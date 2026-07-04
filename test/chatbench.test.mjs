@@ -127,6 +127,33 @@ test("summarizeTier1: baselineFail turns never fail the case; all-green baseline
   assert.deepEqual(improved.improvedBaselineTurns, [1]);
 });
 
+test("summarizeTier1: improvedIn ENFORCES a fixed baselineFail turn — a later regression is a real tier-1 failure (cycle-2 marker discipline)", () => {
+  const fixedStillGood = { checks: [{ key: "answerMatch", pass: true }], baselineFail: true, improvedIn: "002" };
+  const fixedRegressed = { checks: [{ key: "answerMatch", pass: false, expected: "x", actual: "y" }], baselineFail: true, improvedIn: "002" };
+
+  const good = summarizeTier1([fixedStillGood]);
+  assert.equal(good.pass, true);
+  assert.deepEqual(good.baselineFailTurns, [0], "the historical marker stays on the record");
+  assert.deepEqual(good.improvedBaselineTurns, [0], "a fixed weakness still reports as improved");
+
+  const regressed = summarizeTier1([fixedRegressed]);
+  assert.equal(regressed.pass, false, "a regression on a fixed weakness FAILS the case — never a quietly-lapsed improvement");
+  assert.equal(regressed.checksFailed, 1);
+  assert.deepEqual(regressed.baselineFailTurns, [0]);
+});
+
+test("parseCases: improvedIn lint — string label required, and only alongside baselineFail:true", () => {
+  const bad = [
+    { id: "a", tags: ["noise"], mode: "turns", turns: [{ say: "x", expect: { miss: true, improvedIn: "002" } }] },
+    { id: "b", tags: ["noise"], mode: "turns", turns: [{ say: "x", expect: { miss: true, baselineFail: true, improvedIn: 2 } }] },
+    { id: "c", tags: ["noise"], mode: "turns", turns: [{ say: "x", expect: { miss: true, baselineFail: true, improvedIn: "002" } }] },
+  ].map((c) => JSON.stringify(c)).join("\n");
+  const { errors } = parseCases(bad);
+  assert.ok(errors.some((e) => e.startsWith("a turn 1") && e.includes("only annotates a baselineFail:true turn")), errors.join("; "));
+  assert.ok(errors.some((e) => e.startsWith("b turn 1") && e.includes("non-empty cycle label string")), errors.join("; "));
+  assert.ok(!errors.some((e) => e.startsWith("c turn 1")), `the valid pairing lints clean: ${errors.join("; ")}`);
+});
+
 // ---- runner: turns mode (fake runTurn — proves threading + evaluation wiring) ----
 
 test("runTurnsCase: threads focus/last turn-to-turn and stops on end, like runChat's loop", async () => {
@@ -179,6 +206,27 @@ test("runSessionCase: drives full runChat in a temp dir, reads answers + records
   assert.equal(transcript[0].miss, false);
   const tier1 = summarizeTier1(turnEvals);
   assert.equal(tier1.pass, true, JSON.stringify(tier1.failing));
+});
+
+test("runSessionCase: clears the product read cache before EVERY session (H1a bench fidelity — real sessions are separate processes)", async () => {
+  // Two sessions in one case: without deps.clearCache() between them, session 2
+  // would be served src/source.mjs's process-cached pre-session payload and
+  // never see session 1's graph fold-in (the cycle-1 mr-session-count hard
+  // fail). The runner must call it once per session run.
+  let cleared = 0;
+  const caseDef = {
+    id: "stub-two-sessions", tags: ["memory-recall"], mode: "session", graph: "empty",
+    turns: [
+      { say: "hi", session: 1 },
+      { say: "hi", session: 2 },
+    ],
+  };
+  const { transcript } = await runSessionCase(caseDef, {
+    runChat, parseSessionJsonl, parseSessionLog, turnKey, graphJson: "{}",
+    clearCache: () => { cleared += 1; },
+  });
+  assert.equal(transcript.length, 2);
+  assert.equal(cleared, 2, "one cache clear per session run");
 });
 
 // ---- compare (the regression gate) ----
