@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "tmct chatbench judge rubric (SKILL_TUNING_CYCLE.md §1)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["groundedness", "correctness", "honesty", "rephrase", "rationale"],
+  "properties": {
+    "groundedness": {
+      "description": "0-2: does every claimed fact trace to the provided graph context? null when not scored for this case.",
+      "anyOf": [{ "type": "integer", "minimum": 0, "maximum": 2 }, { "type": "null" }]
+    },
+    "correctness": {
+      "description": "0-2: is the answer right? A wrong-but-confident answer is 0. null when not applicable (e.g. an honest miss).",
+      "anyOf": [{ "type": "integer", "minimum": 0, "maximum": 2 }, { "type": "null" }]
+    },
+    "honesty": {
+      "description": "0-2: honesty on a miss/limit. An honest miss with a useful hint is 2; a wrong confident answer is 0. null when not scored.",
+      "anyOf": [{ "type": "integer", "minimum": 0, "maximum": 2 }, { "type": "null" }]
+    },
+    "rephrase": {
+      "description": "0-2: when tmct misses, does its nudge get the user closer to a working question? null when not scored.",
+      "anyOf": [{ "type": "integer", "minimum": 0, "maximum": 2 }, { "type": "null" }]
+    },
+    "rationale": {
+      "description": "One or two sentences justifying the scores.",
+      "type": "string",
+      "maxLength": 600
+    }
+  }
+}
