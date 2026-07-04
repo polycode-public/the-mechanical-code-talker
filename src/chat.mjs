@@ -1,6 +1,6 @@
 // chat.mjs — `tmct chat`: a full interactive client over the tmct code-graph.
 // Any BARE line is a plain-English question dispatched through the mechanical
-// tmct_ask engine (the EXACT path bin/cli.mjs's `cli tmct_ask` fallback uses),
+// tmct_ask engine (the EXACT path bin/tmct.mjs's `cli tmct_ask` fallback uses),
 // so chat is the same zero-model engine with a readline shell around it, plus:
 //
 //   - SLASH-COMMANDS to reach every richer tool dispatchTool (server.mjs) serves —
@@ -320,7 +320,7 @@ export function gitToplevel(cwd = process.cwd()) {
   return null;
 }
 
-/** Mirror bin/cli.mjs's configFor: an explicit repo pins the artifact path; no
+/** Mirror bin/tmct.mjs's configFor: an explicit repo pins the artifact path; no
  *  repo falls back to the cwd/env-derived default. */
 function configFor(repoPath) {
   return repoPath ? { graphFile: join(repoPath, DEFAULT_GRAPH_REL) } : loadConfig();

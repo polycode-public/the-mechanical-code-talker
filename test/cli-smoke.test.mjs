@@ -1,14 +1,16 @@
-// Binary smoke: spawn bin/cli.mjs as a real child and exercise the cli
-// query/digest modes against a fixture graph. No server, no MCP.
+// Binary smoke: spawn bin/tmct.mjs as a real child and exercise the cli
+// query/digest modes against a fixture graph. No server, no MCP. A spawned
+// child has NON-TTY stdio, so the bare/chat invocations exercise the --plain
+// (readline) path — which is exactly the shell the suite must pin down.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const BIN = fileURLToPath(new URL("../bin/cli.mjs", import.meta.url));
+const BIN = fileURLToPath(new URL("../bin/tmct.mjs", import.meta.url));
 const FIXTURE = fileURLToPath(new URL("./fixtures/entities.fixture.json", import.meta.url));
 
 /** A temp repo whose .tmct/graph.json is the test fixture — lets us exercise the cli
@@ -22,14 +24,25 @@ async function repoWithFixtureGraph() {
 }
 const runCli = (...args) => spawnSync(process.execPath, [BIN, ...args], { encoding: "utf8" });
 
-test("bare invocation prints the usage line and exits 2 (no server to start)", () => {
-  const bare = runCli();
-  assert.equal(bare.status, 2);
-  assert.match(bare.stderr, /Use `cli digest …`, `cli <tool> …`, or `chat`/);
-  // an unknown mode gets the same instructive usage line
+test("bare invocation with non-TTY stdin reaches CHAT (the headline argv splice) and exits 0", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-bare-"));
+  try {
+    // `tmct` with piped stdin = the --plain readline shell in an empty dir: honest
+    // empty-graph banner, a greeting turn, clean exit 0, .tmct/ created.
+    const bare = spawnSync(process.execPath, [BIN], { encoding: "utf8", input: "hi\n/exit\n", cwd: dir });
+    assert.equal(bare.status, 0, bare.stderr);
+    assert.match(bare.stdout, /no graph loaded — starting empty/);
+    assert.match(bare.stdout, /Hi\. Ask me about this codebase/, "the greeting turn answered");
+    const names = await readdir(join(dir, ".tmct"));
+    assert.ok(names.some((n) => /^session-.*\.log$/.test(n)), "the bare invocation wrote its session log");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+  // an unknown mode still gets the instructive usage line and exit 2
   const unknown = runCli("frobnicate");
   assert.equal(unknown.status, 2);
   assert.match(unknown.stderr, /unknown invocation "frobnicate"/);
+  assert.match(unknown.stderr, /Use `cli digest …`, `cli <tool> …`, or `chat`/);
 });
 
 test("cli <toolName>: any tool routes to dispatchTool and prints its text result", async () => {

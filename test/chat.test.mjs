@@ -20,7 +20,9 @@ import { dispatchTool } from "../src/server.mjs";
 import { parseEntities } from "../src/codegraph.mjs";
 import * as source from "../src/source.mjs";
 
-const BIN = fileURLToPath(new URL("../bin/cli.mjs", import.meta.url));
+// bin/tmct.mjs: a spawned child has non-TTY stdio, so `chat` takes the --plain
+// readline path — the exact same contract the deleted bin/cli.mjs served.
+const BIN = fileURLToPath(new URL("../bin/tmct.mjs", import.meta.url));
 const FIXTURE = fileURLToPath(new URL("./fixtures/entities.fixture.json", import.meta.url));
 const CONFIG = { graphFile: FIXTURE };
 
