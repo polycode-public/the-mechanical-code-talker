@@ -1,0 +1,231 @@
+# software-phrases.txt — the SE phrase book (ROADMAP items 4+7).
+#
+# One phrase pattern per line; {x}/{y} are entity slots the matcher binds to
+# names in the graph. Lines starting with `~` declare a SYNONYM FAMILY: words
+# and short phrases the matcher may treat as interchangeable when normalizing
+# input. `#` starts a comment; blank lines are ignored.
+# Parsed by src/corpus/templates.mjs loadPhrasebook().
+
+# --- synonym families: the interchangeable vocabulary of asking about code ---
+~ call, invoke, use, execute, run, trigger, talk to
+~ import, include, require, pull in, depend on, load
+~ module, file, source file, unit
+~ function, fn, func, routine, procedure, method
+~ class, type, struct, record, interface
+~ test, spec, unit test, test case, check
+~ bug, defect, fault, issue, problem, glitch
+~ fix, repair, patch, resolve, correct
+~ change, modify, edit, touch, update, alter, rework
+~ delete, remove, drop, kill, strip out, get rid of
+~ create, add, make, introduce, write, define
+~ rename, relabel, move, relocate
+~ commit, change set, checkin, revision
+~ author, committer, contributor, developer, dev, engineer, programmer
+~ big, large, huge, long, giant
+~ small, tiny, short, little, lean
+~ recent, latest, newest, last, fresh
+~ old, oldest, ancient, stale, legacy
+~ broken, failing, red, busted, dead
+~ working, passing, green, healthy, fine
+~ central, core, important, key, load-bearing, critical
+~ unused, dead, orphaned, abandoned, unreferenced
+~ caller, call site, consumer, client
+~ callee, target, dependency
+~ parent, superclass, base class, ancestor
+~ child, subclass, derived class, descendant
+~ member, field, attribute, property
+~ argument, parameter, param, arg, input
+~ return, result, output, yield
+~ error, exception, failure, crash, panic
+~ codebase, repo, repository, project, source tree, code
+
+# --- call graph: what calls what ---
+what calls {x}
+what does {x} call
+who calls {x}
+who is calling {x}
+which functions call {x}
+which modules call {x}
+what invokes {x}
+callers of {x}
+call sites of {x}
+where is {x} called
+where is {x} called from
+is {x} called anywhere
+is {x} ever called
+does anything call {x}
+does {x} call {y}
+what talks to {x}
+what does {x} talk to
+what depends on {x}
+what does {x} depend on
+show me the call graph around {x}
+
+# --- imports and dependencies ---
+who imports {x}
+what imports {x}
+which modules import {x}
+what does {x} import
+where is {x} imported
+is {x} imported anywhere
+does {x} import {y}
+what requires {x}
+what uses {x}
+what does {x} use
+what pulls in {x}
+dependencies of {x}
+dependents of {x}
+what breaks if {x} changes
+what would be affected by changing {x}
+impact of changing {x}
+blast radius of {x}
+
+# --- definition and location: where things live ---
+where is {x}
+where is {x} defined
+where does {x} live
+which file defines {x}
+which module defines {x}
+what is defined in {x}
+what does {x} define
+what lives in {x}
+find {x}
+show me {x}
+is there a {x}
+do we have a {x}
+does {x} exist
+where is {x} importable from
+what does {x} export
+what is the public api of {x}
+what is in the {x} package
+
+# --- description: what things are ---
+what is {x}
+what is {x} for
+what does {x} do
+describe {x}
+tell me about {x}
+explain {x}
+what kind of thing is {x}
+is {x} a module or a function
+what type is {x}
+what does {x} return
+what arguments does {x} take
+what parameters does {x} take
+what is the signature of {x}
+what exceptions does {x} throw
+what does {x} raise
+what does {x} catch
+is {x} public or private
+is {x} deprecated
+
+# --- structure: classes, members, inheritance ---
+what does {x} contain
+what members does {x} have
+what methods does {x} have
+what fields does {x} have
+what is inside {x}
+what does {x} inherit from
+what extends {x}
+what subclasses {x}
+subclasses of {x}
+superclass of {x}
+parents of {x}
+children of {x}
+is {x} a subclass of {y}
+what implements {x}
+implementations of {x}
+
+# --- tests ---
+is {x} tested
+does {x} have tests
+what tests {x}
+what tests cover {x}
+which tests exercise {x}
+where are the tests for {x}
+test coverage of {x}
+what does {x} test
+is there a test for {x}
+how well tested is {x}
+what has no tests
+which modules are untested
+do the tests pass
+are the tests green
+
+# --- history: commits, authors, change ---
+who wrote {x}
+who authored {x}
+who last touched {x}
+who changed {x}
+when was {x} last changed
+when was {x} added
+what changed recently
+what changed in the last commit
+what did {x} change
+what commits touched {x}
+history of {x}
+how often does {x} change
+what changes together with {x}
+what usually changes with {x}
+is {x} new
+is {x} stale
+who knows about {x}
+who owns {x}
+
+# --- size, count, shape ---
+how many modules are there
+how many functions are there
+how many classes are there
+how many tests are there
+how big is {x}
+how big is the codebase
+how many lines is {x}
+what is the biggest module
+what is the biggest function
+what is the most complex module
+what is the most central module
+what is the most imported module
+what is the most called function
+what has the most dependencies
+what has no dependencies
+what is unused
+what is dead code
+list the modules
+list the classes
+list everything you know about {x}
+
+# --- bugs, quality, health ---
+is {x} broken
+why is {x} failing
+what is wrong with {x}
+does {x} have known bugs
+is {x} safe to change
+is {x} safe to delete
+what is risky about {x}
+what smells in {x}
+is {x} too big
+does {x} do too much
+
+# --- memory: what tmct itself was told ---
+what did i tell you about {x}
+what do you know about {x}
+what do you remember about {x}
+what have i told you
+what did i ask you before
+did i mention {x}
+remember that {x}
+forget about {x}
+what did you just say
+what was your last answer
+what did we talk about
+summarise this session
+
+# --- meta: about the graph and tmct ---
+what can you answer
+what do you know
+how much do you know
+what is in your graph
+when was your graph built
+where does your graph come from
+what can i ask you
+help me ask a better question
