@@ -182,7 +182,11 @@ in `SKILL_TUNING_CYCLE.md`:
   relative/embedded clauses, quantifiers+counting, negation, temporal,
   coordination/compositional, multi-turn discourse reference, declarative
   assert+recall). Multiple questions per grade × specialization with a little
-  overlap. **Ladder gating:** advanced grades are SKIPPED until every grade
+  overlap — authored as a POOL ~10× the per-run need (deterministic generator;
+  each run samples ~10% stratified, ≥5 items per populated cell, recorded
+  seed), with COMBINATION cells alongside single-area cells so weakness is
+  attributable to an area alone or to a specific pairing.
+  **Ladder gating:** advanced grades are SKIPPED until every grade
   below passes reliably; when a grade reaches unit-test-level reliability its
   cases become ALWAYS-RUN deterministic tests (judge-free, promoted alongside
   test/showcase.test.mjs). Winograd/WinoGrande items stay as permanent

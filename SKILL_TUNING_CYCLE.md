@@ -54,6 +54,14 @@ Every cycle MUST satisfy:
   matter what the mean does.
 - **Judge integrity:** a judge refusal or format failure **VOIDS that case's score** for that
   sample — it is re-sampled or excluded, **never counted as a fail**.
+- **Graded-pool sampling (case-set v2):** graded cases live in a POOL ~10× the run size
+  (`chatbench/graded-pool.jsonl`); each run draws a stratified seeded sample (~10%, **never fewer
+  than 5 items per populated grade×construction cell**, seed recorded in the product output so
+  every run is reproducible). This is the anti-overfitting mechanism — levers cannot memorize the
+  test. The regression rule adapts for sampled cases: promoted always-run grades are FIXED (never
+  sampled out); cross-cycle pass→fail regression is checked on the INTERSECTION of the two
+  cycles' samples; **cell-level means** (grade × construction, single-area vs combination cells
+  reported separately) are the comparable cross-cycle statistic, not per-item identity.
 
 ## 2. The loop (one cycle; repeats without pausing)
 
