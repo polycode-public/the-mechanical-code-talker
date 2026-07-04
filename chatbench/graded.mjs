@@ -171,12 +171,13 @@ export function promotedSubset(cellCases, n = MIN_PER_CELL) {
 
 function groupByCell(cases) {
   const map = new Map();
+  const idOf = (c) => c.id ?? c.caseId; // pool cases carry id; product rows carry caseId
   for (const c of cases) {
     const key = cellKey(c);
     if (!map.has(key)) map.set(key, []);
     map.get(key).push(c);
   }
-  for (const list of map.values()) list.sort((a, b) => a.id.localeCompare(b.id));
+  for (const list of map.values()) list.sort((a, b) => idOf(a).localeCompare(idOf(b)));
   return map;
 }
 
@@ -246,7 +247,9 @@ export function computeAgreement(rowsA, rowsB, { tolerance = AGREEMENT_TOLERANCE
     const b = rate(cellsB.get(key) ?? []);
     const measurable = a.rate !== null && b.rate !== null;
     const delta = measurable ? Math.abs(a.rate - b.rate) : null;
-    const verdict = !measurable ? "UNMEASURED" : delta <= tolerance ? "AGREE" : "DISAGREE";
+    // 1e-9 epsilon: pass-rates are small fractions (n/5), so raw float
+    // subtraction can land a hair above the tolerance (0.8 - 0.6 > 0.2).
+    const verdict = !measurable ? "UNMEASURED" : delta <= tolerance + 1e-9 ? "AGREE" : "DISAGREE";
     return {
       grade, construction, combo: isCombo(construction),
       a, b, delta,
