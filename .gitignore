@@ -1,0 +1,17 @@
+node_modules/
+
+# mct's own graph/session artifacts (machine-local, rebuildable)
+.seonix/
+.mct/
+
+# C# Roslyn extractor build output — rebuilt via `dotnet publish` in roslyn/
+roslyn/publish/
+roslyn/bin/
+roslyn/obj/
+
+# Java extractor build output — the prebuilt jar in java/dist/ IS tracked
+java/target/
+
+# npm
+*.log
+npm-debug.log*

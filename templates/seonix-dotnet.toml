@@ -1,0 +1,57 @@
+# example-dotnet-seonix.toml — an estate config for a .NET-heavy microservice
+# estate (modelled on the Westfield/Titan estate at ~/projects/wh: 75 repos,
+# C# + Angular/CDK TypeScript + Vue, Lambdas behind API Gateway, SNS/SQS/
+# EventBridge wiring). Copy to `seonix.toml`, edit the paths, and index the
+# whole estate into one merged graph. Shipped in the package; `seonix init
+# --dotnet` seeds it. Format: PLAN_SEON_TUNING.md §8.5/§8.10/§8.12/§8.13.
+
+# The repos to merge into one estate graph — the first config key. A path to a
+# newline-delimited file (relative to this config), OR an inline array.
+repositories = "repositories-indexed-by-seonix.txt"
+out_root     = "."          # merged graph → ./.seonix/graph.json, ids prefixed mod:<repo>/…
+
+[index]
+languages = ["csharp", "typescript", "javascript"]   # + java/python parsers stay on, harmless if absent
+
+# GRAB text + config the code walk misses (B018). Docs, SQL, Razor views, BDD
+# specs, CI, and scripts — the operational + intent layer of a service estate.
+include_text = [
+  "**/*.md", "**/*.sql", "**/*.cshtml", "**/*.feature",
+  "**/*.sh", "**/*.ps1",                               # deploy/dev scripts (carry aws/cdk calls → §8.11)
+]
+include_structure = [
+  "**/*.sln", "**/*.csproj",                           # project graph + <ProjectReference>/<PackageReference>
+  "**/Directory.Build.props", "**/Directory.Packages.props",
+  "**/package.json", "**/tsconfig.json",               # JS/TS project refs
+  "**/.github/workflows/*.{yml,yaml}",                 # CI as structure
+  "**/serverless.yml", "**/template.yaml", "**/cdk.json",   # IaC — the service-wiring source (§8.11)
+]
+vue               = "split"    # .vue → <script> to TS parser, <template> to text
+markdown_sections = true       # .md → Document→Section tree
+
+# EXCLUDE — generated, bulky, and low-signal. .gitignore already covers build
+# output; these trim what it doesn't.
+exclude = [
+  "**/*.Designer.cs", "**/Migrations/*.cs",            # generated / mechanical C# (~15% of .cs)
+  "**/package-lock.json", "**/packages.lock.json", "**/yarn.lock",
+  "**/*.min.js", "**/*.min.css", "**/*.map", "**/*.snap",
+  "**/*.{zip,dll,exe,pdb,nupkg,so,dylib,png,jpg,jpeg,svg,ico,gif,heic,webp,woff,woff2,ttf,pdf,webm,csv,xlsx}",
+  "**/playwright-report/**", "**/test-reports/**", "**/*-report/**", "**/coverage/**", "**/local-notes/**",
+]
+respect_gitignore = true       # inherit each repo's own obj/bin/dist excludes
+
+# HARD security skip — DEFAULTS ON. This estate contains real .aws_credentials,
+# .pem private keys, and .env files (audit 2026-07-02). Never indexed, never
+# grabbed as text. `!` re-includes an example variant only.
+secret_exclude = [
+  "**/.aws_credentials", "**/*.pem", "**/*.pfx", "**/*.key",
+  "**/.env", "**/*.env", "!**/*.env.example",
+  "**/appsettings.Development.json", "**/appsettings.*.local.json",
+]
+
+[tune]
+# C# depth note: build the Roslyn helper once (`dotnet publish -c Release -o
+# publish` in the installed package's roslyn/) so C# indexes at full Roslyn
+# depth, not the tree-sitter fallback. Scoring knobs stay at defaults:
+# score_gap_k = 0.6
+# literal_mention = false     # helpful when task text carries literal namespaces/paths

@@ -1,0 +1,58 @@
+{
+  "name": "@polycode-projects/mct",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "description": "The Mechanical Code Talker (mct) — a tolerant, offline, $0 chat surface that guides you toward precision queries about a software repository. ELIZA/PARRY-style but domain-obsessed with code. No model calls; no codebase index of its own.",
+  "license": "AGPL-3.0-only",
+  "author": "Polycode Limited",
+  "engines": {
+    "node": ">=24"
+  },
+  "bin": {
+    "mct": "./bin/mct.mjs"
+  },
+  "main": "./src/index.mjs",
+  "exports": {
+    ".": "./src/index.mjs",
+    "./chat": "./src/chat.mjs",
+    "./resolveObject": "./src/ask.mjs",
+    "./ask": "./src/ask.mjs",
+    "./relationKind": "./src/codegraph.mjs",
+    "./impactClosure": "./src/codegraph.mjs",
+    "./dispatchTool": "./src/server.mjs",
+    "./fetchEntities": "./src/source.mjs"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "templates/*.toml",
+    "roslyn/*.cs",
+    "roslyn/*.csproj",
+    "java/pom.xml",
+    "java/src/**/*.java",
+    "java/dist/*.jar",
+    "README.md",
+    "ROADMAP.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "cytoscape": "^3.30.0",
+    "smol-toml": "^1.7.0",
+    "tree-sitter": "^0.21.1",
+    "tree-sitter-c-sharp": "^0.21.3",
+    "tree-sitter-java": "^0.21.0",
+    "typescript": "~5.6.2",
+    "wink-eng-lite-web-model": "^1.8.1",
+    "wink-nlp": "^2.4.0"
+  },
+  "scripts": {
+    "test": "node --test \"test/**/*.test.mjs\"",
+    "chat": "node bin/mct.mjs",
+    "viz": "node bin/mct.mjs viz"
+  }
+}

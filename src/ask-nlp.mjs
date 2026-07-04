@@ -1,0 +1,73 @@
+// ask-nlp.mjs — the OPTIONAL wink-nlp adapter behind ask.mjs's lemma/POS tier.
+//
+// BOUNDARY (hard, do not move): this file is Node-only and is NEVER inlined into
+// the viewer bundle. viz.mjs's askSource() inlines codegraph.mjs + ask-vocab.mjs +
+// ask.mjs ONLY and strips their import lines, so the portable single-file HTML has
+// no wink, no model, and no `nlpAdapter` binding at all — ask.mjs reaches this
+// module exclusively through a `typeof nlpAdapter === "function"` guard and
+// degrades to adapter-less parsing (lemma/POS tiers off; the curated tables and
+// the bounded edit-distance tier still work, browser and Node alike). Keeping the
+// ~1MB CJS model out of the page is the point of the split.
+//
+// wink-nlp and wink-eng-lite-web-model are CJS — loaded via createRequire, the
+// same Node-module-resolution approach viz.mjs uses to locate cytoscape (resolve
+// through the module system, never a guessed path). The require happens lazily on
+// first use and failure is cached as null: a checkout without the optional deps
+// installed answers exactly like the browser bundle, it never throws.
+
+import { createRequire } from "node:module";
+
+let cached; // undefined = not tried yet; null = unavailable (tried once, honestly off)
+
+/** Lazily build the {lemma, posTags} adapter, or null when wink isn't loadable.
+ *  Deterministic: wink-nlp's tagger/lemmatiser is a fixed model with no sampling,
+ *  so the same input always yields the same tags/lemmas across processes. */
+export function nlpAdapter() {
+  if (cached !== undefined) return cached;
+  try {
+    const require = createRequire(import.meta.url);
+    const winkNLP = require("wink-nlp");
+    const model = require("wink-eng-lite-web-model");
+    const nlp = winkNLP(model);
+    const its = nlp.its;
+    cached = {
+      /** Lowercase lemma of a single token ("imported" -> "import"); the word
+       *  itself when wink has nothing better (unknown words come back as-is). */
+      lemma(word) {
+        const w = String(word || "");
+        try {
+          const out = nlp.readDoc(w).tokens().out(its.lemma);
+          return String(out[0] || w).toLowerCase();
+        } catch {
+          return w.toLowerCase();
+        }
+      },
+      /** UPOS tags aligned to the CALLER's word array. wink re-tokenizes (it
+       *  splits "walk.mjs" into three tokens), so each input word is greedily
+       *  matched to the run of wink tokens that spell it and takes its FIRST
+       *  sub-token's tag; null per word on any surprise, never a throw. */
+      posTags(words) {
+        try {
+          const toks = nlp.readDoc(words.join(" ")).tokens();
+          const texts = toks.out();
+          const tags = toks.out(its.pos);
+          const out = [];
+          let k = 0;
+          for (const w of words) {
+            if (k >= texts.length) { out.push(null); continue; }
+            out.push(tags[k]);
+            let acc = texts[k];
+            k += 1;
+            while (acc.length < w.length && k < texts.length) { acc += texts[k]; k += 1; }
+          }
+          return out;
+        } catch {
+          return words.map(() => null);
+        }
+      },
+    };
+  } catch {
+    cached = null;
+  }
+  return cached;
+}

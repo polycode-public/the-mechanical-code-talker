@@ -1,0 +1,2403 @@
+// ask.mjs — a mechanical (zero-model-call) natural-language query engine over the
+// seonix graph. PLAN_MECHANICAL_CHAT.md (P0): a small, closed English grammar
+// compiles a free-text question into a graph traversal over the SAME classified
+// relation groups codegraph.mjs's other render functions read, then renders a
+// templated, citation-faithful answer. No embeddings, no generative model calls —
+// a miss is a stated blank, never a guess (the extraction pipeline's "no wrong
+// edge" ethos, held at the query layer too). Term/keyword matching is TIERED
+// (2026-07-02, two-level fuzzy): exact curated match always wins; a Node-only
+// wink-nlp LEMMA/POS tier and a bounded Damerau-Levenshtein FUZZY tier fire only
+// on a miss, a unique fuzzy hit is announced in the answer ("assuming you
+// meant …"), and any tie surfaces as ambiguity — never a silently-broken guess.
+//
+// Four pure, independently-testable stages, orchestrated by ask():
+//   parseQuery (grammar)  ->  resolveObject (mechanical term resolution)  ->
+//   traverse (graph lookup)  ->  render (templates).
+//
+// §3.5/3.6 (2026-07-02, ELIZA/PARRY-style breadth): parseQuery normalizes the
+// raw text (contractions, g-drop, filler-strip), rewrites recognized negative-
+// rhetorical constructions to their affirmative form, then runs TWO INDEPENDENT
+// parsing STRATEGIES against the same normalized text — the original anchored-
+// template matcher (precise, fast, unweakened) and a keyword-spotting/
+// decomposition matcher (ELIZA's own mechanism: find the keyword, decompose
+// around it, tolerate reordering/casual phrasing) — and MERGES their results:
+// one strategy hit -> use it; both hit and agree -> use it (high confidence);
+// both hit and DISAGREE -> a genuine parse-level ambiguity, surfaced honestly;
+// neither hits -> the honest grammar miss. STRATEGIES is a plain array so a
+// third strategy could join the same way, not a hardcoded two-branch special
+// case.
+//
+// Where a parsed intent is temporal/churn-shaped (touched/since/cochange as a
+// FILTER over commits, not a structural edge), this engine does NOT re-implement
+// that — see PLAN_MECHANICAL_CHAT.md §2: matchQuery/nlToQuery (temporal.mjs) already
+// own that surface for the Chronograph browser; ask.mjs's own `touches`/`cochange`
+// verbs here answer "which modules touch/co-change with X" as ONE-HOP structural
+// edges (mgx:touchedByCommit / mgx:changeCoupledWith), which is a different (and
+// simpler) question than the browser's time-scrubbing view.
+
+import { relationKind, impactClosure } from "./codegraph.mjs";
+import {
+  VERB_TO_KIND, ENTITY_TO_TYPE, MODIFIER_TO_KIND,
+  CONTRACTIONS, MISSPELLINGS, WRONG_WORDS, G_DROP, FILLER_WORDS,
+  CONTEXT_PRONOUNS, NEGATION_FRAMES, COMMIT_CONTENT_FRAMES, META_MEANING_VERBS,
+  WHERE_MARKERS, MENTION_MARKERS,
+  RELATIVE_PRONOUNS, PLACEHOLDER_NOUNS, BOOLEAN_CONNECTIVES, QUALIFIERS,
+  AGGREGATE_TRIGGERS, LIST_TRIGGERS, SUPERLATIVE_EXTREMES, EDGE_NOUN_TO_METRIC, ANAPHORA_TRIGGERS,
+  MEMBERSHIP_KINDS, CASCADE_NOISE, CASCADE_SYNONYMS, HELP_TRIGGERS,
+} from "./ask-vocab.mjs";
+import { lookupByProseTokens } from "./prose.mjs";
+// The OPTIONAL Node-only wink-nlp adapter (lemma/POS tier). BOUNDARY: the inlined
+// viewer bundle (viz.mjs askSource) strips this import line and never inlines
+// ask-nlp.mjs, so in the browser `nlpAdapter` is simply an undeclared identifier —
+// defaultNlp() below reads it through `typeof`, the one operator that touches an
+// undeclared name without throwing, and the portable single-file HTML degrades to
+// adapter-less parsing (curated tables + bounded fuzzy still on) instead of
+// shipping a ~1MB language model inside the page.
+import { nlpAdapter } from "./ask-nlp.mjs";
+
+/** All edges of a classified relation kind, flattened across relation groups —
+ *  a local copy of codegraph.mjs's private edgesOfKind (kept local rather than
+ *  exported+imported to avoid coupling this file's commit boundary to concurrent
+ *  in-flight edits elsewhere in codegraph.mjs; both read the same relationKind
+ *  classification, so they cannot drift in meaning). */
+function edgesOfKind(graph, kind) {
+  const out = [];
+  for (const g of graph.relations) if (relationKind(g) === kind) out.push(...g.edges);
+  return out;
+}
+
+// ---- §3 vocabulary — single-sourced in ./ask-vocab.mjs; the grammar, the
+// rephrase-hint text, and the renderer's noun forms all derive from those
+// three tables, so they cannot drift. ----
+
+// Predicate kinds carrying a finer, symbol-grain sibling (module-coarse -> fn/method-precise).
+// "which functions call X" should read off callsSymbol (fn->fn), not the module-coarse "calls".
+const SYMBOL_GRAIN_SIBLING = { calls: "callsSymbol", touches: "touchesSymbol" };
+const FINE_ENTITY_TYPES = new Set(["Function", "Method", "Class", "Attribute", "GlobalVariable"]);
+
+// Query-side UNION families (2026-07-02 query families): a parsed kind that is not
+// itself a stored predicate but a curated union of stored kinds — "what uses X"
+// honestly means the import graph AND the call graph together. Everything else
+// maps to itself; grain selection (asked entity type) then narrows the union's
+// subjects the same way it narrows a single kind's.
+const KIND_UNIONS = { uses: ["imports", "calls", "callsSymbol"] };
+const kindsFor = (kind) => KIND_UNIONS[kind] || [kind];
+
+const OVERFLOW_CAP = 12;
+
+const PLURAL_FORMS = {
+  Function: ["function", "functions"], Method: ["method", "methods"],
+  Class: ["class", "classes"], Module: ["module", "modules"],
+  Attribute: ["attribute", "attributes"], GlobalVariable: ["variable", "variables"],
+  Commit: ["commit", "commits"],
+  // "Change" is ask-vocab.mjs's pseudo-type (a wildcard over the touch traversal's
+  // results, never a node class) — it still needs noun forms for zero-hit templates.
+  Change: ["change", "changes"],
+};
+function nounFor(entityType, n) {
+  const [s, p] = PLURAL_FORMS[entityType] || ["result", "results"];
+  return n === 1 ? s : p;
+}
+
+// Every relation KIND token is already the correct 3rd-person-singular verb form
+// ("X imports Y", "X calls Y", "X touches Y") EXCEPT "cochange", the one kind whose
+// name is a bare noun/verb stem ("X cochange Y" is wrong; "X cochanges Y" is right) —
+// so the reverse-shape zero-hit template below reads off this table instead of
+// unconditionally appending "s" (which used to double-pluralize every other kind:
+// "callss", "importss", "touchess").
+const REVERSE_MISS_VERB = { cochange: "cochanges" };
+function verbFor(kind) {
+  return REVERSE_MISS_VERB[kind] || kind;
+}
+
+function escapeRegex(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// ---- §3.5 normalization — runs before EITHER parsing strategy sees the text ----
+
+/** contraction/informal-spelling table -> word-boundary regex, longest phrase
+ *  first (so "there's" doesn't get shadowed by a shorter overlapping entry). */
+const tableRe = (table) => new RegExp(
+  "\\b(" + Object.keys(table).sort((a, b) => b.length - a.length).map(escapeRegex).join("|") + ")\\b",
+  "gi",
+);
+const CONTRACTION_RE = tableRe(CONTRACTIONS);
+// misspelling/wrong-word CORRECTIONS (ask-vocab.mjs) — same mechanism, applied
+// after contractions: restore the intended spelling first, then map misused
+// words to their canonical schema term. Deterministic and curated, so they run
+// BEFORE either parse strategy and ahead of the bounded edit-distance fallback.
+// The trailing lookahead refuses to rewrite a word glued to a dotted extension:
+// WRONG_WORDS entries are real English words that plausibly NAME modules
+// ("revision.mjs", "property.py"), and a correction that corrupts an object
+// term would be a guess — the exact thing these tables exist to avoid.
+const correctionRe = (table) => new RegExp(
+  "\\b(" + Object.keys(table).sort((a, b) => b.length - a.length).map(escapeRegex).join("|") + ")\\b(?!\\.[a-z0-9])",
+  "gi",
+);
+const MISSPELLING_RE = correctionRe(MISSPELLINGS);
+const WRONG_WORD_RE = correctionRe(WRONG_WORDS);
+
+/** Free-text -> normalized free-text: contractions expanded, g-dropped words
+ *  restored, filler/politeness words stripped. Idempotent and pure — the same
+ *  input always normalizes the same way, so both parsing strategies see
+ *  identical text and their outputs are directly comparable. Deliberately
+ *  does NOT force lowercase: object/subject terms (module names like
+ *  "myFile", class names like "Base") are meaningfully cased, and every
+ *  substitution below already matches case-insensitively (`i`/`gi` flags) —
+ *  forcing the whole string to lowercase would silently corrupt every parsed
+ *  term's case instead. */
+export function normalizeQuery(text) {
+  let q = String(text || "");
+  q = q.replace(CONTRACTION_RE, (m) => CONTRACTIONS[m.toLowerCase()]);
+  q = q.replace(MISSPELLING_RE, (m) => MISSPELLINGS[m.toLowerCase()]);
+  q = q.replace(WRONG_WORD_RE, (m) => WRONG_WORDS[m.toLowerCase()]);
+  q = q.replace(G_DROP, "$1ing");
+  if (FILLER_WORDS.length) {
+    const fillerRe = new RegExp(
+      "\\b(" + [...FILLER_WORDS].sort((a, b) => b.length - a.length).map(escapeRegex).join("|") + ")\\b",
+      "gi",
+    );
+    q = q.replace(fillerRe, " ");
+  }
+  return q.replace(/\s+/g, " ").trim();
+}
+
+/** Recognized rhetorical/idiomatic constructions rewritten to the canonical form
+ *  of the SAME question before either parse strategy sees the text — a small
+ *  closed pattern set, not a general rewriter. Two families, tried in order:
+ *  COMMIT_CONTENT_FRAMES first ("what was in commit <sha>" -> "what did <sha>
+ *  touch"; sha-anchored, so it can't swallow a containment question), then the
+ *  §3.6 negative-rhetorical NEGATION_FRAMES. First matching frame across both wins
+ *  and rewriting stops; unmatched text passes through unchanged. */
+export function applyNegationFrames(text) {
+  for (const frame of [...COMMIT_CONTENT_FRAMES, ...NEGATION_FRAMES]) {
+    const m = text.match(frame.re);
+    if (m) return frame.to(m).replace(/\s+/g, " ").trim();
+  }
+  return text;
+}
+
+// ---- strategy 1: anchored templates — fixed precedence order; first fit wins,
+// never ambiguous at the template level (a question matching two shapes is a
+// design smell we test against). Unweakened from the original P0 grammar. ----
+
+const VERB_ALT = Object.keys(VERB_TO_KIND).sort((a, b) => b.length - a.length).map(escapeRegex).join("|");
+const ENTITY_ALT = Object.keys(ENTITY_TO_TYPE).sort((a, b) => b.length - a.length).map(escapeRegex).join("|");
+const MODIFIER_ALT = Object.keys(MODIFIER_TO_KIND).sort((a, b) => b.length - a.length).map(escapeRegex).join("|");
+const META_ALT = META_MEANING_VERBS.slice().sort((a, b) => b.length - a.length).map(escapeRegex).join("|");
+
+const TEMPLATES = [
+  // T1 ASK: "does X import Y" / "is X a subclass of Y" -> Yes/No. Tried FIRST: it starts with
+  // does/is/do/did, which the reverse/forward templates below never match (those start with
+  // which/what), so precedence between T1 and the rest is structural, not a tie-break guess.
+  // "did" joins does/do for the past-tense commit forms ("did commit <sha> touch X").
+  {
+    name: "ask",
+    re: new RegExp(`^(?:does|do|did)\\s+(.+?)\\s+(${VERB_ALT})\\s+(.+?)\\??$`, "i"),
+    build: (m) => ({
+      shape: "ask", entityType: null, modifier: "direct",
+      kind: VERB_TO_KIND[m[2].toLowerCase()], subject: m[1].trim(), object: m[3].trim(),
+    }),
+  },
+  // T2 reverse: "which <entity> [<modifier>] <verb> <object>" — the operator's own example shape.
+  {
+    name: "reverse",
+    re: new RegExp(`^which\\s+(${ENTITY_ALT})\\s+(?:(${MODIFIER_ALT})\\s+)?(${VERB_ALT})\\s+(.+?)\\??$`, "i"),
+    build: (m) => ({
+      shape: "reverse",
+      entityType: ENTITY_TO_TYPE[m[1].toLowerCase()],
+      modifier: m[2] ? MODIFIER_TO_KIND[m[2].toLowerCase()] : "direct",
+      kind: VERB_TO_KIND[m[3].toLowerCase()],
+      object: m[4].trim(),
+    }),
+  },
+  // T3 forward: "what does <object> <verb>" — X is given, list its R-related things.
+  // "did" joins does/do for the past-tense commit forms ("what did commit <sha> touch").
+  {
+    name: "forward",
+    re: new RegExp(`^what\\s+(?:does|do|did)\\s+(.+?)\\s+(${VERB_ALT})\\??$`, "i"),
+    build: (m) => ({
+      shape: "forward", entityType: null, modifier: "direct",
+      kind: VERB_TO_KIND[m[2].toLowerCase()], object: m[1].trim(),
+    }),
+  },
+  // T4 meta: "what does <term> mean" — a question about the GRAPH'S OWN VOCABULARY
+  // (a SchemaClass/SchemaPredicate label, e.g. "cochange", or a raw prop token, e.g.
+  // "mgx:callsSymbol"), not a graph traversal over code edges. Tried after T3: T3 also
+  // starts "what does/do", but T3 only fires when the tail is a relation VERB_ALT
+  // phrase ("import"/"calls"/…), which "mean"/"means"/etc never are (disjoint tables —
+  // ask-vocab.mjs's file comment explains why they're kept separate), so the two never
+  // actually compete for the same input.
+  {
+    name: "meta-mean",
+    re: new RegExp(`^what\\s+(?:does|do|is|are)\\s+(.+?)\\s+(?:${META_ALT})\\??$`, "i"),
+    build: (m) => ({ shape: "meta", entityType: null, modifier: "direct", kind: "meta", object: m[1].trim() }),
+  },
+  // T5 meta: "what is a/an <term>" — the OTHER worked phrasing ("what is a Commit").
+  // The indefinite article is REQUIRED (not optional): a bare "what is <anything>"
+  // would also swallow "what is the meaning of this codebase" (an existing, deliberately
+  // honest grammar-miss regression case — ask.test.mjs/ask-dual-strategy.test.mjs both
+  // assert it stays null), which never mentions "a"/"an" before its tail. Requiring the
+  // article keeps this template's reach to the one worked shape without reopening that.
+  {
+    name: "meta-whatis",
+    re: new RegExp(`^what\\s+(?:is|are)\\s+(?:an?)\\s+(.+?)\\??$`, "i"),
+    build: (m) => ({ shape: "meta", entityType: null, modifier: "direct", kind: "meta", object: m[1].trim() }),
+  },
+  // T6 mention: "where is <term> mentioned/referenced" — the prose/mentions surface
+  // (2026-07-02 query families). Tried BEFORE T7: T7's trailing marker is optional,
+  // so without this ordering it would swallow the mention question and lose the
+  // marker that distinguishes "locate the definition" from "list the prose mentions".
+  {
+    name: "mention",
+    re: new RegExp(`^where\\s+(?:is|are|was|were)\\s+(.+?)\\s+(?:${MENTION_MARKERS.map(escapeRegex).join("|")})\\??$`, "i"),
+    build: (m) => ({ shape: "mentions", entityType: null, modifier: "direct", kind: "mentions", object: m[1].trim() }),
+  },
+  // T7 where: "where is <term> [defined|declared|located|implemented]" — definition
+  // location off the site attribute / defining module. "where" starts no other
+  // template, so precedence against T1-T5 is structural.
+  {
+    name: "where",
+    re: new RegExp(`^where\\s+(?:is|are|was|were)\\s+(.+?)(?:\\s+(?:${WHERE_MARKERS.map(escapeRegex).join("|")}))?\\??$`, "i"),
+    build: (m) => ({ shape: "where", entityType: null, modifier: "direct", kind: "where", object: m[1].trim() }),
+  },
+  // T8 when: "when did <term> [last] change/touched/updated…" — temporal shape over
+  // the touches edges + commit date attributes. The verb slot reuses VERB_ALT, but
+  // only the touches family carries dates to answer with, so build() rejects any
+  // other kind (returning null falls through — parseAnchored tolerates it) rather
+  // than pretending "when did X import Y" has a temporal answer.
+  {
+    name: "when",
+    re: new RegExp(`^when\\s+(?:did|does|do|was|were|is)\\s+(.+?)\\s+(?:last\\s+)?(${VERB_ALT})\\??$`, "i"),
+    build: (m) => (VERB_TO_KIND[m[2].toLowerCase()] === "touches"
+      ? { shape: "when", entityType: null, modifier: "direct", kind: "touches", object: m[1].trim() }
+      : null),
+  },
+];
+
+/** Strategy 1: the original P0 anchored grammar — the whole (normalized) string
+ *  must match one of TEMPLATES start-to-end. A build() may return null to reject
+ *  a structural match on curated grounds (T8's non-temporal verbs); the scan then
+ *  simply continues, exactly as if the regex had not matched. Pure. */
+function parseAnchored(text) {
+  for (const t of TEMPLATES) {
+    const m = text.match(t.re);
+    if (m) {
+      const parsed = t.build(m);
+      if (parsed) return parsed;
+    }
+  }
+  return null;
+}
+
+// ---- strategy 2: keyword-spotting/decomposition — ELIZA's own mechanism: find
+// the keyword(s) anywhere in the text, decompose around them, tolerate reordering
+// and casual phrasing. Position-independent (no `^...$` anchor), so it tolerates
+// "what calls this" / "who invokes this" / "something executes this, where from"
+// — real phrasings the anchored grammar's fixed shapes don't cover. ----
+
+const STOPWORDS = new Set([
+  "what", "who", "which", "where", "when", "why", "how",
+  "does", "do", "did", "is", "are", "was", "were", "the", "a", "an", "of", "to", "from", "at", "in", "on",
+  "there", "something", "anything", "nothing", "one", "any",
+  // temporal filler in when-questions ("when was X last touched") — a symbol
+  // literally named "last" would be the accepted residual cost, same trade as
+  // every other stopword.
+  "last",
+]);
+
+/** Find the longest phrase from `table`'s keys that appears as a contiguous
+ *  run of `words` (case already lowercased by the caller). Longest-match-first
+ *  (multi-word phrases before single words) so "co-changes with" isn't
+ *  shadowed by a shorter unrelated word. A span overlapping `consumed` indices
+ *  is skipped: the verb and entity tables now share a surface form ("change"
+ *  is both a touches verb and the Change entity noun), and a word already
+ *  claimed by the verb pass must not double as the entity keyword. Returns
+ *  {kind, start, end} (end exclusive) or null. */
+function findPhrase(lcWords, table, consumed = null) {
+  const phrases = Object.keys(table).sort((a, b) => b.split(" ").length - a.split(" ").length);
+  for (const p of phrases) {
+    const pWords = p.split(" ");
+    for (let i = 0; i <= lcWords.length - pWords.length; i += 1) {
+      if (consumed && pWords.some((_, j) => consumed.has(i + j))) continue;
+      if (pWords.every((w, j) => lcWords[i + j] === w)) return { kind: table[p], start: i, end: i + pWords.length };
+    }
+  }
+  return null;
+}
+
+// ---- bounded edit distance (two-level fuzzy, 2026-07-02) — hand-rolled
+// Damerau-Levenshtein (optimal string alignment: substitution/insertion/deletion
+// + adjacent transposition), bounded with an early row-minimum exit. Used by the
+// keyword-spot FUZZY tier below and resolveObject's tier 5 — both fire only after
+// every exact/curated tier missed, and a distance TIE is refused (keyword) or
+// surfaced as ambiguity (object), never broken by a guess. Pure JS, no deps, so
+// the inlined viewer bundle gets fuzzy matching for free. ----
+
+/** Distance between a and b, or max+1 as soon as it provably exceeds `max`. */
+function editDistance(a, b, max) {
+  if (a === b) return 0;
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  let prev2 = null;
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i += 1) {
+    const cur = [i];
+    let rowMin = i;
+    for (let j = 1; j <= b.length; j += 1) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      let v = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) v = Math.min(v, prev2[j - 2] + cost);
+      cur[j] = v;
+      if (v < rowMin) rowMin = v;
+    }
+    if (rowMin > max) return max + 1;
+    prev2 = prev;
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
+/** The curated distance budget: 1 edit for short tokens, 2 for longer ones. */
+const fuzzyBound = (s) => (s.length <= 5 ? 1 : 2);
+
+/** Every single word appearing in the three parse tables — the "is this word
+ *  already vocabulary?" gate for the lemma/fuzzy canonicalization passes (an
+ *  exact vocab word is NEVER rewritten: exact curated match always wins). */
+const VOCAB_WORDS = new Set(
+  [...Object.keys(VERB_TO_KIND), ...Object.keys(ENTITY_TO_TYPE), ...Object.keys(MODIFIER_TO_KIND)]
+    .flatMap((p) => p.split(" ")),
+);
+
+/** Fuzzy-correction TARGETS: verb-phrase and modifier constituents only, length ≥4.
+ *  Entity nouns are deliberately excluded — real identifiers collide with them at
+ *  distance ≤2 far too easily ("myfile" is 2 edits from "file", "caller" 2 from
+ *  "calls"-family words), and entity-noun typos are already owned by the curated
+ *  MISSPELLINGS table where such calls are made deliberately. Short constituents
+ *  ("of", "to", "in", "on") are excluded for the same reason: at bound 1 half of
+ *  English is adjacent to them. */
+const FUZZY_TARGET_WORDS = [...new Set(
+  [...Object.keys(VERB_TO_KIND), ...Object.keys(MODIFIER_TO_KIND)]
+    .flatMap((p) => p.split(" "))
+    .filter((w) => w.length >= 4),
+)];
+
+/** A query word may be canonicalized only if it is plain alphabetic, not a
+ *  stopword, and not already vocabulary. Dotted/digit terms (file names, shas)
+ *  are never touched. */
+function eligibleForCanon(w) {
+  return /^[a-z]+$/.test(w) && !STOPWORDS.has(w) && !VOCAB_WORDS.has(w);
+}
+
+/** UNIQUE within-bound fuzzy vocab keyword for `w`, or null — a tie between two
+ *  distinct target words at the same distance is refused outright (the honest-miss
+ *  discipline at the vocabulary level; cf. MISSPELLINGS' curated "calss" decision). */
+function fuzzyVocabWord(w) {
+  const bound = fuzzyBound(w);
+  let best = bound + 1;
+  let hit = null;
+  let tied = false;
+  for (const target of FUZZY_TARGET_WORDS) {
+    const d = editDistance(w, target, Math.min(best, bound));
+    if (d < best) { best = d; hit = target; tied = false; }
+    else if (d === best && d <= bound && target !== hit) tied = true;
+  }
+  return best <= bound && !tied ? hit : null;
+}
+
+/** Strategy 2: scan (already-normalized) text for a verb keyword anywhere,
+ *  plus optional entity/modifier keywords anywhere, then split whatever's
+ *  left (after removing the matched spans + stopwords) into the words BEFORE
+ *  and AFTER the verb. Which side(s) are non-empty decides the shape —
+ *  mirrors the three anchored shapes but by decomposition instead of a fixed
+ *  template, so it tolerates reordering/casual phrasing the anchored regexes
+ *  don't: text on BOTH sides ("does X import Y") -> ask{subject:before,
+ *  object:after}; only AFTER the verb ("what calls this") -> reverse{object:
+ *  after}; only BEFORE it ("what does X import") -> forward{object:before}.
+ *  A lone context pronoun ("this"/"it"/"that"/"here") ending up as a resolved
+ *  term is left as plain text — resolveTermOrContext (traverse-time)
+ *  recognizes it against an optional contextId, so no separate flag is
+ *  needed here. A misparse here costs nothing beyond an honest object-miss
+ *  downstream (resolveObject never guesses).
+ *
+ *  Keyword matching is TIERED (two-level fuzzy work, 2026-07-02) — each lower
+ *  tier fires ONLY when every tier above found no verb phrase at all, so an
+ *  exact curated match can never be displaced:
+ *    1. exact — the words as typed (post-normalization, which already applied
+ *       the curated CONTRACTIONS/MISSPELLINGS/WRONG_WORDS corrections);
+ *    2. lemma (only with the optional Node-side `nlp` adapter) — each eligible
+ *       word is replaced by its wink lemma IF that lemma is itself a vocab word
+ *       ("imported"/"importing" -> "import"), so inflections hit the curated
+ *       phrases without enumerating them. Every verb family already stores its
+ *       lemma form ("import", "call", "touch", "use", …), so a direct
+ *       lemma-in-vocab check is the whole lookup — no reverse index needed;
+ *    3. fuzzy (adapter-free; works in the inlined viewer too) — a word ≥4 chars
+ *       matching nothing exactly may rewrite to a UNIQUE verb/modifier
+ *       constituent within the bounded edit distance (see fuzzyVocabWord; ties
+ *       are refused, entity nouns are never fuzzy targets).
+ *  The canonicalized words drive PHRASE FINDING only — sideText always reads the
+ *  ORIGINAL words, so a correction can never corrupt an object/subject term. */
+function parseKeywordSpot(text, nlp = null) {
+  // Strip a trailing "?" (mirrors the anchored templates' own `\??$`) and turn commas into
+  // pauses/spaces — but NEVER strip a mid-word ".": object terms are routinely dotted file/module
+  // names ("a.py", "utils.mjs"), and the anchored strategy captures those raw, so keyword-spot
+  // must too or the two strategies would "disagree" over a period that was never part of the intent.
+  const words = text.replace(/\?+\s*$/, "").replace(/,/g, " ").split(/\s+/).filter(Boolean);
+  const lcWords = words.map((w) => w.toLowerCase());
+  // where/mentions shapes (2026-07-02 query families): "where is X [defined]" and
+  // "where is X mentioned" carry NO relation verb, so the verb-driven decomposition
+  // below can never reach them. Routed here by the "where" question word + marker —
+  // but ONLY when no relation verb exists anywhere in the sentence: "something
+  // executes this, where from" (an existing worked phrasing) has a verb, and its
+  // "where" is decorative, not a location question.
+  if (lcWords.includes("where") && !findPhrase(lcWords, VERB_TO_KIND)) {
+    const mention = lcWords.some((w) => MENTION_MARKERS.includes(w));
+    const markers = new Set([...WHERE_MARKERS, ...MENTION_MARKERS]);
+    const objText = words.filter((w, i) => !STOPWORDS.has(lcWords[i]) && !markers.has(lcWords[i])).join(" ").trim();
+    if (objText) {
+      const kind = mention ? "mentions" : "where";
+      return { shape: kind, entityType: null, modifier: "direct", kind, object: objText };
+    }
+  }
+  let canonWords = lcWords;
+  let verbHit = findPhrase(lcWords, VERB_TO_KIND);
+  if (!verbHit && nlp) {
+    // tier 2: lemma (see the tier doc above) — replace only when the lemma is
+    // itself vocabulary, so unknown words ("myfile") pass through untouched.
+    const lemmaWords = lcWords.map((w) => {
+      if (!eligibleForCanon(w)) return w;
+      const l = nlp.lemma(w);
+      return VOCAB_WORDS.has(l) ? l : w;
+    });
+    verbHit = findPhrase(lemmaWords, VERB_TO_KIND);
+    if (verbHit) canonWords = lemmaWords;
+  }
+  if (!verbHit) {
+    // tier 3: bounded-edit-distance rewrite toward verb/modifier keywords only
+    // ("impotr" -> "import"); ≥4-char words only — below that the bound covers
+    // half of English (and "and" is 1 edit from the "land in" constituent).
+    const fuzzyWords = lcWords.map((w) => (w.length >= 4 && eligibleForCanon(w) ? fuzzyVocabWord(w) || w : w));
+    verbHit = findPhrase(fuzzyWords, VERB_TO_KIND);
+    if (verbHit) canonWords = fuzzyWords;
+  }
+  if (!verbHit) return null;
+  // POS consumer (wink adapter, Node-side only): rescue the ONE decomposition this
+  // strategy provably mis-parses — a relation word used as a NOUN in a "the
+  // <imports> of <term>" nominal ("show the imports of walk.mjs" otherwise
+  // decomposes to ask{subject:"show"}; bare "the imports of walk.mjs" to the
+  // reverse shape, both wrong). The wink probe showed "import" is tagged NOUN even
+  // in genuine verb use ("which modules import walk.mjs"), so the POS signal is
+  // deliberately NOT a general verb veto — it only fires inside this exact
+  // det+NOUN+"of" frame, where the nominal reading is grammatically forced.
+  if (nlp && verbHit.end - verbHit.start === 1) {
+    const i = verbHit.start;
+    const det = lcWords[i - 1];
+    if ((det === "the" || det === "these" || det === "those") && lcWords[i + 1] === "of") {
+      const tags = nlp.posTags(words);
+      if (tags[i] === "NOUN") {
+        const objText = words.slice(i + 2).filter((w, j) => !STOPWORDS.has(lcWords[i + 2 + j])).join(" ").trim();
+        if (objText) return { shape: "forward", entityType: null, modifier: "direct", kind: verbHit.kind, object: objText };
+      }
+    }
+  }
+  const consumed = new Set();
+  const mark = (hit) => { if (hit) for (let i = hit.start; i < hit.end; i += 1) consumed.add(i); };
+  mark(verbHit);
+  const entityHit = findPhrase(canonWords, ENTITY_TO_TYPE, consumed);
+  mark(entityHit);
+  const modifierHit = findPhrase(canonWords, MODIFIER_TO_KIND, consumed);
+  mark(modifierHit);
+  const sideText = (from, to) => words
+    .slice(from, to)
+    .filter((_, j) => !consumed.has(from + j) && !STOPWORDS.has(lcWords[from + j]))
+    .join(" ")
+    .trim();
+  const beforeText = sideText(0, verbHit.start);
+  const afterText = sideText(verbHit.end, words.length);
+  const kind = verbHit.kind;
+  // slices read canonWords, not lcWords: the entity/modifier spans were matched
+  // against the canonicalized array, whose word IS the table key.
+  const entityType = entityHit ? ENTITY_TO_TYPE[canonWords.slice(entityHit.start, entityHit.end).join(" ")] : null;
+  const modifier = modifierHit ? MODIFIER_TO_KIND[canonWords.slice(modifierHit.start, modifierHit.end).join(" ")] : "direct";
+
+  // when shape (2026-07-02 query families): "when did X change" / "when was X last
+  // touched" — the "when" question word turns a touches decomposition temporal.
+  // Only touches carries commit dates to answer with; a "when" next to any other
+  // relation verb falls through to the ordinary shapes (and their honest answers).
+  if (kind === "touches" && lcWords.includes("when")) {
+    const objText = beforeText || afterText;
+    if (objText) return { shape: "when", entityType: null, modifier: "direct", kind: "touches", object: objText };
+  }
+
+  if (beforeText && afterText) return { shape: "ask", entityType: null, modifier: "direct", kind, subject: beforeText, object: afterText };
+  if (afterText) return { shape: "reverse", entityType, modifier, kind, object: afterText };
+  // forward keeps the spotted entityType ("which modules did commit <sha> touch" is a
+  // forward decomposition — subject before the verb — whose asked grain would otherwise
+  // be lost); traverse() only consults it for the commit-as-subject grain selection,
+  // so plain forwards behave exactly as before. Modifier stays hardcoded: no forward
+  // closure traversal exists (see modifierIsWired).
+  if (beforeText) return { shape: "forward", entityType, modifier: "direct", kind, object: beforeText };
+  return null;
+}
+
+// ---- strategy merge — run both, agree/disagree/single/neither (§ above). A
+// plain array + a merge step, so a third strategy plugs in the same way. ----
+
+const STRATEGIES = [
+  { name: "anchored", parse: parseAnchored },
+  { name: "keyword-spot", parse: parseKeywordSpot },
+];
+
+/** The default lemma/POS adapter: wink-nlp when this is a Node process with the
+ *  optional deps installed, null otherwise. BOUNDARY (see the import comment):
+ *  the inlined viewer bundle strips the ask-nlp.mjs import, so `nlpAdapter` is
+ *  an UNDECLARED identifier there — `typeof` reads it without throwing and the
+ *  browser path degrades to no adapter, same parse pipeline otherwise. */
+function defaultNlp() {
+  return typeof nlpAdapter === "function" ? nlpAdapter() : null;
+}
+
+// "commit abc1234" and bare "abc1234" are the SAME term once resolveObject's
+// commit-sha tier strips the noun — the anchored strategy captures the noun inside
+// its object span while keyword-spot consumes it as the entity keyword, so without
+// this the two strategies would "disagree" over a word that names no different thing.
+const cmpTerm = (s) => String(s || "").trim().toLowerCase().replace(/\s+/g, " ").replace(/^commit\s+(?=[0-9a-f]{7,40}$)/, "");
+
+/** Do two independently-produced parses mean the same graph query? Same
+ *  shape, same relation kind, and matching term(s) (both subject and object
+ *  for "ask"; just object otherwise) — anything less is a genuine
+ *  disagreement, not a near-miss to paper over. */
+function sameParse(p, q) {
+  if (p.shape !== q.shape || p.kind !== q.kind) return false;
+  if (p.shape === "ask") return cmpTerm(p.subject) === cmpTerm(q.subject) && cmpTerm(p.object) === cmpTerm(q.object);
+  return cmpTerm(p.object) === cmpTerm(q.object);
+}
+
+/** Compile a free-text question into {shape, kind, entityType, modifier,
+ *  object[, subject]}, or null if NEITHER strategy fits — an honest grammar
+ *  miss (§6.3), never a best-effort guess. When both strategies parse and
+ *  AGREE, returns that parse unchanged (no fallback ordering — either
+ *  strategy's own result is equally valid once they agree, per §above: "use
+ *  either"). When both parse but DISAGREE (different shape/kind/term),
+ *  returns {ambiguousParse: true, candidates: [...]} — a genuine "this could
+ *  mean more than one thing" case, distinct from resolveObject's later
+ *  object-resolution ambiguity. `opts.nlp` overrides the lemma/POS adapter
+ *  (pass null to force the adapter-less browser behavior in a Node test);
+ *  leaving it undefined picks the deterministic default (defaultNlp). Pure
+ *  given (query, adapter) — the adapter itself is a fixed model, no sampling. */
+export function parseQuery(query, { nlp = undefined } = {}) {
+  const adapter = nlp === undefined ? defaultNlp() : nlp;
+  const raw = String(query || "").trim().replace(/\s+/g, " ");
+  if (!raw) return null;
+  const text = applyNegationFrames(normalizeQuery(raw));
+  if (!text) return null;
+  // COMPOSITIONAL PARSE PATH (PLAN §5.16 P3) — the new PRIMARY layer: a recursive
+  // descent over CLAUSES for the compositional shapes (nested/relative, boolean,
+  // qualifiers, aggregates, superlatives, anaphora). It fires ONLY when a
+  // compositional MARKER is present and returns null otherwise, so every plain
+  // clause falls straight through to the unchanged two-strategy merge below — the
+  // whole existing grammar is preserved bit-for-bit. When a marker IS present but
+  // the phrase cannot be compiled, it returns an honest {node:"miss"} rather than
+  // letting keyword-spot guess at a composition it never expressed.
+  const composite = parseComposite(text, adapter);
+  if (composite) return composite;
+  const hits = STRATEGIES.map((s) => ({ name: s.name, parsed: s.parse(text, adapter) })).filter((r) => r.parsed);
+  if (hits.length === 0) return null;
+  if (hits.length === 1) return hits[0].parsed;
+  const [a, b] = hits;
+  if (sameParse(a.parsed, b.parsed)) return a.parsed;
+  return { ambiguousParse: true, candidates: hits.map((h) => h.parsed) };
+}
+
+// ============================================================================
+// §compositional grammar (PLAN §5.16 P3) — the step up from ELIZA keyword-
+// spotting to a real recursive-descent grammar. Tokenize -> recursive-descent
+// parse to an AST of nodes -> compile to graph traversal. The AST node shapes
+// (all carry a `node` tag so traverse()/render() can branch without touching the
+// simple-clause path):
+//   {node:"clause",   clause}                    — a wrapped simple parse (the leaf)
+//   {node:"allOfClass", entityType}              — every individual of a class
+//   {node:"reverseSet"|"forwardSet", kind, entityType, inner}  — nested/relative:
+//        the OBJECT (reverse) / SUBJECT (forward) of the outer edge is the id-set
+//        produced by evaluating `inner` (another AST) — two-stage traversal.
+//   {node:"membership", entityType, term}        — "<entity> of/in <term>"
+//   {node:"qualifier", filters:[word…], inner}   — adjective post-filters on a set
+//   {node:"boolean", entityType, atoms:[{op,kind,ast|filters}…]}  — set algebra
+//        over the SAME subject (and/or/but-not); op ∈ seed/intersection/union/difference
+//   {node:"count", entityType, base}             — aggregate: |eval(base)|
+//   {node:"list", entityType, base, scoped}      — list the individuals of eval(base),
+//        capped at OVERFLOW_CAP; `scoped` suppresses the "narrow with …" hint when the
+//        list was already restricted (a module scope or predicate tail)
+//   {node:"superlative", entityType, metric, metricNoun, extreme}  — rank by degree
+//   {node:"anaphora", mode, filter}              — over ask()'s `prev` id array
+//   {node:"miss", reason}                        — a compositional marker was seen
+//        but could not compile: an honest stated miss, never a guess.
+// The grammar COMPOSES the closed vocabulary (ask-vocab.mjs); it never opens it —
+// every leaf still resolves through the existing curated clause parser + tiered
+// resolveObject, so a term it can't resolve is still an honest object-miss.
+// ============================================================================
+
+// Depth cap on nesting (PLAN P3: "depth ≥2 nesting; guard against runaway with a
+// sane hop cap and an honest 'too deep to resolve' if exceeded").
+const MAX_COMPOSE_DEPTH = 4;
+// A resolvable-later placeholder object term for the OUTER clause of a nested
+// parse: the outer clause is parsed normally (so its verb/shape/grain classify),
+// then its `object` is discarded and replaced at eval time by the inner set. Chosen
+// to be plainly alphabetic (not a stopword, not vocabulary) so the clause parser
+// treats it as an ordinary object term rather than dropping it.
+const NEST_SENTINEL = "zzinnerset";
+// Filler words dropped at the front of a relative predicate / anaphora filter.
+const PRED_LEAD_SKIP = new Set(["that", "which", "who", "are", "is", "was", "were", "do", "does", "also", "still", "both", "and"]);
+const FRAME_WORDS = new Set(["which", "what", "who", "list", "show", "find", "give", "me", "us", "all"]);
+
+const splitWords = (text) => String(text).replace(/\?+\s*$/, "").replace(/,/g, " ").split(/\s+/).filter(Boolean);
+const entityNoun = (w) => (ENTITY_TO_TYPE[w] ? { entityType: ENTITY_TO_TYPE[w], placeholder: false }
+  : (PLACEHOLDER_NOUNS.includes(w) ? { entityType: null, placeholder: true } : null));
+const isGerundVerb = (w) => !!VERB_TO_KIND[w] && w.endsWith("ing");
+
+/** Run the two existing strategies on a FRAGMENT and return a single simple clause
+ *  (or null). Deterministic tie-break: on strategy disagreement the anchored parse
+ *  wins (STRATEGIES[0]) — a fragment fed from the composer is already shape-
+ *  constrained, so the merge's "surface an ambiguity" behavior isn't wanted here. */
+function parseSimpleClause(text, nlp) {
+  const hits = STRATEGIES.map((s) => s.parse(text, nlp)).filter(Boolean);
+  if (!hits.length) return null;
+  if (hits.length === 1) return hits[0];
+  return sameParse(hits[0], hits[1]) ? hits[0] : hits[0];
+}
+
+/** Top compositional dispatcher — first marker-matching production wins; a
+ *  production returns null (not this shape → fall through) or an AST node (which
+ *  may itself be {node:"miss"} when the marker was present but uncompilable). */
+function parseComposite(text, nlp) {
+  const w = splitWords(text);
+  const lc = w.map((x) => x.toLowerCase());
+  return parseAnaphora(w, lc, nlp)
+    || parseAggregate(w, lc, nlp)
+    || parseSuperlative(w, lc, nlp)
+    || parseList(w, lc, nlp, 0)
+    || parseNested(w, lc, nlp, 0)
+    || parseRelationalOrQualified(w, lc, nlp, 0);
+}
+
+/** A set-producing sub-expression (used for nested inner clauses, boolean branches,
+ *  and count restrictors): nested first, then the relational/qualifier/boolean
+ *  parser, then a bare simple clause. Carries `depth` for the nesting cap. */
+function parseSetPhrase(text, nlp, depth) {
+  if (depth > MAX_COMPOSE_DEPTH) return { node: "miss", reason: "too deep to resolve" };
+  const w = splitWords(text);
+  const lc = w.map((x) => x.toLowerCase());
+  const nested = parseNested(w, lc, nlp, depth);
+  if (nested) return nested;
+  const rel = parseRelationalOrQualified(w, lc, nlp, depth);
+  if (rel) return rel;
+  const clause = parseSimpleClause(text, nlp);
+  if (clause) return { node: "clause", clause };
+  return null;
+}
+
+/** NESTED / RELATIVE (object-position relative clause): "<outer verb> <placeholder
+ *  |entity> that <inner>" — the noun before "that" is the OBJECT of the outer edge,
+ *  constrained by the inner clause. Distinguished from a subject-relative ("functions
+ *  that call X", handled by parseRelationalOrQualified) by requiring a VERB before the
+ *  relative noun (i.e. the noun is not the leading subject). Returns a reverse/forward
+ *  Set node, an honest miss (marker present, uncompilable), or null (no object-relative
+ *  marker → let another production try). */
+function parseNested(w, lc, nlp, depth) {
+  for (let r = 1; r < lc.length; r += 1) {
+    if (!RELATIVE_PRONOUNS.includes(lc[r])) continue;
+    if (r + 1 >= lc.length) continue;               // nothing after "that"
+    const noun = entityNoun(lc[r - 1]);
+    if (!noun) continue;                            // "that" not preceded by a noun
+    const head = w.slice(0, r - 1);                 // outer clause words, minus the placeholder noun
+    if (!head.length) continue;                     // noun is the leading subject → subject-relative, not this shape
+    const outer = parseSimpleClause([...head, NEST_SENTINEL].join(" "), nlp);
+    if (!outer || (outer.shape !== "reverse" && outer.shape !== "forward")) continue;
+    if (outer.modifier && outer.modifier !== "direct") continue; // no transitive-over-set closure primitive
+    // build the inner sub-query: "which <placeholder-noun> <inner-text>" — recurses,
+    // so the inner may itself be nested/boolean/qualified (depth ≥2).
+    const innerText = `which ${lc[r - 1]} ${w.slice(r + 1).join(" ")}`;
+    const inner = parseSetPhrase(innerText, nlp, depth + 1);
+    if (!inner || inner.node === "miss") return inner ? { node: "miss", reason: inner.reason || "inner clause didn't parse" } : { node: "miss", reason: "inner clause didn't parse" };
+    return { node: outer.shape === "reverse" ? "reverseSet" : "forwardSet", kind: outer.kind, entityType: outer.entityType, inner };
+  }
+  return null;
+}
+
+/** ANAPHORA over the previous result set: "which of those/them <filter>", "how many
+ *  of those <filter>". Requires "of <pronoun>" (so a bare "those" in a term never
+ *  fires). Returns a {node:"anaphora"} (mode count|list), a miss (filter present but
+ *  uncompilable), or null. */
+function parseAnaphora(w, lc, nlp) {
+  let p = -1;
+  for (let i = 1; i < lc.length; i += 1) {
+    if (ANAPHORA_TRIGGERS.includes(lc[i]) && lc[i - 1] === "of") { p = i; break; }
+  }
+  if (p < 0) return null;
+  const head = lc.slice(0, p - 1).join(" ");
+  const mode = /^(how many|how much|count)\b/.test(head) ? "count" : "list";
+  const filter = parsePredicateFilter(w.slice(p + 1), nlp);
+  if (filter === undefined) return { node: "miss", reason: "the follow-up filter didn't parse" };
+  return { node: "anaphora", mode, filter };
+}
+
+/** Parse a trailing filter (for anaphora, and any "of those that …" tail) into
+ *  {type:"all"} | {type:"qual", filters} | {type:"clause", clause}. Returns
+ *  undefined when a non-empty filter cannot be compiled (an honest miss upstream). */
+function parsePredicateFilter(words, nlp) {
+  let i = 0;
+  const lc = words.map((x) => x.toLowerCase());
+  while (i < lc.length && PRED_LEAD_SKIP.has(lc[i])) i += 1;
+  const rest = words.slice(i);
+  const restLc = lc.slice(i);
+  if (!rest.length) return { type: "all" };
+  if (restLc.every((x) => QUALIFIERS[x])) return { type: "qual", filters: restLc };
+  const clause = parseSimpleClause(`what ${rest.join(" ")}`, nlp);
+  if (clause && (clause.shape === "reverse" || clause.shape === "forward") && clause.object) {
+    return { type: "clause", clause };
+  }
+  return undefined;
+}
+
+/** Trailing "and that's the whole question" filler an aggregate/list tail can carry
+ *  ("how many classes are there", "list functions in total", "which classes exist in
+ *  the index") — a count/list over a bare kind is frequently phrased with such a tail,
+ *  and it must NOT be mistaken for a restrictor (that's the exact bug behind "how many
+ *  classes are there" → the count-restrictor miss). Combined with STOPWORDS (which
+ *  already carries are/there/is/in/the/…) at the call site, so only the non-stopword
+ *  extras live here. A tail with ANY word outside this ∪ STOPWORDS is a real restrictor. */
+const AGG_TAIL_FILLER = new Set([
+  "total", "altogether", "overall", "exist", "exists", "existing", "present",
+  "here", "now", "currently", "graph", "index", "codebase", "repo", "repository",
+]);
+
+/** AGGREGATE / COUNT: "how many <entity> [<restrictor>]", "count <entity>",
+ *  "number of <entity> that …". A bare "how many classes" counts the class of
+ *  individuals; a restrictor tail counts a clause's result set; a purely-filler tail
+ *  ("… are there", "… in total") is treated as no restrictor (a bare count). */
+function parseAggregate(w, lc, nlp) {
+  const trig = AGGREGATE_TRIGGERS.find((t) => lc.slice(0, t.split(" ").length).join(" ") === t);
+  if (!trig) return null;
+  let i = trig.split(" ").length;
+  while (i < lc.length && (lc[i] === "the" || lc[i] === "a" || lc[i] === "all")) i += 1;
+  const quals = [];
+  while (i < lc.length && QUALIFIERS[lc[i]]) { quals.push(lc[i]); i += 1; }
+  const noun = i < lc.length ? entityNoun(lc[i]) : null;
+  if (!noun) return { node: "miss", reason: "count needs a known entity kind (functions, classes, modules, …)" };
+  const entWord = lc[i];
+  i += 1;
+  const tail = w.slice(i);
+  const tailMeaningful = lc.slice(i).some((t) => !STOPWORDS.has(t) && !AGG_TAIL_FILLER.has(t));
+  let base;
+  if (tailMeaningful) {
+    const setAst = parseSetPhrase(`which ${entWord} ${tail.join(" ")}`, nlp, 1);
+    if (!setAst || setAst.node === "miss") return { node: "miss", reason: "the count restrictor didn't parse" };
+    base = setAst;
+  } else {
+    base = { node: "allOfClass", entityType: noun.entityType };
+  }
+  if (quals.length) base = { node: "qualifier", filters: quals, inner: base };
+  return { node: "count", entityType: noun.entityType, base };
+}
+
+// Determiners/objects skipped after a LIST trigger verb ("show me THE classes") — a
+// superset of the aggregate skip so "give me all the modules" reaches the kind noun.
+const LIST_SKIP = new Set(["the", "a", "an", "all", "me", "us"]);
+const LIST_TRIGGERS_SORTED = [...LIST_TRIGGERS].sort((a, b) => b.split(" ").length - a.split(" ").length);
+// The listable node classes, named in the honest miss and the empty-index message.
+const LISTABLE_KINDS = "functions, classes, methods, modules, attributes, variables, or commits";
+
+/** LIST: "list <kind>", "show me the <kind>s", "what are the <kind>", "list <kind> in
+ *  <module>". A sibling of the count node — it enumerates the individuals of a class
+ *  (rendered under OVERFLOW_CAP) instead of counting them. Fires on a LIST_TRIGGERS
+ *  verb, OR the bare interrogative "what/which <kind>" — but the interrogative form is
+ *  gated to a filler-only tail so an ordinary reverse query ("which functions call X")
+ *  is NOT hijacked into a list (it must stay a simple clause; the compat tests pin it).
+ *  A scope/predicate tail ("in walk.mjs", "that call X") is delegated to parseSetPhrase
+ *  (reusing membership/relational/boolean), and its `scoped` flag suppresses the
+ *  "narrow with …" hint. An unknown kind after a clear imperative trigger ("list
+ *  bananas") is an honest miss naming the listable kinds; anything less certain falls
+ *  through (null) to the existing parser/cascade rather than guessing. */
+function parseList(w, lc, nlp, depth) {
+  let i = 0;
+  let interrogative = false;
+  let matched = null;
+  for (const t of LIST_TRIGGERS_SORTED) {
+    const tw = t.split(" ");
+    if (lc.slice(0, tw.length).join(" ") === t) { matched = t; i = tw.length; break; }
+  }
+  if (!matched) {
+    if (lc[0] === "what" || lc[0] === "which") { interrogative = true; i = 1; }
+    else return null;
+  }
+  while (i < lc.length && LIST_SKIP.has(lc[i])) i += 1;
+  const quals = [];
+  while (i < lc.length && QUALIFIERS[lc[i]]) { quals.push(lc[i]); i += 1; }
+  const noun = i < lc.length ? entityNoun(lc[i]) : null;
+  // "Change" is ask-vocab.mjs's pseudo-type (no node is ever class "Change"), so it is
+  // not a listable class — fall through rather than render a false empty.
+  if (!noun || noun.placeholder || noun.entityType === "Change") {
+    // A clear imperative "list <one unknown plain word>" is an honest miss that NAMES
+    // the kinds; a verb-led or multi-word tail, or the interrogative form, is too
+    // uncertain to claim as a list — fall through to the existing parser/cascade.
+    if (!interrogative && i < lc.length && i === lc.length - 1
+      && /^[a-z]+$/.test(lc[i]) && !VERB_TO_KIND[lc[i]] && !PLACEHOLDER_NOUNS.includes(lc[i])) {
+      return { node: "miss", reason: `"${lc[i]}" isn't a listable kind — try ${LISTABLE_KINDS}` };
+    }
+    return null;
+  }
+  const entityType = noun.entityType;
+  const entWord = lc[i];
+  i += 1;
+  const tail = w.slice(i);
+  const tailMeaningful = lc.slice(i).some((t) => !STOPWORDS.has(t) && !AGG_TAIL_FILLER.has(t));
+  // The bare interrogative "what/which <kind>" is a list ONLY with an explicit
+  // list-confirming filler tail ("… are there", "… that exist"): a real predicate
+  // ("which functions call X") is a reverse query, and a *bare* "which methods" is left
+  // alone deliberately — otherwise the relaxation cascade could drop an unknown
+  // qualifier ("which shiny methods" → "which methods") and silently list everything,
+  // erasing the honest "unknown qualifier" miss. Imperative triggers ("list methods")
+  // carry their own list intent, so they need no such tail.
+  if (interrogative && (tailMeaningful || tail.length === 0)) return null;
+  let base;
+  let scoped = false;
+  if (tailMeaningful) {
+    const setAst = parseSetPhrase(`which ${[...quals, entWord, ...tail].join(" ")}`, nlp, (depth || 0) + 1);
+    if (!setAst || setAst.node === "miss") return { node: "miss", reason: (setAst && setAst.reason) || "the list filter didn't parse" };
+    base = setAst;
+    scoped = true;
+  } else {
+    base = { node: "allOfClass", entityType };
+    if (quals.length) base = { node: "qualifier", filters: quals, inner: base };
+  }
+  return { node: "list", entityType, base, scoped };
+}
+
+/** SUPERLATIVE: "which <entity> has the most/fewest <edge-noun>", "the most-connected
+ *  <entity>", "the largest <entity>". Ranks individuals of <entity> by a degree
+ *  metric over the classified edge groups. An unrecognized edge noun is an honest
+ *  miss naming the supported ones. */
+function parseSuperlative(w, lc, nlp) {
+  // extreme (single word, or "most connected" two-word)
+  let ext = null; let extIdx = -1;
+  for (let i = 0; i < lc.length; i += 1) {
+    const two = lc.slice(i, i + 2).join(" ");
+    if (SUPERLATIVE_EXTREMES[two]) { ext = SUPERLATIVE_EXTREMES[two]; extIdx = i; break; }
+    if (SUPERLATIVE_EXTREMES[lc[i]]) { ext = SUPERLATIVE_EXTREMES[lc[i]]; extIdx = i; break; }
+  }
+  if (!ext) return null;
+  // entity noun anywhere (first match, deterministic)
+  let entityType; let entWord = null;
+  for (const x of lc) { const n = entityNoun(x); if (n && !n.placeholder) { entityType = n.entityType; entWord = x; break; } }
+  if (!entWord) return { node: "miss", reason: "a superlative needs an entity kind (module, class, function, …)" };
+  // edge noun after the extreme (imports/callers/methods/…)
+  let metric = null; let metricNoun = null;
+  for (let i = extIdx; i < lc.length; i += 1) {
+    if (EDGE_NOUN_TO_METRIC[lc[i]]) { metric = EDGE_NOUN_TO_METRIC[lc[i]]; metricNoun = lc[i]; break; }
+  }
+  const connectivity = lc.includes("connected") || lc.slice(extIdx, extIdx + 2).join(" ") === "most connected"
+    || ["largest", "biggest", "smallest"].includes(lc[extIdx]);
+  if (!metric) {
+    if (connectivity) { metric = EDGE_NOUN_TO_METRIC.connections; metricNoun = "connections"; }
+    else return { node: "miss", reason: "name what to rank by (imports, callers, methods, tests, or connections)" };
+  }
+  return { node: "superlative", entityType, metric, metricNoun, extreme: ext };
+}
+
+/** RELATIONAL / BOOLEAN / QUALIFIER (subject-first): "[which] [<qualifier>…] <entity>
+ *  [that] <predicate>", where <predicate> is one or more relation clauses joined by
+ *  and/or/but-not over the SAME subject, a "<of|in> <term>" membership, or empty (a
+ *  bare qualified class). Fires ONLY on a compositional marker — a leading qualifier,
+ *  a relative pronoun, a gerund-led predicate, or a membership "of/in" — so a plain
+ *  reverse query ("which functions call helper") and the bare-template ambiguous case
+ *  ("which classes extends Base and couples to logging", no marker) both fall through
+ *  to the existing strategies untouched. Returns an AST node, a miss, or null. */
+function parseRelationalOrQualified(w, lc, nlp, depth) {
+  let i = 0;
+  while (i < lc.length && FRAME_WORDS.has(lc[i])) i += 1;
+  const framed = i > 0;
+  const quals = [];
+  while (i < lc.length && QUALIFIERS[lc[i]]) { quals.push(lc[i]); i += 1; }
+  const noun = i < lc.length ? entityNoun(lc[i]) : null;
+  if (!noun) {
+    // an unknown adjective sitting in the qualifier slot, right before a known
+    // entity noun ("which shiny methods", "static frobnicated functions") — an
+    // honest miss that NAMES the supported qualifiers, never a guess (PLAN P3).
+    // STOPWORDS are excluded so a normal question auxiliary in that position ("what
+    // DID commit X touch", "what WAS in <sha>") is left for the existing parser, not
+    // mistaken for an unknown qualifier.
+    if ((framed || quals.length) && i + 1 < lc.length && /^[a-z]+$/.test(lc[i])
+      && !VERB_TO_KIND[lc[i]] && !STOPWORDS.has(lc[i]) && entityNoun(lc[i + 1])) {
+      return { node: "miss", reason: `unknown qualifier "${lc[i]}" — supported: ${Object.keys(QUALIFIERS).join(", ")}` };
+    }
+    return null;                                   // no subject entity → not this shape
+  }
+  const entityType = noun.entityType;
+  const entWord = lc[i];
+  i += 1;
+  let predLc = lc.slice(i);
+  let predWords = w.slice(i);
+  let relFlag = false;
+  if (predLc.length && RELATIVE_PRONOUNS.includes(predLc[0])) { relFlag = true; predLc = predLc.slice(1); predWords = predWords.slice(1); }
+  const membershipLed = predLc[0] === "of" || predLc[0] === "in";
+  const gerundLed = predLc.length > 0 && isGerundVerb(predLc[0]);
+  // marker gate — the crux of backward-compat: without one of these, this is not a
+  // compositional query and we must NOT hijack it from the existing parser.
+  if (!(quals.length || relFlag || membershipLed || gerundLed)) return null;
+
+  // empty predicate → a bare qualified class ("public methods")
+  if (!predWords.length) {
+    let base = { node: "allOfClass", entityType };
+    if (!quals.length) return { node: "miss", reason: "nothing to filter or traverse" };
+    return { node: "qualifier", filters: quals, inner: base };
+  }
+
+  const subjPrefix = noun.placeholder ? "what" : `which ${entWord}`;
+  const { branches, ops } = splitBoolean(predLc, predWords);
+  // build one atom per branch, borrowing a leading verb phrase across bare branches
+  // ("importing X or Y" → the second branch inherits "importing").
+  let prevVerb = null;
+  const atoms = [];
+  for (let b = 0; b < branches.length; b += 1) {
+    const bw = branches[b];
+    const blc = bw.map((x) => x.toLowerCase());
+    const op = b === 0 ? "seed" : ops[b - 1];
+    if (bw.length && blc.every((x) => QUALIFIERS[x])) { atoms.push({ op, kind: "qual", filters: blc }); continue; }
+    if (blc[0] === "of" || blc[0] === "in") {
+      atoms.push({ op, kind: "set", ast: { node: "membership", entityType, term: bw.slice(1).join(" ") } });
+      continue;
+    }
+    let phrase = bw;
+    const vh = findPhrase(blc, VERB_TO_KIND);
+    if (vh) prevVerb = bw.slice(vh.start, vh.end);
+    else if (prevVerb) phrase = [...prevVerb, ...bw];
+    // a branch is a single predicate (top-level booleans are already split out), so
+    // parse it as nested-or-simple — NOT back through parseSetPhrase, which would
+    // re-detect the branch's own gerund/relative lead and recurse on identical text.
+    const ast = parseBranchAst(`${subjPrefix} ${phrase.join(" ")}`, nlp, depth + 1);
+    if (!ast || ast.node === "miss") return { node: "miss", reason: (ast && ast.reason) || "a clause in the combination didn't parse" };
+    atoms.push({ op, kind: "set", ast });
+  }
+  // the first atom must be a base set, not a bare qualifier (a qualifier needs
+  // something to filter). "public methods" already took the empty-predicate path above.
+  if (atoms[0].kind !== "set") return { node: "miss", reason: "start with a clause, then combine with and/or/but-not" };
+
+  let result;
+  if (atoms.length === 1) {
+    result = atoms[0].ast;
+  } else {
+    result = { node: "boolean", entityType, atoms };
+  }
+  if (quals.length) result = { node: "qualifier", filters: quals, inner: result };
+  return result;
+}
+
+/** Parse a single boolean branch (one predicate over the subject) into a set-AST:
+ *  nested (the branch has its own object-relative "that") or a plain simple clause.
+ *  Deliberately does NOT re-enter parseRelationalOrQualified — the branch has no
+ *  top-level boolean of its own (it was just split off one), so descending there
+ *  would only re-detect its gerund/relative lead and recurse on the same text. */
+function parseBranchAst(text, nlp, depth) {
+  if (depth > MAX_COMPOSE_DEPTH) return { node: "miss", reason: "too deep to resolve" };
+  const w = splitWords(text);
+  const lc = w.map((x) => x.toLowerCase());
+  const nested = parseNested(w, lc, nlp, depth);
+  if (nested) return nested;
+  const clause = parseSimpleClause(text, nlp);
+  return clause ? { node: "clause", clause } : null;
+}
+
+/** Split a predicate word array on boolean connectives (longest key first, so
+ *  "but not" beats a bare "not"). Returns {branches:[[word…]…], ops:[op…]} with
+ *  branches.length === ops.length + 1. */
+function splitBoolean(predLc, predWords) {
+  const conns = Object.keys(BOOLEAN_CONNECTIVES).sort((a, z) => z.split(" ").length - a.split(" ").length);
+  const branches = []; const ops = [];
+  let start = 0; let i = 0;
+  while (i < predLc.length) {
+    let hit = null;
+    for (const c of conns) {
+      const cw = c.split(" ");
+      if (predLc.slice(i, i + cw.length).join(" ") === c) { hit = { c, len: cw.length }; break; }
+    }
+    if (hit && i > start) {                        // a connective, and not at a branch start (avoid leading "and")
+      branches.push(predWords.slice(start, i));
+      ops.push(BOOLEAN_CONNECTIVES[hit.c]);
+      i += hit.len; start = i;
+    } else if (hit) { i += hit.len; start = i; }   // connective at branch start — skip it
+    else i += 1;
+  }
+  branches.push(predWords.slice(start));
+  return { branches, ops };
+}
+
+// ---- compositional EVALUATION — compile an AST to a graph traversal, reusing the
+// same primitives (edgesOfKind, resolveObject, refineToEntities, traverse) the
+// simple path uses. Pure given (graph, ast, opts). ----
+
+/** Reverse traversal over a SET of object ids (the nested "callers of {X…}" step) —
+ *  mirrors traverse()'s reverse general case (symbol-grain sibling + defines-refine),
+ *  but membership-tests e.object against a set instead of a single id. */
+function reverseOverSet(graph, kind, entityType, objectIds) {
+  const symbolKind = SYMBOL_GRAIN_SIBLING[kind];
+  if (symbolKind && FINE_ENTITY_TYPES.has(entityType)) {
+    const edges = edgesOfKind(graph, symbolKind).filter((e) => objectIds.has(e.object));
+    return uniqueById(edges.map((e) => graph.byId.get(e.subject)).filter((s) => s && s.class === entityType));
+  }
+  const edges = kindsFor(kind).flatMap((k) => edgesOfKind(graph, k)).filter((e) => objectIds.has(e.object));
+  const subjects = uniqueById(edges.map((e) => graph.byId.get(e.subject)).filter(Boolean));
+  if (!entityType || entityType === "Change") return subjects;
+  const direct = subjects.filter((s) => s.class === entityType);
+  if (direct.length) return direct;
+  if (entityType !== "Module" && subjects.some((s) => s.class === "Module")) {
+    return refineToEntities(graph, new Set(subjects.filter((s) => s.class === "Module").map((s) => s.id)), entityType);
+  }
+  return [];
+}
+
+/** Forward traversal over a SET of subject ids (the "things {X…} call/define" step). */
+function forwardOverSet(graph, kind, subjectIds) {
+  const edges = kindsFor(kind).flatMap((k) => edgesOfKind(graph, k)).filter((e) => subjectIds.has(e.subject));
+  return uniqueById(edges.map((e) => graph.byId.get(e.object)).filter(Boolean));
+}
+
+function uniqueById(inds) {
+  const seen = new Set(); const out = [];
+  for (const x of inds) if (x && !seen.has(x.id)) { seen.add(x.id); out.push(x); }
+  return out;
+}
+
+// Per-graph memo for the qualifier attribute/edge sets (exported symbols, tested
+// modules, symbol→module map) — computed once, so a qualifier filter over a large
+// result set stays cheap and deterministic.
+const qualCache = new WeakMap();
+function qualSets(graph) {
+  let c = qualCache.get(graph);
+  if (c) return c;
+  const exported = new Set();
+  for (const e of edgesOfKind(graph, "reexports")) {
+    exported.add(String(e.object).toLowerCase());
+    const ind = graph.byId.get(e.object);
+    if (ind) exported.add(String(ind.label).toLowerCase());
+  }
+  const testedModules = new Set(edgesOfKind(graph, "tests").map((e) => e.object));
+  const moduleOfSymbol = new Map();
+  for (const e of edgesOfKind(graph, "defines")) moduleOfSymbol.set(e.object, e.subject);
+  c = { exported, testedModules, moduleOfSymbol };
+  qualCache.set(graph, c);
+  return c;
+}
+function moduleIdOf(graph, ind) {
+  if (!ind) return null;
+  if (ind.class === "Module") return ind.id;
+  return qualSets(graph).moduleOfSymbol.get(ind.id) || null;
+}
+
+/** Does an individual satisfy one qualifier (spec from QUALIFIERS)? Reads only
+ *  attributes/edges the graph already carries — an unpopulated attribute (e.g.
+ *  isAbstract) simply yields false, an honest empty rather than an error. */
+function qualHolds(graph, ind, spec) {
+  if (!spec) return false;
+  switch (spec.via) {
+    case "visibility": {
+      const v = String((ind.attributes || []).find((a) => a.key === "visibility")?.value || "public").toLowerCase();
+      return v === spec.value;
+    }
+    case "attr":
+      return !!(ind.attributes || []).find((a) => a.key === spec.attr)?.value;
+    case "exported": {
+      const ex = qualSets(graph).exported;
+      return ex.has(String(ind.label).toLowerCase()) || ex.has(String(ind.id).toLowerCase());
+    }
+    case "tested": {
+      const mid = moduleIdOf(graph, ind);
+      return (!!mid && qualSets(graph).testedModules.has(mid)) === spec.value;
+    }
+    default: return false;
+  }
+}
+
+/** Compile a set-producing AST into an array of individuals. */
+function evalSet(graph, ast, opts) {
+  switch (ast.node) {
+    case "clause": return traverse(graph, ast.clause, opts).matches || [];
+    case "allOfClass": return graph.individuals.filter((i) => i.class === ast.entityType);
+    case "reverseSet": {
+      const ids = new Set(evalSet(graph, ast.inner, opts).map((i) => i.id));
+      return reverseOverSet(graph, ast.kind, ast.entityType, ids);
+    }
+    case "forwardSet": {
+      const ids = new Set(evalSet(graph, ast.inner, opts).map((i) => i.id));
+      return forwardOverSet(graph, ast.kind, ids);
+    }
+    case "membership": {
+      const r = resolveObject(graph, ast.term);
+      if (!r.match) return [];
+      const ids = new Set([r.match.id]);
+      const objs = uniqueById(MEMBERSHIP_KINDS.flatMap((k) => forwardOverSet(graph, k, ids)));
+      return ast.entityType ? objs.filter((o) => o.class === ast.entityType) : objs;
+    }
+    case "qualifier": {
+      const base = evalSet(graph, ast.inner, opts);
+      return base.filter((ind) => ast.filters.every((f) => qualHolds(graph, ind, QUALIFIERS[f])));
+    }
+    case "boolean": return evalBoolean(graph, ast, opts);
+    case "anaphora": return evalAnaphora(graph, ast, opts).matches;
+    default: return [];
+  }
+}
+
+/** Fold a boolean AST left-to-right into a result set. A qualifier atom acts as a
+ *  set filter on the accumulator (intersection keeps satisfiers, difference removes
+ *  them); a set atom contributes its own id-set for the op. */
+function evalBoolean(graph, ast, opts) {
+  let acc = [];
+  for (const atom of ast.atoms) {
+    if (atom.op === "seed") { acc = evalSet(graph, atom.ast, opts); continue; }
+    if (atom.kind === "qual") {
+      const holds = (ind) => atom.filters.every((f) => qualHolds(graph, ind, QUALIFIERS[f]));
+      acc = atom.op === "difference" ? acc.filter((i) => !holds(i)) : acc.filter((i) => holds(i));
+      continue;
+    }
+    const oids = new Set(evalSet(graph, atom.ast, opts).map((i) => i.id));
+    if (atom.op === "intersection") acc = acc.filter((i) => oids.has(i.id));
+    else if (atom.op === "difference") acc = acc.filter((i) => !oids.has(i.id));
+    else if (atom.op === "union") {
+      const seen = new Set(acc.map((i) => i.id));
+      for (const other of evalSet(graph, atom.ast, opts)) if (!seen.has(other.id)) { seen.add(other.id); acc.push(other); }
+    }
+  }
+  return acc;
+}
+
+/** Anaphora over ask()'s `prev` id array — filter/count the previous answer's ids.
+ *  No prev supplied → honest miss (never a guess), like an unresolved pronoun. */
+function evalAnaphora(graph, ast, opts) {
+  const prev = opts && opts.prev;
+  if (!Array.isArray(prev) || !prev.length) return { compositeMiss: true, reason: "no-prev", matches: [] };
+  let items = prev.map((id) => graph.byId.get(id)).filter(Boolean);
+  const f = ast.filter;
+  if (f && f.type === "qual") {
+    items = items.filter((ind) => f.filters.every((q) => qualHolds(graph, ind, QUALIFIERS[q])));
+  } else if (f && f.type === "clause") {
+    const r = resolveObject(graph, f.clause.object);
+    if (!r.match) items = [];
+    else {
+      // include the symbol-grain sibling so a fn->fn "call" filter tests callsSymbol,
+      // not just the module-coarse "calls" edge (mirrors traverse()'s reverse path).
+      const sib = SYMBOL_GRAIN_SIBLING[f.clause.kind];
+      const kinds = [...kindsFor(f.clause.kind), ...(sib ? [sib] : [])];
+      const ok = new Set(kinds.flatMap((k) => edgesOfKind(graph, k)).filter((e) => e.object === r.match.id).map((e) => e.subject));
+      items = items.filter((ind) => ok.has(ind.id));
+    }
+  }
+  // a count over a prior set names the entity kind when the survivors share a class.
+  const common = items.length && items.every((x) => x.class === items[0].class) ? items[0].class : null;
+  if (ast.mode === "count") return { compositeKind: "count", count: items.length, entityType: common, matches: [] };
+  return { compositeKind: "set", matches: items, entityType: common };
+}
+
+// Structural kinds counted for "most-connected" (total degree). Symbol-grain and
+// commit-history kinds are excluded so "connections" reads as the code-structure
+// degree a developer means, not every recorded touch.
+const DEGREE_KINDS = ["imports", "calls", "callsSymbol", "inherits", "contains", "tests"];
+/** Degree of an individual under a superlative metric ({kind, dir, sibling?, filter?}). */
+function degreeMetric(graph, ind, metric) {
+  const kinds = metric.kind === "*" ? DEGREE_KINDS : [metric.kind, ...(metric.sibling ? [metric.sibling] : [])];
+  let n = 0;
+  for (const k of kinds) for (const e of edgesOfKind(graph, k)) {
+    const out = e.subject === ind.id; const inc = e.object === ind.id;
+    if (metric.dir === "out" && out) {
+      if (metric.filter) { const o = graph.byId.get(e.object); if (!o || o.class !== metric.filter) continue; }
+      n += 1;
+    } else if (metric.dir === "in" && inc) n += 1;
+    else if (metric.dir === "both" && (out || inc)) n += 1;
+  }
+  return n;
+}
+function evalSuperlative(graph, ast) {
+  const pool = graph.individuals.filter((i) => i.class === ast.entityType);
+  const scored = pool.map((ind) => ({ ind, score: degreeMetric(graph, ind, ast.metric) }))
+    .sort((a, z) => (ast.extreme === "most" ? z.score - a.score : a.score - z.score));
+  if (!scored.length) return { compositeKind: "superlative", entityType: ast.entityType, matches: [] };
+  const best = scored[0].score;
+  const winners = scored.filter((s) => s.score === best).map((s) => s.ind);
+  return { compositeKind: "superlative", entityType: ast.entityType, metricNoun: ast.metricNoun, extreme: ast.extreme, score: best, matches: winners };
+}
+
+/** Compile any compositional AST to a result object traverse() returns for the
+ *  simple path — {matches, …} plus compositeKind/compositeMiss flags render() reads. */
+export function evalComposite(graph, ast, opts = {}) {
+  if (ast.node === "miss") return { compositeMiss: true, reason: ast.reason || null, matches: [] };
+  if (ast.node === "count") return { compositeKind: "count", count: evalSet(graph, ast.base, opts).length, entityType: ast.entityType, matches: [] };
+  if (ast.node === "list") return { compositeKind: "list", matches: evalSet(graph, ast.base, opts), entityType: ast.entityType, scoped: ast.scoped };
+  if (ast.node === "superlative") return evalSuperlative(graph, ast);
+  if (ast.node === "anaphora") return evalAnaphora(graph, ast, opts);
+  return { compositeKind: "set", matches: evalSet(graph, ast, opts), entityType: ast.entityType || null };
+}
+
+// ---- compositional RENDER — templated, same "honest miss vs cited hit" discipline
+// as renderCore. ----
+
+const compositeList = (matches) => listJoin(matches.slice(0, OVERFLOW_CAP)
+  .map((m) => (["Function", "Method"].includes(m.class) ? `${m.label}()` : m.label)))
+  + (matches.length > OVERFLOW_CAP ? `, …and ${matches.length - OVERFLOW_CAP} more` : "");
+
+/** A compositional worked example for the rephrase hint (§honest miss now shows a
+ *  compositional phrasing too). */
+export function compositionalHint() {
+  return 'compositional queries also work: "which functions call X and call Y", "what calls something that imports X", "public methods of X", "list functions" / "show me the classes", "how many classes", "which module has the most imports", or (after a listing) "which of those are tested"';
+}
+
+function renderComposite(parsed, result) {
+  if (result.compositeMiss) {
+    if (result.reason === "no-prev") {
+      return { content: `"those"/"them" needs a previous answer to refer to — ask a listing question first, then follow up.`, miss: true, ambiguous: false };
+    }
+    return { content: `couldn't compile this compositional question${result.reason ? ` (${result.reason})` : ""}. ${compositionalHint()}.`, miss: true, ambiguous: false };
+  }
+  if (result.compositeKind === "count") {
+    const noun = result.entityType ? nounFor(result.entityType, result.count) : (result.count === 1 ? "result" : "results");
+    return { content: `${result.count} ${noun}.`, miss: false, ambiguous: false, matches: [] };
+  }
+  if (result.compositeKind === "list") {
+    if (!result.matches.length) {
+      return { content: `no ${nounFor(result.entityType, 2)} in this index.`, miss: true, ambiguous: false, matches: [] };
+    }
+    // an unscoped list that overflowed the cap gets a light hint to narrow by module —
+    // but only for kinds that live IN a module (a "modules in <module>" or "commits in
+    // <module>" scope is meaningless); the scoped forms are already narrow, no hint.
+    const scopeable = !["Module", "Commit"].includes(result.entityType);
+    const hint = (!result.scoped && scopeable && result.matches.length > OVERFLOW_CAP)
+      ? ` — narrow with "${nounFor(result.entityType, 2)} in <module>"`
+      : "";
+    return { content: `${compositeList(result.matches)}${hint}.`, miss: false, ambiguous: false, matches: result.matches };
+  }
+  if (result.compositeKind === "superlative") {
+    if (!result.matches.length) return { content: `no ${nounFor(result.entityType, 2)} to rank in this index.`, miss: true, ambiguous: false };
+    const lead = result.extreme === "most" ? "the most" : "the fewest";
+    const tie = result.matches.length > 1 ? ` (${result.matches.length}-way tie)` : "";
+    return {
+      content: `${compositeList(result.matches)} — ${lead} ${result.metricNoun} (${result.score})${tie}.`,
+      miss: false, ambiguous: false, matches: result.matches,
+    };
+  }
+  // set-producing
+  if (!result.matches.length) {
+    return { content: `nothing in the index matches that${result.entityType ? ` (${nounFor(result.entityType, 2)})` : ""}.`, miss: true, ambiguous: false, matches: [] };
+  }
+  return { content: `${compositeList(result.matches)}.`, miss: false, ambiguous: false, matches: result.matches };
+}
+
+/** The rephrase hint shown on a grammar miss — generated from the SAME tables the parser
+ *  uses, so it can never suggest a phrasing the grammar doesn't actually support (§6.3). */
+export function rephraseHint() {
+  return '"which <functions|classes|modules> <imports|calls|uses|inherits from|tests|touched> <name>" or "what does <name> <import|call|export>" or "what uses <name>" or "where is <name> defined" / "where is <name> mentioned" or "when did <name> change" or "which changes touch commit <sha>"/"what did commit <sha> touch" (a commit\'s own changes) or plainly "what calls this" (about a selected node) or "what does <term> mean"/"what is a <ClassName>" (about the graph\'s own vocabulary). '
+    + compositionalHint();
+}
+
+// ---- §4 object-term resolution — mechanical, no embeddings, tiered, stop at first hit ----
+
+function componentSet(s) {
+  return new Set(String(s).toLowerCase().split(/[^a-z0-9]+/).filter(Boolean));
+}
+
+/** Resolve a free-text object/subject term against the graph's individuals, in priority
+ *  order (§4, generalized beyond the module-coupling worked example to cover every verb
+ *  family's object grain — `inherits`/`calls` resolve against Class/Function names, not
+ *  just modules): a sha-shaped term ("[commit ]<hex≥7>") first resolves against Commit
+ *  individuals by unique id/label prefix (see the inline comment), then (1) exact
+ *  label/id match, (2) an `ext:` unresolved-target match (today
+ *  ext: targets are edge-endpoint STRINGS with no individual of their own — e.g. an
+ *  unimported inherits base, or any import target — so this tier returns a synthetic
+ *  {id:"ext:<name>", label:<name>, class:null} match rather than an `individuals` lookup;
+ *  see PLAN_MECHANICAL_CHAT.md §10 on why external `imports` targets land here rather
+ *  than tier 1/3 today), (3) boundary-aware substring/component match, (4) a prose-index
+ *  fallback (PLAN_PROSE_INDEX.md §6): the term, tokenized the same way as a docstring, is
+ *  looked up against `graph.proseIndex` via `lookupByProseTokens` — an exact WORD-level
+ *  overlap match against a symbol's decomposed-identifier or doc-comment tokens, never a
+ *  substring/fuzzy guess (the same "no wrong edge" standard as tiers 1-3, just over a
+ *  different token source: prose rather than the literal identifier). Only ever consulted
+ *  once every literal-identifier tier above has failed, and the result is tagged
+ *  `matchedVia: "prose"` so a caller can tell the match came from prose content rather
+ *  than the symbol's own name — the render layer does not currently read this (it treats
+ *  a resolved match as a resolved match, same "honest miss vs genuine hit" binary tiers
+ *  1-3 already use), but the field is there for any caller that wants to surface it. (5)
+ *  a bounded Damerau-Levenshtein pass against labels AND label components (two-level
+ *  fuzzy, 2026-07-02): a UNIQUE within-bound match resolves, tagged `matchedVia:
+ *  "fuzzy"` so render() can say "assuming you meant <label>" out loud; multiple
+ *  matches at the same best distance are an honest ambiguity listing the candidates.
+ *  Never applied to sha-shaped terms (the commit namespace is exact-or-ambiguous
+ *  only) nor to terms under 4 chars (the bound would cover half of everything).
+ *  (6) no match at all — an honest miss. Returns {match, candidates, tier, ambiguous
+ *  [, matchedVia]} — ambiguous on a true tier-3 score tie, a tier-4 overlap-count
+ *  tie, or a tier-5 distance tie. */
+export function resolveObject(graph, term) {
+  const t = String(term || "").trim();
+  if (!t) return { match: null, candidates: [], tier: null, ambiguous: false };
+  const tLc = t.toLowerCase();
+  const pool = graph.individuals;
+
+  // commit-sha tier (checked first, only for sha-shaped terms): "ef74e44e25c8",
+  // "commit ef74e44e25c8", "commit:ef74e44", or a full 40-char sha resolve against
+  // Commit individuals by id/label prefix (ids are commit:<full-sha>, labels the
+  // 12-char short sha), case-insensitive. A UNIQUE prefix is exact-grade over the
+  // closed commit namespace (tier 1); a prefix shared by more than one commit is an
+  // honest ambiguity listing the candidates — never "the first one"; a hex-looking
+  // word matching NO commit falls through to the ordinary tiers unchanged (it may
+  // be a real code identifier).
+  const shaTerm = tLc.match(/^(commit[:\s])?([0-9a-f]{7,40})$/);
+  if (shaTerm) {
+    const sha = shaTerm[2];
+    const hits = pool.filter((i) => i.class === "Commit"
+      && (String(i.id).toLowerCase().startsWith(`commit:${sha}`) || String(i.label).toLowerCase().startsWith(sha)));
+    if (hits.length === 1) return { match: hits[0], candidates: [], tier: 1, ambiguous: false };
+    if (hits.length > 1) return { match: hits[0], candidates: hits.slice(1, 5), tier: 1, ambiguous: true };
+    // the explicit "commit" noun declares intent — with no matching commit, falling
+    // through would let the WORD "commit" component-match the Commit schema node (or
+    // any identifier containing it): a guess, not a resolution. Bare hex still falls
+    // through (it may be a real code identifier).
+    if (shaTerm[1]) return { match: null, candidates: [], tier: null, ambiguous: false };
+  }
+
+  const exact = pool.find((i) => String(i.label).toLowerCase() === tLc || String(i.id).toLowerCase() === tLc);
+  if (exact) return { match: exact, candidates: [], tier: 1, ambiguous: false };
+
+  // ext: targets never have their own individual (they're a raw edge-endpoint id) — find
+  // the actual (case-preserved) id off a real edge rather than reconstructing it, so a
+  // typo'd term can't silently "resolve" to an ext: id nothing in the graph references.
+  const extLc = `ext:${tLc}`;
+  let extId = null;
+  outer: for (const g of graph.relations) {
+    for (const e of g.edges) {
+      if (String(e.object).toLowerCase() === extLc) { extId = e.object; break outer; }
+    }
+  }
+  if (extId) return { match: { id: extId, label: t, class: null }, candidates: [], tier: 2, ambiguous: false };
+
+  // tier 3 — two disjoint regimes (dotted-symbol fix, 2026-07-02, advisor-verified
+  // bug): a DOTTED term with no slash ("res.json", "Widget.render", "walk.mjs") is
+  // symbol-shaped (object.member / Class.method / a bare file name), and the old
+  // any-substring-of-any-label pass let it land on a module whose PATH merely
+  // contains the text ("res.json" -> test/res.json.js — the wrong grain presented
+  // as if the term were that file). Such terms now match only (a) symbol labels
+  // (whole-term containment, or the ".member" suffix when the owner alias differs:
+  // "res.json" -> Response.json), and (b) module labels by EXACT basename equality
+  // ("walk.mjs" -> src/walk.mjs — extension-stripped basename equality is
+  // deliberately NOT used; that is precisely the phantom-path vector). Symbol
+  // matches outrank module matches. Undotted/slashed terms keep the original pass.
+  const scored = [];
+  const dotted = !tLc.includes("/") && /^[\w$]+(\.[\w$]+)+$/.test(tLc);
+  if (dotted) {
+    const lastSeg = tLc.split(".").pop();
+    for (const m of pool) {
+      const label = String(m.label || "").toLowerCase();
+      if (m.class === "Module") {
+        if (label.split("/").pop() === tLc) scored.push({ ind: m, score: 1000 - Math.abs(label.length - tLc.length) });
+      } else if (label.includes(tLc)) {
+        scored.push({ ind: m, score: 2000 - Math.abs(label.length - tLc.length) });
+      } else if (label.endsWith(`.${lastSeg}`)) {
+        scored.push({ ind: m, score: 1500 - Math.abs(label.length - tLc.length) });
+      }
+    }
+  } else {
+    const termComps = componentSet(t);
+    for (const m of pool) {
+      const label = String(m.label || "").toLowerCase();
+      if (label.includes(tLc)) {
+        scored.push({ ind: m, score: 1000 - Math.abs(label.length - tLc.length) });
+        continue;
+      }
+      const overlap = [...termComps].filter((c) => componentSet(m.label).has(c)).length;
+      if (overlap > 0) scored.push({ ind: m, score: overlap * 10 });
+    }
+  }
+  scored.sort((a, b) => b.score - a.score);
+  if (scored.length) {
+    const [best, ...rest] = scored;
+    const tied = rest.filter((x) => x.score === best.score);
+    return {
+      match: best.ind,
+      candidates: rest.slice(0, 4).map((x) => x.ind),
+      tier: 3,
+      ambiguous: tied.length > 0,
+    };
+  }
+
+  // tier 4: prose-index fallback (PLAN_PROSE_INDEX.md §6) — see the function doc above.
+  // The typeof guard is the same viewer-bundle boundary as defaultNlp(): viz.mjs's
+  // askSource strips the prose.mjs import but does not inline prose.mjs, so in the
+  // browser `lookupByProseTokens` is an undeclared identifier — without the guard,
+  // ANY term reaching this tier threw a ReferenceError in the page instead of
+  // rendering the honest miss (a real, previously-untested viewer bug).
+  // DOTTED terms never consult prose: "res.json" word-matches test/res.json.js's
+  // own path tokens, which is the tier-3 phantom-path bug reappearing through a
+  // side door — a dotted term names an identifier, and identifiers resolve by
+  // label (tiers above) or the bounded fuzzy pass below, or they honestly miss.
+  let proseResult = null;
+  const proseHits = !dotted && typeof lookupByProseTokens === "function" ? lookupByProseTokens(graph.proseIndex, t) : [];
+  if (proseHits.length) {
+    const [best, ...rest] = proseHits;
+    const bestInd = graph.byId.get(best.id);
+    if (bestInd) {
+      const tied = rest.filter((h) => h.score === best.score);
+      proseResult = {
+        match: bestInd,
+        candidates: rest.slice(0, 4).map((h) => graph.byId.get(h.id)).filter(Boolean),
+        tier: 4,
+        ambiguous: tied.length > 0,
+        matchedVia: "prose",
+      };
+      // A UNIQUE SEMANTIC prose hit stands — fuzzy is never consulted (lower
+      // tiers fire only on a miss). Two prose outcomes yield to tier 5 instead:
+      // (a) an AMBIGUOUS tie — a typo'd identifier ("bulidContextBundle") often
+      // word-overlaps several symbols' prose tokens at the same score while its
+      // 1-edit NAME match is unique; (b) a hit that only exists because the
+      // prose SPELL layer corrected the query token (via:"spell") — the same
+      // typo tier 5 resolves with stronger (name) evidence and announces out
+      // loud, exactly the division of labour prose.mjs's own spell-layer
+      // comment specifies. If tier 5 cannot resolve uniquely either, the
+      // stashed prose result is surfaced as-is.
+      if (!proseResult.ambiguous && best.via !== "spell") return proseResult;
+    }
+  }
+
+  // tier 5: bounded fuzzy (see the function doc) — every exact tier above missed
+  // (or tier 4 tied), so a typo'd identifier gets one honest chance against labels
+  // and their components. sha-shaped terms never reach here (guard above);
+  // sub-4-char terms are excluded because a 1-edit budget on 3 chars matches far
+  // too much to ever be a unique intent.
+  if (!shaTerm && tLc.length >= 4) {
+    const bound = fuzzyBound(tLc);
+    let best = bound + 1;
+    let hits = [];
+    for (const m of pool) {
+      let d = editDistance(String(m.label || "").toLowerCase(), tLc, bound);
+      if (d > 0) {
+        for (const comp of componentSet(m.label)) {
+          if (d <= 0) break;
+          d = Math.min(d, editDistance(comp, tLc, bound));
+        }
+      }
+      if (d < best) { best = d; hits = [m]; }
+      else if (d === best && d <= bound) hits.push(m);
+    }
+    if (best <= bound && hits.length === 1) {
+      return { match: hits[0], candidates: [], tier: 5, ambiguous: false, matchedVia: "fuzzy" };
+    }
+    if (best <= bound && hits.length > 1 && !proseResult) {
+      // equidistant fuzzy tie with no prose evidence either — honest ambiguity.
+      const [bestInd, ...rest] = hits;
+      return { match: bestInd, candidates: rest.slice(0, 4), tier: 5, ambiguous: true, matchedVia: "fuzzy" };
+    }
+  }
+  // fuzzy couldn't resolve uniquely: surface the prose tie (when there was one)
+  // exactly as before, else the honest miss.
+  return proseResult || { match: null, candidates: [], tier: null, ambiguous: false };
+}
+
+/** Resolve a term that may be a context pronoun ("this"/"it"/"that"/"here") —
+ *  when `contextId` is given, resolve straight to that graph entity (a real
+ *  click/focus in the caller's UI, not a guess); with no contextId, an honest
+ *  miss explaining exactly what's missing, distinct from "no such name in the
+ *  index". A non-pronoun term always falls through to the ordinary
+ *  resolveObject tiers. */
+function resolveTermOrContext(graph, term, contextId) {
+  if (CONTEXT_PRONOUNS.includes(String(term || "").trim().toLowerCase())) {
+    if (!contextId) return { match: null, candidates: [], tier: null, ambiguous: false, unresolvedPronoun: true };
+    const ind = graph.byId.get(contextId);
+    return ind
+      ? { match: ind, candidates: [], tier: 1, ambiguous: false }
+      : { match: null, candidates: [], tier: null, ambiguous: false, unresolvedPronoun: true };
+  }
+  return resolveObject(graph, term);
+}
+
+// ---- traversal — orchestrates codegraph.mjs's edgesOfKind; grain-refines a module-coarse
+// edge (e.g. imports: Module->Module) down to a finer requested entityType via `defines`
+// (Module -> top-level Function/Class/Method/Attribute), never re-implementing edge scans. ----
+
+function refineToEntities(graph, moduleIds, entityType) {
+  const out = [];
+  for (const e of edgesOfKind(graph, "defines")) {
+    if (!moduleIds.has(e.subject)) continue;
+    const ind = graph.byId.get(e.object);
+    if (ind && ind.class === entityType) out.push(ind);
+  }
+  return out;
+}
+
+/** Everything a commit touched, across BOTH stored grains — touches (Commit->Module)
+ *  and touchesSymbol (Commit->fn/method/class) — narrowed by the asked entity type:
+ *  "modules"/"files" keeps the coarse grain only, a fine type keeps its own symbol
+ *  class only, and null/"Change" ("which changes touch commit X") keeps the union.
+ *  The result carries `commitSubject` so render() cites the commit and groups the
+ *  touched entities by class instead of pretending the commit was a search target. */
+function commitTouches(graph, commit, entityType, extra = {}) {
+  // "Commit" counts as wildcard here too: in "what was touched by commit X" the
+  // keyword-spotter consumes "commit" as the entity keyword though it belongs to
+  // the object noun phrase — and no commit ever touches another commit (no
+  // Commit->Commit edges exist), so honoring it as a class filter could only
+  // ever manufacture a false blank.
+  const wildcard = !entityType || entityType === "Change" || entityType === "Commit";
+  const wantCoarse = wildcard || entityType === "Module";
+  const wantFine = wildcard || FINE_ENTITY_TYPES.has(entityType);
+  const kinds = [...(wantCoarse ? ["touches"] : []), ...(wantFine ? ["touchesSymbol"] : [])];
+  let matches = kinds
+    .flatMap((k) => edgesOfKind(graph, k))
+    .filter((e) => e.subject === commit.id)
+    .map((e) => graph.byId.get(e.object))
+    .filter(Boolean);
+  if (entityType && FINE_ENTITY_TYPES.has(entityType)) matches = matches.filter((m) => m.class === entityType);
+  return {
+    matches, objMatch: commit, commitSubject: true, ambiguous: false, candidates: [],
+    traversal: `${kinds.join("+")} edges where subject = commit ${commit.label}`,
+    ...extra,
+  };
+}
+
+/** Safety net (paired with the render-branch fix earlier in this file's history): a
+ *  {shape, kind, entityType} combination must be explicitly listed here to receive
+ *  real non-"direct" modifier behavior. Anything parsing to a non-"direct" modifier
+ *  that ISN'T listed gets an honest "not supported yet" response from render() —
+ *  never a silent fallback to direct-only behavior. This means a future
+ *  MODIFIER_TO_KIND addition that forgets to wire traverse()/render() for it fails
+ *  loud here, by construction, rather than quietly behaving as if the modifier had
+ *  never been given (the exact bug class this file's own render-routing fix, above,
+ *  just caught). Today's only non-"direct" value is "transitive" (PLAN_MECHANICAL_
+ *  CHAT.md P1), wired below for reverse-shape imports/calls closures over
+ *  impactClosure (codegraph.mjs) — module-coarse only; the fine-grained
+ *  callsSymbol/touchesSymbol siblings and every other predicate kind have no
+ *  closure primitive yet, and forward-shape currently never parses a non-"direct"
+ *  modifier at all (both parsing strategies hardcode modifier:"direct" for it). */
+function modifierIsWired(shape, kind, entityType) {
+  return shape === "reverse" && (kind === "imports" || kind === "calls") && (!entityType || entityType === "Module");
+}
+// Matches renderImpact's own default (codegraph.mjs) — impactClosure is reused as-is,
+// not reimplemented, so its own depth convention is the honest one to inherit.
+const TRANSITIVE_MAX_DEPTH = 8;
+
+/** Compile a parsed query into a graph lookup. Pure given (graph, parsed, opts).
+ *  `opts.contextId` resolves a context pronoun ("this"/"it"/…) when the parse
+ *  needed one. Returns {matches, objMatch, candidates, traversal, ambiguous,
+ *  answer?, unresolvedPronoun?} — `answer` only set for the "ask" shape.
+ *  `matches` is always an array of individuals (or edge records for "ask"). */
+export function traverse(graph, parsed, { contextId = null, prev = null } = {}) {
+  if (!parsed) return { matches: [], objMatch: null, candidates: [], traversal: null, ambiguous: false };
+  // compositional AST (PLAN §5.16 P3) — the new grammar's nodes carry a `node` tag;
+  // everything else (simple clauses, ambiguousParse) flows through the original path
+  // below completely unchanged.
+  if (parsed.node) return evalComposite(graph, parsed, { contextId, prev });
+  if (parsed.ambiguousParse) return { matches: [], objMatch: null, candidates: [], traversal: null, ambiguous: false };
+  const { shape, kind, entityType } = parsed;
+
+  // meta: a question about the graph's OWN vocabulary ("what does cochange mean", "what
+  // is a Commit") — looked up against the SchemaClass/SchemaPredicate individuals
+  // schema-docs.mjs's ingestSchemaDocs merged into the graph, not a code-edge traversal.
+  // Matched by exact (case-insensitive) label ("cochange", "Commit") OR the raw `token`
+  // attribute a SchemaPredicate also carries ("mgx:callsSymbol") — never substring/fuzzy,
+  // same discipline as resolveObject's own tiers: a real term match or an honest miss.
+  if (shape === "meta") {
+    const term = String(parsed.object || "").trim();
+    const termLc = term.toLowerCase();
+    const match = (graph.individuals || []).find((i) => {
+      if (i.class !== "SchemaClass" && i.class !== "SchemaPredicate") return false;
+      if (String(i.label).toLowerCase() === termLc) return true;
+      const token = (i.attributes || []).find((a) => a.key === "token")?.value;
+      return token && String(token).toLowerCase() === termLc;
+    });
+    if (!match) return { matches: [], objMatch: null, candidates: [], traversal: `schema lookup for "${term}"`, ambiguous: false };
+    return {
+      matches: [match], objMatch: match, candidates: [],
+      traversal: `schema lookup for "${term}"`, ambiguous: false,
+    };
+  }
+
+  // mentions: "where is X mentioned" (2026-07-02 query families) — the prose
+  // surface, not an edge traversal: list the individuals whose decomposed
+  // identifier / doc-comment tokens contain the term's words (the same index
+  // resolveObject's tier 4 consults, surfaced directly). The term itself is NOT
+  // resolved to an entity first — the question is about mentions of the words,
+  // which is exactly what the prose index stores. typeof guard: same viewer-
+  // bundle boundary as tier 4 (prose.mjs is never inlined).
+  if (shape === "mentions") {
+    const term = String(parsed.object || "").trim();
+    const hits = typeof lookupByProseTokens === "function" ? lookupByProseTokens(graph.proseIndex, term) : [];
+    const matches = hits.map((h) => graph.byId.get(h.id)).filter(Boolean);
+    return {
+      matches, objMatch: null, candidates: [], ambiguous: false, mentionsShape: true,
+      traversal: `proseIndex word lookup for "${term}"`,
+    };
+  }
+
+  // §modifier support gate (safety net, see modifierIsWired's own doc above) — checked
+  // BEFORE object resolution, so an unsupported modifier+kind combination gets its own
+  // honest capability-gap message rather than masquerading as an object-miss, or worse,
+  // silently behaving as if "transitively"/"indirectly" had never been said.
+  if (parsed.modifier && parsed.modifier !== "direct" && !modifierIsWired(shape, kind, entityType)) {
+    return {
+      matches: [], objMatch: null, candidates: [], ambiguous: false,
+      unsupportedModifier: true,
+      traversal: `modifier "${parsed.modifier}" requested for a "${kind}" query — no closure traversal exists for this combination yet`,
+    };
+  }
+
+  if (shape === "ask") {
+    const subj = resolveTermOrContext(graph, parsed.subject, contextId);
+    const obj = resolveTermOrContext(graph, parsed.object, contextId);
+    if (!subj.match || !obj.match) {
+      return {
+        matches: [], objMatch: obj.match, candidates: obj.candidates, traversal: null, ambiguous: false, answer: null,
+        unresolvedPronoun: !!(subj.unresolvedPronoun || obj.unresolvedPronoun),
+      };
+    }
+    // touches edges are stored commit -> entity, so when the question names the
+    // commit on the OBJECT side ("was walk.mjs touched by commit X"), orient the
+    // edge test by where the commit actually is instead of failing on direction;
+    // a commit subject is also checked at the symbol grain ("does commit X touch
+    // <function>" lives on touchesSymbol, not the module-coarse kind).
+    let [from, to] = [subj.match, obj.match];
+    let kinds = kindsFor(kind); // "uses" checks the whole union ("does X use Y")
+    if (kind === "touches") {
+      if (to.class === "Commit" && from.class !== "Commit") [from, to] = [to, from];
+      if (from.class === "Commit") kinds = ["touches", "touchesSymbol"];
+    }
+    const edges = kinds.flatMap((k) => edgesOfKind(graph, k)).filter((e) => e.subject === from.id && e.object === to.id);
+    return {
+      matches: edges, answer: edges.length > 0, objMatch: obj.match, subjMatch: subj.match,
+      candidates: [], traversal: `${kinds.join("+")} edge from ${from.label} to ${to.label}`, ambiguous: false,
+    };
+  }
+
+  // reverse and forward both resolve one named term ("object" in the parsed shape — for
+  // forward it is the query's grammatical subject, e.g. "what does X import" -> parsed.object = X).
+  const { match: objMatch, candidates, ambiguous, unresolvedPronoun, matchedVia } = resolveTermOrContext(graph, parsed.object, contextId);
+  if (!objMatch) return { matches: [], objMatch: null, candidates, traversal: null, ambiguous: false, unresolvedPronoun };
+
+  // where: "where is X [defined]" (2026-07-02 query families) — the resolved
+  // entity IS the answer; render() reads its class + site attribute ("path:
+  // start[-end]", seon:startsAt) for the module/line citation.
+  if (shape === "where") {
+    const site = (objMatch.attributes || []).find((a) => a.key === "site")?.value || null;
+    return {
+      matches: [objMatch], objMatch, candidates, ambiguous, matchedVia, whereShape: true, site,
+      traversal: site ? `site attribute of ${objMatch.label}` : `class + defining module of ${objMatch.label}`,
+    };
+  }
+
+  // when: "when did X change" / "when was X last touched" (2026-07-02 query
+  // families) — the commits whose touch edges reach X, newest commit date first
+  // (mgx:commitDate, ISO-8601, so a lexical sort IS the date sort; undated
+  // commits sort last and render() says so honestly). Checked BEFORE the
+  // commit-as-subject flip: "when did <sha> change" asks for the commit's own
+  // date, not its touched files, so a Commit object answers with itself.
+  if (shape === "when") {
+    const dateOf = (c) => String((c.attributes || []).find((a) => a.key === "date")?.value || "");
+    let commits;
+    if (objMatch.class === "Commit") {
+      commits = [objMatch];
+    } else {
+      const edges = ["touches", "touchesSymbol"].flatMap((k) => edgesOfKind(graph, k)).filter((e) => e.object === objMatch.id);
+      const seen = new Set();
+      commits = [];
+      for (const e of edges) {
+        if (seen.has(e.subject)) continue;
+        seen.add(e.subject);
+        const c = graph.byId.get(e.subject);
+        if (c && c.class === "Commit") commits.push(c);
+      }
+      commits.sort((a, b) => dateOf(b).localeCompare(dateOf(a)));
+    }
+    return {
+      matches: commits, objMatch, candidates, ambiguous, matchedVia, whenShape: true,
+      traversal: `touches+touchesSymbol edges where object = ${objMatch.label}, newest commit date first`,
+    };
+  }
+
+  // commit-as-subject flip: touches edges are stored commit -> entity, so when the
+  // RESOLVED term of a touches question is itself a Commit — "which changes touch
+  // commit ef74e44e25c8" (reverse), "what did commit abc1234 touch" (forward),
+  // "what changed in abc1234" (casual reverse) — the honest reading is "what did
+  // that commit touch": read the edges FROM the commit, grain-selected by the asked
+  // entity type, instead of scanning for edges INTO it (a commit is never a touch
+  // target, so the un-flipped scan would render a misleading blank).
+  if (kind === "touches" && objMatch.class === "Commit") {
+    return commitTouches(graph, objMatch, entityType, { candidates, ambiguous, matchedVia });
+  }
+
+  if (shape === "forward") {
+    const edges = kindsFor(kind).flatMap((k) => edgesOfKind(graph, k)).filter((e) => e.subject === objMatch.id);
+    const matches = edges.map((e) => graph.byId.get(e.object)).filter(Boolean);
+    return { matches, objMatch, candidates, traversal: `${kindsFor(kind).join("+")} edges where subject = ${objMatch.label}`, ambiguous, matchedVia };
+  }
+
+  // reverse + transitive (PLAN_MECHANICAL_CHAT.md P1): the gate above guarantees kind is
+  // "imports" or "calls" and entityType is null/"Module" here. Reuses impactClosure
+  // (codegraph.mjs) AS-IS rather than reimplementing a closure — impactClosure's own
+  // dependents map is a REVERSE closure over imports+calls edges TOGETHER (renderImpact's
+  // "what would break" framing), not a strict single-predicate chain, so a query for
+  // "transitively imports" and one for "transitively calls" both resolve to the SAME
+  // mixed reverse-dependency closure. That's a real, deliberate scope decision (matching
+  // the plan's own instruction to wire onto "renderImpact's existing closure traversal"
+  // rather than build a new predicate-pure one) — the traversal receipt below says so
+  // honestly rather than implying a narrower single-predicate result than what was
+  // actually computed.
+  if (parsed.modifier === "transitive") {
+    const levels = impactClosure(graph, objMatch, { maxDepth: TRANSITIVE_MAX_DEPTH });
+    const matches = levels.flat().map((d) => graph.byId.get(d.id)).filter(Boolean);
+    return {
+      matches, objMatch, candidates, ambiguous, matchedVia,
+      traversal: `reverse dependency closure over imports+calls edges from ${objMatch.label} (impactClosure, maxDepth=${TRANSITIVE_MAX_DEPTH})`,
+    };
+  }
+
+  // reverse: "which <entityType> R <objMatch>"
+  const symbolKind = SYMBOL_GRAIN_SIBLING[kind];
+  if (symbolKind && FINE_ENTITY_TYPES.has(entityType)) {
+    const edges = edgesOfKind(graph, symbolKind).filter((e) => e.object === objMatch.id);
+    const matches = edges.map((e) => graph.byId.get(e.subject)).filter((i) => i && i.class === entityType);
+    return { matches, objMatch, candidates, traversal: `${symbolKind} edges where object = ${objMatch.label}`, ambiguous, matchedVia };
+  }
+
+  // General case: some predicates are already fine-grained (inherits: Class->Class, contains:
+  // Class->Member) and some are module-coarse (imports/calls/tests/cochange: Module->Module).
+  // Rather than assume one or the other, check what the edge's actual subjects ARE: if they
+  // already match the requested entityType, use them directly (inherits); only when they're
+  // Module individuals and a FINER entityType was asked for do we refine via `defines`
+  // (imports) — never blindly treat an edge's subject id as if it were always a module id.
+  let edges = kindsFor(kind).flatMap((k) => edgesOfKind(graph, k)).filter((e) => e.object === objMatch.id);
+  let extNote = "";
+  if (!edges.length && objMatch.class) {
+    // Unresolved ext:<Name> endpoints with the SAME name as the resolved entity:
+    // the extractor declined to assert identity (e.g. commander's every "class X
+    // extends Command" edge points at ext:Command, never the Class node), so a
+    // strict id match renders a FALSE blank. Count them by NAME instead and say
+    // so in the receipt — name-grade evidence, labeled as such, same standard as
+    // resolveObject's own ext: tier.
+    const extId = `ext:${String(objMatch.label).toLowerCase()}`;
+    edges = kindsFor(kind).flatMap((k) => edgesOfKind(graph, k)).filter((e) => String(e.object).toLowerCase() === extId);
+    if (edges.length) extNote = ` (by name, via unresolved ${extId} references)`;
+  }
+  // dedupe by id: a union kind ("uses") can reach the same subject through two
+  // legs (a module that both imports AND calls X), and one answer must list it once.
+  const subjects = [];
+  const seenSubjects = new Set();
+  for (const e of edges) {
+    const s = graph.byId.get(e.subject);
+    if (s && !seenSubjects.has(s.id)) { seenSubjects.add(s.id); subjects.push(s); }
+  }
+  let matches, grainNote = "";
+  // "Change" (ask-vocab.mjs's pseudo-type) is a wildcard here: "which changes touch
+  // walk.mjs" means the touch edges' own subjects — the commits — not a node class
+  // to filter by (no individual is ever class "Change", so filtering would always
+  // produce a false blank).
+  if (!entityType || entityType === "Change") {
+    matches = subjects;
+  } else {
+    const direct = subjects.filter((s) => s.class === entityType);
+    if (direct.length) {
+      matches = direct;
+    } else if (entityType !== "Module" && subjects.some((s) => s.class === "Module")) {
+      const moduleIds = new Set(subjects.filter((s) => s.class === "Module").map((s) => s.id));
+      matches = refineToEntities(graph, moduleIds, entityType);
+      grainNote = `, then ${entityType} defined in the matched module(s)`;
+    } else {
+      matches = [];
+    }
+  }
+  return { matches, objMatch, candidates, traversal: `${kindsFor(kind).join("+")} edges where object = ${objMatch.label}${extNote}${grainNote}`, ambiguous, matchedVia };
+}
+
+// ---- §5 templated renderer — string interpolation + grouping/pluralization/overflow rules,
+// never generation; every sentence is read off a matched edge/individual. ----
+
+function moduleLabelOf(ind) {
+  if (ind.class === "Module") return ind.label;
+  const site = (ind.attributes || []).find((a) => a.key === "site")?.value;
+  if (site) return String(site).split(":")[0];
+  const m = String(ind.id || "").match(/^fn:(.+)#/);
+  return m ? m[1] : "(unknown module)";
+}
+
+function symbolLabelOf(ind) {
+  const label = String(ind.label || ind.id || "");
+  return ["Function", "Method"].includes(ind.class) ? `function ${label}()` : label;
+}
+
+function listJoin(syms) {
+  return syms.length > 1 ? `${syms.slice(0, -1).join(", ")} and ${syms[syms.length - 1]}` : syms[0];
+}
+
+/** One-line, honest rephrasing of a candidate parse — used to describe a
+ *  parse-level disagreement between strategies without pretending to pick
+ *  a winner. Template only, reads straight off the parsed fields. */
+function describeParse(p) {
+  const obj = p.object ?? p.subject ?? "?";
+  const ent = p.entityType ? nounFor(p.entityType, 2) + " that " : "";
+  return `${ent}${p.kind} "${obj}"`;
+}
+
+/** Render a compiled query result into {content, miss, ambiguous, matches?, candidates?}.
+ *  Every branch is a template, not generation — §5's grouping/pluralization/overflow rules.
+ *  A tier-5 fuzzy object resolution is ANNOUNCED, not silent: the answer is prefixed
+ *  "assuming you meant <label>:" so the correction is on the record next to the result
+ *  (an unannounced fuzzy hit would be indistinguishable from an exact one — a guess). */
+export function render(parsed, result) {
+  const r = renderCore(parsed, result);
+  if (result && result.matchedVia === "fuzzy" && result.objMatch && !r.ambiguous) {
+    r.content = `assuming you meant ${result.objMatch.label}: ${r.content}`;
+  }
+  return r;
+}
+
+function renderCore(parsed, result) {
+  if (!parsed) {
+    return { content: `couldn't parse this as a graph question. Try: ${rephraseHint()}`, miss: true, ambiguous: false };
+  }
+  if (parsed.node) return renderComposite(parsed, result);
+  if (parsed.ambiguousParse) {
+    const options = parsed.candidates.map((p, i) => `${i + 1}) ${describeParse(p)}`).join(" or ");
+    return {
+      content: `this could mean more than one thing: ${options} — try rephrasing more specifically.`,
+      miss: false, ambiguous: true, candidates: parsed.candidates.map(describeParse),
+    };
+  }
+  if (result.unresolvedPronoun) {
+    return {
+      content: `"${parsed.object ?? parsed.subject}" needs a selected node to refer to — click a node first, or name it directly.`,
+      miss: true, ambiguous: false,
+    };
+  }
+  if (result.unsupportedModifier) {
+    return {
+      content: `the "${parsed.modifier}" modifier isn't supported for "${parsed.kind}" queries yet — only imports/calls (module-level) have a transitive closure today.`,
+      miss: true, ambiguous: false,
+    };
+  }
+  if (parsed.shape === "meta") {
+    if (!result.objMatch) {
+      return {
+        content: `"${parsed.object}" isn't a term in this graph's own vocabulary (no matching class or predicate).`,
+        miss: true, ambiguous: false,
+      };
+    }
+    const doc = (result.objMatch.attributes || []).find((a) => a.key === "doc")?.value || "";
+    const kindWord = result.objMatch.class === "SchemaClass" ? "a class in the graph's schema" : "a predicate (relation) in the graph's schema";
+    return { content: `${result.objMatch.label} is ${kindWord}: ${doc}`, miss: false, ambiguous: false, matches: result.matches };
+  }
+  // mentions: the prose surface — checked before the generic objMatch-null miss
+  // below, because a mentions result deliberately carries no resolved object
+  // (the question is about the term's words, not a graph entity).
+  if (result.mentionsShape) {
+    if (!result.matches.length) {
+      return {
+        content: `"${parsed.object}" is not mentioned in any indexed identifier or doc-comment prose. (traversal: ${result.traversal})`,
+        miss: true, ambiguous: false,
+      };
+    }
+    const shown = result.matches.slice(0, OVERFLOW_CAP).map((m) => `${m.label} (${nounFor(m.class, 1)})`);
+    const extra = result.matches.length > OVERFLOW_CAP ? `, …and ${result.matches.length - OVERFLOW_CAP} more` : "";
+    return {
+      content: `"${parsed.object}" is mentioned in the prose tokens of ${listJoin(shown)}${extra}.`,
+      miss: false, ambiguous: false, matches: result.matches,
+    };
+  }
+  if (!result.objMatch && (!result.candidates || result.candidates.length === 0) && parsed.shape !== "ask") {
+    // name what kind of thing was looked for: a sha-shaped term was checked against
+    // the commit namespace, a dotted slash-free term against symbol labels — a
+    // generic "no module matching" would misreport both.
+    const objText = String(parsed.object || "").trim();
+    const what = /^(?:commit[:\s])?[0-9a-f]{7,40}$/i.test(objText) ? "commit"
+      : (!objText.includes("/") && /^[\w$]+(\.[\w$]+)+$/.test(objText) ? "symbol" : "module");
+    return {
+      content: `no ${what} matching "${parsed.object}" found in the index.`,
+      miss: true, ambiguous: false, candidates: [],
+    };
+  }
+  if (result.ambiguous) {
+    // the candidates say what KIND of thing is ambiguous — a shared commit-sha
+    // prefix must read "more than one commit", not "module".
+    const pool = [result.objMatch, ...(result.candidates || [])].filter(Boolean);
+    const noun = pool.length && pool.every((i) => i.class === "Commit") ? "commit" : "module";
+    return {
+      content: `"${parsed.object}" matches more than one ${noun} ambiguously — please narrow the term.`,
+      miss: false, ambiguous: true, candidates: pool.map((i) => i.label),
+    };
+  }
+  // where: the resolved entity's own location, cited off the site attribute.
+  if (result.whereShape) {
+    const ind = result.objMatch;
+    if (ind.class === "Module") {
+      return { content: `${ind.label} is a module — the label is its repo path.`, miss: false, ambiguous: false, matches: result.matches };
+    }
+    if (ind.class === "Commit") {
+      return { content: `${ind.label} is a commit, not a code location — try "what did commit ${ind.label} touch".`, miss: true, ambiguous: false };
+    }
+    const m = String(result.site || "").match(/^(.*):(\d+)(?:-(\d+))?$/);
+    if (m) {
+      const lines = m[3] && m[3] !== m[2] ? `lines ${m[2]}-${m[3]}` : `line ${m[2]}`;
+      return { content: `${symbolLabelOf(ind)} is defined in ${m[1]} at ${lines}.`, miss: false, ambiguous: false, matches: result.matches };
+    }
+    return {
+      content: `${symbolLabelOf(ind)} is defined in ${moduleLabelOf(ind)} (no line span recorded in this index).`,
+      miss: false, ambiguous: false, matches: result.matches,
+    };
+  }
+  // when: newest touching commit + its date; undated commits are said out loud
+  // (honest miss with the precise re-index hint), never silently skipped.
+  if (result.whenShape) {
+    const subject = result.objMatch.label;
+    if (!result.matches.length) {
+      return { content: `no recorded commit touches ${subject} in this index. (traversal: ${result.traversal})`, miss: true, ambiguous: false };
+    }
+    const newest = result.matches[0];
+    const date = (newest.attributes || []).find((a) => a.key === "date")?.value || "";
+    if (!date) {
+      return {
+        content: `commit ${newest.label} touched ${subject}, but this index records no commit dates — re-index with a current seonix to attach mgx:commitDate.`,
+        miss: true, ambiguous: false,
+      };
+    }
+    const msg = (newest.attributes || []).find((a) => a.key === "message")?.value || "";
+    const day = String(date).slice(0, 10);
+    if (newest.id === result.objMatch.id) {
+      return { content: `commit ${newest.label} is dated ${day}${msg ? ` ("${msg}")` : ""}.`, miss: false, ambiguous: false, matches: result.matches };
+    }
+    const more = result.matches.length - 1;
+    return {
+      content: `${subject} was last touched by commit ${newest.label} on ${day}${msg ? ` ("${msg}")` : ""}${more ? `; ${more} earlier commit${more === 1 ? "" : "s"} recorded` : ""}.`,
+      miss: false, ambiguous: false, matches: result.matches,
+    };
+  }
+  // commit-as-subject answers ("which changes touch commit X", "what did commit X
+  // touch"): cite the commit, group the touched entities by CLASS — modules and
+  // symbols are different grains of the same answer, and flattening them into one
+  // undifferentiated list would hide which is which. Same OVERFLOW_CAP as the
+  // other list templates; zero hits is the standard honest blank, commit cited.
+  if (result.commitSubject) {
+    const cite = `commit ${result.objMatch.label}`;
+    if (!result.matches.length) {
+      return {
+        content: `${cite} touched nothing recorded in the index. (traversal: ${result.traversal})`,
+        miss: true, ambiguous: false,
+      };
+    }
+    const byClass = new Map();
+    for (const m of result.matches.slice(0, OVERFLOW_CAP)) {
+      const cls = m.class || "Module";
+      if (!byClass.has(cls)) byClass.set(cls, []);
+      byClass.get(cls).push(["Function", "Method"].includes(cls) ? `${m.label}()` : m.label);
+    }
+    const clauses = [...byClass.entries()].map(([cls, labels]) => `${nounFor(cls, labels.length)} ${listJoin(labels)}`);
+    const extra = result.matches.length > OVERFLOW_CAP ? `; …and ${result.matches.length - OVERFLOW_CAP} more` : "";
+    return { content: `${cite} touched ${clauses.join("; ")}${extra}.`, miss: false, ambiguous: false, matches: result.matches };
+  }
+  if (parsed.shape === "ask") {
+    if (!result.objMatch || !result.subjMatch) {
+      return { content: `couldn't resolve one of the terms in this question.`, miss: true, ambiguous: false };
+    }
+    return {
+      content: result.answer ? `Yes. (${result.traversal})` : `No — no ${parsed.kind} edge found from ${result.subjMatch.label} to ${result.objMatch.label}.`,
+      miss: !result.answer, ambiguous: false,
+    };
+  }
+  if (!result.matches.length) {
+    // forward: parsed.object is the GIVEN subject ("what does X import" -> X), not a
+    // search target — "No modules found that X." reads as broken grammar (and X's own
+    // relation edges are simply absent, not "not found"), so this shape gets its own,
+    // subject-first phrasing rather than reusing reverse's "found ... that OBJECT" template.
+    if (parsed.shape === "forward") {
+      return {
+        content: `${result.objMatch.label} has no ${parsed.kind} edges in the index. (traversal: ${result.traversal || "no traversal resolved"})`,
+        miss: true, ambiguous: false,
+      };
+    }
+    const entityWord = nounFor(parsed.entityType || "Module", 2);
+    return {
+      content: `No ${entityWord} found whose module directly ${verbFor(parsed.kind)} ${parsed.object}. (traversal: ${result.traversal || "no traversal resolved"})`,
+      miss: true, ambiguous: false,
+    };
+  }
+  // Route by the MATCHED entities' actual class, not just the parsed hint — a reverse
+  // query phrased without an explicit entity keyword ("what imports X", entityType null)
+  // still resolves to Module individuals for a module-level relation like "imports", and
+  // grouping those by-module (module label as its own "symbol" label) reads as nonsense
+  // ("in a.mjs there is a.mjs"). The fine-grained per-symbol grouping below is only
+  // meaningful when the matches are sub-module entities (functions/classes/etc) — a
+  // Commit list ("which commits touched X") has no containing module to group by, so
+  // anything that is not a fine entity takes the flat join.
+  if (parsed.shape === "forward" || parsed.entityType === "Module" || result.matches.every((m) => !FINE_ENTITY_TYPES.has(m.class))) {
+    const shown = result.matches.slice(0, OVERFLOW_CAP).map((m) => m.label);
+    const extra = result.matches.length > OVERFLOW_CAP ? `, …and ${result.matches.length - OVERFLOW_CAP} more` : "";
+    return { content: shown.join(" and ") + extra + ".", miss: false, ambiguous: false, matches: result.matches };
+  }
+  // reverse, fine-grained entity: group by module, one clause per module (§5 grouping rule) —
+  // the FIRST module states "in {module} there is …"; each SUBSEQUENT module states
+  // "there is … in {module}" (module trails, not leads), matching the plan's worked example.
+  const byModule = new Map();
+  for (const m of result.matches.slice(0, OVERFLOW_CAP)) {
+    const mod = moduleLabelOf(m);
+    if (!byModule.has(mod)) byModule.set(mod, []);
+    byModule.get(mod).push(symbolLabelOf(m));
+  }
+  const clauses = [...byModule.entries()].map(([mod, syms], i) => {
+    const list = listJoin(syms);
+    return i === 0 ? `in ${mod} there is ${list}` : `there is ${list} in ${mod}`;
+  });
+  const extra = result.matches.length > OVERFLOW_CAP ? ` …and ${result.matches.length - OVERFLOW_CAP} more` : "";
+  return { content: clauses.join(" and ") + extra + ".", miss: false, ambiguous: false, matches: result.matches };
+}
+
+// ============================================================================
+// §progressive-relaxation cascade (SHRDLU in a code graph, with a Zork parser's
+// forgiveness) — a controlled loop that wraps the WHOLE existing parse and runs
+// ONLY when the direct parse of the normalized query would MISS. A clean direct hit
+// never enters the cascade (it stays instant and exact); the cascade only ever DROPS
+// noise/unmatched words or NORMALISES a near-canonical word to the closed vocabulary,
+// re-attempting the full parse (compositional + templates + keyword-spot) after each
+// transform, and bottoms out in the SAME honest miss + rephrase hint the engine
+// already returned — never inventing a term or guessing an entity. Deterministic:
+// same input → same cascade path. All of it is plain JS over the already-imported
+// tables + resolveObject/parseQuery, so it survives the viewer bundle's import strip.
+// ============================================================================
+
+const wordsOf = (arr) => arr.flatMap((p) => String(p).toLowerCase().split(" "));
+
+/** Every token the CLOSED grammar gives QUERY MEANING to — relation verbs, entity
+ *  nouns, modifiers, qualifiers, aggregate/superlative triggers, edge-degree nouns,
+ *  boolean connectives, placeholder nouns, anaphora/meta/where/mention markers,
+ *  relative pronouns, and the small synonym keys. The noise-strip pass will NEVER
+ *  remove one of these, and the drop-unmatched pass always keeps them: they carry the
+ *  intent, only the packaging around them is negotiable. */
+const CONTENT_VOCAB = new Set([
+  ...wordsOf(Object.keys(VERB_TO_KIND)), ...wordsOf(Object.keys(ENTITY_TO_TYPE)),
+  ...wordsOf(Object.keys(MODIFIER_TO_KIND)), ...wordsOf(Object.keys(QUALIFIERS)),
+  ...wordsOf(AGGREGATE_TRIGGERS), ...wordsOf(Object.keys(SUPERLATIVE_EXTREMES)),
+  ...wordsOf(Object.keys(EDGE_NOUN_TO_METRIC)), ...wordsOf(Object.keys(BOOLEAN_CONNECTIVES)),
+  ...wordsOf(PLACEHOLDER_NOUNS), ...wordsOf(ANAPHORA_TRIGGERS), ...wordsOf(META_MEANING_VERBS),
+  ...wordsOf(WHERE_MARKERS), ...wordsOf(MENTION_MARKERS), ...wordsOf(RELATIVE_PRONOUNS),
+  ...wordsOf(Object.keys(CASCADE_SYNONYMS)),
+]);
+
+/** Structural scaffolding words — question words, articles-in-questions, frame verbs,
+ *  and context pronouns. Not "content", but they hold a sentence together, so the
+ *  drop-unmatched pass keeps them (dropping "what"/"of" would corrupt the grammar);
+ *  the noise-strip pass may still remove the few of these that are ALSO curated noise
+ *  ("the"/"a"/"show"/"me") — the two sets overlap on purpose. */
+const STRUCTURAL_WORDS = new Set([...STOPWORDS, ...FRAME_WORDS, ...CONTEXT_PRONOUNS]);
+const CASCADE_NOISE_SET = new Set(wordsOf(CASCADE_NOISE));
+/** Every token that carries NO graph meaning of its own — curated noise (articles,
+ *  politeness, vocatives, presentation frames) PLUS the structural scaffolding
+ *  (question words, context pronouns). The bare-kind-noun terminal rule (relaxParse's
+ *  Layer 4) treats a query as "just a kind noun wrapped in packaging" only when every
+ *  non-kind token is one of these — so an unknown qualifier ("shiny") or a relation
+ *  verb, being neither, still blocks the default and preserves the honest miss. */
+const NOISE_OR_SCAFFOLD = new Set([...CASCADE_NOISE_SET, ...STRUCTURAL_WORDS]);
+
+/** The aggregate/list TRIGGER words the cascade's drop-unmatched pass will fuzzy-correct
+ *  a typo toward (Gap 2, trigger-typo work). Curated (not derived from LIST_TRIGGERS'
+ *  multi-word phrases) so the target set stays clean single verbs — "many", "count",
+ *  "list", "show", … — and never drags in a stray "down"/"off"/"out" from a phrasal
+ *  trigger that would mis-correct an unrelated token. */
+const TRIGGER_FUZZY_WORDS = [
+  "many", "count", "number", "quantity", "total", "tally",
+  "list", "show", "display", "print", "dump", "enumerate", "name",
+];
+/** Closed-vocab words a plain unknown may be fuzzy-corrected TOWARD before the cascade
+ *  discards it: relation verbs, entity kind nouns, and the aggregate/list triggers. A
+ *  correction fires only on a token already bound for the drop pile (grammar doesn't own
+ *  it, no entity resolves) and only for a UNIQUE within-bound target, so it strictly
+ *  beats dropping — a typo of a trigger keeps its intent instead of being lost. Excludes
+ *  STOPWORDS/structural words (a random unknown must never bend into "what"/"the") and
+ *  <4-char words (at the small bound they match half of English). */
+const CASCADE_FUZZY_TARGETS = [...new Set([
+  ...wordsOf(Object.keys(VERB_TO_KIND)),
+  ...Object.keys(ENTITY_TO_TYPE),
+  ...TRIGGER_FUZZY_WORDS,
+])].filter((wd) => /^[a-z]+$/.test(wd) && wd.length >= 4 && !STOPWORDS.has(wd));
+
+/** UNIQUE within-bound fuzzy correction of `w` toward CASCADE_FUZZY_TARGETS, or null —
+ *  a distance tie between two distinct targets is refused (honest-miss discipline at the
+ *  vocabulary level, cf. fuzzyVocabWord). */
+function fuzzyCascadeWord(w) {
+  const bound = fuzzyBound(w);
+  let best = bound + 1; let hit = null; let tied = false;
+  for (const target of CASCADE_FUZZY_TARGETS) {
+    const d = editDistance(w, target, Math.min(best, bound));
+    if (d < best) { best = d; hit = target; tied = false; }
+    else if (d === best && d <= bound && target !== hit) tied = true;
+  }
+  return best <= bound && !tied ? hit : null;
+}
+
+/** Is `parsed` a genuinely ANSWERABLE query — one that both parsed AND (for the simple
+ *  clauses) resolves its named term(s) to a graph entity? A composite non-miss node,
+ *  an ambiguous parse, and a meta/mentions surface all count; an unresolved-context
+ *  pronoun is its OWN specific honest miss (kept, not relaxed). Returns:
+ *    true       — a real, executable answer (even if it later renders an empty set / "No")
+ *    "ambiguous"/"pronoun" — a specific outcome to keep, distinct from relaxable
+ *    false      — no parse at all, a compositional {node:"miss"}, or an unresolved term
+ *  ask() starts the cascade ONLY on `false`, and accepts a relaxed attempt ONLY on the
+ *  strict `true` (so the cascade can never "rescue" a query into another kind of miss). */
+function answerable(graph, parsed, contextId) {
+  if (!parsed) return false;
+  if (parsed.ambiguousParse) return "ambiguous";
+  if (parsed.node) return parsed.node !== "miss";
+  if (parsed.shape === "meta" || parsed.shape === "mentions") return true;
+  const o = resolveTermOrContext(graph, parsed.object, contextId);
+  if (o.unresolvedPronoun) return "pronoun";
+  if (!o.match) return false;
+  if (parsed.shape === "ask") {
+    const s = resolveTermOrContext(graph, parsed.subject, contextId);
+    if (s.unresolvedPronoun) return "pronoun";
+    return s.match ? true : false;
+  }
+  return true;
+}
+
+/** Whole-query help/orientation request → show the hint directly (never the relaxation
+ *  loop, never a pretend answer). Matches only when the ENTIRE normalized query is a
+ *  curated HELP_TRIGGER, so a symbol named "help" in a real question is untouched. */
+function isHelpRequest(query) {
+  const q = String(query || "").trim().toLowerCase().replace(/[?.!\s]+$/, "");
+  return HELP_TRIGGERS.includes(q);
+}
+
+/** The relaxation cascade. Given a query whose direct parse MISSED, walk three
+ *  increasingly-permissive layers, re-attempting the full parse after each transform,
+ *  and return the FIRST attempt that yields an answerable parse (with a trace of what
+ *  it did) — or null if none does (caller then falls back to the original honest miss):
+ *    1. NOISE-STRIP    — remove one curated noise token (leftmost) at a time, never one
+ *                        that is content vocab or resolves to an entity, re-parsing each
+ *                        time, until a parse answers or no noise tokens remain.
+ *    2. DROP-UNMATCHED — drop the plain-lowercase words that are NEITHER grammar NOR a
+ *                        resolvable entity (an unknown "frobnicate"); identifier-shaped
+ *                        tokens (dotted files, shas, CamelCase) are never dropped —
+ *                        they are content that may honestly fail to resolve.
+ *    3. SYNONYM        — rewrite surviving near-canonical words to the closed vocab.
+ *  Bounded (one token removed per noise iteration; hard guard) and deterministic. */
+export function relaxParse(graph, query, { nlp = undefined, contextId = null, prev = null } = {}) {
+  const from = applyNegationFrames(normalizeQuery(String(query || "")));
+  let tokens = splitWords(from);
+  if (!tokens.length) return null;
+  const dropped = [];
+  const steps = [];
+
+  // Two literal-resolution guards (never the fuzzy/prose tiers, whose loose near-
+  // matches would let a noise word masquerade as an entity):
+  //  · resolvesExact  — EXACT label/id or ext: match only (tier ≤ 2). Used to protect a
+  //    curated NOISE word from being stripped: only a token that literally NAMES an
+  //    entity ("a module called `the`") is safe-listed. A mere substring coincidence
+  //    ("me" ⊂ "Method", tier 3) must NOT block stripping a genuine filler word.
+  //  · resolvesLiteral — exact/ext/substring/component (tier ≤ 3). Used to KEEP an
+  //    identifier-shaped content token ("logging" ⊂ "src/logging.mjs") through the
+  //    drop-unmatched pass, and to hold a synonym rewrite off a real entity name.
+  const resolvesExact = (t) => {
+    const r = resolveObject(graph, t);
+    return !!r.match && r.tier != null && r.tier <= 2;
+  };
+  const resolvesLiteral = (t) => {
+    const r = resolveObject(graph, t);
+    return !!r.match && r.tier != null && r.tier <= 3;
+  };
+  // Does a term string carry at least one REAL word — one the grammar doesn't already
+  // own as vocabulary/scaffolding? Guards against a relaxation that drops the actual
+  // asked term and lets a bare marker slide into its place ("where is [X] defined" →
+  // "where is defined", "defined" is a WHERE_MARKER, never the thing being located).
+  const hasRealTerm = (s) => splitWords(String(s || "")).some((w) => {
+    const lc = w.toLowerCase();
+    return !CONTENT_VOCAB.has(lc) && !STRUCTURAL_WORDS.has(lc);
+  });
+  // Accept a relaxed attempt ONLY if it is a genuinely answerable parse (terms resolve)
+  // AND it renders a REAL positive answer — never another empty/miss (relaxation earns a
+  // win only by turning a miss into an answer, never a differently-worded miss) — and
+  // never by promoting a bare marker to the asked term.
+  const TERM_SHAPES = new Set(["reverse", "forward", "where", "when", "ask"]);
+  const attempt = (toks) => {
+    const text = toks.join(" ");
+    const p = parseQuery(text, { nlp });
+    if (answerable(graph, p, contextId) !== true) return null;
+    if (p && !p.node && TERM_SHAPES.has(p.shape)) {
+      if (p.object != null && !hasRealTerm(p.object)) return null;
+      if (p.shape === "ask" && p.subject != null && !hasRealTerm(p.subject)) return null;
+    }
+    const rendered = render(p, traverse(graph, p, { contextId, prev }));
+    return rendered.miss ? null : { parsed: p, text };
+  };
+  const done = (hit) => ({ parsed: hit.parsed, from, to: hit.text, dropped: [...dropped], steps });
+
+  // Layer 1 — NOISE-STRIP (one lowest-value token at a time)
+  let guard = 0;
+  const hardCap = Math.max(tokens.length, 1) + 12;
+  for (; guard < hardCap; guard += 1) {
+    let idx = -1;
+    for (let i = 0; i < tokens.length; i += 1) {
+      const lc = tokens[i].toLowerCase();
+      if (CASCADE_NOISE_SET.has(lc) && !CONTENT_VOCAB.has(lc) && !resolvesExact(tokens[i])) { idx = i; break; }
+    }
+    if (idx < 0) break;
+    const removed = tokens[idx];
+    tokens = tokens.filter((_, i) => i !== idx);
+    dropped.push(removed);
+    steps.push(`strip noise "${removed}" → "${tokens.join(" ")}"`);
+    const hit = attempt(tokens);
+    if (hit) return done(hit);
+  }
+
+  // Layer 2 — DROP-UNMATCHED (plain-lowercase unknowns beside the real terms)
+  const survivors = [];
+  const nowDropped = [];
+  const corrected = [];
+  for (const t of tokens) {
+    const lc = t.toLowerCase();
+    const plain = /^[a-z]+$/.test(lc);
+    if (!plain || CONTENT_VOCAB.has(lc) || STRUCTURAL_WORDS.has(lc) || resolvesLiteral(t)) {
+      survivors.push(t);
+      continue;
+    }
+    // Gap 2 — before dropping an unmatched plain token, try a bounded fuzzy-correct to a
+    // UNIQUE closed-vocab word (verbs, entity kinds, aggregate/list triggers): a typo of
+    // a TRIGGER ("manyn"→"many", "coutn"→"count", "liist"→"list") is restored, not
+    // discarded, so the count/list intent survives. Only a unique within-bound hit; else
+    // the token is genuinely unrecoverable and drops exactly as before.
+    const fix = fuzzyCascadeWord(lc);
+    if (fix && fix !== lc) { survivors.push(fix); corrected.push(`${t}→${fix}`); continue; }
+    nowDropped.push(t);
+  }
+  if ((corrected.length || nowDropped.length) && survivors.length) {
+    tokens = survivors;
+    dropped.push(...nowDropped);
+    if (corrected.length) steps.push(`fuzzy-correct ${JSON.stringify(corrected)} → "${tokens.join(" ")}"`);
+    if (nowDropped.length) steps.push(`drop unmatched ${JSON.stringify(nowDropped)} → "${tokens.join(" ")}"`);
+    const hit = attempt(tokens);
+    if (hit) return done(hit);
+  }
+
+  // Layer 3 — SYNONYM-NORMALISE the survivors onto the canonical vocabulary
+  let changed = false;
+  const normed = tokens.map((t) => {
+    const lc = t.toLowerCase();
+    if (CASCADE_SYNONYMS[lc] && !resolvesLiteral(t)) { changed = true; return CASCADE_SYNONYMS[lc]; }
+    return t;
+  });
+  if (changed) {
+    steps.push(`normalise synonyms → "${normed.join(" ")}"`);
+    const hit = attempt(normed);
+    if (hit) return done(hit);
+  }
+
+  // Layer 4 (terminal) — BARE KIND NOUN → a bounded DEFAULT ACTION. When noise-strip,
+  // drop-unmatched and synonym-normalise have all failed to yield an answerable parse,
+  // give the operator's "vague enough to land" case a sensible answer instead of an
+  // honest miss: a query that is ONLY a kind noun (class/classes, function/functions,
+  // module, method, attribute, variable, commit, …) wrapped in articles/noise/question
+  // words DEFAULTS TO A COUNT of that kind ("the classes" / "classes" / "tell me the
+  // classes" → "20 classes."). Count, not list: a bare unscoped list of 647 functions is
+  // noise, whereas the count is the cheap useful answer the asker can then drill into
+  // ("list them"). Deterministic — count for every kind, no cardinality cap.
+  //
+  // We classify the ORIGINAL normalized tokens (`from`), NOT the layer-mutated `tokens`:
+  // drop-unmatched has by now EATEN any unknown qualifier, so "the shiny classes" would
+  // otherwise look identical to a bare "classes". Reading the whole phrase keeps the
+  // discipline exact — the rule fires ONLY when every non-kind token is pure packaging
+  // (NOISE_OR_SCAFFOLD). A dangling unknown qualifier ("the shiny classes"), a relation
+  // verb, a marker, or a real term is neither noise nor a kind noun, so it lands in
+  // `others`, blocks the default, and the honest miss (or the real compositional query,
+  // if a lower layer already rescued it) stands.
+  const bareLc = splitWords(from).map((t) => t.toLowerCase());
+  const kindWords = [];
+  const others = [];
+  for (const t of bareLc) {
+    if (NOISE_OR_SCAFFOLD.has(t)) continue;
+    // real entity kinds only — "change"/"changes" is ask-vocab's pseudo-type (never a
+    // node class), so it is not a countable kind; it falls into `others`.
+    const et = ENTITY_TO_TYPE[t];
+    if (et && et !== "Change") kindWords.push(t);
+    else others.push(t);
+  }
+  if (kindWords.length === 1 && others.length === 0) {
+    // reuse the whole aggregate pipeline (parseAggregate → count node → renderer): a
+    // synthesized "count <kind>" is the exact query the cascade's other count paths land.
+    const hit = attempt(["count", kindWords[0]]);
+    if (hit) { steps.push(`bare kind "${kindWords[0]}" → count`); return done(hit); }
+  }
+  // A LONE unknown noun wrapped only in packaging ("the bananas") is left to the generic
+  // honest miss (the rephrase hint already NAMES the kinds): a crisper "isn't a listable
+  // kind" miss here would fire on every one-word non-query the same way ("tell me a joke"),
+  // which chat.mjs's own surface deliberately answers with the general hint — so the
+  // bare-noun default is a COUNT of a KNOWN kind only, never a re-worded miss.
+
+  return null; // exhausted — the honest bottom of the cascade (caller keeps the original miss)
+}
+
+// ---- orchestration — the seonix_ask entry point (§6.3: parse -> resolve -> traverse -> render) ----
+
+/** Answer a free-text question over the graph, mechanically. `opts.contextId`
+ *  resolves a context pronoun ("this"/"it"/…) — wired from a UI's currently-
+ *  selected node when one exists; omit it in the bare CLI/MCP surface, where
+ *  a pronoun then produces an honest miss rather than a guess. `opts.nlp`
+ *  overrides the lemma/POS adapter (see parseQuery) — leave it undefined and
+ *  a Node process picks up wink automatically while the inlined viewer stays
+ *  adapter-less by construction. `opts.prev` is the id array of the LAST answer's
+ *  matches — thread it from a chat loop so a follow-up anaphora question ("which of
+ *  those are tested", "how many of them call X") filters/counts the prior result
+ *  set; omit it and anaphora questions produce an honest "needs a previous answer"
+ *  miss. Returns the full {content, seonix_ask:
+ *  {mechanical,parsed,matches,traversal,miss,ambiguous,candidates?}} envelope
+ *  §6.2 specifies. Zero generative model calls. */
+export function ask(graph, query, { contextId = null, nlp = undefined, prev = null } = {}) {
+  // Explicit help/orientation request → the rephrase hint directly (the honest bottom
+  // of the cascade, reached on demand), never a pretend answer or a relaxation attempt.
+  if (isHelpRequest(query)) {
+    return {
+      content: rephraseHint(),
+      seonix_ask: {
+        mechanical: true, parsed: null, matches: [], traversal: null,
+        miss: true, ambiguous: false, matchedVia: null, help: true, relaxed: null,
+      },
+    };
+  }
+  const direct = parseQuery(query, { nlp });
+  // The relaxation cascade fires ONLY when the DIRECT parse would miss (no parse, a
+  // compositional {node:"miss"}, or an unresolved named term) — a clean hit, an
+  // ambiguous parse, an unresolved-pronoun miss, and a real-but-empty answer all keep
+  // the direct parse untouched (a hit stays instant and exact).
+  let parsed = direct;
+  let relaxed = null;
+  if (answerable(graph, direct, contextId) === false) {
+    const r = relaxParse(graph, query, { nlp, contextId, prev });
+    if (r) { parsed = r.parsed; relaxed = { from: r.from, to: r.to, dropped: r.dropped, steps: r.steps }; }
+  }
+  const result = traverse(graph, parsed, { contextId, prev });
+  const rendered = render(parsed, result);
+  // If relaxation materially rewrote the query and produced a real answer, note it
+  // lightly (terse, honest) so the reader knows how the question was read.
+  const content = (relaxed && !rendered.miss && relaxed.to !== relaxed.from)
+    ? `read as "${relaxed.to}" — ${rendered.content}`
+    : rendered.content;
+  return {
+    content,
+    seonix_ask: {
+      mechanical: true,
+      parsed: (parsed && !parsed.ambiguousParse) ? parsed : null,
+      matches: (result.matches || []).map((m) => ({
+        id: m.id, label: m.label, type: m.class, module: m.class ? moduleLabelOf(m) : undefined,
+      })),
+      traversal: result.traversal || null,
+      miss: !!rendered.miss,
+      ambiguous: !!rendered.ambiguous,
+      // The relaxation trace: null when the direct parse was used as-is (a clean hit or
+      // an honest miss the cascade couldn't/shouldn't rescue), else what the cascade
+      // dropped/normalised to reach an answer. A caller can assert relaxed===null to
+      // prove the cascade never touched a direct hit.
+      relaxed,
+      // Confidence provenance: "prose" when resolveObject fell through to the tier-4
+      // prose-index fallback (PLAN_PROSE_INDEX.md §6 — matched what the symbol talks
+      // about, not its name); "fuzzy" when the tier-5 bounded-edit-distance pass
+      // resolved a typo'd term (the rendered content also announces it: "assuming you
+      // meant <label>"); null for every literal-identifier tier.
+      matchedVia: result.matchedVia || null,
+      ...(rendered.ambiguous ? { candidates: rendered.candidates } : {}),
+    },
+  };
+}

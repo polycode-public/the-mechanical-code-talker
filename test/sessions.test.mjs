@@ -1,0 +1,229 @@
+// sessions.mjs tests — chat sessions as first-class temporal graph data:
+// the pure upsert (resolution tiers, honest drops, per-turn re-append), the
+// sidecar .jsonl parser, the atomic read-time graph append, and the gated
+// end-to-end re-index fold-in (indexRepository re-attaches recorded sessions).
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import {
+  SESSIONS_DIR_REL, SESSION_CLASS, ASKS_ABOUT_PROP,
+  upsertSession, appendSessionToGraph, parseSessionJsonl, readSessionRecords, foldInSessions,
+} from "../src/sessions.mjs";
+import { CLASS_DOCS, PREDICATE_DOCS } from "../src/schema-docs.mjs";
+
+const FIXTURES_MULTI = fileURLToPath(new URL("./fixtures/multi", import.meta.url));
+const SRC_SESSIONS = fileURLToPath(new URL("../src/sessions.mjs", import.meta.url));
+
+const have = (cmd) => spawnSync(cmd, ["--version"], { stdio: "ignore" }).status === 0;
+const gate = { skip: !((have("python3") || have("python")) && have("git")) ? "needs python3 + git" : false };
+
+/** A minimal fresh entities payload (the buildEntities shape) for pure upsert tests. */
+function freshEntities() {
+  return {
+    classes: [{ name: "Module", count: 2, sample: ["app/x.mjs", "app/y.mjs"] }],
+    vocabulary: [{ prop: "mgx:importsNamespace", predicate: "imports" }],
+    objectProperties: [{ predicate: "imports", prop: "mgx:importsNamespace", count: 1,
+      examples: [{ subject: "mod:app/y.mjs", object: "mod:app/x.mjs", subjectLabel: "app/y.mjs", objectLabel: "app/x.mjs" }] }],
+    individuals: [
+      { id: "mod:app/x.mjs", label: "app/x.mjs", class: "Module", derived_from: [], mentions: [], attributes: [] },
+      { id: "mod:app/y.mjs", label: "app/y.mjs", class: "Module", derived_from: [], mentions: [], attributes: [] },
+      { id: "fn:app/y.mjs#helper", label: "helper", class: "Function", derived_from: [], mentions: [], attributes: [] },
+    ],
+  };
+}
+
+const RECORD = {
+  id: "01890000-0000-7000-8000-000000000001",
+  started: "2026-07-02T10:00:00.000Z",
+  ended: "2026-07-02T10:05:00.000Z",
+  turns: [
+    { ts: "2026-07-02T10:01:00.000Z", query: "which modules import x.mjs",
+      resolvedIds: ["mod:app/x.mjs"], answeredIds: ["mod:app/y.mjs"], miss: false },
+  ],
+};
+
+// ---- upsertSession (pure) ----
+
+test("upsertSession: Session individual + asksAbout group + classes/vocabulary entries; Modules untouched", () => {
+  const e = freshEntities();
+  const before = JSON.stringify(e.individuals.filter((i) => i.class === "Module"));
+  const { kept, dropped } = upsertSession(e, RECORD);
+  assert.equal(kept, 2);
+  assert.equal(dropped, 0);
+
+  const sess = e.individuals.find((i) => i.class === SESSION_CLASS);
+  assert.ok(sess, "Session individual exists");
+  assert.equal(sess.id, `session:${RECORD.id}`);
+  assert.equal(sess.label, "01890000", "short time-ordered label, like a Commit's short sha");
+  const attr = (k) => sess.attributes.find((a) => a.key === k)?.value;
+  assert.equal(attr("started"), RECORD.started);
+  assert.equal(attr("ended"), RECORD.ended);
+  assert.equal(attr("turns"), "1");
+  assert.match(attr("queries"), /which modules import x\.mjs/);
+
+  const group = e.objectProperties.find((g) => g.prop === ASKS_ABOUT_PROP);
+  assert.ok(group, "asksAbout group grouped like the other relation groups");
+  assert.equal(group.predicate, "asksAbout");
+  assert.equal(group.count, 2);
+  assert.deepEqual(group.examples.map((x) => x.object).sort(), ["mod:app/x.mjs", "mod:app/y.mjs"]);
+  assert.ok(group.examples.every((x) => x.subject === sess.id));
+
+  assert.deepEqual(e.classes.find((c) => c.name === SESSION_CLASS), { name: "Session", count: 1, sample: ["01890000"] });
+  assert.ok(e.vocabulary.some((v) => v.prop === ASKS_ABOUT_PROP && /runtime observation/.test(v.note)));
+
+  // the source-derived content is undisturbed
+  assert.equal(JSON.stringify(e.individuals.filter((i) => i.class === "Module")), before);
+  assert.equal(e.classes.find((c) => c.name === "Module").count, 2);
+  assert.equal(e.objectProperties.find((g) => g.prop === "mgx:importsNamespace").count, 1);
+});
+
+test("upsertSession: per-turn re-append REPLACES the prior copy — one individual, no duplicate edges", () => {
+  const e = freshEntities();
+  upsertSession(e, RECORD);
+  const twoTurns = { ...RECORD, ended: "2026-07-02T10:06:00.000Z",
+    turns: [...RECORD.turns, { ts: "2026-07-02T10:06:00.000Z", query: "tell me a joke", resolvedIds: [], answeredIds: [], miss: true }] };
+  upsertSession(e, twoTurns);
+  const sessions = e.individuals.filter((i) => i.class === SESSION_CLASS);
+  assert.equal(sessions.length, 1);
+  assert.equal(sessions[0].attributes.find((a) => a.key === "turns").value, "2");
+  assert.equal(sessions[0].attributes.find((a) => a.key === "ended").value, "2026-07-02T10:06:00.000Z");
+  assert.equal(e.objectProperties.find((g) => g.prop === ASKS_ABOUT_PROP).count, 2, "edges not duplicated");
+  assert.equal(e.classes.find((c) => c.name === SESSION_CLASS).count, 1);
+});
+
+test("upsertSession: unresolvable ref → edge dropped + counted; moved symbol re-resolves via unique label", () => {
+  const e = freshEntities();
+  const rec = { ...RECORD, turns: [{ ts: RECORD.turns[0].ts, query: "where is helper",
+    // helper was recorded at app/OLD.mjs; the fresh graph defines it at app/y.mjs (label tier).
+    // mod:gone.mjs matches nothing at all (dropped, never guessed).
+    resolvedIds: ["fn:app/OLD.mjs#helper"], answeredIds: ["mod:gone.mjs"], miss: false }] };
+  const { kept, dropped } = upsertSession(e, rec);
+  assert.equal(kept, 1);
+  assert.equal(dropped, 1);
+  const group = e.objectProperties.find((g) => g.prop === ASKS_ABOUT_PROP);
+  assert.deepEqual(group.examples.map((x) => x.object), ["fn:app/y.mjs#helper"], "re-resolved by unique label");
+  const sess = e.individuals.find((i) => i.class === SESSION_CLASS);
+  assert.equal(sess.attributes.find((a) => a.key === "dropped").value, "1");
+  const ids = new Set(e.individuals.map((i) => i.id));
+  assert.ok(group.examples.every((x) => ids.has(x.object)), "no dangling edge targets");
+});
+
+// ---- sidecar parsing ----
+
+test("parseSessionJsonl: header + turns + end; torn trailing line skipped; headerless → null", () => {
+  const text = [
+    JSON.stringify({ type: "session", id: RECORD.id, started: RECORD.started, repo: "/r", seonixVersion: "0.2.1" }),
+    JSON.stringify({ type: "turn", ...RECORD.turns[0] }),
+    JSON.stringify({ type: "turn", ts: "2026-07-02T10:02:00.000Z", query: "tell me a joke", resolvedIds: [], answeredIds: [], miss: true }),
+    JSON.stringify({ type: "end", ts: RECORD.ended }),
+    '{"type":"turn","query":"killed mid-wri', // torn line from a killed session
+  ].join("\n");
+  const rec = parseSessionJsonl(text);
+  assert.equal(rec.id, RECORD.id);
+  assert.equal(rec.started, RECORD.started);
+  assert.equal(rec.ended, RECORD.ended);
+  assert.equal(rec.turns.length, 2);
+  assert.deepEqual(rec.turns[0].answeredIds, ["mod:app/y.mjs"]);
+  assert.equal(rec.turns[1].miss, true);
+  assert.equal(parseSessionJsonl("not json\n"), null);
+});
+
+// ---- read-time graph append (atomic) ----
+
+test("appendSessionToGraph: fresh-read + atomic write; second append updates in place; no temp litter", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "seonix-sess-append-"));
+  try {
+    const graphFile = join(dir, "graph.json");
+    await writeFile(graphFile, JSON.stringify(freshEntities()));
+    await appendSessionToGraph(graphFile, RECORD);
+    let g = JSON.parse(await readFile(graphFile, "utf8"));
+    assert.equal(g.individuals.filter((i) => i.class === SESSION_CLASS).length, 1);
+    assert.equal(g.objectProperties.find((x) => x.prop === ASKS_ABOUT_PROP).count, 2);
+
+    // a re-index replaced the file mid-session (x.mjs is gone) → next append re-reads
+    // and drops the vanished target, keeping the survivor
+    const reindexed = freshEntities();
+    reindexed.individuals = reindexed.individuals.filter((i) => i.id !== "mod:app/x.mjs");
+    await writeFile(graphFile, JSON.stringify(reindexed));
+    await appendSessionToGraph(graphFile, RECORD);
+    g = JSON.parse(await readFile(graphFile, "utf8"));
+    const group = g.objectProperties.find((x) => x.prop === ASKS_ABOUT_PROP);
+    assert.deepEqual(group.examples.map((x) => x.object), ["mod:app/y.mjs"], "vanished target dropped, never dangling");
+    const sess = g.individuals.find((i) => i.class === SESSION_CLASS);
+    assert.equal(sess.attributes.find((a) => a.key === "dropped").value, "1");
+
+    const names = await readdir(dir);
+    assert.ok(!names.some((n) => n.includes(".tmp-")), `atomic write leaves no temp files: ${names}`);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---- re-index fold-in (end-to-end through indexRepository) ----
+
+test("re-index fold-in: indexRepository re-attaches sessions, re-resolving ids; unresolvable → dropped-count", gate, async () => {
+  const { indexRepository } = await import("../src/extract.mjs");
+  const dir = await mkdtemp(join(tmpdir(), "seonix-sess-foldin-"));
+  try {
+    await cp(join(FIXTURES_MULTI, "repo-a"), dir, { recursive: true });
+    const sessionsDir = join(dir, SESSIONS_DIR_REL);
+    await mkdir(sessionsDir, { recursive: true });
+    const sid = "01890000-0000-7000-8000-00000000abcd";
+    await writeFile(join(sessionsDir, `session-${sid}.jsonl`), [
+      JSON.stringify({ type: "session", id: sid, started: "2026-07-01T00:00:00.000Z", repo: dir, seonixVersion: "0.2.1" }),
+      JSON.stringify({ type: "turn", ts: "2026-07-01T00:01:00.000Z", query: "which modules import alpha",
+        resolvedIds: ["mod:pkg/alpha.py"], answeredIds: ["mod:pkg/beta.py", "mod:pkg/DELETED.py"], miss: false }),
+      JSON.stringify({ type: "end", ts: "2026-07-01T00:02:00.000Z" }),
+    ].join("\n") + "\n");
+
+    const { graphFile } = await indexRepository(dir);
+    const g = JSON.parse(await readFile(graphFile, "utf8"));
+    const sess = g.individuals.find((i) => i.id === `session:${sid}`);
+    assert.ok(sess, "Session individual survives a fresh re-index");
+    assert.equal(sess.class, SESSION_CLASS);
+    assert.equal(sess.attributes.find((a) => a.key === "dropped").value, "1", "the deleted module's edge is dropped, counted");
+    const group = g.objectProperties.find((x) => x.prop === ASKS_ABOUT_PROP);
+    assert.deepEqual(group.examples.map((x) => x.object).sort(), ["mod:pkg/alpha.py", "mod:pkg/beta.py"]);
+    assert.ok(g.classes.some((c) => c.name === SESSION_CLASS && c.count === 1));
+
+    // readSessionRecords is what fed the fold-in — sanity-check it directly too
+    const records = await readSessionRecords(dir);
+    assert.equal(records.length, 1);
+    assert.equal(records[0].turns.length, 1);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("readSessionRecords: no sessions dir → [] (every existing fixture repo)", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "seonix-sess-none-"));
+  try {
+    assert.deepEqual(await readSessionRecords(dir), []);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("foldInSessions: zero records is a no-op (session-less graphs stay byte-identical)", () => {
+  const e = freshEntities();
+  const before = JSON.stringify(e);
+  foldInSessions(e, []);
+  assert.equal(JSON.stringify(e), before);
+});
+
+// ---- schema drift guard (mirrors schema-docs.test.mjs, scoped to sessions.mjs) ----
+
+test("drift guard: every class/prop literal sessions.mjs emits has a CLASS_DOCS/PREDICATE_DOCS entry", async () => {
+  const src = await readFile(SRC_SESSIONS, "utf8");
+  const documentedClasses = new Set(CLASS_DOCS.map((c) => c.name));
+  const documentedProps = new Set(PREDICATE_DOCS.map((p) => p.prop));
+  assert.ok(documentedClasses.has(SESSION_CLASS), "Session has a CLASS_DOCS entry (→ SchemaClass individual)");
+  assert.ok(documentedProps.has(ASKS_ABOUT_PROP), "mgx:asksAbout has a PREDICATE_DOCS entry");
+  for (const [, prop] of src.matchAll(/prop:\s*"([a-zA-Z:]+)"/g)) {
+    assert.ok(documentedProps.has(prop), `sessions.mjs emits prop "${prop}" with no PREDICATE_DOCS entry`);
+  }
+});

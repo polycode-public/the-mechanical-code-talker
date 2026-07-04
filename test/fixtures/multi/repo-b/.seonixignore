@@ -1,0 +1,2 @@
+# per-repo excludes must be honoured in multi mode exactly as in single mode
+scratch/

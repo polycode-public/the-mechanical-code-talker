@@ -1,0 +1,49 @@
+# CI for @polycode-projects/mct — a single published npm package (no website, no
+# AWS, no benchmark rig). Two jobs: run the tests, and publish to public npm on a
+# deliberate version bump. Mirrors the seonix repo's publish:npm shape, minus the
+# --workspace flag (mct is a single package, not a workspace).
+
+image: node:24
+
+stages:
+  - test
+  - deploy
+
+# Optional stock security scanning. Harmless if the group doesn't license it.
+include:
+  - template: Security/SAST.gitlab-ci.yml
+  - template: Security/Secret-Detection.gitlab-ci.yml
+
+unit:
+  stage: test
+  script:
+    - npm ci
+    - npm test
+
+# Publish the package to PUBLIC npmjs.org. Automatic on main, but the release
+# TRIGGER is a VERSION BUMP, not a push or a tag: the script compares
+# package.json's version against what's already live on npm and no-ops if they
+# match, so an ordinary push to main can never re-publish or error on "version
+# already exists" — only a commit that bumps the version publishes. The rule
+# requires NPM_TOKEN present (a masked, protected npm *automation* token for the
+# @polycode-projects scope) so a not-yet-configured token fails closed (the job
+# doesn't run) rather than failing loud on every push.
+publish:npm:
+  stage: deploy
+  needs:
+    - unit
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main" && $NPM_TOKEN'
+  script:
+    - echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > .npmrc
+    - npm ci
+    - npm test
+    - LOCAL_VERSION=$(node -p "require('./package.json').version")
+    - PUBLISHED_VERSION=$(npm view @polycode-projects/mct version 2>/dev/null || echo "none")
+    - |
+      if [ "$PUBLISHED_VERSION" = "$LOCAL_VERSION" ]; then
+        echo "@polycode-projects/mct is already at $LOCAL_VERSION on npm — no version bump in this push, skipping publish."
+      else
+        echo "publishing $LOCAL_VERSION (npm currently has ${PUBLISHED_VERSION})"
+        npm publish --access public
+      fi
