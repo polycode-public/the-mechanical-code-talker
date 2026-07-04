@@ -302,35 +302,34 @@ answer EXISTS as a stable phrasing in technical prose is not a ceiling — it is
   register); then template acquisition generalizes — mining candidate templates from corpus
   blocks (tier-2), scored by slot-fillability, promoted into `data/templates/` with provenance.
 
-## Phase 6 — Response finishing: grammar pass + tone of voice
+## Phase 6 — Response finishing: the grammar pass (tone of voice dropped for now)
 
-*(Refined 2026-07-05: "tone is a lens, never a source." Fact invariance is achieved by
-CONSTRUCTION, not by hope — finishing operates over a segmented answer, never a raw string.)*
+*(Refined 2026-07-05; decisions settled with the operator. Fact invariance is achieved by
+CONSTRUCTION, not by hope — finishing operates over a SEGMENTED answer, never a raw string.
+Tone-of-voice synonym substitution is DROPPED: once every term with technical significance is
+protected — entities, paths, vocabulary, receipts, provenance — the substitutable surface is
+mostly connectives: high accuracy risk, thin reward. "Keen on the trickery to make a helpful
+product, but not at the cost of accuracy." Moved to Phase LATER should a provably-safe subset
+ever emerge.)*
 
 - **The segmentation IR (the foundation, lever 1)**: every answer becomes a list of typed spans
   before it becomes text — `prose` vs PROTECTED (`entity`, `path`, `number`, `code`,
-  `provenance`, `receipt`). Protected spans are byte-copied through both finishing passes; only
-  prose spans are ever touched. The W1 template renderer is already slot-aware (slots ARE the
-  protected spans); composed renders adopt segmentation progressively via a conservative masker.
-  Phase 5's dual banding reads the same spans.
+  `provenance`, `receipt`). Protected spans are byte-copied through finishing; only prose spans
+  are ever touched. The W1 template renderer is already slot-aware (slots ARE the protected
+  spans); composed renders adopt segmentation progressively via a conservative masker. Phase 5's
+  dual banding reads the same spans.
 - **Grammar pass (lever 2)**: a data-driven rule table (TOML, item-7 formats) over prose spans —
   article selection ("a artifact" → "an artifact", an observed defect class), subject–verb
-  agreement against slot plurality, capitalization, list/terminal punctuation. WHICH rules fire
-  is part of the tone's grammar-preference profile (terse permits fragments; academic enforces
-  full sentences; friendly expands contractions).
-- **Tone pass (lever 3)**: `data/tones/<voice>.toml` — one-shot, lemma-aware, non-cascading,
-  case-preserving synonym/phrase substitution, prose spans only. Ship `neutral` (the IDENTITY
-  function — byte-for-byte, so every existing test and graded expectation stays valid
-  unconditionally) + `terse-engineering` + `friendly` + `academic`. Selected via `/tone` +
-  tmct.toml default; the turn record carries `tone` beside `via`. Pass order: tone → grammar
-  (substitution may change a/an agreement; grammar runs last — confirm with a spike).
-- **Verification**: unit invariance checker (protected-span multiset identical pre/post, full
-  tone × answer-shape matrix) + per-voice golden files + a bench **tone lane**: the same graded
-  sample re-run per voice must hold groundedness/correctness EXACTLY (any delta = a protected
-  span leaked into prose) while the judge separately rates register fit.
-- **Open decisions (plan-mode)**: memory stores neutral-flattening + tone tag vs as-spoken
-  (touches the answer-capture path); tone-as-pass vs per-voice template overrides for the few
-  surfaces where substitution reads awkwardly.
+  agreement against slot plurality, capitalization, list/terminal punctuation. Grammar
+  corrections IMPROVE accuracy (they fix our own generated defects); that is why they survive
+  the tone cut. Neutral behavior is byte-stable except where a rule fixes a genuine defect —
+  each rule lands as a bench-measured lever.
+- **Memory decision (settled)**: memory stores BOTH — the **as-spoken** turns live as larger
+  prose blocks on the graph (the honest record), and the **canonical** form is derived and
+  LINKED to its source prose blocks (canonise + link, never replace). Recall and folding read
+  canonical; provenance walks back to as-spoken.
+- **Verification**: unit invariance checker (protected-span multiset identical pre/post) +
+  golden files per rule + the graded bench measuring each grammar rule as a lever.
 
 ## Phase 7 — The Repository Interface (seonix inverts to a tmct user)
 
@@ -398,6 +397,14 @@ a passive payload loader into the product's primary integration surface.)*
 
 Features we have deliberately shaped seams for but will not build until the phases above have
 earned them:
+
+### Tone-of-voice adaptation (dropped from Phase 6, 2026-07-05)
+Per-voice synonym/phrase substitution over prose spans. Dropped because tmct's protected-span
+analysis leaves too little safely-substitutable text: any term with technical significance is
+untouchable, and accuracy outranks helpfulness trickery. Revisit only if a provably-safe
+substitutable subset emerges (e.g. connective-only voice profiles, or per-voice template
+overrides authored as whole alternatives rather than substitutions). The grammar-preference
+half of the idea survives inside Phase 6's rule table.
 
 ### Tier-4 corpus: learn-on-miss acquisition
 The strongest miss signal tmct can emit is: *lexicon term recognized, query built cleanly,
