@@ -115,8 +115,11 @@ Keep the `exports` map and the primitives stable and documented as the
 internals are refactored.
 
 ### Shell work
-- **OpenTUI console shell** around `runTurn`; readline `runChat` stays as
-  `--plain` and as the test surface.
+- **Ink console shell** (`src/tui/app.mjs`, ink + react, no build step) around
+  the shared session sink; readline `runChat` stays as `--plain` and as the
+  test surface. *(Decision: OpenTUI ruled out — `@opentui/core` depends on Bun
+  FFI (`bun-ffi-structs`, native Zig renderer), not Node-clean; revisit when it
+  runs under plain Node.)*
 - Fold the surviving `bin/cli.mjs` arms into `bin/tmct.mjs`; delete `cli.mjs`.
 
 ---
