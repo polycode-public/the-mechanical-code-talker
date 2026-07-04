@@ -53,3 +53,12 @@
 {"id":"nudge-precision","class":"nudge","register":"friendly","template":"The closer you get to a shape like \"{example}\", the sharper my answer gets."}
 {"id":"nudge-commands","class":"nudge","register":"friendly","template":"If prose fails you, the slash commands always work — try {command}."}
 {"id":"nudge-narrower","class":"nudge","register":"friendly","template":"That matched {count} things — too many to be useful. Narrow it with a module or class name."}
+{"id":"conversational-greeting","class":"conversational","register":"friendly","template":"Hi. Ask me about this codebase — imports, calls, definitions, history — or /help."}
+{"id":"conversational-greeting-hello-there","class":"conversational","register":"friendly","template":"Hello there. (A hollow voice says, \"fool.\") Ask me about this codebase, or /help."}
+{"id":"conversational-greeting-good-morning","class":"conversational","register":"friendly","template":"Good morning. Ask me about this codebase, or /help."}
+{"id":"conversational-greeting-good-afternoon","class":"conversational","register":"friendly","template":"Good afternoon. Ask me about this codebase, or /help."}
+{"id":"conversational-greeting-good-evening","class":"conversational","register":"friendly","template":"Good evening. Ask me about this codebase, or /help."}
+{"id":"conversational-thanks","class":"conversational","register":"friendly","template":"Any time. Ask another, or /help for what I can do."}
+{"id":"conversational-farewell","class":"conversational","register":"friendly","template":"Bye — flushing the session log. Come back with a question any time."}
+{"id":"orientation-friendly","class":"orientation","register":"friendly","template":"I answer questions about THIS codebase's structure — imports, calls, definitions,\nhistory and counts. For example:\n  which modules import walk.mjs\n  what calls buildContextBundle\n  how many classes are there\n/help for commands, /stats for an overview of the graph."}
+{"id":"miss-no-previous-answer","class":"miss","register":"friendly","template":"No previous answer to expand yet — ask me a question first, then say \"why\" or \"say more\"."}

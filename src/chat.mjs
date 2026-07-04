@@ -49,6 +49,7 @@ import { SESSIONS_DIR_REL, appendSessionToGraph } from "./sessions.mjs";
 import { uuidv7 } from "./uuid.mjs";
 import { createTelemetry } from "./telemetry.mjs";
 import * as defaultSource from "./source.mjs";
+import { loadTemplates, render as renderTemplate } from "./corpus/templates.mjs";
 
 // uuidv7 lives in ./uuid.mjs (shared with telemetry + the bench stamp); re-exported
 // here because callers/tests still import it from chat.mjs.
@@ -211,15 +212,43 @@ export function isConversational(query) {
   return q.split(/\s+/).filter(Boolean).length <= 3 && !codeish;
 }
 
-/** The short friendly orientation shown for conversational input. */
-const FRIENDLY = [
-  "I answer questions about THIS codebase's structure — imports, calls, definitions,",
-  "history and counts. For example:",
-  "  which modules import walk.mjs",
-  "  what calls buildContextBundle",
-  "  how many classes are there",
-  "/help for commands, /stats for an overview of the graph.",
-].join("\n");
+// ---- the response-template library (W1: templates → render path) ----
+// The WORDING of the conversational/orientation surfaces lives in
+// data/templates/responses.jsonl (corpus/templates.mjs) — the template library is
+// load-bearing for these turns. The recognizer sets below stay code: they decide
+// WHICH template answers, never what it says. Loading is lazy + failure-tolerated
+// (chat.mjs ethos: a turn never crashes) — a broken/missing data file degrades to
+// one short honest line, never a throw before the prompt.
+
+/** Template ids (data/templates/responses.jsonl) for the surfaces chat renders. */
+const T_GREETING = "conversational-greeting";
+const T_GREETING_BY_PHRASE = {
+  "hello there": "conversational-greeting-hello-there",
+  "good morning": "conversational-greeting-good-morning",
+  "good afternoon": "conversational-greeting-good-afternoon",
+  "good evening": "conversational-greeting-good-evening",
+};
+const T_THANKS = "conversational-thanks";
+const T_FAREWELL = "conversational-farewell";
+const T_ORIENTATION = "orientation-friendly";
+const T_WHY_EMPTY = "miss-no-previous-answer";
+
+/** The degraded line when the template library itself cannot load — a packaging
+ *  failure said out loud, never a crashed turn or a silently different answer. */
+const TEMPLATES_UNAVAILABLE = "response templates unavailable — ask a question, or /help for commands.";
+
+let templatesPromise = null;
+/** Load data/templates/responses.jsonl once per process; null on failure. */
+function chatTemplates() {
+  if (!templatesPromise) templatesPromise = loadTemplates().catch(() => null);
+  return templatesPromise;
+}
+/** Strict render through the loaded map; null on any failure (no map / unknown
+ *  id / missing slot) so every call site degrades explicitly, never half-fills. */
+function tRender(templates, id, slots = {}) {
+  if (!templates) return null;
+  try { return renderTemplate(id, slots, templates); } catch { return null; }
+}
 
 // ---- conversational (ELIZA/Zork-manners) templated layer ----
 // A small CLOSED set of human expressions handled with a TEMPLATED response BEFORE
@@ -248,16 +277,8 @@ const WHY = new Set([
   "elaborate", "tell me more", "more detail", "expand",
 ]);
 
-const GREETING = "Hi. Ask me about this codebase — imports, calls, definitions, history — or /help.";
-/** A couple of expression-specific lines (a light Zork nod for "hello there"). */
-const GREETING_LINES = {
-  "hello there": 'Hello there. (A hollow voice says, "fool.") Ask me about this codebase, or /help.',
-  "good morning": "Good morning. Ask me about this codebase, or /help.",
-  "good afternoon": "Good afternoon. Ask me about this codebase, or /help.",
-  "good evening": "Good evening. Ask me about this codebase, or /help.",
-};
-const ACK = "Any time. Ask another, or /help for what I can do.";
-const FAREWELL = "Bye — flushing the session log. Come back with a question any time.";
+// (Greeting/thanks/farewell wording moved to data/templates/responses.jsonl — W1.
+// The expression-specific greeting variants map through T_GREETING_BY_PHRASE above.)
 
 /** Re-render the last answer in verbose form: the previous query + its full answer
  *  plus the ask envelope's traversal receipt and the matched entities (the detail a
@@ -289,22 +310,31 @@ export function renderVerbose(last) {
 function conversationalTurn(line, ctx) {
   const raw = String(line);
   const q = raw.toLowerCase().replace(/[.!?]+$/, "").replace(/\s+/g, " ").trim();
-  const mk = (answer, { end = false, miss = false } = {}) => {
+  const t = (id) => tRender(ctx.templates, id) ?? TEMPLATES_UNAVAILABLE;
+  const mk = (answer, { end = false, miss = false, via = "template" } = {}) => {
     const ts = new Date().toISOString();
     return {
       answer,
       logLines: [ts, `> ${raw}`, answer, ""],
-      record: { type: "turn", ts, query: raw, conversational: true, resolvedIds: [], answeredIds: [], miss },
+      record: { type: "turn", ts, query: raw, conversational: true, via, resolvedIds: [], answeredIds: [], miss },
       focus: ctx.focus,
       last: ctx.last, // a conversational turn never overwrites the last real answer
       ...(end ? { end: true } : {}),
     };
   };
-  if (BYE.has(q)) return mk(FAREWELL, { end: true });
-  if (WHY.has(q)) { const v = renderVerbose(ctx.last); return mk(v.text, { miss: v.empty }); }
-  if (GREET.has(q)) return mk(GREETING_LINES[q] || GREETING);
-  if (THANKS.has(q)) return mk(ACK);
-  if (q === "help" || q === "?" || HELP_PHRASES.some((re) => re.test(raw))) return mk(FRIENDLY);
+  if (BYE.has(q)) return mk(t(T_FAREWELL), { end: true });
+  if (WHY.has(q)) {
+    const v = renderVerbose(ctx.last);
+    // The empty-state hint is template wording (via:"template", the data row wins;
+    // renderVerbose's own string is the degraded fallback for direct library callers).
+    // A real expansion re-renders the LAST ANSWER — its wording is the prior answer's,
+    // not a template's, so it carries via:"conversational".
+    if (v.empty) return mk(tRender(ctx.templates, T_WHY_EMPTY) ?? v.text, { miss: true });
+    return mk(v.text, { via: "conversational" });
+  }
+  if (GREET.has(q)) return mk(t(T_GREETING_BY_PHRASE[q] || T_GREETING));
+  if (THANKS.has(q)) return mk(t(T_THANKS));
+  if (q === "help" || q === "?" || HELP_PHRASES.some((re) => re.test(raw))) return mk(t(T_ORIENTATION));
   return null;
 }
 
@@ -374,7 +404,7 @@ export async function helpText() {
  *  otherwise the unchanged dispatchTool path (which also yields the no-graph error).
  *  A hit updates the focus to the resolved object. Grammar miss / ToolError → a
  *  normal answer, never a crash. */
-async function runAsk(query, { config, source, graph, focus }) {
+async function runAsk(query, { config, source, graph, focus, templates }) {
   const ts = new Date().toISOString();
   let answer;
   let envelope = null;
@@ -404,11 +434,17 @@ async function runAsk(query, { config, source, graph, focus }) {
   }
   const answeredIds = (envelope?.matches || []).map((m) => m?.id).filter(Boolean);
   const miss = envelope ? !!envelope.miss : true;
+  // Answer provenance (W1): "composed" is the ask engine's productive band; the
+  // orientation swap below is template wording, so those turns carry via:"template".
+  let via = "composed";
   // On a MISS: a conversational miss (a greeting, "what can you do", a very short
   // non-code line) gets the friendly orientation instead of the raw grammar hint. A
   // near-miss STRUCTURAL question keeps the precise hint the engine already produced.
-  if (miss && isConversational(query)) answer = FRIENDLY;
-  const record = { type: "turn", ts, query, resolvedIds, answeredIds, miss };
+  if (miss && isConversational(query)) {
+    answer = tRender(templates, T_ORIENTATION) ?? TEMPLATES_UNAVAILABLE;
+    via = "template";
+  }
+  const record = { type: "turn", ts, query, via, resolvedIds, answeredIds, miss };
   const logLines = [ts, `> ${query}`, answer, ""];
   // `detail` feeds why/say-more's verbose re-render: the traversal receipt + the
   // matched entities the terse render trims (see renderVerbose).
@@ -418,12 +454,12 @@ async function runAsk(query, { config, source, graph, focus }) {
 
 /** A non-ask, non-dispatch chat turn (count answer, /stats) — the same
  *  { answer, logLines, record, focus } shape, recorded like any other turn. */
-function plainTurn(query, answer, { command, miss = false, focus = null } = {}) {
+function plainTurn(query, answer, { command, via = "composed", miss = false, focus = null } = {}) {
   const ts = new Date().toISOString();
   return {
     answer,
     logLines: [ts, `> ${query}`, answer, ""],
-    record: { type: "turn", ts, query, ...(command ? { command } : {}), resolvedIds: [], answeredIds: [], miss },
+    record: { type: "turn", ts, query, ...(command ? { command } : {}), via, resolvedIds: [], answeredIds: [], miss },
     focus,
   };
 }
@@ -440,7 +476,7 @@ async function runCommand(line, { config, source, graph, focus }) {
   const mk = (answer, { resolvedIds = [], miss = false, newFocus = focus } = {}) => ({
     answer,
     logLines: [ts, `> ${line}`, answer, ""],
-    record: { type: "turn", ts, query: line, command: name, resolvedIds, answeredIds: [], miss },
+    record: { type: "turn", ts, query: line, command: name, via: "command", resolvedIds, answeredIds: [], miss },
     focus: newFocus,
   });
 
@@ -502,7 +538,7 @@ async function assertTurn(line, { memoryDir, sessionId, focus }) {
       .join("; ");
     const n = res.ids.length;
     const answer = `noted — remembered ${n} fact${n === 1 ? "" : "s"}: ${shown}`;
-    return plainTurn(line, answer, { command: "assert", focus });
+    return plainTurn(line, answer, { command: "assert", via: "assert", focus });
   } catch {
     return null; // grammar unavailable / write failed — fall through to the engine
   }
@@ -524,7 +560,8 @@ async function assertTurn(line, { memoryDir, sessionId, focus }) {
  */
 export async function runTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "" } = {}) {
   const line = String(input ?? "").trim();
-  const ctx = { config, source, graph, focus, last, memoryDir, sessionId };
+  const templates = await chatTemplates(); // failure-tolerated: null degrades, never throws
+  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates };
   // A DISPATCHED turn (count / slash-command / ask) becomes the new "last answer"
   // that why/say-more re-renders; a conversational turn does not (it preserves it).
   const withLast = (result) => ({ ...result, last: { query: line, answer: result.answer, detail: result.detail ?? null } });
@@ -546,7 +583,7 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // Aggregate/count questions are answered mechanically off the loaded graph header,
   // BEFORE falling through to the ask engine (focus unchanged — a count names no entity).
   const count = answerCount(graph, line);
-  if (count != null) return withLast(plainTurn(line, count, { focus }));
+  if (count != null) return withLast(plainTurn(line, count, { via: "count", focus }));
   return withLast(await runAsk(line, ctx));
 }
 

@@ -4,7 +4,7 @@
 //   .tmct/session-<uuidv7>.log            — the human-readable transcript (chat.mjs)
 //   .tmct/sessions/session-<uuidv7>.jsonl — the STRUCTURED sidecar this module owns:
 //     {"type":"session", id, started, repo, tmctVersion}        (header line)
-//     {"type":"turn", ts, query, resolvedIds, answeredIds, miss}  (one per turn, flushed)
+//     {"type":"turn", ts, query, via, resolvedIds, answeredIds, miss}  (one per turn, flushed)
 //     {"type":"end", ts}                                          (clean close marker)
 //
 // From the sidecar the session enters the typed graph twice:
@@ -216,6 +216,7 @@ async function recordSessionMemory(graphFile, record, repoDirOverride = null) {
     if (t.answeredIds?.length) parsed.answeredIds = t.answeredIds;
     if (t.command) parsed.command = t.command;
     if (t.miss) parsed.miss = true;
+    if (t.via) parsed.via = t.via; // answer provenance (W1) — carried into memory
     utterances.push({
       role: "visitor", text: query, ts, sessionId: record.id, sessionStarted: record.started || "",
       ...(Object.keys(parsed).length ? { parsed } : {}),
@@ -264,6 +265,10 @@ export function parseSessionJsonl(text) {
         // conversational filler are recorded but never folded into the corpus.
         ...(rec.command ? { command: String(rec.command) } : {}),
         ...(rec.conversational ? { conversational: true } : {}),
+        // answer provenance (W1): composed|template|count|command|conversational|
+        // assert|recall|fact|corpus — carried through so the memory side-write and
+        // any re-fold keep the banding signal the Phase-5 bench reads.
+        ...(rec.via ? { via: String(rec.via) } : {}),
       });
     } else if (rec?.type === "end") ended = String(rec.ts || "") || ended;
   }
