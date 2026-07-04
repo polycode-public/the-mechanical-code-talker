@@ -7,13 +7,17 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { PassThrough, Readable } from "node:stream";
 import {
   SESSIONS_DIR_REL, SESSION_CLASS, ASKS_ABOUT_PROP,
   upsertSession, appendSessionToGraph, parseSessionJsonl, readSessionRecords, foldInSessions,
 } from "../src/sessions.mjs";
 import { CLASS_DOCS, PREDICATE_DOCS } from "../src/schema-docs.mjs";
+import { runChat } from "../src/chat.mjs";
+import { MEMORY_GRAPH_REL } from "../src/memory/core.mjs";
 
 const SRC_SESSIONS = fileURLToPath(new URL("../src/sessions.mjs", import.meta.url));
+const FIXTURE = fileURLToPath(new URL("./fixtures/entities.fixture.json", import.meta.url));
 
 /** A minimal fresh entities payload (the buildEntities shape) for pure upsert tests. */
 function freshEntities() {
@@ -261,6 +265,52 @@ test("appendSessionToGraph: memory is best-effort and scoped — no .tmct layout
     await writeFile(join(dir, ".tmct", "memory", "graph.json"), "not json {");
     const res = await appendSessionToGraph(tmctGraph, RECORD);
     assert.equal(res.kept, 2, "graph append succeeded despite the broken memory store");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---- GUARD: the shell-transcript tripwire ----
+// The memory subsystem recovers each turn's ANSWER text by RE-READING the human
+// transcript .tmct/session-<id>.log (parseSessionLog, keyed by turnKey(ts, query)),
+// which depends on (a) the sidecar record's ts matching the transcript block's ts
+// line and (b) writeLog flushing BEFORE the per-turn graph upsert. Any chat shell
+// (readline today, an Ink TUI, anything future) must write the SAME transcript
+// format through the SAME sequencing, or answer text silently stops reaching
+// memory. This test drives a scripted session through the real shell and asserts
+// every non-conversational, non-miss turn produced a NON-EMPTY tmct answer
+// utterance in .tmct/memory/graph.json — the tripwire transcript drift would trip.
+
+test("guard: every dispatched (non-conversational, non-miss) turn's answer lands as a NON-EMPTY memory utterance", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-sess-guard-"));
+  try {
+    await mkdir(join(dir, ".tmct"), { recursive: true });
+    await writeFile(join(dir, ".tmct", "graph.json"), await readFile(FIXTURE, "utf8"));
+    const input = Readable.from([
+      "hi\n",                          // conversational — outside the guard
+      "which modules import a.mjs\n",  // ask-engine hit
+      "how many classes are there\n",  // mechanical count answer
+      "/describe Base\n",              // slash-command answer
+      "tell me a joke\n",              // grammar miss — outside the guard
+      "/exit\n",
+    ]);
+    const out = new PassThrough();
+    out.resume(); // drain — this guard is about the artifacts, not the screen
+    const { sidecarFile } = await runChat({ repoPath: dir, input, output: out });
+
+    const sidecar = parseSessionJsonl(await readFile(sidecarFile, "utf8"));
+    const guarded = sidecar.turns.filter((t) => !t.conversational && !t.miss);
+    assert.equal(guarded.length, 3, "the script dispatched exactly three answerable turns");
+
+    const memory = JSON.parse(await readFile(join(dir, MEMORY_GRAPH_REL), "utf8"));
+    const byId = new Map(memory.individuals.map((i) => [i.id, i]));
+    for (const t of guarded) {
+      const utt = byId.get(`utt:${sidecar.id}#${t.ts}#tmct`);
+      assert.ok(utt, `a tmct answer utterance was recorded for "${t.query}"`);
+      const text = utt.attributes.find((a) => a.prop === "mgx:utteranceText")?.value;
+      assert.ok(text && text.trim().length > 0,
+        `the answer utterance text is non-empty for "${t.query}" (got ${JSON.stringify(text)})`);
+    }
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
