@@ -30,26 +30,44 @@
 // vs --compare <prior product.jsonl> (a previously-passing case now failing),
 // or on runner errors; 0 otherwise.
 //
+// GRADED layer (case-set v2, chatbench/GRADED.md): a separate POOL of graded
+// cases (chatbench/graded-pool.jsonl; cases.jsonl keeps the frozen v1 48) is
+// sampled per run — stratified per grade×construction cell, seeded, with a
+// DUAL DRAW by default (two independent samples whose per-cell agreement is
+// the instrument's own reliability check). --ladder gates grades ascending;
+// --grade runs one band. With no pool file present, behavior is exactly v1.
+//
 // Usage:
 //   node chatbench/run.mjs --stamp <label> [--cases chatbench/cases.jsonl]
 //     [--out chatbench/results/raw/run-<stamp>] [--compare <prior product.jsonl>]
-//     [--only <caseId,caseId,...>]
+//     [--only <caseId,caseId,...>] [--pool <graded-pool.jsonl|none>]
+//     [--sample <fraction>] [--seed <n>] [--single|--dual] [--grade <band>] [--ladder]
 
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PassThrough, Readable } from "node:stream";
+import {
+  GRADES, fnv1a, validateConstruction,
+  stratifiedSample, dualDraws, computeAgreement, renderAgreementTable,
+  gradeReliability, gradedRollup, renderRollup,
+} from "./graded.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = dirname(HERE);
 export const FIXTURE = join(ROOT, "test", "fixtures", "entities.fixture.json");
 export const DEFAULT_CASES = join(HERE, "cases.jsonl");
+export const DEFAULT_POOL = join(HERE, "graded-pool.jsonl");
 
 export const TAGS = [
   "graph-query", "conversational", "honesty-miss", "typo-fuzzy", "noise",
   "ambiguity", "multi-turn-focus", "memory-recall", "bootstrap-empty",
 ];
+// graded pool cases carry the "graded" tag (their coverage registry is the
+// grade × construction matrix, not the v1 TAGS); it is valid everywhere but
+// deliberately NOT part of the v1 coverage registry above.
+const EXTRA_TAGS = ["graded"];
 export const EXPECT_KEYS = [
   "miss", "answerMatch", "answerNotMatch", "answeredIdsInclude",
   "resolvedIdsInclude", "focusLabel", "end", "baselineFail", "improvedIn",
@@ -109,7 +127,13 @@ export function parseCases(text) {
     if (seen.has(c.id)) errors.push(`${at}: duplicate id ${c.id}`);
     seen.add(c.id);
     if (!Array.isArray(c.tags) || !c.tags.length) errors.push(`${c.id}: tags must be a non-empty array`);
-    for (const tag of c.tags || []) if (!TAGS.includes(tag)) errors.push(`${c.id}: unknown tag "${tag}"`);
+    for (const tag of c.tags || []) if (!TAGS.includes(tag) && !EXTRA_TAGS.includes(tag)) errors.push(`${c.id}: unknown tag "${tag}"`);
+    if (c.grade !== undefined || c.construction !== undefined) {
+      if (!GRADES.includes(c.grade)) errors.push(`${c.id}: grade must be one of ${GRADES.join("|")}`);
+      const cErr = validateConstruction(c.construction);
+      if (cErr) errors.push(`${c.id}: ${cErr}`);
+      if (!(c.tags || []).includes("graded")) errors.push(`${c.id}: graded cases must carry the "graded" tag`);
+    }
     if (!MODES.includes(c.mode)) errors.push(`${c.id}: mode must be one of ${MODES.join("|")}`);
     if (c.mode === "session" && !GRAPHS.includes(c.graph)) errors.push(`${c.id}: session case needs graph: ${GRAPHS.join("|")}`);
     if (c.mode === "turns" && c.graph) errors.push(`${c.id}: graph is a session-mode field`);
@@ -362,6 +386,8 @@ export async function runCase(caseDef, deps) {
     tags: caseDef.tags,
     mode: caseDef.mode,
     ...(caseDef.graph ? { graph: caseDef.graph } : {}),
+    ...(caseDef.grade ? { grade: caseDef.grade, construction: caseDef.construction } : {}),
+    ...(caseDef.grade && deps.sampling ? { sampling: deps.sampling } : {}),
     stamp: deps.stamp,
     judge: {
       dimensions: caseDef.judge?.dimensions ?? JUDGE_DIMENSIONS,
@@ -392,7 +418,7 @@ export function parseJsonl(text) {
 }
 
 function parseArgs(argv) {
-  const args = { cases: DEFAULT_CASES };
+  const args = { cases: DEFAULT_CASES, sample: 0.1 };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
     if (a === "--stamp") args.stamp = argv[++i];
@@ -400,37 +426,27 @@ function parseArgs(argv) {
     else if (a === "--out") args.out = argv[++i];
     else if (a === "--compare") args.compare = argv[++i];
     else if (a === "--only") args.only = argv[++i].split(",").map((s) => s.trim()).filter(Boolean);
+    else if (a === "--pool") args.pool = argv[++i];
+    else if (a === "--sample") args.sample = Number(argv[++i]);
+    else if (a === "--seed") args.seed = Number(argv[++i]);
+    else if (a === "--dual") args.dual = true;
+    else if (a === "--single") args.dual = false;
+    else if (a === "--grade") args.grade = argv[++i].toUpperCase();
+    else if (a === "--ladder") args.ladder = true;
     else throw new Error(`unknown argument ${a}`);
   }
   return args;
 }
 
-export async function main(argv = process.argv.slice(2)) {
-  const args = parseArgs(argv);
-  if (!args.stamp || !/^[A-Za-z0-9._-]+$/.test(args.stamp)) {
-    console.error("chatbench/run.mjs: --stamp <label> is required (a filesystem-safe label; ids never come from Date.now).");
-    return 2;
-  }
-  const outDir = args.out ?? join(HERE, "results", "raw", `run-${args.stamp}`);
-
-  // Lazy product imports (the same modules the CLI uses).
+/** Assemble the real-product deps every case replay needs (the same modules
+ *  the CLI uses, the fixture run through the writer pipeline). The caller MUST
+ *  await cleanup() when done. Shared by main() and generate-graded.mjs. */
+export async function createRunnerDeps(stamp) {
   const { runTurn, runChat } = await import(join(ROOT, "src", "chat.mjs"));
   const { parseEntities } = await import(join(ROOT, "src", "codegraph.mjs"));
   const { ingestSchemaDocs } = await import(join(ROOT, "src", "schema-docs.mjs"));
   const { parseSessionJsonl, parseSessionLog, turnKey } = await import(join(ROOT, "src", "sessions.mjs"));
   const { clearCache } = await import(join(ROOT, "src", "source.mjs")); // H1a — see runSessionCase
-
-  const { cases, errors } = parseCases(await readFile(args.cases, "utf8"));
-  if (errors.length) {
-    console.error(`cases lint failed (${errors.length}):`);
-    for (const e of errors) console.error(`  - ${e}`);
-    return 2;
-  }
-  const selected = args.only ? cases.filter((c) => args.only.includes(c.id)) : cases;
-  if (args.only && selected.length !== args.only.length) {
-    console.error(`--only names unknown case ids: ${args.only.filter((id) => !cases.some((c) => c.id === id)).join(", ")}`);
-    return 2;
-  }
 
   // The runner's fixture pipeline mirrors a REAL graph writer's: raw payload ->
   // ingestSchemaDocs() -> the artifact (a real graph.json always carries the
@@ -444,28 +460,179 @@ export async function main(argv = process.argv.slice(2)) {
   await writeFile(graphFile, graphJson);
   const config = { graphFile };
   const graph = parseEntities(JSON.parse(graphJson));
-  const deps = { runTurn, runChat, parseSessionJsonl, parseSessionLog, turnKey, clearCache, config, graph, graphJson, stamp: args.stamp };
+  const deps = { runTurn, runChat, parseSessionJsonl, parseSessionLog, turnKey, clearCache, config, graph, graphJson, stamp };
+  return { deps, cleanup: () => rm(graphDir, { recursive: true, force: true }) };
+}
 
+async function fileExists(path) {
+  try { await access(path); return true; } catch { return false; }
+}
+
+/** Run one draw's graded cases grade-ascending, honoring --ladder gating.
+ *  Returns { rows, skipped } where skipped = [{grade, reason}]. */
+async function runGradedDraw(gradedCases, deps, { ladder }) {
   const rows = [];
-  try {
-    for (const caseDef of selected) rows.push(await runCase(caseDef, deps)); // sequential: session cases share tmpdir space, and product runs are ms-cheap
-  } finally {
-    await rm(graphDir, { recursive: true, force: true });
+  const skipped = [];
+  const reliabilityByGrade = {};
+  let gatedBy = null;
+  for (const grade of GRADES) {
+    const ofGrade = gradedCases.filter((c) => c.grade === grade);
+    if (!ofGrade.length) continue;
+    if (ladder && gatedBy) {
+      skipped.push({ grade, reason: gatedBy });
+      continue;
+    }
+    const gradeRows = [];
+    for (const caseDef of ofGrade) gradeRows.push(await runCase(caseDef, deps));
+    rows.push(...gradeRows);
+    reliabilityByGrade[grade] = gradeReliability(gradeRows);
+    if (ladder && !reliabilityByGrade[grade].reliable) {
+      const r = reliabilityByGrade[grade];
+      gatedBy = `${grade} at ${r.passing}/${r.real}`;
+    }
   }
+  return { rows, skipped, reliabilityByGrade };
+}
 
-  await mkdir(outDir, { recursive: true });
-  const productFile = join(outDir, "product.jsonl");
-  await writeFile(productFile, rows.map((r) => JSON.stringify(r)).join("\n") + "\n");
-
+function reportRows(label, rows) {
   const passed = rows.filter((r) => r.tier1.pass).length;
   const baseline = rows.filter((r) => r.tier1.baselineFailTurns.length).length;
   const improved = rows.filter((r) => r.tier1.improvedBaselineTurns.length);
-  console.log(`chatbench run ${args.stamp}: ${rows.length} case(s) — tier-1 pass ${passed}/${rows.length} (${baseline} carry baselineFail turns).`);
+  console.log(`${label}: ${rows.length} case(s) — tier-1 pass ${passed}/${rows.length} (${baseline} carry baselineFail turns).`);
   if (improved.length) console.log(`baseline improvements (documented weaknesses now passing): ${improved.map((r) => r.caseId).join(", ")}`);
   for (const r of rows.filter((x) => !x.tier1.pass)) {
     console.log(`  FAIL ${r.caseId}: ${r.tier1.failing.map((f) => `turn ${f.turn + 1} ${f.key} (expected ${JSON.stringify(f.expected)})`).join("; ")}`);
   }
+}
+
+export async function main(argv = process.argv.slice(2)) {
+  const args = parseArgs(argv);
+  if (!args.stamp || !/^[A-Za-z0-9._-]+$/.test(args.stamp)) {
+    console.error("chatbench/run.mjs: --stamp <label> is required (a filesystem-safe label; ids never come from Date.now).");
+    return 2;
+  }
+  if (!(args.sample > 0 && args.sample <= 1)) {
+    console.error("chatbench/run.mjs: --sample must be a fraction in (0, 1].");
+    return 2;
+  }
+  const outDir = args.out ?? join(HERE, "results", "raw", `run-${args.stamp}`);
+
+  const { cases, errors } = parseCases(await readFile(args.cases, "utf8"));
+  if (errors.length) {
+    console.error(`cases lint failed (${errors.length}):`);
+    for (const e of errors) console.error(`  - ${e}`);
+    return 2;
+  }
+
+  // Graded pool (case-set v2): loaded when present (or named via --pool),
+  // sampled per cell. "--pool none" opts out entirely.
+  let pool = [];
+  const poolPath = args.pool === "none" ? null : args.pool ?? ((await fileExists(DEFAULT_POOL)) ? DEFAULT_POOL : null);
+  if (poolPath) {
+    const parsed = parseCases(await readFile(poolPath, "utf8"));
+    if (parsed.errors.length) {
+      console.error(`graded pool lint failed (${parsed.errors.length}):`);
+      for (const e of parsed.errors) console.error(`  - ${e}`);
+      return 2;
+    }
+    pool = parsed.cases.filter((c) => c.grade);
+    const dupes = pool.filter((c) => cases.some((v) => v.id === c.id)).map((c) => c.id);
+    if (dupes.length) {
+      console.error(`graded pool ids collide with cases.jsonl: ${dupes.join(", ")}`);
+      return 2;
+    }
+  }
+  if (args.grade && !GRADES.includes(args.grade)) {
+    console.error(`--grade must be one of ${GRADES.join("|")}`);
+    return 2;
+  }
+  if (args.grade) pool = pool.filter((c) => c.grade === args.grade);
+
+  let selected = args.only ? cases.filter((c) => args.only.includes(c.id)) : cases;
+  if (args.grade) selected = []; // --grade runs one graded band only
+  if (args.only) {
+    const fromPool = pool.filter((c) => args.only.includes(c.id));
+    if (selected.length + fromPool.length !== args.only.length) {
+      const known = new Set([...cases, ...pool].map((c) => c.id));
+      console.error(`--only names unknown case ids: ${args.only.filter((id) => !known.has(id)).join(", ")}`);
+      return 2;
+    }
+    pool = fromPool;
+  }
+
+  // Sampling: --only pins exact ids (no sampling); otherwise a stratified
+  // seeded draw per cell — DUAL by default (parallel-forms reliability, see
+  // GRADED.md): two disjoint-where-possible draws whose per-cell agreement is
+  // the instrument's self-test. Seeds derive from the stamp unless --seed.
+  const dual = args.only ? false : (args.dual ?? pool.length > 0);
+  const seedA = args.seed ?? fnv1a(args.stamp);
+  const seedB = (seedA + 1) >>> 0;
+  let drawA = pool;
+  let drawB = [];
+  if (pool.length && !args.only && args.sample < 1) {
+    if (dual) {
+      ({ a: drawA, b: drawB } = dualDraws(pool, { fraction: args.sample, seedA, seedB }));
+    } else {
+      drawA = stratifiedSample(pool, { fraction: args.sample, seed: seedA });
+    }
+  } else if (pool.length && dual && args.sample >= 1) {
+    drawB = []; // a full-pool run has nothing left to cross-validate against
+  }
+
+  const { deps, cleanup } = await createRunnerDeps(args.stamp);
+  const rows = [];
+  const rowsB = [];
+  let skippedA = [];
+  let skippedB = [];
+  try {
+    for (const caseDef of selected) rows.push(await runCase(caseDef, deps)); // sequential: session cases share tmpdir space, and product runs are ms-cheap
+    if (drawA.length) {
+      deps.sampling = { seed: seedA, fraction: args.sample, draw: dual ? "A" : "single" };
+      const a = await runGradedDraw(drawA, deps, { ladder: args.ladder });
+      rows.push(...a.rows);
+      skippedA = a.skipped;
+    }
+    if (drawB.length) {
+      deps.sampling = { seed: seedB, fraction: args.sample, draw: "B" };
+      const b = await runGradedDraw(drawB, deps, { ladder: args.ladder });
+      rowsB.push(...b.rows);
+      skippedB = b.skipped;
+    }
+    delete deps.sampling;
+  } finally {
+    await cleanup();
+  }
+
+  await mkdir(outDir, { recursive: true });
+  const productFile = join(outDir, dual && rowsB.length ? "product-a.jsonl" : "product.jsonl");
+  await writeFile(productFile, rows.map((r) => JSON.stringify(r)).join("\n") + "\n");
+
+  reportRows(`chatbench run ${args.stamp}${dual && rowsB.length ? " (draw A)" : ""}`, rows);
+  for (const s of skippedA) console.log(`  grade ${s.grade} skipped: ${s.reason}`);
   console.log(`product: ${productFile}`);
+
+  if (rowsB.length) {
+    const productFileB = join(outDir, "product-b.jsonl");
+    await writeFile(productFileB, rowsB.map((r) => JSON.stringify(r)).join("\n") + "\n");
+    reportRows(`chatbench run ${args.stamp} (draw B)`, rowsB);
+    for (const s of skippedB) console.log(`  grade ${s.grade} skipped: ${s.reason}`);
+    console.log(`product: ${productFileB}`);
+
+    const agreement = computeAgreement(rows.filter((r) => r.grade), rowsB, {});
+    agreement.seeds = { a: seedA, b: seedB };
+    agreement.stamp = args.stamp;
+    const agreementFile = join(outDir, "agreement.json");
+    await writeFile(agreementFile, JSON.stringify(agreement, null, 2) + "\n");
+    console.log("\ndual-draw agreement (the instrument's self-test):");
+    console.log(renderAgreementTable(agreement));
+    console.log(`agreement: ${agreementFile}`);
+  }
+
+  const graded = rows.filter((r) => r.grade);
+  if (graded.length) {
+    console.log(`\ngraded rollup (draw A, seed ${seedA}, sample ${args.sample}):`);
+    console.log(renderRollup(gradedRollup(graded)));
+  }
 
   if (args.compare) {
     const prior = parseJsonl(await readFile(args.compare, "utf8"));
@@ -475,7 +642,7 @@ export async function main(argv = process.argv.slice(2)) {
       console.error(`TIER-1 REGRESSIONS vs ${args.compare}: ${regressions.join(", ")}`);
       return 1;
     }
-    console.log("no tier-1 regressions vs compare base.");
+    console.log("no tier-1 regressions vs compare base (checked on the id intersection — sampled graded sets compare cell-level means across cycles, GRADED.md).");
   }
   return 0;
 }
