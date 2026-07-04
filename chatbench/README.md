@@ -9,8 +9,12 @@ stays no-LLM; the judge lives only here.
 
 | file | role |
 | --- | --- |
-| `cases.jsonl` | the case set — **append-only once the CHATBENCH arc starts**; never edit or delete a case mid-arc |
-| `run.mjs` | deterministic runner: replays cases, evaluates tier-1 expectations, writes `product.jsonl` |
+| `cases.jsonl` | the v1 case set — **append-only once the CHATBENCH arc starts**; never edit or delete a case mid-arc |
+| `graded-pool.jsonl` | the GRADED pool (case-set v2): 850 generated cases across 30 grade×construction cells, sampled per run — see `GRADED.md` |
+| `graded.mjs` | graded registries + pure logic: matrix, stratified/dual sampling, agreement, ladder, rollups |
+| `generate-graded.mjs` | deterministic pool generator (replays the engine to auto-author expectations) |
+| `GRADED.md` | the graded benchmark's design doc (matrix, band descriptors, sampling contract, promotion) |
+| `run.mjs` | deterministic runner: replays cases, evaluates tier-1 expectations, writes `product.jsonl` (or `product-a/b.jsonl` + `agreement.json` on dual graded runs) |
 | `judge.mjs` | judge fan-out: N samples/case against the pinned model+prompt, writes `judged.jsonl` + `summary.json` |
 | `judge-prompt-v1.txt` | the versioned judge prompt (bump the file name to version it; record the pin in every write-up) |
 | `rubric.schema.json` | the structured-output schema the judge must satisfy |
@@ -38,6 +42,52 @@ node chatbench/report.mjs \
 ```
 
 Useful during development: `--only <id,id>` (both run and judge), `--samples 1`.
+
+## The graded layer (case-set v2 — full design in `GRADED.md`)
+
+With `graded-pool.jsonl` present, `chatbench:run` ALSO runs a stratified
+sample of the graded pool — per grade×construction cell, `max(5, round(0.1 ×
+pool))` cases — as a **dual draw** by default: two independent seeded samples
+(`product-a.jsonl` = v1 + draw A; `product-b.jsonl` = draw B), whose per-cell
+agreement (`agreement.json` + the printed table) is the instrument's own
+reliability check. A DISAGREEING cell is UNDER-COVERED: grow its pool/sample
+and exclude it from cycle statistics until it agrees.
+
+Graded schema on top of the v1 case shape: `grade` (`A1`…`C2`),
+`construction` (one of the 11 taxonomy entries, or an `a+b` combo such as
+`pronoun-binding+negation`), the `graded` tag, and — on frontier turns only —
+`expect.baselineFail: true` plus `observed` (the recorded current answer).
+Graded product rows carry `grade`, `construction` and `sampling: {seed,
+fraction, draw}` so any run is reproducible.
+
+Flags (all additive; with no pool file the runner behaves exactly as v1):
+
+```sh
+npm run chatbench:run -- --stamp graded-smoke        # v1 + dual graded draws
+#   --single            one draw instead of the dual pair
+#   --sample <fraction> per-cell sampling fraction (default 0.1; 1 = whole pool)
+#   --seed <n>          draw seed (default fnv1a(stamp); recorded in rows)
+#   --grade B1          run one graded band only
+#   --ladder            grades ascend; grade N unreliable → N+1… skipped
+#                       ("grade B2 skipped: B1 at 4/5")
+#   --pool <file|none>  alternate pool / opt out
+node chatbench/generate-graded.mjs                   # rebuild the pool (deterministic; seed 20260704)
+```
+
+**Ladder + promotion:** `--ladder` skips every grade above the first
+unreliable one (a grade is reliable when all its non-frontier sampled cases
+pass; frontier cases never block). Cells that stay reliable across two
+cycles are PROMOTED: their fixed 5-item subsets run as always-run judge-free
+unit tests in `test/chatbench-graded.test.mjs` — currently grades **A1 and
+A2** (9 cells × 5 cases); promoting a future grade = appending its band to
+`PROMOTED_GRADES` in `graded.mjs`.
+
+**Addition record (append-only discipline):** 2026-07-04 — created
+`graded-pool.jsonl` with 850 generated cases (490 passing, 360 frontier)
+across 30 cells; **zero v1 cases in `cases.jsonl` touched** (still 48). The
+pool file is regenerable but committed and append-only in the same sense as
+`cases.jsonl`: regeneration must reproduce it byte-identically (seed
+20260704) unless a write-up records a deliberate pool revision.
 
 ## Case shape (`cases.jsonl`, one JSON object per line)
 
