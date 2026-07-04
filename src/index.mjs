@@ -29,5 +29,13 @@ export { relationKind, impactClosure } from "./codegraph.mjs";
 // Tool dispatch (slash-commands and CLI tool calls route through here).
 export { dispatchTool } from "./server.mjs";
 
-// The single graph-load choke point — the adapter's data-provider seam.
-export { fetchEntities } from "./source.mjs";
+// Conversational memory (ROADMAP item 9) — tmct's OWN OWL-labelled graph under
+// .tmct/memory/, distinct from any provider-supplied code graph.
+export { loadMemory, appendUtterance, appendFact } from "./memory/core.mjs";
+export { retrieveBlocks, saveBlock, rankBlocks } from "./memory/blocks.mjs";
+export { foldSessionLogs } from "./memory/fold.mjs";
+
+// The single graph-load choke point — the adapter's data-provider seam
+// (docs/adapter-contract.md): registerProvider() plugs a producer in;
+// fetchEntities() is the one read path.
+export { fetchEntities, registerProvider } from "./source.mjs";
