@@ -1,5 +1,5 @@
 // Local graph source — the offline replacement for marginalia's HTTP/A2A `api`
-// layer. The MCP server takes this as an injectable dependency (so tests can
+// layer. The tool layer takes this as an injectable dependency (so tests can
 // stub it); in production it reads the JSON artifact the deterministic indexer
 // wrote to config.graphFile. No network, no model calls.
 

@@ -1,26 +1,22 @@
-// seonix MCP server — a local, query-only stdio server over the deterministic
-// typed code-graph artifact (<repo>/.seonix/graph.json). Adapted from the shipped
-// marginalia seon-mcp server, but the graph source
-// is a LOCAL file (src/source.mjs) and seonix_search is a LOCAL lexical lookup
-// (no remote API, no LLM, no model calls anywhere).
+// seonix tool layer — query-only tools over the deterministic typed code-graph
+// artifact (<repo>/.seonix/graph.json). The graph source is a LOCAL file
+// (src/source.mjs) and seonix_search is a LOCAL lexical lookup (no remote API,
+// no LLM, no model calls anywhere). dispatchTool is the single internal switch
+// the chat surface and the `cli <tool>` route call into.
 //
 // Tools (all query-only, bounded output): seonix_search, seonix_describe, seonix_snippet,
 // seonix_impact, plus the §9 read-replacing tools seonix_members, seonix_subclasses,
 // seonix_architecture, seonix_tests_for, seonix_untested, seonix_history, seonix_callers,
-// seonix_callees. Each answers one question in ONE compact call so the agent need not
+// seonix_callees. Each answers one question in ONE compact call so the caller need not
 // Read/Grep. Errors reach the caller as clean tool errors — message only, never a stack.
 //
-// seonix_ask (PLAN_MECHANICAL_CHAT.md, hot tool): a mechanical, zero-model-call NL query
-// over the graph — collapses the search+describe+traversal composition loop an agent would
+// seonix_ask (hot tool): a mechanical, zero-model-call NL query over the graph —
+// collapses the search+describe+traversal composition loop a caller would
 // otherwise hand-compose into one deterministic round-trip. See ask.mjs.
 
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import { loadConfig, ToolError } from "./config.mjs";
-import { createTelemetry } from "./telemetry.mjs";
+import { ToolError } from "./config.mjs";
 import * as defaultSource from "./source.mjs";
 import {
   parseEntities,
@@ -55,11 +51,9 @@ import { ask } from "./ask.mjs";
 
 const SNIPPET_MAX_LINES = 200;
 
-export const SERVER_INFO = { name: "seonix", version: "0.1.0" };
-
-// C4 tiered tool surface: only the TWO hot tools are registered as MCP tools, so the
-// agent's tool list stays tiny. Every COLD tool (describe/members/impact/history/…) is
-// still served by dispatchTool below and is reachable via the CLI `cli <tool>` route +
+// Tiered tool surface: the hot tools carry full descriptions/schemas in this
+// catalog; every COLD tool (describe/members/impact/history/…) is still served
+// by dispatchTool below and is reachable via the CLI `cli <tool>` route +
 // the generated <repo>/.seonix/TOOLS.md catalog (renderToolsCatalog).
 export const TOOLS = [
   {
@@ -127,7 +121,7 @@ function resolveOrThrow(graph, symbol, what) {
 
 /**
  * Build the seonix_context "edit bundle" for a symbol and return { text, tier, topup }.
- * Shared by the MCP seonix_context tool AND the no-MCP `cli digest` arm (cli.mjs), so both
+ * Shared by the seonix_context tool AND the `cli digest` arm (cli.mjs), so both
  * benefit from the size-adaptive sizing for free. `trim:true` (B2) renders a SECONDARY,
  * signatures-only bundle (no bodies/tails) for related-but-not-primary digest modules.
  *
@@ -368,7 +362,7 @@ export async function dispatchTool(name, args, { config, source = defaultSource 
     if (!query) throw new ToolError("query is required");
     const graph = await loadGraph(config, source);
     const { content, seonix_ask } = ask(graph, query);
-    // Every dispatchTool caller (this MCP handler, the CLI fallback) expects a plain string —
+    // Every dispatchTool caller (the chat surface, the CLI fallback) expects a plain string —
     // append the structured envelope as a delimited, machine-parseable block rather than
     // changing that shared contract for one tool. PLAN_MECHANICAL_CHAT.md §6.2.
     return `${content}\n\n---seonix_ask---\n${JSON.stringify(seonix_ask, null, 2)}`;
@@ -395,60 +389,3 @@ export async function dispatchTool(name, args, { config, source = defaultSource 
   throw new ToolError(`unknown tool: ${name}`);
 }
 
-/** SEONIX_TOOLS (csv of tool names) narrows what the server registers AND serves —
- *  an unlisted tool is invisible to the client and un-dispatchable, not merely
- *  un-granted, so a permission layer that auto-denies visible-but-ungranted tools
- *  (headless `claude -p`) has nothing to deny. Unknown names in the csv throw at
- *  startup: a typo must fail loudly, not silently serve the full set. */
-export function resolveServedTools(env = process.env) {
-  const csv = (env.SEONIX_TOOLS || "").trim();
-  if (!csv) return TOOLS;
-  const wanted = csv.split(",").map((s) => s.trim()).filter(Boolean);
-  const byName = new Map(TOOLS.map((t) => [t.name, t]));
-  const unknown = wanted.filter((n) => !byName.has(n));
-  if (unknown.length) throw new Error(`SEONIX_TOOLS names unknown tool(s): ${unknown.join(", ")}`);
-  return wanted.map((n) => byName.get(n));
-}
-
-/** Build the MCP server (transport-agnostic — tests connect it in-memory). */
-export function buildServer({ config = loadConfig(), source = defaultSource, env = process.env } = {}) {
-  const served = resolveServedTools(env);
-  const servedNames = new Set(served.map((t) => t.name));
-  // The dispatch gate applies ONLY under an active SEONIX_TOOLS filter: unfiltered, the cold
-  // tools stay dispatchable-though-unlisted (the C4 tiered surface); filtered, EVERYTHING
-  // outside the csv — hot siblings and cold tools alike — is un-dispatchable, because the
-  // filter's whole point is a provably single-tool server for the seonix-ask benchmark arm.
-  const filtered = served !== TOOLS;
-  // Opt-in telemetry, created ONCE per server (default OFF → null → `tel?.record` is a
-  // no-op and nothing is written). LOG FILE ONLY — stdout belongs to the MCP transport.
-  const tel = createTelemetry({ env, config, surface: "mcp" });
-  const server = new Server(SERVER_INFO, { capabilities: { tools: {} } });
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: served }));
-  server.setRequestHandler(CallToolRequestSchema, async (req) => {
-    const { name, arguments: args } = req.params;
-    const t0 = Date.now();
-    try {
-      if (filtered && !servedNames.has(name)) throw new ToolError(`unknown tool: ${name}`);
-      const text = await dispatchTool(name, args || {}, { config, source });
-      tel?.record({
-        tool: name,
-        response: { count: text ? text.split("\n").length : 0, truncated: /truncated/i.test(text) },
-        perf: { ms_total: Date.now() - t0 },
-        cost: { returned_chars: text.length, returned_tokens_est: Math.ceil(text.length / 4) },
-      });
-      return { content: [{ type: "text", text }] };
-    } catch (e) {
-      const text = e instanceof ToolError ? e.message : `unexpected error: ${e?.message || e}`;
-      return { content: [{ type: "text", text }], isError: true };
-    }
-  });
-  return server;
-}
-
-export async function startServer() {
-  const config = loadConfig();
-  const server = buildServer({ config });
-  await server.connect(new StdioServerTransport());
-  // stdout belongs to the MCP transport; sign on via stderr.
-  process.stderr.write(`seonix: serving ${resolveServedTools().length} tools over ${config.graphFile}\n`);
-}

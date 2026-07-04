@@ -1112,7 +1112,7 @@ export const DEFAULT_SCORE_GAP = 0.6;
  *  include ranks (top_k)..2 whose score sits within `scoreGapK` of rank 1 — the near-tie case
  *  where a second (or third) module is genuinely as relevant as the top hit, not filler. Never
  *  resurrects a suppressed (empty) selection: a top_k of 0 stays empty regardless of scoreGapK.
- *  Pure — the single source of truth for gap-extension, shared by the CLI/MCP product surface
+ *  Pure — the single source of truth for gap-extension, shared by the CLI product surface
  *  (cli.mjs's query-based `digest`) and the bench rig (bench/run.mjs's selectModules).
  *
  *  DELIBERATELY NEUTRAL BY DEFAULT: `scoreGapK` defaults to `null` (gap-extension OFF, plain
@@ -1879,7 +1879,7 @@ export function renderContextMore(plan) {
 
 // ---- #7 cold-tool catalog (written to <repo>/.seonix/TOOLS.md by the index step) --
 
-/** Markdown catalog of the COLD tools (everything except the two hot MCP tools): each
+/** Markdown catalog of the COLD tools (everything except the hot catalog tools): each
  *  with a one-line purpose and the exact Bash invocation via the CLI `cli <tool>` route.
  *  Pure — `cliPath` is the absolute path to bin/cli.mjs the caller wants embedded. */
 export function renderToolsCatalog(cliPath) {
@@ -1907,9 +1907,9 @@ export function renderToolsCatalog(cliPath) {
   const lines = [
     "# seonix cold-tool catalog",
     "",
-    "The two hot tools — `seonix_context` (start here to add/modify code; supports `depth: min|auto|full`) and `seonix_snippet` (exact source of one symbol) — are exposed as MCP tools.",
+    "The hot tools — `seonix_context` (start here to add/modify code; supports `depth: min|auto|full`) and `seonix_snippet` (exact source of one symbol) — carry full schemas in the TOOLS catalog.",
     "",
-    "The cold tools below are not registered as MCP tools (to keep the surface small); invoke each via the CLI:",
+    "The cold tools below invoke via the CLI:",
     "",
   ];
   for (const [name, purpose, args] of cold) {

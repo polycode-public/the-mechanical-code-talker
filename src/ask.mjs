@@ -2334,7 +2334,7 @@ export function relaxParse(graph, query, { nlp = undefined, contextId = null, pr
 
 /** Answer a free-text question over the graph, mechanically. `opts.contextId`
  *  resolves a context pronoun ("this"/"it"/…) — wired from a UI's currently-
- *  selected node when one exists; omit it in the bare CLI/MCP surface, where
+ *  selected node when one exists; omit it in the bare CLI surface, where
  *  a pronoun then produces an honest miss rather than a guess. `opts.nlp`
  *  overrides the lemma/POS adapter (see parseQuery) — leave it undefined and
  *  a Node process picks up wink automatically while the inlined viewer stays

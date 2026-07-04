@@ -358,7 +358,7 @@ export const FILLER_WORDS = Object.freeze([
  *  directly — resolved against an optional `contextId` (ask.mjs §keyword-
  *  spotting; wired from the graph viewer's currently-selected node, when the
  *  chat panel is asking "about" whatever the user last clicked). With no
- *  context available (the bare CLI/MCP surface), these produce an honest
+ *  context available (the bare CLI surface), these produce an honest
  *  "which node does 'this' refer to?" miss — never a guess. */
 export const CONTEXT_PRONOUNS = Object.freeze(["this", "it", "that", "here", "this one", "that one"]);
 
@@ -654,7 +654,7 @@ export const CASCADE_SYNONYMS = Object.freeze({
  *  demand) rather than pretending to answer or running the relaxation loop. A closed
  *  set matched against the whole normalized query only, so "which functions call help"
  *  (a real question about a symbol named "help") is untouched. Standalone greetings and
- *  the chat "/help" command are chat.mjs's own surface; this is the bare CLI/MCP ask()
+ *  the chat "/help" command are chat.mjs's own surface; this is the bare CLI ask()
  *  entry point's equivalent. */
 export const HELP_TRIGGERS = Object.freeze([
   "help", "help me", "how do i ask", "how do i use this", "what can i ask",

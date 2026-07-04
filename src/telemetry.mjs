@@ -7,7 +7,7 @@
 // When enabled it appends ONE JSONL line per event to `<graphDir>/seonix-<id>.log`
 // (i.e. next to graph.json, in the repo's `.seonix/` artifact dir). Writes are
 // fire-and-forget with a swallowed catch: telemetry must NEVER throw, block, or write
-// to stdout/stderr (stdout is the MCP transport). A structural redact() keeps file
+// to stdout/stderr (stdout belongs to the chat surface). A structural redact() keeps file
 // CONTENTS out of the log — it records only ids/paths/scores/sizes/counts.
 
 import { appendFile } from "node:fs/promises";
@@ -82,7 +82,7 @@ export function createTelemetry({ env = process.env, config, toml = null, surfac
     try {
       const line = { v: 1, id, seq: seq++, ts: new Date().toISOString(), surface, ...redact(fields) };
       // Fire-and-forget: never await, never let a write error surface. Telemetry must
-      // not block a query or corrupt the MCP stdout transport.
+      // not block a query or corrupt stdout.
       appendFile(file, JSON.stringify(line) + "\n").catch(() => {});
     } catch { /* redaction/serialisation must never throw a caller's turn */ }
   };

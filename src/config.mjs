@@ -1,17 +1,16 @@
-// Configuration for the seonix MCP server. Unlike the marginalia original
-// (remote API + key), this server reads a LOCAL graph artifact written by the
-// deterministic indexer — so the only knob is where that artifact lives.
+// Configuration for the seonix tool layer. Unlike the marginalia original
+// (remote API + key), this reads a LOCAL graph artifact — so the only knob is
+// where that artifact lives.
 //
 //   SEONIX_GRAPH_FILE — path to the JSON graph artifact. Default:
-//                     <cwd>/.seonix/graph.json. MCP launchers start the server with
-//                     cwd = the indexed worktree, so the default resolves to the
-//                     artifact `cli index_repository` wrote there — no config needed.
+//                     <cwd>/.seonix/graph.json. Run with cwd = the repo, and the
+//                     default resolves to that repo's artifact — no config needed.
 
 import { join } from "node:path";
 
 export const DEFAULT_GRAPH_REL = join(".seonix", "graph.json");
 
-/** A clean, caller-facing tool error — message shown to the MCP client verbatim,
+/** A clean, caller-facing tool error — message shown to the caller verbatim,
  *  never a stack. */
 export class ToolError extends Error {
   constructor(message) {

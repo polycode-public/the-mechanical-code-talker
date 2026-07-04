@@ -1,13 +1,12 @@
 #!/usr/bin/env node
 // seonix — local typed-edge code-graph tools over a pre-built graph artifact:
 //
-//   seonix                                              → stdio MCP server
 //   seonix cli digest '{"repo_path":"<abs>","modules":[…]}' → architecture map + per-module
-//                                                           context bundles to stdout (no-MCP arm)
+//                                                             context bundles to stdout
 //   seonix cli digest '{"repo_path":"<abs>","query":"<free text>"}' → same, but auto-locates +
 //     score-gap-selects the modules (R1b, the shipped default) instead of requiring an explicit
 //     `modules` list — one call from a question to a digest. `modules` wins if both are given.
-//   seonix cli <toolName> '{…args}'                     → invoke ANY tool via Bash (no MCP)
+//   seonix cli <toolName> '{…args}'                     → invoke ANY tool via Bash
 //     (e.g. seonix cli seonix_ask '{"query":"<free text>"}' — mechanical, no-LLM NL question
 //      over the graph; no bespoke wiring needed, this fallback covers it)
 //   seonix chat [--repo <abs>] → interactive prompt over the mechanical seonix_ask engine; /exit to leave; session log → <repo>/.seonix/session-<uuidv7>.log
@@ -16,7 +15,6 @@
 // cwd = that repo) load it by default. No flags, no config files.
 
 import { join } from "node:path";
-import { startServer } from "../src/server.mjs";
 import { dispatchTool, buildContextBundle } from "../src/server.mjs";
 import { loadConfig, DEFAULT_GRAPH_REL } from "../src/config.mjs";
 import * as source from "../src/source.mjs";
@@ -35,14 +33,14 @@ function parsePayload(payload) {
   catch { return null; }
 }
 
-const DIGEST_MODULE_CAP = 12;   // bound the no-MCP digest — a handful of changed modules
+const DIGEST_MODULE_CAP = 12;   // bound the digest — a handful of changed modules
 const DIGEST_SECONDARY_CAP = 2; // B2: at most this many SECONDARY modules get a (trimmed) bundle
 const TIER_RANK = { NONE: 0, TINY: 1, MID: 2, LARGE: 3, FULL: 4 };
 
 /** `cli digest` — print a machine-readable header + a repo architecture map + the
  *  seonix_context edit bundle for each requested module to stdout (reuses the server's exact
  *  renderer via buildContextBundle, so no render logic is duplicated). This stdout is injected
- *  into the no-MCP arm's prompt.
+ *   into a caller's prompt.
  *
  *  Two ways to say which modules: an explicit `modules` array (unchanged), or a `query` string —
  *  auto-locate + score-gap-select (R1b, the shipped default as of 2026-07-02) in one call, so a
@@ -60,7 +58,7 @@ async function runDigest(args) {
   let autoSelected = null; // for the header, when `query` drove selection
   if (!modules.length && args.query) {
     const graph = parseEntities(await source.fetchEntities(configFor(repoPath)));
-    // SHIPPED DEFAULT (0.5.0): the no-MCP digest's query-mode auto-locate resolves literal-mention ON
+    // SHIPPED DEFAULT (0.5.0): the digest's query-mode auto-locate resolves literal-mention ON
     // (a fresh invocation with no seonix.toml), disable-able via `literal_mention:false`. Kept in
     // lockstep with the `seonix_locate` handler so `cli digest '{query}'` ≡ `cli seonix_locate` for the
     // same query. A strict no-op unless the query carries a ≥3-component dotted path / repo-relative
@@ -131,7 +129,7 @@ async function main() {
   const [mode, sub, payload] = process.argv.slice(2);
 
   if (mode === "cli") {
-    // digest mode: architecture map + per-module context bundles → stdout (no-MCP arm)
+    // digest mode: architecture map + per-module context bundles → stdout
     if (sub === "digest") {
       const args = parsePayload(payload);
       if (args === null) {
@@ -183,8 +181,8 @@ async function main() {
       return;
     }
 
-    // tool-query fallback: any other `cli <toolName> '{…}'` routes to the MCP dispatcher,
-    // so "cold" tools are invokable from Bash without an MCP connection.
+    // tool-query fallback: any other `cli <toolName> '{…}'` routes to dispatchTool,
+    // so "cold" tools are invokable from Bash directly.
     if (sub) {
       const args = parsePayload(payload);
       if (args === null) {
@@ -215,13 +213,10 @@ async function main() {
     return;
   }
 
-  if (mode === undefined) {
-    await startServer(); // bare invocation → MCP stdio server
-    return;
-  }
-
-  process.stderr.write(`seonix: unknown invocation "${process.argv.slice(2).join(" ")}". ` +
-    "Use bare (MCP server), `cli digest …`, `cli <tool> …`, or `chat`.\n");
+  // Bare invocation: no server to start any more — print the usage line and exit 2.
+  // (bin/mct.mjs splices in `chat` for bare invocations, so nothing user-facing is lost.)
+  process.stderr.write(`seonix: ${mode === undefined ? "missing mode" : `unknown invocation "${process.argv.slice(2).join(" ")}"`}. ` +
+    "Use `cli digest …`, `cli <tool> …`, or `chat`.\n");
   process.exit(2);
 }
 

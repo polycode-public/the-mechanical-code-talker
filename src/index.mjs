@@ -18,7 +18,7 @@ export { ask, resolveObject } from "./ask.mjs";
 // Graph traversal primitives.
 export { relationKind, impactClosure } from "./codegraph.mjs";
 
-// Tool dispatch (slash-commands and MCP tools route through here).
+// Tool dispatch (slash-commands and CLI tool calls route through here).
 export { dispatchTool } from "./server.mjs";
 
 // The single graph-load choke point — the adapter's data-provider seam.

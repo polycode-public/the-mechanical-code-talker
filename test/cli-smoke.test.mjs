@@ -1,6 +1,5 @@
-// Binary smoke: spawn bin/cli.mjs as a real stdio child and complete an MCP
-// initialize + tools/list exchange with the SDK's own client. Listing tools
-// touches no graph artifact, so no index is needed.
+// Binary smoke: spawn bin/cli.mjs as a real child and exercise the cli
+// query/digest modes against a fixture graph. No server, no MCP.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -8,8 +7,6 @@ import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
 const BIN = fileURLToPath(new URL("../bin/cli.mjs", import.meta.url));
 const FIXTURE = fileURLToPath(new URL("./fixtures/entities.fixture.json", import.meta.url));
@@ -25,23 +22,14 @@ async function repoWithFixtureGraph() {
 }
 const runCli = (...args) => spawnSync(process.execPath, [BIN, ...args], { encoding: "utf8" });
 
-test("stdio binary starts, initializes, and lists every tool", async () => {
-  const transport = new StdioClientTransport({ command: process.execPath, args: [BIN] });
-  const client = new Client({ name: "smoke-client", version: "0.0.0" });
-  await client.connect(transport);
-  try {
-    const { tools } = await client.listTools();
-    const names = tools.map((t) => t.name);
-    // Roster is owned by server.mjs (another agent) and evolving — assert the stable
-    // invariants, not the exact list: the binary boots, speaks MCP, and advertises a
-    // non-empty set of seonix_* tools including the always-present entry point.
-    assert.ok(names.length >= 1, "server lists at least one tool");
-    assert.ok(names.every((n) => n.startsWith("seonix_")), `all tools are seonix_*: ${names.join(", ")}`);
-    assert.ok(names.includes("seonix_context"), "seonix_context is always present");
-    assert.equal(client.getServerVersion()?.name, "seonix");
-  } finally {
-    await client.close();
-  }
+test("bare invocation prints the usage line and exits 2 (no server to start)", () => {
+  const bare = runCli();
+  assert.equal(bare.status, 2);
+  assert.match(bare.stderr, /Use `cli digest …`, `cli <tool> …`, or `chat`/);
+  // an unknown mode gets the same instructive usage line
+  const unknown = runCli("frobnicate");
+  assert.equal(unknown.status, 2);
+  assert.match(unknown.stderr, /unknown invocation "frobnicate"/);
 });
 
 test("cli <toolName>: any tool routes to dispatchTool and prints its text result", async () => {

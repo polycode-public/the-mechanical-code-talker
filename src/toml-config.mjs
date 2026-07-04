@@ -1,6 +1,6 @@
 // seonix.toml loader (pure library — no cli wiring here).
 //
-// The MCP server's runtime config still lives in config.mjs (`loadConfig`, the
+// The runtime config still lives in config.mjs (`loadConfig`, the
 // SEONIX_GRAPH_FILE knob) and stays byte-identical. This module is the *product*
 // config surface: an optional `seonix.toml` at a repo/estate root that a consumer
 // checks in to steer indexing and scoring. Absent file = shipped defaults (today's
