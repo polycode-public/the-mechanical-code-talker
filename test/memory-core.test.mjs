@@ -176,3 +176,39 @@ test("emptyMemory: distinct from source.mjs's provider bootstrap — memory-mark
   assert.equal(m.memory, true);
   assert.equal(m.bootstrap, undefined, "not a provider payload");
 });
+
+test("appendFact: term normalization converges ConceptNet/CURIE/bare spellings on ONE fact id", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-mem-"));
+  try {
+    const a = await appendFact(dir, { subject: "/c/en/software_bug", predicate: "rdfs:subClassOf", object: "/c/en/defect" });
+    const b = await appendFact(dir, { subject: "tmct:Software_bug", predicate: "rdfs:subClassOf", object: "Defect" });
+    const c = await appendFact(dir, { subject: "software bug", predicate: "rdfs:subClassOf", object: "defect" });
+    assert.equal(a.id, b.id, "ConceptNet and CURIE spellings share an id");
+    assert.equal(b.id, c.id, "bare lowercase spelling shares it too");
+    const m = await loadMemory(dir);
+    const facts = m.individuals.filter((i) => i.class === FACT_CLASS);
+    assert.equal(facts.length, 1, "one fact, not three");
+    const attr = (k) => facts[0].attributes.find((x) => x.key === k)?.value;
+    assert.equal(attr("subject"), "software bug");
+    assert.equal(attr("predicate"), "rdfs:subClassOf", "predicate casing preserved");
+    assert.equal(attr("object"), "defect");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("appendFact: provenance is UNIONED across writers, never overwritten", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-mem-"));
+  try {
+    await appendFact(dir, { subject: "module", predicate: "rdfs:subClassOf", object: "artifact", provenance: "corpus:conceptnet" });
+    await appendFact(dir, { subject: "module", predicate: "rdfs:subClassOf", object: "artifact", provenance: "chat:session-1" });
+    await appendFact(dir, { subject: "module", predicate: "rdfs:subClassOf", object: "artifact", provenance: "chat:session-1" });
+    const m = await loadMemory(dir);
+    const facts = m.individuals.filter((i) => i.class === FACT_CLASS);
+    assert.equal(facts.length, 1);
+    const prov = facts[0].attributes.find((x) => x.key === "provenance")?.value;
+    assert.equal(prov, "corpus:conceptnet | chat:session-1", "both provenances kept, deduped");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
