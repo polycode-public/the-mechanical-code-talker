@@ -11,7 +11,7 @@ import { dirname, join } from "node:path";
 import * as jstsTsc from "../src/jsts_tsc.mjs";
 import * as csRoslyn from "../src/cs_roslyn.mjs";
 import * as csTree from "../src/cs_treesitter.mjs";
-import { buildEntities } from "../src/extract.mjs";
+import { buildEntities } from "../src/graph-build.mjs";
 import { REGISTRY, LANG_EXTS, ingestRepo } from "../src/extract_lang.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));

@@ -11,7 +11,7 @@
 // like ask.test.mjs, so these exercise the true traverse/render pipeline end-to-end.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildEntities } from "../src/extract.mjs";
+import { buildEntities } from "../src/graph-build.mjs";
 import { parseEntities } from "../src/codegraph.mjs";
 import { ingestSchemaDocs } from "../src/schema-docs.mjs";
 import { ask, relaxParse } from "../src/ask.mjs";

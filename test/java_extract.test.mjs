@@ -17,7 +17,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import * as javaJavaparser from "../src/java_javaparser.mjs";
 import * as javaTree from "../src/java_treesitter.mjs";
-import { buildEntities } from "../src/extract.mjs";
+import { buildEntities } from "../src/graph-build.mjs";
 import { REGISTRY, LANG_EXTS, ingestRepo } from "../src/extract_lang.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));

@@ -8,7 +8,8 @@ import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildEntities, indexRepository, GIT_LOG_EXCLUDE } from "../src/extract.mjs";
+import { buildEntities } from "../src/graph-build.mjs";
+import { indexRepository, GIT_LOG_EXCLUDE } from "../src/extract.mjs";
 
 const MODULES = [
   { path: "pkg/a.py", dotted: "pkg.a", imports: [], calls: [],

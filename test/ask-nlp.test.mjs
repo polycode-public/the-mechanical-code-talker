@@ -9,7 +9,7 @@ import { readFile } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
-import { buildEntities } from "../src/extract.mjs";
+import { buildEntities } from "../src/graph-build.mjs";
 import { parseEntities } from "../src/codegraph.mjs";
 import { parseQuery, ask } from "../src/ask.mjs";
 import { nlpAdapter } from "../src/ask-nlp.mjs";

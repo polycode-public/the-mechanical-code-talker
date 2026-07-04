@@ -10,7 +10,7 @@
 // traverse/render pipeline, not a mock.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildEntities } from "../src/extract.mjs";
+import { buildEntities } from "../src/graph-build.mjs";
 import { parseEntities } from "../src/codegraph.mjs";
 import { ingestSchemaDocs } from "../src/schema-docs.mjs";
 import { parseQuery, ask } from "../src/ask.mjs";

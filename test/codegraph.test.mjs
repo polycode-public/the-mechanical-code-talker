@@ -38,7 +38,7 @@ import {
   renderFileHistory,
   renderMethodHistory,
 } from "../src/codegraph.mjs";
-import { buildEntities } from "../src/extract.mjs";
+import { buildEntities } from "../src/graph-build.mjs";
 import { proseLayerHits } from "../src/prose.mjs";
 
 const fixture = JSON.parse(

@@ -1,5 +1,5 @@
 // schema-docs.mjs tests: (1) a drift guard — every entity class / prop token actually
-// emitted by extract.mjs's buildEntities has a documented entry, so the schema docs
+// emitted by graph-build.mjs's buildEntities has a documented entry, so the schema docs
 // can't silently go stale as the graph grows; (2) ingestSchemaDocs()'s correctness and
 // idempotence; (3) a regression proof that ingestion never displaces real extracted data.
 import { test } from "node:test";
@@ -8,28 +8,28 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { CLASS_DOCS, PREDICATE_DOCS, ingestSchemaDocs } from "../src/schema-docs.mjs";
-import { buildEntities } from "../src/extract.mjs";
+import { buildEntities } from "../src/graph-build.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const EXTRACT_SRC = join(here, "..", "src", "extract.mjs");
+const EXTRACT_SRC = join(here, "..", "src", "graph-build.mjs");
 
-test("drift guard: every `class: \"X\"` individual literal in extract.mjs has a CLASS_DOCS entry", async () => {
+test("drift guard: every `class: \"X\"` individual literal in graph-build.mjs has a CLASS_DOCS entry", async () => {
   const src = await readFile(EXTRACT_SRC, "utf8");
   const used = new Set([...src.matchAll(/class:\s*"([A-Za-z]+)"/g)].map((m) => m[1]));
-  assert.ok(used.size > 0, "sanity: the regex actually found classes in extract.mjs");
+  assert.ok(used.size > 0, "sanity: the regex actually found classes in graph-build.mjs");
   const documented = new Set(CLASS_DOCS.map((c) => c.name));
   for (const name of used) {
-    assert.ok(documented.has(name), `extract.mjs emits class "${name}" with no CLASS_DOCS entry`);
+    assert.ok(documented.has(name), `graph-build.mjs emits class "${name}" with no CLASS_DOCS entry`);
   }
 });
 
-test("drift guard: every `prop: \"X\"` attribute/edge literal in extract.mjs has a PREDICATE_DOCS entry", async () => {
+test("drift guard: every `prop: \"X\"` attribute/edge literal in graph-build.mjs has a PREDICATE_DOCS entry", async () => {
   const src = await readFile(EXTRACT_SRC, "utf8");
   const used = new Set([...src.matchAll(/prop:\s*"([a-zA-Z:]+)"/g)].map((m) => m[1]));
   assert.ok(used.size > 10, "sanity: the regex actually found a realistic number of prop tokens");
   const documented = new Set(PREDICATE_DOCS.map((p) => p.prop));
   for (const prop of used) {
-    assert.ok(documented.has(prop), `extract.mjs emits prop "${prop}" with no PREDICATE_DOCS entry`);
+    assert.ok(documented.has(prop), `graph-build.mjs emits prop "${prop}" with no PREDICATE_DOCS entry`);
   }
 });
 

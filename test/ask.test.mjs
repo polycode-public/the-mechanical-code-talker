@@ -4,7 +4,7 @@
 // in isolation (parseQuery/resolveObject/traverse/render) and end-to-end (ask()).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildEntities } from "../src/extract.mjs";
+import { buildEntities } from "../src/graph-build.mjs";
 import { parseEntities } from "../src/codegraph.mjs";
 import { ingestSchemaDocs } from "../src/schema-docs.mjs";
 import { parseQuery, resolveObject, traverse, render, ask, rephraseHint, normalizeQuery } from "../src/ask.mjs";
