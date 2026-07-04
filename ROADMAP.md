@@ -277,6 +277,8 @@ and the block-index summary (blocks, tokens, top PageRank blocks). Same renderer
 
 ## Phase 5 — Formulaic competence: the template-acquisition learning loop
 
+> Detailed plan: **`PLAN_FORMULAIC_COMPETENCE.md`**.
+
 The operator's insight upgraded to the strategy: a consistently-failed C1/C2 graded cell whose
 answer EXISTS as a stable phrasing in technical prose is not a ceiling — it is a
 **template-acquisition lever**. tmct learns the way human learners do: formulaic chunks first
@@ -303,6 +305,8 @@ answer EXISTS as a stable phrasing in technical prose is not a ceiling — it is
   blocks (tier-2), scored by slot-fillability, promoted into `data/templates/` with provenance.
 
 ## Phase 6 — Response finishing: the grammar pass (tone of voice dropped for now)
+
+> Detailed plan: **`PLAN_RESPONSE_FINISHING.md`**.
 
 *(Refined 2026-07-05; decisions settled with the operator. Fact invariance is achieved by
 CONSTRUCTION, not by hope — finishing operates over a SEGMENTED answer, never a raw string.
@@ -332,6 +336,8 @@ ever emerge.)*
   golden files per rule + the graded bench measuring each grammar rule as a lever.
 
 ## Phase 7 — The Repository Interface (seonix inverts to a tmct user)
+
+> Detailed plan: **`PLAN_REPOSITORY_INTERFACE.md`**.
 
 *(Operator-specified 2026-07-05; upgraded from research item to a build phase. tmct was spun OUT
 of seonix; this inverts the relationship: seonix reorients as a USER that imports the tmct
