@@ -260,6 +260,10 @@ benchmark (Phase 5) and the memory inspector read.
   terms, paper phrase-mining), consulted ONLY behind an explicit opt-in flag, cached down into
   tier 2 after use. **Network failure degrades to the honest miss** — the $0-offline default is
   inviolable; tiers 2-3 are additive, never required.
+- **Tier 4 — learn-on-miss (Phase LATER, not now)**: the term IS in the lexicon and the query
+  built cleanly, but the graph+memory+corpus all return nothing → web search, clean the fetched
+  text into tmct's own dialect (the ACE-ish controlled grammar), store on disk (tier 2), ingest,
+  THEN answer — the full acquisition loop at question time. See Phase LATER.
 
 ### Memory inspection (seeing into the memory)
 
@@ -312,6 +316,24 @@ After a response is built (template-based or query-composed), two finishing pass
   libraries per voice, item-7 formats), selected via `/tone <voice>` and a config default.
   Tone must never change FACTS — the finishing passes rewrite surface form only, and the `via`
   provenance gains a `tone` note so the bench can verify factual invariance under re-toning.
+
+## Phase LATER — recognized, deferred, not now
+
+Features we have deliberately shaped seams for but will not build until the phases above have
+earned them:
+
+### Tier-4 corpus: learn-on-miss acquisition
+The strongest miss signal tmct can emit is: *lexicon term recognized, query built cleanly,
+zero matches anywhere* — the question was well-formed and the knowledge is simply absent. The
+tier-4 loop answers it by learning: web search on the resolved term → clean the fetched text
+into tmct's own dialect (normalize into the ACE-OWL controlled grammar; whatever survives the
+grammar becomes Facts, whatever doesn't becomes tier-2 text blocks under the PageRank index) →
+store on disk with source provenance → ingest → answer the original question from the newly
+learned material, citing what was just learned and from where. Strictly opt-in, network tier
+rules apply (offline default inviolable; failure degrades to the honest miss). Prerequisites:
+W1-W5 wired and measured, the Phase-5 template/dialect cleaning machinery (the "clean dialect"
+IS the acquisition format), and a provenance-trust policy for web-sourced facts (never blended
+silently with graph/operator facts — the `via`/provenance discipline extends to "learned:web").
 
 ## Explicitly out of scope (for now)
 
