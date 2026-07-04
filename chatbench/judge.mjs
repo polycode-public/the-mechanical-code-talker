@@ -8,10 +8,13 @@
 //   judge model:    claude-haiku-4-5-20251001   (the FULL pinned id, never an alias)
 //   prompt version: judge-prompt-v1             (chatbench/judge-prompt-v1.txt)
 //   invocation:     claude -p <prompt> --model <id> --output-format json
-//                     --json-schema chatbench/rubric.schema.json
-//   output shape:   stdout is one JSON envelope; `.result` is the STRINGIFIED
-//                   rubric JSON (verified by live probe — see chatbench/README.md),
-//                   parsed and validated against the rubric bounds here.
+//                     --json-schema '<contents of chatbench/rubric.schema.json>'
+//                   (the flag takes the schema INLINE — passing a file path is
+//                   rejected with "--json-schema is not valid JSON")
+//   output shape:   stdout is one JSON envelope; `.result` carries the rubric
+//                   verdict (probe-verified — see chatbench/README.md), parsed
+//                   (string or object tolerated) and validated against the
+//                   rubric bounds here.
 //
 // Integrity rules (§1, enforced): a judge refusal, timeout or format failure
 // VOIDS that sample (recorded with void:true + reason) — it is retried once
@@ -94,14 +97,15 @@ export function validateScores(obj) {
 }
 
 /** Extract + validate the rubric object from claude's stdout. The envelope is
- *  `--output-format json`'s single JSON object; `.result` carries the
- *  structured output (a string of JSON under --json-schema — probe-verified;
- *  an already-parsed object is tolerated too). Returns { scores } or { error }. */
+ *  `--output-format json`'s single JSON object; probe-verified shape: under
+ *  --json-schema it carries BOTH `.structured_output` (the parsed object) and
+ *  `.result` (the same JSON as a string). Prefer structured_output; fall back
+ *  to parsing .result. Returns { scores, rationale } or { error }. */
 export function parseJudgeOutput(stdout) {
   let envelope;
   try { envelope = JSON.parse(stdout); } catch (e) { return { error: `stdout is not JSON: ${e.message}` }; }
   if (envelope.is_error) return { error: `claude reported an error: ${String(envelope.result).slice(0, 200)}` };
-  let result = envelope.result;
+  let result = envelope.structured_output ?? envelope.result;
   if (typeof result === "string") {
     try { result = JSON.parse(result); } catch { return { error: `result is not rubric JSON: ${result.slice(0, 200)}` }; }
   }
@@ -111,18 +115,31 @@ export function parseJudgeOutput(stdout) {
   return { scores, rationale: result.rationale };
 }
 
+/** Enforce the case's dimension gating: the judge sometimes scores a dimension
+ *  it was told to leave null (probe-observed), which would smuggle an unasked
+ *  dimension into the case mean. Mask everything outside the case's declared
+ *  dimensions to null — deterministic, recorded scores stay comparable. */
+export function maskScores(scores, dimensions) {
+  if (!scores) return scores;
+  const keep = new Set(dimensions?.length ? dimensions : DIMENSIONS);
+  return Object.fromEntries(DIMENSIONS.map((d) => [d, keep.has(d) ? (scores[d] ?? null) : null]));
+}
+
 // ---- the live call (never reached under --dry-run or in tests) ----
 
-async function callJudgeOnce(prompt, { model, schemaFile }) {
+async function callJudgeOnce(prompt, { model, schemaJson }) {
   try {
+    // NOTE (probe-verified): --json-schema takes the schema JSON INLINE, not a
+    // file path — chatbench/rubric.schema.json is read once and passed as text.
     const { stdout } = await execFileP(
       "claude",
-      ["-p", prompt, "--model", model, "--output-format", "json", "--json-schema", schemaFile],
+      ["-p", prompt, "--model", model, "--output-format", "json", "--json-schema", schemaJson],
       { timeout: JUDGE_TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024 },
     );
     return { stdout };
   } catch (e) {
-    return { error: `claude invocation failed: ${String(e.message || e).slice(0, 300)}` };
+    const stderr = String(e?.stderr || "").trim().slice(0, 300);
+    return { error: `claude invocation failed: ${String(e?.code ?? "")} ${stderr || String(e?.message || e).slice(0, 300)}` };
   }
 }
 
@@ -265,7 +282,11 @@ export async function main(argv = process.argv.slice(2)) {
   let rows = parseJsonl(await readFile(args.product, "utf8"));
   if (args.only) rows = rows.filter((r) => args.only.includes(r.caseId));
 
-  const prompts = rows.map((row) => ({ caseId: row.caseId, prompt: buildPrompt(row, template) }));
+  const prompts = rows.map((row) => ({
+    caseId: row.caseId,
+    dimensions: row.judge?.dimensions ?? DIMENSIONS,
+    prompt: buildPrompt(row, template),
+  }));
 
   if (args.dryRun) {
     const file = join(outDir, "prompts.jsonl");
@@ -277,8 +298,15 @@ export async function main(argv = process.argv.slice(2)) {
   // fan out: N samples per case, bounded concurrency, sequential retry inside judgeSample
   const jobs = prompts.flatMap((p) => Array.from({ length: args.samples }, (_, s) => ({ ...p, sample: s + 1 })));
   let done = 0;
+  const schemaJson = JSON.stringify(JSON.parse(await readFile(SCHEMA_FILE, "utf8"))); // inline schema (see callJudgeOnce)
   const judged = await pool(jobs, args.concurrency, async (job) => {
-    const r = await judgeSample(job.prompt, { model: JUDGE_MODEL, schemaFile: SCHEMA_FILE });
+    let r = await judgeSample(job.prompt, { model: JUDGE_MODEL, schemaJson });
+    const masked = r.void ? null : maskScores(r.scores, job.dimensions);
+    if (masked && Object.values(masked).every((v) => v === null)) {
+      // the judge scored none of the case's requested dimensions — a format
+      // failure in rubric terms: void the sample (§1), never score it
+      r = { void: true, reason: "judge scored no requested dimension", rationale: r.rationale, raw: r.raw };
+    }
     done += 1;
     process.stderr.write(`\rjudged ${done}/${jobs.length}${r.void ? " (void)" : ""}   `);
     return {
@@ -288,7 +316,7 @@ export async function main(argv = process.argv.slice(2)) {
       promptVersion: PROMPT_VERSION,
       void: r.void,
       ...(r.reason ? { reason: r.reason } : {}),
-      scores: r.scores,
+      scores: r.void ? null : masked,
       rationale: r.rationale,
       raw: r.raw,
     };

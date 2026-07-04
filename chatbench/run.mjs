@@ -66,6 +66,7 @@ export const FIXTURE_CONTEXT = [
   "- tests: app/unit-tests/b.test.mjs covers app/lib/b.mjs and app/functions/d/handler.mjs.",
   "- One commit: abc1234 by Ada Lovelace on 2026-06-28, message \"Render the widget with full mode\", touching app/lib/a.mjs and Widget.render.",
   "- Nothing else exists: no zebra.mjs, no nonExistentFn, no other commits.",
+  "- Like every real tmct graph artifact, it also documents its OWN vocabulary (schema classes like Module/Class/Function and predicates like imports/calls), so questions about what a term means are answerable from the graph.",
 ].join("\n");
 
 export const EMPTY_CONTEXT =
@@ -239,12 +240,12 @@ function sink() {
  *  measurement. Answers and records are read back from the session log +
  *  structured sidecar (sessions.mjs), matched to turns by order. */
 export async function runSessionCase(caseDef, deps) {
-  const { runChat, parseSessionJsonl, parseSessionLog, turnKey } = deps;
+  const { runChat, parseSessionJsonl, parseSessionLog, turnKey, graphJson } = deps;
   const dir = await mkdtemp(join(tmpdir(), `tmct-chatbench-${caseDef.id.replace(/[^A-Za-z0-9-]/g, "_")}-`));
   try {
     if ((caseDef.graph ?? "fixture") === "fixture") {
       await mkdir(join(dir, ".tmct"), { recursive: true });
-      await writeFile(join(dir, ".tmct", "graph.json"), await readFile(FIXTURE, "utf8"));
+      await writeFile(join(dir, ".tmct", "graph.json"), graphJson);
     }
     // group turns by session number, preserving order
     const bySession = new Map();
@@ -366,7 +367,7 @@ export async function main(argv = process.argv.slice(2)) {
   // Lazy product imports (the same modules the CLI uses).
   const { runTurn, runChat } = await import(join(ROOT, "src", "chat.mjs"));
   const { parseEntities } = await import(join(ROOT, "src", "codegraph.mjs"));
-  const source = await import(join(ROOT, "src", "source.mjs"));
+  const { ingestSchemaDocs } = await import(join(ROOT, "src", "schema-docs.mjs"));
   const { parseSessionJsonl, parseSessionLog, turnKey } = await import(join(ROOT, "src", "sessions.mjs"));
 
   const { cases, errors } = parseCases(await readFile(args.cases, "utf8"));
@@ -381,14 +382,26 @@ export async function main(argv = process.argv.slice(2)) {
     return 2;
   }
 
-  // The fixture graph is parsed ONCE and threaded into every turns-mode case;
-  // config.graphFile points at the read-only fixture (runTurn never writes).
-  const config = { graphFile: FIXTURE };
-  const graph = parseEntities(await source.fetchEntities(config));
-  const deps = { runTurn, runChat, parseSessionJsonl, parseSessionLog, turnKey, config, graph, stamp: args.stamp };
+  // The runner's fixture pipeline mirrors a REAL graph writer's: raw payload ->
+  // ingestSchemaDocs() -> the artifact (a real graph.json always carries the
+  // schema-doc individuals — test/ask.test.mjs's buildGraph plays the same
+  // trick). The ingested payload is materialized ONCE to a throwaway file so
+  // the dispatchTool path (which re-reads config.graphFile per ask) sees the
+  // same graph the pre-parsed `graph` object holds; runTurn never writes to it.
+  const graphJson = JSON.stringify(ingestSchemaDocs(JSON.parse(await readFile(FIXTURE, "utf8"))));
+  const graphDir = await mkdtemp(join(tmpdir(), "tmct-chatbench-graph-"));
+  const graphFile = join(graphDir, "graph.json");
+  await writeFile(graphFile, graphJson);
+  const config = { graphFile };
+  const graph = parseEntities(JSON.parse(graphJson));
+  const deps = { runTurn, runChat, parseSessionJsonl, parseSessionLog, turnKey, config, graph, graphJson, stamp: args.stamp };
 
   const rows = [];
-  for (const caseDef of selected) rows.push(await runCase(caseDef, deps)); // sequential: session cases share tmpdir space, and product runs are ms-cheap
+  try {
+    for (const caseDef of selected) rows.push(await runCase(caseDef, deps)); // sequential: session cases share tmpdir space, and product runs are ms-cheap
+  } finally {
+    await rm(graphDir, { recursive: true, force: true });
+  }
 
   await mkdir(outDir, { recursive: true });
   const productFile = join(outDir, "product.jsonl");
