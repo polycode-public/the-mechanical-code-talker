@@ -210,7 +210,7 @@ calculations, not inference: deterministic, explainable, cheap.
 Let tmct run linters or tests to observe whether something actually worked,
 reporting the observation — measurement, not reasoning.
 
-### Item 11 — Formal logical reasoning over the ontology (Prolog / Progol) — exploratory, gated
+### Item 11 — Formal logical reasoning over the ontology (Prolog / Progol) — exploratory, gated; matured into Phase LATER tier-5 "entailment-on-miss"
 Apply real rules of inference (modus tollens, etc.) to formulas extracted from
 parsed prose, checked against the axioms in the ontology (item 3) — a step
 beyond item 5's arithmetic. The sketch: map OWL constructs into templates over
@@ -334,6 +334,42 @@ rules apply (offline default inviolable; failure degrades to the honest miss). P
 W1-W5 wired and measured, the Phase-5 template/dialect cleaning machinery (the "clean dialect"
 IS the acquisition format), and a provenance-trust policy for web-sourced facts (never blended
 silently with graph/operator facts — the `via`/provenance discipline extends to "learned:web").
+
+### Tier-5: entailment-on-miss — "the Syllogist" (deductive inference over the OWL base)
+*(Item 11 matured from exploratory sketch to a designed tier; the "theorem-prove against
+parsed prose" thread of the original code-talker ideas.)*
+
+**The concept, classically:** answering from the **deductive closure** of a knowledge base —
+KB ⊨ φ ("the knowledge base *entails* φ") — content that is nowhere ASSERTED in the graph,
+memory, or corpus, but is a logical CONSEQUENCE of what is. Deductive inference (modus ponens,
+modus tollens, syllogistic chains) predates ELIZA by ~2,300 years (Aristotle's syllogisms →
+Frege's predicate logic → Robinson's resolution principle 1965 → Kowalski's "logic as a
+programming language" → Prolog's SLD resolution; on the rules side, forward-chaining production
+systems and the Rete algorithm; on the OWL side, description-logic reasoners and the RDFS/OWL
+entailment regimes). tmct's version: a well-formed query misses everywhere → run the inference
+layer over the OWL-encoded facts + axioms → if the answer is ENTAILED, materialize it as a Fact
+with `via:"entailed"` and a **proof-chain provenance** (the applied rules + premise facts,
+renderable as a chain of thought in words: "every cache is a store; every store is a component;
+so a cache is a component") → the same query now yields an answer that shows its derivation.
+
+**Worked shape (modus tollens over the code graph):** axiom "every tested module is covered by
+a suite"; fact "m.mjs is covered by no suite" ⊨ "m.mjs is not tested" — never asserted,
+honestly derived, provenance = the two premises + the rule name.
+
+**Engine choice (the Prolog / graph-query question):** the classical candidates are embedded
+Prolog (SLD, backward-chaining, item 11's original sketch), a graph query syntax (SPARQL under
+entailment regimes / datalog / openCypher), or a description-logic tableau reasoner. The
+recommended target is **OWL 2 RL** — the profile DESIGNED to be implemented as forward-chaining
+rules (datalog-style semi-naive materialization, polynomial, decidable): pure-JS implementable,
+mechanical, explainable rule-by-rule — exactly in ethos. Prolog-style backward chaining stays
+the fallback for query-time-only derivation if materialization proves too eager. Progol/ILP
+(learning NEW rules from examples) remains a separate, further-out spike.
+
+**Gates:** the full-domain lexicon + OWL encoding in a queriable structure (Phases 2+4+5 and
+tier-4's acquisition feed it), the provenance-trust policy (entailed facts must never silently
+mix with asserted ones — a wrong axiom poisons the closure, so entailments are retractable by
+provenance), and bench cells that measure inference specifically (premises in, conclusion
+asked, derivation shown).
 
 ## Explicitly out of scope (for now)
 
