@@ -173,6 +173,18 @@ in `SKILL_TUNING_CYCLE.md`:
   harness only** — the product stays no-LLM;
 - `CHATBENCH_0NN.md` artifacts and an autonomous cycle loop (no hard pause;
   each cycle logs its ranked decision menu and continues).
+- **Difficulty-spectrum calibration** (case-set v2+): tag every case with a
+  recognized difficulty band so the set spans too-easy → tough-but-solvable →
+  too-hard, following child development to academic: bAbI-style graded task
+  families as the backbone, TROG-2-style grammatical-construction blocks +
+  CEFR-ish bands as tags, Winograd/WinoGrande items as permanent ceiling
+  markers, CHILDES for naturalistic easy-band inputs. Maintenance rule per
+  cycle: a case at 100% for two cycles is PROMOTED to the retained showcase
+  (test/showcase.test.mjs — deterministic, judge-free, runs with `npm test`);
+  a case at 0% is a ceiling marker, not a failure.
+- **Retained showcase** (landed): the five most complex achieved sequences are
+  frozen as unit-timescale regression tests in `test/showcase.test.mjs`; a
+  showcase regression voids a cycle PASS regardless of the mean.
 
 Inside this loop, two earlier ambitions become **tuning levers** rather than
 standalone features:
