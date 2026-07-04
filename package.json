@@ -41,6 +41,8 @@
   },
   "scripts": {
     "test": "node --test \"test/**/*.test.mjs\"",
-    "chat": "node bin/tmct.mjs"
+    "chat": "node bin/tmct.mjs",
+    "chatbench:run": "node chatbench/run.mjs",
+    "chatbench:judge": "node chatbench/judge.mjs"
   }
 }
