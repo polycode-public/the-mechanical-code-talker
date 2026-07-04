@@ -608,6 +608,64 @@ async function factAnswer(memoryDir, query, envelope, miss) {
   return null;
 }
 
+// ---- W5: corpus on-demand — LOCAL tier only, behind an explicit flag ----
+
+/** The opt-in env flag: TMCT_CORPUS_LOOKUP=1 lets an unknown-term miss consult
+ *  the LOCAL committed ConceptNet slice (tier 1 of the corpus tiering policy).
+ *  Default OFF for this wave.
+ *
+ *  TIER-3 SEAM (documented, NOT implemented): a network lookup (the ConceptNet
+ *  API for terms the local slice misses, cached down into .tmct/corpus/ per the
+ *  tier-2 policy) would attach exactly where corpusAside() returns null below —
+ *  behind its own explicit opt-in flag, never in the default path, and any
+ *  network failure must degrade to the honest miss ($0-offline is inviolable). */
+export const CORPUS_LOOKUP_FLAG = "TMCT_CORPUS_LOOKUP";
+/** How many corpus surface lines one aside quotes. */
+const CORPUS_ASIDE_CAP = 2;
+
+let corpusPromise = null; // the local slice as renderable rows, one load per process
+/** Load the committed slice + relation map once, as { key, surface } rows —
+ *  `surface` is the map's own canonical sentence ("a cache is used for storing
+ *  data"), `key` the normFactTerm-normalized subject. Failure → []. */
+function localCorpus() {
+  if (!corpusPromise) {
+    corpusPromise = (async () => {
+      const { loadSlice, loadMap, termText } = await import("./corpus/conceptnet.mjs");
+      const { normFactTerm } = await import("./memory/core.mjs");
+      const [assertions, map] = await Promise.all([loadSlice(), loadMap()]);
+      const rows = [];
+      for (const a of assertions) {
+        const row = map.get(a.rel);
+        if (!row || row.ace === "none" || !row.surface) continue; // non-emissions stay out here too
+        const subject = termText(a.start);
+        const object = termText(a.end);
+        if (!subject || !object) continue;
+        rows.push({
+          key: normFactTerm(subject),
+          surface: String(row.surface).replace("{start}", subject).replace("{end}", object),
+        });
+      }
+      return rows;
+    })().catch(() => []);
+  }
+  return corpusPromise;
+}
+
+/** W5 seam: the grounded aside for an unknown term, or null (which is also
+ *  where the tier-3 network lookup would attach — see CORPUS_LOOKUP_FLAG). */
+async function corpusAside(term) {
+  try {
+    const { normFactTerm } = await import("./memory/core.mjs");
+    const variants = factTermVariants(normFactTerm, term);
+    const rows = (await localCorpus()).filter((r) => variants.has(r.key));
+    if (!rows.length) return null;
+    const shown = rows.slice(0, CORPUS_ASIDE_CAP).map((r) => r.surface);
+    return `the corpus knows: ${shown.join("; ")} (ConceptNet, CC-BY-SA)`;
+  } catch {
+    return null;
+  }
+}
+
 /** The explicit recall question forms — "what did i ask before", "what did we
  *  talk about", "what have we discussed" — answered from memory, never the graph. */
 const RECALL_ASK_RE = /^what (?:did|have) (?:i|we) (?:ask(?:ed)?(?: you)?|talk(?:ed)? about|discuss(?:ed)?)(?: before| earlier| previously| last time)?[?.!]*$/i;
@@ -636,7 +694,7 @@ async function recallSummary(memoryDir) {
  *  otherwise the unchanged dispatchTool path (which also yields the no-graph error).
  *  A hit updates the focus to the resolved object. Grammar miss / ToolError → a
  *  normal answer, never a crash. */
-async function runAsk(query, { config, source, graph, focus, templates, memoryDir }) {
+async function runAsk(query, { config, source, graph, focus, templates, memoryDir, env }) {
   const ts = new Date().toISOString();
   // W2: the explicit recall forms are answered from memory's folded blocks, never
   // the graph. Gated on memoryDir — a bare runTurn (no session shell) stays pure.
@@ -704,6 +762,16 @@ async function runAsk(query, { config, source, graph, focus, templates, memoryDi
         via = "recall";
         recordMiss = false; // memory answered it, cited — no longer a blank
       }
+    }
+  }
+  // W5 (flag-gated, default OFF): an unknown-term miss may consult the LOCAL
+  // committed corpus slice — a hit APPENDS a grounded, licence-cited aside under
+  // the honest miss (the miss itself stands; the aside is context, not an answer).
+  if (recordMiss && envelope?.parsed?.object && String(env?.[CORPUS_LOOKUP_FLAG] || "") === "1") {
+    const aside = await corpusAside(envelope.parsed.object);
+    if (aside) {
+      answer = `${answer}\n${aside}`;
+      via = "corpus";
     }
   }
   const record = { type: "turn", ts, query, via, resolvedIds, answeredIds, miss: recordMiss };
@@ -820,10 +888,10 @@ async function assertTurn(line, { memoryDir, sessionId, focus }) {
  * subject), `answeredIds` the entity ids an ask answer cited; a slash-command turn
  * also carries its `command` name. Both drive the mgx:asksAbout graph append.
  */
-export async function runTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "" } = {}) {
+export async function runTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env } = {}) {
   const line = String(input ?? "").trim();
   const templates = await chatTemplates(); // failure-tolerated: null degrades, never throws
-  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates };
+  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates, env };
   // A DISPATCHED turn (count / slash-command / ask) becomes the new "last answer"
   // that why/say-more re-renders; a conversational turn does not (it preserves it).
   const withLast = (result) => ({ ...result, last: { query: line, answer: result.answer, detail: result.detail ?? null } });
@@ -1015,7 +1083,7 @@ export async function createSession({
      *  → telemetry → upsertGraph, in that exact order). Returns { answer, end, prompt }. */
     async turn(line) {
       const { answer, logLines, record, focus: nextFocus, last: nextLast, end } =
-        await runTurn(line, { config, source, graph, focus, last, memoryDir: repo, sessionId });
+        await runTurn(line, { config, source, graph, focus, last, memoryDir: repo, sessionId, env });
       focus = nextFocus;
       last = nextLast;
       await writeLog(logLines.join("\n") + "\n");
