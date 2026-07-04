@@ -304,25 +304,56 @@ answer EXISTS as a stable phrasing in technical prose is not a ceiling — it is
 
 ## Phase 6 — Response finishing: grammar pass + tone of voice
 
-After a response is built (template-based or query-composed), two finishing passes:
+*(Refined 2026-07-05: "tone is a lens, never a source." Fact invariance is achieved by
+CONSTRUCTION, not by hope — finishing operates over a segmented answer, never a raw string.)*
 
-- **Grammar pass**: a deterministic post-render check/correction over tmct's OWN output
-  (agreement, article choice for slot-filled terms, list punctuation) — the item-10 machinery
-  pointed at ourselves; wrong-grammar output is a bench-visible defect class.
-- **Tone-of-voice adaptation**: text libraries of **synonyms per tone** plus **per-tone grammar
-  preference profiles** (different grammar corrections apply per voice — terse engineering
-  register keeps fragments and serial-comma lists; friendly register expands contractions,
-  softens negatives; academic register formalizes). Data-first (JSONL/TOML synonym+preference
-  libraries per voice, item-7 formats), selected via `/tone <voice>` and a config default.
-  Tone must never change FACTS — the finishing passes rewrite surface form only, and the `via`
-  provenance gains a `tone` note so the bench can verify factual invariance under re-toning.
+- **The segmentation IR (the foundation, lever 1)**: every answer becomes a list of typed spans
+  before it becomes text — `prose` vs PROTECTED (`entity`, `path`, `number`, `code`,
+  `provenance`, `receipt`). Protected spans are byte-copied through both finishing passes; only
+  prose spans are ever touched. The W1 template renderer is already slot-aware (slots ARE the
+  protected spans); composed renders adopt segmentation progressively via a conservative masker.
+  Phase 5's dual banding reads the same spans.
+- **Grammar pass (lever 2)**: a data-driven rule table (TOML, item-7 formats) over prose spans —
+  article selection ("a artifact" → "an artifact", an observed defect class), subject–verb
+  agreement against slot plurality, capitalization, list/terminal punctuation. WHICH rules fire
+  is part of the tone's grammar-preference profile (terse permits fragments; academic enforces
+  full sentences; friendly expands contractions).
+- **Tone pass (lever 3)**: `data/tones/<voice>.toml` — one-shot, lemma-aware, non-cascading,
+  case-preserving synonym/phrase substitution, prose spans only. Ship `neutral` (the IDENTITY
+  function — byte-for-byte, so every existing test and graded expectation stays valid
+  unconditionally) + `terse-engineering` + `friendly` + `academic`. Selected via `/tone` +
+  tmct.toml default; the turn record carries `tone` beside `via`. Pass order: tone → grammar
+  (substitution may change a/an agreement; grammar runs last — confirm with a spike).
+- **Verification**: unit invariance checker (protected-span multiset identical pre/post, full
+  tone × answer-shape matrix) + per-voice golden files + a bench **tone lane**: the same graded
+  sample re-run per voice must hold groundedness/correctness EXACTLY (any delta = a protected
+  span leaked into prose) while the judge separately rates register fit.
+- **Open decisions (plan-mode)**: memory stores neutral-flattening + tone tag vs as-spoken
+  (touches the answer-capture path); tone-as-pass vs per-voice template overrides for the few
+  surfaces where substitution reads awkwardly.
 
-## Research — the Repository Interface (seonix inverts to a tmct user)
+## Phase 7 — The Repository Interface (seonix inverts to a tmct user)
 
-*(Operator-specified 2026-07-05. tmct was spun OUT of seonix; this inverts the relationship:
-seonix reorients as a USER that imports the tmct library and exposes its graph to tmct as a
-typed service. Grows item 14's provider adapter from a passive payload loader into the product's
-primary integration surface.)*
+*(Operator-specified 2026-07-05; upgraded from research item to a build phase. tmct was spun OUT
+of seonix; this inverts the relationship: seonix reorients as a USER that imports the tmct
+library and exposes its graph to tmct as a typed service. Grows item 14's provider adapter from
+a passive payload loader into the product's primary integration surface.)*
+
+**Phase deliverables — define, reference-implement, and test the interface:**
+1. **The interface DEFINITION**: the typed, OWL-grounded service contract as a versioned
+   document + machine-readable shape (docs/repository-interface.md + a JSON-schema/typedef of
+   every service, its arguments, result types, and error contract) — tmct owns and versions it.
+2. **A REFERENCE IMPLEMENTATION tmct ships itself**: the in-repo provider (fixture graph +
+   bootstrap/empty graph) implementing EVERY service of the interface — the executable
+   specification any external producer reads first.
+3. **The contract test suite (the compatibility kit)**: a runnable suite any implementation is
+   tested against — tmct's reference implementation passes it in `npm test`; seonix runs the
+   SAME suite against its native implementation to claim conformance. Conformance = the suite,
+   not prose.
+4. **The session-handle lifecycle**, implemented: create/dispose context handles (focus, last,
+   memory dir, lexicon), provider-owned caching, documented re-entrancy — proven by the
+   contract suite's concurrent-session cases.
+5. **`tmct init`** shipped as part of this phase (it is the interface's onboarding surface).
 
 - **tmct defines the adapter shape** — not the producer. Rationale: tmct is the brittle side
   (query interpretation), so it must own and optimize around a STABLE interface; because the
