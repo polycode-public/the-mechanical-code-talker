@@ -3,7 +3,7 @@
 // sidecar .jsonl parser, and the atomic read-time graph append.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -171,6 +171,99 @@ test("foldInSessions: zero records is a no-op (session-less graphs stay byte-ide
   const before = JSON.stringify(e);
   foldInSessions(e, []);
   assert.equal(JSON.stringify(e), before);
+});
+
+// ---- the memory side-write (item 9 wiring: chat.mjs untouched) ----
+
+/** A repo laid out the way chat.mjs leaves it: .tmct/graph.json + transcript
+ *  log (+ optionally the structured sidecar). */
+async function repoForMemory({ withEnd = false } = {}) {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-sess-mem-"));
+  await mkdir(join(dir, ".tmct", "sessions"), { recursive: true });
+  await writeFile(join(dir, ".tmct", "graph.json"), JSON.stringify(freshEntities()));
+  const t = RECORD.turns[0];
+  await writeFile(join(dir, ".tmct", `session-${RECORD.id}.log`),
+    `# tmct chat 0.2.0 — session started ${RECORD.started} — repo ${dir}\n\n` +
+    `${t.ts}\n> ${t.query}\napp/x.mjs is imported by:\n  - app/y.mjs\n\n`);
+  await writeFile(join(dir, ".tmct", "sessions", `session-${RECORD.id}.jsonl`), [
+    JSON.stringify({ type: "session", id: RECORD.id, started: RECORD.started, repo: dir, tmctVersion: "0.2.0" }),
+    JSON.stringify({ type: "turn", ...t }),
+    ...(withEnd ? [JSON.stringify({ type: "end", ts: RECORD.ended })] : []),
+  ].join("\n") + "\n");
+  return dir;
+}
+
+test("appendSessionToGraph: the turn ALSO lands in .tmct/memory — visitor utterance + tmct reply with the transcript's answer text", async () => {
+  const dir = await repoForMemory();
+  try {
+    const graphFile = join(dir, ".tmct", "graph.json");
+    await appendSessionToGraph(graphFile, RECORD);
+    await appendSessionToGraph(graphFile, RECORD); // per-turn replay — idempotent
+
+    // the PROVIDER-side graph got the Session as before; utterances never leak into it
+    const g = JSON.parse(await readFile(graphFile, "utf8"));
+    assert.equal(g.individuals.filter((i) => i.class === SESSION_CLASS).length, 1);
+    assert.ok(!g.individuals.some((i) => i.class === "Utterance"), "memory stays out of the provider graph");
+
+    // tmct's OWN graph holds the Q and the A, paired
+    const m = JSON.parse(await readFile(join(dir, ".tmct", "memory", "graph.json"), "utf8"));
+    const utts = m.individuals.filter((i) => i.class === "Utterance");
+    assert.equal(utts.length, 2, "one visitor + one tmct utterance, no duplicates from the replay");
+    const attr = (ind, k) => ind.attributes.find((a) => a.key === k)?.value;
+    const visitor = utts.find((u) => attr(u, "role") === "visitor");
+    const reply = utts.find((u) => attr(u, "role") === "tmct");
+    assert.equal(attr(visitor, "text"), RECORD.turns[0].query);
+    assert.deepEqual(JSON.parse(attr(visitor, "parsed")),
+      { resolvedIds: ["mod:app/x.mjs"], answeredIds: ["mod:app/y.mjs"] });
+    assert.equal(attr(reply, "text"), "app/x.mjs is imported by: - app/y.mjs", "answer prose recovered from the transcript");
+    const replyGroup = m.objectProperties.find((x) => x.prop === "mgx:inReplyTo");
+    assert.deepEqual([replyGroup.examples[0].subject, replyGroup.examples[0].object], [reply.id, visitor.id]);
+    assert.equal(m.objectProperties.find((x) => x.prop === "mgx:saidInSession").count, 2);
+
+    // no end marker yet → nothing folded
+    assert.equal(await readdir(join(dir, ".tmct", "memory")).then((n) => n.includes("blocks")), false);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("appendSessionToGraph: once the sidecar carries its end marker, the session folds into the block corpus", async () => {
+  const dir = await repoForMemory({ withEnd: true });
+  try {
+    await appendSessionToGraph(join(dir, ".tmct", "graph.json"), RECORD);
+    const index = JSON.parse(await readFile(join(dir, ".tmct", "memory", "blocks", "index.json"), "utf8"));
+    assert.deepEqual(Object.keys(index.blocks), [RECORD.id], "one block, id = session id");
+    const block = await readFile(join(dir, ".tmct", "memory", "blocks", index.blocks[RECORD.id].file), "utf8");
+    assert.equal(block, `Q: ${RECORD.turns[0].query}\nA: app/x.mjs is imported by: - app/y.mjs`);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("appendSessionToGraph: memory is best-effort and scoped — no .tmct layout → no memory writes; memory:false disables; a memory failure never fails the graph append", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-sess-nomem-"));
+  try {
+    // graph file NOT under .tmct → no repo to attach memory to → graph append only
+    const bareGraph = join(dir, "graph.json");
+    await writeFile(bareGraph, JSON.stringify(freshEntities()));
+    await appendSessionToGraph(bareGraph, RECORD);
+    assert.deepEqual((await readdir(dir)).sort(), ["graph.json"], "nothing but the graph artifact");
+
+    // .tmct layout but memory disabled by the caller
+    await mkdir(join(dir, ".tmct"), { recursive: true });
+    const tmctGraph = join(dir, ".tmct", "graph.json");
+    await writeFile(tmctGraph, JSON.stringify(freshEntities()));
+    await appendSessionToGraph(tmctGraph, RECORD, { memory: false });
+    assert.ok(!(await readdir(join(dir, ".tmct"))).includes("memory"), "memory:false writes no memory");
+
+    // a poisoned memory store must not break the graph append (best-effort seam)
+    await mkdir(join(dir, ".tmct", "memory"), { recursive: true });
+    await writeFile(join(dir, ".tmct", "memory", "graph.json"), "not json {");
+    const res = await appendSessionToGraph(tmctGraph, RECORD);
+    assert.equal(res.kept, 2, "graph append succeeded despite the broken memory store");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 
 // ---- schema drift guard (mirrors schema-docs.test.mjs, scoped to sessions.mjs) ----
