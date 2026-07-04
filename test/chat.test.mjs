@@ -1,8 +1,8 @@
 // chat.mjs tests — uuidv7, the pure turn function, a scripted (no-TTY) session
 // against the entities fixture, and a binary smoke of `seonix chat`. The turn
-// function is exercised through the SAME dispatchTool path the CLI fallback
-// uses, with config.graphFile pointed straight at the committed fixture (the
-// same trick cli-smoke.test.mjs's repoWithFixtureGraph plays via .seonix/).
+// function is exercised through the SAME dispatchTool path the CLI uses, with
+// config.graphFile pointed straight at the committed fixture (the same trick
+// cli-smoke.test.mjs's repoWithFixtureGraph plays via .seonix/).
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -14,7 +14,7 @@ import { PassThrough, Readable } from "node:stream";
 import {
   uuidv7, runTurn, runChat, helpText, COMMANDS, SESSION_LOG_DIR, PROMPT,
   answerCount, renderStats, isConversational,
-  renderVerbose, parseSeonixCommand, buildLlmPrompt, makeFallback, runLlmFallback, probeLlm,
+  renderVerbose,
 } from "../src/chat.mjs";
 import { dispatchTool } from "../src/server.mjs";
 import { parseEntities } from "../src/codegraph.mjs";
@@ -374,125 +374,6 @@ test("runTurn: a dispatched turn updates `last`; a conversational turn preserves
   // a count turn is also expandable
   const count = await runTurn("how many classes are there", { config: CONFIG, graph: g });
   assert.equal(count.last.answer, "3 classes.");
-});
-
-// ---- opt-in LLM fallback: decision + command-execution, subprocess INJECTED ----
-
-/** A fake spawn that records its call and returns a scripted result. Tests never
- *  shell out to a real model — the whole decision + execution path is exercised here. */
-function fakeSpawn(result, calls = []) {
-  return (bin, args, opts) => { calls.push({ bin, args, opts }); return result; };
-}
-const OK_PROBE = { status: 0, stdout: "1.0.0", stderr: "", error: null };
-
-test("buildLlmPrompt / parseSeonixCommand: the compile contract round-trips", () => {
-  const prompt = buildLlmPrompt("what calls fnAlpha");
-  assert.match(prompt, /seonix cli <tool>/);
-  assert.match(prompt, /seonix_ask/);
-  assert.match(prompt, /Question: what calls fnAlpha/);
-  const cmd = parseSeonixCommand(`seonix cli seonix_search '{"query":"fnAlpha"}'`);
-  assert.deepEqual(cmd, { tool: "seonix_search", args: { query: "fnAlpha" } });
-  assert.equal(parseSeonixCommand("no command here"), null, "no command → null");
-  assert.equal(parseSeonixCommand(`seonix cli rm_rf '{"x":1}'`), null, "unknown tool rejected");
-  assert.equal(parseSeonixCommand(`seonix cli seonix_search '{bad json}'`), null, "unparseable json rejected");
-});
-
-test("LLM fallback fires ONLY on miss + flag; a hit never calls the model", async () => {
-  const g = await graph();
-  const calls = [];
-  const fallback = makeFallback("claude", fakeSpawn({ status: 0, stdout: `seonix cli seonix_search '{"query":"fnAlpha"}'`, stderr: "", error: null }, calls), { cwd: "/repo" });
-
-  // a HIT with the flag set: fallback must NOT be consulted
-  const hit = await runTurn("which modules import a.mjs", { config: CONFIG, graph: g, fallback });
-  assert.match(hit.answer, /app\/lib\/b\.mjs/);
-  assert.equal(calls.length, 0, "no LLM call on a mechanical hit");
-
-  // a MISS with NO flag: still no call, honest miss stands
-  const missNoFlag = await runTurn("please refactor everything now", { config: CONFIG, graph: g });
-  assert.match(missNoFlag.answer, /couldn't parse this as a graph question/);
-  assert.equal(calls.length, 0, "no LLM call without the flag");
-});
-
-test("LLM fallback: a MISS + flag compiles a command that is executed MECHANICALLY and labelled", async () => {
-  const g = await graph();
-  const calls = [];
-  const fallback = makeFallback("claude", fakeSpawn({ status: 0, stdout: `seonix cli seonix_search '{"query":"fnAlpha"}'`, stderr: "", error: null }, calls), { cwd: "/repo" });
-  const { answer } = await runTurn("please refactor everything now", { config: CONFIG, graph: g, fallback });
-  assert.equal(calls.length, 1, "the model was consulted once on the miss");
-  assert.equal(calls[0].opts.cwd, "/repo", "spawned in the chat's target repo cwd");
-  assert.match(answer, /LLM-assisted via claude/, "labelled LLM-assisted");
-  assert.match(answer, /compiled: seonix cli seonix_search/, "shows the compiled command");
-  // the answer is the GROUNDED mechanical result of that command, not free model text
-  const direct = await dispatchTool("seonix_search", { query: "fnAlpha" }, { config: CONFIG });
-  assert.ok(answer.includes(direct), "the grounded seonix_search result is shown");
-});
-
-test("LLM fallback: unparseable model output → its raw text is shown, clearly marked as external", async () => {
-  const g = await graph();
-  const fallback = makeFallback("claude", fakeSpawn({ status: 0, stdout: "I think fnAlpha calls a few things.", stderr: "", error: null }), { cwd: "/repo" });
-  const { answer } = await runTurn("please refactor everything now", { config: CONFIG, graph: g, fallback });
-  assert.match(answer, /external model claude — NOT the deterministic seonix engine/);
-  assert.match(answer, /I think fnAlpha/);
-});
-
-test("LLM fallback: tool-absent / non-zero exit / timeout / spawn-throw all degrade to the honest miss", async () => {
-  const g = await graph();
-  const missText = /couldn't parse this as a graph question/;
-  const cases = [
-    { status: null, stdout: "", stderr: "", error: Object.assign(new Error("spawn ENOENT"), { code: "ENOENT" }) }, // binary absent
-    { status: 1, stdout: "", stderr: "boom", error: null },   // non-zero exit
-    { status: null, stdout: "", stderr: "", error: Object.assign(new Error("ETIMEDOUT"), { code: "ETIMEDOUT" }) }, // timeout
-    { status: 0, stdout: "   ", stderr: "", error: null },    // empty output
-  ];
-  for (const result of cases) {
-    const fallback = makeFallback("claude", fakeSpawn(result), { cwd: "/repo" });
-    const { answer } = await runTurn("please refactor everything now", { config: CONFIG, graph: g, fallback });
-    assert.match(answer, missText, `degrades to honest miss for ${JSON.stringify(result.error?.code || result.status)}`);
-  }
-  // a spawn that THROWS (not just returns an error) also degrades, never crashes the turn
-  const throwing = makeFallback("claude", () => { throw new Error("kaboom"); }, { cwd: "/repo" });
-  const { answer } = await runTurn("please refactor everything now", { config: CONFIG, graph: g, fallback: throwing });
-  assert.match(answer, missText, "a throwing spawn degrades to the honest miss");
-});
-
-test("LLM fallback is NOT consulted for conversational misses (greeting keeps the friendly orientation path)", async () => {
-  const g = await graph();
-  const calls = [];
-  const fallback = makeFallback("claude", fakeSpawn({ status: 0, stdout: "whatever", stderr: "", error: null }, calls), { cwd: "/repo" });
-  // "banana" is a short non-code line → conversational → friendly orientation, no LLM
-  const { answer } = await runTurn("banana", { config: CONFIG, graph: g, fallback });
-  assert.match(answer, /I answer questions about THIS codebase/);
-  assert.equal(calls.length, 0, "no LLM call for a conversational miss");
-});
-
-test("runLlmFallback + probeLlm: direct unit coverage of the copilot argv and the probe", async () => {
-  // copilot argv is the agentic `gh copilot -- -p …` shape (best-effort; see README)
-  const calls = [];
-  const fallback = makeFallback("copilot", fakeSpawn({ status: 0, stdout: `seonix cli seonix_search '{"query":"fnAlpha"}'`, stderr: "", error: null }, calls), { cwd: "/repo" });
-  const out = await runLlmFallback("anything", { fallback, config: CONFIG });
-  assert.match(out, /LLM-assisted via copilot/);
-  assert.deepEqual(calls[0].args.slice(0, 3), ["copilot", "--", "-p"], "gh copilot -- -p …");
-  assert.ok(calls[0].args.includes("--allow-all-tools"), "non-interactive requires --allow-all-tools");
-
-  assert.equal(probeLlm(makeFallback("claude", fakeSpawn(OK_PROBE))), true, "a 0-exit probe is present");
-  assert.equal(probeLlm(makeFallback("claude", fakeSpawn({ status: 127, stdout: "", stderr: "not found", error: null }))), false, "a non-zero probe is absent");
-  assert.equal(probeLlm(makeFallback("claude", () => { throw new Error("nope"); })), false, "a throwing probe is absent");
-});
-
-test("runChat: --with-claude but the binary is absent → says so once and stays mechanical-only", async () => {
-  const dir = await repoWithFixtureGraph();
-  try {
-    const { out, text } = sink();
-    // an injected spawn whose probe fails (binary absent) — the flag is disabled, no hang
-    await runChat({
-      repoPath: dir, input: Readable.from(["which modules import a.mjs\n", "/exit\n"]), output: out,
-      withClaude: true, spawn: () => ({ status: 127, stdout: "", stderr: "", error: null }),
-    });
-    assert.match(text(), /LLM fallback requested \(claude\) but its binary was not found/);
-    assert.match(text(), /app\/lib\/b\.mjs/, "the mechanical session still works");
-  } finally {
-    await rm(dir, { recursive: true, force: true });
-  }
 });
 
 test("runChat: a scripted conversational session — greeting, hit, why re-render, then bye ends it", async () => {

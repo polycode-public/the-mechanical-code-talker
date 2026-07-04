@@ -13,11 +13,6 @@
 //     help/orientation, farewell (ends the session), and why/say-more (re-renders the
 //     last answer verbosely, with the ask envelope's traversal receipt + matches).
 //     These resolve no entity, so they never become asksAbout graph edges (like /help).
-//   - an OPT-IN LLM FALLBACK (--with-claude / --with-copilot, default OFF, chat-only):
-//     ONLY when a flag is set AND the mechanical engine misses a bare question does chat
-//     shell an external LLM in the target-repo cwd, asking it to COMPILE one seonix
-//     command it then runs mechanically (labelled LLM-assisted); any failure degrades to
-//     the honest miss. The benchmark/digest/MCP paths never reach this — it is chat-only.
 //   - MULTI-TURN CONTEXT: a current FOCUS entity. A command or an answer that
 //     resolves a primary entity remembers it; a bare `it`/`this`/`that` (threaded
 //     to ask() as contextId) or a no-arg entity command then reuse it, so "what
@@ -35,7 +30,7 @@
 // runTurn(input, …) is a PURE function (query|command -> { answer, logLines, record,
 // focus }) so tests exercise it directly; every ask.mjs import is LAZY and
 // failure-tolerated, so concurrent evolution of the engine can never crash a turn
-// (worst case a turn records fewer ids / a fallback hint, never wrong data).
+// (worst case a turn records fewer ids / an honest miss hint, never wrong data).
 
 import { join } from "node:path";
 import { createWriteStream } from "node:fs";
@@ -308,133 +303,10 @@ function conversationalTurn(line, ctx) {
   return null;
 }
 
-// ---- opt-in LLM fallback (chat-only; default OFF; miss-gated) ----
-// ONLY fires when a chat flag (--with-claude / --with-copilot) is set AND the
-// mechanical engine returns a genuine MISS on a bare question (after the
-// conversational layer and slash-commands have had their turn). The subprocess runs
-// in the target repo cwd with a timeout; ANY failure (tool absent, non-zero exit,
-// unparseable output, timeout) degrades to the engine's honest miss — never a crash
-// or a hang. The benchmark/digest/MCP paths never reach here (this is chat-only).
-
-/** How long a fallback subprocess may run before it's killed (ms). */
-export const LLM_TIMEOUT_MS = 60_000;
-
-/** Provider specs: the binary, a cheap probe, and the argv for a non-interactive
- *  prompt on the CHEAPEST model. `claude -p` is a headless one-shot; the GitHub
- *  Copilot CLI (`gh copilot -- -p`) is an AGENTIC shell assistant oriented at running
- *  commands, so it's a poorer fit for graph Q&A — wired best-effort, limitation noted
- *  in the README. Both are asked to COMPILE one seonix command (see buildLlmPrompt). */
-export const LLM_PROVIDERS = {
-  claude: {
-    label: "claude",
-    bin: "claude",
-    probe: ["--version"],
-    argv: (prompt) => ["-p", prompt, "--model", "haiku"],
-  },
-  copilot: {
-    label: "copilot",
-    bin: "gh",
-    probe: ["copilot", "--", "--version"],
-    argv: (prompt) => ["copilot", "--", "-p", prompt, "--allow-all-tools", "--no-color"],
-  },
-};
-
-/** The tool names a compiled fallback command may name — the exact dispatchTool tools
- *  chat already fronts (COMMANDS' targets) plus seonix_ask. A command naming anything
- *  else is rejected (→ the model's raw text is shown instead, clearly labelled). */
-const FALLBACK_TOOLS = new Set([...Object.values(COMMANDS).map((c) => c.tool), "seonix_ask"]);
-
-/** Default spawn: a thin spawnSync wrapper normalised to {status,stdout,stderr,error}.
- *  Injectable everywhere so tests never shell out to a real model. */
-export function defaultSpawn(bin, args, { cwd, timeout, input = "" } = {}) {
-  const r = spawnSync(bin, args, { cwd, timeout, input, encoding: "utf8" });
-  return { status: r.status, stdout: r.stdout || "", stderr: r.stderr || "", error: r.error || null };
-}
-
-/** Build a fallback config from a provider name + an (injectable) spawn. Returns null
- *  for an unknown provider. `cwd` is the CHAT'S TARGET REPO — the subprocess runs there. */
-export function makeFallback(provider, spawn = defaultSpawn, { cwd = process.cwd(), timeoutMs = LLM_TIMEOUT_MS } = {}) {
-  const spec = LLM_PROVIDERS[provider];
-  if (!spec) return null;
-  return { provider, label: spec.label, bin: spec.bin, probe: spec.probe, argv: spec.argv, spawn, cwd, timeoutMs };
-}
-
-/** One cheap probe (`--version`) to decide if the tool binary is present. A missing
- *  binary / non-zero exit / spawn error → false (chat then says so once and stays
- *  mechanical-only). */
-export function probeLlm(fallback) {
-  try {
-    const r = fallback.spawn(fallback.bin, fallback.probe, { cwd: fallback.cwd, timeout: 5000, input: "" });
-    return !!r && !r.error && r.status === 0;
-  } catch { return false; }
-}
-
-/** The compile prompt: the user's question + the seonix query surface, asking for ONE
- *  command so the answer stays graph-grounded (we execute it mechanically). */
-export function buildLlmPrompt(query) {
-  const toolLines = [
-    `  seonix_ask {"query":"<plain-English structural question>"}  — the general NL graph query`,
-    ...Object.entries(COMMANDS).map(([, s]) => `  ${s.tool} {"${s.arg || "…"}":"…"}  — ${s.help}`),
-  ];
-  return [
-    "You translate a question about a code graph into ONE seonix CLI command that answers it.",
-    "The graph is already indexed. Available tools and their JSON argument:",
-    ...toolLines,
-    "",
-    "Reply with EXACTLY one line and nothing else:",
-    `  seonix cli <tool> '<json-args>'`,
-    'e.g.  seonix cli seonix_ask \'{"query":"what calls fetchEntities"}\'',
-    "If no tool fits, reply with the single word: NONE",
-    "",
-    `Question: ${query}`,
-  ].join("\n");
-}
-
-/** Parse a compiled `seonix cli <tool> '<json>'` command out of the model's text.
- *  Returns {tool,args} on a valid, known-tool command with parseable JSON, else null. */
-export function parseSeonixCommand(text) {
-  const m = String(text || "").match(/seonix\s+cli\s+(\w+)\s+['"]?(\{[\s\S]*?\})['"]?/);
-  if (!m) return null;
-  const tool = m[1];
-  if (!FALLBACK_TOOLS.has(tool)) return null;
-  let args;
-  try { args = JSON.parse(m[2]); } catch { return null; }
-  if (!args || typeof args !== "object") return null;
-  return { tool, args };
-}
-
-/** Run the opt-in fallback for a MISSED query. Preferred shape: the model COMPILES one
- *  seonix command, which we execute MECHANICALLY and show graph-grounded, labelled
- *  LLM-assisted. If it can't produce a valid command, its raw text is shown, clearly
- *  marked as coming from the external model (never silently blended with mechanical
- *  answers). ANY spawn failure/timeout/absence → null, so the caller keeps the honest
- *  miss. Async only to await dispatchTool. */
-export async function runLlmFallback(query, { fallback, config, source }) {
-  if (!fallback) return null;
-  let res;
-  try {
-    res = fallback.spawn(fallback.bin, fallback.argv(buildLlmPrompt(query)), {
-      cwd: fallback.cwd, timeout: fallback.timeoutMs, input: "",
-    });
-  } catch { return null; } // spawn threw (e.g. ENOENT) — degrade to honest miss
-  if (!res || res.error || res.status !== 0) return null; // timeout/non-zero/absent
-  const text = String(res.stdout || "").trim();
-  if (!text) return null;
-  const cmd = parseSeonixCommand(text);
-  if (cmd) {
-    try {
-      const out = await dispatchTool(cmd.tool, cmd.args, { config, source });
-      return `[LLM-assisted via ${fallback.label}] compiled: seonix cli ${cmd.tool} '${JSON.stringify(cmd.args)}'\n${out}`;
-    } catch { /* the compiled command didn't run — fall through to the raw text */ }
-  }
-  // No usable command: show the model's own words, clearly NOT the deterministic engine.
-  return `[answer from external model ${fallback.label} — NOT the deterministic seonix engine]\n${text}`;
-}
-
 // ---- repo-root resolution: default the target to the GIT ROOT, not raw cwd ----
 
 /** The git top-level for `cwd`, or null if not in a repo (or git is unavailable).
- *  Injected into runChat so tests exercise the fallback without a real git tree. */
+ *  Injected into runChat so tests exercise repo resolution without a real git tree. */
 export function gitToplevel(cwd = process.cwd()) {
   try {
     const r = spawnSync("git", ["rev-parse", "--show-toplevel"], { cwd, encoding: "utf8" });
@@ -497,7 +369,7 @@ export async function helpText() {
  *  otherwise the unchanged dispatchTool path (which also yields the no-graph error).
  *  A hit updates the focus to the resolved object. Grammar miss / ToolError → a
  *  normal answer, never a crash. */
-async function runAsk(query, { config, source, graph, focus, fallback = null }) {
+async function runAsk(query, { config, source, graph, focus }) {
   const ts = new Date().toISOString();
   let answer;
   let envelope = null;
@@ -527,20 +399,10 @@ async function runAsk(query, { config, source, graph, focus, fallback = null }) 
   }
   const answeredIds = (envelope?.matches || []).map((m) => m?.id).filter(Boolean);
   const miss = envelope ? !!envelope.miss : true;
-  // On a MISS: an opt-in LLM fallback (flag set) gets first refusal on a genuine
-  // (non-conversational, bare) question — it degrades to the honest miss on any
-  // failure, so `answer` stays the engine's own hint when it returns null. A
-  // conversational miss (a greeting, "what can you do", a very short non-code line)
-  // gets the friendly orientation instead of the raw grammar hint. A near-miss
-  // STRUCTURAL question keeps the precise hint the engine already produced.
-  if (miss) {
-    if (fallback && !isConversational(query)) {
-      const fb = await runLlmFallback(query, { fallback, config, source });
-      if (fb != null) answer = fb;
-    } else if (isConversational(query)) {
-      answer = FRIENDLY;
-    }
-  }
+  // On a MISS: a conversational miss (a greeting, "what can you do", a very short
+  // non-code line) gets the friendly orientation instead of the raw grammar hint. A
+  // near-miss STRUCTURAL question keeps the precise hint the engine already produced.
+  if (miss && isConversational(query)) answer = FRIENDLY;
   const record = { type: "turn", ts, query, resolvedIds, answeredIds, miss };
   const logLines = [ts, `> ${query}`, answer, ""];
   // `detail` feeds why/say-more's verbose re-render: the traversal receipt + the
@@ -627,9 +489,9 @@ async function runCommand(line, { config, source, graph, focus }) {
  * subject), `answeredIds` the entity ids an ask answer cited; a slash-command turn
  * also carries its `command` name. Both drive the mgx:asksAbout graph append.
  */
-export async function runTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, fallback = null } = {}) {
+export async function runTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null } = {}) {
   const line = String(input ?? "").trim();
-  const ctx = { config, source, graph, focus, last, fallback };
+  const ctx = { config, source, graph, focus, last };
   // A DISPATCHED turn (count / slash-command / ask) becomes the new "last answer"
   // that why/say-more re-renders; a conversational turn does not (it preserves it).
   const withLast = (result) => ({ ...result, last: { query: line, answer: result.answer, detail: result.detail ?? null } });
@@ -665,9 +527,6 @@ export async function runChat({
   env = process.env,
   cwd = process.cwd(),
   gitRoot = gitToplevel,
-  withClaude = false,
-  withCopilot = false,
-  spawn = defaultSpawn,
 } = {}) {
   // Default the target to the GIT ROOT, not raw cwd: running from a nested package
   // dir (npm sets cwd there) would otherwise index only that package's ~few modules
@@ -729,21 +588,6 @@ export async function runChat({
   output.write(dim("pass --repo <path> to target a different repo") + "\n");
   output.write(dim("ask a question, or /help for commands (/stats for an overview) — /exit to leave") + "\n");
 
-  // Opt-in LLM fallback (chat-only, default OFF). Probe the tool ONCE at startup: an
-  // absent binary is reported and the flag disabled, so the session stays mechanical-
-  // only and never hangs on a missing tool. --with-claude wins if both flags are set.
-  let fallback = null;
-  const wanted = withClaude ? "claude" : withCopilot ? "copilot" : null;
-  if (wanted) {
-    const cand = makeFallback(wanted, spawn, { cwd: repo });
-    if (probeLlm(cand)) {
-      fallback = cand;
-      output.write(dim(`LLM fallback: ${cand.label} — used ONLY when the mechanical engine misses a bare question`) + "\n");
-    } else {
-      output.write(dim(`LLM fallback requested (${wanted}) but its binary was not found — continuing mechanical-only`) + "\n");
-    }
-  }
-
   const rl = createInterface({ input, output, prompt: PROMPT });
   rl.on("SIGINT", () => rl.close()); // Ctrl+C behaves like /exit (clean close, log flushed)
   let closed = false;
@@ -758,7 +602,7 @@ export async function runChat({
     const line = raw.trim();
     if (line === "/exit") break;
     if (line) {
-      const { answer, logLines, record, focus: nextFocus, last: nextLast, end } = await runTurn(line, { config, source, graph, focus, last, fallback });
+      const { answer, logLines, record, focus: nextFocus, last: nextLast, end } = await runTurn(line, { config, source, graph, focus, last });
       focus = nextFocus;
       last = nextLast;
       output.write(answer + "\n");

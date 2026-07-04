@@ -5,10 +5,9 @@
 // with software). No model calls; mct keeps no codebase index of its own.
 //
 //   mct                                   → interactive chat (the headline)
-//   mct chat [--repo <abs>]               → same, explicit; --with-claude|--with-copilot add an opt-in LLM fallback
+//   mct chat [--repo <abs>]               → same, explicit
 //   mct viz [--focus <sym>] [--out f.html] → render a focused sub-graph to HTML
 //   mct cli <tool> '{…json}'              → invoke a graph tool directly (de-emphasized carry-over)
-//   mct hook-augment                      → PreToolUse Grep/Glob augmenter (stdin→stdout)
 //   mct --help                            → this help
 //
 // This is a whole-package lift of the seonix chat surface (v0.1.0): internal
@@ -25,10 +24,8 @@ software repository. No model calls; no codebase index of its own.
 Usage:
   mct                          interactive chat (the headline surface)
   mct chat [--repo <abs>]      chat over a specific repo's graph
-                               [--with-claude|--with-copilot] opt-in LLM fallback (chat-only)
   mct viz [--focus <sym>] …    render a focused sub-graph to HTML
   mct cli <tool> '{…}'         invoke a graph tool directly (carry-over, de-emphasized)
-  mct hook-augment             PreToolUse Grep/Glob augmenter (stdin→stdout)
   mct --help                   show this help
 
 In chat: /help lists slash-commands; /exit leaves. Session log → <repo>/.seonix/session-<id>.log.

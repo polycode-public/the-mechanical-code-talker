@@ -25,11 +25,10 @@
 //   seonix cli <toolName> '{…args}'                     → invoke ANY MCP tool via Bash (no MCP)
 //     (e.g. seonix cli seonix_ask '{"query":"<free text>"}' — mechanical, no-LLM NL question
 //      over the graph, PLAN_MECHANICAL_CHAT.md; no bespoke wiring needed, this fallback covers it)
-//   seonix hook-augment                                 → PreToolUse Grep/Glob augmenter (stdin→stdout)
 //   seonix viz [--focus <sym>] [--depth N] [--out f.html] [--data-out f.json] [--repo-url <gitlab url> --ref main] [--site-nav] → render a focused sub-graph to HTML (one shared viewer; data embedded, or split out with --data-out). By default also writes code-browser.html + timeline.html next to --out with a working header nav; --graph-only suppresses the siblings
 //   seonix viz --browser-out f.html [--browser-data-out f.json] [--timeline-out f.html] [--scope product|<prefixes>] → override the sibling artifact paths (Chronograph code browser: temporal scrub + two-cursor diff + narration + ghost-branch merges + keyboard nav; archive/PLAN_CODE_BROWSER.md)
 //   seonix viz --serve [--port N] [--focus <sym>]        → serve the same viewer against THIS repo's index (the local equivalent of the site's #viz; code browser at /code-browser.html, live-reannotating on HEAD change via /code-browser-version)
-//   seonix chat [--repo <abs>] [--with-claude|--with-copilot] → interactive prompt over the mechanical seonix_ask engine; /exit to leave; session log → <repo>/.seonix/session-<uuidv7>.log. The optional --with-* flags add an opt-in LLM fallback used ONLY when the mechanical engine misses a bare question (chat-only, never in the benchmark path)
+//   seonix chat [--repo <abs>] → interactive prompt over the mechanical seonix_ask engine; /exit to leave; session log → <repo>/.seonix/session-<uuidv7>.log
 //
 // The index step is offline and model-free (Python ast + git). It writes the
 // graph artifact to <repo_path>/.seonix/graph.json; the server (started with
@@ -41,7 +40,7 @@ import { dispatchTool, buildContextBundle } from "../src/server.mjs";
 import { indexRepository, indexRepositories, discoverRepos } from "../src/extract.mjs";
 import { loadConfig, DEFAULT_GRAPH_REL } from "../src/config.mjs";
 import * as source from "../src/source.mjs";
-import { parseEntities, renderSearch, rankModulesByProximity, searchModulesRanked, selectRankedModules, DEFAULT_SCORE_GAP } from "../src/codegraph.mjs";
+import { parseEntities, rankModulesByProximity, searchModulesRanked, selectRankedModules, DEFAULT_SCORE_GAP } from "../src/codegraph.mjs";
 
 /** Build a config pointed at a specific repo's artifact (for `cli` sub-commands that
  *  take a repo_path), or fall back to the cwd-derived default. */
@@ -146,40 +145,6 @@ async function runDigest(args) {
   const header = `# seonix-digest tier=${effTier} topup=${topup} modules=${emitted}`
     + (autoSelected ? ` selected=${autoSelected.join(",") || "(none)"}` : "");
   process.stdout.write([header, ...body].join("\n") + "\n");
-}
-
-/** Read all of stdin (best-effort; resolves "" if none). */
-function readStdin() {
-  return new Promise((resolve) => {
-    let data = "";
-    if (process.stdin.isTTY) return resolve("");
-    process.stdin.setEncoding("utf8");
-    process.stdin.on("data", (c) => (data += c));
-    process.stdin.on("end", () => resolve(data));
-    process.stdin.on("error", () => resolve(data));
-  });
-}
-
-/** PreToolUse Grep/Glob augmenter: emit seon graph context as additionalContext.
- *  Mirrors cbm's hook-augment. Silent on any failure (exit 0, no output) so it can
- *  never block a tool call. */
-async function hookAugment() {
-  try {
-    const raw = await readStdin();
-    const evt = JSON.parse(raw || "{}");
-    const ti = evt.tool_input || evt.toolInput || {};
-    const query = String(ti.pattern || ti.query || ti.glob || "").trim();
-    if (!query) return;
-    const graph = parseEntities(await source.fetchEntities(loadConfig()));
-    if (!graph.individuals.length) return;
-    const text = renderSearch(graph, query);
-    if (!text || /^no module matches|^empty query/.test(text)) return;
-    const additionalContext =
-      "seon typed code-map hits for this search (prefer seonix_context / seonix_snippet over reading files):\n" + text;
-    process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext } }));
-  } catch {
-    /* silent — never block the tool */
-  }
 }
 
 async function main() {
@@ -368,11 +333,6 @@ async function main() {
     process.exit(2);
   }
 
-  if (mode === "hook-augment") {
-    await hookAugment();
-    return;
-  }
-
   if (mode === "viz") {
     const { runVizCli } = await import("../src/viz.mjs");
     await runVizCli(process.argv.slice(3));
@@ -382,12 +342,8 @@ async function main() {
   if (mode === "chat") {
     const { runChat } = await import("../src/chat.mjs");
     const i = process.argv.indexOf("--repo");
-    // Opt-in LLM fallback (chat-only, default OFF, miss-gated — never in the benchmark
-    // path): --with-claude shells `claude -p`, --with-copilot shells `gh copilot -- -p`.
     await runChat({
       repoPath: i !== -1 ? process.argv[i + 1] : undefined,
-      withClaude: process.argv.includes("--with-claude"),
-      withCopilot: process.argv.includes("--with-copilot"),
     });
     return;
   }
@@ -398,7 +354,7 @@ async function main() {
   }
 
   process.stderr.write(`seonix: unknown invocation "${process.argv.slice(2).join(" ")}". ` +
-    "Use bare (MCP server), `cli index_repository …`, `cli <tool> …`, `chat`, `hook-augment`, or `viz`.\n");
+    "Use bare (MCP server), `cli index_repository …`, `cli <tool> …`, `chat`, or `viz`.\n");
   process.exit(2);
 }
 
