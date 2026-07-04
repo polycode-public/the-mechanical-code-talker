@@ -17,7 +17,12 @@
 // membership, post-turn focus label, session end. A turn marked
 // expect.baselineFail:true documents a KNOWN current miss: its checks are
 // evaluated and recorded but never fail the case; if they all pass, the case is
-// flagged `improvedBaselineTurns` (a lever fixed a documented weakness).
+// flagged `improvedBaselineTurns` (a lever fixed a documented weakness). Once a
+// lever DOES fix it, the turn gains expect.improvedIn:"<cycle>" (cycle 2 onward):
+// baselineFail:true stays as the historical record (the case set is append-only —
+// SKILL_TUNING_CYCLE.md §1), but the expectation is ENFORCED from that cycle on,
+// so a later regression on a fixed weakness is a real tier-1 failure, never a
+// quietly-lapsed improvement.
 //
 // Determinism: the run stamp comes from the CLI (--stamp <label>), never from
 // Date.now — two runs over the same tree and stamp produce byte-identical rows
@@ -47,7 +52,7 @@ export const TAGS = [
 ];
 export const EXPECT_KEYS = [
   "miss", "answerMatch", "answerNotMatch", "answeredIdsInclude",
-  "resolvedIdsInclude", "focusLabel", "end", "baselineFail",
+  "resolvedIdsInclude", "focusLabel", "end", "baselineFail", "improvedIn",
 ];
 export const JUDGE_DIMENSIONS = ["groundedness", "correctness", "honesty", "rephrase"];
 const MODES = ["turns", "session"];
@@ -55,17 +60,30 @@ const GRAPHS = ["fixture", "empty"];
 
 /** The graph context the judge scores groundedness against — a faithful prose
  *  summary of test/fixtures/entities.fixture.json (kept in sync by hand; the
- *  case set is pinned to this fixture). */
+ *  case set is pinned to this fixture).
+ *
+ *  H1b correction (cycle 2, CHATBENCH_001 §judge-integrity): cycle 1's text
+ *  claimed "One commit: abc1234 … no other commits", but the committed fixture
+ *  ALSO carries git:def5678 provenance on app/lib/a.mjs (derived_from) and two
+ *  cochange edges — content /describe faithfully renders ("touched by 2
+ *  commit(s)", "provenance: git:abc1234, git:def5678", the cochange lines). The
+ *  judge scored faithfully against that unfaithful summary and systematically
+ *  zeroed TRUTHFUL /describe output (mt-describe-then-callers, plus turn-1
+ *  contamination of mt-focus-drift and one gq-impact-a sample). The lines below
+ *  state the fixture's actual content. This is a measurement correction to
+ *  judge INPUT, not a product change — CHATBENCH_002 must treat affected
+ *  cases' deltas as partly measurement-correction, per the cycle-1 write-up. */
 export const FIXTURE_CONTEXT = [
   "The graph under discussion (a small fixture codebase) holds exactly these facts:",
   "- Modules (8): app/lib/a.mjs, app/lib/b.mjs, app/lib/c.mjs, app/functions/d/handler.mjs, app/lib/e.mjs, app/lib/f.mjs, scripts/g.mjs, app/unit-tests/b.test.mjs.",
-  "- Classes (3): Base; Widget extends Base; Button extends Widget. Widget has method render (app/lib/b.mjs:5-9) and attribute name.",
-  "- Function fnAlpha is defined in app/lib/a.mjs at line 12. The method Widget.render calls fnAlpha (a symbol-level calls edge).",
+  "- Classes (3): Base; Widget extends Base; Button extends Widget. Widget has method render (app/lib/b.mjs:5-9) and attribute name. app/lib/b.mjs also defines a global variable `register`.",
+  "- Function fnAlpha is defined in app/lib/a.mjs at line 12. The method Widget.render calls fnAlpha (a symbol-level calls edge). app/functions/d/handler.mjs re-exports fnAlpha.",
   "- imports: b.mjs->a.mjs, c.mjs->a.mjs, d/handler.mjs->b.mjs, d/handler.mjs->c.mjs, e.mjs->a.mjs, e.mjs->f.mjs, f.mjs->e.mjs.",
   "- module-level calls: scripts/g.mjs -> app/lib/a.mjs (no module-level calls edge targets fnAlpha itself).",
   "- tests: app/unit-tests/b.test.mjs covers app/lib/b.mjs and app/functions/d/handler.mjs.",
-  "- One commit: abc1234 by Ada Lovelace on 2026-06-28, message \"Render the widget with full mode\", touching app/lib/a.mjs and Widget.render.",
-  "- Nothing else exists: no zebra.mjs, no nonExistentFn, no other commits.",
+  "- cochange (change-coupled) edges: app/lib/a.mjs <-> app/lib/b.mjs (weight 3) and app/lib/a.mjs <-> app/lib/c.mjs (weight 2).",
+  "- Commits: abc1234 (by Ada Lovelace on 2026-06-28, message \"Render the widget with full mode\") is the only commit ENTITY, touching app/lib/a.mjs (module grain) and Widget.render (symbol grain). Additionally, per-module PROVENANCE records commit ids: app/lib/a.mjs derives from git:abc1234 AND git:def5678, app/lib/b.mjs from git:abc1234 — so saying app/lib/a.mjs was \"touched by 2 commit(s)\" or citing git:def5678 in its provenance is TRUTHFUL; def5678 simply has no commit entity of its own to describe.",
+  "- Nothing else exists: no zebra.mjs, no nonExistentFn, no commit references beyond abc1234 and def5678.",
   "- Like every real tmct graph artifact, it also documents its OWN vocabulary (schema classes like Module/Class/Function and predicates like imports/calls), so questions about what a term means are answerable from the graph.",
 ].join("\n");
 
@@ -115,6 +133,14 @@ export function parseCases(text) {
         if (c.mode === "session" && ("focusLabel" in turn.expect || "end" in turn.expect)) {
           errors.push(`${tat}: focusLabel/end are turns-mode expectations (session mode reads the sidecar, which has neither)`);
         }
+        if ("improvedIn" in turn.expect) {
+          if (typeof turn.expect.improvedIn !== "string" || !turn.expect.improvedIn.trim()) {
+            errors.push(`${tat}: improvedIn must be a non-empty cycle label string (e.g. "002")`);
+          }
+          if (turn.expect.baselineFail !== true) {
+            errors.push(`${tat}: improvedIn only annotates a baselineFail:true turn (it records the cycle that fixed the documented weakness)`);
+          }
+        }
       }
     });
     if (c.judge) {
@@ -161,18 +187,21 @@ export function evaluateExpect(expect, outcome) {
 
 /** Fold per-turn checks into the case's tier-1 verdict. baselineFail turns
  *  never fail the case; a baselineFail turn whose checks ALL pass is an
- *  improvement (flagged, still not a failure). */
+ *  improvement (flagged, still not a failure) — UNLESS the turn also carries
+ *  improvedIn:"<cycle>": the weakness was fixed in that cycle, the marker pair
+ *  stays as the historical record, and the checks are enforced like any other
+ *  turn's (a regression on a fixed weakness is a real tier-1 failure). */
 export function summarizeTier1(turnEvals) {
   const failing = [];
   const baselineFailTurns = [];
   const improvedBaselineTurns = [];
   let checksTotal = 0;
-  turnEvals.forEach(({ checks, baselineFail }, i) => {
+  turnEvals.forEach(({ checks, baselineFail, improvedIn }, i) => {
     checksTotal += checks.length;
     if (baselineFail) {
       baselineFailTurns.push(i);
       if (checks.length && checks.every((ch) => ch.pass)) improvedBaselineTurns.push(i);
-      return;
+      if (!improvedIn) return; // still-documented weakness: advisory, never failing
     }
     for (const ch of checks) if (!ch.pass) failing.push({ turn: i, ...ch });
   });
@@ -219,7 +248,11 @@ export async function runTurnsCase(caseDef, deps) {
       ...(outcome.end ? { end: true } : {}),
       ...(turn.expect ? { expect: turn.expect } : {}),
     });
-    turnEvals.push({ checks: evaluateExpect(turn.expect, outcome), baselineFail: Boolean(turn.expect?.baselineFail) });
+    turnEvals.push({
+      checks: evaluateExpect(turn.expect, outcome),
+      baselineFail: Boolean(turn.expect?.baselineFail),
+      improvedIn: turn.expect?.improvedIn ?? null,
+    });
     if (outcome.end) break; // a farewell ends the case's session, like runChat
   }
   return { transcript, turnEvals };
@@ -257,6 +290,18 @@ export async function runSessionCase(caseDef, deps) {
     const transcript = [];
     const turnEvals = [];
     for (const [sessionNo, turns] of bySession) {
+      // H1a bench-fidelity correction (cycle 2, CHATBENCH_001 §hard-fails,
+      // mr-session-count): REAL tmct sessions are separate CLI processes, so
+      // src/source.mjs's process-level read cache never spans two of them. The
+      // bench replays every session of a case inside THIS one process — without
+      // clearing that cache between sessions, session N+1 is served the stale
+      // pre-session payload and never sees what session N folded into
+      // graph.json ("0 sessions." against a graph that records session 1).
+      // Clearing here restores the one-process-per-session reality the product
+      // actually runs in. A measurement correction, NOT a product change (the
+      // product-side note — a long-lived multi-session process like server.mjs
+      // would want its own invalidation — is recorded in CHATBENCH_001).
+      deps.clearCache?.();
       const lines = [...turns.map((t) => t.say), "/exit"].map((l) => l + "\n");
       const { logFile, sidecarFile } = await runChat({
         repoPath: dir,
@@ -290,7 +335,11 @@ export async function runSessionCase(caseDef, deps) {
         });
         const checks = evaluateExpect(turn.expect, outcome);
         if (!matched) checks.push({ key: "turnRecorded", pass: false, expected: turn.say, actual: record?.query ?? "(no record)" });
-        turnEvals.push({ checks, baselineFail: Boolean(turn.expect?.baselineFail) });
+        turnEvals.push({
+          checks,
+          baselineFail: Boolean(turn.expect?.baselineFail),
+          improvedIn: turn.expect?.improvedIn ?? null,
+        });
       });
     }
     return { transcript, turnEvals };
@@ -369,6 +418,7 @@ export async function main(argv = process.argv.slice(2)) {
   const { parseEntities } = await import(join(ROOT, "src", "codegraph.mjs"));
   const { ingestSchemaDocs } = await import(join(ROOT, "src", "schema-docs.mjs"));
   const { parseSessionJsonl, parseSessionLog, turnKey } = await import(join(ROOT, "src", "sessions.mjs"));
+  const { clearCache } = await import(join(ROOT, "src", "source.mjs")); // H1a — see runSessionCase
 
   const { cases, errors } = parseCases(await readFile(args.cases, "utf8"));
   if (errors.length) {
@@ -394,7 +444,7 @@ export async function main(argv = process.argv.slice(2)) {
   await writeFile(graphFile, graphJson);
   const config = { graphFile };
   const graph = parseEntities(JSON.parse(graphJson));
-  const deps = { runTurn, runChat, parseSessionJsonl, parseSessionLog, turnKey, config, graph, graphJson, stamp: args.stamp };
+  const deps = { runTurn, runChat, parseSessionJsonl, parseSessionLog, turnKey, clearCache, config, graph, graphJson, stamp: args.stamp };
 
   const rows = [];
   try {

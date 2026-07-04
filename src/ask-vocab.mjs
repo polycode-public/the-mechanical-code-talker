@@ -295,7 +295,13 @@ export const MISSPELLINGS = Object.freeze({
   "tets": "tests",
   // grammar anchor words
   "whcih": "which", "wich": "which", "whihc": "which",
-  "waht": "what",
+  // "wat" (chatbench cycle 2, tf-wat-calls): the internet-casual spelling of
+  // "what" — neither curated noise nor a restorable trigger typo, so "wat calls
+  // fnAlpha" used to die as "couldn't resolve one of the terms". Restored here
+  // so BOTH parse strategies and the relaxation cascade see the canonical
+  // anchor; the correction regex's dotted-extension guard keeps a module
+  // literally named "wat.mjs" untouched, same residual trade as every entry.
+  "waht": "what", "wat": "what",
   "dose": "does", "doess": "does",
   "teh": "the",
   // aggregate/list TRIGGER words (2026-07-02, trigger-typo work) — a typo of a count
@@ -626,6 +632,12 @@ export const CASCADE_NOISE = Object.freeze([
   // vocatives / terms of address (the "matey" of the worked example, and its kin)
   "matey", "mate", "buddy", "pal", "dude", "man", "bro", "bru", "fam",
   "friend", "sir", "maam", "folks", "guys", "everyone", "dear",
+  // the product's OWN name used as an address (chatbench cycle 2, ns-hey-tmct:
+  // "hey tmct, what calls fnAlpha thanks") — a vocative like "matey", stripped
+  // by the same rules: relaxParse's resolvesExact guard still protects a module
+  // literally named "tmct", and noise-strip's template/keyword-spot acceptance
+  // bounds the cost of a mid-question strip to an honest object-miss.
+  "tmct",
   // presentation frames — the keyword-spotting strategy's blind spot: the
   // compositional grammar skips these as FRAME_WORDS, but "show me what imports X"
   // otherwise decomposes (via keyword-spot) to ask{subject:"show me"}. Stripping
