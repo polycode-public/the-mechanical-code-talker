@@ -22,8 +22,12 @@
 
 **What 1.585 means.** The cycle-1 pick did what it was picked to do: all five targeted flips
 landed (two at a perfect 2.0), hard fails fell 6 → 2 exactly as predicted, and the engine again
-produced **zero hallucinated entities across all 48 cases** — every remaining sub-2 score is an
-omission or a badly-handled miss, never an invented fact. The mean landed 0.015 below the
+produced **zero hallucinated entities in graph-derived answers** — every remaining sub-2 score
+is an omission or a badly-handled miss. (Amended after adversarial review: two cases,
+conv-what-can-you-do and am-bare-name, emit STATIC HELP-TEXT examples naming walk.mjs /
+buildContextBundle, which are not in the fixture — judges scored that as fabrication in both
+cycles. The engine never invents graph facts; the hardcoded help examples are a real honesty
+leak already on the lever board.) The mean landed 0.015 below the
 predicted band (1.60–1.66) for a reason worth being precise about: the H1b judge-context
 correction is double-edged — it stopped the judge punishing truthful `/describe` output (+1.333
 on mt-describe-then-callers) but the same added truth (def5678 provenance) now makes the judge
@@ -236,9 +240,11 @@ edited or extended this cycle (append-only rule: 0 additions).
 
 **What the arc proved about mechanical-chat viability ("how far can mechanical chat get"):**
 a deterministic, no-LLM chat surface over a code graph reached **1.585/2 (79%) with 2/48 hard
-fails and zero hallucinated entities in 96 case-runs across two cycles**. The failure texture is
-the headline finding: every point lost in both cycles is an *omission or a badly-handled miss*
-— never an invented fact — which is precisely the failure class LLM chat cannot structurally
+fails and zero hallucinated entities in graph-derived answers across 96 case-runs** (caveat:
+two cases emit static help-text placeholders naming entities absent from the fixture — a
+templating honesty leak on the lever board, not an engine fabrication). The failure texture is
+the headline finding: the engine never invents a graph fact — points lost are omissions and
+mishandled misses, which is precisely the failure class LLM chat cannot structurally
 guarantee against. The floor is honest; the ceiling is a coverage problem. The arc also proved
 the tuning loop itself: single-seam levers move exactly their predicted cases (5/5 flips, hard
 fails 6→2 on the nose), regressions are catchable by construction (byte-level answer diffs), and
@@ -256,9 +262,10 @@ cannot see those subsystems at all.
 **The one investment that moves it most: L4 answer-grain (callsSymbol) surfacing.** Cycle 2's
 rationales make it unambiguous — six cases now cite the same omitted fact (Widget.render →
 fnAlpha): the remaining graph-query hard fail (0.0), ns-wondering (0.75), ns-hey-tmct (0.917),
-tf-fnalpah (1.111), hm-empty-result-calls (1.444), tf-wat-calls (1.667). Worth ≈ +6 case-points
-≈ **+0.12–0.13 of mean from one seam** — more than the whole of cycle 2 — with the tier-1
-scoping trap already documented (below).
+tf-fnalpah (1.111), hm-empty-result-calls (1.444), tf-wat-calls (1.667). (Amended after
+adversarial review: summing this board's own per-case endpoints gives ≈ +4.5 case-points
+≈ **+0.094 of mean** — comparable to, not more than, cycle 2's +4.8; the earlier "+6" was
+headroom-to-2.0, not a prediction.) Tier-1 scoping trap already documented (below).
 
 **Evidence-ranked plan for cycles 3–5:**
 1. **Cycle 3 — L4 answer-grain surfacing** (the pick; scoping trap documented in the decision
@@ -348,7 +355,8 @@ rule (SKILL §2 step 6 / §0), not asked. Carried forward from CHATBENCH_001's c
 | 8 | **batch appendFacts + seedMemory bootstrap wiring** — GATED on case-set v2 | 0.000 on the current case set | Same gate as rank 7; O(N²) seeding cost is real but only matters once seeding is on a measured path |
 
 **Pick: L4 answer-grain surfacing** (rank 1), scoped exactly as documented — carried into
-cycle 3's step 1. On-record cycle-3 prediction: mean **1.585 → 1.69–1.72**, hard fails **2 → 1**
+cycle 3's step 1. On-record cycle-3 prediction (amended after adversarial review — grounded in
+the per-case endpoint arithmetic): mean **1.585 → ~1.68 (band 1.66–1.71)**, hard fails **2 → 1**
 (mt-focus-drift remains, by choice), tier-1 stays 48/48 with hm-empty-result-calls' `miss:true`
 expectation intact; regression watch: hm-empty-result-calls (the trap case), gq-imports-of-a /
 gq-tests-for-b (answer-path neighbors), and the three passing ns-* cases.
