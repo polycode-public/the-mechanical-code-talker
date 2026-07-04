@@ -275,6 +275,31 @@ top facts ranked by provenance breadth (corpus+chat-agreed facts first), recent 
 and the block-index summary (blocks, tokens, top PageRank blocks). Same renderer serves
 `/stats`-style terse and `why`-style verbose.
 
+## Provenance & trust — the unified source-link primitive (cross-cutting)
+
+*(Operator-specified 2026-07-05, from the observation that Phase-6 canonicalise-and-link,
+tier-4 learn-on-miss, and the ConceptNet slice all share one shape: raw source preserved,
+derived form linked back.)* Promote that shape to a FIRST-CLASS primitive used everywhere a
+fact enters memory:
+
+- **Every fact/block carries a `Source` and a link to it** — one predicate family
+  (`mgx:derivedFrom` / `mgx:canonicalisedFrom` / `mgx:statedBy`) instead of the current
+  per-writer `mgx:factProvenance` string. Sources are first-class individuals (class `Source`:
+  operator-chat, corpus:conceptnet, learned:web:<url>, entailed:<rule>, provider:seonix), so a
+  fact can cite MANY sources (the existing "|"-union becomes real edges).
+- **Calculable trust scores per source**, deterministic and explainable: a source-type prior
+  (operator > provider graph > curated corpus > web > unverified entailment) combined with
+  corroboration (how many independent sources assert the same fact — the union already tells us)
+  and recency/agreement signals. Trust is a computed attribute, never hand-set, always
+  traceable to its inputs.
+- **Trust as RETRIEVAL WEIGHTING**: `retrieveBlocks` / fact lookup / the memory inspector rank
+  by relevance × trust, not relevance alone — a corroborated operator-stated fact outranks a
+  lone web scrape on the same query. Contradiction becomes visible (two high-trust sources
+  disagree → surface both with their provenance, never silently pick).
+- **Feeds tier-5**: the Syllogist's entailed facts get a derived trust (min/product of premise
+  trusts × rule confidence) — a conclusion is only as trustworthy as its weakest premise, and
+  that number is computed, not asserted.
+
 ## Phase 5 — Formulaic competence: the template-acquisition learning loop
 
 > Detailed plan: **`PLAN_FORMULAIC_COMPETENCE.md`**.
@@ -398,6 +423,25 @@ a passive payload loader into the product's primary integration surface.)*
   seeds/links the text corpuses (tier-1/2 policy applies), writes the externalized configuration
   (tmct.toml — the seonix.toml pattern), creates `.tmct/`, and records provenance — so a host
   package (seonix) or a bare user gets a working install with one command.
+
+## Phase 8 — Speculative inference: a step toward the Syllogist
+
+*(Operator-specified 2026-07-05. Tier-5 entailment answers a MISS on demand; this is the step
+before it — PROACTIVELY extending memory with inferences that will be useful later, forward and
+backward chaining over the OWL base during idle/fold time rather than at query time.)*
+
+> Detailed plan: **`PLAN_SPECULATIVE_INFERENCE.md`**.
+
+The mechanics are the easy half (bounded forward chaining materializes entailments; backward
+chaining from frequent query shapes pre-derives likely answers). **The hard half is the
+selection criterion — "what is useful to think about" — which is the FRAME PROBLEM / relevance
+realization, unsolved in the general case and not to be pretended otherwise.** The plan's job is
+to make it TRACTABLE in tmct's narrow, closed world, not to solve it: usefulness is approximated
+from what the system actually gets asked (query-shape frequency), what connects to recent focus,
+what a cheap forward step yields that isn't already stored, and — the honest guardrail — a hard
+budget (inference is bounded, its output trust-scored via the provenance primitive, and anything
+speculative is retractable and never outranks a stated fact). Everything else is deferred to the
+plan's open questions, where the relevance problem is named as the open research risk it is.
 
 ## Phase LATER — recognized, deferred, not now
 
