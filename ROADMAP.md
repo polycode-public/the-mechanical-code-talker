@@ -317,6 +317,45 @@ After a response is built (template-based or query-composed), two finishing pass
   Tone must never change FACTS — the finishing passes rewrite surface form only, and the `via`
   provenance gains a `tone` note so the bench can verify factual invariance under re-toning.
 
+## Research — the Repository Interface (seonix inverts to a tmct user)
+
+*(Operator-specified 2026-07-05. tmct was spun OUT of seonix; this inverts the relationship:
+seonix reorients as a USER that imports the tmct library and exposes its graph to tmct as a
+typed service. Grows item 14's provider adapter from a passive payload loader into the product's
+primary integration surface.)*
+
+- **tmct defines the adapter shape** — not the producer. Rationale: tmct is the brittle side
+  (query interpretation), so it must own and optimize around a STABLE interface; because the
+  vocabulary is OWL-grounded, the human/code world is already quantized into types both sides
+  understand — the interface is built from those shared types, not ad-hoc JSON.
+- **A rich instruction set, translated from what seonix already exposes**: survey seonix's
+  native tool surface (describe / members / subclasses / impact / callers / callees / tests-for /
+  untested / history / exports / architecture / search / context / snippet / locate / digest —
+  the dispatchTool catalog tmct carried at the lift) and translate it into tmct's language as
+  the REPOSITORY INTERFACE: a consistent set of typed services any graph producer implements
+  natively (seonix first; the empty/bootstrap and fixture providers are degenerate
+  implementations tmct ships itself).
+- **The flow** (LLM-agent front door): Claude Code et al. is briefed to use seonix → when the
+  agent judges it useful, seonix's "ask" tools pass NATURAL LANGUAGE to tmct → seonix calls the
+  tmct library in-process with the query PLUS a callbacks object (functions implementing the
+  repository interface over its native graph) → tmct resolves the query mechanically, calling
+  back into seonix's services for graph truth → results return through seonix to the LLM agent.
+  The mechanical interpreter becomes the NL front-end for any agent-facing graph tool; the LLM
+  stays outside tmct, exactly as the no-LLM ethos requires.
+- **In-process lifecycle research (the hard part)**: seonix calls tmct directly, and the
+  interface is wider than the in-house chat — so define explicitly what is HELD IN MEMORY
+  between function calls: an explicit session/context handle (focus, last-answer, memory dir,
+  loaded lexicon) created and disposed by the caller instead of process-global state; graph
+  caching delegated to the provider (tmct never caches provider truth — the known source.mjs
+  process-cache staleness in long-lived servers becomes the provider's concern, by contract);
+  re-entrancy and concurrent-session guarantees documented per service.
+- **seonix chat becomes tmct chat + a pointer**: seonix's chat surface loads tmct's chat with
+  the repository-interface handle — one chat implementation, N graph backends.
+- **Distribution: `tmct init`** — a CLI command that initializes a local directory for tmct:
+  seeds/links the text corpuses (tier-1/2 policy applies), writes the externalized configuration
+  (tmct.toml — the seonix.toml pattern), creates `.tmct/`, and records provenance — so a host
+  package (seonix) or a bare user gets a working install with one command.
+
 ## Phase LATER — recognized, deferred, not now
 
 Features we have deliberately shaped seams for but will not build until the phases above have
