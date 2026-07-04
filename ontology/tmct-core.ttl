@@ -1,0 +1,281 @@
+# ontology/tmct-core.ttl — tmct's core OWL 2 ontology (ROADMAP Phase 2, item 3).
+#
+# Grounds the vocabulary tmct's runtime actually writes:
+#   1. the conversational-memory vocabulary of src/memory/core.mjs
+#      (Utterance / Fact / Session classes; the mgx: predicates its
+#      graph.json payload emits);
+#   2. the OWL/RDF(S) kinds the ACE-OWL grammar (src/grammar/ace.mjs)
+#      labels its triples with;
+#   3. the top-level software-entity classes and core verb properties of
+#      the declared lexicon (src/grammar/lexicon-core.json), aligned to
+#      the code-graph classes and prop tokens of src/graph-build.mjs.
+#
+# The runtime stores OWL-LABELLED TRIPLES IN PLAIN JSON (.tmct/, see
+# docs/references/schemas/owl2-vocabulary.md) — this document gives those
+# labels their formal home; no OWL toolchain runs in the product path.
+#
+# Prefix provenance:
+#   mgx:  urn:tmct:mgx#  — tmct's OWNED extension namespace, exactly the
+#         prefix block src/memory/core.mjs's emptyMemory() declares.
+#   tmct: urn:tmct:core# — terms minted by the grammar/lexicon (classes,
+#         verb predicates). Note: memory/core.mjs's normFactTerm strips
+#         CURIE prefixes on fact subjects/objects at write time, so the
+#         stored spelling of tmct:module is "module"; this file is the
+#         type system those bare terms refer back to.
+#   seon: SEON, the Software Evolution ONtologies (se-on.org, FAMIX-
+#         derived) — the reference vocabulary the code graph's seon:*
+#         prop tokens (seon:hasSuperType, seon:containsCodeEntity, …)
+#         borrow from. Namespace IRI as conventionally published;
+#         UNVERIFIED-pending-web-check per docs/references/ discipline.
+
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix tmct: <urn:tmct:core#> .
+@prefix mgx:  <urn:tmct:mgx#> .
+@prefix seon: <http://se-on.org/ontologies/domain-specific/2012/02/code.owl#> .
+
+<urn:tmct:core> a owl:Ontology ;
+  rdfs:label "tmct core ontology" ;
+  rdfs:comment "The type system behind tmct's conversational memory graph and ACE-OWL grammar emissions. Authored by hand; kept small and aligned with what the code actually writes." .
+
+# ---------------------------------------------------------------------------
+# 1. Conversational memory (src/memory/core.mjs) — the classes counted in the
+#    memory payload's classes[] and the mgx: vocabulary it documents in-payload.
+#    Individuals carry rdf:type owl:NamedIndividual (utterances, sessions) or
+#    rdf:type rdf:Statement (reified facts).
+# ---------------------------------------------------------------------------
+
+tmct:Utterance a owl:Class ;
+  rdfs:label "Utterance" ;
+  rdfs:comment "One thing said in a chat turn: an a-visitor-said item (role=visitor) or the tmct response alongside it (role=tmct)." .
+
+tmct:Fact a owl:Class ;
+  rdfs:label "Fact" ;
+  rdfs:subClassOf rdf:Statement ;
+  rdfs:comment "A grammar-derived OWL triple, RDF-reified: the individual carries rdf:subject / rdf:predicate / rdf:object attribute triples plus mgx:factProvenance. Written only by appendFact (the ACE parser's write point)." .
+
+tmct:Session a owl:Class ;
+  rdfs:label "Session" ;
+  rdfs:comment "One recorded tmct chat session — the anchor utterances attach to via mgx:saidInSession." .
+
+mgx:saidInSession a owl:ObjectProperty ;
+  rdfs:label "saidInSession" ;
+  rdfs:domain tmct:Utterance ;
+  rdfs:range tmct:Session ;
+  rdfs:comment "Utterance to the Session it was said in; runtime observation, owned (no SEON term)." .
+
+mgx:inReplyTo a owl:ObjectProperty ;
+  rdfs:label "inReplyTo" ;
+  rdfs:domain tmct:Utterance ;
+  rdfs:range tmct:Utterance ;
+  rdfs:comment "tmct Utterance to the visitor Utterance it answers (the Q/A pairing)." .
+
+mgx:utteranceRole a owl:DatatypeProperty ;
+  rdfs:domain tmct:Utterance ;
+  rdfs:range xsd:string ;
+  rdfs:comment "Who said it: visitor or tmct." .
+
+mgx:utteranceText a owl:DatatypeProperty ;
+  rdfs:domain tmct:Utterance ;
+  rdfs:range xsd:string ;
+  rdfs:comment "The utterance's normalized text (capped)." .
+
+mgx:utteranceTs a owl:DatatypeProperty ;
+  rdfs:domain tmct:Utterance ;
+  rdfs:range xsd:dateTime ;
+  rdfs:comment "When it was said, ISO-8601 (the chat turn timestamp)." .
+
+mgx:utteranceParsed a owl:DatatypeProperty ;
+  rdfs:domain tmct:Utterance ;
+  rdfs:range xsd:string ;
+  rdfs:comment "Optional JSON of the interpretation pipeline's parse of this request." .
+
+mgx:sessionStarted a owl:DatatypeProperty ;
+  rdfs:domain tmct:Session ;
+  rdfs:range xsd:dateTime ;
+  rdfs:comment "Session anchor: when the session started, ISO-8601." .
+
+mgx:factProvenance a owl:DatatypeProperty ;
+  rdfs:domain tmct:Fact ;
+  rdfs:range xsd:string ;
+  rdfs:comment "Where a fact came from — an ace:<source>[:<sessionId>][@<ts>] tag from grammar/assert.mjs, or a corpus block id; multiple writers union tags joined by ' | '." .
+
+mgx:hasProseTokens a owl:DatatypeProperty ;
+  rdfs:range xsd:string ;
+  rdfs:comment "Prose tokens (prose.mjs tokenizer) backing the payload's proseIndex; carried by any memory individual with indexable text." .
+
+# ---------------------------------------------------------------------------
+# 2. Grammar-emitted kinds (src/grammar/ace.mjs) — how the 8 ACE-OWL patterns
+#    use the standard vocabulary. Facts store these as predicate strings; the
+#    `kind` label on each emitted triple names the governing OWL construct.
+#
+#    pattern 1  every N1 is a N2            rdfs:subClassOf
+#    pattern 2  PROPERNAME is a N           rdf:type
+#    pattern 3  N1 VERB N2                  a tmct: object property (below)
+#    pattern 4  every N1 that VERBs a N2    owl:Restriction + owl:onProperty +
+#               is a N3                     owl:someValuesFrom, and the N1-
+#                                           intersection subclassed to N3
+#    pattern 5  every N has at least/at     owl:minCardinality / owl:maxCardinality /
+#               most/exactly n N2           owl:cardinality on tmct:has, with
+#                                           owl:onClass recording the counted class
+#    pattern 6  no N1 is a N2               owl:disjointWith
+#    pattern 7  N1's N2 is VALUE            owl:DatatypeProperty or owl:ObjectProperty
+#                                           assertion per the noun's declared typing
+#    pattern 8  ADJ N / X is ADJ            rdfs:subClassOf (subclass-forming ADJ) or
+#                                           owl:hasValue restriction / owl:DatatypeProperty
+#                                           assertion (data ADJ)
+#
+#    Flat-store stand-in: the JSON fact store has no RDF lists, so a pattern-4
+#    intersection is flattened to REPEATED owl:intersectionOf triples (one per
+#    member) on a readable deterministic node, e.g.
+#      tmct:module-that-imports-database owl:intersectionOf tmct:module ;
+#                                        owl:intersectionOf tmct:some-imports-database .
+#    In proper Turtle that intersection reads:
+# ---------------------------------------------------------------------------
+
+tmct:has a owl:ObjectProperty ;
+  rdfs:label "has" ;
+  rdfs:comment "The generic possession property pattern-5 cardinality restrictions constrain (every module has at least 1 test)." .
+
+# Documentation example of a pattern-4 emission in real Turtle (kept as a
+# named, deterministic node exactly as the grammar mints it):
+tmct:some-imports-database a owl:Restriction ;
+  owl:onProperty tmct:imports ;
+  owl:someValuesFrom tmct:database .
+
+tmct:module-that-imports-database a owl:Class ;
+  owl:intersectionOf ( tmct:module tmct:some-imports-database ) ;
+  rdfs:subClassOf tmct:service .
+
+# ---------------------------------------------------------------------------
+# 3. Software-entity classes — the lexicon's top-level nouns (lowercase lemma
+#    = the normFactTerm spelling facts store), aligned to the code-graph
+#    classes buildEntities emits (Module, Class, Function, Method, Attribute,
+#    GlobalVariable, Commit, Session — see src/schema-docs.mjs).
+# ---------------------------------------------------------------------------
+
+tmct:module a owl:Class ;
+  rdfs:label "module" ;
+  rdfs:comment "A source file / importable unit. Aligns with the code-graph class Module." .
+
+tmct:class a owl:Class ;
+  rdfs:label "class" ;
+  rdfs:comment "A class definition. Aligns with the code-graph class Class; cf. seon:ComplexType." .
+
+tmct:function a owl:Class ;
+  rdfs:label "function" ;
+  rdfs:comment "A top-level function. Aligns with the code-graph class Function." .
+
+tmct:method a owl:Class ;
+  rdfs:label "method" ;
+  rdfs:comment "A function inside a class. Aligns with the code-graph class Method; cf. seon:Method." .
+
+tmct:attribute a owl:Class ;
+  rdfs:label "attribute" ;
+  rdfs:comment "A field/property of a class. Aligns with the code-graph class Attribute; cf. seon:Attribute." .
+
+tmct:variable a owl:Class ;
+  rdfs:label "variable" ;
+  rdfs:comment "A module-level variable. Aligns with the code-graph class GlobalVariable." .
+
+tmct:commit a owl:Class ;
+  rdfs:label "commit" ;
+  rdfs:comment "A recorded git commit. Aligns with the code-graph class Commit." .
+
+tmct:test a owl:Class ;
+  rdfs:label "test" ;
+  rdfs:comment "A test (module or case) — the subject side of mgx:testsCoverage edges." .
+
+tmct:repository a owl:Class ; rdfs:label "repository" .
+tmct:service a owl:Class ; rdfs:label "service" .
+tmct:package a owl:Class ; rdfs:label "package" .
+tmct:database a owl:Class ; rdfs:label "database" .
+tmct:bug a owl:Class ; rdfs:label "bug" .
+tmct:branch a owl:Class ; rdfs:label "branch" .
+tmct:developer a owl:Class ; rdfs:label "developer" .
+tmct:project a owl:Class ; rdfs:label "project" .
+
+# ---------------------------------------------------------------------------
+# 4. Core verb properties — the tmct:<3sg> predicates lexicon verbs emit
+#    (grammar/lexicon.mjs predicateOf), rdfs:seeAlso-aligned to the code
+#    graph's prop tokens where one exists.
+# ---------------------------------------------------------------------------
+
+tmct:imports a owl:ObjectProperty ;
+  rdfs:label "imports" ;
+  rdfs:seeAlso mgx:importsNamespace ;
+  rdfs:comment "Subject imports object. The code graph's module-to-module edge is mgx:importsNamespace." .
+
+tmct:calls a owl:ObjectProperty ;
+  rdfs:label "calls" ;
+  rdfs:seeAlso mgx:callsSymbol ;
+  rdfs:comment "Subject calls object; cf. mgx:callsCoarse (module level) and seon:invokesMethod." .
+
+tmct:tests a owl:ObjectProperty ;
+  rdfs:label "tests" ;
+  rdfs:seeAlso mgx:testsCoverage .
+
+tmct:contains a owl:ObjectProperty ;
+  rdfs:label "contains" ;
+  rdfs:seeAlso seon:containsCodeEntity .
+
+tmct:extends a owl:ObjectProperty ;
+  rdfs:label "extends" ;
+  rdfs:seeAlso seon:hasSuperType ;
+  rdfs:comment "Subject extends/inherits from object; the code graph's inheritance edge is seon:hasSuperType." .
+
+tmct:defines a owl:ObjectProperty ;
+  rdfs:label "defines" ;
+  rdfs:seeAlso seon:declaresMethod .
+
+tmct:touches a owl:ObjectProperty ;
+  rdfs:label "touches" ;
+  rdfs:seeAlso mgx:touchesSymbol ;
+  rdfs:comment "A commit touches a module/symbol; cf. mgx:touchedByCommit (inverse orientation in the code graph)." .
+
+tmct:uses a owl:ObjectProperty ; rdfs:label "uses" .
+tmct:dependsOn a owl:ObjectProperty ; rdfs:label "dependsOn" .
+tmct:reliesOn a owl:ObjectProperty ; rdfs:label "reliesOn" .
+tmct:inheritsFrom a owl:ObjectProperty ; rdfs:label "inheritsFrom" ; rdfs:seeAlso seon:hasSuperType .
+tmct:implements a owl:ObjectProperty ; rdfs:label "implements" .
+tmct:exports a owl:ObjectProperty ; rdfs:label "exports" ; rdfs:seeAlso mgx:reExports .
+tmct:covers a owl:ObjectProperty ; rdfs:label "covers" ; rdfs:seeAlso mgx:testsCoverage .
+
+# ---------------------------------------------------------------------------
+# 5. Possessive-noun and data-adjective properties (patterns 7 and 8) — the
+#    lexicon's declared typings: property=data nouns and type=data adjectives
+#    become owl:DatatypeProperty assertions; property=object nouns become
+#    owl:ObjectProperty assertions.
+# ---------------------------------------------------------------------------
+
+tmct:license a owl:DatatypeProperty ; rdfs:label "license" ; rdfs:range xsd:string .
+tmct:version a owl:DatatypeProperty ; rdfs:label "version" ; rdfs:range xsd:string .
+tmct:name a owl:DatatypeProperty ; rdfs:label "name" ; rdfs:range xsd:string .
+tmct:path a owl:DatatypeProperty ; rdfs:label "path" ; rdfs:range xsd:string .
+tmct:size a owl:DatatypeProperty ; rdfs:label "size" ; rdfs:range xsd:string .
+tmct:status a owl:DatatypeProperty ; rdfs:label "status" ; rdfs:range xsd:string .
+tmct:language a owl:DatatypeProperty ; rdfs:label "language" ; rdfs:range xsd:string .
+tmct:extension a owl:DatatypeProperty ; rdfs:label "extension" ; rdfs:range xsd:string .
+
+tmct:owner a owl:ObjectProperty ; rdfs:label "owner" .
+tmct:maintainer a owl:ObjectProperty ; rdfs:label "maintainer" .
+tmct:author a owl:ObjectProperty ; rdfs:label "author" ; rdfs:seeAlso mgx:commitAuthor .
+tmct:reviewer a owl:ObjectProperty ; rdfs:label "reviewer" .
+tmct:parent a owl:ObjectProperty ; rdfs:label "parent" .
+tmct:dependency a owl:ObjectProperty ; rdfs:label "dependency" .
+
+tmct:deprecated a owl:DatatypeProperty ; rdfs:label "deprecated" ; rdfs:range xsd:boolean .
+tmct:flaky a owl:DatatypeProperty ; rdfs:label "flaky" ; rdfs:range xsd:boolean .
+tmct:tested a owl:DatatypeProperty ; rdfs:label "tested" ; rdfs:range xsd:boolean .
+tmct:documented a owl:DatatypeProperty ; rdfs:label "documented" ; rdfs:range xsd:boolean .
+tmct:broken a owl:DatatypeProperty ; rdfs:label "broken" ; rdfs:range xsd:boolean .
+
+# Subclass-forming adjectives denote classes (pattern 8): legacy-module is a
+# subclass of both module and the adjective class.
+tmct:legacy a owl:Class ; rdfs:label "legacy" .
+tmct:internal a owl:Class ; rdfs:label "internal" .
+tmct:external a owl:Class ; rdfs:label "external" .
+tmct:experimental a owl:Class ; rdfs:label "experimental" .
+tmct:stable a owl:Class ; rdfs:label "stable" .
