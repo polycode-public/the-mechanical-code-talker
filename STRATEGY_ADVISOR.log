@@ -63,3 +63,9 @@ RECOMMENDED ACTION (independent ranked lever board, impact×cheapness):
   L8 Utterance/Fact CLASS_DOCS add — cheapest doc, honesty polish.
   Two levers (L1+L2) clear 5 of 9 baselineFail.
 STATUS: OPEN
+
+═══════════════════════════════════════
+[2026-07-04 18:13Z] source=strategy-advisor(opus,deep) · topic=T9 run-time telemetry watch (cycle-2 judge)
+OBSERVATION: Judge pass confirmed live (node chatbench/judge.mjs --samples 3, PID 40057 from 19:06 local; concurrent claude -p claude-haiku-4-5-20251001 judges). judged.jsonl NOT written after ~6min poll (18:07-18:13Z) — harness writes it atomically ON COMPLETION, not streaming, so early per-case checks are impossible mid-run. TWO live validations from judge process args: (1) DIMENSION-MASKING CORRECT — graph-query cases instruct "Score ONLY these dimensions: groundedness, correctness. Set every other dimension to null." (2) H1b truthful FIXTURE_CONTEXT is LIVE in the paid pass — context now explicitly states app/lib/a.mjs derives from abc1234 AND def5678 and that "touched by 2 commit(s)"/citing def5678 is TRUTHFUL. So the mt-describe-then-callers ~1.7 prediction rests on the corrected context actually being scored; if it does not move, diagnosis (not config) was wrong.
+RECOMMENDED ACTION: Next tick — once judged.jsonl exists, run deferred integrity checks (void rate, 3-sample spread on the 5 flipped cases whose answers are novel text, masking) + early predictions-vs-actuals on 5 flipped + 4 regression-watch cases. CYCLE-3 harness idea: stream judged rows (append per-case) so live telemetry watches actually work.
+STATUS: OPEN
