@@ -181,11 +181,54 @@ export function parseSessionJsonl(text) {
       turns.push({
         ts: String(rec.ts || ""), query: String(rec.query || ""),
         resolvedIds: arr(rec.resolvedIds), answeredIds: arr(rec.answeredIds), miss: !!rec.miss,
+        // preserved for the memory fold (memory/fold.mjs): slash-command turns and
+        // conversational filler are recorded but never folded into the corpus.
+        ...(rec.command ? { command: String(rec.command) } : {}),
+        ...(rec.conversational ? { conversational: true } : {}),
       });
     } else if (rec?.type === "end") ended = String(rec.ts || "") || ended;
   }
   if (!header?.id) return null;
   return { id: String(header.id), started: String(header.started || ""), ended, turns };
+}
+
+// A transcript turn opens with an ISO-8601 ms timestamp line followed by the
+// echoed "> <query>" line (chat.mjs's logLines shape).
+const LOG_TS_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+
+/** Key a transcript answer by its turn: ts + query (ts alone can collide when
+ *  two instant turns land in the same millisecond). */
+export const turnKey = (ts, query) => `${ts} ${query}`;
+
+/**
+ * Parse a human-readable session transcript (.tmct/session-<id>.log) into a
+ * Map of turnKey(ts, query) → answer text. The transcript is the ONLY session
+ * artifact that carries the answer PROSE (the structured sidecar records ids,
+ * not text), so the memory write-path recovers response text from here.
+ * Tolerant by design: a block is `ts` line + "> query" line + answer lines
+ * until the next block; header/footer and torn tails just don't match.
+ */
+export function parseSessionLog(text) {
+  const lines = String(text ?? "").split("\n");
+  const answers = new Map();
+  let open = null; // { ts, query, answerLines }
+  const close = () => {
+    if (!open) return;
+    while (open.answerLines.length && !open.answerLines.at(-1).trim()) open.answerLines.pop();
+    answers.set(turnKey(open.ts, open.query), open.answerLines.join("\n"));
+    open = null;
+  };
+  for (let i = 0; i < lines.length; i += 1) {
+    if (LOG_TS_RE.test(lines[i]) && lines[i + 1]?.startsWith("> ")) {
+      close();
+      open = { ts: lines[i], query: lines[i + 1].slice(2), answerLines: [] };
+      i += 1;
+    } else if (open) {
+      open.answerLines.push(lines[i]);
+    }
+  }
+  close();
+  return answers;
 }
 
 /** All recorded sessions under <rootDir>/.tmct/sessions/*.jsonl, oldest first
