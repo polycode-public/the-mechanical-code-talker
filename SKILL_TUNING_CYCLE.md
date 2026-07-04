@@ -62,6 +62,13 @@ Every cycle MUST satisfy:
   sampled out); cross-cycle pass→fail regression is checked on the INTERSECTION of the two
   cycles' samples; **cell-level means** (grade × construction, single-area vs combination cells
   reported separately) are the comparable cross-cycle statistic, not per-item identity.
+- **Dual-draw agreement (parallel-forms reliability):** every graded measurement runs as TWO
+  independent draws (distinct recorded seeds, sampled without replacement across the pair).
+  Per-cell disagreement beyond tolerance (default |Δ pass-rate| > 0.2) marks the cell
+  **UNDER-COVERED — an instrument failure, not product signal**: the cell is excluded from the
+  cycle's PASS/FAIL statistics (unmeasured, not failed) and the prescription is to grow its pool
+  or per-run sample. The overall agreement rate is the benchmark's own reliability score and is
+  reported in every `CHATBENCH_0NN.md` beside the product mean.
 
 ## 2. The loop (one cycle; repeats without pausing)
 
