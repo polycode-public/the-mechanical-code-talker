@@ -398,14 +398,119 @@ export async function helpText() {
   ].join("\n");
 }
 
+// ---- W2: memory recall on the miss path (retrieveBlocks → runAsk) ----
+
+/** The conservative relevance floor a folded-session block must clear (the
+ *  retrieveBlocks idf×(1+rank) score) before an honest ask-miss is answered from
+ *  memory. Calibrated in the small-corpus regime (test/wiring-recall.test.mjs):
+ *  a genuine re-ask scores ~4, a frame-word coincidence ~1. */
+export const RECALL_MIN_SCORE = 2.0;
+
+/** How many blocks the miss path consults (the W2 seam: retrieveBlocks(dir, q, 2)). */
+const RECALL_TOP_K = 2;
+
+/** Frame/stop words ignored when checking that a recalled Q genuinely shares
+ *  vocabulary with the live query — at least one shared CONTENT word is required,
+ *  so "which …" alone can never masquerade as a memory. */
+const RECALL_STOPWORDS = new Set([
+  "the", "a", "an", "and", "or", "for", "with", "about", "into", "from",
+  "which", "what", "who", "how", "when", "where", "why",
+  "does", "do", "did", "is", "are", "was", "were", "there",
+  "me", "my", "we", "i", "you", "it", "this", "that", "in", "of", "to",
+]);
+const recallWords = (s) => new Set(
+  String(s).toLowerCase().split(/[^a-z0-9.]+/).filter((w) => w.length >= 3 && !RECALL_STOPWORDS.has(w)),
+);
+
+/** Decode a uuidv7 id's leading 48-bit unix-ms timestamp → "YYYY-MM-DD", or null
+ *  (block ids ARE session uuidv7s — fold.mjs sets block id = session id). */
+function uuidv7Day(id) {
+  const hex = String(id || "").replace(/-/g, "").slice(0, 12);
+  if (!/^[0-9a-f]{12}$/i.test(hex)) return null;
+  const ms = parseInt(hex, 16);
+  return ms > 0 && Number.isFinite(ms) ? new Date(ms).toISOString().slice(0, 10) : null;
+}
+
+/** Pick the recalled block's Q/A pair most relevant to the query (content-word
+ *  overlap; ties → first). Null when NO pair shares a content word — the block
+ *  matched on packaging, not substance, so the honest miss must stand. */
+function bestQaPair(blockText, query) {
+  const qWords = recallWords(query);
+  const pairs = [];
+  let open = null;
+  for (const line of String(blockText).split("\n")) {
+    if (line.startsWith("Q: ")) { open = { q: line.slice(3), a: "" }; pairs.push(open); }
+    else if (open && line.startsWith("A: ")) open.a = line.slice(3);
+  }
+  let best = null;
+  let bestScore = 0;
+  for (const p of pairs) {
+    let score = 0;
+    for (const w of recallWords(p.q)) if (qWords.has(w)) score += 1;
+    if (score > bestScore) { best = p; bestScore = score; }
+  }
+  return best;
+}
+
+/** W2 seam: consult the folded-session block index for an honest miss. A
+ *  sufficiently-relevant hit returns the recalled Q/A, framed and cited to its
+ *  session; anything less returns null and the miss stands unchanged. Lazy +
+ *  failure-tolerated (chat.mjs ethos): a broken memory store degrades to null. */
+async function recallFromBlocks(memoryDir, query) {
+  try {
+    const { retrieveBlocks } = await import("./memory/blocks.mjs");
+    const hits = await retrieveBlocks(memoryDir, query, RECALL_TOP_K);
+    const best = hits[0];
+    if (!best || best.score < RECALL_MIN_SCORE || !best.text) return null;
+    const pair = bestQaPair(best.text, query);
+    if (!pair) return null;
+    const day = uuidv7Day(best.id);
+    const cite = `session ${String(best.id).slice(0, 8)}${day ? `, ${day}` : ""}`;
+    const qa = pair.a ? `Q: ${pair.q}\n  A: ${pair.a}` : `Q: ${pair.q}`;
+    return `you asked about this before (${cite}):\n  ${qa}`;
+  } catch {
+    return null;
+  }
+}
+
+/** The explicit recall question forms — "what did i ask before", "what did we
+ *  talk about", "what have we discussed" — answered from memory, never the graph. */
+const RECALL_ASK_RE = /^what (?:did|have) (?:i|we) (?:ask(?:ed)?(?: you)?|talk(?:ed)? about|discuss(?:ed)?)(?: before| earlier| previously| last time)?[?.!]*$/i;
+
+/** Summarize the most recent folded session's questions (block ids are session
+ *  uuidv7s, so a plain sort is chronological). Null when nothing is folded yet. */
+async function recallSummary(memoryDir) {
+  try {
+    const { loadBlockIndex, BLOCKS_DIR_REL } = await import("./memory/blocks.mjs");
+    const index = await loadBlockIndex(memoryDir);
+    const id = Object.keys(index.blocks).sort().at(-1);
+    if (!id) return null;
+    const text = await readFile(join(memoryDir, BLOCKS_DIR_REL, index.blocks[id].file), "utf8");
+    const qs = text.split("\n").filter((l) => l.startsWith("Q: ")).map((l) => l.slice(3)).slice(0, 6);
+    if (!qs.length) return null;
+    const day = uuidv7Day(id);
+    return `last time (session ${String(id).slice(0, 8)}${day ? `, ${day}` : ""}) you asked: ${qs.map((q) => `"${q}"`).join("; ")}`;
+  } catch {
+    return null;
+  }
+}
+
 /** A bare question → tmct_ask. When a focus is set AND the graph is in hand we
  *  call ask() directly to thread the focus as contextId (so a pronoun like "it"
  *  resolves to the focus) — building the SAME delimited string dispatchTool emits;
  *  otherwise the unchanged dispatchTool path (which also yields the no-graph error).
  *  A hit updates the focus to the resolved object. Grammar miss / ToolError → a
  *  normal answer, never a crash. */
-async function runAsk(query, { config, source, graph, focus, templates }) {
+async function runAsk(query, { config, source, graph, focus, templates, memoryDir }) {
   const ts = new Date().toISOString();
+  // W2: the explicit recall forms are answered from memory's folded blocks, never
+  // the graph. Gated on memoryDir — a bare runTurn (no session shell) stays pure.
+  if (memoryDir && RECALL_ASK_RE.test(String(query).trim())) {
+    const summary = await recallSummary(memoryDir);
+    return plainTurn(query, summary ?? "nothing to recall yet — no earlier session has been folded into memory.", {
+      via: "recall", miss: !summary, focus,
+    });
+  }
   let answer;
   let envelope = null;
   try {
@@ -437,14 +542,25 @@ async function runAsk(query, { config, source, graph, focus, templates }) {
   // Answer provenance (W1): "composed" is the ask engine's productive band; the
   // orientation swap below is template wording, so those turns carry via:"template".
   let via = "composed";
+  let recordMiss = miss;
   // On a MISS: a conversational miss (a greeting, "what can you do", a very short
   // non-code line) gets the friendly orientation instead of the raw grammar hint. A
   // near-miss STRUCTURAL question keeps the precise hint the engine already produced.
   if (miss && isConversational(query)) {
     answer = tRender(templates, T_ORIENTATION) ?? TEMPLATES_UNAVAILABLE;
     via = "template";
+  } else if (miss && memoryDir) {
+    // W2: after the honest miss is composed, consult the folded-session memory. A
+    // relevant enough block ANSWERS — recalled Q/A framed + cited first, with the
+    // engine's own miss hint kept below; no hit leaves the miss byte-unchanged.
+    const recalled = await recallFromBlocks(memoryDir, query);
+    if (recalled) {
+      answer = `${recalled}\n\n${answer}`;
+      via = "recall";
+      recordMiss = false; // memory answered it, cited — no longer a blank
+    }
   }
-  const record = { type: "turn", ts, query, via, resolvedIds, answeredIds, miss };
+  const record = { type: "turn", ts, query, via, resolvedIds, answeredIds, miss: recordMiss };
   const logLines = [ts, `> ${query}`, answer, ""];
   // `detail` feeds why/say-more's verbose re-render: the traversal receipt + the
   // matched entities the terse render trims (see renderVerbose).
