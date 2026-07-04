@@ -36,6 +36,8 @@ Usage:
   tmct chat [--repo <abs>]     chat over a specific repo's graph
        [--plain]               force the plain readline shell (the default when
                                stdin/stdout is not a terminal)
+  tmct memory [--repo <abs>]   what tmct remembers: facts, utterances, sessions,
+       [--verbose]             folded blocks (the /memory chat command, from the shell)
   tmct cli <tool> '{…}'        invoke a graph tool directly (carry-over, de-emphasized)
   tmct cli digest '{…}'        architecture map + per-module context bundles
   tmct --help                  show this help
@@ -270,6 +272,20 @@ async function main() {
     return;
   }
 
+  if (mode === "memory") {
+    // `tmct memory` — the /memory chat command from the shell: same renderer
+    // (src/memory/inspect.mjs), same repo resolution as chat (git root default).
+    const rest = process.argv.slice(3);
+    const i = rest.indexOf("--repo");
+    const repoPath = i !== -1 ? rest[i + 1] : undefined;
+    const verbose = rest.includes("--verbose") || rest.includes("-v");
+    const { gitToplevel } = await import("../src/chat.mjs");
+    const { inspectMemory } = await import("../src/memory/inspect.mjs");
+    const repo = repoPath || gitToplevel(process.cwd()) || process.cwd();
+    process.stdout.write(await inspectMemory(repo, { verbose }) + "\n");
+    return;
+  }
+
   if (mode === "cli") {
     await runCliMode();
     return;
@@ -278,7 +294,7 @@ async function main() {
   // An unknown mode gets the instructive usage line and exit 2. (A bare invocation
   // never lands here — the argv splice above rewrote it to `chat`.)
   process.stderr.write(`tmct: unknown invocation "${process.argv.slice(2).join(" ")}". ` +
-    "Use `cli digest …`, `cli <tool> …`, or `chat`.\n");
+    "Use `cli digest …`, `cli <tool> …`, `memory`, or `chat`.\n");
   process.exit(2);
 }
 

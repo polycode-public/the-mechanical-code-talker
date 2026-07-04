@@ -116,15 +116,27 @@ export function toFacts(assertions, map) {
 
 /** Seed a repo's memory graph (<dir>/.tmct/memory/graph.json) from the
  *  committed slice. Options: limit (cap the facts written — handy for tests
- *  and fast bootstraps), slicePath/mapPath overrides.
+ *  and fast bootstraps), slicePath/mapPath overrides, and `prefer` — an array
+ *  of predicate URIs that STABLE-partitions the facts before the limit is
+ *  applied (facts whose predicate appears earlier in `prefer` come first;
+ *  everything else keeps slice order after them). A capped bootstrap seed
+ *  wants the DEFINITIONAL band ("a cache is a kind of buffer") ahead of the
+ *  location trivia the slice happens to open with; without `prefer` the
+ *  behavior is byte-identical to before.
  *
  *  Idempotent twice over: appendFact's content-hashed ids make a blind
  *  re-append an upsert, and we pre-read the store once to skip triples that
  *  are already there (so re-seeding costs one read, not N rewrites).
  *  Returns { appended, skipped, total }. */
-export async function seedMemory(dir, { limit, slicePath = SLICE_FILE, mapPath = MAP_FILE } = {}) {
+export async function seedMemory(dir, { limit, slicePath = SLICE_FILE, mapPath = MAP_FILE, prefer } = {}) {
   const [assertions, map] = await Promise.all([loadSlice(slicePath), loadMap(mapPath)]);
   let facts = toFacts(assertions, map);
+  if (Array.isArray(prefer) && prefer.length) {
+    const rank = new Map(prefer.map((p, i) => [p, i]));
+    // stable partition: Array.prototype.sort is stable in Node, so equal-rank
+    // facts keep their slice order — deterministic across runs by construction.
+    facts = facts.slice().sort((a, b) => (rank.get(a.predicate) ?? prefer.length) - (rank.get(b.predicate) ?? prefer.length));
+  }
   if (limit !== undefined) facts = facts.slice(0, limit);
 
   // One read up front: what does the store already reify? Keys are built with

@@ -568,7 +568,9 @@ test("runChat: missing graph bootstraps clean — honest empty banner, conversat
   try {
     const { out, text } = sink();
     const input = Readable.from(["hi\n", "which modules import a.mjs\n", "/exit\n"]);
-    const { turns } = await runChat({ repoPath: dir, input, output: out });
+    // W3 seeding is covered by wiring-seed.test.mjs — opted out here to keep this
+    // test about the bootstrap banner/turn/fold contract (and fast).
+    const { turns } = await runChat({ repoPath: dir, input, output: out, env: { TMCT_NO_SEED: "1" } });
     assert.equal(turns, 2);
     // the banner is honest about the empty start — and never an error before the prompt
     assert.match(text(), /no graph loaded — starting empty/);
@@ -601,7 +603,10 @@ test("cli chat: real binary, stdin closed after /exit → exit 0; graphless repo
     assert.ok(names.some((n) => /^session-.*\.log$/.test(n)), "binary session wrote its log");
 
     // no graph → the bootstrap path: honest empty banner, greeting works, clean exit 0
-    const bad = spawnSync(process.execPath, [BIN, "chat", "--repo", bare], { encoding: "utf8", input: "hi\n/exit\n" });
+    // (TMCT_NO_SEED: the W3 seeded-bootstrap path has its own suite — wiring-seed.test.mjs)
+    const bad = spawnSync(process.execPath, [BIN, "chat", "--repo", bare], {
+      encoding: "utf8", input: "hi\n/exit\n", env: { ...process.env, TMCT_NO_SEED: "1" },
+    });
     assert.equal(bad.status, 0, bad.stderr);
     assert.match(bad.stdout, /no graph loaded — starting empty/);
     const bareGraph = JSON.parse(await readFile(join(bare, ".tmct", "graph.json"), "utf8"));

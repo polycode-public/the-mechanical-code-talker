@@ -37,9 +37,9 @@
 // load-bearing — see its docblock), telemetry, and the close. runChat is the
 // readline shell over it; src/tui/app.mjs is the Ink shell over the same sink.
 
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 import { createWriteStream } from "node:fs";
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createInterface } from "node:readline/promises";
 import { spawnSync } from "node:child_process";
 import { dispatchTool } from "./server.mjs";
@@ -49,6 +49,7 @@ import { SESSIONS_DIR_REL, appendSessionToGraph } from "./sessions.mjs";
 import { uuidv7 } from "./uuid.mjs";
 import { createTelemetry } from "./telemetry.mjs";
 import * as defaultSource from "./source.mjs";
+import { loadTemplates, render as renderTemplate } from "./corpus/templates.mjs";
 
 // uuidv7 lives in ./uuid.mjs (shared with telemetry + the bench stamp); re-exported
 // here because callers/tests still import it from chat.mjs.
@@ -211,15 +212,43 @@ export function isConversational(query) {
   return q.split(/\s+/).filter(Boolean).length <= 3 && !codeish;
 }
 
-/** The short friendly orientation shown for conversational input. */
-const FRIENDLY = [
-  "I answer questions about THIS codebase's structure — imports, calls, definitions,",
-  "history and counts. For example:",
-  "  which modules import walk.mjs",
-  "  what calls buildContextBundle",
-  "  how many classes are there",
-  "/help for commands, /stats for an overview of the graph.",
-].join("\n");
+// ---- the response-template library (W1: templates → render path) ----
+// The WORDING of the conversational/orientation surfaces lives in
+// data/templates/responses.jsonl (corpus/templates.mjs) — the template library is
+// load-bearing for these turns. The recognizer sets below stay code: they decide
+// WHICH template answers, never what it says. Loading is lazy + failure-tolerated
+// (chat.mjs ethos: a turn never crashes) — a broken/missing data file degrades to
+// one short honest line, never a throw before the prompt.
+
+/** Template ids (data/templates/responses.jsonl) for the surfaces chat renders. */
+const T_GREETING = "conversational-greeting";
+const T_GREETING_BY_PHRASE = {
+  "hello there": "conversational-greeting-hello-there",
+  "good morning": "conversational-greeting-good-morning",
+  "good afternoon": "conversational-greeting-good-afternoon",
+  "good evening": "conversational-greeting-good-evening",
+};
+const T_THANKS = "conversational-thanks";
+const T_FAREWELL = "conversational-farewell";
+const T_ORIENTATION = "orientation-friendly";
+const T_WHY_EMPTY = "miss-no-previous-answer";
+
+/** The degraded line when the template library itself cannot load — a packaging
+ *  failure said out loud, never a crashed turn or a silently different answer. */
+const TEMPLATES_UNAVAILABLE = "response templates unavailable — ask a question, or /help for commands.";
+
+let templatesPromise = null;
+/** Load data/templates/responses.jsonl once per process; null on failure. */
+function chatTemplates() {
+  if (!templatesPromise) templatesPromise = loadTemplates().catch(() => null);
+  return templatesPromise;
+}
+/** Strict render through the loaded map; null on any failure (no map / unknown
+ *  id / missing slot) so every call site degrades explicitly, never half-fills. */
+function tRender(templates, id, slots = {}) {
+  if (!templates) return null;
+  try { return renderTemplate(id, slots, templates); } catch { return null; }
+}
 
 // ---- conversational (ELIZA/Zork-manners) templated layer ----
 // A small CLOSED set of human expressions handled with a TEMPLATED response BEFORE
@@ -248,16 +277,8 @@ const WHY = new Set([
   "elaborate", "tell me more", "more detail", "expand",
 ]);
 
-const GREETING = "Hi. Ask me about this codebase — imports, calls, definitions, history — or /help.";
-/** A couple of expression-specific lines (a light Zork nod for "hello there"). */
-const GREETING_LINES = {
-  "hello there": 'Hello there. (A hollow voice says, "fool.") Ask me about this codebase, or /help.',
-  "good morning": "Good morning. Ask me about this codebase, or /help.",
-  "good afternoon": "Good afternoon. Ask me about this codebase, or /help.",
-  "good evening": "Good evening. Ask me about this codebase, or /help.",
-};
-const ACK = "Any time. Ask another, or /help for what I can do.";
-const FAREWELL = "Bye — flushing the session log. Come back with a question any time.";
+// (Greeting/thanks/farewell wording moved to data/templates/responses.jsonl — W1.
+// The expression-specific greeting variants map through T_GREETING_BY_PHRASE above.)
 
 /** Re-render the last answer in verbose form: the previous query + its full answer
  *  plus the ask envelope's traversal receipt and the matched entities (the detail a
@@ -289,22 +310,31 @@ export function renderVerbose(last) {
 function conversationalTurn(line, ctx) {
   const raw = String(line);
   const q = raw.toLowerCase().replace(/[.!?]+$/, "").replace(/\s+/g, " ").trim();
-  const mk = (answer, { end = false, miss = false } = {}) => {
+  const t = (id) => tRender(ctx.templates, id) ?? TEMPLATES_UNAVAILABLE;
+  const mk = (answer, { end = false, miss = false, via = "template" } = {}) => {
     const ts = new Date().toISOString();
     return {
       answer,
       logLines: [ts, `> ${raw}`, answer, ""],
-      record: { type: "turn", ts, query: raw, conversational: true, resolvedIds: [], answeredIds: [], miss },
+      record: { type: "turn", ts, query: raw, conversational: true, via, resolvedIds: [], answeredIds: [], miss },
       focus: ctx.focus,
       last: ctx.last, // a conversational turn never overwrites the last real answer
       ...(end ? { end: true } : {}),
     };
   };
-  if (BYE.has(q)) return mk(FAREWELL, { end: true });
-  if (WHY.has(q)) { const v = renderVerbose(ctx.last); return mk(v.text, { miss: v.empty }); }
-  if (GREET.has(q)) return mk(GREETING_LINES[q] || GREETING);
-  if (THANKS.has(q)) return mk(ACK);
-  if (q === "help" || q === "?" || HELP_PHRASES.some((re) => re.test(raw))) return mk(FRIENDLY);
+  if (BYE.has(q)) return mk(t(T_FAREWELL), { end: true });
+  if (WHY.has(q)) {
+    const v = renderVerbose(ctx.last);
+    // The empty-state hint is template wording (via:"template", the data row wins;
+    // renderVerbose's own string is the degraded fallback for direct library callers).
+    // A real expansion re-renders the LAST ANSWER — its wording is the prior answer's,
+    // not a template's, so it carries via:"conversational".
+    if (v.empty) return mk(tRender(ctx.templates, T_WHY_EMPTY) ?? v.text, { miss: true });
+    return mk(v.text, { via: "conversational" });
+  }
+  if (GREET.has(q)) return mk(t(T_GREETING_BY_PHRASE[q] || T_GREETING));
+  if (THANKS.has(q)) return mk(t(T_THANKS));
+  if (q === "help" || q === "?" || HELP_PHRASES.some((re) => re.test(raw))) return mk(t(T_ORIENTATION));
   return null;
 }
 
@@ -348,6 +378,7 @@ export async function helpText() {
     ["<question>", "ask the graph in plain English (the default for any non-slash line)"],
     ...Object.entries(COMMANDS).map(([name, s]) => [`/${name}${s.arg ? (s.optional ? ` [${s.arg}]` : ` <${s.arg}>`) : ""}`, s.help]),
     ["/stats", "a one-screen overview: entity counts, relationship counts, packages"],
+    ["/memory [verbose]", "what tmct remembers: facts, utterances, sessions, folded blocks"],
     ["/focus <symbol>", "set the current focus (reused by 'it'/'this' and no-arg entity commands)"],
     ["/help", "this list"],
     ["/exit", "leave the session (also Ctrl+C / Ctrl+D)"],
@@ -368,14 +399,312 @@ export async function helpText() {
   ].join("\n");
 }
 
+// ---- W2: memory recall on the miss path (retrieveBlocks → runAsk) ----
+
+/** The conservative relevance floor a folded-session block must clear (the
+ *  retrieveBlocks idf×(1+rank) score) before an honest ask-miss is answered from
+ *  memory. Calibrated in the small-corpus regime (test/wiring-recall.test.mjs):
+ *  a genuine re-ask scores ~4, a frame-word coincidence ~1. */
+export const RECALL_MIN_SCORE = 2.0;
+
+/** How many blocks the miss path consults (the W2 seam: retrieveBlocks(dir, q, 2)). */
+const RECALL_TOP_K = 2;
+
+/** Frame/stop words ignored when checking that a recalled Q genuinely shares
+ *  vocabulary with the live query — at least one shared CONTENT word is required,
+ *  so "which …" alone can never masquerade as a memory. */
+const RECALL_STOPWORDS = new Set([
+  "the", "a", "an", "and", "or", "for", "with", "about", "into", "from",
+  "which", "what", "who", "how", "when", "where", "why",
+  "does", "do", "did", "is", "are", "was", "were", "there",
+  "me", "my", "we", "i", "you", "it", "this", "that", "in", "of", "to",
+]);
+const recallWords = (s) => new Set(
+  String(s).toLowerCase().split(/[^a-z0-9.]+/).filter((w) => w.length >= 3 && !RECALL_STOPWORDS.has(w)),
+);
+
+/** Decode a uuidv7 id's leading 48-bit unix-ms timestamp → "YYYY-MM-DD", or null
+ *  (block ids ARE session uuidv7s — fold.mjs sets block id = session id). */
+function uuidv7Day(id) {
+  const hex = String(id || "").replace(/-/g, "").slice(0, 12);
+  if (!/^[0-9a-f]{12}$/i.test(hex)) return null;
+  const ms = parseInt(hex, 16);
+  return ms > 0 && Number.isFinite(ms) ? new Date(ms).toISOString().slice(0, 10) : null;
+}
+
+/** Pick the recalled block's Q/A pair most relevant to the query (content-word
+ *  overlap; ties → first). Null when NO pair shares a content word — the block
+ *  matched on packaging, not substance, so the honest miss must stand. */
+function bestQaPair(blockText, query) {
+  const qWords = recallWords(query);
+  const pairs = [];
+  let open = null;
+  for (const line of String(blockText).split("\n")) {
+    if (line.startsWith("Q: ")) { open = { q: line.slice(3), a: "" }; pairs.push(open); }
+    else if (open && line.startsWith("A: ")) open.a = line.slice(3);
+  }
+  let best = null;
+  let bestScore = 0;
+  for (const p of pairs) {
+    let score = 0;
+    for (const w of recallWords(p.q)) if (qWords.has(w)) score += 1;
+    if (score > bestScore) { best = p; bestScore = score; }
+  }
+  return best;
+}
+
+/** W2 seam: consult the folded-session block index for an honest miss. A
+ *  sufficiently-relevant hit returns the recalled Q/A, framed and cited to its
+ *  session; anything less returns null and the miss stands unchanged. Lazy +
+ *  failure-tolerated (chat.mjs ethos): a broken memory store degrades to null. */
+async function recallFromBlocks(memoryDir, query) {
+  try {
+    const { retrieveBlocks } = await import("./memory/blocks.mjs");
+    const hits = await retrieveBlocks(memoryDir, query, RECALL_TOP_K);
+    const best = hits[0];
+    if (!best || best.score < RECALL_MIN_SCORE || !best.text) return null;
+    const pair = bestQaPair(best.text, query);
+    if (!pair) return null;
+    const day = uuidv7Day(best.id);
+    const cite = `session ${String(best.id).slice(0, 8)}${day ? `, ${day}` : ""}`;
+    const qa = pair.a ? `Q: ${pair.q}\n  A: ${pair.a}` : `Q: ${pair.q}`;
+    return `you asked about this before (${cite}):\n  ${qa}`;
+  } catch {
+    return null;
+  }
+}
+
+// ---- W4: asserted Facts → answers (the memory graph's reified triples) ----
+
+/** How a stored fact predicate reads in English — one phrase per predicate the
+ *  two writers (the ACE grammar, the ConceptNet map) actually emit. An unknown
+ *  predicate renders verbatim rather than being guessed around. */
+const FACT_PREDICATE_PHRASES = {
+  "rdfs:subClassOf": "is a kind of",
+  "rdf:type": "is a",
+  "owl:disjointWith": "is not a",
+  "mgx:partOf": "is part of",
+  "mgx:hasA": "has",
+  "mgx:usedFor": "is used for",
+  "mgx:capableOf": "can",
+  "mgx:atLocation": "is found in",
+  "mgx:causes": "causes",
+  "mgx:hasProperty": "is",
+  "mgx:madeOf": "is made of",
+  "mgx:receivesAction": "can be",
+  "mgx:createdBy": "is created by",
+  "mgx:mannerOf": "is a way to",
+  "mgx:desires": "wants",
+  "mgx:locatedNear": "is typically near",
+  "mgx:motivatedByGoal": "is motivated by",
+  "mgx:obstructedBy": "can be prevented by",
+  "mgx:causesDesire": "makes you want to",
+  "mgx:hasSubevent": "involves",
+  "mgx:hasFirstSubevent": "begins with",
+  "mgx:hasLastSubevent": "ends with",
+  "mgx:hasPrerequisite": "requires",
+};
+const factPhrase = (f) => `${f.subject} ${FACT_PREDICATE_PHRASES[f.predicate] || f.predicate} ${f.object}`;
+
+/** One rendered fact line: "you told me" when the chat asserted it (an ace:chat
+ *  provenance tag), "i learned" for corpus-only facts — provenance VERBATIM. */
+function renderFactLine(f) {
+  const lead = f.provenance.includes("ace:chat") ? "you told me" : "i learned";
+  return `${lead}: ${factPhrase(f)}${f.provenance ? ` (source: ${f.provenance})` : ""}`;
+}
+
+/** Read every reified Fact out of the memory graph as plain {subject, predicate,
+ *  object, provenance} rows. Lazy + failure-tolerated: no memory → []. */
+async function memoryFacts(memoryDir) {
+  try {
+    const { loadMemory } = await import("./memory/core.mjs");
+    const m = await loadMemory(memoryDir);
+    const out = [];
+    for (const ind of m.individuals || []) {
+      if (ind?.class !== "Fact") continue;
+      const get = (k) => (ind.attributes || []).find((a) => a.key === k)?.value || "";
+      out.push({ subject: get("subject"), predicate: get("predicate"), object: get("object"), provenance: get("provenance") });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+/** Spelling variants a question term is matched under (normFactTerm + a naive
+ *  singular): "caches"/"a cache"/"/c/en/cache" all reach the stored "cache". */
+function factTermVariants(normFactTerm, term) {
+  const t = normFactTerm(term);
+  const v = new Set([t]);
+  if (t.endsWith("es")) v.add(t.slice(0, -2));
+  if (t.endsWith("s")) v.add(t.slice(0, -1));
+  return v;
+}
+
+/** "is a module a component" — the yes/no vocabulary form the graph grammar
+ *  doesn't parse; checked against the isa-family fact predicates only. */
+const ISA_ASK_RE = /^(?:is|are)\s+(?:an?\s+)?(.+?)\s+(?:a\s+kind\s+of|a\s+type\s+of|an?)\s+(.+?)[?.!\s]*$/i;
+const ISA_PREDICATES = new Set(["rdfs:subClassOf", "rdf:type"]);
+/** "what do you know about caches" — the open recall-everything form. */
+const KNOW_ABOUT_RE = /^what\s+do\s+you\s+know\s+about\s+(.+?)[?.!\s]*$/i;
+/** How many facts a single answer lists before "…and N more". */
+const FACT_ANSWER_CAP = 5;
+
+/** W4 seam: answer (or extend) a vocabulary/definition question from the MEMORY
+ *  graph's Facts. Returns { text, replace } — `replace:false` means the engine's
+ *  own (schema-docs) answer stands and the fact lines are appended under it —
+ *  or null when memory holds nothing relevant (misses stay unchanged). */
+async function factAnswer(memoryDir, query, envelope, miss) {
+  let normFactTerm;
+  try { ({ normFactTerm } = await import("./memory/core.mjs")); } catch { return null; }
+  const q = String(query).trim();
+
+  // (a) meta-shaped questions ("what is a module", "what does cache mean") — the
+  // parsed object term, matched against fact SUBJECTS; consulted for hits (append
+  // alongside the schema-docs answer) and misses (facts answer alone) alike.
+  // When the engine produced NO parse at all (the empty-bootstrap graph
+  // short-circuits before parsing), the meta FORM is recognized directly on a
+  // miss — same required-article discipline as the grammar's own T5 template.
+  let metaTerm = envelope?.parsed?.shape === "meta" ? envelope.parsed.object : null;
+  if (!metaTerm && miss && !envelope?.parsed) {
+    const m = q.match(/^what\s+(?:is|are)\s+an?\s+(.+?)[?.!\s]*$/i)
+      || q.match(/^what\s+(?:does|do)\s+(.+?)\s+means?[?.!\s]*$/i);
+    if (m) metaTerm = m[1];
+  }
+  if (metaTerm) {
+    const variants = factTermVariants(normFactTerm, metaTerm);
+    const hits = (await memoryFacts(memoryDir)).filter((f) => variants.has(f.subject));
+    if (!hits.length) return null;
+    const shown = hits.slice(0, FACT_ANSWER_CAP).map(renderFactLine);
+    const extra = hits.length > FACT_ANSWER_CAP ? `\n…and ${hits.length - FACT_ANSWER_CAP} more remembered fact${hits.length - FACT_ANSWER_CAP === 1 ? "" : "s"}.` : "";
+    return { text: shown.join("\n") + extra, replace: miss };
+  }
+  if (!miss) return null;
+
+  // (b) "is a module a component" — yes iff a remembered isa-family fact says so.
+  const isa = q.match(ISA_ASK_RE);
+  if (isa) {
+    const subj = factTermVariants(normFactTerm, isa[1]);
+    const obj = factTermVariants(normFactTerm, isa[2]);
+    const hit = (await memoryFacts(memoryDir)).find(
+      (f) => ISA_PREDICATES.has(f.predicate) && subj.has(f.subject) && obj.has(f.object),
+    );
+    if (hit) return { text: `yes — ${renderFactLine(hit)}`, replace: true };
+    return null; // no remembered fact — the honest miss stands (never a guessed "no")
+  }
+
+  // (c) "what do you know about caches" — everything remembered that MENTIONS the
+  // term (subject or object), capped.
+  const know = q.match(KNOW_ABOUT_RE);
+  if (know) {
+    const variants = factTermVariants(normFactTerm, know[1]);
+    const hits = (await memoryFacts(memoryDir)).filter((f) => variants.has(f.subject) || variants.has(f.object));
+    if (!hits.length) return null;
+    // echo the STORED spelling ("caches" asked → "cache" known), never a guess
+    const term = variants.has(hits[0].subject) ? hits[0].subject : hits[0].object;
+    const shown = hits.slice(0, FACT_ANSWER_CAP).map((f) => `  ${renderFactLine(f)}`);
+    const extra = hits.length > FACT_ANSWER_CAP ? `\n  …and ${hits.length - FACT_ANSWER_CAP} more.` : "";
+    return { text: `${hits.length} remembered fact${hits.length === 1 ? "" : "s"} about ${term}:\n${shown.join("\n")}${extra}`, replace: true };
+  }
+  return null;
+}
+
+// ---- W5: corpus on-demand — LOCAL tier only, behind an explicit flag ----
+
+/** The opt-in env flag: TMCT_CORPUS_LOOKUP=1 lets an unknown-term miss consult
+ *  the LOCAL committed ConceptNet slice (tier 1 of the corpus tiering policy).
+ *  Default OFF for this wave.
+ *
+ *  TIER-3 SEAM (documented, NOT implemented): a network lookup (the ConceptNet
+ *  API for terms the local slice misses, cached down into .tmct/corpus/ per the
+ *  tier-2 policy) would attach exactly where corpusAside() returns null below —
+ *  behind its own explicit opt-in flag, never in the default path, and any
+ *  network failure must degrade to the honest miss ($0-offline is inviolable). */
+export const CORPUS_LOOKUP_FLAG = "TMCT_CORPUS_LOOKUP";
+/** How many corpus surface lines one aside quotes. */
+const CORPUS_ASIDE_CAP = 2;
+
+let corpusPromise = null; // the local slice as renderable rows, one load per process
+/** Load the committed slice + relation map once, as { key, surface } rows —
+ *  `surface` is the map's own canonical sentence ("a cache is used for storing
+ *  data"), `key` the normFactTerm-normalized subject. Failure → []. */
+function localCorpus() {
+  if (!corpusPromise) {
+    corpusPromise = (async () => {
+      const { loadSlice, loadMap, termText } = await import("./corpus/conceptnet.mjs");
+      const { normFactTerm } = await import("./memory/core.mjs");
+      const [assertions, map] = await Promise.all([loadSlice(), loadMap()]);
+      const rows = [];
+      for (const a of assertions) {
+        const row = map.get(a.rel);
+        if (!row || row.ace === "none" || !row.surface) continue; // non-emissions stay out here too
+        const subject = termText(a.start);
+        const object = termText(a.end);
+        if (!subject || !object) continue;
+        rows.push({
+          key: normFactTerm(subject),
+          surface: String(row.surface).replace("{start}", subject).replace("{end}", object),
+        });
+      }
+      return rows;
+    })().catch(() => []);
+  }
+  return corpusPromise;
+}
+
+/** W5 seam: the grounded aside for an unknown term, or null (which is also
+ *  where the tier-3 network lookup would attach — see CORPUS_LOOKUP_FLAG). */
+async function corpusAside(term) {
+  try {
+    const { normFactTerm } = await import("./memory/core.mjs");
+    const variants = factTermVariants(normFactTerm, term);
+    const rows = (await localCorpus()).filter((r) => variants.has(r.key));
+    if (!rows.length) return null;
+    const shown = rows.slice(0, CORPUS_ASIDE_CAP).map((r) => r.surface);
+    return `the corpus knows: ${shown.join("; ")} (ConceptNet, CC-BY-SA)`;
+  } catch {
+    return null;
+  }
+}
+
+/** The explicit recall question forms — "what did i ask before", "what did we
+ *  talk about", "what have we discussed" — answered from memory, never the graph. */
+const RECALL_ASK_RE = /^what (?:did|have) (?:i|we) (?:ask(?:ed)?(?: you)?|talk(?:ed)? about|discuss(?:ed)?)(?: before| earlier| previously| last time)?[?.!]*$/i;
+
+/** Summarize the most recent folded session's questions (block ids are session
+ *  uuidv7s, so a plain sort is chronological). Null when nothing is folded yet. */
+async function recallSummary(memoryDir) {
+  try {
+    const { loadBlockIndex, BLOCKS_DIR_REL } = await import("./memory/blocks.mjs");
+    const index = await loadBlockIndex(memoryDir);
+    const id = Object.keys(index.blocks).sort().at(-1);
+    if (!id) return null;
+    const text = await readFile(join(memoryDir, BLOCKS_DIR_REL, index.blocks[id].file), "utf8");
+    const qs = text.split("\n").filter((l) => l.startsWith("Q: ")).map((l) => l.slice(3)).slice(0, 6);
+    if (!qs.length) return null;
+    const day = uuidv7Day(id);
+    return `last time (session ${String(id).slice(0, 8)}${day ? `, ${day}` : ""}) you asked: ${qs.map((q) => `"${q}"`).join("; ")}`;
+  } catch {
+    return null;
+  }
+}
+
 /** A bare question → tmct_ask. When a focus is set AND the graph is in hand we
  *  call ask() directly to thread the focus as contextId (so a pronoun like "it"
  *  resolves to the focus) — building the SAME delimited string dispatchTool emits;
  *  otherwise the unchanged dispatchTool path (which also yields the no-graph error).
  *  A hit updates the focus to the resolved object. Grammar miss / ToolError → a
  *  normal answer, never a crash. */
-async function runAsk(query, { config, source, graph, focus }) {
+async function runAsk(query, { config, source, graph, focus, templates, memoryDir, env }) {
   const ts = new Date().toISOString();
+  // W2: the explicit recall forms are answered from memory's folded blocks, never
+  // the graph. Gated on memoryDir — a bare runTurn (no session shell) stays pure.
+  if (memoryDir && RECALL_ASK_RE.test(String(query).trim())) {
+    const summary = await recallSummary(memoryDir);
+    return plainTurn(query, summary ?? "nothing to recall yet — no earlier session has been folded into memory.", {
+      via: "recall", miss: !summary, focus,
+    });
+  }
   let answer;
   let envelope = null;
   try {
@@ -404,11 +733,49 @@ async function runAsk(query, { config, source, graph, focus }) {
   }
   const answeredIds = (envelope?.matches || []).map((m) => m?.id).filter(Boolean);
   const miss = envelope ? !!envelope.miss : true;
+  // Answer provenance (W1): "composed" is the ask engine's productive band; the
+  // orientation swap below is template wording, so those turns carry via:"template".
+  let via = "composed";
+  let recordMiss = miss;
   // On a MISS: a conversational miss (a greeting, "what can you do", a very short
   // non-code line) gets the friendly orientation instead of the raw grammar hint. A
   // near-miss STRUCTURAL question keeps the precise hint the engine already produced.
-  if (miss && isConversational(query)) answer = FRIENDLY;
-  const record = { type: "turn", ts, query, resolvedIds, answeredIds, miss };
+  if (miss && isConversational(query)) {
+    answer = tRender(templates, T_ORIENTATION) ?? TEMPLATES_UNAVAILABLE;
+    via = "template";
+  } else if (memoryDir) {
+    // W4: vocabulary/definition questions consult the MEMORY graph's Facts
+    // alongside the schema-docs surface — a remembered fact answers a miss (or
+    // extends a schema hit), cited with its provenance verbatim. Checked BEFORE
+    // recall: a reified fact is stronger evidence than a transcript echo.
+    const fact = await factAnswer(memoryDir, query, envelope, miss);
+    if (fact) {
+      answer = fact.replace ? fact.text : `${answer}\n${fact.text}`;
+      via = "fact";
+      recordMiss = false;
+    } else if (miss) {
+      // W2: after the honest miss is composed, consult the folded-session memory. A
+      // relevant enough block ANSWERS — recalled Q/A framed + cited first, with the
+      // engine's own miss hint kept below; no hit leaves the miss byte-unchanged.
+      const recalled = await recallFromBlocks(memoryDir, query);
+      if (recalled) {
+        answer = `${recalled}\n\n${answer}`;
+        via = "recall";
+        recordMiss = false; // memory answered it, cited — no longer a blank
+      }
+    }
+  }
+  // W5 (flag-gated, default OFF): an unknown-term miss may consult the LOCAL
+  // committed corpus slice — a hit APPENDS a grounded, licence-cited aside under
+  // the honest miss (the miss itself stands; the aside is context, not an answer).
+  if (recordMiss && envelope?.parsed?.object && String(env?.[CORPUS_LOOKUP_FLAG] || "") === "1") {
+    const aside = await corpusAside(envelope.parsed.object);
+    if (aside) {
+      answer = `${answer}\n${aside}`;
+      via = "corpus";
+    }
+  }
+  const record = { type: "turn", ts, query, via, resolvedIds, answeredIds, miss: recordMiss };
   const logLines = [ts, `> ${query}`, answer, ""];
   // `detail` feeds why/say-more's verbose re-render: the traversal receipt + the
   // matched entities the terse render trims (see renderVerbose).
@@ -418,12 +785,12 @@ async function runAsk(query, { config, source, graph, focus }) {
 
 /** A non-ask, non-dispatch chat turn (count answer, /stats) — the same
  *  { answer, logLines, record, focus } shape, recorded like any other turn. */
-function plainTurn(query, answer, { command, miss = false, focus = null } = {}) {
+function plainTurn(query, answer, { command, via = "composed", miss = false, focus = null } = {}) {
   const ts = new Date().toISOString();
   return {
     answer,
     logLines: [ts, `> ${query}`, answer, ""],
-    record: { type: "turn", ts, query, ...(command ? { command } : {}), resolvedIds: [], answeredIds: [], miss },
+    record: { type: "turn", ts, query, ...(command ? { command } : {}), via, resolvedIds: [], answeredIds: [], miss },
     focus,
   };
 }
@@ -432,7 +799,7 @@ function plainTurn(query, answer, { command, miss = false, focus = null } = {}) 
  *  the same { answer, logLines, record, focus } shape as runAsk; the record carries
  *  the command name and the resolved entity id (for entity commands) so a
  *  slash-command turn becomes asksAbout graph data wherever it resolves an entity. */
-async function runCommand(line, { config, source, graph, focus }) {
+async function runCommand(line, { config, source, graph, focus, memoryDir }) {
   const ts = new Date().toISOString();
   const sp = line.indexOf(" ");
   const name = (sp === -1 ? line.slice(1) : line.slice(1, sp)).toLowerCase();
@@ -440,12 +807,24 @@ async function runCommand(line, { config, source, graph, focus }) {
   const mk = (answer, { resolvedIds = [], miss = false, newFocus = focus } = {}) => ({
     answer,
     logLines: [ts, `> ${line}`, answer, ""],
-    record: { type: "turn", ts, query: line, command: name, resolvedIds, answeredIds: [], miss },
+    record: { type: "turn", ts, query: line, command: name, via: "command", resolvedIds, answeredIds: [], miss },
     focus: newFocus,
   });
 
   if (name === "help") return mk(await helpText());
   if (name === "stats") return graph ? mk(renderStats(graph)) : mk("no graph loaded — /stats needs an index.", { miss: true });
+
+  // /memory [verbose] — what tmct remembers, as text (the ROADMAP "Memory
+  // inspection" surface; the same renderer serves the `tmct memory` CLI).
+  if (name === "memory") {
+    if (!memoryDir) return mk("no memory store here — /memory works inside a repo session.", { miss: true });
+    try {
+      const { inspectMemory } = await import("./memory/inspect.mjs");
+      return mk(await inspectMemory(memoryDir, { verbose: /^(?:-v|--verbose|verbose)$/i.test(argText) }));
+    } catch (e) {
+      return mk(String(e?.message || e), { miss: true }); // a broken store reads as its own clean error
+    }
+  }
 
   if (name === "focus") {
     if (!argText) return mk(focus ? `focus is ${focus.label}` : "no focus set — /focus <symbol> to set one.");
@@ -502,7 +881,7 @@ async function assertTurn(line, { memoryDir, sessionId, focus }) {
       .join("; ");
     const n = res.ids.length;
     const answer = `noted — remembered ${n} fact${n === 1 ? "" : "s"}: ${shown}`;
-    return plainTurn(line, answer, { command: "assert", focus });
+    return plainTurn(line, answer, { command: "assert", via: "assert", focus });
   } catch {
     return null; // grammar unavailable / write failed — fall through to the engine
   }
@@ -522,9 +901,10 @@ async function assertTurn(line, { memoryDir, sessionId, focus }) {
  * subject), `answeredIds` the entity ids an ask answer cited; a slash-command turn
  * also carries its `command` name. Both drive the mgx:asksAbout graph append.
  */
-export async function runTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "" } = {}) {
+export async function runTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env } = {}) {
   const line = String(input ?? "").trim();
-  const ctx = { config, source, graph, focus, last, memoryDir, sessionId };
+  const templates = await chatTemplates(); // failure-tolerated: null degrades, never throws
+  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates, env };
   // A DISPATCHED turn (count / slash-command / ask) becomes the new "last answer"
   // that why/say-more re-renders; a conversational turn does not (it preserves it).
   const withLast = (result) => ({ ...result, last: { query: line, answer: result.answer, detail: result.detail ?? null } });
@@ -546,8 +926,49 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // Aggregate/count questions are answered mechanically off the loaded graph header,
   // BEFORE falling through to the ask engine (focus unchanged — a count names no entity).
   const count = answerCount(graph, line);
-  if (count != null) return withLast(plainTurn(line, count, { focus }));
+  if (count != null) return withLast(plainTurn(line, count, { via: "count", focus }));
   return withLast(await runAsk(line, ctx));
+}
+
+// ---- W3: seedMemory → bootstrap (first run in a graph-less repo) ----
+
+/** How many corpus facts the first-run bootstrap seeds. Measured curve (dev
+ *  laptop, appendFact's read-modify-write per fact): 100→~0.16s, 250→~0.54s,
+ *  500→~1.7s — the full 500 stays inside a session-start budget, so the seed
+ *  runs synchronously and complete (no partial-sync cap needed). */
+export const SEED_LIMIT = 500;
+
+/** Which predicates the capped seed prefers (stable order — see seedMemory's
+ *  `prefer`): the definitional band first, so a bootstrap's 500 facts answer
+ *  "what is a cache?"-style vocabulary questions rather than location trivia. */
+export const SEED_PREFER = ["rdfs:subClassOf", "rdf:type", "mgx:usedFor", "mgx:partOf", "mgx:capableOf"];
+
+/** The seed marker: its presence means this repo's memory already carries the
+ *  corpus seed, so re-runs skip without even reading the slice. */
+export const SEED_MARKER_REL = join(".tmct", "memory", "corpus-seed.json");
+
+/** Seed the ConceptNet slice into <repo>/.tmct/memory once. Idempotent twice
+ *  over (the marker short-circuits; seedMemory itself content-hashes fact ids)
+ *  and failure-tolerated: a missing/broken corpus degrades to the unseeded
+ *  bootstrap — never an error before the prompt. Returns seedMemory's
+ *  { appended, skipped, total } on a fresh seed, null when skipped/failed. */
+async function seedBootstrapMemory(repo) {
+  const marker = join(repo, SEED_MARKER_REL);
+  try {
+    await readFile(marker, "utf8");
+    return null; // already seeded — the marker is authoritative
+  } catch { /* no marker → first run */ }
+  try {
+    const { seedMemory } = await import("./corpus/conceptnet.mjs");
+    const res = await seedMemory(repo, { limit: SEED_LIMIT, prefer: SEED_PREFER });
+    await mkdir(dirname(marker), { recursive: true });
+    await writeFile(marker, JSON.stringify({
+      seededAt: new Date().toISOString(), limit: SEED_LIMIT, appended: res.appended, skipped: res.skipped,
+    }) + "\n");
+    return res;
+  } catch {
+    return null; // corpus unavailable — bootstrap proceeds unseeded
+  }
 }
 
 /** Trim a focus label for the prompt so a long module path can't run the line off. */
@@ -638,12 +1059,23 @@ export async function createSession({
   };
 
   const empty = graph.individuals.length === 0;
+  // W3: FIRST RUN in a graph-less repo seeds a capped ConceptNet slice into
+  // .tmct/memory so vocabulary questions ("what is a cache?") have something
+  // honest to stand on from turn one. Guarded three ways: only the empty
+  // bootstrap (a fixture/provider graph never seeds), only once (the marker),
+  // and never when TMCT_NO_SEED=1 opts out.
+  let seeded = null;
+  if (empty && String(env.TMCT_NO_SEED || "") !== "1") {
+    seeded = await seedBootstrapMemory(repo);
+  }
   const bannerLines = [
     empty
       // Empty-graph bootstrap: honest-miss messaging, never an error before the prompt.
       ? `tmct chat — ${repo} — no graph loaded — starting empty; ` +
         `the conversation is remembered to ${DEFAULT_GRAPH_REL} — log ${logFile}`
       : `tmct chat — ${repo} — ${moduleCount} module(s) — log ${logFile}`,
+    // the honest seed line appears ONLY on the run that actually seeded
+    ...(seeded ? [`seeded ${seeded.appended} starter facts from the ConceptNet slice — /memory to inspect`] : []),
     "pass --repo <path> to target a different repo",
     "ask a question, or /help for commands (/stats for an overview) — /exit to leave",
   ];
@@ -664,7 +1096,7 @@ export async function createSession({
      *  → telemetry → upsertGraph, in that exact order). Returns { answer, end, prompt }. */
     async turn(line) {
       const { answer, logLines, record, focus: nextFocus, last: nextLast, end } =
-        await runTurn(line, { config, source, graph, focus, last, memoryDir: repo, sessionId });
+        await runTurn(line, { config, source, graph, focus, last, memoryDir: repo, sessionId, env });
       focus = nextFocus;
       last = nextLast;
       await writeLog(logLines.join("\n") + "\n");
