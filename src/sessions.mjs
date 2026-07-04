@@ -24,7 +24,8 @@
 // rather than re-deriving them from source.
 
 import { mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
+import { appendUtterances } from "./memory/core.mjs";
 
 export const SESSIONS_DIR_REL = join(".tmct", "sessions");
 
@@ -144,8 +145,13 @@ export function upsertSession(entities, record) {
  *  may have replaced it mid-session), upsert, write back atomically. A MISSING
  *  artifact is the empty-graph bootstrap: seed a minimal valid payload so the
  *  conversation itself becomes the first graph write. Still throws on an invalid
- *  (unparseable) artifact — the caller treats the append as best-effort. */
-export async function appendSessionToGraph(graphFile, record) {
+ *  (unparseable) artifact — the caller treats the append as best-effort.
+ *
+ *  Signature stays backward-compatible: chat.mjs passes (graphFile, record)
+ *  exactly as before. The optional third param only tunes the MEMORY side-write
+ *  (below): `repoDir` overrides the derived repo root, `memory: false` disables
+ *  the side-write entirely. */
+export async function appendSessionToGraph(graphFile, record, { memory = true, repoDir = null } = {}) {
   let text = null;
   try {
     text = await readFile(graphFile, "utf8");
@@ -161,7 +167,80 @@ export async function appendSessionToGraph(graphFile, record) {
   }
   const res = upsertSession(entities, record);
   await atomicWriteJson(graphFile, entities);
+  // ALSO record the turn(s) into tmct's OWN memory graph (.tmct/memory/ — item 9),
+  // and fold the transcript into the text-block corpus once the session has ended.
+  // Best-effort by design: memory must never degrade the graph append that already
+  // succeeded, so every failure here is swallowed (mirrors chat.mjs's own stance).
+  if (memory) {
+    try { await recordSessionMemory(graphFile, record, repoDir); } catch { /* best-effort */ }
+  }
   return res;
+}
+
+/** Derive the repo root the memory store lives under from the graph artifact's
+ *  location: the default layout is <repo>/.tmct/graph.json. A custom
+ *  TMCT_GRAPH_FILE outside a .tmct dir has no discoverable repo (and no session
+ *  transcript/sidecar layout to read), so the memory side-write is skipped —
+ *  memory writes go ONLY under a real .tmct/, never beside arbitrary files. */
+function repoDirFromGraphFile(graphFile) {
+  const tmctDir = dirname(graphFile);
+  return basename(tmctDir) === ".tmct" ? dirname(tmctDir) : null;
+}
+
+/** The memory side-write for one session append (item 9's chat wiring, placed
+ *  HERE so chat.mjs needs no change — it already calls appendSessionToGraph
+ *  every turn). Each recorded turn becomes an a-visitor-said Utterance; the
+ *  response prose is recovered from the human transcript (the only artifact
+ *  that carries answer TEXT — the sidecar records ids) and recorded alongside
+ *  as a tmct Utterance replying to it. Deterministic utterance ids make the
+ *  per-turn replay idempotent. Once the sidecar carries its end marker (chat
+ *  writes it before the final graph upsert), the session is folded into the
+ *  text-block corpus (memory/fold.mjs). */
+async function recordSessionMemory(graphFile, record, repoDirOverride = null) {
+  const repoDir = repoDirOverride ?? repoDirFromGraphFile(graphFile);
+  if (!repoDir || !record?.id) return;
+
+  let answers = new Map();
+  try {
+    answers = parseSessionLog(await readFile(join(repoDir, ".tmct", `session-${record.id}.log`), "utf8"));
+  } catch { /* no transcript (direct API callers) — record the requests alone */ }
+
+  const utterances = [];
+  for (const t of record.turns || []) {
+    const query = String(t?.query || "");
+    const ts = String(t?.ts || "");
+    if (!query || !ts) continue;
+    // the structured parse the turn produced — stored on the visitor utterance
+    const parsed = {};
+    if (t.resolvedIds?.length) parsed.resolvedIds = t.resolvedIds;
+    if (t.answeredIds?.length) parsed.answeredIds = t.answeredIds;
+    if (t.command) parsed.command = t.command;
+    if (t.miss) parsed.miss = true;
+    utterances.push({
+      role: "visitor", text: query, ts, sessionId: record.id, sessionStarted: record.started || "",
+      ...(Object.keys(parsed).length ? { parsed } : {}),
+    });
+    const answer = answers.get(turnKey(ts, query));
+    if (answer) {
+      utterances.push({
+        role: "tmct", text: answer, ts, sessionId: record.id,
+        replyTo: `utt:${record.id}#${ts}#visitor`,
+      });
+    }
+  }
+  await appendUtterances(repoDir, utterances);
+
+  // Session over? The sidecar's end marker is authoritative (chat.mjs writes it
+  // before the final upsert). Fold THIS session's transcript into the corpus.
+  let ended = false;
+  try {
+    const sidecar = await readFile(join(repoDir, SESSIONS_DIR_REL, `session-${record.id}.jsonl`), "utf8");
+    ended = Boolean(parseSessionJsonl(sidecar)?.ended);
+  } catch { /* no sidecar — nothing to fold from */ }
+  if (ended) {
+    const { foldSessionLogs } = await import("./memory/fold.mjs"); // lazy: fold imports this module
+    await foldSessionLogs(repoDir, { sessionId: record.id });
+  }
 }
 
 /** Parse one sidecar .jsonl into a session record (null if no valid header).
