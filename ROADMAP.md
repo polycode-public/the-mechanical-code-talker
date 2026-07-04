@@ -351,6 +351,13 @@ primary integration surface.)*
   re-entrancy and concurrent-session guarantees documented per service.
 - **seonix chat becomes tmct chat + a pointer**: seonix's chat surface loads tmct's chat with
   the repository-interface handle — one chat implementation, N graph backends.
+- **Browser mode**: the same inversion works in seonix's browser/code-browser surface — seonix
+  finds its own graph (it already ships one to the page) and embeds an OFF-THE-SHELF tmct: the
+  engine core (interpret / ask / render, lexicon, templates) is already pure JS with no
+  node-only dependency — wink's eng-lite-web-model is literally the browser build — so the
+  repository interface + a browser storage seam for memory (or provider-supplied persistence)
+  is all that separates the npm package from running in the page. The fs/readline/child_process
+  seams stay node-side; the browser gets the library surface, not the shell.
 - **Distribution: `tmct init`** — a CLI command that initializes a local directory for tmct:
   seeds/links the text corpuses (tier-1/2 policy applies), writes the externalized configuration
   (tmct.toml — the seonix.toml pattern), creates `.tmct/`, and records provenance — so a host
