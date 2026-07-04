@@ -107,18 +107,24 @@ export function App({ session }) {
     }
   };
 
+  const trySubmit = (raw) => {
+    if (busy) return; // one turn at a time — the engine is deterministic and fast
+    const line = String(raw).trim();
+    setInput("");
+    if (line) void submit(line);
+  };
+
   useInput((ch, key) => {
-    if (key.return) {
-      if (busy) return; // one turn at a time — the engine is deterministic and fast
-      const line = input.trim();
-      setInput("");
-      if (line) void submit(line);
-      return;
-    }
+    if (key.return) { trySubmit(input); return; }
     if (key.backspace || key.delete) { setInput((s) => s.slice(0, -1)); return; }
     if (key.ctrl && ch === "u") { setInput(""); return; }
     if (key.ctrl || key.meta || key.escape || key.tab || key.upArrow || key.downArrow || key.leftArrow || key.rightArrow) return;
-    if (ch) setInput((s) => s + ch);
+    if (!ch) return;
+    // A PASTED chunk arrives as one multi-char event; a newline inside it means
+    // "submit this line" (one line per turn — the readline shell's per-line read).
+    const nl = ch.search(/[\r\n]/);
+    if (nl === -1) { setInput((s) => s + ch); return; }
+    trySubmit(input + ch.slice(0, nl));
   });
 
   // The pane's line budget: full height minus the input line and the status bar.
