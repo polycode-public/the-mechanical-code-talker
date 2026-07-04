@@ -97,10 +97,14 @@ status and any handover doc current.
 3. the same pipe in a **fixture-graph dir** — must greet and exit 0.
 Do not proceed to step 4 unless all three pass; record that they passed.
 
-**Step 4 — RUN the chatbench.** One deterministic product run per arm (replay every case's turns
-through `runTurn`), then fan out the judge: N ≥ 3 samples per case against the pinned judge
-model + prompt. Product runs are free; the judge calls are the only spend. Tee to a log and
-compute the mean + per-tag table as results land.
+**Step 4 — RUN the chatbench — concurrently, in the background.** One deterministic product run
+per arm (replay every case's turns through `runTurn` — seconds, free), then fan out the judge at
+**maximum safe concurrency** (`--concurrency 12` is the default; the judge is embarrassingly
+parallel — independent subprocess calls with per-sample retry — so wall-time divides by the lane
+count until the API rate limit pushes back; if throttling appears, halve it). The run ALWAYS
+executes as a background task: **the chat stays for chat** — the coordinator launches the run,
+keeps coordinating (merges, advisor ticks, operator questions), and picks the results up on the
+completion notification. Never block the conversation on a benchmark.
 
 **Step 5 — STRATEGY ADVISOR runs ALONGSIDE the whole time.** Per `SKILL_STRATEGY_ADVISOR.md`,
 spawn the background advisor and let it ride the check-in cadence with the chat-eval watch-list

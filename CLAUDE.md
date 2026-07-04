@@ -8,6 +8,11 @@ session is the COORDINATOR (plans, launches, integrates, answers the operator), 
 - Decompose into workstreams with **clear file-ownership boundaries**; serialize on shared
   files (one agent owns `package.json`, `src/`, `bin/`, `test/` sequences; docs/site tracks
   run in parallel).
+- **Keep the chat for chat**: anything long-running (benchmarks, judge passes, builds, test
+  sweeps) executes as a BACKGROUND task at maximum safe concurrency (the chatbench judge
+  defaults to `--concurrency 12`); the main session launches it, keeps coordinating and
+  conversing, and collects results on the completion notification. Never block the
+  conversation on a run.
 - Commit per completed step with the repo-local identity (`antony@polycode.co.uk` /
   `Antony at Polycode`); keep `npm test` green at every commit.
 - Push/publish is gated on the operator (CI publishes on version bump on `main`).

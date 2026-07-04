@@ -229,6 +229,11 @@ watch-list is the drift alarm between operator check-ins. Priority order:
   (the multi-strategy pipeline degenerating into one path); the miss rate; the
   ambiguity-surround rate ("if you mean X then …" firing too often or never); fuzzy tier-3
   matches over-winning — which masks vocabulary gaps the lexicon should be fixing.
+- **Under-parallelized work.** Flag any long-running work executing serially that could fan
+  out: judge runs below the default concurrency, independent workstreams executing one-after-
+  another instead of as parallel subagents, a benchmark blocking the main chat instead of
+  running as a background task. The standing preference is the coordinator model at maximum
+  safe concurrency — the chat is for chat; encourage it whenever the session drifts from it.
 - **Process slips.** The `chatbench/results/raw-<NNN>/` snapshot skipped before the next run
   overwrites raw judge output; the case set (`chatbench/cases.jsonl`) edited mid-cycle instead of
   append-only between cycles.

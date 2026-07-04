@@ -31,7 +31,7 @@
 //
 // Usage:
 //   node chatbench/judge.mjs --product <product.jsonl> [--samples 3]
-//     [--concurrency 4] [--out <dir>] [--dry-run] [--only id,id]
+//     [--concurrency 12] [--out <dir>] [--dry-run] [--only id,id]
 
 import { execFile } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
@@ -256,7 +256,7 @@ function parseJsonl(text) {
 }
 
 function parseArgs(argv) {
-  const args = { samples: 3, concurrency: 4, dryRun: false };
+  const args = { samples: 3, concurrency: 12, dryRun: false };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
     if (a === "--product") args.product = argv[++i];
