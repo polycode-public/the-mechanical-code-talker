@@ -11,7 +11,7 @@ import { parseQuery, resolveObject, traverse, render, ask, rephraseHint, normali
 
 // Mirrors the operator's own worked example, with an INTERNAL coupling target instead of
 // an external package (log4j-style external imports do not surface as graph edges today —
-// see PLAN_MECHANICAL_CHAT.md §10; extract.mjs only resolves imports that match an internal
+// see PLAN_MECHANICAL_CHAT.md §10; graph-build.mjs only resolves imports that match an internal
 // module's `dotted` name via its registry).
 const MODULES = [
   { path: "src/logging.mjs", dotted: "src.logging", imports: [], calls: [],
@@ -63,7 +63,7 @@ const COMMITS = [
   // §commit-question fixture (viewer commit-chat fix): a realistic full-length sha whose
   // commit touches TWO modules (coarse grain) and — via SYMBOL_HISTORY below — one
   // symbol (fine grain), so grain selection is observable. Touches each module pair only
-  // once, below extract.mjs's COCHANGE_MIN, so no cochange edge appears as a side effect.
+  // once, below graph-build.mjs's COCHANGE_MIN, so no cochange edge appears as a side effect.
   { sha: "ef74e44e25c8f00dbaadf00dcafe123456789abc", files: ["myFile.mjs", "src/logging.mjs"],
     author: "fixture", date: "2026-07-01T00:00:00+00:00", subject: "touch fixture" },
 ];
@@ -75,7 +75,7 @@ const SYMBOL_HISTORY = [
 
 function buildGraph() {
   const entities = buildEntities(MODULES, COMMITS, { symbolHistory: SYMBOL_HISTORY });
-  // Mirrors extract.mjs's indexRepository: buildEntities -> ingestSchemaDocs(entities) ->
+  // Mirrors a graph writer: buildEntities -> ingestSchemaDocs(entities) ->
   // (write to disk, skipped here) -> parseEntities. Without this, the graph the test
   // fixture builds would never carry the SchemaClass/SchemaPredicate individuals a real
   // index build always has, and the "meta" shape's tests below would be testing against
@@ -187,9 +187,9 @@ test("resolveObject: a term that resolves at an earlier tier never falls through
 
 test("ask(): end-to-end — a reverse-shape query resolves its object term via the prose fallback and still returns a correct, real graph answer", () => {
   const graph = buildGraph();
-  const { content, seonix_ask } = ask(graph, "which functions call invoice");
-  assert.equal(seonix_ask.miss, false);
-  assert.equal(seonix_ask.matchedVia, "prose");
+  const { content, tmct_ask } = ask(graph, "which functions call invoice");
+  assert.equal(tmct_ask.miss, false);
+  assert.equal(tmct_ask.matchedVia, "prose");
   assert.match(content, /checkout/);
 });
 
@@ -247,14 +247,14 @@ test("render: singular result (1 hit) does not pluralize awkwardly", () => {
 
 test("ask(): the operator's worked example renders EXACTLY the specified sentence", () => {
   const graph = buildGraph();
-  const { content, seonix_ask } = ask(graph, "Which functions explicitly couple to logging");
+  const { content, tmct_ask } = ask(graph, "Which functions explicitly couple to logging");
   assert.equal(content, "in myFile.mjs there is function startup() and there is function myFunc() in src/someOtherFile.mjs.");
-  assert.equal(seonix_ask.mechanical, true);
-  assert.equal(seonix_ask.miss, false);
-  assert.equal(seonix_ask.ambiguous, false);
-  assert.equal(seonix_ask.matches.length, 2);
-  assert.deepEqual(seonix_ask.parsed, { shape: "reverse", entityType: "Function", modifier: "direct", kind: "imports", object: "logging" });
-  assert.match(seonix_ask.traversal, /imports edges where object = src\/logging\.mjs/);
+  assert.equal(tmct_ask.mechanical, true);
+  assert.equal(tmct_ask.miss, false);
+  assert.equal(tmct_ask.ambiguous, false);
+  assert.equal(tmct_ask.matches.length, 2);
+  assert.deepEqual(tmct_ask.parsed, { shape: "reverse", entityType: "Function", modifier: "direct", kind: "imports", object: "logging" });
+  assert.match(tmct_ask.traversal, /imports edges where object = src\/logging\.mjs/);
 });
 
 test("ask(): reverse-shape without an explicit entity keyword (\"what imports X\") still renders the clean module-join, not the fine-grained by-module grouping", () => {
@@ -263,48 +263,48 @@ test("ask(): reverse-shape without an explicit entity keyword (\"what imports X\
   // matched individuals are still Module-class (imports is a module-level relation), and
   // render() must route on THAT, not the (absent) parsed hint, or it falls into the
   // fine-grained grouping path and produces "in a.mjs there is a.mjs" nonsense.
-  const { content, seonix_ask } = ask(graph, "what imports logging");
+  const { content, tmct_ask } = ask(graph, "what imports logging");
   assert.equal(content, "myFile.mjs and src/someOtherFile.mjs.");
-  assert.equal(seonix_ask.miss, false);
-  assert.equal(seonix_ask.matches.length, 2);
+  assert.equal(tmct_ask.miss, false);
+  assert.equal(tmct_ask.matches.length, 2);
 });
 
 test("ask(): grammar miss — clean rephrase hint, never a wrong guess", () => {
   const graph = buildGraph();
-  const { content, seonix_ask } = ask(graph, "tell me a story about this codebase");
-  assert.equal(seonix_ask.mechanical, true);
-  assert.equal(seonix_ask.miss, true);
-  assert.equal(seonix_ask.matches.length, 0);
+  const { content, tmct_ask } = ask(graph, "tell me a story about this codebase");
+  assert.equal(tmct_ask.mechanical, true);
+  assert.equal(tmct_ask.miss, true);
+  assert.equal(tmct_ask.matches.length, 0);
   assert.match(content, /couldn't parse this/);
 });
 
 test("ask(): unresolved object term — honest miss with the receipt of what was checked", () => {
   const graph = buildGraph();
-  const { seonix_ask } = ask(graph, "which functions import totallyMissingPackage");
-  assert.equal(seonix_ask.miss, true);
-  assert.equal(seonix_ask.matches.length, 0);
+  const { tmct_ask } = ask(graph, "which functions import totallyMissingPackage");
+  assert.equal(tmct_ask.miss, true);
+  assert.equal(tmct_ask.matches.length, 0);
 });
 
 test("ask(): inherits verb family — which classes inherit from Base", () => {
   const graph = buildGraph();
-  const { content, seonix_ask } = ask(graph, "which classes inherit from Base");
-  assert.equal(seonix_ask.miss, false);
+  const { content, tmct_ask } = ask(graph, "which classes inherit from Base");
+  assert.equal(tmct_ask.miss, false);
   assert.match(content, /Widget/);
 });
 
 test("ask(): tests verb family — which modules test app.widget's module", () => {
   const graph = buildGraph();
-  const { seonix_ask } = ask(graph, "which modules tests app/widget.mjs");
+  const { tmct_ask } = ask(graph, "which modules tests app/widget.mjs");
   // widget_test.mjs imports widget.mjs but is not itself wired through mgx:testsCoverage in
   // this minimal fixture (buildEntities' testsCoverage rule may require a stricter shape) —
   // this test documents current behaviour rather than asserting an un-verified positive.
-  assert.equal(typeof seonix_ask.miss, "boolean");
+  assert.equal(typeof tmct_ask.miss, "boolean");
 });
 
 test("ask(): forward shape — what does myFile import", () => {
   const graph = buildGraph();
-  const { content, seonix_ask } = ask(graph, "what does myFile import");
-  assert.equal(seonix_ask.miss, false);
+  const { content, tmct_ask } = ask(graph, "what does myFile import");
+  assert.equal(tmct_ask.miss, false);
   assert.match(content, /src\/logging\.mjs/);
 });
 
@@ -329,24 +329,24 @@ test("parseQuery: \"transitively\"/\"indirectly\" both parse to modifier:transit
 test("ask(): transitive imports finds a 2-hop dependent (entrypoint.mjs) that the DIRECT modifier correctly misses", () => {
   const graph = buildGraph();
   const direct = ask(graph, "which modules import logging");
-  const directLabels = direct.seonix_ask.matches.map((m) => m.label).sort();
+  const directLabels = direct.tmct_ask.matches.map((m) => m.label).sort();
   assert.deepEqual(directLabels, ["myFile.mjs", "src/someOtherFile.mjs"]);
 
   const transitive = ask(graph, "which modules transitively import logging");
-  assert.equal(transitive.seonix_ask.miss, false);
-  const transitiveLabels = transitive.seonix_ask.matches.map((m) => m.label).sort();
+  assert.equal(transitive.tmct_ask.miss, false);
+  const transitiveLabels = transitive.tmct_ask.matches.map((m) => m.label).sort();
   assert.deepEqual(transitiveLabels, ["app/entrypoint.mjs", "myFile.mjs", "src/someOtherFile.mjs"]);
-  assert.match(transitive.seonix_ask.traversal, /reverse dependency closure/);
+  assert.match(transitive.tmct_ask.traversal, /reverse dependency closure/);
 });
 
 test("ask(): \"indirectly\" is a true synonym of \"transitively\" — same real result, not just the same parsed modifier value", () => {
   const graph = buildGraph();
   const a = ask(graph, "which modules transitively import logging");
   const b = ask(graph, "which modules indirectly import logging");
-  assert.deepEqual(a.seonix_ask.matches, b.seonix_ask.matches);
+  assert.deepEqual(a.tmct_ask.matches, b.tmct_ask.matches);
 });
 
-test("traverse(): reverse+transitive+calls reaches the real impactClosure path (a hand-built graph, since extract.mjs does not emit module-coarse mgx:callsCoarse edges from any current MODULES fixture shape — see the fork report) — proves \"calls\" is genuinely wired, not just gated-through", () => {
+test("traverse(): reverse+transitive+calls reaches the real impactClosure path (a hand-built graph, since buildEntities does not emit module-coarse mgx:callsCoarse edges from any current MODULES fixture shape — see the fork report) — proves \"calls\" is genuinely wired, not just gated-through", () => {
   const individuals = [
     { id: "mod:a.mjs", label: "a.mjs", class: "Module" },
     { id: "mod:b.mjs", label: "b.mjs", class: "Module" },
@@ -373,8 +373,8 @@ test("ask(): transitive + inherits (no closure primitive for this kind) is an HO
   const graph = buildGraph();
   const direct = ask(graph, "which classes inherit from Base");
   const transitive = ask(graph, "which classes transitively inherit from Base");
-  assert.equal(direct.seonix_ask.miss, false);
-  assert.equal(transitive.seonix_ask.miss, true);
+  assert.equal(direct.tmct_ask.miss, false);
+  assert.equal(transitive.tmct_ask.miss, true);
   assert.match(transitive.content, /"transitive" modifier isn't supported for "inherits"/);
   // the exact regression class this test guards against: silently behaving as if
   // "transitively" had never been said, i.e. matching the direct answer's content.
@@ -383,8 +383,8 @@ test("ask(): transitive + inherits (no closure primitive for this kind) is an HO
 
 test("ask(): transitive + a fine-grained entity type (\"which functions transitively call X\") is an honest \"not supported\" miss — impactClosure is module-coarse only", () => {
   const graph = buildGraph();
-  const { content, seonix_ask } = ask(graph, "which functions transitively call checkout");
-  assert.equal(seonix_ask.miss, true);
+  const { content, tmct_ask } = ask(graph, "which functions transitively call checkout");
+  assert.equal(tmct_ask.miss, true);
   assert.match(content, /"transitive" modifier isn't supported for "calls"/);
 });
 
@@ -409,30 +409,30 @@ test("parseQuery: the existing honest-miss regression (\"what is the meaning of 
 
 test("ask(): \"what does cochange mean\" answers from the graph's own SchemaPredicate individual, by human-facing kind name", () => {
   const graph = buildGraph();
-  const { content, seonix_ask } = ask(graph, "what does cochange mean");
-  assert.equal(seonix_ask.miss, false);
+  const { content, tmct_ask } = ask(graph, "what does cochange mean");
+  assert.equal(tmct_ask.miss, false);
   assert.match(content, /frequently committed together/i);
 });
 
 test("ask(): \"what is a Commit\" answers from the graph's own SchemaClass individual", () => {
   const graph = buildGraph();
-  const { content, seonix_ask } = ask(graph, "what is a Commit");
-  assert.equal(seonix_ask.miss, false);
+  const { content, tmct_ask } = ask(graph, "what is a Commit");
+  assert.equal(tmct_ask.miss, false);
   assert.match(content, /git commit/i);
 });
 
 test("ask(): \"what does mgx:callsSymbol mean\" resolves by the raw prop TOKEN, not just the human-facing kind label", () => {
   const graph = buildGraph();
-  const { content, seonix_ask } = ask(graph, "what does mgx:callsSymbol mean");
-  assert.equal(seonix_ask.miss, false);
+  const { content, tmct_ask } = ask(graph, "what does mgx:callsSymbol mean");
+  assert.equal(tmct_ask.miss, false);
   assert.match(content, /unambiguous names only/i);
 });
 
 test("ask(): a meta question about an undocumented term is an honest miss, never a guess", () => {
   const graph = buildGraph();
-  const { seonix_ask } = ask(graph, "what does zzznotarealterm mean");
-  assert.equal(seonix_ask.miss, true);
-  assert.equal(seonix_ask.matches.length, 0);
+  const { tmct_ask } = ask(graph, "what does zzznotarealterm mean");
+  assert.equal(tmct_ask.miss, true);
+  assert.equal(tmct_ask.matches.length, 0);
 });
 
 // ---- §commit questions (viewer commit-chat fix): sha-term resolution + the
@@ -493,8 +493,8 @@ test("resolveObject: an AMBIGUOUS sha prefix is an honest miss listing the candi
   assert.equal(match.class, "Commit");
   assert.equal(candidates.length, 1);
   // …and end-to-end the render says so, naming the right kind of thing:
-  const { content, seonix_ask } = ask(graph, "which changes touch commit abcdef1");
-  assert.equal(seonix_ask.ambiguous, true);
+  const { content, tmct_ask } = ask(graph, "which changes touch commit abcdef1");
+  assert.equal(tmct_ask.ambiguous, true);
   assert.match(content, /matches more than one commit ambiguously/);
 });
 
@@ -510,36 +510,36 @@ test("resolveObject: a hex-looking term matching NO commit falls through the ord
 
 test("ask(): \"which changes touch commit <sha>\" — the operator's question answers with BOTH grains, commit cited, grouped by class", () => {
   const graph = buildGraph();
-  const { content, seonix_ask } = ask(graph, `which changes touch commit ${FIXTURE_SHORT}`);
-  assert.equal(seonix_ask.miss, false);
+  const { content, tmct_ask } = ask(graph, `which changes touch commit ${FIXTURE_SHORT}`);
+  assert.equal(tmct_ask.miss, false);
   assert.match(content, new RegExp(`^commit ${FIXTURE_SHORT} touched `));
   assert.match(content, /modules myFile\.mjs and src\/logging\.mjs/);
   assert.match(content, /function startup\(\)/);
-  assert.equal(seonix_ask.matches.length, 3);
-  assert.match(seonix_ask.traversal, /touches\+touchesSymbol edges where subject = commit/);
+  assert.equal(tmct_ask.matches.length, 3);
+  assert.match(tmct_ask.traversal, /touches\+touchesSymbol edges where subject = commit/);
 });
 
 test("ask(): \"which modules did commit <sha> touch\" — module grain only, no symbol bleed-through", () => {
   const graph = buildGraph();
-  const { content, seonix_ask } = ask(graph, `which modules did commit ${FIXTURE_SHORT} touch`);
-  assert.equal(seonix_ask.miss, false);
-  assert.deepEqual(seonix_ask.matches.map((m) => m.label).sort(), ["myFile.mjs", "src/logging.mjs"]);
+  const { content, tmct_ask } = ask(graph, `which modules did commit ${FIXTURE_SHORT} touch`);
+  assert.equal(tmct_ask.miss, false);
+  assert.deepEqual(tmct_ask.matches.map((m) => m.label).sort(), ["myFile.mjs", "src/logging.mjs"]);
   assert.doesNotMatch(content, /startup/);
 });
 
 test("ask(): \"which functions changed in <sha>\" — symbol grain only, filtered to the asked class", () => {
   const graph = buildGraph();
-  const { content, seonix_ask } = ask(graph, `which functions changed in ${FIXTURE_SHORT}`);
-  assert.equal(seonix_ask.miss, false);
-  assert.deepEqual(seonix_ask.matches.map((m) => m.label), ["startup"]);
+  const { content, tmct_ask } = ask(graph, `which functions changed in ${FIXTURE_SHORT}`);
+  assert.equal(tmct_ask.miss, false);
+  assert.deepEqual(tmct_ask.matches.map((m) => m.label), ["startup"]);
   assert.equal(content, `commit ${FIXTURE_SHORT} touched function startup().`);
 });
 
 test("ask(): \"what did commit <sha> touch\" (forward) and the passive \"what was touched by commit <sha>\" reach the same commit-as-subject answer", () => {
   const graph = buildGraph();
-  const { content, seonix_ask } = ask(graph, `what did commit ${FIXTURE_SHORT} touch`);
-  assert.equal(seonix_ask.miss, false);
-  assert.equal(seonix_ask.matches.length, 3);
+  const { content, tmct_ask } = ask(graph, `what did commit ${FIXTURE_SHORT} touch`);
+  assert.equal(tmct_ask.miss, false);
+  assert.equal(tmct_ask.matches.length, 3);
   assert.match(content, /myFile\.mjs/);
   const passive = ask(graph, `what was touched by commit ${FIXTURE_SHORT}`);
   assert.equal(passive.content, content);
@@ -547,9 +547,9 @@ test("ask(): \"what did commit <sha> touch\" (forward) and the passive \"what wa
 
 test("ask(): the existing commit-as-answer direction still works — \"which commits touched myFile.mjs\" lists commits flat", () => {
   const graph = buildGraph();
-  const { content, seonix_ask } = ask(graph, "which commits touched myFile.mjs");
-  assert.equal(seonix_ask.miss, false);
-  assert.deepEqual(seonix_ask.matches.map((m) => m.label).sort(), ["abc123", FIXTURE_SHORT]);
+  const { content, tmct_ask } = ask(graph, "which commits touched myFile.mjs");
+  assert.equal(tmct_ask.miss, false);
+  assert.deepEqual(tmct_ask.matches.map((m) => m.label).sort(), ["abc123", FIXTURE_SHORT]);
   assert.match(content, /abc123/);
   assert.match(content, new RegExp(FIXTURE_SHORT));
 });
@@ -565,8 +565,8 @@ test("ask(): yes/no with a commit — \"did commit <sha> touch src/logging.mjs\"
 test("ask(): a commit that touched nothing recorded renders the standard honest blank, commit acknowledged", () => {
   const c = { id: "commit:beefcafe00000000000000000000000000000000", label: "beefcafe0000", class: "Commit" };
   const graph = { individuals: [c], byId: new Map([[c.id, c]]), relations: [], truncated: [], proseIndex: {} };
-  const { content, seonix_ask } = ask(graph, "what did commit beefcafe0000 touch");
-  assert.equal(seonix_ask.miss, true);
+  const { content, tmct_ask } = ask(graph, "what did commit beefcafe0000 touch");
+  assert.equal(tmct_ask.miss, true);
   assert.match(content, /^commit beefcafe0000 touched nothing recorded in the index\./);
   assert.match(content, /traversal:/);
 });
@@ -581,9 +581,9 @@ test("render: commit answers obey OVERFLOW_CAP (12 shown, remainder counted)", (
       edges: mods.map((m) => ({ subject: c.id, object: m.id, subjectLabel: c.label, objectLabel: m.label })),
     }],
   };
-  const { content, seonix_ask } = ask(graph, "which changes touch commit cafe00000000");
-  assert.equal(seonix_ask.miss, false);
-  assert.equal(seonix_ask.matches.length, 15);
+  const { content, tmct_ask } = ask(graph, "which changes touch commit cafe00000000");
+  assert.equal(tmct_ask.miss, false);
+  assert.equal(tmct_ask.matches.length, 15);
   assert.match(content, /…and 3 more\.$/);
   assert.match(content, /m11\.mjs/);
   assert.doesNotMatch(content, /m12\.mjs/);
@@ -595,8 +595,8 @@ test("rephraseHint: the grammar-miss hint now suggests the commit question shape
 
 test("ask(): a sha matching no commit is an honest miss that says \"commit\", not \"module\"", () => {
   const graph = buildGraph();
-  const { content, seonix_ask } = ask(graph, "which changes touch commit ffffff123");
-  assert.equal(seonix_ask.miss, true);
+  const { content, tmct_ask } = ask(graph, "which changes touch commit ffffff123");
+  assert.equal(tmct_ask.miss, true);
   assert.match(content, /no commit matching "commit ffffff123" found in the index\./);
 });
 
@@ -621,7 +621,7 @@ test("ask(): a misspelled query answers exactly like its correct spelling — ad
   const clean = ask(graph, "which modules import src/logging.mjs", { nlp: null });
   const typod = ask(graph, "whcih moduels improt src/logging.mjs", { nlp: null });
   assert.equal(typod.content, clean.content);
-  assert.equal(typod.seonix_ask.miss, false);
+  assert.equal(typod.tmct_ask.miss, false);
 });
 
 test("resolveObject: tier 5 fuzzy — a UNIQUE 1-edit typo of a label resolves, tagged matchedVia:fuzzy", () => {
@@ -670,9 +670,9 @@ test("resolveObject: a UNIQUE prose hit still wins before fuzzy is ever consulte
 
 test("ask(): a fuzzy object resolution is ANNOUNCED — \"assuming you meant <label>:\" prefixes the answer", () => {
   const graph = buildGraph();
-  const { content, seonix_ask } = ask(graph, "which modules import loging", { nlp: null }); // 1 edit from the "logging" component
-  assert.equal(seonix_ask.miss, false);
-  assert.equal(seonix_ask.matchedVia, "fuzzy");
+  const { content, tmct_ask } = ask(graph, "which modules import loging", { nlp: null }); // 1 edit from the "logging" component
+  assert.equal(tmct_ask.miss, false);
+  assert.equal(tmct_ask.matchedVia, "fuzzy");
   assert.match(content, /^assuming you meant src\/logging\.mjs: /);
   assert.match(content, /myFile\.mjs/);
 });
@@ -692,22 +692,22 @@ test("parseQuery: uses family — \"what uses X\" (keyword-only) and \"which mod
 
 test("ask(): uses — \"what uses calculateTotalPrice\" reaches the symbol-grain caller via the callsSymbol leg of the union", () => {
   const graph = buildGraph();
-  const { content, seonix_ask } = ask(graph, "what uses calculateTotalPrice");
-  assert.equal(seonix_ask.miss, false);
+  const { content, tmct_ask } = ask(graph, "what uses calculateTotalPrice");
+  assert.equal(tmct_ask.miss, false);
   assert.match(content, /checkout/);
-  assert.match(seonix_ask.traversal, /imports\+calls\+callsSymbol/);
+  assert.match(tmct_ask.traversal, /imports\+calls\+callsSymbol/);
 });
 
 test("ask(): uses — \"which modules use src/billing.mjs\" answers with the importing module (module grain of the union)", () => {
   const graph = buildGraph();
-  const { seonix_ask } = ask(graph, "which modules use src/billing.mjs");
-  assert.equal(seonix_ask.miss, false);
-  assert.deepEqual(seonix_ask.matches.map((m) => m.label), ["src/checkout.mjs"]);
+  const { tmct_ask } = ask(graph, "which modules use src/billing.mjs");
+  assert.equal(tmct_ask.miss, false);
+  assert.deepEqual(tmct_ask.matches.map((m) => m.label), ["src/checkout.mjs"]);
 });
 
 test("ask(): uses — honest miss for an unresolvable term", () => {
   const graph = buildGraph();
-  assert.equal(ask(graph, "which modules use totallyMissingThing").seonix_ask.miss, true);
+  assert.equal(ask(graph, "which modules use totallyMissingThing").tmct_ask.miss, true);
 });
 
 test("parseQuery: where family — \"where is startup defined\" parses identically through both strategies, marker optional", () => {
@@ -719,17 +719,17 @@ test("parseQuery: where family — \"where is startup defined\" parses identical
 test("ask(): where — a function answers with module + line off the site attribute; a module answers with its path", () => {
   const graph = buildGraph();
   const fn = ask(graph, "where is startup defined");
-  assert.equal(fn.seonix_ask.miss, false);
+  assert.equal(fn.tmct_ask.miss, false);
   assert.equal(fn.content, "function startup() is defined in myFile.mjs at line 3.");
   const mod = ask(graph, "where is src/logging.mjs");
-  assert.equal(mod.seonix_ask.miss, false);
+  assert.equal(mod.tmct_ask.miss, false);
   assert.match(mod.content, /is a module/);
 });
 
 test("ask(): where — honest miss for an unresolvable term", () => {
   const graph = buildGraph();
-  const { content, seonix_ask } = ask(graph, "where is totallymissingthing defined");
-  assert.equal(seonix_ask.miss, true);
+  const { content, tmct_ask } = ask(graph, "where is totallymissingthing defined");
+  assert.equal(tmct_ask.miss, true);
   assert.match(content, /no module matching/);
 });
 
@@ -741,20 +741,20 @@ test("parseQuery: mentions family — \"where is X mentioned\" routes to the pro
 test("ask(): mentions — a doc-comment word surfaces the symbols whose prose mentions it; an unknown word is an honest blank", () => {
   const graph = buildGraph();
   const hit = ask(graph, "where is invoice mentioned");
-  assert.equal(hit.seonix_ask.miss, false);
+  assert.equal(hit.tmct_ask.miss, false);
   assert.match(hit.content, /calculateTotalPrice/);
   const miss = ask(graph, "where is zzznotaword mentioned");
-  assert.equal(miss.seonix_ask.miss, true);
+  assert.equal(miss.tmct_ask.miss, true);
   assert.match(miss.content, /not mentioned in any indexed/);
 });
 
 test("ask(): exports family — \"what does myFile export\" reads the reExports surface; a module with no exports is an honest blank", () => {
   const graph = buildGraph();
   const hit = ask(graph, "what does myFile export");
-  assert.equal(hit.seonix_ask.miss, false);
+  assert.equal(hit.tmct_ask.miss, false);
   assert.match(hit.content, /startup/);
   const blank = ask(graph, "what does src/unrelated.mjs export");
-  assert.equal(blank.seonix_ask.miss, true);
+  assert.equal(blank.tmct_ask.miss, true);
   assert.match(blank.content, /has no reexports edges/);
 });
 
@@ -762,11 +762,11 @@ test("ask(): exports family — the un-answerable phrasings stay honest misses (
   const graph = buildGraph();
   // "what is exposed" names no module: a grammar miss with or without the adapter.
   assert.equal(parseQuery("what is exposed", { nlp: null }), null);
-  assert.equal(ask(graph, "what is exposed").seonix_ask.miss, true);
+  assert.equal(ask(graph, "what is exposed").tmct_ask.miss, true);
   // "how does the API get exposed" has no traversal: adapter-less it is a grammar
   // miss; with the lemma adapter it decomposes but its term never resolves here.
-  assert.equal(ask(graph, "how does the API get exposed", { nlp: null }).seonix_ask.miss, true);
-  assert.equal(ask(graph, "how does the API get exposed").seonix_ask.miss, true);
+  assert.equal(ask(graph, "how does the API get exposed", { nlp: null }).tmct_ask.miss, true);
+  assert.equal(ask(graph, "how does the API get exposed").tmct_ask.miss, true);
 });
 
 test("parseQuery: when family — \"when did X change\" / \"when was X last touched\" parse identically through both strategies", () => {
@@ -780,23 +780,23 @@ test("parseQuery: when family — \"when did X change\" / \"when was X last touc
 
 test("ask(): when — newest dated commit cited with date and message; undated commits sort last", () => {
   const graph = buildGraph();
-  const { content, seonix_ask } = ask(graph, "when did myFile.mjs change");
-  assert.equal(seonix_ask.miss, false);
+  const { content, tmct_ask } = ask(graph, "when did myFile.mjs change");
+  assert.equal(tmct_ask.miss, false);
   assert.match(content, /myFile\.mjs was last touched by commit ef74e44e25c8 on 2026-07-01/);
   assert.match(content, /1 earlier commit recorded/); // abc123, undated, sorts last
 });
 
 test("ask(): when — asking about a commit answers with the commit's own date", () => {
   const graph = buildGraph();
-  const { content, seonix_ask } = ask(graph, "when did ef74e44e25c8 change");
-  assert.equal(seonix_ask.miss, false);
+  const { content, tmct_ask } = ask(graph, "when did ef74e44e25c8 change");
+  assert.equal(tmct_ask.miss, false);
   assert.match(content, /commit ef74e44e25c8 is dated 2026-07-01/);
 });
 
 test("ask(): when — an untouched module is an honest blank; a dateless index is an honest miss with the precise re-index hint", () => {
   const graph = buildGraph();
   const blank = ask(graph, "when did src/unrelated.mjs change");
-  assert.equal(blank.seonix_ask.miss, true);
+  assert.equal(blank.tmct_ask.miss, true);
   assert.match(blank.content, /no recorded commit touches src\/unrelated\.mjs/);
   // hand-built: one undated commit touching one module
   const c = { id: "commit:dddd000000000000000000000000000000000000", label: "dddd00000000", class: "Commit" };
@@ -807,7 +807,7 @@ test("ask(): when — an untouched module is an honest blank; a dateless index i
       edges: [{ subject: c.id, object: m.id, subjectLabel: c.label, objectLabel: m.label }] }],
   };
   const dateless = ask(g2, "when did a.mjs change");
-  assert.equal(dateless.seonix_ask.miss, true);
+  assert.equal(dateless.tmct_ask.miss, true);
   assert.match(dateless.content, /records no commit dates/);
 });
 
@@ -844,9 +844,9 @@ test("resolveObject: bare-file-name dotted terms still resolve by exact basename
 
 test("ask(): \"what defines res.json\" now answers with the defining module of the SYMBOL", () => {
   const graph = buildGraph();
-  const { content, seonix_ask } = ask(graph, "what defines res.json");
-  assert.equal(seonix_ask.miss, false);
-  assert.match(seonix_ask.traversal, /object = Response\.json/);
+  const { content, tmct_ask } = ask(graph, "what defines res.json");
+  assert.equal(tmct_ask.miss, false);
+  assert.match(tmct_ask.traversal, /object = Response\.json/);
   assert.match(content, /app\/response\.mjs/);
 });
 
@@ -858,10 +858,10 @@ test("ask(): inherits with an unresolved ext: base — same-name ext references 
     relations: [{ predicate: "hasSuperType", prop: "seon:hassupertype", count: 1,
       edges: [{ subject: sub.id, object: "ext:Command", subjectLabel: "MyCommand", objectLabel: "Command" }] }],
   };
-  const { content, seonix_ask } = ask(graph, "which classes inherit from Command");
-  assert.equal(seonix_ask.miss, false);
-  assert.deepEqual(seonix_ask.matches.map((m) => m.label), ["MyCommand"]);
-  assert.match(seonix_ask.traversal, /by name, via unresolved ext:command references/);
+  const { content, tmct_ask } = ask(graph, "which classes inherit from Command");
+  assert.equal(tmct_ask.miss, false);
+  assert.deepEqual(tmct_ask.matches.map((m) => m.label), ["MyCommand"]);
+  assert.match(tmct_ask.traversal, /by name, via unresolved ext:command references/);
   assert.match(content, /MyCommand/);
 });
 
@@ -894,15 +894,15 @@ test("ask(): \"what was in commit <sha>\" answers with the commit's touched enti
   const graph = buildGraph();
   const framed = ask(graph, `what was in commit ${FIXTURE_SHORT}`);
   const canonical = ask(graph, `what did commit ${FIXTURE_SHORT} touch`);
-  assert.equal(framed.seonix_ask.miss, false);
+  assert.equal(framed.tmct_ask.miss, false);
   assert.equal(framed.content, canonical.content);
   assert.match(framed.content, /myFile\.mjs/);
 });
 
 test("ask(): a commit-content frame over an UNKNOWN sha is the standard honest commit blank, not a phantom", () => {
   const graph = buildGraph();
-  const { content, seonix_ask } = ask(graph, "what was in commit deadbeef123");
-  assert.equal(seonix_ask.miss, true);
+  const { content, tmct_ask } = ask(graph, "what was in commit deadbeef123");
+  assert.equal(tmct_ask.miss, true);
   assert.match(content, /no commit matching/);
 });
 

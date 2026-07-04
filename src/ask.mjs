@@ -1,5 +1,5 @@
 // ask.mjs — a mechanical (zero-model-call) natural-language query engine over the
-// seonix graph. PLAN_MECHANICAL_CHAT.md (P0): a small, closed English grammar
+// tmct graph. PLAN_MECHANICAL_CHAT.md (P0): a small, closed English grammar
 // compiles a free-text question into a graph traversal over the SAME classified
 // relation groups codegraph.mjs's other render functions read, then renders a
 // templated, citation-faithful answer. No embeddings, no generative model calls —
@@ -1954,7 +1954,7 @@ function renderCore(parsed, result) {
     const date = (newest.attributes || []).find((a) => a.key === "date")?.value || "";
     if (!date) {
       return {
-        content: `commit ${newest.label} touched ${subject}, but this index records no commit dates — re-index with a current seonix to attach mgx:commitDate.`,
+        content: `commit ${newest.label} touched ${subject}, but this index records no commit dates — regenerate the graph to attach mgx:commitDate.`,
         miss: true, ambiguous: false,
       };
     }
@@ -2330,7 +2330,7 @@ export function relaxParse(graph, query, { nlp = undefined, contextId = null, pr
   return null; // exhausted — the honest bottom of the cascade (caller keeps the original miss)
 }
 
-// ---- orchestration — the seonix_ask entry point (§6.3: parse -> resolve -> traverse -> render) ----
+// ---- orchestration — the tmct_ask entry point (§6.3: parse -> resolve -> traverse -> render) ----
 
 /** Answer a free-text question over the graph, mechanically. `opts.contextId`
  *  resolves a context pronoun ("this"/"it"/…) — wired from a UI's currently-
@@ -2342,7 +2342,7 @@ export function relaxParse(graph, query, { nlp = undefined, contextId = null, pr
  *  matches — thread it from a chat loop so a follow-up anaphora question ("which of
  *  those are tested", "how many of them call X") filters/counts the prior result
  *  set; omit it and anaphora questions produce an honest "needs a previous answer"
- *  miss. Returns the full {content, seonix_ask:
+ *  miss. Returns the full {content, tmct_ask:
  *  {mechanical,parsed,matches,traversal,miss,ambiguous,candidates?}} envelope
  *  §6.2 specifies. Zero generative model calls. */
 export function ask(graph, query, { contextId = null, nlp = undefined, prev = null } = {}) {
@@ -2351,7 +2351,7 @@ export function ask(graph, query, { contextId = null, nlp = undefined, prev = nu
   if (isHelpRequest(query)) {
     return {
       content: rephraseHint(),
-      seonix_ask: {
+      tmct_ask: {
         mechanical: true, parsed: null, matches: [], traversal: null,
         miss: true, ambiguous: false, matchedVia: null, help: true, relaxed: null,
       },
@@ -2377,7 +2377,7 @@ export function ask(graph, query, { contextId = null, nlp = undefined, prev = nu
     : rendered.content;
   return {
     content,
-    seonix_ask: {
+    tmct_ask: {
       mechanical: true,
       parsed: (parsed && !parsed.ambiguousParse) ? parsed : null,
       matches: (result.matches || []).map((m) => ({

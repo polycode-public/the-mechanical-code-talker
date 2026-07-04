@@ -53,7 +53,7 @@ function buildGraph() {
   return parseEntities(entities);
 }
 const graph = buildGraph();
-const labels = (r) => r.seonix_ask.matches.map((m) => m.label).sort();
+const labels = (r) => r.tmct_ask.matches.map((m) => m.label).sort();
 
 // ---- backward compat: the compositional layer must NOT hijack plain queries ----
 
@@ -89,12 +89,12 @@ test("nested depth ≥2: an inner relative clause itself composes", () => {
   // resolves the inner-inner (importers of core = mid,mid2), then importers of THOSE
   // (entry), then importers of that (none) — depth-2 nesting, an honest empty, not a crash.
   const r = ask(graph, "what imports something that imports something that imports core.mjs");
-  assert.equal(r.seonix_ask.miss, true);
+  assert.equal(r.tmct_ask.miss, true);
 });
 
 test("nested MISS: an inner clause that cannot parse is an honest stated miss, not a guess", () => {
   const r = ask(graph, "what calls something that frobnicates the wibble");
-  assert.equal(r.seonix_ask.miss, true);
+  assert.equal(r.tmct_ask.miss, true);
   assert.match(r.content, /couldn't compile this compositional question/);
 });
 
@@ -120,7 +120,7 @@ test("boolean difference HIT: 'classes inheriting from Base but not tested'", ()
 
 test("boolean MISS: an uncompilable branch makes the whole combination an honest miss", () => {
   const r = ask(graph, "functions that call something that blargh and call beta");
-  assert.equal(r.seonix_ask.miss, true);
+  assert.equal(r.tmct_ask.miss, true);
   assert.match(r.content, /couldn't compile this compositional question/);
 });
 
@@ -140,13 +140,13 @@ test("qualifier + membership HIT: 'public methods in widget.mjs' (of/in <term>)"
 
 test("qualifier abstract is honestly EMPTY (isAbstract is never populated) — not an error", () => {
   const r = ask(graph, "abstract classes");
-  assert.equal(r.seonix_ask.miss, true); // empty set, honest blank
-  assert.equal(r.seonix_ask.matches.length, 0);
+  assert.equal(r.tmct_ask.miss, true); // empty set, honest blank
+  assert.equal(r.tmct_ask.matches.length, 0);
 });
 
 test("qualifier MISS: an unknown qualifier is an honest miss that NAMES the supported ones", () => {
   const r = ask(graph, "which shiny methods");
-  assert.equal(r.seonix_ask.miss, true);
+  assert.equal(r.tmct_ask.miss, true);
   assert.match(r.content, /unknown qualifier "shiny"/);
   assert.match(r.content, /public, private/); // names the supported set
 });
@@ -162,7 +162,7 @@ test("aggregate HIT: 'how many classes' counts the class of individuals; a restr
 
 test("aggregate MISS: 'how many bananas' names no known entity kind — honest miss", () => {
   const r = ask(graph, "how many bananas");
-  assert.equal(r.seonix_ask.miss, true);
+  assert.equal(r.tmct_ask.miss, true);
   assert.match(r.content, /count needs a known entity kind/);
 });
 
@@ -176,13 +176,13 @@ test("superlative HIT: 'which module has the most imports' ranks by out-degree",
 
 test("superlative HIT: 'the most connected module' ranks by total degree", () => {
   const r = ask(graph, "the most connected module");
-  assert.equal(r.seonix_ask.miss, false);
+  assert.equal(r.tmct_ask.miss, false);
   assert.match(r.content, /the most connected \(\d+\)/);
 });
 
 test("superlative MISS: an unrecognized rank-by noun is an honest miss naming the supported ones", () => {
   const r = ask(graph, "which module has the most bananas");
-  assert.equal(r.seonix_ask.miss, true);
+  assert.equal(r.tmct_ask.miss, true);
   assert.match(r.content, /imports, callers, methods, tests, or connections/);
 });
 
@@ -207,7 +207,7 @@ test("list HIT: many synonym triggers all reach the list ('display', 'dump', 'en
 
 test("list HIT (scoped): 'list methods in widget.mjs' lists that module's members, no narrow hint", () => {
   const r = ask(graph, "list methods in widget.mjs");
-  assert.equal(r.seonix_ask.miss, false);
+  assert.equal(r.tmct_ask.miss, false);
   assert.deepEqual(labels(r), ["privMethod", "pubMethod", "statMethod"]);
   assert.doesNotMatch(r.content, /narrow with/); // already scoped
 });
@@ -226,15 +226,15 @@ test("list OVERFLOW-CAP: a large unscoped list shows the first N + '…and M mor
   ingestSchemaDocs(bigEntities);
   const big = parseEntities(bigEntities);
   const r = ask(big, "list functions");
-  assert.equal(r.seonix_ask.miss, false);
+  assert.equal(r.tmct_ask.miss, false);
   assert.match(r.content, /…and 8 more/); // 20 − 12 shown
   assert.match(r.content, /narrow with "functions in <module>"/);
-  assert.equal(r.seonix_ask.matches.length, 20); // the full set is still returned in the envelope
+  assert.equal(r.tmct_ask.matches.length, 20); // the full set is still returned in the envelope
 });
 
 test("list MISS: 'list bananas' is an honest miss that NAMES the listable kinds, never a guess", () => {
   const r = ask(graph, "list bananas");
-  assert.equal(r.seonix_ask.miss, true);
+  assert.equal(r.tmct_ask.miss, true);
   assert.match(r.content, /isn't a listable kind/);
   assert.match(r.content, /functions, classes, methods, modules/);
 });
@@ -248,13 +248,13 @@ test("list compat: bare 'which methods' still doesn't PARSE (not a list, not a r
   // rule reads it as a bare kind noun wrapped in a question word and DEFAULTS to a count
   // (the operator's "vague enough to land" case). The count is the safe zero-arg answer.
   const r = ask(graph, "which methods");
-  assert.equal(r.seonix_ask.miss, false);
+  assert.equal(r.tmct_ask.miss, false);
   assert.match(r.content, /\bmethods?\.$/);
-  assert.equal(r.seonix_ask.relaxed.to, "count methods");
+  assert.equal(r.tmct_ask.relaxed.to, "count methods");
   // The safety property the bare form protects is UNCHANGED: a dangling UNKNOWN qualifier
   // ("which shiny methods") is still an honest miss — the terminal rule classifies the
   // ORIGINAL tokens, so "shiny" blocks the default rather than being silently dropped.
-  assert.equal(ask(graph, "which shiny methods").seonix_ask.miss, true);
+  assert.equal(ask(graph, "which shiny methods").tmct_ask.miss, true);
   assert.match(ask(graph, "which shiny methods").content, /unknown qualifier "shiny"/);
   assert.deepEqual(labels(ask(graph, "which classes are there")), ["Base", "Gadget", "Widget"]); // the filler form DOES list
 });
@@ -263,20 +263,20 @@ test("list compat: bare 'which methods' still doesn't PARSE (not a list, not a r
 
 test("anaphora HIT: 'which of those are tested' / 'how many of those' filter+count the prior ids", () => {
   const first = ask(graph, "which classes inherit from Base"); // {Widget, Gadget}
-  const prev = first.seonix_ask.matches.map((m) => m.id);
+  const prev = first.tmct_ask.matches.map((m) => m.id);
   assert.deepEqual(labels(ask(graph, "which of those are tested", { prev })), ["Widget"]);
   assert.match(ask(graph, "how many of those are tested", { prev }).content, /^1 class\.$/);
 });
 
 test("anaphora HIT: a clause filter over the prior set ('which of those call alpha')", () => {
   const first = ask(graph, "which functions call alpha"); // {callsBoth, callsOne}
-  const prev = first.seonix_ask.matches.map((m) => m.id);
+  const prev = first.tmct_ask.matches.map((m) => m.id);
   assert.deepEqual(labels(ask(graph, "which of those call beta", { prev })), ["callsBoth"]);
 });
 
 test("anaphora MISS: with no prev supplied, 'those' has nothing to refer to — honest miss, never a guess", () => {
   const r = ask(graph, "which of those are tested");
-  assert.equal(r.seonix_ask.miss, true);
+  assert.equal(r.tmct_ask.miss, true);
   assert.match(r.content, /needs a previous answer/);
 });
 

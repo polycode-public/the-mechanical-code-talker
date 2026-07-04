@@ -1,32 +1,32 @@
-// schema-docs.mjs — the single source of truth for seonix's own ontology documentation.
+// schema-docs.mjs — the single source of truth for tmct's own ontology documentation.
 //
-// seonix's typed graph (packages/seonix/src/extract.mjs's buildEntities, queried by
-// codegraph.mjs) has had its schema documented since day one, but only in scattered code
-// comments (extract.mjs's header, the `note` fields on some — not all — of the `vocabulary`
+// tmct's typed graph (src/graph-build.mjs's buildEntities, queried by codegraph.mjs)
+// has had its schema documented since day one, but only in scattered code comments
+// (graph-build.mjs's header, the `note` fields on some — not all — of the `vocabulary`
 // array entries it emits) — readable by a human editing the source, invisible to anything
 // that only sees graph.json. This file completes that documentation (every entity class,
 // every predicate actually emitted — verified against real `prop:`/`class:` literals in
-// extract.mjs, not just what the existing vocabulary array already claimed) and
-// `ingestSchemaDocs()` (called once, from `indexRepository`, see extract.mjs) merges it
-// into every graph build so a question like "what does cochange mean" or "what is a
+// graph-build.mjs, not just what the existing vocabulary array already claimed) and
+// `ingestSchemaDocs()` (called by a graph writer after buildEntities) merges it
+// into a graph build so a question like "what does cochange mean" or "what is a
 // Commit" is answerable by querying the SAME graph the same way any other question is —
 // not via separate hardcoded documentation logic.
 //
 // GLOBAL, NOT PER-REPO: this documentation does not vary by repository — "Module" means
 // the same thing indexing Django or a JS library — so it is static, committed data
 // (this file), never recomputed at index time. Ingesting it is a fixed-size merge, not a
-// computation (see the ~0ms measured delta in schema-docs.test.mjs / extract.test.mjs).
+// computation (see the ~0ms measured delta in schema-docs.test.mjs).
 //
 // Mirrors the pattern in marginalia's app/lib/vocab.mjs (a `comment`/description per
 // schema term, single-sourced) minus the RDF/OWL external-alignment machinery, which
-// doesn't apply here — seonix's schema is code-relationship-specific, not general-domain.
+// doesn't apply here — tmct's schema is code-relationship-specific, not general-domain.
 
 // ---- entity classes (7 — verified against every `class: "X"` individual literal in
-// extract.mjs) -----------------------------------------------------------------------
+// graph-build.mjs) -----------------------------------------------------------------------
 export const CLASS_DOCS = Object.freeze([
   { name: "Module", description:
     "A source file — one importable unit within the indexed repository (a .py/.mjs/.ts/" +
-    ".cs/.java file, etc). The coarsest unit seonix ranks, locates, and injects as a " +
+    ".cs/.java file, etc). The coarsest unit tmct ranks, locates, and injects as a " +
     "digest; every other entity class belongs to exactly one Module." },
   { name: "Class", description:
     "A class definition inside a Module. Contains Methods and Attributes (seon:" +
@@ -50,15 +50,15 @@ export const CLASS_DOCS = Object.freeze([
     "to the Modules it touched (mgx:touchedByCommit) and, more precisely, the specific " +
     "symbols whose current source span its changed lines intersect (mgx:touchesSymbol)." },
   { name: "Session", description:
-    "One recorded `seonix chat` session — a runtime observation, not a source " +
+    "One recorded `tmct chat` session — a runtime observation, not a source " +
     "derivation. Carries started/ended timestamps (temporal ordering, like a Commit's " +
     "date), a turn count and the queries asked, and connects to the entities its turns " +
-    "resolved or answered with (mgx:asksAbout). Recorded under .seonix/sessions/ and " +
+    "resolved or answered with (mgx:asksAbout). Recorded under .tmct/sessions/ and " +
     "re-attached on every re-index (sessions.mjs)." },
 ]);
 
 // ---- predicates / attributes (every `prop:` token actually emitted by buildEntities,
-// verified by grep against extract.mjs — not just what the pre-existing `vocabulary`
+// verified by grep against graph-build.mjs — not just what the pre-existing `vocabulary`
 // array already documented; three real gaps found this way: seon:startsAt, mgx:value,
 // mgx:dotted, plus the prose second-pass's mgx:hasProseTokens) ------------------------
 export const PREDICATE_DOCS = Object.freeze([

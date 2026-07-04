@@ -364,7 +364,7 @@ export function buildEntities(modules, commits, { generatedAt = "", symbolHistor
     // for readers; the graph is JSON-label-only (no RDF store — see PLAN_SEON_RDF.md).
     prefixes: {
       seon: "http://se-on.org/ontologies/seon.owl#",
-      mgx: "urn:seonix:mgx#",
+      mgx: "urn:tmct:mgx#",
       rdfs: "http://www.w3.org/2000/01/rdf-schema#",
     },
     vocabulary: [
@@ -421,7 +421,7 @@ export function buildEntities(modules, commits, { generatedAt = "", symbolHistor
     individuals: allIndividuals,
     // Second pass (PLAN_PROSE_INDEX.md): word -> [individual ids], inverted from the
     // `prose_tokens` attribute attachProseTokens just attached. Disable via
-    // SEONIX_PROSE_INDEX=0 (indexRepository, below) — {} when off. The typed graph above
+    // TMCT_PROSE_INDEX=0 (indexRepository, below) — {} when off. The typed graph above
     // (individuals' core fields, all edges) is byte-identical either way.
     proseIndex,
   };

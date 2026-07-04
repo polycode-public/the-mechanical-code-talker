@@ -1,16 +1,17 @@
 {
-  "name": "@polycode-projects/mct",
+  "name": "@polycode-projects/the-mechanical-code-talker",
   "version": "0.1.0",
   "private": false,
   "type": "module",
-  "description": "The Mechanical Code Talker (mct) — a tolerant, offline, $0 chat surface that guides you toward precision queries about a software repository. ELIZA/PARRY-style but domain-obsessed with code. No model calls; no codebase index of its own.",
-  "license": "AGPL-3.0-only",
+  "description": "The Mechanical Code Talker (tmct) — a tolerant, offline, $0 chat surface that guides you toward precision queries about a software repository. ELIZA/PARRY-style but domain-obsessed with code. No model calls; no codebase index of its own.",
+  "license": "MPL-2.0",
   "author": "Polycode Limited",
+  "homepage": "https://polycode-projects.gitlab.io/the-mechanical-code-talker/",
   "engines": {
     "node": ">=24"
   },
   "bin": {
-    "mct": "./bin/mct.mjs"
+    "tmct": "./bin/tmct.mjs"
   },
   "main": "./src/index.mjs",
   "exports": {
@@ -40,6 +41,6 @@
   },
   "scripts": {
     "test": "node --test \"test/**/*.test.mjs\"",
-    "chat": "node bin/mct.mjs"
+    "chat": "node bin/tmct.mjs"
   }
 }

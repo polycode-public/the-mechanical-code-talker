@@ -24,7 +24,7 @@ const ROWS = [
 ];
 
 function writeSyntheticModel() {
-  const dir = mkdtempSync(join(tmpdir(), "seonix-embed-test-"));
+  const dir = mkdtempSync(join(tmpdir(), "tmct-embed-test-"));
   const header = Buffer.from(JSON.stringify({
     embeddings: { dtype: "F32", shape: [ROWS.length, DIM], data_offsets: [0, ROWS.length * DIM * 4] },
   }), "utf8");
@@ -52,7 +52,7 @@ const l2 = (v) => Math.sqrt([...v].reduce((s, x) => s + x * x, 0));
 const approx = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-6, `${msg}: ${a} ≉ ${b}`);
 
 test("loadEmbedder: absent dir → null (silent no-op contract; CI never needs the 30 MB fetch)", () => {
-  assert.equal(loadEmbedder({ dir: join(tmpdir(), "seonix-embed-definitely-absent") }), null);
+  assert.equal(loadEmbedder({ dir: join(tmpdir(), "tmct-embed-definitely-absent") }), null);
 });
 
 test("loadEmbedder: parses the synthetic safetensors + tokenizer (dim from the tensor shape)", () => {
@@ -107,14 +107,14 @@ test("cosine: orthogonal rows are 0, identical rows are 1", () => {
   approx(cosine(embedder.embed("hello"), embedder.embed("hello")), 1, "identical");
 });
 
-test("defaultEmbeddingsDir: SEONIX_EMBED_DIR env override wins", () => {
-  const prev = process.env.SEONIX_EMBED_DIR;
+test("defaultEmbeddingsDir: TMCT_EMBED_DIR env override wins", () => {
+  const prev = process.env.TMCT_EMBED_DIR;
   try {
-    process.env.SEONIX_EMBED_DIR = "/tmp/somewhere-else";
+    process.env.TMCT_EMBED_DIR = "/tmp/somewhere-else";
     assert.equal(defaultEmbeddingsDir(), "/tmp/somewhere-else");
   } finally {
-    if (prev === undefined) delete process.env.SEONIX_EMBED_DIR;
-    else process.env.SEONIX_EMBED_DIR = prev;
+    if (prev === undefined) delete process.env.TMCT_EMBED_DIR;
+    else process.env.TMCT_EMBED_DIR = prev;
   }
   assert.match(defaultEmbeddingsDir(), /vendor[\\/]embeddings[\\/]potion-base-8M$/);
 });

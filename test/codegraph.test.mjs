@@ -128,8 +128,8 @@ test("impactClosure attaches covering test modules; leaves/objects have none", (
 });
 
 // ── impactClosure folds in callsSymbol, coarsened to module level on read (2026-07-02) ──
-// Module-coarse "calls" (mgx:callsCoarse, extract.mjs) only fires when the callee's module
-// is ALREADY in the caller's import list ("coarse, import-backed calls" — see extract.mjs's
+// Module-coarse "calls" (mgx:callsCoarse, graph-build.mjs) only fires when the callee's module
+// is ALREADY in the caller's import list ("coarse, import-backed calls" — see graph-build.mjs's
 // own comment above its callEdges loop), so by construction every "calls" edge duplicates an
 // "imports" edge between the same pair — it can never independently extend this closure's
 // reach. The main fixture's own single callsSymbol edge (m-render → fn-alpha, i.e.
@@ -219,7 +219,7 @@ test("renderSearch: finds the module by defined-symbol name, ranked, compact", (
   const text = renderSearch(graph, "fnAlpha");
   assert.match(text, /module\(s\) match "fnAlpha"/);
   assert.match(text, /app\/lib\/a\.mjs \(defines 1 symbol\(s\)\) — matching: fnAlpha/);
-  assert.match(text, /seonix_describe/);
+  assert.match(text, /tmct_describe/);
   assert.match(renderSearch(graph, "nothing-matches-this"), /no module matches/);
   assert.equal(renderSearch(graph, "   "), "empty query");
 });
@@ -669,16 +669,16 @@ test("renderContextMore renders only the omitted sections (siblings/tests/cochan
 
 test("renderToolsCatalog lists the cold tools with exact CLI invocations", () => {
   const cat = renderToolsCatalog("/abs/bin/cli.mjs");
-  assert.match(cat, /# seonix cold-tool catalog/);
+  assert.match(cat, /# tmct cold-tool catalog/);
   // hot tools are NOT given a cold ## entry
-  assert.doesNotMatch(cat, /## seonix_context\n/);
-  assert.doesNotMatch(cat, /## seonix_snippet\n/);
+  assert.doesNotMatch(cat, /## tmct_context\n/);
+  assert.doesNotMatch(cat, /## tmct_snippet\n/);
   // representative cold tools + their exact Bash invocation
-  for (const name of ["seonix_describe", "seonix_calls", "seonix_file_history", "seonix_method_history", "seonix_class_history", "seonix_context_more", "seonix_impact"]) {
+  for (const name of ["tmct_describe", "tmct_calls", "tmct_file_history", "tmct_method_history", "tmct_class_history", "tmct_context_more", "tmct_impact"]) {
     assert.ok(cat.includes(`## ${name}`), `missing ${name}`);
   }
-  assert.match(cat, /node \/abs\/bin\/cli\.mjs cli seonix_describe '\{"symbol":"django\/utils\/text\.py"\}'/);
-  assert.match(cat, /node \/abs\/bin\/cli\.mjs cli seonix_calls '\{"symbol":"slugify"\}'/);
+  assert.match(cat, /node \/abs\/bin\/cli\.mjs cli tmct_describe '\{"symbol":"django\/utils\/text\.py"\}'/);
+  assert.match(cat, /node \/abs\/bin\/cli\.mjs cli tmct_calls '\{"symbol":"slugify"\}'/);
 });
 
 test("structural ranking: a structurally-closer sibling outranks a far one within a name tier", () => {
@@ -873,7 +873,7 @@ test("PLAN_PROSE_INDEX.md proseBoost: OFF (absent/false/no proseIndex) is byte-i
 });
 
 // ── Layered prose normalisation (proseLayers, 2026-07-02) — the prose index carries NORMALISED
-// layers (spell-corrected / canonical-schema-term / stem / lemma) under proseIndex["seonix:layers"],
+// layers (spell-corrected / canonical-schema-term / stem / lemma) under proseIndex["tmct:layers"],
 // keyed by the normalised token. A task-text word that only reaches a module through a normalised
 // form ("refund" → the module's lemma layer) scores nothing in the verbatim scorer; the opt-in
 // flag adds a bounded, discounted signal. "refund" appears NOWHERE in calculateTotal's path or
@@ -896,7 +896,7 @@ const proseLayersPayload = {
   proseIndex: {
     // verbatim top level (unused by proseLayers — it consults only the layers below)
     total: ["fn:src/billing.mjs#calculateTotal"],
-    "seonix:layers": {
+    "tmct:layers": {
       lemma: {
         refund: ["fn:src/billing.mjs#calculateTotal"],   // billing.mjs reachable only via the lemma layer
         widget: ["fn:src/unrelated.mjs#noop"],           // unrelated.mjs has a layer posting but no lexical match
@@ -940,7 +940,7 @@ test("proseLayers: OFF (absent/false/no layers) is byte-identical to the pre-exi
   // A graph with NO prose layers at all (the fixtures used throughout this file carry proseIndex:{})
   // — proseLayers:true must be a pure no-op, not an error.
   assert.deepEqual(searchModulesRanked(graph, "fnAlpha", { proseLayers: true }), searchModulesRanked(graph, "fnAlpha"));
-  // A graph WITH a verbatim proseIndex but no "seonix:layers" key: still a pure no-op.
+  // A graph WITH a verbatim proseIndex but no "tmct:layers" key: still a pure no-op.
   assert.deepEqual(searchModulesRanked(proseBoostGraph, "price invoice", { proseLayers: true }), searchModulesRanked(proseBoostGraph, "price invoice"));
 });
 
@@ -948,20 +948,20 @@ test("proseLayerHits accessor: reads the normalised layers read-only, tolerates 
   const hit = proseLayerHits(proseLayersGraph.proseIndex, "refund");
   assert.deepEqual(hit, { ids: ["fn:src/billing.mjs#calculateTotal"], via: "lemma" });
   // multi-layer hit: sorted ids, "+"-joined sorted via
-  const multi = proseLayerHits({ "seonix:layers": {
+  const multi = proseLayerHits({ "tmct:layers": {
     lemma: { foo: ["b", "a"] },
     stem: { foo: ["a", "c"] },
   } }, "foo");
   assert.deepEqual(multi, { ids: ["a", "b", "c"], via: "lemma+stem" });
   // posting given as { ids: [...] } is tolerated
-  assert.deepEqual(proseLayerHits({ "seonix:layers": { canonical: { x: { ids: ["z"] } } } }, "x"), { ids: ["z"], via: "canonical" });
+  assert.deepEqual(proseLayerHits({ "tmct:layers": { canonical: { x: { ids: ["z"] } } } }, "x"), { ids: ["z"], via: "canonical" });
   // accepts a parsed graph too (reads .proseIndex)
   assert.deepEqual(proseLayerHits(proseLayersGraph, "refund"), { ids: ["fn:src/billing.mjs#calculateTotal"], via: "lemma" });
   // misses / malformed / absent → { ids: [], via: null }
   assert.deepEqual(proseLayerHits(proseLayersGraph.proseIndex, "nope"), { ids: [], via: null });
   assert.deepEqual(proseLayerHits({}, "refund"), { ids: [], via: null });
   assert.deepEqual(proseLayerHits(null, "refund"), { ids: [], via: null });
-  assert.deepEqual(proseLayerHits({ "seonix:layers": null }, "refund"), { ids: [], via: null });
+  assert.deepEqual(proseLayerHits({ "tmct:layers": null }, "refund"), { ids: [], via: null });
 });
 
 // ── PLAN_SEON_TUNING.md §7.5/§7.6(5a) (literalMention, 2026-07-02) — the tokenizer destroys a

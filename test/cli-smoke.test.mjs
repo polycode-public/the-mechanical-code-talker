@@ -11,13 +11,13 @@ import { fileURLToPath } from "node:url";
 const BIN = fileURLToPath(new URL("../bin/cli.mjs", import.meta.url));
 const FIXTURE = fileURLToPath(new URL("./fixtures/entities.fixture.json", import.meta.url));
 
-/** A temp repo whose .seonix/graph.json is the test fixture — lets us exercise the cli
+/** A temp repo whose .tmct/graph.json is the test fixture — lets us exercise the cli
  *  query/digest modes without python+git (no real source files; the renderers tolerate
  *  missing files and just omit the file-backed sections). */
 async function repoWithFixtureGraph() {
-  const dir = await mkdtemp(join(tmpdir(), "seonix-cli-"));
-  await mkdir(join(dir, ".seonix"), { recursive: true });
-  await writeFile(join(dir, ".seonix", "graph.json"), await readFile(FIXTURE, "utf8"));
+  const dir = await mkdtemp(join(tmpdir(), "tmct-cli-"));
+  await mkdir(join(dir, ".tmct"), { recursive: true });
+  await writeFile(join(dir, ".tmct", "graph.json"), await readFile(FIXTURE, "utf8"));
   return dir;
 }
 const runCli = (...args) => spawnSync(process.execPath, [BIN, ...args], { encoding: "utf8" });
@@ -36,18 +36,18 @@ test("cli <toolName>: any tool routes to dispatchTool and prints its text result
   const dir = await repoWithFixtureGraph();
   try {
     // architecture takes no symbol → exercises the generic tool-query path end-to-end
-    const arch = runCli("cli", "seonix_architecture", JSON.stringify({ repo_path: dir }));
+    const arch = runCli("cli", "tmct_architecture", JSON.stringify({ repo_path: dir }));
     assert.equal(arch.status, 0, arch.stderr);
     assert.match(arch.stdout, /Architecture/);
     assert.match(arch.stdout, /module\(s\)/);
 
-    // a symbol tool too (seonix_describe of a module in the fixture)
-    const desc = runCli("cli", "seonix_describe", JSON.stringify({ repo_path: dir, symbol: "app/lib/a.mjs" }));
+    // a symbol tool too (tmct_describe of a module in the fixture)
+    const desc = runCli("cli", "tmct_describe", JSON.stringify({ repo_path: dir, symbol: "app/lib/a.mjs" }));
     assert.equal(desc.status, 0, desc.stderr);
     assert.match(desc.stdout, /app\/lib\/a\.mjs/);
 
     // an unknown tool name is a clean non-zero exit, not a crash
-    const bad = runCli("cli", "seonix_nope", JSON.stringify({ repo_path: dir }));
+    const bad = runCli("cli", "tmct_nope", JSON.stringify({ repo_path: dir }));
     assert.notEqual(bad.status, 0);
     assert.match(bad.stderr, /unknown tool/);
   } finally {
@@ -62,7 +62,7 @@ test("cli digest: machine header line first, then architecture map + per-module 
     assert.equal(res.status, 0, res.stderr);
     // HARD CONTRACT: the very first line is the machine-readable header the rig greps.
     const first = res.stdout.split("\n")[0];
-    assert.match(first, /^# seonix-digest tier=(NONE|TINY|MID|LARGE) topup=(true|false) modules=\d+$/, first);
+    assert.match(first, /^# tmct-digest tier=(NONE|TINY|MID|LARGE) topup=(true|false) modules=\d+$/, first);
     assert.match(first, /modules=1/);
     assert.match(res.stdout, /# Repository architecture/);
     assert.match(res.stdout, /# Context bundle: app\/lib\/a\.mjs/);
@@ -79,7 +79,7 @@ test("cli digest (B2): primary gets a full bundle, secondaries are ranked + trim
     // now keeps module digests TINY (see the dedicated min/untuned tests below).
     const res = runCli("cli", "digest", JSON.stringify({ repo_path: dir, modules: ["app/lib/b.mjs", "app/lib/a.mjs"], untuned: true }));
     assert.equal(res.status, 0, res.stderr);
-    assert.match(res.stdout.split("\n")[0], /^# seonix-digest tier=\w+ topup=(true|false) modules=2$/);
+    assert.match(res.stdout.split("\n")[0], /^# tmct-digest tier=\w+ topup=(true|false) modules=2$/);
     // the secondary module is marked trimmed
     assert.match(res.stdout, /# Context bundle: app\/lib\/a\.mjs \(secondary, trimmed\)/);
     // the primary (b) carries the full tail (covering tests); the trimmed secondary section does NOT
@@ -93,10 +93,10 @@ test("cli digest (B2): primary gets a full bundle, secondaries are ranked + trim
   }
 });
 
-test("cli seonix_locate (TUNING #3): emits ranked <relpath>\\t<score>, highest first", async () => {
+test("cli tmct_locate (TUNING #3): emits ranked <relpath>\\t<score>, highest first", async () => {
   const dir = await repoWithFixtureGraph();
   try {
-    const res = runCli("cli", "seonix_locate", JSON.stringify({ repo_path: dir, query: "fnAlpha" }));
+    const res = runCli("cli", "tmct_locate", JSON.stringify({ repo_path: dir, query: "fnAlpha" }));
     assert.equal(res.status, 0, res.stderr);
     const lines = res.stdout.trim().split("\n").filter(Boolean);
     assert.ok(lines.length >= 1, "at least one ranked line");
@@ -131,11 +131,11 @@ test("cli digest min/untuned (B012: tuning #1 reverted): default==untuned MID; m
     assert.equal(min.status, 0, min.stderr);
     assert.equal(untuned.status, 0, untuned.stderr);
     // reverted default: long exemplar escalates to MID + top-up
-    assert.match(headerOf(def.stdout), /^# seonix-digest tier=MID topup=true modules=1$/, headerOf(def.stdout));
+    assert.match(headerOf(def.stdout), /^# tmct-digest tier=MID topup=true modules=1$/, headerOf(def.stdout));
     // min: leanest, always TINY + no top-up
-    assert.match(headerOf(min.stdout), /^# seonix-digest tier=TINY topup=false modules=1$/, headerOf(min.stdout));
+    assert.match(headerOf(min.stdout), /^# tmct-digest tier=TINY topup=false modules=1$/, headerOf(min.stdout));
     // untuned: now a no-op for sizing → identical MID
-    assert.match(headerOf(untuned.stdout), /^# seonix-digest tier=MID topup=true modules=1$/, headerOf(untuned.stdout));
+    assert.match(headerOf(untuned.stdout), /^# tmct-digest tier=MID topup=true modules=1$/, headerOf(untuned.stdout));
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

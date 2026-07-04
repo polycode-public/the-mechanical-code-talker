@@ -1,6 +1,6 @@
-// chat.mjs — `seonix chat`: a full interactive client over the seonix code-graph.
+// chat.mjs — `tmct chat`: a full interactive client over the tmct code-graph.
 // Any BARE line is a plain-English question dispatched through the mechanical
-// seonix_ask engine (the EXACT path bin/cli.mjs's `cli seonix_ask` fallback uses),
+// tmct_ask engine (the EXACT path bin/cli.mjs's `cli tmct_ask` fallback uses),
 // so chat is the same zero-model engine with a readline shell around it, plus:
 //
 //   - SLASH-COMMANDS to reach every richer tool dispatchTool (server.mjs) serves —
@@ -17,11 +17,11 @@
 //     resolves a primary entity remembers it; a bare `it`/`this`/`that` (threaded
 //     to ask() as contextId) or a no-arg entity command then reuse it, so "what
 //     calls it" works after `/describe Foo`. `/focus <symbol>` sets it explicitly;
-//     the prompt shows it (`seon(walk.mjs)>`). No focus set → single-shot as before.
+//     the prompt shows it (`tmct(walk.mjs)>`). No focus set → single-shot as before.
 //
 // Sessions are logged to <repo>/SESSION_LOG_DIR/session-<uuidv7>.log, appended and
 // flushed per turn so a killed session keeps everything up to its last turn.
-// Alongside it a STRUCTURED sidecar (.seonix/sessions/session-<uuidv7>.jsonl,
+// Alongside it a STRUCTURED sidecar (.tmct/sessions/session-<uuidv7>.jsonl,
 // sessions.mjs) records each turn's query, the command used, and the resolved/
 // answered entity ids — for SLASH-COMMAND turns too — and the session is upserted
 // into graph.json per turn as a first-class `Session` individual with mgx:asksAbout
@@ -49,19 +49,19 @@ import * as defaultSource from "./source.mjs";
 // here because callers/tests still import it from chat.mjs.
 export { uuidv7 };
 
-/** Where session logs live, relative to the target repo. `.seonix/` is the repo's
+/** Where session logs live, relative to the target repo. `.tmct/` is the repo's
  *  one artifact directory (gitignored, machine-local) — flip this single constant
  *  if the operator prefers a different location. */
-export const SESSION_LOG_DIR = ".seonix";
+export const SESSION_LOG_DIR = ".tmct";
 
-/** The base (no-focus) prompt. With a focus set the shell shows `seon(label)>`. */
-export const PROMPT = "seon> ";
+/** The base (no-focus) prompt. With a focus set the shell shows `tmct(label)>`. */
+export const PROMPT = "tmct> ";
 
-/** dispatchTool("seonix_ask", …) returns the prose answer plus a delimited
+/** dispatchTool("tmct_ask", …) returns the prose answer plus a delimited
  *  machine-readable envelope (server.mjs §6.2); the TUI shows the prose only.
  *  Reused verbatim when chat builds the same string from a direct ask() call
  *  (the focus/contextId path), so runTurn parses one envelope shape either way. */
-const ASK_ENVELOPE_DELIM = "\n\n---seonix_ask---\n";
+const ASK_ENVELOPE_DELIM = "\n\n---tmct_ask---\n";
 
 /** The context pronouns a focus can stand in for — a bare `it`/`this`/`that`/`here`
  *  as a command arg reuses the focus, and the ask engine resolves the same words
@@ -75,22 +75,22 @@ const isPronoun = (s) => CONTEXT_WORDS.has(String(s || "").trim().toLowerCase())
  *  `query`; the rest take `symbol`) — never invented. `arg:null` → no-argument
  *  tool; `optional:true` → the arg may be omitted (whole-repo architecture). */
 export const COMMANDS = {
-  find:       { tool: "seonix_search",       arg: "query",   help: "lexical search across the graph" },
-  search:     { tool: "seonix_search",       arg: "query",   help: "alias of /find" },
-  context:    { tool: "seonix_context",      arg: "symbol",  help: "the sized edit bundle for a symbol (start here to change code)" },
-  snippet:    { tool: "seonix_snippet",      arg: "symbol",  help: "exact source of one function/class/method" },
-  describe:   { tool: "seonix_describe",     arg: "symbol",  help: "a symbol's definition, kind and relations" },
-  signature:  { tool: "seonix_signature",    arg: "symbol",  help: "a symbol's signature only" },
-  members:    { tool: "seonix_members",      arg: "class",   help: "the methods/attributes of a class" },
-  subclasses: { tool: "seonix_subclasses",   arg: "class",   help: "the subclasses of a class" },
-  impact:     { tool: "seonix_impact",       arg: "module",  help: "what a change to this module reaches (impact closure)" },
-  callers:    { tool: "seonix_callers",      arg: "symbol",  help: "functions that call this symbol" },
-  callees:    { tool: "seonix_callees",      arg: "symbol",  help: "functions this symbol calls" },
-  tests:      { tool: "seonix_tests_for",    arg: "symbol",  help: "the tests covering this symbol" },
-  untested:   { tool: "seonix_untested",     arg: null,      help: "symbols with no covering test" },
-  history:    { tool: "seonix_history",      arg: "symbol",  help: "the commit history of this symbol" },
-  exports:    { tool: "seonix_exports",      arg: "module",  help: "a module's public exports" },
-  arch:       { tool: "seonix_architecture", arg: "package", help: "the architecture overview (optional package filter)", optional: true },
+  find:       { tool: "tmct_search",       arg: "query",   help: "lexical search across the graph" },
+  search:     { tool: "tmct_search",       arg: "query",   help: "alias of /find" },
+  context:    { tool: "tmct_context",      arg: "symbol",  help: "the sized edit bundle for a symbol (start here to change code)" },
+  snippet:    { tool: "tmct_snippet",      arg: "symbol",  help: "exact source of one function/class/method" },
+  describe:   { tool: "tmct_describe",     arg: "symbol",  help: "a symbol's definition, kind and relations" },
+  signature:  { tool: "tmct_signature",    arg: "symbol",  help: "a symbol's signature only" },
+  members:    { tool: "tmct_members",      arg: "class",   help: "the methods/attributes of a class" },
+  subclasses: { tool: "tmct_subclasses",   arg: "class",   help: "the subclasses of a class" },
+  impact:     { tool: "tmct_impact",       arg: "module",  help: "what a change to this module reaches (impact closure)" },
+  callers:    { tool: "tmct_callers",      arg: "symbol",  help: "functions that call this symbol" },
+  callees:    { tool: "tmct_callees",      arg: "symbol",  help: "functions this symbol calls" },
+  tests:      { tool: "tmct_tests_for",    arg: "symbol",  help: "the tests covering this symbol" },
+  untested:   { tool: "tmct_untested",     arg: null,      help: "symbols with no covering test" },
+  history:    { tool: "tmct_history",      arg: "symbol",  help: "the commit history of this symbol" },
+  exports:    { tool: "tmct_exports",      arg: "module",  help: "a module's public exports" },
+  arch:       { tool: "tmct_architecture", arg: "package", help: "the architecture overview (optional package filter)", optional: true },
 };
 
 /** Args that name a single graph entity — the ones a no-arg/pronoun command falls
@@ -132,7 +132,7 @@ function countableKinds(graph) {
 }
 
 /** Recognise a count/aggregate question and answer it from the graph header, or
- *  null if it isn't one (→ fall through to seonix_ask). "how many X [are there]",
+ *  null if it isn't one (→ fall through to tmct_ask). "how many X [are there]",
  *  "count [the] X", "number of X". An unknown kind lists what it CAN count. */
 export function answerCount(graph, query) {
   if (!graph) return null;
@@ -336,7 +336,7 @@ async function resolveEntity(graph, term) {
 }
 
 /** The `/help` body: the bare-question default + every command (from COMMANDS, so
- *  it can't drift) + the seonix_ask question shapes, pulled from the engine's own
+ *  it can't drift) + the tmct_ask question shapes, pulled from the engine's own
  *  rephraseHint() so the shapes are exactly the ones the grammar supports. */
 export async function helpText() {
   const rows = [
@@ -358,12 +358,12 @@ export async function helpText() {
   }
   return [
     "commands:", ...lines, "",
-    "question shapes for a bare line (seonix_ask):", `  ${shapes}`,
+    "question shapes for a bare line (tmct_ask):", `  ${shapes}`,
     'plus counts: "how many <classes|functions|modules|methods|commits> are there".',
   ].join("\n");
 }
 
-/** A bare question → seonix_ask. When a focus is set AND the graph is in hand we
+/** A bare question → tmct_ask. When a focus is set AND the graph is in hand we
  *  call ask() directly to thread the focus as contextId (so a pronoun like "it"
  *  resolves to the focus) — building the SAME delimited string dispatchTool emits;
  *  otherwise the unchanged dispatchTool path (which also yields the no-graph error).
@@ -378,9 +378,9 @@ async function runAsk(query, { config, source, graph, focus }) {
     if (graph && focus?.id) {
       const { ask } = await import("./ask.mjs");
       const r = ask(graph, query, { contextId: focus.id });
-      text = `${r.content}${ASK_ENVELOPE_DELIM}${JSON.stringify(r.seonix_ask, null, 2)}`;
+      text = `${r.content}${ASK_ENVELOPE_DELIM}${JSON.stringify(r.tmct_ask, null, 2)}`;
     } else {
-      text = await dispatchTool("seonix_ask", { query }, { config, source });
+      text = await dispatchTool("tmct_ask", { query }, { config, source });
     }
     const [content, envJson] = text.split(ASK_ENVELOPE_DELIM);
     answer = content;
@@ -478,7 +478,7 @@ async function runCommand(line, { config, source, graph, focus }) {
 /**
  * One chat turn: input → { answer, logLines, record, focus }. Pure of any
  * TTY/stream concerns so tests exercise it directly. A leading `/` routes to a
- * slash-command; anything else is a bare seonix_ask question. `focus` in is the
+ * slash-command; anything else is a bare tmct_ask question. `focus` in is the
  * current focus entity ({id,label}) or null; `focus` out is the (possibly updated)
  * focus the caller should carry into the next turn. A turn never crashes the
  * session — a grammar miss, an unknown command and a bad-symbol ToolError all come
@@ -511,13 +511,13 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
 
 /** Trim a focus label for the prompt so a long module path can't run the line off. */
 const shortLabel = (l) => { const s = String(l); return s.length > 40 ? "…" + s.slice(-39) : s; };
-const promptFor = (focus) => (focus ? `seon(${shortLabel(focus.label)})> ` : PROMPT);
+const promptFor = (focus) => (focus ? `tmct(${shortLabel(focus.label)})> ` : PROMPT);
 
 /**
  * The interactive shell. Streams are injectable so tests run scripted sessions
  * without a TTY. A repo with NO graph artifact is not an error: the session
  * starts from the empty bootstrap graph (the banner says so honestly) and the
- * first turn's fold-in creates .seonix/graph.json from the conversation itself.
+ * first turn's fold-in creates .tmct/graph.json from the conversation itself.
  * Returns { logFile, sidecarFile, turns } once the session ends.
  */
 export async function runChat({
@@ -570,8 +570,8 @@ export async function runChat({
   const writeSidecar = (obj) => flush(sidecar, JSON.stringify(obj) + "\n");
 
   const startIso = new Date().toISOString();
-  await writeLog(`# seonix chat ${version} — session started ${startIso} — repo ${repo}\n\n`);
-  await writeSidecar({ type: "session", id: sessionId, started: startIso, repo, seonixVersion: version });
+  await writeLog(`# tmct chat ${version} — session started ${startIso} — repo ${repo}\n\n`);
+  await writeSidecar({ type: "session", id: sessionId, started: startIso, repo, tmctVersion: version });
 
   // Read-time graph upsert (sessions.mjs): after every turn, the session becomes /
   // stays a first-class Session individual in graph.json (crash-safe: turn n is in
@@ -587,10 +587,10 @@ export async function runChat({
   const dim = (s) => (env.NO_COLOR || !output.isTTY ? s : `\x1b[2m${s}\x1b[0m`);
   if (graph.individuals.length === 0) {
     // Empty-graph bootstrap: honest-miss messaging, never an error before the prompt.
-    output.write(dim(`seonix chat — ${repo} — no graph loaded — starting empty; ` +
+    output.write(dim(`tmct chat — ${repo} — no graph loaded — starting empty; ` +
       `the conversation is remembered to ${DEFAULT_GRAPH_REL} — log ${logFile}`) + "\n");
   } else {
-    output.write(dim(`seonix chat — ${repo} — ${moduleCount} module(s) — log ${logFile}`) + "\n");
+    output.write(dim(`tmct chat — ${repo} — ${moduleCount} module(s) — log ${logFile}`) + "\n");
   }
   output.write(dim("pass --repo <path> to target a different repo") + "\n");
   output.write(dim("ask a question, or /help for commands (/stats for an overview) — /exit to leave") + "\n");

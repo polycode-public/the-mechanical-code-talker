@@ -45,8 +45,8 @@ test("lemma tier: \"what imported walk.mjs\" parses (reverse/imports) with the a
 
 test("lemma tier: e2e — \"which modules imported src/logging.mjs\" answers off the real imports edges", () => {
   const graph = buildGraph();
-  const { content, seonix_ask } = ask(graph, "which modules imported src/logging.mjs");
-  assert.equal(seonix_ask.miss, false);
+  const { content, tmct_ask } = ask(graph, "which modules imported src/logging.mjs");
+  assert.equal(tmct_ask.miss, false);
   assert.match(content, /myFile\.mjs/);
 });
 
@@ -127,15 +127,15 @@ test("viewer bundle without wink: stripped codegraph+vocab+ask evaluates and ans
   ctx.__raw = JSON.parse(JSON.stringify(rawEntities()));
   const run = (q) => vm.runInContext(`ask(parseEntities(__raw), ${JSON.stringify(q)})`, ctx);
   // exact grammar — unchanged
-  assert.equal(run("which modules import src/logging.mjs").seonix_ask.miss, false);
+  assert.equal(run("which modules import src/logging.mjs").tmct_ask.miss, false);
   // curated misspelling corrections — plain tables, work in the page
-  assert.equal(run("whcih moduels improt src/logging.mjs").seonix_ask.miss, false);
+  assert.equal(run("whcih moduels improt src/logging.mjs").tmct_ask.miss, false);
   // bounded fuzzy keyword + object — plain JS, works in the page ("loging" is a
   // 1-edit typo of the "logging" label component; a dotted typo like "loggng.mjs"
   // would stop at tier 3 instead, its ".mjs" component matching every module)
-  assert.equal(run("which modules impotr src/logging.mjs").seonix_ask.miss, false);
+  assert.equal(run("which modules impotr src/logging.mjs").tmct_ask.miss, false);
   assert.match(run("which modules import loging").content, /assuming you meant/);
   // lemma tier honestly OFF (no adapter): the inflected form stays a grammar miss
-  assert.equal(run("what imported src/logging.mjs").seonix_ask.miss, true);
+  assert.equal(run("what imported src/logging.mjs").tmct_ask.miss, true);
   assert.match(run("what imported src/logging.mjs").content, /couldn't parse/);
 });

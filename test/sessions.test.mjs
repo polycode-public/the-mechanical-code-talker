@@ -110,7 +110,7 @@ test("upsertSession: unresolvable ref → edge dropped + counted; moved symbol r
 
 test("parseSessionJsonl: header + turns + end; torn trailing line skipped; headerless → null", () => {
   const text = [
-    JSON.stringify({ type: "session", id: RECORD.id, started: RECORD.started, repo: "/r", seonixVersion: "0.2.1" }),
+    JSON.stringify({ type: "session", id: RECORD.id, started: RECORD.started, repo: "/r", tmctVersion: "0.2.1" }),
     JSON.stringify({ type: "turn", ...RECORD.turns[0] }),
     JSON.stringify({ type: "turn", ts: "2026-07-02T10:02:00.000Z", query: "tell me a joke", resolvedIds: [], answeredIds: [], miss: true }),
     JSON.stringify({ type: "end", ts: RECORD.ended }),
@@ -129,7 +129,7 @@ test("parseSessionJsonl: header + turns + end; torn trailing line skipped; heade
 // ---- read-time graph append (atomic) ----
 
 test("appendSessionToGraph: fresh-read + atomic write; second append updates in place; no temp litter", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "seonix-sess-append-"));
+  const dir = await mkdtemp(join(tmpdir(), "tmct-sess-append-"));
   try {
     const graphFile = join(dir, "graph.json");
     await writeFile(graphFile, JSON.stringify(freshEntities()));
@@ -158,7 +158,7 @@ test("appendSessionToGraph: fresh-read + atomic write; second append updates in 
 });
 
 test("readSessionRecords: no sessions dir → [] (every existing fixture repo)", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "seonix-sess-none-"));
+  const dir = await mkdtemp(join(tmpdir(), "tmct-sess-none-"));
   try {
     assert.deepEqual(await readSessionRecords(dir), []);
   } finally {

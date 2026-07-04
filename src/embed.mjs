@@ -31,11 +31,11 @@ const MODEL_FILE = "model.safetensors";
 const TOKENIZER_FILE = "tokenizer.json";
 const CONFIG_FILE = "config.json";
 
-/** Default artifact dir: $SEONIX_EMBED_DIR, else <repo>/vendor/embeddings/potion-base-8M
+/** Default artifact dir: $TMCT_EMBED_DIR, else <repo>/vendor/embeddings/potion-base-8M
  *  (gitignored via vendor/ — the location scripts/fetch-embeddings.mjs writes). */
 export function defaultEmbeddingsDir() {
-  if (process.env.SEONIX_EMBED_DIR) return process.env.SEONIX_EMBED_DIR;
-  const here = dirname(fileURLToPath(import.meta.url)); // packages/seonix/src
+  if (process.env.TMCT_EMBED_DIR) return process.env.TMCT_EMBED_DIR;
+  const here = dirname(fileURLToPath(import.meta.url)); // packages/tmct/src
   return join(here, "..", "..", "..", "vendor", "embeddings", "potion-base-8M");
 }
 

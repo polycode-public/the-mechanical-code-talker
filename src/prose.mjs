@@ -1,7 +1,7 @@
 // prose.mjs — the second-pass prose extraction + cross-reference index (PLAN_PROSE_INDEX.md).
 //
 // Deterministic, zero-model-calls, zero dependencies: pure string transforms + a plain-object
-// inverted index over data extract.mjs's typed pass has already produced (identifier names,
+// inverted index over data graph-build.mjs's typed pass has already produced (identifier names,
 // captured doc text). Two token sources, one combined set per individual:
 //   1. identifier decomposition — names are often literal sentence fragments
 //      ("calculateTotalPriceIncludingTax" -> calculate/total/price/including/tax); splitting
@@ -86,7 +86,7 @@ export function proseTokensFor({ name, doc } = {}) {
  *  decomposing it and tokenize its `message` attribute instead, which is the real prose
  *  (commit messages are often the richest free text in the whole graph). Mutates and
  *  returns the same array — safe to call once after the typed individuals are built.
- *  `enabled=false` is a no-op (the disable path `SEONIX_PROSE_INDEX=0` in extract.mjs), so
+ *  `enabled=false` is a no-op (the disable path `TMCT_PROSE_INDEX=0` in a graph writer), so
  *  the core typed graph is never affected by turning this pass off. */
 export function attachProseTokens(individuals, { enabled = true } = {}) {
   if (!enabled) return individuals;
@@ -148,13 +148,13 @@ export function lookupByProseTokens(proseIndex, query, { limit = 10 } = {}) {
  *  build is unchanged — this only READS the layers the pre-pass already wrote). Given a query
  *  `token`, return the individual ids reachable through the NORMALISED prose layers
  *  (spell-corrected / canonical-schema-term / stem / lemma) stored under
- *  `proseIndex["seonix:layers"]` — the same normalised layers ask.mjs's resolveObject consults,
+ *  `proseIndex["tmct:layers"]` — the same normalised layers ask.mjs's resolveObject consults,
  *  here surfaced for the locate SCORER so a task-text word that only overlaps a module via a
  *  normalised form still resolves.
  *
  *  Layer shape consumed (an inverted index keyed by the NORMALISED token, mirroring the verbatim
  *  top level, just normalised):
- *    proseIndex["seonix:layers"] = { <layerName>: { <normalisedToken>: [id, …] }, … }
+ *    proseIndex["tmct:layers"] = { <layerName>: { <normalisedToken>: [id, …] }, … }
  *  A posting may be a plain id array or `{ ids: [...] }` — both are tolerated. The raw query
  *  token is looked up directly against every layer's keys, so a token whose surface form is
  *  already a canonical/stem/lemma/spell-corrected key hits; the accessor never itself normalises
@@ -167,8 +167,8 @@ export function lookupByProseTokens(proseIndex, query, { limit = 10 } = {}) {
  *  safe no-op, so the opt-in flag degrades to nothing on a graph indexed before layers existed.
  *  Accepts either a `proseIndex` object or a parsed graph (reads its `.proseIndex`). */
 export function proseLayerHits(proseIndex, token) {
-  const src = proseIndex && (proseIndex["seonix:layers"] ? proseIndex : proseIndex.proseIndex);
-  const layers = src && src["seonix:layers"];
+  const src = proseIndex && (proseIndex["tmct:layers"] ? proseIndex : proseIndex.proseIndex);
+  const layers = src && src["tmct:layers"];
   const t = String(token || "").toLowerCase();
   const empty = { ids: [], via: null };
   if (!t || !layers || typeof layers !== "object") return empty;

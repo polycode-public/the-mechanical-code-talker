@@ -1,16 +1,16 @@
-// seonix tool layer — query-only tools over the deterministic typed code-graph
-// artifact (<repo>/.seonix/graph.json). The graph source is a LOCAL file
-// (src/source.mjs) and seonix_search is a LOCAL lexical lookup (no remote API,
+// tmct tool layer — query-only tools over the deterministic typed code-graph
+// artifact (<repo>/.tmct/graph.json). The graph source is a LOCAL file
+// (src/source.mjs) and tmct_search is a LOCAL lexical lookup (no remote API,
 // no LLM, no model calls anywhere). dispatchTool is the single internal switch
 // the chat surface and the `cli <tool>` route call into.
 //
-// Tools (all query-only, bounded output): seonix_search, seonix_describe, seonix_snippet,
-// seonix_impact, plus the §9 read-replacing tools seonix_members, seonix_subclasses,
-// seonix_architecture, seonix_tests_for, seonix_untested, seonix_history, seonix_callers,
-// seonix_callees. Each answers one question in ONE compact call so the caller need not
+// Tools (all query-only, bounded output): tmct_search, tmct_describe, tmct_snippet,
+// tmct_impact, plus the §9 read-replacing tools tmct_members, tmct_subclasses,
+// tmct_architecture, tmct_tests_for, tmct_untested, tmct_history, tmct_callers,
+// tmct_callees. Each answers one question in ONE compact call so the caller need not
 // Read/Grep. Errors reach the caller as clean tool errors — message only, never a stack.
 //
-// seonix_ask (hot tool): a mechanical, zero-model-call NL query over the graph —
+// tmct_ask (hot tool): a mechanical, zero-model-call NL query over the graph —
 // collapses the search+describe+traversal composition loop a caller would
 // otherwise hand-compose into one deterministic round-trip. See ask.mjs.
 
@@ -54,10 +54,10 @@ const SNIPPET_MAX_LINES = 200;
 // Tiered tool surface: the hot tools carry full descriptions/schemas in this
 // catalog; every COLD tool (describe/members/impact/history/…) is still served
 // by dispatchTool below and is reachable via the CLI `cli <tool>` route +
-// the generated <repo>/.seonix/TOOLS.md catalog (renderToolsCatalog).
+// the generated <repo>/.tmct/TOOLS.md catalog (renderToolsCatalog).
 export const TOOLS = [
   {
-    name: "seonix_context",
+    name: "tmct_context",
     // Lean resident schema (re-billed every turn): the minimum that still steers the agent to
     // ONE call → write, not Read.
     description:
@@ -72,7 +72,7 @@ export const TOOLS = [
     },
   },
   {
-    name: "seonix_snippet",
+    name: "tmct_snippet",
     description: "EXACT source of one function/class/Class.method by name (its line span only) + a one-line in-repo call hint. Prefer over Read for a single symbol.",
     inputSchema: {
       type: "object",
@@ -83,7 +83,7 @@ export const TOOLS = [
     },
   },
   {
-    name: "seonix_ask",
+    name: "tmct_ask",
     description:
       "Ask a structural question in plain English: \"which functions call X\", \"what uses X\", \"where is X defined\", \"when did X change\". One call, no model. A clean miss beats a guess.",
     inputSchema: {
@@ -115,15 +115,15 @@ function resolveOrThrow(graph, symbol, what) {
   if (!match) {
     throw new ToolError(
       `no entity matching ${what} "${symbol}" in the code-map graph. ` +
-        "Try a repo-relative path (e.g. django/utils/text.py), a basename, or seonix_search for a fuzzy lookup.",
+        "Try a repo-relative path (e.g. django/utils/text.py), a basename, or tmct_search for a fuzzy lookup.",
     );
   }
   return { match, candidates };
 }
 
 /**
- * Build the seonix_context "edit bundle" for a symbol and return { text, tier, topup }.
- * Shared by the seonix_context tool AND the `cli digest` arm (cli.mjs), so both
+ * Build the tmct_context "edit bundle" for a symbol and return { text, tier, topup }.
+ * Shared by the tmct_context tool AND the `cli digest` arm (cli.mjs), so both
  * benefit from the size-adaptive sizing for free. `trim:true` (B2) renders a SECONDARY,
  * signatures-only bundle (no bodies/tails) for related-but-not-primary digest modules.
  *
@@ -143,7 +143,7 @@ export async function buildContextBundle(args, { config, source = defaultSource,
   const untuned = Boolean(args?.untuned);
   // `max` forces the injection CEILING — FULL tier (every section + inlined depth-1 callee
   // bodies) with top-up, and it OVERRIDES trim so even secondary modules get the full bundle. Used
-  // by the seonix-max arm to test whether more injection re-bloats.
+  // by the tmct-max arm to test whether more injection re-bloats.
   const max = Boolean(args?.max);
   const graph = await loadGraph(config, source);
   const { match } = resolveOrThrow(graph, symbol, "symbol");
@@ -226,7 +226,7 @@ export async function buildContextBundle(args, { config, source = defaultSource,
       out.push(`  ${s.class} ${s.label}${s.site ? ` :${s.site.start}` : ""}  ${dec}${sig}${r}`);
     }
     if (plan.siblings.length > plan.siblingCap) {
-      out.push(`  …+${plan.siblings.length - plan.siblingCap} more (use seonix_search kind=function or seonix_snippet <name> for any of them)`);
+      out.push(`  …+${plan.siblings.length - plan.siblingCap} more (use tmct_search kind=function or tmct_snippet <name> for any of them)`);
     }
   }
   if (mask.allExports && plan.allExports) {
@@ -251,30 +251,30 @@ export async function buildContextBundle(args, { config, source = defaultSource,
   out.push(`\nYou now have the snippet, the sibling style, the registration anchor and the tests. ` +
     `Write the new code with Edit/Write — do NOT Read ${plan.moduleLabel}.`);
   if (tier !== "FULL") {
-    out.push(`(bundle tier ${tier}; for any omitted sections run seonix_context_more {"symbol":"${symbol}"}, or seonix_context with depth="full".)`);
+    out.push(`(bundle tier ${tier}; for any omitted sections run tmct_context_more {"symbol":"${symbol}"}, or tmct_context with depth="full".)`);
   }
   return { text: out.join("\n"), tier, topup };
 }
 
 export async function dispatchTool(name, args, { config, source = defaultSource } = {}) {
-  if (name === "seonix_context") {
+  if (name === "tmct_context") {
     return (await buildContextBundle(args, { config, source })).text;
   }
-  if (name === "seonix_context_more") {
+  if (name === "tmct_context_more") {
     const symbol = String(args?.symbol || "").trim();
     if (!symbol) throw new ToolError("symbol is required");
     const graph = await loadGraph(config, source);
     const { match } = resolveOrThrow(graph, symbol, "symbol");
     return renderContextMore(contextPlan(graph, match));
   }
-  if (name === "seonix_describe") {
+  if (name === "tmct_describe") {
     const symbol = String(args?.symbol || "").trim();
     if (!symbol) throw new ToolError("symbol is required");
     const graph = await loadGraph(config, source);
     const { match, candidates } = resolveOrThrow(graph, symbol, "symbol");
     return renderDescribe(graph, match, { candidates });
   }
-  if (name === "seonix_snippet") {
+  if (name === "tmct_snippet") {
     const symbol = String(args?.symbol || "").trim();
     if (!symbol) throw new ToolError("symbol is required");
     const graph = await loadGraph(config, source);
@@ -283,10 +283,10 @@ export async function dispatchTool(name, args, { config, source = defaultSource 
     if (!site) {
       throw new ToolError(
         `"${match.label}" (${match.class || "Entity"}) has no source span in the graph — ` +
-          "it is likely a module. Use seonix_describe for its contents, then seonix_snippet one of the functions/classes it defines.",
+          "it is likely a module. Use tmct_describe for its contents, then tmct_snippet one of the functions/classes it defines.",
       );
     }
-    // repo root = the dir containing .seonix/ (graphFile = <repo>/.seonix/graph.json)
+    // repo root = the dir containing .tmct/ (graphFile = <repo>/.tmct/graph.json)
     const repoRoot = dirname(dirname(config.graphFile));
     const abs = join(repoRoot, site.path);
     let text;
@@ -305,21 +305,21 @@ export async function dispatchTool(name, args, { config, source = defaultSource 
     const hint = callHint(graph, match); // #4: one-line "calls in-repo: …" so the agent sees in-repo deps inline
     return `${header}\n${body}${note}${hint ? `\n${hint}` : ""}${cand}`;
   }
-  if (name === "seonix_signature") {
+  if (name === "tmct_signature") {
     const symbol = String(args?.symbol || "").trim();
     if (!symbol) throw new ToolError("symbol is required");
     const graph = await loadGraph(config, source);
     const { match } = resolveOrThrow(graph, symbol, "symbol");
     return renderSignature(graph, match);
   }
-  if (name === "seonix_impact") {
+  if (name === "tmct_impact") {
     const module = String(args?.module || "").trim();
     if (!module) throw new ToolError("module is required");
     const graph = await loadGraph(config, source);
     const { match } = resolveOrThrow(graph, module, "module");
     return renderImpact(graph, match);
   }
-  if (name === "seonix_search") {
+  if (name === "tmct_search") {
     const query = String(args?.query || "").trim();
     const kind = String(args?.kind || "").trim();
     if (!query && !kind) throw new ToolError("query is required");
@@ -330,62 +330,62 @@ export async function dispatchTool(name, args, { config, source = defaultSource 
       name: String(args?.name || "").trim(),
     });
   }
-  if (name === "seonix_members") {
+  if (name === "tmct_members") {
     const symbol = String(args?.class || "").trim();
     if (!symbol) throw new ToolError("class is required");
     const graph = await loadGraph(config, source);
     const { match } = resolveOrThrow(graph, symbol, "class");
     return renderMembers(graph, match);
   }
-  if (name === "seonix_subclasses") {
+  if (name === "tmct_subclasses") {
     const symbol = String(args?.class || "").trim();
     if (!symbol) throw new ToolError("class is required");
     const graph = await loadGraph(config, source);
     const { match } = resolveOrThrow(graph, symbol, "class");
     return renderSubclasses(graph, match);
   }
-  if (name === "seonix_architecture") {
+  if (name === "tmct_architecture") {
     const graph = await loadGraph(config, source);
     return renderArchitecture(graph, { pkg: String(args?.package || "").trim() });
   }
-  if (name === "seonix_exports") {
+  if (name === "tmct_exports") {
     const module = String(args?.module || "").trim();
     if (!module) throw new ToolError("module is required");
     const graph = await loadGraph(config, source);
     const { match } = resolveOrThrow(graph, module, "module");
     return renderExports(graph, match);
   }
-  if (name === "seonix_untested") {
+  if (name === "tmct_untested") {
     const graph = await loadGraph(config, source);
     return renderUntested(graph);
   }
-  if (name === "seonix_ask") {
+  if (name === "tmct_ask") {
     const query = String(args?.query || "").trim();
     if (!query) throw new ToolError("query is required");
     const graph = await loadGraph(config, source);
-    const { content, seonix_ask } = ask(graph, query);
+    const { content, tmct_ask } = ask(graph, query);
     // Every dispatchTool caller (the chat surface, the CLI fallback) expects a plain string —
     // append the structured envelope as a delimited, machine-parseable block rather than
     // changing that shared contract for one tool. PLAN_MECHANICAL_CHAT.md §6.2.
-    return `${content}\n\n---seonix_ask---\n${JSON.stringify(seonix_ask, null, 2)}`;
+    return `${content}\n\n---tmct_ask---\n${JSON.stringify(tmct_ask, null, 2)}`;
   }
   if (
-    name === "seonix_tests_for" || name === "seonix_history" || name === "seonix_callers" ||
-    name === "seonix_callees" || name === "seonix_cochanges" || name === "seonix_calls" ||
-    name === "seonix_file_history" || name === "seonix_method_history" || name === "seonix_class_history"
+    name === "tmct_tests_for" || name === "tmct_history" || name === "tmct_callers" ||
+    name === "tmct_callees" || name === "tmct_cochanges" || name === "tmct_calls" ||
+    name === "tmct_file_history" || name === "tmct_method_history" || name === "tmct_class_history"
   ) {
     const symbol = String(args?.symbol || "").trim();
     if (!symbol) throw new ToolError("symbol is required");
     const graph = await loadGraph(config, source);
     const { match } = resolveOrThrow(graph, symbol, "symbol");
-    if (name === "seonix_tests_for") return renderTestsFor(graph, match);
-    if (name === "seonix_history") return renderHistory(graph, match);
-    if (name === "seonix_callers") return renderCallers(graph, match);
-    if (name === "seonix_cochanges") return renderCochanges(graph, match);
-    if (name === "seonix_calls") return renderCalls(graph, match);
-    if (name === "seonix_file_history") return renderFileHistory(graph, match);
-    if (name === "seonix_method_history") return renderMethodHistory(graph, match);
-    if (name === "seonix_class_history") return renderClassHistory(graph, match);
+    if (name === "tmct_tests_for") return renderTestsFor(graph, match);
+    if (name === "tmct_history") return renderHistory(graph, match);
+    if (name === "tmct_callers") return renderCallers(graph, match);
+    if (name === "tmct_cochanges") return renderCochanges(graph, match);
+    if (name === "tmct_calls") return renderCalls(graph, match);
+    if (name === "tmct_file_history") return renderFileHistory(graph, match);
+    if (name === "tmct_method_history") return renderMethodHistory(graph, match);
+    if (name === "tmct_class_history") return renderClassHistory(graph, match);
     return renderCallees(graph, match);
   }
   throw new ToolError(`unknown tool: ${name}`);

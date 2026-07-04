@@ -2,8 +2,8 @@ import { lookupByProseTokens, proseLayerHits } from "./prose.mjs";
 import { cosine } from "./embed.mjs";
 
 // Pure (no-network, no-fs) query logic over the typed `entities` payload that the
-// deterministic indexer writes to <repo>/.seonix/graph.json (shape produced by
-// src/extract.mjs):
+// deterministic indexer writes to <repo>/.tmct/graph.json (shape produced by
+// src/graph-build.mjs):
 //
 //   {
 //     generated_at, classes: [{name, count, sample[]}],
@@ -16,7 +16,7 @@ import { cosine } from "./embed.mjs";
 // Ported ≈verbatim from marginalia seon-mcp/src/codegraph.mjs (the shipped,
 // tested typed-edge query layer). The only edits: provenance/attestation wording
 // is code-graph-generic (git:<sha> / file:line refs, not memory-node prose), and
-// a renderSearch() is added for the local, deterministic seonix_search.
+// a renderSearch() is added for the local, deterministic tmct_search.
 //
 // Edge inventory is read DYNAMICALLY from the payload (predicate verb + the closed
 // `prop` token like "mg:imports"); only the kind-classifier for the impact closure
@@ -66,7 +66,7 @@ const KINDS = ["imports", "calls", "defines", "tests", "touches", "contains", "i
 // our `mgx:` extension; the legacy `mg:` tokens are kept so a stale artifact still
 // classifies. Lower-cased keys.
 const PROP_KIND = {
-  // v2.0 faithful tokens (SEONIX realign)
+  // v2.0 faithful tokens (SEON-faithful realign)
   "mgx:importsnamespace": "imports",
   "mgx:callscoarse": "calls",
   "seon:declaresmethod": "defines",
@@ -181,7 +181,7 @@ export function resolveSymbol(graph, symbol) {
   };
 }
 
-// ---- source site (for seonix_snippet) -------------------------------------------
+// ---- source site (for tmct_snippet) -------------------------------------------
 
 /** Parse a Function/Class individual's `site` attribute ("path:start[-end]") into
  *  {path, start, end}, or null if it has none (e.g. a Module). Pure. */
@@ -274,9 +274,9 @@ function truncationNote(graph) {
  * terminate via the visited set. Each dependent carries the via-predicate and
  * the test modules covering it (subjects of tests-kind edges pointing at it).
  *
- * Module-coarse "calls" (`mgx:callsCoarse`, extract.mjs) is deliberately
+ * Module-coarse "calls" (`mgx:callsCoarse`, graph-build.mjs) is deliberately
  * conservative — it only fires when the callee's module is ALREADY in the
- * caller's import list ("coarse, import-backed calls", extract.mjs's own
+ * caller's import list ("coarse, import-backed calls", graph-build.mjs's own
  * comment), so by construction every "calls" edge is a strict subset of an
  * "imports" edge between the same pair — it never independently extends this
  * closure's reach beyond what "imports" alone already gives it. `callsSymbol`
@@ -377,7 +377,7 @@ export function renderImpact(graph, ind, { maxDepth = 8 } = {}) {
     lines.push(
       "warning: partial edge lists (" +
         truncatedStructural.map((t) => `${t.predicate}: ${t.shown}/${t.count}`).join(", ") +
-        ") — this closure may be missing edges. Cross-check critical results with seonix_search.",
+        ") — this closure may be missing edges. Cross-check critical results with tmct_search.",
     );
   }
   return lines.join("\n");
@@ -400,12 +400,12 @@ function definesIndex(graph) {
 
 /**
  * Local, deterministic free-text lookup over the typed graph — the offline
- * replacement for marginalia's LLM-backed A2A seonix_search. Finds the MODULE
+ * replacement for marginalia's LLM-backed A2A tmct_search. Finds the MODULE
  * where code lives ("where do template filters / validators live?"): scores
  * modules by query-token hits in the path (strong) plus the count of DEFINED
  * SYMBOLS whose name matches a token (capped so a giant module can't dominate),
  * with a penalty for test modules. Renders each hit compactly with the matching
- * symbols, so the agent can jump straight to seonix_describe. No model calls.
+ * symbols, so the agent can jump straight to tmct_describe. No model calls.
  */
 const SEARCH_LIMIT = 10;
 const SEARCH_SYMBOLS_SHOWN = 8;
@@ -438,7 +438,7 @@ const CALL_PROX_CAP_FRAC = 0.35;
 // B016 E1b (opt-in via implOfInterface): boost a module that implements an interface DEFINED
 // in a strongly-matched module (C# IBasketService→BasketService, the rank-4 case). PLAN_B016
 // §6.1 specified an `isAbstract` guard, but that field is never populated by any extractor —
-// verified empirically 2026-07-02 against django/eshoponweb/java-gson .seonix/graph.json: 0
+// verified empirically 2026-07-02 against django/eshoponweb/java-gson .tmct/graph.json: 0
 // individuals carry `isAbstract` in all three. The only real distinguishing signal in the data
 // is C#'s naming convention (interfaces prefixed `I<Uppercase>`, e.g. IBasketService) — and C#'s
 // `inherits` edges point at an UNRESOLVED `ext:<Name>` id rather than the interface's own
@@ -469,7 +469,7 @@ const PROSE_LOOKUP_LIMIT = 50; // bounds lookupByProseTokens' scan; the CAP_FRAC
 
 // Layered prose normalisation (opt-in via proseLayers, 2026-07-02): the prose index now carries
 // NORMALISED layers (spell-corrected / canonical-schema-term / stem / lemma) under
-// proseIndex["seonix:layers"] (built by the prose pre-pass; consumed read-only via prose.mjs's
+// proseIndex["tmct:layers"] (built by the prose pre-pass; consumed read-only via prose.mjs's
 // proseLayerHits). Today the locate scorer matches query tokens against a module's path/symbol
 // text VERBATIM, so a task-text word that only reaches a module via its stem/lemma/canonical form
 // scores nothing. With the flag on, a query token that does NOT already match a module lexically,
@@ -1044,7 +1044,7 @@ function scoreModules(graph, tokens, opts = {}) {
     if (!opts.embedder) {
       if (!embedWarned) {
         embedWarned = true;
-        process.stderr.write("seonix: embedRank requested but no embedder available (weights not fetched? see `npm run refs:embeddings`) — flag is a no-op\n");
+        process.stderr.write("tmct: embedRank requested but no embedder available (weights not fetched? see `npm run refs:embeddings`) — flag is a no-op\n");
       }
     } else if (scored.length) {
       const embedder = opts.embedder;
@@ -1150,7 +1150,7 @@ export function renderSearch(graph, query, { limit = SEARCH_LIMIT, kind = "", de
   if (!tokens.length && !nameRe && !decFilter) return "empty query";
   const scored = scoreModules(graph, tokens);
   if (!scored.length) {
-    return `no module matches "${query}". Try broader keywords, or seonix_describe <path> if you know where it lives.`;
+    return `no module matches "${query}". Try broader keywords, or tmct_describe <path> if you know where it lives.`;
   }
   const hits = scored.slice(0, limit);
   const lines = [`${scored.length} module(s) match "${query}" (top ${hits.length}):`];
@@ -1158,7 +1158,7 @@ export function renderSearch(graph, query, { limit = SEARCH_LIMIT, kind = "", de
     const m = matching.length ? ` — matching: ${capJoin([...new Set(matching)], SEARCH_SYMBOLS_SHOWN)}` : "";
     lines.push(`- ${ind.label} (defines ${defineCount} symbol(s))${m}`);
   }
-  lines.push("Then seonix_describe <path> for the full sibling list + typed edges, or seonix_impact <path> for dependents.");
+  lines.push("Then tmct_describe <path> for the full sibling list + typed edges, or tmct_impact <path> for dependents.");
   return lines.join("\n");
 }
 
@@ -1217,7 +1217,7 @@ export function renderMembers(graph, ind) {
   const lines = [`${ind.label} — ${ind.class || "Entity"} (id: ${ind.id})`];
   const contains = edgesOfKind(graph, "contains").filter((e) => e.subject === ind.id);
   if (!contains.length) {
-    lines.push("members: none recorded (empty class, or members not in the extracted graph). Use seonix_describe for its edges.");
+    lines.push("members: none recorded (empty class, or members not in the extracted graph). Use tmct_describe for its edges.");
     return lines.join("\n");
   }
   const methods = [];
@@ -1231,7 +1231,7 @@ export function renderMembers(graph, ind) {
   }
   if (methods.length) lines.push(`methods (${methods.length}): ${capJoin(methods, MEMBERS_CAP)}`);
   if (attrs.length) lines.push(`attributes (${attrs.length}): ${capJoin(attrs, MEMBERS_CAP)}`);
-  lines.push("Use seonix_snippet <Class.member> for an exact body.");
+  lines.push("Use tmct_snippet <Class.member> for an exact body.");
   return lines.join("\n");
 }
 
@@ -1240,7 +1240,7 @@ const attrVal = (ind, key) => (ind?.attributes || []).find((a) => a.key === key)
 /** The mechanical-enrichment signature of a symbol in ONE compact block — params,
  *  return annotation, raises/catches, self-fields, flags, decorators, one-line doc —
  *  so the agent gets the API surface without reading the body. Deterministic ast facts
- *  (kept OUT of seonix_context's lean bundle; this is the targeted tool for them). */
+ *  (kept OUT of tmct_context's lean bundle; this is the targeted tool for them). */
 export function renderSignature(graph, ind) {
   const site = siteOf(ind);
   const lines = [`${ind.label} — ${ind.class || "Entity"}${spanTag(site)}`];
@@ -1268,8 +1268,8 @@ export function renderSignature(graph, ind) {
   if (value) lines.push(`value: ${value}`);
   const doc = attrVal(ind, "doc");
   if (doc) lines.push(`doc: ${doc}`);
-  if (lines.length === 1) lines.push("(no signature detail recorded for this symbol — likely a module or attribute; use seonix_snippet for its source.)");
-  lines.push("Use seonix_snippet for the exact body.");
+  if (lines.length === 1) lines.push("(no signature detail recorded for this symbol — likely a module or attribute; use tmct_snippet for its source.)");
+  lines.push("Use tmct_snippet for the exact body.");
   return lines.join("\n");
 }
 
@@ -1401,7 +1401,7 @@ export function renderCallers(graph, ind) {
   if (!modId) return `cannot map ${ind.label} to a module.`;
   const modLabel = graph.byId.get(modId)?.label || modId;
   const callers = [...new Set(edgesOfKind(graph, "calls").filter((e) => e.object === modId).map((e) => e.subjectLabel || e.subject))];
-  if (!callers.length) return `${modLabel}: no recorded callers (calls are coarse/import-backed — absence is not proof). Try seonix_impact for the full reverse closure.`;
+  if (!callers.length) return `${modLabel}: no recorded callers (calls are coarse/import-backed — absence is not proof). Try tmct_impact for the full reverse closure.`;
   return `${modLabel} — called by ${callers.length} module(s):\n  ${capJoin(callers, CALL_CAP, "\n  ")}`;
 }
 
@@ -1427,7 +1427,7 @@ function calleeRef(graph, e) {
 }
 
 /** One-line "calls in-repo: name [path:line], …" hint for a function — appended to
- *  seonix_snippet and the seonix_context exemplar body so the agent sees the symbol's
+ *  tmct_snippet and the tmct_context exemplar body so the agent sees the symbol's
  *  in-repo call dependencies inline. Empty string when it calls nothing in-repo. Pure. */
 export function callHint(graph, ind) {
   if (!ind?.id) return "";
@@ -1520,11 +1520,11 @@ function searchSymbols(graph, tokens, { limit = SEARCH_LIMIT, kind, decFilter, n
   const top = hits.slice(0, limit);
   const lines = [`${hits.length} ${kind}(s) match (top ${top.length}):`];
   for (const { ind } of top) lines.push(`- ${ind.label}${spanTag(siteOf(ind))}`);
-  lines.push("Then seonix_snippet <name> for the exact body, or seonix_describe for its edges.");
+  lines.push("Then tmct_snippet <name> for the exact body, or tmct_describe for its edges.");
   return lines.join("\n");
 }
 
-// ---- seonix_context: a one-shot "edit bundle" plan (pure; the server adds the file
+// ---- tmct_context: a one-shot "edit bundle" plan (pure; the server adds the file
 //      reads). Returns everything needed to add-a-sibling to a module in ONE call,
 //      so the agent need not search→describe→snippet→read×N (RepoGraph ego-network
 //      idea; LocAgent: structured, replacement-shaped output drives tool adoption).
@@ -1784,7 +1784,7 @@ export function sizeBundle(plan, graph, { untuned = false } = {}) {
     // (c) a long/complex focal escalates TINY→MID. Escalation fires on any long focal: gating it on
     // an explicit symbol anchor (so a long-exemplar MODULE digest stayed TINY) regressed results,
     // because the trimmed sibling/test tail was load-bearing scaffolding. The `untuned` param is now
-    // a no-op for sizing (kept so the seonix-b010 control arm's flag still resolves).
+    // a no-op for sizing (kept so the tmct-b010 control arm's flag still resolves).
     if (loc > TINY_MAX_LOC || arity > TINY_MAX_ARITY || Boolean(focal.raises)) tier = "MID";
     // (d) LARGE — only for an EXPLICIT symbol focus (plan.anchor), where inlining the
     // depth-1 callee bodies / the class shape is worth the tokens: a cross-module call from
@@ -1842,7 +1842,7 @@ export function rankModulesByProximity(graph, primaryLabel, candidateLabels) {
     .map((s) => s.label);
 }
 
-// ---- #7 seonix_context_more: only the sections a TINY/MID bundle omits ------------
+// ---- #7 tmct_context_more: only the sections a TINY/MID bundle omits ------------
 
 /** Render ONLY the bundle sections a lean bundle omits (sibling list / class members /
  *  re-exports / __all__ / tests / cochange) for a symbol's module. Pure (no fs). */
@@ -1877,37 +1877,37 @@ export function renderContextMore(plan) {
   return out.join("\n");
 }
 
-// ---- #7 cold-tool catalog (written to <repo>/.seonix/TOOLS.md by the index step) --
+// ---- #7 cold-tool catalog (written to <repo>/.tmct/TOOLS.md by the index step) --
 
 /** Markdown catalog of the COLD tools (everything except the hot catalog tools): each
  *  with a one-line purpose and the exact Bash invocation via the CLI `cli <tool>` route.
  *  Pure — `cliPath` is the absolute path to bin/cli.mjs the caller wants embedded. */
 export function renderToolsCatalog(cliPath) {
   const cold = [
-    ["seonix_describe", "Locate one symbol and list its typed edges (both directions) with provenance.", { symbol: "django/utils/text.py" }],
-    ["seonix_signature", "One symbol's API surface (params, returns, raises/catches, flags, decorators, doc) without the body.", { symbol: "Truncator.chars" }],
-    ["seonix_impact", "Transitive reverse closure over imports/calls — what breaks if a module changes, by depth, with tests.", { module: "django/utils/text.py" }],
-    ["seonix_search", "Free-text/ranked lookup over the code-map to find the right module or symbol.", { query: "template filters", kind: "function" }],
-    ["seonix_members", "A class's methods + attributes (file:line, decorators) in one slice.", { class: "Truncator" }],
-    ["seonix_subclasses", "A class's base classes plus the transitive set of classes that extend it.", { class: "Field" }],
-    ["seonix_architecture", "Package/module map + the most-imported hub modules (optionally scoped to a package).", { package: "django/template" }],
-    ["seonix_exports", "A module's public __all__ surface, each name resolved to the module that defines it.", { module: "django/db/models/__init__.py" }],
-    ["seonix_tests_for", "The test modules covering a symbol or module, from the typed test edges.", { symbol: "django/utils/text.py" }],
-    ["seonix_untested", "Source modules with no covering test module — a coverage-gap view (no arguments).", {}],
-    ["seonix_history", "Recent commits that touched a symbol's module (newest first).", { symbol: "django/utils/text.py" }],
-    ["seonix_file_history", "Commits that touched a symbol's module, each with author / date / subject.", { symbol: "django/utils/text.py" }],
-    ["seonix_method_history", "Commits that touched a specific method symbol (fine-grained), with author / date / subject.", { symbol: "Truncator.chars" }],
-    ["seonix_class_history", "Commits that touched a specific class symbol (fine-grained), with author / date / subject.", { symbol: "Truncator" }],
-    ["seonix_callers", "Modules that call into a symbol's module (one hop).", { symbol: "django/utils/text.py" }],
-    ["seonix_callees", "Modules a symbol's module calls into (one hop).", { symbol: "django/utils/text.py" }],
-    ["seonix_calls", "The in-repo symbols a function calls (fn→fn), each with file:line.", { symbol: "slugify" }],
-    ["seonix_cochanges", "Modules that historically change in the same commit as a symbol's module (git co-change).", { symbol: "django/utils/text.py" }],
-    ["seonix_context_more", "The bundle sections a lean seonix_context omitted (siblings / tests / cochange / class members / re-exports).", { symbol: "django/utils/text.py" }],
+    ["tmct_describe", "Locate one symbol and list its typed edges (both directions) with provenance.", { symbol: "django/utils/text.py" }],
+    ["tmct_signature", "One symbol's API surface (params, returns, raises/catches, flags, decorators, doc) without the body.", { symbol: "Truncator.chars" }],
+    ["tmct_impact", "Transitive reverse closure over imports/calls — what breaks if a module changes, by depth, with tests.", { module: "django/utils/text.py" }],
+    ["tmct_search", "Free-text/ranked lookup over the code-map to find the right module or symbol.", { query: "template filters", kind: "function" }],
+    ["tmct_members", "A class's methods + attributes (file:line, decorators) in one slice.", { class: "Truncator" }],
+    ["tmct_subclasses", "A class's base classes plus the transitive set of classes that extend it.", { class: "Field" }],
+    ["tmct_architecture", "Package/module map + the most-imported hub modules (optionally scoped to a package).", { package: "django/template" }],
+    ["tmct_exports", "A module's public __all__ surface, each name resolved to the module that defines it.", { module: "django/db/models/__init__.py" }],
+    ["tmct_tests_for", "The test modules covering a symbol or module, from the typed test edges.", { symbol: "django/utils/text.py" }],
+    ["tmct_untested", "Source modules with no covering test module — a coverage-gap view (no arguments).", {}],
+    ["tmct_history", "Recent commits that touched a symbol's module (newest first).", { symbol: "django/utils/text.py" }],
+    ["tmct_file_history", "Commits that touched a symbol's module, each with author / date / subject.", { symbol: "django/utils/text.py" }],
+    ["tmct_method_history", "Commits that touched a specific method symbol (fine-grained), with author / date / subject.", { symbol: "Truncator.chars" }],
+    ["tmct_class_history", "Commits that touched a specific class symbol (fine-grained), with author / date / subject.", { symbol: "Truncator" }],
+    ["tmct_callers", "Modules that call into a symbol's module (one hop).", { symbol: "django/utils/text.py" }],
+    ["tmct_callees", "Modules a symbol's module calls into (one hop).", { symbol: "django/utils/text.py" }],
+    ["tmct_calls", "The in-repo symbols a function calls (fn→fn), each with file:line.", { symbol: "slugify" }],
+    ["tmct_cochanges", "Modules that historically change in the same commit as a symbol's module (git co-change).", { symbol: "django/utils/text.py" }],
+    ["tmct_context_more", "The bundle sections a lean tmct_context omitted (siblings / tests / cochange / class members / re-exports).", { symbol: "django/utils/text.py" }],
   ];
   const lines = [
-    "# seonix cold-tool catalog",
+    "# tmct cold-tool catalog",
     "",
-    "The hot tools — `seonix_context` (start here to add/modify code; supports `depth: min|auto|full`) and `seonix_snippet` (exact source of one symbol) — carry full schemas in the TOOLS catalog.",
+    "The hot tools — `tmct_context` (start here to add/modify code; supports `depth: min|auto|full`) and `tmct_snippet` (exact source of one symbol) — carry full schemas in the TOOLS catalog.",
     "",
     "The cold tools below invoke via the CLI:",
     "",

@@ -25,8 +25,8 @@ test("splitIdentifierWords: acronym runs (the ELIZA-adjacent edge case set)", ()
 });
 
 test("splitIdentifierWords: path-like module names — separators, hyphens, extension stripped", () => {
-  assert.deepEqual(splitIdentifierWords("packages/seonix/src/ask-vocab.mjs"),
-    ["packages", "seonix", "src", "ask", "vocab"]);
+  assert.deepEqual(splitIdentifierWords("packages/tmct/src/ask-vocab.mjs"),
+    ["packages", "tmct", "src", "ask", "vocab"]);
 });
 
 test("splitIdentifierWords: single-character tokens are dropped, empty/falsy input is []", () => {
@@ -91,7 +91,7 @@ test("attachProseTokens: individuals with nothing to index get no prose_tokens a
   assert.equal(individuals[0].attributes.find((a) => a.key === "prose_tokens"), undefined);
 });
 
-test("attachProseTokens: enabled=false is a true no-op (the SEONIX_PROSE_INDEX=0 disable path)", () => {
+test("attachProseTokens: enabled=false is a true no-op (the TMCT_PROSE_INDEX=0 disable path)", () => {
   const individuals = [{ id: "fn:a.py#calculateTotal", label: "calculateTotal", class: "Function", attributes: [] }];
   const before = JSON.stringify(individuals);
   attachProseTokens(individuals, { enabled: false });

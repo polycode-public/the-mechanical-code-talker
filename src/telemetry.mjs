@@ -1,11 +1,11 @@
-// telemetry.mjs — OPT-IN, fire-and-forget query telemetry (PLAN_SEONIX_TELEMETRY.md).
+// telemetry.mjs — OPT-IN, fire-and-forget query telemetry (PLAN_TMCT_TELEMETRY.md).
 //
 // The measurement contract is absolute: telemetry is OFF by default and the OFF path
 // must be BYTE-IDENTICAL — no file, no stdout/stderr change, ~zero cost. createTelemetry
 // returns NULL when disabled, so every call site is a single falsy check: `tel?.record(…)`.
 //
-// When enabled it appends ONE JSONL line per event to `<graphDir>/seonix-<id>.log`
-// (i.e. next to graph.json, in the repo's `.seonix/` artifact dir). Writes are
+// When enabled it appends ONE JSONL line per event to `<graphDir>/tmct-<id>.log`
+// (i.e. next to graph.json, in the repo's `.tmct/` artifact dir). Writes are
 // fire-and-forget with a swallowed catch: telemetry must NEVER throw, block, or write
 // to stdout/stderr (stdout belongs to the chat surface). A structural redact() keeps file
 // CONTENTS out of the log — it records only ids/paths/scores/sizes/counts.
@@ -20,21 +20,21 @@ const DROP_KEYS = new Set(["text", "content", "snippet"]);
  *  question, which is the correlation key and is not file content). */
 const MAX_STR = 500;
 
-/** Enabled iff `SEONIX_TELEMETRY==="1"` OR `[telemetry] enabled=true` in the toml.
- *  The env wins BOTH directions: `SEONIX_TELEMETRY==="0"` force-disables even when the
+/** Enabled iff `TMCT_TELEMETRY==="1"` OR `[telemetry] enabled=true` in the toml.
+ *  The env wins BOTH directions: `TMCT_TELEMETRY==="0"` force-disables even when the
  *  toml turns it on. Default OFF (anything but "1"/"0" in the env falls through to toml). */
 export function telemetryEnabled(env = process.env, toml = null) {
-  const e = env?.SEONIX_TELEMETRY;
+  const e = env?.TMCT_TELEMETRY;
   if (e === "1") return true;
   if (e === "0") return false;
   return toml?.telemetry?.enabled === true;
 }
 
 /** The invocation id that correlates a log ↔ a host process. A host (the bench rig,
- *  a wrapping agent) may stamp `SEONIX_INVOCATION_ID` so its trace/record and this log
+ *  a wrapping agent) may stamp `TMCT_INVOCATION_ID` so its trace/record and this log
  *  share one id; absent, we mint a fresh time-sortable uuidv7. */
 export function invocationId(env = process.env) {
-  return (env?.SEONIX_INVOCATION_ID && String(env.SEONIX_INVOCATION_ID)) || uuidv7();
+  return (env?.TMCT_INVOCATION_ID && String(env.TMCT_INVOCATION_ID)) || uuidv7();
 }
 
 /** Structural redaction: drop any field named text/content/snippet at any depth, and
@@ -76,7 +76,7 @@ export function redact(value, path = "") {
 export function createTelemetry({ env = process.env, config, toml = null, surface } = {}) {
   if (!telemetryEnabled(env, toml)) return null;
   const id = invocationId(env);
-  const file = join(dirname(config.graphFile), `seonix-${id}.log`);
+  const file = join(dirname(config.graphFile), `tmct-${id}.log`);
   let seq = 0;
   const record = (fields = {}) => {
     try {

@@ -42,23 +42,23 @@ const OPTS = { nlp: null };
 test("cascade NOISE-STRIP: 'Please count the classes matey' → counts the classes (politeness + vocative stripped)", () => {
   const graph = buildGraph();
   const r = ask(graph, "Please count the classes matey", OPTS);
-  assert.equal(r.seonix_ask.miss, false);
+  assert.equal(r.tmct_ask.miss, false);
   assert.match(r.content, /3 classes\./); // Apple, Banana, Cherry
   // the cascade WAS used, and it stripped the noise words (order-independent set check)
-  assert.notEqual(r.seonix_ask.relaxed, null);
-  assert.equal(r.seonix_ask.relaxed.to, "count classes");
-  assert.deepEqual([...r.seonix_ask.relaxed.dropped].sort(), ["matey", "the"]);
+  assert.notEqual(r.tmct_ask.relaxed, null);
+  assert.equal(r.tmct_ask.relaxed.to, "count classes");
+  assert.deepEqual([...r.tmct_ask.relaxed.dropped].sort(), ["matey", "the"]);
 });
 
 test("cascade NOISE-STRIP: 'could you show me what imports walk.mjs please' → the importers", () => {
   const graph = buildGraph();
   const r = ask(graph, "could you show me what imports walk.mjs please", OPTS);
-  assert.equal(r.seonix_ask.miss, false);
+  assert.equal(r.tmct_ask.miss, false);
   // src/a.mjs and src/b.mjs import walk.mjs
   assert.match(r.content, /src\/a\.mjs/);
   assert.match(r.content, /src\/b\.mjs/);
-  assert.notEqual(r.seonix_ask.relaxed, null);
-  assert.equal(r.seonix_ask.relaxed.to, "what imports walk.mjs");
+  assert.notEqual(r.tmct_ask.relaxed, null);
+  assert.equal(r.tmct_ask.relaxed.to, "what imports walk.mjs");
 });
 
 // ---- 2. DROP-UNMATCHED: an unknown content word beside a valid one is dropped ----
@@ -66,10 +66,10 @@ test("cascade NOISE-STRIP: 'could you show me what imports walk.mjs please' → 
 test("cascade DROP-UNMATCHED: 'count the frobnicate classes' → drops the unknown, counts the classes", () => {
   const graph = buildGraph();
   const r = ask(graph, "count the frobnicate classes", OPTS);
-  assert.equal(r.seonix_ask.miss, false);
+  assert.equal(r.tmct_ask.miss, false);
   assert.match(r.content, /3 classes\./);
-  assert.ok(r.seonix_ask.relaxed.dropped.includes("frobnicate"), "the unknown word was dropped");
-  assert.equal(r.seonix_ask.relaxed.to, "count classes");
+  assert.ok(r.tmct_ask.relaxed.dropped.includes("frobnicate"), "the unknown word was dropped");
+  assert.equal(r.tmct_ask.relaxed.to, "count classes");
 });
 
 test("cascade DROP-UNMATCHED: an identifier-shaped unknown ('frobnicate the classes') that leaves nothing to run is an HONEST miss, never a guess", () => {
@@ -77,8 +77,8 @@ test("cascade DROP-UNMATCHED: an identifier-shaped unknown ('frobnicate the clas
   // "frobnicate" is dropped and "the" stripped, but a bare "classes" is no executable
   // query (there is no list-all-classes verb) — so the cascade honestly bottoms out.
   const r = ask(graph, "frobnicate the classes", OPTS);
-  assert.equal(r.seonix_ask.miss, true);
-  assert.equal(r.seonix_ask.relaxed, null); // no relaxation could rescue it → original miss kept
+  assert.equal(r.tmct_ask.miss, true);
+  assert.equal(r.tmct_ask.relaxed, null); // no relaxation could rescue it → original miss kept
   assert.match(r.content, /couldn't parse this as a graph question/);
 });
 
@@ -87,10 +87,10 @@ test("cascade DROP-UNMATCHED: an identifier-shaped unknown ('frobnicate the clas
 test("cascade SYNONYM-NORMALISE: 'tally the classes' → normalises 'tally' to 'count'", () => {
   const graph = buildGraph();
   const r = ask(graph, "tally the classes", OPTS);
-  assert.equal(r.seonix_ask.miss, false);
+  assert.equal(r.tmct_ask.miss, false);
   assert.match(r.content, /3 classes\./);
-  assert.equal(r.seonix_ask.relaxed.to, "count classes");
-  assert.ok(r.seonix_ask.relaxed.steps.some((s) => /normalise synonyms/.test(s)), "the synonym layer fired");
+  assert.equal(r.tmct_ask.relaxed.to, "count classes");
+  assert.ok(r.tmct_ask.relaxed.steps.some((s) => /normalise synonyms/.test(s)), "the synonym layer fired");
 });
 
 // ---- 3b. TRIGGER-TYPO correction: a typo of an aggregate/list trigger is CORRECTED
@@ -100,15 +100,15 @@ test("cascade SYNONYM-NORMALISE: 'tally the classes' → normalises 'tally' to '
 test("trigger-typo (curated): 'how manyn classes are there' → the class count (manyn→many + trailing 'are there' tolerated)", () => {
   const graph = buildGraph();
   const r = ask(graph, "how manyn classes are there", OPTS);
-  assert.equal(r.seonix_ask.miss, false);
+  assert.equal(r.tmct_ask.miss, false);
   assert.match(r.content, /^3 classes\.$/); // curated MISSPELLINGS fixes it → a clean direct hit
-  assert.equal(r.seonix_ask.relaxed, null);
+  assert.equal(r.tmct_ask.relaxed, null);
 });
 
 test("trigger-typo (curated): 'coutn classes' → the class count (coutn→count)", () => {
   const graph = buildGraph();
   const r = ask(graph, "coutn classes", OPTS);
-  assert.equal(r.seonix_ask.miss, false);
+  assert.equal(r.tmct_ask.miss, false);
   assert.match(r.content, /^3 classes\.$/);
 });
 
@@ -120,23 +120,23 @@ test("trailing-filler: 'how many classes are there' counts (the 'are there' tail
 test("trigger-typo (fuzzy backstop): an UNCURATED typo 'how manny classes' is fuzzy-corrected to 'many', not dropped", () => {
   const graph = buildGraph();
   const r = ask(graph, "how manny classes", OPTS);
-  assert.equal(r.seonix_ask.miss, false);
+  assert.equal(r.tmct_ask.miss, false);
   assert.match(r.content, /3 classes\./);
   // it rode the cascade's fuzzy-correct step (not a curated MISSPELLING)
-  assert.ok(r.seonix_ask.relaxed.steps.some((s) => /fuzzy-correct/.test(s) && /manny/.test(s)), "the fuzzy-correct step fired");
+  assert.ok(r.tmct_ask.relaxed.steps.some((s) => /fuzzy-correct/.test(s) && /manny/.test(s)), "the fuzzy-correct step fired");
 });
 
 test("trigger-typo (fuzzy backstop): an uncurated 'coubt classes' corrects to 'count'", () => {
   const graph = buildGraph();
   const r = ask(graph, "coubt classes", OPTS);
-  assert.equal(r.seonix_ask.miss, false);
+  assert.equal(r.tmct_ask.miss, false);
   assert.match(r.content, /3 classes\./);
 });
 
 test("trigger-typo DISCIPLINE: a non-near-miss stays an honest miss ('how bananas classes' — 'bananas' isn't near any trigger)", () => {
   const graph = buildGraph();
   const r = ask(graph, "how bananas classes", OPTS);
-  assert.equal(r.seonix_ask.miss, true);
+  assert.equal(r.tmct_ask.miss, true);
   assert.match(r.content, /couldn't parse this as a graph question/);
 });
 
@@ -145,7 +145,7 @@ test("trigger-typo determinism: the same typo'd trigger yields an identical resu
   const a = ask(graph, "how manny classes", OPTS);
   const b = ask(graph, "how manny classes", OPTS);
   assert.equal(a.content, b.content);
-  assert.deepEqual(a.seonix_ask.relaxed, b.seonix_ask.relaxed);
+  assert.deepEqual(a.tmct_ask.relaxed, b.tmct_ask.relaxed);
 });
 
 // ---- 4. pure noise → honest miss (the honest bottom of the cascade) ----
@@ -153,8 +153,8 @@ test("trigger-typo determinism: the same typo'd trigger yields an identical resu
 test("cascade honest bottom: a query that is ONLY noise → honest miss + rephrase hint, never a fabricated answer", () => {
   const graph = buildGraph();
   const r = ask(graph, "please kindly just tell me matey", OPTS);
-  assert.equal(r.seonix_ask.miss, true);
-  assert.equal(r.seonix_ask.relaxed, null);
+  assert.equal(r.tmct_ask.miss, true);
+  assert.equal(r.tmct_ask.relaxed, null);
   assert.match(r.content, /couldn't parse this as a graph question/);
 });
 
@@ -163,9 +163,9 @@ test("cascade honest bottom: a query that is ONLY noise → honest miss + rephra
 test("cascade is NOT invoked on a direct hit: a clean query parses without relaxation (relaxed === null)", () => {
   const graph = buildGraph();
   const r = ask(graph, "which functions call buildContextBundle", OPTS);
-  assert.equal(r.seonix_ask.miss, false);
+  assert.equal(r.tmct_ask.miss, false);
   assert.match(r.content, /caller/);
-  assert.equal(r.seonix_ask.relaxed, null); // the spy: the cascade never touched a direct hit
+  assert.equal(r.tmct_ask.relaxed, null); // the spy: the cascade never touched a direct hit
   // and the content is not prefixed with a "read as" relaxation note
   assert.doesNotMatch(r.content, /read as/);
 });
@@ -173,9 +173,9 @@ test("cascade is NOT invoked on a direct hit: a clean query parses without relax
 test("cascade is NOT invoked on a direct compositional hit either ('how many classes')", () => {
   const graph = buildGraph();
   const r = ask(graph, "how many classes", OPTS);
-  assert.equal(r.seonix_ask.miss, false);
+  assert.equal(r.tmct_ask.miss, false);
   assert.match(r.content, /^3 classes\.$/);
-  assert.equal(r.seonix_ask.relaxed, null);
+  assert.equal(r.tmct_ask.relaxed, null);
 });
 
 // ---- 6. explicit help request → the hint directly, never a pretend answer ----
@@ -183,12 +183,12 @@ test("cascade is NOT invoked on a direct compositional hit either ('how many cla
 test("cascade help: an explicit help request shows the rephrase hint directly (not a relaxation attempt)", () => {
   const graph = buildGraph();
   const r = ask(graph, "help", OPTS);
-  assert.equal(r.seonix_ask.miss, true);
-  assert.equal(r.seonix_ask.help, true);
-  assert.equal(r.seonix_ask.relaxed, null);
+  assert.equal(r.tmct_ask.miss, true);
+  assert.equal(r.tmct_ask.help, true);
+  assert.equal(r.tmct_ask.relaxed, null);
   assert.match(r.content, /which <functions\|classes\|modules>/); // the rephrase hint itself
   // a real question about a symbol NAMED help is NOT intercepted (whole-query match only)
-  assert.notEqual(ask(graph, "which functions call help", OPTS).seonix_ask.help, true);
+  assert.notEqual(ask(graph, "which functions call help", OPTS).tmct_ask.help, true);
 });
 
 // ---- 7. determinism: same query + same graph → identical envelope, twice ----
@@ -198,8 +198,8 @@ test("cascade determinism: the same relaxed query yields an identical result bot
   const a = ask(graph, "Please count the classes matey", OPTS);
   const b = ask(graph, "Please count the classes matey", OPTS);
   assert.equal(a.content, b.content);
-  assert.deepEqual(a.seonix_ask.relaxed, b.seonix_ask.relaxed);
-  assert.deepEqual(a.seonix_ask.parsed, b.seonix_ask.parsed);
+  assert.deepEqual(a.tmct_ask.relaxed, b.tmct_ask.relaxed);
+  assert.deepEqual(a.tmct_ask.parsed, b.tmct_ask.parsed);
   // relaxParse itself is pure given (graph, query): identical trace across calls
   const t1 = relaxParse(graph, "could you show me what imports walk.mjs please", OPTS);
   const t2 = relaxParse(graph, "could you show me what imports walk.mjs please", OPTS);
@@ -215,7 +215,7 @@ test("cascade discipline: a resolvable-but-empty query keeps its honest direct a
   // walk.mjs resolves and imports nothing → a real, empty forward answer. The object
   // resolved, so the cascade must NOT fire (a hit — even an empty one — stays exact).
   const r = ask(graph, "what does walk.mjs import", OPTS);
-  assert.equal(r.seonix_ask.relaxed, null);
+  assert.equal(r.tmct_ask.relaxed, null);
   assert.match(r.content, /no imports edges/);
 });
 
@@ -224,8 +224,8 @@ test("cascade discipline: an unresolved location term is an honest miss, not a m
   // dropping the unresolved term must NOT leave "where is defined" and let the WHERE
   // marker "defined" slide into the asked-term slot — that would be a guess.
   const r = ask(graph, "where is totallymissingthing defined", OPTS);
-  assert.equal(r.seonix_ask.miss, true);
-  assert.equal(r.seonix_ask.relaxed, null);
+  assert.equal(r.tmct_ask.miss, true);
+  assert.equal(r.tmct_ask.relaxed, null);
   assert.match(r.content, /no module matching/);
 });
 
@@ -238,63 +238,63 @@ test("cascade discipline: an unresolved location term is an honest miss, not a m
 test("bare kind noun: 'the classes' → a COUNT default (not an honest miss)", () => {
   const graph = buildGraph();
   const r = ask(graph, "the classes", OPTS); // fixture has Apple, Banana, Cherry
-  assert.equal(r.seonix_ask.miss, false);
+  assert.equal(r.tmct_ask.miss, false);
   assert.match(r.content, /3 classes\./);
-  assert.equal(r.seonix_ask.relaxed.to, "count classes");
-  assert.ok(r.seonix_ask.relaxed.steps.some((s) => /bare kind "classes" → count/.test(s)), "the terminal rule fired");
+  assert.equal(r.tmct_ask.relaxed.to, "count classes");
+  assert.ok(r.tmct_ask.relaxed.steps.some((s) => /bare kind "classes" → count/.test(s)), "the terminal rule fired");
 });
 
 test("bare kind noun: a truly bare 'classes' (no article) also lands the count", () => {
   const graph = buildGraph();
   const r = ask(graph, "classes", OPTS);
-  assert.equal(r.seonix_ask.miss, false);
+  assert.equal(r.tmct_ask.miss, false);
   assert.match(r.content, /3 classes\./);
-  assert.equal(r.seonix_ask.relaxed.to, "count classes");
+  assert.equal(r.tmct_ask.relaxed.to, "count classes");
 });
 
 test("bare kind noun: 'tell me the classes' — 'tell me' is filler-stripped, the bare kind surfaces → count", () => {
   const graph = buildGraph();
   const r = ask(graph, "tell me the classes", OPTS);
-  assert.equal(r.seonix_ask.miss, false);
+  assert.equal(r.tmct_ask.miss, false);
   assert.match(r.content, /3 classes\./);
-  assert.equal(r.seonix_ask.relaxed.to, "count classes");
+  assert.equal(r.tmct_ask.relaxed.to, "count classes");
 });
 
 test("bare kind noun: 'what about the modules' — the 'about' lead-in is noise, the kind surfaces → count", () => {
   const graph = buildGraph();
   const r = ask(graph, "what about the modules", OPTS); // 6 modules in the fixture
-  assert.equal(r.seonix_ask.miss, false);
+  assert.equal(r.tmct_ask.miss, false);
   assert.match(r.content, /6 modules\./);
-  assert.equal(r.seonix_ask.relaxed.to, "count modules");
+  assert.equal(r.tmct_ask.relaxed.to, "count modules");
 });
 
 test("bare kind noun: singular 'the function' counts the function kind too", () => {
   const graph = buildGraph();
   const r = ask(graph, "the function", OPTS); // walk, buildContextBundle, caller
-  assert.equal(r.seonix_ask.miss, false);
+  assert.equal(r.tmct_ask.miss, false);
   assert.match(r.content, /3 functions\./);
 });
 
 test("bare kind DISCIPLINE: a dangling UNKNOWN qualifier ('the shiny classes') does NOT count — it stays an honest miss (the terminal rule reads the ORIGINAL tokens, so 'shiny' blocks the default)", () => {
   const graph = buildGraph();
   const r = ask(graph, "the shiny classes", OPTS);
-  assert.equal(r.seonix_ask.miss, true);
-  assert.equal(r.seonix_ask.relaxed, null); // never rescued into a count-all
+  assert.equal(r.tmct_ask.miss, true);
+  assert.equal(r.tmct_ask.relaxed, null); // never rescued into a count-all
   assert.match(r.content, /couldn't parse this as a graph question/);
 });
 
 test("bare kind DISCIPLINE: 'change'/'changes' is ask-vocab's pseudo-type (no node class) — never counted as a bare kind", () => {
   const graph = buildGraph();
   const r = ask(graph, "the changes", OPTS);
-  assert.equal(r.seonix_ask.miss, true);
-  assert.equal(r.seonix_ask.relaxed, null);
+  assert.equal(r.tmct_ask.miss, true);
+  assert.equal(r.tmct_ask.relaxed, null);
 });
 
 test("bare kind DISCIPLINE: a bare NON-kind noun ('the bananas') is still an honest miss, never a count", () => {
   const graph = buildGraph();
   const r = ask(graph, "the bananas", OPTS);
-  assert.equal(r.seonix_ask.miss, true);
-  assert.equal(r.seonix_ask.relaxed, null);
+  assert.equal(r.tmct_ask.miss, true);
+  assert.equal(r.tmct_ask.relaxed, null);
   assert.match(r.content, /couldn't parse this as a graph question/); // the hint names the kinds
 });
 
@@ -306,7 +306,7 @@ test("bare kind DISCIPLINE: a kind noun carrying a real relative-clause predicat
   // ordinary parse/cascade instead. Whatever it resolves to, it must NOT be "3 classes."
   const r = ask(graph, "the classes that couple to walk.mjs", OPTS);
   assert.doesNotMatch(r.content, /\b3 classes\./); // never the bare count default
-  assert.notEqual(r.seonix_ask.relaxed && r.seonix_ask.relaxed.to, "count classes");
+  assert.notEqual(r.tmct_ask.relaxed && r.tmct_ask.relaxed.to, "count classes");
 });
 
 test("bare kind determinism: 'the classes' yields an identical relaxed result both times", () => {
@@ -314,5 +314,5 @@ test("bare kind determinism: 'the classes' yields an identical relaxed result bo
   const a = ask(graph, "the classes", OPTS);
   const b = ask(graph, "the classes", OPTS);
   assert.equal(a.content, b.content);
-  assert.deepEqual(a.seonix_ask.relaxed, b.seonix_ask.relaxed);
+  assert.deepEqual(a.tmct_ask.relaxed, b.tmct_ask.relaxed);
 });

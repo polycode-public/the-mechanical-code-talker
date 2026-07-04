@@ -1,7 +1,7 @@
 // ask-vocab.mjs — the single committed vocabulary `ask.mjs`'s grammar, rephrase
 // hint, and renderer noun forms all derive from (§3 of PLAN_MECHANICAL_CHAT.md).
 // A shipped, hand-curated resource — the same "closed is deliberate" ethos as
-// this repo's other closed vocabularies (SEON/mgx predicates, `.seonixignore`'s
+// this repo's other closed vocabularies (SEON/mgx predicates, `.tmctignore`'s
 // gitignore-subset grammar): an open/unbounded phrase list is unvalidatable and
 // eventually produces a false-positive match against an unrelated code
 // identifier, so each relation carries a curated (not exhaustive) set of real
@@ -9,7 +9,7 @@
 //
 // Modeled on marginalia's app/lib/vocab.mjs pattern (a single source of truth
 // with a `verbs: [...]` trigger-phrase array per token) — minus the RDF/OWL
-// external-alignment machinery, which doesn't apply here: seonix's vocabulary
+// external-alignment machinery, which doesn't apply here: tmct's vocabulary
 // is code-relationship-specific (imports/calls/inherits/…), not a general
 // knowledge-graph ontology. No NLP library, no lemmatiser — plain phrase lists
 // feeding the same fixed-precedence regex grammar `ask.mjs` already used, so
@@ -631,7 +631,7 @@ export const CASCADE_NOISE = Object.freeze([
   // otherwise decomposes (via keyword-spot) to ask{subject:"show me"}. Stripping
   // them on a miss recovers the underlying reverse/forward question. ("count" is NOT
   // here — it is an aggregate trigger; "find"/"search" are here as presentation
-  // verbs, not the seonix_search tool, which ask.mjs never dispatches.)
+  // verbs, not the tmct_search tool, which ask.mjs never dispatches.)
   "show", "tell", "give", "list", "find", "me", "us", "lemme",
 ]);
 

@@ -1,8 +1,8 @@
 // chat.mjs tests — uuidv7, the pure turn function, a scripted (no-TTY) session
-// against the entities fixture, and a binary smoke of `seonix chat`. The turn
+// against the entities fixture, and a binary smoke of `tmct chat`. The turn
 // function is exercised through the SAME dispatchTool path the CLI uses, with
 // config.graphFile pointed straight at the committed fixture (the same trick
-// cli-smoke.test.mjs's repoWithFixtureGraph plays via .seonix/).
+// cli-smoke.test.mjs's repoWithFixtureGraph plays via .tmct/).
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -35,9 +35,9 @@ const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
 /** Same fixture-backed temp repo as cli-smoke.test.mjs. */
 async function repoWithFixtureGraph() {
-  const dir = await mkdtemp(join(tmpdir(), "seonix-chat-"));
-  await mkdir(join(dir, ".seonix"), { recursive: true });
-  await writeFile(join(dir, ".seonix", "graph.json"), await readFile(FIXTURE, "utf8"));
+  const dir = await mkdtemp(join(tmpdir(), "tmct-chat-"));
+  await mkdir(join(dir, ".tmct"), { recursive: true });
+  await writeFile(join(dir, ".tmct", "graph.json"), await readFile(FIXTURE, "utf8"));
   return dir;
 }
 
@@ -77,7 +77,7 @@ test("runTurn: a hit query answers from the graph, envelope stripped, log lines 
   const query = "which modules import a.mjs";
   const { answer, logLines } = await runTurn(query, { config: { graphFile: FIXTURE } });
   assert.match(answer, /app\/lib\/b\.mjs/);
-  assert.doesNotMatch(answer, /---seonix_ask---/, "the machine envelope is not shown in the TUI");
+  assert.doesNotMatch(answer, /---tmct_ask---/, "the machine envelope is not shown in the TUI");
   assert.equal(logLines.length, 4);
   assert.match(logLines[0], ISO_RE);
   assert.equal(logLines[1], `> ${query}`);
@@ -94,7 +94,7 @@ test("runTurn: a grammar miss prints the engine's own hint text — no special h
 
 test("runTurn: a structural query over a MISSING graph is an honest miss (bootstrap), not a crash", async () => {
   const { answer, record } = await runTurn("which modules import a.mjs", {
-    config: { graphFile: "/nonexistent/.seonix/graph.json" },
+    config: { graphFile: "/nonexistent/.tmct/graph.json" },
   });
   assert.match(answer, /the graph at .* is empty/);
   assert.match(answer, /folds the conversation/);
@@ -104,7 +104,7 @@ test("runTurn: a structural query over a MISSING graph is an honest miss (bootst
 
 // ---- slash-commands: reach every tool (bare input still asks) ----
 
-test("runTurn: a bare (non-slash) line still dispatches seonix_ask (the default)", async () => {
+test("runTurn: a bare (non-slash) line still dispatches tmct_ask (the default)", async () => {
   const { answer, record } = await runTurn("which modules import a.mjs", { config: CONFIG, graph: await graph() });
   assert.match(answer, /app\/lib\/b\.mjs/);
   assert.equal(record.command, undefined, "an ask turn carries no command field");
@@ -117,22 +117,22 @@ test("runTurn: a bare (non-slash) line still dispatches seonix_ask (the default)
 test("runTurn: every slash-command dispatches the tool + arg key it maps to", async () => {
   const g = await graph();
   const cases = [
-    ["/find fnAlpha",             "seonix_search",       { query: "fnAlpha" }],
-    ["/search fnAlpha",           "seonix_search",       { query: "fnAlpha" }],
-    ["/context app/lib/a.mjs",    "seonix_context",      { symbol: "app/lib/a.mjs" }],
-    ["/snippet fnAlpha",          "seonix_snippet",      { symbol: "fnAlpha" }],
-    ["/describe Base",            "seonix_describe",     { symbol: "Base" }],
-    ["/signature fnAlpha",        "seonix_signature",    { symbol: "fnAlpha" }],
-    ["/members Widget",           "seonix_members",      { class: "Widget" }],
-    ["/subclasses Base",          "seonix_subclasses",   { class: "Base" }],
-    ["/impact app/lib/a.mjs",     "seonix_impact",       { module: "app/lib/a.mjs" }],
-    ["/callers fnAlpha",          "seonix_callers",      { symbol: "fnAlpha" }],
-    ["/callees fnAlpha",          "seonix_callees",      { symbol: "fnAlpha" }],
-    ["/tests fnAlpha",            "seonix_tests_for",    { symbol: "fnAlpha" }],
-    ["/untested",                 "seonix_untested",     {}],
-    ["/history fnAlpha",          "seonix_history",      { symbol: "fnAlpha" }],
-    ["/exports app/lib/a.mjs",    "seonix_exports",      { module: "app/lib/a.mjs" }],
-    ["/arch",                     "seonix_architecture", { package: "" }],
+    ["/find fnAlpha",             "tmct_search",       { query: "fnAlpha" }],
+    ["/search fnAlpha",           "tmct_search",       { query: "fnAlpha" }],
+    ["/context app/lib/a.mjs",    "tmct_context",      { symbol: "app/lib/a.mjs" }],
+    ["/snippet fnAlpha",          "tmct_snippet",      { symbol: "fnAlpha" }],
+    ["/describe Base",            "tmct_describe",     { symbol: "Base" }],
+    ["/signature fnAlpha",        "tmct_signature",    { symbol: "fnAlpha" }],
+    ["/members Widget",           "tmct_members",      { class: "Widget" }],
+    ["/subclasses Base",          "tmct_subclasses",   { class: "Base" }],
+    ["/impact app/lib/a.mjs",     "tmct_impact",       { module: "app/lib/a.mjs" }],
+    ["/callers fnAlpha",          "tmct_callers",      { symbol: "fnAlpha" }],
+    ["/callees fnAlpha",          "tmct_callees",      { symbol: "fnAlpha" }],
+    ["/tests fnAlpha",            "tmct_tests_for",    { symbol: "fnAlpha" }],
+    ["/untested",                 "tmct_untested",     {}],
+    ["/history fnAlpha",          "tmct_history",      { symbol: "fnAlpha" }],
+    ["/exports app/lib/a.mjs",    "tmct_exports",      { module: "app/lib/a.mjs" }],
+    ["/arch",                     "tmct_architecture", { package: "" }],
   ];
   for (const [line, tool, args] of cases) {
     const { answer } = await runTurn(line, { config: CONFIG, graph: g });
@@ -195,7 +195,7 @@ test("runTurn: a no-arg entity command reuses the focus", async () => {
   const g = await graph();
   const focus = { id: "mod-a", label: "app/lib/a.mjs" };
   const { answer, record } = await runTurn("/impact", { config: CONFIG, graph: g, focus });
-  assert.equal(answer, await dispatchTool("seonix_impact", { module: "app/lib/a.mjs" }, { config: CONFIG }));
+  assert.equal(answer, await dispatchTool("tmct_impact", { module: "app/lib/a.mjs" }, { config: CONFIG }));
   assert.deepEqual(record.resolvedIds, ["mod-a"]);
   // no arg AND no focus → a helpful "needs a …" line, not a crash
   const bare = await runTurn("/impact", { config: CONFIG, graph: g, focus: null });
@@ -432,7 +432,7 @@ test("runChat: not in a git repo (gitRoot → null) falls back to cwd", async ()
 
 // ---- runChat (scripted session, no TTY) ----
 
-test("runChat: scripted session writes .seonix/session-<uuidv7>.log with header, turns, exit", async () => {
+test("runChat: scripted session writes .tmct/session-<uuidv7>.log with header, turns, exit", async () => {
   const dir = await repoWithFixtureGraph();
   try {
     const input = Readable.from(["which modules import a.mjs\n", "tell me a joke\n", "  \n", "/exit\n"]);
@@ -450,7 +450,7 @@ test("runChat: scripted session writes .seonix/session-<uuidv7>.log with header,
     assert.match(logName.slice("session-".length, -".log".length), UUID_V7_RE);
 
     const log = await readFile(logFile, "utf8");
-    assert.match(log, /^# seonix chat \d+\.\d+\.\d+ — session started \d{4}-.* — repo /, "header line");
+    assert.match(log, /^# tmct chat \d+\.\d+\.\d+ — session started \d{4}-.* — repo /, "header line");
     assert.ok(log.includes(dir), "header names the repo");
     assert.match(log, /> which modules import a\.mjs\n/);
     assert.match(log, /app\/lib\/b\.mjs/);
@@ -481,7 +481,7 @@ test("runChat: structured sidecar + read-time graph append — the session becom
     assert.equal(turns, 2);
 
     // sidecar: same uuid as the log, header + one line per turn + end marker, all valid JSON
-    assert.ok(sidecarFile.startsWith(join(dir, ".seonix", "sessions") + "/"), sidecarFile);
+    assert.ok(sidecarFile.startsWith(join(dir, ".tmct", "sessions") + "/"), sidecarFile);
     const uuid = logFile.match(/session-([0-9a-f-]{36})\.log$/)[1];
     assert.ok(sidecarFile.endsWith(`session-${uuid}.jsonl`), "sidecar shares the session uuid");
     const lines = (await readFile(sidecarFile, "utf8")).trim().split("\n").map((l) => JSON.parse(l));
@@ -489,7 +489,7 @@ test("runChat: structured sidecar + read-time graph append — the session becom
     assert.equal(lines[0].type, "session");
     assert.equal(lines[0].id, uuid);
     assert.equal(lines[0].repo, dir);
-    assert.match(lines[0].seonixVersion, /^\d+\.\d+\.\d+/);
+    assert.match(lines[0].tmctVersion, /^\d+\.\d+\.\d+/);
     const [hit, miss] = [lines[1], lines[2]];
     assert.equal(hit.type, "turn");
     assert.equal(hit.query, "which modules import a.mjs");
@@ -501,7 +501,7 @@ test("runChat: structured sidecar + read-time graph append — the session becom
     assert.equal(lines[3].type, "end");
 
     // read-time append: graph.json now carries the Session individual + asksAbout edges
-    const g = JSON.parse(await readFile(join(dir, ".seonix", "graph.json"), "utf8"));
+    const g = JSON.parse(await readFile(join(dir, ".tmct", "graph.json"), "utf8"));
     const sess = g.individuals.find((i) => i.id === `session:${uuid}`);
     assert.ok(sess, "Session individual appended to graph.json");
     assert.equal(sess.class, "Session");
@@ -536,7 +536,7 @@ test("runChat: a slash-command turn is recorded — sidecar carries the command,
 
     // the /impact turn became first-class graph data — a Session node + asksAbout edge
     const uuid = logFile.match(/session-([0-9a-f-]{36})\.log$/)[1];
-    const gjson = JSON.parse(await readFile(join(dir, ".seonix", "graph.json"), "utf8"));
+    const gjson = JSON.parse(await readFile(join(dir, ".tmct", "graph.json"), "utf8"));
     const sess = gjson.individuals.find((i) => i.id === `session:${uuid}`);
     assert.ok(sess, "Session individual appended");
     assert.match(sess.attributes.find((a) => a.key === "queries").value, /\/impact app\/lib\/a\.mjs \| \/help/);
@@ -562,7 +562,7 @@ test("runChat: input ending without /exit (Ctrl+D shape) still closes cleanly an
 });
 
 test("runChat: missing graph bootstraps clean — honest empty banner, conversational turns work, and the session CREATES graph.json", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "seonix-chat-nograph-"));
+  const dir = await mkdtemp(join(tmpdir(), "tmct-chat-nograph-"));
   try {
     const { out, text } = sink();
     const input = Readable.from(["hi\n", "which modules import a.mjs\n", "/exit\n"]);
@@ -575,7 +575,7 @@ test("runChat: missing graph bootstraps clean — honest empty banner, conversat
     assert.match(text(), /no symbol matching "a\.mjs" found in the index\./);
     assert.doesNotMatch(text(), /\n\s+at /);
     // the conversation itself became the first graph write: a Session individual exists
-    const g = JSON.parse(await readFile(join(dir, ".seonix", "graph.json"), "utf8"));
+    const g = JSON.parse(await readFile(join(dir, ".tmct", "graph.json"), "utf8"));
     const sess = g.individuals.filter((i) => i.class === "Session");
     assert.equal(sess.length, 1, "the session was folded into a freshly created graph.json");
     assert.equal(sess[0].attributes.find((a) => a.key === "turns").value, "2");
@@ -588,21 +588,21 @@ test("runChat: missing graph bootstraps clean — honest empty banner, conversat
 
 test("cli chat: real binary, stdin closed after /exit → exit 0; graphless repo → clean empty start", async () => {
   const dir = await repoWithFixtureGraph();
-  const bare = await mkdtemp(join(tmpdir(), "seonix-chat-bare-"));
+  const bare = await mkdtemp(join(tmpdir(), "tmct-chat-bare-"));
   try {
     const ok = spawnSync(process.execPath, [BIN, "chat", "--repo", dir], {
       encoding: "utf8", input: "which modules import a.mjs\n/exit\n",
     });
     assert.equal(ok.status, 0, ok.stderr);
     assert.match(ok.stdout, /app\/lib\/b\.mjs/);
-    const names = await readdir(join(dir, ".seonix"));
+    const names = await readdir(join(dir, ".tmct"));
     assert.ok(names.some((n) => /^session-.*\.log$/.test(n)), "binary session wrote its log");
 
     // no graph → the bootstrap path: honest empty banner, greeting works, clean exit 0
     const bad = spawnSync(process.execPath, [BIN, "chat", "--repo", bare], { encoding: "utf8", input: "hi\n/exit\n" });
     assert.equal(bad.status, 0, bad.stderr);
     assert.match(bad.stdout, /no graph loaded — starting empty/);
-    const bareGraph = JSON.parse(await readFile(join(bare, ".seonix", "graph.json"), "utf8"));
+    const bareGraph = JSON.parse(await readFile(join(bare, ".tmct", "graph.json"), "utf8"));
     assert.ok(bareGraph.individuals.some((i) => i.class === "Session"), "bootstrap session folded into a new graph.json");
   } finally {
     await rm(dir, { recursive: true, force: true });

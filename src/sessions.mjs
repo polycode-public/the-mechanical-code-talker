@@ -1,9 +1,9 @@
 // sessions.mjs — chat sessions as first-class temporal graph data, like commits.
 //
-// A `seonix chat` session leaves two artifacts under the target repo:
-//   .seonix/session-<uuidv7>.log            — the human-readable transcript (chat.mjs)
-//   .seonix/sessions/session-<uuidv7>.jsonl — the STRUCTURED sidecar this module owns:
-//     {"type":"session", id, started, repo, seonixVersion}        (header line)
+// A `tmct chat` session leaves two artifacts under the target repo:
+//   .tmct/session-<uuidv7>.log            — the human-readable transcript (chat.mjs)
+//   .tmct/sessions/session-<uuidv7>.jsonl — the STRUCTURED sidecar this module owns:
+//     {"type":"session", id, started, repo, tmctVersion}        (header line)
 //     {"type":"turn", ts, query, resolvedIds, answeredIds, miss}  (one per turn, flushed)
 //     {"type":"end", ts}                                          (clean close marker)
 //
@@ -26,7 +26,7 @@
 import { mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
-export const SESSIONS_DIR_REL = join(".seonix", "sessions");
+export const SESSIONS_DIR_REL = join(".tmct", "sessions");
 
 export const SESSION_CLASS = "Session";
 export const ASKS_ABOUT_PREDICATE = "asksAbout";
@@ -188,7 +188,7 @@ export function parseSessionJsonl(text) {
   return { id: String(header.id), started: String(header.started || ""), ended, turns };
 }
 
-/** All recorded sessions under <rootDir>/.seonix/sessions/*.jsonl, oldest first
+/** All recorded sessions under <rootDir>/.tmct/sessions/*.jsonl, oldest first
  *  (uuidv7 filenames sort chronologically). Best-effort: no dir → []. */
 export async function readSessionRecords(rootDir) {
   const dir = join(rootDir, SESSIONS_DIR_REL);

@@ -1,13 +1,13 @@
-// @polycode-projects/mct — library entry point.
+// @polycode-projects/the-mechanical-code-talker (tmct) — library entry point.
 //
-// mct is a whole-package lift of the seonix chat surface (v0.1.0). Internal
-// module filenames and symbols are kept verbatim from seonix to preserve the
-// "same shape" and its green test suite; the user-facing branding is `mct`.
+// tmct began as a whole-package lift of an earlier chat surface (see README
+// provenance). Internal module filenames and symbols were kept to preserve the
+// shape and its green test suite; the branding throughout is now `tmct`.
 //
-// This entry re-exports the adapter primitives a future seonix→mct adapter (and
-// any other library consumer) needs. The clean chat/primitives split — pulling
-// the movable grammar out of ask.mjs away from the core primitives it currently
-// shares a file with — is deferred to ROADMAP.md.
+// This entry re-exports the adapter primitives a library consumer needs. The
+// clean chat/primitives split — pulling the movable grammar out of ask.mjs away
+// from the core primitives it currently shares a file with — is deferred to
+// ROADMAP.md.
 
 // Chat surface (also reachable as the `./chat` subpath export).
 export { runChat, COMMANDS, answerCount, renderStats } from "./chat.mjs";

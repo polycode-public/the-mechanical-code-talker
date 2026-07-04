@@ -1,6 +1,6 @@
 {
   "generated_at": "2026-06-28T00:00:00.000Z",
-  "prefixes": { "seon": "http://se-on.org/ontologies/seon.owl#", "mgx": "urn:seonix:mgx#" },
+  "prefixes": { "seon": "http://se-on.org/ontologies/seon.owl#", "mgx": "urn:tmct:mgx#" },
   "classes": [
     { "name": "Module", "count": 8, "sample": ["app/lib/a.mjs", "app/lib/b.mjs"] },
     { "name": "Class", "count": 3, "sample": ["Base", "Widget", "Button"] },

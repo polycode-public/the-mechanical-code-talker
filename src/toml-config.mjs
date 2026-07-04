@@ -1,8 +1,8 @@
-// seonix.toml loader (pure library — no cli wiring here).
+// tmct.toml loader (pure library — no cli wiring here).
 //
 // The runtime config still lives in config.mjs (`loadConfig`, the
-// SEONIX_GRAPH_FILE knob) and stays byte-identical. This module is the *product*
-// config surface: an optional `seonix.toml` at a repo/estate root that a consumer
+// TMCT_GRAPH_FILE knob) and stays byte-identical. This module is the *product*
+// config surface: an optional `tmct.toml` at a repo/estate root that a consumer
 // checks in to steer indexing and scoring. Absent file = shipped defaults (today's
 // behaviour, byte-for-byte).
 //
@@ -15,9 +15,9 @@ import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { parse } from "smol-toml";
 
-export const CONFIG_FILE = "seonix.toml";
+export const CONFIG_FILE = "tmct.toml";
 
-/** Read `<rootDir>/seonix.toml` and return the raw parsed table.
+/** Read `<rootDir>/tmct.toml` and return the raw parsed table.
  *  - Absent file → `null` (the "today" signal: shipped defaults, byte-identical).
  *  - Present but unparseable → throws a clear error naming the file + parse cause
  *    (a `secret_exclude` misparse is security-relevant — never swallow it). */
@@ -148,7 +148,7 @@ function flatten(obj, prefix = "", out = {}) {
 /** Merge config sources by per-key precedence: explicit `args` > `toml` >
  *  `defaults`. Returns `{effective, sources}`, both keyed by the same sorted set
  *  of dotted keys (deterministic output). `sources[key]` is one of
- *  "arg" | "seonix.toml" | "default".
+ *  "arg" | "tmct.toml" | "default".
  *
  *  Tri-state note: presence is tested with `in`, not truthiness, so a `toml`
  *  value of `false` (e.g. `literal_mention = false` disabling the shipped-ON
@@ -173,7 +173,7 @@ export function mergeEffective({ args = {}, toml = null, defaults = {} } = {}) {
       sources[k] = "arg";
     } else if (k in tFlat) {
       effective[k] = tFlat[k];
-      sources[k] = "seonix.toml";
+      sources[k] = "tmct.toml";
     } else {
       effective[k] = dFlat[k];
       sources[k] = "default";
