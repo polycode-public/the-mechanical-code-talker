@@ -15,9 +15,9 @@ lands — this stub is the reference list it is checked against.
 - **Licence:** ConceptNet data is **CC-BY-SA 4.0** (attribution to ConceptNet
   and its upstream sources; the committed slice ships with its own notice,
   separate from this repo's MPL-2.0).
-- **Retrieval date:** UNVERIFIED-pending-web-check (authored offline
-  2026-07-04; the exact relation list, its current count, and any
-  deprecations must be verified against the live wiki page and stamped).
+- **Retrieval date:** 2026-07-04 — VERIFIED against the ConceptNet 5.7.0
+  assertions dump (the committed slice's source): the 34-relation canonical
+  list below matched the dump exactly (29 of them appear in the tech slice).
 - **Consumer in repo:** `src/corpus/conceptnet.mjs` +
   `src/corpus/conceptnet-map.toml` (Phase 2).
 
@@ -26,8 +26,8 @@ lands — this stub is the reference list it is checked against.
 ConceptNet uses a fixed, closed vocabulary of relations (each assertion also
 carries surface text — ConceptNet's own templates generate natural-language
 sentences from `(relation, start, end)` triples, which is exactly the seam
-tmct's surface templates exploit). The documented set, as recalled offline
-(UNVERIFIED-pending-web-check — verify count and spelling against the wiki):
+tmct's surface templates exploit). The documented set (VERIFIED 2026-07-04 against the ConceptNet 5.7.0 dump —
+all 34 relations matched exactly):
 
 | Relation | Gloss | Notes for the ACE-OWL mapping |
 |---|---|---|
