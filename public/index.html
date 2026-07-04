@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tmct — The Mechanical Code Talker</title>
+<meta name="description" content="A pure-JS, no-LLM, offline, $0 chatbot in the ELIZA/PARRY lineage — mechanical interpretation, OWL graph memory, honest misses.">
+<style>
+  :root {
+    --bg: #fdfcf9;
+    --fg: #23211c;
+    --muted: #6b6559;
+    --accent: #8a4b12;
+    --card: #f3efe7;
+    --border: #ddd6c8;
+    --code-bg: #2b2822;
+    --code-fg: #e8e2d4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #191713;
+      --fg: #e8e2d4;
+      --muted: #a39b8a;
+      --accent: #e0a465;
+      --card: #221f1a;
+      --border: #3a352c;
+      --code-bg: #11100d;
+      --code-fg: #d8d2c4;
+    }
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font: 17px/1.6 Georgia, "Times New Roman", serif;
+    padding: 3rem 1.25rem 4rem;
+  }
+  main { max-width: 44rem; margin: 0 auto; }
+  h1 {
+    font-size: 2.1rem;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+  }
+  h1 .long { display: block; font-size: 1.05rem; font-weight: normal; color: var(--muted); margin-top: 0.35rem; font-style: italic; }
+  h2 {
+    font-size: 1.25rem;
+    margin: 2.4rem 0 0.7rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.3rem;
+  }
+  p { margin: 0.7rem 0; }
+  em { color: var(--accent); font-style: italic; }
+  a { color: var(--accent); }
+  ul { margin: 0.7rem 0 0.7rem 1.4rem; }
+  li { margin: 0.35rem 0; }
+  .lede { font-size: 1.1rem; margin-top: 1.2rem; }
+  pre {
+    background: var(--code-bg);
+    color: var(--code-fg);
+    font: 14px/1.55 "SF Mono", Menlo, Consolas, monospace;
+    padding: 1rem 1.2rem;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 0.9rem 0;
+  }
+  code {
+    font: 0.88em "SF Mono", Menlo, Consolas, monospace;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 0.05em 0.3em;
+  }
+  pre code { background: none; border: none; padding: 0; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.9rem 1.1rem;
+    margin: 0.8rem 0;
+  }
+  .card h3 { font-size: 1rem; margin-bottom: 0.25rem; }
+  .card p { margin: 0.2rem 0; font-size: 0.95rem; color: var(--muted); }
+  .phase { display: flex; gap: 0.8rem; align-items: baseline; }
+  .phase .num {
+    font: bold 0.85rem "SF Mono", Menlo, Consolas, monospace;
+    color: var(--accent);
+    white-space: nowrap;
+  }
+  footer {
+    margin-top: 3rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.9rem;
+    color: var(--muted);
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>tmct
+    <span class="long">The Mechanical Code Talker — a pure-JS, no-LLM, offline, $0 chatbot</span>
+  </h1>
+
+  <p class="lede">
+    A chatbot in the <em>ELIZA/PARRY lineage</em>, obsessed with software the way PARRY
+    was obsessed with the mafia. No model calls anywhere in the product: interpretation
+    is <em>mechanical</em>, memory is an <em>OWL-labelled graph</em> on disk, and every
+    answer is either grounded or an honest miss.
+  </p>
+
+  <h2>Install &amp; quickstart</h2>
+  <pre><code>npm install -g @polycode-projects/the-mechanical-code-talker
+
+$ tmct
+tmct&gt; what talks to the payment module?
+…
+tmct&gt; /help
+tmct&gt; /exit</code></pre>
+  <p>Point it at a repo's graph with <code>tmct chat --repo /path/to/repo</code>, or start
+  with nothing — tmct bootstraps an empty memory and remembers what you tell it.</p>
+
+  <h2>How it works</h2>
+  <ul>
+    <li><strong>Multiple concurrent interpretation strategies</strong> per message —
+      grammar parse, keyword picking, noise-word removal, fuzzy matching. Same-class
+      results merge; distinct classes get an explicit
+      <em>&ldquo;if you mean X then &hellip;&rdquo;</em> instead of a silent guess.</li>
+    <li><strong>An ACE-inspired controlled grammar</strong> — text that fits it is
+      compiled to OWL-labelled triples the graph memory can store and answer from.</li>
+    <li><strong>Two-layer memory</strong> — an always-loaded OWL-labelled JSON graph
+      (<code>.tmct/</code>, local, never committed) plus text blocks under a
+      PageRank-style relevance index, both fed by every parsed exchange and by cleaned
+      session logs. Committed corpuses (a ConceptNet slice is planned) seed the vocabulary.</li>
+  </ul>
+
+  <h2>The no-LLM, honesty pitch</h2>
+  <ul>
+    <li><strong>No LLM, anywhere, ever</strong> — deterministic language libraries
+      (wink-nlp's local model), template sets, and graph lookups. Offline. $0 per message.</li>
+    <li><strong>Not an indexer</strong> — tmct consumes a graph via a provider seam;
+      it builds no codebase index of its own.</li>
+    <li><strong>Not a reasoning model</strong> — where it &ldquo;reasons&rdquo;, it
+      calculates, and shows the calculation as prose.</li>
+    <li><strong>Never guesses silently</strong> — a miss is declared, with a nudge
+      toward a question it <em>can</em> answer. A wrong confident answer is treated as
+      worse than an honest miss — that rule is wired into its eval rubric.</li>
+  </ul>
+
+  <h2>Roadmap</h2>
+  <div class="card phase"><span class="num">Phase 0</span>
+    <div><h3>Reshape (v0.2.0 — done)</h3>
+    <p>LLM fallback stripped, extraction stack and MCP server dropped, MPL-2.0,
+    tmct naming, empty-graph bootstrap, published to npm.</p></div></div>
+  <div class="card phase"><span class="num">Phase 1</span>
+    <div><h3>Interpretation pipeline + memory foundations</h3>
+    <p>The multi-strategy pipeline, the conversational memory graph, the
+    graph-provider adapter contract, an OpenTUI shell.</p></div></div>
+  <div class="card phase"><span class="num">Phase 2</span>
+    <div><h3>Grammar &rarr; OWL + corpus</h3>
+    <p>The ACE-inspired grammar emitting OWL triples, the tmct-core ontology,
+    template libraries, a committed ConceptNet slice (CC-BY-SA 4.0).</p></div></div>
+  <div class="card phase"><span class="num">Phase 3</span>
+    <div><h3>Chat tuning cycle (autonomous)</h3>
+    <p>A fixed chatbench case set, deterministic replay, LLM-as-judge scoring —
+    in the offline eval harness only; the product stays no-LLM.</p></div></div>
+
+  <h2>Links</h2>
+  <ul>
+    <li>Repository: <a href="https://gitlab.com/polycode-projects/the-mechanical-code-talker">gitlab.com/polycode-projects/the-mechanical-code-talker</a></li>
+    <li>Package: <a href="https://www.npmjs.com/package/@polycode-projects/the-mechanical-code-talker">npmjs.com/package/@polycode-projects/the-mechanical-code-talker</a></li>
+  </ul>
+
+  <footer>
+    <p>MPL-2.0 &middot; corpus data under its own licences &middot; &copy; Polycode Limited.</p>
+  </footer>
+</main>
+</body>
+</html>

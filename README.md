@@ -1,82 +1,108 @@
-# mct — The Mechanical Code Talker
+# tmct — The Mechanical Code Talker
 
-`@polycode-projects/mct`
+`@polycode-projects/the-mechanical-code-talker`
 
-A tolerant, offline, **$0** chat that guides you toward precision queries about a
-software repository. It is ELIZA/PARRY-style — pattern-driven, best-efforts, no
-model calls — but domain-obsessed with code the way PARRY was obsessed with the
-mafia. It assumes a narrow context (you are asking about *this* repo) and leans
-into that assumption to be helpful cheaply.
+A pure-JS, **no-LLM**, offline, **$0** chatbot in the ELIZA/PARRY lineage —
+pattern-driven, best-efforts, and obsessed with software the way PARRY was
+obsessed with the mafia. No model calls anywhere in the product: interpretation
+is mechanical (deterministic language libraries, template sets, committed
+corpuses), memory is a graph on disk, and every answer is either grounded or an
+honest miss.
 
 ```
-$ mct
-seon> what talks to the payment module?
+$ tmct
+tmct> what talks to the payment module?
 …
-seon> /callers checkout
+tmct> /callers checkout
 …
-seon> /exit
+tmct> /exit
 ```
 
-## What mct is
+Home page: https://polycode-projects.gitlab.io/the-mechanical-code-talker/
 
-- A **mechanical chat surface**: deterministic pattern-matching over a code
-  graph, mapping loose natural-language-ish questions onto precise graph queries
-  and slash-commands (`/callers`, `/callees`, `/tests`, `/impact`, `/arch`, …).
-- **Offline and free**: no LLM in the default path. An opt-in `--with-claude` /
-  `--with-copilot` fallback is available for chat only, used solely when the
-  mechanical engine misses a bare question — never required.
-- A **library**: importable via a real `exports` map, so other tools can drive
-  the chat engine and its primitives (`ask`, `resolveObject`, `relationKind`,
-  `impactClosure`, `dispatchTool`, `fetchEntities`).
+## How it interprets you
 
-## What mct deliberately is NOT
+Every message runs through **multiple concurrent interpretation strategies** —
+a grammar parse, keyword picking, noise-word removal, fuzzy matching. Their
+results are grouped by class:
 
-- **It is not an indexer.** mct keeps **no codebase index of its own**. It reads
-  a pre-built graph artifact; producing that graph is out of scope (today it
-  consumes seonix's `.seonix/graph.json`; a first-class provider adapter is on
-  the ROADMAP). mct's job is the *conversation*, not the extraction.
+- results of the **same class merge** into one ranked answer;
+- results of **distinct classes** are surrounded with an explicit
+  *"if you mean X then …"* so ambiguity is shown, never silently resolved.
+
+One of the strategies is an **ACE-inspired controlled grammar**: when your
+text fits the controlled fragment, tmct emits OWL-labelled triples from it —
+statements it can store, retrieve, and answer from later. Text that doesn't
+fit the grammar still gets the tolerant strategies; nothing is rejected for
+being loose, fuzzy, or misspelled.
+
+## How it remembers
+
+tmct's memory has two layers, both fed by every parsed request and response and
+by cleaned session logs:
+
+- an **always-loaded OWL-labelled JSON graph** on disk under `.tmct/` (local
+  artifact, never committed);
+- **text blocks under a PageRank-style index**, pulled into context on
+  relevance rather than loaded wholesale.
+
+With no graph at all, tmct starts empty and remembers what you tell it — the
+`.tmct/` graph is created from the conversation. Committed corpuses seed the
+vocabulary; a filtered **ConceptNet slice** (CC-BY-SA 4.0) is planned — see
+`ROADMAP.md` Phase 2.
+
+## What tmct deliberately is NOT
+
+- **It is not an indexer.** tmct keeps no codebase index of its own. It
+  consumes a graph via a provider seam (`fetchEntities` and friends); producing
+  a code graph is out of scope. tmct's job is the *conversation*.
 - **It is not a reasoning model.** Where it "reasons", it does so by
   *calculation* surfaced as prose ("there are a lot of tests for a codebase of
-  that size") and, optionally, by running linters/tests to *observe* whether
-  something worked — not by generating free-form thought.
-- **It does not guess silently.** When it cannot resolve your question it tells
-  you so and nudges you toward a query it *can* answer.
+  that size") — deterministic, explainable, cheap. There is **no LLM anywhere
+  in the product**. (An LLM-as-judge exists only in the offline eval harness
+  that tunes tmct — see `SKILL_TUNING_CYCLE.md` — never in the product path.)
+- **It never guesses silently.** When it cannot resolve your question it says
+  so and nudges you toward a query it *can* answer.
 
 ## Install & use
 
 ```bash
-npm install -g @polycode-projects/mct    # or npx @polycode-projects/mct
-mct                                       # bare = chat (the headline)
-mct chat --repo /abs/path/to/repo         # chat over a specific repo's graph
-mct --help                                # full usage
+npm install -g @polycode-projects/the-mechanical-code-talker
+tmct                                  # bare = chat (the headline)
+tmct chat --repo /abs/path/to/repo    # chat over a specific repo's graph
 ```
 
-Non-chat modes (graph tools, `viz`, `hook-augment`) are carried over from the
-lift and remain available under `mct <mode> …`, but they are de-emphasized —
-mct's headline is the chat.
+Inside the chat: `/help` lists commands, `/exit` leaves. `TMCT_GRAPH_FILE`
+overrides the graph location.
+
+> Install-size note: tmct depends on wink-nlp's deterministic English language
+> model (~3.8 MB installed). That model is a lookup table, not an LLM.
 
 ### As a library
 
 ```js
-import { runChat, ask, resolveObject, fetchEntities } from "@polycode-projects/mct";
-import { runChat } from "@polycode-projects/mct/chat";
+import { runChat, ask, resolveObject, fetchEntities } from "@polycode-projects/the-mechanical-code-talker";
 ```
 
-## Provenance and shape
+The `exports` map and the chat primitives (`ask`, `resolveObject`,
+`relationKind`, `impactClosure`, `dispatchTool`, `fetchEntities`) are the
+extension surface.
 
-mct v0.1.0 is a **whole-package lift** of the seonix chat surface. Internal
-module filenames and identifiers are kept **verbatim** from seonix — the rename
-is packaging and branding, not a symbol-level refactor. This guarantees mct
-starts life with seonix's shape and its green test suite. The graph artifact
-directory is still named `.seonix/` for the same reason (see ROADMAP.md for the
-planned `.mct` migration). The clean chat/primitives split, the index-shedding,
-and the seonix→mct adapter are all deferred — see **ROADMAP.md**.
+## Provenance
 
-## Licence
+tmct began as a whole-package lift of the seonix chat surface (v0.1.0, then
+published as `@polycode-projects/mct`), and was then reshaped: the LLM
+fallback, the code-extraction stack, and the MCP server were all removed; the
+naming, license, and memory model were reset to the vision above. See
+`ROADMAP.md` for the phase plan.
 
-**AGPL-3.0-only.** This is a deliberate copyleft choice for a published library:
-network use counts as distribution, so a hosted service built on mct must offer
-its corresponding source. If that does not suit your use, do not build on mct.
-See `LICENSE`.
+## Licensing
+
+**MPL-2.0.** Free for commercial use; if you modify the covered files and
+distribute them, you must publish those files' source under the MPL with
+attribution — the copyleft is file-level, not project-level. See `LICENSE`.
+
+Corpus data carries its own licenses, separate from the code: the planned
+ConceptNet slice is **CC-BY-SA 4.0** and will ship with its own notice.
 
 © Polycode Limited.

@@ -1,7 +1,9 @@
-# CI for @polycode-projects/mct — a single published npm package (no website, no
-# AWS, no benchmark rig). Two jobs: run the tests, and publish to public npm on a
-# deliberate version bump. Mirrors the seonix repo's publish:npm shape, minus the
-# --workspace flag (mct is a single package, not a workspace).
+# CI for @polycode-projects/the-mechanical-code-talker (tmct) — a single
+# published npm package plus a static GitLab Pages home page (no AWS, no
+# benchmark rig). Three jobs: run the tests, publish to public npm on a
+# deliberate version bump, and deploy public/ to Pages on main. Mirrors the
+# seonix repo's publish:npm shape, minus the --workspace flag (tmct is a
+# single package, not a workspace).
 
 image: node:24
 
@@ -39,11 +41,24 @@ publish:npm:
     - npm ci
     - npm test
     - LOCAL_VERSION=$(node -p "require('./package.json').version")
-    - PUBLISHED_VERSION=$(npm view @polycode-projects/mct version 2>/dev/null || echo "none")
+    - PUBLISHED_VERSION=$(npm view @polycode-projects/the-mechanical-code-talker version 2>/dev/null || echo "none")
     - |
       if [ "$PUBLISHED_VERSION" = "$LOCAL_VERSION" ]; then
-        echo "@polycode-projects/mct is already at $LOCAL_VERSION on npm — no version bump in this push, skipping publish."
+        echo "@polycode-projects/the-mechanical-code-talker is already at $LOCAL_VERSION on npm — no version bump in this push, skipping publish."
       else
         echo "publishing $LOCAL_VERSION (npm currently has ${PUBLISHED_VERSION})"
         npm publish --access public
       fi
+
+# GitLab Pages: the static home page. GitLab's convention is a job literally
+# named `pages` whose artifact is the `public/` directory — the repo already
+# keeps the site there, so this job just hands it over. Main branch only.
+pages:
+  stage: deploy
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+  script:
+    - echo "publishing public/ to GitLab Pages"
+  artifacts:
+    paths:
+      - public

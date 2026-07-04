@@ -1,150 +1,209 @@
-# mct ROADMAP
+# tmct ROADMAP
 
-mct v0.1.0 is a **whole-package lift** of the seonix chat surface: identical
-shape, green tests, mct branding. That was deliberate — it gives every ambition
-below a working, tested starting point instead of a green field. This document
-carries the full set of ambitions for the project; none of them are implemented
-in v0.1.0 beyond what the lift already provides.
+tmct v0.1.0 was a **whole-package lift** of the seonix chat surface (published
+as `@polycode-projects/mct`): identical shape, green tests, new branding. That
+was deliberate — it gave every ambition below a working, tested starting point
+instead of a green field. v0.2.0 is the **reshape**: the lift's LLM fallback,
+extraction stack, and MCP server are gone, and the package, naming, and license
+now match the product this document describes.
 
-## The product vision
+This roadmap is organized into phases. The original 16 ambition items are
+mapped into them (item numbers retained for traceability); the seven sketches
+formerly held in `code-talker-ideas.txt` are folded into items 8–11 below and
+the file has been deleted.
 
-### 1. A tolerant, ELIZA/PARRY-style chat, obsessed with software repositories
-A best-efforts conversational surface that **guides users toward precision
-queries**. ELIZA/PARRY-style pattern reflection, but domain-obsessed the way
-PARRY was obsessed with the mafia — mct may heavily assume a narrow context (you
-are asking about *this* codebase) and exploit that assumption to answer cheaply
-and confidently. Tolerant of loose, fuzzy, misspelled input; never silently
-wrong.
+## The umbrella product definition (item 1)
 
-### 2. Its own well-defined grammar
-A first-class, documented grammar for the input language mct accepts and the
-query language it maps onto — extracted from the current ad-hoc pattern matching
-in `ask.mjs` into an explicit, testable grammar definition.
+**A tolerant, ELIZA/PARRY-style chat, obsessed with software.** A best-efforts
+conversational surface that guides users toward precision queries.
+ELIZA/PARRY-style pattern reflection, but domain-obsessed the way PARRY was
+obsessed with the mafia — tmct may heavily assume a narrow context (you are
+asking about *this* codebase, or about what tmct itself remembers) and exploit
+that assumption to answer cheaply and confidently. Tolerant of loose, fuzzy,
+misspelled input; never silently wrong; **no LLM anywhere in the product**.
+Every phase below serves this definition.
 
-### 3. Ontologies: OWL-SEON / FAMIX + core OWL/RDF
-Ground the vocabulary in real software-engineering ontologies:
-- **OWL-SEON** and **FAMIX** for software-entity concepts (classes, methods,
-  packages, calls, inheritance, …).
-- Core **OWL/RDF** vocabulary for the general relational scaffolding.
-This gives mct a principled type system for what it can talk *about*.
+---
 
-### 4. Sentence-fragment template libraries + an SE phrase book
-- Libraries of **sentence-fragment templates** for two jobs: matching user
-  *input* and generating *responses*.
-- A **software-engineering "phrase book"**: the idiomatic ways engineers phrase
-  questions and answers about code, curated so mct sounds fluent in the domain.
+## Phase 0 — Reshape (v0.2.0) — the current work
 
-### 5. Calculation surfaced as reasoning
-Present derived facts as lightweight reasoning: "there are a lot of tests for a
-codebase of that size", "this module is unusually central". These are
-**calculations**, not model inference — deterministic, explainable, cheap.
+One commit per step, `npm test` green at each.
 
-### 6. Optionally running linters/tests to *observe*
-Let mct **run linters or tests** to observe whether something actually worked,
-reporting the observation — again without "reasoning", just measurement.
+- **DONE — Strip the LLM fallback** (`--with-claude` / `--with-copilot` and the
+  `hook-augment` mode removed; the product path is now provably model-free).
+- **DONE — Drop the extraction/viz stack** *(item 12: shed the codebase-index
+  dependency)*: Python `ast`, tree-sitter, Roslyn/Java extractors, walk/viz/
+  timeline/temporal modules, `roslyn/`, `java/`, `templates/` all deleted. tmct
+  consumes a graph via the provider seam; it produces none.
+- **DONE — Drop the MCP server**: `@modelcontextprotocol/sdk` removed;
+  `dispatchTool` survives as the plain internal tool switch.
+- **DONE — Carve `buildEntities`** into `src/graph-build.mjs`: the pure
+  in-memory graph assembly function, kept as the future memory writer
+  primitive.
+- **DONE — Empty-graph bootstrap** *(item 14, partial)*: a missing graph file
+  is no longer an error; tmct starts empty, says so, and creates
+  `.tmct/graph.json` from the conversation. The full provider adapter contract
+  is Phase 1.
+- **DONE — tmct naming purge** *(item 15, widened)*: seonix AND the interim
+  "mct" replaced throughout — package
+  `@polycode-projects/the-mechanical-code-talker`, bin `tmct`
+  (`bin/tmct.mjs`), tool prefix `tmct_*`, artifact dir `.tmct/`, env
+  `TMCT_GRAPH_FILE`, prompt `tmct>`.
+- **DONE — License swap to MPL-2.0** (from AGPL-3.0): free commercial use,
+  file-level publish-and-attribute copyleft.
+- **DONE — README rewrite + GitLab Pages home page** (`public/index.html`,
+  `pages` CI job): https://polycode-projects.gitlab.io/the-mechanical-code-talker/
+- **DONE — `docs/references/` skeleton + `ontology/`**: the reference-library
+  index (canonical URL / retrieval date / licence / consumer per entry), OWL 2
+  vocabulary notes, ACE-OWL sub-fragment pattern table, ConceptNet relation
+  list, and the `ontology/tmct-core.ttl` placeholder. This feeds the Phase 2
+  grammar work; the library grows as sources are web-verified.
+- **DONE — Publish 0.2.0** under the new name; deprecate
+  `@polycode-projects/mct@0.1.0` with a rename pointer.
 
-### 7. Data formats: JSONL, TOML, .txt line files
-mct's own data (phrase books, template libraries, ontology fragments, session
-records) should live in **plain, diffable formats**: mostly **JSONL**, **TOML**,
-and **.txt** line files. A graph store is possible later, but is not the default.
+---
 
-## Parsing, memory, and reasoning ambitions
+## Phase 1 — Interpretation pipeline + memory foundations
 
-These items expand a set of sketched ideas (`code-talker-ideas.txt`) into
-concrete scope. They sit between the product vision above and the
-architectural ambitions below: they describe how the tolerant chat surface
-(item 1), its grammar (item 2), and its ontology grounding (item 3) actually
-work end to end.
+### Item 8 — Multi-strategy request classification and ranking → `src/interpret/`
+Instead of a single best-guess parse, run the request through **all the classes
+of thing it could be**, parse it with each class's own strategy (grammar parse,
+keyword picking, noise-word removal, fuzzy matching — later the ACE strategy
+from Phase 2), execute the strategies that look like winners, then **merge
+same-class results** and surround **distinct-class results** with "if you mean
+X then …". Grows from `ask.mjs`'s existing 2-way merge into
+`interpret/pipeline.mjs` + `interpret/merge.mjs` + `interpret/strategies/*`.
+*(Covers sketch 1 of the former `code-talker-ideas.txt`: "request → all the
+classes of things it could be → parse using each class-specific strategy →
+execute winners → combine similar result classes and rank".)*
 
-### 8. Multi-strategy request classification and ranking
-Instead of a single best-guess parse, run the request through **all the
-classes of thing it could be** — ideally enumerated via an ontology of prose —
-parse it with each class's own strategy, execute the strategies that look like
-winners, then combine similar result classes and rank the candidate responses
-to pick one. This turns the "own grammar" ambition (item 2) into an explicit
-multi-candidate pipeline, giving the tolerant chat surface (item 1) a
-principled way to try several readings of ambiguous input before committing
-to an answer, rather than committing early to one parse.
+### Item 13 — The clean chat / primitives split
+Pull the movable conversational grammar out of the core primitives
+(`resolveObject`, `edgesOfKind`, `refineToEntities`, `traverse`) so the chat
+engine stands alone. `chat.mjs` slims to the conversational layer + `runTurn`
+orchestration.
 
-### 9. Conversational memory as its own graph
-Once a request is parsed, record it as an "a-visitor-said" item; responses to
-queries are recorded too. With both sides of the exchange captured, future
-input can be matched against **prior questions** by text similarity, not just
-against the code graph — a second, complementary memory that grows from the
-conversation itself rather than from source extraction. This is mct's own
-session data, in the JSONL/TOML/.txt formats already scoped in item 7, and is
-distinct from the code graph the seonix adapter (item 14) delivers — it is
-not written back through that adapter. *(Ambiguity: the ideas file just says
-"added to the graph"; I've read this as mct's own conversational graph, kept
-separate from the indexed code graph. Worth the operator confirming — if the
-intent was instead to annotate the seonix-fed graph itself, that changes the
-adapter contract in item 14.)*
-
-### 10. Input normalization pass (grammar / spell / style checks)
-Run a grammar check, spell check, and style check over parsed input as a
+### Item 10 — Input normalization pass (grammar / spell / style checks)
+Run a grammar check, spell check, and style check over input as a
 normalization pass alongside classification (item 8), so misspelled or
-ungrammatical input is repaired or scored before it's matched against
-templates — a concrete mechanism for the "tolerant of loose, fuzzy, misspelled
-input" promise in item 1. The same checks are an obvious fit for the
-"observe" ambition (item 6): running them over repo prose (docs, comments,
-commit messages) as another observable measurement, alongside linters and
-tests over code, not just over user input.
+ungrammatical input is repaired or scored before template matching — the
+concrete mechanism behind item 1's "tolerant of loose, fuzzy, misspelled
+input" promise. The same checks later serve the "observe" ambition (item 6)
+over repo prose. *(Covers sketches 3, 4, and 5 of the former ideas file:
+grammar check, spell check, style check.)*
 
-### 11. Formal logical reasoning engine over the ontology (Prolog / Progol)
-Apply real logical inference (e.g. modus tollens and other rules of inference)
-to a formula extracted from parsed prose, checked against the axioms already
-present in the ontology (item 3) — a step beyond the deterministic arithmetic
-already scoped as "calculation surfaced as reasoning" (item 5). The sketch is:
-map OWL constructs into templates over parameter expressions (Prolog terms or
-similar), then use a theorem prover — Progol (inductive logic programming) is
-named as a candidate — to prove goals against the parsed prose. This is a
-materially bigger lift than item 5 and depends on the ontology work (item 3)
-landing first; treat it as exploratory rather than committed scope until a
-spike confirms the OWL-to-template mapping is tractable.
+### Item 9 — Conversational memory as its own graph → `src/memory/`
+Record every parsed request as an "a-visitor-said" item and every response
+alongside it, in tmct's own OWL-labelled graph (`memory/core.mjs`), with text
+blocks under a PageRank-style relevance index (`memory/blocks.mjs`) and
+session-log cleaning/folding (`memory/fold.mjs`). Future input can then match
+against **prior questions** by similarity, not just against a provided code
+graph. This is tmct's own data under `.tmct/`, distinct from any
+provider-supplied graph and not written back through the provider adapter.
+*(Covers sketch 2 of the former ideas file: "once parsed the text is added to
+the graph as a-visitor-said item; responses from queries go in the graph; text
+matching may find similar questions".)*
 
-## Architectural ambitions
+### Item 14 (finish) — The graph-provider adapter contract
+Define the provider touchpoint interface — a loader yielding
+`{ individuals, byId, relations, proseIndex }` plus the published primitives —
+so seonix or any other producer can feed tmct without tmct importing an
+indexer. Phase 0 shipped the bootstrap seam; this finishes the contract.
 
-### 12. Shed the codebase-index dependency
-mct should keep **no codebase index of its own** and depend on none. Today the
-lift still carries seonix's full extraction stack (Python `ast`, tree-sitter,
-Roslyn/Java extractors, `codegraph.mjs`, etc.) because the chat surface does not
-separate cleanly at the source. Sever that: mct consumes a graph via an
-adapter (below) and drops the extraction code entirely.
+### Item 16 — Library-first design for extension
+Keep the `exports` map and the primitives stable and documented as the
+internals are refactored.
 
-### 13. The clean chat / primitives split
-The lift is intentionally *not* split. At the seonix HEAD it was lifted from:
-- `ask.mjs` mixes movable grammar with core primitives (`resolveObject`,
-  `edgesOfKind`, `refineToEntities`, `traverse`);
-- every slash-command routes through core `dispatchTool` (`server.mjs`);
-- the `ask` tests build real graphs via core `buildEntities`.
-Pull the movable conversational grammar out of the core primitives into its own
-cohesive module(s), so the chat engine stands alone.
+### Shell work
+- **OpenTUI console shell** around `runTurn`; readline `runChat` stays as
+  `--plain` and as the test surface.
+- Fold the surviving `bin/cli.mjs` arms into `bin/tmct.mjs`; delete `cli.mjs`.
 
-### 14. The seonix→mct adapter
-Define the **graph-provider touchpoint interface** so seonix (and any other
-producer) can feed mct without mct importing an indexer. The grounding for the
-lift identified this seam:
-- a **loader** yielding `{ individuals, byId, relations, proseIndex }`;
-- plus the primitives `relationKind`, `impactClosure`, `resolveObject`, `ask`,
-  `rephraseHint`, `fetchEntities`, `dispatchTool`.
-v0.1.0 already publishes these as named exports (see `src/index.mjs` and the
-`exports` map) so the adapter has a **target surface** to bind to. The adapter
-implementation itself is future work, tracked in **both** repos' roadmaps.
+---
 
-### 15. `.mct` artifact directory migration (deferred)
-The lifted code writes and reads the graph artifact under `.seonix/`
-(`SESSION_LOG_DIR`, session logs, `graph.json`). Renaming it to `.mct/` was
-**deferred at v0.1.0** because the name is threaded through many tests and
-fixtures, so the swap is not trivially test-safe. Migrate it once the adapter
-(item 14) owns artifact-path resolution, updating the fixtures in the same pass.
+## Phase 2 — Grammar → OWL + corpus
 
-### 16. Library-first design for extension
-mct is designed as a **library for extension** — the `exports` map and the
-primitives above are the extension surface. Keep that contract stable and
-documented as the internals are refactored.
+### Item 2 — Its own well-defined grammar → `src/grammar/ace.mjs`
+A first-class, documented, testable grammar — an **ACE-inspired controlled
+fragment** (~8 sentence patterns; see
+`docs/references/schemas/ace-owl-fragment.md`) that emits **OWL-labelled
+triples** when text fits it, backed by a declared lexicon
+(`grammar/lexicon.mjs`, TOML/JSONL data). Plugs into the item-8 pipeline as
+one strategy among several: fitting the grammar is a strong signal, missing it
+falls back to the tolerant strategies.
+
+### Item 3 — Ontology grounding: core OWL/RDF + SE vocabularies
+Ground the memory vocabulary in real ontologies: core **OWL 2 / RDF / RDFS**
+scaffolding plus software-entity concepts (the SEON-derived terms the graph
+already uses — `seon:`, `mgx:` prefixes — with **OWL-SEON** and **FAMIX** as
+reference vocabularies). Deliverable: `ontology/tmct-core.ttl`.
+
+### Items 4 + 7 — Template libraries, phrase book, plain data formats
+Sentence-fragment template libraries for matching input and generating
+responses, plus a software-engineering phrase book — all in plain, diffable
+formats (**JSONL**, **TOML**, **.txt** line files).
+
+### ConceptNet corpus slice
+A committed, filtered English/tech-domain **ConceptNet slice** (CC-BY-SA 4.0
+notice, size-budgeted) with the ~35-row relation→ACE-OWL-pattern mapping table
+(`src/corpus/conceptnet.mjs` + `conceptnet-map.toml`; relation list in
+`docs/references/schemas/conceptnet-relations.md`). The corpus seeds the
+bootstrap graph so an empty tmct still has a vocabulary.
+
+### Reference library growth
+Grow `docs/references/` with web-verified sources: ACE/APE papers, ConceptNet
+docs, ELIZA/PARRY lineage papers (only redistributable licences committed) —
+and finish `ontology/tmct-core.ttl` alongside the grammar work.
+
+---
+
+## Phase 3 — Chat tuning cycle (autonomous)
+
+The measurement loop that turns the above into a tunable product — specified
+in `SKILL_TUNING_CYCLE.md`:
+
+- a fixed, versioned **chatbench case set** (`chatbench/cases.jsonl`);
+- a **deterministic replay runner** over `runTurn` (the product is
+  deterministic — one run per arm suffices);
+- **LLM-as-judge** scoring (N≥3 samples per case; groundedness / correctness /
+  honesty-on-miss / rephrase-hint helpfulness). The judge lives in the **eval
+  harness only** — the product stays no-LLM;
+- `CHATBENCH_0NN.md` artifacts and an autonomous cycle loop (no hard pause;
+  each cycle logs its ranked decision menu and continues).
+
+Inside this loop, two earlier ambitions become **tuning levers** rather than
+standalone features:
+
+### Item 5 — Calculation surfaced as reasoning
+Derived facts presented as lightweight reasoning ("there are a lot of tests
+for a codebase of that size", "this module is unusually central") —
+calculations, not inference: deterministic, explainable, cheap.
+
+### Item 6 — Optionally running linters/tests to *observe*
+Let tmct run linters or tests to observe whether something actually worked,
+reporting the observation — measurement, not reasoning.
+
+### Item 11 — Formal logical reasoning over the ontology (Prolog / Progol) — exploratory, gated
+Apply real rules of inference (modus tollens, etc.) to formulas extracted from
+parsed prose, checked against the axioms in the ontology (item 3) — a step
+beyond item 5's arithmetic. The sketch: map OWL constructs into templates over
+parameter expressions (Prolog terms or similar), then use a theorem prover —
+Progol (inductive logic programming) is the named candidate — to prove goals
+against parsed prose. Materially bigger than item 5 and dependent on the
+Phase 2 ontology landing; **exploratory until a spike confirms the
+OWL-to-template mapping is tractable**. *(Covers sketches 6 and 7 of the
+former ideas file: "reasoning as the application of logic rules to the formula
+created from prose against the set of axioms in the graph, possibly search
+using Prolog" and "fit OWL constructs into templates / parameter expressions,
+then use Progol to theorem-prove against parsed prose".)*
+
+---
 
 ## Explicitly out of scope (for now)
 
-- No website, no AWS, no benchmark rig — mct is a published npm library only.
+- No AWS, no benchmark rig — tmct is a published npm library + CLI with a
+  static GitLab Pages home page only.
 - No auto-publish: releasing a version is gated on a deliberate version-bump
   commit plus a configured `NPM_TOKEN` in CI.
+- No MCP server, no LLM in the product path — permanently out of scope, not
+  just "for now".
