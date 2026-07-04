@@ -1701,13 +1701,41 @@ function fuzzyCascadeWord(w) {
   return best <= bound && !tied ? hit : null;
 }
 
+/** The typo→schema-term trap guard (chatbench cycle 2, CHATBENCH_001 L3 — the
+ *  tf-modles hard fail). A term that resolves ONLY via the tier-5 bounded-fuzzy
+ *  pass onto one of the graph's OWN vocabulary individuals (a SchemaClass/
+ *  SchemaPredicate that ingestSchemaDocs merged in), while the same word ALSO
+ *  fuzzy-corrects to an entity KIND NOUN of the closed grammar ("modles" →
+ *  "modules"), is a typo'd kind noun, not a question about the schema term:
+ *  without this guard, "which modles import a.mjs" silently pivoted onto the
+ *  CLASS Module and confidently answered a question the visitor never asked
+ *  ("No — no imports edge found from Module to app/lib/a.mjs"). Reporting the
+ *  parse unanswerable sends it to the relaxation cascade, whose drop-unmatched
+ *  layer restores the kind noun (fuzzyCascadeWord) and whose winning re-parse is
+ *  ANNOUNCED as a repair receipt ('read as "which modules import a.mjs" — …').
+ *  If the cascade cannot produce a real answer, the original parse still stands
+ *  (ask() keeps the direct parse when relaxParse returns null), so a genuine
+ *  schema-adjacent question is never turned into a new kind of miss. Exact and
+ *  substring/prose matches are untouched — the guard reads matchedVia:"fuzzy"
+ *  only, and only when the kind-noun reading exists. */
+function schemaTypoTrap(resolution, term) {
+  if (!resolution?.match || resolution.matchedVia !== "fuzzy" || resolution.ambiguous) return false;
+  const cls = resolution.match.class;
+  if (cls !== "SchemaClass" && cls !== "SchemaPredicate") return false;
+  const lc = String(term || "").trim().toLowerCase();
+  const kindNoun = fuzzyCascadeWord(lc);
+  return !!kindNoun && kindNoun !== lc && !!ENTITY_TO_TYPE[kindNoun];
+}
+
 /** Is `parsed` a genuinely ANSWERABLE query — one that both parsed AND (for the simple
  *  clauses) resolves its named term(s) to a graph entity? A composite non-miss node,
  *  an ambiguous parse, and a meta/mentions surface all count; an unresolved-context
  *  pronoun is its OWN specific honest miss (kept, not relaxed). Returns:
  *    true       — a real, executable answer (even if it later renders an empty set / "No")
  *    "ambiguous"/"pronoun" — a specific outcome to keep, distinct from relaxable
- *    false      — no parse at all, a compositional {node:"miss"}, or an unresolved term
+ *    false      — no parse at all, a compositional {node:"miss"}, an unresolved term,
+ *                 or a fuzzy-only schema-individual hit with a kind-noun reading
+ *                 (schemaTypoTrap above — relaxable, so the cascade can re-read it)
  *  ask() starts the cascade ONLY on `false`, and accepts a relaxed attempt ONLY on the
  *  strict `true` (so the cascade can never "rescue" a query into another kind of miss). */
 function answerable(graph, parsed, contextId) {
@@ -1717,11 +1745,11 @@ function answerable(graph, parsed, contextId) {
   if (parsed.shape === "meta" || parsed.shape === "mentions") return true;
   const o = resolveTermOrContext(graph, parsed.object, contextId);
   if (o.unresolvedPronoun) return "pronoun";
-  if (!o.match) return false;
+  if (!o.match || schemaTypoTrap(o, parsed.object)) return false;
   if (parsed.shape === "ask") {
     const s = resolveTermOrContext(graph, parsed.subject, contextId);
     if (s.unresolvedPronoun) return "pronoun";
-    return s.match ? true : false;
+    return s.match && !schemaTypoTrap(s, parsed.subject) ? true : false;
   }
   return true;
 }
