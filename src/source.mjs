@@ -12,16 +12,35 @@ export function clearCache() {
   cache = null;
 }
 
-/** Read + parse the local graph artifact. Cached per file for the process. */
+/** The empty-graph bootstrap payload: what a repo with no artifact "contains".
+ *  Shaped exactly like a buildEntities payload so parseEntities and the session
+ *  upsert treat it as a normal (just empty) graph. `bootstrap: true` marks it. */
+export function emptyEntities() {
+  return {
+    generated_at: "",
+    bootstrap: true,
+    classes: [],
+    vocabulary: [],
+    objectProperties: [],
+    individuals: [],
+    proseIndex: {},
+  };
+}
+
+/** Read + parse the local graph artifact. Cached per file for the process.
+ *  A MISSING artifact (ENOENT) is not an error: the chat surface starts from an
+ *  empty graph and the first session fold-in creates the file — so we return the
+ *  bootstrap payload (uncached, so the freshly written file is picked up next
+ *  fetch). Every other failure still throws a clean ToolError. */
 export async function fetchEntities(config) {
   if (cache && cache.file === config.graphFile) return cache.payload;
   let text;
   try {
     text = await readFile(config.graphFile, "utf8");
   } catch (e) {
+    if (e?.code === "ENOENT") return emptyEntities();
     throw new ToolError(
-      `no graph artifact at ${config.graphFile} — run \`seonix cli index_repository '{"repo_path":"<abs>"}'\` ` +
-        `for this repo first (the indexer writes <repo>/.seonix/graph.json). (${e?.code || e?.message || e})`,
+      `cannot read graph artifact at ${config.graphFile} (${e?.code || e?.message || e})`,
     );
   }
   let payload;

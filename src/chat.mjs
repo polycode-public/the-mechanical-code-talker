@@ -515,8 +515,9 @@ const promptFor = (focus) => (focus ? `seon(${shortLabel(focus.label)})> ` : PRO
 
 /**
  * The interactive shell. Streams are injectable so tests run scripted sessions
- * without a TTY. Throws the source layer's own ToolError (pointing at
- * `seonix cli index_repository`) when the repo has no graph artifact.
+ * without a TTY. A repo with NO graph artifact is not an error: the session
+ * starts from the empty bootstrap graph (the banner says so honestly) and the
+ * first turn's fold-in creates .seonix/graph.json from the conversation itself.
  * Returns { logFile, sidecarFile, turns } once the session ends.
  */
 export async function runChat({
@@ -540,9 +541,9 @@ export async function runChat({
     else { repo = cwd; config = loadConfig(env, cwd); } // not a git repo — cwd/env default
   }
 
-  // Load the graph once up front — the banner needs the module count, focus/`it`
-  // resolution and contextId threading need it in hand, and a missing/empty
-  // artifact should fail HERE with the server's own helpful error, not on turn one.
+  // Load the graph once up front — the banner needs the module count, and focus/`it`
+  // resolution and contextId threading need it in hand. A missing artifact loads as
+  // the empty bootstrap graph (source.mjs) — the banner says so; never an error.
   const graph = parseEntities(await source.fetchEntities(config));
   const moduleCount = graph.individuals.filter((i) => (i.class || "") === "Module").length;
   const { version } = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
@@ -584,7 +585,13 @@ export async function runChat({
   };
 
   const dim = (s) => (env.NO_COLOR || !output.isTTY ? s : `\x1b[2m${s}\x1b[0m`);
-  output.write(dim(`seonix chat — ${repo} — ${moduleCount} module(s) — log ${logFile}`) + "\n");
+  if (graph.individuals.length === 0) {
+    // Empty-graph bootstrap: honest-miss messaging, never an error before the prompt.
+    output.write(dim(`seonix chat — ${repo} — no graph loaded — starting empty; ` +
+      `the conversation is remembered to ${DEFAULT_GRAPH_REL} — log ${logFile}`) + "\n");
+  } else {
+    output.write(dim(`seonix chat — ${repo} — ${moduleCount} module(s) — log ${logFile}`) + "\n");
+  }
   output.write(dim("pass --repo <path> to target a different repo") + "\n");
   output.write(dim("ask a question, or /help for commands (/stats for an overview) — /exit to leave") + "\n");
 

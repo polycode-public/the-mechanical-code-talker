@@ -92,12 +92,14 @@ test("runTurn: a grammar miss prints the engine's own hint text — no special h
   assert.equal(logLines[2], answer, "the miss text is logged verbatim too");
 });
 
-test("runTurn: a thrown ToolError (no graph) becomes the answer, not a crash", async () => {
-  const { answer } = await runTurn("which modules import a.mjs", {
+test("runTurn: a structural query over a MISSING graph is an honest miss (bootstrap), not a crash", async () => {
+  const { answer, record } = await runTurn("which modules import a.mjs", {
     config: { graphFile: "/nonexistent/.seonix/graph.json" },
   });
-  assert.match(answer, /no graph artifact at/);
-  assert.match(answer, /index_repository/);
+  assert.match(answer, /the graph at .* is empty/);
+  assert.match(answer, /folds the conversation/);
+  assert.doesNotMatch(answer, /\n\s+at /, "message only — never a stack trace");
+  assert.equal(record.miss, true);
 });
 
 // ---- slash-commands: reach every tool (bare input still asks) ----
@@ -559,14 +561,24 @@ test("runChat: input ending without /exit (Ctrl+D shape) still closes cleanly an
   }
 });
 
-test("runChat: missing graph throws the server's own helpful error before any prompt", async () => {
+test("runChat: missing graph bootstraps clean — honest empty banner, conversational turns work, and the session CREATES graph.json", async () => {
   const dir = await mkdtemp(join(tmpdir(), "seonix-chat-nograph-"));
   try {
-    const { out } = sink();
-    await assert.rejects(
-      () => runChat({ repoPath: dir, input: Readable.from([]), output: out }),
-      /no graph artifact at .*index_repository/s,
-    );
+    const { out, text } = sink();
+    const input = Readable.from(["hi\n", "which modules import a.mjs\n", "/exit\n"]);
+    const { turns } = await runChat({ repoPath: dir, input, output: out });
+    assert.equal(turns, 2);
+    // the banner is honest about the empty start — and never an error before the prompt
+    assert.match(text(), /no graph loaded — starting empty/);
+    assert.match(text(), /remembered to .*graph\.json/);
+    // a structural query over the empty graph answers with the engine's honest miss, no stack
+    assert.match(text(), /no symbol matching "a\.mjs" found in the index\./);
+    assert.doesNotMatch(text(), /\n\s+at /);
+    // the conversation itself became the first graph write: a Session individual exists
+    const g = JSON.parse(await readFile(join(dir, ".seonix", "graph.json"), "utf8"));
+    const sess = g.individuals.filter((i) => i.class === "Session");
+    assert.equal(sess.length, 1, "the session was folded into a freshly created graph.json");
+    assert.equal(sess[0].attributes.find((a) => a.key === "turns").value, "2");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -574,7 +586,7 @@ test("runChat: missing graph throws the server's own helpful error before any pr
 
 // ---- binary smoke ----
 
-test("cli chat: real binary, stdin closed after /exit → exit 0; graphless repo → clean error", async () => {
+test("cli chat: real binary, stdin closed after /exit → exit 0; graphless repo → clean empty start", async () => {
   const dir = await repoWithFixtureGraph();
   const bare = await mkdtemp(join(tmpdir(), "seonix-chat-bare-"));
   try {
@@ -586,11 +598,12 @@ test("cli chat: real binary, stdin closed after /exit → exit 0; graphless repo
     const names = await readdir(join(dir, ".seonix"));
     assert.ok(names.some((n) => /^session-.*\.log$/.test(n)), "binary session wrote its log");
 
-    // stdin immediately closed, no graph → the no-graph error, non-zero exit, no crash
-    const bad = spawnSync(process.execPath, [BIN, "chat", "--repo", bare], { encoding: "utf8", input: "" });
-    assert.notEqual(bad.status, 0);
-    assert.match(bad.stderr, /no graph artifact at/);
-    assert.match(bad.stderr, /index_repository/);
+    // no graph → the bootstrap path: honest empty banner, greeting works, clean exit 0
+    const bad = spawnSync(process.execPath, [BIN, "chat", "--repo", bare], { encoding: "utf8", input: "hi\n/exit\n" });
+    assert.equal(bad.status, 0, bad.stderr);
+    assert.match(bad.stdout, /no graph loaded — starting empty/);
+    const bareGraph = JSON.parse(await readFile(join(bare, ".seonix", "graph.json"), "utf8"));
+    assert.ok(bareGraph.individuals.some((i) => i.class === "Session"), "bootstrap session folded into a new graph.json");
   } finally {
     await rm(dir, { recursive: true, force: true });
     await rm(bare, { recursive: true, force: true });

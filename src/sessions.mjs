@@ -13,8 +13,8 @@
 //     atomically (temp + rename), re-reading the file first so a re-index that
 //     happened mid-session is tolerated: edges whose targets vanished are dropped,
 //     never left dangling (honest degradation).
-//   - RE-INDEX (extract.mjs single-path mode): readSessionRecords() + foldInSessions()
-//     re-attach every recorded session to the FRESH graph, re-resolving each recorded
+//   - REBUILD (any future graph writer): readSessionRecords() + foldInSessions()
+//     re-attach every recorded session to a FRESH graph, re-resolving each recorded
 //     entity id (by id first, then by unique label derived from the id shape);
 //     unresolvable references are dropped and counted on the session node
 //     (mgx:sessionDroppedEdges) — never a guessed edge.
@@ -23,8 +23,8 @@
 // asked the graph about and which entities answered, so re-indexing re-attaches them
 // rather than re-deriving them from source.
 
-import { readFile, readdir, rename, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 
 export const SESSIONS_DIR_REL = join(".seonix", "sessions");
 
@@ -141,10 +141,24 @@ export function upsertSession(entities, record) {
 }
 
 /** Read-time append (chat.mjs, once per turn): re-read graph.json FRESH (a re-index
- *  may have replaced it mid-session), upsert, write back atomically. Throws on a
- *  missing/invalid artifact — the caller treats the append as best-effort. */
+ *  may have replaced it mid-session), upsert, write back atomically. A MISSING
+ *  artifact is the empty-graph bootstrap: seed a minimal valid payload so the
+ *  conversation itself becomes the first graph write. Still throws on an invalid
+ *  (unparseable) artifact — the caller treats the append as best-effort. */
 export async function appendSessionToGraph(graphFile, record) {
-  const entities = JSON.parse(await readFile(graphFile, "utf8"));
+  let text = null;
+  try {
+    text = await readFile(graphFile, "utf8");
+  } catch (e) {
+    if (e?.code !== "ENOENT") throw e;
+  }
+  let entities;
+  if (text === null) {
+    entities = { generated_at: "", classes: [], vocabulary: [], objectProperties: [], individuals: [], proseIndex: {} };
+    await mkdir(dirname(graphFile), { recursive: true });
+  } else {
+    entities = JSON.parse(text);
+  }
   const res = upsertSession(entities, record);
   await atomicWriteJson(graphFile, entities);
   return res;

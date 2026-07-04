@@ -100,9 +100,11 @@ async function loadGraph(config, source) {
   const payload = await source.fetchEntities(config);
   const graph = parseEntities(payload);
   if (!graph.individuals.length) {
+    // Honest miss, never a stack: a fresh repo simply has no graph yet (the chat
+    // session itself creates one as the conversation folds in).
     throw new ToolError(
-      `the graph artifact at ${config.graphFile} has no entities — re-run ` +
-        "`seonix cli index_repository` for this repo (did the index step succeed?).",
+      `the graph at ${config.graphFile} is empty — no entities to answer from yet ` +
+        "(this repo starts with no graph; the chat session folds the conversation into one).",
     );
   }
   return graph;
