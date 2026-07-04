@@ -173,15 +173,23 @@ in `SKILL_TUNING_CYCLE.md`:
   harness only** — the product stays no-LLM;
 - `CHATBENCH_0NN.md` artifacts and an autonomous cycle loop (no hard pause;
   each cycle logs its ranked decision menu and continues).
-- **Difficulty-spectrum calibration** (case-set v2+): tag every case with a
-  recognized difficulty band so the set spans too-easy → tough-but-solvable →
-  too-hard, following child development to academic: bAbI-style graded task
-  families as the backbone, TROG-2-style grammatical-construction blocks +
-  CEFR-ish bands as tags, Winograd/WinoGrande items as permanent ceiling
-  markers, CHILDES for naturalistic easy-band inputs. Maintenance rule per
-  cycle: a case at 100% for two cycles is PROMOTED to the retained showcase
-  (test/showcase.test.mjs — deterministic, judge-free, runs with `npm test`);
-  a case at 0% is a ceiling marker, not a failure.
+- **The graded benchmark** (case-set v2, operator-specified 2026-07-04): a
+  scaled ladder fitted to HUMAN LANGUAGE STANDARDS, not AI-benchmark mechanics
+  (bAbI explicitly rejected — it tests expected-AI mechanics and overfits the
+  same way our own cases would). Every case carries a **CEFR band (A1–C2)** +
+  a **construction specialization** tag (TROG-2/CELF-5 style blocks, adapted:
+  naming/vocabulary, SVO queries, pronoun binding, reversible/passive,
+  relative/embedded clauses, quantifiers+counting, negation, temporal,
+  coordination/compositional, multi-turn discourse reference, declarative
+  assert+recall). Multiple questions per grade × specialization with a little
+  overlap. **Ladder gating:** advanced grades are SKIPPED until every grade
+  below passes reliably; when a grade reaches unit-test-level reliability its
+  cases become ALWAYS-RUN deterministic tests (judge-free, promoted alongside
+  test/showcase.test.mjs). Winograd/WinoGrande items stay as permanent
+  ceiling markers; CHILDES as naturalistic easy-band input source. Licence
+  rule: TROG/CELF are commercial — borrow the construction taxonomy and
+  grading structure, author ORIGINAL items, never copy instrument content.
+  A case at 0% is a ceiling marker, not a failure.
 - **Retained showcase** (landed): the five most complex achieved sequences are
   frozen as unit-timescale regression tests in `test/showcase.test.mjs`; a
   showcase regression voids a cycle PASS regardless of the mean.
