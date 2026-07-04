@@ -128,7 +128,8 @@ test("TUI: a turn renders question+answer into the transcript, updates the focus
 
 test("TUI: slash-commands dispatch through the sink; an empty repo's status bar says so honestly", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-tui-empty-"));
-  const session = await createSession({ repoPath: dir });
+  // (TMCT_NO_SEED: the W3 seeded-bootstrap path has its own suite — wiring-seed.test.mjs)
+  const session = await createSession({ repoPath: dir, env: { TMCT_NO_SEED: "1" } });
   const { lastFrame, stdin, unmount } = render(h(App, { session }));
   // long lines are hard-wrapped at the column budget — strip the wraps to match phrases
   const flat = () => String(lastFrame() ?? "").replace(/\n/g, "");

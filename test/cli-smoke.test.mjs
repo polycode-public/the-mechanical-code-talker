@@ -29,7 +29,10 @@ test("bare invocation with non-TTY stdin reaches CHAT (the headline argv splice)
   try {
     // `tmct` with piped stdin = the --plain readline shell in an empty dir: honest
     // empty-graph banner, a greeting turn, clean exit 0, .tmct/ created.
-    const bare = spawnSync(process.execPath, [BIN], { encoding: "utf8", input: "hi\n/exit\n", cwd: dir });
+    // (TMCT_NO_SEED: the W3 seeded-bootstrap path has its own suite — wiring-seed.test.mjs)
+    const bare = spawnSync(process.execPath, [BIN], {
+      encoding: "utf8", input: "hi\n/exit\n", cwd: dir, env: { ...process.env, TMCT_NO_SEED: "1" },
+    });
     assert.equal(bare.status, 0, bare.stderr);
     assert.match(bare.stdout, /no graph loaded — starting empty/);
     assert.match(bare.stdout, /Hi\. Ask me about this codebase/, "the greeting turn answered");

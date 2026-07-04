@@ -37,9 +37,9 @@
 // load-bearing — see its docblock), telemetry, and the close. runChat is the
 // readline shell over it; src/tui/app.mjs is the Ink shell over the same sink.
 
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 import { createWriteStream } from "node:fs";
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createInterface } from "node:readline/promises";
 import { spawnSync } from "node:child_process";
 import { dispatchTool } from "./server.mjs";
@@ -703,6 +703,42 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   return withLast(await runAsk(line, ctx));
 }
 
+// ---- W3: seedMemory → bootstrap (first run in a graph-less repo) ----
+
+/** How many corpus facts the first-run bootstrap seeds. Measured curve (dev
+ *  laptop, appendFact's read-modify-write per fact): 100→~0.16s, 250→~0.54s,
+ *  500→~1.7s — the full 500 stays inside a session-start budget, so the seed
+ *  runs synchronously and complete (no partial-sync cap needed). */
+export const SEED_LIMIT = 500;
+
+/** The seed marker: its presence means this repo's memory already carries the
+ *  corpus seed, so re-runs skip without even reading the slice. */
+export const SEED_MARKER_REL = join(".tmct", "memory", "corpus-seed.json");
+
+/** Seed the ConceptNet slice into <repo>/.tmct/memory once. Idempotent twice
+ *  over (the marker short-circuits; seedMemory itself content-hashes fact ids)
+ *  and failure-tolerated: a missing/broken corpus degrades to the unseeded
+ *  bootstrap — never an error before the prompt. Returns seedMemory's
+ *  { appended, skipped, total } on a fresh seed, null when skipped/failed. */
+async function seedBootstrapMemory(repo) {
+  const marker = join(repo, SEED_MARKER_REL);
+  try {
+    await readFile(marker, "utf8");
+    return null; // already seeded — the marker is authoritative
+  } catch { /* no marker → first run */ }
+  try {
+    const { seedMemory } = await import("./corpus/conceptnet.mjs");
+    const res = await seedMemory(repo, { limit: SEED_LIMIT });
+    await mkdir(dirname(marker), { recursive: true });
+    await writeFile(marker, JSON.stringify({
+      seededAt: new Date().toISOString(), limit: SEED_LIMIT, appended: res.appended, skipped: res.skipped,
+    }) + "\n");
+    return res;
+  } catch {
+    return null; // corpus unavailable — bootstrap proceeds unseeded
+  }
+}
+
 /** Trim a focus label for the prompt so a long module path can't run the line off. */
 const shortLabel = (l) => { const s = String(l); return s.length > 40 ? "…" + s.slice(-39) : s; };
 const promptFor = (focus) => (focus ? `tmct(${shortLabel(focus.label)})> ` : PROMPT);
@@ -791,12 +827,23 @@ export async function createSession({
   };
 
   const empty = graph.individuals.length === 0;
+  // W3: FIRST RUN in a graph-less repo seeds a capped ConceptNet slice into
+  // .tmct/memory so vocabulary questions ("what is a cache?") have something
+  // honest to stand on from turn one. Guarded three ways: only the empty
+  // bootstrap (a fixture/provider graph never seeds), only once (the marker),
+  // and never when TMCT_NO_SEED=1 opts out.
+  let seeded = null;
+  if (empty && String(env.TMCT_NO_SEED || "") !== "1") {
+    seeded = await seedBootstrapMemory(repo);
+  }
   const bannerLines = [
     empty
       // Empty-graph bootstrap: honest-miss messaging, never an error before the prompt.
       ? `tmct chat — ${repo} — no graph loaded — starting empty; ` +
         `the conversation is remembered to ${DEFAULT_GRAPH_REL} — log ${logFile}`
       : `tmct chat — ${repo} — ${moduleCount} module(s) — log ${logFile}`,
+    // the honest seed line appears ONLY on the run that actually seeded
+    ...(seeded ? [`seeded ${seeded.appended} starter facts from the ConceptNet slice — /memory to inspect`] : []),
     "pass --repo <path> to target a different repo",
     "ask a question, or /help for commands (/stats for an overview) — /exit to leave",
   ];

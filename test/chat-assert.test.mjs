@@ -25,7 +25,8 @@ test("assertTurn: a declarative ACE sentence in a session lands a Fact in memory
   try {
     const input = Readable.from(["every module is a component\n", "/exit\n"]);
     const { out, text } = sink();
-    await runChat({ repoPath: dir, input, output: out });
+    // (TMCT_NO_SEED: this test counts EXACT facts — the W3 corpus seed has its own suite)
+    await runChat({ repoPath: dir, input, output: out, env: { TMCT_NO_SEED: "1" } });
     assert.match(text(), /noted — remembered 1 fact: module rdfs:subClassOf component/);
     const m = await loadMemory(dir);
     const facts = m.individuals.filter((i) => i.class === FACT_CLASS);
@@ -55,7 +56,8 @@ test("assertTurn: questions and unknown-word declaratives never assert in a sess
       "/exit\n",
     ]);
     const { out, text } = sink();
-    await runChat({ repoPath: dir, input, output: out });
+    // (TMCT_NO_SEED: this test counts EXACT facts — the W3 corpus seed has its own suite)
+    await runChat({ repoPath: dir, input, output: out, env: { TMCT_NO_SEED: "1" } });
     assert.doesNotMatch(text(), /noted — remembered/);
     const m = await loadMemory(dir);
     assert.equal(m.individuals.filter((i) => i.class === FACT_CLASS).length, 0, "no facts written");
