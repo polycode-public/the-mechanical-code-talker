@@ -226,6 +226,93 @@ then use Progol to theorem-prove against parsed prose".)*
 
 ---
 
+## Phase 4 — The wiring wave (operator-directed 2026-07-04)
+
+Five subsystems are built, tested, and consumed by NOTHING in the answer path — they measured
+zero on case-set v1 because no case could see them. This phase wires each into answering, with
+**unit tests at the seam AND graded-benchmark cells that measure it** (the graded pool creates
+the cases that make each lever visible). Wired as one operator-directed wave; cycle-level
+attribution resumes per-lever afterwards.
+
+| # | Wiring | Seam | Unit test | Bench coverage |
+|---|---|---|---|---|
+| W1 | **Templates → render path** | answer rendering consumes `data/templates/responses.jsonl` via `src/corpus/templates.mjs` instead of hardcoded strings (same output first — byte-stable swap — then variation) | render parity + slot lint | every existing case re-measures the swap; `via:"template"` provenance |
+| W2 | **retrieveBlocks → miss path** | a bare-question miss consults the memory block index before the honest miss; a hit answers with the recalled block + provenance ("you asked this on …") | recall hit/miss seam | memory-recall cells (mr-asked-before flips) |
+| W3 | **seedMemory → bootstrap** | first run in a graph-less repo seeds a capped corpus slice (limit ~500) into `.tmct/memory/`; banner says so honestly | seeded-bootstrap test | bootstrap-empty + vocabulary cells ("what is a cache?") |
+| W4 | **Asserted Facts → answers** | "what is a module?" / "is a module a component?" consults remembered `rdfs:subClassOf`/`rdf:type` facts alongside the code graph, cited with provenance | fact-lookup seam | assert-recall cells |
+| W5 | **Corpus on-demand** | unknown-term misses may consult the corpus slice (local first; network tier only behind an explicit flag) | on-demand seam, offline-degrades test | naming-vocabulary cells at higher grades |
+
+Answer-path **provenance** lands with W1: every turn record carries `via`
+(composed | template | count | recall | fact | corpus) — the field the dual-banding
+benchmark (Phase 5) and the memory inspector read.
+
+### Corpus tiering policy (the committed/seeded/on-demand cutoff)
+
+- **Tier 1 — committed & shipped in the npm tarball**: small, load-bearing, licence-clean,
+  diffable — the lexicon, response templates, phrasebook, the relation→OWL map, and the CORE
+  ConceptNet slice. Budget: **~2 MB total tarball**; rule: what the product needs to be useful
+  offline out of the box.
+- **Tier 2 — fetched at seed time into install-local folders** (`.tmct/corpus/` per repo, or a
+  user-level cache): growable corpora — extended ConceptNet neighbourhoods, acquired template
+  libraries (Phase 5), any corpus > ~2 MB. Fetched once by `tmct seed` (or first bootstrap with
+  consent), checksummed, provenance-recorded, never committed.
+- **Tier 3 — on-demand at question time**: unbounded/live sources (ConceptNet API for unknown
+  terms, paper phrase-mining), consulted ONLY behind an explicit opt-in flag, cached down into
+  tier 2 after use. **Network failure degrades to the honest miss** — the $0-offline default is
+  inviolable; tiers 2-3 are additive, never required.
+
+### Memory inspection (seeing into the memory)
+
+Graph-vis exploration hasn't earned its keep; the in-ethos answer is TEXT. A `/memory` chat
+command + `tmct memory` CLI: the memory graph grouped by **OWL superclass** (Utterance, Fact,
+Session; code classes when present), counts per class with **balanced samples scaled to class
+size** (log-scaled so a 10,000-fact class shows ~8 exemplars and a 3-session class shows all 3),
+top facts ranked by provenance breadth (corpus+chat-agreed facts first), recent utterance pairs,
+and the block-index summary (blocks, tokens, top PageRank blocks). Same renderer serves
+`/stats`-style terse and `why`-style verbose.
+
+## Phase 5 — Formulaic competence: the template-acquisition learning loop
+
+The operator's insight upgraded to the strategy: a consistently-failed C1/C2 graded cell whose
+answer EXISTS as a stable phrasing in technical prose is not a ceiling — it is a
+**template-acquisition lever**. tmct learns the way human learners do: formulaic chunks first
+(Wray's formulaic sequences), productive competence later.
+
+- **Dual banding**: every graded score splits into a **productive band** (composed answers only)
+  and a **performance band** (templates allowed), computed from the `via` provenance (W1). The
+  band GAP is a first-class metric: how much fluency is memorized vs generated.
+- **Template-lane benchmarking**: cases that target templated capability are TAGGED as such —
+  a template-carried C1 pass counts in the performance band and never inflates the productive
+  band; template-lane cells get their own agreement/reliability treatment (they are additional
+  benchmarking, not replacements — a level we would otherwise expect to fail at is being
+  deliberately faked, and the bench must say so).
+- **The shopping list**: each cycle, the write-up extracts consistently-failed C1/C2 cells and
+  ranks them by template-acquirability (does a stable technical-prose phrasing exist? is the
+  slot structure mechanical — counts, comparisons, provenance we already compute?). Acquiring
+  the template IS the lever; the graded bench measures the flip in the performance band.
+- **Mechanical conclusions at paragraph grade**: counting + comparison + superlatives (item 5)
+  composed through acquired C1-register templates — "X has 340 tests across 12 suites, unusually
+  dense for a codebase this size" — tech-domain answers can be genuinely advanced while the CEFR
+  banding tells us honestly how good the conversation AROUND them is.
+- **Generalization path**: fixed tech domain first (templates hand-picked from technical-paper
+  register); then template acquisition generalizes — mining candidate templates from corpus
+  blocks (tier-2), scored by slot-fillability, promoted into `data/templates/` with provenance.
+
+## Phase 6 — Response finishing: grammar pass + tone of voice
+
+After a response is built (template-based or query-composed), two finishing passes:
+
+- **Grammar pass**: a deterministic post-render check/correction over tmct's OWN output
+  (agreement, article choice for slot-filled terms, list punctuation) — the item-10 machinery
+  pointed at ourselves; wrong-grammar output is a bench-visible defect class.
+- **Tone-of-voice adaptation**: text libraries of **synonyms per tone** plus **per-tone grammar
+  preference profiles** (different grammar corrections apply per voice — terse engineering
+  register keeps fragments and serial-comma lists; friendly register expands contractions,
+  softens negatives; academic register formalizes). Data-first (JSONL/TOML synonym+preference
+  libraries per voice, item-7 formats), selected via `/tone <voice>` and a config default.
+  Tone must never change FACTS — the finishing passes rewrite surface form only, and the `via`
+  provenance gains a `tone` note so the bench can verify factual invariance under re-toning.
+
 ## Explicitly out of scope (for now)
 
 - No AWS, no benchmark rig — tmct is a published npm library + CLI with a
