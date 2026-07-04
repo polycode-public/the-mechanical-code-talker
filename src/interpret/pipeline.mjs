@@ -5,7 +5,10 @@
 //
 // A STRATEGY is a plain object:
 //   { id, class, run(text, ctx) -> {strategyId, class, candidates:[{parsed,
-//     confidence?, note?}]} | null }
+//     confidence?, note?, via?}]} | null }
+// `via` marks an APPROXIMATE reading ("fuzzy"/"lemma"/"spell"): the merge
+// discards approximate candidates whenever anything parsed exactly (the tier
+// discipline — exact curated match always wins — held across strategies).
 // `run` may be sync or async (Promise-returning); a strategy that THROWS or
 // rejects is dropped for that request — one broken strategy never takes the
 // pipeline down. Strategies are registered in the STRATEGIES array below in
@@ -23,6 +26,7 @@
 import { normalizeQuery, applyNegationFrames } from "./normalize.mjs";
 import { grammarStrategy } from "./strategies/grammar.mjs";
 import { keywordSpotStrategy } from "./strategies/keywords.mjs";
+import { noiseStripStrategy } from "./strategies/noise-strip.mjs";
 import { mergeStrategyResults } from "./merge.mjs";
 // Optional Node-only wink adapter — same viewer-bundle boundary as ask.mjs: an
 // inlining bundle strips this import and the `typeof` read below degrades to
@@ -31,9 +35,12 @@ import { nlpAdapter } from "../ask-nlp.mjs";
 
 /** The registered strategies, in precedence order. grammar + keyword-spot are
  *  the two legacy parsers (one shared class, "graph-query" — their merge is
- *  byte-identical to the original two-way agree/disagree behavior).
- *  interpret/strategies/ace.mjs (Phase 2) will register here the same way. */
-export const STRATEGIES = [grammarStrategy, keywordSpotStrategy];
+ *  byte-identical to the original two-way agree/disagree behavior); noise-strip
+ *  is the item-10 tolerant fallback (its own class; it only fires when the
+ *  anchored grammar missed the text as-given, so it can never displace an
+ *  existing template parse). interpret/strategies/ace.mjs (Phase 2) will
+ *  register here the same way. */
+export const STRATEGIES = [grammarStrategy, keywordSpotStrategy, noiseStripStrategy];
 
 /** The documented normalization pre-pass: whitespace-collapse + the §3.5
  *  normalization pipeline + the closed rhetorical-frame rewrites, applied ONCE

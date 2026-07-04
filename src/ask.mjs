@@ -51,7 +51,7 @@ import {
 // grammar, split out of this file: normalization pre-pass, the two parsing
 // strategies, and the bounded-fuzzy service. Re-exported below where existing
 // callers/tests import them from here.
-import { normalizeQuery, applyNegationFrames, STOPWORDS, splitWords } from "./interpret/normalize.mjs";
+import { normalizeQuery, applyNegationFrames, STOPWORDS, splitWords, wordsOf } from "./interpret/normalize.mjs";
 import { editDistance, fuzzyBound } from "./interpret/fuzzy.mjs";
 import { parseAnchored } from "./interpret/strategies/grammar.mjs";
 import { parseKeywordSpot, findPhrase } from "./interpret/strategies/keywords.mjs";
@@ -1633,7 +1633,6 @@ function renderCore(parsed, result) {
 // tables + resolveObject/parseQuery, so it survives the viewer bundle's import strip.
 // ============================================================================
 
-const wordsOf = (arr) => arr.flatMap((p) => String(p).toLowerCase().split(" "));
 
 /** Every token the CLOSED grammar gives QUERY MEANING to — relation verbs, entity
  *  nouns, modifiers, qualifiers, aggregate/superlative triggers, edge-degree nouns,

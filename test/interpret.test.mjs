@@ -9,7 +9,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { interpret, STRATEGIES, normalizeInput, runStrategiesSync } from "../src/interpret/pipeline.mjs";
 import { mergeStrategyResults, alternateLines, sameParse } from "../src/interpret/merge.mjs";
-import { parseQuery } from "../src/ask.mjs";
+import { stripNoise } from "../src/interpret/strategies/noise-strip.mjs";
+import { parseQuery, ask } from "../src/ask.mjs";
+import { buildEntities } from "../src/graph-build.mjs";
+import { parseEntities } from "../src/codegraph.mjs";
+import { ingestSchemaDocs } from "../src/schema-docs.mjs";
 
 // A tiny strategy factory: fixed id/class, returns the given parse for any text.
 const fixed = (id, cls, parsed, confidence, note = null) => ({
@@ -195,4 +199,137 @@ test("interpret: empty input is an honest empty record, no strategy runs", async
   assert.equal(rec.parsed, null);
   assert.deepEqual(rec.results, []);
   assert.equal(ran, false);
+});
+
+// ---- merge contamination guard: an APPROXIMATE (fuzzy/lemma) candidate may
+// never stand in for — or ride alongside — an exact parse. The "assuming you
+// meant …" announcement belongs ONLY to answers that actually leaned on the
+// approximate tier (ask.test.mjs pins the announced case; here we pin the
+// merge-level tier discipline that keeps an exact answer unannounced). ----
+
+test("merge: a fuzzy TWIN of an exact parse is discarded — the exact candidate wins and keeps exact provenance", () => {
+  const exact = REV("src/logging.mjs");
+  const twin = REV("src/logging.mjs");
+  const merged = mergeStrategyResults([
+    { strategyId: "grammar", class: "graph-query", candidates: [{ parsed: exact, confidence: 0.9 }] },
+    { strategyId: "spell-repair", class: "graph-query", candidates: [{ parsed: twin, confidence: 0.8, via: "fuzzy", note: "assuming you meant src/logging.mjs" }] },
+  ]);
+  assert.equal(merged.parsed, exact, "the exact strategy's own parse object must win");
+  assert.equal(merged.winner.via, null);
+  assert.equal(merged.winner.note, null, "the fuzzy twin's announcement note must not leak onto the exact winner");
+  assert.deepEqual(merged.alternates, []);
+});
+
+test("merge: an approximate DISAGREEING candidate is also discarded when anything parsed exactly (never a forced ambiguity)", () => {
+  const exact = REV("alpha");
+  const merged = mergeStrategyResults([
+    { strategyId: "grammar", class: "graph-query", candidates: [{ parsed: exact, confidence: 0.9 }] },
+    { strategyId: "fuzzy-guess", class: "graph-query", candidates: [{ parsed: REV("alfa"), confidence: 0.8, via: "fuzzy" }] },
+  ]);
+  assert.equal(merged.parsed, exact);
+  assert.equal(merged.parsed.ambiguousParse, undefined);
+});
+
+test("merge: an approximate candidate DOES win when nothing parsed exactly, provenance preserved", () => {
+  const fuzzy = REV("src/logging.mjs");
+  const merged = mergeStrategyResults([
+    { strategyId: "spell-repair", class: "graph-query", candidates: [{ parsed: fuzzy, confidence: 0.6, via: "fuzzy" }] },
+  ]);
+  assert.equal(merged.parsed, fuzzy);
+  assert.equal(merged.winner.via, "fuzzy");
+});
+
+// ============================================================================
+// item 10 — normalization repairs + the noise-strip strategy, end-to-end.
+// A real graph fixture (mirrors ask.test.mjs's shape): src/logging.mjs is
+// imported by myFile.mjs; NOTHING imports myFile.mjs (the honest-negative
+// case the relaxation cascade can never rescue — it refuses to relax into a
+// miss — which is exactly where noise-strip earns its place).
+// ============================================================================
+
+const MODULES = [
+  { path: "src/logging.mjs", dotted: "src.logging", imports: [], calls: [],
+    defines: [{ name: "Logger", kind: "class", lineno: 1, decorators: [] }] },
+  { path: "myFile.mjs", dotted: "myFile", imports: ["src.logging"], calls: [],
+    defines: [{ name: "startup", kind: "function", lineno: 3, decorators: [] }] },
+];
+function buildGraph() {
+  const entities = buildEntities(MODULES, []);
+  ingestSchemaDocs(entities);
+  return parseEntities(entities);
+}
+
+test("item 10 (normalize): emphatic trailing \"??\" is repaired — the parse and the answer match the single-\"?\" phrasing", () => {
+  const graph = buildGraph();
+  assert.deepEqual(
+    parseQuery("which modules import src/logging.mjs??"),
+    parseQuery("which modules import src/logging.mjs?"),
+  );
+  const noisy = ask(graph, "which modules import src/logging.mjs??");
+  const clean = ask(graph, "which modules import src/logging.mjs");
+  assert.equal(noisy.content, clean.content);
+  assert.equal(noisy.tmct_ask.miss, false);
+  assert.match(noisy.content, /myFile\.mjs/);
+  // and the pipeline record says normalization changed the input
+  return interpret("which modules import src/logging.mjs??").then((rec) => {
+    assert.equal(rec.normalizationChanged, true);
+    assert.equal(rec.normalized, "which modules import src/logging.mjs?");
+  });
+});
+
+test("item 10 (noise-strip): stripNoise removes curated noise but never grammar words, Capitalized names, or dotted terms", () => {
+  const { text, dropped } = stripNoise("man which modules import myFile.mjs", null);
+  assert.equal(text, "which modules import myFile.mjs");
+  assert.deepEqual(dropped, ["man"]);
+  const untouched = stripNoise("does Base import walk.mjs", null);
+  assert.deepEqual(untouched.dropped, []);
+});
+
+test("item 10 (noise-strip): NEW tolerant behavior — a vocative-led question whose honest answer is NEGATIVE now answers like the clean phrasing (it missed as \"couldn't resolve\" before)", () => {
+  const graph = buildGraph();
+  // nothing imports myFile.mjs: the cascade refuses to relax into a miss, so
+  // before this strategy the keyword-spot garbage parse (ask{subject:"man"})
+  // died as "couldn't resolve one of the terms in this question."
+  const noisy = ask(graph, "hey man which modules import myFile.mjs");
+  const clean = ask(graph, "which modules import myFile.mjs");
+  assert.equal(noisy.content, clean.content);
+  assert.match(noisy.content, /No modules found whose module directly imports myFile\.mjs/);
+  assert.equal(noisy.tmct_ask.miss, true); // the honest blank, not a parse failure
+  assert.doesNotMatch(noisy.content, /couldn't resolve/);
+});
+
+test("item 10 (noise-strip): the wink stop-word tier — a leading adverb wink flags (\"anyway\") strips the same way", () => {
+  const graph = buildGraph();
+  const noisy = ask(graph, "anyway which modules import myFile.mjs");
+  const clean = ask(graph, "which modules import myFile.mjs");
+  assert.equal(noisy.content, clean.content);
+  assert.doesNotMatch(noisy.content, /couldn't resolve/);
+});
+
+test("item 10 (noise-strip): positive answers come back IDENTICAL to the clean phrasing (no relaxation preamble, no announcement)", () => {
+  const graph = buildGraph();
+  const noisy = ask(graph, "hey man which modules import src/logging.mjs");
+  const clean = ask(graph, "which modules import src/logging.mjs");
+  assert.equal(noisy.content, clean.content);
+  assert.doesNotMatch(noisy.content, /read as|assuming you meant/);
+  assert.match(noisy.content, /myFile\.mjs/);
+});
+
+test("item 10 (noise-strip): a vocative-led META question answers like its clean phrasing", () => {
+  const graph = buildGraph();
+  const noisy = ask(graph, "dude what does cochange mean");
+  const clean = ask(graph, "what does cochange mean");
+  assert.equal(noisy.content, clean.content);
+  assert.equal(noisy.tmct_ask.miss, false);
+});
+
+test("item 10 (noise-strip): the strategy never fires when the anchored grammar owns the text as-given", async () => {
+  // anchored parses this whole sentence (T2), noise ("the") and all — the
+  // strategy must yield null rather than compete with the grammar's own parse.
+  const rec = await interpret("which modules import myFile.mjs", { nlp: null });
+  assert.ok(!rec.results.some((r) => r.strategyId === "noise-strip"));
+  // and the pinned two-strategy ambiguity stays exactly the legacy surface
+  const amb = parseQuery("which classes extends Base and couples to logging");
+  assert.equal(amb.ambiguousParse, true);
+  assert.equal(amb.candidates.length, 2);
 });

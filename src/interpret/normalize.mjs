@@ -66,6 +66,12 @@ export function normalizeQuery(text) {
     );
     q = q.replace(fillerRe, " ");
   }
+  // emphatic trailing punctuation (item 10): a run of terminal "?" collapses to
+  // one — the anchored templates consume exactly one optional trailing "?", so
+  // "…walk.mjs??" otherwise leaks a stray "?" into the captured object term (the
+  // keyword-spot strategy already strips the whole run, and the two strategies
+  // then "disagreed" over punctuation that was never part of the intent).
+  q = q.replace(/\?{2,}\s*$/, "?");
   return q.replace(/\s+/g, " ").trim();
 }
 
@@ -104,3 +110,8 @@ export const STOPWORDS = new Set([
  *  spaces, mid-word "." preserved (object terms are routinely dotted file/module
  *  names — "a.py", "utils.mjs"). */
 export const splitWords = (text) => String(text).replace(/\?+\s*$/, "").replace(/,/g, " ").split(/\s+/).filter(Boolean);
+
+/** Flatten a phrase list into its lowercase constituent words — the standard way
+ *  a vocab table's multi-word phrases feed a word-level set (the cascade's
+ *  content-vocab union, the noise-strip KEEP set). */
+export const wordsOf = (arr) => arr.flatMap((p) => String(p).toLowerCase().split(" "));

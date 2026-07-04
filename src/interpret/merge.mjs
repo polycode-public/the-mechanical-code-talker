@@ -45,32 +45,57 @@ export function sameParse(p, q) {
  *  record, and `alternates` lists each OTHER class's best candidate (its parse
  *  not sameParse-equal to a winning one — a cross-class agreement is agreement,
  *  not an alternative reading). Null when nothing parsed anywhere. */
+// Candidate `via` values that mark an APPROXIMATE reading (a bounded-edit-
+// distance or lemma rewrite happened on the way to this parse). The engine's
+// tier discipline — "exact curated match always wins; lower tiers fire only on
+// a miss" — must survive the merge: an approximate candidate is DISCARDED
+// outright whenever any exact candidate parsed at all (rule a), and dedupe keys
+// on (parse, via) so an approximate twin can never collapse onto (or stand in
+// for) an exact parse and smuggle its "assuming you meant …" announcement into
+// an exact answer (rule b). A candidate with no `via` (or via:"exact") is exact
+// — the legacy strategies set none.
+const APPROXIMATE_VIAS = new Set(["fuzzy", "lemma", "spell"]);
+const isApproximate = (c) => APPROXIMATE_VIAS.has(c.via);
+
 export function mergeStrategyResults(results) {
   const valid = (results || []).filter((r) => r && Array.isArray(r.candidates) && r.candidates.length);
   if (!valid.length) return null;
-  // group by class, flattening candidates in precedence order
-  const groups = new Map();
+  // flatten candidates in precedence order (validity-checked)
+  let flat = [];
   for (const r of valid) {
-    if (!groups.has(r.class)) groups.set(r.class, []);
     for (const c of r.candidates) {
       if (!c || !c.parsed) continue;
-      groups.get(r.class).push({
+      flat.push({
         parsed: c.parsed,
         confidence: typeof c.confidence === "number" ? c.confidence : DEFAULT_CONFIDENCE,
         note: c.note || null,
+        via: c.via || null,
         strategyId: r.strategyId,
         class: r.class,
       });
     }
   }
+  // rule (a): any exact parse anywhere discards every approximate candidate —
+  // exact curated evidence always wins, so a fuzzy/lemma reading may only ever
+  // compete when NOTHING parsed exactly.
+  if (flat.some((c) => !isApproximate(c))) flat = flat.filter((c) => !isApproximate(c));
+  if (!flat.length) return null;
+  // group by class, preserving precedence order
+  const groups = new Map();
+  for (const c of flat) {
+    if (!groups.has(c.class)) groups.set(c.class, []);
+    groups.get(c.class).push(c);
+  }
   // within-class dedupe: an identical parse collapses onto its first (highest-
   // precedence) occurrence — the survivor keeps the strongest confidence and
-  // counts how many strategies agreed on it.
+  // counts how many strategies agreed on it. Dedupe keys on (parse, via) — rule
+  // (b) — so distinct provenances never merge (moot after rule (a) globally
+  // splits exact from approximate, but held here as its own invariant).
   const merged = [];
   for (const [cls, cands] of groups) {
     const distinct = [];
     for (const c of cands) {
-      const dup = distinct.find((d) => sameParse(d.parsed, c.parsed));
+      const dup = distinct.find((d) => sameParse(d.parsed, c.parsed) && d.via === c.via);
       if (dup) {
         dup.agreed += 1;
         dup.confidence = Math.max(dup.confidence, c.confidence);
