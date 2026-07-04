@@ -115,6 +115,7 @@ test("viewer bundle without wink: stripped codegraph+vocab+interpret+ask evaluat
     ["codegraph.mjs", "ask-vocab.mjs",
       "interpret/normalize.mjs", "interpret/fuzzy.mjs",
       "interpret/strategies/grammar.mjs", "interpret/strategies/keywords.mjs",
+      "interpret/merge.mjs", "interpret/pipeline.mjs",
       "ask.mjs"].map((f) => readFile(join(srcDir, f), "utf8")),
   );
   // the exact strip an inlining viewer bundle applies (kept in sync by this test:

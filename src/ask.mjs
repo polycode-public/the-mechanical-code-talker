@@ -14,18 +14,21 @@
 //   parseQuery (grammar)  ->  resolveObject (mechanical term resolution)  ->
 //   traverse (graph lookup)  ->  render (templates).
 //
-// §3.5/3.6 (2026-07-02, ELIZA/PARRY-style breadth): parseQuery normalizes the
-// raw text (contractions, g-drop, filler-strip), rewrites recognized negative-
-// rhetorical constructions to their affirmative form, then runs TWO INDEPENDENT
-// parsing STRATEGIES against the same normalized text — the original anchored-
-// template matcher (precise, fast, unweakened) and a keyword-spotting/
-// decomposition matcher (ELIZA's own mechanism: find the keyword, decompose
-// around it, tolerate reordering/casual phrasing) — and MERGES their results:
-// one strategy hit -> use it; both hit and agree -> use it (high confidence);
-// both hit and DISAGREE -> a genuine parse-level ambiguity, surfaced honestly;
-// neither hits -> the honest grammar miss. STRATEGIES is a plain array so a
-// third strategy could join the same way, not a hardcoded two-branch special
-// case.
+// §3.5/3.6 (2026-07-02, ELIZA/PARRY-style breadth; split into src/interpret/ for
+// ROADMAP items 8/10/13): parseQuery normalizes the raw text (contractions,
+// g-drop, filler-strip — interpret/normalize.mjs), rewrites recognized negative-
+// rhetorical constructions to their affirmative form, then runs the REGISTERED
+// parsing STRATEGIES over the same normalized text (interpret/pipeline.mjs) —
+// the original anchored-template matcher (interpret/strategies/grammar.mjs:
+// precise, fast, unweakened) and a keyword-spotting/decomposition matcher
+// (interpret/strategies/keywords.mjs — ELIZA's own mechanism: find the keyword,
+// decompose around it, tolerate reordering/casual phrasing) — and MERGES their
+// results (interpret/merge.mjs): one strategy hit -> use it; hits that agree ->
+// use it (high confidence); same-class hits that DISAGREE -> a genuine
+// parse-level ambiguity, surfaced honestly; no hits -> the honest grammar miss.
+// STRATEGIES is a plain registration array (interpret/pipeline.mjs) so further
+// strategies (Phase 2's ACE grammar) join the same way, not a hardcoded
+// two-branch special case.
 //
 // Where a parsed intent is temporal/churn-shaped (touched/since/cochange as a
 // FILTER over commits, not a structural edge), this engine does NOT re-implement
@@ -52,6 +55,8 @@ import { normalizeQuery, applyNegationFrames, STOPWORDS, splitWords } from "./in
 import { editDistance, fuzzyBound } from "./interpret/fuzzy.mjs";
 import { parseAnchored } from "./interpret/strategies/grammar.mjs";
 import { parseKeywordSpot, findPhrase } from "./interpret/strategies/keywords.mjs";
+import { runStrategiesSync } from "./interpret/pipeline.mjs";
+import { mergeStrategyResults } from "./interpret/merge.mjs";
 import { lookupByProseTokens } from "./prose.mjs";
 
 // Normalization stays importable from its original site (tests + chat surface).
@@ -127,13 +132,13 @@ function verbFor(kind) {
 // strategies/keywords.mjs (parseKeywordSpot, findPhrase), interpret/fuzzy.mjs
 // (editDistance, fuzzyBound — also resolveObject's tier-5 budget below). ----
 
-// ---- strategy merge — run both, agree/disagree/single/neither (§ above). A
-// plain array + a merge step, so a third strategy plugs in the same way. ----
-
-const STRATEGIES = [
-  { name: "anchored", parse: parseAnchored },
-  { name: "keyword-spot", parse: parseKeywordSpot },
-];
+// ---- strategy merge — now the interpret PIPELINE (item 8): the registered
+// strategies (interpret/pipeline.mjs STRATEGIES — grammar, keyword-spot, …) run
+// over the normalized text and interpret/merge.mjs merges them: same-class
+// agreement dedupes to one parse, same-class disagreement is the honest
+// {ambiguousParse, candidates} surface, and distinct-class alternates carry the
+// "if you mean X then …" surround (unused on this synchronous path — parseQuery
+// keeps the winning parse only, byte-identical to the original two-way merge). ----
 
 /** The default lemma/POS adapter: wink-nlp when this is a Node process with the
  *  optional deps installed, null otherwise. BOUNDARY (see the import comment):
@@ -144,34 +149,21 @@ function defaultNlp() {
   return typeof nlpAdapter === "function" ? nlpAdapter() : null;
 }
 
-// "commit abc1234" and bare "abc1234" are the SAME term once resolveObject's
-// commit-sha tier strips the noun — the anchored strategy captures the noun inside
-// its object span while keyword-spot consumes it as the entity keyword, so without
-// this the two strategies would "disagree" over a word that names no different thing.
-const cmpTerm = (s) => String(s || "").trim().toLowerCase().replace(/\s+/g, " ").replace(/^commit\s+(?=[0-9a-f]{7,40}$)/, "");
-
-/** Do two independently-produced parses mean the same graph query? Same
- *  shape, same relation kind, and matching term(s) (both subject and object
- *  for "ask"; just object otherwise) — anything less is a genuine
- *  disagreement, not a near-miss to paper over. */
-function sameParse(p, q) {
-  if (p.shape !== q.shape || p.kind !== q.kind) return false;
-  if (p.shape === "ask") return cmpTerm(p.subject) === cmpTerm(q.subject) && cmpTerm(p.object) === cmpTerm(q.object);
-  return cmpTerm(p.object) === cmpTerm(q.object);
-}
-
 /** Compile a free-text question into {shape, kind, entityType, modifier,
- *  object[, subject]}, or null if NEITHER strategy fits — an honest grammar
- *  miss (§6.3), never a best-effort guess. When both strategies parse and
+ *  object[, subject]}, or null if NO strategy fits — an honest grammar
+ *  miss (§6.3), never a best-effort guess. When strategies parse and
  *  AGREE, returns that parse unchanged (no fallback ordering — either
  *  strategy's own result is equally valid once they agree, per §above: "use
- *  either"). When both parse but DISAGREE (different shape/kind/term),
+ *  either"). When they parse but DISAGREE (different shape/kind/term),
  *  returns {ambiguousParse: true, candidates: [...]} — a genuine "this could
  *  mean more than one thing" case, distinct from resolveObject's later
- *  object-resolution ambiguity. `opts.nlp` overrides the lemma/POS adapter
- *  (pass null to force the adapter-less browser behavior in a Node test);
- *  leaving it undefined picks the deterministic default (defaultNlp). Pure
- *  given (query, adapter) — the adapter itself is a fixed model, no sampling. */
+ *  object-resolution ambiguity. Routed through interpret/pipeline.mjs +
+ *  interpret/merge.mjs (item 8) — the two legacy strategies at their existing
+ *  precedence produce identical winners. `opts.nlp` overrides the lemma/POS
+ *  adapter (pass null to force the adapter-less browser behavior in a Node
+ *  test); leaving it undefined picks the deterministic default (defaultNlp).
+ *  Pure given (query, adapter) — the adapter itself is a fixed model, no
+ *  sampling. */
 export function parseQuery(query, { nlp = undefined } = {}) {
   const adapter = nlp === undefined ? defaultNlp() : nlp;
   const raw = String(query || "").trim().replace(/\s+/g, " ");
@@ -182,18 +174,14 @@ export function parseQuery(query, { nlp = undefined } = {}) {
   // descent over CLAUSES for the compositional shapes (nested/relative, boolean,
   // qualifiers, aggregates, superlatives, anaphora). It fires ONLY when a
   // compositional MARKER is present and returns null otherwise, so every plain
-  // clause falls straight through to the unchanged two-strategy merge below — the
+  // clause falls straight through to the unchanged strategy pipeline below — the
   // whole existing grammar is preserved bit-for-bit. When a marker IS present but
   // the phrase cannot be compiled, it returns an honest {node:"miss"} rather than
   // letting keyword-spot guess at a composition it never expressed.
   const composite = parseComposite(text, adapter);
   if (composite) return composite;
-  const hits = STRATEGIES.map((s) => ({ name: s.name, parsed: s.parse(text, adapter) })).filter((r) => r.parsed);
-  if (hits.length === 0) return null;
-  if (hits.length === 1) return hits[0].parsed;
-  const [a, b] = hits;
-  if (sameParse(a.parsed, b.parsed)) return a.parsed;
-  return { ambiguousParse: true, candidates: hits.map((h) => h.parsed) };
+  const merged = mergeStrategyResults(runStrategiesSync(text, { nlp: adapter, raw }));
+  return merged ? merged.parsed : null;
 }
 
 // ============================================================================
@@ -241,15 +229,13 @@ const entityNoun = (w) => (ENTITY_TO_TYPE[w] ? { entityType: ENTITY_TO_TYPE[w], 
   : (PLACEHOLDER_NOUNS.includes(w) ? { entityType: null, placeholder: true } : null));
 const isGerundVerb = (w) => !!VERB_TO_KIND[w] && w.endsWith("ing");
 
-/** Run the two existing strategies on a FRAGMENT and return a single simple clause
+/** Run the two legacy strategies on a FRAGMENT and return a single simple clause
  *  (or null). Deterministic tie-break: on strategy disagreement the anchored parse
- *  wins (STRATEGIES[0]) — a fragment fed from the composer is already shape-
- *  constrained, so the merge's "surface an ambiguity" behavior isn't wanted here. */
+ *  wins — a fragment fed from the composer is already shape-constrained, so the
+ *  merge's "surface an ambiguity" behavior isn't wanted here. (Equivalent to the
+ *  original two-strategy scan: anchored first, keyword-spot only on a miss.) */
 function parseSimpleClause(text, nlp) {
-  const hits = STRATEGIES.map((s) => s.parse(text, nlp)).filter(Boolean);
-  if (!hits.length) return null;
-  if (hits.length === 1) return hits[0];
-  return sameParse(hits[0], hits[1]) ? hits[0] : hits[0];
+  return parseAnchored(text) || parseKeywordSpot(text, nlp);
 }
 
 /** Top compositional dispatcher — first marker-matching production wins; a

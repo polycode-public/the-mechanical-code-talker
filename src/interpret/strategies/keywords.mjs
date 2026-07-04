@@ -166,3 +166,20 @@ export function parseKeywordSpot(text, nlp = null) {
   if (beforeText) return { shape: "forward", entityType, modifier: "direct", kind, object: beforeText };
   return null;
 }
+
+/** Pipeline registration (interpret/pipeline.mjs): keyword-spotting as a
+ *  strategy. Class "graph-query" — shared with the anchored grammar, so the two
+ *  merge (agree/disagree) exactly as the legacy two-way merge did. Confidence
+ *  0.7: a decomposition is looser evidence than a full-template match. The
+ *  lemma/POS adapter arrives via ctx.nlp (the pipeline's default is the same
+ *  Node-only wink adapter ask.mjs picks up). */
+export const keywordSpotStrategy = {
+  id: "keyword-spot",
+  class: "graph-query",
+  run(text, ctx = {}) {
+    const parsed = parseKeywordSpot(text, ctx.nlp || null);
+    return parsed
+      ? { strategyId: "keyword-spot", class: "graph-query", candidates: [{ parsed, confidence: 0.7 }] }
+      : null;
+  },
+};

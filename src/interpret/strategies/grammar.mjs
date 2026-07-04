@@ -118,3 +118,20 @@ export function parseAnchored(text) {
   }
   return null;
 }
+
+/** Pipeline registration (interpret/pipeline.mjs): the anchored grammar as a
+ *  strategy. Class "graph-query" — shared with keyword-spot, so the two merge
+ *  (agree/disagree) exactly as the legacy two-way merge did. Confidence 0.9:
+ *  the highest of the registered strategies (a full-sentence template match is
+ *  the engine's most precise evidence), which also makes "graph-query" the
+ *  winning class whenever this strategy fires. */
+export const grammarStrategy = {
+  id: "grammar",
+  class: "graph-query",
+  run(text) {
+    const parsed = parseAnchored(text);
+    return parsed
+      ? { strategyId: "grammar", class: "graph-query", candidates: [{ parsed, confidence: 0.9 }] }
+      : null;
+  },
+};
