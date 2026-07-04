@@ -378,6 +378,7 @@ export async function helpText() {
     ["<question>", "ask the graph in plain English (the default for any non-slash line)"],
     ...Object.entries(COMMANDS).map(([name, s]) => [`/${name}${s.arg ? (s.optional ? ` [${s.arg}]` : ` <${s.arg}>`) : ""}`, s.help]),
     ["/stats", "a one-screen overview: entity counts, relationship counts, packages"],
+    ["/memory [verbose]", "what tmct remembers: facts, utterances, sessions, folded blocks"],
     ["/focus <symbol>", "set the current focus (reused by 'it'/'this' and no-arg entity commands)"],
     ["/help", "this list"],
     ["/exit", "leave the session (also Ctrl+C / Ctrl+D)"],
@@ -798,7 +799,7 @@ function plainTurn(query, answer, { command, via = "composed", miss = false, foc
  *  the same { answer, logLines, record, focus } shape as runAsk; the record carries
  *  the command name and the resolved entity id (for entity commands) so a
  *  slash-command turn becomes asksAbout graph data wherever it resolves an entity. */
-async function runCommand(line, { config, source, graph, focus }) {
+async function runCommand(line, { config, source, graph, focus, memoryDir }) {
   const ts = new Date().toISOString();
   const sp = line.indexOf(" ");
   const name = (sp === -1 ? line.slice(1) : line.slice(1, sp)).toLowerCase();
@@ -812,6 +813,18 @@ async function runCommand(line, { config, source, graph, focus }) {
 
   if (name === "help") return mk(await helpText());
   if (name === "stats") return graph ? mk(renderStats(graph)) : mk("no graph loaded — /stats needs an index.", { miss: true });
+
+  // /memory [verbose] — what tmct remembers, as text (the ROADMAP "Memory
+  // inspection" surface; the same renderer serves the `tmct memory` CLI).
+  if (name === "memory") {
+    if (!memoryDir) return mk("no memory store here — /memory works inside a repo session.", { miss: true });
+    try {
+      const { inspectMemory } = await import("./memory/inspect.mjs");
+      return mk(await inspectMemory(memoryDir, { verbose: /^(?:-v|--verbose|verbose)$/i.test(argText) }));
+    } catch (e) {
+      return mk(String(e?.message || e), { miss: true }); // a broken store reads as its own clean error
+    }
+  }
 
   if (name === "focus") {
     if (!argText) return mk(focus ? `focus is ${focus.label}` : "no focus set — /focus <symbol> to set one.");

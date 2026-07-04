@@ -45,7 +45,7 @@ test("bare invocation with non-TTY stdin reaches CHAT (the headline argv splice)
   const unknown = runCli("frobnicate");
   assert.equal(unknown.status, 2);
   assert.match(unknown.stderr, /unknown invocation "frobnicate"/);
-  assert.match(unknown.stderr, /Use `cli digest …`, `cli <tool> …`, or `chat`/);
+  assert.match(unknown.stderr, /Use `cli digest …`, `cli <tool> …`, `memory`, or `chat`/);
 });
 
 test("cli <toolName>: any tool routes to dispatchTool and prints its text result", async () => {
