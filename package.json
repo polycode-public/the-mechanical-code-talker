@@ -29,7 +29,9 @@
     "src/",
     "README.md",
     "ROADMAP.md",
-    "LICENSE"
+    "LICENSE",
+    "corpus/",
+    "data/"
   ],
   "publishConfig": {
     "access": "public"

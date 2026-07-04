@@ -1,0 +1,251 @@
+# conceptnet-map.toml — the relation → ACE-OWL-pattern mapping table
+# (ROADMAP Phase 2, ConceptNet corpus slice).
+#
+# One row per ConceptNet relation (the canonical closed set of 34 —
+# docs/references/schemas/conceptnet-relations.md is the reference list this
+# table is drift-checked against; test/corpus-conceptnet.test.mjs fails if the
+# committed slice contains a relation with no row here).
+#
+# Fields:
+#   rel       the ConceptNet relation URI ("/r/IsA")
+#   surface   the canonical surface template, "{start}"/"{end}" slotted —
+#             the "A dog is a kind of animal" sentence shape this relation reads as
+#   ace       which ACE-OWL pattern it maps to (docs/references/schemas/
+#             ace-owl-fragment.md): subClassOf | type | ObjectProperty |
+#             someValuesFrom | disjointWith | property | none
+#   predicate the predicate URI src/corpus/conceptnet.mjs emits into memory
+#             facts (absent when ace = "none" — no fact is emitted)
+#   note      why, and what a "none" row is still good for
+#
+# Loader contract (src/corpus/conceptnet.mjs): a relation in the slice that is
+# MISSING here is an error (drift guard); a row with ace = "none" is a
+# deliberate non-emission, silently skipped by toFacts().
+
+[[relation]]
+rel = "/r/IsA"
+surface = "a {start} is a kind of {end}"
+ace = "subClassOf"
+predicate = "rdfs:subClassOf"
+note = "hyponym → hypernym; ACE pattern 1 ('every N1 is a N2')"
+
+[[relation]]
+rel = "/r/DefinedAs"
+surface = "a {start} is defined as {end}"
+ace = "subClassOf"
+predicate = "rdfs:subClassOf"
+note = "definitional IsA; also ACE pattern 1"
+
+[[relation]]
+rel = "/r/PartOf"
+surface = "a {start} is part of a {end}"
+ace = "ObjectProperty"
+predicate = "mgx:partOf"
+note = "meronymy; ACE pattern 3 (N1 VERB N2)"
+
+[[relation]]
+rel = "/r/HasA"
+surface = "a {start} has a {end}"
+ace = "ObjectProperty"
+predicate = "mgx:hasA"
+note = "possession/holonymy; plain edge today — ACE pattern 5 cardinality is a later refinement"
+
+[[relation]]
+rel = "/r/UsedFor"
+surface = "a {start} is used for {end}"
+ace = "ObjectProperty"
+predicate = "mgx:usedFor"
+note = "typical purpose; ACE pattern 3"
+
+[[relation]]
+rel = "/r/CapableOf"
+surface = "a {start} can {end}"
+ace = "ObjectProperty"
+predicate = "mgx:capableOf"
+note = "typical capability; ACE pattern 3"
+
+[[relation]]
+rel = "/r/AtLocation"
+surface = "you are likely to find a {start} in a {end}"
+ace = "ObjectProperty"
+predicate = "mgx:atLocation"
+note = "typical location; ACE pattern 3"
+
+[[relation]]
+rel = "/r/Causes"
+surface = "a {start} causes {end}"
+ace = "ObjectProperty"
+predicate = "mgx:causes"
+note = "causation; ACE pattern 3"
+
+[[relation]]
+rel = "/r/HasSubevent"
+surface = "when you {start}, you {end}"
+ace = "ObjectProperty"
+predicate = "mgx:hasSubevent"
+note = "event decomposition; ACE pattern 3"
+
+[[relation]]
+rel = "/r/HasFirstSubevent"
+surface = "the first thing you do when you {start} is {end}"
+ace = "ObjectProperty"
+predicate = "mgx:hasFirstSubevent"
+note = "first step; ACE pattern 3"
+
+[[relation]]
+rel = "/r/HasLastSubevent"
+surface = "the last thing you do when you {start} is {end}"
+ace = "ObjectProperty"
+predicate = "mgx:hasLastSubevent"
+note = "last step; ACE pattern 3"
+
+[[relation]]
+rel = "/r/HasPrerequisite"
+surface = "in order to {start}, you must {end}"
+ace = "ObjectProperty"
+predicate = "mgx:hasPrerequisite"
+note = "dependency; ACE pattern 3"
+
+[[relation]]
+rel = "/r/HasProperty"
+surface = "a {start} is {end}"
+ace = "property"
+predicate = "mgx:hasProperty"
+note = "attribute/adjective; ACE pattern 8 ('N1 is ADJ')"
+
+[[relation]]
+rel = "/r/MotivatedByGoal"
+surface = "you would {start} because you want to {end}"
+ace = "ObjectProperty"
+predicate = "mgx:motivatedByGoal"
+note = "motivation; ACE pattern 3"
+
+[[relation]]
+rel = "/r/ObstructedBy"
+surface = "{start} can be prevented by {end}"
+ace = "ObjectProperty"
+predicate = "mgx:obstructedBy"
+note = "blocker; ACE pattern 3"
+
+[[relation]]
+rel = "/r/Desires"
+surface = "a {start} wants {end}"
+ace = "ObjectProperty"
+predicate = "mgx:desires"
+note = "typical desire; ACE pattern 3"
+
+[[relation]]
+rel = "/r/CausesDesire"
+surface = "{start} makes you want to {end}"
+ace = "ObjectProperty"
+predicate = "mgx:causesDesire"
+note = "evoked desire; ACE pattern 3"
+
+[[relation]]
+rel = "/r/CreatedBy"
+surface = "a {start} is created by a {end}"
+ace = "ObjectProperty"
+predicate = "mgx:createdBy"
+note = "provenance; ACE pattern 3"
+
+[[relation]]
+rel = "/r/MadeOf"
+surface = "a {start} is made of {end}"
+ace = "ObjectProperty"
+predicate = "mgx:madeOf"
+note = "material; ACE pattern 3"
+
+[[relation]]
+rel = "/r/ReceivesAction"
+surface = "a {start} can be {end}"
+ace = "ObjectProperty"
+predicate = "mgx:receivesAction"
+note = "typical patient role; ACE pattern 3"
+
+[[relation]]
+rel = "/r/LocatedNear"
+surface = "a {start} is typically near a {end}"
+ace = "ObjectProperty"
+predicate = "mgx:locatedNear"
+note = "proximity; ACE pattern 3"
+
+[[relation]]
+rel = "/r/MannerOf"
+surface = "{start} is a way to {end}"
+ace = "ObjectProperty"
+predicate = "mgx:mannerOf"
+note = "verb specialization — properly rdfs:subPropertyOf between verbs; stored as a plain edge until the grammar grows verb hierarchies"
+
+[[relation]]
+rel = "/r/DistinctFrom"
+surface = "a {start} is not a {end}"
+ace = "disjointWith"
+predicate = "owl:disjointWith"
+note = "mutual exclusion; ACE pattern 6 ('no N1 is a N2')"
+
+# --- unmappable relations: no clean OWL-axiom fit; kept for other consumers ---
+
+[[relation]]
+rel = "/r/RelatedTo"
+surface = "{start} is related to {end}"
+ace = "none"
+note = "weakest, undirected association — too vague for an axiom; useful later as a fuzzy-match hint, never a fact"
+
+[[relation]]
+rel = "/r/Synonym"
+surface = "{start} means the same as {end}"
+ace = "none"
+note = "lexical alias, not an axiom — feeds the grammar lexicon / phrasebook synonym families instead"
+
+[[relation]]
+rel = "/r/Antonym"
+surface = "{start} is the opposite of {end}"
+ace = "none"
+note = "lexical opposition; OWL disjointness would over-claim (hot/cold are not disjoint classes) — DistinctFrom carries the real disjointness"
+
+[[relation]]
+rel = "/r/FormOf"
+surface = "{start} is a form of the word {end}"
+ace = "none"
+note = "inflection → root; lexicon normalization, not knowledge"
+
+[[relation]]
+rel = "/r/DerivedFrom"
+surface = "the word {start} is derived from {end}"
+ace = "none"
+note = "word derivation; lexicon material, not an axiom"
+
+[[relation]]
+rel = "/r/SymbolOf"
+surface = "{start} is a symbol of {end}"
+ace = "none"
+note = "symbolism — no OWL fit"
+
+[[relation]]
+rel = "/r/SimilarTo"
+surface = "{start} is similar to {end}"
+ace = "none"
+note = "graded similarity — no crisp OWL fit; potential fuzzy-match hint only"
+
+[[relation]]
+rel = "/r/HasContext"
+surface = "{start} is used in the context of {end}"
+ace = "none"
+note = "usage-domain tag — the slice FILTER signal (tech-domain selection), not a fact to store"
+
+[[relation]]
+rel = "/r/EtymologicallyRelatedTo"
+surface = "{start} shares an origin with {end}"
+ace = "none"
+note = "etymology — filtered out of the slice by policy"
+
+[[relation]]
+rel = "/r/EtymologicallyDerivedFrom"
+surface = "the word {start} comes from {end}"
+ace = "none"
+note = "etymology — filtered out of the slice by policy"
+
+[[relation]]
+rel = "/r/ExternalURL"
+surface = "{start} is described at {end}"
+ace = "none"
+note = "link out of the graph — filtered out of the slice (end is a URL, not an en concept)"

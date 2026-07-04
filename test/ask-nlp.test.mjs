@@ -107,16 +107,27 @@ test("determinism: two separate node processes produce byte-identical parse+answ
 // and still answers — misspelling corrections and the bounded fuzzy tier are
 // plain JS and ride along; only the lemma/POS tier degrades away. ----
 
-test("viewer bundle without wink: stripped codegraph+vocab+ask evaluates and answers (fuzzy + misspellings intact, lemma/POS honestly off)", async () => {
-  const [codegraph, vocab, askSrc] = await Promise.all(
-    ["codegraph.mjs", "ask-vocab.mjs", "ask.mjs"].map((f) => readFile(join(srcDir, f), "utf8")),
+test("viewer bundle without wink: stripped codegraph+vocab+interpret+ask evaluates and answers (fuzzy + misspellings intact, lemma/POS honestly off)", async () => {
+  // Bundle order mirrors the import graph: vocab feeds the interpret modules
+  // (normalize -> fuzzy -> strategies, the item-13 split), which feed ask.mjs.
+  // ask-nlp.mjs stays OUT — that exclusion is the boundary this test proves.
+  const sources = await Promise.all(
+    ["codegraph.mjs", "ask-vocab.mjs",
+      "interpret/normalize.mjs", "interpret/fuzzy.mjs",
+      "interpret/strategies/grammar.mjs", "interpret/strategies/keywords.mjs",
+      "interpret/strategies/noise-strip.mjs",
+      "interpret/merge.mjs", "interpret/pipeline.mjs",
+      "ask.mjs"].map((f) => readFile(join(srcDir, f), "utf8")),
   );
-  // the exact strip viz.mjs's askSource() applies (kept in sync by this test:
-  // if the import shapes in ask.mjs ever stop matching it, this eval throws).
+  // the exact strip an inlining viewer bundle applies (kept in sync by this test:
+  // if the import/export shapes in ask.mjs or interpret/* ever stop matching it,
+  // this eval throws). Re-export statements ("export { a, b };") are dropped the
+  // same way import statements are — the bindings are already top-level names.
   const strip = (src) => src
     .replace(/^import\s[\s\S]*?from\s+"[^"]+";\s*$/gm, "")
+    .replace(/^export\s+\{[^}]*\}(\s+from\s+"[^"]+")?;\s*$/gm, "")
     .replace(/^export (?=(function|const|async function))/gm, "");
-  const bundle = [strip(codegraph), strip(vocab), strip(askSrc)].join("\n");
+  const bundle = sources.map(strip).join("\n");
   // no FUNCTIONAL wink machinery may survive the strip (comments may mention it):
   // a live import statement, import.meta, or a createRequire call would each be a
   // hard failure in a classic inlined <script>.

@@ -42,6 +42,20 @@ export function nlpAdapter() {
           return w.toLowerCase();
         }
       },
+      /** True when wink's lexicon flags the word as an English stop word
+       *  ("anyway", "well", "also", …). Consulted by the noise-strip strategy
+       *  (interpret/strategies/noise-strip.mjs) as its wink tier — the strategy's
+       *  own KEEP set screens out the grammar's load-bearing words (which/what/
+       *  does/…) BEFORE this is asked, so wink flagging a question word is
+       *  harmless by construction. False on any surprise, never a throw. */
+      isStopWord(word) {
+        try {
+          const out = nlp.readDoc(String(word || "")).tokens().out(its.stopWordFlag);
+          return out[0] === true;
+        } catch {
+          return false;
+        }
+      },
       /** UPOS tags aligned to the CALLER's word array. wink re-tokenizes (it
        *  splits "walk.mjs" into three tokens), so each input word is greedily
        *  matched to the run of wink tokens that spell it and takes its FIRST
