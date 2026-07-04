@@ -245,19 +245,35 @@ function fnv1a(s) {
   return (h >>> 0).toString(16).padStart(8, "0");
 }
 
+/** Normalize a fact TERM (subject/object) so every writer converges on one
+ *  spelling and the graph stays queryable: ConceptNet's /c/en/foo_bar, a
+ *  grammar's tmct:Foo_bar and a bare "Foo bar" all become "foo bar". The
+ *  PREDICATE is deliberately NOT normalized this way - it is a controlled
+ *  vocabulary term (rdfs:subClassOf) whose casing is meaningful. */
+export function normFactTerm(t) {
+  let s = normText(t);
+  s = s.replace(/^\/c\/[a-z]{2,3}\//i, "");
+  s = s.replace(/^[a-z][\w.-]*:/i, "");
+  s = s.replace(/_/g, " ").replace(/\s+/g, " ").trim();
+  return s.toLowerCase();
+}
+
 /** Append one grammar-derived OWL triple, RDF-reified: a `Fact` individual
  *  carrying rdf:subject / rdf:predicate / rdf:object (+ provenance). The
  *  Phase-2 ACE parser's write point. Same (s,p,o) → same id → upsert, never a
  *  duplicate. Returns { id }. */
 export async function appendFact(dir, { subject, predicate, object, provenance = "" } = {}) {
-  const s = normText(subject);
+  const s = normFactTerm(subject);
   const p = normText(predicate);
-  const o = normText(object);
+  const o = normFactTerm(object);
   if (!s || !p || !o) throw new Error("a fact needs subject, predicate and object");
   const id = `fact:${fnv1a(`${s} ${p} ${o}`)}`;
   const text = `${s} ${p} ${o}`;
   const tokens = proseTokensFor({ doc: text });
   await mutateMemory(dir, (payload) => {
+    const prior = payload.individuals.find((x) => x?.id === id);
+    const priorProv = prior?.attributes?.find((a) => a?.prop === "mgx:factProvenance")?.value || "";
+    const provs = [...new Set([...priorProv.split(" | "), normText(provenance)].filter(Boolean))];
     upsertIndividual(payload, {
       id, label: labelOf(text), class: FACT_CLASS,
       derived_from: [], mentions: [],
@@ -266,7 +282,7 @@ export async function appendFact(dir, { subject, predicate, object, provenance =
         { prop: "rdf:subject", key: "subject", value: s },
         { prop: "rdf:predicate", key: "predicate", value: p },
         { prop: "rdf:object", key: "object", value: o },
-        ...(provenance ? [{ prop: "mgx:factProvenance", key: "provenance", value: normText(provenance) }] : []),
+        ...(provs.length ? [{ prop: "mgx:factProvenance", key: "provenance", value: provs.join(" | ") }] : []),
         ...(tokens.length ? [{ prop: "mgx:hasProseTokens", key: "prose_tokens", value: tokens.join(" ") }] : []),
       ],
     });

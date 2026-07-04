@@ -14,18 +14,21 @@
 //   parseQuery (grammar)  ->  resolveObject (mechanical term resolution)  ->
 //   traverse (graph lookup)  ->  render (templates).
 //
-// §3.5/3.6 (2026-07-02, ELIZA/PARRY-style breadth): parseQuery normalizes the
-// raw text (contractions, g-drop, filler-strip), rewrites recognized negative-
-// rhetorical constructions to their affirmative form, then runs TWO INDEPENDENT
-// parsing STRATEGIES against the same normalized text — the original anchored-
-// template matcher (precise, fast, unweakened) and a keyword-spotting/
-// decomposition matcher (ELIZA's own mechanism: find the keyword, decompose
-// around it, tolerate reordering/casual phrasing) — and MERGES their results:
-// one strategy hit -> use it; both hit and agree -> use it (high confidence);
-// both hit and DISAGREE -> a genuine parse-level ambiguity, surfaced honestly;
-// neither hits -> the honest grammar miss. STRATEGIES is a plain array so a
-// third strategy could join the same way, not a hardcoded two-branch special
-// case.
+// §3.5/3.6 (2026-07-02, ELIZA/PARRY-style breadth; split into src/interpret/ for
+// ROADMAP items 8/10/13): parseQuery normalizes the raw text (contractions,
+// g-drop, filler-strip — interpret/normalize.mjs), rewrites recognized negative-
+// rhetorical constructions to their affirmative form, then runs the REGISTERED
+// parsing STRATEGIES over the same normalized text (interpret/pipeline.mjs) —
+// the original anchored-template matcher (interpret/strategies/grammar.mjs:
+// precise, fast, unweakened) and a keyword-spotting/decomposition matcher
+// (interpret/strategies/keywords.mjs — ELIZA's own mechanism: find the keyword,
+// decompose around it, tolerate reordering/casual phrasing) — and MERGES their
+// results (interpret/merge.mjs): one strategy hit -> use it; hits that agree ->
+// use it (high confidence); same-class hits that DISAGREE -> a genuine
+// parse-level ambiguity, surfaced honestly; no hits -> the honest grammar miss.
+// STRATEGIES is a plain registration array (interpret/pipeline.mjs) so further
+// strategies (Phase 2's ACE grammar) join the same way, not a hardcoded
+// two-branch special case.
 //
 // Where a parsed intent is temporal/churn-shaped (touched/since/cochange as a
 // FILTER over commits, not a structural edge), this engine does NOT re-implement
@@ -38,14 +41,26 @@
 import { relationKind, impactClosure } from "./codegraph.mjs";
 import {
   VERB_TO_KIND, ENTITY_TO_TYPE, MODIFIER_TO_KIND,
-  CONTRACTIONS, MISSPELLINGS, WRONG_WORDS, G_DROP, FILLER_WORDS,
-  CONTEXT_PRONOUNS, NEGATION_FRAMES, COMMIT_CONTENT_FRAMES, META_MEANING_VERBS,
+  CONTEXT_PRONOUNS, META_MEANING_VERBS,
   WHERE_MARKERS, MENTION_MARKERS,
   RELATIVE_PRONOUNS, PLACEHOLDER_NOUNS, BOOLEAN_CONNECTIVES, QUALIFIERS,
   AGGREGATE_TRIGGERS, LIST_TRIGGERS, SUPERLATIVE_EXTREMES, EDGE_NOUN_TO_METRIC, ANAPHORA_TRIGGERS,
   MEMBERSHIP_KINDS, CASCADE_NOISE, CASCADE_SYNONYMS, HELP_TRIGGERS,
 } from "./ask-vocab.mjs";
+// The interpretation layer (ROADMAP items 8/10/13) — the movable conversational
+// grammar, split out of this file: normalization pre-pass, the two parsing
+// strategies, and the bounded-fuzzy service. Re-exported below where existing
+// callers/tests import them from here.
+import { normalizeQuery, applyNegationFrames, STOPWORDS, splitWords, wordsOf } from "./interpret/normalize.mjs";
+import { editDistance, fuzzyBound } from "./interpret/fuzzy.mjs";
+import { parseAnchored } from "./interpret/strategies/grammar.mjs";
+import { parseKeywordSpot, findPhrase } from "./interpret/strategies/keywords.mjs";
+import { runStrategiesSync } from "./interpret/pipeline.mjs";
+import { mergeStrategyResults } from "./interpret/merge.mjs";
 import { lookupByProseTokens } from "./prose.mjs";
+
+// Normalization stays importable from its original site (tests + chat surface).
+export { normalizeQuery, applyNegationFrames };
 // The OPTIONAL Node-only wink-nlp adapter (lemma/POS tier). BOUNDARY: the inlined
 // viewer bundle (viz.mjs askSource) strips this import line and never inlines
 // ask-nlp.mjs, so in the browser `nlpAdapter` is simply an undeclared identifier —
@@ -110,443 +125,20 @@ function verbFor(kind) {
   return REVERSE_MISS_VERB[kind] || kind;
 }
 
-function escapeRegex(s) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
+// ---- the parsing strategies + normalization + fuzzy service formerly defined
+// here now live in src/interpret/ (items 8/10/13): interpret/normalize.mjs
+// (normalizeQuery, applyNegationFrames, STOPWORDS, splitWords), interpret/
+// strategies/grammar.mjs (parseAnchored, the anchored TEMPLATES), interpret/
+// strategies/keywords.mjs (parseKeywordSpot, findPhrase), interpret/fuzzy.mjs
+// (editDistance, fuzzyBound — also resolveObject's tier-5 budget below). ----
 
-// ---- §3.5 normalization — runs before EITHER parsing strategy sees the text ----
-
-/** contraction/informal-spelling table -> word-boundary regex, longest phrase
- *  first (so "there's" doesn't get shadowed by a shorter overlapping entry). */
-const tableRe = (table) => new RegExp(
-  "\\b(" + Object.keys(table).sort((a, b) => b.length - a.length).map(escapeRegex).join("|") + ")\\b",
-  "gi",
-);
-const CONTRACTION_RE = tableRe(CONTRACTIONS);
-// misspelling/wrong-word CORRECTIONS (ask-vocab.mjs) — same mechanism, applied
-// after contractions: restore the intended spelling first, then map misused
-// words to their canonical schema term. Deterministic and curated, so they run
-// BEFORE either parse strategy and ahead of the bounded edit-distance fallback.
-// The trailing lookahead refuses to rewrite a word glued to a dotted extension:
-// WRONG_WORDS entries are real English words that plausibly NAME modules
-// ("revision.mjs", "property.py"), and a correction that corrupts an object
-// term would be a guess — the exact thing these tables exist to avoid.
-const correctionRe = (table) => new RegExp(
-  "\\b(" + Object.keys(table).sort((a, b) => b.length - a.length).map(escapeRegex).join("|") + ")\\b(?!\\.[a-z0-9])",
-  "gi",
-);
-const MISSPELLING_RE = correctionRe(MISSPELLINGS);
-const WRONG_WORD_RE = correctionRe(WRONG_WORDS);
-
-/** Free-text -> normalized free-text: contractions expanded, g-dropped words
- *  restored, filler/politeness words stripped. Idempotent and pure — the same
- *  input always normalizes the same way, so both parsing strategies see
- *  identical text and their outputs are directly comparable. Deliberately
- *  does NOT force lowercase: object/subject terms (module names like
- *  "myFile", class names like "Base") are meaningfully cased, and every
- *  substitution below already matches case-insensitively (`i`/`gi` flags) —
- *  forcing the whole string to lowercase would silently corrupt every parsed
- *  term's case instead. */
-export function normalizeQuery(text) {
-  let q = String(text || "");
-  q = q.replace(CONTRACTION_RE, (m) => CONTRACTIONS[m.toLowerCase()]);
-  q = q.replace(MISSPELLING_RE, (m) => MISSPELLINGS[m.toLowerCase()]);
-  q = q.replace(WRONG_WORD_RE, (m) => WRONG_WORDS[m.toLowerCase()]);
-  q = q.replace(G_DROP, "$1ing");
-  if (FILLER_WORDS.length) {
-    const fillerRe = new RegExp(
-      "\\b(" + [...FILLER_WORDS].sort((a, b) => b.length - a.length).map(escapeRegex).join("|") + ")\\b",
-      "gi",
-    );
-    q = q.replace(fillerRe, " ");
-  }
-  return q.replace(/\s+/g, " ").trim();
-}
-
-/** Recognized rhetorical/idiomatic constructions rewritten to the canonical form
- *  of the SAME question before either parse strategy sees the text — a small
- *  closed pattern set, not a general rewriter. Two families, tried in order:
- *  COMMIT_CONTENT_FRAMES first ("what was in commit <sha>" -> "what did <sha>
- *  touch"; sha-anchored, so it can't swallow a containment question), then the
- *  §3.6 negative-rhetorical NEGATION_FRAMES. First matching frame across both wins
- *  and rewriting stops; unmatched text passes through unchanged. */
-export function applyNegationFrames(text) {
-  for (const frame of [...COMMIT_CONTENT_FRAMES, ...NEGATION_FRAMES]) {
-    const m = text.match(frame.re);
-    if (m) return frame.to(m).replace(/\s+/g, " ").trim();
-  }
-  return text;
-}
-
-// ---- strategy 1: anchored templates — fixed precedence order; first fit wins,
-// never ambiguous at the template level (a question matching two shapes is a
-// design smell we test against). Unweakened from the original P0 grammar. ----
-
-const VERB_ALT = Object.keys(VERB_TO_KIND).sort((a, b) => b.length - a.length).map(escapeRegex).join("|");
-const ENTITY_ALT = Object.keys(ENTITY_TO_TYPE).sort((a, b) => b.length - a.length).map(escapeRegex).join("|");
-const MODIFIER_ALT = Object.keys(MODIFIER_TO_KIND).sort((a, b) => b.length - a.length).map(escapeRegex).join("|");
-const META_ALT = META_MEANING_VERBS.slice().sort((a, b) => b.length - a.length).map(escapeRegex).join("|");
-
-const TEMPLATES = [
-  // T1 ASK: "does X import Y" / "is X a subclass of Y" -> Yes/No. Tried FIRST: it starts with
-  // does/is/do/did, which the reverse/forward templates below never match (those start with
-  // which/what), so precedence between T1 and the rest is structural, not a tie-break guess.
-  // "did" joins does/do for the past-tense commit forms ("did commit <sha> touch X").
-  {
-    name: "ask",
-    re: new RegExp(`^(?:does|do|did)\\s+(.+?)\\s+(${VERB_ALT})\\s+(.+?)\\??$`, "i"),
-    build: (m) => ({
-      shape: "ask", entityType: null, modifier: "direct",
-      kind: VERB_TO_KIND[m[2].toLowerCase()], subject: m[1].trim(), object: m[3].trim(),
-    }),
-  },
-  // T2 reverse: "which <entity> [<modifier>] <verb> <object>" — the operator's own example shape.
-  {
-    name: "reverse",
-    re: new RegExp(`^which\\s+(${ENTITY_ALT})\\s+(?:(${MODIFIER_ALT})\\s+)?(${VERB_ALT})\\s+(.+?)\\??$`, "i"),
-    build: (m) => ({
-      shape: "reverse",
-      entityType: ENTITY_TO_TYPE[m[1].toLowerCase()],
-      modifier: m[2] ? MODIFIER_TO_KIND[m[2].toLowerCase()] : "direct",
-      kind: VERB_TO_KIND[m[3].toLowerCase()],
-      object: m[4].trim(),
-    }),
-  },
-  // T3 forward: "what does <object> <verb>" — X is given, list its R-related things.
-  // "did" joins does/do for the past-tense commit forms ("what did commit <sha> touch").
-  {
-    name: "forward",
-    re: new RegExp(`^what\\s+(?:does|do|did)\\s+(.+?)\\s+(${VERB_ALT})\\??$`, "i"),
-    build: (m) => ({
-      shape: "forward", entityType: null, modifier: "direct",
-      kind: VERB_TO_KIND[m[2].toLowerCase()], object: m[1].trim(),
-    }),
-  },
-  // T4 meta: "what does <term> mean" — a question about the GRAPH'S OWN VOCABULARY
-  // (a SchemaClass/SchemaPredicate label, e.g. "cochange", or a raw prop token, e.g.
-  // "mgx:callsSymbol"), not a graph traversal over code edges. Tried after T3: T3 also
-  // starts "what does/do", but T3 only fires when the tail is a relation VERB_ALT
-  // phrase ("import"/"calls"/…), which "mean"/"means"/etc never are (disjoint tables —
-  // ask-vocab.mjs's file comment explains why they're kept separate), so the two never
-  // actually compete for the same input.
-  {
-    name: "meta-mean",
-    re: new RegExp(`^what\\s+(?:does|do|is|are)\\s+(.+?)\\s+(?:${META_ALT})\\??$`, "i"),
-    build: (m) => ({ shape: "meta", entityType: null, modifier: "direct", kind: "meta", object: m[1].trim() }),
-  },
-  // T5 meta: "what is a/an <term>" — the OTHER worked phrasing ("what is a Commit").
-  // The indefinite article is REQUIRED (not optional): a bare "what is <anything>"
-  // would also swallow "what is the meaning of this codebase" (an existing, deliberately
-  // honest grammar-miss regression case — ask.test.mjs/ask-dual-strategy.test.mjs both
-  // assert it stays null), which never mentions "a"/"an" before its tail. Requiring the
-  // article keeps this template's reach to the one worked shape without reopening that.
-  {
-    name: "meta-whatis",
-    re: new RegExp(`^what\\s+(?:is|are)\\s+(?:an?)\\s+(.+?)\\??$`, "i"),
-    build: (m) => ({ shape: "meta", entityType: null, modifier: "direct", kind: "meta", object: m[1].trim() }),
-  },
-  // T6 mention: "where is <term> mentioned/referenced" — the prose/mentions surface
-  // (2026-07-02 query families). Tried BEFORE T7: T7's trailing marker is optional,
-  // so without this ordering it would swallow the mention question and lose the
-  // marker that distinguishes "locate the definition" from "list the prose mentions".
-  {
-    name: "mention",
-    re: new RegExp(`^where\\s+(?:is|are|was|were)\\s+(.+?)\\s+(?:${MENTION_MARKERS.map(escapeRegex).join("|")})\\??$`, "i"),
-    build: (m) => ({ shape: "mentions", entityType: null, modifier: "direct", kind: "mentions", object: m[1].trim() }),
-  },
-  // T7 where: "where is <term> [defined|declared|located|implemented]" — definition
-  // location off the site attribute / defining module. "where" starts no other
-  // template, so precedence against T1-T5 is structural.
-  {
-    name: "where",
-    re: new RegExp(`^where\\s+(?:is|are|was|were)\\s+(.+?)(?:\\s+(?:${WHERE_MARKERS.map(escapeRegex).join("|")}))?\\??$`, "i"),
-    build: (m) => ({ shape: "where", entityType: null, modifier: "direct", kind: "where", object: m[1].trim() }),
-  },
-  // T8 when: "when did <term> [last] change/touched/updated…" — temporal shape over
-  // the touches edges + commit date attributes. The verb slot reuses VERB_ALT, but
-  // only the touches family carries dates to answer with, so build() rejects any
-  // other kind (returning null falls through — parseAnchored tolerates it) rather
-  // than pretending "when did X import Y" has a temporal answer.
-  {
-    name: "when",
-    re: new RegExp(`^when\\s+(?:did|does|do|was|were|is)\\s+(.+?)\\s+(?:last\\s+)?(${VERB_ALT})\\??$`, "i"),
-    build: (m) => (VERB_TO_KIND[m[2].toLowerCase()] === "touches"
-      ? { shape: "when", entityType: null, modifier: "direct", kind: "touches", object: m[1].trim() }
-      : null),
-  },
-];
-
-/** Strategy 1: the original P0 anchored grammar — the whole (normalized) string
- *  must match one of TEMPLATES start-to-end. A build() may return null to reject
- *  a structural match on curated grounds (T8's non-temporal verbs); the scan then
- *  simply continues, exactly as if the regex had not matched. Pure. */
-function parseAnchored(text) {
-  for (const t of TEMPLATES) {
-    const m = text.match(t.re);
-    if (m) {
-      const parsed = t.build(m);
-      if (parsed) return parsed;
-    }
-  }
-  return null;
-}
-
-// ---- strategy 2: keyword-spotting/decomposition — ELIZA's own mechanism: find
-// the keyword(s) anywhere in the text, decompose around them, tolerate reordering
-// and casual phrasing. Position-independent (no `^...$` anchor), so it tolerates
-// "what calls this" / "who invokes this" / "something executes this, where from"
-// — real phrasings the anchored grammar's fixed shapes don't cover. ----
-
-const STOPWORDS = new Set([
-  "what", "who", "which", "where", "when", "why", "how",
-  "does", "do", "did", "is", "are", "was", "were", "the", "a", "an", "of", "to", "from", "at", "in", "on",
-  "there", "something", "anything", "nothing", "one", "any",
-  // temporal filler in when-questions ("when was X last touched") — a symbol
-  // literally named "last" would be the accepted residual cost, same trade as
-  // every other stopword.
-  "last",
-]);
-
-/** Find the longest phrase from `table`'s keys that appears as a contiguous
- *  run of `words` (case already lowercased by the caller). Longest-match-first
- *  (multi-word phrases before single words) so "co-changes with" isn't
- *  shadowed by a shorter unrelated word. A span overlapping `consumed` indices
- *  is skipped: the verb and entity tables now share a surface form ("change"
- *  is both a touches verb and the Change entity noun), and a word already
- *  claimed by the verb pass must not double as the entity keyword. Returns
- *  {kind, start, end} (end exclusive) or null. */
-function findPhrase(lcWords, table, consumed = null) {
-  const phrases = Object.keys(table).sort((a, b) => b.split(" ").length - a.split(" ").length);
-  for (const p of phrases) {
-    const pWords = p.split(" ");
-    for (let i = 0; i <= lcWords.length - pWords.length; i += 1) {
-      if (consumed && pWords.some((_, j) => consumed.has(i + j))) continue;
-      if (pWords.every((w, j) => lcWords[i + j] === w)) return { kind: table[p], start: i, end: i + pWords.length };
-    }
-  }
-  return null;
-}
-
-// ---- bounded edit distance (two-level fuzzy, 2026-07-02) — hand-rolled
-// Damerau-Levenshtein (optimal string alignment: substitution/insertion/deletion
-// + adjacent transposition), bounded with an early row-minimum exit. Used by the
-// keyword-spot FUZZY tier below and resolveObject's tier 5 — both fire only after
-// every exact/curated tier missed, and a distance TIE is refused (keyword) or
-// surfaced as ambiguity (object), never broken by a guess. Pure JS, no deps, so
-// the inlined viewer bundle gets fuzzy matching for free. ----
-
-/** Distance between a and b, or max+1 as soon as it provably exceeds `max`. */
-function editDistance(a, b, max) {
-  if (a === b) return 0;
-  if (Math.abs(a.length - b.length) > max) return max + 1;
-  let prev2 = null;
-  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
-  for (let i = 1; i <= a.length; i += 1) {
-    const cur = [i];
-    let rowMin = i;
-    for (let j = 1; j <= b.length; j += 1) {
-      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      let v = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
-      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) v = Math.min(v, prev2[j - 2] + cost);
-      cur[j] = v;
-      if (v < rowMin) rowMin = v;
-    }
-    if (rowMin > max) return max + 1;
-    prev2 = prev;
-    prev = cur;
-  }
-  return prev[b.length];
-}
-
-/** The curated distance budget: 1 edit for short tokens, 2 for longer ones. */
-const fuzzyBound = (s) => (s.length <= 5 ? 1 : 2);
-
-/** Every single word appearing in the three parse tables — the "is this word
- *  already vocabulary?" gate for the lemma/fuzzy canonicalization passes (an
- *  exact vocab word is NEVER rewritten: exact curated match always wins). */
-const VOCAB_WORDS = new Set(
-  [...Object.keys(VERB_TO_KIND), ...Object.keys(ENTITY_TO_TYPE), ...Object.keys(MODIFIER_TO_KIND)]
-    .flatMap((p) => p.split(" ")),
-);
-
-/** Fuzzy-correction TARGETS: verb-phrase and modifier constituents only, length ≥4.
- *  Entity nouns are deliberately excluded — real identifiers collide with them at
- *  distance ≤2 far too easily ("myfile" is 2 edits from "file", "caller" 2 from
- *  "calls"-family words), and entity-noun typos are already owned by the curated
- *  MISSPELLINGS table where such calls are made deliberately. Short constituents
- *  ("of", "to", "in", "on") are excluded for the same reason: at bound 1 half of
- *  English is adjacent to them. */
-const FUZZY_TARGET_WORDS = [...new Set(
-  [...Object.keys(VERB_TO_KIND), ...Object.keys(MODIFIER_TO_KIND)]
-    .flatMap((p) => p.split(" "))
-    .filter((w) => w.length >= 4),
-)];
-
-/** A query word may be canonicalized only if it is plain alphabetic, not a
- *  stopword, and not already vocabulary. Dotted/digit terms (file names, shas)
- *  are never touched. */
-function eligibleForCanon(w) {
-  return /^[a-z]+$/.test(w) && !STOPWORDS.has(w) && !VOCAB_WORDS.has(w);
-}
-
-/** UNIQUE within-bound fuzzy vocab keyword for `w`, or null — a tie between two
- *  distinct target words at the same distance is refused outright (the honest-miss
- *  discipline at the vocabulary level; cf. MISSPELLINGS' curated "calss" decision). */
-function fuzzyVocabWord(w) {
-  const bound = fuzzyBound(w);
-  let best = bound + 1;
-  let hit = null;
-  let tied = false;
-  for (const target of FUZZY_TARGET_WORDS) {
-    const d = editDistance(w, target, Math.min(best, bound));
-    if (d < best) { best = d; hit = target; tied = false; }
-    else if (d === best && d <= bound && target !== hit) tied = true;
-  }
-  return best <= bound && !tied ? hit : null;
-}
-
-/** Strategy 2: scan (already-normalized) text for a verb keyword anywhere,
- *  plus optional entity/modifier keywords anywhere, then split whatever's
- *  left (after removing the matched spans + stopwords) into the words BEFORE
- *  and AFTER the verb. Which side(s) are non-empty decides the shape —
- *  mirrors the three anchored shapes but by decomposition instead of a fixed
- *  template, so it tolerates reordering/casual phrasing the anchored regexes
- *  don't: text on BOTH sides ("does X import Y") -> ask{subject:before,
- *  object:after}; only AFTER the verb ("what calls this") -> reverse{object:
- *  after}; only BEFORE it ("what does X import") -> forward{object:before}.
- *  A lone context pronoun ("this"/"it"/"that"/"here") ending up as a resolved
- *  term is left as plain text — resolveTermOrContext (traverse-time)
- *  recognizes it against an optional contextId, so no separate flag is
- *  needed here. A misparse here costs nothing beyond an honest object-miss
- *  downstream (resolveObject never guesses).
- *
- *  Keyword matching is TIERED (two-level fuzzy work, 2026-07-02) — each lower
- *  tier fires ONLY when every tier above found no verb phrase at all, so an
- *  exact curated match can never be displaced:
- *    1. exact — the words as typed (post-normalization, which already applied
- *       the curated CONTRACTIONS/MISSPELLINGS/WRONG_WORDS corrections);
- *    2. lemma (only with the optional Node-side `nlp` adapter) — each eligible
- *       word is replaced by its wink lemma IF that lemma is itself a vocab word
- *       ("imported"/"importing" -> "import"), so inflections hit the curated
- *       phrases without enumerating them. Every verb family already stores its
- *       lemma form ("import", "call", "touch", "use", …), so a direct
- *       lemma-in-vocab check is the whole lookup — no reverse index needed;
- *    3. fuzzy (adapter-free; works in the inlined viewer too) — a word ≥4 chars
- *       matching nothing exactly may rewrite to a UNIQUE verb/modifier
- *       constituent within the bounded edit distance (see fuzzyVocabWord; ties
- *       are refused, entity nouns are never fuzzy targets).
- *  The canonicalized words drive PHRASE FINDING only — sideText always reads the
- *  ORIGINAL words, so a correction can never corrupt an object/subject term. */
-function parseKeywordSpot(text, nlp = null) {
-  // Strip a trailing "?" (mirrors the anchored templates' own `\??$`) and turn commas into
-  // pauses/spaces — but NEVER strip a mid-word ".": object terms are routinely dotted file/module
-  // names ("a.py", "utils.mjs"), and the anchored strategy captures those raw, so keyword-spot
-  // must too or the two strategies would "disagree" over a period that was never part of the intent.
-  const words = text.replace(/\?+\s*$/, "").replace(/,/g, " ").split(/\s+/).filter(Boolean);
-  const lcWords = words.map((w) => w.toLowerCase());
-  // where/mentions shapes (2026-07-02 query families): "where is X [defined]" and
-  // "where is X mentioned" carry NO relation verb, so the verb-driven decomposition
-  // below can never reach them. Routed here by the "where" question word + marker —
-  // but ONLY when no relation verb exists anywhere in the sentence: "something
-  // executes this, where from" (an existing worked phrasing) has a verb, and its
-  // "where" is decorative, not a location question.
-  if (lcWords.includes("where") && !findPhrase(lcWords, VERB_TO_KIND)) {
-    const mention = lcWords.some((w) => MENTION_MARKERS.includes(w));
-    const markers = new Set([...WHERE_MARKERS, ...MENTION_MARKERS]);
-    const objText = words.filter((w, i) => !STOPWORDS.has(lcWords[i]) && !markers.has(lcWords[i])).join(" ").trim();
-    if (objText) {
-      const kind = mention ? "mentions" : "where";
-      return { shape: kind, entityType: null, modifier: "direct", kind, object: objText };
-    }
-  }
-  let canonWords = lcWords;
-  let verbHit = findPhrase(lcWords, VERB_TO_KIND);
-  if (!verbHit && nlp) {
-    // tier 2: lemma (see the tier doc above) — replace only when the lemma is
-    // itself vocabulary, so unknown words ("myfile") pass through untouched.
-    const lemmaWords = lcWords.map((w) => {
-      if (!eligibleForCanon(w)) return w;
-      const l = nlp.lemma(w);
-      return VOCAB_WORDS.has(l) ? l : w;
-    });
-    verbHit = findPhrase(lemmaWords, VERB_TO_KIND);
-    if (verbHit) canonWords = lemmaWords;
-  }
-  if (!verbHit) {
-    // tier 3: bounded-edit-distance rewrite toward verb/modifier keywords only
-    // ("impotr" -> "import"); ≥4-char words only — below that the bound covers
-    // half of English (and "and" is 1 edit from the "land in" constituent).
-    const fuzzyWords = lcWords.map((w) => (w.length >= 4 && eligibleForCanon(w) ? fuzzyVocabWord(w) || w : w));
-    verbHit = findPhrase(fuzzyWords, VERB_TO_KIND);
-    if (verbHit) canonWords = fuzzyWords;
-  }
-  if (!verbHit) return null;
-  // POS consumer (wink adapter, Node-side only): rescue the ONE decomposition this
-  // strategy provably mis-parses — a relation word used as a NOUN in a "the
-  // <imports> of <term>" nominal ("show the imports of walk.mjs" otherwise
-  // decomposes to ask{subject:"show"}; bare "the imports of walk.mjs" to the
-  // reverse shape, both wrong). The wink probe showed "import" is tagged NOUN even
-  // in genuine verb use ("which modules import walk.mjs"), so the POS signal is
-  // deliberately NOT a general verb veto — it only fires inside this exact
-  // det+NOUN+"of" frame, where the nominal reading is grammatically forced.
-  if (nlp && verbHit.end - verbHit.start === 1) {
-    const i = verbHit.start;
-    const det = lcWords[i - 1];
-    if ((det === "the" || det === "these" || det === "those") && lcWords[i + 1] === "of") {
-      const tags = nlp.posTags(words);
-      if (tags[i] === "NOUN") {
-        const objText = words.slice(i + 2).filter((w, j) => !STOPWORDS.has(lcWords[i + 2 + j])).join(" ").trim();
-        if (objText) return { shape: "forward", entityType: null, modifier: "direct", kind: verbHit.kind, object: objText };
-      }
-    }
-  }
-  const consumed = new Set();
-  const mark = (hit) => { if (hit) for (let i = hit.start; i < hit.end; i += 1) consumed.add(i); };
-  mark(verbHit);
-  const entityHit = findPhrase(canonWords, ENTITY_TO_TYPE, consumed);
-  mark(entityHit);
-  const modifierHit = findPhrase(canonWords, MODIFIER_TO_KIND, consumed);
-  mark(modifierHit);
-  const sideText = (from, to) => words
-    .slice(from, to)
-    .filter((_, j) => !consumed.has(from + j) && !STOPWORDS.has(lcWords[from + j]))
-    .join(" ")
-    .trim();
-  const beforeText = sideText(0, verbHit.start);
-  const afterText = sideText(verbHit.end, words.length);
-  const kind = verbHit.kind;
-  // slices read canonWords, not lcWords: the entity/modifier spans were matched
-  // against the canonicalized array, whose word IS the table key.
-  const entityType = entityHit ? ENTITY_TO_TYPE[canonWords.slice(entityHit.start, entityHit.end).join(" ")] : null;
-  const modifier = modifierHit ? MODIFIER_TO_KIND[canonWords.slice(modifierHit.start, modifierHit.end).join(" ")] : "direct";
-
-  // when shape (2026-07-02 query families): "when did X change" / "when was X last
-  // touched" — the "when" question word turns a touches decomposition temporal.
-  // Only touches carries commit dates to answer with; a "when" next to any other
-  // relation verb falls through to the ordinary shapes (and their honest answers).
-  if (kind === "touches" && lcWords.includes("when")) {
-    const objText = beforeText || afterText;
-    if (objText) return { shape: "when", entityType: null, modifier: "direct", kind: "touches", object: objText };
-  }
-
-  if (beforeText && afterText) return { shape: "ask", entityType: null, modifier: "direct", kind, subject: beforeText, object: afterText };
-  if (afterText) return { shape: "reverse", entityType, modifier, kind, object: afterText };
-  // forward keeps the spotted entityType ("which modules did commit <sha> touch" is a
-  // forward decomposition — subject before the verb — whose asked grain would otherwise
-  // be lost); traverse() only consults it for the commit-as-subject grain selection,
-  // so plain forwards behave exactly as before. Modifier stays hardcoded: no forward
-  // closure traversal exists (see modifierIsWired).
-  if (beforeText) return { shape: "forward", entityType, modifier: "direct", kind, object: beforeText };
-  return null;
-}
-
-// ---- strategy merge — run both, agree/disagree/single/neither (§ above). A
-// plain array + a merge step, so a third strategy plugs in the same way. ----
-
-const STRATEGIES = [
-  { name: "anchored", parse: parseAnchored },
-  { name: "keyword-spot", parse: parseKeywordSpot },
-];
+// ---- strategy merge — now the interpret PIPELINE (item 8): the registered
+// strategies (interpret/pipeline.mjs STRATEGIES — grammar, keyword-spot, …) run
+// over the normalized text and interpret/merge.mjs merges them: same-class
+// agreement dedupes to one parse, same-class disagreement is the honest
+// {ambiguousParse, candidates} surface, and distinct-class alternates carry the
+// "if you mean X then …" surround (unused on this synchronous path — parseQuery
+// keeps the winning parse only, byte-identical to the original two-way merge). ----
 
 /** The default lemma/POS adapter: wink-nlp when this is a Node process with the
  *  optional deps installed, null otherwise. BOUNDARY (see the import comment):
@@ -557,34 +149,21 @@ function defaultNlp() {
   return typeof nlpAdapter === "function" ? nlpAdapter() : null;
 }
 
-// "commit abc1234" and bare "abc1234" are the SAME term once resolveObject's
-// commit-sha tier strips the noun — the anchored strategy captures the noun inside
-// its object span while keyword-spot consumes it as the entity keyword, so without
-// this the two strategies would "disagree" over a word that names no different thing.
-const cmpTerm = (s) => String(s || "").trim().toLowerCase().replace(/\s+/g, " ").replace(/^commit\s+(?=[0-9a-f]{7,40}$)/, "");
-
-/** Do two independently-produced parses mean the same graph query? Same
- *  shape, same relation kind, and matching term(s) (both subject and object
- *  for "ask"; just object otherwise) — anything less is a genuine
- *  disagreement, not a near-miss to paper over. */
-function sameParse(p, q) {
-  if (p.shape !== q.shape || p.kind !== q.kind) return false;
-  if (p.shape === "ask") return cmpTerm(p.subject) === cmpTerm(q.subject) && cmpTerm(p.object) === cmpTerm(q.object);
-  return cmpTerm(p.object) === cmpTerm(q.object);
-}
-
 /** Compile a free-text question into {shape, kind, entityType, modifier,
- *  object[, subject]}, or null if NEITHER strategy fits — an honest grammar
- *  miss (§6.3), never a best-effort guess. When both strategies parse and
+ *  object[, subject]}, or null if NO strategy fits — an honest grammar
+ *  miss (§6.3), never a best-effort guess. When strategies parse and
  *  AGREE, returns that parse unchanged (no fallback ordering — either
  *  strategy's own result is equally valid once they agree, per §above: "use
- *  either"). When both parse but DISAGREE (different shape/kind/term),
+ *  either"). When they parse but DISAGREE (different shape/kind/term),
  *  returns {ambiguousParse: true, candidates: [...]} — a genuine "this could
  *  mean more than one thing" case, distinct from resolveObject's later
- *  object-resolution ambiguity. `opts.nlp` overrides the lemma/POS adapter
- *  (pass null to force the adapter-less browser behavior in a Node test);
- *  leaving it undefined picks the deterministic default (defaultNlp). Pure
- *  given (query, adapter) — the adapter itself is a fixed model, no sampling. */
+ *  object-resolution ambiguity. Routed through interpret/pipeline.mjs +
+ *  interpret/merge.mjs (item 8) — the two legacy strategies at their existing
+ *  precedence produce identical winners. `opts.nlp` overrides the lemma/POS
+ *  adapter (pass null to force the adapter-less browser behavior in a Node
+ *  test); leaving it undefined picks the deterministic default (defaultNlp).
+ *  Pure given (query, adapter) — the adapter itself is a fixed model, no
+ *  sampling. */
 export function parseQuery(query, { nlp = undefined } = {}) {
   const adapter = nlp === undefined ? defaultNlp() : nlp;
   const raw = String(query || "").trim().replace(/\s+/g, " ");
@@ -595,18 +174,14 @@ export function parseQuery(query, { nlp = undefined } = {}) {
   // descent over CLAUSES for the compositional shapes (nested/relative, boolean,
   // qualifiers, aggregates, superlatives, anaphora). It fires ONLY when a
   // compositional MARKER is present and returns null otherwise, so every plain
-  // clause falls straight through to the unchanged two-strategy merge below — the
+  // clause falls straight through to the unchanged strategy pipeline below — the
   // whole existing grammar is preserved bit-for-bit. When a marker IS present but
   // the phrase cannot be compiled, it returns an honest {node:"miss"} rather than
   // letting keyword-spot guess at a composition it never expressed.
   const composite = parseComposite(text, adapter);
   if (composite) return composite;
-  const hits = STRATEGIES.map((s) => ({ name: s.name, parsed: s.parse(text, adapter) })).filter((r) => r.parsed);
-  if (hits.length === 0) return null;
-  if (hits.length === 1) return hits[0].parsed;
-  const [a, b] = hits;
-  if (sameParse(a.parsed, b.parsed)) return a.parsed;
-  return { ambiguousParse: true, candidates: hits.map((h) => h.parsed) };
+  const merged = mergeStrategyResults(runStrategiesSync(text, { nlp: adapter, raw }));
+  return merged ? merged.parsed : null;
 }
 
 // ============================================================================
@@ -650,20 +225,17 @@ const NEST_SENTINEL = "zzinnerset";
 const PRED_LEAD_SKIP = new Set(["that", "which", "who", "are", "is", "was", "were", "do", "does", "also", "still", "both", "and"]);
 const FRAME_WORDS = new Set(["which", "what", "who", "list", "show", "find", "give", "me", "us", "all"]);
 
-const splitWords = (text) => String(text).replace(/\?+\s*$/, "").replace(/,/g, " ").split(/\s+/).filter(Boolean);
 const entityNoun = (w) => (ENTITY_TO_TYPE[w] ? { entityType: ENTITY_TO_TYPE[w], placeholder: false }
   : (PLACEHOLDER_NOUNS.includes(w) ? { entityType: null, placeholder: true } : null));
 const isGerundVerb = (w) => !!VERB_TO_KIND[w] && w.endsWith("ing");
 
-/** Run the two existing strategies on a FRAGMENT and return a single simple clause
+/** Run the two legacy strategies on a FRAGMENT and return a single simple clause
  *  (or null). Deterministic tie-break: on strategy disagreement the anchored parse
- *  wins (STRATEGIES[0]) — a fragment fed from the composer is already shape-
- *  constrained, so the merge's "surface an ambiguity" behavior isn't wanted here. */
+ *  wins — a fragment fed from the composer is already shape-constrained, so the
+ *  merge's "surface an ambiguity" behavior isn't wanted here. (Equivalent to the
+ *  original two-strategy scan: anchored first, keyword-spot only on a miss.) */
 function parseSimpleClause(text, nlp) {
-  const hits = STRATEGIES.map((s) => s.parse(text, nlp)).filter(Boolean);
-  if (!hits.length) return null;
-  if (hits.length === 1) return hits[0];
-  return sameParse(hits[0], hits[1]) ? hits[0] : hits[0];
+  return parseAnchored(text) || parseKeywordSpot(text, nlp);
 }
 
 /** Top compositional dispatcher — first marker-matching production wins; a
@@ -2061,7 +1633,6 @@ function renderCore(parsed, result) {
 // tables + resolveObject/parseQuery, so it survives the viewer bundle's import strip.
 // ============================================================================
 
-const wordsOf = (arr) => arr.flatMap((p) => String(p).toLowerCase().split(" "));
 
 /** Every token the CLOSED grammar gives QUERY MEANING to — relation verbs, entity
  *  nouns, modifiers, qualifiers, aggregate/superlative triggers, edge-degree nouns,
