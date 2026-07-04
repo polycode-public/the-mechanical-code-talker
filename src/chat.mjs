@@ -473,6 +473,141 @@ async function recallFromBlocks(memoryDir, query) {
   }
 }
 
+// ---- W4: asserted Facts → answers (the memory graph's reified triples) ----
+
+/** How a stored fact predicate reads in English — one phrase per predicate the
+ *  two writers (the ACE grammar, the ConceptNet map) actually emit. An unknown
+ *  predicate renders verbatim rather than being guessed around. */
+const FACT_PREDICATE_PHRASES = {
+  "rdfs:subClassOf": "is a kind of",
+  "rdf:type": "is a",
+  "owl:disjointWith": "is not a",
+  "mgx:partOf": "is part of",
+  "mgx:hasA": "has",
+  "mgx:usedFor": "is used for",
+  "mgx:capableOf": "can",
+  "mgx:atLocation": "is found in",
+  "mgx:causes": "causes",
+  "mgx:hasProperty": "is",
+  "mgx:madeOf": "is made of",
+  "mgx:receivesAction": "can be",
+  "mgx:createdBy": "is created by",
+  "mgx:mannerOf": "is a way to",
+  "mgx:desires": "wants",
+  "mgx:locatedNear": "is typically near",
+  "mgx:motivatedByGoal": "is motivated by",
+  "mgx:obstructedBy": "can be prevented by",
+  "mgx:causesDesire": "makes you want to",
+  "mgx:hasSubevent": "involves",
+  "mgx:hasFirstSubevent": "begins with",
+  "mgx:hasLastSubevent": "ends with",
+  "mgx:hasPrerequisite": "requires",
+};
+const factPhrase = (f) => `${f.subject} ${FACT_PREDICATE_PHRASES[f.predicate] || f.predicate} ${f.object}`;
+
+/** One rendered fact line: "you told me" when the chat asserted it (an ace:chat
+ *  provenance tag), "i learned" for corpus-only facts — provenance VERBATIM. */
+function renderFactLine(f) {
+  const lead = f.provenance.includes("ace:chat") ? "you told me" : "i learned";
+  return `${lead}: ${factPhrase(f)}${f.provenance ? ` (source: ${f.provenance})` : ""}`;
+}
+
+/** Read every reified Fact out of the memory graph as plain {subject, predicate,
+ *  object, provenance} rows. Lazy + failure-tolerated: no memory → []. */
+async function memoryFacts(memoryDir) {
+  try {
+    const { loadMemory } = await import("./memory/core.mjs");
+    const m = await loadMemory(memoryDir);
+    const out = [];
+    for (const ind of m.individuals || []) {
+      if (ind?.class !== "Fact") continue;
+      const get = (k) => (ind.attributes || []).find((a) => a.key === k)?.value || "";
+      out.push({ subject: get("subject"), predicate: get("predicate"), object: get("object"), provenance: get("provenance") });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+/** Spelling variants a question term is matched under (normFactTerm + a naive
+ *  singular): "caches"/"a cache"/"/c/en/cache" all reach the stored "cache". */
+function factTermVariants(normFactTerm, term) {
+  const t = normFactTerm(term);
+  const v = new Set([t]);
+  if (t.endsWith("es")) v.add(t.slice(0, -2));
+  if (t.endsWith("s")) v.add(t.slice(0, -1));
+  return v;
+}
+
+/** "is a module a component" — the yes/no vocabulary form the graph grammar
+ *  doesn't parse; checked against the isa-family fact predicates only. */
+const ISA_ASK_RE = /^(?:is|are)\s+(?:an?\s+)?(.+?)\s+(?:a\s+kind\s+of|a\s+type\s+of|an?)\s+(.+?)[?.!\s]*$/i;
+const ISA_PREDICATES = new Set(["rdfs:subClassOf", "rdf:type"]);
+/** "what do you know about caches" — the open recall-everything form. */
+const KNOW_ABOUT_RE = /^what\s+do\s+you\s+know\s+about\s+(.+?)[?.!\s]*$/i;
+/** How many facts a single answer lists before "…and N more". */
+const FACT_ANSWER_CAP = 5;
+
+/** W4 seam: answer (or extend) a vocabulary/definition question from the MEMORY
+ *  graph's Facts. Returns { text, replace } — `replace:false` means the engine's
+ *  own (schema-docs) answer stands and the fact lines are appended under it —
+ *  or null when memory holds nothing relevant (misses stay unchanged). */
+async function factAnswer(memoryDir, query, envelope, miss) {
+  let normFactTerm;
+  try { ({ normFactTerm } = await import("./memory/core.mjs")); } catch { return null; }
+  const q = String(query).trim();
+
+  // (a) meta-shaped questions ("what is a module", "what does cache mean") — the
+  // parsed object term, matched against fact SUBJECTS; consulted for hits (append
+  // alongside the schema-docs answer) and misses (facts answer alone) alike.
+  // When the engine produced NO parse at all (the empty-bootstrap graph
+  // short-circuits before parsing), the meta FORM is recognized directly on a
+  // miss — same required-article discipline as the grammar's own T5 template.
+  let metaTerm = envelope?.parsed?.shape === "meta" ? envelope.parsed.object : null;
+  if (!metaTerm && miss && !envelope?.parsed) {
+    const m = q.match(/^what\s+(?:is|are)\s+an?\s+(.+?)[?.!\s]*$/i)
+      || q.match(/^what\s+(?:does|do)\s+(.+?)\s+means?[?.!\s]*$/i);
+    if (m) metaTerm = m[1];
+  }
+  if (metaTerm) {
+    const variants = factTermVariants(normFactTerm, metaTerm);
+    const hits = (await memoryFacts(memoryDir)).filter((f) => variants.has(f.subject));
+    if (!hits.length) return null;
+    const shown = hits.slice(0, FACT_ANSWER_CAP).map(renderFactLine);
+    const extra = hits.length > FACT_ANSWER_CAP ? `\n…and ${hits.length - FACT_ANSWER_CAP} more remembered fact${hits.length - FACT_ANSWER_CAP === 1 ? "" : "s"}.` : "";
+    return { text: shown.join("\n") + extra, replace: miss };
+  }
+  if (!miss) return null;
+
+  // (b) "is a module a component" — yes iff a remembered isa-family fact says so.
+  const isa = q.match(ISA_ASK_RE);
+  if (isa) {
+    const subj = factTermVariants(normFactTerm, isa[1]);
+    const obj = factTermVariants(normFactTerm, isa[2]);
+    const hit = (await memoryFacts(memoryDir)).find(
+      (f) => ISA_PREDICATES.has(f.predicate) && subj.has(f.subject) && obj.has(f.object),
+    );
+    if (hit) return { text: `yes — ${renderFactLine(hit)}`, replace: true };
+    return null; // no remembered fact — the honest miss stands (never a guessed "no")
+  }
+
+  // (c) "what do you know about caches" — everything remembered that MENTIONS the
+  // term (subject or object), capped.
+  const know = q.match(KNOW_ABOUT_RE);
+  if (know) {
+    const variants = factTermVariants(normFactTerm, know[1]);
+    const hits = (await memoryFacts(memoryDir)).filter((f) => variants.has(f.subject) || variants.has(f.object));
+    if (!hits.length) return null;
+    // echo the STORED spelling ("caches" asked → "cache" known), never a guess
+    const term = variants.has(hits[0].subject) ? hits[0].subject : hits[0].object;
+    const shown = hits.slice(0, FACT_ANSWER_CAP).map((f) => `  ${renderFactLine(f)}`);
+    const extra = hits.length > FACT_ANSWER_CAP ? `\n  …and ${hits.length - FACT_ANSWER_CAP} more.` : "";
+    return { text: `${hits.length} remembered fact${hits.length === 1 ? "" : "s"} about ${term}:\n${shown.join("\n")}${extra}`, replace: true };
+  }
+  return null;
+}
+
 /** The explicit recall question forms — "what did i ask before", "what did we
  *  talk about", "what have we discussed" — answered from memory, never the graph. */
 const RECALL_ASK_RE = /^what (?:did|have) (?:i|we) (?:ask(?:ed)?(?: you)?|talk(?:ed)? about|discuss(?:ed)?)(?: before| earlier| previously| last time)?[?.!]*$/i;
@@ -549,15 +684,26 @@ async function runAsk(query, { config, source, graph, focus, templates, memoryDi
   if (miss && isConversational(query)) {
     answer = tRender(templates, T_ORIENTATION) ?? TEMPLATES_UNAVAILABLE;
     via = "template";
-  } else if (miss && memoryDir) {
-    // W2: after the honest miss is composed, consult the folded-session memory. A
-    // relevant enough block ANSWERS — recalled Q/A framed + cited first, with the
-    // engine's own miss hint kept below; no hit leaves the miss byte-unchanged.
-    const recalled = await recallFromBlocks(memoryDir, query);
-    if (recalled) {
-      answer = `${recalled}\n\n${answer}`;
-      via = "recall";
-      recordMiss = false; // memory answered it, cited — no longer a blank
+  } else if (memoryDir) {
+    // W4: vocabulary/definition questions consult the MEMORY graph's Facts
+    // alongside the schema-docs surface — a remembered fact answers a miss (or
+    // extends a schema hit), cited with its provenance verbatim. Checked BEFORE
+    // recall: a reified fact is stronger evidence than a transcript echo.
+    const fact = await factAnswer(memoryDir, query, envelope, miss);
+    if (fact) {
+      answer = fact.replace ? fact.text : `${answer}\n${fact.text}`;
+      via = "fact";
+      recordMiss = false;
+    } else if (miss) {
+      // W2: after the honest miss is composed, consult the folded-session memory. A
+      // relevant enough block ANSWERS — recalled Q/A framed + cited first, with the
+      // engine's own miss hint kept below; no hit leaves the miss byte-unchanged.
+      const recalled = await recallFromBlocks(memoryDir, query);
+      if (recalled) {
+        answer = `${recalled}\n\n${answer}`;
+        via = "recall";
+        recordMiss = false; // memory answered it, cited — no longer a blank
+      }
     }
   }
   const record = { type: "turn", ts, query, via, resolvedIds, answeredIds, miss: recordMiss };
@@ -711,6 +857,11 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
  *  runs synchronously and complete (no partial-sync cap needed). */
 export const SEED_LIMIT = 500;
 
+/** Which predicates the capped seed prefers (stable order — see seedMemory's
+ *  `prefer`): the definitional band first, so a bootstrap's 500 facts answer
+ *  "what is a cache?"-style vocabulary questions rather than location trivia. */
+export const SEED_PREFER = ["rdfs:subClassOf", "rdf:type", "mgx:usedFor", "mgx:partOf", "mgx:capableOf"];
+
 /** The seed marker: its presence means this repo's memory already carries the
  *  corpus seed, so re-runs skip without even reading the slice. */
 export const SEED_MARKER_REL = join(".tmct", "memory", "corpus-seed.json");
@@ -728,7 +879,7 @@ async function seedBootstrapMemory(repo) {
   } catch { /* no marker → first run */ }
   try {
     const { seedMemory } = await import("./corpus/conceptnet.mjs");
-    const res = await seedMemory(repo, { limit: SEED_LIMIT });
+    const res = await seedMemory(repo, { limit: SEED_LIMIT, prefer: SEED_PREFER });
     await mkdir(dirname(marker), { recursive: true });
     await writeFile(marker, JSON.stringify({
       seededAt: new Date().toISOString(), limit: SEED_LIMIT, appended: res.appended, skipped: res.skipped,
