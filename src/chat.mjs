@@ -31,6 +31,11 @@
 // focus }) so tests exercise it directly; every ask.mjs import is LAZY and
 // failure-tolerated, so concurrent evolution of the engine can never crash a turn
 // (worst case a turn records fewer ids / an honest miss hint, never wrong data).
+//
+// createSession(…) is the SESSION SINK every shell shares: it owns the artifact
+// files, the per-turn writeLog → writeSidecar → upsertGraph sequencing (order is
+// load-bearing — see its docblock), telemetry, and the close. runChat is the
+// readline shell over it; src/tui/app.mjs is the Ink shell over the same sink.
 
 import { join } from "node:path";
 import { createWriteStream } from "node:fs";
@@ -514,16 +519,28 @@ const shortLabel = (l) => { const s = String(l); return s.length > 40 ? "…" + 
 const promptFor = (focus) => (focus ? `tmct(${shortLabel(focus.label)})> ` : PROMPT);
 
 /**
- * The interactive shell. Streams are injectable so tests run scripted sessions
- * without a TTY. A repo with NO graph artifact is not an error: the session
- * starts from the empty bootstrap graph (the banner says so honestly) and the
- * first turn's fold-in creates .tmct/graph.json from the conversation itself.
- * Returns { logFile, sidecarFile, turns } once the session ends.
+ * The SESSION SINK — everything a chat shell (readline below, the Ink TUI, any
+ * future surface) must share so the on-disk session contract stays identical no
+ * matter what draws the screen:
+ *
+ *   - repo/config resolution (git root default, --repo override) + the one-time
+ *     graph load and banner strings;
+ *   - the transcript log + structured sidecar file creation and per-turn
+ *     writeLog → writeSidecar → upsertGraph sequencing. THE ORDER IS LOAD-BEARING:
+ *     the memory side-write (sessions.mjs) recovers each turn's ANSWER text by
+ *     re-reading the transcript keyed by turnKey(record.ts, query), so the log
+ *     line must be flushed before the graph upsert runs, and logLines[0] must be
+ *     the record's ts (runTurn guarantees that);
+ *   - opt-in telemetry and the end-of-session close (end lines, final upsert,
+ *     stream flush).
+ *
+ * Returns { repo, config, graph, moduleCount, version, sessionId, logFile,
+ * sidecarFile, bannerLines, empty, focus, turns, promptFor(), turn(line), close() }.
+ * `turn(line)` runs one dispatched turn through runTurn and the full sink
+ * sequencing, returning { answer, end, prompt }; `close()` is idempotent.
  */
-export async function runChat({
+export async function createSession({
   repoPath,
-  input = process.stdin,
-  output = process.stdout,
   source = defaultSource,
   env = process.env,
   cwd = process.cwd(),
@@ -548,7 +565,7 @@ export async function runChat({
   const moduleCount = graph.individuals.filter((i) => (i.class || "") === "Module").length;
   const { version } = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
 
-  // Opt-in telemetry (default OFF → null → the loop's `tel?.record` is a no-op, and
+  // Opt-in telemetry (default OFF → null → the sink's `tel?.record` is a no-op, and
   // nothing is written). The conversational session log + sidecar above stay the
   // authoritative chat record; this is the machine-readable query telemetry.
   const tel = createTelemetry({ env, config, surface: "chat" });
@@ -562,7 +579,7 @@ export async function runChat({
   const sidecarFile = join(sessionsDir, `session-${sessionId}.jsonl`);
   const stream = createWriteStream(logFile, { flags: "a" });
   const sidecar = createWriteStream(sidecarFile, { flags: "a" });
-  // Awaited writes: each chunk is handed to the OS before the loop continues, so a
+  // Awaited writes: each chunk is handed to the OS before the turn completes, so a
   // killed session keeps everything up to the last completed turn — in both files.
   const flush = (s, text) =>
     new Promise((resolve, reject) => s.write(text, (e) => (e ? reject(e) : resolve())));
@@ -584,35 +601,36 @@ export async function runChat({
     catch { /* best-effort — see above */ }
   };
 
-  const dim = (s) => (env.NO_COLOR || !output.isTTY ? s : `\x1b[2m${s}\x1b[0m`);
-  if (graph.individuals.length === 0) {
-    // Empty-graph bootstrap: honest-miss messaging, never an error before the prompt.
-    output.write(dim(`tmct chat — ${repo} — no graph loaded — starting empty; ` +
-      `the conversation is remembered to ${DEFAULT_GRAPH_REL} — log ${logFile}`) + "\n");
-  } else {
-    output.write(dim(`tmct chat — ${repo} — ${moduleCount} module(s) — log ${logFile}`) + "\n");
-  }
-  output.write(dim("pass --repo <path> to target a different repo") + "\n");
-  output.write(dim("ask a question, or /help for commands (/stats for an overview) — /exit to leave") + "\n");
-
-  const rl = createInterface({ input, output, prompt: PROMPT });
-  rl.on("SIGINT", () => rl.close()); // Ctrl+C behaves like /exit (clean close, log flushed)
-  let closed = false;
-  rl.on("close", () => { closed = true; });
-  const prompt = () => { if (!closed) rl.prompt(); }; // input may end while a turn is in flight
+  const empty = graph.individuals.length === 0;
+  const bannerLines = [
+    empty
+      // Empty-graph bootstrap: honest-miss messaging, never an error before the prompt.
+      ? `tmct chat — ${repo} — no graph loaded — starting empty; ` +
+        `the conversation is remembered to ${DEFAULT_GRAPH_REL} — log ${logFile}`
+      : `tmct chat — ${repo} — ${moduleCount} module(s) — log ${logFile}`,
+    "pass --repo <path> to target a different repo",
+    "ask a question, or /help for commands (/stats for an overview) — /exit to leave",
+  ];
 
   let turns = 0;
   let focus = null; // the current focus entity ({id,label}) — threaded turn to turn
   let last = null;  // the last dispatched answer ({query,answer,detail}) — why/say-more re-renders it
-  prompt();
-  for await (const raw of rl) { // Ctrl+D / closed stdin ends the iteration cleanly
-    const line = raw.trim();
-    if (line === "/exit") break;
-    if (line) {
-      const { answer, logLines, record, focus: nextFocus, last: nextLast, end } = await runTurn(line, { config, source, graph, focus, last });
+  let closed = false;
+
+  return {
+    repo, config, graph, moduleCount, version, sessionId, logFile, sidecarFile,
+    bannerLines, empty,
+    get focus() { return focus; },
+    get turns() { return turns; },
+    promptFor: () => promptFor(focus),
+
+    /** One dispatched turn through the FULL sink sequencing (writeLog → writeSidecar
+     *  → telemetry → upsertGraph, in that exact order). Returns { answer, end, prompt }. */
+    async turn(line) {
+      const { answer, logLines, record, focus: nextFocus, last: nextLast, end } =
+        await runTurn(line, { config, source, graph, focus, last });
       focus = nextFocus;
       last = nextLast;
-      output.write(answer + "\n");
       await writeLog(logLines.join("\n") + "\n");
       await writeSidecar(record);
       turnRecords.push(record);
@@ -625,18 +643,66 @@ export async function runChat({
       });
       await upsertGraph(record.ts);
       turns += 1;
-      rl.setPrompt(promptFor(focus));
+      return { answer, end: Boolean(end), prompt: promptFor(focus) };
+    },
+
+    /** End-of-session close: end lines in both artifacts, the final graph upsert
+     *  (which also triggers the memory fold), stream flush. Idempotent. */
+    async close() {
+      if (closed) return;
+      closed = true;
+      const endIso = new Date().toISOString();
+      await writeLog(`${endIso}\n> /exit\nsession end ${endIso}\n`);
+      await writeSidecar({ type: "end", ts: endIso });
+      await upsertGraph(endIso);
+      await new Promise((resolve) => stream.end(resolve));
+      await new Promise((resolve) => sidecar.end(resolve));
+    },
+  };
+}
+
+/**
+ * The interactive readline shell over createSession — the `--plain` surface and
+ * the scripted-test surface. Streams are injectable so tests run sessions
+ * without a TTY. A repo with NO graph artifact is not an error: the session
+ * starts from the empty bootstrap graph (the banner says so honestly) and the
+ * first turn's fold-in creates .tmct/graph.json from the conversation itself.
+ * Returns { logFile, sidecarFile, turns } once the session ends.
+ */
+export async function runChat({
+  repoPath,
+  input = process.stdin,
+  output = process.stdout,
+  source = defaultSource,
+  env = process.env,
+  cwd = process.cwd(),
+  gitRoot = gitToplevel,
+} = {}) {
+  const session = await createSession({ repoPath, source, env, cwd, gitRoot });
+
+  const dim = (s) => (env.NO_COLOR || !output.isTTY ? s : `\x1b[2m${s}\x1b[0m`);
+  for (const line of session.bannerLines) output.write(dim(line) + "\n");
+
+  const rl = createInterface({ input, output, prompt: PROMPT });
+  rl.on("SIGINT", () => rl.close()); // Ctrl+C behaves like /exit (clean close, log flushed)
+  let closed = false;
+  rl.on("close", () => { closed = true; });
+  const prompt = () => { if (!closed) rl.prompt(); }; // input may end while a turn is in flight
+
+  prompt();
+  for await (const raw of rl) { // Ctrl+D / closed stdin ends the iteration cleanly
+    const line = raw.trim();
+    if (line === "/exit") break;
+    if (line) {
+      const { answer, end, prompt: nextPrompt } = await session.turn(line);
+      output.write(answer + "\n");
+      rl.setPrompt(nextPrompt);
       if (end) break; // a conversational "bye"/"goodbye" — clean end, same as /exit
     }
     prompt();
   }
   rl.close();
 
-  const endIso = new Date().toISOString();
-  await writeLog(`${endIso}\n> /exit\nsession end ${endIso}\n`);
-  await writeSidecar({ type: "end", ts: endIso });
-  await upsertGraph(endIso);
-  await new Promise((resolve) => stream.end(resolve));
-  await new Promise((resolve) => sidecar.end(resolve));
-  return { logFile, sidecarFile, turns };
+  await session.close();
+  return { logFile: session.logFile, sidecarFile: session.sidecarFile, turns: session.turns };
 }
