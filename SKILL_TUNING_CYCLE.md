@@ -96,7 +96,12 @@ between operator check-ins** — surface anything non-obvious; it appends `OPEN`
 
 **Step 6 — WRITE the cycle up.** On completion: **snapshot the raw judge outputs to
 `chatbench/results/raw-<NNN>/` BEFORE the next run overwrites them**, then write:
-- **`CHATBENCH_0NN.md`** — the headline mean (+ hard-fail count) at the top; the per-tag
+- **`CHATBENCH_0NN.md`** — the headline mean (+ hard-fail count) at the top; a **BEST-EXAMPLES
+  pick in the summary** — 3-5 verbatim transcript excerpts showing the most complex sequences the
+  chat handled THIS cycle (multi-turn focus/pronoun chains, cross-session memory, declarative
+  asserts, repaired noise/typo queries, ambiguity surrounds), each with a one-line "what this
+  demonstrates"; the operator reads these first — they are the product's demo reel and the
+  fastest smell test for whether the mean is measuring something real; the per-tag
   breakdown; the **predictions-vs-actuals** table (step 1's prediction against what moved); the
   **per-lever analysis** tying the applied lever to the cases it moved; the judge model + prompt
   version pin; **and the decision log** — the re-ranked menu of next-cycle levers with a one-line
@@ -142,7 +147,7 @@ and fixture-graph dirs — a failed smoke voids the run); **runs** the chatbench
 product run per arm over the append-only `chatbench/cases.jsonl`, then N≥3 pinned-judge samples
 per case on the 0–2 groundedness/correctness/honesty-on-miss/rephrase-hint rubric — wrong-confident
 scores below honest-miss; judge refusals void, never fail), with the **strategy advisor riding
-alongside as the drift alarm**; **writes** `CHATBENCH_0NN.md` (headline mean + hard-fails,
+alongside as the drift alarm**; **writes** `CHATBENCH_0NN.md` (headline mean + hard-fails + the best-examples pick,
 per-tag, predictions-vs-actuals, per-lever analysis, ranked next-cycle decision log) +
 `CHATBENCH_0NN_TRANSCRIPTS.md` (discriminating transcripts first), snapshotting raw judge output
 to `chatbench/results/raw-<NNN>/` first; then applies the decision rule (**PASS = mean up AND no
