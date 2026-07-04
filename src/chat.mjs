@@ -480,6 +480,34 @@ async function runCommand(line, { config, source, graph, focus }) {
   return mk(answer);
 }
 
+/** A declarative ACE-grammar sentence → assert into memory + confirm; null on
+ *  any grammar miss / residue / import failure so the query engine keeps first
+ *  refusal on everything else. Lazy imports + catch-all: the grammar layer can
+ *  never crash a turn (chat.mjs ethos). Writes ONLY under memoryDir/.tmct/memory. */
+async function assertTurn(line, { memoryDir, sessionId, focus }) {
+  try {
+    const { parseAce } = await import("./grammar/ace.mjs");
+    const { loadLexicon } = await import("./grammar/lexicon.mjs");
+    const parse = parseAce(line, loadLexicon());
+    if (!parse || !parse.triples?.length || parse.residue?.length) return null;
+    const { assertSentence } = await import("./grammar/assert.mjs");
+    const { normFactTerm } = await import("./memory/core.mjs");
+    const ts = new Date().toISOString();
+    const res = await assertSentence(memoryDir, line, {
+      provenance: { source: "chat", sessionId, ts },
+    });
+    if (!res || !res.ids?.length) return null;
+    const shown = res.triples
+      .map((t) => `${normFactTerm(t.subject)} ${t.predicate} ${normFactTerm(t.object)}`)
+      .join("; ");
+    const n = res.ids.length;
+    const answer = `noted — remembered ${n} fact${n === 1 ? "" : "s"}: ${shown}`;
+    return plainTurn(line, answer, { command: "assert", focus });
+  } catch {
+    return null; // grammar unavailable / write failed — fall through to the engine
+  }
+}
+
 /**
  * One chat turn: input → { answer, logLines, record, focus }. Pure of any
  * TTY/stream concerns so tests exercise it directly. A leading `/` routes to a
@@ -494,9 +522,9 @@ async function runCommand(line, { config, source, graph, focus }) {
  * subject), `answeredIds` the entity ids an ask answer cited; a slash-command turn
  * also carries its `command` name. Both drive the mgx:asksAbout graph append.
  */
-export async function runTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null } = {}) {
+export async function runTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "" } = {}) {
   const line = String(input ?? "").trim();
-  const ctx = { config, source, graph, focus, last };
+  const ctx = { config, source, graph, focus, last, memoryDir, sessionId };
   // A DISPATCHED turn (count / slash-command / ask) becomes the new "last answer"
   // that why/say-more re-renders; a conversational turn does not (it preserves it).
   const withLast = (result) => ({ ...result, last: { query: line, answer: result.answer, detail: result.detail ?? null } });
@@ -507,6 +535,14 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   if (convo) return convo;
 
   if (line.startsWith("/")) return withLast(await runCommand(line, ctx));
+  // Declarative ACE sentences ("every module is a artifact") ASSERT into tmct's
+  // own memory and confirm — they are statements to remember, not graph queries.
+  // Gated on memoryDir: only a session shell provides a write target, so a bare
+  // runTurn (tests, library callers) stays pure and falls through to the engine.
+  if (memoryDir) {
+    const asserted = await assertTurn(line, ctx);
+    if (asserted) return withLast(asserted);
+  }
   // Aggregate/count questions are answered mechanically off the loaded graph header,
   // BEFORE falling through to the ask engine (focus unchanged — a count names no entity).
   const count = answerCount(graph, line);
@@ -628,7 +664,7 @@ export async function createSession({
      *  → telemetry → upsertGraph, in that exact order). Returns { answer, end, prompt }. */
     async turn(line) {
       const { answer, logLines, record, focus: nextFocus, last: nextLast, end } =
-        await runTurn(line, { config, source, graph, focus, last });
+        await runTurn(line, { config, source, graph, focus, last, memoryDir: repo, sessionId });
       focus = nextFocus;
       last = nextLast;
       await writeLog(logLines.join("\n") + "\n");
