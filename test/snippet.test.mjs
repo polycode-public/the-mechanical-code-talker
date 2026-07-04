@@ -1,27 +1,31 @@
-// seonix_snippet end-to-end: index a tiny temp repo, then fetch exact source spans
-// through dispatchTool against the real on-disk graph (gated on python3 + git).
+// seonix_snippet end-to-end: build a tiny graph with buildEntities over a real
+// on-disk source file, then fetch exact source spans through dispatchTool.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
-import { mkdtemp, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { indexRepository } from "../src/extract.mjs";
+import { buildEntities } from "../src/graph-build.mjs";
 import { dispatchTool } from "../src/server.mjs";
 
-const have = (c) => spawnSync(c, ["--version"], { stdio: "ignore" }).status === 0;
-const toolchain = (have("python3") || have("python")) && have("git");
-
-test("seonix_snippet returns the exact source span; modules have none", { skip: !toolchain ? "needs python3 + git" : false }, async () => {
+test("seonix_snippet returns the exact source span; modules have none", async () => {
   const dir = await mkdtemp(join(tmpdir(), "seon-snip-"));
   try {
     await writeFile(join(dir, "a.py"),
       "import os\n\n\ndef helper(x):\n    return x + 1\n\n\nclass Thing:\n    def m(self):\n        return 2\n");
-    const git = (...a) => spawnSync("git", a, { cwd: dir });
-    git("init", "-q"); git("config", "user.email", "t@t"); git("config", "user.name", "t");
-    git("add", "-A"); git("commit", "-q", "-m", "base");
-
-    const { graphFile } = await indexRepository(dir);
+    const modules = [{
+      path: "a.py", dotted: "a", imports: ["os"], calls: [],
+      defines: [
+        { name: "helper", kind: "function", lineno: 4, end_lineno: 5, decorators: [] },
+        { name: "Thing", kind: "class", lineno: 8, end_lineno: 10, decorators: [] },
+        // methods are flat defines entries with dotted Class.method names (see ask.test.mjs)
+        { name: "Thing.m", kind: "method", lineno: 9, end_lineno: 10, decorators: [] },
+      ],
+    }];
+    const entities = buildEntities(modules, [], { generatedAt: new Date().toISOString() });
+    await mkdir(join(dir, ".seonix"), { recursive: true });
+    const graphFile = join(dir, ".seonix", "graph.json");
+    await writeFile(graphFile, JSON.stringify(entities));
     const config = { graphFile };
 
     const snip = await dispatchTool("seonix_snippet", { symbol: "helper" }, { config });
@@ -36,7 +40,7 @@ test("seonix_snippet returns the exact source span; modules have none", { skip: 
     const cls = await dispatchTool("seonix_snippet", { symbol: "Thing" }, { config });
     assert.match(cls, /Thing — Class @ a\.py:8-10/);
 
-    // a method is now a first-class individual → snippet resolves Class.method
+    // a method is a first-class individual → snippet resolves Class.method
     const method = await dispatchTool("seonix_snippet", { symbol: "Thing.m" }, { config });
     assert.match(method, /Thing\.m — Method @ a\.py:9-10/);
     assert.match(method, /9\t {4}def m\(self\):/);

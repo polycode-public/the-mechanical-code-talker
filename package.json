@@ -26,12 +26,6 @@
   "files": [
     "bin/",
     "src/",
-    "templates/*.toml",
-    "roslyn/*.cs",
-    "roslyn/*.csproj",
-    "java/pom.xml",
-    "java/src/**/*.java",
-    "java/dist/*.jar",
     "README.md",
     "ROADMAP.md",
     "LICENSE"
@@ -41,18 +35,12 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "cytoscape": "^3.30.0",
     "smol-toml": "^1.7.0",
-    "tree-sitter": "^0.21.1",
-    "tree-sitter-c-sharp": "^0.21.3",
-    "tree-sitter-java": "^0.21.0",
-    "typescript": "~5.6.2",
     "wink-eng-lite-web-model": "^1.8.1",
     "wink-nlp": "^2.4.0"
   },
   "scripts": {
     "test": "node --test \"test/**/*.test.mjs\"",
-    "chat": "node bin/mct.mjs",
-    "viz": "node bin/mct.mjs viz"
+    "chat": "node bin/mct.mjs"
   }
 }

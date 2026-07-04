@@ -6,7 +6,6 @@
 //
 //   mct                                   → interactive chat (the headline)
 //   mct chat [--repo <abs>]               → same, explicit
-//   mct viz [--focus <sym>] [--out f.html] → render a focused sub-graph to HTML
 //   mct cli <tool> '{…json}'              → invoke a graph tool directly (de-emphasized carry-over)
 //   mct --help                            → this help
 //
@@ -24,7 +23,6 @@ software repository. No model calls; no codebase index of its own.
 Usage:
   mct                          interactive chat (the headline surface)
   mct chat [--repo <abs>]      chat over a specific repo's graph
-  mct viz [--focus <sym>] …    render a focused sub-graph to HTML
   mct cli <tool> '{…}'         invoke a graph tool directly (carry-over, de-emphasized)
   mct --help                   show this help
 

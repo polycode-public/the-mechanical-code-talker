@@ -1,11 +1,9 @@
 // sessions.mjs tests — chat sessions as first-class temporal graph data:
 // the pure upsert (resolution tiers, honest drops, per-turn re-append), the
-// sidecar .jsonl parser, the atomic read-time graph append, and the gated
-// end-to-end re-index fold-in (indexRepository re-attaches recorded sessions).
+// sidecar .jsonl parser, and the atomic read-time graph append.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
-import { cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15,11 +13,7 @@ import {
 } from "../src/sessions.mjs";
 import { CLASS_DOCS, PREDICATE_DOCS } from "../src/schema-docs.mjs";
 
-const FIXTURES_MULTI = fileURLToPath(new URL("./fixtures/multi", import.meta.url));
 const SRC_SESSIONS = fileURLToPath(new URL("../src/sessions.mjs", import.meta.url));
-
-const have = (cmd) => spawnSync(cmd, ["--version"], { stdio: "ignore" }).status === 0;
-const gate = { skip: !((have("python3") || have("python")) && have("git")) ? "needs python3 + git" : false };
 
 /** A minimal fresh entities payload (the buildEntities shape) for pure upsert tests. */
 function freshEntities() {
@@ -158,42 +152,6 @@ test("appendSessionToGraph: fresh-read + atomic write; second append updates in 
 
     const names = await readdir(dir);
     assert.ok(!names.some((n) => n.includes(".tmp-")), `atomic write leaves no temp files: ${names}`);
-  } finally {
-    await rm(dir, { recursive: true, force: true });
-  }
-});
-
-// ---- re-index fold-in (end-to-end through indexRepository) ----
-
-test("re-index fold-in: indexRepository re-attaches sessions, re-resolving ids; unresolvable → dropped-count", gate, async () => {
-  const { indexRepository } = await import("../src/extract.mjs");
-  const dir = await mkdtemp(join(tmpdir(), "seonix-sess-foldin-"));
-  try {
-    await cp(join(FIXTURES_MULTI, "repo-a"), dir, { recursive: true });
-    const sessionsDir = join(dir, SESSIONS_DIR_REL);
-    await mkdir(sessionsDir, { recursive: true });
-    const sid = "01890000-0000-7000-8000-00000000abcd";
-    await writeFile(join(sessionsDir, `session-${sid}.jsonl`), [
-      JSON.stringify({ type: "session", id: sid, started: "2026-07-01T00:00:00.000Z", repo: dir, seonixVersion: "0.2.1" }),
-      JSON.stringify({ type: "turn", ts: "2026-07-01T00:01:00.000Z", query: "which modules import alpha",
-        resolvedIds: ["mod:pkg/alpha.py"], answeredIds: ["mod:pkg/beta.py", "mod:pkg/DELETED.py"], miss: false }),
-      JSON.stringify({ type: "end", ts: "2026-07-01T00:02:00.000Z" }),
-    ].join("\n") + "\n");
-
-    const { graphFile } = await indexRepository(dir);
-    const g = JSON.parse(await readFile(graphFile, "utf8"));
-    const sess = g.individuals.find((i) => i.id === `session:${sid}`);
-    assert.ok(sess, "Session individual survives a fresh re-index");
-    assert.equal(sess.class, SESSION_CLASS);
-    assert.equal(sess.attributes.find((a) => a.key === "dropped").value, "1", "the deleted module's edge is dropped, counted");
-    const group = g.objectProperties.find((x) => x.prop === ASKS_ABOUT_PROP);
-    assert.deepEqual(group.examples.map((x) => x.object).sort(), ["mod:pkg/alpha.py", "mod:pkg/beta.py"]);
-    assert.ok(g.classes.some((c) => c.name === SESSION_CLASS && c.count === 1));
-
-    // readSessionRecords is what fed the fold-in — sanity-check it directly too
-    const records = await readSessionRecords(dir);
-    assert.equal(records.length, 1);
-    assert.equal(records[0].turns.length, 1);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

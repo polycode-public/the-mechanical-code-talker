@@ -1,43 +1,23 @@
 #!/usr/bin/env node
-// seonix — local typed-edge code-graph MCP. Two-mode contract, mirroring
-// codebase-memory-mcp so it drops into the same benchmark harness:
+// seonix — local typed-edge code-graph tools over a pre-built graph artifact:
 //
 //   seonix                                              → stdio MCP server
-//   seonix cli index_repository '{"repo_path":"<abs>"}' → deterministic index
-//     (honours <repo>/.seonixignore — gitignore-subset patterns; pass
-//      `"ignores":false` in the JSON arg to index everything regardless)
-//   seonix cli index_repository '{"repo_paths":["<abs1>","<abs2>",…],"out_root":"<abs-dir>"}' → index
-//     n repos into ONE merged graph at <out_root>/.seonix/ (module ids prefixed with each repo's
-//     directory basename; out_root defaults to the paths' deepest common ancestor directory).
-//     Mutually exclusive with repo_path.
-//   seonix cli index_repository '{"multi_root":"<abs-dir>"}' → estate discovery: every immediate
-//     child directory carrying a .git (dir or file) is indexed as a repo, merged into
-//     <multi_root>/.seonix/ (discovered/skipped counts logged to stderr)
 //   seonix cli digest '{"repo_path":"<abs>","modules":[…]}' → architecture map + per-module
 //                                                           context bundles to stdout (no-MCP arm)
 //   seonix cli digest '{"repo_path":"<abs>","query":"<free text>"}' → same, but auto-locates +
 //     score-gap-selects the modules (R1b, the shipped default) instead of requiring an explicit
 //     `modules` list — one call from a question to a digest. `modules` wins if both are given.
-//   seonix cli browser_link '{"query":"<nl-ish or grammar>","at":"<sha>","base":"<url>"}' → NL→query→URL:
-//     map a natural-language-ish request to the code-browser query grammar (deterministic, no model),
-//     SELF-TEST it against the local temporal graph (≥1 match, cursors resolve), print the URL;
-//     exit 1 on a link that would render empty. `"grammar":true` takes the query verbatim.
-//   seonix cli <toolName> '{…args}'                     → invoke ANY MCP tool via Bash (no MCP)
+//   seonix cli <toolName> '{…args}'                     → invoke ANY tool via Bash (no MCP)
 //     (e.g. seonix cli seonix_ask '{"query":"<free text>"}' — mechanical, no-LLM NL question
-//      over the graph, PLAN_MECHANICAL_CHAT.md; no bespoke wiring needed, this fallback covers it)
-//   seonix viz [--focus <sym>] [--depth N] [--out f.html] [--data-out f.json] [--repo-url <gitlab url> --ref main] [--site-nav] → render a focused sub-graph to HTML (one shared viewer; data embedded, or split out with --data-out). By default also writes code-browser.html + timeline.html next to --out with a working header nav; --graph-only suppresses the siblings
-//   seonix viz --browser-out f.html [--browser-data-out f.json] [--timeline-out f.html] [--scope product|<prefixes>] → override the sibling artifact paths (Chronograph code browser: temporal scrub + two-cursor diff + narration + ghost-branch merges + keyboard nav; archive/PLAN_CODE_BROWSER.md)
-//   seonix viz --serve [--port N] [--focus <sym>]        → serve the same viewer against THIS repo's index (the local equivalent of the site's #viz; code browser at /code-browser.html, live-reannotating on HEAD change via /code-browser-version)
+//      over the graph; no bespoke wiring needed, this fallback covers it)
 //   seonix chat [--repo <abs>] → interactive prompt over the mechanical seonix_ask engine; /exit to leave; session log → <repo>/.seonix/session-<uuidv7>.log
 //
-// The index step is offline and model-free (Python ast + git). It writes the
-// graph artifact to <repo_path>/.seonix/graph.json; the server (started with
-// cwd = that repo) loads it by default. No flags, no config files.
+// The graph artifact lives at <repo_path>/.seonix/graph.json; the tools (run with
+// cwd = that repo) load it by default. No flags, no config files.
 
 import { join } from "node:path";
 import { startServer } from "../src/server.mjs";
 import { dispatchTool, buildContextBundle } from "../src/server.mjs";
-import { indexRepository, indexRepositories, discoverRepos } from "../src/extract.mjs";
 import { loadConfig, DEFAULT_GRAPH_REL } from "../src/config.mjs";
 import * as source from "../src/source.mjs";
 import { parseEntities, rankModulesByProximity, searchModulesRanked, selectRankedModules, DEFAULT_SCORE_GAP } from "../src/codegraph.mjs";
@@ -151,71 +131,6 @@ async function main() {
   const [mode, sub, payload] = process.argv.slice(2);
 
   if (mode === "cli") {
-    // index mode: `cli index_repository '{"repo_path":"<abs>"}'` (single repo, unchanged),
-    // '{"repo_paths":[…],"out_root":"<abs>"}' (explicit n-repo merge) or
-    // '{"multi_root":"<abs>"}' (discover child repos, merge into <multi_root>/.seonix/).
-    if (sub === "index_repository") {
-      const args = parsePayload(payload);
-      if (args === null) {
-        process.stderr.write("seonix: index_repository expects a JSON arg, e.g. '{\"repo_path\":\"/abs\"}'\n");
-        process.exit(2);
-      }
-      const given = ["repo_path", "repo_paths", "multi_root"].filter((k) => args[k] !== undefined);
-      if (given.length > 1) {
-        process.stderr.write(`seonix: ${given.join(" + ")} are mutually exclusive — pass exactly one\n`);
-        process.exit(2);
-      }
-      if (given.length === 0) {
-        process.stderr.write("seonix: index_repository requires repo_path, repo_paths or multi_root\n");
-        process.exit(2);
-      }
-      const t0 = Date.now();
-      const emitSummary = (graphFile, counts, head) => {
-        process.stderr.write(
-          `seonix: indexed ${head}${counts.modules} modules, ${counts.functions} symbols, ` +
-            `${counts.edges} edges (${counts.callsSymbol} callsSymbol, ${counts.touchesSymbol} touchesSymbol), ` +
-            `${counts.commits} commits in ${Date.now() - t0}ms → ${graphFile}\n`,
-        );
-        process.stderr.write(
-          `seonix: history-symbol pass +${counts.historyMs}ms over ${counts.baseMs}ms base ` +
-            `= ${counts.historyPct}% (depth ${counts.historySymbolDepth}; budget ≤10%)\n`,
-        );
-      };
-
-      if (args.repo_path) {
-        const { graphFile, counts } = await indexRepository(args.repo_path, { ignores: args.ignores !== false });
-        emitSummary(graphFile, counts, "");
-        return;
-      }
-
-      let repoPaths = args.repo_paths;
-      let outRoot = args.out_root || "";
-      if (args.multi_root) {
-        const { repos, skipped } = await discoverRepos(args.multi_root);
-        process.stderr.write(
-          `seonix: multi_root ${args.multi_root}: ${repos.length} repo(s) discovered` +
-            (skipped.length ? `; skipped ${skipped.length} non-repo child dir(s): ${skipped.join(", ")}` : "") + "\n",
-        );
-        if (!repos.length) {
-          process.stderr.write("seonix: multi_root contains no repositories (no child directory has a .git)\n");
-          process.exit(2);
-        }
-        repoPaths = repos;
-        outRoot = args.multi_root;
-      }
-      if (!Array.isArray(repoPaths) || repoPaths.length === 0) {
-        process.stderr.write("seonix: repo_paths must be a non-empty array of absolute paths\n");
-        process.exit(2);
-      }
-      const { graphFile, counts, repos } = await indexRepositories(repoPaths, {
-        ignores: args.ignores !== false,
-        outRoot,
-        log: (line) => process.stderr.write(`seonix: ${line}\n`),
-      });
-      emitSummary(graphFile, counts, `${repos.length} repos, `);
-      return;
-    }
-
     // digest mode: architecture map + per-module context bundles → stdout (no-MCP arm)
     if (sub === "digest") {
       const args = parsePayload(payload);
@@ -268,48 +183,6 @@ async function main() {
       return;
     }
 
-    // browser_link (Chronograph P2): NL-ish text → query grammar → SELF-TESTED URL.
-    // The mapping is deterministic keyword handling (nlToQuery — never a model call;
-    // a model-driven wrapper can sit on top and pass `grammar:true` with grammar it
-    // wrote itself). The link is printed ONLY if it will render something: the query
-    // must match ≥1 node of the local temporal graph and every cursor must resolve —
-    // the agent contract from PLAN_CODE_BROWSER.md ("no dead links").
-    if (sub === "browser_link") {
-      const args = parsePayload(payload);
-      if (args === null || !String(args?.query || "").trim()) {
-        process.stderr.write("seonix: browser_link expects a JSON arg, e.g. '{\"query\":\"classes that change with render\"}'\n");
-        process.exit(2);
-      }
-      const config = configFor(args.repo_path);
-      const { buildTemporalGraph, gitCommitOrder } = await import("../src/browser.mjs");
-      const { nlToQuery, validateLink, encodeViewState, VIEW_DEFAULTS } = await import("../src/temporal.mjs");
-      try {
-        const raw = await source.fetchEntities(config);
-        const commitIds = (raw.individuals || []).filter((i) => i.class === "Commit").map((i) => i.id);
-        const order = await gitCommitOrder(args.repo_path || process.cwd(), commitIds);
-        const tg = buildTemporalGraph(raw, order, { scope: args.scope });
-        const { q, notes } = args.grammar ? { q: String(args.query).trim(), notes: [] } : nlToQuery(args.query);
-        for (const n of notes) process.stderr.write(`seonix: note: ${n}\n`);
-        if (!q) {
-          process.stderr.write("seonix: the request maps to an empty query — nothing to link\n");
-          process.exit(1);
-        }
-        const v = validateLink(tg, { q, at: args.at || "", b: args.b || "" });
-        if (!v.ok) {
-          for (const r of v.reasons) process.stderr.write(`seonix: link self-test FAILED: ${r}\n`);
-          process.exit(1);
-        }
-        const qs = encodeViewState({ ...VIEW_DEFAULTS, q, at: args.at || "", b: args.b || "" });
-        const base = String(args.base || "").replace(/\/+$/, "");
-        process.stdout.write(`${base}/code-browser.html?${qs}\n`);
-        process.stderr.write(`seonix: link self-test OK — q="${q}" matches ${v.matches} node(s)\n`);
-      } catch (e) {
-        process.stderr.write(`seonix: ${e?.message || e}\n`);
-        process.exit(1);
-      }
-      return;
-    }
-
     // tool-query fallback: any other `cli <toolName> '{…}'` routes to the MCP dispatcher,
     // so "cold" tools are invokable from Bash without an MCP connection.
     if (sub) {
@@ -329,14 +202,8 @@ async function main() {
       return;
     }
 
-    process.stderr.write("seonix: `cli` needs a sub-command (index_repository | digest | <toolName>)\n");
+    process.stderr.write("seonix: `cli` needs a sub-command (digest | <toolName>)\n");
     process.exit(2);
-  }
-
-  if (mode === "viz") {
-    const { runVizCli } = await import("../src/viz.mjs");
-    await runVizCli(process.argv.slice(3));
-    return;
   }
 
   if (mode === "chat") {
@@ -354,7 +221,7 @@ async function main() {
   }
 
   process.stderr.write(`seonix: unknown invocation "${process.argv.slice(2).join(" ")}". ` +
-    "Use bare (MCP server), `cli index_repository …`, `cli <tool> …`, `chat`, or `viz`.\n");
+    "Use bare (MCP server), `cli digest …`, `cli <tool> …`, or `chat`.\n");
   process.exit(2);
 }
 
