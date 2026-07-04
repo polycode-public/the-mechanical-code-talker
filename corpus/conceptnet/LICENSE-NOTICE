@@ -1,0 +1,37 @@
+LICENSE NOTICE — corpus/conceptnet/slice.jsonl
+==============================================
+
+The file slice.jsonl in this directory is a filtered excerpt of ConceptNet 5.7,
+and is licensed under the Creative Commons Attribution-ShareAlike 4.0
+International License (CC-BY-SA 4.0), NOT under this repository's MPL-2.0.
+
+  https://creativecommons.org/licenses/by-sa/4.0/
+
+Attribution
+-----------
+
+This work includes data from ConceptNet 5, which was compiled by the
+Commonsense Computing Initiative. ConceptNet 5 is freely available under the
+Creative Commons Attribution-ShareAlike license (CC-BY-SA 4.0) from
+https://conceptnet.io. The included data was created by contributors to
+Commonsense Computing projects, contributors to Wikimedia projects, Games
+with a Purpose, Princeton University's WordNet, DBPedia, OpenCyc, and Umbel.
+
+Source
+------
+
+- Dataset: ConceptNet 5.7.0 assertions dump
+  https://s3.amazonaws.com/conceptnet/downloads/2019/edges/conceptnet-assertions-5.7.0.csv.gz
+  (dump published 2019-07-03; retrieved and filtered 2026-07-04)
+- Project: https://conceptnet.io / https://github.com/commonsense/conceptnet5
+- The filtering applied (English-only, tech-domain seed terms, canonical
+  relations, size budget) is described in README.md in this directory and is
+  reproducible via filter-dump.mjs.
+
+Share-alike
+-----------
+
+If you redistribute slice.jsonl (modified or not), you must do so under
+CC-BY-SA 4.0 with this attribution. The code in this directory
+(fetch-slice.mjs, filter-dump.mjs) is tmct code under the repository's
+MPL-2.0; only the data file carries CC-BY-SA 4.0.

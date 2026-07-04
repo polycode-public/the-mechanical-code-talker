@@ -1,0 +1,55 @@
+{"id":"describe-entity-terse","class":"describe","register":"terse","template":"{subject}: {kind} in {location}."}
+{"id":"describe-entity-friendly","class":"describe","register":"friendly","template":"{subject} is a {kind} living in {location}."}
+{"id":"describe-entity-with-doc","class":"describe","register":"friendly","template":"{subject} is a {kind} in {location} — \"{doc}\"."}
+{"id":"describe-module-imports","class":"describe","register":"friendly","template":"{subject} imports {objects}."}
+{"id":"describe-module-imported-by","class":"describe","register":"friendly","template":"{subject} is imported by {objects}."}
+{"id":"describe-callers","class":"describe","register":"friendly","template":"{subject} is called by {objects}."}
+{"id":"describe-callers-terse","class":"describe","register":"terse","template":"{subject} <- {objects}."}
+{"id":"describe-callees","class":"describe","register":"friendly","template":"{subject} calls {objects}."}
+{"id":"describe-members","class":"describe","register":"friendly","template":"{subject} contains {objects}."}
+{"id":"describe-superclass","class":"describe","register":"friendly","template":"{subject} inherits from {object}."}
+{"id":"describe-tested-by","class":"describe","register":"friendly","template":"{subject} is exercised by {objects}."}
+{"id":"describe-untested","class":"describe","register":"friendly","template":"I can't see any test that imports {subject} — that may just mean the coverage is indirect."}
+{"id":"describe-history","class":"describe","register":"friendly","template":"{subject} was last touched by {commit} ({when}): \"{message}\"."}
+{"id":"describe-relation-fact","class":"describe","register":"terse","template":"{subject} {predicate} {object}."}
+{"id":"describe-isa-fact","class":"describe","register":"friendly","template":"As I understand it, a {subject} is a kind of {object}."}
+{"id":"count-plain","class":"count","register":"terse","template":"{count} {noun}."}
+{"id":"count-sentence","class":"count","register":"friendly","template":"There are {count} {noun} in {scope}."}
+{"id":"count-one","class":"count","register":"friendly","template":"There is exactly one {noun} in {scope}: {subject}."}
+{"id":"count-zero","class":"count","register":"friendly","template":"I can't find any {noun} in {scope}."}
+{"id":"count-with-sample","class":"count","register":"friendly","template":"{count} {noun} in {scope} — for example {examples}."}
+{"id":"count-compared","class":"count","register":"friendly","template":"{count} {noun} — {comparison} for a codebase of this size."}
+{"id":"miss-plain","class":"miss","register":"terse","template":"No match for \"{query}\"."}
+{"id":"miss-honest","class":"miss","register":"friendly","template":"I couldn't ground \"{query}\" in anything I know. I'd rather say so than guess."}
+{"id":"miss-rephrase-name","class":"miss","register":"friendly","template":"I don't recognise \"{query}\". If you name a module, function, or class I know about, I can work from there."}
+{"id":"miss-rephrase-pattern","class":"miss","register":"friendly","template":"\"{query}\" didn't match anything. Try a shape like \"{example}\" — that's a question I can answer precisely."}
+{"id":"miss-nearest","class":"miss","register":"friendly","template":"Nothing matches \"{query}\" exactly. The nearest name I know is {nearest} — is that what you meant?"}
+{"id":"miss-nearest-terse","class":"miss","register":"terse","template":"No \"{query}\". Nearest: {nearest}."}
+{"id":"miss-empty-graph","class":"miss","register":"friendly","template":"My graph is empty right now, so I can't answer \"{query}\" yet. Tell me things and I'll remember them."}
+{"id":"miss-out-of-domain","class":"miss","register":"friendly","template":"That sounds like it's outside my patch — I only really know about {scope}. Ask me about the code and I'm much more useful."}
+{"id":"ambiguity-two","class":"ambiguity","register":"friendly","template":"That could go two ways. If you mean {a} then {aAnswer}; if you mean {b} then {bAnswer}."}
+{"id":"ambiguity-two-terse","class":"ambiguity","register":"terse","template":"{a}: {aAnswer} / {b}: {bAnswer}."}
+{"id":"ambiguity-three","class":"ambiguity","register":"friendly","template":"I see three readings. If you mean {a} then {aAnswer}; if you mean {b} then {bAnswer}; if you mean {c} then {cAnswer}."}
+{"id":"ambiguity-name-clash","class":"ambiguity","register":"friendly","template":"\"{query}\" names more than one thing here: {candidates}. Which one do you mean?"}
+{"id":"ambiguity-name-clash-terse","class":"ambiguity","register":"terse","template":"\"{query}\" is ambiguous: {candidates}."}
+{"id":"ambiguity-class-split","class":"ambiguity","register":"friendly","template":"Reading \"{query}\" as a {a} gives one answer, reading it as a {b} gives another. Say which and I'll commit."}
+{"id":"assume-scope","class":"assumption","register":"friendly","template":"I'll assume you're asking about {assumed} — say otherwise and I'll drop that."}
+{"id":"assume-scope-terse","class":"assumption","register":"terse","template":"Assuming {assumed}."}
+{"id":"assume-spelling","class":"assumption","register":"friendly","template":"I read \"{query}\" as {assumed} (closest name I know). {answer}"}
+{"id":"assume-this-repo","class":"assumption","register":"friendly","template":"I'm assuming \"{query}\" is about this repository. {answer}"}
+{"id":"assume-latest","class":"assumption","register":"friendly","template":"You didn't say which {noun}, so I took the most recent one: {assumed}."}
+{"id":"assume-singular","class":"assumption","register":"friendly","template":"Several things match; I picked the strongest, {assumed}. The runners-up were {others}."}
+{"id":"recall-plain","class":"recall","register":"friendly","template":"You told me earlier that {fact}."}
+{"id":"recall-plain-terse","class":"recall","register":"terse","template":"Earlier: {fact}."}
+{"id":"recall-with-when","class":"recall","register":"friendly","template":"Earlier in this session ({when}) you said \"{utterance}\"."}
+{"id":"recall-prior-session","class":"recall","register":"friendly","template":"In a previous session you told me that {fact} — I'm going on that."}
+{"id":"recall-corpus","class":"recall","register":"friendly","template":"My corpus says {fact} — that's background knowledge, not something you told me."}
+{"id":"recall-conflict","class":"recall","register":"friendly","template":"Careful — you told me earlier that {fact}, which doesn't sit well with \"{query}\". Which should I keep?"}
+{"id":"recall-similar-question","class":"recall","register":"friendly","template":"You asked something similar before (\"{utterance}\") and the answer was: {answer}"}
+{"id":"recall-nothing","class":"recall","register":"friendly","template":"You haven't told me anything about {subject} yet."}
+{"id":"stored-fact","class":"stored","register":"friendly","template":"Noted: {subject} {predicate} {object}. I'll remember that."}
+{"id":"stored-fact-terse","class":"stored","register":"terse","template":"Stored: {subject} {predicate} {object}."}
+{"id":"stored-duplicate","class":"stored","register":"friendly","template":"I already knew that {subject} {predicate} {object} — nothing new to store."}
+{"id":"nudge-precision","class":"nudge","register":"friendly","template":"The closer you get to a shape like \"{example}\", the sharper my answer gets."}
+{"id":"nudge-commands","class":"nudge","register":"friendly","template":"If prose fails you, the slash commands always work — try {command}."}
+{"id":"nudge-narrower","class":"nudge","register":"friendly","template":"That matched {count} things — too many to be useful. Narrow it with a module or class name."}
