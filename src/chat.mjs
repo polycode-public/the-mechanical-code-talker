@@ -1264,25 +1264,33 @@ async function curatedDefinitionAnswer(query, envelope, { memoryDir, lexicon }) 
  *  the graph parser reads as a count. Null when the line isn't such a touch. The
  *  concept force is gated further downstream (a KNOWN, instance-bearing concept), so
  *  this only has to recognize the SHAPE, not vet the term. */
-function conceptTermOf(query, envelope) {
-  const base = metaTermOf(query, envelope);
-  if (base) return base;
+/** The VAGUE-TOUCH shapes ("tell me about X", "[and] what about X") — a concept
+ *  touch that is NOT the "what is a X" / "what does X mean" META shape. The meta shape
+ *  has its own established handling (a noun definition, a predicate definition, or the
+ *  honest ambiguity surround for a term that is BOTH a noun and a predicate — e.g.
+ *  "imports"), which the RELATION force must never preempt (frozen case
+ *  am-meta-imports). Gated downstream by CONCEPT_CLASS / RELATION_TERM, so a real
+ *  entity name declines here. */
+function vagueTouchTermOf(query) {
   const q = String(query).trim();
   const m = q.match(/^tell me about\s+(?:an?\s+)?(.+?)[?.!\s]*$/i)
-    // "[and/so/…] what about X" with no good discourse continuation — the concept
-    // KIND word is a concept touch, not a bare module lookup (DEAD-END 4). Gated
-    // downstream by CONCEPT_CLASS/RELATION_TERM, so a real entity name declines here.
     || q.match(/^(?:(?:and|so|but|ok|okay|now|then)\s+)*what about\s+(?:an?\s+|the\s+)?(.+?)[?.!\s]*$/i);
   return m ? m[1].trim() : null;
 }
 
-/** The RELATION term a vague touch names — reuses conceptTermOf's shapes ("what is
- *  X"/"what does X mean"/"tell me about X"/"what about X"), plus the relation-only
- *  openers the graph parser reads as something else: "what are the imports", "what
- *  calls are there", "what is calling". Null when the line isn't such a touch. Gated
- *  downstream by RELATION_TERM, so this only has to recognize the SHAPE. */
+function conceptTermOf(query, envelope) {
+  return metaTermOf(query, envelope) || vagueTouchTermOf(query);
+}
+
+/** The RELATION term a vague touch names — the VAGUE-touch shapes only ("tell me
+ *  about X", "what about X"), NOT the "what is a X"/"what does X mean" meta shape (a
+ *  relation term that is also a vocabulary word, like "imports", keeps its established
+ *  ambiguity/predicate-definition answer — frozen case am-meta-imports). Plus the
+ *  relation-only openers the graph parser reads as something else: "what are the
+ *  imports", "what calls are there", "what is calling". Null when the line isn't such a
+ *  touch. Gated downstream by RELATION_TERM, so this only has to recognize the SHAPE. */
 function relationTermOf(query, envelope) {
-  const base = conceptTermOf(query, envelope);
+  const base = vagueTouchTermOf(query);
   if (base) return base;
   const q = String(query).trim().toLowerCase().replace(/[?.!]+$/, "").replace(/\s+/g, " ");
   let m;
