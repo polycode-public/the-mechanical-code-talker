@@ -128,6 +128,31 @@ export function renderMemory({ memory, blocks }, { verbose = false } = {}) {
     lines.push("", "blocks — none folded yet (a session folds when it ends).");
   }
 
+  // ---- explore hooks: real, runnable example queries built from what's actually
+  //      stored, so /memory is a springboard for drilling in, not just a dump ----
+  if (individuals.length) {
+    const clean = (t) => typeof t === "string" && /^[a-z][a-z0-9]+(?: [a-z0-9]{2,}){0,2}$/.test(t) && t.length <= 22 && !/^\d+$/.test(t);
+    const facts = readFactRows(memory);
+    // Rank candidate "what is a X" terms by CATEGORY SIZE (how many facts point at
+    // them) so the hooks land on rich, recognisable categories (function, class, …),
+    // not a lone ConceptNet oddity.
+    const freq = new Map();
+    for (const f of facts) if (clean(f.object)) freq.set(f.object, (freq.get(f.object) || 0) + 1);
+    const terms = [...freq.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([t]) => t)
+      .slice(0, 3);
+    const sample = facts.find((f) => clean(f.subject) && terms.includes(f.object));
+    const ex = terms.map((t) => `  what is a ${t}`);
+    if (sample) ex.push(`  is a ${sample.subject} a ${sample.object}`);
+    if (terms[0]) ex.push(`  what did i tell you about ${terms[0]}`);
+    if (ex.length) {
+      lines.push("", "explore — ask any of these (real terms from the store above):");
+      lines.push(...ex);
+      lines.push("  /memory verbose — the full store   ·   /stats — the code-graph overview");
+    }
+  }
+
   return lines.join("\n");
 }
 

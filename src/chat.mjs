@@ -104,6 +104,37 @@ export const COMMANDS = {
  *  back to the focus for, and that update the focus on a successful resolve. */
 const ENTITY_ARGS = new Set(["symbol", "module", "class"]);
 
+/** System-command words that a forgiving shell accepts WITHOUT the leading "/":
+ *  `stats`, `memory`, `describe X`, `members X`, … all work bare. "help" is left
+ *  out on purpose — bare "help" stays the friendly orientation; "/help" is the
+ *  full command list. */
+const COMMAND_WORDS = new Set(["stats", "memory", "focus", ...Object.keys(COMMANDS)]);
+
+/** Query connectives that mark a line as a COMPOSITIONAL question the ask engine
+ *  should own, even when it happens to start with a command word ("untested modules
+ *  IMPORTING x", "find functions THAT CALL y"). Their presence blocks slash-routing. */
+const QUERY_CONNECTIVES = /\b(that|which|and|or|imports?|importing|calls?|calling|uses?|using|covers?|covering|tests?|testing|touch(?:es|ed|ing)?|inherits?|of|with|from|into|by|most|least)\b/i;
+
+/** A bare leading command word → its slash form ("stats" → "/stats", "describe x"
+ *  → "/describe x"), so the system commands are slash-optional. Conservative on the
+ *  entity/arg commands: it routes a bare word or a SHORT name-like argument, but
+ *  falls through (returns null) for a multi-word compositional query so the ask
+ *  engine still owns things like "untested modules importing a.mjs". Returns null
+ *  when the first token is not a command word. */
+export function asBareCommand(line) {
+  const trimmed = String(line || "").trim();
+  if (!trimmed || trimmed.startsWith("/")) return null;
+  const [first, ...restTok] = trimmed.split(/\s+/);
+  if (!COMMAND_WORDS.has(first.toLowerCase())) return null;
+  const rest = restTok.join(" ");
+  // Zero-arg system commands are always the command; a bare command word is too.
+  if (!rest || first.toLowerCase() === "stats" || first.toLowerCase() === "memory") return `/${trimmed}`;
+  // Arg commands: route only a short, name-like argument (no query connectives),
+  // so "describe Widget" / "members my class" route but a compositional query does not.
+  if (restTok.length <= 3 && !QUERY_CONNECTIVES.test(rest)) return `/${trimmed}`;
+  return null;
+}
+
 // ---- aggregate / count queries — answered MECHANICALLY off the loaded graph
 // header (individuals grouped by class, relation groups by predicate), not by
 // dispatching to the ask engine. Deterministic, fully in-ethos. ----
@@ -1128,7 +1159,14 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
     return { ...finished, last: { query: line, answer: finished.answer, detail: finished.detail ?? null } };
   };
 
-  // Conversational layer first (greetings, thanks, help, bye, why/say-more) — these
+  // Slash-optional system commands: a bare leading command word ("stats",
+  // "memory", "describe X") is routed to its slash form BEFORE the conversational
+  // layer, so a forgiving shell answers "stats" the way it answers "/stats" instead
+  // of falling through to the generic orientation.
+  const bareCmd = asBareCommand(line);
+  if (bareCmd) return withLast(await runCommand(bareCmd, ctx));
+
+  // Conversational layer next (greetings, thanks, help, bye, why/say-more) — these
   // resolve no entity and carry their own preserved `last`.
   const convo = conversationalTurn(line, ctx);
   if (convo) return convo;
