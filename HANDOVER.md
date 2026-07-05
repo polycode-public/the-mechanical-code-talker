@@ -48,7 +48,7 @@ number). Dual-draw agreement 27/30 cells (3 under-covered: B1 pron, B1 temporal,
 ## Open decisions / risks
 - Negation set-complement needs a **bounded universe**; refuse complement over the non-enumerable
   `Change` pseudo-type (PLAN_CYCLE_4 open Q).
-- chatbench 004 is a groundedness **re-baseline** (Meta-1 changed FIXTURE_CONTEXT) — never compare
+- chatbench 004 is a groundedness **re-baseline** (Meta-1 changed FIXTURE_CONTEXT). Never compare
   v1-context groundedness to v2-context.
 
 ## Strategy advisor
@@ -60,6 +60,6 @@ Tick 1 confirmed the fnv1a byte-identity (200k fuzz).
 - **Cycle 006 PASS** (1.373→1.451): multi-turn discourse seam + ACE lexicon nouns → B1 disc+count 0→25/25, C1 assert-recall 2→25/25. Grammar A/B (capitalise/list) dropped (would regress the sacred v1 spine).
 - **B1 ladder:** 0.766 → 1.272 → 1.349 → **1.438** (one lever — the `/members` miss:true cell — from the ~1.5 exit bar that ungates C2).
 - **Timings** recorded per run + per CEFR level (`timings.json`): 006 wall 6.4s.
-- **Plain-prose review** applied (`SKILL_PLAIN_PROSE.md`, adapted from seonix) — AI-ism em-dashes cut, all numbers/claims preserved.
+- **Plain-prose review** applied (`SKILL_PLAIN_PROSE.md`, adapted from seonix). AI-ism em-dashes cut, all numbers/claims preserved.
 - **Release 0.5.0** pushed; CI publishing with `--provenance` (repository.url in place).
 - Next-cycle board (in CHATBENCH_006.md): B1 discourse residual /members semantics → likely crosses 1.5 → then C-grades ungate.

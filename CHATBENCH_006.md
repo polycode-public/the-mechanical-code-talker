@@ -55,7 +55,7 @@ cases); A1 0.3 · A2 0.0 · B1 0.3 · B2 3.2 · C1 1.7 · C2 0.8. Full data:
 
 ## Decision log — next-cycle board
 
-**Meta-2 gate: B1 = 1.438, still under ~1.5 — C-grade judged spend stays gated; lever 6 (C2)
+**Meta-2 gate: B1 = 1.438, still under ~1.5. C-grade judged spend stays gated; lever 6 (C2)
 deferred.** B1 has climbed every cycle and is one lever from the bar.
 
 1. **B1 discourse residual (2/25)** — the last B1 drag: empty-class `/members` reports `miss:false`
@@ -67,5 +67,5 @@ deferred.** B1 has climbed every cycle and is one lever from the bar.
 4. **Post-arc: the grammar voice A/B + C2 ceiling** — after a case-set refresh re-pins the openers,
    and once B1 clears the exit bar.
 
-**Exit-criterion tracker:** B1 grade mean **1.438 / ~1.5** — the single residual `/members`
+**Exit-criterion tracker:** B1 grade mean **1.438 / ~1.5**. The single residual `/members`
 `miss:true` cell is the likely crossing point.

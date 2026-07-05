@@ -33,5 +33,5 @@ who touched src/core/store.mjs
 what does src/core/store.mjs change together with
 ```
 
-The graph is a plain JSON artifact — open `.tmct/graph.json` to see the exact
+The graph is a plain JSON artifact. Open `.tmct/graph.json` to see the exact
 OWL-labelled shape tmct consumes (`seon:` / `mgx:` predicates).

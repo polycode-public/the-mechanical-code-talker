@@ -38,4 +38,4 @@ which modules import Shop/PaymentService.cs
 ```
 
 Because the type is the shared concept (not the syntax), "how many classes" spans
-three languages in one number — that is the whole point.
+three languages in one number. That is the whole point.
