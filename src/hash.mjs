@@ -1,6 +1,6 @@
 // hash.mjs — the single home for tmct's content-address hash.
 //
-// FNV-1a 32-bit is deliberately home-grown (see PLAN_DEPENDENCY_STRATEGY.md): it
+// FNV-1a 32-bit is deliberately home-grown (see archive/PLAN_DEPENDENCY_STRATEGY.md): it
 // must be synchronous, browser-safe, dependency-free, and — critically —
 // CROSS-VERSION STABLE, because fact ids are content-addressed by it and a fact's
 // id is its identity across the whole memory graph. Every library candidate fails

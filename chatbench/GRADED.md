@@ -104,7 +104,7 @@ these numbers move as levers land. Re-run the generator to refresh them.
 | C1 | mixed / 150 | pool 125→150 (temporal 25→50); deep chains largely pass; temporal composition and cross-session recall are the frontier |
 | C2 | 12 / 50 | ceiling (all Winograd-style items fail, as is their job) |
 
-Cycle-4 pool growth (PLAN_CYCLE_4.md): the pool went **850 → 925 cases** — the
+Cycle-4 pool growth (archive/PLAN_CYCLE_4.md): the pool went **850 → 925 cases** — the
 three dual-draw UNDER-COVERED cells (B1 pronoun-binding, B1 temporal, C1 temporal)
 were each grown 25 → 50 and are now **census cells** (sampled in full every run,
 see "Sampling"), restoring all three to the PASS/FAIL statistic.
@@ -212,7 +212,7 @@ expectation. The gating is implemented in `runGradedDraw` (`run.mjs`, injectable
 runner for unit-testing) and the pure `ladderGate` (`graded.mjs`); the
 `test/chatbench-graded.test.mjs` `runGradedDraw` test exercises it end-to-end.
 
-**The standing cadence (PLAN_CYCLE_4.md §META-2 — don't pay to judge a ceiling
+**The standing cadence (archive/PLAN_CYCLE_4.md §META-2 — don't pay to judge a ceiling
 while the floor leaks).** Tier-1 (and its dual-draw agreement) is FREE and always
 runs for every grade. **Judged** spend is where discipline matters:
 
@@ -239,7 +239,7 @@ future grade = appending its band name to the one `PROMOTED_GRADES` array in
 45 always-run cases; every A1/A2 cell's promoted subset passes today).
 Demotion (a promoted cell regressing) fails `npm test` — that is the point.
 
-## Dual banding — productive vs performance (PLAN_FORMULAIC_COMPETENCE.md)
+## Dual banding — productive vs performance (archive/PLAN_FORMULAIC_COMPETENCE.md)
 
 Every graded score splits into two bands, computed from the `via` provenance the
 product already stamps on each turn (threaded onto each product row as `row.via` =
@@ -267,7 +267,7 @@ it is not actually faking the level (either mis-tagged, or a genuine
 chunk-becomes-grammar acquisition to record). The agreement gate applies unchanged:
 a template-lane cell that disagrees across draws is UNDER-COVERED until its pool grows.
 
-## The judge context and its version (META-1, PLAN_CYCLE_4.md)
+## The judge context and its version (META-1, archive/PLAN_CYCLE_4.md)
 
 The groundedness judge scores against `FIXTURE_CONTEXT` (`run.mjs`) — a faithful
 prose ENUMERATION of the fixture. Cycle-4 META-1 broadened it from module grain to

@@ -132,7 +132,7 @@ export function applyPhrasingFrames(text) {
   return text;
 }
 
-// ---- §B1 negation — the SET-COMPLEMENT frame (Cycle 5, PLAN_CYCLE_4.md). Recognizes
+// ---- §B1 negation — the SET-COMPLEMENT frame (Cycle 5, archive/PLAN_CYCLE_4.md). Recognizes
 // a BARE set-negation query — "which X do not <verb> Y", "X that don't <verb> Y",
 // "modules not importing Y", "which X are not <qualifier>" — and returns a descriptor
 // {entWord, predicate} that ask.mjs's compositional grammar turns into a bounded

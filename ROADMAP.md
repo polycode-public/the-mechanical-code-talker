@@ -279,11 +279,13 @@ and the block-index summary (blocks, tokens, top PageRank blocks). Same renderer
 
 > **STATUS: in progress — the two headline B1 levers shipped.** Negation as a bounded SET
 > COMPLEMENT ("which X do not <verb> Y") and reversible-passive traversal ("X is imported by Y")
-> are live; the harness meta-fixes and the rest of the ranked lever board continue.
+> are live; the harness meta-fixes and the rest of the ranked lever board (levers 3–6 + the C2
+> ceiling, below) continue. **This section is the durable home for the tuning arc** — the detailed
+> cycle-4 plan was archived to `archive/PLAN_CYCLE_4.md` once its substance lived here.
 
-> Detailed plans: **PLAN_CYCLE_4.md** (the tuning arc) and **PLAN_DEPENDENCY_STRATEGY.md**
-> (the pre-build dependency audit — verdict: no dep changes now; a standing adoption
-> register + avoid-list for phases 6-9; two near-term actions).
+> The dependency audit that also fed this phase is archived at `archive/PLAN_DEPENDENCY_STRATEGY.md`
+> (verdict: no dep changes now; a standing adoption register + avoid-list for phases 6-9; two
+> near-term actions, both shipped — see below).
 
 The immediate work: drive the graded benchmark up the CEFR ladder, one lever per cycle, per
 `SKILL_TUNING_CYCLE.md`. Cycle 3 (post-wiring-wave, CHATBENCH_003) gave the first full-spectrum
@@ -312,7 +314,7 @@ from meta-1's harness artifact), **C2 ceiling LAST**. Operator decision 2026-07-
 them**. Exit criterion in the plan (roughly: B1 grade mean ≥ ~1.5 with all cells dual-draw
 agreeing unlocks C-grade judging).
 
-## Near-term actions (from the dependency audit, PLAN_DEPENDENCY_STRATEGY.md)
+## Near-term actions (from the dependency audit, archive/PLAN_DEPENDENCY_STRATEGY.md)
 
 > **STATUS: both shipped.** The wink browser-loader seam is added (shared model loader with a
 > browser registration path) and `fnv1a` is single-sourced into `src/hash.mjs`.
@@ -322,7 +324,7 @@ Two concrete, low-risk actions the audit surfaced — not features, not dep chan
 1. **Fix wink's `createRequire` browser-loader gap** — the wink model IS the browser build, but
    our adapters load it via `createRequire(import.meta.url)` (`ask-nlp.mjs:29`, `prose-nlp.mjs:31`),
    which is Node-only. Browser mode needs a bundler `import` path. **A Phase 8 (browser-mode)
-   blocker** — budget it into `PLAN_REPOSITORY_INTERFACE.md`; it is a wiring fix, not a dependency
+   blocker** — budget it into `archive/PLAN_REPOSITORY_INTERFACE.md`; it is a wiring fix, not a dependency
    change (the model is already browser-capable).
 2. **Single-source `fnv1a`** — extract the content-address hash to one `src/hash.mjs` so the
    cross-version-stable fact-id contract has a single definition. Trivial refactor, do any time;
@@ -337,7 +339,7 @@ Two concrete, low-risk actions the audit surfaced — not features, not dep chan
 > `/memory` inspector surfaces contradictions with provenance. Legacy `mgx:factProvenance` kept
 > as a compat shim.
 
-> Detailed plan: **PLAN_PROVENANCE_TRUST.md**.
+> Detailed plan: **archive/PLAN_PROVENANCE_TRUST.md**.
 
 *(Operator-specified 2026-07-05, from the observation that Phase-6 canonicalise-and-link,
 tier-4 learn-on-miss, and the ConceptNet slice all share one shape: raw source preserved,
@@ -370,7 +372,7 @@ fact enters memory:
 > **STATUS: shipped.** A technical (C1) register of templates and productive/performance
 > dual-banding (computed from the `via` provenance) are live in the benchmark.
 
-> Detailed plan: **`PLAN_FORMULAIC_COMPETENCE.md`**.
+> Detailed plan: **`archive/PLAN_FORMULAIC_COMPETENCE.md`**.
 
 The operator's insight upgraded to the strategy: a consistently-failed C1/C2 graded cell whose
 answer EXISTS as a stable phrasing in technical prose is not a ceiling — it is a
@@ -403,7 +405,7 @@ answer EXISTS as a stable phrasing in technical prose is not a ceiling — it is
 > pass runs on prose spans only under a protected-span invariance guard. The a/an article fix is
 > active; broader voice/agreement rules are implemented-but-parked.
 
-> Detailed plan: **`PLAN_RESPONSE_FINISHING.md`**.
+> Detailed plan: **`archive/PLAN_RESPONSE_FINISHING.md`**.
 
 *(Refined 2026-07-05; decisions settled with the operator. Fact invariance is achieved by
 CONSTRUCTION, not by hope. Finishing operates over a SEGMENTED answer, never a raw string.
@@ -440,7 +442,7 @@ ever emerge.)*
 > runnable conformance/compatibility suite; and `tmct init` (scaffold `.tmct/`, `tmct.toml`,
 > tier-1 seed, provenance).
 
-> Detailed plan: **`PLAN_REPOSITORY_INTERFACE.md`**.
+> Detailed plan: **`archive/PLAN_REPOSITORY_INTERFACE.md`**.
 
 *(Operator-specified 2026-07-05; upgraded from research item to a build phase. tmct was spun OUT
 of seonix; this inverts the relationship: seonix reorients as a USER that imports the tmct
@@ -512,7 +514,7 @@ a passive payload loader into the product's primary integration surface.)*
 before it — PROACTIVELY extending memory with inferences that will be useful later, forward and
 backward chaining over the OWL base during idle/fold time rather than at query time.)*
 
-> Detailed plan: **`PLAN_SPECULATIVE_INFERENCE.md`**.
+> Detailed plan: **`archive/PLAN_SPECULATIVE_INFERENCE.md`**.
 
 **A maintenance job, not a query-time cost.** Speculative inference runs as an explicit
 batch — `npx tmct syllogise --depth <N>` (default depth bounded, e.g. 32) — and **once

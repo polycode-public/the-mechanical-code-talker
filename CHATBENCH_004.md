@@ -43,7 +43,7 @@ context omitted it. Re-reading the target cases through the enriched judge:
 
 The two cases that were being penalised for telling the truth (the `/describe` symbol detail and the
 cross-session recall citing a session id the judge couldn't see) are now perfect. This is measurement
-integrity restored, exactly as `PLAN_CYCLE_4.md` predicted — **not** a product change.
+integrity restored, exactly as `archive/PLAN_CYCLE_4.md` predicted — **not** a product change.
 
 > Aggregate groundedness (1.593 over 965 samples) is grammar-lane-dominated ~64:1 and is NOT a valid
 > re-float signal; the 5-case subgroup above is. (Advisor tick 5 flagged this; the write-up honours it.)

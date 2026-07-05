@@ -1,5 +1,5 @@
 // The FIXTURE reference provider — a small, real, self-contained code graph that
-// implements every Repository-Interface service. PLAN_REPOSITORY_INTERFACE.md
+// implements every Repository-Interface service. archive/PLAN_REPOSITORY_INTERFACE.md
 // deliverable 2: "the executable specification an external producer reads first".
 //
 // It is a degenerate provider in the sense that its graph is tiny and its source

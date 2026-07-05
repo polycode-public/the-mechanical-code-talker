@@ -1,6 +1,6 @@
 // The Repository Interface — tmct's OWNED, versioned contract between "interpret
 // the query" (tmct, the brittle side) and "ask the graph for truth" (a provider,
-// the stable side). PLAN_REPOSITORY_INTERFACE.md.
+// the stable side). archive/PLAN_REPOSITORY_INTERFACE.md.
 //
 // tmct defines and versions this shape; a provider (seonix, a fixture, a browser
 // page) IMPLEMENTS it over its native graph. Both sides already agree on the

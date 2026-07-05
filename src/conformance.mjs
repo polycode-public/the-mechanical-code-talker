@@ -1,6 +1,6 @@
 // conformance.mjs — the Repository-Interface CONTRACT TEST SUITE as a reusable kit.
 //
-// PLAN_REPOSITORY_INTERFACE.md deliverable 3: an implementation is CONFORMANT iff it
+// archive/PLAN_REPOSITORY_INTERFACE.md deliverable 3: an implementation is CONFORMANT iff it
 // passes `runConformance(name, makeProvider)`. tmct's own fixture + bootstrap providers
 // pass it in `npm test`; an EXTERNAL producer (seonix) imports this kit from the
 // published package and runs the SAME suite against its native provider to claim

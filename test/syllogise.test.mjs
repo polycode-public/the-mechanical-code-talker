@@ -1,5 +1,5 @@
 // syllogise.test.mjs — the speculative-inference engine (Phase 9 /
-// PLAN_SPECULATIVE_INFERENCE.md): the pure forward-chaining kernel, the
+// archive/PLAN_SPECULATIVE_INFERENCE.md): the pure forward-chaining kernel, the
 // materialising pass (entailed provenance + low trust, never outranks a stated
 // fact), and the HONEST KILL CRITERION — does a pre-derived transitive fact flip
 // a real subclass-chain miss to a hit, measured on the DEFAULT W3 bootstrap seed

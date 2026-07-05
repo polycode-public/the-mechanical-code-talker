@@ -277,7 +277,7 @@ test("gradedRollup: per-grade cells with single vs combo separated (the weak-alo
   assert.equal(comboCell.construction, "pronoun-binding+negation");
 });
 
-// ---- dual banding + template-lane (PLAN_FORMULAIC_COMPETENCE.md) ----
+// ---- dual banding + template-lane (archive/PLAN_FORMULAIC_COMPETENCE.md) ----
 
 // a row with an explicit via + tags for band accounting.
 const brow = (id, grade, construction, { pass = true, via = "composed", tags = ["graded"] } = {}) => ({
@@ -419,7 +419,7 @@ test("computeAgreement: a template-lane parallel-forms line is reported alongsid
   assert.match(table, /template-lane agreement:/);
 });
 
-// ---- runGradedDraw ladder integration (META-2, PLAN_CYCLE_4.md) ----
+// ---- runGradedDraw ladder integration (META-2, archive/PLAN_CYCLE_4.md) ----
 
 test("runGradedDraw: --ladder gates every grade above the first unreliable one, with a receipt; without --ladder all grades run", async () => {
   // A synthetic pool: B1 has an ENFORCED failure (non-frontier, fails tier-1) so

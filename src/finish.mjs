@@ -1,5 +1,5 @@
 // finish.mjs — Phase 7 response finishing: the segmentation IR seam.
-// (PLAN_RESPONSE_FINISHING.md, "The segmentation IR (lever 1)".)
+// (archive/PLAN_RESPONSE_FINISHING.md, "The segmentation IR (lever 1)".)
 //
 // The governing principle is fact-invariance BY CONSTRUCTION. An answer is a
 // list of typed spans, [{ type, text }, …], carried alongside the flat string

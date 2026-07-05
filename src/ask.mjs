@@ -254,7 +254,7 @@ function parseComposite(text, nlp) {
     || parseRelationalOrQualified(w, lc, nlp, 0);
 }
 
-// B1 NEGATION (Cycle 5, PLAN_CYCLE_4.md) — the SET COMPLEMENT. "which X do not <verb>
+// B1 NEGATION (Cycle 5, archive/PLAN_CYCLE_4.md) — the SET COMPLEMENT. "which X do not <verb>
 // Y" / "X that don't <verb> Y" / "modules not importing Y" / "which X are not
 // <qualifier>" compiles to allOfClass(kind) DIFFERENCE (the positive result set),
 // reusing the EXISTING machinery: evalBoolean already folds a "difference" atom, and

@@ -19,7 +19,7 @@ const PKG_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 export const TEMPLATES_FILE = join(PKG_ROOT, "data", "templates", "responses.jsonl");
 export const PHRASEBOOK_FILE = join(PKG_ROOT, "data", "phrasebook", "software-phrases.txt");
 
-// Registers (Phase 6, PLAN_FORMULAIC_COMPETENCE.md): `terse|friendly` are the
+// Registers (Phase 6, archive/PLAN_FORMULAIC_COMPETENCE.md): `terse|friendly` are the
 // conversational bands; `technical` is the C1 / technical-paper band whose
 // templates render item-5 mechanical conclusions (count / comparison /
 // superlative + the provenance we already compute) as advanced prose. A

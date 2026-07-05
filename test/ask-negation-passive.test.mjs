@@ -1,5 +1,5 @@
 // ask-negation-passive.test.mjs — the two headline Phase-5 parser levers
-// (PLAN_CYCLE_4.md, "Cycle 5 — B1 negation" and "Cycle 6 — reversible-passive"),
+// (archive/PLAN_CYCLE_4.md, "Cycle 5 — B1 negation" and "Cycle 6 — reversible-passive"),
 // driven END-TO-END against the committed fixture graph (test/fixtures/
 // entities.fixture.json) so the assertions exercise the real
 // parseQuery -> resolveObject -> traverse -> render pipeline, not a mock.

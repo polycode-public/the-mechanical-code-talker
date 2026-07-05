@@ -1,5 +1,5 @@
 // The Repository-Interface CONTRACT TEST SUITE — the compatibility kit.
-// PLAN_REPOSITORY_INTERFACE.md deliverable 3: "a runnable suite any implementation
+// archive/PLAN_REPOSITORY_INTERFACE.md deliverable 3: "a runnable suite any implementation
 // is tested against. Conformance = passing the suite, not matching prose."
 //
 // tmct's two reference providers (fixture, bootstrap) PASS it here in npm test.

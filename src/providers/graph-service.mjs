@@ -1,5 +1,5 @@
 // The reference Repository-Interface service over a parsed code graph.
-// PLAN_REPOSITORY_INTERFACE.md — "the executable specification".
+// archive/PLAN_REPOSITORY_INTERFACE.md — "the executable specification".
 //
 // createGraphService(graph) returns a typed service object implementing EVERY
 // service in src/repository-interface.mjs over the `{ individuals, byId,

@@ -12,7 +12,7 @@ import {
 import { STOPWORDS } from "../normalize.mjs";
 import { VOCAB_WORDS, eligibleForCanon, fuzzyVocabWord } from "../fuzzy.mjs";
 
-// Reversible-passive detection (Cycle 6, PLAN_CYCLE_4.md): the passive auxiliaries that,
+// Reversible-passive detection (Cycle 6, archive/PLAN_CYCLE_4.md): the passive auxiliaries that,
 // together with an agent-marking "by", flip the active reading, and the wh-words that
 // mark a QUESTIONED agent ("by which classes" / stranded "who is X tested by"). Bare
 // "do/does/did" are deliberately EXCLUDED — "which X do not <verb> Y" is a NEGATION, not
@@ -176,7 +176,7 @@ export function parseKeywordSpot(text, nlp = null) {
     if (objText) return { shape: "when", entityType: null, modifier: "direct", kind: "touches", object: objText };
   }
 
-  // reversible passive (Cycle 6, PLAN_CYCLE_4.md): "PATIENT is VERBed BY AGENT" — an
+  // reversible passive (Cycle 6, archive/PLAN_CYCLE_4.md): "PATIENT is VERBed BY AGENT" — an
   // agent-marking "by" plus a passive auxiliary flips the active reading, so the AGENT
   // (after "by") is the edge SUBJECT and the PATIENT the edge OBJECT. Object-first
   // phrasing is otherwise read subject-first and the edge traversed backwards. Fires

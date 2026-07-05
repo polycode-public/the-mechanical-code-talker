@@ -68,7 +68,7 @@ export const TAGS = [
 // graded pool cases carry the "graded" tag (their coverage registry is the
 // grade × construction matrix, not the v1 TAGS); it is valid everywhere but
 // deliberately NOT part of the v1 coverage registry above. "template-lane"
-// (PLAN_FORMULAIC_COMPETENCE.md §template-lane) marks a case that targets a
+// (archive/PLAN_FORMULAIC_COMPETENCE.md §template-lane) marks a case that targets a
 // TEMPLATED capability — a pass there raises the PERFORMANCE band only, never
 // the productive band; the dual-banding rollup + isTemplateLane read this tag.
 const EXTRA_TAGS = ["graded", "template-lane"];
@@ -95,7 +95,7 @@ const GRAPHS = ["fixture", "empty"];
  *  zeroed TRUTHFUL /describe output (mt-describe-then-callers, plus turn-1
  *  contamination of mt-focus-drift and one gq-impact-a sample).
  *
- *  META-1 broadening (cycle 4, PLAN_CYCLE_4.md §META-1 — the direct lineage of
+ *  META-1 broadening (cycle 4, archive/PLAN_CYCLE_4.md §META-1 — the direct lineage of
  *  H1a/H1b, generalized): cycle 1–2's summary enumerated the graph at MODULE
  *  grain only, so the judge — told the context was exhaustive — scored the
  *  product's TRUTHFUL SYMBOL-grain output as fabrication (A2 naming zeroed 5/5
@@ -420,7 +420,7 @@ export async function runCase(caseDef, deps) {
     stamp: deps.stamp,
     // via provenance of the ANSWERING turn (the last transcript turn) — the band
     // the dual-banding rollup reads: "composed" is productive, every other via
-    // (template/count/recall/fact/corpus/…) is performance-only (PLAN_FORMULAIC_COMPETENCE.md).
+    // (template/count/recall/fact/corpus/…) is performance-only (archive/PLAN_FORMULAIC_COMPETENCE.md).
     via: transcript.length ? transcript[transcript.length - 1].via ?? null : null,
     judge: {
       dimensions: caseDef.judge?.dimensions ?? JUDGE_DIMENSIONS,
@@ -504,7 +504,7 @@ async function fileExists(path) {
 }
 
 /** Run one draw's graded cases grade-ascending, honoring --ladder gating
- *  (META-2, PLAN_CYCLE_4.md): grades run A1→C2; the FIRST grade whose
+ *  (META-2, archive/PLAN_CYCLE_4.md): grades run A1→C2; the FIRST grade whose
  *  non-frontier cases don't all pass tier-1 GATES — every grade above it is
  *  SKIPPED with a receipt ("grade C1 skipped: B1 at 4/6"), so judged spend never
  *  chases a ceiling while the floor leaks. `run` is injectable (defaults to the
@@ -679,7 +679,7 @@ export async function main(argv = process.argv.slice(2)) {
     console.log(renderRollup(gradedRollup(graded)));
     const tlFindings = templateLaneLint([...graded, ...rowsB.filter((r) => r.grade)]);
     if (tlFindings.length) {
-      console.log("\ntemplate-lane lint (a template-lane pass must NOT be composed — see PLAN_FORMULAIC_COMPETENCE.md):");
+      console.log("\ntemplate-lane lint (a template-lane pass must NOT be composed — see archive/PLAN_FORMULAIC_COMPETENCE.md):");
       for (const f of tlFindings) console.log(`  - ${f.cell} ${f.caseId}: ${f.finding}`);
     }
   }

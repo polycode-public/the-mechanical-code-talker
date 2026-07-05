@@ -220,7 +220,7 @@ export const MODIFIER_TO_KIND = Object.freeze({
   transitively: "transitive", indirectly: "transitive",
 });
 
-// ---- reversible-passive participles (Cycle 6, PLAN_CYCLE_4.md) — past participles ->
+// ---- reversible-passive participles (Cycle 6, archive/PLAN_CYCLE_4.md) — past participles ->
 // relation kind, for the agent-marked passive "X is <participle> by Y". Kept SEPARATE
 // from VERB_TO_KIND on purpose: these forms are NOT standalone active verbs in this
 // grammar ("defined" belongs to the multi-word "is defined in" and to the WHERE_MARKERS

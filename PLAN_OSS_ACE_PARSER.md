@@ -33,7 +33,7 @@ permissive, browser-capable JS product on both license and platform.
 
 ## Why this is worth open-sourcing (the gap it fills)
 
-Per `PLAN_DEPENDENCY_STRATEGY.md`, this is the strongest publish-not-replace candidate. No permissive,
+Per `archive/PLAN_DEPENDENCY_STRATEGY.md`, this is the strongest publish-not-replace candidate. No permissive,
 ESM, browser-capable, npm-installable ACE→OWL controlled-natural-language parser exists in JS. The
 RDF-JS / semantic-web community (the `rdfjs`/N3 family the dep-strategy plan pre-cleared) has excellent
 serialization, stores, and reasoners, but **no controlled-NL front-end**: nothing that takes English a
@@ -95,7 +95,7 @@ Keep it a separate entry point / optional peer dep so the core parser stays zero
 
 ## Why gated on Phase 8
 
-`PLAN_REPOSITORY_INTERFACE.md` (Phase 8) settles how tmct consumes external libraries cleanly: the
+`archive/PLAN_REPOSITORY_INTERFACE.md` (Phase 8) settles how tmct consumes external libraries cleanly: the
 library-surface discipline, capability negotiation, the named/versioned boundary. Extract the ACE parser
 **once that boundary pattern exists**, so `ace-owl` is the **second proof of the same seam**: the first is
 seonix inverting into a tmct user; this is tmct depending outward on an extracted parser. Doing it before
