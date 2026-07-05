@@ -15,7 +15,7 @@
 // Everything degrades honestly: an empty memory renders as the empty story,
 // never an error.
 
-import { loadMemory, FACT_CLASS, UTTERANCE_CLASS, IN_REPLY_TO_PROP } from "./core.mjs";
+import { loadMemory, UTTERANCE_CLASS, IN_REPLY_TO_PROP, readFactRows, findContradictions } from "./core.mjs";
 import { loadBlockIndex } from "./blocks.mjs";
 
 /** Log-scaled sample count for a class of `n` individuals: 2·log10(n), floored
@@ -67,19 +67,34 @@ export function renderMemory({ memory, blocks }, { verbose = false } = {}) {
       for (const ind of balancedSample(of, k)) lines.push(`  ${truncate(ind.label, textCap)}`);
     }
 
-    // ---- top facts by provenance breadth ----
-    const facts = byClass.get(FACT_CLASS) || [];
-    const withBreadth = facts
-      .map((f) => {
-        const prov = attrOf(f, "provenance");
-        return { f, prov, breadth: prov ? prov.split(" | ").filter(Boolean).length : 0 };
-      })
-      .filter((x) => x.breadth > 0)
-      .sort((a, b) => b.breadth - a.breadth || String(a.f.label).localeCompare(String(b.f.label)));
-    if (withBreadth.length) {
-      lines.push("", "top facts by provenance breadth:");
-      for (const { f, prov, breadth } of withBreadth.slice(0, verbose ? 8 : 3)) {
-        lines.push(`  ${truncate(f.label, textCap)} — ${breadth} source${breadth === 1 ? "" : "s"}: ${verbose ? prov : truncate(prov, 80)}`);
+    // ---- top facts by COMPUTED TRUST (upgraded from raw provenance breadth) ----
+    // Trust folds source-type prior + corroboration + recency, so a corroborated
+    // operator-stated fact outranks a lone web scrape by construction; provenance
+    // rides along (verbatim in verbose) for the audit trail.
+    const ranked = readFactRows(memory)
+      .filter((r) => r.sourceIds.length || r.provenance)
+      .sort((a, b) => b.trust - a.trust
+        || b.sourceIds.length - a.sourceIds.length
+        || `${a.subject} ${a.predicate} ${a.object}`.localeCompare(`${b.subject} ${b.predicate} ${b.object}`));
+    if (ranked.length) {
+      lines.push("", "top facts by trust:");
+      for (const r of ranked.slice(0, verbose ? 8 : 3)) {
+        const n = r.sourceIds.length || (r.provenance ? r.provenance.split(" | ").filter(Boolean).length : 0);
+        const label = `${r.subject} ${r.predicate} ${r.object}`;
+        lines.push(`  ${truncate(label, textCap)} — trust ${r.trust.toFixed(2)}, ${n} source${n === 1 ? "" : "s"}: ${verbose ? r.provenance : truncate(r.provenance, 80)}`);
+      }
+    }
+
+    // ---- contradictions: same (subject,predicate), differing object, both above
+    //      the trust floor → surface BOTH with provenance, never silently pick ----
+    const contradictions = findContradictions(memory);
+    if (contradictions.length) {
+      lines.push("", `contradictions (${contradictions.length} — both kept, never silently resolved):`);
+      for (const group of contradictions.slice(0, verbose ? 8 : 3)) {
+        lines.push(`  ${group[0].subject} ${group[0].predicate}?`);
+        for (const r of group) {
+          lines.push(`    ${truncate(r.object, textCap)} (trust ${r.trust.toFixed(2)}; ${verbose ? r.provenance : truncate(r.provenance, 60)})`);
+        }
       }
     }
 

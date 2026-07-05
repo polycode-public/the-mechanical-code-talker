@@ -24,6 +24,15 @@
 import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { splitIdentifierWords, tokenizeProse } from "../prose.mjs";
+import { SOURCE_PRIOR } from "./trust.mjs";
+
+// A block inherits the trust of the Source it was folded from: a session block
+// is operator-chat (1.0), a corpus block its corpus Source (0.7). Retrieval
+// weights relevance × trust via a BOUNDED factor (≈ 0.5 + trust → ~[0.5, 1.5]),
+// a capped nudge so a weakly-trusted but perfectly-relevant block still surfaces.
+const DEFAULT_BLOCK_SOURCE_TYPE = "operator";
+const blockTrust = (sourceType) => SOURCE_PRIOR[sourceType] ?? SOURCE_PRIOR.operator;
+const trustFactorOf = (trust) => 0.5 + (typeof trust === "number" ? trust : SOURCE_PRIOR.operator);
 
 export const BLOCKS_DIR_REL = join(".tmct", "memory", "blocks");
 const INDEX_NAME = "index.json";
@@ -134,14 +143,20 @@ function rerank(index) {
  * duplicated (fold.mjs's re-fold idempotency rests on this).
  * Returns the block's index entry { file, tokens, rank }.
  */
-export async function saveBlock(dir, { id, text }) {
+export async function saveBlock(dir, { id, text, sourceType = DEFAULT_BLOCK_SOURCE_TYPE, createdAt = "" }) {
   if (!id) throw new Error("a block needs an id");
   const bdir = blocksDir(dir);
   await mkdir(bdir, { recursive: true });
   const file = `${safeName(id)}.txt`;
   await atomicWrite(join(bdir, file), String(text ?? ""));
   const index = await loadBlockIndex(dir);
-  index.blocks[id] = { file, tokens: tokenizeBlock(text) };
+  const prior = index.blocks[id];
+  index.blocks[id] = {
+    file, tokens: tokenizeBlock(text),
+    // first-write-wins createdAt (step (a)) + the block's inherited source trust (step (d)).
+    createdAt: prior?.createdAt || createdAt || new Date().toISOString(),
+    sourceType, trust: blockTrust(sourceType),
+  };
   rerank(index);
   await atomicWrite(join(bdir, INDEX_NAME), JSON.stringify(index));
   return index.blocks[id];
@@ -189,7 +204,12 @@ export async function retrieveBlocks(dir, query, k = 3) {
     for (const t of qTokens) if (sets[i].has(t)) idfSum += idf.get(t);
     if (idfSum <= 0) continue;
     const rank = b.rank ?? 0;
-    scored.push({ id, score: idfSum * (1 + rank), rank, file: b.file });
+    // relevance × connectivity × TRUST — a bounded trustFactor (~[0.5, 1.5]) so a
+    // corroborated/operator block outranks a lone low-trust one on a relevance tie,
+    // yet a weakly-trusted but perfectly-relevant block still surfaces.
+    const trust = typeof b.trust === "number" ? b.trust : blockTrust(b.sourceType);
+    const trustFactor = trustFactorOf(trust);
+    scored.push({ id, score: idfSum * (1 + rank) * trustFactor, rank, trust, file: b.file });
   }
   scored.sort((a, b) => b.score - a.score || b.rank - a.rank || a.id.localeCompare(b.id));
   const top = scored.slice(0, Math.max(1, k));

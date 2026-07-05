@@ -60,6 +60,10 @@ tmct:Session a owl:Class ;
   rdfs:label "Session" ;
   rdfs:comment "One recorded tmct chat session — the anchor utterances attach to via mgx:saidInSession." .
 
+tmct:Source a owl:Class ;
+  rdfs:label "Source" ;
+  rdfs:comment "A first-class provenance individual (rdf:type owl:NamedIndividual) a Fact is derived from, over a closed kind set with deterministic ids: src:operator-chat, src:provider:<name>, src:corpus:<name>, src:learned:web:<urlhash>, src:entailed:<rule>. Carries mgx:sourceType (the trust-prior key), mgx:createdAt, and kind specifics (mgx:sourceUrl / mgx:sourceRule)." .
+
 mgx:saidInSession a owl:ObjectProperty ;
   rdfs:label "saidInSession" ;
   rdfs:domain tmct:Utterance ;
@@ -100,7 +104,57 @@ mgx:sessionStarted a owl:DatatypeProperty ;
 mgx:factProvenance a owl:DatatypeProperty ;
   rdfs:domain tmct:Fact ;
   rdfs:range xsd:string ;
-  rdfs:comment "Where a fact came from — an ace:<source>[:<sessionId>][@<ts>] tag from grammar/assert.mjs, or a corpus block id; multiple writers union tags joined by ' | '." .
+  rdfs:comment "LEGACY COMPAT SHIM. The ace:<source>[:<sessionId>][@<ts>] / corpus:<name> provenance tags a fact came from, union-joined by ' | '. The source-of-truth is now the mgx:statedBy edges DERIVED from this string; kept byte-identical for readers still keying on it." .
+
+# --- Provenance & Trust (PLAN_PROVENANCE_TRUST) — the one source-link primitive ---
+
+mgx:createdAt a owl:DatatypeProperty ;
+  rdfs:range xsd:dateTime ;
+  rdfs:comment "When an individual was FIRST written, ISO-8601 (first-write-wins on upsert). Carried by every created individual (Utterance / Fact / Session / Source / block-index entry). Distinct from mgx:utteranceTs (the turn time an utterance CLAIMS). The audit 'when', the recency input to trust, and Phase 9's novelty signal." .
+
+mgx:derivedFrom a owl:ObjectProperty ;
+  rdfs:label "derivedFrom" ;
+  rdfs:domain tmct:Fact ;
+  rdfs:range tmct:Source ;
+  rdfs:seeAlso <http://www.w3.org/ns/prov#wasDerivedFrom> ;
+  rdfs:comment "Umbrella: a Fact derived from a Source (or another Fact). Intended external referent prov:wasDerivedFrom, UNVERIFIED-pending-web-check per docs/references/ discipline — we do not claim PROV ownership." .
+
+mgx:statedBy a owl:ObjectProperty ;
+  rdfs:label "statedBy" ;
+  rdfs:subPropertyOf mgx:derivedFrom ;
+  rdfs:domain tmct:Fact ;
+  rdfs:range tmct:Source ;
+  rdfs:comment "The workhorse: a Source directly ASSERTS this Fact. The old mgx:factProvenance ' | '-union becomes N statedBy edges, one per independent Source — the corroboration signal a ranker can read." .
+
+mgx:canonicalisedFrom a owl:ObjectProperty ;
+  rdfs:label "canonicalisedFrom" ;
+  rdfs:subPropertyOf mgx:derivedFrom ;
+  rdfs:comment "A canonical Fact derived by cleaning from a raw form (Phase 7 canonicalise-and-link; tier-4 raw→cleaned). Points at the raw Block/Source, never replacing it." .
+
+mgx:sourceType a owl:DatatypeProperty ;
+  rdfs:domain tmct:Source ;
+  rdfs:range xsd:string ;
+  rdfs:comment "A Source's kind: operator | provider | corpus | web | entailed — the trust-prior key." .
+
+mgx:sourceUrl a owl:DatatypeProperty ;
+  rdfs:domain tmct:Source ;
+  rdfs:range xsd:string ;
+  rdfs:comment "A web Source's URL (the src:learned:web:<urlhash> specific)." .
+
+mgx:sourceRule a owl:DatatypeProperty ;
+  rdfs:domain tmct:Source ;
+  rdfs:range xsd:string ;
+  rdfs:comment "An entailed Source's rule id (the src:entailed:<rule> specific)." .
+
+mgx:trustScore a owl:DatatypeProperty ;
+  rdfs:domain tmct:Fact ;
+  rdfs:range xsd:decimal ;
+  rdfs:comment "Materialised trust cache in [0,1] — a PURE function of a fact's Sources + createdAt (src/memory/trust.mjs: source-type prior, noisy-OR corroboration, bounded recency nudge). Never hand-set; invalidated when a statedBy edge is added." .
+
+mgx:trustInputs a owl:DatatypeProperty ;
+  rdfs:domain tmct:Fact ;
+  rdfs:range xsd:string ;
+  rdfs:comment "JSON of the inputs mgx:trustScore was computed from (source-type multiset, corroboration count, createdAt, recency multiplier) — so any score is reproducible and auditable." .
 
 mgx:hasProseTokens a owl:DatatypeProperty ;
   rdfs:range xsd:string ;

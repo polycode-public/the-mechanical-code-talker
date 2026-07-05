@@ -32,6 +32,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { proseTokensFor, buildProseIndex } from "../prose.mjs";
 import { fnv1aHex } from "../hash.mjs";
+import { computeTrust, TRUST_SCORE_PROP, TRUST_INPUTS_PROP } from "./trust.mjs";
 
 export const MEMORY_DIR_REL = join(".tmct", "memory");
 export const MEMORY_GRAPH_REL = join(MEMORY_DIR_REL, "graph.json");
@@ -39,9 +40,21 @@ export const MEMORY_GRAPH_REL = join(MEMORY_DIR_REL, "graph.json");
 export const UTTERANCE_CLASS = "Utterance";
 export const FACT_CLASS = "Fact";
 export const MEMORY_SESSION_CLASS = "Session";
+export const SOURCE_CLASS = "Source";
 
 export const SAID_IN_SESSION_PROP = "mgx:saidInSession";
 export const IN_REPLY_TO_PROP = "mgx:inReplyTo";
+
+// The provenance-link predicate family (PLAN_PROVENANCE_TRUST step (b)): one
+// umbrella object property with two workhorse subproperties, minted in the owned
+// mgx: namespace to match tmct-core.ttl's object-property style.
+export const DERIVED_FROM_PROP = "mgx:derivedFrom";        // umbrella: Fact → Source|Fact
+export const STATED_BY_PROP = "mgx:statedBy";              // a Source directly asserts a Fact
+export const CANONICALISED_FROM_PROP = "mgx:canonicalisedFrom"; // a canonical Fact ← its raw form
+export const CREATED_AT_PROP = "mgx:createdAt";           // first-write-wins ISO-8601 on every individual
+
+// The one deterministic operator Source id — the operator chatting to tmct.
+export const OPERATOR_SOURCE_ID = "src:operator-chat";
 
 const ROLES = new Set(["visitor", "tmct"]);
 const LABEL_CAP = 48;    // utterance/fact labels stay skimmable in renders
@@ -60,7 +73,16 @@ const MEMORY_VOCABULARY = [
   { prop: "rdf:subject", note: "reified fact: the triple's subject term" },
   { prop: "rdf:predicate", note: "reified fact: the triple's predicate term" },
   { prop: "rdf:object", note: "reified fact: the triple's object term" },
-  { prop: "mgx:factProvenance", note: "where a fact came from (a session/turn ref, a corpus block id, an ACE parse)" },
+  { prop: "mgx:factProvenance", note: "LEGACY COMPAT SHIM: the ' | '-joined provenance tag string a fact came from; the source-of-truth is now the mgx:statedBy edges derived from it" },
+  { prop: CREATED_AT_PROP, note: "when an individual was FIRST written, ISO-8601 (first-write-wins on upsert); the audit 'when', the recency input to trust, the novelty signal" },
+  { prop: DERIVED_FROM_PROP, predicate: "derivedFrom", note: "umbrella: a Fact derived from a Source (or another Fact). ext ref prov:wasDerivedFrom (UNVERIFIED-pending-web-check)" },
+  { prop: STATED_BY_PROP, predicate: "statedBy", note: "subPropertyOf derivedFrom: a Source directly asserts this Fact (one edge per independent source — replaces the factProvenance union)" },
+  { prop: CANONICALISED_FROM_PROP, predicate: "canonicalisedFrom", note: "subPropertyOf derivedFrom: a canonical Fact cleaned from a raw Block/Source, never replacing it" },
+  { prop: "mgx:sourceType", note: "a Source's kind: operator | provider | corpus | web | entailed (the trust-prior key)" },
+  { prop: "mgx:sourceUrl", note: "a web Source's URL" },
+  { prop: "mgx:sourceRule", note: "an entailed Source's rule id" },
+  { prop: TRUST_SCORE_PROP, note: "materialised trust cache in [0,1] — pure function of a fact's Sources + createdAt (memory/trust.mjs); invalidated when a statedBy edge is added" },
+  { prop: TRUST_INPUTS_PROP, note: "JSON of the inputs the trust score was computed from (source-type multiset, corroboration count, createdAt, recency) — makes the score auditable" },
   { prop: "mgx:hasProseTokens", note: "prose tokens (prose.mjs tokenizer) backing the payload's proseIndex" },
   { prop: "mgx:sessionStarted", note: "session anchor: when the session started, ISO-8601" },
 ];
@@ -111,10 +133,14 @@ export async function loadMemory(dir) {
 }
 
 /** Fresh read → mutate → atomic write. Serialized per call; every public append
- *  goes through here so a concurrent reader never sees a torn store. */
+ *  goes through here so a concurrent reader never sees a torn store. The lazy,
+ *  idempotent legacy-provenance migration rides this same cycle (step (b)): any
+ *  Fact still carrying only the old mgx:factProvenance string gets its Sources +
+ *  statedBy edges + trust materialised on the next write of any kind. */
 async function mutateMemory(dir, fn) {
   const payload = await loadMemory(dir);
   const out = fn(payload) ?? payload;
+  migrateLegacyProvenance(out);
   out.proseIndex = buildProseIndex(out.individuals);
   await mkdir(dirname(memoryGraphFile(dir)), { recursive: true });
   await atomicWriteJson(memoryGraphFile(dir), out);
@@ -123,6 +149,152 @@ async function mutateMemory(dir, fn) {
 
 const normText = (t) => String(t ?? "").replace(/\s+/g, " ").trim().slice(0, TEXT_CAP);
 const labelOf = (text) => (text.length > LABEL_CAP ? text.slice(0, LABEL_CAP - 1) + "…" : text);
+const nowIso = () => new Date().toISOString();
+
+/** First-write-wins createdAt: keep the prior individual's timestamp if it has
+ *  one (records when a thing was FIRST learned, not when last touched), else the
+ *  candidate. */
+function firstWriteCreatedAt(prior, candidate) {
+  return prior?.attributes?.find((a) => a?.prop === CREATED_AT_PROP)?.value || candidate || nowIso();
+}
+
+/** Set (replace-or-append) one attribute on an individual by prop. */
+function setAttr(ind, prop, key, value) {
+  ind.attributes = (ind.attributes || []).filter((a) => a?.prop !== prop);
+  ind.attributes.push({ prop, key, value });
+}
+
+// ---- Sources (step (b)): first-class provenance individuals -----------------
+
+/** Deterministic Source id + type over the closed kind set. Returns null for an
+ *  unknown kind (an unmappable provenance tag → no Source, honestly). */
+function sourceIdFor(desc) {
+  switch (desc?.kind) {
+    case "operator": return { id: OPERATOR_SOURCE_ID, type: "operator" };
+    case "provider": return { id: `src:provider:${desc.name}`, type: "provider" };
+    case "corpus": return { id: `src:corpus:${desc.name}`, type: "corpus" };
+    case "web": return { id: `src:learned:web:${fnv1aHex(String(desc.url || ""))}`, type: "web", url: String(desc.url || "") };
+    case "entailed": return { id: `src:entailed:${desc.rule}`, type: "entailed", rule: String(desc.rule || "") };
+    default: return null;
+  }
+}
+
+const sourceLabel = (id) => String(id).replace(/^src:/, "");
+
+/** Upsert a Source individual (deterministic id → idempotent, edges never
+ *  dangle). createdAt is first-write-wins; a recovered @<ts> (desc.createdAt)
+ *  seeds it when present. Returns the Source id, or null for an unknown kind. */
+function upsertSource(payload, desc, createdAtCandidate) {
+  const info = sourceIdFor(desc);
+  if (!info) return null;
+  const prior = payload.individuals.find((i) => i?.id === info.id);
+  const created = firstWriteCreatedAt(prior, desc?.createdAt || createdAtCandidate);
+  upsertIndividual(payload, {
+    id: info.id, label: sourceLabel(info.id), class: SOURCE_CLASS,
+    derived_from: [], mentions: [],
+    attributes: [
+      { prop: "rdf:type", key: "type", value: "owl:NamedIndividual" },
+      { prop: "mgx:sourceType", key: "sourceType", value: info.type },
+      { prop: CREATED_AT_PROP, key: "createdAt", value: created },
+      ...(info.url ? [{ prop: "mgx:sourceUrl", key: "sourceUrl", value: info.url }] : []),
+      ...(info.rule ? [{ prop: "mgx:sourceRule", key: "sourceRule", value: info.rule }] : []),
+    ],
+  });
+  return info.id;
+}
+
+/**
+ * Parse one legacy provenance TAG into a Source descriptor over the closed kind
+ * set — the inverse the migration and the live write path both name Sources
+ * through. The tag formats are exactly what the writers produce:
+ *   corpus:conceptnet /r/IsA   → { kind:"corpus",   name:"conceptnet" }
+ *   ace:chat:<session>@<ts>    → { kind:"operator",  createdAt:<ts> }
+ *   web:<url> | url:<url>      → { kind:"web",       url:<url> }
+ *   entailed:<rule>            → { kind:"entailed",  rule:<rule> }
+ * chat:/session: refs map to the operator; an unknown tag → null (no Source).
+ */
+export function provenanceTagToSource(tag) {
+  const t = String(tag || "").trim();
+  if (!t) return null;
+  const head = t.split(/\s+/)[0]; // drop trailing " /r/IsA" etc.
+  if (head.startsWith("corpus:")) return { kind: "corpus", name: head.slice("corpus:".length) || "unknown" };
+  if (head.startsWith("ace:")) {
+    const at = head.indexOf("@");
+    return { kind: "operator", createdAt: at >= 0 ? head.slice(at + 1) : "" };
+  }
+  if (head.startsWith("web:")) return { kind: "web", url: head.slice("web:".length) };
+  if (head.startsWith("url:")) return { kind: "web", url: head.slice("url:".length) };
+  if (head.startsWith("entailed:")) return { kind: "entailed", rule: head.slice("entailed:".length) };
+  if (head.startsWith("chat:") || head.startsWith("session:") || head.startsWith("operator")) return { kind: "operator" };
+  return null;
+}
+
+/** Map a payload's Source individuals into the { id: Source } shape computeTrust
+ *  resolves against. */
+function sourcesByIdMap(payload) {
+  const m = {};
+  for (const i of payload.individuals) if (i?.class === SOURCE_CLASS) m[i.id] = i;
+  return m;
+}
+
+/** The Source ids a Fact is statedBy, read off the edge group. */
+function statedByObjectsFor(payload, factId) {
+  const g = payload.objectProperties.find((x) => x?.prop === STATED_BY_PROP);
+  return (g?.examples || []).filter((e) => e?.subject === factId).map((e) => e.object);
+}
+
+/** Recompute + materialise a Fact's trust cache (mgx:trustScore + the auditable
+ *  mgx:trustInputs). Called exactly where a statedBy edge could have changed. */
+function recomputeFactTrust(payload, fact, nowMs = Date.now()) {
+  const sourceIds = statedByObjectsFor(payload, fact.id);
+  const createdAt = (fact.attributes || []).find((a) => a?.prop === CREATED_AT_PROP)?.value || "";
+  const { score, inputs } = computeTrust({ sourceIds, createdAt }, sourcesByIdMap(payload), { now: nowMs });
+  setAttr(fact, TRUST_SCORE_PROP, "trustScore", String(score));
+  setAttr(fact, TRUST_INPUTS_PROP, "trustInputs", JSON.stringify(inputs));
+}
+
+/** Reconcile a Fact's Sources + statedBy edges with its (unchanged, compat)
+ *  mgx:factProvenance string, then recompute its trust. ADD-only over
+ *  deterministic Source ids and upsertEdge's subject>object dedupe, so it is
+ *  idempotent and NEVER re-keys the fact (its id still hashes only (s,p,o)). */
+function syncFactSources(payload, fact, nowMs = Date.now()) {
+  const prov = (fact.attributes || []).find((a) => a?.prop === "mgx:factProvenance")?.value || "";
+  // a Source's createdAt candidate is the FIRST stating fact's createdAt (its
+  // "first seen"), falling back to now — first-write-wins keeps the earliest.
+  const factCreated = (fact.attributes || []).find((a) => a?.prop === CREATED_AT_PROP)?.value || new Date(nowMs).toISOString();
+  for (const tag of prov.split(" | ").filter(Boolean)) {
+    const desc = provenanceTagToSource(tag);
+    if (!desc) continue;
+    const sid = upsertSource(payload, desc, factCreated);
+    if (!sid) continue;
+    upsertEdge(payload, { predicate: "statedBy", prop: STATED_BY_PROP }, {
+      subject: fact.id, object: sid, subjectLabel: fact.label, objectLabel: sourceLabel(sid),
+    });
+  }
+  recomputeFactTrust(payload, fact, nowMs);
+}
+
+/** Lazy, idempotent migration of the legacy provenance union (step (b)): any
+ *  Fact that carries the string but has NO statedBy edge yet gets its Sources +
+ *  edges + trust materialised. The string is KEPT as a compat shim (readers on
+ *  chat.mjs still key on it). New writes stay reconciled via syncFactSources, so
+ *  in steady state this scan finds nothing and converges. */
+function migrateLegacyProvenance(payload) {
+  if (!Array.isArray(payload?.individuals) || !Array.isArray(payload?.objectProperties)) return;
+  const statedGroup = payload.objectProperties.find((g) => g?.prop === STATED_BY_PROP);
+  const haveEdge = new Set((statedGroup?.examples || []).map((e) => e.subject));
+  let changed = false;
+  const now = Date.now();
+  for (const ind of payload.individuals) {
+    if (ind?.class !== FACT_CLASS) continue;
+    if (haveEdge.has(ind.id)) continue; // already reconciled (live path or prior run)
+    const prov = (ind.attributes || []).find((a) => a?.prop === "mgx:factProvenance")?.value || "";
+    if (!prov) continue;
+    syncFactSources(payload, ind, now);
+    changed = true;
+  }
+  if (changed) recountClasses(payload);
+}
 
 /** Upsert an individual by id (replace-in-place keeps ordering stable). */
 function upsertIndividual(payload, ind) {
@@ -148,7 +320,7 @@ function upsertEdge(payload, { predicate, prop }, edge) {
 /** Recount `classes[]` from the individuals — every memory class stays counted
  *  and sampled the way graph-build.mjs counts the code classes. */
 function recountClasses(payload) {
-  const names = [MEMORY_SESSION_CLASS, UTTERANCE_CLASS, FACT_CLASS];
+  const names = [MEMORY_SESSION_CLASS, UTTERANCE_CLASS, FACT_CLASS, SOURCE_CLASS];
   payload.classes = payload.classes.filter((c) => !names.includes(c?.name));
   for (const name of names) {
     const of = payload.individuals.filter((i) => i?.class === name);
@@ -165,6 +337,7 @@ function ensureSession(payload, sessionId, started = "") {
     derived_from: [], mentions: [],
     attributes: [
       { prop: "rdf:type", key: "type", value: "owl:NamedIndividual" },
+      { prop: CREATED_AT_PROP, key: "createdAt", value: started || nowIso() },
       ...(started ? [{ prop: "mgx:sessionStarted", key: "started", value: started }] : []),
     ],
   });
@@ -173,7 +346,7 @@ function ensureSession(payload, sessionId, started = "") {
 
 /** Build (don't write) one Utterance individual + its edges; shared by the
  *  single and batch append paths. Returns the utterance id. */
-function putUtterance(payload, { role, text, ts, sessionId, sessionStarted = "", parsed = null, replyTo = null }) {
+function putUtterance(payload, { role, text, ts, sessionId, sessionStarted = "", parsed = null, replyTo = null, createdAt = "" }) {
   if (!ROLES.has(role)) throw new Error(`utterance role must be "visitor" or "tmct", got ${JSON.stringify(role)}`);
   if (!sessionId) throw new Error("utterance needs a sessionId");
   const cleanTs = String(ts || "");
@@ -181,6 +354,8 @@ function putUtterance(payload, { role, text, ts, sessionId, sessionStarted = "",
   const id = `utt:${sessionId}#${cleanTs}#${role}`;
   const label = labelOf(cleanText) || (role === "visitor" ? "a-visitor-said" : "a-tmct-said");
   const tokens = proseTokensFor({ doc: cleanText });
+  const prior = payload.individuals.find((x) => x?.id === id);
+  const createdAtVal = firstWriteCreatedAt(prior, createdAt || cleanTs); // first-write-wins
   const ind = {
     id, label, class: UTTERANCE_CLASS,
     derived_from: [], mentions: [],
@@ -189,6 +364,7 @@ function putUtterance(payload, { role, text, ts, sessionId, sessionStarted = "",
       { prop: "mgx:utteranceRole", key: "role", value: role },
       { prop: "mgx:utteranceText", key: "text", value: cleanText },
       { prop: "mgx:utteranceTs", key: "ts", value: cleanTs },
+      { prop: CREATED_AT_PROP, key: "createdAt", value: createdAtVal },
       ...(parsed != null ? [{ prop: "mgx:utteranceParsed", key: "parsed", value: JSON.stringify(parsed) }] : []),
       ...(tokens.length ? [{ prop: "mgx:hasProseTokens", key: "prose_tokens", value: tokens.join(" ") }] : []),
     ],
@@ -253,7 +429,7 @@ export function normFactTerm(t) {
  *  carrying rdf:subject / rdf:predicate / rdf:object (+ provenance). The
  *  Phase-2 ACE parser's write point. Same (s,p,o) → same id → upsert, never a
  *  duplicate. Returns { id }. */
-export async function appendFact(dir, { subject, predicate, object, provenance = "" } = {}) {
+export async function appendFact(dir, { subject, predicate, object, provenance = "", createdAt = "" } = {}) {
   const s = normFactTerm(subject);
   const p = normText(predicate);
   const o = normFactTerm(object);
@@ -264,7 +440,10 @@ export async function appendFact(dir, { subject, predicate, object, provenance =
   await mutateMemory(dir, (payload) => {
     const prior = payload.individuals.find((x) => x?.id === id);
     const priorProv = prior?.attributes?.find((a) => a?.prop === "mgx:factProvenance")?.value || "";
+    // The mgx:factProvenance union stays BYTE-IDENTICAL (a compat shim readers
+    // still key on); the Source edges below are DERIVED from it, purely additive.
     const provs = [...new Set([...priorProv.split(" | "), normText(provenance)].filter(Boolean))];
+    const createdAtVal = firstWriteCreatedAt(prior, createdAt); // first-write-wins
     upsertIndividual(payload, {
       id, label: labelOf(text), class: FACT_CLASS,
       derived_from: [], mentions: [],
@@ -273,11 +452,82 @@ export async function appendFact(dir, { subject, predicate, object, provenance =
         { prop: "rdf:subject", key: "subject", value: s },
         { prop: "rdf:predicate", key: "predicate", value: p },
         { prop: "rdf:object", key: "object", value: o },
+        { prop: CREATED_AT_PROP, key: "createdAt", value: createdAtVal },
         ...(provs.length ? [{ prop: "mgx:factProvenance", key: "provenance", value: provs.join(" | ") }] : []),
         ...(tokens.length ? [{ prop: "mgx:hasProseTokens", key: "prose_tokens", value: tokens.join(" ") }] : []),
       ],
     });
+    // Derive Source individuals + statedBy edges from the provenance union and
+    // (re)materialise this fact's trust — the live half of steps (b)/(c).
+    syncFactSources(payload, payload.individuals.find((x) => x?.id === id));
     recountClasses(payload);
   });
   return { id };
+}
+
+// ---- Chat-facing seams (W4 fact lookup + contradiction) ---------------------
+// The W4 fact-lookup THREADING lives in chat.mjs (NOT here); these pure readers
+// are the seam it calls so the answer layer ranks candidates by relevance ×
+// trust and cites provenance WITHOUT re-walking the graph shape.
+
+/**
+ * Resolve every reified Fact in a loaded memory payload into a row carrying its
+ * Source ids + source-type multiset, the legacy provenance string (compat), and
+ * the cached trust score. Pure. The exported seam the chat/answer layer consumes
+ * for trust-weighted fact ranking.
+ */
+export function readFactRows(memory) {
+  const individuals = memory?.individuals || [];
+  const sourcesById = new Map(individuals.filter((i) => i?.class === SOURCE_CLASS).map((i) => [i.id, i]));
+  const statedGroup = (memory?.objectProperties || []).find((g) => g?.prop === STATED_BY_PROP);
+  const byFact = new Map();
+  for (const e of statedGroup?.examples || []) {
+    if (!byFact.has(e.subject)) byFact.set(e.subject, []);
+    byFact.get(e.subject).push(e.object);
+  }
+  const rows = [];
+  for (const ind of individuals) {
+    if (ind?.class !== FACT_CLASS) continue;
+    const get = (k) => (ind.attributes || []).find((a) => a?.key === k)?.value || "";
+    const sourceIds = byFact.get(ind.id) || [];
+    const sourceTypes = sourceIds
+      .map((id) => (sourcesById.get(id)?.attributes || []).find((a) => a?.prop === "mgx:sourceType")?.value)
+      .filter(Boolean);
+    rows.push({
+      id: ind.id,
+      subject: get("subject"), predicate: get("predicate"), object: get("object"),
+      provenance: get("provenance"), // legacy compat string, verbatim
+      sourceIds, sourceTypes,
+      trust: Number((ind.attributes || []).find((a) => a?.prop === TRUST_SCORE_PROP)?.value) || 0,
+    });
+  }
+  return rows;
+}
+
+/** The trust floor a fact must clear before a differing object counts as a real
+ *  contradiction (below it the fact is too weak to contradict anything). */
+export const CONTRADICTION_TRUST_FLOOR = 0.5;
+
+/**
+ * Facts that CONTRADICT: same (subject, predicate), DIFFERENT object, each above
+ * the trust floor. Returns groups (each a [rows] sorted by trust desc) so the
+ * answer/inspection layer surfaces BOTH with their provenance and NEVER silently
+ * picks the higher-trust one. Same (s,p,o) from two writers is corroboration,
+ * not contradiction — one Fact id, N statedBy edges — so it never appears here.
+ */
+export function findContradictions(memory, { floor = CONTRADICTION_TRUST_FLOOR } = {}) {
+  const rows = readFactRows(memory).filter((r) => r.trust >= floor);
+  const byKey = new Map();
+  for (const r of rows) {
+    const key = `${r.subject} ${r.predicate}`;
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key).push(r);
+  }
+  const out = [];
+  for (const group of byKey.values()) {
+    if (new Set(group.map((r) => r.object)).size > 1) {
+      out.push(group.slice().sort((a, b) => b.trust - a.trust || a.object.localeCompare(b.object)));
+    }
+  }
+  return out.sort((a, b) => `${a[0].subject} ${a[0].predicate}`.localeCompare(`${b[0].subject} ${b[0].predicate}`));
 }

@@ -25,7 +25,7 @@
 
 import { mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
-import { appendUtterances } from "./memory/core.mjs";
+import { appendUtterances, CREATED_AT_PROP } from "./memory/core.mjs";
 
 export const SESSIONS_DIR_REL = join(".tmct", "sessions");
 
@@ -73,6 +73,10 @@ export function upsertSession(entities, record) {
   entities.individuals ||= [];
   entities.objectProperties ||= [];
 
+  // capture the prior copy's createdAt BEFORE we drop it — first-write-wins so
+  // mgx:createdAt records when the session was FIRST seen, not last re-appended.
+  const priorSession = entities.individuals.find((i) => i?.id === sid);
+  const priorCreatedAt = priorSession?.attributes?.find((a) => a?.prop === CREATED_AT_PROP)?.value || "";
   // replace any prior copy of this session (read-time appends run once per turn)
   entities.individuals = entities.individuals.filter((i) => i?.id !== sid);
   let group = entities.objectProperties.find((g) => g?.prop === ASKS_ABOUT_PROP);
@@ -111,6 +115,8 @@ export function upsertSession(entities, record) {
     id: sid, label, class: SESSION_CLASS,
     derived_from: [], mentions: [],
     attributes: [
+      // referenced via the imported constant (single-sourced from memory/core.mjs)
+      { prop: CREATED_AT_PROP, key: "createdAt", value: priorCreatedAt || started || new Date().toISOString() },
       { prop: "mgx:sessionStarted", key: "started", value: started },
       { prop: "mgx:sessionEnded", key: "ended", value: ended },
       { prop: "mgx:sessionTurns", key: "turns", value: String(turns.length) },
