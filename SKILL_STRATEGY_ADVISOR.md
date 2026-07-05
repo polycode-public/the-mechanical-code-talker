@@ -73,7 +73,15 @@ tail, the repo, and the brief.
 
 ## 2. The deep process (what each tick does)
 
-Each tick runs this sequence, budgeting effort toward the focused brief (§4):
+Each tick runs this sequence, budgeting effort toward the focused brief (§4).
+
+**Step 0 — every tick, and every re-arm: CHECK THE INBOX.** Before the sequence below, read the
+session's inbox (`~/.claude/inboxes/<your-handle>.md`) for `[unread]` messages from other Claude
+sessions on the machine. Act on any that bear on the operator's goal — a coordination request, a
+hand-off, a conflicting workstream, a "flag before you touch these files" — and surface them to the
+main loop alongside the tick's findings, then mark them `[read]`. Inter-session coordination is part
+of the watch, not an afterthought: when two sessions edit the same repo, the advisor is the tripwire
+that catches the collision before a clobbered push (protocol: `~/.claude/inboxes/README.md`).
 
 1. **Goal inference.** Read the transcript tail, the operator's USER prompts first. State in one
    line what the operator is actually trying to achieve, near-term and long-term.
@@ -153,11 +161,18 @@ anything non-obvious to the operator in your next chat message (skip if it said 
 advice"), and disclose when you act on its advice. Then re-arm the next tick with an updated
 ledger and a fresh focused brief.
 
-**Step D — cadence: re-arm on exit, ~5-minute return (operator standing preference).** The
-completion notification is the trigger: deep ticks naturally take 2–4 minutes, so re-arming on
-each completion lands on the cadence without any timer. Two adjustments:
+**Step D — cadence: re-arm on exit, ~5-minute return (operator standing preference).** Start the
+advisor on this 5-minute re-arm by DEFAULT for any non-trivial session (it rides
+`SKILL_TUNING_CYCLE`'s autonomous loop). The completion notification is the trigger: deep ticks
+naturally take 2–4 minutes, so re-arming on each completion lands on the cadence without any timer.
+Three adjustments:
+- **Check the inbox on every re-arm (and on start).** Each time the main loop re-arms the advisor,
+  it first reads its own inbox (`~/.claude/inboxes/<handle>.md`), acts on `[unread]` messages, marks
+  them `[read]`, and hands the advisor tick any cross-session context worth watching (Step 0). This
+  is how coordination stays current at the 5-minute cadence rather than only at session start.
 - **Hold while idle.** When the session is waiting on the operator and nothing is moving, hold
-  the re-arm (a tick with nothing new to chew on repeats itself). Resume the moment work resumes.
+  the re-arm (a tick with nothing new to chew on repeats itself). Resume the moment work resumes —
+  but still glance at the inbox on resume, since another session may have moved while you idled.
 - **Idle-session fallback.** If advice should arrive even when the main loop is asleep, use a
   scheduled (cron/routine) advisor session that writes to the owning session's inbox; the main
   loop reads its inbox between tasks and relays. Delivery still happens through the main loop.
