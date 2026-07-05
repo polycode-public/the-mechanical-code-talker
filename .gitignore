@@ -3,6 +3,16 @@ node_modules/
 # tmct's own graph/session artifacts (machine-local, rebuildable)
 .tmct/
 
+# ...except the bundled EXAMPLE graphs, which are meant to be committed so a new
+# user can `npm run example:mini` and see tmct work with no setup. Only the
+# graph.json ships; any session logs / memory a user's own run writes under these
+# dirs stays ignored (rules below).
+!examples/**/.tmct/
+!examples/**/.tmct/graph.json
+examples/**/.tmct/session-*.log
+examples/**/.tmct/memory/
+examples/**/.tmct/sessions/
+
 # npm
 *.log
 npm-debug.log*

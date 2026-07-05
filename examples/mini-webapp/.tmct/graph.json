@@ -1,0 +1,2338 @@
+{
+  "generated_at": "2026-05-24T16:00:00.000Z",
+  "prefixes": {
+    "seon": "http://se-on.org/ontologies/seon.owl#",
+    "mgx": "urn:tmct:mgx#",
+    "rdfs": "http://www.w3.org/2000/01/rdf-schema#"
+  },
+  "vocabulary": [
+    {
+      "prop": "mgx:importsNamespace",
+      "predicate": "imports",
+      "note": "module→module; SEON usesComplexType is type→type, so owned (cf. main:dependsOn)"
+    },
+    {
+      "prop": "mgx:callsCoarse",
+      "predicate": "calls",
+      "note": "module→module, import-backed; NOT SEON's method→method invokesMethod"
+    },
+    {
+      "prop": "mgx:callsSymbol",
+      "predicate": "callsSymbol",
+      "note": "caller fn/method→callee fn/class; symbol-granular, unique-name-resolved (Group A); cf. seon:invokesMethod"
+    },
+    {
+      "prop": "seon:declaresMethod",
+      "predicate": "defines"
+    },
+    {
+      "prop": "seon:containsCodeEntity",
+      "predicate": "contains"
+    },
+    {
+      "prop": "mgx:touchedByCommit",
+      "predicate": "touches",
+      "note": "owned; seon:history is not a real SEON property (cf. history:isCommittedIn)"
+    },
+    {
+      "prop": "mgx:touchesSymbol",
+      "predicate": "touchesSymbol",
+      "note": "Commit→CodeEntity; changed-line-range ∩ symbol span; owned (cf. seon-hist)"
+    },
+    {
+      "prop": "mgx:commitAuthor",
+      "note": "commit author name (%an)"
+    },
+    {
+      "prop": "mgx:commitDate",
+      "note": "commit author date, ISO-8601 (%aI)"
+    },
+    {
+      "prop": "mgx:commitMessage",
+      "note": "commit subject line (%s), capped to 120 chars"
+    },
+    {
+      "prop": "mgx:testsCoverage",
+      "predicate": "tests",
+      "note": "no SEON term — our extension"
+    },
+    {
+      "prop": "seon:hasSuperType",
+      "predicate": "inherits"
+    },
+    {
+      "prop": "mgx:changeCoupledWith",
+      "predicate": "cochange",
+      "note": "git co-change; owned (no SEON term; cf. domain-spanning change-couplings.owl)"
+    },
+    {
+      "prop": "mgx:reExports",
+      "predicate": "reexports",
+      "note": "public API / re-export surface (__all__); owned, no SEON term"
+    },
+    {
+      "prop": "mgx:exportsAll",
+      "note": "literal __all__ membership list on a module (the public surface a new sibling must join)"
+    },
+    {
+      "prop": "mgx:decorator",
+      "note": "Python/framework decorators — our extension"
+    },
+    {
+      "prop": "seon:hasParameter",
+      "note": "formal parameter list (signature string, ast.unparse of the args)"
+    },
+    {
+      "prop": "seon:hasReturnType",
+      "note": "return ANNOTATION string only (not a resolved type — that is Group B)"
+    },
+    {
+      "prop": "seon:throwsException",
+      "note": "exception names from `raise` statements (literal, not resolved)"
+    },
+    {
+      "prop": "seon:catchesException",
+      "note": "exception types from `except` handlers"
+    },
+    {
+      "prop": "seon:accessesField",
+      "note": "self.<field> names a method touches (self-scoped only — honest)"
+    },
+    {
+      "prop": "seon:isStatic",
+      "note": "@staticmethod/@classmethod"
+    },
+    {
+      "prop": "seon:isAbstract",
+      "note": "@abstractmethod/@abstractproperty"
+    },
+    {
+      "prop": "seon:isConstant",
+      "note": "ALL_CAPS module global"
+    },
+    {
+      "prop": "seon:subKind",
+      "note": "type flavour on a Class define when not a plain class (interface/enum/struct/record); kind stays class"
+    },
+    {
+      "prop": "seon:hasAccessModifier",
+      "note": "visibility from leading underscore (private/protected); public omitted"
+    },
+    {
+      "prop": "seon:hasDoc",
+      "note": "first docstring line (capped) — one-line purpose without the body"
+    }
+  ],
+  "classes": [
+    {
+      "name": "Module",
+      "count": 12,
+      "sample": [
+        "src/core/model.mjs",
+        "src/core/store.mjs",
+        "src/core/validate.mjs"
+      ]
+    },
+    {
+      "name": "Class",
+      "count": 10,
+      "sample": [
+        "Record",
+        "Task",
+        "User"
+      ]
+    },
+    {
+      "name": "Function",
+      "count": 15,
+      "sample": [
+        "loadStore",
+        "saveStore",
+        "validateTask"
+      ]
+    },
+    {
+      "name": "Method",
+      "count": 4,
+      "sample": [
+        "Task.complete",
+        "Task.assignTo",
+        "Logger.info"
+      ]
+    },
+    {
+      "name": "Attribute",
+      "count": 1,
+      "sample": [
+        "Task.title"
+      ]
+    },
+    {
+      "name": "GlobalVariable",
+      "count": 0,
+      "sample": []
+    },
+    {
+      "name": "Commit",
+      "count": 8,
+      "sample": [
+        "a1b2c3d4e5f6",
+        "b2c3d4e5f6a1",
+        "c3d4e5f6a1b2"
+      ]
+    }
+  ],
+  "objectProperties": [
+    {
+      "predicate": "imports",
+      "prop": "mgx:importsNamespace",
+      "count": 18,
+      "examples": [
+        {
+          "subject": "mod:src/core/store.mjs",
+          "object": "mod:src/core/model.mjs",
+          "subjectLabel": "src/core/store.mjs",
+          "objectLabel": "src/core/model.mjs"
+        },
+        {
+          "subject": "mod:src/core/validate.mjs",
+          "object": "mod:src/core/model.mjs",
+          "subjectLabel": "src/core/validate.mjs",
+          "objectLabel": "src/core/model.mjs"
+        },
+        {
+          "subject": "mod:src/handlers/base.mjs",
+          "object": "mod:src/lib/http.mjs",
+          "subjectLabel": "src/handlers/base.mjs",
+          "objectLabel": "src/lib/http.mjs"
+        },
+        {
+          "subject": "mod:src/server/router.mjs",
+          "object": "mod:src/lib/http.mjs",
+          "subjectLabel": "src/server/router.mjs",
+          "objectLabel": "src/lib/http.mjs"
+        },
+        {
+          "subject": "mod:src/server/router.mjs",
+          "object": "mod:src/lib/logger.mjs",
+          "subjectLabel": "src/server/router.mjs",
+          "objectLabel": "src/lib/logger.mjs"
+        },
+        {
+          "subject": "mod:src/handlers/tasks.mjs",
+          "object": "mod:src/handlers/base.mjs",
+          "subjectLabel": "src/handlers/tasks.mjs",
+          "objectLabel": "src/handlers/base.mjs"
+        },
+        {
+          "subject": "mod:src/handlers/tasks.mjs",
+          "object": "mod:src/core/store.mjs",
+          "subjectLabel": "src/handlers/tasks.mjs",
+          "objectLabel": "src/core/store.mjs"
+        },
+        {
+          "subject": "mod:src/handlers/tasks.mjs",
+          "object": "mod:src/core/validate.mjs",
+          "subjectLabel": "src/handlers/tasks.mjs",
+          "objectLabel": "src/core/validate.mjs"
+        },
+        {
+          "subject": "mod:src/handlers/tasks.mjs",
+          "object": "mod:src/core/model.mjs",
+          "subjectLabel": "src/handlers/tasks.mjs",
+          "objectLabel": "src/core/model.mjs"
+        },
+        {
+          "subject": "mod:src/handlers/tasks.mjs",
+          "object": "mod:src/lib/http.mjs",
+          "subjectLabel": "src/handlers/tasks.mjs",
+          "objectLabel": "src/lib/http.mjs"
+        },
+        {
+          "subject": "mod:src/handlers/users.mjs",
+          "object": "mod:src/handlers/base.mjs",
+          "subjectLabel": "src/handlers/users.mjs",
+          "objectLabel": "src/handlers/base.mjs"
+        },
+        {
+          "subject": "mod:src/handlers/users.mjs",
+          "object": "mod:src/core/store.mjs",
+          "subjectLabel": "src/handlers/users.mjs",
+          "objectLabel": "src/core/store.mjs"
+        },
+        {
+          "subject": "mod:src/handlers/users.mjs",
+          "object": "mod:src/core/validate.mjs",
+          "subjectLabel": "src/handlers/users.mjs",
+          "objectLabel": "src/core/validate.mjs"
+        },
+        {
+          "subject": "mod:src/handlers/users.mjs",
+          "object": "mod:src/core/model.mjs",
+          "subjectLabel": "src/handlers/users.mjs",
+          "objectLabel": "src/core/model.mjs"
+        },
+        {
+          "subject": "mod:src/server/app.mjs",
+          "object": "mod:src/server/router.mjs",
+          "subjectLabel": "src/server/app.mjs",
+          "objectLabel": "src/server/router.mjs"
+        },
+        {
+          "subject": "mod:src/server/app.mjs",
+          "object": "mod:src/handlers/tasks.mjs",
+          "subjectLabel": "src/server/app.mjs",
+          "objectLabel": "src/handlers/tasks.mjs"
+        },
+        {
+          "subject": "mod:src/server/app.mjs",
+          "object": "mod:src/handlers/users.mjs",
+          "subjectLabel": "src/server/app.mjs",
+          "objectLabel": "src/handlers/users.mjs"
+        },
+        {
+          "subject": "mod:src/server/app.mjs",
+          "object": "mod:src/lib/logger.mjs",
+          "subjectLabel": "src/server/app.mjs",
+          "objectLabel": "src/lib/logger.mjs"
+        }
+      ]
+    },
+    {
+      "predicate": "calls",
+      "prop": "mgx:callsCoarse",
+      "count": 7,
+      "examples": [
+        {
+          "subject": "mod:src/core/store.mjs",
+          "object": "mod:src/core/model.mjs",
+          "subjectLabel": "src/core/store.mjs",
+          "objectLabel": "src/core/model.mjs"
+        },
+        {
+          "subject": "mod:src/core/validate.mjs",
+          "object": "mod:src/core/model.mjs",
+          "subjectLabel": "src/core/validate.mjs",
+          "objectLabel": "src/core/model.mjs"
+        },
+        {
+          "subject": "mod:src/handlers/tasks.mjs",
+          "object": "mod:src/core/validate.mjs",
+          "subjectLabel": "src/handlers/tasks.mjs",
+          "objectLabel": "src/core/validate.mjs"
+        },
+        {
+          "subject": "mod:src/handlers/tasks.mjs",
+          "object": "mod:src/core/store.mjs",
+          "subjectLabel": "src/handlers/tasks.mjs",
+          "objectLabel": "src/core/store.mjs"
+        },
+        {
+          "subject": "mod:src/handlers/users.mjs",
+          "object": "mod:src/core/validate.mjs",
+          "subjectLabel": "src/handlers/users.mjs",
+          "objectLabel": "src/core/validate.mjs"
+        },
+        {
+          "subject": "mod:src/server/app.mjs",
+          "object": "mod:src/server/router.mjs",
+          "subjectLabel": "src/server/app.mjs",
+          "objectLabel": "src/server/router.mjs"
+        },
+        {
+          "subject": "mod:src/server/app.mjs",
+          "object": "mod:src/lib/logger.mjs",
+          "subjectLabel": "src/server/app.mjs",
+          "objectLabel": "src/lib/logger.mjs"
+        }
+      ]
+    },
+    {
+      "predicate": "callsSymbol",
+      "prop": "mgx:callsSymbol",
+      "count": 9,
+      "examples": [
+        {
+          "subject": "fn:src/core/store.mjs#saveStore",
+          "object": "fn:src/core/model.mjs#Task",
+          "subjectLabel": "saveStore",
+          "objectLabel": "Task"
+        },
+        {
+          "subject": "fn:src/core/validate.mjs#validateTask",
+          "object": "fn:src/core/model.mjs#Task",
+          "subjectLabel": "validateTask",
+          "objectLabel": "Task"
+        },
+        {
+          "subject": "fn:src/core/validate.mjs#validateUser",
+          "object": "fn:src/core/model.mjs#User",
+          "subjectLabel": "validateUser",
+          "objectLabel": "User"
+        },
+        {
+          "subject": "fn:src/handlers/tasks.mjs#listTasks",
+          "object": "fn:src/core/store.mjs#loadStore",
+          "subjectLabel": "listTasks",
+          "objectLabel": "loadStore"
+        },
+        {
+          "subject": "fn:src/handlers/tasks.mjs#createTask",
+          "object": "fn:src/core/validate.mjs#validateTask",
+          "subjectLabel": "createTask",
+          "objectLabel": "validateTask"
+        },
+        {
+          "subject": "fn:src/handlers/tasks.mjs#createTask",
+          "object": "fn:src/core/store.mjs#saveStore",
+          "subjectLabel": "createTask",
+          "objectLabel": "saveStore"
+        },
+        {
+          "subject": "fn:src/handlers/users.mjs#listUsers",
+          "object": "fn:src/core/validate.mjs#validateUser",
+          "subjectLabel": "listUsers",
+          "objectLabel": "validateUser"
+        },
+        {
+          "subject": "fn:src/server/app.mjs#createApp",
+          "object": "fn:src/server/router.mjs#addRoute",
+          "subjectLabel": "createApp",
+          "objectLabel": "addRoute"
+        },
+        {
+          "subject": "fn:src/server/app.mjs#createApp",
+          "object": "fn:src/lib/logger.mjs#createLogger",
+          "subjectLabel": "createApp",
+          "objectLabel": "createLogger"
+        }
+      ]
+    },
+    {
+      "predicate": "tests",
+      "prop": "mgx:testsCoverage",
+      "count": 5,
+      "examples": [
+        {
+          "subject": "mod:test/tasks.test.mjs",
+          "object": "mod:src/handlers/tasks.mjs",
+          "subjectLabel": "test/tasks.test.mjs",
+          "objectLabel": "src/handlers/tasks.mjs"
+        },
+        {
+          "subject": "mod:test/tasks.test.mjs",
+          "object": "mod:src/core/store.mjs",
+          "subjectLabel": "test/tasks.test.mjs",
+          "objectLabel": "src/core/store.mjs"
+        },
+        {
+          "subject": "mod:test/tasks.test.mjs",
+          "object": "mod:src/core/model.mjs",
+          "subjectLabel": "test/tasks.test.mjs",
+          "objectLabel": "src/core/model.mjs"
+        },
+        {
+          "subject": "mod:test/store.test.mjs",
+          "object": "mod:src/core/store.mjs",
+          "subjectLabel": "test/store.test.mjs",
+          "objectLabel": "src/core/store.mjs"
+        },
+        {
+          "subject": "mod:test/store.test.mjs",
+          "object": "mod:src/core/model.mjs",
+          "subjectLabel": "test/store.test.mjs",
+          "objectLabel": "src/core/model.mjs"
+        }
+      ]
+    },
+    {
+      "predicate": "defines",
+      "prop": "seon:declaresMethod",
+      "count": 30,
+      "examples": [
+        {
+          "subject": "mod:src/core/model.mjs",
+          "object": "fn:src/core/model.mjs#Record",
+          "subjectLabel": "src/core/model.mjs",
+          "objectLabel": "Record"
+        },
+        {
+          "subject": "mod:src/core/model.mjs",
+          "object": "fn:src/core/model.mjs#Task",
+          "subjectLabel": "src/core/model.mjs",
+          "objectLabel": "Task"
+        },
+        {
+          "subject": "mod:src/core/model.mjs",
+          "object": "fn:src/core/model.mjs#Task.title",
+          "subjectLabel": "src/core/model.mjs",
+          "objectLabel": "Task.title"
+        },
+        {
+          "subject": "mod:src/core/model.mjs",
+          "object": "fn:src/core/model.mjs#Task.complete",
+          "subjectLabel": "src/core/model.mjs",
+          "objectLabel": "Task.complete"
+        },
+        {
+          "subject": "mod:src/core/model.mjs",
+          "object": "fn:src/core/model.mjs#Task.assignTo",
+          "subjectLabel": "src/core/model.mjs",
+          "objectLabel": "Task.assignTo"
+        },
+        {
+          "subject": "mod:src/core/model.mjs",
+          "object": "fn:src/core/model.mjs#User",
+          "subjectLabel": "src/core/model.mjs",
+          "objectLabel": "User"
+        },
+        {
+          "subject": "mod:src/core/model.mjs",
+          "object": "fn:src/core/model.mjs#Project",
+          "subjectLabel": "src/core/model.mjs",
+          "objectLabel": "Project"
+        },
+        {
+          "subject": "mod:src/core/store.mjs",
+          "object": "fn:src/core/store.mjs#Store",
+          "subjectLabel": "src/core/store.mjs",
+          "objectLabel": "Store"
+        },
+        {
+          "subject": "mod:src/core/store.mjs",
+          "object": "fn:src/core/store.mjs#loadStore",
+          "subjectLabel": "src/core/store.mjs",
+          "objectLabel": "loadStore"
+        },
+        {
+          "subject": "mod:src/core/store.mjs",
+          "object": "fn:src/core/store.mjs#saveStore",
+          "subjectLabel": "src/core/store.mjs",
+          "objectLabel": "saveStore"
+        },
+        {
+          "subject": "mod:src/core/validate.mjs",
+          "object": "fn:src/core/validate.mjs#validateTask",
+          "subjectLabel": "src/core/validate.mjs",
+          "objectLabel": "validateTask"
+        },
+        {
+          "subject": "mod:src/core/validate.mjs",
+          "object": "fn:src/core/validate.mjs#validateUser",
+          "subjectLabel": "src/core/validate.mjs",
+          "objectLabel": "validateUser"
+        },
+        {
+          "subject": "mod:src/lib/logger.mjs",
+          "object": "fn:src/lib/logger.mjs#Logger",
+          "subjectLabel": "src/lib/logger.mjs",
+          "objectLabel": "Logger"
+        },
+        {
+          "subject": "mod:src/lib/logger.mjs",
+          "object": "fn:src/lib/logger.mjs#Logger.info",
+          "subjectLabel": "src/lib/logger.mjs",
+          "objectLabel": "Logger.info"
+        },
+        {
+          "subject": "mod:src/lib/logger.mjs",
+          "object": "fn:src/lib/logger.mjs#createLogger",
+          "subjectLabel": "src/lib/logger.mjs",
+          "objectLabel": "createLogger"
+        },
+        {
+          "subject": "mod:src/lib/http.mjs",
+          "object": "fn:src/lib/http.mjs#parseBody",
+          "subjectLabel": "src/lib/http.mjs",
+          "objectLabel": "parseBody"
+        },
+        {
+          "subject": "mod:src/lib/http.mjs",
+          "object": "fn:src/lib/http.mjs#sendJson",
+          "subjectLabel": "src/lib/http.mjs",
+          "objectLabel": "sendJson"
+        },
+        {
+          "subject": "mod:src/handlers/base.mjs",
+          "object": "fn:src/handlers/base.mjs#Controller",
+          "subjectLabel": "src/handlers/base.mjs",
+          "objectLabel": "Controller"
+        },
+        {
+          "subject": "mod:src/handlers/base.mjs",
+          "object": "fn:src/handlers/base.mjs#Controller.handle",
+          "subjectLabel": "src/handlers/base.mjs",
+          "objectLabel": "Controller.handle"
+        },
+        {
+          "subject": "mod:src/server/router.mjs",
+          "object": "fn:src/server/router.mjs#Router",
+          "subjectLabel": "src/server/router.mjs",
+          "objectLabel": "Router"
+        },
+        {
+          "subject": "mod:src/server/router.mjs",
+          "object": "fn:src/server/router.mjs#addRoute",
+          "subjectLabel": "src/server/router.mjs",
+          "objectLabel": "addRoute"
+        },
+        {
+          "subject": "mod:src/handlers/tasks.mjs",
+          "object": "fn:src/handlers/tasks.mjs#TaskController",
+          "subjectLabel": "src/handlers/tasks.mjs",
+          "objectLabel": "TaskController"
+        },
+        {
+          "subject": "mod:src/handlers/tasks.mjs",
+          "object": "fn:src/handlers/tasks.mjs#listTasks",
+          "subjectLabel": "src/handlers/tasks.mjs",
+          "objectLabel": "listTasks"
+        },
+        {
+          "subject": "mod:src/handlers/tasks.mjs",
+          "object": "fn:src/handlers/tasks.mjs#createTask",
+          "subjectLabel": "src/handlers/tasks.mjs",
+          "objectLabel": "createTask"
+        },
+        {
+          "subject": "mod:src/handlers/users.mjs",
+          "object": "fn:src/handlers/users.mjs#UserController",
+          "subjectLabel": "src/handlers/users.mjs",
+          "objectLabel": "UserController"
+        },
+        {
+          "subject": "mod:src/handlers/users.mjs",
+          "object": "fn:src/handlers/users.mjs#listUsers",
+          "subjectLabel": "src/handlers/users.mjs",
+          "objectLabel": "listUsers"
+        },
+        {
+          "subject": "mod:src/server/app.mjs",
+          "object": "fn:src/server/app.mjs#createApp",
+          "subjectLabel": "src/server/app.mjs",
+          "objectLabel": "createApp"
+        },
+        {
+          "subject": "mod:src/server/app.mjs",
+          "object": "fn:src/server/app.mjs#start",
+          "subjectLabel": "src/server/app.mjs",
+          "objectLabel": "start"
+        },
+        {
+          "subject": "mod:test/tasks.test.mjs",
+          "object": "fn:test/tasks.test.mjs#testCreateTask",
+          "subjectLabel": "test/tasks.test.mjs",
+          "objectLabel": "testCreateTask"
+        },
+        {
+          "subject": "mod:test/store.test.mjs",
+          "object": "fn:test/store.test.mjs#testLoadStore",
+          "subjectLabel": "test/store.test.mjs",
+          "objectLabel": "testLoadStore"
+        }
+      ]
+    },
+    {
+      "predicate": "touches",
+      "prop": "mgx:touchedByCommit",
+      "count": 18,
+      "examples": [
+        {
+          "subject": "commit:a1b2c3d4e5f6",
+          "object": "mod:src/core/model.mjs",
+          "subjectLabel": "a1b2c3d4e5f6",
+          "objectLabel": "src/core/model.mjs"
+        },
+        {
+          "subject": "commit:a1b2c3d4e5f6",
+          "object": "mod:src/core/store.mjs",
+          "subjectLabel": "a1b2c3d4e5f6",
+          "objectLabel": "src/core/store.mjs"
+        },
+        {
+          "subject": "commit:b2c3d4e5f6a1",
+          "object": "mod:src/core/validate.mjs",
+          "subjectLabel": "b2c3d4e5f6a1",
+          "objectLabel": "src/core/validate.mjs"
+        },
+        {
+          "subject": "commit:b2c3d4e5f6a1",
+          "object": "mod:src/core/model.mjs",
+          "subjectLabel": "b2c3d4e5f6a1",
+          "objectLabel": "src/core/model.mjs"
+        },
+        {
+          "subject": "commit:c3d4e5f6a1b2",
+          "object": "mod:src/handlers/tasks.mjs",
+          "subjectLabel": "c3d4e5f6a1b2",
+          "objectLabel": "src/handlers/tasks.mjs"
+        },
+        {
+          "subject": "commit:c3d4e5f6a1b2",
+          "object": "mod:src/handlers/base.mjs",
+          "subjectLabel": "c3d4e5f6a1b2",
+          "objectLabel": "src/handlers/base.mjs"
+        },
+        {
+          "subject": "commit:c3d4e5f6a1b2",
+          "object": "mod:src/core/store.mjs",
+          "subjectLabel": "c3d4e5f6a1b2",
+          "objectLabel": "src/core/store.mjs"
+        },
+        {
+          "subject": "commit:d4e5f6a1b2c3",
+          "object": "mod:src/server/app.mjs",
+          "subjectLabel": "d4e5f6a1b2c3",
+          "objectLabel": "src/server/app.mjs"
+        },
+        {
+          "subject": "commit:d4e5f6a1b2c3",
+          "object": "mod:src/server/router.mjs",
+          "subjectLabel": "d4e5f6a1b2c3",
+          "objectLabel": "src/server/router.mjs"
+        },
+        {
+          "subject": "commit:d4e5f6a1b2c3",
+          "object": "mod:src/lib/http.mjs",
+          "subjectLabel": "d4e5f6a1b2c3",
+          "objectLabel": "src/lib/http.mjs"
+        },
+        {
+          "subject": "commit:e5f6a1b2c3d4",
+          "object": "mod:src/lib/logger.mjs",
+          "subjectLabel": "e5f6a1b2c3d4",
+          "objectLabel": "src/lib/logger.mjs"
+        },
+        {
+          "subject": "commit:e5f6a1b2c3d4",
+          "object": "mod:src/server/app.mjs",
+          "subjectLabel": "e5f6a1b2c3d4",
+          "objectLabel": "src/server/app.mjs"
+        },
+        {
+          "subject": "commit:f6a1b2c3d4e5",
+          "object": "mod:src/handlers/users.mjs",
+          "subjectLabel": "f6a1b2c3d4e5",
+          "objectLabel": "src/handlers/users.mjs"
+        },
+        {
+          "subject": "commit:f6a1b2c3d4e5",
+          "object": "mod:src/handlers/base.mjs",
+          "subjectLabel": "f6a1b2c3d4e5",
+          "objectLabel": "src/handlers/base.mjs"
+        },
+        {
+          "subject": "commit:0a1b2c3d4e5f",
+          "object": "mod:test/tasks.test.mjs",
+          "subjectLabel": "0a1b2c3d4e5f",
+          "objectLabel": "test/tasks.test.mjs"
+        },
+        {
+          "subject": "commit:0a1b2c3d4e5f",
+          "object": "mod:test/store.test.mjs",
+          "subjectLabel": "0a1b2c3d4e5f",
+          "objectLabel": "test/store.test.mjs"
+        },
+        {
+          "subject": "commit:1b2c3d4e5f60",
+          "object": "mod:src/core/store.mjs",
+          "subjectLabel": "1b2c3d4e5f60",
+          "objectLabel": "src/core/store.mjs"
+        },
+        {
+          "subject": "commit:1b2c3d4e5f60",
+          "object": "mod:src/core/model.mjs",
+          "subjectLabel": "1b2c3d4e5f60",
+          "objectLabel": "src/core/model.mjs"
+        }
+      ]
+    },
+    {
+      "predicate": "touchesSymbol",
+      "prop": "mgx:touchesSymbol",
+      "count": 2,
+      "examples": [
+        {
+          "subject": "commit:c3d4e5f6a1b2",
+          "object": "fn:src/handlers/tasks.mjs#listTasks",
+          "subjectLabel": "c3d4e5f6a1b2",
+          "objectLabel": "listTasks"
+        },
+        {
+          "subject": "commit:c3d4e5f6a1b2",
+          "object": "fn:src/handlers/tasks.mjs#createTask",
+          "subjectLabel": "c3d4e5f6a1b2",
+          "objectLabel": "createTask"
+        }
+      ]
+    },
+    {
+      "predicate": "contains",
+      "prop": "seon:containsCodeEntity",
+      "count": 5,
+      "examples": [
+        {
+          "subject": "fn:src/core/model.mjs#Task",
+          "object": "fn:src/core/model.mjs#Task.title",
+          "subjectLabel": "Task",
+          "objectLabel": "title"
+        },
+        {
+          "subject": "fn:src/core/model.mjs#Task",
+          "object": "fn:src/core/model.mjs#Task.complete",
+          "subjectLabel": "Task",
+          "objectLabel": "complete"
+        },
+        {
+          "subject": "fn:src/core/model.mjs#Task",
+          "object": "fn:src/core/model.mjs#Task.assignTo",
+          "subjectLabel": "Task",
+          "objectLabel": "assignTo"
+        },
+        {
+          "subject": "fn:src/lib/logger.mjs#Logger",
+          "object": "fn:src/lib/logger.mjs#Logger.info",
+          "subjectLabel": "Logger",
+          "objectLabel": "info"
+        },
+        {
+          "subject": "fn:src/handlers/base.mjs#Controller",
+          "object": "fn:src/handlers/base.mjs#Controller.handle",
+          "subjectLabel": "Controller",
+          "objectLabel": "handle"
+        }
+      ]
+    },
+    {
+      "predicate": "inherits",
+      "prop": "seon:hasSuperType",
+      "count": 5,
+      "examples": [
+        {
+          "subject": "fn:src/core/model.mjs#Task",
+          "object": "fn:src/core/model.mjs#Record",
+          "subjectLabel": "Task",
+          "objectLabel": "Record"
+        },
+        {
+          "subject": "fn:src/core/model.mjs#User",
+          "object": "fn:src/core/model.mjs#Record",
+          "subjectLabel": "User",
+          "objectLabel": "Record"
+        },
+        {
+          "subject": "fn:src/core/model.mjs#Project",
+          "object": "fn:src/core/model.mjs#Record",
+          "subjectLabel": "Project",
+          "objectLabel": "Record"
+        },
+        {
+          "subject": "fn:src/handlers/tasks.mjs#TaskController",
+          "object": "fn:src/handlers/base.mjs#Controller",
+          "subjectLabel": "TaskController",
+          "objectLabel": "Controller"
+        },
+        {
+          "subject": "fn:src/handlers/users.mjs#UserController",
+          "object": "fn:src/handlers/base.mjs#Controller",
+          "subjectLabel": "UserController",
+          "objectLabel": "Controller"
+        }
+      ]
+    },
+    {
+      "predicate": "cochange",
+      "prop": "mgx:changeCoupledWith",
+      "count": 1,
+      "examples": [
+        {
+          "subject": "mod:src/core/model.mjs",
+          "object": "mod:src/core/store.mjs",
+          "subjectLabel": "src/core/model.mjs",
+          "objectLabel": "src/core/store.mjs",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "predicate": "reexports",
+      "prop": "mgx:reExports",
+      "count": 0,
+      "examples": []
+    }
+  ],
+  "individuals": [
+    {
+      "id": "mod:src/core/model.mjs",
+      "label": "src/core/model.mjs",
+      "class": "Module",
+      "derived_from": [
+        "git:a1b2c3d4e5f6",
+        "git:b2c3d4e5f6a1",
+        "git:1b2c3d4e5f60"
+      ],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "mgx:dotted",
+          "key": "dotted",
+          "value": "src.core.model"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "core model src"
+        }
+      ]
+    },
+    {
+      "id": "mod:src/core/store.mjs",
+      "label": "src/core/store.mjs",
+      "class": "Module",
+      "derived_from": [
+        "git:a1b2c3d4e5f6",
+        "git:c3d4e5f6a1b2",
+        "git:1b2c3d4e5f60"
+      ],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "mgx:dotted",
+          "key": "dotted",
+          "value": "src.core.store"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "core src store"
+        }
+      ]
+    },
+    {
+      "id": "mod:src/core/validate.mjs",
+      "label": "src/core/validate.mjs",
+      "class": "Module",
+      "derived_from": [
+        "git:b2c3d4e5f6a1"
+      ],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "mgx:dotted",
+          "key": "dotted",
+          "value": "src.core.validate"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "core src validate"
+        }
+      ]
+    },
+    {
+      "id": "mod:src/lib/logger.mjs",
+      "label": "src/lib/logger.mjs",
+      "class": "Module",
+      "derived_from": [
+        "git:e5f6a1b2c3d4"
+      ],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "mgx:dotted",
+          "key": "dotted",
+          "value": "src.lib.logger"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "lib logger src"
+        }
+      ]
+    },
+    {
+      "id": "mod:src/lib/http.mjs",
+      "label": "src/lib/http.mjs",
+      "class": "Module",
+      "derived_from": [
+        "git:d4e5f6a1b2c3"
+      ],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "mgx:dotted",
+          "key": "dotted",
+          "value": "src.lib.http"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "http lib src"
+        }
+      ]
+    },
+    {
+      "id": "mod:src/handlers/base.mjs",
+      "label": "src/handlers/base.mjs",
+      "class": "Module",
+      "derived_from": [
+        "git:c3d4e5f6a1b2",
+        "git:f6a1b2c3d4e5"
+      ],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "mgx:dotted",
+          "key": "dotted",
+          "value": "src.handlers.base"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "base handlers src"
+        }
+      ]
+    },
+    {
+      "id": "mod:src/server/router.mjs",
+      "label": "src/server/router.mjs",
+      "class": "Module",
+      "derived_from": [
+        "git:d4e5f6a1b2c3"
+      ],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "mgx:dotted",
+          "key": "dotted",
+          "value": "src.server.router"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "router server src"
+        }
+      ]
+    },
+    {
+      "id": "mod:src/handlers/tasks.mjs",
+      "label": "src/handlers/tasks.mjs",
+      "class": "Module",
+      "derived_from": [
+        "git:c3d4e5f6a1b2"
+      ],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "mgx:dotted",
+          "key": "dotted",
+          "value": "src.handlers.tasks"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "handlers src tasks"
+        }
+      ]
+    },
+    {
+      "id": "mod:src/handlers/users.mjs",
+      "label": "src/handlers/users.mjs",
+      "class": "Module",
+      "derived_from": [
+        "git:f6a1b2c3d4e5"
+      ],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "mgx:dotted",
+          "key": "dotted",
+          "value": "src.handlers.users"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "handlers src users"
+        }
+      ]
+    },
+    {
+      "id": "mod:src/server/app.mjs",
+      "label": "src/server/app.mjs",
+      "class": "Module",
+      "derived_from": [
+        "git:d4e5f6a1b2c3",
+        "git:e5f6a1b2c3d4"
+      ],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "mgx:dotted",
+          "key": "dotted",
+          "value": "src.server.app"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "app server src"
+        }
+      ]
+    },
+    {
+      "id": "mod:test/tasks.test.mjs",
+      "label": "test/tasks.test.mjs",
+      "class": "Module",
+      "derived_from": [
+        "git:0a1b2c3d4e5f"
+      ],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "mgx:dotted",
+          "key": "dotted",
+          "value": "test.tasks.test"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "tasks test"
+        }
+      ]
+    },
+    {
+      "id": "mod:test/store.test.mjs",
+      "label": "test/store.test.mjs",
+      "class": "Module",
+      "derived_from": [
+        "git:0a1b2c3d4e5f"
+      ],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "mgx:dotted",
+          "key": "dotted",
+          "value": "test.store.test"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "store test"
+        }
+      ]
+    },
+    {
+      "id": "fn:src/core/model.mjs#Record",
+      "label": "Record",
+      "class": "Class",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "src/core/model.mjs:1-7"
+        },
+        {
+          "prop": "seon:hasDoc",
+          "key": "doc",
+          "value": "Base persisted entity."
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "base entity persisted record"
+        }
+      ]
+    },
+    {
+      "id": "fn:src/core/model.mjs#Task",
+      "label": "Task",
+      "class": "Class",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "src/core/model.mjs:9-15"
+        },
+        {
+          "prop": "seon:hasDoc",
+          "key": "doc",
+          "value": "A unit of work."
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "task unit work"
+        }
+      ]
+    },
+    {
+      "id": "fn:src/core/model.mjs#Task.title",
+      "label": "Task.title",
+      "class": "Attribute",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "src/core/model.mjs:17-23"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "task"
+        }
+      ]
+    },
+    {
+      "id": "fn:src/core/model.mjs#Task.complete",
+      "label": "Task.complete",
+      "class": "Method",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "src/core/model.mjs:25-31"
+        },
+        {
+          "prop": "seon:hasParameter",
+          "key": "params",
+          "value": "self"
+        },
+        {
+          "prop": "seon:hasDoc",
+          "key": "doc",
+          "value": "Mark the task done."
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "done mark task"
+        }
+      ]
+    },
+    {
+      "id": "fn:src/core/model.mjs#Task.assignTo",
+      "label": "Task.assignTo",
+      "class": "Method",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "src/core/model.mjs:33-39"
+        },
+        {
+          "prop": "seon:hasParameter",
+          "key": "params",
+          "value": "self, user"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "task"
+        }
+      ]
+    },
+    {
+      "id": "fn:src/core/model.mjs#User",
+      "label": "User",
+      "class": "Class",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "src/core/model.mjs:41-47"
+        },
+        {
+          "prop": "seon:hasDoc",
+          "key": "doc",
+          "value": "An account."
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "account user"
+        }
+      ]
+    },
+    {
+      "id": "fn:src/core/model.mjs#Project",
+      "label": "Project",
+      "class": "Class",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "src/core/model.mjs:49-55"
+        },
+        {
+          "prop": "seon:hasDoc",
+          "key": "doc",
+          "value": "A grouping of tasks."
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "grouping project tasks"
+        }
+      ]
+    },
+    {
+      "id": "fn:src/core/store.mjs#Store",
+      "label": "Store",
+      "class": "Class",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "src/core/store.mjs:1-7"
+        },
+        {
+          "prop": "seon:hasDoc",
+          "key": "doc",
+          "value": "In-memory record store."
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "memory record store"
+        }
+      ]
+    },
+    {
+      "id": "fn:src/core/store.mjs#loadStore",
+      "label": "loadStore",
+      "class": "Function",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "src/core/store.mjs:9-15"
+        },
+        {
+          "prop": "seon:hasReturnType",
+          "key": "returns",
+          "value": "Store"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "load store"
+        }
+      ]
+    },
+    {
+      "id": "fn:src/core/store.mjs#saveStore",
+      "label": "saveStore",
+      "class": "Function",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "src/core/store.mjs:17-23"
+        },
+        {
+          "prop": "seon:hasParameter",
+          "key": "params",
+          "value": "store, record"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "save store"
+        }
+      ]
+    },
+    {
+      "id": "fn:src/core/validate.mjs#validateTask",
+      "label": "validateTask",
+      "class": "Function",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "src/core/validate.mjs:1-7"
+        },
+        {
+          "prop": "seon:hasParameter",
+          "key": "params",
+          "value": "task"
+        },
+        {
+          "prop": "seon:throwsException",
+          "key": "raises",
+          "value": "ValidationError"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "task validate"
+        }
+      ]
+    },
+    {
+      "id": "fn:src/core/validate.mjs#validateUser",
+      "label": "validateUser",
+      "class": "Function",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "src/core/validate.mjs:9-15"
+        },
+        {
+          "prop": "seon:hasParameter",
+          "key": "params",
+          "value": "user"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "user validate"
+        }
+      ]
+    },
+    {
+      "id": "fn:src/lib/logger.mjs#Logger",
+      "label": "Logger",
+      "class": "Class",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "src/lib/logger.mjs:1-7"
+        },
+        {
+          "prop": "seon:hasDoc",
+          "key": "doc",
+          "value": "Leveled logger."
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "leveled logger"
+        }
+      ]
+    },
+    {
+      "id": "fn:src/lib/logger.mjs#Logger.info",
+      "label": "Logger.info",
+      "class": "Method",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "src/lib/logger.mjs:9-15"
+        },
+        {
+          "prop": "seon:hasParameter",
+          "key": "params",
+          "value": "self, msg"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "logger"
+        }
+      ]
+    },
+    {
+      "id": "fn:src/lib/logger.mjs#createLogger",
+      "label": "createLogger",
+      "class": "Function",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "src/lib/logger.mjs:17-23"
+        },
+        {
+          "prop": "seon:hasReturnType",
+          "key": "returns",
+          "value": "Logger"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "create logger"
+        }
+      ]
+    },
+    {
+      "id": "fn:src/lib/http.mjs#parseBody",
+      "label": "parseBody",
+      "class": "Function",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "src/lib/http.mjs:1-7"
+        },
+        {
+          "prop": "seon:hasParameter",
+          "key": "params",
+          "value": "req"
+        },
+        {
+          "prop": "seon:hasReturnType",
+          "key": "returns",
+          "value": "object"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "body parse"
+        }
+      ]
+    },
+    {
+      "id": "fn:src/lib/http.mjs#sendJson",
+      "label": "sendJson",
+      "class": "Function",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "src/lib/http.mjs:9-15"
+        },
+        {
+          "prop": "seon:hasParameter",
+          "key": "params",
+          "value": "res, body"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "json send"
+        }
+      ]
+    },
+    {
+      "id": "fn:src/handlers/base.mjs#Controller",
+      "label": "Controller",
+      "class": "Class",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "src/handlers/base.mjs:1-7"
+        },
+        {
+          "prop": "seon:hasDoc",
+          "key": "doc",
+          "value": "Base request controller."
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "base controller request"
+        }
+      ]
+    },
+    {
+      "id": "fn:src/handlers/base.mjs#Controller.handle",
+      "label": "Controller.handle",
+      "class": "Method",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "src/handlers/base.mjs:9-15"
+        },
+        {
+          "prop": "seon:hasParameter",
+          "key": "params",
+          "value": "self, req, res"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "controller"
+        }
+      ]
+    },
+    {
+      "id": "fn:src/server/router.mjs#Router",
+      "label": "Router",
+      "class": "Class",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "src/server/router.mjs:1-7"
+        },
+        {
+          "prop": "seon:hasDoc",
+          "key": "doc",
+          "value": "Path → handler table."
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "handler path router table"
+        }
+      ]
+    },
+    {
+      "id": "fn:src/server/router.mjs#addRoute",
+      "label": "addRoute",
+      "class": "Function",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "src/server/router.mjs:9-15"
+        },
+        {
+          "prop": "seon:hasParameter",
+          "key": "params",
+          "value": "method, path, fn"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "add route"
+        }
+      ]
+    },
+    {
+      "id": "fn:src/handlers/tasks.mjs#TaskController",
+      "label": "TaskController",
+      "class": "Class",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "src/handlers/tasks.mjs:1-7"
+        },
+        {
+          "prop": "seon:hasDoc",
+          "key": "doc",
+          "value": "HTTP surface for tasks."
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "controller http surface task tasks"
+        }
+      ]
+    },
+    {
+      "id": "fn:src/handlers/tasks.mjs#listTasks",
+      "label": "listTasks",
+      "class": "Function",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "src/handlers/tasks.mjs:9-15"
+        },
+        {
+          "prop": "seon:hasParameter",
+          "key": "params",
+          "value": "req, res"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "list tasks"
+        }
+      ]
+    },
+    {
+      "id": "fn:src/handlers/tasks.mjs#createTask",
+      "label": "createTask",
+      "class": "Function",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "src/handlers/tasks.mjs:17-23"
+        },
+        {
+          "prop": "seon:hasParameter",
+          "key": "params",
+          "value": "req, res"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "create task"
+        }
+      ]
+    },
+    {
+      "id": "fn:src/handlers/users.mjs#UserController",
+      "label": "UserController",
+      "class": "Class",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "src/handlers/users.mjs:1-7"
+        },
+        {
+          "prop": "seon:hasDoc",
+          "key": "doc",
+          "value": "HTTP surface for users."
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "controller http surface user users"
+        }
+      ]
+    },
+    {
+      "id": "fn:src/handlers/users.mjs#listUsers",
+      "label": "listUsers",
+      "class": "Function",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "src/handlers/users.mjs:9-15"
+        },
+        {
+          "prop": "seon:hasParameter",
+          "key": "params",
+          "value": "req, res"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "list users"
+        }
+      ]
+    },
+    {
+      "id": "fn:src/server/app.mjs#createApp",
+      "label": "createApp",
+      "class": "Function",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "src/server/app.mjs:1-7"
+        },
+        {
+          "prop": "seon:hasReturnType",
+          "key": "returns",
+          "value": "Router"
+        },
+        {
+          "prop": "seon:hasDoc",
+          "key": "doc",
+          "value": "Wire routes and start the server."
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "app create routes server start wire"
+        }
+      ]
+    },
+    {
+      "id": "fn:src/server/app.mjs#start",
+      "label": "start",
+      "class": "Function",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "src/server/app.mjs:9-15"
+        },
+        {
+          "prop": "seon:hasParameter",
+          "key": "params",
+          "value": "port"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "start"
+        }
+      ]
+    },
+    {
+      "id": "fn:test/tasks.test.mjs#testCreateTask",
+      "label": "testCreateTask",
+      "class": "Function",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "test/tasks.test.mjs:1-7"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "create task test"
+        }
+      ]
+    },
+    {
+      "id": "fn:test/store.test.mjs#testLoadStore",
+      "label": "testLoadStore",
+      "class": "Function",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "test/store.test.mjs:1-7"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "load store test"
+        }
+      ]
+    },
+    {
+      "id": "commit:a1b2c3d4e5f6",
+      "label": "a1b2c3d4e5f6",
+      "class": "Commit",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "mgx:commitAuthor",
+          "key": "author",
+          "value": "Grace Hopper"
+        },
+        {
+          "prop": "mgx:commitDate",
+          "key": "date",
+          "value": "2026-05-02T09:12:00+00:00"
+        },
+        {
+          "prop": "mgx:commitMessage",
+          "key": "message",
+          "value": "seed core Record/Task/User models"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "core models record seed task user"
+        }
+      ]
+    },
+    {
+      "id": "commit:b2c3d4e5f6a1",
+      "label": "b2c3d4e5f6a1",
+      "class": "Commit",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "mgx:commitAuthor",
+          "key": "author",
+          "value": "Grace Hopper"
+        },
+        {
+          "prop": "mgx:commitDate",
+          "key": "date",
+          "value": "2026-05-04T14:03:00+00:00"
+        },
+        {
+          "prop": "mgx:commitMessage",
+          "key": "message",
+          "value": "add task/user validation"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "add task user validation"
+        }
+      ]
+    },
+    {
+      "id": "commit:c3d4e5f6a1b2",
+      "label": "c3d4e5f6a1b2",
+      "class": "Commit",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "mgx:commitAuthor",
+          "key": "author",
+          "value": "Alan Kay"
+        },
+        {
+          "prop": "mgx:commitDate",
+          "key": "date",
+          "value": "2026-05-09T11:40:00+00:00"
+        },
+        {
+          "prop": "mgx:commitMessage",
+          "key": "message",
+          "value": "task handler + base Controller"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "base controller handler task"
+        }
+      ]
+    },
+    {
+      "id": "commit:d4e5f6a1b2c3",
+      "label": "d4e5f6a1b2c3",
+      "class": "Commit",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "mgx:commitAuthor",
+          "key": "author",
+          "value": "Alan Kay"
+        },
+        {
+          "prop": "mgx:commitDate",
+          "key": "date",
+          "value": "2026-05-12T16:22:00+00:00"
+        },
+        {
+          "prop": "mgx:commitMessage",
+          "key": "message",
+          "value": "http server wiring"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "http server wiring"
+        }
+      ]
+    },
+    {
+      "id": "commit:e5f6a1b2c3d4",
+      "label": "e5f6a1b2c3d4",
+      "class": "Commit",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "mgx:commitAuthor",
+          "key": "author",
+          "value": "Radia Perlman"
+        },
+        {
+          "prop": "mgx:commitDate",
+          "key": "date",
+          "value": "2026-05-15T08:55:00+00:00"
+        },
+        {
+          "prop": "mgx:commitMessage",
+          "key": "message",
+          "value": "leveled logging"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "leveled logging"
+        }
+      ]
+    },
+    {
+      "id": "commit:f6a1b2c3d4e5",
+      "label": "f6a1b2c3d4e5",
+      "class": "Commit",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "mgx:commitAuthor",
+          "key": "author",
+          "value": "Radia Perlman"
+        },
+        {
+          "prop": "mgx:commitDate",
+          "key": "date",
+          "value": "2026-05-18T13:10:00+00:00"
+        },
+        {
+          "prop": "mgx:commitMessage",
+          "key": "message",
+          "value": "user handler"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "handler user"
+        }
+      ]
+    },
+    {
+      "id": "commit:0a1b2c3d4e5f",
+      "label": "0a1b2c3d4e5f",
+      "class": "Commit",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "mgx:commitAuthor",
+          "key": "author",
+          "value": "Barbara Liskov"
+        },
+        {
+          "prop": "mgx:commitDate",
+          "key": "date",
+          "value": "2026-05-21T10:30:00+00:00"
+        },
+        {
+          "prop": "mgx:commitMessage",
+          "key": "message",
+          "value": "unit tests for tasks + store"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "store tasks tests unit"
+        }
+      ]
+    },
+    {
+      "id": "commit:1b2c3d4e5f60",
+      "label": "1b2c3d4e5f60",
+      "class": "Commit",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "mgx:commitAuthor",
+          "key": "author",
+          "value": "Barbara Liskov"
+        },
+        {
+          "prop": "mgx:commitDate",
+          "key": "date",
+          "value": "2026-05-24T15:45:00+00:00"
+        },
+        {
+          "prop": "mgx:commitMessage",
+          "key": "message",
+          "value": "refactor store persistence API"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "api persistence refactor store"
+        }
+      ]
+    }
+  ],
+  "proseIndex": {
+    "core": [
+      "commit:a1b2c3d4e5f6",
+      "mod:src/core/model.mjs",
+      "mod:src/core/store.mjs",
+      "mod:src/core/validate.mjs"
+    ],
+    "model": [
+      "mod:src/core/model.mjs"
+    ],
+    "src": [
+      "mod:src/core/model.mjs",
+      "mod:src/core/store.mjs",
+      "mod:src/core/validate.mjs",
+      "mod:src/handlers/base.mjs",
+      "mod:src/handlers/tasks.mjs",
+      "mod:src/handlers/users.mjs",
+      "mod:src/lib/http.mjs",
+      "mod:src/lib/logger.mjs",
+      "mod:src/server/app.mjs",
+      "mod:src/server/router.mjs"
+    ],
+    "store": [
+      "commit:0a1b2c3d4e5f",
+      "commit:1b2c3d4e5f60",
+      "fn:src/core/store.mjs#Store",
+      "fn:src/core/store.mjs#loadStore",
+      "fn:src/core/store.mjs#saveStore",
+      "fn:test/store.test.mjs#testLoadStore",
+      "mod:src/core/store.mjs",
+      "mod:test/store.test.mjs"
+    ],
+    "validate": [
+      "fn:src/core/validate.mjs#validateTask",
+      "fn:src/core/validate.mjs#validateUser",
+      "mod:src/core/validate.mjs"
+    ],
+    "lib": [
+      "mod:src/lib/http.mjs",
+      "mod:src/lib/logger.mjs"
+    ],
+    "logger": [
+      "fn:src/lib/logger.mjs#Logger",
+      "fn:src/lib/logger.mjs#Logger.info",
+      "fn:src/lib/logger.mjs#createLogger",
+      "mod:src/lib/logger.mjs"
+    ],
+    "http": [
+      "commit:d4e5f6a1b2c3",
+      "fn:src/handlers/tasks.mjs#TaskController",
+      "fn:src/handlers/users.mjs#UserController",
+      "mod:src/lib/http.mjs"
+    ],
+    "base": [
+      "commit:c3d4e5f6a1b2",
+      "fn:src/core/model.mjs#Record",
+      "fn:src/handlers/base.mjs#Controller",
+      "mod:src/handlers/base.mjs"
+    ],
+    "handlers": [
+      "mod:src/handlers/base.mjs",
+      "mod:src/handlers/tasks.mjs",
+      "mod:src/handlers/users.mjs"
+    ],
+    "router": [
+      "fn:src/server/router.mjs#Router",
+      "mod:src/server/router.mjs"
+    ],
+    "server": [
+      "commit:d4e5f6a1b2c3",
+      "fn:src/server/app.mjs#createApp",
+      "mod:src/server/app.mjs",
+      "mod:src/server/router.mjs"
+    ],
+    "tasks": [
+      "commit:0a1b2c3d4e5f",
+      "fn:src/core/model.mjs#Project",
+      "fn:src/handlers/tasks.mjs#TaskController",
+      "fn:src/handlers/tasks.mjs#listTasks",
+      "mod:src/handlers/tasks.mjs",
+      "mod:test/tasks.test.mjs"
+    ],
+    "users": [
+      "fn:src/handlers/users.mjs#UserController",
+      "fn:src/handlers/users.mjs#listUsers",
+      "mod:src/handlers/users.mjs"
+    ],
+    "app": [
+      "fn:src/server/app.mjs#createApp",
+      "mod:src/server/app.mjs"
+    ],
+    "test": [
+      "fn:test/store.test.mjs#testLoadStore",
+      "fn:test/tasks.test.mjs#testCreateTask",
+      "mod:test/store.test.mjs",
+      "mod:test/tasks.test.mjs"
+    ],
+    "entity": [
+      "fn:src/core/model.mjs#Record"
+    ],
+    "persisted": [
+      "fn:src/core/model.mjs#Record"
+    ],
+    "record": [
+      "commit:a1b2c3d4e5f6",
+      "fn:src/core/model.mjs#Record",
+      "fn:src/core/store.mjs#Store"
+    ],
+    "task": [
+      "commit:a1b2c3d4e5f6",
+      "commit:b2c3d4e5f6a1",
+      "commit:c3d4e5f6a1b2",
+      "fn:src/core/model.mjs#Task",
+      "fn:src/core/model.mjs#Task.assignTo",
+      "fn:src/core/model.mjs#Task.complete",
+      "fn:src/core/model.mjs#Task.title",
+      "fn:src/core/validate.mjs#validateTask",
+      "fn:src/handlers/tasks.mjs#TaskController",
+      "fn:src/handlers/tasks.mjs#createTask",
+      "fn:test/tasks.test.mjs#testCreateTask"
+    ],
+    "unit": [
+      "commit:0a1b2c3d4e5f",
+      "fn:src/core/model.mjs#Task"
+    ],
+    "work": [
+      "fn:src/core/model.mjs#Task"
+    ],
+    "done": [
+      "fn:src/core/model.mjs#Task.complete"
+    ],
+    "mark": [
+      "fn:src/core/model.mjs#Task.complete"
+    ],
+    "account": [
+      "fn:src/core/model.mjs#User"
+    ],
+    "user": [
+      "commit:a1b2c3d4e5f6",
+      "commit:b2c3d4e5f6a1",
+      "commit:f6a1b2c3d4e5",
+      "fn:src/core/model.mjs#User",
+      "fn:src/core/validate.mjs#validateUser",
+      "fn:src/handlers/users.mjs#UserController"
+    ],
+    "grouping": [
+      "fn:src/core/model.mjs#Project"
+    ],
+    "project": [
+      "fn:src/core/model.mjs#Project"
+    ],
+    "memory": [
+      "fn:src/core/store.mjs#Store"
+    ],
+    "load": [
+      "fn:src/core/store.mjs#loadStore",
+      "fn:test/store.test.mjs#testLoadStore"
+    ],
+    "save": [
+      "fn:src/core/store.mjs#saveStore"
+    ],
+    "leveled": [
+      "commit:e5f6a1b2c3d4",
+      "fn:src/lib/logger.mjs#Logger"
+    ],
+    "create": [
+      "fn:src/handlers/tasks.mjs#createTask",
+      "fn:src/lib/logger.mjs#createLogger",
+      "fn:src/server/app.mjs#createApp",
+      "fn:test/tasks.test.mjs#testCreateTask"
+    ],
+    "body": [
+      "fn:src/lib/http.mjs#parseBody"
+    ],
+    "parse": [
+      "fn:src/lib/http.mjs#parseBody"
+    ],
+    "json": [
+      "fn:src/lib/http.mjs#sendJson"
+    ],
+    "send": [
+      "fn:src/lib/http.mjs#sendJson"
+    ],
+    "controller": [
+      "commit:c3d4e5f6a1b2",
+      "fn:src/handlers/base.mjs#Controller",
+      "fn:src/handlers/base.mjs#Controller.handle",
+      "fn:src/handlers/tasks.mjs#TaskController",
+      "fn:src/handlers/users.mjs#UserController"
+    ],
+    "request": [
+      "fn:src/handlers/base.mjs#Controller"
+    ],
+    "handler": [
+      "commit:c3d4e5f6a1b2",
+      "commit:f6a1b2c3d4e5",
+      "fn:src/server/router.mjs#Router"
+    ],
+    "path": [
+      "fn:src/server/router.mjs#Router"
+    ],
+    "table": [
+      "fn:src/server/router.mjs#Router"
+    ],
+    "add": [
+      "commit:b2c3d4e5f6a1",
+      "fn:src/server/router.mjs#addRoute"
+    ],
+    "route": [
+      "fn:src/server/router.mjs#addRoute"
+    ],
+    "surface": [
+      "fn:src/handlers/tasks.mjs#TaskController",
+      "fn:src/handlers/users.mjs#UserController"
+    ],
+    "list": [
+      "fn:src/handlers/tasks.mjs#listTasks",
+      "fn:src/handlers/users.mjs#listUsers"
+    ],
+    "routes": [
+      "fn:src/server/app.mjs#createApp"
+    ],
+    "start": [
+      "fn:src/server/app.mjs#createApp",
+      "fn:src/server/app.mjs#start"
+    ],
+    "wire": [
+      "fn:src/server/app.mjs#createApp"
+    ],
+    "models": [
+      "commit:a1b2c3d4e5f6"
+    ],
+    "seed": [
+      "commit:a1b2c3d4e5f6"
+    ],
+    "validation": [
+      "commit:b2c3d4e5f6a1"
+    ],
+    "wiring": [
+      "commit:d4e5f6a1b2c3"
+    ],
+    "logging": [
+      "commit:e5f6a1b2c3d4"
+    ],
+    "tests": [
+      "commit:0a1b2c3d4e5f"
+    ],
+    "api": [
+      "commit:1b2c3d4e5f60"
+    ],
+    "persistence": [
+      "commit:1b2c3d4e5f60"
+    ],
+    "refactor": [
+      "commit:1b2c3d4e5f60"
+    ]
+  }
+}

@@ -125,6 +125,41 @@ or a bare user gets a working install in one command.
 > Install-size note: tmct depends on wink-nlp's deterministic English language
 > model (~3.8 MB installed). That model is a lookup table, not an LLM.
 
+### Try it on an example graph
+
+tmct *consumes* a code graph at `<repo>/.tmct/graph.json` — it does not build
+one. Two ready-made example graphs ship in `examples/` so you can see it answer
+real questions with no setup:
+
+```bash
+npm run example:mini       # "Questboard" — a small task-tracker web app (12 modules)
+npm run example:polyglot   # one shared OWL vocabulary across Java / Python / C#
+npm run chat:repo -- ./any/path   # chat over any repo that has a .tmct/graph.json
+```
+
+Questions the **mini-webapp** graph answers:
+
+```
+what classes are there
+describe Task
+how many modules
+which modules import src/core/model.mjs
+what tests cover src/handlers/tasks.mjs
+```
+
+The **polyglot** graph shows the language-neutral idea — Java, Python and C#
+entities all typed to the same `seon:Class` / `seon:Method` / `seon:Module`
+concepts, so one query reasons across every language at once:
+
+```
+how many classes          # 9 — Java + Python + C# counted as one concept
+what classes are there     # Order (Java), Inventory (Python), PaymentService (C#), …
+which modules define PaymentService
+```
+
+See `examples/mini-webapp/README.md` and `examples/polyglot/README.md` for the
+full tours.
+
 ### As a library
 
 ```js

@@ -72,6 +72,9 @@
   "scripts": {
     "test": "node --test \"test/**/*.test.mjs\"",
     "chat": "node bin/tmct.mjs",
+    "chat:repo": "node bin/tmct.mjs chat --repo",
+    "example:mini": "node bin/tmct.mjs chat --repo examples/mini-webapp",
+    "example:polyglot": "node bin/tmct.mjs chat --repo examples/polyglot",
     "chatbench:run": "node chatbench/run.mjs",
     "chatbench:judge": "node chatbench/judge.mjs",
     "audit": "npm audit --audit-level=high",

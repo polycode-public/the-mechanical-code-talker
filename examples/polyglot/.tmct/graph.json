@@ -1,0 +1,1256 @@
+{
+  "generated_at": "2026-06-05T14:30:00.000Z",
+  "prefixes": {
+    "seon": "http://se-on.org/ontologies/seon.owl#",
+    "mgx": "urn:tmct:mgx#",
+    "rdfs": "http://www.w3.org/2000/01/rdf-schema#"
+  },
+  "vocabulary": [
+    {
+      "prop": "mgx:importsNamespace",
+      "predicate": "imports",
+      "note": "module→module; SEON usesComplexType is type→type, so owned (cf. main:dependsOn)"
+    },
+    {
+      "prop": "mgx:callsCoarse",
+      "predicate": "calls",
+      "note": "module→module, import-backed; NOT SEON's method→method invokesMethod"
+    },
+    {
+      "prop": "mgx:callsSymbol",
+      "predicate": "callsSymbol",
+      "note": "caller fn/method→callee fn/class; symbol-granular, unique-name-resolved (Group A); cf. seon:invokesMethod"
+    },
+    {
+      "prop": "seon:declaresMethod",
+      "predicate": "defines"
+    },
+    {
+      "prop": "seon:containsCodeEntity",
+      "predicate": "contains"
+    },
+    {
+      "prop": "mgx:touchedByCommit",
+      "predicate": "touches",
+      "note": "owned; seon:history is not a real SEON property (cf. history:isCommittedIn)"
+    },
+    {
+      "prop": "mgx:touchesSymbol",
+      "predicate": "touchesSymbol",
+      "note": "Commit→CodeEntity; changed-line-range ∩ symbol span; owned (cf. seon-hist)"
+    },
+    {
+      "prop": "mgx:commitAuthor",
+      "note": "commit author name (%an)"
+    },
+    {
+      "prop": "mgx:commitDate",
+      "note": "commit author date, ISO-8601 (%aI)"
+    },
+    {
+      "prop": "mgx:commitMessage",
+      "note": "commit subject line (%s), capped to 120 chars"
+    },
+    {
+      "prop": "mgx:testsCoverage",
+      "predicate": "tests",
+      "note": "no SEON term — our extension"
+    },
+    {
+      "prop": "seon:hasSuperType",
+      "predicate": "inherits"
+    },
+    {
+      "prop": "mgx:changeCoupledWith",
+      "predicate": "cochange",
+      "note": "git co-change; owned (no SEON term; cf. domain-spanning change-couplings.owl)"
+    },
+    {
+      "prop": "mgx:reExports",
+      "predicate": "reexports",
+      "note": "public API / re-export surface (__all__); owned, no SEON term"
+    },
+    {
+      "prop": "mgx:exportsAll",
+      "note": "literal __all__ membership list on a module (the public surface a new sibling must join)"
+    },
+    {
+      "prop": "mgx:decorator",
+      "note": "Python/framework decorators — our extension"
+    },
+    {
+      "prop": "seon:hasParameter",
+      "note": "formal parameter list (signature string, ast.unparse of the args)"
+    },
+    {
+      "prop": "seon:hasReturnType",
+      "note": "return ANNOTATION string only (not a resolved type — that is Group B)"
+    },
+    {
+      "prop": "seon:throwsException",
+      "note": "exception names from `raise` statements (literal, not resolved)"
+    },
+    {
+      "prop": "seon:catchesException",
+      "note": "exception types from `except` handlers"
+    },
+    {
+      "prop": "seon:accessesField",
+      "note": "self.<field> names a method touches (self-scoped only — honest)"
+    },
+    {
+      "prop": "seon:isStatic",
+      "note": "@staticmethod/@classmethod"
+    },
+    {
+      "prop": "seon:isAbstract",
+      "note": "@abstractmethod/@abstractproperty"
+    },
+    {
+      "prop": "seon:isConstant",
+      "note": "ALL_CAPS module global"
+    },
+    {
+      "prop": "seon:subKind",
+      "note": "type flavour on a Class define when not a plain class (interface/enum/struct/record); kind stays class"
+    },
+    {
+      "prop": "seon:hasAccessModifier",
+      "note": "visibility from leading underscore (private/protected); public omitted"
+    },
+    {
+      "prop": "seon:hasDoc",
+      "note": "first docstring line (capped) — one-line purpose without the body"
+    }
+  ],
+  "classes": [
+    {
+      "name": "Module",
+      "count": 6,
+      "sample": [
+        "com/shop/Order.java",
+        "com/shop/OrderService.java",
+        "shop/inventory.py"
+      ]
+    },
+    {
+      "name": "Class",
+      "count": 9,
+      "sample": [
+        "Order",
+        "Customer",
+        "PremiumCustomer"
+      ]
+    },
+    {
+      "name": "Function",
+      "count": 1,
+      "sample": [
+        "calculate_price"
+      ]
+    },
+    {
+      "name": "Method",
+      "count": 5,
+      "sample": [
+        "Order.total",
+        "OrderService.place",
+        "Inventory.reserve"
+      ]
+    },
+    {
+      "name": "Attribute",
+      "count": 1,
+      "sample": [
+        "Order.id"
+      ]
+    },
+    {
+      "name": "GlobalVariable",
+      "count": 0,
+      "sample": []
+    },
+    {
+      "name": "Commit",
+      "count": 3,
+      "sample": [
+        "aa11bb22cc33",
+        "bb22cc33dd44",
+        "cc33dd44ee55"
+      ]
+    }
+  ],
+  "objectProperties": [
+    {
+      "predicate": "imports",
+      "prop": "mgx:importsNamespace",
+      "count": 3,
+      "examples": [
+        {
+          "subject": "mod:com/shop/OrderService.java",
+          "object": "mod:com/shop/Order.java",
+          "subjectLabel": "com/shop/OrderService.java",
+          "objectLabel": "com/shop/Order.java"
+        },
+        {
+          "subject": "mod:shop/pricing.py",
+          "object": "mod:shop/inventory.py",
+          "subjectLabel": "shop/pricing.py",
+          "objectLabel": "shop/inventory.py"
+        },
+        {
+          "subject": "mod:Shop/CheckoutController.cs",
+          "object": "mod:Shop/PaymentService.cs",
+          "subjectLabel": "Shop/CheckoutController.cs",
+          "objectLabel": "Shop/PaymentService.cs"
+        }
+      ]
+    },
+    {
+      "predicate": "calls",
+      "prop": "mgx:callsCoarse",
+      "count": 3,
+      "examples": [
+        {
+          "subject": "mod:com/shop/OrderService.java",
+          "object": "mod:com/shop/Order.java",
+          "subjectLabel": "com/shop/OrderService.java",
+          "objectLabel": "com/shop/Order.java"
+        },
+        {
+          "subject": "mod:shop/pricing.py",
+          "object": "mod:shop/inventory.py",
+          "subjectLabel": "shop/pricing.py",
+          "objectLabel": "shop/inventory.py"
+        },
+        {
+          "subject": "mod:Shop/CheckoutController.cs",
+          "object": "mod:Shop/PaymentService.cs",
+          "subjectLabel": "Shop/CheckoutController.cs",
+          "objectLabel": "Shop/PaymentService.cs"
+        }
+      ]
+    },
+    {
+      "predicate": "callsSymbol",
+      "prop": "mgx:callsSymbol",
+      "count": 3,
+      "examples": [
+        {
+          "subject": "fn:com/shop/OrderService.java#OrderService.place",
+          "object": "fn:com/shop/Order.java#Order",
+          "subjectLabel": "OrderService.place",
+          "objectLabel": "Order"
+        },
+        {
+          "subject": "fn:shop/pricing.py#calculate_price",
+          "object": "fn:shop/inventory.py#Inventory",
+          "subjectLabel": "calculate_price",
+          "objectLabel": "Inventory"
+        },
+        {
+          "subject": "fn:Shop/CheckoutController.cs#CheckoutController.checkout",
+          "object": "fn:Shop/PaymentService.cs#PaymentService",
+          "subjectLabel": "CheckoutController.checkout",
+          "objectLabel": "PaymentService"
+        }
+      ]
+    },
+    {
+      "predicate": "tests",
+      "prop": "mgx:testsCoverage",
+      "count": 0,
+      "examples": []
+    },
+    {
+      "predicate": "defines",
+      "prop": "seon:declaresMethod",
+      "count": 16,
+      "examples": [
+        {
+          "subject": "mod:com/shop/Order.java",
+          "object": "fn:com/shop/Order.java#Order",
+          "subjectLabel": "com/shop/Order.java",
+          "objectLabel": "Order"
+        },
+        {
+          "subject": "mod:com/shop/Order.java",
+          "object": "fn:com/shop/Order.java#Order.id",
+          "subjectLabel": "com/shop/Order.java",
+          "objectLabel": "Order.id"
+        },
+        {
+          "subject": "mod:com/shop/Order.java",
+          "object": "fn:com/shop/Order.java#Order.total",
+          "subjectLabel": "com/shop/Order.java",
+          "objectLabel": "Order.total"
+        },
+        {
+          "subject": "mod:com/shop/Order.java",
+          "object": "fn:com/shop/Order.java#Customer",
+          "subjectLabel": "com/shop/Order.java",
+          "objectLabel": "Customer"
+        },
+        {
+          "subject": "mod:com/shop/Order.java",
+          "object": "fn:com/shop/Order.java#PremiumCustomer",
+          "subjectLabel": "com/shop/Order.java",
+          "objectLabel": "PremiumCustomer"
+        },
+        {
+          "subject": "mod:com/shop/OrderService.java",
+          "object": "fn:com/shop/OrderService.java#OrderService",
+          "subjectLabel": "com/shop/OrderService.java",
+          "objectLabel": "OrderService"
+        },
+        {
+          "subject": "mod:com/shop/OrderService.java",
+          "object": "fn:com/shop/OrderService.java#OrderService.place",
+          "subjectLabel": "com/shop/OrderService.java",
+          "objectLabel": "OrderService.place"
+        },
+        {
+          "subject": "mod:shop/inventory.py",
+          "object": "fn:shop/inventory.py#Inventory",
+          "subjectLabel": "shop/inventory.py",
+          "objectLabel": "Inventory"
+        },
+        {
+          "subject": "mod:shop/inventory.py",
+          "object": "fn:shop/inventory.py#Inventory.reserve",
+          "subjectLabel": "shop/inventory.py",
+          "objectLabel": "Inventory.reserve"
+        },
+        {
+          "subject": "mod:shop/inventory.py",
+          "object": "fn:shop/inventory.py#Warehouse",
+          "subjectLabel": "shop/inventory.py",
+          "objectLabel": "Warehouse"
+        },
+        {
+          "subject": "mod:shop/pricing.py",
+          "object": "fn:shop/pricing.py#calculate_price",
+          "subjectLabel": "shop/pricing.py",
+          "objectLabel": "calculate_price"
+        },
+        {
+          "subject": "mod:Shop/PaymentService.cs",
+          "object": "fn:Shop/PaymentService.cs#IPaymentGateway",
+          "subjectLabel": "Shop/PaymentService.cs",
+          "objectLabel": "IPaymentGateway"
+        },
+        {
+          "subject": "mod:Shop/PaymentService.cs",
+          "object": "fn:Shop/PaymentService.cs#PaymentService",
+          "subjectLabel": "Shop/PaymentService.cs",
+          "objectLabel": "PaymentService"
+        },
+        {
+          "subject": "mod:Shop/PaymentService.cs",
+          "object": "fn:Shop/PaymentService.cs#PaymentService.charge",
+          "subjectLabel": "Shop/PaymentService.cs",
+          "objectLabel": "PaymentService.charge"
+        },
+        {
+          "subject": "mod:Shop/CheckoutController.cs",
+          "object": "fn:Shop/CheckoutController.cs#CheckoutController",
+          "subjectLabel": "Shop/CheckoutController.cs",
+          "objectLabel": "CheckoutController"
+        },
+        {
+          "subject": "mod:Shop/CheckoutController.cs",
+          "object": "fn:Shop/CheckoutController.cs#CheckoutController.checkout",
+          "subjectLabel": "Shop/CheckoutController.cs",
+          "objectLabel": "CheckoutController.checkout"
+        }
+      ]
+    },
+    {
+      "predicate": "touches",
+      "prop": "mgx:touchedByCommit",
+      "count": 6,
+      "examples": [
+        {
+          "subject": "commit:aa11bb22cc33",
+          "object": "mod:com/shop/Order.java",
+          "subjectLabel": "aa11bb22cc33",
+          "objectLabel": "com/shop/Order.java"
+        },
+        {
+          "subject": "commit:aa11bb22cc33",
+          "object": "mod:com/shop/OrderService.java",
+          "subjectLabel": "aa11bb22cc33",
+          "objectLabel": "com/shop/OrderService.java"
+        },
+        {
+          "subject": "commit:bb22cc33dd44",
+          "object": "mod:shop/inventory.py",
+          "subjectLabel": "bb22cc33dd44",
+          "objectLabel": "shop/inventory.py"
+        },
+        {
+          "subject": "commit:bb22cc33dd44",
+          "object": "mod:shop/pricing.py",
+          "subjectLabel": "bb22cc33dd44",
+          "objectLabel": "shop/pricing.py"
+        },
+        {
+          "subject": "commit:cc33dd44ee55",
+          "object": "mod:Shop/PaymentService.cs",
+          "subjectLabel": "cc33dd44ee55",
+          "objectLabel": "Shop/PaymentService.cs"
+        },
+        {
+          "subject": "commit:cc33dd44ee55",
+          "object": "mod:Shop/CheckoutController.cs",
+          "subjectLabel": "cc33dd44ee55",
+          "objectLabel": "Shop/CheckoutController.cs"
+        }
+      ]
+    },
+    {
+      "predicate": "touchesSymbol",
+      "prop": "mgx:touchesSymbol",
+      "count": 0,
+      "examples": []
+    },
+    {
+      "predicate": "contains",
+      "prop": "seon:containsCodeEntity",
+      "count": 6,
+      "examples": [
+        {
+          "subject": "fn:com/shop/Order.java#Order",
+          "object": "fn:com/shop/Order.java#Order.id",
+          "subjectLabel": "Order",
+          "objectLabel": "id"
+        },
+        {
+          "subject": "fn:com/shop/Order.java#Order",
+          "object": "fn:com/shop/Order.java#Order.total",
+          "subjectLabel": "Order",
+          "objectLabel": "total"
+        },
+        {
+          "subject": "fn:com/shop/OrderService.java#OrderService",
+          "object": "fn:com/shop/OrderService.java#OrderService.place",
+          "subjectLabel": "OrderService",
+          "objectLabel": "place"
+        },
+        {
+          "subject": "fn:shop/inventory.py#Inventory",
+          "object": "fn:shop/inventory.py#Inventory.reserve",
+          "subjectLabel": "Inventory",
+          "objectLabel": "reserve"
+        },
+        {
+          "subject": "fn:Shop/PaymentService.cs#PaymentService",
+          "object": "fn:Shop/PaymentService.cs#PaymentService.charge",
+          "subjectLabel": "PaymentService",
+          "objectLabel": "charge"
+        },
+        {
+          "subject": "fn:Shop/CheckoutController.cs#CheckoutController",
+          "object": "fn:Shop/CheckoutController.cs#CheckoutController.checkout",
+          "subjectLabel": "CheckoutController",
+          "objectLabel": "checkout"
+        }
+      ]
+    },
+    {
+      "predicate": "inherits",
+      "prop": "seon:hasSuperType",
+      "count": 3,
+      "examples": [
+        {
+          "subject": "fn:com/shop/Order.java#PremiumCustomer",
+          "object": "fn:com/shop/Order.java#Customer",
+          "subjectLabel": "PremiumCustomer",
+          "objectLabel": "Customer"
+        },
+        {
+          "subject": "fn:shop/inventory.py#Warehouse",
+          "object": "fn:shop/inventory.py#Inventory",
+          "subjectLabel": "Warehouse",
+          "objectLabel": "Inventory"
+        },
+        {
+          "subject": "fn:Shop/PaymentService.cs#PaymentService",
+          "object": "fn:Shop/PaymentService.cs#IPaymentGateway",
+          "subjectLabel": "PaymentService",
+          "objectLabel": "IPaymentGateway"
+        }
+      ]
+    },
+    {
+      "predicate": "cochange",
+      "prop": "mgx:changeCoupledWith",
+      "count": 0,
+      "examples": []
+    },
+    {
+      "predicate": "reexports",
+      "prop": "mgx:reExports",
+      "count": 0,
+      "examples": []
+    }
+  ],
+  "individuals": [
+    {
+      "id": "mod:com/shop/Order.java",
+      "label": "com/shop/Order.java",
+      "class": "Module",
+      "derived_from": [
+        "git:aa11bb22cc33"
+      ],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "mgx:dotted",
+          "key": "dotted",
+          "value": "com.shop.Order"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "com order shop"
+        }
+      ]
+    },
+    {
+      "id": "mod:com/shop/OrderService.java",
+      "label": "com/shop/OrderService.java",
+      "class": "Module",
+      "derived_from": [
+        "git:aa11bb22cc33"
+      ],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "mgx:dotted",
+          "key": "dotted",
+          "value": "com.shop.OrderService"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "com order service shop"
+        }
+      ]
+    },
+    {
+      "id": "mod:shop/inventory.py",
+      "label": "shop/inventory.py",
+      "class": "Module",
+      "derived_from": [
+        "git:bb22cc33dd44"
+      ],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "mgx:dotted",
+          "key": "dotted",
+          "value": "shop.inventory"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "inventory shop"
+        }
+      ]
+    },
+    {
+      "id": "mod:shop/pricing.py",
+      "label": "shop/pricing.py",
+      "class": "Module",
+      "derived_from": [
+        "git:bb22cc33dd44"
+      ],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "mgx:dotted",
+          "key": "dotted",
+          "value": "shop.pricing"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "pricing shop"
+        }
+      ]
+    },
+    {
+      "id": "mod:Shop/PaymentService.cs",
+      "label": "Shop/PaymentService.cs",
+      "class": "Module",
+      "derived_from": [
+        "git:cc33dd44ee55"
+      ],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "mgx:dotted",
+          "key": "dotted",
+          "value": "Shop.PaymentService"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "payment service shop"
+        }
+      ]
+    },
+    {
+      "id": "mod:Shop/CheckoutController.cs",
+      "label": "Shop/CheckoutController.cs",
+      "class": "Module",
+      "derived_from": [
+        "git:cc33dd44ee55"
+      ],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "mgx:dotted",
+          "key": "dotted",
+          "value": "Shop.CheckoutController"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "checkout controller shop"
+        }
+      ]
+    },
+    {
+      "id": "fn:com/shop/Order.java#Order",
+      "label": "Order",
+      "class": "Class",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "com/shop/Order.java:1-7"
+        },
+        {
+          "prop": "seon:hasAccessModifier",
+          "key": "visibility",
+          "value": "public"
+        },
+        {
+          "prop": "seon:hasDoc",
+          "key": "doc",
+          "value": "A customer order (Java)."
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "customer java order"
+        }
+      ]
+    },
+    {
+      "id": "fn:com/shop/Order.java#Order.id",
+      "label": "Order.id",
+      "class": "Attribute",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "com/shop/Order.java:9-15"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "order"
+        }
+      ]
+    },
+    {
+      "id": "fn:com/shop/Order.java#Order.total",
+      "label": "Order.total",
+      "class": "Method",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "com/shop/Order.java:17-23"
+        },
+        {
+          "prop": "seon:hasParameter",
+          "key": "params",
+          "value": "self"
+        },
+        {
+          "prop": "seon:hasReturnType",
+          "key": "returns",
+          "value": "Money"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "order"
+        }
+      ]
+    },
+    {
+      "id": "fn:com/shop/Order.java#Customer",
+      "label": "Customer",
+      "class": "Class",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "com/shop/Order.java:25-31"
+        },
+        {
+          "prop": "seon:hasDoc",
+          "key": "doc",
+          "value": "A buyer (Java)."
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "buyer customer java"
+        }
+      ]
+    },
+    {
+      "id": "fn:com/shop/Order.java#PremiumCustomer",
+      "label": "PremiumCustomer",
+      "class": "Class",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "com/shop/Order.java:33-39"
+        },
+        {
+          "prop": "seon:hasDoc",
+          "key": "doc",
+          "value": "Loyalty-tier buyer (Java)."
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "buyer customer java loyalty premium tier"
+        }
+      ]
+    },
+    {
+      "id": "fn:com/shop/OrderService.java#OrderService",
+      "label": "OrderService",
+      "class": "Class",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "com/shop/OrderService.java:1-7"
+        },
+        {
+          "prop": "seon:hasDoc",
+          "key": "doc",
+          "value": "Order use-cases (Java)."
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "cases java order service use"
+        }
+      ]
+    },
+    {
+      "id": "fn:com/shop/OrderService.java#OrderService.place",
+      "label": "OrderService.place",
+      "class": "Method",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "com/shop/OrderService.java:9-15"
+        },
+        {
+          "prop": "seon:hasParameter",
+          "key": "params",
+          "value": "self, order"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "order service"
+        }
+      ]
+    },
+    {
+      "id": "fn:shop/inventory.py#Inventory",
+      "label": "Inventory",
+      "class": "Class",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "shop/inventory.py:1-7"
+        },
+        {
+          "prop": "seon:hasDoc",
+          "key": "doc",
+          "value": "Stock levels (Python)."
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "inventory levels python stock"
+        }
+      ]
+    },
+    {
+      "id": "fn:shop/inventory.py#Inventory.reserve",
+      "label": "Inventory.reserve",
+      "class": "Method",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "shop/inventory.py:9-15"
+        },
+        {
+          "prop": "seon:hasParameter",
+          "key": "params",
+          "value": "self, sku, qty"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "inventory"
+        }
+      ]
+    },
+    {
+      "id": "fn:shop/inventory.py#Warehouse",
+      "label": "Warehouse",
+      "class": "Class",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "shop/inventory.py:17-23"
+        },
+        {
+          "prop": "seon:hasDoc",
+          "key": "doc",
+          "value": "A physical stock location (Python)."
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "location physical python stock warehouse"
+        }
+      ]
+    },
+    {
+      "id": "fn:shop/pricing.py#calculate_price",
+      "label": "calculate_price",
+      "class": "Function",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "shop/pricing.py:1-7"
+        },
+        {
+          "prop": "seon:hasParameter",
+          "key": "params",
+          "value": "cart"
+        },
+        {
+          "prop": "seon:hasReturnType",
+          "key": "returns",
+          "value": "Decimal"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "calculate price"
+        }
+      ]
+    },
+    {
+      "id": "fn:Shop/PaymentService.cs#IPaymentGateway",
+      "label": "IPaymentGateway",
+      "class": "Class",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "Shop/PaymentService.cs:1-7"
+        },
+        {
+          "prop": "seon:subKind",
+          "key": "subkind",
+          "value": "interface"
+        },
+        {
+          "prop": "seon:hasDoc",
+          "key": "doc",
+          "value": "Payment gateway contract (C#)."
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "contract gateway payment"
+        }
+      ]
+    },
+    {
+      "id": "fn:Shop/PaymentService.cs#PaymentService",
+      "label": "PaymentService",
+      "class": "Class",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "Shop/PaymentService.cs:9-15"
+        },
+        {
+          "prop": "seon:hasDoc",
+          "key": "doc",
+          "value": "Charges cards (C#)."
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "cards charges payment service"
+        }
+      ]
+    },
+    {
+      "id": "fn:Shop/PaymentService.cs#PaymentService.charge",
+      "label": "PaymentService.charge",
+      "class": "Method",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "Shop/PaymentService.cs:17-23"
+        },
+        {
+          "prop": "seon:hasParameter",
+          "key": "params",
+          "value": "self, amount"
+        },
+        {
+          "prop": "seon:hasReturnType",
+          "key": "returns",
+          "value": "Receipt"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "payment service"
+        }
+      ]
+    },
+    {
+      "id": "fn:Shop/CheckoutController.cs#CheckoutController",
+      "label": "CheckoutController",
+      "class": "Class",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "Shop/CheckoutController.cs:1-7"
+        },
+        {
+          "prop": "seon:hasDoc",
+          "key": "doc",
+          "value": "Checkout endpoint (C#)."
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "checkout controller endpoint"
+        }
+      ]
+    },
+    {
+      "id": "fn:Shop/CheckoutController.cs#CheckoutController.checkout",
+      "label": "CheckoutController.checkout",
+      "class": "Method",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "seon:startsAt",
+          "key": "site",
+          "value": "Shop/CheckoutController.cs:9-15"
+        },
+        {
+          "prop": "seon:hasParameter",
+          "key": "params",
+          "value": "self, cart"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "checkout controller"
+        }
+      ]
+    },
+    {
+      "id": "commit:aa11bb22cc33",
+      "label": "aa11bb22cc33",
+      "class": "Commit",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "mgx:commitAuthor",
+          "key": "author",
+          "value": "James Gosling"
+        },
+        {
+          "prop": "mgx:commitDate",
+          "key": "date",
+          "value": "2026-06-01T09:00:00+00:00"
+        },
+        {
+          "prop": "mgx:commitMessage",
+          "key": "message",
+          "value": "Java: order domain model"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "domain java model order"
+        }
+      ]
+    },
+    {
+      "id": "commit:bb22cc33dd44",
+      "label": "bb22cc33dd44",
+      "class": "Commit",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "mgx:commitAuthor",
+          "key": "author",
+          "value": "Guido van Rossum"
+        },
+        {
+          "prop": "mgx:commitDate",
+          "key": "date",
+          "value": "2026-06-03T10:30:00+00:00"
+        },
+        {
+          "prop": "mgx:commitMessage",
+          "key": "message",
+          "value": "Python: inventory + pricing"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "inventory pricing python"
+        }
+      ]
+    },
+    {
+      "id": "commit:cc33dd44ee55",
+      "label": "cc33dd44ee55",
+      "class": "Commit",
+      "derived_from": [],
+      "mentions": [],
+      "attributes": [
+        {
+          "prop": "mgx:commitAuthor",
+          "key": "author",
+          "value": "Anders Hejlsberg"
+        },
+        {
+          "prop": "mgx:commitDate",
+          "key": "date",
+          "value": "2026-06-05T14:15:00+00:00"
+        },
+        {
+          "prop": "mgx:commitMessage",
+          "key": "message",
+          "value": "C#: payment + checkout"
+        },
+        {
+          "prop": "mgx:hasProseTokens",
+          "key": "prose_tokens",
+          "value": "checkout payment"
+        }
+      ]
+    }
+  ],
+  "proseIndex": {
+    "com": [
+      "mod:com/shop/Order.java",
+      "mod:com/shop/OrderService.java"
+    ],
+    "order": [
+      "commit:aa11bb22cc33",
+      "fn:com/shop/Order.java#Order",
+      "fn:com/shop/Order.java#Order.id",
+      "fn:com/shop/Order.java#Order.total",
+      "fn:com/shop/OrderService.java#OrderService",
+      "fn:com/shop/OrderService.java#OrderService.place",
+      "mod:com/shop/Order.java",
+      "mod:com/shop/OrderService.java"
+    ],
+    "shop": [
+      "mod:Shop/CheckoutController.cs",
+      "mod:Shop/PaymentService.cs",
+      "mod:com/shop/Order.java",
+      "mod:com/shop/OrderService.java",
+      "mod:shop/inventory.py",
+      "mod:shop/pricing.py"
+    ],
+    "service": [
+      "fn:Shop/PaymentService.cs#PaymentService",
+      "fn:Shop/PaymentService.cs#PaymentService.charge",
+      "fn:com/shop/OrderService.java#OrderService",
+      "fn:com/shop/OrderService.java#OrderService.place",
+      "mod:Shop/PaymentService.cs",
+      "mod:com/shop/OrderService.java"
+    ],
+    "inventory": [
+      "commit:bb22cc33dd44",
+      "fn:shop/inventory.py#Inventory",
+      "fn:shop/inventory.py#Inventory.reserve",
+      "mod:shop/inventory.py"
+    ],
+    "pricing": [
+      "commit:bb22cc33dd44",
+      "mod:shop/pricing.py"
+    ],
+    "payment": [
+      "commit:cc33dd44ee55",
+      "fn:Shop/PaymentService.cs#IPaymentGateway",
+      "fn:Shop/PaymentService.cs#PaymentService",
+      "fn:Shop/PaymentService.cs#PaymentService.charge",
+      "mod:Shop/PaymentService.cs"
+    ],
+    "checkout": [
+      "commit:cc33dd44ee55",
+      "fn:Shop/CheckoutController.cs#CheckoutController",
+      "fn:Shop/CheckoutController.cs#CheckoutController.checkout",
+      "mod:Shop/CheckoutController.cs"
+    ],
+    "controller": [
+      "fn:Shop/CheckoutController.cs#CheckoutController",
+      "fn:Shop/CheckoutController.cs#CheckoutController.checkout",
+      "mod:Shop/CheckoutController.cs"
+    ],
+    "customer": [
+      "fn:com/shop/Order.java#Customer",
+      "fn:com/shop/Order.java#Order",
+      "fn:com/shop/Order.java#PremiumCustomer"
+    ],
+    "java": [
+      "commit:aa11bb22cc33",
+      "fn:com/shop/Order.java#Customer",
+      "fn:com/shop/Order.java#Order",
+      "fn:com/shop/Order.java#PremiumCustomer",
+      "fn:com/shop/OrderService.java#OrderService"
+    ],
+    "buyer": [
+      "fn:com/shop/Order.java#Customer",
+      "fn:com/shop/Order.java#PremiumCustomer"
+    ],
+    "loyalty": [
+      "fn:com/shop/Order.java#PremiumCustomer"
+    ],
+    "premium": [
+      "fn:com/shop/Order.java#PremiumCustomer"
+    ],
+    "tier": [
+      "fn:com/shop/Order.java#PremiumCustomer"
+    ],
+    "cases": [
+      "fn:com/shop/OrderService.java#OrderService"
+    ],
+    "use": [
+      "fn:com/shop/OrderService.java#OrderService"
+    ],
+    "levels": [
+      "fn:shop/inventory.py#Inventory"
+    ],
+    "python": [
+      "commit:bb22cc33dd44",
+      "fn:shop/inventory.py#Inventory",
+      "fn:shop/inventory.py#Warehouse"
+    ],
+    "stock": [
+      "fn:shop/inventory.py#Inventory",
+      "fn:shop/inventory.py#Warehouse"
+    ],
+    "location": [
+      "fn:shop/inventory.py#Warehouse"
+    ],
+    "physical": [
+      "fn:shop/inventory.py#Warehouse"
+    ],
+    "warehouse": [
+      "fn:shop/inventory.py#Warehouse"
+    ],
+    "calculate": [
+      "fn:shop/pricing.py#calculate_price"
+    ],
+    "price": [
+      "fn:shop/pricing.py#calculate_price"
+    ],
+    "contract": [
+      "fn:Shop/PaymentService.cs#IPaymentGateway"
+    ],
+    "gateway": [
+      "fn:Shop/PaymentService.cs#IPaymentGateway"
+    ],
+    "cards": [
+      "fn:Shop/PaymentService.cs#PaymentService"
+    ],
+    "charges": [
+      "fn:Shop/PaymentService.cs#PaymentService"
+    ],
+    "endpoint": [
+      "fn:Shop/CheckoutController.cs#CheckoutController"
+    ],
+    "domain": [
+      "commit:aa11bb22cc33"
+    ],
+    "model": [
+      "commit:aa11bb22cc33"
+    ]
+  }
+}
