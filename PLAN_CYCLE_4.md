@@ -8,7 +8,7 @@
 An operator-directed multi-cycle plan (operator, 2026-07-05: reviewing the CHATBENCH_003 lever
 board — "we'll do ALL of them"). Cycle 3 gave us the first full CEFR reading and, with it, a clear
 diagnosis: a clean A1/A2 shelf (~1.71), a **cliff at B1 (0.766)**, and a jagged C-tier not worth
-chasing yet. This plan turns that diagnosis into a buildable arc — **fix the measurement first, then
+chasing yet. This plan turns that diagnosis into a buildable arc. **Fix the measurement first, then
 land the missing parser verbs one cycle at a time**, per `SKILL_TUNING_CYCLE.md`'s one-lever
 discipline. It is not a single pick; it is the sequence and the exit criterion for the whole B1 push.
 
@@ -73,7 +73,7 @@ load-bearing rung.
 - *What changes:* teach the parser a **negation frame** for set queries — "which X do **not** <verb>
   Y", "X that don't <verb> Y", "un-<verb>ed X", "modules … but not tested" — that computes a **SET
   COMPLEMENT**: the bounded universe of entities of the kind MINUS the positive result set.
-- *Where — the good news: the traversal machinery already exists; only the parse marker is missing.*
+- *Where — the traversal machinery already exists; only the parse marker is missing.*
   `evalBoolean` (`ask.mjs:725`) **already implements set difference** (`op === "difference"` →
   `acc.filter((i) => !oids.has(i.id))`), and `evalSet`'s `allOfClass` node (`ask.mjs:696` →
   `graph.individuals.filter((i) => i.class === entityType)`) is a **ready-made bounded universe** of a
@@ -85,10 +85,10 @@ load-bearing rung.
   `applyNegationFrames` (`src/interpret/normalize.mjs:85`, driven by `NEGATION_FRAMES`
   `ask-vocab.mjs:379`), run once at `parseQuery` (`ask.mjs:171`) ahead of every strategy. Today "not"
   is neither a `STOPWORD` (`normalize.mjs:99`) nor consumed, so `parseKeywordSpot`'s `sideText`
-  (`keywords.mjs:137-143`) leaves it in a term and `resolveObject` (`ask.mjs:907`) misses — dying as
+  (`keywords.mjs:137-143`) leaves it in a term and `resolveObject` (`ask.mjs:907`) misses, dying as
   `no <kind> matching "not" found` (`ask.mjs:1485`) or, in the two-term `"ask"` shape, `couldn't
   resolve one of the terms` (`ask.mjs:1569`). Note `NEGATION_FRAMES` today is a **rhetorical
-  double-negative rewriter only** ("there isn't anything calling it" → "what calls it") — it *removes*
+  double-negative rewriter only** ("there isn't anything calling it" → "what calls it"). It *removes*
   negation and must not be overloaded to compute a complement (its docblock forbids scope parsing);
   the new marker recognizes the set-negation and routes it to the `allOfClass`-minus-positive AST. The
   generator already encodes the exact desired truth (`b1Negation`, `generate-graded.mjs:474` —
@@ -108,34 +108,34 @@ load-bearing rung.
   "imported by Z", "Base is inherited by which classes") and **swap subject/object roles before
   traversal**. Object-first phrasing is currently read subject-first, so the edge is traversed
   backwards: "which modules are tested by b.test.mjs" → `No modules found whose module directly tests
-  by b.test.mjs. (traversal: tests edges where object = b.test.mjs)` — the traversal receipt literally
+  by b.test.mjs. (traversal: tests edges where object = b.test.mjs)`. The traversal receipt literally
   shows the reversed direction.
-- *Where:* the `shape` field decides direction — `reverse` returns edge *subjects*, `forward` returns
+- *Where:* the `shape` field decides direction. `reverse` returns edge *subjects*, `forward` returns
   *objects*. `parseKeywordSpot` assigns it from surface word order (`keywords.mjs:159-166`); `traverse`
   reads it (forward `e.subject === objMatch.id`, reverse `e.object === objMatch.id` — `ask.mjs:1300`,
   `:1329`). The fix: a passive auxiliary + agent-marking "by" must **flip the resulting shape**
-  (reverse↔forward) at `parseKeywordSpot` before it returns — or, cleaner, add a passive rewrite as a
+  (reverse↔forward) at `parseKeywordSpot` before it returns. Or, cleaner, add a passive rewrite as a
   sibling frame table beside `COMMIT_CONTENT_FRAMES` in `applyNegationFrames` (`normalize.mjs:85`) so
   both strategies see the swapped canonical form for free. `traverse` already has a kind-specific
-  role-swap precedent (`ask.mjs:1233-1236`, the touches/Commit flip) — this generalizes it to a
+  role-swap precedent (`ask.mjs:1233-1236`, the touches/Commit flip). This generalizes it to a
   surface-cued passive. Cleanly attributable to one direction decision.
 - *Prediction on record:* B1 reversible-passive 0.48→~1.6 (5 cells), B2 passive 0.0→~1.6; B1 grade
   +~0.18. Clears passive-4/24/25 and the B2 passive hard fails.
 - *Regression watch:* active-voice queries ("which modules import X") must keep their current
-  direction — the passive detector fires only on genuine agent-marked passives, never on a bare
+  direction. The passive detector fires only on genuine agent-marked passives, never on a bare
   "by" that is part of an entity or filler.
 
 **Parallel throughout — under-covered pool growth (harness, rank 4, zero product risk).**
 Grow the B1 pronoun-binding, B1 temporal, and C1 temporal cells' pool / per-run sample so the two
 draws agree (the |Δ green-rate| ≤ 0.2 gate, `GRADED.md`). These cells are **excluded-as-unmeasured**,
 not failed; restoring them returns 3 cells to the PASS/FAIL statistic. Runs alongside any product
-cycle — it touches `graded.mjs`/`generate-graded.mjs`/`graded-pool.jsonl`, disjoint from the
+cycle. It touches `graded.mjs`/`generate-graded.mjs`/`graded-pool.jsonl`, disjoint from the
 interpreter. Must land before we can claim the B1 exit criterion (below) is *measured*.
 
 **The tail (ranked, after B1 is reliable):**
 - **assert-recall read-back (rank 5).** The via:fact path *writes* ("noted — remembered 1 fact:
   function rdfs:subClassOf component") but the read-back is unqueryable ("'component' isn't a term in
-  this graph's own vocabulary") — assert writes, no assert reads. Make declared facts queryable
+  this graph's own vocabulary"). Assert writes, no assert reads. Make declared facts queryable
   ("every X is a Y" → "what is a Y"). Extends the Phase-4 wiring that won on `mr-asked-before`; ranked
   below the cliff because it touches only 2 isolated cells (B2 assert 0.63, C1 assert 0.5) and does
   not generalize up the ladder.
@@ -144,12 +144,12 @@ interpreter. Must land before we can claim the B1 exit criterion (below) is *mea
   until the B1 verbs land.
 - **help-text honesty leak (a real product fabrication, distinct from META-1's artifact).** The
   hardcoded `walk.mjs` / `buildContextBundle` examples (help block / `buildContextBundle`) name
-  entities **absent from the fixture** — the engine emitting non-fixture names. Judges dock it 0/0/0
+  entities **absent from the fixture**, the engine emitting non-fixture names. Judges dock it 0/0/0
   where it appears: `conv-what-can-you-do`, `am-bare-name`, and the B1-pronoun fall-throughs
   (`g-b1-pron-24`, `g-b1-pron-14`). Cheap product fix; it does **not** touch the A2 naming cell (that
   is META-1). Fold in with the tail.
 - **C2 relative-embedded / ceiling (rank 7, LAST).** Hardest, lowest generalization, expected-low
-  grade — not worth judging until B1 is reliable (that is exactly what META-2 gates).
+  grade, not worth judging until B1 is reliable (that is exactly what META-2 gates).
 
 ## Sequencing and the exit criterion
 
@@ -178,18 +178,18 @@ Genuinely open questions (last, by design):
 - **Does set-complement need a bounded universe to stay honest on big graphs?** On the fixture the
   kind's universe is tiny; on a real estate "which modules do not import X" could return thousands.
   The complement must have a defined, bounded universe (the queried kind within the loaded graph) and
-  an overflow discipline (`OVERFLOW_CAP`, `compositeList` already cap rendering) — this ties directly
+  an overflow discipline (`OVERFLOW_CAP`, `compositeList` already cap rendering). This ties directly
   to `PLAN_REPOSITORY_INTERFACE.md` (what "all modules" *means* at repository scale). A concrete edge
   already visible: the `Change` pseudo-type (`ask-vocab.mjs`) is a wildcard, **not a stored class**, so
-  it is not independently enumerable — a complement over "changes" is ill-defined and must be refused
+  it is not independently enumerable. A complement over "changes" is ill-defined and must be refused
   honestly, not answered over an empty universe. Decide the universe boundary before shipping negation
   past the fixture.
 - **Should META-1 pin a judge-context VERSION** the way `PROMPT_VERSION` (`judge-prompt-v1`) pins the
   prompt? A `FIXTURE_CONTEXT` version stamped on every judged row would make "which context scored
-  this" auditable and let cross-cycle comparisons state which context grain they used. Leaning yes —
+  this" auditable and let cross-cycle comparisons state which context grain they used. Leaning yes:
   cheap, and it is the honest bookkeeping for the next question.
 - **Does fixing the judge artifact retroactively invalidate cycle 1–3 groundedness comparisons?** The
-  honest answer: **partly yes** — every rich-answer groundedness number from cycles 1–3 was scored
+  answer: **partly yes**. Every rich-answer groundedness number from cycles 1–3 was scored
   against the module-grain context, so their *absolute* groundedness is artificially low and not
   directly comparable to cycle-4-onward numbers. It does **not** invalidate the cross-cycle *deltas on
   unchanged answers* (the v1 byte-identical spine) or correctness/honesty dimensions. The write-ups

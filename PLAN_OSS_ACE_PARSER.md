@@ -2,7 +2,7 @@
 
 A Phase-LATER workstream plan (operator, 2026-07-05), from the dependency audit's publish-not-replace
 finding. `src/grammar/ace.mjs` is a pure-JS, ESM, dependency-free parser that turns controlled-English
-sentences into OWL-labelled triples — and nothing like it exists as an installable JS package. This plan
+sentences into OWL-labelled triples. Nothing like it exists as an installable JS package. This plan
 extracts it out of tmct into its own repository and npm package, and settles the seam between the
 domain-agnostic parser and tmct's memory-specific consumption of it.
 
@@ -28,7 +28,7 @@ Built in ROADMAP Phase 2 item 2, backed by `docs/references/schemas/ace-owl-frag
 - **`docs/references/schemas/ace-owl-fragment.md`** — the pattern table (the 8-row grammar↔OWL map). This
   becomes the extracted package's README/docs.
 
-The reference implementation of ACE, **APE**, is GPL/LGPL + SWI-Prolog native — disqualified for a
+The reference implementation of ACE, **APE**, is GPL/LGPL + SWI-Prolog native, disqualified for a
 permissive, browser-capable JS product on both license and platform.
 
 ## Why this is worth open-sourcing (the gap it fills)
@@ -36,7 +36,7 @@ permissive, browser-capable JS product on both license and platform.
 Per `PLAN_DEPENDENCY_STRATEGY.md`, this is the strongest publish-not-replace candidate. No permissive,
 ESM, browser-capable, npm-installable ACE→OWL controlled-natural-language parser exists in JS. The
 RDF-JS / semantic-web community (the `rdfjs`/N3 family the dep-strategy plan pre-cleared) has excellent
-serialization, stores, and reasoners — but **no controlled-NL front-end**: nothing that takes English a
+serialization, stores, and reasoners, but **no controlled-NL front-end**: nothing that takes English a
 human can write and emits OWL axioms, without a Prolog runtime. tmct's parser is exactly that, and it is
 pure-JS and dependency-free. Publishing it fills a real ecosystem gap and raises tmct's profile as the
 project the parser came from.
@@ -49,7 +49,7 @@ project the parser came from.
 - **Stays in tmct:** `src/grammar/assert.mjs` — the memory bridge / write path (`assertSentence` →
   `appendFact`) is tmct-specific and consumes triples; it stays. The `src/interpret/strategies/` ACE
   adapter (the Phase 2 pipeline seam that treats a grammar fit as a high-confidence strategy result)
-  stays. `normFactTerm` / `appendFact` normalization (`src/memory/core.mjs`) stays — **the consumer
+  stays. `normFactTerm` / `appendFact` normalization (`src/memory/core.mjs`) stays. **The consumer
   normalizes.** Everything that stores or reasons over triples is tmct's.
 - tmct depends on `ace-owl` as a library, exactly as chat depends on seonix.
 
@@ -80,13 +80,13 @@ tmct-memory assumptions. Two things make this real:
    usable by ANY RDF/OWL project, not just tmct.
 
 **RDFJS-quad value-add (optional adapter).** The dep-strategy plan pre-clears N3.js at the I/O edge. The
-library can offer an optional adapter emitting RDFJS quads (via N3.js) from the neutral triples — a direct
+library can offer an optional adapter emitting RDFJS quads (via N3.js) from the neutral triples, a direct
 bridge into the semantic-web toolchain that would make `ace-owl` a first-class citizen of that ecosystem.
 Keep it a separate entry point / optional peer dep so the core parser stays zero-dependency.
 
 ## Publishing mechanics
 
-- **License MPL-2.0**, matching tmct — file-level copyleft is fine for a library and share-friendly.
+- **License MPL-2.0**, matching tmct. File-level copyleft is fine for a library and share-friendly.
 - Its own **repo, CI, README, docs, semver.** The `ace-owl-fragment.md` pattern table becomes the docs; the
   README leads with "controlled English → OWL triples, in the browser, no Prolog."
 - **The lexicon ships as extensible data:** a domain-agnostic neutral base plus the software-domain starter
@@ -95,7 +95,7 @@ Keep it a separate entry point / optional peer dep so the core parser stays zero
 
 ## Why gated on Phase 8
 
-`PLAN_REPOSITORY_INTERFACE.md` (Phase 8) settles how tmct consumes external libraries cleanly — the
+`PLAN_REPOSITORY_INTERFACE.md` (Phase 8) settles how tmct consumes external libraries cleanly: the
 library-surface discipline, capability negotiation, the named/versioned boundary. Extract the ACE parser
 **once that boundary pattern exists**, so `ace-owl` is the **second proof of the same seam**: the first is
 seonix inverting into a tmct user; this is tmct depending outward on an extracted parser. Doing it before
@@ -106,7 +106,7 @@ Phase 8 would invent the boundary discipline twice.
 Per the dep-strategy plan, two other home-grown pieces could follow the same path **if demand appears**:
 the **bounded-Damerau fuzzy matcher** (`interpret/fuzzy.mjs`, transposition-aware + tie-refusal) and the
 **PageRank + IDF block ranker** (`memory/blocks.mjs`). Both are lower priority than the ACE parser, because
-both DO have permissive JS alternatives — the ACE parser is uniquely gap-filling, which is why it goes first.
+both DO have permissive JS alternatives. The ACE parser is uniquely gap-filling, which is why it goes first.
 
 ## First steps (when this track opens)
 
@@ -124,7 +124,7 @@ both DO have permissive JS alternatives — the ACE parser is uniquely gap-filli
 ## Open questions (genuinely open)
 
 - **Does a domain-agnostic lexicon weaken tmct's tech-domain tuning?** Likely tmct ships its tech lexicon
-  as an OVERLAY on the library's neutral base — but confirm the overlay carries all current tuning (noun
+  as an OVERLAY on the library's neutral base, but confirm the overlay carries all current tuning (noun
   property typings, verb prepositions, adjective types) with no loss versus today's single `lexicon-core.json`.
 - **Versioning coupling.** How tightly does tmct pin `ace-owl`? A parser change that shifts emitted triples
   is a breaking change for tmct's stored memory (content-addressed fact ids). Semver discipline plus tmct
@@ -132,4 +132,4 @@ both DO have permissive JS alternatives — the ACE parser is uniquely gap-filli
 - **RDFJS quads native or separate adapter?** Emit quads from the core, or keep the core zero-dep and leave
   N3.js to an optional adapter (this plan's lean)? Depends on how central RDFJS is to the target audience.
 - **Naming / scope.** `@polycode-projects/ace-owl` (collision-safe, obviously ours) vs an unscoped community
-  name (more discoverable, higher adoption) — an operator decision at publish time.
+  name (more discoverable, higher adoption), an operator decision at publish time.

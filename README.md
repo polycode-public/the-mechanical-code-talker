@@ -37,7 +37,7 @@ fit the grammar still gets the tolerant strategies; nothing is rejected for
 being loose, fuzzy, or misspelled.
 
 **Negation and passive.** "Which modules do *not* import X?" computes a bounded
-**set complement** over the graph — and an honestly empty result stays a miss
+**set complement** over the graph, and an honestly empty result stays a miss
 rather than a fabricated list (a non-enumerable type, like arbitrary *changes*,
 is refused outright). Reversible-passive questions traverse the right direction:
 "what is imported by Y" and "what does Y import" are understood as opposite
@@ -73,8 +73,8 @@ web scrape, a rule-derived entailment — and a fact links back to *all* of them
 (`mgx:derivedFrom` / `mgx:statedBy` / `mgx:canonicalisedFrom`), timestamped with
 `mgx:createdAt`. From those links tmct computes a **deterministic, explainable
 trust score** — a source-type prior combined with corroboration (how many
-independent sources agree) and recency — never hand-set, always traceable to its
-inputs. Retrieval then ranks by **relevance × trust**, so a corroborated,
+independent sources agree) and recency. It is never hand-set, always traceable
+to its inputs. Retrieval then ranks by **relevance × trust**, so a corroborated,
 operator-stated fact outranks a lone web scrape on the same question. When two
 trusted sources *disagree*, the `/memory` inspector shows **both sides with their
 provenance** rather than silently picking a winner.
@@ -95,7 +95,7 @@ on the chat's hot path.
   a code graph is out of scope. tmct's job is the *conversation*.
 - **It is not a reasoning model.** Where it "reasons", it does so by
   *calculation* surfaced as prose ("there are a lot of tests for a codebase of
-  that size") — deterministic, explainable, cheap. Even its forward-chaining
+  that size"). It is deterministic, explainable, and cheap. Even its forward-chaining
   entailment (`tmct syllogise`) is mechanical OWL rule materialization applied
   offline, rule-by-rule and retractable — not an LLM. There is **no LLM anywhere
   in the product**. (An LLM-as-judge exists only in the offline eval harness

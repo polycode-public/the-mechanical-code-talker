@@ -15,12 +15,12 @@ competence later, and the bench is built to tell the two apart honestly.
 ## Context — what the pieces are today
 
 - **The template renderer** (`src/corpus/templates.mjs` + `data/templates/responses.jsonl`, 64 rows):
-  W1 made the answer path consume `render(id, slots)` instead of hardcoded strings — strict slots, a
+  W1 made the answer path consume `render(id, slots)` instead of hardcoded strings: strict slots, a
   thrown slot is a programming error not a user-facing miss. Registers today are `terse|friendly`
   only; there is no C1/technical-paper register yet.
 - **The `via` provenance** (`src/chat.mjs`): every turn record already carries
   `via ∈ {composed, template, count, recall, fact, corpus, command, conversational, assert}`. This is
-  the exact field the dual banding reads — Phase 5 does not need new plumbing to know *how* an answer
+  the exact field the dual banding reads. Phase 5 does not need new plumbing to know *how* an answer
   was produced, only to aggregate it.
 - **The graded benchmark** (`chatbench/GRADED.md`): a CEFR A1–C2 ladder × TROG/CELF-adapted
   construction taxonomy, 30 cells / 850 pool cases, stratified seeded sampling with a **dual-draw
@@ -29,10 +29,10 @@ competence later, and the bench is built to tell the two apart honestly.
   C2 ceiling (12/50). The cell-level green-rate is the cross-cycle comparable statistic.
 - **The tuning cycle** (`CHATBENCH_002.md`): single-seam levers move exactly their predicted cases;
   the operator's own verdict on cycle 2 is that the *mechanical floor is honest* (zero hallucinated
-  graph entities across 96 runs) and the ceiling is a coverage problem — movement past ~1.85 mean
+  graph entities across 96 runs) and the ceiling is a coverage problem. Movement past ~1.85 mean
   "requires new wiring *and new cases to measure it*." Phase 5 is that wiring, made into a loop.
 
-## Why — formulaic competence is a real acquisition mechanism, not a cheat
+## Why — formulaic competence is a real acquisition mechanism
 
 Human language testing distinguishes **productive** competence (what a learner can generate from
 grammar) from **performance** enabled by **formulaic sequences** — Wray's memorized multi-word chunks
@@ -56,7 +56,7 @@ aggregation over the existing product rows):
 - **Performance band** — the score with templates (and the other formulaic vias) allowed. This is
   what tmct can *say*, by any means.
 
-The **gap between the bands is itself a headline metric** — it quantifies how much of tmct's fluency
+The **gap between the bands is itself a headline metric**. It quantifies how much of tmct's fluency
 is memorized versus generated, per cell and per grade. A template-carried C1 pass raises the
 performance band and **never touches the productive band**; that invariant is the honesty guarantee.
 The design question this seam forces — settled as a rule, flagged as an open one below — is *whether a
@@ -70,7 +70,7 @@ independently demonstrated.
 Cases that target a *templated capability* are **tagged** as template-lane. The operator's framing is
 load-bearing: *"it's faking a level we would expect a fail at, so the bench must say so."* So template
 -lane cells get their own dual-draw agreement treatment (`GRADED.md`'s parallel-forms self-test),
-reported as an **additional** measurement alongside the standard cells — never a replacement for them.
+reported as an **additional** measurement alongside the standard cells, never a replacement for them.
 A template-lane C1 cell that passes tells us the performance band cleared C1 there; the co-located
 non-template cell (or the productive-band read of the same cell) tells us the productive band did not.
 Both numbers ship in the CHATBENCH write-up. The agreement gate applies unchanged: a template-lane
@@ -92,7 +92,7 @@ consistently-failed cells; Phase 5 adds a ranking pass over the failed **C1/C2 g
 Cells scoring high on all three are the **shopping list**. Acquiring the template *is* the lever: one
 template-acquisition per cycle keeps the attribution clean (`CHATBENCH_002`'s single-seam discipline),
 and the graded bench measures the flip **in the performance band**. A cell that flips performance but
-not productive is the expected, honest outcome — the write-up records both, and the band gap for that
+not productive is the expected, honest outcome. The write-up records both, and the band gap for that
 cell widens by exactly the acquired chunk. Failed ceiling cells stop being a scoreboard of shame and
 become an ordered backlog of acquirable phrasings.
 
@@ -100,12 +100,12 @@ become an ordered backlog of acquirable phrasings.
 
 - **Phase 5a — fixed tech domain.** Templates are hand-picked in the technical-paper (C1) register,
   authored as **original phrasings** (the `GRADED.md` licence rule extends here: borrow register and
-  structure, never copy source text). This requires a new `register` value — the strict loader's
+  structure, never copy source text). This requires a new `register` value. The strict loader's
   `REGISTERS` set (`terse|friendly` today) grows a `technical` band with its own slot-lint.
 - **Phase 5b — mined templates.** Template acquisition generalizes: candidate templates are **mined
   from tier-2 corpus blocks** (the fetched-at-seed-time corpora of the ROADMAP's tiering policy),
   scored by **slot-fillability** against what tmct computes, and the survivors are **promoted into
-  `data/templates/` with provenance** — the same committed/diffable discipline, plus a `via:"corpus"`
+  `data/templates/` with provenance**, the same committed/diffable discipline, plus a `via:"corpus"`
   or acquired-template provenance stamp so a mined chunk is always distinguishable from a hand-authored
   one in both the memory inspector and the dual banding.
 
@@ -114,14 +114,14 @@ become an ordered backlog of acquirable phrasings.
 - **Builds on W1** (renderer + `via`): dual banding is an aggregation over provenance that already
   exists; template-lane cases are ordinary graded cases with a tag.
 - **Consumes PLAN_RESPONSE_FINISHING.md's segmentation IR**: acquired-template slots ARE the protected
-  spans of that plan's typed-span model — cite that plan for the span taxonomy and the invariance
+  spans of that plan's typed-span model. Cite that plan for the span taxonomy and the invariance
   checker; do not respecify it here. A C1 template renders into `prose` + protected (`number`,
   `entity`, `provenance`) spans and rides finishing's grammar pass unchanged.
 - **Feeds the tuning cycle as levers**: one template-acquisition per cycle, ranked by the shopping
-  list, measured by the performance-band flip — the acquisition loop is a *kind* of tuning lever, not
+  list, measured by the performance-band flip. The acquisition loop is a *kind* of tuning lever, not
   a parallel process.
 - **Adjacent to PLAN_REPOSITORY_INTERFACE.md**: the values templates fill (counts, comparisons,
-  provenance) come through the repository interface's typed services — see that plan for the service
+  provenance) come through the repository interface's typed services. See that plan for the service
   contract that supplies the slot data.
 
 ## First steps (when this track opens)
@@ -133,7 +133,7 @@ become an ordered backlog of acquirable phrasings.
    line in `agreement.json`.
 3. **The `technical` register**: extend `REGISTERS` in `templates.mjs`, add the slot-lint, author the
    first 3–5 C1 technical-paper templates over item-5 mechanical conclusions (count/compare/superlative
-   + provenance) — original phrasings, licence-clean.
+   + provenance), original phrasings, licence-clean.
 4. **The acquirability ranking pass** in the cycle write-up: rank consistently-failed C1/C2 cells by
    the three-part test above; the top-ranked acquirable cell is the next cycle's pick.
 5. Author one template-lane graded cell per acquired template so the flip is visible (the graded pool
@@ -146,10 +146,10 @@ become an ordered backlog of acquirable phrasings.
   render must match)? The no-LLM-in-product rule keeps any judge in the eval harness only; a golden
   file is cheaper and deterministic but does not generalize to mined templates.
 - **The chunk-becomes-grammar promotion**: should the productive band *ever* absorb a template once its
-  pattern is compositionally reproduced — and if so, what independent evidence of composition (a
+  pattern is compositionally reproduced? And if so, what independent evidence of composition (a
   rederivation over held-out slots?) is required before the re-credit is honest?
 - **Diminishing returns**: how many templates per cell before acquisition stops moving the performance
-  band — i.e. when does a cell's slot space saturate, and does the shopping list need a per-cell
+  band, i.e. when does a cell's slot space saturate, and does the shopping list need a per-cell
   acquisition cap the way the tuning cycle caps levers per cycle?
 - **Mining precision (5b)**: what slot-fillability threshold promotes a mined tier-2 candidate, and how
   is a mined template's register validated when there is no human author in the loop?

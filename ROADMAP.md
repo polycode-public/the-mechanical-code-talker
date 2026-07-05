@@ -2,7 +2,7 @@
 
 tmct v0.1.0 was a **whole-package lift** of the seonix chat surface (published
 as `@polycode-projects/mct`): identical shape, green tests, new branding. That
-was deliberate — it gave every ambition below a working, tested starting point
+was deliberate. It gave every ambition below a working, tested starting point
 instead of a green field. v0.2.0 is the **reshape**: the lift's LLM fallback,
 extraction stack, and MCP server are gone, and the package, naming, and license
 now match the product this document describes.
@@ -228,7 +228,7 @@ then use Progol to theorem-prove against parsed prose".)*
 
 ## Phase 4 — The wiring wave (operator-directed 2026-07-04)
 
-Five subsystems are built, tested, and consumed by NOTHING in the answer path — they measured
+Five subsystems are built, tested, and consumed by NOTHING in the answer path. They measured
 zero on case-set v1 because no case could see them. This phase wires each into answering, with
 **unit tests at the seam AND graded-benchmark cells that measure it** (the graded pool creates
 the cases that make each lever visible). Wired as one operator-directed wave; cycle-level
@@ -406,7 +406,7 @@ answer EXISTS as a stable phrasing in technical prose is not a ceiling — it is
 > Detailed plan: **`PLAN_RESPONSE_FINISHING.md`**.
 
 *(Refined 2026-07-05; decisions settled with the operator. Fact invariance is achieved by
-CONSTRUCTION, not by hope — finishing operates over a SEGMENTED answer, never a raw string.
+CONSTRUCTION, not by hope. Finishing operates over a SEGMENTED answer, never a raw string.
 Tone-of-voice synonym substitution is DROPPED: once every term with technical significance is
 protected — entities, paths, vocabulary, receipts, provenance — the substitutable surface is
 mostly connectives: high accuracy risk, thin reward. "Keen on the trickery to make a helpful
@@ -466,7 +466,7 @@ a passive payload loader into the product's primary integration surface.)*
 - **tmct defines the adapter shape** — not the producer. Rationale: tmct is the brittle side
   (query interpretation), so it must own and optimize around a STABLE interface; because the
   vocabulary is OWL-grounded, the human/code world is already quantized into types both sides
-  understand — the interface is built from those shared types, not ad-hoc JSON.
+  understand, so the interface is built from those shared types, not ad-hoc JSON.
 - **A rich instruction set, translated from what seonix already exposes**: survey seonix's
   native tool surface (describe / members / subclasses / impact / callers / callees / tests-for /
   untested / history / exports / architecture / search / context / snippet / locate / digest —
@@ -521,7 +521,7 @@ exactly when pre-deriving the useful closure pays off). Never on the chat's hot 
 
 **The selection criterion, sharpened by the operator (2026-07-05):** the guiding question is
 *"what do the assertions of the sources I TRUST allow me to infer about this topic that is of
-RELEVANCE"* — so **novelty × trust is the primary driver**, not an afterthought: the pass walks
+RELEVANCE"* — so **novelty × trust is the primary driver**: the pass walks
 outward from high-trust premises (the provenance primitive) toward novel, relevant conclusions,
 timestamping each so recency and novelty stay computable. The mechanics are the easy half
 (bounded forward chaining materializes entailments; backward chaining from frequent query shapes
@@ -530,7 +530,7 @@ realization — unsolved in the general case and not pretended otherwise;** trus
 are the tractable approximation, not a solution. The plan's job is
 to make it TRACTABLE in tmct's narrow, closed world, not to solve it: usefulness is approximated
 from what the system actually gets asked (query-shape frequency), what connects to recent focus,
-what a cheap forward step yields that isn't already stored, and — the honest guardrail — a hard
+what a cheap forward step yields that isn't already stored, and a hard
 budget (inference is bounded, its output trust-scored via the provenance primitive, and anything
 speculative is retractable and never outranks a stated fact). Everything else is deferred to the
 plan's open questions, where the relevance problem is named as the open research risk it is.

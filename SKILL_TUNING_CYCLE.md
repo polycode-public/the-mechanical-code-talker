@@ -1,9 +1,9 @@
 # SKILL_TUNING_CYCLE.md — the autonomous chat tuning cycle (continuous iterations, no hard pause)
 
 The orchestration skill that runs the tmct **chat tuning cycle**: read the last result, pick +
-apply the next lever, smoke, run the chatbench, analyse, write it up — and **continue to the next
+apply the next lever, smoke, run the chatbench, analyse, write it up, and **continue to the next
 cycle**. It is the conductor; the worker skill it drives is **`SKILL_STRATEGY_ADVISOR.md`** (the
-second pair of eyes). The measurement rules live in **§1 of this document** — this skill both
+second pair of eyes). The measurement rules live in **§1 of this document**. This skill both
 defines and enforces them (there is no separate benchmarking skill in this repo).
 
 The product under test is deterministic, pure-JS, and $0 per run; the only paid component is the
@@ -23,8 +23,8 @@ chose and why.
 
 - **Use it** to drive the CHATBENCH_001→002→0NN arc: one lever applied per cycle, measured against
   the contract in §1, written up, decision-logged, and iterated.
-- **Do NOT use it** for a one-off smoke, a docs-only change, or to apply several levers at once —
-  one cycle = one lever, so movement in the mean is attributable.
+- **Do NOT use it** for a one-off smoke, a docs-only change, or to apply several levers at once.
+  One cycle = one lever, so movement in the mean is attributable.
 - **Autonomous, interruptible.** There is no step-7 pause: the ranked menu that used to gate the
   next cycle is now a *logged decision record*. The operator steers by interrupting, by editing
   the ROADMAP phase priorities, or by naming a lever at invocation.
@@ -36,9 +36,9 @@ Every cycle MUST satisfy:
 - **Fixed, versioned case set:** `chatbench/cases.jsonl` — one JSON object per line:
   `{ id, turns[], expectations, tags }`. The set is **append-only per cycle**: new cases may be
   added between runs (record the addition in the write-up), but existing cases are never edited
-  or removed mid-arc — editing a case invalidates every prior cycle's comparison against it.
+  or removed mid-arc. Editing a case invalidates every prior cycle's comparison against it.
 - **Deterministic replay:** each case's `turns` are replayed through `runTurn`. The product is
-  deterministic, so **ONE product run per arm** is sufficient — repetition adds nothing.
+  deterministic, so **ONE product run per arm** is sufficient; repetition adds nothing.
 - **The judge is the noisy part:** each case's transcript is scored by an **LLM-as-judge** with
   **N ≥ 3 judge samples per case** (the judge lives in the eval harness only; the product stays
   no-LLM). **Judge model + prompt version are pinned and recorded** in every `CHATBENCH_0NN.md`.
@@ -53,11 +53,11 @@ Every cycle MUST satisfy:
   previously-passing case regresses to fail**. Any pass→fail regression is **FAIL outright**, no
   matter what the mean does.
 - **Judge integrity:** a judge refusal or format failure **VOIDS that case's score** for that
-  sample — it is re-sampled or excluded, **never counted as a fail**.
+  sample. It is re-sampled or excluded, **never counted as a fail**.
 - **Graded-pool sampling (case-set v2):** graded cases live in a POOL ~10× the run size
   (`chatbench/graded-pool.jsonl`); each run draws a stratified seeded sample (~10%, **never fewer
   than 5 items per populated grade×construction cell**, seed recorded in the product output so
-  every run is reproducible). This is the anti-overfitting mechanism — levers cannot memorize the
+  every run is reproducible). This is the anti-overfitting mechanism. Levers cannot memorize the
   test. The regression rule adapts for sampled cases: promoted always-run grades are FIXED (never
   sampled out); cross-cycle pass→fail regression is checked on the INTERSECTION of the two
   cycles' samples; **cell-level means** (grade × construction, single-area vs combination cells

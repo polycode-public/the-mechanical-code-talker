@@ -6,20 +6,20 @@
 > voice/agreement rules are implemented-but-parked.
 
 A Phase-7 execution plan (operator, decisions settled 2026-07-05). Phase 7 is FULLY DECIDED in
-ROADMAP.md; this doc elaborates HOW the finishing layer is built, not WHETHER — it reopens no
+ROADMAP.md; this doc elaborates HOW the finishing layer is built, not WHETHER. It reopens no
 decision. The governing principle: **fact invariance BY CONSTRUCTION**. Finishing operates over a
 SEGMENTED answer, never a raw string, so a grammar rule *cannot* touch an entity, a path, a number,
-a receipt or a provenance tag — those are byte-copied through, and only prose is ever transformed.
+a receipt or a provenance tag. Those are byte-copied through, and only prose is ever transformed.
 "Finish over a segmented answer, not a string" (operator-agreed).
 
 ## Context — what an answer is today
 
-Every chat turn ends in `runTurn` (src/chat.mjs) as `{ answer, logLines, record, focus, via }` — a
+Every chat turn ends in `runTurn` (src/chat.mjs) as `{ answer, logLines, record, focus, via }`, a
 FLAT string plus a `via` provenance band (`composed | template | count | command | conversational |
 assert | recall | fact | corpus`). Two production paths build that string:
 
 - **Templated** surfaces (W1) render through `corpus/templates.mjs render(id, slots)`: a template
-  string with `{slot}` holes filled from grounded data only. The renderer already KNOWS the seam —
+  string with `{slot}` holes filled from grounded data only. The renderer already KNOWS the seam.
   `slotsOf()` enumerates the holes; literal text between holes is fixed wording, slot fills are the
   grounded facts. This surface is segmentation-ready almost for free.
 - **Composed** surfaces (the ask engine, src/ask.mjs `renderCore`/`renderComposite`) assemble prose
@@ -27,16 +27,16 @@ assert | recall | fact | corpus`). Two production paths build that string:
   fnAlpha)`), repair receipts (`read as "which modules import a.mjs"`) and licence/provenance tails
   (`(source: …)`, `ConceptNet, CC-BY-SA`). These are hand-built strings with no structure today.
 
-The whole thing is pinned by BYTE-EXACT assertions — test/showcase.test.mjs matches literal strings
+The whole thing is pinned by BYTE-EXACT assertions: test/showcase.test.mjs matches literal strings
 (`app/lib/b.mjs and app/lib/c.mjs and app/lib/e.mjs`, `3 classes.`, the receipt phrasings). Those
 assertions are the contract finishing must honour: neutral behaviour is byte-stable.
 
 ## Why finish at all, and why over segments
 
-tmct GENERATES defective English of its own — "a artifact" in the assert echo, a singular verb
+tmct GENERATES defective English of its own: "a artifact" in the assert echo, a singular verb
 against a plural slot, an uncapitalised opener. Fixing those IMPROVES accuracy: they are our own
 manufacturing defects, not the user's facts. That is exactly why the grammar pass survives the
-tone-of-voice cut (below) — a correction is a fix, not a flourish. But an unstructured
+tone-of-voice cut (below). A correction is a fix, not a flourish. But an unstructured
 search-and-replace over a whole answer string is how you turn `app/lib/a.mjs` into `app/lib/an.mjs`.
 Segmentation makes that class of error UNREPRESENTABLE: the rule engine is only ever handed prose
 spans; protected spans are not in its input at all.
@@ -94,11 +94,11 @@ to prose spans only. The starter rule set, each landing as an individually bench
 5. **Terminal punctuation** — exactly one sentence-final stop.
 
 Each rule carries APPLICABILITY CONDITIONS in its TOML row (register, span type context, position),
-which is where the grammar-PREFERENCE half of the dropped tone idea survives — as conditions on
+which is where the grammar-PREFERENCE half of the dropped tone idea survives, as conditions on
 corrective rules, not as a substitution engine. A rule's NEUTRAL behaviour is byte-stable; the only
 byte changes it may introduce are GENUINE fixes. Where a fix changes a byte-exact showcase/test
 assertion, that assertion is updated IN THE SAME cycle, with the before/after diff quoted verbatim
-in the tuning-cycle write-up (SKILL_TUNING_CYCLE.md) — a fix is never smuggled past a green test.
+in the tuning-cycle write-up (SKILL_TUNING_CYCLE.md). A fix is never smuggled past a green test.
 
 ## Tone-of-voice: DROPPED (record the decision)
 
@@ -117,7 +117,7 @@ Finishing must not corrupt the honest record. So memory stores BOTH:
 - **As-spoken** turns remain the honest record. Today `recordSessionMemory` (src/sessions.mjs) already
   writes each turn as larger prose `Utterance` individuals (visitor + tmct, recovered from the
   transcript), and `fold.mjs` cleans surviving Q/A into prose blocks (memory/blocks.mjs). That path is
-  UNCHANGED — raw prose is preserved verbatim.
+  UNCHANGED. Raw prose is preserved verbatim.
 - **Canonical** forms are DERIVED and LINKED, never overwritten. A canonicalised `Fact` (memory/
   core.mjs's reified `rdf:Statement`) points back to the prose it came from via a new edge
   `mgx:canonicalisedFrom` (Fact → source `Utterance`/block id), added to `MEMORY_VOCABULARY`
@@ -131,7 +131,7 @@ Finishing must not corrupt the honest record. So memory stores BOTH:
 ## Verification
 
 - **Invariance checker** (unit): for every finished turn, assert the PROTECTED-span multiset is
-  identical pre- and post-finishing — the machine proof that no fact moved. Runs over the showcase
+  identical pre- and post-finishing, the machine proof that no fact moved. Runs over the showcase
   corpus and every golden.
 - **Per-rule golden files**: each rule ships a golden of inputs → finished outputs, so a rule's exact
   effect is frozen and reviewable.
@@ -161,7 +161,7 @@ Finishing must not corrupt the honest record. So memory stores BOTH:
 
 
 **Timestamping (trust prerequisite).** Every created individual gains `mgx:createdAt` on
-write — Facts lack one today (only Utterances carry `ts`). It is provenance in its own right:
+write. Facts lack one today (only Utterances carry `ts`). It is provenance in its own right:
 the recency input to trust scoring and the novelty signal Phase 8's deduction pass needs.
 Backfill in `appendFact`/block writes; deterministic-id upsert keeps the FIRST createdAt
 (when a fact was first learned), never overwriting it on re-assert.
@@ -174,7 +174,7 @@ Backfill in `appendFact`/block writes; deterministic-id upsert keeps the FIRST c
 - **Sidecar serialization**: how do segments persist into the structured sidecar record without
   bloating it? Options: don't persist (re-derive on fold from the transcript + graph), or persist a
   COMPACT span index (offsets + types, not repeated text). Re-derivation keeps the sidecar lean and
-  respects the T1a invariant that the transcript is the sole answer-text artifact — preferred unless
+  respects the T1a invariant that the transcript is the sole answer-text artifact, preferred unless
   re-derivation proves lossy.
 - **Rule ordering / idempotence**: confirm the starter rules commute (or fix an order) so `finish` is
   idempotent — `finish(finish(x)) === finish(x)` — a checkable property worth a test.
