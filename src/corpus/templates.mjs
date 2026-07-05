@@ -31,6 +31,65 @@ export function slotsOf(template) {
   return out;
 }
 
+// --- Segmentation IR (Phase 7, lever 1) -------------------------------------
+// A rendered answer is ALSO a list of typed spans: [{ type, text }, …] with
+// type ∈ prose | entity | path | number | code | provenance | receipt. The
+// invariant law is byte-exact reconstruction: flatten(segments) === render().
+// Everything except `prose` is PROTECTED — finishing (a later wave) may only
+// transform prose spans, so a grammar rule can never touch a fact.
+//
+// Slot kinds map a template hole to its protected span type. A slot fill is
+// ALWAYS protected (never prose): it is grounded data, not our wording. The
+// specific type is derived from the slot name; unknown slots fall back to the
+// conservative `entity` (protect-when-unsure). Bytes never depend on the type,
+// only on the fill, so the type is metadata layered over an exact split.
+const SLOT_KIND = {
+  count: "number",
+  when: "number",
+  location: "path",
+  commit: "path",
+};
+
+/** The protected span type for a template slot name (default: entity). */
+export function slotKind(name) {
+  return SLOT_KIND[name] || "entity";
+}
+
+/** Reconstruct the flat answer from its segments — a pure, total inverse of
+ *  segmentation: `segments.map(s => s.text).join("")`. flatten(renderSegments(
+ *  id, slots)) === render(id, slots), byte for byte. */
+export function flatten(segments) {
+  let out = "";
+  for (const s of segments) out += s.text;
+  return out;
+}
+
+/** Render template `id` as a SEGMENTED answer: the literal text between slots
+ *  becomes `prose` spans, each slot fill becomes a PROTECTED span typed by
+ *  slotKind(). Validation is identical to render() (unknown id / missing slot
+ *  throw the same messages), so render() is exactly flatten(renderSegments()). */
+export function renderSegments(id, slots = {}, templates = cache) {
+  if (!templates) throw new Error("renderSegments() before loadTemplates() — load the template library first");
+  const row = templates.get(id);
+  if (!row) throw new Error(`unknown template id "${id}"`);
+  const missing = row.slots.filter((s) => slots[s] === undefined || slots[s] === null);
+  if (missing.length) {
+    throw new Error(`template "${id}" missing slot${missing.length > 1 ? "s" : ""}: ${missing.join(", ")}`);
+  }
+  const tpl = row.template;
+  const re = new RegExp(SLOT_RE.source, "g"); // own lastIndex; never touch the shared regex
+  const segments = [];
+  let last = 0;
+  let m;
+  while ((m = re.exec(tpl)) !== null) {
+    if (m.index > last) segments.push({ type: "prose", text: tpl.slice(last, m.index) });
+    segments.push({ type: slotKind(m[1]), text: String(slots[m[1]]) });
+    last = m.index + m[0].length;
+  }
+  if (last < tpl.length) segments.push({ type: "prose", text: tpl.slice(last) });
+  return segments;
+}
+
 let cache = null; // Map<id, row> from the last loadTemplates() — render()'s source
 
 /** Load + validate the response templates. Every line must parse as JSON with
@@ -71,13 +130,10 @@ export async function loadTemplates(path = TEMPLATES_FILE) {
  *  `templates` explicitly to bypass the module cache, e.g. in tests). */
 export function render(id, slots = {}, templates = cache) {
   if (!templates) throw new Error("render() before loadTemplates() — load the template library first");
-  const row = templates.get(id);
-  if (!row) throw new Error(`unknown template id "${id}"`);
-  const missing = row.slots.filter((s) => slots[s] === undefined || slots[s] === null);
-  if (missing.length) {
-    throw new Error(`template "${id}" missing slot${missing.length > 1 ? "s" : ""}: ${missing.join(", ")}`);
-  }
-  return row.template.replace(SLOT_RE, (_, name) => String(slots[name]));
+  // render() IS the flattened segmentation, by construction: the byte output is
+  // provably identical to the old `.replace(SLOT_RE, …)` (test/segments.test.mjs
+  // renders every responses.jsonl row both ways and asserts equality).
+  return flatten(renderSegments(id, slots, templates));
 }
 
 /** Load + parse the SE phrase book. Returns:
