@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>tmct — The Mechanical Code Talker</title>
-<meta name="description" content="A pure-JS, no-LLM, offline, $0 chatbot in the ELIZA/PARRY lineage — mechanical interpretation, OWL graph memory, honest misses.">
+<meta name="description" content="A pure-JS, no-LLM, offline, $0 chatbot in the ELIZA/PARRY lineage: mechanical interpretation, OWL graph memory, honest misses.">
 <style>
   :root {
     --bg: #fdfcf9;
@@ -103,8 +103,8 @@
 
   <p class="lede">
     A chatbot in the <em>ELIZA/PARRY lineage</em>, obsessed with software the way PARRY
-    was obsessed with the mafia. No model calls anywhere in the product: interpretation
-    is <em>mechanical</em>, memory is an <em>OWL-labelled graph</em> on disk, and every
+    was obsessed with the mafia. No model calls anywhere. Interpretation is
+    <em>mechanical</em>, memory is an <em>OWL-labelled graph</em> on disk, and every
     answer is either grounded or an honest miss.
   </p>
 
@@ -160,10 +160,13 @@ tmct syllogise    # offline: pre-derive entailed facts (a maintenance job)</code
   same suite to claim conformance. Conformance is the suite, not prose.</p>
 
   <h2>Security &amp; supply chain</h2>
-  <p>CI runs SAST and secret detection; a nightly <code>npm audit</code> + OSV-Scanner job
-  watches dependencies; releases publish with <strong>npm provenance</strong>; and a
-  <code>SECURITY.md</code> policy documents coordinated disclosure. Offline and $0 by default
-  means the supply chain has to be trustworthy too.</p>
+  <p>Offline and $0 means the supply chain has to be trustworthy too:</p>
+  <ul>
+    <li>CI runs SAST and secret detection.</li>
+    <li>A nightly <code>npm audit</code> + OSV-Scanner job watches dependencies.</li>
+    <li>Releases publish with <strong>npm provenance</strong>.</li>
+    <li>A <code>SECURITY.md</code> policy documents coordinated disclosure.</li>
+  </ul>
 
   <h2>The no-LLM, honesty pitch</h2>
   <ul>

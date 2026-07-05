@@ -2,12 +2,11 @@
 
 `@polycode-projects/the-mechanical-code-talker`
 
-A pure-JS, **no-LLM**, offline, **$0** chatbot in the ELIZA/PARRY lineage —
+A pure-JS, **no-LLM**, offline, **$0** chatbot in the ELIZA/PARRY lineage:
 pattern-driven, best-efforts, and obsessed with software the way PARRY was
-obsessed with the mafia. No model calls anywhere in the product: interpretation
-is mechanical (deterministic language libraries, template sets, committed
-corpuses), memory is a graph on disk, and every answer is either grounded or an
-honest miss.
+obsessed with the mafia. No model calls anywhere. Interpretation is mechanical
+(deterministic language libraries, template sets, committed corpuses). Memory is
+a graph on disk. Every answer is either grounded or an honest miss.
 
 ```
 $ tmct
@@ -173,29 +172,31 @@ extension surface.
 ## The repository interface
 
 tmct is not an indexer, so it consumes a graph through a typed contract any
-producer can implement. That contract is now first-class: a **versioned
-(1.0.0), OWL-grounded, machine-readable service definition**
-(`docs/repository-interface.md` + a JSON schema) of every service, its
-arguments, result types, and error contract. A **miss is a value, not a throw** —
-the interface models "no answer" explicitly. tmct ships **reference providers**
-(a fixture graph and the empty/bootstrap graph) that implement every service,
-and a **runnable conformance suite**: tmct's own providers pass it in `npm test`,
-and any external graph producer (seonix first) runs the *same* suite against its
-native implementation to claim conformance. Conformance is the suite, not prose.
-The design deliberately inverts the original relationship — tmct was lifted out
-of seonix; now seonix reorients as a *user* that imports the tmct library and
-exposes its graph to tmct as a service, with the LLM agent staying outside tmct
-exactly as the no-LLM ethos requires.
+producer can implement. That contract is first-class: a **versioned (1.0.0),
+OWL-grounded, machine-readable service definition** (`docs/repository-interface.md`
+plus a JSON schema) of every service, its arguments, result types, and error
+contract. A **miss is a value, not a throw**: the interface models "no answer"
+explicitly. tmct ships **reference providers** (a fixture graph and the
+empty/bootstrap graph) that implement every service, and a **runnable conformance
+suite**. tmct's own providers pass it in `npm test`. Any external graph producer
+(seonix first) runs the same suite against its native implementation to claim
+conformance. Conformance is the suite, not prose. This inverts the original
+relationship: tmct was lifted out of seonix, and seonix now reorients as a *user*
+that imports the tmct library and exposes its graph to tmct as a service. The LLM
+agent stays outside tmct, as the no-LLM ethos requires.
 
 ## Security and supply chain
 
 tmct is $0 to run and meant to be trusted offline, so the supply chain is
-hardened accordingly: CI runs **SAST and secret detection**, a **nightly
-`npm audit` + OSV-Scanner** job watches dependencies, releases are published with
-**npm provenance** (`--provenance`), and there is a coordinated-disclosure
-`SECURITY.md` policy. The content-address hash is single-sourced in
-`src/hash.mjs` so the cross-version-stable fact-id contract has exactly one
-definition.
+hardened:
+
+- CI runs **SAST and secret detection**.
+- A nightly **`npm audit` + OSV-Scanner** job watches dependencies.
+- Releases are published with **npm provenance** (`--provenance`).
+- A coordinated-disclosure `SECURITY.md` policy covers reports.
+
+The content-address hash is single-sourced in `src/hash.mjs`, so the
+cross-version-stable fact-id contract has exactly one definition.
 
 ## Provenance
 
