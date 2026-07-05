@@ -12,6 +12,19 @@ mapped into them (item numbers retained for traceability); the seven sketches
 formerly held in `code-talker-ideas.txt` are folded into items 8–11 below and
 the file has been deleted.
 
+## Where we are now (2026-07-06)
+
+**Shipped: v0.7.1** — Phases 0–10 are done. The chat surface is strong and measured: the concept force
+(nouns + relations), seed-all vocabulary, de-anthropomorphized rendering, `--ephemeral` demos, the
+Repository Interface (v1, consumed by the seonix session), provenance/trust, response finishing, and
+speculative inference all landed; `CHATBENCH_0.7.1` re-baselined quality at **1.488/2** (tier-1 spine
+331/333). The completed feature plans are archived under `archive/`.
+
+**Next: Phase 11** — the deterministic **capability router** and its own **AGENTBENCH** benchmark
+(`PLAN_CAPABILITY_ROUTER.md` + `docs/references/planning/`). A fresh session starts there — see Phase
+11 below for the queued tracks (chat levers, the router build, the bedrock-meter surface, playtest in a
+worktree, and two research-agent stages).
+
 ## The umbrella product definition (item 1)
 
 **A tolerant, ELIZA/PARRY-style chat, obsessed with software.** A best-efforts
@@ -596,6 +609,66 @@ you toward precision" promise on the conversational surface.
 - **Measured** by the version-matched benchmark (`CHATBENCH_<version>` per `SKILL_TUNING_CYCLE.md`),
   with new graded cells for the miss / empty-graph / concept-touch surfaces so these become
   regression-protected levers, not one-off polish.
+
+## Phase 11 — The capability router & the agentic bench (0.7.2 →)
+
+*(Operator-directed 2026-07-06. The next session kicks off here.)* tmct as a **deterministic, no-LLM
+tool router** behind an Anthropic-compatible API — the workstream specified in
+`PLAN_CAPABILITY_ROUTER.md`, grounded in `docs/references/planning/`. This is a **new capability on a
+new axis** (driving a tool loop, not answering a chat turn), so it gets its **own benchmark**:
+**`AGENTBENCH`**, a sibling to CHATBENCH — same versioned-naming + grading discipline
+(`AGENTBENCH_<version>.md`, `_00N` for re-runs), but the levels are the **A0→C2 agentic rungs** and a
+**hallucinated tool call is an automatic fail**. Honest status: the router is *designed, not built* —
+the headline economic claim is **newly testable, not demonstrated**, gated on the first demo returning
+a number (a 0% hallucination rate on a real domain).
+
+### Track 1 — chat-surface levers (next CHATBENCH; all three)
+The three levers `CHATBENCH_0.7.1` measured + ranked — which **double as router prerequisites** (they
+gate the A2→B1→C1 rungs, per Phase B of the router plan):
+1. **Pronoun / focus binding** — the "it → Commit" mis-bind (`B1 pron 1.24`); biggest movable mass.
+2. **Discourse-count anaphora** — "count them / how many of those" over a prior listing (clears the 2
+   `CHATBENCH_0.7.1` tier-1 misses).
+3. **C1 temporal-over-relative composition** — the two-hop ceiling (`C1 temp 0.31`).
+Land all three (not just #1); they raise the chat floor *and* the router's floor at once.
+
+### Track 2 — the router build (the within-horizon slice, in order)
+Buildable now with a frontier model as co-author (see PLAN §"solved vs unsolved"):
+- **Phase A — the shim.** An Anthropic Messages API endpoint (`/v1/messages`, `tool_use`/`tool_result`
+  blocks). **Extended:** also present as a **`bedrock-meter`-compatible routing target** (see below).
+- **Phase B — measure today → `AGENTBENCH_0.7.2.md`.** Shim + a small graph-query toolset up the
+  A0→C2 ladder; the honest baseline (expected A0 solid, A1–A2 partial, per the CHATBENCH_0.7.1
+  inherited assets).
+- **Phase C — the grading ladder.** The AGENTBENCH benchmark itself (rungs as levels, comparable
+  local/hosted models as reference bands, zero-hallucination gate).
+- **Stage 0 — capability registry** (`Capability`/`Parameter`/`Precondition`/`Effect` = STRIPS/PDDL
+  operators as facts).
+- **Stage 1 — the resolver** (unification + backward chaining / a mini Datalog).
+- **Stage 4 — the guardrail** (validate an LLM's proposed `tool_use` against declared preconditions —
+  the hybrid fast-path; cheap once 0–1 exist).
+- **Stage 3 — the planner** (POP/HTN over operators + Steel & Ho monitor-and-replan → **closed-world
+  C1**; optionally defer search to an external PDDL solver).
+
+### Phase A extension — the `bedrock-meter` deployment surface
+`../bedrock-meter` is pre-flight Bedrock cost metering + capping, with a **roadmap optimiser** that
+"cheaply assesses a task's complexity … and routes to the lowest-cost capable model" (it already
+meters Nova Lite + Nova Micro). tmct — **benchmarked against agent capabilities by AGENTBENCH** — slots
+in as the **$0 floor *below* Nova-micro** in that routing ladder: for a request class AGENTBENCH proves
+in-envelope, the optimiser routes to tmct (deterministic, ~$0, ms latency) instead of any metered
+model. So Phase A's shim is built **bedrock-meter-pluggable**, and AGENTBENCH is what defines the
+envelope the optimiser is allowed to trust. This is the concrete "near-free alternative" deployment.
+
+### Track 3 — playtest alongside the build (`git worktree`)
+Run `SKILL_CHAT_PLAYTEST.md` **in a parallel `git worktree`** while the router is built — the
+dialogue-flow dead-end hunt keeps running without blocking the build, and its fixes **merge back**.
+(The worktree is auto-cleaned if unchanged; merge the frozen `test/chatflow-*` transcripts in.)
+
+### Track 4 — research agents (the "at the edge" stages)
+Two stages need design judgment + exploration, so they run as **background research agents**, off the
+critical build path:
+- **Stage 2 — intent frames, controlled fragment** — imperative NL → structured intent for the
+  controlled command language (the front-end; the general case stays out-of-scope / escalate).
+- **Stage 5 — goal-reasoner, closed-world C2** — BDI + Goal-Driven Autonomy: deduce-goals (long-chain
+  deduction) → plan-each (C1) → threat-aware, *persistent* first-step arbitration.
 
 ## Phase LATER — recognized, deferred, not now
 

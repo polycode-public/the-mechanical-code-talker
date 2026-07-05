@@ -1,65 +1,44 @@
-# HANDOVER — Phases 5–9 + provenance + security + release
+# HANDOVER — current state & kickoff
 
-Living handover for the multi-stage roadmap push. Any session can resume from here.
-Plan of record: `/Users/antony/.claude/plans/hello-claude-please-complete-hidden-quokka.md`.
+Living handover. Any session resumes from here. **Plan of record: `ROADMAP.md`** — read its
+**"Where we are now"** block and **Phase 11** first; this file is the short version.
 Session handle (inbox): `mechanic`.
 
-## Operator decisions (locked)
-- Release: **bump 0.4.0 + `npm publish --provenance`** (version bump is the LAST commit).
-- Measurement: **single final chatbench 004** (batch measure; per-lever attribution collapsed;
-  004 marked a groundedness re-baseline per Meta-1).
-- OSS ACE parser: **deferred** (Stage 7 doc-only).
-- Push cadence: **push per completed stage**, `npm test` green each time.
+## Where we are (2026-07-06)
 
-## Build order (dependency-gated)
-Stage 0 foundations → Stage 1 provenance&trust → Stage 2 Phase-5 levers → Stage 3 Phase 6 →
-Stage 4 Phase 7 → Stage 5 Phase 8 → Stage 6 Phase 9 → Stage 7 (deferred doc) → Stage 8 docs+0.4.0
-→ chatbench 004.
+- **Shipped: v0.7.1.** Phases 0–10 complete. `npm test` green (≈797), CLI smokes exit 0, main clean.
+- The chat surface is strong + measured: concept force (nouns + relations), seed-all vocabulary,
+  de-anthropomorphized rendering + cap-32/"more", `--ephemeral` demos, dead-end routing, the
+  Repository Interface (v1, consumed by the seonix `codememory` session), provenance/trust, response
+  finishing, speculative inference (`tmct syllogise`).
+- **Last bench: `CHATBENCH_0.7.1`** — a quality **re-baseline** (seed-all + concept force moved the
+  substrate), mean **1.488/2**, tier-1 spine **331/333**. CEFR ladder + the ranked next-levers are in
+  that file.
+- Completed feature plans are archived under **`archive/`**; the capability-router RFC
+  (`PLAN_CAPABILITY_ROUTER.md`) + the planning reference library (`docs/references/planning/`) are the
+  live forward docs.
 
-## Status
+## What's next — Phase 11 (see ROADMAP Phase 11 for the full queue)
 
-| Stage | State | Notes |
-|---|---|---|
-| 0 — foundations | ✅ DONE, pushed | hash single-source, wink shared loader + browser seam, security + npm provenance. |
-| 1 — provenance & trust | ✅ DONE, pushed | createdAt, Source edges, computeTrust, trust-weighted retrieval, contradiction inspector; legacy string kept as compat shim. |
-| 2 — Phase 5 levers | ✅ DONE, pushed | negation set-complement + reversible-passive (guards green); harness Meta-1/2 + pool + dual-banding; assert-recall read-back. |
-| 3 — Phase 6 | ✅ DONE, pushed | dual-banding + technical (C1) register. |
-| 4 — Phase 7 | ✅ DONE, pushed | segmentation IR + grammar-rule engine (a/an active, voice rules parked) + finish seam + canonise-link. |
-| 5 — Phase 8 | ✅ DONE, pushed | typed service + versioned contract + conformance kit + providers + session handle + `tmct init`. |
-| 6 — Phase 9 | ✅ DONE, pushed | `tmct syllogise` subClassOf closure, budget/focus/trust guards; kill criterion MET (flips real misses on default seed). |
-| 7 — ACE parser | deferred | doc-only; PLAN_OSS_ACE_PARSER.md is the follow-up spec. |
-| 8 — docs + release | ✅ DONE, PUBLISHED | README/homepage/ROADMAP/PLANs updated; 0.4.0 + keywords + repository/bugs. **Live on npm: 0.4.0 (latest), published with provenance.** First publish attempt E422'd (missing repository.url for provenance); fixed in c01490a. |
-| final — chatbench 004 | ✅ PASS | mean 1.303 (up from 1.258), 51 hard fails, 0 voided, 333/333 tier-1. Meta-1 re-float +0.467 on the 5 cases; B1 cliff 0.766→1.272. Advisor release-gate: GO. |
+The deterministic **capability router** + its own **AGENTBENCH** benchmark. Queued tracks:
+1. **Chat-surface levers (next CHATBENCH), all three:** pronoun/focus binding, discourse-count
+   anaphora, C1 temporal-over-relative — they raise the chat floor *and* are router prerequisites.
+2. **Router build (in order):** Phase A shim (Anthropic `/v1/messages`, also `bedrock-meter`-pluggable)
+   → Phase B measure → `AGENTBENCH_0.7.2.md` baseline → Phase C the grading ladder → Stage 0 registry
+   → Stage 1 resolver → Stage 4 guardrail → Stage 3 planner (closed-world C1).
+3. **`bedrock-meter` surface:** the shim slots into `../bedrock-meter`'s cost optimiser as the **$0
+   floor below Nova-micro**; AGENTBENCH defines the envelope the optimiser trusts.
+4. **Playtest alongside** (`SKILL_CHAT_PLAYTEST.md`) in a **`git worktree`**, merged back.
+5. **Research agents:** Stage 2 (intent frames, controlled fragment) + Stage 5 (goal-reasoner,
+   closed-world C2) — off the critical path.
 
-## Test / smoke state
-- `npm test`: **714 pass / 0 fail**. Both smokes exit 0. `tmct init` + `tmct syllogise` drive clean.
+## Discipline (unchanged)
 
-## chatbench 004 (in flight)
-- Product replay: `chatbench/results/raw/run-cycle-004/product-a.jsonl` (333 rows), `product-b.jsonl`, `agreement.json`.
-- No tier-1 regressions vs cycle-003. B1 negation 5/5 green (was 0.200), reversible-passive 5/5 (was 0.478).
-- Judge: pinned claude-haiku-4-5 / judge-prompt-v1, N=3, concurrency 12 → judged.jsonl + summary.json.
-- Cycle 4 is a **groundedness RE-BASELINE** (FIXTURE_CONTEXT → fixture-context-v2); do not compare v1-context groundedness to v2-context.
-- Pending write-up: CHATBENCH_004.md + CHATBENCH_004_TRANSCRIPTS.md.
+Repo-local identity (`antony@polycode.co.uk` / `Antony at Polycode`); `npm test` green at every commit;
+push per completed step (operator-gated); coordinator + background sub-agents; CHATBENCH/AGENTBENCH
+artifacts match `package.json` version, `_00N` for re-runs. Honest gate for the router: the headline
+economic claim is **newly testable, not demonstrated** — the first demo must return a **0%
+hallucination rate** on a real domain before any claim ships.
 
-## Last bench numbers (baseline to beat, from CHATBENCH_003 / Cycle 3)
-CEFR: A1 1.72 · A2 1.70 · **B1 0.77 (cliff)** · B2 0.97 · C1 1.07 · C2 0.69. Combined 1.258 (trap
-number). Dual-draw agreement 27/30 cells (3 under-covered: B1 pron, B1 temporal, C1 temporal).
-
-## Open decisions / risks
-- Negation set-complement needs a **bounded universe**; refuse complement over the non-enumerable
-  `Change` pseudo-type (PLAN_CYCLE_4 open Q).
-- chatbench 004 is a groundedness **re-baseline** (Meta-1 changed FIXTURE_CONTEXT). Never compare
-  v1-context groundedness to v2-context.
-
-## Strategy advisor
-Background Opus 4.8, ~5-min re-arm on completion; append-only OPEN items in `STRATEGY_ADVISOR.log`.
-Tick 1 confirmed the fnv1a byte-identity (200k fuzz).
-
-## Cycles 005–006 arc (autonomous, no hard pauses) — DONE
-- **Cycle 005 PASS** (1.303→1.373): B1 combo composition, grain-aware count, multi-turn assert-recall, safe grammar rules (terminal+agreement). Voice-nit reverted (frozen-spine collision).
-- **Cycle 006 PASS** (1.373→1.451): multi-turn discourse seam + ACE lexicon nouns → B1 disc+count 0→25/25, C1 assert-recall 2→25/25. Grammar A/B (capitalise/list) dropped (would regress the sacred v1 spine).
-- **B1 ladder:** 0.766 → 1.272 → 1.349 → **1.438** (one lever — the `/members` miss:true cell — from the ~1.5 exit bar that ungates C2).
-- **Timings** recorded per run + per CEFR level (`timings.json`): 006 wall 6.4s.
-- **Plain-prose review** applied (`SKILL_PLAIN_PROSE.md`, adapted from seonix). AI-ism em-dashes cut, all numbers/claims preserved.
-- **Release 0.5.0** pushed; CI publishing with `--provenance` (repository.url in place).
-- Next-cycle board (in CHATBENCH_006.md): B1 discourse residual /members semantics → likely crosses 1.5 → then C-grades ungate.
+*History (Phases 0–10, releases 0.2.0→0.7.1, cycles 001→0.7.1) lives in git + the `CHATBENCH_*` /
+`archive/PLAN_*` artifacts.*
