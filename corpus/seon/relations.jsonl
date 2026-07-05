@@ -1,0 +1,8 @@
+{"relation":"imports","definition":"To import is to bring another module's definitions into the current one.","sense":"software"}
+{"relation":"calls","definition":"A call is one function invoking another.","sense":"software"}
+{"relation":"contains","definition":"Containment is a class or module holding a member (a method, attribute, or nested definition).","sense":"software"}
+{"relation":"inherits","definition":"Inheritance is one class deriving its structure and behaviour from another.","sense":"software"}
+{"relation":"tests","definition":"A test is code that exercises another unit and checks its behaviour.","sense":"software"}
+{"relation":"defines","definition":"A definition is where a name (a class, function, or variable) is introduced.","sense":"software"}
+{"relation":"touches","definition":"A touch is a commit changing a file or a symbol in the codebase.","sense":"software"}
+{"relation":"cochange","definition":"Change-coupling is two files that tend to be changed together in the same commits.","sense":"software"}
