@@ -28,7 +28,7 @@ Stage 4 Phase 7 → Stage 5 Phase 8 → Stage 6 Phase 9 → Stage 7 (deferred do
 | 5 — Phase 8 | ✅ DONE, pushed | typed service + versioned contract + conformance kit + providers + session handle + `tmct init`. |
 | 6 — Phase 9 | ✅ DONE, pushed | `tmct syllogise` subClassOf closure, budget/focus/trust guards; kill criterion MET (flips real misses on default seed). |
 | 7 — ACE parser | deferred | doc-only; PLAN_OSS_ACE_PARSER.md is the follow-up spec. |
-| 8 — docs + release | ✅ DONE | README/homepage/ROADMAP/PLANs updated; package.json 0.4.0 + keywords; CI publishes with --provenance on the version-bump push. |
+| 8 — docs + release | ✅ DONE, PUBLISHED | README/homepage/ROADMAP/PLANs updated; 0.4.0 + keywords + repository/bugs. **Live on npm: 0.4.0 (latest), published with provenance.** First publish attempt E422'd (missing repository.url for provenance); fixed in c01490a. |
 | final — chatbench 004 | ✅ PASS | mean 1.303 (up from 1.258), 51 hard fails, 0 voided, 333/333 tier-1. Meta-1 re-float +0.467 on the 5 cases; B1 cliff 0.766→1.272. Advisor release-gate: GO. |
 
 ## Test / smoke state
