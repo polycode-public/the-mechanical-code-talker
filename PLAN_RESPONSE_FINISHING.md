@@ -154,6 +154,13 @@ Finishing must not corrupt the honest record. So memory stores BOTH:
    quoting the "a artifact" → "an artifact" fix diff.
 4. Add `mgx:canonicalisedFrom` to MEMORY_VOCABULARY and the canonical-Fact link in the fold path.
 
+
+**Timestamping (trust prerequisite).** Every created individual gains `mgx:createdAt` on
+write — Facts lack one today (only Utterances carry `ts`). It is provenance in its own right:
+the recency input to trust scoring and the novelty signal Phase 8's deduction pass needs.
+Backfill in `appendFact`/block writes; deterministic-id upsert keeps the FIRST createdAt
+(when a fact was first learned), never overwriting it on re-assert.
+
 ## Open questions (genuinely open)
 
 - **Masker term source**: does the composed-path protected-term list derive from the loaded GRAPH at

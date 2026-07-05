@@ -287,6 +287,9 @@ fact enters memory:
   per-writer `mgx:factProvenance` string. Sources are first-class individuals (class `Source`:
   operator-chat, corpus:conceptnet, learned:web:<url>, entailed:<rule>, provider:seonix), so a
   fact can cite MANY sources (the existing "|"-union becomes real edges).
+- **Everything created is TIMESTAMPED** (`mgx:createdAt`), universally — Facts don't carry one
+  today (only Utterances do), a Phase-6-trust gap to close: recency is a trust input and the
+  novelty signal (below) needs it. Backfill on write; the timestamp is itself provenance.
 - **Calculable trust scores per source**, deterministic and explainable: a source-type prior
   (operator > provider graph > curated corpus > web > unverified entailment) combined with
   corroboration (how many independent sources assert the same fact — the union already tells us)
@@ -432,10 +435,20 @@ backward chaining over the OWL base during idle/fold time rather than at query t
 
 > Detailed plan: **`PLAN_SPECULATIVE_INFERENCE.md`**.
 
-The mechanics are the easy half (bounded forward chaining materializes entailments; backward
-chaining from frequent query shapes pre-derives likely answers). **The hard half is the
-selection criterion — "what is useful to think about" — which is the FRAME PROBLEM / relevance
-realization, unsolved in the general case and not to be pretended otherwise.** The plan's job is
+**A maintenance job, not a query-time cost.** Speculative inference runs as an explicit
+batch — `npx tmct syllogise --depth <N>` (default depth bounded, e.g. 32) — and **once
+automatically after seeding** (the W3 bootstrap seed is the natural trigger: a fresh corpus is
+exactly when pre-deriving the useful closure pays off). Never on the chat's hot path.
+
+**The selection criterion, sharpened by the operator (2026-07-05):** the guiding question is
+*"what do the assertions of the sources I TRUST allow me to infer about this topic that is of
+RELEVANCE"* — so **novelty × trust is the primary driver**, not an afterthought: the pass walks
+outward from high-trust premises (the provenance primitive) toward novel, relevant conclusions,
+timestamping each so recency and novelty stay computable. The mechanics are the easy half
+(bounded forward chaining materializes entailments; backward chaining from frequent query shapes
+pre-derives likely answers). **The residual hard half is still the FRAME PROBLEM / relevance
+realization — unsolved in the general case and not pretended otherwise;** trust+novelty+relevance
+are the tractable approximation, not a solution. The plan's job is
 to make it TRACTABLE in tmct's narrow, closed world, not to solve it: usefulness is approximated
 from what the system actually gets asked (query-shape frequency), what connects to recent focus,
 what a cheap forward step yields that isn't already stored, and — the honest guardrail — a hard

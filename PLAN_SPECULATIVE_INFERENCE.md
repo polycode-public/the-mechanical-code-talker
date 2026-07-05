@@ -141,6 +141,23 @@ These are not tuning knobs; they are what make speculation safe to ship.
    **If it never flips a cell, stop** — the honest outcome is that eager materialization wasn't worth it
    and tier-5's lazy on-demand derivation is the whole answer. Do not generalize on faith.
 
+
+## Refinements (operator, 2026-07-05)
+
+- **It is a MAINTENANCE JOB.** `npx tmct syllogise --depth <N>` (bounded default ~32) is the
+  primary entry, plus one automatic pass **after seeding** (W3 bootstrap is the trigger — a
+  fresh corpus is when pre-deriving the useful closure pays off). Never on the chat hot path;
+  the fold-time hook stays as an optional incremental top-up, not the main mechanism.
+- **Novelty × trust is the PRIMARY driver**, framed as the operator's question:
+  *"what do the assertions of the sources I trust allow me to infer about this topic that is of
+  relevance?"* The pass walks OUTWARD FROM HIGH-TRUST PREMISES (provenance primitive) toward
+  novel, relevant conclusions — trust gates the premises, novelty gates the conclusions,
+  relevance (query-shape frequency + focus-connection) gates the topic. `--depth` bounds the
+  chain length.
+- **Timestamping** (`mgx:createdAt`, Phase-6 trust) is a prerequisite: novelty is computed
+  against what already exists and when, and speculative facts must be garbage-collectable by age
+  when the source graph moves.
+
 ## Open questions — the standing research risk, last and unresolved
 
 - **The relevance criterion itself.** The heuristics above are proxies, and the frame problem guarantees
