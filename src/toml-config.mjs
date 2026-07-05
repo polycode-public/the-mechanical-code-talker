@@ -87,6 +87,20 @@ export async function normalizeConfig(raw, { configDir } = {}) {
     cfg.outRoot = resolve(dir, String(src.out_root));
   }
 
+  // `tmct init` onboarding keys (ROADMAP Phase 8). Sparse like the rest: only a
+  // key actually present appears, so "unset" stays distinguishable from "set to
+  // the default". `graph_file` is resolved against configDir to match outRoot.
+  if (src.graph_file !== undefined) {
+    cfg.graphFile = resolve(dir, String(src.graph_file));
+  }
+  const corpus = src.corpus || {};
+  if (corpus.tier !== undefined) cfg.corpus = { tier: corpus.tier };
+  const seed = src.seed || {};
+  const seedCfg = {};
+  if (seed.enabled !== undefined) seedCfg.enabled = seed.enabled;
+  if (seed.limit !== undefined) seedCfg.limit = seed.limit;
+  if (Object.keys(seedCfg).length) cfg.seed = seedCfg;
+
   const idx = src.index || {};
   const index = {};
   if (idx.languages !== undefined) index.languages = idx.languages;
