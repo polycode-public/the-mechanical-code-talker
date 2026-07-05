@@ -44,11 +44,38 @@ end-to-end against a real client.
 
 ### Phase B — Measure where tmct sits today
 
-With the shim + a small tool set (graph-query tools: `find_definition`, `find_callers`,
-`list_members`…), run tmct up the **agentic ladder (A0→C2)** and record where it actually lands *now*.
-Expected: **A0 solid, A1–A2 partial** for the code-navigation domain; nothing above. Use the existing
-CHATBENCH / `SKILL_CHAT_PLAYTEST` discipline (deterministic replay, no judge needed for
-did-it-complete). Output: an honest "today" row — the baseline every later claim is measured against.
+We already have a **partial Phase-B reading, from real data.** `CHATBENCH_0.7.1.md` measures the chat
+surface's **resolution** capability — the very thing the router turns into tool calls (a request →
+which graph fact, with which bound entity) — on the CEFR ladder. That baseline transfers directly:
+
+**Inherited assets — what the resolution engine already does (measured, `CHATBENCH_0.7.1`):**
+
+- **A-shelf resolution is solid:** A1 **1.885** / A2 **1.933** — naming/definition (`A1 count 2.00`,
+  `naming 1.90`), SVO graph queries (`what calls X` / `what imports X`), aggregate/**count** (`2.00`),
+  and — the 0.7 levers — **negation** (`A2 neg 2.00`) and **passive** (`B1 passive 1.93`) clearing even
+  above their home grade. Rich multi-fact answers land (`gq-impact-a 2.00`).
+- **It refuses instead of guessing:** honest ambiguity (`am-tests-cover` → "narrow the term"), honest
+  empties, and guiding non-answers (`conv-why-empty`). This is the router's non-negotiable property —
+  never emit a wrong call — *already demonstrated on the answer surface*.
+- **Determinism + speed:** sub-millisecond per graded turn; the whole run is seconds and free.
+
+So the router's **A0 solid, A1–A2 within reach** is evidence-backed, not hoped: the hard part of A1/A2
+(resolve the request to the right grounded fact + entity) is already at ~1.9. Phase B's remaining work
+is narrow: the shim (Phase A) + a small declared toolset, then run the **tool-loop** ladder
+specifically (answer-emission is measured; `tool_use`-emission is not yet).
+
+**Inherited debt — the chat-surface weaknesses that *gate router rungs* (from `CHATBENCH_0.7.1`):**
+
+| Weakness (measured) | Router rung it blocks | Why it's router-critical |
+| --- | --- | --- |
+| **Pronoun / focus binding** — `B1 pron 1.24`, the "it → Commit" mis-bind | **A2 → B1** | A tool loop threads a prior `tool_result` into the next call's arguments; a mis-bound antecedent binds the **wrong argument**. Must be fixed before B1 recipes are trustworthy. |
+| **Discourse-count/filter anaphora** — the 2 tier-1 misses ("count them" over a listing → grammar wall) | **B1** | "do X, then count/filter the result" is the minimal recipe; threading a prior answer's *set* into the next step is exactly B1. |
+| **C1 temporal-over-relative composition** — `C1 temp 0.31` (10 hard-fails) | **C1** | Two-hop compositional resolution is what the closed-world planner leans on to satisfy chained open conditions. |
+
+These are not new work for the router — they are the **same next-lever ranking `CHATBENCH_0.7.1`
+already recommends**, now doubling as router prerequisites: (1) pronoun/focus binding, (2)
+discourse-count anaphora, (3) C1 temporal composition. Fixing them on the chat surface *is* raising the
+router's floor.
 
 ### Phase C — The grading ladder (the agentic benchmark)
 
@@ -78,6 +105,12 @@ Each stage is gated by Phase C showing the rung is actually reached.
 | **4** | The guardrail — validate an LLM's proposed `tool_use` against declared capabilities + preconditions | the hybrid fast-path | Precondition checking (STRIPS) |
 | **5** | The goal-reasoner (the C2 speculation, below) | **closed-world C2** | BDI / Goal-Driven Autonomy + long-chain deduction |
 
+**Prerequisites carried from Phase B** (the `CHATBENCH_0.7.1` inherited debt): Stage 1–2 (A2→B1) is
+**gated on fixing pronoun/focus binding and discourse-count anaphora** — a router that threads results
+across turns cannot ship on a resolver that mis-binds "it" or drops "count them". Stage 3 (C1) inherits
+the temporal-over-relative composition ceiling. Land these chat-surface levers first; they *are* the
+router's floor-raising, and they are already the benchmark's recommended next work.
+
 ---
 
 ## Solved vs. unsolved — the honest map
@@ -91,8 +124,9 @@ Each stage is gated by Phase C showing the rung is actually reached.
 | Bounded multi-step recipes (B1) | **Solved** | HTN methods (declared decomposition) — NONLIN/SHOP2. |
 | Conditional / retry (B2) | **Solved** | Steel & Ho conditional plans + outcome monitoring → re-plan. |
 | Open-ended planning, **closed world** (C1) | **Solved** | Classical planning (POP/HTN/PDDL) is sound/complete inside a declared operator model. See below. |
-| Request → structured intent, **controlled fragment** | **Partial** | ACE parser + tolerant strategies + `shape`. Solid for controlled/declarative input. |
-| Parameter binding (slot-filling) | **Partial** | Role labelling from the grammar; brittle for rich arguments. |
+| Request → structured intent, **controlled fragment** | **Partial (measured)** | ACE parser + tolerant strategies + `shape`. **A1/A2 ~1.9 on the chat surface (`CHATBENCH_0.7.1`)** — naming, SVO, count, negation, passive all resolve. |
+| Parameter binding (slot-filling) | **Partial** | Role labelling from the grammar; brittle for rich args. **Known debt: pronoun/focus binding (`B1 pron 1.24`, the "it → Commit" mis-bind)** — must fix before B1. |
+| Cross-turn threading (anaphora / focus) | **Partial (known bugs)** | Threading a prior `tool_result` into the next call. **Debt: discourse-count anaphora (2 tier-1 misses) + the focus mis-bind** — the A2→B1 gate. |
 | Request → intent, **arbitrary imperative NL** | **Unsolved** | The front-end problem — exactly what LLMs are for. tmct's answer: constrain the input + guide toward it. |
 | Open-ended planning, **open world** (C1) | **Unsolved** | Novel errors, unmodelled effects break the closed-world assumption. Escalate. |
 | Autonomous agency (C2) | **Speculative** | Reachable closed-world via the reduction below; goal-*generation* in open worlds stays open. |
