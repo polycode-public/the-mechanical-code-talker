@@ -491,6 +491,18 @@ budget (inference is bounded, its output trust-scored via the provenance primiti
 speculative is retractable and never outranks a stated fact). Everything else is deferred to the
 plan's open questions, where the relevance problem is named as the open research risk it is.
 
+### Open-source the ACE-OWL parser as a standalone library
+*(Operator-specified 2026-07-05, from the dependency audit's publish-not-replace finding.)* The
+pure-JS, ESM, dependency-free ACE-OWL controlled-grammar parser (`src/grammar/ace.mjs` +
+`lexicon.mjs`) that turns controlled-English sentences into OWL-labelled triples is a RARE thing:
+the reference implementation (APE) is GPL + SWI-Prolog (native), so there is no permissive,
+browser-capable, npm-installable ACE→OWL parser in the JS ecosystem. tmct's is exactly that.
+Extract it to its own MPL-2.0 package (tmct depends on it back), so the wider RDF/OWL/semantic-web
+JS community gains a controlled-natural-language front-end that runs in the browser. Gated on the
+Repository Interface library-surface work (Phase 8) settling the extraction boundary; see
+`PLAN_OSS_ACE_PARSER.md`. Sibling publish-candidates (the bounded-Damerau fuzzy matcher, the
+PageRank+IDF block ranker) may follow the same path if there is demand.
+
 ## Phase LATER — recognized, deferred, not now
 
 Features we have deliberately shaped seams for but will not build until the phases above have
