@@ -50,6 +50,7 @@ import { uuidv7 } from "./uuid.mjs";
 import { createTelemetry } from "./telemetry.mjs";
 import * as defaultSource from "./source.mjs";
 import { loadTemplates, render as renderTemplate } from "./corpus/templates.mjs";
+import { finish } from "./finish.mjs";
 
 // uuidv7 lives in ./uuid.mjs (shared with telemetry + the bench stamp); re-exported
 // here because callers/tests still import it from chat.mjs.
@@ -531,6 +532,19 @@ async function memoryFacts(memoryDir) {
   }
 }
 
+/** Load memory once and resolve every reified Fact into a TRUST-BEARING row
+ *  ({subject,predicate,object,provenance,trust,sourceTypes,…}) via core's
+ *  readFactRows — the seam the answer layer ranks + cites without re-walking the
+ *  graph shape (Wave-A memory/core.mjs). Lazy + failure-tolerated: no memory → []. */
+async function factRows(memoryDir) {
+  try {
+    const { loadMemory, readFactRows } = await import("./memory/core.mjs");
+    return readFactRows(await loadMemory(memoryDir));
+  } catch {
+    return [];
+  }
+}
+
 /** Spelling variants a question term is matched under (normFactTerm + a naive
  *  singular): "caches"/"a cache"/"/c/en/cache" all reach the stored "cache". */
 function factTermVariants(normFactTerm, term) {
@@ -607,6 +621,41 @@ async function factAnswer(memoryDir, query, envelope, miss) {
     return { text: `${hits.length} remembered fact${hits.length === 1 ? "" : "s"} about ${term}:\n${shown.join("\n")}${extra}`, replace: true };
   }
   return null;
+}
+
+/** ASSERT-RECALL READ-BACK (PLAN_CYCLE_4 tail): after "every X is a Y" is
+ *  asserted, the *superclass* side is otherwise unqueryable — factAnswer's meta
+ *  path matches fact SUBJECTS only, so "what is a Y" (Y the asserted OBJECT) dies
+ *  as an honest miss ("'component' isn't a term in this graph's own vocabulary")
+ *  even though the fact "X is a kind of Y" is remembered. This is the REVERSE-
+ *  membership reader: it consults readFactRows (trust-bearing) for isa-family
+ *  facts whose OBJECT is the asked term and reports the members, citing each
+ *  fact's provenance verbatim, higher-trust first. Miss-only and run AFTER
+ *  factAnswer returns null, so it never shadows the subject-side answer or a
+ *  schema hit. Returns { text, replace:true } or null (the miss stands). */
+async function factReadBack(memoryDir, query, envelope, miss) {
+  if (!miss) return null;
+  let normFactTerm;
+  try { ({ normFactTerm } = await import("./memory/core.mjs")); } catch { return null; }
+  const q = String(query).trim();
+  // The meta form the grammar's T5 template speaks ("what is a Y"), taken from the
+  // parse when present, else recognized directly on a no-parse miss (same required-
+  // article discipline as factAnswer's own meta fallback).
+  let term = envelope?.parsed?.shape === "meta" ? envelope.parsed.object : null;
+  if (!term && !envelope?.parsed) {
+    const m = q.match(/^what\s+(?:is|are)\s+an?\s+(.+?)[?.!\s]*$/i);
+    if (m) term = m[1];
+  }
+  if (!term) return null;
+  const variants = factTermVariants(normFactTerm, term);
+  const hits = (await factRows(memoryDir))
+    .filter((f) => ISA_PREDICATES.has(f.predicate) && variants.has(f.object))
+    .sort((a, b) => b.trust - a.trust);
+  if (!hits.length) return null;
+  const shown = hits.slice(0, FACT_ANSWER_CAP).map(renderFactLine);
+  const n = hits.length - FACT_ANSWER_CAP;
+  const extra = n > 0 ? `\n…and ${n} more remembered fact${n === 1 ? "" : "s"}.` : "";
+  return { text: shown.join("\n") + extra, replace: true };
 }
 
 // ---- W5: corpus on-demand — LOCAL tier only, behind an explicit flag ----
@@ -748,7 +797,10 @@ async function runAsk(query, { config, source, graph, focus, templates, memoryDi
     // alongside the schema-docs surface — a remembered fact answers a miss (or
     // extends a schema hit), cited with its provenance verbatim. Checked BEFORE
     // recall: a reified fact is stronger evidence than a transcript echo.
-    const fact = await factAnswer(memoryDir, query, envelope, miss);
+    // Subject-side facts first (factAnswer), then the reverse-membership read-back
+    // (factReadBack) so an asserted "every X is a Y" answers "what is a Y" too.
+    const fact = (await factAnswer(memoryDir, query, envelope, miss))
+      ?? (await factReadBack(memoryDir, query, envelope, miss));
     if (fact) {
       answer = fact.replace ? fact.text : `${answer}\n${fact.text}`;
       via = "fact";
@@ -863,16 +915,21 @@ async function runCommand(line, { config, source, graph, focus, memoryDir }) {
  *  any grammar miss / residue / import failure so the query engine keeps first
  *  refusal on everything else. Lazy imports + catch-all: the grammar layer can
  *  never crash a turn (chat.mjs ethos). Writes ONLY under memoryDir/.tmct/memory. */
-async function assertTurn(line, { memoryDir, sessionId, focus }) {
+async function assertTurn(line, { memoryDir, sessionId, focus, lexicon = null }) {
   try {
     const { parseAce } = await import("./grammar/ace.mjs");
-    const { loadLexicon } = await import("./grammar/lexicon.mjs");
-    const parse = parseAce(line, loadLexicon());
+    // A session handle carries its own loaded lexicon (createSession loads it once);
+    // a bare runTurn (no handle) lazy-loads the cached core lexicon. The lexicon is
+    // immutable, so sharing one reference across concurrent handles is re-entrant.
+    let lex = lexicon;
+    if (!lex) { const { loadLexicon } = await import("./grammar/lexicon.mjs"); lex = loadLexicon(); }
+    const parse = parseAce(line, lex);
     if (!parse || !parse.triples?.length || parse.residue?.length) return null;
     const { assertSentence } = await import("./grammar/assert.mjs");
     const { normFactTerm } = await import("./memory/core.mjs");
     const ts = new Date().toISOString();
     const res = await assertSentence(memoryDir, line, {
+      lexicon: lex,
       provenance: { source: "chat", sessionId, ts },
     });
     if (!res || !res.ids?.length) return null;
@@ -901,13 +958,22 @@ async function assertTurn(line, { memoryDir, sessionId, focus }) {
  * subject), `answeredIds` the entity ids an ask answer cited; a slash-command turn
  * also carries its `command` name. Both drive the mgx:asksAbout graph append.
  */
-export async function runTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env } = {}) {
+export async function runTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null } = {}) {
   const line = String(input ?? "").trim();
   const templates = await chatTemplates(); // failure-tolerated: null degrades, never throws
-  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates, env };
+  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates, env, lexicon };
   // A DISPATCHED turn (count / slash-command / ask) becomes the new "last answer"
   // that why/say-more re-renders; a conversational turn does not (it preserves it).
-  const withLast = (result) => ({ ...result, last: { query: line, answer: result.answer, detail: result.detail ?? null } });
+  // FINISH SEAM (PLAN_RESPONSE_FINISHING §"Where it lives"): every dispatched turn's
+  // result passes through finish() here — the LAST transform in the turn — before its
+  // finished answer becomes the `last` we expand. finish() owns the prose-span
+  // grammar pass (src/finish.mjs); it rewrites result.answer/logLines and leaves the
+  // protected spans (entities, paths, numbers, receipts, provenance) byte-invariant,
+  // so `last` and the transcript stay consistent with what the shell prints.
+  const withLast = (result) => {
+    const finished = finish(result, { graph });
+    return { ...finished, last: { query: line, answer: finished.answer, detail: finished.detail ?? null } };
+  };
 
   // Conversational layer first (greetings, thanks, help, bye, why/say-more) — these
   // resolve no entity and carry their own preserved `last`.
@@ -991,10 +1057,27 @@ const promptFor = (focus) => (focus ? `tmct(${shortLabel(focus.label)})> ` : PRO
  *   - opt-in telemetry and the end-of-session close (end lines, final upsert,
  *     stream flush).
  *
- * Returns { repo, config, graph, moduleCount, version, sessionId, logFile,
- * sidecarFile, bannerLines, empty, focus, turns, promptFor(), turn(line), close() }.
- * `turn(line)` runs one dispatched turn through runTurn and the full sink
- * sequencing, returning { answer, end, prompt }; `close()` is idempotent.
+ * THE CALLER-OWNED HANDLE (PLAN_REPOSITORY_INTERFACE §"The in-process lifecycle").
+ * The returned object IS the session handle — created here, disposed by the caller
+ * (`close()`), with NO process-global state. All of a session's between-turn state
+ * lives on the handle: the mutable `focus` and `lastAnswer` (closure-private, read
+ * through getters) and the read-only `memoryDir`, `graph`, `config` and `lexicon`.
+ *   - CREATE: `const s = await createSession({ repoPath })` — resolves repo/config,
+ *     loads the graph + lexicon once, opens the log/sidecar streams, seeds first-run
+ *     memory. Cheap to hold; a session is one repo's worth of chat.
+ *   - DISPOSE: `await s.close()` — idempotent; flushes both artifacts and the final
+ *     graph upsert (which triggers the memory fold). A dropped handle leaks only its
+ *     two write streams, so callers SHOULD close; a second close is a no-op.
+ *   - RE-ENTRANCY / CONCURRENCY: two handles never clobber each other. Each owns its
+ *     own `focus`/`lastAnswer`/streams/`sessionId`; the only cross-handle sharing is
+ *     the IMMUTABLE lexicon (a cached read-only singleton) and the read-through
+ *     provider graph — neither is mutated by a turn, so concurrent handles over the
+ *     same or different repos run isolated. Proven by test/chat-session.test.mjs.
+ *
+ * Returns { repo, config, graph, lexicon, memoryDir, moduleCount, version, sessionId,
+ * logFile, sidecarFile, bannerLines, empty, focus, lastAnswer, turns, promptFor(),
+ * turn(line), close() }. `turn(line)` runs one dispatched turn through runTurn and the
+ * full sink sequencing, returning { answer, end, prompt }; `close()` is idempotent.
  */
 export async function createSession({
   repoPath,
@@ -1021,6 +1104,14 @@ export async function createSession({
   const graph = parseEntities(await source.fetchEntities(config));
   const moduleCount = graph.individuals.filter((i) => (i.class || "") === "Module").length;
   const { version } = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+
+  // Load this handle's lexicon once (the immutable cached core vocabulary the ACE
+  // assert path parses against). Threaded into every turn so the grammar layer never
+  // re-imports per turn; failure-tolerated — a broken lexicon degrades to the lazy
+  // per-turn load inside assertTurn, never an error before the prompt.
+  let lexicon = null;
+  try { const { loadLexicon } = await import("./grammar/lexicon.mjs"); lexicon = loadLexicon(); }
+  catch { lexicon = null; }
 
   // Opt-in telemetry (default OFF → null → the sink's `tel?.record` is a no-op, and
   // nothing is written). The conversational session log + sidecar above stay the
@@ -1086,9 +1177,12 @@ export async function createSession({
   let closed = false;
 
   return {
-    repo, config, graph, moduleCount, version, sessionId, logFile, sidecarFile,
-    bannerLines, empty,
+    repo, config, graph, lexicon, memoryDir: repo, moduleCount, version, sessionId,
+    logFile, sidecarFile, bannerLines, empty,
+    // Mutable between-turn state — read-only to the caller, so a shell can render the
+    // prompt/expand-hint without reaching into runTurn's threading.
     get focus() { return focus; },
+    get lastAnswer() { return last; },
     get turns() { return turns; },
     promptFor: () => promptFor(focus),
 
@@ -1096,7 +1190,7 @@ export async function createSession({
      *  → telemetry → upsertGraph, in that exact order). Returns { answer, end, prompt }. */
     async turn(line) {
       const { answer, logLines, record, focus: nextFocus, last: nextLast, end } =
-        await runTurn(line, { config, source, graph, focus, last, memoryDir: repo, sessionId, env });
+        await runTurn(line, { config, source, graph, focus, last, memoryDir: repo, sessionId, env, lexicon });
       focus = nextFocus;
       last = nextLast;
       await writeLog(logLines.join("\n") + "\n");
