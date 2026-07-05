@@ -1,0 +1,288 @@
+{"term":"module","definition":"A module is a source file: one importable, self-contained unit of code that groups related definitions and can be loaded by other code.","sense":"software"}
+{"term":"class","definition":"A class is a template that defines the structure and behaviour of objects; in code it groups methods and attributes under one type.","sense":"software"}
+{"term":"function","definition":"A function is a named, reusable block of code that takes inputs, performs a computation, and optionally returns a result.","sense":"software"}
+{"term":"method","definition":"A method is a function that belongs to a class and operates on the class's objects, usually with access to their attributes.","sense":"software"}
+{"term":"attribute","definition":"An attribute is a named piece of data held by an object or class — a field that stores part of the object's state.","sense":"software"}
+{"term":"variable","definition":"A variable is a named container that holds a value which can change during a program's execution.","sense":"software"}
+{"term":"constant","definition":"A constant is a named value that is fixed once set and does not change during a program's execution.","sense":"software"}
+{"term":"object","definition":"An object is a concrete instance of a class, bundling specific data (its attributes) with the behaviour (its methods) defined by that class.","sense":"software"}
+{"term":"interface","definition":"An interface is a declared set of method signatures that a class can implement, specifying what an object can do without saying how.","sense":"software"}
+{"term":"type","definition":"A type classifies values by the kind of data they hold and the operations allowed on them.","sense":"software"}
+{"term":"structure","definition":"A structure is a composite type that groups several named fields of data together as a single value.","sense":"software"}
+{"term":"routine","definition":"A routine is a named, callable sequence of instructions — the general term covering functions, methods, and procedures.","sense":"software"}
+{"term":"operation","definition":"An operation is a single unit of work a program performs, such as a computation, a method call, or a data change.","sense":"software"}
+{"term":"helper","definition":"A helper is a small supporting function or module that factors out a repeated task to keep other code simple.","sense":"software"}
+{"term":"handler","definition":"A handler is a routine that responds to a specific event or request, such as an HTTP request or a UI click.","sense":"software"}
+{"term":"controller","definition":"A controller is a component that receives requests, coordinates the application's response, and returns a result to the caller.","sense":"software"}
+{"term":"model","definition":"A model is the part of an application that represents its data and business rules, independent of how the data is displayed.","sense":"software"}
+{"term":"view","definition":"A view is the part of an application that presents data to the user and forms the visible interface.","sense":"software"}
+{"term":"template","definition":"A template is a reusable skeleton with placeholders that are filled in to produce concrete output such as HTML or code.","sense":"software"}
+{"term":"component","definition":"A component is a reusable, self-contained unit of software with a defined interface that combines with others to build a larger system.","sense":"software"}
+{"term":"service","definition":"A service is a self-contained program or module that exposes an interface and performs work for other programs on request.","sense":"software"}
+{"term":"callback","definition":"A callback is a function passed to other code so it can be invoked later when a particular event or step occurs.","sense":"software"}
+{"term":"promise","definition":"A promise is an object representing the eventual result of an asynchronous operation, which resolves with a value or rejects with an error.","sense":"software"}
+{"term":"iterator","definition":"An iterator is an object that yields the elements of a collection one at a time on request.","sense":"software"}
+{"term":"generator","definition":"A generator is a special function that can pause and resume, producing a sequence of values one at a time.","sense":"software"}
+{"term":"value","definition":"A value is a concrete piece of data, such as a number, string, or object, that a program computes with or stores.","sense":"software"}
+{"term":"string","definition":"A string is a value made of an ordered sequence of characters, used to represent text.","sense":"software"}
+{"term":"number","definition":"A number is a value representing a numeric quantity that a program can compute with.","sense":"software"}
+{"term":"list","definition":"A list is an ordered collection of values that can grow or shrink and is accessed in sequence.","sense":"software"}
+{"term":"array","definition":"An array is an ordered, indexed collection of values stored together and accessed by position.","sense":"software"}
+{"term":"symbol","definition":"A symbol is a named entity in source code, such as a variable, function, or class, that the tooling can resolve to a definition.","sense":"software"}
+{"term":"identifier","definition":"An identifier is the name given to a symbol in code — the text used to refer to a variable, function, type, or module.","sense":"software"}
+{"term":"token","definition":"A token is the smallest meaningful unit of source text a parser reads, such as a keyword, name, number, or punctuation mark.","sense":"software"}
+{"term":"keyword","definition":"A keyword is a word reserved by a programming language with a fixed meaning, which cannot be used as an ordinary identifier.","sense":"software"}
+{"term":"statement","definition":"A statement is a single complete instruction in a program that performs an action.","sense":"software"}
+{"term":"expression","definition":"An expression is a fragment of code that evaluates to a value.","sense":"software"}
+{"term":"scope","definition":"A scope is the region of a program in which a given name is defined and can be referred to.","sense":"software"}
+{"term":"parameter","definition":"A parameter is a named input declared by a function, standing for a value supplied when the function is called.","sense":"software"}
+{"term":"argument","definition":"An argument is the actual value passed to a function for one of its parameters when the function is called.","sense":"software"}
+{"term":"loop","definition":"A loop is a control structure that repeats a block of code while a condition holds or over the items of a collection.","sense":"software"}
+{"term":"file","definition":"A file is a named unit of stored data on disk; source code, configuration, and assets each live in files.","sense":"software"}
+{"term":"directory","definition":"A directory is a named container in a filesystem that holds files and other directories.","sense":"software"}
+{"term":"folder","definition":"A folder is a directory: a named filesystem container that holds files and other folders.","sense":"software"}
+{"term":"line","definition":"A line is a single row of text in a source file, the unit code is most often counted and referenced by.","sense":"software"}
+{"term":"comment","definition":"A comment is human-readable text in source code that the compiler or interpreter ignores, used to explain the code.","sense":"software"}
+{"term":"docstring","definition":"A docstring is a structured comment attached to a module, class, or function that documents its purpose and usage.","sense":"software"}
+{"term":"codebase","definition":"A codebase is the whole body of source code for a project, taken together across all its files and directories.","sense":"software"}
+{"term":"repository","definition":"A repository is a version-controlled store of a project's files and its full history of changes.","sense":"software"}
+{"term":"project","definition":"A project is a coordinated body of work with a shared goal, its code, documents, and plans managed together.","sense":"software"}
+{"term":"package","definition":"A package is a distributable bundle of code with a manifest declaring its name, version, and dependencies.","sense":"software"}
+{"term":"library","definition":"A library is a reusable package of code that other programs call to perform common tasks, without controlling the overall flow.","sense":"software"}
+{"term":"framework","definition":"A framework is a reusable software structure that provides the overall architecture and calls into the developer's code to build an application.","sense":"software"}
+{"term":"dependency","definition":"A dependency is an external package or module that a project needs in order to build or run.","sense":"software"}
+{"term":"api","definition":"An API (application programming interface) is a defined set of operations one piece of software exposes for others to call.","sense":"software"}
+{"term":"endpoint","definition":"An endpoint is a specific network address and operation of an API that a client can call, usually a URL path plus method.","sense":"software"}
+{"term":"route","definition":"A route is a rule mapping an incoming request path to the handler that should serve it.","sense":"software"}
+{"term":"server","definition":"A server is a program that waits for and responds to requests from clients over a network.","sense":"software"}
+{"term":"client","definition":"A client is a program that sends requests to a server and consumes its responses.","sense":"software"}
+{"term":"protocol","definition":"A protocol is an agreed set of rules and message formats that lets two programs communicate.","sense":"software"}
+{"term":"request","definition":"A request is a message a client sends to a server asking it to perform an operation or return data.","sense":"software"}
+{"term":"response","definition":"A response is the message a server sends back to a client in reply to a request.","sense":"software"}
+{"term":"message","definition":"A message is a discrete unit of data sent between programs, processes, or components.","sense":"software"}
+{"term":"event","definition":"An event is a notification that something has happened, which handlers can subscribe to and react to.","sense":"software"}
+{"term":"session","definition":"A session is a bounded period of interaction between a user or client and a system, holding state for its duration.","sense":"software"}
+{"term":"database","definition":"A database is an organised store of data managed by software that supports querying, updating, and durability.","sense":"software"}
+{"term":"schema","definition":"A schema is the formal definition of how data is structured, naming its tables, fields, and their types and relations.","sense":"software"}
+{"term":"table","definition":"A table is a database structure that stores records as rows, each with the same named columns.","sense":"software"}
+{"term":"query","definition":"A query is a request written in a query language that retrieves or changes data in a database.","sense":"software"}
+{"term":"index","definition":"An index is an auxiliary data structure that speeds up lookups in a database or collection at the cost of extra storage.","sense":"software"}
+{"term":"cache","definition":"A cache is a fast, temporary store that keeps copies of recently used data so future requests are served more quickly.","sense":"software"}
+{"term":"queue","definition":"A queue is a data structure or service that holds items in order until a consumer processes them, typically first-in first-out.","sense":"software"}
+{"term":"worker","definition":"A worker is a process or thread dedicated to running jobs pulled from a queue, off the main request path.","sense":"software"}
+{"term":"job","definition":"A job is a discrete piece of work scheduled to be run, often asynchronously by a worker.","sense":"software"}
+{"term":"task","definition":"A task is a unit of work to be carried out, tracked, or scheduled.","sense":"software"}
+{"term":"process","definition":"A process is an independent running instance of a program, with its own memory and system resources.","sense":"software"}
+{"term":"thread","definition":"A thread is an independent line of execution within a process, sharing the process's memory with other threads.","sense":"software"}
+{"term":"runtime","definition":"A runtime is the environment that executes a program, providing services like memory management and standard libraries while it runs.","sense":"software"}
+{"term":"environment","definition":"An environment is a configured context in which software runs, such as development, testing, or production.","sense":"software"}
+{"term":"tool","definition":"A tool is a program used by developers to build, test, inspect, or maintain software.","sense":"software"}
+{"term":"command","definition":"A command is a single instruction issued to a program or shell to perform an action.","sense":"software"}
+{"term":"script","definition":"A script is a short program, usually interpreted, that automates a task or sequence of commands.","sense":"software"}
+{"term":"parser","definition":"A parser is a program that reads text according to a grammar and turns it into a structured representation.","sense":"software"}
+{"term":"compiler","definition":"A compiler is a tool that translates source code in one language into another form, typically machine or bytecode.","sense":"software"}
+{"term":"linter","definition":"A linter is a tool that analyses source code for likely errors, style violations, and suspicious patterns without running it.","sense":"software"}
+{"term":"formatter","definition":"A formatter is a tool that rewrites source code into a consistent style without changing its behaviour.","sense":"software"}
+{"term":"plugin","definition":"A plugin is an add-on component that extends a host program's functionality through a defined extension interface.","sense":"software"}
+{"term":"hook","definition":"A hook is a defined point where custom code can be attached to run at a specific moment in a larger process.","sense":"software"}
+{"term":"prompt","definition":"A prompt is the text or signal a program shows to invite input, or the instruction text given to a language model.","sense":"software"}
+{"term":"test","definition":"A test is code that runs a program under known conditions and checks that it behaves as expected.","sense":"software"}
+{"term":"suite","definition":"A suite is a named collection of tests grouped and run together.","sense":"software"}
+{"term":"assertion","definition":"An assertion is a check inside a test that a condition holds, failing the test if it does not.","sense":"software"}
+{"term":"mock","definition":"A mock is a stand-in object that imitates a real dependency and records how it was used, so a test can run in isolation.","sense":"software"}
+{"term":"stub","definition":"A stub is a minimal stand-in that returns fixed responses in place of a real dependency during a test.","sense":"software"}
+{"term":"fixture","definition":"A fixture is a fixed, known set-up of data or state that a test runs against for repeatable results.","sense":"software"}
+{"term":"snapshot","definition":"A snapshot is a saved record of a program's output that later runs are compared against to detect changes.","sense":"software"}
+{"term":"coverage","definition":"Coverage is a measure of how much of a program's code is exercised by its tests.","sense":"software"}
+{"term":"benchmark","definition":"A benchmark is a repeatable test that measures a program's performance, such as speed or memory use.","sense":"software"}
+{"term":"regression","definition":"A regression is a defect that reappears or is newly introduced, breaking behaviour that previously worked.","sense":"software"}
+{"term":"migration","definition":"A migration is a scripted, versioned change that moves a database schema or data from one state to the next.","sense":"software"}
+{"term":"refactor","definition":"A refactor is a change that restructures existing code to improve it without altering its external behaviour.","sense":"software"}
+{"term":"review","definition":"A review is an examination of proposed changes by another person to catch problems before they are merged.","sense":"software"}
+{"term":"merge","definition":"A merge is the operation of combining changes from one branch or source into another.","sense":"software"}
+{"term":"commit","definition":"A commit is a recorded snapshot of changes in version control, with a message and an author, forming one point in the history.","sense":"software"}
+{"term":"branch","definition":"A branch is a named, independent line of development in a repository that can diverge from and later merge back into others.","sense":"software"}
+{"term":"tag","definition":"A tag is a fixed label attached to a specific commit, commonly used to mark a release.","sense":"software"}
+{"term":"release","definition":"A release is a specific, published version of software made available for use.","sense":"software"}
+{"term":"build","definition":"A build is the process of turning source code into runnable or distributable artefacts, and the artefact it produces.","sense":"software"}
+{"term":"pipeline","definition":"A pipeline is an automated sequence of stages that build, test, and deliver software.","sense":"software"}
+{"term":"deployment","definition":"A deployment is the act of putting a build of software into a running environment where it is used.","sense":"software"}
+{"term":"artifact","definition":"An artifact is a file produced by a build or process, such as a compiled binary, package, or report.","sense":"software"}
+{"term":"milestone","definition":"A milestone is a significant, dated checkpoint in a project marking the completion of a set of work.","sense":"software"}
+{"term":"sprint","definition":"A sprint is a short, fixed period during which a team completes a planned set of work.","sense":"software"}
+{"term":"backlog","definition":"A backlog is the ordered list of outstanding work, features, and fixes a team plans to address.","sense":"software"}
+{"term":"roadmap","definition":"A roadmap is a high-level plan showing the intended direction and sequence of a project's major work over time.","sense":"software"}
+{"term":"phase","definition":"A phase is a distinct stage of a project or process with its own goals and boundaries.","sense":"software"}
+{"term":"feature","definition":"A feature is a distinct unit of functionality that delivers value to a user.","sense":"software"}
+{"term":"requirement","definition":"A requirement is a stated condition or capability that a system must satisfy.","sense":"software"}
+{"term":"specification","definition":"A specification is a precise, written description of what a system or component must do and how it must behave.","sense":"software"}
+{"term":"document","definition":"A document is a written record, such as a design note, guide, or reference, that captures information about a project.","sense":"software"}
+{"term":"bug","definition":"A bug is a flaw in software that causes it to behave incorrectly or unexpectedly.","sense":"software"}
+{"term":"defect","definition":"A defect is a fault in a system where its behaviour departs from what was required.","sense":"software"}
+{"term":"issue","definition":"An issue is a tracked item recording a bug, task, or request to be addressed.","sense":"software"}
+{"term":"ticket","definition":"A ticket is a tracked work item in an issue tracker, recording a request, bug, or task and its status.","sense":"software"}
+{"term":"error","definition":"An error is a condition in which a program cannot complete an operation correctly.","sense":"software"}
+{"term":"exception","definition":"An exception is an error signalled at runtime that interrupts normal flow and can be caught and handled.","sense":"software"}
+{"term":"warning","definition":"A warning is a diagnostic that flags a potential problem without stopping the program.","sense":"software"}
+{"term":"log","definition":"A log is a recorded stream of timestamped messages a program emits about what it is doing, used for monitoring and debugging.","sense":"software"}
+{"term":"metric","definition":"A metric is a measured quantity about a system, such as latency or error rate, tracked over time.","sense":"software"}
+{"term":"risk","definition":"A risk is a potential future problem that could harm a project, weighed by its likelihood and impact.","sense":"software"}
+{"term":"smell","definition":"A code smell is a surface sign in code that hints at a deeper design problem, without being a bug itself.","sense":"software"}
+{"term":"pattern","definition":"A pattern is a reusable, named solution to a recurring design problem in software.","sense":"software"}
+{"term":"prototype","definition":"A prototype is an early, throwaway or partial build made to explore an idea or validate an approach.","sense":"software"}
+{"term":"developer","definition":"A developer is a person who writes and maintains software.","sense":"software"}
+{"term":"engineer","definition":"An engineer is a person who designs, builds, and maintains software systems.","sense":"software"}
+{"term":"user","definition":"A user is a person who uses a piece of software.","sense":"software"}
+{"term":"visitor","definition":"A visitor is a person who interacts with a system, often anonymously, such as a browser of a website.","sense":"software"}
+{"term":"team","definition":"A team is a group of people working together on a shared project.","sense":"software"}
+{"term":"owner","definition":"An owner is the person or party accountable for a piece of software or work.","sense":"software"}
+{"term":"maintainer","definition":"A maintainer is a person responsible for keeping a project healthy: reviewing changes, fixing issues, and making releases.","sense":"software"}
+{"term":"author","definition":"An author is the person who wrote a given piece of code, commit, or document.","sense":"software"}
+{"term":"reviewer","definition":"A reviewer is a person who examines proposed changes and gives feedback before they are merged.","sense":"software"}
+{"term":"parent","definition":"A parent is the entity one level above another in a hierarchy, such as a base class or a containing item.","sense":"software"}
+{"term":"graph","definition":"A graph is a structure of nodes connected by edges, used to represent entities and the relationships between them.","sense":"software"}
+{"term":"node","definition":"A node is a single entity in a graph, connected to others by edges.","sense":"software"}
+{"term":"edge","definition":"An edge is a connection between two nodes in a graph, representing a relationship between them.","sense":"software"}
+{"term":"triple","definition":"A triple is a statement of the form subject-predicate-object, the basic unit of a knowledge graph.","sense":"software"}
+{"term":"fact","definition":"A fact is an asserted statement held in memory, typically a subject-predicate-object triple with provenance.","sense":"software"}
+{"term":"ontology","definition":"An ontology is a formal, shared vocabulary of concepts and the relationships between them in a domain.","sense":"software"}
+{"term":"lexicon","definition":"A lexicon is the declared set of words a language system understands, each tagged with its grammatical category.","sense":"software"}
+{"term":"grammar","definition":"A grammar is the set of rules describing which sequences of words form valid sentences in a language.","sense":"software"}
+{"term":"sentence","definition":"A sentence is a grammatically complete unit of language expressing a statement, question, or command.","sense":"software"}
+{"term":"utterance","definition":"An utterance is one thing said in a conversation turn, by a visitor or by the system.","sense":"software"}
+{"term":"question","definition":"A question is an utterance that requests information.","sense":"software"}
+{"term":"answer","definition":"An answer is a response that supplies the information a question asked for.","sense":"software"}
+{"term":"config","definition":"A config is the set of externally supplied settings that control how a program behaves without changing its code.","sense":"software"}
+{"term":"configuration","definition":"A configuration is the set of externally supplied settings that control how a program behaves without changing its code.","sense":"software"}
+{"term":"setting","definition":"A setting is a single named, adjustable value that controls part of a program's behaviour.","sense":"software"}
+{"term":"option","definition":"An option is a selectable setting that alters a program's behaviour, often passed on the command line.","sense":"software"}
+{"term":"flag","definition":"A flag is a boolean option that turns a behaviour on or off.","sense":"software"}
+{"term":"input","definition":"Input is the data given to a program or function to process.","sense":"software"}
+{"term":"output","definition":"Output is the data a program or function produces as its result.","sense":"software"}
+{"term":"result","definition":"A result is the value or outcome produced by an operation.","sense":"software"}
+{"term":"category","definition":"A category is a named group into which things sharing a property are classified.","sense":"software"}
+{"term":"kind","definition":"A kind is a class or type of thing — a way of saying what something is an instance of.","sense":"software"}
+{"term":"part","definition":"A part is a component that, together with others, makes up a larger whole.","sense":"software"}
+{"term":"change","definition":"A change is any modification to code, data, or configuration from one state to another.","sense":"software"}
+{"term":"unit","definition":"A unit is the smallest self-contained piece of a system that is tested or reasoned about on its own.","sense":"software"}
+{"term":"license","definition":"A license is the legal terms under which software may be used, modified, and shared.","sense":"software"}
+{"term":"version","definition":"A version is a label identifying one specific released state of software, usually as an ordered number.","sense":"software"}
+{"term":"name","definition":"A name is the identifying label given to an entity.","sense":"software"}
+{"term":"path","definition":"A path is the location of a file or resource, written as a sequence of names from a known root.","sense":"software"}
+{"term":"size","definition":"Size is a measure of how large something is, such as a file's byte count or a collection's element count.","sense":"software"}
+{"term":"status","definition":"Status is the current state of an entity, such as open, passing, or deployed.","sense":"software"}
+{"term":"language","definition":"A language is a formal system of syntax and semantics for writing programs, such as Python or Java.","sense":"software"}
+{"term":"extension","definition":"An extension is the suffix of a filename that indicates its type, such as .py or .mjs.","sense":"software"}
+{"term":"import","definition":"To import is to bring the definitions of another module into the current one so its code can be used.","sense":"software"}
+{"term":"call","definition":"To call is to invoke a function or method so that its code runs, optionally passing arguments and receiving a result.","sense":"software"}
+{"term":"contain","definition":"To contain is to hold something as a part: a class contains its methods, a module contains its definitions.","sense":"software"}
+{"term":"extend","definition":"To extend is to define a new type built on an existing one, inheriting and adding to its structure and behaviour.","sense":"software"}
+{"term":"use","definition":"To use is to depend on or make use of another entity's functionality.","sense":"software"}
+{"term":"depend","definition":"To depend on is to require another package or module in order to build or run.","sense":"software"}
+{"term":"rely","definition":"To rely on is to depend on another entity for correct operation.","sense":"software"}
+{"term":"inherit","definition":"To inherit from is to take on the structure and behaviour of a parent type by extending it.","sense":"software"}
+{"term":"belong","definition":"To belong to is to be a part or member of a containing entity.","sense":"software"}
+{"term":"point","definition":"To point to is to hold a reference that identifies another entity, such as a tag pointing to a commit.","sense":"software"}
+{"term":"implement","definition":"To implement is to provide the concrete code that satisfies an interface or specification.","sense":"software"}
+{"term":"override","definition":"To override is to replace an inherited method with a new definition in a subclass.","sense":"software"}
+{"term":"export","definition":"To export is to make a definition in a module available for other modules to import.","sense":"software"}
+{"term":"define","definition":"To define is to introduce a named entity, such as a function or class, and give it its meaning.","sense":"software"}
+{"term":"declare","definition":"To declare is to state that a name exists and its type, without necessarily giving its full definition.","sense":"software"}
+{"term":"reference","definition":"To reference is to refer to another entity by name without containing it.","sense":"software"}
+{"term":"invoke","definition":"To invoke is to cause a routine to run — a synonym for calling a function or method.","sense":"software"}
+{"term":"wrap","definition":"To wrap is to enclose one piece of code or data inside another that adapts or extends its behaviour.","sense":"software"}
+{"term":"cover","definition":"To cover is for a test to exercise a piece of code, contributing to its test coverage.","sense":"software"}
+{"term":"describe","definition":"To describe is to state the properties or behaviour of an entity in words.","sense":"software"}
+{"term":"modify","definition":"To modify is to change an existing entity from one state to another.","sense":"software"}
+{"term":"touch","definition":"To touch is for a commit to change a file or symbol, however slightly.","sense":"software"}
+{"term":"fix","definition":"To fix is to change code so that a bug no longer occurs.","sense":"software"}
+{"term":"break","definition":"To break is to introduce a change that makes previously working behaviour fail.","sense":"software"}
+{"term":"introduce","definition":"To introduce is to add a new entity or behaviour to a system for the first time.","sense":"software"}
+{"term":"deprecate","definition":"To deprecate is to mark an entity as obsolete and discouraged, scheduled for eventual removal.","sense":"software"}
+{"term":"replace","definition":"To replace is to substitute one entity for another that supersedes it.","sense":"software"}
+{"term":"own","definition":"To own is to be the party accountable for an entity's upkeep and decisions.","sense":"software"}
+{"term":"maintain","definition":"To maintain is to keep a project healthy over time by fixing, updating, and releasing it.","sense":"software"}
+{"term":"revert","definition":"To revert is to undo a change, returning code to its previous state.","sense":"software"}
+{"term":"deploy","definition":"To deploy is to put a build of software into a running environment where it is used.","sense":"software"}
+{"term":"run","definition":"To run is to execute a program or piece of code so that it performs its work.","sense":"software"}
+{"term":"execute","definition":"To execute is to carry out the instructions of a program or command.","sense":"software"}
+{"term":"load","definition":"To load is to read data or code into memory so a program can use it.","sense":"software"}
+{"term":"parse","definition":"To parse is to read text according to a grammar and turn it into a structured form.","sense":"software"}
+{"term":"emit","definition":"To emit is to produce and send out a value, event, or message.","sense":"software"}
+{"term":"validate","definition":"To validate is to check that data or input meets its required rules before it is used.","sense":"software"}
+{"term":"throw","definition":"To throw is to raise an exception, signalling an error that interrupts normal flow.","sense":"software"}
+{"term":"catch","definition":"To catch is to intercept a thrown exception so it can be handled instead of crashing the program.","sense":"software"}
+{"term":"create","definition":"To create is to bring a new entity into existence.","sense":"software"}
+{"term":"delete","definition":"To delete is to remove an entity so it no longer exists.","sense":"software"}
+{"term":"update","definition":"To update is to change an existing entity to a newer state.","sense":"software"}
+{"term":"expose","definition":"To expose is to make an entity accessible to callers outside its own boundary.","sense":"software"}
+{"term":"consume","definition":"To consume is to take in and use data or a service produced by another party.","sense":"software"}
+{"term":"produce","definition":"To produce is to generate an output, artefact, or value as a result of work.","sense":"software"}
+{"term":"generate","definition":"To generate is to produce code, data, or output automatically from a source or template.","sense":"software"}
+{"term":"configure","definition":"To configure is to set the options that control how a program behaves.","sense":"software"}
+{"term":"install","definition":"To install is to place a package and its dependencies where a program can use them.","sense":"software"}
+{"term":"publish","definition":"To publish is to release a package or version so others can obtain it.","sense":"software"}
+{"term":"ship","definition":"To ship is to deliver a finished piece of software to its users.","sense":"software"}
+{"term":"watch","definition":"To watch is to observe a resource for changes and react when they occur.","sense":"software"}
+{"term":"trigger","definition":"To trigger is to cause a process or handler to start in response to an event.","sense":"software"}
+{"term":"write","definition":"To write is to record data or code to a file, store, or output.","sense":"software"}
+{"term":"read","definition":"To read is to obtain data from a file, store, or input.","sense":"software"}
+{"term":"have","definition":"To have is to possess an attribute, part, or property.","sense":"software"}
+{"term":"legacy","definition":"Legacy describes old code or a system still in use but built on outdated approaches and kept mainly for compatibility.","sense":"software"}
+{"term":"internal","definition":"Internal describes an entity meant for use only within its own module or system, not exposed to outside callers.","sense":"software"}
+{"term":"external","definition":"External describes an entity that comes from or is exposed to outside the current system.","sense":"software"}
+{"term":"public","definition":"Public describes an entity that is accessible to callers outside its own class or module.","sense":"software"}
+{"term":"private","definition":"Private describes an entity that is accessible only within its own class or module.","sense":"software"}
+{"term":"abstract","definition":"Abstract describes a class or method that declares behaviour without fully implementing it, meant to be completed by subclasses.","sense":"software"}
+{"term":"static","definition":"Static describes a member that belongs to a class itself rather than to any of its instances.","sense":"software"}
+{"term":"async","definition":"Async describes code that runs without blocking, returning control before its work completes and finishing later.","sense":"software"}
+{"term":"experimental","definition":"Experimental describes a feature that is provisional and may change or be removed without notice.","sense":"software"}
+{"term":"stable","definition":"Stable describes an entity whose interface is settled and safe to depend on.","sense":"software"}
+{"term":"core","definition":"Core describes the central, essential part of a system that other parts depend on.","sense":"software"}
+{"term":"shared","definition":"Shared describes an entity used in common by several parts of a system.","sense":"software"}
+{"term":"global","definition":"Global describes an entity accessible everywhere in a program, across all scopes.","sense":"software"}
+{"term":"local","definition":"Local describes an entity accessible only within the immediate scope where it is defined.","sense":"software"}
+{"term":"generated","definition":"Generated describes code or data produced automatically by a tool rather than written by hand.","sense":"software"}
+{"term":"standalone","definition":"Standalone describes software that runs on its own without needing a larger host system.","sense":"software"}
+{"term":"primary","definition":"Primary describes the first or main one of a set.","sense":"software"}
+{"term":"secondary","definition":"Secondary describes a supporting one that is not the main of a set.","sense":"software"}
+{"term":"deprecated","definition":"Deprecated means an entity is marked obsolete and discouraged, kept for now but scheduled for removal.","sense":"software"}
+{"term":"fast","definition":"Fast means an operation or system completes its work in little time.","sense":"software"}
+{"term":"slow","definition":"Slow means an operation or system takes a long time to complete its work.","sense":"software"}
+{"term":"large","definition":"Large means an entity has a big size, such as many lines, bytes, or elements.","sense":"software"}
+{"term":"small","definition":"Small means an entity has a little size, such as few lines, bytes, or elements.","sense":"software"}
+{"term":"flaky","definition":"Flaky describes a test that sometimes passes and sometimes fails without any code change, making its result untrustworthy.","sense":"software"}
+{"term":"tested","definition":"Tested means an entity has tests that exercise its behaviour.","sense":"software"}
+{"term":"documented","definition":"Documented means an entity has accompanying explanatory text describing what it does.","sense":"software"}
+{"term":"buggy","definition":"Buggy means an entity contains defects that cause incorrect behaviour.","sense":"software"}
+{"term":"broken","definition":"Broken means an entity does not work as intended and currently fails.","sense":"software"}
+{"term":"green","definition":"Green means the tests or build are currently passing.","sense":"software"}
+{"term":"deterministic","definition":"Deterministic means code produces the same output for the same input every time, with no randomness.","sense":"software"}
+{"term":"pure","definition":"Pure describes a function that returns the same result for the same inputs and has no side effects.","sense":"software"}
+{"term":"empty","definition":"Empty means a container holds no elements, or an entity has no content.","sense":"software"}
+{"term":"stale","definition":"Stale means data or a cache is out of date relative to its source and needs refreshing.","sense":"software"}
+{"term":"struct","definition":"A struct is a composite type grouping named fields; in language-neutral terms it is treated as a kind of class (a data-only type).","sense":"software"}
+{"term":"record","definition":"A record is a type whose value is a fixed group of named fields; a kind of class focused on holding data.","sense":"software"}
+{"term":"trait","definition":"A trait is a reusable set of method signatures and default implementations a type can adopt; a kind of interface.","sense":"software"}
+{"term":"enum","definition":"An enum is a type whose values are drawn from a fixed, named set of constants.","sense":"software"}
+{"term":"def","definition":"A def is Python's keyword introducing a function or method definition; a def is a kind of function.","sense":"software"}
+{"term":"func","definition":"func is the keyword some languages (Go, Swift) use to declare a function; a func is a kind of function.","sense":"software"}
+{"term":"fn","definition":"fn is the keyword Rust uses to declare a function; an fn is a kind of function.","sense":"software"}
+{"term":"sub","definition":"A sub is Perl's subroutine; a sub is a kind of function.","sense":"software"}
+{"term":"procedure","definition":"A procedure is a routine that performs actions without necessarily returning a value; a kind of routine.","sense":"software"}
+{"term":"lambda","definition":"A lambda is an anonymous function defined inline, usually to be passed as a value; a kind of function.","sense":"software"}
+{"term":"closure","definition":"A closure is a function that captures variables from the scope in which it was defined; a kind of function.","sense":"software"}
+{"term":"constructor","definition":"A constructor is a special method that initialises a new object of its class; a kind of method.","sense":"software"}
+{"term":"destructor","definition":"A destructor is a special method run when an object is destroyed, to release its resources; a kind of method.","sense":"software"}
+{"term":"getter","definition":"A getter is a method that reads and returns the value of an attribute; a kind of method.","sense":"software"}
+{"term":"setter","definition":"A setter is a method that updates the value of an attribute; a kind of method.","sense":"software"}
+{"term":"namespace","definition":"A namespace is a named region that groups identifiers to prevent name collisions; it plays the role of a module.","sense":"software"}
+{"term":"header","definition":"A header is a file declaring the interface of a compilation unit in C-family languages; a kind of file.","sense":"software"}
+{"term":"field","definition":"A field is a named data member of a class or struct; the same concept as an attribute.","sense":"software"}
+{"term":"property","definition":"A property is an attribute accessed through getter and setter methods; a kind of attribute.","sense":"software"}
+{"term":"coroutine","definition":"A coroutine is a routine that can suspend and resume its execution; a kind of function used for cooperative concurrency.","sense":"software"}
+{"term":"instance","definition":"An instance is a concrete object created from a class; instance is another word for object.","sense":"software"}
+{"term":"tmct","definition":"tmct (the-mechanical-code-talker) is a deterministic, no-LLM chatbot that answers questions about a software project's code graph and its own vocabulary from a JSON knowledge graph on disk.","sense":"software"}
+{"term":"code graph","definition":"A code graph is tmct's typed graph of a repository's entities (modules, classes, functions, commits) and the relationships between them, which tmct queries to answer questions.","sense":"software"}
+{"term":"memory graph","definition":"The memory graph is the OWL-labelled JSON knowledge graph tmct keeps under .tmct/, storing facts, utterances, and sessions it can reason over.","sense":"software"}
+{"term":"seon","definition":"SEON, the Software Evolution ONtologies, is the FAMIX-derived reference vocabulary tmct borrows code-entity terms from; corpus/seon is tmct's own curated tier-1 software ontology.","sense":"software"}

@@ -1,0 +1,37 @@
+LICENSE NOTICE — corpus/seon/
+=============================
+
+The files in this directory (concepts.jsonl, definitions.jsonl, README.md) are
+ORIGINAL WORK authored by hand for the-mechanical-code-talker (tmct), and are
+licensed under this repository's license, the Mozilla Public License Version 2.0
+(MPL-2.0) — the same terms as the rest of the repository.
+
+  https://www.mozilla.org/MPL/2.0/
+
+They are NOT derived from ConceptNet and are NOT under CC-BY-SA. Do not confuse
+this directory with corpus/conceptnet/, whose slice.jsonl is a CC-BY-SA 4.0
+excerpt of ConceptNet 5 (see corpus/conceptnet/LICENSE-NOTICE).
+
+What this is
+------------
+
+corpus/seon is tmct's curated tier-1 software-engineering ontology: a hand-
+authored, language-neutral set of concept definitions and relation facts covering
+the vocabulary declared in src/grammar/lexicon-core.json. Every line was written
+and checked by the project, not compiled from an external dataset.
+
+On the name "seon"
+------------------
+
+The directory is named for SEON (the Software Evolution ONtologies, se-on.org),
+the FAMIX-derived reference vocabulary tmct's code-graph prop tokens borrow term
+IDEAS from (see ontology/tmct-core.ttl). This directory does NOT redistribute
+SEON's published ontology files; it is tmct's own curated ontology, named in
+homage to that reference vocabulary. No SEON content is copied here.
+
+Reuse
+-----
+
+As MPL-2.0 material, these files may be used, modified, and redistributed under
+the MPL-2.0 terms. Attribution to the-mechanical-code-talker / Polycode is
+appreciated but governed by the license, not by CC-BY-SA share-alike.
