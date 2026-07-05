@@ -155,6 +155,14 @@ can do better, and cleanly:
 - **Steel & Ho closes the execution loop:** monitor each `tool_result` against the operator's expected
   effect; on divergence, re-plan from the observed state (that is B2, and it is what makes C1 robust
   rather than brittle).
+- **The one real risk is operator-model *fidelity*, not the planner.** Preconditions are easy to
+  declare; **effects are hard** — what does `bash <cmd>` actually change in world-state? And classical
+  planning assumes a *static, fully-observable, deterministic* world, which live tool execution is not.
+  That is not a reason to distrust planning; it is precisely *why the Steel & Ho monitor-and-replan
+  layer is mandatory, not optional*: the planner proposes against the modelled effects, execution
+  checks reality, and divergence forces a re-plan. Pure STRIPS is the skeleton; **POP/HTN +
+  monitoring** is the system. The difficulty migrates to authoring honest effects (the knowledge-
+  engineering cost), not to the search.
 
 **Recommendation:** adopt the operator model (Stage 0), keep **templates as declared HTN methods /
 macro-operators** for common paths (they're faster and give the cleanest proofs), and fall back to
@@ -191,14 +199,41 @@ need care, and both are literature-covered:
   expected-utility; or (c) **declared goal priority**. It must be **threat-aware**: don't pick a first
   step that clobbers another live goal's plan (POP threats lifted to the meta-level — planning over a
   conjunction of goals).
+- **Intention persistence.** The raw loop (deduce → plan → act → repeat) **thrashes**: goals flicker
+  and the first-step choice oscillates if everything is re-derived from scratch every tick. The **I in
+  BDI is a *commitment*** — once an intention is adopted, persist with it until it is achieved, becomes
+  impossible, or its goal lapses. Without this the agent is *busy, not autonomous*. This is the part
+  the raw reduction misses and the BDI literature supplies.
 - **Goal generation.** In the **closed** world, deducible and deterministic. In the **open** world —
   novel situations implying goals no rule declared — it is **unsolved**, and it is exactly where an
   LLM's open-ended judgement wins. Same boundary as C1, one level up.
 
 **Verdict:** the reduction is a real architecture, not hand-waving — closed-world C2 is buildable on
-top of a solved C1 + a deduction engine + a threat-aware choice rule. It should be a **Stage 5**, gated
-on C1 being genuinely reached and measured. (Deepen-next: add a `docs/references/planning/` entry on
-BDI + Goal-Driven Autonomy when we get here.)
+top of a solved C1 + a deduction engine + a threat-aware, persistent choice rule. It should be a
+**Stage 5**, gated on C1 being genuinely reached and measured. The sharpest thing to carry forward:
+**goal *generation* is where autonomy actually lives** — everything else reduces to solved machinery.
+That single step is the seam where tmct stays deterministic (closed-world goal-rules) and an LLM earns
+its cost (open-world novel goals). (Deepen-next: add a `docs/references/planning/` entry on BDI +
+Goal-Driven Autonomy when we get here.)
+
+---
+
+## The shared shape — both ideas locate the escalation boundary
+
+The two reductions are the *same move*, and that is the real result. Each collapses a scary capability
+into **(solved deterministic machinery) + (a residual that concentrates at exactly one place: the
+open-world boundary)**:
+
+- **C1** = classical planning (solved) + **open-world planning** (residual).
+- **C2** = C1 + threat-aware goal-arbitration (solved) + **open-world goal-generation** (residual).
+
+The residual is never scattered — it always lands at the same seam: *novelty the declared model does
+not cover.* So beyond climbing a rung, both ideas do something more valuable for the **guardrail /
+fast-path** framing: they **precisely locate where the deterministic core must hand off to an LLM.**
+Knowing *where* to escalate is worth more than climbing one more rung — it lets the cheap, auditable,
+$0 core run with confidence over everything it can prove, and spends the metered model *only* at the
+open-world boundary where it is genuinely irreplaceable. That boundary — not the ladder height — is the
+router's real deliverable.
 
 ---
 
