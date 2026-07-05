@@ -49,8 +49,72 @@ import {
 } from "./codegraph.mjs";
 import { ask } from "./ask.mjs";
 import { createGraphService } from "./providers/graph-service.mjs";
+// Read-ONLY consumers of the conversational-memory graph (src/memory/core.mjs) — the 500
+// corpus facts live there, NOT in the code-map graph.json every tool below loads. Used by
+// the FALL-THROUGH bridge (below): when the code-map resolves NOTHING for a concept query
+// (/subclasses /describe /members /find), answer from the reified isa-family facts instead
+// of a flat "no entity". Never written here; memory writes stay owned by memory/*.
+import { loadMemory, readFactRows, normFactTerm } from "./memory/core.mjs";
 
 const SNIPPET_MAX_LINES = 200;
+
+// The reified isa-family predicates a memory Fact carries ("<subject> rdfs:subClassOf
+// <object>" / "rdf:type"): subject IS-A object. Subclasses of X = facts whose OBJECT is X;
+// superclasses of X = facts whose SUBJECT is X. (Matches chat.mjs's ISA_PREDICATES.)
+const ISA_PREDICATES = new Set(["rdfs:subClassOf", "rdf:type"]);
+const MEMORY_LIST_CAP = 40;
+
+/** Load the conversational-memory Facts as trust-bearing rows, failure-tolerant (no memory
+ *  store / unreadable → [], so the tool still returns its honest code-map miss). repoRoot is
+ *  the dir that CONTAINS .tmct/ (graphFile = <repo>/.tmct/graph.json), which is exactly the
+ *  `dir` loadMemory joins MEMORY_GRAPH_REL onto. */
+async function memoryFactRows(config) {
+  try {
+    return readFactRows(await loadMemory(dirname(dirname(config.graphFile))));
+  } catch {
+    return [];
+  }
+}
+
+/** A short provenance receipt for a set of memory rows — distinct source strings, capped. */
+function memoryProvenance(rows) {
+  const provs = [...new Set(rows.map((r) => r.provenance).filter(Boolean))];
+  if (!provs.length) return "provenance: memory/corpus facts";
+  const shown = provs.slice(0, 2).join("; ");
+  return `provenance: ${shown}${provs.length > 2 ? `, +${provs.length - 2} more source(s)` : ""}`;
+}
+
+/** FALL-THROUGH: subclasses of a concept from the reified isa-family facts (subjects of
+ *  "<subj> subClassOf <term>"). Null when the term names no such facts (so the caller can
+ *  keep the honest code-map miss). Provenance is always cited. */
+function renderMemorySubclasses(rows, term) {
+  const t = normFactTerm(term);
+  const hits = rows.filter((r) => ISA_PREDICATES.has(r.predicate) && r.object === t);
+  if (!hits.length) return null;
+  const labels = [...new Set(hits.map((r) => r.subject))].sort();
+  const shown = labels.slice(0, MEMORY_LIST_CAP);
+  const tail = labels.length > MEMORY_LIST_CAP ? `\n  …+${labels.length - MEMORY_LIST_CAP} more` : "";
+  return `"${term}" is not a code-map entity — answering from memory/corpus facts. ` +
+    `${labels.length} known subclass(es):\n  ${shown.join("\n  ")}${tail}\n(${memoryProvenance(hits)})`;
+}
+
+/** FALL-THROUGH: a concept's DEFINITION from the isa-family facts — its superclasses ("is
+ *  a …") plus a count/sample of its known subclasses. Null when the term names no facts. */
+function renderMemoryDefinition(rows, term) {
+  const t = normFactTerm(term);
+  const isa = rows.filter((r) => ISA_PREDICATES.has(r.predicate) && (r.subject === t || r.object === t));
+  if (!isa.length) return null;
+  const supers = [...new Set(isa.filter((r) => r.subject === t).map((r) => r.object))];
+  const subs = [...new Set(isa.filter((r) => r.object === t).map((r) => r.subject))].sort();
+  const lines = [`"${term}" is not a code-map entity — answering from memory/corpus facts.`];
+  if (supers.length) lines.push(`is a: ${supers.slice(0, MEMORY_LIST_CAP).join(", ")}`);
+  if (subs.length) {
+    const tail = subs.length > MEMORY_LIST_CAP ? `, +${subs.length - MEMORY_LIST_CAP} more` : "";
+    lines.push(`known subclasses (${subs.length}): ${subs.slice(0, MEMORY_LIST_CAP).join(", ")}${tail}`);
+  }
+  lines.push(`(${memoryProvenance(isa)})`);
+  return lines.join("\n");
+}
 
 // Tiered tool surface: the hot tools carry full descriptions/schemas in this
 // catalog; every COLD tool (describe/members/impact/history/…) is still served
@@ -298,8 +362,11 @@ export async function dispatchTool(name, args, { config, source = defaultSource 
   if (name === "tmct_describe") {
     const symbol = String(args?.symbol || "").trim();
     if (!symbol) throw new ToolError("symbol is required");
-    const { match, candidates } = resolveOrThrow(svc, symbol, "symbol");
-    return renderDescribe(graph, match, { candidates });
+    const { match, candidates } = resolveSymbol(svc.graph, symbol);
+    if (match) return renderDescribe(graph, match, { candidates }); // code-map wins when present
+    const fb = renderMemoryDefinition(await memoryFactRows(config), symbol);
+    if (fb) return fb;
+    resolveOrThrow(svc, symbol, "symbol"); // no code-map + no memory fact → the honest miss
   }
   if (name === "tmct_snippet") {
     const symbol = String(args?.symbol || "").trim();
@@ -347,23 +414,37 @@ export async function dispatchTool(name, args, { config, source = defaultSource 
     const query = String(args?.query || "").trim();
     const kind = String(args?.kind || "").trim();
     if (!query && !kind) throw new ToolError("query is required");
-    return renderSearch(graph, query, {
+    const out = renderSearch(graph, query, {
       kind,
       decorator: String(args?.decorator || "").trim(),
       name: String(args?.name || "").trim(),
     });
+    // FALL-THROUGH: a code-map miss ("no module matches …") on a plain concept query still
+    // answers from the memory/corpus isa-family facts when the concept is known there.
+    if (!kind && /^no module matches/.test(out)) {
+      const fb = renderMemoryDefinition(await memoryFactRows(config), query);
+      if (fb) return fb;
+    }
+    return out;
   }
   if (name === "tmct_members") {
     const symbol = String(args?.class || "").trim();
     if (!symbol) throw new ToolError("class is required");
-    const { match } = resolveOrThrow(svc, symbol, "class");
-    return renderMembers(graph, match);
+    const { match } = resolveSymbol(svc.graph, symbol);
+    if (match) return renderMembers(graph, match); // code-map wins when present
+    // a concept's "members" in the corpus sense are its subclasses (its instances).
+    const fb = renderMemorySubclasses(await memoryFactRows(config), symbol);
+    if (fb) return fb;
+    resolveOrThrow(svc, symbol, "class"); // the honest miss
   }
   if (name === "tmct_subclasses") {
     const symbol = String(args?.class || "").trim();
     if (!symbol) throw new ToolError("class is required");
-    const { match } = resolveOrThrow(svc, symbol, "class");
-    return renderSubclasses(graph, match);
+    const { match } = resolveSymbol(svc.graph, symbol);
+    if (match) return renderSubclasses(graph, match); // code-map wins when present
+    const fb = renderMemorySubclasses(await memoryFactRows(config), symbol);
+    if (fb) return fb;
+    resolveOrThrow(svc, symbol, "class"); // no code-map subclass + no memory fact → honest miss
   }
   if (name === "tmct_architecture") {
     return renderArchitecture(graph, { pkg: String(args?.package || "").trim() });

@@ -186,6 +186,33 @@ test("superlative MISS: an unrecognized rank-by noun is an honest miss naming th
   assert.match(r.content, /imports, callers, methods, tests, or connections/);
 });
 
+// ---- FIX 2 (cycle W2P): widened AGGREGATE + SUPERLATIVE synonym net — more phrasings for
+// the SAME cardinality-COUNT / ARGMAX-by-degree intents now hit the existing infra. ----
+
+test("aggregate synonyms: 'sum of'/'tally of'/'total of'/'amount of' <kind> all count the class", () => {
+  // BEFORE (cycle W2P): these '<measure> of <kind>' forms missed the grammar entirely
+  // ("couldn't parse this as a graph question") — only "how many"/"count"/"number of" hit.
+  assert.match(ask(graph, "sum of classes").content, /^3 classes\.$/);
+  assert.match(ask(graph, "tally of classes").content, /^3 classes\.$/);
+  assert.match(ask(graph, "total of functions").content, /^5 functions\.$/);
+  assert.match(ask(graph, "amount of classes").content, /^3 classes\.$/);
+  for (const q of ["sum of classes", "tally of classes", "total of functions", "amount of classes"]) {
+    assert.equal(ask(graph, q).tmct_ask.miss, false, `${q} is no longer an honest-miss`);
+  }
+});
+
+test("superlative degree-nouns: 'most imported'/'most depended-on'/'most used' rank by in-degree", () => {
+  // BEFORE (cycle W2P): "which module is most imported" compiled to an honest miss ("name
+  // what to rank by") because only the noun "imports"/"importers" was a rank-by metric, not
+  // the participle. core.mjs is imported by mid, mid2 and caller → the argmax at in-degree 3.
+  assert.match(ask(graph, "which module is most imported").content, /^core\.mjs — the most imported \(3\)\.$/);
+  assert.match(ask(graph, "which module is most depended-on").content, /^core\.mjs — the most depended-on \(3\)\.$/);
+  assert.match(ask(graph, "which module is most used").content, /^core\.mjs — the most used \(3\)\.$/);
+  for (const q of ["which module is most imported", "which module is most depended-on", "which module is most used"]) {
+    assert.equal(ask(graph, q).tmct_ask.miss, false, `${q} now ranks instead of missing`);
+  }
+});
+
 // ---- 4b. LIST shape ("list <kind>" / "show the <kind>s") — sibling of the count node ----
 
 test("list HIT: bare 'list classes' / 'show me the classes' enumerate the class of individuals", () => {

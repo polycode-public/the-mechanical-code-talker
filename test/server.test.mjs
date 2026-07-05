@@ -3,6 +3,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { dispatchTool, TOOLS } from "../src/server.mjs";
 import { ToolError } from "../src/config.mjs";
@@ -217,4 +220,84 @@ test("unexpected internal errors propagate as plain errors (callers wrap message
     assert.equal(e.message, "boom");
     return true;
   });
+});
+
+// ---- FIX 3 (cycle W2P): the two-graph bridge — when the CODE-MAP graph resolves nothing
+// for a concept query (/subclasses /describe /members /find), fall through to the reified
+// isa-family facts in the MEMORY graph (with provenance), instead of a flat "no entity". ----
+
+/** A temp repo whose .tmct/memory/graph.json carries two reified isa Facts:
+ *   gizmo  rdfs:subClassOf software   (a subclass of "software")
+ *   software rdfs:subClassOf product  (a superclass of "software")
+ * The code-map graph itself is still the stub fixture (no "software" entity there). */
+async function repoWithMemoryFacts() {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-mem-"));
+  const mem = {
+    individuals: [
+      { id: "fact:1", class: "Fact", attributes: [
+        { prop: "rdf:subject", key: "subject", value: "gizmo" },
+        { prop: "rdf:predicate", key: "predicate", value: "rdfs:subClassOf" },
+        { prop: "rdf:object", key: "object", value: "software" },
+        { prop: "mgx:factProvenance", key: "provenance", value: "corpus:conceptnet /r/IsA" },
+      ] },
+      { id: "fact:2", class: "Fact", attributes: [
+        { prop: "rdf:subject", key: "subject", value: "software" },
+        { prop: "rdf:predicate", key: "predicate", value: "rdfs:subClassOf" },
+        { prop: "rdf:object", key: "object", value: "product" },
+        { prop: "mgx:factProvenance", key: "provenance", value: "corpus:conceptnet /r/IsA" },
+      ] },
+    ],
+    objectProperties: [],
+  };
+  await mkdir(join(dir, ".tmct", "memory"), { recursive: true });
+  await writeFile(join(dir, ".tmct", "memory", "graph.json"), JSON.stringify(mem));
+  return { dir, config: { graphFile: join(dir, ".tmct", "graph.json") } };
+}
+
+test("bridge: /subclasses on a code-map miss falls through to memory facts (with provenance)", async () => {
+  const { dir, config: memConfig } = await repoWithMemoryFacts();
+  try {
+    const out = await dispatchTool("tmct_subclasses", { class: "software" }, { config: memConfig, source: stubSource });
+    assert.match(out, /not a code-map entity/, "states it answered from memory");
+    assert.match(out, /1 known subclass/);
+    assert.match(out, /gizmo/, "the isa-family subject is listed");
+    assert.match(out, /provenance: corpus:conceptnet/, "provenance is cited");
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("bridge: /describe on a code-map miss reports the concept's superclasses + subclasses from memory", async () => {
+  const { dir, config: memConfig } = await repoWithMemoryFacts();
+  try {
+    const out = await dispatchTool("tmct_describe", { symbol: "software" }, { config: memConfig, source: stubSource });
+    assert.match(out, /is a: product/, "superclass (software subClassOf product)");
+    assert.match(out, /known subclasses \(1\): gizmo/);
+    assert.match(out, /provenance:/);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("bridge: /members on a code-map miss lists the concept's subclasses from memory", async () => {
+  const { dir, config: memConfig } = await repoWithMemoryFacts();
+  try {
+    const out = await dispatchTool("tmct_members", { class: "software" }, { config: memConfig, source: stubSource });
+    assert.match(out, /gizmo/);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("bridge: the CODE-MAP still wins when it resolves — /subclasses Base is the code-map answer, not memory", async () => {
+  const { dir, config: memConfig } = await repoWithMemoryFacts();
+  try {
+    const out = await dispatchTool("tmct_subclasses", { class: "Base" }, { config: memConfig, source: stubSource });
+    assert.doesNotMatch(out, /not a code-map entity/, "code-map resolution takes precedence");
+    assert.match(out, /Base — Class/, "the fixture's code-map subclasses answer");
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("bridge: a term unknown to BOTH graphs keeps the honest code-map ToolError", async () => {
+  const { dir, config: memConfig } = await repoWithMemoryFacts();
+  try {
+    await assert.rejects(
+      dispatchTool("tmct_subclasses", { class: "zz-nowhere" }, { config: memConfig, source: stubSource }),
+      (e) => { assert.ok(e instanceof ToolError); assert.match(e.message, /no entity matching/); return true; },
+    );
+  } finally { await rm(dir, { recursive: true, force: true }); }
 });

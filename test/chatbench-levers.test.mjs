@@ -31,9 +31,13 @@ const CLEAN_CALLS = ask(graph, "what calls fnAlpha");
 const CLEAN_IMPORTERS = ask(graph, "which modules import a.mjs");
 
 test("cycle-2 fixture sanity: the clean phrasings behave as CHATBENCH_001 documents", () => {
-  // the honest module-grain empty (no module-level calls edge targets fnAlpha)
-  assert.match(CLEAN_CALLS.content, /No modules found whose module directly calls fnAlpha/);
-  assert.equal(CLEAN_CALLS.tmct_ask.miss, true);
+  // CORRECTNESS FIX (cycle W2P): "what calls fnAlpha" now reads the symbol-level caller
+  // Widget.render off the callsSymbol edge (BEFORE: the module-coarse honest empty "No
+  // modules found whose module directly calls fnAlpha", miss:true). The noise/typo levers
+  // below still assert byte-identity to THIS clean answer, so their robustness purpose is
+  // unchanged — only the clean answer itself is now the correct, non-empty one.
+  assert.match(CLEAN_CALLS.content, /Widget\.render/);
+  assert.equal(CLEAN_CALLS.tmct_ask.miss, false);
   // the three importers, positively
   assert.match(CLEAN_IMPORTERS.content, /app\/lib\/b\.mjs/);
   assert.equal(CLEAN_IMPORTERS.tmct_ask.miss, false);
@@ -43,15 +47,15 @@ test("cycle-2 fixture sanity: the clean phrasings behave as CHATBENCH_001 docume
 
 test("L1a (ns-wondering): 'i was wondering what calls fnAlpha' answers like the clean phrasing — never 'couldn't resolve'", () => {
   const r = ask(graph, "i was wondering what calls fnAlpha");
-  assert.equal(r.content, CLEAN_CALLS.content, "byte-identical to the clean phrasing's honest empty");
-  assert.equal(r.tmct_ask.miss, true, "the honest blank, not a parse failure");
+  assert.equal(r.content, CLEAN_CALLS.content, "byte-identical to the clean phrasing's answer");
+  assert.equal(r.tmct_ask.miss, false, "the same real answer the clean phrasing gets");
   assert.doesNotMatch(r.content, /couldn't resolve/);
 });
 
 test("L1b (ns-hey-tmct): the product's own name used as an address strips — 'hey tmct, what calls fnAlpha thanks'", () => {
   const r = ask(graph, "hey tmct, what calls fnAlpha thanks");
   assert.equal(r.content, CLEAN_CALLS.content);
-  assert.equal(r.tmct_ask.miss, true);
+  assert.equal(r.tmct_ask.miss, false);
   assert.doesNotMatch(r.content, /couldn't resolve/);
   // and the strip layer itself treats "tmct" as a vocative (curated noise)
   const { dropped } = stripNoise("tmct what calls fnAlpha thanks", null);
@@ -62,7 +66,7 @@ test("L1c (tf-wat-calls): 'wat' is repaired to 'what' before either strategy par
   assert.equal(normalizeQuery("wat calls fnAlpha"), "what calls fnAlpha");
   const r = ask(graph, "wat calls fnAlpha");
   assert.equal(r.content, CLEAN_CALLS.content);
-  assert.equal(r.tmct_ask.miss, true);
+  assert.equal(r.tmct_ask.miss, false);
   // the correction never rewrites a module literally named wat.mjs (dotted-extension guard)
   assert.equal(normalizeQuery("which modules import wat.mjs"), "which modules import wat.mjs");
 });

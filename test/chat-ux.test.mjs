@@ -46,8 +46,11 @@ test("#1 a grammar miss over a POPULATED graph is short, not the wall", async ()
 
 test("#1 receipt-bearing misses KEEP their specific wording (not shortened)", async () => {
   const g = await graph();
-  const empty = await runTurn("what calls fnAlpha", { config: CONFIG, graph: g });
-  assert.match(empty.answer, /No modules found whose module directly calls fnAlpha/);
+  // (cycle W2P: "what calls fnAlpha" is now a real hit — Widget.render via callsSymbol — so
+  // the receipt-bearing MISS example uses a genuinely-uncalled symbol; nothing calls
+  // Widget.render, so it stays the honest empty with its callsSymbol traversal receipt.)
+  const empty = await runTurn("what calls Widget.render", { config: CONFIG, graph: g });
+  assert.match(empty.answer, /No .* found whose module directly calls Widget\.render/);
   assert.match(empty.answer, /\(traversal:/, "the traversal receipt survives");
   const unresolved = await runTurn("which modules import zebra.mjs", { config: CONFIG, graph: g });
   assert.match(unresolved.answer, /no symbol matching "zebra\.mjs" found in the index/);

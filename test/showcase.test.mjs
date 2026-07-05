@@ -122,11 +122,19 @@ test("showcase 4: the ambiguity surround — distinct readings are offered, not 
   assert.match(answer, /try rephrasing more specifically/, "and the user is guided");
 });
 
-test("showcase 5: the honest empty with a traversal receipt, through noise", async () => {
+test("showcase 5: the symbol-level caller surfaced through noise (callsSymbol fix)", async () => {
+  // CORRECTNESS FIX (cycle W2P): this case previously PINNED the WRONG honest-empty
+  //   BEFORE: "No modules found whose module directly calls fnAlpha. (traversal: calls
+  //            edges where object = fnAlpha)"   [record.miss === true]
+  // The fixture records a real symbol-level caller — Widget.render --callsSymbol--> fnAlpha
+  // — that the old module-coarse `calls` scan silently ignored. A bare "what calls fnAlpha"
+  // now reads the fn/method-precise callsSymbol edge (like "which functions call X" already
+  // did), so the honest answer is Widget.render, WITH its module (app/lib/b.mjs) as its site:
+  //   AFTER: "in app/lib/b.mjs there is function Widget.render()."   [record.miss === false]
   const { answer, record } = await runTurn("i was wondering what calls fnAlpha", {
     config: { graphFile: FIXTURE },
   });
-  assert.match(answer, /No modules found whose module directly calls fnAlpha\./, "honest empty, no hallucination");
-  assert.match(answer, /\(traversal: calls edges where object = fnAlpha\)/, "shows its work");
-  assert.equal(record.miss, true, "recorded as the miss it honestly is");
+  assert.match(answer, /Widget\.render/, "the real symbol-level caller is named, not a false empty");
+  assert.match(answer, /app\/lib\/b\.mjs/, "with its module (site), through the 'i was wondering' noise");
+  assert.equal(record.miss, false, "a recorded caller exists — no longer the honest miss the old scan reported");
 });

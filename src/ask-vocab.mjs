@@ -529,7 +529,14 @@ export const AGGREGATE_TRIGGERS = Object.freeze([
   // CONTENT_VOCAB and blocks the article's own noise-strip)
   "how many", "how much", "how many of", "number of",
   "total number of", "quantity of",
-  // neutral / imperative
+  // "<measure> of <kind>" cardinality forms (widened net, cycle W2P): count = sum = total
+  // = tally = number of. The bare single words (sum/total/tally) stay CASCADE_SYNONYMS-
+  // mapped to "count" (identifier-fragment risk without the "of" anchor — see that table's
+  // note); the multi-word "of" forms are safe to promote to direct triggers because the
+  // trailing "of <kind>" pins them to a cardinality question, not a stray identifier.
+  "tally of", "sum of", "total of", "amount of",
+  // neutral / imperative (bare "tally"/"sum"/"total" stay CASCADE_SYNONYMS-mapped so the
+  // "tally the classes" relaxation path — pinned by a cascade test — is preserved).
   "count", "count up", "count of", "tot up",
 ]);
 
@@ -593,6 +600,17 @@ export const EDGE_NOUN_TO_METRIC = Object.freeze({
   connections: { kind: "*", dir: "both" },
   edges: { kind: "*", dir: "both" },
   connected: { kind: "*", dir: "both" },
+  // participle degree-nouns (widened net, cycle W2P): "the most imported / most
+  // depended-on / most used <module>" ranks by IN-degree — how many things import/depend
+  // on/use it — the ARGMAX-by-degree intent a developer expresses with a passive
+  // participle rather than the noun ("importers"). "depended" catches "depended-on" /
+  // "depended on" (both tokenize to a bare "depended"); "used" folds the symbol-grain
+  // callsSymbol callers in alongside importers so "most used" reads as most-relied-upon.
+  imported: { kind: "imports", dir: "in" },
+  "depended-on": { kind: "imports", dir: "in" },
+  depended: { kind: "imports", dir: "in" },
+  used: { kind: "imports", dir: "in", sibling: "callsSymbol" },
+  called: { kind: "calls", dir: "in", sibling: "callsSymbol" },
 });
 
 /** Anaphora triggers over the PREVIOUS result set (ask()'s `prev` id array):

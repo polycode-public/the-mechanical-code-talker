@@ -357,7 +357,9 @@ test("renderSignature: compact API surface (params/returns/raises/self-fields/fl
 
 test("renderExports lists a module's public API resolved to origin", () => {
   const text = renderExports(graph, graph.byId.get("mod-d"));
-  assert.match(text, /public API \(1 export\(s\) via __all__\)/);
+  // language-neutral wording (cycle W2P): the reexports edge covers JS/TS `export` as well
+  // as Python `__all__`, so the header no longer claims a Python-only "via __all__".
+  assert.match(text, /public API \(1 export\(s\)\)/);
   assert.match(text, /fnAlpha ← app\/lib\/a\.mjs/); // re-export resolves to the defining module
   assert.match(renderExports(graph, graph.byId.get("mod-b")), /no public exports recorded/);
 });

@@ -109,7 +109,9 @@ test("W1 via: count/command/composed/orientation-miss each carry their own prove
   assert.equal(cmd.record.via, "command");
   const hit = await runTurn("which modules import a.mjs", { config: CONFIG, graph: g });
   assert.equal(hit.record.via, "composed", "an ask answer is the composed (productive) band");
-  const miss = await runTurn("what calls fnAlpha", { config: CONFIG, graph: g });
+  // (cycle W2P: "what calls fnAlpha" is now a real hit — use a genuinely-uncalled symbol for
+  // the honest-ask-miss band; nothing calls Widget.render, still engine-composed wording.)
+  const miss = await runTurn("what calls Widget.render", { config: CONFIG, graph: g });
   assert.equal(miss.record.via, "composed", "an honest ask miss is still engine-composed wording");
   assert.equal(miss.record.miss, true);
   // a conversational miss (short, non-code) is answered by the orientation TEMPLATE

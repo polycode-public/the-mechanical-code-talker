@@ -1396,7 +1396,20 @@ export function renderHistory(graph, ind) {
 }
 
 /** Modules that call into the target's module (one hop over `calls`). */
+// Symbol-grain classes whose call graph lives on the fn/method-precise `callsSymbol`
+// edge, not the module-coarse `calls`. When the resolved target IS one of these, callers/
+// callees must read the SYMBOL node's own edges — mapping it to its enclosing module (the
+// old behaviour) both mislabels the answer with `mod:<path>` and scans the wrong edge set,
+// so "Widget.render --callsSymbol--> fnAlpha" was reported as "no recorded callers".
+const CALL_SYMBOL_CLASSES = new Set(["Function", "Method"]);
+
 export function renderCallers(graph, ind) {
+  // symbol grain: a fine symbol's callers are the SUBJECTS of callsSymbol edges into it.
+  if (CALL_SYMBOL_CLASSES.has(ind.class)) {
+    const callers = [...new Set(edgesOfKind(graph, "callsSymbol").filter((e) => e.object === ind.id).map((e) => e.subjectLabel || e.subject))];
+    if (!callers.length) return `${ind.label}: no recorded callers (fine-grained call edges are conservative — absence is not proof). Try tmct_impact for the full reverse closure.`;
+    return `${ind.label} — called by ${callers.length} symbol(s):\n  ${capJoin(callers, CALL_CAP, "\n  ")}`;
+  }
   const modId = moduleIdOf(graph, ind);
   if (!modId) return `cannot map ${ind.label} to a module.`;
   const modLabel = graph.byId.get(modId)?.label || modId;
@@ -1405,8 +1418,15 @@ export function renderCallers(graph, ind) {
   return `${modLabel} — called by ${callers.length} module(s):\n  ${capJoin(callers, CALL_CAP, "\n  ")}`;
 }
 
-/** Modules the target's module calls into (one hop over `calls`). */
+/** Callees of the target: the fn/method-precise callsSymbol edges when it is a fine symbol,
+ *  else the module-coarse `calls` one hop from its module. */
 export function renderCallees(graph, ind) {
+  // symbol grain: a fine symbol's callees are the OBJECTS of its callsSymbol edges.
+  if (CALL_SYMBOL_CLASSES.has(ind.class)) {
+    const callees = [...new Set(edgesOfKind(graph, "callsSymbol").filter((e) => e.subject === ind.id).map((e) => e.objectLabel || e.object))];
+    if (!callees.length) return `${ind.label}: no recorded callees (calls only stdlib/external, or fine-grained call edges are not in the extracted graph).`;
+    return `${ind.label} — calls into ${callees.length} symbol(s):\n  ${capJoin(callees, CALL_CAP, "\n  ")}`;
+  }
   const modId = moduleIdOf(graph, ind);
   if (!modId) return `cannot map ${ind.label} to a module.`;
   const modLabel = graph.byId.get(modId)?.label || modId;
@@ -1953,20 +1973,23 @@ export function renderCochanges(graph, ind) {
 
 const EXPORTS_CAP = 40;
 
-/** A module's public export surface: each __all__ name → the module that actually
- *  defines it (so re-export hubs like __init__ are explicit). */
+/** A module's public export surface: each exported name → the module that actually
+ *  defines it (so re-export hubs like __init__ / an index barrel are explicit). Reads the
+ *  `reexports` edge (mgx:reExports), which the extractor emits for ANY public-API construct
+ *  — Python `__all__` AND JS/TS `export` / `export { … } from …` — so the wording stays
+ *  language-neutral rather than implying a Python-only `__all__`. */
 export function renderExports(graph, ind) {
   const modId = moduleIdOf(graph, ind);
   if (!modId) return `cannot map ${ind.label} to a module.`;
   const modLabel = graph.byId.get(modId)?.label || modId;
   const edges = edgesOfKind(graph, "reexports").filter((e) => e.subject === modId);
-  if (!edges.length) return `${modLabel}: no public exports recorded (no literal __all__, or none resolved).`;
+  if (!edges.length) return `${modLabel}: no public exports recorded (no export list / __all__ found, or none resolved).`;
   const list = edges.slice(0, EXPORTS_CAP).map((e) => {
     const origin = graph.byId.get(e.object);
     const where = origin ? siteOf(origin) : null;
     const from = where ? ` ← ${where.path}` : "";
     return `${e.objectLabel || e.object}${from}`;
   });
-  return `${modLabel} — public API (${edges.length} export(s) via __all__):\n  ${list.join("\n  ")}` +
+  return `${modLabel} — public API (${edges.length} export(s)):\n  ${list.join("\n  ")}` +
     (edges.length > EXPORTS_CAP ? `\n  …+${edges.length - EXPORTS_CAP} more` : "");
 }

@@ -1471,18 +1471,18 @@ export function traverse(graph, parsed, { contextId = null, prev = null } = {}) 
 
   // reverse: "which <entityType> R <objMatch>". GRAIN-AWARE (Cycle 5, lever 3): a kind
   // that carries a symbol-grain sibling reads off the SIBLING when a fine SUBJECT grain
-  // was asked for ("which functions call X" → callsSymbol). Additionally, for `touches`
-  // specifically, when the RESOLVED OBJECT is itself a fine symbol the answer MUST read off
-  // touchesSymbol: touches is Commit→Module (module-coarse) and can NEVER point at a
-  // symbol, so "how many commits touched Widget.render" used to scan the module-grain
-  // edges and return a false 0 — the count belongs at symbol grain. This object-driven
-  // switch is scoped to touches on purpose: calls/callsSymbol already resolve a fine
-  // object through the fine-entityType branch, and a null-entityType "what calls <fn>"
-  // deliberately keeps its module-coarse `calls` receipt (the honest-empty showcase pins
-  // it), so widening the switch to calls would silently change that answer.
+  // was asked for ("which functions call X" → callsSymbol). It ALSO reads off the sibling
+  // when the RESOLVED OBJECT is itself a fine symbol, for EVERY kind with a sibling — not
+  // only touches: the module-coarse edge (calls Module→Module, touches Commit→Module) can
+  // NEVER point at a function/method, so a bare "what calls fnAlpha" scanning the coarse
+  // `calls` edges returned a FALSE empty ("No modules found …") while the graph records a
+  // real symbol-level caller (Widget.render --callsSymbol--> fnAlpha). The honest answer
+  // reads off callsSymbol at symbol grain; a truly-uncalled symbol still renders the
+  // honest empty, now with the accurate callsSymbol receipt. (Previously scoped to touches
+  // only, which left this exact callsSymbol caller invisible — a genuine correctness bug.)
   const symbolKind = SYMBOL_GRAIN_SIBLING[kind];
-  const objIsTouchedSymbol = kind === "touches" && !!(objMatch.class && FINE_ENTITY_TYPES.has(objMatch.class));
-  if (symbolKind && (FINE_ENTITY_TYPES.has(entityType) || objIsTouchedSymbol)) {
+  const objIsFineSymbol = !!(objMatch.class && FINE_ENTITY_TYPES.has(objMatch.class));
+  if (symbolKind && (FINE_ENTITY_TYPES.has(entityType) || objIsFineSymbol)) {
     const edges = edgesOfKind(graph, symbolKind).filter((e) => e.object === objMatch.id);
     const subjects = uniqueById(edges.map((e) => graph.byId.get(e.subject)).filter(Boolean));
     const matches = (!entityType || entityType === "Change") ? subjects : subjects.filter((i) => i.class === entityType);

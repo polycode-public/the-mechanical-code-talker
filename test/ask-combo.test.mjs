@@ -94,13 +94,16 @@ test("count+temp grain: 'how many commits touched <module>' stays at MODULE grai
   assert.match(runAsk("how many commits touched fnAlpha").content, /^0 commits\.$/);
 });
 
-test("grain REGRESSION: null-entityType 'what calls <fn>' keeps its module-coarse `calls` receipt", () => {
-  // the object-driven grain switch is scoped to touches — a bare "what calls fnAlpha"
-  // must still read off the `calls` receipt the byte-exact showcase pins (Widget.render
-  // calls fnAlpha only at callsSymbol grain, which this shape deliberately does not use).
+test("grain FIX: null-entityType 'what calls <fn>' reads the callsSymbol grain (Widget.render → fnAlpha)", () => {
+  // CORRECTNESS FIX (cycle W2P): a bare "what calls fnAlpha" now reads the fn/method-precise
+  // callsSymbol edge when its RESOLVED OBJECT is a fine symbol — not only when a fine SUBJECT
+  // grain was named. Widget.render --callsSymbol--> fnAlpha is a real caller the old module-
+  // coarse `calls` scan silently ignored (BEFORE: traversal "calls edges where object =
+  // fnAlpha", miss:true). The honest answer names it.
   const r = runAsk("i was wondering what calls fnAlpha");
-  assert.equal(r.tmct_ask.traversal, "calls edges where object = fnAlpha");
-  assert.equal(r.tmct_ask.miss, true);
+  assert.equal(r.tmct_ask.traversal, "callsSymbol edges where object = fnAlpha");
+  assert.equal(r.tmct_ask.miss, false);
+  assert.match(r.content, /Widget\.render/);
 });
 
 // ============================================================================
