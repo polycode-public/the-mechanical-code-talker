@@ -38,6 +38,11 @@ Usage:
                                stdin/stdout is not a terminal)
   tmct memory [--repo <abs>]   what tmct remembers: facts, utterances, sessions,
        [--verbose]             folded blocks (the /memory chat command, from the shell)
+  tmct init [--force]          initialize the current directory for tmct: .tmct/,
+                               tmct.toml, tier-1 corpus seed, provenance record
+  tmct syllogise [--repo <abs>] speculative inference (offline maintenance job): forward-
+       [--depth <n>] [--budget <n>]  chain the memory's rdfs:subClassOf closure, materialising
+                               bounded, low-trust, retractable entailed facts (never on the chat path)
   tmct cli <tool> '{…}'        invoke a graph tool directly (carry-over, de-emphasized)
   tmct cli digest '{…}'        architecture map + per-module context bundles
   tmct --help                  show this help
@@ -283,6 +288,40 @@ async function main() {
     const { inspectMemory } = await import("../src/memory/inspect.mjs");
     const repo = repoPath || gitToplevel(process.cwd()) || process.cwd();
     process.stdout.write(await inspectMemory(repo, { verbose }) + "\n");
+    return;
+  }
+
+  if (mode === "init") {
+    // `tmct init` — the Repository-Interface onboarding surface: scaffold .tmct/,
+    // write tmct.toml, seed the tier-1 corpus (offline, opt-out via TMCT_NO_SEED),
+    // and record provenance. Idempotent; --force rewrites config + re-records.
+    const rest = process.argv.slice(3);
+    const { initRepo } = await import("../src/init.mjs");
+    const res = await initRepo(process.cwd(), { force: rest.includes("--force") });
+    process.stdout.write(res.message + "\n");
+    return;
+  }
+
+  if (mode === "syllogise") {
+    // `tmct syllogise` — the explicit speculative-inference batch (never on the chat
+    // hot path): forward-chain the memory's rdfs:subClassOf closure into bounded,
+    // low-trust, retractable entailed facts. Same repo resolution as `memory`.
+    const rest = process.argv.slice(3);
+    const i = rest.indexOf("--repo");
+    const repoPath = i !== -1 ? rest[i + 1] : undefined;
+    const numFlag = (name, dflt) => {
+      const j = rest.indexOf(name);
+      const v = j !== -1 ? Number(rest[j + 1]) : NaN;
+      return Number.isFinite(v) ? v : dflt;
+    };
+    const { gitToplevel } = await import("../src/chat.mjs");
+    const { syllogise } = await import("../src/syllogise.mjs");
+    const repo = repoPath || gitToplevel(process.cwd()) || process.cwd();
+    const res = await syllogise(repo, { depth: numFlag("--depth", 32), budget: numFlag("--budget", 50) });
+    process.stdout.write(
+      `tmct syllogise — derived ${res.count} entailed fact(s) (subClassOf closure, depth ${res.depth}, budget ${res.budget})`
+      + (res.truncated ? " — budget reached, more available" : "") + "\n",
+    );
     return;
   }
 
