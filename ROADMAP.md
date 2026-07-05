@@ -275,6 +275,37 @@ top facts ranked by provenance breadth (corpus+chat-agreed facts first), recent 
 and the block-index summary (blocks, tokens, top PageRank blocks). Same renderer serves
 `/stats`-style terse and `why`-style verbose.
 
+## Phase 5 — The cycle-4+ tuning arc (near-term: make the floor reliable)
+
+> Detailed plan: **PLAN_CYCLE_4.md**.
+
+The immediate work: drive the graded benchmark up the CEFR ladder, one lever per cycle, per
+`SKILL_TUNING_CYCLE.md`. Cycle 3 (post-wiring-wave, CHATBENCH_003) gave the first full-spectrum
+reading — A1 1.72 / A2 1.70 / **B1 0.77 (the cliff)** / B2 0.97 / C1 1.07 / C2 0.69 — and two
+META-fixes gate everything:
+
+- **Meta-1 — fix the harness artifact BEFORE trusting groundedness.** The judge systematically
+  scores TRUTHFUL product output (/describe attributes, recall frames, session ids) as
+  fabrication because `FIXTURE_CONTEXT` omits the detail the product legitimately emits.
+  Measurement integrity: lands in its own cycle, re-measured, before any product lever — else
+  every groundedness delta is confounded. A harness correction, logged as such (like cycle-2's
+  H1a/H1b), not a product change.
+- **Meta-2 — the ladder rule: get B1 reliable before judging C-grades.** Don't pay to judge a
+  ceiling while the floor leaks. A/B grades carry the judged spend; C1/C2 stay tier-1-only
+  ceiling markers, judged only occasionally to confirm they're still ceilings (the existing
+  `--ladder`/`--grade` flags).
+
+Then the product levers, one per cycle, in ranked order: **(1) B1 negation operator** — the
+deepest gap, the engine tokenizes "not"/"don't" as an entity ("no module matching 'not' found");
+add set-complement to traversal; predicted B1 0.77→~1.05, ~10 hard fails cleared. **(2)
+reversible-passive** ("is imported by" reverses edge direction). **(3) under-covered pool
+growth** (B1 pronoun/temporal, C1 temporal — instrument fix, parallelizable). **(4)
+assert-recall read-back**, **(5) quantifier+temporal composition**, **(6) the help-text honesty
+leak** (hardcoded examples naming non-fixture entities — a real product fabrication, distinct
+from meta-1's harness artifact), **C2 ceiling LAST**. Operator decision 2026-07-05: **do all of
+them**. Exit criterion in the plan (roughly: B1 grade mean ≥ ~1.5 with all cells dual-draw
+agreeing unlocks C-grade judging).
+
 ## Provenance & trust — the unified source-link primitive (cross-cutting)
 
 *(Operator-specified 2026-07-05, from the observation that Phase-6 canonicalise-and-link,
@@ -303,7 +334,7 @@ fact enters memory:
   trusts × rule confidence) — a conclusion is only as trustworthy as its weakest premise, and
   that number is computed, not asserted.
 
-## Phase 5 — Formulaic competence: the template-acquisition learning loop
+## Phase 6 — Formulaic competence: the template-acquisition learning loop
 
 > Detailed plan: **`PLAN_FORMULAIC_COMPETENCE.md`**.
 
@@ -332,7 +363,7 @@ answer EXISTS as a stable phrasing in technical prose is not a ceiling — it is
   register); then template acquisition generalizes — mining candidate templates from corpus
   blocks (tier-2), scored by slot-fillability, promoted into `data/templates/` with provenance.
 
-## Phase 6 — Response finishing: the grammar pass (tone of voice dropped for now)
+## Phase 7 — Response finishing: the grammar pass (tone of voice dropped for now)
 
 > Detailed plan: **`PLAN_RESPONSE_FINISHING.md`**.
 
@@ -363,7 +394,7 @@ ever emerge.)*
 - **Verification**: unit invariance checker (protected-span multiset identical pre/post) +
   golden files per rule + the graded bench measuring each grammar rule as a lever.
 
-## Phase 7 — The Repository Interface (seonix inverts to a tmct user)
+## Phase 8 — The Repository Interface (seonix inverts to a tmct user)
 
 > Detailed plan: **`PLAN_REPOSITORY_INTERFACE.md`**.
 
@@ -427,7 +458,7 @@ a passive payload loader into the product's primary integration surface.)*
   (tmct.toml — the seonix.toml pattern), creates `.tmct/`, and records provenance — so a host
   package (seonix) or a bare user gets a working install with one command.
 
-## Phase 8 — Speculative inference: a step toward the Syllogist
+## Phase 9 — Speculative inference: a step toward the Syllogist
 
 *(Operator-specified 2026-07-05. Tier-5 entailment answers a MISS on demand; this is the step
 before it — PROACTIVELY extending memory with inferences that will be useful later, forward and

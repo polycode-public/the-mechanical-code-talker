@@ -1,6 +1,6 @@
 # PLAN_FORMULAIC_COMPETENCE.md — templates first, productive composition later
 
-The Phase 5 plan (operator, 2026-07-04, refined 2026-07-05). The graded benchmark (Phase 3) grades
+The Phase 6 plan (operator, 2026-07-04, refined 2026-07-05). The graded benchmark (Phase 3) grades
 the conversation on a human CEFR ladder; the wiring wave (Phase 4) gave every turn a `via`
 provenance field and made the template renderer load-bearing. This plan reads those two together
 and turns the operator's inversion — *a consistently-failed ceiling cell whose answer already exists

@@ -1,6 +1,6 @@
 # PLAN_REPOSITORY_INTERFACE.md — seonix inverts into a tmct user
 
-The Phase 7 plan (operator-specified 2026-07-05). tmct v0.1.0 was a whole-package lift OUT of
+The Phase 8 plan (operator-specified 2026-07-05). tmct v0.1.0 was a whole-package lift OUT of
 `@polycode-projects/seonix`; this phase inverts the relationship. seonix reorients as a **user** that
 imports the tmct library and exposes its native graph to tmct as a typed service — the mirror image of
 `PLAN_CHAT_EXTRACTION.md`, which pulled chat the other way. There, seonix was the host and chat the

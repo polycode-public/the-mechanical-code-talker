@@ -1,6 +1,6 @@
-# PLAN_RESPONSE_FINISHING.md — Phase 6: the grammar pass over a segmented answer
+# PLAN_RESPONSE_FINISHING.md — Phase 7: the grammar pass over a segmented answer
 
-A Phase-6 execution plan (operator, decisions settled 2026-07-05). Phase 6 is FULLY DECIDED in
+A Phase-7 execution plan (operator, decisions settled 2026-07-05). Phase 7 is FULLY DECIDED in
 ROADMAP.md; this doc elaborates HOW the finishing layer is built, not WHETHER — it reopens no
 decision. The governing principle: **fact invariance BY CONSTRUCTION**. Finishing operates over a
 SEGMENTED answer, never a raw string, so a grammar rule *cannot* touch an entity, a path, a number,

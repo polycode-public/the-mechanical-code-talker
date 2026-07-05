@@ -1,6 +1,6 @@
 # PLAN_SPECULATIVE_INFERENCE.md — thinking ahead about the right things
 
-The Phase 8 plan (operator-specified 2026-07-05). Phase LATER's tier-5 — **the Syllogist** — answers
+The Phase 9 plan (operator-specified 2026-07-05). Phase LATER's tier-5 — **the Syllogist** — answers
 a query-time MISS by deductive inference on demand: a well-formed question misses everywhere, so run
 the inference layer over the OWL-encoded facts + axioms and, if the answer is *entailed*, materialize
 it with a proof-chain. Phase 8 is the step BEFORE that: instead of waiting for the miss, PROACTIVELY
