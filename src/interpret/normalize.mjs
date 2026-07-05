@@ -90,6 +90,48 @@ export function applyNegationFrames(text) {
   return text;
 }
 
+// ---- phrasing frames (SKILL_CHAT_PLAYTEST drill-down loop) — route the natural
+// ways a developer asks a MEMBERS-of-class or a WHERE-DEFINED question onto the
+// canonical shapes the grammar already answers, so a phrasing miss becomes a real
+// answer (or an honest empty with a receipt) instead of the grammar wall. Same
+// closed-pattern, first-match-wins discipline as the negation/commit frames: each
+// frame REWRITES the whole line to a canonical query BOTH parse strategies then
+// handle for free. Run AFTER applyNegationFrames so a sha "what's in <sha>" is
+// already the commit-subject question before the members frame could see it. ----
+export const PHRASING_FRAMES = Object.freeze([
+  // MEMBERS-of-class → "what does X contain".
+  //   "what functions are in Task", "what methods are inside X", "what attributes are in X"
+  { re: /^what\s+(?:functions?|methods?|members?|attributes?|fields?|properties)\s+(?:are|is)\s+(?:in|inside|within)\s+(?:the\s+)?(.+?)\??$/i, to: (m) => `what does ${m[1]} contain` },
+  //   "what functions does Task have", "what methods does X have"
+  { re: /^what\s+(?:functions?|methods?|members?|attributes?|fields?|properties)\s+(?:does|do)\s+(.+?)\s+have\??$/i, to: (m) => `what does ${m[1]} contain` },
+  //   "what are the members of X", "what are the methods in X"
+  { re: /^what\s+are\s+(?:the\s+)?(?:functions?|methods?|members?|attributes?|fields?|properties)\s+(?:of|in|inside|within)\s+(?:the\s+)?(.+?)\??$/i, to: (m) => `what does ${m[1]} contain` },
+  //   "members of X", "methods of X", "contents of X"
+  { re: /^(?:the\s+)?(?:members?|methods?|attributes?|contents)\s+of\s+(?:the\s+)?(.+?)\??$/i, to: (m) => `what does ${m[1]} contain` },
+  //   "what's in X" / "what is in X" (contraction already expanded; sha handled above)
+  { re: /^what\s+is\s+(?:in|inside)\s+(?:the\s+)?(.+?)\??$/i, to: (m) => `what does ${m[1]} contain` },
+
+  // WHERE-DEFINED → "where is X defined". PAST TENSE ONLY ("what defined X", "what
+  // declared X"): the PRESENT "what defines X" already parses as a reverse-defines
+  // query (the module defining symbol X — test/ask.test.mjs pins that), so rewriting
+  // it would change that receipt. The past-tense form is the one that hit the wall.
+  { re: /^what\s+(?:defined|declared)\s+(?:the\s+)?(?:function\s+|method\s+|class\s+|module\s+|variable\s+|constant\s+)?(.+?)\??$/i, to: (m) => `where is ${m[1]} defined` },
+  //   "where's X defined" (the "where's" contraction is not in the contraction table)
+  { re: /^where'?s\s+(?:the\s+)?(.+?)\s+(defined|declared|located|implemented)\??$/i, to: (m) => `where is ${m[1]} ${m[2]}` },
+]);
+
+/** Apply the phrasing frames (members-of-class + where-defined) — first match wins
+ *  and rewriting stops; unmatched text passes through unchanged. Kept SEPARATE from
+ *  applyNegationFrames so the ordering (negation/commit first, then phrasing) is
+ *  explicit at the call site (normalizeInput). */
+export function applyPhrasingFrames(text) {
+  for (const frame of PHRASING_FRAMES) {
+    const m = text.match(frame.re);
+    if (m) return frame.to(m).replace(/\s+/g, " ").trim();
+  }
+  return text;
+}
+
 // ---- §B1 negation — the SET-COMPLEMENT frame (Cycle 5, PLAN_CYCLE_4.md). Recognizes
 // a BARE set-negation query — "which X do not <verb> Y", "X that don't <verb> Y",
 // "modules not importing Y", "which X are not <qualifier>" — and returns a descriptor

@@ -51,7 +51,7 @@ import {
 // grammar, split out of this file: normalization pre-pass, the two parsing
 // strategies, and the bounded-fuzzy service. Re-exported below where existing
 // callers/tests import them from here.
-import { normalizeQuery, applyNegationFrames, matchNegationSet, STOPWORDS, splitWords, wordsOf } from "./interpret/normalize.mjs";
+import { normalizeQuery, applyNegationFrames, applyPhrasingFrames, matchNegationSet, STOPWORDS, splitWords, wordsOf } from "./interpret/normalize.mjs";
 import { editDistance, fuzzyBound } from "./interpret/fuzzy.mjs";
 import { parseAnchored } from "./interpret/strategies/grammar.mjs";
 import { parseKeywordSpot, findPhrase } from "./interpret/strategies/keywords.mjs";
@@ -168,7 +168,7 @@ export function parseQuery(query, { nlp = undefined } = {}) {
   const adapter = nlp === undefined ? defaultNlp() : nlp;
   const raw = String(query || "").trim().replace(/\s+/g, " ");
   if (!raw) return null;
-  const text = applyNegationFrames(normalizeQuery(raw));
+  const text = applyPhrasingFrames(applyNegationFrames(normalizeQuery(raw)));
   if (!text) return null;
   // COMPOSITIONAL PARSE PATH (PLAN §5.16 P3) — the new PRIMARY layer: a recursive
   // descent over CLAUSES for the compositional shapes (nested/relative, boolean,

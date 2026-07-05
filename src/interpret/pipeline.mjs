@@ -23,7 +23,7 @@
 // normalization changed the input (`normalizationChanged`), so a repaired
 // spelling/contraction is on the record, never silent.
 
-import { normalizeQuery, applyNegationFrames } from "./normalize.mjs";
+import { normalizeQuery, applyNegationFrames, applyPhrasingFrames } from "./normalize.mjs";
 import { grammarStrategy } from "./strategies/grammar.mjs";
 import { keywordSpotStrategy } from "./strategies/keywords.mjs";
 import { noiseStripStrategy } from "./strategies/noise-strip.mjs";
@@ -47,7 +47,7 @@ export const STRATEGIES = [grammarStrategy, keywordSpotStrategy, noiseStripStrat
  *  before any strategy runs. Returns {raw, text, changed}. */
 export function normalizeInput(input) {
   const raw = String(input || "").trim().replace(/\s+/g, " ");
-  const text = raw ? applyNegationFrames(normalizeQuery(raw)) : "";
+  const text = raw ? applyPhrasingFrames(applyNegationFrames(normalizeQuery(raw))) : "";
   return { raw, text, changed: text !== raw };
 }
 
