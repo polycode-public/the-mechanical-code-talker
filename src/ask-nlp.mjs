@@ -9,13 +9,13 @@
 // the bounded edit-distance tier still work, browser and Node alike). Keeping the
 // ~1MB CJS model out of the page is the point of the split.
 //
-// wink-nlp and wink-eng-lite-web-model are CJS — loaded via createRequire, the
-// same Node-module-resolution approach viz.mjs uses to locate cytoscape (resolve
-// through the module system, never a guessed path). The require happens lazily on
-// first use and failure is cached as null: a checkout without the optional deps
-// installed answers exactly like the browser bundle, it never throws.
+// wink-nlp and wink-eng-lite-web-model are loaded through the shared leaf loader
+// src/wink-model.mjs (Node `createRequire` fallback + a browser registration seam),
+// so this file no longer carries its own Node-only load block. The load happens
+// lazily on first use and failure is cached as null: a checkout without the optional
+// deps installed answers exactly like the browser bundle, it never throws.
 
-import { createRequire } from "node:module";
+import { winkInstance } from "./wink-model.mjs";
 
 let cached; // undefined = not tried yet; null = unavailable (tried once, honestly off)
 
@@ -25,10 +25,8 @@ let cached; // undefined = not tried yet; null = unavailable (tried once, honest
 export function nlpAdapter() {
   if (cached !== undefined) return cached;
   try {
-    const require = createRequire(import.meta.url);
-    const winkNLP = require("wink-nlp");
-    const model = require("wink-eng-lite-web-model");
-    const nlp = winkNLP(model);
+    const nlp = winkInstance();
+    if (!nlp) { cached = null; return cached; }
     const its = nlp.its;
     cached = {
       /** Lowercase lemma of a single token ("imported" -> "import"); the word

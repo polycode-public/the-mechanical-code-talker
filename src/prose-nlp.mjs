@@ -1,23 +1,23 @@
 // prose-nlp.mjs — the OPTIONAL wink-nlp lemma loader behind prose.mjs's LEMMA layer.
 //
-// Deliberately a SEPARATE loader from ask-nlp.mjs (same createRequire pattern, same
-// deps) rather than an import of it: ask-nlp.mjs belongs to the ask-engine surface
-// and is under active concurrent work — the prose pre-pass must not couple its
-// index-build path to that file's export shape. The ~20 duplicated lines are the
-// decoupling fee; the wink model itself is loaded lazily and at most once per
-// process either way.
+// Kept SEPARATE from ask-nlp.mjs (its own `proseLemma` export shape) rather than an
+// import of that ask-engine surface — but both now share the neutral leaf loader
+// src/wink-model.mjs, so the wink model is resolved in ONE place. The former ~20
+// duplicated createRequire lines are gone; the coupling this file avoids is to
+// ask-nlp.mjs's export shape, not to a leaf model loader.
 //
-// BOUNDARY (same as ask-nlp.mjs, hard): Node-only, never inlined into the viewer
-// bundle. prose.mjs is itself never inlined by viz.mjs's askSource(), so nothing
-// browser-side can reach this module. wink-nlp + wink-eng-lite-web-model are CJS —
-// loaded via createRequire, lazily, with failure cached as null: a checkout without
-// the optional deps simply builds no lemma layer (honestly absent), it never throws.
+// BOUNDARY (same as ask-nlp.mjs, hard): Node-only path, never inlined into the
+// viewer bundle. prose.mjs is itself never inlined by viz.mjs's askSource(), so
+// nothing browser-side can reach this module. The wink pair is loaded lazily (Node
+// createRequire fallback, or the browser registration seam), failure cached as null:
+// a checkout without the optional deps simply builds no lemma layer (honestly
+// absent), it never throws.
 //
 // Determinism: wink's lemmatiser is a fixed trained model with no sampling — the
 // same token always yields the same lemma across runs and processes, which is what
 // lets the lemma layer meet the "byte-identical proseIndex across builds" contract.
 
-import { createRequire } from "node:module";
+import { winkInstance } from "./wink-model.mjs";
 
 let cached; // undefined = not tried yet; null = unavailable (tried once, honestly off)
 
@@ -27,10 +27,8 @@ let cached; // undefined = not tried yet; null = unavailable (tried once, honest
 export function proseLemma() {
   if (cached !== undefined) return cached;
   try {
-    const require = createRequire(import.meta.url);
-    const winkNLP = require("wink-nlp");
-    const model = require("wink-eng-lite-web-model");
-    const nlp = winkNLP(model);
+    const nlp = winkInstance();
+    if (!nlp) { cached = null; return cached; }
     const its = nlp.its;
     const memo = new Map();
     cached = (word) => {
