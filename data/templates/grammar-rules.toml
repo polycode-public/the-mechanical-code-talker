@@ -19,8 +19,14 @@
 # LIVE as of cycle 005: ARTICLE-SELECTION (cycle 4), plus the two SAFE defect
 # fixes TERMINAL-PUNCTUATION and SUBJECT-VERB-AGREEMENT — each byte-stable when
 # neutral, no product-voice change. CAPITALISATION and LIST are fully implemented
-# and golden-tested IN ISOLATION but remain PARKED (enabled=false) pending a
-# judged A/B in cycle 006 — they rewrite established product bytes (tmct's
+# and golden-tested IN ISOLATION but remain PARKED (enabled=false). The cycle-006
+# judged A/B was assessed and DROPPED: `capitalise` rewrites the sentence-initial
+# char, which regresses ~10 frozen v1 cases.jsonl whose case-sensitive answerMatch
+# pins lowercase openers ("can't count", "no symbol matching", "assuming you meant",
+# …) — the same sacred-case collision that reverted the voice-nit; and `list` has
+# zero 3-item "X and Y and Z" targets in the judged set (a no-op). Deferred to a
+# post-arc case-set refresh where the openers can be re-pinned deliberately. They
+# rewrite established product bytes (tmct's
 # lowercase openers and repeated "and" joins are an intentional VOICE, not a
 # grammar defect), so activating them is a per-rule tuning-cycle decision with
 # its own bench + showcase reconcile, not a blanket flip. `enabled=false` keeps

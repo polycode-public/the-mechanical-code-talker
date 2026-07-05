@@ -380,6 +380,45 @@ test("runTurn: a dispatched turn updates `last`; a conversational turn preserves
   assert.equal(count.last.answer, "3 classes.");
 });
 
+test("runTurn: discourse anaphora — 'which of those are tested' filters the previous answer set (CHATBENCH_006 L2)", async () => {
+  const g = await graph();
+  const list = await runTurn("which modules import a.mjs", { config: CONFIG, graph: g });
+  assert.equal(list.record.miss, false);
+  // the follow-up refers to turn 1's ids (threaded as `prev` via last.detail.matches)
+  const those = await runTurn("which of those are tested", { config: CONFIG, graph: g, last: list.last });
+  assert.equal(those.record.miss, false, "the anaphora resolves, not a 'needs a previous answer' miss");
+  assert.doesNotMatch(those.answer, /needs a previous answer/);
+  // with NO prior answer it stays an honest miss (never a guess)
+  const bare = await runTurn("which of those are tested", { config: CONFIG, graph: g, last: null });
+  assert.equal(bare.record.miss, true);
+});
+
+test("runTurn: discourse+count — 'how many of those' / 'count them' count the previous set, not a bad-kind error (CHATBENCH_006 L1)", async () => {
+  const g = await graph();
+  const list = await runTurn("which modules import a.mjs", { config: CONFIG, graph: g });
+  const nMatch = list.answer.match(/app\/lib/g) || [];
+  const howMany = await runTurn("how many of those", { config: CONFIG, graph: g, last: list.last });
+  assert.doesNotMatch(howMany.answer, /I can't count/, "the anaphoric count no longer falls into the bad-kind branch");
+  assert.match(howMany.answer, /^\d+ /, "answers with a leading count");
+  const countThem = await runTurn("count them", { config: CONFIG, graph: g, last: list.last });
+  assert.match(countThem.answer, /^\d+ /);
+  // a plain kind count is untouched by the anaphora decline
+  const plain = await runTurn("how many classes are there", { config: CONFIG, graph: g });
+  assert.equal(plain.answer, "3 classes.");
+});
+
+test("runTurn: 'what about X' re-asks the prior question shape with X swapped in (CHATBENCH_006 L2)", async () => {
+  const g = await graph();
+  const first = await runTurn("what does app/lib/e.mjs import", { config: CONFIG, graph: g });
+  const direct = await runTurn("what does app/lib/c.mjs import", { config: CONFIG, graph: g });
+  const about = await runTurn("what about app/lib/c.mjs", { config: CONFIG, graph: g, last: first.last });
+  assert.equal(about.answer, direct.answer, "the continuation answers as if the prior shape were re-asked for the new subject");
+  assert.equal(about.record.query, "what about app/lib/c.mjs", "the record keeps the user's actual words");
+  // no prior turn → nothing to continue, an ordinary (miss) turn
+  const orphan = await runTurn("what about app/lib/c.mjs", { config: CONFIG, graph: g, last: null });
+  assert.notEqual(orphan.answer, direct.answer);
+});
+
 test("runChat: a scripted conversational session — greeting, hit, why re-render, then bye ends it", async () => {
   const dir = await repoWithFixtureGraph();
   try {

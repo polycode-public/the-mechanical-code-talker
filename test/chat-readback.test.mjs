@@ -113,6 +113,50 @@ test("multi-turn: 'what did i tell you about X' recalls every remembered fact me
   }
 });
 
+// ---- cycle-006 lever 3: whole-store recall + asserted-vocabulary count (C1 assert) ----
+
+test("whole-recall: 'what facts do you know' / 'what did i tell you last time' list every remembered fact, cited", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-wr-"));
+  try {
+    await runTurn("every class is a component", { config: CONFIG, graph: GRAPH, memoryDir: dir, sessionId: "wr" });
+    for (const q of ["what facts do you know", "what did i tell you last time", "what do you remember"]) {
+      const r = await runTurn(q, { config: CONFIG, graph: GRAPH, memoryDir: dir });
+      assert.match(r.answer, /class is a kind of component \(source: ace:chat:wr@/, `"${q}" recalls the fact, cited`);
+      assert.equal(r.record.via, "fact");
+      assert.equal(r.record.miss, false);
+    }
+    // with NOTHING remembered the recall stays an honest miss (never a guess)
+    const empty = await mkdtemp(join(tmpdir(), "tmct-wr-empty-"));
+    try {
+      const r = await runTurn("what facts do you know", { config: CONFIG, graph: GRAPH, memoryDir: empty });
+      assert.equal(r.record.miss, true);
+      assert.notEqual(r.record.via, "fact");
+    } finally { await rm(empty, { recursive: true, force: true }); }
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("asserted-vocabulary count: after 'every class is a X', 'how many Xs are there' equals the class count; a plain kind is untouched", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-avc-"));
+  try {
+    await runTurn("every class is a component", { config: CONFIG, graph: GRAPH, memoryDir: dir, sessionId: "avc" });
+    const n = await runTurn("how many components are there", { config: CONFIG, graph: GRAPH, memoryDir: dir });
+    assert.equal(n.answer, "3 components.", "the asserted object noun inherits the class cardinality");
+    assert.equal(n.record.via, "fact");
+    // a real graph kind is answered by the header count, unchanged by the fact path
+    const plain = await runTurn("how many classes are there", { config: CONFIG, graph: GRAPH, memoryDir: dir });
+    assert.equal(plain.answer, "3 classes.");
+    // an un-asserted object noun still honestly declines (names what it CAN count)
+    const unknown = await runTurn("how many widgets are there", { config: CONFIG, graph: GRAPH, memoryDir: dir });
+    assert.match(unknown.answer, /I can't count "widgets"/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("multi-turn: an un-asserted membership still honestly MISSES (byte-identical with and without memory)", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-mt-miss-"));
   try {

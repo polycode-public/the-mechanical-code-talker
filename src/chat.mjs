@@ -138,11 +138,22 @@ function countableKinds(graph) {
   return Object.keys(CLASS_LABELS).filter((c) => present.has(c)).map((c) => CLASS_LABELS[c][1]);
 }
 
+/** A discourse-anaphoric count/list head — "how many [of] those/them/these",
+ *  "count them/those/these". These refer to the previous answer set and are owned
+ *  by the ask engine's anaphora node, never the header-count path. */
+const ANAPHORA_COUNT_RE = /\b(?:how many|how much|count|number of)\s+(?:of\s+)?(?:those|them|these)\b/i;
+
 /** Recognise a count/aggregate question and answer it from the graph header, or
  *  null if it isn't one (→ fall through to tmct_ask). "how many X [are there]",
  *  "count [the] X", "number of X". An unknown kind lists what it CAN count. */
 export function answerCount(graph, query) {
   if (!graph) return null;
+  // ANAPHORIC counts ("how many of those are tested", "count them", "how many of
+  // them") count the PREVIOUS answer's set, not a graph kind — decline so the turn
+  // falls through to the ask engine's anaphora node (which threads `prev`). Without
+  // this the bare "of"/pronoun head is mis-reported as an uncountable kind and the
+  // discourse+count follow-up dies before it can resolve (CHATBENCH_006 lever 1).
+  if (ANAPHORA_COUNT_RE.test(String(query))) return null;
   const m = String(query).match(/\b(?:how many|number of|count(?:\s+the)?)\s+([a-z]+)\b/i);
   if (!m) return null;
   const noun = m[1].toLowerCase();
@@ -153,6 +164,31 @@ export function answerCount(graph, query) {
   }
   const n = countClass(graph, cls);
   return `${n} ${classNoun(cls, n)}.`;
+}
+
+/** ASSERTED-VOCABULARY count (CHATBENCH_006 lever 3): once "every class is a type"
+ *  is remembered, "how many types are there" counts as many types as there are
+ *  classes — the asserted object noun inherits the subject class's cardinality.
+ *  Consulted only when answerCount can't map the noun to a graph class (an unknown
+ *  kind) AND a session's memory is in hand. Returns the count string or null (no
+ *  such fact → the honest "I can't count …" from answerCount stands). */
+async function countFromFacts(graph, memoryDir, query) {
+  if (!graph || !memoryDir) return null;
+  const m = String(query).match(/\b(?:how many|number of|count(?:\s+the)?)\s+([a-z]+)\b/i);
+  if (!m) return null;
+  const asked = m[1].toLowerCase();
+  if (COUNT_NOUNS[asked]) return null; // a real graph kind — answerCount owns it
+  let normFactTerm;
+  try { ({ normFactTerm } = await import("./memory/core.mjs")); } catch { return null; }
+  const objVariants = factTermVariants(normFactTerm, asked);
+  const isa = (await factRows(memoryDir))
+    .filter((f) => ISA_PREDICATES.has(f.predicate) && objVariants.has(f.object));
+  // pick the highest-trust asserted subject that maps to a countable graph class
+  for (const f of isa.sort((a, b) => (b.trust ?? 0) - (a.trust ?? 0))) {
+    const cls = COUNT_NOUNS[String(f.subject).toLowerCase()];
+    if (cls) { const n = countClass(graph, cls); return `${n} ${asked}.`; }
+  }
+  return null;
 }
 
 /** `/stats`: a one-screen overview of the graph — class counts, relationship
@@ -630,6 +666,11 @@ const TOLD_ABOUT_RE = /^what\s+(?:did|have)\s+(?:i|we|you)\s+(?:told|tell|said|s
 /** "what kind of thing is an X" — the subject-side membership phrasing the grammar
  *  doesn't parse: reports X's OWN remembered type (falling back to X's members). */
 const KIND_OF_RE = /^what\s+kind\s+of\s+(?:thing|class|type|category|entity)?\s*(?:is|are)\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
+/** WHOLE-STORE recall (CHATBENCH_006 lever 3): "what did i tell you [last time]",
+ *  "what facts do you know", "what do you remember" — list EVERY remembered fact
+ *  (no subject/object term to filter on), cited, higher-trust first. The multi-turn
+ *  / cross-session assert-recall surfaces that carry no term the grammar can bind. */
+const WHOLE_RECALL_RE = /^(?:what\s+(?:did|have)\s+(?:i|we)\s+(?:told?|tell|said?|say)\s+(?:you|me|us)?(?:\s+(?:last\s+time|before|earlier|previously|already))?|what\s+facts?\s+do\s+you\s+(?:know|have|remember)|what\s+do\s+you\s+(?:know|remember)|what\s+have\s+you\s+(?:learned|learnt|remembered))[?.!\s]*$/i;
 
 /** The singular class-noun of the graph entity a term names ("app/lib/a.mjs" →
  *  "module", "Widget" → "class"), via the ask engine's own resolver + the loaded
@@ -672,6 +713,15 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null) {
     const extra = n > 0 ? `\n…and ${n} more remembered fact${n === 1 ? "" : "s"}.` : "";
     return { text: shown.join("\n") + extra, replace: true };
   };
+
+  // (d) WHOLE-STORE recall (CHATBENCH_006 lever 3) — "what did i tell you last time",
+  // "what facts do you know": no term to bind, so list every remembered fact,
+  // higher-trust first, each cited. Answers the cross-session assert-recall surfaces.
+  if (WHOLE_RECALL_RE.test(q)) {
+    const hits = (isa.length ? isa : rows).slice().sort(byTrust);
+    if (!hits.length) return null;
+    return renderMany(hits);
+  }
 
   // (a) FORWARD membership — "is an X a Y". X's fact-subject candidates are the
   // term itself (a class word) AND, when it resolves in the graph, its class-noun
@@ -806,14 +856,45 @@ async function recallSummary(memoryDir) {
   }
 }
 
+/** "[and/so/…] what about X" — a discourse continuation that re-asks the previous
+ *  turn's question with X swapped in. */
+const WHAT_ABOUT_RE = /^(?:(?:and|so|but|ok|okay|now|then)\s+)*what about\s+(.+?)[?.!\s]*$/i;
+/** A code-ish name token in a prior query (a path/dotted name, or a CamelCase/
+ *  Capitalized symbol) — the subject "what about X" replaces. */
+const NAME_TOKEN_RE = /\b[\w-]+(?:[/.][\w-]+)+\b|\b[A-Z][A-Za-z0-9_]*\b/;
+
+/** DISCOURSE CONTINUATION (CHATBENCH_006 lever 2): "what about X" carries the PRIOR
+ *  turn's question shape across the turn boundary — re-asking it with X in place of
+ *  the previous subject/object. Returns the reconstructed query (parsed like any
+ *  subject question, so X resolves and becomes the new focus), or null when there's
+ *  no prior query or no name token to swap (→ the ordinary honest miss stands). */
+function discourseRewrite(query, last) {
+  const m = String(query).match(WHAT_ABOUT_RE);
+  if (!m || !last?.query) return null;
+  const prevQ = String(last.query);
+  if (!NAME_TOKEN_RE.test(prevQ)) return null;
+  const newSubj = m[1].trim();
+  return prevQ.replace(NAME_TOKEN_RE, () => newSubj);
+}
+
 /** A bare question → tmct_ask. When a focus is set AND the graph is in hand we
  *  call ask() directly to thread the focus as contextId (so a pronoun like "it"
  *  resolves to the focus) — building the SAME delimited string dispatchTool emits;
  *  otherwise the unchanged dispatchTool path (which also yields the no-graph error).
  *  A hit updates the focus to the resolved object. Grammar miss / ToolError → a
  *  normal answer, never a crash. */
-async function runAsk(query, { config, source, graph, focus, templates, memoryDir, env }) {
+async function runAsk(query, { config, source, graph, focus, last, templates, memoryDir, env }) {
   const ts = new Date().toISOString();
+  // DISCOURSE ANAPHORA (CHATBENCH_006 levers 1+2): a follow-up like "which of those
+  // are tested" / "how many of those" / "count them" filters or counts the PREVIOUS
+  // answer's entity set. That set is the ids the last dispatched turn cited — carried
+  // on `last.detail.matches`. Threading it as ask()'s `prev` is what lets the anaphora
+  // node resolve instead of the "needs a previous answer" honest miss.
+  const prev = (last?.detail?.matches || []).map((m) => m?.id).filter(Boolean);
+  // The query the ENGINE parses: a "what about X" continuation is rewritten to the
+  // prior shape with X swapped in; everything else parses verbatim. The record and
+  // transcript keep the user's ACTUAL words (`query`), only the parse target changes.
+  const askQuery = discourseRewrite(query, last) ?? query;
   // W2: the explicit recall forms are answered from memory's folded blocks, never
   // the graph. Gated on memoryDir — a bare runTurn (no session shell) stays pure.
   if (memoryDir && RECALL_ASK_RE.test(String(query).trim())) {
@@ -826,12 +907,16 @@ async function runAsk(query, { config, source, graph, focus, templates, memoryDi
   let envelope = null;
   try {
     let text;
-    if (graph && focus?.id) {
+    if (graph && (focus?.id || prev.length)) {
+      // Direct ask() when EITHER a focus is set (thread it as contextId so "it"
+      // binds) OR the previous turn produced a set to refer back to (thread it as
+      // `prev` for the anaphora node). Builds the SAME delimited envelope dispatchTool
+      // emits, so the parse below is identical either way.
       const { ask } = await import("./ask.mjs");
-      const r = ask(graph, query, { contextId: focus.id });
+      const r = ask(graph, askQuery, { contextId: focus?.id ?? null, prev });
       text = `${r.content}${ASK_ENVELOPE_DELIM}${JSON.stringify(r.tmct_ask, null, 2)}`;
     } else {
-      text = await dispatchTool("tmct_ask", { query }, { config, source });
+      text = await dispatchTool("tmct_ask", { query: askQuery }, { config, source });
     }
     const [content, envJson] = text.split(ASK_ENVELOPE_DELIM);
     answer = content;
@@ -1060,7 +1145,15 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // Aggregate/count questions are answered mechanically off the loaded graph header,
   // BEFORE falling through to the ask engine (focus unchanged — a count names no entity).
   const count = answerCount(graph, line);
-  if (count != null) return withLast(plainTurn(line, count, { via: "count", focus }));
+  if (count != null) {
+    // An "I can't count <noun>" from a bare kind may still be answerable from an
+    // ASSERTED vocabulary fact ("every class is a type" → "how many types" = the
+    // class count). countFromFacts declines on a real graph kind, so ordinary
+    // counts are unaffected; it only speaks for a remembered object noun.
+    const viaFact = memoryDir ? await countFromFacts(graph, memoryDir, line) : null;
+    if (viaFact != null) return withLast(plainTurn(line, viaFact, { via: "fact", focus }));
+    return withLast(plainTurn(line, count, { via: "count", focus }));
+  }
   return withLast(await runAsk(line, ctx));
 }
 
