@@ -220,6 +220,28 @@ export const MODIFIER_TO_KIND = Object.freeze({
   transitively: "transitive", indirectly: "transitive",
 });
 
+// ---- reversible-passive participles (Cycle 6, PLAN_CYCLE_4.md) — past participles ->
+// relation kind, for the agent-marked passive "X is <participle> by Y". Kept SEPARATE
+// from VERB_TO_KIND on purpose: these forms are NOT standalone active verbs in this
+// grammar ("defined" belongs to the multi-word "is defined in" and to the WHERE_MARKERS
+// location routing; bare "inherited" has no active key), so folding them into
+// VERB_TO_KIND would silently re-route "where is X defined" and other queries. This
+// table is consulted ONLY by the keyword strategy's passive path, which has already
+// confirmed a passive auxiliary AND an agent-marking "by" — so an active query is never
+// affected. Most common participles ("imported"/"tested"/"called"/"covered") already
+// reach VERB_TO_KIND via the lemma tier; this table backfills the two families the lemma
+// tier can't (defines/inherits) plus the obvious siblings, so the passive works
+// adapter-free too. ----
+export const PASSIVE_PARTICIPLE_TO_KIND = Object.freeze({
+  imported: "imports", called: "calls", used: "uses",
+  tested: "tests", covered: "tests", verified: "tests", exercised: "tests", checked: "tests",
+  defined: "defines", declared: "defines",
+  inherited: "inherits", extended: "inherits", subclassed: "inherits",
+  contained: "contains",
+  exported: "reexports", "re-exported": "reexports", exposed: "reexports",
+  touched: "touches", changed: "touches", modified: "touches", edited: "touches", updated: "touches",
+});
+
 // ---- §3.5 normalization — contractions/informal spellings that would otherwise
 // block a match, expanded BEFORE parsing (BOTH the anchored-template strategy
 // and the independent keyword-spotting strategy see the same normalized text —

@@ -7,10 +7,19 @@
 
 import {
   VERB_TO_KIND, ENTITY_TO_TYPE, MODIFIER_TO_KIND,
-  WHERE_MARKERS, MENTION_MARKERS,
+  WHERE_MARKERS, MENTION_MARKERS, PLACEHOLDER_NOUNS, PASSIVE_PARTICIPLE_TO_KIND,
 } from "../../ask-vocab.mjs";
 import { STOPWORDS } from "../normalize.mjs";
 import { VOCAB_WORDS, eligibleForCanon, fuzzyVocabWord } from "../fuzzy.mjs";
+
+// Reversible-passive detection (Cycle 6, PLAN_CYCLE_4.md): the passive auxiliaries that,
+// together with an agent-marking "by", flip the active reading, and the wh-words that
+// mark a QUESTIONED agent ("by which classes" / stranded "who is X tested by"). Bare
+// "do/does/did" are deliberately EXCLUDED — "which X do not <verb> Y" is a NEGATION, not
+// a passive, and must be left for the compositional complement frame.
+const PASSIVE_AUX = new Set(["is", "are", "was", "were", "be", "been", "being", "get", "gets", "got"]);
+const WH_WORDS = new Set(["which", "what", "who", "whom", "whose"]);
+const PLACEHOLDER_SET = new Set(PLACEHOLDER_NOUNS.map((w) => w.toLowerCase()));
 
 /** Find the longest phrase from `table`'s keys that appears as a contiguous
  *  run of `words` (case already lowercased by the caller). Longest-match-first
@@ -107,6 +116,17 @@ export function parseKeywordSpot(text, nlp = null) {
     verbHit = findPhrase(fuzzyWords, VERB_TO_KIND);
     if (verbHit) canonWords = fuzzyWords;
   }
+  if (!verbHit && lcWords.includes("by")) {
+    // passive-participle rescue (Cycle 6): a participle whose kind is NOT a standalone
+    // active verb here ("defined" belongs to "is defined in"; bare "inherited" has no
+    // active key) still marks a passive when a passive auxiliary and an agent "by" are
+    // present. Consulted ONLY on this exact gate (aux + by), so the active grammar and
+    // the where-marker routing ("where is X defined") are never disturbed.
+    for (let i = 0; i < lcWords.length; i += 1) {
+      const k = PASSIVE_PARTICIPLE_TO_KIND[lcWords[i]];
+      if (k && lcWords.slice(0, i).some((w) => PASSIVE_AUX.has(w))) { verbHit = { kind: k, start: i, end: i + 1 }; break; }
+    }
+  }
   if (!verbHit) return null;
   // POS consumer (wink adapter, Node-side only): rescue the ONE decomposition this
   // strategy provably mis-parses — a relation word used as a NOUN in a "the
@@ -154,6 +174,42 @@ export function parseKeywordSpot(text, nlp = null) {
   if (kind === "touches" && lcWords.includes("when")) {
     const objText = beforeText || afterText;
     if (objText) return { shape: "when", entityType: null, modifier: "direct", kind: "touches", object: objText };
+  }
+
+  // reversible passive (Cycle 6, PLAN_CYCLE_4.md): "PATIENT is VERBed BY AGENT" — an
+  // agent-marking "by" plus a passive auxiliary flips the active reading, so the AGENT
+  // (after "by") is the edge SUBJECT and the PATIENT the edge OBJECT. Object-first
+  // phrasing is otherwise read subject-first and the edge traversed backwards. Fires
+  // ONLY on a genuine agent "by": a passive auxiliary before the verb AND a standalone
+  // "by" NOT already swallowed into a multi-word verb phrase ("touched by"/"modified
+  // by" are single touches verbs, so their "by" is consumed and never triggers this) —
+  // an active query whose object merely contains a "by" token is untouched (the
+  // regression guard). The single NAMED role term becomes the object; whether the AGENT
+  // is named ("by b.test.mjs" → forward from the agent) or QUESTIONED ("by which
+  // classes" / a stranded "…tested by" → reverse over the patient) picks the direction.
+  const byIdx = lcWords.indexOf("by");
+  const hasPassiveAux = lcWords.slice(0, verbHit.start).some((w) => PASSIVE_AUX.has(w));
+  if (byIdx >= 0 && !consumed.has(byIdx) && hasPassiveAux) {
+    const roleWords = [];
+    for (let i = 0; i < words.length; i += 1) {
+      const w = lcWords[i];
+      if (consumed.has(i) || STOPWORDS.has(w) || w === "by" || PASSIVE_AUX.has(w)
+        || WH_WORDS.has(w) || PLACEHOLDER_SET.has(w)) continue;
+      roleWords.push(words[i]);
+    }
+    const object = roleWords.join(" ").trim();
+    if (object) {
+      // the first meaningful token after "by" (skipping only articles) decides direction:
+      // a wh-word or nothing → the agent is questioned (reverse over the named patient);
+      // a named token → the agent is given (forward from it).
+      let nextAfterBy = null;
+      for (let i = byIdx + 1; i < lcWords.length; i += 1) {
+        if (lcWords[i] === "the" || lcWords[i] === "a" || lcWords[i] === "an") continue;
+        nextAfterBy = lcWords[i]; break;
+      }
+      const agentNamed = nextAfterBy != null && !WH_WORDS.has(nextAfterBy) && !ENTITY_TO_TYPE[nextAfterBy];
+      return { shape: agentNamed ? "forward" : "reverse", entityType, modifier, kind, object };
+    }
   }
 
   if (beforeText && afterText) return { shape: "ask", entityType: null, modifier: "direct", kind, subject: beforeText, object: afterText };

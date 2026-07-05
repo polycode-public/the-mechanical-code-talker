@@ -90,6 +90,40 @@ export function applyNegationFrames(text) {
   return text;
 }
 
+// ---- §B1 negation — the SET-COMPLEMENT frame (Cycle 5, PLAN_CYCLE_4.md). Recognizes
+// a BARE set-negation query — "which X do not <verb> Y", "X that don't <verb> Y",
+// "modules not importing Y", "which X are not <qualifier>" — and returns a descriptor
+// {entWord, predicate} that ask.mjs's compositional grammar turns into a bounded
+// complement (allOfClass(kind) MINUS the positive result set). Deliberately SEPARATE
+// from applyNegationFrames/NEGATION_FRAMES above: that table is a rhetorical
+// double-negative rewriter that REMOVES negation ("there isn't anything calling it" ->
+// "what calls it") and its docblock forbids scope parsing; this detector PRESERVES the
+// negation as a set operation. Returns null when no set-negation marker is present, so
+// every affirmative query passes through untouched (the active-voice regression guard).
+// The entWord is validated against the entity vocabulary by the caller, which also
+// enforces the bounded-universe refusal for the non-enumerable "changes" pseudo-type. ----
+const NEGATION_SET_RE = new RegExp(
+  "^(?:which|what|who|list|show(?:\\s+me)?|find|give\\s+me)?\\s*(?:the\\s+|all\\s+)?" // optional frame + determiner
+  + "([a-z][a-z-]*)\\s+"                    // (1) the entity kind noun
+  + "(?:(?:that|which|who)\\s+)?"           // optional relative pronoun
+  + "(?:(?:do|does|did|are|is|was|were|have|has)\\s+)?" // optional auxiliary
+  + "not\\s+(.+)$",                         // the negation marker + (2) the predicate
+  "i",
+);
+
+/** Recognize a bare set-negation query and return {entWord, predicate}, or null when
+ *  no set-negation marker ("not") follows an entity noun. Pure text analysis — the
+ *  caller (ask.mjs's parseNegation) validates the entity kind, refuses the
+ *  non-enumerable "changes" universe, and builds the complement AST. */
+export function matchNegationSet(text) {
+  const m = String(text || "").match(NEGATION_SET_RE);
+  if (!m) return null;
+  const entWord = m[1].toLowerCase();
+  const predicate = m[2].trim();
+  if (!predicate) return null;
+  return { entWord, predicate };
+}
+
 // ---- shared text-prep helpers (used by the strategies, the compositional
 // grammar, and ask.mjs's relaxation cascade alike) ----
 

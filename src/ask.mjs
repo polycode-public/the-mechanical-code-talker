@@ -51,7 +51,7 @@ import {
 // grammar, split out of this file: normalization pre-pass, the two parsing
 // strategies, and the bounded-fuzzy service. Re-exported below where existing
 // callers/tests import them from here.
-import { normalizeQuery, applyNegationFrames, STOPWORDS, splitWords, wordsOf } from "./interpret/normalize.mjs";
+import { normalizeQuery, applyNegationFrames, matchNegationSet, STOPWORDS, splitWords, wordsOf } from "./interpret/normalize.mjs";
 import { editDistance, fuzzyBound } from "./interpret/fuzzy.mjs";
 import { parseAnchored } from "./interpret/strategies/grammar.mjs";
 import { parseKeywordSpot, findPhrase } from "./interpret/strategies/keywords.mjs";
@@ -244,7 +244,8 @@ function parseSimpleClause(text, nlp) {
 function parseComposite(text, nlp) {
   const w = splitWords(text);
   const lc = w.map((x) => x.toLowerCase());
-  return parseAnaphora(w, lc, nlp)
+  return parseNegation(text, nlp, 0)
+    || parseAnaphora(w, lc, nlp)
     || parseAggregate(w, lc, nlp)
     || parseSuperlative(w, lc, nlp)
     || parseList(w, lc, nlp, 0)
@@ -252,11 +253,81 @@ function parseComposite(text, nlp) {
     || parseRelationalOrQualified(w, lc, nlp, 0);
 }
 
+// B1 NEGATION (Cycle 5, PLAN_CYCLE_4.md) — the SET COMPLEMENT. "which X do not <verb>
+// Y" / "X that don't <verb> Y" / "modules not importing Y" / "which X are not
+// <qualifier>" compiles to allOfClass(kind) DIFFERENCE (the positive result set),
+// reusing the EXISTING machinery: evalBoolean already folds a "difference" atom, and
+// the allOfClass node is a ready-made bounded universe of a kind. The only new work is
+// recognizing the negation marker (matchNegationSet, normalize.mjs) and assembling the
+// boolean-difference AST — no new traversal primitive. Regression guards, all tested:
+//   (1) honest-empty stays honest — an EMPTY complement ("which functions are not
+//       exported", where the only function is exported) renders the standard honest
+//       "nothing matches" miss, never invents a member and never re-trips the literal-
+//       'not' trap (the "not" is consumed here, so it can't leak into an object term);
+//   (2) BOUNDED UNIVERSE only — the universe is the queried kind within the loaded
+//       graph; the "Change" pseudo-type (ask-vocab.mjs) is a wildcard, not a stored
+//       enumerable class, so a complement over "changes" is REFUSED honestly rather
+//       than answered over an empty universe;
+//   (3) active-voice/positive queries are untouched — parseNegation returns null unless
+//       matchNegationSet finds an explicit set-negation marker.
+function complementAst(entityType, diffAtom) {
+  return {
+    node: "boolean",
+    entityType,
+    atoms: [
+      { op: "seed", kind: "set", ast: { node: "allOfClass", entityType } },
+      diffAtom,
+    ],
+  };
+}
+
+function parseNegation(text, nlp, depth = 0) {
+  const neg = matchNegationSet(text);
+  if (!neg) return null;                             // no set-negation marker → not this shape
+  const noun = entityNoun(neg.entWord);
+  // a set complement needs a CONCRETE, enumerable kind. A placeholder ("things") has no
+  // bounded universe; the "Change" pseudo-type is a wildcard over the touch traversal,
+  // never a stored class, so its complement is ill-defined and must be refused honestly.
+  if (!noun || noun.placeholder || !noun.entityType) return null;
+  const entityType = noun.entityType;
+  if (entityType === "Change") {
+    return { node: "miss", reason: `"${neg.entWord}" isn't an enumerable kind — a set complement needs a concrete kind (functions, classes, modules, …)` };
+  }
+  const predWords = splitWords(neg.predicate);
+  const predLc = predWords.map((x) => x.toLowerCase());
+  // (a) qualifier negation ("not tested" / "not exported"): difference the qualifier
+  // set off the class — equivalent to the negated qualifier, an honest empty when none.
+  if (predLc.length && predLc.every((x) => QUALIFIERS[x])) {
+    return complementAst(entityType, { op: "difference", kind: "qual", filters: predLc });
+  }
+  const vh = findPhrase(predLc, VERB_TO_KIND);
+  if (!vh) return { node: "miss", reason: "a negated set query needs a known relation verb (import, call, inherit from, test, …)" };
+  const objWords = predWords.filter((_, i) => (i < vh.start || i >= vh.end) && !STOPWORDS.has(predLc[i]) && predLc[i] !== "from");
+  // (b) existential object ("do not import anything" / "define nothing"): the complement
+  // is the class MINUS the subjects that have ANY edge of this kind.
+  if (!objWords.length) {
+    return complementAst(entityType, { op: "difference", kind: "set", ast: { node: "existsEdge", entityType, kind: vh.kind } });
+  }
+  // (c) concrete object ("do not import a.mjs"): the class MINUS the POSITIVE result
+  // set, parsed through the existing clause/relational machinery (never re-negating —
+  // the reconstructed positive text carries no "not").
+  const positive = parseSetPhrase(`which ${neg.entWord} ${neg.predicate}`, nlp, depth + 1);
+  if (!positive || positive.node === "miss") {
+    return { node: "miss", reason: (positive && positive.reason) || "the negated clause didn't parse" };
+  }
+  return complementAst(entityType, { op: "difference", kind: "set", ast: positive });
+}
+
 /** A set-producing sub-expression (used for nested inner clauses, boolean branches,
  *  and count restrictors): nested first, then the relational/qualifier/boolean
  *  parser, then a bare simple clause. Carries `depth` for the nesting cap. */
 function parseSetPhrase(text, nlp, depth) {
   if (depth > MAX_COMPOSE_DEPTH) return { node: "miss", reason: "too deep to resolve" };
+  // a set-negation clause can appear as a count restrictor ("how many classes are not
+  // tested"), a list filter, or a boolean branch — try the complement frame first so
+  // those compositions get the bounded-complement for free.
+  const negated = parseNegation(text, nlp, depth);
+  if (negated) return negated;
   const w = splitWords(text);
   const lc = w.map((x) => x.toLowerCase());
   const nested = parseNested(w, lc, nlp, depth);
@@ -694,6 +765,13 @@ function evalSet(graph, ast, opts) {
   switch (ast.node) {
     case "clause": return traverse(graph, ast.clause, opts).matches || [];
     case "allOfClass": return graph.individuals.filter((i) => i.class === ast.entityType);
+    // the SUBJECTS that have ANY edge of a kind (the existential "modules that import
+    // anything") — the positive set an existential negation ("do not import anything")
+    // differences off allOfClass to yield "modules that import nothing".
+    case "existsEdge": {
+      const subs = new Set(kindsFor(ast.kind).flatMap((k) => edgesOfKind(graph, k)).map((e) => e.subject));
+      return graph.individuals.filter((i) => subs.has(i.id) && (!ast.entityType || i.class === ast.entityType));
+    }
     case "reverseSet": {
       const ids = new Set(evalSet(graph, ast.inner, opts).map((i) => i.id));
       return reverseOverSet(graph, ast.kind, ast.entityType, ids);
