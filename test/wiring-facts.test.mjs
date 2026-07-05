@@ -51,20 +51,25 @@ test("W4: assert-then-ask round-trip — the remembered fact answers, provenance
 test("W4: corpus-seeded facts (the W3 seed) answer vocabulary questions, cited to the corpus", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-w4-corpus-"));
   try {
-    // the exact seed the W3 bootstrap performs
+    // the ConceptNet band of the W3 bootstrap — now UNCAPPED (0.7.0 "seed all"), so
+    // res.appended is the whole seedable slice (thousands), not a finite cap.
     const res = await seedMemory(dir, { limit: SEED_LIMIT, prefer: SEED_PREFER });
-    assert.equal(res.appended, SEED_LIMIT);
+    assert.ok(res.appended > 1000, `the whole ConceptNet band seeds uncapped (got ${res.appended})`);
     const config = { graphFile: join(dir, ".tmct", "graph.json") }; // empty bootstrap graph
 
+    // Rendered as clean data + provenance — the "i learned:" prefix was dropped in 0.7.0
+    // (an anthropomorphism; corpus facts are just facts). Provenance stays verbatim.
     const whatIs = await runTurn("what is a cache?", { config, memoryDir: dir });
-    assert.match(whatIs.answer, /i learned: cache is a kind of \w+/);
+    assert.match(whatIs.answer, /^cache is a kind of \w+/);
+    assert.doesNotMatch(whatIs.answer, /i learned:/, "no anthropomorphising prefix on corpus facts");
     assert.match(whatIs.answer, /\(source: corpus:conceptnet \/r\/IsA\)/, "provenance verbatim from the fact");
     assert.equal(whatIs.record.via, "fact");
     assert.equal(whatIs.record.miss, false);
 
     const know = await runTurn("what do you know about caches", { config, memoryDir: dir });
     assert.match(know.answer, /^\d+ remembered facts? about cache:/);
-    assert.match(know.answer, /i learned: cache/);
+    assert.match(know.answer, /cache is a kind of/);
+    assert.doesNotMatch(know.answer, /i learned:/);
     assert.equal(know.record.via, "fact");
   } finally {
     clearCache();

@@ -175,3 +175,22 @@ STATUS: OPEN
 OBSERVATION: Merge risk is LOW. Worktree agent-a8d5d557468bbfb9d is still AT fork base 249c056 (HEAD unmoved), with UNCOMMITTED edits to only src/chat.mjs (+264/-37, 299-line churn) and data/templates/responses.jsonl (+2). Main advanced 3 commits since fork (9abe6f5): .gitignore, README.md, SKILL_PLAIN_PROSE.md, examples/**, package.json, public/index.html. ZERO file overlap — main never touched chat.mjs or responses.jsonl since 249c056, so chat.mjs is byte-identical fork-base==main. Rebase applies clean, NO conflict hotspot, NO hand-reconcile file. (The asBareCommand + inspect.mjs /memory hooks are IN 249c056 = shared ancestor, not drift — cannot conflict.) Worktree chat.mjs already adds moduleCountOf + TMCT_GRAPH_FILE + count-miss lanes = exactly the neighbourhood Wave-2 two-graph/aggregate will edit.
 RECOMMENDED ACTION: (1) MERGE: commit in worktree, then `git rebase main` on the branch (predict zero conflicts, disjoint files) → ff main. Rebase over merge = linear history; either is safe here. No file needs manual reconcile. (2) WAVE-2 OWNERSHIP — ask.mjs is the shared hotspot (callsSymbol AND aggregate both want it). Do NOT 3-way split. FOLD callsSymbol+aggregate into ONE query-path agent owning {codegraph.mjs, ask.mjs, ask-vocab.mjs, ask-nlp.mjs}; run the two-graph-bridge+seed-all agent CONCURRENTLY owning {chat.mjs, server.mjs, sessions.mjs} — disjoint, safe in parallel. This builds two-graph directly on the just-merged chat.mjs moduleCountOf/TMCT_GRAPH_FILE additions, so merge worktree BEFORE launching it (already the plan).
 STATUS: OPEN
+
+═══════════════════════════════════════
+[2026-07-05 16:42Z] source=strategy-advisor(opus,deep) · topic=batch-seed golden-equivalence guard
+OBSERVATION: appendFact writes are wall-clock-stamped (createdAt=nowIso() on first
+write when createdAt arg empty; recomputeFactTrust uses Date.now() per call). So the
+per-fact path is NOT byte-reproducible across two runs on its own. Two structural
+divergence risks for batch appendFacts: (1) mgx:factProvenance union is arrival-order
+dedupe ([...prior.split, new] via Set) — a batch that collapses duplicate fact-ids via
+a Map/sort will reorder the " | " string and break byte-identity; (2) first-write-wins
+createdAt: per-fact gives EACH first occurrence its own distinct nowIso(); a batch that
+stamps all facts with one nowIso() at batch start diverges.
+RECOMMENDED ACTION: The golden-equivalence deep-equal MUST inject a fixed clock into
+BOTH paths (explicit createdAt on every seed fact + a pinned now for trust) — otherwise
+the two graph.json differ on timestamps for reasons unrelated to the batch logic and the
+test is meaningless. The corpus MUST include a duplicate fact-id with TWO different
+provenance tags in a fixed order; assert its factProvenance string is arrival-ordered.
+Compare via JSON.stringify(graphA)===JSON.stringify(graphB) (the exact atomicWriteJson
+artifact), not a shallow field check. npm-test-green is necessary but NOT sufficient.
+STATUS: OPEN

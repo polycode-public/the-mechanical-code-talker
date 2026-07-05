@@ -127,7 +127,10 @@ function a1Naming(t) {
     const article = /^[AEIOU]/.test(cls) ? "an" : "a";
     const ctx = `${cls} is a class in the graph's own schema vocabulary (every tmct graph documents its own vocabulary); the right answer defines the term.`;
     for (const say of [`what is ${article} ${cls}`, `what does ${cls} mean`]) {
-      items.push(turnsItem(ctx, { say, expect: { miss: false, answerMatch: [`${cls} is a class in the graph's schema`] } }));
+      // Accept EITHER the schema-doc lead (fallback when the graph has no instances
+      // of the kind) OR the 0.7.0 concept force's composed answer (definition +
+      // "In this codebase, for example: …" when instances exist) — both are correct.
+      items.push(turnsItem(ctx, { say, expect: { miss: false, answerMatch: [`(${cls} is a class in the graph's schema|In this codebase, for example)`] } }));
     }
   }
   for (const p of PREDICATES) {

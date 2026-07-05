@@ -35,12 +35,14 @@ export const MEMORY_DIR_REL = join(".tmct", "memory");
 export const SESSIONS_DIR_REL = join(".tmct", "sessions");
 export const SEED_MARKER_REL = join(".tmct", "memory", "corpus-seed.json");
 
-/** How many corpus facts the seed writes — matches chat.mjs SEED_LIMIT so an
- *  init-seeded repo and a bootstrap-seeded repo carry the identical slice. */
-export const SEED_LIMIT = 500;
+/** `undefined` = seed the WHOLE ConceptNet band (no cap) — matches chat.mjs
+ *  SEED_LIMIT so an init-seeded repo and a bootstrap-seeded repo carry the identical
+ *  slice. A number in `tmct.toml`'s `seed.limit` still caps (explicit user override);
+ *  absent ⇒ all. */
+export const SEED_LIMIT = undefined;
 
-/** Predicate preference for the capped seed (definitional band first) — matches
- *  chat.mjs SEED_PREFER so "what is a cache?" answers land in the first 500. */
+/** Predicate order for the seed (definitional band first) — matches chat.mjs
+ *  SEED_PREFER. With the cap lifted this sets ORDER only; every fact seeds. */
 export const SEED_PREFER = ["rdfs:subClassOf", "rdf:type", "mgx:usedFor", "mgx:partOf", "mgx:capableOf"];
 
 /** The shipped default config — the exact shape written into `tmct.toml` and
@@ -49,7 +51,7 @@ export function defaultConfig() {
   return {
     graphFile: join(".tmct", "graph.json"),
     corpus: { tier: "tier1" },
-    seed: { enabled: true, limit: SEED_LIMIT },
+    seed: { enabled: true },
   };
 }
 
@@ -103,8 +105,9 @@ tier = ${JSON.stringify(corpus.tier)}
 # Offline and deterministic. Set false, or export TMCT_NO_SEED=1, to opt out —
 # the repo still initialises, just empty of corpus facts.
 enabled = ${seed.enabled ? "true" : "false"}
-# How many facts the seed writes (definitional band first).
-limit = ${Number(seed.limit)}
+# By default the WHOLE committed slice seeds (no cap — the operator's "seed all").
+# To cap it, uncomment and set a number (definitional band first):
+${seed.limit != null ? `limit = ${Number(seed.limit)}` : "# limit = 500"}
 `;
 }
 
@@ -183,7 +186,7 @@ export async function initRepo(dir, { force = false, seed, env = process.env } =
   } else {
     try {
       const { seedMemory } = await import("./corpus/conceptnet.mjs");
-      const limit = Number(config.seed?.limit) || SEED_LIMIT;
+      const limit = config.seed?.limit != null ? Number(config.seed.limit) : SEED_LIMIT;
       seedResult = await seedMemory(root, { limit, prefer: SEED_PREFER });
       const markerNew = !(await exists(paths.marker));
       await mkdir(dirname(paths.marker), { recursive: true });

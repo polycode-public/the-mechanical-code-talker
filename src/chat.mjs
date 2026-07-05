@@ -345,6 +345,9 @@ const T_WHY_EMPTY = "miss-no-previous-answer";
  *  over-promising "ask me about this codebase". */
 const T_GREETING_EMPTY = "conversational-greeting-empty";
 const T_ORIENTATION_EMPTY = "orientation-empty";
+/** THE CONCEPT FORCE (concept.mjs): the three-band answer to a vague "what is a X"
+ *  that names a known concept WITH instances — {definition}/{examples}/{followups}. */
+const T_CONCEPT = "concept-force";
 
 /** The degraded line when the template library itself cannot load — a packaging
  *  failure said out loud, never a crashed turn or a silently different answer. */
@@ -486,9 +489,10 @@ function orientationAnswer(templates, graph) {
  *  when a code graph is loaded, else the honest empty-graph orientation. */
 function orientationText(graph) {
   if (noCodeGraph(graph)) {
-    return "There's no code graph loaded here, so I can't answer structure questions yet. "
-      + "Point me at your code with `--repo <path>` or run `tmct init` to index this repo. "
-      + 'I do know some general vocabulary — try "what is a cache". /help for commands.';
+    return "There's no code graph loaded here, so I can't answer structure questions (imports, calls, definitions) yet. "
+      + "For those I need a `.tmct/graph.json` produced by a graph producer — point me at one with `--repo <path>`, "
+      + "or try the shipped example `npm run example:mini`. tmct reads graphs; it doesn't index code itself. "
+      + 'For general vocabulary, `tmct init` seeds concepts — try "what is a cache". /help for commands.';
   }
   const by = (cls) => (graph.individuals || []).filter((i) => (i.class || "") === cls).length;
   const parts = [];
@@ -798,11 +802,18 @@ const FACT_PREDICATE_PHRASES = {
 };
 const factPhrase = (f) => `${f.subject} ${FACT_PREDICATE_PHRASES[f.predicate] || f.predicate} ${f.object}`;
 
-/** One rendered fact line: "you told me" when the chat asserted it (an ace:chat
- *  provenance tag), "i learned" for corpus-only facts — provenance VERBATIM. */
+/** One rendered fact line. An OPERATOR-asserted fact keeps the true first-person
+ *  provenance ("you told me: …"). A CORPUS fact is presented as clean DATA with its
+ *  source cited — NEVER "i learned: …", which over-claims and anthropomorphises
+ *  (especially when the corpus row is noise); the relation and its provenance speak
+ *  for themselves. Provenance stays VERBATIM either way. */
 function renderFactLine(f) {
-  const lead = f.provenance.includes("ace:chat") ? "you told me" : "i learned";
-  return `${lead}: ${factPhrase(f)}${f.provenance ? ` (source: ${f.provenance})` : ""}`;
+  const cite = f.provenance ? ` (source: ${f.provenance})` : "";
+  if (f.provenance.includes("ace:chat")) return `you told me: ${factPhrase(f)}${cite}`;
+  // CORPUS facts are background DATA — present the relation plainly, cited to its
+  // source, NEVER "i learned: …" (the footgun: a first-person claim over corpus noise).
+  if (f.provenance.includes("corpus:")) return `${factPhrase(f)}${cite}`;
+  return `i learned: ${factPhrase(f)}${cite}`;
 }
 
 /** Read every reified Fact out of the memory graph as plain {subject, predicate,
@@ -852,8 +863,8 @@ const ISA_ASK_RE = /^(?:is|are)\s+(?:an?\s+)?(.+?)\s+(?:a\s+kind\s+of|a\s+type\s
 const ISA_PREDICATES = new Set(["rdfs:subClassOf", "rdf:type"]);
 /** "what do you know about caches" — the open recall-everything form. */
 const KNOW_ABOUT_RE = /^what\s+do\s+you\s+know\s+about\s+(.+?)[?.!\s]*$/i;
-/** How many facts a single answer lists before "…and N more". */
-const FACT_ANSWER_CAP = 5;
+/** How many facts a single answer lists before the remainder is paged with "more". */
+const FACT_ANSWER_CAP = 32;
 
 /** W4 seam: answer (or extend) a vocabulary/definition question from the MEMORY
  *  graph's Facts. Returns { text, replace } — `replace:false` means the engine's
@@ -880,9 +891,11 @@ async function factAnswer(memoryDir, query, envelope, miss) {
     const variants = factTermVariants(normFactTerm, metaTerm);
     const hits = (await memoryFacts(memoryDir)).filter((f) => variants.has(f.subject));
     if (!hits.length) return null;
-    const shown = hits.slice(0, FACT_ANSWER_CAP).map(renderFactLine);
-    const extra = hits.length > FACT_ANSWER_CAP ? `\n…and ${hits.length - FACT_ANSWER_CAP} more remembered fact${hits.length - FACT_ANSWER_CAP === 1 ? "" : "s"}.` : "";
-    return { text: shown.join("\n") + extra, replace: miss };
+    const lines = hits.map(renderFactLine);
+    const shown = lines.slice(0, FACT_ANSWER_CAP);
+    const rest = lines.slice(FACT_ANSWER_CAP);
+    const extra = rest.length ? `\n…and ${rest.length} more — say 'more' to see them.` : "";
+    return { text: shown.join("\n") + extra, replace: miss, ...(rest.length ? { pending: { items: rest, noun: "facts" } } : {}) };
   }
   if (!miss) return null;
 
@@ -907,9 +920,11 @@ async function factAnswer(memoryDir, query, envelope, miss) {
     if (!hits.length) return null;
     // echo the STORED spelling ("caches" asked → "cache" known), never a guess
     const term = variants.has(hits[0].subject) ? hits[0].subject : hits[0].object;
-    const shown = hits.slice(0, FACT_ANSWER_CAP).map((f) => `  ${renderFactLine(f)}`);
-    const extra = hits.length > FACT_ANSWER_CAP ? `\n  …and ${hits.length - FACT_ANSWER_CAP} more.` : "";
-    return { text: `${hits.length} remembered fact${hits.length === 1 ? "" : "s"} about ${term}:\n${shown.join("\n")}${extra}`, replace: true };
+    const lines = hits.map((f) => `  ${renderFactLine(f)}`);
+    const shown = lines.slice(0, FACT_ANSWER_CAP);
+    const rest = lines.slice(FACT_ANSWER_CAP);
+    const extra = rest.length ? `\n  …and ${rest.length} more — say 'more' to see them.` : "";
+    return { text: `${hits.length} remembered fact${hits.length === 1 ? "" : "s"} about ${term}:\n${shown.join("\n")}${extra}`, replace: true, ...(rest.length ? { pending: { items: rest.map((l) => l.trim()), noun: "facts" } } : {}) };
   }
   return null;
 }
@@ -963,10 +978,11 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null) {
   const isa = rows.filter((f) => ISA_PREDICATES.has(f.predicate));
   const byTrust = (a, b) => b.trust - a.trust;
   const renderMany = (hits) => {
-    const shown = hits.slice(0, FACT_ANSWER_CAP).map(renderFactLine);
-    const n = hits.length - FACT_ANSWER_CAP;
-    const extra = n > 0 ? `\n…and ${n} more remembered fact${n === 1 ? "" : "s"}.` : "";
-    return { text: shown.join("\n") + extra, replace: true };
+    const lines = hits.map(renderFactLine);
+    const shown = lines.slice(0, FACT_ANSWER_CAP);
+    const rest = lines.slice(FACT_ANSWER_CAP);
+    const extra = rest.length ? `\n…and ${rest.length} more — say 'more' to see them.` : "";
+    return { text: shown.join("\n") + extra, replace: true, ...(rest.length ? { pending: { items: rest, noun: "facts" } } : {}) };
   };
 
   // (d) WHOLE-STORE recall (CHATBENCH_006 lever 3) — "what did i tell you last time",
@@ -1001,9 +1017,11 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null) {
     const hits = rows.filter((f) => variants.has(f.subject) || variants.has(f.object)).sort(byTrust);
     if (!hits.length) return null;
     const term = variants.has(hits[0].subject) ? hits[0].subject : hits[0].object;
-    const shown = hits.slice(0, FACT_ANSWER_CAP).map((f) => `  ${renderFactLine(f)}`);
-    const extra = hits.length > FACT_ANSWER_CAP ? `\n  …and ${hits.length - FACT_ANSWER_CAP} more.` : "";
-    return { text: `${hits.length} remembered fact${hits.length === 1 ? "" : "s"} about ${term}:\n${shown.join("\n")}${extra}`, replace: true };
+    const lines = hits.map((f) => `  ${renderFactLine(f)}`);
+    const shown = lines.slice(0, FACT_ANSWER_CAP);
+    const rest = lines.slice(FACT_ANSWER_CAP);
+    const extra = rest.length ? `\n  …and ${rest.length} more — say 'more' to see them.` : "";
+    return { text: `${hits.length} remembered fact${hits.length === 1 ? "" : "s"} about ${term}:\n${shown.join("\n")}${extra}`, replace: true, ...(rest.length ? { pending: { items: rest.map((l) => l.trim()), noun: "facts" } } : {}) };
   }
 
   // (c) REVERSE / "what kind of thing" membership. The meta form ("what is a Y")
@@ -1208,6 +1226,61 @@ async function curatedDefinitionAnswer(query, envelope, { memoryDir, lexicon }) 
   return { text: `${def} (source: corpus/seon)`, term };
 }
 
+/** The concept term a vague "what is a X" / "tell me about X" / "what does X mean" /
+ *  "define X" asks about — metaTermOf's forms plus the "tell me about …" opener that
+ *  the graph parser reads as a count. Null when the line isn't such a touch. The
+ *  concept force is gated further downstream (a KNOWN, instance-bearing concept), so
+ *  this only has to recognize the SHAPE, not vet the term. */
+function conceptTermOf(query, envelope) {
+  const base = metaTermOf(query, envelope);
+  if (base) return base;
+  const m = String(query).trim().match(/^tell me about\s+(?:an?\s+)?(.+?)[?.!\s]*$/i);
+  return m ? m[1].trim() : null;
+}
+
+/** THE CONCEPT FORCE — compose the three-band answer (corpus/seon definition + real
+ *  graph/memory instances + pre-validated follow-ups) for a vague concept touch, or
+ *  null when it isn't one: not a "what is a X"/"tell me about X" shape, not a known
+ *  enumerable concept (CONCEPT_CLASS), no curated definition, or NO instances anywhere
+ *  (composeConcept's own honest-miss gate). Loads the definition DIRECTLY from the
+ *  shipped corpus/seon file (seonDefinitions), so it works without per-repo memory
+ *  seeding; the memory fact rows only ADD remembered "A is a X" examples when present.
+ *  Lazy + failure-tolerated throughout (chat.mjs ethos). Returns { text, instances }. */
+async function conceptForceAnswer(query, envelope, { graph, config, source, memoryDir, templates }) {
+  const rawTerm = conceptTermOf(query, envelope);
+  if (!rawTerm) return null;
+  let normFactTerm; let composeConcept; let CONCEPT_CLASS;
+  try {
+    ({ normFactTerm } = await import("./memory/core.mjs"));
+    ({ composeConcept, CONCEPT_CLASS } = await import("./concept.mjs"));
+  } catch { return null; }
+  const term = normFactTerm(rawTerm);
+  if (!CONCEPT_CLASS[term]) return null; // not an enumerable code concept — ordinary path owns it
+  const definition = (await seonDefinitions()).get(term) ?? null;
+  if (!definition) return null;
+  // The runChat shell hands the loaded graph straight in; the pure runTurn(config)
+  // path (tests, chatbench) does not, so load it the same way dispatchTool does when
+  // it's missing. Failure-tolerated: no loadable graph → no concept force.
+  let g = graph;
+  if (!g && config && source) {
+    try { g = parseEntities(await source.fetchEntities(config)); } catch { g = null; }
+  }
+  if (!g) return null;
+  const rows = memoryDir ? await factRows(memoryDir) : [];
+  let composed;
+  try { composed = composeConcept(g, term, { definition, factRows: rows }); }
+  catch { return null; }
+  if (!composed) return null;
+  const rendered = tRender(templates, T_CONCEPT, {
+    definition: composed.definition, examples: composed.examples, followups: composed.followups,
+  });
+  const text = rendered ?? `${composed.definition}\n${composed.examples}${composed.followups}`;
+  const pending = composed.remainder && composed.remainder.length
+    ? { items: composed.remainder, noun: composed.noun }
+    : null;
+  return { text, instances: composed.instances, pending };
+}
+
 /** A bare question → tmct_ask. When a focus is set AND the graph is in hand we
  *  call ask() directly to thread the focus as contextId (so a pronoun like "it"
  *  resolves to the focus) — building the SAME delimited string dispatchTool emits;
@@ -1270,6 +1343,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // orientation swap below is template wording, so those turns carry via:"template".
   let via = "composed";
   let recordMiss = miss;
+  let factPending = null; // a truncated fact listing's held remainder (for "more" paging)
   // MISS handling. The intent lanes + short-miss are RECOGNIZER-gated on the query
   // text AND only consulted on a would-miss, so a real graph query — a hit, an honest
   // empty with a receipt, a fuzzy repair — is never hijacked. Order: (1) META/SELF
@@ -1301,6 +1375,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       answer = fact.replace ? fact.text : `${answer}\n${fact.text}`;
       via = "fact";
       recordMiss = false;
+      if (fact.pending) factPending = fact.pending; // a truncated fact list → paginable remainder
     } else if (miss) {
       // W2: after the honest miss is composed, consult the folded-session memory. A
       // relevant enough block ANSWERS — recalled Q/A framed + cited first, with the
@@ -1323,6 +1398,24 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     const def = await curatedDefinitionAnswer(query, envelope, { memoryDir, lexicon });
     if (def) { answer = def.text; via = "corpus/seon"; recordMiss = false; }
   }
+  // THE CONCEPT FORCE (concept.mjs) — a vague "what is a X" / "tell me about X" that
+  // names a KNOWN code concept WITH real instances composes the three-band answer
+  // (definition + real examples + pre-validated follow-ups), superseding the bare
+  // schema-doc / curated-definition surface (both corpus-sourced). It declines unless
+  // the term is a known, instance-bearing concept, so a precise query, an unknown
+  // term, or an instance-less concept is never hijacked — the ordinary answer stands.
+  // Runs after the corpus-fact/curated branches (via composed|corpus/seon) but not
+  // over a "you told me" fact, a meta/self summary, or the conversational lanes.
+  let conceptInstances = null;
+  let conceptPending = null;
+  if (via === "composed" || via === "corpus/seon") {
+    const concept = await conceptForceAnswer(query, envelope, { graph, config, source, memoryDir, templates });
+    if (concept) {
+      answer = concept.text; via = "corpus/seon"; recordMiss = false;
+      conceptInstances = concept.instances;
+      conceptPending = concept.pending;
+    }
+  }
   // (4) #2 TEACH lane — a teach-shaped would-miss nothing above answered: route to
   // memory, or say what CAN be remembered (LOUD), never the wall / a silent drop.
   if (miss && recordMiss && via === "composed") {
@@ -1339,7 +1432,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // toward a real graph, unless it already points there. Only when genuinely empty.
   if (recordMiss && (via === "composed" || via === "miss")
       && noCodeGraph(graph) && !/--repo|tmct init|no code graph/i.test(answer)) {
-    answer = `${answer}\n(this repo has no code graph — try \`--repo <path>\` or \`tmct init\`.)`;
+    answer = `${answer}\n(this repo has no code graph — for structure, point me at a \`.tmct/graph.json\` with \`--repo <path>\` or run \`npm run example:mini\`; tmct doesn't index code itself.)`;
   }
   // W5 (flag-gated, default OFF): an unknown-term miss may consult the LOCAL
   // committed corpus slice — a hit APPENDS a grounded, licence-cited aside under
@@ -1351,11 +1444,19 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       via = "corpus";
     }
   }
-  const record = { type: "turn", ts, query, via, resolvedIds, answeredIds, miss: recordMiss };
+  // The concept force answers WITH real example instances — those are the entities the
+  // turn "asked about" (the SchemaClass meta-node is documentation, not a code entity),
+  // so record + expand them, not the schema match.
+  const finalAnsweredIds = conceptInstances ? conceptInstances.map((i) => i.id) : answeredIds;
+  const record = { type: "turn", ts, query, via, resolvedIds, answeredIds: finalAnsweredIds, miss: recordMiss };
   const logLines = [ts, `> ${query}`, answer, ""];
   // `detail` feeds why/say-more's verbose re-render: the traversal receipt + the
   // matched entities the terse render trims (see renderVerbose).
-  const detail = envelope ? { traversal: envelope.traversal || null, matches: envelope.matches || [] } : null;
+  const detail = conceptInstances
+    ? { traversal: envelope?.traversal || null, matches: conceptInstances, ...(conceptPending ? { pending: conceptPending } : {}) }
+    : (envelope
+      ? { traversal: envelope.traversal || null, matches: envelope.matches || [], ...(factPending ? { pending: factPending } : {}) }
+      : (factPending ? { traversal: null, matches: [], pending: factPending } : null));
   return { answer, logLines, record, focus: newFocus, detail };
 }
 
@@ -1482,6 +1583,29 @@ async function assertTurn(line, { memoryDir, sessionId, focus, lexicon = null })
  * subject), `answeredIds` the entity ids an ask answer cited; a slash-command turn
  * also carries its `command` name. Both drive the mgx:asksAbout graph append.
  */
+// ---- "more" pagination — a long examples/facts listing shows the first PAGE
+// entries and holds the remainder on the turn's `last.detail.pending`; a bare
+// "more"/"show more"/"the rest" in the NEXT turn renders the next batch, advancing
+// the same pending state. Any other (real) query produces a fresh `last` without
+// `pending`, so the remainder is naturally cleared — no stale continuation. ----
+const PAGE = 32;
+const MORE_RE = /^(?:more|show more|see more|the rest|next|continue|go on)\b[.!?]*$/i;
+const joinList = (a) => (a.length > 1 ? `${a.slice(0, -1).join(", ")} and ${a[a.length - 1]}` : (a[0] ?? ""));
+
+/** Render the next page of a held remainder (pending: {items:[str], noun}). Returns a
+ *  plain turn whose `detail.pending` carries what's still unseen (null when the batch
+ *  finished the list), so a follow-on "more" continues. */
+function morePage(query, { last, focus }) {
+  const p = last.detail.pending;
+  const batch = p.items.slice(0, PAGE);
+  const rest = p.items.slice(PAGE);
+  const tail = rest.length ? ` …and ${rest.length} more — say 'more' to see them.` : "";
+  const answer = `${joinList(batch)}.${tail}`;
+  const turn = plainTurn(query, answer, { via: "count", focus });
+  turn.detail = { traversal: null, matches: [], ...(rest.length ? { pending: { items: rest, noun: p.noun } } : {}) };
+  return turn;
+}
+
 export async function runTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null } = {}) {
   const line = String(input ?? "").trim();
   const templates = await chatTemplates(); // failure-tolerated: null degrades, never throws
@@ -1510,6 +1634,13 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // resolve no entity and carry their own preserved `last`.
   const convo = conversationalTurn(line, ctx);
   if (convo) return convo;
+
+  // "more" — page the remainder of a previous long listing, if one is held. Gated on
+  // an actual pending remainder so a bare "more" with nothing to continue falls through
+  // to the ordinary path (an honest miss), never a pretend page.
+  if (MORE_RE.test(line) && Array.isArray(last?.detail?.pending?.items) && last.detail.pending.items.length) {
+    return withLast(morePage(line, ctx));
+  }
 
   if (line.startsWith("/")) return withLast(await runCommand(line, ctx));
   // Declarative ACE sentences ("every module is a artifact") ASSERT into tmct's
@@ -1546,15 +1677,20 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
 
 // ---- W3: seedMemory → bootstrap (first run in a graph-less repo) ----
 
-/** How many corpus facts the first-run bootstrap seeds. Measured curve (dev
- *  laptop, appendFact's read-modify-write per fact): 100→~0.16s, 250→~0.54s,
- *  500→~1.7s — the full 500 stays inside a session-start budget, so the seed
- *  runs synchronously and complete (no partial-sync cap needed). */
-export const SEED_LIMIT = 500;
+/** The first-run bootstrap seeds the WHOLE shipped ConceptNet band (no cap) — the
+ *  operator's "seed all 40k" call. `undefined` means seedMemory writes every
+ *  seedable fact in the committed slice (~6.3k). The batched appendFacts write
+ *  (src/memory/core.mjs) makes this a single O(N) pass — the full slice seeds in a
+ *  couple of seconds, inside a session-start budget, so it still runs synchronously
+ *  and complete. A finite value here would re-impose the old cap; keep it undefined
+ *  to mean "all". (Kept as a named export so init.mjs and tests share the intent.) */
+export const SEED_LIMIT = undefined;
 
-/** Which predicates the capped seed prefers (stable order — see seedMemory's
- *  `prefer`): the definitional band first, so a bootstrap's 500 facts answer
- *  "what is a cache?"-style vocabulary questions rather than location trivia. */
+/** Which predicates the seed lists FIRST (stable order — see seedMemory's `prefer`):
+ *  the definitional band leads, so the on-disk memory opens with the vocabulary that
+ *  answers "what is a cache?"-style questions rather than location trivia. With the
+ *  cap lifted this only sets ORDER (every fact seeds either way), but a well-ordered
+ *  memory keeps inspection and any future re-cap honest. */
 export const SEED_PREFER = ["rdfs:subClassOf", "rdf:type", "mgx:usedFor", "mgx:partOf", "mgx:capableOf"];
 
 /** The seed marker: its presence means this repo's memory already carries the
@@ -1752,8 +1888,10 @@ export async function createSession({
     // the honest seed line appears ONLY on the run that actually seeded — the count
     // is the TOTAL appended, split into the curated SEON ontology + the ConceptNet band.
     ...(seeded ? [`seeded ${seeded.appended} starter facts (${seeded.seon} curated SEON + ${seeded.conceptnet} ConceptNet) — /memory to inspect`] : []),
-    // no code indexed → point at how to get one, and at what IS answerable now
-    ...(noCodeGraph ? ['no code indexed yet — run `tmct init` here or pass --repo <path>; meanwhile try "what is a cache"'] : []),
+    // no code graph → point at how to GET one (a graph producer / --repo / the shipped
+    // example), honest that `tmct init` seeds VOCABULARY, not a code graph, and at what
+    // IS answerable now. tmct reads graphs; it never indexes code itself.
+    ...(noCodeGraph ? ['for code structure, point me at a .tmct/graph.json with --repo <path> or try `npm run example:mini` (tmct reads graphs, it doesn\'t index code); `tmct init` only seeds vocabulary — try "what is a cache"'] : []),
     "pass --repo <path> to target a different repo",
     "ask a question, or /help for commands (/stats for an overview) — /exit to leave",
   ];

@@ -70,7 +70,7 @@ test("tmct.toml is documented, parseable, and round-trips through the config loa
     const norm = await normalizeConfig(raw, { configDir: dir });
     assert.equal(norm.corpus.tier, "tier1");
     assert.equal(norm.seed.enabled, true);
-    assert.equal(norm.seed.limit, 500);
+    assert.equal(norm.seed.limit, undefined, "no cap by default — the whole slice seeds (0.7.0 seed-all)");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
