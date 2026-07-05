@@ -222,6 +222,45 @@ async function countFromFacts(graph, memoryDir, query) {
   return null;
 }
 
+// ---- memory-store counts (the .tmct/memory graph, distinct from the code graph
+// answerCount reads) — so "how many facts do you know" is answerable, consistent
+// with what `/memory` advertises. The code graph owns the structural kinds
+// (classes/functions/modules/…); the memory store owns Facts + Utterances. Sessions
+// stay with answerCount (chat writes Session individuals into the code graph as
+// first-class temporal data — see sessions.mjs), so this never shadows them. ----
+
+/** Nouns that name a MEMORY-STORE individual class, → the class to count. */
+const MEMORY_COUNT_NOUNS = {
+  fact: "Fact", facts: "Fact",
+  utterance: "Utterance", utterances: "Utterance", said: "Utterance",
+};
+const MEMORY_CLASS_LABELS = { Fact: ["fact", "facts"], Utterance: ["utterance", "utterances"] };
+
+/** Recognise a memory-store count question and answer it by loading the memory
+ *  graph, or null (→ answerCount / the ask engine own it). Handles "how many facts",
+ *  "how many utterances", and the bare "how many do you know" (→ facts). Lazy +
+ *  failure-tolerated: no memory / a broken store → null, so the honest fall-through
+ *  stands. */
+async function answerMemoryCount(memoryDir, query) {
+  if (!memoryDir) return null;
+  const q = String(query).toLowerCase();
+  let cls = null;
+  // the bare "how many do you know" (no explicit noun) defaults to remembered facts
+  if (/\bhow many(?:\s+(?:things?|facts?))?\s+(?:do|d'?)\s+(?:you|u)\s+know\b/.test(q)) cls = "Fact";
+  if (!cls) {
+    const m = q.match(/\b(?:how many|number of|count(?:\s+the)?)\s+([a-z]+)\b/);
+    if (m) cls = MEMORY_COUNT_NOUNS[m[1]] || null;
+  }
+  if (!cls) return null;
+  let loadMemory;
+  try { ({ loadMemory } = await import("./memory/core.mjs")); } catch { return null; }
+  let mem;
+  try { mem = await loadMemory(memoryDir); } catch { return null; }
+  const n = (mem.individuals || []).filter((i) => (i.class || "") === cls).length;
+  const [sing, plur] = MEMORY_CLASS_LABELS[cls];
+  return `${n} ${n === 1 ? sing : plur}.`;
+}
+
 /** `/stats`: a one-screen overview of the graph — class counts, relationship
  *  (predicate) counts, and module/package totals — read straight off the header. */
 export function renderStats(graph) {
@@ -1093,6 +1132,82 @@ function discourseRewrite(query, last) {
   return prevQ.replace(NAME_TOKEN_RE, () => newSubj);
 }
 
+// ---- curated SEON definitions (corpus/seon/definitions.jsonl) ----
+// A "what is a <term>" for a LEXICON term prefers the curated one-sentence
+// definition — the richer surface form of the same curated SEON knowledge that the
+// concept seed reifies — over the bare seon concept fact / schema-docs / honest
+// miss. Cited via:"corpus/seon". Two guards keep it honest and test-safe:
+//   - it only fires when this repo actually carries the SEON concept seed (a
+//     corpus:seon fact about the term is in memory) — so a repo seeded with only
+//     ConceptNet (or nothing) is byte-unchanged;
+//   - a fact the USER personally asserted (ace:chat) still wins — you told me beats
+//     the corpus definition.
+
+let seonDefsPromise = null;
+/** Load corpus/seon/definitions.jsonl once → Map(normFactTerm(term) → definition).
+ *  Lazy + failure-tolerated (chat.mjs ethos): any failure degrades to an empty map. */
+function seonDefinitions() {
+  if (!seonDefsPromise) {
+    seonDefsPromise = (async () => {
+      const { SEON_DEFINITIONS_FILE } = await import("./corpus/conceptnet.mjs");
+      const { normFactTerm } = await import("./memory/core.mjs");
+      const raw = await readFile(SEON_DEFINITIONS_FILE, "utf8");
+      const map = new Map();
+      for (const line of raw.split("\n")) {
+        const t = line.trim();
+        if (!t) continue;
+        try {
+          const row = JSON.parse(t);
+          if (row.term && row.definition) map.set(normFactTerm(row.term), String(row.definition));
+        } catch { /* skip a malformed line, never throw */ }
+      }
+      return map;
+    })().catch(() => new Map());
+  }
+  return seonDefsPromise;
+}
+
+/** The meta term a "what is a X" / "what does X mean" / "define X" question asks
+ *  about — from the parse when present, else recognized directly (same required-
+ *  article discipline as the grammar's T5). Null when the line isn't such a form. */
+function metaTermOf(query, envelope) {
+  if (envelope?.parsed?.shape === "meta" && envelope.parsed.object) return envelope.parsed.object;
+  const q = String(query).trim();
+  const m = q.match(/^what\s+(?:is|are)\s+an?\s+(.+?)[?.!\s]*$/i)
+    || q.match(/^what\s+(?:does|do)\s+(?:an?\s+)?(.+?)\s+means?[?.!\s]*$/i)
+    || q.match(/^define\s+(?:an?\s+)?(.+?)[?.!\s]*$/i);
+  return m ? m[1].trim() : null;
+}
+
+/** The curated SEON definition to PREFER for a "what is a <lexicon term>", or null.
+ *  Gated: the term parses as a meta question, is a grammar-lexicon noun, has a
+ *  curated definition, this repo carries the SEON concept seed for it (a corpus:seon
+ *  fact), and the user has NOT personally asserted a fact about it. Returns { text,
+ *  term } or null. Lazy + failure-tolerated throughout. */
+async function curatedDefinitionAnswer(query, envelope, { memoryDir, lexicon }) {
+  if (!memoryDir) return null;
+  const term = metaTermOf(query, envelope);
+  if (!term) return null;
+  let normFactTerm;
+  try { ({ normFactTerm } = await import("./memory/core.mjs")); } catch { return null; }
+  // lexicon-noun gate: the curated defs are keyed on SE lexicon terms only.
+  let lex = lexicon;
+  try {
+    if (!lex) { const { loadLexicon } = await import("./grammar/lexicon.mjs"); lex = loadLexicon(); }
+    const { lookupNoun } = await import("./grammar/lexicon.mjs");
+    if (!lookupNoun(lex, term)) return null;
+  } catch { return null; }
+  const def = (await seonDefinitions()).get(normFactTerm(term));
+  if (!def) return null;
+  // tie the definition to the SEON concept seed being present, and let a user fact win.
+  const variants = factTermVariants(normFactTerm, term);
+  const facts = await memoryFacts(memoryDir);
+  const about = facts.filter((f) => variants.has(f.subject) || variants.has(f.object));
+  if (about.some((f) => f.provenance.includes("ace:chat"))) return null; // you told me — that wins
+  if (!about.some((f) => f.provenance.includes("corpus:seon"))) return null; // no SEON seed here
+  return { text: `${def} (source: corpus/seon)`, term };
+}
+
 /** A bare question → tmct_ask. When a focus is set AND the graph is in hand we
  *  call ask() directly to thread the focus as contextId (so a pronoun like "it"
  *  resolves to the focus) — building the SAME delimited string dispatchTool emits;
@@ -1197,6 +1312,16 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
         recordMiss = false; // memory answered it, cited — no longer a blank
       }
     }
+  }
+  // CURATED SEON DEFINITION (corpus/seon) — a "what is a <lexicon term>" prefers the
+  // curated prose definition over the seon concept fact / schema-docs / honest miss.
+  // Runs after the fact branch and overrides its corpus-fact answer (via:"fact"), but
+  // curatedDefinitionAnswer itself defers to a user-asserted (ace:chat) fact, so a
+  // "you told me" answer already standing is left untouched. Skips the meta/self +
+  // conversational lanes (via:"meta"/"template"), which answer a different question.
+  if (via === "composed" || via === "fact") {
+    const def = await curatedDefinitionAnswer(query, envelope, { memoryDir, lexicon });
+    if (def) { answer = def.text; via = "corpus/seon"; recordMiss = false; }
   }
   // (4) #2 TEACH lane — a teach-shaped would-miss nothing above answered: route to
   // memory, or say what CAN be remembered (LOUD), never the wall / a silent drop.
@@ -1395,6 +1520,15 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
     const asserted = await assertTurn(line, ctx);
     if (asserted) return withLast(asserted);
   }
+  // MEMORY-STORE counts first ("how many facts / utterances do you know") — the
+  // memory graph owns Facts + Utterances, so these are answerable and consistent
+  // with `/memory`. Checked before answerCount (which reads the CODE graph and would
+  // otherwise say "I can't count facts"); it only speaks for a memory-class noun, so
+  // structural counts (classes/functions/…) and sessions fall through unaffected.
+  if (memoryDir) {
+    const memCount = await answerMemoryCount(memoryDir, line);
+    if (memCount != null) return withLast(plainTurn(line, memCount, { via: "count", focus }));
+  }
   // Aggregate/count questions are answered mechanically off the loaded graph header,
   // BEFORE falling through to the ask engine (focus unchanged — a count names no entity).
   const count = answerCount(graph, line);
@@ -1427,11 +1561,20 @@ export const SEED_PREFER = ["rdfs:subClassOf", "rdf:type", "mgx:usedFor", "mgx:p
  *  corpus seed, so re-runs skip without even reading the slice. */
 export const SEED_MARKER_REL = join(".tmct", "memory", "corpus-seed.json");
 
-/** Seed the ConceptNet slice into <repo>/.tmct/memory once. Idempotent twice
- *  over (the marker short-circuits; seedMemory itself content-hashes fact ids)
- *  and failure-tolerated: a missing/broken corpus degrades to the unseeded
- *  bootstrap — never an error before the prompt. Returns seedMemory's
- *  { appended, skipped, total } on a fresh seed, null when skipped/failed. */
+/** Seed the starter corpus into <repo>/.tmct/memory once, in TWO passes:
+ *    1. the curated SEON ontology (corpus/seon/concepts.jsonl) FIRST and UNCAPPED
+ *       — it is small + fully curated (the SE vocabulary + orientation facts),
+ *       tagged "corpus:seon", so a fresh repo knows the curated terms before any
+ *       general ConceptNet noise;
+ *    2. THEN the capped ConceptNet slice (the definitional band first, SEED_LIMIT
+ *       facts), tagged "corpus:conceptnet".
+ *  seon runs first so its curated facts win the content-hash idempotency race — a
+ *  term the ConceptNet slice also carries keeps the seon provenance. Idempotent
+ *  twice over (the marker short-circuits; seedMemory content-hashes fact ids) and
+ *  failure-tolerated: a missing/broken corpus degrades to the unseeded bootstrap —
+ *  never an error before the prompt. Returns { appended, skipped, total, seon,
+ *  conceptnet } on a fresh seed (the banner counts stay honest), null when
+ *  skipped/failed. */
 async function seedBootstrapMemory(repo) {
   const marker = join(repo, SEED_MARKER_REL);
   try {
@@ -1439,11 +1582,22 @@ async function seedBootstrapMemory(repo) {
     return null; // already seeded — the marker is authoritative
   } catch { /* no marker → first run */ }
   try {
-    const { seedMemory } = await import("./corpus/conceptnet.mjs");
-    const res = await seedMemory(repo, { limit: SEED_LIMIT, prefer: SEED_PREFER });
+    const { seedMemory, SEON_CONCEPTS_FILE } = await import("./corpus/conceptnet.mjs");
+    // (1) curated SEON ontology — uncapped, seon-tagged, seeded FIRST.
+    const seon = await seedMemory(repo, { slicePath: SEON_CONCEPTS_FILE, provenancePrefix: "corpus:seon" });
+    // (2) the capped ConceptNet band — byte-identical to the prior single seed.
+    const conceptnet = await seedMemory(repo, { limit: SEED_LIMIT, prefer: SEED_PREFER });
+    const res = {
+      appended: seon.appended + conceptnet.appended,
+      skipped: seon.skipped + conceptnet.skipped,
+      total: seon.total + conceptnet.total,
+      seon: seon.appended,
+      conceptnet: conceptnet.appended,
+    };
     await mkdir(dirname(marker), { recursive: true });
     await writeFile(marker, JSON.stringify({
-      seededAt: new Date().toISOString(), limit: SEED_LIMIT, appended: res.appended, skipped: res.skipped,
+      seededAt: new Date().toISOString(), limit: SEED_LIMIT,
+      appended: res.appended, skipped: res.skipped, seon: res.seon, conceptnet: res.conceptnet,
     }) + "\n");
     return res;
   } catch {
@@ -1595,8 +1749,9 @@ export async function createSession({
       ? `tmct chat — ${repo} — no code graph loaded — ${empty ? "starting empty" : "graph has no code entities"}; ` +
         `the conversation is remembered to ${DEFAULT_GRAPH_REL} — log ${logFile}`
       : `tmct chat — ${repo} — ${moduleCount} module(s) — log ${logFile}`,
-    // the honest seed line appears ONLY on the run that actually seeded
-    ...(seeded ? [`seeded ${seeded.appended} starter facts from the ConceptNet slice — /memory to inspect`] : []),
+    // the honest seed line appears ONLY on the run that actually seeded — the count
+    // is the TOTAL appended, split into the curated SEON ontology + the ConceptNet band.
+    ...(seeded ? [`seeded ${seeded.appended} starter facts (${seeded.seon} curated SEON + ${seeded.conceptnet} ConceptNet) — /memory to inspect`] : []),
     // no code indexed → point at how to get one, and at what IS answerable now
     ...(noCodeGraph ? ['no code indexed yet — run `tmct init` here or pass --repo <path>; meanwhile try "what is a cache"'] : []),
     "pass --repo <path> to target a different repo",

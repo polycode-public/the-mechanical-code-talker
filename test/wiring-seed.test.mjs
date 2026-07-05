@@ -21,6 +21,16 @@ import { clearCache } from "../src/source.mjs";
 const BIN = fileURLToPath(new URL("../bin/tmct.mjs", import.meta.url));
 const FIXTURE = fileURLToPath(new URL("./fixtures/entities.fixture.json", import.meta.url));
 
+// The graph-less bootstrap now seeds in TWO passes (chat.mjs seedBootstrapMemory):
+// the curated SEON ontology FIRST and uncapped (219 facts, provenance corpus:seon),
+// THEN the capped ConceptNet band (SEED_LIMIT=500 requested → 499 appended; one
+// ConceptNet fact overlaps a SEON fact and dedups on its content-hash id). So a
+// fresh repo lands 219 + 499 = 718 starter facts, and the banner says so honestly.
+const SEON_SEEDED = 219;
+const CONCEPTNET_SEEDED = 499;
+const SEEDED_FACTS = SEON_SEEDED + CONCEPTNET_SEEDED; // 718
+const SEED_BANNER = `seeded ${SEEDED_FACTS} starter facts (${SEON_SEEDED} curated SEON + ${CONCEPTNET_SEEDED} ConceptNet) — /memory to inspect`;
+
 const factCount = async (dir) =>
   (await loadMemory(dir)).individuals.filter((i) => i.class === FACT_CLASS).length;
 const exists = (p) => access(p).then(() => true, () => false);
@@ -32,10 +42,10 @@ test("W3: a graph-less first run seeds once — banner line, marker, facts; a se
     const s1 = await createSession({ repoPath: dir, env: {} });
     await s1.close();
     assert.ok(
-      s1.bannerLines.some((l) => l === `seeded ${SEED_LIMIT} starter facts from the ConceptNet slice — /memory to inspect`),
+      s1.bannerLines.some((l) => l === SEED_BANNER),
       `the banner says so honestly: ${JSON.stringify(s1.bannerLines)}`,
     );
-    assert.equal(await factCount(dir), SEED_LIMIT, "the capped slice landed in .tmct/memory");
+    assert.equal(await factCount(dir), SEEDED_FACTS, "both corpus passes landed in .tmct/memory");
     assert.ok(await exists(join(dir, SEED_MARKER_REL)), "the seed marker was written");
 
     clearCache();
@@ -43,7 +53,7 @@ test("W3: a graph-less first run seeds once — banner line, marker, facts; a se
     await s2.close();
     assert.ok(!s2.bannerLines.some((l) => /seeded \d+ starter facts/.test(l)),
       "the marker prevents a re-seed — no seed line on the second run");
-    assert.equal(await factCount(dir), SEED_LIMIT, "fact count unchanged");
+    assert.equal(await factCount(dir), SEEDED_FACTS, "fact count unchanged");
   } finally {
     clearCache();
     await rm(dir, { recursive: true, force: true });
@@ -91,9 +101,9 @@ test("W3 gate: the real binary in an empty dir seeds, greets and exits 0", async
     const elapsed = Date.now() - t0;
     assert.equal(r.status, 0, r.stderr);
     assert.match(r.stdout, /no code graph loaded — starting empty/); // #3
-    assert.match(r.stdout, new RegExp(`seeded ${SEED_LIMIT} starter facts from the ConceptNet slice`));
+    assert.match(r.stdout, new RegExp(`seeded ${SEEDED_FACTS} starter facts \\(${SEON_SEEDED} curated SEON \\+ ${CONCEPTNET_SEEDED} ConceptNet\\)`));
     assert.match(r.stdout, /Hi\. There's no code graph loaded here/); // #3: empty greeting orients
-    assert.equal(await factCount(dir), SEED_LIMIT);
+    assert.equal(await factCount(dir), SEEDED_FACTS);
     assert.ok(elapsed < 15000, `seeded bootstrap stays inside a sane budget (took ${elapsed}ms)`);
   } finally {
     await rm(dir, { recursive: true, force: true });

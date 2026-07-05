@@ -40,6 +40,10 @@ Usage:
        [--verbose]             folded blocks (the /memory chat command, from the shell)
   tmct init [--force]          initialize the current directory for tmct: .tmct/,
                                tmct.toml, tier-1 corpus seed, provenance record
+       [--corpus <id>]         also seed a tier-2 corpus (aws|python|java) — opt-in,
+                               offline, $0; init is tier-1-only unless asked
+       [--detect]              suggest a tier-2 corpus from the repo's manifests
+                               (pyproject.toml → python, pom.xml → java); never seeds unasked
   tmct syllogise [--repo <abs>] speculative inference (offline maintenance job): forward-
        [--depth <n>] [--budget <n>]  chain the memory's rdfs:subClassOf closure, materialising
                                bounded, low-trust, retractable entailed facts (never on the chat path)
@@ -295,10 +299,62 @@ async function main() {
     // `tmct init` — the Repository-Interface onboarding surface: scaffold .tmct/,
     // write tmct.toml, seed the tier-1 corpus (offline, opt-out via TMCT_NO_SEED),
     // and record provenance. Idempotent; --force rewrites config + re-records.
+    //
+    // TIERING POLICY: init is OFFLINE, $0 and TIER-1-ONLY by default. A tier-2
+    // domain/language corpus (corpus/tier2/: aws, python, java) is added ONLY when
+    // explicitly asked via `--corpus <id>`. The `--detect` auto-detect is a
+    // documented STUB: it inspects the repo's manifests (pyproject.toml → python,
+    // pom.xml → java) and SUGGESTS the matching corpus, but never seeds it unasked.
     const rest = process.argv.slice(3);
     const { initRepo } = await import("../src/init.mjs");
     const res = await initRepo(process.cwd(), { force: rest.includes("--force") });
     process.stdout.write(res.message + "\n");
+
+    const ci = rest.indexOf("--corpus");
+    const corpusId = ci !== -1 ? rest[ci + 1] : undefined;
+    if (corpusId) {
+      // Seed a tier-2 corpus by id from corpus/tier2/ (same slice shape as tier-1;
+      // provenance-tagged corpus:tier2:<id>). Idempotent (content-hashed fact ids).
+      const { readFile } = await import("node:fs/promises");
+      const { join, dirname } = await import("node:path");
+      const { seedMemory, TIER2_MANIFEST_FILE } = await import("../src/corpus/conceptnet.mjs");
+      let manifest;
+      try { manifest = JSON.parse(await readFile(TIER2_MANIFEST_FILE, "utf8")); }
+      catch (e) { process.stderr.write(`tmct init: cannot read the tier-2 manifest — ${e?.message || e}\n`); process.exit(1); }
+      const entry = (manifest.corpuses || []).find((c) => c.id === corpusId);
+      if (!entry) {
+        const ids = (manifest.corpuses || []).map((c) => c.id).join(", ");
+        process.stderr.write(`tmct init: unknown --corpus "${corpusId}". Available tier-2 corpuses: ${ids}.\n`);
+        process.exit(2);
+      }
+      const slicePath = join(dirname(TIER2_MANIFEST_FILE), entry.file);
+      const seeded = await seedMemory(process.cwd(), { slicePath, provenancePrefix: `corpus:tier2:${entry.id}` });
+      process.stdout.write(
+        `seeded tier-2 corpus "${entry.id}" (${entry.kind}) — ${seeded.appended} fact(s) added`
+        + `${seeded.skipped ? `, ${seeded.skipped} already present` : ""}. Source: corpus/tier2/${entry.file} (${entry.license}).\n`,
+      );
+      return;
+    }
+
+    if (rest.includes("--detect")) {
+      // AUTO-DETECT STUB (documented, non-seeding): map a build manifest to the
+      // tier-2 corpus that fits, and tell the operator how to add it. Kept a stub on
+      // purpose — the $0/offline default never expands the corpus without an ask.
+      const { access } = await import("node:fs/promises");
+      const { join } = await import("node:path");
+      const has = (f) => access(join(process.cwd(), f)).then(() => true, () => false);
+      const DETECT = [["pyproject.toml", "python"], ["pom.xml", "java"]];
+      const found = [];
+      for (const [file, id] of DETECT) if (await has(file)) found.push([file, id]);
+      if (!found.length) {
+        process.stdout.write("no tier-2 corpus auto-detected (looked for pyproject.toml → python, pom.xml → java).\n");
+      } else {
+        for (const [file, id] of found) {
+          process.stdout.write(`detected ${file} — run \`tmct init --corpus ${id}\` to add the ${id} tier-2 corpus (offline, $0).\n`);
+        }
+      }
+      return;
+    }
     return;
   }
 

@@ -31,6 +31,17 @@ const PKG_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 export const SLICE_FILE = join(PKG_ROOT, "corpus", "conceptnet", "slice.jsonl");
 export const MAP_FILE = join(PKG_ROOT, "src", "corpus", "conceptnet-map.toml");
 
+// The tier-1 curated Software-Engineering ontology (SEON). concepts.jsonl is in
+// the SAME slice shape as ConceptNet ({start, rel, end, weight}), so it loads +
+// maps through the identical loadSlice/loadMap/toFacts path — just with a
+// "corpus:seon" provenance prefix. definitions.jsonl is a separate {term,
+// definition, sense} list the chat answer layer prefers for a lexicon term's
+// "what is a <term>". tier-2 corpuses (aws/python/java) share the slice shape too.
+export const SEON_CONCEPTS_FILE = join(PKG_ROOT, "corpus", "seon", "concepts.jsonl");
+export const SEON_DEFINITIONS_FILE = join(PKG_ROOT, "corpus", "seon", "definitions.jsonl");
+export const TIER2_DIR = join(PKG_ROOT, "corpus", "tier2");
+export const TIER2_MANIFEST_FILE = join(TIER2_DIR, "manifest.json");
+
 const ACE_PATTERNS = new Set(["subClassOf", "type", "ObjectProperty", "someValuesFrom", "disjointWith", "property", "none"]);
 
 /** Load the slice JSONL as a stream (never the whole file as one string) and
@@ -92,8 +103,13 @@ export const termText = (uri) => {
  *  (provenance is a STRING — exactly what src/memory/core.mjs appendFact
  *  takes; it names the corpus and the originating ConceptNet relation).
  *  Rows whose relation maps ace="none" are skipped — deliberate non-emission.
- *  A relation with NO row in the map throws: that is table drift, not data. */
-export function toFacts(assertions, map) {
+ *  A relation with NO row in the map throws: that is table drift, not data.
+ *
+ *  `provenancePrefix` names the corpus half of the provenance string; it defaults
+ *  to "corpus:conceptnet" so the ConceptNet seed stays BYTE-IDENTICAL to before.
+ *  The seon / tier-2 corpuses reuse the same slice shape, tagged "corpus:seon" or
+ *  "corpus:tier2:<id>" so a reader can tell a curated SE fact from ConceptNet noise. */
+export function toFacts(assertions, map, provenancePrefix = "corpus:conceptnet") {
   const facts = [];
   for (const a of assertions) {
     const row = map.get(a.rel);
@@ -108,7 +124,7 @@ export function toFacts(assertions, map) {
       subject,
       predicate: row.predicate,
       object,
-      provenance: `corpus:conceptnet ${a.rel}`,
+      provenance: `${provenancePrefix} ${a.rel}`,
     });
   }
   return facts;
@@ -127,10 +143,12 @@ export function toFacts(assertions, map) {
  *  Idempotent twice over: appendFact's content-hashed ids make a blind
  *  re-append an upsert, and we pre-read the store once to skip triples that
  *  are already there (so re-seeding costs one read, not N rewrites).
- *  Returns { appended, skipped, total }. */
-export async function seedMemory(dir, { limit, slicePath = SLICE_FILE, mapPath = MAP_FILE, prefer } = {}) {
+ *  Returns { appended, skipped, total }. `provenancePrefix` is threaded through to
+ *  toFacts (default "corpus:conceptnet" → byte-identical seed) so a seon/tier-2
+ *  corpus can tag its facts "corpus:seon" / "corpus:tier2:<id>". */
+export async function seedMemory(dir, { limit, slicePath = SLICE_FILE, mapPath = MAP_FILE, prefer, provenancePrefix } = {}) {
   const [assertions, map] = await Promise.all([loadSlice(slicePath), loadMap(mapPath)]);
-  let facts = toFacts(assertions, map);
+  let facts = toFacts(assertions, map, provenancePrefix);
   if (Array.isArray(prefer) && prefer.length) {
     const rank = new Map(prefer.map((p, i) => [p, i]));
     // stable partition: Array.prototype.sort is stable in Node, so equal-rank
