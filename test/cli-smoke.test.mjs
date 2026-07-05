@@ -34,8 +34,8 @@ test("bare invocation with non-TTY stdin reaches CHAT (the headline argv splice)
       encoding: "utf8", input: "hi\n/exit\n", cwd: dir, env: { ...process.env, TMCT_NO_SEED: "1" },
     });
     assert.equal(bare.status, 0, bare.stderr);
-    assert.match(bare.stdout, /no graph loaded — starting empty/);
-    assert.match(bare.stdout, /Hi\. Ask me about this codebase/, "the greeting turn answered");
+    assert.match(bare.stdout, /no code graph loaded — starting empty/); // #3: 0-module orientation
+    assert.match(bare.stdout, /Hi\. There's no code graph loaded here/, "the greeting orients (empty graph), not over-promises"); // #3
     const names = await readdir(join(dir, ".tmct"));
     assert.ok(names.some((n) => /^session-.*\.log$/.test(n)), "the bare invocation wrote its session log");
   } finally {
