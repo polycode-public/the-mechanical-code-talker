@@ -34,6 +34,7 @@ software repository. No model calls; no codebase index of its own.
 Usage:
   tmct                         interactive chat (the headline surface)
   tmct chat [--repo <abs>]     chat over a specific repo's graph
+       [--ephemeral]           read the graph but write nothing back (demo/read-only)
        [--plain]               force the plain readline shell (the default when
                                stdin/stdout is not a terminal)
   tmct memory [--repo <abs>]   what tmct remembers: facts, utterances, sessions,
@@ -267,16 +268,21 @@ async function main() {
     const rest = process.argv.slice(3);
     const i = rest.indexOf("--repo");
     const repoPath = i !== -1 ? rest[i + 1] : undefined;
+    // `--ephemeral` (used by the shipped `npm run example:*` scripts): read the
+    // target graph but write nothing back — no session folded into the committed
+    // code graph, no .tmct/memory dropped under it. A demo you can run repeatedly
+    // on a checked-in example without ever dirtying it.
+    const ephemeral = rest.includes("--ephemeral");
     // The shell gate: a real terminal gets the full-screen Ink TUI; `--plain` or a
     // non-TTY stream (pipes, scripts, the test suite) gets the readline shell. Both
     // drive the same createSession sink — only the drawing differs.
     const plain = rest.includes("--plain") || !process.stdin.isTTY || !process.stdout.isTTY;
     if (plain) {
       const { runChat } = await import("../src/chat.mjs");
-      await runChat({ repoPath });
+      await runChat({ repoPath, ephemeral });
     } else {
       const { runTui } = await import("../src/tui/app.mjs");
-      await runTui({ repoPath });
+      await runTui({ repoPath, ephemeral });
     }
     return;
   }

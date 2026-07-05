@@ -39,7 +39,8 @@
 
 import { join, dirname } from "node:path";
 import { createWriteStream } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { createInterface } from "node:readline/promises";
 import { spawnSync } from "node:child_process";
 import { dispatchTool } from "./server.mjs";
@@ -1789,7 +1790,15 @@ export async function createSession({
   env = process.env,
   cwd = process.cwd(),
   gitRoot = gitToplevel,
+  ephemeral = false,
 } = {}) {
+  // EPHEMERAL mode (--ephemeral, or TMCT_EPHEMERAL=1): read the target graph but
+  // write NOTHING back into it. The shipped examples run this way so a demo never
+  // dirties the committed code graph (`npm run example:mini` used to fold a session
+  // into examples/*/.tmct/graph.json and rewrite it). We still read config.graphFile
+  // for structure; only the WRITE base (logs, memory, sessions) is diverted to an OS
+  // temp dir and the read-time graph upsert is suppressed.
+  ephemeral = ephemeral || /^(1|true|yes)$/i.test(String(env.TMCT_EPHEMERAL || ""));
   // Graph resolution order for the chat surface (documented; --repo wins):
   //   1. --repo <path>       → pins <path>/.tmct/graph.json (repo AND graph).
   //   2. TMCT_GRAPH_FILE env → loads that graph anywhere (loadConfig reads it), so
@@ -1812,6 +1821,11 @@ export async function createSession({
     // otherwise the repo's own .tmct/graph.json is the target.
     config = envGraph ? loadConfig(env, cwd) : { graphFile: join(repo, DEFAULT_GRAPH_REL) };
   }
+
+  // Ephemeral: keep config.graphFile pointing at the READ graph, but divert the
+  // write base (repo → logs/memory/sessions) to a throwaway temp dir. The committed
+  // target is never touched; the demo's memory simply doesn't persist across runs.
+  if (ephemeral) repo = await mkdtemp(join(tmpdir(), "tmct-ephemeral-"));
 
   // Load the graph once up front — the banner needs the module count, and focus/`it`
   // resolution and contextId threading need it in hand. A missing artifact loads as
@@ -1859,6 +1873,7 @@ export async function createSession({
   // artifact mid-session must degrade the recording, never kill the chat.
   const turnRecords = [];
   const upsertGraph = async (ended) => {
+    if (ephemeral) return; // a demo/read-only session never writes back to the graph
     if (!turnRecords.length) return; // a zero-turn session never pollutes the graph
     try { await appendSessionToGraph(config.graphFile, { id: sessionId, started: startIso, ended, turns: turnRecords }); }
     catch { /* best-effort — see above */ }
@@ -1964,8 +1979,9 @@ export async function runChat({
   env = process.env,
   cwd = process.cwd(),
   gitRoot = gitToplevel,
+  ephemeral = false,
 } = {}) {
-  const session = await createSession({ repoPath, source, env, cwd, gitRoot });
+  const session = await createSession({ repoPath, source, env, cwd, gitRoot, ephemeral });
 
   const dim = (s) => (env.NO_COLOR || !output.isTTY ? s : `\x1b[2m${s}\x1b[0m`);
   for (const line of session.bannerLines) output.write(dim(line) + "\n");
