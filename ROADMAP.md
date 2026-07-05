@@ -308,6 +308,20 @@ from meta-1's harness artifact), **C2 ceiling LAST**. Operator decision 2026-07-
 them**. Exit criterion in the plan (roughly: B1 grade mean ≥ ~1.5 with all cells dual-draw
 agreeing unlocks C-grade judging).
 
+## Near-term actions (from the dependency audit, PLAN_DEPENDENCY_STRATEGY.md)
+
+Two concrete, low-risk actions the audit surfaced — not features, not dep changes:
+
+1. **Fix wink's `createRequire` browser-loader gap** — the wink model IS the browser build, but
+   our adapters load it via `createRequire(import.meta.url)` (`ask-nlp.mjs:29`, `prose-nlp.mjs:31`),
+   which is Node-only. Browser mode needs a bundler `import` path. **A Phase 8 (browser-mode)
+   blocker** — budget it into `PLAN_REPOSITORY_INTERFACE.md`; it is a wiring fix, not a dependency
+   change (the model is already browser-capable).
+2. **Single-source `fnv1a`** — extract the content-address hash to one `src/hash.mjs` so the
+   cross-version-stable fact-id contract has a single definition. Trivial refactor, do any time;
+   no dependency (the audit confirmed home-grown FNV-1a is the correct choice — sync + browser +
+   version-stable, which every library candidate fails).
+
 ## Provenance & trust — the unified source-link primitive (cross-cutting)
 
 > Detailed plan: **PLAN_PROVENANCE_TRUST.md**.
