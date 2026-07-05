@@ -1,5 +1,10 @@
 # PLAN_RESPONSE_FINISHING.md — Phase 7: the grammar pass over a segmented answer
 
+> **STATUS: shipped (Phase 7).** Answers segment into typed spans (prose vs protected
+> entity/path/number/code/provenance/receipt); a data-driven grammar-rule pass runs on prose
+> spans only, under a protected-span invariance guard. The a/an article fix is active; broader
+> voice/agreement rules are implemented-but-parked.
+
 A Phase-7 execution plan (operator, decisions settled 2026-07-05). Phase 7 is FULLY DECIDED in
 ROADMAP.md; this doc elaborates HOW the finishing layer is built, not WHETHER — it reopens no
 decision. The governing principle: **fact invariance BY CONSTRUCTION**. Finishing operates over a

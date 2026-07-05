@@ -1,5 +1,10 @@
 # PLAN_CYCLE_4.md — the B1-cliff arc: fix the instrument, then teach the missing verbs
 
+> **STATUS: partially shipped.** The two headline B1 product levers landed: negation as a bounded
+> SET COMPLEMENT ("which X do not <verb> Y"; honest-empty stays a miss, the non-enumerable Change
+> type is refused) and reversible-passive traversal ("X is imported by Y" reverses edge direction).
+> The tuning arc otherwise continues.
+
 An operator-directed multi-cycle plan (operator, 2026-07-05: reviewing the CHATBENCH_003 lever
 board — "we'll do ALL of them"). Cycle 3 gave us the first full CEFR reading and, with it, a clear
 diagnosis: a clean A1/A2 shelf (~1.71), a **cliff at B1 (0.766)**, and a jagged C-tier not worth

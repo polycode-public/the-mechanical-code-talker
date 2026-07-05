@@ -1,5 +1,12 @@
 # PLAN_REPOSITORY_INTERFACE.md — seonix inverts into a tmct user
 
+> **STATUS: shipped (Phase 8).** A versioned (1.0.0), OWL-grounded, machine-readable service
+> contract (`docs/repository-interface.md` + `.schema.json`); a typed graph-service with a
+> first-class miss contract (a miss is a value, not a throw); fixture + bootstrap reference
+> providers; a runnable conformance/compatibility suite external producers (e.g. seonix) run to
+> claim conformance; and `tmct init` (scaffold `.tmct/`, `tmct.toml`, tier-1 seed, provenance).
+> A shared wink model loader adds the browser registration seam.
+
 The Phase 8 plan (operator-specified 2026-07-05). tmct v0.1.0 was a whole-package lift OUT of
 `@polycode-projects/seonix`; this phase inverts the relationship. seonix reorients as a **user** that
 imports the tmct library and exposes its native graph to tmct as a typed service — the mirror image of

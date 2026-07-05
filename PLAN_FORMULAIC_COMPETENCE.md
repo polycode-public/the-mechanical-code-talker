@@ -1,5 +1,9 @@
 # PLAN_FORMULAIC_COMPETENCE.md — templates first, productive composition later
 
+> **STATUS: shipped (Phase 6).** A technical (C1) register of templates plus dual-banding
+> (productive band = composed answers only; performance band = templates allowed) in the
+> benchmark, computed from the `via` provenance.
+
 The Phase 6 plan (operator, 2026-07-04, refined 2026-07-05). The graded benchmark (Phase 3) grades
 the conversation on a human CEFR ladder; the wiring wave (Phase 4) gave every turn a `via`
 provenance field and made the template renderer load-bearing. This plan reads those two together

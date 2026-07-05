@@ -20,20 +20,26 @@ Stage 4 Phase 7 → Stage 5 Phase 8 → Stage 6 Phase 9 → Stage 7 (deferred do
 
 | Stage | State | Notes |
 |---|---|---|
-| 0 — foundations | ✅ DONE, pushed | src/hash.mjs single-source fnv1a; src/wink-model.mjs shared loader + browser seam; seonix security port + npm provenance. 602 tests green, both smokes exit 0. Commits 5225e62 / 5794443 / 9409685. |
-| 1 — provenance & trust | ⏳ next | PLAN_PROVENANCE_TRUST.md a→d. Blocks 6/7/9. |
-| 2 — Phase 5 levers | pending | PLAN_CYCLE_4.md |
-| 3 — Phase 6 | pending | PLAN_FORMULAIC_COMPETENCE.md |
-| 4 — Phase 7 | pending | PLAN_RESPONSE_FINISHING.md |
-| 5 — Phase 8 | pending | PLAN_REPOSITORY_INTERFACE.md |
-| 6 — Phase 9 | pending | PLAN_SPECULATIVE_INFERENCE.md |
-| 7 — ACE parser | deferred | doc-only this round |
-| 8 — docs + release | pending | README, homepage, ROADMAP status, 0.4.0 bump |
-| final — chatbench 004 | pending | SKILL_TUNING_CYCLE.md |
+| 0 — foundations | ✅ DONE, pushed | hash single-source, wink shared loader + browser seam, security + npm provenance. |
+| 1 — provenance & trust | ✅ DONE, pushed | createdAt, Source edges, computeTrust, trust-weighted retrieval, contradiction inspector; legacy string kept as compat shim. |
+| 2 — Phase 5 levers | ✅ DONE, pushed | negation set-complement + reversible-passive (guards green); harness Meta-1/2 + pool + dual-banding; assert-recall read-back. |
+| 3 — Phase 6 | ✅ DONE, pushed | dual-banding + technical (C1) register. |
+| 4 — Phase 7 | ✅ DONE, pushed | segmentation IR + grammar-rule engine (a/an active, voice rules parked) + finish seam + canonise-link. |
+| 5 — Phase 8 | ✅ DONE, pushed | typed service + versioned contract + conformance kit + providers + session handle + `tmct init`. |
+| 6 — Phase 9 | ✅ DONE, pushed | `tmct syllogise` subClassOf closure, budget/focus/trust guards; kill criterion MET (flips real misses on default seed). |
+| 7 — ACE parser | deferred | doc-only; PLAN_OSS_ACE_PARSER.md is the follow-up spec. |
+| 8 — docs + release | 🔄 in progress | docs agent updating README/homepage/ROADMAP/PLANs; 0.4.0 bump is the LAST commit (after 004). |
+| final — chatbench 004 | 🔄 running | product replay done (333 rows, NO tier-1 regressions; B1 negation 5/5, passive 5/5 green); judge fanning out x3 @ conc 12. |
 
 ## Test / smoke state
-- `npm test`: **602 pass / 0 fail** (as of Stage 0).
-- Smokes: graph-less bootstrap (seeds 500 facts, exit 0) + fixture-graph (8 modules, exit 0).
+- `npm test`: **714 pass / 0 fail**. Both smokes exit 0. `tmct init` + `tmct syllogise` drive clean.
+
+## chatbench 004 (in flight)
+- Product replay: `chatbench/results/raw/run-cycle-004/product-a.jsonl` (333 rows), `product-b.jsonl`, `agreement.json`.
+- No tier-1 regressions vs cycle-003. B1 negation 5/5 green (was 0.200), reversible-passive 5/5 (was 0.478).
+- Judge: pinned claude-haiku-4-5 / judge-prompt-v1, N=3, concurrency 12 → judged.jsonl + summary.json.
+- Cycle 4 is a **groundedness RE-BASELINE** (FIXTURE_CONTEXT → fixture-context-v2); do not compare v1-context groundedness to v2-context.
+- Pending write-up: CHATBENCH_004.md + CHATBENCH_004_TRANSCRIPTS.md.
 
 ## Last bench numbers (baseline to beat, from CHATBENCH_003 / Cycle 3)
 CEFR: A1 1.72 · A2 1.70 · **B1 0.77 (cliff)** · B2 0.97 · C1 1.07 · C2 0.69. Combined 1.258 (trap

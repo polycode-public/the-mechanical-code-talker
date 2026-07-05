@@ -1,5 +1,10 @@
 # PLAN_SPECULATIVE_INFERENCE.md — thinking ahead about the right things
 
+> **STATUS: shipped (Phase 9).** `tmct syllogise [--depth n] [--budget n]` — an offline,
+> bounded, deterministic maintenance job that forward-chains the memory's `rdfs:subClassOf`
+> closure into low-trust, retractable entailed facts. Runs once after seeding; never on the
+> chat hot path.
+
 The Phase 9 plan (operator-specified 2026-07-05). Phase LATER's tier-5 — **the Syllogist** — answers
 a query-time MISS by deductive inference on demand: a well-formed question misses everywhere, so run
 the inference layer over the OWL-encoded facts + axioms and, if the answer is *entailed*, materialize

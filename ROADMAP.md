@@ -277,6 +277,10 @@ and the block-index summary (blocks, tokens, top PageRank blocks). Same renderer
 
 ## Phase 5 — The cycle-4+ tuning arc (near-term: make the floor reliable)
 
+> **STATUS: in progress — the two headline B1 levers shipped.** Negation as a bounded SET
+> COMPLEMENT ("which X do not <verb> Y") and reversible-passive traversal ("X is imported by Y")
+> are live; the harness meta-fixes and the rest of the ranked lever board continue.
+
 > Detailed plans: **PLAN_CYCLE_4.md** (the tuning arc) and **PLAN_DEPENDENCY_STRATEGY.md**
 > (the pre-build dependency audit — verdict: no dep changes now; a standing adoption
 > register + avoid-list for phases 6-9; two near-term actions).
@@ -310,6 +314,9 @@ agreeing unlocks C-grade judging).
 
 ## Near-term actions (from the dependency audit, PLAN_DEPENDENCY_STRATEGY.md)
 
+> **STATUS: both shipped.** The wink browser-loader seam is added (shared model loader with a
+> browser registration path) and `fnv1a` is single-sourced into `src/hash.mjs`.
+
 Two concrete, low-risk actions the audit surfaced — not features, not dep changes:
 
 1. **Fix wink's `createRequire` browser-loader gap** — the wink model IS the browser build, but
@@ -323,6 +330,12 @@ Two concrete, low-risk actions the audit surfaced — not features, not dep chan
    version-stable, which every library candidate fails).
 
 ## Provenance & trust — the unified source-link primitive (cross-cutting)
+
+> **STATUS: shipped.** `mgx:createdAt` universal; `Source` first-class individuals linked by
+> `mgx:derivedFrom` / `mgx:statedBy` / `mgx:canonicalisedFrom`; a deterministic `computeTrust`
+> (source-type prior × corroboration × recency); retrieval weighted by relevance × trust; the
+> `/memory` inspector surfaces contradictions with provenance. Legacy `mgx:factProvenance` kept
+> as a compat shim.
 
 > Detailed plan: **PLAN_PROVENANCE_TRUST.md**.
 
@@ -354,6 +367,9 @@ fact enters memory:
 
 ## Phase 6 — Formulaic competence: the template-acquisition learning loop
 
+> **STATUS: shipped.** A technical (C1) register of templates and productive/performance
+> dual-banding (computed from the `via` provenance) are live in the benchmark.
+
 > Detailed plan: **`PLAN_FORMULAIC_COMPETENCE.md`**.
 
 The operator's insight upgraded to the strategy: a consistently-failed C1/C2 graded cell whose
@@ -382,6 +398,10 @@ answer EXISTS as a stable phrasing in technical prose is not a ceiling — it is
   blocks (tier-2), scored by slot-fillability, promoted into `data/templates/` with provenance.
 
 ## Phase 7 — Response finishing: the grammar pass (tone of voice dropped for now)
+
+> **STATUS: shipped.** Answers segment into typed spans (prose vs protected); the grammar-rule
+> pass runs on prose spans only under a protected-span invariance guard. The a/an article fix is
+> active; broader voice/agreement rules are implemented-but-parked.
 
 > Detailed plan: **`PLAN_RESPONSE_FINISHING.md`**.
 
@@ -413,6 +433,12 @@ ever emerge.)*
   golden files per rule + the graded bench measuring each grammar rule as a lever.
 
 ## Phase 8 — The Repository Interface (seonix inverts to a tmct user)
+
+> **STATUS: shipped.** A versioned (1.0.0), OWL-grounded service contract
+> (`docs/repository-interface.md` + `.schema.json`); a typed graph-service with a first-class
+> miss contract (a miss is a value, not a throw); fixture + bootstrap reference providers; a
+> runnable conformance/compatibility suite; and `tmct init` (scaffold `.tmct/`, `tmct.toml`,
+> tier-1 seed, provenance).
 
 > Detailed plan: **`PLAN_REPOSITORY_INTERFACE.md`**.
 
@@ -478,6 +504,10 @@ a passive payload loader into the product's primary integration surface.)*
 
 ## Phase 9 — Speculative inference: a step toward the Syllogist
 
+> **STATUS: shipped.** `tmct syllogise [--depth n] [--budget n]` — an offline, bounded,
+> deterministic maintenance job that forward-chains the `rdfs:subClassOf` closure into low-trust,
+> retractable entailed facts; runs once after seeding, never on the chat hot path.
+
 *(Operator-specified 2026-07-05. Tier-5 entailment answers a MISS on demand; this is the step
 before it — PROACTIVELY extending memory with inferences that will be useful later, forward and
 backward chaining over the OWL base during idle/fold time rather than at query time.)*
@@ -506,6 +536,9 @@ speculative is retractable and never outranks a stated fact). Everything else is
 plan's open questions, where the relevance problem is named as the open research risk it is.
 
 ### Open-source the ACE-OWL parser as a standalone library
+> **STATUS: deferred follow-up** — not yet started; still gated on the Phase 8 library-surface
+> work settling the extraction boundary. See `PLAN_OSS_ACE_PARSER.md`.
+
 *(Operator-specified 2026-07-05, from the dependency audit's publish-not-replace finding.)* The
 pure-JS, ESM, dependency-free ACE-OWL controlled-grammar parser (`src/grammar/ace.mjs` +
 `lexicon.mjs`) that turns controlled-English sentences into OWL-labelled triples is a RARE thing:

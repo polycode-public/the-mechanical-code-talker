@@ -1,5 +1,10 @@
 # PLAN_DEPENDENCY_STRATEGY.md — audit the libraries before building on them
 
+> **STATUS: near-term actions shipped.** `fnv1a` is single-sourced into `src/hash.mjs` (the
+> content-address hash now has one definition), and a shared wink model loader adds a browser
+> registration seam (the `createRequire` browser-loader gap). No dependency changes — as the
+> audit advised.
+
 A pre-Phase-5 strategic review (operator, 2026-07-05). Before the cycle-4 tuning arc and the
 feature phases (6–9) build on the current substrate, audit what tmct depends on, what it
 home-grows, and what the modern JS ecosystem offers — so any "switch now" lands *before* features

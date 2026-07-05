@@ -114,10 +114,14 @@
 $ tmct
 tmct&gt; what talks to the payment module?
 …
-tmct&gt; /help
+tmct&gt; which modules do not import logger?
+…
+tmct&gt; /memory        # inspect what tmct remembers, with provenance
 tmct&gt; /exit</code></pre>
   <p>Point it at a repo's graph with <code>tmct chat --repo /path/to/repo</code>, or start
   with nothing — tmct bootstraps an empty memory and remembers what you tell it.</p>
+  <pre><code>tmct init         # scaffold .tmct/, tmct.toml, seed corpus + provenance
+tmct syllogise    # offline: pre-derive entailed facts (a maintenance job)</code></pre>
 
   <h2>How it works</h2>
   <ul>
@@ -131,7 +135,35 @@ tmct&gt; /exit</code></pre>
       (<code>.tmct/</code>, local, never committed) plus text blocks under a
       PageRank-style relevance index, both fed by every parsed exchange and by cleaned
       session logs. Committed corpuses (a ConceptNet slice is planned) seed the vocabulary.</li>
+    <li><strong>Provenance &amp; trust on every fact</strong> — each fact records where it
+      came from and when; sources are first-class, and a deterministic, explainable trust
+      score (source-type prior &times; corroboration &times; recency) weights retrieval by
+      <em>relevance &times; trust</em>. When trusted sources disagree, <code>/memory</code>
+      shows both sides with their provenance instead of silently picking one.</li>
+    <li><strong>Negation &amp; passive</strong> — &ldquo;which modules do <em>not</em> import
+      X&rdquo; computes a bounded set complement (an honestly empty answer stays a miss);
+      &ldquo;imported by&rdquo; and &ldquo;imports&rdquo; traverse opposite edges.</li>
+    <li><strong>Response finishing</strong> — answers are segmented into prose vs
+      <em>protected</em> spans (entities, paths, numbers, code, provenance); a small grammar
+      pass touches prose only, under a guard that proves the protected spans pass through
+      byte-for-byte.</li>
+    <li><strong>Speculative inference, offline</strong> — <code>tmct syllogise</code>
+      forward-chains the OWL subclass closure into low-trust, retractable entailed facts as a
+      bounded maintenance job — never on the chat's hot path.</li>
   </ul>
+
+  <h2>The repository interface</h2>
+  <p>tmct builds no index of its own — it consumes a graph through a <strong>versioned
+  (1.0.0), OWL-grounded, machine-readable service contract</strong> where a <em>miss is a
+  value, not a throw</em>. It ships reference providers (fixture + empty/bootstrap graph) and
+  a runnable <strong>conformance suite</strong>: any external producer (seonix first) runs the
+  same suite to claim conformance. Conformance is the suite, not prose.</p>
+
+  <h2>Security &amp; supply chain</h2>
+  <p>CI runs SAST and secret detection; a nightly <code>npm audit</code> + OSV-Scanner job
+  watches dependencies; releases publish with <strong>npm provenance</strong>; and a
+  <code>SECURITY.md</code> policy documents coordinated disclosure. Offline and $0 by default
+  means the supply chain has to be trustworthy too.</p>
 
   <h2>The no-LLM, honesty pitch</h2>
   <ul>
@@ -163,6 +195,26 @@ tmct&gt; /exit</code></pre>
     <div><h3>Chat tuning cycle (autonomous)</h3>
     <p>A fixed chatbench case set, deterministic replay, LLM-as-judge scoring —
     in the offline eval harness only; the product stays no-LLM.</p></div></div>
+  <div class="card phase"><span class="num">Provenance</span>
+    <div><h3>Source-link &amp; trust primitive (done)</h3>
+    <p>Timestamped facts, first-class sources, deterministic trust, trust-weighted
+    retrieval, contradiction surfacing in <code>/memory</code>.</p></div></div>
+  <div class="card phase"><span class="num">Phase 6</span>
+    <div><h3>Formulaic competence (done)</h3>
+    <p>A technical (C1) register of templates and productive-vs-performance
+    dual-banding in the benchmark.</p></div></div>
+  <div class="card phase"><span class="num">Phase 7</span>
+    <div><h3>Response finishing (done)</h3>
+    <p>Typed-span segmentation with a protected-span invariance guard; the a/an
+    fix is active, broader voice rules parked.</p></div></div>
+  <div class="card phase"><span class="num">Phase 8</span>
+    <div><h3>Repository interface (done)</h3>
+    <p>A versioned, OWL-grounded service contract, reference providers, a
+    conformance suite, and <code>tmct init</code>.</p></div></div>
+  <div class="card phase"><span class="num">Phase 9</span>
+    <div><h3>Speculative inference (done)</h3>
+    <p><code>tmct syllogise</code> — offline, bounded, deterministic
+    forward-chaining into low-trust, retractable facts.</p></div></div>
 
   <h2>Links</h2>
   <ul>

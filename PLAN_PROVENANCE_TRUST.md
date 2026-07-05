@@ -1,5 +1,12 @@
 # PLAN_PROVENANCE_TRUST.md — one source-link primitive, built once, consumed everywhere
 
+> **STATUS: shipped.** The primitive is live: `mgx:createdAt` on every fact/block; `Source`
+> first-class individuals linked by `mgx:derivedFrom` / `mgx:statedBy` / `mgx:canonicalisedFrom`;
+> a deterministic, explainable `computeTrust` (source-type prior × corroboration × recency);
+> retrieval weighted by relevance × trust; the `/memory` inspector surfaces contradictions with
+> both sides + provenance rather than silently picking. Fact ids still content-address `(s,p,o)`;
+> legacy `mgx:factProvenance` retained as a compat shim.
+
 A cross-cutting infrastructure plan (operator-specified 2026-07-05). Four features on the roadmap
 already need the same thing in four disguises: Phase 7's canonicalise-and-link, Phase LATER tier-4's
 learn-on-miss (raw web text → cleaned linked form), tier-5's entailment (conclusion linked to
