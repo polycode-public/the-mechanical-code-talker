@@ -48,7 +48,12 @@
     "./relationKind": "./src/codegraph.mjs",
     "./impactClosure": "./src/codegraph.mjs",
     "./dispatchTool": "./src/server.mjs",
-    "./fetchEntities": "./src/source.mjs"
+    "./fetchEntities": "./src/source.mjs",
+    "./repository-interface": "./src/repository-interface.mjs",
+    "./graph-service": "./src/providers/graph-service.mjs",
+    "./providers/fixture": "./src/providers/fixture.mjs",
+    "./providers/bootstrap": "./src/providers/bootstrap.mjs",
+    "./conformance": "./src/conformance.mjs"
   },
   "files": [
     "bin/",
