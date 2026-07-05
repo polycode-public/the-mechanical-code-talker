@@ -49,6 +49,31 @@ under a guard that proves the protected spans came through byte-for-byte. Today
 that pass fixes the a/an article defect; broader voice and agreement rules are
 implemented but parked until they earn their place on the benchmark.
 
+## How it guides you
+
+When you touch a **concept** without asking a precise question — "what is a
+class", "what about imports", "what calls are there" — tmct answers in three
+bands instead of dead-ending:
+
+1. the **definition** (a plain-English one-liner: *"A class is a template that
+   defines the structure and behaviour of objects."* / *"To import is to bring
+   another module's definitions into the current one."*);
+2. **real instances from your graph** — *"In this codebase, for example: Record,
+   Task and User (10 classes)"*, or actual edges *"src/core/store.mjs imports
+   src/core/model.mjs (18 import edges)"*;
+3. **guided follow-ups** — two or three concrete next questions, each one
+   *pre-checked against your graph* so every suggestion is guaranteed to resolve:
+   *"Want to go deeper? Try: which classes inherit from Record / what does Task
+   contain / where is User defined"*.
+
+It fires for both **noun** concepts (class, module, function, method) and
+**relation** concepts (imports, calls, contains, inherits, tests), and only when
+tmct genuinely knows the concept *and* has instances of it — otherwise the honest
+miss stands. The effect is a conversation that drills down from a vague opener to
+a useful answer without ever hitting a wall. Natural phrasings are routed to the
+capability you meant: *"what functions are in Task"* → its members, *"what
+defined saveStore"* → where it's defined.
+
 ## How it remembers
 
 tmct's memory has two layers, both fed by every parsed request and response and
@@ -60,9 +85,12 @@ by cleaned session logs:
   relevance rather than loaded wholesale.
 
 With no graph at all, tmct starts empty and remembers what you tell it — the
-`.tmct/` graph is created from the conversation. Committed corpuses seed the
-vocabulary; a filtered **ConceptNet slice** (CC-BY-SA 4.0) is planned — see
-`ROADMAP.md` Phase 2.
+`.tmct/` graph is created from the conversation. On a first run it seeds the
+committed vocabulary so it knows what it's talking about from turn one: a curated
+**SEON** software ontology plus the whole filtered **ConceptNet slice**
+(CC-BY-SA 4.0) — every term carries an English definition, so "what is a cache?"
+answers offline, from disk, on turn one. `--ephemeral` (used by the shipped
+`npm run example:*` demos) reads a graph but writes nothing back.
 
 ### Provenance and trust
 

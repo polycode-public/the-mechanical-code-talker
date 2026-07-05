@@ -569,7 +569,7 @@ you toward precision" promise on the conversational surface.
   ConceptNet slice quality-filtered (word-sense noise cut) and regrown to ~40k facts; tier-2
   specialised corpuses (aws/python/java) with `tmct init --corpus`; batched `appendFacts` (one
   write, 419s→2.5s) enabling **seed-all** so a fresh repo knows the whole curated vocabulary.
-- **The concept force (0.7.0):** a vague touch on a concept X, where tmct knows X and has instances,
+- **The concept force (shipped 0.7.0):** a vague touch on a concept X, where tmct knows X and has instances,
   answers in three bands — **the definition** (from `corpus/seon`), **the examples** (real code-graph
   + memory instances of X), and **a soft guided follow-up** ("Want to go deeper?" + 2–3 questions
   built from the real instances × the query shapes valid for that kind, each pre-validated to
@@ -579,6 +579,18 @@ you toward precision" promise on the conversational surface.
   de-anthropomorphised (no first-person "i learned:" over-claim — corpus facts read as data +
   provenance; `you told me` stays for operator-asserted facts); listings cap at 32 with a "say
   'more'" pagination that holds the remainder in session state.
+- **Dead-end routing + read-only demos (shipped 0.7.0):** natural drill-down phrasings are routed
+  onto the canonical shapes they mean — `what functions are in X` → members-of-class, `what defined
+  X` → where-is-X-defined, a no-context `what about X` → the concept/relation force (the discourse
+  continuation still wins when there IS a prior answer). `tmct chat --ephemeral` (and the
+  `npm run example:*` demos) reads a graph but writes nothing back, so a checked-in example is never
+  dirtied by a demo run.
+- **The dialogue-flow loop (`SKILL_CHAT_PLAYTEST.md`, 0.7.0):** a fast, qualitative tuning loop that
+  complements the LLM-judge benchmark — Claude plays a curious user, hunts *dead-ends* (walls,
+  "unknown qualifier", phrasing-misses, invited follow-ups the engine can't take), fixes them by
+  ROUTING to existing capabilities, replays the same conversations until they flow, freezes them as
+  regression transcripts, then ratchets the complexity tier. The drill-down transcript above is its
+  first frozen fixture (`test/chatflow-drilldown.test.mjs`).
 - **Measured** by the version-matched benchmark (`CHATBENCH_<version>` per `SKILL_TUNING_CYCLE.md`),
   with new graded cells for the miss / empty-graph / concept-touch surfaces so these become
   regression-protected levers, not one-off polish.
