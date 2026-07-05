@@ -30,8 +30,65 @@ import { createInterface } from "node:readline";
 import { SEED_TERMS, CANONICAL_RELS, FILTERED_RELS, bareEnTerm } from "./fetch-slice.mjs";
 import { loadMap } from "../../src/corpus/conceptnet.mjs";
 
-const MAX_BYTES = 1_400_000; // committed-slice budget (hard cap 1.5 MB)
-const SEEDS = new Set(SEED_TERMS);
+const MAX_BYTES = 4_500_000; // committed-slice budget (hard cap 5 MB), grown for the ~40k tier-1 target
+
+// Tier-1 growth seeds (2026-07-05): the original SEED_TERMS in fetch-slice.mjs
+// stay the canonical ~90-term base; this list WIDENS the tech domain toward the
+// ~40k-fact target without leaving the software/tech world — languages,
+// frameworks, data structures, cloud/infra, protocols, tools, ML. Kept here (an
+// owned maintainer file) rather than in fetch-slice.mjs so the API route's seed
+// contract is untouched. Union with SEED_TERMS below.
+const EXTRA_SEEDS = [
+  // programming languages & ecosystems
+  "python", "java", "javascript", "typescript", "ruby", "perl", "php", "golang",
+  "rust", "kotlin", "swift", "scala", "haskell", "lisp", "clojure", "erlang",
+  "fortran", "cobol", "pascal", "assembly", "sql", "html", "css", "json", "xml",
+  "yaml", "markdown", "bash", "powershell",
+  // paradigms & concepts
+  "programming", "coding", "recursion", "iteration", "inheritance",
+  "polymorphism", "abstraction", "encapsulation", "concurrency", "parallelism",
+  "multithreading", "asynchronous", "synchronization", "serialization",
+  "optimization", "refactoring", "debugging", "compilation", "runtime",
+  "object_oriented", "functional_programming", "computer_science",
+  "software_engineering", "computer_programming",
+  // data structures & algorithms
+  "hash", "hashtable", "tree", "graph", "list", "tuple", "dictionary", "heap",
+  "matrix", "vector", "node", "recursion", "sorting", "searching", "linked_list",
+  "binary_tree", "hash_table", "data_type", "datatype",
+  // frameworks, tools & platforms
+  "git", "github", "docker", "kubernetes", "jenkins", "react", "angular",
+  "nodejs", "django", "flask", "spring", "rails", "tensorflow", "pytorch",
+  "hadoop", "kafka", "redis", "mongodb", "mysql", "postgresql", "sqlite",
+  "elasticsearch", "apache", "nginx", "wordpress", "eclipse", "vim", "emacs",
+  // hardware & systems
+  "kernel", "driver", "register", "transistor", "semiconductor", "motherboard",
+  "microprocessor", "microcontroller", "gpu", "ram", "rom", "ssd", "firmware",
+  "bootloader", "filesystem", "partition", "peripheral", "microchip",
+  "circuit_board", "integrated_circuit", "hard_drive", "graphics_card",
+  // networking & protocols
+  "packet", "bandwidth", "latency", "router", "firewall", "gateway", "proxy",
+  "dns", "tcp", "ftp", "smtp", "ssh", "ssl", "vpn", "ethernet", "wifi",
+  "bluetooth", "socket", "port", "packet_switching", "ip_address",
+  // web & the net
+  "url", "cookie", "session", "webpage", "hyperlink", "frontend", "backend",
+  "webserver", "webservice", "hosting", "domain", "html5", "ajax",
+  // cloud, infra & devops
+  "cloud_computing", "container", "virtualization", "serverless",
+  "microservice", "deployment", "devops", "pipeline", "infrastructure",
+  "datacenter", "cluster", "scalability", "availability", "redundancy",
+  // security
+  "authentication", "authorization", "cryptography", "hashing", "firewall",
+  "malware", "virus", "vulnerability", "cybersecurity", "cipher",
+  // data & ml
+  "dataset", "database", "datastore", "query", "index", "schema", "transaction",
+  "neural_network", "deep_learning", "classification", "regression",
+  "clustering", "training", "inference", "algorithm", "computation",
+  "big_data", "data_mining", "data_science", "analytics",
+  // concurrency & os primitives
+  "semaphore", "mutex", "deadlock", "scheduler", "interrupt", "syscall",
+  "daemon", "multitasking", "buffer", "pipe",
+];
+const SEEDS = new Set([...SEED_TERMS, ...EXTRA_SEEDS]);
 const termOf = (uri) => uri.slice("/c/en/".length);
 
 const byKey = new Map(); // "start rel end" -> row

@@ -19,7 +19,7 @@ import { lookupByProseTokens } from "../src/prose.mjs";
 
 const attr = (ind, key) => (ind?.attributes || []).find((a) => a.key === key)?.value;
 
-test("slice: loads, en→en only, well-shaped, within the 1.5 MB budget", async () => {
+test("slice: loads, en→en only, well-shaped, within the 5 MB budget", async () => {
   const assertions = await loadSlice();
   assert.ok(assertions.length >= 300, `a real slice, not a stub (got ${assertions.length})`);
   const seen = new Set();
@@ -33,7 +33,7 @@ test("slice: loads, en→en only, well-shaped, within the 1.5 MB budget", async 
     seen.add(key);
   }
   const { size } = await stat(SLICE_FILE);
-  assert.ok(size <= 1_500_000, `slice stays within budget: ${size} bytes`);
+  assert.ok(size <= 5_000_000, `slice stays within budget: ${size} bytes`);
 });
 
 test("drift guard: every relation in the slice has a mapping row; the table is the full canonical set", async () => {

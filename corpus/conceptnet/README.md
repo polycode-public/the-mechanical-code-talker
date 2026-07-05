@@ -15,7 +15,9 @@ see `LICENSE-NOTICE` in this directory for the full attribution.
 - **Source:** ConceptNet 5.7.0 assertions dump,
   `https://s3.amazonaws.com/conceptnet/downloads/2019/edges/conceptnet-assertions-5.7.0.csv.gz`
   (published 2019-07-03).
-- **Retrieved + filtered:** 2026-07-04.
+- **Retrieved + filtered:** 2026-07-04; **regrown to the ~40k tier-1 target on
+  2026-07-05** (same dump, same licence) by widening the tech-seed domain and
+  raising the size budget — see "Growing the slice" below.
 - **Why the dump, not the API:** the public API (`api.conceptnet.io`) was
   hard-down (HTTP 502 from its nginx front-end on every request across ~15
   attempts over 10+ minutes on 2026-07-04), so the slice was stream-filtered
@@ -33,12 +35,16 @@ see `LICENSE-NOTICE` in this directory for the full attribution.
    policy: `/r/EtymologicallyRelatedTo`, `/r/EtymologicallyDerivedFrom`,
    `/r/ExternalURL` (etymology noise and link-outs — no consumer in tmct).
 3. **Tech-domain seed terms**: at least one endpoint's bare term is in the
-   90-term software/tech seed list exported as `SEED_TERMS` from
+   tech seed list — the ~90-term base `SEED_TERMS` exported from
    `fetch-slice.mjs` (software, computer, program, code, module, function,
    database, server, network, bug, test, file, memory, algorithm, keyboard,
-   programmer, repository, commit, …).
+   programmer, repository, commit, …) **plus** the ~230-term `EXTRA_SEEDS`
+   growth list in `filter-dump.mjs` (programming languages, frameworks, data
+   structures, cloud/infra, protocols, tools, ML — python, java, docker,
+   kubernetes, git, neural_network, tcp, kernel, hashtable, …), added
+   2026-07-05 to reach the ~40k tier-1 target while staying in the tech domain.
 4. **Dedupe** by `(start, rel, end)`, keeping the higher weight.
-5. **Size budget** (committed slice ≤ 1.5 MB; target ~1.4 MB), **two-tier**:
+5. **Size budget** (committed slice ≤ 5 MB; target ~4.3 MB), **two-tier**:
    assertions whose relation maps to an ACE-OWL pattern (`ace != "none"` in
    `conceptnet-map.toml`) are kept first, weight-descending; `ace = "none"`
    relations (`RelatedTo`, `Synonym`, …) fill the remaining budget — they
@@ -46,7 +52,7 @@ see `LICENSE-NOTICE` in this directory for the full attribution.
    facts.
 6. Deterministic output order: `(rel, start, end)`.
 
-## Quality-filter pass (2026-07-05)
+## Quality-filter pass (regrown slice, 2026-07-05)
 
 `filter-dump.mjs` keeps the DATA honest (tech-seed match, canonical relations,
 budget) but not the SEMANTICS: ConceptNet's crowd-sourced "Verbosity"/Open-Mind
@@ -66,66 +72,66 @@ row):
   evidence-based set (`elegance, evil, gloom, unreality, universalism, dumb,
   free, junk`) — never a class
 
-**Result: 14,258 → 13,880 rows (378 cut), 1,399,979 → 1,348,361 bytes.** Cuts by
-reason: sentence-fragment 328, single-char 27, numeric 11, opinion-object 8,
-definitional-phrase 4. Of the 4,170 seedable (mapped, `ace≠none`) facts, 286
-noise facts were removed, leaving **3,884 clean seedable facts**. No relation
-disappeared entirely (the drift guard stays satisfied). Re-run any time with:
+**Result (2026-07-05 regrow): 45,633 → 44,947 rows (686 cut), 4,308,850 →
+4,220,629 bytes.** Cuts by reason: sentence-fragment 613, single-char 48,
+numeric 11, opinion-object 8, definitional-phrase 6. Of the seedable (mapped,
+`ace≠none`) facts, the clean slice carries **6,255** — up from 3,884 in the
+1.35 MB slice. No relation disappeared entirely (the drift guard stays
+satisfied). Re-run any time with:
 
 ```bash
 node corpus/conceptnet/quality-filter.mjs --in-place corpus/conceptnet/slice.jsonl
 ```
 
-## Growing the slice toward ~40k facts — the budget blocker
+## Growing the slice toward the ~40k tier-1 target (done 2026-07-05)
 
-Growing tier-1 to the operator's ~40k-fact target is **feasible data-wise but
-blocked by the committed budget**: the ConceptNet dump S3 endpoint is reachable,
-but `test/corpus-conceptnet.test.mjs` asserts `size <= 1_500_000`, and the clean
-slice is already 1.35 MB (13,880 rows). 40k facts is ≈ 4 MB — 2.6× over the cap.
-Reaching it needs a **Wave-2 policy change** (raise `MAX_BYTES` in
-`filter-dump.mjs` AND the budget assertion in the test), which is out of scope
-for a data-only pass. When the budget is raised, regrow with a bigger seed list
-+ budget, then re-run the quality filter:
+The operator's ~40k-fact tier-1 target is **shipped**: the slice was regrown
+from the same ConceptNet dump by (a) widening the tech domain with the
+`EXTRA_SEEDS` list in `filter-dump.mjs` (~230 tech terms — languages,
+frameworks, data structures, cloud/infra, protocols, tools, ML) and (b) raising
+`MAX_BYTES` in `filter-dump.mjs` from 1.4 MB to 4.5 MB with the matching test
+budget assertion (`test/corpus-conceptnet.test.mjs`) raised from 1.5 MB to
+5 MB. The widened seed set matched **45,633 unique en→en assertions** (all under
+budget, so no tier-trimming was needed this pass), and the quality filter
+trimmed them to the committed **44,947 clean facts**. Regenerate with:
 
 ```bash
-# 1. widen the domain and the budget (edit SEED_TERMS in fetch-slice.mjs, MAX_BYTES in filter-dump.mjs)
+# 1. stream-filter the dump (widened seeds + raised budget already live in filter-dump.mjs)
 curl -s https://s3.amazonaws.com/conceptnet/downloads/2019/edges/conceptnet-assertions-5.7.0.csv.gz \
   | gunzip -c | node corpus/conceptnet/filter-dump.mjs > corpus/conceptnet/slice.jsonl
 # 2. re-apply the semantic quality filter
 node corpus/conceptnet/quality-filter.mjs --in-place corpus/conceptnet/slice.jsonl
-# 3. raise the test's budget assertion to match
 ```
 
-## Row counts (pre-filter baseline, 2026-07-04)
+## Row counts (regrown slice, 2026-07-05)
 
-**14,258 assertions, 1,399,979 bytes** — the raw filter-dump output, BEFORE the
-2026-07-05 quality-filter pass above trimmed it to 13,880 rows / 1,348,361 bytes
-(34,074,917 dump lines scanned;
-28,802 unique en→en seed assertions matched = 4,170 mappable + 24,632
-`ace="none"`; ALL 4,170 mappable kept, 10,088 none-rows fill the budget).
-29 of the 31 non-filtered canonical relations are present:
+**44,947 clean assertions, 4,220,629 bytes** — the quality-filtered committed
+slice (raw filter-dump output was 45,633 rows / 4,308,850 bytes; 34,074,917 dump
+lines scanned; 45,633 unique en→en seed assertions matched = 6,670 mappable +
+38,963 `ace="none"`; ALL kept under the 4.5 MB budget, then 686 noise rows cut).
+30 of the 31 non-filtered canonical relations are present; **6,255 seedable
+(`ace≠none`) facts**:
 
 | Relation | Rows | | Relation | Rows |
 |---|---|---|---|---|
-| `/r/RelatedTo` | 4911 | | `/r/HasA` | 39 |
-| `/r/HasContext` | 2634 | | `/r/HasProperty` | 27 |
-| `/r/IsA` | 2594 | | `/r/Antonym` | 25 |
-| `/r/DerivedFrom` | 1906 | | `/r/MotivatedByGoal` | 25 |
-| `/r/AtLocation` | 459 | | `/r/SimilarTo` | 20 |
-| `/r/Synonym` | 368 | | `/r/DistinctFrom` | 19 |
-| `/r/UsedFor` | 312 | | `/r/DefinedAs` | 16 |
-| `/r/FormOf` | 224 | | `/r/MadeOf` | 14 |
-| `/r/CapableOf` | 164 | | `/r/CausesDesire` | 12 |
-| `/r/MannerOf` | 141 | | `/r/HasLastSubevent` | 12 |
-| `/r/PartOf` | 115 | | `/r/Causes` | 11 |
-| `/r/HasPrerequisite` | 103 | | `/r/CreatedBy` | 10 |
-| `/r/HasSubevent` | 42 | | `/r/Desires` | 7 |
-| `/r/ReceivesAction` | 40 | | `/r/HasFirstSubevent` | 7 |
-| | | | `/r/LocatedNear` | 1 |
+| `/r/RelatedTo` | 29016 | | `/r/HasSubevent` | 42 |
+| `/r/HasContext` | 4376 | | `/r/DistinctFrom` | 32 |
+| `/r/IsA` | 4173 | | `/r/HasProperty` | 30 |
+| `/r/DerivedFrom` | 3388 | | `/r/ReceivesAction` | 27 |
+| `/r/Synonym` | 1126 | | `/r/MotivatedByGoal` | 26 |
+| `/r/AtLocation` | 642 | | `/r/MadeOf` | 20 |
+| `/r/FormOf` | 528 | | `/r/Causes` | 18 |
+| `/r/UsedFor` | 378 | | `/r/CreatedBy` | 15 |
+| `/r/CapableOf` | 231 | | `/r/CausesDesire` | 13 |
+| `/r/MannerOf` | 230 | | `/r/Desires` | 9 |
+| `/r/PartOf` | 196 | | `/r/HasLastSubevent` | 8 |
+| `/r/Antonym` | 155 | | `/r/HasFirstSubevent` | 7 |
+| `/r/HasPrerequisite` | 108 | | `/r/LocatedNear` | 3 |
+| `/r/SimilarTo` | 102 | | `/r/DefinedAs` | 2 |
+| `/r/HasA` | 45 | | `/r/SymbolOf` | 1 |
 
-Absent from the slice (nothing matched the seed terms): `/r/ObstructedBy`,
-`/r/SymbolOf` — both still have mapping rows, so a regenerated slice that
-surfaces them stays covered.
+Absent from the slice (nothing matched the seed terms): `/r/ObstructedBy` — it
+still has a mapping row, so a regenerated slice that surfaces it stays covered.
 
 ## How to regenerate / extend
 
@@ -139,11 +145,12 @@ curl -s https://s3.amazonaws.com/conceptnet/downloads/2019/edges/conceptnet-asse
   | node corpus/conceptnet/filter-dump.mjs > corpus/conceptnet/slice.jsonl
 ```
 
-To extend the domain, add seed terms to `SEED_TERMS` in `fetch-slice.mjs` and
-re-run. `npm test` guards the contract: every relation present in the slice
-must have a row in `src/corpus/conceptnet-map.toml` (drift guard), en→en shape
-and the ≤ 1.5 MB budget are asserted, and the seeding path is exercised
-end-to-end.
+To extend the domain, add seed terms to `EXTRA_SEEDS` in `filter-dump.mjs` (the
+dump route that produces the committed slice) or `SEED_TERMS` in
+`fetch-slice.mjs` (the API route) and re-run. `npm test` guards the contract:
+every relation present in the slice must have a row in
+`src/corpus/conceptnet-map.toml` (drift guard), en→en shape and the ≤ 5 MB
+budget are asserted, and the seeding path is exercised end-to-end.
 
 ## Consumers
 

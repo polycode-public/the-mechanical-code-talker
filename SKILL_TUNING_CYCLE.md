@@ -33,6 +33,14 @@ chose and why.
 
 Every cycle MUST satisfy:
 
+- **Artifact naming — match the `package.json` version.** A benchmark's write-up and its raw
+  snapshot are named after the tmct version they measure: `CHATBENCH_<version>.md` +
+  `CHATBENCH_<version>_TRANSCRIPTS.md`, raw under `chatbench/results/raw/run-<version>/`. A RE-RUN
+  of the SAME version (re-measure without a version bump — a harness fix, a re-judge, a second draw)
+  appends `_00N`: `CHATBENCH_0.7.0_001.md`, `_002`, …, `run-0.7.0_001/`. So the artifact name always
+  says which shipped version it scores, and the `_00N` suffix orders re-runs of that version. (The
+  historical `CHATBENCH_001…006` cycle-numbered artifacts stay as-is; version-matched naming applies
+  from 0.7.0 onward.)
 - **Fixed, versioned case set:** `chatbench/cases.jsonl` — one JSON object per line:
   `{ id, turns[], expectations, tags }`. The set is **append-only per cycle**: new cases may be
   added between runs (record the addition in the write-up), but existing cases are never edited
@@ -113,9 +121,12 @@ slips. Because the loop no longer pauses for the operator, **the advisor is also
 between operator check-ins** — surface anything non-obvious; it appends `OPEN` items to
 `STRATEGY_ADVISOR.log` (append-only).
 
-**Step 6 — WRITE the cycle up.** On completion: **snapshot the raw judge outputs to
-`chatbench/results/raw-<NNN>/` BEFORE the next run overwrites them**, then write:
-- **`CHATBENCH_0NN.md`** — the headline mean (+ hard-fail count) at the top; a **BEST-EXAMPLES
+**Step 6 — WRITE the cycle up.** The artifact name **matches `package.json`'s version** (see
+"Artifact naming" in §1): `CHATBENCH_<version>.md` for the release under test (e.g.
+`CHATBENCH_0.7.0.md`), and a same-version RE-RUN appends `_00N` (`CHATBENCH_0.7.0_001.md`, `_002`,
+…). On completion: **snapshot the raw judge outputs to `chatbench/results/raw/run-<version>[_00N]/`
+BEFORE the next run overwrites them**, then write:
+- **`CHATBENCH_<version>.md`** — the headline mean (+ hard-fail count) at the top; a **BEST-EXAMPLES
   pick in the summary** — 3-5 verbatim transcript excerpts showing the most complex sequences the
   chat handled THIS cycle (multi-turn focus/pronoun chains, cross-session memory, declarative
   asserts, repaired noise/typo queries, ambiguity surrounds), each with a one-line "what this
@@ -125,7 +136,7 @@ between operator check-ins** — surface anything non-obvious; it appends `OPEN`
   **per-lever analysis** tying the applied lever to the cases it moved; the judge model + prompt
   version pin; **and the decision log** — the re-ranked menu of next-cycle levers with a one-line
   justification each and the pick named.
-- **`CHATBENCH_0NN_TRANSCRIPTS.md`** — the transcript appendix, **discriminating transcripts
+- **`CHATBENCH_<version>_TRANSCRIPTS.md`** — the transcript appendix, **discriminating transcripts
   first** (the cases where arms/cycles differ), so the behaviour change is visible at a glance.
 
 **Step 7 — CONTINUE.** Apply the decision rule (§1). Re-rank the lever board from this cycle's
