@@ -26,6 +26,13 @@
   "license": "MPL-2.0",
   "author": "Polycode Limited",
   "homepage": "https://polycode-projects.gitlab.io/the-mechanical-code-talker/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://gitlab.com/polycode-projects/the-mechanical-code-talker.git"
+  },
+  "bugs": {
+    "url": "https://gitlab.com/polycode-projects/the-mechanical-code-talker/-/issues"
+  },
   "engines": {
     "node": ">=24"
   },
