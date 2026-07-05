@@ -1,150 +1,204 @@
 # PLAN_CAPABILITY_ROUTER.md — tmct as a deterministic, no-LLM tool router
 
-> **STATUS: exploratory / RFC — decisions OPEN, we should chat more.** This captures an operator
-> idea (2026-07-05) and evaluates it honestly. Nothing here is committed; the point is to sharpen the
-> bet, name the hard parts, and pick the smallest thing worth building. Do not treat the stage sketch
-> as a schedule.
+> **STATUS: exploratory / RFC — reorganised around the build flow (interface → measure → grade →
+> climb). Decisions still open; we finalise tonight.** The point is to sharpen the bet, mark what is a
+> solved problem vs. genuinely open, and pick the smallest thing worth building first.
 
-## The idea (operator, in their words, restated)
+## The idea (restated)
 
-Accept a chat prompt that is a **request**. Parse it — with tmct's existing machinery — into canonical
-sentences and OWL graph facts. Capture a set of **capabilities** (tools) as canonical facts *in the
-same lexicon*. Add a substrate of domain-specific knowledge and the ability to **forward- and
-backward-chain**. Then *infer* which capability satisfies the request, use **subject replacement** to
-fill a sentence template and **token replacement** to populate a *parameterised* capability — i.e.
-bind the tool's arguments from the parsed request. Expose the whole thing behind an
-**Anthropic-compatible completions API** that emits `tool_use` blocks, and tmct can drive a **tool
-loop**: a deterministic, offline, $0 "function-calling model."
+Point a tool-loop client (Claude Code) at a **tmct-backed completions API** and its "model" becomes
+rules + an OWL graph + inference — no tokens, no GPU. Parse a request into canonical facts; declare
+each **capability** (tool) as facts in the same lexicon; infer which capability satisfies the request
+and bind its parameters; emit that as a tool call. Deterministic, offline, $0, and — the whole point —
+**able to prove why** it chose the call it did.
 
-## Why it's on-thesis (the compelling part)
+## Why it's on-thesis
 
-tmct's whole bet is *deterministic, offline, explainable, no-LLM*. A tool router that **shows its
-proof** — *why* it chose this capability and *how* it bound each parameter — is a real, differentiated
-thing: auditable, reproducible, air-gappable, $0. LLM function-calling is a black box; this would be a
-glass box. And most of the substrate already exists:
+LLM function-calling is a black box; this is a glass box. Most of the substrate exists — the ACE
+parser (request → triples), the lexicon, the graph, provenance/trust, forward-chaining (`syllogise`),
+the ambiguity surround, miss-as-value, and the Repository-Interface service muscle. What's new is a
+capability registry, a real unification/backward-chaining resolver, an imperative intent-frame
+extractor, and the HTTP shim.
 
-- **request → triples**: the ACE controlled-English parser (`src/grammar/ace.mjs`) + the tolerant
-  strategies + the `shape` field already turn text into OWL-labelled `(subject, predicate, object)`.
-- **capabilities as facts in the same lexicon**: a tool described in the same vocabulary lives in the
-  *same semantic space* as the request, so matching is **graph unification, not embedding similarity**.
-- **inference**: `tmct syllogise` already forward-chains `rdfs:subClassOf`; provenance/trust already
-  ranks and explains facts; the **"if you mean X then …" ambiguity surround** already handles the
-  multiple-match case; **miss-as-value** already handles "I can't map this" without throwing.
-- **expose as a service**: the Repository Interface (Phase 8) is the muscle for shipping a versioned,
-  machine-readable service contract — an Anthropic-compatible shim is the same move at a new endpoint.
+---
 
-## The pipeline
+## THE BUILD FLOW (the spine)
 
-1. **INGEST** — request → tolerant parse → canonical sentence(s) → an **intent frame**:
-   `(action, patient/object, modifiers/constraints, named entities)`. Reuses the ACE parser + the
-   `shape` field; the imperative mood is the new bit (§ hard problem 1).
-2. **CAPABILITY REGISTRY** — each tool declared as canonical facts: its action verb(s), the type of
-   its object, its **parameters** (name, type, required, which request-role fills it), its
-   **preconditions** and **effects**. Stored as OWL individuals (`Capability`, `Parameter`) in the
-   same graph, with provenance/trust.
-3. **MATCH (inference)** — **unify** the intent frame against the capability signatures. Forward-chain
-   the request's entities up their type/`subClassOf` lattice; backward-chain from a capability's
-   precondition/effect to test whether the request satisfies/wants it. A capability matches when its
-   action subsumes the request's action and its object-type subsumes the request's object. Rank by
-   specificity × trust. Multiple matches → the ambiguity surround. No match → an **honest refusal**.
-4. **BIND (parameterise)** — slot-fill: map the parsed roles (subject / object / modifiers / named
-   entities) onto the capability's parameters by role + type. **Subject replacement** into a confirm-
-   back sentence template; **token replacement** into the parameterised tool signature → a concrete
-   `tool_use` with arguments. An unbound *required* parameter → **ask for it** (guided), never guess.
-5. **EMIT** — an Anthropic `/v1/messages` assistant turn: either a text answer (a query tmct can
-   answer from the graph directly) or one-or-more `tool_use` blocks with bound arguments + an optional
-   **proof/receipt**. Take the `tool_result` on the next call; continue the loop.
+Four phases, each a gate for the next. This is the reorganisation: don't build the engine first —
+**speak the protocol, measure where we stand, build the ruler, then climb it.**
 
-## What exists vs. what is genuinely new
+### Phase A — Speak the protocol (the common interface)
 
-- **Exists:** ACE parser, lexicon, tolerant strategies + `shape`, graph memory, provenance/trust,
-  forward-chaining (`subClassOf`), the ambiguity surround, miss-as-value, the service-contract muscle.
-- **New:** (a) a **capability ontology** (`Capability`/`Parameter`/`Precondition`/`Effect`) + a
-  declaration format; (b) a real **unification + backward-chaining resolver** — a mini Datalog/SLD
-  engine *with variables* (today's chainer is `subClassOf`-only, groundless); (c) an **imperative
-  intent-frame extractor** (verbs + roles), where the grammar is currently tuned for declaratives and
-  queries; (d) **parameter slot-filling**; (e) the **Anthropic-compatible HTTP shim** + the tool-loop
-  turn state.
+The common interface is an **Anthropic Messages API-compatible endpoint** (`POST /v1/messages`): a
+request carries `model`, `messages[]`, and `tools[]`; a response is `content` blocks — `text` and/or
+`tool_use` (with `input` = the bound arguments) — and a `stop_reason`; the caller returns a
+`tool_result` block and the loop continues. **Claude Code speaks this**, so it is the target. (OpenAI's
+`/v1/chat/completions` with `tool_calls` is the analogue; ship it as an optional second adapter for
+reach, not first.)
 
-## The hard problems (be honest, or this fails quietly)
+tmct becomes a **drop-in "model"**: it receives the messages + tool schemas, and for each turn either
+answers as `text` (a question it can settle from the graph) or emits `tool_use` blocks with bound
+arguments + a proof receipt. **This is a solved problem** — a serialization/HTTP shim, no research —
+and it is the surface everything else plugs in behind. Build it first so every later stage is testable
+end-to-end against a real client.
 
-1. **The front end is the whole ballgame.** Arbitrary NL imperative → structured intent is *exactly*
-   what LLMs are good at and rule systems are brittle at. tmct's honest position is "controlled input
-   + tolerant guidance toward it." So **v0 must accept a constrained command language** (tmct nudges
-   the user toward it via the same surround), NOT "any prompt." This is a **command router for a
-   controlled fragment, not a general NL agent** — say so plainly, or over-promise and drown in
-   coverage misses.
-2. **Matching a single tool is tractable; achieving a goal is planning — but planning is a solved,
-   deterministic field, not a research bet.** Single-shot selection = unification + subsumption
-   (Datalog-ish, buildable). Multi-step goal achievement (chain N tools via their effects) =
-   **classical AI planning** — STRIPS/PDDL operators, partial-order planning, HTN/NONLIN — a 40-year
-   body of *no-LLM, goal-directed* work (see [`docs/references/planning/`](docs/references/planning/README.md)).
-   The honest limit is **not planning, it is the closed-world assumption**: inside a declared operator
-   model a planner is sound/complete and deterministic (reachable C1); the moment the world is open —
-   an unmodelled effect, a novel error — it breaks and tmct escalates. **Scope v0 to single-shot**;
-   the planner is a later stage, and when it comes it is *engineering against a mature literature*,
-   not open research.
-3. **Parameter binding coverage.** Role→param slot-filling works when the grammar labels roles; it is
-   brittle for rich arguments. Controlled input helps; complex tools will still fray.
-4. **Termination & safety.** A router that **refuses or asks when unsure is *safer* than an LLM** — no
-   hallucinated calls. Lean into that. But coverage is lower, and the proof-chain is the whole point:
-   every emitted call carries *why this tool* and *how each argument was bound*.
+### Phase B — Measure where tmct sits today
 
-## Positioning (the strongest product story)
+With the shim + a small tool set (graph-query tools: `find_definition`, `find_callers`,
+`list_members`…), run tmct up the **agentic ladder (A0→C2)** and record where it actually lands *now*.
+Expected: **A0 solid, A1–A2 partial** for the code-navigation domain; nothing above. Use the existing
+CHATBENCH / `SKILL_CHAT_PLAYTEST` discipline (deterministic replay, no judge needed for
+did-it-complete). Output: an honest "today" row — the baseline every later claim is measured against.
 
-Not "replace the LLM." Two framings, and the second is probably the lead:
+### Phase C — The grading ladder (the agentic benchmark)
 
-- **(a) Standalone deterministic router** where reproducibility / offline / safety / audit dominate:
-  regulated or air-gapped environments, CI automations, high-volume cost-sensitive routing.
-- **(b) A deterministic FAST-PATH / guardrail in FRONT of an LLM tool loop** — tmct handles the
-  requests it can *prove* (fast, free, auditable) and **escalates the rest** to the LLM; and/or it
-  **validates the LLM's proposed `tool_use`** against declared capabilities + preconditions before it
-  runs. This *de-risks the coverage problem* and is immediately useful even at low coverage.
+Build the ruler before the engine. A graded benchmark for the **tool loop**, the direct analogue of
+CHATBENCH's CEFR ladder — but the levels are the **A0→C2 rungs** and the reference bands are the
+**comparable models** (tiny-local / 8B-open / Nova-micro / Nova-lite / Haiku) as illustrative anchors.
 
-## Prior art to lean on (don't reinvent)
+- **A case** = a request + a declared toolset + the expected outcome (which call(s), which bound args).
+- **The grade** = did the loop *complete the rung's task*: correct call(s), **zero hallucinated
+  calls**, terminated, and a **valid proof chain**. Hallucinating a call is an automatic fail (the one
+  thing a deterministic router must never do); refusing-when-unsure is a pass at the honest-miss level.
+- **Regression-protected**, exactly like the language ladder: a rung once reached must stay reached.
 
-Attempto Controlled English (ACE — tmct's own lineage); Datalog / Prolog SLD-resolution + unification;
-STRIPS / PDDL planning; semantic parsing to executable forms (text-to-SQL, λ-DCS, AMR); the
-function-calling / `tool_use` JSON schema; OpenAI/Anthropic-API-compatible shims; RDF/SPARQL
-query-by-unification.
+This makes "climbing" a number, not a vibe — and it is what lets us say, honestly and measurably,
+"tmct-backed is at the Nova-lite rung on the declarable slice."
 
-## A staged sketch (NOT a schedule — a de-risking order)
+### Phase D — Climb the ladder (the tech, ordered by the rung it unlocks)
 
-- **Stage 0 — capability ontology + registry.** `Capability`/`Parameter`/`Precondition`/`Effect`
-  classes; a declaration format (ACE sentences or TOML); register a toy toolset (e.g. file ops) as
-  facts. *Cheap, unblocks everything, proves the representation.*
-- **Stage 1 — the resolver.** A unification + backward-chaining engine (mini Datalog with variables)
-  over the existing graph: forward-chain types, backward-chain preconditions, ranked matches, the
-  ambiguity surround, honest refusal. *The load-bearing new capability.*
-- **Stage 2 — intent frames + binding.** Imperative verb+role extraction on the controlled fragment;
-  parameter slot-filling; proof-chain assembly.
-- **Stage 3 — the shim.** Anthropic-compatible `/v1/messages` with `tools`; one `tool_use` per turn;
-  the tool-loop state; a runnable demo toolset end-to-end.
-- **Stage 4 (fork) — the guardrail.** Validate/pre-filter an LLM's proposed `tool_use` against
-  declared capabilities + preconditions — the hybrid story, useful even if standalone coverage is low.
-- **Stage 5 — the planner (engineering, not research).** Multi-step goal achievement over declared
-  capabilities-as-operators: POP (least-commitment, causal-link proofs) or HTN (SHOP2-style
-  decomposition of composite capabilities), possibly deferring the hard search to a mature external
-  PDDL solver (Fast Downward) while tmct stays the NL→domain compiler + proof-chain renderer. Reaches
-  **closed-world C1**; open-world C1 still escalates. Grounded in
-  [`docs/references/planning/`](docs/references/planning/README.md). Only if the single-shot router
-  earns it.
+Each stage is gated by Phase C showing the rung is actually reached.
 
-**Kill criterion:** build the smallest honest DEMO first (a file-ops toolset: *"remove the test file
-for the http module"* → `delete_file(path=test/http.test.mjs)` with a proof chain, refusing when
-ambiguous). If controlled-fragment coverage on a realistic toolset is so low that every request needs
-the LLM anyway, the **standalone** story dies — but the **guardrail/fast-path** story (Stage 4) can
-still stand on its own.
+| Stage | Builds | Unlocks | Solved by |
+| ----- | ------ | ------- | --------- |
+| **0** | Capability ontology + registry (`Capability`/`Parameter`/`Precondition`/`Effect`) | A1 *representation* | STRIPS/PDDL operator model — [`docs/references/planning/STRIPS_PDDL.md`](docs/references/planning/STRIPS_PDDL.md) |
+| **1** | The resolver — unification + backward chaining over capabilities-as-facts | A1–B1 *matching* | Datalog/SLD resolution; open-condition satisfaction (POP) |
+| **2** | Imperative intent frames + parameter slot-filling | A2–B1 *binding* | Semantic parsing (partial — see open problems) |
+| **3** | The planner — POP/HTN over operators + Steel & Ho monitor-and-replan | **closed-world C1** | Classical planning — the three planning refs |
+| **4** | The guardrail — validate an LLM's proposed `tool_use` against declared capabilities + preconditions | the hybrid fast-path | Precondition checking (STRIPS) |
+| **5** | The goal-reasoner (the C2 speculation, below) | **closed-world C2** | BDI / Goal-Driven Autonomy + long-chain deduction |
 
-## Open questions (for the chat)
+---
+
+## Solved vs. unsolved — the honest map
+
+| Area | Status | How / why |
+| ---- | ------ | --------- |
+| The common interface (`/v1/messages` shim) | **Solved** | Documented protocol; deterministic JSON serialization. Engineering. |
+| Capability representation | **Solved** | STRIPS/PDDL operators (preconditions→effects) = capabilities-as-facts. 50-year-old model. |
+| Capability selection (single-shot) | **Solved** | Unification + backward chaining (Datalog/SLD). Well-understood; buildable. |
+| Conflict detection between calls | **Solved** | POP **threats** + promotion/demotion. |
+| Bounded multi-step recipes (B1) | **Solved** | HTN methods (declared decomposition) — NONLIN/SHOP2. |
+| Conditional / retry (B2) | **Solved** | Steel & Ho conditional plans + outcome monitoring → re-plan. |
+| Open-ended planning, **closed world** (C1) | **Solved** | Classical planning (POP/HTN/PDDL) is sound/complete inside a declared operator model. See below. |
+| Request → structured intent, **controlled fragment** | **Partial** | ACE parser + tolerant strategies + `shape`. Solid for controlled/declarative input. |
+| Parameter binding (slot-filling) | **Partial** | Role labelling from the grammar; brittle for rich arguments. |
+| Request → intent, **arbitrary imperative NL** | **Unsolved** | The front-end problem — exactly what LLMs are for. tmct's answer: constrain the input + guide toward it. |
+| Open-ended planning, **open world** (C1) | **Unsolved** | Novel errors, unmodelled effects break the closed-world assumption. Escalate. |
+| Autonomous agency (C2) | **Speculative** | Reachable closed-world via the reduction below; goal-*generation* in open worlds stays open. |
+
+The pattern: **almost everything above the front-end is a solved problem in the planning/KR
+literature.** The genuinely open work is (1) the NL front end and (2) the open-world boundary. tmct's
+whole strategy is to sidestep both by *declaring the domain* and *refusing past its edge*.
+
+---
+
+## The C1 cliff — solved by classical planning (closed world)
+
+We earlier proposed climbing C1 with **templates for graph queries**. The planning references say we
+can do better, and cleanly:
+
+- **Templates are the B1 special case.** A pre-authored query/recipe *is* a declared HTN method or a
+  macro-operator: you hand-write the whole plan. That reaches B1, and reaches C1 only for the goals
+  you happened to template.
+- **Planning is the C1 general case.** Declare **operators** (fine-grained atoms: preconditions →
+  effects) instead of whole recipes, and a **POP/PDDL planner composes them** into a plan for *any
+  reachable goal* — including goal combinations nobody templated. That is precisely the leap from
+  "run a canned recipe" (B1) to "generate a plan for a novel goal" (C1), and it is **deterministic and
+  complete inside the declared world**.
+- **Causal links = the proof chain** (why each step), **threats** = conflict handling,
+  **least commitment** = don't over-order the loop. All three come free with POP.
+- **Steel & Ho closes the execution loop:** monitor each `tool_result` against the operator's expected
+  effect; on divergence, re-plan from the observed state (that is B2, and it is what makes C1 robust
+  rather than brittle).
+
+**Recommendation:** adopt the operator model (Stage 0), keep **templates as declared HTN methods /
+macro-operators** for common paths (they're faster and give the cleanest proofs), and fall back to
+**first-principles POP/PDDL planning** for novel goals — optionally deferring the hard search to a
+mature external solver (Fast Downward) while tmct stays the NL→domain compiler + proof renderer. So:
+**C1 closed-world is a solved problem we adopt, not invent.** The residual — open-world C1 — stays a
+refuse/escalate boundary.
+
+---
+
+## The C2 speculation — autonomy as a fixed meta-loop
+
+The operator's proposed reduction: **"self-directed" is not magic — it is a canned meta-loop.**
+
+1. Ask the fixed self-question: **"What are the current goals?"**
+2. For each deduced goal, **plan to reach it** (this is C1 — assumed solved as the *gate* before C2).
+3. **Choose among the unique first steps** of those plans; execute one; observe; repeat.
+
+This is sound, and it has a name: it is essentially a **BDI agent** (Belief–Desire–Intention: Rao &
+Georgeff) crossed with **Goal-Driven Autonomy** (Aha, Molineaux, Cox) and **continual/online
+planning**. The elegance of the reduction is real: it collapses "autonomy" into *C1 + a
+goal-deduction step + an action-selection rule*, so the only genuinely new part is **"what are the
+current goals?"** — and in a **closed world that is itself a deduction**: goals fall out of a declared
+goal model (maintenance goals, triggers, unmet desired-states) evaluated by **long-chain deduction**
+over the KB. That is exactly the "long-chain deduction library" the operator flags — a Datalog /
+Prolog (tau-prolog) / forward-chaining (RETE) engine, or an extension of `syllogise`.
+
+So the honest claim mirrors C1: **closed-world C2 is reachable** by this reduction —
+deduce-goals (long-chain inference) → plan-each (C1) → arbitrate-first-steps → act → loop. Two parts
+need care, and both are literature-covered:
+
+- **First-step arbitration.** Collect the first action of each goal's plan, dedupe, and pick by:
+  (a) **keystone** — the step shared by the most goal-plans; (b) **decision-theoretic** — Steel & Ho
+  expected-utility; or (c) **declared goal priority**. It must be **threat-aware**: don't pick a first
+  step that clobbers another live goal's plan (POP threats lifted to the meta-level — planning over a
+  conjunction of goals).
+- **Goal generation.** In the **closed** world, deducible and deterministic. In the **open** world —
+  novel situations implying goals no rule declared — it is **unsolved**, and it is exactly where an
+  LLM's open-ended judgement wins. Same boundary as C1, one level up.
+
+**Verdict:** the reduction is a real architecture, not hand-waving — closed-world C2 is buildable on
+top of a solved C1 + a deduction engine + a threat-aware choice rule. It should be a **Stage 5**, gated
+on C1 being genuinely reached and measured. (Deepen-next: add a `docs/references/planning/` entry on
+BDI + Goal-Driven Autonomy when we get here.)
+
+---
+
+## What stays genuinely open (say it plainly)
+
+1. **The NL front end.** Arbitrary imperative → structured intent. tmct's answer is a *controlled
+   command language* + tolerant guidance toward it — a command router for a declared fragment, not a
+   general NL agent. This is the make-or-break, and it is honest to constrain it.
+2. **The open-world boundary** (C1 and C2). Novel errors, unmodelled effects, goals nobody declared.
+   tmct refuses/escalates; the LLM wins. This is a feature (safety) and a limit (coverage).
+3. **Parameter-binding coverage** for rich arguments beyond what the grammar labels.
+
+## Positioning (the strongest story)
+
+Not "replace the LLM." Either a **standalone deterministic router** where reproducibility / offline /
+audit / cost dominate, or — the lead — a **deterministic fast-path / guardrail in front of an LLM tool
+loop**: tmct handles what it can prove (fast, free, auditable), validates the LLM's proposed calls
+against declared preconditions, and escalates the rest. This de-risks coverage and is useful even at
+low coverage.
+
+## Prior art
+
+Attempto Controlled English (tmct's lineage); Datalog / Prolog SLD-resolution + unification;
+STRIPS/PDDL + POP + HTN (see [`docs/references/planning/`](docs/references/planning/README.md)); Steel
+& Ho (plan-vs-execute); BDI (Rao & Georgeff) + Goal-Driven Autonomy (Aha/Molineaux/Cox); GraphPlan /
+SATPLAN; semantic parsing to executable forms; OpenAI/Anthropic API-compatible shims.
+
+## Open questions (for tonight)
 
 1. **Input contract** — controlled command language, tolerant-guided, or "any prompt"? *(Lean:
    controlled + guided.)*
-2. **Scope** — single-shot router first, or commit to the planner? *(Lean: single-shot v0.)*
-3. **Product shape** — standalone router, or LLM fast-path/guardrail as the lead? *(Lean: guardrail
-   leads, standalone is the purist demo.)*
-4. **Home** — does the capability ontology + resolver live in tmct, or a new package (the same
-   extraction move as [[PLAN_OSS_ACE_PARSER]])?
-5. **Build vs. pull** — how much of the unification/backward-chaining core do we write vs. adopt a JS
-   Datalog?
-6. **Smallest compelling demo** — what toolset makes the glass-box pitch land in one screen?
+2. **Interface** — Anthropic Messages only, or OpenAI adapter too? *(Lean: Messages first.)*
+3. **Build vs. pull** — write the resolver/planner, or embed a JS Datalog + defer search to an
+   external PDDL solver? *(Lean: pull the mature solver, own the compiler + proofs.)*
+4. **Home** — capability ontology + resolver in tmct, or a new package (the `ace-owl` extraction move)?
+5. **Smallest demo** — a read-only, cited, sub-10ms **answers** endpoint on a Function URL (Phase A +
+   the graph-query slice) is shippable *this week* and turns "feels amazing" into a `curl`. Start there?
