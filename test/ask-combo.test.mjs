@@ -107,9 +107,10 @@ test("grain REGRESSION: null-entityType 'what calls <fn>' keeps its module-coars
 // VOICE NIT — the reverse zero-hit reads naturally
 // ============================================================================
 
-test("voice nit: reverse zero-hit drops the redundant 'whose module', reads with the base verb", () => {
+test("reverse zero-hit: honest empty with the traditional phrasing + traversal receipt", () => {
+  // (A cycle-5 voice-nit rephrasing was reverted — the frozen v1 cases.jsonl pins the
+  // "whose module directly <verb>s X" wording, and the case set is sacred mid-arc.)
   const r = runAsk("which modules test app/lib/f.mjs"); // nothing tests f.mjs → honest empty
-  assert.match(r.content, /No modules found that directly test app\/lib\/f\.mjs\./);
-  assert.doesNotMatch(r.content, /whose module/);
+  assert.match(r.content, /No modules found whose module directly tests app\/lib\/f\.mjs\./);
   assert.match(r.content, /\(traversal: tests edges where object = app\/lib\/f\.mjs\)/, "receipt kept");
 });

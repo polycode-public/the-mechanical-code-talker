@@ -293,7 +293,7 @@ test("item 10 (noise-strip): NEW tolerant behavior — a vocative-led question w
   const noisy = ask(graph, "hey man which modules import myFile.mjs");
   const clean = ask(graph, "which modules import myFile.mjs");
   assert.equal(noisy.content, clean.content);
-  assert.match(noisy.content, /No modules found that directly import myFile\.mjs/);
+  assert.match(noisy.content, /No modules found whose module directly imports myFile\.mjs/);
   assert.equal(noisy.tmct_ask.miss, true); // the honest blank, not a parse failure
   assert.doesNotMatch(noisy.content, /couldn't resolve/);
 });

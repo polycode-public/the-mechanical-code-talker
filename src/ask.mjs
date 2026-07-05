@@ -125,22 +125,6 @@ function verbFor(kind) {
   return REVERSE_MISS_VERB[kind] || kind;
 }
 
-// BASE (bare-infinitive) verb form for the reverse zero-hit template. Every relation
-// KIND token is a 3rd-person-singular verb ("imports", "tests", …); the honest-miss
-// sentence now has a PLURAL subject ("No modules … that directly test X"), which wants
-// the base form, so the redundant "whose module" scaffolding can be dropped for a
-// grammatical read. Curated where a plain trailing-"s"/"es" strip would misfire
-// ("touches"→"touch", "cochange" is already a stem); anything unlisted strips the
-// inflection generically.
-const BASE_VERB = {
-  imports: "import", calls: "call", callsSymbol: "call", touches: "touch",
-  touchesSymbol: "touch", tests: "test", inherits: "inherit", contains: "contain",
-  defines: "define", reexports: "re-export", cochange: "co-change", uses: "use",
-};
-function baseVerb(kind) {
-  return BASE_VERB[kind] || String(kind).replace(/es$/, "").replace(/s$/, "");
-}
-
 // ---- the parsing strategies + normalization + fuzzy service formerly defined
 // here now live in src/interpret/ (items 8/10/13): interpret/normalize.mjs
 // (normalizeQuery, applyNegationFrames, STOPWORDS, splitWords), interpret/
@@ -1758,14 +1742,13 @@ function renderCore(parsed, result) {
         miss: true, ambiguous: false,
       };
     }
-    // VOICE NIT (Cycle 5): the old "No modules found whose module directly tests X" read
-    // ungrammatically — the "whose module" is redundant scaffolding (doubly broken when a
-    // stray "by" landed in the object: "whose module directly tests by X"). The plural
-    // subject now takes the base verb ("… that directly test X") for a natural read; the
-    // traversal receipt is unchanged.
+    // NOTE (Cycle 5): a voice-nit rephrasing ("that directly <verb>") was reverted —
+    // the frozen v1 cases.jsonl pins the "whose module directly <verb>s X" wording
+    // (hm-empty-result-calls / tf-wat-calls / ns-wondering), and the case set is
+    // append-only/sacred mid-arc, so the honest-miss phrasing stays as-is.
     const entityWord = nounFor(parsed.entityType || "Module", 2);
     return {
-      content: `No ${entityWord} found that directly ${baseVerb(parsed.kind)} ${parsed.object}. (traversal: ${result.traversal || "no traversal resolved"})`,
+      content: `No ${entityWord} found whose module directly ${verbFor(parsed.kind)} ${parsed.object}. (traversal: ${result.traversal || "no traversal resolved"})`,
       miss: true, ambiguous: false,
     };
   }
