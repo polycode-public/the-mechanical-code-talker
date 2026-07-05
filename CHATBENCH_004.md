@@ -19,6 +19,14 @@ rows) + product-b (draw B). **No tier-1 regressions** vs cycle-003 (all 333 tier
   honest-miss, not a product regression. Tier-1 is clean (333/333).
 - **Judge integrity clean:** 0 voided samples (no refusal/format failure leaked into the fail count).
 
+> **Methodology note (cross-cycle identity):** `caseId` is a stable identity ONLY for the
+> hand-authored v1/memory cases (e.g. `hm-unknown-fn`, `mr-asked-before`) — the byte-identical-dip
+> rebuttal above is applied to those. It is NOT stable for `g-*` graded-pool cases: the pool
+> re-seeds each cycle (c3 seed `2419986853` → c4 `2302543520`), so an identical `g-*` id is a
+> DIFFERENT question across cycles (some c4 honesty "drops" are re-samples, not regressions). Graded
+> comparisons are therefore made at the **cell-level mean** (grade × construction), never per-`g-*`-id,
+> per `GRADED.md`.
+
 ## Meta-1 — the re-float (the whole point of this cycle)
 
 The judge was systematically scoring TRUTHFUL symbol-grain output as fabrication because the old
