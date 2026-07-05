@@ -10,11 +10,59 @@ image: node:24
 stages:
   - test
   - deploy
+  - verify
 
-# Optional stock security scanning. Harmless if the group doesn't license it.
+# ---- security scanning (free tier) -----------------------------------------
+# SAST (semgrep) + Pipeline Secret Detection via GitLab's stock templates.
+# Harmless if the group doesn't license the report UI — the jobs still run.
+# tmct is a pure-JS package, so IaC (KICS) and Container Scanning are N/A and
+# are deliberately NOT included; the nightly `dep:audit` job below covers the
+# Ultimate-only Dependency Scanning as far as the free tier allows.
 include:
   - template: Security/SAST.gitlab-ci.yml
   - template: Security/Secret-Detection.gitlab-ci.yml
+
+variables:
+  # We scan OUR code, not committed corpuses / vendored assets: corpus/ + data/
+  # hold committed corpus + template data, public/ is the static site, .tmct is
+  # the on-disk graph memory, node_modules is dependencies.
+  SAST_EXCLUDED_PATHS: "corpus, data, public, node_modules, .tmct"
+  SECRET_DETECTION_EXCLUDED_PATHS: "corpus, data, public, node_modules, .tmct"
+
+# The scanner jobs default to the `test` stage, which would gate deploy on
+# scanner wall-clock. Run them in `verify` with needs:[] instead: they start
+# immediately, never delay publish/pages, and never fail the pipeline.
+semgrep-sast:
+  stage: verify
+  needs: []
+  allow_failure: true
+
+secret_detection:
+  stage: verify
+  needs: []
+  allow_failure: true
+
+# ---- nightly dependency scanning (free-tier substitute for Ultimate DS) ----
+# Runs ONLY from a scheduled pipeline. The operator creates the schedule once
+# in the GitLab UI: Settings → CI/CD → Pipeline schedules → e.g. "0 3 * * *"
+# on main (CI files cannot create schedules). BLOCKING by design — it has NO
+# allow_failure: `npm audit --audit-level=high` fails the job on any high or
+# critical advisory. `npm outdated` is visibility-only. OSV-Scanner is pinned
+# to a specific release (never `releases/latest`) and cross-checks the npm
+# lockfile only — tmct is pure JS, so there is no pom.xml to scan.
+dep:audit:
+  stage: test
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+  script:
+    - npm run audit
+    - npm outdated || true          # visibility only — never fails the job
+    - curl -sSL -o /usr/local/bin/osv-scanner
+        https://github.com/google/osv-scanner/releases/download/v2.0.2/osv-scanner_linux_amd64
+    - chmod +x /usr/local/bin/osv-scanner
+    # v2 syntax with v1 fallback, scoped to the single first-party manifest.
+    - osv-scanner scan source -L package-lock.json
+        || osv-scanner --lockfile=package-lock.json
 
 unit:
   stage: test
@@ -35,7 +83,15 @@ publish:npm:
   needs:
     - unit
   rules:
+    # schedule-guarded: the nightly dep:audit schedule must not re-publish.
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      when: never
     - if: '$CI_COMMIT_BRANCH == "main" && $NPM_TOKEN'
+  id_tokens:
+    # npm provenance on GitLab CI signs the build via Sigstore using this OIDC
+    # token (npm reads SIGSTORE_ID_TOKEN); the aud must be sigstore.
+    SIGSTORE_ID_TOKEN:
+      aud: sigstore
   script:
     - echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > .npmrc
     - npm ci
@@ -47,7 +103,7 @@ publish:npm:
         echo "@polycode-projects/the-mechanical-code-talker is already at $LOCAL_VERSION on npm — no version bump in this push, skipping publish."
       else
         echo "publishing $LOCAL_VERSION (npm currently has ${PUBLISHED_VERSION})"
-        npm publish --access public
+        npm publish --provenance --access public
       fi
 
 # GitLab Pages: the static home page. GitLab's convention is a job literally
@@ -56,6 +112,9 @@ publish:npm:
 pages:
   stage: deploy
   rules:
+    # schedule-guarded: the nightly dep:audit schedule must not redeploy Pages.
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      when: never
     - if: '$CI_COMMIT_BRANCH == "main"'
   script:
     - echo "publishing public/ to GitLab Pages"

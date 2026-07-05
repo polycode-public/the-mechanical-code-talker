@@ -47,7 +47,9 @@
     "test": "node --test \"test/**/*.test.mjs\"",
     "chat": "node bin/tmct.mjs",
     "chatbench:run": "node chatbench/run.mjs",
-    "chatbench:judge": "node chatbench/judge.mjs"
+    "chatbench:judge": "node chatbench/judge.mjs",
+    "audit": "npm audit --audit-level=high",
+    "audit:fix": "npm audit fix"
   },
   "devDependencies": {
     "ink-testing-library": "^4.0.0"
