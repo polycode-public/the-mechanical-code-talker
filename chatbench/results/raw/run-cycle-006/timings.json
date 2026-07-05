@@ -1,0 +1,54 @@
+{
+  "wallMs": 6396.558220999999,
+  "all": {
+    "label": "all",
+    "n": 618,
+    "totalMs": 6076,
+    "meanMs": 9.831715210355988
+  },
+  "spine": {
+    "label": "v1-spine",
+    "n": 48,
+    "totalMs": 5519,
+    "meanMs": 114.97916666666667
+  },
+  "grades": [
+    {
+      "label": "A1",
+      "n": 30,
+      "totalMs": 8,
+      "meanMs": 0.26666666666666666
+    },
+    {
+      "label": "A2",
+      "n": 60,
+      "totalMs": 2,
+      "meanMs": 0.03333333333333333
+    },
+    {
+      "label": "B1",
+      "n": 250,
+      "totalMs": 71,
+      "meanMs": 0.284
+    },
+    {
+      "label": "B2",
+      "n": 70,
+      "totalMs": 226,
+      "meanMs": 3.2285714285714286
+    },
+    {
+      "label": "C1",
+      "n": 140,
+      "totalMs": 235,
+      "meanMs": 1.6785714285714286
+    },
+    {
+      "label": "C2",
+      "n": 20,
+      "totalMs": 15,
+      "meanMs": 0.75
+    }
+  ],
+  "stamp": "cycle-006"
+}
