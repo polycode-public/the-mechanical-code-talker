@@ -31,6 +31,7 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { proseTokensFor, buildProseIndex } from "../prose.mjs";
+import { fnv1aHex } from "../hash.mjs";
 
 export const MEMORY_DIR_REL = join(".tmct", "memory");
 export const MEMORY_GRAPH_REL = join(MEMORY_DIR_REL, "graph.json");
@@ -235,16 +236,6 @@ export async function appendUtterances(dir, utterances) {
   return { ids };
 }
 
-/** FNV-1a 32-bit — a stable little content hash for fact ids (dedupe by triple). */
-function fnv1a(s) {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < s.length; i += 1) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return (h >>> 0).toString(16).padStart(8, "0");
-}
-
 /** Normalize a fact TERM (subject/object) so every writer converges on one
  *  spelling and the graph stays queryable: ConceptNet's /c/en/foo_bar, a
  *  grammar's tmct:Foo_bar and a bare "Foo bar" all become "foo bar". The
@@ -267,7 +258,7 @@ export async function appendFact(dir, { subject, predicate, object, provenance =
   const p = normText(predicate);
   const o = normFactTerm(object);
   if (!s || !p || !o) throw new Error("a fact needs subject, predicate and object");
-  const id = `fact:${fnv1a(`${s} ${p} ${o}`)}`;
+  const id = `fact:${fnv1aHex(`${s} ${p} ${o}`)}`;
   const text = `${s} ${p} ${o}`;
   const tokens = proseTokensFor({ doc: text });
   await mutateMemory(dir, (payload) => {

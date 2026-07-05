@@ -100,3 +100,9 @@ OBSERVATION:
 - Same judge-context blindspot caps mr-asked-before (correctness 2/2/2 but groundedness/honesty dinged for session-id/date not in judge ctx).
 RECOMMENDED ACTION: CHATBENCH_003 must (1) frame v1 as STABLE + one recall win, not a broad uplift; drop/caveat the hardfail 2->1 as noise. (2) Reattribute A2-naming 0.60 to judge-context incompleteness, not product fabrication. (3) Reframe B1 cliff as negation/complement construction gap, not a grade-level difficulty cliff. Add judge-context enrichment (attributes, session state) as a harness fix before trusting groundedness on rich surfaces.
 STATUS: OPEN
+
+═══════════════════════════════════════
+[2026-07-05 01:42Z] source=strategy-advisor(opus,deep) · topic=fnv1a-single-source-byte-identity
+OBSERVATION: Stage-0 byte-identity claim is SAFE. core.mjs:239 (no mid-loop >>>0) and chatbench/graded.mjs:108 (mid-loop >>>0) produce identical output for the same input. Proof: the mid-loop >>>0 only flips the SIGN representation of h between iterations; every downstream op (charCodeAt XOR, Math.imul) reads only the low 32 bits (JS ToInt32/Math.imul ignore the sign), and Math.imul always returns a 32-bit value so h never overflows in either version. Verified empirically: 10 edge samples + 200k fuzz cases, ALL_EQUAL=true.
+RECOMMENDED ACTION: Ship the shared module as fnv1a32(str){let h=0x811c9dc5;for(...){h^=str.charCodeAt(i);h=Math.imul(h,0x01000193);}return h>>>0;} (single normalize at return) + fnv1aHex(str)=>fnv1a32(str).toString(16).padStart(8,\"0\"). This preserves BOTH call sites: graded.mjs fnv1a === fnv1a32 (unsigned number); core.mjs private fnv1a === fnv1aHex (8-char hex). No regen of .tmct fact ids needed. Add a one-shot golden test asserting fnv1aHex(\"the mechanical code talker\")===\"39cc7931\" to lock the bytes against future refactors.
+STATUS: OPEN
