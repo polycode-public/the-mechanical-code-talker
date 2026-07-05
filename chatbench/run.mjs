@@ -51,7 +51,7 @@ import { PassThrough, Readable } from "node:stream";
 import {
   GRADES, fnv1a, validateConstruction,
   stratifiedSample, dualDraws, computeAgreement, renderAgreementTable,
-  gradeReliability, gradedRollup, renderRollup,
+  gradeReliability, gradedRollup, renderRollup, templateLaneLint,
 } from "./graded.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -66,8 +66,11 @@ export const TAGS = [
 ];
 // graded pool cases carry the "graded" tag (their coverage registry is the
 // grade × construction matrix, not the v1 TAGS); it is valid everywhere but
-// deliberately NOT part of the v1 coverage registry above.
-const EXTRA_TAGS = ["graded"];
+// deliberately NOT part of the v1 coverage registry above. "template-lane"
+// (PLAN_FORMULAIC_COMPETENCE.md §template-lane) marks a case that targets a
+// TEMPLATED capability — a pass there raises the PERFORMANCE band only, never
+// the productive band; the dual-banding rollup + isTemplateLane read this tag.
+const EXTRA_TAGS = ["graded", "template-lane"];
 export const EXPECT_KEYS = [
   "miss", "answerMatch", "answerNotMatch", "answeredIdsInclude",
   "resolvedIdsInclude", "focusLabel", "end", "baselineFail", "improvedIn",
@@ -77,8 +80,10 @@ const MODES = ["turns", "session"];
 const GRAPHS = ["fixture", "empty"];
 
 /** The graph context the judge scores groundedness against — a faithful prose
- *  summary of test/fixtures/entities.fixture.json (kept in sync by hand; the
- *  case set is pinned to this fixture).
+ *  ENUMERATION of test/fixtures/entities.fixture.json (kept in sync by hand; the
+ *  case set is pinned to this fixture). Stamped onto every judged row via
+ *  FIXTURE_CONTEXT_VERSION so "which context scored this" is auditable across
+ *  cycles (the way PROMPT_VERSION pins the prompt).
  *
  *  H1b correction (cycle 2, CHATBENCH_001 §judge-integrity): cycle 1's text
  *  claimed "One commit: abc1234 … no other commits", but the committed fixture
@@ -87,23 +92,44 @@ const GRAPHS = ["fixture", "empty"];
  *  commit(s)", "provenance: git:abc1234, git:def5678", the cochange lines). The
  *  judge scored faithfully against that unfaithful summary and systematically
  *  zeroed TRUTHFUL /describe output (mt-describe-then-callers, plus turn-1
- *  contamination of mt-focus-drift and one gq-impact-a sample). The lines below
- *  state the fixture's actual content. This is a measurement correction to
- *  judge INPUT, not a product change — CHATBENCH_002 must treat affected
- *  cases' deltas as partly measurement-correction, per the cycle-1 write-up. */
+ *  contamination of mt-focus-drift and one gq-impact-a sample).
+ *
+ *  META-1 broadening (cycle 4, PLAN_CYCLE_4.md §META-1 — the direct lineage of
+ *  H1a/H1b, generalized): cycle 1–2's summary enumerated the graph at MODULE
+ *  grain only, so the judge — told the context was exhaustive — scored the
+ *  product's TRUTHFUL SYMBOL-grain output as fabrication (A2 naming zeroed 5/5
+ *  in both draws; mr-asked-before capped at 1.222 despite a correct recall; every
+ *  /describe-anchored case dinged). The lines below now carry the FULL fixture
+ *  entity detail the product may truthfully emit — per-symbol ids, source sites/
+ *  line spans, params/returns/raises/decorators/self-fields, per-module provenance
+ *  commit ids, and the session/memory VOCABULARY the recall path speaks — every
+ *  value verbatim from entities.fixture.json (and the memory subsystem's own OWL
+ *  schema). "Holds exactly these facts" stays TRUE of the fuller enumeration. This
+ *  is a measurement correction to judge INPUT, NOT a product change; CHATBENCH_004
+ *  marks cycle 4 a groundedness RE-BASELINE (v1-context means are not comparable to
+ *  v2-context means; only unchanged-answer deltas and correctness/honesty carry over). */
 export const FIXTURE_CONTEXT = [
-  "The graph under discussion (a small fixture codebase) holds exactly these facts:",
-  "- Modules (8): app/lib/a.mjs, app/lib/b.mjs, app/lib/c.mjs, app/functions/d/handler.mjs, app/lib/e.mjs, app/lib/f.mjs, scripts/g.mjs, app/unit-tests/b.test.mjs.",
-  "- Classes (3): Base; Widget extends Base; Button extends Widget. Widget has method render (app/lib/b.mjs:5-9) and attribute name. app/lib/b.mjs also defines a global variable `register`.",
-  "- Function fnAlpha is defined in app/lib/a.mjs at line 12. The method Widget.render calls fnAlpha (a symbol-level calls edge). app/functions/d/handler.mjs re-exports fnAlpha.",
+  "The graph under discussion (a small fixture codebase) holds exactly these facts. Each entity carries a stable id and, where the fixture records it, a source site, signature and provenance — the product may TRUTHFULLY render any of this detail:",
+  "- Modules (8), by id → label: mod-a → app/lib/a.mjs, mod-b → app/lib/b.mjs, mod-c → app/lib/c.mjs, mod-d → app/functions/d/handler.mjs, mod-e → app/lib/e.mjs, mod-f → app/lib/f.mjs, mod-g → scripts/g.mjs, test-b → app/unit-tests/b.test.mjs. app/lib/a.mjs also carries the dotted name \"app.lib.a\".",
+  "- Classes (3): Base (id cls-base, site app/lib/a.mjs:1-3); Widget (id cls-widget, site app/lib/b.mjs:1-30) extends Base; Button (id cls-button, site app/lib/c.mjs:1-10) extends Widget.",
+  "- Method Widget.render (id m-render, site app/lib/b.mjs:5-9): decorator `property`; parameters `self, mode='full'`; returns `str`; raises `ValueError`; accesses self fields `name, size`; doc \"Render the widget.\". Widget contains render and the attribute name.",
+  "- Attribute Widget.name (id a-name, site app/lib/b.mjs:2). Global variable `register` (id g-register, site app/lib/b.mjs:1, value `Library()`) is defined in app/lib/b.mjs.",
+  "- Function fnAlpha (id fn-alpha, site app/lib/a.mjs:12) is defined in app/lib/a.mjs. The method Widget.render calls fnAlpha (a symbol-level callsSymbol edge). app/functions/d/handler.mjs re-exports fnAlpha (reexports edge).",
   "- imports: b.mjs->a.mjs, c.mjs->a.mjs, d/handler.mjs->b.mjs, d/handler.mjs->c.mjs, e.mjs->a.mjs, e.mjs->f.mjs, f.mjs->e.mjs.",
   "- module-level calls: scripts/g.mjs -> app/lib/a.mjs (no module-level calls edge targets fnAlpha itself).",
   "- tests: app/unit-tests/b.test.mjs covers app/lib/b.mjs and app/functions/d/handler.mjs.",
   "- cochange (change-coupled) edges: app/lib/a.mjs <-> app/lib/b.mjs (weight 3) and app/lib/a.mjs <-> app/lib/c.mjs (weight 2).",
-  "- Commits: abc1234 (by Ada Lovelace on 2026-06-28, message \"Render the widget with full mode\") is the only commit ENTITY, touching app/lib/a.mjs (module grain) and Widget.render (symbol grain). Additionally, per-module PROVENANCE records commit ids: app/lib/a.mjs derives from git:abc1234 AND git:def5678, app/lib/b.mjs from git:abc1234 — so saying app/lib/a.mjs was \"touched by 2 commit(s)\" or citing git:def5678 in its provenance is TRUTHFUL; def5678 simply has no commit entity of its own to describe.",
+  "- Commits: abc1234 (id commit-abc; author Ada Lovelace; date 2026-06-28T12:00:00+00:00; message \"Render the widget with full mode\") is the only commit ENTITY, touching app/lib/a.mjs (touches, module grain) and Widget.render (touchesSymbol, symbol grain). Additionally, per-module PROVENANCE (derived_from) records commit ids: app/lib/a.mjs derives from git:abc1234 AND git:def5678, app/lib/b.mjs from git:abc1234 — so saying app/lib/a.mjs was \"touched by 2 commit(s)\" or citing git:abc1234, git:def5678 in its provenance is TRUTHFUL; def5678 simply has no commit entity of its own to describe.",
   "- Nothing else exists: no zebra.mjs, no nonExistentFn, no commit references beyond abc1234 and def5678.",
-  "- Like every real tmct graph artifact, it also documents its OWN vocabulary (schema classes like Module/Class/Function and predicates like imports/calls), so questions about what a term means are answerable from the graph.",
+  "- Like every real tmct graph artifact, it also documents its OWN vocabulary (schema classes like Module/Class/Function/Method/Attribute/Commit/GlobalVariable and predicates like imports/calls/tests/defines/touches/contains/inherits/cochange/reexports), so questions about what a term means are answerable from the graph.",
+  "- MEMORY & SESSION vocabulary (the recall path speaks this; a session-mode answer that cites it is TRUTHFUL, not invented): each chat session is folded into the graph as a first-class `Session` individual whose id is a uuidv7 (a hex id beginning `019f…`), timestamped with an ISO date; each recorded turn is an `Utterance`; each asserted rule (\"every module is a component\") becomes a reified `Fact` individual carrying an rdfs:subClassOf-style relation (e.g. `function rdfs:subClassOf component`) with its own provenance. A recall answer (\"noted — remembered 1 fact: …\", \"you asked before …\") renders these remembered Session/Utterance/Fact frames — so citing a session id, a prior date, or a stored fact is grounded in the memory graph even though it is not a code entity above.",
 ].join("\n");
+
+/** Stamped onto every judged row's judge object (like PROMPT_VERSION pins the
+ *  prompt) so a cross-cycle comparison can state which context grain scored it.
+ *  Bump when FIXTURE_CONTEXT / EMPTY_CONTEXT change grain (v1 = cycle-1/2 module
+ *  grain; v2 = cycle-4 META-1 full symbol + memory-vocabulary enumeration). */
+export const FIXTURE_CONTEXT_VERSION = "fixture-context-v2";
 
 export const EMPTY_CONTEXT =
   "The graph under discussion is EMPTY (a fresh repo with no index): zero entities, zero edges. " +
@@ -267,6 +293,7 @@ export async function runTurnsCase(caseDef, deps) {
       miss: outcome.miss,
       resolvedIds: outcome.resolvedIds,
       answeredIds: outcome.answeredIds,
+      ...(r.record?.via ? { via: r.record.via } : {}),
       ...(r.record?.command ? { command: r.record.command } : {}),
       focusLabel: outcome.focusLabel,
       ...(outcome.end ? { end: true } : {}),
@@ -354,6 +381,7 @@ export async function runSessionCase(caseDef, deps) {
           miss: outcome.miss,
           resolvedIds: outcome.resolvedIds,
           answeredIds: outcome.answeredIds,
+          ...(matched && record?.via ? { via: record.via } : {}),
           ...(record?.command ? { command: record.command } : {}),
           ...(turn.expect ? { expect: turn.expect } : {}),
         });
@@ -389,9 +417,15 @@ export async function runCase(caseDef, deps) {
     ...(caseDef.grade ? { grade: caseDef.grade, construction: caseDef.construction } : {}),
     ...(caseDef.grade && deps.sampling ? { sampling: deps.sampling } : {}),
     stamp: deps.stamp,
+    // via provenance of the ANSWERING turn (the last transcript turn) — the band
+    // the dual-banding rollup reads: "composed" is productive, every other via
+    // (template/count/recall/fact/corpus/…) is performance-only (PLAN_FORMULAIC_COMPETENCE.md).
+    via: transcript.length ? transcript[transcript.length - 1].via ?? null : null,
     judge: {
       dimensions: caseDef.judge?.dimensions ?? JUDGE_DIMENSIONS,
       context: caseDef.judge?.context ? `${baseContext}\n\nCase note: ${caseDef.judge.context}` : baseContext,
+      // META-1: pin which context grain scored this row (auditable across cycles).
+      contextVersion: FIXTURE_CONTEXT_VERSION,
     },
     transcript,
     tier1,
@@ -468,9 +502,14 @@ async function fileExists(path) {
   try { await access(path); return true; } catch { return false; }
 }
 
-/** Run one draw's graded cases grade-ascending, honoring --ladder gating.
- *  Returns { rows, skipped } where skipped = [{grade, reason}]. */
-async function runGradedDraw(gradedCases, deps, { ladder }) {
+/** Run one draw's graded cases grade-ascending, honoring --ladder gating
+ *  (META-2, PLAN_CYCLE_4.md): grades run A1→C2; the FIRST grade whose
+ *  non-frontier cases don't all pass tier-1 GATES — every grade above it is
+ *  SKIPPED with a receipt ("grade C1 skipped: B1 at 4/6"), so judged spend never
+ *  chases a ceiling while the floor leaks. `run` is injectable (defaults to the
+ *  real runCase) so the gating integration is unit-testable without the engine.
+ *  Returns { rows, skipped, reliabilityByGrade } where skipped = [{grade, reason}]. */
+export async function runGradedDraw(gradedCases, deps, { ladder, run = runCase } = {}) {
   const rows = [];
   const skipped = [];
   const reliabilityByGrade = {};
@@ -483,7 +522,7 @@ async function runGradedDraw(gradedCases, deps, { ladder }) {
       continue;
     }
     const gradeRows = [];
-    for (const caseDef of ofGrade) gradeRows.push(await runCase(caseDef, deps));
+    for (const caseDef of ofGrade) gradeRows.push(await run(caseDef, deps));
     rows.push(...gradeRows);
     reliabilityByGrade[grade] = gradeReliability(gradeRows);
     if (ladder && !reliabilityByGrade[grade].reliable) {
@@ -632,6 +671,11 @@ export async function main(argv = process.argv.slice(2)) {
   if (graded.length) {
     console.log(`\ngraded rollup (draw A, seed ${seedA}, sample ${args.sample}):`);
     console.log(renderRollup(gradedRollup(graded)));
+    const tlFindings = templateLaneLint([...graded, ...rowsB.filter((r) => r.grade)]);
+    if (tlFindings.length) {
+      console.log("\ntemplate-lane lint (a template-lane pass must NOT be composed — see PLAN_FORMULAIC_COMPETENCE.md):");
+      for (const f of tlFindings) console.log(`  - ${f.cell} ${f.caseId}: ${f.finding}`);
+    }
   }
 
   if (args.compare) {

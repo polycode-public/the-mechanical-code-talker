@@ -468,6 +468,33 @@ function b1Pronoun(t) {
       { say: "who touched that", expect: expectSet(t, truth) },
     ));
   }
+  // ---- cycle-4 pool growth (25 → 50): more anchor × follow-up bindings over
+  // ALL eight modules, plus a "this" pronoun variant. Ground truth per fixture. ----
+  const allMods = t.modules.map((i) => t.label(i));
+  const extraFollowups = [
+    { say: "what does it import", truth: (l) => t.importsOf(l) },
+    { say: "what calls it", truth: (l) => t.callersOf(l) },
+    { say: "what does it define", truth: (l) => t.definesOf(l) },
+  ];
+  extraFollowups.forEach((f, fi) => {
+    allMods.forEach((m, mi) => {
+      const anchor = MODULE_ANCHORS[(mi + fi) % MODULE_ANCHORS.length](m);
+      const truth = f.truth(m);
+      items.push(turnsItem(
+        `Turn 2's "it" refers to ${m} (the subject of turn 1). ${ctxSet(`${f.say} (it = ${m})`, truth)}`,
+        { say: anchor, expect: {} },
+        { say: f.say, expect: expectSet(t, truth) },
+      ));
+    });
+  });
+  allMods.forEach((m, mi) => {
+    const truth = t.touchedBy(m);
+    items.push(turnsItem(
+      `Turn 2's "this" refers to ${m}, the module just described. ${ctxSet(`who touched this (this = ${m})`, truth)}`,
+      { say: MODULE_ANCHORS[mi % MODULE_ANCHORS.length](m), expect: {} },
+      { say: "who touched this", expect: expectSet(t, truth) },
+    ));
+  });
   return items;
 }
 
@@ -623,6 +650,34 @@ function b1Temporal(t) {
     "Ground truth: abc1234 is the newest (and only) commit; nothing is recorded after it — the honest answer states that emptiness.",
     { say: "what changed after abc1234", expect: { miss: true, answerNotMatch: ["I answer questions about"] } },
   ));
+  // ---- cycle-4 pool growth (25 → 50): additional original phrasings of the
+  // same commit-history intents over ALL modules/symbols, ground truth verbatim
+  // from the fixture (only app/lib/a.mjs and Widget.render are ever touched). ----
+  const touchedExpect = (touched) => touched.length
+    ? { miss: false, answerMatch: ["abc1234"] }
+    : { miss: true, answerNotMatch: ["I answer questions about"] };
+  const allMods = t.modules.map((i) => t.label(i));
+  for (const m of allMods) {
+    const touched = t.touchedBy(m);
+    const ctx = touched.length ? commitCtx : `Ground truth: no recorded commit touches ${m}; the honest answer states that emptiness.`;
+    items.push(turnsItem(ctx, { say: `has ${m} changed`, expect: touchedExpect(touched) }));
+    items.push(turnsItem(ctx, { say: `the commit history of ${m}`, expect: touchedExpect(touched) }));
+    items.push(turnsItem(ctx, { say: `when was ${m} last touched`, expect: touchedExpect(touched) }));
+  }
+  for (const m of allMods) {
+    const truth = t.cochangeOf(m);
+    items.push(turnsItem(
+      `Ground truth: change-coupled (cochange) partners of ${m}: ${truth.join(", ") || "none"}.`,
+      { say: `which modules changed together with ${m}`, expect: expectSet(t, truth) },
+    ));
+  }
+  for (const s of ["Widget.render", "fnAlpha", "Base", "Widget"]) {
+    const truth = t.touchedBy(s).filter((x) => x === "abc1234");
+    items.push(turnsItem(
+      truth.length ? "Ground truth: commit abc1234 touched Widget.render (touchesSymbol)." : `Ground truth: no commit entity touches ${s} — honest empty.`,
+      { say: `which commit touched ${s}`, expect: truth.length ? { miss: false, answeredIdsInclude: ["commit-abc"], answerMatch: ["abc1234"] } : { miss: true, answerNotMatch: ["I answer questions about"] } },
+    ));
+  }
   return items;
 }
 
@@ -1230,6 +1285,39 @@ function c1Temporal(t) {
     "Ground truth: abc1234 is the newest (and only) commit entity.",
     { say: "what is the newest commit", expect: { miss: false, answeredIdsInclude: ["commit-abc"], answerMatch: ["abc1234"] } },
   ));
+  // ---- cycle-4 pool growth (25 → 50): more temporal-over-relative phrasings
+  // across ALL modules/symbols; ground truth verbatim (only app/lib/a.mjs and
+  // Widget.render are ever touched, so all indirect targets resolve honestly). ----
+  const allMods = t.modules.map((i) => t.label(i));
+  for (const m of allMods) {
+    const touched = t.touchedBy(m);
+    items.push(turnsItem(
+      touched.length ? "Ground truth: the last recorded change to app/lib/a.mjs is commit abc1234 (2026-06-28)." : `Ground truth: no recorded commit ever changed ${m} — honest empty.`,
+      { say: `when was ${m} last changed`, expect: touched.length ? { miss: false, answerMatch: ["abc1234"] } : { miss: true, answerNotMatch: ["I answer questions about"] } },
+    ));
+  }
+  for (const m of allMods) {
+    const importers = t.importersOf(m);
+    const truth = [...new Set(importers.flatMap((u) => t.touchedBy(u)))];
+    items.push(turnsItem(
+      `"the module importing ${m}" = {${importers.join(", ") || "none"}}. ${ctxSet(`who touched the module importing ${m}`, truth)}`,
+      { say: `who touched the module importing ${m}`, expect: expectSet(t, truth) },
+    ));
+  }
+  for (const m of allMods) {
+    const truth = t.cochangeOf(m);
+    items.push(turnsItem(
+      `Ground truth: change-coupled (cochange) partners of ${m}: ${truth.join(", ") || "none"}.`,
+      { say: `cochange partners of ${m}`, expect: expectSet(t, truth) },
+    ));
+  }
+  for (const s of ["Base", "Widget", "register"]) {
+    const truth = t.touchedBy(s).filter((x) => x === "abc1234");
+    items.push(turnsItem(
+      truth.length ? "Ground truth: commit abc1234 touched it." : `Ground truth: no commit touched ${s} — honest empty.`,
+      { say: `which commit touched ${s}`, expect: truth.length ? { miss: false, answeredIdsInclude: ["commit-abc"], answerMatch: ["abc1234"] } : { miss: true, answerNotMatch: ["I answer questions about"] } },
+    ));
+  }
   return items;
 }
 

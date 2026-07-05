@@ -16,15 +16,20 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import {
   GRADES, CONSTRUCTIONS, COMBO_PARTS, GRADED_MATRIX, PROMOTED_GRADES,
-  MIN_PER_CELL, AGREEMENT_TOLERANCE,
+  MIN_PER_CELL, AGREEMENT_TOLERANCE, CELL_SAMPLE,
   validateConstruction, isCombo, cellKey, fnv1a, mulberry32, seededShuffle,
   isFrontierCase, isGreenRow, promotedSubset, stratifiedSample, dualDraws,
   computeAgreement, renderAgreementTable, gradeReliability, ladderGate,
-  gradedRollup,
+  gradedRollup, isProductiveRow, isTemplateLane, bandScore, templateLaneLint,
 } from "../chatbench/graded.mjs";
 import {
   parseCases, summarizeTier1, runTurnsCase, runSessionCase, createRunnerDeps,
+  runGradedDraw,
 } from "../chatbench/run.mjs";
+
+// The per-run sample size a cell draws: its CELL_SAMPLE override (census cells,
+// grown for dual-draw reliability) else the MIN_PER_CELL floor.
+const cellSample = (cell) => CELL_SAMPLE[cellKey(cell)] ?? MIN_PER_CELL;
 
 const POOL_FILE = fileURLToPath(new URL("../chatbench/graded-pool.jsonl", import.meta.url));
 const CASES_FILE = fileURLToPath(new URL("../chatbench/cases.jsonl", import.meta.url));
@@ -115,7 +120,10 @@ test("stratifiedSample: deterministic per seed, 5-per-cell floor, promoted grade
   const byCell = new Map();
   for (const c of s1) byCell.set(cellKey(c), (byCell.get(cellKey(c)) ?? 0) + 1);
   assert.equal(byCell.size, GRADED_MATRIX.length, "every cell represented");
-  for (const [key, n] of byCell) assert.equal(n, MIN_PER_CELL, `${key}: 10% of 25/50 floors at ${MIN_PER_CELL}`);
+  for (const [key, n] of byCell) {
+    const expected = CELL_SAMPLE[key] ?? MIN_PER_CELL; // census cells draw their full override
+    assert.equal(n, expected, `${key}: draws ${expected} (10% of 25/50 floors at ${MIN_PER_CELL}, census cells draw their override)`);
+  }
   // promoted grades: the FIXED promoted subset regardless of seed
   for (const grade of PROMOTED_GRADES) {
     const fixed1 = s1.filter((c) => c.grade === grade).map((c) => c.id).sort();
@@ -124,17 +132,27 @@ test("stratifiedSample: deterministic per seed, 5-per-cell floor, promoted grade
   }
 });
 
-test("dualDraws: distinct seeds, no within-cell overlap for non-promoted cells, identical fixed subsets for promoted cells", () => {
+test("dualDraws: distinct seeds, no within-cell overlap for non-promoted cells, identical fixed subsets for promoted + census cells", () => {
   const { a, b } = dualDraws(pool, { fraction: 0.1, seedA: 7, seedB: 8 });
   const aIds = new Set(a.map((c) => c.id));
+  // a census cell (CELL_SAMPLE ≥ pool size) is fully drawn in BOTH draws, so it
+  // overlaps by design (that is what makes it always agree); every other
+  // non-promoted cell has pool ≥ 2× quota so draw B shares nothing with A.
+  const censusCell = (c) => (CELL_SAMPLE[cellKey(c)] ?? 0) >= (GRADED_MATRIX.find((m) => cellKey(m) === cellKey(c))?.size ?? Infinity);
   for (const c of b) {
-    if (PROMOTED_GRADES.includes(c.grade)) {
-      assert.ok(aIds.has(c.id), `${c.id}: promoted cases identical across draws`);
+    if (PROMOTED_GRADES.includes(c.grade) || censusCell(c)) {
+      assert.ok(aIds.has(c.id), `${c.id}: promoted/census cases identical across draws`);
     } else {
       assert.ok(!aIds.has(c.id), `${c.id}: pools are ≥ 2× the quota, so draw B shares nothing with draw A`);
     }
   }
   assert.equal(a.length, b.length, "parallel forms are the same shape");
+  // the census cells guarantee agreement: both draws hold the identical full cell.
+  for (const key of Object.keys(CELL_SAMPLE)) {
+    const ca = a.filter((c) => cellKey(c) === key).map((c) => c.id).sort();
+    const cb = b.filter((c) => cellKey(c) === key).map((c) => c.id).sort();
+    assert.deepEqual(ca, cb, `${key}: census cell is the identical full set in both draws → |Δ green-rate| = 0`);
+  }
 });
 
 test("stratifiedSample: exclude tops up from the excluded set only when the cell runs dry", () => {
@@ -256,6 +274,134 @@ test("gradedRollup: per-grade cells with single vs combo separated (the weak-alo
   assert.deepEqual(b1.combo, { n: 1, green: 0, frontier: 1 });
   const comboCell = b1.cells.find((c) => c.combo);
   assert.equal(comboCell.construction, "pronoun-binding+negation");
+});
+
+// ---- dual banding + template-lane (PLAN_FORMULAIC_COMPETENCE.md) ----
+
+// a row with an explicit via + tags for band accounting.
+const brow = (id, grade, construction, { pass = true, via = "composed", tags = ["graded"] } = {}) => ({
+  caseId: id, grade, construction, via, tags,
+  tier1: { pass, baselineFailTurns: [], improvedBaselineTurns: [], failing: [], checksTotal: 1, checksFailed: pass ? 0 : 1 },
+});
+
+test("dual banding: productive counts composed greens only; performance counts every green; gap ≥ 0", () => {
+  const rows = [
+    brow("1", "C1", "temporal", { via: "composed" }),        // green + composed → both bands
+    brow("2", "C1", "temporal", { via: "template" }),        // green + template → performance only
+    brow("3", "C1", "temporal", { via: "count" }),           // green + count → performance only
+    brow("4", "C1", "temporal", { via: "composed", pass: false }), // not green → neither
+  ];
+  const b = bandScore(rows);
+  assert.equal(b.n, 4);
+  assert.equal(b.performance.green, 3, "three greens by any via");
+  assert.equal(b.productive.green, 1, "one green is composed");
+  assert.ok(Math.abs(b.gap - (3 / 4 - 1 / 4)) < 1e-9, "gap = perf rate − prod rate");
+  assert.ok(b.gap >= 0, "productive greens are a subset of performance greens");
+  assert.ok(isProductiveRow(brow("x", "C1", "temporal", { via: "composed" })));
+  assert.ok(!isProductiveRow(brow("x", "C1", "temporal", { via: "template" })));
+});
+
+test("template-lane invariant: a template-carried pass RAISES performance and NEVER productive", () => {
+  const base = [brow("p1", "C1", "temporal", { via: "composed" })]; // one composed green
+  const before = bandScore(base);
+  // add a template-lane pass carried by a template (the faked level)
+  const withTemplate = [...base, brow("t1", "C1", "temporal", { via: "template", tags: ["graded", "template-lane"] })];
+  const after = bandScore(withTemplate);
+  assert.equal(after.performance.green, before.performance.green + 1, "performance band rises by the template pass");
+  assert.equal(after.productive.green, before.productive.green, "productive band NEVER moves for a template pass");
+  assert.ok(after.gap > before.gap, "the band gap widens by exactly the acquired chunk");
+  assert.ok(isTemplateLane(withTemplate[1]) && !isProductiveRow(withTemplate[1]));
+});
+
+test("templateLaneLint: flags a template-lane row that passed via:composed (not actually faking the level)", () => {
+  const rows = [
+    brow("ok", "C1", "temporal", { via: "template", tags: ["graded", "template-lane"] }), // clean
+    brow("bad", "C1", "temporal", { via: "composed", tags: ["graded", "template-lane"] }), // composed green under a template-lane tag
+    brow("plain", "C1", "temporal", { via: "composed" }), // not template-lane → ignored
+  ];
+  const findings = templateLaneLint(rows);
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0].caseId, "bad");
+  assert.match(findings[0].finding, /not faking the level/);
+});
+
+test("gradedRollup: cells + grades carry the two-band score and gap; template-lane rows are counted", () => {
+  const rows = [
+    brow("1", "C1", "temporal", { via: "composed" }),
+    brow("2", "C1", "temporal", { via: "template", tags: ["graded", "template-lane"] }),
+  ];
+  const g = gradedRollup(rows).find((x) => x.grade === "C1");
+  assert.equal(g.bands.performance.green, 2);
+  assert.equal(g.bands.productive.green, 1);
+  const cell = g.cells.find((c) => c.construction === "temporal");
+  assert.equal(cell.bands.performance.green, 2);
+  assert.equal(cell.bands.productive.green, 1);
+  assert.equal(cell.templateLane, 1, "one template-lane row in the cell");
+  assert.ok(renderRollupHasBand(g));
+});
+
+function renderRollupHasBand(grade) {
+  return grade.bands && typeof grade.bands.gap === "number";
+}
+
+test("computeAgreement: a template-lane parallel-forms line is reported alongside the standard cells", () => {
+  const a = [
+    brow("t1", "C1", "temporal", { via: "template", tags: ["graded", "template-lane"] }),
+    brow("t2", "C1", "temporal", { via: "template", tags: ["graded", "template-lane"] }),
+    brow("s1", "C1", "temporal", { via: "composed" }),
+  ];
+  const b = [
+    brow("t3", "C1", "temporal", { via: "template", tags: ["graded", "template-lane"] }),
+    brow("t4", "C1", "temporal", { via: "template", tags: ["graded", "template-lane"] }),
+    brow("s2", "C1", "temporal", { via: "composed" }),
+  ];
+  const agreement = computeAgreement(a, b, {});
+  assert.ok(agreement.templateLane, "template-lane sub-agreement present");
+  assert.equal(agreement.templateLane.cells.length, 1, "one template-lane cell");
+  assert.equal(agreement.templateLane.cells[0].construction, "temporal");
+  const table = renderAgreementTable(agreement);
+  assert.match(table, /template-lane C1 temporal/);
+  assert.match(table, /template-lane agreement:/);
+});
+
+// ---- runGradedDraw ladder integration (META-2, PLAN_CYCLE_4.md) ----
+
+test("runGradedDraw: --ladder gates every grade above the first unreliable one, with a receipt; without --ladder all grades run", async () => {
+  // A synthetic pool: B1 has an ENFORCED failure (non-frontier, fails tier-1) so
+  // the grade is unreliable; a stub runner returns the case's authored outcome.
+  const cases = [
+    { id: "a1", grade: "A1", construction: "svo-query" },
+    { id: "b1a", grade: "B1", construction: "temporal" },       // passes
+    { id: "b1b", grade: "B1", construction: "temporal", fail: true }, // enforced fail → unreliable
+    { id: "c1", grade: "C1", construction: "temporal" },
+    { id: "c2", grade: "C2", construction: "relative-embedded" },
+  ];
+  const stubRun = async (c) => ({
+    caseId: c.id, grade: c.grade, construction: c.construction,
+    tier1: { pass: !c.fail, baselineFailTurns: [], improvedBaselineTurns: [], failing: [], checksTotal: 1, checksFailed: c.fail ? 1 : 0 },
+  });
+  const gated = await runGradedDraw(cases, {}, { ladder: true, run: stubRun });
+  assert.deepEqual(gated.skipped.map((s) => s.grade), ["C1", "C2"], "grades above B1 are skipped");
+  assert.match(gated.skipped[0].reason, /B1 at 1\/2/);
+  assert.deepEqual(gated.rows.map((r) => r.grade), ["A1", "B1", "B1"], "nothing above the gate ran");
+  const open = await runGradedDraw(cases, {}, { ladder: false, run: stubRun });
+  assert.equal(open.skipped.length, 0, "no --ladder → every grade runs");
+  assert.equal(open.rows.length, 5);
+});
+
+test("census cells (CELL_SAMPLE ≥ size) agree on the REAL pool: both draws are the identical full cell, so green-rate is identical", () => {
+  // isFrontierCase is the deterministic green proxy (a replayed row is green iff
+  // the pool case is non-frontier — the engine is unchanged and deterministic).
+  const nonFrontierRate = (list) => (list.length ? list.filter((c) => !isFrontierCase(c)).length / list.length : null);
+  for (const stamp of ["cycle3", "cycle4", "run-004", "graded-smoke", "xyz"]) {
+    const seedA = fnv1a(stamp);
+    const { a, b } = dualDraws(pool, { fraction: 0.1, seedA, seedB: (seedA + 1) >>> 0 });
+    for (const key of Object.keys(CELL_SAMPLE)) {
+      const ca = a.filter((c) => cellKey(c) === key);
+      const cb = b.filter((c) => cellKey(c) === key);
+      assert.equal(Math.abs(nonFrontierRate(ca) - nonFrontierRate(cb)), 0, `${key} @ ${stamp}: census cell agrees exactly`);
+    }
+  }
 });
 
 // ---- (e) the PROMOTED ALWAYS-RUN set ----

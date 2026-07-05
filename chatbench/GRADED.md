@@ -50,12 +50,14 @@ rollups and the agreement table always separate single from combo cells.
 | --- | --- | --- |
 | A1 | naming-vocabulary (25), svo-query (50), quantifier-counting (25) | — |
 | A2 | naming-vocabulary (25), svo-query (50), quantifier-counting (25), pronoun-binding (25), negation (25) | noise+svo-query (25) |
-| B1 | pronoun-binding (25), negation (25), reversible-passive (25), temporal (25), discourse-reference (25) | pronoun-binding+negation (25), discourse-reference+quantifier-counting (25) |
+| B1 | pronoun-binding (50†), negation (25), reversible-passive (25), temporal (50†), discourse-reference (25) | pronoun-binding+negation (25), discourse-reference+quantifier-counting (25) |
 | B2 | reversible-passive (25), relative-embedded (50), coordination-compositional (50), discourse-reference (25), assert-recall (25) | quantifier-counting+temporal (25), noise+pronoun-binding (25) |
-| C1 | temporal (25), relative-embedded (25), coordination-compositional (25), assert-recall (25) | negation+relative-embedded (25) |
+| C1 | temporal (50†), relative-embedded (25), coordination-compositional (25), assert-recall (25) | negation+relative-embedded (25) |
 | C2 | pronoun-binding (25 — Winograd-style), relative-embedded (25) | — |
 
-30 cells, 850 pool cases. Why these cells: each construction is populated at
+30 cells, 925 pool cases. († = **census cells**: B1 pronoun-binding, B1 temporal
+and C1 temporal were grown 25→50 and are drawn in FULL every run — cycle-4 pool
+growth, see "Sampling" below.) Why these cells: each construction is populated at
 the band where it first meaningfully exists in the code-chat domain (per the
 band descriptors) and **overlaps into the adjacent band** with harder
 surfaces of the same construction — svo/naming/counting A1→A2,
@@ -88,16 +90,24 @@ through the current engine**, mirroring the v1 discipline:
   timeless ground-truth `judge.context`.
 
 Baseline distribution at generation (green cases / pool — the ladder's
-current shape; per-cell detail is printed by the generator):
+current shape; per-cell detail is printed by the generator). **The authoritative
+counts are always whatever `node chatbench/generate-graded.mjs` prints against the
+current engine** — the generator replays every item through the live engine, so
+these numbers move as levers land. Re-run the generator to refresh them.
 
 | grade | green / pool | reading |
 | --- | --- | --- |
 | A1 | 93 / 100 | mostly passing (frontier: meta-vs-predicate ambiguity on "what does *pred* mean") |
-| A2 | 138 / 175 | mostly passing (frontier: restricted counts, entity-name vocabulary traps, "are not tested" phrasings) |
-| B1 | 48 / 175 | **the frontier band** (reversible passives answer the reversed question; set-anaphora "those" is not threaded; negated set queries don't parse) |
-| B2 | 131 / 225 | mixed (relative-embedded and coordination largely pass; assert-recall, discourse chains and passives-in-relatives fail) |
-| C1 | 68 / 125 | mixed (deep chains largely pass; temporal composition and cross-session recall fail) |
+| A2 | ~140 / 175 | mostly passing (frontier: restricted counts, entity-name vocabulary traps, "are not tested" phrasings) |
+| B1 | grows / 225 | **the frontier band** — pool 175→225 after the cycle-4 growth (pronoun-binding 25→50, temporal 25→50); the negation/reversible-passive levers (cycles 5–6) move it |
+| B2 | mixed / 225 | relative-embedded and coordination largely pass; assert-recall, discourse chains and passives-in-relatives fail |
+| C1 | mixed / 150 | pool 125→150 (temporal 25→50); deep chains largely pass; temporal composition and cross-session recall are the frontier |
 | C2 | 12 / 50 | ceiling (all Winograd-style items fail, as is their job) |
+
+Cycle-4 pool growth (PLAN_CYCLE_4.md): the pool went **850 → 925 cases** — the
+three dual-draw UNDER-COVERED cells (B1 pronoun-binding, B1 temporal, C1 temporal)
+were each grown 25 → 50 and are now **census cells** (sampled in full every run,
+see "Sampling"), restoring all three to the PASS/FAIL statistic.
 
 Schema additions over v1 (`parseCases` lints them): `grade` (A1–C2),
 `construction` (one taxonomy entry or a two-part `a+b` combo), the `graded`
@@ -106,12 +116,25 @@ registry), and turn-level `observed` (frontier record only).
 
 ## Sampling: stratified, seeded, dual-draw
 
-A bench run never replays all 850: `run.mjs` draws a stratified sample —
-per cell, `max(5, round(fraction × poolSize))` items (fraction default 0.1 →
-exactly 5 per cell, the statistical floor per populated area), seeded per
-cell with `seed ^ fnv1a(cellKey)`. The seed defaults to `fnv1a(stamp)` and is
-**recorded on every graded product row** (`sampling: {seed, fraction, draw}`),
-so any run is exactly reproducible from its stamp or its recorded seed.
+A bench run never replays all 925: `run.mjs` draws a stratified sample —
+per cell, `max(cellFloor, round(fraction × poolSize))` items where `cellFloor`
+is the cell's `CELL_SAMPLE` override else 5 (fraction default 0.1 → exactly 5 per
+cell, the statistical floor per populated area), seeded per cell with
+`seed ^ fnv1a(cellKey)`. The seed defaults to `fnv1a(stamp)` and is **recorded on
+every graded product row** (`sampling: {seed, fraction, draw}`), so any run is
+exactly reproducible from its stamp or its recorded seed.
+
+**Census cells (`CELL_SAMPLE`, cycle-4 pool growth).** Three cells — B1
+pronoun-binding, B1 temporal, C1 temporal — carry a `sample` equal to their pool
+size (50) in `GRADED_MATRIX`, so both draws hold the **full cell** every run.
+These cells are *irreducibly heterogeneous* (a scattered mix of passing and
+frontier items): no partial sample makes two independent draws reliably agree
+(verified across 500 seeds), so at n=5 the instrument correctly flagged them
+UNDER-COVERED. Drawing the full census makes `|Δ green-rate| = 0` for every seed —
+they always AGREE and stay in the PASS/FAIL statistic. Like promotion, this trades
+sampling-independence for full coverage. Judged-cost note: a census cell is the
+identical set in draw A and draw B, so it only needs to be **JUDGED once** (draw A);
+draw B adds no judged information for those cells.
 
 **Dual draw (default for graded runs; `--single` opts out):** every graded
 measurement executes twice — draw A (seed) and draw B (seed+1), sampled
@@ -164,17 +187,34 @@ Sampling changes the regression contract (this section amends
    statistic across cycles** — robust under sampling — not per-item identity.
    A cell currently flagged UNDER-COVERED is excluded from the comparison.
 
-## Ladder gating (`--ladder`)
+## Ladder gating (`--ladder`) and the judged-spend cadence (META-2)
 
 Grades run ascending (A1 → C2). A grade is **reliable** when every
 non-frontier sampled case passes tier-1 (frontier cases never block the
 climb — a grade of only ceiling markers is vacuously reliable; its job is to
 stay on the record). When grade N is unreliable, every grade above it is
-SKIPPED with a receipt: `grade B2 skipped: B1 at 4/5`. `--grade <band>` runs
+SKIPPED with a receipt: `grade C1 skipped: B1 at 4/6`. `--grade <band>` runs
 one band alone. At the authoring baseline every grade is reliable **by
 construction** (failures were marked frontier at authoring), so the ladder
 gates nowhere; its job begins the first time a lever regresses an enforced
-expectation.
+expectation. The gating is implemented in `runGradedDraw` (`run.mjs`, injectable
+runner for unit-testing) and the pure `ladderGate` (`graded.mjs`); the
+`test/chatbench-graded.test.mjs` `runGradedDraw` test exercises it end-to-end.
+
+**The standing cadence (PLAN_CYCLE_4.md §META-2 — don't pay to judge a ceiling
+while the floor leaks).** Tier-1 (and its dual-draw agreement) is FREE and always
+runs for every grade. **Judged** spend is where discipline matters:
+
+- **Judged cycles focus the A/B grades until B1 clears its exit threshold.** Run
+  the standing invocation with `--ladder`, so a regression at any lower rung gates
+  the paid samples off the higher ones automatically.
+- **C1/C2 stay tier-1-only ceiling markers** — run for tier-1 agreement (free) but
+  NOT judged, judged only occasionally to confirm they are still ceilings. A verdict
+  that hinges on a C-cell is the only reason to buy its judged-mean agreement.
+- The **B1 exit criterion** that lifts the ladder gate and returns C1/C2 to the
+  judged budget: B1 grade mean ≥ ~1.5, every B1 cell dual-draw-agreeing (no B1 cell
+  UNDER-COVERED — the cycle-4 census-cell growth is what makes that measurable), and
+  no pass→fail regression on the v1 line or the promoted A1/A2 always-run set.
 
 ## Promotion (cell-level)
 
@@ -187,3 +227,45 @@ future grade = appending its band name to the one `PROMOTED_GRADES` array in
 `chatbench/graded.mjs`. Currently promoted: **A1 and A2** (9 cells × 5 =
 45 always-run cases; every A1/A2 cell's promoted subset passes today).
 Demotion (a promoted cell regressing) fails `npm test` — that is the point.
+
+## Dual banding — productive vs performance (PLAN_FORMULAIC_COMPETENCE.md)
+
+Every graded score splits into two bands, computed from the `via` provenance the
+product already stamps on each turn (threaded onto each product row as `row.via` =
+the answering turn's via; no re-run, pure aggregation in `gradedRollup`):
+
+- **Productive band** — greens whose answering `via` is `"composed"` (the ask
+  engine generated it). This is what tmct can *generate*.
+- **Performance band** — greens by ANY via (template/count/recall/fact/corpus/…
+  included). This is what tmct can *say*, by any means.
+
+Both are reported per cell and per grade as `perf G/n vs prod G/n, gap` — the
+**band gap** (`performance rate − productive rate`, always ≥ 0) quantifies how much
+of the fluency is memorized versus generated. `bandScore()` is the primitive;
+`isProductiveRow(row)` = `via === "composed"`.
+
+**Template-lane** (`isTemplateLane`, the `template-lane` tag, valid everywhere).
+A case tagged `template-lane` targets a *templated* capability — "the bench must
+say a level is being faked". A template-carried pass **raises the performance band
+and NEVER the productive band** (the honesty guarantee, asserted in
+`test/chatbench-graded.test.mjs`). Template-lane cells get their own parallel-forms
+**agreement line** (`agreement.templateLane` + the `template-lane …` rows in the
+rendered table), reported ALONGSIDE the standard cells, never replacing them.
+`templateLaneLint(rows)` flags a template-lane row that passed `via:"composed"` —
+it is not actually faking the level (either mis-tagged, or a genuine
+chunk-becomes-grammar acquisition to record). The agreement gate applies unchanged:
+a template-lane cell that disagrees across draws is UNDER-COVERED until its pool grows.
+
+## The judge context and its version (META-1, PLAN_CYCLE_4.md)
+
+The groundedness judge scores against `FIXTURE_CONTEXT` (`run.mjs`) — a faithful
+prose ENUMERATION of the fixture. Cycle-4 META-1 broadened it from module grain to
+the **full fixture entity detail the product may truthfully emit** (per-symbol ids,
+source sites/line spans, params/returns/raises/decorators/self-fields, per-module
+provenance commit ids, and the Session/Utterance/Fact memory vocabulary the recall
+path speaks). "Holds exactly these facts" stays true of the fuller enumeration.
+This is a **harness correction to judge INPUT, not a product change** (the lineage
+of cycle-2's H1a/H1b). Every judged row is stamped with `judge.contextVersion`
+(`FIXTURE_CONTEXT_VERSION`, currently `fixture-context-v2`) so a cross-cycle
+comparison can state which context grain scored it — and cycle 4 is a groundedness
+**re-baseline**: v1-context means are not comparable to v2-context means.

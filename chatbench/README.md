@@ -10,7 +10,7 @@ stays no-LLM; the judge lives only here.
 | file | role |
 | --- | --- |
 | `cases.jsonl` | the v1 case set — **append-only once the CHATBENCH arc starts**; never edit or delete a case mid-arc |
-| `graded-pool.jsonl` | the GRADED pool (case-set v2): 850 generated cases across 30 grade×construction cells, sampled per run — see `GRADED.md` |
+| `graded-pool.jsonl` | the GRADED pool (case-set v2): 925 generated cases across 30 grade×construction cells, sampled per run — see `GRADED.md` |
 | `graded.mjs` | graded registries + pure logic: matrix, stratified/dual sampling, agreement, ladder, rollups |
 | `generate-graded.mjs` | deterministic pool generator (replays the engine to auto-author expectations) |
 | `GRADED.md` | the graded benchmark's design doc (matrix, band descriptors, sampling contract, promotion) |
@@ -51,14 +51,19 @@ pool))` cases — as a **dual draw** by default: two independent seeded samples
 (`product-a.jsonl` = v1 + draw A; `product-b.jsonl` = draw B), whose per-cell
 agreement (`agreement.json` + the printed table) is the instrument's own
 reliability check. A DISAGREEING cell is UNDER-COVERED: grow its pool/sample
-and exclude it from cycle statistics until it agrees.
+and exclude it from cycle statistics until it agrees. Three **census cells**
+(B1 pronoun-binding, B1 temporal, C1 temporal — `CELL_SAMPLE`) are drawn in
+FULL every run so they always agree (cycle-4 pool growth; see `GRADED.md`).
 
 Graded schema on top of the v1 case shape: `grade` (`A1`…`C2`),
 `construction` (one of the 11 taxonomy entries, or an `a+b` combo such as
-`pronoun-binding+negation`), the `graded` tag, and — on frontier turns only —
-`expect.baselineFail: true` plus `observed` (the recorded current answer).
-Graded product rows carry `grade`, `construction` and `sampling: {seed,
-fraction, draw}` so any run is reproducible.
+`pronoun-binding+negation`), the `graded` tag (plus the optional
+`template-lane` tag), and — on frontier turns only — `expect.baselineFail: true`
+plus `observed` (the recorded current answer). Graded product rows carry `grade`,
+`construction`, `sampling: {seed, fraction, draw}`, the answering-turn `via`
+(dual-banding: productive `via:"composed"` vs performance any-via + band gap), and
+`judge.contextVersion` (which `FIXTURE_CONTEXT` grain scored the row) so any run is
+reproducible and auditable.
 
 Flags (all additive; with no pool file the runner behaves exactly as v1):
 
@@ -69,7 +74,8 @@ npm run chatbench:run -- --stamp graded-smoke        # v1 + dual graded draws
 #   --seed <n>          draw seed (default fnv1a(stamp); recorded in rows)
 #   --grade B1          run one graded band only
 #   --ladder            grades ascend; grade N unreliable → N+1… skipped
-#                       ("grade B2 skipped: B1 at 4/5")
+#                       ("grade C1 skipped: B1 at 4/6") — judged cadence: focus
+#                       A/B until B1 clears; C1/C2 tier-1-only (GRADED.md §META-2)
 #   --pool <file|none>  alternate pool / opt out
 node chatbench/generate-graded.mjs                   # rebuild the pool (deterministic; seed 20260704)
 ```
@@ -88,6 +94,13 @@ across 30 cells; **zero v1 cases in `cases.jsonl` touched** (still 48). The
 pool file is regenerable but committed and append-only in the same sense as
 `cases.jsonl`: regeneration must reproduce it byte-identically (seed
 20260704) unless a write-up records a deliberate pool revision.
+2026-07-05 (cycle 4) — deliberate pool revision: the three dual-draw
+UNDER-COVERED cells (B1 pronoun-binding, B1 temporal, C1 temporal) grown 25→50
+(new original phrasings, ground truth verbatim from the fixture) and made census
+cells, so **925 cases** across 30 cells. Regenerate with
+`node chatbench/generate-graded.mjs` after any engine change lands, since the
+generator replays every item through the live engine (the frontier marks track
+the current engine).
 
 ## Case shape (`cases.jsonl`, one JSON object per line)
 

@@ -55,7 +55,9 @@ export const cellKey = (c) => `${c.grade}:${c.construction}`;
 /** The populated grade × construction matrix (GRADED.md documents the why).
  *  size = the POOL size the generator must produce per cell (50 default,
  *  25 where the surface space is narrower); the per-run SAMPLE is 10% with a
- *  5-item floor. slug is the id fragment: g-<band>-<slug>-<n>. */
+ *  5-item floor, unless the cell carries a `sample` override (CELL_SAMPLE) — a
+ *  census cell (sample = size) is drawn in FULL every run so its two draws always
+ *  agree (cycle-4 pool growth). slug is the id fragment: g-<band>-<slug>-<n>. */
 export const GRADED_MATRIX = [
   { grade: "A1", construction: "naming-vocabulary", slug: "naming", size: 25 },
   { grade: "A1", construction: "svo-query", slug: "svo", size: 50 },
@@ -66,10 +68,19 @@ export const GRADED_MATRIX = [
   { grade: "A2", construction: "pronoun-binding", slug: "pron", size: 25 },
   { grade: "A2", construction: "negation", slug: "neg", size: 25 },
   { grade: "A2", construction: "noise+svo-query", slug: "noise-svo", size: 25 },
-  { grade: "B1", construction: "pronoun-binding", slug: "pron", size: 25 },
+  // B1 pronoun-binding + B1 temporal (and C1 temporal below) grown to a 50-item
+  // pool that is FULLY sampled every run (cycle-4 pool growth, PLAN_CYCLE_4.md):
+  // these cells were dual-draw UNDER-COVERED at n=5 — irreducibly heterogeneous
+  // (a scattered mix of passing + frontier items), so NO partial sample makes the
+  // two independent draws reliably agree (empirically verified across 500 seeds).
+  // `sample` = pool size makes each draw a full CENSUS, so |Δ green-rate| = 0 for
+  // every seed and the cell re-enters the PASS/FAIL stat. Like promotion, this
+  // trades sampling-independence for full coverage; the judged-cost note in
+  // GRADED.md flags that a census cell need only be JUDGED once (draw A).
+  { grade: "B1", construction: "pronoun-binding", slug: "pron", size: 50, sample: 50 },
   { grade: "B1", construction: "negation", slug: "neg", size: 25 },
   { grade: "B1", construction: "reversible-passive", slug: "passive", size: 25 },
-  { grade: "B1", construction: "temporal", slug: "temp", size: 25 },
+  { grade: "B1", construction: "temporal", slug: "temp", size: 50, sample: 50 },
   { grade: "B1", construction: "discourse-reference", slug: "disc", size: 25 },
   { grade: "B1", construction: "pronoun-binding+negation", slug: "pron-neg", size: 25 },
   { grade: "B1", construction: "discourse-reference+quantifier-counting", slug: "disc-count", size: 25 },
@@ -80,7 +91,7 @@ export const GRADED_MATRIX = [
   { grade: "B2", construction: "assert-recall", slug: "assert", size: 25 },
   { grade: "B2", construction: "quantifier-counting+temporal", slug: "count-temp", size: 25 },
   { grade: "B2", construction: "noise+pronoun-binding", slug: "noise-pron", size: 25 },
-  { grade: "C1", construction: "temporal", slug: "temp", size: 25 },
+  { grade: "C1", construction: "temporal", slug: "temp", size: 50, sample: 50 }, // cycle-4 pool growth (see B1 note)
   { grade: "C1", construction: "relative-embedded", slug: "rel", size: 25 },
   { grade: "C1", construction: "coordination-compositional", slug: "coord", size: 25 },
   { grade: "C1", construction: "assert-recall", slug: "assert", size: 25 },
@@ -98,6 +109,14 @@ export const PROMOTED_GRADES = ["A1", "A2"];
 /** Per-run sample floor per populated cell — keeps per-area performance
  *  statistically readable (operator spec). */
 export const MIN_PER_CELL = 5;
+
+/** Per-cell per-run sample OVERRIDES (cellKey → floor), derived from the
+ *  GRADED_MATRIX `sample` field. Cells grown for dual-draw reliability
+ *  (cycle-4 pool growth) draw more than MIN_PER_CELL every run so the two
+ *  parallel-forms draws have enough resolution to agree. */
+export const CELL_SAMPLE = Object.fromEntries(
+  GRADED_MATRIX.filter((c) => c.sample).map((c) => [cellKey(c), c.sample]),
+);
 
 /** Dual-draw agreement tolerance: |Δ pass-rate| ≤ 0.2 per cell (1 item of 5). */
 export const AGREEMENT_TOLERANCE = 0.2;
@@ -155,6 +174,64 @@ export function isGreenRow(row) {
   return (t1.baselineFailTurns ?? []).every((i) => improved.has(i));
 }
 
+// ---- dual banding (PLAN_FORMULAIC_COMPETENCE.md — productive vs performance) ----
+
+/** A row is PRODUCTIVE when its answering turn was composed by the ask engine
+ *  (via:"composed"), NOT carried by a formulaic path (template/count/recall/
+ *  fact/corpus/…). This is the field the dual banding splits on: the productive
+ *  band counts composed greens only; the performance band counts every green.
+ *  A template-carried pass therefore lifts performance and NEVER productive —
+ *  the honesty guarantee (a memorized chunk is never scored as generation). */
+export function isProductiveRow(row) {
+  return (row.via ?? null) === "composed";
+}
+
+/** A row is TEMPLATE-LANE when its case is tagged so (PLAN_FORMULAIC_COMPETENCE.md
+ *  §template-lane): it deliberately targets a templated capability — "the bench
+ *  must say a level is being faked". Its pass belongs to the performance band. */
+export function isTemplateLane(row) {
+  return (row.tags ?? []).includes("template-lane");
+}
+
+/** The two-band score for a set of rows: performance = greens by any via;
+ *  productive = greens whose via is "composed". gap = performance − productive
+ *  rate (always ≥ 0 — productive greens are a subset of performance greens);
+ *  the gap quantifies how much of the fluency is memorized vs generated. */
+export function bandScore(rows) {
+  const n = rows.length;
+  const green = rows.filter(isGreenRow);
+  const perfGreen = green.length;
+  const prodGreen = green.filter(isProductiveRow).length;
+  const perfRate = n ? perfGreen / n : null;
+  const prodRate = n ? prodGreen / n : null;
+  return {
+    n,
+    performance: { green: perfGreen, rate: perfRate },
+    productive: { green: prodGreen, rate: prodRate },
+    gap: n ? perfRate - prodRate : null,
+  };
+}
+
+/** Template-lane lint over PRODUCT ROWS: a template-lane row that is GREEN via
+ *  "composed" is NOT actually faking the level — either it is mis-tagged, or the
+ *  engine has genuinely ACQUIRED the composition (a notable "chunk-becomes-
+ *  grammar" event, PLAN_FORMULAIC_COMPETENCE.md open question). Either way it must
+ *  be surfaced, never silently credited to the productive band by accident. */
+export function templateLaneLint(rows) {
+  const findings = [];
+  for (const row of rows) {
+    if (!isTemplateLane(row)) continue;
+    if (isGreenRow(row) && isProductiveRow(row)) {
+      findings.push({
+        caseId: row.caseId ?? row.id,
+        cell: `${row.grade}:${row.construction}`,
+        finding: "template-lane row passed via:composed — it is not faking the level; re-classify or record the productive acquisition (chunk-becomes-grammar)",
+      });
+    }
+  }
+  return findings;
+}
+
 /** The fixed promoted subset of one cell's pool: the first `n` non-frontier
  *  cases by id — deterministic, stable across regenerations, and exactly what
  *  the always-run unit tests execute. */
@@ -186,7 +263,7 @@ function groupByCell(cases) {
  *  `exclude` (a Set of ids) supports the dual draw's without-replacement rule:
  *  excluded items are avoided while the cell can still fill the quota without
  *  them, otherwise the remainder is topped up from the full cell. */
-export function stratifiedSample(cases, { fraction = 0.1, seed = 1, minPerCell = MIN_PER_CELL, promotedGrades = PROMOTED_GRADES, exclude = new Set() } = {}) {
+export function stratifiedSample(cases, { fraction = 0.1, seed = 1, minPerCell = MIN_PER_CELL, promotedGrades = PROMOTED_GRADES, exclude = new Set(), sampleOverrides = CELL_SAMPLE } = {}) {
   const byCell = groupByCell(cases);
   const picked = [];
   for (const [key, cell] of [...byCell.entries()].sort(([a], [b]) => a.localeCompare(b))) {
@@ -199,7 +276,9 @@ export function stratifiedSample(cases, { fraction = 0.1, seed = 1, minPerCell =
       picked.push(...fixed, ...padding);
       continue;
     }
-    const need = Math.min(cell.length, Math.max(minPerCell, Math.round(fraction * cell.length)));
+    // per-cell floor: the grown cells (CELL_SAMPLE) draw their bigger sample.
+    const cellFloor = Math.max(minPerCell, sampleOverrides[key] ?? 0);
+    const need = Math.min(cell.length, Math.max(cellFloor, Math.round(fraction * cell.length)));
     const rng = mulberry32((seed ^ fnv1a(key)) >>> 0);
     const shuffled = seededShuffle(cell, rng);
     const fresh = shuffled.filter((c) => !exclude.has(c.id));
@@ -215,11 +294,11 @@ export function stratifiedSample(cases, { fraction = 0.1, seed = 1, minPerCell =
  *  REPLACEMENT against draw A where the pool is deep enough (a cell of ≥ 2×
  *  quota shares no item between draws). Promoted-grade cells are the same
  *  fixed subset in both draws by design (they are the instrument's anchor). */
-export function dualDraws(cases, { fraction = 0.1, seedA = 1, seedB = 2, minPerCell = MIN_PER_CELL, promotedGrades = PROMOTED_GRADES } = {}) {
-  const a = stratifiedSample(cases, { fraction, seed: seedA, minPerCell, promotedGrades });
+export function dualDraws(cases, { fraction = 0.1, seedA = 1, seedB = 2, minPerCell = MIN_PER_CELL, promotedGrades = PROMOTED_GRADES, sampleOverrides = CELL_SAMPLE } = {}) {
+  const a = stratifiedSample(cases, { fraction, seed: seedA, minPerCell, promotedGrades, sampleOverrides });
   const promoted = new Set(a.filter((c) => promotedGrades.includes(c.grade)).map((c) => c.id));
   const exclude = new Set(a.filter((c) => !promoted.has(c.id)).map((c) => c.id));
-  const b = stratifiedSample(cases, { fraction, seed: seedB, minPerCell, promotedGrades, exclude });
+  const b = stratifiedSample(cases, { fraction, seed: seedB, minPerCell, promotedGrades, exclude, sampleOverrides });
   return { a, b };
 }
 
@@ -235,11 +314,13 @@ function rate(rows) {
  *  cell's volatility (instrument failure, not product signal) — it is flagged
  *  UNDER-COVERED with the grow-the-pool prescription and must be excluded
  *  from cycle PASS/FAIL statistics until it agrees. */
-export function computeAgreement(rowsA, rowsB, { tolerance = AGREEMENT_TOLERANCE } = {}) {
+/** Per-cell A-vs-B green-rate comparison over one row subset (the reusable core
+ *  of both the standard agreement table and the template-lane one). */
+function agreementCells(rowsA, rowsB, tolerance) {
   const cellsA = groupByCell(rowsA.filter((r) => r.grade));
   const cellsB = groupByCell(rowsB.filter((r) => r.grade));
   const keys = [...new Set([...cellsA.keys(), ...cellsB.keys()])].sort();
-  const cells = keys.map((key) => {
+  return keys.map((key) => {
     const [grade, construction] = [key.slice(0, key.indexOf(":")), key.slice(key.indexOf(":") + 1)];
     const a = rate(cellsA.get(key) ?? []);
     const b = rate(cellsB.get(key) ?? []);
@@ -257,19 +338,34 @@ export function computeAgreement(rowsA, rowsB, { tolerance = AGREEMENT_TOLERANCE
         : {}),
     };
   });
+}
+
+function agreementOverall(cells) {
   const measured = cells.filter((c) => c.verdict !== "UNMEASURED");
   const agree = measured.filter((c) => c.verdict === "AGREE").length;
   return {
+    cells: cells.length,
+    measured: measured.length,
+    agree,
+    disagree: measured.length - agree,
+    agreementRate: measured.length ? agree / measured.length : null,
+    underCovered: cells.filter((c) => c.underCovered).map((c) => `${c.grade}:${c.construction}`),
+  };
+}
+
+export function computeAgreement(rowsA, rowsB, { tolerance = AGREEMENT_TOLERANCE } = {}) {
+  const cells = agreementCells(rowsA, rowsB, tolerance);
+  // Template-lane parallel-forms self-test (PLAN_FORMULAIC_COMPETENCE.md): its own
+  // agreement line over template-lane rows only — reported ALONGSIDE the standard
+  // cells, never replacing them. Empty when no template-lane cases were drawn.
+  const tlA = rowsA.filter(isTemplateLane);
+  const tlB = rowsB.filter(isTemplateLane);
+  const templateLaneCells = (tlA.length || tlB.length) ? agreementCells(tlA, tlB, tolerance) : [];
+  return {
     tolerance,
     cells,
-    overall: {
-      cells: cells.length,
-      measured: measured.length,
-      agree,
-      disagree: measured.length - agree,
-      agreementRate: measured.length ? agree / measured.length : null,
-      underCovered: cells.filter((c) => c.underCovered).map((c) => `${c.grade}:${c.construction}`),
-    },
+    overall: agreementOverall(cells),
+    templateLane: { cells: templateLaneCells, overall: agreementOverall(templateLaneCells) },
   };
 }
 
@@ -283,6 +379,12 @@ export function renderAgreementTable(agreement) {
       `${c.grade} ${c.construction}${c.combo ? " [combo]" : ""} | ${fmt(c.a)} | ${fmt(c.b)} | ${c.delta === null ? "—" : c.delta.toFixed(2)} | ${c.verdict}${c.underCovered ? " (UNDER-COVERED)" : ""}`),
     `overall agreement: ${agreement.overall.agree}/${agreement.overall.measured} cells (${agreement.overall.agreementRate === null ? "—" : (agreement.overall.agreementRate * 100).toFixed(0) + "%"}) at tolerance ${agreement.tolerance}`,
   ];
+  const tl = agreement.templateLane;
+  if (tl && tl.cells.length) {
+    lines.push(...tl.cells.map((c) =>
+      `template-lane ${c.grade} ${c.construction}${c.combo ? " [combo]" : ""} | ${fmt(c.a)} | ${fmt(c.b)} | ${c.delta === null ? "—" : c.delta.toFixed(2)} | ${c.verdict}${c.underCovered ? " (UNDER-COVERED)" : ""}`));
+    lines.push(`template-lane agreement: ${tl.overall.agree}/${tl.overall.measured} cells (${tl.overall.agreementRate === null ? "—" : (tl.overall.agreementRate * 100).toFixed(0) + "%"}) at tolerance ${agreement.tolerance}`);
+  }
   return lines.join("\n");
 }
 
@@ -339,6 +441,9 @@ export function gradedRollup(rows) {
         n: cellRows.length,
         green: cellRows.filter(isGreenRow).length,
         frontier: cellRows.filter((r) => (r.tier1?.baselineFailTurns ?? []).some((i) => !(r.tier1?.improvedBaselineTurns ?? []).includes(i))).length,
+        // dual banding: productive (composed only) vs performance (any via) + gap.
+        bands: bandScore(cellRows),
+        templateLane: cellRows.filter(isTemplateLane).length,
       });
     }
     const single = cells.filter((c) => !c.combo);
@@ -349,19 +454,25 @@ export function gradedRollup(rows) {
       cells,
       single: { n: sum(single, "n"), green: sum(single, "green"), frontier: sum(single, "frontier") },
       combo: { n: sum(combo, "n"), green: sum(combo, "green"), frontier: sum(combo, "frontier") },
+      // per-grade dual banding over every row of the grade (single + combo).
+      bands: bandScore(ofGrade),
     });
   }
   return grades;
 }
 
-/** Render the rollup for stdout. */
+/** Render the rollup for stdout, including the productive/performance band gap
+ *  (PLAN_FORMULAIC_COMPETENCE.md): perf = greens by any via, prod = composed-only
+ *  greens, gap = perf − prod (how much fluency is memorized vs generated). */
 export function renderRollup(rollup) {
   const lines = [];
+  const band = (b) => `perf ${b.performance.green}/${b.n} vs prod ${b.productive.green}/${b.n}, gap ${b.gap === null ? "—" : b.gap.toFixed(2)}`;
   for (const g of rollup) {
     const part = (p, label) => (p.n ? ` ${label} ${p.green}/${p.n} green (${p.frontier} frontier)` : "");
-    lines.push(`  ${g.grade}:${part(g.single, "single")}${part(g.combo, "| combo")}`);
+    lines.push(`  ${g.grade}:${part(g.single, "single")}${part(g.combo, "| combo")} — bands: ${band(g.bands)}`);
     for (const c of g.cells) {
-      lines.push(`    ${c.construction}${c.combo ? " [combo]" : ""}: ${c.green}/${c.n} green, ${c.frontier} frontier`);
+      const tl = c.templateLane ? `, ${c.templateLane} template-lane` : "";
+      lines.push(`    ${c.construction}${c.combo ? " [combo]" : ""}: ${c.green}/${c.n} green, ${c.frontier} frontier [${band(c.bands)}${tl}]`);
     }
   }
   return lines.join("\n");
