@@ -277,7 +277,9 @@ and the block-index summary (blocks, tokens, top PageRank blocks). Same renderer
 
 ## Phase 5 — The cycle-4+ tuning arc (near-term: make the floor reliable)
 
-> Detailed plan: **PLAN_CYCLE_4.md**.
+> Detailed plans: **PLAN_CYCLE_4.md** (the tuning arc) and **PLAN_DEPENDENCY_STRATEGY.md**
+> (the pre-build dependency audit — verdict: no dep changes now; a standing adoption
+> register + avoid-list for phases 6-9; two near-term actions).
 
 The immediate work: drive the graded benchmark up the CEFR ladder, one lever per cycle, per
 `SKILL_TUNING_CYCLE.md`. Cycle 3 (post-wiring-wave, CHATBENCH_003) gave the first full-spectrum
