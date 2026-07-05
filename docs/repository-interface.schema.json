@@ -1,0 +1,239 @@
+{
+  "version": "1.0.0",
+  "ontology": "urn:tmct:core",
+  "missReasons": [
+    "UNRESOLVED_TERM",
+    "CAPABILITY_ABSENT",
+    "TRUNCATED_GRAPH",
+    "NO_SOURCE"
+  ],
+  "edgeKinds": [
+    "imports",
+    "calls",
+    "callsSymbol",
+    "defines",
+    "tests",
+    "touches",
+    "touchesSymbol",
+    "contains",
+    "inherits",
+    "cochange",
+    "reexports"
+  ],
+  "types": {
+    "Individual": {
+      "fields": {
+        "id": "string (opaque provider id)",
+        "label": "string (human/display name)",
+        "class": "string — a tmct: class token (module|class|function|method|attribute|variable|commit|test|…)",
+        "attributes": "Array<{ key: string, value: string, prop: string|null }> — prop is the SEON/mgx token grounding the value"
+      }
+    },
+    "Edge": {
+      "fields": {
+        "subject": "string (individual id)",
+        "object": "string (individual id)",
+        "predicate": "string — the relation predicate",
+        "prop": "string|null — the SEON/mgx property token; see edgeKinds → tmct: mapping",
+        "subjectLabel": "string? (additive)",
+        "objectLabel": "string? (additive)",
+        "weight": "number? (additive; e.g. cochange coupling)"
+      }
+    },
+    "Result": {
+      "shape": "{ ok: true, value: T } | { ok: false, miss: Miss }"
+    },
+    "Miss": {
+      "shape": "{ reason: MISS_REASONS, detail: string, term: string|null }"
+    }
+  },
+  "capabilitiesModel": "A provider advertises `capabilities: string[]` (service names it implements). A service outside the set is negotiated away to miss(CAPABILITY_ABSENT) — never an error. Source services (snippet, context) may be advertised yet answer miss(NO_SOURCE) when no working tree exists.",
+  "services": {
+    "resolve": {
+      "group": "resolution",
+      "args": {
+        "term": "string"
+      },
+      "result": "{ match: Individual, candidates: Individual[] }",
+      "misses": [
+        "UNRESOLVED_TERM"
+      ],
+      "concurrency": "concurrent-safe: reads immutable graph truth; no shared mutable state",
+      "purpose": "The resolveSymbol seam: map a free term to an individual + runner-up candidates. Every id-taking service consumes a resolved id."
+    },
+    "describe": {
+      "group": "resolution",
+      "args": {
+        "id": "string"
+      },
+      "result": "{ individual: Individual, out: Edge[], incoming: Edge[] }",
+      "misses": [
+        "UNRESOLVED_TERM"
+      ],
+      "concurrency": "concurrent-safe: reads immutable graph truth; no shared mutable state",
+      "purpose": "Full typed portrait of one individual: its attributes and its outgoing/incoming edges."
+    },
+    "members": {
+      "group": "resolution",
+      "args": {
+        "classId": "string"
+      },
+      "result": "{ methods: Individual[], attributes: Individual[] }",
+      "misses": [
+        "UNRESOLVED_TERM"
+      ],
+      "concurrency": "concurrent-safe: reads immutable graph truth; no shared mutable state",
+      "purpose": "A class's methods + attributes (via the contains relation) — replaces reading the class body."
+    },
+    "subclasses": {
+      "group": "resolution",
+      "args": {
+        "classId": "string"
+      },
+      "result": "{ bases: Individual[], subclasses: Individual[] }",
+      "misses": [
+        "UNRESOLVED_TERM"
+      ],
+      "concurrency": "concurrent-safe: reads immutable graph truth; no shared mutable state",
+      "purpose": "Forward bases + the transitive reverse inheritance closure (who extends this)."
+    },
+    "exports": {
+      "group": "resolution",
+      "args": {
+        "moduleId": "string"
+      },
+      "result": "{ exports: Individual[] }",
+      "misses": [
+        "UNRESOLVED_TERM"
+      ],
+      "concurrency": "concurrent-safe: reads immutable graph truth; no shared mutable state",
+      "purpose": "A module's curated public API (resolved __all__ / re-exports)."
+    },
+    "signature": {
+      "group": "resolution",
+      "args": {
+        "id": "string"
+      },
+      "result": "{ id, label, class, params, returns, raises, decorators, doc, selfFields, flags }",
+      "misses": [
+        "UNRESOLVED_TERM"
+      ],
+      "concurrency": "concurrent-safe: reads immutable graph truth; no shared mutable state",
+      "purpose": "The compact API surface of a symbol without its body."
+    },
+    "edges": {
+      "group": "traversal",
+      "args": {
+        "id": "string",
+        "kind": "EDGE_KINDS member"
+      },
+      "result": "{ kind: string, edges: Edge[] }",
+      "misses": [
+        "UNRESOLVED_TERM"
+      ],
+      "concurrency": "concurrent-safe: reads immutable graph truth; no shared mutable state",
+      "purpose": "Outgoing edges of one closed kind from an individual (an honest empty array is not a miss).",
+      "note": "An unknown kind (outside EDGE_KINDS) is a programming error and throws TypeError, not a miss."
+    },
+    "impact": {
+      "group": "traversal",
+      "args": {
+        "moduleId": "string"
+      },
+      "result": "{ total: number, levels: Array<Array<{ id, label, via, tests }>> }",
+      "misses": [
+        "UNRESOLVED_TERM"
+      ],
+      "concurrency": "concurrent-safe: reads immutable graph truth; no shared mutable state",
+      "purpose": "The transitive dependent closure the interpreter cannot compute without provider truth."
+    },
+    "snippet": {
+      "group": "source",
+      "args": {
+        "id": "string"
+      },
+      "result": "{ path: string, span: { start, end }, body: string|null }",
+      "misses": [
+        "UNRESOLVED_TERM",
+        "NO_SOURCE"
+      ],
+      "concurrency": "concurrent-safe: reads immutable graph truth; no shared mutable state",
+      "purpose": "The exact source span of a symbol. A provider with no working tree returns miss(NO_SOURCE) honestly."
+    },
+    "context": {
+      "group": "source",
+      "args": {
+        "symbol": "string",
+        "depth": "min|auto|full?"
+      },
+      "result": "{ text: string, tier: string } (a sized edit bundle)",
+      "misses": [
+        "UNRESOLVED_TERM",
+        "NO_SOURCE"
+      ],
+      "concurrency": "concurrent-safe: reads immutable graph truth; no shared mutable state",
+      "purpose": "The composed edit bundle (exemplar, siblings, registration, insertion region). Source-reaching."
+    },
+    "architecture": {
+      "group": "aggregate",
+      "args": {
+        "package": "string?"
+      },
+      "result": "{ modules: number, packages: Array<[dir, count]>, hubs: Array<{ id, label, importers }> }",
+      "misses": [],
+      "concurrency": "concurrent-safe: reads immutable graph truth; no shared mutable state",
+      "purpose": "Package/module shape + the most-imported hub modules. Optional package prefix scopes it."
+    },
+    "untested": {
+      "group": "aggregate",
+      "args": {},
+      "result": "{ modules: Individual[] }",
+      "misses": [],
+      "concurrency": "concurrent-safe: reads immutable graph truth; no shared mutable state",
+      "purpose": "Modules with no covering test module (via the tests relation)."
+    },
+    "stats": {
+      "group": "aggregate",
+      "args": {},
+      "result": "{ total: number, classes: Array<{ class: string, count: number }>, truncated: boolean }",
+      "misses": [],
+      "concurrency": "concurrent-safe: reads immutable graph truth; no shared mutable state",
+      "purpose": "Per-tmct:class individual counts, read straight from the payload."
+    },
+    "history": {
+      "group": "temporal",
+      "args": {
+        "id": "string"
+      },
+      "result": "{ commits: Array<{ id, label, author, date, message }> }",
+      "misses": [
+        "UNRESOLVED_TERM"
+      ],
+      "concurrency": "concurrent-safe: reads immutable graph truth; no shared mutable state",
+      "purpose": "The commits that touched an individual (tmct:commit individuals via tmct:touches)."
+    },
+    "search": {
+      "group": "search",
+      "args": {
+        "query": "string",
+        "kind": "string?",
+        "name": "string?",
+        "decorator": "string?"
+      },
+      "result": "{ results: Individual[] }",
+      "misses": [],
+      "concurrency": "concurrent-safe: reads immutable graph truth; no shared mutable state",
+      "purpose": "Lexical, provider-local locate. An empty result set is honest, not a miss."
+    },
+    "ask": {
+      "group": "search",
+      "args": {
+        "query": "string"
+      },
+      "result": "{ content: string, tmct_ask: object } (the composed NL round-trip envelope)",
+      "misses": [],
+      "concurrency": "concurrent-safe: reads immutable graph truth; no shared mutable state",
+      "purpose": "The mechanical, zero-model NL query over the graph — tmct's whole reason to exist."
+    }
+  }
+}

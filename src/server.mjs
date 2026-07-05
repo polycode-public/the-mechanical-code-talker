@@ -48,6 +48,7 @@ import {
   renderClassHistory,
 } from "./codegraph.mjs";
 import { ask } from "./ask.mjs";
+import { createGraphService } from "./providers/graph-service.mjs";
 
 const SNIPPET_MAX_LINES = 200;
 
@@ -66,7 +67,7 @@ export const TOOLS = [
       type: "object",
       required: ["symbol"],
       properties: {
-        symbol: { type: "string", description: "Module path (django/utils/text.py) or a sibling function/class name in it (lower)." },
+        symbol: { type: "string", description: "Module path (e.g. path/to/module) or a sibling function/class name defined in it." },
         depth: { type: "string", enum: ["min", "auto", "full"], default: "auto", description: "auto (sized to the task) | min (leanest) | full (every section)." },
       },
     },
@@ -78,7 +79,7 @@ export const TOOLS = [
       type: "object",
       required: ["symbol"],
       properties: {
-        symbol: { type: "string", description: "function/class name (slugify, Truncator), Class.method, or fn:<path>#name." },
+        symbol: { type: "string", description: "function/class name, Class.method, or fn:<path>#name." },
       },
     },
   },
@@ -110,12 +111,17 @@ async function loadGraph(config, source) {
   return graph;
 }
 
-function resolveOrThrow(graph, symbol, what) {
-  const { match, candidates } = resolveSymbol(graph, symbol);
+// Resolution + the miss→ToolError bridge, threaded through the typed service
+// object (createGraphService). The service is the named seam; tmct's own
+// presentation (render*) reads its raw graph (svc.graph) and formats. A clean
+// miss on the interface becomes the instructive ToolError the CLI/chat expect —
+// message-only, never a stack, no fabricated entity names (generic placeholder).
+function resolveOrThrow(svc, symbol, what) {
+  const { match, candidates } = resolveSymbol(svc.graph, symbol);
   if (!match) {
     throw new ToolError(
       `no entity matching ${what} "${symbol}" in the code-map graph. ` +
-        "Try a repo-relative path (e.g. django/utils/text.py), a basename, or tmct_search for a fuzzy lookup.",
+        "Try a repo-relative path (e.g. path/to/module), a basename, or tmct_search for a fuzzy lookup.",
     );
   }
   return { match, candidates };
@@ -146,7 +152,8 @@ export async function buildContextBundle(args, { config, source = defaultSource,
   // by the tmct-max arm to test whether more injection re-bloats.
   const max = Boolean(args?.max);
   const graph = await loadGraph(config, source);
-  const { match } = resolveOrThrow(graph, symbol, "symbol");
+  const svc = createGraphService(graph);
+  const { match } = resolveOrThrow(svc, symbol, "symbol");
   const plan = contextPlan(graph, match);
   // #6/B1/B6: pick the section mask by depth — min forces TINY, full/max forces everything, auto
   // runs the size classifier (lean TINY default + one-tier top-up when the edit needs it).
@@ -256,29 +263,48 @@ export async function buildContextBundle(args, { config, source = defaultSource,
   return { text: out.join("\n"), tier, topup };
 }
 
+// The full set of tool names dispatchTool serves (hot catalog + cold tools). Used
+// to reject an unknown tool before any graph load.
+const DISPATCH_TOOLS = new Set([
+  "tmct_context", "tmct_context_more", "tmct_describe", "tmct_snippet", "tmct_signature",
+  "tmct_impact", "tmct_search", "tmct_members", "tmct_subclasses", "tmct_architecture",
+  "tmct_exports", "tmct_untested", "tmct_ask", "tmct_tests_for", "tmct_history",
+  "tmct_callers", "tmct_callees", "tmct_cochanges", "tmct_calls",
+  "tmct_file_history", "tmct_method_history", "tmct_class_history",
+]);
+
 export async function dispatchTool(name, args, { config, source = defaultSource } = {}) {
+  // tmct_context builds (and loads) its own edit bundle — return early so we don't
+  // double-load the graph for it.
   if (name === "tmct_context") {
     return (await buildContextBundle(args, { config, source })).text;
   }
+  // Reject an unknown tool BEFORE touching the graph — preserves the original
+  // ordering (an unknown name never triggers a load).
+  if (!DISPATCH_TOOLS.has(name)) throw new ToolError(`unknown tool: ${name}`);
+  // Every other tool reads graph truth: load once and build the typed service
+  // object (the Repository Interface). dispatchTool is the presentation adapter —
+  // it delegates resolution + the miss/error contract to the service and formats
+  // the result with tmct's own render* layer (which reads svc.graph). This is the
+  // switch's operations extracted into a named, typed seam without changing bytes.
+  const graph = await loadGraph(config, source);
+  const svc = createGraphService(graph);
   if (name === "tmct_context_more") {
     const symbol = String(args?.symbol || "").trim();
     if (!symbol) throw new ToolError("symbol is required");
-    const graph = await loadGraph(config, source);
-    const { match } = resolveOrThrow(graph, symbol, "symbol");
+    const { match } = resolveOrThrow(svc, symbol, "symbol");
     return renderContextMore(contextPlan(graph, match));
   }
   if (name === "tmct_describe") {
     const symbol = String(args?.symbol || "").trim();
     if (!symbol) throw new ToolError("symbol is required");
-    const graph = await loadGraph(config, source);
-    const { match, candidates } = resolveOrThrow(graph, symbol, "symbol");
+    const { match, candidates } = resolveOrThrow(svc, symbol, "symbol");
     return renderDescribe(graph, match, { candidates });
   }
   if (name === "tmct_snippet") {
     const symbol = String(args?.symbol || "").trim();
     if (!symbol) throw new ToolError("symbol is required");
-    const graph = await loadGraph(config, source);
-    const { match, candidates } = resolveOrThrow(graph, symbol, "symbol");
+    const { match, candidates } = resolveOrThrow(svc, symbol, "symbol");
     const site = siteOf(match);
     if (!site) {
       throw new ToolError(
@@ -308,22 +334,19 @@ export async function dispatchTool(name, args, { config, source = defaultSource 
   if (name === "tmct_signature") {
     const symbol = String(args?.symbol || "").trim();
     if (!symbol) throw new ToolError("symbol is required");
-    const graph = await loadGraph(config, source);
-    const { match } = resolveOrThrow(graph, symbol, "symbol");
+    const { match } = resolveOrThrow(svc, symbol, "symbol");
     return renderSignature(graph, match);
   }
   if (name === "tmct_impact") {
     const module = String(args?.module || "").trim();
     if (!module) throw new ToolError("module is required");
-    const graph = await loadGraph(config, source);
-    const { match } = resolveOrThrow(graph, module, "module");
+    const { match } = resolveOrThrow(svc, module, "module");
     return renderImpact(graph, match);
   }
   if (name === "tmct_search") {
     const query = String(args?.query || "").trim();
     const kind = String(args?.kind || "").trim();
     if (!query && !kind) throw new ToolError("query is required");
-    const graph = await loadGraph(config, source);
     return renderSearch(graph, query, {
       kind,
       decorator: String(args?.decorator || "").trim(),
@@ -333,36 +356,30 @@ export async function dispatchTool(name, args, { config, source = defaultSource 
   if (name === "tmct_members") {
     const symbol = String(args?.class || "").trim();
     if (!symbol) throw new ToolError("class is required");
-    const graph = await loadGraph(config, source);
-    const { match } = resolveOrThrow(graph, symbol, "class");
+    const { match } = resolveOrThrow(svc, symbol, "class");
     return renderMembers(graph, match);
   }
   if (name === "tmct_subclasses") {
     const symbol = String(args?.class || "").trim();
     if (!symbol) throw new ToolError("class is required");
-    const graph = await loadGraph(config, source);
-    const { match } = resolveOrThrow(graph, symbol, "class");
+    const { match } = resolveOrThrow(svc, symbol, "class");
     return renderSubclasses(graph, match);
   }
   if (name === "tmct_architecture") {
-    const graph = await loadGraph(config, source);
     return renderArchitecture(graph, { pkg: String(args?.package || "").trim() });
   }
   if (name === "tmct_exports") {
     const module = String(args?.module || "").trim();
     if (!module) throw new ToolError("module is required");
-    const graph = await loadGraph(config, source);
-    const { match } = resolveOrThrow(graph, module, "module");
+    const { match } = resolveOrThrow(svc, module, "module");
     return renderExports(graph, match);
   }
   if (name === "tmct_untested") {
-    const graph = await loadGraph(config, source);
     return renderUntested(graph);
   }
   if (name === "tmct_ask") {
     const query = String(args?.query || "").trim();
     if (!query) throw new ToolError("query is required");
-    const graph = await loadGraph(config, source);
     const { content, tmct_ask } = ask(graph, query);
     // Every dispatchTool caller (the chat surface, the CLI fallback) expects a plain string —
     // append the structured envelope as a delimited, machine-parseable block rather than
@@ -376,8 +393,7 @@ export async function dispatchTool(name, args, { config, source = defaultSource 
   ) {
     const symbol = String(args?.symbol || "").trim();
     if (!symbol) throw new ToolError("symbol is required");
-    const graph = await loadGraph(config, source);
-    const { match } = resolveOrThrow(graph, symbol, "symbol");
+    const { match } = resolveOrThrow(svc, symbol, "symbol");
     if (name === "tmct_tests_for") return renderTestsFor(graph, match);
     if (name === "tmct_history") return renderHistory(graph, match);
     if (name === "tmct_callers") return renderCallers(graph, match);
