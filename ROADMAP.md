@@ -550,6 +550,39 @@ Repository Interface library-surface work (Phase 8) settling the extraction boun
 `PLAN_OSS_ACE_PARSER.md`. Sibling publish-candidates (the bounded-Damerau fuzzy matcher, the
 PageRank+IDF block ranker) may follow the same path if there is demand.
 
+## Phase 10 — Conversational competence & onboarding (0.6.0 → 0.7.0)
+
+*(Operator-directed, from live new-user testing.)* Once a graph is loaded the engine is strong;
+the weak surfaces were the FIRST RUN and the VAGUE question. This phase makes the miss graceful,
+the empty state honest, and the vague touch a guided answer — realising item 1's "tolerant, guides
+you toward precision" promise on the conversational surface.
+
+- **Onboarding UX (shipped 0.6.0):** the grammar wall moved behind `/help` (a short, tailored miss
+  instead); intent lanes for memory/teach ("remember that X"), meta/self ("what is this codebase",
+  "what do you know"), routed only when a graph query would miss; empty/degenerate-graph
+  orientation that distinguishes CODE STRUCTURE (needs a `.tmct/graph.json` via a producer or
+  `--repo`; tmct reads graphs, it does not index code) from VOCABULARY (`tmct init`/bootstrap seeds
+  concepts); `TMCT_GRAPH_FILE` honoured by chat; slash-optional commands (`stats`≡`/stats`);
+  `/memory` explore hooks; up/down-arrow prompt history in the TUI.
+- **Knowledge (shipped 0.6.0 → 0.7.0):** the curated `corpus/seon` ontology — a software-sense
+  definition for EVERY lexicon term, language-neutral (Java/C#/Python `class` → one concept); the
+  ConceptNet slice quality-filtered (word-sense noise cut) and regrown to ~40k facts; tier-2
+  specialised corpuses (aws/python/java) with `tmct init --corpus`; batched `appendFacts` (one
+  write, 419s→2.5s) enabling **seed-all** so a fresh repo knows the whole curated vocabulary.
+- **The concept force (0.7.0):** a vague touch on a concept X, where tmct knows X and has instances,
+  answers in three bands — **the definition** (from `corpus/seon`), **the examples** (real code-graph
+  + memory instances of X), and **a soft guided follow-up** ("Want to go deeper?" + 2–3 questions
+  built from the real instances × the query shapes valid for that kind, each pre-validated to
+  resolve). Applies to NOUN concepts (`what is a class` → define + Base/Widget/Button + drill-ins)
+  AND **RELATION concepts** (`what about imports` / `what calls are there` → the verb definition +
+  example edges + guided queries), fixing the vague-query dead-ends. Fact rendering is
+  de-anthropomorphised (no first-person "i learned:" over-claim — corpus facts read as data +
+  provenance; `you told me` stays for operator-asserted facts); listings cap at 32 with a "say
+  'more'" pagination that holds the remainder in session state.
+- **Measured** by the version-matched benchmark (`CHATBENCH_<version>` per `SKILL_TUNING_CYCLE.md`),
+  with new graded cells for the miss / empty-graph / concept-touch surfaces so these become
+  regression-protected levers, not one-off polish.
+
 ## Phase LATER — recognized, deferred, not now
 
 Features we have deliberately shaped seams for but will not build until the phases above have
