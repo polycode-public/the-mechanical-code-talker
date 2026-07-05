@@ -46,9 +46,61 @@ see `LICENSE-NOTICE` in this directory for the full attribution.
    facts.
 6. Deterministic output order: `(rel, start, end)`.
 
-## Row counts (committed slice, 2026-07-04)
+## Quality-filter pass (2026-07-05)
 
-**14,258 assertions, 1,399,979 bytes** (34,074,917 dump lines scanned;
+`filter-dump.mjs` keeps the DATA honest (tech-seed match, canonical relations,
+budget) but not the SEMANTICS: ConceptNet's crowd-sourced "Verbosity"/Open-Mind
+rows leave sentence-fragment "concepts" and opinion axioms that read as nonsense
+once seeded ("a computer is a kind of dumb", "a class is a kind of elegance",
+"mouse AtLocation taloned_grip_of_owl", "2 is a kind of software"). A second
+pass, `quality-filter.mjs`, removes those by term/relation shape (never per
+row):
+
+- **numeric endpoint** — bare term all digits (`2`, `1000`, `80386`)
+- **single-char endpoint** — bare term length ≤ 1 (`a`, `r`, `m`)
+- **sentence fragment** — ≥ 4 underscore-words on either endpoint
+  (`taloned_grip_of_owl`, `worlds_largest_interconnected_network_of_networks`)
+- **definitional phrase** — `/r/DefinedAs` with a ≥ 3-word object (real
+  `DefinedAs` is a synonym: `cpu → processor`)
+- **opinion object** — `/r/IsA` / `/r/DefinedAs` whose object is in a small
+  evidence-based set (`elegance, evil, gloom, unreality, universalism, dumb,
+  free, junk`) — never a class
+
+**Result: 14,258 → 13,880 rows (378 cut), 1,399,979 → 1,348,361 bytes.** Cuts by
+reason: sentence-fragment 328, single-char 27, numeric 11, opinion-object 8,
+definitional-phrase 4. Of the 4,170 seedable (mapped, `ace≠none`) facts, 286
+noise facts were removed, leaving **3,884 clean seedable facts**. No relation
+disappeared entirely (the drift guard stays satisfied). Re-run any time with:
+
+```bash
+node corpus/conceptnet/quality-filter.mjs --in-place corpus/conceptnet/slice.jsonl
+```
+
+## Growing the slice toward ~40k facts — the budget blocker
+
+Growing tier-1 to the operator's ~40k-fact target is **feasible data-wise but
+blocked by the committed budget**: the ConceptNet dump S3 endpoint is reachable,
+but `test/corpus-conceptnet.test.mjs` asserts `size <= 1_500_000`, and the clean
+slice is already 1.35 MB (13,880 rows). 40k facts is ≈ 4 MB — 2.6× over the cap.
+Reaching it needs a **Wave-2 policy change** (raise `MAX_BYTES` in
+`filter-dump.mjs` AND the budget assertion in the test), which is out of scope
+for a data-only pass. When the budget is raised, regrow with a bigger seed list
++ budget, then re-run the quality filter:
+
+```bash
+# 1. widen the domain and the budget (edit SEED_TERMS in fetch-slice.mjs, MAX_BYTES in filter-dump.mjs)
+curl -s https://s3.amazonaws.com/conceptnet/downloads/2019/edges/conceptnet-assertions-5.7.0.csv.gz \
+  | gunzip -c | node corpus/conceptnet/filter-dump.mjs > corpus/conceptnet/slice.jsonl
+# 2. re-apply the semantic quality filter
+node corpus/conceptnet/quality-filter.mjs --in-place corpus/conceptnet/slice.jsonl
+# 3. raise the test's budget assertion to match
+```
+
+## Row counts (pre-filter baseline, 2026-07-04)
+
+**14,258 assertions, 1,399,979 bytes** — the raw filter-dump output, BEFORE the
+2026-07-05 quality-filter pass above trimmed it to 13,880 rows / 1,348,361 bytes
+(34,074,917 dump lines scanned;
 28,802 unique en→en seed assertions matched = 4,170 mappable + 24,632
 `ace="none"`; ALL 4,170 mappable kept, 10,088 none-rows fill the budget).
 29 of the 31 non-filtered canonical relations are present:

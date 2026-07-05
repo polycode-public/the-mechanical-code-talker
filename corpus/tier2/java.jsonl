@@ -1,0 +1,31 @@
+{"start":"/c/en/java","rel":"/r/IsA","end":"/c/en/programming_language","weight":1,"surfaceText":"[[java]] IsA [[programming language]]"}
+{"start":"/c/en/java","rel":"/r/HasProperty","end":"/c/en/compiled","weight":1,"surfaceText":"[[java]] HasProperty [[compiled]]"}
+{"start":"/c/en/java","rel":"/r/HasProperty","end":"/c/en/statically_typed","weight":1,"surfaceText":"[[java]] HasProperty [[statically typed]]"}
+{"start":"/c/en/java","rel":"/r/UsedFor","end":"/c/en/building_applications","weight":1,"surfaceText":"[[java]] UsedFor [[building applications]]"}
+{"start":"/c/en/arraylist","rel":"/r/IsA","end":"/c/en/list","weight":1,"surfaceText":"[[arraylist]] IsA [[list]]"}
+{"start":"/c/en/arraylist","rel":"/r/IsA","end":"/c/en/data_structure","weight":1,"surfaceText":"[[arraylist]] IsA [[data structure]]"}
+{"start":"/c/en/hashmap","rel":"/r/IsA","end":"/c/en/hash_table","weight":1,"surfaceText":"[[hashmap]] IsA [[hash table]]"}
+{"start":"/c/en/hashmap","rel":"/r/IsA","end":"/c/en/dictionary","weight":1,"surfaceText":"[[hashmap]] IsA [[dictionary]]"}
+{"start":"/c/en/hashmap","rel":"/r/IsA","end":"/c/en/map","weight":1,"surfaceText":"[[hashmap]] IsA [[map]]"}
+{"start":"/c/en/interface","rel":"/r/IsA","end":"/c/en/type","weight":1,"surfaceText":"[[interface]] IsA [[type]]"}
+{"start":"/c/en/interface","rel":"/r/IsA","end":"/c/en/contract","weight":1,"surfaceText":"[[interface]] IsA [[contract]]"}
+{"start":"/c/en/class","rel":"/r/IsA","end":"/c/en/type","weight":1,"surfaceText":"[[class]] IsA [[type]]"}
+{"start":"/c/en/object","rel":"/r/IsA","end":"/c/en/instance","weight":1,"surfaceText":"[[object]] IsA [[instance]]"}
+{"start":"/c/en/jvm","rel":"/r/IsA","end":"/c/en/virtual_machine","weight":1,"surfaceText":"[[jvm]] IsA [[virtual machine]]"}
+{"start":"/c/en/jvm","rel":"/r/UsedFor","end":"/c/en/running_bytecode","weight":1,"surfaceText":"[[jvm]] UsedFor [[running bytecode]]"}
+{"start":"/c/en/jvm","rel":"/r/CapableOf","end":"/c/en/execute_bytecode","weight":1,"surfaceText":"[[jvm]] CapableOf [[execute bytecode]]"}
+{"start":"/c/en/bytecode","rel":"/r/IsA","end":"/c/en/code","weight":1,"surfaceText":"[[bytecode]] IsA [[code]]"}
+{"start":"/c/en/garbage_collector","rel":"/r/PartOf","end":"/c/en/jvm","weight":1,"surfaceText":"[[garbage collector]] PartOf [[jvm]]"}
+{"start":"/c/en/garbage_collector","rel":"/r/UsedFor","end":"/c/en/freeing_memory","weight":1,"surfaceText":"[[garbage collector]] UsedFor [[freeing memory]]"}
+{"start":"/c/en/jar","rel":"/r/IsA","end":"/c/en/archive","weight":1,"surfaceText":"[[jar]] IsA [[archive]]"}
+{"start":"/c/en/jar","rel":"/r/IsA","end":"/c/en/file","weight":1,"surfaceText":"[[jar]] IsA [[file]]"}
+{"start":"/c/en/jar","rel":"/r/UsedFor","end":"/c/en/packaging_classes","weight":1,"surfaceText":"[[jar]] UsedFor [[packaging classes]]"}
+{"start":"/c/en/maven","rel":"/r/IsA","end":"/c/en/build_tool","weight":1,"surfaceText":"[[maven]] IsA [[build tool]]"}
+{"start":"/c/en/maven","rel":"/r/IsA","end":"/c/en/package_manager","weight":1,"surfaceText":"[[maven]] IsA [[package manager]]"}
+{"start":"/c/en/gradle","rel":"/r/IsA","end":"/c/en/build_tool","weight":1,"surfaceText":"[[gradle]] IsA [[build tool]]"}
+{"start":"/c/en/thread","rel":"/r/IsA","end":"/c/en/process","weight":1,"surfaceText":"[[thread]] IsA [[process]]"}
+{"start":"/c/en/thread","rel":"/r/UsedFor","end":"/c/en/concurrency","weight":1,"surfaceText":"[[thread]] UsedFor [[concurrency]]"}
+{"start":"/c/en/generics","rel":"/r/UsedFor","end":"/c/en/type_safety","weight":1,"surfaceText":"[[generics]] UsedFor [[type safety]]"}
+{"start":"/c/en/annotation","rel":"/r/IsA","end":"/c/en/metadata","weight":1,"surfaceText":"[[annotation]] IsA [[metadata]]"}
+{"start":"/c/en/exception","rel":"/r/IsA","end":"/c/en/error","weight":1,"surfaceText":"[[exception]] IsA [[error]]"}
+{"start":"/c/en/method","rel":"/r/IsA","end":"/c/en/function","weight":1,"surfaceText":"[[method]] IsA [[function]]"}
