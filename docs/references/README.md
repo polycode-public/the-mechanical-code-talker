@@ -39,6 +39,12 @@ docs/references/
     conceptnet-relations.md       <- hand: ConceptNet's fixed relation types
   papers/
     README.md                     <- ACE/APE + ELIZA/PARRY lineage candidates
+  planning/
+    README.md                     <- classical planning & KR (the C1-ceiling correction)
+    PARTIAL_ORDER_PLANNING.md     <- least-commitment planning: causal links, threats
+    NONLIN.md                     <- Tate 1976: the first HTN partial-order planner
+    STRIPS_PDDL.md                <- the operator/effect model + its declaration language
+    STEEL_AND_HO.md               <- planning + execution under uncertainty (link-only, scanned)
 ```
 
 ## 1. OWL 2 / RDF / RDFS vocabulary — [`schemas/owl2-vocabulary.md`](schemas/owl2-vocabulary.md)
@@ -69,6 +75,18 @@ against. **Consumer:** `src/corpus/conceptnet.mjs` (Phase 2).
 Empty pending Phase 2: ACE/APE papers and the ELIZA/PARRY lineage
 (Weizenbaum 1966; Colby et al. 1971). Only redistributable licences get
 committed; the rest are link+excerpt stubs.
+
+## 5. Classical planning & KR — [`planning/`](planning/README.md)
+
+The 40-plus-year body of **deterministic, no-LLM, goal-directed planning** —
+partial-order planning, HTN/NONLIN, STRIPS/PDDL, Steel & Ho — behind the
+capability-router RFC. Its load-bearing point: *open-ended planning is not an
+LLM-only capability*. Within a declared operator model, a planner does
+goal-directed multi-step decomposition deterministically, so the agentic
+ladder's C1 ceiling is **open-world**, not planning itself. Primary papers are
+link-only (publisher copyright / scanned reports). **Consumer:**
+[`PLAN_CAPABILITY_ROUTER.md`](../../PLAN_CAPABILITY_ROUTER.md) — Stage 1 (the
+resolver = open-condition satisfaction) and Stage 5 (the planner).
 
 ## Deepen-next index
 

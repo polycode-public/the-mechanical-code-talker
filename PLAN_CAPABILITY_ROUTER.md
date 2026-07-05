@@ -74,10 +74,16 @@ glass box. And most of the substrate already exists:
    the user toward it via the same surround), NOT "any prompt." This is a **command router for a
    controlled fragment, not a general NL agent** — say so plainly, or over-promise and drown in
    coverage misses.
-2. **Matching a single tool is tractable; achieving a goal is planning.** Single-shot selection =
-   unification + subsumption (Datalog-ish, buildable). Multi-step goal achievement (chain N tools via
-   their effects) = **STRIPS/PDDL planning**, a far bigger research bet. **Scope v0 to single-shot**;
-   the planner is a later fork.
+2. **Matching a single tool is tractable; achieving a goal is planning — but planning is a solved,
+   deterministic field, not a research bet.** Single-shot selection = unification + subsumption
+   (Datalog-ish, buildable). Multi-step goal achievement (chain N tools via their effects) =
+   **classical AI planning** — STRIPS/PDDL operators, partial-order planning, HTN/NONLIN — a 40-year
+   body of *no-LLM, goal-directed* work (see [`docs/references/planning/`](docs/references/planning/README.md)).
+   The honest limit is **not planning, it is the closed-world assumption**: inside a declared operator
+   model a planner is sound/complete and deterministic (reachable C1); the moment the world is open —
+   an unmodelled effect, a novel error — it breaks and tmct escalates. **Scope v0 to single-shot**;
+   the planner is a later stage, and when it comes it is *engineering against a mature literature*,
+   not open research.
 3. **Parameter binding coverage.** Role→param slot-filling works when the grammar labels roles; it is
    brittle for rich arguments. Controlled input helps; complex tools will still fray.
 4. **Termination & safety.** A router that **refuses or asks when unsure is *safer* than an LLM** — no
@@ -116,8 +122,13 @@ query-by-unification.
   the tool-loop state; a runnable demo toolset end-to-end.
 - **Stage 4 (fork) — the guardrail.** Validate/pre-filter an LLM's proposed `tool_use` against
   declared capabilities + preconditions — the hybrid story, useful even if standalone coverage is low.
-- **Stage 5 (research) — the planner.** PDDL-style multi-step goal achievement. Only if the single-shot
-  router earns it.
+- **Stage 5 — the planner (engineering, not research).** Multi-step goal achievement over declared
+  capabilities-as-operators: POP (least-commitment, causal-link proofs) or HTN (SHOP2-style
+  decomposition of composite capabilities), possibly deferring the hard search to a mature external
+  PDDL solver (Fast Downward) while tmct stays the NL→domain compiler + proof-chain renderer. Reaches
+  **closed-world C1**; open-world C1 still escalates. Grounded in
+  [`docs/references/planning/`](docs/references/planning/README.md). Only if the single-shot router
+  earns it.
 
 **Kill criterion:** build the smallest honest DEMO first (a file-ops toolset: *"remove the test file
 for the http module"* → `delete_file(path=test/http.test.mjs)` with a proof chain, refusing when
