@@ -1,0 +1,6072 @@
+{
+  "stamp": "cycle-005",
+  "judgeModel": "claude-haiku-4-5-20251001",
+  "promptVersion": "judge-prompt-v1",
+  "samplesPerCase": 3,
+  "overall": {
+    "cases": 333,
+    "mean": 1.373,
+    "hardFailCount": 40,
+    "voidCount": 0,
+    "tier1PassCount": 333
+  },
+  "perTag": [
+    {
+      "tag": "ambiguity",
+      "cases": 4,
+      "mean": 1.541,
+      "hardFails": 0
+    },
+    {
+      "tag": "bootstrap-empty",
+      "cases": 2,
+      "mean": 1.889,
+      "hardFails": 0
+    },
+    {
+      "tag": "conversational",
+      "cases": 6,
+      "mean": 1.861,
+      "hardFails": 0
+    },
+    {
+      "tag": "graded",
+      "cases": 285,
+      "mean": 1.32,
+      "hardFails": 38
+    },
+    {
+      "tag": "graph-query",
+      "cases": 15,
+      "mean": 1.7,
+      "hardFails": 1
+    },
+    {
+      "tag": "honesty-miss",
+      "cases": 5,
+      "mean": 1.467,
+      "hardFails": 0
+    },
+    {
+      "tag": "memory-recall",
+      "cases": 3,
+      "mean": 1.833,
+      "hardFails": 0
+    },
+    {
+      "tag": "multi-turn-focus",
+      "cases": 5,
+      "mean": 1.517,
+      "hardFails": 1
+    },
+    {
+      "tag": "noise",
+      "cases": 5,
+      "mean": 1.65,
+      "hardFails": 0
+    },
+    {
+      "tag": "typo-fuzzy",
+      "cases": 4,
+      "mean": 1.764,
+      "hardFails": 0
+    }
+  ],
+  "perCase": [
+    {
+      "caseId": "am-bare-name",
+      "tags": [
+        "ambiguity"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.667,
+      "dims": {
+        "groundedness": 0.333,
+        "correctness": 0.333,
+        "honesty": 1,
+        "rephrase": 1
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "am-meta-imports",
+      "tags": [
+        "ambiguity"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.833,
+      "dims": {
+        "groundedness": null,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": 1.667
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "am-tests-cover",
+      "tags": [
+        "ambiguity"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.833,
+      "dims": {
+        "groundedness": null,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": 1.667
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "am-two-readings",
+      "tags": [
+        "ambiguity"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.833,
+      "dims": {
+        "groundedness": null,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": 1.667
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "be-greet-stats",
+      "tags": [
+        "bootstrap-empty"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": null,
+        "correctness": 2,
+        "honesty": 2,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "be-honest-empty",
+      "tags": [
+        "bootstrap-empty"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.778,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": 1.333
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "conv-bye",
+      "tags": [
+        "conversational"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": null,
+        "correctness": 2,
+        "honesty": 2,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "conv-hello-there",
+      "tags": [
+        "conversational"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": null,
+        "correctness": 2,
+        "honesty": 2,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "conv-hi",
+      "tags": [
+        "conversational"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": null,
+        "correctness": 2,
+        "honesty": 2,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "conv-thanks",
+      "tags": [
+        "conversational"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": null,
+        "correctness": 2,
+        "honesty": 2,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "conv-what-can-you-do",
+      "tags": [
+        "conversational"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.167,
+      "dims": {
+        "groundedness": null,
+        "correctness": 1.333,
+        "honesty": 1,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "conv-why-empty",
+      "tags": [
+        "conversational"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": null,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": 2
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a1-count-1",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a1-count-10",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a1-count-11",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a1-count-12",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a1-count-13",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a1-naming-10",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.333,
+      "dims": {
+        "groundedness": 1,
+        "correctness": 1.667,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a1-naming-11",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.5,
+      "dims": {
+        "groundedness": 1.333,
+        "correctness": 1.667,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a1-naming-12",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.833,
+      "dims": {
+        "groundedness": 1.667,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a1-naming-14",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.333,
+      "dims": {
+        "groundedness": 1,
+        "correctness": 1.667,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a1-naming-15",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a1-svo-1",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a1-svo-10",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.111,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 1.333,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a1-svo-11",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.444,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 1.667,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a1-svo-12",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a1-svo-13",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.444,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 1.667,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a2-count-1",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a2-count-11",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a2-count-12",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.667,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 1.667,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a2-count-13",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a2-count-15",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a2-naming-10",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a2-naming-11",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a2-naming-12",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a2-naming-13",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a2-naming-16",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a2-neg-1",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a2-neg-10",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a2-neg-11",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a2-neg-12",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a2-neg-13",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a2-noise-svo-1",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.667,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 1.333,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a2-noise-svo-10",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a2-noise-svo-11",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a2-noise-svo-12",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a2-noise-svo-13",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a2-pron-1",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a2-pron-10",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a2-pron-11",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a2-pron-12",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a2-pron-13",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a2-svo-1",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a2-svo-10",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a2-svo-11",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.778,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a2-svo-12",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-a2-svo-13",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-disc-13",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 0,
+      "dims": {
+        "groundedness": 0,
+        "correctness": null,
+        "honesty": 0,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": true
+    },
+    {
+      "caseId": "g-b1-disc-19",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.417,
+      "dims": {
+        "groundedness": 0.667,
+        "correctness": 0,
+        "honesty": 0.333,
+        "rephrase": 0.667
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-disc-22",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 1.083,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 0,
+        "honesty": 0.667,
+        "rephrase": 1.667
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-disc-23",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0,
+      "dims": {
+        "groundedness": 0,
+        "correctness": 0,
+        "honesty": 0,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": true
+    },
+    {
+      "caseId": "g-b1-disc-9",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.833,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 1.667,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-disc-count-13",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.75,
+      "dims": {
+        "groundedness": 1.333,
+        "correctness": 0,
+        "honesty": 0.333,
+        "rephrase": 1.333
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-disc-count-17",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 1,
+      "dims": {
+        "groundedness": 1.667,
+        "correctness": 0.333,
+        "honesty": 1.333,
+        "rephrase": 0.667
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-disc-count-19",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.583,
+      "dims": {
+        "groundedness": 1.333,
+        "correctness": 0.333,
+        "honesty": 0.667,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-disc-count-21",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.917,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 0.333,
+        "honesty": 0.667,
+        "rephrase": 0.667
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-disc-count-25",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.417,
+      "dims": {
+        "groundedness": 0.667,
+        "correctness": 0,
+        "honesty": 0.333,
+        "rephrase": 0.667
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-neg-1",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-neg-11",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 0.556,
+      "dims": {
+        "groundedness": 1,
+        "correctness": null,
+        "honesty": 0.667,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-neg-16",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-neg-19",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-neg-3",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-passive-15",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-passive-20",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-passive-23",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.111,
+      "dims": {
+        "groundedness": 1.333,
+        "correctness": null,
+        "honesty": 1.333,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-passive-25",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-passive-9",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.833,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 1.667,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-1",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 1,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 0.333,
+        "honesty": 0.667,
+        "rephrase": 1
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-10",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-11",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.889,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": 1
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-12",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.917,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 0,
+        "honesty": 0.667,
+        "rephrase": 1
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-13",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.833,
+      "dims": {
+        "groundedness": 1.667,
+        "correctness": 0.333,
+        "honesty": 0.333,
+        "rephrase": 1
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-14",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-15",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.917,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 0.667,
+        "honesty": 0,
+        "rephrase": 1
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-16",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.583,
+      "dims": {
+        "groundedness": 1,
+        "correctness": 0,
+        "honesty": 0.667,
+        "rephrase": 0.667
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-17",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.778,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": 1
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-18",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.833,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 0,
+        "honesty": 0.333,
+        "rephrase": 1
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-19",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-2",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-20",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 1.25,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 1,
+        "honesty": 1,
+        "rephrase": 1
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-21",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 1.083,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 0.333,
+        "honesty": 1,
+        "rephrase": 1
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-22",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.75,
+      "dims": {
+        "groundedness": 1.667,
+        "correctness": 0.667,
+        "honesty": 0,
+        "rephrase": 0.667
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-23",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.556,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 1.667,
+        "rephrase": 0.5
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-24",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-25",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.25,
+      "dims": {
+        "groundedness": 0.333,
+        "correctness": 0.667,
+        "honesty": 0,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-26",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.778,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-27",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-28",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.833,
+      "dims": {
+        "groundedness": 1.667,
+        "correctness": 0,
+        "honesty": 0.667,
+        "rephrase": 1
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-29",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.778,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-3",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-30",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.667,
+      "dims": {
+        "groundedness": 1.333,
+        "correctness": 0,
+        "honesty": 0.667,
+        "rephrase": 0.667
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-31",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.889,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": 1
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-32",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.833,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 1.667,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-33",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.917,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 0,
+        "honesty": 0.667,
+        "rephrase": 1
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-34",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.889,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": 1
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-35",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.583,
+      "dims": {
+        "groundedness": 1.667,
+        "correctness": 0.667,
+        "honesty": 0,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-36",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.833,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 0,
+        "honesty": 0.667,
+        "rephrase": 0.667
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-37",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-38",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-39",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.278,
+      "dims": {
+        "groundedness": 0.667,
+        "correctness": 0,
+        "honesty": 0,
+        "rephrase": 1
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": true
+    },
+    {
+      "caseId": "g-b1-pron-4",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 1.083,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 0.667,
+        "honesty": 0.667,
+        "rephrase": 1
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-40",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 0.667,
+      "dims": {
+        "groundedness": 1.667,
+        "correctness": null,
+        "honesty": 0.333,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-41",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 0.445,
+      "dims": {
+        "groundedness": 1,
+        "correctness": null,
+        "honesty": 0.333,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-42",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.555,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": 0.667
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-43",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.556,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 1.667,
+        "rephrase": 0.5
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-44",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0,
+      "dims": {
+        "groundedness": 0,
+        "correctness": 0,
+        "honesty": 0,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": true
+    },
+    {
+      "caseId": "g-b1-pron-45",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.555,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-46",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-47",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.667,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 1.667,
+        "rephrase": 1
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-48",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.833,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 0,
+        "honesty": 0.333,
+        "rephrase": 1
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-49",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-5",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 1.083,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 1,
+        "honesty": 0.667,
+        "rephrase": 0.667
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-50",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.917,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 0.333,
+        "honesty": 0.667,
+        "rephrase": 0.667
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-6",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.083,
+      "dims": {
+        "groundedness": 0.333,
+        "correctness": 0,
+        "honesty": 0,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": true
+    },
+    {
+      "caseId": "g-b1-pron-7",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.5,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 0,
+        "honesty": 0,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": true
+    },
+    {
+      "caseId": "g-b1-pron-8",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-9",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.778,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-neg-11",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.5,
+      "dims": {
+        "groundedness": 1.667,
+        "correctness": 1.333,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-neg-16",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-neg-17",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-neg-4",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-pron-neg-9",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-1",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.333,
+      "dims": {
+        "groundedness": 1.667,
+        "correctness": null,
+        "honesty": 1.333,
+        "rephrase": 0.5
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-10",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.778,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 1.333,
+        "rephrase": 2
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-11",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.889,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": 1
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-12",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.555,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-13",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-14",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.5,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 1,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-15",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1,
+      "dims": {
+        "groundedness": 1,
+        "correctness": 1,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-16",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1,
+      "dims": {
+        "groundedness": 1,
+        "correctness": 1,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-17",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.667,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": 1
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-18",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.5,
+      "dims": {
+        "groundedness": 1.333,
+        "correctness": null,
+        "honesty": 1.667,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-19",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 0.333,
+      "dims": {
+        "groundedness": 1,
+        "correctness": null,
+        "honesty": 0,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-2",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.444,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": 0.333
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-20",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1,
+      "dims": {
+        "groundedness": 1,
+        "correctness": 1,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-21",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.889,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": 1
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-22",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-23",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 0.333,
+      "dims": {
+        "groundedness": 0.667,
+        "correctness": null,
+        "honesty": 0.333,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-24",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.778,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-25",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-26",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-27",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-28",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 0.556,
+      "dims": {
+        "groundedness": 1,
+        "correctness": null,
+        "honesty": 0.667,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-29",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.667,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": 0.5
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-3",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-30",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.111,
+      "dims": {
+        "groundedness": 1.333,
+        "correctness": null,
+        "honesty": 0.667,
+        "rephrase": 1.333
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-31",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0,
+      "dims": {
+        "groundedness": 0,
+        "correctness": 0,
+        "honesty": 0,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": true
+    },
+    {
+      "caseId": "g-b1-temp-32",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.889,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": 1.5
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-33",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.778,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-34",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.667,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 1,
+        "rephrase": 2
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-35",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-36",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1,
+      "dims": {
+        "groundedness": 1.667,
+        "correctness": null,
+        "honesty": 0.667,
+        "rephrase": 0.5
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-37",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 0.111,
+      "dims": {
+        "groundedness": 0.333,
+        "correctness": null,
+        "honesty": 0,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-38",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-39",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.667,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": 0.5
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-4",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.667,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": 0.5
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-40",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-41",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-42",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": 2
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-43",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-44",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.083,
+      "dims": {
+        "groundedness": 0.333,
+        "correctness": 0,
+        "honesty": 0,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": true
+    },
+    {
+      "caseId": "g-b1-temp-45",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-46",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 1.5,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 0.333,
+        "honesty": 1.667,
+        "rephrase": 2
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-47",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-48",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.556,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 1.667,
+        "rephrase": 0.5
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-49",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.25,
+      "dims": {
+        "groundedness": 0.667,
+        "correctness": 0,
+        "honesty": 0.333,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-5",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 0.333,
+      "dims": {
+        "groundedness": 0.667,
+        "correctness": null,
+        "honesty": 0.333,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-50",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.333,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 1.667,
+        "rephrase": 0.333
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-6",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.778,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 1.333,
+        "rephrase": 2
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-7",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.167,
+      "dims": {
+        "groundedness": 0.667,
+        "correctness": 0,
+        "honesty": 0,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": true
+    },
+    {
+      "caseId": "g-b1-temp-8",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 0.222,
+      "dims": {
+        "groundedness": 0.333,
+        "correctness": null,
+        "honesty": 0.333,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b1-temp-9",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.667,
+      "dims": {
+        "groundedness": 1.667,
+        "correctness": null,
+        "honesty": 1.667,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b2-assert-14",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b2-assert-16",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": 2,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b2-assert-22",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.917,
+      "dims": {
+        "groundedness": 1.333,
+        "correctness": 0,
+        "honesty": 1.333,
+        "rephrase": 1
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b2-assert-4",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.333,
+      "dims": {
+        "groundedness": 1,
+        "correctness": 0,
+        "honesty": 0,
+        "rephrase": 0.333
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": true
+    },
+    {
+      "caseId": "g-b2-assert-8",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b2-coord-2",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b2-coord-34",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b2-coord-47",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b2-coord-49",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b2-coord-50",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b2-count-temp-16",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0,
+      "dims": {
+        "groundedness": 0,
+        "correctness": 0,
+        "honesty": 0,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": true
+    },
+    {
+      "caseId": "g-b2-count-temp-19",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0,
+      "dims": {
+        "groundedness": 0,
+        "correctness": 0,
+        "honesty": 0,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": true
+    },
+    {
+      "caseId": "g-b2-count-temp-21",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0,
+      "dims": {
+        "groundedness": 0,
+        "correctness": 0,
+        "honesty": 0,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": true
+    },
+    {
+      "caseId": "g-b2-count-temp-3",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0,
+      "dims": {
+        "groundedness": 0,
+        "correctness": 0,
+        "honesty": 0,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": true
+    },
+    {
+      "caseId": "g-b2-count-temp-4",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0,
+      "dims": {
+        "groundedness": 0,
+        "correctness": 0,
+        "honesty": 0,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": true
+    },
+    {
+      "caseId": "g-b2-disc-11",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0,
+      "dims": {
+        "groundedness": 0,
+        "correctness": 0,
+        "honesty": 0,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": true
+    },
+    {
+      "caseId": "g-b2-disc-17",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.583,
+      "dims": {
+        "groundedness": 0.667,
+        "correctness": 0,
+        "honesty": 0,
+        "rephrase": 1.667
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": true
+    },
+    {
+      "caseId": "g-b2-disc-22",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.75,
+      "dims": {
+        "groundedness": 1,
+        "correctness": 0.333,
+        "honesty": 0.667,
+        "rephrase": 1
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b2-disc-24",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 1.583,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 0.333,
+        "honesty": 2,
+        "rephrase": 2
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b2-disc-8",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 1.167,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 0.667,
+        "honesty": 1,
+        "rephrase": 1
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b2-noise-pron-10",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b2-noise-pron-2",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.667,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": 0.5
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b2-noise-pron-23",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.667,
+      "dims": {
+        "groundedness": 1.667,
+        "correctness": 1.667,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b2-noise-pron-5",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.667,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 1.667,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b2-noise-pron-8",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b2-passive-10",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b2-passive-12",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b2-passive-14",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 1,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b2-passive-15",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b2-passive-6",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b2-rel-26",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 1,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b2-rel-33",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b2-rel-39",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b2-rel-44",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.278,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 1,
+        "rephrase": 0.5
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-b2-rel-47",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-assert-14",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.5,
+      "dims": {
+        "groundedness": 1,
+        "correctness": 0,
+        "honesty": 0.333,
+        "rephrase": 0.667
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-assert-15",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.083,
+      "dims": {
+        "groundedness": 0,
+        "correctness": 0,
+        "honesty": 0,
+        "rephrase": 0.333
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": true
+    },
+    {
+      "caseId": "g-c1-assert-20",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.583,
+      "dims": {
+        "groundedness": 1.333,
+        "correctness": 0.333,
+        "honesty": 0.667,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-assert-7",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 1.083,
+      "dims": {
+        "groundedness": 1.333,
+        "correctness": 0.667,
+        "honesty": 1.333,
+        "rephrase": 1
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-assert-8",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0,
+      "dims": {
+        "groundedness": 0,
+        "correctness": 0,
+        "honesty": 0,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": true
+    },
+    {
+      "caseId": "g-c1-coord-11",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-coord-12",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 0,
+      "dims": {
+        "groundedness": 0,
+        "correctness": 0,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": true
+    },
+    {
+      "caseId": "g-c1-coord-14",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-coord-19",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0,
+      "dims": {
+        "groundedness": 0,
+        "correctness": 0,
+        "honesty": 0,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": true
+    },
+    {
+      "caseId": "g-c1-coord-22",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.5,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 1.333,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-neg-rel-11",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0,
+      "dims": {
+        "groundedness": 0,
+        "correctness": 0,
+        "honesty": 0,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": true
+    },
+    {
+      "caseId": "g-c1-neg-rel-16",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.333,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 1.333,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-neg-rel-18",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.167,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 1,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-neg-rel-19",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 0.167,
+      "dims": {
+        "groundedness": 0.333,
+        "correctness": 0,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-neg-rel-7",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-rel-12",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.333,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 1.333,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-rel-17",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 1,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-rel-20",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.167,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 1,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-rel-23",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.5,
+      "dims": {
+        "groundedness": 0.667,
+        "correctness": 0,
+        "honesty": 0.333,
+        "rephrase": 1
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-rel-6",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 0,
+      "dims": {
+        "groundedness": 0,
+        "correctness": null,
+        "honesty": 0,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": true
+    },
+    {
+      "caseId": "g-c1-temp-1",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.889,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": 1.5
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-temp-10",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.583,
+      "dims": {
+        "groundedness": 1,
+        "correctness": 0,
+        "honesty": 0.333,
+        "rephrase": 1
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-temp-11",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 0.222,
+      "dims": {
+        "groundedness": 0.667,
+        "correctness": null,
+        "honesty": 0,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-temp-12",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0,
+      "dims": {
+        "groundedness": 0,
+        "correctness": 0,
+        "honesty": 0,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": true
+    },
+    {
+      "caseId": "g-c1-temp-13",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-temp-14",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.778,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-temp-15",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-temp-16",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 0.445,
+      "dims": {
+        "groundedness": 0.667,
+        "correctness": null,
+        "honesty": 0.667,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-temp-17",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-temp-18",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.667,
+      "dims": {
+        "groundedness": 1.667,
+        "correctness": 0,
+        "honesty": 0.333,
+        "rephrase": 0.667
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-temp-19",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 0.222,
+      "dims": {
+        "groundedness": 0,
+        "correctness": null,
+        "honesty": 0,
+        "rephrase": 0.667
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": true
+    },
+    {
+      "caseId": "g-c1-temp-2",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-temp-20",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.667,
+      "dims": {
+        "groundedness": 1.333,
+        "correctness": 0,
+        "honesty": 0.333,
+        "rephrase": 1
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-temp-21",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.778,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": 1
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-temp-22",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.5,
+      "dims": {
+        "groundedness": 1.333,
+        "correctness": 0,
+        "honesty": 0.333,
+        "rephrase": 0.333
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-temp-23",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.611,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 0,
+        "honesty": 0,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": true
+    },
+    {
+      "caseId": "g-c1-temp-24",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.25,
+      "dims": {
+        "groundedness": 0.333,
+        "correctness": 0,
+        "honesty": 0,
+        "rephrase": 0.667
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": true
+    },
+    {
+      "caseId": "g-c1-temp-25",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.083,
+      "dims": {
+        "groundedness": 0,
+        "correctness": 0,
+        "honesty": 0,
+        "rephrase": 0.333
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": true
+    },
+    {
+      "caseId": "g-c1-temp-26",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.555,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-temp-27",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 1,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-temp-28",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.25,
+      "dims": {
+        "groundedness": 1,
+        "correctness": 0,
+        "honesty": 0,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": true
+    },
+    {
+      "caseId": "g-c1-temp-29",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.333,
+      "dims": {
+        "groundedness": 1.333,
+        "correctness": 0,
+        "honesty": 0,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": true
+    },
+    {
+      "caseId": "g-c1-temp-3",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.722,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 1.667,
+        "rephrase": 1
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-temp-30",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 0.555,
+      "dims": {
+        "groundedness": 0.667,
+        "correctness": null,
+        "honesty": 0.333,
+        "rephrase": 0.667
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-temp-31",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 1,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-temp-32",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.444,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 1.667,
+        "rephrase": 0.667
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-temp-33",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.667,
+      "dims": {
+        "groundedness": 1.667,
+        "correctness": 0,
+        "honesty": 0,
+        "rephrase": 1
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": true
+    },
+    {
+      "caseId": "g-c1-temp-34",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 0.5,
+      "dims": {
+        "groundedness": 0.333,
+        "correctness": null,
+        "honesty": 1,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-temp-35",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.417,
+      "dims": {
+        "groundedness": 1,
+        "correctness": 0,
+        "honesty": 0,
+        "rephrase": 0.667
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": true
+    },
+    {
+      "caseId": "g-c1-temp-36",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 0,
+        "rephrase": 1
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-temp-37",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 0.889,
+      "dims": {
+        "groundedness": 1.333,
+        "correctness": null,
+        "honesty": 1.333,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-temp-38",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 1,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-temp-39",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.333,
+      "dims": {
+        "groundedness": 1.333,
+        "correctness": 0,
+        "honesty": 0,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": true
+    },
+    {
+      "caseId": "g-c1-temp-4",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-temp-40",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.889,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": 1
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-temp-41",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-temp-42",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 0.556,
+      "dims": {
+        "groundedness": 0.667,
+        "correctness": null,
+        "honesty": 1,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-temp-43",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 0.444,
+      "dims": {
+        "groundedness": 0.667,
+        "correctness": null,
+        "honesty": 0,
+        "rephrase": 0.667
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-temp-44",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1,
+      "dims": {
+        "groundedness": 1.333,
+        "correctness": null,
+        "honesty": 1.333,
+        "rephrase": 0.333
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-temp-45",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 1,
+      "dims": {
+        "groundedness": 1,
+        "correctness": 0.667,
+        "honesty": 1.333,
+        "rephrase": 1
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-temp-46",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 1,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-temp-47",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.083,
+      "dims": {
+        "groundedness": 0.333,
+        "correctness": 0,
+        "honesty": 0,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": true
+    },
+    {
+      "caseId": "g-c1-temp-48",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 1,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 0,
+        "honesty": 1,
+        "rephrase": 1
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-temp-49",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 0,
+      "dims": {
+        "groundedness": 0,
+        "correctness": null,
+        "honesty": 0,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": true
+    },
+    {
+      "caseId": "g-c1-temp-5",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.778,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-temp-50",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 1,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 0.333,
+        "honesty": 0.667,
+        "rephrase": 1
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-temp-6",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-temp-7",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 1,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-temp-8",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 0.778,
+      "dims": {
+        "groundedness": 1.333,
+        "correctness": null,
+        "honesty": 1,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c1-temp-9",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.333,
+      "dims": {
+        "groundedness": 1,
+        "correctness": 0,
+        "honesty": 0,
+        "rephrase": 0.333
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": true
+    },
+    {
+      "caseId": "g-c2-pron-1",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 1.111,
+      "dims": {
+        "groundedness": 1.667,
+        "correctness": 0,
+        "honesty": 1,
+        "rephrase": 1.333
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c2-pron-12",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.5,
+      "dims": {
+        "groundedness": 0.667,
+        "correctness": 0,
+        "honesty": 0.333,
+        "rephrase": 1
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c2-pron-17",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.75,
+      "dims": {
+        "groundedness": 1.333,
+        "correctness": 0,
+        "honesty": 0.667,
+        "rephrase": 1
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c2-pron-19",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 1,
+      "dims": {
+        "groundedness": 1.667,
+        "correctness": 0.333,
+        "honesty": 1,
+        "rephrase": 1
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c2-pron-9",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.25,
+      "dims": {
+        "groundedness": 0,
+        "correctness": 0,
+        "honesty": 0.333,
+        "rephrase": 0.667
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": true
+    },
+    {
+      "caseId": "g-c2-rel-14",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.667,
+      "dims": {
+        "groundedness": 1.667,
+        "correctness": 0,
+        "honesty": 0.333,
+        "rephrase": 0.667
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c2-rel-19",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c2-rel-2",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "g-c2-rel-4",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0,
+      "dims": {
+        "groundedness": 0,
+        "correctness": 0,
+        "honesty": 0,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": true
+    },
+    {
+      "caseId": "g-c2-rel-6",
+      "tags": [
+        "graded"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "gq-count-classes",
+      "tags": [
+        "graph-query"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "gq-describe-widget",
+      "tags": [
+        "graph-query"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "gq-functions-call-fnalpha",
+      "tags": [
+        "graph-query"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0,
+      "dims": {
+        "groundedness": 0,
+        "correctness": 0,
+        "honesty": 0,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": true
+    },
+    {
+      "caseId": "gq-impact-a",
+      "tags": [
+        "graph-query"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.833,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 1.667,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "gq-imports-by-e",
+      "tags": [
+        "graph-query"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "gq-imports-of-a",
+      "tags": [
+        "graph-query"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "gq-inherit-from-base",
+      "tags": [
+        "graph-query"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "gq-members-widget",
+      "tags": [
+        "graph-query"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "gq-public-methods-widget",
+      "tags": [
+        "graph-query"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.833,
+      "dims": {
+        "groundedness": 1.667,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "gq-subclasses-base",
+      "tags": [
+        "graph-query"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "gq-tests-for-b",
+      "tags": [
+        "graph-query"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "gq-when-changed-a",
+      "tags": [
+        "graph-query"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1,
+      "dims": {
+        "groundedness": 1,
+        "correctness": 1,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "gq-where-defined-fnalpha",
+      "tags": [
+        "graph-query"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "gq-who-touched-a",
+      "tags": [
+        "graph-query"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.5,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 1,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "hm-count-bananas",
+      "tags": [
+        "honesty-miss"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": null,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": 2
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "hm-empty-result-calls",
+      "tags": [
+        "honesty-miss",
+        "graph-query"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.333,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 1.333,
+        "rephrase": 0.667
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "hm-joke",
+      "tags": [
+        "honesty-miss"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 2,
+        "rephrase": 2
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "hm-unknown-fn",
+      "tags": [
+        "honesty-miss"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 1,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "hm-unknown-module",
+      "tags": [
+        "honesty-miss"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 1,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "mr-asked-before",
+      "tags": [
+        "memory-recall"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": 2,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "mr-graph-intact",
+      "tags": [
+        "memory-recall"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.5,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 1,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "mr-session-count",
+      "tags": [
+        "memory-recall"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": 2,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "mt-ask-then-touched",
+      "tags": [
+        "multi-turn-focus"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.5,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 1,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "mt-describe-then-callers",
+      "tags": [
+        "multi-turn-focus"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "mt-focus-drift",
+      "tags": [
+        "multi-turn-focus"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 0.083,
+      "dims": {
+        "groundedness": 0.333,
+        "correctness": 0,
+        "honesty": 0,
+        "rephrase": 0
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": true
+    },
+    {
+      "caseId": "mt-focus-members",
+      "tags": [
+        "multi-turn-focus"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "mt-why-expand",
+      "tags": [
+        "multi-turn-focus"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": 2,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "ns-could-you",
+      "tags": [
+        "noise"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "ns-hey-tmct",
+      "tags": [
+        "noise"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 1.083,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 1,
+        "honesty": 1,
+        "rephrase": 0.333
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "ns-so-uh-count",
+      "tags": [
+        "noise"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "ns-um-hey",
+      "tags": [
+        "noise"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "ns-wondering",
+      "tags": [
+        "noise"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 1.167,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 1,
+        "honesty": 1,
+        "rephrase": 0.667
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "tf-fnalpah",
+      "tags": [
+        "typo-fuzzy"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 1.222,
+      "dims": {
+        "groundedness": 2,
+        "correctness": null,
+        "honesty": 1.333,
+        "rephrase": 0.333
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "tf-modles",
+      "tags": [
+        "typo-fuzzy"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": 2,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "tf-wat-calls",
+      "tags": [
+        "typo-fuzzy"
+      ],
+      "tier1Pass": true,
+      "baselineFail": true,
+      "mean": 1.833,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 1.667,
+        "honesty": 2,
+        "rephrase": 1
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    },
+    {
+      "caseId": "tf-whcih-imprt",
+      "tags": [
+        "typo-fuzzy"
+      ],
+      "tier1Pass": true,
+      "baselineFail": false,
+      "mean": 2,
+      "dims": {
+        "groundedness": 2,
+        "correctness": 2,
+        "honesty": null,
+        "rephrase": null
+      },
+      "samples": 3,
+      "voids": 0,
+      "hardFail": false
+    }
+  ]
+}

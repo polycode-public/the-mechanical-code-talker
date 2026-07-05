@@ -1,0 +1,543 @@
+{
+  "tolerance": 0.2,
+  "cells": [
+    {
+      "grade": "A1",
+      "construction": "naming-vocabulary",
+      "combo": false,
+      "a": {
+        "n": 5,
+        "green": 5,
+        "rate": 1
+      },
+      "b": {
+        "n": 5,
+        "green": 5,
+        "rate": 1
+      },
+      "delta": 0,
+      "verdict": "AGREE"
+    },
+    {
+      "grade": "A1",
+      "construction": "quantifier-counting",
+      "combo": false,
+      "a": {
+        "n": 5,
+        "green": 5,
+        "rate": 1
+      },
+      "b": {
+        "n": 5,
+        "green": 5,
+        "rate": 1
+      },
+      "delta": 0,
+      "verdict": "AGREE"
+    },
+    {
+      "grade": "A1",
+      "construction": "svo-query",
+      "combo": false,
+      "a": {
+        "n": 5,
+        "green": 5,
+        "rate": 1
+      },
+      "b": {
+        "n": 5,
+        "green": 5,
+        "rate": 1
+      },
+      "delta": 0,
+      "verdict": "AGREE"
+    },
+    {
+      "grade": "A2",
+      "construction": "naming-vocabulary",
+      "combo": false,
+      "a": {
+        "n": 5,
+        "green": 5,
+        "rate": 1
+      },
+      "b": {
+        "n": 5,
+        "green": 5,
+        "rate": 1
+      },
+      "delta": 0,
+      "verdict": "AGREE"
+    },
+    {
+      "grade": "A2",
+      "construction": "negation",
+      "combo": false,
+      "a": {
+        "n": 5,
+        "green": 5,
+        "rate": 1
+      },
+      "b": {
+        "n": 5,
+        "green": 5,
+        "rate": 1
+      },
+      "delta": 0,
+      "verdict": "AGREE"
+    },
+    {
+      "grade": "A2",
+      "construction": "noise+svo-query",
+      "combo": true,
+      "a": {
+        "n": 5,
+        "green": 5,
+        "rate": 1
+      },
+      "b": {
+        "n": 5,
+        "green": 5,
+        "rate": 1
+      },
+      "delta": 0,
+      "verdict": "AGREE"
+    },
+    {
+      "grade": "A2",
+      "construction": "pronoun-binding",
+      "combo": false,
+      "a": {
+        "n": 5,
+        "green": 5,
+        "rate": 1
+      },
+      "b": {
+        "n": 5,
+        "green": 5,
+        "rate": 1
+      },
+      "delta": 0,
+      "verdict": "AGREE"
+    },
+    {
+      "grade": "A2",
+      "construction": "quantifier-counting",
+      "combo": false,
+      "a": {
+        "n": 5,
+        "green": 5,
+        "rate": 1
+      },
+      "b": {
+        "n": 5,
+        "green": 5,
+        "rate": 1
+      },
+      "delta": 0,
+      "verdict": "AGREE"
+    },
+    {
+      "grade": "A2",
+      "construction": "svo-query",
+      "combo": false,
+      "a": {
+        "n": 5,
+        "green": 5,
+        "rate": 1
+      },
+      "b": {
+        "n": 5,
+        "green": 5,
+        "rate": 1
+      },
+      "delta": 0,
+      "verdict": "AGREE"
+    },
+    {
+      "grade": "B1",
+      "construction": "discourse-reference",
+      "combo": false,
+      "a": {
+        "n": 5,
+        "green": 2,
+        "rate": 0.4
+      },
+      "b": {
+        "n": 5,
+        "green": 2,
+        "rate": 0.4
+      },
+      "delta": 0,
+      "verdict": "AGREE"
+    },
+    {
+      "grade": "B1",
+      "construction": "discourse-reference+quantifier-counting",
+      "combo": true,
+      "a": {
+        "n": 5,
+        "green": 0,
+        "rate": 0
+      },
+      "b": {
+        "n": 5,
+        "green": 0,
+        "rate": 0
+      },
+      "delta": 0,
+      "verdict": "AGREE"
+    },
+    {
+      "grade": "B1",
+      "construction": "negation",
+      "combo": false,
+      "a": {
+        "n": 5,
+        "green": 5,
+        "rate": 1
+      },
+      "b": {
+        "n": 5,
+        "green": 4,
+        "rate": 0.8
+      },
+      "delta": 0.19999999999999996,
+      "verdict": "AGREE"
+    },
+    {
+      "grade": "B1",
+      "construction": "pronoun-binding",
+      "combo": false,
+      "a": {
+        "n": 50,
+        "green": 27,
+        "rate": 0.54
+      },
+      "b": {
+        "n": 50,
+        "green": 27,
+        "rate": 0.54
+      },
+      "delta": 0,
+      "verdict": "AGREE"
+    },
+    {
+      "grade": "B1",
+      "construction": "pronoun-binding+negation",
+      "combo": true,
+      "a": {
+        "n": 5,
+        "green": 5,
+        "rate": 1
+      },
+      "b": {
+        "n": 5,
+        "green": 4,
+        "rate": 0.8
+      },
+      "delta": 0.19999999999999996,
+      "verdict": "AGREE"
+    },
+    {
+      "grade": "B1",
+      "construction": "reversible-passive",
+      "combo": false,
+      "a": {
+        "n": 5,
+        "green": 5,
+        "rate": 1
+      },
+      "b": {
+        "n": 5,
+        "green": 5,
+        "rate": 1
+      },
+      "delta": 0,
+      "verdict": "AGREE"
+    },
+    {
+      "grade": "B1",
+      "construction": "temporal",
+      "combo": false,
+      "a": {
+        "n": 50,
+        "green": 45,
+        "rate": 0.9
+      },
+      "b": {
+        "n": 50,
+        "green": 45,
+        "rate": 0.9
+      },
+      "delta": 0,
+      "verdict": "AGREE"
+    },
+    {
+      "grade": "B2",
+      "construction": "assert-recall",
+      "combo": false,
+      "a": {
+        "n": 5,
+        "green": 2,
+        "rate": 0.4
+      },
+      "b": {
+        "n": 5,
+        "green": 1,
+        "rate": 0.2
+      },
+      "delta": 0.2,
+      "verdict": "AGREE"
+    },
+    {
+      "grade": "B2",
+      "construction": "coordination-compositional",
+      "combo": false,
+      "a": {
+        "n": 5,
+        "green": 5,
+        "rate": 1
+      },
+      "b": {
+        "n": 5,
+        "green": 4,
+        "rate": 0.8
+      },
+      "delta": 0.19999999999999996,
+      "verdict": "AGREE"
+    },
+    {
+      "grade": "B2",
+      "construction": "discourse-reference",
+      "combo": false,
+      "a": {
+        "n": 5,
+        "green": 0,
+        "rate": 0
+      },
+      "b": {
+        "n": 5,
+        "green": 0,
+        "rate": 0
+      },
+      "delta": 0,
+      "verdict": "AGREE"
+    },
+    {
+      "grade": "B2",
+      "construction": "noise+pronoun-binding",
+      "combo": true,
+      "a": {
+        "n": 5,
+        "green": 5,
+        "rate": 1
+      },
+      "b": {
+        "n": 5,
+        "green": 5,
+        "rate": 1
+      },
+      "delta": 0,
+      "verdict": "AGREE"
+    },
+    {
+      "grade": "B2",
+      "construction": "quantifier-counting+temporal",
+      "combo": true,
+      "a": {
+        "n": 5,
+        "green": 0,
+        "rate": 0
+      },
+      "b": {
+        "n": 5,
+        "green": 2,
+        "rate": 0.4
+      },
+      "delta": 0.4,
+      "verdict": "DISAGREE",
+      "underCovered": true,
+      "prescription": "grow this cell's pool and/or per-run sample; exclude the cell from cycle PASS/FAIL statistics until it agrees (unmeasured, not failed)"
+    },
+    {
+      "grade": "B2",
+      "construction": "relative-embedded",
+      "combo": false,
+      "a": {
+        "n": 5,
+        "green": 5,
+        "rate": 1
+      },
+      "b": {
+        "n": 5,
+        "green": 5,
+        "rate": 1
+      },
+      "delta": 0,
+      "verdict": "AGREE"
+    },
+    {
+      "grade": "B2",
+      "construction": "reversible-passive",
+      "combo": false,
+      "a": {
+        "n": 5,
+        "green": 5,
+        "rate": 1
+      },
+      "b": {
+        "n": 5,
+        "green": 5,
+        "rate": 1
+      },
+      "delta": 0,
+      "verdict": "AGREE"
+    },
+    {
+      "grade": "C1",
+      "construction": "assert-recall",
+      "combo": false,
+      "a": {
+        "n": 5,
+        "green": 0,
+        "rate": 0
+      },
+      "b": {
+        "n": 5,
+        "green": 0,
+        "rate": 0
+      },
+      "delta": 0,
+      "verdict": "AGREE"
+    },
+    {
+      "grade": "C1",
+      "construction": "coordination-compositional",
+      "combo": false,
+      "a": {
+        "n": 5,
+        "green": 4,
+        "rate": 0.8
+      },
+      "b": {
+        "n": 5,
+        "green": 4,
+        "rate": 0.8
+      },
+      "delta": 0,
+      "verdict": "AGREE"
+    },
+    {
+      "grade": "C1",
+      "construction": "negation+relative-embedded",
+      "combo": true,
+      "a": {
+        "n": 5,
+        "green": 4,
+        "rate": 0.8
+      },
+      "b": {
+        "n": 5,
+        "green": 4,
+        "rate": 0.8
+      },
+      "delta": 0,
+      "verdict": "AGREE"
+    },
+    {
+      "grade": "C1",
+      "construction": "relative-embedded",
+      "combo": false,
+      "a": {
+        "n": 5,
+        "green": 4,
+        "rate": 0.8
+      },
+      "b": {
+        "n": 5,
+        "green": 4,
+        "rate": 0.8
+      },
+      "delta": 0,
+      "verdict": "AGREE"
+    },
+    {
+      "grade": "C1",
+      "construction": "temporal",
+      "combo": false,
+      "a": {
+        "n": 50,
+        "green": 32,
+        "rate": 0.64
+      },
+      "b": {
+        "n": 50,
+        "green": 32,
+        "rate": 0.64
+      },
+      "delta": 0,
+      "verdict": "AGREE"
+    },
+    {
+      "grade": "C2",
+      "construction": "pronoun-binding",
+      "combo": false,
+      "a": {
+        "n": 5,
+        "green": 0,
+        "rate": 0
+      },
+      "b": {
+        "n": 5,
+        "green": 0,
+        "rate": 0
+      },
+      "delta": 0,
+      "verdict": "AGREE"
+    },
+    {
+      "grade": "C2",
+      "construction": "relative-embedded",
+      "combo": false,
+      "a": {
+        "n": 5,
+        "green": 3,
+        "rate": 0.6
+      },
+      "b": {
+        "n": 5,
+        "green": 2,
+        "rate": 0.4
+      },
+      "delta": 0.19999999999999996,
+      "verdict": "AGREE"
+    }
+  ],
+  "overall": {
+    "cells": 30,
+    "measured": 30,
+    "agree": 29,
+    "disagree": 1,
+    "agreementRate": 0.9666666666666667,
+    "underCovered": [
+      "B2:quantifier-counting+temporal"
+    ]
+  },
+  "templateLane": {
+    "cells": [],
+    "overall": {
+      "cells": 0,
+      "measured": 0,
+      "agree": 0,
+      "disagree": 0,
+      "agreementRate": null,
+      "underCovered": []
+    }
+  },
+  "seeds": {
+    "a": 2319321139,
+    "b": 2319321140
+  },
+  "stamp": "cycle-005"
+}
