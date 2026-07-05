@@ -308,6 +308,8 @@ agreeing unlocks C-grade judging).
 
 ## Provenance & trust — the unified source-link primitive (cross-cutting)
 
+> Detailed plan: **PLAN_PROVENANCE_TRUST.md**.
+
 *(Operator-specified 2026-07-05, from the observation that Phase-6 canonicalise-and-link,
 tier-4 learn-on-miss, and the ConceptNet slice all share one shape: raw source preserved,
 derived form linked back.)* Promote that shape to a FIRST-CLASS primitive used everywhere a
