@@ -69,6 +69,40 @@ export function wrapLines(lines, width) {
   return out;
 }
 
+// ---- line editor (pure, cursor-aware — readline-style in-line editing) ----
+// The input line is a (value, cursor) pair: `cursor` is an index in [0, value.length]
+// naming the gap BEFORE which the next character lands. Left/right move it; typing and
+// backspace act AT it, so a message can be edited mid-line and resubmitted. Pure so
+// node:test exercises the editing without a terminal.
+
+/** Insert `str` at the cursor; the cursor advances past it. */
+export function insertAt(value, cursor, str) {
+  const c = clampCursor(value, cursor);
+  return { value: value.slice(0, c) + str + value.slice(c), cursor: c + str.length };
+}
+
+/** Delete the character BEFORE the cursor (Backspace); the cursor steps left. A no-op
+ *  at column 0. (This shell treats Backspace and Delete alike — delete-before-cursor.) */
+export function backspaceAt(value, cursor) {
+  const c = clampCursor(value, cursor);
+  if (c <= 0) return { value, cursor: 0 };
+  return { value: value.slice(0, c - 1) + value.slice(c), cursor: c - 1 };
+}
+
+/** Clamp a cursor index into [0, value.length]. */
+export function clampCursor(value, cursor) {
+  return Math.max(0, Math.min(String(value).length, Number(cursor) || 0));
+}
+
+/** Split the value around the cursor for rendering: the text before it, the single
+ *  character UNDER it (a space when the cursor sits past the end), and the text after
+ *  that character — so the caret block can highlight `at` in place. */
+export function inputCells(value, cursor) {
+  const c = clampCursor(value, cursor);
+  const s = String(value);
+  return { before: s.slice(0, c), at: s.slice(c, c + 1) || " ", after: s.slice(c + 1) };
+}
+
 /** Terminal size, live across resizes (falls back to 80×24 off-TTY). */
 function useTerminalSize() {
   const { stdout } = useStdout();
@@ -90,6 +124,7 @@ export function App({ session }) {
   const { columns, rows } = useTerminalSize();
   const [items, setItems] = useState([]);
   const [input, setInput] = useState("");
+  const [cursor, setCursor] = useState(0); // caret position within `input` (readline-style)
   const [prompt, setPrompt] = useState(session.promptFor());
   const [busy, setBusy] = useState(false);
   // Command history (up/down arrow recall, readline-style). `history` is oldest→newest;
@@ -111,10 +146,14 @@ export function App({ session }) {
     }
   };
 
+  // Set the editable line to a whole string with the caret at its end (history recall,
+  // submit-reset) — one place so `input` and `cursor` never drift apart.
+  const setLine = (value) => { setInput(value); setCursor(value.length); };
+
   const trySubmit = (raw) => {
     if (busy) return; // one turn at a time — the engine is deterministic and fast
     const line = String(raw).trim();
-    setInput("");
+    setLine("");
     setHistCursor(-1); // any submit resets history navigation to the live input
     if (line) {
       // record for up-arrow recall; collapse an immediate duplicate of the last line
@@ -125,30 +164,36 @@ export function App({ session }) {
 
   useInput((ch, key) => {
     if (key.return) { trySubmit(input); return; }
-    if (key.backspace || key.delete) { setInput((s) => s.slice(0, -1)); return; }
-    if (key.ctrl && ch === "u") { setInput(""); return; }
+    // Left/right arrow + Ctrl-A/E: move the caret so a typed line can be edited mid-string
+    // and resubmitted (not just appended to / backspaced from the end).
+    if (key.leftArrow) { setCursor((c) => clampCursor(input, c - 1)); return; }
+    if (key.rightArrow) { setCursor((c) => clampCursor(input, c + 1)); return; }
+    if (key.ctrl && ch === "a") { setCursor(0); return; }                // home
+    if (key.ctrl && ch === "e") { setCursor(input.length); return; }     // end
+    if (key.backspace || key.delete) { const r = backspaceAt(input, cursor); setInput(r.value); setCursor(r.cursor); return; }
+    if (key.ctrl && ch === "u") { setLine(""); return; }
     // Up/down arrow: recall previous prompts (readline-style), oldest→newest history.
     if (key.upArrow) {
       if (!history.length) return;
       const nc = Math.min(histCursor + 1, history.length - 1);
       setHistCursor(nc);
-      setInput(history[history.length - 1 - nc]);
+      setLine(history[history.length - 1 - nc]);
       return;
     }
     if (key.downArrow) {
-      if (histCursor <= 0) { setHistCursor(-1); setInput(""); return; } // back to a fresh line
+      if (histCursor <= 0) { setHistCursor(-1); setLine(""); return; } // back to a fresh line
       const nc = histCursor - 1;
       setHistCursor(nc);
-      setInput(history[history.length - 1 - nc]);
+      setLine(history[history.length - 1 - nc]);
       return;
     }
-    if (key.ctrl || key.meta || key.escape || key.tab || key.leftArrow || key.rightArrow) return;
+    if (key.ctrl || key.meta || key.escape || key.tab) return;
     if (!ch) return;
     // A PASTED chunk arrives as one multi-char event; a newline inside it means
     // "submit this line" (one line per turn — the readline shell's per-line read).
     const nl = ch.search(/[\r\n]/);
-    if (nl === -1) { setInput((s) => s + ch); return; }
-    trySubmit(input + ch.slice(0, nl));
+    if (nl === -1) { const r = insertAt(input, cursor, ch); setInput(r.value); setCursor(r.cursor); return; }
+    trySubmit(input.slice(0, cursor) + ch.slice(0, nl) + input.slice(cursor));
   });
 
   // The pane's line budget: full height minus the input line and the status bar.
@@ -163,11 +208,15 @@ export function App({ session }) {
         h(Text, { key: `l${i}`, wrap: "truncate-end" }, line === "" ? " " : line)),
     ),
     h(Box, { height: 1 },
-      h(Text, { wrap: "truncate-end" },
-        h(Text, { bold: true }, prompt),
-        input,
-        busy ? h(Text, { dimColor: true }, "…") : h(Text, { inverse: true }, " "),
-      ),
+      (() => {
+        const { before, at, after } = inputCells(input, cursor);
+        return h(Text, { wrap: "truncate-end" },
+          h(Text, { bold: true }, prompt),
+          before,
+          busy ? h(Text, { dimColor: true }, "…") : h(Text, { inverse: true }, at), // caret block over the char at the cursor
+          busy ? null : after,
+        );
+      })(),
     ),
     h(Box, { height: 1 },
       h(Text, { dimColor: true, wrap: "truncate-end" },

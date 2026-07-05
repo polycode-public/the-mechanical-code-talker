@@ -17,7 +17,8 @@ import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { App, statusText, appendTurn, transcriptLines, wrapLines } from "../src/tui/app.mjs";
+import { App, statusText, appendTurn, transcriptLines, wrapLines,
+  insertAt, backspaceAt, clampCursor, inputCells } from "../src/tui/app.mjs";
 import { createSession } from "../src/chat.mjs";
 
 const h = React.createElement;
@@ -86,6 +87,30 @@ test("appendTurn/transcriptLines: the question echoes under the prompt it was ty
   const more = appendTurn(items, { prompt: "tmct> ", query: "q2", answer: "a2" });
   assert.equal(items.length, 2);
   assert.equal(more.length, 4);
+});
+
+test("line editor: caret moves and edits happen mid-string, not just at the end", () => {
+  // type "helo", move the caret back to before the last char, insert the missing "l"
+  let { value, cursor } = insertAt("", 0, "helo"); // "helo", caret at 4
+  assert.deepEqual({ value, cursor }, { value: "helo", cursor: 4 });
+  cursor = clampCursor(value, cursor - 1); // ← between "hel" and "o"
+  ({ value, cursor } = insertAt(value, cursor, "l"));
+  assert.deepEqual({ value, cursor }, { value: "hello", cursor: 4 }, "insert lands at the caret, not the end");
+
+  // backspace deletes the char BEFORE the caret; a no-op at column 0
+  ({ value, cursor } = backspaceAt("hello", 3)); // remove the second "l"
+  assert.deepEqual({ value, cursor }, { value: "helo", cursor: 2 });
+  assert.deepEqual(backspaceAt("hi", 0), { value: "hi", cursor: 0 }, "backspace at home is a no-op");
+
+  // caret clamps to the string bounds
+  assert.equal(clampCursor("abc", -5), 0);
+  assert.equal(clampCursor("abc", 99), 3);
+});
+
+test("inputCells: splits the value so the caret block highlights the char in place", () => {
+  assert.deepEqual(inputCells("hello", 2), { before: "he", at: "l", after: "lo" });
+  assert.deepEqual(inputCells("hi", 2), { before: "hi", at: " ", after: "" }, "past the end → caret over a space");
+  assert.deepEqual(inputCells("", 0), { before: "", at: " ", after: "" });
 });
 
 test("wrapLines: hard-wraps at the column budget so the fixed-height pane's math stays honest", () => {
