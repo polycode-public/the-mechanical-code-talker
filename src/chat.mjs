@@ -305,6 +305,12 @@ const STRUCT_WORDS = new Set([
   "subclass", "subclasses", "inherit", "inherits", "test", "tests", "touch", "touches",
   "commit", "commits", "export", "exports", "caller", "callers", "callee", "callees",
   "history", "where", "mentioned", "signature", "impact",
+  // relation-concept vocabulary (gerunds + relation nouns) so a SHORT relation touch
+  // ("what is calling", "what about inheritance") is a structural question, not
+  // small-talk — otherwise a ≤3-word relation touch is grabbed by the conversational
+  // orientation before the relation concept force can serve it.
+  "importing", "calling", "invoking", "inheriting", "containing", "contains", "containment",
+  "testing", "defining", "touching", "extending", "inheritance", "coverage", "member", "members",
 ]);
 
 /** Does this look like small-talk / an orientation request rather than a
@@ -1186,6 +1192,32 @@ function seonDefinitions() {
   return seonDefsPromise;
 }
 
+let seonRelsPromise = null;
+/** Load corpus/seon/relations.jsonl once → Map(relationTerm → definition), keyed on
+ *  the concept key ("imports","calls",…). Sits beside definitions.jsonl (same seon
+ *  dir), loaded the same lazy + failure-tolerated way — any failure degrades to an
+ *  empty map, so the relation force simply declines rather than throwing. */
+function relationDefinitions() {
+  if (!seonRelsPromise) {
+    seonRelsPromise = (async () => {
+      const { SEON_DEFINITIONS_FILE } = await import("./corpus/conceptnet.mjs");
+      const relFile = join(dirname(SEON_DEFINITIONS_FILE), "relations.jsonl");
+      const raw = await readFile(relFile, "utf8");
+      const map = new Map();
+      for (const line of raw.split("\n")) {
+        const t = line.trim();
+        if (!t) continue;
+        try {
+          const row = JSON.parse(t);
+          if (row.relation && row.definition) map.set(String(row.relation).toLowerCase(), String(row.definition));
+        } catch { /* skip a malformed line, never throw */ }
+      }
+      return map;
+    })().catch(() => new Map());
+  }
+  return seonRelsPromise;
+}
+
 /** The meta term a "what is a X" / "what does X mean" / "define X" question asks
  *  about — from the parse when present, else recognized directly (same required-
  *  article discipline as the grammar's T5). Null when the line isn't such a form. */
@@ -1235,8 +1267,71 @@ async function curatedDefinitionAnswer(query, envelope, { memoryDir, lexicon }) 
 function conceptTermOf(query, envelope) {
   const base = metaTermOf(query, envelope);
   if (base) return base;
-  const m = String(query).trim().match(/^tell me about\s+(?:an?\s+)?(.+?)[?.!\s]*$/i);
+  const q = String(query).trim();
+  const m = q.match(/^tell me about\s+(?:an?\s+)?(.+?)[?.!\s]*$/i)
+    // "[and/so/…] what about X" with no good discourse continuation — the concept
+    // KIND word is a concept touch, not a bare module lookup (DEAD-END 4). Gated
+    // downstream by CONCEPT_CLASS/RELATION_TERM, so a real entity name declines here.
+    || q.match(/^(?:(?:and|so|but|ok|okay|now|then)\s+)*what about\s+(?:an?\s+|the\s+)?(.+?)[?.!\s]*$/i);
   return m ? m[1].trim() : null;
+}
+
+/** The RELATION term a vague touch names — reuses conceptTermOf's shapes ("what is
+ *  X"/"what does X mean"/"tell me about X"/"what about X"), plus the relation-only
+ *  openers the graph parser reads as something else: "what are the imports", "what
+ *  calls are there", "what is calling". Null when the line isn't such a touch. Gated
+ *  downstream by RELATION_TERM, so this only has to recognize the SHAPE. */
+function relationTermOf(query, envelope) {
+  const base = conceptTermOf(query, envelope);
+  if (base) return base;
+  const q = String(query).trim().toLowerCase().replace(/[?.!]+$/, "").replace(/\s+/g, " ");
+  let m;
+  // "what are the imports", "what is the containment", "what are all the calls"
+  if ((m = q.match(/^what\s+(?:are|is)\s+(?:all\s+)?(?:the\s+)?([a-z][a-z-]*?)(?:\s+(?:edges|relationships|relations))?$/))) return m[1];
+  // "what calls are there", "what imports are there"
+  if ((m = q.match(/^what\s+([a-z][a-z-]*?)\s+are\s+there$/))) return m[1];
+  // "what is calling", "what is importing" (bare gerund, no object)
+  if ((m = q.match(/^what\s+(?:is|are)\s+([a-z][a-z-]*ing)$/))) return m[1];
+  return null;
+}
+
+/** THE RELATION CONCEPT FORCE — compose the three-band answer (curated relation
+ *  definition + real example EDGES + pre-validated follow-ups) for a vague touch on a
+ *  relation/edge kind ("what about imports", "what are the calls", "tell me about
+ *  contains"), or null when it isn't one: not a recognizable relation touch, not a
+ *  known edge concept (RELATION_TERM), no curated definition, or the graph has NO
+ *  edges of that kind (composeRelation's own honest-miss gate). Loads the definition
+ *  from the shipped corpus/seon/relations.jsonl, so it works without per-repo memory
+ *  seeding. Lazy + failure-tolerated throughout. Returns { text, pending }. */
+async function relationForceAnswer(query, envelope, { graph, config, source, templates }) {
+  const rawTerm = relationTermOf(query, envelope);
+  if (!rawTerm) return null;
+  let composeRelation; let RELATION_TERM;
+  try { ({ composeRelation, RELATION_TERM } = await import("./concept.mjs")); }
+  catch { return null; }
+  const term = String(rawTerm).toLowerCase();
+  if (!RELATION_TERM[term]) return null; // not an enumerable edge concept — ordinary path owns it
+  const definition = (await relationDefinitions()).get(RELATION_TERM[term]) ?? null;
+  if (!definition) return null;
+  // Same graph-load fallback as conceptForceAnswer: the shell hands the loaded graph
+  // straight in; the pure runTurn(config) path loads it the way dispatchTool does.
+  let g = graph;
+  if (!g && config && source) {
+    try { g = parseEntities(await source.fetchEntities(config)); } catch { g = null; }
+  }
+  if (!g) return null;
+  let composed;
+  try { composed = composeRelation(g, term, { definition }); }
+  catch { return null; }
+  if (!composed) return null;
+  const rendered = tRender(templates, T_CONCEPT, {
+    definition: composed.definition, examples: composed.examples, followups: composed.followups,
+  });
+  const text = rendered ?? `${composed.definition}\n${composed.examples}${composed.followups}`;
+  const pending = composed.remainder && composed.remainder.length
+    ? { items: composed.remainder, noun: composed.noun }
+    : null;
+  return { text, pending };
 }
 
 /** THE CONCEPT FORCE — compose the three-band answer (corpus/seon definition + real
@@ -1415,6 +1510,20 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       answer = concept.text; via = "corpus/seon"; recordMiss = false;
       conceptInstances = concept.instances;
       conceptPending = concept.pending;
+    } else {
+      // THE RELATION CONCEPT FORCE — the noun force declined, so try the edge-kind
+      // touch ("what about imports", "what are the calls", "tell me about contains").
+      // Same three-band shape over real EDGES; declines unless the term is a known,
+      // edge-bearing relation, so a precise query / unknown word is never hijacked.
+      // For a "what about <relation>" this also SUPERSEDES the discourse rewrite's
+      // dead-end (rewriting the prior question with a relation word rarely resolves) —
+      // but only when the touched word is a relation concept; a real entity name in
+      // "what about X" declines here and the discourse continuation stands.
+      const relation = await relationForceAnswer(query, envelope, { graph, config, source, templates });
+      if (relation) {
+        answer = relation.text; via = "corpus/seon"; recordMiss = false;
+        conceptPending = relation.pending;
+      }
     }
   }
   // (4) #2 TEACH lane — a teach-shaped would-miss nothing above answered: route to
@@ -1452,12 +1561,16 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   const record = { type: "turn", ts, query, via, resolvedIds, answeredIds: finalAnsweredIds, miss: recordMiss };
   const logLines = [ts, `> ${query}`, answer, ""];
   // `detail` feeds why/say-more's verbose re-render: the traversal receipt + the
-  // matched entities the terse render trims (see renderVerbose).
+  // matched entities the terse render trims (see renderVerbose). `pending` carries a
+  // truncated listing's held remainder for "more" paging — the concept/relation force
+  // holds it on conceptPending (the relation force resolves no instance ids, so it can
+  // still page even with an empty matches set); a fact listing holds it on factPending.
+  const pending = conceptPending ?? factPending;
   const detail = conceptInstances
-    ? { traversal: envelope?.traversal || null, matches: conceptInstances, ...(conceptPending ? { pending: conceptPending } : {}) }
+    ? { traversal: envelope?.traversal || null, matches: conceptInstances, ...(pending ? { pending } : {}) }
     : (envelope
-      ? { traversal: envelope.traversal || null, matches: envelope.matches || [], ...(factPending ? { pending: factPending } : {}) }
-      : (factPending ? { traversal: null, matches: [], pending: factPending } : null));
+      ? { traversal: envelope.traversal || null, matches: envelope.matches || [], ...(pending ? { pending } : {}) }
+      : (pending ? { traversal: null, matches: [], pending } : null));
   return { answer, logLines, record, focus: newFocus, detail };
 }
 

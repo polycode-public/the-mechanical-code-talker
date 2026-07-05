@@ -14,7 +14,7 @@ import { join } from "node:path";
 import { parseEntities } from "../src/codegraph.mjs";
 import { ingestSchemaDocs } from "../src/schema-docs.mjs";
 import { ask } from "../src/ask.mjs";
-import { composeConcept, CONCEPT_CLASS } from "../src/concept.mjs";
+import { composeConcept, composeRelation, CONCEPT_CLASS, RELATION_TERM } from "../src/concept.mjs";
 import { runTurn } from "../src/chat.mjs";
 import { clearCache } from "../src/source.mjs";
 
@@ -188,6 +188,75 @@ test("cap 32 + 'more' pagination: a >32-instance concept lists 32, holds the res
     clearCache();
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+// ---- THE RELATION CONCEPT FORCE (composeRelation) — the same three bands over
+// EDGE kinds. A vague touch on a relation ("what about imports") gets the curated
+// relation definition, real example edges, and pre-validated follow-ups. ----
+
+const IMPORTS_DEF = "To import is to bring another module's definitions into the current one.";
+
+test("composeRelation: the three bands for 'imports' — definition + real example edges + follow-ups", async () => {
+  const graph = await fixtureGraph();
+  const c = composeRelation(graph, "imports", { definition: IMPORTS_DEF });
+  assert.ok(c, "a known relation with edges composes");
+  assert.equal(c.definition, IMPORTS_DEF, "the FACT band is the relation definition (one sentence, no cut needed)");
+  assert.equal(c.examples,
+    "In this codebase, for example: app/lib/b.mjs imports app/lib/a.mjs, app/lib/c.mjs imports app/lib/a.mjs "
+    + "and app/functions/d/handler.mjs imports app/lib/b.mjs (7 import edges). …and 4 more — say 'more' to see them.",
+    "the EXAMPLES band renders real edges as sentences with the edge count");
+  assert.deepEqual(c.followupQueries,
+    ["which modules import app/lib/a.mjs", "what does app/lib/b.mjs import"],
+    "the follow-ups are grounded in real edge endpoints, both sides");
+  assert.equal(c.remainder.length, 4, "the un-shown edges are held for 'more' pagination");
+  assert.equal(c.noun, "import edges");
+});
+
+test("composeRelation: EVERY generated follow-up actually resolves (pre-checked, never a miss)", async () => {
+  const graph = await fixtureGraph();
+  const defs = {
+    imports: IMPORTS_DEF, calls: "A call is one function invoking another.",
+    contains: "Containment is a class holding a member.",
+    inherits: "Inheritance is one class deriving from another.",
+    tests: "A test exercises another unit.", defines: "A definition introduces a name.",
+    touches: "A touch is a commit changing a file.",
+  };
+  for (const [term, def] of Object.entries(defs)) {
+    const c = composeRelation(graph, term, { definition: def });
+    assert.ok(c, `${term} composes`);
+    for (const q of c.followupQueries) {
+      const r = ask(graph, q);
+      assert.equal(r.tmct_ask.miss, false, `follow-up "${q}" must not miss`);
+      assert.ok((r.tmct_ask.matches || []).length > 0, `follow-up "${q}" must return results`);
+    }
+  }
+});
+
+test("composeRelation: gerund/synonym terms collapse to the same edge concept", async () => {
+  const graph = await fixtureGraph();
+  assert.equal(RELATION_TERM.importing, "imports");
+  assert.equal(RELATION_TERM.calling, "calls");
+  assert.equal(RELATION_TERM.inheritance, "inherits");
+  assert.equal(RELATION_TERM.extends, "inherits");
+  const a = composeRelation(graph, "importing", { definition: IMPORTS_DEF });
+  const b = composeRelation(graph, "imports", { definition: IMPORTS_DEF });
+  assert.deepEqual(a.examples, b.examples, "'importing' enumerates the same edges as 'imports'");
+});
+
+test("composeRelation: declines (null) for an unknown relation, no definition, or NO edges of that kind", async () => {
+  const graph = await fixtureGraph();
+  assert.equal(RELATION_TERM.frobnicate, undefined);
+  assert.equal(composeRelation(graph, "frobnicate", { definition: "x." }), null, "unknown relation → decline");
+  assert.equal(composeRelation(graph, "imports", { definition: null }), null, "no definition → decline");
+  // a graph that has only import edges → asking for 'calls' finds no edges → honest miss.
+  const importsOnly = parseEntities({
+    individuals: [],
+    objectProperties: [{ predicate: "imports", prop: "mgx:importsNamespace", count: 1,
+      examples: [{ subject: "a.mjs", object: "b.mjs", subjectLabel: "a.mjs", objectLabel: "b.mjs" }] }],
+  });
+  assert.equal(composeRelation(importsOnly, "calls", { definition: "a call." }), null,
+    "no edges of the kind → no relation force (never a fabricated edge)");
+  assert.ok(composeRelation(importsOnly, "imports", { definition: IMPORTS_DEF }), "the present kind still composes");
 });
 
 test("trigger discipline: a specific-entity 'what is Widget' and an unknown concept are not hijacked", async () => {
