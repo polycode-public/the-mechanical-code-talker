@@ -21,9 +21,18 @@
 // Byte-exact reconstruction is the whole contract here: flatten(segments) ===
 // answer for every producer, and finish() returns its input byte-for-byte.
 
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { join, dirname } from "node:path";
+import { parse as parseToml } from "smol-toml";
+
 import { flatten } from "./corpus/templates.mjs";
 
 export { flatten };
+
+const GRAMMAR_DIR = dirname(fileURLToPath(import.meta.url));
+/** The data-driven grammar-rule table (Phase 7, lever 2). */
+export const GRAMMAR_RULES_FILE = join(GRAMMAR_DIR, "..", "data", "templates", "grammar-rules.toml");
 
 /** The segment type vocabulary. `prose` is the only unprotected type. */
 export const SEGMENT_TYPES = Object.freeze([
@@ -186,25 +195,249 @@ export function assertInvariance(before, after) {
   return after;
 }
 
+// --- The grammar-rule engine (lever 2) --------------------------------------
+// applyGrammar transforms ONLY the prose spans of a segment list. It NEVER
+// regexes the flat answer string and NEVER touches a protected span — the
+// invariance checker is treated as NECESSARY-BUT-NOT-SUFFICIENT (a token the
+// masker failed to protect would sit in a prose span, and a corrupting rule that
+// mangled it would pass the multiset check because prose is unchecked). So the
+// only defence is that a rule literally cannot receive a protected span: every
+// handler below filters `type === "prose"` and byte-copies the rest. Each rule's
+// NEUTRAL behaviour is byte-stable; the only byte changes are GENUINE fixes to
+// defects tmct itself generates. Rules are chosen to commute → idempotent.
+
+const escapeRe2 = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** Preserve the leading-letter case of `orig` on the replacement `want`. */
+function matchCase(orig, want) {
+  return /^[A-Z]/.test(orig) ? want[0].toUpperCase() + want.slice(1) : want;
+}
+
+/** The first alphabetic word token of a string (leading punctuation skipped),
+ *  or "" when there is none (a bare number / symbol → the caller must refuse). */
+function leadingWord(text) {
+  const m = String(text).match(/[A-Za-z][\w-]*/);
+  return m ? m[0] : "";
+}
+
+/** Does `word` begin with a VOWEL SOUND? true → "an", false → "a", null → cannot
+ *  tell (refuse). Spelling-vs-sound exceptions come from the rule's TOML row. */
+function beginsWithVowelSound(word, rule) {
+  const w = String(word).toLowerCase().replace(/^[^a-z]+/, "");
+  if (!w) return null;
+  for (const ex of rule.vowel_sound_consonants || []) if (w.startsWith(ex)) return true;
+  for (const ex of rule.consonant_sound_vowels || []) if (w.startsWith(ex)) return false;
+  const c = w[0];
+  if ("aeiou".includes(c)) return true;
+  if (/[a-z]/.test(c)) return false;
+  return null;
+}
+
+/** Plurality of a span: an explicit boolean `plural` wins; else a NUMBER span is
+ *  singular iff its value is exactly 1 (0 and >1 are plural); else null. */
+function pluralityOf(seg) {
+  if (!seg) return null;
+  if (typeof seg.plural === "boolean") return seg.plural;
+  if (seg.type === "number") {
+    const v = Number(String(seg.text).replace(/,/g, ""));
+    return Number.isFinite(v) ? v !== 1 : null;
+  }
+  return null;
+}
+
+// Rule 1 — article selection (a/an). Reads the following word: in-span when the
+// whole "a word" pair is inside one prose span; across the boundary when the
+// prose ends in "a"/"an" and the next span supplies the word (guard #3: it only
+// fires when it can read the real next token, else it leaves the article alone).
+function ruleArticle(segments, rule) {
+  const out = segments.map((s) => ({ ...s }));
+  for (let i = 0; i < out.length; i += 1) {
+    const seg = out[i];
+    if (seg.type !== "prose") continue;
+    // (a) in-span "a artifact" / "an module" (case-insensitive; case preserved)
+    seg.text = seg.text.replace(/\b(a|an)(\s+)([A-Za-z][\w-]*)/gi, (m, art, sp, word) => {
+      const vowel = beginsWithVowelSound(word, rule);
+      if (vowel === null) return m;
+      return matchCase(art, vowel ? "an" : "a") + sp + word;
+    });
+    // (b) boundary: prose ends "…a " / "…an ", next span carries the word
+    const bm = seg.text.match(/(^|[^\w])(a|an)(\s+)$/i);
+    if (bm) {
+      const next = out[i + 1];
+      const word = next && typeof next.text === "string" ? leadingWord(next.text) : "";
+      const vowel = word ? beginsWithVowelSound(word, rule) : null;
+      if (vowel !== null) {
+        const fixed = matchCase(bm[2], vowel ? "an" : "a");
+        seg.text = seg.text.slice(0, bm.index + bm[1].length) + fixed + bm[3];
+      }
+    }
+  }
+  return out;
+}
+
+// Rule 2 — subject–verb agreement. STRUCTURE-DRIVEN and deliberately narrow:
+// (i) an existential "there is/are/was/were" agrees with the FOLLOWING number
+//     span's value (the number is genuinely the subject there);
+// (ii) any listed copula agrees with a following span that carries an explicit
+//      `plural` flag (a producer that knows its slot's plurality sets it).
+// A bare copula followed by a number that is an OBJECT count ("the file has 3")
+// is NOT existential and carries no flag → left untouched. No surface guessing.
+function ruleAgreement(segments, rule) {
+  const singular = rule.singular || [];
+  const plural = rule.plural || [];
+  const toPlural = {};
+  const toSingular = {};
+  for (let k = 0; k < singular.length; k += 1) { toPlural[singular[k]] = plural[k]; }
+  for (let k = 0; k < plural.length; k += 1) { toSingular[plural[k]] = singular[k]; }
+  const out = segments.map((s) => ({ ...s }));
+  for (let i = 0; i < out.length; i += 1) {
+    const seg = out[i];
+    if (seg.type !== "prose") continue;
+    const m = seg.text.match(/(\bthere\s+)?\b([A-Za-z]+)(\s*)$/i);
+    if (!m) continue;
+    const verb = m[2].toLowerCase();
+    if (!(verb in toPlural) && !(verb in toSingular)) continue;
+    const next = out[i + 1];
+    const existential = Boolean(m[1]) && next && next.type === "number";
+    const flagged = next && typeof next.plural === "boolean";
+    if (!existential && !flagged) continue; // guard: only fire on real structure
+    const isPlural = pluralityOf(next);
+    if (isPlural === null) continue;
+    let want = null;
+    if (isPlural && verb in toPlural && toPlural[verb] !== verb) want = toPlural[verb];
+    else if (!isPlural && verb in toSingular && toSingular[verb] !== verb) want = toSingular[verb];
+    if (!want) continue;
+    seg.text = seg.text.slice(0, m.index) + (m[1] || "") + matchCase(m[2], want) + m[3];
+  }
+  return out;
+}
+
+// Rule 3 — sentence capitalisation. Only when the answer OPENS on a prose span
+// whose first non-space character is a lowercase letter. An answer that opens on
+// a protected span (a path/entity) is left exactly as grounded.
+function ruleCapitalise(segments) {
+  if (!segments.length || segments[0].type !== "prose") return segments;
+  const out = segments.map((s) => ({ ...s }));
+  out[0].text = out[0].text.replace(/^(\s*)([a-z])/, (m, sp, ch) => sp + ch.toUpperCase());
+  return out;
+}
+
+// Rule 4 — list punctuation. A series joined by repeated connective prose spans
+// (default " and ") becomes a comma series with a single terminal conjunction:
+// "a and b and c" → "a, b and c". Operates ONLY on the connective prose spans;
+// the joined (protected) items are byte-copied. A two-item list is untouched.
+function ruleList(segments, rule) {
+  const conn = rule.connective;
+  const sep = rule.separator;
+  const out = segments.map((s) => ({ ...s }));
+  const isConn = (i) => out[i] && out[i].type === "prose" && out[i].text === conn;
+  let i = 0;
+  while (i < out.length) {
+    if (!isConn(i)) { i += 1; continue; }
+    const run = [i];
+    let j = i;
+    while (isConn(j + 2)) { run.push(j + 2); j += 2; }
+    if (run.length >= 2) {
+      for (let k = 0; k < run.length - 1; k += 1) out[run[k]].text = sep; // last stays " and "
+    }
+    i = j + 1;
+  }
+  return out;
+}
+
+// Rule 5 — terminal punctuation. Collapse a trailing run of 2+ sentence stops in
+// the LAST prose span to a single stop ("done.." → "done."). Adds nothing where
+// a fragment/list answer legitimately ends without a stop.
+function ruleTerminal(segments, rule) {
+  const stops = (rule.stops && rule.stops.length ? rule.stops : [".", "!", "?"]).map(escapeRe2).join("");
+  const out = segments.map((s) => ({ ...s }));
+  let idx = -1;
+  for (let i = out.length - 1; i >= 0; i -= 1) if (out[i].type === "prose") { idx = i; break; }
+  if (idx < 0) return out;
+  const re = new RegExp(`([${stops}])(?:\\s*[${stops}])+(\\s*)$`);
+  const m = out[idx].text.match(re);
+  if (m) out[idx].text = out[idx].text.slice(0, m.index) + m[1] + m[2];
+  return out;
+}
+
+const HANDLERS = {
+  article: ruleArticle,
+  agreement: ruleAgreement,
+  capitalise: ruleCapitalise,
+  list: ruleList,
+  terminal: ruleTerminal,
+};
+
+let rulesCache = null;
+
+/** Load + parse the grammar-rule table (the `[[rule]]` array-of-tables). Sync so
+ *  finish() stays synchronous at the turn seam. A bad/absent table is defensive:
+ *  the caller falls back to an empty rule set (finish becomes a strict no-op). */
+export function loadGrammarRules(path = GRAMMAR_RULES_FILE) {
+  const parsed = parseToml(readFileSync(path, "utf8"));
+  return Array.isArray(parsed.rule) ? parsed.rule : [];
+}
+
+/** The cached rule table (parsed once per process). */
+export function grammarRules() {
+  if (rulesCache === null) {
+    try { rulesCache = loadGrammarRules(); } catch { rulesCache = []; }
+  }
+  return rulesCache;
+}
+
+/** Apply the grammar rules to a segment list, in file order, transforming ONLY
+ *  prose spans. Asserts fact-invariance at the end (the protected multiset must
+ *  be identical) and returns the transformed segments. Idempotent by design:
+ *  applyGrammar(applyGrammar(x)) yields the same flattened text as applyGrammar(x). */
+export function applyGrammar(segments, rules = grammarRules()) {
+  let cur = segments;
+  for (const rule of rules) {
+    if (rule && rule.enabled === false) continue;
+    const handler = rule && HANDLERS[rule.kind];
+    if (!handler) continue;
+    cur = handler(cur, rule);
+  }
+  assertInvariance(segments, cur); // necessary-but-not-sufficient; still a hard gate
+  return cur;
+}
+
 // --- The finish() seam ------------------------------------------------------
-// finish() is the LAST transform in a turn. In the finished design it will:
-//   1. take the turn result's `segments` (attached by the producer) or, if none,
-//      mask its `answer` via maskSegments(result.answer, ctx),
-//   2. map ONLY the prose spans through the grammar-rule engine,
-//   3. re-flatten to a new answer, asserting the invariance checker holds,
+// finish() is the LAST transform in a turn:
+//   1. take the result's `segments` (attached by a producer) or mask its
+//      `answer` via maskSegments(result.answer, ctx),
+//   2. map ONLY the prose spans through the grammar-rule engine (applyGrammar),
+//   3. re-flatten, ASSERTING the invariance checker holds (guard #4: this runs
+//      in production, not just in tests — a corruption throws, never ships),
 //   4. rewrite result.answer (and thus logLines); `via` is unchanged.
 //
-// In THIS foundation step it is a strict NO-OP: it returns its input
-// byte-for-byte, so every existing byte-exact assertion (test/showcase.test.mjs)
-// stays green. Idempotent by construction: finish(finish(x)) === finish(x).
+// NEUTRAL finishing is BYTE-STABLE: when no rule fires, the flattened answer is
+// byte-identical to the input and finish() returns its argument by REFERENCE, so
+// every byte-exact assertion (test/showcase.test.mjs) stays green untouched. A
+// genuine fix (e.g. "a artifact" → "an artifact") rebuilds the result with the
+// corrected answer. Idempotent by construction: finish(finish(x)) === finish(x).
 //
-// INTENDED chat.mjs SEAM (not wired here — a later wave does this): in runTurn,
-// at the `withLast` seam where every dispatched turn's result is finalised,
-// wrap the result — `result = finish(result, { graph })` — so every producer
-// (runAsk, plainTurn, conversationalTurn, runCommand) passes through it once,
-// whether or not it attached `segments`.
+// INTENDED chat.mjs SEAM (a sibling/later wave wires this, foreign file): in
+// runTurn, at the `withLast` seam, `result = finish(result, { graph })` so every
+// producer passes through once. Until then finish() is exercised by its unit +
+// golden tests; wiring it changes no fact, only fixes our own generated defects.
 
-/** No-op finishing seam: returns `result` unchanged (byte-for-byte). */
+/** Finish a turn result: grammar-correct its prose spans, preserving every fact.
+ *  Byte-stable when neutral (returns its argument unchanged); rebuilds only on a
+ *  genuine fix. Throws if finishing would move any protected span (guard #4). */
 export function finish(result, ctx = {}) {
-  return result;
+  if (!result || typeof result.answer !== "string") return result;
+  const before = Array.isArray(result.segments) && result.segments.length
+    ? result.segments
+    : maskSegments(result.answer, ctx);
+  const after = applyGrammar(before, grammarRules());
+  assertInvariance(before, after);
+  const answer = flatten(after);
+  if (answer === result.answer) return result; // neutral → byte-stable, same reference
+  const next = { ...result, answer, segments: after };
+  if (Array.isArray(result.logLines)) {
+    next.logLines = result.logLines.map((l) =>
+      (typeof l === "string" ? l.split(result.answer).join(answer) : l));
+  }
+  return next;
 }

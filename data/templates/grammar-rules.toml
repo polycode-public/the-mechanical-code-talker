@@ -1,0 +1,89 @@
+# grammar-rules.toml — the data-driven grammar-rule table (Phase 7, lever 2)
+# (PLAN_RESPONSE_FINISHING.md, "The grammar pass (lever 2)").
+#
+# Each [[rule]] is a corrective grammar rule applied by applyGrammar() in
+# src/finish.mjs over the PROSE spans of a segmented answer — NEVER the flat
+# string, and NEVER a protected span (entity / path / number / code / provenance
+# / receipt). The engine reads STRUCTURE, never guesses from surface: an article
+# rule that would touch the word inside the following protected span refuses to
+# fire, agreement reads the following number's value, and so on.
+#
+# CONTRACT (the plan's law): a rule's NEUTRAL behaviour is BYTE-STABLE. The only
+# byte changes a rule may introduce are GENUINE fixes to defects tmct itself
+# generates ("a artifact"). `kind` selects the built-in handler; `enabled=false`
+# PARKS a rule out of the live answer path; the remaining keys are that handler's
+# applicability conditions + parameters. Rules apply in file order; the set is
+# chosen to commute so finish() is idempotent: finish(finish(x)) === finish(x).
+#
+# SEQUENCING (PLAN_RESPONSE_FINISHING.md, "one grammar rule per tuning cycle"):
+# only ARTICLE-SELECTION is live this cycle — it fixes a genuine defect with a
+# narrow, safe blast radius. AGREEMENT, CAPITALISATION, LIST and TERMINAL are
+# fully implemented and golden-tested IN ISOLATION, but PARKED (enabled=false):
+# each rewrites established product bytes (tmct's lowercase openers and repeated
+# "and" joins are an intentional VOICE, not a grammar defect), so activating them
+# is a per-rule tuning-cycle decision with its own bench + showcase reconcile,
+# not a blanket flip. `enabled=false` keeps them inert in finish(); the goldens
+# force-enable each rule to prove its behaviour independent of the live flag.
+
+# 1. Article selection — a/an by the following word's phonetic onset. The live
+#    defect this fixes: the assert echo "every module is a artifact" -> "an
+#    artifact". Reads the next word (whether in-span or the leading token of the
+#    following protected span); refuses at a boundary it cannot read safely.
+[[rule]]
+id = "article-selection"
+kind = "article"
+enabled = true
+registers = []            # [] = every register
+description = "a/an agreement with the following word's phonetic onset"
+# Spelling-vowel words that begin with a CONSONANT sound (take 'a').
+consonant_sound_vowels = ["uni", "use", "user", "usa", "usu", "ubi", "eu", "ewe", "one", "once"]
+# Spelling-consonant words that begin with a VOWEL sound (take 'an'): silent h.
+vowel_sound_consonants = ["hour", "honest", "honour", "honor", "heir", "herb"]
+
+# 2. Subject–verb agreement — an existential copula agrees with the count that
+#    follows it ("there is 3 classes" -> "there are 3 classes"; "there are 1
+#    class" -> "there is 1 class"). Structure-driven: the plurality is READ from
+#    the following number span's value (or a protected span's explicit `plural`
+#    flag), never guessed. Neutral on already-correct agreement.
+[[rule]]
+id = "subject-verb-agreement"
+kind = "agreement"
+enabled = false   # PARKED — implemented + golden-tested, not live this cycle
+registers = []
+description = "existential copula agrees with the following count/plurality"
+singular = ["is", "was", "has"]
+plural = ["are", "were", "have"]
+
+# 3. Sentence capitalisation — capitalise the first alphabetic character of a
+#    sentence-initial prose span. Never fires when the answer opens on a
+#    protected span (a path/entity opener is left exactly as grounded).
+[[rule]]
+id = "sentence-capitalisation"
+kind = "capitalise"
+enabled = false   # PARKED — implemented + golden-tested, not live this cycle
+registers = []
+description = "capitalise the first alphabetic of a prose-initial span"
+
+# 4. List punctuation — a series joined by repeated " and " connectives becomes
+#    a comma series with a single terminal conjunction ("a and b and c" -> "a, b
+#    and c"). Operates ONLY on the prose connective spans, never the entity spans
+#    they join; a two-item list ("a and b") is already correct and untouched.
+[[rule]]
+id = "list-punctuation"
+kind = "list"
+enabled = false   # PARKED — implemented + golden-tested, not live this cycle
+registers = []
+description = "repeated 'and' joins in a 3+ item series become a comma series"
+connective = " and "
+separator = ", "
+
+# 5. Terminal punctuation — exactly one sentence-final stop: a run of 2+ trailing
+#    stops in the final prose span collapses to one ("done.." -> "done."). Adds
+#    nothing where a fragment/list answer legitimately ends without a stop.
+[[rule]]
+id = "terminal-punctuation"
+kind = "terminal"
+enabled = false   # PARKED — implemented + golden-tested, not live this cycle
+registers = []
+description = "collapse a run of trailing sentence stops to a single stop"
+stops = [".", "!", "?"]

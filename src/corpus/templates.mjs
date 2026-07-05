@@ -19,8 +19,24 @@ const PKG_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 export const TEMPLATES_FILE = join(PKG_ROOT, "data", "templates", "responses.jsonl");
 export const PHRASEBOOK_FILE = join(PKG_ROOT, "data", "phrasebook", "software-phrases.txt");
 
-const REGISTERS = new Set(["terse", "friendly"]);
+// Registers (Phase 6, PLAN_FORMULAIC_COMPETENCE.md): `terse|friendly` are the
+// conversational bands; `technical` is the C1 / technical-paper band whose
+// templates render item-5 mechanical conclusions (count / comparison /
+// superlative + the provenance we already compute) as advanced prose. A
+// technical template is FORMULAIC COMPETENCE: it renders via:"template", so the
+// dual banding counts it in the PERFORMANCE band only, never the productive one.
+const REGISTERS = new Set(["terse", "friendly", "technical"]);
 const SLOT_RE = /\{([A-Za-z][A-Za-z0-9]*)\}/g;
+
+// Slot-lint for the technical band: a technical template may ONLY fill from the
+// mechanical values tmct actually computes (counts, comparisons, superlatives,
+// scopes, provenance) — no free-text slot can smuggle unattributable prose into
+// the C1 register. Every technical row must also carry a {provenance} fill (the
+// item-5 "+ provenance" contract: an advanced claim always shows its source).
+export const TECHNICAL_SLOTS = Object.freeze(new Set([
+  "subject", "count", "noun", "scope", "comparison", "metric", "unit",
+  "superlative", "provenance",
+]));
 
 /** The slot names a template string requires, in first-appearance order. */
 export function slotsOf(template) {
@@ -48,6 +64,7 @@ const SLOT_KIND = {
   when: "number",
   location: "path",
   commit: "path",
+  provenance: "provenance",
 };
 
 /** The protected span type for a template slot name (default: entity). */
@@ -115,10 +132,21 @@ export async function loadTemplates(path = TEMPLATES_FILE) {
       }
     }
     if (!REGISTERS.has(row.register)) {
-      throw new Error(`${path}:${n + 1}: register must be terse|friendly, got "${row.register}"`);
+      throw new Error(`${path}:${n + 1}: register must be terse|friendly|technical, got "${row.register}"`);
     }
     if (byId.has(row.id)) throw new Error(`${path}:${n + 1}: duplicate template id "${row.id}"`);
-    byId.set(row.id, { ...row, slots: slotsOf(row.template) });
+    const slots = slotsOf(row.template);
+    // Technical-band slot-lint: mechanical-only fills, provenance mandatory.
+    if (row.register === "technical") {
+      const stray = slots.filter((s) => !TECHNICAL_SLOTS.has(s));
+      if (stray.length) {
+        throw new Error(`${path}:${n + 1}: technical template "${row.id}" uses non-mechanical slot${stray.length > 1 ? "s" : ""}: ${stray.join(", ")} (allowed: ${[...TECHNICAL_SLOTS].join(", ")})`);
+      }
+      if (!slots.includes("provenance")) {
+        throw new Error(`${path}:${n + 1}: technical template "${row.id}" must carry a {provenance} fill (an advanced claim always shows its source)`);
+      }
+    }
+    byId.set(row.id, { ...row, slots });
   }
   cache = byId;
   return byId;

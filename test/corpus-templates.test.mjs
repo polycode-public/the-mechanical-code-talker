@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   TEMPLATES_FILE, PHRASEBOOK_FILE,
-  loadTemplates, render, slotsOf, loadPhrasebook,
+  loadTemplates, render, slotsOf, loadPhrasebook, TECHNICAL_SLOTS,
 } from "../src/corpus/templates.mjs";
 
 test("lint: every responses.jsonl row parses, ids are unique, registers valid, every template has a class", async () => {
@@ -22,7 +22,51 @@ test("lint: every responses.jsonl row parses, ids are unique, registers valid, e
     assert.ok(classes.has(c), `template class "${c}" covered`);
   }
   const registers = new Set([...templates.values()].map((t) => t.register));
-  assert.ok(registers.has("terse") && registers.has("friendly"), "both registers present");
+  assert.ok(registers.has("terse") && registers.has("friendly"), "both conversational registers present");
+  assert.ok(registers.has("technical"), "the C1 technical register is present (Phase 6)");
+});
+
+test("technical register (Phase 6): C1 templates over item-5 mechanical conclusions, provenance mandatory", async () => {
+  const templates = await loadTemplates(TEMPLATES_FILE);
+  const technical = [...templates.values()].filter((t) => t.register === "technical");
+  assert.ok(technical.length >= 3 && technical.length <= 5, `3–5 technical templates (got ${technical.length})`);
+  for (const row of technical) {
+    // slot-lint: mechanical fills only, and every technical claim shows its source
+    for (const s of row.slots) {
+      assert.ok(TECHNICAL_SLOTS.has(s), `technical "${row.id}" slot {${s}} is mechanical`);
+    }
+    assert.ok(row.slots.includes("provenance"), `technical "${row.id}" carries {provenance}`);
+    // the mechanical spine: a count / comparison / superlative value is present
+    assert.ok(
+      ["count", "comparison", "metric", "superlative"].some((s) => row.slots.includes(s)),
+      `technical "${row.id}" fills a count/compare/superlative value`,
+    );
+  }
+  // it renders to advanced prose from grounded slots only
+  const out = render("technical-density", {
+    subject: "the auth module", count: "340", noun: "tests",
+    scope: "12 suites", provenance: "source: coverage index",
+  }, templates);
+  assert.equal(
+    out,
+    "the auth module carries 340 tests across 12 suites — a concentration well above what a codebase of this size typically sustains (source: coverage index).",
+  );
+});
+
+test("technical slot-lint fails loudly: a non-mechanical slot or a missing provenance is rejected at load", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-tech-"));
+  try {
+    const bad = join(dir, "bad.jsonl");
+    // free-text slot that could smuggle unattributable prose into the C1 register
+    await writeFile(bad, '{"id":"t","class":"count","register":"technical","template":"{opinion} ({provenance})."}\n');
+    await assert.rejects(() => loadTemplates(bad), /non-mechanical slot: opinion/);
+    // a technical claim with no source
+    await writeFile(bad, '{"id":"t","class":"count","register":"technical","template":"{count} {noun}."}\n');
+    await assert.rejects(() => loadTemplates(bad), /must carry a \{provenance\} fill/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+    await loadTemplates(); // restore the module cache for later tests
+  }
 });
 
 test("slotsOf: extracts slot names once each, in order; ignores malformed braces", () => {
