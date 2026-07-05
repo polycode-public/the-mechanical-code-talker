@@ -9,6 +9,7 @@ import { join } from "node:path";
 import { parseSessionLog, turnKey } from "../src/sessions.mjs";
 import { cleanSessionText, foldSessionLogs } from "../src/memory/fold.mjs";
 import { BLOCKS_DIR_REL, loadBlockIndex, retrieveBlocks } from "../src/memory/blocks.mjs";
+import { appendFact, appendUtterances, loadMemory, readFactRows, CANONICALISED_FROM_PROP } from "../src/memory/core.mjs";
 
 const SID = "01890000-0000-7000-8000-00000000f01d";
 const T = (n) => `2026-07-03T10:0${n}:00.000Z`;
@@ -121,6 +122,72 @@ test("foldSessionLogs: sessionId scoping folds just that session; missing dir / 
     assert.deepEqual(await foldSessionLogs(bare), { folded: [], removed: [], skipped: 0 });
   } finally {
     await rm(bare, { recursive: true, force: true });
+  }
+});
+
+// ---- canonise + link (Phase 7) + the fold-time speculative pass (Phase 9) ----
+// A memory graph with two as-spoken assertions and the canonical Facts reified
+// from them. Folding must (1) LINK each canonical Fact back to its as-spoken
+// utterance via mgx:canonicalisedFrom (canonise AND link, never replace), and
+// (2) run a bounded, focus-scoped speculative pass that closes the subclass chain
+// the session touched — cache⊑store, store⊑component ⊨ cache⊑component.
+test("foldSessionLogs: canonise+link edges the canonical Fact to its as-spoken utterance; recall reads canonical, provenance walks back", async () => {
+  const S = "01890000-0000-7000-8000-0000000ca11a";
+  const TA = "2026-07-04T10:00:00.000Z";
+  const TB = "2026-07-04T10:01:00.000Z";
+  const dir = await mkdtemp(join(tmpdir(), "tmct-mem-canon-"));
+  try {
+    // as-spoken utterances (the honest record) + the canonical Facts reified from
+    // them, tagged with the chat provenance the ACE bridge writes.
+    await appendUtterances(dir, [
+      { role: "visitor", text: "every cache is a store", ts: TA, sessionId: S, sessionStarted: T(0) },
+      { role: "visitor", text: "every store is a component", ts: TB, sessionId: S, sessionStarted: T(0) },
+    ]);
+    await appendFact(dir, { subject: "cache", predicate: "rdfs:subClassOf", object: "store", provenance: `ace:chat:${S}@${TA}` });
+    await appendFact(dir, { subject: "store", predicate: "rdfs:subClassOf", object: "component", provenance: `ace:chat:${S}@${TB}` });
+
+    // a matching sidecar so the fold processes this session id
+    await mkdir(join(dir, ".tmct", "sessions"), { recursive: true });
+    const sidecar = [
+      JSON.stringify({ type: "session", id: S, started: T(0), repo: "/r" }),
+      JSON.stringify({ type: "turn", ts: TA, query: "every cache is a store", via: "assert" }),
+      JSON.stringify({ type: "turn", ts: TB, query: "every store is a component", via: "assert" }),
+      JSON.stringify({ type: "end", ts: T(8) }),
+    ].join("\n") + "\n";
+    await writeFile(join(dir, ".tmct", "sessions", `session-${S}.jsonl`), sidecar);
+
+    await foldSessionLogs(dir, { sessionId: S });
+
+    const memory = await loadMemory(dir);
+    const rows = readFactRows(memory);
+    // recall reads CANONICAL: the reified fact is present and normalized
+    const cacheStore = rows.find((r) => r.subject === "cache" && r.object === "store" && r.predicate === "rdfs:subClassOf");
+    assert.ok(cacheStore, "canonical Fact recallable");
+
+    // canonicalisedFrom LINKS the canonical Fact back to the as-spoken utterance
+    const links = (memory.objectProperties || []).find((g) => g.prop === CANONICALISED_FROM_PROP);
+    assert.ok(links, "an mgx:canonicalisedFrom relation exists");
+    const uttId = `utt:${S}#${TA}#visitor`;
+    assert.ok(
+      links.examples.some((e) => e.subject === cacheStore.id && e.object === uttId),
+      "the canonical Fact edges back to its as-spoken utterance",
+    );
+    // the as-spoken prose is left VERBATIM (canonise never replaces)
+    const utt = memory.individuals.find((i) => i.id === uttId);
+    assert.equal(utt.attributes.find((a) => a.key === "text").value, "every cache is a store");
+
+    // the fold-time speculative pass closed the chain the session touched
+    const derived = rows.find((r) => r.subject === "cache" && r.object === "component" && r.predicate === "rdfs:subClassOf");
+    assert.ok(derived, "cache⊑component pre-derived at fold time (focus-scoped Phase 9 pass)");
+    assert.match(derived.provenance, /entailed:subClassOf/, "and honestly marked entailed, low-trust");
+    assert.ok(derived.trust < 0.5, "entailed facts carry speculative trust");
+
+    // re-fold is idempotent: no duplicate canonicalisedFrom edge
+    await foldSessionLogs(dir, { sessionId: S });
+    const links2 = (await loadMemory(dir)).objectProperties.find((g) => g.prop === CANONICALISED_FROM_PROP);
+    assert.equal(links2.examples.filter((e) => e.subject === cacheStore.id && e.object === uttId).length, 1);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
   }
 });
 
