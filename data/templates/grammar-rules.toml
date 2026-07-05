@@ -16,14 +16,16 @@
 # chosen to commute so finish() is idempotent: finish(finish(x)) === finish(x).
 #
 # SEQUENCING (PLAN_RESPONSE_FINISHING.md, "one grammar rule per tuning cycle"):
-# only ARTICLE-SELECTION is live this cycle — it fixes a genuine defect with a
-# narrow, safe blast radius. AGREEMENT, CAPITALISATION, LIST and TERMINAL are
-# fully implemented and golden-tested IN ISOLATION, but PARKED (enabled=false):
-# each rewrites established product bytes (tmct's lowercase openers and repeated
-# "and" joins are an intentional VOICE, not a grammar defect), so activating them
-# is a per-rule tuning-cycle decision with its own bench + showcase reconcile,
-# not a blanket flip. `enabled=false` keeps them inert in finish(); the goldens
-# force-enable each rule to prove its behaviour independent of the live flag.
+# LIVE as of cycle 005: ARTICLE-SELECTION (cycle 4), plus the two SAFE defect
+# fixes TERMINAL-PUNCTUATION and SUBJECT-VERB-AGREEMENT — each byte-stable when
+# neutral, no product-voice change. CAPITALISATION and LIST are fully implemented
+# and golden-tested IN ISOLATION but remain PARKED (enabled=false) pending a
+# judged A/B in cycle 006 — they rewrite established product bytes (tmct's
+# lowercase openers and repeated "and" joins are an intentional VOICE, not a
+# grammar defect), so activating them is a per-rule tuning-cycle decision with
+# its own bench + showcase reconcile, not a blanket flip. `enabled=false` keeps
+# them inert in finish(); the goldens force-enable each rule to prove its
+# behaviour independent of the live flag.
 
 # 1. Article selection — a/an by the following word's phonetic onset. The live
 #    defect this fixes: the assert echo "every module is a artifact" -> "an
@@ -48,7 +50,7 @@ vowel_sound_consonants = ["hour", "honest", "honour", "honor", "heir", "herb"]
 [[rule]]
 id = "subject-verb-agreement"
 kind = "agreement"
-enabled = false   # PARKED — implemented + golden-tested, not live this cycle
+enabled = true    # LIVE (cycle 005) — structure-driven existential agreement, byte-stable when neutral
 registers = []
 description = "existential copula agrees with the following count/plurality"
 singular = ["is", "was", "has"]
@@ -83,7 +85,7 @@ separator = ", "
 [[rule]]
 id = "terminal-punctuation"
 kind = "terminal"
-enabled = false   # PARKED — implemented + golden-tested, not live this cycle
+enabled = true    # LIVE (cycle 005) — pure defect fix, narrowest blast radius (trailing doubled stop)
 registers = []
 description = "collapse a run of trailing sentence stops to a single stop"
 stops = [".", "!", "?"]

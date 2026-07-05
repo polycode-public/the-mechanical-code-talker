@@ -205,16 +205,19 @@ test("render: zero hits — a stated blank with a traversal receipt, not a silen
 });
 
 test("render: reverse-shape zero hits never double-pluralizes the kind (\"callss\"/\"importss\")", () => {
+  // The plural-subject miss now reads with the BASE verb ("… that directly test x") — no
+  // "whose module" scaffolding, and still never a double-pluralized "callss"/"importss".
   const cases = [
-    ["calls", "calls"], ["imports", "imports"], ["touches", "touches"],
-    ["defines", "defines"], ["contains", "contains"], ["tests", "tests"],
-    ["inherits", "inherits"], ["reexports", "reexports"], ["cochange", "cochanges"],
+    ["calls", "call"], ["imports", "import"], ["touches", "touch"],
+    ["defines", "define"], ["contains", "contain"], ["tests", "test"],
+    ["inherits", "inherit"], ["reexports", "re-export"], ["cochange", "co-change"],
   ];
   for (const [kind, expectedVerb] of cases) {
     const parsed = { shape: "reverse", entityType: "Function", modifier: "direct", kind, object: "x" };
     const result = { matches: [], objMatch: { label: "x" }, candidates: [], traversal: "…", ambiguous: false };
     const r = render(parsed, result);
-    assert.match(r.content, new RegExp(`whose module directly ${expectedVerb} x\\.`), kind);
+    assert.match(r.content, new RegExp(`found that directly ${expectedVerb} x\\.`), kind);
+    assert.doesNotMatch(r.content, /whose module/, `${kind}: the redundant "whose module" is gone`);
   }
 });
 

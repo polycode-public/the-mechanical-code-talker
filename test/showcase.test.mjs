@@ -126,7 +126,7 @@ test("showcase 5: the honest empty with a traversal receipt, through noise", asy
   const { answer, record } = await runTurn("i was wondering what calls fnAlpha", {
     config: { graphFile: FIXTURE },
   });
-  assert.match(answer, /No modules found whose module directly calls fnAlpha\./, "honest empty, no hallucination");
+  assert.match(answer, /No modules found that directly call fnAlpha\./, "honest empty, no hallucination");
   assert.match(answer, /\(traversal: calls edges where object = fnAlpha\)/, "shows its work");
   assert.equal(record.miss, true, "recorded as the miss it honestly is");
 });

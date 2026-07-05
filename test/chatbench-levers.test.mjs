@@ -32,7 +32,7 @@ const CLEAN_IMPORTERS = ask(graph, "which modules import a.mjs");
 
 test("cycle-2 fixture sanity: the clean phrasings behave as CHATBENCH_001 documents", () => {
   // the honest module-grain empty (no module-level calls edge targets fnAlpha)
-  assert.match(CLEAN_CALLS.content, /No modules found whose module directly calls fnAlpha/);
+  assert.match(CLEAN_CALLS.content, /No modules found that directly call fnAlpha/);
   assert.equal(CLEAN_CALLS.tmct_ask.miss, true);
   // the three importers, positively
   assert.match(CLEAN_IMPORTERS.content, /app\/lib\/b\.mjs/);

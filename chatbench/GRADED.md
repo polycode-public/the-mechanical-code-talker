@@ -143,6 +143,17 @@ so the two samples share no item. Products land in the same run dir as
 `product-a.jsonl` (v1 cases + draw A) and `product-b.jsonl` (draw B only; v1
 is not re-run), plus `agreement.json`.
 
+**Timings (`timings.json`, cycle-005):** every run also writes a wall-clock
+timing rollup — the total **run wall-time** (a monotonic clock wrapped around the
+whole product replay, both draws) plus, per CEFR band A1..C2 and for the **v1
+spine** (the ungraded frozen `cases.jsonl` set), the row count, total ms and
+**mean ms per row** of the deterministic per-row product replay time (each row's
+own `timingMs`). Buckets partition exactly — `spine.totalMs + Σ grades.totalMs ==
+all.totalMs`. These numbers are **wall-clock**: they vary run to run and are
+deliberately kept OUT of every determinism / row-equality assertion (the runner
+also prints the same rollup to stdout). Shape: `{ wallMs, all, spine, grades[],
+stamp }`, each bucket `{ label, n, totalMs, meanMs }`.
+
 ### The agreement gate — the instrument's self-test (parallel-forms reliability)
 
 Two independent draws over the same engine must AGREE per cell; disagreement

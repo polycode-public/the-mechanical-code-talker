@@ -52,6 +52,7 @@ import {
   GRADES, fnv1a, validateConstruction,
   stratifiedSample, dualDraws, computeAgreement, renderAgreementTable,
   gradeReliability, gradedRollup, renderRollup, templateLaneLint,
+  timingRollup, renderTimings,
 } from "./graded.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -623,6 +624,10 @@ export async function main(argv = process.argv.slice(2)) {
   const rowsB = [];
   let skippedA = [];
   let skippedB = [];
+  // Total run wall-time: a monotonic clock wrapped around the ENTIRE product
+  // replay (both draws). Wall-clock, so it varies run to run and is kept out of
+  // every determinism/row-equality assertion — it lands only in timings.json.
+  const wallStart = performance.now();
   try {
     for (const caseDef of selected) rows.push(await runCase(caseDef, deps)); // sequential: session cases share tmpdir space, and product runs are ms-cheap
     if (drawA.length) {
@@ -641,6 +646,7 @@ export async function main(argv = process.argv.slice(2)) {
   } finally {
     await cleanup();
   }
+  const wallMs = performance.now() - wallStart;
 
   await mkdir(outDir, { recursive: true });
   const productFile = join(outDir, dual && rowsB.length ? "product-a.jsonl" : "product.jsonl");
@@ -677,6 +683,19 @@ export async function main(argv = process.argv.slice(2)) {
       for (const f of tlFindings) console.log(`  - ${f.cell} ${f.caseId}: ${f.finding}`);
     }
   }
+
+  // TIMINGS (cycle-005): total run wall-time + per-CEFR-grade / v1-spine rollup
+  // of the per-row product replay time. Aggregated over EVERY replayed row (v1
+  // spine + graded draw A + draw B) and persisted to a machine-readable
+  // timings.json the write-up reads. Wall-clock — informational only, NEVER part
+  // of product-row equality or the determinism/byte-stability checks.
+  const timings = timingRollup([...rows, ...rowsB], { wallMs });
+  timings.stamp = args.stamp;
+  const timingsFile = join(outDir, "timings.json");
+  await writeFile(timingsFile, JSON.stringify(timings, null, 2) + "\n");
+  console.log("\ntimings (wall-clock — informational, excluded from determinism/row-equality checks):");
+  console.log(renderTimings(timings));
+  console.log(`timings: ${timingsFile}`);
 
   if (args.compare) {
     const prior = parseJsonl(await readFile(args.compare, "utf8"));

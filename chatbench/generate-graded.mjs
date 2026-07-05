@@ -1721,6 +1721,16 @@ const BUILDERS = {
 
 const TRUNCATE_OBSERVED = 240;
 
+/** Scrub run-volatile tokens from an informational `observed` capture so the
+ *  committed pool is byte-deterministic: a session uuidv7 and an ISO-8601
+ *  timestamp (both minted live in an assert-recall provenance citation) become
+ *  stable placeholders. Purely cosmetic — the `expect` contract never reads this. */
+function normObserved(s) {
+  return String(s)
+    .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, "<session>")
+    .replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/g, "<ts>");
+}
+
 /** Replay one selected item; return the finished case (baselineFail marks +
  *  observed answers on turns whose desired checks the engine fails). */
 export async function authorCase(item, id, cell, deps) {
@@ -1748,7 +1758,12 @@ export async function authorCase(item, id, cell, deps) {
     if (failed) {
       frontier = true;
       turn.expect = { ...turn.expect, baselineFail: true };
-      const answer = transcript[i]?.answer ?? "";
+      // Normalize volatile provenance in the informational capture so the pool
+      // stays byte-deterministic: assert-recall answers now cite a live
+      // `ace:chat:<session-uuidv7>@<iso-timestamp>` (lever 2), both of which vary
+      // per generation run. The `expect` contract is unaffected; only this human-
+      // readable `observed` string is scrubbed.
+      const answer = normObserved(transcript[i]?.answer ?? "");
       turn.observed = answer.length > TRUNCATE_OBSERVED ? `${answer.slice(0, TRUNCATE_OBSERVED)}…` : answer;
     }
   });

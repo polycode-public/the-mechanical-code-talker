@@ -623,39 +623,107 @@ async function factAnswer(memoryDir, query, envelope, miss) {
   return null;
 }
 
-/** ASSERT-RECALL READ-BACK (PLAN_CYCLE_4 tail): after "every X is a Y" is
- *  asserted, the *superclass* side is otherwise unqueryable — factAnswer's meta
- *  path matches fact SUBJECTS only, so "what is a Y" (Y the asserted OBJECT) dies
- *  as an honest miss ("'component' isn't a term in this graph's own vocabulary")
- *  even though the fact "X is a kind of Y" is remembered. This is the REVERSE-
- *  membership reader: it consults readFactRows (trust-bearing) for isa-family
- *  facts whose OBJECT is the asked term and reports the members, citing each
- *  fact's provenance verbatim, higher-trust first. Miss-only and run AFTER
- *  factAnswer returns null, so it never shadows the subject-side answer or a
- *  schema hit. Returns { text, replace:true } or null (the miss stands). */
-async function factReadBack(memoryDir, query, envelope, miss) {
+/** "what did i tell you about X" — the multi-turn recall phrasing (a sibling of
+ *  factAnswer's "what do you know about X" KNOW_ABOUT form): everything remembered
+ *  that mentions X on either side. */
+const TOLD_ABOUT_RE = /^what\s+(?:did|have)\s+(?:i|we|you)\s+(?:told|tell|said|say)\s+(?:you|me|us)?\s*about\s+(.+?)[?.!\s]*$/i;
+/** "what kind of thing is an X" — the subject-side membership phrasing the grammar
+ *  doesn't parse: reports X's OWN remembered type (falling back to X's members). */
+const KIND_OF_RE = /^what\s+kind\s+of\s+(?:thing|class|type|category|entity)?\s*(?:is|are)\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
+
+/** The singular class-noun of the graph entity a term names ("app/lib/a.mjs" →
+ *  "module", "Widget" → "class"), via the ask engine's own resolver + the loaded
+ *  graph's class map — or null on a miss/ambiguity/no-graph. Lets forward
+ *  membership answer over a graph INSTANCE, not just a bare class word. */
+async function entityClassNoun(graph, term) {
+  const ent = await resolveEntity(graph, term);
+  if (!ent) return null;
+  const cls = (graph?.byId?.get?.(ent.id) || (graph?.individuals || []).find((i) => i?.id === ent.id))?.class;
+  return cls && CLASS_LABELS[cls] ? CLASS_LABELS[cls][0] : null;
+}
+
+/** ASSERT-RECALL MULTI-TURN READ-BACK (PLAN_CYCLE_4 tail → cycle-005 lever 2):
+ *  once "every X is a Y" is asserted in an earlier turn, the graded assert-recall
+ *  cells (B2/C1 assert) query it back across turns in shapes the graph grammar
+ *  can't parse — so each dies as an honest miss even though "X is a kind of Y" is
+ *  remembered. This reader answers those declare-then-recall shapes from the
+ *  reified Facts (readFactRows — trust-bearing), citing each fact's provenance
+ *  verbatim, higher-trust first:
+ *    (a) FORWARD membership "is an X a Y" — X a class WORD ("is a module a
+ *        component") OR a graph INSTANCE ("is app/lib/a.mjs a component", resolved
+ *        to its class-noun) — yes iff a remembered isa-family fact says so;
+ *    (b) RECALL "what did i tell you about X" — every remembered fact mentioning X;
+ *    (c) REVERSE membership — "what is a Y" reports Y's members (object-side), and
+ *        "what kind of thing is an X" reports X's own type (subject-side first).
+ *  Miss-only and run AFTER factAnswer returns null, so it never shadows the
+ *  subject-side answer or a schema hit. Returns { text, replace:true } or null. */
+async function factReadBack(memoryDir, query, envelope, miss, graph = null) {
   if (!miss) return null;
   let normFactTerm;
   try { ({ normFactTerm } = await import("./memory/core.mjs")); } catch { return null; }
   const q = String(query).trim();
-  // The meta form the grammar's T5 template speaks ("what is a Y"), taken from the
-  // parse when present, else recognized directly on a no-parse miss (same required-
-  // article discipline as factAnswer's own meta fallback).
+  const rows = await factRows(memoryDir);
+  if (!rows.length) return null;
+  const isa = rows.filter((f) => ISA_PREDICATES.has(f.predicate));
+  const byTrust = (a, b) => b.trust - a.trust;
+  const renderMany = (hits) => {
+    const shown = hits.slice(0, FACT_ANSWER_CAP).map(renderFactLine);
+    const n = hits.length - FACT_ANSWER_CAP;
+    const extra = n > 0 ? `\n…and ${n} more remembered fact${n === 1 ? "" : "s"}.` : "";
+    return { text: shown.join("\n") + extra, replace: true };
+  };
+
+  // (a) FORWARD membership — "is an X a Y". X's fact-subject candidates are the
+  // term itself (a class word) AND, when it resolves in the graph, its class-noun
+  // (an instance) — so "is app/lib/a.mjs a component" answers off "module …".
+  const isaAsk = q.match(ISA_ASK_RE);
+  if (isaAsk) {
+    const objVariants = factTermVariants(normFactTerm, isaAsk[2]);
+    const subjCandidates = new Set(factTermVariants(normFactTerm, isaAsk[1]));
+    const noun = await entityClassNoun(graph, isaAsk[1]);
+    if (noun) for (const v of factTermVariants(normFactTerm, noun)) subjCandidates.add(v);
+    const hit = isa
+      .filter((f) => subjCandidates.has(f.subject) && objVariants.has(f.object))
+      .sort(byTrust)[0];
+    if (hit) return { text: `yes — ${renderFactLine(hit)}`, replace: true };
+    return null; // no remembered fact — the honest miss stands (never a guessed "no")
+  }
+
+  // (b) RECALL — "what did i tell you about X": every remembered fact mentioning X.
+  const told = q.match(TOLD_ABOUT_RE);
+  if (told) {
+    const variants = factTermVariants(normFactTerm, told[1]);
+    const hits = rows.filter((f) => variants.has(f.subject) || variants.has(f.object)).sort(byTrust);
+    if (!hits.length) return null;
+    const term = variants.has(hits[0].subject) ? hits[0].subject : hits[0].object;
+    const shown = hits.slice(0, FACT_ANSWER_CAP).map((f) => `  ${renderFactLine(f)}`);
+    const extra = hits.length > FACT_ANSWER_CAP ? `\n  …and ${hits.length - FACT_ANSWER_CAP} more.` : "";
+    return { text: `${hits.length} remembered fact${hits.length === 1 ? "" : "s"} about ${term}:\n${shown.join("\n")}${extra}`, replace: true };
+  }
+
+  // (c) REVERSE / "what kind of thing" membership. The meta form ("what is a Y")
+  // comes from the parse when present, else recognized directly on a no-parse miss;
+  // "what kind of thing is an X" is recognized regardless (the grammar never parses
+  // it as meta). "what is a Y" reports Y's MEMBERS (object-side); "what kind of
+  // thing is an X" reports X's own TYPE (subject-side first), so both directions
+  // of a single remembered "X is a kind of Y" are queryable.
   let term = envelope?.parsed?.shape === "meta" ? envelope.parsed.object : null;
-  if (!term && !envelope?.parsed) {
+  let kindOf = false;
+  const mk = q.match(KIND_OF_RE);
+  if (mk) { term = mk[1]; kindOf = true; }
+  else if (!term && !envelope?.parsed) {
     const m = q.match(/^what\s+(?:is|are)\s+an?\s+(.+?)[?.!\s]*$/i);
     if (m) term = m[1];
   }
   if (!term) return null;
   const variants = factTermVariants(normFactTerm, term);
-  const hits = (await factRows(memoryDir))
-    .filter((f) => ISA_PREDICATES.has(f.predicate) && variants.has(f.object))
-    .sort((a, b) => b.trust - a.trust);
+  const subjectHits = isa.filter((f) => variants.has(f.subject)).sort(byTrust);
+  const objectHits = isa.filter((f) => variants.has(f.object)).sort(byTrust);
+  const hits = kindOf
+    ? (subjectHits.length ? subjectHits : objectHits)
+    : (objectHits.length ? objectHits : subjectHits);
   if (!hits.length) return null;
-  const shown = hits.slice(0, FACT_ANSWER_CAP).map(renderFactLine);
-  const n = hits.length - FACT_ANSWER_CAP;
-  const extra = n > 0 ? `\n…and ${n} more remembered fact${n === 1 ? "" : "s"}.` : "";
-  return { text: shown.join("\n") + extra, replace: true };
+  return renderMany(hits);
 }
 
 // ---- W5: corpus on-demand — LOCAL tier only, behind an explicit flag ----
@@ -800,7 +868,7 @@ async function runAsk(query, { config, source, graph, focus, templates, memoryDi
     // Subject-side facts first (factAnswer), then the reverse-membership read-back
     // (factReadBack) so an asserted "every X is a Y" answers "what is a Y" too.
     const fact = (await factAnswer(memoryDir, query, envelope, miss))
-      ?? (await factReadBack(memoryDir, query, envelope, miss));
+      ?? (await factReadBack(memoryDir, query, envelope, miss, graph));
     if (fact) {
       answer = fact.replace ? fact.text : `${answer}\n${fact.text}`;
       via = "fact";

@@ -14,7 +14,7 @@ stays no-LLM; the judge lives only here.
 | `graded.mjs` | graded registries + pure logic: matrix, stratified/dual sampling, agreement, ladder, rollups |
 | `generate-graded.mjs` | deterministic pool generator (replays the engine to auto-author expectations) |
 | `GRADED.md` | the graded benchmark's design doc (matrix, band descriptors, sampling contract, promotion) |
-| `run.mjs` | deterministic runner: replays cases, evaluates tier-1 expectations, writes `product.jsonl` (or `product-a/b.jsonl` + `agreement.json` on dual graded runs) |
+| `run.mjs` | deterministic runner: replays cases, evaluates tier-1 expectations, writes `product.jsonl` (or `product-a/b.jsonl` + `agreement.json` on dual graded runs) + `timings.json` (wall-clock run time + per-CEFR-grade / v1-spine replay timing) |
 | `judge.mjs` | judge fan-out: N samples/case against the pinned model+prompt, writes `judged.jsonl` + `summary.json` |
 | `judge-prompt-v1.txt` | the versioned judge prompt (bump the file name to version it; record the pin in every write-up) |
 | `rubric.schema.json` | the structured-output schema the judge must satisfy |
@@ -54,6 +54,11 @@ reliability check. A DISAGREEING cell is UNDER-COVERED: grow its pool/sample
 and exclude it from cycle statistics until it agrees. Three **census cells**
 (B1 pronoun-binding, B1 temporal, C1 temporal — `CELL_SAMPLE`) are drawn in
 FULL every run so they always agree (cycle-4 pool growth; see `GRADED.md`).
+
+Every run also writes **`timings.json`** (cycle-005): the total run wall-time
+plus, per CEFR band and for the v1 spine, the row count / total ms / mean ms per
+row of the deterministic product replay. Wall-clock and informational only —
+never part of the determinism / row-equality checks (see `GRADED.md`).
 
 Graded schema on top of the v1 case shape: `grade` (`A1`…`C2`),
 `construction` (one of the 11 taxonomy entries, or an `a+b` combo such as

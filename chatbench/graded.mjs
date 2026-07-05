@@ -461,6 +461,58 @@ export function gradedRollup(rows) {
   return grades;
 }
 
+// ---- timings (wall-clock instrumentation, cycle-005) ----
+
+/** Sum one bucket's product replay time. Each product row already carries
+ *  `timingMs` (the deterministic product replay wall-time of that case, written
+ *  by runCase). A bucket reports: n timed rows, total ms, and mean ms PER ROW.
+ *  Rows without a finite timingMs are ignored in the denominator so a partial /
+ *  synthetic set never poisons the mean. */
+export function timingBucket(label, rows) {
+  const timed = rows.filter((r) => Number.isFinite(r.timingMs));
+  const totalMs = timed.reduce((acc, r) => acc + r.timingMs, 0);
+  const n = timed.length;
+  return { label, n, totalMs, meanMs: n ? totalMs / n : null };
+}
+
+/** Per-CEFR-grade + v1-spine timing rollup over product rows (cycle-005). Buckets:
+ *  - `all`   — every row supplied (spine + graded, both draws);
+ *  - `spine` — the UNGRADED v1 frozen cases (cases.jsonl), null when none ran;
+ *  - `grades[]` — one bucket per populated CEFR band A1..C2, ascending.
+ *  `wallMs` (the whole-replay wall-clock, timed by the runner around the product
+ *  loop) is threaded in, not derived here. IMPORTANT: these are WALL-CLOCK numbers
+ *  that vary run to run — they are deliberately kept OUT of product-row equality /
+ *  determinism assertions and live only in the run's timings.json. */
+export function timingRollup(rows, { wallMs = null } = {}) {
+  const spineRows = rows.filter((r) => !r.grade);
+  const grades = [];
+  for (const grade of GRADES) {
+    const ofGrade = rows.filter((r) => r.grade === grade);
+    if (!ofGrade.length) continue;
+    grades.push(timingBucket(grade, ofGrade));
+  }
+  return {
+    wallMs,
+    all: timingBucket("all", rows),
+    spine: spineRows.length ? timingBucket("v1-spine", spineRows) : null,
+    grades,
+  };
+}
+
+/** Render the timing rollup for stdout (plain text). */
+export function renderTimings(timings) {
+  const ms = (v) => (v === null || v === undefined ? "—" : `${Math.round(v)}ms`);
+  const mean = (v) => (v === null || v === undefined ? "—" : `${v.toFixed(1)}ms`);
+  const bucket = (b) => `${b.n} row(s), total ${ms(b.totalMs)}, mean ${mean(b.meanMs)}/row`;
+  const lines = [
+    `  wall-time (product replay): ${ms(timings.wallMs)}`,
+    `  all: ${bucket(timings.all)}`,
+  ];
+  if (timings.spine) lines.push(`  v1-spine: ${bucket(timings.spine)}`);
+  for (const g of timings.grades) lines.push(`  ${g.label}: ${bucket(g)}`);
+  return lines.join("\n");
+}
+
 /** Render the rollup for stdout, including the productive/performance band gap
  *  (PLAN_FORMULAIC_COMPETENCE.md): perf = greens by any via, prod = composed-only
  *  greens, gap = perf − prod (how much fluency is memorized vs generated). */

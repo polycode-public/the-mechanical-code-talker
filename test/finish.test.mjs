@@ -142,24 +142,26 @@ const golden = (rules, input, expected) => {
   assert.equal(flatten(applyGrammar(out, rules)), expected, "idempotent");
 };
 
-test("the rule table loads: 5 rules; only article-selection is live this cycle", () => {
+test("the rule table loads: 5 rules; the three SAFE defect rules are live this cycle", () => {
   const rules = loadGrammarRules();
   assert.equal(rules.length, 5);
   const kinds = rules.map((r) => r.kind);
   assert.deepEqual(kinds, ["article", "agreement", "capitalise", "list", "terminal"]);
   for (const r of rules) assert.ok(r.id && r.kind, "id + kind present");
-  // article-selection is ACTIVE; the other four are implemented + golden-tested
-  // but PARKED (they rewrite established product voice — see grammar-rules.toml).
+  // LIVE (cycle 005): article-selection (cycle 4) + the two safe defect fixes
+  // subject-verb-agreement and terminal-punctuation. capitalise/list stay PARKED
+  // (they rewrite established product voice — a judged A/B in cycle 006).
   const live = rules.filter((r) => r.enabled !== false).map((r) => r.id);
-  assert.deepEqual(live, ["article-selection"], "only the genuine-defect rule is live");
+  assert.deepEqual(live, ["article-selection", "subject-verb-agreement", "terminal-punctuation"],
+    "the three safe defect rules are live; the voice rules stay parked");
 });
 
-test("live finish() applies ONLY article-selection — the parked rules are inert by default", () => {
-  // capitalise/list would fire here if live; with the shipped flags they do NOT.
+test("live finish() applies the SAFE defect rules; the VOICE rules (capitalise/list) stay inert", () => {
   const result = { answer: "every module is a artifact and b and c..", via: "assert" };
   const out = finish(result, {});
-  // article fixes "a artifact"; opener stays lowercase, "and…and" and ".." untouched
-  assert.equal(out.answer, "every module is an artifact and b and c..");
+  // article fixes "a artifact"; terminal collapses the trailing ".." -> "."; the
+  // opener stays lowercase (capitalise parked) and "and…and" is untouched (list parked).
+  assert.equal(out.answer, "every module is an artifact and b and c.");
 });
 
 test("GOLDEN rule 1 — article selection (the 'a artifact' → 'an artifact' fix)", () => {

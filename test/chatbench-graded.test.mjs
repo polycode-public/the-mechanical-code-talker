@@ -21,6 +21,7 @@ import {
   isFrontierCase, isGreenRow, promotedSubset, stratifiedSample, dualDraws,
   computeAgreement, renderAgreementTable, gradeReliability, ladderGate,
   gradedRollup, isProductiveRow, isTemplateLane, bandScore, templateLaneLint,
+  timingBucket, timingRollup, renderTimings,
 } from "../chatbench/graded.mjs";
 import {
   parseCases, summarizeTier1, runTurnsCase, runSessionCase, createRunnerDeps,
@@ -343,6 +344,60 @@ test("gradedRollup: cells + grades carry the two-band score and gap; template-la
 function renderRollupHasBand(grade) {
   return grade.bands && typeof grade.bands.gap === "number";
 }
+
+// ---- timings (cycle-005 per-CEFR-grade wall-clock rollup) ----
+
+// a product row carrying a synthetic replay time and (optionally) a grade.
+const trow = (id, timingMs, grade) => ({ caseId: id, timingMs, ...(grade ? { grade } : {}) });
+
+test("timingRollup: sums per-CEFR-grade + v1-spine totals and means correctly over a synthetic row set", () => {
+  const rows = [
+    trow("v1", 10),          // ungraded → v1 spine
+    trow("v2", 30),          // ungraded → v1 spine
+    trow("a1a", 4, "A1"),
+    trow("a1b", 6, "A1"),
+    trow("b1a", 20, "B1"),
+    trow("b1b", 40, "B1"),
+    trow("b1c", 60, "B1"),
+  ];
+  const t = timingRollup(rows, { wallMs: 250 });
+
+  assert.equal(t.wallMs, 250, "wall-time threaded through unchanged");
+
+  // all rows: total = 10+30+4+6+20+40+60 = 170 over 7 rows.
+  assert.equal(t.all.n, 7);
+  assert.equal(t.all.totalMs, 170);
+  assert.ok(Math.abs(t.all.meanMs - 170 / 7) < 1e-9, "mean ms per row over the whole set");
+
+  // v1 spine (ungraded): 10 + 30 = 40 over 2 rows, mean 20.
+  assert.equal(t.spine.label, "v1-spine");
+  assert.deepEqual({ n: t.spine.n, total: t.spine.totalMs, mean: t.spine.meanMs }, { n: 2, total: 40, mean: 20 });
+
+  // grades ascending, only the populated ones (A1, B1 — no A2/B2/C1/C2 here).
+  assert.deepEqual(t.grades.map((g) => g.label), ["A1", "B1"], "only populated grades, ascending");
+  const a1 = t.grades.find((g) => g.label === "A1");
+  assert.deepEqual({ n: a1.n, total: a1.totalMs, mean: a1.meanMs }, { n: 2, total: 10, mean: 5 });
+  const b1 = t.grades.find((g) => g.label === "B1");
+  assert.deepEqual({ n: b1.n, total: b1.totalMs, mean: b1.meanMs }, { n: 3, total: 120, mean: 40 });
+
+  // per-grade totals + the spine reconstruct the whole-set total (no double count).
+  const reconstructed = t.spine.totalMs + t.grades.reduce((acc, g) => acc + g.totalMs, 0);
+  assert.equal(reconstructed, t.all.totalMs, "spine + grades == all (partition is exact)");
+});
+
+test("timingBucket: ignores rows without a finite timingMs so a partial set never poisons the mean", () => {
+  const b = timingBucket("x", [trow("a", 10), { caseId: "b" }, trow("c", 30), trow("d", NaN)]);
+  assert.deepEqual({ n: b.n, total: b.totalMs, mean: b.meanMs }, { n: 2, total: 40, mean: 20 });
+  const empty = timingBucket("none", [{ caseId: "z" }]);
+  assert.deepEqual({ n: empty.n, total: empty.totalMs, mean: empty.meanMs }, { n: 0, total: 0, mean: null });
+});
+
+test("renderTimings: reports wall-time, all, v1-spine and each populated grade", () => {
+  const text = renderTimings(timingRollup([trow("v", 10), trow("a1", 6, "A1")], { wallMs: 42 }));
+  assert.match(text, /wall-time \(product replay\): 42ms/);
+  assert.match(text, /v1-spine: 1 row\(s\), total 10ms, mean 10\.0ms\/row/);
+  assert.match(text, /A1: 1 row\(s\), total 6ms, mean 6\.0ms\/row/);
+});
 
 test("computeAgreement: a template-lane parallel-forms line is reported alongside the standard cells", () => {
   const a = [

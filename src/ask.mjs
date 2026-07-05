@@ -125,6 +125,22 @@ function verbFor(kind) {
   return REVERSE_MISS_VERB[kind] || kind;
 }
 
+// BASE (bare-infinitive) verb form for the reverse zero-hit template. Every relation
+// KIND token is a 3rd-person-singular verb ("imports", "tests", …); the honest-miss
+// sentence now has a PLURAL subject ("No modules … that directly test X"), which wants
+// the base form, so the redundant "whose module" scaffolding can be dropped for a
+// grammatical read. Curated where a plain trailing-"s"/"es" strip would misfire
+// ("touches"→"touch", "cochange" is already a stem); anything unlisted strips the
+// inflection generically.
+const BASE_VERB = {
+  imports: "import", calls: "call", callsSymbol: "call", touches: "touch",
+  touchesSymbol: "touch", tests: "test", inherits: "inherit", contains: "contain",
+  defines: "define", reexports: "re-export", cochange: "co-change", uses: "use",
+};
+function baseVerb(kind) {
+  return BASE_VERB[kind] || String(kind).replace(/es$/, "").replace(/s$/, "");
+}
+
 // ---- the parsing strategies + normalization + fuzzy service formerly defined
 // here now live in src/interpret/ (items 8/10/13): interpret/normalize.mjs
 // (normalizeQuery, applyNegationFrames, STOPWORDS, splitWords), interpret/
@@ -245,6 +261,7 @@ function parseComposite(text, nlp) {
   const w = splitWords(text);
   const lc = w.map((x) => x.toLowerCase());
   return parseNegation(text, nlp, 0)
+    || parseForwardNegation(w, lc, nlp)
     || parseAnaphora(w, lc, nlp)
     || parseAggregate(w, lc, nlp)
     || parseSuperlative(w, lc, nlp)
@@ -318,6 +335,54 @@ function parseNegation(text, nlp, depth = 0) {
   return complementAst(entityType, { op: "difference", kind: "set", ast: positive });
 }
 
+// B1 FORWARD NEGATION (Cycle 5, pron+neg) — the SUBJECT-side complement's mirror: "what
+// does[n't] <subj> <verb>" ("what doesn't it import", "what does app/lib/e.mjs not import")
+// is every individual of the verb's OBJECT grain that <subj> does NOT reach via that verb.
+// Distinct from parseNegation (which negates a queried KIND — "which modules do not import
+// X"): here the negation sits on a FORWARD clause whose subject is a named term or a focus
+// pronoun, so the universe is inferred from the verb's own edges (imports → Module) rather
+// than a stated kind noun. The subject is resolved LATE (at eval, through the same
+// contextId a plain "it" uses), so pronoun-binding composes with the complement for free.
+// Refused honestly (empty) when the verb's object grain is ambiguous or the subject can't
+// resolve — never a guess. Runs AFTER parseNegation, so the stated-kind form is unaffected.
+const FWD_NEG_FRAME = new Set(["what", "which", "thing", "things", "one", "ones", "stuff"]);
+function parseForwardNegation(w, lc, nlp) {
+  let i = 0;
+  while (i < lc.length && FWD_NEG_FRAME.has(lc[i])) i += 1;
+  if (!["do", "does", "did"].includes(lc[i])) return null;   // need the auxiliary lead
+  i += 1;
+  const rest = w.slice(i);
+  const restLc = lc.slice(i);
+  const notIdx = restLc.indexOf("not");
+  if (notIdx < 0) return null;                                // no negation → not this shape
+  const vh = findPhrase(restLc, VERB_TO_KIND);
+  if (!vh) return null;                                       // no relation verb → not this shape
+  // the subject term is whatever survives after removing "not", the verb phrase, "from",
+  // and question scaffolding — a bare pronoun "it" (not a stopword) survives and binds to
+  // the focus at eval time; a named module/symbol survives and resolves directly.
+  const subjTokens = rest.filter((_, j) => j !== notIdx && (j < vh.start || j >= vh.end)
+    && restLc[j] !== "from" && !STOPWORDS.has(restLc[j]));
+  const subjectTerm = subjTokens.join(" ").trim();
+  if (!subjectTerm) return null;
+  return { node: "forwardComplement", kind: vh.kind, subjectTerm };
+}
+
+/** The single OBJECT class a forward relation kind points at across the loaded graph
+ *  (imports → Module), or null when its objects span more than one class (an ambiguous
+ *  grain the complement's universe can't be pinned to). Ext: endpoints have no individual,
+ *  so they don't muddy the class vote. Used by the forwardComplement evaluator to bound
+ *  the universe it differences the positive forward set out of. */
+function kindObjectClass(graph, kind) {
+  const classes = new Set();
+  for (const k of kindsFor(kind)) {
+    for (const e of edgesOfKind(graph, k)) {
+      const o = graph.byId.get(e.object);
+      if (o && o.class) classes.add(o.class);
+    }
+  }
+  return classes.size === 1 ? [...classes][0] : null;
+}
+
 /** A set-producing sub-expression (used for nested inner clauses, boolean branches,
  *  and count restrictors): nested first, then the relational/qualifier/boolean
  *  parser, then a bare simple clause. Carries `depth` for the nesting cap. */
@@ -373,12 +438,21 @@ function parseNested(w, lc, nlp, depth) {
  *  uncompilable), or null. */
 function parseAnaphora(w, lc, nlp) {
   let p = -1;
+  let viaOf = false;
   for (let i = 1; i < lc.length; i += 1) {
-    if (ANAPHORA_TRIGGERS.includes(lc[i]) && lc[i - 1] === "of") { p = i; break; }
+    if (!ANAPHORA_TRIGGERS.includes(lc[i])) continue;
+    if (lc[i - 1] === "of") { p = i; viaOf = true; break; } // "how many of those", "which of them"
+    // BARE anaphoric pronoun as the FINAL word, directly after a count/list trigger
+    // ("count them", "count those", "list them") — the discourse-reference count/list over
+    // the previous answer with no "of" (Cycle 5, disc+count). Pinned to the terminal
+    // position so a mid-sentence "these"/"those" used as a determiner ("list these
+    // functions") is left for the ordinary list/clause path, not seized as an anaphor.
+    const headSoFar = lc.slice(0, i).join(" ");
+    if (i === lc.length - 1 && (AGGREGATE_TRIGGERS.includes(headSoFar) || LIST_TRIGGERS.includes(headSoFar))) { p = i; break; }
   }
   if (p < 0) return null;
-  const head = lc.slice(0, p - 1).join(" ");
-  const mode = /^(how many|how much|count)\b/.test(head) ? "count" : "list";
+  const head = (viaOf ? lc.slice(0, p - 1) : lc.slice(0, p)).join(" ");
+  const mode = AGGREGATE_TRIGGERS.includes(head) || /^(how many|how much|count|number|quantity|total)\b/.test(head) ? "count" : "list";
   const filter = parsePredicateFilter(w.slice(p + 1), nlp);
   if (filter === undefined) return { node: "miss", reason: "the follow-up filter didn't parse" };
   return { node: "anaphora", mode, filter };
@@ -771,6 +845,16 @@ function evalSet(graph, ast, opts) {
     case "existsEdge": {
       const subs = new Set(kindsFor(ast.kind).flatMap((k) => edgesOfKind(graph, k)).map((e) => e.subject));
       return graph.individuals.filter((i) => subs.has(i.id) && (!ast.entityType || i.class === ast.entityType));
+    }
+    // forward complement: the verb's object-grain universe MINUS what the (late-resolved,
+    // focus-bindable) subject reaches via that verb — "what doesn't it import".
+    case "forwardComplement": {
+      const r = resolveTermOrContext(graph, ast.subjectTerm, opts && opts.contextId);
+      if (!r.match) return [];                              // unresolved subject / focus-less pronoun → honest empty
+      const universeType = kindObjectClass(graph, ast.kind);
+      if (!universeType) return [];                         // ambiguous object grain → refuse honestly
+      const positive = new Set(forwardOverSet(graph, ast.kind, new Set([r.match.id])).map((x) => x.id));
+      return graph.individuals.filter((i) => i.class === universeType && !positive.has(i.id));
     }
     case "reverseSet": {
       const ids = new Set(evalSet(graph, ast.inner, opts).map((i) => i.id));
@@ -1401,11 +1485,23 @@ export function traverse(graph, parsed, { contextId = null, prev = null } = {}) 
     };
   }
 
-  // reverse: "which <entityType> R <objMatch>"
+  // reverse: "which <entityType> R <objMatch>". GRAIN-AWARE (Cycle 5, lever 3): a kind
+  // that carries a symbol-grain sibling reads off the SIBLING when a fine SUBJECT grain
+  // was asked for ("which functions call X" → callsSymbol). Additionally, for `touches`
+  // specifically, when the RESOLVED OBJECT is itself a fine symbol the answer MUST read off
+  // touchesSymbol: touches is Commit→Module (module-coarse) and can NEVER point at a
+  // symbol, so "how many commits touched Widget.render" used to scan the module-grain
+  // edges and return a false 0 — the count belongs at symbol grain. This object-driven
+  // switch is scoped to touches on purpose: calls/callsSymbol already resolve a fine
+  // object through the fine-entityType branch, and a null-entityType "what calls <fn>"
+  // deliberately keeps its module-coarse `calls` receipt (the honest-empty showcase pins
+  // it), so widening the switch to calls would silently change that answer.
   const symbolKind = SYMBOL_GRAIN_SIBLING[kind];
-  if (symbolKind && FINE_ENTITY_TYPES.has(entityType)) {
+  const objIsTouchedSymbol = kind === "touches" && !!(objMatch.class && FINE_ENTITY_TYPES.has(objMatch.class));
+  if (symbolKind && (FINE_ENTITY_TYPES.has(entityType) || objIsTouchedSymbol)) {
     const edges = edgesOfKind(graph, symbolKind).filter((e) => e.object === objMatch.id);
-    const matches = edges.map((e) => graph.byId.get(e.subject)).filter((i) => i && i.class === entityType);
+    const subjects = uniqueById(edges.map((e) => graph.byId.get(e.subject)).filter(Boolean));
+    const matches = (!entityType || entityType === "Change") ? subjects : subjects.filter((i) => i.class === entityType);
     return { matches, objMatch, candidates, traversal: `${symbolKind} edges where object = ${objMatch.label}`, ambiguous, matchedVia };
   }
 
@@ -1662,9 +1758,14 @@ function renderCore(parsed, result) {
         miss: true, ambiguous: false,
       };
     }
+    // VOICE NIT (Cycle 5): the old "No modules found whose module directly tests X" read
+    // ungrammatically — the "whose module" is redundant scaffolding (doubly broken when a
+    // stray "by" landed in the object: "whose module directly tests by X"). The plural
+    // subject now takes the base verb ("… that directly test X") for a natural read; the
+    // traversal receipt is unchanged.
     const entityWord = nounFor(parsed.entityType || "Module", 2);
     return {
-      content: `No ${entityWord} found whose module directly ${verbFor(parsed.kind)} ${parsed.object}. (traversal: ${result.traversal || "no traversal resolved"})`,
+      content: `No ${entityWord} found that directly ${baseVerb(parsed.kind)} ${parsed.object}. (traversal: ${result.traversal || "no traversal resolved"})`,
       miss: true, ambiguous: false,
     };
   }
