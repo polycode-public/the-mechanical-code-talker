@@ -300,6 +300,12 @@ const T_THANKS = "conversational-thanks";
 const T_FAREWELL = "conversational-farewell";
 const T_ORIENTATION = "orientation-friendly";
 const T_WHY_EMPTY = "miss-no-previous-answer";
+/** Empty / degenerate-graph variants (#3/#5): shown when the loaded graph has 0
+ *  modules (a graph-less bootstrap OR a graph.json with no code entities). They
+ *  orient toward `--repo`/`tmct init` + the seeded vocabulary instead of
+ *  over-promising "ask me about this codebase". */
+const T_GREETING_EMPTY = "conversational-greeting-empty";
+const T_ORIENTATION_EMPTY = "orientation-empty";
 
 /** The degraded line when the template library itself cannot load — a packaging
  *  failure said out loud, never a crashed turn or a silently different answer. */
@@ -400,9 +406,188 @@ function conversationalTurn(line, ctx) {
     if (v.empty) return mk(tRender(ctx.templates, T_WHY_EMPTY) ?? v.text, { miss: true });
     return mk(v.text, { via: "conversational" });
   }
-  if (GREET.has(q)) return mk(t(T_GREETING_BY_PHRASE[q] || T_GREETING));
+  if (GREET.has(q)) {
+    // #3 empty/degenerate-graph greeting: a plain "hi"/"hello" over a graph with 0
+    // modules orients toward --repo/tmct init instead of over-promising "ask me
+    // about this codebase". Phrase-specific variants (good morning, hello there)
+    // keep their wording; only the default greeting swaps.
+    const id = (!T_GREETING_BY_PHRASE[q] && noCodeGraph(ctx.graph)) ? T_GREETING_EMPTY : (T_GREETING_BY_PHRASE[q] || T_GREETING);
+    return mk(t(id));
+  }
   if (THANKS.has(q)) return mk(t(T_THANKS));
-  if (q === "help" || q === "?" || HELP_PHRASES.some((re) => re.test(raw))) return mk(t(T_ORIENTATION));
+  if (q === "help" || q === "?" || HELP_PHRASES.some((re) => re.test(raw))) return mk(orientationAnswer(ctx.templates, ctx.graph));
+  return null;
+}
+
+// ---- #1/#2/#3 conversational-UX helpers: module-aware orientation, the short
+// tailored miss, and the intent lanes (teach + meta/self). All are recognizer-
+// gated and (for the lanes) only consulted on a would-miss, so ordinary graph
+// queries are never hijacked. ----
+
+/** Code entities (Modules) in the loaded graph — the "is there a code graph here"
+ *  test. 0 means a graph-less bootstrap OR a graph.json with no code entities (the
+ *  degenerate trap); both orient rather than over-promise. */
+export function moduleCountOf(graph) {
+  if (!graph || !Array.isArray(graph.individuals)) return 0;
+  return graph.individuals.filter((i) => (i.class || "") === "Module").length;
+}
+
+/** A KNOWN-empty code graph: a loaded graph object with 0 modules. A null graph
+ *  (a bare runTurn that wasn't handed one) is "unknown", NOT empty — the empty
+ *  orientation/greeting only fires when we actually hold an empty graph. */
+const noCodeGraph = (graph) => !!graph && moduleCountOf(graph) === 0;
+
+/** The orientation surface, module-aware: the empty variant (→ --repo/tmct init +
+ *  seeded vocabulary) when there's no code graph, the standard one otherwise. */
+function orientationAnswer(templates, graph) {
+  return tRender(templates, noCodeGraph(graph) ? T_ORIENTATION_EMPTY : T_ORIENTATION) ?? TEMPLATES_UNAVAILABLE;
+}
+
+/** A dynamic orientation string for the meta/self lane: a /stats-style overview
+ *  when a code graph is loaded, else the honest empty-graph orientation. */
+function orientationText(graph) {
+  if (noCodeGraph(graph)) {
+    return "There's no code graph loaded here, so I can't answer structure questions yet. "
+      + "Point me at your code with `--repo <path>` or run `tmct init` to index this repo. "
+      + 'I do know some general vocabulary — try "what is a cache". /help for commands.';
+  }
+  const by = (cls) => (graph.individuals || []).filter((i) => (i.class || "") === cls).length;
+  const parts = [];
+  for (const [cls, sing, plur] of [["Module", "module", "modules"], ["Class", "class", "classes"], ["Function", "function", "functions"]]) {
+    const n = by(cls); if (n) parts.push(`${n} ${n === 1 ? sing : plur}`);
+  }
+  return `This is a tmct code graph — ${(graph.individuals || []).length} entities`
+    + `${parts.length ? ` (${parts.join(", ")})` : ""}. `
+    + 'Ask about imports, calls, definitions or history — e.g. "which modules import <name>", "what calls <name>". '
+    + "/stats for the full overview, /help for commands.";
+}
+
+// #1 SHORT, TAILORED MISS — the engine's full grammar cheat-sheet (rephraseHint)
+// now lives ONLY behind /help. A genuine parse-miss gets ONE line: an honest miss
+// + at most two example shapes chosen for what the user typed + a /help pointer.
+// The opening "couldn't parse this as a graph question. Try:" is preserved (the
+// honest-miss contract + the graded hm-joke case pin those words).
+const MISS_EXAMPLES = {
+  import: ['"which modules import <name>"', '"what does <name> import"'],
+  export: ['"what does <name> export"', '"which modules import <name>"'],
+  call: ['"what calls <name>"', '"which functions call <name>"'],
+  test: ['"what tests <name>"', '"which functions are tested"'],
+  inherit: ['"which classes inherit from <name>"', '"what are the subclasses of <name>"'],
+  history: ['"when did <name> change"', '"who touched <name>"'],
+  define: ['"where is <name> defined"', '"where is <name> mentioned"'],
+  meaning: ['"what is a <ClassName>"', '"what does <term> mean"'],
+  count: ['"how many classes are there"', '"how many modules are there"'],
+};
+const MISS_DEFAULT = ['"which modules import <name>"', '"what calls <name>"'];
+
+/** Choose up to two example shapes RELEVANT to the user's words. */
+function tailoredExamples(q) {
+  // membership yes/no ("is a algorithm information") — the grammar wants an article
+  // before BOTH terms; hint the working shape rather than dumping the wall.
+  if (/^is\s+(?:an?\s+)?[\w-]+\b/.test(q)) return ['"is a <thing> a <kind>" (an article before the kind, too)'];
+  const has = (re) => re.test(q);
+  if (has(/\bimport/)) return MISS_EXAMPLES.import;
+  if (has(/\bexport/)) return MISS_EXAMPLES.export;
+  if (has(/\b(?:calls?|caller|callee)\b/)) return MISS_EXAMPLES.call;
+  if (has(/\b(?:tests?|cover|covering|tested)\b/)) return MISS_EXAMPLES.test;
+  if (has(/\b(?:inherit|subclass|extends?|superclass|hierarchy|base class|parent class)\b/)) return MISS_EXAMPLES.inherit;
+  if (has(/\b(?:history|when|changed?|commit|touch(?:e[ds])?|who)\b/)) return MISS_EXAMPLES.history;
+  if (has(/\b(?:defined?|where|located?|mention)\b/)) return MISS_EXAMPLES.define;
+  if (has(/\b(?:mean|means|meaning|definition|vocab)\b/) || /\bwhat(?:'s| is)? an? \w/.test(q)) return MISS_EXAMPLES.meaning;
+  if (has(/\b(?:how many|count|number of)\b/)) return MISS_EXAMPLES.count;
+  return MISS_DEFAULT;
+}
+
+/** The one-line short miss. */
+export function shortMissHint(query) {
+  const ex = tailoredExamples(String(query || "").toLowerCase());
+  return `couldn't parse this as a graph question. Try: ${ex.join(" or ")}. Type /help for all query shapes.`;
+}
+
+/** The exact opening of the engine's full grammar-wall miss — the ONLY miss the
+ *  short-miss rewrites. Receipt-bearing misses (honest empties, unresolved terms,
+ *  the empty-graph bootstrap note, compositional misses) never match, so their
+ *  specific wording + traversal receipts stand. */
+const WALL_MISS_RE = /^couldn't parse this as a graph question\. Try:/;
+
+// #2 INTENT LANE — MEMORY/TEACH. "remember that X is a Y", "note that …", or a
+// bare "X is a Y" declarative the graph parser couldn't handle → route to the
+// assert/memory path; when it can't be stored, say what CAN be remembered
+// (LOUD, the working shape) — never the grammar wall, never a silent data loss.
+const TEACH_RE = /^(?:please\s+)?(?:remember|note|keep in mind|jot down|for the record|fyi)\b[:,]?\s*(?:that\s+)?(.+?)[.?!]*$/i;
+const BARE_DECLARATIVE_RE = /^(?:every |each |all |a |an )?[\w-]+ (?:is|are) (?:a |an )?[\w-]+$/i;
+/** Interrogative / auxiliary leads that make an "X is a Y"-shaped line a QUESTION
+ *  ("what is a cache", "is a module a component"), never a teach declarative. */
+const QUESTION_LEAD_RE = /^(?:what|who|which|where|when|why|how|is|are|do|does|did|can|could|should|would|will|has|have)\b/i;
+
+/** Sentence forms to try asserting for a teach payload: the payload as-is, and
+ *  (if it carries no determiner) its "every …" universal — the ACE-OWL shape the
+ *  grammar actually lands. */
+function assertCandidates(payload) {
+  const p = String(payload).trim();
+  const out = [p];
+  if (!/^(?:every|each|all|a|an)\b/i.test(p)) out.push(`every ${p}`);
+  return [...new Set(out)];
+}
+/** The "every X is a Y" rewrite of a declarative, for the "did you mean …" hint. */
+function teachSuggestion(payload) {
+  const m = String(payload).match(/^(?:every |each |all |a |an )?([\w-]+) (?:is|are) (?:a |an )?([\w-]+)$/i);
+  return m ? `every ${m[1].toLowerCase()} is a ${m[2].toLowerCase()}` : null;
+}
+
+async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
+  const raw = String(query).trim();
+  let payload = null;
+  const m = raw.match(TEACH_RE);
+  if (m && /\b(?:is|are)\b/i.test(m[1])) payload = m[1].trim();
+  else if (BARE_DECLARATIVE_RE.test(raw) && !QUESTION_LEAD_RE.test(raw)) payload = raw;
+  if (!payload) return null;
+  // Try to store it (a live session provides the write target). assertTurn returns
+  // the "noted — remembered …" confirmation or null (grammar miss / unknown words).
+  if (memoryDir) {
+    for (const cand of assertCandidates(payload)) {
+      const stored = await assertTurn(cand, { memoryDir, sessionId, focus: null, lexicon });
+      if (stored) return { text: stored.answer, via: "assert", miss: false };
+    }
+  }
+  const suggestion = teachSuggestion(payload);
+  const did = suggestion && suggestion !== payload.toLowerCase() ? ` Did you mean: "${suggestion}"?` : "";
+  return {
+    text: 'I couldn\'t store that — I remember facts in the shape "every X is a Y", where X and Y are '
+      + `words I know.${did} Type /memory to see what I already remember.`,
+    via: "teach-miss", miss: true,
+  };
+}
+
+// #2 INTENT LANE — META/SELF. Bare self/session questions answered from stats /
+// memory / orientation, never the grammar wall or the raw fact-dump. WOULD-MISS
+// ONLY (the caller gates on a miss) and every pattern is a WHOLE-LINE self/session
+// reference with no graph entity or predicate, so real graph queries ("what does X
+// import", the meta "what does imports mean", "what did i ask before") never match.
+const WHAT_KNOW_RE = /^what\s+(?:do\s+you|d'?you)\s+know(?:\s+so\s+far)?$/;
+const META_ORIENT_RE = /^(?:what(?:'s| is| are)?\s+this(?:\s+(?:codebase|repo|repository|project|code|thing))?|what\s+(?:codebase|repo|repository|project)\s+is\s+this|what\s+am\s+i\s+looking\s+at|what\s+is\s+tmct|how\s+do\s+i\s+(?:start|begin|get\s+started|get\s+going|load\s+(?:my\s+)?code|index\s+(?:my\s+)?(?:code|repo|repository)|use\s+(?:this|you|tmct))|where\s+do\s+i\s+(?:start|begin))$/;
+
+/** A SHORT memory summary (never a fact dump) for the bare "what do you know". */
+async function memorySummary(memoryDir, graph) {
+  const rows = memoryDir ? await memoryFacts(memoryDir) : [];
+  if (!rows.length) {
+    const hook = moduleCountOf(graph) > 0
+      ? 'ask about this codebase\'s structure (imports, calls, definitions), or teach me with "every X is a Y"'
+      : 'teach me with "every X is a Y", or try general vocabulary like "what is a cache"';
+    return `I haven't been told any facts yet — ${hook}. /memory to inspect, /help for commands.`;
+  }
+  const preds = new Set(rows.map((f) => f.predicate).filter(Boolean));
+  const n = rows.length;
+  return `I remember ${n} fact${n === 1 ? "" : "s"} across ${preds.size} relation `
+    + `type${preds.size === 1 ? "" : "s"}. Ask "what do you know about <term>", or /memory to explore.`;
+}
+
+async function metaLane(query, { graph, memoryDir }) {
+  const q = String(query).trim().toLowerCase().replace(/[?.!]+$/, "").replace(/\s+/g, " ");
+  if (WHAT_KNOW_RE.test(q) || q === "what have you learned" || q === "what have you learnt") {
+    return { text: await memorySummary(memoryDir, graph), via: "meta" };
+  }
+  if (META_ORIENT_RE.test(q)) return { text: orientationText(graph), via: "meta" };
   return null;
 }
 
@@ -914,7 +1099,7 @@ function discourseRewrite(query, last) {
  *  otherwise the unchanged dispatchTool path (which also yields the no-graph error).
  *  A hit updates the focus to the resolved object. Grammar miss / ToolError → a
  *  normal answer, never a crash. */
-async function runAsk(query, { config, source, graph, focus, last, templates, memoryDir, env }) {
+async function runAsk(query, { config, source, graph, focus, last, templates, memoryDir, sessionId = "", lexicon = null, env }) {
   const ts = new Date().toISOString();
   // DISCOURSE ANAPHORA (CHATBENCH_006 levers 1+2): a follow-up like "which of those
   // are tested" / "how many of those" / "count them" filters or counts the PREVIOUS
@@ -970,19 +1155,31 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // orientation swap below is template wording, so those turns carry via:"template".
   let via = "composed";
   let recordMiss = miss;
-  // On a MISS: a conversational miss (a greeting, "what can you do", a very short
-  // non-code line) gets the friendly orientation instead of the raw grammar hint. A
-  // near-miss STRUCTURAL question keeps the precise hint the engine already produced.
-  if (miss && isConversational(query)) {
-    answer = tRender(templates, T_ORIENTATION) ?? TEMPLATES_UNAVAILABLE;
-    via = "template";
-  } else if (memoryDir) {
-    // W4: vocabulary/definition questions consult the MEMORY graph's Facts
-    // alongside the schema-docs surface — a remembered fact answers a miss (or
-    // extends a schema hit), cited with its provenance verbatim. Checked BEFORE
-    // recall: a reified fact is stronger evidence than a transcript echo.
-    // Subject-side facts first (factAnswer), then the reverse-membership read-back
-    // (factReadBack) so an asserted "every X is a Y" answers "what is a Y" too.
+  // MISS handling. The intent lanes + short-miss are RECOGNIZER-gated on the query
+  // text AND only consulted on a would-miss, so a real graph query — a hit, an honest
+  // empty with a receipt, a fuzzy repair — is never hijacked. Order: (1) META/SELF
+  // lane (would-miss), (2) conversational orientation (would-miss), (3) memory
+  // facts/recall (a fact EXTENDS a non-miss schema hit too — NOT miss-gated),
+  // (4) TEACH lane (would-miss), (5) the short tailored miss (would-miss).
+  let handled = false;
+  // (1) #2 META/SELF: bare self/session questions ("what do you know", "what is this
+  // codebase", "how do i start") → a summary / orientation, answered before the
+  // fact-dump readers so "what do you know" gets a summary, not raw facts.
+  if (miss) {
+    const meta = await metaLane(query, { graph, memoryDir });
+    if (meta) { answer = meta.text; via = meta.via; recordMiss = false; handled = true; }
+  }
+  if (!handled && miss && isConversational(query)) {
+    // A conversational miss (a greeting, "what can you do", a very short non-code
+    // line) gets the friendly orientation (module-aware: empty → --repo/tmct init).
+    answer = orientationAnswer(templates, graph); via = "template"; handled = true;
+  } else if (!handled && memoryDir) {
+    // W4: vocabulary/definition questions consult the MEMORY graph's Facts alongside
+    // the schema-docs surface — a remembered fact answers a miss OR extends a (non-
+    // miss) schema hit, cited with its provenance verbatim. Checked BEFORE recall: a
+    // reified fact is stronger evidence than a transcript echo. Subject-side facts
+    // first (factAnswer), then the reverse-membership read-back (factReadBack) so an
+    // asserted "every X is a Y" answers "what is a Y" too.
     const fact = (await factAnswer(memoryDir, query, envelope, miss))
       ?? (await factReadBack(memoryDir, query, envelope, miss, graph));
     if (fact) {
@@ -1000,6 +1197,24 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
         recordMiss = false; // memory answered it, cited — no longer a blank
       }
     }
+  }
+  // (4) #2 TEACH lane — a teach-shaped would-miss nothing above answered: route to
+  // memory, or say what CAN be remembered (LOUD), never the wall / a silent drop.
+  if (miss && recordMiss && via === "composed") {
+    const taught = await teachLane(query, { memoryDir, sessionId, lexicon });
+    if (taught) { answer = taught.text; via = taught.via; recordMiss = taught.miss; }
+  }
+  // (5) #1 SHORT TAILORED MISS — replace ONLY the engine's full grammar cheat-sheet
+  // wall (WALL_MISS_RE). Receipt-bearing misses keep their specific wording.
+  if (miss && recordMiss && via === "composed" && WALL_MISS_RE.test(answer)) {
+    answer = shortMissHint(query); via = "miss";
+  }
+  // #4 HONEST-EMPTY POLISH — an empty CODE graph: any still-standing engine
+  // dead-end (an honest empty, the short miss, the bootstrap note) carries the exit
+  // toward a real graph, unless it already points there. Only when genuinely empty.
+  if (recordMiss && (via === "composed" || via === "miss")
+      && noCodeGraph(graph) && !/--repo|tmct init|no code graph/i.test(answer)) {
+    answer = `${answer}\n(this repo has no code graph — try \`--repo <path>\` or \`tmct init\`.)`;
   }
   // W5 (flag-gated, default OFF): an unknown-term miss may consult the LOCAL
   // committed corpus slice — a hit APPENDS a grounded, licence-cited aside under
@@ -1285,16 +1500,27 @@ export async function createSession({
   cwd = process.cwd(),
   gitRoot = gitToplevel,
 } = {}) {
+  // Graph resolution order for the chat surface (documented; --repo wins):
+  //   1. --repo <path>       → pins <path>/.tmct/graph.json (repo AND graph).
+  //   2. TMCT_GRAPH_FILE env → loads that graph anywhere (loadConfig reads it), so
+  //      `TMCT_GRAPH_FILE=<path> tmct chat` works even inside a git repo — the chat
+  //      surface used to ignore it (only the `cli` tool path honoured it). The repo
+  //      for logs/memory is still the git root / cwd; only the graph file is overridden.
+  //   3. git root            → <root>/.tmct/graph.json (the default target).
+  //   4. cwd                 → <cwd>/.tmct/graph.json (not a git repo).
   // Default the target to the GIT ROOT, not raw cwd: running from a nested package
   // dir (npm sets cwd there) would otherwise index only that package's ~few modules
-  // instead of the whole repo. --repo stays the explicit override.
+  // instead of the whole repo.
   let repo;
   let config;
   if (repoPath) { repo = repoPath; config = configFor(repoPath); }
   else {
     const root = gitRoot(cwd);
-    if (root) { repo = root; config = configFor(root); }
-    else { repo = cwd; config = loadConfig(env, cwd); } // not a git repo — cwd/env default
+    repo = root || cwd;
+    const envGraph = env.TMCT_GRAPH_FILE && String(env.TMCT_GRAPH_FILE).trim();
+    // TMCT_GRAPH_FILE (via loadConfig) overrides the repo-derived default graph path;
+    // otherwise the repo's own .tmct/graph.json is the target.
+    config = envGraph ? loadConfig(env, cwd) : { graphFile: join(repo, DEFAULT_GRAPH_REL) };
   }
 
   // Load the graph once up front — the banner needs the module count, and focus/`it`
@@ -1358,14 +1584,21 @@ export async function createSession({
   if (empty && String(env.TMCT_NO_SEED || "") !== "1") {
     seeded = await seedBootstrapMemory(repo);
   }
+  // #3/#5: 0 modules means no code graph to answer structure questions from —
+  // whether the graph file is absent (empty bootstrap) OR present with no code
+  // entities (the degenerate trap). Both get orienting, non-over-promising banner
+  // + greeting messaging rather than a silent dead-end.
+  const noCodeGraph = moduleCount === 0;
   const bannerLines = [
-    empty
-      // Empty-graph bootstrap: honest-miss messaging, never an error before the prompt.
-      ? `tmct chat — ${repo} — no graph loaded — starting empty; ` +
+    noCodeGraph
+      // No code graph: honest, orienting messaging — never an error before the prompt.
+      ? `tmct chat — ${repo} — no code graph loaded — ${empty ? "starting empty" : "graph has no code entities"}; ` +
         `the conversation is remembered to ${DEFAULT_GRAPH_REL} — log ${logFile}`
       : `tmct chat — ${repo} — ${moduleCount} module(s) — log ${logFile}`,
     // the honest seed line appears ONLY on the run that actually seeded
     ...(seeded ? [`seeded ${seeded.appended} starter facts from the ConceptNet slice — /memory to inspect`] : []),
+    // no code indexed → point at how to get one, and at what IS answerable now
+    ...(noCodeGraph ? ['no code indexed yet — run `tmct init` here or pass --repo <path>; meanwhile try "what is a cache"'] : []),
     "pass --repo <path> to target a different repo",
     "ask a question, or /help for commands (/stats for an overview) — /exit to leave",
   ];

@@ -90,9 +90,9 @@ test("W3 gate: the real binary in an empty dir seeds, greets and exits 0", async
     const r = spawnSync(process.execPath, [BIN], { encoding: "utf8", input: "hi\n/exit\n", cwd: dir });
     const elapsed = Date.now() - t0;
     assert.equal(r.status, 0, r.stderr);
-    assert.match(r.stdout, /no graph loaded — starting empty/);
+    assert.match(r.stdout, /no code graph loaded — starting empty/); // #3
     assert.match(r.stdout, new RegExp(`seeded ${SEED_LIMIT} starter facts from the ConceptNet slice`));
-    assert.match(r.stdout, /Hi\. Ask me about this codebase/);
+    assert.match(r.stdout, /Hi\. There's no code graph loaded here/); // #3: empty greeting orients
     assert.equal(await factCount(dir), SEED_LIMIT);
     assert.ok(elapsed < 15000, `seeded bootstrap stays inside a sane budget (took ${elapsed}ms)`);
   } finally {

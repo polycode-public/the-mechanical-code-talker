@@ -87,10 +87,14 @@ test("runTurn: a hit query answers from the graph, envelope stripped, log lines 
   assert.equal(logLines[3], "", "turn record ends with a blank line");
 });
 
-test("runTurn: a grammar miss prints the engine's own hint text — no special handling", async () => {
+test("runTurn: a grammar miss gets the SHORT tailored miss (#1), not the full grammar wall", async () => {
+  // #1: the full rephraseHint cheat-sheet now lives only behind /help; a genuine
+  // parse-miss keeps the honest "couldn't parse … Try:" opening (graded hm-joke pins
+  // those words) + at most two RELEVANT example shapes + a /help pointer.
   const { answer, logLines } = await runTurn("tell me a joke", { config: { graphFile: FIXTURE } });
-  assert.match(answer, /couldn't parse this as a graph question/);
-  assert.match(answer, /which <functions\|classes\|modules>/);
+  assert.match(answer, /^couldn't parse this as a graph question\. Try:/);
+  assert.match(answer, /Type \/help for all query shapes\./);
+  assert.doesNotMatch(answer, /which <functions\|classes\|modules>/, "the full grammar wall is gone (it lives behind /help)");
   assert.equal(logLines[2], answer, "the miss text is logged verbatim too");
 });
 
@@ -612,7 +616,7 @@ test("runChat: missing graph bootstraps clean — honest empty banner, conversat
     const { turns } = await runChat({ repoPath: dir, input, output: out, env: { TMCT_NO_SEED: "1" } });
     assert.equal(turns, 2);
     // the banner is honest about the empty start — and never an error before the prompt
-    assert.match(text(), /no graph loaded — starting empty/);
+    assert.match(text(), /no code graph loaded — starting empty/); // #3: 0-module orientation
     assert.match(text(), /remembered to .*graph\.json/);
     // a structural query over the empty graph answers with the engine's honest miss, no stack
     assert.match(text(), /no symbol matching "a\.mjs" found in the index\./);
@@ -647,7 +651,7 @@ test("cli chat: real binary, stdin closed after /exit → exit 0; graphless repo
       encoding: "utf8", input: "hi\n/exit\n", env: { ...process.env, TMCT_NO_SEED: "1" },
     });
     assert.equal(bad.status, 0, bad.stderr);
-    assert.match(bad.stdout, /no graph loaded — starting empty/);
+    assert.match(bad.stdout, /no code graph loaded — starting empty/); // #3
     const bareGraph = JSON.parse(await readFile(join(bare, ".tmct", "graph.json"), "utf8"));
     assert.ok(bareGraph.individuals.some((i) => i.class === "Session"), "bootstrap session folded into a new graph.json");
   } finally {

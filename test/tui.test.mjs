@@ -134,7 +134,7 @@ test("TUI: slash-commands dispatch through the sink; an empty repo's status bar 
   // long lines are hard-wrapped at the column budget — strip the wraps to match phrases
   const flat = () => String(lastFrame() ?? "").replace(/\n/g, "");
   try {
-    assert.ok(await until(() => /no graph( loaded)? — starting empty/.test(flat())), "bootstrap note in banner/status bar");
+    assert.ok(await until(() => /no (?:code )?graph( loaded)? — starting empty/.test(flat())), "bootstrap note in banner/status bar"); // #3
     // one chunk with the newline — the paste path submits the line atomically
     stdin.write("/help\n");
     assert.ok(await until(() => /question shapes for a bare line/.test(lastFrame())), "/help answered in the transcript");
