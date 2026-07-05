@@ -4,7 +4,7 @@
 //   loadSlice(path?)        stream corpus/conceptnet/slice.jsonl → assertions
 //   loadMap(path?)          src/corpus/conceptnet-map.toml → Map(rel → row)
 //   toFacts(assertions,map) assertions → appendFact-shaped triples
-//   seedMemory(dir, opts)   write them into <dir>/.tmct/memory via appendFact
+//   seedMemory(dir, opts)   write them into <dir>/.tmct/memory via appendFacts (one batched write)
 //
 // The slice is committed data (one JSON object per line: {start, rel, end,
 // surfaceText?, weight}; en→en only; CC-BY-SA 4.0 for ConceptNet-derived rows
@@ -13,11 +13,12 @@
 // ace = "none" are deliberate non-emissions. A slice relation MISSING from
 // the table is a drift error — loud, never guessed around.
 //
-// Seeding goes through src/memory/core.mjs appendFact() ONLY (memory is
-// import-only here): fact ids are content-hashed from (s,p,o), so re-seeding
-// is idempotent by construction. seedMemory additionally pre-loads the store
-// once and skips triples already present, so a re-seed is read-mostly instead
-// of N rewrites.
+// Seeding goes through src/memory/core.mjs appendFacts() (memory is import-only
+// here): fact ids are content-hashed from (s,p,o), so re-seeding is idempotent by
+// construction. seedMemory pre-loads the store once and skips triples already
+// present, then hands the survivors to appendFacts as ONE batched read-modify-
+// write — so seeding the whole slice is O(N), not the O(N²) a per-fact appendFact
+// loop would incur (the 6 k-fact slice: ~7 min → a couple of seconds).
 
 import { createReadStream } from "node:fs";
 import { readFile } from "node:fs/promises";
@@ -25,7 +26,7 @@ import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { parse as parseToml } from "smol-toml";
-import { appendFact, loadMemory, normFactTerm } from "../memory/core.mjs";
+import { appendFacts, loadMemory, normFactTerm } from "../memory/core.mjs";
 
 const PKG_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 export const SLICE_FILE = join(PKG_ROOT, "corpus", "conceptnet", "slice.jsonl");
@@ -140,9 +141,10 @@ export function toFacts(assertions, map, provenancePrefix = "corpus:conceptnet")
  *  location trivia the slice happens to open with; without `prefer` the
  *  behavior is byte-identical to before.
  *
- *  Idempotent twice over: appendFact's content-hashed ids make a blind
+ *  Idempotent twice over: appendFacts' content-hashed ids make a blind
  *  re-append an upsert, and we pre-read the store once to skip triples that
- *  are already there (so re-seeding costs one read, not N rewrites).
+ *  are already there (so re-seeding costs one read, not N rewrites). The
+ *  survivors are written in ONE batched appendFacts call, not a per-fact loop.
  *  Returns { appended, skipped, total }. `provenancePrefix` is threaded through to
  *  toFacts (default "corpus:conceptnet" → byte-identical seed) so a seon/tier-2
  *  corpus can tag its facts "corpus:seon" / "corpus:tier2:<id>". */
@@ -169,17 +171,20 @@ export async function seedMemory(dir, { limit, slicePath = SLICE_FILE, mapPath =
     existing.add(factKey(get("subject"), get("predicate"), get("object")));
   }
 
-  let appended = 0;
   let skipped = 0;
+  const toWrite = [];
   for (const fact of facts) {
     const key = factKey(fact.subject, fact.predicate, fact.object);
     if (existing.has(key)) {
       skipped += 1;
       continue;
     }
-    await appendFact(dir, fact);
     existing.add(key);
-    appended += 1;
+    toWrite.push(fact);
   }
-  return { appended, skipped, total: facts.length };
+  // ONE read-modify-write for the whole seed (was one per fact — O(N²) I/O, ~7 min
+  // for the 6 k-fact slice). appendFacts also skips any malformed row rather than
+  // throwing, so its skipped count folds into the dedup skips here.
+  const res = await appendFacts(dir, toWrite);
+  return { appended: res.appended, skipped: skipped + res.skipped, total: facts.length };
 }

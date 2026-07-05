@@ -425,6 +425,14 @@ export function normFactTerm(t) {
   return s.toLowerCase();
 }
 
+// The fact-id contract: a Fact is content-addressed by its NUL-DELIMITED
+// (s, p, o). NUL never occurs in a normalized term or a predicate URI, so it is
+// a collision-proof separator (a space could be forged by a term that contains
+// one). appendFact hashes the SAME `${s}\0${p}\0${o}` inline; appendFacts routes
+// through here so the batch path can never drift to a space and silently re-key
+// every seeded fact — the golden-equivalence test pins the two paths together.
+const factIdFor = (s, p, o) => `fact:${fnv1aHex(`${s}\0${p}\0${o}`)}`;
+
 /** Append one grammar-derived OWL triple, RDF-reified: a `Fact` individual
  *  carrying rdf:subject / rdf:predicate / rdf:object (+ provenance). The
  *  Phase-2 ACE parser's write point. Same (s,p,o) → same id → upsert, never a
@@ -463,6 +471,82 @@ export async function appendFact(dir, { subject, predicate, object, provenance =
     recountClasses(payload);
   });
   return { id };
+}
+
+/** Batch append of grammar/corpus-derived triples — ONE read-modify-write for a
+ *  whole seed (the appendUtterances precedent, for facts). The per-fact
+ *  appendFact does a full read → mutate → prose-reindex → atomic-write PER FACT,
+ *  so seeding N facts is O(N²) I/O (6 k facts ≈ 7 min); this collapses it to a
+ *  single mutate.
+ *
+ *  Every fact is normalized + prose-tokenized OUTSIDE the mutate, then a SINGLE
+ *  mutateMemory upserts each Fact through an id→individual Map (O(1) upsert, so
+ *  the growing individuals array is never rescanned per fact), reconciles each
+ *  touched fact's Sources + trust via the SAME syncFactSources appendFact uses,
+ *  and recountClasses ONCE at the end. The result is deep-equal (modulo array
+ *  order) to looping appendFact: same fact ids, same mgx:factProvenance union,
+ *  same statedBy Source edges, same mgx:trustScore, same first-write-wins
+ *  createdAt. Malformed facts (missing subject/predicate/object) are SKIPPED (a
+ *  bad row never aborts a 6 k-fact seed), not thrown as appendFact does.
+ *  Returns { ids, appended, skipped } — ids one per applied fact (in order),
+ *  appended = ids.length, skipped = malformed count. */
+export async function appendFacts(dir, facts) {
+  const prepared = [];
+  let skipped = 0;
+  for (const f of facts || []) {
+    const s = normFactTerm(f?.subject);
+    const p = normText(f?.predicate);
+    const o = normFactTerm(f?.object);
+    if (!s || !p || !o) { skipped += 1; continue; } // batch skips, never throws
+    const text = `${s} ${p} ${o}`;
+    prepared.push({
+      id: factIdFor(s, p, o), // NUL-delimited — byte-identical to appendFact's id
+      s, p, o, text,
+      tokens: proseTokensFor({ doc: text }),
+      provenance: normText(f?.provenance),
+      createdAt: f?.createdAt || "",
+    });
+  }
+  const ids = [];
+  if (!prepared.length) return { ids, appended: 0, skipped };
+  await mutateMemory(dir, (payload) => {
+    // id → individual index for O(1) upsert (the array grows to thousands).
+    const byId = new Map(payload.individuals.map((i) => [i?.id, i]));
+    const touched = [];
+    const seen = new Set();
+    for (const f of prepared) {
+      const prior = byId.get(f.id);
+      const priorProv = prior?.attributes?.find((a) => a?.prop === "mgx:factProvenance")?.value || "";
+      // Same as appendFact: the mgx:factProvenance union stays byte-identical (a
+      // compat shim); the Source edges below are DERIVED from it, purely additive.
+      const provs = [...new Set([...priorProv.split(" | "), f.provenance].filter(Boolean))];
+      const createdAtVal = firstWriteCreatedAt(prior, f.createdAt); // first-write-wins
+      const ind = {
+        id: f.id, label: labelOf(f.text), class: FACT_CLASS,
+        derived_from: [], mentions: [],
+        attributes: [
+          { prop: "rdf:type", key: "type", value: "rdf:Statement" },
+          { prop: "rdf:subject", key: "subject", value: f.s },
+          { prop: "rdf:predicate", key: "predicate", value: f.p },
+          { prop: "rdf:object", key: "object", value: f.o },
+          { prop: CREATED_AT_PROP, key: "createdAt", value: createdAtVal },
+          ...(provs.length ? [{ prop: "mgx:factProvenance", key: "provenance", value: provs.join(" | ") }] : []),
+          ...(f.tokens.length ? [{ prop: "mgx:hasProseTokens", key: "prose_tokens", value: f.tokens.join(" ") }] : []),
+        ],
+      };
+      // Upsert into BOTH the array (replace-in-place keeps order) and the index.
+      if (prior) payload.individuals[payload.individuals.indexOf(prior)] = ind;
+      else payload.individuals.push(ind);
+      byId.set(f.id, ind);
+      ids.push(f.id);
+      if (!seen.has(f.id)) { seen.add(f.id); touched.push(f.id); }
+    }
+    // Reconcile each touched fact's Sources + trust once (add-only, idempotent),
+    // then recount classes a SINGLE time at the end.
+    for (const id of touched) syncFactSources(payload, byId.get(id));
+    recountClasses(payload);
+  });
+  return { ids, appended: ids.length, skipped };
 }
 
 // ---- Chat-facing seams (W4 fact lookup + contradiction) ---------------------

@@ -9,7 +9,7 @@ import { join } from "node:path";
 import {
   MEMORY_GRAPH_REL, UTTERANCE_CLASS, FACT_CLASS,
   SAID_IN_SESSION_PROP, IN_REPLY_TO_PROP,
-  emptyMemory, loadMemory, appendUtterance, appendUtterances, appendFact,
+  emptyMemory, loadMemory, appendUtterance, appendUtterances, appendFact, appendFacts,
 } from "../src/memory/core.mjs";
 import { parseEntities } from "../src/codegraph.mjs";
 import { lookupByProseTokens } from "../src/prose.mjs";
@@ -168,6 +168,90 @@ test("appends are atomic: no temp litter in .tmct/memory, and the store survives
     assert.equal(m.generated_at, TS2, "generated_at tracks the latest utterance");
   } finally {
     await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("appendFacts: ONE write for a whole batch — Fact individuals, provenance, trust; malformed rows skipped not thrown", async () => {
+  const dir = await tmpRepo();
+  try {
+    const res = await appendFacts(dir, [
+      { subject: "/c/en/cache", predicate: "rdfs:subClassOf", object: "buffer", provenance: "corpus:conceptnet /r/IsA" },
+      { subject: "module", predicate: "rdfs:subClassOf", object: "artifact", provenance: "corpus:conceptnet /r/IsA" },
+      { subject: "bad", predicate: "", object: "row" },       // malformed — skipped
+      { subject: "", predicate: "isa", object: "thing" },      // malformed — skipped
+    ]);
+    assert.deepEqual({ appended: res.appended, skipped: res.skipped }, { appended: 2, skipped: 2 });
+    assert.equal(res.ids.length, 2);
+
+    const m = await loadMemory(dir);
+    const facts = m.individuals.filter((i) => i.class === FACT_CLASS);
+    assert.equal(facts.length, 2, "two facts, malformed rows never landed");
+    const cache = facts.find((f) => attr(f, "subject") === "cache");
+    assert.equal(attr(cache, "type"), "rdf:Statement");
+    assert.equal(attr(cache, "object"), "buffer");
+    assert.equal(attr(cache, "provenance"), "corpus:conceptnet /r/IsA");
+    // provenance derived a Source + statedBy edge + a trust score (same seam as appendFact)
+    assert.ok(m.individuals.some((i) => i.class === "Source"), "a Source individual was derived");
+    assert.ok(Number(attr(cache, "trustScore")) > 0, "trust materialised");
+    assert.equal(m.classes.find((c) => c.name === FACT_CLASS).count, 2);
+
+    // empty batch is a no-op
+    const none = await appendFacts(dir, []);
+    assert.deepEqual(none, { ids: [], appended: 0, skipped: 0 });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("appendFacts: GOLDEN EQUIVALENCE — byte-identical to looping appendFact (incl. duplicate-provenance arrival order)", async () => {
+  // Injected fixed clock: every fact carries the SAME explicit createdAt, so
+  // first-write-wins createdAt (and the recency it feeds) is reproducible across
+  // the two independent seeds — without this the two live seeds would stamp
+  // different wall-clock timestamps and the equivalence would be vacuous.
+  const CREATED = "2026-01-02T03:04:05.000Z";
+  const facts = [
+    { subject: "/c/en/cache", predicate: "rdfs:subClassOf", object: "/c/en/buffer", provenance: "corpus:conceptnet /r/IsA", createdAt: CREATED },
+    { subject: "the sky", predicate: "mgx:hasProperty", object: "blue", provenance: "ace:chat:s1@2026-07-05T00:00:00.000Z", createdAt: CREATED },
+    // SAME (s,p,o) id as row 0, a DIFFERENT provenance tag — the union must read
+    // in ARRIVAL order ("corpus… | web…"), never sorted/reordered.
+    { subject: "cache", predicate: "rdfs:subClassOf", object: "buffer", provenance: "web:https://ex.org/x", createdAt: CREATED },
+    { subject: "module", predicate: "rdfs:subClassOf", object: "artifact", provenance: "corpus:conceptnet /r/IsA", createdAt: CREATED },
+    { subject: "bad", predicate: "", object: "row", createdAt: CREATED }, // malformed — batch skips, appendFact would throw
+  ];
+  const valid = facts.filter((f) => f.subject && f.predicate && f.object);
+
+  // Sort the arrays whose ORDER legitimately differs between the two paths
+  // (individuals / edge examples / class samples), but NEVER touch attribute
+  // order or the provenance STRING — those must already be identical.
+  const norm = (g) => ({
+    ...g,
+    individuals: [...g.individuals].sort((a, b) => a.id.localeCompare(b.id)),
+    objectProperties: [...g.objectProperties]
+      .map((grp) => ({ ...grp, examples: [...grp.examples].sort((a, b) => `${a.subject}>${a.object}`.localeCompare(`${b.subject}>${b.object}`)) }))
+      .sort((a, b) => a.prop.localeCompare(b.prop)),
+    classes: [...g.classes].map((c) => ({ ...c, sample: [...(c.sample || [])].sort() })).sort((a, b) => a.name.localeCompare(b.name)),
+  });
+
+  const dirA = await tmpRepo();
+  const dirB = await tmpRepo();
+  try {
+    for (const f of valid) await appendFact(dirA, f); // per-fact path (throws on malformed → feed only valid)
+    const res = await appendFacts(dirB, facts);       // batch path (skips malformed)
+    assert.deepEqual({ appended: res.appended, skipped: res.skipped }, { appended: 4, skipped: 1 });
+
+    const a = JSON.parse(await readFile(join(dirA, MEMORY_GRAPH_REL), "utf8"));
+    const b = JSON.parse(await readFile(join(dirB, MEMORY_GRAPH_REL), "utf8"));
+
+    // the load-bearing assertion: the two graphs are structurally identical
+    assert.deepEqual(norm(b), norm(a), "batch graph == per-fact graph (modulo array order)");
+
+    // and prove the duplicate-fact provenance union is arrival-ordered in BOTH
+    const provOf = (g) => attr(g.individuals.find((i) => i.class === FACT_CLASS && attr(i, "subject") === "cache"), "provenance");
+    assert.equal(provOf(a), "corpus:conceptnet /r/IsA | web:https://ex.org/x", "per-fact: arrival-ordered union");
+    assert.equal(provOf(b), provOf(a), "batch: byte-identical arrival-ordered union");
+  } finally {
+    await rm(dirA, { recursive: true, force: true });
+    await rm(dirB, { recursive: true, force: true });
   }
 });
 
