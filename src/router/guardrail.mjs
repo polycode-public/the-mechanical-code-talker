@@ -28,7 +28,7 @@
 // Pure over its inputs + ctx.resolve (the binding oracle). No network, no Date.now.
 
 import { capabilityByName, preconditionsOf, PRECOND } from "./registry.mjs";
-import { hallucinationsIn } from "../../agentbench/grade.mjs";
+import { hallucinationsIn } from "./call-validator.mjs";
 
 /** Validate a proposed tool_use. Returns a glass-box verdict:
  *    { ok, tool, denied:[{reason,detail}], steps:[{pred,ok,...}], provenance }

@@ -30,6 +30,7 @@
 // each set against a hand-derived fixture truth).
 
 import { impactClosure, edgesOfKind, siteOf } from "../src/codegraph.mjs";
+import { uniqSort } from "../src/router/set-algebra.mjs";
 
 // A test-path label, mirroring codegraph.mjs's private isTestLabel (untested view).
 const isTestLabel = (s) =>
@@ -46,8 +47,6 @@ function moduleIdOf(graph, ind) {
   const m = String(ind?.id || "").match(/^fn:(.+)#/);
   return m ? `mod:${m[1]}` : null;
 }
-
-const uniqSort = (xs) => [...new Set(xs)].sort((a, b) => String(a).localeCompare(String(b)));
 
 // ---- per-tool structured result sets (label sets), mirroring render* ----------
 
@@ -164,22 +163,9 @@ export function resultSetOf(graph, name, _input, resolvedInd) {
 
 // ---- the composition operators (the multi-step fold) -------------------------
 // PURE set-algebra over the threaded step result-sets. The DRIVER selects one by
-// the router's HTN method; grade.mjs never imports these.
+// the router's HTN method; grade.mjs never imports these. They LIVE in the
+// product router now (src/router/set-algebra.mjs) — the bench imports the
+// product, never the other way round. Re-exported here (uniqSort included) so
+// every existing bench import keeps working.
 
-/** a ∩ b — the relative-filter fold ("of the <set>, which are <Y>"). */
-export function intersect(a = [], b = []) {
-  const bs = new Set(b);
-  return uniqSort([...new Set(a)].filter((x) => bs.has(x)));
-}
-
-/** if a is empty -> b, else a — the conditional "… <action> instead" recipe
- *  ("if X has no tests, list what covers Y instead"). */
-export function fallbackIfEmpty(a = [], b = []) {
-  return uniqSort(a.length ? a : b);
-}
-
-/** if a is empty -> b, else ∅ — the guarded conditional ("if X is untested,
- *  <action> it"): the action's result fires ONLY when the guard set is empty. */
-export function guardIfEmpty(a = [], b = []) {
-  return uniqSort(a.length ? [] : b);
-}
+export { uniqSort, intersect, fallbackIfEmpty, guardIfEmpty } from "../src/router/set-algebra.mjs";
