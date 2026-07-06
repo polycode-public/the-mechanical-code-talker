@@ -1,10 +1,14 @@
 # AGENTBENCH_0.8.0 — the shim-transport baseline, measured
 
-**Headline:** **0% hallucination on every rung** (A0→C2) — the router's one non-negotiable,
-demonstrated by the *transport floor*. Overall **completion 13 / 28 = 46%**, hallucination **0 / 28
-= 0%**. On the honest gate (**0% hallucination AT ≥50% completion**) the shim **clears A0 (71%), A1
-(56%), A2 (100%)** and hits its **ceiling at B1** (0% — it gates B2/C1/C2). Deterministic replay,
-no LLM, no judge; two runs over the same tree + `--stamp 0.8.0` are byte-identical.
+**Headline:** **0% hallucination on every rung it *acts on* (A0–A2); it refuses above.** — the
+router's one non-negotiable, demonstrated by the *transport floor*. Honesty note: hallucination is
+measured only over *produced* calls, so on B1→C2 the shim emits **zero** calls and 0% is true by
+construction of refusal (a ceiling marker, not discriminating evidence); the load-bearing
+0%-hallucination signal lives in A0/A1/A2 where the shim actually acts. Overall **completion 13 / 28
+= 46%**, hallucination **0 / 28 = 0%**. On the honest gate (**0% hallucination AT ≥50% completion**)
+the shim **clears A0 (71%), A1 (56%), A2 (100%)** and hits its **ceiling at B1** (0% completion — it
+gates B2/C1/C2). Deterministic replay, no LLM, no judge; two runs over the same tree + `--stamp
+0.8.0` are byte-identical.
 
 > ## ⚠ This is the SHIM-TRANSPORT floor — NOT the router baseline, NOT the stub floor
 > The driver under test is `shim-transport` (`agentbench/driver-shim.mjs`): it reuses the HTTP
