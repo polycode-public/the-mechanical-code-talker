@@ -9,6 +9,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { interpret, STRATEGIES, normalizeInput, runStrategiesSync } from "../src/interpret/pipeline.mjs";
 import { mergeStrategyResults, alternateLines, sameParse } from "../src/interpret/merge.mjs";
+import { applyPreambleFrames } from "../src/interpret/normalize.mjs";
 import { stripNoise } from "../src/interpret/strategies/noise-strip.mjs";
 import { parseQuery, ask } from "../src/ask.mjs";
 import { buildEntities } from "../src/graph-build.mjs";
@@ -321,6 +322,151 @@ test("item 10 (noise-strip): a vocative-led META question answers like its clean
   const clean = ask(graph, "what does cochange mean");
   assert.equal(noisy.content, clean.content);
   assert.equal(noisy.tmct_ask.miss, false);
+});
+
+// ============================================================================
+// 0.8.2 feel wave (WS2) — closed preamble frames, determiner-insensitive merge,
+// has-tests coverage rewrite, sha guard on the authorship frame.
+// ============================================================================
+
+// ---- 1. preamble frames (interpret/normalize.mjs applyPreambleFrames, hooked
+// inside normalizeQuery before the FILLER strip) ----
+
+test("preamble (greeting): 'hey there, quick question - <Q>' strips to the bare question and answers identically", () => {
+  const graph = buildGraph();
+  const noisy = "hey there, quick question - which modules import src/logging.mjs?";
+  assert.equal(normalizeInput(noisy).text, "which modules import src/logging.mjs?");
+  const r = ask(graph, noisy);
+  const clean = ask(graph, "which modules import src/logging.mjs");
+  assert.equal(r.content, clean.content);
+  assert.equal(r.tmct_ask.miss, false);
+  assert.match(r.content, /myFile\.mjs/);
+});
+
+test("preamble (greeting): delimiter variants — comma, hyphen, em-dash, with/without the quick-question bridge", () => {
+  assert.equal(normalizeInput("hi - what calls Logger").text, "what calls Logger");
+  assert.equal(normalizeInput("hello there — quick question: what calls Logger?").text, "what calls Logger?");
+  assert.equal(normalizeInput("yo, who touched src/logging.mjs").text, "who touched src/logging.mjs");
+  assert.equal(normalizeInput("hey, just a quick question - what calls Logger").text, "what calls Logger");
+});
+
+test("preamble (greeting): a BARE greeting is untouched by the frame (delimiter + non-empty remainder required)", () => {
+  // the frame itself never fires on a bare greeting — chat's conversational lane
+  // matches the RAW line ("hey there" ∈ GREET), so the greeting stays a greeting.
+  assert.equal(applyPreambleFrames("hey there"), "hey there");
+  assert.equal(applyPreambleFrames("hey there,"), "hey there,"); // empty remainder → no strip
+  // and a vocative ("hey tmct, …") is NOT a greeting preamble — no delimiter after
+  // the greeting word — so it stays for the noise-strip tier that already owns it.
+  assert.match(normalizeInput("hey tmct, what calls fnAlpha thanks").text, /tmct/);
+});
+
+test("preamble (modal): 'can/could/will you … [, please][?]' unwraps to the bare question", () => {
+  const graph = buildGraph();
+  assert.equal(normalizeInput("can you tell me which modules import src/logging.mjs, please?").text,
+    "which modules import src/logging.mjs");
+  assert.equal(normalizeInput("will you show me which modules import src/logging.mjs").text,
+    "which modules import src/logging.mjs");
+  const r = ask(graph, "could you tell me which modules import src/logging.mjs please");
+  assert.equal(r.content, ask(graph, "which modules import src/logging.mjs").content);
+});
+
+test("preamble (modal): 'can you tell me a joke' normalizes byte-identically to the bare joke line — the hm-joke wall is preserved", () => {
+  const graph = buildGraph();
+  assert.equal(normalizeInput("can you tell me a joke").text, normalizeInput("tell me a joke").text);
+  const wrapped = ask(graph, "can you tell me a joke");
+  assert.equal(wrapped.tmct_ask.miss, true);
+  assert.match(wrapped.content, /^couldn't parse this as a graph question/);
+  assert.equal(wrapped.content, ask(graph, "tell me a joke").content);
+});
+
+test("preamble (show/give-me): an entity remainder bridges to the describe surface", () => {
+  assert.equal(normalizeInput("show me the store module").text, "describe store module");
+  assert.equal(normalizeInput("can you show me the store module please").text, "describe store module");
+  assert.equal(normalizeInput("give me src/logging.mjs").text, "describe src/logging.mjs");
+  // the contraction table feeds the bridge ("gimme" → "give me" first)
+  assert.equal(normalizeInput("gimme the store module").text, "describe store module");
+});
+
+test("preamble (show/give-me): a remainder carrying a relation verb or interrogative lead UNWRAPS to the real query", () => {
+  const graph = buildGraph();
+  assert.equal(normalizeInput("show me which modules import src/logging.mjs").text,
+    "which modules import src/logging.mjs");
+  const r = ask(graph, "show me which modules import src/logging.mjs");
+  assert.equal(r.content, ask(graph, "which modules import src/logging.mjs").content);
+  assert.equal(r.tmct_ask.miss, false);
+});
+
+test("preamble (show/give-me): a KIND-listing remainder is left untouched — the compositional list grammar owns it", () => {
+  // "show me" is a LIST_TRIGGER; the bridge must not steal the working list shape.
+  assert.equal(normalizeInput("show me untested modules").text, "show me untested modules");
+  const parsed = parseQuery("show me untested modules", { nlp: null });
+  assert.equal(parsed.node, "list");
+  assert.deepEqual(parsed.base.filters, ["untested"]);
+  // negation-set listings keep their boolean composition after the unwrap too
+  const neg = parseQuery("show me modules not importing src/logging.mjs", { nlp: null });
+  assert.equal(neg.node, "boolean");
+});
+
+// ---- 2. determiner-insensitive candidate merge (interpret/merge.mjs) ----
+
+test("merge (determiner): 'the logger' vs 'logger' is agreement, not ambiguity — and the det-less object survives", () => {
+  assert.equal(sameParse(
+    { shape: "reverse", kind: "imports", object: "the logger" },
+    { shape: "reverse", kind: "imports", object: "logger" },
+  ), true);
+  const parsed = parseQuery("which modules import the logger", { nlp: null });
+  assert.equal(parsed.ambiguousParse, undefined, "identical readings must not be surfaced as a choice");
+  assert.equal(parsed.object, "logger", "downstream resolution must see the det-less term");
+});
+
+test("merge (determiner): genuinely DISTINCT terms still surface as the honest ambiguity", () => {
+  const a = REV("alpha");
+  const b = REV("the beta"); // det-stripping must not collapse different terms
+  const merged = mergeStrategyResults([
+    { strategyId: "s1", class: "graph-query", candidates: [{ parsed: a, confidence: 0.9 }] },
+    { strategyId: "s2", class: "graph-query", candidates: [{ parsed: b, confidence: 0.7 }] },
+  ]);
+  assert.equal(merged.parsed.ambiguousParse, true);
+});
+
+// ---- 3. has-tests → coverage rewrite (normalize.mjs PHRASING_FRAMES) ----
+
+test("has-tests: 'does X have tests' / 'is X tested' rewrite onto the coverage question (no more defines-edge garble)", () => {
+  const graph = buildGraph();
+  assert.equal(normalizeInput("does myFile.mjs have tests").text, "what tests myFile.mjs");
+  assert.equal(normalizeInput("do the handlers have any tests?").text, "what tests the handlers");
+  assert.equal(normalizeInput("does startup have test coverage").text, "what tests startup");
+  assert.equal(normalizeInput("is myFile.mjs tested").text, "what tests myFile.mjs");
+  const r = ask(graph, "does myFile.mjs have tests");
+  assert.doesNotMatch(r.content, /defines edge/, "the has→defines misparse must be gone");
+  assert.match(r.content, /No tests cover myFile\.mjs/);
+  assert.equal(r.content, ask(graph, "what tests myFile.mjs").content);
+});
+
+test("has-tests guards: members questions and negated forms are NOT captured", () => {
+  // "does X have methods" stays the members family, never a coverage rewrite
+  assert.equal(normalizeInput("does Widget have methods").text, "does Widget have methods");
+  // a negated subject span keeps its own set-complement handling downstream
+  assert.equal(normalizeInput("is myFile.mjs not tested").text, "is myFile.mjs not tested");
+  // the agent-marked passive keeps its own path (anchor is is/are, not which/what)
+  assert.match(normalizeInput("which modules are tested by b.test.mjs").text, /^which modules are tested by/);
+});
+
+// ---- 4. sha guard on the authorship frame (normalize.mjs PHRASING_FRAMES) ----
+
+test("authorship sha guard: a commit-sha object is NOT rewritten to 'who touched' (the author lane consumes it)", () => {
+  assert.equal(normalizeInput("who is the author of abc1234").text, "who is the author of abc1234");
+  assert.equal(normalizeInput("who wrote deadbeefcafe").text, "who wrote deadbeefcafe");
+  assert.equal(normalizeInput("who authored commit abc1234").text, "who authored commit abc1234");
+});
+
+test("authorship sha guard: non-sha objects (files/symbols/anaphora) keep the touch rewrite", () => {
+  assert.equal(normalizeInput("who is the author of walk.mjs").text, "who touched walk.mjs");
+  assert.equal(normalizeInput("who wrote src/logging.mjs?").text, "who touched src/logging.mjs");
+  // hex-looking but dotted → a module name, still rewritten
+  assert.equal(normalizeInput("who wrote deadbeef.mjs").text, "who touched deadbeef.mjs");
+  // anaphora rides through untouched
+  assert.equal(normalizeInput("who wrote it").text, "who touched it");
 });
 
 test("item 10 (noise-strip): the strategy never fires when the anchored grammar owns the text as-given", async () => {

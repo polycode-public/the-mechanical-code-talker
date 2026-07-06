@@ -57,8 +57,12 @@ test("cascade NOISE-STRIP: 'could you show me what imports walk.mjs please' → 
   // src/a.mjs and src/b.mjs import walk.mjs
   assert.match(r.content, /src\/a\.mjs/);
   assert.match(r.content, /src\/b\.mjs/);
-  assert.notEqual(r.tmct_ask.relaxed, null);
-  assert.equal(r.tmct_ask.relaxed.to, "what imports walk.mjs");
+  // 0.8.2 preamble frames (interpret/normalize.mjs): the modal wrapper + show-me
+  // bridge now unwrap this to "what imports walk.mjs" BEFORE parsing, so it is a
+  // clean DIRECT hit — the cascade is no longer needed for this phrasing (the
+  // same answer, one tier earlier; the cascade's own rescue stays pinned by the
+  // worked example above).
+  assert.equal(r.tmct_ask.relaxed, null);
 });
 
 // ---- 2. DROP-UNMATCHED: an unknown content word beside a valid one is dropped ----
@@ -201,8 +205,10 @@ test("cascade determinism: the same relaxed query yields an identical result bot
   assert.deepEqual(a.tmct_ask.relaxed, b.tmct_ask.relaxed);
   assert.deepEqual(a.tmct_ask.parsed, b.tmct_ask.parsed);
   // relaxParse itself is pure given (graph, query): identical trace across calls
-  const t1 = relaxParse(graph, "could you show me what imports walk.mjs please", OPTS);
-  const t2 = relaxParse(graph, "could you show me what imports walk.mjs please", OPTS);
+  // (probe with the worked example above — the "could you show me …" phrasing now
+  // direct-parses via the 0.8.2 preamble frames and never enters the cascade)
+  const t1 = relaxParse(graph, "Please count the classes matey", OPTS);
+  const t2 = relaxParse(graph, "Please count the classes matey", OPTS);
   assert.deepEqual(t1.steps, t2.steps);
   assert.deepEqual(t1.dropped, t2.dropped);
 });

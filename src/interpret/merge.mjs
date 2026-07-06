@@ -25,7 +25,18 @@ const DEFAULT_CONFIDENCE = 0.5;
 // commit-sha tier strips the noun — the anchored strategy captures the noun inside
 // its object span while keyword-spot consumes it as the entity keyword, so without
 // this the two strategies would "disagree" over a word that names no different thing.
-const cmpTerm = (s) => String(s || "").trim().toLowerCase().replace(/\s+/g, " ").replace(/^commit\s+(?=[0-9a-f]{7,40}$)/, "");
+// A leading DETERMINER is the same kind of non-difference (0.8.2 feel wave): the
+// anchored grammar captures "the logger" while keyword-spot captures "logger", and
+// the resulting "ambiguity" asked the user to choose between identical readings.
+const cmpTerm = (s) => String(s || "").trim().toLowerCase().replace(/\s+/g, " ")
+  .replace(/^(?:the|a|an)\s+/, "")
+  .replace(/^commit\s+(?=[0-9a-f]{7,40}$)/, "");
+
+// Leading-determiner probe over a parse's term slots — the dedupe below keeps the
+// det-LESS twin so downstream term resolution sees the bare object ("logger",
+// never "the logger").
+const LEADING_DET_RE = /^\s*(?:the|a|an)\s+/i;
+const detCount = (p) => [p?.subject, p?.object].filter((t) => LEADING_DET_RE.test(String(t || ""))).length;
 
 /** Do two independently-produced parses mean the same graph query? Same
  *  shape, same relation kind, and matching term(s) (both subject and object
@@ -99,6 +110,10 @@ export function mergeStrategyResults(results) {
       if (dup) {
         dup.agreed += 1;
         dup.confidence = Math.max(dup.confidence, c.confidence);
+        // determiner-insensitive collapse: when the agreeing parses differ only
+        // by a leading determiner, the det-less reading's parse survives (the
+        // representative's strategy/confidence standing is unchanged).
+        if (detCount(c.parsed) < detCount(dup.parsed)) dup.parsed = c.parsed;
         continue;
       }
       distinct.push({ ...c, agreed: 1 });
