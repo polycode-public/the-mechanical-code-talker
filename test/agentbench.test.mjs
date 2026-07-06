@@ -11,7 +11,7 @@
 //      the registry name-set is a strict SUBSET of the dispatch case set
 //      (closed-world default-deny). This catches arg-key drift at merge.
 
-import { test } from "node:test";
+import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -37,6 +37,15 @@ import {
 import { COMMANDS } from "../src/chat.mjs";
 
 const CASES_FILE = fileURLToPath(new URL("../agentbench/cases.jsonl", import.meta.url));
+
+// ONE shared run context for the whole file (0.8.2 speed insurance): every
+// consumer here is READ-ONLY over the materialized fixture graph, so the
+// per-test createRunCtx (mkdtemp + graph write + cleanup) cycles collapse into
+// a single module-scope one, cleaned in the after-hook. runAgentbench calls
+// pass it through { ctx } and so skip their own create/cleanup too.
+const SHARED = await createRunCtx();
+const CTX = SHARED.ctx;
+after(() => SHARED.cleanup());
 
 // ---- 1. registry shape ------------------------------------------------------
 
@@ -216,41 +225,31 @@ test("parseCases: rejects an undeclared tool, an unknown rung, and a hallucinate
 // ---- 3. CONFORMANCE — the executable "verified against the switch" ----------
 
 test("conformance: registry ⊆ dispatchTool AND every arg-key is read by the switch", async () => {
-  const { ctx, cleanup } = await createRunCtx();
-  try {
-    for (const cap of capabilities()) {
-      const res = await ctx.dispatch(cap.name, {}); // empty input
-      // strict SUBSET: the name is a real dispatch case (never "unknown tool")
-      if (!res.ok) assert.doesNotMatch(res.error, /unknown tool/, `${cap.name} must be a dispatchTool case`);
-      const reqArgs = requiredArgsOf(cap.name);
-      const anyGroups = preconditionsOf(cap.name).filter((p) => p.pred === PRECOND.anyPresent);
-      if (reqArgs.length === 0 && anyGroups.length === 0) {
-        assert.ok(res.ok, `${cap.name} takes no required arg → dispatch({}) should succeed`);
-      } else {
-        // dispatch({}) must reject with a message naming the arg-key the switch
-        // actually reads — this is where arg-key DRIFT fails the merge.
-        assert.ok(!res.ok, `${cap.name} requires an arg → dispatch({}) should error`);
-        const argWord = reqArgs[0] ?? anyGroups[0].params[0];
-        assert.match(res.error, new RegExp(`\\b${argWord}\\b`), `${cap.name}: dispatch names its arg-key "${argWord}"`);
-      }
+  for (const cap of capabilities()) {
+    const res = await CTX.dispatch(cap.name, {}); // empty input
+    // strict SUBSET: the name is a real dispatch case (never "unknown tool")
+    if (!res.ok) assert.doesNotMatch(res.error, /unknown tool/, `${cap.name} must be a dispatchTool case`);
+    const reqArgs = requiredArgsOf(cap.name);
+    const anyGroups = preconditionsOf(cap.name).filter((p) => p.pred === PRECOND.anyPresent);
+    if (reqArgs.length === 0 && anyGroups.length === 0) {
+      assert.ok(res.ok, `${cap.name} takes no required arg → dispatch({}) should succeed`);
+    } else {
+      // dispatch({}) must reject with a message naming the arg-key the switch
+      // actually reads — this is where arg-key DRIFT fails the merge.
+      assert.ok(!res.ok, `${cap.name} requires an arg → dispatch({}) should error`);
+      const argWord = reqArgs[0] ?? anyGroups[0].params[0];
+      assert.match(res.error, new RegExp(`\\b${argWord}\\b`), `${cap.name}: dispatch names its arg-key "${argWord}"`);
     }
-  } finally {
-    await cleanup();
   }
 });
 
 test("conformance: the EXCLUDED tools are dispatched but unregistered (strict subset, not disjoint)", async () => {
-  const { ctx, cleanup } = await createRunCtx();
-  try {
-    for (const name of ["tmct_snippet", "tmct_context_more"]) {
-      assert.ok(!isCapability(name), `${name} is intentionally unregistered`);
-      const res = await ctx.dispatch(name, {});
-      // it IS a dispatch case (server handles it) — proving the registry is a
-      // strict SUBSET of the switch, not a disjoint set.
-      assert.ok(!res.ok && !/unknown tool/.test(res.error), `${name} is dispatched (excluded from the registry, not unknown)`);
-    }
-  } finally {
-    await cleanup();
+  for (const name of ["tmct_snippet", "tmct_context_more"]) {
+    assert.ok(!isCapability(name), `${name} is intentionally unregistered`);
+    const res = await CTX.dispatch(name, {});
+    // it IS a dispatch case (server handles it) — proving the registry is a
+    // strict SUBSET of the switch, not a disjoint set.
+    assert.ok(!res.ok && !/unknown tool/.test(res.error), `${name} is dispatched (excluded from the registry, not unknown)`);
   }
 });
 
@@ -277,7 +276,7 @@ test("conformance: the COMMANDS.arg seam — every command's arg-key is one the 
 
 test("agentbench e2e: the stub driver runs the seed set to a labeled stub-floor result", async () => {
   const { cases } = parseCases(await readFile(CASES_FILE, "utf8"));
-  const { rows, rolled } = await runAgentbench(cases, { stamp: BENCH_VERSION });
+  const { rows, rolled } = await runAgentbench(cases, { stamp: BENCH_VERSION, ctx: CTX });
   assert.equal(rows.length, cases.length);
   for (const r of rows) {
     assert.equal(r.driver, "stub-floor", "every row is stamped the stub-driver floor, not a router baseline");
@@ -300,7 +299,7 @@ test("agentbench e2e: the stub driver runs the seed set to a labeled stub-floor 
 
 test("agentbench e2e: the shim-transport driver NEVER hallucinates over the whole ladder (its non-negotiable)", async () => {
   const { cases } = parseCases(await readFile(CASES_FILE, "utf8"));
-  const { rows, rolled } = await runAgentbench(cases, { driver: shimDriver, stamp: BENCH_VERSION });
+  const { rows, rolled } = await runAgentbench(cases, { driver: shimDriver, stamp: BENCH_VERSION, ctx: CTX });
   assert.equal(rows.length, cases.length);
   for (const r of rows) {
     assert.equal(r.driver, "shim-transport", "every shim row is stamped shim-transport, not a router baseline");
@@ -319,47 +318,37 @@ test("agentbench e2e: the shim-transport driver NEVER hallucinates over the whol
 });
 
 test("shim-transport: refuses free-NL and multi-step (transport floor), clears the command register at 0% halluc", async () => {
-  const { ctx, cleanup } = await createRunCtx();
-  try {
-    // a bare COMMANDS verb + entity → the shim emits a grounded, well-formed call.
-    const ok = await shimDriver("describe Widget", ["tmct_describe"], ctx);
-    assert.equal(ok.driver, "shim-transport");
-    assert.deepEqual(ok.calls, [{ name: "tmct_describe", input: { symbol: "Widget" } }]);
-    assert.equal(ok.refused, false);
-    assert.deepEqual(hallucinationsIn(ok.calls[0], ["tmct_describe"]), []);
+  // a bare COMMANDS verb + entity → the shim emits a grounded, well-formed call.
+  const ok = await shimDriver("describe Widget", ["tmct_describe"], CTX);
+  assert.equal(ok.driver, "shim-transport");
+  assert.deepEqual(ok.calls, [{ name: "tmct_describe", input: { symbol: "Widget" } }]);
+  assert.equal(ok.refused, false);
+  assert.deepEqual(hallucinationsIn(ok.calls[0], ["tmct_describe"]), []);
 
-    // free-NL phrasing is out of the command register → text answer here = REFUSE,
-    // never a guessed/ungrounded call.
-    const nl = await shimDriver("which functions call fnAlpha", ["tmct_describe", "tmct_callers", "tmct_callees"], ctx);
-    assert.equal(nl.refused, true);
-    assert.deepEqual(nl.calls, []);
+  // free-NL phrasing is out of the command register → text answer here = REFUSE,
+  // never a guessed/ungrounded call.
+  const nl = await shimDriver("which functions call fnAlpha", ["tmct_describe", "tmct_callers", "tmct_callees"], CTX);
+  assert.equal(nl.refused, true);
+  assert.deepEqual(nl.calls, []);
 
-    // a multi-step recipe: the single-call transport emits at most one call →
-    // refuses here (no thread-through), a ceiling, never a hallucination.
-    const multi = await shimDriver("find who calls fnAlpha, then describe Widget.render", ["tmct_callers", "tmct_describe"], ctx);
-    assert.equal(multi.refused, true);
-    assert.deepEqual(multi.calls, []);
+  // a multi-step recipe: the single-call transport emits at most one call →
+  // refuses here (no thread-through), a ceiling, never a hallucination.
+  const multi = await shimDriver("find who calls fnAlpha, then describe Widget.render", ["tmct_callers", "tmct_describe"], CTX);
+  assert.equal(multi.refused, true);
+  assert.deepEqual(multi.calls, []);
 
-    // a command whose entity does not resolve → honest refusal (no ungrounded call).
-    const miss = await shimDriver("describe zebra.mjs", ["tmct_describe"], ctx);
-    assert.equal(miss.refused, true);
-    assert.deepEqual(miss.calls, []);
-  } finally {
-    await cleanup();
-  }
+  // a command whose entity does not resolve → honest refusal (no ungrounded call).
+  const miss = await shimDriver("describe zebra.mjs", ["tmct_describe"], CTX);
+  assert.equal(miss.refused, true);
+  assert.deepEqual(miss.calls, []);
 });
 
 test("agentbench e2e: the stub driver refuses a request whose only fitting tool is out-of-set", async () => {
-  const { ctx, cleanup } = await createRunCtx();
-  try {
-    // "history of X" but tmct_history is not offered → honest refusal, no call
-    const loop = await stubDriver("what is the commit history of Widget.render", ["tmct_describe", "tmct_callers"], ctx);
-    assert.equal(loop.refused, true);
-    assert.deepEqual(loop.calls, []);
-    assert.equal(loop.driver, "stub-floor");
-  } finally {
-    await cleanup();
-  }
+  // "history of X" but tmct_history is not offered → honest refusal, no call
+  const loop = await stubDriver("what is the commit history of Widget.render", ["tmct_describe", "tmct_callers"], CTX);
+  assert.equal(loop.refused, true);
+  assert.deepEqual(loop.calls, []);
+  assert.equal(loop.driver, "stub-floor");
 });
 
 // ---- 4. RESULT EXECUTION + COMPOSITION (0.8.1) ------------------------------
@@ -368,29 +357,24 @@ test("agentbench e2e: the stub driver refuses a request whose only fitting tool 
 // render*), the composition operators, the STATIC-literal expect.result lint, and
 // the plan-vs-result SPLIT in gradeCase + the resolver e2e.
 
-test("results: the structured extractor mirrors the render* set semantics over the fixture", async () => {
-  const { ctx, cleanup } = await createRunCtx();
-  try {
-    const g = ctx.graph;
-    const ind = (t) => ctx.resolve(t).match;
-    // the untested view (renderUntested): source modules with no covering test module
-    assert.deepEqual(untestedModules(g),
-      ["app/lib/a.mjs", "app/lib/c.mjs", "app/lib/e.mjs", "app/lib/f.mjs", "scripts/g.mjs"]);
-    // the reverse impact closure (renderImpact/impactClosure), uncapped + sorted
-    assert.deepEqual(impactLabels(g, ind("app/lib/a.mjs")),
-      ["app/functions/d/handler.mjs", "app/lib/b.mjs", "app/lib/c.mjs", "app/lib/e.mjs", "app/lib/f.mjs", "scripts/g.mjs"]);
-    // tests_for: [] means untested (renderTestsFor "no covering tests")
-    assert.deepEqual(testsForLabels(g, ind("app/lib/c.mjs")), []);
-    assert.deepEqual(testsForLabels(g, ind("app/lib/b.mjs")), ["app/unit-tests/b.test.mjs"]);
-    // members (contains edge) and fine-symbol callers (callsSymbol)
-    assert.deepEqual(membersLabels(g, ind("Widget")), ["name", "render"]);
-    assert.deepEqual(callersLabels(g, ind("fnAlpha")), ["Widget.render"]);
-    // resultSetOf routes by tool name; a no-set tool returns the bound entity singleton
-    assert.deepEqual(resultSetOf(g, "tmct_untested", {}, null), untestedModules(g));
-    assert.deepEqual(resultSetOf(g, "tmct_describe", { symbol: "fnAlpha" }, ind("fnAlpha")), ["fnAlpha"]);
-  } finally {
-    await cleanup();
-  }
+test("results: the structured extractor mirrors the render* set semantics over the fixture", () => {
+  const g = CTX.graph;
+  const ind = (t) => CTX.resolve(t).match;
+  // the untested view (renderUntested): source modules with no covering test module
+  assert.deepEqual(untestedModules(g),
+    ["app/lib/a.mjs", "app/lib/c.mjs", "app/lib/e.mjs", "app/lib/f.mjs", "scripts/g.mjs"]);
+  // the reverse impact closure (renderImpact/impactClosure), uncapped + sorted
+  assert.deepEqual(impactLabels(g, ind("app/lib/a.mjs")),
+    ["app/functions/d/handler.mjs", "app/lib/b.mjs", "app/lib/c.mjs", "app/lib/e.mjs", "app/lib/f.mjs", "scripts/g.mjs"]);
+  // tests_for: [] means untested (renderTestsFor "no covering tests")
+  assert.deepEqual(testsForLabels(g, ind("app/lib/c.mjs")), []);
+  assert.deepEqual(testsForLabels(g, ind("app/lib/b.mjs")), ["app/unit-tests/b.test.mjs"]);
+  // members (contains edge) and fine-symbol callers (callsSymbol)
+  assert.deepEqual(membersLabels(g, ind("Widget")), ["name", "render"]);
+  assert.deepEqual(callersLabels(g, ind("fnAlpha")), ["Widget.render"]);
+  // resultSetOf routes by tool name; a no-set tool returns the bound entity singleton
+  assert.deepEqual(resultSetOf(g, "tmct_untested", {}, null), untestedModules(g));
+  assert.deepEqual(resultSetOf(g, "tmct_describe", { symbol: "fnAlpha" }, ind("fnAlpha")), ["fnAlpha"]);
 });
 
 test("results: the composition operators fold threaded step results (pure set-algebra)", () => {
@@ -473,7 +457,7 @@ test("gradeCase: a case WITHOUT expect.result mirrors plan completion on the res
 test("agentbench e2e: the resolver EXECUTES + COMPOSES — result-completion is BELOW plan-completion (the honest gap), at 0% hallucination", async () => {
   const knownLabels = await loadFixtureLabels();
   const { cases } = parseCases(await readFile(CASES_FILE, "utf8"), { knownLabels });
-  const { rows, rolled } = await runAgentbench(cases, { driver: resolverDriver, stamp: BENCH_VERSION });
+  const { rows, rolled } = await runAgentbench(cases, { driver: resolverDriver, stamp: BENCH_VERSION, ctx: CTX });
   // the non-negotiable holds on BOTH axes
   assert.equal(rolled.overall.hallucinationRate, 0, "0% hallucination — the router's floor");
   // the SPLIT: composing the answer is strictly harder than emitting the plan, so
@@ -505,41 +489,31 @@ test("agentbench e2e: the resolver EXECUTES + COMPOSES — result-completion is 
   assert.ok(relaxed.verdict.completed && !relaxed.verdict.resultCompleted, "plan-correct, result-incomplete (the honest plan-vs-result gap)");
 });
 
-test("member-filter: memberIndividuals is the GRAIN FIX (full individuals, dotted labels) and membersReaching folds bounded reach", async () => {
-  const { ctx, cleanup } = await createRunCtx();
-  try {
-    const g = ctx.graph;
-    const widget = ctx.resolve("Widget").match;
-    const members = memberIndividuals(g, widget);
-    // FULL individuals through the by-id index — dotted labels + real classes,
-    // never a string-concatenated "<Class>.<short>" guess.
-    assert.deepEqual(members.map((m) => m.label).sort(), ["Widget.name", "Widget.render"]);
-    assert.deepEqual(members.map((m) => m.class).sort(), ["Attribute", "Method"]);
-    // the fold: only the CALLABLE member whose callsSymbol closure reaches fnAlpha
-    assert.deepEqual(membersReaching(g, widget, "fnAlpha"), ["Widget.render"]);
-    // an unreachable / unknown target composes ∅ (honest empty, never a guess)
-    assert.deepEqual(membersReaching(g, widget, "app/lib/b.mjs"), []);
-    assert.deepEqual(membersReaching(g, widget, "no-such-entity"), []);
-    // a class with no members composes ∅
-    assert.deepEqual(membersReaching(g, ctx.resolve("Button").match, "fnAlpha"), []);
-  } finally {
-    await cleanup();
-  }
+test("member-filter: memberIndividuals is the GRAIN FIX (full individuals, dotted labels) and membersReaching folds bounded reach", () => {
+  const g = CTX.graph;
+  const widget = CTX.resolve("Widget").match;
+  const members = memberIndividuals(g, widget);
+  // FULL individuals through the by-id index — dotted labels + real classes,
+  // never a string-concatenated "<Class>.<short>" guess.
+  assert.deepEqual(members.map((m) => m.label).sort(), ["Widget.name", "Widget.render"]);
+  assert.deepEqual(members.map((m) => m.class).sort(), ["Attribute", "Method"]);
+  // the fold: only the CALLABLE member whose callsSymbol closure reaches fnAlpha
+  assert.deepEqual(membersReaching(g, widget, "fnAlpha"), ["Widget.render"]);
+  // an unreachable / unknown target composes ∅ (honest empty, never a guess)
+  assert.deepEqual(membersReaching(g, widget, "app/lib/b.mjs"), []);
+  assert.deepEqual(membersReaching(g, widget, "no-such-entity"), []);
+  // a class with no members composes ∅
+  assert.deepEqual(membersReaching(g, CTX.resolve("Button").match, "fnAlpha"), []);
 });
 
 test("member-filter driver: refuses the hop honestly when tmct_callees is undeclared or the target does not bind", async () => {
-  const { ctx, cleanup } = await createRunCtx();
-  try {
-    // the reachability hop is NOT groundable without tmct_callees in-set
-    const noHop = await resolverDriver("which methods of Widget end up calling fnAlpha", ["tmct_members", "tmct_callers"], ctx);
-    assert.equal(noHop.refused, true);
-    assert.deepEqual(noHop.calls, []);
-    assert.match(String(noHop.why), /tmct_callees/);
-    // an unbindable filter target is an honest miss, never a guessed fold
-    const noTarget = await resolverDriver("which methods of Widget end up calling zebraFn", ["tmct_members", "tmct_callees"], ctx);
-    assert.equal(noTarget.refused, true);
-    assert.deepEqual(noTarget.calls, []);
-  } finally {
-    await cleanup();
-  }
+  // the reachability hop is NOT groundable without tmct_callees in-set
+  const noHop = await resolverDriver("which methods of Widget end up calling fnAlpha", ["tmct_members", "tmct_callers"], CTX);
+  assert.equal(noHop.refused, true);
+  assert.deepEqual(noHop.calls, []);
+  assert.match(String(noHop.why), /tmct_callees/);
+  // an unbindable filter target is an honest miss, never a guessed fold
+  const noTarget = await resolverDriver("which methods of Widget end up calling zebraFn", ["tmct_members", "tmct_callees"], CTX);
+  assert.equal(noTarget.refused, true);
+  assert.deepEqual(noTarget.calls, []);
 });
