@@ -31,6 +31,8 @@ import { resolverDriver } from "./driver-resolver.mjs";
 import { capabilityByName } from "../src/router/registry.mjs";
 import { resolveObject } from "../src/ask.mjs";
 import { parseEntities } from "../src/codegraph.mjs";
+import { resultSetOf } from "./results.mjs";
+import { ingestSchemaDocs } from "../src/schema-docs.mjs";
 
 // The pluggable drivers, selectable with --driver. `stub` is the STUB-DRIVER
 // FLOOR (default); `shim` is the SHIM-TRANSPORT interface floor (server-http.mjs
@@ -65,6 +67,15 @@ export const FIXTURE = join(ROOT, "test", "fixtures", "entities.fixture.json");
 // run, no Date.now). Artifacts stamp this; a version bump auto-flows here so the
 // grading record never drifts from the release it measures.
 export const BENCH_VERSION = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")).version;
+
+/** The set of every entity LABEL in the ingested fixture — the referential
+ *  authority for the expect.result lint (a static composed-answer literal must
+ *  name only real fixture entities, so a stale literal fails loudly at parse
+ *  time, exactly like the expected-call lint). Pure read; no Date.now. */
+export async function loadFixtureLabels() {
+  const graph = parseEntities(ingestSchemaDocs(JSON.parse(await readFile(FIXTURE, "utf8"))));
+  return new Set(graph.individuals.map((i) => String(i.label)));
+}
 
 /** Build the run context the driver receives. Materializes the ingested fixture
  *  to a throwaway .tmct/graph.json (mirroring chatbench's createRunnerDeps and a
@@ -104,7 +115,12 @@ export async function createRunCtx() {
       // result-threading. A no-arg tool (untested/arch) has no bound entity.
       const primary = input && (input.symbol ?? input.module ?? input.class ?? input.query);
       const resolved = primary ? resolve(String(primary)).match : null;
-      return { ok: true, text, resolved };
+      // the STRUCTURED result SET (label set) the query produced — the machine-
+      // checkable twin of `text` that the multi-step COMPOSER folds (0.8.1). This
+      // is the structured payload the resolver driver threads to compute the
+      // composed answer grade.mjs value-compares to expect.result.
+      const result = resultSetOf(graph, name, input, resolved);
+      return { ok: true, text, resolved, result };
     } catch (e) {
       if (e instanceof ToolError) return { ok: false, error: e.message };
       throw e; // a real bug, not an honest miss — surface it
@@ -149,6 +165,10 @@ export async function runCase(caseDef, driver, ctx, stamp) {
       refused: Boolean(loopResult?.refused),
       terminated: Boolean(loopResult?.terminated),
       proof: loopResult?.proof ?? [],
+      // the EXECUTED, COMPOSED answer (0.8.1) — the folded result set the grader
+      // value-compares to expect.result. Recorded for transcript provenance; an
+      // empty array is a real answer (∅), so guard on !== undefined not truthiness.
+      ...(loopResult?.composed !== undefined ? { composed: loopResult.composed } : {}),
       ...(loopResult?.why ? { why: loopResult.why } : {}),
       ...(loopResult?.observed ? { observed: loopResult.observed } : {}),
     },
@@ -201,7 +221,8 @@ export async function main(argv = process.argv.slice(2)) {
     return 2;
   }
 
-  const { cases, errors } = parseCases(await readFile(args.cases, "utf8"));
+  const knownLabels = await loadFixtureLabels();
+  const { cases, errors } = parseCases(await readFile(args.cases, "utf8"), { knownLabels });
   if (errors.length) {
     console.error(`cases lint failed (${errors.length}):`);
     for (const e of errors) console.error(`  - ${e}`);
@@ -237,6 +258,15 @@ export async function main(argv = process.argv.slice(2)) {
   if (fails.length) {
     console.log(`\nnon-passing cases (${fails.length}):`);
     for (const r of fails) console.log(`  ${r.verdict.hallucinated.length ? "HALLUC" : "FAIL  "} ${r.caseId} [${r.rung}]: ${r.verdict.reasons.join("; ")}`);
+  }
+
+  // the PLAN-vs-RESULT split, made loud: cases that PASS the call-plan but whose
+  // EXECUTED composed answer is still wrong (composing is strictly harder than
+  // routing — the honest delta this release measures).
+  const resultGap = rows.filter((r) => r.verdict.pass && !r.verdict.resultCompleted);
+  if (resultGap.length) {
+    console.log(`\nplan-correct but RESULT-incomplete (${resultGap.length}) — the honest composing gap:`);
+    for (const r of resultGap) console.log(`  RESULT ${r.caseId} [${r.rung}]: ${r.verdict.resultReasons.join("; ")}`);
   }
 
   if (ladder) {

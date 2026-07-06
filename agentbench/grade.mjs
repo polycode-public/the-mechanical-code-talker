@@ -35,8 +35,12 @@ export const COMPLETION_FLOOR = 0.5;
 const isPlainObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 
 /** Parse cases.jsonl text into { cases, errors }. Errors are lint findings the
- *  test enforces over the committed file (same discipline as chatbench). */
-export function parseCases(text) {
+ *  test enforces over the committed file (same discipline as chatbench).
+ *  `knownLabels` (optional Set of fixture entity labels) turns on the REFERENTIAL
+ *  lint of expect.result: every static composed-answer literal must name a real
+ *  fixture entity, so a stale literal fails loudly at parse time — the exact
+ *  discipline the expected-call lint already applies to call names. */
+export function parseCases(text, { knownLabels = null } = {}) {
   const cases = [];
   const errors = [];
   const seen = new Set();
@@ -77,6 +81,22 @@ export function parseCases(text) {
       }
     } else if (e.calls) {
       errors.push(`${c.id}: a refuse case must not also declare expect.calls`);
+    }
+    // expect.result — the STATIC composed-answer literal (0.8.1). A composition
+    // case pins the TRUE end-to-end answer (e.g. the untested-∩-impact set) as a
+    // literal array of entity labels; grade.mjs value-compares the driver's
+    // composed answer to it (no re-derivation → no circularity). Lint it: an
+    // array of non-empty strings, never on a refuse case, and — when a fixture is
+    // supplied — every label referential.
+    if ("result" in e) {
+      if (refuse) errors.push(`${c.id}: a refuse case must not declare expect.result (nothing composes)`);
+      if (!Array.isArray(e.result)) errors.push(`${c.id}: expect.result must be an array of entity labels`);
+      else {
+        e.result.forEach((label, j) => {
+          if (typeof label !== "string" || !label.trim()) errors.push(`${c.id} result ${j + 1}: label must be a non-empty string`);
+          else if (knownLabels && !knownLabels.has(label)) errors.push(`${c.id} result ${j + 1}: "${label}" is not a fixture entity (stale literal)`);
+        });
+      }
     }
     cases.push(c);
   });
@@ -206,12 +226,53 @@ export function gradeCase(caseDef, loopResult) {
     if (!valid) reasons.push("expected a valid proof chain (present, all steps ok, causal chain connected to grounded facts)");
   }
 
+  // 6. RESULT completion — the NEW axis (0.8.1). AGENTBENCH_0.8.0 graded the
+  //    call-PLAN; this grades the EXECUTED, COMPOSED answer. A COMPOSITION case
+  //    pins expect.result (the true end-to-end set); result-correct iff the
+  //    driver's produced composed answer VALUE-EQUALS that static literal (as a
+  //    set), with zero hallucination and termination. grade.mjs imports NO
+  //    composition function — it only compares the driver's `composed` field to
+  //    the literal, so the check is not the code testing itself. A case WITHOUT
+  //    expect.result has nothing to compose: its result axis mirrors plan
+  //    completion (a single grounded call / a correct refusal IS its own answer).
+  //    resultReasons are separate so the plan verdict (`pass`) is untouched — the
+  //    plan-vs-result SPLIT is the whole point.
+  const resultReasons = [];
+  let resultCompleted;
+  if (Array.isArray(caseDef.expect.result)) {
+    const composed = Array.isArray(loopResult?.composed) ? loopResult.composed : null;
+    const ok = hallucinated.length === 0 &&
+      (!caseDef.expect.terminates || terminated) &&
+      composed !== null &&
+      sameSet(composed, caseDef.expect.result);
+    resultCompleted = ok;
+    if (!ok) {
+      resultReasons.push(composed === null
+        ? "no composed result produced (the plan did not execute+fold to an answer)"
+        : `composed result ${describeSet(composed)} != expected ${describeSet(caseDef.expect.result)}`);
+    }
+  } else {
+    resultCompleted = completed; // nothing to compose — the plan outcome IS the answer
+  }
+
   const pass = hallucinated.length === 0 &&
     (!caseDef.expect.terminates || terminated) &&
     completed &&
     reasons.length === 0;
-  return { pass, hallucinated, completed, reasons };
+  return { pass, hallucinated, completed, resultCompleted, reasons, resultReasons };
 }
+
+/** Set equality over two label arrays (order/duplication-insensitive) — the
+ *  value-level comparison the result axis uses. */
+export function sameSet(a, b) {
+  const as = new Set(a.map(String));
+  const bs = new Set(b.map(String));
+  if (as.size !== bs.size) return false;
+  for (const x of as) if (!bs.has(x)) return false;
+  return true;
+}
+
+const describeSet = (xs) => (xs.length ? `{${[...xs].map(String).sort().join(", ")}}` : "∅");
 
 /** CONNECTEDNESS of a POP proof: when a proof carries `causal-link` steps
  *  (producer -> condition -> consumer), the chain must be GROUNDED — at least one
@@ -257,14 +318,19 @@ function tallyOne(rows) {
   const total = rows.length;
   const passed = rows.filter((r) => r.verdict.pass).length;
   const completed = rows.filter((r) => r.verdict.completed).length;
+  const resultCompleted = rows.filter((r) => r.verdict.resultCompleted).length;
   const hallucinated = rows.filter((r) => r.verdict.hallucinated.length > 0).length;
   const completion = total ? completed / total : 0;
+  const resultCompletion = total ? resultCompleted / total : 0;
   const hallucinationRate = total ? hallucinated / total : 0;
   return {
-    total, passed, completed, hallucinated,
-    completion, hallucinationRate,
-    // the honest gate: no hallucination AND enough completion to prove it isn't
-    // a refuse-everything degenerate.
+    total, passed, completed, resultCompleted, hallucinated,
+    completion, resultCompletion, hallucinationRate,
+    // the honest gate: no hallucination AND enough call-plan completion to prove
+    // it isn't a refuse-everything degenerate. The gate stays on PLAN completion
+    // (unchanged from 0.8.0); result-completion is reported ALONGSIDE, never
+    // silently folded into the gate — composing an answer is strictly harder than
+    // emitting the plan, and conflating them would hide that.
     gatePass: hallucinationRate === 0 && completion >= COMPLETION_FLOOR,
   };
 }
@@ -289,23 +355,19 @@ export function ladderGate(rolled) {
   return { order: RUNGS.filter((r) => rolled.byRung[r]), gatedAt, receipts };
 }
 
-/** Human-readable metric-pair table for the console. */
+/** Human-readable metric-pair table for the console. Shows BOTH completion axes:
+ *  plan-completion (the call-plan, gated) and result-completion (the executed,
+ *  composed answer) — the honest plan-vs-result split. */
 export function renderRollup(rolled) {
-  const lines = ["rung   n  pass  completion  halluc  gate"];
+  const row = (label, c) =>
+    `${label.padEnd(5)} ${String(c.total).padStart(2)}  ${String(c.passed).padStart(4)}  ` +
+    `${(c.completion * 100).toFixed(0).padStart(9)}%  ${(c.resultCompletion * 100).toFixed(0).padStart(11)}%  ` +
+    `${(c.hallucinationRate * 100).toFixed(0).padStart(5)}%  ${c.gatePass ? "PASS" : "----"}`;
+  const lines = ["rung   n  pass  plan-compl  result-compl  halluc  gate"];
   for (const rung of RUNGS) {
     const c = rolled.byRung[rung];
-    if (!c) continue;
-    lines.push(
-      `${rung.padEnd(5)} ${String(c.total).padStart(2)}  ${String(c.passed).padStart(4)}  ` +
-      `${(c.completion * 100).toFixed(0).padStart(9)}%  ${(c.hallucinationRate * 100).toFixed(0).padStart(5)}%  ` +
-      `${c.gatePass ? "PASS" : "----"}`,
-    );
+    if (c) lines.push(row(rung, c));
   }
-  const o = rolled.overall;
-  lines.push(
-    `${"all".padEnd(5)} ${String(o.total).padStart(2)}  ${String(o.passed).padStart(4)}  ` +
-    `${(o.completion * 100).toFixed(0).padStart(9)}%  ${(o.hallucinationRate * 100).toFixed(0).padStart(5)}%  ` +
-    `${o.gatePass ? "PASS" : "----"}`,
-  );
+  lines.push(row("all", rolled.overall));
   return lines.join("\n");
 }

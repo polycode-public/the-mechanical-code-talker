@@ -24,11 +24,16 @@ import {
 } from "../src/router/registry.mjs";
 import {
   RUNGS, COMPLETION_FLOOR, parseCases, hallucinationsIn, isCallWellFormed,
-  callMatches, callsMatch, gradeCase, rollup, ladderGate,
+  callMatches, callsMatch, gradeCase, rollup, ladderGate, sameSet,
 } from "../agentbench/grade.mjs";
 import { stubDriver } from "../agentbench/driver-stub.mjs";
 import { shimDriver } from "../agentbench/driver-shim.mjs";
-import { runAgentbench, createRunCtx, BENCH_VERSION } from "../agentbench/run.mjs";
+import { resolverDriver } from "../agentbench/driver-resolver.mjs";
+import { runAgentbench, createRunCtx, BENCH_VERSION, loadFixtureLabels } from "../agentbench/run.mjs";
+import {
+  resultSetOf, untestedModules, impactLabels, testsForLabels, membersLabels, callersLabels,
+  intersect, fallbackIfEmpty, guardIfEmpty,
+} from "../agentbench/results.mjs";
 import { COMMANDS } from "../src/chat.mjs";
 
 const CASES_FILE = fileURLToPath(new URL("../agentbench/cases.jsonl", import.meta.url));
@@ -348,4 +353,134 @@ test("agentbench e2e: the stub driver refuses a request whose only fitting tool 
   } finally {
     await cleanup();
   }
+});
+
+// ---- 4. RESULT EXECUTION + COMPOSITION (0.8.1) ------------------------------
+// AGENTBENCH_0.8.0 graded the call-PLAN, not the EXECUTED composed result. These
+// pin the new axis: the structured result-set extractor (mirrors dispatchTool's
+// render*), the composition operators, the STATIC-literal expect.result lint, and
+// the plan-vs-result SPLIT in gradeCase + the resolver e2e.
+
+test("results: the structured extractor mirrors the render* set semantics over the fixture", async () => {
+  const { ctx, cleanup } = await createRunCtx();
+  try {
+    const g = ctx.graph;
+    const ind = (t) => ctx.resolve(t).match;
+    // the untested view (renderUntested): source modules with no covering test module
+    assert.deepEqual(untestedModules(g),
+      ["app/lib/a.mjs", "app/lib/c.mjs", "app/lib/e.mjs", "app/lib/f.mjs", "scripts/g.mjs"]);
+    // the reverse impact closure (renderImpact/impactClosure), uncapped + sorted
+    assert.deepEqual(impactLabels(g, ind("app/lib/a.mjs")),
+      ["app/functions/d/handler.mjs", "app/lib/b.mjs", "app/lib/c.mjs", "app/lib/e.mjs", "app/lib/f.mjs", "scripts/g.mjs"]);
+    // tests_for: [] means untested (renderTestsFor "no covering tests")
+    assert.deepEqual(testsForLabels(g, ind("app/lib/c.mjs")), []);
+    assert.deepEqual(testsForLabels(g, ind("app/lib/b.mjs")), ["app/unit-tests/b.test.mjs"]);
+    // members (contains edge) and fine-symbol callers (callsSymbol)
+    assert.deepEqual(membersLabels(g, ind("Widget")), ["name", "render"]);
+    assert.deepEqual(callersLabels(g, ind("fnAlpha")), ["Widget.render"]);
+    // resultSetOf routes by tool name; a no-set tool returns the bound entity singleton
+    assert.deepEqual(resultSetOf(g, "tmct_untested", {}, null), untestedModules(g));
+    assert.deepEqual(resultSetOf(g, "tmct_describe", { symbol: "fnAlpha" }, ind("fnAlpha")), ["fnAlpha"]);
+  } finally {
+    await cleanup();
+  }
+});
+
+test("results: the composition operators fold threaded step results (pure set-algebra)", () => {
+  // intersect — the relative-filter fold
+  assert.deepEqual(intersect(["a", "b", "c"], ["b", "c", "d"]), ["b", "c"]);
+  assert.deepEqual(intersect(["a"], ["b"]), []); // disjoint → empty composed answer
+  // fallback-if-empty — take the alternative only when the guard set is empty
+  assert.deepEqual(fallbackIfEmpty([], ["x"]), ["x"]);
+  assert.deepEqual(fallbackIfEmpty(["p"], ["x"]), ["p"]);
+  // guard-if-empty — the action fires only when the guard set is empty
+  assert.deepEqual(guardIfEmpty([], ["y"]), ["y"]);
+  assert.deepEqual(guardIfEmpty(["nonempty"], ["y"]), []);
+});
+
+test("sameSet: order/duplication-insensitive value equality (the result comparator)", () => {
+  assert.ok(sameSet(["a", "b"], ["b", "a"]));
+  assert.ok(sameSet([], []));
+  assert.ok(!sameSet(["a"], ["a", "b"]));
+  assert.ok(!sameSet(["a", "b"], ["a", "c"]));
+});
+
+test("parseCases: expect.result must be a static array of strings; a refuse case may not carry one", () => {
+  const bad = [
+    JSON.stringify({ id: "r1", rung: "C1", request: "q", tools: ["tmct_untested"], expect: { calls: [{ name: "tmct_untested" }], result: "not-an-array", terminates: true } }),
+    JSON.stringify({ id: "r2", rung: "C1", request: "q", tools: ["tmct_untested"], expect: { calls: [{ name: "tmct_untested" }], result: [""], terminates: true } }),
+    JSON.stringify({ id: "r3", rung: "A2", request: "q", tools: ["tmct_describe"], expect: { refuse: true, result: ["x"], terminates: true } }),
+  ].join("\n");
+  const { errors } = parseCases(bad);
+  assert.ok(errors.some((e) => /r1.*expect\.result must be an array/.test(e)));
+  assert.ok(errors.some((e) => /r2.*non-empty string/.test(e)));
+  assert.ok(errors.some((e) => /r3.*refuse case must not declare expect\.result/.test(e)));
+});
+
+test("parseCases: the REFERENTIAL lint fails a STALE expect.result literal against the fixture", async () => {
+  const knownLabels = await loadFixtureLabels();
+  const stale = JSON.stringify({
+    id: "s1", rung: "C1", request: "q", tools: ["tmct_impact", "tmct_untested"],
+    expect: { calls: [{ name: "tmct_impact", input: { module: "app/lib/a.mjs" } }, { name: "tmct_untested" }], result: ["app/lib/NONEXISTENT.mjs"], terminates: true },
+  });
+  const withFixture = parseCases(stale, { knownLabels });
+  assert.ok(withFixture.errors.some((e) => /NONEXISTENT.*stale literal/.test(e)), "a non-fixture label fails loudly");
+  // without the fixture the structural lint still passes it (referential is opt-in)
+  assert.deepEqual(parseCases(stale).errors, []);
+});
+
+test("cases.jsonl: every expect.result literal is referential against the fixture (no stale literals)", async () => {
+  const knownLabels = await loadFixtureLabels();
+  const { cases, errors } = parseCases(await readFile(CASES_FILE, "utf8"), { knownLabels });
+  assert.deepEqual(errors, [], "committed cases lint clean under the fixture-referential result check");
+  // and the frame actually carries composition cases (the rungs aren't a thin sample)
+  const withResult = cases.filter((c) => Array.isArray(c.expect.result));
+  assert.ok(withResult.length >= 7, `expected several composition cases (got ${withResult.length})`);
+});
+
+test("gradeCase: the RESULT axis — composed value-equals the literal PASSES; a wrong/absent fold FAILS plan-independently", () => {
+  const caseDef = { rung: "C1", tools: ["tmct_impact", "tmct_untested"], expect: { calls: [{ name: "tmct_impact", input: { module: "app/lib/a.mjs" } }, { name: "tmct_untested" }], result: ["app/lib/c.mjs", "scripts/g.mjs"], terminates: true } };
+  const calls = [{ name: "tmct_impact", input: { module: "app/lib/a.mjs" } }, { name: "tmct_untested", input: {} }];
+  // plan-correct AND result-correct (composed set-equals the literal, order-insensitive)
+  const good = gradeCase(caseDef, { calls, refused: false, terminated: true, composed: ["scripts/g.mjs", "app/lib/c.mjs"] });
+  assert.ok(good.pass && good.completed && good.resultCompleted, good.reasons.concat(good.resultReasons).join("; "));
+  // plan-correct but result-WRONG (the fold computed a different set) — the split
+  const wrong = gradeCase(caseDef, { calls, refused: false, terminated: true, composed: ["app/lib/c.mjs"] });
+  assert.ok(wrong.completed, "plan still matched");
+  assert.ok(!wrong.resultCompleted, "but the composed answer is wrong");
+  assert.ok(wrong.resultReasons.some((r) => /!=/.test(r)));
+  // plan-correct but NO fold produced (a relaxed single-shot plan) — result-incomplete
+  const nofold = gradeCase(caseDef, { calls, refused: false, terminated: true });
+  assert.ok(nofold.completed && !nofold.resultCompleted);
+});
+
+test("gradeCase: a case WITHOUT expect.result mirrors plan completion on the result axis", () => {
+  const caseDef = { rung: "A0", tools: ["tmct_describe"], expect: { calls: [{ name: "tmct_describe", input: { symbol: "Widget" } }], terminates: true } };
+  const v = gradeCase(caseDef, { calls: [{ name: "tmct_describe", input: { symbol: "Widget" } }], refused: false, terminated: true });
+  assert.equal(v.resultCompleted, v.completed);
+  assert.ok(v.resultCompleted);
+});
+
+test("agentbench e2e: the resolver EXECUTES + COMPOSES — result-completion is BELOW plan-completion (the honest gap), at 0% hallucination", async () => {
+  const knownLabels = await loadFixtureLabels();
+  const { cases } = parseCases(await readFile(CASES_FILE, "utf8"), { knownLabels });
+  const { rows, rolled } = await runAgentbench(cases, { driver: resolverDriver, stamp: BENCH_VERSION });
+  // the non-negotiable holds on BOTH axes
+  assert.equal(rolled.overall.hallucinationRate, 0, "0% hallucination — the router's floor");
+  // the SPLIT: composing the answer is strictly harder than emitting the plan, so
+  // result-completion must be <= plan-completion, and strictly BELOW here (the C1
+  // reachability case + the C2 ranking case pass plan but fail result).
+  assert.ok(rolled.overall.resultCompletion <= rolled.overall.completion);
+  assert.ok(rolled.overall.resultCompletion < rolled.overall.completion, "the honest plan-vs-result delta is real, not zero");
+  // the intersection case is the positive proof result-grading WORKS: plan AND result
+  const inImpact = rows.find((r) => r.caseId === "ab-c1-untested-in-impact");
+  assert.ok(inImpact.verdict.completed && inImpact.verdict.resultCompleted, "untested-∩-impact composes to the true set");
+  assert.deepEqual(inImpact.produced.composed, ["app/lib/c.mjs", "app/lib/e.mjs", "app/lib/f.mjs", "scripts/g.mjs"]);
+  // the empty-composition case composes to ∅ correctly (a real answer, not a miss)
+  const empty = rows.find((r) => r.caseId === "ab-c1-untested-in-impact-b");
+  assert.deepEqual(empty.produced.composed, []);
+  assert.ok(empty.verdict.resultCompleted);
+  // the honest FAILS: relaxed single-shot plans pass plan, fail result
+  const relaxed = rows.find((r) => r.caseId === "ab-c1-widget-methods-calling");
+  assert.ok(relaxed.verdict.completed && !relaxed.verdict.resultCompleted, "plan-correct, result-incomplete (the retired caveat)");
 });
