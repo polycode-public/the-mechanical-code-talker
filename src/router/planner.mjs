@@ -74,7 +74,28 @@ export function decompose(request) {
     };
   }
 
-  // METHOD 3 — SEQUENCING: split on the ordered connectives. Least commitment:
+  // METHOD 3 — the MEMBER-FILTER recipe: "which/what methods|members of X …
+  // (end up|eventually)? calling/reaching Y". A C1 surface-syntax recipe like the
+  // conditional and relative-filter methods above (the C1 discipline: a closed,
+  // authored shape — NOT the C2 goal-reasoner's deduction). Decomposes to
+  // [enumerate members(X), filter by bounded transitive call-reach of Y]. The
+  // second segment is the filter TARGET, role "member-filter": the DRIVER owns
+  // the per-member callees hop + the reachability fold (driver-resolver.mjs) —
+  // segment 2 is not a resolvable leaf sub-goal on its own.
+  const mem = raw.match(
+    /^(?:which|what)\s+(?:methods?|members?)\s+of\s+(.+?)\s+(?:(?:end\s+up|eventually)\s+)?(?:calls?|calling|reach(?:es|ing)?|invokes?|invoking)\s+(.+?)\s*\??$/i,
+  );
+  if (mem) {
+    return {
+      method: "member-filter",
+      segments: [
+        { text: `members ${mem[1].trim()}`, role: "action", thread: false },
+        { text: mem[2].trim(), role: "member-filter", thread: true },
+      ],
+    };
+  }
+
+  // METHOD 4 — SEQUENCING: split on the ordered connectives. Least commitment:
   // we only split where a connective actually is.
   const parts = raw.split(/\s*(?:,\s*then\s+|,\s+and\s+then\s+|\s+and\s+then\s+|\s+then\s+|,\s+|\s+and\s+)\s*/i)
     .map((s) => s.replace(/^(?:then\s+|and\s+then\s+|and\s+|also\s+|check\s+|next\s+)/i, "").trim())

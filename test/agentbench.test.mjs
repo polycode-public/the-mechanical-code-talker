@@ -32,7 +32,7 @@ import { resolverDriver } from "../agentbench/driver-resolver.mjs";
 import { runAgentbench, createRunCtx, BENCH_VERSION, loadFixtureLabels } from "../agentbench/run.mjs";
 import {
   resultSetOf, untestedModules, impactLabels, testsForLabels, membersLabels, callersLabels,
-  intersect, fallbackIfEmpty, guardIfEmpty,
+  intersect, fallbackIfEmpty, guardIfEmpty, memberIndividuals, membersReaching,
 } from "../agentbench/results.mjs";
 import { COMMANDS } from "../src/chat.mjs";
 
@@ -487,7 +487,57 @@ test("agentbench e2e: the resolver EXECUTES + COMPOSES — result-completion is 
   const empty = rows.find((r) => r.caseId === "ab-c1-untested-in-impact-b");
   assert.deepEqual(empty.produced.composed, []);
   assert.ok(empty.verdict.resultCompleted);
-  // the honest FAILS: relaxed single-shot plans pass plan, fail result
-  const relaxed = rows.find((r) => r.caseId === "ab-c1-widget-methods-calling");
-  assert.ok(relaxed.verdict.completed && !relaxed.verdict.resultCompleted, "plan-correct, result-incomplete (the retired caveat)");
+  // the MEMBER-FILTER recipe (0.8.2): the per-member hop the 0.8.1 relaxation
+  // named as missing now composes the true answer — green on BOTH axes.
+  const memberFilter = rows.find((r) => r.caseId === "ab-c1-widget-methods-calling");
+  assert.ok(memberFilter.verdict.completed && memberFilter.verdict.resultCompleted, "member-filter composes the reachability answer (the 0.8.1 relaxation retired)");
+  assert.deepEqual(memberFilter.produced.composed, ["Widget.render"]);
+  assert.deepEqual(memberFilter.produced.calls.map((c) => c.name), ["tmct_members", "tmct_callees"], "the per-member callees hop is a real, appended grounded call");
+  // its HELD-OUT EMPTY TWIN: a new class, no callable members, composes ∅
+  const twin = rows.find((r) => r.caseId === "ab-c1-button-methods-calling");
+  assert.ok(twin.verdict.completed && twin.verdict.resultCompleted, "the recipe generalizes to Button and composes an honest ∅");
+  assert.deepEqual(twin.produced.composed, []);
+  // the honest FAIL that remains: the C2 ranking case passes plan, fails result
+  // under the C1 resolver (the goal-reasoner ranking is Stage 5's climb).
+  const relaxed = rows.find((r) => r.caseId === "ab-c2-what-to-test");
+  assert.ok(relaxed.verdict.completed && !relaxed.verdict.resultCompleted, "plan-correct, result-incomplete (the honest plan-vs-result gap)");
+});
+
+test("member-filter: memberIndividuals is the GRAIN FIX (full individuals, dotted labels) and membersReaching folds bounded reach", async () => {
+  const { ctx, cleanup } = await createRunCtx();
+  try {
+    const g = ctx.graph;
+    const widget = ctx.resolve("Widget").match;
+    const members = memberIndividuals(g, widget);
+    // FULL individuals through the by-id index — dotted labels + real classes,
+    // never a string-concatenated "<Class>.<short>" guess.
+    assert.deepEqual(members.map((m) => m.label).sort(), ["Widget.name", "Widget.render"]);
+    assert.deepEqual(members.map((m) => m.class).sort(), ["Attribute", "Method"]);
+    // the fold: only the CALLABLE member whose callsSymbol closure reaches fnAlpha
+    assert.deepEqual(membersReaching(g, widget, "fnAlpha"), ["Widget.render"]);
+    // an unreachable / unknown target composes ∅ (honest empty, never a guess)
+    assert.deepEqual(membersReaching(g, widget, "app/lib/b.mjs"), []);
+    assert.deepEqual(membersReaching(g, widget, "no-such-entity"), []);
+    // a class with no members composes ∅
+    assert.deepEqual(membersReaching(g, ctx.resolve("Button").match, "fnAlpha"), []);
+  } finally {
+    await cleanup();
+  }
+});
+
+test("member-filter driver: refuses the hop honestly when tmct_callees is undeclared or the target does not bind", async () => {
+  const { ctx, cleanup } = await createRunCtx();
+  try {
+    // the reachability hop is NOT groundable without tmct_callees in-set
+    const noHop = await resolverDriver("which methods of Widget end up calling fnAlpha", ["tmct_members", "tmct_callers"], ctx);
+    assert.equal(noHop.refused, true);
+    assert.deepEqual(noHop.calls, []);
+    assert.match(String(noHop.why), /tmct_callees/);
+    // an unbindable filter target is an honest miss, never a guessed fold
+    const noTarget = await resolverDriver("which methods of Widget end up calling zebraFn", ["tmct_members", "tmct_callees"], ctx);
+    assert.equal(noTarget.refused, true);
+    assert.deepEqual(noTarget.calls, []);
+  } finally {
+    await cleanup();
+  }
 });

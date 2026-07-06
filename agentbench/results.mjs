@@ -88,6 +88,57 @@ export function membersLabels(graph, ind) {
 
 const CALL_SYMBOL_CLASSES = new Set(["Function", "Method"]);
 
+/** The member INDIVIDUALS of a class — the contains-edge object IDS mapped
+ *  through a by-id index of graph.individuals to the FULL individuals (dotted
+ *  labels like Widget.render, real classes like Method/Attribute). This is the
+ *  GRAIN FIX the member-filter hop needs: the contains edge's objectLabel is the
+ *  short member name ("render"), but the call graph (callsSymbol) and the
+ *  tmct_callees arg both speak the individual's own dotted label — so we index
+ *  to the individual and read ITS label, never string-concatenate one. */
+export function memberIndividuals(graph, classInd) {
+  const byId = new Map(graph.individuals.map((i) => [i.id, i]));
+  return edgesOfKind(graph, "contains")
+    .filter((e) => e.subject === classInd.id)
+    .map((e) => byId.get(e.object))
+    .filter(Boolean);
+}
+
+/** Members of a class (Method|Function grain only) whose BOUNDED transitive
+ *  callsSymbol closure reaches the target label — the member-filter fold
+ *  ("which methods of X end up calling Y"). Depth-bounded BFS over the fine
+ *  call graph (maxDepth mirrors the planner/subclasses bound); an unknown
+ *  target composes ∅ (an honest empty answer, never a guess). */
+export function membersReaching(graph, classInd, targetLabel, maxDepth = 8) {
+  const target = graph.individuals.find((i) => String(i.label) === String(targetLabel));
+  if (!target) return [];
+  const out = new Map();
+  for (const e of edgesOfKind(graph, "callsSymbol")) {
+    if (!out.has(e.subject)) out.set(e.subject, []);
+    out.get(e.subject).push(e.object);
+  }
+  const reaches = (startId) => {
+    const visited = new Set([startId]);
+    let frontier = [startId];
+    for (let depth = 1; depth <= maxDepth && frontier.length; depth += 1) {
+      const next = [];
+      for (const id of frontier) {
+        for (const o of out.get(id) || []) {
+          if (o === target.id) return true;
+          if (!visited.has(o)) { visited.add(o); next.push(o); }
+        }
+      }
+      frontier = next;
+    }
+    return false;
+  };
+  return uniqSort(
+    memberIndividuals(graph, classInd)
+      .filter((m) => CALL_SYMBOL_CLASSES.has(m.class))
+      .filter((m) => reaches(m.id))
+      .map((m) => m.label),
+  );
+}
+
 /** Callers of a symbol (mirrors renderCallers — callsSymbol for fine symbols,
  *  else module-coarse calls). */
 export function callersLabels(graph, ind) {

@@ -244,13 +244,28 @@ test("guardrail: an undeclared (but registered) tool is a policy denial when a d
 
 // ---- 4. the PLANNER (Stage 3) -----------------------------------------------
 
-test("planner: decompose picks the HTN method — conditional / relative-filter / sequence / single", () => {
+test("planner: decompose picks the HTN method — conditional / relative-filter / member-filter / sequence / single", () => {
   assert.equal(decompose("if fnAlpha is untested, describe it").method, "conditional");
   assert.equal(decompose("of the modules impacted by app/lib/a.mjs, which are untested").method, "relative-filter");
   assert.equal(decompose("show the members of Widget and then its subclasses").method, "sequence");
   assert.equal(decompose("describe Widget").method, "single");
   assert.equal(isMultiStep("describe Widget"), false);
   assert.equal(isMultiStep("find who calls fnAlpha, then describe Widget.render"), true);
+});
+
+test("planner: the member-filter method decomposes to [members(X), reach-filter Y] across its surface forms", () => {
+  const d = decompose("which methods of Widget end up calling fnAlpha");
+  assert.equal(d.method, "member-filter");
+  assert.deepEqual(d.segments, [
+    { text: "members Widget", role: "action", thread: false },
+    { text: "fnAlpha", role: "member-filter", thread: true },
+  ]);
+  // held-out surface forms of the SAME closed recipe (C1 surface syntax, not C2)
+  assert.equal(decompose("what members of Widget eventually reach fnAlpha").method, "member-filter");
+  assert.equal(decompose("which methods of Button end up calling fnAlpha").segments[0].text, "members Button");
+  // NOT a member-filter: a plain members question keeps its single-shot route
+  assert.equal(decompose("show the members of Widget").method, "single");
+  assert.equal(decompose("which methods of Widget are documented").method, "single");
 });
 
 test("planner: a B1 recipe threads two steps + emits a CONNECTED POP causal-link proof", async () => {
