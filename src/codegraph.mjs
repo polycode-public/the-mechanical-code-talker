@@ -1173,7 +1173,13 @@ export function renderSearch(graph, query, { limit = SEARCH_LIMIT, kind = "", de
  *  mechanical NL-query engine (PLAN_MECHANICAL_CHAT.md) to orchestrate rather than duplicate. */
 export function edgesOfKind(graph, kind) {
   const out = [];
-  for (const g of graph.relations) if (relationKind(g) === kind) out.push(...g.edges);
+  // Plain-loop append, NOT out.push(...g.edges): argument spread materialises every
+  // element as a call argument and overflows the stack past ~100k edges (live report:
+  // 27,770-module repo, "list modules in <dir>" → "Maximum call stack size exceeded").
+  for (const g of graph.relations) {
+    if (relationKind(g) !== kind) continue;
+    for (const e of g.edges) out.push(e);
+  }
   return out;
 }
 
