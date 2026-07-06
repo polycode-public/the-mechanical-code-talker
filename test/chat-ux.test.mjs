@@ -247,3 +247,104 @@ test("moduleCountOf: null/empty → 0, populated fixture → 8", async () => {
   assert.equal(moduleCountOf({ individuals: [] }), 0);
   assert.equal(moduleCountOf(await graph()), 8);
 });
+
+// ---- 0.8.2 WS4: wall kindness (repeat suppression, live orientation examples,
+//      stranger openers) + capability nudges (risk/opinion/imperative/why) ----
+
+test("WS4(a) wall repeat suppression: 2nd consecutive wall is a one-liner, 3rd re-offers the hint", async () => {
+  const g = await graph();
+  const focus = g.individuals.find((i) => i.class === "Module");
+  const walls = ["frobnicate zibble.mjs wozzit deeply", "blorp quux.mjs zibble again", "wozzit flurble.mjs blorp thing"];
+  let last = null;
+  const answers = [];
+  for (const q of walls) {
+    const r = await runTurn(q, { config: CONFIG, graph: g, focus, last });
+    assert.equal(r.record.miss, true, `"${q}" is still recorded as a miss`);
+    answers.push(r.answer);
+    last = r.last ?? last;
+  }
+  assert.match(answers[0], /^couldn't parse this as a graph question\. Try:/, "1st miss: the tailored hint");
+  assert.equal(answers[1], "still couldn't parse that — /help lists every query shape.", "2nd miss: the one-liner");
+  assert.doesNotMatch(answers[1], /^couldn't parse this as a graph question\. Try:/, "the one-liner never matches WALL_MISS_RE");
+  assert.match(answers[2], /^couldn't parse this as a graph question\. Try:/, "3rd miss: the tailored hint re-offered (self-limiting)");
+});
+
+test("WS4(b) orientation examples are LIVE from the loaded graph — and both answer", async () => {
+  const g = await graph();
+  const r = await runTurn("what can you do", { config: CONFIG, graph: g });
+  assert.match(r.answer, /which modules import app\/lib\/a\.mjs/, "example1 = the fixture's sorted-first imported module");
+  assert.match(r.answer, /what calls fnAlpha/, "example2 = the fixture's sorted-first called function");
+  // a stranger typing the examples verbatim must get answers, not misses
+  const ex1 = await runTurn("which modules import app/lib/a.mjs", { config: CONFIG, graph: g });
+  assert.equal(ex1.record.miss, false, "example1 answers");
+  const ex2 = await runTurn("what calls fnAlpha", { config: CONFIG, graph: g });
+  assert.equal(ex2.record.miss, false, "example2 answers");
+});
+
+test("WS4(b) orientation examples degrade: empty graph → empty orientation, null graph → generic pair", async () => {
+  const empty = await runTurn("what can you do", { config: CONFIG, graph: { individuals: [], relations: [], byId: new Map() } });
+  assert.match(empty.answer, /no code graph loaded/i, "an empty graph keeps the empty orientation");
+  const nul = await runTurn("what can you do", { config: CONFIG, graph: null });
+  assert.match(nul.answer, /which modules import walk\.mjs/, "a null (unknown) graph keeps the generic example1");
+  assert.match(nul.answer, /what calls buildContextBundle/, "…and the generic example2");
+});
+
+test("WS4(c) META_ORIENT_RE: the stranger openers get the live overview, not the wall", async () => {
+  const g = await graph();
+  for (const q of ["what does this app do", "what does the codebase do?", "what does this project do",
+    "what is this app", "what is the app for", "what's this app"]) {
+    const r = await runTurn(q, { config: CONFIG, graph: g });
+    assert.equal(r.record.via, "meta", `"${q}" routes to the meta/self lane`);
+    assert.equal(r.record.miss, false, `"${q}" is not a miss`);
+    assert.match(r.answer, /This is a tmct code graph — \d+ entities/, `"${q}" gets the live overview`);
+  }
+});
+
+test("WS4(d) riskiest nudge: honest proxies (impact + churn), recorded as a miss", async () => {
+  const g = await graph();
+  const r = await runTurn("what is the riskiest module", { config: CONFIG, graph: g });
+  assert.equal(r.record.miss, true, "a capability wall stays a recorded miss");
+  assert.match(r.answer, /don't score risk/);
+  assert.match(r.answer, /\/impact /, "points at the impact proxy");
+  assert.match(r.answer, /who touched /, "points at the churn proxy");
+});
+
+test("WS4(e) opinion honesty: 'is the code good' gets the personality line, never the membership hint", async () => {
+  const g = await graph();
+  for (const q of ["is the code good", "is this code messy?", "is this codebase well written"]) {
+    const r = await runTurn(q, { config: CONFIG, graph: g });
+    assert.equal(r.record.miss, true, `"${q}" stays a recorded miss`);
+    assert.match(r.answer, /don't hold opinions/, `"${q}" gets the honest personality line`);
+    assert.doesNotMatch(r.answer, /is a <thing> a <kind>/, `"${q}" never gets the membership-shape hint`);
+  }
+});
+
+test("WS4(8) imperative nudge: write/make/fix asks → the read-only wall; 'it' resolves to the focus", async () => {
+  const g = await graph();
+  const r = await runTurn("can you write a test for fnAlpha", { config: CONFIG, graph: g });
+  assert.equal(r.record.miss, true, "recordMiss stays TRUE — capability walls never become recallable answers");
+  assert.match(r.answer, /I don't write code — I read a graph of it/);
+  assert.match(r.answer, /untested modules/);
+  // "fix it" with a standing focus names the focus
+  const focus = g.individuals.find((i) => i.label === "fnAlpha");
+  const fix = await runTurn("please fix it and add a test", { config: CONFIG, graph: g, focus });
+  assert.equal(fix.record.miss, true);
+  assert.match(fix.answer, /\/tests fnAlpha/, "the pronoun resolves to the current focus name");
+});
+
+test("WS4(8) why-untested nudge: motive questions get the records-what-IS wall", async () => {
+  const g = await graph();
+  for (const q of ["why is fnAlpha untested", "why are the handlers not tested", "why isn't Widget.render uncovered"]) {
+    const r = await runTurn(q, { config: CONFIG, graph: g });
+    assert.equal(r.record.miss, true, `"${q}" stays a recorded miss`);
+    assert.match(r.answer, /can't know why — the graph records what IS/, `"${q}" gets the honest wall`);
+    assert.match(r.answer, /untested modules/, `"${q}" points at the coverage facts`);
+  }
+});
+
+test("WS4(8) guard: 'tell me a joke' keeps its ordinary honest miss (no imperative hijack)", async () => {
+  const g = await graph();
+  const r = await runTurn("tell me a joke", { config: CONFIG, graph: g });
+  assert.doesNotMatch(r.answer, /I don't write code/, "'tell' is not an imperative-nudge verb");
+  assert.match(r.answer, /^couldn't parse this as a graph question\. Try:/, "the graded hm-joke wording stands");
+});
