@@ -4,7 +4,7 @@
 // Trust is a COMPUTED attribute of a Fact — never hand-set — a pure function of
 // its Source edges, those Sources' types, and its mgx:createdAt. Three inputs
 // combine:
-//   - a Source-TYPE PRIOR (operator > provider > corpus > web > entailed);
+//   - a Source-TYPE PRIOR (operator > teach > provider > corpus > web > entailed);
 //   - CORROBORATION over the fact's distinct Sources by noisy-OR
 //     (1 − Π(1 − wᵢ), capped at 1) — two independent web sources (0.4) reach
 //     0.64, a lone operator fact is already 1.0;
@@ -26,11 +26,15 @@
 export const TRUST_SCORE_PROP = "mgx:trustScore";
 export const TRUST_INPUTS_PROP = "mgx:trustInputs";
 
-/** Source-type priors — the ordering operator > provider-graph > curated-corpus
- *  > web > unverified-entailment. The entailed value is a FLOOR before premise
- *  adjustment (see the entailed hook below). */
+/** Source-type priors — the ordering operator > teach > provider-graph >
+ *  curated-corpus > web > unverified-entailment. `teach` is the chat teach
+ *  lane's natural-frame writes ("remember that …", "<Name> owns <X>") — still
+ *  operator speech, but through a looser recognizer than the ACE-parsed
+ *  operator assert, so it sits just below the operator prior. The entailed
+ *  value is a FLOOR before premise adjustment (see the entailed hook below). */
 export const SOURCE_PRIOR = Object.freeze({
   operator: 1.0,
+  teach: 0.95,
   provider: 0.9,
   corpus: 0.7,
   web: 0.4,

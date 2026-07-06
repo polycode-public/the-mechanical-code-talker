@@ -78,7 +78,7 @@ const MEMORY_VOCABULARY = [
   { prop: DERIVED_FROM_PROP, predicate: "derivedFrom", note: "umbrella: a Fact derived from a Source (or another Fact). ext ref prov:wasDerivedFrom (UNVERIFIED-pending-web-check)" },
   { prop: STATED_BY_PROP, predicate: "statedBy", note: "subPropertyOf derivedFrom: a Source directly asserts this Fact (one edge per independent source — replaces the factProvenance union)" },
   { prop: CANONICALISED_FROM_PROP, predicate: "canonicalisedFrom", note: "subPropertyOf derivedFrom: a canonical Fact cleaned from a raw Block/Source, never replacing it" },
-  { prop: "mgx:sourceType", note: "a Source's kind: operator | provider | corpus | web | entailed (the trust-prior key)" },
+  { prop: "mgx:sourceType", note: "a Source's kind: operator | teach | provider | corpus | web | entailed (the trust-prior key)" },
   { prop: "mgx:sourceUrl", note: "a web Source's URL" },
   { prop: "mgx:sourceRule", note: "an entailed Source's rule id" },
   { prop: TRUST_SCORE_PROP, note: "materialised trust cache in [0,1] — pure function of a fact's Sources + createdAt (memory/trust.mjs); invalidated when a statedBy edge is added" },
@@ -171,6 +171,7 @@ function setAttr(ind, prop, key, value) {
 function sourceIdFor(desc) {
   switch (desc?.kind) {
     case "operator": return { id: OPERATOR_SOURCE_ID, type: "operator" };
+    case "teach": return { id: "src:teach-chat", type: "teach" };
     case "provider": return { id: `src:provider:${desc.name}`, type: "provider" };
     case "corpus": return { id: `src:corpus:${desc.name}`, type: "corpus" };
     case "web": return { id: `src:learned:web:${fnv1aHex(String(desc.url || ""))}`, type: "web", url: String(desc.url || "") };
@@ -209,6 +210,7 @@ function upsertSource(payload, desc, createdAtCandidate) {
  * through. The tag formats are exactly what the writers produce:
  *   corpus:conceptnet /r/IsA   → { kind:"corpus",   name:"conceptnet" }
  *   ace:chat:<session>@<ts>    → { kind:"operator",  createdAt:<ts> }
+ *   teach:chat:<session>@<ts>  → { kind:"teach",     createdAt:<ts> }
  *   web:<url> | url:<url>      → { kind:"web",       url:<url> }
  *   entailed:<rule>            → { kind:"entailed",  rule:<rule> }
  * chat:/session: refs map to the operator; an unknown tag → null (no Source).
@@ -221,6 +223,11 @@ export function provenanceTagToSource(tag) {
   if (head.startsWith("ace:")) {
     const at = head.indexOf("@");
     return { kind: "operator", createdAt: at >= 0 ? head.slice(at + 1) : "" };
+  }
+  if (head.startsWith("teach:")) {
+    // the chat teach lane's natural frames — chat.mjs's teachProvenanceTag
+    const at = head.indexOf("@");
+    return { kind: "teach", createdAt: at >= 0 ? head.slice(at + 1) : "" };
   }
   if (head.startsWith("web:")) return { kind: "web", url: head.slice("web:".length) };
   if (head.startsWith("url:")) return { kind: "web", url: head.slice("url:".length) };
