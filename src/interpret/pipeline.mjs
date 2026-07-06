@@ -27,6 +27,13 @@ import { normalizeQuery, applyNegationFrames, applyPhrasingFrames } from "./norm
 import { grammarStrategy } from "./strategies/grammar.mjs";
 import { keywordSpotStrategy } from "./strategies/keywords.mjs";
 import { noiseStripStrategy } from "./strategies/noise-strip.mjs";
+// Optional Node-flavored ACE strategy — same viewer-bundle boundary as the
+// ask-nlp adapter below: the ACE grammar reaches grammar/ace.mjs -> lexicon.mjs,
+// which reads its committed JSON via Node fs, so an inlining viewer bundle strips
+// this import; the `typeof` guard where STRATEGIES is built then degrades to an
+// ace-less registry instead of throwing over an undeclared identifier. (ACE is
+// async-only anyway, so the sync parseQuery path the viewer uses never ran it.)
+import { aceStrategy } from "./strategies/ace.mjs";
 import { mergeStrategyResults } from "./merge.mjs";
 // Optional Node-only wink adapter — same viewer-bundle boundary as ask.mjs: an
 // inlining bundle strips this import and the `typeof` read below degrades to
@@ -38,9 +45,17 @@ import { nlpAdapter } from "../ask-nlp.mjs";
  *  byte-identical to the original two-way agree/disagree behavior); noise-strip
  *  is the item-10 tolerant fallback (its own class; it only fires when the
  *  anchored grammar missed the text as-given, so it can never displace an
- *  existing template parse). interpret/strategies/ace.mjs (Phase 2) will
- *  register here the same way. */
-export const STRATEGIES = [grammarStrategy, keywordSpotStrategy, noiseStripStrategy];
+ *  existing template parse). interpret/strategies/ace.mjs (Phase 2 / Stage 2) is
+ *  the ACE-OWL controlled-fragment grammar, registered here as an ADDITIVE, own-
+ *  class ("ace-fact") strategy. It is ASYNC on purpose: runStrategiesSync (the
+ *  parseQuery / CHATBENCH-facing path) SKIPS Promise-returning strategies, so ACE
+ *  adds declarative-fragment reach to interpret() while leaving the sync spine
+ *  byte-stable (see strategies/ace.mjs for the full rationale). The `typeof` guard
+ *  mirrors the nlpAdapter degradation: a stripped ACE import (viewer bundle) leaves
+ *  the identifier undeclared, so the registry is ace-less there instead of a crash. */
+// eslint-disable-next-line no-undef
+const OPTIONAL_STRATEGIES = typeof aceStrategy !== "undefined" ? [aceStrategy] : [];
+export const STRATEGIES = [grammarStrategy, keywordSpotStrategy, noiseStripStrategy, ...OPTIONAL_STRATEGIES];
 
 /** The documented normalization pre-pass: whitespace-collapse + the §3.5
  *  normalization pipeline + the closed rhetorical-frame rewrites, applied ONCE
