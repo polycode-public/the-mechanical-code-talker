@@ -10,16 +10,21 @@
 //   3. "what tests cover X" honest-empty reads cleanly ("No tests cover X."), not
 //      the "…whose module directly tests cover X" garble (ask.mjs miss renderer) —
 //      while the frozen "which modules test X" wording is left byte-exact.
+//   4. the chatbench runner scrubs the per-run-volatile fact-recall citation
+//      (ace:chat:<uuidv7>@<ISO stamp>) so assert-recall rows are byte-reproducible
+//      across identical runs (was the discourse-count / assert-recall flake source).
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ask } from "../src/ask.mjs";
-import { runTurn } from "../src/chat.mjs";
+import { runTurn, runChat } from "../src/chat.mjs";
 import { parseEntities } from "../src/codegraph.mjs";
 import { ingestSchemaDocs } from "../src/schema-docs.mjs";
 import { clearCache } from "../src/source.mjs";
+import { runSessionCase } from "../chatbench/run.mjs";
+import { parseSessionJsonl, parseSessionLog, turnKey } from "../src/sessions.mjs";
 
 const FIXTURE = new URL("./fixtures/entities.fixture.json", import.meta.url);
 const FIXTURE_PAYLOAD = JSON.parse(await readFile(FIXTURE, "utf8"));
@@ -141,4 +146,31 @@ test("fix3: the frozen 'which modules test X' entity-keyword wording is untouche
   const r = ask(graph, "which modules test app/lib/f.mjs"); // explicit entity keyword → entityType Module
   assert.match(r.content, /No modules found whose module directly tests app\/lib\/f\.mjs\./,
     "the pinned entity-keyword phrasing (frozen in cases.jsonl) stays byte-exact");
+});
+
+// ── Fix 4: the chatbench runner scrubs the volatile fact-recall citation ──
+
+test("fix4: assert-recall rows are byte-reproducible — the ace:chat:<uuid>@<ts> citation is scrubbed", async () => {
+  // An assert-then-recall session: turn 1 stores a fact, turn 2 recalls it and echoes
+  // the provenance. The uuidv7 session id + wall-clock stamp are minted per run, so the
+  // recalled answer used to flip between otherwise-identical runs (the instrument flake).
+  const graphJson = (() => { const p = structuredClone(FIXTURE_PAYLOAD); ingestSchemaDocs(p); return JSON.stringify(p); })();
+  const caseDef = {
+    id: "qw-assert-recall", tags: ["graded"], grade: "C1", construction: "assert-recall",
+    mode: "session", graph: "fixture",
+    turns: [
+      { say: "every class is a category", session: 1, expect: { miss: false } },
+      { say: "what did i tell you last time", session: 2, expect: { miss: false, answerMatch: ["category"] } },
+    ],
+  };
+  const deps = { runChat, parseSessionJsonl, parseSessionLog, turnKey, graphJson, clearCache };
+  const run1 = await runSessionCase(caseDef, deps);
+  const run2 = await runSessionCase(caseDef, deps);
+  const recall1 = run1.transcript[1].answer;
+  const recall2 = run2.transcript[1].answer;
+  assert.match(recall1, /category/, "the recall still names the asserted fact (tier-1 unaffected)");
+  assert.match(recall1, /ace:chat:<session>@<ts>/, "the volatile citation is folded to the stable placeholder");
+  assert.doesNotMatch(recall1, /ace:chat:[0-9a-f]{8}-/i, "no raw uuidv7 leaks into the recorded answer");
+  assert.doesNotMatch(recall1, /@\d{4}-\d{2}-\d{2}T/, "no raw wall-clock stamp leaks into the recorded answer");
+  assert.equal(recall1, recall2, "two identical runs record byte-identical recall answers");
 });

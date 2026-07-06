@@ -317,6 +317,13 @@ function sink() {
   return out;
 }
 
+/** The per-run-volatile fact-recall citation: `ace:chat:<uuidv7>@<ISO timestamp>`.
+ *  The session uuid (uuidv7, time-seeded) and the wall-clock stamp are both minted
+ *  fresh each run, so any recorded answer that echoes this provenance is not
+ *  reproducible — the runner scrubs it to a stable placeholder (below) for byte-equal
+ *  rows across identical runs. */
+const VOLATILE_PROVENANCE = /ace:chat:[0-9a-f-]{36}@\d{4}-\d{2}-\d{2}T[0-9:.]+Z/gi;
+
 /** Run a session-mode case through the FULL runChat in a fresh temp dir:
  *  graph "fixture" seeds .tmct/graph.json from the committed fixture; "empty"
  *  starts bare (the bootstrap path). Turns grouped by turn.session run as
@@ -369,8 +376,16 @@ export async function runSessionCase(caseDef, deps) {
         const matched = record && record.query === turn.say;
         // Scrub the per-run temp dir out of answers (e.g. the empty-graph
         // bootstrap message names the graph path) so rows stay deterministic.
+        // Same for the volatile fact-recall citation ace:chat:<uuidv7>@<ISO stamp>:
+        // both the session uuid and the wall-clock stamp are minted per run, so an
+        // assert-recall answer that echoes the provenance ("you told me: … (source:
+        // ace:chat:019f…@2026-…Z)") otherwise flips between identical runs — the
+        // instrument's discourse-count / assert-recall nondeterminism source. Fold it
+        // to the SAME <session>@<ts> placeholder the case-set's `observed` fields use.
         const answer = matched
-          ? (answers.get(turnKey(record.ts, record.query)) ?? "").replaceAll(dir, "<repo>")
+          ? (answers.get(turnKey(record.ts, record.query)) ?? "")
+              .replaceAll(dir, "<repo>")
+              .replace(VOLATILE_PROVENANCE, "ace:chat:<session>@<ts>")
           : "";
         const outcome = matched
           ? { answer, miss: record.miss, resolvedIds: record.resolvedIds, answeredIds: record.answeredIds }
