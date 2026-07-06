@@ -1,0 +1,154 @@
+# PLAN_CHAT_FEEL — ranked next steps for chat feel + agent capability (post-0.8.1)
+
+Written 2026-07-06 from a 4-source sweep: `ROADMAP.md` (Track 1 + Next), `CHATBENCH_0.8.1.md`
+(+ `_TRANSCRIPTS`), `AGENTBENCH_0.8.1_002.md`, and a **live lightweight playtest** (7 CLI sessions
+against `examples/mini-webapp`, method borrowed loosely from `SKILL_CHAT_PLAYTEST.md` — no full
+ceremony). Playtest evidence is quoted below; the ranking follows it.
+
+Guardrails for everything here: deterministic tier-1 (333/333) stays green; any lever that changes
+answer *text* on a judged surface re-judges the touched tags only (see HANDOVER bench-reuse map);
+no LLM in the product path; AGENTBENCH re-runs are free (deterministic).
+
+## Ranked plan
+
+Value axis: **feel** = natural chat feel, **agent** = router/agent capability.
+
+### 1. Recall hygiene — stop memorizing failures, tighten recall matching (feel; small)
+Playtest's worst finding, invisible to CHATBENCH: wall/miss replies are stored and replayed as
+"you asked about this before" recalls, on loose matches (verb and file both wrong), and even
+*nested* (a recall-of-a-recall-of-a-wall opened session 6). Fix: (a) never store a miss/wall/refuse
+reply as a recallable answer; (b) recall only fires when predicate + entity both match; (c) never
+prepend a recall to a reply that is itself a miss. Highest value-per-effort in the whole list.
+
+### 2. Preamble/politeness stripping before parse (feel + agent; small)
+"hey there, quick question - which modules import X?" and "can you show me X please" wall while the
+bare forms answer. Strip greeting/politeness/preamble/trailing-`?` frames before routing (chat spine
+*and* router front-end — this widens NL reach for free). Also swallow the article: "what about the
+logger" currently asks the user to disambiguate "the logger" vs "logger".
+
+### 3. Relation self-consistency — calls ∪ callsSymbol, vocabulary knows its own classes (feel; small-med)
+Three self-contradictions: "what calls saveStore" answers via `callsSymbol` but "what does
+createTask call" reports "no calls edges" (`calls` only); "what is a Record" denies a class the bot
+itself lists (vocab lookup misses Class individuals); "does it have tests" emits a wrong-relation
+receipt ("no defines edge from createTask to 0a1b2c3d4e5f" — a commit hash). Union the two call
+relations on call questions, include classes in the vocab lookup, route has-tests to the coverage
+capability. **Also clears the only CHATBENCH hard-fail** (`gq-functions-call-fnalpha`, all-dims-0
+since cycle 1).
+
+### 4. Author→commit querying (feel; med) — HANDOVER follow-up #1, confirmed live
+The bot volunteers "(Grace Hopper)" in touch-sets, then walls on "who is Grace Hopper" and misparses
+"what did Grace Hopper touch" as a module lookup. Route person-name subjects to an
+author→commits→touched traversal in `src/ask.mjs` (or minimally: graph-aware nudge in the miss
+renderer). CHATBENCH's own lever list adds: "who is the author of <commit>" should *name* the author
+(fixture has it), not dump the touch-set.
+
+### 5. Wall-render kindness (feel; small, wide surface)
+The ~120-word grammar dump repeats verbatim as the default wall (5× in one session); specific misses
+get baffling generic hints ("is this code any good" → `is a <thing> a <kind>`); honest-empties still
+ship the `(traversal: … edges where object = …)` debug tail; coverage-miss leaks the user's verb
+("No tests cover **touch** app/lib/f.mjs"); the "what can you do" examples cite tmct's own repo
+symbols, not the loaded graph; "what does the app do" — the most likely stranger opener — walls
+instead of getting the "what is this project" overview. One sweep over the miss/empty renderers:
+short tailored nudge first, full shapes only in /help, canonical verb in coverage renders,
+graph-derived examples, app-overview route.
+
+### 6. ROADMAP Track 1 trio (feel + agent; the big rock)
+Pronoun/focus binding (B1 pron 1.24 — "biggest movable mass"), discourse-count anaphora ("count
+them" — clears 2 standing tier-1 misses), C1 temporal-over-relative composition (0.31 ceiling).
+ROADMAP: "Land all three (not just #1); they raise the chat floor *and* the router's floor at once"
+— they gate the A2→B1→C1 router rungs, and cross-turn anaphora slot-filling is one of
+AGENTBENCH_0.8.1_002's two named frontiers. Ladder rule applies: this is what makes B1 reliable
+before paying to judge C-grades.
+
+### 7. Teach-lane widening (feel; med)
+Sanctioned ACE teach ("every controller is a handler") is lovely — source receipts build trust. But
+natural forms miss it entirely ("remember that saveStore is deprecated", "Priya owns tasks.mjs"),
+and taught vocabulary can't bridge to graph instances ("is TaskController a handler" walls; the
+is-a parse demands an article that never fits a symbol name). Add natural teach frames + a
+taught-class↔instance bridge (inherits ∘ subClassOf). ACE stays product-inert unless a spike shows
+zero spine regression (it's wired async; activation is a deliberate, separately-gated step).
+
+### 8. Imperative + why nudges (feel; small) — HANDOVER follow-up #5
+"make a test for it" → "I don't write code — but /tests <name> shows coverage"; "why is it
+untested" → honest capability nudge. Walls are fine; blank walls aren't.
+
+### 9. Second C2 goal-rule + held-out phrasings (agent; med) — HANDOVER follow-up #2
+C2 currently rests on one coverage-invariant `GOAL_RULES` entry — real but thin. A second declared
+rule with blind-graded held-out phrasings makes "C2 cleared" rule-general.
+
+### 10. AGENTBENCH ladder depth + the C1 per-member hop (agent; med) — HANDOVER follow-up #3
+Grow result-composition cases (static `expect.result` literals, fixture-linted); the standing C1 red
+(`ab-c1-widget-methods-calling`) needs a per-member callees hop the single-shot resolver can't emit
+— either a bounded second hop in the composer or an honest permanent ceiling marker. Fix the
+fixture-grain mismatch (bare `render` vs dotted `Widget.render`) either way.
+
+### 11. Hygiene: bench-import smell (neither axis; tiny) — HANDOVER follow-up #4
+`src/router/resolver.mjs` imports `hallucinationsIn` from `agentbench/grade.mjs`; extract the shared
+check into `src/router/`.
+
+### 12. The push (operator-gated)
+0.8.1 committed locally; pushing `main` triggers CI publish. Not a session decision.
+
+Suggested batching: **items 1–5 + 8 are one "feel wave"** (small, disjoint renderer/lexer surfaces,
+one re-judge of the touched tags at the end, one playtest to confirm); **item 6 is its own wave**;
+**items 9–11 are a router wave**; 7 rides with either.
+
+## Playtest evidence (2026-07-06, lightweight; 7 sessions, mini-webapp graph, isolated store)
+
+Strengths to protect: typo tolerance ("wich functions are untested" → perfect answer), `it`-anaphora
+carry (4 consecutive turns), `describe <Class>`, superlatives ("which module has the most imports"),
+counts, greeting/thanks personality, taught-fact source receipts.
+
+Key exchanges (trimmed):
+
+```
+user> what can you do
+tmct> … For example: which modules import walk.mjs / what calls buildContextBundle …
+      [examples from tmct's own repo, not the loaded graph — a stranger typing them gets misses]
+
+user> who touched src/core/store.mjs
+tmct> a1b2c3d4e5f6 (Grace Hopper) and c3d4e5f6a1b2 (Alan Kay) and 1b2c3d4e5f60 (Barbara Liskov).
+user> who is Grace Hopper
+tmct> couldn't parse this as a graph question. Try: "when did <name> change" …
+user> what did Grace Hopper touch
+tmct> no module matching "Grace Hopper" found in the index.
+
+user> what calls saveStore
+tmct> in src/handlers/tasks.mjs there is function createTask().
+user> [later, focus = createTask] what does it call
+tmct> createTask has no calls edges in the index. (traversal: calls edges where subject = createTask)
+      [self-contradiction: callsSymbol vs calls]
+user> does it have tests
+tmct> No — no defines edge found from createTask to 0a1b2c3d4e5f.   [wrong relation + raw hash]
+
+user> what does the app do
+tmct> couldn't parse this as a graph question. …   [most likely stranger opener; walls]
+user> whats the riskiest file to change
+tmct> no module matching "riskiest" found in the index.
+
+user> who owns src/handlers/tasks.mjs
+tmct> you asked about this before (session 019f3967…): Q: who touched src/core/store.mjs A: …
+      couldn't parse this as a graph question. Try: [~120-word grammar dump]
+      [wrong recall stapled to a wall; repeated verbatim 5× in the session]
+
+user> hey there, quick question - which modules import src/core/model.mjs?
+tmct> you asked about this before …: Q: who owns src/handlers/tasks.mjs A: you asked about this
+      before …: Q: who touched src/core/store.mjs A: … couldn't parse …
+      [nested recall-of-a-recall-of-a-wall; the bare question answers perfectly]
+
+user> every controller is a handler
+tmct> noted — remembered 1 fact: controller rdfs:subClassOf handler
+user> is a controller a handler
+tmct> yes — you told me: controller is a kind of handler (source: ace:chat:…)   [lovely]
+user> is TaskController a handler
+tmct> couldn't parse this as a graph question. Try: "is a <thing> a <kind>" …
+      [taught vocab can't bridge to instances; is-a parse demands an article]
+
+user> what about the logger        [after an imports question]
+tmct> this could mean more than one thing: 1) modules that imports "the logger" or 2) modules that
+      imports "logger" — try rephrasing more specifically.   [same reading twice]
+
+user> what is a Record
+tmct> "Record" isn't a term in this graph's own vocabulary (no matching class or predicate).
+      [the bot lists Record under "what classes are there" and shows inherits → Record]
+```
