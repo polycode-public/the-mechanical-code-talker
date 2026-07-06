@@ -14,16 +14,34 @@ the file has been deleted.
 
 ## Where we are now (2026-07-06)
 
-**Shipped: v0.7.1** — Phases 0–10 are done. The chat surface is strong and measured: the concept force
-(nouns + relations), seed-all vocabulary, de-anthropomorphized rendering, `--ephemeral` demos, the
-Repository Interface (v1, consumed by the seonix session), provenance/trust, response finishing, and
-speculative inference all landed; `CHATBENCH_0.7.1` re-baselined quality at **1.488/2** (tier-1 spine
-331/333). The completed feature plans are archived under `archive/`.
+**Built: v0.8.0 — Phase 11 landed (Phases 0–10 shipped in 0.7.1).** All five Phase-11 tracks are
+built, merged, and measured; `npm test` green (**869**). Push/publish held for the operator. Highlights:
 
-**Next: Phase 11** — the deterministic **capability router** and its own **AGENTBENCH** benchmark
-(`PLAN_CAPABILITY_ROUTER.md` + `docs/references/planning/`). A fresh session starts there — see Phase
-11 below for the queued tracks (chat levers, the router build, the bedrock-meter surface, playtest in a
-worktree, and two research-agent stages).
+- **Track 1 — chat levers (measured).** Pronoun/focus binding, discourse-count anaphora, and C1
+  temporal-over-relative composition all landed. `CHATBENCH_0.8.0`: tier-1 spine **331→333**, all three
+  lever families moved their cells (the B1-temporal control did not spill); judged fixed tag
+  `multi-turn-focus` **1.433→1.9** (the pronoun lever's echo). The judged pooled mean (1.44) is **not
+  case-comparable** to 0.7.1's 1.488 — the graded draw re-samples 10% of cells each run, so §1 compares
+  cell-level, not the scalar; the deterministic tier-1 spine is the load-bearing PASS.
+- **Track 2 — the router (designed → DEMONSTRATED).** The Anthropic-compatible `/v1/messages` shim
+  (`serve` mode), the Stage-0 capability registry (STRIPS/PDDL operators, closed-world default-deny),
+  and the resolver (S1) + guardrail (S4) + planner (S3, pure-JS POP/HTN + Steel & Ho monitor). Measured:
+  `AGENTBENCH_0.8.0` (shim-transport floor, 46% completion) → `AGENTBENCH_0.8.0_001` (the real router):
+  **96% completion at 0% hallucination on every rung**, clearing the closed-world ladder to **C1**. The
+  honest gate the phase was staked on is **met on its hallucination axis (0%)**. **Caveat (stated in the
+  artifact):** AGENTBENCH grades the correct **call-plan + proof**, *not* the executed composed result,
+  and B1/B2/C1 are thin rungs (2–3 cases); the C2 case is honestly **refused** (Stage 5, unbuilt).
+- **Track 3 — bedrock-meter surface.** `../bedrock-meter` gained a cost-ascending router ladder with the
+  **tmct `$0` rung at rank 0 below nova-micro**; an end-to-end test meters an in-envelope request at
+  **£0** and escalates out-of-envelope to nova-micro (that repo: 73 green, unpushed).
+- **Track 4 — playtest.** Three frozen dialogue-flow transcripts (`test/chatflow-{coverage,history,
+  architecture}.test.mjs`) from routing dead-ends off the grammar wall.
+- **Track 5 — research.** `docs/references/planning/` gained Stage-2 intent-frames + Stage-5
+  goal-reasoner design notes + a BDI/Goal-Driven-Autonomy reference entry.
+
+**Next:** the C2 goal-reasoner (Stage 5) and Stage-2 imperative intent frames are the designed-but-
+unbuilt edge; the tier-4/tier-5 items in Phase LATER remain the long tail. See Phase 11 below and
+`HANDOVER.md` for the open follow-ups.
 
 ## The umbrella product definition (item 1)
 
@@ -610,17 +628,26 @@ you toward precision" promise on the conversational surface.
   with new graded cells for the miss / empty-graph / concept-touch surfaces so these become
   regression-protected levers, not one-off polish.
 
-## Phase 11 — The capability router & the agentic bench (0.7.2 →)
+## Phase 11 — The capability router & the agentic bench (0.8.0 — LANDED)
 
-*(Operator-directed 2026-07-06. The next session kicks off here.)* tmct as a **deterministic, no-LLM
+*(Operator-directed 2026-07-06; built the same day across five concurrent tracks.)* tmct as a **deterministic, no-LLM
 tool router** behind an Anthropic-compatible API — the workstream specified in
 `PLAN_CAPABILITY_ROUTER.md`, grounded in `docs/references/planning/`. This is a **new capability on a
 new axis** (driving a tool loop, not answering a chat turn), so it gets its **own benchmark**:
 **`AGENTBENCH`**, a sibling to CHATBENCH — same versioned-naming + grading discipline
 (`AGENTBENCH_<version>.md`, `_00N` for re-runs), but the levels are the **A0→C2 agentic rungs** and a
-**hallucinated tool call is an automatic fail**. Honest status: the router is *designed, not built* —
-the headline economic claim is **newly testable, not demonstrated**, gated on the first demo returning
-a number (a 0% hallucination rate on a real domain).
+**hallucinated tool call is an automatic fail**.
+
+**Status: DEMONSTRATED (with a stated scope caveat).** The router is built and measured:
+`AGENTBENCH_0.8.0_001` = **96% completion at 0% hallucination on every rung**, closed-world ladder
+cleared to **C1**. The gate the phase was staked on — a **0% hallucination rate on a real domain** (the
+graph-query toolset over the fixture) — **is met.** The honest scope line, held from the start:
+AGENTBENCH grades the correct **call-plan + causal-link proof, not the executed composed result**; the
+B1/B2/C1 rungs are **thin (2–3 cases)**; and the one C2 case is **refused** (the Stage-5 goal-reasoner
+is designed, not built). So "closed-world C1" means *the router provably selects and binds the right
+tool sequence*, not *end-to-end multi-step reasoning* — the demonstrated-vs-designed boundary is the
+real deliverable. The five tracks below are all built; the two research-agent stages (Track 4 below)
+remain designed-not-built by intent.
 
 ### Track 1 — chat-surface levers (next CHATBENCH; all three)
 The three levers `CHATBENCH_0.7.1` measured + ranked — which **double as router prerequisites** (they

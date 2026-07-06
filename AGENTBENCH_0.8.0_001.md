@@ -8,6 +8,18 @@ miss is `ab-c2-safe-to-change` — a genuine C2 goal-reasoner (Stage 5, unbuilt)
 **refuses/escalates** rather than fake. Deterministic replay, no LLM, no judge; two runs over the same
 tree + `--stamp 0.8.0` are byte-identical.
 
+> **⚠ What "completion" measures (the mandatory caveat).** AGENTBENCH grades the **call-PLAN + its
+> proof** — the right tool names, bound (determinable) args, in the right order, with a connected
+> causal chain — **NOT the composed RESULT.** It does not execute the composition: e.g.
+> `ab-c1-untested-in-impact` passes by emitting `tmct_impact` then `tmct_untested` *in order*; the
+> actual set-intersection ("which impacted modules are untested") is never computed or checked. So the
+> honest reading of 96% is *"the router selects and binds the correct determinable tool-plan and proves
+> the choice, at 0% hallucination"* — **not** *"it computes the multi-step answer end-to-end."* Rungs
+> are also **thin** (B1/B2/C1 = 2–3 cases each); C1's 100% is **1 clean relative-filter sequence + 1
+> case (`ab-c1-widget-methods-calling`) graded to its determinable first hop** after a relaxation that
+> drops a fixture-specific filter. "Closed-world C1 cleared" therefore means *plan + proof*, on a
+> deliberately small frame — the demonstrated-vs-designed line this phase held throughout.
+
 > ## ✅ This IS the router baseline — `driver:"resolver-0.8.0"`, NOT a floor
 > The driver under test is `resolver` (`agentbench/driver-resolver.mjs`): single-shot requests go
 > through the **RESOLVER** (`src/router/resolver.mjs`) — command register → NL parse → imperative
