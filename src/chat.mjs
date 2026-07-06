@@ -598,11 +598,60 @@ export const WALL_MISS_RE = /^couldn't parse this as a graph question\. Try:/;
 // bare "X is a Y" declarative the graph parser couldn't handle → route to the
 // assert/memory path; when it can't be stored, say what CAN be remembered
 // (LOUD, the working shape) — never the grammar wall, never a silent data loss.
+// 0.8.2 widens the lane with two NATURAL frames, both reified via appendFact
+// with a distinct teach:chat provenance (its own "teach" trust prior):
+//   - "remember/note that <X> is <adjective>" → an mgx:hasProperty fact —
+//     ONLY under the explicit wrapper (a bare "X is deprecated" is never
+//     silently swallowed);
+//   - "<Name> owns/maintains <X>" (bare declarative or wrapped) → an
+//     mgx:ownedBy fact, read back by "who owns <X>" (factReadBack).
 const TEACH_RE = /^(?:please\s+)?(?:remember|note|keep in mind|jot down|for the record|fyi)\b[:,]?\s*(?:that\s+)?(.+?)[.?!]*$/i;
 const BARE_DECLARATIVE_RE = /^(?:every |each |all |a |an )?[\w-]+ (?:is|are) (?:a |an )?[\w-]+$/i;
 /** Interrogative / auxiliary leads that make an "X is a Y"-shaped line a QUESTION
  *  ("what is a cache", "is a module a component"), never a teach declarative. */
 const QUESTION_LEAD_RE = /^(?:what|who|which|where|when|why|how|is|are|do|does|did|can|could|should|would|will|has|have)\b/i;
+
+// The teach lane's fact predicates (rendered via FACT_PREDICATE_PHRASES).
+const OWNED_BY_PREDICATE = "mgx:ownedBy";
+const HAS_PROPERTY_PREDICATE = "mgx:hasProperty";
+
+/** "<Name> owns/maintains <X>" — the ownership teach declarative. <Name> is one
+ *  or two name tokens, <X> one code-ish token (a path, a file, a symbol). The
+ *  BARE form additionally requires a Capitalized name (see teachLane), so
+ *  ordinary lowercase prose never lands a fact without the explicit wrapper. */
+const OWNS_TEACH_RE = /^([A-Za-z][\w'-]*(?:\s+[A-Z][\w'-]*)?)\s+(?:owns|maintains)\s+(\S+?)[.!?]*$/;
+
+/** "<X> is <adjective>" — the property teach payload (wrapper-REQUIRED): a lazy
+ *  subject and a single bare complement word. Never matches the "is a <noun>"
+ *  membership shape (that stays the ACE grammar's), so "remember that cache is
+ *  a store" still lands as rdfs:subClassOf, not a property. */
+const TEACH_PROPERTY_RE = /^(?:every\s+|each\s+|all\s+|the\s+)?(.+?)\s+(?:is|are)\s+(?!an?\b|the\b)([A-Za-z][\w-]*)$/i;
+
+/** The teach lane's provenance tag — mirrors grammar/assert.mjs's provenanceTag
+ *  shape under a distinct "teach:" family, so a taught fact is auditable apart
+ *  from the ACE-parsed asserts: teach:chat:<sessionId>@<ts>. core.mjs maps the
+ *  tag to a "teach" Source (trust prior in memory/trust.mjs). */
+const teachProvenanceTag = (sessionId, ts) => `teach:chat${sessionId ? `:${sessionId}` : ""}${ts ? `@${ts}` : ""}`;
+
+/** Reify one teach-lane fact + confirm (shared by the property and ownership
+ *  frames). Lazy + failure-tolerated: a write failure degrades to null (the
+ *  teach-miss text stands), never a crash. */
+async function teachFact(memoryDir, sessionId, { subject, predicate, object }) {
+  try {
+    const { appendFact, normFactTerm } = await import("./memory/core.mjs");
+    const s = normFactTerm(subject);
+    const o = normFactTerm(object);
+    if (!s || !o) return null;
+    await appendFact(memoryDir, {
+      subject: s, predicate, object: o,
+      provenance: teachProvenanceTag(sessionId, new Date().toISOString()),
+    });
+    const phrase = FACT_PREDICATE_PHRASES[predicate] || predicate;
+    return { text: `noted — remembered: ${s} ${phrase} ${o}`, via: "assert", miss: false };
+  } catch {
+    return null;
+  }
+}
 
 /** Sentence forms to try asserting for a teach payload: the payload as-is, and
  *  (if it carries no determiner) its "every …" universal — the ACE-OWL shape the
@@ -621,9 +670,23 @@ function teachSuggestion(payload) {
 
 async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
   const raw = String(query).trim();
-  let payload = null;
   const m = raw.match(TEACH_RE);
-  if (m && /\b(?:is|are)\b/i.test(m[1])) payload = m[1].trim();
+  const wrapped = m ? m[1].trim() : null;
+
+  // OWNERSHIP — "<Name> owns/maintains <X>", bare or remember-wrapped. The bare
+  // form is double-gated: a Capitalized name AND no interrogative lead, so the
+  // "who owns <X>" READ question and ordinary prose never land a fact here.
+  const ownSrc = wrapped ?? raw.replace(/[.!?]+\s*$/, "");
+  const own = ownSrc.match(OWNS_TEACH_RE);
+  if (own && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && (wrapped || /^[A-Z]/.test(own[1]))) {
+    const stored = await teachFact(memoryDir, sessionId, {
+      subject: own[2], predicate: OWNED_BY_PREDICATE, object: own[1],
+    });
+    if (stored) return stored;
+  }
+
+  let payload = null;
+  if (wrapped && /\b(?:is|are)\b/i.test(wrapped)) payload = wrapped;
   else if (BARE_DECLARATIVE_RE.test(raw) && !QUESTION_LEAD_RE.test(raw)) payload = raw;
   if (!payload) return null;
   // Try to store it (a live session provides the write target). assertTurn returns
@@ -632,6 +695,19 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
     for (const cand of assertCandidates(payload)) {
       const stored = await assertTurn(cand, { memoryDir, sessionId, focus: null, lexicon });
       if (stored) return { text: stored.answer, via: "assert", miss: false };
+    }
+    // PROPERTY teach — "remember/note that <X> is <adjective>": wrapper-REQUIRED
+    // (a bare "X is deprecated" is never silently reified), and only after the
+    // ACE grammar declined (unknown words / not the membership shape), so a
+    // wrapped "X is a Y" over known lexicon still lands as rdfs:subClassOf.
+    if (wrapped) {
+      const prop = wrapped.match(TEACH_PROPERTY_RE);
+      if (prop) {
+        const stored = await teachFact(memoryDir, sessionId, {
+          subject: prop[1], predicate: HAS_PROPERTY_PREDICATE, object: prop[2],
+        });
+        if (stored) return stored;
+      }
     }
   }
   const suggestion = teachSuggestion(payload);
@@ -854,6 +930,7 @@ const FACT_PREDICATE_PHRASES = {
   "mgx:hasFirstSubevent": "begins with",
   "mgx:hasLastSubevent": "ends with",
   "mgx:hasPrerequisite": "requires",
+  "mgx:ownedBy": "is owned by", // the teach lane's ownership frame ("Priya owns tasks.mjs")
 };
 const factPhrase = (f) => `${f.subject} ${FACT_PREDICATE_PHRASES[f.predicate] || f.predicate} ${f.object}`;
 
@@ -864,7 +941,9 @@ const factPhrase = (f) => `${f.subject} ${FACT_PREDICATE_PHRASES[f.predicate] ||
  *  for themselves. Provenance stays VERBATIM either way. */
 function renderFactLine(f) {
   const cite = f.provenance ? ` (source: ${f.provenance})` : "";
-  if (f.provenance.includes("ace:chat")) return `you told me: ${factPhrase(f)}${cite}`;
+  // ace:chat = the ACE-parsed operator assert; teach:chat = the teach lane's
+  // natural frames — both are things the operator SAID, so both read first-person.
+  if (f.provenance.includes("ace:chat") || f.provenance.includes("teach:chat")) return `you told me: ${factPhrase(f)}${cite}`;
   // CORPUS facts are background DATA — present the relation plainly, cited to its
   // source, NEVER "i learned: …" (the footgun: a first-person claim over corpus noise).
   if (f.provenance.includes("corpus:")) return `${factPhrase(f)}${cite}`;
@@ -991,6 +1070,9 @@ const TOLD_ABOUT_RE = /^what\s+(?:did|have)\s+(?:i|we|you)\s+(?:told|tell|said|s
 /** "what kind of thing is an X" — the subject-side membership phrasing the grammar
  *  doesn't parse: reports X's OWN remembered type (falling back to X's members). */
 const KIND_OF_RE = /^what\s+kind\s+of\s+(?:thing|class|type|category|entity)?\s*(?:is|are)\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
+/** "who owns <X>" / "who maintains <X>" — the closed ownership read-back over
+ *  the teach lane's mgx:ownedBy facts. */
+const WHO_OWNS_RE = /^who\s+(?:owns|maintains)\s+(.+?)[?.!\s]*$/i;
 /** WHOLE-STORE recall (CHATBENCH_006 lever 3): "what did i tell you [last time]",
  *  "what facts do you know", "what do you remember" — list EVERY remembered fact
  *  (no subject/object term to filter on), cited, higher-trust first. The multi-turn
@@ -1006,6 +1088,39 @@ async function entityClassNoun(graph, term) {
   if (!ent) return null;
   const cls = (graph?.byId?.get?.(ent.id) || (graph?.individuals || []).find((i) => i?.id === ent.id))?.class;
   return cls && CLASS_LABELS[cls] ? CLASS_LABELS[cls][0] : null;
+}
+
+/** A relation group that carries class-inheritance edges — the same token family
+ *  codegraph.mjs's relationKind classifies as "inherits" (checked locally over
+ *  prop+predicate so this file adds no codegraph import surface). */
+const INHERITS_GROUP_RE = /inherit|supertype|subclass|extend|specializ/i;
+/** How far up an inheritance chain the class↔instance bridge walks. */
+const INHERITS_MAX_HOPS = 8;
+
+/** Walk the code graph's `inherits` chain UPWARD from an entity id — each
+ *  superclass as { id, label }, bounded (≤ INHERITS_MAX_HOPS) and cycle-safe.
+ *  Read-only over graph.relations; feeds the class↔instance bridge so a taught
+ *  "controller ⊑ handler" composes with a graph "TaskController inherits
+ *  Controller". Follows the FIRST outgoing inherits edge per hop (single
+ *  inheritance is the emitted shape). */
+function inheritsChain(graph, startId) {
+  const out = [];
+  if (!graph || !startId) return out;
+  const seen = new Set([startId]);
+  let cur = startId;
+  for (let hop = 0; hop < INHERITS_MAX_HOPS; hop += 1) {
+    let edge = null;
+    for (const g of graph.relations || []) {
+      if (!INHERITS_GROUP_RE.test(`${g?.prop || ""} ${g?.predicate || ""}`)) continue;
+      edge = (g.edges || []).find((e) => e?.subject === cur) || null;
+      if (edge) break;
+    }
+    if (!edge || seen.has(edge.object)) break;
+    seen.add(edge.object);
+    out.push({ id: edge.object, label: edge.objectLabel || edge.object });
+    cur = edge.object;
+  }
+  return out;
 }
 
 /** ASSERT-RECALL MULTI-TURN READ-BACK (PLAN_CYCLE_4 tail → cycle-005 lever 2):
@@ -1062,7 +1177,43 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null) {
       .filter((f) => subjCandidates.has(f.subject) && objVariants.has(f.object))
       .sort(byTrust)[0];
     if (hit) return { text: `yes — ${renderFactLine(hit)}`, replace: true };
+    // CLASS↔INSTANCE BRIDGE (0.8.2): when X resolves to a graph entity, its
+    // inherits chain's superclass LABELS are subject candidates too — a taught
+    // "controller ⊑ handler" composes with a graph "TaskController inherits
+    // Controller" so "is TaskController a handler" answers yes, naming BOTH
+    // sources (the graph edge + the taught fact with its provenance).
+    const ent = await resolveEntity(graph, isaAsk[1]);
+    if (ent) {
+      const bridgeSubjects = new Map(); // fact-term variant → the superclass label as spelled in the graph
+      for (const sup of inheritsChain(graph, ent.id)) {
+        for (const v of factTermVariants(normFactTerm, sup.label)) {
+          if (!subjCandidates.has(v) && !bridgeSubjects.has(v)) bridgeSubjects.set(v, sup.label);
+        }
+      }
+      const bridged = isa
+        .filter((f) => bridgeSubjects.has(f.subject) && objVariants.has(f.object))
+        .sort(byTrust)[0];
+      if (bridged) {
+        return {
+          text: `yes — the code graph says ${ent.label} inherits ${bridgeSubjects.get(bridged.subject)}, and ${renderFactLine(bridged)}`,
+          replace: true,
+        };
+      }
+    }
     return null; // no remembered fact — the honest miss stands (never a guessed "no")
+  }
+
+  // (a2) OWNERSHIP read-back — "who owns/maintains <X>": the teach lane's
+  // mgx:ownedBy facts about X, trust-ranked, each cited (the source receipt
+  // stays in the render). No fact → null, the honest miss stands.
+  const owns = q.match(WHO_OWNS_RE);
+  if (owns) {
+    const variants = factTermVariants(normFactTerm, owns[1]);
+    const hits = rows
+      .filter((f) => f.predicate === OWNED_BY_PREDICATE && variants.has(f.subject))
+      .sort(byTrust);
+    if (!hits.length) return null;
+    return renderMany(hits);
   }
 
   // (b) RECALL — "what did i tell you about X": every remembered fact mentioning X.
