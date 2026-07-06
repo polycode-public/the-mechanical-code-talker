@@ -283,10 +283,17 @@ test("agentbench e2e: the stub driver runs the seed set to a labeled stub-floor 
     assert.equal(r.driver, "stub-floor", "every row is stamped the stub-driver floor, not a router baseline");
     assert.equal(r.version, BENCH_VERSION, "artifacts are stamped the bench version (tracks package.json)");
   }
-  // the seed set is authored to the stub's ability, so the floor clears its gate
+  // the stub is a KEYWORD matcher authored for the CONCRETE rungs (A0-A2); the
+  // abstract rungs (B1+ multi-step, and the Stage-5 C2 goal cases added since)
+  // are BEYOND its design by construction. So the "real floor" property (a
+  // NON-degenerate floor: it clears the gate rather than refuse-everything) is
+  // asserted on the rungs it targets, not the deliberately-harder full ladder —
+  // adding a C2 case the stub cannot goal-deduce must not read as a floor regression.
   assert.equal(rolled.overall.hallucinationRate, 0, "the stub structurally cannot hallucinate (default-deny to declared set)");
-  assert.ok(rolled.overall.completion >= COMPLETION_FLOOR);
-  assert.ok(rolled.overall.gatePass);
+  for (const rung of ["A0", "A1", "A2"]) {
+    assert.ok(rolled.byRung[rung].completion >= COMPLETION_FLOOR, `stub completes its authored rung ${rung} (${(rolled.byRung[rung].completion * 100).toFixed(0)}%)`);
+    assert.ok(rolled.byRung[rung].gatePass, `stub clears its gate on authored rung ${rung}`);
+  }
 });
 
 // ---- the SHIM-TRANSPORT baseline driver -------------------------------------

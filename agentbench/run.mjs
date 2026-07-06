@@ -28,6 +28,7 @@ import { parseCases, gradeCase, rollup, ladderGate, renderRollup, RUNGS } from "
 import { stubDriver } from "./driver-stub.mjs";
 import { shimDriver } from "./driver-shim.mjs";
 import { resolverDriver } from "./driver-resolver.mjs";
+import { goalDriver } from "./driver-goal.mjs";
 import { capabilityByName } from "../src/router/registry.mjs";
 import { resolveObject } from "../src/ask.mjs";
 import { parseEntities } from "../src/codegraph.mjs";
@@ -37,8 +38,10 @@ import { ingestSchemaDocs } from "../src/schema-docs.mjs";
 // The pluggable drivers, selectable with --driver. `stub` is the STUB-DRIVER
 // FLOOR (default); `shim` is the SHIM-TRANSPORT interface floor (server-http.mjs
 // selectTool, reused in-process); `resolver` is the ROUTER BASELINE (Stage 1 +
-// Stage 3 — the resolver/planner, driver:"resolver-0.8.0"), NOT a floor.
-export const DRIVERS = Object.freeze({ stub: stubDriver, shim: shimDriver, resolver: resolverDriver });
+// Stage 3 — the resolver/planner, driver:"resolver-0.8.0"), NOT a floor; `goal`
+// is the STAGE-5 goal-reasoner ON TOP of the resolver (C1 first, escalate a C1
+// refusal to the closed-world C2 goal-reasoner — driver:"goal-0.8.1").
+export const DRIVERS = Object.freeze({ stub: stubDriver, shim: shimDriver, resolver: resolverDriver, goal: goalDriver });
 
 // A HARD wall-clock backstop on ONE driver call (coordinator reinforcement 1):
 // the planner's POP/HTN loop has its own MAX_STEPS budget, but a bug that never
