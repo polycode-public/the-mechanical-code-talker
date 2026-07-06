@@ -306,3 +306,15 @@ STATUS: OPEN — Agent I.
 OBSERVATION 23 (task#10): CHATBENCH judged mean is pending + discourse-count nondeterminism (E flagged 331-333). Freezing a nondeterministic mean into ROADMAP/HANDOVER/memory is not reproducible.
 RECOMMENDED ACTION: stamp the mean with seed + report median-of-N (or caveat the discourse-count family) before writing the 0.8.0 headline.
 STATUS: OPEN — task #10.
+
+═══════════════════════════════════════════════════════════════════════
+[2026-07-06 01:58Z] source=strategy-advisor(opus,deep) · topic=phase-11-tick11-FINAL-honesty-audit
+OBSERVATION 24 (MANDATORY caveat): AGENTBENCH completion = callsMatch (names+pinned args+order) + proofConnected — it grades the call-PLAN, NOT the composed RESULT. ab-c1-untested-in-impact passes by emitting tmct_impact then tmct_untested in order; the actual set-intersection is never computed/checked (tmct_untested is noArg, causal link condition:null still passes).
+RECOMMENDED ACTION: 0.8.0 docs + AGENTBENCH_0.8.0_001.md must state the headline as "emits the correct determinable call-PLAN at 0% hallucination," NOT "computes the composed answer." "Closed-world C1 cleared" = plan+proof, not end-to-end reasoning.
+STATUS: DONE — folding into AGENTBENCH_0.8.0_001.md + ROADMAP + HANDOVER.
+
+OBSERVATION 25: C1 100% leans on a relaxation over a 2-case rung — ab-c1-widget-methods-calling relaxed so the target is the first hop tmct_members{Widget}, the actual filter dropped. B1/B2/C1 are n=2-3 (thin sample).
+RECOMMENDED ACTION: render C1 as "1 clean relative-filter sequence + 1 case graded to its determinable first hop," disclose the thin per-rung n. Honest, not an unqualified clear.
+STATUS: DONE — folding into docs.
+
+=== ADVISOR CLOSED: build complete, 25 findings over 11 ticks, all logged + actioned. ===
