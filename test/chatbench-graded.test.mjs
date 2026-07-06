@@ -62,7 +62,10 @@ test("graded pool: every case carries grade + construction + the graded tag; ids
   // no collision with the frozen v1 set
   const { cases: v1 } = parseCases(await readFile(CASES_FILE, "utf8"));
   for (const c of pool) assert.ok(!v1.some((v) => v.id === c.id), `${c.id} collides with cases.jsonl`);
-  assert.equal(v1.length, 48, "the v1 case set is untouched (48 cases)");
+  // 49 = the frozen v1 48 + gq-forward-method-calls (0.8.2 WS1, append-only:
+  // deterministic tier-1 coverage for the forward call union — "what does
+  // Widget.render call" — which previously had no chatbench case at all).
+  assert.equal(v1.length, 49, "the case set only ever grows by appends (48 frozen v1 + 1)");
 });
 
 test("graded pool: cell coverage matches GRADED_MATRIX exactly (the design doc's matrix is enforced, not aspirational)", () => {

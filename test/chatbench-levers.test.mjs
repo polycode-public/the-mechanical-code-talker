@@ -174,8 +174,10 @@ test("Lever 1 (g-b1-pron-25): 'it' keeps binding to the focus module, never jump
       "which modules import it",
     ]);
     assert.match(d.answer, /app\/lib\/e\.mjs — Module/, "describe sets the module focus");
-    // turn 2 binds "it" to the module (this already worked) …
-    assert.match(calls.answer, /object = app\/lib\/e\.mjs/, "turn 2 'it' = the module");
+    // turn 2 binds "it" to the module (this already worked) … (0.8.2 WS1: the
+    // traversal receipt left the honest-empty prose, so the binding is read off
+    // the turn's detail, where it still flows for why/verbose.)
+    assert.match(calls.last.detail.traversal, /object = app\/lib\/e\.mjs/, "turn 2 'it' = the module");
     assert.equal(calls.focus.id, "mod-e", "focus is NOT displaced to a Commit after turn 2");
     // … turn 3 is the fix: "it" still binds to the module, not Commit.
     assert.doesNotMatch(imports.answer, /object = Commit/, "turn 3 'it' never binds to Commit");

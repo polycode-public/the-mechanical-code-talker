@@ -51,7 +51,13 @@ test("#1 receipt-bearing misses KEEP their specific wording (not shortened)", as
   // Widget.render, so it stays the honest empty with its callsSymbol traversal receipt.)
   const empty = await runTurn("what calls Widget.render", { config: CONFIG, graph: g });
   assert.match(empty.answer, /No .* found whose module directly calls Widget\.render/);
-  assert.match(empty.answer, /\(traversal:/, "the traversal receipt survives");
+  // (0.8.2 WS1: the receipt left the honest-empty prose — it must survive into the
+  // turn's detail so the why-path re-render still surfaces it.)
+  assert.match(empty.last.detail.traversal, /callsSymbol edges where object = Widget\.render/,
+    "the traversal receipt survives into detail for why/verbose");
+  const why = await runTurn("why", { config: CONFIG, graph: g, last: empty.last });
+  assert.match(why.answer, /traversal: callsSymbol edges where object = Widget\.render/,
+    "'why' re-renders the receipt the terse prose dropped");
   const unresolved = await runTurn("which modules import zebra.mjs", { config: CONFIG, graph: g });
   assert.match(unresolved.answer, /no symbol matching "zebra\.mjs" found in the index/);
 });

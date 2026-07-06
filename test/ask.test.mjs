@@ -195,13 +195,17 @@ test("ask(): end-to-end — a reverse-shape query resolves its object term via t
 
 // ---- render (§5 templates: grouping/pluralization/overflow/zero-hit) ----
 
-test("render: zero hits — a stated blank with a traversal receipt, not a silent miss", () => {
+test("render: zero hits — a stated blank in plain words; the traversal receipt rides the result, not the prose", () => {
+  // (0.8.2 WS1: the " (traversal: …)" tail was dropped from the honest-empty prose —
+  // the receipt still flows on the result/envelope so chat's why/verbose re-render
+  // surfaces it on demand.)
   const parsed = { shape: "reverse", entityType: "Function", modifier: "direct", kind: "imports", object: "unrelated" };
   const result = { matches: [], objMatch: { label: "src/unrelated.mjs" }, candidates: [], traversal: "imports edges where object = src/unrelated.mjs", ambiguous: false };
   const r = render(parsed, result);
   assert.equal(r.miss, true);
   assert.match(r.content, /No functions found/);
-  assert.match(r.content, /traversal:/);
+  assert.doesNotMatch(r.content, /traversal:/, "the receipt no longer rides the prose");
+  assert.equal(result.traversal, "imports edges where object = src/unrelated.mjs", "…but stays on the result for the why-path");
 });
 
 test("render: reverse-shape zero hits never double-pluralizes the kind (\"callss\"/\"importss\")", () => {
@@ -223,7 +227,9 @@ test("render: forward-shape zero hits reads as a subject-first sentence, not \"f
   const result = { matches: [], objMatch: { label: "src/leaf.mjs" }, candidates: [], traversal: "imports edges where subject = src/leaf.mjs", ambiguous: false };
   const r = render(parsed, result);
   assert.equal(r.miss, true);
-  assert.equal(r.content, "src/leaf.mjs has no imports edges in the index. (traversal: imports edges where subject = src/leaf.mjs)");
+  // (0.8.2 WS1: plain words — the traversal receipt rides the result, not the prose.)
+  assert.equal(r.content, "src/leaf.mjs has no imports edges in the index.");
+  assert.equal(result.traversal, "imports edges where subject = src/leaf.mjs", "the receipt survives on the result for the why-path");
   assert.doesNotMatch(r.content, /\bthis\b/); // the resolved label is used, never the raw pronoun text
 });
 
@@ -311,7 +317,8 @@ test("ask(): forward shape — what does myFile import", () => {
 test("ask(): ask-shape yes/no", () => {
   const graph = buildGraph();
   const yes = ask(graph, "does myFile import logging");
-  assert.match(yes.content, /^Yes\./);
+  // (0.8.2 WS1: the yes render is plain words — the edge sentence, no parenthetical.)
+  assert.equal(yes.content, "Yes — imports edge from myFile.mjs to src/logging.mjs.");
   const no = ask(graph, "does myFile import unrelated");
   assert.match(no.content, /^No/);
 });
@@ -557,7 +564,8 @@ test("ask(): the existing commit-as-answer direction still works — \"which com
 test("ask(): yes/no with a commit — \"did commit <sha> touch src/logging.mjs\" / an untouched module says No", () => {
   const graph = buildGraph();
   const yes = ask(graph, `did commit ${FIXTURE_SHORT} touch src/logging.mjs`);
-  assert.match(yes.content, /^Yes\./);
+  // (0.8.2 WS1: plain-words yes — the edge sentence itself, no parenthetical receipt.)
+  assert.match(yes.content, /^Yes — touches\+touchesSymbol edge from ef74e44e25c8 to src\/logging\.mjs\.$/);
   const no = ask(graph, `did commit ${FIXTURE_SHORT} touch src/unrelated.mjs`);
   assert.match(no.content, /^No/);
 });
@@ -567,8 +575,10 @@ test("ask(): a commit that touched nothing recorded renders the standard honest 
   const graph = { individuals: [c], byId: new Map([[c.id, c]]), relations: [], truncated: [], proseIndex: {} };
   const { content, tmct_ask } = ask(graph, "what did commit beefcafe0000 touch");
   assert.equal(tmct_ask.miss, true);
-  assert.match(content, /^commit beefcafe0000 touched nothing recorded in the index\./);
-  assert.match(content, /traversal:/);
+  assert.match(content, /^commit beefcafe0000 touched nothing recorded in the index\.$/);
+  // (0.8.2 WS1: the receipt rides the envelope for the why-path, not the prose.)
+  assert.doesNotMatch(content, /traversal:/);
+  assert.match(tmct_ask.traversal, /touches/, "the traversal receipt survives on the envelope");
 });
 
 test("render: commit answers obey OVERFLOW_CAP (12 shown, remainder counted)", () => {
