@@ -77,7 +77,12 @@ import { nlpAdapter } from "./ask-nlp.mjs";
  *  classification, so they cannot drift in meaning). */
 function edgesOfKind(graph, kind) {
   const out = [];
-  for (const g of graph.relations) if (relationKind(g) === kind) out.push(...g.edges);
+  // Plain-loop append, NOT out.push(...g.edges): argument spread overflows the call
+  // stack past ~100k edges on graph-scale relation groups (see codegraph.mjs twin).
+  for (const g of graph.relations) {
+    if (relationKind(g) !== kind) continue;
+    for (const e of g.edges) out.push(e);
+  }
   return out;
 }
 
