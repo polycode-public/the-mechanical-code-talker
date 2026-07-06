@@ -440,9 +440,11 @@ test("cases.jsonl: every expect.result literal is referential against the fixtur
   const knownLabels = await loadFixtureLabels();
   const { cases, errors } = parseCases(await readFile(CASES_FILE, "utf8"), { knownLabels });
   assert.deepEqual(errors, [], "committed cases lint clean under the fixture-referential result check");
-  // and the frame actually carries composition cases (the rungs aren't a thin sample)
+  // and the frame actually carries composition cases (the rungs aren't a thin
+  // sample). Floor raised 7 -> 18 with the 0.8.2 ladder-depth appends (member-
+  // filter pair + guard/fallback/empty-fold variants) — update deliberately.
   const withResult = cases.filter((c) => Array.isArray(c.expect.result));
-  assert.ok(withResult.length >= 7, `expected several composition cases (got ${withResult.length})`);
+  assert.ok(withResult.length >= 18, `expected a deep composition ladder (got ${withResult.length})`);
 });
 
 test("gradeCase: the RESULT axis — composed value-equals the literal PASSES; a wrong/absent fold FAILS plan-independently", () => {
