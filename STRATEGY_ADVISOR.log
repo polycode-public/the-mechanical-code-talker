@@ -332,3 +332,17 @@ STATUS: OPEN — sent to Agent AB.
 OBSERVATION 28: src/grammar/ace.mjs is imported by src/chat.mjs (the CHATBENCH path), not just the router. Stage 2 (#4) mutating ace shared grammar can silently regress CHATBENCH 333.
 RECOMMENDED ACTION: router intent frames as an ADDITIVE frame table the resolver consumes, not chat-facing ace edits; gate #4 on a CHATBENCH re-measure (not only the 2 AGENTBENCH re-measures).
 STATUS: OPEN — recorded in task #15.
+
+═══════════════════════════════════════════════════════════════════════
+[2026-07-06 02:56Z] source=strategy-advisor(opus,deep) · topic=0.8.1-tick2-goal-reasoner
+OBSERVATION 29: the goal-reasoner meta-loop has no MECHANICAL termination bound — planner MAX_STEPS is intra-plan, syllogise bounds step-1 only; the design note relies on BDI persistence+drop-conditions (semantic convergence), so an observed-effect-re-triggers-goal cycle can livelock.
+RECOMMENDED ACTION: hard OUTER-tick budget (mirror MAX_STEPS) + monotone-progress invariant (each tick achieves/drops a goal or halts). Sent to Agent S5.
+STATUS: OPEN — Agent S5.
+
+OBSERVATION 30: ab-c2-safe-to-change is PLAN-only (no expect.result) — a /safe to change/ regex frame would "clear" C2 by memorization, not goal-deduction (the overfit trap 0.8.1 closes).
+RECOMMENDED ACTION: no request-string literals; PIN expect.result; >=2 held-out C2 phrasings decomposing via the same declared goal-rules; why-chain cites a declared goal-rule by backward-chain. Honest refuse beats a hardcoded pass. Sent to Agent S5.
+STATUS: OPEN — Agent S5.
+
+OBSERVATION 31: leaky boundary — src/router/resolver.mjs:~42 imports hallucinationsIn from agentbench/grade.mjs, so grade.mjs edits ripple into the PRODUCT. (Also a future cleanup: the bench should not be a product dependency.)
+RECOMMENDED ACTION: keep grade.mjs edits additive/back-compat, gate on full npm test; serialize src/router/ (S2 already blockedBy S5). Sent to Agent S5; cleanup noted for HANDOVER.
+STATUS: OPEN — Agent S5 + future cleanup.
