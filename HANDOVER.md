@@ -53,6 +53,20 @@ Session handle (inbox): `mechanic`.
    authoritative `--compare` id-intersection gate is stable. Worth a deterministic-seed fix.
 6. **The push**: 0.8.0 is committed locally, not pushed. Pushing to `main` triggers CI publish — operator-gated.
 
+### If you roll 0.8.1 — the bench reuse map (0.8.0 is FROZEN; re-runs roll the version, reusing what's still valid)
+
+Two merges landed *after* their benches ran; the rest is untouched. **Reuse from 0.8.0 as-is:**
+`AGENTBENCH_0.8.0_001` resolver (96%, measured over the final cases — reproduces deterministically),
+the `AGENTBENCH_0.8.0` shim-floor **46%** conclusion (re-verified over the relaxed cases; only 2
+C1/C2 raw rows' `expect` drifted — the shim scores 0 there regardless), the **CHATBENCH per-family
+lever verification** (331→333; E's `normalize.mjs` touched a different surface than the 3 lever
+families), the bedrock-meter e2e, and the research notes. **Only re-run for 0.8.1:** the CHATBENCH
+**deterministic** tier-1 / graded pass, to fold in E's predicative-qualifier / co-change routing gains
+(cheap, free, deterministic — E verified no `--compare` regression, so it's equal-or-better). **Do NOT
+re-run** the CHATBENCH LLM judge (E's surface isn't in the judged lever tags; pooled mean already
+flagged non-comparable) unless a product change touches the judged tags. Optionally regen the shim-floor
+raw over the final cases for byte-consistency (headline unchanged).
+
 ## Discipline (unchanged)
 
 Repo-local identity (`antony@polycode.co.uk` / `Antony at Polycode`); `npm test` green at every commit;
