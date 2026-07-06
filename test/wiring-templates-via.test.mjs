@@ -40,11 +40,14 @@ const FROZEN = {
   "conversational-greeting-good-evening": "Good evening. Ask me about this codebase, or /help.",
   "conversational-thanks": "Any time. Ask another, or /help for what I can do.",
   "conversational-farewell": "Bye — flushing the session log. Come back with a question any time.",
+  // 0.8.2 WS4: orientation-friendly carries {example1}/{example2} — LIVE example
+  // queries from the loaded graph (see ORIENTATION_GENERIC/ORIENTATION_FIXTURE
+  // below). The generic pair reproduces the pre-slot text byte-for-byte.
   "orientation-friendly": [
     "I answer questions about THIS codebase's structure — imports, calls, definitions,",
     "history and counts. For example:",
-    "  which modules import walk.mjs",
-    "  what calls buildContextBundle",
+    "  which modules import {example1}",
+    "  what calls {example2}",
     "  how many classes are there",
     "/help for commands, /stats for an overview of the graph.",
   ].join("\n"),
@@ -52,10 +55,22 @@ const FROZEN = {
     'No previous answer to expand yet — ask me a question first, then say "why" or "say more".',
 };
 
+// 0.8.2 WS4: the orientation card's example queries are LIVE — chat.mjs fills
+// {example1}/{example2} from the loaded graph (a null/unknown graph falls back to
+// the generic pair, which reproduces the pre-slot wording byte-for-byte).
+const ORIENTATION_GENERIC = { example1: "walk.mjs", example2: "buildContextBundle" };
+const orientationWith = (slots) => FROZEN["orientation-friendly"]
+  .replace("{example1}", slots.example1).replace("{example2}", slots.example2);
+// The entities fixture's deterministic picks: the sorted-first IMPORTED module and
+// the sorted-first CALLED function — both example queries answer on this graph.
+const ORIENTATION_FIXTURE = orientationWith({ example1: "app/lib/a.mjs", example2: "fnAlpha" });
+
 test("W1 render parity: every moved surface renders byte-identical to the pre-swap string", async () => {
   const templates = await loadTemplates();
   for (const [id, expected] of Object.entries(FROZEN)) {
-    assert.equal(render(id, {}, templates), expected, `template "${id}" is byte-stable`);
+    const slots = id === "orientation-friendly" ? ORIENTATION_GENERIC : {};
+    const want = id === "orientation-friendly" ? orientationWith(ORIENTATION_GENERIC) : expected;
+    assert.equal(render(id, slots, templates), want, `template "${id}" is byte-stable`);
   }
 });
 
@@ -64,6 +79,11 @@ test("W1 slot lint: chat-consumed rows are zero-slot; the whole file validates",
   for (const id of Object.keys(FROZEN)) {
     const row = templates.get(id);
     assert.ok(row, `row "${id}" exists`);
+    // orientation-friendly is the ONE slotted chat row (live examples, WS4).
+    if (id === "orientation-friendly") {
+      assert.deepEqual([...row.slots].sort(), ["example1", "example2"], `"${id}" carries exactly the live-example slots`);
+      continue;
+    }
     assert.deepEqual(row.slots, [], `"${id}" needs no slots (chat renders it with {})`);
   }
 });
@@ -82,7 +102,7 @@ test("W1 runTurn parity: the conversational turns answer with the exact template
   assert.equal(bye.answer, FROZEN["conversational-farewell"]);
   assert.equal(bye.end, true, "farewell still ends the session");
   const help = await runTurn("what can you do", { config: CONFIG, graph: g });
-  assert.equal(help.answer, FROZEN["orientation-friendly"]);
+  assert.equal(help.answer, ORIENTATION_FIXTURE);
   const why = await runTurn("why", { config: CONFIG, graph: g });
   assert.equal(why.answer, FROZEN["miss-no-previous-answer"]);
   assert.equal(why.record.miss, true, "the empty why is still recorded as a miss");
@@ -116,7 +136,7 @@ test("W1 via: count/command/composed/orientation-miss each carry their own prove
   assert.equal(miss.record.miss, true);
   // a conversational miss (short, non-code) is answered by the orientation TEMPLATE
   const convoMiss = await runTurn("jokes please", { config: CONFIG, graph: g });
-  assert.equal(convoMiss.answer, FROZEN["orientation-friendly"]);
+  assert.equal(convoMiss.answer, ORIENTATION_FIXTURE);
   assert.equal(convoMiss.record.via, "template");
 });
 

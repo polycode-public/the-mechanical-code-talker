@@ -45,7 +45,7 @@ import { createInterface } from "node:readline/promises";
 import { spawnSync } from "node:child_process";
 import { dispatchTool } from "./server.mjs";
 import { loadConfig, DEFAULT_GRAPH_REL } from "./config.mjs";
-import { parseEntities } from "./codegraph.mjs";
+import { parseEntities, edgesOfKind, renderAuthorCard, renderAuthorTouches, renderCommitAuthor } from "./codegraph.mjs";
 import { SESSIONS_DIR_REL, appendSessionToGraph } from "./sessions.mjs";
 import { uuidv7 } from "./uuid.mjs";
 import { createTelemetry } from "./telemetry.mjs";
@@ -518,10 +518,48 @@ export function moduleCountOf(graph) {
  *  orientation/greeting only fires when we actually hold an empty graph. */
 const noCodeGraph = (graph) => !!graph && moduleCountOf(graph) === 0;
 
+/** LIVE orientation examples (0.8.2 WS4 wall kindness): the example queries on the
+ *  orientation card name entities from the LOADED graph — the sorted-first Module
+ *  label and the sorted-first Function/Method label, deterministically — so a
+ *  stranger who types them verbatim gets a real answer on ANY graph (the old
+ *  hardcoded walk.mjs/buildContextBundle examples miss on every non-tmct graph).
+ *  A null (unknown) graph keeps the generic pair byte-for-byte. */
+function orientationExamples(graph) {
+  const generic = { example1: "walk.mjs", example2: "buildContextBundle" };
+  if (!graph || !Array.isArray(graph.individuals)) return generic;
+  const minLabel = (labels) => {
+    let best = null;
+    for (const l of labels) { const s = String(l || ""); if (s && (best === null || s < best)) best = s; }
+    return best;
+  };
+  // "which modules import <example1>" must ANSWER, so prefer a module that IS
+  // imported (an `imports` edge object); any module label as the fallback.
+  const importedMod = minLabel(edgesOfKind(graph, "imports")
+    .filter((e) => (graph.byId?.get?.(e.object)?.class || "") === "Module")
+    .map((e) => e.objectLabel || ""));
+  const anyMod = minLabel(graph.individuals.filter((i) => (i.class || "") === "Module").map((i) => i.label));
+  const example1 = importedMod ?? anyMod ?? generic.example1;
+  // "what calls <example2>" must ANSWER, so prefer a Function/Method that HAS a
+  // recorded caller (a `callsSymbol` edge object with a real individual), then a
+  // module-coarse called module, then any callable label, then example1.
+  const calledSym = minLabel(edgesOfKind(graph, "callsSymbol")
+    .filter((e) => ["Function", "Method"].includes(graph.byId?.get?.(e.object)?.class || ""))
+    .map((e) => e.objectLabel || graph.byId?.get?.(e.object)?.label || ""));
+  const calledMod = minLabel(edgesOfKind(graph, "calls")
+    .filter((e) => (graph.byId?.get?.(e.object)?.class || "") === "Module")
+    .map((e) => e.objectLabel || ""));
+  const anyFn = minLabel(graph.individuals
+    .filter((i) => i.class === "Function" || i.class === "Method").map((i) => i.label));
+  const example2 = calledSym ?? calledMod ?? anyFn ?? example1;
+  return { example1, example2 };
+}
+
 /** The orientation surface, module-aware: the empty variant (→ --repo/tmct init +
- *  seeded vocabulary) when there's no code graph, the standard one otherwise. */
+ *  seeded vocabulary) when there's no code graph, the standard one (with live
+ *  {example1}/{example2} query examples from the loaded graph) otherwise. */
 function orientationAnswer(templates, graph) {
-  return tRender(templates, noCodeGraph(graph) ? T_ORIENTATION_EMPTY : T_ORIENTATION) ?? TEMPLATES_UNAVAILABLE;
+  if (noCodeGraph(graph)) return tRender(templates, T_ORIENTATION_EMPTY) ?? TEMPLATES_UNAVAILABLE;
+  return tRender(templates, T_ORIENTATION, orientationExamples(graph)) ?? TEMPLATES_UNAVAILABLE;
 }
 
 /** A dynamic orientation string for the meta/self lane: a /stats-style overview
@@ -725,7 +763,10 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
 // reference with no graph entity or predicate, so real graph queries ("what does X
 // import", the meta "what does imports mean", "what did i ask before") never match.
 const WHAT_KNOW_RE = /^what\s+(?:do\s+you|d'?you)\s+know(?:\s+so\s+far)?$/;
-const META_ORIENT_RE = /^(?:what(?:'s| is| are)?\s+this(?:\s+(?:codebase|repo|repository|project|code|thing))?|what\s+(?:codebase|repo|repository|project)\s+is\s+this|what\s+am\s+i\s+looking\s+at|what\s+is\s+tmct|how\s+do\s+i\s+(?:start|begin|get\s+started|get\s+going|load\s+(?:my\s+)?code|index\s+(?:my\s+)?(?:code|repo|repository)|use\s+(?:this|you|tmct))|where\s+do\s+i\s+(?:start|begin))$/;
+// 0.8.2 WS4 wall kindness (c): the most likely stranger openers — "what does this
+// app/codebase do", "what is this app (for)" — join the orientation lane, so a
+// first-touch question gets the live overview instead of the grammar wall.
+const META_ORIENT_RE = /^(?:what(?:'s| is| are)?\s+this(?:\s+(?:app|codebase|repo|repository|project|code|thing))?|what\s+(?:codebase|repo|repository|project)\s+is\s+this|what\s+does\s+(?:this|the)\s+(?:app|code|codebase|project|repo)\s+do|what\s+is\s+(?:this|the)\s+app(?:\s+for)?|what\s+am\s+i\s+looking\s+at|what\s+is\s+tmct|how\s+do\s+i\s+(?:start|begin|get\s+started|get\s+going|load\s+(?:my\s+)?code|index\s+(?:my\s+)?(?:code|repo|repository)|use\s+(?:this|you|tmct))|where\s+do\s+i\s+(?:start|begin))$/;
 
 /** A SHORT memory summary (never a fact dump) for the bare "what do you know". */
 async function memorySummary(memoryDir, graph) {
@@ -748,8 +789,111 @@ async function metaLane(query, { graph, memoryDir }) {
     return { text: await memorySummary(memoryDir, graph), via: "meta" };
   }
   if (META_ORIENT_RE.test(q)) return { text: orientationText(graph), via: "meta" };
+  // 0.8.2 WS4: the sha-authorship form ("who authored a1b2c3d") can be as short as
+  // THREE words, which the conversational-orientation branch (step 2) would grab
+  // before the author step (4b) is reached — a bare hex sha is not "code-ish" to
+  // isConversational. The form is closed + unambiguous (7-40 hex chars), so the
+  // meta lane delegates it to the author lane here. Unknown/ambiguous shas return
+  // null and fall through unchanged.
+  if (AUTHOR_SHA_RE.test(q)) return authorLane(q, { graph });
   return null;
 }
+
+// #4 INTENT LANE — AUTHOR (0.8.2 WS4). Author is a Commit ATTRIBUTE (key
+// "author"/mgx:commitAuthor), never an individual, so "who is Grace Hopper" can't
+// resolve as an entity — this lane reads the attribute through codegraph.mjs's
+// authorIndex renderers instead. WOULD-MISS gated (the ladder consults it only on
+// a miss) + CLOSED whole-line regexes + an EXACT case-insensitive author-name hit:
+// an unknown name renders null here and falls through to the ordinary honest miss
+// (never a guess, never a hijacked graph query).
+const AUTHOR_NAME_SRC = "([A-Za-z][\\w'.-]*(?:\\s+[A-Za-z][\\w'.-]*){0,3})";
+const AUTHOR_WHO_IS_RE = new RegExp(`^who\\s+is\\s+${AUTHOR_NAME_SRC}$`, "i");
+const AUTHOR_TOUCHED_RE = new RegExp(
+  `^what\\s+(?:did|has)\\s+${AUTHOR_NAME_SRC}\\s+(?:touch(?:ed)?|chang(?:e|ed)|work(?:ed)?\\s+on|commit(?:ted)?)$`, "i");
+// The sha authorship forms — the interpret layer no longer rewrites these (WS2 guard).
+const AUTHOR_SHA_RE = /^who\s+(?:authored|wrote|is\s+the\s+author\s+of)\s+(?:commit\s+)?([0-9a-fA-F]{7,40})$/i;
+
+function authorLane(query, { graph }) {
+  if (!graph) return null;
+  const q = String(query).trim().replace(/[?.!]+$/, "").replace(/\s+/g, " ");
+  const sha = q.match(AUTHOR_SHA_RE);
+  if (sha) {
+    const line = renderCommitAuthor(graph, sha[1]);
+    return line ? { text: line, via: "author" } : null;
+  }
+  const touched = q.match(AUTHOR_TOUCHED_RE);
+  if (touched) {
+    const text = renderAuthorTouches(graph, touched[1]);
+    if (text) return { text, via: "author" };
+  }
+  const who = q.match(AUTHOR_WHO_IS_RE);
+  if (who) {
+    const text = renderAuthorCard(graph, who[1]);
+    if (text) return { text, via: "author" };
+  }
+  return null;
+}
+
+// #5(d,e)/#8 CAPABILITY NUDGES (0.8.2 WS4) — closed regexes on the would-miss path
+// for asks the graph genuinely cannot answer: risk scoring, code opinions, writing
+// code, and motive-"why". Each renders an HONEST wall pointing at the nearest real
+// query shapes. These REMAIN recorded as misses (recordMiss stays TRUE): a
+// capability wall must never fold into a recallable answer — WS3's fold hygiene is
+// the second belt, this gate is the braces.
+const RISK_NUDGE_RE = /\brisk(?:iest|y)\b/i;
+const OPINION_ADJ_SRC =
+  "(?:good|bad|clean|messy|ugly|nice|great|terrible|awful|solid|elegant|readable|maintainable|well[- ]written|well[- ]structured|spaghetti|ok|okay|decent|healthy)";
+const OPINION_NUDGE_RE = new RegExp(`^is\\s+(?:this|the)\\s+code(?:base)?\\s+(?:any\\s+)?${OPINION_ADJ_SRC}\\b`, "i");
+// Imperative "write code for me": a leading make/write/create/add/generate/
+// implement/fix/refactor (optionally "can you …"-wrapped) aimed at a code noun (or
+// a focus-resolvable "it"). "tell" is deliberately NOT a verb here — "tell me a
+// joke" (the graded hm-joke case) must keep its ordinary honest miss.
+const IMPERATIVE_NUDGE_RE =
+  /^(?:please\s+)?(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?)?(?:make|write|create|add|generate|implement|fix|refactor)\b(?=.*\b(?:tests?|code|functions?|methods?|modules?|class(?:es)?|files?|it)\b)/i;
+const WHY_UNTESTED_RE = /^why\s+(?:is|are)(?:n't|\s+not)?\s+(.+?)\s+(?:untested|not\s+tested|uncovered)$/i;
+
+/** The <name> a nudge shows: the focus label when the query leans on a pronoun (or
+ *  gave us nothing better), else the captured subject; "<name>" as the placeholder. */
+function nudgeName(captured, focus) {
+  const c = String(captured || "").trim();
+  if (c && !/^(?:it|this|that|they|them)$/i.test(c)) return c;
+  return focus?.label || "<name>";
+}
+
+/** The capability-nudge answer for a would-miss query, or null. Order matters only
+ *  for the opinion gate: it must fire BEFORE the short-miss's "is a <thing> a
+ *  <kind>" membership hint would (the caller runs this whole step before the
+ *  short-miss rewrite). */
+function nudgeAnswer(query, focus) {
+  const q = String(query).trim().replace(/[?.!]+$/, "").replace(/\s+/g, " ");
+  if (OPINION_NUDGE_RE.test(q)) {
+    const name = focus?.label || "<name>";
+    return "I don't hold opinions — I read structure, not quality. I can show what an opinion would rest on: "
+      + `/stats (shape), "untested modules" (coverage), "who touched ${name}" (churn).`;
+  }
+  if (RISK_NUDGE_RE.test(q)) {
+    const name = focus?.label || "<name>";
+    return "I don't score risk — but two honest proxies live in the graph: "
+      + `"/impact ${name}" (what a change reaches) and "who touched ${name}" (churn).`;
+  }
+  const why = q.match(WHY_UNTESTED_RE);
+  if (why) {
+    const name = nudgeName(why[1], focus);
+    return "I can't know why — the graph records what IS, not intent. "
+      + `"what tests ${name}" and "untested modules" show the coverage facts.`;
+  }
+  if (IMPERATIVE_NUDGE_RE.test(q)) {
+    const name = nudgeName(/\b(?:it|this)\b/i.test(q) ? "it" : "", focus);
+    return "I don't write code — I read a graph of it. "
+      + `/tests ${name} shows what covers it; "untested modules" shows the gaps.`;
+  }
+  return null;
+}
+
+/** The wall-repeat one-liner (0.8.2 WS4 wall kindness (a)). MUST NOT match
+ *  WALL_MISS_RE: the suppression keys on the PREVIOUS answer matching it, so this
+ *  text self-limits — a third consecutive miss re-offers the tailored hint. */
+const WALL_REPEAT_ONELINER = "still couldn't parse that — /help lists every query shape.";
 
 // ---- repo-root resolution: default the target to the GIT ROOT, not raw cwd ----
 
@@ -1770,10 +1914,35 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     const taught = await teachLane(query, { memoryDir, sessionId, lexicon });
     if (taught) { answer = taught.text; via = taught.via; recordMiss = taught.miss; }
   }
+  // (4b) #4 AUTHOR lane (0.8.2 WS4) — "who is <Name>", "what did <Name> touch",
+  // "who authored <sha>": the Commit author ATTRIBUTE answered as a person, off
+  // codegraph.mjs's authorIndex renderers. Closed regexes + an exact case-
+  // insensitive author hit only; an unknown name falls through to the ordinary
+  // honest miss below (never a guess).
+  if (miss && recordMiss && via === "composed") {
+    const authored = authorLane(query, { graph });
+    if (authored) { answer = authored.text; via = authored.via; recordMiss = false; }
+  }
+  // (4c) CAPABILITY NUDGES (0.8.2 WS4) — risk scoring / code opinions / "write me
+  // code" imperatives / motive-"why": an honest wall pointing at the nearest real
+  // query shapes. recordMiss stays TRUE — a capability wall is still a miss and
+  // must never become a recallable answer. The opinion gate fires HERE, before the
+  // short-miss's "is a <thing> a <kind>" membership hint could claim the line.
+  if (miss && recordMiss && via === "composed") {
+    const nudged = nudgeAnswer(query, newFocus);
+    if (nudged) { answer = nudged; via = "miss"; }
+  }
   // (5) #1 SHORT TAILORED MISS — replace ONLY the engine's full grammar cheat-sheet
   // wall (WALL_MISS_RE). Receipt-bearing misses keep their specific wording.
+  // WALL KINDNESS (0.8.2 WS4 (a)): when the PREVIOUS turn's answer was already a
+  // wall/short-miss (it matched WALL_MISS_RE), the second consecutive wall collapses
+  // to a one-liner whose text does NOT match WALL_MISS_RE — self-limiting, so a
+  // third consecutive miss re-offers the tailored hint instead of droning.
   if (miss && recordMiss && via === "composed" && WALL_MISS_RE.test(answer)) {
-    answer = shortMissHint(query); via = "miss";
+    answer = (last?.answer && WALL_MISS_RE.test(String(last.answer)))
+      ? WALL_REPEAT_ONELINER
+      : shortMissHint(query);
+    via = "miss";
   }
   // #4 HONEST-EMPTY POLISH — an empty CODE graph: any still-standing engine
   // dead-end (an honest empty, the short miss, the bootstrap note) carries the exit

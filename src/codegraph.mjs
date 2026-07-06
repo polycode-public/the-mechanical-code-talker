@@ -1523,6 +1523,108 @@ export function renderClassHistory(graph, ind) {
   return renderSymbolHistory(graph, ind);
 }
 
+// ---- author identity (0.8.2 WS4): the Commit "author" attribute answered as a
+//      person — "who is <Name>", "what did <Name> touch". Author is an ATTRIBUTE
+//      (key "author"/mgx:commitAuthor), never an individual, so these read the
+//      attribute off every Commit and aggregate. All renderers return null on an
+//      unknown name — the chat lane falls through to the ordinary honest miss. ----
+
+const AUTHOR_TOUCH_CAP = 15;
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** Map of lowercased author name → that author's Commit individuals (payload order).
+ *  Tolerates both attribute-key conventions (author / commitAuthor), like commitLine. */
+export function authorIndex(graph) {
+  const idx = new Map();
+  for (const ind of graph?.individuals || []) {
+    if ((ind.class || "") !== "Commit") continue;
+    const author = String(attrVal(ind, "author") || attrVal(ind, "commitAuthor")).trim();
+    if (!author) continue;
+    const key = author.toLowerCase();
+    if (!idx.has(key)) idx.set(key, []);
+    idx.get(key).push(ind);
+  }
+  return idx;
+}
+
+/** "May–Jun 2026"-style range over the commits' date attributes ("" when undated). */
+function commitDateRange(commits) {
+  const dates = commits
+    .map((c) => new Date(attrVal(c, "date") || attrVal(c, "commitDate")))
+    .filter((d) => !Number.isNaN(d.getTime()))
+    .sort((a, b) => a - b);
+  if (!dates.length) return "";
+  const fmt = (d) => `${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+  const lo = fmt(dates[0]);
+  const hi = fmt(dates[dates.length - 1]);
+  if (lo === hi) return lo;
+  if (dates[0].getUTCFullYear() === dates[dates.length - 1].getUTCFullYear()) {
+    return `${MONTHS[dates[0].getUTCMonth()]}–${hi}`;
+  }
+  return `${lo}–${hi}`;
+}
+
+/** The deduped labels of everything an author's commits touched (touches +
+ *  touchesSymbol edge OBJECTS), in edge order. [] on an unknown author. */
+function authorTouchedLabels(graph, commits) {
+  const ids = new Set(commits.map((c) => c.id));
+  const labels = [];
+  const seen = new Set();
+  for (const kind of ["touches", "touchesSymbol"]) {
+    for (const e of edgesOfKind(graph, kind)) {
+      if (!ids.has(e.subject)) continue;
+      const label = e.objectLabel || graph.byId?.get?.(e.object)?.label || e.object;
+      if (seen.has(label)) continue;
+      seen.add(label);
+      labels.push(label);
+    }
+  }
+  return labels;
+}
+
+/** Identity card for an author name — "Grace Hopper — 2 commits in this index
+ *  (May–Jun 2026), touching: <labels, capped>". Null on an unknown name. */
+export function renderAuthorCard(graph, name) {
+  const commits = authorIndex(graph).get(String(name || "").trim().toLowerCase());
+  if (!commits?.length) return null;
+  const display = String(attrVal(commits[0], "author") || attrVal(commits[0], "commitAuthor")).trim();
+  const range = commitDateRange(commits);
+  const touched = authorTouchedLabels(graph, commits);
+  const touching = touched.length ? `, touching: ${capJoin(touched, AUTHOR_TOUCH_CAP)}` : "";
+  return `${display} — ${commits.length} commit${commits.length === 1 ? "" : "s"} in this index${range ? ` (${range})` : ""}${touching}.`;
+}
+
+/** What an author touched — the deduped entity list off her commits' touches/
+ *  touchesSymbol edges, capped like the other bounded renders. Null on an unknown
+ *  name; an honest "no touch edges" line when the commits carry none. */
+export function renderAuthorTouches(graph, name) {
+  const commits = authorIndex(graph).get(String(name || "").trim().toLowerCase());
+  if (!commits?.length) return null;
+  const display = String(attrVal(commits[0], "author") || attrVal(commits[0], "commitAuthor")).trim();
+  const touched = authorTouchedLabels(graph, commits);
+  if (!touched.length) return `${display}: ${commits.length} commit${commits.length === 1 ? "" : "s"} in this index, but no touch edges recorded for them.`;
+  return `${display} touched ${touched.length} entit${touched.length === 1 ? "y" : "ies"} across ${commits.length} commit${commits.length === 1 ? "" : "s"}:\n  ${capJoin(touched, AUTHOR_TOUCH_CAP, "\n  ")}`;
+}
+
+/** "authored by <author> (<date>)" for a commit named by sha (7-40 hex chars; the
+ *  graph label and the typed sha may each be a prefix of the other). Null when the
+ *  sha matches no commit or more than one — never a guess. */
+export function renderCommitAuthor(graph, sha) {
+  const s = String(sha || "").trim().toLowerCase();
+  if (!/^[0-9a-f]{7,40}$/.test(s)) return null;
+  const hits = (graph?.individuals || []).filter((i) => {
+    if ((i.class || "") !== "Commit") return false;
+    const label = String(i.label || "").toLowerCase();
+    return label.startsWith(s) || s.startsWith(label);
+  });
+  if (hits.length !== 1) return null;
+  const c = hits[0];
+  const author = String(attrVal(c, "author") || attrVal(c, "commitAuthor")).trim();
+  if (!author) return null;
+  const date = attrVal(c, "date") || attrVal(c, "commitDate");
+  return `${c.label}: authored by ${author}${date ? ` (${date})` : ""}.`;
+}
+
 // ---- symbol search (kind=function/class/method/attribute, with name/decorator filters)
 
 const SYMBOL_CLASSES = { function: "Function", class: "Class", method: "Method", attribute: "Attribute" };
