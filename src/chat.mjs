@@ -105,6 +105,29 @@ export const COMMANDS = {
  *  back to the focus for, and that update the focus on a successful resolve. */
 const ENTITY_ARGS = new Set(["symbol", "module", "class"]);
 
+/** The individual classes that are FOCUS-WORTHY — the code entities the ENTITY_ARGS
+ *  commands (symbol/module/class) name and that "it"/"this" should bind to. A
+ *  `Commit`/`Session` (history/provenance) or a `SchemaClass`/`SchemaPredicate`
+ *  (vocabulary meta-node) is a real graph individual but NOT a standing antecedent:
+ *  it must not silently DISPLACE a code-entity focus, or the next turn's pronoun
+ *  binds to the wrong thing (CHATBENCH_0.7.1 B1-pron: "it" → Commit). */
+const FOCUS_WORTHY_CLASSES = new Set(["Module", "Function", "Class", "Method", "Attribute", "GlobalVariable"]);
+
+/** Is the individual with this id a focus-worthy code entity? Looks the class up on
+ *  the loaded graph (focus objects stay `{id,label}` — the class is never stored on
+ *  them, so a caller that deepEquals the focus shape is unaffected). An unknown id
+ *  (ext: endpoint, missing) is treated as not-worthy: conservative, so it never
+ *  displaces a standing code focus but is freely adopted when there is none. */
+const isFocusWorthy = (graph, id) => FOCUS_WORTHY_CLASSES.has(graph?.byId?.get(id)?.class);
+
+/** The focus to carry forward after a turn resolved `ent`. A newly-resolved entity
+ *  becomes the focus UNLESS it is not focus-worthy (a Commit/Session/schema node)
+ *  AND there is already a standing focus-worthy (code) focus — in which case the
+ *  standing code focus holds. So a query whose object resolves to a Commit never
+ *  hijacks the "it" antecedent from the module/function the user was working on. */
+const nextFocus = (graph, focus, ent) =>
+  (!focus?.id || isFocusWorthy(graph, ent.id) || !isFocusWorthy(graph, focus.id)) ? ent : focus;
+
 /** System-command words that a forgiving shell accepts WITHOUT the leading "/":
  *  `stats`, `memory`, `describe X`, `members X`, … all work bare. "help" is left
  *  out on purpose — bare "help" stays the friendly orientation; "/help" is the
@@ -1438,8 +1461,19 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   let resolvedIds = [];
   let newFocus = focus;
   if (graph && envelope?.parsed?.object) {
-    const ent = await resolveEntity(graph, envelope.parsed.object);
-    if (ent) { resolvedIds = [ent.id]; newFocus = ent; }
+    const obj = envelope.parsed.object;
+    // A PRONOUN object ("it"/"this") was already resolved against the focus via
+    // contextId — the resolved antecedent IS the focus. Re-resolving the literal
+    // pronoun string is the CHATBENCH_0.7.1 B1-pron bug: "it" substring-matches the
+    // "Commit" schema node (label contains "it"), so the focus jumped off the module
+    // to a Commit and the NEXT "it" bound wrong. Reuse the focus directly instead.
+    const ent = (isPronoun(obj) && focus?.id) ? focus : await resolveEntity(graph, obj);
+    if (ent) {
+      resolvedIds = [ent.id];
+      // Class-gate the focus update: a Commit/Session/schema object never displaces a
+      // standing code-entity focus (see nextFocus).
+      newFocus = nextFocus(graph, focus, ent);
+    }
   }
   const answeredIds = (envelope?.matches || []).map((m) => m?.id).filter(Boolean);
   const miss = envelope ? !!envelope.miss : true;
@@ -1653,7 +1687,10 @@ async function runCommand(line, { config, source, graph, focus, memoryDir }) {
   // follow-up ("what calls it", a no-arg /context) reuses it.
   if (entityArg) {
     const ent = await resolveEntity(graph, value);
-    if (ent) return mk(answer, { resolvedIds: [ent.id], newFocus: ent });
+    // Same class-gate as the ask path (nextFocus): a command whose arg resolves to a
+    // Commit/Session/schema node records the resolution but does not displace a
+    // standing code-entity focus that "it" is meant to keep binding to.
+    if (ent) return mk(answer, { resolvedIds: [ent.id], newFocus: nextFocus(graph, focus, ent) });
   }
   return mk(answer);
 }

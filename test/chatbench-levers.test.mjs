@@ -15,16 +15,45 @@
 //   L3  "which modles import a.mjs"            (tf-modles)     — schema-trap + receipt
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { ask } from "../src/ask.mjs";
 import { runTurn } from "../src/chat.mjs";
 import { parseEntities } from "../src/codegraph.mjs";
 import { ingestSchemaDocs } from "../src/schema-docs.mjs";
+import { clearCache } from "../src/source.mjs";
 import { normalizeQuery } from "../src/interpret/normalize.mjs";
 import { stripNoise, noiseStripStrategy } from "../src/interpret/strategies/noise-strip.mjs";
 
 const FIXTURE = new URL("./fixtures/entities.fixture.json", import.meta.url);
-const graph = parseEntities(ingestSchemaDocs(JSON.parse(await readFile(FIXTURE, "utf8"))));
+const FIXTURE_PAYLOAD = JSON.parse(await readFile(FIXTURE, "utf8"));
+const graph = parseEntities(ingestSchemaDocs(FIXTURE_PAYLOAD));
+
+/** A temp repo whose .tmct/graph.json carries the fixture, plus the in-memory graph.
+ *  The multi-turn levers below need BOTH: `config.graphFile` for the command path's
+ *  dispatchTool, and the parsed `graph` for the focus/anaphora threading. Returns a
+ *  `drive(queries)` that threads focus + last exactly as the session shell does. */
+async function repoDriver() {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-levers-"));
+  await mkdir(join(dir, ".tmct"), { recursive: true });
+  await writeFile(join(dir, ".tmct", "graph.json"), JSON.stringify(FIXTURE_PAYLOAD));
+  const config = { graphFile: join(dir, ".tmct", "graph.json") };
+  const drive = async (queries) => {
+    const out = [];
+    let last = null;
+    let focus = null;
+    for (const q of queries) {
+      clearCache();
+      const r = await runTurn(q, { config, graph, last, focus });
+      out.push(r);
+      last = r.last;
+      focus = r.focus;
+    }
+    return out;
+  };
+  return { dir, drive, cleanup: () => rm(dir, { recursive: true, force: true }) };
+}
 
 // The clean-phrasing behaviors every noise/typo variant must reproduce exactly.
 const CLEAN_CALLS = ask(graph, "what calls fnAlpha");
@@ -124,4 +153,36 @@ test("L3 guard narrowness: exact schema-vocabulary surfaces are untouched", () =
   // without a fuzzy-only schema hit)
   assert.doesNotMatch(CLEAN_IMPORTERS.content, /read as|assuming you meant/);
   assert.equal(CLEAN_IMPORTERS.tmct_ask.relaxed, null);
+});
+
+// ============================================================================
+// CHATBENCH_0.7.1 — Phase 11 Track 1 levers (pronoun binding, discourse-count,
+// temporal-over-relative composition). Each drives real turns through runTurn.
+// ============================================================================
+
+// ---- Lever 1 — pronoun / focus binding (g-b1-pron-25: the "it → Commit" mis-bind) ----
+
+test("Lever 1 (g-b1-pron-25): 'it' keeps binding to the focus module, never jumps to a Commit", async () => {
+  const { drive, cleanup } = await repoDriver();
+  try {
+    // The exact transcript: /describe a module, then two pronoun follow-ups. The
+    // second follow-up USED to mis-bind — "it" substring-matched the "Commit" schema
+    // node (label contains "it"), so the traversal read "object = Commit".
+    const [d, calls, imports] = await drive([
+      "/describe app/lib/e.mjs",
+      "what calls it",
+      "which modules import it",
+    ]);
+    assert.match(d.answer, /app\/lib\/e\.mjs — Module/, "describe sets the module focus");
+    // turn 2 binds "it" to the module (this already worked) …
+    assert.match(calls.answer, /object = app\/lib\/e\.mjs/, "turn 2 'it' = the module");
+    assert.equal(calls.focus.id, "mod-e", "focus is NOT displaced to a Commit after turn 2");
+    // … turn 3 is the fix: "it" still binds to the module, not Commit.
+    assert.doesNotMatch(imports.answer, /object = Commit/, "turn 3 'it' never binds to Commit");
+    assert.match(imports.answer, /app\/lib\/f\.mjs/, "turn 3 resolves the real importer of e.mjs");
+    assert.equal(imports.record.miss, false, "turn 3 is a real answer, not the wrong honest-empty");
+    assert.equal(imports.focus.id, "mod-e", "the code-entity focus is held across the pronoun turns");
+  } finally {
+    await cleanup();
+  }
 });
