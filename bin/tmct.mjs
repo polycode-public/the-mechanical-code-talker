@@ -48,6 +48,10 @@ Usage:
   tmct syllogise [--repo <abs>] speculative inference (offline maintenance job): forward-
        [--depth <n>] [--budget <n>]  chain the memory's rdfs:subClassOf closure, materialising
                                bounded, low-trust, retractable entailed facts (never on the chat path)
+  tmct serve [--repo <abs>]    run the Anthropic Messages API-compatible endpoint
+       [--host <h>] [--port <n>]  (POST /v1/messages) over the graph — a deterministic,
+                               no-LLM "model" a tool-loop client can call; $0 usage.
+                               Defaults: host 127.0.0.1, port 8787. Ctrl+C to stop.
   tmct cli <tool> '{…}'        invoke a graph tool directly (carry-over, de-emphasized)
   tmct cli digest '{…}'        architecture map + per-module context bundles
   tmct --help                  show this help
@@ -385,6 +389,47 @@ async function main() {
       + (res.truncated ? " — budget reached, more available" : "") + "\n",
     );
     return;
+  }
+
+  if (mode === "serve") {
+    // `tmct serve` — the Phase-A capability-router interface: an Anthropic
+    // Messages API-compatible HTTP endpoint (POST /v1/messages) over the graph.
+    // A deterministic, no-LLM "model" a tool-loop client (Claude Code) can point
+    // at; every response reports $0 usage. Read-only: no session artifacts, no
+    // writes back to the graph. See src/server-http.mjs.
+    const rest = process.argv.slice(3);
+    if (rest.includes("--help") || rest.includes("-h")) {
+      process.stdout.write(
+        "tmct serve — Anthropic Messages API-compatible endpoint (POST /v1/messages)\n\n" +
+        "Usage:\n" +
+        "  tmct serve [--repo <abs>] [--host <h>] [--port <n>]\n\n" +
+        "  --repo <abs>   target a repo's graph (<abs>/.tmct/graph.json); default: cwd/TMCT_GRAPH_FILE\n" +
+        "  --host <h>     bind address (default 127.0.0.1)\n" +
+        "  --port <n>     TCP port (default 8787; 0 picks an ephemeral port)\n\n" +
+        "Request:  { model, messages:[...], tools:[...], max_tokens, system? }\n" +
+        "Response: { id, type:\"message\", role:\"assistant\", content:[...blocks], stop_reason, usage }\n" +
+        "          usage is always { input_tokens: 0, output_tokens: 0 } — tmct is the $0 floor.\n",
+      );
+      return;
+    }
+    const strFlag = (name, dflt) => { const j = rest.indexOf(name); return j !== -1 ? rest[j + 1] : dflt; };
+    const repoPath = strFlag("--repo", undefined);
+    const host = strFlag("--host", "127.0.0.1");
+    const portRaw = strFlag("--port", undefined);
+    const port = portRaw !== undefined && Number.isFinite(Number(portRaw)) ? Number(portRaw) : 8787;
+    const { join } = await import("node:path");
+    const { startServer } = await import("../src/server-http.mjs");
+    const { loadConfig, DEFAULT_GRAPH_REL } = await import("../src/config.mjs");
+    const configFor = (rp) => rp ? { graphFile: join(rp, DEFAULT_GRAPH_REL) } : loadConfig();
+    const srv = await startServer({ config: configFor(repoPath), host, port });
+    process.stdout.write(
+      `tmct serve — Anthropic Messages API at ${srv.url}/v1/messages (POST) — ` +
+      `graph ${srv.config.graphFile} — usage billed $0 — Ctrl+C to stop\n`,
+    );
+    const shutdown = async () => { await srv.close(); process.exit(0); };
+    process.on("SIGINT", shutdown);
+    process.on("SIGTERM", shutdown);
+    return; // the listening server keeps the event loop alive
   }
 
   if (mode === "cli") {
