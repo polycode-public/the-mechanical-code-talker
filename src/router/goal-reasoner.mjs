@@ -55,8 +55,23 @@ export const MAX_TICKS = 16;
 // ---- the DECLARED goal model (data, mirroring registry.mjs's STRIPS operators)
 // A goal-rule is a maintenance INVARIANT over the graph, plus the epistemic
 // sub-goals whose facts decide whether it is violated and the DECLARED priority
-// that breaks ties in first-step arbitration. Growing this set is the "long-chain
+// that settles ties in first-step arbitration. Growing this set is the "long-chain
 // deduction library" the RFC flags — same discipline as syllogise's rule set.
+//
+// Each rule declares (pure frozen data, no code):
+//   focusClass — the entity class the scoped reading binds its focus to.
+//   modes      — which deduced scopes the rule covers ("scoped" = a bound focus;
+//                "global" = whole-graph keystone arbitration). A rule whose
+//                sub-goals are all entity-scoped has no global reading.
+//   subGoals   — the epistemic facts to gather, IN DECLARED ORDER (each
+//                backward-chains to a capability, exactly like an NL intent).
+//   compose    — the declarative fold of the gathered facts into the scoped
+//                answer: intersect(a, b), each side naming a gathered topic,
+//                optionally bound to the focus (`of:"focus"`), optionally with
+//                the focus itself unioned in (`withFocus` — the change footprint).
+//   priorityTopic / coverageTopic — the global keystone arbitration keys
+//                (argmax |priority(m)| over the coverage-violating set).
+//   achieves   — the meta-goal topic the composed answer achieves.
 export const GOAL_RULES = Object.freeze([
   Object.freeze({
     id: "coverage-invariant",
@@ -65,8 +80,8 @@ export const GOAL_RULES = Object.freeze([
     // closure) MUST have direct test coverage. A Module that is untested AND
     // impactful VIOLATES it — an active goal to close the coverage gap.
     invariant: "an impactful module must be tested",
-    // the epistemic facts a plan must gather to evaluate the invariant (each
-    // backward-chains to a capability, exactly like the resolver's NL intents).
+    focusClass: "Module",
+    modes: Object.freeze(["scoped", "global"]),
     subGoals: Object.freeze(["impact", "untested"]),
     // the DECLARED priority key for first-step arbitration: a violation's
     // priority is its blast radius |impact(module)| — the wider the reach, the
@@ -74,8 +89,40 @@ export const GOAL_RULES = Object.freeze([
     priorityTopic: "impact",
     // the coverage predicate the invariant screens on.
     coverageTopic: "untested",
+    // scoped fold: untested ∩ ({focus} ∪ impact(focus)) — the change footprint.
+    compose: Object.freeze({
+      op: "intersect",
+      a: Object.freeze({ topic: "untested" }),
+      b: Object.freeze({ topic: "impact", of: "focus", withFocus: true }),
+      names: "the change's untested footprint",
+      empty: "no coverage gap",
+    }),
     // the meta-goal topic the composed answer achieves (backward-chained below).
     achieves: "coverage-gap",
+  }),
+  Object.freeze({
+    id: "cochange-risk-invariant",
+    kind: "maintenance",
+    // INVARIANT: a module CHANGE-COUPLED with the focus (they historically land
+    // in the same commits) MUST have direct test coverage. A coupled module that
+    // is untested VIOLATES it — an active goal over the focus's coupling set.
+    invariant: "a module change-coupled with the focus must be tested",
+    focusClass: "Module",
+    // scoped ONLY: both sub-goals are read relative to a bound focus; there is
+    // no whole-graph keystone reading declared for change-coupling.
+    modes: Object.freeze(["scoped"]),
+    subGoals: Object.freeze(["cochanges", "untested"]),
+    priorityTopic: "cochanges",
+    coverageTopic: "untested",
+    // scoped fold: cochanges(focus) ∩ untested — the coupled-but-untested set.
+    compose: Object.freeze({
+      op: "intersect",
+      a: Object.freeze({ topic: "cochanges", of: "focus" }),
+      b: Object.freeze({ topic: "untested" }),
+      names: "the change-coupled untested set",
+      empty: "every change-coupled module is tested",
+    }),
+    achieves: "cochange-risk",
   }),
 ]);
 
@@ -83,6 +130,28 @@ export const GOAL_RULES = Object.freeze([
  *  the goal-level twin of resolver.backwardChain (capability selection). Pure. */
 export function backwardChainGoal(topic) {
   return GOAL_RULES.find((r) => r.achieves === topic) || null;
+}
+
+/** THE RULE-SELECTION DEDUCTION (replaces the old single-rule hard-wiring): a
+ *  declared goal-rule APPLIES to a request iff
+ *    (1) every one of its epistemic sub-goal topics backward-chains to a
+ *        capability IN the declared toolset (the closed-world groundability
+ *        screen — the meta-level twin of "never select an out-of-set call"),
+ *    (2) the deduced mode is one of the rule's declared modes, and
+ *    (3) a scoped reading's bound focus is of the rule's declared focusClass.
+ *  Pure over the goal model + registry: nothing here reads the request string.
+ *  The caller REFUSES on zero matches (the open-world goal-generation seam) and
+ *  on more than one (an ambiguous meta-goal — arbitration between meta-goals is
+ *  undeclared, so guessing one would be an invented goal). */
+export function applicableRules(declaredTools, focus, mode) {
+  const declared = Array.isArray(declaredTools) ? declaredTools : [];
+  return GOAL_RULES.filter((rule) =>
+    rule.modes.includes(mode)
+    && (mode !== "scoped" || (focus != null && focus.class === rule.focusClass))
+    && rule.subGoals.every((topic) => {
+      const cap = backwardChain(topic);
+      return Boolean(cap && declared.includes(cap.name));
+    }));
 }
 
 const refuse = (why, driver) => ({ calls: [], refused: true, terminated: true, proof: [], composed: null, driver, why });
@@ -130,11 +199,12 @@ async function groundSubGoal(topic, entityLabel, tools, ctx) {
 }
 
 /** BDI DROP CONDITIONS (Rao & Georgeff): an intention persists until it is
- *  achieved / impossible / its goal lapses. Returns the reason string, or null
- *  to KEEP committing to it. Pure — unit-testable in isolation. */
-export function dropCondition(intention, observed, mode, focus) {
+ *  achieved / impossible / its goal lapses. `focusClass` is the SELECTED rule's
+ *  declared focus class (never a literal here — the rule is the authority).
+ *  Returns the reason string, or null to KEEP committing to it. Pure. */
+export function dropCondition(intention, observed, mode, focus, focusClass) {
   if (observed.has(intention.key)) return "achieved";       // fact now gathered
-  if (mode === "scoped" && (!focus || focus.class !== "Module")) return "lapsed"; // focus moved
+  if (mode === "scoped" && (!focus || focus.class !== focusClass)) return "lapsed"; // focus moved
   return null;                                               // else keep the commitment
 }
 
@@ -148,21 +218,32 @@ export function dropCondition(intention, observed, mode, focus) {
  *  ctx: { dispatch(name,input)->{ok,result}, resolve(term)->{match,ambiguous} }. */
 export async function goalReason(request, tools, ctx, { driver = "goal-0.8.1" } = {}) {
   const declared = Array.isArray(tools) ? tools : [];
-  const rule = backwardChainGoal("coverage-gap");
-  if (!rule) return refuse("no declared goal-rule achieves the meta-goal — escalate", driver);
 
-  // STEP 1 — deduce the goal scope from the DECLARED model + a bound focus.
+  // STEP 1 — deduce the goal scope from the DECLARED model + a bound focus,
+  // then SELECT the goal-rule by pure applicability (no request keyword ever):
+  // a bound focus reads scoped, no focus reads global (keystone arbitration).
   const focus = focusOf(request, ctx);
-  let mode;
-  if (focus && focus.class === "Module") mode = "scoped"; // assess the focus module's change footprint
-  else if (focus) mode = "escalate";                      // a non-Module focus: no declared rule covers it
-  else mode = "global";                                   // no focus => rank the whole codebase (keystone)
+  const mode = focus ? "scoped" : "global";
 
-  // The open-world goal-generation seam, named honestly: a resolved focus the
-  // declared goal model does not cover is REFUSED, never given an invented goal.
-  if (mode === "escalate") {
-    return refuse(`open-world: no declared goal-rule covers a ${focus.class} focus (the coverage-invariant is Module-scoped) — escalate`, driver);
+  // The open-world goal-generation seam, named honestly: a resolved focus whose
+  // class NO declared goal-rule scopes is REFUSED, never given an invented goal.
+  if (focus && !GOAL_RULES.some((r) => r.focusClass === focus.class)) {
+    const covered = [...new Set(GOAL_RULES.map((r) => r.focusClass))].join("/");
+    return refuse(`open-world: no declared goal-rule covers a ${focus.class} focus (the declared goal-rules are ${covered}-scoped) — escalate`, driver);
   }
+
+  // Rule selection is a DEDUCTION over the goal model + the declared toolset:
+  // 0 applicable rules => the same open-world seam (nothing declared grounds the
+  // request's scope in this toolset); >1 => an AMBIGUOUS meta-goal (arbitration
+  // between meta-goals is undeclared) — both are honest refusals, never a guess.
+  const applicable = applicableRules(declared, focus, mode);
+  if (!applicable.length) {
+    return refuse(`open-world: no declared goal-rule is applicable in ${mode} mode (each needs a sub-goal capability outside the declared toolset, or a scope it does not declare) — escalate`, driver);
+  }
+  if (applicable.length > 1) {
+    return refuse(`ambiguous meta-goal: ${applicable.length} declared goal-rules apply (${applicable.map((r) => r.id).join(", ")}) — meta-goal arbitration is undeclared, refuse rather than guess — escalate`, driver);
+  }
+  const rule = applicable[0];
 
   // the glass-box WHY, citing the declared goal-rule by backward-chain (the C2
   // twin of resolver.mjs's "backward-chain => <capability>" provenance).
@@ -175,15 +256,22 @@ export async function goalReason(request, tools, ctx, { driver = "goal-0.8.1" } 
   const calls = [];
   const observed = new Map();     // intention.key -> gathered result set
 
-  // STEP 2/3 — the pending INTENTIONS (epistemic sub-goals), each carrying its
-  // declared execution order (arbitration is least-commitment: min order first,
-  // the keystone selection over the gathered facts happens at compose).
-  //   scoped: gather impact(focus) then the untested coverage-scan.
-  //   global: gather untested first, then EXPAND to impact-of-each (GDA replan).
-  const pending = mode === "scoped"
-    ? [{ topic: "impact", of: focus.label, key: `impact:${focus.label}`, order: 0 },
-       { topic: "untested", of: null, key: "untested", order: 1 }]
-    : [{ topic: "untested", of: null, key: "untested", order: 0 }];
+  // STEP 2/3 — the pending INTENTIONS: the rule's epistemic sub-goals IN
+  // DECLARED ORDER (arbitration is least-commitment: min order first, the
+  // keystone selection over the gathered facts happens at compose). A topic
+  // binds the focus iff its capability declares a REQUIRED parameter (read from
+  // the registry, never special-cased by topic name); in global mode there is
+  // no focus to bind, so entity-scoped topics are deferred to the GDA expansion
+  // (gather the coverage scan first, then EXPAND to priority-of-each violator).
+  const bindsEntity = (topic) => {
+    const cap = backwardChain(topic);
+    return Boolean(cap && cap.parameters.some((p) => p.required));
+  };
+  const pending = rule.subGoals
+    .filter((topic) => mode === "scoped" || !bindsEntity(topic))
+    .map((topic, i) => (mode === "scoped" && bindsEntity(topic)
+      ? { topic, of: focus.label, key: `${topic}:${focus.label}`, order: i }
+      : { topic, of: null, key: topic, order: i }));
 
   let committed = null;   // the persisted BDI intention (not re-derived each tick)
   let expanded = false;   // one-shot guard: the single bounded GDA expansion
@@ -197,7 +285,7 @@ export async function goalReason(request, tools, ctx, { driver = "goal-0.8.1" } 
     // (3b) PERSISTENCE — keep the committed intention unless a BDI drop condition
     //      fires; only THEN re-arbitrate. This is the "commitment, not recomputed
     //      preference" that stops the loop thrashing.
-    if (committed && dropCondition(committed, observed, mode, focus)) committed = null;
+    if (committed && dropCondition(committed, observed, mode, focus, rule.focusClass)) committed = null;
     if (!committed || !pending.includes(committed)) {
       // (3a) FIRST-STEP ARBITRATION — least-commitment: the lowest declared order
       //      among pending. Threat-aware: skip a step that would clobber another
@@ -220,17 +308,17 @@ export async function goalReason(request, tools, ctx, { driver = "goal-0.8.1" } 
     pending.splice(pending.indexOf(committed), 1);
     committed = null;
 
-    // GDA EXPANSION (monitor -> replan), ONCE: on observing the untested set in
-    // global mode, expand to the priority sub-goal (impact) for each violating
-    // module, so arbitration can rank them. Bounded by |untested| (finite) and
-    // fired at most once (the `expanded` guard) => the pending set still
-    // converges.
+    // GDA EXPANSION (monitor -> replan), ONCE: on observing the coverage set in
+    // global mode (guarded on the rule DECLARING a global reading), expand to
+    // the priority sub-goal for each violating module, so arbitration can rank
+    // them. Bounded by the finite coverage set and fired at most once (the
+    // `expanded` guard) => the pending set still converges.
     let expandedThisTick = false;
-    if (mode === "global" && achievedTopic === rule.coverageTopic && !expanded) {
+    if (mode === "global" && rule.modes.includes("global") && achievedTopic === rule.coverageTopic && !expanded) {
       expanded = true;
       expandedThisTick = true;
-      const untested = observed.get("untested") || [];
-      untested.forEach((m, i) => pending.push({ topic: rule.priorityTopic, of: m, key: `impact:${m}`, order: 100 + i }));
+      const violating = observed.get(rule.coverageTopic) || [];
+      violating.forEach((m, i) => pending.push({ topic: rule.priorityTopic, of: m, key: `${rule.priorityTopic}:${m}`, order: 100 + i }));
     }
 
     // the invariant, enforced mechanically: the pending set shrank by one this
@@ -245,21 +333,31 @@ export async function goalReason(request, tools, ctx, { driver = "goal-0.8.1" } 
   // facts (all INSIDE the driver's timeout guard; no unbounded post-work).
   let composed;
   if (mode === "scoped") {
-    // the coverage-gap of the focus: the untested modules in its change
-    // FOOTPRINT ({focus} ∪ its impact closure) — a real composed set (∅ = no gap).
-    const footprint = [focus.label, ...(observed.get(`impact:${focus.label}`) || [])];
-    composed = intersect(observed.get("untested") || [], footprint);
-    why.push(`compose: untested ∩ ({${focus.label}} ∪ impact) = the change's untested footprint (${composed.length ? composed.join(", ") : "∅ — no coverage gap"})`);
+    // interpret the rule's DECLARATIVE compose spec: intersect two gathered
+    // sides, each a topic (optionally focus-bound, optionally with the focus
+    // itself unioned in — the change-footprint shape). ∅ is a real answer.
+    const sideSet = (side) => {
+      const key = side.of === "focus" ? `${side.topic}:${focus.label}` : side.topic;
+      const set = observed.get(key) || [];
+      return side.withFocus ? [focus.label, ...set] : set;
+    };
+    const sideDesc = (side) => (side.withFocus
+      ? `({${focus.label}} ∪ ${side.topic})`
+      : side.of === "focus" ? `${side.topic}(${focus.label})` : side.topic);
+    const spec = rule.compose;
+    composed = intersect(sideSet(spec.a), sideSet(spec.b));
+    why.push(`compose: ${sideDesc(spec.a)} ∩ ${sideDesc(spec.b)} = ${spec.names} (${composed.length ? composed.join(", ") : `∅ — ${spec.empty}`})`);
   } else {
-    // KEYSTONE arbitration: among the coverage violations (untested modules), pick
-    // the highest declared priority — the widest blast radius |impact(m)| — tie
-    // broken by label order. The single most-worth-covering module.
-    const untested = observed.get("untested") || [];
-    const ranked = untested
-      .map((m) => ({ m, weight: (observed.get(`impact:${m}`) || []).length }))
+    // KEYSTONE arbitration: among the coverage violations, pick the highest
+    // declared priority — the widest |priority(m)| set — tie broken by label
+    // order. The single most-worth-covering module. Only a rule declaring a
+    // global mode ever reaches here (applicability screened on rule.modes).
+    const violating = observed.get(rule.coverageTopic) || [];
+    const ranked = violating
+      .map((m) => ({ m, weight: (observed.get(`${rule.priorityTopic}:${m}`) || []).length }))
       .sort((a, b) => b.weight - a.weight || String(a.m).localeCompare(String(b.m)));
     composed = ranked.length ? [ranked[0].m] : [];
-    why.push(`keystone: argmax |impact| over ${untested.length} untested module(s) => ${composed.length ? `${composed[0]} (weight ${ranked[0].weight})` : "∅"}`);
+    why.push(`keystone: argmax |${rule.priorityTopic}| over ${violating.length} ${rule.coverageTopic} module(s) => ${composed.length ? `${composed[0]} (weight ${ranked[0].weight})` : "∅"}`);
   }
 
   return { calls, refused: false, terminated: true, proof, why, composed, driver, observed: `goal(${mode}): ${calls.map((c) => c.name).join(" -> ")}` };
