@@ -138,6 +138,54 @@ test("resolver: imperative frames fill what the grammar + command register miss 
   assert.deepEqual(unt.selected.input, {});
 });
 
+// ---- Stage 2: widened imperative reach + tmct_calls reachability -------------
+
+test("Stage 2: tmct_calls is now NL-reachable via a dedicated edge-dump frame (NOT_NL_REACHABLE emptied)", async () => {
+  // the old routing gap is closed: no orphan tag remains, and the cap is reached.
+  assert.deepEqual(NOT_NL_REACHABLE, {}, "no capability is tagged unreachable any more");
+  assert.ok(reachableCapabilityNames().has("tmct_calls"), "tmct_calls is reachable via a frame");
+  assert.equal(backwardChain("calls").name, "tmct_calls", "the 'calls' topic backward-chains to tmct_calls");
+
+  const ctx = await graphCtx();
+  // the explicit edge-dump phrasing reaches tmct_calls WITHOUT colliding with the
+  // relational 'call' verb (tmct_callees is also in-set and must NOT be selected).
+  for (const q of ["show the call edges of Widget.render", "the call graph of Widget.render", "list the outgoing calls from Widget.render"]) {
+    const r = await resolveOne(q, ["tmct_calls", "tmct_callees"], ctx);
+    assert.ok(!r.refused, `${q}: ${r.reason}`);
+    assert.equal(r.selected.name, "tmct_calls", q);
+    assert.deepEqual(r.selected.input, { symbol: "Widget.render" }, q);
+  }
+  // the relational 'what does X call' STILL routes to callees (no collision).
+  const callees = await resolveOne("what does Widget.render call", ["tmct_calls", "tmct_callees"], ctx);
+  assert.equal(callees.selected.name, "tmct_callees");
+});
+
+test("Stage 2: a bare imperative the grammar+command register both miss ('explain X') now binds via the description frame", async () => {
+  const ctx = await graphCtx();
+  const r = await resolveOne("explain Widget", ["tmct_describe", "tmct_members"], ctx);
+  assert.ok(!r.refused, r.reason);
+  assert.equal(r.selected.name, "tmct_describe");
+  assert.deepEqual(r.selected.input, { symbol: "Widget" });
+});
+
+test("Stage 2: an OUT-OF-SET NL parse is rescued by an imperative frame that reaches a DECLARED capability", async () => {
+  const ctx = await graphCtx();
+  // keyword-spot mis-reads 'outgoing calls of X' toward the relational calls shape
+  // (which would select an out-of-set callers/callees); the frame reaches the
+  // declared tmct_calls instead of refusing — the resolveOne fall-through.
+  const r = await resolveOne("list the outgoing calls from fnAlpha", ["tmct_calls"], ctx);
+  assert.ok(!r.refused, r.reason);
+  assert.equal(r.selected.name, "tmct_calls");
+  assert.deepEqual(r.selected.input, { symbol: "fnAlpha" });
+});
+
+test("Stage 2: the sharp boundary — an UNDECLARED verb ('refactor') is refused, never guessed", async () => {
+  const ctx = await graphCtx();
+  const r = await resolveOne("refactor the Widget class", ["tmct_describe", "tmct_members"], ctx);
+  assert.equal(r.refused, true);
+  assert.deepEqual(r.selected, null);
+});
+
 test("resolver: HONEST REFUSE — unresolvable entity, out-of-set tool, and unmapped relation all refuse (never a guess)", async () => {
   const ctx = await graphCtx();
   // unresolvable entity

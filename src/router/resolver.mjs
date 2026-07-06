@@ -21,8 +21,13 @@
 //      the topic to the capability. This is the Stage-1 deliverable proper.
 //   3. IMPERATIVE INTENT FRAMES (Stage 2, this module's FRAMES table) — curated
 //      phrasings the relational grammar does not carry ("blast radius of X",
-//      "who calls X", "search for X"): a regex -> {topic, arg}. Same backward
-//      chaining (topic -> capability), same resolveObject binding.
+//      "who calls X", "search for X", "the call edges of X", "explain X"): a
+//      regex -> {topic, arg}. Same backward chaining (topic -> capability), same
+//      resolveObject binding. This is the surface that lifts NL reach above the
+//      command register: it reaches tmct_calls (the raw call-edge dump — a grain
+//      the relational "call" verb collides with) via an EXPLICIT edge-dump frame,
+//      and it rescues a request whose NL parse selected an OUT-OF-SET capability
+//      by re-selecting a DECLARED one (resolveOne falls through to the frame).
 //
 // ENTITY BINDING is DELEGATED to `resolveObject` (ask.mjs — the tiered lemma/
 // fuzzy binding oracle with honest ambiguity). This module NEVER re-implements
@@ -77,9 +82,17 @@ export const UNMAPPED_KINDS = Object.freeze({
 // conformance test FAILS on an untagged gap; a genuinely-unreachable cap must be
 // tagged HERE with the Stage it needs, so the ceiling is honest rather than a
 // silent low-completion refuse. (Coordinator reinforcement 2.)
-export const NOT_NL_REACHABLE = Object.freeze({
-  tmct_calls: "the raw call-edge dump collides with tmct_callees on every NL phrasing (\"what does X call\" -> callees) and has no command verb; distinguishing it needs a Stage-2 intent frame we have not authored",
-});
+//
+// EMPTY as of Stage 2. tmct_calls — the raw call-edge dump that USED to sit here —
+// is now reached by a DEDICATED imperative frame keyed on the "call edges / call
+// graph / outgoing calls of X" phrasings the relational grammar does NOT carry
+// (see FRAMES below). The collision the old tag named is real, so the frame does
+// NOT touch the relational "call" verb (that still routes callers/callees); it
+// opens a SECOND, distinct surface that names the edge-dump grain explicitly. With
+// it every declared capability is NL/command/frame-reachable — the ceiling is
+// genuinely empty, not a silenced gap. (The conformance test enforces both
+// directions: an over-claimed tag would now fail, since tmct_calls IS reachable.)
+export const NOT_NL_REACHABLE = Object.freeze({});
 
 // ---- imperative intent FRAMES (Stage 2 — fills what the relational grammar and
 // the command register both miss). regex -> { topic, arg | noArg }. `arg` names
@@ -90,7 +103,14 @@ export const NOT_NL_REACHABLE = Object.freeze({
 export const FRAMES = Object.freeze([
   { re: /\buntested\b|\bwithout\s+(?:a\s+)?tests?\b|\bhas\s+no\s+tests?\b|\bneeds?\s+(?:a\s+)?tests?\b/i, topic: "untested", noArg: true },
   { re: /\bblast\s*radius\b|\bimpacts?\b|\bimpacted\b|what\s+(?:a\s+)?change.*(?:reach|affect|touch)|what\s+(?:depends?\s+on|dependents?)\b/i, topic: "impact", arg: "module" },
-  { re: /\bcallees?\b|what\s+does\s+\S+\s+call\b/i, topic: "callees", arg: "symbol" },
+  // tmct_calls (Stage 2 — the reachability win): the RAW call-edge dump, a grain
+  // the relational "call" verb collides with (which routes callers/callees). This
+  // frame does NOT use the bare verb — it keys on the EXPLICIT edge-dump nouns
+  // ("call edges", "call graph", "outgoing calls of X") the relational grammar
+  // never emits, so it opens a distinct surface without touching callers/callees.
+  // FIRST so its explicit phrasing wins before the callees/callers verb frames.
+  { re: /\bcall[\s-]*edges?\b|\bcall[\s-]*graph\b|\boutgoing\s+calls?\b|\bcall[\s-]*sites?\s+(?:of|in|out|from)\b/i, topic: "calls", arg: "symbol" },
+  { re: /\bcallees?\b|wh(?:at|o)\s+does\s+\S+\s+call\b/i, topic: "callees", arg: "symbol" },
   { re: /\bcallers?\b|who\s+calls\b|what\s+calls\b/i, topic: "callers", arg: "symbol" },
   { re: /\btests?\b.*\b(?:for|cover|covering|of)\b|which\s+tests?\b|covers?\b|covered\b|test\s+coverage\b/i, topic: "tests", arg: "symbol" },
   { re: /\bcochang|change[- ]coupl/i, topic: "cochanges", arg: "symbol" },
@@ -99,7 +119,7 @@ export const FRAMES = Object.freeze([
   { re: /\bmembers?\b|\bmethods?\s+of\b|\battributes?\s+of\b/i, topic: "members", arg: "class" },
   { re: /\bhistory\b|who\s+changed\b|commits?\s+(?:that\s+)?touch/i, topic: "history", arg: "symbol" },
   { re: /\bsignature\b/i, topic: "signature", arg: "symbol" },
-  { re: /\bdescribe\b|what\s+is\b|tell\s+me\s+about\b|definition\s+of\b/i, topic: "description", arg: "symbol" },
+  { re: /\bdescribe\b|\bexplain\b|what\s+is\b|tell\s+me\s+about\b|definition\s+of\b/i, topic: "description", arg: "symbol" },
   { re: /\bsearch\b|\bfind\b|look\s+for\b/i, topic: "matches", arg: "query" },
 ]);
 
@@ -129,6 +149,9 @@ const STOP = new Set([
   "export", "exports", "history", "commit", "commits", "signature", "search", "find", "look",
   "module", "modules", "class", "classes", "function", "functions", "symbol", "symbols",
   "untested", "blast", "radius", "change", "changes", "changing", "reach", "reaches", "affect", "affects",
+  // Stage-2 edge-dump + imperative-verb tokens (tmct_calls frame + explain/outgoing
+  // phrasings): none names an entity, so keep them out of the slot-filler's pool.
+  "explain", "edge", "edges", "graph", "outgoing", "site", "sites", "invoke", "invokes", "run", "runs", "execute", "executes",
 ]);
 
 /** Pull one entity token from a request (imperative-frame slot-filling). Prefer a
@@ -235,13 +258,28 @@ export async function resolveOne(request, declaredNames, ctx, { execute = true }
   //    so we fall through and only surface the NL reason if the frame misses too.
   let pick = commandCapability(request, declared);
   let nlRefuse = null;
+  let nlUndeclared = null;
   if (!pick) {
     const mapped = mapParse(parseQuery(request));
-    if (mapped && !mapped.refuse) pick = mapped;
-    else if (mapped && mapped.refuse) nlRefuse = mapped.reason;
+    if (mapped && !mapped.refuse) {
+      // An NL parse that selects a DECLARED capability is the Stage-1 answer. One
+      // that selects an OUT-OF-SET capability is NOT terminal (Stage-2 widening):
+      // an imperative FRAME may still reach a DECLARED capability for the SAME
+      // request (e.g. keyword-spot mis-routes "outgoing calls of X" toward an
+      // out-of-set callers/callees, but the calls-frame reaches the declared
+      // tmct_calls). Hold the out-of-set name and fall through; surface it only if
+      // the frame misses too. This can only turn a refuse into a grounded DECLARED
+      // call — the declared/hallucination gates below still apply, never a guess.
+      if (declared.has(mapped.name)) pick = mapped;
+      else nlUndeclared = mapped.name;
+    } else if (mapped && mapped.refuse) nlRefuse = mapped.reason;
   }
   if (!pick) pick = mapFrame(request);
-  if (!pick) return REFUSE(nlRefuse || "no command, NL parse, or imperative frame selects a capability");
+  if (!pick) {
+    if (nlRefuse) return REFUSE(nlRefuse);
+    if (nlUndeclared) return REFUSE(`selected ${nlUndeclared} but it is not in the declared toolset`);
+    return REFUSE("no command, NL parse, or imperative frame selects a capability");
+  }
   let why = pick.why ?? [];
   if (!declared.has(pick.name)) return REFUSE(`selected ${pick.name} but it is not in the declared toolset`);
 
