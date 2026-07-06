@@ -353,3 +353,17 @@ OBSERVATION 32: the 0.8.0 reuse-map ("re-run CHATBENCH deterministic only, reuse
 RECOMMENDED ACTION: at 0.8.1 integration RE-JUDGE the QW+PT-touched judged tags (do not blanket-reuse); reuse judge only for genuinely untouched tags. Recorded in task #16; rewrite the reuse map at integration.
 STATUS: OPEN — task #16.
 (sub-findings a/b/c low-risk: quickwins.test.mjs freezes wordings so PT re-break fails the gate; fix1 is in chat.mjs not concept.mjs; Stage 5 on result-graded bench is sound.)
+
+═══════════════════════════════════════════════════════════════════════
+[2026-07-06 03:28Z] source=strategy-advisor(opus,deep) · topic=0.8.1-tick4-joint-chatbench-calls-honesty
+OBSERVATION 33: PT appends PHRASING_FRAMES (normalize.mjs), S2 appends FRAMES (resolver.mjs) — different files, clean textual merge, but COUPLED first-match semantics. PT rewrite "what is untested"->"untested modules" only routes because resolver FRAMES[0] catches it; if S2 inserts a broader frame ahead (or ACE claims the string at higher precedence), PT gains vanish on a byte-clean merge. Each branch no-regression gate is blind to the other.
+RECOMMENDED ACTION: gate on a JOINT CHATBENCH (both merged), not per-branch. Recorded in task #16(1).
+STATUS: OPEN — integration.
+
+OBSERVATION 34: tmct_calls reachability honesty — NOT_NL_REACHABLE.tmct_calls (resolver.mjs:81) needs a real Stage-2 frame; "what does X call" collides with callees (FRAMES:93). S2 must not clear it by un-tagging; the honest path is a NEW distinct-phrasing frame backward-chaining to tmct_calls with callees green.
+RECOMMENDED ACTION: integration verifies a real frame exists + callees unregressed before any un-tag lands; else re-tag. Recorded in task #16(2).
+STATUS: OPEN — integration.
+
+OBSERVATION 35: AGENTBENCH_0.8.1_002 must dedup by case id vs _001 or C2 result double-counts.
+RECOMMENDED ACTION: score _002 as a delta over _001 case set. Recorded in task #16(3).
+STATUS: OPEN — integration.
