@@ -136,6 +136,26 @@ export const PHRASING_FRAMES = Object.freeze([
     to: (m) => `${m[2].toLowerCase()} ${m[1].toLowerCase()}`,
   },
 
+  // BARE COVERAGE SURVEY (no entity kind) → the attributive "<qualifier> modules"
+  // the grammar already answers. Once "what is a test" opens the topic, a developer
+  // asks the survey the plainest way — "what is untested", "what's not tested",
+  // "what isn't covered", "what is covered" — with NO entity noun at all, so the
+  // predicative-qualifier frame above (which needs a KIND between what/which and
+  // are/is) can't catch it, and it fell through to a soft wall ("no module matching
+  // 'not'…" / the "I answer questions…" orientation). Default the surveyed kind to
+  // modules (the same set "which modules are not tested" / "untested modules" return)
+  // and fold the negation into the qualifier (not tested → untested, not covered →
+  // uncovered). Anchored with no object, so "what tests cover X" / "what is a test"
+  // never match here.
+  {
+    re: /^what\s+(?:is|are)\s+(not\s+)?(tested|untested|covered|uncovered)\??$/i,
+    to: (m) => {
+      const q = m[2].toLowerCase();
+      const flipped = m[1] ? (q === "tested" ? "untested" : q === "covered" ? "uncovered" : q) : q;
+      return `${flipped} modules`;
+    },
+  },
+
   // CO-CHANGE → the "co-changes with" canonical the RELATIONS table answers. The
   // cochange verb synonyms (ask-vocab.mjs) include "co-changes with" / "moves
   // together with" / "tends to change together with", but NOT the plainest form a
