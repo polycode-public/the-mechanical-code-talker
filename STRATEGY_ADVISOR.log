@@ -278,3 +278,17 @@ STATUS: OPEN — task #4.
 OBSERVATION 17: task#4 owns src/router/ only (clean vs G/agentbench, H/chatbench) BUT must import parseQuery+resolveObject from src/ask.mjs — the file Agent E is mutating. File-ownership disjoint; parse-output CONTRACT shared.
 RECOMMENDED ACTION: keep task#4 held until E merges, then freeze parseQuery output as a fixture-pinned interface the router consumes. Recorded in task #4 (now gated on E too).
 STATUS: OPEN — task #4.
+
+═══════════════════════════════════════════════════════════════════════
+[2026-07-06 00:53Z] source=strategy-advisor(opus,deep) · topic=phase-11-tick9-agentbench-honesty-planner-seam
+OBSERVATION 18: "0% hallucination on EVERY rung" is vacuous on B1+ — grade.mjs measures hallucination only over PRODUCED calls; the shim emits zero calls on B1-C2, so 0/n is true by construction of refusal. Load-bearing evidence is A0/A1/A2.
+RECOMMENDED ACTION: soften the headline to "0% hallucination on every rung it ACTS on (A0-A2); refuses above."
+STATUS: DONE ✅ — AGENTBENCH_0.8.0.md headline corrected.
+
+OBSERVATION 19 (task#4 planner seam): ctx.dispatch (run.mjs:77) returns rendered TEXT only. The single-call resolver seam is clean (capabilityByName+dispatch+tools suffice), but a B1+ PLANNER must thread step-i result into step-i+1 args — a 240-char rendered blob is unparseable for that.
+RECOMMENDED ACTION: before the planner, extend dispatch to return a STRUCTURED payload (resolved ids/objects) alongside text. Recorded in task #4.
+STATUS: OPEN — task #4.
+
+OBSERVATION 20 (task#4 overfit): C1/C2 cases pin fixture-only entities the request never names (ab-c2-what-to-test → impact{module:app/lib/a.mjs}; ab-c1 → callees{symbol:Widget.render}); callsMatch is order+length-strict; B2 encodes both conditional branches flat so a short-circuiting planner fails. Fine as a frozen frame, risky as the planner tuning target.
+RECOMMENDED ACTION: relax these to plan-SHAPE grading (or tag overfit-prone) before climbing, so the planner is not tuned to fixture answers. Recorded in task #4.
+STATUS: OPEN — task #4.
