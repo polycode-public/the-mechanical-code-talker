@@ -5,7 +5,7 @@
 // every capability is reachable (or tagged not-NL-reachable) — no orphans either
 // way, enforced as a HARD failure (coordinator reinforcement 2).
 
-import { test } from "node:test";
+import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -24,7 +24,7 @@ import {
 import { guard, admits } from "../src/router/guardrail.mjs";
 import { decompose, isMultiStep, plan, MAX_STEPS } from "../src/router/planner.mjs";
 import { resolverDriver } from "../agentbench/driver-resolver.mjs";
-import { runAgentbench } from "../agentbench/run.mjs";
+import { runAgentbench, createRunCtx } from "../agentbench/run.mjs";
 import { parseCases, COMPLETION_FLOOR } from "../agentbench/grade.mjs";
 
 const CASES_FILE = fileURLToPath(new URL("../agentbench/cases.jsonl", import.meta.url));
@@ -46,6 +46,15 @@ async function graphCtx() {
   };
   return { resolve, dispatch, graph };
 }
+
+// ONE module-scope context of each grain (0.8.2 speed insurance): the in-memory
+// unit ctx (read-only routing oracle — parsed once, no cleanup needed) and the
+// real run ctx (materialized fixture graph for the runAgentbench e2e, passed
+// through { ctx } so the harness skips its own create/cleanup; cleaned once in
+// the after-hook). Every consumer is read-only, so sharing is safe.
+const UNIT_CTX = await graphCtx();
+const SHARED = await createRunCtx();
+after(() => SHARED.cleanup());
 
 // ---- 1. THE BIDIRECTIONAL CONFORMANCE (the headline) ------------------------
 
@@ -98,7 +107,7 @@ test("conformance cap→A: EVERY registered capability is reachable (NL/frame/co
 // ---- 2. resolver routing (backward chaining + resolveObject binding) ---------
 
 test("resolver: NL parse routes via backward chaining to the right capability + bound arg", async () => {
-  const ctx = await graphCtx();
+  const ctx = UNIT_CTX;
   const cases = [
     ["which functions call fnAlpha", ["tmct_callers", "tmct_callees"], "tmct_callers", { symbol: "fnAlpha" }],
     ["what does app/lib/b.mjs export", ["tmct_exports"], "tmct_exports", { module: "app/lib/b.mjs" }],
@@ -115,7 +124,7 @@ test("resolver: NL parse routes via backward chaining to the right capability + 
 });
 
 test("resolver: terse command forms route via the command register (tier 1), even when the NL grammar mis-parses", async () => {
-  const ctx = await graphCtx();
+  const ctx = UNIT_CTX;
   // "callees Widget.render" keyword-spots to reverse/calls (would route to callers)
   // — the command register wins and routes to callees, correctly.
   const r = await resolveOne("callees Widget.render", ["tmct_callees", "tmct_callers"], ctx);
@@ -128,7 +137,7 @@ test("resolver: terse command forms route via the command register (tier 1), eve
 });
 
 test("resolver: imperative frames fill what the grammar + command register miss (blast radius, untested)", async () => {
-  const ctx = await graphCtx();
+  const ctx = UNIT_CTX;
   const imp = await resolveOne("what is the impact of changing app/lib/a.mjs", ["tmct_impact", "tmct_describe"], ctx);
   assert.equal(imp.selected.name, "tmct_impact");
   assert.deepEqual(imp.selected.input, { module: "app/lib/a.mjs" });
@@ -146,7 +155,7 @@ test("Stage 2: tmct_calls is now NL-reachable via a dedicated edge-dump frame (N
   assert.ok(reachableCapabilityNames().has("tmct_calls"), "tmct_calls is reachable via a frame");
   assert.equal(backwardChain("calls").name, "tmct_calls", "the 'calls' topic backward-chains to tmct_calls");
 
-  const ctx = await graphCtx();
+  const ctx = UNIT_CTX;
   // the explicit edge-dump phrasing reaches tmct_calls WITHOUT colliding with the
   // relational 'call' verb (tmct_callees is also in-set and must NOT be selected).
   for (const q of ["show the call edges of Widget.render", "the call graph of Widget.render", "list the outgoing calls from Widget.render"]) {
@@ -161,7 +170,7 @@ test("Stage 2: tmct_calls is now NL-reachable via a dedicated edge-dump frame (N
 });
 
 test("Stage 2: a bare imperative the grammar+command register both miss ('explain X') now binds via the description frame", async () => {
-  const ctx = await graphCtx();
+  const ctx = UNIT_CTX;
   const r = await resolveOne("explain Widget", ["tmct_describe", "tmct_members"], ctx);
   assert.ok(!r.refused, r.reason);
   assert.equal(r.selected.name, "tmct_describe");
@@ -169,7 +178,7 @@ test("Stage 2: a bare imperative the grammar+command register both miss ('explai
 });
 
 test("Stage 2: an OUT-OF-SET NL parse is rescued by an imperative frame that reaches a DECLARED capability", async () => {
-  const ctx = await graphCtx();
+  const ctx = UNIT_CTX;
   // keyword-spot mis-reads 'outgoing calls of X' toward the relational calls shape
   // (which would select an out-of-set callers/callees); the frame reaches the
   // declared tmct_calls instead of refusing — the resolveOne fall-through.
@@ -180,14 +189,14 @@ test("Stage 2: an OUT-OF-SET NL parse is rescued by an imperative frame that rea
 });
 
 test("Stage 2: the sharp boundary — an UNDECLARED verb ('refactor') is refused, never guessed", async () => {
-  const ctx = await graphCtx();
+  const ctx = UNIT_CTX;
   const r = await resolveOne("refactor the Widget class", ["tmct_describe", "tmct_members"], ctx);
   assert.equal(r.refused, true);
   assert.deepEqual(r.selected, null);
 });
 
 test("resolver: HONEST REFUSE — unresolvable entity, out-of-set tool, and unmapped relation all refuse (never a guess)", async () => {
-  const ctx = await graphCtx();
+  const ctx = UNIT_CTX;
   // unresolvable entity
   assert.equal((await resolveOne("describe zebra.mjs", ["tmct_describe"], ctx)).refused, true);
   // the fitting tool is not declared for the case
@@ -199,7 +208,7 @@ test("resolver: HONEST REFUSE — unresolvable entity, out-of-set tool, and unma
 });
 
 test("resolver: a bound call always self-passes the zero-hallucination gate (never emits an undeclared/unknown call)", async () => {
-  const ctx = await graphCtx();
+  const ctx = UNIT_CTX;
   // ask for a tool NOT in the declared set -> refuse, never reach outside it
   const r = await resolveOne("which functions call fnAlpha", ["tmct_describe"], ctx);
   assert.equal(r.refused, true);
@@ -216,7 +225,7 @@ test("guardrail: DEFAULT-DENY — an unregistered / invented tool is denied outr
 });
 
 test("guardrail: a well-formed, resolvable call passes; an unresolvable one is denied on the resolves precondition", async () => {
-  const ctx = await graphCtx();
+  const ctx = UNIT_CTX;
   const ok = guard({ name: "tmct_describe", input: { symbol: "Widget" } }, ["tmct_describe"], ctx);
   assert.ok(ok.ok, JSON.stringify(ok.denied));
   assert.ok(ok.steps.some((s) => s.pred && s.pred.includes("resolves") && s.ok && s.boundTo === "Widget"));
@@ -227,7 +236,7 @@ test("guardrail: a well-formed, resolvable call passes; an unresolvable one is d
 });
 
 test("guardrail: proves RESOLVABILITY, not ANTECEDENT-CORRECTNESS — a mis-bound but resolvable symbol PASSES", async () => {
-  const ctx = await graphCtx();
+  const ctx = UNIT_CTX;
   // "abc1234" is a Commit sha; describing it is semantically odd, but the symbol
   // RESOLVES to a real entity, so the guardrail admits it. Cross-turn binding
   // correctness is the chat lever's job, not the guardrail's (file header).
@@ -244,7 +253,7 @@ test("guardrail: an undeclared (but registered) tool is a policy denial when a d
 
 // ---- 4. the PLANNER (Stage 3) -----------------------------------------------
 
-test("planner: decompose picks the HTN method — conditional / relative-filter / sequence / single", () => {
+test("planner: decompose picks the HTN method — conditional / relative-filter / member-filter / sequence / single", () => {
   assert.equal(decompose("if fnAlpha is untested, describe it").method, "conditional");
   assert.equal(decompose("of the modules impacted by app/lib/a.mjs, which are untested").method, "relative-filter");
   assert.equal(decompose("show the members of Widget and then its subclasses").method, "sequence");
@@ -253,8 +262,23 @@ test("planner: decompose picks the HTN method — conditional / relative-filter 
   assert.equal(isMultiStep("find who calls fnAlpha, then describe Widget.render"), true);
 });
 
+test("planner: the member-filter method decomposes to [members(X), reach-filter Y] across its surface forms", () => {
+  const d = decompose("which methods of Widget end up calling fnAlpha");
+  assert.equal(d.method, "member-filter");
+  assert.deepEqual(d.segments, [
+    { text: "members Widget", role: "action", thread: false },
+    { text: "fnAlpha", role: "member-filter", thread: true },
+  ]);
+  // held-out surface forms of the SAME closed recipe (C1 surface syntax, not C2)
+  assert.equal(decompose("what members of Widget eventually reach fnAlpha").method, "member-filter");
+  assert.equal(decompose("which methods of Button end up calling fnAlpha").segments[0].text, "members Button");
+  // NOT a member-filter: a plain members question keeps its single-shot route
+  assert.equal(decompose("show the members of Widget").method, "single");
+  assert.equal(decompose("which methods of Widget are documented").method, "single");
+});
+
 test("planner: a B1 recipe threads two steps + emits a CONNECTED POP causal-link proof", async () => {
-  const ctx = await graphCtx();
+  const ctx = UNIT_CTX;
   const r = await plan("show the members of Widget and then its subclasses", ["tmct_members", "tmct_subclasses"], ctx);
   assert.ok(!r.refused, r.why);
   assert.deepEqual(r.calls, [
@@ -268,7 +292,7 @@ test("planner: a B1 recipe threads two steps + emits a CONNECTED POP causal-link
 });
 
 test("planner: BUDGET + monitor — an over-budget plan and an unresolvable sub-goal both REFUSE (escalate), never partial", async () => {
-  const ctx = await graphCtx();
+  const ctx = UNIT_CTX;
   // over budget: more than MAX_STEPS sequenced sub-goals
   const long = Array.from({ length: MAX_STEPS + 2 }, () => "untested").join(" and then ");
   const over = await plan(long, ["tmct_untested"], ctx);
@@ -290,7 +314,7 @@ test("planner: extractEntity picks the strong identifier token for frame slot-fi
 
 test("agentbench e2e: the resolver driver holds 0% hallucination on EVERY case (the non-negotiable), stamped resolver-0.8.0", async () => {
   const { cases } = parseCases(await readFile(CASES_FILE, "utf8"));
-  const { rows, rolled } = await runAgentbench(cases, { driver: resolverDriver, stamp: "0.8.0" });
+  const { rows, rolled } = await runAgentbench(cases, { driver: resolverDriver, stamp: "0.8.0", ctx: SHARED.ctx });
   for (const r of rows) {
     assert.equal(r.driver, "resolver-0.8.0", `${r.caseId} is the router baseline, not a floor`);
     assert.deepEqual(r.verdict.hallucinated, [], `${r.caseId} must never hallucinate`);
@@ -300,7 +324,7 @@ test("agentbench e2e: the resolver driver holds 0% hallucination on EVERY case (
 
 test("agentbench e2e: the resolver driver CLIMBS — A0..C1 clear the gate, well above the shim-transport floor", async () => {
   const { cases } = parseCases(await readFile(CASES_FILE, "utf8"));
-  const { rolled } = await runAgentbench(cases, { driver: resolverDriver, stamp: "0.8.0" });
+  const { rolled } = await runAgentbench(cases, { driver: resolverDriver, stamp: "0.8.0", ctx: SHARED.ctx });
   for (const rung of ["A0", "A1", "A2", "B1", "B2", "C1"]) {
     assert.ok(rolled.byRung[rung].gatePass, `${rung} clears the honest gate (0% halluc AT >=${COMPLETION_FLOOR * 100}% completion)`);
   }

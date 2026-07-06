@@ -23,10 +23,75 @@
 // transport floor is measured against.
 
 import { resolveOne } from "../src/router/resolver.mjs";
-import { plan, isMultiStep, decompose } from "../src/router/planner.mjs";
-import { intersect, fallbackIfEmpty, guardIfEmpty } from "./results.mjs";
+import { plan, isMultiStep, decompose, MAX_STEPS } from "../src/router/planner.mjs";
+import { intersect, fallbackIfEmpty, guardIfEmpty, memberIndividuals, membersReaching } from "./results.mjs";
 
 export const DRIVER = "resolver-0.8.0";
+
+const refuse = (why) => ({ calls: [], refused: true, terminated: true, proof: [], driver: DRIVER, why });
+
+// The member grains a call-reachability hop applies to (a class also `contains`
+// Attributes — no call edges, no callees hop).
+const CALLABLE_MEMBER_CLASSES = new Set(["Method", "Function"]);
+
+/** Execute the MEMBER-FILTER method ("which methods of X end up calling Y") —
+ *  the per-member hop the single-shot resolver cannot emit. Step 1 grounds
+ *  members(X) via resolveOne (grounded call 1); then, per CALLABLE member
+ *  (sorted, bounded by the planner's MAX_STEPS budget), one tmct_callees hop —
+ *  each an appended, grounded call. The fold is membersReaching (the bounded
+ *  transitive callsSymbol closure), computed over the graph, never parsed from
+ *  text. The proof chain stays a connected POP chain: step 1 is rooted at the
+ *  grounded graph; every hop's producer is step-1 (the member list it consumed).
+ *  Honest refuses: no tmct_callees in the declared set (the hop cannot be
+ *  grounded), an unbindable filter target, an over-budget member list. */
+async function memberFilterDrive(request, tools, ctx, segments) {
+  const [setSeg, filterSeg] = segments;
+  if (!tools.includes("tmct_callees")) {
+    return refuse("the member-filter reachability hop needs tmct_callees, which is not in the declared toolset — refusing the hop rather than guessing the fold");
+  }
+  // the filter TARGET must bind to exactly one graph entity (the resolves oracle).
+  const t = ctx.resolve ? ctx.resolve(String(filterSeg.text)) : null;
+  if (!t || !t.match || t.ambiguous) {
+    return refuse(`the member-filter target "${filterSeg.text}" does not bind to one graph entity (honest miss)`);
+  }
+  const target = t.match;
+
+  // step 1 — the grounded member enumeration ("members <X>") via the resolver.
+  const r1 = await resolveOne(setSeg.text, tools, ctx, { execute: true });
+  if (r1.refused) return refuse(`sub-goal 1 ("${setSeg.text}") did not resolve: ${r1.reason}`);
+  const classInd = r1.resolved;
+  if (!classInd) return refuse(`sub-goal 1 ("${setSeg.text}") grounded no class entity to enumerate`);
+
+  const calls = [r1.selected];
+  const proof = [{ step: "causal-link", producer: "graph", condition: classInd.label, consumer: `step-1:${r1.selected.name}`, role: "action", ok: true }];
+  for (const s of r1.proof) proof.push({ ...s, ofStep: 1 });
+  const why = [
+    `HTN method: member-filter — enumerate members(${classInd.label}), hop tmct_callees per callable member, fold by bounded transitive reach of ${target.label}`,
+    ...(r1.why || []).map((w) => `[1] ${w}`),
+  ];
+
+  // the per-member hop: callable members only, sorted, bounded by the plan budget.
+  const members = memberIndividuals(ctx.graph, classInd)
+    .filter((m) => CALLABLE_MEMBER_CLASSES.has(m.class))
+    .sort((a, b) => String(a.label).localeCompare(String(b.label)));
+  if (1 + members.length > MAX_STEPS) {
+    return refuse(`member-filter needs ${1 + members.length} steps (> budget ${MAX_STEPS}) — escalate`);
+  }
+  for (let i = 0; i < members.length; i += 1) {
+    const m = members[i];
+    const res = await ctx.dispatch("tmct_callees", { symbol: m.label });
+    if (!res.ok) return refuse(`the callees hop for ${m.label} did not ground: ${res.error}`);
+    calls.push({ name: "tmct_callees", input: { symbol: m.label } });
+    proof.push({ step: "causal-link", producer: "step-1", condition: m.label, consumer: `step-${i + 2}:tmct_callees`, role: "member-filter", ok: true });
+    why.push(`[${i + 2}] callees hop over ${m.label} (a member step 1 produced)`);
+  }
+
+  const composed = membersReaching(ctx.graph, classInd, target.label);
+  return {
+    calls, refused: false, terminated: true, proof, driver: DRIVER, why, composed,
+    observed: `plan(member-filter): ${calls.map((c) => c.name).join(" -> ")} => {${composed.join(", ")}}`,
+  };
+}
 
 /** Fold a multi-step plan's EXECUTED, threaded step results into one composed
  *  answer, choosing the operator from the router's HTN method. Re-dispatches each
@@ -58,6 +123,11 @@ async function composeResult(request, calls, ctx) {
 /** The router-baseline driver. Single-call via the resolver; multi-step via the
  *  planner, then RESULT composition. Returns a graded loopResult. */
 export async function resolverDriver(request, tools, ctx) {
+  // MEMBER-FILTER -> the per-member hop (the planner's leaf resolver cannot
+  // resolve the filter segment alone; the driver owns the hop + the fold).
+  const d = decompose(request);
+  if (d.method === "member-filter") return memberFilterDrive(request, tools, ctx, d.segments);
+
   // MULTI-STEP -> the planner (HTN + POP + monitor). It labels its own rows.
   if (isMultiStep(request)) {
     const loop = await plan(request, tools, ctx, { driver: DRIVER });

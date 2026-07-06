@@ -16,7 +16,8 @@
 // Usage:
 //   node agentbench/run.mjs [--stamp <label>] [--cases agentbench/cases.jsonl]
 //     [--out agentbench/results/raw/run-<stamp>] [--rung <A0|A1|…|C2>]
-//     [--ladder] [--only <id,id,…>]
+//     [--ladder] [--only <id,id,…>] [--concurrency <n>]  (default 8 — the
+//     case fan-out; rows stay in case order, bytes identical to sequential)
 
 import { mkdir, readFile, writeFile, mkdtemp, rm } from "node:fs/promises";
 import { readFileSync } from "node:fs";
@@ -52,6 +53,31 @@ export const DRIVERS = Object.freeze({ stub: stubDriver, shim: shimDriver, resol
 // on a real hang (a bug); in normal operation it never triggers, so recorded
 // output stays byte-identical (no Date.now enters any row).
 export const DRIVER_TIMEOUT_MS = 20000;
+
+// Bounded fan-out width for the case loop (item D, 0.8.2). Safe because
+// dispatchTool is STATELESS per call: it re-loads the graph through
+// source.fetchEntities (a read-only, file-keyed payload cache — a concurrent
+// first read is a benign same-payload race), parseEntities builds a fresh graph
+// object, the render* layer is pure, and memoryFactRows is a read-only
+// ENOENT-tolerant read — no per-call mutation anywhere on the dispatch path.
+// Rows are written results[i] BY INDEX, so row order (and product.jsonl bytes)
+// is identical to the sequential loop. Override with --concurrency.
+export const DEFAULT_CONCURRENCY = 8;
+
+/** Run `worker(item)` over items with bounded concurrency, preserving order
+ *  (results[i] by index — copied from chatbench/judge.mjs's pool). */
+export async function pool(items, limit, worker) {
+  const results = new Array(items.length);
+  let next = 0;
+  const lane = async () => {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await worker(items[i], i);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) || 1 }, lane));
+  return results;
+}
 
 // Drivers whose rows are a FLOOR, not the router baseline — the runner prints a
 // caveat banner for each so the real engine is never measured against a
@@ -180,21 +206,25 @@ export async function runCase(caseDef, driver, ctx, stamp) {
 }
 
 /** Programmatic entry (unit-testable): grade a set of cases with a given driver.
- *  Returns { rows, rolled, ladder }. `driver` defaults to the stub floor. */
-export async function runAgentbench(cases, { driver = stubDriver, stamp = BENCH_VERSION, ladder = false } = {}) {
-  const { ctx, cleanup } = await createRunCtx();
+ *  Returns { rows, rolled, ladder }. `driver` defaults to the stub floor.
+ *  Cases fan out through pool() at `concurrency` lanes, rows written BY INDEX
+ *  (case order — byte-identical to the sequential loop). Pass `ctx` to reuse a
+ *  caller-owned run context (the caller then owns its cleanup — the test suite's
+ *  shared-ctx path); otherwise a throwaway one is created and cleaned here. */
+export async function runAgentbench(cases, { driver = stubDriver, stamp = BENCH_VERSION, ladder = false, concurrency = DEFAULT_CONCURRENCY, ctx = null } = {}) {
+  const owned = ctx ? null : await createRunCtx();
+  const runCtx = ctx ?? owned.ctx;
   try {
-    const rows = [];
-    for (const caseDef of cases) rows.push(await runCase(caseDef, driver, ctx, stamp));
+    const rows = await pool(cases, concurrency, (caseDef) => runCase(caseDef, driver, runCtx, stamp));
     const rolled = rollup(rows);
     return { rows, rolled, ladder: ladder ? ladderGate(rolled) : null };
   } finally {
-    await cleanup();
+    if (owned) await owned.cleanup();
   }
 }
 
 function parseArgs(argv) {
-  const args = { cases: DEFAULT_CASES, stamp: BENCH_VERSION, driver: "stub" };
+  const args = { cases: DEFAULT_CASES, stamp: BENCH_VERSION, driver: "stub", concurrency: DEFAULT_CONCURRENCY };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
     if (a === "--stamp") args.stamp = argv[++i];
@@ -203,6 +233,7 @@ function parseArgs(argv) {
     else if (a === "--rung") args.rung = argv[++i].toUpperCase();
     else if (a === "--ladder") args.ladder = true;
     else if (a === "--driver") args.driver = argv[++i];
+    else if (a === "--concurrency") args.concurrency = Number(argv[++i]);
     else if (a === "--only") args.only = argv[++i].split(",").map((s) => s.trim()).filter(Boolean);
     else throw new Error(`unknown argument ${a}`);
   }
@@ -221,6 +252,10 @@ export async function main(argv = process.argv.slice(2)) {
   }
   if (!DRIVERS[args.driver]) {
     console.error(`--driver must be one of ${Object.keys(DRIVERS).join("|")}`);
+    return 2;
+  }
+  if (!Number.isInteger(args.concurrency) || args.concurrency < 1) {
+    console.error("--concurrency must be a positive integer");
     return 2;
   }
 
@@ -242,7 +277,7 @@ export async function main(argv = process.argv.slice(2)) {
   }
   if (!selected.length) { console.error("no cases selected."); return 2; }
 
-  const { rows, rolled, ladder } = await runAgentbench(selected, { driver: DRIVERS[args.driver], stamp: args.stamp, ladder: args.ladder });
+  const { rows, rolled, ladder } = await runAgentbench(selected, { driver: DRIVERS[args.driver], stamp: args.stamp, ladder: args.ladder, concurrency: args.concurrency });
 
   const outDir = args.out ?? join(HERE, "results", "raw", `run-${args.stamp}`);
   await mkdir(outDir, { recursive: true });
