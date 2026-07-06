@@ -213,6 +213,11 @@ export function composeConcept(graph, term, { definition = null, factRows = [] }
     instances: graphInstances.slice(0, MAX_EXAMPLES).map((i) => ({
       id: i.id, label: i.label, type: i.class,
     })),
+    // EVERY instance id (uncapped), for discourse-count anaphora ("count them" /
+    // "how many of those") over a truncated listing: `instances` is capped at
+    // MAX_EXAMPLES and the rest lives in `remainder` as prose labels, invisible to
+    // the counter — so a follow-up count would undercount without the full id set.
+    allInstanceIds: graphInstances.map((i) => i.id),
     // the un-shown instance labels + their plural noun, for the shell's "more"
     // pagination — empty when nothing was truncated.
     remainder: remainderLabels,

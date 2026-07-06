@@ -19,7 +19,7 @@ import { readFile, mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ask } from "../src/ask.mjs";
-import { runTurn } from "../src/chat.mjs";
+import { runTurn, asBareCommand } from "../src/chat.mjs";
 import { parseEntities } from "../src/codegraph.mjs";
 import { ingestSchemaDocs } from "../src/schema-docs.mjs";
 import { clearCache } from "../src/source.mjs";
@@ -184,5 +184,76 @@ test("Lever 1 (g-b1-pron-25): 'it' keeps binding to the focus module, never jump
     assert.equal(imports.focus.id, "mod-e", "the code-entity focus is held across the pronoun turns");
   } finally {
     await cleanup();
+  }
+});
+
+// ---- Lever 2 — discourse-count anaphora (g-b1-disc-count-22, g-b1-disc-count-3) ----
+
+test("Lever 2 (asBareCommand): a no-arg command word with a kind qualifier is NOT a command call", () => {
+  // bare "untested" (and other no-arg words) still route to the command …
+  assert.equal(asBareCommand("untested"), "/untested");
+  assert.equal(asBareCommand("stats"), "/stats");
+  // … but "untested classes"/"untested modules" fall through to the ask engine —
+  // the /untested tool takes no argument and would drop the qualifier (listing
+  // modules for "classes"); the engine filters by kind AND seeds anaphora.
+  assert.equal(asBareCommand("untested classes"), null);
+  assert.equal(asBareCommand("untested modules"), null);
+  // an arg command with a short name still routes (unchanged behavior).
+  assert.equal(asBareCommand("describe Widget"), "/describe Widget");
+});
+
+test("Lever 2 (g-b1-disc-count-22): 'untested classes' → 'count them' counts the class set (2), not the grammar wall", async () => {
+  const { drive, cleanup } = await repoDriver();
+  try {
+    const [first, count] = await drive(["untested classes", "count them"]);
+    // turn 1 now filters BY KIND (the two untested classes), not the /untested
+    // module listing the arg-less command produced.
+    assert.match(first.answer, /Base and Button/, "turn 1 lists the untested CLASSES");
+    assert.equal(first.record.miss, false);
+    // turn 2 counts the prior class set — never the grammar-wall help text.
+    assert.match(count.answer, /^2 /, "count them → 2");
+    assert.equal(count.record.miss, false);
+    assert.doesNotMatch(count.answer, /I answer questions about THIS codebase/, "no grammar wall");
+  } finally {
+    await cleanup();
+  }
+});
+
+test("Lever 2 (g-b1-disc-count-3): 'untested classes' → 'how many of those are tested' → 0", async () => {
+  const { drive, cleanup } = await repoDriver();
+  try {
+    const [, tested] = await drive(["untested classes", "how many of those are tested"]);
+    assert.match(tested.answer, /^0 /, "none of the untested classes are tested");
+    assert.equal(tested.record.miss, false);
+  } finally {
+    await cleanup();
+  }
+});
+
+test("Lever 2 (pagination robustness): 'count them' over a TRUNCATED concept listing counts the full set, not the shown page", async () => {
+  // A concept force caps its shown examples at MAX_EXAMPLES (32) and holds the rest
+  // as prose; the FULL id set rides on detail.allIds so the count survives the cap.
+  const many = structuredClone(FIXTURE_PAYLOAD);
+  for (let i = 0; i < 40; i += 1) many.individuals.push({ id: `mod-x${i}`, class: "Module", label: `pkg/x${i}.mjs` });
+  const bigGraph = parseEntities(ingestSchemaDocs(many));
+  const dir = await mkdtemp(join(tmpdir(), "tmct-levers-pag-"));
+  try {
+    await mkdir(join(dir, ".tmct"), { recursive: true });
+    await writeFile(join(dir, ".tmct", "graph.json"), JSON.stringify(many));
+    const config = { graphFile: join(dir, ".tmct", "graph.json") };
+    let last = null;
+    clearCache();
+    const first = await runTurn("what is a module", { config, graph: bigGraph });
+    // the render is truncated (only a page shown) but the full set is carried…
+    assert.ok(first.last.detail.pending, "the render truncated (remainder held)");
+    assert.equal(first.last.detail.matches.length, 32, "matches is capped at MAX_EXAMPLES");
+    assert.equal(first.last.detail.allIds.length, 48, "allIds carries EVERY module id (8 + 40)");
+    last = first.last;
+    clearCache();
+    const count = await runTurn("count them", { config, graph: bigGraph, last });
+    assert.match(count.answer, /^48 /, "count them counts the FULL set (48), not the shown 32");
+    assert.equal(count.record.miss, false);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
   }
 });
