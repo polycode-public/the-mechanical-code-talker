@@ -276,7 +276,7 @@ test("agentbench e2e: the stub driver runs the seed set to a labeled stub-floor 
   assert.equal(rows.length, cases.length);
   for (const r of rows) {
     assert.equal(r.driver, "stub-floor", "every row is stamped the stub-driver floor, not a router baseline");
-    assert.equal(r.version, "0.8.0", "artifacts are stamped 0.8.0 explicitly (not read from package.json)");
+    assert.equal(r.version, BENCH_VERSION, "artifacts are stamped the bench version (tracks package.json)");
   }
   // the seed set is authored to the stub's ability, so the floor clears its gate
   assert.equal(rolled.overall.hallucinationRate, 0, "the stub structurally cannot hallucinate (default-deny to declared set)");
