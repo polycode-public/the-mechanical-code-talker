@@ -1,0 +1,21 @@
+agentbench run 0.8.1_002 (version 0.8.1) — 43 case(s), driver: resolver-0.8.0,goal-0.8.1
+
+metric pair per rung (gate = 0% hallucination AT ≥50% completion):
+rung   n  pass  plan-compl  result-compl  halluc  gate
+A0     7     7        100%          100%      0%  PASS
+A1    12    12        100%          100%      0%  PASS
+A2     4     4        100%          100%      0%  PASS
+B1     6     6        100%          100%      0%  PASS
+B2     4     4        100%          100%      0%  PASS
+C1     4     4        100%           75%      0%  PASS
+C2     6     6        100%           83%      0%  PASS
+all   43    43        100%           95%      0%  PASS
+
+plan-correct but RESULT-incomplete (2) — the honest composing gap:
+  RESULT ab-c1-widget-methods-calling [C1]: no composed result produced (the plan did not execute+fold to an answer)
+  RESULT ab-c2-what-to-test [C2]: no composed result produced (the plan did not execute+fold to an answer)
+
+ladder (rungs ascend; first un-gated rung gates the rest):
+  order: A0 → A1 → A2 → B1 → B2 → C1 → C2  — all rungs pass the gate
+
+product: /Users/antony/projects/polycode-projects/the-mechanical-code-talker/.claude/worktrees/agent-a036b58dd6b9f7f7d/agentbench/results/raw/run-0.8.1_002/product.jsonl
