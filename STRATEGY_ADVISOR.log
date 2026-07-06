@@ -264,3 +264,17 @@ STATUS: OPEN — sent to Agent G.
 OBSERVATION 14: arg keys live in THREE unbound sources — COMMANDS.arg (chat.mjs), registry param.arg, dispatchTool. A future edit turns a shim tool_use.input into a grader unknown-arg auto-fail misread as a router defect.
 RECOMMENDED ACTION: conformance assertion — for every COMMANDS[c] with isCapability(tool), COMMANDS[c].arg ∈ argKeysOf(tool).
 STATUS: OPEN — sent to Agent G (fold into its conformance test).
+
+═══════════════════════════════════════════════════════════════════════
+[2026-07-06 00:49Z] source=strategy-advisor(opus,deep) · topic=phase-11-tick8-resolver-design
+OBSERVATION 15: the resolver entry point is parseQuery (ask.mjs:167) emitting {shape,kind,entityType,object}; the registry keys capabilities by tool-name + effect-topic; ask-vocab expresses intent as {kind,dir,sibling}. NO table joins ask-kind->capability yet.
+RECOMMENDED ACTION: Stage-1 core deliverable is that mapping, shipped with a BIDIRECTIONAL conformance test pinning every ask-vocab kind/dir/shape to a registry capability (no orphans either way) or it silently mis-routes. Recorded in task #4.
+STATUS: OPEN — task #4.
+
+OBSERVATION 16: resolves(param,as) precondition maps directly to resolveObject (ask.mjs:1145) — tiered lemma/fuzzy resolution + honest ambiguity already exist.
+RECOMMENDED ACTION: resolver/guardrail must DELEGATE to resolveObject as the binding oracle, never re-implement (parallel impl guarantees drift; ties to binding-confidence). Recorded in task #4.
+STATUS: OPEN — task #4.
+
+OBSERVATION 17: task#4 owns src/router/ only (clean vs G/agentbench, H/chatbench) BUT must import parseQuery+resolveObject from src/ask.mjs — the file Agent E is mutating. File-ownership disjoint; parse-output CONTRACT shared.
+RECOMMENDED ACTION: keep task#4 held until E merges, then freeze parseQuery output as a fixture-pinned interface the router consumes. Recorded in task #4 (now gated on E too).
+STATUS: OPEN — task #4.
