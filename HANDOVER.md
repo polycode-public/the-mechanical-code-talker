@@ -6,74 +6,67 @@ Session handle (inbox): `mechanic`.
 
 ## Where we are (2026-07-06)
 
-- **Built: v0.8.0 — Phase 11 landed (Phases 0–10 shipped in 0.7.1).** All five tracks built across
-  concurrent background agents, merged to `main`, `npm test` green (**869**), CLI smokes exit 0.
-  **`package.json` is bumped to 0.8.0 locally; the push is HELD for the operator** (CI publishes on a
-  version bump on `main`).
-- **Track 1 — chat levers (measured).** Pronoun/focus binding, discourse-count anaphora, C1
-  temporal-over-relative. `CHATBENCH_0.8.0`: tier-1 spine **331→333**, all three lever families moved
-  their cells, B1-temporal control did not spill; judged fixed tag `multi-turn-focus` **1.433→1.9**.
-  Judged pooled mean **1.44 is NOT case-comparable** to 0.7.1's 1.488 (graded re-samples 10% each run
-  — compare cell-level, not the scalar); the deterministic tier-1 spine is the load-bearing PASS.
-- **Track 2 — the router (DEMONSTRATED).** `/v1/messages` shim (`serve` mode) → Stage-0 registry →
-  resolver (S1) + guardrail (S4) + planner (S3, pure-JS POP/HTN + Steel & Ho monitor). Measured:
-  `AGENTBENCH_0.8.0` (shim-transport floor, 46%) → `AGENTBENCH_0.8.0_001` (real router): **96%
-  completion at 0% hallucination on every rung**, closed-world ladder cleared to **C1**.
-  **Honest caveat (in the artifact + ROADMAP):** AGENTBENCH grades the correct **call-plan + causal
-  proof, NOT the executed composed result**; B1/B2/C1 are **thin (2–3 cases)**; C2 is **refused**
-  (Stage 5 unbuilt). "Closed-world C1" = provably-correct tool-plan, not end-to-end reasoning.
-- **Track 3 — bedrock-meter.** `../bedrock-meter` has a cost-ascending router ladder with the tmct
-  **`$0` rung at rank 0 below nova-micro**; e2e test meters an in-envelope request at **£0**, escalates
-  out-of-envelope to nova-micro (73 green there; **unpushed**; no tmct-side change needed).
-- **Track 4 — playtest.** 3 frozen transcripts: `test/chatflow-{coverage,history,architecture}.test.mjs`.
-- **Track 5 — research.** `docs/references/planning/`: `STAGE_2_INTENT_FRAMES.md`,
-  `STAGE_5_GOAL_REASONER.md`, `BDI_GOAL_DRIVEN_AUTONOMY.md`.
-- **Coordination artifact:** `STRATEGY_ADVISOR.log` — 25 evidence-backed findings over 11 advisor
-  ticks, all logged + actioned (the gameable-gate→metric-pair fix, the planner-hang backstop, the
-  plan-not-result caveat, etc.). Worth skimming to see what shaped the build.
+- **v0.8.0 SHIPPED + PUBLISHED** (tmct `main` pushed; CI published on the version bump; `../bedrock-meter`
+  pushed too). **v0.8.1 BUILT — push HELD for the operator** (`package.json` = 0.8.1 locally; pushing
+  `main` triggers CI publish). `npm test` green (**916**), CLI smokes exit 0.
+- **0.8.1 deepened the router with real reasoning measurement + the two frontier stages:**
+  - **AGENTBENCH grades the executed composed RESULT** now, not just the call-plan (retires the biggest
+    0.8.0 caveat). Resolver under result-grading: **97% plan / 91% result / 0% hallucination**.
+  - **Stage 5 C2 goal-reasoner** (`src/router/goal-reasoner.mjs`, BDI + GDA). Honest **like-for-like**
+    figure = the driver swap on the identical 39-case ladder (`AGENTBENCH_0.8.1_001`): resolver **85% →
+    goal 95% result** (+10pp, 0% halluc). C2 cleared for **one declared coverage-invariant goal-rule** —
+    real + phrasing-robust (held-out phrasings graded blind, grep-clean of request literals), but
+    **thinly sampled, not rule-general**; open-world case honestly refused. *(The cross-release "0→83%
+    C2" is on a grown 6-case ladder authored for the goal-reasoner — NOT like-for-like; same-basket win
+    is one case, original C2 0→50%.)*
+  - **Stage 2 intent frames + ACE** (`AGENTBENCH_0.8.1_002`, goal driver): **100% plan / 95% result /
+    0% halluc**. `tmct_calls` **genuinely NL-reachable** (distinct edge-dump frame; `NOT_NL_REACHABLE`
+    now `{}`, bidirectional-conformance-enforced). ACE wired **async** → the sync CHATBENCH spine is
+    byte-identical; `interpret()` is called nowhere in the product path (chat/ask/server/bin), so ACE is
+    inert in the shipped product — reach without regression.
+  - **Chat (CHATBENCH_0.8.1):** quick wins (singular "what is a test", friendly commit-author refs, "No
+    tests cover X", chatbench discourse-count flake root-caused = per-run provenance UUIDs scrubbed) +
+    two playtests → **6 frozen `test/chatflow-*` transcripts**. Joint deterministic CHATBENCH (both new
+    frame tables together): **no tier-1 regression vs 0.7.1** (verified on `main`). Judged tags the text
+    changes touched were **re-judged, not blanket-reused** — see `CHATBENCH_0.8.1`.
+- **Coordination artifact:** `STRATEGY_ADVISOR.log` — **37 findings over 15 advisor ticks** (11 in 0.8.0,
+  4 + final in 0.8.1), all logged + actioned (the gameable-gate→metric-pair fix, the planner-hang
+  backstop, plan-not-result, the C2 overfit trap, the same-basket caveat, the judged-reuse correction).
 
 ## Open follow-ups (next session)
 
-1. **Stage 5 — the C2 goal-reasoner** (BDI + Goal-Driven Autonomy): the one AGENTBENCH C2 case is
-   currently refused. Design note ready (`docs/references/planning/STAGE_5_GOAL_REASONER.md`), gated on
-   Stage 3 (now done) — buildable next.
-2. **Stage 2 — imperative intent frames** (`docs/references/planning/STAGE_2_INTENT_FRAMES.md`): widen
-   NL→capability reach. Note the flagged prerequisite: the **ACE engine (`src/grammar/ace.mjs`) is not
-   yet wired into the interpret pipeline** (`STRATEGIES` = grammar/keyword-spot/noise-strip only).
-   `tmct_calls` is tagged `NOT_NL_REACHABLE` in the registry — Stage 2 is where it becomes reachable.
-3. **AGENTBENCH depth**: B1/B2/C1 are 2–3 cases each; grow the ladder and add **result-composition**
-   grading (today it grades the call-plan, not the executed answer) so C1 measures reasoning, not just
-   routing. Relaxed/overfit cases are tagged in `agentbench/cases.jsonl`.
-4. **Playtest dead-ends E could not fix in-scope** (chat.mjs / renderer): singular **"what is a test"**
-   (needs `relationTermOf` widening in `src/chat.mjs`); **"who touched X"** renders raw commit hashes
-   (want authors/friendly refs); **"tests cover" miss-renderer garble**; subject-anaphora "it"
-   inconsistencies in the `last`-only test driver.
-5. **Instrument flake**: `chatbench/run.mjs` tier-1 pass count is nondeterministic on the discourse-count
-   graded cases (331–333) — **pre-existing** (present on the clean tree), not caused by 0.8.0. The
-   authoritative `--compare` id-intersection gate is stable. Worth a deterministic-seed fix.
-6. **The push**: 0.8.0 is committed locally, not pushed. Pushing to `main` triggers CI publish — operator-gated.
+1. **Author→commit querying** (a dead-end the friendly-commit-ref quick win OPENED): "what did Grace
+   Hopper touch" / "who is Grace Hopper" wall — author is a Commit *attribute*, no author node. Fix:
+   either an author→commits→touched traversal in `src/ask.mjs`, or (cheaper) pass the graph into the
+   touch-query miss renderer so an object matching a known author yields a nudge.
+2. **Grow C2 beyond one goal-rule** — C2 rests on a single coverage-invariant `GOAL_RULES` entry;
+   author a second declared goal-rule + held-out phrasings so "C2 cleared" is rule-general, not thin.
+3. **AGENTBENCH ladder depth** — B1/B2 are healthier now but the abstract rungs are still small; grow
+   result-composition cases (static `expect.result` literals, fixture-linted).
+4. **Product ← bench import smell** — `src/router/resolver.mjs` imports `hallucinationsIn` from
+   `agentbench/grade.mjs`; the bench should not be a product dependency. Extract the shared check to
+   `src/router/`.
+5. **Lower-priority chat ceilings** (honest nudges, not walls): imperative "make a test for it",
+   why-questions "why is it untested", churn-focus anaphora in the `runTurn(+last)` path.
+6. **The push**: 0.8.1 is committed locally, not pushed. Pushing `main` triggers CI publish — operator-gated.
 
-### If you roll 0.8.1 — the bench reuse map (0.8.0 is FROZEN; re-runs roll the version, reusing what's still valid)
+### Bench reuse map (0.8.0 & 0.8.1 are FROZEN; a re-run rolls the version, reusing what's still valid)
 
-Two merges landed *after* their benches ran; the rest is untouched. **Reuse from 0.8.0 as-is:**
-`AGENTBENCH_0.8.0_001` resolver (96%, measured over the final cases — reproduces deterministically),
-the `AGENTBENCH_0.8.0` shim-floor **46%** conclusion (re-verified over the relaxed cases; only 2
-C1/C2 raw rows' `expect` drifted — the shim scores 0 there regardless), the **CHATBENCH per-family
-lever verification** (331→333; E's `normalize.mjs` touched a different surface than the 3 lever
-families), the bedrock-meter e2e, and the research notes. **Only re-run for 0.8.1:** the CHATBENCH
-**deterministic** tier-1 / graded pass, to fold in E's predicative-qualifier / co-change routing gains
-(cheap, free, deterministic — E verified no `--compare` regression, so it's equal-or-better). **Do NOT
-re-run** the CHATBENCH LLM judge (E's surface isn't in the judged lever tags; pooled mean already
-flagged non-comparable) unless a product change touches the judged tags. Optionally regen the shim-floor
-raw over the final cases for byte-consistency (headline unchanged).
+Deterministic AGENTBENCH/CHATBENCH reproduce byte-identically and are cheap to re-run. **The judged
+CHATBENCH is the ONLY expensive part and must NOT be blanket-reused across a text change:** any lever
+that alters answer *text* on a judged surface (as 0.8.1's quick wins + playtests did on graph-query /
+ambiguity / multi-turn-focus / memory-recall / honesty-miss / A1-graded) makes those 0.8.0 judged
+scores stale even though the deterministic `answerMatch` still passes. Re-judge the touched tags; carry
+untouched tags. AGENTBENCH is fully deterministic (no judge) — always safe to re-run.
 
 ## Discipline (unchanged)
 
 Repo-local identity (`antony@polycode.co.uk` / `Antony at Polycode`); `npm test` green at every commit;
-coordinator + background sub-agents with disjoint file-ownership, worktree-isolated, merged back;
-CHATBENCH/AGENTBENCH artifacts match `package.json` version, `_00N` for re-runs; no LLM in the product
-path (the CHATBENCH judge lives only in the eval harness; AGENTBENCH grading is deterministic).
+coordinator + background sub-agents, disjoint file-ownership, worktree-isolated, merged back; a ~5-min
+completion-driven **strategy advisor** running throughout; CHATBENCH/AGENTBENCH artifacts match
+`package.json` version, `_00N` for re-runs; no LLM in the product path (the CHATBENCH judge lives only
+in the eval harness; AGENTBENCH grading is deterministic).
 
-*History (Phases 0–10, releases 0.2.0→0.7.1) lives in git + the `CHATBENCH_*` / `AGENTBENCH_*` /
-`archive/PLAN_*` artifacts. Phase 11 (0.8.0) is in the `CHATBENCH_0.8.0` / `AGENTBENCH_0.8.0*` /
-`STRATEGY_ADVISOR.log` artifacts + `src/router/` + `agentbench/`.*
+*History (Phases 0–10, releases 0.2.0→0.7.1) lives in git + the `CHATBENCH_*` / `archive/PLAN_*`
+artifacts. Phase 11 (0.8.0 + 0.8.1) is in `CHATBENCH_0.8.*` / `AGENTBENCH_0.8.*` / `STRATEGY_ADVISOR.log`
++ `src/router/` + `agentbench/`.*

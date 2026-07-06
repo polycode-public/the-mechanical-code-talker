@@ -14,34 +14,41 @@ the file has been deleted.
 
 ## Where we are now (2026-07-06)
 
-**Built: v0.8.0 — Phase 11 landed (Phases 0–10 shipped in 0.7.1).** All five Phase-11 tracks are
-built, merged, and measured; `npm test` green (**869**). Push/publish held for the operator. Highlights:
+**Built: v0.8.1 — Phase 11 deepened (0.8.0 shipped + published; 0.8.1 push held for the operator).**
+`npm test` green (**916**). 0.8.1 hardened the router with real *reasoning* measurement and closed the
+frontier stages, all under the same demonstrated-vs-designed honesty discipline:
 
-- **Track 1 — chat levers (measured).** Pronoun/focus binding, discourse-count anaphora, and C1
-  temporal-over-relative composition all landed. `CHATBENCH_0.8.0`: tier-1 spine **331→333**, all three
-  lever families moved their cells (the B1-temporal control did not spill); judged fixed tag
-  `multi-turn-focus` **1.433→1.9** (the pronoun lever's echo). The judged pooled mean (1.44) is **not
-  case-comparable** to 0.7.1's 1.488 — the graded draw re-samples 10% of cells each run, so §1 compares
-  cell-level, not the scalar; the deterministic tier-1 spine is the load-bearing PASS.
-- **Track 2 — the router (designed → DEMONSTRATED).** The Anthropic-compatible `/v1/messages` shim
-  (`serve` mode), the Stage-0 capability registry (STRIPS/PDDL operators, closed-world default-deny),
-  and the resolver (S1) + guardrail (S4) + planner (S3, pure-JS POP/HTN + Steel & Ho monitor). Measured:
-  `AGENTBENCH_0.8.0` (shim-transport floor, 46% completion) → `AGENTBENCH_0.8.0_001` (the real router):
-  **96% completion at 0% hallucination on every rung**, clearing the closed-world ladder to **C1**. The
-  honest gate the phase was staked on is **met on its hallucination axis (0%)**. **Caveat (stated in the
-  artifact):** AGENTBENCH grades the correct **call-plan + proof**, *not* the executed composed result,
-  and B1/B2/C1 are thin rungs (2–3 cases); the C2 case is honestly **refused** (Stage 5, unbuilt).
-- **Track 3 — bedrock-meter surface.** `../bedrock-meter` gained a cost-ascending router ladder with the
-  **tmct `$0` rung at rank 0 below nova-micro**; an end-to-end test meters an in-envelope request at
-  **£0** and escalates out-of-envelope to nova-micro (that repo: 73 green, unpushed).
-- **Track 4 — playtest.** Three frozen dialogue-flow transcripts (`test/chatflow-{coverage,history,
-  architecture}.test.mjs`) from routing dead-ends off the grammar wall.
-- **Track 5 — research.** `docs/references/planning/` gained Stage-2 intent-frames + Stage-5
-  goal-reasoner design notes + a BDI/Goal-Driven-Autonomy reference entry.
+- **AGENTBENCH now grades the executed composed RESULT, not just the call-plan** (retires the headline
+  0.8.0 caveat). Under result-grading the resolver is **97% plan / 91% result / 0% hallucination**; the
+  honest gap lands exactly where reasoning is hard (C1, C2).
+- **Stage 5 — the C2 goal-reasoner** (BDI + Goal-Driven Autonomy) genuinely lifts result-completion.
+  The honest, **like-for-like** figure is the *driver swap on the identical 39-case ladder*
+  (`AGENTBENCH_0.8.1_001`): resolver **85% → goal-reasoner 95% result** (+10pp, purely the driver, 0%
+  hallucination). C2 is **cleared for one declared coverage-invariant goal-rule** — real and
+  phrasing-robust (validated by held-out phrasings graded blind, no request-string literals), but
+  **thinly sampled, not rule-general**; the open-world case is honestly **refused**. *(NB: the
+  cross-release "0→83% C2" reads on a grown 6-case C2 ladder whose 4 new cases exercise the
+  goal-reasoner — not a like-for-like rate; the same-basket win is one case fixed, 0→50% original C2.)*
+- **Stage 2 — imperative intent frames + ACE reach** (`AGENTBENCH_0.8.1_002`, goal driver): **100% plan
+  / 95% result / 0% hallucination**. `tmct_calls` is now **genuinely NL-reachable** via a distinct
+  edge-dump frame (not by un-tagging — bidirectional conformance enforces it; `NOT_NL_REACHABLE` is now
+  `{}`). ACE is wired **async** into the interpret pipeline so the synchronous CHATBENCH parse spine is
+  **byte-identical** — ACE is inert in the shipped product path (`interpret()` is called nowhere in
+  chat/ask/server/bin), reach without regression.
+- **Chat surface (CHATBENCH_0.8.1):** quick wins (singular "what is a test", friendly commit-author
+  refs, "No tests cover X" honest-empty, the chatbench discourse-count flake root-caused + scrubbed) +
+  two playtests (coverage-survey + authorship routing; **6 frozen `chatflow-*` transcripts** total).
+  Joint deterministic CHATBENCH (both new frame tables together): **no tier-1 regression vs 0.7.1.**
+  Judged tags touched by the text changes were re-judged (not blanket-reused) — see `CHATBENCH_0.8.1`.
 
-**Next:** the C2 goal-reasoner (Stage 5) and Stage-2 imperative intent frames are the designed-but-
-unbuilt edge; the tier-4/tier-5 items in Phase LATER remain the long tail. See Phase 11 below and
-`HANDOVER.md` for the open follow-ups.
+**Shipped earlier in v0.8.0 (published):** all five Phase-11 tracks — the `/v1/messages` shim + Stage-0
+registry + resolver/guardrail/planner (`AGENTBENCH_0.8.0_001`: 96% *plan* completion, 0% hallucination,
+closed-world C1); the three chat levers (`CHATBENCH_0.8.0`: tier-1 331→333); the `../bedrock-meter` `$0`
+rung (rank 0 below nova-micro, £0 metered e2e); the playtest; and the Stage-2/Stage-5 research notes.
+
+**Next:** grow the thin C2/coverage sampling to a second goal-rule; author→commit querying (a dead-end
+the friendly-commit-ref quick win opened); AGENTBENCH ladder depth; the tier-4/tier-5 Phase LATER long
+tail. See Phase 11 below and `HANDOVER.md` for the full open-follow-up list.
 
 ## The umbrella product definition (item 1)
 
@@ -628,7 +635,7 @@ you toward precision" promise on the conversational surface.
   with new graded cells for the miss / empty-graph / concept-touch surfaces so these become
   regression-protected levers, not one-off polish.
 
-## Phase 11 — The capability router & the agentic bench (0.8.0 — LANDED)
+## Phase 11 — The capability router & the agentic bench (0.8.0 shipped · 0.8.1 deepened)
 
 *(Operator-directed 2026-07-06; built the same day across five concurrent tracks.)* tmct as a **deterministic, no-LLM
 tool router** behind an Anthropic-compatible API — the workstream specified in
