@@ -27,7 +27,9 @@ import {
   callMatches, callsMatch, gradeCase, rollup, ladderGate,
 } from "../agentbench/grade.mjs";
 import { stubDriver } from "../agentbench/driver-stub.mjs";
+import { shimDriver } from "../agentbench/driver-shim.mjs";
 import { runAgentbench, createRunCtx, BENCH_VERSION } from "../agentbench/run.mjs";
+import { COMMANDS } from "../src/chat.mjs";
 
 const CASES_FILE = fileURLToPath(new URL("../agentbench/cases.jsonl", import.meta.url));
 
@@ -247,6 +249,25 @@ test("conformance: the EXCLUDED tools are dispatched but unregistered (strict su
   }
 });
 
+test("conformance: the COMMANDS.arg seam — every command's arg-key is one the registry accepts", () => {
+  // Arg keys live in THREE places (chat.mjs COMMANDS.arg, registry param.arg,
+  // dispatchTool) with nothing structurally binding them. The shim (server-http
+  // selectTool) binds a tool_use input under COMMANDS[verb].arg; if that key ever
+  // drifts from the registry's param.arg, the grader reads the shim call as an
+  // `unknown-arg` HALLUCINATION — a transport defect misread as a router defect.
+  // Pin the invariant: for every command whose tool is a registered capability,
+  // its arg-key must be an accepted arg-key of that capability.
+  for (const [verb, spec] of Object.entries(COMMANDS)) {
+    if (!isCapability(spec.tool)) continue; // context/snippet: intentionally unregistered
+    if (spec.arg == null) {
+      assert.equal(requiredArgsOf(spec.tool).length, 0, `/${verb} takes no arg → ${spec.tool} must have no required arg`);
+      continue;
+    }
+    assert.ok(argKeysOf(spec.tool).has(spec.arg),
+      `/${verb}: COMMANDS.arg "${spec.arg}" must be an accepted arg-key of ${spec.tool} (got ${[...argKeysOf(spec.tool)].join(",")})`);
+  }
+});
+
 // ---- end-to-end: the stub-driver floor --------------------------------------
 
 test("agentbench e2e: the stub driver runs the seed set to a labeled stub-floor result", async () => {
@@ -261,6 +282,59 @@ test("agentbench e2e: the stub driver runs the seed set to a labeled stub-floor 
   assert.equal(rolled.overall.hallucinationRate, 0, "the stub structurally cannot hallucinate (default-deny to declared set)");
   assert.ok(rolled.overall.completion >= COMPLETION_FLOOR);
   assert.ok(rolled.overall.gatePass);
+});
+
+// ---- the SHIM-TRANSPORT baseline driver -------------------------------------
+
+test("agentbench e2e: the shim-transport driver NEVER hallucinates over the whole ladder (its non-negotiable)", async () => {
+  const { cases } = parseCases(await readFile(CASES_FILE, "utf8"));
+  const { rows, rolled } = await runAgentbench(cases, { driver: shimDriver, stamp: BENCH_VERSION });
+  assert.equal(rows.length, cases.length);
+  for (const r of rows) {
+    assert.equal(r.driver, "shim-transport", "every shim row is stamped shim-transport, not a router baseline");
+    // structural no-hallucination: zero hallucinated calls, AND every produced
+    // call is well-formed (in-registry, declared, bindable) — never an
+    // out-of-set / unbindable call, on EVERY seeded case.
+    assert.deepEqual(r.verdict.hallucinated, [], `${r.caseId} must not hallucinate`);
+    for (const call of r.produced.calls) {
+      assert.deepEqual(hallucinationsIn(call, r.tools), [], `${r.caseId}: ${call.name} must be well-formed against the declared set`);
+    }
+  }
+  // The HONEST HEADLINE: 0% hallucination everywhere — the router's non-negotiable
+  // property, demonstrated by the transport floor; completion is the axis the
+  // resolver must climb (higher rungs are ceiling markers, not bugs).
+  assert.equal(rolled.overall.hallucinationRate, 0, "the shim refuses / answers in text rather than emit an ungrounded call");
+});
+
+test("shim-transport: refuses free-NL and multi-step (transport floor), clears the command register at 0% halluc", async () => {
+  const { ctx, cleanup } = await createRunCtx();
+  try {
+    // a bare COMMANDS verb + entity → the shim emits a grounded, well-formed call.
+    const ok = await shimDriver("describe Widget", ["tmct_describe"], ctx);
+    assert.equal(ok.driver, "shim-transport");
+    assert.deepEqual(ok.calls, [{ name: "tmct_describe", input: { symbol: "Widget" } }]);
+    assert.equal(ok.refused, false);
+    assert.deepEqual(hallucinationsIn(ok.calls[0], ["tmct_describe"]), []);
+
+    // free-NL phrasing is out of the command register → text answer here = REFUSE,
+    // never a guessed/ungrounded call.
+    const nl = await shimDriver("which functions call fnAlpha", ["tmct_describe", "tmct_callers", "tmct_callees"], ctx);
+    assert.equal(nl.refused, true);
+    assert.deepEqual(nl.calls, []);
+
+    // a multi-step recipe: the single-call transport emits at most one call →
+    // refuses here (no thread-through), a ceiling, never a hallucination.
+    const multi = await shimDriver("find who calls fnAlpha, then describe Widget.render", ["tmct_callers", "tmct_describe"], ctx);
+    assert.equal(multi.refused, true);
+    assert.deepEqual(multi.calls, []);
+
+    // a command whose entity does not resolve → honest refusal (no ungrounded call).
+    const miss = await shimDriver("describe zebra.mjs", ["tmct_describe"], ctx);
+    assert.equal(miss.refused, true);
+    assert.deepEqual(miss.calls, []);
+  } finally {
+    await cleanup();
+  }
 });
 
 test("agentbench e2e: the stub driver refuses a request whose only fitting tool is out-of-set", async () => {
