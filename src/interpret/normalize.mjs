@@ -165,6 +165,23 @@ export const PHRASING_FRAMES = Object.freeze([
   // onto "what co-changes with X" routes them to the working change-coupling query.
   { re: /^what\s+does\s+(.+?)\s+changes?\s+together\s+with\??$/i, to: (m) => `what co-changes with ${m[1]}` },
   { re: /^what\s+changes?\s+together\s+with\s+(.+?)\??$/i, to: (m) => `what co-changes with ${m[1]}` },
+
+  // AUTHORSHIP → the "who touched X" churn query. "who touched X" now names the
+  // commit author beside the sha (the 0.8.1 commit-ref quick-win), which invites the
+  // synonyms a developer reaches for next — "who wrote X", "who authored X", "who is
+  // the author of X" — and every one of them hit the grammar wall. tmct has no
+  // separate authorship edge; "touched" IS the authorship signal (the churn commits
+  // carry the author), so these are true synonyms of "who touched X", not a new
+  // capability. Anaphora rides through untouched ("who wrote it" → "who touched it").
+  { re: /^who\s+(?:wrote|authored)\s+(?:the\s+)?(.+?)\??$/i, to: (m) => `who touched ${m[1]}` },
+  { re: /^who\s+is\s+the\s+authors?\s+of\s+(?:the\s+)?(.+?)\??$/i, to: (m) => `who touched ${m[1]}` },
+
+  // NEEDS-TESTS → the untested-module survey. "what needs tests" / "what needs
+  // testing" is the plainest way to ask which modules are uncovered, and it hit the
+  // grammar wall ("no module matching 'needs'…"). Route it onto the same attributive
+  // survey the bare "what is untested" frame lands on. Closed to the tests/coverage
+  // object, so it can't swallow a general "what needs X".
+  { re: /^what\s+needs\s+(?:to\s+be\s+)?(?:a\s+)?(?:tested|tests?|testing|coverage|covering)\??$/i, to: () => "untested modules" },
 ]);
 
 /** Apply the phrasing frames (members-of-class + where-defined) — first match wins
