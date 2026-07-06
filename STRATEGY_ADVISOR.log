@@ -318,3 +318,17 @@ RECOMMENDED ACTION: render C1 as "1 clean relative-filter sequence + 1 case grad
 STATUS: DONE — folding into docs.
 
 === ADVISOR CLOSED: build complete, 25 findings over 11 ticks, all logged + actioned. ===
+
+═══════════════════════════════════════════════════════════════════════
+[2026-07-06 02:31Z] source=strategy-advisor(opus,deep) · topic=0.8.1-tick1-result-grading-ace
+OBSERVATION 26: DRIVER_TIMEOUT_MS wraps only driver() (run.mjs Promise.race ~133). If #2 composes the multi-step RESULT in runCase AFTER the driver returns, that execution is UNGUARDED — rehangs the suite (the 0.8.0 backstop hazard).
+RECOMMENDED ACTION: compose the RESULT inside plan()/resolveOne() (timeout-covered) or widen the race to enclose composition.
+STATUS: OPEN — sent to Agent AB.
+
+OBSERVATION 27: expect.result circularity — resolver returns observed=first-call text (resolver.mjs ~273), so composition is NEW code; if grade.mjs computes the expected via the same helper the driver uses, the test is vacuous.
+RECOMMENDED ACTION: expect.result as STATIC LITERALS in cases.jsonl, linted against the fixture at parseCases; grade.mjs imports NO composition fn (value-level compare only).
+STATUS: OPEN — sent to Agent AB.
+
+OBSERVATION 28: src/grammar/ace.mjs is imported by src/chat.mjs (the CHATBENCH path), not just the router. Stage 2 (#4) mutating ace shared grammar can silently regress CHATBENCH 333.
+RECOMMENDED ACTION: router intent frames as an ADDITIVE frame table the resolver consumes, not chat-facing ace edits; gate #4 on a CHATBENCH re-measure (not only the 2 AGENTBENCH re-measures).
+STATUS: OPEN — recorded in task #15.
