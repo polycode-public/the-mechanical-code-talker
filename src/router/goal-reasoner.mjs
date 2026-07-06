@@ -43,8 +43,8 @@
 
 import { backwardChain, extractEntity } from "./resolver.mjs";
 import { capabilityByName, effectsOf } from "./registry.mjs";
-import { hallucinationsIn } from "../../agentbench/grade.mjs";
-import { intersect } from "../../agentbench/results.mjs";
+import { hallucinationsIn } from "./call-validator.mjs";
+import { intersect } from "./set-algebra.mjs";
 
 // Hard OUTER-tick budget — the meta-loop runs at most this many ticks, then
 // REFUSES (escalate). Independent of BDI convergence and of the monotone

@@ -44,7 +44,7 @@ import { selectTool } from "../server-http.mjs";
 import {
   capabilities, capabilityByName, preconditionsOf, effectsOf, PRECOND,
 } from "./registry.mjs";
-import { hallucinationsIn } from "../../agentbench/grade.mjs";
+import { hallucinationsIn } from "./call-validator.mjs";
 
 // ---- the ask-kind -> epistemic-topic MAPPING (the Stage-1 core) --------------
 // Keyed `${shape}:${kind}` off parseQuery's simple-clause output. The VALUE is

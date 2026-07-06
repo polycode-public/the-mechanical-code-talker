@@ -12,7 +12,8 @@
 // per-case verdict, and the per-rung METRIC PAIR + ladder rollup. run.mjs wires
 // it to the pluggable driver and the fixture.
 
-import { isCapability, argKeysOf, requiredArgsOf, preconditionsOf, PRECOND } from "../src/router/registry.mjs";
+import { isCapability } from "../src/router/registry.mjs";
+import { hallucinationsIn } from "../src/router/call-validator.mjs";
 
 // ---- the rungs (the agentic ladder — analogue of chatbench's CEFR GRADES) ----
 // A0 = single obvious tool, args on a plate. A1 = pick the right tool from a
@@ -104,44 +105,11 @@ export function parseCases(text, { knownLabels = null } = {}) {
 }
 
 // ---- the zero-hallucination gate (the AUTOMATIC-FAIL check) ------------------
+// hallucinationsIn / isCallWellFormed LIVE in the product router now
+// (src/router/call-validator.mjs) — the bench imports the product, never the
+// other way round. Re-exported here so every existing bench import keeps working.
 
-/** Every way a single produced call can be a HALLUCINATION — the one thing a
- *  deterministic router must never do. Returns [] for a clean call, else a list
- *  of { reason, detail }:
- *    - "undeclared"  — name is not in the case's declared toolset
- *    - "unknown-tool"— name is not a registry capability at all
- *    - "unknown-arg" — an input key the capability does not accept
- *    - "missing-arg" — a required arg absent (and no any-present precond covers it)
- *  Any nonempty result = AUTOMATIC FAIL for the case. */
-export function hallucinationsIn(call, declaredTools) {
-  const problems = [];
-  const name = call?.name;
-  if (typeof name !== "string" || !name) return [{ reason: "unknown-tool", detail: "no tool name" }];
-  if (!isCapability(name)) return [{ reason: "unknown-tool", detail: name }];
-  if (!declaredTools.includes(name)) problems.push({ reason: "undeclared", detail: name });
-  const input = call.input && typeof call.input === "object" ? call.input : {};
-  const accepted = argKeysOf(name);
-  for (const key of Object.keys(input)) {
-    if (!accepted.has(key)) problems.push({ reason: "unknown-arg", detail: `${name}.${key}` });
-  }
-  // required-arg presence, honoring an any-present disjunction (search: query|kind)
-  const anyGroups = preconditionsOf(name)
-    .filter((p) => p.pred === PRECOND.anyPresent)
-    .map((p) => p.params);
-  const present = (k) => input[k] !== undefined && input[k] !== null && String(input[k]).trim() !== "";
-  for (const req of requiredArgsOf(name)) {
-    if (!present(req)) problems.push({ reason: "missing-arg", detail: `${name}.${req}` });
-  }
-  for (const group of anyGroups) {
-    if (!group.some(present)) problems.push({ reason: "missing-arg", detail: `${name} needs one of ${group.join("|")}` });
-  }
-  return problems;
-}
-
-/** True iff a produced call is dispatchable-shaped (no hallucination). */
-export function isCallWellFormed(call, declaredTools) {
-  return hallucinationsIn(call, declaredTools).length === 0;
-}
+export { hallucinationsIn, isCallWellFormed } from "../src/router/call-validator.mjs";
 
 // ---- expected-vs-produced call matching -------------------------------------
 
