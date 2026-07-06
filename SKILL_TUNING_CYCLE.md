@@ -154,8 +154,8 @@ next cycle. No pause — the operator interrupts when they want the wheel.
 
 - **The case set is sacred.** Append-only between cycles; never edit or delete existing cases
   mid-arc; record every addition in the write-up.
-- **Snapshot before overwrite.** `chatbench/results/raw-<NNN>/` is written before the next run
-  starts — a skipped snapshot is a process slip the advisor flags.
+- **Snapshot before overwrite.** `chatbench/results/raw/run-<version>[_00N]/` is written before
+  the next run starts — a skipped snapshot is a process slip the advisor flags.
 - **`STRATEGY_ADVISOR.log` is append-only.** Never edit or reorder prior entries. When you act on
   an `OPEN` item, append a short `✅ DONE` note. Commit the log alongside the related change.
 - **Push state is SESSION-SCOPED — never treat a past "no push" as a standing rule.** Commit
@@ -180,6 +180,6 @@ scores below honest-miss; judge refusals void, never fail), with the **strategy 
 alongside as the drift alarm**; **writes** `CHATBENCH_0NN.md` (headline mean + hard-fails + the best-examples pick,
 per-tag, predictions-vs-actuals, per-lever analysis, ranked next-cycle decision log) +
 `CHATBENCH_0NN_TRANSCRIPTS.md` (discriminating transcripts first), snapshotting raw judge output
-to `chatbench/results/raw-<NNN>/` first; then applies the decision rule (**PASS = mean up AND no
+to `chatbench/results/raw/run-<version>[_00N]/` first; then applies the decision rule (**PASS = mean up AND no
 pass→fail regression**) and **continues to the next cycle** — no hard pause; the operator
 interrupts at will.

@@ -12,11 +12,29 @@ mapped into them (item numbers retained for traceability); the seven sketches
 formerly held in `code-talker-ideas.txt` are folded into items 8–11 below and
 the file has been deleted.
 
-## Where we are now (2026-07-06)
+## Where we are now (2026-07-07)
 
-**Built: v0.8.1 — Phase 11 deepened (0.8.0 shipped + published; 0.8.1 push held for the operator).**
-`npm test` green (**916**). 0.8.1 hardened the router with real *reasoning* measurement and closed the
-frontier stages, all under the same demonstrated-vs-designed honesty discipline:
+**Built: v0.8.2 — the chat-feel wave + rule-general C2 (0.8.1 published; 0.8.2 gated green, push =
+the next operator action).** `npm test` green (**974**). 0.8.2 deepened both axes at once:
+
+- **Chat feel (CHATBENCH_0.8.2, deterministic tier):** tier-1 **334/334 (draw A) + 285/285 (draw
+  B)**, zero regressions; the cycle-1 standing hard-fail `gq-functions-call-fnalpha` **flipped
+  green**. Landed (PLAN_CHAT_FEEL items 1–5, 7, 8): recall hygiene, preamble/politeness frames,
+  calls∪callsSymbol + grain/meta fallbacks, the author lane, wall kindness + honest capability
+  nudges, teach-lane widening + the taught-class↔inherits bridge, receipt tails prose→detail.
+  Plus a live-found scale hotfix (edgesOfKind argument-spread overflow past ~100k edges, from a
+  27,770-module monorepo). **The judged (LLM) re-judge of the touched tags is DEFERRED
+  post-release (ship-over-delay)** — 0.8.1 judged scores stay the judged record and are stale on
+  those tags; see CHATBENCH_0.8.2.
+- **Agent (AGENTBENCH_0.8.2):** ladder 43→56 cases; goal driver **100% plan / 98% result / 0%
+  hallucination, all rungs gate-PASS** (one deliberate honest red: `ab-c2-what-to-test`); resolver
+  floor clean **A0–C1 100/100** via the new member-filter HTN method + per-member hop (flips
+  `ab-c1-widget-methods-calling` in both drivers). **C2 is now rule-general**: a second declared
+  goal-rule (`cochange-risk-invariant`) + pure `applicableRules` selection (0→refuse open-world,
+  >1→refuse ambiguous; grep-clean of request keywords). Bench-import inversion
+  (`src/router/call-validator.mjs` + `set-algebra.mjs`); bounded runner pool (`--concurrency` 8).
+
+**Shipped in v0.8.1 (published):** the same demonstrated-vs-designed honesty discipline, summarized:
 
 - **AGENTBENCH now grades the executed composed RESULT, not just the call-plan** (retires the headline
   0.8.0 caveat). Under result-grading the resolver is **97% plan / 91% result / 0% hallucination**; the
@@ -46,9 +64,13 @@ registry + resolver/guardrail/planner (`AGENTBENCH_0.8.0_001`: 96% *plan* comple
 closed-world C1); the three chat levers (`CHATBENCH_0.8.0`: tier-1 331→333); the `../bedrock-meter` `$0`
 rung (rank 0 below nova-micro, £0 metered e2e); the playtest; and the Stage-2/Stage-5 research notes.
 
-**Next:** grow the thin C2/coverage sampling to a second goal-rule; author→commit querying (a dead-end
-the friendly-commit-ref quick win opened); AGENTBENCH ladder depth; the tier-4/tier-5 Phase LATER long
-tail. See Phase 11 below and `HANDOVER.md` for the full open-follow-up list.
+**Next (post-release, in order):** (1) the judged re-judge of the stale tags (the deferred half of
+the 0.8.2 evidence); (2) the chat-feel fast-follows from the confirmation playtest (recall
+conjunction enforcement, the fuzzy-entity FALSE-EMPTY confident-wrong class, function-grain
+coverage, module-grain overview); (3) the Track-1 trio against the measured red set (pron ×18,
+temporal b1×5 + c1×9, disc-count re-measure first); (4) `edgesOfKind` memoization + endpoint
+indices (perf at monorepo scale); (5) the seonix cutover ping + wh-scale feedback loop. Full list
+with targets in `HANDOVER.md`.
 
 ## The umbrella product definition (item 1)
 
@@ -635,7 +657,7 @@ you toward precision" promise on the conversational surface.
   with new graded cells for the miss / empty-graph / concept-touch surfaces so these become
   regression-protected levers, not one-off polish.
 
-## Phase 11 — The capability router & the agentic bench (0.8.0 shipped · 0.8.1 deepened)
+## Phase 11 — The capability router & the agentic bench (0.8.0 shipped · 0.8.1 deepened · 0.8.2 feel + rule-general C2)
 
 *(Operator-directed 2026-07-06; built the same day across five concurrent tracks.)* tmct as a **deterministic, no-LLM
 tool router** behind an Anthropic-compatible API — the workstream specified in
@@ -657,6 +679,14 @@ real deliverable. The five tracks below are all built; the two research-agent st
 remain designed-not-built by intent.
 
 ### Track 1 — chat-surface levers (next CHATBENCH; all three)
+
+> **STATUS (0.8.2):** the surrounding feel surface landed — PLAN_CHAT_FEEL items **1–5, 7, 8**
+> (recall hygiene, preamble frames, call-relation self-consistency, author lane, wall kindness,
+> teach-lane widening, honest nudges) shipped and gate-verified deterministically. **The trio
+> below is DEFERRED post-release with measured targets** (advisor tick-4): pronoun red set = 18
+> g-b1-pron ids; temporal = g-b1-temp ×5 + g-c1-temp ×9; discourse-count re-measure first — it
+> sampled 0/5 red and is likely already green. See HANDOVER follow-up #3.
+
 The three levers `CHATBENCH_0.7.1` measured + ranked — which **double as router prerequisites** (they
 gate the A2→B1→C1 rungs, per Phase B of the router plan):
 1. **Pronoun / focus binding** — the "it → Commit" mis-bind (`B1 pron 1.24`); biggest movable mass.
@@ -666,6 +696,12 @@ gate the A2→B1→C1 rungs, per Phase B of the router plan):
 Land all three (not just #1); they raise the chat floor *and* the router's floor at once.
 
 ### Track 2 — the router build (the within-horizon slice, in order)
+
+> **STATUS (0.8.2):** the C1 composition gap closed — the **member-filter HTN method + per-member
+> callees hop** flips the standing C1 red in both drivers (resolver floor A0–C1 all 100/100); the
+> ladder grew 43→56 fixture-linted cases; the bench-import smell is inverted
+> (`src/router/call-validator.mjs` + `set-algebra.mjs`).
+
 Buildable now with a frontier model as co-author (see PLAN §"solved vs unsolved"):
 - **Phase A — the shim.** An Anthropic Messages API endpoint (`/v1/messages`, `tool_use`/`tool_result`
   blocks). **Extended:** also present as a **`bedrock-meter`-compatible routing target** (see below).
@@ -703,6 +739,12 @@ critical build path:
   controlled command language (the front-end; the general case stays out-of-scope / escalate).
 - **Stage 5 — goal-reasoner, closed-world C2** — BDI + Goal-Driven Autonomy: deduce-goals (long-chain
   deduction) → plan-each (C1) → threat-aware, *persistent* first-step arbitration.
+
+> **STATUS (0.8.2):** both research stages are now BUILT and measured. Stage 2 landed in 0.8.1_002;
+> Stage 5's 0.8.1 "one thin rule" caveat is retired — **C2 is rule-general**: two declared
+> goal-rules (`coverage-invariant`, `cochange-risk-invariant`) selected by pure `applicableRules`
+> deduction with honest refusals at both failure modes (0 applicable = open-world, >1 = ambiguous),
+> zero request keywords. Goal driver: 100% plan / 98% result / 0% hallucination over 56 cases.
 
 ## Phase LATER — recognized, deferred, not now
 
