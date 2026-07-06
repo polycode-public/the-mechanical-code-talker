@@ -136,6 +136,26 @@ export const PHRASING_FRAMES = Object.freeze([
     to: (m) => `${m[2].toLowerCase()} ${m[1].toLowerCase()}`,
   },
 
+  // BARE COVERAGE SURVEY (no entity kind) → the attributive "<qualifier> modules"
+  // the grammar already answers. Once "what is a test" opens the topic, a developer
+  // asks the survey the plainest way — "what is untested", "what's not tested",
+  // "what isn't covered", "what is covered" — with NO entity noun at all, so the
+  // predicative-qualifier frame above (which needs a KIND between what/which and
+  // are/is) can't catch it, and it fell through to a soft wall ("no module matching
+  // 'not'…" / the "I answer questions…" orientation). Default the surveyed kind to
+  // modules (the same set "which modules are not tested" / "untested modules" return)
+  // and fold the negation into the qualifier (not tested → untested, not covered →
+  // uncovered). Anchored with no object, so "what tests cover X" / "what is a test"
+  // never match here.
+  {
+    re: /^what\s+(?:is|are)\s+(not\s+)?(tested|untested|covered|uncovered)\??$/i,
+    to: (m) => {
+      const q = m[2].toLowerCase();
+      const flipped = m[1] ? (q === "tested" ? "untested" : q === "covered" ? "uncovered" : q) : q;
+      return `${flipped} modules`;
+    },
+  },
+
   // CO-CHANGE → the "co-changes with" canonical the RELATIONS table answers. The
   // cochange verb synonyms (ask-vocab.mjs) include "co-changes with" / "moves
   // together with" / "tends to change together with", but NOT the plainest form a
@@ -145,6 +165,23 @@ export const PHRASING_FRAMES = Object.freeze([
   // onto "what co-changes with X" routes them to the working change-coupling query.
   { re: /^what\s+does\s+(.+?)\s+changes?\s+together\s+with\??$/i, to: (m) => `what co-changes with ${m[1]}` },
   { re: /^what\s+changes?\s+together\s+with\s+(.+?)\??$/i, to: (m) => `what co-changes with ${m[1]}` },
+
+  // AUTHORSHIP → the "who touched X" churn query. "who touched X" now names the
+  // commit author beside the sha (the 0.8.1 commit-ref quick-win), which invites the
+  // synonyms a developer reaches for next — "who wrote X", "who authored X", "who is
+  // the author of X" — and every one of them hit the grammar wall. tmct has no
+  // separate authorship edge; "touched" IS the authorship signal (the churn commits
+  // carry the author), so these are true synonyms of "who touched X", not a new
+  // capability. Anaphora rides through untouched ("who wrote it" → "who touched it").
+  { re: /^who\s+(?:wrote|authored)\s+(?:the\s+)?(.+?)\??$/i, to: (m) => `who touched ${m[1]}` },
+  { re: /^who\s+is\s+the\s+authors?\s+of\s+(?:the\s+)?(.+?)\??$/i, to: (m) => `who touched ${m[1]}` },
+
+  // NEEDS-TESTS → the untested-module survey. "what needs tests" / "what needs
+  // testing" is the plainest way to ask which modules are uncovered, and it hit the
+  // grammar wall ("no module matching 'needs'…"). Route it onto the same attributive
+  // survey the bare "what is untested" frame lands on. Closed to the tests/coverage
+  // object, so it can't swallow a general "what needs X".
+  { re: /^what\s+needs\s+(?:to\s+be\s+)?(?:a\s+)?(?:tested|tests?|testing|coverage|covering)\??$/i, to: () => "untested modules" },
 ]);
 
 /** Apply the phrasing frames (members-of-class + where-defined) — first match wins
