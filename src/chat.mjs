@@ -105,6 +105,29 @@ export const COMMANDS = {
  *  back to the focus for, and that update the focus on a successful resolve. */
 const ENTITY_ARGS = new Set(["symbol", "module", "class"]);
 
+/** The individual classes that are FOCUS-WORTHY — the code entities the ENTITY_ARGS
+ *  commands (symbol/module/class) name and that "it"/"this" should bind to. A
+ *  `Commit`/`Session` (history/provenance) or a `SchemaClass`/`SchemaPredicate`
+ *  (vocabulary meta-node) is a real graph individual but NOT a standing antecedent:
+ *  it must not silently DISPLACE a code-entity focus, or the next turn's pronoun
+ *  binds to the wrong thing (CHATBENCH_0.7.1 B1-pron: "it" → Commit). */
+const FOCUS_WORTHY_CLASSES = new Set(["Module", "Function", "Class", "Method", "Attribute", "GlobalVariable"]);
+
+/** Is the individual with this id a focus-worthy code entity? Looks the class up on
+ *  the loaded graph (focus objects stay `{id,label}` — the class is never stored on
+ *  them, so a caller that deepEquals the focus shape is unaffected). An unknown id
+ *  (ext: endpoint, missing) is treated as not-worthy: conservative, so it never
+ *  displaces a standing code focus but is freely adopted when there is none. */
+const isFocusWorthy = (graph, id) => FOCUS_WORTHY_CLASSES.has(graph?.byId?.get(id)?.class);
+
+/** The focus to carry forward after a turn resolved `ent`. A newly-resolved entity
+ *  becomes the focus UNLESS it is not focus-worthy (a Commit/Session/schema node)
+ *  AND there is already a standing focus-worthy (code) focus — in which case the
+ *  standing code focus holds. So a query whose object resolves to a Commit never
+ *  hijacks the "it" antecedent from the module/function the user was working on. */
+const nextFocus = (graph, focus, ent) =>
+  (!focus?.id || isFocusWorthy(graph, ent.id) || !isFocusWorthy(graph, focus.id)) ? ent : focus;
+
 /** System-command words that a forgiving shell accepts WITHOUT the leading "/":
  *  `stats`, `memory`, `describe X`, `members X`, … all work bare. "help" is left
  *  out on purpose — bare "help" stays the friendly orientation; "/help" is the
@@ -127,9 +150,18 @@ export function asBareCommand(line) {
   if (!trimmed || trimmed.startsWith("/")) return null;
   const [first, ...restTok] = trimmed.split(/\s+/);
   if (!COMMAND_WORDS.has(first.toLowerCase())) return null;
+  const fl = first.toLowerCase();
   const rest = restTok.join(" ");
   // Zero-arg system commands are always the command; a bare command word is too.
-  if (!rest || first.toLowerCase() === "stats" || first.toLowerCase() === "memory") return `/${trimmed}`;
+  if (!rest || fl === "stats" || fl === "memory") return `/${trimmed}`;
+  // A NO-ARGUMENT command word ("untested") with trailing words is NOT a command
+  // call — the /untested tool takes no argument and would silently drop the qualifier,
+  // listing MODULES for "untested classes". "untested classes" / "untested modules"
+  // is a kind-FILTERED query the ask engine answers correctly (Base, Button for
+  // classes) AND, as a listing, seeds discourse-count anaphora ("count them",
+  // "how many of those are tested") with its match set — the CHATBENCH_0.7.1
+  // discourse-count tier-1 misses (g-b1-disc-count-22/-3). Fall through to the engine.
+  if (COMMANDS[fl]?.arg == null && rest) return null;
   // Arg commands: route only a short, name-like argument (no query connectives),
   // so "describe Widget" / "members my class" route but a compositional query does not.
   if (restTok.length <= 3 && !QUERY_CONNECTIVES.test(rest)) return `/${trimmed}`;
@@ -1382,7 +1414,7 @@ async function conceptForceAnswer(query, envelope, { graph, config, source, memo
   const pending = composed.remainder && composed.remainder.length
     ? { items: composed.remainder, noun: composed.noun }
     : null;
-  return { text, instances: composed.instances, pending };
+  return { text, instances: composed.instances, allIds: composed.allInstanceIds, pending };
 }
 
 /** A bare question → tmct_ask. When a focus is set AND the graph is in hand we
@@ -1398,7 +1430,12 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // answer's entity set. That set is the ids the last dispatched turn cited — carried
   // on `last.detail.matches`. Threading it as ask()'s `prev` is what lets the anaphora
   // node resolve instead of the "needs a previous answer" honest miss.
-  const prev = (last?.detail?.matches || []).map((m) => m?.id).filter(Boolean);
+  // Prefer the FULL id set (`allIds`) when the last turn carried one — a concept-force
+  // listing caps its shown `matches` at MAX_EXAMPLES, so counting `matches` alone would
+  // undercount "count them" over a truncated listing (CHATBENCH_0.7.1 discourse-count).
+  const prev = (last?.detail?.allIds && last.detail.allIds.length)
+    ? last.detail.allIds.filter(Boolean)
+    : (last?.detail?.matches || []).map((m) => m?.id).filter(Boolean);
   // The query the ENGINE parses: a "what about X" continuation is rewritten to the
   // prior shape with X swapped in; everything else parses verbatim. The record and
   // transcript keep the user's ACTUAL words (`query`), only the parse target changes.
@@ -1438,8 +1475,19 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   let resolvedIds = [];
   let newFocus = focus;
   if (graph && envelope?.parsed?.object) {
-    const ent = await resolveEntity(graph, envelope.parsed.object);
-    if (ent) { resolvedIds = [ent.id]; newFocus = ent; }
+    const obj = envelope.parsed.object;
+    // A PRONOUN object ("it"/"this") was already resolved against the focus via
+    // contextId — the resolved antecedent IS the focus. Re-resolving the literal
+    // pronoun string is the CHATBENCH_0.7.1 B1-pron bug: "it" substring-matches the
+    // "Commit" schema node (label contains "it"), so the focus jumped off the module
+    // to a Commit and the NEXT "it" bound wrong. Reuse the focus directly instead.
+    const ent = (isPronoun(obj) && focus?.id) ? focus : await resolveEntity(graph, obj);
+    if (ent) {
+      resolvedIds = [ent.id];
+      // Class-gate the focus update: a Commit/Session/schema object never displaces a
+      // standing code-entity focus (see nextFocus).
+      newFocus = nextFocus(graph, focus, ent);
+    }
   }
   const answeredIds = (envelope?.matches || []).map((m) => m?.id).filter(Boolean);
   const miss = envelope ? !!envelope.miss : true;
@@ -1511,12 +1559,14 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // Runs after the corpus-fact/curated branches (via composed|corpus/seon) but not
   // over a "you told me" fact, a meta/self summary, or the conversational lanes.
   let conceptInstances = null;
+  let conceptAllIds = null;
   let conceptPending = null;
   if (via === "composed" || via === "corpus/seon") {
     const concept = await conceptForceAnswer(query, envelope, { graph, config, source, memoryDir, templates });
     if (concept) {
       answer = concept.text; via = "corpus/seon"; recordMiss = false;
       conceptInstances = concept.instances;
+      conceptAllIds = concept.allIds;
       conceptPending = concept.pending;
     } else {
       // THE RELATION CONCEPT FORCE — the noun force declined, so try the edge-kind
@@ -1574,8 +1624,14 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // holds it on conceptPending (the relation force resolves no instance ids, so it can
   // still page even with an empty matches set); a fact listing holds it on factPending.
   const pending = conceptPending ?? factPending;
+  // `allIds` carries the FULL result-set ids (uncapped) so discourse-count anaphora
+  // ("count them" / "how many of those") survives a truncated render: the concept
+  // force shows only MAX_EXAMPLES instances on `matches`, but a follow-up count must
+  // see them all. The ordinary ask-engine listing already carries its whole set on
+  // `matches`, so only the concept force needs the extra field (a full id array).
+  const allIds = conceptAllIds && conceptAllIds.length ? conceptAllIds : null;
   const detail = conceptInstances
-    ? { traversal: envelope?.traversal || null, matches: conceptInstances, ...(pending ? { pending } : {}) }
+    ? { traversal: envelope?.traversal || null, matches: conceptInstances, ...(allIds ? { allIds } : {}), ...(pending ? { pending } : {}) }
     : (envelope
       ? { traversal: envelope.traversal || null, matches: envelope.matches || [], ...(pending ? { pending } : {}) }
       : (pending ? { traversal: null, matches: [], pending } : null));
@@ -1653,7 +1709,10 @@ async function runCommand(line, { config, source, graph, focus, memoryDir }) {
   // follow-up ("what calls it", a no-arg /context) reuses it.
   if (entityArg) {
     const ent = await resolveEntity(graph, value);
-    if (ent) return mk(answer, { resolvedIds: [ent.id], newFocus: ent });
+    // Same class-gate as the ask path (nextFocus): a command whose arg resolves to a
+    // Commit/Session/schema node records the resolution but does not displace a
+    // standing code-entity focus that "it" is meant to keep binding to.
+    if (ent) return mk(answer, { resolvedIds: [ent.id], newFocus: nextFocus(graph, focus, ent) });
   }
   return mk(answer);
 }

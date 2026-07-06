@@ -246,6 +246,7 @@ function parseComposite(text, nlp) {
   const lc = w.map((x) => x.toLowerCase());
   return parseNegation(text, nlp, 0)
     || parseForwardNegation(w, lc, nlp)
+    || parseTemporal(w, lc, nlp, 0)
     || parseAnaphora(w, lc, nlp)
     || parseAggregate(w, lc, nlp)
     || parseSuperlative(w, lc, nlp)
@@ -414,6 +415,44 @@ function parseNested(w, lc, nlp, depth) {
     return { node: outer.shape === "reverse" ? "reverseSet" : "forwardSet", kind: outer.kind, entityType: outer.entityType, inner };
   }
   return null;
+}
+
+// TEMPORAL-OVER-RELATIVE (Phase 11 Track 1, lever 3) — "when did <relative set> [last]
+// change". The flat when-shape (traverse) dates the commits touching ONE resolved term;
+// this composes that same touches→commit→date-sort machinery as an OUTER operator over a
+// NESTED inner set ("when did the modules that import X last change", "when were the
+// functions that call Y last touched"). Fires only for a RELATIVE subject (a "that/which"
+// marker) so the single-entity "when did X change" stays on the flat path untouched; a
+// marker present but uncompilable inner is an honest miss, never a guess.
+const TEMPORAL_AUX = new Set(["did", "was", "were", "do", "does", "has", "have", "had"]);
+const TEMPORAL_TAIL = new Set([
+  "change", "changed", "changes", "update", "updated", "updates",
+  "modify", "modified", "modifies", "touch", "touched", "touches", "edit", "edited", "revise", "revised",
+]);
+const TEMPORAL_TRAIL_FILLER = new Set(["last", "recently", "ever", "get", "got", "been", "then", "now", "already"]);
+const TEMPORAL_DET = new Set(["the", "a", "an", "all", "those", "these", "any"]);
+
+function parseTemporal(w, lc, nlp, depth = 0) {
+  if (lc[0] !== "when") return null;              // temporal questions lead with "when"
+  let i = 1;
+  if (!TEMPORAL_AUX.has(lc[i])) return null;      // need an auxiliary ("when did …")
+  i += 1;
+  // the change-verb tail — take the LAST occurrence so "…that import X last change" works.
+  let t = -1;
+  for (let k = lc.length - 1; k >= i; k -= 1) { if (TEMPORAL_TAIL.has(lc[k])) { t = k; break; } }
+  if (t < 0) return null;                          // no change verb → not a temporal question
+  let subjWords = w.slice(i, t);
+  let subjLc = lc.slice(i, t);
+  while (subjLc.length && TEMPORAL_TRAIL_FILLER.has(subjLc[subjLc.length - 1])) { subjWords = subjWords.slice(0, -1); subjLc = subjLc.slice(0, -1); }
+  while (subjLc.length && TEMPORAL_DET.has(subjLc[0])) { subjWords = subjWords.slice(1); subjLc = subjLc.slice(1); }
+  if (!subjWords.length) return null;
+  // ONLY a relative/nested subject composes here; a bare named entity is the flat path's.
+  if (!subjLc.some((x) => RELATIVE_PRONOUNS.includes(x))) return null;
+  const framed = FRAME_WORDS.has(subjLc[0]) ? subjWords.join(" ") : `which ${subjWords.join(" ")}`;
+  const inner = parseSetPhrase(framed, nlp, depth + 1);
+  if (!inner || inner.node === "miss") return inner ? { node: "miss", reason: inner.reason || "the inner set of the temporal query didn't parse" } : { node: "miss", reason: "the inner set of the temporal query didn't parse" };
+  const noun = entityNoun(subjLc[0]);
+  return { node: "temporal", inner, entityType: (noun && noun.entityType) || null };
 }
 
 /** ANAPHORA over the previous result set: "which of those/them <filter>", "how many
@@ -745,7 +784,15 @@ function reverseOverSet(graph, kind, entityType, objectIds) {
     const edges = edgesOfKind(graph, symbolKind).filter((e) => objectIds.has(e.object));
     return uniqueById(edges.map((e) => graph.byId.get(e.subject)).filter((s) => s && s.class === entityType));
   }
-  const edges = kindsFor(kind).flatMap((k) => edgesOfKind(graph, k)).filter((e) => objectIds.has(e.object));
+  // GRAIN-AWARE OBJECT SET (Phase 11 Track 1, lever 3): when the inner set resolved to
+  // FINE symbols (functions/methods/…), also scan the symbol-grain sibling — the coarse
+  // edge (touches Commit→Module, calls Module→Module) can never point AT a symbol, so a
+  // two-hop whose inner clause produced symbols ("which commits touched the functions
+  // that call X") would falsely miss without it. Mirrors traverse()'s objIsFineSymbol
+  // branch for the flat path; the module-coarse case is byte-unchanged (no fine ids).
+  const objHasFine = !!symbolKind && [...objectIds].some((id) => FINE_ENTITY_TYPES.has(graph.byId.get(id)?.class));
+  const scanKinds = objHasFine ? [...kindsFor(kind), symbolKind] : kindsFor(kind);
+  const edges = scanKinds.flatMap((k) => edgesOfKind(graph, k)).filter((e) => objectIds.has(e.object));
   const subjects = uniqueById(edges.map((e) => graph.byId.get(e.subject)).filter(Boolean));
   if (!entityType || entityType === "Change") return subjects;
   const direct = subjects.filter((s) => s.class === entityType);
@@ -933,6 +980,24 @@ function degreeMetric(graph, ind, metric) {
   }
   return n;
 }
+/** TEMPORAL over a nested set (lever 3) — the commits that touched ANY member of the
+ *  inner set, newest commit date first. Reuses the SAME touches→commit→date-sort the
+ *  flat when-shape runs (mgx:commitDate is ISO-8601, so a lexical sort IS a date sort;
+ *  undated commits sort last and render says so). `entityType` is the inner noun, only
+ *  for phrasing. An empty inner set (nothing resolved) or no touching commit is an
+ *  honest empty — never a guess. */
+function evalTemporal(graph, ast, opts) {
+  const inner = evalSet(graph, ast.inner, opts);
+  const ids = new Set(inner.map((i) => i.id));
+  if (!ids.size) return { compositeKind: "temporal", matches: [], entityType: ast.entityType, innerCount: 0 };
+  // reverseOverSet(touches) collects the touching commits across BOTH grains (its
+  // grain-aware object-set branch reads touchesSymbol when the inner set is symbols).
+  const commits = reverseOverSet(graph, "touches", "Commit", ids);
+  const dateOf = (c) => String((c.attributes || []).find((a) => a.key === "date")?.value || "");
+  commits.sort((a, b) => dateOf(b).localeCompare(dateOf(a)));
+  return { compositeKind: "temporal", matches: commits, entityType: ast.entityType, innerCount: inner.length };
+}
+
 function evalSuperlative(graph, ast) {
   const pool = graph.individuals.filter((i) => i.class === ast.entityType);
   const scored = pool.map((ind) => ({ ind, score: degreeMetric(graph, ind, ast.metric) }))
@@ -950,6 +1015,7 @@ export function evalComposite(graph, ast, opts = {}) {
   if (ast.node === "count") return { compositeKind: "count", count: evalSet(graph, ast.base, opts).length, entityType: ast.entityType, matches: [] };
   if (ast.node === "list") return { compositeKind: "list", matches: evalSet(graph, ast.base, opts), entityType: ast.entityType, scoped: ast.scoped };
   if (ast.node === "superlative") return evalSuperlative(graph, ast);
+  if (ast.node === "temporal") return evalTemporal(graph, ast, opts);
   if (ast.node === "anaphora") return evalAnaphora(graph, ast, opts);
   return { compositeKind: "set", matches: evalSet(graph, ast, opts), entityType: ast.entityType || null };
 }
@@ -997,6 +1063,32 @@ function renderComposite(parsed, result) {
     const tie = result.matches.length > 1 ? ` (${result.matches.length}-way tie)` : "";
     return {
       content: `${compositeList(result.matches)} — ${lead} ${result.metricNoun} (${result.score})${tie}.`,
+      miss: false, ambiguous: false, matches: result.matches,
+    };
+  }
+  // temporal (lever 3): the newest touching commit + its date over the inner set;
+  // honest empty when nothing in the set was touched, undated commits said out loud —
+  // the same discipline as the flat when-shape, now over a composed set.
+  if (result.compositeKind === "temporal") {
+    const n = result.innerCount || 0;
+    const setNoun = result.entityType ? nounFor(result.entityType, n || 2) : (n === 1 ? "entity" : "entities");
+    const wasWere = n === 1 ? "was" : "were";
+    if (!n) {
+      return { content: `nothing in the index matches the inner set, so there is no change history to date.`, miss: true, ambiguous: false, matches: [] };
+    }
+    if (!result.matches.length) {
+      return { content: `no recorded commit touched the ${n} ${setNoun} in that set in this index.`, miss: true, ambiguous: false, matches: [] };
+    }
+    const newest = result.matches[0];
+    const date = (newest.attributes || []).find((a) => a.key === "date")?.value || "";
+    if (!date) {
+      return { content: `the ${setNoun} in that set ${wasWere} last touched by commit ${newest.label}, but this index records no commit dates — regenerate the graph to attach mgx:commitDate.`, miss: true, ambiguous: false, matches: result.matches };
+    }
+    const msg = (newest.attributes || []).find((a) => a.key === "message")?.value || "";
+    const day = String(date).slice(0, 10);
+    const more = result.matches.length - 1;
+    return {
+      content: `the ${setNoun} in that set ${wasWere} last touched by commit ${newest.label} on ${day}${msg ? ` ("${msg}")` : ""}${more ? `; ${more} earlier commit${more === 1 ? "" : "s"} recorded` : ""}.`,
       miss: false, ambiguous: false, matches: result.matches,
     };
   }
