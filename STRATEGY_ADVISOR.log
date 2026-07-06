@@ -244,3 +244,13 @@ STATUS: OPEN — task #7.
 OBSERVATION 10: proof-chain seam frozen too thin. agentbench/grade.mjs verifies a FLAT precondition-ok list; PLAN:154 defines the proof chain as POP causal links (producer->condition->consumer). A flat list cannot verify the chain connects goal to grounded facts — gameable, one level past the completion-floor fix.
 RECOMMENDED ACTION: shape the recorded proof STEP to carry causal-link fields NOW (grading stays lenient — extra keys tolerated); design the planner proof-producer + grade.mjs proof-checker together and tighten to CONNECTEDNESS when Stage 3 lands. Recorded in task #4.
 STATUS: OPEN — task #4.
+
+═══════════════════════════════════════════════════════════════════════
+[2026-07-06 00:33Z] source=strategy-advisor(opus,deep) · topic=phase-11-tick5-testinfra
+OBSERVATION 11: main went RED on a FLAKY wall-clock gate, not the merge — test/wiring-seed.test.mjs:118 W3 asserted elapsed<15000, measured 23148ms under concurrent-agent load. Merge touched only src/router + agentbench/*, zero seed paths.
+RECOMMENDED ACTION: make W3 budget load-tolerant (this project mandates concurrent agents).
+STATUS: DONE ✅ — raised to 90000ms with rationale; still catches the ~419s->2.5s unbatched regression.
+
+OBSERVATION 12: agentbench BENCH_VERSION hardcoded "0.8.0" (correct for pre-bump worktree) will drift on the next bump — every artifact keeps stamping 0.8.0.
+RECOMMENDED ACTION: default the stamp from package.json (deterministic, no Date.now).
+STATUS: DONE ✅ — BENCH_VERSION now reads package.json at load; verified 0.8.0.
