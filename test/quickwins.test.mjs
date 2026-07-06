@@ -121,3 +121,24 @@ test("fix2: 'who touched X' degrades gracefully to the sha alone when no author 
   assert.equal(r.content, "abc1234.", "no author → the sha stands alone, no empty parens");
 });
 
+// ── Fix 3: the "tests cover" honest-empty reads cleanly ──
+
+test("fix3: 'what tests cover X' honest-empty reads 'No tests cover X.', not the garble", () => {
+  const r = ask(graph, "what tests cover app/lib/c.mjs"); // c.mjs has no test edges
+  assert.equal(r.tmct_ask.miss, true);
+  assert.match(r.content, /^No tests cover app\/lib\/c\.mjs\./,
+    "the 'tests cover' verb phrase no longer leaks into the miss template");
+  assert.doesNotMatch(r.content, /whose module directly/, "the mislabelled 'modules … whose module' scaffold is gone");
+  assert.doesNotMatch(r.content, /tests cover app\/lib\/c\.mjs\. \(traversal.*cover/, "no leaked 'cover' verb in the object");
+});
+
+test("fix3: the leaked 'cover' verb is stripped from the object", () => {
+  const r = ask(graph, "which tests cover app/lib/f.mjs");
+  assert.match(r.content, /^No tests cover app\/lib\/f\.mjs\./, "the object is the module, with 'cover' removed");
+});
+
+test("fix3: the frozen 'which modules test X' entity-keyword wording is untouched", () => {
+  const r = ask(graph, "which modules test app/lib/f.mjs"); // explicit entity keyword → entityType Module
+  assert.match(r.content, /No modules found whose module directly tests app\/lib\/f\.mjs\./,
+    "the pinned entity-keyword phrasing (frozen in cases.jsonl) stays byte-exact");
+});
