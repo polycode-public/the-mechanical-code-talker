@@ -134,6 +134,22 @@ export function subclassesLabels(graph, ind) {
   return uniqSort(labels);
 }
 
+/** Modules change-coupled with a symbol's module (mirrors renderCochanges /
+ *  cochangeNeighbours EDGE-FOR-EDGE: the `cochange` edge is read SYMMETRICALLY —
+ *  a hit whether the module is the edge's subject OR its object — so with the
+ *  fixture's a→b and a→c edges, cochanges(a) = {b, c} AND cochanges(b) = {a}.
+ *  The render caps at 20 for brevity; this is the uncapped honest label SET). */
+export function cochangesLabels(graph, ind) {
+  const modId = moduleIdOf(graph, ind);
+  if (!modId) return [];
+  const labels = [];
+  for (const e of edgesOfKind(graph, "cochange")) {
+    if (e.subject === modId) labels.push(e.objectLabel || e.object);
+    else if (e.object === modId) labels.push(e.subjectLabel || e.subject);
+  }
+  return uniqSort(labels);
+}
+
 /** A module's public exports (mirrors renderExports — the `reexports` edge). */
 export function exportsLabels(graph, ind) {
   const modId = moduleIdOf(graph, ind);
@@ -156,6 +172,7 @@ export function resultSetOf(graph, name, _input, resolvedInd) {
     case "tmct_callers": return resolvedInd ? callersLabels(graph, resolvedInd) : [];
     case "tmct_callees": return resolvedInd ? calleesLabels(graph, resolvedInd) : [];
     case "tmct_subclasses": return resolvedInd ? subclassesLabels(graph, resolvedInd) : [];
+    case "tmct_cochanges": return resolvedInd ? cochangesLabels(graph, resolvedInd) : [];
     case "tmct_exports": return resolvedInd ? exportsLabels(graph, resolvedInd) : [];
     default: return resolvedInd ? [resolvedInd.label] : [];
   }

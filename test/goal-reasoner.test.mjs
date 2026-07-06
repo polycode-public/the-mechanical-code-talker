@@ -17,9 +17,10 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 import {
-  GOAL_RULES, MAX_TICKS, backwardChainGoal, threatsAmong, dropCondition, goalReason,
+  GOAL_RULES, MAX_TICKS, backwardChainGoal, applicableRules, threatsAmong, dropCondition, goalReason,
 } from "../src/router/goal-reasoner.mjs";
 import { goalDriver } from "../agentbench/driver-goal.mjs";
+import { cochangesLabels, untestedModules, intersect } from "../agentbench/results.mjs";
 import { capabilities } from "../src/router/registry.mjs";
 import { createRunCtx, runAgentbench, BENCH_VERSION, loadFixtureLabels } from "../agentbench/run.mjs";
 import { parseCases, hallucinationsIn } from "../agentbench/grade.mjs";
@@ -29,21 +30,53 @@ const CASES_FILE = fileURLToPath(new URL("../agentbench/cases.jsonl", import.met
 
 // ---- 1. UNIT: the declared goal model + meta-loop primitives -----------------
 
-test("goal model: GOAL_RULES is a declared, frozen maintenance-invariant set", () => {
-  assert.ok(Array.isArray(GOAL_RULES) && GOAL_RULES.length >= 1);
+test("goal model: GOAL_RULES is a declared, frozen maintenance-invariant set (rule-general fields)", () => {
+  assert.ok(Array.isArray(GOAL_RULES) && GOAL_RULES.length >= 2, "0.8.2: at least two declared goal-rules (C2 is rule-general)");
   for (const r of GOAL_RULES) {
     assert.equal(typeof r.id, "string");
     assert.equal(r.kind, "maintenance");
     assert.ok(Array.isArray(r.subGoals) && r.subGoals.length, `${r.id} declares epistemic sub-goals`);
     assert.equal(typeof r.achieves, "string", `${r.id} declares a meta-goal topic`);
-    assert.ok(Object.isFrozen(r), `${r.id} is frozen data (declared, not mutable)`);
+    // the 0.8.2 rule-general fields: nothing about a rule lives in code any more
+    assert.equal(typeof r.focusClass, "string", `${r.id} declares the focus entity class`);
+    assert.ok(Array.isArray(r.modes) && r.modes.every((m) => ["scoped", "global"].includes(m)), `${r.id} declares its modes`);
+    assert.ok(r.compose && r.compose.op === "intersect" && r.compose.a && r.compose.b, `${r.id} declares a compose spec`);
+    assert.ok(r.compose.a.topic && r.compose.b.topic, `${r.id} compose sides name gathered topics`);
+    assert.ok(Object.isFrozen(r) && Object.isFrozen(r.compose), `${r.id} is frozen data (declared, not mutable)`);
+  }
+  // both scoped sub-goal lists + arbitration keys stay inside the declared sub-goals
+  for (const r of GOAL_RULES) {
+    assert.ok(r.subGoals.includes(r.priorityTopic) && r.subGoals.includes(r.coverageTopic), `${r.id} arbitration keys are declared sub-goals`);
   }
 });
 
 test("backwardChainGoal: a meta-goal topic chains to the declared goal-rule that achieves it", () => {
   const r = backwardChainGoal("coverage-gap");
   assert.ok(r && r.id === "coverage-invariant", "coverage-gap => coverage-invariant");
+  const c = backwardChainGoal("cochange-risk");
+  assert.ok(c && c.id === "cochange-risk-invariant", "cochange-risk => cochange-risk-invariant (the second declared rule)");
   assert.equal(backwardChainGoal("no-such-topic"), null, "an unachievable topic chains to nothing (honest null)");
+});
+
+test("applicableRules: pure selection — unique by toolset, none at the open-world seam, multiple = ambiguous", () => {
+  const focus = { class: "Module", label: "app/lib/a.mjs" };
+  // UNIQUE: each toolset grounds exactly one rule's sub-goals
+  assert.deepEqual(applicableRules(["tmct_impact", "tmct_untested"], focus, "scoped").map((r) => r.id),
+    ["coverage-invariant"], "impact+untested grounds only the coverage-invariant");
+  assert.deepEqual(applicableRules(["tmct_cochanges", "tmct_untested"], focus, "scoped").map((r) => r.id),
+    ["cochange-risk-invariant"], "cochanges+untested grounds only the cochange rule");
+  // NONE: an insufficient toolset, or a mode the rule does not declare
+  assert.deepEqual(applicableRules(["tmct_impact"], focus, "scoped"), [], "a missing sub-goal capability disqualifies");
+  assert.deepEqual(applicableRules([], focus, "scoped"), [], "an empty toolset grounds nothing");
+  assert.deepEqual(applicableRules(["tmct_cochanges", "tmct_untested"], null, "global"), [],
+    "the cochange rule is scoped-only (entity-scoped sub-goals): no global reading");
+  // GLOBAL: only the coverage rule declares it
+  assert.deepEqual(applicableRules(["tmct_impact", "tmct_untested"], null, "global").map((r) => r.id), ["coverage-invariant"]);
+  // MULTIPLE: a toolset grounding both rules for a Module focus is AMBIGUOUS
+  const both = applicableRules(["tmct_impact", "tmct_untested", "tmct_cochanges"], focus, "scoped");
+  assert.equal(both.length, 2, "both rules apply — the caller must refuse, never pick one");
+  // focusClass screen: a non-Module focus matches neither rule in scoped mode
+  assert.deepEqual(applicableRules(["tmct_impact", "tmct_untested", "tmct_cochanges"], { class: "Method", label: "Widget.render" }, "scoped"), []);
 });
 
 test("threatsAmong: meta-level POP threats are PROVABLY empty over the read-only registry", () => {
@@ -59,12 +92,14 @@ test("dropCondition: BDI commitment holds until achieved / lapsed (persistence, 
   const intention = { topic: "impact", key: "impact:app/lib/a.mjs" };
   const focus = { class: "Module", label: "app/lib/a.mjs" };
   // not yet gathered, focus intact -> KEEP the commitment (null)
-  assert.equal(dropCondition(intention, observed, "scoped", focus), null);
+  assert.equal(dropCondition(intention, observed, "scoped", focus, "Module"), null);
   // fact gathered -> ACHIEVED
   observed.set("impact:app/lib/a.mjs", ["x"]);
-  assert.equal(dropCondition(intention, observed, "scoped", focus), "achieved");
-  // focus lapsed (no longer a Module) -> LAPSED
-  assert.equal(dropCondition({ topic: "impact", key: "k" }, new Map(), "scoped", { class: "Method" }), "lapsed");
+  assert.equal(dropCondition(intention, observed, "scoped", focus, "Module"), "achieved");
+  // focus lapsed (no longer of the SELECTED RULE's declared focusClass) -> LAPSED
+  assert.equal(dropCondition({ topic: "impact", key: "k" }, new Map(), "scoped", { class: "Method" }, "Module"), "lapsed");
+  // the class literal comes from the rule, not the function: a Method-scoped rule keeps a Method focus
+  assert.equal(dropCondition({ topic: "impact", key: "k" }, new Map(), "scoped", { class: "Method" }, "Method"), null);
 });
 
 test("MAX_TICKS: the meta-loop carries a hard OUTER-tick budget (mechanical termination)", () => {
@@ -105,6 +140,103 @@ test("goal-reasoner e2e: HELD-OUT phrasings decompose via the SAME goal-rule (gr
     const c = await goalDriver("should I be worried about changing app/lib/c.mjs", ["tmct_impact", "tmct_untested"], ctx);
     assert.equal(c.refused, false);
     assert.deepEqual(c.composed, ["app/lib/c.mjs"], "c's only dependent is tested -> singleton gap");
+  } finally {
+    await cleanup();
+  }
+});
+
+// ---- 0.8.2: the SECOND declared goal-rule (cochange-risk-invariant) ----------
+
+test("cochangesLabels: mirrors renderCochanges edge-for-edge (SYMMETRIC read of the cochange edge)", async () => {
+  const { ctx, cleanup } = await createRunCtx();
+  try {
+    const g = ctx.graph;
+    const bind = (t) => ctx.resolve(t).match;
+    // fixture truth: the only cochange edges are a→b (×3) and a→c (×2).
+    assert.deepEqual(cochangesLabels(g, bind("app/lib/a.mjs")), ["app/lib/b.mjs", "app/lib/c.mjs"], "cochanges(a) = {b, c}");
+    // the render reads the edge SYMMETRICALLY (subject OR object) — so b and c
+    // each couple back to a even though the fixture edges point a→{b,c} only.
+    assert.deepEqual(cochangesLabels(g, bind("app/lib/b.mjs")), ["app/lib/a.mjs"], "cochanges(b) = {a} (reverse direction)");
+    assert.deepEqual(cochangesLabels(g, bind("app/lib/c.mjs")), ["app/lib/a.mjs"], "cochanges(c) = {a} (reverse direction)");
+    // a module with no coupling edges has the empty set (a real answer)
+    assert.deepEqual(cochangesLabels(g, bind("app/lib/e.mjs")), []);
+    // and the invariant's hand-derived truth: cochanges(a) ∩ untested = {c} (b is tested)
+    assert.deepEqual(intersect(cochangesLabels(g, bind("app/lib/a.mjs")), untestedModules(g)), ["app/lib/c.mjs"]);
+  } finally {
+    await cleanup();
+  }
+});
+
+test("goal-reasoner e2e: the SECOND rule — change-coupling phrasings deduce cochange-risk via toolset applicability", async () => {
+  const { ctx, cleanup } = await createRunCtx();
+  try {
+    const tools = ["tmct_cochanges", "tmct_untested"];
+    for (const request of [
+      "what tends to break when I ship app/lib/a.mjs",
+      "what else should I double-check before shipping app/lib/a.mjs",
+      "what usually regresses alongside app/lib/a.mjs",
+    ]) {
+      const r = await goalDriver(request, tools, ctx);
+      assert.equal(r.refused, false, `${request}: the goal-reasoner composes`);
+      assert.equal(r.driver, "goal-0.8.1", `${request}: C1 refused; C2 handled it`);
+      assert.deepEqual(r.calls, [
+        { name: "tmct_cochanges", input: { symbol: "app/lib/a.mjs" } },
+        { name: "tmct_untested", input: {} },
+      ], `${request}: the rule's sub-goals in declared order`);
+      assert.deepEqual(r.composed, ["app/lib/c.mjs"], `${request}: cochanges(a) ∩ untested`);
+      assert.ok(r.why.some((w) => /backward-chain.*cochange-risk-invariant/.test(w)), `${request}: why cites the declared rule`);
+    }
+  } finally {
+    await cleanup();
+  }
+});
+
+test("goal-reasoner e2e: LEAKAGE GUARD — every new C2 phrasing REFUSES under the C1 resolver (no request keyword carries it)", async () => {
+  const { ctx, cleanup } = await createRunCtx();
+  try {
+    const tools = ["tmct_cochanges", "tmct_untested"];
+    for (const [request, declared] of [
+      ["what tends to break when I ship app/lib/a.mjs", tools],
+      ["what else should I double-check before shipping app/lib/a.mjs", tools],
+      ["what usually regresses alongside app/lib/a.mjs", tools],
+      ["what usually regresses together in this codebase", tools],
+      ["what else should I double-check before shipping app/lib/f.mjs", ["tmct_impact", "tmct_untested", "tmct_cochanges"]],
+    ]) {
+      const r = await resolverDriver(request, declared, ctx);
+      assert.equal(r.refused, true, `${request}: C1 must refuse (the phrasing is genuinely held out)`);
+      assert.deepEqual(r.calls, [], `${request}: C1 emits nothing`);
+    }
+  } finally {
+    await cleanup();
+  }
+});
+
+test("goal-reasoner e2e: SCOPED-ONLY + AMBIGUITY seams both refuse honestly", async () => {
+  const { ctx, cleanup } = await createRunCtx();
+  try {
+    // no focus binds and the cochange rule declares no global mode; coverage
+    // cannot ground impact in this toolset -> 0 applicable -> open-world refuse.
+    const global = await goalDriver("what usually regresses together in this codebase", ["tmct_cochanges", "tmct_untested"], ctx);
+    assert.equal(global.refused, true);
+    assert.deepEqual(global.calls, []);
+    assert.match(String(global.why), /open-world.*escalate/);
+
+    // a toolset grounding BOTH rules for a Module focus -> ambiguous meta-goal refuse.
+    const ambiguous = await goalDriver("what else should I double-check before shipping app/lib/f.mjs", ["tmct_impact", "tmct_untested", "tmct_cochanges"], ctx);
+    assert.equal(ambiguous.refused, true);
+    assert.deepEqual(ambiguous.calls, []);
+    assert.match(String(ambiguous.why), /ambiguous meta-goal.*coverage-invariant.*cochange-risk-invariant/);
+  } finally {
+    await cleanup();
+  }
+});
+
+test("goal driver e2e: the C1 relative-filter over the cochange grain composes at C1 (not the goal-reasoner)", async () => {
+  const { ctx, cleanup } = await createRunCtx();
+  try {
+    const r = await goalDriver("of the modules change-coupled with app/lib/a.mjs, which are untested", ["tmct_cochanges", "tmct_untested"], ctx);
+    assert.equal(r.driver, "resolver-0.8.0", "the planner's relative-filter frame carries it — C2 adds nothing");
+    assert.deepEqual(r.composed, ["app/lib/c.mjs"]);
   } finally {
     await cleanup();
   }
@@ -179,10 +311,13 @@ test("goal driver e2e: Stage 5 moves C2 result-completion OFF the floor at 0% ha
   assert.equal(goal.rolled.overall.hallucinationRate, 0, "0% hallucination — the router's floor, preserved by Stage 5");
 
   // the WIN: the goal-reasoner un-gates C2 and lifts its result-completion far off
-  // the C1-only floor (goal-deduction is genuinely doing work).
+  // the C1-only floor (goal-deduction is genuinely doing work). 0.8.2 counts: C2
+  // is 11 cases (6 coverage-era + 3 cochange composes + 2 seam refusals); the goal
+  // driver composes/refuses 10 of 11 on the result axis (what-to-test stays the
+  // honest miss), so the floor is deliberately raised 0.8 -> 0.9 with the wave.
   assert.ok(goal.rolled.byRung.C2.completion > base.rolled.byRung.C2.completion, "C2 plan-completion climbs under Stage 5");
   assert.ok(goal.rolled.byRung.C2.resultCompletion > base.rolled.byRung.C2.resultCompletion, "C2 result-completion climbs under Stage 5");
-  assert.ok(goal.rolled.byRung.C2.resultCompletion >= 0.8, `C2 result-completion is high (${(goal.rolled.byRung.C2.resultCompletion * 100).toFixed(0)}%)`);
+  assert.ok(goal.rolled.byRung.C2.resultCompletion >= 0.9, `C2 result-completion is high (${(goal.rolled.byRung.C2.resultCompletion * 100).toFixed(0)}%)`);
   assert.ok(goal.rolled.byRung.C2.gatePass, "C2 passes the honest gate under Stage 5");
 
   // HONESTY: what-to-test stays result-incomplete (the resolver answers it relaxed;
