@@ -346,3 +346,10 @@ STATUS: OPEN — Agent S5.
 OBSERVATION 31: leaky boundary — src/router/resolver.mjs:~42 imports hallucinationsIn from agentbench/grade.mjs, so grade.mjs edits ripple into the PRODUCT. (Also a future cleanup: the bench should not be a product dependency.)
 RECOMMENDED ACTION: keep grade.mjs edits additive/back-compat, gate on full npm test; serialize src/router/ (S2 already blockedBy S5). Sent to Agent S5; cleanup noted for HANDOVER.
 STATUS: OPEN — Agent S5 + future cleanup.
+
+═══════════════════════════════════════════════════════════════════════
+[2026-07-06 03:17Z] source=strategy-advisor(opus,deep) · topic=0.8.1-tick3-judged-reuse-invalid
+OBSERVATION 32: the 0.8.0 reuse-map ("re-run CHATBENCH deterministic only, reuse judge") is PARTIALLY INVALID — QW #1 changed answer TEXT on judged surfaces: who-touched-X friendly refs (cells gq-who-touched-a, mt-ask-then-touched, mr-graph-intact, graded g-a1-svo-38), "No tests cover X" honest-empty (A1 graded pool g-a1-svo-24/53/36, judged honesty/rephrase), singular "what is a test". Deterministic re-run PASSES (miss/answerMatch unchanged) → false confidence, while judged means for graph-query/ambiguity/multi-turn-focus/memory-recall/A1-graded are stale (scored against old text). PT playtest compounds this.
+RECOMMENDED ACTION: at 0.8.1 integration RE-JUDGE the QW+PT-touched judged tags (do not blanket-reuse); reuse judge only for genuinely untouched tags. Recorded in task #16; rewrite the reuse map at integration.
+STATUS: OPEN — task #16.
+(sub-findings a/b/c low-risk: quickwins.test.mjs freezes wordings so PT re-break fails the gate; fix1 is in chat.mjs not concept.mjs; Stage 5 on result-graded bench is sound.)
