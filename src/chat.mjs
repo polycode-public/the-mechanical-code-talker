@@ -589,8 +589,10 @@ export function shortMissHint(query) {
 /** The exact opening of the engine's full grammar-wall miss — the ONLY miss the
  *  short-miss rewrites. Receipt-bearing misses (honest empties, unresolved terms,
  *  the empty-graph bootstrap note, compositional misses) never match, so their
- *  specific wording + traversal receipts stand. */
-const WALL_MISS_RE = /^couldn't parse this as a graph question\. Try:/;
+ *  specific wording + traversal receipts stand. Exported: the recall hygiene
+ *  (bestQaPair) reuses it so a folded wall answer is never replayed as a memory
+ *  (fold.mjs carries its own local copy — the memory layer stays decoupled). */
+export const WALL_MISS_RE = /^couldn't parse this as a graph question\. Try:/;
 
 // #2 INTENT LANE — MEMORY/TEACH. "remember that X is a Y", "note that …", or a
 // bare "X is a Y" declarative the graph parser couldn't handle → route to the
@@ -747,12 +749,15 @@ const RECALL_TOP_K = 2;
 
 /** Frame/stop words ignored when checking that a recalled Q genuinely shares
  *  vocabulary with the live query — at least one shared CONTENT word is required,
- *  so "which …" alone can never masquerade as a memory. */
+ *  so "which …" alone can never masquerade as a memory. Includes PATH-NOISE
+ *  tokens (src, lib, mjs, …): "who owns src/handlers/tasks.mjs" must never
+ *  recall "who touched src/core/store.mjs" off "src" alone. */
 const RECALL_STOPWORDS = new Set([
   "the", "a", "an", "and", "or", "for", "with", "about", "into", "from",
   "which", "what", "who", "how", "when", "where", "why",
   "does", "do", "did", "is", "are", "was", "were", "there",
   "me", "my", "we", "i", "you", "it", "this", "that", "in", "of", "to",
+  "src", "lib", "app", "mjs", "cjs", "js", "ts", "py", "index", "main", "test",
 ]);
 const recallWords = (s) => new Set(
   String(s).toLowerCase().split(/[^a-z0-9.]+/).filter((w) => w.length >= 3 && !RECALL_STOPWORDS.has(w)),
@@ -767,9 +772,18 @@ function uuidv7Day(id) {
   return ms > 0 && Number.isFinite(ms) ? new Date(ms).toISOString().slice(0, 10) : null;
 }
 
+/** A recall frame's opening — a stored ANSWER carrying it is a replay of an
+ *  earlier recall, never fresh content (nested recall-of-recall hygiene). */
+const RECALL_PREAMBLE_RE = /^you asked about this before/;
+
 /** Pick the recalled block's Q/A pair most relevant to the query (content-word
- *  overlap; ties → first). Null when NO pair shares a content word — the block
- *  matched on packaging, not substance, so the honest miss must stand. */
+ *  overlap; ties → first). Null when nothing qualifies — the block matched on
+ *  packaging, not substance, so the honest miss must stand. Recall HYGIENE
+ *  (0.8.2): only a pair with a SUBSTANTIVE answer is recallable — a Q-only pair,
+ *  a grammar-wall answer (WALL_MISS_RE) or a prior recall frame (nested
+ *  recall-of-recall) is skipped; and the shared overlap must carry at least one
+ *  dotted path/file token or ≥2 plain content words, so "src"/"mjs"-grade noise
+ *  never bridges two unrelated questions. */
 function bestQaPair(blockText, query) {
   const qWords = recallWords(query);
   const pairs = [];
@@ -781,17 +795,20 @@ function bestQaPair(blockText, query) {
   let best = null;
   let bestScore = 0;
   for (const p of pairs) {
-    let score = 0;
-    for (const w of recallWords(p.q)) if (qWords.has(w)) score += 1;
-    if (score > bestScore) { best = p; bestScore = score; }
+    if (!p.a || WALL_MISS_RE.test(p.a) || RECALL_PREAMBLE_RE.test(p.a)) continue;
+    const shared = [...recallWords(p.q)].filter((w) => qWords.has(w));
+    if (!shared.some((w) => w.includes(".")) && shared.length < 2) continue;
+    if (shared.length > bestScore) { best = p; bestScore = shared.length; }
   }
   return best;
 }
 
 /** W2 seam: consult the folded-session block index for an honest miss. A
  *  sufficiently-relevant hit returns the recalled Q/A, framed and cited to its
- *  session; anything less returns null and the miss stands unchanged. Lazy +
- *  failure-tolerated (chat.mjs ethos): a broken memory store degrades to null. */
+ *  session; anything less returns null and the miss stands BYTE-UNCHANGED. A
+ *  recall only ever fires with a substantive recalled A (bestQaPair's hygiene),
+ *  so it is never prepended to a reply that is itself a miss going to record.
+ *  Lazy + failure-tolerated (chat.mjs ethos): a broken store degrades to null. */
 async function recallFromBlocks(memoryDir, query) {
   try {
     const { retrieveBlocks } = await import("./memory/blocks.mjs");
@@ -802,8 +819,7 @@ async function recallFromBlocks(memoryDir, query) {
     if (!pair) return null;
     const day = uuidv7Day(best.id);
     const cite = `session ${String(best.id).slice(0, 8)}${day ? `, ${day}` : ""}`;
-    const qa = pair.a ? `Q: ${pair.q}\n  A: ${pair.a}` : `Q: ${pair.q}`;
-    return `you asked about this before (${cite}):\n  ${qa}`;
+    return `you asked about this before (${cite}):\n  Q: ${pair.q}\n  A: ${pair.a}`;
   } catch {
     return null;
   }

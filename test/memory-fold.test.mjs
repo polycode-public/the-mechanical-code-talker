@@ -81,6 +81,28 @@ test("cleanSessionText: drops slash-commands, conversational + unflagged filler,
   assert.equal(cleanSessionText({ turns: [{ ts: T(1), query: "hello there!!" }, { ts: T(2), query: "/help", command: "help" }] }), "");
 });
 
+test("cleanSessionText (0.8.2 hygiene): wall answers and recall replays never fold, even when NOT flagged miss", () => {
+  // An old-build poisoned store: via:"recall" turns recorded miss:false whose
+  // answers carry the recall preamble + the grammar wall below it, and a wall
+  // answer that slipped through unflagged. Re-folding must drop BOTH.
+  const turns = [
+    { ts: T(1), query: "who owns billing.mjs", miss: false },
+    { ts: T(2), query: "which modules import config.mjs", miss: false },
+    { ts: T(3), query: "who calls helper?", miss: false },
+  ];
+  const answers = new Map([
+    [turnKey(T(1), "who owns billing.mjs"),
+      'couldn\'t parse this as a graph question. Try: "which modules import <name>". Type /help for all query shapes.'],
+    [turnKey(T(2), "which modules import config.mjs"),
+      "you asked about this before (session 0189aaaa, 2026-07-01):\n  Q: which modules import config.mjs\n  A: app/lib/b.mjs\n\ncouldn't parse this as a graph question. Try: …"],
+    [turnKey(T(3), "who calls helper?"), "helper is called by app/lib/b.mjs."],
+  ]);
+  const text = cleanSessionText({ id: SID, turns }, answers);
+  assert.equal(text, "Q: who calls helper?\nA: helper is called by app/lib/b.mjs.",
+    "only the substantive turn survives — wall + recall-replay answers are dropped");
+  assert.doesNotMatch(text, /couldn't parse|asked about this before/);
+});
+
 test("foldSessionLogs: a mixed fixture session folds to the expected cleaned block; folding twice yields ONE block", async () => {
   const dir = await repoWithSession();
   try {

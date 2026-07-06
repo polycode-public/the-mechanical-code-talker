@@ -142,3 +142,81 @@ test("W2: the explicit form with nothing folded is an honest recall-miss", async
 test("W2: the relevance floor is exported and conservative", () => {
   assert.ok(RECALL_MIN_SCORE >= 1.5, "a frame-word coincidence (~1.0) must stay below the floor");
 });
+
+// ---- 0.8.2 recall hygiene: nested recall-of-recall-of-wall + loose matching ----
+
+/** A temp repo with NO graph artifact and one block of the given text. */
+async function repoWithBlockText(text) {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-w2-hyg-"));
+  await saveBlock(dir, { id: BLOCK_ID, text });
+  return dir;
+}
+
+/** Assert query against a repo carrying `blockText` produces NO recall and the
+ *  miss stands byte-unchanged (identical to the memory-less answer). */
+async function assertNoRecall(blockText, query) {
+  const dir = await repoWithBlockText(blockText);
+  try {
+    const config = { graphFile: join(dir, ".tmct", "graph.json") };
+    const withMemory = await runTurn(query, { config, memoryDir: dir });
+    clearCache();
+    const bare = await runTurn(query, { config });
+    assert.doesNotMatch(withMemory.answer, /you asked about this before/, `"${query}" must not recall`);
+    assert.equal(withMemory.answer, bare.answer, `"${query}" miss byte-unchanged`);
+    assert.notEqual(withMemory.record.via, "recall");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
+test("hygiene: a folded WALL answer is never replayed as a memory", async () => {
+  await assertNoRecall(
+    "Q: who owns billing.mjs\n" +
+    'A: couldn\'t parse this as a graph question. Try: "which modules import <name>". Type /help for all query shapes.',
+    "who owns billing.mjs", // a genuine re-ask — but the stored A is the wall, so the miss stands
+  );
+});
+
+test("hygiene: a nested recall preamble is never replayed (no recall-of-recall)", async () => {
+  await assertNoRecall(
+    "Q: which modules import a.mjs\n" +
+    "A: you asked about this before (session 0189aaaa, 2023-08-01): Q: which modules import a.mjs A: app/lib/b.mjs.",
+    "which modules import a.mjs",
+  );
+});
+
+test("hygiene: a Q-only pair (no answer) is never replayed", async () => {
+  await assertNoRecall("Q: which modules import a.mjs", "which modules import a.mjs");
+});
+
+test("hygiene: path-noise-only overlap never recalls (src/mjs tokens are stopwords)", async () => {
+  await assertNoRecall(
+    "Q: who touched src/core/store.mjs\nA: store.mjs was touched by commit abc123 (2 days ago).",
+    "who owns src/handlers/tasks.mjs",
+  );
+});
+
+test("hygiene: a single plain shared content word is not enough (needs a dotted token or ≥2 words)", async () => {
+  await assertNoRecall(
+    "Q: which modules import config.mjs\nA: config.mjs is imported by app/lib/b.mjs.",
+    "which modules parse yaml",
+  );
+});
+
+test("hygiene: a genuine re-ask with a substantive stored answer STILL recalls, via recall", async () => {
+  const dir = await repoWithBlockText(
+    "Q: which modules import a.mjs\nA: app/lib/b.mjs and app/lib/c.mjs and app/lib/e.mjs.",
+  );
+  try {
+    const config = { graphFile: join(dir, ".tmct", "graph.json") };
+    const { answer, record } = await runTurn("which modules import a.mjs", { config, memoryDir: dir });
+    assert.match(answer, /^you asked about this before \(session 0189aaaa/);
+    assert.match(answer, /A: app\/lib\/b\.mjs/);
+    assert.equal(record.via, "recall");
+    assert.equal(record.miss, false);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
