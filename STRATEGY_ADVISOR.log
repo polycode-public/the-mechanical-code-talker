@@ -292,3 +292,17 @@ STATUS: OPEN — task #4.
 OBSERVATION 20 (task#4 overfit): C1/C2 cases pin fixture-only entities the request never names (ab-c2-what-to-test → impact{module:app/lib/a.mjs}; ab-c1 → callees{symbol:Widget.render}); callsMatch is order+length-strict; B2 encodes both conditional branches flat so a short-circuiting planner fails. Fine as a frozen frame, risky as the planner tuning target.
 RECOMMENDED ACTION: relax these to plan-SHAPE grading (or tag overfit-prone) before climbing, so the planner is not tuned to fixture answers. Recorded in task #4.
 STATUS: OPEN — task #4.
+
+═══════════════════════════════════════════════════════════════════════
+[2026-07-06 01:22Z] source=strategy-advisor(opus,deep) · topic=phase-11-tick10-planner-safety
+OBSERVATION 21: planner termination has NO harness backstop — run.mjs:91 runCase calls driver ONE-SHOT (await driver(...)) with the whole POP/HTN loop inside driver(); runAgentbench runs from test/agentbench.test.mjs, so a planner that never grounds a subgoal hangs the entire ~848-test npm test with no timeout.
+RECOMMENDED ACTION: planner hard depth/step budget AND bound the driver call in runCase (step/wall-clock guard) so overrun records FAIL on terminates:true instead of hanging.
+STATUS: OPEN — sent to Agent I (time-sensitive safety).
+
+OBSERVATION 22: resolver must be ONTO all 15 caps — thin-NL caps (signature, callees, calls, cochanges, subclasses) may lack a parseQuery->resolveObject path; a declared-but-unreachable cap forces a refuse that reads as low completion, not a routing gap.
+RECOMMENDED ACTION: conformance test asserts every cap reachable (onto) — orphans FAIL a test, or are tagged not-NL-reachable (needs Stage 2). Already in the bidirectional-conformance brief; reinforced to Agent I.
+STATUS: OPEN — Agent I.
+
+OBSERVATION 23 (task#10): CHATBENCH judged mean is pending + discourse-count nondeterminism (E flagged 331-333). Freezing a nondeterministic mean into ROADMAP/HANDOVER/memory is not reproducible.
+RECOMMENDED ACTION: stamp the mean with seed + report median-of-N (or caveat the discourse-count family) before writing the 0.8.0 headline.
+STATUS: OPEN — task #10.
