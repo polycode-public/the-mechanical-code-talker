@@ -257,3 +257,62 @@ test("Lever 2 (pagination robustness): 'count them' over a TRUNCATED concept lis
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+// ---- Lever 3 — C1 temporal-over-relative composition (g-c1-temp-31 family) ----
+
+test("Lever 3A (symbol-grain two-hop): 'which commits touched the methods that call X' reads touchesSymbol over the inner set", () => {
+  // The inner clause resolves to a fine SYMBOL (Widget.render, a Method); the outer
+  // touches step must consult touchesSymbol, not just the module-coarse `touches`
+  // edge (which can never point at a symbol) — else this two-hop falsely misses.
+  const r = ask(graph, "which commits touched the methods that call fnAlpha");
+  assert.equal(r.tmct_ask.parsed?.node, "reverseSet", "assembles as a nested reverse-set");
+  assert.equal(r.tmct_ask.miss, false, "not an honest-empty — the commit is found");
+  assert.match(r.content, /abc1234/, "the touching commit is cited");
+});
+
+test("Lever 3A: 'who touched the functions that Widget contains' composes over the symbol set", () => {
+  const r = ask(graph, "who touched the functions that Widget contains");
+  assert.equal(r.tmct_ask.miss, false);
+  assert.match(r.content, /abc1234/);
+});
+
+test("Lever 3B (temporal node): 'when did the module that X imports last change' dates the touching commit", () => {
+  // inner = the module app/lib/b.mjs imports (app/lib/a.mjs), which commit abc1234
+  // touched — the temporal node runs the touches→commit→date-sort over that inner set.
+  const r = ask(graph, "when did the module that app/lib/b.mjs imports last change");
+  assert.equal(r.tmct_ask.parsed?.node, "temporal", "parses to the new temporal AST node");
+  assert.equal(r.tmct_ask.miss, false);
+  assert.match(r.content, /last touched by commit abc1234 on 2026-06-28/, "cites the newest commit + date");
+});
+
+test("Lever 3B (temporal node): 'when were the methods that call X last touched' composes over the symbol set", () => {
+  const r = ask(graph, "when were the methods that call fnAlpha last touched");
+  assert.equal(r.tmct_ask.parsed?.node, "temporal");
+  assert.equal(r.tmct_ask.miss, false);
+  assert.match(r.content, /commit abc1234/);
+});
+
+test("Lever 3B honesty: an untouched inner set is an HONEST empty, never a guessed date", () => {
+  // the modules that import a.mjs (b, c, e) — none were touched by any commit in the
+  // thin-history fixture: the temporal node reports the honest empty, not a fake date.
+  const r = ask(graph, "when did the modules that import app/lib/a.mjs last change");
+  assert.equal(r.tmct_ask.parsed?.node, "temporal", "still assembles the composition");
+  assert.equal(r.tmct_ask.miss, true, "honest empty");
+  assert.match(r.content, /no recorded commit touched/);
+});
+
+test("Lever 3 discipline: the FLAT single-entity 'when did X change' is untouched (not shadowed by the temporal node)", () => {
+  const flat = ask(graph, "when did app/lib/a.mjs change");
+  assert.equal(flat.tmct_ask.parsed?.node, undefined, "a bare entity stays on the flat when-shape path");
+  assert.equal(flat.tmct_ask.miss, false);
+  assert.match(flat.content, /app\/lib\/a\.mjs was last touched by commit abc1234/);
+});
+
+test("Lever 3 (g-c1-temp-31): 'who touched the module that imports X' now ASSEMBLES the two-hop", () => {
+  // On this thin-history fixture the module (e.mjs, which imports f.mjs) was touched
+  // by no commit, so the honest answer is empty — but the composition now ASSEMBLES
+  // (a reverseSet node) instead of the old generic non-answer; on a fixture with
+  // history it resolves the touching commits.
+  const r = ask(graph, "who touched the module that imports app/lib/f.mjs");
+  assert.equal(r.tmct_ask.parsed?.node, "reverseSet", "the two-hop is assembled, not a parse failure");
+});
