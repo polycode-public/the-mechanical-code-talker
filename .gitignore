@@ -13,6 +13,9 @@ examples/**/.tmct/session-*.log
 examples/**/.tmct/memory/
 examples/**/.tmct/sessions/
 
+# Claude Code's transient agent worktrees (git-internal checkouts, never committed)
+.claude/worktrees/
+
 # npm
 *.log
 npm-debug.log*
