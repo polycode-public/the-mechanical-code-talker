@@ -1,0 +1,9 @@
+{"id":"ab-a0-describe-widget","rung":"A0","request":"describe Widget","tools":["tmct_describe"],"expect":{"calls":[{"name":"tmct_describe","input":{"symbol":"Widget"}}],"terminates":true,"proof":true}}
+{"id":"ab-a0-untested","rung":"A0","request":"list the untested symbols","tools":["tmct_untested"],"expect":{"calls":[{"name":"tmct_untested"}],"terminates":true,"proof":true}}
+{"id":"ab-a0-exports-b","rung":"A0","request":"what does app/lib/b.mjs export","tools":["tmct_exports"],"expect":{"calls":[{"name":"tmct_exports","input":{"module":"app/lib/b.mjs"}}],"terminates":true}}
+{"id":"ab-a1-callers-fnalpha","rung":"A1","request":"which functions call fnAlpha","tools":["tmct_describe","tmct_callers","tmct_callees"],"expect":{"calls":[{"name":"tmct_callers","input":{"symbol":"fnAlpha"}}],"terminates":true,"proof":true}}
+{"id":"ab-a1-impact-a","rung":"A1","request":"what is the impact of changing app/lib/a.mjs","tools":["tmct_impact","tmct_describe","tmct_callers"],"expect":{"calls":[{"name":"tmct_impact","input":{"module":"app/lib/a.mjs"}}],"terminates":true}}
+{"id":"ab-a1-tests-for-b","rung":"A1","request":"which tests cover app/lib/b.mjs","tools":["tmct_tests_for","tmct_untested"],"expect":{"calls":[{"name":"tmct_tests_for","input":{"symbol":"app/lib/b.mjs"}}],"terminates":true}}
+{"id":"ab-a1-search-widget","rung":"A1","request":"search for widget","tools":["tmct_search"],"expect":{"calls":[{"name":"tmct_search","input":{"query":"widget"}}],"terminates":true}}
+{"id":"ab-a2-refuse-unresolvable","rung":"A2","request":"describe zebra.mjs","tools":["tmct_describe"],"expect":{"refuse":true,"terminates":true}}
+{"id":"ab-a2-refuse-out-of-set","rung":"A2","request":"what is the commit history of Widget.render","tools":["tmct_describe","tmct_callers"],"expect":{"refuse":true,"terminates":true}}
