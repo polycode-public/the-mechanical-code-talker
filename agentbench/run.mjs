@@ -10,9 +10,8 @@
 // exact signature via runAgentbench({ driver }).
 //
 // Determinism: NO Date.now() in recorded output — the run stamp comes from
-// --stamp (default the pinned bench version 0.8.0, NOT read from package.json,
-// which in this worktree still reads a pre-bump version). Two runs over the same
-// tree + stamp produce byte-identical rows.
+// --stamp (default the bench version, read once from package.json at load). Two
+// runs over the same tree + stamp produce byte-identical rows.
 //
 // Usage:
 //   node agentbench/run.mjs [--stamp <label>] [--cases agentbench/cases.jsonl]
@@ -20,6 +19,7 @@
 //     [--ladder] [--only <id,id,…>]
 
 import { mkdir, readFile, writeFile, mkdtemp, rm } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -33,10 +33,10 @@ const ROOT = dirname(HERE);
 export const DEFAULT_CASES = join(HERE, "cases.jsonl");
 export const FIXTURE = join(ROOT, "test", "fixtures", "entities.fixture.json");
 
-// The PINNED bench version — explicit, NOT read from package.json (this worktree
-// branched pre-bump; the real version is 0.8.0). This is the default --stamp and
-// the version stamped onto every artifact.
-export const BENCH_VERSION = "0.8.0";
+// The bench version tracks package.json (read once at load — deterministic per
+// run, no Date.now). Artifacts stamp this; a version bump auto-flows here so the
+// grading record never drifts from the release it measures.
+export const BENCH_VERSION = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")).version;
 
 /** Build the run context the driver receives. Materializes the ingested fixture
  *  to a throwaway .tmct/graph.json (mirroring chatbench's createRunnerDeps and a

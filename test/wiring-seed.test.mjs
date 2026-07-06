@@ -115,7 +115,12 @@ test("W3 gate: the real binary in an empty dir seeds, greets and exits 0", async
     assert.ok(banner.conceptnet > UNCAPPED_MIN, `ConceptNet band uncapped (got ${banner.conceptnet})`);
     assert.match(r.stdout, /Hi\. There's no code graph loaded here/); // #3: empty greeting orients
     assert.equal(await factCount(dir), banner.total);
-    assert.ok(elapsed < 15000, `seeded bootstrap stays inside a sane budget (took ${elapsed}ms)`);
+    // Load-tolerant budget: this project MANDATES concurrent background agents,
+    // so an absolute wall-clock cap false-fails a healthy seed under contention
+    // (observed >20s under a heavy agent fleet). The guard exists to catch a
+    // regression to the pre-batch unbatched path (~419s → 2.5s); 90s catches that
+    // 100× regression while tolerating fleet load.
+    assert.ok(elapsed < 90000, `seeded bootstrap stays inside a sane budget (took ${elapsed}ms)`);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
