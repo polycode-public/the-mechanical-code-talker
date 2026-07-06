@@ -118,6 +118,33 @@ export const PHRASING_FRAMES = Object.freeze([
   { re: /^what\s+(?:defined|declared)\s+(?:the\s+)?(?:function\s+|method\s+|class\s+|module\s+|variable\s+|constant\s+)?(.+?)\??$/i, to: (m) => `where is ${m[1]} defined` },
   //   "where's X defined" (the "where's" contraction is not in the contraction table)
   { re: /^where'?s\s+(?:the\s+)?(.+?)\s+(defined|declared|located|implemented)\??$/i, to: (m) => `where is ${m[1]} ${m[2]}` },
+
+  // PREDICATIVE QUALIFIER → the ATTRIBUTIVE form the grammar already answers. The
+  // adjective-qualifier post-filters (ask-vocab.mjs QUALIFIERS: tested/untested,
+  // public/private, exported, static/abstract/constant, …) parse in the ATTRIBUTIVE
+  // slot — "untested modules", "public methods" — but a developer just as naturally
+  // asks the PREDICATIVE "which modules are untested" / "what functions are tested",
+  // which hit the grammar wall (and, worse, the wall's own hint SUGGESTED "which
+  // functions are tested" — a shape it could not then answer). Rewriting the
+  // predicative "<which|what> <kind> are <QUALIFIER>" to "<QUALIFIER> <kind>" routes
+  // it onto the working attributive filter. Closed to the known qualifier adjectives
+  // (not a general "… are X" catch), and the QUALIFIER must sit immediately after
+  // are/is, so "which modules are NOT tested" never matches here — that keeps its own
+  // set-complement handler (matchNegationSet, downstream in ask.mjs's parseNegation).
+  {
+    re: /^(?:which|what)\s+(?:the\s+|all\s+)?([a-z][a-z-]*?)\s+(?:are|is)\s+(public|private|protected|static|abstract|constant|exported|re-?exported|tested|covered|untested|uncovered)\??$/i,
+    to: (m) => `${m[2].toLowerCase()} ${m[1].toLowerCase()}`,
+  },
+
+  // CO-CHANGE → the "co-changes with" canonical the RELATIONS table answers. The
+  // cochange verb synonyms (ask-vocab.mjs) include "co-changes with" / "moves
+  // together with" / "tends to change together with", but NOT the plainest form a
+  // developer types — the one the README itself prints and the relation renders as:
+  // "what does X change together with" / "what changes together with X". Both hit a
+  // dead-end ("couldn't resolve one of the terms" / the grammar wall); rewriting them
+  // onto "what co-changes with X" routes them to the working change-coupling query.
+  { re: /^what\s+does\s+(.+?)\s+changes?\s+together\s+with\??$/i, to: (m) => `what co-changes with ${m[1]}` },
+  { re: /^what\s+changes?\s+together\s+with\s+(.+?)\??$/i, to: (m) => `what co-changes with ${m[1]}` },
 ]);
 
 /** Apply the phrasing frames (members-of-class + where-defined) — first match wins
