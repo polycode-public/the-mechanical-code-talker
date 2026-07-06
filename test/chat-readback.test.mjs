@@ -176,13 +176,15 @@ test("multi-turn: an un-asserted membership still honestly MISSES (byte-identica
 });
 
 test("read-back: an un-asserted superclass term still honestly misses (byte-identical to no-memory)", async () => {
+  // (0.8.2 WS1: "widget" now resolves via ask's meta fallback — the fixture's Class
+  // Widget — so this pin uses a term matching neither memory, schema, nor a class.)
   const dir = await mkdtemp(join(tmpdir(), "tmct-rb-miss-"));
   try {
-    // one unrelated fact remembered, so memory is non-empty but holds nothing about 'widget'
+    // one unrelated fact remembered, so memory is non-empty but holds nothing about 'gizmo'
     await runTurn("every function is a component", { config: CONFIG, memoryDir: dir, sessionId: "rb-miss" });
 
-    const withMemory = await runTurn("what is a widget", { config: CONFIG, memoryDir: dir });
-    const bare = await runTurn("what is a widget", { config: CONFIG });
+    const withMemory = await runTurn("what is a gizmo", { config: CONFIG, memoryDir: dir });
+    const bare = await runTurn("what is a gizmo", { config: CONFIG });
     assert.equal(withMemory.answer, bare.answer, "un-asserted term unchanged by the read-back");
     assert.equal(withMemory.record.miss, true);
     assert.notEqual(withMemory.record.via, "fact");

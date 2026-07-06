@@ -62,5 +62,7 @@ test("co-change routing: an uncoupled module is an honest empty with a receipt, 
   const [r] = await drive(["what does src/core/model.mjs change together with"]);
   assert.doesNotMatch(r.answer, /couldn't parse this as a graph question/, "not the grammar wall");
   assert.doesNotMatch(r.answer, /couldn't resolve one of the terms/, "not the unresolved-terms dead-end");
-  assert.match(r.answer, /traversal: cochange edges/, "honest empty carries its receipt");
+  // (0.8.2 WS1: the receipt left the honest-empty prose — it rides the turn's
+  // detail, where why/verbose re-renders still surface it.)
+  assert.match(r.last.detail.traversal, /cochange edges/, "honest empty carries its receipt in detail");
 });

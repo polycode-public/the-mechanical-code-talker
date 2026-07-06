@@ -93,14 +93,35 @@ test("fix1: a relation word that IS a real schema predicate keeps its schema met
 });
 
 test("fix1: a non-relation unknown term still declines to the honest vocabulary miss", async () => {
+  // (0.8.2 WS1: "widget" now resolves via the meta fallback — it IS the fixture's
+  // Class Widget — so the honest-miss pin uses a term that matches nothing at all.)
+  const dir = await repoWithFixture();
+  try {
+    const config = { graphFile: join(dir, ".tmct", "graph.json") };
+    clearCache();
+    const r = await runTurn("what is a gadget", { config, graph });
+    assert.equal(r.record.miss, true);
+    assert.match(r.answer, /isn't a term in this graph's own vocabulary/,
+      "'gadget' is not a RELATION_TERM, a schema term, or a code-graph class — the miss stands");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("fix1 (0.8.2 WS1): a schema-vocabulary miss that IS a unique code-graph Class gets the describe-style one-liner", async () => {
+  // "what is a Widget" used to claim Widget "isn't a term in this graph's own
+  // vocabulary" although the code graph carries the Class individual — the meta
+  // fallback now points at the real entity instead of the false vocabulary miss.
   const dir = await repoWithFixture();
   try {
     const config = { graphFile: join(dir, ".tmct", "graph.json") };
     clearCache();
     const r = await runTurn("what is a widget", { config, graph });
-    assert.equal(r.record.miss, true);
-    assert.match(r.answer, /isn't a term in this graph's own vocabulary/,
-      "'widget' is not a RELATION_TERM, so the relation force declines and the miss stands");
+    assert.equal(r.record.miss, false, "a unique Class-label hit is a real answer");
+    assert.equal(r.answer,
+      'Widget is a class in this codebase, defined in app/lib/b.mjs — try "describe Widget" or "which classes inherit from Widget".',
+      "the describe-style one-liner cites the defining module and offers next questions");
   } finally {
     clearCache();
     await rm(dir, { recursive: true, force: true });
@@ -140,6 +161,18 @@ test("fix3: 'what tests cover X' honest-empty reads 'No tests cover X.', not the
 test("fix3: the leaked 'cover' verb is stripped from the object", () => {
   const r = ask(graph, "which tests cover app/lib/f.mjs");
   assert.match(r.content, /^No tests cover app\/lib\/f\.mjs\./, "the object is the module, with 'cover' removed");
+});
+
+test("fix3 (0.8.2 WS1): ANY leading relation verb is canonicalized out of the tests-kind honest empty", () => {
+  // The old strip only knew ^cover(s|ing)? — "do any tests touch f.mjs" leaked the
+  // user's verb ("No tests cover touch app/lib/f.mjs."). The strip is now built from
+  // ask-vocab's closed relation-verb table, so touch/check/verify canonicalize too.
+  for (const verb of ["touch", "check", "verify", "cover"]) {
+    const r = ask(graph, `which tests ${verb} app/lib/f.mjs`);
+    assert.equal(r.tmct_ask.miss, true, `${verb}: still the honest empty`);
+    assert.match(r.content, /^No tests cover app\/lib\/f\.mjs\./, `${verb}: the leaked verb is stripped`);
+    assert.doesNotMatch(r.content, new RegExp(`cover ${verb} `), `${verb}: no verb rides into the object`);
+  }
 });
 
 test("fix3: the frozen 'which modules test X' entity-keyword wording is untouched", () => {

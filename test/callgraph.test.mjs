@@ -57,7 +57,8 @@ test("honest-empty stays honest: a truly-uncalled symbol reports no callers, no 
   const { content, tmct_ask } = ask(graph, "what calls Widget.render");
   assert.equal(tmct_ask.miss, true, "genuinely uncalled → the honest miss");
   assert.match(content, /No .* found whose module directly calls Widget\.render/, "honest empty");
-  assert.match(content, /callsSymbol edges where object = Widget\.render/, "with the accurate callsSymbol receipt");
+  // (0.8.2 WS1: the receipt rides the envelope, not the prose.)
+  assert.equal(tmct_ask.traversal, "callsSymbol edges where object = Widget.render", "with the accurate callsSymbol receipt on the envelope");
 });
 
 test("honest-empty stays honest at the tool layer: /callers on an uncalled symbol", async () => {

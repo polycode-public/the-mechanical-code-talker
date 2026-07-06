@@ -89,6 +89,12 @@ function edgesOfKind(graph, kind) {
 // "which functions call X" should read off callsSymbol (fn->fn), not the module-coarse "calls".
 const SYMBOL_GRAIN_SIBLING = { calls: "callsSymbol", touches: "touchesSymbol" };
 const FINE_ENTITY_TYPES = new Set(["Function", "Method", "Class", "Attribute", "GlobalVariable"]);
+// The fn/method FAMILY (0.8.2 WS1): callers of a symbol are recorded at whichever
+// grain the extractor saw (a method Widget.render is class "Method"), but a person
+// asking "which functions call X" means the callable family, not the storage class.
+// Used ONLY as an empty-result fallback (see traverse's reverse symbol-grain path):
+// an exact-class answer is never widened, so every non-empty answer is byte-stable.
+const FINE_CLASS_SIBLING = { Function: "Method", Method: "Function" };
 
 // Query-side UNION families (2026-07-02 query families): a parsed kind that is not
 // itself a stored predicate but a curated union of stored kinds — "what uses X"
@@ -124,6 +130,24 @@ const REVERSE_MISS_VERB = { cochange: "cochanges" };
 function verbFor(kind) {
   return REVERSE_MISS_VERB[kind] || kind;
 }
+
+// Leading-relation-verb strip for the tests-kind honest empty (0.8.2 WS1): the
+// keyword strategy can match the "tests" NOUN as the relation verb and leave the
+// user's OWN verb at the head of the object term ("do any tests touch f.mjs" →
+// object "touch f.mjs"), which the old ^cover-only strip missed ("No tests cover
+// touch app/lib/f.mjs."). The closed list is read from ask-vocab.mjs's exported
+// VERB_TO_KIND (derived from the RELATIONS verb table — the source of truth,
+// including the `tests` kind's own verbs: cover/check/verify/exercise/…), longest
+// phrase first so multi-word verbs strip whole; a bare optional s/ing/ed tail keeps
+// the previously-stripped inflections ("covering") without enumerating them. Only
+// ever applied to the tests-kind zero-hit template's object — never to resolution.
+const LEADING_RELATION_VERB_RE = new RegExp(
+  `^(?:${Object.keys(VERB_TO_KIND)
+    .sort((a, b) => b.length - a.length)
+    .map((v) => v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("|")})(?:s|ing|ed)?\\s+`,
+  "i",
+);
 
 // ---- the parsing strategies + normalization + fuzzy service formerly defined
 // here now live in src/interpret/ (items 8/10/13): interpret/normalize.mjs
@@ -1416,7 +1440,29 @@ export function traverse(graph, parsed, { contextId = null, prev = null } = {}) 
       const token = (i.attributes || []).find((a) => a.key === "token")?.value;
       return token && String(token).toLowerCase() === termLc;
     });
-    if (!match) return { matches: [], objMatch: null, candidates: [], traversal: `schema lookup for "${term}"`, ambiguous: false };
+    if (!match) {
+      // META FALLBACK TO REAL ENTITIES (0.8.2 WS1): "what is a Record" used to say
+      // "'Record' isn't a term in this graph's own vocabulary" even when Record is a
+      // code-graph Class individual. After the SchemaClass/SchemaPredicate miss, try
+      // an exact case-insensitive UNIQUE label match against class === "Class"
+      // individuals; a unique hit renders a describe-style one-liner (see render's
+      // metaCodeClass branch). Anything less than a unique exact hit keeps the
+      // honest vocabulary miss — never a guess.
+      const classHits = (graph.individuals || []).filter((i) => i.class === "Class" && String(i.label).toLowerCase() === termLc);
+      if (classHits.length === 1) {
+        const hit = classHits[0];
+        const mid = moduleIdOf(graph, hit);
+        const modLabel = (mid && graph.byId.get(mid)?.label)
+          || String((hit.attributes || []).find((a) => a.key === "site")?.value || "").split(":")[0]
+          || null;
+        return {
+          matches: [hit], objMatch: hit, candidates: [], ambiguous: false,
+          metaCodeClass: true, metaModuleLabel: modLabel,
+          traversal: `schema lookup for "${term}" (miss), then unique Class individual by label`,
+        };
+      }
+      return { matches: [], objMatch: null, candidates: [], traversal: `schema lookup for "${term}"`, ambiguous: false };
+    }
     return {
       matches: [match], objMatch: match, candidates: [],
       traversal: `schema lookup for "${term}"`, ambiguous: false,
@@ -1536,9 +1582,22 @@ export function traverse(graph, parsed, { contextId = null, prev = null } = {}) 
   }
 
   if (shape === "forward") {
-    const edges = kindsFor(kind).flatMap((k) => edgesOfKind(graph, k)).filter((e) => e.subject === objMatch.id);
-    const matches = edges.map((e) => graph.byId.get(e.object)).filter(Boolean);
-    return { matches, objMatch, candidates, traversal: `${kindsFor(kind).join("+")} edges where subject = ${objMatch.label}`, ambiguous, matchedVia };
+    // FORWARD CALL UNION (0.8.2 WS1): a kind with a symbol-grain sibling scans the
+    // UNION coarse+sibling when the resolved SUBJECT is itself a fine symbol —
+    // "what does Widget.render call" lives on callsSymbol (fn->fn), which the
+    // module-coarse scan alone can never reach (a coarse edge's subject is a
+    // module, so a Function/Method subject rendered a false "no calls edges" while
+    // the reverse direction answered). Module subjects never carry a sibling edge,
+    // so their scan — and the traversal receipt — stays byte-identical. The receipt
+    // names what was actually scanned ("calls+callsSymbol edges where subject = X").
+    const fwdSibling = SYMBOL_GRAIN_SIBLING[kind];
+    const subjIsFineSymbol = !!(fwdSibling && objMatch.class && FINE_ENTITY_TYPES.has(objMatch.class));
+    const fwdKinds = subjIsFineSymbol ? [...new Set([...kindsFor(kind), fwdSibling])] : kindsFor(kind);
+    const edges = fwdKinds.flatMap((k) => edgesOfKind(graph, k)).filter((e) => e.subject === objMatch.id);
+    const targets = edges.map((e) => graph.byId.get(e.object)).filter(Boolean);
+    // dedupe only on the widened scan — the coarse-only path keeps its exact shape.
+    const matches = subjIsFineSymbol ? uniqueById(targets) : targets;
+    return { matches, objMatch, candidates, traversal: `${fwdKinds.join("+")} edges where subject = ${objMatch.label}`, ambiguous, matchedVia };
   }
 
   // reverse + transitive (PLAN_MECHANICAL_CHAT.md P1): the gate above guarantees kind is
@@ -1577,8 +1636,23 @@ export function traverse(graph, parsed, { contextId = null, prev = null } = {}) 
   if (symbolKind && (FINE_ENTITY_TYPES.has(entityType) || objIsFineSymbol)) {
     const edges = edgesOfKind(graph, symbolKind).filter((e) => e.object === objMatch.id);
     const subjects = uniqueById(edges.map((e) => graph.byId.get(e.subject)).filter(Boolean));
-    const matches = (!entityType || entityType === "Change") ? subjects : subjects.filter((i) => i.class === entityType);
-    return { matches, objMatch, candidates, traversal: `${symbolKind} edges where object = ${objMatch.label}`, ambiguous, matchedVia };
+    let matches = (!entityType || entityType === "Change") ? subjects : subjects.filter((i) => i.class === entityType);
+    let widenNote = "";
+    // FINE-GRAIN FAMILY FALLBACK (0.8.2 WS1): when the exact-class filter comes back
+    // EMPTY and the asked grain is Function/Method, retry with the family sibling —
+    // "which functions call fnAlpha" must not hide the recorded caller Widget.render
+    // just because the extractor stored it as class Method. Fallback-only by
+    // construction (the exact filter must be empty first), so every currently
+    // non-empty answer is byte-identical; the widening is said in the traversal.
+    const siblingClass = FINE_CLASS_SIBLING[entityType];
+    if (!matches.length && siblingClass) {
+      const widened = subjects.filter((i) => i.class === siblingClass);
+      if (widened.length) {
+        matches = widened;
+        widenNote = `, widened to ${siblingClass} subjects (no ${entityType} recorded)`;
+      }
+    }
+    return { matches, objMatch, candidates, traversal: `${symbolKind} edges where object = ${objMatch.label}${widenNote}`, ambiguous, matchedVia };
   }
 
   // General case: some predicates are already fine-grained (inherits: Class->Class, contains:
@@ -1714,6 +1788,17 @@ function renderCore(parsed, result) {
         miss: true, ambiguous: false,
       };
     }
+    // meta fallback hit (0.8.2 WS1, see traverse's meta branch): the term is not
+    // schema vocabulary but IS a unique code-graph Class — a describe-style
+    // one-liner pointing at the real entity, instead of the false vocabulary miss.
+    if (result.metaCodeClass) {
+      const label = result.objMatch.label;
+      const definedIn = result.metaModuleLabel ? `, defined in ${result.metaModuleLabel}` : "";
+      return {
+        content: `${label} is a class in this codebase${definedIn} — try "describe ${label}" or "which classes inherit from ${label}".`,
+        miss: false, ambiguous: false, matches: result.matches,
+      };
+    }
     const doc = (result.objMatch.attributes || []).find((a) => a.key === "doc")?.value || "";
     const kindWord = result.objMatch.class === "SchemaClass" ? "a class in the graph's schema" : "a predicate (relation) in the graph's schema";
     return { content: `${result.objMatch.label} is ${kindWord}: ${doc}`, miss: false, ambiguous: false, matches: result.matches };
@@ -1724,7 +1809,7 @@ function renderCore(parsed, result) {
   if (result.mentionsShape) {
     if (!result.matches.length) {
       return {
-        content: `"${parsed.object}" is not mentioned in any indexed identifier or doc-comment prose. (traversal: ${result.traversal})`,
+        content: `"${parsed.object}" is not mentioned in any indexed identifier or doc-comment prose.`,
         miss: true, ambiguous: false,
       };
     }
@@ -1781,7 +1866,7 @@ function renderCore(parsed, result) {
   if (result.whenShape) {
     const subject = result.objMatch.label;
     if (!result.matches.length) {
-      return { content: `no recorded commit touches ${subject} in this index. (traversal: ${result.traversal})`, miss: true, ambiguous: false };
+      return { content: `no recorded commit touches ${subject} in this index.`, miss: true, ambiguous: false };
     }
     const newest = result.matches[0];
     const date = (newest.attributes || []).find((a) => a.key === "date")?.value || "";
@@ -1811,7 +1896,7 @@ function renderCore(parsed, result) {
     const cite = `commit ${result.objMatch.label}`;
     if (!result.matches.length) {
       return {
-        content: `${cite} touched nothing recorded in the index. (traversal: ${result.traversal})`,
+        content: `${cite} touched nothing recorded in the index.`,
         miss: true, ambiguous: false,
       };
     }
@@ -1829,8 +1914,11 @@ function renderCore(parsed, result) {
     if (!result.objMatch || !result.subjMatch) {
       return { content: `couldn't resolve one of the terms in this question.`, miss: true, ambiguous: false };
     }
+    // the yes render is plain words — the traversal string IS "<kind> edge from
+    // <A> to <B>", so it reads as the sentence itself, not a parenthetical receipt
+    // (the receipt still rides on the result's traversal field for why/verbose).
     return {
-      content: result.answer ? `Yes. (${result.traversal})` : `No — no ${parsed.kind} edge found from ${result.subjMatch.label} to ${result.objMatch.label}.`,
+      content: result.answer ? `Yes — ${result.traversal}.` : `No — no ${parsed.kind} edge found from ${result.subjMatch.label} to ${result.objMatch.label}.`,
       miss: !result.answer, ambiguous: false,
     };
   }
@@ -1841,21 +1929,24 @@ function renderCore(parsed, result) {
     // subject-first phrasing rather than reusing reverse's "found ... that OBJECT" template.
     if (parsed.shape === "forward") {
       return {
-        content: `${result.objMatch.label} has no ${parsed.kind} edges in the index. (traversal: ${result.traversal || "no traversal resolved"})`,
+        content: `${result.objMatch.label} has no ${parsed.kind} edges in the index.`,
         miss: true, ambiguous: false,
       };
     }
     // "what tests cover X" / "what tests X" — the tests themselves are the search
     // target (no explicit entity keyword → entityType null), and "tests" reads as a
     // verb phrase, so the generic "No <modules> found whose module directly tests <obj>"
-    // template garbles: it mislabels the searched kind as "modules" and lets the leaked
-    // "cover " verb ride into the object ("…directly tests cover X"). Render the honest
-    // empty as the natural "No tests cover X." The frozen entity-keyword form ("which
-    // modules test X", entityType="Module") keeps its pinned wording below.
+    // template garbles: it mislabels the searched kind as "modules" and lets the user's
+    // leaked verb ride into the object ("…tests cover touch X"). Any leading relation
+    // verb (cover/touch/check/verify/… — LEADING_RELATION_VERB_RE, built from the
+    // ask-vocab verb table) is stripped, so the honest empty reads as the natural
+    // "No tests cover X." The frozen entity-keyword form ("which modules test X",
+    // entityType="Module") keeps its pinned wording below.
     if (parsed.kind === "tests" && !parsed.entityType) {
-      const obj = String(parsed.object || "").replace(/^cover(?:s|ing)?\s+/i, "").trim();
+      const stripped = String(parsed.object || "").replace(LEADING_RELATION_VERB_RE, "").trim();
+      const obj = stripped || String(parsed.object || "").trim();
       return {
-        content: `No tests cover ${obj}. (traversal: ${result.traversal || "no traversal resolved"})`,
+        content: `No tests cover ${obj}.`,
         miss: true, ambiguous: false,
       };
     }
@@ -1865,7 +1956,7 @@ function renderCore(parsed, result) {
     // append-only/sacred mid-arc, so the honest-miss phrasing stays as-is.
     const entityWord = nounFor(parsed.entityType || "Module", 2);
     return {
-      content: `No ${entityWord} found whose module directly ${verbFor(parsed.kind)} ${parsed.object}. (traversal: ${result.traversal || "no traversal resolved"})`,
+      content: `No ${entityWord} found whose module directly ${verbFor(parsed.kind)} ${parsed.object}.`,
       miss: true, ambiguous: false,
     };
   }

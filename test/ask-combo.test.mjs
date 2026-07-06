@@ -107,13 +107,99 @@ test("grain FIX: null-entityType 'what calls <fn>' reads the callsSymbol grain (
 });
 
 // ============================================================================
+// 0.8.2 WS1 — forward call union (symbol-grain subject scans coarse+sibling)
+// ============================================================================
+
+test("forward union: 'what does Widget.render call' reads calls+callsSymbol (fn->fn), names fnAlpha", () => {
+  // BEFORE: kind "calls" scanned only the module-coarse edges, whose subjects are
+  // modules — a Method subject answered "no calls edges" while the reverse worked.
+  const r = runAsk("what does Widget.render call");
+  assert.equal(r.tmct_ask.miss, false);
+  assert.equal(r.tmct_ask.traversal, "calls+callsSymbol edges where subject = Widget.render",
+    "the receipt names what was actually scanned");
+  assert.deepEqual(labels(r), ["fnAlpha"]);
+});
+
+test("forward union: a MODULE subject is byte-stable (modules never carry callsSymbol)", () => {
+  const r = runAsk("what does scripts/g.mjs call");
+  assert.equal(r.content, "app/lib/a.mjs.");
+  assert.equal(r.tmct_ask.traversal, "calls edges where subject = scripts/g.mjs",
+    "coarse-only scan and receipt, exactly as before");
+});
+
+test("forward union: a fine subject with NO sibling edges is still the honest empty", () => {
+  const r = runAsk("what does fnAlpha call"); // fnAlpha calls nothing recorded
+  assert.equal(r.tmct_ask.miss, true);
+  assert.equal(r.tmct_ask.traversal, "calls+callsSymbol edges where subject = fnAlpha");
+});
+
+// ============================================================================
+// 0.8.2 WS1 — fine-grain family fallback (Function<->Method on an empty exact class)
+// ============================================================================
+
+test("family fallback: 'which functions call fnAlpha' widens to the Method caller Widget.render", () => {
+  // The only recorded caller is class Method; the exact Function filter used to
+  // return the false empty (the standing gq-functions-call-fnalpha baselineFail).
+  const r = runAsk("which functions call fnAlpha");
+  assert.equal(r.tmct_ask.miss, false);
+  assert.match(r.content, /Widget\.render/);
+  assert.equal(r.tmct_ask.traversal,
+    "callsSymbol edges where object = fnAlpha, widened to Method subjects (no Function recorded)",
+    "the widening is noted in the traversal");
+});
+
+test("family fallback is FALLBACK-ONLY: the exact-class answer is byte-identical when non-empty", () => {
+  // entityType Method matches the caller directly — no widening, no note.
+  const r = runAsk("which methods call fnAlpha");
+  assert.equal(r.content, "in app/lib/b.mjs there is function Widget.render().");
+  assert.equal(r.tmct_ask.traversal, "callsSymbol edges where object = fnAlpha");
+  // and the null-entityType path (no class filter at all) is untouched too.
+  const bare = runAsk("i was wondering what calls fnAlpha");
+  assert.equal(bare.tmct_ask.traversal, "callsSymbol edges where object = fnAlpha");
+  assert.match(bare.content, /Widget\.render/);
+});
+
+test("family fallback: a truly-uncalled symbol keeps the honest empty (no sibling subjects either)", () => {
+  const r = runAsk("which functions call Widget.render");
+  assert.equal(r.tmct_ask.miss, true);
+  assert.equal(r.tmct_ask.traversal, "callsSymbol edges where object = Widget.render",
+    "no widening note when there was nothing to widen to");
+});
+
+// ============================================================================
+// 0.8.2 WS1 — meta-lookup fallback to real entities
+// ============================================================================
+
+test("meta fallback: 'what is a Widget' answers with the code-graph Class one-liner, not the vocabulary miss", () => {
+  const r = runAsk("what is a Widget");
+  assert.equal(r.tmct_ask.miss, false);
+  assert.equal(r.content,
+    'Widget is a class in this codebase, defined in app/lib/b.mjs — try "describe Widget" or "which classes inherit from Widget".');
+});
+
+test("meta fallback: the label match is exact case-insensitive ('what is a widget' hits Widget)", () => {
+  const r = runAsk("what is a widget");
+  assert.equal(r.tmct_ask.miss, false);
+  assert.match(r.content, /^Widget is a class in this codebase/);
+});
+
+test("meta fallback: a both-miss term keeps the current honest vocabulary miss", () => {
+  const r = runAsk("what is a doohickey");
+  assert.equal(r.tmct_ask.miss, true);
+  assert.match(r.content, /"doohickey" isn't a term in this graph's own vocabulary/);
+});
+
+// ============================================================================
 // VOICE NIT — the reverse zero-hit reads naturally
 // ============================================================================
 
-test("reverse zero-hit: honest empty with the traditional phrasing + traversal receipt", () => {
+test("reverse zero-hit: honest empty with the traditional phrasing; the receipt rides the envelope", () => {
   // (A cycle-5 voice-nit rephrasing was reverted — the frozen v1 cases.jsonl pins the
-  // "whose module directly <verb>s X" wording, and the case set is sacred mid-arc.)
+  // "whose module directly <verb>s X" wording, and the case set is sacred mid-arc.
+  // 0.8.2 WS1: the " (traversal: …)" tail left the prose; the receipt still flows on
+  // tmct_ask.traversal → chat's detail, so why/verbose re-renders surface it.)
   const r = runAsk("which modules test app/lib/f.mjs"); // nothing tests f.mjs → honest empty
   assert.match(r.content, /No modules found whose module directly tests app\/lib\/f\.mjs\./);
-  assert.match(r.content, /\(traversal: tests edges where object = app\/lib\/f\.mjs\)/, "receipt kept");
+  assert.doesNotMatch(r.content, /\(traversal:/, "the prose is plain words now");
+  assert.equal(r.tmct_ask.traversal, "tests edges where object = app/lib/f.mjs", "receipt kept on the envelope for the why-path");
 });
