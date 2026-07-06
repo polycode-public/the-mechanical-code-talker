@@ -13,7 +13,7 @@
 
 import {
   CONTRACTIONS, MISSPELLINGS, WRONG_WORDS, G_DROP, FILLER_WORDS,
-  NEGATION_FRAMES, COMMIT_CONTENT_FRAMES,
+  NEGATION_FRAMES, COMMIT_CONTENT_FRAMES, VERB_TO_KIND,
 } from "../ask-vocab.mjs";
 
 export function escapeRegex(s) {
@@ -44,8 +44,92 @@ const correctionRe = (table) => new RegExp(
 const MISSPELLING_RE = correctionRe(MISSPELLINGS);
 const WRONG_WORD_RE = correctionRe(WRONG_WORDS);
 
+// ---- closed PREAMBLE frames (0.8.2 feel wave, PLAN_CHAT_FEEL item 2) — the
+// conversational wrapping a developer puts AROUND a real question: a greeting
+// lead-in with a delimiter ("hey there, quick question - …"), the modal
+// politeness wrapper ("can you … please"), and the show/give-me presentation
+// bridge. These are DELIMITER- and PHRASE-anchored, so they must run BEFORE the
+// FILLER-strip pass below: FILLER_WORDS strips "hey"/"can you" as bare words, so
+// after that pass the frames' anchors are gone while the punctuation debris
+// ("there, quick question -") still poisons the parse (the playtest wall).
+// Applied inside normalizeQuery — the one seam BOTH composition sites (ask.mjs
+// parseQuery and interpret/pipeline.mjs normalizeInput) run first — AFTER the
+// word-restoring correction tables (so "gimme"/"shwo me" are already "give me"/
+// "show me") and BEFORE the filler strip. Closed patterns, applied in order to a
+// small fixpoint; unmatched text passes through byte-unchanged. ----
+
+/** Any relation verb phrase from the shared vocabulary — the show/give-me
+ *  bridge's "this remainder is a real relation query" probe. */
+const RELATION_VERB_RE = new RegExp(
+  "\\b(?:" + Object.keys(VERB_TO_KIND).sort((a, b) => b.length - a.length).map(escapeRegex).join("|") + ")\\b",
+  "i",
+);
+/** A remainder that opens interrogatively is already a question — unwrap it. */
+const INTERROGATIVE_LEAD_RE = /^(?:which|what|who|whose|where|when|why|how)\b/i;
+/** A remainder that is a KIND listing ("show me [the] untested modules", "show
+ *  me the tests") already belongs to the compositional list/qualifier grammar,
+ *  whose LIST_TRIGGERS include "show me"/"give me" — leave the WHOLE text
+ *  untouched so that working path keeps it. Two shapes: a plural kind noun in
+ *  tail position, or a bare (det +) singular kind noun and nothing else. */
+const LISTING_TAIL_KINDS = new Set([
+  "modules", "files", "functions", "methods", "classes", "attributes", "fields",
+  "properties", "variables", "globals", "commits", "changes", "tests", "members",
+]);
+const BARE_KIND_RE = /^(?:all\s+|the\s+)?(?:module|file|function|method|class|attribute|field|property|variable|global|commit|change|test|member)\??$/i;
+const isListingRemainder = (rest) => {
+  if (BARE_KIND_RE.test(rest)) return true;
+  const words = rest.replace(/\?+\s*$/, "").trim().split(/\s+/);
+  return LISTING_TAIL_KINDS.has((words[words.length - 1] || "").toLowerCase());
+};
+
+/** Greeting lead-in with a delimiter (+ optional "quick question" bridge):
+ *  "hey there, quick question - <Q>" -> "<Q>". The delimiter and the non-empty
+ *  remainder are REQUIRED, so a bare "hey there" stays a greeting for chat's
+ *  conversational lane, and "hey tmct, …" (a vocative, no delimiter after the
+ *  greeting word) is left for the noise-strip tier that already owns it. */
+const GREETING_PREAMBLE_RE = /^(?:hi|hiya|hello|hey|yo|howdy)(?:\s+there)?\s*[,—–-]\s*(?:(?:just\s+a\s+)?quick\s+question\s*[,:—–-]?\s*)?(.+)$/i;
+/** Modal politeness wrapper: "can/could/would/will you [please] <Q>[, please][?]"
+ *  -> "<Q>". FILLER_WORDS already ate "can you"/"please" as words; this frame
+ *  removes them as a WRAPPER so the ", please" comma never survives into the
+ *  parsed object term. The unwrapped remainder flows on through the ordinary
+ *  passes, so "can you tell me a joke" -> "tell me a joke" -> (FILLER) "a joke"
+ *  — byte-identical to what the bare form normalizes to (the hm-joke wall). */
+const MODAL_WRAPPER_RE = /^(?:can|could|would|will)\s+you\s+(?:please\s+)?(.+?)(?:[,\s]+please)?\??$/i;
+/** show/give-me presentation bridge: "show me [the] <thing>". Three-way:
+ *  a KIND-listing remainder is left untouched (the compositional list grammar
+ *  owns "show me untested modules"); a remainder carrying a relation verb or an
+ *  interrogative lead is a real query merely presented — unwrap to it ("show me
+ *  which modules import X" -> "which modules import X"); anything else is an
+ *  entity presentation — bridge to the describe surface ("show me the store
+ *  module" -> "describe store module"). */
+const SHOW_GIVE_ME_RE = /^(?:show|give)\s+me\s+(?:the\s+)?(.+?)\??$/i;
+
+/** Apply the closed preamble frames in order (greeting -> modal -> show/give-me),
+ *  repeated to a small fixpoint so stacked wrappers ("hey, can you show me X
+ *  please") peel fully. Pure and idempotent; unmatched text passes through. */
+export function applyPreambleFrames(text) {
+  let q = String(text || "");
+  for (let pass = 0; pass < 3; pass++) {
+    const before = q;
+    let m = q.match(GREETING_PREAMBLE_RE);
+    if (m) q = m[1].trim();
+    m = q.match(MODAL_WRAPPER_RE);
+    if (m) q = m[1].trim();
+    m = q.match(SHOW_GIVE_ME_RE);
+    if (m) {
+      const rest = m[1].trim();
+      if (!isListingRemainder(rest)) {
+        q = (RELATION_VERB_RE.test(rest) || INTERROGATIVE_LEAD_RE.test(rest)) ? rest : `describe ${rest}`;
+      }
+    }
+    if (q === before) break;
+  }
+  return q;
+}
+
 /** Free-text -> normalized free-text: contractions expanded, g-dropped words
- *  restored, filler/politeness words stripped. Idempotent and pure — the same
+ *  restored, closed preamble frames peeled, filler/politeness words stripped.
+ *  Idempotent and pure — the same
  *  input always normalizes the same way, so both parsing strategies see
  *  identical text and their outputs are directly comparable. Deliberately
  *  does NOT force lowercase: object/subject terms (module names like
@@ -59,6 +143,10 @@ export function normalizeQuery(text) {
   q = q.replace(MISSPELLING_RE, (m) => MISSPELLINGS[m.toLowerCase()]);
   q = q.replace(WRONG_WORD_RE, (m) => WRONG_WORDS[m.toLowerCase()]);
   q = q.replace(G_DROP, "$1ing");
+  // closed preamble frames (greeting lead-in, modal wrapper, show/give-me
+  // bridge) — AFTER the correction tables (a repaired "give me"/"show me" still
+  // feeds the bridge) but BEFORE the filler strip erases their anchor words.
+  q = applyPreambleFrames(q);
   if (FILLER_WORDS.length) {
     const fillerRe = new RegExp(
       "\\b(" + [...FILLER_WORDS].sort((a, b) => b.length - a.length).map(escapeRegex).join("|") + ")\\b",
@@ -173,8 +261,25 @@ export const PHRASING_FRAMES = Object.freeze([
   // separate authorship edge; "touched" IS the authorship signal (the churn commits
   // carry the author), so these are true synonyms of "who touched X", not a new
   // capability. Anaphora rides through untouched ("who wrote it" → "who touched it").
-  { re: /^who\s+(?:wrote|authored)\s+(?:the\s+)?(.+?)\??$/i, to: (m) => `who touched ${m[1]}` },
-  { re: /^who\s+is\s+the\s+authors?\s+of\s+(?:the\s+)?(.+?)\??$/i, to: (m) => `who touched ${m[1]}` },
+  // SHA GUARD (0.8.2 feel wave): a COMMIT object is NOT a synonym — "who is the
+  // author of abc1234" rewritten to "who touched abc1234" dumps the commit's
+  // touch-SET instead of naming its author. The negative lookahead refuses the
+  // rewrite when the object is a bare (optionally "commit "-prefixed) 7-40 char
+  // hex sha, leaving the un-rewritten form for the author lane to consume;
+  // file/symbol objects (anything non-sha, e.g. "deadbeef.mjs") keep the rewrite.
+  { re: /^who\s+(?:wrote|authored)\s+(?:the\s+)?(?!(?:commit\s+)?[0-9a-f]{7,40}\??$)(.+?)\??$/i, to: (m) => `who touched ${m[1]}` },
+  { re: /^who\s+is\s+the\s+authors?\s+of\s+(?:the\s+)?(?!(?:commit\s+)?[0-9a-f]{7,40}\??$)(.+?)\??$/i, to: (m) => `who touched ${m[1]}` },
+
+  // HAS-TESTS → the coverage question the RELATIONS table answers. "does X have
+  // tests" parses "have" as a defines-verb (VERB_TO_KIND), producing the garbled
+  // "No — no defines edge found from X to <whatever resolves>" receipt; "is X
+  // tested" traverses tests edges from the WRONG side (subject = X). Both mean
+  // the coverage question "what tests X" — rewrite onto it. Closed to a
+  // tests/coverage object ("does X have methods/members" stays the members
+  // family) and refuses any "not" in the subject span, so the set-complement
+  // negations ("is X not tested") keep their own handler downstream.
+  { re: /^(?:does|do)\s+(?!.*\bnot\b)(.+?)\s+have\s+(?:any\s+)?(?:tests?|test\s+coverage|coverage)\??$/i, to: (m) => `what tests ${m[1]}` },
+  { re: /^(?:is|are)\s+(?!.*\bnot\b)(.+?)\s+tested\??$/i, to: (m) => `what tests ${m[1]}` },
 
   // NEEDS-TESTS → the untested-module survey. "what needs tests" / "what needs
   // testing" is the plainest way to ask which modules are uncovered, and it hit the
