@@ -208,3 +208,17 @@ STATUS: OPEN — sent to Agent C; verify in the merged agentbench/ harness + REA
 OBSERVATION 3: B (shim) imports runTurn/createSession from chat.mjs; C stub calls ask/dispatchTool — files Agent A is editing. Textually disjoint (clean merge) but a prior log entry shows this exact consumer seam broke before.
 RECOMMENDED ACTION: freeze runTurn/createSession/ask/dispatchTool export signatures for the wave; add a post-merge integration smoke driving shim->chat->tool loop.
 STATUS: OPEN — added to integration task #10.
+
+═══════════════════════════════════════════════════════════════════════
+[2026-07-06 00:14Z] source=strategy-advisor(opus,deep) · topic=phase-11-registry-guardrail
+OBSERVATION 4: Stage-4 guardrail proves RESOLVABILITY, not antecedent-correctness. A mis-bound "it"->Commit (B1 pron 1.24) is a valid resolvable symbol and passes preconditions. The 0%-hallucination gate cannot lean on Stage 4 for cross-turn binding.
+RECOMMENDED ACTION: binding-confidence signal must come from Stage 2 / lever 1 (class-gated focus); gate honesty depends on it. Recorded in task #4.
+STATUS: OPEN — design principle for resolver/guardrail (task #4).
+
+OBSERVATION 5: registry is a strict subset of dispatchTool — tmct_context, tmct_context_more, tmct_snippet (unbounded-output, most hallucination-prone) are unguarded.
+RECOMMENDED ACTION: closed-world default-deny any unregistered tool (= auto-fail), or register the three with preconditions.
+STATUS: OPEN — sent to Agent C; verify in merged registry/guardrail.
+
+OBSERVATION 6: registry arg-key correctness is a comment, not a test.
+RECOMMENDED ACTION: conformance test — every registry arg-key is read by dispatchTool; registry name-set relates to dispatch case-set per the deny decision. Catches arg drift at merge.
+STATUS: OPEN — sent to Agent C.
