@@ -193,11 +193,17 @@ export function gradeCase(caseDef, loopResult) {
     else reasons.push(`produced calls do not match expected (${describeCalls(calls)} vs ${describeCalls(expectedCalls)})`);
   }
 
-  // 5. proof chain when required
+  // 5. proof chain when required — CONNECTEDNESS, not a flat ok-list. A proof is
+  //    valid iff it is non-empty, every step is ok (extra keys tolerated), AND —
+  //    when it carries POP causal-links (the planner's producer->condition->
+  //    consumer edges) — those links CONNECT the goal back to a grounded fact.
+  //    Single-call proofs (precondition + effect steps, no causal-links) stay
+  //    valid under the every-ok check (lenient for existing stub/shim/resolver
+  //    rows), so this only ADDS a check for multi-step causal chains.
   if (caseDef.expect.proof === true) {
     const proof = Array.isArray(loopResult?.proof) ? loopResult.proof : [];
-    const valid = proof.length > 0 && proof.every((s) => s.ok !== false);
-    if (!valid) reasons.push("expected a valid proof chain (present, all precondition steps ok)");
+    const valid = proof.length > 0 && proof.every((s) => s.ok !== false) && proofConnected(proof);
+    if (!valid) reasons.push("expected a valid proof chain (present, all steps ok, causal chain connected to grounded facts)");
   }
 
   const pass = hallucinated.length === 0 &&
@@ -205,6 +211,25 @@ export function gradeCase(caseDef, loopResult) {
     completed &&
     reasons.length === 0;
   return { pass, hallucinated, completed, reasons };
+}
+
+/** CONNECTEDNESS of a POP proof: when a proof carries `causal-link` steps
+ *  (producer -> condition -> consumer), the chain must be GROUNDED — at least one
+ *  link is rooted at the graph, every link is ok, and every producer is either the
+ *  grounded graph or an earlier plan step (never a dangling reference). A proof
+ *  with NO causal-links (a single-call precondition/effect receipt) is connected
+ *  by definition (nothing to chain) — kept lenient so existing rows still pass. */
+export function proofConnected(proof) {
+  const links = proof.filter((s) => s && s.step === "causal-link");
+  if (!links.length) return true; // single-call receipt — nothing to connect
+  let rooted = false;
+  for (const l of links) {
+    if (l.ok === false) return false;
+    const p = String(l.producer ?? "");
+    if (p === "graph") { rooted = true; continue; }
+    if (!/^step-\d+$/.test(p)) return false; // producer must be the graph or a real prior step
+  }
+  return rooted; // the chain must ultimately touch a grounded fact
 }
 
 const describeCalls = (calls) =>

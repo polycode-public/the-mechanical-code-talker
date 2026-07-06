@@ -27,13 +27,26 @@ import { fileURLToPath } from "node:url";
 import { parseCases, gradeCase, rollup, ladderGate, renderRollup, RUNGS } from "./grade.mjs";
 import { stubDriver } from "./driver-stub.mjs";
 import { shimDriver } from "./driver-shim.mjs";
+import { resolverDriver } from "./driver-resolver.mjs";
 import { capabilityByName } from "../src/router/registry.mjs";
+import { resolveObject } from "../src/ask.mjs";
+import { parseEntities } from "../src/codegraph.mjs";
 
 // The pluggable drivers, selectable with --driver. `stub` is the STUB-DRIVER
 // FLOOR (default); `shim` is the SHIM-TRANSPORT interface floor (server-http.mjs
-// selectTool, reused in-process). Neither is the router baseline — that is the
-// resolver/planner driver, swapped in later behind this same seam.
-export const DRIVERS = Object.freeze({ stub: stubDriver, shim: shimDriver });
+// selectTool, reused in-process); `resolver` is the ROUTER BASELINE (Stage 1 +
+// Stage 3 — the resolver/planner, driver:"resolver-0.8.0"), NOT a floor.
+export const DRIVERS = Object.freeze({ stub: stubDriver, shim: shimDriver, resolver: resolverDriver });
+
+// A HARD wall-clock backstop on ONE driver call (coordinator reinforcement 1):
+// the planner's POP/HTN loop has its own MAX_STEPS budget, but a bug that never
+// grounds a sub-goal could still hang the single `await driver(...)` — and
+// runAgentbench is called from test/agentbench.test.mjs, so a wedge would hang
+// the whole ~848-test suite with no failure. This bound turns an overrun into a
+// deterministic FAIL on `terminates:true` instead. The timeout only ever fires
+// on a real hang (a bug); in normal operation it never triggers, so recorded
+// output stays byte-identical (no Date.now enters any row).
+export const DRIVER_TIMEOUT_MS = 20000;
 
 // Drivers whose rows are a FLOOR, not the router baseline — the runner prints a
 // caveat banner for each so the real engine is never measured against a
@@ -62,33 +75,65 @@ export async function createRunCtx() {
   const { ingestSchemaDocs } = await import(join(ROOT, "src", "schema-docs.mjs"));
   const { ToolError } = await import(join(ROOT, "src", "config.mjs"));
 
-  const graphJson = JSON.stringify(ingestSchemaDocs(JSON.parse(await readFile(FIXTURE, "utf8"))));
+  const ingested = ingestSchemaDocs(JSON.parse(await readFile(FIXTURE, "utf8")));
+  const graphJson = JSON.stringify(ingested);
   const dir = await mkdtemp(join(tmpdir(), "tmct-agentbench-"));
   await mkdir(join(dir, ".tmct"), { recursive: true });
   const graphFile = join(dir, ".tmct", "graph.json");
   await writeFile(graphFile, graphJson);
   const config = { graphFile };
 
+  // The parsed graph, loaded ONCE, so the resolver/planner can BIND entities
+  // (resolveObject — the binding oracle) with the same graph dispatchTool reads.
+  const graph = parseEntities(ingested);
+
+  // resolve(): the driver's binding oracle. Delegates to resolveObject (ask.mjs)
+  // — the resolver's `resolves(param, as)` precondition maps to exactly this.
+  const resolve = (term) => resolveObject(graph, term);
+
   // dispatch(): the driver's window onto the REAL tool layer. Returns
-  // { ok:true, text } on success, { ok:false, error } on a ToolError (an
-  // unresolvable entity / honest miss — NOT a crash).
+  // { ok:true, text, resolved } on success (resolved = the STRUCTURED payload —
+  // the graph entity the call bound, so the planner can thread step-i's result
+  // into step-i+1's args), { ok:false, error } on a ToolError (an unresolvable
+  // entity / honest miss — NOT a crash). Back-compat: the stub/shim drivers read
+  // only `text`, so the extra `resolved` key is inert for them.
   const dispatch = async (name, input) => {
     try {
       const text = await dispatchTool(name, input, { config });
-      return { ok: true, text };
+      // the primary bound arg (symbol/module/class) -> its resolved entity, for
+      // result-threading. A no-arg tool (untested/arch) has no bound entity.
+      const primary = input && (input.symbol ?? input.module ?? input.class ?? input.query);
+      const resolved = primary ? resolve(String(primary)).match : null;
+      return { ok: true, text, resolved };
     } catch (e) {
       if (e instanceof ToolError) return { ok: false, error: e.message };
       throw e; // a real bug, not an honest miss — surface it
     }
   };
 
-  const ctx = { dispatch, capabilityByName, config };
+  const ctx = { dispatch, resolve, graph, capabilityByName, config };
   return { ctx, cleanup: () => rm(dir, { recursive: true, force: true }) };
 }
 
-/** Run one case through the driver → a graded product row (deterministic). */
+/** Run one case through the driver → a graded product row (deterministic). The
+ *  driver call is BOUNDED (DRIVER_TIMEOUT_MS): a runaway planner records a
+ *  non-terminating loopResult (an automatic FAIL on `terminates:true`) instead of
+ *  hanging the caller — critically, the ~848-test suite that calls runAgentbench.
+ *  The timeout fires only on a real hang, so normal runs are byte-identical. */
 export async function runCase(caseDef, driver, ctx, stamp) {
-  const loopResult = await driver(caseDef.request, caseDef.tools, ctx);
+  let timer;
+  const guard = new Promise((resolve) => {
+    timer = setTimeout(
+      () => resolve({ calls: [], refused: false, terminated: false, proof: [], driver: "timeout", why: `driver exceeded ${DRIVER_TIMEOUT_MS}ms — bounded to prevent a suite hang` }),
+      DRIVER_TIMEOUT_MS,
+    );
+  });
+  let loopResult;
+  try {
+    loopResult = await Promise.race([driver(caseDef.request, caseDef.tools, ctx), guard]);
+  } finally {
+    clearTimeout(timer);
+  }
   const verdict = gradeCase(caseDef, loopResult);
   return {
     caseId: caseDef.id,
