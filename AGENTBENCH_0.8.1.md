@@ -115,8 +115,8 @@ A composition case pins the **true composed answer** as a static array of entity
   `composed` is new code (0.8.0's `observed` was only the first call's rendered text), so the
   produced-vs-expected comparison is purely value-level.
 - **Determinism:** stamped `--stamp 0.8.1` (never `Date.now()`); re-running is byte-identical (checked).
-  The `version` field reads `package.json` (0.8.0 in this worktree — branched before main's 0.8.1 bump,
-  which is not editable here); the run **stamp/label** is 0.8.1, which names the artifacts.
+  The `version` field reads `package.json` = **0.8.1** (raw regenerated on `main` after the 0.8.1 bump);
+  stamp/label and version agree.
 - **The extractor is tested, not asserted:** `test/agentbench.test.mjs` pins every result set
   (`untested`, `impact(a)`, `tests_for`, `members`, `callers`) against a hand-derived fixture truth, the
   compose operators as pure set-algebra, the two-branch `gradeCase` result axis, the referential lint,
