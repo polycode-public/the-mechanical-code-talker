@@ -1332,6 +1332,19 @@ function relationTermOf(query, envelope) {
   if ((m = q.match(/^what\s+([a-z][a-z-]*?)\s+are\s+there$/))) return m[1];
   // "what is calling", "what is importing" (bare gerund, no object)
   if ((m = q.match(/^what\s+(?:is|are)\s+([a-z][a-z-]*ing)$/))) return m[1];
+  // THE SINGULAR META FORM — "what is a test" / "what is an import". The whole meta
+  // shape used to be excluded here to keep the frozen am-meta-imports ambiguity case
+  // ("what does imports mean") out; but that case is a DIFFERENT shape (ambiguousParse
+  // → envelope.parsed is null), and a relation word whose SINGULAR reads as a real
+  // graph-schema class/predicate ("what is a contains"/"cochange") answers non-miss
+  // from the ordinary meta path. So admit the article meta form ONLY when the ordinary
+  // path MISSED on a plain definitional parse (envelope.miss on a shape:"meta" object):
+  // an unambiguous relation word like "test" — no schema reading, no ambiguity — then
+  // reaches the relation-concept force exactly as its plural "what are the tests" does.
+  // RELATION_TERM still gates the term downstream, so a non-relation miss is untouched.
+  if (envelope?.miss === true && envelope?.parsed?.shape === "meta" && envelope.parsed.object) {
+    return envelope.parsed.object;
+  }
   return null;
 }
 
