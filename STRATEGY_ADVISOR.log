@@ -222,3 +222,15 @@ STATUS: OPEN — sent to Agent C; verify in merged registry/guardrail.
 OBSERVATION 6: registry arg-key correctness is a comment, not a test.
 RECOMMENDED ACTION: conformance test — every registry arg-key is read by dispatchTool; registry name-set relates to dispatch case-set per the deny decision. Catches arg drift at merge.
 STATUS: OPEN — sent to Agent C.
+
+═══════════════════════════════════════════════════════════════════════
+[2026-07-06 00:18Z] source=strategy-advisor(opus,deep) · topic=phase-11-measurement-mergegate
+CONFIRMED: findings 2/5/6 implemented by Agent C (agentbench/grade.mjs reports completion+hallucination pair, gates at COMPLETION_FLOOR, hallucinationsIn auto-fails !isCapability closed-world deny). ACE-not-wired absorbed into STAGE_2_INTENT_FRAMES.md:54 (managed, not drift).
+
+OBSERVATION 7: the 3 levers will be statistically invisible in a pooled CHATBENCH_0.8.0 mean — graded-pool.jsonl is 925 cases, run.mjs defaults to 10% sample, the fixes touch ~3 cells; sampling may not even draw g-b1-pron-25.
+RECOMMENDED ACTION: CHATBENCH_0.8.0 re-measure MUST report a per-family, full-run breakdown (--only g-b1-pron,g-b1-disc-count,g-b1-temp; no sample) alongside the pooled mean. Recorded in task #6.
+STATUS: OPEN — measurement design for task #6.
+
+OBSERVATION 8: merge-gate honesty — verify all THREE levers ship with impl + a levers-test cell before merging Agent A; do not let the CHATBENCH_0.8.0 narrative claim three if only some land. An over-claimed stamp is the hallucination-of-progress this phase exists to prevent.
+RECOMMENDED ACTION: gate A merge on 3 levers each (impl+test), else honestly re-scope the stamp. Recorded in task #1 acceptance.
+STATUS: OPEN — merge-gate for task #1.
