@@ -367,3 +367,15 @@ STATUS: OPEN — integration.
 OBSERVATION 35: AGENTBENCH_0.8.1_002 must dedup by case id vs _001 or C2 result double-counts.
 RECOMMENDED ACTION: score _002 as a delta over _001 case set. Recorded in task #16(3).
 STATUS: OPEN — integration.
+
+═══════════════════════════════════════════════════════════════════════
+[2026-07-06 03:56Z] source=strategy-advisor(opus,deep) · topic=0.8.1-FINAL-honesty-audit
+OBSERVATION 36 (MANDATORY caveat): the "91%->95% / C2 0->83%" AGENTBENCH headline is a BASKET CHANGE, not like-for-like. The C2 ladder grew 2->6 with 4 cases authored for the goal-reasoner. Same-basket truth: on the held-constant 35 cases the goal driver fixes ONE result case (91->94%; original C2 result 0->50%, 1 of 2). The 0->83% is on the grown C2 ladder.
+RECOMMENDED ACTION: headline the SAME-BASKET / DRIVER-SWAP win — AGENTBENCH_0.8.1_001 shows resolver 85% vs goal-reasoner 95% result on the IDENTICAL 39 cases (+10pp, purely the driver swap, 0% halluc). Cite that, not the cross-release rate.
+STATUS: DONE — folding into docs.
+
+OBSERVATION 37: no double-count (_002 = _001 39 + 4 A1/A2; C2 stays 6). ACE claim HOLDS fully — interpret() called nowhere in the product path; parseQuery uses runStrategiesSync which drops the async ACE strategy; sync spine byte-verified. C2 rests on ONE GOAL_RULES entry (coverage invariant) — real + phrasing-robust (held-out, grep-clean) but thinly sampled, NOT rule-general: state as such.
+RECOMMENDED ACTION: docs say C2 cleared for one declared coverage-invariant goal-rule, thinly sampled. Baseline note: authoritative no-regression is the MAIN run vs run-0.7.1 (verified); S2 in-worktree used cycle-006.
+STATUS: DONE — folding into docs.
+
+=== ADVISOR CLOSED (0.8.1): build complete, 37 findings over 15 ticks (11 in 0.8.0, 4 in 0.8.1 + final), all logged + actioned. ===
