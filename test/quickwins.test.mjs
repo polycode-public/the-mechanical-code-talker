@@ -102,3 +102,22 @@ test("fix1: a non-relation unknown term still declines to the honest vocabulary 
   }
 });
 
+// ── Fix 2: "who touched X" renders a friendly commit ref, not a raw sha ──
+
+test("fix2: 'who touched X' names the author beside the sha, not a bare hash", () => {
+  const r = ask(graph, "who touched app/lib/a.mjs");
+  assert.equal(r.tmct_ask.miss, false);
+  assert.equal(r.content, "abc1234 (Ada Lovelace).",
+    "the friendly ref is the short sha + the Commit individual's mgx:commitAuthor");
+});
+
+test("fix2: 'who touched X' degrades gracefully to the sha alone when no author is recorded", () => {
+  // a commit individual with NO author attribute → the sha renders alone (no "()").
+  const noAuthor = structuredClone(FIXTURE_PAYLOAD);
+  const commit = noAuthor.individuals.find((i) => i.class === "Commit");
+  commit.attributes = (commit.attributes || []).filter((a) => a.key !== "author");
+  const g = parseEntities(ingestSchemaDocs(noAuthor));
+  const r = ask(g, "who touched app/lib/a.mjs");
+  assert.equal(r.content, "abc1234.", "no author → the sha stands alone, no empty parens");
+});
+

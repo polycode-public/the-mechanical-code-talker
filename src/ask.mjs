@@ -1646,6 +1646,17 @@ function symbolLabelOf(ind) {
   return ["Function", "Method"].includes(ind.class) ? `function ${label}()` : label;
 }
 
+/** A FRIENDLY commit reference for a "who touched X" list — the raw sha alone reads as
+ *  noise, so when the Commit individual carries an author (mgx:commitAuthor → key
+ *  "author") name them beside it. The label is already the graph's short ref (the
+ *  builder stores sha.slice(0,12)), so it is used verbatim. Degrades gracefully: a
+ *  commit with no recorded author renders the sha alone, exactly as before. */
+function commitRefOf(ind) {
+  const sha = String(ind.label || ind.id || "");
+  const author = (ind.attributes || []).find((a) => a.key === "author")?.value;
+  return author ? `${sha} (${author})` : sha;
+}
+
 function listJoin(syms) {
   return syms.length > 1 ? `${syms.slice(0, -1).join(", ")} and ${syms[syms.length - 1]}` : syms[0];
 }
@@ -1853,7 +1864,10 @@ function renderCore(parsed, result) {
   // Commit list ("which commits touched X") has no containing module to group by, so
   // anything that is not a fine entity takes the flat join.
   if (parsed.shape === "forward" || parsed.entityType === "Module" || result.matches.every((m) => !FINE_ENTITY_TYPES.has(m.class))) {
-    const shown = result.matches.slice(0, OVERFLOW_CAP).map((m) => m.label);
+    // A reverse "who touched X" resolves to Commit individuals — render friendly refs
+    // (short sha + author) instead of the raw stored sha; every other flat list (module
+    // labels, etc.) keeps its own label verbatim.
+    const shown = result.matches.slice(0, OVERFLOW_CAP).map((m) => m.class === "Commit" ? commitRefOf(m) : m.label);
     const extra = result.matches.length > OVERFLOW_CAP ? `, …and ${result.matches.length - OVERFLOW_CAP} more` : "";
     return { content: shown.join(" and ") + extra + ".", miss: false, ambiguous: false, matches: result.matches };
   }
