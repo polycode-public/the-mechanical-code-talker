@@ -26,7 +26,22 @@ import { fileURLToPath } from "node:url";
 
 import { parseCases, gradeCase, rollup, ladderGate, renderRollup, RUNGS } from "./grade.mjs";
 import { stubDriver } from "./driver-stub.mjs";
+import { shimDriver } from "./driver-shim.mjs";
 import { capabilityByName } from "../src/router/registry.mjs";
+
+// The pluggable drivers, selectable with --driver. `stub` is the STUB-DRIVER
+// FLOOR (default); `shim` is the SHIM-TRANSPORT interface floor (server-http.mjs
+// selectTool, reused in-process). Neither is the router baseline — that is the
+// resolver/planner driver, swapped in later behind this same seam.
+export const DRIVERS = Object.freeze({ stub: stubDriver, shim: shimDriver });
+
+// Drivers whose rows are a FLOOR, not the router baseline — the runner prints a
+// caveat banner for each so the real engine is never measured against a
+// mislabeled anchor (coordinator note 2, extended to shim-transport).
+const FLOOR_CAVEAT = Object.freeze({
+  "stub-floor": "the STUB-DRIVER FLOOR — a dumb keyword matcher, not the router baseline.",
+  "shim-transport": "the SHIM-TRANSPORT interface floor (server-http.mjs routing) — the transport/serialization layer, NOT the routing brain. The real anchor is the resolver/planner driver, swapped in later behind driver(request,tools,ctx).",
+});
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = dirname(HERE);
@@ -111,7 +126,7 @@ export async function runAgentbench(cases, { driver = stubDriver, stamp = BENCH_
 }
 
 function parseArgs(argv) {
-  const args = { cases: DEFAULT_CASES, stamp: BENCH_VERSION };
+  const args = { cases: DEFAULT_CASES, stamp: BENCH_VERSION, driver: "stub" };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
     if (a === "--stamp") args.stamp = argv[++i];
@@ -119,6 +134,7 @@ function parseArgs(argv) {
     else if (a === "--out") args.out = argv[++i];
     else if (a === "--rung") args.rung = argv[++i].toUpperCase();
     else if (a === "--ladder") args.ladder = true;
+    else if (a === "--driver") args.driver = argv[++i];
     else if (a === "--only") args.only = argv[++i].split(",").map((s) => s.trim()).filter(Boolean);
     else throw new Error(`unknown argument ${a}`);
   }
@@ -133,6 +149,10 @@ export async function main(argv = process.argv.slice(2)) {
   }
   if (args.rung && !RUNGS.includes(args.rung)) {
     console.error(`--rung must be one of ${RUNGS.join("|")}`);
+    return 2;
+  }
+  if (!DRIVERS[args.driver]) {
+    console.error(`--driver must be one of ${Object.keys(DRIVERS).join("|")}`);
     return 2;
   }
 
@@ -153,7 +173,7 @@ export async function main(argv = process.argv.slice(2)) {
   }
   if (!selected.length) { console.error("no cases selected."); return 2; }
 
-  const { rows, rolled, ladder } = await runAgentbench(selected, { stamp: args.stamp, ladder: args.ladder });
+  const { rows, rolled, ladder } = await runAgentbench(selected, { driver: DRIVERS[args.driver], stamp: args.stamp, ladder: args.ladder });
 
   const outDir = args.out ?? join(HERE, "results", "raw", `run-${args.stamp}`);
   await mkdir(outDir, { recursive: true });
@@ -162,8 +182,8 @@ export async function main(argv = process.argv.slice(2)) {
 
   const drivers = [...new Set(rows.map((r) => r.driver))];
   console.log(`agentbench run ${args.stamp} (version ${BENCH_VERSION}) — ${rows.length} case(s), driver: ${drivers.join(",")}`);
-  if (drivers.includes("stub-floor")) {
-    console.log("NOTE: these are the STUB-DRIVER FLOOR — not the router baseline. The real resolver/planner is swapped in later behind driver(request,tools,ctx).");
+  for (const d of drivers) {
+    if (FLOOR_CAVEAT[d]) console.log(`NOTE: driver "${d}" rows are ${FLOOR_CAVEAT[d]}`);
   }
   console.log("\nmetric pair per rung (gate = 0% hallucination AT ≥50% completion):");
   console.log(renderRollup(rolled));
