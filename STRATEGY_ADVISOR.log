@@ -254,3 +254,13 @@ STATUS: DONE ✅ — raised to 90000ms with rationale; still catches the ~419s->
 OBSERVATION 12: agentbench BENCH_VERSION hardcoded "0.8.0" (correct for pre-bump worktree) will drift on the next bump — every artifact keeps stamping 0.8.0.
 RECOMMENDED ACTION: default the stamp from package.json (deterministic, no Date.now).
 STATUS: DONE ✅ — BENCH_VERSION now reads package.json at load; verified 0.8.0.
+
+═══════════════════════════════════════════════════════════════════════
+[2026-07-06 00:38Z] source=strategy-advisor(opus,deep) · topic=phase-11-tick6-shim-transport
+OBSERVATION 13: the shim is TRANSPORT, not the routing brain — selectTool emits tool_use only for explicit COMMANDS verbs or when tmct_ask is declared; agentbench NL cases declare only registry capabilities, so a shim-backed driver returns text (low completion). Measuring it as "the router baseline" mints a mislabeled anchor (run.mjs:165 only prints the caveat for stub-floor).
+RECOMMENDED ACTION: G stamps driver:"shim-transport", frames AGENTBENCH_0.8.0 as the transport/interface floor NOT the router baseline (real anchor = resolver/planner, task#4); honest headline = 0% hallucination held at low NL completion, climbs with the resolver.
+STATUS: OPEN — sent to Agent G.
+
+OBSERVATION 14: arg keys live in THREE unbound sources — COMMANDS.arg (chat.mjs), registry param.arg, dispatchTool. A future edit turns a shim tool_use.input into a grader unknown-arg auto-fail misread as a router defect.
+RECOMMENDED ACTION: conformance assertion — for every COMMANDS[c] with isCapability(tool), COMMANDS[c].arg ∈ argKeysOf(tool).
+STATUS: OPEN — sent to Agent G (fold into its conformance test).
