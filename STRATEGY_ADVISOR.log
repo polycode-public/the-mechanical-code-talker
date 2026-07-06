@@ -234,3 +234,13 @@ STATUS: OPEN — measurement design for task #6.
 OBSERVATION 8: merge-gate honesty — verify all THREE levers ship with impl + a levers-test cell before merging Agent A; do not let the CHATBENCH_0.8.0 narrative claim three if only some land. An over-claimed stamp is the hallucination-of-progress this phase exists to prevent.
 RECOMMENDED ACTION: gate A merge on 3 levers each (impl+test), else honestly re-scope the stamp. Recorded in task #1 acceptance.
 STATUS: OPEN — merge-gate for task #1.
+
+═══════════════════════════════════════════════════════════════════════
+[2026-07-06 00:23Z] source=strategy-advisor(opus,deep) · topic=phase-11-forward-seams
+OBSERVATION 9: the "$0 rung below nova-micro" has no slot. PLAN_BEDROCK_METER_OPTIMISER §1.0.1 puts nova-micro at rank 0; shipped runtime model-ladder.mjs:14-32 freezes nova-lite at rank 0 with nova-micro OFF-ladder (rank()->null); model-select.mjs maps off-ladder ids to clip:"unranked", unordered. So tmct-$0 and nova-micro would both be unranked — no code path prefers the cheaper. tmct references bedrock-meter nowhere.
+RECOMMENDED ACTION: keep AGENTBENCH model bands strictly ILLUSTRATIVE (do not wire rank() ordering); Agent D must reconcile the plan-vs-runtime ladder (place nova-micro on-ladder rank 0 + tmct below, or add a below-floor rung) as part of building the RoutingTarget. The $0-rung is aspirational until D builds ordering — narrate as such. Recorded in task #7.
+STATUS: OPEN — task #7.
+
+OBSERVATION 10: proof-chain seam frozen too thin. agentbench/grade.mjs verifies a FLAT precondition-ok list; PLAN:154 defines the proof chain as POP causal links (producer->condition->consumer). A flat list cannot verify the chain connects goal to grounded facts — gameable, one level past the completion-floor fix.
+RECOMMENDED ACTION: shape the recorded proof STEP to carry causal-link fields NOW (grading stays lenient — extra keys tolerated); design the planner proof-producer + grade.mjs proof-checker together and tighten to CONNECTEDNESS when Stage 3 lands. Recorded in task #4.
+STATUS: OPEN — task #4.
