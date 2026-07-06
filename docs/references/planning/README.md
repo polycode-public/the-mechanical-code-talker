@@ -39,7 +39,15 @@ is less novel than it first looks:
 | [`NONLIN.md`](NONLIN.md)                                     | Tate (1976), Edinburgh — the first HTN, partial-order planner; O-Plan and the HTN lineage.      |
 | [`STRIPS_PDDL.md`](STRIPS_PDDL.md)                           | The operator/effect model (STRIPS, 1971) and its modern declaration language, PDDL.             |
 | [`STEEL_AND_HO.md`](STEEL_AND_HO.md)                         | Steel & Ho (1993), Essex — planning *and execution* under uncertainty; when to stop planning.   |
+| [`BDI_GOAL_DRIVEN_AUTONOMY.md`](BDI_GOAL_DRIVEN_AUTONOMY.md) | Rao & Georgeff BDI + Aha/Molineaux/Cox Goal-Driven Autonomy + continual planning (Stage 5).     |
 | Also linked below                                            | GraphPlan (Blum & Furst, 1995), SATPLAN (Kautz & Selman), HTN solvers (SHOP2), the IPC.         |
+
+### Design notes (router-stage synthesis, not primary-source references)
+
+| File                                                         | Covers                                                                                          |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| [`STAGE_2_INTENT_FRAMES.md`](STAGE_2_INTENT_FRAMES.md)       | Stage 2 — imperative NL → intent frames over a controlled fragment; reuse of the ACE parser + lexicon; the in-scope/escalate boundary. |
+| [`STAGE_5_GOAL_REASONER.md`](STAGE_5_GOAL_REASONER.md)       | Stage 5 — closed-world C2 goal-reasoner; first-step arbitration, intention persistence, the open-world goal-generation residual. |
 
 ## Further primary works (link-only)
 
