@@ -47,7 +47,7 @@ playtest-sprint round; see "Playtest sprint" below).
 "find me the payment class" now works: type-filtered, fuzzy property-surface matching, with a
 narrow-then-broaden cascade (self and descendants first, then ancestor and siblings if nothing
 matches) and a boolean-fold generalization for compositional predicate queries. Design doc:
-`PLAN_PREDICATE_QUERIES.md`.
+`archive/PLAN_PREDICATE_QUERIES.md`.
 
 ### Research plans that became real code
 
@@ -92,7 +92,7 @@ piped session before its log flushed. Fixed with `try`/`catch` and `try`/`finall
 - **`PLAN_INFERENCE_TESTING.md`.** Revised so infbench case generation is mechanical, not
   hand-authored. It mechanizes the bench, not the engine: new inference rules in
   `src/syllogise.mjs` stay hand-written work, staged for later.
-- **`PLAN_PREDICATE_QUERIES.md`.** The find-query feature's design doc.
+- **`archive/PLAN_PREDICATE_QUERIES.md`.** The find-query feature's design doc.
 - **`PLAN_ADVANCED_GRAMMAR.md`.** Gained cross-links to the other plans and a phasing note.
 - **`PLAN_CODE.md`.** New, not built. Program synthesis over tmct's own closed DSLs: a
   `GOAL_RULE` or `PHRASING_FRAMES` entry synthesized from labeled examples, plus two later, harder

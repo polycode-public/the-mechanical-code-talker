@@ -249,7 +249,7 @@ there before authoring anything new (track c).
    both siblings already use (PLAN_INFERENCE_TESTING §4 header, PLAN_ADVANCED_GRAMMAR §3 title).
 6. **Cross-plan phasing (2026-07-07 sweep, see `ROADMAP.md`'s near-term section for the live
    picture):** this plan's stage 1 (tracks a+b) and stage 2's disjointWith growth (track d) are
-   Phase-1 quick wins, executed alongside [[PLAN_PREDICATE_QUERIES.md]]'s core feature,
+   Phase-1 quick wins, executed alongside [[archive/PLAN_PREDICATE_QUERIES.md]]'s core feature,
    [[PLAN_INFERENCE_TESTING.md]]'s stage-0 harness, and [[PLAN_ADVANCED_GRAMMAR.md]]'s track (a)/
    (f). This plan's stage 3 (numeric vocabulary) is Phase 2. Stage 4 and track (e)'s WordNet
    door stay Phase 3 (unstarted, re-confirm value first).

@@ -27,7 +27,7 @@ one patch per shipped playtest-sprint fix — see `HANDOVER.md` for the exact re
 - **A new feature: predicate-based "find" queries.** "find me the payment class" now works:
   type-filtered, fuzzy property-surface matching, with a narrow-then-broaden inheritance-aware
   cascade and a boolean-fold generalization for compositional predicate queries. Design:
-  `PLAN_PREDICATE_QUERIES.md`.
+  `archive/PLAN_PREDICATE_QUERIES.md`.
 - **Two research tracks landed as code.** The ontology plan's two inert synonym resources
   (ConceptNet synonym/similar-to rows, phrasebook synonym families) are now wired into query-time
   matching, and the disjointness premise set plus numeric vocabulary grew
@@ -42,7 +42,7 @@ one patch per shipped playtest-sprint fix — see `HANDOVER.md` for the exact re
   end to end, and surfaced a real goal-reasoner honesty gap (Bug 8, below).
 - **A session-loop fix.** A throwing turn no longer aborts a piped/non-interactive session.
 - **4 new plan docs.** `PLAN_ontology-hierarchies.md`, `PLAN_INFERENCE_TESTING.md` (revised so
-  infbench generation is mechanical, not hand-authored), `PLAN_PREDICATE_QUERIES.md`, and
+  infbench generation is mechanical, not hand-authored), `archive/PLAN_PREDICATE_QUERIES.md`, and
   `PLAN_CODE.md` (new, program synthesis over tmct's closed DSLs, gated on explicit operator
   sign-off per track, not built yet).
 

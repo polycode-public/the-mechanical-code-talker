@@ -51,3 +51,9 @@ correction and the Bug A recall-fix pointer (see ~/.claude/inboxes/codememory.md
 ADVISOR CLOSED (post-0.8.2 wave, 2026-07-07) — stopped by operator instruction. 2 ticks run,
 2 findings, both actioned. Wave shipped as v0.9.0 (pushed, CI publishing). Full history above;
 re-arm fresh for the next wave rather than resuming this block.
+
+═══════════════════════════════════════
+[2026-07-07 22:56Z] source=strategy-advisor(sonnet5,deep) · topic=narrate-mode-vs-playtest-collision
+OBSERVATION: narrate-mode agent (worktree agent-ae21cfc66710b9bdf, based at 640c852) is worktree-isolated per its task spec, but playtest sprint rounds 1-3 landed fixes by DIRECT commit on main (b0a2021, 9218266, d95535d), touching the same chat.mjs/ask.mjs/normalize.mjs lanes narrate-mode is instrumenting. Rounds 4-8 will repeat that pattern. Every round-4-8 fix commit widens the eventual merge-back diff against narrate-mode's frozen base. Separately: git worktree list shows 17 worktrees, only 1 locked/active — 16 stale from prior ticks, worth a prune before the next fan-out wave.
+RECOMMENDED ACTION: after each playtest round's fix lands on main, immediately run `git -C .claude/worktrees/agent-ae21cfc66710b9bdf merge main` (or rebase) to catch conflicts in small increments rather than one big-bang resolution after round 8. Run `git worktree prune`/cleanup once the in-flight agents finish.
+STATUS: OPEN

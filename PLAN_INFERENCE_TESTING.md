@@ -310,7 +310,7 @@ contradicting the closure is quarantined, not blended).
 
 Stage 0 (harness + generator + A1/A2/ceiling templates + `npm run infbench`) is a **Phase-1 quick
 win** — executed alongside [[PLAN_ontology-hierarchies.md]]'s stage-1 synonym wiring,
-[[PLAN_PREDICATE_QUERIES.md]]'s core feature, and [[PLAN_ADVANCED_GRAMMAR.md]]'s tracks (a)/(f).
+[[archive/PLAN_PREDICATE_QUERIES.md]]'s core feature, and [[PLAN_ADVANCED_GRAMMAR.md]]'s tracks (a)/(f).
 Stage 1 (`cax-sco`) is Phase 2 — real engine code, gated on Stage 0's harness existing to measure
 it. Stages 3-5 (`cax-dw`, tier-5 forward-chainer, consistency checker) are Phase 3 — the big rock,
 gated on [[PLAN_ontology-hierarchies.md]] stage 2 (disjointness premises) landing first for stage
