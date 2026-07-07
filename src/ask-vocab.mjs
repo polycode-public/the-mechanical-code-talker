@@ -157,6 +157,12 @@ export const RELATIONS = {
       "change alongside", "shares commits with", "share commits with",
       "tends to change together with", "tend to change together with",
       "moves together with", "move together with",
+      // Track-1 trio (temporal lever): the bare "changed/change together with" form
+      // (no "tends to"/"tend to" prefix) was missing outright — "which modules
+      // changed together with X" fell through to the "touch(ed)" verb instead (a
+      // Commit->Module kind, structurally unable to match a Module subject), always
+      // producing a confidently-empty answer regardless of real cochange data.
+      "changed together with", "change together with", "changes together with",
     ],
   },
   reexports: {

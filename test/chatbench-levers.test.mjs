@@ -373,3 +373,43 @@ test("Lever 3 (g-c1-temp-31): 'who touched the module that imports X' now ASSEMB
 });
 
 
+// ---- Lever 3C (Track-1 trio, post-0.8.2) — cochange, the two sub-bugs behind
+// the g-b1-temp-7/31/44 + g-c1-temp-12/29/47 red set: (a) the bare "changed
+// together with" phrasing was missing from the cochange verb table outright,
+// so it fell through to the "touch(ed)" verb (Commit->Module, structurally
+// unable to match a Module subject) and always produced a confidently-empty
+// answer; (b) cochange (mgx:changeCoupledWith) is a SYMMETRIC relation but the
+// fixture stores one directed edge per pair, so a query naming the STORED
+// SUBJECT side ("cochange with app/lib/a.mjs", a.mjs being subject of both
+// recorded pairs) found nothing under a reverse-only (object-side) filter. ----
+
+test("Lever 3C(a): 'which modules changed together with X' now parses as cochange, not touch(ed)", () => {
+  const r = ask(graph, "which modules changed together with app/lib/a.mjs");
+  assert.equal(r.tmct_ask.parsed?.kind, "cochange", "the bare phrasing resolves to the cochange verb table entry");
+  assert.equal(r.tmct_ask.miss, false);
+  assert.match(r.content, /app\/lib\/b\.mjs/);
+  assert.match(r.content, /app\/lib\/c\.mjs/);
+});
+
+test("Lever 3C(a): 'which modules changed together with X' also answers from the OBJECT side of the stored pair", () => {
+  // app/lib/c.mjs is the OBJECT of the stored edge (mod-a -> mod-c); this
+  // direction worked even before the symmetric-lookup fix once the kind itself
+  // parsed correctly — kept as a regression guard on the non-flipped path.
+  const r = ask(graph, "which modules changed together with app/lib/c.mjs");
+  assert.equal(r.tmct_ask.miss, false);
+  assert.match(r.content, /app\/lib\/a\.mjs/);
+});
+
+test("Lever 3C(b): 'which modules cochange with X' matches the SUBJECT side of the stored pair too (symmetric lookup)", () => {
+  // app/lib/a.mjs is the SUBJECT of both stored cochange edges (-> b.mjs, -> c.mjs);
+  // a reverse (object-side-only) filter used to find nothing for this direction.
+  const r = ask(graph, "which modules cochange with app/lib/a.mjs");
+  assert.equal(r.tmct_ask.miss, false, "the symmetric lookup finds the pair from its stored-subject side");
+  assert.match(r.content, /app\/lib\/b\.mjs/);
+  assert.match(r.content, /app\/lib\/c\.mjs/);
+});
+
+test("Lever 3C discipline: a module with NO cochange partner anywhere stays an honest empty", () => {
+  const r = ask(graph, "which modules cochange with app/lib/f.mjs");
+  assert.equal(r.tmct_ask.miss, true, "f.mjs has no recorded cochange edge on either side — no fabricated partner");
+});

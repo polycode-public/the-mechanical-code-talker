@@ -2159,6 +2159,21 @@ export function traverse(graph, parsed, { contextId = null, prev = null } = {}) 
   // Module individuals and a FINER entityType was asked for do we refine via `defines`
   // (imports) — never blindly treat an edge's subject id as if it were always a module id.
   let edges = kindsFor(kind).flatMap((k) => edgesOfKind(graph, k)).filter((e) => e.object === gObjMatch.id);
+  // cochange (Module<->Module, mgx:changeCoupledWith) is a SYMMETRIC relation but
+  // stored as ONE directed edge per pair (extractor convention, not a meaningful
+  // subject/object direction) — "which modules cochange with X" must also match
+  // when X is the STORED SUBJECT of the pair, reading the OTHER endpoint (Track-1
+  // trio, temporal lever). Flip subject<->object on that side so the subjects-
+  // collection loop below (which reads e.subject) picks up the partner uniformly;
+  // the object-side match above is untouched, so an existing non-empty answer is
+  // byte-identical.
+  if (kind === "cochange") {
+    edges = edges.concat(
+      kindsFor(kind).flatMap((k) => edgesOfKind(graph, k))
+        .filter((e) => e.subject === gObjMatch.id)
+        .map((e) => ({ ...e, subject: e.object, object: e.subject })),
+    );
+  }
   let extNote = "";
   if (!edges.length && gObjMatch.class) {
     // Unresolved ext:<Name> endpoints with the SAME name as the resolved entity:
