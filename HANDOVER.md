@@ -119,15 +119,18 @@ piped session before its log flushed. Fixed with `try`/`catch` and `try`/`finall
    "what hold i at". `STOPWORDS` (`src/interpret/normalize.mjs`) has no modal auxiliaries
    (should/would/could/can/will/shall/might/must), so "should" reaches the fuzzy-correction step
    and lands within edit distance of "hold". Diagnosed, not yet fixed: add modals to `STOPWORDS`.
-4. **`PLAN_TMCT_ECOSYSTEM_INTEGRATION.md`, in progress (redispatched).** An earlier attempt at
-   this doc was lost (its background task became untraceable, likely across a context-compaction
-   boundary — no file/branch/worktree trace found). Redispatched fresh with the operator's full
-   original brief: a 3-part plan for tmct/bedrock-meter/marginalia integration, plus a deep-dive
-   on whether tmct can drive marginalia's and seonix's own graph tools directly or needs a
-   corpus+lexicon+template extension layered on top. Note: stray `.claude/worktrees/agent-*`
-   directories in this repo contain unmerged commits (`5abc102`, `9f1c505`) for a `/v1/messages`
-   shim under "Phase 11 Track 2, Phase A" — real prior work, never merged to `main`; the
-   redispatched agent was told to investigate and account for it, not assume it's live.
+4. **`PLAN_TMCT_ECOSYSTEM_INTEGRATION.md` — landed.** The redispatched research doc is done
+   (an earlier attempt was lost to an untraceable context boundary; this is a fresh pass).
+   Correction to the note this follow-up used to carry: the `/v1/messages` shim commits
+   (`5abc102`, `9f1c505`) are **NOT unmerged stray work** — they're already merged and shipped
+   on `main` since 0.8.0 (confirmed via `git merge-base --is-ancestor`); the
+   `.claude/worktrees/agent-*` directories are just ordinary leftover worktrees whose commits
+   already landed. Bigger finding: **seonix has already fully migrated to tmct** — their
+   `PLAN_CHAT_EXTRACTION.md` is archived (= done), they import
+   `@polycode-projects/the-mechanical-code-talker@^0.9.4` as a real dependency, and are now
+   running their own playtest-sprint-style dogfooding against tmct's chat engine on their real
+   production graph (see `~/.claude/inboxes/codememory.md` for live findings). marginalia is
+   the one genuinely open part of the plan — see the doc's §3.2.
 5. **`PLAN_CODE.md`'s sign-off gate.** Read the plan and decide with the operator whether to
    greenlight Track 1 (GOAL_RULE/PHRASING_FRAMES synthesis). Tracks 2/3 (JS, HTML/CSS synthesis)
    stay further out regardless.
