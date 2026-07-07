@@ -488,6 +488,41 @@ test("presupposition (f) guard: a HELD relation presupposition keeps the engine'
   assert.match(r.answer, /^Yes — imports edge from app\/lib\/b\.mjs to app\/lib\/a\.mjs\./);
 });
 
+// ---- describe-wrapper rescue (playtest sprint round 2, SKILL_PLAYTEST_SPRINT.md):
+// a describe-intent question wrapped in an ordinary polite request ("can you
+// describe X for me", "can you tell me more about X") is rescued as a LAST-RESORT
+// lane, tried only after every earlier lane (concept/relation force, teach, author,
+// presupposition, capability nudges) has declined — so it must never shadow the
+// relation force's own "tell me about <concept>" trigger for an enumerable concept
+// like inheritance. ----
+
+test("describe-wrapper rescue: a polite wrapper around a real symbol name resolves via tmct_describe instead of the generic wall", async () => {
+  const g = await graph();
+  const r1 = await runTurn("can you describe Widget for me", { config: CONFIG, graph: g });
+  assert.equal(r1.record.via, "describe");
+  assert.equal(r1.record.miss, false);
+  assert.match(r1.answer, /^Widget — Class/);
+
+  const r2 = await runTurn("can you tell me more about Widget", { config: CONFIG, graph: g });
+  assert.equal(r2.record.via, "describe");
+  assert.match(r2.answer, /^Widget — Class/);
+});
+
+test("describe-wrapper rescue guard: an unresolvable wrapped term declines silently — the ordinary wall stands, unchanged wording", async () => {
+  const g = await graph();
+  const r = await runTurn("can you tell me more about NotARealSymbol", { config: CONFIG, graph: g });
+  assert.notEqual(r.record.via, "describe");
+  assert.equal(r.record.miss, true);
+});
+
+test("describe-wrapper rescue guard: 'tell me about <enumerable concept>' still reaches the relation force, never the describe rescue", async () => {
+  const g = await graph();
+  const r = await runTurn("tell me about inheritance", { config: CONFIG, graph: g });
+  assert.notEqual(r.record.via, "describe");
+  assert.equal(r.record.miss, false);
+  assert.match(r.answer, /class deriving its structure and behaviour from another/);
+});
+
 test("presupposition (f) guard: an unresolvable subject/object declines (falls through), never guesses", async () => {
   const g = await graph();
   const r = await runTurn("why does zzz-nonexistent still import app/lib/a.mjs", { config: CONFIG, graph: g });
