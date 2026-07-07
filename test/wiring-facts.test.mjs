@@ -247,3 +247,98 @@ test("W4: no-fact questions stay byte-unchanged honest misses", async () => {
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+// ---- PLAN_ontology-hierarchies.md §3 tracks (a)+(b) — query-time synonym
+// expansion consuming the two already-parsed-but-inert resources: ConceptNet's
+// /r/Synonym rows (gated ace:"none" in conceptnet-map.toml — never a memory
+// FACT, but the raw slice data is real) and loadPhrasebook()'s already-parsed
+// `synonyms` families (corpus/templates.mjs, parsed but never consumed until
+// now). A direct term miss retries via known synonyms and, on a hit, ALWAYS
+// cites the synonym term AND its licensing corpus source — never a silent
+// substitution. ----
+
+test("ontology (a): a ConceptNet /r/Synonym pair resolves a vocabulary term that had NO direct facts", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-ontology-syn-"));
+  try {
+    // the committed slice carries a real bidirectional "argument"~"parameter"
+    // /r/Synonym row (weight 2) — no fact is ever taught about "argument"
+    // itself, only about its synonym "parameter".
+    await appendFact(dir, {
+      subject: "parameter", predicate: "rdfs:subClassOf", object: "value",
+      provenance: "ace:chat:t-syn@2026-07-07T00:00:00.000Z",
+    });
+    // control: a direct hit on the taught term needs no synonym detour
+    const direct = await runTurn("what is a parameter", { config: CONFIG, memoryDir: dir });
+    assert.match(direct.answer, /^you told me: parameter is a kind of value/);
+    assert.doesNotMatch(direct.answer, /known synonym/);
+
+    // the synonym-expanded miss: "argument" has no direct facts, but its
+    // known synonym "parameter" does — the source is cited, never silent.
+    const viaSyn = await runTurn("what is an argument", { config: CONFIG, memoryDir: dir });
+    assert.equal(viaSyn.record.via, "fact");
+    assert.equal(viaSyn.record.miss, false);
+    assert.match(viaSyn.answer,
+      /^no direct facts about "argument" — showing its known synonym "parameter" \(source: corpus:conceptnet \/r\/Synonym\):/);
+    assert.match(viaSyn.answer, /you told me: parameter is a kind of value/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("ontology (b): a phrasebook synonym family resolves a vocabulary term that had NO direct facts", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-ontology-phrasebook-"));
+  try {
+    // data/phrasebook/software-phrases.txt carries "~ caller, call site, consumer,
+    // client" — "client" itself is neither a SEON concept nor a graph noun (a
+    // genuine composed miss, unlike "module" which the concept force already
+    // answers for real and must not be shadowed by an unrelated synonym).
+    await appendFact(dir, {
+      subject: "caller", predicate: "rdfs:subClassOf", object: "artifact",
+      provenance: "ace:chat:t-syn2@2026-07-07T00:00:00.000Z",
+    });
+    const r = await runTurn("what is a client", { config: CONFIG, memoryDir: dir });
+    assert.equal(r.record.via, "fact");
+    assert.match(r.answer,
+      /^no direct facts about "client" — showing its known synonym "caller" \(source: corpus:phrasebook\):/);
+    assert.match(r.answer, /you told me: caller is a kind of artifact/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("ontology: a real concept-force answer never sprouts an unrelated synonym aside", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-ontology-nonmiss-"));
+  try {
+    await appendFact(dir, {
+      subject: "unit", predicate: "rdfs:subClassOf", object: "artifact",
+      provenance: "ace:chat:t-syn3@2026-07-07T00:00:00.000Z",
+    });
+    // "module" is a KNOWN, instance-bearing SEON concept over the real fixture
+    // graph — conceptForceAnswer already answers it for real (via:"corpus/seon"),
+    // so the synonym lane (a LAST-RESORT, only once composed/fact/corpus-seon
+    // have ALL declined) must never fire even though "unit" (module's
+    // phrasebook synonym) has an unrelated taught fact sitting in memory.
+    const r = await runTurn("what is a module", { config: CONFIG, graph: GRAPH, memoryDir: dir });
+    assert.equal(r.record.via, "corpus/seon");
+    assert.doesNotMatch(r.answer, /known synonym/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("ontology: no known synonym anywhere → the honest miss stands, byte-unchanged", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-ontology-none-"));
+  try {
+    const q = "what is a zzzznonexistentword";
+    const withMemory = await runTurn(q, { config: CONFIG, memoryDir: dir });
+    const bare = await runTurn(q, { config: CONFIG });
+    assert.equal(withMemory.answer, bare.answer);
+    assert.equal(withMemory.record.miss, true);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});

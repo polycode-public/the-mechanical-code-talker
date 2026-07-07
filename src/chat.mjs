@@ -1262,6 +1262,84 @@ function factTermVariants(normFactTerm, term) {
   return v;
 }
 
+// ---- PLAN_ontology-hierarchies.md §3 tracks (a)+(b): synonymsOf(term) —
+// QUERY-TIME term expansion wiring the two already-parsed-but-inert synonym
+// resources. §1's "two vocabulary gates" distinction: this widens what a
+// vocabulary QUESTION can be matched against (the memory fact/corpus term
+// space), never what parseAce can TEACH (the ACE lexicon gate is untouched —
+// src/grammar/lexicon-core.json is out of this agent's scope regardless). A
+// synonym-expansion hit ALWAYS renders its licensing source visibly — never a
+// silent substitution (the confident-wrong discipline every other lane here
+// already follows). ----
+
+/** term (lowercased, unnormalized — the caller normalizes) -> [{variant,
+ *  source}], built once from two committed-but-unconsumed resources:
+ *    (a) the ConceptNet slice's /r/Synonym + /r/SimilarTo rows — deliberately
+ *        gated `ace = "none"` in conceptnet-map.toml (never emitted as a
+ *        memory FACT; that gate is about fact emission, not about whether the
+ *        raw slice data exists — the map's own note names "the grammar
+ *        lexicon / phrasebook synonym families" as this data's real consumer)
+ *    (b) loadPhrasebook()'s already-parsed `synonyms` families
+ *        (corpus/templates.mjs, parsed + tested but never called outside its
+ *        own test until now)
+ *  PRECISION PASS (PLAN_ontology-hierarchies.md §3 track a: "start with a
+ *  precision-reviewed subset ... not a blind bulk activation"): a spot check
+ *  of the raw /r/Synonym slice showed the noise concentrates in multi-word /
+ *  punctuated endpoints (generic-English senses, proper-noun collisions); this
+ *  index admits only SINGLE-WORD, purely-alphabetic ConceptNet endpoints on
+ *  BOTH sides of a row — a first-cut heuristic filter, not a full manual
+ *  review of all 1,228 rows (a natural follow-up, not claimed as done here).
+ *  Lazy + failure-tolerated: a missing/broken corpus file degrades to an
+ *  empty (or phrasebook-only) index, never a throw. */
+let synonymIndexCache = null;
+async function synonymIndex() {
+  if (synonymIndexCache) return synonymIndexCache;
+  const index = new Map();
+  const add = (a, b, source) => {
+    const ta = String(a || "").trim().toLowerCase();
+    const tb = String(b || "").trim().toLowerCase();
+    if (!ta || !tb || ta === tb) return;
+    if (!index.has(ta)) index.set(ta, []);
+    if (!index.get(ta).some((e) => e.variant === tb)) index.get(ta).push({ variant: tb, source });
+    if (!index.has(tb)) index.set(tb, []);
+    if (!index.get(tb).some((e) => e.variant === ta)) index.get(tb).push({ variant: ta, source });
+  };
+  try {
+    const { loadSlice, loadMap, termText } = await import("./corpus/conceptnet.mjs");
+    const [assertions, map] = await Promise.all([loadSlice(), loadMap()]);
+    const SINGLE_WORD_RE = /^[a-z]+$/;
+    for (const a of assertions) {
+      if (a.rel !== "/r/Synonym" && a.rel !== "/r/SimilarTo") continue;
+      if (!map.has(a.rel)) continue; // drift-guarded elsewhere; tolerate here
+      const start = termText(a.start);
+      const end = termText(a.end);
+      if (!start || !end || !SINGLE_WORD_RE.test(start) || !SINGLE_WORD_RE.test(end)) continue;
+      add(start, end, `corpus:conceptnet ${a.rel}`);
+    }
+  } catch { /* corpus unavailable — degrade gracefully */ }
+  try {
+    const { loadPhrasebook } = await import("./corpus/templates.mjs");
+    const { synonyms } = await loadPhrasebook();
+    for (const family of synonyms) {
+      for (let i = 0; i < family.length; i += 1) {
+        for (let j = i + 1; j < family.length; j += 1) add(family[i], family[j], "corpus:phrasebook");
+      }
+    }
+  } catch { /* tolerated */ }
+  synonymIndexCache = index;
+  return index;
+}
+
+/** Known synonyms of `term` (case-insensitive), each `{variant, source}` — []
+ *  when nothing is known. Callers widen a failed factTermVariants lookup with
+ *  these variants ONLY on a direct miss, and MUST cite `source` in the
+ *  rendered answer (synonymFactAnswer, below factAnswer, is the reference
+ *  consumer). */
+async function synonymsOf(term) {
+  const index = await synonymIndex();
+  return index.get(String(term || "").trim().toLowerCase()) || [];
+}
+
 /** "is a module a component" — the yes/no vocabulary form the graph grammar
  *  doesn't parse; checked against the isa-family fact predicates only. */
 const ISA_ASK_RE = /^(?:is|are)\s+(?:an?\s+)?(.+?)\s+(?:a\s+kind\s+of|a\s+type\s+of|an?)\s+(.+?)[?.!\s]*$/i;
@@ -1330,6 +1408,40 @@ async function factAnswer(memoryDir, query, envelope, miss) {
     const rest = lines.slice(FACT_ANSWER_CAP);
     const extra = rest.length ? `\n  …and ${rest.length} more — say 'more' to see them.` : "";
     return { text: `${hits.length} remembered fact${hits.length === 1 ? "" : "s"} about ${term}:\n${shown.join("\n")}${extra}`, replace: true, ...(rest.length ? { pending: { items: rest.map((l) => l.trim()), noun: "facts" } } : {}) };
+  }
+  return null;
+}
+
+/** Ontology plan tracks (a)+(b) (PLAN_ontology-hierarchies.md §3): a LAST-
+ *  RESORT query-time synonym expansion for a "what is a X"-shaped term with NO
+ *  direct facts. Deliberately run where the caller runs it (runAsk, after
+ *  curatedDefinitionAnswer/conceptForceAnswer have ALL had their full chance,
+ *  gated on `via === "composed"` still standing) rather than inside factAnswer
+ *  itself: ask()'s own grammar parses EVERY "what is a X" as shape:"meta" with
+ *  miss:true, even when conceptForceAnswer goes on to answer it for real from
+ *  SEON instance data — gating on miss alone (tried and reverted) is not
+ *  enough to avoid hijacking that real answer with an unrelated synonym's
+ *  taught fact; running LAST, only once nothing else answered, is the actual
+ *  guard. ALWAYS renders a visible prefix naming the synonym term AND the
+ *  corpus row that licensed the match — never a silent substitution. Returns
+ *  { text } or null. Lazy + failure-tolerated throughout. */
+async function synonymFactAnswer(memoryDir, query, envelope) {
+  if (!memoryDir) return null;
+  const term = metaTermOf(query, envelope);
+  if (!term) return null;
+  let normFactTerm;
+  try { ({ normFactTerm } = await import("./memory/core.mjs")); } catch { return null; }
+  const facts = await memoryFacts(memoryDir);
+  for (const { variant, source } of await synonymsOf(term)) {
+    const variants = factTermVariants(normFactTerm, variant);
+    const hits = facts.filter((f) => variants.has(f.subject));
+    if (!hits.length) continue;
+    const lines = hits.map(renderFactLine);
+    const shown = lines.slice(0, FACT_ANSWER_CAP);
+    const rest = lines.slice(FACT_ANSWER_CAP);
+    const extra = rest.length ? `\n…and ${rest.length} more — say 'more' to see them.` : "";
+    const prefix = `no direct facts about "${term}" — showing its known synonym "${variant}" (source: ${source}):\n`;
+    return { text: prefix + shown.join("\n") + extra, ...(rest.length ? { pending: { items: rest, noun: "facts" } } : {}) };
   }
   return null;
 }
@@ -2078,6 +2190,19 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
         answer = relation.text; via = "corpus/seon"; recordMiss = false;
         conceptPending = relation.pending;
       }
+    }
+  }
+  // (3b) ONTOLOGY SYNONYM EXPANSION (PLAN_ontology-hierarchies.md §3 tracks
+  // a+b) — a LAST-RESORT vocabulary-term retry via known synonyms, tried only
+  // once composed/fact/corpus-seon have ALL declined (via === "composed" still
+  // standing here), so it can never hijack a real schema/concept-force answer
+  // (see synonymFactAnswer's own docblock for why gating on miss alone isn't
+  // enough). Every hit cites its synonym term + licensing corpus source.
+  if (miss && recordMiss && via === "composed") {
+    const syn = await synonymFactAnswer(memoryDir, query, envelope);
+    if (syn) {
+      answer = syn.text; via = "fact"; recordMiss = false;
+      if (syn.pending) factPending = syn.pending;
     }
   }
   // (4) #2 TEACH lane — a teach-shaped would-miss nothing above answered: route to
