@@ -2987,6 +2987,12 @@ export async function runChat({
   gitRoot = gitToplevel,
   ephemeral = false,
 } = {}) {
+  // createSession's first-run seed (~2-3s, corpus/seon + ConceptNet) produces ZERO
+  // output until it fully resolves — found live: an operator reported `npm run chat`
+  // appearing to hang with total silence. This one line is cheap on every run (a
+  // fast subsequent run just flashes it briefly) and removes the "is this even
+  // running" uncertainty during the one case that's genuinely slow.
+  output.write("tmct — starting…\n");
   const session = await createSession({ repoPath, source, env, cwd, gitRoot, ephemeral });
 
   const dim = (s) => (env.NO_COLOR || !output.isTTY ? s : `\x1b[2m${s}\x1b[0m`);

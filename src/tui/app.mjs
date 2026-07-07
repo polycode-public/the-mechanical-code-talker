@@ -231,6 +231,12 @@ export function App({ session }) {
  *  which also triggers the memory fold — stream flush). Returns
  *  { logFile, sidecarFile, turns } exactly like runChat. */
 export async function runTui({ repoPath, stdout = process.stdout, stdin = process.stdin, ...sessionOpts } = {}) {
+  // Same reasoning as runChat's equivalent line (src/chat.mjs): createSession's
+  // first-run seed is silent for ~2-3s, and nothing is written to the terminal
+  // (not even the alternate-screen switch below) until it resolves — this was
+  // reported live as an apparent hang. One cheap line on the PRIMARY screen,
+  // before the alt-screen switch, so there's visible proof of life immediately.
+  stdout.write("tmct — starting…\n");
   const session = await createSession({ repoPath, ...sessionOpts });
   stdout.write("\x1b[?1049h\x1b[H"); // alternate screen buffer + home — a clean full-screen canvas
   const app = render(h(App, { session }), { stdout, stdin, exitOnCtrlC: true });

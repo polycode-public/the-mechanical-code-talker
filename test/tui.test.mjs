@@ -218,3 +218,48 @@ test("TUI: /exit ends the app without dispatching a turn; Ctrl+C and a conversat
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+// ---- genuine first-run: a fresh, empty repo, the REAL seed (no TMCT_NO_SEED),
+// through the actual TUI render path — the exact combination nothing else in this
+// suite exercises. The existing empty-repo TUI test above deliberately opts OUT of
+// seeding (env: {TMCT_NO_SEED:"1"}, seeding has its own suite, wiring-seed.test.mjs)
+// and wiring-seed.test.mjs never touches the TUI — so "does `tmct chat` in a brand
+// new directory actually reach a working prompt, seed included" was untested. Found
+// live: an operator reported `npm run chat` appearing to hang with no visible
+// output. Root-caused: createSession's first-run seed genuinely takes ~2.5-3s
+// (measured; corpus/seon + ConceptNet, and this session's own ontology-wiring work
+// added roughly 500ms of that vs. the pre-session baseline) and produces ZERO
+// output until it fully resolves — runChat/runTui now both print an immediate
+// "starting…" line before the seed for exactly this reason (src/chat.mjs,
+// src/tui/app.mjs). This test doesn't go through runTui (it renders the App
+// component directly, same as the other TUI tests), so it doesn't see that line —
+// it guards the underlying "does the seed+render path ever complete" property.
+test("TUI: a genuinely fresh, unseeded repo reaches a working prompt through the real seed path (no TMCT_NO_SEED) and answers a natural-language question", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-tui-freshseed-"));
+  const t0 = Date.now();
+  const session = await createSession({ repoPath: dir }); // no TMCT_NO_SEED — the real seed runs
+  const { lastFrame, stdin, unmount } = render(h(App, { session }));
+  try {
+    assert.ok(await until(() => /ask a question, or \/help/.test(lastFrame())), "the prompt is reached, not stuck mid-render");
+    // The real seed measured ~2.5-3s on this machine — genuinely slow, not instant,
+    // but bounded. This guards against an actual hang (minutes/forever), not the
+    // known, separately-tracked seed latency itself (a perf follow-up, not a
+    // correctness bug) — a tight threshold here would just make the test flaky
+    // against its own measured baseline.
+    assert.ok(Date.now() - t0 < 15000, "reaches a working prompt within a bounded time — no open-ended hang");
+    assert.match(lastFrame(), /seeded \d+ starter facts/, "the real seed ran (not TMCT_NO_SEED-skipped) and its banner line rendered");
+
+    // a natural-language question through the live prompt, immediately after the
+    // seed — the exact next thing an operator does, and the other half of what
+    // was untested (a first-run session answering ANYTHING at all).
+    stdin.write("what is a cache");
+    assert.ok(await until(() => lastFrame().includes("what is a cache")), "the typed question echoes");
+    stdin.write("\r");
+    assert.ok(await until(() => session.turns === 1), "the question dispatched as a real turn, not silently dropped");
+    assert.equal(lastFrame().includes("went wrong"), false, "no crash/error surfaced for the first live question");
+  } finally {
+    unmount();
+    await session.close();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
