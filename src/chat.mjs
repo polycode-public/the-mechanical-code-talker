@@ -79,6 +79,144 @@ const ASK_ENVELOPE_DELIM = "\n\n---tmct_ask---\n";
 const CONTEXT_WORDS = new Set(["it", "this", "that", "here"]);
 const isPronoun = (s) => CONTEXT_WORDS.has(String(s || "").trim().toLowerCase());
 
+// ---- narrate mode (opt-in, developer/debug-facing) -------------------------
+// "in the tmct interface let's be a lot more verbose, you and I are the only
+// users" — a narrative of decision points, the matched pattern, the results +
+// sources, and a deduced per-turn goal, appended to the answer. OFF by default
+// (a `/narrate on`/`/narrate off` toggle, or a `--narrate`/TMCT_NARRATE=1
+// session start): the DEFAULT (narrate:false) path must stay byte-identical
+// to before this feature existed, so every site below is a cheap `trace?.push`
+// no-op when tracing is off — runTurn only allocates the `trace` array at all
+// when narrate is true. Design: a single mutable `trace` array threaded
+// through runTurn -> runAsk/runCommand/conversationalTurn (via `ctx.trace`);
+// each stage pushes plain, already-formatted lines tagged with their own
+// category prefix ("goal:", "lane:", "pattern:", "result:", "source:",
+// "intermediate:") — the trace array IS the narrative, in decision order; no
+// separate structured side-channel to keep in sync. renderNarration (below,
+// next to runTurn) buckets by that prefix into the sections the operator
+// asked for and appends the block under NARRATE_MARKER, AFTER finish() and
+// OUTSIDE of `last.answer` — so a narrated turn's repeat-detection / why-
+// re-render logic (which compares `last.answer` bytes) is unaffected by
+// whether narrate happens to be on.
+export const NARRATE_MARKER = "--- narrate ---";
+
+/** Push one narrative line, only when tracing is on (`trace` is the mutable
+ *  array runTurn allocates for a narrate:true turn, else null/undefined). */
+function note(trace, text) { if (trace) trace.push(text); }
+
+/** relation `kind` (ask-vocab.mjs RELATIONS) -> a short, deterministic
+ *  statement of what a person asking that KIND of question is probably after.
+ *  Deliberately a small, honest bucket lookup over the query SHAPE the engine
+ *  already computed — tmct is no-LLM, so goal deduction is table-driven, never
+ *  free-text generation. A kind/shape this table doesn't recognise falls
+ *  through to a generic line in deduceGoalFromParsed, never a fabricated guess. */
+const GOAL_BY_KIND = {
+  imports: "understand a dependency/import relationship",
+  uses: "understand a dependency/usage relationship (imports and/or calls)",
+  calls: "understand a call relationship",
+  callsSymbol: "understand a call relationship",
+  defines: "locate what a module/class defines",
+  contains: "understand class membership (methods/attributes)",
+  tests: "assess test coverage",
+  inherits: "understand a class hierarchy/inheritance relationship",
+  touches: "understand commit/change history",
+  touchesSymbol: "understand commit/change history",
+  cochange: "understand change-coupling between modules",
+  reexports: "understand a module's public exports/API surface",
+};
+const goalNoun = (entityType) => (entityType ? `${String(entityType).toLowerCase()}(s)` : "entities");
+
+/** Deduce a one-line goal statement from the ask engine's parsed AST — either
+ *  the plain-clause form ({shape,kind,entityType,object[,subject]}) or the
+ *  compositional form ({node:...}, ask.mjs's §compositional grammar). Returns
+ *  null when there's nothing to bucket on (no parse stood at all); the caller
+ *  supplies its own honest "didn't resolve" wording in that case. */
+function deduceGoalFromParsed(parsed) {
+  if (!parsed) return null;
+  const { node, shape, kind } = parsed;
+  if (node === "find") return `locate a specific named entity ("${parsed.term}")`;
+  if (node === "count") return `get a count of ${goalNoun(parsed.entityType)}`;
+  if (node === "list") return `list/enumerate ${goalNoun(parsed.entityType)} matching a condition`;
+  if (node === "superlative") return `rank/compare ${goalNoun(parsed.entityType)} by ${parsed.metricNoun || parsed.metric || "a metric"}`;
+  if (node === "anaphora") return "follow up on the previous answer's result set (discourse anaphora)";
+  if (node === "membership") return `understand "${parsed.term || "an entity"}"'s membership/relationship`;
+  if (node === "clause") return deduceGoalFromParsed(parsed.clause);
+  if (node === "miss") return null;
+  if (node === "boolean" || node === "qualifier" || node === "reverseSet" || node === "forwardSet" || node === "allOfClass" || node === "temporal") {
+    const k = kind || parsed.inner?.kind;
+    return k && GOAL_BY_KIND[k] ? GOAL_BY_KIND[k] : `filter/traverse ${goalNoun(parsed.entityType)} by a relationship`;
+  }
+  // plain (non-compositional) clause
+  if (shape === "meta") return `understand a vocabulary/definition term ("${parsed.object}")`;
+  if (shape === "where") return `locate where something is defined ("${parsed.object}")`;
+  if (shape === "when") return "understand when something last changed (history)";
+  if (shape === "mentions") return `find where something is mentioned in prose ("${parsed.object}")`;
+  if (shape === "ask") return (kind && GOAL_BY_KIND[kind]) || "check a specific subject/object relationship";
+  if ((shape === "reverse" || shape === "forward") && kind) return GOAL_BY_KIND[kind] || `understand a "${kind}" relationship`;
+  return "understand a graph relationship";
+}
+
+/** Split the collected trace into buckets by its own leading category tag, so
+ *  renderNarration can group like with like while the trace array itself stays
+ *  a flat, chronological narrative — no structured side-channel to keep in
+ *  sync with the notes pushed at each call site. */
+function bucketTrace(trace) {
+  const buckets = { goal: [], lane: [], pattern: [], result: [], source: [], intermediate: [] };
+  const other = [];
+  for (const line of trace) {
+    const m = /^([a-z]+):\s/.exec(String(line));
+    if (m && buckets[m[1]]) buckets[m[1]].push(line); else other.push(line);
+  }
+  return { ...buckets, other };
+}
+
+/** Render the collected trace into the human-readable block appended to a
+ *  narrated turn's answer (see runTurn's withLast — this runs AFTER finish()
+ *  and never touches `last.answer`). `fallbackGoal` covers turn types that
+ *  push no "goal:" note of their own (a bare slash-command, a count, an
+ *  assert) with a generic via-derived line — every narrated turn gets a goal
+ *  line, never a silent gap. */
+function renderNarration(trace, { record, detail, fallbackGoal }) {
+  const b = bucketTrace(trace);
+  const lines = [NARRATE_MARKER];
+  lines.push(...(b.goal.length ? b.goal : [`goal: ${fallbackGoal}`]));
+  lines.push(`decision: via=${record.via || "?"}${record.command ? ` command=/${record.command}` : ""}${record.miss ? " (miss)" : ""}`);
+  lines.push(...b.lane, ...b.pattern);
+  if (detail?.traversal) lines.push(`result: traversal — ${detail.traversal}`);
+  if (Array.isArray(detail?.matches) && detail.matches.length) {
+    const shown = detail.matches.slice(0, 5).map((m) => `${m.label}${m.type ? ` [${m.type}]` : ""}`);
+    lines.push(`result: ${detail.matches.length} match(es) — ${shown.join(", ")}${detail.matches.length > shown.length ? ", …" : ""}`);
+  }
+  if (Array.isArray(record.resolvedIds) && record.resolvedIds.length) {
+    lines.push(`result: resolved entity id(s) — ${record.resolvedIds.join(", ")}`);
+  }
+  if (Array.isArray(record.answeredIds) && record.answeredIds.length && record.answeredIds.length !== (detail?.matches?.length || 0)) {
+    lines.push(`result: answered entity id(s) — ${record.answeredIds.join(", ")}`);
+  }
+  lines.push(...b.result, ...b.source, ...b.intermediate, ...b.other);
+  return lines.join("\n");
+}
+
+/** Append the narrate-mode block to a turn's OUTWARD-FACING answer/logLines —
+ *  used at every runTurn return site, AFTER finish() (or, for a conversational
+ *  turn, after its own render). Deliberately never touches `last.answer` /
+ *  `last.detail` (the caller builds `last` from the PRE-narration `result`) so
+ *  a narrated turn's own repeat-detection and why/say-more re-render (both of
+ *  which compare `last.answer` bytes — see ORIENTATION_REPEAT_ONELINER and
+ *  renderVerbose) see the exact same text a narrate:false run would have
+ *  produced; narrate is purely additive to what's PRINTED, never to what's
+ *  REMEMBERED. No-op (returns `result` unchanged, by reference) when `trace`
+ *  is null (narrate off) or empty (nothing was traced). */
+function withNarration(result, trace, fallbackGoal) {
+  if (!trace || !trace.length) return result;
+  const narrative = renderNarration(trace, { record: result.record, detail: result.detail, fallbackGoal });
+  const answer = `${result.answer}\n\n${narrative}`;
+  const logLines = Array.isArray(result.logLines)
+    ? result.logLines.map((l) => (l === result.answer ? answer : l))
+    : result.logLines;
+  return { ...result, answer, logLines };
+}
+
 /** Slash-command → (dispatchTool name, arg key). Arg keys are the EXACT ones the
  *  server.mjs dispatchTool switch reads (members/subclasses take `class`;
  *  impact/exports take `module`; architecture takes `package`; search takes
@@ -517,26 +655,48 @@ function conversationalTurn(line, ctx) {
       ...(end ? { end: true } : {}),
     };
   };
-  if (BYE.has(q)) return mk(t(T_FAREWELL), { end: true });
+  if (BYE.has(q)) {
+    note(ctx.trace, "goal: casual/social — ending the session (no graph intent)");
+    note(ctx.trace, "lane: conversational — farewell (BYE closed set)");
+    return mk(t(T_FAREWELL), { end: true });
+  }
   if (WHY.has(q)) {
+    note(ctx.trace, "goal: elaborate on the previous answer (why/say-more)");
+    note(ctx.trace, "lane: conversational — why/say-more (WHY closed set)");
     const v = renderVerbose(ctx.last);
     // The empty-state hint is template wording (via:"template", the data row wins;
     // renderVerbose's own string is the degraded fallback for direct library callers).
     // A real expansion re-renders the LAST ANSWER — its wording is the prior answer's,
     // not a template's, so it carries via:"conversational".
-    if (v.empty) return mk(tRender(ctx.templates, T_WHY_EMPTY) ?? v.text, { miss: true });
+    if (v.empty) {
+      note(ctx.trace, "intermediate: no previous answer held on ctx.last — nothing to expand");
+      return mk(tRender(ctx.templates, T_WHY_EMPTY) ?? v.text, { miss: true });
+    }
+    note(ctx.trace, `result: re-rendering the previous answer to "${ctx.last?.query ?? "?"}" verbosely`);
     return mk(v.text, { via: "conversational" });
   }
   if (GREET.has(q)) {
+    note(ctx.trace, "goal: casual/social — greeting, no graph intent");
+    note(ctx.trace, "lane: conversational — greeting (GREET closed set)");
     // #3 empty/degenerate-graph greeting: a plain "hi"/"hello" over a graph with 0
     // modules orients toward --repo/tmct init instead of over-promising "ask me
     // about this codebase". Phrase-specific variants (good morning, hello there)
     // keep their wording; only the default greeting swaps.
     const id = (!T_GREETING_BY_PHRASE[q] && noCodeGraph(ctx.graph)) ? T_GREETING_EMPTY : (T_GREETING_BY_PHRASE[q] || T_GREETING);
+    note(ctx.trace, `pattern: template "${id}" (data/templates/responses.jsonl)`);
     return mk(t(id));
   }
-  if (THANKS.has(q)) return mk(t(T_THANKS));
-  if (q === "help" || q === "?" || HELP_PHRASES.some((re) => re.test(raw))) return mk(orientationAnswer(ctx.templates, ctx.graph));
+  if (THANKS.has(q)) {
+    note(ctx.trace, "goal: casual/social — acknowledgement, no graph intent");
+    note(ctx.trace, "lane: conversational — thanks/acknowledgement (THANKS closed set)");
+    note(ctx.trace, `pattern: template "${T_THANKS}" (data/templates/responses.jsonl)`);
+    return mk(t(T_THANKS));
+  }
+  if (q === "help" || q === "?" || HELP_PHRASES.some((re) => re.test(raw))) {
+    note(ctx.trace, "goal: get oriented — what can tmct answer, how do I start");
+    note(ctx.trace, "lane: conversational — help/orientation (HELP_PHRASES / bare help / ?)");
+    return mk(orientationAnswer(ctx.templates, ctx.graph));
+  }
   return null;
 }
 
@@ -1154,6 +1314,7 @@ export async function helpText() {
     ["/stats", "a one-screen overview: entity counts, relationship counts, packages"],
     ["/memory [verbose]", "what tmct remembers: facts, utterances, sessions, folded blocks"],
     ["/focus <symbol>", "set the current focus (reused by 'it'/'this' and no-arg entity commands)"],
+    ["/narrate on|off", "verbose developer/debug mode: decision points, matched pattern, results+sources, goal per turn"],
     ["/help", "this list"],
     ["/exit", "leave the session (also Ctrl+C / Ctrl+D)"],
   ];
@@ -2169,7 +2330,7 @@ async function conceptForceAnswer(query, envelope, { graph, config, source, memo
  *  otherwise the unchanged dispatchTool path (which also yields the no-graph error).
  *  A hit updates the focus to the resolved object. Grammar miss / ToolError → a
  *  normal answer, never a crash. */
-async function runAsk(query, { config, source, graph, focus, last, templates, memoryDir, sessionId = "", lexicon = null, env }) {
+async function runAsk(query, { config, source, graph, focus, last, templates, memoryDir, sessionId = "", lexicon = null, env, trace }) {
   const ts = new Date().toISOString();
   // DISCOURSE ANAPHORA (CHATBENCH_006 levers 1+2): a follow-up like "which of those
   // are tested" / "how many of those" / "count them" filters or counts the PREVIOUS
@@ -2189,7 +2350,10 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // W2: the explicit recall forms are answered from memory's folded blocks, never
   // the graph. Gated on memoryDir — a bare runTurn (no session shell) stays pure.
   if (memoryDir && RECALL_ASK_RE.test(String(query).trim())) {
+    note(trace, "goal: recall what was discussed earlier (explicit recall phrasing)");
+    note(trace, "lane: RECALL_ASK_RE matched — answered from folded-session memory, never the graph");
     const summary = await recallSummary(memoryDir);
+    note(trace, summary ? "source: memory/fold.mjs recallSummary" : "intermediate: no folded session blocks yet — nothing to recall");
     return plainTurn(query, summary ?? "nothing to recall yet — no earlier session has been folded into memory.", {
       via: "recall", miss: !summary, focus,
     });
@@ -2214,7 +2378,31 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     if (envJson) { try { envelope = JSON.parse(envJson); } catch { envelope = null; } }
   } catch (e) {
     answer = String(e?.message || e);
+    note(trace, `intermediate: the ask engine threw — ${answer}`);
   }
+  // NARRATE: the direct parse/traversal receipt, straight off ask()'s own envelope
+  // (§6.2) — this alone covers most of "the version of prompt that matched" and
+  // "intermediate information" with ZERO extra instrumentation of ask.mjs: `parsed`
+  // is the compiled AST (shape/kind/entityType or a compositional {node:...}),
+  // `relaxed` is the FULL relaxation-cascade trace (what noise/unmatched tokens the
+  // engine stripped/corrected before it found an answerable parse — exactly the
+  // "almost resolved but failed" near-miss detail a playtest debugging session
+  // wants), and `matchedVia` names the confidence tier (prose/fuzzy) a resolution
+  // fell through to.
+  if (envelope?.parsed) {
+    const p = envelope.parsed;
+    const shape = p.node ? `node=${p.node}` : `shape=${p.shape}`;
+    note(trace, `pattern: parsed AST — ${shape}${p.kind ? ` kind=${p.kind}` : ""}${p.entityType ? ` entityType=${p.entityType}` : ""}${p.object != null ? ` object="${p.object}"` : ""}${p.term != null ? ` term="${p.term}"` : ""}`);
+  } else {
+    note(trace, "pattern: no parse stood (direct grammar miss — every registered strategy declined)");
+  }
+  if (envelope?.relaxed) {
+    const r = envelope.relaxed;
+    note(trace, `intermediate: the direct parse missed — the relaxation cascade rescued it: "${r.from}" -> "${r.to}"${r.dropped?.length ? ` (dropped: ${r.dropped.join(", ")})` : ""}`);
+    if (r.steps?.length) note(trace, `intermediate: relaxation steps — ${r.steps.join(" | ")}`);
+  }
+  if (envelope?.matchedVia) note(trace, `source: term resolved via the "${envelope.matchedVia}" confidence tier (not a literal identifier match)`);
+  if (envelope?.ambiguous) note(trace, "intermediate: the resolved term was AMBIGUOUS — multiple candidates matched, see the answer's disambiguation prompt");
   // A grammar miss has parsed:null → stays []. An empty-RESULT query (object resolved,
   // no edges) still records the resolved subject — that IS the asksAbout signal, and
   // it becomes the new focus so a follow-up "what calls it" can reuse it.
@@ -2233,6 +2421,9 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       // Class-gate the focus update: a Commit/Session/schema object never displaces a
       // standing code-entity focus (see nextFocus).
       newFocus = nextFocus(graph, focus, ent);
+      note(trace, `result: resolved object "${obj}" -> ${ent.label} (${ent.id}) — becomes the new focus`);
+    } else if (!isPronoun(obj)) {
+      note(trace, `intermediate: object "${obj}" did NOT resolve to a graph entity — this is why an otherwise-parsed query still misses`);
     }
   }
   const answeredIds = (envelope?.matches || []).map((m) => m?.id).filter(Boolean);
@@ -2242,6 +2433,17 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   let via = "composed";
   let recordMiss = miss;
   let factPending = null; // a truncated fact listing's held remainder (for "more" paging)
+  // GOAL DEDUCTION: from the parsed AST when one stood (deterministic, table-driven —
+  // see deduceGoalFromParsed); a total grammar miss (no parse at all) gets the honest
+  // "didn't resolve" goal line verbatim, matching the operator's own wording for that
+  // case. Pushed once, EARLY (before the miss cascade below may go on to answer via a
+  // completely different lane — an intent lane's own goal note, when it pushes one,
+  // stays the more specific of the two since bucketTrace keeps every "goal:" line and
+  // renderNarration shows them all, most-specific-last-written).
+  {
+    const deduced = deduceGoalFromParsed(envelope?.parsed);
+    note(trace, `goal: ${deduced ?? "unclear — the phrasing didn't resolve to a known query shape"}`);
+  }
   // MISS handling. The intent lanes + short-miss are RECOGNIZER-gated on the query
   // text AND only consulted on a would-miss, so a real graph query — a hit, an honest
   // empty with a receipt, a fuzzy repair — is never hijacked. Order: (1) META/SELF
@@ -2254,7 +2456,10 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // fact-dump readers so "what do you know" gets a summary, not raw facts.
   if (miss) {
     const meta = await metaLane(query, { graph, memoryDir });
-    if (meta) { answer = meta.text; via = meta.via; recordMiss = false; handled = true; }
+    if (meta) {
+      answer = meta.text; via = meta.via; recordMiss = false; handled = true;
+      note(trace, `lane: (1) META/SELF — bare self/session question recognized, answered via="${meta.via}"`);
+    }
   }
   if (!handled && miss && isConversational(query)) {
     // A conversational miss (a greeting, "what can you do", a very short non-code
@@ -2264,8 +2469,11 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     // identical orientation-class turn used to repeat the full blurb verbatim —
     // collapse to a one-liner on that repeat, mirroring WALL_REPEAT_ONELINER.
     const orientation = orientationAnswer(templates, graph);
-    answer = (last?.answer === orientation) ? ORIENTATION_REPEAT_ONELINER : orientation;
+    const repeat = last?.answer === orientation;
+    answer = repeat ? ORIENTATION_REPEAT_ONELINER : orientation;
     via = "template"; handled = true;
+    note(trace, `lane: (2) conversational orientation — isConversational() matched a would-miss; ${repeat ? "REPEAT collapsed to one-liner" : "full orientation card"}`);
+    note(trace, "goal: casual/social or too-short-to-be-structural — no graph intent");
   } else if (!handled && memoryDir) {
     // W4: vocabulary/definition questions consult the MEMORY graph's Facts alongside
     // the schema-docs surface — a remembered fact answers a miss OR extends a (non-
@@ -2280,6 +2488,8 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       via = "fact";
       recordMiss = false;
       if (fact.pending) factPending = fact.pending; // a truncated fact list → paginable remainder
+      note(trace, `lane: (3) memory facts — factAnswer/factReadBack matched (memoryDir=${memoryDir})`);
+      note(trace, "source: .tmct/memory Facts (see /memory for provenance per line)");
     } else if (miss) {
       // W2: after the honest miss is composed, consult the folded-session memory. A
       // relevant enough block ANSWERS — recalled Q/A framed + cited first, with the
@@ -2305,6 +2515,8 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
         answer = `${recalled}\n\n${trailing}`;
         via = "recall";
         recordMiss = false; // memory answered it, cited — no longer a blank
+        note(trace, "lane: (3) memory recall — recallFromBlocks matched a folded-session Q/A above the relevance floor");
+        note(trace, "source: .tmct/memory folded session blocks (fold.mjs)");
       }
     }
   }
@@ -2316,7 +2528,11 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // conversational lanes (via:"meta"/"template"), which answer a different question.
   if (via === "composed" || via === "fact") {
     const def = await curatedDefinitionAnswer(query, envelope, { memoryDir, lexicon });
-    if (def) { answer = def.text; via = "corpus/seon"; recordMiss = false; }
+    if (def) {
+      answer = def.text; via = "corpus/seon"; recordMiss = false;
+      note(trace, "lane: CURATED SEON DEFINITION — curatedDefinitionAnswer matched a lexicon term");
+      note(trace, "source: corpus/seon (curated prose definition, licensed per data/corpus/seon)");
+    }
   }
   // THE CONCEPT FORCE (concept.mjs) — a vague "what is a X" / "tell me about X" that
   // names a KNOWN code concept WITH real instances composes the three-band answer
@@ -2336,6 +2552,8 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       conceptInstances = concept.instances;
       conceptAllIds = concept.allIds;
       conceptPending = concept.pending;
+      note(trace, `lane: THE CONCEPT FORCE — a known code concept with ${concept.instances?.length ?? 0} real instance(s) composed the 3-band answer`);
+      note(trace, "source: concept.mjs composeConcept — graph instances + corpus/seon definition");
     } else {
       // THE RELATION CONCEPT FORCE — the noun force declined, so try the edge-kind
       // touch ("what about imports", "what are the calls", "tell me about contains").
@@ -2349,6 +2567,8 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       if (relation) {
         answer = relation.text; via = "corpus/seon"; recordMiss = false;
         conceptPending = relation.pending;
+        note(trace, "lane: THE RELATION CONCEPT FORCE — the touched word named a known, edge-bearing relation kind");
+        note(trace, "source: relationForceAnswer over the loaded graph's own edges (not corpus)");
       }
     }
   }
@@ -2363,13 +2583,19 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     if (syn) {
       answer = syn.text; via = "fact"; recordMiss = false;
       if (syn.pending) factPending = syn.pending;
+      note(trace, "lane: (3b) ONTOLOGY SYNONYM EXPANSION — a last-resort synonym of the term had direct facts");
+      note(trace, "source: .tmct/memory Facts, reached via a known synonym (cited in the answer itself)");
     }
   }
   // (4) #2 TEACH lane — a teach-shaped would-miss nothing above answered: route to
   // memory, or say what CAN be remembered (LOUD), never the wall / a silent drop.
   if (miss && recordMiss && via === "composed") {
     const taught = await teachLane(query, { memoryDir, sessionId, lexicon });
-    if (taught) { answer = taught.text; via = taught.via; recordMiss = taught.miss; }
+    if (taught) {
+      answer = taught.text; via = taught.via; recordMiss = taught.miss;
+      note(trace, `lane: (4) TEACH — TEACH_RE/OWNS_TEACH_RE/BARE_DECLARATIVE_RE matched, ${taught.miss ? "but the payload could not be stored" : "reified into .tmct/memory"}`);
+      note(trace, "goal: teach/remember a new fact");
+    }
   }
   // (4b) #4 AUTHOR lane (0.8.2 WS4) — "who is <Name>", "what did <Name> touch",
   // "who authored <sha>": the Commit author ATTRIBUTE answered as a person, off
@@ -2378,7 +2604,12 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // honest miss below (never a guess).
   if (miss && recordMiss && via === "composed") {
     const authored = authorLane(query, { graph });
-    if (authored) { answer = authored.text; via = authored.via; recordMiss = false; }
+    if (authored) {
+      answer = authored.text; via = authored.via; recordMiss = false;
+      note(trace, "lane: (4b) AUTHOR — a who-is/what-did-<Name>-touch/who-authored-<sha> pattern matched a commit author");
+      note(trace, "source: codegraph.mjs authorIndex (derived from Commit individuals)");
+      note(trace, "goal: identify a person and/or what they touched (authorship/history)");
+    }
   }
   // (4b2) #5(f) PRESUPPOSITION HONEST-NUDGE (ADVANCED_GRAMMAR track f) — "why
   // does X still/again import Y": names the presupposition being checked
@@ -2387,7 +2618,11 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // one is still an honest, confident correction, not a miss.
   if (miss && recordMiss && via === "composed") {
     const presup = await presuppositionNudge(query, { graph, memoryDir });
-    if (presup) { answer = presup.text; via = "presupposition"; recordMiss = false; }
+    if (presup) {
+      answer = presup.text; via = "presupposition"; recordMiss = false;
+      note(trace, "lane: (4b2) PRESUPPOSITION HONEST-NUDGE — a still/again-marked question's presupposition was checked against the graph");
+      note(trace, "goal: verify an assumption baked into the question, then answer what survives");
+    }
   }
   // (4c) CAPABILITY NUDGES (0.8.2 WS4) — risk scoring / code opinions / "write me
   // code" imperatives / motive-"why": an honest wall pointing at the nearest real
@@ -2396,7 +2631,11 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // short-miss's "is a <thing> a <kind>" membership hint could claim the line.
   if (miss && recordMiss && via === "composed") {
     const nudged = nudgeAnswer(query, newFocus);
-    if (nudged) { answer = nudged; via = "miss"; }
+    if (nudged) {
+      answer = nudged; via = "miss";
+      note(trace, "lane: (4c) CAPABILITY NUDGE — the question asked tmct to do something outside its scope (opinion/generation/risk-scoring)");
+      note(trace, "goal: out of scope for a no-LLM graph reader — pointed at the nearest real query shapes");
+    }
   }
   // (4d) DESCRIBE-WRAPPER RESCUE (playtest sprint round 2, SKILL_PLAYTEST_SPRINT.md)
   // — "can you describe X for me" / "tell me more about X": a closed wrapper
@@ -2410,7 +2649,11 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // it only claims the turn if /describe actually resolves the captured term.
   if (miss && recordMiss && via === "composed") {
     const described = await describeWrapperAnswer(query, { config, source });
-    if (described) { answer = described.text; via = "describe"; recordMiss = false; }
+    if (described) {
+      answer = described.text; via = "describe"; recordMiss = false;
+      note(trace, "lane: (4d) DESCRIBE-WRAPPER RESCUE — a polite wrapper around \"describe/tell me about <symbol>\" resolved via /describe, tried last after every other lane declined");
+      note(trace, "goal: get a symbol's definition/kind/relations (phrased conversationally)");
+    }
   }
   // (5) #1 SHORT TAILORED MISS — replace ONLY the engine's full grammar cheat-sheet
   // wall (WALL_MISS_RE). Receipt-bearing misses keep their specific wording.
@@ -2419,10 +2662,10 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // to a one-liner whose text does NOT match WALL_MISS_RE — self-limiting, so a
   // third consecutive miss re-offers the tailored hint instead of droning.
   if (miss && recordMiss && via === "composed" && WALL_MISS_RE.test(answer)) {
-    answer = (last?.answer && WALL_MISS_RE.test(String(last.answer)))
-      ? WALL_REPEAT_ONELINER
-      : shortMissHint(query);
+    const repeat = last?.answer && WALL_MISS_RE.test(String(last.answer));
+    answer = repeat ? WALL_REPEAT_ONELINER : shortMissHint(query);
     via = "miss";
+    note(trace, `lane: (5) SHORT TAILORED MISS — every lane above declined; ${repeat ? "REPEAT collapsed to one-liner (wall kindness)" : "the full grammar wall was shortened + tailored to the query's keywords"}`);
   }
   // #4 HONEST-EMPTY POLISH — an empty CODE graph: any still-standing engine
   // dead-end (an honest empty, the short miss, the bootstrap note) carries the exit
@@ -2430,6 +2673,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   if (recordMiss && (via === "composed" || via === "miss")
       && noCodeGraph(graph) && !/--repo|tmct init|no code graph/i.test(answer)) {
     answer = `${answer}\n(this repo has no code graph — for structure, point me at a \`.tmct/graph.json\` with \`--repo <path>\` or run \`npm run example:mini\`; tmct doesn't index code itself.)`;
+    note(trace, "intermediate: HONEST-EMPTY POLISH — the loaded graph has 0 modules, so the dead-end got a --repo/tmct init pointer appended");
   }
   // W5 (flag-gated, default OFF): an unknown-term miss may consult the LOCAL
   // committed corpus slice — a hit APPENDS a grounded, licence-cited aside under
@@ -2439,6 +2683,8 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     if (aside) {
       answer = `${answer}\n${aside}`;
       via = "corpus";
+      note(trace, "lane: W5 corpus aside — an unknown term matched the local committed corpus slice (TMCT_CORPUS_LOOKUP=1)");
+      note(trace, "source: local committed corpus slice (licence-cited in the aside itself)");
     }
   }
   // ADVANCED_GRAMMAR track (a) — counterfactual marker (PLAN_ADVANCED_GRAMMAR.md
@@ -2454,6 +2700,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   const counterfactualSubject = String(query).trim().match(COUNTERFACTUAL_RE);
   if (!recordMiss && via === "composed" && counterfactualSubject) {
     answer = `hypothetically, if ${counterfactualSubject[1].trim()} were removed: ${answer}`;
+    note(trace, `intermediate: COUNTERFACTUAL_RE matched — compiled to a real traversal, wrapped as hypothetical ("${counterfactualSubject[1].trim()}" removed)`);
   }
   // The concept force answers WITH real example instances — those are the entities the
   // turn "asked about" (the SchemaClass meta-node is documentation, not a code entity),
@@ -2493,28 +2740,52 @@ function plainTurn(query, answer, { command, via = "composed", miss = false, foc
   };
 }
 
-/** A slash-command → the mapped tool (or the /help, /focus, unknown cases). Returns
- *  the same { answer, logLines, record, focus } shape as runAsk; the record carries
- *  the command name and the resolved entity id (for entity commands) so a
- *  slash-command turn becomes asksAbout graph data wherever it resolves an entity. */
-async function runCommand(line, { config, source, graph, focus, memoryDir }) {
+/** A slash-command → the mapped tool (or the /help, /focus, /narrate, unknown
+ *  cases). Returns the same { answer, logLines, record, focus } shape as
+ *  runAsk; the record carries the command name and the resolved entity id
+ *  (for entity commands) so a slash-command turn becomes asksAbout graph data
+ *  wherever it resolves an entity. `ctx.trace` (narrate mode, or undefined
+ *  when off) gets one "goal:"/"lane:" note per branch — a slash-command's
+ *  "decision" is simply which command+tool ran, so this is intentionally
+ *  lighter than runAsk's miss-cascade instrumentation. */
+async function runCommand(line, { config, source, graph, focus, memoryDir, trace, narrate = false }) {
   const ts = new Date().toISOString();
   const sp = line.indexOf(" ");
   const name = (sp === -1 ? line.slice(1) : line.slice(1, sp)).toLowerCase();
   const argText = (sp === -1 ? "" : line.slice(sp + 1)).trim();
-  const mk = (answer, { resolvedIds = [], miss = false, newFocus = focus } = {}) => ({
+  const mk = (answer, { resolvedIds = [], miss = false, newFocus = focus, narrateNext } = {}) => ({
     answer,
     logLines: [ts, `> ${line}`, answer, ""],
     record: { type: "turn", ts, query: line, command: name, via: "command", resolvedIds, answeredIds: [], miss },
     focus: newFocus,
+    ...(narrateNext !== undefined ? { narrate: narrateNext } : {}),
   });
 
-  if (name === "help") return mk(await helpText());
-  if (name === "stats") return graph ? mk(renderStats(graph)) : mk("no graph loaded — /stats needs an index.", { miss: true });
+  if (name === "help") { note(trace, "goal: get oriented / learn available commands"); return mk(await helpText()); }
+  if (name === "stats") {
+    note(trace, "goal: get a one-screen overview of the loaded graph");
+    return graph ? mk(renderStats(graph)) : mk("no graph loaded — /stats needs an index.", { miss: true });
+  }
+
+  // /narrate on|off — the debug-mode toggle itself (session-scoped, mirrors the
+  // /focus pattern: the new state rides the turn RESULT as `narrate`, and
+  // createSession's turn() applies it to its own mutable state; a bare
+  // runTurn caller threads it the same way it threads `focus`/`last`). A
+  // status-only "/narrate" (no on/off) reports the CURRENT state and changes
+  // nothing — never silently flips it.
+  if (name === "narrate") {
+    const arg = argText.toLowerCase();
+    if (arg !== "on" && arg !== "off") {
+      return mk(`narrate mode is ${narrate ? "on" : "off"} — /narrate on or /narrate off to change it.`);
+    }
+    const next = arg === "on";
+    return mk(`narrate mode ${next ? "on" : "off"}.`, { narrateNext: next });
+  }
 
   // /memory [verbose] — what tmct remembers, as text (the ROADMAP "Memory
   // inspection" surface; the same renderer serves the `tmct memory` CLI).
   if (name === "memory") {
+    note(trace, "goal: inspect tmct's memory store (facts/utterances/sessions)");
     if (!memoryDir) return mk("no memory store here — /memory works inside a repo session.", { miss: true });
     try {
       const { inspectMemory } = await import("./memory/inspect.mjs");
@@ -2525,18 +2796,28 @@ async function runCommand(line, { config, source, graph, focus, memoryDir }) {
   }
 
   if (name === "focus") {
+    note(trace, "goal: set the working focus entity for follow-up pronouns (it/this/that)");
     if (!argText) return mk(focus ? `focus is ${focus.label}` : "no focus set — /focus <symbol> to set one.");
     const ent = await resolveEntity(graph, isPronoun(argText) ? focus?.label : argText);
     if (!ent) return mk(`could not resolve "${argText}" to a single entity — focus unchanged${focus ? ` (still ${focus.label})` : ""}.`, { miss: true });
+    note(trace, `result: resolved "${argText}" -> ${ent.label} (${ent.id})`);
     return mk(`focus set to ${ent.label}.`, { resolvedIds: [ent.id], newFocus: ent });
   }
 
   const spec = COMMANDS[name];
-  if (!spec) return mk(`unknown command /${name} — type /help for the list of commands.`, { miss: true });
+  if (!spec) {
+    note(trace, `pattern: /${name} is not a registered command (see COMMANDS in src/chat.mjs)`);
+    return mk(`unknown command /${name} — type /help for the list of commands.`, { miss: true });
+  }
+  note(trace, `goal: ${spec.help}`);
+  note(trace, `lane: slash-command /${name} -> dispatchTool("${spec.tool}"${spec.arg ? `, {${spec.arg}}` : ""})`);
 
   const entityArg = ENTITY_ARGS.has(spec.arg);
   let value = argText;
-  if (entityArg && (!value || isPronoun(value))) value = focus?.label || "";
+  if (entityArg && (!value || isPronoun(value))) {
+    value = focus?.label || "";
+    if (value) note(trace, `intermediate: no/pronoun argument -> fell back to the standing focus "${value}"`);
+  }
   if (spec.arg && !spec.optional && !value) {
     const need = entityArg ? `${spec.arg} (none given and no focus set — /focus <x> or pass one)` : spec.arg;
     return mk(`/${name} needs a ${need}.`, { miss: true });
@@ -2546,6 +2827,7 @@ async function runCommand(line, { config, source, graph, focus, memoryDir }) {
   try {
     answer = await dispatchTool(spec.tool, spec.arg ? { [spec.arg]: value } : {}, { config, source });
   } catch (e) {
+    note(trace, `intermediate: dispatchTool("${spec.tool}") threw — ${String(e?.message || e)}`);
     return mk(String(e?.message || e), { miss: true }); // the tool's own clean error, never a stack
   }
   // Entity commands resolve their subject for the sidecar/graph AND set the focus so a
@@ -2556,16 +2838,18 @@ async function runCommand(line, { config, source, graph, focus, memoryDir }) {
     // Commit/Session/schema node records the resolution but does not displace a
     // standing code-entity focus that "it" is meant to keep binding to.
     if (ent) {
+      note(trace, `result: resolved "${value}" -> ${ent.label} (${ent.id}, class=${graph?.byId?.get?.(ent.id)?.class || "?"})`);
       // Bug B4 (0.8.2 follow-up): /describe's code-map render never sees memory,
       // so a taught fact about the resolved entity is invisible to it — append
       // matching taught facts (subject === the resolved entity, trust-ranked)
       // under the code-map answer, mirroring the ask-path's fact-append pattern.
       if (name === "describe" && memoryDir) {
         const facts = await describedFacts(memoryDir, ent.label);
-        if (facts) answer = `${answer}\n${facts}`;
+        if (facts) { answer = `${answer}\n${facts}`; note(trace, "source: memory facts (describedFacts) appended to the code-map answer"); }
       }
       return mk(answer, { resolvedIds: [ent.id], newFocus: nextFocus(graph, focus, ent) });
     }
+    note(trace, `intermediate: "${value}" did not resolve to a single entity — the tool's own (unresolved) answer stands`);
   }
   return mk(answer);
 }
@@ -2640,10 +2924,17 @@ function morePage(query, { last, focus }) {
   return turn;
 }
 
-export async function runTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null } = {}) {
+export async function runTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false } = {}) {
   const line = String(input ?? "").trim();
   const templates = await chatTemplates(); // failure-tolerated: null degrades, never throws
-  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates, env, lexicon };
+  // narrate mode: allocate the mutable trace array ONLY when on (`null` when off,
+  // matching every OTHER optional collaborator here — templates/memoryDir/lexicon
+  // all null-degrade the same way). Every note()/withNarration() call below is a
+  // cheap `if (trace)`/`if (!trace || !trace.length)` no-op when this is null, so
+  // the narrate:false path allocates nothing extra and renders byte-identically to
+  // before this feature existed — see the "---- narrate mode ----" section above.
+  const trace = narrate ? [] : null;
+  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates, env, lexicon, trace, narrate };
   // A DISPATCHED turn (count / slash-command / ask) becomes the new "last answer"
   // that why/say-more re-renders; a conversational turn does not (it preserves it).
   // FINISH SEAM (PLAN_RESPONSE_FINISHING §"Where it lives"): every dispatched turn's
@@ -2651,10 +2942,13 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // finished answer becomes the `last` we expand. finish() owns the prose-span
   // grammar pass (src/finish.mjs); it rewrites result.answer/logLines and leaves the
   // protected spans (entities, paths, numbers, receipts, provenance) byte-invariant,
-  // so `last` and the transcript stay consistent with what the shell prints.
-  const withLast = (result) => {
+  // so `last` and the transcript stay consistent with what the shell prints. The
+  // narrate block (withNarration, above) is applied AFTER `last` is captured from
+  // the PRE-narration finished result — see withNarration's docblock for why.
+  const withLast = (result, fallbackGoal = "unclear — no goal signal for this turn type") => {
     const finished = finish(result, { graph });
-    return { ...finished, last: { query: line, answer: finished.answer, detail: finished.detail ?? null } };
+    const nextLast = { query: line, answer: finished.answer, detail: finished.detail ?? null };
+    return { ...withNarration(finished, trace, fallbackGoal), last: nextLast };
   };
 
   // Slash-optional system commands: a bare leading command word ("stats",
@@ -2662,28 +2956,36 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // layer, so a forgiving shell answers "stats" the way it answers "/stats" instead
   // of falling through to the generic orientation.
   const bareCmd = asBareCommand(line);
-  if (bareCmd) return withLast(await runCommand(bareCmd, ctx));
+  if (bareCmd) return withLast(await runCommand(bareCmd, ctx), "use a specific tool/command directly");
 
   // Conversational layer next (greetings, thanks, help, bye, why/say-more) — these
-  // resolve no entity and carry their own preserved `last`.
+  // resolve no entity and carry their own preserved `last`. Bypasses withLast (a
+  // conversational turn is never finish()'d / never becomes a new `last`), so the
+  // narrate block is applied directly here instead.
   const convo = conversationalTurn(line, ctx);
-  if (convo) return convo;
+  if (convo) return withNarration(convo, trace, "casual/social — no graph intent");
 
   // "more" — page the remainder of a previous long listing, if one is held. Gated on
   // an actual pending remainder so a bare "more" with nothing to continue falls through
   // to the ordinary path (an honest miss), never a pretend page.
   if (MORE_RE.test(line) && Array.isArray(last?.detail?.pending?.items) && last.detail.pending.items.length) {
-    return withLast(morePage(line, ctx));
+    note(trace, "goal: continue viewing a previous long listing (pagination)");
+    note(trace, "lane: MORE_RE matched a held pending remainder from the previous turn's detail.pending");
+    return withLast(morePage(line, ctx), "continue viewing a previous long listing");
   }
 
-  if (line.startsWith("/")) return withLast(await runCommand(line, ctx));
+  if (line.startsWith("/")) return withLast(await runCommand(line, ctx), "use a specific tool/command directly");
   // Declarative ACE sentences ("every module is a artifact") ASSERT into tmct's
   // own memory and confirm — they are statements to remember, not graph queries.
   // Gated on memoryDir: only a session shell provides a write target, so a bare
   // runTurn (tests, library callers) stays pure and falls through to the engine.
   if (memoryDir) {
     const asserted = await assertTurn(line, ctx);
-    if (asserted) return withLast(asserted);
+    if (asserted) {
+      note(trace, "goal: teach/remember a new fact (declarative ACE sentence)");
+      note(trace, "lane: assertTurn — grammar/ace.mjs parseAce matched a full triple with no residue");
+      return withLast(asserted, "teach/remember a new fact");
+    }
   }
   // MEMORY-STORE counts first ("how many facts / utterances do you know") — the
   // memory graph owns Facts + Utterances, so these are answerable and consistent
@@ -2692,7 +2994,11 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // structural counts (classes/functions/…) and sessions fall through unaffected.
   if (memoryDir) {
     const memCount = await answerMemoryCount(memoryDir, line);
-    if (memCount != null) return withLast(plainTurn(line, memCount, { via: "count", focus }));
+    if (memCount != null) {
+      note(trace, "goal: get a count of a memory-store kind (facts/utterances)");
+      note(trace, "lane: answerMemoryCount — matched a MEMORY_COUNT_NOUNS entry, answered off the .tmct/memory graph header");
+      return withLast(plainTurn(line, memCount, { via: "count", focus }), "get a count of a memory-store kind");
+    }
   }
   // Aggregate/count questions are answered mechanically off the loaded graph header,
   // BEFORE falling through to the ask engine (focus unchanged — a count names no entity).
@@ -2703,10 +3009,16 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
     // class count). countFromFacts declines on a real graph kind, so ordinary
     // counts are unaffected; it only speaks for a remembered object noun.
     const viaFact = memoryDir ? await countFromFacts(graph, memoryDir, line) : null;
-    if (viaFact != null) return withLast(plainTurn(line, viaFact, { via: "fact", focus }));
-    return withLast(plainTurn(line, count, { via: "count", focus }));
+    if (viaFact != null) {
+      note(trace, 'goal: get a count of an asserted-vocabulary kind ("every X is a Y" inherited cardinality)');
+      note(trace, "lane: countFromFacts — the counted noun matched a remembered isa-fact's SUBJECT, whose class IS countable");
+      return withLast(plainTurn(line, viaFact, { via: "fact", focus }), "get a count");
+    }
+    note(trace, "goal: get a count of a graph kind (classes/functions/modules/…)");
+    note(trace, "lane: answerCount — a header-count aggregate question, answered mechanically off the graph header, never dispatched to the ask engine");
+    return withLast(plainTurn(line, count, { via: "count", focus }), "get a count of a graph kind");
   }
-  return withLast(await runAsk(line, ctx));
+  return withLast(await runAsk(line, ctx), "unclear — no goal signal computed by the ask engine");
 }
 
 // ---- W3: seedMemory → bootstrap (first run in a graph-less repo) ----
@@ -2824,6 +3136,7 @@ export async function createSession({
   cwd = process.cwd(),
   gitRoot = gitToplevel,
   ephemeral = false,
+  narrate = false,
 } = {}) {
   // EPHEMERAL mode (--ephemeral, or TMCT_EPHEMERAL=1): read the target graph but
   // write NOTHING back into it. The shipped examples run this way so a demo never
@@ -2832,6 +3145,13 @@ export async function createSession({
   // for structure; only the WRITE base (logs, memory, sessions) is diverted to an OS
   // temp dir and the read-time graph upsert is suppressed.
   ephemeral = ephemeral || /^(1|true|yes)$/i.test(String(env.TMCT_EPHEMERAL || ""));
+  // NARRATE mode (--narrate, or TMCT_NARRATE=1 — same on/off convention as
+  // TMCT_EPHEMERAL/TMCT_NO_SEED): start the session with narrate mode already
+  // on. Session-scoped and mutable from here — `/narrate on`/`/narrate off`
+  // flips it turn-to-turn the same way `/focus` mutates the session's focus
+  // (see `turn()` below: a turn result's `narrate` field, when present,
+  // updates this closure-private variable). Default OFF, as the operator asked.
+  let narrateOn = narrate || /^(1|true|yes)$/i.test(String(env.TMCT_NARRATE || ""));
   // Graph resolution order for the chat surface (documented; --repo wins):
   //   1. --repo <path>       → pins <path>/.tmct/graph.json (repo AND graph).
   //   2. TMCT_GRAPH_FILE env → loads that graph anywhere (loadConfig reads it), so
@@ -2957,6 +3277,7 @@ export async function createSession({
     get focus() { return focus; },
     get lastAnswer() { return last; },
     get turns() { return turns; },
+    get narrate() { return narrateOn; },
     promptFor: () => promptFor(focus),
 
     /** One dispatched turn through the FULL sink sequencing (writeLog → writeSidecar
@@ -2968,7 +3289,7 @@ export async function createSession({
     async turn(line) {
       let result;
       try {
-        result = await runTurn(line, { config, source, graph, focus, last, memoryDir: repo, sessionId, env, lexicon });
+        result = await runTurn(line, { config, source, graph, focus, last, memoryDir: repo, sessionId, env, lexicon, narrate: narrateOn });
       } catch (e) {
         const ts = new Date().toISOString();
         const message = e instanceof Error ? e.message : String(e);
@@ -2979,9 +3300,12 @@ export async function createSession({
         turns += 1;
         return { answer: `Something went wrong answering that (${message}). Try rephrasing, or /help.`, end: false, prompt: promptFor(focus) };
       }
-      const { answer, logLines, record, focus: nextFocus, last: nextLast, end } = result;
+      const { answer, logLines, record, focus: nextFocus, last: nextLast, end, narrate: nextNarrate } = result;
       focus = nextFocus;
       last = nextLast;
+      // /narrate on|off (runCommand) rides the turn RESULT the same way a focus
+      // update does — apply it to this handle's session-scoped state.
+      if (typeof nextNarrate === "boolean") narrateOn = nextNarrate;
       await writeLog(logLines.join("\n") + "\n");
       await writeSidecar(record);
       turnRecords.push(record);
@@ -3029,6 +3353,7 @@ export async function runChat({
   cwd = process.cwd(),
   gitRoot = gitToplevel,
   ephemeral = false,
+  narrate = false,
 } = {}) {
   // createSession's first-run seed (~2-3s, corpus/seon + ConceptNet) produces ZERO
   // output until it fully resolves — found live: an operator reported `npm run chat`
@@ -3036,7 +3361,7 @@ export async function runChat({
   // fast subsequent run just flashes it briefly) and removes the "is this even
   // running" uncertainty during the one case that's genuinely slow.
   output.write("tmct — starting…\n");
-  const session = await createSession({ repoPath, source, env, cwd, gitRoot, ephemeral });
+  const session = await createSession({ repoPath, source, env, cwd, gitRoot, ephemeral, narrate });
 
   const dim = (s) => (env.NO_COLOR || !output.isTTY ? s : `\x1b[2m${s}\x1b[0m`);
   for (const line of session.bannerLines) output.write(dim(line) + "\n");
