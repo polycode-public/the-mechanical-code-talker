@@ -2062,9 +2062,12 @@ function relationTermOf(query, envelope) {
  *  (normalize.mjs). Deliberately used only as a LAST-RESORT lane (see its call
  *  site below) — "tell me about X" is ALSO the relation/concept force's own
  *  trigger phrase for enumerable concepts ("tell me about inheritance"), so
- *  this must never run before those have had their chance. */
+ *  this must never run before those have had their chance. Trails an optional
+ *  "please" as well as "for me" (playtest sprint round 3): this lane reads the
+ *  RAW turn text, not normalize.mjs's FILLER_WORDS-stripped one, so "could you
+ *  tell me more about Router please" needs its own trailing-politeness strip. */
 const DESCRIBE_WRAPPER_RE =
-  /^(?:(?:can|could|would)\s+you\s+(?:please\s+)?|please\s+)?(?:tell\s+me\s+(?:more\s+)?about|describe)\s+(.+?)(?:\s+for\s+me)?\s*\??$/i;
+  /^(?:(?:can|could|would)\s+you\s+(?:please\s+)?|please\s+)?(?:tell\s+me\s+(?:more\s+)?about|describe)\s+(.+?)(?:\s+for\s+me)?(?:\s+please)?\s*\??$/i;
 
 async function describeWrapperAnswer(query, { config, source }) {
   const m = DESCRIBE_WRAPPER_RE.exec(String(query || "").trim());

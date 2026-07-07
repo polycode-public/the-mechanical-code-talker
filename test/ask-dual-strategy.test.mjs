@@ -272,3 +272,19 @@ test("keyword-spot: frequency-adverb filler (\"usually\"/\"typically\"/…) is s
     parseQuery("what does src/core/store.mjs usually change together with"),
     "the adverb-free and adverb-bearing phrasings parse identically");
 });
+
+// ---- found live (playtest sprint round 3): a leading discourse marker ("btw")
+// with no delimiter after it derailed the whole parse — "btw what does X change
+// together with" was misread as an "ask"-shaped touches query with subject "btw
+// X" instead of the intended reverse cochange query, because "btw" carried no
+// grammatical weight anywhere in the tokenizer. Fixed by adding "btw"/"by the
+// way" to FILLER_WORDS (ask-vocab.mjs), the same mechanism that already strips
+// "so"/"like"/"hey" as bare discourse filler — no new preamble frame needed. ----
+
+test("keyword-spot: a leading 'btw' discourse marker (no delimiter) is stripped like any other filler word", () => {
+  assert.deepEqual(parseQuery("btw what does src/core/store.mjs change together with"),
+    { shape: "reverse", entityType: null, modifier: "direct", kind: "cochange", object: "src/core/store.mjs" });
+  assert.deepEqual(parseQuery("by the way what does src/core/store.mjs change together with"),
+    parseQuery("what does src/core/store.mjs change together with"),
+    "the 'btw' and 'by the way' forms parse identically to the bare phrasing");
+});

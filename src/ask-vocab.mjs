@@ -380,6 +380,7 @@ export const FILLER_WORDS = Object.freeze([
   "um", "uh", "erm", "so", "like", "yo", "hey", "bru", "bro", "fam", "mate",
   "please", "could you", "can you", "would you", "tell me", "i wonder",
   "just wondering", "quickly", "real quick", "kinda", "sorta",
+  "btw", "by the way",
 ]);
 
 /** Deictic/pronoun terms that refer to a context entity rather than naming one

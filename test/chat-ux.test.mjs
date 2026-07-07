@@ -508,6 +508,14 @@ test("describe-wrapper rescue: a polite wrapper around a real symbol name resolv
   assert.match(r2.answer, /^Widget — Class/);
 });
 
+test("describe-wrapper rescue: a trailing 'please' (not just a leading one) still resolves (playtest sprint round 3)", async () => {
+  const g = await graph();
+  const r = await runTurn("could you tell me more about Widget please", { config: CONFIG, graph: g });
+  assert.equal(r.record.via, "describe");
+  assert.equal(r.record.miss, false);
+  assert.match(r.answer, /^Widget — Class/);
+});
+
 test("describe-wrapper rescue guard: an unresolvable wrapped term declines silently — the ordinary wall stands, unchanged wording", async () => {
   const g = await graph();
   const r = await runTurn("can you tell me more about NotARealSymbol", { config: CONFIG, graph: g });
