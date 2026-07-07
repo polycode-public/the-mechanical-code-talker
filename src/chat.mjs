@@ -2917,10 +2917,26 @@ export async function createSession({
     promptFor: () => promptFor(focus),
 
     /** One dispatched turn through the FULL sink sequencing (writeLog → writeSidecar
-     *  → telemetry → upsertGraph, in that exact order). Returns { answer, end, prompt }. */
+     *  → telemetry → upsertGraph, in that exact order). Returns { answer, end, prompt }.
+     *  A throwing runTurn must never abort the session: a piped/non-interactive driver
+     *  has no other chance to see this turn's answer, and losing the catch here also
+     *  skips session.close() upstream, leaving the log/sidecar streams unflushed for
+     *  every LATER turn too — found live via a piped-stdin driver hitting a bad turn. */
     async turn(line) {
-      const { answer, logLines, record, focus: nextFocus, last: nextLast, end } =
-        await runTurn(line, { config, source, graph, focus, last, memoryDir: repo, sessionId, env, lexicon });
+      let result;
+      try {
+        result = await runTurn(line, { config, source, graph, focus, last, memoryDir: repo, sessionId, env, lexicon });
+      } catch (e) {
+        const ts = new Date().toISOString();
+        const message = e instanceof Error ? e.message : String(e);
+        await writeLog(`${ts}\n> ${line}\nerror: ${message}\n`);
+        const errorRecord = { type: "error", ts, query: line, error: message };
+        await writeSidecar(errorRecord);
+        turnRecords.push(errorRecord);
+        turns += 1;
+        return { answer: `Something went wrong answering that (${message}). Try rephrasing, or /help.`, end: false, prompt: promptFor(focus) };
+      }
+      const { answer, logLines, record, focus: nextFocus, last: nextLast, end } = result;
       focus = nextFocus;
       last = nextLast;
       await writeLog(logLines.join("\n") + "\n");
@@ -2983,19 +2999,27 @@ export async function runChat({
   const prompt = () => { if (!closed) rl.prompt(); }; // input may end while a turn is in flight
 
   prompt();
-  for await (const raw of rl) { // Ctrl+D / closed stdin ends the iteration cleanly
-    const line = raw.trim();
-    if (line === "/exit") break;
-    if (line) {
-      const { answer, end, prompt: nextPrompt } = await session.turn(line);
-      output.write(answer + "\n");
-      rl.setPrompt(nextPrompt);
-      if (end) break; // a conversational "bye"/"goodbye" — clean end, same as /exit
+  // try/finally: session.close() is the ONLY code path that writes end-markers and
+  // flushes the log/sidecar write streams (stream.end()/sidecar.end()) — an
+  // unhandled throw anywhere in the loop body must still reach it, or a
+  // piped/non-interactive run can lose buffered writes outright, not just this
+  // turn's data. session.turn() now catches its own errors (see createSession),
+  // so this is defense in depth for anything else that might throw here.
+  try {
+    for await (const raw of rl) { // Ctrl+D / closed stdin ends the iteration cleanly
+      const line = raw.trim();
+      if (line === "/exit") break;
+      if (line) {
+        const { answer, end, prompt: nextPrompt } = await session.turn(line);
+        output.write(answer + "\n");
+        rl.setPrompt(nextPrompt);
+        if (end) break; // a conversational "bye"/"goodbye" — clean end, same as /exit
+      }
+      prompt();
     }
-    prompt();
+  } finally {
+    rl.close();
+    await session.close();
   }
-  rl.close();
-
-  await session.close();
   return { logFile: session.logFile, sidecarFile: session.sidecarFile, turns: session.turns };
 }

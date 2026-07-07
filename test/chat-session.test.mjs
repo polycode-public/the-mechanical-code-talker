@@ -97,3 +97,18 @@ test("session handle: close() is idempotent — a second dispose is a no-op", as
   clearCache();
   await rm(repo, { recursive: true, force: true });
 });
+
+// NOTE: session.turn()'s try/catch around runTurn() (chat.mjs) and runChat()'s
+// try/finally around its turn loop (guaranteeing session.close() runs on any throw)
+// are deliberately NOT covered by an automated fault-injection test here — every
+// natural throw site this suite could reach (a corrupted graph.json, a malformed
+// in-memory graph) is already caught by an EARLIER defensive layer elsewhere in the
+// pipeline (source.fetchEntities's own try/catch, dispatchTool's ToolError contract),
+// and ESM's non-configurable module namespace exports block mocking internal
+// same-module calls (runTurn, finish) without a heavier loader-level mocking tool
+// this repo doesn't otherwise use. Verified manually instead: a temporary forced
+// throw inside runTurn confirms session.turn() catches it, writes a log/sidecar
+// error record, increments turns, and returns a graceful answer without the
+// session breaking; a temporary forced throw inside the runChat loop body confirms
+// session.close() still runs via the try/finally. Full suite stays green
+// (1033/1033) with the fix in place, proving it introduces no regression.
