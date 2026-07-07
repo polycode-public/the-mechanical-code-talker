@@ -14,8 +14,9 @@ the file has been deleted.
 
 ## Where we are now (2026-07-07)
 
-`npm test` green (**1033**). A version bump to reflect this session's wave is imminent; see
-`HANDOVER.md` for the exact release status.
+`npm test` green (**1042**). **v0.9.5, pushed** (0.8.2 → 0.9.0 for this session's main wave, then
+one patch per shipped playtest-sprint fix — see `HANDOVER.md` for the exact release chain and the
+"Playtest sprint" section there for what each patch fixed).
 
 ### Now: shipped this session
 
@@ -62,8 +63,12 @@ In priority order (full detail and measured targets in `HANDOVER.md`):
 5. **`PLAN_CODE.md`'s sign-off decision.** Track 1 (rule/frame synthesis) is the lowest-risk
    candidate; decide with the operator whether to greenlight it.
 6. Smaller chat-feel residuals from the 0.8.2 confirmation playtest, the Track-1 trio (pronoun,
-   temporal, discourse-count, measured red sets), `edgesOfKind` memoization for monorepo-scale
-   latency, and the version bump plus push.
+   temporal, discourse-count, measured red sets), and `edgesOfKind` memoization for monorepo-scale
+   latency. (The version bump plus push is done — see "Now" above.)
+7. **`SKILL_PLAYTEST_SPRINT.md`, in progress.** A capped, delegated, chained playtest loop (each
+   round a background chat session against `examples/mini-webapp`, appraised and fixed+shipped
+   live). Rounds 1-3 shipped 3 real fixes (0.9.3-0.9.5); cap raised from 3 to 8 rounds mid-run;
+   continuing.
 
 ### Later: deferred by design, staged inside each plan
 

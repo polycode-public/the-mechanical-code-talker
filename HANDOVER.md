@@ -8,8 +8,23 @@ Session handle (inbox): `mechanic`.
 
 A large wave landed on `main` this session. It fixed 5 bugs, shipped a new query feature, turned
 two research tracks into real code, built a new inference benchmark, and added 4 new plan docs.
-All merged, `npm test` green (**1033**). The version is not bumped yet; see follow-up 10 below for
-the exact release status.
+All merged, `npm test` green (**1042**). **Version: 0.9.5, pushed** (0.9.0 → 0.9.5 across this
+session — 5 HANDOVER bugs + predicate-find + research plans in 0.9.0, then one shipped fix per
+playtest-sprint round; see "Playtest sprint" below).
+
+### Playtest sprint (`SKILL_PLAYTEST_SPRINT.md`), rounds 1–3 of an 8-round run (cap raised from 3
+### to 8 mid-run by operator instruction)
+
+- **Round 1** (0.9.3): a redundant same-kind verb after a relation-trigger word polluted object
+  extraction ("what tests cover X" — "cover" wasn't stripped); frequency adverbs ("usually" etc.)
+  weren't in `STOPWORDS`.
+- **Round 2** (0.9.4): polite describe-wrapper phrasings ("can you tell me more about X") dead-ended
+  instead of resolving like `/describe X` — added a last-resort rescue lane.
+- **Round 3** (0.9.5): the round-2 rescue lane only stripped a LEADING "please", not trailing
+  ("...about Router please" still failed); a leading "btw" with no delimiter derailed an otherwise-
+  working query into the wrong clause shape — added to `FILLER_WORDS`. Also logged 4 deferred
+  findings (likely genuine ceilings, not routing bugs) — see the numbered follow-up list below.
+- Rounds 4–8 continuing; results relayed as they land.
 
 ### The 5 bugs from the last follow-up list, all fixed
 
@@ -94,17 +109,25 @@ piped session before its log flushed. Fixed with `try`/`catch` and `try`/`finall
    genuine confident-wrong failure in the flagship zero-hallucination capability (AGENTBENCH's C2
    goal-reasoner), more serious than the cosmetic bugs fixed this wave. It needs a real semantic
    gate, not a quick patch.
-2. **Bug 6: scoped listing false-empty.** "list modules in `<pkg>`" returns empty even though the
-   unscoped lister shows matches. Found by an external session (codememory) dogfooding a
-   191k-entity monorepo graph.
+2. **Bug 6: scoped listing false-empty. Now CONFIRMED locally reproducible** (playtest sprint
+   round 4, `examples/mini-webapp`): "list modules in src/lib" and "list files in src/handlers"
+   both return "no modules in this index." even though `src/lib/logger.mjs`/`src/lib/http.mjs`
+   and `src/handlers/{base,tasks,users}.mjs` genuinely exist. Originally found by an external
+   session (codememory) dogfooding a 191k-entity monorepo graph; no longer needs their scale to
+   repro — raises this bug's priority, it's now trivially demonstrable and testable in-repo.
 3. **Bug 7: a modal survives the fuzzy cascade.** "what should i look at first" gets rewritten to
    "what hold i at". `STOPWORDS` (`src/interpret/normalize.mjs`) has no modal auxiliaries
    (should/would/could/can/will/shall/might/must), so "should" reaches the fuzzy-correction step
    and lands within edit distance of "hold". Diagnosed, not yet fixed: add modals to `STOPWORDS`.
-4. **`PLAN_TMCT_ECOSYSTEM_INTEGRATION.md`, in progress.** A separate concurrent session is
-   drafting a 3-part plan for tmct/bedrock-meter/marginalia integration (tmct already has a
-   working `/v1/messages` shim; bedrock-meter already has a tested cost-ordered router with a tmct
-   routing target). Check for its completion next session and finalize.
+4. **`PLAN_TMCT_ECOSYSTEM_INTEGRATION.md`, in progress (redispatched).** An earlier attempt at
+   this doc was lost (its background task became untraceable, likely across a context-compaction
+   boundary — no file/branch/worktree trace found). Redispatched fresh with the operator's full
+   original brief: a 3-part plan for tmct/bedrock-meter/marginalia integration, plus a deep-dive
+   on whether tmct can drive marginalia's and seonix's own graph tools directly or needs a
+   corpus+lexicon+template extension layered on top. Note: stray `.claude/worktrees/agent-*`
+   directories in this repo contain unmerged commits (`5abc102`, `9f1c505`) for a `/v1/messages`
+   shim under "Phase 11 Track 2, Phase A" — real prior work, never merged to `main`; the
+   redispatched agent was told to investigate and account for it, not assume it's live.
 5. **`PLAN_CODE.md`'s sign-off gate.** Read the plan and decide with the operator whether to
    greenlight Track 1 (GOAL_RULE/PHRASING_FRAMES synthesis). Tracks 2/3 (JS, HTML/CSS synthesis)
    stay further out regardless.
@@ -125,10 +148,10 @@ piped session before its log flushed. Fixed with `try`/`catch` and `try`/`finall
    cliffs on 27k-module graphs.
 9. **`test/goal-reasoner.test.mjs` shared-ctx conversion.** Convert to the shared run-ctx pattern
    the runner now uses (hygiene; keeps the suite honest about per-case isolation).
-10. **Version bump and push.** `package.json` is still 0.8.2 (unpushed since 0.8.1). This
-    session's wave adds substantial new capability, not just bug fixes, so the coordinator plans
-    to bump to 0.9.0 to reflect that. Pushing `main` triggers CI publish; ping the seonix session
-    (`~/.claude/inboxes/codememory.md`) the moment it ships, per the standing agreement there.
+10. **Version bump and push — DONE.** 0.8.2 → 0.9.0 (the main wave) → 0.9.1 → 0.9.2/0.9.3
+    (scoped-listing + recall fixes, playtest round 1) → 0.9.4 (playtest round 2) → 0.9.5
+    (playtest round 3), all pushed, all publishing via CI. seonix (codememory) pinged and has
+    already bumped its own pin through this chain (see `~/.claude/inboxes/codememory.md`).
 
 11. **Playtest sprint findings (round 3, `SKILL_PLAYTEST_SPRINT.md`), deferred as likely genuine
     ceilings — not forced this wave:**
