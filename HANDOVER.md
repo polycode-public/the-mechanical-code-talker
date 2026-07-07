@@ -110,16 +110,16 @@ piped session before its log flushed. Fixed with `try`/`catch` and `try`/`finall
    previously-working global keystone case (`demo/agentic-loop-demo.mjs`) is unchanged.
    AGENTBENCH goal-driver baseline unchanged (100% plan / 98% result / 0% hallucination, 56
    cases) — independently re-verified by the coordinator, not just the fixing agent's own report.
-2. **Bug 6: scoped listing false-empty. Now CONFIRMED locally reproducible** (playtest sprint
-   round 4, `examples/mini-webapp`): "list modules in src/lib" and "list files in src/handlers"
-   both return "no modules in this index." even though `src/lib/logger.mjs`/`src/lib/http.mjs`
-   and `src/handlers/{base,tasks,users}.mjs` genuinely exist. Originally found by an external
-   session (codememory) dogfooding a 191k-entity monorepo graph; no longer needs their scale to
-   repro — raises this bug's priority, it's now trivially demonstrable and testable in-repo.
-3. **Bug 7: a modal survives the fuzzy cascade.** "what should i look at first" gets rewritten to
-   "what hold i at". `STOPWORDS` (`src/interpret/normalize.mjs`) has no modal auxiliaries
-   (should/would/could/can/will/shall/might/must), so "should" reaches the fuzzy-correction step
-   and lands within edit distance of "hold". Diagnosed, not yet fixed: add modals to `STOPWORDS`.
+2. **Bug 6 — FIXED (cluster A, commit `7a4f38c`).** Root cause: a bare directory term
+   ("src/lib") had no exact node of its own, so `resolveObject`'s fuzzy tiers landed it on ONE
+   arbitrarily-chosen module whose label merely *contained* the path as a substring, then
+   traversed only that module's own membership edges (which a module never has) — a false
+   empty even with real modules under the directory. Fixed with a directory-prefix scope branch
+   (proper path-segment matching, never a bare substring) that unions across every module under
+   the directory when there's no exact single-node match. Independently re-verified live.
+3. **Bug 7 — FIXED (cluster A, commit `c48c5af`).** Added the modal-auxiliary family
+   (should/would/could/can/will/shall/might/must) to `STOPWORDS`, same mechanism as the
+   frequency-adverb fix. Independently re-verified live.
 4. **`PLAN_TMCT_ECOSYSTEM_INTEGRATION.md` — landed.** The redispatched research doc is done
    (an earlier attempt was lost to an untraceable context boundary; this is a fresh pass).
    Correction to the note this follow-up used to carry: the `/v1/messages` shim commits
@@ -140,21 +140,30 @@ piped session before its log flushed. Fixed with `try`/`catch` and `try`/`finall
 5. **`PLAN_CODE.md`'s sign-off gate.** Read the plan and decide with the operator whether to
    greenlight Track 1 (GOAL_RULE/PHRASING_FRAMES synthesis). Tracks 2/3 (JS, HTML/CSS synthesis)
    stay further out regardless.
-6. **Chat-feel residuals from the 0.8.2 confirmation playtest** (ranked, smaller than 1-3 above):
-   1. Recall matching still fires on half-matches once memory fills. Entity OR predicate mismatch
-      can replay, and a recall can still staple onto a wall in the who-owns re-ask path.
-   2. Function-grain coverage contradiction: any similarly-shaped case not caught by the Bug C+D
-      fix above.
-   3. The off-topic orientation blurb still doesn't shorten everywhere the parse-wall route does.
+6. **Chat-feel residual trio — triaged (cluster A):**
+   1. Recall half-match replay: **confirmed already fixed** this session (entity∧predicate
+      conjunction, pinned tests cover the exact "who owns X" scenario). No change needed.
+   2. **The orientation-repeat gap — FIXED (commit `4465120`).** `metaLane`'s `META_ORIENT_RE`
+      branch ("what does this app do") was a separate route to the same full-blurb text that
+      never got Bug B1's repeat-suppression treatment. Now threads `last` and collapses to a
+      one-liner on repeat, same pattern, independently re-verified live.
+   3. **Function-grain coverage contradiction — genuine, unfixed, newly precise repro found.**
+      `traverse()`'s grain-aware resolution (Bug C+D) only runs on the `"reverse"` shape; the
+      `"forward"` shape returns earlier and never reaches it — "what does foo define" over a
+      same-stem Module/Class pair resolves the wrong grain, false-empty. Needs a
+      `kindSubjectClass` helper (mirrors `kindObjectClass` over edge subjects) and touches
+      `traverse()`'s control flow across multiple shapes — bigger than a routing tweak, deferred.
 7. **Track-1 trio** (pronoun / temporal / discourse-count), deferred with measured targets
    (advisor tick-4, full-pool dry-run): pronoun red set = 18 ids (g-b1-pron
    1,4,5,7,12,13,16,18,20,21,22,28,30,33,35,36,48,50; g-c2-pron unmeasured at full depth);
    temporal = g-b1-temp x5 (7,31,44,46,49) + g-c1-temp x9 (10,12,23,28,29,33,39,47,48).
    Re-measure g-b1-disc-count full-25 first: it sampled 0/5 red at tick-4, likely already green.
-8. **Perf at monorepo scale** (advisor tick-4 #1, queued as the first post-release perf lever):
-   memoize `edgesOfKind` per (graph, kind) with a `WeakMap`, add by-subject/by-object endpoint
-   indices (mirroring `adjacencyForKinds`). No crash-class hazard remains; these are latency/GC
-   cliffs on 27k-module graphs.
+8. **Perf at monorepo scale — partially done (cluster A, commit `36887ef`).** `edgesOfKind`
+   memoized per `(graph, kind)` via `WeakMap`, cache-correctness + perf-sanity tested (≥5x on a
+   200k-edge group). The by-subject/by-object endpoint indices are NOT done — would need
+   rewiring many existing call sites, judged bigger/riskier than that pass's scope; still open.
+   Ontology numeric-vocabulary (stage 3, `PLAN_ontology-hierarchies.md`) turned out to be
+   **already done** pre-session (commit `308fa67`) — cluster A found it, no work needed.
 9. **`test/goal-reasoner.test.mjs` shared-ctx conversion.** Convert to the shared run-ctx pattern
    the runner now uses (hygiene; keeps the suite honest about per-case isolation).
 10. **Version bump and push — DONE.** 0.8.2 → 0.9.0 (the main wave) → 0.9.1 → 0.9.2/0.9.3

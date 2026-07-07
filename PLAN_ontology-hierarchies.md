@@ -1,9 +1,8 @@
 # PLAN_ontology-hierarchies.md — the OWL hierarchy/lexicon layer under inference and grammar
 
-> **STATUS (2026-07-08): stages 1–2 (synonym wiring, disjointness growth) ✅ shipped. Stage 3
-> (numeric data-property vocabulary) 🔄 IN PROGRESS**, rolled into the continuous fix-ship loop
-> this session (vocabulary declaration only, per this doc's own low-risk framing — no engine
-> work, nothing consumes it until tier-5).
+> **STATUS (2026-07-08): stages 1–3 all ✅ shipped.** Stage 3 (numeric data-property vocabulary
+> — 7 nouns + 42 disjointness rows) turned out to already be done pre-session (commit
+> `308fa67`); confirmed, no further work needed.
 
 **Goal:** answer four concrete questions — how far/how useful is a synonym/hypernym hierarchy
 layer, does it aid inference, can cardinality ("at least N") be wired in, can arithmetic +
