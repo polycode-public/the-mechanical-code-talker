@@ -7,14 +7,25 @@
 // strategy is dropped, never fatal).
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { interpret, STRATEGIES, normalizeInput, runStrategiesSync } from "../src/interpret/pipeline.mjs";
 import { mergeStrategyResults, alternateLines, sameParse } from "../src/interpret/merge.mjs";
-import { applyPreambleFrames } from "../src/interpret/normalize.mjs";
+import {
+  applyPreambleFrames, applySubordinationFrames, applyConditionalFrames, COUNTERFACTUAL_RE,
+} from "../src/interpret/normalize.mjs";
 import { stripNoise } from "../src/interpret/strategies/noise-strip.mjs";
 import { parseQuery, ask } from "../src/ask.mjs";
 import { buildEntities } from "../src/graph-build.mjs";
 import { parseEntities } from "../src/codegraph.mjs";
 import { ingestSchemaDocs } from "../src/schema-docs.mjs";
+
+// The richer committed fixture (imports + tests edges) — the local MODULES set
+// below has neither, so the conditional-qualifier/counterfactual tests (which
+// need real import AND test-coverage data) load it directly, mirroring
+// wiring-facts.test.mjs's convention.
+const RICH_FIXTURE = fileURLToPath(new URL("./fixtures/entities.fixture.json", import.meta.url));
+function richGraph() { return parseEntities(JSON.parse(readFileSync(RICH_FIXTURE, "utf8"))); }
 
 // A tiny strategy factory: fixed id/class, returns the given parse for any text.
 const fixed = (id, cls, parsed, confidence, note = null) => ({
@@ -534,4 +545,93 @@ test("item 10 (noise-strip): the strategy never fires when the anchored grammar 
   const amb = parseQuery("which classes extends Base and couples to logging");
   assert.equal(amb.ambiguousParse, true);
   assert.equal(amb.candidates.length, 2);
+});
+
+// ============================================================================
+// ADVANCED_GRAMMAR track (a) (PLAN_ADVANCED_GRAMMAR.md §2a) — closed-frame
+// subordination + conditionals, wired inside normalizeQuery (interpret/
+// normalize.mjs) so both parse strategies see the rewritten text for free.
+// ============================================================================
+
+test("subordination: a leading framing clause strips to the bare question and answers identically", () => {
+  const graph = buildGraph();
+  const noisy = "since we're refactoring, which modules import src/logging.mjs?";
+  assert.equal(applySubordinationFrames(noisy), "which modules import src/logging.mjs?");
+  assert.equal(normalizeInput(noisy).text, "which modules import src/logging.mjs?");
+  const r = ask(graph, noisy);
+  const clean = ask(graph, "which modules import src/logging.mjs");
+  assert.equal(r.content, clean.content);
+  assert.equal(r.tmct_ask.miss, false);
+});
+
+test("subordination: the closed conjunction family (although/though/while/because/whereas/given that/now that)", () => {
+  assert.equal(applySubordinationFrames("although this seems odd, who touched src/logging.mjs"), "who touched src/logging.mjs");
+  assert.equal(applySubordinationFrames("though it's late, what calls Logger"), "what calls Logger");
+  assert.equal(applySubordinationFrames("while you're at it, what calls Logger"), "what calls Logger");
+  assert.equal(applySubordinationFrames("because i'm curious, who touched src/logging.mjs"), "who touched src/logging.mjs");
+  assert.equal(applySubordinationFrames("whereas before, what calls Logger"), "what calls Logger");
+  assert.equal(applySubordinationFrames("given that we shipped, who touched src/logging.mjs"), "who touched src/logging.mjs");
+  assert.equal(applySubordinationFrames("now that it's stable, what calls Logger"), "what calls Logger");
+});
+
+test("subordination: a BARE clause (no delimiting comma) is untouched, and ordinary 'since' content stays intact", () => {
+  assert.equal(applySubordinationFrames("since we're refactoring"), "since we're refactoring"); // empty remainder → no strip
+  assert.equal(applySubordinationFrames("modules changed since last week"), "modules changed since last week");
+});
+
+test("conditional (qualifier composition): 'if a module imports X, is it tested' compiles to the working boolean-qualifier shape and answers correctly", () => {
+  const graph = richGraph();
+  assert.equal(
+    applyConditionalFrames("if a module imports app/lib/a.mjs, is it tested"),
+    "modules importing app/lib/a.mjs and tested",
+  );
+  const r = ask(graph, "if a module imports app/lib/a.mjs, is it tested");
+  const clean = ask(graph, "modules importing app/lib/a.mjs and tested");
+  assert.equal(r.content, clean.content);
+  assert.equal(r.tmct_ask.miss, false);
+  assert.match(r.content, /app\/lib\/b\.mjs/, "only the ACTUALLY-tested importer (b.mjs), not the whole import set");
+});
+
+test("conditional (qualifier composition): 'that'/'this' subject forms and a different relation verb", () => {
+  assert.equal(
+    applyConditionalFrames("if a class inherits from Base, is that tested"),
+    "classes inheriting from Base and tested",
+  );
+  assert.equal(
+    applyConditionalFrames("if a commit touches app/lib/a.mjs, is this exported"),
+    "commits touching app/lib/a.mjs and exported",
+  );
+});
+
+test("conditional (counterfactual): 'if X were deleted, what would break' compiles to the transitive reverse-dependency closure and answers correctly", () => {
+  const graph = richGraph();
+  assert.equal(
+    applyConditionalFrames("if app/lib/a.mjs were deleted, what would break"),
+    "which modules transitively import app/lib/a.mjs",
+  );
+  assert.match("if app/lib/a.mjs were deleted, what would break", COUNTERFACTUAL_RE);
+  const r = ask(graph, "if app/lib/a.mjs were deleted, what would break");
+  const clean = ask(graph, "which modules transitively import app/lib/a.mjs");
+  assert.equal(r.content, clean.content);
+  assert.equal(r.tmct_ask.miss, false);
+});
+
+test("conditional (counterfactual): 'was removed'/'might fail'/'could be affected' variants", () => {
+  assert.equal(
+    applyConditionalFrames("if app/lib/a.mjs was removed, what might fail"),
+    "which modules transitively import app/lib/a.mjs",
+  );
+  assert.equal(
+    applyConditionalFrames("if app/lib/a.mjs were deleted, what could be affected"),
+    "which modules transitively import app/lib/a.mjs",
+  );
+});
+
+test("conditional: an unrecognized kind/verb/qualifier is left UNMATCHED — an honest miss, never a guessed composition", () => {
+  // "widget" isn't in the closed CONDITIONAL_KIND_PLURAL table
+  assert.equal(applyConditionalFrames("if a widget imports X, is it tested"), "if a widget imports X, is it tested");
+  // "shiny" isn't a recognized qualifier
+  assert.equal(applyConditionalFrames("if a module imports X, is it shiny"), "if a module imports X, is it shiny");
+  // a plain non-conditional question is untouched
+  assert.equal(applyConditionalFrames("which modules import X"), "which modules import X");
 });

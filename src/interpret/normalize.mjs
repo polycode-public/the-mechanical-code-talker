@@ -141,9 +141,122 @@ export function applyPreambleFrames(text) {
   return q;
 }
 
+// ---- ADVANCED_GRAMMAR track (a) (PLAN_ADVANCED_GRAMMAR.md §2): closed-frame
+// subordination + conditionals — the proven 0.8.2 preamble-frame method (closed,
+// delimiter-anchored, first-match-wins, unmatched text passes through
+// byte-unchanged) at its next size up. Two families:
+//   SUBORDINATION_FRAMES  strippable leading framing clauses ("since we're
+//     refactoring, which modules import x?" -> "which modules import x?") —
+//     the clause carries no query content, it's conversational scaffolding
+//     around a real question, same species as the greeting/thanks preambles.
+//   CONDITIONAL frames    "if <clause>, is it <qualifier>?" compiles to the
+//     EXISTING compositional boolean-qualifier shape the grammar already
+//     answers ("<kind> <relation-gerund> <object> and <qualifier>" — proven by
+//     test/ask-compositional.test.mjs's "classes inheriting from Base and
+//     tested"), and the counterfactual "if X were deleted, what would break"
+//     compiles to the existing transitive-modifier reverse-dependency closure
+//     ("which modules transitively import X" — proven by
+//     test/ask.test.mjs's transitive-modifier suite). Both frame families are
+//     wired INSIDE normalizeQuery (not as a separate call site) because this
+//     agent's scope is normalize.mjs only — ask.mjs/interpret/pipeline.mjs
+//     call normalizeQuery already, so embedding here reaches every strategy
+//     for free, with no new call site required. A conditional shape NOT
+//     covered by these two closed patterns is deliberately left unmatched —
+//     the honest-miss discipline PLAN_ADVANCED_GRAMMAR §2a states explicitly
+//     ("refuse any conditional whose consequent isn't a computable
+//     traversal"): only rewrite to a shape independently verified correct,
+//     never a plausible-looking guess. ----
+
+/** Strippable leading framing clause: "since/although/though/while/because/
+ *  whereas/given that/now that <clause>, <Q>" -> "<Q>". Delimiter- (comma-)
+ *  anchored and non-empty-remainder-required, same discipline as
+ *  GREETING_PREAMBLE_RE — a bare "since when do you know that" (no comma
+ *  splitting a framing clause from a real question) is NOT a subordination
+ *  wrapper and is left alone; "since" as an ordinary temporal content word
+ *  ("modules changed since last week", no leading comma-delimited clause)
+ *  never matches either. */
+const SUBORDINATION_FRAMES_RE =
+  /^(?:since|although|though|while|because|whereas|given\s+that|now\s+that)\s+.+?,\s*(.+)$/i;
+
+/** Apply the subordination-frame strip to a small fixpoint (a doubly-wrapped
+ *  "well, since X, although Y, <Q>" peels fully — rare, but the same
+ *  discipline applyPreambleFrames already uses). Pure; unmatched text passes
+ *  through byte-unchanged. */
+export function applySubordinationFrames(text) {
+  let q = String(text || "");
+  for (let pass = 0; pass < 3; pass++) {
+    const m = q.match(SUBORDINATION_FRAMES_RE);
+    if (!m) break;
+    q = m[1].trim();
+  }
+  return q;
+}
+
+/** relation-verb (bare 3rd-person singular, the RELATIONS table's own primary
+ *  form) -> gerund, the shape the compositional grammar's proven
+ *  "<kind> <gerund> <object> and <qualifier>" pattern needs. A small, closed,
+ *  hand-curated table (not a generic morphological rule) — the same
+ *  "no guessing" discipline as every other closed vocabulary in this file. */
+const CONDITIONAL_VERB_GERUND = Object.freeze({
+  imports: "importing", calls: "calling", touches: "touching", tests: "testing",
+  exports: "exporting", contains: "containing", defines: "defining", uses: "using",
+  "inherits from": "inheriting from",
+});
+/** entity kind noun (singular) -> plural, the LISTABLE_KINDS the compositional
+ *  grammar's subject slot takes. Regular English pluralization covers every
+ *  entry (no irregulars in this closed set), so a flat table beats a
+ *  morphological rule for the same "no guessing" reason as the verb table. */
+const CONDITIONAL_KIND_PLURAL = Object.freeze({
+  module: "modules", class: "classes", function: "functions", method: "methods",
+  attribute: "attributes", variable: "variables", commit: "commits", file: "files",
+});
+const CONDITIONAL_QUALIFIER_SRC =
+  "public|private|protected|static|abstract|constant|re-?exported|exported|tested|covered|untested|uncovered";
+/** "if a/the <kind> <relation-verb> <object>, is/are it/that/they/this
+ *  <qualifier>?" -> "<kind plural> <relation-gerund> <object> and <qualifier>".
+ *  Closed to the two small tables above (both ends validated), so an
+ *  unrecognized kind/verb/qualifier simply doesn't match — falls through to
+ *  the ordinary grammar, which honestly misses on the untransformed "if …"
+ *  text rather than risk a wrong composition. */
+const CONDITIONAL_QUALIFIER_RE = new RegExp(
+  "^if\\s+(?:a|an|the)?\\s*(" + Object.keys(CONDITIONAL_KIND_PLURAL).join("|") + ")\\s+"
+  + "(" + Object.keys(CONDITIONAL_VERB_GERUND).join("|") + ")\\s+"
+  + "(.+?),\\s*(?:is|are)\\s+(?:it|that|they|this)\\s+"
+  + "(" + CONDITIONAL_QUALIFIER_SRC + ")\\??$",
+  "i",
+);
+
+/** Counterfactual deletion: "if <X> were/was deleted/removed(,)? what
+ *  would/might break/fail/be affected?" -> "which modules transitively import
+ *  <X>" — the EXISTING reverse-dependency closure (impactClosure via the
+ *  transitive modifier, ask.mjs/codegraph.mjs), proven correct by
+ *  test/ask.test.mjs's transitive-modifier suite. Exported so chat.mjs can
+ *  independently recognize the SAME raw query shape and prepend a
+ *  hypothetical marker to the rendered answer (a hypothetical consequent must
+ *  never be presented as an unqualified fact) — normalize.mjs only rewrites
+ *  the QUESTION text, it never touches the answer. */
+export const COUNTERFACTUAL_RE =
+  /^if\s+(.+?)\s+(?:were|was)\s+(?:deleted|removed),?\s*what\s+(?:would|might|could)\s+(?:break|fail|be\s+affected)\??$/i;
+
+/** Apply the two closed CONDITIONAL frames, first-match-wins (qualifier
+ *  composition tried first — it is the more specific shape). Pure; unmatched
+ *  text passes through byte-unchanged. */
+export function applyConditionalFrames(text) {
+  const q = String(text || "");
+  const qual = q.match(CONDITIONAL_QUALIFIER_RE);
+  if (qual) {
+    const kind = CONDITIONAL_KIND_PLURAL[qual[1].toLowerCase()];
+    const gerund = CONDITIONAL_VERB_GERUND[qual[2].toLowerCase()];
+    return `${kind} ${gerund} ${qual[3].trim()} and ${qual[4].toLowerCase()}`;
+  }
+  const cf = q.match(COUNTERFACTUAL_RE);
+  if (cf) return `which modules transitively import ${cf[1].trim()}`;
+  return q;
+}
+
 /** Free-text -> normalized free-text: contractions expanded, g-dropped words
- *  restored, closed preamble frames peeled, filler/politeness words stripped.
- *  Idempotent and pure — the same
+ *  restored, closed preamble/subordination/conditional frames peeled, filler/
+ *  politeness words stripped. Idempotent and pure — the same
  *  input always normalizes the same way, so both parsing strategies see
  *  identical text and their outputs are directly comparable. Deliberately
  *  does NOT force lowercase: object/subject terms (module names like
@@ -161,6 +274,15 @@ export function normalizeQuery(text) {
   // bridge) — AFTER the correction tables (a repaired "give me"/"show me" still
   // feeds the bridge) but BEFORE the filler strip erases their anchor words.
   q = applyPreambleFrames(q);
+  // subordination (strip a leading framing clause) THEN conditional (compile
+  // "if …" to an existing working shape) — subordination first so a stacked
+  // "since we're refactoring, if a module imports X, is it tested" peels its
+  // outer wrapper before the conditional frame ever sees it. Both run BEFORE
+  // the filler strip for the same reason the preamble frames do: their
+  // anchors ("since", "if", "is it") would otherwise be eaten as bare words,
+  // leaving punctuation/clause debris that poisons the parse.
+  q = applySubordinationFrames(q);
+  q = applyConditionalFrames(q);
   if (FILLER_WORDS.length) {
     const fillerRe = new RegExp(
       "\\b(" + [...FILLER_WORDS].sort((a, b) => b.length - a.length).map(escapeRegex).join("|") + ")\\b",

@@ -53,6 +53,7 @@ import * as defaultSource from "./source.mjs";
 import { loadTemplates, render as renderTemplate } from "./corpus/templates.mjs";
 import { finish } from "./finish.mjs";
 import { VERB_TO_KIND, WHERE_MARKERS, MENTION_MARKERS, ENTITY_TO_TYPE } from "./ask-vocab.mjs";
+import { COUNTERFACTUAL_RE } from "./interpret/normalize.mjs";
 
 // uuidv7 lives in ./uuid.mjs (shared with telemetry + the bench stamp); re-exported
 // here because callers/tests still import it from chat.mjs.
@@ -2295,6 +2296,20 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       answer = `${answer}\n${aside}`;
       via = "corpus";
     }
+  }
+  // ADVANCED_GRAMMAR track (a) — counterfactual marker (PLAN_ADVANCED_GRAMMAR.md
+  // §2a): "if X were deleted, what would break" compiles to a REAL traversal
+  // (interpret/normalize.mjs's COUNTERFACTUAL_RE rewrite, "which modules
+  // transitively import X") — but the consequent is hypothetical, so a plain
+  // traversal answer would over-claim it as present-tense fact. normalize.mjs
+  // only rewrites the QUESTION; this names the SAME raw query shape here (the
+  // one seam that sees both the original text and the final answer) and marks
+  // the answer as conditional. Gated to a genuine non-miss composed traversal
+  // — a counterfactual that happens to miss keeps its ordinary honest-miss
+  // wording, never a fabricated "hypothetically" wrapper around a blank.
+  const counterfactualSubject = String(query).trim().match(COUNTERFACTUAL_RE);
+  if (!recordMiss && via === "composed" && counterfactualSubject) {
+    answer = `hypothetically, if ${counterfactualSubject[1].trim()} were removed: ${answer}`;
   }
   // The concept force answers WITH real example instances — those are the entities the
   // turn "asked about" (the SchemaClass meta-node is documentation, not a code entity),

@@ -371,6 +371,26 @@ test("Bug E MODULE_ORIENT_RE: a pronoun subject is left to isConversational/META
     "moduleOrientLane must decline a pronoun subject, not silently resolve it via focus");
 });
 
+test("ADVANCED_GRAMMAR track (a): a counterfactual deletion query gets a hypothetical marker on its real answer", async () => {
+  const g = await graph();
+  const r = await runTurn("if app/lib/a.mjs were deleted, what would break", { config: CONFIG, graph: g });
+  assert.equal(r.record.via, "composed");
+  assert.equal(r.record.miss, false);
+  assert.match(r.answer, /^hypothetically, if app\/lib\/a\.mjs were removed: /);
+  // the traversal itself is the SAME real reverse-dependency closure a direct
+  // "transitively import" question answers — only the marker is added.
+  const direct = await runTurn("which modules transitively import app/lib/a.mjs", { config: CONFIG, graph: g });
+  assert.equal(r.answer, `hypothetically, if app/lib/a.mjs were removed: ${direct.answer}`);
+});
+
+test("ADVANCED_GRAMMAR track (a): a subordination-wrapped question answers identically to its bare form", async () => {
+  const g = await graph();
+  const wrapped = await runTurn("since we're refactoring, which modules import app/lib/a.mjs", { config: CONFIG, graph: g });
+  const bare = await runTurn("which modules import app/lib/a.mjs", { config: CONFIG, graph: g });
+  assert.equal(wrapped.answer, bare.answer);
+  assert.equal(wrapped.record.miss, false);
+});
+
 test("WS4(d) riskiest nudge: honest proxies (impact + churn), recorded as a miss", async () => {
   const g = await graph();
   const r = await runTurn("what is the riskiest module", { config: CONFIG, graph: g });
