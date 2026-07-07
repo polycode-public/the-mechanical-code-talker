@@ -130,8 +130,12 @@ function nounFor(entityType, n) {
 // name is a bare noun/verb stem ("X cochange Y" is wrong; "X cochanges Y" is right) —
 // so the reverse-shape zero-hit template below reads off this table instead of
 // unconditionally appending "s" (which used to double-pluralize every other kind:
-// "callss", "importss", "touchess").
-const REVERSE_MISS_VERB = { cochange: "cochanges" };
+// "callss", "importss", "touchess"). "reexports" -> "export" (Bug B3, HANDOVER
+// follow-up #2): the raw internal kind identifier "reexports" leaked straight into
+// the forward-miss prose ("X has no reexports edges in the index") — the human
+// word for this relation is "export" ("X has no export edges in the index"),
+// matching every other kind's already-natural phrasing.
+const REVERSE_MISS_VERB = { cochange: "cochanges", reexports: "export" };
 function verbFor(kind) {
   return REVERSE_MISS_VERB[kind] || kind;
 }
@@ -2035,7 +2039,7 @@ function renderCore(parsed, result) {
     // subject-first phrasing rather than reusing reverse's "found ... that OBJECT" template.
     if (parsed.shape === "forward") {
       return {
-        content: `${result.objMatch.label} has no ${parsed.kind} edges in the index.`,
+        content: `${result.objMatch.label} has no ${verbFor(parsed.kind)} edges in the index.`,
         miss: true, ambiguous: false,
       };
     }

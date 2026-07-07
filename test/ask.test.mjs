@@ -212,7 +212,12 @@ test("render: reverse-shape zero hits never double-pluralizes the kind (\"callss
   const cases = [
     ["calls", "calls"], ["imports", "imports"], ["touches", "touches"],
     ["defines", "defines"], ["contains", "contains"], ["tests", "tests"],
-    ["inherits", "inherits"], ["reexports", "reexports"], ["cochange", "cochanges"],
+    // "reexports" -> "export" (Bug B3, HANDOVER follow-up #2): verbFor()'s override
+    // table is shared with the forward-miss template's fix below, so the reverse
+    // shape's honest miss reads "directly export x" too — a minor grammar trade
+    // (vs. the grammatically-exact but internal-vocabulary-leaking "reexports")
+    // accepted deliberately so both templates read off ONE table, not two.
+    ["inherits", "inherits"], ["reexports", "export"], ["cochange", "cochanges"],
   ];
   for (const [kind, expectedVerb] of cases) {
     const parsed = { shape: "reverse", entityType: "Function", modifier: "direct", kind, object: "x" };
@@ -765,7 +770,11 @@ test("ask(): exports family — \"what does myFile export\" reads the reExports 
   assert.match(hit.content, /startup/);
   const blank = ask(graph, "what does src/unrelated.mjs export");
   assert.equal(blank.tmct_ask.miss, true);
-  assert.match(blank.content, /has no reexports edges/);
+  // Bug B3 (HANDOVER follow-up #2): the raw internal kind identifier "reexports"
+  // must never leak into the rendered prose — verbFor()'s override table maps it
+  // to the human word "export", matching every other kind's natural phrasing.
+  assert.match(blank.content, /has no export edges/);
+  assert.doesNotMatch(blank.content, /reexports/);
 });
 
 test("ask(): exports family — the un-answerable phrasings stay honest misses (pinned)", () => {
