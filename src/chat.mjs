@@ -1005,6 +1005,98 @@ function nudgeAnswer(query, focus) {
   return null;
 }
 
+// #5(f) PRESUPPOSITION HONEST-NUDGE (ADVANCED_GRAMMAR track f,
+// PLAN_ADVANCED_GRAMMAR.md §2f). "why does a.mjs still import the deprecated
+// store?" presupposes TWO things: (1) a.mjs currently imports store — a real,
+// checkable graph fact; (2) store is "deprecated" — a checkable MEMORY fact
+// (mgx:hasProperty, the teach lane's own "X is <adjective>" shape). We never
+// ACCOMMODATE a presupposition silently (assume it's true and answer around
+// it) — we NAME it, confirmed or refuted, then answer what survives. Same
+// honesty-nudge render precedent as why-untested/opinion above. Closed
+// trigger lexicon (Levinson's classic still/again/anymore family) + the
+// closed VERB_TO_KIND relation-verb table (read-only, ask-vocab.mjs) for the
+// verb split — an unrecognized shape declines (null), never a guess.
+const PRESUPPOSITION_TRIGGER_RE = /^why\s+(?:does|do|is|are)\s+(.+?)\s+(?:still|again|anymore|any\s+more)\s+(.+?)[?.!\s]*$/i;
+
+/** Split a "<verb> <object>" tail on the longest known VERB_TO_KIND phrase
+ *  (2-word phrases tried before 1-word, so "inherits from" wins over a bare
+ *  "inherits"), returning {verb, kind, object} or null when no known relation
+ *  verb opens the tail — the presupposition's relation half is then simply
+ *  not checkable, so the caller declines rather than guessing a kind. */
+function splitVerbObject(tail) {
+  const words = String(tail).trim().split(/\s+/);
+  for (let n = Math.min(2, words.length); n >= 1; n -= 1) {
+    const candidate = words.slice(0, n).join(" ").toLowerCase();
+    if (VERB_TO_KIND[candidate]) {
+      return { verb: candidate, kind: VERB_TO_KIND[candidate], object: words.slice(n).join(" ").trim() };
+    }
+  }
+  return null;
+}
+
+/** The presupposition-nudge answer for a would-miss "why … still/again …"
+ *  query, or null (declines — never a guess — when the subject/object don't
+ *  resolve to real graph entities, or no known relation verb opens the tail).
+ *  Presupposition (1) is checked against the GRAPH (exhaustive, so a "no" is
+ *  a confident, non-miss answer, not a shrug); presupposition (2) — an
+ *  optional embedded 2-word object ("the DEPRECATED store") — is checked
+ *  against MEMORY facts (mgx:hasProperty) and is honestly "no fact saying so"
+ *  when absent, never assumed. Returns {text} or null.
+ *
+ *  WOULD-MISS ONLY, matching every other lane in this file (never hijack a
+ *  real answer): "why does X import Y" already has a real, working grammar
+ *  answer when the relation HOLDS ("Yes — imports edge from X to Y",
+ *  miss:false) — that answer is correct and this lane must not shadow it. The
+ *  relation-holds case an honest "No — no <kind> edge found …" is recorded as
+ *  a MISS by the base engine's own empty-result convention, so THAT is where
+ *  this lane adds real value: naming the presupposition explicitly (subject,
+ *  predicate, object — and the embedded property claim, if any) rather than
+ *  the plainer receipt. */
+async function presuppositionNudge(query, { graph, memoryDir }) {
+  if (!graph) return null;
+  const m = String(query).trim().replace(/[?.!]+$/, "").match(PRESUPPOSITION_TRIGGER_RE);
+  if (!m) return null;
+  const split = splitVerbObject(m[2]);
+  if (!split) return null;
+  const rawObject = split.object.replace(/^(?:the|a|an)\s+/i, "").trim();
+  const objWords = rawObject.split(/\s+/);
+  const hasAdjective = objWords.length === 2;
+  const entityTerm = hasAdjective ? objWords[1] : rawObject;
+  const adjective = hasAdjective ? objWords[0].toLowerCase() : null;
+
+  const subjEnt = await resolveEntity(graph, m[1].trim());
+  const objEnt = await resolveEntity(graph, entityTerm);
+  if (!subjEnt || !objEnt) return null; // can't check the presupposition — decline, never guess
+
+  const holds = edgesOfKind(graph, split.kind).some((e) => e.subject === subjEnt.id && e.object === objEnt.id);
+  const lines = [
+    `checking the presupposition first: ${subjEnt.label} does${holds ? "" : "n't"} ${split.verb} ${objEnt.label} (${holds ? "yes" : "no"})`,
+  ];
+  if (adjective) {
+    let propHit = null;
+    if (memoryDir) {
+      let normFactTerm;
+      try { ({ normFactTerm } = await import("./memory/core.mjs")); } catch { normFactTerm = null; }
+      if (normFactTerm) {
+        const facts = await memoryFacts(memoryDir);
+        const subjMatches = (f) => normFactTerm(f.subject) === normFactTerm(entityTerm);
+        // Two shapes a taught "<X> is <adjective>" can land as: the teach
+        // lane's mgx:hasProperty (subject/object) fact, or — when the
+        // adjective is a known ACE-OWL lexicon data-property word (e.g.
+        // "deprecated", grammar/lexicon-core.json) — the ACE grammar's own
+        // tmct:<adjective> "true" data-property triple (assertTurn tries ACE
+        // FIRST, so this is the more common real path for a lexicon word).
+        propHit = facts.find((f) => subjMatches(f)
+          && ((f.predicate === HAS_PROPERTY_PREDICATE && normFactTerm(f.object) === adjective)
+            || (f.predicate === `tmct:${adjective}` && f.object === "true"))) || null;
+      }
+    }
+    lines.push(`${objEnt.label} ${adjective} — ${propHit ? `yes (source: ${propHit.provenance})` : "I have no fact saying so"}`);
+  }
+  const verdict = lines.join("; ");
+  return { text: holds ? `${verdict}. ${subjEnt.label} does ${split.verb} ${objEnt.label}.` : `${verdict} — the premise doesn't hold.` };
+}
+
 /** The wall-repeat one-liner (0.8.2 WS4 wall kindness (a)). MUST NOT match
  *  WALL_MISS_RE: the suppression keys on the PREVIOUS answer matching it, so this
  *  text self-limits — a third consecutive miss re-offers the tailored hint. */
@@ -2258,6 +2350,15 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   if (miss && recordMiss && via === "composed") {
     const authored = authorLane(query, { graph });
     if (authored) { answer = authored.text; via = authored.via; recordMiss = false; }
+  }
+  // (4b2) #5(f) PRESUPPOSITION HONEST-NUDGE (ADVANCED_GRAMMAR track f) — "why
+  // does X still/again import Y": names the presupposition being checked
+  // (against the graph, confidently) before answering what survives. A
+  // CONFIRMED presupposition is a real answer (recordMiss:false); a REFUTED
+  // one is still an honest, confident correction, not a miss.
+  if (miss && recordMiss && via === "composed") {
+    const presup = await presuppositionNudge(query, { graph, memoryDir });
+    if (presup) { answer = presup.text; via = "presupposition"; recordMiss = false; }
   }
   // (4c) CAPABILITY NUDGES (0.8.2 WS4) — risk scoring / code opinions / "write me
   // code" imperatives / motive-"why": an honest wall pointing at the nearest real

@@ -439,3 +439,57 @@ test("WS4(8) guard: 'tell me a joke' keeps its ordinary honest miss (no imperati
   assert.doesNotMatch(r.answer, /I don't write code/, "'tell' is not an imperative-nudge verb");
   assert.match(r.answer, /^couldn't parse this as a graph question\. Try:/, "the graded hm-joke wording stands");
 });
+
+// ---- ADVANCED_GRAMMAR track (f) (PLAN_ADVANCED_GRAMMAR.md §2f): the
+// presupposition honest-nudge — "why does X still/again import Y" names the
+// presupposition being checked (against the graph, confidently — and, for an
+// embedded "the DEPRECATED Y" adjective claim, against memory), then answers
+// what survives. Fires only where the base grammar's own "why does X import
+// Y" answer is a MISS (the relation does NOT hold) — a real "Yes" answer is
+// never shadowed, see presuppositionNudge's own docblock. ----
+
+test("presupposition (f): a REFUTED relation presupposition is named, honestly, with a confident 'no'", async () => {
+  const g = await graph();
+  // app/lib/f.mjs does NOT import app/lib/a.mjs in the fixture.
+  const r = await runTurn("why does app/lib/f.mjs still import app/lib/a.mjs", { config: CONFIG, graph: g });
+  assert.equal(r.record.via, "presupposition");
+  assert.equal(r.record.miss, false, "a confident graph-checked 'no' is an answer, not a miss");
+  assert.match(r.answer, /^checking the presupposition first: app\/lib\/f\.mjs doesn't import app\/lib\/a\.mjs \(no\)/);
+  assert.match(r.answer, /the premise doesn't hold/);
+});
+
+test("presupposition (f): an embedded 'the <adjective> <term>' claim is checked against memory and cited", async () => {
+  const dir = await mem();
+  try {
+    const g = await graph();
+    await runTurn("remember that app/lib/a.mjs is deprecated", { config: CONFIG, graph: g, memoryDir: dir, sessionId: "presup" });
+    const r = await runTurn(
+      "why does app/lib/f.mjs still import the deprecated app/lib/a.mjs",
+      { config: CONFIG, graph: g, memoryDir: dir },
+    );
+    assert.equal(r.record.via, "presupposition");
+    assert.match(r.answer, /app\/lib\/a\.mjs deprecated — yes \(source: ace:chat:presup@/);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("presupposition (f): an embedded adjective with NO matching fact is honestly 'no fact saying so', never assumed", async () => {
+  const g = await graph();
+  const r = await runTurn("why does app/lib/f.mjs still import the fancy app/lib/a.mjs", { config: CONFIG, graph: g });
+  assert.equal(r.record.via, "presupposition");
+  assert.match(r.answer, /app\/lib\/a\.mjs fancy — I have no fact saying so/);
+});
+
+test("presupposition (f) guard: a HELD relation presupposition keeps the engine's own real 'Yes' answer, never shadowed", async () => {
+  const g = await graph();
+  // app/lib/b.mjs DOES import app/lib/a.mjs — the base grammar already
+  // answers this for real (miss:false); the presupposition lane must not fire.
+  const r = await runTurn("why does app/lib/b.mjs still import app/lib/a.mjs", { config: CONFIG, graph: g });
+  assert.notEqual(r.record.via, "presupposition");
+  assert.match(r.answer, /^Yes — imports edge from app\/lib\/b\.mjs to app\/lib\/a\.mjs\./);
+});
+
+test("presupposition (f) guard: an unresolvable subject/object declines (falls through), never guesses", async () => {
+  const g = await graph();
+  const r = await runTurn("why does zzz-nonexistent still import app/lib/a.mjs", { config: CONFIG, graph: g });
+  assert.notEqual(r.record.via, "presupposition");
+});
