@@ -583,6 +583,38 @@ function orientationText(graph) {
     + "/stats for the full overview, /help for commands.";
 }
 
+/** Bug E (0.8.2 follow-up): a friendly, prose-shaped condensation of
+ *  renderDescribe's edge counts (codegraph.mjs) — defines/imports/reexports
+ *  (outgoing from `ind`) + tests (incoming: who covers `ind`) — capped sample,
+ *  matching orientationText's tone rather than reusing /describe's verbose
+ *  block verbatim. A capped sample (not the full renderDescribe dump) because
+ *  this lane answers a casual "what does X do", not a request for the whole
+ *  edge listing (that's what /describe is for — named in the pointer below). */
+const MODULE_OVERVIEW_SAMPLE = 3;
+function moduleOverviewText(graph, ind) {
+  const out = (kind) => edgesOfKind(graph, kind).filter((e) => e.subject === ind.id);
+  const sample = (edges) => {
+    const labels = edges.slice(0, MODULE_OVERVIEW_SAMPLE).map((e) => e.objectLabel || e.object);
+    return edges.length > MODULE_OVERVIEW_SAMPLE
+      ? `${labels.join(", ")}, +${edges.length - MODULE_OVERVIEW_SAMPLE} more`
+      : labels.join(", ");
+  };
+  const defines = out("defines");
+  const imports = out("imports");
+  const reexports = out("reexports");
+  const testedBy = edgesOfKind(graph, "tests").filter((e) => e.object === ind.id);
+  const parts = [];
+  if (defines.length) parts.push(`defines ${defines.length} (${sample(defines)})`);
+  if (imports.length) parts.push(`imports ${imports.length} (${sample(imports)})`);
+  if (reexports.length) parts.push(`exports ${reexports.length} (${sample(reexports)})`);
+  parts.push(testedBy.length
+    ? `covered by ${testedBy.length} test module${testedBy.length === 1 ? "" : "s"}`
+    : "no recorded tests");
+  const cls = (ind.class || "entity").toLowerCase();
+  return `${ind.label} is a ${cls} — ${parts.join("; ")}. `
+    + `/describe ${ind.label} for the full breakdown.`;
+}
+
 // #1 SHORT, TAILORED MISS — the engine's full grammar cheat-sheet (rephraseHint)
 // now lives ONLY behind /help. A genuine parse-miss gets ONE line: an honest miss
 // + at most two example shapes chosen for what the user typed + a /help pointer.
@@ -792,12 +824,47 @@ async function memorySummary(memoryDir, graph) {
     + `type${preds.size === 1 ? "" : "s"}. Ask "what do you know about <term>", or /memory to explore.`;
 }
 
+// #2(e) MODULE-GRAIN OVERVIEW (Bug E, 0.8.2 follow-up). META_ORIENT_RE (above)
+// is closed to 5 literal nouns (app/codebase/repo/repository/project) — it
+// cannot match a module path or symbol name by construction, and "do" is
+// deliberately excluded from VERB_TO_KIND everywhere else in the grammar, so
+// "what does app/lib/a.mjs do" hit the grammar wall even though the data
+// (renderDescribe's own edge aggregation) and the resolver (resolveEntity)
+// both already exist. CASE-PRESERVING: module paths/symbol names are
+// case-sensitive, so this reads the ORIGINAL query text, never metaLane's
+// lowercased `q` (authorLane's same discipline, just above/below).
+const MODULE_ORIENT_RE = /^what\s+does\s+(.+?)\s+do\??$/i;
+
+/** authorLane's discipline, mirrored: a closed regex + an EXACT, UNIQUE
+ *  resolution via resolveEntity, else null — never a guess. Pronoun/self
+ *  subjects ("what does it/this do") are META_ORIENT_RE's/isConversational's
+ *  territory, not this lane's — declined here so they fall through unchanged. */
+async function moduleOrientLane(query, { graph }) {
+  if (!graph) return null;
+  const q = String(query).trim().replace(/[?.!]+$/, "").replace(/\s+/g, " ");
+  const m = q.match(MODULE_ORIENT_RE);
+  if (!m) return null;
+  const term = m[1].trim();
+  if (/^(?:it|this|that|they|them)$/i.test(term)) return null;
+  const ent = await resolveEntity(graph, term);
+  if (!ent) return null;
+  const ind = graph.byId?.get?.(ent.id);
+  if (!ind) return null;
+  return { text: moduleOverviewText(graph, ind), via: "meta" };
+}
+
 async function metaLane(query, { graph, memoryDir }) {
   const q = String(query).trim().toLowerCase().replace(/[?.!]+$/, "").replace(/\s+/g, " ");
   if (WHAT_KNOW_RE.test(q) || q === "what have you learned" || q === "what have you learnt") {
     return { text: await memorySummary(memoryDir, graph), via: "meta" };
   }
   if (META_ORIENT_RE.test(q)) return { text: orientationText(graph), via: "meta" };
+  // Bug E: an arbitrary "what does <term> do" that META_ORIENT_RE's closed noun
+  // list didn't claim — try the module-grain overview before falling through to
+  // the author-sha check below (disjoint triggers; order doesn't matter, but
+  // this reads MORE of the query shape space, so it goes first).
+  const moduleOrient = await moduleOrientLane(query, { graph });
+  if (moduleOrient) return moduleOrient;
   // 0.8.2 WS4: the sha-authorship form ("who authored a1b2c3d") can be as short as
   // THREE words, which the conversational-orientation branch (step 2) would grab
   // before the author step (4b) is reached — a bare hex sha is not "code-ish" to

@@ -323,6 +323,54 @@ test("WS4(c) META_ORIENT_RE: the stranger openers get the live overview, not the
   }
 });
 
+test("Bug E (0.8.2 follow-up) MODULE_ORIENT_RE: 'what does <module> do' gets a friendly overview, not the wall", async () => {
+  const g = await graph();
+  // app/functions/d/handler.mjs (mod-d) is populated across imports/reexports/tests
+  // in the fixture — imports app/lib/b.mjs + app/lib/c.mjs, re-exports fnAlpha, and
+  // is covered by app/unit-tests/b.test.mjs.
+  const r = await runTurn("what does app/functions/d/handler.mjs do", { config: CONFIG, graph: g });
+  assert.equal(r.record.via, "meta", "routes to the meta/self lane, not composed/miss");
+  assert.equal(r.record.miss, false);
+  assert.match(r.answer, /^app\/functions\/d\/handler\.mjs is a module —/);
+  assert.match(r.answer, /imports 2 \(app\/lib\/b\.mjs, app\/lib\/c\.mjs\)/);
+  assert.match(r.answer, /exports 1 \(fnAlpha\)/);
+  assert.match(r.answer, /covered by 1 test module/);
+  assert.match(r.answer, /\/describe app\/functions\/d\/handler\.mjs for the full breakdown\./);
+
+  // app/lib/b.mjs (mod-b) is populated across defines/imports/tests but has NO
+  // reexports — that line must simply be absent, not render as "exports 0".
+  const b = await runTurn("what does app/lib/b.mjs do", { config: CONFIG, graph: g });
+  assert.equal(b.record.via, "meta");
+  assert.match(b.answer, /defines 2 \(Widget, register\)/);
+  assert.match(b.answer, /imports 1 \(app\/lib\/a\.mjs\)/);
+  assert.match(b.answer, /covered by 1 test module/);
+  assert.doesNotMatch(b.answer, /exports \d/);
+});
+
+test("Bug E MODULE_ORIENT_RE: a module with no defines/imports/reexports/tests gets an honest 'no recorded tests' line", async () => {
+  const g = await graph();
+  // scripts/g.mjs has only a "calls" edge in the fixture — none of
+  // defines/imports/reexports/tests, the four kinds this overview reads.
+  const r = await runTurn("what does scripts/g.mjs do", { config: CONFIG, graph: g });
+  assert.equal(r.record.via, "meta");
+  assert.match(r.answer, /^scripts\/g\.mjs is a module — no recorded tests\./);
+});
+
+test("Bug E MODULE_ORIENT_RE: an unresolvable subject falls through (honest miss, never a guess)", async () => {
+  const g = await graph();
+  const r = await runTurn("what does zzz-nonexistent-symbol do", { config: CONFIG, graph: g });
+  assert.equal(r.record.miss, true);
+  assert.notEqual(r.record.via, "meta");
+});
+
+test("Bug E MODULE_ORIENT_RE: a pronoun subject is left to isConversational/META_ORIENT_RE, not guessed at", async () => {
+  const g = await graph();
+  const focus = g.individuals.find((i) => i.id === "mod-d");
+  const r = await runTurn("what does it do", { config: CONFIG, graph: g, focus });
+  assert.notEqual(r.answer.split(" ")[0], "app/functions/d/handler.mjs",
+    "moduleOrientLane must decline a pronoun subject, not silently resolve it via focus");
+});
+
 test("WS4(d) riskiest nudge: honest proxies (impact + churn), recorded as a miss", async () => {
   const g = await graph();
   const r = await runTurn("what is the riskiest module", { config: CONFIG, graph: g });
