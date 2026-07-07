@@ -864,6 +864,13 @@ function qualSets(graph) {
   qualCache.set(graph, c);
   return c;
 }
+// KNOWN DIVERGENCE (not a bug, do not merge): this moduleIdOf is DEFINES-EDGE-keyed
+// (walks the `defines` edge Module->symbol, built once in qualSets above), while
+// codegraph.mjs's own moduleIdOf (codegraph.mjs:1198) is SITE-ATTRIBUTE-keyed (reads
+// the individual's `site` attribute / a `fn:<path>#name` id shape) — the two can
+// disagree for a symbol whose site attribute and defines edge point at different
+// modules (a genuine, currently-untested cross-file edge case), so this file
+// deliberately keeps its own copy rather than importing codegraph.mjs's.
 function moduleIdOf(graph, ind) {
   if (!ind) return null;
   if (ind.class === "Module") return ind.id;
@@ -1170,12 +1177,25 @@ function componentSet(s) {
  *  only) nor to terms under 4 chars (the bound would cover half of everything).
  *  (6) no match at all — an honest miss. Returns {match, candidates, tier, ambiguous
  *  [, matchedVia]} — ambiguous on a true tier-3 score tie, a tier-4 overlap-count
- *  tie, or a tier-5 distance tie. */
-export function resolveObject(graph, term) {
+ *  tie, or a tier-5 distance tie.
+ *
+ *  `opts.expectedClass` (grain-aware resolution, Bug C+D fix): when set, narrows
+ *  the candidate POOL to `i.class === expectedClass` before every pool-driven tier
+ *  (exact/tier-3/tier-5) — the ranking code within each tier is untouched, only the
+ *  universe it ranks over shrinks. The ext: tier (synthetic matches with
+ *  `class: null`, never a real individual) is skipped outright when a class is
+ *  expected — it can never BE that class. The prose tier (tier 4) filters its hits
+ *  to the expected class before picking a winner. Every existing call site passes
+ *  no 3rd argument, so `expectedClass` defaults to null and behavior is
+ *  byte-identical to before this option existed — this is purely opt-in narrowing
+ *  for a caller (traverse()'s reverse case) that already knows what class the
+ *  relation's object slot expects ("which modules import logger" must never
+ *  resolve "logger" to a same-stem Class). */
+export function resolveObject(graph, term, { expectedClass = null } = {}) {
   const t = String(term || "").trim();
   if (!t) return { match: null, candidates: [], tier: null, ambiguous: false };
   const tLc = t.toLowerCase();
-  const pool = graph.individuals;
+  const pool = expectedClass ? graph.individuals.filter((i) => i.class === expectedClass) : graph.individuals;
 
   // commit-sha tier (checked first, only for sha-shaped terms): "ef74e44e25c8",
   // "commit ef74e44e25c8", "commit:ef74e44", or a full 40-char sha resolve against
@@ -1212,7 +1232,10 @@ export function resolveObject(graph, term) {
       if (String(e.object).toLowerCase() === extLc) { extId = e.object; break outer; }
     }
   }
-  if (extId) return { match: { id: extId, label: t, class: null }, candidates: [], tier: 2, ambiguous: false };
+  // ext: matches are synthetic (class: null, no real individual) — with a class
+  // expected, they can never satisfy it, so skip this tier entirely rather than
+  // returning a match whose class silently doesn't match what the caller asked for.
+  if (extId && !expectedClass) return { match: { id: extId, label: t, class: null }, candidates: [], tier: 2, ambiguous: false };
 
   // tier 3 — two disjoint regimes (dotted-symbol fix, 2026-07-02, advisor-verified
   // bug): a DOTTED term with no slash ("res.json", "Widget.render", "walk.mjs") is
@@ -1274,7 +1297,9 @@ export function resolveObject(graph, term) {
   // side door — a dotted term names an identifier, and identifiers resolve by
   // label (tiers above) or the bounded fuzzy pass below, or they honestly miss.
   let proseResult = null;
-  const proseHits = !dotted && typeof lookupByProseTokens === "function" ? lookupByProseTokens(graph.proseIndex, t) : [];
+  const proseHits = !dotted && typeof lookupByProseTokens === "function"
+    ? lookupByProseTokens(graph.proseIndex, t).filter((h) => !expectedClass || graph.byId.get(h.id)?.class === expectedClass)
+    : [];
   if (proseHits.length) {
     const [best, ...rest] = proseHits;
     const bestInd = graph.byId.get(best.id);
@@ -1660,22 +1685,81 @@ export function traverse(graph, parsed, { contextId = null, prev = null } = {}) 
     return { matches, objMatch, candidates, traversal: `${symbolKind} edges where object = ${objMatch.label}${widenNote}`, ambiguous, matchedVia };
   }
 
+  // §grain-aware object resolution (Bug C+D, HANDOVER follow-up #2, checked BEFORE
+  // the edge filter below): a predicate's OBJECT slot carries one particular class
+  // (kindObjectClass) — resolveObject itself is blind to that, so a same-stem term
+  // ("logger") can resolve to the WRONG grain (a Class named Logger) instead of the
+  // Module the "imports"/"calls"/… edge actually points at, and the edge filter
+  // below then legitimately returns [] for the wrong-grain id — a confident-wrong
+  // empty, not an honest miss. `wantClass` is null for a kind whose edges span more
+  // than one object class (e.g. "contains") — no grain check applies there, byte-
+  // identical to before. objMatch.class === null (an ext: synthetic match, no real
+  // individual — see resolveObject's tier 2) is likewise never grain-checked: it has
+  // no better class to compare against, and is already the most specific resolution
+  // available.
+  let gObjMatch = objMatch;
+  let gCandidates = candidates;
+  let gAmbiguous = ambiguous;
+  let gMatchedVia = matchedVia;
+  let grainRefinedNote = "";
+  const wantClass = kindObjectClass(graph, kind);
+  if (wantClass && gObjMatch.class && gObjMatch.class !== wantClass) {
+    // (1) retry resolution SCOPED to the expected class — "logger" now only
+    // considers Module individuals, so it lands on src/lib/logger.mjs instead of
+    // the same-stem Class (fixes Bug C).
+    const retry = resolveObject(graph, parsed.object, { expectedClass: wantClass });
+    if (retry.match && !retry.ambiguous) {
+      gObjMatch = retry.match;
+      gCandidates = retry.candidates;
+      gAmbiguous = retry.ambiguous;
+      gMatchedVia = retry.matchedVia;
+    } else if ((kind === "tests" || kind === "cochange") && gObjMatch.class !== "Module") {
+      // (2) tests/cochange are always Module->Module — no same-grain alternative
+      // exists (the retry above genuinely found nothing), but the resolved
+      // fine-grain entity (a Function, say) DOES live in a module, and that
+      // module is the real, honest subject of a tests/cochange question ("does
+      // createTask have tests" — fixes Bug D). Up-refine via the same moduleIdOf
+      // qualHolds's "tested" case already uses (see its divergence comment above).
+      const mid = moduleIdOf(graph, gObjMatch);
+      const mod = mid && graph.byId.get(mid);
+      if (mod) {
+        grainRefinedNote = `, refined from ${gObjMatch.label} to its containing module`;
+        gObjMatch = mod;
+      } else {
+        return {
+          matches: [], objMatch: gObjMatch, candidates: gCandidates, ambiguous: gAmbiguous, matchedVia: gMatchedVia,
+          wrongGrainMiss: true, wantClass,
+          traversal: `"${parsed.object}" resolved to ${gObjMatch.class} ${gObjMatch.label} (grain mismatch: this "${kind}" question needs a ${wantClass}, and no containing module could be found to refine to)`,
+        };
+      }
+    } else {
+      // (3) neither a same-grain resolution nor an up-refinement applies — an
+      // honest wrong-grain miss, distinct from both "unresolved" (the existing
+      // objMatch-null branch below, untouched) and "resolved + genuinely empty".
+      return {
+        matches: [], objMatch: gObjMatch, candidates: gCandidates, ambiguous: gAmbiguous, matchedVia: gMatchedVia,
+        wrongGrainMiss: true, wantClass,
+        traversal: `"${parsed.object}" resolved to ${gObjMatch.class} ${gObjMatch.label} (grain mismatch: this "${kind}" question needs a ${wantClass})`,
+      };
+    }
+  }
+
   // General case: some predicates are already fine-grained (inherits: Class->Class, contains:
   // Class->Member) and some are module-coarse (imports/calls/tests/cochange: Module->Module).
   // Rather than assume one or the other, check what the edge's actual subjects ARE: if they
   // already match the requested entityType, use them directly (inherits); only when they're
   // Module individuals and a FINER entityType was asked for do we refine via `defines`
   // (imports) — never blindly treat an edge's subject id as if it were always a module id.
-  let edges = kindsFor(kind).flatMap((k) => edgesOfKind(graph, k)).filter((e) => e.object === objMatch.id);
+  let edges = kindsFor(kind).flatMap((k) => edgesOfKind(graph, k)).filter((e) => e.object === gObjMatch.id);
   let extNote = "";
-  if (!edges.length && objMatch.class) {
+  if (!edges.length && gObjMatch.class) {
     // Unresolved ext:<Name> endpoints with the SAME name as the resolved entity:
     // the extractor declined to assert identity (e.g. commander's every "class X
     // extends Command" edge points at ext:Command, never the Class node), so a
     // strict id match renders a FALSE blank. Count them by NAME instead and say
     // so in the receipt — name-grade evidence, labeled as such, same standard as
     // resolveObject's own ext: tier.
-    const extId = `ext:${String(objMatch.label).toLowerCase()}`;
+    const extId = `ext:${String(gObjMatch.label).toLowerCase()}`;
     edges = kindsFor(kind).flatMap((k) => edgesOfKind(graph, k)).filter((e) => String(e.object).toLowerCase() === extId);
     if (edges.length) extNote = ` (by name, via unresolved ${extId} references)`;
   }
@@ -1706,7 +1790,11 @@ export function traverse(graph, parsed, { contextId = null, prev = null } = {}) 
       matches = [];
     }
   }
-  return { matches, objMatch, candidates, traversal: `${kindsFor(kind).join("+")} edges where object = ${objMatch.label}${extNote}${grainNote}`, ambiguous, matchedVia };
+  return {
+    matches, objMatch: gObjMatch, candidates: gCandidates,
+    traversal: `${kindsFor(kind).join("+")} edges where object = ${gObjMatch.label}${extNote}${grainNote}${grainRefinedNote}`,
+    ambiguous: gAmbiguous, matchedVia: gMatchedVia,
+  };
 }
 
 // ---- §5 templated renderer — string interpolation + grouping/pluralization/overflow rules,
@@ -1783,6 +1871,19 @@ function renderCore(parsed, result) {
   if (result.unsupportedModifier) {
     return {
       content: `the "${parsed.modifier}" modifier isn't supported for "${parsed.kind}" queries yet — only imports/calls (module-level) have a transitive closure today.`,
+      miss: true, ambiguous: false,
+    };
+  }
+  // wrong-grain honest miss (Bug C+D, traverse()'s general reverse case): the term
+  // resolved to a REAL entity, just not the class this predicate's object slot
+  // needs, and no same-grain alternative (nor an up-refinement to a containing
+  // module) exists — distinct from both the objMatch-null "unresolved" miss below
+  // and a resolved-but-genuinely-empty answer.
+  if (result.wrongGrainMiss) {
+    const gotNoun = result.objMatch.class ? nounFor(result.objMatch.class, 1) : "term";
+    const wantNoun = nounFor(result.wantClass, 1);
+    return {
+      content: `"${parsed.object}" resolved to the ${gotNoun} ${result.objMatch.label}, but this question needs a ${wantNoun} — no ${wantNoun} named "${parsed.object}" was found in the index.`,
       miss: true, ambiguous: false,
     };
   }

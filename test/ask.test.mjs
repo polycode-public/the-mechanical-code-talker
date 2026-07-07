@@ -928,3 +928,83 @@ test("parseQuery: the COMMIT frames require a sha tail — \"what is in walk.mjs
   assert.equal(p.object, "walk.mjs");
   assert.notEqual(p.kind, "touches");
 });
+
+// ---- §grain-aware entity resolution (Bug C+D, HANDOVER follow-up #2): a
+// grain-collision fixture — a Module "x/foo.mjs" and a same-stem Class "Foo" — a
+// deliberately hand-built graph (not the shared MODULES fixture above), so the
+// collision is exact and isolated from every other test's terms. ----
+
+function buildGrainCollisionGraph() {
+  const individuals = [
+    { id: "mod:x/foo.mjs", label: "x/foo.mjs", class: "Module", attributes: [] },
+    { id: "mod:y/qux.mjs", label: "y/qux.mjs", class: "Module", attributes: [] },
+    { id: "cls:Foo", label: "Foo", class: "Class", attributes: [] },
+    { id: "cls:Bar", label: "Bar", class: "Class", attributes: [] },
+    { id: "fn:x/foo.mjs#createTask", label: "createTask", class: "Function", attributes: [] },
+  ];
+  return {
+    individuals, byId: new Map(individuals.map((i) => [i.id, i])), proseIndex: {}, truncated: [],
+    relations: [
+      {
+        predicate: "mgx:importsNamespace", prop: "mgx:importsnamespace", count: 1,
+        edges: [{ subject: "mod:y/qux.mjs", object: "mod:x/foo.mjs", subjectLabel: "y/qux.mjs", objectLabel: "x/foo.mjs" }],
+      },
+      {
+        predicate: "seon:declaresMethod", prop: "seon:declaresmethod", count: 1,
+        edges: [{ subject: "mod:x/foo.mjs", object: "fn:x/foo.mjs#createTask", subjectLabel: "x/foo.mjs", objectLabel: "createTask" }],
+      },
+      {
+        predicate: "mgx:testsCoverage", prop: "mgx:testscoverage", count: 1,
+        edges: [{ subject: "mod:y/qux.mjs", object: "mod:x/foo.mjs", subjectLabel: "y/qux.mjs", objectLabel: "x/foo.mjs" }],
+      },
+    ],
+  };
+}
+
+test("resolveObject: expectedClass narrows the pool BEFORE every tier — the grain-collision fixture (Module x/foo.mjs, same-stem Class Foo)", () => {
+  const graph = buildGrainCollisionGraph();
+  // unscoped: tier-1 exact match wins the Class over the same-stem Module — this
+  // IS Bug C's root cause, byte-identical (2-arg call sites are unaffected).
+  const unscoped = resolveObject(graph, "foo");
+  assert.equal(unscoped.tier, 1);
+  assert.equal(unscoped.match.class, "Class");
+  // expectedClass:"Module" excludes the Class from the pool entirely before tier 1
+  // even runs, so tier 3 (substring) finds the Module instead.
+  const scoped = resolveObject(graph, "foo", { expectedClass: "Module" });
+  assert.equal(scoped.match.id, "mod:x/foo.mjs");
+  assert.equal(scoped.match.class, "Module");
+  // expectedClass:"Class" keeps the exact-match Class (already the right grain).
+  const classScoped = resolveObject(graph, "foo", { expectedClass: "Class" });
+  assert.equal(classScoped.match.id, "cls:Foo");
+});
+
+test("ask(): grain-aware resolution — \"which modules import foo\" resolves the Module, not the same-stem Class (Bug C)", () => {
+  const graph = buildGrainCollisionGraph();
+  const { content, tmct_ask } = ask(graph, "which modules import foo");
+  assert.equal(tmct_ask.miss, false);
+  assert.equal(tmct_ask.parsed.object, "foo");
+  assert.match(content, /y\/qux\.mjs/);
+  assert.match(tmct_ask.traversal, /object = x\/foo\.mjs/);
+});
+
+test("ask(): grain-aware resolution — a resolved wrong-grain term with NO same-grain alternative renders the new honest wrongGrainMiss (distinct from the plain unresolved miss)", () => {
+  const graph = buildGrainCollisionGraph();
+  // "Bar" resolves (tier 1, exact) to the Class, but no Module anywhere has any
+  // trace of "bar" in its label — the retry scoped to Module genuinely fails, and
+  // "imports" is neither tests nor cochange, so there is no up-refine path either.
+  const { content, tmct_ask } = ask(graph, "which modules import Bar");
+  assert.equal(tmct_ask.miss, true);
+  assert.match(content, /"Bar" resolved to the class Bar, but this question needs a module/);
+  assert.match(content, /no module named "Bar" was found in the index/);
+});
+
+test("ask(): grain-aware resolution — tests/cochange up-refine a resolved fine-grain entity to its containing module (Bug D)", () => {
+  const graph = buildGrainCollisionGraph();
+  // createTask is a real Function, correctly resolved — but no plain edge ever
+  // points AT a Function for the module-coarse "tests" kind; the containing
+  // module (x/foo.mjs, which y/qux.mjs tests) is the honest subject.
+  const { content, tmct_ask } = ask(graph, "does createTask have tests");
+  assert.equal(tmct_ask.miss, false);
+  assert.match(content, /y\/qux\.mjs/);
+  assert.match(tmct_ask.traversal, /refined from createTask to its containing module/);
+});

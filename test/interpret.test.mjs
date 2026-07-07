@@ -443,6 +443,38 @@ test("has-tests: 'does X have tests' / 'is X tested' rewrite onto the coverage q
   assert.equal(r.content, ask(graph, "what tests myFile.mjs").content);
 });
 
+test("has-tests: Function-grain up-refine (Bug C+D, HANDOVER follow-up #2) — 'does createTask have tests' resolves the Function correctly, then refines to its containing module (parity with the bare 'tests' verb question)", () => {
+  // Hand-built graph (mirrors ask.test.mjs's grain-collision fixture pattern): a
+  // real Function individual, defined-in a Module that a separate test module
+  // covers via mgx:testsCoverage — the module-coarse edge the tests kind actually
+  // stores; no edge can ever point AT a Function directly for this kind.
+  const individuals = [
+    { id: "mod:src/foo.mjs", label: "src/foo.mjs", class: "Module", attributes: [] },
+    { id: "mod:test/foo.test.mjs", label: "test/foo.test.mjs", class: "Module", attributes: [] },
+    { id: "fn:src/foo.mjs#createTask", label: "createTask", class: "Function", attributes: [] },
+  ];
+  const graph = {
+    individuals, byId: new Map(individuals.map((i) => [i.id, i])), proseIndex: {}, truncated: [],
+    relations: [
+      {
+        predicate: "seon:declaresMethod", prop: "seon:declaresmethod", count: 1,
+        edges: [{ subject: "mod:src/foo.mjs", object: "fn:src/foo.mjs#createTask", subjectLabel: "src/foo.mjs", objectLabel: "createTask" }],
+      },
+      {
+        predicate: "mgx:testsCoverage", prop: "mgx:testscoverage", count: 1,
+        edges: [{ subject: "mod:test/foo.test.mjs", object: "mod:src/foo.mjs", subjectLabel: "test/foo.test.mjs", objectLabel: "src/foo.mjs" }],
+      },
+    ],
+  };
+  assert.equal(normalizeInput("does createTask have tests").text, "what tests createTask");
+  const viaHasTests = ask(graph, "does createTask have tests");
+  const viaTestsVerb = ask(graph, "what tests createTask");
+  assert.equal(viaHasTests.tmct_ask.miss, false);
+  assert.match(viaHasTests.content, /test\/foo\.test\.mjs/);
+  assert.equal(viaHasTests.content, viaTestsVerb.content);
+  assert.match(viaHasTests.tmct_ask.traversal, /refined from createTask to its containing module/);
+});
+
 test("has-tests guards: members questions and negated forms are NOT captured", () => {
   // "does X have methods" stays the members family, never a coverage rewrite
   assert.equal(normalizeInput("does Widget have methods").text, "does Widget have methods");
