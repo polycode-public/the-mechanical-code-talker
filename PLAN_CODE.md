@@ -1,9 +1,16 @@
 # PLAN_CODE.md — program synthesis over tmct's closed DSLs (and, now, JS/HTML/CSS)
 
-> **STATUS (2026-07-08): Track 1 SIGNED OFF, 🔄 IN PROGRESS** (GOAL_RULE/PHRASING_FRAMES
-> synthesis from labeled examples — the lowest-risk track, no sandbox needed, data not code).
-> **Tracks 2–4 remain unsigned-off and untouched** — each still requires its own separate
-> operator sign-off per §8's gate before any implementation begins.
+> **STATUS (2026-07-08): Track 1 ✅ SHIPPED** — all 5 staged units (`synthbench/`): a
+> `PHRASING_FRAMES` template-generalization synthesizer, a labeled-example harness reusing
+> agentbench's own case shape, a bounded `GOAL_RULE` field-grammar enumerator (grounded in the
+> live registry, not hardcoded), a verification oracle that runs a candidate through the real
+> unmodified `goalReason`, and a deterministic CEGIS refiner. Reproduces both hand-written
+> `GOAL_RULES` byte-for-byte and synthesizes one genuinely novel rule (0% call fabrication,
+> held-out-checked). One small backward-compatible product change (`goalReason`/
+> `applicableRules` gained an optional `ruleSet` param, default preserves every existing
+> caller) — merged cleanly alongside the Bug 8 domain-gate fix, both independently
+> re-verified working together. **Tracks 2–4 remain unsigned-off and untouched** — each still
+> requires its own separate operator sign-off per §8's gate before any implementation begins.
 
 *(Drafted 2026-07-07. Status: RESEARCH PLAN, not a build order — see §8, explicit operator sign-off
 required before any implementation. Origin: operator's conversational prompt — "I wonder if you

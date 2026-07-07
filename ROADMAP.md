@@ -27,8 +27,8 @@ the file has been deleted.
 - **Cluster C** — `PLAN_CHAT_FEEL.md` item 6, the pronoun/temporal/discourse-count trio
   (measured red sets from an earlier advisor tick; re-measured against the current graded pool
   before any fix).
-- **Cluster D** — `PLAN_CODE.md` Track 1 (GOAL_RULE/PHRASING_FRAMES synthesis) — operator
-  sign-off given this session; Tracks 2-4 remain unsigned-off and untouched.
+- ~~**Cluster D** — `PLAN_CODE.md` Track 1~~ **shipped** (see "Now" below). Tracks 2-4 remain
+  unsigned-off and untouched.
 - **Cluster E** — `PLAN_INFERENCE_TESTING.md` Stage 1 (`cax-sco` rule) + Stage 2 (proof-chain
   receipts) in `src/syllogise.mjs`, targeting the measured chat-A2 50% ceiling.
 

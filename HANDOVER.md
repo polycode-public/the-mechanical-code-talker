@@ -137,9 +137,11 @@ piped session before its log flushed. Fixed with `try`/`catch` and `try`/`finall
      as "what", the whole phrase becomes a literal search term); and an edge-counting gap ("how
      many tests cover X" can't be answered — the counting grammar only counts entity classes,
      not edges of a named predicate, though it degrades honestly rather than walling).
-5. **`PLAN_CODE.md`'s sign-off gate.** Read the plan and decide with the operator whether to
-   greenlight Track 1 (GOAL_RULE/PHRASING_FRAMES synthesis). Tracks 2/3 (JS, HTML/CSS synthesis)
-   stay further out regardless.
+5. **`PLAN_CODE.md` Track 1 — SIGNED OFF and SHIPPED (cluster D).** GOAL_RULE/PHRASING_FRAMES
+   synthesis (`synthbench/`), all 5 staged units. Merged with a real conflict against Bug 8's
+   domain gate (both touch `goalReason`) — resolved by hand, both independently re-verified
+   working together post-merge. Tracks 2–4 (mutation search, JS, HTML/CSS synthesis) remain
+   unsigned-off and untouched.
 6. **Chat-feel residual trio — triaged (cluster A):**
    1. Recall half-match replay: **confirmed already fixed** this session (entity∧predicate
       conjunction, pinned tests cover the exact "who owns X" scenario). No change needed.
