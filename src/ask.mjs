@@ -2286,11 +2286,16 @@ function renderCore(parsed, result) {
   }
   if (result.ambiguous) {
     // the candidates say what KIND of thing is ambiguous — a shared commit-sha
-    // prefix must read "more than one commit", not "module".
+    // prefix must read "more than one commit", not "module". Name the actual
+    // candidates in the prose (not just the structured `candidates` field) —
+    // "narrow the term" is not itself actionable if the reader can't see what
+    // it's ambiguous between; mirrors the mentionsShape branch's listing above.
     const pool = [result.objMatch, ...(result.candidates || [])].filter(Boolean);
     const noun = pool.length && pool.every((i) => i.class === "Commit") ? "commit" : "module";
+    const shown = pool.slice(0, OVERFLOW_CAP).map((i) => i.label);
+    const extra = pool.length > OVERFLOW_CAP ? `, …and ${pool.length - OVERFLOW_CAP} more` : "";
     return {
-      content: `"${parsed.object}" matches more than one ${noun} ambiguously — please narrow the term.`,
+      content: `"${parsed.object}" matches more than one ${noun} ambiguously — did you mean ${listJoin(shown)}${extra}? Try one of those.`,
       miss: false, ambiguous: true, candidates: pool.map((i) => i.label),
     };
   }
