@@ -87,6 +87,7 @@
     "chatbench:judge": "node chatbench/judge.mjs",
     "serve": "node bin/tmct.mjs serve",
     "agentbench:run": "node agentbench/run.mjs",
+    "infbench": "node infbench/generate-cases.mjs && node infbench/run.mjs",
     "audit": "npm audit --audit-level=high",
     "audit:fix": "npm audit fix"
   },

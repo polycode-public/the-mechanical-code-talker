@@ -1,0 +1,259 @@
+// infbench/grade.mjs — the DETERMINISTIC grading core for INFBENCH (sibling of
+// agentbench/grade.mjs, PLAN_INFERENCE_TESTING.md §2.1/§3).
+//
+// INFBENCH grades classical-logic competence on a 6-band ladder (INF-A1..C2,
+// PLAN_INFERENCE_TESTING.md §1) with AGENTBENCH's ruler: no LLM judge, no
+// re-derivation — every case's `expect` is a STATIC literal pinned at
+// generation time (infbench/generate-cases.mjs), so grading is a pure
+// COMPARISON, never a replay of the engine testing itself.
+//
+// TWO DRIVE POINTS (§2.1):
+//   - kernel: calls src/syllogise.mjs's deriveSubClassClosure directly over
+//     the premises' rdfs:subClassOf edges — the pure prover, blind to the
+//     codegraph and to any rule outside subClassOf transitivity. Only
+//     meaningful for cases whose `arms` declares "kernel" (a1Lookup/subClassOf
+//     and a2ChainLen2/taught-only — the only templates that are pure
+//     class-to-class subClassOf questions; every other template is outside
+//     the kernel's actual domain by construction, so it is never asked one —
+//     see generate-cases.mjs's per-template `arms`).
+//   - chat: interprets a real runTurn/runChat transcript (driven by
+//     infbench/run.mjs) via the turn's own `miss` flag — the SAME honest-miss
+//     signal chat.mjs itself computes (recordMiss), not a text-pattern guess.
+//
+// The honest gate (§1's "Pass criterion per band", mirroring AGENTBENCH):
+// completion >= COMPLETION_FLOOR (50%) AT 0% fabrication. Fabrication = a
+// confident directional verdict ("yes"/"no") that isn't the pinned literal —
+// the automatic FAIL, exactly agentbench's hallucinated-call gate.
+
+import { deriveSubClassClosure } from "../src/syllogise.mjs";
+import { parseAce } from "../src/grammar/ace.mjs";
+import { loadLexicon } from "../src/grammar/lexicon.mjs";
+import { normFactTerm } from "../src/memory/core.mjs";
+
+// ---- the bands (the classical-logic ladder — INF-A1 -> INF-C2) ----
+export const BANDS = Object.freeze(["INF-A1", "INF-A2", "INF-B1", "INF-B2", "INF-C1", "INF-C2"]);
+export const ARMS = Object.freeze(["kernel", "chat"]);
+export const CHECK_TYPES = Object.freeze(["isa", "recall", "inconsistent"]);
+export const VERDICTS = Object.freeze(["yes", "no", "unproven", "inconsistent"]);
+
+/** The honest-gate completion floor (mirrors agentbench/grade.mjs's
+ *  COMPLETION_FLOOR — a refuse/miss-everything driver scores 0% fabrication
+ *  but ~0% completion and so fails the gate). */
+export const COMPLETION_FLOOR = 0.5;
+
+// ---- case lint (schema-shape only — the SEMANTIC lint (parseAce cleanliness,
+// the referential entailed-literal check) already ran at generation time in
+// generate-cases.mjs; this mirrors agentbench's parseCases as a defense-in-
+// depth check over the COMMITTED file, catching drift/hand-editing). ----
+const isPlainObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+
+export function parseCases(text) {
+  const cases = [];
+  const errors = [];
+  const seen = new Set();
+  const lines = String(text).split("\n").filter((l) => l.trim());
+  lines.forEach((line, i) => {
+    const at = `line ${i + 1}`;
+    let c;
+    try { c = JSON.parse(line); } catch (e) { errors.push(`${at}: invalid JSON — ${e.message}`); return; }
+    if (!c.id || typeof c.id !== "string") { errors.push(`${at}: missing id`); return; }
+    if (seen.has(c.id)) errors.push(`${at}: duplicate id ${c.id}`);
+    seen.add(c.id);
+    if (!BANDS.includes(c.band)) errors.push(`${c.id}: band must be one of ${BANDS.join("|")}`);
+    if (!c.template || typeof c.template !== "string") errors.push(`${c.id}: missing template`);
+    if (!c.variant || typeof c.variant !== "string") errors.push(`${c.id}: missing variant`);
+    if (!Array.isArray(c.arms) || !c.arms.length || c.arms.some((a) => !ARMS.includes(a))) {
+      errors.push(`${c.id}: arms must be a non-empty subset of ${ARMS.join("|")}`);
+    }
+    if (!CHECK_TYPES.includes(c.checkType)) errors.push(`${c.id}: checkType must be one of ${CHECK_TYPES.join("|")}`);
+    if (!Array.isArray(c.premises) || !c.premises.length || c.premises.some((p) => typeof p !== "string")) {
+      errors.push(`${c.id}: premises must be a non-empty array of strings`);
+    }
+    if (!c.query || typeof c.query !== "string") errors.push(`${c.id}: missing query`);
+    if (!isPlainObject(c.expect)) { errors.push(`${c.id}: missing expect`); return; }
+    if (c.checkType === "recall") {
+      if (!Array.isArray(c.expect.mentions) || !c.expect.mentions.length) errors.push(`${c.id}: expect.mentions must be a non-empty array for a recall case`);
+    } else if (!VERDICTS.includes(c.expect.verdict)) {
+      errors.push(`${c.id}: expect.verdict must be one of ${VERDICTS.join("|")}`);
+    }
+    if (c.graph && !isPlainObject(c.graph)) errors.push(`${c.id}: graph must be an object (a raw entities payload fragment)`);
+    cases.push(c);
+  });
+  return { cases, errors };
+}
+
+// ---- kernel arm: the pure closure/prover, over ONLY rdfs:subClassOf edges --
+
+/** The canonical "is X a Y" query surface every generated case uses. Shared
+ *  by the kernel's own (bench-side) query interpretation — NOT by the chat
+ *  arm, which never parses text: it reads chat.mjs's own `miss` flag. */
+const QUERY_RE = /^is\s+(?:an?\s+)?(.+?)\s+an?\s+(.+?)[?.!\s]*$/i;
+
+/** Kernel verdict for one case: null when the case's `arms` does not declare
+ *  "kernel" (not applicable — see file header); otherwise "yes" (the query's
+ *  (subject,object) pair is present or derivable in the premises' subClassOf
+ *  closure) or "unproven" (kernel's rdfs:subClassOf-only domain cannot see
+ *  it — an honest structural ceiling, e.g. it has no notion of the codegraph
+ *  or of disjointWith/cardinality/someValuesFrom). Pure; no I/O. */
+export function kernelVerdict(caseDef) {
+  if (!(caseDef.arms || []).includes("kernel")) return null;
+  const lexicon = loadLexicon();
+  const edges = [];
+  for (const premise of caseDef.premises || []) {
+    const parsed = parseAce(premise, lexicon);
+    for (const t of parsed?.triples || []) {
+      if (t.predicate === "rdfs:subClassOf") edges.push([normFactTerm(t.subject), normFactTerm(t.object)]);
+    }
+  }
+  const m = String(caseDef.query || "").match(QUERY_RE);
+  if (!m) return "unproven";
+  const subj = normFactTerm(m[1]);
+  const obj = normFactTerm(m[2]);
+  if (edges.some(([a, b]) => a === subj && b === obj)) return "yes";
+  const derived = deriveSubClassClosure(edges, {});
+  return derived.some((d) => d.subject === subj && d.object === obj) ? "yes" : "unproven";
+}
+
+/** Grade the kernel arm of one case, or null when not applicable (arms lacks
+ *  "kernel"). fabricated = the kernel asserted "yes" on a case whose pinned
+ *  literal is not "yes" (kernel never produces "no"/"inconsistent" — it has
+ *  no rule for either, so those directions can't be fabricated FROM kernel). */
+export function gradeKernelRow(caseDef) {
+  const observed = kernelVerdict(caseDef);
+  if (observed == null) return null;
+  const expected = caseDef.expect.verdict;
+  const pass = observed === expected;
+  const fabricated = observed === "yes" && expected !== "yes";
+  return { pass, fabricated, completed: pass, observed, expected };
+}
+
+// ---- chat arm: interpret a real runTurn/runChat transcript --------------
+
+const INCONSISTENT_RE = /inconsist|contradict|(?:^|\W)conflict|clash|can'?t both|cannot both/i;
+const LEADING_YES_RE = /^\W*yes\b/i;
+const LEADING_NO_RE = /^\W*no\b/i;
+
+/** Interpret an "isa"-checkType chat outcome ({ answer, miss }) into an
+ *  observed verdict. The AUTHORITATIVE signal is chat.mjs's own `miss` flag
+ *  (recordMiss) — not text pattern matching: a miss is ALWAYS "unproven"
+ *  regardless of the specific honest-refusal phrasing chat.mjs used (there
+ *  are several: "couldn't parse…", "couldn't resolve…", "the graph … is
+ *  empty…" — verified live during authoring, infbench spike). A non-miss
+ *  answer is read for its leading yes/no (chat.mjs's own answer convention,
+ *  "yes — …" / "no — …", verified live) or an inconsistency admission. */
+export function interpretIsaAnswer({ answer, miss }) {
+  const a = String(answer ?? "");
+  if (INCONSISTENT_RE.test(a)) return "inconsistent";
+  if (miss === false && LEADING_YES_RE.test(a)) return "yes";
+  if (miss === false && LEADING_NO_RE.test(a)) return "no";
+  if (miss !== false) return "unproven"; // miss === true, or no record at all
+  return "unclear"; // a non-miss answer without a clear lead — should not occur for isa queries in practice
+}
+
+/** Interpret a "recall"-checkType chat outcome: pass iff the turn was not a
+ *  miss and the answer mentions every pinned literal (normFactTerm-normalized
+ *  substring match — the same term-normalization the memory store itself
+ *  applies, so "E02.mjs" in a rendered fact line still matches "e02.mjs"). */
+function interpretRecallAnswer({ answer, miss }, mentions) {
+  const a = normFactTerm(String(answer ?? ""));
+  if (miss !== false) return false;
+  return (mentions || []).every((m) => a.includes(normFactTerm(m)));
+}
+
+/** Interpret an "inconsistent"-checkType chat outcome: "inconsistent" iff the
+ *  answer admits the clash; otherwise "unproven" — a plain fact-echo/miss is
+ *  an honest INCOMPLETE (the consistency checker doesn't exist yet, §4 stage
+ *  5), never a fabrication, because this query shape never produces a
+ *  directional yes/no verdict (see file header). */
+function interpretInconsistentAnswer({ answer }) {
+  return INCONSISTENT_RE.test(String(answer ?? "")) ? "inconsistent" : "unproven";
+}
+
+/** Grade the chat arm of one case against its driven outcome
+ *  ({ answer, miss }, from infbench/run.mjs's runChat drive). Always
+ *  applicable (chat is the universal mouth — every case declares "chat" in
+ *  `arms`). Returns { pass, fabricated, completed, observed }. */
+export function gradeChatRow(caseDef, outcome) {
+  const expect = caseDef.expect;
+
+  if (caseDef.checkType === "recall") {
+    const pass = interpretRecallAnswer(outcome, expect.mentions);
+    return { pass, fabricated: false, completed: pass, observed: pass ? "yes" : (outcome.miss === false ? "unclear" : "unproven") };
+  }
+
+  if (caseDef.checkType === "inconsistent") {
+    const observed = interpretInconsistentAnswer(outcome);
+    const pass = observed === "inconsistent";
+    return { pass, fabricated: false, completed: pass, observed };
+  }
+
+  // checkType "isa"
+  const observed = interpretIsaAnswer(outcome);
+  const pass = observed === expect.verdict;
+  // fabrication: a CONFIDENT directional verdict (yes/no) that is not the
+  // pinned one — includes the dangerous case of asserting yes/no on a case
+  // whose honest floor is "unproven" (an honest-refusal cell, §2.1), and the
+  // directionally-wrong case (expected "no", produced "yes" or vice versa).
+  const fabricated = (observed === "yes" || observed === "no") && observed !== expect.verdict;
+  return { pass, fabricated, completed: pass, observed };
+}
+
+// ---- per-band METRIC PAIR + ladder rollup (mirrors agentbench/grade.mjs) --
+
+function tallyOne(rows) {
+  const total = rows.length;
+  const passed = rows.filter((r) => r.pass).length;
+  const completed = rows.filter((r) => r.completed).length;
+  const fabricated = rows.filter((r) => r.fabricated).length;
+  const completion = total ? completed / total : 0;
+  const fabricationRate = total ? fabricated / total : 0;
+  return {
+    total, passed, completed, fabricated, completion, fabricationRate,
+    gatePass: fabricationRate === 0 && completion >= COMPLETION_FLOOR,
+  };
+}
+
+/** Fold graded rows (one arm's — kernel or chat) into { byBand, overall }. */
+export function rollup(rows) {
+  const byBand = {};
+  for (const band of BANDS) {
+    const of = rows.filter((r) => r.band === band);
+    if (of.length) byBand[band] = tallyOne(of);
+  }
+  return { byBand, overall: tallyOne(rows) };
+}
+
+/** Ladder gating (mirrors agentbench/grade.mjs's ladderGate): bands run
+ *  INF-A1 -> INF-C2; the FIRST band failing the honest gate (0% fabrication
+ *  at >= COMPLETION_FLOOR completion) gates every band above it, reported
+ *  skipped-with-a-receipt. A 0%-completion band is a CEILING MARKER, not a
+ *  failure (PLAN_INFERENCE_TESTING.md §3, ROADMAP L256). */
+export function ladderGate(rolled) {
+  const receipts = [];
+  let gatedAt = null;
+  for (const band of BANDS) {
+    const cell = rolled.byBand[band];
+    if (!cell) continue;
+    if (gatedAt) { receipts.push({ band, reason: `gated by ${gatedAt}` }); continue; }
+    if (!cell.gatePass) {
+      gatedAt = cell.fabricationRate > 0
+        ? `${band} fabrication ${(cell.fabricationRate * 100).toFixed(0)}%`
+        : `${band} completion ${(cell.completion * 100).toFixed(0)}% < ${(COMPLETION_FLOOR * 100).toFixed(0)}%`;
+    }
+  }
+  return { order: BANDS.filter((b) => rolled.byBand[b]), gatedAt, receipts };
+}
+
+/** Human-readable metric-pair table for one arm's rollup. */
+export function renderRollup(rolled, label = "") {
+  const row = (l, c) =>
+    `${l.padEnd(9)} ${String(c.total).padStart(3)}  ${String(c.passed).padStart(4)}  ` +
+    `${(c.completion * 100).toFixed(0).padStart(10)}%  ${(c.fabricationRate * 100).toFixed(0).padStart(6)}%  ${c.gatePass ? "PASS" : "----"}`;
+  const lines = [`${label ? `${label} — ` : ""}band       n  pass  completion  fabric  gate`];
+  for (const band of BANDS) {
+    const c = rolled.byBand[band];
+    if (c) lines.push(row(band, c));
+  }
+  lines.push(row("all", rolled.overall));
+  return lines.join("\n");
+}
