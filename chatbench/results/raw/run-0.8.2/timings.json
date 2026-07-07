@@ -1,0 +1,30 @@
+{
+  "wallMs": 896.0801749999999,
+  "all": {
+    "label": "all",
+    "n": 57,
+    "totalMs": 869,
+    "meanMs": 15.24561403508772
+  },
+  "spine": {
+    "label": "v1-spine",
+    "n": 47,
+    "totalMs": 530,
+    "meanMs": 11.27659574468085
+  },
+  "grades": [
+    {
+      "label": "B2",
+      "n": 5,
+      "totalMs": 156,
+      "meanMs": 31.2
+    },
+    {
+      "label": "C1",
+      "n": 5,
+      "totalMs": 183,
+      "meanMs": 36.6
+    }
+  ],
+  "stamp": "0.8.2"
+}

@@ -1,4 +1,4 @@
-# CHATBENCH_0.8.2 — the feel wave, deterministic tier (judged re-judge DEFERRED)
+# CHATBENCH_0.8.2 — the feel wave, deterministic tier (judged re-judge LANDED post-release — see final section)
 
 **Headline:** 0.8.2 is the chat-feel wave (PLAN_CHAT_FEEL items 1–5, 7, 8) plus a live-found scale
 hotfix. The **deterministic tier is the release evidence**: **334 / 334 tier-1 (draw A)** — the
@@ -14,7 +14,11 @@ green (**974**); CLI smokes exit 0.
 
 ---
 
-## ⚠️ The judged tier is DEFERRED — read this first
+## ⚠️ The judged tier was DEFERRED at release — read this first
+
+> **UPDATE (2026-07-07): the re-judge LANDED** — see **"Judged re-judge (post-release)"** at the
+> end of this document. The stale-tag list below is cleared; 0.8.2 judged scores are now the judged
+> record for the touched tags. The rest of this section is kept verbatim as the release-time record.
 
 0.8.2 changes answer TEXT on many judged surfaces (recall renders, preamble handling, call answers,
 author renders, wall/miss renders, receipt tails moved out of prose). Per the bench-reuse rule
@@ -120,3 +124,84 @@ pool append recorded, dual-draw under-coverage named). **Judged tier — DEFERRE
 listed above; the re-judge is the first post-release bench action and 0.8.1's judged numbers stay
 the judged record until it lands. Artifacts: `chatbench/results/raw/run-0.8.2-gate/`
 (product-a/b, agreement, timings).
+
+---
+
+## Judged re-judge (post-release) — the deferred tier, landed 2026-07-07
+
+The first post-release bench action, per the plan above. **Judge pinned:
+`claude-haiku-4-5-20251001` @ `judge-prompt-v1`, 3 samples/case, `--concurrency 12`.** Scope:
+exactly the stale-tag list — the 47 v1 spine cases carrying {graph-query, honesty-miss,
+multi-turn-focus, memory-recall, ambiguity, conversational, typo-fuzzy, noise} plus the 10 graded
+**assert** cells from the release gate's own draw A (seed 1380087607: `g-b2-assert-3/-8/-10/-14/-22`,
+`g-c1-assert-7/-9/-13/-19/-23`). **57 cases × 3 = 171 samples, 0 voids, 0 hard-fails, no
+throttling** (concurrency held at 12 throughout). Fresh deterministic product run `--stamp 0.8.2`
+(57/57 tier-1 pass); raw under `chatbench/results/raw/run-0.8.2/` (product.jsonl, judged.jsonl,
+summary.json, console.txt, timings.json). Overall mean over the re-judged scope: **1.814 / 2**.
+
+### The re-derived touched list first (honesty about scope)
+
+The deferral's stale-tag list was deliberately conservative. At re-judge time the actual
+answer-text diff (0.8.1 `product-a` vs the 0.8.2 gate run, per-turn, byte-level) shows only **four**
+v1 cases with substantive text change — `gq-functions-call-fnalpha` (grain-fallback flip),
+`conv-what-can-you-do` + `am-bare-name` (orientation examples now graph-derived, wall-kindness
+item 5), plus the appended `gq-forward-method-calls` — and `mr-asked-before` differing only by the
+run-volatile session uuid. **Every other case in the 8 tags, including both F4 honesty cells, is
+byte-identical to 0.8.1.** The receipt-tail (prose→detail) change turned out not to touch any v1
+judged render — those tails lived on surfaces the v1 spine doesn't sample. All 8 tags were
+re-judged anyway (the decision scoped them), so every previously-stale tag now has a fresh 0.8.2
+score and the stale list is cleared.
+
+### Per-tag table (0.8.1 judged record → 0.8.2 re-judge)
+
+| Tag | n | 0.8.1 record | 0.8.2 | Δ | Text changed? | Read |
+| --- | ---: | ---: | ---: | ---: | --- | --- |
+| graph-query | 16 | 1.741 (n=15) | **1.788** | +0.047 | 2 cases + 1 new | ↑ — `gq-functions-call-fnalpha` 0 → 1.222 (hard-fail cleared), new `gq-forward-method-calls` = 2.0; like-for-like on the shared 15: 1.774 (+0.033) |
+| honesty-miss | 5 | 1.600 | 1.511 | −0.089 | **none** | judge noise on byte-identical text — see F4 watch below |
+| multi-turn-focus | 5 | 1.900 | **1.900** | 0.000 | none | flat-high, held |
+| memory-recall | 3 | 1.833 | 1.778 | −0.055 | uuid only | noise band, n=3 |
+| ambiguity | 4 | 1.250 | **1.417** | +0.167 | `am-bare-name` | 0.8.1 flagged its 1.250 as a downward noise draw (n=4); 1.417 sits between it and 0.8.0's 1.521, with the one real text change (`am-bare-name` 0.667 → 1.167) pulling up |
+| conversational | 6 | 1.806 (0.8.0 carried) | **1.972** | +0.166 | `conv-what-can-you-do` | ↑ — graph-derived examples; 5 of 6 cases at 2.0 |
+| typo-fuzzy | 4 | 1.917 (0.8.0 carried) | 1.806 | −0.111 | none | judge noise on byte-identical text, n=4 |
+| noise | 5 | 1.900 (0.8.0 carried) | 1.845 | −0.055 | none | judge noise on byte-identical text |
+| **assert cells (for record)** | 10 | — (never judged) | **B2 2.000 / C1 2.000** | — | teach-lane wave | both assert-recall cells perfect over the gate draw A sample; no prior judged baseline exists (0.8.1 judged A1 only) |
+
+**Hard-fails: 0** (0.8.1's selective run carried 1). **`gq-functions-call-fnalpha` now scores:**
+0.000 (all-dims-0) → **1.222** (groundedness 1, correctness 1.333, honesty 1.333) — the cycle-1
+standing hard-fail is cleared on the judged tier too; the judge's residual reservation is the
+Function/Method grain wording ("there is function Widget.render()" for what the fixture records as
+a method), which is the known grain-fallback trade-off, not a fabrication.
+
+### ⚠️ F4 regression watch (hm-unknown-module / hm-unknown-fn) — stated prominently
+
+**`hm-unknown-module` dropped: 1.222 → 1.000** (honesty 1.333 → 1.0, rephrase 0.333 → 0);
+`hm-unknown-fn` held flat at 1.000 (honesty 1, rephrase 0 — identical dims to 0.8.1). Per F4's
+instruction this is reported prominently and **no code was changed**. The essential context: both
+cases' answer text is **byte-identical to 0.8.1** — the receipt tail was never part of these two
+renders ("no symbol matching \"zebra.mjs\" found in the index." / "no module matching
+\"nonExistentFn\" found in the index."), so the F4 mechanism (receipt tail = grounded disclosure
+the judge rewarded) cannot be what moved. The drop is one judge sample's worth of variance on
+unchanged text over n=3 (same class as 0.8.1's ambiguity n=4 note). F4's conditional fix (restore
+the receipt on genuine unknown-entity misses) is therefore NOT triggered by evidence of text
+regression — but both cells sit at a mediocre 1.0 because the miss render offers **no rephrase
+hint at all** (rephrase pinned at 0 in both versions); that is a real, pre-existing weakness worth
+a lever of its own, not a 0.8.2 regression.
+
+### What moved and why (the honest paragraph)
+
+The wave's text changes moved exactly the cases they touched, and nothing else moved beyond judge
+noise. The three substantive movers are all attributable: the Function↔Method grain fallback
+cleared the judged hard-fail (`gq-functions-call-fnalpha` +1.222, the largest single-case move);
+the graph-derived orientation examples (wall-kindness item 5) lifted both surfaces that render the
+orientation blurb (`conv-what-can-you-do` → 1.833, driving conversational to 1.972; `am-bare-name`
++0.500, driving ambiguity's +0.167); and the appended `gq-forward-method-calls` entered at a clean
+2.0. Every downward tag delta (honesty-miss −0.089, typo-fuzzy −0.111, noise/memory-recall −0.055)
+sits on **byte-identical answer text** and small n (3–5 cases, 3 samples), i.e. the same judge
+sampling variance CHATBENCH_0.8.1 documented for ambiguity n=4 — this run's ambiguity swinging
+back +0.167 on essentially unchanged text (3 of its 4 cases) is itself the cleanest demonstration
+that these small-n tags oscillate ±0.1–0.3 between draws. Judge-noise candidates for the record:
+honesty-miss (n=5), typo-fuzzy (n=4), ambiguity (n=4), memory-recall (n=3). The assert cells'
+perfect 2.000/2.000 says the teach/recall renders the wave reworked read as grounded and correct
+to the judge, but with no prior assert baseline it is a first mark, not a delta. Net: **the judged
+tier confirms the deterministic story — the wave improved what it touched and regressed nothing
+the instrument can distinguish from its own noise.**

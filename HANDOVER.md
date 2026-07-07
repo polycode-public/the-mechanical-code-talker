@@ -48,13 +48,21 @@ Session handle (inbox): `mechanic`.
 
 ## Open follow-ups (next session, in order)
 
-1. **The judged re-judge (first post-release bench action).** Pinned judge
-   (`claude-haiku-4-5-20251001` @ `judge-prompt-v1`, 3 samples/case, `--concurrency 12`) over the
-   stale tags {graph-query, honesty-miss, multi-turn-focus, memory-recall, ambiguity,
-   conversational, typo-fuzzy, noise} + graded assert cells; carry untouched tags; re-derive the
-   final list from actual answer-text diffs. Regression watch (advisor F4): `hm-unknown-module` /
-   `hm-unknown-fn` — if an honesty cell drops, restore the receipt tail on genuine unknown-entity
-   misses only. Artifact: `CHATBENCH_0.8.2_001.md`.
+1. **The judged re-judge — DONE (2026-07-07).** All 8 stale tags + the gate draw A assert cells
+   re-judged (57 cases × 3 samples = 171, 0 voids, 0 hard-fails; pinned judge
+   `claude-haiku-4-5-20251001` @ `judge-prompt-v1`, concurrency 12 held throughout). Headlines:
+   overall 1.814 over the scope; graph-query 1.741 → **1.788** (the cycle-1 hard-fail
+   `gq-functions-call-fnalpha` scores 0 → 1.222, judged hard-fails now 0; new
+   `gq-forward-method-calls` = 2.0); conversational 1.806 → **1.972** and ambiguity 1.250 →
+   **1.417** (graph-derived orientation examples); multi-turn-focus held 1.900; assert cells B2/C1
+   both **2.000** (first judged mark). Dips (honesty-miss 1.600 → 1.511, typo-fuzzy 1.917 → 1.806,
+   noise/memory-recall −0.055) all sit on byte-identical answer text = judge noise. **F4 watch:
+   `hm-unknown-module` dropped 1.222 → 1.000 on byte-identical text** (the receipt tail was never
+   in that render) — reported prominently in the write-up, no code changed, conditional fix NOT
+   triggered; both hm cells' rephrase=0 is a real pre-existing weakness (a lever, not a
+   regression). Write-up: the "Judged re-judge (post-release)" section appended to
+   `CHATBENCH_0.8.2.md` (same version, one artifact — no separate `_001` doc); raw under
+   `chatbench/results/raw/run-0.8.2/`.
 2. **Chat-feel fast-follows (ranked; from the 0.8.2 confirmation playtest — greenlit overall,
    these are the residuals):**
    1. Recall matching still fires on half-matches once memory fills — entity OR predicate mismatch
@@ -100,12 +108,14 @@ Session handle (inbox): `mechanic`.
 
 Deterministic AGENTBENCH/CHATBENCH reproduce byte-identically and are always safe to re-run —
 AGENTBENCH has no judge at all. **The judged CHATBENCH is the only expensive part and must never
-be blanket-reused across a text change.** Current judged state: **0.8.1 scores are the judged
-record**; they are **STALE on {graph-query, honesty-miss, multi-turn-focus, memory-recall,
-ambiguity, conversational, typo-fuzzy, noise} + graded assert cells** (0.8.2 changed answer text
-on those surfaces; deferral was a deliberate ship-over-delay call) and **valid on the untouched
-tags** (bootstrap-empty). Follow-up #1 clears the stale set; until then, quote 0.8.2 evidence from
-the deterministic tier only.
+be blanket-reused across a text change.** Current judged state: **no stale tags.** The 0.8.2
+re-judge (follow-up #1, done 2026-07-07) scored {graph-query, honesty-miss, multi-turn-focus,
+memory-recall, ambiguity, conversational, typo-fuzzy, noise} + the B2/C1 assert cells against the
+0.8.2 tree — **0.8.2 is now the judged record for those tags** (CHATBENCH_0.8.2.md "Judged
+re-judge (post-release)"; raw in `chatbench/results/raw/run-0.8.2/`). bootstrap-empty carries its
+0.8.0 score (2.000; surface untouched since). The next text change on a judged surface makes its
+tags stale again — re-derive the touched set from answer-text diffs as this re-judge did (the
+conservative stale list overstated: only 4 v1 cases had actually changed text).
 
 ## Discipline (unchanged)
 
