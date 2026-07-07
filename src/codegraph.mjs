@@ -1166,12 +1166,31 @@ export function renderSearch(graph, query, { limit = SEARCH_LIMIT, kind = "", de
 //      history / call neighbours). Each answers ONE question in one compact call so
 //      the agent need not Read/Grep. All keep the bounded-output discipline. -------
 
+/** Per-graph, per-kind memo for edgesOfKind's own flattened scan — WeakMap<graph,
+ *  Map<kind, edge[]>>, mirroring qualCache's (ask.mjs) established per-graph-object
+ *  caching convention: a loaded graph's `relations` are never mutated in place after
+ *  parseEntities builds it (every refresh constructs a NEW graph object), so caching
+ *  keyed on graph object identity is correctness-safe for a graph's whole lifetime —
+ *  same invariant qualCache already relies on in production. edgesOfKind is called
+ *  repeatedly on the SAME (graph, kind) pair across a single query's traversal
+ *  (evalSet/traverse/adjacencyForKinds/renderArchitecture/… all re-derive it), and at
+ *  monorepo scale (tens of thousands of modules) that repeated O(relations) scan is a
+ *  real latency/GC cost — this collapses every call after the first to an O(1) lookup. */
+const edgesOfKindCache = new WeakMap();
+
 /** All edges whose relation classifies to `kind`, flattened across relation groups. */
 /** All edges of a classified relation kind (imports/calls/defines/tests/touches/inherits/
  *  cochange/reexports/callsSymbol/touchesSymbol/contains — see relationKind/PROP_KIND above),
  *  flattened across every raw relation group that classifies to it. Exported for ask.mjs's
- *  mechanical NL-query engine (PLAN_MECHANICAL_CHAT.md) to orchestrate rather than duplicate. */
+ *  mechanical NL-query engine (PLAN_MECHANICAL_CHAT.md) to orchestrate rather than duplicate.
+ *  Memoized per (graph, kind) — see edgesOfKindCache's own doc above (perf lever, HANDOVER
+ *  follow-up #8: latency/GC on monorepo-scale graphs, not a correctness fix — the earlier
+ *  stack-overflow bug below is already fixed and unrelated). */
 export function edgesOfKind(graph, kind) {
+  let byKind = edgesOfKindCache.get(graph);
+  if (!byKind) { byKind = new Map(); edgesOfKindCache.set(graph, byKind); }
+  const cached = byKind.get(kind);
+  if (cached) return cached;
   const out = [];
   // Plain-loop append, NOT out.push(...g.edges): argument spread materialises every
   // element as a call argument and overflows the stack past ~100k edges (live report:
@@ -1180,6 +1199,7 @@ export function edgesOfKind(graph, kind) {
     if (relationKind(g) !== kind) continue;
     for (const e of g.edges) out.push(e);
   }
+  byKind.set(kind, out);
   return out;
 }
 

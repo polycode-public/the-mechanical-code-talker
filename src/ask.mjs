@@ -70,12 +70,36 @@ export { normalizeQuery, applyNegationFrames };
 // shipping a ~1MB language model inside the page.
 import { nlpAdapter } from "./ask-nlp.mjs";
 
+/** Per-graph, per-kind memo for THIS file's own edgesOfKind copy — same WeakMap<graph,
+ *  Map<kind, edge[]>> shape as codegraph.mjs's twin (and this file's own qualCache,
+ *  below), kept as an independent cache rather than sharing codegraph.mjs's (same
+ *  commit-boundary reasoning as the function copy itself: both derive the identical
+ *  result from the identical relationKind classification, so two caches can never
+ *  disagree, only duplicate a little memory). Correctness rests on the same
+ *  invariant qualCache already relies on: a loaded graph's `relations` are never
+ *  mutated in place (a refresh always builds a NEW graph object via parseEntities).
+ *  Deliberately NAMED DIFFERENTLY from codegraph.mjs's `edgesOfKindCache` — the
+ *  inlined viewer bundle (viz.mjs's askSource) literally CONCATENATES a stripped
+ *  codegraph.mjs + this file into one classic script (test/ask-nlp.test.mjs pins
+ *  this), so two `const`s with the same name would be a real SyntaxError there. */
+const askEdgesOfKindCache = new WeakMap();
+
 /** All edges of a classified relation kind, flattened across relation groups —
  *  a local copy of codegraph.mjs's private edgesOfKind (kept local rather than
  *  exported+imported to avoid coupling this file's commit boundary to concurrent
  *  in-flight edits elsewhere in codegraph.mjs; both read the same relationKind
- *  classification, so they cannot drift in meaning). */
+ *  classification, so they cannot drift in meaning). Memoized per (graph, kind) —
+ *  perf lever, HANDOVER follow-up #8: this is the query engine's hottest path,
+ *  called repeatedly on the same (graph, kind) pair across a single query's
+ *  compositional evaluation, and at monorepo scale (tens of thousands of modules)
+ *  the repeated O(relations) scan is a real latency/GC cost — not a correctness
+ *  fix (the stack-overflow bug this file's twin comment references is already
+ *  fixed and unrelated). */
 function edgesOfKind(graph, kind) {
+  let byKind = askEdgesOfKindCache.get(graph);
+  if (!byKind) { byKind = new Map(); askEdgesOfKindCache.set(graph, byKind); }
+  const cached = byKind.get(kind);
+  if (cached) return cached;
   const out = [];
   // Plain-loop append, NOT out.push(...g.edges): argument spread overflows the call
   // stack past ~100k edges on graph-scale relation groups (see codegraph.mjs twin).
@@ -83,6 +107,7 @@ function edgesOfKind(graph, kind) {
     if (relationKind(g) !== kind) continue;
     for (const e of g.edges) out.push(e);
   }
+  byKind.set(kind, out);
   return out;
 }
 
