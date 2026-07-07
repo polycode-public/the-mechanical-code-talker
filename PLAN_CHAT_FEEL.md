@@ -2,9 +2,15 @@
 
 > **STATUS (annotated 2026-07-08):** items **1–5, 7–12 ✅ delivered in 0.8.2**
 > (merge named per item below; deterministic gate 334/334 + 285/285, zero regressions;
-> confirmation playtest greenlit the wave). Item **6 → 🔄 IN PROGRESS** (rolled into the
-> continuous fix-ship loop this session; re-measuring the pronoun/temporal/discourse-count red
-> sets against the current graded pool before any fix — see `HANDOVER.md`). Original text kept
+> confirmation playtest greenlit the wave). Item **6 → mostly ✅ shipped this session**:
+> pronoun/focus binding **fully cleared** (B1 census 34/50 → 50/50, 0 frontier — root cause was
+> `isConversational()` discarding an already-parsed structural query, not the earlier "it→Commit"
+> mis-bind); discourse-count **confirmed already green** (25/25, no fix needed); temporal
+> **partially cleared** (cochange sub-cluster: B1 45/50→48/50, C1 41/50→44/50 — 8 of 14 red ids
+> remain, each a distinct small grammar gap, documented in `HANDOVER.md`). Also surfaced a live,
+> un-flagged regression outside this item's scope: `C1:presupposition` (11/25) and
+> `C2:garden-path` (12/25) show real hard fails not marked `baselineFail` — worth a look next
+> tick. Original text kept
 > verbatim below the markers.
 
 Written 2026-07-06 from a 4-source sweep: `ROADMAP.md` (Track 1 + Next), `CHATBENCH_0.8.1.md`

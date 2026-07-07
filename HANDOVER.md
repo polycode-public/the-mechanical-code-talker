@@ -155,11 +155,28 @@ piped session before its log flushed. Fixed with `try`/`catch` and `try`/`finall
       same-stem Module/Class pair resolves the wrong grain, false-empty. Needs a
       `kindSubjectClass` helper (mirrors `kindObjectClass` over edge subjects) and touches
       `traverse()`'s control flow across multiple shapes — bigger than a routing tweak, deferred.
-7. **Track-1 trio** (pronoun / temporal / discourse-count), deferred with measured targets
-   (advisor tick-4, full-pool dry-run): pronoun red set = 18 ids (g-b1-pron
-   1,4,5,7,12,13,16,18,20,21,22,28,30,33,35,36,48,50; g-c2-pron unmeasured at full depth);
-   temporal = g-b1-temp x5 (7,31,44,46,49) + g-c1-temp x9 (10,12,23,28,29,33,39,47,48).
-   Re-measure g-b1-disc-count full-25 first: it sampled 0/5 red at tick-4, likely already green.
+7. **Track-1 trio — mostly FIXED (cluster C, commits `2525e08`, `62e26cb`).**
+   - **Pronoun/focus binding: fully cleared.** Root cause was NOT the "it→Commit" mis-bind
+     (already fixed in 0.8.2) but a second bug: `isConversational()` is a text-only heuristic
+     that fired AFTER `ask()` had already parsed a pronoun-shortened follow-up ("who touched
+     it") into a real structural query, discarding the correct composed answer for the generic
+     orientation wall. Fixed by gating that branch on `!envelope?.parsed`. B1 pronoun-binding
+     34/50 → 50/50, 0 frontier; A2 sibling `g-a2-pron-20` also flipped. Independently
+     re-verified live.
+   - **Discourse-count: confirmed already green**, 25/25, no fix needed.
+   - **Temporal: partially cleared.** Fixed the cochange sub-cluster (6 of 14 red ids): bare
+     "changed together with" was missing from the verb table (fell through to "touch(ed)",
+     structurally unable to match), and cochange is symmetric but stored as one directed edge
+     per pair, so a query naming the stored-subject side found nothing — added a symmetric
+     union. B1 temporal 45/50 → 48/50, C1 temporal 41/50 → 44/50. Independently re-verified
+     live. Remaining 8 red ids are 7 distinct small grammar gaps (not one shared mechanism —
+     "cochange partners of X" unparsed, "the commit history of X" unparsed, "has X changed"
+     misparsed as "defines", no superlative-over-commits capability, "before/since \<date\>"
+     qualifiers ignored) — deferred, not bundled to avoid scope creep.
+   - **New finding, out of this item's scope, not fixed**: `C1:presupposition` (11/25) and
+     `C2:garden-path` (12/25) show real hard fails not marked `baselineFail` in the committed
+     graded pool — a live, un-flagged regression from some point before this session started.
+     Worth investigating next tick.
 8. **Perf at monorepo scale — partially done (cluster A, commit `36887ef`).** `edgesOfKind`
    memoized per `(graph, kind)` via `WeakMap`, cache-correctness + perf-sanity tested (≥5x on a
    200k-edge group). The by-subject/by-object endpoint indices are NOT done — would need

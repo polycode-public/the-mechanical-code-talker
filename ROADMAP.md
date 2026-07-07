@@ -82,13 +82,13 @@ In priority order (full detail and measured targets in `HANDOVER.md`):
    unscoped lister shows matches. Found dogfooding a 191k-entity monorepo graph.
 3. **Bug 7.** A modal auxiliary ("should") survives the fuzzy-correction cascade and misreads as
    "hold". The diagnosed fix is adding modals to `STOPWORDS`.
-4. **`PLAN_TMCT_ECOSYSTEM_INTEGRATION.md`.** A separate concurrent session is drafting this
-   3-part tmct/bedrock-meter/marginalia integration plan. Check for completion and finalize.
-5. **`PLAN_CODE.md`'s sign-off decision.** Track 1 (rule/frame synthesis) is the lowest-risk
-   candidate; decide with the operator whether to greenlight it.
-6. Smaller chat-feel residuals from the 0.8.2 confirmation playtest, the Track-1 trio (pronoun,
-   temporal, discourse-count, measured red sets), and `edgesOfKind` memoization for monorepo-scale
-   latency. (The version bump plus push is done — see "Now" above.)
+4. ~~`PLAN_TMCT_ECOSYSTEM_INTEGRATION.md`~~ **shipped** — see "Now" above.
+5. ~~`PLAN_CODE.md` Track 1 sign-off~~ **signed off and shipped** — see "Now" above.
+6. **Still open**: the function-grain forward-shape gap (Bug C+D's grain resolution doesn't
+   cover the "forward" traversal shape), 8 remaining temporal red ids (each a distinct small
+   grammar gap), the un-flagged `C1:presupposition`/`C2:garden-path` regression, the
+   `edgesOfKind` by-subject/by-object endpoint indices (memoization itself is done). Full
+   detail in `HANDOVER.md`.
 7. **`SKILL_PLAYTEST_SPRINT.md`, in progress.** A capped, delegated, chained playtest loop (each
    round a background chat session against `examples/mini-webapp`, appraised and fixed+shipped
    live). Rounds 1-3 shipped 3 real fixes (0.9.3-0.9.5); cap raised from 3 to 8 rounds mid-run;
