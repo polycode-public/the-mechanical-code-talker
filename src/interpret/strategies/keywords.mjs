@@ -150,6 +150,21 @@ export function parseKeywordSpot(text, nlp = null) {
   const consumed = new Set();
   const mark = (hit) => { if (hit) for (let i = hit.start; i < hit.end; i += 1) consumed.add(i); };
   mark(verbHit);
+  // A redundant SAME-KIND verb immediately after the matched one ("what TESTS
+  // cover X" — "tests" is read as the relation trigger, but "cover" — also a
+  // `tests` verb, ask-vocab.mjs's own synonym list — is the word the sentence
+  // actually intends as the verb) would otherwise fall into afterText raw and
+  // corrupt the object ("cover src/core/model.mjs" instead of the module alone).
+  // Anchored to the exact position right after verbHit (never a general re-scan),
+  // and gated on matching the SAME kind, so this can only strip a genuine
+  // restatement, never eat a real object term. Found live: "what tests cover X",
+  // "which tests test X" both misparsed this way before this fix.
+  for (const [phrase, kind] of Object.entries(VERB_TO_KIND)) {
+    if (kind !== verbHit.kind) continue;
+    const pWords = phrase.split(" ");
+    const start = verbHit.end;
+    if (pWords.every((w, j) => canonWords[start + j] === w)) { mark({ start, end: start + pWords.length }); break; }
+  }
   const entityHit = findPhrase(canonWords, ENTITY_TO_TYPE, consumed);
   mark(entityHit);
   const modifierHit = findPhrase(canonWords, MODIFIER_TO_KIND, consumed);

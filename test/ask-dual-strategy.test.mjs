@@ -237,3 +237,38 @@ test("regression: plain formal/neutral anchored phrasings are unaffected by the 
     { shape: "forward", entityType: null, modifier: "direct", kind: "imports", object: "myFile" });
   assert.equal(parseQuery("which classes inherit from Base").kind, "inherits");
 });
+
+// ---- found live (playtest sprint round 1, SKILL_PLAYTEST_SPRINT.md): "what
+// tests cover X" and "which tests test X" — the relation-noun "tests" and the
+// relation's OWN verb synonym ("cover"/"test") are adjacent, and only the noun
+// got consumed, leaving the real verb glued into the object ("cover X" instead
+// of "X"). Fixed by stripping a redundant same-kind verb immediately after the
+// matched one, anchored to that exact position (never a general re-scan). ----
+
+test("keyword-spot: a redundant same-kind verb right after the relation-noun trigger is stripped, not left in the object", () => {
+  assert.deepEqual(parseQuery("what tests cover src/core/model.mjs"),
+    { shape: "reverse", entityType: null, modifier: "direct", kind: "tests", object: "src/core/model.mjs" });
+  assert.deepEqual(parseQuery("which tests cover src/core/model.mjs"),
+    { shape: "reverse", entityType: null, modifier: "direct", kind: "tests", object: "src/core/model.mjs" });
+  assert.deepEqual(parseQuery("which tests test src/core/model.mjs"),
+    { shape: "reverse", entityType: null, modifier: "direct", kind: "tests", object: "src/core/model.mjs" });
+  // the pre-existing, already-working phrasings this fix must not disturb
+  assert.deepEqual(parseQuery("what covers src/core/model.mjs"),
+    { shape: "reverse", entityType: null, modifier: "direct", kind: "tests", object: "src/core/model.mjs" });
+  assert.deepEqual(parseQuery("which modules cover src/core/model.mjs"),
+    { shape: "reverse", entityType: "Module", modifier: "direct", kind: "tests", object: "src/core/model.mjs" });
+});
+
+// ---- found live (same round): a frequency adverb ("usually"/"typically") glued
+// onto the object term instead of being stripped as filler — "what does X
+// usually change together with" resolved to object "X usually", an unresolvable
+// term. Fixed by adding the frequency-adverb family to STOPWORDS (normalize.mjs),
+// the same filler-word mechanism every other stopword already uses. ----
+
+test("keyword-spot: frequency-adverb filler (\"usually\"/\"typically\"/…) is stripped from the object like any other stopword", () => {
+  assert.deepEqual(parseQuery("what does src/core/store.mjs usually change together with"),
+    { shape: "reverse", entityType: null, modifier: "direct", kind: "cochange", object: "src/core/store.mjs" });
+  assert.deepEqual(parseQuery("what does src/core/store.mjs change together with"),
+    parseQuery("what does src/core/store.mjs usually change together with"),
+    "the adverb-free and adverb-bearing phrasings parse identically");
+});

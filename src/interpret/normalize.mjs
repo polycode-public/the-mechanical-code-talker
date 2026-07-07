@@ -485,6 +485,12 @@ export const STOPWORDS = new Set([
   // literally named "last" would be the accepted residual cost, same trade as
   // every other stopword.
   "last",
+  // frequency-adverb filler ("what does X usually change together with", "what does
+  // X typically call") — found live: "usually" glued onto the object term instead of
+  // being stripped, corrupting resolution ("src/core/store.mjs usually" instead of
+  // the module alone). Same trade as every other stopword: a symbol literally named
+  // "usually" would be the accepted residual cost.
+  "usually", "typically", "generally", "normally", "often", "commonly", "mostly",
 ]);
 
 /** Split free text into words: trailing "?" run stripped, commas treated as
