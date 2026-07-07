@@ -821,15 +821,19 @@ function parseRelationalOrQualified(w, lc, nlp, depth) {
   while (i < lc.length && QUALIFIERS[lc[i]]) { quals.push(lc[i]); i += 1; }
   const noun = i < lc.length ? entityNoun(lc[i]) : null;
   if (!noun) {
-    // an unknown adjective sitting in the qualifier slot, right before a known
-    // entity noun ("which shiny methods", "static frobnicated functions") — an
-    // honest miss that NAMES the supported qualifiers, never a guess (PLAN P3).
-    // STOPWORDS are excluded so a normal question auxiliary in that position ("what
-    // DID commit X touch", "what WAS in <sha>") is left for the existing parser, not
-    // mistaken for an unknown qualifier.
-    if ((framed || quals.length) && i + 1 < lc.length && /^[a-z]+$/.test(lc[i])
-      && !VERB_TO_KIND[lc[i]] && !STOPWORDS.has(lc[i]) && entityNoun(lc[i + 1])) {
-      return { node: "miss", reason: `unknown qualifier "${lc[i]}" — supported: ${Object.keys(QUALIFIERS).join(", ")}` };
+    // An unknown adjective sitting in the qualifier slot, right before a known entity
+    // noun ("list payment modules", "which shiny methods") — try it as a predicate-find
+    // fuzzy term FIRST ("payment" filtering Module labels/attributes) before declaring
+    // it an unrecognized qualifier: a real, honest answer beats an error message, and a
+    // genuine zero-hit still renders find's own honest "no <noun> found matching <term>"
+    // miss (never a confident-wrong guess either way — same discipline as everywhere
+    // else this AST node is produced). STOPWORDS are excluded so a normal question
+    // auxiliary in that position ("what DID commit X touch") is left for the existing
+    // parser, not mistaken for a term.
+    const nextNoun = i + 1 < lc.length ? entityNoun(lc[i + 1]) : null;
+    if ((framed || quals.length) && nextNoun && /^[a-z]+$/.test(lc[i])
+      && !VERB_TO_KIND[lc[i]] && !STOPWORDS.has(lc[i])) {
+      return { node: "find", entityType: nextNoun.entityType, term: w[i] };
     }
     return null;                                   // no subject entity → not this shape
   }

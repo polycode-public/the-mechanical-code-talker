@@ -158,11 +158,24 @@ test("qualifier abstract is honestly EMPTY (isAbstract is never populated) — n
   assert.equal(r.tmct_ask.matches.length, 0);
 });
 
-test("qualifier MISS: an unknown qualifier is an honest miss that NAMES the supported ones", () => {
+test("qualifier MISS: an unrecognized qualifier word is tried as a predicate-find term first, honest zero-hit miss if nothing matches", () => {
+  // "shiny" is neither a real QUALIFIER nor a real Method label/attribute in the
+  // fixture — rather than the old hard "unknown qualifier" rejection, it's now tried
+  // as a fuzzy find term (a real answer beats an error when one exists) and honestly
+  // reports the zero-hit search, never a confident-wrong guess either way.
   const r = ask(graph, "which shiny methods");
   assert.equal(r.tmct_ask.miss, true);
-  assert.match(r.content, /unknown qualifier "shiny"/);
-  assert.match(r.content, /public, private/); // names the supported set
+  assert.match(r.content, /no methods found matching "shiny"/);
+});
+
+test("qualifier-slot-to-find HIT: 'list payment modules'-shaped queries now answer instead of erroring", () => {
+  // Found live: "list payment modules" used to hard-fail with "unknown qualifier
+  // 'payment'" even though "find me the payment class" already worked — the same
+  // unrecognized-qualifier-slot word is now tried as a predicate-find term, so this
+  // phrasing and the equivalent "find" phrasing land the same real answer.
+  const r = ask(graph, "which pub methods");
+  assert.equal(r.tmct_ask.miss, false);
+  assert.deepEqual(labels(r), ["pubMethod"]);
 });
 
 // ---- 4. AGGREGATES + SUPERLATIVES ----
@@ -292,11 +305,13 @@ test("list compat: bare 'which methods' still doesn't PARSE (not a list, not a r
   assert.equal(r.tmct_ask.miss, false);
   assert.match(r.content, /\bmethods?\.$/);
   assert.equal(r.tmct_ask.relaxed.to, "count methods");
-  // The safety property the bare form protects is UNCHANGED: a dangling UNKNOWN qualifier
-  // ("which shiny methods") is still an honest miss — the terminal rule classifies the
-  // ORIGINAL tokens, so "shiny" blocks the default rather than being silently dropped.
+  // The safety property the bare form protects is UNCHANGED: a dangling qualifier-slot
+  // word ("which shiny methods") still blocks the count default rather than being
+  // silently dropped — the terminal rule classifies the ORIGINAL tokens. It's now tried
+  // as a predicate-find term first (see the "qualifier MISS" test above) and still
+  // resolves to an honest miss, since no fixture Method matches "shiny".
   assert.equal(ask(graph, "which shiny methods").tmct_ask.miss, true);
-  assert.match(ask(graph, "which shiny methods").content, /unknown qualifier "shiny"/);
+  assert.match(ask(graph, "which shiny methods").content, /no methods found matching "shiny"/);
   assert.deepEqual(labels(ask(graph, "which classes are there")), ["Base", "Gadget", "Widget"]); // the filler form DOES list
 });
 
