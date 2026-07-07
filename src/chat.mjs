@@ -52,6 +52,7 @@ import { createTelemetry } from "./telemetry.mjs";
 import * as defaultSource from "./source.mjs";
 import { loadTemplates, render as renderTemplate } from "./corpus/templates.mjs";
 import { finish } from "./finish.mjs";
+import { VERB_TO_KIND, WHERE_MARKERS, MENTION_MARKERS } from "./ask-vocab.mjs";
 
 // uuidv7 lives in ./uuid.mjs (shared with telemetry + the bench stamp); re-exported
 // here because callers/tests still import it from chat.mjs.
@@ -632,6 +633,14 @@ export function shortMissHint(query) {
  *  (fold.mjs carries its own local copy — the memory layer stays decoupled). */
 export const WALL_MISS_RE = /^couldn't parse this as a graph question\. Try:/;
 
+/** WALL_MISS_RE's non-anchored twin: does the grammar-wall opening appear
+ *  ANYWHERE in the text, not just at its start? A recall-then-wall's own
+ *  `answer` is prefixed with the recall frame ("you asked about this before
+ *  (…):\n  Q: …\n  A: …\n\n"), so the wall-repeat check (Bug A root cause 2,
+ *  0.8.2 follow-up) that inspects the PREVIOUS turn's `last.answer` needs the
+ *  unanchored form to still recognize it as a wall repeat. */
+const WALL_MISS_ANYWHERE_RE = /couldn't parse this as a graph question\. Try:/;
+
 // #2 INTENT LANE — MEMORY/TEACH. "remember that X is a Y", "note that …", or a
 // bare "X is a Y" declarative the graph parser couldn't handle → route to the
 // assert/memory path; when it can't be stored, say what CAN be remembered
@@ -996,15 +1005,50 @@ function uuidv7Day(id) {
  *  earlier recall, never fresh content (nested recall-of-recall hygiene). */
 const RECALL_PREAMBLE_RE = /^you asked about this before/;
 
-/** Pick the recalled block's Q/A pair most relevant to the query (content-word
- *  overlap; ties → first). Null when nothing qualifies — the block matched on
- *  packaging, not substance, so the honest miss must stand. Recall HYGIENE
- *  (0.8.2): only a pair with a SUBSTANTIVE answer is recallable — a Q-only pair,
- *  a grammar-wall answer (WALL_MISS_RE) or a prior recall frame (nested
- *  recall-of-recall) is skipped; and the shared overlap must carry at least one
- *  dotted path/file token or ≥2 plain content words, so "src"/"mjs"-grade noise
- *  never bridges two unrelated questions. */
-function bestQaPair(blockText, query) {
+/** Predicate-class content words bestQaPair requires a SHARED token from (Bug A
+ *  entity∧predicate conjunction fix, 0.8.2 follow-up): every phrase in
+ *  VERB_TO_KIND (ask-vocab.mjs's code-graph relation vocabulary — read-only
+ *  reference here, never edited) split into its content words, PLUS the
+ *  where/mention markers from the same file, PLUS chat.mjs's own ownership
+ *  predicate ("owns"/"maintains", WHO_OWNS_RE/OWNS_TEACH_RE below) — a real,
+ *  distinct predicate class the graph-relation table doesn't carry. Without this
+ *  last pair, a stored "who touched X" and a live "who owns X" share no
+ *  predicate word at all (which already rejects them) but neither could a
+ *  genuine "who owns X" repeat ever recall itself. */
+const PREDICATE_WORDS = new Set(
+  [
+    ...Object.keys(VERB_TO_KIND).flatMap((phrase) => phrase.split(/[\s-]+/)),
+    ...WHERE_MARKERS, ...MENTION_MARKERS,
+    "owns", "maintains",
+  ].filter((w) => w.length >= 3),
+);
+
+/** Does `word` identify a graph ENTITY the two questions share — a dotted/path
+ *  token (the cheap, always-available signal) or a bare term that resolves to a
+ *  real graph individual (so a shared bare name, not just a shared directory
+ *  segment, counts too). Failure-tolerated: no graph / no resolution → false,
+ *  never a throw. */
+async function isSharedEntityToken(word, graph) {
+  if (word.includes(".")) return true;
+  if (!graph) return false;
+  const ent = await resolveEntity(graph, word);
+  return !!ent;
+}
+
+/** Pick the recalled block's Q/A pair most relevant to the query. Null when
+ *  nothing qualifies — the block matched on packaging, not substance, so the
+ *  honest miss must stand. Recall HYGIENE (0.8.2, tightened in the 0.8.2
+ *  follow-up): only a pair with a SUBSTANTIVE answer is recallable — a Q-only
+ *  pair, a grammar-wall answer (WALL_MISS_RE) or a prior recall frame (nested
+ *  recall-of-recall) is skipped. The acceptance test is an explicit CONJUNCTION,
+ *  not the old OR-shaped word-overlap count: at least one shared
+ *  entity-identifying token (isSharedEntityToken) AND at least one shared
+ *  predicate-class word (PREDICATE_WORDS) — so a stored "who touched X" can
+ *  never recall onto a live "who owns X" (predicate mismatch, entity token
+ *  still shared) and a stored "who owns X" can never recall onto "who owns Y"
+ *  (predicate matches, entity token doesn't — a shared directory segment used
+ *  to satisfy the old ≥2-word branch on its own). */
+async function bestQaPair(blockText, query, graph) {
   const qWords = recallWords(query);
   const pairs = [];
   let open = null;
@@ -1017,7 +1061,13 @@ function bestQaPair(blockText, query) {
   for (const p of pairs) {
     if (!p.a || WALL_MISS_RE.test(p.a) || RECALL_PREAMBLE_RE.test(p.a)) continue;
     const shared = [...recallWords(p.q)].filter((w) => qWords.has(w));
-    if (!shared.some((w) => w.includes(".")) && shared.length < 2) continue;
+    if (!shared.length) continue;
+    if (!shared.some((w) => PREDICATE_WORDS.has(w))) continue;
+    let hasEntity = false;
+    for (const w of shared) {
+      if (await isSharedEntityToken(w, graph)) { hasEntity = true; break; }
+    }
+    if (!hasEntity) continue;
     if (shared.length > bestScore) { best = p; bestScore = shared.length; }
   }
   return best;
@@ -1029,13 +1079,13 @@ function bestQaPair(blockText, query) {
  *  recall only ever fires with a substantive recalled A (bestQaPair's hygiene),
  *  so it is never prepended to a reply that is itself a miss going to record.
  *  Lazy + failure-tolerated (chat.mjs ethos): a broken store degrades to null. */
-async function recallFromBlocks(memoryDir, query) {
+async function recallFromBlocks(memoryDir, query, graph) {
   try {
     const { retrieveBlocks } = await import("./memory/blocks.mjs");
     const hits = await retrieveBlocks(memoryDir, query, RECALL_TOP_K);
     const best = hits[0];
     if (!best || best.score < RECALL_MIN_SCORE || !best.text) return null;
-    const pair = bestQaPair(best.text, query);
+    const pair = await bestQaPair(best.text, query, graph);
     if (!pair) return null;
     const day = uuidv7Day(best.id);
     const cite = `session ${String(best.id).slice(0, 8)}${day ? `, ${day}` : ""}`;
@@ -1856,9 +1906,25 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       // W2: after the honest miss is composed, consult the folded-session memory. A
       // relevant enough block ANSWERS — recalled Q/A framed + cited first, with the
       // engine's own miss hint kept below; no hit leaves the miss byte-unchanged.
-      const recalled = await recallFromBlocks(memoryDir, query);
+      const recalled = await recallFromBlocks(memoryDir, query, graph);
       if (recalled) {
-        answer = `${recalled}\n\n${answer}`;
+        // Bug A root cause 2 (0.8.2 follow-up): a successful recall always sets
+        // recordMiss = false below, which is the SAME flag the composed-path
+        // wall-shortening pass (further down) gates on — so a recall-then-wall
+        // combo used to carry the full, un-shortened grammar-cheat-sheet dump on
+        // every repeat, never collapsing to shortMissHint/WALL_REPEAT_ONELINER the
+        // way a plain wall does. Apply the identical shortening/repeat-suppression
+        // logic to the TRAILING miss text here, keyed off the same WALL_MISS_RE +
+        // `last` check (using the non-anchored twin, since a repeated
+        // recall-then-wall's own last answer is itself prefixed with the recall
+        // frame, not starting with the wall text).
+        let trailing = answer;
+        if (WALL_MISS_RE.test(trailing)) {
+          trailing = (last?.answer && WALL_MISS_ANYWHERE_RE.test(String(last.answer)))
+            ? WALL_REPEAT_ONELINER
+            : shortMissHint(query);
+        }
+        answer = `${recalled}\n\n${trailing}`;
         via = "recall";
         recordMiss = false; // memory answered it, cited — no longer a blank
       }

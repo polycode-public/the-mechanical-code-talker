@@ -18,6 +18,8 @@ import { Readable, PassThrough } from "node:stream";
 import { runTurn, runChat, RECALL_MIN_SCORE } from "../src/chat.mjs";
 import { saveBlock } from "../src/memory/blocks.mjs";
 import { clearCache } from "../src/source.mjs";
+import { parseEntities } from "../src/codegraph.mjs";
+import * as source from "../src/source.mjs";
 
 const FIXTURE = fileURLToPath(new URL("./fixtures/entities.fixture.json", import.meta.url));
 
@@ -215,6 +217,71 @@ test("hygiene: a genuine re-ask with a substantive stored answer STILL recalls, 
     assert.match(answer, /A: app\/lib\/b\.mjs/);
     assert.equal(record.via, "recall");
     assert.equal(record.miss, false);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---- Bug A (0.8.2 follow-up): explicit entity∧predicate conjunction + a
+// recall-then-wall shortens on repeat exactly like a plain wall does ----
+
+test("hygiene: a predicate mismatch never recalls (entity token shared, predicate isn't)", async () => {
+  // "who touched X" and "who owns X" share the dotted entity token "billing.mjs"
+  // but NOT a predicate word — the old OR-shaped test recalled off the shared
+  // entity token alone; the new conjunction correctly rejects it.
+  await assertNoRecall(
+    "Q: who touched billing.mjs\nA: billing.mjs was touched by commit abc123 (2 days ago).",
+    "who owns billing.mjs",
+  );
+});
+
+test("hygiene: an entity mismatch never recalls (predicate shared, entity token isn't)", async () => {
+  // Both questions share the predicate word "import" and the directory segment
+  // "handlers", which used to satisfy the old ≥2-shared-word branch on its own —
+  // but the actual FILE differs (logger.mjs vs tasks.mjs), so this must not recall.
+  await assertNoRecall(
+    "Q: which modules import src/handlers/logger.mjs\nA: app/lib/b.mjs imports src/handlers/logger.mjs.",
+    "which modules import src/handlers/tasks.mjs",
+  );
+});
+
+test("hygiene: a recall-then-wall's trailing miss text shortens on the 2nd identical turn", async () => {
+  // "who owns billing.mjs really truly" shares the predicate word "owns" and the
+  // dotted entity token "billing.mjs" with the stored Q, so it recalls — but the
+  // engine's OWN parse of this exact live query is a genuine grammar-wall miss
+  // (no recognized relation verb), so the trailing text after the recall frame
+  // must still shorten on repeat exactly like a plain (non-recall) wall does.
+  const dir = await mkdtemp(join(tmpdir(), "tmct-w2-hyg-wall-"));
+  try {
+    await mkdir(join(dir, ".tmct"), { recursive: true });
+    await writeFile(join(dir, ".tmct", "graph.json"), await readFile(FIXTURE, "utf8"));
+    await saveBlock(dir, {
+      id: BLOCK_ID,
+      text: "Q: who owns billing.mjs\nA: billing.mjs is owned by Priya, per the last teach session.",
+    });
+    const config = { graphFile: join(dir, ".tmct", "graph.json") };
+    const graph = parseEntities(await source.fetchEntities(config));
+    const q = "who owns billing.mjs really truly";
+
+    const t1 = await runTurn(q, { config, graph, memoryDir: dir });
+    assert.equal(t1.record.via, "recall");
+    assert.match(t1.answer, /^you asked about this before/);
+    // First occurrence: the trailing text is the SHORT tailored hint (the wall
+    // opening still appears, just with the 2-example short form, not the raw
+    // full grammar-cheat-sheet dump).
+    assert.match(t1.answer, /couldn't parse this as a graph question\. Try:/);
+    assert.match(t1.answer, /"who touched <name>"/, "the short tailored hint, not the full rephraseHint dump");
+
+    const t2 = await runTurn(q, { config, graph, memoryDir: dir, last: t1.last });
+    assert.equal(t2.record.via, "recall");
+    assert.match(t2.answer, /^you asked about this before/);
+    // Second identical turn: the trailing text collapses to the wall-repeat
+    // one-liner, which does NOT match WALL_MISS_RE (self-limiting, per the
+    // existing composed-path convention) — so the raw wall opening no longer
+    // appears anywhere in the answer.
+    assert.doesNotMatch(t2.answer, /couldn't parse this as a graph question\. Try:/);
+    assert.match(t2.answer, /still couldn't parse that/);
   } finally {
     clearCache();
     await rm(dir, { recursive: true, force: true });
