@@ -283,6 +283,7 @@ function parseComposite(text, nlp) {
     || parseAnaphora(w, lc, nlp)
     || parseAggregate(w, lc, nlp)
     || parseSuperlative(w, lc, nlp)
+    || parseFind(w, lc, nlp, 0)
     || parseList(w, lc, nlp, 0)
     || parseNested(w, lc, nlp, 0)
     || parseRelationalOrQualified(w, lc, nlp, 0);
@@ -677,6 +678,62 @@ function parseSuperlative(w, lc, nlp) {
   return { node: "superlative", entityType, metric, metricNoun, extreme: ext };
 }
 
+// PREDICATE-FIND (Workstream 2 — new product feature): "find [me/us] [the/a] <term>
+// <entityType>" (trailing-type — "find me the payment class") or "find [me/us]
+// [the/a] <entityType> <linker> <term>" (leading-type-with-linker — "find the class
+// named Foo"). A TYPE FILTER ∧ FUZZY PROPERTY-SURFACE MATCH, not a literal name
+// lookup (contrast parseList's plain class enumeration) — reuses the same closed
+// compositional grammar (evalSet's new "find" case, renderComposite's new branch)
+// so it composes for free with qualifiers/booleans later (§6 generalization below).
+const FIND_LINKERS = new Set(["called", "named", "about", "like", "containing", "matching", "with"]);
+
+/** PREDICATE-FIND: see the file comment above. Triggered ONLY by a leading "find"
+ *  (parseNegation, earlier in parseComposite's chain, already claims "find" as an
+ *  optional lead before an EXPLICIT set-negation marker — "find modules that don't
+ *  import X" reaches that production first and never reaches here). Reuses
+ *  LIST_SKIP and entityNoun/ENTITY_TO_TYPE exactly as parseList does. A clear
+ *  imperative "find <one unknown plain word>" (mirroring parseList's own single-
+ *  trailing-word discipline) is an honest miss naming LISTABLE_KINDS — a
+ *  PARSE-TIME miss, structurally distinct from evalSet("find")'s zero-hit SEARCH
+ *  miss; anything less certain — a longer uncertain remainder, or ANY relative-
+ *  clause marker present anywhere (that/which/who) — defers (null) to the existing
+ *  parser/cascade, so "find the file that imports store" keeps parsing via the
+ *  established parseNested/parseRelationalOrQualified relative-clause path (the
+ *  §6 generalization below is the ONE place a term-bearing find-with-predicate
+ *  shape is recognized, and it is a structurally separate production). */
+function parseFind(w, lc, nlp, depth) {
+  if (lc[0] !== "find") return null;
+  let i = 1;
+  while (i < lc.length && LIST_SKIP.has(lc[i])) i += 1;
+  if (i >= lc.length) return null;
+
+  // leading-type-with-linker: "find [me] [the] <entityType> <linker> <term…>"
+  const leadNoun = entityNoun(lc[i]);
+  if (leadNoun && !leadNoun.placeholder && leadNoun.entityType !== "Change"
+    && i + 1 < lc.length && FIND_LINKERS.has(lc[i + 1])) {
+    const term = w.slice(i + 2).join(" ").trim();
+    if (term) return { node: "find", entityType: leadNoun.entityType, term };
+    // a linker with nothing after it is too uncertain to claim — fall through.
+  }
+
+  // trailing-type: "find [me] [the] <term…> <entityType>"
+  const lastNoun = entityNoun(lc[lc.length - 1]);
+  if (lastNoun && !lastNoun.placeholder && lastNoun.entityType !== "Change") {
+    const term = w.slice(i, lc.length - 1).join(" ").trim();
+    if (term) return { node: "find", entityType: lastNoun.entityType, term };
+  }
+
+  // A relative-clause marker anywhere means a DIFFERENT production owns this text
+  // (either the plain relative-clause path, or the §6 find-with-predicate
+  // generalization inside parseRelationalOrQualified) — never claimed here.
+  if (lc.some((t) => RELATIVE_PRONOUNS.includes(t))) return null;
+  // A clear imperative single unknown trailing word (mirrors parseList's own rule).
+  if (i === lc.length - 1 && /^[a-z]+$/.test(lc[i]) && !VERB_TO_KIND[lc[i]] && !PLACEHOLDER_NOUNS.includes(lc[i])) {
+    return { node: "miss", reason: `"${lc[i]}" isn't a listable kind — try ${LISTABLE_KINDS}` };
+  }
+  return null;
+}
+
 /** RELATIONAL / BOOLEAN / QUALIFIER (subject-first): "[which] [<qualifier>…] <entity>
  *  [that] <predicate>", where <predicate> is one or more relation clauses joined by
  *  and/or/but-not over the SAME subject, a "<of|in> <term>" membership, or empty (a
@@ -685,7 +742,78 @@ function parseSuperlative(w, lc, nlp) {
  *  reverse query ("which functions call helper") and the bare-template ambiguous case
  *  ("which classes extends Base and couples to logging", no marker) both fall through
  *  to the existing strategies untouched. Returns an AST node, a miss, or null. */
+/** §6 generalization (predicate-find, Workstream 2 follow-up) — detect the HEAD of
+ *  "find [me/us] [the/a] <term…> <entityType> that|which|who <predicate>": mirrors
+ *  parseFind's own trailing-type recognition (LIST_SKIP, entityNoun), but requires
+ *  a relative-clause marker directly after the entity noun and a NON-EMPTY term
+ *  before it. An EMPTY term ("find classes that…") is deliberately NOT this shape
+ *  — it already reaches parseRelationalOrQualified's normal head-parsing below
+ *  once "find" is skipped as a FRAME_WORD, with no find-seed needed. Returns
+ *  {entityType, term, relIdx} (relIdx = the relative pronoun's token index) or
+ *  null — null on anything less than an exact match (never a guess). */
+function parseFindPredicateHead(w, lc) {
+  if (lc[0] !== "find") return null;
+  let i = 1;
+  while (i < lc.length && LIST_SKIP.has(lc[i])) i += 1;
+  let r = -1;
+  for (let k = i + 1; k < lc.length; k += 1) { if (RELATIVE_PRONOUNS.includes(lc[k])) { r = k; break; } }
+  if (r < 0) return null;
+  const noun = entityNoun(lc[r - 1]);
+  if (!noun || noun.placeholder || noun.entityType === "Change") return null;
+  const term = w.slice(i, r - 1).join(" ").trim();
+  if (!term) return null;
+  return { entityType: noun.entityType, term, relIdx: r };
+}
+
+/** Build boolean/qualifier atoms for a predicate whose FIRST (seed) atom the
+ *  caller already determined externally (the §6 generalization's find-seed,
+ *  above) — `predLc`/`predWords` are the tokens AFTER the leading relative
+ *  pronoun has already been consumed. Every atom's op defaults to
+ *  "intersection" (a relative clause always RESTRICTS the seed) except where an
+ *  explicit and/or/but-not connective says otherwise. Mirrors
+ *  parseRelationalOrQualified's own branch-classification (qualifier-only /
+ *  membership / verb-phrase clause) in miniature, duplicated rather than
+ *  shared, so neither path risks regressing the other. */
+function buildPredicateAtoms(entityType, subjPrefix, predLc, predWords, nlp, depth) {
+  const { branches, ops } = splitBoolean(predLc, predWords);
+  let prevVerb = null;
+  const atoms = [];
+  for (let b = 0; b < branches.length; b += 1) {
+    const bw = branches[b];
+    const blc = bw.map((x) => x.toLowerCase());
+    const op = b === 0 ? "intersection" : ops[b - 1];
+    if (bw.length && blc.every((x) => QUALIFIERS[x])) { atoms.push({ op, kind: "qual", filters: blc }); continue; }
+    if (blc[0] === "of" || blc[0] === "in") {
+      atoms.push({ op, kind: "set", ast: { node: "membership", entityType, term: bw.slice(1).join(" ") } });
+      continue;
+    }
+    let phrase = bw;
+    const vh = findPhrase(blc, VERB_TO_KIND);
+    if (vh) prevVerb = bw.slice(vh.start, vh.end);
+    else if (prevVerb) phrase = [...prevVerb, ...bw];
+    const ast = parseBranchAst(`${subjPrefix} ${phrase.join(" ")}`, nlp, depth);
+    if (!ast || ast.node === "miss") return { miss: (ast && ast.reason) || "a clause in the combination didn't parse" };
+    atoms.push({ op, kind: "set", ast });
+  }
+  return { atoms };
+}
+
 function parseRelationalOrQualified(w, lc, nlp, depth) {
+  // §6 generalization (predicate-find): seeds the SAME boolean/qualifier fold
+  // below with a {node:"find",…} atom instead of the plain {node:"allOfClass"}
+  // a bare qualified class gets — see parseFindPredicateHead's own doc above.
+  const findHead = parseFindPredicateHead(w, lc);
+  if (findHead) {
+    const { entityType, term, relIdx } = findHead;
+    const predLc = lc.slice(relIdx + 1);
+    const predWords = w.slice(relIdx + 1);
+    if (!predLc.length) return { node: "miss", reason: `a relative clause needs a predicate after "${lc[relIdx]}"` };
+    const built = buildPredicateAtoms(entityType, `which ${lc[relIdx - 1]}`, predLc, predWords, nlp, depth + 1);
+    if (built.miss) return { node: "miss", reason: built.miss };
+    const atoms = [{ op: "seed", kind: "set", ast: { node: "find", entityType, term } }, ...built.atoms];
+    return atoms.length === 1 ? atoms[0].ast : { node: "boolean", entityType, atoms };
+  }
+
   let i = 0;
   while (i < lc.length && FRAME_WORDS.has(lc[i])) i += 1;
   const framed = i > 0;
@@ -905,11 +1033,185 @@ function qualHolds(graph, ind, spec) {
   }
 }
 
+// ---- predicate-find (Workstream 2) — the narrow-then-broaden inheritance cascade
+// over `inherits` edges (Class->Class today; ANY entityType that later gains such
+// edges between individuals of the SAME class extends automatically — detected
+// dynamically via inheritsApplicable, never hardcoded to "Class"). ----
+
+/** All `inherits` edges (subject inherits FROM object — the derived class is the
+ *  subject, the base class is the object; RELATIONS.inherits' own comment). */
+function inheritsEdges(graph) {
+  return edgesOfKind(graph, "inherits");
+}
+/** Direct subclasses of `id` (edges whose OBJECT is id). */
+function directChildrenOf(graph, id) {
+  return inheritsEdges(graph).filter((e) => e.object === id).map((e) => e.subject);
+}
+/** Direct superclasses of `id` (edges whose SUBJECT is id). */
+function directParentsOf(graph, id) {
+  return inheritsEdges(graph).filter((e) => e.subject === id).map((e) => e.object);
+}
+/** Every descendant (subclass, transitively) of `id` — cycle-safe BFS. */
+function descendantsOf(graph, id) {
+  const out = new Set();
+  const queue = [...directChildrenOf(graph, id)];
+  while (queue.length) {
+    const next = queue.shift();
+    if (out.has(next)) continue;
+    out.add(next);
+    for (const c of directChildrenOf(graph, next)) if (!out.has(c)) queue.push(c);
+  }
+  return out;
+}
+/** Every ancestor (superclass, transitively) of `id` — cycle-safe BFS. */
+function ancestorsOf(graph, id) {
+  const out = new Set();
+  const queue = [...directParentsOf(graph, id)];
+  while (queue.length) {
+    const next = queue.shift();
+    if (out.has(next)) continue;
+    out.add(next);
+    for (const p of directParentsOf(graph, next)) if (!out.has(p)) queue.push(p);
+  }
+  return out;
+}
+/** Does `entityType` participate in an `inherits`-style subsumption relation TODAY —
+ *  at least one inherits edge whose subject AND object are both individuals of this
+ *  class? Detected dynamically (never hardcoded to "Class") so the cascade below
+ *  extends automatically to any future type that gains such edges; when false, the
+ *  broad (ancestor/sibling) pass is simply a no-op and predicate-find degrades to a
+ *  flat own-label+attributes match — the common case for Module/Function today.
+ *  Memoized per graph (a WeakMap so it never leaks/needs manual invalidation). */
+const inheritsApplicableCache = new WeakMap();
+function inheritsApplicable(graph, entityType) {
+  let byType = inheritsApplicableCache.get(graph);
+  if (!byType) { byType = new Map(); inheritsApplicableCache.set(graph, byType); }
+  if (byType.has(entityType)) return byType.get(entityType);
+  const ok = inheritsEdges(graph).some((e) => {
+    const s = graph.byId.get(e.subject); const o = graph.byId.get(e.object);
+    return !!s && !!o && s.class === entityType && o.class === entityType;
+  });
+  byType.set(entityType, ok);
+  return ok;
+}
+
+/** Does `ind`'s OWN property surface (label, or an attribute value) contain EVERY
+ *  token of the fuzzy term (AND across tokens, same tokenizer resolveObject's own
+ *  tier-3 uses)? Returns "label" | "attr" | null — the provenance tag findSortHits
+ *  scores label hits above attribute-only hits (per the match-scope design). */
+function ownSurfaceHit(ind, termTokens) {
+  const labelLc = String(ind.label || "").toLowerCase();
+  if (termTokens.every((tok) => labelLc.includes(tok))) return "label";
+  const attrs = (ind.attributes || []).map((a) => String(a.value ?? "").toLowerCase());
+  if (termTokens.every((tok) => attrs.some((v) => v.includes(tok)))) return "attr";
+  return null;
+}
+// own-label hits rank above inheritance-chain hits above attribute-only hits (the
+// match-scope design's stated scoring); tie-break by shorter label (the same
+// convention resolveObject's own tiers use for a scored tie).
+const FIND_TIER = { label: 3, chain: 2, attr: 1 };
+function sortFindHits(hits) {
+  return hits.slice()
+    .sort((a, b) => (FIND_TIER[b.via] - FIND_TIER[a.via]) || (String(a.ind.label).length - String(b.ind.label).length))
+    .map((h) => h.ind);
+}
+
+/** A BOUNDED-FUZZY (Damerau-Levenshtein, same budget resolveObject's own tier-5
+ *  uses) near-match of the WHOLE term against `ind`'s label or any of its
+ *  components. Used ONLY by the broad pass below — never the narrow pass, whose
+ *  exact-substring `ownSurfaceHit` test already runs against EVERY individual of
+ *  the type (ancestors and siblings included, being ordinary pool members too),
+ *  so an exact-substring re-test in the broad pass would be logically vacuous: if
+ *  narrow found nothing, no individual's own surface can contain the term as a
+ *  substring, full stop. Fuzzy near-matching is what makes the broad pass find
+ *  something narrow genuinely couldn't (a typo'd or partial name on a relative),
+ *  which is also why a broad-pass hit is always rendered "related, not exact" —
+ *  it is a near-miss by construction, not a confident equal. */
+function fuzzyFindHit(ind, term) {
+  const tLc = String(term || "").trim().toLowerCase();
+  if (tLc.length < 4) return false; // same floor resolveObject's tier-5 uses
+  const bound = fuzzyBound(tLc);
+  if (editDistance(String(ind.label || "").toLowerCase(), tLc, bound) <= bound) return true;
+  for (const comp of componentSet(ind.label)) {
+    if (editDistance(comp, tLc, bound) <= bound) return true;
+  }
+  return false;
+}
+
+/** The narrow-then-broaden search behind evalSet's "find" case and evalComposite's
+ *  dedicated "find" handling (predicate-find, Workstream 2):
+ *   1. NARROW — for each `entityType` individual, a hit if its OWN surface matches
+ *      every term token, OR (when the type participates in `inherits` today) any of
+ *      its DESCENDANTS' own surface does — a subclass genuinely IS a kind of its
+ *      superclass, so a hit anywhere in the subtree counts as the candidate itself
+ *      matching. If this pass finds ≥1 hit anywhere in the pool, it is the WHOLE
+ *      answer — never silently widened when a specific answer exists (the same
+ *      discipline Bug C's grain-aware resolution establishes). Every individual of
+ *      the type is tested here, ancestors and siblings included (they are ordinary
+ *      pool members too) — so an EMPTY narrow pass means no individual's own
+ *      surface anywhere in the pool contains the term as a substring.
+ *   2. BROAD — only when the narrow pass is EMPTY across the WHOLE pool AND the
+ *      type participates in `inherits`: for each candidate, walk UP to its
+ *      superclass(es); a bounded-FUZZY near-match (fuzzyFindHit, above — never a
+ *      repeat of narrow's exact test, which the previous point shows would find
+ *      nothing new) on a superclass's own surface counts, and so does one on that
+ *      superclass's OTHER direct children (siblings) — always rendered as
+ *      "related, not exact" (renderComposite), never an unqualified match.
+ *  Returns {narrow, broad} — `broad` is only ever non-empty when `narrow` is empty.
+ *  When the type has no inherits edges at all, the broad pass is a no-op and this
+ *  degrades to a flat own-label+attributes match (Module/Function today). */
+function computeFind(graph, entityType, term) {
+  const pool = graph.individuals.filter((i) => i.class === entityType);
+  const termTokens = [...componentSet(term)];
+  if (!termTokens.length || !pool.length) return { narrow: [], broad: [] };
+  const cascade = inheritsApplicable(graph, entityType);
+
+  const narrowHits = [];
+  for (const ind of pool) {
+    const own = ownSurfaceHit(ind, termTokens);
+    if (own) { narrowHits.push({ ind, via: own }); continue; }
+    if (!cascade) continue;
+    const viaChain = [...descendantsOf(graph, ind.id)].some((did) => {
+      const d = graph.byId.get(did);
+      return !!d && !!ownSurfaceHit(d, termTokens);
+    });
+    if (viaChain) narrowHits.push({ ind, via: "chain" });
+  }
+  if (narrowHits.length || !cascade) return { narrow: sortFindHits(narrowHits), broad: [] };
+
+  const broadHits = new Map(); // id -> {ind, via}
+  for (const ind of pool) {
+    for (const ancId of ancestorsOf(graph, ind.id)) {
+      if (!broadHits.has(ancId)) {
+        const anc = graph.byId.get(ancId);
+        if (anc && anc.class === entityType && fuzzyFindHit(anc, term)) {
+          broadHits.set(ancId, { ind: anc, via: "chain" });
+        }
+      }
+      for (const sibId of directChildrenOf(graph, ancId)) {
+        if (sibId === ind.id || broadHits.has(sibId)) continue;
+        const sib = graph.byId.get(sibId);
+        if (sib && sib.class === entityType && fuzzyFindHit(sib, term)) broadHits.set(sibId, { ind: sib, via: "chain" });
+      }
+    }
+  }
+  return { narrow: [], broad: sortFindHits([...broadHits.values()]) };
+}
+
 /** Compile a set-producing AST into an array of individuals. */
 function evalSet(graph, ast, opts) {
   switch (ast.node) {
     case "clause": return traverse(graph, ast.clause, opts).matches || [];
     case "allOfClass": return graph.individuals.filter((i) => i.class === ast.entityType);
+    // predicate-find (Workstream 2), embedded as a set atom (§6 generalization —
+    // a find-seed inside a boolean/qualifier fold): the narrow-then-broaden
+    // cascade's result, transparently flattened (the "related, not exact" framing
+    // is a top-level RENDER concern — evalComposite's dedicated "find" handling
+    // below, not this generic embedding).
+    case "find": {
+      const { narrow, broad } = computeFind(graph, ast.entityType, ast.term);
+      return narrow.length ? narrow : broad;
+    }
     // the SUBJECTS that have ANY edge of a kind (the existential "modules that import
     // anything") — the positive set an existential negation ("do not import anything")
     // differences off allOfClass to yield "modules that import nothing".
@@ -1057,6 +1359,17 @@ export function evalComposite(graph, ast, opts = {}) {
   if (ast.node === "superlative") return evalSuperlative(graph, ast);
   if (ast.node === "temporal") return evalTemporal(graph, ast, opts);
   if (ast.node === "anaphora") return evalAnaphora(graph, ast, opts);
+  // predicate-find (Workstream 2), TOP-LEVEL: unlike evalSet's "find" case (used
+  // when a find-seed is embedded inside a boolean/qualifier fold, §6), this keeps
+  // the broad-pass provenance so renderComposite can label a "related, not exact"
+  // hit distinctly rather than presenting it as an unqualified match.
+  if (ast.node === "find") {
+    const { narrow, broad } = computeFind(graph, ast.entityType, ast.term);
+    return {
+      compositeKind: "find", entityType: ast.entityType, term: ast.term,
+      matches: narrow.length ? narrow : broad, broad: !narrow.length && broad.length > 0,
+    };
+  }
   return { compositeKind: "set", matches: evalSet(graph, ast, opts), entityType: ast.entityType || null };
 }
 
@@ -1070,7 +1383,17 @@ const compositeList = (matches) => listJoin(matches.slice(0, OVERFLOW_CAP)
 /** A compositional worked example for the rephrase hint (§honest miss now shows a
  *  compositional phrasing too). */
 export function compositionalHint() {
-  return 'compositional queries also work: "which functions call X and call Y", "what calls something that imports X", "public methods of X", "list functions" / "show me the classes", "how many classes", "which module has the most imports", or (after a listing) "which of those are tested"';
+  return 'compositional queries also work: "which functions call X and call Y", "what calls something that imports X", "public methods of X", "list functions" / "show me the classes", "how many classes", "which module has the most imports", "find me the payment class", or (after a listing) "which of those are tested"';
+}
+
+/** A short citation line for a SINGLE predicate-find hit — the module it lives in,
+ *  when known (mirrors the plain reverse-shape render's grouping convention, just
+ *  condensed to one line since there is exactly one hit to cite). */
+function describeFindHit(ind) {
+  const label = ["Function", "Method"].includes(ind.class) ? `${ind.label}()` : ind.label;
+  if (ind.class === "Module") return label;
+  const mod = moduleLabelOf(ind);
+  return mod && mod !== "(unknown module)" ? `${label} in ${mod}` : label;
 }
 
 function renderComposite(parsed, result) {
@@ -1096,6 +1419,25 @@ function renderComposite(parsed, result) {
       ? ` — narrow with "${nounFor(result.entityType, 2)} in <module>"`
       : "";
     return { content: `${compositeList(result.matches)}${hint}.`, miss: false, ambiguous: false, matches: result.matches };
+  }
+  // predicate-find (Workstream 2): zero hits -> an honest miss naming BOTH the type
+  // and the term; the broad ("related, not exact") pass is ALWAYS clearly labeled,
+  // never presented as an unqualified match — the confident-wrong discipline Bug
+  // C's grain-aware resolution established; one hit -> a short citation; many hits
+  // -> the standard compositeList/OVERFLOW_CAP convention, reused verbatim.
+  if (result.compositeKind === "find") {
+    const typeNoun = nounFor(result.entityType, 1);
+    if (!result.matches.length) {
+      return { content: `no ${nounFor(result.entityType, 2)} found matching "${result.term}".`, miss: true, ambiguous: false, matches: [] };
+    }
+    const cited = result.matches.length === 1 ? describeFindHit(result.matches[0]) : compositeList(result.matches);
+    if (result.broad) {
+      return {
+        content: `no exact ${typeNoun} named "${result.term}", but found a related ${result.matches.length === 1 ? typeNoun : nounFor(result.entityType, 2)}: ${cited}.`,
+        miss: false, ambiguous: false, matches: result.matches, relatedNotExact: true,
+      };
+    }
+    return { content: `${cited}.`, miss: false, ambiguous: false, matches: result.matches };
   }
   if (result.compositeKind === "superlative") {
     if (!result.matches.length) return { content: `no ${nounFor(result.entityType, 2)} to rank in this index.`, miss: true, ambiguous: false };

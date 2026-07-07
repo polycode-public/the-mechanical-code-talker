@@ -73,6 +73,20 @@ test("compat: the bare-template ambiguous case stays ambiguousParse (no gerund/t
   assert.equal(p.ambiguousParse, true);
 });
 
+test("compat: predicate-find (Workstream 2) must NOT hijack 'find the file that imports store' — it still parses via the existing (non-find) path, unaffected", () => {
+  // parseFind declines outright: a relative-clause marker ("that") is present
+  // anywhere in the tokens, and that production explicitly defers whenever one
+  // is found. The §6 find-with-predicate generalization ALSO declines: the
+  // entity noun "file" sits immediately after "find the" with no term words in
+  // between (an EMPTY term), which is deliberately NOT the find-with-predicate
+  // shape (an empty term already reaches the plain head-parsing path with no
+  // find-seed needed). So this stays exactly what it was before Workstream 2 —
+  // never a {node:"find"} or a find-seeded {node:"boolean"}.
+  const p = parseQuery("find the file that imports store");
+  assert.notEqual(p?.node, "find");
+  if (p?.node === "boolean") assert.notEqual(p.atoms?.[0]?.ast?.node, "find");
+});
+
 // ---- 1. NESTED / RELATIVE clauses (multi-hop, two-stage traversal) ----
 
 test("nested HIT: 'what imports something that imports core.mjs' = importers of core's importers (2-hop)", () => {
