@@ -52,7 +52,7 @@ import { createTelemetry } from "./telemetry.mjs";
 import * as defaultSource from "./source.mjs";
 import { loadTemplates, render as renderTemplate } from "./corpus/templates.mjs";
 import { finish } from "./finish.mjs";
-import { VERB_TO_KIND, WHERE_MARKERS, MENTION_MARKERS } from "./ask-vocab.mjs";
+import { VERB_TO_KIND, WHERE_MARKERS, MENTION_MARKERS, ENTITY_TO_TYPE } from "./ask-vocab.mjs";
 
 // uuidv7 lives in ./uuid.mjs (shared with telemetry + the bench stamp); re-exported
 // here because callers/tests still import it from chat.mjs.
@@ -140,6 +140,40 @@ const COMMAND_WORDS = new Set(["stats", "memory", "focus", ...Object.keys(COMMAN
  *  IMPORTING x", "find functions THAT CALL y"). Their presence blocks slash-routing. */
 const QUERY_CONNECTIVES = /\b(that|which|and|or|imports?|importing|calls?|calling|uses?|using|covers?|covering|tests?|testing|touch(?:es|ed|ing)?|inherits?|of|with|from|into|by|most|least)\b/i;
 
+// ---- "find" routing precedence (PLAN_PREDICATE_QUERIES.md) — /find (COMMANDS,
+// tmct_search: a plain lexical search) predates the ask engine's newer
+// predicate-find grammar (parseFind, ask.mjs: "find [me] a/the <term>
+// <entityType>" or "find [me] a/the <entityType> named/called/… <term>",
+// type-filtered ∧ fuzzy property-match — reuses ENTITY_TO_TYPE/LIST_SKIP
+// exactly as parseList does). Both now claim a bare "find …" line, so
+// asBareCommand must pick ONE deterministically — not by incidental word
+// count (a 3-word tail used to fall to the OLD /find while an otherwise
+// identical 4-word tail fell to the NEW grammar: "find the widget class" vs
+// "find me the payment class"). Precedence: when the tail names a real
+// listable entity type in one of parseFind's own two closed shapes, that IS
+// the predicate-find grammar's trigger — defer to it (return null) regardless
+// of length; otherwise (no entity-type noun — a plain name/keyword search)
+// /find keeps its original tmct_search routing. ----
+const FIND_LIST_SKIP = new Set(["the", "a", "an", "all", "me", "us"]);
+const FIND_LINKERS = new Set(["called", "named", "about", "like", "containing", "matching", "with"]);
+
+/** Does a bare "find …" tail look like the ask engine's predicate-find shape
+ *  rather than a plain lexical search? A cheap, read-only proxy for
+ *  parseFind's own trigger (ask.mjs is out of this agent's edit scope this
+ *  pass — ENTITY_TO_TYPE is the SAME table parseFind validates candidates
+ *  against, imported here read-only so both call sites agree on one
+ *  vocabulary). Two closed shapes, mirroring parseFind exactly: trailing-type
+ *  ("<term…> <entityType>", e.g. "the payment class") and
+ *  leading-type-with-linker ("<entityType> <linker> <term…>", e.g. "the class
+ *  named Foo"). */
+function looksLikePredicateFind(restTok) {
+  const toks = restTok.map((w) => w.toLowerCase()).filter((w) => !FIND_LIST_SKIP.has(w));
+  if (!toks.length) return false;
+  if (ENTITY_TO_TYPE[toks[toks.length - 1]]) return true; // trailing-type
+  if (toks.length > 1 && ENTITY_TO_TYPE[toks[0]] && FIND_LINKERS.has(toks[1])) return true; // leading-type-with-linker
+  return false;
+}
+
 /** A bare leading command word → its slash form ("stats" → "/stats", "describe x"
  *  → "/describe x"), so the system commands are slash-optional. Conservative on the
  *  entity/arg commands: it routes a bare word or a SHORT name-like argument, but
@@ -155,6 +189,10 @@ export function asBareCommand(line) {
   const rest = restTok.join(" ");
   // Zero-arg system commands are always the command; a bare command word is too.
   if (!rest || fl === "stats" || fl === "memory") return `/${trimmed}`;
+  // "find" (only — "search", its /find-tool alias, keeps its original behavior
+  // unconditionally): the predicate-find grammar's own shape wins regardless of
+  // word count, see the precedence note above.
+  if (fl === "find" && looksLikePredicateFind(restTok)) return null;
   // A NO-ARGUMENT command word ("untested") with trailing words is NOT a command
   // call — the /untested tool takes no argument and would silently drop the qualifier,
   // listing MODULES for "untested classes". "untested classes" / "untested modules"

@@ -36,3 +36,33 @@ test("non-commands, slash lines, and blanks are left alone", () => {
   assert.equal(asBareCommand("help"), null); // help stays the friendly orientation
   assert.equal(asBareCommand("   "), null);
 });
+
+// ---- "find" routing precedence (PLAN_PREDICATE_QUERIES.md) — the old /find
+// (tmct_search, a plain lexical search) and the ask engine's newer
+// predicate-find grammar ("find [me] a/the <term> <entityType>") both claim a
+// bare "find …" line; asBareCommand must pick one deterministically by SHAPE
+// (does the tail name a real listable entity type, in one of the grammar's two
+// closed orders?), never by incidental tail word count. ----
+test('"find <term> <entityType>"-shaped lines defer to the ask engine (null) regardless of tail length', () => {
+  // a short (3-word) and a long (4-word) tail of the SAME shape must land on
+  // the SAME route — this was the reported inconsistency (word-count-gated).
+  assert.equal(asBareCommand("find the widget class"), null);
+  assert.equal(asBareCommand("find me the payment class"), null);
+  assert.equal(asBareCommand("find the payment class"), null);
+  assert.equal(asBareCommand("find a payment module"), null);
+});
+
+test('"find <entityType> <linker> <term>"-shaped lines also defer to the ask engine (null)', () => {
+  assert.equal(asBareCommand("find the class named Foo"), null);
+  assert.equal(asBareCommand("find a class called Foo"), null);
+  assert.equal(asBareCommand("find module matching logger"), null);
+});
+
+test('a plain "find <name>" with no entity-type noun keeps the ORIGINAL /find (tmct_search) routing', () => {
+  assert.equal(asBareCommand("find logger"), "/find logger");
+  assert.equal(asBareCommand("find the payment thing"), "/find the payment thing");
+});
+
+test('"search" (the /find alias) is unaffected by the predicate-find precedence rule', () => {
+  assert.equal(asBareCommand("search the widget class"), "/search the widget class");
+});
