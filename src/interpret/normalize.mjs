@@ -491,6 +491,13 @@ export const STOPWORDS = new Set([
   // the module alone). Same trade as every other stopword: a symbol literally named
   // "usually" would be the accepted residual cost.
   "usually", "typically", "generally", "normally", "often", "commonly", "mostly",
+  // modal auxiliaries ("what SHOULD i look at first") — found live: with no modal in
+  // this set, "should" reached the cascade's bounded fuzzy-correction step and landed
+  // within edit distance of the unrelated closed-vocab word "hold" ("defines" synonym,
+  // ask-vocab.mjs), corrupting the whole query into "what hold i at". Same trade as
+  // every other stopword: a symbol literally named "should" would be the accepted
+  // residual cost.
+  "should", "would", "could", "can", "will", "shall", "might", "must",
 ]);
 
 /** Split free text into words: trailing "?" run stripped, commas treated as

@@ -273,6 +273,25 @@ test("keyword-spot: frequency-adverb filler (\"usually\"/\"typically\"/…) is s
     "the adverb-free and adverb-bearing phrasings parse identically");
 });
 
+// ---- found live (this round): a modal auxiliary ("should") survived the fuzzy-
+// correction cascade — with no modal in STOPWORDS, "should" reached the cascade's
+// bounded fuzzy-correct-toward-closed-vocab step and landed within edit distance of
+// "hold" (a "defines" verb synonym, ask-vocab.mjs), corrupting "what should i look at
+// first" into a confident-looking "read as 'what hold i at' — …" instead of an honest
+// miss. Fixed by adding the modal family to STOPWORDS (normalize.mjs), the same
+// filler-word mechanism the frequency-adverb fix above already uses. ----
+
+test("keyword-spot: a modal auxiliary (\"should\"/\"would\"/…) never survives to the fuzzy-correction cascade", () => {
+  // "should" must not corrupt into the unrelated closed-vocab word "hold" (a
+  // "defines" verb synonym, ask-vocab.mjs) — the query has no compilable graph shape
+  // at all, so it stays a direct-parse null (never a confident-wrong guess), exactly
+  // like any other stopword-only residual.
+  assert.equal(parseQuery("what should i look at first"), null);
+  for (const modal of ["would", "could", "can", "will", "shall", "might", "must"]) {
+    assert.equal(parseQuery(`what ${modal} i look at first`), null, `modal "${modal}" must not survive to a corrupted parse`);
+  }
+});
+
 // ---- found live (playtest sprint round 3): a leading discourse marker ("btw")
 // with no delimiter after it derailed the whole parse — "btw what does X change
 // together with" was misread as an "ask"-shaped touches query with subject "btw
