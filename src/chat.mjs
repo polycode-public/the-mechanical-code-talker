@@ -1459,6 +1459,29 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null) {
   return renderMany(hits);
 }
 
+/** Bug B4 (0.8.2 follow-up): taught facts about ONE resolved entity, trust-
+ *  ranked and rendered the same way factReadBack's own lines are — the seam
+ *  `/describe` was missing. `renderDescribe` (codegraph.mjs) and `dispatchTool`
+ *  (server.mjs) never receive `memoryDir`, so ACE-taught facts about the
+ *  resolved entity were architecturally invisible to `/describe`; this reads
+ *  memory directly and the CALLER (runCommand) appends the result to
+ *  renderDescribe's own output, mirroring the ask-path's existing
+ *  `factAnswer(...) ?? factReadBack(...)` append discipline rather than
+ *  threading memoryDir through the pure describe renderer itself. Subject-side
+ *  only (a `/describe` names ONE code entity as the subject of its own facts,
+ *  not every fact that merely mentions it in passing) — null when memory holds
+ *  nothing about this subject. */
+async function describedFacts(memoryDir, label) {
+  let normFactTerm;
+  try { ({ normFactTerm } = await import("./memory/core.mjs")); } catch { return null; }
+  const rows = await factRows(memoryDir);
+  if (!rows.length) return null;
+  const variants = factTermVariants(normFactTerm, label);
+  const hits = rows.filter((f) => variants.has(f.subject)).sort((a, b) => b.trust - a.trust);
+  if (!hits.length) return null;
+  return `taught facts:\n${hits.map((f) => `  ${renderFactLine(f)}`).join("\n")}`;
+}
+
 // ---- W5: corpus on-demand — LOCAL tier only, behind an explicit flag ----
 
 /** The opt-in env flag: TMCT_CORPUS_LOOKUP=1 lets an unknown-term miss consult
@@ -2143,7 +2166,17 @@ async function runCommand(line, { config, source, graph, focus, memoryDir }) {
     // Same class-gate as the ask path (nextFocus): a command whose arg resolves to a
     // Commit/Session/schema node records the resolution but does not displace a
     // standing code-entity focus that "it" is meant to keep binding to.
-    if (ent) return mk(answer, { resolvedIds: [ent.id], newFocus: nextFocus(graph, focus, ent) });
+    if (ent) {
+      // Bug B4 (0.8.2 follow-up): /describe's code-map render never sees memory,
+      // so a taught fact about the resolved entity is invisible to it — append
+      // matching taught facts (subject === the resolved entity, trust-ranked)
+      // under the code-map answer, mirroring the ask-path's fact-append pattern.
+      if (name === "describe" && memoryDir) {
+        const facts = await describedFacts(memoryDir, ent.label);
+        if (facts) answer = `${answer}\n${facts}`;
+      }
+      return mk(answer, { resolvedIds: [ent.id], newFocus: nextFocus(graph, focus, ent) });
+    }
   }
   return mk(answer);
 }
