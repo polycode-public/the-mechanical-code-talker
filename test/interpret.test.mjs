@@ -360,6 +360,30 @@ test("preamble (greeting): a BARE greeting is untouched by the frame (delimiter 
   assert.match(normalizeInput("hey tmct, what calls fnAlpha thanks").text, /tmct/);
 });
 
+test("preamble (thanks): 'thanks, <Q>' / 'thanks so much, <Q>' strips to the bare question and answers identically (Bug B2)", () => {
+  const graph = buildGraph();
+  const noisy = "thanks so much, which modules import src/logging.mjs?";
+  assert.equal(normalizeInput(noisy).text, "which modules import src/logging.mjs?");
+  const r = ask(graph, noisy);
+  const clean = ask(graph, "which modules import src/logging.mjs");
+  assert.equal(r.content, clean.content);
+  assert.equal(r.tmct_ask.miss, false);
+  assert.match(r.content, /myFile\.mjs/);
+});
+
+test("preamble (thanks): delimiter + phrase variants — 'thanks a lot', 'thank you', 'cheers', 'thx'", () => {
+  assert.equal(normalizeInput("thanks, what calls Logger").text, "what calls Logger");
+  assert.equal(normalizeInput("thanks a lot - what calls Logger").text, "what calls Logger");
+  assert.equal(normalizeInput("thank you, who touched src/logging.mjs").text, "who touched src/logging.mjs");
+  assert.equal(normalizeInput("cheers, what calls Logger?").text, "what calls Logger?");
+  assert.equal(normalizeInput("thx — what calls Logger").text, "what calls Logger");
+});
+
+test("preamble (thanks): a BARE thanks is untouched by the frame (delimiter + non-empty remainder required)", () => {
+  assert.equal(applyPreambleFrames("thanks so much"), "thanks so much");
+  assert.equal(applyPreambleFrames("thanks,"), "thanks,"); // empty remainder → no strip
+});
+
 test("preamble (modal): 'can/could/will you … [, please][?]' unwraps to the bare question", () => {
   const graph = buildGraph();
   assert.equal(normalizeInput("can you tell me which modules import src/logging.mjs, please?").text,

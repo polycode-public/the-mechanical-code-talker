@@ -46,7 +46,8 @@ const WRONG_WORD_RE = correctionRe(WRONG_WORDS);
 
 // ---- closed PREAMBLE frames (0.8.2 feel wave, PLAN_CHAT_FEEL item 2) — the
 // conversational wrapping a developer puts AROUND a real question: a greeting
-// lead-in with a delimiter ("hey there, quick question - …"), the modal
+// lead-in with a delimiter ("hey there, quick question - …"), a thanks lead-in
+// with a delimiter ("thanks so much, …" — Bug B2, 0.8.2 follow-up), the modal
 // politeness wrapper ("can you … please"), and the show/give-me presentation
 // bridge. These are DELIMITER- and PHRASE-anchored, so they must run BEFORE the
 // FILLER-strip pass below: FILLER_WORDS strips "hey"/"can you" as bare words, so
@@ -88,6 +89,17 @@ const isListingRemainder = (rest) => {
  *  conversational lane, and "hey tmct, …" (a vocative, no delimiter after the
  *  greeting word) is left for the noise-strip tier that already owns it. */
 const GREETING_PREAMBLE_RE = /^(?:hi|hiya|hello|hey|yo|howdy)(?:\s+there)?\s*[,—–-]\s*(?:(?:just\s+a\s+)?quick\s+question\s*[,:—–-]?\s*)?(.+)$/i;
+/** Thanks lead-in with a delimiter (+ optional "quick question" bridge), the
+ *  sibling of GREETING_PREAMBLE_RE for the "thanks" word family (Bug B2, 0.8.2
+ *  follow-up): "thanks, <Q>" / "thanks so much, <Q>" -> "<Q>". chat.mjs's
+ *  GREETINGS set already treats a BARE "thanks"/"thank you"/"cheers" as
+ *  small-talk, and noise-strip.mjs's CASCADE_NOISE strips a single bare
+ *  token — but a multi-word lead-in ("thanks so much, X", "thanks a lot, X")
+ *  left "so"/"much"/"a"/"lot" debris after the noise strip that corrupted
+ *  re-parse (the object term inherited the debris). Same delimiter- and
+ *  non-empty-remainder-REQUIRED discipline as the greeting frame, so a bare
+ *  "thanks so much" (no delimiter, no question) stays small-talk. */
+const THANKS_PREAMBLE_RE = /^(?:thanks|thank\s+you|many\s+thanks|thx|ty|cheers)(?:\s+(?:so\s+much|a\s+lot|very\s+much|a\s+bunch))?\s*[,—–-]\s*(?:(?:just\s+a\s+)?quick\s+question\s*[,:—–-]?\s*)?(.+)$/i;
 /** Modal politeness wrapper: "can/could/would/will you [please] <Q>[, please][?]"
  *  -> "<Q>". FILLER_WORDS already ate "can you"/"please" as words; this frame
  *  removes them as a WRAPPER so the ", please" comma never survives into the
@@ -112,6 +124,8 @@ export function applyPreambleFrames(text) {
   for (let pass = 0; pass < 3; pass++) {
     const before = q;
     let m = q.match(GREETING_PREAMBLE_RE);
+    if (m) q = m[1].trim();
+    m = q.match(THANKS_PREAMBLE_RE);
     if (m) q = m[1].trim();
     m = q.match(MODAL_WRAPPER_RE);
     if (m) q = m[1].trim();
