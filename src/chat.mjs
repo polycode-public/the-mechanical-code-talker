@@ -2478,13 +2478,26 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       note(trace, `lane: (1) META/SELF — bare self/session question recognized, answered via="${meta.via}"`);
     }
   }
-  if (!handled && miss && isConversational(query)) {
+  if (!handled && miss && !envelope?.parsed && isConversational(query)) {
     // A conversational miss (a greeting, "what can you do", a very short non-code
     // line) gets the friendly orientation (module-aware: empty → --repo/tmct init).
     // Bug B1 (0.8.2 follow-up): this branch carries via:"template" and never
     // reaches the composed-only wall-shortening gate below, so a second
     // identical orientation-class turn used to repeat the full blurb verbatim —
     // collapse to a one-liner on that repeat, mirroring WALL_REPEAT_ONELINER.
+    //
+    // `!envelope?.parsed` (Track-1 trio, pronoun/focus binding — "biggest movable
+    // mass"): isConversational() is a TEXT-ONLY heuristic (≤3 words, no code-ish
+    // token) — it has no way to know the query already compiled to a real
+    // structural AST shape. A pronoun-shortened follow-up ("who touched it"/
+    // "that"/"this") is exactly 3 words and "touched" isn't in STRUCT_WORDS, so
+    // isConversational used to fire AFTER ask() had already parsed the reverse
+    // "touches" shape, resolved the pronoun off the focus, run the traversal, and
+    // composed an honest (possibly empty) answer — discarding that correct answer
+    // for the generic orientation wall. When envelope.parsed stood, the query WAS
+    // structural (by construction, not word-count guesswork); its own composed
+    // answer — hit, honest empty, or "it needs a referent" — is always more
+    // truthful than the orientation card.
     const orientation = orientationAnswer(templates, graph);
     const repeat = last?.answer === orientation;
     answer = repeat ? ORIENTATION_REPEAT_ONELINER : orientation;

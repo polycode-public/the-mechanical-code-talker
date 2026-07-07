@@ -189,6 +189,59 @@ test("Lever 1 (g-b1-pron-25): 'it' keeps binding to the focus module, never jump
   }
 });
 
+// ---- Lever 1b (Track-1 trio, post-0.8.2): a pronoun-shortened follow-up must
+// not be mistaken for small talk once it already parsed as a real graph query.
+// g-b1-pron red set (1,4,5,7,12,13,16,18,20,21,22,28,30,33,35,36,48,50) + the
+// A2 sibling g-a2-pron-20 — all "who touched {it|this|that}" after a module was
+// established. isConversational() is a ≤3-word / no-code-token TEXT heuristic;
+// "who touched it" is exactly 3 words and "touched" isn't in STRUCT_WORDS, so it
+// used to fire AFTER ask() had already parsed the reverse "touches" shape,
+// resolved the pronoun off the focus, and composed an honest (empty) answer —
+// discarding that correct answer for the generic "I answer questions about…"
+// orientation wall. ----
+
+test("Lever 1b (g-b1-pron red set): 'who touched it/this/that' after a focus-setting turn gets the honest answer, not the orientation wall", async () => {
+  const { drive, cleanup } = await repoDriver();
+  try {
+    for (const pronoun of ["it", "this", "that"]) {
+      const [, followUp] = await drive(["what does app/lib/b.mjs import", `who touched ${pronoun}`]);
+      assert.doesNotMatch(
+        followUp.answer,
+        /I answer questions about THIS codebase/,
+        `"who touched ${pronoun}" must not fall back to the generic orientation wall`,
+      );
+      assert.equal(followUp.record.miss, true, "app/lib/b.mjs has no recorded touching commit — an honest empty, not a guess");
+    }
+  } finally {
+    await cleanup();
+  }
+});
+
+test("Lever 1b: the SAME pronoun follow-up still answers a REAL hit, not just an honest empty", async () => {
+  const { drive, cleanup } = await repoDriver();
+  try {
+    const [, , touched] = await drive(["which modules import app/lib/e.mjs", "what does it import", "who touched it"]);
+    // app/lib/e.mjs itself has no recorded touching commit either (thin-history
+    // fixture), so this stays an honest empty too — but it must be the ask
+    // engine's OWN composed miss (mentions the module), never the orientation card.
+    assert.doesNotMatch(touched.answer, /I answer questions about THIS codebase/);
+    assert.match(touched.last.detail.traversal, /object = app\/lib\/e\.mjs/, "'it' still resolves to the established focus");
+  } finally {
+    await cleanup();
+  }
+});
+
+test("Lever 1b discipline: genuine small talk is UNAFFECTED — it never reaches a parsed AST", async () => {
+  const { drive, cleanup } = await repoDriver();
+  try {
+    const [hi] = await drive(["hi there"]);
+    assert.equal(hi.record.via, "template", "still the greeting template, not a graph-query attempt");
+    assert.doesNotMatch(hi.answer, /traversal|edges where/i, "no graph-traversal language leaked into small talk");
+  } finally {
+    await cleanup();
+  }
+});
+
 // ---- Lever 2 — discourse-count anaphora (g-b1-disc-count-22, g-b1-disc-count-3) ----
 
 test("Lever 2 (asBareCommand): a no-arg command word with a kind qualifier is NOT a command call", () => {
@@ -318,3 +371,5 @@ test("Lever 3 (g-c1-temp-31): 'who touched the module that imports X' now ASSEMB
   const r = ask(graph, "who touched the module that imports app/lib/f.mjs");
   assert.equal(r.tmct_ask.parsed?.node, "reverseSet", "the two-hop is assembled, not a parse failure");
 });
+
+
