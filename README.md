@@ -42,6 +42,20 @@ is refused outright). Reversible-passive questions traverse the right direction:
 "what is imported by Y" and "what does Y import" are understood as opposite
 edges, not the same one.
 
+**Finding by description.** "find me the payment class" searches by type and a
+fuzzy match against the entity's own properties, instead of making you name it
+exactly. It checks the type itself and its subclasses first. Only if nothing
+matches there does it widen to a related type, and when it does, it says so
+plainly rather than presenting the looser match as exact.
+
+**Synonyms and everyday phrasing.** tmct matches many of the words people
+actually use for the same idea, from a curated synonym list plus a filtered
+ConceptNet slice. A slightly different word for the same concept still
+resolves. It also follows a few common sentence shapes: clauses starting with
+*because/although/while*, and conditionals ("if X were removed, what
+breaks"). It flags a question whose premise doesn't hold, too: "why does X
+still import Y" when it no longer does.
+
 **Response finishing.** Before an answer is printed it is segmented into typed
 spans — prose versus *protected* entities, paths, numbers, code, provenance, and
 receipts — and a small data-driven grammar pass runs on the prose spans only,

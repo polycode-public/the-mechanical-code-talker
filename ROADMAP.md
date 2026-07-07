@@ -14,63 +14,96 @@ the file has been deleted.
 
 ## Where we are now (2026-07-07)
 
-**Built: v0.8.2 — the chat-feel wave + rule-general C2 (0.8.1 published; 0.8.2 gated green, push =
-the next operator action).** `npm test` green (**974**). 0.8.2 deepened both axes at once:
+`npm test` green (**1033**). A version bump to reflect this session's wave is imminent; see
+`HANDOVER.md` for the exact release status.
 
-- **Chat feel (CHATBENCH_0.8.2, deterministic tier):** tier-1 **334/334 (draw A) + 285/285 (draw
-  B)**, zero regressions; the cycle-1 standing hard-fail `gq-functions-call-fnalpha` **flipped
-  green**. Landed (PLAN_CHAT_FEEL items 1–5, 7, 8): recall hygiene, preamble/politeness frames,
-  calls∪callsSymbol + grain/meta fallbacks, the author lane, wall kindness + honest capability
-  nudges, teach-lane widening + the taught-class↔inherits bridge, receipt tails prose→detail.
-  Plus a live-found scale hotfix (edgesOfKind argument-spread overflow past ~100k edges, from a
-  27,770-module monorepo). **The judged (LLM) re-judge of the touched tags is DEFERRED
-  post-release (ship-over-delay)** — 0.8.1 judged scores stay the judged record and are stale on
-  those tags; see CHATBENCH_0.8.2.
-- **Agent (AGENTBENCH_0.8.2):** ladder 43→56 cases; goal driver **100% plan / 98% result / 0%
-  hallucination, all rungs gate-PASS** (one deliberate honest red: `ab-c2-what-to-test`); resolver
-  floor clean **A0–C1 100/100** via the new member-filter HTN method + per-member hop (flips
-  `ab-c1-widget-methods-calling` in both drivers). **C2 is now rule-general**: a second declared
-  goal-rule (`cochange-risk-invariant`) + pure `applicableRules` selection (0→refuse open-world,
-  >1→refuse ambiguous; grep-clean of request keywords). Bench-import inversion
-  (`src/router/call-validator.mjs` + `set-algebra.mjs`); bounded runner pool (`--concurrency` 8).
+### Now: shipped this session
 
-**Shipped in v0.8.1 (published):** the same demonstrated-vs-designed honesty discipline, summarized:
+- **5 bugs fixed.** Recall half-match replay + staple-onto-wall; 4 wall-kindness gaps (orientation
+  blurb repeat, "thanks, `<clause>`" walls, a reexports vocabulary leak, `/describe` not surfacing
+  taught facts); grain-aware entity resolution (fixes the fuzzy-entity false-empty and a
+  function/module coverage contradiction); module-grain overview gap. Full list in `HANDOVER.md`.
+- **A new feature: predicate-based "find" queries.** "find me the payment class" now works:
+  type-filtered, fuzzy property-surface matching, with a narrow-then-broaden inheritance-aware
+  cascade and a boolean-fold generalization for compositional predicate queries. Design:
+  `PLAN_PREDICATE_QUERIES.md`.
+- **Two research tracks landed as code.** The ontology plan's two inert synonym resources
+  (ConceptNet synonym/similar-to rows, phrasebook synonym families) are now wired into query-time
+  matching, and the disjointness premise set plus numeric vocabulary grew
+  (`PLAN_ontology-hierarchies.md`). The advanced-grammar plan's closed-frame subordination and
+  conditional support, plus presupposition honest-nudges, landed (`PLAN_ADVANCED_GRAMMAR.md`); the
+  graded pool grew 925 to 1075 cases across 6 new construction families (`chatbench/GRADED.md`).
+- **A new benchmark: infbench.** A 6-band classical-logic ladder (INF-A1..C2), mechanically
+  generated, first baseline in `INFBENCH_0.8.2.md`. Kernel A1/A2 clean; chat A1 100%, A2 exactly
+  50% (the cax-sco gap, now measured). The ladder gates at B1 (33%) because the disjointness proof
+  rule doesn't exist yet.
+- **A new demo** (`demo/agentic-loop-demo.mjs`) shows the zero-LLM deduce-plan-execute-compose loop
+  end to end, and surfaced a real goal-reasoner honesty gap (Bug 8, below).
+- **A session-loop fix.** A throwing turn no longer aborts a piped/non-interactive session.
+- **4 new plan docs.** `PLAN_ontology-hierarchies.md`, `PLAN_INFERENCE_TESTING.md` (revised so
+  infbench generation is mechanical, not hand-authored), `PLAN_PREDICATE_QUERIES.md`, and
+  `PLAN_CODE.md` (new, program synthesis over tmct's closed DSLs, gated on explicit operator
+  sign-off per track, not built yet).
 
-- **AGENTBENCH now grades the executed composed RESULT, not just the call-plan** (retires the headline
-  0.8.0 caveat). Under result-grading the resolver is **97% plan / 91% result / 0% hallucination**; the
-  honest gap lands exactly where reasoning is hard (C1, C2).
-- **Stage 5 — the C2 goal-reasoner** (BDI + Goal-Driven Autonomy) genuinely lifts result-completion.
-  The honest, **like-for-like** figure is the *driver swap on the identical 39-case ladder*
-  (`AGENTBENCH_0.8.1_001`): resolver **85% → goal-reasoner 95% result** (+10pp, purely the driver, 0%
-  hallucination). C2 is **cleared for one declared coverage-invariant goal-rule** — real and
-  phrasing-robust (validated by held-out phrasings graded blind, no request-string literals), but
-  **thinly sampled, not rule-general**; the open-world case is honestly **refused**. *(NB: the
-  cross-release "0→83% C2" reads on a grown 6-case C2 ladder whose 4 new cases exercise the
-  goal-reasoner — not a like-for-like rate; the same-basket win is one case fixed, 0→50% original C2.)*
-- **Stage 2 — imperative intent frames + ACE reach** (`AGENTBENCH_0.8.1_002`, goal driver): **100% plan
-  / 95% result / 0% hallucination**. `tmct_calls` is now **genuinely NL-reachable** via a distinct
-  edge-dump frame (not by un-tagging — bidirectional conformance enforces it; `NOT_NL_REACHABLE` is now
-  `{}`). ACE is wired **async** into the interpret pipeline so the synchronous CHATBENCH parse spine is
-  **byte-identical** — ACE is inert in the shipped product path (`interpret()` is called nowhere in
-  chat/ask/server/bin), reach without regression.
-- **Chat surface (CHATBENCH_0.8.1):** quick wins (singular "what is a test", friendly commit-author
-  refs, "No tests cover X" honest-empty, the chatbench discourse-count flake root-caused + scrubbed) +
-  two playtests (coverage-survey + authorship routing; **6 frozen `chatflow-*` transcripts** total).
-  Joint deterministic CHATBENCH (both new frame tables together): **no tier-1 regression vs 0.7.1.**
-  Judged tags touched by the text changes were re-judged (not blanket-reused) — see `CHATBENCH_0.8.1`.
+### Next: the open follow-ups
 
-**Shipped earlier in v0.8.0 (published):** all five Phase-11 tracks — the `/v1/messages` shim + Stage-0
-registry + resolver/guardrail/planner (`AGENTBENCH_0.8.0_001`: 96% *plan* completion, 0% hallucination,
-closed-world C1); the three chat levers (`CHATBENCH_0.8.0`: tier-1 331→333); the `../bedrock-meter` `$0`
-rung (rank 0 below nova-micro, £0 metered e2e); the playtest; and the Stage-2/Stage-5 research notes.
+In priority order (full detail and measured targets in `HANDOVER.md`):
 
-**Next (post-release, in order):** (1) the judged re-judge of the stale tags (the deferred half of
-the 0.8.2 evidence); (2) the chat-feel fast-follows from the confirmation playtest (recall
-conjunction enforcement, the fuzzy-entity FALSE-EMPTY confident-wrong class, function-grain
-coverage, module-grain overview); (3) the Track-1 trio against the measured red set (pron ×18,
-temporal b1×5 + c1×9, disc-count re-measure first); (4) `edgesOfKind` memoization + endpoint
-indices (perf at monorepo scale); (5) the seonix cutover ping + wh-scale feedback loop. Full list
-with targets in `HANDOVER.md`.
+1. **Bug 8.** The goal-reasoner's global-mode deduction answers requests unrelated to any deduced
+   goal with false confidence, once no focus entity binds (`src/router/goal-reasoner.mjs:226`).
+   The most serious open issue: a genuine confident-wrong failure in the flagship
+   zero-hallucination capability. Needs a real semantic gate.
+2. **Bug 6.** Scoped listing false-empty: "list modules in `<pkg>`" returns empty though the
+   unscoped lister shows matches. Found dogfooding a 191k-entity monorepo graph.
+3. **Bug 7.** A modal auxiliary ("should") survives the fuzzy-correction cascade and misreads as
+   "hold". The diagnosed fix is adding modals to `STOPWORDS`.
+4. **`PLAN_TMCT_ECOSYSTEM_INTEGRATION.md`.** A separate concurrent session is drafting this
+   3-part tmct/bedrock-meter/marginalia integration plan. Check for completion and finalize.
+5. **`PLAN_CODE.md`'s sign-off decision.** Track 1 (rule/frame synthesis) is the lowest-risk
+   candidate; decide with the operator whether to greenlight it.
+6. Smaller chat-feel residuals from the 0.8.2 confirmation playtest, the Track-1 trio (pronoun,
+   temporal, discourse-count, measured red sets), `edgesOfKind` memoization for monorepo-scale
+   latency, and the version bump plus push.
+
+### Later: deferred by design, staged inside each plan
+
+Each plan doc stages its own later phases; this list just points to them rather than repeating
+their tables.
+
+- **infbench stages 1-5** (`PLAN_INFERENCE_TESTING.md` §4). The disjointness proof rule (unlocks
+  B1), proof-chain materialization, cardinality entailment, consistency checking.
+- **Advanced-grammar tracks b/d/e** (`PLAN_ADVANCED_GRAMMAR.md`). The constructions not landed
+  this wave: stacked modality/passive, implicit arguments, and the rest of the CEFR inventory
+  audit table.
+- **Ontology stage 3+** (`PLAN_ontology-hierarchies.md`). Beyond the synonym-wiring and
+  disjointness growth landed this wave.
+- **`PLAN_CODE.md` tracks 2/3.** Small JS-function synthesis and HTML/CSS-fragment synthesis, both
+  via a Playwright-sandboxed headless browser. Explicitly staged well behind Track 1, each gated
+  on its own operator sign-off.
+
+### History — what shipped in earlier releases
+
+**v0.8.2** (the chat-feel wave + rule-general C2): tier-1 CHATBENCH 334/334 (draw A) + 285/285
+(draw B), zero regressions; the cycle-1 hard-fail `gq-functions-call-fnalpha` flipped green.
+Landed recall hygiene, preamble/politeness frames, calls∪callsSymbol + grain/meta fallbacks, the
+author lane, wall kindness + honest capability nudges, teach-lane widening, receipt tails
+prose→detail, plus a live-found scale hotfix (`edgesOfKind` argument-spread overflow past ~100k
+edges). AGENTBENCH ladder grew 43→56 cases; goal driver 100% plan / 98% result / 0% hallucination,
+all rungs gate-PASS; resolver floor clean A0–C1 100/100; C2 became rule-general (two declared
+goal-rules, pure `applicableRules` selection). Full detail: `CHATBENCH_0.8.2.md`,
+`AGENTBENCH_0.8.2.md`.
+
+**v0.8.1** (published): AGENTBENCH grades the executed composed result, not just the call-plan.
+Resolver 97% plan / 91% result / 0% hallucination. Stage 5 (the C2 goal-reasoner, BDI + Goal-Driven
+Autonomy) lifted result-completion +10pp on a like-for-like driver swap. Stage 2 (imperative intent
+frames + ACE reach) shipped at 100% plan / 95% result / 0% hallucination, `tmct_calls` genuinely
+NL-reachable. Chat surface: quick wins + two frozen playtest transcripts, no tier-1 regression vs
+0.7.1. Full detail: `CHATBENCH_0.8.1.md`, `AGENTBENCH_0.8.1.md`.
+
+**v0.8.0** (published): all five Phase-11 tracks. The `/v1/messages` shim + Stage-0 registry +
+resolver/guardrail/planner (96% plan completion, 0% hallucination, closed-world C1); three chat
+levers; the `../bedrock-meter` $0 rung; the playtest; Stage-2/Stage-5 research notes. Full detail:
+`CHATBENCH_0.8.0.md`, `AGENTBENCH_0.8.0.md`.
 
 ## The umbrella product definition (item 1)
 
