@@ -39,4 +39,15 @@ path so end-markers are written and streams are flushed — the try/catch alone 
 inside turn()) does not guarantee that if the catch re-throws or if runChat itself is later
 refactored; safest is a try/finally around the for-await loop body in runChat that always
 calls session.close().
-STATUS: OPEN
+STATUS: ✅ DONE — commit 9593c1a, both the session.turn() try/catch and the runChat
+try/finally landed exactly as recommended; verified manually via a temporary forced-throw
+patch (reverted before commit), 1033/1033 tests green.
+
+═══════════════════════════════════════
+[tick 1 follow-ups] STATUS: ✅ DONE — Bug 6 (directory-scoped listing false-empty) logged
+in HANDOVER.md's open-follow-ups list; codememory replied to on the dropped.push false-alarm
+correction and the Bug A recall-fix pointer (see ~/.claude/inboxes/codememory.md).
+
+ADVISOR CLOSED (post-0.8.2 wave, 2026-07-07) — stopped by operator instruction. 2 ticks run,
+2 findings, both actioned. Wave shipped as v0.9.0 (pushed, CI publishing). Full history above;
+re-arm fresh for the next wave rather than resuming this block.
