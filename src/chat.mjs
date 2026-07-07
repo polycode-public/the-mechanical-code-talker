@@ -2052,6 +2052,32 @@ function relationTermOf(query, envelope) {
   return null;
 }
 
+/** A closed "describe"-intent wrapper: "can you describe X for me", "could you
+ *  tell me about X", "tell me more about X" → attempt tmct_describe(X). Found
+ *  live (playtest sprint round 2, SKILL_PLAYTEST_SPRINT.md): a describe-intent
+ *  question wrapped in an ordinary polite request ("can you tell me more about
+ *  Controller") fell all the way to the generic wall despite naming a real,
+ *  just-listed entity — nothing recognized the wrapper at all. Same closed
+ *  lead-in-alternation discipline as GREETING_PREAMBLE_RE/THANKS_PREAMBLE_RE
+ *  (normalize.mjs). Deliberately used only as a LAST-RESORT lane (see its call
+ *  site below) — "tell me about X" is ALSO the relation/concept force's own
+ *  trigger phrase for enumerable concepts ("tell me about inheritance"), so
+ *  this must never run before those have had their chance. */
+const DESCRIBE_WRAPPER_RE =
+  /^(?:(?:can|could|would)\s+you\s+(?:please\s+)?|please\s+)?(?:tell\s+me\s+(?:more\s+)?about|describe)\s+(.+?)(?:\s+for\s+me)?\s*\??$/i;
+
+async function describeWrapperAnswer(query, { config, source }) {
+  const m = DESCRIBE_WRAPPER_RE.exec(String(query || "").trim());
+  const term = m?.[1]?.trim();
+  if (!term) return null;
+  try {
+    const text = await dispatchTool("tmct_describe", { symbol: term }, { config, source });
+    return text ? { text } : null;
+  } catch {
+    return null; // unresolvable term — decline, the ordinary wall stands unchanged
+  }
+}
+
 /** THE RELATION CONCEPT FORCE — compose the three-band answer (curated relation
  *  definition + real example EDGES + pre-validated follow-ups) for a vague touch on a
  *  relation/edge kind ("what about imports", "what are the calls", "tell me about
@@ -2368,6 +2394,20 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   if (miss && recordMiss && via === "composed") {
     const nudged = nudgeAnswer(query, newFocus);
     if (nudged) { answer = nudged; via = "miss"; }
+  }
+  // (4d) DESCRIBE-WRAPPER RESCUE (playtest sprint round 2, SKILL_PLAYTEST_SPRINT.md)
+  // — "can you describe X for me" / "tell me more about X": a closed wrapper
+  // around an ordinary polite request naming a symbol. Tried ONLY here, after
+  // EVERY other lane (concept force, relation force, teach, author,
+  // presupposition, capability nudges) has already declined — "tell me about
+  // inheritance" must keep reaching the relation force's richer answer
+  // unmolested (that regression is exactly why this ISN'T inside asBareCommand,
+  // which runs first and would preempt every lane above). A last-resort rescue
+  // for what would otherwise become the generic wall, never a competing route:
+  // it only claims the turn if /describe actually resolves the captured term.
+  if (miss && recordMiss && via === "composed") {
+    const described = await describeWrapperAnswer(query, { config, source });
+    if (described) { answer = described.text; via = "describe"; recordMiss = false; }
   }
   // (5) #1 SHORT TAILORED MISS — replace ONLY the engine's full grammar cheat-sheet
   // wall (WALL_MISS_RE). Receipt-bearing misses keep their specific wording.
