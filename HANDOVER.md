@@ -130,6 +130,26 @@ piped session before its log flushed. Fixed with `try`/`catch` and `try`/`finall
     to bump to 0.9.0 to reflect that. Pushing `main` triggers CI publish; ping the seonix session
     (`~/.claude/inboxes/codememory.md`) the moment it ships, per the standing agreement there.
 
+11. **Playtest sprint findings (round 3, `SKILL_PLAYTEST_SPRINT.md`), deferred as likely genuine
+    ceilings — not forced this wave:**
+    1. The bare interrogative form of scoped listing ("what modules are in `<dir>`") declines
+       even though the imperative form ("list modules in `<dir>`") already works — `parseList`
+       (`src/ask.mjs`) deliberately declines any meaningful tail on the interrogative path to
+       avoid colliding with genuine reverse-clause predicates ("which modules import X"), and the
+       compat tests pin that decline. A real fix needs a narrowly-scoped exception (interrogative
+       + a leading scope preposition — "in"/"inside"/"under" — routed the same way the imperative
+       form already is) rather than a blanket widening; not attempted this round to avoid
+       regressing the pinned reverse-query tests without dedicated time to verify.
+    2. "find me the task controller" (a compound proper-noun phrase, no generic type-noun like
+       "class"/"module") doesn't match predicate-find's grammar — likely a genuine phrasing
+       ceiling, not a routing bug (predicate-find requires a generic entity-type noun by design).
+    3. "can you remind me what classes exist" — a listing-style wrapper analogous to the
+       describe-wrapper rescue (round 2) but for list/count queries, not describe. Real gap;
+       bigger scope than a routing tweak, would need its own closed-frame lane.
+    4. "and what about addRoute, what's that for" (anaphoric topic-shift) — already-known,
+       already-deferred ADVANCED_GRAMMAR track (b)/(e) territory (DRT-lite discourse). Not a new
+       finding, just confirmed still open.
+
 ### Bench reuse map (0.8.0–0.8.2 deterministic runs are FROZEN; judged state below)
 
 Deterministic AGENTBENCH/CHATBENCH reproduce byte-identically and are always safe to re-run.
