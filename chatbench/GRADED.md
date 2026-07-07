@@ -52,10 +52,10 @@ rollups and the agreement table always separate single from combo cells.
 | A2 | naming-vocabulary (25), svo-query (50), quantifier-counting (25), pronoun-binding (25), negation (25) | noise+svo-query (25) |
 | B1 | pronoun-binding (50†), negation (25), reversible-passive (25), temporal (50†), discourse-reference (25) | pronoun-binding+negation (25), discourse-reference+quantifier-counting (25) |
 | B2 | reversible-passive (25), relative-embedded (50), coordination-compositional (50), discourse-reference (25), assert-recall (25) | quantifier-counting+temporal (25), noise+pronoun-binding (25) |
-| C1 | temporal (50†), relative-embedded (25), coordination-compositional (25), assert-recall (25) | negation+relative-embedded (25) |
-| C2 | pronoun-binding (25 — Winograd-style), relative-embedded (25) | — |
+| C1 | temporal (50†), relative-embedded (25), coordination-compositional (25), assert-recall (25), subordination (25), conditional (25), ellipsis (25), discourse-deixis (25), presupposition (25) | negation+relative-embedded (25) |
+| C2 | pronoun-binding (25 — Winograd-style), relative-embedded (25), garden-path (25) | — |
 
-30 cells, 925 pool cases. († = **census cells**: B1 pronoun-binding, B1 temporal
+36 cells, 1075 pool cases. († = **census cells**: B1 pronoun-binding, B1 temporal
 and C1 temporal were grown 25→50 and are drawn in FULL every run — cycle-4 pool
 growth, see "Sampling" below.) Why these cells: each construction is populated at
 the band where it first meaningfully exists in the code-chat domain (per the
@@ -67,6 +67,34 @@ relative-embedded B2→C1→C2, coordination B2→C1, assert-recall B2→C1. The
 overlap is deliberate: the same construction phrased at adjacent grades
 detects band-boundary reliability (an engine that passes pronoun-binding at
 A2 but not B1 has a boundary between them, not a construction hole).
+
+**PLAN_ADVANCED_GRAMMAR.md §3 stage 0 (2026-07-07): five new C1 cells + one new
+C2 cell.** Growing the pool over the CEFR phenomena the plan's §1 inventory
+table found unmeasured — subordination (because/although/while framing of a
+real query, stripped to its core meaning), conditional (a universally-
+quantified filtered conditional and a counterfactual-deletion
+reverse-dependency closure), ellipsis/gapping (multi-turn `mode:"turns"`
+fragments — "and b.mjs?", "same for classes?" — re-instantiated into the prior
+turn's slot), discourse-deixis ("the second one", "the former"/"the latter",
+"that list" over a prior turn's ordered result set), presupposition ("why does
+X still import Y" — confirms a true import edge, corrects a false one, and
+never silently accommodates an unverifiable nested claim like "the deprecated
+Y"), and C2 garden-path (stacked reduced-relative clauses and a lexical
+noun/verb ambiguity that an anchored, first-match-wins template resolves
+without local misparsing — track (g)'s "garden-path-immune by construction"
+claim). Every new cell's expectations are computed from the fixture, never
+from engine output, exactly like every existing cell; the generator's replay
+marks whatever the current engine doesn't yet handle as `baselineFail` +
+`observed` — the honest frontier this stage exists to measure, not something
+authored in advance. Two results worth flagging: **presupposition measured
+25/25 green at authoring** — the existing "why does X import Y" boolean
+edge-check (plus incidental adjective/article stripping on "the deprecated
+Y") already satisfies the desired honest-confirm/honest-correct pattern by
+accident, with no new mechanism built; **discourse-deixis measured 0/25** — a
+clean, full ceiling (no ordinal/former-latter/set-reference resolution exists
+today), exactly the mechanism gap the plan predicted. C2 garden-path measured
+20/25 green, matching track (g)'s prediction that this cell would mostly
+demonstrate existing correctness rather than exercise new mechanism.
 
 ## The pool + the generator (authoring discipline)
 
@@ -101,13 +129,23 @@ these numbers move as levers land. Re-run the generator to refresh them.
 | A2 | ~140 / 175 | mostly passing (frontier: restricted counts, entity-name vocabulary traps, "are not tested" phrasings) |
 | B1 | grows / 225 | **the frontier band** — pool 175→225 after the cycle-4 growth (pronoun-binding 25→50, temporal 25→50); the negation/reversible-passive levers (cycles 5–6) move it |
 | B2 | mixed / 225 | relative-embedded and coordination largely pass; assert-recall, discourse chains and passives-in-relatives fail |
-| C1 | mixed / 150 | pool 125→150 (temporal 25→50); deep chains largely pass; temporal composition and cross-session recall are the frontier |
-| C2 | 12 / 50 | ceiling (all Winograd-style items fail, as is their job) |
+| C1 | 213 / 275 | pool 150→275 (PLAN_ADVANCED_GRAMMAR §3 stage 0, five new cells); deep chains and presupposition largely pass; conditional, ellipsis and discourse-deixis are the new frontier alongside temporal composition |
+| C2 | 35 / 75 | pool 50→75 (garden-path added); pronoun-binding stays a clean 0/25 ceiling, garden-path measures 20/25 green — mostly already correct by construction, not a new mechanism |
 
 Cycle-4 pool growth (archive/PLAN_CYCLE_4.md): the pool went **850 → 925 cases** — the
 three dual-draw UNDER-COVERED cells (B1 pronoun-binding, B1 temporal, C1 temporal)
 were each grown 25 → 50 and are now **census cells** (sampled in full every run,
 see "Sampling"), restoring all three to the PASS/FAIL statistic.
+
+PLAN_ADVANCED_GRAMMAR.md §3 stage 0 pool growth (2026-07-07): the pool went
+**925 → 1075 cases** across **30 → 36 cells** (the five new C1 cells + the one
+new C2 cell above). The same pass also re-measured B1 discourse-reference+
+quantifier-counting (`g-b1-disc-count`) per HANDOVER follow-up #3's note that
+it sampled 0/5 red at tick-4 and was "likely already green": its pool is
+already at full size (25 candidate items = 25 pool items, so every generator
+run replays the WHOLE cell, not a sample) and now measures **25/25 green, 0
+frontier** — the suspicion is confirmed, the cell is fully green at the
+current engine baseline.
 
 Schema additions over v1 (`parseCases` lints them): `grade` (A1–C2),
 `construction` (one taxonomy entry or a two-part `a+b` combo), the `graded`
@@ -116,7 +154,7 @@ registry), and turn-level `observed` (frontier record only).
 
 ## Sampling: stratified, seeded, dual-draw
 
-A bench run never replays all 925: `run.mjs` draws a stratified sample —
+A bench run never replays all 1075: `run.mjs` draws a stratified sample —
 per cell, `max(cellFloor, round(fraction × poolSize))` items where `cellFloor`
 is the cell's `CELL_SAMPLE` override else 5 (fraction default 0.1 → exactly 5 per
 cell, the statistical floor per populated area), seeded per cell with

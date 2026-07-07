@@ -27,6 +27,16 @@ export const CONSTRUCTIONS = [
   "coordination-compositional",
   "discourse-reference",
   "assert-recall",
+  // PLAN_ADVANCED_GRAMMAR.md §3 stage 0 (pool growth, no new mechanisms): the
+  // five unmeasured-C1 rows + the C2 garden-path marker from the plan's §1
+  // inventory table. Frontier by construction until §2's tracks (a)/(b)/(e)/(f)
+  // land — see GRADED.md for the cell-by-cell baseline.
+  "subordination",
+  "conditional",
+  "ellipsis",
+  "discourse-deixis",
+  "presupposition",
+  "garden-path",
 ];
 
 /** Combo cells may pair a construction with "noise" (a v1 surface dimension,
@@ -98,6 +108,21 @@ export const GRADED_MATRIX = [
   { grade: "C1", construction: "negation+relative-embedded", slug: "neg-rel", size: 25 },
   { grade: "C2", construction: "pronoun-binding", slug: "pron", size: 25 },
   { grade: "C2", construction: "relative-embedded", slug: "rel", size: 25 },
+  // PLAN_ADVANCED_GRAMMAR.md §3 stage 0 (2026-07-07): pool growth over the five
+  // unmeasured C1 rows + the C2 garden-path marker from the plan's §1 inventory
+  // table. Ground truth is fixture-authored per the standing anti-fabrication
+  // discipline; today's engine has no subordination/conditional/ellipsis/
+  // discourse-deixis/presupposition mechanism (§2 tracks a/b/e/f, not yet
+  // built), so these cells are largely frontier by construction — the honest
+  // measurement this stage exists to take. C2 garden-path is the exception: per
+  // §2 track (g), anchored templates are garden-path-immune BY CONSTRUCTION, so
+  // this cell mostly demonstrates today's engine already getting it right.
+  { grade: "C1", construction: "subordination", slug: "subord", size: 25 },
+  { grade: "C1", construction: "conditional", slug: "cond", size: 25 },
+  { grade: "C1", construction: "ellipsis", slug: "ellip", size: 25 },
+  { grade: "C1", construction: "discourse-deixis", slug: "deixis", size: 25 },
+  { grade: "C1", construction: "presupposition", slug: "presup", size: 25 },
+  { grade: "C2", construction: "garden-path", slug: "garden", size: 25 },
 ];
 
 /** Grades whose reliably-passing cells are PROMOTED: their fixed 5-item

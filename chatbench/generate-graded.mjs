@@ -1685,6 +1685,332 @@ function c2Relative(t) {
   return items;
 }
 
+// ---- PLAN_ADVANCED_GRAMMAR.md §3 stage 0 (2026-07-07): pool growth over the
+// five unmeasured C1 rows + the C2 garden-path marker from the plan's §1
+// inventory table. Every builder below computes DESIRED ground truth from the
+// fixture exactly like the builders above (never from engine output); the
+// generator's replay pass (authorCase) marks whichever turns the CURRENT
+// engine fails as baselineFail:true + observed — that is the honest frontier
+// this stage exists to measure, not something authored here. ----
+
+/** Reverse-dependency TRANSITIVE closure of a module/symbol: everything that
+ *  (directly or indirectly) imports or calls it — the "if X were deleted,
+ *  what would break" traversal (PLAN_ADVANCED_GRAMMAR §2 track (a)). */
+function transitiveDependents(t, label) {
+  const seen = new Set();
+  const stack = [label];
+  while (stack.length) {
+    const cur = stack.pop();
+    for (const dep of [...t.importersOf(cur), ...t.callersOf(cur)]) {
+      if (!seen.has(dep)) { seen.add(dep); stack.push(dep); }
+    }
+  }
+  return [...seen];
+}
+
+/** Transitive subclass closure — the class-hierarchy analogue of the above. */
+function transitiveSubclasses(t, label) {
+  const seen = new Set();
+  const stack = [label];
+  while (stack.length) {
+    const cur = stack.pop();
+    for (const sub of t.subclassesOf(cur)) {
+      if (!seen.has(sub)) { seen.add(sub); stack.push(sub); }
+    }
+  }
+  return [...seen];
+}
+
+/** C1 subordination (causal/concessive framing of real queries) — ground
+ *  truth is the query's core meaning STRIPPED of the subordinate clause,
+ *  computed the same way the base query's truth already is (svo/negation/
+ *  relative traversals). The subordinate clause itself carries no graph fact,
+ *  so it never changes the answer. */
+function c1Subordination(t) {
+  const items = [];
+  const mods = t.modules.map((i) => t.label(i));
+  const cores = [
+    ...mods.map((m) => ({ say: `which modules import ${m}`, truth: t.importersOf(m) })),
+    ...mods.map((m) => ({ say: `what does ${m} import`, truth: t.importsOf(m) })),
+    ...mods.map((m) => ({ say: `who touched ${m}`, truth: t.touchedBy(m) })),
+    ...mods.map((m) => ({ say: `which tests cover ${m}`, truth: t.testsCovering(m) })),
+    ...["Base", "Widget", "Button"].map((c) => ({ say: `which classes inherit from ${c}`, truth: t.subclassesOf(c) })),
+  ];
+  const CAUSAL = [
+    (core) => `since we're refactoring, ${core}`,
+    (core) => `because the team just started a migration, ${core}`,
+    (core) => `${core}, since the codebase keeps growing`,
+    (core) => `${core}, because the sprint just kicked off`,
+  ];
+  const CONCESSIVE = [
+    (core) => `although it's getting late, ${core}`,
+    (core) => `even though the docs are stale, ${core}`,
+    (core) => `${core}, although the CI is flaky today`,
+    (core) => `while the release is pending, ${core}`,
+  ];
+  const FRAMES = [...CAUSAL, ...CONCESSIVE];
+  cores.forEach((core, i) => {
+    const say = FRAMES[i % FRAMES.length](core.say);
+    items.push(turnsItem(
+      `Subordinate framing strips to the core query "${core.say}"; the subordinate clause ("since we're refactoring", "although…", etc.) carries no graph fact and must not change the answer. ${ctxSet(core.say, core.truth)}`,
+      { say, expect: expectSet(t, core.truth) },
+    ));
+  });
+  return items;
+}
+
+/** C1 conditional (incl. counterfactual) — two families: (1) a universally-
+ *  quantified filtered conditional ("if a module imports X, is it tested?"),
+ *  which compiles to the same AST composition as the coordination cells
+ *  (importers of X filtered by test coverage); (2) counterfactual deletion
+ *  ("if X were deleted, what would break?"), which compiles to the reverse-
+ *  dependency transitive closure — a real traversal, honestly renderable with
+ *  a hypothetical marker (PLAN_ADVANCED_GRAMMAR §2 track (a)). */
+function c1Conditional(t) {
+  const items = [];
+  const mods = t.modules.map((i) => t.label(i));
+  for (const m of mods) {
+    const truth = t.importersOf(m).filter((x) => t.isTested(t.id(x)));
+    for (const say of [`if a module imports ${m}, is it tested`, `if a module imports ${m}, has it got tests`]) {
+      items.push(turnsItem(
+        `Conditional compiles to: the importers of ${m}, filtered by test coverage. ${ctxSet(`modules importing ${m} and tested`, truth)}`,
+        { say, expect: expectSet(t, truth) },
+      ));
+    }
+  }
+  for (const m of mods) {
+    const truth = transitiveDependents(t, m);
+    for (const say of [`if ${m} were deleted, what would break`, `what would break if ${m} were removed`, `if ${m} was deleted, what would break`]) {
+      items.push(turnsItem(
+        `Counterfactual: the reverse-dependency TRANSITIVE closure of ${m} (everything that imports or calls it, directly or indirectly). ${ctxSet(`what depends on ${m}`, truth)}`,
+        { say, expect: expectSet(t, truth) },
+      ));
+    }
+  }
+  for (const c of ["Base", "Widget", "Button"]) {
+    const truth = transitiveSubclasses(t, c);
+    items.push(turnsItem(
+      `Counterfactual: if ${c} were deleted, its transitive subclasses would break. ${ctxSet(`what inherits from ${c}, transitively`, truth)}`,
+      { say: `if ${c} were deleted, what would break`, expect: expectSet(t, truth) },
+    ));
+  }
+  return items;
+}
+
+/** C1 ellipsis / gapping (multi-turn) — "which modules import X?" then "and
+ *  Y?" / "same for Y?": ground truth = the fragment re-instantiated into the
+ *  prior turn's slot (subject substitution, family A) or into the prior
+ *  turn's KIND slot (family B, "same for classes?"). */
+function c1Ellipsis(t) {
+  const items = [];
+  const mods = t.modules.map((i) => t.label(i));
+  const stems = [
+    { make: (l) => `which modules import ${l}`, truth: (l) => t.importersOf(l) },
+    { make: (l) => `who touched ${l}`, truth: (l) => t.touchedBy(l) },
+    { make: (l) => `what does ${l} import`, truth: (l) => t.importsOf(l) },
+    { make: (l) => `which tests cover ${l}`, truth: (l) => t.testsCovering(l) },
+  ];
+  const gaps = ["and $1?", "and $1", "same for $1?", "same for $1"];
+  stems.forEach((stem, si) => {
+    for (let i = 0; i < mods.length - 1; i += 1) {
+      const anchor = mods[i];
+      const target = mods[(i + 1) % mods.length];
+      const gapSay = gaps[(si + i) % gaps.length].replace("$1", target);
+      const truth = stem.truth(target);
+      items.push(turnsItem(
+        `Ellipsis: turn 2's fragment "${gapSay}" re-instantiates turn 1's question "${stem.make(anchor)}" with ${target} substituted into the SAME subject slot. ${ctxSet(stem.make(target), truth)}`,
+        { say: stem.make(anchor), expect: {} },
+        { say: gapSay, expect: expectSet(t, truth) },
+      ));
+    }
+  });
+  const untestedModules = t.modules.map((i) => t.label(i)).filter((m) => !t.isTested(t.id(m)));
+  const untestedClasses = t.classes.map((i) => t.label(i)).filter((c) => !t.isTested(t.id(c)));
+  items.push(turnsItem(
+    `Ellipsis (kind substitution): turn 2's "same for classes" re-instantiates turn 1's coverage survey for the CLASS kind, not the module kind. ${ctxSet("untested classes", untestedClasses)}`,
+    { say: "untested modules", expect: {} },
+    { say: "same for classes", expect: expectSet(t, untestedClasses) },
+  ));
+  items.push(turnsItem(
+    `Ellipsis (kind substitution): turn 2's "same for modules" re-instantiates turn 1's coverage survey for the MODULE kind. ${ctxSet("untested modules", untestedModules)}`,
+    { say: "untested classes", expect: {} },
+    { say: "same for modules", expect: expectSet(t, untestedModules) },
+  ));
+  items.push(turnsItem(
+    `Ellipsis (count gapping): turn 2's "and app/lib/b.mjs?" re-instantiates turn 1's COUNT question with the new subject. Ground truth: ${t.importersOf("app/lib/b.mjs").length}.`,
+    { say: "how many modules import app/lib/a.mjs", expect: {} },
+    { say: "and app/lib/b.mjs?", expect: { miss: false, answerMatch: [`^${t.importersOf("app/lib/b.mjs").length} `] } },
+  ));
+  return items;
+}
+
+/** C1 discourse deixis — "the former"/"the latter", ordinal reference ("the
+ *  second one"), and set reference ("that list") pointing back at a prior
+ *  turn's ORDERED result set. Ordinal/former/latter items are only authored
+ *  when the anchor's real answer set is long/short enough to make them
+ *  well-defined (computed live against the fixture, never hardcoded). */
+function c1DiscourseDeixis(t) {
+  const items = [];
+  const anchors = [
+    { say: "which modules import app/lib/a.mjs", set: () => t.importersOf("app/lib/a.mjs") },
+    { say: "which modules import app/lib/b.mjs", set: () => t.importersOf("app/lib/b.mjs") },
+    { say: "which classes inherit from Base", set: () => t.subclassesOf("Base") },
+    { say: "which modules import app/lib/e.mjs", set: () => t.importersOf("app/lib/e.mjs") },
+    { say: "list the modules", set: () => t.modules.map((i) => t.label(i)) },
+    { say: "list the classes", set: () => t.classes.map((i) => t.label(i)) },
+    { say: "untested classes", set: () => t.classes.map((i) => t.label(i)).filter((c) => !t.isTested(t.id(c))) },
+    { say: "what uses app/lib/a.mjs", set: () => [...new Set([...t.importersOf("app/lib/a.mjs"), ...t.callersOf("app/lib/a.mjs")])] },
+    { say: "which modules cochange with app/lib/a.mjs", set: () => t.cochangeOf("app/lib/a.mjs") },
+    { say: "what does app/lib/e.mjs import", set: () => t.importsOf("app/lib/e.mjs") },
+  ];
+  const ORDINALS = [["the first one", 0], ["the second one", 1], ["the third one", 2]];
+  for (const a of anchors) {
+    const set = a.set();
+    for (const [say, idx] of ORDINALS) {
+      if (set.length <= idx) continue;
+      items.push(turnsItem(
+        `Discourse deixis: "${say}" refers to index ${idx} of turn 1's ordered answer set (${set.join(", ")}). ${ctxSet(say, [set[idx]])}`,
+        { say: a.say, expect: {} },
+        { say, expect: { miss: false, answerMatch: [esc(set[idx])] } },
+      ));
+    }
+    if (set.length === 2) {
+      items.push(turnsItem(
+        `Discourse deixis: "the former" refers to the first-mentioned item of turn 1's two-item set (${set.join(", ")}).`,
+        { say: a.say, expect: {} },
+        { say: "the former", expect: { miss: false, answerMatch: [esc(set[0])] } },
+      ));
+      items.push(turnsItem(
+        `Discourse deixis: "the latter" refers to the second-mentioned item of turn 1's two-item set (${set.join(", ")}).`,
+        { say: a.say, expect: {} },
+        { say: "the latter", expect: { miss: false, answerMatch: [esc(set[1])] } },
+      ));
+    }
+    items.push(turnsItem(
+      `Discourse deixis: "that list" refers to turn 1's WHOLE answer set (${set.join(", ") || "empty"}); the correct count is ${set.length}.`,
+      { say: a.say, expect: {} },
+      { say: "how many are in that list", expect: { miss: false, answerMatch: [`^${set.length} `] } },
+    ));
+  }
+  return items;
+}
+
+/** C1 presupposition — "why does X still import Y?" presupposes X imports Y.
+ *  When the fixture confirms the edge, the honest answer confirms it (naming
+ *  both entities); when the fixture has NO such edge, the presupposition is
+ *  FALSE and the honest answer corrects it rather than accommodating it
+ *  silently (PLAN_ADVANCED_GRAMMAR §2 track (f) — never silent accommodation,
+ *  always name the presupposition). A third family stacks an UNVERIFIABLE
+ *  presupposition ("the deprecated Y") the fixture has no vocabulary for at
+ *  all, alongside a checkable one ("X still imports Y"). */
+function c1Presupposition(t) {
+  const items = [];
+  const mods = t.modules.map((i) => t.label(i));
+  const triggers = ["still", "again"];
+  const truePairs = [];
+  for (const x of mods) for (const y of t.importsOf(x)) truePairs.push([x, y]);
+  const falsePairs = [];
+  for (const x of mods) {
+    for (const y of mods) {
+      if (x === y || t.importsOf(x).includes(y)) continue;
+      falsePairs.push([x, y]);
+    }
+  }
+  for (const trigger of triggers) {
+    for (const [x, y] of truePairs) {
+      items.push(turnsItem(
+        `Presupposition check: "${trigger}" presupposes ${x} already imports ${y} — TRUE per the fixture (a real imports edge). The honest answer confirms it by naming both.`,
+        { say: `why does ${x} ${trigger} import ${y}`, expect: { miss: false, answerMatch: [esc(x), esc(y)], answerNotMatch: ["I answer questions about"] } },
+      ));
+    }
+  }
+  const falseSample = falsePairs.filter((_, i) => i % 5 === 0);
+  for (const trigger of triggers) {
+    for (const [x, y] of falseSample) {
+      items.push(turnsItem(
+        `Presupposition check: "${trigger}" presupposes ${x} imports ${y} — FALSE per the fixture (no such edge exists). The honest answer must CORRECT the false presupposition, never silently confirm it.`,
+        { say: `why does ${x} ${trigger} import ${y}`, expect: { miss: true, answerNotMatch: ["I answer questions about"] } },
+      ));
+    }
+  }
+  for (const [x, y] of truePairs.slice(0, 6)) {
+    items.push(turnsItem(
+      `Presupposition check with a nested UNVERIFIABLE presupposition: "the deprecated ${y}" presupposes ${y} is deprecated — the fixture has no such attribute at all — while "${x} still imports ${y}" IS true. The honest answer confirms the checkable import and flags the deprecation claim as unverifiable, never accepting it silently.`,
+      { say: `why does ${x} still import the deprecated ${y}`, expect: { miss: false, answerMatch: [esc(x), esc(y)], answerNotMatch: ["I answer questions about"] } },
+    ));
+  }
+  return items;
+}
+
+/** C2 garden-path (adversarial) — sentences with a LOCALLY-ambiguous parse
+ *  (stacked reduced-relative clauses, or a lexical noun/verb ambiguity) that
+ *  resolves unambiguously once the anchored-template grammar's first-match-
+ *  wins discipline is applied. Per PLAN_ADVANCED_GRAMMAR §2 track (g): "the
+ *  anchored templates are actually garden-path-immune by construction" — this
+ *  cell is expected to demonstrate the engine already handling most of these
+ *  correctly (unlike the other five cells in this stage, which are largely
+ *  frontier), not to exercise new mechanism. */
+function c2GardenPath(t) {
+  const items = [];
+  const mods = t.modules.map((i) => t.label(i));
+  const importers = mods.filter((m) => t.importsOf(m).length);
+  // family A: double reduced-relative stacked on "modules" — "imported by X"
+  // and "tested by Y" both modify the same head noun; a naive incremental
+  // parser could misattach the second reduced relative as a new main clause.
+  for (const x of importers) {
+    const truth = t.importsOf(x).filter((m) => t.coveredBy("app/unit-tests/b.test.mjs").includes(m));
+    items.push(turnsItem(
+      `Garden-path (stacked reduced relatives on "modules"): reads as "modules [that are] imported by ${x} [and that are] tested by app/unit-tests/b.test.mjs" — the anchored template matches the whole span deterministically, so the only reading is the intersection. ${ctxSet(`modules imported by ${x} and tested by app/unit-tests/b.test.mjs`, truth)}`,
+      { say: `modules imported by ${x} tested by app/unit-tests/b.test.mjs`, expect: expectSet(t, truth) },
+    ));
+    items.push(turnsItem(
+      `Garden-path (reversed clause order, same reading): "modules [that are] tested by app/unit-tests/b.test.mjs [and that are] imported by ${x}" — same intersection, order-independent. ${ctxSet(`modules tested by app/unit-tests/b.test.mjs and imported by ${x}`, truth)}`,
+      { say: `modules tested by app/unit-tests/b.test.mjs imported by ${x}`, expect: expectSet(t, truth) },
+    ));
+  }
+  // family B: double reduced-relative stacked on a commit-touch clause.
+  for (const x of importers) {
+    const truth = t.importsOf(x).filter((m) => t.touchedBy(m).includes("abc1234"));
+    items.push(turnsItem(
+      `Garden-path (stacked reduced relatives): "modules [that are] imported by ${x} [and that are] touched by abc1234" — the anchored template resolves the whole span at once. ${ctxSet(`modules imported by ${x} and touched by abc1234`, truth)}`,
+      { say: `modules imported by ${x} touched by abc1234`, expect: expectSet(t, truth) },
+    ));
+    items.push(turnsItem(
+      `Garden-path (reversed clause order, same reading): "modules touched by abc1234 imported by ${x}" resolves to the same intersection. ${ctxSet(`modules touched by abc1234 and imported by ${x}`, truth)}`,
+      { say: `modules touched by abc1234 imported by ${x}`, expect: expectSet(t, truth) },
+    ));
+  }
+  // family C: PP-attachment ambiguity on a SINGULAR head ("the module ...").
+  for (const x of mods.filter((m) => t.importsOf(m).length === 1)) {
+    const target = t.importsOf(x)[0];
+    const truth = t.touchedBy(target);
+    items.push(turnsItem(
+      `Garden-path (PP attachment): "the module imported by ${x}" could locally read as a modifier on "module" or misattach past it — it resolves to ${target}, the module ${x} imports. ${ctxSet(`who touched the module imported by ${x}`, truth)}`,
+      { say: `who touched the module imported by ${x}`, expect: expectSet(t, truth) },
+    ));
+  }
+  // family D: lexical noun/verb ambiguity — "tests" as the covering relation's
+  // subject vs. a bare kind noun.
+  const anyCoverage = mods.filter((m) => t.testsCovering(m).length > 0);
+  for (const say of ["which modules tests cover", "which modules do tests cover"]) {
+    items.push(turnsItem(
+      `Garden-path (lexical ambiguity): "tests" could locally read as the object kind ("which modules [are] tests [that] cover…") or, correctly, as the subject of "cover" ("tests cover which modules") — the anchored template only matches the relation reading. ${ctxSet("which modules have test coverage", anyCoverage)}`,
+      { say, expect: expectSet(t, anyCoverage) },
+    ));
+  }
+  // family E: reduced relative stacked over class inheritance + module siting.
+  for (const cls of ["Base", "Widget"]) {
+    for (const m of mods) {
+      const truth = t.subclassesOf(cls).filter((c) => t.definesOf(m).includes(c));
+      items.push(turnsItem(
+        `Garden-path (stacked reduced relatives on "classes"): "classes [that] inherit from ${cls} [and that are] defined in ${m}" — resolves to the intersection of the two reduced relatives on the same head. ${ctxSet(`classes inheriting from ${cls} and defined in ${m}`, truth)}`,
+        { say: `classes inherited from ${cls} defined in ${m}`, expect: expectSet(t, truth) },
+      ));
+    }
+  }
+  return items;
+}
+
 // ---- the cell → builder table ----
 
 const BUILDERS = {
@@ -1718,6 +2044,12 @@ const BUILDERS = {
   "C1:negation+relative-embedded": c1NegRel,
   "C2:pronoun-binding": c2Winograd,
   "C2:relative-embedded": c2Relative,
+  "C1:subordination": c1Subordination,
+  "C1:conditional": c1Conditional,
+  "C1:ellipsis": c1Ellipsis,
+  "C1:discourse-deixis": c1DiscourseDeixis,
+  "C1:presupposition": c1Presupposition,
+  "C2:garden-path": c2GardenPath,
 };
 
 // ---- replay: auto-author expectations against the CURRENT engine ----
