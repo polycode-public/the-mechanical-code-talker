@@ -12,11 +12,28 @@ mapped into them (item numbers retained for traceability); the seven sketches
 formerly held in `code-talker-ideas.txt` are folded into items 8–11 below and
 the file has been deleted.
 
-## Where we are now (2026-07-07)
+## Where we are now (2026-07-08)
 
-`npm test` green (**1042**). **v0.9.5, pushed** (0.8.2 → 0.9.0 for this session's main wave, then
-one patch per shipped playtest-sprint fix — see `HANDOVER.md` for the exact release chain and the
-"Playtest sprint" section there for what each patch fixed).
+`npm test` green (**1055**). **v0.9.6, pushed** (0.8.2 → 0.9.6 across this session — see
+`HANDOVER.md` for the exact release chain).
+
+### Doing right now (5 background clusters, all worktree-isolated, merged sequentially as each lands)
+
+- **Cluster A** — Bug 6 (scoped-listing false-empty) + Bug 7 (modal-in-fuzzy-cascade) + the
+  chat-feel residual pair (items 1-2 of the trio's siblings) + `edgesOfKind` memoization +
+  ontology numeric-vocabulary declaration.
+- **Cluster B** — Bug 8 (goal-reasoner confident-wrong on off-domain requests) + refreshing
+  `PLAN_CAPABILITY_ROUTER.md`'s stale stage-5 status text.
+- **Cluster C** — `PLAN_CHAT_FEEL.md` item 6, the pronoun/temporal/discourse-count trio
+  (measured red sets from an earlier advisor tick; re-measured against the current graded pool
+  before any fix).
+- **Cluster D** — `PLAN_CODE.md` Track 1 (GOAL_RULE/PHRASING_FRAMES synthesis) — operator
+  sign-off given this session; Tracks 2-4 remain unsigned-off and untouched.
+- **Cluster E** — `PLAN_INFERENCE_TESTING.md` Stage 1 (`cax-sco` rule) + Stage 2 (proof-chain
+  receipts) in `src/syllogise.mjs`, targeting the measured chat-A2 50% ceiling.
+
+Also in flight: playtest sprint rounds 4-8 (3/3 rounds so far shipped a real fix), the strategy
+advisor (restarted, 5-min re-arm).
 
 ### Now: shipped this session
 
@@ -44,7 +61,15 @@ one patch per shipped playtest-sprint fix — see `HANDOVER.md` for the exact re
 - **4 new plan docs.** `PLAN_ontology-hierarchies.md`, `PLAN_INFERENCE_TESTING.md` (revised so
   infbench generation is mechanical, not hand-authored), `archive/PLAN_PREDICATE_QUERIES.md`, and
   `PLAN_CODE.md` (new, program synthesis over tmct's closed DSLs, gated on explicit operator
-  sign-off per track, not built yet).
+  sign-off per track — Track 1 signed off, see "Doing" above).
+- **`PLAN_TMCT_ECOSYSTEM_INTEGRATION.md`**, landed — a code-grounded tmct/bedrock-meter/marginalia
+  integration plan. Corrects a standing wrong assumption (the `/v1/messages` shim was believed
+  unmerged; it's been on `main` since 0.8.0) and confirms seonix has already fully migrated onto
+  tmct as a real dependency.
+- **A `/narrate` debug mode.** Opt-in (`/narrate on`, `--narrate`, `TMCT_NARRATE=1`) per-turn
+  decision narrative — which lane/pattern matched, results + sources, a deterministic goal
+  deduction — built for playtest-sprint debugging; zero cost when off (byte-identical regression
+  guard).
 
 ### Next: the open follow-ups
 

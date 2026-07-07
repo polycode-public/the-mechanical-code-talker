@@ -1,5 +1,10 @@
 # PLAN_CODE.md — program synthesis over tmct's closed DSLs (and, now, JS/HTML/CSS)
 
+> **STATUS (2026-07-08): Track 1 SIGNED OFF, 🔄 IN PROGRESS** (GOAL_RULE/PHRASING_FRAMES
+> synthesis from labeled examples — the lowest-risk track, no sandbox needed, data not code).
+> **Tracks 2–4 remain unsigned-off and untouched** — each still requires its own separate
+> operator sign-off per §8's gate before any implementation begins.
+
 *(Drafted 2026-07-07. Status: RESEARCH PLAN, not a build order — see §8, explicit operator sign-off
 required before any implementation. Origin: operator's conversational prompt — "I wonder if you
 could implement program synthesis, only not with a 1957 tech stack" — resolved to

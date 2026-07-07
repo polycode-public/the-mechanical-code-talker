@@ -1,5 +1,9 @@
 # PLAN_INFERENCE_TESTING.md — INFBENCH: classical logic on a 6-band CEFR-shaped ladder
 
+> **STATUS (2026-07-08): Stage 0 ✅ shipped. Stages 1–2 🔄 IN PROGRESS** (the `cax-sco` rule in
+> `src/syllogise.mjs` + proof-chain receipt rendering, targeting the measured chat-A2 50%
+> ceiling — rolled into the continuous fix-ship loop this session).
+
 *(Revised 2026-07-07 — mechanizes CASE GENERATION. What changed vs the prior draft: §1's worked
 examples are reframed as hand-verified EXPRESSIBILITY WITNESSES, not the case-authoring mechanism;
 §2 gains a new case-generation subsection (§2.2) mirroring `chatbench/generate-graded.mjs`'s

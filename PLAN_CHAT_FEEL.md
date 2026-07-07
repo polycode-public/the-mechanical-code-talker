@@ -1,9 +1,11 @@
 # PLAN_CHAT_FEEL — ranked next steps for chat feel + agent capability (post-0.8.1)
 
-> **STATUS (annotated 2026-07-07, the 0.8.2 wave):** items **1–5, 7–11 ✅ delivered in 0.8.2**
+> **STATUS (annotated 2026-07-08):** items **1–5, 7–12 ✅ delivered in 0.8.2**
 > (merge named per item below; deterministic gate 334/334 + 285/285, zero regressions;
-> confirmation playtest greenlit the wave). Item **6 → post-release** with measured targets;
-> item **12 → shipping now**. Original text kept verbatim below the markers.
+> confirmation playtest greenlit the wave). Item **6 → 🔄 IN PROGRESS** (rolled into the
+> continuous fix-ship loop this session; re-measuring the pronoun/temporal/discourse-count red
+> sets against the current graded pool before any fix — see `HANDOVER.md`). Original text kept
+> verbatim below the markers.
 
 Written 2026-07-06 from a 4-source sweep: `ROADMAP.md` (Track 1 + Next), `CHATBENCH_0.8.1.md`
 (+ `_TRANSCRIPTS`), `AGENTBENCH_0.8.1_002.md`, and a **live lightweight playtest** (7 CLI sessions
