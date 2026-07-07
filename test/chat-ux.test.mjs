@@ -289,6 +289,29 @@ test("WS4(b) orientation examples degrade: empty graph → empty orientation, nu
   assert.match(nul.answer, /what calls buildContextBundle/, "…and the generic example2");
 });
 
+test("WS4(b) Bug B1 (0.8.2 follow-up): a 2nd identical orientation turn is a one-liner, 3rd re-offers the blurb", async () => {
+  // "so then" is short + non-code-ish (isConversational's fallback heuristic) but
+  // NOT a GREETING/THANKS/BYE/WHY/HELP_PHRASES literal, so — unlike "what can you
+  // do" — it is NOT intercepted by conversationalTurn() at the top of runTurn
+  // (which never threads `last` through: "a conversational turn never overwrites
+  // the last real answer"). It falls through to runAsk's isConversational branch,
+  // the one this fix targets.
+  const g = await graph();
+  let last = null;
+  const answers = [];
+  for (let i = 0; i < 3; i++) {
+    const r = await runTurn("so then", { config: CONFIG, graph: g, last });
+    assert.equal(r.record.via, "template", "orientation always carries via:'template'");
+    answers.push(r.answer);
+    last = r.last ?? last;
+  }
+  assert.match(answers[0], /which modules import app\/lib\/a\.mjs/, "1st turn: the full orientation blurb");
+  assert.equal(answers[1], "still the same overview — /help lists every command and query shape.",
+    "2nd identical turn: the repeat one-liner");
+  assert.notEqual(answers[2], answers[1], "3rd turn: the one-liner self-limits");
+  assert.match(answers[2], /which modules import app\/lib\/a\.mjs/, "3rd turn: the full blurb re-offered");
+});
+
 test("WS4(c) META_ORIENT_RE: the stranger openers get the live overview, not the wall", async () => {
   const g = await graph();
   for (const q of ["what does this app do", "what does the codebase do?", "what does this project do",

@@ -904,6 +904,16 @@ function nudgeAnswer(query, focus) {
  *  text self-limits — a third consecutive miss re-offers the tailored hint. */
 const WALL_REPEAT_ONELINER = "still couldn't parse that — /help lists every query shape.";
 
+/** The orientation-repeat one-liner (Bug B1, 0.8.2 follow-up). The conversational
+ *  orientation branch sits OUTSIDE the composed-only wall-shortening gate (it
+ *  carries via:"template", never "composed"), so it never shortened on a second
+ *  identical turn the way a plain wall does. MUST be a different string from
+ *  orientationAnswer's own output (checked by identity, not regex, since the
+ *  orientation text is templated/graph-dependent) so this self-limits exactly
+ *  like WALL_REPEAT_ONELINER: a third consecutive orientation-class turn
+ *  re-offers the full orientation instead of droning the one-liner forever. */
+const ORIENTATION_REPEAT_ONELINER = "still the same overview — /help lists every command and query shape.";
+
 // ---- repo-root resolution: default the target to the GIT ROOT, not raw cwd ----
 
 /** The git top-level for `cwd`, or null if not in a repo (or git is unavailable).
@@ -1887,7 +1897,13 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   if (!handled && miss && isConversational(query)) {
     // A conversational miss (a greeting, "what can you do", a very short non-code
     // line) gets the friendly orientation (module-aware: empty → --repo/tmct init).
-    answer = orientationAnswer(templates, graph); via = "template"; handled = true;
+    // Bug B1 (0.8.2 follow-up): this branch carries via:"template" and never
+    // reaches the composed-only wall-shortening gate below, so a second
+    // identical orientation-class turn used to repeat the full blurb verbatim —
+    // collapse to a one-liner on that repeat, mirroring WALL_REPEAT_ONELINER.
+    const orientation = orientationAnswer(templates, graph);
+    answer = (last?.answer === orientation) ? ORIENTATION_REPEAT_ONELINER : orientation;
+    via = "template"; handled = true;
   } else if (!handled && memoryDir) {
     // W4: vocabulary/definition questions consult the MEMORY graph's Facts alongside
     // the schema-docs surface — a remembered fact answers a miss OR extends a (non-
