@@ -131,6 +131,11 @@ piped session before its log flushed. Fixed with `try`/`catch` and `try`/`finall
    running their own playtest-sprint-style dogfooding against tmct's chat engine on their real
    production graph (see `~/.claude/inboxes/codememory.md` for live findings). marginalia is
    the one genuinely open part of the plan — see the doc's §3.2.
+   - **2 new findings from codememory's dogfooding, not yet triaged**: a typo-tolerance gap on
+     the question word itself ("wht other files does X pull in" — "wht" not recognized/stripped
+     as "what", the whole phrase becomes a literal search term); and an edge-counting gap ("how
+     many tests cover X" can't be answered — the counting grammar only counts entity classes,
+     not edges of a named predicate, though it degrades honestly rather than walling).
 5. **`PLAN_CODE.md`'s sign-off gate.** Read the plan and decide with the operator whether to
    greenlight Track 1 (GOAL_RULE/PHRASING_FRAMES synthesis). Tracks 2/3 (JS, HTML/CSS synthesis)
    stay further out regardless.
