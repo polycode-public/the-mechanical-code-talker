@@ -75,10 +75,9 @@ advisor (restarted, 5-min re-arm).
 
 In priority order (full detail and measured targets in `HANDOVER.md`):
 
-1. **Bug 8.** The goal-reasoner's global-mode deduction answers requests unrelated to any deduced
-   goal with false confidence, once no focus entity binds (`src/router/goal-reasoner.mjs:226`).
-   The most serious open issue: a genuine confident-wrong failure in the flagship
-   zero-hallucination capability. Needs a real semantic gate.
+1. **Bug 8 — FIXED.** A global-mode domain gate now requires the request itself (not just the
+   caller's declared toolset) to parse as a query about the deduced goal's domain, reusing
+   `ask.mjs`'s own grammar. Zero-hallucination baseline unchanged; independently re-verified.
 2. **Bug 6.** Scoped listing false-empty: "list modules in `<pkg>`" returns empty though the
    unscoped lister shows matches. Found dogfooding a 191k-entity monorepo graph.
 3. **Bug 7.** A modal auxiliary ("should") survives the fuzzy-correction cascade and misreads as

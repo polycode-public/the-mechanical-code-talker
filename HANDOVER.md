@@ -101,14 +101,15 @@ piped session before its log flushed. Fixed with `try`/`catch` and `try`/`finall
 
 ## Open follow-ups (next session, in priority order)
 
-1. **Bug 8, highest priority: the goal-reasoner answers unrelated requests with confidence.**
-   `src/router/goal-reasoner.mjs:226`'s global-mode deduction gates only on the caller's declared
-   toolset, never on whether the request text relates to the deduced goal, once no focus entity
-   binds. "write a haiku about pizza" gets a confident, well-formatted "biggest testing risk"
-   answer instead of an honest refusal. Reproduce with `demo/agentic-loop-demo.mjs`. This is a
-   genuine confident-wrong failure in the flagship zero-hallucination capability (AGENTBENCH's C2
-   goal-reasoner), more serious than the cosmetic bugs fixed this wave. It needs a real semantic
-   gate, not a quick patch.
+1. **Bug 8 — FIXED (cluster B, commit `99dfa06`).** The goal-reasoner's global-mode deduction now
+   gates on the request ITSELF, not just the caller's declared toolset: a new domain gate reuses
+   `ask.mjs`'s own `parseQuery` (the same grammar the C1 resolver already parses every request
+   with) to check the request parses to a shape naming the candidate rule's declared `focusClass`
+   — zero new keyword tables, "deduction not keyword-match" stays intact. "write a haiku about
+   pizza" now honestly refuses instead of confidently answering "biggest testing risk"; the
+   previously-working global keystone case (`demo/agentic-loop-demo.mjs`) is unchanged.
+   AGENTBENCH goal-driver baseline unchanged (100% plan / 98% result / 0% hallucination, 56
+   cases) — independently re-verified by the coordinator, not just the fixing agent's own report.
 2. **Bug 6: scoped listing false-empty. Now CONFIRMED locally reproducible** (playtest sprint
    round 4, `examples/mini-webapp`): "list modules in src/lib" and "list files in src/handlers"
    both return "no modules in this index." even though `src/lib/logger.mjs`/`src/lib/http.mjs`
