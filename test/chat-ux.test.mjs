@@ -323,6 +323,29 @@ test("WS4(c) META_ORIENT_RE: the stranger openers get the live overview, not the
   }
 });
 
+test("chat-feel residual (0.8.2 confirmation playtest, follow-up #3): META_ORIENT_RE's own repeat also shortens (not just isConversational's)", async () => {
+  // Bug B1 only taught the isConversational-triggered orientation branch (the "so
+  // then" test above) to shorten on repeat — metaLane's META_ORIENT_RE branch is a
+  // SEPARATE route to the same class of full-blurb text ("what does this app do"),
+  // and used to reprint it verbatim on every repeat with no suppression at all.
+  const g = await graph();
+  let last = null;
+  const answers = [];
+  for (let i = 0; i < 3; i++) {
+    const r = await runTurn("what does this app do", { config: CONFIG, graph: g, last });
+    assert.equal(r.record.via, "meta", "still routes to the meta/self lane");
+    answers.push(r.answer);
+    last = r.last ?? last;
+  }
+  assert.match(answers[0], /This is a tmct code graph — \d+ entities/, "1st turn: the full overview");
+  assert.equal(answers[1], "still the same overview — /stats for the full one, /help for commands.",
+    "2nd identical turn: the repeat one-liner");
+  assert.notEqual(answers[1], "still the same overview — /help lists every command and query shape.",
+    "uses its OWN oneliner text, distinct from isConversational's ORIENTATION_REPEAT_ONELINER");
+  assert.notEqual(answers[2], answers[1], "3rd turn: the one-liner self-limits");
+  assert.match(answers[2], /This is a tmct code graph — \d+ entities/, "3rd turn: the full overview re-offered");
+});
+
 test("Bug E (0.8.2 follow-up) MODULE_ORIENT_RE: 'what does <module> do' gets a friendly overview, not the wall", async () => {
   const g = await graph();
   // app/functions/d/handler.mjs (mod-d) is populated across imports/reexports/tests

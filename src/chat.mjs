@@ -1052,12 +1052,22 @@ async function moduleOrientLane(query, { graph }) {
   return { text: moduleOverviewText(graph, ind), via: "meta" };
 }
 
-async function metaLane(query, { graph, memoryDir }) {
+async function metaLane(query, { graph, memoryDir, last = null }) {
   const q = String(query).trim().toLowerCase().replace(/[?.!]+$/, "").replace(/\s+/g, " ");
   if (WHAT_KNOW_RE.test(q) || q === "what have you learned" || q === "what have you learnt") {
     return { text: await memorySummary(memoryDir, graph), via: "meta" };
   }
-  if (META_ORIENT_RE.test(q)) return { text: orientationText(graph), via: "meta" };
+  if (META_ORIENT_RE.test(q)) {
+    // Chat-feel residual (0.8.2 confirmation playtest, follow-up #3): Bug B1 only
+    // taught the isConversational-triggered orientation branch (below, via:"template")
+    // to shorten on an identical repeat — this META_ORIENT_RE branch is a SEPARATE
+    // route to the same class of full-blurb text ("what does this app do" reprinted
+    // orientationText(graph) verbatim on every repeat, never collapsing). Mirrors
+    // ORIENTATION_REPEAT_ONELINER's identity-check pattern exactly, with its own
+    // distinct oneliner text (self-limiting for the same reason).
+    const text = orientationText(graph);
+    return { text: last?.answer === text ? META_ORIENT_REPEAT_ONELINER : text, via: "meta" };
+  }
   // Bug E: an arbitrary "what does <term> do" that META_ORIENT_RE's closed noun
   // list didn't claim — try the module-grain overview before falling through to
   // the author-sha check below (disjoint triggers; order doesn't matter, but
@@ -1271,6 +1281,13 @@ const WALL_REPEAT_ONELINER = "still couldn't parse that — /help lists every qu
  *  like WALL_REPEAT_ONELINER: a third consecutive orientation-class turn
  *  re-offers the full orientation instead of droning the one-liner forever. */
 const ORIENTATION_REPEAT_ONELINER = "still the same overview — /help lists every command and query shape.";
+
+/** metaLane's own repeat-suppression twin for META_ORIENT_RE ("what does this app
+ *  do", etc. — see metaLane's doc above) — a genuinely separate route to the same
+ *  orientation-class text that Bug B1 didn't cover. MUST differ from
+ *  ORIENTATION_REPEAT_ONELINER (a distinct string, checked by identity) so the two
+ *  independent repeat-suppression sites can never be confused with one another. */
+const META_ORIENT_REPEAT_ONELINER = "still the same overview — /stats for the full one, /help for commands.";
 
 // ---- repo-root resolution: default the target to the GIT ROOT, not raw cwd ----
 
@@ -2455,7 +2472,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // codebase", "how do i start") → a summary / orientation, answered before the
   // fact-dump readers so "what do you know" gets a summary, not raw facts.
   if (miss) {
-    const meta = await metaLane(query, { graph, memoryDir });
+    const meta = await metaLane(query, { graph, memoryDir, last });
     if (meta) {
       answer = meta.text; via = meta.via; recordMiss = false; handled = true;
       note(trace, `lane: (1) META/SELF — bare self/session question recognized, answered via="${meta.via}"`);
