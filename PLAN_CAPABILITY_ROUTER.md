@@ -209,12 +209,35 @@ need care, and both are literature-covered:
   LLM's open-ended judgement wins. Same boundary as C1, one level up.
 
 **Verdict:** the reduction is a real architecture, not hand-waving — closed-world C2 is buildable on
-top of a solved C1 + a deduction engine + a threat-aware, persistent choice rule. It should be a
-**Stage 5**, gated on C1 being genuinely reached and measured. The sharpest thing to carry forward:
-**goal *generation* is where autonomy actually lives** — everything else reduces to solved machinery.
-That single step is the seam where tmct stays deterministic (closed-world goal-rules) and an LLM earns
-its cost (open-world novel goals). (Deepen-next: add a `docs/references/planning/` entry on BDI +
-Goal-Driven Autonomy when we get here.)
+top of a solved C1 + a deduction engine + a threat-aware, persistent choice rule. The sharpest thing to
+carry forward: **goal *generation* is where autonomy actually lives** — everything else reduces to
+solved machinery. That single step is the seam where tmct stays deterministic (closed-world goal-rules)
+and an LLM earns its cost (open-world novel goals). (Deepen-next: add a `docs/references/planning/`
+entry on BDI + Goal-Driven Autonomy when we get here.)
+
+> **STATUS (0.9.5, was "gated on C1 being genuinely reached and measured"): Stage 5 SHIPPED.**
+> `src/router/goal-reasoner.mjs` builds exactly the meta-loop above — deduce-goals → plan-each (C1) →
+> threat-aware persistent first-step arbitration → execute one, observe, repeat — and is rule-general
+> (0.8.2): two declared goal-rules (`coverage-invariant`, `cochange-risk-invariant`) selected by pure
+> `applicableRules` deduction, honest refusals at both failure modes (0 applicable = open-world,
+> >1 = ambiguous), zero request keywords. Measured: goal driver 100% plan / 98% result / 0%
+> hallucination over 56 AGENTBENCH cases (`AGENTBENCH_0.8.2.md`).
+>
+> It also shipped with a real confident-wrong gap (Bug 8, found live via `demo/agentic-loop-demo.mjs`):
+> `applicableRules` deduces a goal-rule from the DECLARED TOOLSET alone; in **global mode** (no focus
+> entity bound — the *"goal generation is unsolved in the open world"* seam this section itself calls
+> out) nothing checked whether the REQUEST ITSELF had any connection to the deduced goal, so an
+> unrelated request ("write a haiku about pizza") sharing the coverage-invariant rule's declared
+> toolset got a confident, well-formatted "biggest testing risk" answer instead of an honest refusal —
+> exactly the open-world-goal-generation failure mode this section predicted, just surfacing as a false
+> POSITIVE (answering) rather than a missing capability. **Now fixed**: a global-mode DOMAIN GATE reuses
+> ask.mjs's own compositional NL grammar (`parseQuery` — the same primitive the C1 resolver already
+> parses every request with) as a structural relevance check — the request must parse to a shape naming
+> the candidate rule's declared `focusClass`, or it refuses at the open-world seam rather than borrow
+> someone else's goal. Scoped mode was never affected (a bound focus is already proof of relevance);
+> the fix adds zero request keywords, keeping the "deduction, not keyword-match" discipline this module
+> was built on. Regression-tested in `test/goal-reasoner.test.mjs`; the 56-case AGENTBENCH baseline
+> above is unchanged.
 
 ---
 

@@ -21,10 +21,11 @@
 import { createRunCtx } from "../agentbench/run.mjs";
 import { goalDriver } from "../agentbench/driver-goal.mjs";
 
-// Five requests chosen to show the full ladder this loop actually climbs — AND an
-// honest, freshly-found gap in it (request 5). Do not sand this down: the whole
-// house ethos of this codebase is "confident-wrong is the cardinal sin," and this
-// demo would be dishonest if it hid the one place that ethos currently slips.
+// Five requests chosen to show the full ladder this loop actually climbs —
+// INCLUDING the one honest refusal that used to be a confident-wrong answer
+// (request 5, Bug 8, now fixed). Do not sand this down: the whole house ethos
+// of this codebase is "confident-wrong is the cardinal sin," and this demo
+// would be dishonest if it hid the place that ethos once slipped.
 //   1. a plain C1 relative-filter request (the router plans + composes, no goal
 //      deduction needed)
 //   2. a C2 request with NO explicit filter syntax — the router refuses, and the
@@ -34,23 +35,25 @@ import { goalDriver } from "../agentbench/driver-goal.mjs";
 //   4. a genuinely UNCOVERED request (a SchemaPredicate focus no goal-rule scopes)
 //      — the honest refusal working as designed
 //   5. **a request with NOTHING to do with code risk at all** ("write a haiku
-//      about pizza") — found live while building this demo. `goalReason`
-//      (src/router/goal-reasoner.mjs:226) sets `mode = focus ? "scoped" :
-//      "global"`; global-mode rule applicability only checks whether the
-//      CALLER'S DECLARED TOOLSET matches a rule's needs (applicableRules) — it
-//      never checks whether `request`'s text has any relation to the deduced
-//      goal at all once no focus entity binds. So ANY unbindable request, with
-//      the SAME declared tools the coverage-invariant rule wants, silently gets
-//      the "biggest testing risk" answer — a confident answer to a DIFFERENT
-//      question than the one asked, not a refusal. This is real and reachable:
-//      a Messages-API-style caller that declares its tool catalog once per
-//      session (the normal pattern) would hit this on every off-topic turn.
+//      about pizza") — found live while building this demo, logged as Bug 8, and
+//      FIXED (see goal-reasoner.mjs's GLOBAL-MODE DOMAIN GATE, in the module
+//      header). Was: `goalReason` set `mode = focus ? "scoped" : "global"`, and
+//      global-mode rule applicability checked ONLY whether the CALLER'S DECLARED
+//      TOOLSET matched a rule's needs (applicableRules) — never whether
+//      `request`'s text had any relation to the deduced goal once no focus
+//      entity bound, so ANY unbindable request with the SAME declared tools the
+//      coverage-invariant rule wants silently got the "biggest testing risk"
+//      answer. The fix reuses ask.mjs's own NL grammar (parseQuery — the SAME
+//      primitive the C1 resolver already parses every request with) as a
+//      structural relevance gate in global mode: the request must parse to a
+//      shape naming the deduced rule's focus class, or it is refused, never
+//      answered with someone else's goal. Zero request keywords added.
 const REQUESTS = [
   { label: "C1 — compositional relative-filter", request: "of the modules impacted by app/lib/a.mjs, which are untested", tools: ["tmct_impact", "tmct_untested"] },
   { label: "C2 — goal deduction, no filter syntax", request: "is app/lib/a.mjs safe to change", tools: ["tmct_impact", "tmct_untested"] },
   { label: "C2 — global goal, no focus entity, keystone arbitration", request: "which module is the biggest testing risk", tools: ["tmct_untested", "tmct_impact"] },
   { label: "REFUSAL (working as designed) — a SchemaPredicate focus no goal-rule scopes", request: "delete all the tests", tools: ["tmct_impact", "tmct_untested"] },
-  { label: "*** GAP, NOT A REFUSAL *** — unrelated request, same declared tools, silently answered", request: "write a haiku about pizza", tools: ["tmct_impact", "tmct_untested"] },
+  { label: "REFUSAL (Bug 8, FIXED) — off-domain request, same declared tools, now honestly refuses", request: "write a haiku about pizza", tools: ["tmct_impact", "tmct_untested"] },
 ];
 
 function printLoop({ label, request, tools }, loopResult) {
@@ -93,12 +96,13 @@ async function main() {
   console.log("own deterministic router + goal-reasoner (src/router/) — no model call,");
   console.log("no network, no randomness. Requests 1-3 are the real, validated capability:");
   console.log("closed goal-rules climb reliably. Request 4 is the honest refusal working");
-  console.log("as designed. Request 5 is NOT a refusal — it's a gap: an unrelated request");
-  console.log("silently got a real, confident, differently-phrased answer instead of being");
-  console.log("recognized as out of scope. Root cause: global-mode goal deduction");
-  console.log("(src/router/goal-reasoner.mjs:226) gates only on the CALLER'S DECLARED");
-  console.log("TOOLSET, never on whether the request text relates to the deduced goal at");
-  console.log("all, once no focus entity binds. Logged in HANDOVER.md as a follow-up.");
+  console.log("as designed. Request 5 USED TO be a gap: an unrelated request silently got");
+  console.log("a real, confident, differently-phrased answer instead of being recognized as");
+  console.log("out of scope (Bug 8, src/router/goal-reasoner.mjs). It is now FIXED with a");
+  console.log("global-mode DOMAIN GATE — reusing ask.mjs's own NL grammar (parseQuery) to");
+  console.log("require the request itself, not just the declared toolset, to be about the");
+  console.log("deduced goal's domain — so it refuses honestly like request 4, zero request");
+  console.log("keywords added. See HANDOVER.md / PLAN_CAPABILITY_ROUTER.md for the history.");
 }
 
 main().catch((e) => {

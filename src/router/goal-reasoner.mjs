@@ -40,11 +40,32 @@
 // (queries mutate nothing — the STRIPS closed world), so no step can delete a
 // condition another goal depends on. We compute this from the registry rather
 // than assume it (threatsAmong), so the guarantee is grounded, not asserted.
+//
+// THE GLOBAL-MODE DOMAIN GATE (Bug 8 fix). In SCOPED mode, relevance is already
+// proven structurally: the focus is a REAL bound graph entity (resolveObject
+// found it), so the request is provably about something in the graph. In GLOBAL
+// mode there is no focus to bind, and `applicableRules` alone only screens the
+// CALLER'S DECLARED TOOLSET — a caller-constant fact that says nothing about
+// whether THIS request has any connection to the deduced goal (a caller who
+// declares tmct_untested/tmct_impact once per session would ground
+// coverage-invariant for every off-topic turn). The fix reuses ask.mjs's OWN
+// compositional NL grammar (parseQuery — the SAME primitive the C1 resolver
+// already parses every request with, see resolver.mjs mapParse) as a structural
+// relevance check, never a new keyword table: does the request even COMPILE to a
+// recognized graph-query shape naming a known entity kind, and does that kind
+// match the rule's declared focusClass? A request parseQuery cannot place at all
+// (null — "write a haiku about pizza") or places without landing on any
+// recognized entity kind (a miss with no entity kind — "how many pizzas are
+// there") is an honest "not about this graph" signal; a request parseQuery
+// resolves to a real AST naming the rule's focus class ("which module is the
+// biggest testing risk" -> {node:"superlative", entityType:"Module", ...})
+// stays exactly as reachable as before. Zero request keywords added.
 
 import { backwardChain, extractEntity } from "./resolver.mjs";
 import { capabilityByName, effectsOf } from "./registry.mjs";
 import { hallucinationsIn } from "./call-validator.mjs";
 import { intersect } from "./set-algebra.mjs";
+import { parseQuery } from "../ask.mjs";
 
 // Hard OUTER-tick budget — the meta-loop runs at most this many ticks, then
 // REFUSES (escalate). Independent of BDI convergence and of the monotone
@@ -178,6 +199,25 @@ function focusOf(request, ctx) {
   return r && r.match && !r.ambiguous ? r.match : null;
 }
 
+/** The GLOBAL-MODE DOMAIN GATE's primitive: what entity CLASS (if any) did
+ *  ask.mjs's own compositional NL grammar recognize in the request? Walks
+ *  parseQuery's AST (the same shapes resolver.mjs's mapParse/mapFrame already
+ *  consume) for its declared `entityType` field, unwrapping the wrapper nodes
+ *  (`clause`, `inner`, `base`) that carry no entityType of their own. Returns the
+ *  class name, or null when the grammar placed nothing (an outright non-parse) or
+ *  placed a MISS with no recognized entity kind at all ("how many pizzas are
+ *  there" -> {node:"miss", reason:"count needs a known entity kind..."} carries no
+ *  entityType, same as a flat null). Pure; no request-string keyword table — it
+ *  reads a field ask.mjs's grammar already computes for every request. */
+function parsedEntityType(node) {
+  if (!node || typeof node !== "object") return null;
+  if (typeof node.entityType === "string") return node.entityType;
+  if (node.clause) return parsedEntityType(node.clause);
+  if (node.inner) return parsedEntityType(node.inner);
+  if (node.base) return parsedEntityType(node.base);
+  return null;
+}
+
 /** Ground ONE epistemic sub-goal (a topic + optional bound entity) into a
  *  grounded, EXECUTED call, or null when it is not groundable in the declared
  *  toolset (=> the meta-loop escalates). Backward-chains topic->capability, binds
@@ -237,13 +277,31 @@ export async function goalReason(request, tools, ctx, { driver = "goal-0.8.1" } 
   // request's scope in this toolset); >1 => an AMBIGUOUS meta-goal (arbitration
   // between meta-goals is undeclared) — both are honest refusals, never a guess.
   const applicable = applicableRules(declared, focus, mode);
-  if (!applicable.length) {
+
+  // THE GLOBAL-MODE DOMAIN GATE (Bug 8 fix, see the module header). SCOPED mode
+  // already proved relevance via a bound graph entity; GLOBAL mode has not, so
+  // `applicable` alone (a pure function of the caller's DECLARED TOOLSET) is not
+  // enough — it says nothing about whether THIS request is even about the graph.
+  // Screen it against ask.mjs's own NL grammar: the request must parse to a shape
+  // naming the candidate rule's declared focusClass, or it is refused as honestly
+  // off-domain rather than answered with someone else's goal.
+  let domainRelevant = applicable;
+  if (mode === "global" && applicable.length) {
+    const requestClass = parsedEntityType(parseQuery(request));
+    domainRelevant = applicable.filter((r) => requestClass === r.focusClass);
+    if (!domainRelevant.length) {
+      const classes = [...new Set(applicable.map((r) => r.focusClass))].join("/");
+      return refuse(`open-world: the request does not parse as a query about ${classes} (ask.mjs's own NL grammar names ${requestClass || "no recognized entity kind"} in it) — global goal deduction needs the REQUEST ITSELF to be about the deduced goal's domain, not just a declared toolset that happens to ground it — escalate`, driver);
+    }
+  }
+
+  if (!domainRelevant.length) {
     return refuse(`open-world: no declared goal-rule is applicable in ${mode} mode (each needs a sub-goal capability outside the declared toolset, or a scope it does not declare) — escalate`, driver);
   }
-  if (applicable.length > 1) {
-    return refuse(`ambiguous meta-goal: ${applicable.length} declared goal-rules apply (${applicable.map((r) => r.id).join(", ")}) — meta-goal arbitration is undeclared, refuse rather than guess — escalate`, driver);
+  if (domainRelevant.length > 1) {
+    return refuse(`ambiguous meta-goal: ${domainRelevant.length} declared goal-rules apply (${domainRelevant.map((r) => r.id).join(", ")}) — meta-goal arbitration is undeclared, refuse rather than guess — escalate`, driver);
   }
-  const rule = applicable[0];
+  const rule = domainRelevant[0];
 
   // the glass-box WHY, citing the declared goal-rule by backward-chain (the C2
   // twin of resolver.mjs's "backward-chain => <capability>" provenance).
