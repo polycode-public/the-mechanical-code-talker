@@ -164,9 +164,16 @@ export function backwardChainGoal(topic) {
  *  The caller REFUSES on zero matches (the open-world goal-generation seam) and
  *  on more than one (an ambiguous meta-goal — arbitration between meta-goals is
  *  undeclared, so guessing one would be an invented goal). */
-export function applicableRules(declaredTools, focus, mode) {
+// `ruleSet` defaults to the real, shipped GOAL_RULES — every existing caller
+// (driver-goal.mjs, this module's own goalReason, every test) is unaffected.
+// The override exists ONLY for PLAN_CODE.md Track 1 (§1.4): the synthesis
+// oracle clones a CANDIDATE rule into its own array and runs it through this
+// SAME trusted function — never a re-derivation — to check it decides
+// applicability exactly like a hand-written rule would. synthbench/ is the
+// only caller that ever passes a non-default ruleSet.
+export function applicableRules(declaredTools, focus, mode, ruleSet = GOAL_RULES) {
   const declared = Array.isArray(declaredTools) ? declaredTools : [];
-  return GOAL_RULES.filter((rule) =>
+  return ruleSet.filter((rule) =>
     rule.modes.includes(mode)
     && (mode !== "scoped" || (focus != null && focus.class === rule.focusClass))
     && rule.subGoals.every((topic) => {
@@ -255,8 +262,14 @@ export function dropCondition(intention, observed, mode, focus, focusClass) {
  *  the keystone module globally) or an HONEST REFUSE at the open-world
  *  goal-generation seam.
  *
- *  ctx: { dispatch(name,input)->{ok,result}, resolve(term)->{match,ambiguous} }. */
-export async function goalReason(request, tools, ctx, { driver = "goal-0.8.1" } = {}) {
+ *  ctx: { dispatch(name,input)->{ok,result}, resolve(term)->{match,ambiguous} }.
+ *
+ *  `ruleSet` defaults to the real, shipped GOAL_RULES (every product call site
+ *  omits it). PLAN_CODE.md Track 1's synthesis oracle (synthbench/rules/
+ *  oracle.mjs) is the one caller that overrides it, with a CLONED array
+ *  holding a candidate rule — the candidate then runs through this exact same
+ *  meta-loop a hand-written rule does, never a parallel re-implementation. */
+export async function goalReason(request, tools, ctx, { driver = "goal-0.8.1", ruleSet = GOAL_RULES } = {}) {
   const declared = Array.isArray(tools) ? tools : [];
 
   // STEP 1 — deduce the goal scope from the DECLARED model + a bound focus,
@@ -267,8 +280,8 @@ export async function goalReason(request, tools, ctx, { driver = "goal-0.8.1" } 
 
   // The open-world goal-generation seam, named honestly: a resolved focus whose
   // class NO declared goal-rule scopes is REFUSED, never given an invented goal.
-  if (focus && !GOAL_RULES.some((r) => r.focusClass === focus.class)) {
-    const covered = [...new Set(GOAL_RULES.map((r) => r.focusClass))].join("/");
+  if (focus && !ruleSet.some((r) => r.focusClass === focus.class)) {
+    const covered = [...new Set(ruleSet.map((r) => r.focusClass))].join("/");
     return refuse(`open-world: no declared goal-rule covers a ${focus.class} focus (the declared goal-rules are ${covered}-scoped) — escalate`, driver);
   }
 
@@ -276,7 +289,7 @@ export async function goalReason(request, tools, ctx, { driver = "goal-0.8.1" } 
   // 0 applicable rules => the same open-world seam (nothing declared grounds the
   // request's scope in this toolset); >1 => an AMBIGUOUS meta-goal (arbitration
   // between meta-goals is undeclared) — both are honest refusals, never a guess.
-  const applicable = applicableRules(declared, focus, mode);
+  const applicable = applicableRules(declared, focus, mode, ruleSet);
 
   // THE GLOBAL-MODE DOMAIN GATE (Bug 8 fix, see the module header). SCOPED mode
   // already proved relevance via a bound graph entity; GLOBAL mode has not, so
