@@ -3,8 +3,12 @@
 *(Drafted 2026-07-07, post-0.8.2 gate. Status: RESEARCH PLAN, not yet a build order. This plan
 STARTS WHERE THE TRIO ENDS — HANDOVER follow-up #3's pronoun-binding / temporal-over-relative /
 discourse-count wave is in flight with measured targets; nothing here begins until those land and
-re-measure. Sibling plan drafted concurrently: [[PLAN_INFERENCE_TESTING.md]] — the C1
-logic/quantifier-entailment overlap lives THERE, referenced in §4, not duplicated here.)*
+re-measure. Sibling plans drafted concurrently: [[PLAN_INFERENCE_TESTING.md]] — the C1
+logic/quantifier-entailment overlap lives THERE, referenced in §4, not duplicated here;
+[[PLAN_ontology-hierarchies.md]] — the vocabulary/lexicon layer this plan's tracks (a)/(d) consume
+as term reach; [[PLAN_PREDICATE_QUERIES.md]] — a distinct product feature (not a research plan),
+sequenced alongside this one's Phase-1 items, see `ROADMAP.md`'s near-term section for the live
+cross-plan picture.)*
 
 **Ground rules, restated because everything below is tempted to violate them.** The product is
 no-LLM, permanently (ROADMAP "out of scope"); every mechanism must be deterministic, explainable,
@@ -177,6 +181,14 @@ BEFORE each cycle, predictions-vs-actuals in the write-up):
    naming so no construction is double-counted in both plans' exit criteria.
 3. Order inside this plan: 0 → 1 → 2 → 3 → 4 (3's template-bank refactor deliberately trails 1
    so the data format is extracted from working frames, not designed speculatively).
+4. **Cross-plan phasing (2026-07-07 sweep):** track (a) (closed-frame subordination/conditionals),
+   track (f) (presupposition nudges), and this plan's stage 0 pool growth are Phase-1 quick wins,
+   executed alongside [[PLAN_ontology-hierarchies.md]]'s synonym-wiring stage,
+   [[PLAN_INFERENCE_TESTING.md]]'s INFBENCH-harness stage 0, and [[PLAN_PREDICATE_QUERIES.md]]'s
+   core feature. Track (b) (DRT-lite) is Phase 2, still gated on the trio landing first as stated
+   above. Track (e) (ellipsis, depends on (b)) and track (d)'s template-bank refactor are Phase 3.
+   Track (c) beyond the narrow clause-splitter stays a recorded negative finding, not scheduled.
+   See `ROADMAP.md`'s near-term section for the live cross-plan picture.
 
 ## 5 — Risks / honesty
 

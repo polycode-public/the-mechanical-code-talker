@@ -1,7 +1,8 @@
 # SKILL_STRATEGY_ADVISOR.md — a deep-process background "strategy advisor" for a Claude Code session
 
 A reusable recipe for running a second pair of eyes alongside the main agent: a background agent
-on Opus 4.8 that, on a re-armed ~5-minute cadence, infers the operator's goal, checks the main
+on Sonnet 5 (the default model as of 2026-07-07; previously Opus 4.8 — see §5) that, on a
+re-armed ~5-minute cadence, infers the operator's goal, checks the main
 agent's progress against it, researches the repo (and the web when a specific question emerges),
 ranks candidate solutions from all sources, optionally dry-runs the top one, and returns 1–3
 non-obvious recommendations that the main loop surfaces into the chat. It runs a deeper,
@@ -43,7 +44,7 @@ So the pattern is a small cycle the main loop drives:
 
 ```
 main loop (when the advisor's last tick completes, or when work resumes)
-  → spawn the advisor tick (background, model: opus)   [deep process, returns findings]
+  → spawn the advisor tick (background, model: sonnet5)   [deep process, returns findings]
   → on its completion notification: SURFACE non-obvious findings to the operator
   → re-arm the next tick with a fresh focused brief + the do-not-repeat ledger
 ```
@@ -108,10 +109,14 @@ that catches the collision before a clobbered push (protocol: `~/.claude/inboxes
 confirm `ls ~/.claude/projects/<slug>/<session-id>.jsonl`. If absent, rely on the handover/plan
 docs instead.
 
-**Step B — spawn the advisor** as a **background** general-purpose agent with **`model: opus`
-(Opus 4.8), always.** This is not a cost-saving role. The validated value of the deep process
-came from verification work (reading graph predicate tallies, harness internals, raw result
-records) that cheaper models hand-wave. A wrong-but-confident advisor is worse than none.
+**Step B — spawn the advisor** as a **background** general-purpose agent with **`model: sonnet5`
+(Sonnet 5), the default as of 2026-07-07.** The validated production run (§7) was on Opus 4.8;
+the model default was changed to Sonnet 5 by operator instruction to run this cadence more
+cheaply. The discipline that made the deep process valuable — verification work (reading graph
+predicate tallies, harness internals, raw result records), not hand-waving — still applies at
+this tier: if a tick's findings start reading as plausible-but-unverified, that is a signal to
+escalate that specific tick back to `model: opus`, not a reason to relax the dry-run step. A
+wrong-but-confident advisor is worse than none regardless of which model produced it.
 
 Prompt template (generalise the bracketed parts; keep the structure):
 
@@ -149,7 +154,7 @@ Keep under ~300 words. Specificity over coverage.
 PERSIST: IF (and only if) you have actionable advice, APPEND one self-contained block to
 <REPO>/STRATEGY_ADVISOR.log (append-only; NEVER edit/reorder prior entries; NEVER run git).
 Skip the log entirely on a "no new advice" run. Use:
-  printf '\n═══════════════════════════════════════\n[%s] source=strategy-advisor(opus,deep) · topic=<short>\nOBSERVATION: ...\nRECOMMENDED ACTION: ...\nSTATUS: OPEN\n' "$(date -u +'%Y-%m-%d %H:%MZ')" >> STRATEGY_ADVISOR.log
+  printf '\n═══════════════════════════════════════\n[%s] source=strategy-advisor(sonnet5,deep) · topic=<short>\nOBSERVATION: ...\nRECOMMENDED ACTION: ...\nSTATUS: OPEN\n' "$(date -u +'%Y-%m-%d %H:%MZ')" >> STRATEGY_ADVISOR.log
 
 INBOX CHANNEL: to get context from another session on this machine, or to leave a note for the
 owning session (handle: <HANDLE>), append to the relevant inbox under ~/.claude/inboxes/
@@ -200,9 +205,11 @@ advisor's standing instruction is "do NOT repeat these".
 
 ## 5. Discipline (so it stays valuable, not noise)
 
-- **Opus 4.8, always, as a background sub-agent task.** The advisor is a verifier, not a
-  summarizer; give it the strongest model and expect evidence (file:line, record counts) in
-  every claim.
+- **Sonnet 5, by default, as a background sub-agent task** (changed from Opus 4.8 2026-07-07 by
+  operator instruction — see §7 for the Opus-validated production run this recipe was built on).
+  The advisor is a verifier, not a summarizer; expect evidence (file:line, record counts) in
+  every claim regardless of model tier, and escalate an individual tick to `model: opus` if its
+  findings start reading as plausible-but-unverified.
 - **"Say nothing if nothing."** Force the literal "No new strategic advice this tick — approach
   is sound." so empty runs cost one line.
 - **Non-obvious only.** It must not restate the plan. Its value is the thing you didn't think of.
@@ -281,7 +288,8 @@ Every one of these came from the dry-run/verification step, not from re-reading 
 
 ## 8. One-paragraph TL;DR
 
-Spawn a background strategy advisor on Opus 4.8 that each tick infers the operator's goal from
+Spawn a background strategy advisor on Sonnet 5 (default since 2026-07-07; Opus 4.8 for the
+validated production run in §7) that each tick infers the operator's goal from
 the transcript tail, assesses the main agent's progress, researches the worktree/git/web, ranks
 solutions from all sources, dry-runs the top recommendation when cheap (scratch worktree, never
 committed), and returns 1–3 evidence-backed non-obvious findings or "no new advice". Its
