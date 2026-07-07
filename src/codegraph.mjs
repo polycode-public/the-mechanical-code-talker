@@ -115,7 +115,7 @@ export function relationKind(group) {
 
 // ---- symbol resolution (exact → normalised path → substring) ------------------
 
-function normPath(s) {
+export function normPath(s) {
   return String(s || "")
     .trim()
     .toLowerCase()

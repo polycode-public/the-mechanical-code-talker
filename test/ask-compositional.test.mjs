@@ -266,6 +266,56 @@ test("list HIT (scoped): 'list methods in widget.mjs' lists that module's member
   assert.doesNotMatch(r.content, /narrow with/); // already scoped
 });
 
+// ---- 4b-i. LIST shape, DIRECTORY scope ("list <kind> in <dir>") — Bug 6 regression:
+// a bare directory term (no node of its own) used to fuzzy-match ONE arbitrary module
+// whose label merely CONTAINED the directory substring, then traverse THAT module's
+// own membership edges — which never yields other modules, producing a false-empty
+// "no modules in this index." even though real modules live under the directory. The
+// fixture's "test/widget.test.mjs" is the only module under a "test/" directory, so it
+// exercises the fix without disturbing any other test's fixture/count assumptions.
+test("list HIT (directory-scoped): 'list modules in test' lists the modules under that directory", () => {
+  const r = ask(graph, "list modules in test");
+  assert.equal(r.tmct_ask.miss, false);
+  assert.deepEqual(labels(r), ["test/widget.test.mjs"]);
+  assert.equal(r.tmct_ask.parsed.base.node, "membership");
+  assert.equal(r.tmct_ask.parsed.scoped, true);
+});
+
+test("list HONEST-EMPTY (directory-scoped): 'list modules in nope' is a genuine dead-end, not a guess", () => {
+  const r = ask(graph, "list modules in nope");
+  // an empty list is rendered as an honest miss (same convention as every other empty
+  // list, e.g. "list bananas") — the point under test is that it's an HONEST empty
+  // (no modules exist under "nope"), not the false-empty the bug produced for a
+  // directory that genuinely DOES have modules under it.
+  assert.equal(r.tmct_ask.miss, true);
+  assert.deepEqual(r.tmct_ask.matches, []);
+  assert.match(r.content, /no modules in this index/);
+});
+
+test("list HIT (directory-scoped, non-Module entityType): 'list functions in a subdirectory' collects the entity kind across every module under it, not just the fuzzy-picked one", () => {
+  // a dedicated fixture with TWO modules under the same directory, each defining a
+  // function, so the directory scope must union across BOTH modules (a single-node
+  // fuzzy match, the old behavior, could only ever reach one of them).
+  const dirModules = [
+    { path: "lib/alpha.mjs", dotted: "lib.alpha", imports: [], calls: [], defines: [{ name: "alphaFn", kind: "function", lineno: 1, decorators: [] }] },
+    { path: "lib/beta.mjs", dotted: "lib.beta", imports: [], calls: [], defines: [{ name: "betaFn", kind: "function", lineno: 1, decorators: [] }] },
+    { path: "outside.mjs", dotted: "outside", imports: [], calls: [], defines: [{ name: "outsideFn", kind: "function", lineno: 1, decorators: [] }] },
+  ];
+  const dirEntities = buildEntities(dirModules, [], {});
+  ingestSchemaDocs(dirEntities);
+  const dirGraph = parseEntities(dirEntities);
+  const r = ask(dirGraph, "list functions in lib");
+  assert.equal(r.tmct_ask.miss, false);
+  assert.deepEqual(labels(r), ["alphaFn", "betaFn"]); // both modules under lib/, outside.mjs excluded
+});
+
+test("list compat: an EXACT single-file match still takes the single-container path, not directory scope", () => {
+  // "widget.mjs" is an exact module node (tier 1) — this must stay the existing
+  // single-container-node behavior even though the fix adds a directory-scope branch.
+  const r = ask(graph, "list methods in widget.mjs");
+  assert.deepEqual(labels(r), ["privMethod", "pubMethod", "statMethod"]);
+});
+
 test("list HIT (qualifier): 'list public methods' filters, still a list", () => {
   assert.deepEqual(labels(ask(graph, "list public methods")), ["pubMethod", "statMethod"]);
 });

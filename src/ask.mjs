@@ -38,7 +38,7 @@
 // edges (mgx:touchedByCommit / mgx:changeCoupledWith), which is a different (and
 // simpler) question than the browser's time-scrubbing view.
 
-import { relationKind, impactClosure } from "./codegraph.mjs";
+import { relationKind, impactClosure, normPath } from "./codegraph.mjs";
 import {
   VERB_TO_KIND, ENTITY_TO_TYPE, MODIFIER_TO_KIND,
   CONTEXT_PRONOUNS, META_MEANING_VERBS,
@@ -980,6 +980,19 @@ function uniqueById(inds) {
   return out;
 }
 
+/** The Module individuals whose path lives strictly UNDER the directory named by
+ *  `term` — a proper path-segment prefix match (normPath(label).startsWith(dir +
+ *  "/")), never a bare substring, so "src/lib" cannot spuriously catch
+ *  "src/libfoo/x.mjs". Mirrors renderArchitecture's own pkg-prefix scoping
+ *  (codegraph.mjs) but returns individuals rather than a summary string — this is
+ *  the "membership" AST node's directory-scope branch (see its call site above). */
+function directoryScopeModules(graph, term) {
+  const norm = normPath(term);
+  if (!norm) return [];
+  const prefix = `${norm}/`;
+  return graph.individuals.filter((i) => i.class === "Module" && normPath(i.label).startsWith(prefix));
+}
+
 // Per-graph memo for the qualifier attribute/edge sets (exported symbols, tested
 // modules, symbol→module map) — computed once, so a qualifier filter over a large
 // result set stays cheap and deterministic.
@@ -1242,7 +1255,27 @@ function evalSet(graph, ast, opts) {
       return forwardOverSet(graph, ast.kind, ids);
     }
     case "membership": {
+      // DIRECTORY SCOPE ("modules in src/lib", "files in src/handlers"): a bare
+      // path term with no exact node of its own is a DIRECTORY, not a single
+      // container individual — resolveObject's fuzzy tiers used to land it on ONE
+      // arbitrarily-chosen module whose label merely CONTAINS the path substring
+      // (e.g. "src/lib" fuzzy-matching "src/lib/logger.mjs"), then traversed that
+      // one module's own membership edges for entityType "Module" — which a module
+      // never has, so the answer was a false-empty ("no modules in this index.")
+      // even though several modules genuinely live under the directory. An EXACT
+      // node match (tier 1 — a real file/symbol named that) still wins outright
+      // (unchanged single-container-node behavior, e.g. "methods in widget.mjs");
+      // only when there is no exact match do we try directory-prefix scope first.
       const r = resolveObject(graph, ast.term);
+      if (!(r.match && r.tier === 1)) {
+        const dirMods = directoryScopeModules(graph, ast.term);
+        if (dirMods.length) {
+          if (!ast.entityType || ast.entityType === "Module") return dirMods;
+          const ids = new Set(dirMods.map((m) => m.id));
+          const objs = uniqueById(MEMBERSHIP_KINDS.flatMap((k) => forwardOverSet(graph, k, ids)));
+          return objs.filter((o) => o.class === ast.entityType);
+        }
+      }
       if (!r.match) return [];
       const ids = new Set([r.match.id]);
       const objs = uniqueById(MEMBERSHIP_KINDS.flatMap((k) => forwardOverSet(graph, k, ids)));
