@@ -1184,3 +1184,49 @@ test("tier2/T31 STACCATO CONNECTIVE LEAKAGE: a bare-connective relation-chain co
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("tier2/T32 discourseRewrite swaps into a PRONOUN-shaped prior query too: 'what calls it' -> 'and Widget?' rewrites to 'what calls Widget' instead of hitting the raw grammar wall", async () => {
+  const { dir, turns } = await driveSession([
+    "what calls app/lib/a.mjs",
+    "what calls it",
+    "and Widget?",
+  ]);
+  try {
+    for (const [i, t] of turns.entries()) {
+      assert.doesNotMatch(t.answer, WALL, `turn ${i} must not hit the grammar wall — 'and Widget?' after a pronoun-shaped prior turn ('what calls it', no NAME_TOKEN to swap) used to fall straight through`);
+    }
+    assert.equal(turns[0].answer, "scripts/g.mjs.");
+    assert.equal(turns[1].answer, "scripts/g.mjs.", "'what calls it' re-asks the same query via the standing focus");
+    assert.equal(turns[2].answer, "No modules found whose module directly calls Widget.",
+      "'and Widget?' correctly rewrote to 'what calls Widget' (swapping into the bare PRONOUN 'it', since 'what calls it' has no real name token) — an honest empty over the RIGHT new subject, not a parse failure");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("tier2/T33 the reverse-object honest miss names the query's OWN entity type ('no class matching') instead of defaulting to 'module' when the searched term is neither sha- nor dotted-symbol-shaped", async () => {
+  const { dir, turns } = await driveSession(["which classes inherit from Nonexistent"]);
+  try {
+    assert.equal(turns[0].answer, 'no class matching "Nonexistent" found in the index.',
+      "entityType=Class was already on the parsed AST — the old hardcoded 'module' catch-all default ignored it");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+
+  // The dotted/slash-free "symbol" shape read keeps its existing priority — a
+  // bare filename-like term with no basename match at all is still read as
+  // symbol-shaped regardless of any stated entity type (frozen by
+  // test/chat.test.mjs's own "a.mjs" case, over an EMPTY graph where nothing
+  // fuzzy-matches; this fixture's "a.mjs" itself resolves fine via basename
+  // fuzzy match to app/lib/a.mjs, so a genuinely absent dotted term is used
+  // here instead to isolate the same shape-priority rule).
+  const { dir: dir2, turns: turns2 } = await driveSession(["which modules import nonexistent.mjs"]);
+  try {
+    assert.equal(turns2[0].answer, 'no symbol matching "nonexistent.mjs" found in the index.');
+  } finally {
+    clearCache();
+    await rm(dir2, { recursive: true, force: true });
+  }
+});
