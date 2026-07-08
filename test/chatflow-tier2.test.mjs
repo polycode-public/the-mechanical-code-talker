@@ -1230,3 +1230,23 @@ test("tier2/T33 the reverse-object honest miss names the query's OWN entity type
     await rm(dir2, { recursive: true, force: true });
   }
 });
+
+test("tier2/T34 a bare pronoun with NO standing focus never resolves via the raw pronoun string either: consecutive 'where is it defined'/'what does it import' with nothing set both render the SAME honest miss, never a fabricated specific answer", async () => {
+  // Found in final replay verification, cycle 8: the pronoun-reuse guard only
+  // special-cased the case where a focus DOES stand — with none, it fell
+  // through to resolveEntity(graph, "it"), hitting the exact CHATBENCH_0.7.1
+  // B1-pron substring-match trap ("it" -> some label CONTAINING "it") as a
+  // silent side effect on focus-bookkeeping, even though the turn's own
+  // visible answer was already the correct honest miss — corrupting the NEXT
+  // turn's "it" into a confidently WRONG (not just empty) specific answer.
+  const { dir, turns } = await driveSession(["where is it defined", "what does it import"]);
+  try {
+    for (const [i, t] of turns.entries()) {
+      assert.equal(t.answer, '"it" needs a selected node to refer to — click a node first, or name it directly.',
+        `turn ${i}: with no focus ever set, EVERY bare "it" must render the SAME honest miss — never a specific answer fabricated off a substring-matched bogus focus adopted by a PRIOR turn`);
+    }
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
