@@ -34,6 +34,8 @@ const wrap = root.closest(".demo-wrap") || document;
 const linesEl = root.querySelector(".term-lines");
 const statusEl = wrap.querySelector(".term-status");
 const cliEl = wrap.querySelector(".term-cli");
+const inputRow = root.querySelector(".term-input-row");
+const inputEl = root.querySelector(".term-input");
 
 function addLine(text, cls) {
   const div = document.createElement("div");
@@ -94,6 +96,7 @@ async function run() {
     thinking.remove();
     addLine(result.content, "term-answer");
     publishAnswer(question, result.content);
+    enableInput();
     return;
   }
 
@@ -129,16 +132,61 @@ async function run() {
   thinking.remove();
   if (result && result.__error) {
     addLine(`(honest miss — engine error: ${result.__error && result.__error.message ? result.__error.message : result.__error})`, "term-error");
+    enableInput();
     return;
   }
   addLine(result.content, "term-answer");
   publishAnswer(question, result.content);
+  enableInput();
 }
 
 function publishAnswer(query, answer) {
   window.tmctAnswer = { query, answer, ts: Date.now() };
   root.dispatchEvent(new CustomEvent("tmct-answered", { detail: window.tmctAnswer }));
 }
+
+// ---- interactive follow-up questions ----------------------------------------------
+// Once the scripted demo has produced its first real answer, the engine is warm and
+// the visitor can type their own questions against the same live examples/mini-webapp
+// graph — same askBrowser() call, same rendering helpers, genuinely computed each time.
+let asking = false;
+
+async function askAndRender(question) {
+  if (asking) return;
+  asking = true;
+  inputEl.disabled = true;
+  const typed = addPromptLine();
+  typed.textContent = question;
+  const thinking = addLine("computing…", "term-dim");
+  setCliCaption(question);
+  try {
+    const result = await askBrowser(question);
+    thinking.remove();
+    addLine(result.content, "term-answer");
+    publishAnswer(question, result.content);
+  } catch (err) {
+    thinking.remove();
+    addLine(`(honest miss — engine error: ${err && err.message ? err.message : err})`, "term-error");
+  } finally {
+    asking = false;
+    inputEl.disabled = false;
+    inputEl.focus();
+    root.scrollTop = root.scrollHeight;
+  }
+}
+
+function enableInput() {
+  inputRow.classList.add("ready");
+  inputEl.disabled = false;
+}
+
+inputEl.addEventListener("keydown", (ev) => {
+  if (ev.key !== "Enter") return;
+  const question = inputEl.value.trim();
+  if (!question || asking) return;
+  inputEl.value = "";
+  askAndRender(question);
+});
 
 function refreshWinkStatus() {
   const s = getWinkStatus();

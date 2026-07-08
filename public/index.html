@@ -131,6 +131,24 @@
   #tmct-demo .term-prompt-line { color: var(--code-fg); }
   #tmct-demo .term-prompt { color: var(--accent); }
   #tmct-demo.compact .term-lines > div { margin: 0; }
+  #tmct-demo .term-input-row {
+    display: none;
+    align-items: baseline;
+    margin-top: 0.3em;
+  }
+  #tmct-demo .term-input-row.ready { display: flex; }
+  #tmct-demo .term-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--code-fg);
+    font: inherit;
+    padding: 0;
+    min-width: 0;
+  }
+  #tmct-demo .term-input::placeholder { color: var(--muted); }
+  #tmct-demo .term-input:disabled { opacity: 0.5; }
   .demo-status {
     font-size: 0.78rem;
     color: var(--muted);
@@ -166,7 +184,15 @@
 
   <div class="demo-wrap">
     <div class="demo-label">Live demo — running the real engine, right now, in your browser</div>
-    <div id="tmct-demo"><div class="term-lines"></div></div>
+    <div id="tmct-demo">
+      <div class="term-lines"></div>
+      <div class="term-input-row">
+        <span class="term-prompt">tmct&gt; </span>
+        <input class="term-input" type="text" autocomplete="off" autocapitalize="off"
+               spellcheck="false" disabled
+               placeholder="ask your own question about examples/mini-webapp…">
+      </div>
+    </div>
     <div class="demo-status term-status">wink-nlp: loading…</div>
     <div class="demo-cli">
       This box asks a real question of a small fixture repo's code graph
