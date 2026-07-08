@@ -3484,7 +3484,35 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // branch ALWAYS returns a tailored nudge for this shape, never null, so
   // deferring here never strands the turn with nothing having claimed it.
   const isStaccatoNegation = STACCATO_NEGATION_RE.test(String(query).trim());
-  if (!handled && miss && !envelope?.parsed && isConversational(query) && !isWhatAboutContinuation && !isDescribePronounContinuation && !isExplainTouch && !isStaccatoNegation) {
+  // A vague relation touch ("what about cochange", "tell me about cochange",
+  // the staccato chain continuation "and cochange?") whose relation word has NO
+  // bare single-word VERB_TO_KIND form of its own needs the SAME deferral as
+  // isExplainTouch just above, for the identical reason: "cochange" is the one
+  // relation (ask-vocab.mjs RELATIONS.cochange) whose every registered verb
+  // phrase takes a preposition ("changed WITH X", "changes together WITH X") —
+  // there is no bare "cochanges X" — so ask() never gives this shape a parse to
+  // hang envelope.parsed off of, unlike its siblings (imports/calls/tests/
+  // inherits/contains/defines/touches/reexports all have a bare verb and so
+  // already escape isConversational's ≤3-word catch-all via envelope.parsed).
+  // 0.9.16 Tier-2 playtest, 6th pass: "what about cochange" as an opening turn,
+  // and "and cochange?" as a mid-chain continuation after a working "what about
+  // tests", both fell straight to the generic orientation card even though the
+  // graph has real cochange edges and every sibling relation word already
+  // flowed. Needs no prior-turn/focus context either (same as isExplainTouch) —
+  // scoped to the CLOSED RELATION_TERM vocabulary (concept.mjs) via
+  // relationTermOf's own gate, so an unknown word or a real entity name still
+  // declines and isConversational's catch-all is untouched for it.
+  let isVagueRelationTouch = false;
+  {
+    const relTerm = relationTermOf(String(query), envelope);
+    if (relTerm) {
+      try {
+        const { RELATION_TERM } = await import("./concept.mjs");
+        isVagueRelationTouch = !!RELATION_TERM[relTerm.toLowerCase()];
+      } catch { /* leave false — the ordinary path decides */ }
+    }
+  }
+  if (!handled && miss && !envelope?.parsed && isConversational(query) && !isWhatAboutContinuation && !isDescribePronounContinuation && !isExplainTouch && !isStaccatoNegation && !isVagueRelationTouch) {
     // A conversational miss (a greeting, "what can you do", a very short non-code
     // line) gets the friendly orientation (module-aware: empty → --repo/tmct init).
     // Bug B1 (0.8.2 follow-up): this branch carries via:"template" and never
