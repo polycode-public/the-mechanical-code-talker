@@ -44,7 +44,7 @@ const FROZEN = {
   // queries from the loaded graph (see ORIENTATION_GENERIC/ORIENTATION_FIXTURE
   // below). The generic pair reproduces the pre-slot text byte-for-byte.
   "orientation-friendly": [
-    "I answer questions about THIS codebase's structure — imports, calls, definitions,",
+    "I'm tmct — a deterministic, offline code-graph assistant (no LLM). I answer questions about THIS codebase's structure — imports, calls, definitions,",
     "history and counts. For example:",
     "  which modules import {example1}",
     "  what calls {example2}",

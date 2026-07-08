@@ -35,7 +35,8 @@ test("bare invocation with non-TTY stdin reaches CHAT (the headline argv splice)
     });
     assert.equal(bare.status, 0, bare.stderr);
     assert.match(bare.stdout, /no code graph loaded — starting empty/); // #3: 0-module orientation
-    assert.match(bare.stdout, /Hi\. There's no code graph loaded here/, "the greeting orients (empty graph), not over-promises"); // #3
+    assert.match(bare.stdout, /Hi\. I'm tmct/, "the greeting leads with identity + a working capability, not an apology"); // #3
+    assert.doesNotMatch(bare.stdout, /Ask me about this codebase/, "still doesn't over-promise structure-query capability"); // #3
     const names = await readdir(join(dir, ".tmct"));
     assert.ok(names.some((n) => /^session-.*\.log$/.test(n)), "the bare invocation wrote its session log");
   } finally {

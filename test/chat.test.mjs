@@ -315,8 +315,12 @@ test("runTurn: greetings / thanks / help each return their template, none pollut
   assert.match(cheers.answer, /Any time/);
   const help = await runTurn("what can you do", { config: CONFIG, graph: g });
   assert.match(help.answer, /I answer questions about THIS codebase's structure/, "help/orientation reuses FRIENDLY");
+  // IDENTITY is now a distinct lane from CAPABILITY (was: both conflated onto the
+  // capability blurb, so "who are you" never got a self-description) — "who are
+  // you" answers with identity-self, not the "ask me about this codebase" card.
   const who = await runTurn("who are you", { config: CONFIG, graph: g });
-  assert.match(who.answer, /I answer questions about THIS codebase/);
+  assert.match(who.answer, /I'm tmct/, "who-are-you gets a self-description");
+  assert.doesNotMatch(who.answer, /I answer questions about THIS codebase/, "identity is distinct from capability orientation");
   for (const r of [hey, zork, ta, cheers, help, who]) {
     assert.equal(r.record.conversational, true, `${r.record.query} recorded conversational`);
     assert.deepEqual(r.record.resolvedIds, [], "no asksAbout id for a conversational turn");

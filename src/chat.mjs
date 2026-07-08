@@ -54,6 +54,7 @@ import { loadTemplates, render as renderTemplate } from "./corpus/templates.mjs"
 import { finish } from "./finish.mjs";
 import { VERB_TO_KIND, WHERE_MARKERS, MENTION_MARKERS, ENTITY_TO_TYPE } from "./ask-vocab.mjs";
 import { COUNTERFACTUAL_RE } from "./interpret/normalize.mjs";
+import { fuzzyMatchInSet, fuzzyBound } from "./interpret/fuzzy.mjs";
 
 // uuidv7 lives in ./uuid.mjs (shared with telemetry + the bench stamp); re-exported
 // here because callers/tests still import it from chat.mjs.
@@ -497,15 +498,38 @@ export function renderStats(graph) {
 
 // ---- friendly handling of non-structural / conversational input ----
 
-/** Greetings and small-talk openers that should get a friendly orientation line,
- *  never the raw grammar-miss hint. */
-const GREETINGS = new Set([
-  "hi", "hello", "hey", "yo", "sup", "hiya", "howdy", "hey there", "hi there", "hello there",
-  "thanks", "thank you", "thankyou", "thx", "ty", "cheers", "ok", "okay", "cool",
-]);
-const HELP_PHRASES = [
+/** CAPABILITY questions ("what can you do") — distinct from IDENTITY questions
+ *  ("who are you") below. Both used to be conflated into one HELP_PHRASES list,
+ *  which meant "who are you" always got the "here's what I can query" blurb and
+ *  never a self-description — split so each gets the answer it actually asked for. */
+const CAPABILITY_PHRASES = [
   /^what can (you|u) do\??$/i, /^what do you do\??$/i, /^help( me)?\??$/i, /^\?+$/,
-  /^who are you\??$/i, /^what (is|are|r) (this|you)\??$/i, /^how do (i|you) work\??$/i,
+  /^how do (i|you) work\??$/i, /^how does (this|it) work\??$/i,
+  // unix-habit openers typed inside the REPL out of muscle memory — argv-only
+  // today (bin/tmct.mjs), dead once inside the chat loop; route to the same
+  // capability answer a plain "help" gets.
+  /^--help$/i, /^-h$/i, /^man( tmct)?\??$/i,
+];
+/** IDENTITY questions — "who/what are you", by name, in plain or ESL-ish phrasing.
+ *  Routed to a self-description (identity-self) that works regardless of graph
+ *  state, never the code-graph deflection. */
+const IDENTITY_PHRASES = [
+  /^who are you\??$/i, /^what (is|are|r) (this|you)\??$/i,
+  /^what('?s| is) your name\??$/i, /^what exactly are you\??$/i,
+  /^(tell me about|introduce) yourself\??$/i, /^what is this thing\??$/i,
+  /^what am i (talking|speaking|chatting) (to|with)\??$/i,
+  /^you are what\??$/i, /^what thing (are|is) you\??$/i,
+  /^explain( to me)? what (you are|this is)\??$/i,
+  /^whoami\??$/i,
+];
+/** "Are you an LLM/AI/bot" — tmct's actual positioning (no LLM, deterministic) is
+ *  a genuinely different, more specific answer than the generic self-description,
+ *  and this is a very likely first question given how most chat tools work today. */
+const AI_IDENTITY_PHRASES = [
+  /^(are you|r u) (an? )?(ai|a bot|chatgpt|gpt|an? llm|a language model|a robot)\??$/i,
+  /^is this (chatgpt|gpt|claude|an? ai|an? llm)\??$/i,
+  /^do you use ai\??$/i, /^what language model are you( using)?\??$/i,
+  /^am i (talking|speaking|chatting) (to|with) a (real )?(person|human|bot|ai)\??$/i,
 ];
 /** The structural verbs/nouns that mark a near-miss code question (→ keep the
  *  precise grammar hint, not the friendly nudge). */
@@ -523,16 +547,24 @@ const STRUCT_WORDS = new Set([
   "testing", "defining", "touching", "extending", "inheritance", "coverage", "member", "members",
 ]);
 
+/** Is this raw/normalized query "code-ish" (a dotted/pathed/CamelCase name, "()",
+ *  or a structural keyword)? Shared by isConversational and the fuzzy-typo fallback
+ *  so neither ever grabs a genuine near-miss structural question. */
+function looksCodeish(raw, q) {
+  return /[a-z][A-Z]|[_./]|\(\)/.test(raw) || q.split(/\s+/).some((w) => STRUCT_WORDS.has(w));
+}
+
 /** Does this look like small-talk / an orientation request rather than a
- *  (near-miss) structural question? Greetings & help-phrases always qualify; a
- *  very short input with no code-ish token (dotted/pathed/CamelCase name, "()",
- *  or a structural keyword) does too. */
+ *  (near-miss) structural question? Greetings & help/identity phrases always
+ *  qualify; a very short input with no code-ish token does too. */
 export function isConversational(query) {
   const raw = String(query).trim();
   const q = raw.toLowerCase().replace(/[.!?]+$/, "").trim();
-  if (GREETINGS.has(q)) return true;
-  if (HELP_PHRASES.some((re) => re.test(raw))) return true;
-  const codeish = /[a-z][A-Z]|[_./]|\(\)/.test(raw) || q.split(/\s+/).some((w) => STRUCT_WORDS.has(w));
+  if (GREET.has(q) || THANKS.has(q) || OK_ACK.has(q)) return true;
+  if (CAPABILITY_PHRASES.some((re) => re.test(raw))) return true;
+  if (IDENTITY_PHRASES.some((re) => re.test(raw))) return true;
+  if (AI_IDENTITY_PHRASES.some((re) => re.test(raw))) return true;
+  const codeish = looksCodeish(raw, q);
   return q.split(/\s+/).filter(Boolean).length <= 3 && !codeish;
 }
 
@@ -562,6 +594,11 @@ const T_WHY_EMPTY = "miss-no-previous-answer";
  *  over-promising "ask me about this codebase". */
 const T_GREETING_EMPTY = "conversational-greeting-empty";
 const T_ORIENTATION_EMPTY = "orientation-empty";
+/** IDENTITY answers — self-description and the "no LLM" clarification. Both work
+ *  regardless of graph state (no empty/populated variant): what tmct IS doesn't
+ *  depend on whether a repo is loaded. */
+const T_IDENTITY_SELF = "identity-self";
+const T_IDENTITY_NOT_LLM = "identity-not-an-llm";
 /** THE CONCEPT FORCE (concept.mjs): the three-band answer to a vague "what is a X"
  *  that names a known concept WITH instances — {definition}/{examples}/{followups}. */
 const T_CONCEPT = "concept-force";
@@ -589,29 +626,114 @@ function tRender(templates, id, slots = {}) {
 // they record as plain turns with empty resolvedIds and never become mgx:asksAbout
 // graph edges (same as /help). Register stays plain and short: this is a code tool.
 
-/** Greetings → a short friendly line + one nudge. A couple carry a tasteful nod. */
+/** Greetings → a short friendly line + one nudge. A couple carry a tasteful nod.
+ *  Deliberately broad across register/dialect (UK/US/AU/NZ, formal, slang, texting
+ *  abbreviation) — a CLOSED curated list, same "never guess" ethos as the rest of
+ *  the file, just a bigger one; see collapseRuns/fuzzyMatchInSet below for the
+ *  typo/elongation multiplier layered on top instead of enumerating every typo. */
 const GREET = new Set([
   "hi", "hello", "hey", "yo", "hiya", "howdy", "sup", "greetings",
   "g'day", "gday", "hey there", "hi there", "hello there",
   "good morning", "good afternoon", "good evening", "morning",
+  // UK/AU/NZ
+  "alright", "you alright", "alright mate", "morning all", "yeah nah",
+  // US
+  "hey y'all", "howdy there", "hiya there",
+  // formal
+  "good day", "salutations", "good to meet you", "pleased to meet you",
+  // slang
+  "yo yo", "ayy", "wassup", "sup fam", "heya", "hiya!",
+  // texting abbreviation
+  "gm", "ge",
 ]);
 /** Acknowledgements → an "any time" style reply. */
 const THANKS = new Set([
   "thanks", "thank you", "thankyou", "thx", "ty", "ta", "cheers", "nice one",
-  "much appreciated", "cool thanks",
+  "much appreciated", "cool thanks", "many thanks", "much obliged", "ta very much",
+  "cheers mate", "cheers for that", "tks", "sweet thanks", "nice",
 ]);
 /** Farewells → a goodbye AND a clean end of session (same path as /exit). */
 const BYE = new Set([
   "bye", "goodbye", "quit", "exit", "see ya", "see you", "cya", "later", "farewell",
+  "peace", "peace out", "im off", "i'm off", "gtg", "gotta go", "catch you later",
+  "good day to you", "farewell then",
 ]);
 /** Elaboration asks → RE-RENDER the last answer verbosely (traversal + matches). */
 const WHY = new Set([
   "why", "how", "how so", "how come", "explain", "say more", "go on",
   "elaborate", "tell me more", "more detail", "expand",
 ]);
+/** Bare acknowledgements — routed identically to THANKS (an "ok"/"cool" after an
+ *  answer reads the same as a thanks, not a new question). Kept separate from
+ *  THANKS/GREET because these aren't greetings or gratitude, just closing a beat. */
+const OK_ACK = new Set([
+  "ok", "okay", "cool", "aight", "fair enough", "got it", "gotcha", "noted",
+  "sounds good", "sure", "cool cool", "right",
+]);
+/** New-user / confused openers — "I don't know what this is" reads as an
+ *  orientation request, not small-talk and not a grammar-wall near-miss; routed
+ *  the same as CAPABILITY_PHRASES (→ orientationAnswer). */
+const ORIENT_OPENERS = new Set([
+  "what", "huh", "confused", "i dont know what this is", "i don't know what this is",
+  "i'm lost", "im lost", "no idea what this does", "just installed this",
+  "just installed you", "i just installed this", "i just installed you",
+  "first time here", "just started", "new to this", "new here",
+]);
 
 // (Greeting/thanks/farewell wording moved to data/templates/responses.jsonl — W1.
 // The expression-specific greeting variants map through T_GREETING_BY_PHRASE above.)
+
+/** Aggressive char-run collapse (2+ identical chars → 1) — used ONLY to build a
+ *  lookup key, never to change what's actually said back. Lets a typed-out
+ *  elongation ("heyyyy", "hellooo", "thanksss") match its canonical phrase for
+ *  free: both the canonical phrase and the elongated input collapse to the same
+ *  key (a legitimate double letter like "hello"'s "ll" collapses identically on
+ *  both sides, so there's no canonical/typed asymmetry to get wrong). */
+const collapseRuns = (s) => s.replace(/(.)\1+/g, "$1");
+
+/** phrase(collapsed) → canonical phrase, built once per closed set. */
+function collapsedIndex(set) {
+  const idx = new Map();
+  for (const phrase of set) if (!idx.has(collapseRuns(phrase))) idx.set(collapseRuns(phrase), phrase);
+  return idx;
+}
+const GREET_COLLAPSED = collapsedIndex(GREET);
+const THANKS_COLLAPSED = collapsedIndex(THANKS);
+const BYE_COLLAPSED = collapsedIndex(BYE);
+
+/** Exact match, else the elongation-collapsed match, else null — the canonical
+ *  phrase either way, so callers never see the raw (possibly elongated) input. */
+function closedOrCollapsed(q, set, idx) {
+  if (set.has(q)) return q;
+  return idx.get(collapseRuns(q)) ?? null;
+}
+
+/** The fuzzy-typo fallback's candidate pool: every canonical phrase across the
+ *  closed conversational sets, flattened once. Consulted only after every exact/
+ *  collapsed lookup misses (see fuzzyConversationalMatch). */
+const CONVERSATIONAL_PHRASES = [
+  ...GREET, ...THANKS, ...BYE,
+  "what can you do", "what do you do", "help", "how do you work",
+  "who are you", "what are you", "what is your name",
+];
+function classifyConversational(phrase) {
+  if (GREET.has(phrase)) return "greet";
+  if (THANKS.has(phrase)) return "thanks";
+  if (BYE.has(phrase)) return "bye";
+  if (phrase === "who are you" || phrase === "what are you" || phrase === "what is your name") return "identity";
+  return "capability";
+}
+/** UNIQUE within-bound fuzzy match of the whole trimmed line against
+ *  CONVERSATIONAL_PHRASES — the "helo"/"thnx"/"wat r u"/"byee" tier. Restricted to
+ *  short (≤4-word), non-code-ish inputs (looksCodeish, shared with
+ *  isConversational) so a genuine near-miss structural question is never grabbed;
+ *  a distance tie is refused, never guessed (same discipline as fuzzyVocabWord). */
+function fuzzyConversationalMatch(raw) {
+  const q = collapseRuns(raw.toLowerCase().replace(/[.!?]+$/, "").trim());
+  const words = q.split(/\s+/).filter(Boolean);
+  if (!words.length || words.length > 4 || looksCodeish(raw, q)) return null;
+  return fuzzyMatchInSet(q, CONVERSATIONAL_PHRASES, Math.min(2, fuzzyBound(q)));
+}
 
 /** Re-render the last answer in verbose form: the previous query + its full answer
  *  plus the ask envelope's traversal receipt and the matched entities (the detail a
@@ -643,7 +765,7 @@ export function renderVerbose(last) {
 function conversationalTurn(line, ctx) {
   const raw = String(line);
   const q = raw.toLowerCase().replace(/[.!?]+$/, "").replace(/\s+/g, " ").trim();
-  const t = (id) => tRender(ctx.templates, id) ?? TEMPLATES_UNAVAILABLE;
+  const t = (id, slots = {}) => tRender(ctx.templates, id, slots) ?? TEMPLATES_UNAVAILABLE;
   const mk = (answer, { end = false, miss = false, via = "template" } = {}) => {
     const ts = new Date().toISOString();
     return {
@@ -675,27 +797,61 @@ function conversationalTurn(line, ctx) {
     note(ctx.trace, `result: re-rendering the previous answer to "${ctx.last?.query ?? "?"}" verbosely`);
     return mk(v.text, { via: "conversational" });
   }
-  if (GREET.has(q)) {
-    note(ctx.trace, "goal: casual/social — greeting, no graph intent");
-    note(ctx.trace, "lane: conversational — greeting (GREET closed set)");
-    // #3 empty/degenerate-graph greeting: a plain "hi"/"hello" over a graph with 0
-    // modules orients toward --repo/tmct init instead of over-promising "ask me
-    // about this codebase". Phrase-specific variants (good morning, hello there)
-    // keep their wording; only the default greeting swaps.
-    const id = (!T_GREETING_BY_PHRASE[q] && noCodeGraph(ctx.graph)) ? T_GREETING_EMPTY : (T_GREETING_BY_PHRASE[q] || T_GREETING);
-    note(ctx.trace, `pattern: template "${id}" (data/templates/responses.jsonl)`);
-    return mk(t(id));
+  {
+    const greetHit = closedOrCollapsed(q, GREET, GREET_COLLAPSED);
+    if (greetHit) {
+      note(ctx.trace, "goal: casual/social — greeting, no graph intent");
+      note(ctx.trace, `lane: conversational — greeting (GREET closed set${greetHit === q ? "" : ", elongation-collapsed"})`);
+      // #3 empty/degenerate-graph greeting: a plain "hi"/"hello" over a graph with 0
+      // modules leads with the (now provably-correct) vocabulary hint instead of
+      // over-promising "ask me about this codebase". Phrase-specific variants (good
+      // morning, hello there) keep their wording; only the default greeting swaps.
+      const id = (!T_GREETING_BY_PHRASE[greetHit] && noCodeGraph(ctx.graph)) ? T_GREETING_EMPTY : (T_GREETING_BY_PHRASE[greetHit] || T_GREETING);
+      note(ctx.trace, `pattern: template "${id}" (data/templates/responses.jsonl)`);
+      return mk(t(id, { vocabHint: ctx.vocabHint }));
+    }
   }
-  if (THANKS.has(q)) {
-    note(ctx.trace, "goal: casual/social — acknowledgement, no graph intent");
-    note(ctx.trace, "lane: conversational — thanks/acknowledgement (THANKS closed set)");
-    note(ctx.trace, `pattern: template "${T_THANKS}" (data/templates/responses.jsonl)`);
-    return mk(t(T_THANKS));
+  {
+    const thanksHit = closedOrCollapsed(q, THANKS, THANKS_COLLAPSED) || (OK_ACK.has(q) ? q : null);
+    if (thanksHit) {
+      note(ctx.trace, "goal: casual/social — acknowledgement, no graph intent");
+      note(ctx.trace, `lane: conversational — thanks/acknowledgement (${OK_ACK.has(q) ? "OK_ACK" : "THANKS"} closed set${thanksHit === q ? "" : ", elongation-collapsed"})`);
+      note(ctx.trace, `pattern: template "${T_THANKS}" (data/templates/responses.jsonl)`);
+      return mk(t(T_THANKS));
+    }
   }
-  if (q === "help" || q === "?" || HELP_PHRASES.some((re) => re.test(raw))) {
+  if (AI_IDENTITY_PHRASES.some((re) => re.test(raw))) {
+    note(ctx.trace, "goal: identity — is tmct an AI/LLM (a very likely first question)");
+    note(ctx.trace, "lane: conversational — identity/AI (AI_IDENTITY_PHRASES closed set)");
+    return mk(t(T_IDENTITY_NOT_LLM));
+  }
+  if (IDENTITY_PHRASES.some((re) => re.test(raw))) {
+    note(ctx.trace, "goal: identity — who/what tmct is, not a capability listing");
+    note(ctx.trace, "lane: conversational — identity (IDENTITY_PHRASES closed set)");
+    return mk(t(T_IDENTITY_SELF));
+  }
+  if (q === "help" || q === "?" || CAPABILITY_PHRASES.some((re) => re.test(raw)) || ORIENT_OPENERS.has(q)) {
     note(ctx.trace, "goal: get oriented — what can tmct answer, how do I start");
-    note(ctx.trace, "lane: conversational — help/orientation (HELP_PHRASES / bare help / ?)");
-    return mk(orientationAnswer(ctx.templates, ctx.graph));
+    note(ctx.trace, "lane: conversational — help/orientation (CAPABILITY_PHRASES/ORIENT_OPENERS / bare help / ?)");
+    return mk(orientationAnswer(ctx.templates, ctx.graph, ctx.vocabHint));
+  }
+  // Fuzzy-typo fallback (A4): every exact/collapsed closed-set lookup above missed —
+  // try a bounded edit-distance match against the flattened conversational phrase
+  // pool ("helo", "thnx", "wat r u", "byee"), restricted to short non-code-ish
+  // input so a genuine near-miss structural question is never grabbed.
+  {
+    const fuzzyHit = fuzzyConversationalMatch(raw);
+    if (fuzzyHit) {
+      const bucket = classifyConversational(fuzzyHit);
+      note(ctx.trace, `goal: casual/social or orientation — fuzzy-typo match "${raw}" → "${fuzzyHit}"`);
+      note(ctx.trace, `lane: conversational — fuzzy typo tolerance (${bucket})`);
+      if (bucket === "bye") return mk(t(T_FAREWELL), { end: true });
+      if (bucket === "thanks") return mk(t(T_THANKS));
+      if (bucket === "identity") return mk(t(T_IDENTITY_SELF));
+      if (bucket === "capability") return mk(orientationAnswer(ctx.templates, ctx.graph, ctx.vocabHint));
+      const id = (!T_GREETING_BY_PHRASE[fuzzyHit] && noCodeGraph(ctx.graph)) ? T_GREETING_EMPTY : (T_GREETING_BY_PHRASE[fuzzyHit] || T_GREETING);
+      return mk(t(id, { vocabHint: ctx.vocabHint }));
+    }
   }
   return null;
 }
@@ -754,22 +910,30 @@ function orientationExamples(graph) {
   return { example1, example2 };
 }
 
-/** The orientation surface, module-aware: the empty variant (→ --repo/tmct init +
- *  seeded vocabulary) when there's no code graph, the standard one (with live
- *  {example1}/{example2} query examples from the loaded graph) otherwise. */
-function orientationAnswer(templates, graph) {
-  if (noCodeGraph(graph)) return tRender(templates, T_ORIENTATION_EMPTY) ?? TEMPLATES_UNAVAILABLE;
+/** The orientation surface, module-aware: the empty variant (→ the provably-correct
+ *  vocabulary hint + --repo/tmct init) when there's no code graph, the standard one
+ *  (with live {example1}/{example2} query examples from the loaded graph) otherwise. */
+function orientationAnswer(templates, graph, vocabHint) {
+  if (noCodeGraph(graph)) return tRender(templates, T_ORIENTATION_EMPTY, { vocabHint }) ?? TEMPLATES_UNAVAILABLE;
   return tRender(templates, T_ORIENTATION, orientationExamples(graph)) ?? TEMPLATES_UNAVAILABLE;
 }
 
+/** A minimal, still identity-led fallback for orientationText's empty-graph branch
+ *  — used ONLY if the template library itself failed to load (tRender returned
+ *  null), matching the file's "never crash, always degrade to one honest line"
+ *  ethos. Kept short and hand-written so it never drifts silently. */
+const ORIENTATION_EMPTY_FALLBACK = "I'm tmct — a deterministic, offline chat assistant (no LLM). "
+  + "For code structure (imports, calls, definitions) point me at a repo with `--repo <path>`, "
+  + "or try the shipped example `npm run example:mini`. tmct reads graphs; it doesn't index code itself. /help for commands.";
+
 /** A dynamic orientation string for the meta/self lane: a /stats-style overview
- *  when a code graph is loaded, else the honest empty-graph orientation. */
-function orientationText(graph) {
+ *  when a code graph is loaded, else the honest empty-graph orientation — rendered
+ *  through the SAME template (T_ORIENTATION_EMPTY) conversationalTurn's orientation
+ *  branch uses, so there is exactly one copy of that wording to keep in sync, not
+ *  two hand-duplicated strings. */
+function orientationText(graph, templates, vocabHint) {
   if (noCodeGraph(graph)) {
-    return "There's no code graph loaded here, so I can't answer structure questions (imports, calls, definitions) yet. "
-      + "For those I need a `.tmct/graph.json` produced by a graph producer — point me at one with `--repo <path>`, "
-      + "or try the shipped example `npm run example:mini`. tmct reads graphs; it doesn't index code itself. "
-      + 'For general vocabulary, `tmct init` seeds concepts — try "what is a cache". /help for commands.';
+    return tRender(templates, T_ORIENTATION_EMPTY, { vocabHint }) ?? ORIENTATION_EMPTY_FALLBACK;
   }
   const by = (cls) => (graph.individuals || []).filter((i) => (i.class || "") === cls).length;
   const parts = [];
@@ -1008,13 +1172,18 @@ const WHAT_KNOW_RE = /^what\s+(?:do\s+you|d'?you)\s+know(?:\s+so\s+far)?$/;
 // first-touch question gets the live overview instead of the grammar wall.
 const META_ORIENT_RE = /^(?:what(?:'s| is| are)?\s+this(?:\s+(?:app|codebase|repo|repository|project|code|thing))?|what\s+(?:codebase|repo|repository|project)\s+is\s+this|what\s+does\s+(?:this|the)\s+(?:app|code|codebase|project|repo)\s+do|what\s+is\s+(?:this|the)\s+app(?:\s+for)?|what\s+am\s+i\s+looking\s+at|what\s+is\s+tmct|how\s+do\s+i\s+(?:start|begin|get\s+started|get\s+going|load\s+(?:my\s+)?code|index\s+(?:my\s+)?(?:code|repo|repository)|use\s+(?:this|you|tmct))|where\s+do\s+i\s+(?:start|begin))$/;
 
-/** A SHORT memory summary (never a fact dump) for the bare "what do you know". */
+/** A SHORT memory summary (never a fact dump) for the bare "what do you know".
+ *  This branch only fires when rows.length === 0 — i.e. precisely the case where
+ *  vocabulary seeding either hasn't run or produced nothing, so the hook makes NO
+ *  term-specific promise (an unconditionally-true pointer: the teach lane and
+ *  `tmct init` both work with zero preconditions), rather than suggesting a
+ *  vocabulary example that would be guaranteed to miss right after being offered. */
 async function memorySummary(memoryDir, graph) {
   const rows = memoryDir ? await memoryFacts(memoryDir) : [];
   if (!rows.length) {
     const hook = moduleCountOf(graph) > 0
       ? 'ask about this codebase\'s structure (imports, calls, definitions), or teach me with "every X is a Y"'
-      : 'teach me with "every X is a Y", or try general vocabulary like "what is a cache"';
+      : 'run `tmct init` to seed a starter vocabulary, or teach me directly with "every X is a Y"';
     return `I haven't been told any facts yet — ${hook}. /memory to inspect, /help for commands.`;
   }
   const preds = new Set(rows.map((f) => f.predicate).filter(Boolean));
@@ -1052,7 +1221,7 @@ async function moduleOrientLane(query, { graph }) {
   return { text: moduleOverviewText(graph, ind), via: "meta" };
 }
 
-async function metaLane(query, { graph, memoryDir, last = null }) {
+async function metaLane(query, { graph, memoryDir, last = null, templates = null, vocabHint = null }) {
   const q = String(query).trim().toLowerCase().replace(/[?.!]+$/, "").replace(/\s+/g, " ");
   if (WHAT_KNOW_RE.test(q) || q === "what have you learned" || q === "what have you learnt") {
     return { text: await memorySummary(memoryDir, graph), via: "meta" };
@@ -1065,7 +1234,7 @@ async function metaLane(query, { graph, memoryDir, last = null }) {
     // orientationText(graph) verbatim on every repeat, never collapsing). Mirrors
     // ORIENTATION_REPEAT_ONELINER's identity-check pattern exactly, with its own
     // distinct oneliner text (self-limiting for the same reason).
-    const text = orientationText(graph);
+    const text = orientationText(graph, templates, vocabHint);
     return { text: last?.answer === text ? META_ORIENT_REPEAT_ONELINER : text, via: "meta" };
   }
   // Bug E: an arbitrary "what does <term> do" that META_ORIENT_RE's closed noun
@@ -2398,7 +2567,7 @@ async function conceptForceAnswer(query, envelope, { graph, config, source, memo
  *  otherwise the unchanged dispatchTool path (which also yields the no-graph error).
  *  A hit updates the focus to the resolved object. Grammar miss / ToolError → a
  *  normal answer, never a crash. */
-async function runAsk(query, { config, source, graph, focus, last, templates, memoryDir, sessionId = "", lexicon = null, env, trace }) {
+async function runAsk(query, { config, source, graph, focus, last, templates, memoryDir, sessionId = "", lexicon = null, env, trace, vocabHint = null }) {
   const ts = new Date().toISOString();
   // DISCOURSE ANAPHORA (CHATBENCH_006 levers 1+2): a follow-up like "which of those
   // are tested" / "how many of those" / "count them" filters or counts the PREVIOUS
@@ -2523,7 +2692,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // codebase", "how do i start") → a summary / orientation, answered before the
   // fact-dump readers so "what do you know" gets a summary, not raw facts.
   if (miss) {
-    const meta = await metaLane(query, { graph, memoryDir, last });
+    const meta = await metaLane(query, { graph, memoryDir, last, templates, vocabHint });
     if (meta) {
       answer = meta.text; via = meta.via; recordMiss = false; handled = true;
       note(trace, `lane: (1) META/SELF — bare self/session question recognized, answered via="${meta.via}"`);
@@ -2549,7 +2718,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     // structural (by construction, not word-count guesswork); its own composed
     // answer — hit, honest empty, or "it needs a referent" — is always more
     // truthful than the orientation card.
-    const orientation = orientationAnswer(templates, graph);
+    const orientation = orientationAnswer(templates, graph, vocabHint);
     const repeat = last?.answer === orientation;
     answer = repeat ? ORIENTATION_REPEAT_ONELINER : orientation;
     via = "template"; handled = true;
@@ -3005,7 +3174,7 @@ function morePage(query, { last, focus }) {
   return turn;
 }
 
-export async function runTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false } = {}) {
+export async function runTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, vocabHint = null } = {}) {
   const line = String(input ?? "").trim();
   const templates = await chatTemplates(); // failure-tolerated: null degrades, never throws
   // narrate mode: allocate the mutable trace array ONLY when on (`null` when off,
@@ -3015,7 +3184,12 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // the narrate:false path allocates nothing extra and renders byte-identically to
   // before this feature existed — see the "---- narrate mode ----" section above.
   const trace = narrate ? [] : null;
-  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates, env, lexicon, trace, narrate };
+  // vocabHint: createSession computes this ONCE per session (a marker-file check)
+  // and threads it in; a direct runTurn() caller (tests, library use) that doesn't
+  // pass one gets it computed here instead, so "try this vocabulary example" is
+  // never wrong regardless of caller.
+  const resolvedVocabHint = vocabHint ?? vocabExampleHint(await hasSeededVocabulary(memoryDir));
+  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates, env, lexicon, trace, narrate, vocabHint: resolvedVocabHint };
   // A DISPATCHED turn (count / slash-command / ask) becomes the new "last answer"
   // that why/say-more re-renders; a conversational turn does not (it preserves it).
   // FINISH SEAM (PLAN_RESPONSE_FINISHING §"Where it lives"): every dispatched turn's
@@ -3166,6 +3340,35 @@ async function seedBootstrapMemory(repo) {
   } catch {
     return null; // corpus unavailable — bootstrap proceeds unseeded
   }
+}
+
+/** Whether THIS repo's memory actually carries the corpus seed — the marker is
+ *  authoritative regardless of whether the CURRENT run performed the seeding or
+ *  an earlier run (or `tmct init`) did (seedBootstrapMemory short-circuits on an
+ *  existing marker without re-reading the slice). The one signal every "try this
+ *  vocabulary example" surface must check before offering a term-specific query —
+ *  see vocabExampleHint. A cheap fs check, negligible next to the per-turn
+ *  template load. */
+async function hasSeededVocabulary(repo) {
+  if (!repo) return false;
+  try { await readFile(join(repo, SEED_MARKER_REL), "utf8"); return true; }
+  catch { return false; }
+}
+
+/** A "try this" vocabulary-example clause that's PROVABLY correct in the session
+ *  it's shown, mirroring the discipline orientationExamples() already applies to
+ *  structural examples (never offer an example that isn't confirmed to resolve).
+ *  `cache` is confirmed live: present in corpus/seon/definitions.jsonl, backed by
+ *  a corpus:seon concept fact, and a recognized lexicon noun — but only actually
+ *  answerable once the seed has run. When it hasn't (TMCT_NO_SEED=1,
+ *  seed.enabled=false, or corpus load failure), offering it would be a lie worse
+ *  than no example — swap to an unconditionally-true pointer instead (the teach
+ *  lane and `tmct init` both work with zero preconditions). Computed ONCE per
+ *  session (createSession), not per turn. */
+function vocabExampleHint(seeded) {
+  return seeded
+    ? 'Try "what is a cache" for general vocabulary.'
+    : 'Run `tmct init` to seed a starter vocabulary, or teach me directly with "every X is a Y".';
 }
 
 /** Trim a focus label for the prompt so a long module path can't run the line off. */
@@ -3323,6 +3526,13 @@ export async function createSession({
   if (empty && String(env.TMCT_NO_SEED || "") !== "1") {
     seeded = await seedBootstrapMemory(repo);
   }
+  // vocabHint: computed ONCE per session (not per-turn — see runTurn's own
+  // per-call fallback for direct/library callers). `seeded` is only truthy when
+  // THIS run performed the seeding; a repo seeded by an EARLIER run (or `tmct
+  // init`) still needs the marker check, so this covers both — see
+  // hasSeededVocabulary's docblock.
+  const vocabSeeded = Boolean(seeded) || (await hasSeededVocabulary(repo));
+  const vocabHint = vocabExampleHint(vocabSeeded);
   // #3/#5: 0 modules means no code graph to answer structure questions from —
   // whether the graph file is absent (empty bootstrap) OR present with no code
   // entities (the degenerate trap). Both get orienting, non-over-promising banner
@@ -3338,9 +3548,11 @@ export async function createSession({
     // is the TOTAL appended, split into the curated SEON ontology + the ConceptNet band.
     ...(seeded ? [`seeded ${seeded.appended} starter facts (${seeded.seon} curated SEON + ${seeded.conceptnet} ConceptNet) — /memory to inspect`] : []),
     // no code graph → point at how to GET one (a graph producer / --repo / the shipped
-    // example), honest that `tmct init` seeds VOCABULARY, not a code graph, and at what
-    // IS answerable now. tmct reads graphs; it never indexes code itself.
-    ...(noCodeGraph ? ['for code structure, point me at a .tmct/graph.json with --repo <path> or try `npm run example:mini` (tmct reads graphs, it doesn\'t index code); `tmct init` only seeds vocabulary — try "what is a cache"'] : []),
+    // example), and at what IS answerable now — `vocabHint` is only ever a term
+    // confirmed to resolve in THIS session's actual seed state (see vocabExampleHint),
+    // never a hardcoded example that might not have been seeded. tmct reads graphs;
+    // it never indexes code itself.
+    ...(noCodeGraph ? [`for code structure, point me at a .tmct/graph.json with --repo <path> or try \`npm run example:mini\` (tmct reads graphs, it doesn't index code). ${vocabHint}`] : []),
     "pass --repo <path> to target a different repo",
     "ask a question, or /help for commands (/stats for an overview) — /exit to leave",
   ];
@@ -3370,7 +3582,7 @@ export async function createSession({
     async turn(line) {
       let result;
       try {
-        result = await runTurn(line, { config, source, graph, focus, last, memoryDir: repo, sessionId, env, lexicon, narrate: narrateOn });
+        result = await runTurn(line, { config, source, graph, focus, last, memoryDir: repo, sessionId, env, lexicon, narrate: narrateOn, vocabHint });
       } catch (e) {
         const ts = new Date().toISOString();
         const message = e instanceof Error ? e.message : String(e);

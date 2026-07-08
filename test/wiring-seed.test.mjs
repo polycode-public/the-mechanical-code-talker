@@ -113,7 +113,10 @@ test("W3 gate: the real binary in an empty dir seeds, greets and exits 0", async
     assert.ok(banner, `the seed banner is present: ${JSON.stringify(r.stdout)}`);
     assert.equal(banner.total, banner.seon + banner.conceptnet, "banner arithmetic consistent");
     assert.ok(banner.conceptnet > UNCAPPED_MIN, `ConceptNet band uncapped (got ${banner.conceptnet})`);
-    assert.match(r.stdout, /Hi\. There's no code graph loaded here/); // #3: empty greeting orients
+    // #3: empty greeting orients — leads with identity + the (now seed-confirmed)
+    // vocabulary example, not an apology; this run DID seed, so the hint is the
+    // term-specific one (see the TMCT_NO_SEED sibling test for the other branch).
+    assert.match(r.stdout, /Hi\. I'm tmct\. Try "what is a cache"/);
     assert.equal(await factCount(dir), banner.total);
     // Load-tolerant budget: this project MANDATES concurrent background agents,
     // so an absolute wall-clock cap false-fails a healthy seed under contention

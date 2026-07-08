@@ -76,11 +76,21 @@ export function eligibleForCanon(w) {
  *  distinct target words at the same distance is refused outright (the honest-miss
  *  discipline at the vocabulary level; cf. MISSPELLINGS' curated "calss" decision). */
 export function fuzzyVocabWord(w) {
-  const bound = fuzzyBound(w);
+  return fuzzyMatchInSet(w, FUZZY_TARGET_WORDS, fuzzyBound(w));
+}
+
+/** GENERIC unique-within-bound fuzzy match of `w` against an arbitrary candidate
+ *  list, or null — same discipline as fuzzyVocabWord/resolveObject's tier-5 pass
+ *  (a distance tie between two distinct candidates is refused, never guessed),
+ *  factored out so callers outside the ask/keyword pipeline (e.g. chat.mjs's
+ *  conversational recognizers) can reuse the primitive without a bespoke
+ *  target-list wrapper. `bound` defaults to fuzzyBound(w) but callers may pass a
+ *  tighter budget (e.g. to keep short conversational tokens conservative). */
+export function fuzzyMatchInSet(w, candidates, bound = fuzzyBound(w)) {
   let best = bound + 1;
   let hit = null;
   let tied = false;
-  for (const target of FUZZY_TARGET_WORDS) {
+  for (const target of candidates) {
     const d = editDistance(w, target, Math.min(best, bound));
     if (d < best) { best = d; hit = target; tied = false; }
     else if (d === best && d <= bound && target !== hit) tied = true;

@@ -186,12 +186,87 @@ test("#3 an empty-graph session orients: banner + greeting point at --repo/tmct 
     const banner = s.bannerLines.join("\n");
     assert.match(banner, /no code graph loaded — starting empty/);
     assert.match(banner, /tmct init|--repo/);
-    assert.match(banner, /what is a cache/, "points at the seeded vocabulary");
+    // The fix (this WAS the "lying example" bug): TMCT_NO_SEED=1 means vocabulary
+    // was never actually seeded, so the banner must NOT claim "what is a cache"
+    // works — that's a promise this exact session can't keep. It points at
+    // `tmct init` (the way to actually get it) instead.
+    assert.doesNotMatch(banner, /what is a cache/, "never offers an example that wasn't actually seeded");
+    assert.match(banner, /tmct init.*seed|seed.*starter vocabulary/i, "points at how to actually get the vocabulary");
     const hi = await s.turn("hi");
-    assert.match(hi.answer, /no code graph loaded here/);
+    // The fix (was: leads with an apology — "no code graph loaded here" — even
+    // though the seeded vocabulary already answers general questions). Now leads
+    // with identity + a working capability; the ONE invariant worth keeping is
+    // never claiming structure-query readiness with no graph loaded.
+    assert.match(hi.answer, /I'm tmct/, "leads with identity, not an apology");
+    assert.match(hi.answer, /what is a cache|tmct init/, "leads with a working capability");
     assert.doesNotMatch(hi.answer, /Ask me about this codebase/, "no over-promising greeting");
     await s.close();
   } finally { clearCache(); await rm(dir, { recursive: true, force: true }); }
+});
+
+test("vocab-hint is never a lie: an unseeded session never offers a term-specific example, a seeded session's offered term actually resolves", async () => {
+  clearCache();
+  // UNSEEDED (TMCT_NO_SEED=1): none of the 5 "try this" surfaces may claim "what
+  // is a cache" — the corpus was never seeded, so that example would fail if
+  // followed. This is the exact bug found in research: every surface used to be
+  // gated only on "no code graph", never on whether seeding actually happened.
+  const dirA = await mkdtemp(join(tmpdir(), "tmct-ux-hintlie-"));
+  try {
+    const s = await createSession({ repoPath: dirA, env: { TMCT_NO_SEED: "1" } });
+    assert.doesNotMatch(s.bannerLines.join("\n"), /what is a cache/, "banner");
+    const hi = await s.turn("hi");
+    assert.doesNotMatch(hi.answer, /what is a cache/, "greeting");
+    const cap = await s.turn("what can you do");
+    assert.doesNotMatch(cap.answer, /what is a cache/, "capability orientation");
+    const meta = await s.turn("what is this");
+    assert.doesNotMatch(meta.answer, /what is a cache/, "meta/self lane (orientationText)");
+    const know = await s.turn("what do you know");
+    assert.doesNotMatch(know.answer, /what is a cache/, "memory summary");
+    // The unseeded state must still be ACTIONABLE (not just an absence) — every
+    // surface above should point at how to actually get vocabulary.
+    for (const [label, r] of [["greeting", hi], ["capability", cap]]) {
+      assert.match(r.answer, /tmct init/, `${label} points at how to actually seed vocabulary`);
+    }
+    await s.close();
+  } finally { clearCache(); await rm(dirA, { recursive: true, force: true }); }
+
+  // SEEDED (default): the offered term must actually resolve when asked.
+  const dirB = await mkdtemp(join(tmpdir(), "tmct-ux-hinttrue-"));
+  try {
+    const s = await createSession({ repoPath: dirB });
+    assert.match(s.bannerLines.join("\n"), /what is a cache/, "a seeded session's banner offers the term");
+    const cache = await s.turn("what is a cache");
+    assert.doesNotMatch(cache.answer, /couldn't parse|isn't a term in this graph/i, "the offered example actually resolves, end to end");
+    await s.close();
+  } finally { clearCache(); await rm(dirB, { recursive: true, force: true }); }
+});
+
+test("broadened conversational coverage: dialect/formal/slang/typo/identity/AI openers all get a real answer, never the raw grammar wall", async () => {
+  const g = await graph();
+  const WALL = /couldn't parse this as a graph question/;
+  const samples = [
+    // dialect/formal/slang (closed-set expansion, A1)
+    "you alright", "gday", "good day", "salutations", "wassup",
+    // elongation collapse (A3) + fuzzy typo tolerance (A4)
+    "heyyyy", "helo", "thnx", "byee", "sallutations",
+    // unix-habit openers inside the REPL (A2/CAPABILITY_PHRASES)
+    "whoami", "--help", "-h", "man",
+    // identity, distinct from capability (A2/IDENTITY_PHRASES)
+    "who are you", "what are you", "whats your name", "tell me about yourself",
+    // the AI/LLM sub-family (A2/AI_IDENTITY_PHRASES) — a real, on-brand answer
+    "are you an AI", "are you chatgpt", "is this claude", "do you use ai",
+    // confused/new-user openers (ORIENT_OPENERS)
+    "huh", "confused", "just installed this",
+  ];
+  for (const q of samples) {
+    const r = await runTurn(q, { config: CONFIG, graph: g });
+    assert.doesNotMatch(r.answer, WALL, `"${q}" doesn't hit the raw grammar wall`);
+  }
+  // The AI/LLM sub-family gets its OWN honest answer, not the generic identity blurb.
+  const ai = await runTurn("are you an AI", { config: CONFIG, graph: g });
+  assert.match(ai.answer, /no LLM/i, "the AI/LLM question gets tmct's actual positioning");
+  const who = await runTurn("who are you", { config: CONFIG, graph: g });
+  assert.doesNotMatch(who.answer, /no LLM involved/i, "identity and the AI/LLM clarification stay distinct answers");
 });
 
 test("#3/#4 a structural query over an empty code graph carries the exit toward a real graph", async () => {
@@ -283,7 +358,11 @@ test("WS4(b) orientation examples are LIVE from the loaded graph — and both an
 
 test("WS4(b) orientation examples degrade: empty graph → empty orientation, null graph → generic pair", async () => {
   const empty = await runTurn("what can you do", { config: CONFIG, graph: { individuals: [], relations: [], byId: new Map() } });
-  assert.match(empty.answer, /no code graph loaded/i, "an empty graph keeps the empty orientation");
+  // The fix: an empty graph's orientation leads with identity + a working
+  // capability, not an apology — the --repo pointer is still present, just not
+  // the opening line. See #3 in chat-ux.test.mjs for the greeting's sibling case.
+  assert.match(empty.answer, /I'm tmct/i, "an empty graph keeps the empty orientation (identity-led)");
+  assert.match(empty.answer, /--repo <path>/, "…and still carries the --repo exit");
   const nul = await runTurn("what can you do", { config: CONFIG, graph: null });
   assert.match(nul.answer, /which modules import walk\.mjs/, "a null (unknown) graph keeps the generic example1");
   assert.match(nul.answer, /what calls buildContextBundle/, "…and the generic example2");
