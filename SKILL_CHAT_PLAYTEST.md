@@ -36,7 +36,11 @@ conversation stops. A dead-end is any turn whose reply is one of:
 - a "no X found" / honest-empty where the user plainly meant something the graph CAN answer
   (a phrasing miss, not a real absence),
 - silence where a guided question the product ITSELF offered invited a follow-up the engine can't
-  take.
+  take,
+- an offered example ("try `X`") that ITSELF fails when actually asked, in the exact session state
+  it was offered in (0.9.12: five surfaces once suggested `what is a cache` unconditionally, even
+  under `TMCT_NO_SEED`/`seed.enabled=false` where it always missed — an unverified suggestion is
+  worse than no suggestion, because it spends the user's trust on a promise the product didn't keep).
 
 The bar: **every turn either answers, or gives a guiding nudge toward a precise query** (the "if you
 mean X then…" surround, a "did you mean" repair, a short tailored hint). A turn that does neither is
@@ -109,6 +113,14 @@ it fails regardless of how many earlier turns answered.
 
 ## 3. The complexity ladder (ratchet only when the tier is clean)
 
+- **Tier 0 — before any graph: the bootstrap/identity surface.** No `--repo`, a bare `tmct chat` in
+  an empty dir. Greetings, identity ("who are you", "what are you", "are you an AI/ChatGPT"), help/
+  orientation, and vocabulary questions from the seeded ontology (`what is a cache`) — all BEFORE the
+  user has pointed tmct at any code. This tier is a prerequisite to Tier 1, not a relaxation of it: a
+  dead-end here (0.9.12: greetings/identity leading with "no code graph loaded" instead of the seeded
+  knowledge) is a worse first impression than any structural dead-end, because it's the very first
+  thing a new user sees. Play it with BOTH a normally-seeded session and `TMCT_NO_SEED=1` — an example
+  that only works in one of those states and is offered in both is a dead-end (see §0's new bullet).
 - **Tier 1 — single touch + one drill-down.** "what is a class" → follow one guided question →
   one natural follow-up. (Concept force + one relation.)
 - **Tier 2 — drill-down chains with anaphora.** concept → instance → "what calls it" → "what uses
@@ -128,6 +140,34 @@ marked as such — the bar there is an **honest, guiding** dead-non-end, not a w
 
 ---
 
+## 3b. The surface-variation axis (orthogonal to the ladder)
+
+The ladder (§3) ratchets what CONCEPTS a conversation touches. This axis instead re-plays the SAME
+intent — a greeting, an identity question, a help/orientation ask — through different SURFACES of
+English, at whatever tier you're currently playtesting. It's a multiplier, not another rung: run it
+across Tier 0 and Tier 6 especially (both are "the messy real user" territory), and spot-check it
+elsewhere.
+
+Vary each recognized closed-set intent across:
+- **dialect/region** — UK ("cheers", "ta", "you alright"), US ("howdy", "hey y'all"), AU/NZ
+  ("g'day", "yeah nah")
+- **register** — formal ("good day", "salutations") down to slang/texting ("wassup", "ayy", "hru")
+- **typo/elongation** — "helo", "thnx", "wat r u", "heyyyy" — a near-miss of a phrase tmct DOES know,
+  not a genuinely new phrasing
+- **non-native/ESL phrasing** — word-order or article slips that a fluent-but-non-native speaker
+  plausibly types ("you are what", "explain please what is this")
+- **the honest "are you an LLM" family** — a very likely genuine first question given tmct's no-LLM
+  positioning; it deserves a real, on-brand answer (0.9.12 added `identity-not-an-llm`), not silence
+  or a generic capability blurb
+
+The pass bar is the same as any turn (§0): FLOW, not necessarily verbatim-identical wording to the
+canonical phrasing's answer. A variant that falls through to the grammar wall or the code-graph
+apology is a dead-end exactly like a missed structural phrasing — fix it the same way (§1 Step 3):
+extend the closed set / the bounded-fuzzy fallback (`fuzzyMatchInSet`, `interpret/fuzzy.mjs`), never
+loosen into a guess.
+
+---
+
 ## 4. Discipline (so the loop stays honest)
 
 - **Play, don't cheat.** Ask the way a user would, not the way the grammar wants. The value is the
@@ -142,6 +182,9 @@ marked as such — the bar there is an **honest, guiding** dead-non-end, not a w
 - **Honest dead-non-ends.** When there is truly no answer, the turn still must GUIDE (a nudge, a
   "did you mean", an offer to learn) — an honest miss that keeps the conversation alive is FLOW, a
   bare wall is a dead-end.
+- **Verify every offered example, in-state.** If a turn's reply says `try "X"`, actually ask `X` in
+  that same session/seed state before calling the turn FLOW. A suggestion that wasn't checked is a
+  guess wearing a helpful voice — score it a dead-end if it would fail (§0).
 - **Then measure.** After a tier flows clean, run the version-matched `CHATBENCH_<version>` benchmark
   to confirm the flow fixes moved the aggregate and regressed nothing. Flow and mean are two views of
   the same product; this loop shapes the flow, the benchmark scores it.
