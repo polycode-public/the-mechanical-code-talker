@@ -105,7 +105,21 @@ const isListingRemainder = (rest) => {
 // hi/hey/howdy — 0.9.14 Tier-2 playtest §3b spot-check found "g'day, what does
 // Base contain" fell through to a bogus "'g'day Base' matches more than one
 // module" object search instead of stripping the greeting.
-const GREETING_PREAMBLE_RE = /^(?:hi|hiya|hello|hey|yo|howdy|g'?day)(?:\s+there)?\s*[,—–-]\s*(?:(?:just\s+a\s+)?quick\s+question\s*[,:—–-]?\s*)?(.+)$/i;
+// "good morning"/"good afternoon"/"good evening"/"good day"/"greetings"/
+// "salutations" (formal register, §3b) — chat.mjs's own bare-turn GREETINGS/
+// IDENTITY_PHRASES closed sets already recognize these exact phrases stand-
+// alone, but this LEAD-IN regex (a greeting fused onto a real question in the
+// same turn) didn't carry the multi-word formal forms at all: a second Tier-2
+// playtest pass (0.9.14) found "Good day, what is a method" hit the grammar
+// wall outright, and "Good morning, what about tests" fell through to a bogus
+// "no module matching 'Good morning' found" object search — the exact same
+// failure g'day had before its own fix, just for the formal register instead
+// of the AU/NZ dialect. Formal register also plausibly types the lead-in as
+// its OWN full sentence ("Good day. What is a method?") rather than a comma
+// splice — "." joins the delimiter class for exactly this reason; a bare
+// greeting alone ("hi.") still can't match since the regex also requires a
+// non-empty remainder AFTER the delimiter.
+const GREETING_PREAMBLE_RE = /^(?:hi|hiya|hello|hey|yo|howdy|g'?day|good\s+(?:morning|afternoon|evening|day)|greetings|salutations)(?:\s+there)?\s*[,.—–-]\s*(?:(?:just\s+a\s+)?quick\s+question\s*[,:—–-]?\s*)?(.+)$/i;
 /** Thanks lead-in with a delimiter (+ optional "quick question" bridge), the
  *  sibling of GREETING_PREAMBLE_RE for the "thanks" word family (Bug B2, 0.8.2
  *  follow-up): "thanks, <Q>" / "thanks so much, <Q>" -> "<Q>". chat.mjs's

@@ -38,6 +38,61 @@
 //       reexports" used to dead-end even though the direct query ("what does
 //       X export") already worked — the vague-touch relation force simply had
 //       no entry for the word at all.
+//
+// SECOND PASS (still 0.9.14, repeated Tier 2 per SKILL_CHAT_PLAYTEST §1 Step 6
+// — the first pass found real gaps, so this pass reused the SAME tier at
+// DIFFERENT entry points: different relation types (tests/contains/cochange,
+// not just calls/imports), and the §3b formal-register/ESL angle instead of
+// the first pass's typo/dialect/texting-shorthand angle):
+//   T7  ask.mjs's AGG_TAIL_FILLER (the bare "which X exist"/"what X are
+//       there" list trigger's own filler-tail allowance) had "codebase" but
+//       not the demonstrative right before it — "which classes exist IN THIS
+//       codebase"/"which methods exist in this codebase" fell to the grammar
+//       wall because "this" isn't a STOPWORDS entry either. Fixed by adding
+//       "this"/"that" to AGG_TAIL_FILLER.
+//   T8  GREETING_PREAMBLE_RE's lead-in alternation had every INFORMAL greeting
+//       (hi/hey/yo/howdy/g'day) but no FORMAL-register one at all — "Good day,
+//       what is a method" hit the grammar wall outright, and "Good morning,
+//       what about tests" fell through to a bogus "no module matching 'Good
+//       morning' found" object search — chat.mjs's own bare-turn GREETINGS
+//       closed set already answers these phrases standalone, but this lead-in
+//       regex (greeting FUSED onto a real question) never carried them.
+//   T9  vagueTouchTermOf's capture ate a trailing meta-noun naming WHAT KIND
+//       of thing the touched word already is — "tell me about the cochange
+//       relation"/"what about the inherits relationship" captured the WHOLE
+//       tail ("cochange relation") as the term, which RELATION_TERM's closed
+//       dict (single words only) could never match, so the query fell through
+//       to the grammar wall instead of the relation force.
+//   T10 a bare "explain X" had NO recognized shape at all (normalize.mjs's
+//       own EXPLAIN_WRAPPER_RE only unwraps a WH-QUESTION remainder, not a
+//       bare noun) — "explain cochange"/"explain tests to me" hit the grammar
+//       wall, and the politeness-wrapped "please explain cochange"/"kindly
+//       explain cochange" (never forming ANY ask()-grammar parse attempt, so
+//       envelope.parsed is unconditionally null for this shape) tripped
+//       isConversational()'s ≤3-word heuristic and fell to the generic
+//       orientation card before the relation force ever got a turn. Fixed by
+//       a new EXPLAIN_TOUCH_RE (feeding vagueTouchTermOf) plus a matching
+//       exemption from the conversational catch-all, the same pattern already
+//       used for "what about X" continuations and pronoun describes.
+//   T11 ESL word-order ("please you tell me what is Class", "you tell me what
+//       is Class") left a bare leading "you" that "could/can/would/will you"
+//       (MODAL_WRAPPER_RE) doesn't cover, since those require the verb-first
+//       order — the leftover pronoun broke the bare "what is Class" no-
+//       article COUNT reading specifically (it requires the whole normalized
+//       string to match, unlike the "what is a Class" meta form, which
+//       matches more tolerantly). Fixed by adding "you" to ask-vocab.mjs's
+//       FILLER_WORDS (it carries no grammatical weight in this grammar).
+//   T12 (found by a background strategy-advisor tick, not this pass's own
+//       chat transcripts, but squarely a Tier-2 relation-touch dead-end):
+//       composeRelation returned null for a KNOWN relation with ZERO edges of
+//       that kind, letting the caller's raw grammar attempt at "what about
+//       exports"/"tell me about reexports" fall through to a garbled "no
+//       module matching 'about'/'exports' found" on a graph with no
+//       reexports edges at all (examples/mini-webapp, and the realistic case
+//       for most repos) — cycle 3's own T6 test only ever exercised the
+//       has-edges path. Fixed in src/concept.mjs: composeRelation now
+//       degrades to a two-band answer (definition + "this codebase has no X
+//       edges in the index") instead of null.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
@@ -69,6 +124,32 @@ async function driveSession(queries) {
     await s.close();
   }
   return { dir, turns };
+}
+
+/** Same as repoWithFixture, but with a named top-level objectProperties GROUP
+ *  stripped out entirely — for exercising a relation's ZERO-edge path (the
+ *  fixture's own reexports group has a real edge, which is exactly what let
+ *  the 0.9.14 second-pass zero-edge degrade bug slip past cycle 3's own tests:
+ *  they only ever exercised the has-edges path). */
+async function repoWithFixtureMinus(predicate) {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-tier2-"));
+  const payload = JSON.parse(await readFile(FIXTURE, "utf8"));
+  payload.objectProperties = (payload.objectProperties || []).filter((g) => g.predicate !== predicate);
+  await mkdir(join(dir, ".tmct"), { recursive: true });
+  await writeFile(join(dir, ".tmct", "graph.json"), JSON.stringify(payload));
+  return dir;
+}
+
+async function driveSessionOverGraph(dir, queries) {
+  clearCache();
+  const s = await createSession({ repoPath: dir });
+  const turns = [];
+  try {
+    for (const q of queries) turns.push(await s.turn(q));
+  } finally {
+    await s.close();
+  }
+  return turns;
 }
 
 const CALLS_RELATION_TEXT =
@@ -189,6 +270,133 @@ test("tier2/cross-concept drill-down: 'what is a class' -> 'what about inherits'
     assert.match(turns[1].answer, /^Inheritance is one class deriving/, "the relation concept force answers 'what about inherits'");
     assert.equal(turns[2].answer, "in app/lib/c.mjs there is Button.", "a direct graph query still resolves mid-chain");
     assert.equal(turns[3].answer, CALLS_RELATION_TEXT, "'what about calls' composes the calls relation force to close the chain");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---- SECOND PASS (T7-T12) ----
+
+const TESTS_RELATION_TEXT =
+  "A test is code that exercises another unit and checks its behaviour.\n"
+  + "In this codebase, for example: app/unit-tests/b.test.mjs tests app/lib/b.mjs and app/unit-tests/b.test.mjs tests app/functions/d/handler.mjs (2 test edges).\n"
+  + "Want to go deeper? Try:\n"
+  + "  • what tests app/lib/b.mjs\n"
+  + "  • where is app/functions/d/handler.mjs defined";
+
+const COCHANGE_RELATION_TEXT =
+  "Change-coupling is two files that tend to be changed together in the same commits.\n"
+  + "In this codebase, for example: app/lib/a.mjs changes together with app/lib/b.mjs and app/lib/a.mjs changes together with app/lib/c.mjs (2 change-coupling edges).\n"
+  + "Want to go deeper? Try:\n"
+  + "  • where is app/lib/b.mjs defined\n"
+  + "  • which modules import app/lib/a.mjs";
+
+test("tier2/T7 AGG_TAIL_FILLER demonstrative: 'which classes/functions exist in this codebase' both list, not wall", async () => {
+  const { dir, turns } = await driveSession([
+    "which classes exist in this codebase",
+    "which functions exist in this codebase",
+  ]);
+  try {
+    for (const [i, t] of turns.entries()) {
+      assert.doesNotMatch(t.answer, WALL, `turn ${i} must not hit the grammar wall`);
+    }
+    assert.equal(turns[0].answer, "Base, Widget and Button.");
+    assert.equal(turns[1].answer, "fnAlpha().");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("tier2/T8 formal-register greeting lead-in: 'Good day, what is a class' and 'Good morning, what about tests' both flow (comma AND full-stop delimiter)", async () => {
+  const { dir, turns } = await driveSession([
+    "Good day, what is a class",
+    "Good morning, what about tests",
+    "Good day. What is a class",
+  ]);
+  try {
+    assert.doesNotMatch(turns[0].answer, WALL);
+    assert.match(turns[0].answer, /^A class is a template/, "the greeting is stripped, reaching the class concept force");
+    assert.doesNotMatch(turns[1].answer, WALL);
+    assert.doesNotMatch(turns[1].answer, BAD_SEARCH, "'Good morning' must not be parsed as part of the object term");
+    assert.equal(turns[1].answer, TESTS_RELATION_TEXT);
+    assert.doesNotMatch(turns[2].answer, WALL, "a formal lead-in as its OWN full-stopped sentence, not a comma splice, must strip the same way");
+    assert.match(turns[2].answer, /^A class is a template/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("tier2/T9 trailing relation meta-noun: 'tell me about the tests relation' and 'what about the inherits relationship' both reach the relation force", async () => {
+  const { dir, turns } = await driveSession([
+    "tell me about the tests relation",
+    "what about the inherits relationship",
+  ]);
+  try {
+    for (const [i, t] of turns.entries()) {
+      assert.doesNotMatch(t.answer, WALL, `turn ${i} must not hit the grammar wall`);
+      assert.doesNotMatch(t.answer, BAD_SEARCH, `turn ${i} must not fall through to a bogus object search`);
+    }
+    assert.equal(turns[0].answer, TESTS_RELATION_TEXT);
+    assert.match(turns[1].answer, /^Inheritance is one class deriving/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("tier2/T10 bare 'explain X' family: 'explain cochange', 'please explain cochange' and 'explain tests to me' all reach the relation force (not the grammar wall, not the generic orientation card)", async () => {
+  const { dir, turns } = await driveSession([
+    "explain cochange",
+    "please explain cochange",
+    "explain tests to me",
+  ]);
+  try {
+    for (const [i, t] of turns.entries()) {
+      assert.doesNotMatch(t.answer, WALL, `turn ${i} must not hit the grammar wall`);
+      assert.doesNotMatch(t.answer, /I'm tmct — a deterministic/, `turn ${i} must not fall to the generic orientation card`);
+    }
+    assert.equal(turns[0].answer, COCHANGE_RELATION_TEXT);
+    assert.equal(turns[1].answer, COCHANGE_RELATION_TEXT, "the 'please' politeness wrapper is peeled the same way");
+    assert.equal(turns[2].answer, TESTS_RELATION_TEXT, "a trailing 'to me' is peeled the same way as a leading one");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("tier2/T11 ESL leading pronoun: 'please you tell me what is Class' reaches the bare no-article count reading", async () => {
+  const { dir, turns } = await driveSession(["please you tell me what is Class"]);
+  try {
+    assert.doesNotMatch(turns[0].answer, WALL);
+    assert.equal(turns[0].answer, "read as \"count class\" — 3 classes.");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("tier2/T12 relation vague-touch on ZERO edges of a known kind degrades gracefully (advisor-flagged gap in cycle 3's own reexports fix, T6): 'what about exports'/'tell me about reexports' on a graph with NO reexports edges", async () => {
+  const dir = await repoWithFixtureMinus("reexports");
+  try {
+    const turns = await driveSessionOverGraph(dir, [
+      "what about exports",
+      "tell me about reexports",
+      "what does app/functions/d/handler.mjs export",
+    ]);
+    for (const [i, t] of turns.entries()) {
+      assert.doesNotMatch(t.answer, WALL, `turn ${i} must not hit the grammar wall`);
+      assert.doesNotMatch(t.answer, BAD_SEARCH, `turn ${i} must not fall through to a bogus object search over leftover words like "about"/"exports"`);
+    }
+    const expected =
+      "A re-export is a module passing another module's definition through as part of its own public API.\n"
+      + "This codebase has no re-export edges in the index.";
+    assert.equal(turns[0].answer, expected);
+    assert.equal(turns[1].answer, expected);
+    assert.equal(turns[2].answer, "app/functions/d/handler.mjs has no export edges in the index.",
+      "the per-object direct query keeps its own, already-honest empty phrasing");
   } finally {
     clearCache();
     await rm(dir, { recursive: true, force: true });

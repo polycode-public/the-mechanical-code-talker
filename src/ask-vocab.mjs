@@ -395,12 +395,21 @@ export const G_DROP = /\b([a-z]{3,})in'/gi;
 /** Words stripped during normalization/keyword-spotting once they carry no
  *  grammatical weight for this grammar — greetings, politeness, hedges, and
  *  the discourse fillers a spoken-style question picks up. Never strips a
- *  relation verb, entity noun, or modifier (those are checked first). */
+ *  relation verb, entity noun, or modifier (those are checked first).
+ *  Bare "you" (0.9.14 Tier-2 playtest, §3b ESL angle): a non-native word-order
+ *  slip ("please you tell me what is Class", "you tell me what is Class") left
+ *  a leading "you" that "could you"/"can you"/"would you" don't cover (those
+ *  are anchored WRAPPERS requiring the verb-first order) — the leftover
+ *  pronoun broke the bare "what is Class" no-article count reading, which
+ *  (unlike the "what is a Class" meta form) requires the WHOLE normalized
+ *  string to match, not just a substring. "you" carries no grammatical weight
+ *  in this code-graph grammar (never a real entity/relation term), so it is
+ *  safe to strip anywhere, same trade as every other word in this list. */
 export const FILLER_WORDS = Object.freeze([
   "um", "uh", "erm", "so", "like", "yo", "hey", "bru", "bro", "fam", "mate",
   "please", "could you", "can you", "would you", "tell me", "i wonder",
   "just wondering", "quickly", "real quick", "kinda", "sorta",
-  "btw", "by the way",
+  "btw", "by the way", "you",
 ]);
 
 /** Deictic/pronoun terms that refer to a context entity rather than naming one

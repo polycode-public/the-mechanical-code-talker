@@ -564,10 +564,16 @@ function parsePredicateFilter(words, nlp) {
  *  and it must NOT be mistaken for a restrictor (that's the exact bug behind "how many
  *  classes are there" → the count-restrictor miss). Combined with STOPWORDS (which
  *  already carries are/there/is/in/the/…) at the call site, so only the non-stopword
- *  extras live here. A tail with ANY word outside this ∪ STOPWORDS is a real restrictor. */
+ *  extras live here. A tail with ANY word outside this ∪ STOPWORDS is a real restrictor.
+ *  "this"/"that" (0.9.14 Tier-2 playtest): "which classes exist IN THIS codebase"/
+ *  "which methods exist in this codebase" used to miss — "codebase" alone was already
+ *  filler, but the demonstrative right before it ("this"/"that") is not a STOPWORDS
+ *  entry, so the tail read as non-filler and the whole thing fell through to the
+ *  grammar wall instead of the bare list. */
 const AGG_TAIL_FILLER = new Set([
   "total", "altogether", "overall", "exist", "exists", "existing", "present",
   "here", "now", "currently", "graph", "index", "codebase", "repo", "repository",
+  "this", "that",
 ]);
 
 /** AGGREGATE / COUNT: "how many <entity> [<restrictor>]", "count <entity>",

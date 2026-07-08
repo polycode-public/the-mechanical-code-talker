@@ -2474,6 +2474,12 @@ async function curatedDefinitionAnswer(query, envelope, { memoryDir, lexicon }) 
 // SHORTHAND_CONTRACTIONS above: scoped locally to the lane that owns the word.
 // Word-boundary matched so "hotel"/"intel" are untouched.
 const VAGUE_TOUCH_TEL_RE = /\btel\b/i;
+/** "explain X" / "please explain X" / "kindly explain X" / "explain X to me" /
+ *  "explain X please" — a bare vague-touch shape, sibling of WHAT_ABOUT_RE
+ *  above. Named (not inlined) so both vagueTouchTermOf (term extraction) and
+ *  the isConversational-catch-all exemption (below, deduceGoalFromParsed's
+ *  neighbourhood) can test the SAME shape. */
+const EXPLAIN_TOUCH_RE = /^(?:please\s+|kindly\s+)*explain\s+(?:to\s+me\s+)?(?:an?\s+|the\s+)?(.+?)(?:\s+(?:to\s+me|please))?[?.!\s]*$/i;
 function vagueTouchTermOf(query) {
   // typo-correct the ANCHOR words only ("waht about calls" -> "what about
   // calls") — this shape has no ask()-grammar envelope to lean on for typo
@@ -2490,8 +2496,29 @@ function vagueTouchTermOf(query) {
   q = q.replace(VAGUE_TOUCH_TEL_RE, "tell");
   q = applyPreambleFrames(q);
   const m = q.match(/^(?:kindly\s+)?tell me about\s+(?:an?\s+|the\s+)?(.+?)[?.!\s]*$/i)
-    || q.match(/^(?:(?:and|so|but|ok|okay|now|then|kindly)\s+)*what about\s+(?:an?\s+|the\s+)?(.+?)(?:\s+then|\s+though)?[?.!\s]*$/i);
-  return m ? m[1].trim() : null;
+    || q.match(/^(?:(?:and|so|but|ok|okay|now|then|kindly)\s+)*what about\s+(?:an?\s+|the\s+)?(.+?)(?:\s+then|\s+though)?[?.!\s]*$/i)
+    // "explain X" (0.9.14 Tier-2 playtest, second pass, §3b formal/ESL angle)
+    // — a bare "explain <term>" is at least as natural a vague touch as "tell
+    // me about X", but had no recognized shape at all: normalize.mjs's own
+    // EXPLAIN_WRAPPER_RE only unwraps a WH-QUESTION remainder ("explain
+    // please where is it defined" -> a real structural question), so a bare
+    // noun remainder like "cochange" was never its territory. A leading
+    // "please"/"kindly" also broke the STRUCTURAL pipeline's own
+    // EXPLAIN_WRAPPER_RE (anchored to start with "explain" literally),
+    // sending the whole turn to the wrong lane.
+    || q.match(EXPLAIN_TOUCH_RE);
+  if (!m) return null;
+  // A trailing meta-noun naming WHAT KIND of thing the touched word already is
+  // (0.9.14 Tier-2 playtest, second pass): "tell me about the cochange
+  // relation" / "what about the calls relationship" / "what about the imports
+  // edges" used to capture the WHOLE tail ("cochange relation") as the term —
+  // RELATION_TERM's closed dict has no multi-word entries, so the relation
+  // force declined and the query fell through to the grammar wall. Stripped
+  // for both callers (conceptTermOf's noun touch and relationTermOf's edge
+  // touch): a noun concept is never phrased with this tail ("tell me about
+  // the Class relation" isn't natural), so it's safe either way.
+  const term = m[1].trim().replace(/\s+(?:relations?|relationships?|edges?)$/i, "").trim();
+  return term || null;
 }
 
 function conceptTermOf(query, envelope) {
@@ -2828,7 +2855,18 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // discipline as describeWrapperAnswer itself.
   const describeWrapperMatch = DESCRIBE_WRAPPER_RE.exec(String(query).trim());
   const isDescribePronounContinuation = !!(focus?.label && describeWrapperMatch && DESCRIBE_PRONOUN_RE.test(describeWrapperMatch[1]?.trim() || ""));
-  if (!handled && miss && !envelope?.parsed && isConversational(query) && !isWhatAboutContinuation && !isDescribePronounContinuation) {
+  // A bare/wrapped "explain X" (0.9.14 Tier-2 playtest, second pass) needs the
+  // SAME deferral, and for a stronger reason than the two above: "explain"
+  // isn't a VERB_TO_KIND word at all, so ask() never even ATTEMPTS a parse
+  // (envelope.parsed is null unconditionally for this shape, not merely on a
+  // miss) — a short "explain cochange" (2 words) or politeness-wrapped
+  // "please explain cochange" (3 words) always trips isConversational's ≤3-
+  // word heuristic and never once reaches the relation/concept force below,
+  // which is squarely built to answer exactly this shape. Unlike the two
+  // exemptions above, this one needs no prior-turn/focus context — "explain
+  // X" is a complete, self-contained ask on its own.
+  const isExplainTouch = EXPLAIN_TOUCH_RE.test(String(query).trim());
+  if (!handled && miss && !envelope?.parsed && isConversational(query) && !isWhatAboutContinuation && !isDescribePronounContinuation && !isExplainTouch) {
     // A conversational miss (a greeting, "what can you do", a very short non-code
     // line) gets the friendly orientation (module-aware: empty → --repo/tmct init).
     // Bug B1 (0.8.2 follow-up): this branch carries via:"template" and never
