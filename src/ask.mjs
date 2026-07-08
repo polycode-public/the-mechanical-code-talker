@@ -912,8 +912,19 @@ function parseRelationalOrQualified(w, lc, nlp, depth) {
     // auxiliary in that position ("what DID commit X touch") is left for the existing
     // parser, not mistaken for a term.
     const nextNoun = i + 1 < lc.length ? entityNoun(lc[i + 1]) : null;
+    // CASCADE_NOISE_SET excluded alongside STOPWORDS (Tier-2 playtest, cycle 8):
+    // "what about classes"/"how about the modules" used to reach here with
+    // "about" sitting right where a real qualifying adjective would ("payment"
+    // in "list payment modules") — framed (past "what") and immediately before
+    // a known noun ("classes") — and get misread as a fuzzy find TERM ("no
+    // classes found matching 'about'") instead of the topic-lead-in filler it
+    // is. CASCADE_NOISE already curates "about" for exactly this reading (see
+    // its own docblock, ask-vocab.mjs) — checking it here too lets a real
+    // unknown qualifier ("shiny"/"payment") still reach the find fallback while
+    // a known no-graph-meaning filler word falls through to the ordinary bare-
+    // kind-noun path instead (the cascade's own noise-strip terminal rule).
     if ((framed || quals.length) && nextNoun && /^[a-z]+$/.test(lc[i])
-      && !VERB_TO_KIND[lc[i]] && !STOPWORDS.has(lc[i])) {
+      && !VERB_TO_KIND[lc[i]] && !STOPWORDS.has(lc[i]) && !CASCADE_NOISE_SET.has(lc[i])) {
       return { node: "find", entityType: nextNoun.entityType, term: w[i] };
     }
     return null;                                   // no subject entity → not this shape
