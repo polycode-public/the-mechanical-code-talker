@@ -57,3 +57,11 @@ re-arm fresh for the next wave rather than resuming this block.
 OBSERVATION: narrate-mode agent (worktree agent-ae21cfc66710b9bdf, based at 640c852) is worktree-isolated per its task spec, but playtest sprint rounds 1-3 landed fixes by DIRECT commit on main (b0a2021, 9218266, d95535d), touching the same chat.mjs/ask.mjs/normalize.mjs lanes narrate-mode is instrumenting. Rounds 4-8 will repeat that pattern. Every round-4-8 fix commit widens the eventual merge-back diff against narrate-mode's frozen base. Separately: git worktree list shows 17 worktrees, only 1 locked/active — 16 stale from prior ticks, worth a prune before the next fan-out wave.
 RECOMMENDED ACTION: after each playtest round's fix lands on main, immediately run `git -C .claude/worktrees/agent-ae21cfc66710b9bdf merge main` (or rebase) to catch conflicts in small increments rather than one big-bang resolution after round 8. Run `git worktree prune`/cleanup once the in-flight agents finish.
 STATUS: OPEN
+
+[tick 1 follow-up] STATUS: ✅ DONE — every subsequent worktree-isolated cluster (A, B, D, C, E) was cherry-picked onto main individually with careful conflict resolution + independent re-verification rather than one big-bang merge; no collision was left unresolved. The narrate-mode worktree itself was merged cleanly first, before any conflicting cluster landed. Worktree prune deferred (still 3-4 active/locked worktrees as of this note; will prune once the current fan-out wave fully drains).
+
+═══════════════════════════════════════
+ADVISOR CLOSED (stopped by operator instruction, 2026-07-08). 1 tick run this wave (2026-07-07
+22:56Z, narrate-mode/worktree-merge-order finding — actioned, see the tick-1-follow-up note
+above). No tick 2 was ever re-armed after tick 1 completed — nothing was actively running to
+stop. Re-arm fresh for the next wave rather than resuming this block.
