@@ -292,6 +292,58 @@ test("list HONEST-EMPTY (directory-scoped): 'list modules in nope' is a genuine 
   assert.match(r.content, /no modules in this index/);
 });
 
+// ---- 4b-ii. LIST shape, INTERROGATIVE scoped listing (HANDOVER item 12.2/11.1): the
+// bare interrogative "what/which <kind> [is|are] in|inside|under <scope>" used to
+// decline outright — parseList's interrogative gate refuses ANY meaningful tail, to
+// avoid colliding with a genuine reverse-clause predicate ("which modules import X").
+// A leading SCOPE PREPOSITION right after the entity noun (past an optional copula) is
+// an unambiguous location-scope signal, so it is now routed the SAME way the
+// imperative form already is — without widening the general decline (the reverse-
+// clause compat test right after this block pins that). ----
+
+test("list HIT (interrogative, directory-scoped): 'what modules are in test' answers exactly like the imperative form", () => {
+  const imperative = ask(graph, "list modules in test");
+  const r = ask(graph, "what modules are in test");
+  assert.equal(r.tmct_ask.miss, false);
+  assert.equal(r.content, imperative.content);
+  assert.deepEqual(labels(r), ["test/widget.test.mjs"]);
+  assert.equal(r.tmct_ask.parsed.base.node, "membership");
+  assert.equal(r.tmct_ask.parsed.scoped, true);
+});
+
+test("list HIT (interrogative, single-file scope): 'what classes are in widget.mjs' answers exactly like the imperative form", () => {
+  // "classes" (unlike "methods"/"functions"/"members"/…) is NOT one of the pre-existing
+  // MEMBERS-of-class PHRASING_FRAMES nouns (normalize.mjs), so this exercises parseList's
+  // OWN scoped-listing routing, not that unrelated upstream rewrite.
+  assert.equal(ask(graph, "what classes are in widget.mjs").content, ask(graph, "list classes in widget.mjs").content);
+  assert.deepEqual(labels(ask(graph, "what classes are in widget.mjs")), ["Widget"]);
+});
+
+test("list HIT (interrogative, directory-scoped): a copula-less tail ('what modules in test') routes the same way", () => {
+  assert.equal(ask(graph, "what modules in test").content, ask(graph, "list modules in test").content);
+});
+
+test("list routing-parity (interrogative, 'inside'/'under'): routed to the SAME shape the imperative form already resolves to, warts included — the exception is scoped to routing, not to fixing the unrelated fact that parseRelationalOrQualified's own membership-atom builder only recognizes 'in'/'of' as a preposition (a separate, pre-existing gap, out of scope here)", () => {
+  assert.equal(ask(graph, "what modules are inside test").content, ask(graph, "list modules inside test").content);
+  assert.equal(ask(graph, "what modules are under test").content, ask(graph, "list modules under test").content);
+});
+
+test("list HONEST-EMPTY (interrogative, directory-scoped): 'what modules are in nope' is a genuine dead-end, byte-identical to the imperative miss", () => {
+  const r = ask(graph, "what modules are in nope");
+  assert.equal(r.tmct_ask.miss, true);
+  assert.equal(r.content, ask(graph, "list modules in nope").content);
+});
+
+test("list compat (NO REGRESSION): a reverse-clause predicate ('which/what modules import X') still declines to list and answers the reverse query — the scope-preposition exception must NOT widen the general interrogative gate", () => {
+  const listParse = parseQuery("which modules import base.mjs");
+  assert.notEqual(listParse && listParse.node, "list"); // never hijacked into a list
+  const r = ask(graph, "which modules import base.mjs");
+  const alt = ask(graph, "what modules import base.mjs");
+  assert.equal(r.tmct_ask.miss, false);
+  assert.deepEqual(labels(r), ["gadget.mjs", "widget.mjs"]);
+  assert.equal(alt.content, r.content);
+});
+
 test("list HIT (directory-scoped, non-Module entityType): 'list functions in a subdirectory' collects the entity kind across every module under it, not just the fuzzy-picked one", () => {
   // a dedicated fixture with TWO modules under the same directory, each defining a
   // function, so the directory scope must union across BOTH modules (a single-node

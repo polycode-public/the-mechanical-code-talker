@@ -605,6 +605,12 @@ const LIST_SKIP = new Set(["the", "a", "an", "all", "me", "us"]);
 const LIST_TRIGGERS_SORTED = [...LIST_TRIGGERS].sort((a, b) => b.split(" ").length - a.split(" ").length);
 // The listable node classes, named in the honest miss and the empty-index message.
 const LISTABLE_KINDS = "functions, classes, methods, modules, attributes, variables, or commits";
+// SCOPE PREPOSITIONS (HANDOVER item 12.2/11.1): a leading "in"/"inside"/"under" right
+// after the entity noun (past an optional copula) is an unambiguous LOCATION-SCOPE
+// tail, never a reverse-clause predicate object — "which modules import X" has no
+// preposition there at all. Narrowly scoped to just these three words so the
+// interrogative exception below can't be mistaken for a general tail-acceptance.
+const SCOPE_PREPOSITIONS = new Set(["in", "inside", "under"]);
 
 /** LIST: "list <kind>", "show me the <kind>s", "what are the <kind>", "list <kind> in
  *  <module>". A sibling of the count node — it enumerates the individuals of a class
@@ -616,7 +622,14 @@ const LISTABLE_KINDS = "functions, classes, methods, modules, attributes, variab
  *  (reusing membership/relational/boolean), and its `scoped` flag suppresses the
  *  "narrow with …" hint. An unknown kind after a clear imperative trigger ("list
  *  bananas") is an honest miss naming the listable kinds; anything less certain falls
- *  through (null) to the existing parser/cascade rather than guessing. */
+ *  through (null) to the existing parser/cascade rather than guessing.
+ *
+ *  A single narrowly-scoped EXCEPTION to the interrogative gate (HANDOVER item
+ *  12.2/11.1): "what/which <kind> [is|are] in|inside|under <scope>" — a leading scope
+ *  preposition, past an optional copula, straight after the entity noun — is routed the
+ *  SAME way the imperative "list <kind> in <scope>" already is. This does NOT widen the
+ *  general decline: "which modules import X"/"which functions call X" have a VERB there,
+ *  not a scope preposition, so they still fall through untouched. */
 function parseList(w, lc, nlp, depth) {
   let i = 0;
   let interrogative = false;
@@ -650,18 +663,33 @@ function parseList(w, lc, nlp, depth) {
   i += 1;
   const tail = w.slice(i);
   const tailMeaningful = lc.slice(i).some((t) => !STOPWORDS.has(t) && !AGG_TAIL_FILLER.has(t));
+  // SCOPE-PREPOSITION exception (HANDOVER 12.2/11.1): past an optional copula
+  // ("is"/"are"), does the tail open with "in"/"inside"/"under"? If so this is a
+  // location-scope tail ("what modules ARE IN app/lib"), not a reverse-clause
+  // predicate — strip only the copula (the imperative form never has one: "list
+  // modules in app/lib") so the membership-tail text this builds below is byte-
+  // identical in shape to what the imperative path already builds.
+  let scopeTailLc = lc.slice(i);
+  let scopeTailWords = tail;
+  if (scopeTailLc[0] === "is" || scopeTailLc[0] === "are") {
+    scopeTailLc = scopeTailLc.slice(1);
+    scopeTailWords = scopeTailWords.slice(1);
+  }
+  const scopedException = interrogative && SCOPE_PREPOSITIONS.has(scopeTailLc[0]);
   // The bare interrogative "what/which <kind>" is a list ONLY with an explicit
-  // list-confirming filler tail ("… are there", "… that exist"): a real predicate
-  // ("which functions call X") is a reverse query, and a *bare* "which methods" is left
-  // alone deliberately — otherwise the relaxation cascade could drop an unknown
-  // qualifier ("which shiny methods" → "which methods") and silently list everything,
-  // erasing the honest "unknown qualifier" miss. Imperative triggers ("list methods")
-  // carry their own list intent, so they need no such tail.
-  if (interrogative && (tailMeaningful || tail.length === 0)) return null;
+  // list-confirming filler tail ("… are there", "… that exist") or the scoped
+  // exception just above: a real predicate ("which functions call X") is a reverse
+  // query, and a *bare* "which methods" is left alone deliberately — otherwise the
+  // relaxation cascade could drop an unknown qualifier ("which shiny methods" →
+  // "which methods") and silently list everything, erasing the honest "unknown
+  // qualifier" miss. Imperative triggers ("list methods") carry their own list
+  // intent, so they need no such tail.
+  if (interrogative && ((tailMeaningful && !scopedException) || tail.length === 0)) return null;
   let base;
   let scoped = false;
   if (tailMeaningful) {
-    const setAst = parseSetPhrase(`which ${[...quals, entWord, ...tail].join(" ")}`, nlp, (depth || 0) + 1);
+    const useTail = scopedException ? scopeTailWords : tail;
+    const setAst = parseSetPhrase(`which ${[...quals, entWord, ...useTail].join(" ")}`, nlp, (depth || 0) + 1);
     if (!setAst || setAst.node === "miss") return { node: "miss", reason: (setAst && setAst.reason) || "the list filter didn't parse" };
     base = setAst;
     scoped = true;
