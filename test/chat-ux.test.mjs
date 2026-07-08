@@ -269,6 +269,21 @@ test("broadened conversational coverage: dialect/formal/slang/typo/identity/AI o
   assert.doesNotMatch(who.answer, /no LLM involved/i, "identity and the AI/LLM clarification stay distinct answers");
 });
 
+test("texting-shorthand identity questions reach identity, not the generic orientation card", async () => {
+  const g = await graph();
+  const ORIENTATION_CARD = /I answer questions about THIS codebase/;
+  // "waht r u"/"wat r u" — spaced "r"/"u" shorthand PLUS a typo'd "who/what" —
+  // resolve via fuzzyConversationalMatch's shorthand-contraction pass ("r"→"are",
+  // "u"→"you") feeding the existing bounded edit-distance tier. "hru" is GLUED
+  // (no word boundary for the contraction pass to reach) and gets its own
+  // IDENTITY_PHRASES closed-set entry instead.
+  for (const q of ["waht r u", "wat r u", "hru"]) {
+    const r = await runTurn(q, { config: CONFIG, graph: g });
+    assert.match(r.answer, /I'm tmct/, `"${q}" reaches identity-self, not a generic answer`);
+    assert.doesNotMatch(r.answer, ORIENTATION_CARD, `"${q}" doesn't fall back to the capability/orientation card`);
+  }
+});
+
 test("#3/#4 a structural query over an empty code graph carries the exit toward a real graph", async () => {
   clearCache();
   const dir = await mkdtemp(join(tmpdir(), "tmct-ux-empty2-"));

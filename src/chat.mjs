@@ -527,6 +527,16 @@ const IDENTITY_PHRASES = [
   // order was declared).
   /^explain(?:\s+(?:to me|please))*\s+what\s+(?:is\s+(?:this|it|you)|(?:you are|this is|it is))\??$/i,
   /^whoami\??$/i,
+  // "hru" ("how are you") — GLUED texting shorthand: no word boundary inside it
+  // for a contraction pass (fuzzyConversationalMatch's SHORTHAND_CONTRACTIONS)
+  // to split on, so it earns its own closed-set entry instead, same as GREET/
+  // THANKS' hand-curated slang. Routed to identity-self (not a fake "doing
+  // great!" performance, nor the generic greeting card) — an honest "what I am"
+  // answer is the closest real thing tmct has to say to "how are you". "wyd"
+  // ("what are you doing") is deliberately NOT given a matching entry: it isn't
+  // an identity question and forcing one would be a fabricated route; it falls
+  // through to the honest generic orientation card same as before.
+  /^hru\??$/i,
 ];
 /** "Are you an LLM/AI/bot" — tmct's actual positioning (no LLM, deterministic) is
  *  a genuinely different, more specific answer than the generic self-description,
@@ -729,13 +739,37 @@ function classifyConversational(phrase) {
   if (phrase === "who are you" || phrase === "what are you" || phrase === "what is your name") return "identity";
   return "capability";
 }
+/** Standalone-token texting shorthand for this lane ONLY: "r"→"are", "u"→"you",
+ *  word-boundary matched so a substring inside a real word ("your", "sure",
+ *  "minute") is never touched. This is the SAME normalization class as
+ *  ask-vocab.mjs's CONTRACTIONS table (word-boundary, case-insensitive,
+ *  longest-key-first — see interpret/normalize.mjs's tableRe), but deliberately
+ *  NOT routed through that shared table/normalizeQuery: those feed ask.mjs's
+ *  code-graph grammar pipeline, where a bare "u"/"r" plausibly collides with a
+ *  real dotted identifier ("u.mjs" as a module name) — and conversationalTurn()
+ *  never calls normalizeQuery at all, so extending the shared table wouldn't
+ *  even reach this lane. Scoped locally to the fuzzy-conversational tier
+ *  instead, applied BEFORE the candidate lookup below, so "waht r u"/"wat r u"
+ *  first become "waht are you"/"wat are you" — within the existing bounded
+ *  edit-distance of "who are you"/"what are you" — and resolve exactly the way
+ *  a plain-English typo does. GLUED shorthand ("hru", "wyd") has no word
+ *  boundary to split on and is NOT reached by this pass; see IDENTITY_PHRASES
+ *  for "hru"'s separate closed-set entry. */
+const SHORTHAND_CONTRACTIONS = { r: "are", u: "you" };
+const SHORTHAND_CONTRACTION_RE = /\b(r|u)\b/gi;
+function expandShorthandContractions(text) {
+  return text.replace(SHORTHAND_CONTRACTION_RE, (m) => SHORTHAND_CONTRACTIONS[m.toLowerCase()]);
+}
+
 /** UNIQUE within-bound fuzzy match of the whole trimmed line against
- *  CONVERSATIONAL_PHRASES — the "helo"/"thnx"/"wat r u"/"byee" tier. Restricted to
- *  short (≤4-word), non-code-ish inputs (looksCodeish, shared with
+ *  CONVERSATIONAL_PHRASES — the "helo"/"thnx"/"byee" tier, plus (after shorthand
+ *  contraction expansion above) "waht r u"/"wat r u"-style texting shorthand.
+ *  Restricted to short (≤4-word), non-code-ish inputs (looksCodeish, shared with
  *  isConversational) so a genuine near-miss structural question is never grabbed;
  *  a distance tie is refused, never guessed (same discipline as fuzzyVocabWord). */
 function fuzzyConversationalMatch(raw) {
-  const q = collapseRuns(raw.toLowerCase().replace(/[.!?]+$/, "").trim());
+  const expanded = expandShorthandContractions(raw);
+  const q = collapseRuns(expanded.toLowerCase().replace(/[.!?]+$/, "").trim());
   const words = q.split(/\s+/).filter(Boolean);
   if (!words.length || words.length > 4 || looksCodeish(raw, q)) return null;
   return fuzzyMatchInSet(q, CONVERSATIONAL_PHRASES, Math.min(2, fuzzyBound(q)));
