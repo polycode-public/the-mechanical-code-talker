@@ -2386,6 +2386,19 @@ const WHAT_ABOUT_RE = /^(?:(?:and|so|but|ok|okay|now|then)\s+)*what about\s+(.+?
  *  so this is a safe, unambiguous code-identifier signal. */
 const NAME_TOKEN_RE = /\b[\w-]+(?:[/.][\w-]+)+\b|\b[A-Z][A-Za-z0-9_]*\b|\b[a-z][a-z0-9]*[A-Z][A-Za-z0-9]*\b/;
 
+/** STACCATO SWAP CONTINUATION (0.9.15 Tier-2 playtest, 4th pass): the bare-
+ *  connective sibling of WHAT_ABOUT_RE — "and Widget?", "also app/lib/b.mjs" —
+ *  with no "about" at all. A rapid-fire drill-down chain naturally shortens
+ *  to this once the shape is established ("what calls app/lib/a.mjs" -> "and
+ *  Widget?" meaning "and what calls Widget?"). Unlike WHAT_ABOUT_RE's
+ *  explicit question framing, a bare connective is otherwise too ambiguous
+ *  with ordinary discourse ("and then?", "so what") to safely reinterpret as
+ *  a subject swap — discourseRewrite below only trusts this shape when the
+ *  captured word is ITSELF unambiguously code-ish (NAME_TOKEN_RE): a path, a
+ *  Capitalized symbol, or lowerCamelCase. A plain word ("and stuff?") never
+ *  matches and falls through unchanged. */
+const STACCATO_SWAP_RE = /^(?:and|also|so|then|now)\s+(.+?)[?.!\s]*$/i;
+
 /** DISCOURSE CONTINUATION (CHATBENCH_006 lever 2): "what about X" carries the PRIOR
  *  turn's question shape across the turn boundary — re-asking it with X in place of
  *  the previous subject/object. Returns the reconstructed query (parsed like any
@@ -2393,10 +2406,18 @@ const NAME_TOKEN_RE = /\b[\w-]+(?:[/.][\w-]+)+\b|\b[A-Z][A-Za-z0-9_]*\b|\b[a-z][
  *  no prior query or no name token to swap (→ the ordinary honest miss stands). */
 function discourseRewrite(query, last) {
   const m = String(query).match(WHAT_ABOUT_RE);
-  if (!m || !last?.query) return null;
+  let newSubj;
+  if (m) {
+    newSubj = m[1].trim();
+  } else {
+    const sm = String(query).match(STACCATO_SWAP_RE);
+    const cand = sm?.[1]?.trim();
+    if (!cand || !NAME_TOKEN_RE.test(cand)) return null;
+    newSubj = cand;
+  }
+  if (!last?.query) return null;
   const prevQ = String(last.query);
   if (!NAME_TOKEN_RE.test(prevQ)) return null;
-  const newSubj = m[1].trim();
   return prevQ.replace(NAME_TOKEN_RE, () => newSubj);
 }
 
@@ -2602,6 +2623,20 @@ function relationTermOf(query, envelope) {
   if ((m = q.match(/^what\s+([a-z][a-z-]*?)\s+(?:are|r)\s+there$/))) return m[1];
   // "what is calling", "what is importing" (bare gerund, no object)
   if ((m = q.match(/^what\s+(?:is|are)\s+([a-z][a-z-]*ing)$/))) return m[1];
+  // STACCATO RELATION-CHAIN CONTINUATION (0.9.15 Tier-2 playtest, 4th pass): a
+  // rapid-fire short follow-up inside an EXISTING relation-touch chain — "and
+  // calls?", "also tests", "so inherits", "then contains" — has no "about"/
+  // "is"/"are" at all, just a bare connective + the relation word. Without
+  // this, the bare word fell straight through to ask()'s own raw grammar,
+  // which parsed the leading connective ITSELF as the object term (e.g. "and
+  // calls" read as kind=calls object="and", silently resolving "and" via the
+  // standing focus/contextId fallback into an unrelated, honestly-empty-but-
+  // wrong answer) or, worse, matched no shape at all and hit the grammar
+  // wall outright. Scoped to RELATION_TERM's own closed dict downstream (this
+  // function's caller, relationForceAnswer), so an unrelated word or a real
+  // entity name ("and Widget?", "so that") safely falls through unchanged —
+  // only a genuine, already-known relation word is swept up.
+  if ((m = q.match(/^(?:and|also|so|then|now)\s+([a-z][a-z-]*)$/))) return m[1];
   // THE SINGULAR META FORM — "what is a test" / "what is an import". The whole meta
   // shape used to be excluded here to keep the frozen am-meta-imports ambiguity case
   // ("what does imports mean") out; but that case is a DIFFERENT shape (ambiguousParse
@@ -2650,8 +2685,20 @@ const DESCRIBE_WRAPPER_RE =
  *  same as any unresolvable term. */
 const DESCRIBE_PRONOUN_RE = /^(?:it|that|this|those|them)$/i;
 
+/** STACCATO PRONOUN CONTINUATION (0.9.15 Tier-2 playtest, 4th pass): a rapid-
+ *  fire short follow-up naming no verb at all — "and that?", "also this",
+ *  "so it" — the bare-connective sibling of DESCRIBE_WRAPPER_RE's "what about
+ *  it"/"describe that". Without this, "what calls X" -> "and that?" fell to
+ *  the generic orientation card (isConversational's ≤3-word catch-all caught
+ *  it, and DESCRIBE_WRAPPER_RE requires an actual "about"/"describe" anchor
+ *  word this shape never has) even though the immediately-prior turn had just
+ *  set a real focus a sibling phrasing ("what about it") already resolves
+ *  against cleanly. */
+const STACCATO_PRONOUN_RE = /^(?:and|also|so|then|now)\s+(it|that|this|those|them)\s*\??$/i;
+
 async function describeWrapperAnswer(query, { config, source, focus }) {
-  const m = DESCRIBE_WRAPPER_RE.exec(String(query || "").trim());
+  const q = String(query || "").trim();
+  const m = DESCRIBE_WRAPPER_RE.exec(q) || STACCATO_PRONOUN_RE.exec(q);
   let term = m?.[1]?.trim();
   if (!term) return null;
   if (DESCRIBE_PRONOUN_RE.test(term)) {
@@ -2894,7 +2941,14 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // a describe-shaped question (discourseRewrite can't rewrite "describe X", so it
   // always misses) or whose swapped-in subject is a bare Capitalized/pronoun term
   // fell straight to the generic orientation card instead of reaching (4d).
-  const isWhatAboutContinuation = !!(last?.query && WHAT_ABOUT_RE.test(String(query)));
+  // Same exemption for the bare-connective sibling shape ("and Widget?", "also
+  // app/lib/b.mjs" — no "about" at all, STACCATO_SWAP_RE above), gated the
+  // SAME way discourseRewrite gates it: the swapped-in word must itself be
+  // unambiguously code-ish, so ordinary discourse ("and then?", "so what")
+  // never trips this exemption.
+  const staccatoSwapMatch = String(query).match(STACCATO_SWAP_RE);
+  const isStaccatoSwap = !!(last?.query && staccatoSwapMatch && NAME_TOKEN_RE.test(staccatoSwapMatch[1]?.trim() || ""));
+  const isWhatAboutContinuation = !!(last?.query && WHAT_ABOUT_RE.test(String(query))) || isStaccatoSwap;
   // Same exemption for the sibling shape "describe it"/"tell me about that"
   // (0.9.13 Tier-1 playtest): a bare-pronoun describe/tell-me-about is exactly
   // as short and non-codeish as "what about it", and needs the SAME deferral to
@@ -2903,7 +2957,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // re-ask) fell to the orientation card even though the standing focus made it
   // perfectly answerable. Gated on an actual standing focus, same honest-decline
   // discipline as describeWrapperAnswer itself.
-  const describeWrapperMatch = DESCRIBE_WRAPPER_RE.exec(String(query).trim());
+  const describeWrapperMatch = DESCRIBE_WRAPPER_RE.exec(String(query).trim()) || STACCATO_PRONOUN_RE.exec(String(query).trim());
   const isDescribePronounContinuation = !!(focus?.label && describeWrapperMatch && DESCRIBE_PRONOUN_RE.test(describeWrapperMatch[1]?.trim() || ""));
   // A bare/wrapped "explain X" (0.9.14 Tier-2 playtest, second pass) needs the
   // SAME deferral, and for a stronger reason than the two above: "explain"

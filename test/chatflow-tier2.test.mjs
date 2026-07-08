@@ -149,6 +149,56 @@
 //       "this codebase has no X edges in the index" two-band answer on a graph
 //       with none. Frozen here per §4 ("freeze what flows") to close the
 //       coverage gap the advisor found, even though no dead-end turned up.
+//
+// FOURTH PASS (0.9.15, repeated Tier 2 per SKILL_CHAT_PLAYTEST §1 Step 6 —
+// entry points NOT yet covered by passes 1-3: rapid-fire STACCATO short
+// follow-ups inside a relation-touch chain ("and Y?", "also Z" — no "about"
+// at all, unlike every earlier pass's fixes), relation touches interleaved
+// with the Tier-0 identity/AI-identity closed sets in the SAME conversation,
+// and the "contains" relation kind exercised by name via the vague-touch
+// force for the first time (T1-T16 only ever hit it through a direct
+// per-object query)):
+//   T17 a bare connective + a KNOWN relation word ("and calls?", "also
+//       tests", "so inherits") had no recognized shape at all — unlike "what
+//       about X"/"tell me about X" (T1-T12), this staccato shorthand has no
+//       anchor verb whatsoever. Without a fix it fell straight through to
+//       ask()'s own raw grammar, which parsed the leading connective ITSELF
+//       as the object term ("and calls" read as kind=calls object="and",
+//       silently resolving "and" via the standing focus/contextId fallback
+//       into an unrelated, honestly-empty-but-wrong answer) or matched no
+//       shape at all and hit the grammar wall outright. Fixed by a new
+//       branch in relationTermOf (chat.mjs): `/^(?:and|also|so|then|now)\s+
+//       ([a-z][a-z-]*)$/` — scoped safe by RELATION_TERM's own closed dict
+//       downstream, so an unrelated word or real entity name ("and Widget?")
+//       still falls through unchanged (see T19).
+//   T18 the SAME staccato shorthand for a bare demonstrative pronoun
+//       continuation ("and that?", "also this") — the sibling of the
+//       already-working "what about it" (describeWrapperAnswer's pronoun
+//       resolution) but with no "about" at all. Used to fall to the generic
+//       orientation card (isConversational's ≤3-word catch-all caught it,
+//       and DESCRIBE_WRAPPER_RE requires an actual anchor word this shape
+//       never has). Fixed by a new STACCATO_PRONOUN_RE
+//       (`/^(?:and|also|so|then|now)\s+(it|that|this|those|them)\s*\??$/`)
+//       tried alongside DESCRIBE_WRAPPER_RE in describeWrapperAnswer, plus
+//       the matching isConversational-catch-all exemption.
+//   T19 the SAME staccato shorthand swapping in a real CODE-ISH subject
+//       ("and Widget?", "and app/lib/f.mjs?") — the bare-connective sibling
+//       of discourseRewrite's own "what about X" (CHATBENCH_006 lever 2).
+//       Fixed by a new STACCATO_SWAP_RE tried in discourseRewrite alongside
+//       WHAT_ABOUT_RE, gated (unlike WHAT_ABOUT_RE's explicit question
+//       framing) on the swapped-in word ITSELF being unambiguously code-ish
+//       (NAME_TOKEN_RE — a path, a Capitalized symbol, or lowerCamelCase) so
+//       ordinary staccato discourse ("and then?", "so what", "and also")
+//       never misfires into a bogus subject swap.
+//   Also spot-checked, found ALREADY FLOWING, no fix needed: relation touches
+//   interleaved with Tier-0 identity/AI-identity mid-conversation ("who are
+//   you" -> "what about imports" -> "are you an AI" -> a direct graph query
+//   -> "are you chatgpt" -> another relation touch — every turn answers its
+//   own lane cleanly, no cross-contamination), and the "contains" relation
+//   kind's OWN vague-touch force + every remaining RELATION_TERM synonym not
+//   yet exercised by name (members, containment, subclasses, coverage,
+//   declaration, coupled) — all already correctly resolve via the existing
+//   T1-T12 machinery.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
@@ -606,5 +656,101 @@ test("tier2/T16 touches relation force (advisor-flagged coverage gap, T1-T12 nev
   } finally {
     clearCache();
     await rm(zeroDir, { recursive: true, force: true });
+  }
+});
+
+// ---- FOURTH PASS (T17-T19) ----
+
+const IMPORTS_RELATION_TEXT =
+  "To import is to bring another module's definitions into the current one.\n"
+  + "In this codebase, for example: app/lib/b.mjs imports app/lib/a.mjs, app/lib/c.mjs imports app/lib/a.mjs and app/functions/d/handler.mjs imports app/lib/b.mjs (7 import edges). …and 4 more — say 'more' to see them.\n"
+  + "Want to go deeper? Try:\n"
+  + "  • which modules import app/lib/a.mjs\n"
+  + "  • what does app/lib/b.mjs import";
+
+const CONTAINS_RELATION_TEXT =
+  "Containment is a class or module holding a member (a method, attribute, or nested definition).\n"
+  + "In this codebase, for example: Widget contains render and Widget contains name (2 containment edges).\n"
+  + "Want to go deeper? Try:\n"
+  + "  • what does Widget contain\n"
+  + "  • which class contains render";
+
+const INHERITS_RELATION_TEXT =
+  "Inheritance is one class deriving its structure and behaviour from another.\n"
+  + "In this codebase, for example: Widget inherits from Base and Button inherits from Widget (2 inheritance edges).\n"
+  + "Want to go deeper? Try:\n"
+  + "  • which classes inherit from Base\n"
+  + "  • where is Widget defined";
+
+test("tier2/T17 staccato relation-chain continuation: 'and calls?'/'also tests'/'and inherits?' (no \"about\" at all) all reach the relation force mid-chain", async () => {
+  const { dir, turns } = await driveSession([
+    "what about imports",
+    "and calls?",
+    "also tests",
+    "what about contains",
+    "and inherits?",
+  ]);
+  try {
+    for (const [i, t] of turns.entries()) {
+      assert.doesNotMatch(t.answer, WALL, `turn ${i} must not hit the grammar wall`);
+      assert.doesNotMatch(t.answer, BAD_SEARCH, `turn ${i} must not fall through to a bogus object search over the leftover connective word`);
+    }
+    assert.equal(turns[0].answer, IMPORTS_RELATION_TEXT);
+    assert.equal(turns[1].answer, CALLS_RELATION_TEXT, "'and calls?' composes the calls relation force, not a focus-object miss over the word \"and\"");
+    assert.equal(turns[2].answer, TESTS_RELATION_TEXT, "'also tests' composes the tests relation force, not a bogus \"no module matching 'also' found\"");
+    assert.equal(turns[3].answer, CONTAINS_RELATION_TEXT);
+    assert.equal(turns[4].answer, INHERITS_RELATION_TEXT, "'and inherits?' composes the inherits relation force, not the grammar wall");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("tier2/T18 staccato pronoun continuation: 'and that?'/'also this'/'and it' (no \"about\"/\"describe\" at all) all resolve against the standing focus", async () => {
+  const { dir, turns } = await driveSession([
+    "what calls app/lib/a.mjs",
+    "and that?",
+    "also this",
+    "who tests app/lib/b.mjs",
+    "and it",
+  ]);
+  try {
+    for (const [i, t] of turns.entries()) {
+      assert.doesNotMatch(t.answer, WALL, `turn ${i} must not hit the grammar wall`);
+      assert.doesNotMatch(t.answer, /I'm tmct — a deterministic/, `turn ${i} must not fall to the generic orientation card`);
+    }
+    assert.equal(turns[0].answer, "scripts/g.mjs.");
+    assert.match(turns[1].answer, /^app\/lib\/a\.mjs — Module \(id: mod-a\)/, "'and that?' describes the standing focus (app/lib/a.mjs)");
+    assert.equal(turns[2].answer, turns[1].answer, "'also this' resolves the same way as 'and that?'");
+    assert.equal(turns[3].answer, "app/unit-tests/b.test.mjs.");
+    assert.match(turns[4].answer, /^app\/lib\/b\.mjs — Module \(id: mod-b\)/, "'and it' describes the NEW standing focus after the drill-down (app/lib/b.mjs)");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("tier2/T19 staccato swap continuation: 'and Widget?'/'and app/lib/f.mjs?' (no \"about\" at all) re-ask the prior query shape with the new subject swapped in, while non-code-ish staccato ('so then', 'and also') never misfires into a bogus swap", async () => {
+  const { dir, turns } = await driveSession([
+    "what calls app/lib/a.mjs",
+    "and Widget?",
+    "so then",
+    "and also",
+    "which modules import app/lib/a.mjs",
+    "and app/lib/f.mjs?",
+  ]);
+  try {
+    for (const [i, t] of turns.entries()) {
+      assert.doesNotMatch(t.answer, WALL, `turn ${i} must not hit the grammar wall`);
+    }
+    assert.equal(turns[0].answer, "scripts/g.mjs.");
+    assert.equal(turns[1].answer, "No modules found whose module directly calls Widget.", "'and Widget?' re-asks 'what calls Widget' — an honest, specific empty, not a misparse");
+    assert.match(turns[2].answer, /I'm tmct — a deterministic/, "'so then' has no code-ish swap-in candidate — falls through to the ordinary (guiding) orientation path, not a bogus subject swap");
+    assert.doesNotMatch(turns[3].answer, WALL);
+    assert.equal(turns[4].answer, "app/lib/b.mjs and app/lib/c.mjs and app/lib/e.mjs.");
+    assert.equal(turns[5].answer, "app/lib/e.mjs.", "'and app/lib/f.mjs?' re-asks 'which modules import app/lib/f.mjs' with the swapped-in path");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
   }
 });
