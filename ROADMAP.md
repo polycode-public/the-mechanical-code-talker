@@ -890,6 +890,22 @@ stop signs (full detail + full citation lists in each owning doc):
   nobody has published the specific combination with tmct's multi-trust-tier, hard-budget
   requirement. Speculative angle: an ATMS-lite extension to `syllogise.mjs`'s currently-flat
   provenance tag, sketched but unbuilt.
+- **A ~2M-word connected cross-domain ontology (1M general-English base + 1M
+  technical/scientific/engineering/programming-language/slang)** — `PLAN_ontology-hierarchies.md`
+  (new section, research pass in progress as of 2026-07-08). Explicitly NOT the same finding as
+  that doc's existing track (e) (which is about importing raw WordNet into tmct's own small
+  corpus, and stays correct at that scope) — this is a separate, much larger, deliberately
+  speculative target: a shared reference resource, not tmct's own corpus, that domain-scoped
+  consumers (tmct, marginalia, others) would pull filtered slices from. The real problem, walked
+  into rather than avoided (operator's own framing): merging a general-English base with a
+  technical/domain vocabulary at this scale is not additive — words like "class"/"cache"/"thread"/
+  "wave" collide across registers, the same word-sense problem SEthesaurus's own finding already
+  names at software-corpus scale, now at ~13x the word count. Estimated size at this scale:
+  ~1.3M word-sense nodes, ~4-6M relations, ~1.6-3.2GB as JSON triples (roughly 500-1000x tmct's
+  own ~2MB tier-1 corpus budget) — a genuinely different kind of artifact than anything this repo
+  ships today. Full citation-grounded treatment (word-sense disambiguation literature, BabelNet as
+  the closest existing precedent, a symbolic/deterministic-compatible speculative angle) lands in
+  `PLAN_ontology-hierarchies.md` once the research pass completes.
 
 Every item above is honestly labeled speculative — a direction recorded so it isn't
 re-discovered from scratch, not a committed build plan. None of it is scheduled; the phases above
