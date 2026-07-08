@@ -582,6 +582,30 @@ test("WS4(e) opinion honesty: 'is the code good' gets the personality line, neve
   }
 });
 
+// ---- BUG 3 fix (2026-07-08): out-of-domain small talk ("what time is it")
+// gets an honest, guiding decline instead of the raw grammar wall. These are
+// 4+ word, non-codeish questions — too long for isConversational's ≤3-word
+// catch-all, so before the fix they fell straight to the raw "couldn't parse
+// this as a graph question. Try: ..." wall, a genuine dead-end per
+// SKILL_CHAT_PLAYTEST.md §0. ----
+
+test("BUG 3: out-of-domain personal-assistant questions get an honest decline, never the raw grammar wall", async () => {
+  const g = await graph();
+  for (const q of ["what time is it", "what is the date today", "what day is it", "whats the weather like today"]) {
+    const r = await runTurn(q, { config: CONFIG, graph: g });
+    assert.equal(r.record.miss, true, `"${q}" is still a recorded miss (a genuine capability ceiling)`);
+    assert.match(r.answer, /deterministic code\/vocabulary assistant/, `"${q}" gets the honest decline`);
+    assert.doesNotMatch(r.answer, /couldn't parse this as a graph question/, `"${q}" never hits the raw grammar wall`);
+  }
+});
+
+test("BUG 3: real structural queries are unaffected by the out-of-domain nudge", async () => {
+  const g = await graph();
+  const r = await runTurn("which modules import app/lib/a.mjs", { config: CONFIG, graph: g });
+  assert.equal(r.record.miss, false);
+  assert.doesNotMatch(r.answer, /deterministic code\/vocabulary assistant/);
+});
+
 test("WS4(8) imperative nudge: write/make/fix asks → the read-only wall; 'it' resolves to the focus", async () => {
   const g = await graph();
   const r = await runTurn("can you write a test for fnAlpha", { config: CONFIG, graph: g });

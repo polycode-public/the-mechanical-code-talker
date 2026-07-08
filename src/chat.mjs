@@ -1481,6 +1481,35 @@ const IMPERATIVE_NUDGE_RE =
   /^(?:please\s+)?(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?)?(?:make|write|create|add|generate|implement|fix|refactor)\b(?=.*\b(?:tests?|code|functions?|methods?|modules?|class(?:es)?|files?|it)\b)/i;
 const WHY_UNTESTED_RE = /^why\s+(?:is|are)(?:n't|\s+not)?\s+(.+?)\s+(?:untested|not\s+tested|uncovered)$/i;
 
+// #5(g) OUT-OF-DOMAIN PERSONAL-ASSISTANT NUDGE (BUG 3 fix, 2026-07-08): "what
+// time is it" / "what's the weather" / "what day is it" — obviously not an
+// attempted code-graph query at all (no structural noun/verb), but 4+ words
+// with no dotted/camelCase/"()" token, so it slips past BOTH looksCodeish and
+// isConversational's ≤3-word catch-all, straight to the raw grammar wall
+// ("couldn't parse this as a graph question. Try: ...") — a dead-end per
+// SKILL_CHAT_PLAYTEST.md §0 ("every turn either answers, or gives a guiding
+// nudge... a turn that does neither is a dead-end"). A small closed set, same
+// discipline as RISK_NUDGE_RE/OPINION_NUDGE_RE above: this is a genuine
+// capability ceiling (tmct has no clock/calendar/weather capability) — the
+// fix is an honest decline pointing back at what tmct actually does, never a
+// fabricated time/date/weather answer.
+// "what(?:'s|s|\s+is)" also accepts the bare "whats" spelling — the same
+// informal contraction ask-vocab.mjs's own CONTRACTIONS table maps to "what
+// is" for the graph-query path; nudgeAnswer sees the raw (not contraction-
+// normalized) query text, so it earns its own tolerance here too.
+const PERSONAL_ASSISTANT_NUDGE_RE = new RegExp(
+  "^(?:"
+  + "what\\s+time\\s+is\\s+it(?:\\s+(?:now|right\\s+now))?"
+  + "|what(?:'s|s|\\s+is)\\s+the\\s+time(?:\\s+(?:now|right\\s+now))?"
+  + "|what\\s+day\\s+is\\s+it(?:\\s+today)?"
+  + "|what(?:'s|s|\\s+is)\\s+(?:the\\s+)?(?:day|date)(?:\\s+today)?"
+  + "|what(?:'s|s|\\s+is)\\s+today'?s\\s+date"
+  + "|what(?:'s|s|\\s+is)\\s+the\\s+weather(?:\\s+like)?(?:\\s+(?:today|outside))?"
+  + "|how'?s\\s+the\\s+weather(?:\\s+like)?(?:\\s+(?:today|outside))?"
+  + ")\\??$",
+  "i",
+);
+
 /** STACCATO NEGATION ("not X", "not X then", "except X") — SKILL_CHAT_PLAYTEST
  *  Tier-2, 5th pass: a rapid-fire rejection of a specific item, with no verb at
  *  all — the bare-connective sibling of STACCATO_PRONOUN_RE/STACCATO_SWAP_RE
@@ -1516,6 +1545,10 @@ function nudgeName(captured, focus) {
  *  short-miss rewrite). */
 function nudgeAnswer(query, focus) {
   const q = String(query).trim().replace(/[?.!]+$/, "").replace(/\s+/g, " ");
+  if (PERSONAL_ASSISTANT_NUDGE_RE.test(q)) {
+    return "I don't have access to that — I'm a deterministic code/vocabulary assistant, not a general assistant. "
+      + 'Ask me about code structure ("which modules import <name>") or try "what is a cache".';
+  }
   if (OPINION_NUDGE_RE.test(q)) {
     const name = focus?.label || "<name>";
     return "I don't hold opinions — I read structure, not quality. I can show what an opinion would rest on: "
