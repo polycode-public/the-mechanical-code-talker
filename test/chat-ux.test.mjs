@@ -157,6 +157,113 @@ test("#2 teach (Feature A): a BARE 'X is a Y' declarative with an unknown SUBJEC
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
+// ---- PRONOUN-SUBJECT GUARD (2026-07-08, operator repro) ----
+// "remember you are a womble" and the literal "every you is a womble" both
+// used to reach teachSuggestion/unknownSubjectFallback treating "you" like
+// an ordinary unknown common noun — either offering the nonsensical "did you
+// mean: every you is a womble" hint, or (worse, when the object happens to
+// resolve as a known noun/adjective) SILENTLY storing a bogus fact like
+// "he rdfs:subClassOf module". A personal pronoun is never a valid class-
+// membership subject; these cases now get their own honest, distinct decline
+// — and never a store. Left alone: this/that/these/those (legitimate
+// demonstrative entity references elsewhere in this file), and real (non-
+// pronoun) unknown-subject nouns like "widget" (control case below).
+
+test("pronoun guard: 'remember you are a womble' (wrapped, unknown object) declines with a distinct pronoun message, never the nonsensical 'did you mean: every you is a womble'", async () => {
+  const dir = await mem();
+  try {
+    const { answer, record } = await runTurn("remember you are a womble", {
+      config: CONFIG, graph: await graph(), memoryDir: dir, sessionId: "t",
+    });
+    assert.match(answer, /I can't store a fact about "you" as a class — pronouns aren't things I can classify\./);
+    assert.doesNotMatch(answer, /Did you mean/, "never the nonsensical 'every you is a womble' guess");
+    assert.doesNotMatch(answer, /every you is a womble/i);
+    assert.equal(record.miss, true);
+    const m = await loadMemory(dir);
+    assert.equal(m.individuals.filter((i) => i.class === FACT_CLASS).length, 0, "no fact stored");
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("pronoun guard: the literal 'every you is a womble' (bare, typed directly) also declines with the distinct pronoun message", async () => {
+  const dir = await mem();
+  try {
+    const { answer, record } = await runTurn("every you is a womble", {
+      config: CONFIG, graph: await graph(), memoryDir: dir, sessionId: "t",
+    });
+    assert.match(answer, /I can't store a fact about "you" as a class — pronouns aren't things I can classify\./);
+    assert.doesNotMatch(answer, /^I couldn't store that/, "the OLD generic teach-miss lead-in (with its own suppressed 'did you mean') is gone for pronoun subjects");
+    assert.equal(record.miss, true);
+    const m = await loadMemory(dir);
+    assert.equal(m.individuals.filter((i) => i.class === FACT_CLASS).length, 0, "no fact stored");
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("pronoun guard: a pronoun subject with a KNOWN noun object ('he is a module') is declined, not silently direct-written by the unknown-subject fallback", async () => {
+  const dir = await mem();
+  try {
+    // Without the guard, unknownSubjectFallback would happily store this — "module"
+    // is a known lexicon noun, exactly the shape ("widget is a component") the
+    // fallback is DESIGNED to store for a real unknown-subject noun (control test
+    // below). The pronoun guard must intercept it first.
+    const { answer, record } = await runTurn("he is a module", {
+      config: CONFIG, graph: await graph(), memoryDir: dir, sessionId: "t",
+    });
+    assert.match(answer, /I can't store a fact about "he" as a class — pronouns aren't things I can classify\./);
+    assert.equal(record.miss, true);
+    const m = await loadMemory(dir);
+    assert.equal(m.individuals.filter((i) => i.class === FACT_CLASS).length, 0, "the unknown-subject fallback never fired for a pronoun subject");
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("pronoun guard: a pronoun subject with a KNOWN adjective object ('remember he is deprecated') is declined, not silently written via the property-teach path", async () => {
+  const dir = await mem();
+  try {
+    // Without the guard, the wrapped TEACH_PROPERTY_RE path would store this —
+    // "deprecated" is a known adjective, exactly the "remember that X is
+    // deprecated" shape that path is DESIGNED for over a real subject.
+    const { answer, record } = await runTurn("remember he is deprecated", {
+      config: CONFIG, graph: await graph(), memoryDir: dir, sessionId: "t",
+    });
+    assert.match(answer, /I can't store a fact about "he" as a class — pronouns aren't things I can classify\./);
+    assert.equal(record.miss, true);
+    const m = await loadMemory(dir);
+    assert.equal(m.individuals.filter((i) => i.class === FACT_CLASS).length, 0, "the property-teach path never fired for a pronoun subject");
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("pronoun guard: 'i am a module' (the copula 'am', not 'is'/'are') and 'he is a doctor' both get the distinct pronoun decline", async () => {
+  const dir = await mem();
+  try {
+    // (A bare adjective complement like "i am tired" is swallowed whole by the
+    // pre-existing, unrelated isConversational() orientation-card lane before it
+    // ever reaches teachLane — true for ANY subject, pronoun or not ("cache is
+    // tired" hits the same lane) — so this uses an object shape ("a module")
+    // that's known to actually reach teachLane, same as this file's other cases.)
+    const tired = await runTurn("i am a module", { config: CONFIG, graph: await graph(), memoryDir: dir, sessionId: "t" });
+    assert.match(tired.answer, /I can't store a fact about "i" as a class — pronouns aren't things I can classify\./);
+    assert.equal(tired.record.miss, true);
+
+    const doctor = await runTurn("he is a doctor", { config: CONFIG, graph: await graph(), memoryDir: dir, sessionId: "t" });
+    assert.match(doctor.answer, /I can't store a fact about "he" as a class — pronouns aren't things I can classify\./);
+    assert.equal(doctor.record.miss, true);
+
+    const m = await loadMemory(dir);
+    assert.equal(m.individuals.filter((i) => i.class === FACT_CLASS).length, 0, "neither phrasing stored anything");
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("pronoun guard control: a REAL unknown-subject noun ('widget is a component') is completely unaffected — still stores via the unknown-subject fallback", async () => {
+  const dir = await mem();
+  try {
+    const { answer, record } = await runTurn("widget is a component", {
+      config: CONFIG, graph: await graph(), memoryDir: dir, sessionId: "t",
+    });
+    assert.match(answer, /noted — remembered: widget is a kind of component/);
+    assert.doesNotMatch(answer, /pronouns aren't things I can classify/, "no false-positive pronoun match on an ordinary noun subject");
+    assert.equal(record.miss, false);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
 // ---- #2 META/SELF lane ----
 
 test("#2 meta: bare 'what do you know' → a SHORT summary, never a raw fact dump", async () => {

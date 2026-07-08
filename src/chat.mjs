@@ -1426,6 +1426,31 @@ function teachSuggestion(payload) {
   return `every ${subject} is ${article} ${object}`;
 }
 
+/** PRONOUN-SUBJECT GUARD (2026-07-08, operator repro): "remember you are a
+ *  womble" and the literal "every you is a womble" both used to reach
+ *  teachSuggestion/unknownSubjectFallback treating "you" like an ordinary
+ *  unknown common noun — producing the nonsensical "did you mean: every you
+ *  is a womble" hint (teachSuggestion), or, worse, a SILENT direct-write via
+ *  unknownSubjectFallback whenever the object happened to resolve as a known
+ *  noun/adjective (e.g. "he is a doctor" would have stored the bogus fact
+ *  "he rdfs:subClassOf doctor"). A personal pronoun is never a valid class-
+ *  membership subject for ANY object — "every <pronoun> is a Y" isn't
+ *  coherent English no matter what Y is, so this is a grammatical category
+ *  error, not "new vocabulary" the unknown-subject free pass exists for.
+ *  Checked FIRST in teachLane, before any other recognizer gets a look at
+ *  the payload (bare OR remember-wrapped surface, so it fires uniformly
+ *  across entry points), and short-circuits with its own honest, distinct
+ *  decline — never the generic "every X is a Y" miss text, and never a "did
+ *  you mean" guess.
+ *
+ *  Deliberately limited to the seven UNAMBIGUOUS personal pronouns (you/i/
+ *  it/they/he/she/we) — this/that/these/those are excluded on purpose: they
+ *  double as legitimate demonstrative entity references elsewhere in this
+ *  file (DESCRIBE_PRONOUN_RE, NEGATION_PRONOUN_RE et al.), and a claim about
+ *  a demonstrated entity ("that is a bug", pointing at something real) is a
+ *  much closer call than "every you is a womble" — not this bug's territory. */
+const TEACH_PRONOUN_RE = /^(?:every\s+|each\s+|all\s+|some\s+|a few\s+|a\s+|an\s+)?(you|i|it|they|he|she|we)\s+(?:is|are|am)\b/i;
+
 async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
   const rawInput = String(query).trim();
   const m = rawInput.match(TEACH_RE);
@@ -1440,6 +1465,24 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
   const stripYour = (s) => (s == null ? s : s.replace(/^your\s+/i, "a "));
   const raw = stripYour(rawInput);
   const wrapped = stripYour(wrappedInput);
+
+  // PRONOUN-SUBJECT GUARD — tried against BOTH surfaces (bare and remember-
+  // wrapped; trailing punctuation stripped the same way the OWNS/SOME_A_FEW
+  // lanes below do) before anything else in this function, so a pronoun
+  // subject NEVER reaches teachSuggestion's "did you mean" hint or
+  // unknownSubjectFallback's direct-write path — see TEACH_PRONOUN_RE's own
+  // docblock above for why.
+  const pronounSrc = (wrapped ?? raw).replace(/[.!?]+\s*$/, "");
+  const pronounMatch = pronounSrc.match(TEACH_PRONOUN_RE);
+  if (pronounMatch) {
+    const pronoun = pronounMatch[1];
+    return {
+      text: `I can't store a fact about "${pronoun}" as a class — pronouns aren't things I can classify. `
+        + `I remember facts in the shape "every X is a Y", where X is a specific noun, not a pronoun. `
+        + "Type /memory to see what I already remember.",
+      via: "teach-miss", miss: true,
+    };
+  }
 
   // OWNERSHIP — "<Name> owns/maintains <X>", bare or remember-wrapped. The bare
   // form is double-gated: a Capitalized name AND no interrogative lead, so the
