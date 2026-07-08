@@ -199,6 +199,75 @@
 //   yet exercised by name (members, containment, subclasses, coverage,
 //   declaration, coupled) — all already correctly resolve via the existing
 //   T1-T12 machinery.
+//
+// FIFTH PASS (0.9.15, repeated Tier 2 per SKILL_CHAT_PLAYTEST §1 Step 6 — the
+// 4th pass's own recommendation: hammer the staccato/ellipsis surface FURTHER
+// — staccato negation, staccato count follow-ups, and multi-hop staccato
+// chains 3+ turns deep, none of which T1-T19 exercised):
+//   T20 staccato NEGATION, bare-pronoun flavor ("not that one", "not those",
+//       "not it") — names no alternative at all, so what the user DOES want
+//       is knowable only to them, not the graph. Used to fall to the generic
+//       orientation card (isConversational's ≤3-word catch-all). Fixed by a
+//       new STACCATO_NEGATION_RE branch in nudgeAnswer (chat.mjs) — an honest,
+//       FOCUS-tailored nudge ("not sure what you'd like instead of X — name
+//       it directly, e.g. …"), plus the matching isConversational exemption
+//       (isStaccatoNegation) every other staccato shape already has.
+//   T21 staccato NEGATION, named-entity flavor ("not app/lib/b.mjs", "not
+//       Widget then") — names a real candidate to EXCLUDE from a just-given
+//       list, but that's a capability the engine genuinely doesn't have (even
+//       the fully-spelled "which of those is not X" doesn't compile —
+//       verified live, parsePredicateFilter has no negation branch). A
+//       codeish term used to hit the raw grammar wall outright (isConversational
+//       already declines on a slash/Capitalized token, so this needed no
+//       catch-all exemption, only the nudgeAnswer branch itself, same as T20).
+//       Never fabricated as a real filtered answer — an honest capability-gap
+//       nudge, same discipline as nudgeAnswer's existing opinion/risk/write-
+//       code nudges.
+//   T22 multi-hop STACCATO SWAP chains 3+ turns deep ("what calls X" -> "and
+//       Widget?" -> "and Button?" -> "and app/lib/f.mjs?") broke on the THIRD
+//       swap: discourseRewrite (chat.mjs) rewrites off `last.query`, which
+//       runTurn's own `nextLast` built from the raw verbatim USER TEXT ("and
+//       Widget?"), not the reconstructed positive query ("what calls
+//       Widget") the 2nd swap actually asked — so the 3rd swap tried to
+//       substitute "Button" into "and Widget?" itself (which has no clause
+//       shape at all), corrupting the turn into a nonsense re-ask and hitting
+//       the grammar wall. Fixed by threading runAsk's own reconstructed
+//       `askQuery` forward as `last.query` (a new `effectiveQuery` field,
+//       gated on the rewrite actually firing AND the rewritten query
+//       structurally PARSING — `envelope.parsed`, not `!recordMiss`: this
+//       engine's own "miss" flag covers a structurally-valid honest EMPTY too,
+//       which must still count as a valid chain continuation, only a genuine
+//       grammar failure must not).
+//   T23 the STACCATO PRONOUN shape (T18) had no tolerance for a trailing
+//       "one"/"ones" — "also that one?", "and those ones" (at least as
+//       natural as the bare "also that?" T18 already covers) fell to the
+//       generic orientation card because STACCATO_PRONOUN_RE required the
+//       pronoun to be the LAST token. Fixed by widening the regex with an
+//       optional non-capturing `(?:\s+ones?)?` tail — the capture group
+//       (just the pronoun) is unchanged, so DESCRIBE_PRONOUN_RE's downstream
+//       test is unaffected.
+//   T24 IMPLICIT anaphoric counts with NO explicit "of them/those" at all —
+//       "and how many are tested" (a fluent staccato elision of "how many OF
+//       THOSE are tested") — answerCount's own bare noun-scan greedily (and
+//       wrongly) captured the linking verb ITSELF as the counted noun ("how
+//       many ARE tested" -> noun="are"), answering the nonsensical "I can't
+//       count 'are'." (or, with no prior list at all, falling through further
+//       to a bogus "no module matching 'and many' found" object search).
+//       Fixed by a new IMPLICIT_ANAPHORA_COUNT_RE: answerCount declines this
+//       shape unconditionally (→ falls through to the ask engine), and runAsk
+//       rewrites the elided "of those" back in before calling ask() — so the
+//       anaphora node's EXISTING "how many of those are tested" handling
+//       (T13/T14) answers it correctly whether or not a prior list stands
+//       (with none, the SAME honest "needs a previous answer" nudge T14
+//       already gets for "which ones" after a bare count, never a wall).
+//       Same pass, a sibling fix: a trailing discourse tag on an otherwise-
+//       bare anaphora follow-up ("how many of those THEN") used to be read as
+//       an uncompilable FILTER clause (a PARSE-time miss with the wrong,
+//       generic wording) instead of dropped as filler — reaching the SAME
+//       honest "needs a previous answer" nudge as the bare "how many of
+//       those" when there's truly no prior set. Fixed by adding "then"/
+//       "though" to ask.mjs's PRED_LEAD_SKIP (the same discourse-tag
+//       tolerance WHAT_ABOUT_RE already carries for "what about X then").
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
@@ -749,6 +818,167 @@ test("tier2/T19 staccato swap continuation: 'and Widget?'/'and app/lib/f.mjs?' (
     assert.doesNotMatch(turns[3].answer, WALL);
     assert.equal(turns[4].answer, "app/lib/b.mjs and app/lib/c.mjs and app/lib/e.mjs.");
     assert.equal(turns[5].answer, "app/lib/e.mjs.", "'and app/lib/f.mjs?' re-asks 'which modules import app/lib/f.mjs' with the swapped-in path");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---- FIFTH PASS (T20-T24) ----
+
+test("tier2/T20 staccato negation, bare-pronoun flavor: 'not that one'/'not those'/'not it' get a focus-tailored guiding nudge, never the generic orientation card", async () => {
+  const { dir, turns } = await driveSession([
+    "what calls app/lib/a.mjs",
+    "not that one",
+    "not those",
+    "not it",
+  ]);
+  try {
+    for (const [i, t] of turns.entries()) {
+      assert.doesNotMatch(t.answer, WALL, `turn ${i} must not hit the grammar wall`);
+      assert.doesNotMatch(t.answer, /I'm tmct — a deterministic/, `turn ${i} must not fall to the generic orientation card`);
+    }
+    assert.equal(turns[0].answer, "scripts/g.mjs.");
+    const expected = `not sure what you'd like instead of app/lib/a.mjs — name it directly, e.g. "what calls app/lib/a.mjs".`;
+    assert.equal(turns[1].answer, expected, "'not that one' — the trailing 'one' is tolerated the same way T23's STACCATO_PRONOUN_RE tolerates it");
+    assert.equal(turns[2].answer, expected, "'not those' resolves the same way");
+    assert.equal(turns[3].answer, expected, "'not it' resolves the same way");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("tier2/T20 staccato negation, bare-pronoun flavor with NO standing focus at all: an honest generic nudge, never a crash or a wall", async () => {
+  const { dir, turns } = await driveSession(["not that one"]);
+  try {
+    assert.doesNotMatch(turns[0].answer, WALL);
+    assert.equal(turns[0].answer, `not sure what you'd like instead of that — name it directly, e.g. "what calls Widget".`);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("tier2/T21 staccato negation, named-entity flavor: 'not app/lib/b.mjs' and 'not Widget then' both get an honest capability-gap nudge instead of the raw grammar wall", async () => {
+  const { dir, turns } = await driveSession([
+    "which modules import app/lib/a.mjs",
+    "not app/lib/b.mjs",
+    "not Widget then",
+  ]);
+  try {
+    for (const [i, t] of turns.entries()) {
+      assert.doesNotMatch(t.answer, WALL, `turn ${i} must not hit the grammar wall`);
+    }
+    assert.equal(turns[0].answer, "app/lib/b.mjs and app/lib/c.mjs and app/lib/e.mjs.");
+    assert.equal(
+      turns[1].answer,
+      `I can't filter a previous list by exclusion yet — ask the positive shape directly (e.g. "which modules import <name>"), or ask about app/lib/b.mjs on its own.`,
+      "'not app/lib/b.mjs' — a real member of the just-given list — names the gap honestly instead of the generic grammar wall",
+    );
+    assert.equal(
+      turns[2].answer,
+      `I can't filter a previous list by exclusion yet — ask the positive shape directly (e.g. "which modules import <name>"), or ask about Widget on its own.`,
+      "'not Widget then' — a real graph entity that ISN'T in the list — gets the same honest nudge, not a fabricated 'excluding Widget' answer",
+    );
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("tier2/T22 multi-hop staccato SWAP chain, 3+ turns deep: 'what calls X' -> 'and Widget?' -> 'and Button?' -> 'and app/lib/c.mjs?' all correctly continue the SAME clause shape, not a corrupted re-ask of the previous staccato turn's own raw text", async () => {
+  const { dir, turns } = await driveSession([
+    "what calls app/lib/a.mjs",
+    "and Widget?",
+    "and Button?",
+    "and app/lib/c.mjs?",
+  ]);
+  try {
+    for (const [i, t] of turns.entries()) {
+      assert.doesNotMatch(t.answer, WALL, `turn ${i} must not hit the grammar wall`);
+    }
+    assert.equal(turns[0].answer, "scripts/g.mjs.");
+    assert.equal(turns[1].answer, "No modules found whose module directly calls Widget.");
+    assert.equal(turns[2].answer, "No modules found whose module directly calls Button.",
+      "the 3rd staccato swap in a row still continues 'what calls <X>' — before this fix it corrupted into a nonsense re-ask of turn 2's OWN raw staccato text and hit the grammar wall");
+    assert.equal(turns[3].answer, "No modules found whose module directly calls app/lib/c.mjs.",
+      "a 4th staccato swap still continues correctly");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("tier2/T23 staccato pronoun continuation tolerates a trailing 'one'/'ones': 'also that one?' mid a relation-touch chain describes the standing focus, not the generic orientation card", async () => {
+  const { dir, turns } = await driveSession([
+    "what about imports",
+    "and calls?",
+    "also that one?",
+  ]);
+  try {
+    for (const [i, t] of turns.entries()) {
+      assert.doesNotMatch(t.answer, WALL, `turn ${i} must not hit the grammar wall`);
+      assert.doesNotMatch(t.answer, /I'm tmct — a deterministic/, `turn ${i} must not fall to the generic orientation card`);
+    }
+    assert.equal(turns[0].answer, IMPORTS_RELATION_TEXT);
+    assert.equal(turns[1].answer, CALLS_RELATION_TEXT);
+    assert.match(turns[2].answer, /^app\/functions\/d\/handler\.mjs — Module \(id: mod-d\)/,
+      "'also that one?' describes the focus the relation force's own example set as its new standing focus");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("tier2/T24 implicit anaphoric count with NO explicit 'of them/those': 'and how many are tested' counts the RESTRICTED prior set, both when a prior list stands and when none does", async () => {
+  const { dir, turns } = await driveSession([
+    "which modules import app/lib/a.mjs",
+    "and how many are tested",
+  ]);
+  try {
+    for (const [i, t] of turns.entries()) {
+      assert.doesNotMatch(t.answer, WALL, `turn ${i} must not hit the grammar wall`);
+      assert.doesNotMatch(t.answer, BAD_SEARCH, `turn ${i} must not fall through to a bogus 'and many' object search`);
+    }
+    assert.equal(turns[0].answer, "app/lib/b.mjs and app/lib/c.mjs and app/lib/e.mjs.");
+    assert.equal(turns[1].answer, "1 module.", "restricted to app/lib/b.mjs (the one of the three that's actually tested), not the graph's whole-module total, and not the mis-parsed \"I can't count 'are'\"");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+
+  const { dir: dir2, turns: turns2 } = await driveSession([
+    "how many modules import app/lib/a.mjs",
+    "and how many are tested",
+  ]);
+  try {
+    assert.doesNotMatch(turns2[0].answer, WALL);
+    assert.equal(turns2[0].answer, "3 modules.");
+    assert.equal(
+      turns2[1].answer,
+      `"those"/"them" needs a previous answer to refer to — ask a listing question first, then follow up.`,
+      "a prior COUNT never carries a match set (by design, T14) — the same honest anaphora-miss nudge 'which ones' already gets, never a wall or a bogus object search",
+    );
+  } finally {
+    clearCache();
+    await rm(dir2, { recursive: true, force: true });
+  }
+});
+
+test("tier2/T24 sibling: a trailing discourse tag on a bare anaphora follow-up ('how many of those THEN') is dropped as filler, not misread as an uncompilable filter clause", async () => {
+  const { dir, turns } = await driveSession([
+    "how many modules import app/lib/a.mjs",
+    "how many of those then",
+  ]);
+  try {
+    assert.doesNotMatch(turns[0].answer, WALL);
+    assert.equal(turns[0].answer, "3 modules.");
+    assert.equal(
+      turns[1].answer,
+      `"those"/"them" needs a previous answer to refer to — ask a listing question first, then follow up.`,
+      "before this fix, the trailing 'then' made this an uncompilable-filter miss with the wrong, generic wording instead of the honest no-prior-list nudge",
+    );
   } finally {
     clearCache();
     await rm(dir, { recursive: true, force: true });

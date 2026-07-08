@@ -394,6 +394,20 @@ function countableKinds(graph) {
  *  by the ask engine's anaphora node, never the header-count path. */
 const ANAPHORA_COUNT_RE = /\b(?:how many|how much|count|number of)\s+(?:of\s+)?(?:those|them|these)\b/i;
 
+/** An IMPLICIT anaphoric count with NO explicit "of them/those/these" at all —
+ *  "how many are tested", "and how many are tested" (Tier-2 playtest, 5th
+ *  pass). A fluent staccato follow-up after a just-given list naturally elides
+ *  the pronoun a fuller phrasing ("how many of those are tested") carries —
+ *  ANAPHORA_COUNT_RE above requires that explicit "of them/those/these" and
+ *  never fires for this shape, so answerCount's own bare noun-scan greedily
+ *  (and wrongly) captured the linking verb ITSELF as the counted noun ("how
+ *  many ARE tested" -> noun="are") and answered the nonsensical "I can't
+ *  count 'are'." Gated on real content after the linking verb (`(?!there\b)`)
+ *  so a genuinely bare "how many are there" (no antecedent, no predicate to
+ *  filter on) is untouched — that one's existing "I can't count 'are'" nudge
+ *  is arguably the more honest answer to a query naming nothing at all. */
+const IMPLICIT_ANAPHORA_COUNT_RE = /^(?:(?:and|so|then|also)\s+)?how many (?:are|is|were|was)\s+(?!there\b)(\S.*)$/i;
+
 /** "have"/"has"/"holds"/"hold" are excluded from RESTRICTOR_VERB_RE below —
  *  DELIBERATELY treated as non-restrictor cues here, not a bug fix skipped. Ask-
  *  vocab's VERB_TO_KIND maps them to "defines" unconditionally, but the graph's
@@ -454,6 +468,10 @@ export function answerCount(graph, query) {
   // this the bare "of"/pronoun head is mis-reported as an uncountable kind and the
   // discourse+count follow-up dies before it can resolve (CHATBENCH_006 lever 1).
   if (ANAPHORA_COUNT_RE.test(String(query))) return null;
+  // The elliptical sibling above (no explicit "of them/those" at all) — same
+  // decline, same reason: this is a reference to the PREVIOUS answer's set,
+  // not a graph kind named "are"/"is"/"were"/"was".
+  if (IMPLICIT_ANAPHORA_COUNT_RE.test(String(query).trim())) return null;
   const m = String(query).match(/\b(?:how many|number of|count(?:\s+the)?)\s+([a-z]+)\b/i);
   if (!m) return null;
   const noun = m[1].toLowerCase();
@@ -1409,6 +1427,27 @@ const IMPERATIVE_NUDGE_RE =
   /^(?:please\s+)?(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?)?(?:make|write|create|add|generate|implement|fix|refactor)\b(?=.*\b(?:tests?|code|functions?|methods?|modules?|class(?:es)?|files?|it)\b)/i;
 const WHY_UNTESTED_RE = /^why\s+(?:is|are)(?:n't|\s+not)?\s+(.+?)\s+(?:untested|not\s+tested|uncovered)$/i;
 
+/** STACCATO NEGATION ("not X", "not X then", "except X") — SKILL_CHAT_PLAYTEST
+ *  Tier-2, 5th pass: a rapid-fire rejection of a specific item, with no verb at
+ *  all — the bare-connective sibling of STACCATO_PRONOUN_RE/STACCATO_SWAP_RE
+ *  (below), but with no positive alternative named. Two flavors, BOTH
+ *  genuinely unanswerable as a real graph query (never fabricated):
+ *   - a BARE pronoun rejection ("not that one", "not those", "not it") names
+ *     no alternative at all — what the user DOES want instead is known only
+ *     to them, not derivable from the graph.
+ *   - a NAMED rejection ("not app/lib/b.mjs", "not Widget then") names a real
+ *     candidate to EXCLUDE from a just-given list, but excluding a member
+ *     from a prior result set is a capability the engine genuinely doesn't
+ *     have yet (verified live: even the fully-spelled "which of those is not
+ *     X" doesn't compile — parsePredicateFilter has no negation branch).
+ *  Before this, both fell to the generic orientation card (a short,
+ *  non-codeish turn trips isConversational's ≤3-word catch-all) or the raw
+ *  grammar wall (a codeish one, e.g. a path) — neither names what actually
+ *  went wrong. This is an honest, GUIDING nudge (§0), never a fabricated
+ *  filtered answer and never a bare wall. */
+const STACCATO_NEGATION_RE = /^(?:and\s+)?(?:not|except(?:\s+for)?)\s+(.+?)(?:\s+then|\s+though)?[?.!]*$/i;
+const NEGATION_PRONOUN_RE = /^(?:it|that|this|those|them)(?:\s+ones?)?$/i;
+
 /** The <name> a nudge shows: the focus label when the query leans on a pronoun (or
  *  gave us nothing better), else the captured subject; "<name>" as the placeholder. */
 function nudgeName(captured, focus) {
@@ -1443,6 +1482,16 @@ function nudgeAnswer(query, focus) {
     const name = nudgeName(/\b(?:it|this)\b/i.test(q) ? "it" : "", focus);
     return "I don't write code — I read a graph of it. "
       + `/tests ${name} shows what covers it; "untested modules" shows the gaps.`;
+  }
+  const neg = q.match(STACCATO_NEGATION_RE);
+  if (neg) {
+    const term = neg[1].trim();
+    if (NEGATION_PRONOUN_RE.test(term)) {
+      const name = focus?.label || "Widget";
+      return `not sure what you'd like instead of ${focus?.label || "that"} — name it directly, e.g. "what calls ${name}".`;
+    }
+    return "I can't filter a previous list by exclusion yet — ask the positive shape directly "
+      + `(e.g. "which modules import <name>"), or ask about ${term} on its own.`;
   }
   return null;
 }
@@ -2693,8 +2742,12 @@ const DESCRIBE_PRONOUN_RE = /^(?:it|that|this|those|them)$/i;
  *  it, and DESCRIBE_WRAPPER_RE requires an actual "about"/"describe" anchor
  *  word this shape never has) even though the immediately-prior turn had just
  *  set a real focus a sibling phrasing ("what about it") already resolves
- *  against cleanly. */
-const STACCATO_PRONOUN_RE = /^(?:and|also|so|then|now)\s+(it|that|this|those|them)\s*\??$/i;
+ *  against cleanly. An optional trailing "one"/"ones" (Tier-2 playtest, 5th
+ *  pass — "also that one?", "and those ones") is at least as natural as the
+ *  bare pronoun and carries no extra meaning beyond it: the capture group
+ *  stays the pronoun alone, so DESCRIBE_PRONOUN_RE's downstream test is
+ *  unaffected either way. */
+const STACCATO_PRONOUN_RE = /^(?:and|also|so|then|now)\s+(it|that|this|those|them)(?:\s+ones?)?\s*\??$/i;
 
 async function describeWrapperAnswer(query, { config, source, focus }) {
   const q = String(query || "").trim();
@@ -2817,7 +2870,29 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // The query the ENGINE parses: a "what about X" continuation is rewritten to the
   // prior shape with X swapped in; everything else parses verbatim. The record and
   // transcript keep the user's ACTUAL words (`query`), only the parse target changes.
-  const askQuery = discourseRewrite(query, last) ?? query;
+  let askQuery = discourseRewrite(query, last) ?? query;
+  // IMPLICIT ANAPHORIC COUNT (Tier-2 playtest, 5th pass): "how many are tested" /
+  // "and how many are tested" drops the "of those/them" a fuller phrasing carries
+  // — ask()'s own anaphora node (parseAnaphora) already understands "how many of
+  // those are tested" perfectly, it simply never SEES this elliptical spelling
+  // (ANAPHORA_TRIGGERS requires an explicit pronoun). Insert the elided "of
+  // those" here, the same way discourseRewrite rewrites "what about X" —
+  // UNCONDITIONALLY (not gated on `prev.length`): a genuinely bare "how many
+  // are tested" with no antecedent at all still reaches the anaphora node this
+  // way, which itself honestly degrades to "needs a previous answer to refer
+  // to" (evalAnaphora's own no-prev branch) — a strictly better outcome than
+  // leaving the raw ellipsis unrewritten, which used to fall through to the
+  // ordinary clause grammar and misparse "and" as the object ('no module
+  // matching "and many" found').
+  if (IMPLICIT_ANAPHORA_COUNT_RE.test(String(askQuery).trim())) {
+    // Strip the leading connective too ("and how many are tested" -> "how many
+    // of those are tested") — left in place, it breaks the anaphora node's own
+    // AGGREGATE_TRIGGERS match on "how many" (anchored at the string start),
+    // silently degrading the count into a bare list of the filtered set.
+    askQuery = String(askQuery).trim()
+      .replace(/^(?:and|so|then|also)\s+/i, "")
+      .replace(/how many\s+/i, "how many of those ");
+  }
   // W2: the explicit recall forms are answered from memory's folded blocks, never
   // the graph. Gated on memoryDir — a bare runTurn (no session shell) stays pure.
   if (memoryDir && RECALL_ASK_RE.test(String(query).trim())) {
@@ -2970,7 +3045,15 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // exemptions above, this one needs no prior-turn/focus context — "explain
   // X" is a complete, self-contained ask on its own.
   const isExplainTouch = EXPLAIN_TOUCH_RE.test(String(query).trim());
-  if (!handled && miss && !envelope?.parsed && isConversational(query) && !isWhatAboutContinuation && !isDescribePronounContinuation && !isExplainTouch) {
+  // Staccato negation ("not that one", "not Widget then" — Tier-2, 5th pass)
+  // needs the SAME deferral: "not those" (2 words) / "not that one" (3 words)
+  // both trip isConversational's ≤3-word catch-all before nudgeAnswer's own
+  // STACCATO_NEGATION_RE branch (4c, below) ever gets a turn. Gated on the
+  // shape alone (not a focus/prev precondition) — nudgeAnswer's negation
+  // branch ALWAYS returns a tailored nudge for this shape, never null, so
+  // deferring here never strands the turn with nothing having claimed it.
+  const isStaccatoNegation = STACCATO_NEGATION_RE.test(String(query).trim());
+  if (!handled && miss && !envelope?.parsed && isConversational(query) && !isWhatAboutContinuation && !isDescribePronounContinuation && !isExplainTouch && !isStaccatoNegation) {
     // A conversational miss (a greeting, "what can you do", a very short non-code
     // line) gets the friendly orientation (module-aware: empty → --repo/tmct init).
     // Bug B1 (0.8.2 follow-up): this branch carries via:"template" and never
@@ -3247,7 +3330,25 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     : (envelope
       ? { traversal: envelope.traversal || null, matches: envelope.matches || [], ...(pending ? { pending } : {}) }
       : (pending ? { traversal: null, matches: [], pending } : null));
-  return { answer, logLines, record, focus: newFocus, detail };
+  // MULTI-HOP STACCATO CHAIN CONTINUATION (Tier-2 playtest, 5th pass): when
+  // discourseRewrite actually substituted a new subject into the PRIOR
+  // query's shape ("and Widget?" -> "what calls Widget") and the rewritten
+  // query STRUCTURALLY PARSED (envelope.parsed stood — a real AST, whether it
+  // went on to a hit or an honest empty; "miss" in this engine's own
+  // convention covers BOTH a genuine grammar failure AND a structurally valid
+  // empty result, so `recordMiss` alone can't distinguish them here), thread
+  // the RECONSTRUCTED positive query forward as the effective `last.query`
+  // the NEXT turn's own discourseRewrite reads — not the raw staccato text
+  // itself. Without this, a 3rd staccato swap in a row ("what calls X" ->
+  // "and Widget?" -> "and Button?") tried to rewrite off "and Widget?" (the
+  // 2nd turn's own verbatim staccato input, which has no clause shape of its
+  // own), corrupting the 3rd swap into a nonsense re-ask ("and Button?" with
+  // "Widget" replaced by "Button" — never a real query) instead of correctly
+  // continuing from "what calls Widget". The verbatim text stays on
+  // `record.query`/the transcript untouched; only the swap-chain
+  // CONTINUATION base changes.
+  const effectiveQuery = (askQuery !== query && envelope?.parsed) ? askQuery : null;
+  return { answer, logLines, record, focus: newFocus, detail, effectiveQuery };
 }
 
 /** A non-ask, non-dispatch chat turn (count answer, /stats) — the same
@@ -3474,7 +3575,13 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // the PRE-narration finished result — see withNarration's docblock for why.
   const withLast = (result, fallbackGoal = "unclear — no goal signal for this turn type") => {
     const finished = finish(result, { graph });
-    const nextLast = { query: line, answer: finished.answer, detail: finished.detail ?? null };
+    // runAsk's own effectiveQuery (set only when discourseRewrite substituted a
+    // new subject AND the rewrite produced a genuine non-miss answer) takes
+    // over as the continuation base for the NEXT turn's own discourseRewrite —
+    // see runAsk's docblock above its return statement. Every other turn type
+    // (commands, plain counts, misses) carries no such field, so `line` — the
+    // existing, unchanged behavior — stands.
+    const nextLast = { query: finished.effectiveQuery ?? line, answer: finished.answer, detail: finished.detail ?? null };
     return { ...withNarration(finished, trace, fallbackGoal), last: nextLast };
   };
 

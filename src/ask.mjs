@@ -280,7 +280,16 @@ const MAX_COMPOSE_DEPTH = 4;
 // treats it as an ordinary object term rather than dropping it.
 const NEST_SENTINEL = "zzinnerset";
 // Filler words dropped at the front of a relative predicate / anaphora filter.
-const PRED_LEAD_SKIP = new Set(["that", "which", "who", "are", "is", "was", "were", "do", "does", "also", "still", "both", "and"]);
+// "then"/"though" (Tier-2 playtest, 5th pass): a trailing discourse tag on an
+// otherwise-bare anaphora follow-up — "how many of those THEN", "which of
+// them THOUGH" — used to be read as an (uncompilable) filter clause instead
+// of being dropped as filler, so the follow-up MISSED at PARSE time with a
+// generic "the follow-up filter didn't parse" instead of reaching the
+// friendly eval-time "needs a previous answer" nudge when there was truly no
+// prior set (or the correct count/list when there was one) — the exact same
+// discourse-tag tolerance WHAT_ABOUT_RE already carries for "what about X
+// then"/"what about X though".
+const PRED_LEAD_SKIP = new Set(["that", "which", "who", "are", "is", "was", "were", "do", "does", "also", "still", "both", "and", "then", "though"]);
 const FRAME_WORDS = new Set(["which", "what", "who", "list", "show", "find", "give", "me", "us", "all"]);
 
 const entityNoun = (w) => (ENTITY_TO_TYPE[w] ? { entityType: ENTITY_TO_TYPE[w], placeholder: false }
