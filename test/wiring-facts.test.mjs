@@ -232,6 +232,76 @@ test("bridge: taught vocab composes with the graph inherits chain — YES naming
   }
 });
 
+// ---- PLAN_INFERENCE_TESTING.md §4 stage 1: cax-sco / scm-sco LIVE chase ----
+// (INF-A2's measured chat gap — INFBENCH_0.8.2.md: "chat/A2 taught-only …
+// every case observed unproven"). A direct isa fact and the graph bridge both
+// miss, so factReadBack chases a bounded 2-hop chain over the TAUGHT facts
+// themselves, reusing syllogise.mjs's pure rule kernels live and read-only,
+// and renders the two premises as a proof-chain receipt.
+
+test("cax-sco: 'X is a C', 'every C is a D' → 'is X a D' answers YES with the 2-step chain, both premises cited", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-caxsco-"));
+  try {
+    await runTurn("redis.mjs is a cache", { config: CONFIG, memoryDir: dir, sessionId: "cax" });
+    await runTurn("every cache is a component", { config: CONFIG, memoryDir: dir, sessionId: "cax" });
+    const r = await runTurn("is redis.mjs a component", { config: CONFIG, memoryDir: dir });
+    assert.match(
+      r.answer,
+      /^yes — redis\.mjs is a cache \(source: ace:chat:cax@.*\); cache is a kind of component \(source: ace:chat:cax@.*\); so redis\.mjs is a component$/i,
+      "both premises cited, chained into one derivation",
+    );
+    assert.equal(r.record.via, "fact");
+    assert.equal(r.record.miss, false);
+
+    // a DIRECT one-hop taught fact still answers without the chase (unaffected)
+    await runTurn("bolt.mjs is a component", { config: CONFIG, memoryDir: dir, sessionId: "cax" });
+    const direct = await runTurn("is bolt.mjs a component", { config: CONFIG, memoryDir: dir });
+    assert.match(direct.answer, /^yes — you told me: bolt\.mjs is a component/i);
+    assert.doesNotMatch(direct.answer, /so bolt\.mjs is a component$/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("scm-sco (chat-wired): 'every N1 is a N2', 'every N2 is a N3' → 'is a N1 a N3' answers YES with the 2-step chain", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-scmsco-"));
+  try {
+    await runTurn("every controller is a handler", { config: CONFIG, memoryDir: dir, sessionId: "scm" });
+    await runTurn("every handler is a component", { config: CONFIG, memoryDir: dir, sessionId: "scm" });
+    const r = await runTurn("is a controller a component", { config: CONFIG, memoryDir: dir });
+    assert.match(
+      r.answer,
+      /^yes — controller is a kind of handler \(source: ace:chat:scm@.*\); handler is a kind of component \(source: ace:chat:scm@.*\); so controller is a component$/i,
+    );
+    assert.equal(r.record.via, "fact");
+    assert.equal(r.record.miss, false);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("cax-sco/scm-sco chase: a chain that ISN'T there stays an honest miss — never a guessed 'yes'", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-nochase-"));
+  try {
+    // only ONE premise of the pair is taught — no chain to close
+    await runTurn("redis.mjs is a cache", { config: CONFIG, memoryDir: dir, sessionId: "nc" });
+    const r = await runTurn("is redis.mjs a component", { config: CONFIG, memoryDir: dir });
+    assert.equal(r.record.miss, true, "no 'cache ⊑ component' premise — the honest miss stands");
+    assert.doesNotMatch(r.answer, /^yes/i);
+
+    // both premises taught, but for an UNRELATED target class
+    await runTurn("every cache is a store", { config: CONFIG, memoryDir: dir, sessionId: "nc" });
+    const unrelated = await runTurn("is redis.mjs a gizmo", { config: CONFIG, memoryDir: dir });
+    assert.equal(unrelated.record.miss, true);
+    assert.doesNotMatch(unrelated.answer, /^yes/i);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("W4: no-fact questions stay byte-unchanged honest misses", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-w4-nofact-"));
   try {

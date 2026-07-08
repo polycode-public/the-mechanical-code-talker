@@ -1530,6 +1530,23 @@ function renderFactLine(f) {
   return `i learned: ${factPhrase(f)}${cite}`;
 }
 
+/** PROOF-CHAIN RECEIPT (PLAN_INFERENCE_TESTING.md §4 stage 2; ROADMAP L788's
+ *  "renderable as a chain of thought in words"): render an ordered list of
+ *  premise Fact rows as one continuous argument — "cache is a kind of store;
+ *  store is a kind of component; so redis.mjs is a component" — each premise
+ *  cited via the SAME factPhrase + "(source: …)" convention renderFactLine
+ *  uses, just without its "you told me"/"i learned" framing (a chain reads as
+ *  one derivation, not a list of standalone recollections). The conclusion
+ *  clause is spelled directly from the first premise's subject and the last
+ *  premise's object — sound for any chain length, though today's only caller
+ *  (the live cax-sco/scm-sco chase below) ever passes exactly two. */
+function renderIsaChain(premises) {
+  const step = (f) => `${factPhrase(f)}${f.provenance ? ` (source: ${f.provenance})` : ""}`;
+  const first = premises[0];
+  const last = premises[premises.length - 1];
+  return `${premises.map(step).join("; ")}; so ${first.subject} is a ${last.object}`;
+}
+
 /** Read every reified Fact out of the memory graph as plain {subject, predicate,
  *  object, provenance} rows. Lazy + failure-tolerated: no memory → []. */
 async function memoryFacts(memoryDir) {
@@ -1891,6 +1908,40 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null) {
           replace: true,
         };
       }
+    }
+    // LIVE cax-sco / scm-sco PROOF CHASE (PLAN_INFERENCE_TESTING.md INF-A2,
+    // §4 stage 1): a direct isa fact and the graph inherits-bridge both
+    // missed — chase a chain over TWO TAUGHT isa-family facts (§1's PARTIAL
+    // note: "cax-sco over two TAUGHT facts is NOT implemented"; the band's own
+    // "Rules needed" column: "⊑-chain of length 2") via syllogise.mjs's
+    // findIsaChain, a rooted proof search built on the SAME two rule kernels,
+    // LIVE and READ-ONLY (nothing is written — the offline `tmct syllogise`
+    // batch pass, materializing the same two rules with `entailed:*`
+    // provenance, is the persisting counterpart). Deliberately narrow, twice
+    // over, to stay exactly in INF-A2's scope and not silently answer bands
+    // this stage doesn't (yet) certify:
+    //   - maxHops:2 — a longer taught chain is INF-B2's multi-hop +
+    //     proof-chain-materialization territory (§4 stage 2 proper), which
+    //     INFBENCH pins as an honest ceiling until it lands — answering
+    //     "yes" there today would be graded FABRICATION, not credit.
+    //   - CORPUS-sourced edges excluded — the bulk background corpus band
+    //     (trust 0.7) can coincidentally chain two unrelated classes into a
+    //     technically-true-per-ConceptNet "yes" that has nothing to do with
+    //     what the OPERATOR taught; only operator/teach/entailed-sourced isa
+    //     facts are chased, matching "TAUGHT" in the gap's own name.
+    const { findIsaChain, SUBCLASS_PREDICATE: SC_PREDICATE, TYPE_PREDICATE: RDF_TYPE_PREDICATE } = await import("./syllogise.mjs");
+    const isTaught = (f) => !f.sourceTypes?.includes("corpus") && !f.sourceTypes?.includes("web");
+    const chainSubClassRows = isa.filter((f) => f.predicate === SC_PREDICATE && isTaught(f));
+    const chainTypeRows = isa.filter((f) => f.predicate === RDF_TYPE_PREDICATE && isTaught(f));
+    const chainSubClassEdges = chainSubClassRows.map((f) => [f.subject, f.object]);
+    const chainTypeEdges = chainTypeRows.map((f) => [f.subject, f.object]);
+    const factForStep = (step) => (step.predicate === SC_PREDICATE ? chainSubClassRows : chainTypeRows)
+      .find((f) => f.subject === step.subject && f.object === step.object);
+    for (const subj of subjCandidates) {
+      const chain = findIsaChain(subj, objVariants, chainTypeEdges, chainSubClassEdges, { maxHops: 2 });
+      if (!chain) continue;
+      const premises = chain.map(factForStep);
+      if (premises.every(Boolean)) return { text: `yes — ${renderIsaChain(premises)}`, replace: true };
     }
     return null; // no remembered fact — the honest miss stands (never a guessed "no")
   }
