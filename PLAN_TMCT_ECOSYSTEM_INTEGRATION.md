@@ -459,6 +459,12 @@ edge, not a generic describe dump) has no lexicon or grammar support in tmct at 
 
 ## 5. Sequencing
 
+*(See also [[PLAN_AGI_ARCHITECTURE.md]] — a sibling doc, drafted the same night, that answers a
+narrower question this plan's Part 3 opens but doesn't resolve: how an LLM-decided fact in
+marginalia should be trust-scored and made retractable using the same vocabulary tmct's
+`SOURCE_PRIOR`/provenance system already ships. It verified marginalia's actual LLM-decision
+write path (`typed-edges.mjs`) rather than assuming one didn't exist.)*
+
 Staged so each phase either closes a verified gap or builds on a phase that already landed —
 consistent with this repo's "measure before building" convention (`PLAN_CODE.md` §6,
 `PLAN_ADVANCED_GRAMMAR.md` §2).
