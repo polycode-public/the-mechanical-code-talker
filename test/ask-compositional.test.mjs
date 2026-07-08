@@ -447,3 +447,69 @@ test("determinism: a compositional parse + answer is identical across repeated c
   assert.deepEqual(parseQuery("what imports something that imports core.mjs"),
     parseQuery("what imports something that imports core.mjs"));
 });
+
+// ---- 6. EXISTENCE — "is there a/an <kind> [called/named <X>] [in <module>] [anywhere]"
+// / "are there any <kind>" (seonix triage, 2026-07-09, Batch 1 Bug 1+2): with no
+// dedicated recognizer, this shape used to fall through past the compositional layer
+// into the legacy keyword-spot strategy, whose lemma tier silently canonicalizes
+// "called" -> the `calls` verb and answers a DIFFERENT (relationship) question — a
+// confidently-wrong-shaped miss, not an honest one — and the scoped "is there a <kind>
+// in <module>" form had no recognizer at all and walled out entirely. ----
+
+test("existence HIT (unscoped, named): 'is there a class called Widget anywhere' resolves the real class, not a relationship query", () => {
+  const p = parseQuery("is there a class called Widget anywhere");
+  assert.equal(p.node, "exists");
+  assert.equal(p.entityType, "Class");
+  assert.equal(p.term, "Widget");
+  const r = ask(graph, "is there a class called Widget anywhere");
+  assert.equal(r.tmct_ask.miss, false);
+  assert.match(r.content, /^Yes — Widget is a class, defined in widget\.mjs\.$/);
+});
+
+test("existence MISS (unscoped, named): a genuinely nonexistent class name is an honest No, never a wall or a misrouted relationship answer", () => {
+  const r = ask(graph, "is there a class called Sprocket anywhere");
+  assert.equal(r.tmct_ask.miss, true);
+  assert.match(r.content, /^No — no class named "Sprocket" found\.$/);
+  // never the old mis-route ("No classes found whose module directly calls Sprocket.")
+  assert.doesNotMatch(r.content, /directly calls/);
+});
+
+test("existence HIT (bare, unnamed): 'are there any classes' lists real class membership", () => {
+  const p = parseQuery("are there any classes");
+  assert.equal(p.node, "exists");
+  assert.equal(p.term, null);
+  assert.deepEqual(labels(ask(graph, "are there any classes")), ["Base", "Gadget", "Widget"]);
+  assert.match(ask(graph, "are there any classes").content, /^Yes — /);
+});
+
+test("existence MISS (bare, unnamed, named-not-found form): 'are there any classes called Sprocket' is an honest No", () => {
+  const r = ask(graph, "are there any classes called Sprocket");
+  assert.equal(r.tmct_ask.miss, true);
+  assert.match(r.content, /^No — no class named "Sprocket" found\.$/);
+});
+
+test("existence HIT (scoped): 'is there a class in widget.mjs' checks THAT module's own membership", () => {
+  const p = parseQuery("is there a class in widget.mjs");
+  assert.equal(p.node, "exists");
+  assert.equal(p.scopeModule, "widget.mjs");
+  const r = ask(graph, "is there a class in widget.mjs");
+  assert.equal(r.tmct_ask.miss, false);
+  assert.match(r.content, /^Yes — Widget in widget\.mjs\.$/);
+});
+
+test("existence MISS (scoped): 'is there a class in core.mjs' honestly says no — core.mjs defines a function, not a class", () => {
+  const r = ask(graph, "is there a class in core.mjs");
+  assert.equal(r.tmct_ask.miss, true);
+  assert.match(r.content, /^No — no classes found in core\.mjs\.$/);
+});
+
+test("existence MISS (scoped, unresolved module): a module name matching nothing in the index is named honestly, not silently guessed", () => {
+  const r = ask(graph, "is there a function in zzzzz_not_a_real_module_zzzzz");
+  assert.equal(r.tmct_ask.miss, true);
+  assert.match(r.content, /no module matching "zzzzz_not_a_real_module_zzzzz" found in the index\./);
+});
+
+test("no-regression: a genuine relationship question ('is there a class that calls alpha') is NOT swallowed by the existence recognizer", () => {
+  const p = parseQuery("is there a class that calls alpha");
+  assert.notEqual(p.node, "exists", "a verb-relation clause must fall through to the relation parsers, not the existence shape");
+});

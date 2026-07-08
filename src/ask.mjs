@@ -311,7 +311,8 @@ function parseSimpleClause(text, nlp) {
 function parseComposite(text, nlp) {
   const w = splitWords(text);
   const lc = w.map((x) => x.toLowerCase());
-  return parseNegation(text, nlp, 0)
+  return parseExistence(w, lc)
+    || parseNegation(text, nlp, 0)
     || parseForwardNegation(w, lc, nlp)
     || parseTemporal(w, lc, nlp, 0)
     || parseAnaphora(w, lc, nlp)
@@ -578,6 +579,72 @@ function parsePredicateFilter(words, nlp) {
     return { type: "clause", clause };
   }
   return undefined;
+}
+
+/** EXISTENCE: "is there a/an <kind> [called|named <term>] [in <module>] [anywhere]"
+ *  and "are there any <kind>(s) [called|named <term>] [in <module>]" — a genuine
+ *  existence question ("does this kind/name exist at all", optionally scoped to a
+ *  module), answered directly against class/kind membership rather than routed
+ *  through the relation-verb machinery. Triage bug (2026-07-09, seonix dogfooding):
+ *  with no dedicated recognizer, "is there a class called Store anywhere" fell
+ *  through to the legacy keyword-spot strategy, whose lemma tier canonicalizes
+ *  "called" -> "call" (a `calls` verb — ask-vocab.mjs) and silently answered a
+ *  DIFFERENT question ("which classes call Store") with a confidently-wrong-shaped
+ *  negative, even though a class named Store genuinely exists. "is there a class in
+ *  <module>" walled out the same way — no marker in this grammar recognized it at
+ *  all. Scoped to a tight closed shape: a leading "is there a/an" or "are there any"
+ *  immediately followed by a recognized entity-kind noun, then ONLY "called"/"named
+ *  <term>", "in <module>", the two combined, or an empty/"anywhere"/"at all" tail —
+ *  anything else (a relative clause, a verb phrase: "is there a class THAT CALLS
+ *  Store") is a genuine relationship question and is left untouched for the
+ *  relation parsers below, never swallowed here. */
+function parseExistence(w, lc) {
+  let i;
+  if (lc[0] === "is" && lc[1] === "there") i = 2;
+  else if (lc[0] === "are" && lc[1] === "there") i = 2;
+  else return null;
+  const article = lc[i];
+  if (article === "a" || article === "an" || article === "any") i += 1;
+  else return null;
+  const noun = i < lc.length ? entityNoun(lc[i]) : null;
+  if (!noun || noun.placeholder || !noun.entityType) return null;
+  const entityType = noun.entityType;
+  i += 1;
+
+  let rest = lc.slice(i);
+  let restW = w.slice(i);
+  // trailing filler — "anywhere" / "at all" — stripped so it never gets misread as
+  // a (nonexistent) module/name term below.
+  if (rest.length && rest[rest.length - 1] === "anywhere") {
+    rest = rest.slice(0, -1); restW = restW.slice(0, -1);
+  } else if (rest.length >= 2 && rest[rest.length - 2] === "at" && rest[rest.length - 1] === "all") {
+    rest = rest.slice(0, -2); restW = restW.slice(0, -2);
+  }
+
+  if (!rest.length) return { node: "exists", entityType, term: null, scopeModule: null };
+
+  if (rest[0] === "called" || rest[0] === "named") {
+    if (rest.length < 2) return { node: "miss", reason: `"${rest[0]}" needs a name afterward` };
+    const inIdx = rest.indexOf("in", 1);
+    if (inIdx > 0) {
+      const term = restW.slice(1, inIdx).join(" ").trim();
+      const scopeModule = restW.slice(inIdx + 1).join(" ").trim();
+      if (!term || !scopeModule) return { node: "miss", reason: `a named existence check needs both a name and a module after "in"` };
+      return { node: "exists", entityType, term, scopeModule };
+    }
+    const term = restW.slice(1).join(" ").trim();
+    return term ? { node: "exists", entityType, term, scopeModule: null }
+      : { node: "miss", reason: `"${rest[0]}" needs a name afterward` };
+  }
+
+  if (rest[0] === "in") {
+    const scopeModule = restW.slice(1).join(" ").trim();
+    return scopeModule ? { node: "exists", entityType, term: null, scopeModule }
+      : { node: "miss", reason: `"in" needs a module afterward` };
+  }
+
+  return null; // a relative clause / verb phrase / anything else — genuinely a
+               // different (relationship) question; leave it for the parsers below.
 }
 
 /** Trailing "and that's the whole question" filler an aggregate/list tail can carry
@@ -1479,10 +1546,42 @@ function evalSuperlative(graph, ast) {
   return { compositeKind: "superlative", entityType: ast.entityType, metricNoun: ast.metricNoun, extreme: ast.extreme, score: best, matches: winners };
 }
 
+/** EXISTENCE eval — "is there a/an <kind> [called/named <term>] [in <module>]": a
+ *  direct membership/name check against the graph, never routed through the
+ *  relation-verb machinery. A named check resolves the term against the SAME
+ *  tiered resolveObject() every other named-lookup shape uses (expectedClass pins
+ *  the pool to the asked kind, so "is there a class called Store" can never
+ *  resolve to a same-named function/module); a scope clause resolves the module
+ *  the same way and narrows the check to that module's own `defines` edges
+ *  (refineToEntities — the same primitive members-of-a-module questions use). */
+function evalExists(graph, ast) {
+  const { entityType, term, scopeModule } = ast;
+  let scopeMatch = null;
+  if (scopeModule) {
+    const r = resolveObject(graph, scopeModule, { expectedClass: "Module" });
+    if (!r.match) return { compositeKind: "exists", entityType, term, scopeModule, scopeMiss: true, matches: [] };
+    scopeMatch = r.match;
+  }
+  if (term) {
+    const r = resolveObject(graph, term, { expectedClass: entityType });
+    const inScope = !scopeMatch || (r.match && moduleIdOf(graph, r.match) === scopeMatch.id);
+    const hit = r.match && inScope;
+    return {
+      compositeKind: "exists", entityType, term, scopeModule, scopeMatch,
+      matches: hit ? [r.match] : [],
+    };
+  }
+  const pool = scopeMatch
+    ? refineToEntities(graph, new Set([scopeMatch.id]), entityType)
+    : graph.individuals.filter((i) => i.class === entityType);
+  return { compositeKind: "exists", entityType, term: null, scopeModule, scopeMatch, matches: pool };
+}
+
 /** Compile any compositional AST to a result object traverse() returns for the
  *  simple path — {matches, …} plus compositeKind/compositeMiss flags render() reads. */
 export function evalComposite(graph, ast, opts = {}) {
   if (ast.node === "miss") return { compositeMiss: true, reason: ast.reason || null, matches: [] };
+  if (ast.node === "exists") return evalExists(graph, ast);
   if (ast.node === "count") return { compositeKind: "count", count: evalSet(graph, ast.base, opts).length, entityType: ast.entityType, matches: [] };
   if (ast.node === "list") return { compositeKind: "list", matches: evalSet(graph, ast.base, opts), entityType: ast.entityType, scoped: ast.scoped };
   if (ast.node === "superlative") return evalSuperlative(graph, ast);
@@ -1531,6 +1630,30 @@ function renderComposite(parsed, result) {
       return { content: `"those"/"them" needs a previous answer to refer to — ask a listing question first, then follow up.`, miss: true, ambiguous: false };
     }
     return { content: `couldn't compile this compositional question${result.reason ? ` (${result.reason})` : ""}. ${compositionalHint()}.`, miss: true, ambiguous: false };
+  }
+  // exists: "is there a/an <kind> [called/named <term>] [in <module>]" — an
+  // honest Yes/No membership check, never routed through the relation-verb
+  // machinery (see parseExistence's own doc for the bug this fixes).
+  if (result.compositeKind === "exists") {
+    if (result.scopeMiss) {
+      return { content: `no module matching "${result.scopeModule}" found in the index.`, miss: true, ambiguous: false };
+    }
+    const kindSingular = nounFor(result.entityType, 1);
+    const kindPlural = nounFor(result.entityType, 2);
+    const scopeSuffix = result.scopeMatch ? ` in ${result.scopeMatch.label}` : "";
+    if (result.term) {
+      if (!result.matches.length) {
+        return { content: `No — no ${kindSingular} named "${result.term}" found${scopeSuffix}.`, miss: true, ambiguous: false };
+      }
+      const hit = result.matches[0];
+      const modLabel = moduleLabelOf(hit);
+      const definedIn = hit.class === "Module" ? "" : (modLabel && modLabel !== "(unknown module)" ? `, defined in ${modLabel}` : "");
+      return { content: `Yes — ${hit.label} is a ${kindSingular}${definedIn}.`, miss: false, ambiguous: false, matches: result.matches };
+    }
+    if (!result.matches.length) {
+      return { content: `No — no ${kindPlural} found${scopeSuffix}.`, miss: true, ambiguous: false };
+    }
+    return { content: `Yes — ${compositeList(result.matches)}${scopeSuffix}.`, miss: false, ambiguous: false, matches: result.matches };
   }
   if (result.compositeKind === "count") {
     const noun = result.entityType ? nounFor(result.entityType, result.count) : (result.count === 1 ? "result" : "results");
