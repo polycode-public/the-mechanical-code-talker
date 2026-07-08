@@ -181,6 +181,40 @@ COUNT, not a computed value, and it never enters `syllogise.mjs`'s edge list (wh
 | e | Import WordNet wholesale (the idea doc's implicit "how far could we go" ceiling) | full synset/hypernym graph import | **LOW for tier-1** | violates the committed corpus tiering policy (ROADMAP.md:313-319, tier-1 budget ~2 MB, "what the product needs to be useful offline") and the ConceptNet slice's own reason for being *filtered* (quality-filter.mjs, word-sense noise cut) — WordNet is broader but NOT domain-filtered | L | **negative finding, recorded so it isn't re-asked**: WordNet's general-English senses would reintroduce exactly the noise `RelatedTo`'s 29,016-row exclusion was built to avoid, and it duplicates ConceptNet's own WordNet-derived core relations. At most a **tier-2 fetched corpus** (ROADMAP's own "extended ConceptNet neighbourhoods" lever, L316) behind explicit consent — never committed |
 | f | Add a numeric-comparator query grammar ("modules with at least 3 tests") | new `QUALIFIERS`-shaped table in `ask-vocab.mjs` | MED | none today (§2.3) — a genuinely new surface | M | out of THIS plan's scope; flagged for PLAN_ADVANCED_GRAMMAR, not built here |
 
+**Why WordNet specifically is wrong tier, grounded rather than merely asserted.** Miller's founding
+paper (Miller, G.A., "WordNet: A Lexical Database for English," *Communications of the ACM*
+38(11):39-41, 1995 — verified) frames WordNet explicitly as a general-English psycholinguistic
+resource: synsets built around cognitive-synonymy and word-association judgements over the whole
+language, with no domain sense-disambiguation layer at all. This is not just this plan's own
+inference — the software-engineering NLP literature has an independent, measured verdict on using
+raw WordNet for code/software vocabulary specifically: Chen, Chen, Zhang & Xing, "SEthesaurus:
+WordNet in Software Engineering" (*IEEE Transactions on Software Engineering*, 2019 — verified),
+built a 52,645-term software-specific thesaurus (14,006 synonym groups, 38,104 morphological terms)
+*because* raw WordNet under-covers and mis-senses software terminology drawn from informal SE text
+(Stack Overflow, CodeProject) — abbreviations, domain synonyms, and morphological variants general
+WordNet does not resolve, and general word senses that collide with the software sense (their own
+worked example: a term like `cache` is dominated in general WordNet by non-computing senses). That
+is the *identical* word-sense-noise argument ConceptNet's own `RelatedTo` exclusion already makes
+in this repo (§2.1, 29,016 of 44,947 rows gated out) — but now corroborated by an independent
+domain-focused project reaching the same conclusion from a different direction. The actionable
+consequence: general lexical databases need a domain-specific re-curation pass (SEthesaurus's own
+filter-against-a-domain-corpus-then-cluster pipeline) before they are safe inference premises;
+building that pass is a materially bigger, separately-scoped project than this plan's track (e),
+not a reason to import WordNet raw and hope the noise averages out.
+
+**What would actually need to be true for track (e)'s tier-2 door (§4 stage 4) to be worth
+opening** — named as a real, falsifiable gate, not a standing prohibition argued from taste:
+(1) tracks a–d's cheaper resources (the already-filtered ConceptNet `/r/Synonym`/`/r/IsA` slice,
+SEON, the phrasebook) must be wired and *measured* insufficient — the query-miss-rate plateau
+(§2.1's metric) has to be shown to persist after stages 1–3 land, not assumed in advance; (2) the
+specific residual misses must be lexical-*coverage* gaps (a term WordNet actually carries that the
+filtered ConceptNet slice does not), not sense-*disambiguation* gaps — WordNet's raw synsets make
+those WORSE, per the SEthesaurus finding above, never better; (3) a domain re-curation step
+equivalent to SEthesaurus's own contrast-against-a-software-corpus-then-cluster pipeline would have
+to exist or be built — importing WordNet's synset graph without that filter reintroduces exactly the
+noise this finding rejects, at ~10-100x ConceptNet's already-filtered row count. Absent all three,
+the door stays shut on the evidence, not on precedent alone.
+
 **Recommendation: extend the existing gated pipeline (tracks a–d), do not import WordNet.** The
 repo's own precedent is unambiguous — every existing hierarchy resource (ConceptNet slice, SEON,
 phrasebook) is small, licence-clean, reviewed through a single relation-mapping table with a

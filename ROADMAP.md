@@ -650,13 +650,45 @@ outward from high-trust premises (the provenance primitive) toward novel, releva
 timestamping each so recency and novelty stay computable. The mechanics are the easy half
 (bounded forward chaining materializes entailments; backward chaining from frequent query shapes
 pre-derives likely answers). **The residual hard half is still the FRAME PROBLEM / relevance
-realization — unsolved in the general case and not pretended otherwise;** trust+novelty+relevance
-are the tractable approximation, not a solution. The plan's job is
-to make it TRACTABLE in tmct's narrow, closed world, not to solve it: usefulness is approximated
-from what the system actually gets asked (query-shape frequency), what connects to recent focus,
-what a cheap forward step yields that isn't already stored, and a hard
-budget (inference is bounded, its output trust-scored via the provenance primitive, and anything
-speculative is retractable and never outranks a stated fact). Everything else is deferred to the
+realization — unsolved in the general case and not pretended otherwise.** This is not one problem
+but two, of different hardness (full literature + citations in `PLAN_CAPABILITY_ROUTER.md`'s "The
+open-world boundary" section):
+
+- **The frame-*axiom* problem — solved, inside a declared world.** McCarthy & Hayes named it in
+  1969 ("Some Philosophical Problems from the Standpoint of Artificial Intelligence", *Machine
+  Intelligence* 4); Reiter's 1991 successor-state axioms and Kowalski & Sergot's 1986 event
+  calculus (*New Generation Computing* 4(1)) both solve the narrow reading — stating what changes
+  without enumerating what doesn't — inside a **declared** effect/predicate model. That's exactly
+  the OWL base the Syllogist forward-chains over: the axioms and rules are declared, so applying
+  them is mechanical, bounded, and already shipped (`src/syllogise.mjs`).
+- **The relevance-*bounding* problem — genuinely open, and possibly not just unbuilt.** Given the
+  unbounded set of entailments a rich KB licenses, which ones are worth materializing *before
+  anyone asks* — without an oracle telling the pass what matters? That is McCarthy's deeper,
+  unsolved reading, and it has no known algorithm. It is also, independently, the central problem
+  a live cognitive-science literature has converged on: Vervaeke, Lillicrap & Richards ("Relevance
+  Realization and the Emerging Framework in Cognitive Science", *Journal of Logic and Computation*
+  22(1):79–99, 2012) frame it as the pervasive problem cognitive science keeps rediscovering: Jaeger,
+  Riedl, Djedovic, Vervaeke & Walsh ("Naturalizing relevance realization: why agency and cognition
+  are fundamentally not computational", *Frontiers in Psychology*, 2024) go further and argue —
+  contestably, but rigorously, not as a popular-science claim — that relevance realization
+  *cannot* be an algorithmic process at all, by an analogy to Gödelian incompleteness. Take that as
+  a live, unresolved argument, not a proof: the honest position is that tmct doesn't know whether
+  this is "hard" or "impossible", and says so.
+
+trust+novelty+relevance (query-shape frequency, recent-focus connectivity, a hard depth/budget
+cap) are the **tractable approximation** the plan actually ships — a proxy for relevance, not a
+solution to it, and openly so. **A speculative angle, still respecting no-LLM-in-product:** the
+same bounded-region trick sketched for the router's open-world goal recognition
+(`PLAN_CAPABILITY_ROUTER.md`) applies here. Instead of trying to bound relevance globally (the
+open problem above), bound it *per query-shape*: a query shape already declares which
+predicates/fluents it touches — it's how `parseQuery` resolves it — so restricting speculative
+forward-chaining to premises reachable within N hops of an **observed** query shape's declared
+predicates is a *structurally*-bounded relevance filter, not a learned or statistical one. It is
+narrower than "what's relevant in general" (that stays open) but might be enough to keep
+materialization from drifting into computing entailments nobody will ever ask about — trading
+"relevant to anyone" (unsolved) for "relevant to what this system has actually been asked"
+(a proxy, but a principled, deterministic one). This has not been built or measured; it is a
+candidate for the plan's next spike, not a claimed result. Everything else is deferred to the
 plan's open questions, where the relevance problem is named as the open research risk it is.
 
 ### Open-source the ACE-OWL parser as a standalone library
@@ -811,7 +843,57 @@ critical build path:
 ## Phase LATER — recognized, deferred, not now
 
 Features we have deliberately shaped seams for but will not build until the phases above have
-earned them:
+earned them. **Not everything below is deferred for the same reason** — the design horizon,
+stated explicitly (2026-07-08 research pass):
+
+### The design horizon
+
+**Before the horizon — known-how, not-yet-built, no research risk.** Sequencing or engineering
+debt: the technique exists (in tmct's own prior work or the wider literature), building it is a
+matter of scheduling and effort, not discovery. Everything shipped this session lives here, plus:
+tone-of-voice adaptation (below — deliberately dropped by design choice, not unsolved);
+tier-4 learn-on-miss (below — prerequisites not yet met, not research-blocked); `PLAN_CODE.md`
+Tracks 2–4 (mutation search/repair, JS/HTML/CSS synthesis — APR and CEGIS are established
+techniques); `PLAN_OSS_ACE_PARSER.md` (pure extraction/packaging); OWL 2 RL forward-chaining and
+DL tableau consistency checking (`PLAN_INFERENCE_TESTING.md` stages 3–5 — the W3C's own OWL 2 RL
+profile is a published, complete rule table; Pellet/HermiT/RDFox/Jena are real production
+reasoners built on solved theory); RETE/incremental forward-chaining (same doc — Forgy 1982 is a
+citable, portable algorithm); contingent/conformant planning under initial-state uncertainty
+(`PLAN_CAPABILITY_ROUTER.md` — Bonet & Geffner 2000, Hoffmann & Brafman 2006, Petrick & Bacchus
+2002 all have working algorithms); ordinary closed-domain anaphora resolution (`nextFocus`,
+already shipped, plus a real theoretical grounding available in Grosz/Joshi/Weinstein's centering
+theory, 1995).
+
+**After the horizon — genuinely unsolved in the field, or abandoned by the field in favor of
+approaches tmct's no-LLM ethos rules out.** Named as real research targets, with citations, not
+stop signs (full detail + full citation lists in each owning doc):
+- **The frame problem / relevance realization** — the open-world planning boundary
+  (`PLAN_CAPABILITY_ROUTER.md`'s "The open-world boundary" section; this doc's tier-5 Syllogist
+  paragraph below). McCarthy & Hayes 1969 named it; Jaeger, Riedl, Djedovic, Vervaeke & Walsh
+  (2024) argue it may not be algorithmically solvable in the general case at all. Speculative
+  angle recorded: bounded (N+1) goal recognition — recognize declared goal 1..N, or reject to an
+  explicit "escalate" class, via parse-shape membership (the same mechanism Bug 8's domain gate
+  already uses) — not published anywhere found.
+- **Symbolic (non-neural) dependency parsing at real coverage** — `PLAN_ADVANCED_GRAMMAR.md`
+  track (c). Largely abandoned by mainstream NLP research once neural parsers won CoNLL
+  2017/2018, not disproven at any fixed data budget. Speculative angle: a hand-built,
+  closed-vocabulary disjunct/category dictionary (Link Grammar/CCG-style) scoped only to tmct's
+  own closed relation vocabulary, registered as another additive interpretation strategy.
+- **Winograd-hard commonsense coreference** — `PLAN_ADVANCED_GRAMMAR.md` track (g). Genuinely
+  open without either massive statistical priors (ruled out) or a full commonsense KB (Cyc's
+  decades-long cautionary history). Speculative angle: tmct's own closed, complete graph makes a
+  *narrow slice* of Winograd-shaped ambiguity a graph-query-filtering problem rather than
+  open-domain commonsense reasoning — explicitly not the same as solving Winograd.
+- **Bounded, incremental, trust-tiered, retraction-safe justification tracking** —
+  `PLAN_INFERENCE_TESTING.md`'s stage-3/4/5 discussion. Doyle's JTMS (1979) and de Kleer's ATMS
+  (1986) solve retraction; DRed/RDFox's Backward-Forward solve incremental Datalog maintenance;
+  nobody has published the specific combination with tmct's multi-trust-tier, hard-budget
+  requirement. Speculative angle: an ATMS-lite extension to `syllogise.mjs`'s currently-flat
+  provenance tag, sketched but unbuilt.
+
+Every item above is honestly labeled speculative — a direction recorded so it isn't
+re-discovered from scratch, not a committed build plan. None of it is scheduled; the phases above
+this line are still the actual near-term work.
 
 ### Tone-of-voice adaptation (dropped from Phase 6, 2026-07-05)
 Per-voice synonym/phrase substitution over prose spans. Dropped because tmct's protected-span

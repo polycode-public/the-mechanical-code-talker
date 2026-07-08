@@ -93,16 +93,82 @@ and (e). Guardrails learned from 0.8.2 recall hygiene: walls/misses never enter 
 record is per-session, never persisted to `.tmct/`; every binding is surfaced in the answer
 ("them = the 3 modules from your last question") so a mis-bind is *visible*, in ethos.
 
-**(c) wink dependency-lite — mostly a negative finding, recorded so we stop re-asking.** What
-wink actually provides (ask-nlp.mjs adapter + wink-model.mjs loader): tokenization, sentence
-boundaries, POS tags, lemmas, NER, custom-entity patterns. **No dependency or constituency
-parse.** A "dep-lite" would be a home-built POS-chunker (NP/VP shells → head-attachment
-heuristics) — L effort, and its accuracy on the exact constructions we care about (attachment
-under embedding) is the known-hard part of parsing. Verdict: DO NOT build a general chunker.
-Narrow admissible slice: a POS-gated *clause splitter* (finite-verb counting to segment
-subordinate clauses before the frame tables run) — that's an (a) enabler, S effort, and keeps
-wink in its current advisory role (tiers off gracefully when the model is absent, the standing
-viewer-bundle boundary).
+**(c) wink dependency-lite — a negative finding for the home-built chunker, but not because
+symbolic parsing is dead; it's because the field walked away from it.** What wink actually
+provides (ask-nlp.mjs adapter + wink-model.mjs loader): tokenization, sentence boundaries, POS
+tags, lemmas, NER, custom-entity patterns. **No dependency or constituency parse.** A "dep-lite"
+built as a home-grown POS-chunker (NP/VP shells → head-attachment heuristics) is L effort with a
+known-hard accuracy cliff on exactly the constructions we'd need it for (PP-attachment and
+attachment-under-embedding are the textbook hard cases — no amount of hand-tuned heuristic closes
+that gap at general-English coverage). Verdict, unchanged: DO NOT build a general chunker. Narrow
+admissible slice, unchanged: a POS-gated *clause splitter* (finite-verb counting to segment
+subordinate clauses before the frame tables run) — that's an (a) enabler, S effort, keeps wink in
+its current advisory role.
+
+*Research frontier, named honestly.* "wink has no dependency parse" reads as a library gap; the
+real fact underneath is that **rule-based, non-statistical dependency parsing is a largely
+abandoned line of research**, and it was abandoned for funding/publication reasons, not because
+it was proven inferior at any fixed data budget:
+
+- Dependency grammar itself is old and symbolic in origin — Tesnière's *Éléments de syntaxe
+  structurale* (posthumous, 1959) is the founding text: valency-based government from a verb to
+  its actants/circumstants, diagrammed as stemmas, with no statistics anywhere in the formalism.
+- **Covington's incremental algorithm** ("A Fundamental Algorithm for Dependency Parsing," *Proc.
+  39th ACM Southeast Conference*, 2001; corrected reprint arXiv:2510.19996) is a genuine
+  from-scratch symbolic method: process words left-to-right, test each new word against every
+  previously-processed word for an attachable dependency, O(n³) worst case but near-linear on
+  real sentences. No training data, no statistical model — it's a real, citable, purely
+  rule-driven parsing algorithm.
+- **Link Grammar** (Sleator & Temperley, "Parsing English with a Link Grammar," CMU tech report
+  1991/1993, arXiv:cmp-lg/9508004) is the strongest existing proof this isn't vaporware: a
+  dictionary of per-word "connector" disjuncts (jigsaw-piece link requirements) that a search
+  procedure satisfies into a planar linkage — fully rule-based, no treebank training, LGPL C
+  library still actively maintained today (v5.12.x, 2024; bindings for Python/Java/Node; used by
+  AbiWord's grammar checker and the OpenCog project). It is real, embeddable, and *not neural* —
+  worth naming specifically because it's the counter-example to "no symbolic parser survived."
+  Its ceiling is coverage and ambiguity ranking on genuinely open English, not architecture.
+- **Combinatory Categorial Grammar** (Steedman, *The Syntactic Process*, MIT Press, 2001) is the
+  other live symbolic framework — categories carry their own combination rules (application,
+  composition, type-raising), so syntax and semantics build in lockstep. CCG's own most-cited
+  *application*, though, is Zettlemoyer & Collins's statistically-trained semantic parser
+  ("Learning to Map Sentences to Logical Form: Structured Classification with Probabilistic
+  Categorial Grammars," UAI 2005) mapping ATIS-style database queries to logical form — telling,
+  because it shows CCG's natural home is a **closed query domain**, not open text, and that even
+  there the field reached for statistics rather than a hand-built lexicon.
+- The honest field-level fact, checked rather than assumed: the CoNLL 2017/2018 Universal
+  Dependencies shared tasks were won outright by neural graph-based (biaffine) parsers, and every
+  competitive dependency parser since is neural. Nobody is publishing hand-built symbolic
+  dependency parsers anymore — not because Covington's algorithm stopped working, but because
+  research incentives (leaderboards, treebank-scale eval, funding) all reward statistical
+  approaches. **That abandonment is itself the finding worth recording**: this is a "known how,
+  nobody kept building it" gap, not a "provably impossible" one — closer to an open frontier than
+  a solved-and-discarded idea.
+- The closed-domain angle this licenses, not built anywhere we can find: tmct's queries are not
+  open English — they're a bounded vocabulary over a fixed relation set (imports/calls/tests/
+  inherits/…, `ENTITY_TO_TYPE`/`VERB_TO_KIND`). **Grammar induction restricted to a closed
+  domain lexicon is a much smaller problem than general parsing** — a Link-Grammar-style disjunct
+  dictionary or a CCG-lite lexicon written BY HAND (not induced statistically) over tmct's own
+  closed relation vocabulary is tractable at S–M effort precisely because the vocabulary is
+  closed and the grammar doesn't need to cover the long tail of general English. Attempto
+  Controlled English (Fuchs & Schwitter, "Attempto Controlled English — Not Just Another Logic
+  Specification Language," 1996 onward, arXiv:cmp-lg/9603003) is the concrete existence proof for
+  this pattern at large: a restricted, unambiguous English subset with a hand-built grammar that
+  compiles deterministically to first-order logic, deployed for requirements specs and the
+  semantic web for decades. tmct's ACE-OWL strategy (`src/grammar/ace.mjs`, wired in as its own
+  additive class via `src/interpret/strategies/ace.mjs` and `src/interpret/pipeline.mjs`'s
+  precedence-ordered `STRATEGIES` array) is already the same species of thing — a hand-written
+  controlled fragment, own-class, clean-parse-or-null, never displacing the tolerant strategies.
+  A "dep-lite" strategy scoped the same way — bounded disjunct/category dictionary over the
+  closed relation vocabulary only, registered as another additive class beside `ace-fact`,
+  refusing (returning null) rather than guessing outside its lexicon — would be a genuine step
+  toward real dependency structure without inheriting general-parsing's accuracy cliff, because
+  the cliff is a function of open vocabulary and unbounded ambiguity, neither of which this domain
+  has. Nobody appears to have published this specific combination (symbolic dependency/categorial
+  grammar, hand-built not induced, scoped to a closed code-relationship query domain as an
+  additive strategy in a multi-strategy interpreter) — a real "no vehicle yet" idea, not a
+  rediscovery of prior art. It is NOT scheduled (§4 still parks track (c) beyond the clause
+  splitter) — this paragraph records the idea so it isn't re-discovered from scratch, not a green
+  light to build it.
 
 **(d) Construction-grammar template banks.** Per-construction closed template families as
 *data* (`data/templates/constructions/*.toml`: pattern → AST skeleton, slot types validated
@@ -129,12 +195,108 @@ are the render precedent); S effort as a render-layer pass over failed/partial p
 checks of definite descriptions and *still/again/stop* triggers (a closed trigger lexicon —
 Levinson's classic list is small and finite).
 
-**(g) The permanent ceiling, kept honest.** Winograd-class items need world knowledge —
+**(g) The permanent ceiling, kept honest — and named as a real research frontier, not just a
+wall.** Winograd-class items need world knowledge —
 graded-language-measures.md:18 ("pronoun resolution requiring world knowledge — the permanent
 TOO-HARD ceiling markers") and ROADMAP.md:590's frame-problem language ("unsolved in the general
 case and not pretended otherwise"). g-c2-pron stays 25 marker items, judged rarely, expected red;
 a mechanism that "fixes" them via fixture-specific heuristics is overfit by definition and gets
-reverted. Same bucket: irony, register, genuine idiomatic creativity. The C2 *number* will never
+reverted. Same bucket: irony, register, genuine idiomatic creativity.
+
+*What the literature actually says, checked rather than recalled.* The Winograd Schema Challenge
+was proposed as a *deliberately* statistics-resistant test: Levesque, Davis & Morgenstern, "The
+Winograd Schema Challenge," KR-2012 (expanded from a Commonsense-2011 talk) — designed so
+schema pairs are "Google-proof," i.e. "no obvious statistical test over text corpora … will
+reliably disambiguate these correctly," specifically to rule out the co-occurrence shortcut a
+frequency-count or embedding-similarity trick would take. That design goal is exactly why it's
+the right ceiling marker for a no-LLM, no-statistics product: tmct is structurally the kind of
+system the WSC was built to defeat, by intent, not by accident.
+
+Is it "solved" now? Only partially, and the literature is explicit about the caveat. By ~2019,
+transformer language models fine-tuned on WSC-style data crossed 90% — but Sakaguchi, Le Bras,
+Bhagavatula & Choi built **WinoGrande** ("WinoGrande: An Adversarial Winograd Schema Challenge at
+Scale," AAAI 2020, arXiv:1907.10641) specifically because the original 273-item WSC set turned
+out to be small enough and stylized enough that models could be exploiting annotation artifacts
+rather than reasoning; WinoGrande's AFLITE adversarial-filtering algorithm at 44k items closes
+much of that gap and is measurably harder. Even more directly on point: Kocijan, Davis,
+Lukasiewicz, Marcus & Morgenstern, "The Defeat of the Winograd Schema Challenge," *Artificial
+Intelligence* 325 (2023) 103971 (arXiv:2201.02387) — a retrospective by two of the challenge's own
+co-authors — concludes that LLM success on WSC-derived benchmarks is confounded by dataset bias
+and "knowledge leakage" from web-scale pretraining that has since absorbed huge numbers of
+Winograd-style sentences and their answers, not demonstrated proof of general commonsense
+reasoning. **Read plainly: nobody has shown a system solves Winograd-class ambiguity by reasoning
+from a closed, inspectable knowledge source; the systems that score well do so by having ingested
+statistical traces of approximately this exact problem at planetary scale.** That is precisely the
+resource tmct's no-LLM, no-training-data ground rule forbids, so the ceiling is not a tooling gap
+tmct failed to build past — it's the one form of "success" on this benchmark that is fundamentally
+unavailable to a deterministic, explainable system, and the field's own most careful authors say
+the observed "success" elsewhere may not be real understanding either.
+
+The other symbolic path — build a genuine commonsense knowledge base and reason over it instead of
+using statistics — has a real, decades-long, largely-cautionary data point: **Cyc** (Lenat, from
+1984; spun off as Cycorp in 1995), an explicit attempt to hand-encode on the order of 100 million
+commonsense assertions in symbolic form, auditable and rule-based rather than statistical — the
+closest thing that exists to "the WSC problem, taken seriously, at Cyc's scale of ambition." Forty
+years on, Cyc is remembered in the field largely as a cautionary tale: enormous engineering effort,
+modest and narrow deployed payoff, no publicly demonstrated general-commonsense breakthrough at
+the scale originally promised. This is the honest ceiling on the *other* side of the tradeoff:
+avoiding statistics by hand-building a knowledge base doesn't reliably work either, at least not at
+anything like the effort tmct can spend. So the frame-problem framing already in this document is
+correct on both branches, not just the statistical one — there is, as of this research pass, no
+demonstrated third way that is both symbolic/deterministic and general-purpose.
+
+*The genuinely speculative angle worth recording, scoped to what tmct actually has.* Every WSC
+treatment in the literature above assumes an OPEN general-knowledge domain — that's the whole
+point of the challenge, and why Cyc-scale effort was seen as the only symbolic answer. tmct's
+situation is different in one structural way worth naming: its "world" is not open text, it's a
+**complete, closed, already-loaded graph** (`.tmct/` OWL-labelled JSON — every entity, class, and
+relation the reasoner will ever be asked about is already a node it can traverse, not a fact it
+must retrieve or infer from unbounded background knowledge). A code-domain analogue of a Winograd
+pair — "the function calls the module before it initializes; what does 'it' refer to?" — is not
+actually open-domain commonsense in tmct's world: the antecedent candidates are a finite,
+enumerable set of graph individuals with known classes and known relations to each other, and the
+disambiguating "commonsense" fact (does a function initialize a module, or can a module initialize
+itself; which relations are typically valid arguments for "initializes") is exactly the kind of
+fact tmct's own schema (`ENTITY_TO_TYPE`/`VERB_TO_KIND`, class-gated focus per `nextFocus`,
+`src/chat.mjs:268`) already encodes as data, not as reasoning. This reframes a subset of
+Winograd-shaped ambiguity — NOT the general case, NOT irony/idiom/register, only the sliver where
+disambiguation turns on a fact already present as a graph edge or a class constraint — as a
+graph-query filtering problem rather than a commonsense-reasoning problem. We could not find this
+angle built anywhere: the WSC and its successors are evaluated exclusively over open natural-language
+sentences with no accompanying structured world model the reasoner is presumed to already possess
+completely; grounding pronoun disambiguation in a closed, complete, already-available relational
+graph — rather than either statistical priors or a hand-authored general commonsense KB — is a real
+"no vehicle yet" idea specific to structured-domain chatbots. It would not touch the g-c2-pron
+ceiling markers (those are deliberately open-world-flavored fixture items, by design unsolvable
+this way) but could, as a DISTINCT and separately-named mechanism, extend track (b)'s DRT-lite
+discourse record (typed entities/sets/times/propositions) with a class-constraint disambiguation
+pass for the narrower "which graph-typed antecedent is relation-plausible" cases — worth a future
+PLAN, not scheduled here, and must never be presented as "solving Winograd" since it explicitly
+isn't the same problem.
+
+*A closer, real theoretical grounding for what tmct already ships.* Ordinary anaphora resolution
+over a small closed set of recent discourse referents — which is what `nextFocus`
+(`src/chat.mjs:268`, this session's pronoun-binding fix) and the router's `bindAnaphor`
+(`planner.mjs:116`) already do reasonably well — is NOT the frontier described above; it's
+tractable and largely solved territory, and conflating it with Winograd-hard cases would be
+dishonest. It does, however, have a real symbolic theory it currently only informally resembles:
+**centering theory** (Grosz, Joshi & Weinstein, "Centering: A Framework for Modeling the Local
+Coherence of Discourse," *Computational Linguistics* 21(2), 1995) formalizes exactly
+`nextFocus`'s intuition — each utterance has a ranked list of "forward-looking centers"
+(candidate referents) and a single "backward-looking center" (Cb, the standing topic); pronouns
+preferentially realize the Cb, and a discourse is "coherent" (CONTINUE) when the Cb persists
+across turns, versus SHIFT when it changes. `nextFocus`'s rule — a newly-resolved entity becomes
+focus unless it's not focus-worthy AND a standing focus-worthy entity already exists — is a
+two-rule, hand-specialized approximation of centering's ranking-plus-Cb-continuity preference,
+with `FOCUS_WORTHY_CLASSES` doing the work centering theory would do with a general
+salience/grammatical-role ranking. This is a genuine, cheap, low-risk opportunity distinct from
+the Winograd frontier above: track (b)'s typed discourse record could adopt centering's Cb/Cf
+vocabulary directly (rank forward-looking centers by graph-relation salience, not just recency;
+track Cb continuity as a coherence signal for scoring which discourse-deixis reading is more
+likely) — giving existing ad-hoc code real theoretical grounding, not new capability. Small,
+citable, and worth doing inside track (b) rather than as new scope.
+
+The C2 *number* will never
 be pretty; its job is to stay on the record as the boundary of the machine.
 
 ## 3 — Measurement-first staging

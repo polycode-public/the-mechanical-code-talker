@@ -128,7 +128,7 @@ router's floor-raising, and they are already the benchmark's recommended next wo
 | Parameter binding (slot-filling) | **Partial** | Role labelling from the grammar; brittle for rich args. **Known debt: pronoun/focus binding (`B1 pron 1.24`, the "it → Commit" mis-bind)** — must fix before B1. |
 | Cross-turn threading (anaphora / focus) | **Partial (known bugs)** | Threading a prior `tool_result` into the next call. **Debt: discourse-count anaphora (2 tier-1 misses) + the focus mis-bind** — the A2→B1 gate. |
 | Request → intent, **arbitrary imperative NL** | **Unsolved** | The front-end problem — exactly what LLMs are for. tmct's answer: constrain the input + guide toward it. |
-| Open-ended planning, **open world** (C1) | **Unsolved** | Novel errors, unmodelled effects break the closed-world assumption. Escalate. |
+| Open-ended planning, **open world** (C1) | **Unsolved — see "The open-world boundary" below** | Novel errors, unmodelled effects break the closed-world assumption. The underlying obstruction is the **frame problem** in its relevance-bounding form, not just missing engineering. Escalate. |
 | Autonomous agency (C2) | **Speculative** | Reachable closed-world via the reduction below; goal-*generation* in open worlds stays open. |
 
 The pattern: **almost everything above the front-end is a solved problem in the planning/KR
@@ -260,13 +260,132 @@ router's real deliverable.
 
 ---
 
+## The open-world boundary — naming the real problem
+
+"Unsolved. Escalate." is honest but underspecifies *what* is unsolved. Three things hide behind
+that one phrase, and they are not equally hard — the point of this section is to separate them.
+
+**Not actually open — known-hard, not unknown-how.** Planning under incomplete knowledge of the
+*initial* state has real, published algorithms: belief-space heuristic search (Bonet & Geffner,
+"Planning with Incomplete Information as Heuristic Search in Belief Space", AIPS 2000) generalizes
+classical forward search from states to sets of possible worlds; Conformant-FF (Hoffmann &
+Brafman, "Conformant Planning via Heuristic Forward Search: A New Approach", *Artificial
+Intelligence* 170(6–7), 2006) makes conformant planning practical without any sensing; Petrick &
+Bacchus's PKS ("A Knowledge-Based Approach to Planning with Incomplete Information and Sensing",
+AIPS/ICAPS 2002) tracks the planner's *knowledge* rather than enumerating possible worlds, and
+handles sensing actions directly. These are harder than STRIPS — belief space is exponentially
+larger than state space — but they are **solved** in the research sense: a *declared-but-uncertain*
+world, not an undeclared one. tmct doesn't have this yet; that is engineering debt to pull off the
+shelf (Stage 3's "optionally defer search to Fast Downward" note applies equally to a
+belief-space/conformant solver), not a research frontier.
+
+**The genuinely open core: the frame problem, in its relevance-bounding form.** McCarthy & Hayes
+coined "the frame problem" in 1969 ("Some Philosophical Problems from the Standpoint of Artificial
+Intelligence", *Machine Intelligence* 4, Edinburgh University Press, 463–502) as the difficulty of
+stating what *doesn't* change after an action without enumerating it. That narrow reading is
+solved: situation calculus's successor-state axioms (Reiter, "The Frame Problem in the Situation
+Calculus: A Simple Solution (Sometimes) and a Completeness Result for Goal Regression", 1991)
+collapse the frame-axiom count from actions×fluents to actions+fluents; the event calculus
+(Kowalski & Sergot, "A Logic-based Calculus of Events", *New Generation Computing* 4(1), 1986)
+does the analogous thing for narrative/database updates; STRIPS's own add/delete lists (Fikes &
+Nilsson, "STRIPS: A New Approach to the Application of Theorem Proving to Problem Solving",
+*Artificial Intelligence* 2, 1971) are the original special case. None of these generalize past a
+**declared** effect model — which is exactly tmct's closed-world assumption already, restated. What
+none of them touch is the deeper reading McCarthy himself flagged as open: given an *undeclared*
+world, how does a reasoner decide *which* of the unbounded facts that could be true are relevant to
+consider at all, without an oracle telling it what to ignore? That is not a frame-*axiom* problem —
+it's a **relevance-bounding** problem, and it has no algorithmic solution in the general case. This
+is the frame problem's living core, and it is the actual content of "open-world planning" once the
+closed-world engineering above is stripped away.
+
+**The recent, rigorous treatment says this may not be a matter of degree.** Relevance realization
+has its own citable literature, and it is not just popular-science framing: Vervaeke, Lillicrap &
+Richards ("Relevance Realization and the Emerging Framework in Cognitive Science", *Journal of
+Logic and Computation* 22(1):79–99, 2012) argue relevance realization is the problem cognitive
+science has converged on as central — a peer-reviewed synthesis across the contributing
+disciplines, not the popular *Awakening from the Meaning Crisis* material built on top of it.
+Jaeger, Riedl, Djedovic, Vervaeke & Walsh ("Naturalizing relevance realization: why agency and
+cognition are fundamentally not computational", *Frontiers in Psychology*, 2024) go further and
+make the frame problem the paper's own frame: "the frame problem, defined in its most general form
+as the problem of relevance" cannot, they argue, be solved algorithmically at all — turning an
+ill-defined (semantic) problem into a well-defined (syntactic) one is itself the un-formalizable
+step, by an argument they liken to Gödelian incompleteness. Treat that as a serious, contestable
+philosophical argument, not a proof. But it is exactly the honest register this doc uses elsewhere:
+not "we haven't built it", but "there is a live, peer-reviewed argument that it cannot be built as
+an algorithm at all". Read this way, tmct's "Unsolved. Escalate." is not a cop-out — it may be the
+only defensible position for a system that refuses to guess.
+
+**The sibling problem on the goal side: open-world goal *recognition*.** tmct's goal-reasoner
+(`src/router/goal-reasoner.mjs`) already does closed-world goal *selection* — deduce which of a
+small **declared** set of goal-rules applies via `applicableRules`, refuse on 0 or >1 matches. The
+harder, less-solved sibling is open-world goal *recognition*: given an arbitrary request, infer
+intent from a world of **undeclared** possible goals. The closed-world version is well studied:
+Ramírez & Geffner ("Plan Recognition as Planning", IJCAI 2009) compile goal recognition into a
+planning problem — given a *declared* set of candidate goals and a domain theory, find which
+goal's optimal plan best explains the observed actions; Keren, Gal & Karpas ("Goal Recognition
+Design", ICAPS 2014, using their "worst-case distinctiveness" measure) study the dual problem —
+designing the domain itself so recognition is fast. **Both assume the true goal is a member of the
+declared candidate set.** Bug 8 (fixed this session, `src/router/goal-reasoner.mjs`'s domain gate)
+was exactly a symptom of this boundary: `applicableRules` deduced a goal-rule from the declared
+toolset alone, without checking the request itself was actually *about* that goal's domain — an
+open-world-goal-generation failure surfacing as a confident false positive rather than a missing
+capability.
+
+**Symbolic + open-world + no-LLM is a narrower, mostly-abandoned research niche — say so plainly.**
+The field's trajectory over the last two years has been to reintroduce an LLM specifically to plug
+the open-world gap in an otherwise-symbolic planner, not to solve the open-world case symbolically.
+Chen, Yang, Jia, Hu, Chen, Zhang, Wang & Pan ("Language-Augmented Symbolic Planner for Open-World
+Task Planning", RSS 2024) is a clean example: a classical symbolic planner handles everything it
+can, and an LLM is invoked precisely where action preconditions, objects, or properties are
+incomplete — i.e., precisely at tmct's own escalation seam. This is independent confirmation from a
+different research community that "closed-world symbolic, escalate at the open-world edge" is the
+state-of-the-art *shape*, not a compromise unique to tmct. What's genuinely absent from the
+literature is a competitive **purely symbolic, no-LLM** answer to the open-world case: searching
+turns up open-set recognition / novelty detection as a live subfield, but it is a *statistical/ML*
+one (Bendale & Boult, "Towards Open World Recognition", CVPR 2015 — reject-then-incrementally-learn
+unknown classes), with essentially no cross-pollination into the classical goal-recognition-as-
+planning literature above, which still assumes a closed candidate-goal set. That gap — not "nobody
+has thought about it" but "the specific combination of open-set rejection + symbolic
+goal-recognition-as-planning has no dedicated line of published work this research could find" — is
+real, and it shapes the speculative angle below.
+
+**A speculative angle that hasn't had a vehicle: bounded (N+1) goal recognition.** Full open-world
+goal recognition is out of reach for a deterministic system — that's the honest boundary above. But
+tmct's own architecture already narrows the problem in a way the literature doesn't: it never needs
+to recognize an *arbitrary* goal, only to decide, for a small **declared** set of N goal-rules,
+whether a request matches goal 1..N or belongs to an explicit **(N+1)th "none of the above,
+escalate"** class — precisely the shape the Bug 8 domain gate ad-hoc-solved once, generalized.
+Ramírez & Geffner's plan-recognition-as-planning gives a real mechanism for scoring "does this
+request's parse best explain goal *i*'s declared plan" for *i* in 1..N; the missing piece — and the
+part with no citable prior technique this research could find — is a *principled* reject rule for
+the (N+1)th class, derived the same way the rest of tmct proves things (structurally, from the
+grammar, never a learned score). One tractable, deterministic, no-LLM candidate: borrow the
+*structure* of open-set recognition (reject when no known class's decision region contains the
+input) but implement the "decision region" symbolically — a goal-rule's region is the **set of
+parse shapes** that name its declared `focusClass`/toolset (exactly what the Bug 8 domain gate
+already computes, reusing `ask.mjs`'s `parseQuery`), and reject-to-escalate is what happens when
+the request's parse shape falls in *none* of the N regions — deterministically, not probabilistically.
+This has not been published or built anywhere this research could find; it would be a genuine
+new combination: symbolic, N+1-bounded, explainable goal recognition, built from grammar-shape
+membership instead of either a candidate list assumed exhaustive (Ramírez & Geffner) or a learned
+open-set classifier (Bendale & Boult). It stays inside tmct's ground rules — deterministic, no LLM,
+every accept/reject decision traces to a parse-shape match — and it is a *narrower* claim than
+"solve open-world goal recognition": it only ever answers "is this one of my N declared goals,
+yes/no", never "what new goal is this". That bound is the whole point, and it is the next spike to
+scope, not a result to claim yet.
+
+---
+
 ## What stays genuinely open (say it plainly)
 
 1. **The NL front end.** Arbitrary imperative → structured intent. tmct's answer is a *controlled
    command language* + tolerant guidance toward it — a command router for a declared fragment, not a
    general NL agent. This is the make-or-break, and it is honest to constrain it.
-2. **The open-world boundary** (C1 and C2). Novel errors, unmodelled effects, goals nobody declared.
-   tmct refuses/escalates; the LLM wins. This is a feature (safety) and a limit (coverage).
+2. **The open-world boundary** (C1 and C2) — the frame problem / relevance realization, per "The
+   open-world boundary" above. Novel errors, unmodelled effects, goals nobody declared. tmct
+   refuses/escalates; the LLM wins. This is a feature (safety) and a limit (coverage), and the
+   underlying research question (bounding relevance without an oracle) has a real argument, not
+   yet refuted, that it is not algorithmically solvable at all — not merely unbuilt.
 3. **Parameter-binding coverage** for rich arguments beyond what the grammar labels.
 
 ## Positioning (the strongest story)
@@ -282,7 +401,15 @@ low coverage.
 Attempto Controlled English (tmct's lineage); Datalog / Prolog SLD-resolution + unification;
 STRIPS/PDDL + POP + HTN (see [`docs/references/planning/`](docs/references/planning/README.md)); Steel
 & Ho (plan-vs-execute); BDI (Rao & Georgeff) + Goal-Driven Autonomy (Aha/Molineaux/Cox); GraphPlan /
-SATPLAN; semantic parsing to executable forms; OpenAI/Anthropic API-compatible shims.
+SATPLAN; semantic parsing to executable forms; OpenAI/Anthropic API-compatible shims. **On the
+open-world boundary specifically** (see "The open-world boundary" above for full citations):
+McCarthy & Hayes (1969, the frame problem); Reiter (1991, successor-state axioms); Kowalski &
+Sergot (1986, event calculus); Fikes & Nilsson (1971, STRIPS); Bonet & Geffner (2000) and Hoffmann
+& Brafman (2006) and Petrick & Bacchus (2002) (contingent/conformant/sensing-action planning);
+Vervaeke, Lillicrap & Richards (2012) and Jaeger, Riedl, Djedovic, Vervaeke & Walsh (2024)
+(relevance realization); Ramírez & Geffner (2009) and Keren, Gal & Karpas (2014) (goal recognition
+/ goal recognition design); Chen, Yang, Jia, Hu, Chen, Zhang, Wang & Pan (2024, LLM-augmented
+symbolic planning for open worlds); Bendale & Boult (2015, open-set/open-world recognition).
 
 ## Open questions (for tonight)
 

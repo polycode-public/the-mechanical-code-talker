@@ -253,6 +253,160 @@ deterministic-replay clause); it applies only if a judged phrasing tier is enabl
 | 5 | **Consistency checker** over the closure + refuse-on-contradiction (hand-written Node.js — §2.3) | M | INF-C2 completion > 0 |
 | — | Progol/ILP (learning NEW rules) stays a SEPARATE far spike — ROADMAP Item 11's own language ("exploratory until a spike confirms the mapping is tractable") | — | not on this ladder |
 
+**The literature behind stages 3–5 and the Progol row, verified against real sources — most of it
+is solved, a narrower slice is genuinely open.** Named honestly so "we haven't built it" is never
+conflated with "nobody knows how":
+
+- **OWL 2 RL + DL tableau reasoning is a mature, solved field — reimplementing it here is real
+  engineering, not research.** OWL 2 RL was purpose-designed to be implementable as forward-chaining
+  Datalog: the W3C's own profile document states the design goal directly ("OWL 2 RL reasoning
+  systems can be implemented using rule-based reasoning engines") and proves it — Theorem PR1
+  gives soundness+completeness of the rule-based reading for query answering, and §4.3's Tables 4-9
+  enumerate the COMPLETE rule set as first-order implications over a ternary triple predicate (W3C,
+  *OWL 2 Web Ontology Language Profiles*, Second Edition, 2012, `https://www.w3.org/TR/owl2-profiles/`
+  — verified by direct fetch). Stage 4's tier-5 "the Syllogist" is, in the literature's own terms,
+  an implementation of an already-published complete rule table, not an open design question. The
+  same holds for the harder DL fragments beyond RL: satisfiability/consistency checking for
+  expressive DLs is solved by tableau algorithms (Baader & Sattler, "An Overview of Tableau
+  Algorithms for Description Logics," *Studia Logica* 69(1):5-40, 2001; Horrocks & Sattler, "A
+  Tableau Decision Procedure for SHOIQ," *Journal of Automated Reasoning*, 2007 — both verified),
+  and production reasoners built on exactly this theory exist and are widely deployed: Pellet and
+  HermiT are tableau-based OWL DL reasoners, RDFox is an in-memory parallel Datalog/OWL-2-RL engine
+  materialising up to 6.1M triples/sec (Motik, Nenov, Piro & Horrocks, "RDFox: A Highly-Scalable RDF
+  Store," ISWC 2015 — verified), and Apache Jena ships a general rule engine for exactly this rule
+  shape. **The genuinely tmct-specific part is narrower than "build a reasoner": these mainstream
+  systems assume a single trust tier — a fact is IN the closure or it is not.** tmct's own
+  requirement (`memory/trust.mjs` `SOURCE_PRIOR`, corpus 0.7 < teach 0.95 < operator 1.0, entailed
+  floor 0.3) that a corpus-sourced entailment must NEVER outrank a taught fact, stay low-trust, and
+  remain independently retractable is a governance layer the OWL 2 RL/tableau literature does not
+  address at all — it is silent on trust tiers because DL semantics has none. That governance layer
+  is this repo's own invention (already shipped), not a gap in the literature to fill.
+
+- **Incrementality (RETE / semi-naive evaluation) is also solved — `syllogise.mjs` just hasn't
+  adopted it yet.** `deriveSubClassClosure` (`src/syllogise.mjs:57-103`) re-scans the full
+  `succ` adjacency snapshot every pass; the budget/focus/screen guards bound HOW MUCH work a pass
+  does but not whether the pass reuses work from the last one — there is no persisted match-state
+  across calls. The classical answer (compile the rule set into a discrimination network so a new
+  fact only re-triggers the joins it could actually affect) is Forgy's RETE algorithm (Forgy, C.L.,
+  "Rete: A Fast Algorithm for the Many Pattern/Many Object Pattern Match Problem," *Artificial
+  Intelligence* 19(1):17-37, 1982 — verified) and its Datalog-world descendant, semi-naive
+  evaluation, is exactly what ROADMAP L796-803 already names as tier-5's intended engine choice and
+  what RDFox's production incremental engine actually runs at scale (Motik et al. 2015, above). This
+  session's `edgesOfKind`-style predicate memoization is a real step in this direction (indexing
+  facts by predicate so a pass doesn't rescan irrelevant rows) but it is NOT yet an alpha/beta
+  network — a genuinely incremental `syllogise()` (new fact in ⇒ only the newly-enabled derivations
+  computed, not a re-scan bounded by budget) is a known, citable technique to port, not an open
+  question.
+
+- **Retraction-aware consistency under a hard budget and trust tiers is the one piece that is
+  genuinely narrower than "known algorithm, not yet ported" — worth naming precisely rather than
+  folding into the OWL 2 RL bucket above.** The classical AI answer to "a belief was derived from
+  premises, one premise later disappears, what else must be un-believed?" is a Truth Maintenance
+  System: Doyle's original JTMS (Doyle, J., "A Truth Maintenance System," *Artificial Intelligence*
+  12(3):231-272, 1979 — verified) attaches a justification (its supporting premise set) to every
+  derived belief so retracting a premise triggers dependency-directed removal of exactly the beliefs
+  that justification supported; de Kleer's ATMS generalizes this to track, per fact, the FULL SET of
+  minimal premise-sets ("environments") that would justify it, so a fact survives a retraction as
+  long as ANY of its environments still holds (de Kleer, J., "An Assumption-Based TMS," *Artificial
+  Intelligence* 28:127-162, 1986 — verified). The database/Datalog literature has its own answer to
+  the same shape of problem in the classical two-valued (in/out, one trust tier) setting: DRed
+  deletes a superset of affected tuples then selectively rederives them (Gupta, Mumick &
+  Subrahmanian, "Maintaining Views Incrementally," ACM SIGMOD 1993 — verified), and RDFox's own
+  Backward/Forward algorithm improves on DRed specifically because DRed over-deletes when a fact has
+  many alternate derivations (Motik, Nenov, Piro & Horrocks, "Incremental Update of Datalog
+  Materialisation: the Backward/Forward Algorithm," AAAI 2015 — verified). **None of these four
+  citations natively carries tmct's actual requirement**: multiple co-existing entailments at
+  DIFFERENT trust tiers, where retracting a low-trust corpus premise must re-evaluate only the
+  derivations that actually depended on it, must never touch a higher-trust taught-only derivation
+  that happens to reach the same conclusion, and where the re-evaluation step itself has to be
+  boundable under the same hard idle-CPU budget the forward pass already obeys (`syllogise.mjs:10-25`)
+  — not "eventually consistent," bounded on every call. That specific conjunction — bounded +
+  incremental + trust-tiered + retraction-safe justification tracking over a tiny rule set — is not
+  a named, worked problem anywhere the search above surfaced; the building blocks are each 30-45
+  years old and individually well understood, but their combination under a hard low-resource budget
+  looks like a genuine "no vehicle yet" gap, not a reimplementation task.
+
+  **A concretely speculative, budget-respecting sketch** (offered as a direction, not a design):
+  today every entailed fact carries only a flat provenance TAG (`entailed:subClassOf`,
+  `syllogise.mjs:32,130-136`) — the pivot class `via` that produced it is computed and returned in
+  the pass's report but never persisted onto the fact itself, so there is no stored justification to
+  walk at all today. Stage 2 (this table, row 2) already plans to fix that partially: premise
+  fact-ids + rule name per derivation, a JTMS-shaped single justification per fact. A further,
+  NOT-currently-planned step toward the ATMS proper would track the small SET of alternate premise-
+  sets per derived fact rather than just one — cheap for tmct specifically because the rule count is
+  tiny (two rules today) so the number of alternate derivations per fact is expected to stay small,
+  unlike the general case ATMS was built for. Retraction would then become a set-membership check
+  ("does this fact still have any surviving justification after premise X is retracted?") scoped to
+  the fact's own small environment set, rather than a whole-graph re-scan — and the environment-set
+  size itself could carry a fourth budget knob alongside `depth`/`budget`/`focus`, so the mechanism
+  inherits tmct's existing bounded-idle-CPU promise instead of importing an unbounded ATMS
+  implementation. This stays within the ground rules (deterministic — justifications are computed
+  facts, not heuristics; explainable — a retraction's cause is the exact environment that failed;
+  bounded — a capped environment-set size; low-trust/retractable — the whole point). Untested,
+  unbuilt, and honestly speculative: nobody has published this exact narrow combination as a working
+  system, so there is no citation to verify here beyond the separately-real building blocks above —
+  flagged as such rather than dressed up as prior art.
+
+- **Progol/ILP vs. Track 1's CEGIS rule synthesis — related family, genuinely different mechanism,
+  worth distinguishing precisely now that Track 1 has actually shipped
+  (`src/router/goal-reasoner.mjs` `GOAL_RULES`, `synthbench/rules/enumerate.mjs`,
+  `synthesize.mjs`, `oracle.mjs`).** Muggleton's Progol performs Mode-Directed Inverse Entailment:
+  given background knowledge and mode declarations, it searches an in-principle-OPEN space of Horn
+  clauses via inverse resolution and a most-specific-clause bound, no fixed finite candidate list
+  enumerated up front (Muggleton, S., "Inverse Entailment and Progol," *New Generation Computing*
+  13:245-286, 1995 — verified). Track 1 is structurally different: `enumerate.mjs` builds a FIXED,
+  FINITE candidate set (7,776 rule objects, `enumerate.mjs:1-52`'s own accounting) by nested loops
+  over a hand-designed field grammar derived from the registry (focusClass × modes × topic pairs ×
+  compose templates) — nothing is generated by inverting a proof the way Progol does; every
+  candidate is a member of a pre-declared, closed grammar. `synthesize.mjs`'s narrowing (`survivors
+  = survivors.filter(passesExample)` per given example, `synthesize.mjs:41-56`) is textbook
+  candidate-elimination over that finite set — the shape Mitchell formalized as version-space search
+  (Mitchell, T., "Generalization as Search," *Artificial Intelligence* 18(2):203-226, 1982 —
+  verified) and that modern programming-by-example synthesis frameworks still use, symbolically
+  rather than by brute enumeration, as "version space algebra" (Polozov & Gulwani, "FlashMeta: A
+  Framework for Inductive Program Synthesis," OOPSLA 2015 — verified). The "CEGIS" name Track 1
+  borrows (Solar-Lezama, A., *Program Synthesis by Sketching*, PhD thesis, UC Berkeley/MIT, 2008 —
+  verified, the term's origin) is honest about the counterexample-guided REFINEMENT LOOP shape but
+  not about the mechanism: textbook CEGIS pairs a synthesizer with an SMT solver that adversarially
+  MANUFACTURES counterexamples over an unbounded parametrized space; Track 1's "counterexamples" are
+  pre-supplied labeled examples (`given`/`heldOut`, agentbench-case-shaped) narrowing an already-
+  finite enumerated list — closer to plain filtering than to solver-driven search. **Honest verdict:
+  Track 1 is a real, working, deterministic instance of rule learning from labeled examples — same
+  FAMILY as ILP (learn a rule from examples + background knowledge, verify against held-out data,
+  refuse rather than overfit) — but it is not Progol-style ILP (no inverse entailment, no open
+  hypothesis language, no refinement operators over an unbounded clause space) and not full CEGIS
+  either (no adversarial counterexample generation, no SMT solver). It sits closest to bounded
+  enumerate-and-filter version-space search over a hand-curated finite grammar — genuinely useful
+  and shipped, but its tractability rests entirely on the grammar staying small (PLAN_CODE.md §7's
+  own risk, quoted verbatim in `enumerate.mjs`'s docblock: "every future capability added to the
+  registry linearly grows Track 1's space too"). That means the ROADMAP Item 11 Progol/ILP far-spike is LESS far than
+  it read before Track 1 shipped (the underlying idea — synthesize rules from examples instead of
+  hand-writing every one — now has a working, if narrow, existence proof in this repo) but it is
+  still a distinct, unclaimed spike: nothing here demonstrates inverse entailment, open-ended clause
+  learning, or generalization beyond a pre-declared grammar, which is what "Progol/ILP" specifically
+  named. Whether Track 1's approach generalizes to `syllogise.mjs`'s OWN rule set (learn `cax-dw`-
+  shaped rules from labeled inference examples rather than hand-writing them) is an open question
+  this session's shipped code does not answer — the grammar `enumerate.mjs` searches is
+  goal-reasoner-shaped (GOAL_RULES' `subGoals`/`compose` fields), not inference-rule-shaped (Horn
+  clauses over `rdfs:subClassOf`/`owl:disjointWith`), and porting the technique would need a new,
+  separately-designed finite grammar over THAT shape before CEGIS-style narrowing could apply to it
+  at all — not on this ladder, but no longer purely speculative either.
+  - A field worth naming for completeness, not claimed as directly applicable: the field has largely
+    moved toward neuro-symbolic hybrids for the noisy/large-scale case classical ILP struggles with —
+    Evans & Grefenstette's ∂ILP learns Horn-clause rules via backpropagation against a
+    differentiable relaxation of forward-chaining, explicitly to gain robustness to noisy training
+    data that "traditional ILP systems... cannot cope with" (Evans, R. & Grefenstette, E., "Learning
+    Explanatory Rules from Noisy Data," *Journal of Artificial Intelligence Research* 61:1-64, 2018
+    — verified), and Cropper & Muggleton's own later work (Metagol / Meta-Interpretive Learning,
+    2014-2018 — verified via Cropper & Muggleton, "Learning efficient logic programs," *Machine
+    Learning*, Springer, 2018) moved ILP itself toward predicate invention and recursion rather than
+    Progol's original flat inverse-entailment search. Same pattern already named for the parsing
+    frontier elsewhere in this repo's docs: the mainstream research trend augments rather than
+    replaces the classical technique. tmct's ground rules (no-LLM, permanently) mean this trend is
+    NOT a lever tmct can pull — named here only so it isn't rediscovered later as if unknown, and so
+    the honest state is on record: the neuro-symbolic branch is real and active, and out of scope by
+    tmct's own house rule, not by ignorance of it.
+
 **Unlocks:** chat "why" answers rendered from proof chains (the ROADMAP L790 chain-of-thought-in-
 words); AGENTBENCH C2 goal deduction over taught rules (the router deducing a plan from axioms —
 same closure, different consumer); tier-4 learn-on-miss gets a truth filter (a learned sentence
