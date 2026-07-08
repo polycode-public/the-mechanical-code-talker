@@ -2419,10 +2419,20 @@ function renderCore(parsed, result) {
   if (!result.objMatch && (!result.candidates || result.candidates.length === 0) && parsed.shape !== "ask") {
     // name what kind of thing was looked for: a sha-shaped term was checked against
     // the commit namespace, a dotted slash-free term against symbol labels — a
-    // generic "no module matching" would misreport both.
+    // generic "no module matching" would misreport both. Those two TERM-SHAPE
+    // reads keep priority (a bare "a.mjs" is deliberately read as a symbol-ish
+    // shorthand regardless of the stated entity type — frozen by
+    // test/chat.test.mjs's "no symbol matching \"a.mjs\"" case); only the
+    // remaining catch-all default (unconditionally "module") is replaced by the
+    // parsed AST's own entityType when one is present (Tier-2 playtest, cycle 8
+    // — "which classes inherit from Widget" used to say "no MODULE matching
+    // 'Widget'" even though entityType="Class" was sitting right there unused,
+    // and "Widget" is neither sha- nor dotted-symbol-shaped so the catch-all is
+    // exactly what fired).
     const objText = String(parsed.object || "").trim();
+    const fallback = parsed.entityType && PLURAL_FORMS[parsed.entityType] ? nounFor(parsed.entityType, 1) : "module";
     const what = /^(?:commit[:\s])?[0-9a-f]{7,40}$/i.test(objText) ? "commit"
-      : (!objText.includes("/") && /^[\w$]+(\.[\w$]+)+$/.test(objText) ? "symbol" : "module");
+      : (!objText.includes("/") && /^[\w$]+(\.[\w$]+)+$/.test(objText) ? "symbol" : fallback);
     return {
       content: `no ${what} matching "${parsed.object}" found in the index.`,
       miss: true, ambiguous: false, candidates: [],
