@@ -2895,6 +2895,35 @@ function discourseRewrite(query, last) {
   return prevQ.replace(NAME_TOKEN_RE, () => newSubj);
 }
 
+/** STACCATO SUPERLATIVE REPEAT (Tier-2 playtest, 6th pass, cycle 8): "the biggest
+ *  one" / "which is biggest" / "which one is the biggest" / "what about the
+ *  biggest one" continuing a superlative last turn ("which module has the most
+ *  imports") names NO entity kind at all — parseSuperlative's own grammar always
+ *  declines that shape ("a superlative needs an entity kind (module, class,
+ *  function, …)"), the one piece of information every OTHER superlative phrasing
+ *  supplies, and unlike a plain object ("what does it import") there is no
+ *  pronoun slot here for the focus to fill. Rather than guess a NEW metric — a
+ *  bare "biggest" with an entity kind spliced in would default to the generic
+ *  "connections" metric (EDGE_NOUN_TO_METRIC.connections), which is NOT what
+ *  "the biggest one" means right after a query about imports specifically, and
+ *  would silently answer a different question than the one just asked — this
+ *  re-asks the PRIOR superlative query VERBATIM: the user is confirming/
+ *  repeating the same ranking in their own words, not asking a new one, so
+ *  replaying the exact prior text (same entityType, same metric) is the only
+ *  non-fabricating reading. Gated on the prior query textually naming an extreme
+ *  word — a bare "the biggest one" after an unrelated last turn declines (null)
+ *  and the ordinary honest miss stands, same discipline as discourseRewrite's
+ *  own NAME_TOKEN_RE gate just above. */
+const STACCATO_SUPERLATIVE_RE =
+  /^(?:what about\s+)?(?:(?:and|also|so|then|now)\s+)?(?:which(?:\s+one)?\s+is\s+(?:the\s+)?|the\s+)(?:most|greatest|highest|biggest|largest|fewest|least|smallest)(?:[- ]connected)?(?:\s+ones?)?\s*\??$/i;
+const SUPERLATIVE_EXTREME_WORD_RE = /\b(?:most|greatest|highest|biggest|largest|fewest|least|smallest)\b/i;
+function superlativeRepeatRewrite(query, last) {
+  if (!STACCATO_SUPERLATIVE_RE.test(String(query).trim())) return null;
+  const prevQ = String(last?.query || "");
+  if (!prevQ || !SUPERLATIVE_EXTREME_WORD_RE.test(prevQ)) return null;
+  return prevQ;
+}
+
 // ---- curated SEON definitions (corpus/seon/definitions.jsonl) ----
 // A "what is a <term>" for a LEXICON term prefers the curated one-sentence
 // definition — the richer surface form of the same curated SEON knowledge that the
@@ -3295,7 +3324,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // The query the ENGINE parses: a "what about X" continuation is rewritten to the
   // prior shape with X swapped in; everything else parses verbatim. The record and
   // transcript keep the user's ACTUAL words (`query`), only the parse target changes.
-  let askQuery = discourseRewrite(query, last) ?? query;
+  let askQuery = superlativeRepeatRewrite(query, last) ?? discourseRewrite(query, last) ?? query;
   // IMPLICIT ANAPHORIC COUNT (Tier-2 playtest, 5th pass): "how many are tested" /
   // "and how many are tested" drops the "of those/them" a fuller phrasing carries
   // — ask()'s own anaphora node (parseAnaphora) already understands "how many of
