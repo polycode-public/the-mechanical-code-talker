@@ -51,8 +51,12 @@ a dead-end, and dead-ends are the whole quarry.
 ## 1. The loop (one iteration)
 
 **Step 1 — CHAT (play a curious user).** Against a loaded graph (start with a shipped example so the
-answers are real — `node bin/tmct.mjs chat --repo examples/mini-webapp`), hold a natural
-conversation at the current complexity tier (§3). Rules that make the play realistic:
+answers are real), hold a natural conversation at the current complexity tier (§3). **Never run
+`chat --repo` directly against the committed `examples/mini-webapp/.tmct/graph.json`** — a live
+session writes session/provenance state back into that fixture, dirtying a checked-in file (this bit
+several concurrent playtest cycles in the same session before the pattern was caught). Copy it into a
+tmpdir first and point `--repo` there: `cp -r examples/mini-webapp /tmp/pt-<tier> && node
+bin/tmct.mjs chat --repo /tmp/pt-<tier>`. Rules that make the play realistic:
 - **Follow the product's own guided questions.** When the concept force says "Want to go deeper? Try:
   which classes inherit from Record", ASK one of those next — then ask YOUR natural follow-up to its
   answer, in your own words, not the grammar's.
