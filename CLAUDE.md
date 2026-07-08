@@ -16,13 +16,13 @@ session is the COORDINATOR (plans, launches, integrates, answers the operator), 
 - Commit per completed step with the repo-local identity (`antony@polycode.co.uk` /
   `Antony at Polycode`); keep `npm test` green at every commit.
 - Push/publish is gated on the operator (CI publishes on version bump on `main`).
-- **Version-bump-after-push:** immediately after a push lands on `main`, bump the version
-  (`package.json` + `package-lock.json`, default to a patch bump unless the shipped batch was
-  clearly feature-level or breaking) and commit that bump locally — but do NOT push it. Let the
-  next batch of work commits land on top of it; when that batch is ready to push, the whole thing
-  goes out together with the version already baked in from the start. This keeps the npm-published
-  version always exactly matching the last commit of whatever was actually pushed, and avoids
-  triggering a separate CI publish for every small change.
+- **Version bump timing:** only bump the version (`package.json` + `package-lock.json`) at the
+  moment of actually pushing a release — the bump commit is part of that same push, not a
+  separate step staged in advance. Default to a patch bump unless the batch is clearly
+  feature-level (minor) or breaking (major). Do NOT pre-stage a future version number and leave
+  it sitting unpushed in git between releases — that produced confusing "linking to a version
+  that doesn't exist yet" noise in practice and was reverted by operator instruction 2026-07-09.
+  Between pushes, `package.json`'s version should always equal whatever's actually live on npm.
 
 ## Project
 
