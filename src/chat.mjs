@@ -53,7 +53,7 @@ import * as defaultSource from "./source.mjs";
 import { loadTemplates, render as renderTemplate } from "./corpus/templates.mjs";
 import { finish } from "./finish.mjs";
 import { VERB_TO_KIND, WHERE_MARKERS, MENTION_MARKERS, ENTITY_TO_TYPE } from "./ask-vocab.mjs";
-import { COUNTERFACTUAL_RE } from "./interpret/normalize.mjs";
+import { COUNTERFACTUAL_RE, correctMisspellings, applyPreambleFrames } from "./interpret/normalize.mjs";
 import { fuzzyMatchInSet, fuzzyBound } from "./interpret/fuzzy.mjs";
 
 // uuidv7 lives in ./uuid.mjs (shared with telemetry + the bench stamp); re-exported
@@ -2464,10 +2464,33 @@ async function curatedDefinitionAnswer(query, envelope, { memoryDir, lexicon }) 
  *  "imports"), which the RELATION force must never preempt (frozen case
  *  am-meta-imports). Gated downstream by CONCEPT_CLASS / RELATION_TERM, so a real
  *  entity name declines here. */
+// "tel" -> "tell" (0.9.14 Tier-2 playtest): the dropped-letter typo of THIS
+// lane's own anchor word — "tel me about calls" used to miss the "^tell me
+// about …" regex entirely and fall through to a bogus "no module matching
+// 'tel me'" search. "tell" is not itself part of ask.mjs's code-graph grammar
+// (VERB_TO_KIND/ENTITY_TO_TYPE/anchor words), so it can't live in the shared
+// ask-vocab.mjs MISSPELLINGS table (test/ask-vocab.test.mjs enforces every
+// correction value is grammar-owned) — same reasoning as chat.mjs's own
+// SHORTHAND_CONTRACTIONS above: scoped locally to the lane that owns the word.
+// Word-boundary matched so "hotel"/"intel" are untouched.
+const VAGUE_TOUCH_TEL_RE = /\btel\b/i;
 function vagueTouchTermOf(query) {
-  const q = String(query).trim();
-  const m = q.match(/^tell me about\s+(?:an?\s+)?(.+?)[?.!\s]*$/i)
-    || q.match(/^(?:(?:and|so|but|ok|okay|now|then)\s+)*what about\s+(?:an?\s+|the\s+)?(.+?)[?.!\s]*$/i);
+  // typo-correct the ANCHOR words only ("waht about calls" -> "what about
+  // calls") — this shape has no ask()-grammar envelope to lean on for typo
+  // tolerance (unlike metaTermOf's "what is a X", which mostly gets it for
+  // free off envelope.parsed once ask() itself has normalized). Then peel the
+  // SAME closed greeting/thanks/modal-wrapper preambles ask()'s own grammar
+  // already peels (0.9.14 Tier-2 playtest §3b spot-check: "cheers, what about
+  // imports then" and "could you kindly tell me about the calls" both used to
+  // fall through to a bogus object search) — applyPreambleFrames alone, NOT
+  // the full normalizeQuery pipeline, which also runs subordination/
+  // conditional rewrites that turn "tell me about X" into "about X" (its own
+  // bridge frame), breaking this very regex.
+  let q = correctMisspellings(String(query).trim());
+  q = q.replace(VAGUE_TOUCH_TEL_RE, "tell");
+  q = applyPreambleFrames(q);
+  const m = q.match(/^(?:kindly\s+)?tell me about\s+(?:an?\s+|the\s+)?(.+?)[?.!\s]*$/i)
+    || q.match(/^(?:(?:and|so|but|ok|okay|now|then|kindly)\s+)*what about\s+(?:an?\s+|the\s+)?(.+?)(?:\s+then|\s+though)?[?.!\s]*$/i);
   return m ? m[1].trim() : null;
 }
 
@@ -2485,12 +2508,21 @@ function conceptTermOf(query, envelope) {
 function relationTermOf(query, envelope) {
   const base = vagueTouchTermOf(query);
   if (base) return base;
-  const q = String(query).trim().toLowerCase().replace(/[?.!]+$/, "").replace(/\s+/g, " ");
+  // same typo-correction as vagueTouchTermOf above ("waht calls are there" ->
+  // "what calls are there") — these openers are chat.mjs-only shapes with no
+  // ask()-grammar envelope to inherit normalization from (0.9.14 Tier-2
+  // playtest: "waht calls are there" used to hit the grammar wall outright).
+  const q = correctMisspellings(String(query).trim()).toLowerCase().replace(/[?.!]+$/, "").replace(/\s+/g, " ");
   let m;
-  // "what are the imports", "what is the containment", "what are all the calls"
-  if ((m = q.match(/^what\s+(?:are|is)\s+(?:all\s+)?(?:the\s+)?([a-z][a-z-]*?)(?:\s+(?:edges|relationships|relations))?$/))) return m[1];
-  // "what calls are there", "what imports are there"
-  if ((m = q.match(/^what\s+([a-z][a-z-]*?)\s+are\s+there$/))) return m[1];
+  // "what are the imports", "what is the containment", "what are all the calls",
+  // and the texting-shorthand "r" for "are" (0.9.14 Tier-2 playtest §3b spot-check:
+  // "what r the calls" — narrowly scoped to this closed shape, same judgment call
+  // as chat.mjs's own SHORTHAND_CONTRACTIONS for the identity lane: "r" only reads
+  // as "are" right after "what" in one of these curated anchor shapes, so a real
+  // one-letter identifier is never at risk).
+  if ((m = q.match(/^what\s+(?:are|is|r)\s+(?:all\s+)?(?:the\s+)?([a-z][a-z-]*?)(?:\s+(?:edges|relationships|relations))?$/))) return m[1];
+  // "what calls are there", "what imports are there", "what calls r there"
+  if ((m = q.match(/^what\s+([a-z][a-z-]*?)\s+(?:are|r)\s+there$/))) return m[1];
   // "what is calling", "what is importing" (bare gerund, no object)
   if ((m = q.match(/^what\s+(?:is|are)\s+([a-z][a-z-]*ing)$/))) return m[1];
   // THE SINGULAR META FORM — "what is a test" / "what is an import". The whole meta

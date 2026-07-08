@@ -44,6 +44,19 @@ const correctionRe = (table) => new RegExp(
 const MISSPELLING_RE = correctionRe(MISSPELLINGS);
 const WRONG_WORD_RE = correctionRe(WRONG_WORDS);
 
+/** Just the curated MISSPELLINGS correction (ask-vocab.mjs), standalone — for a
+ *  caller that needs typo-tolerant ANCHOR-WORD matching (a closed regex shape
+ *  keyed on a literal "what"/"which"/"where" etc.) without running the rest of
+ *  normalizeQuery's pipeline (contractions, preamble/subordination/conditional
+ *  frame rewrites, filler-word stripping) — those can restructure the sentence
+ *  in ways a shape-matcher never expects (0.9.14 Tier-2 playtest: normalizeQuery
+ *  turns "tell me about Controller" into "about Controller", which would break
+ *  chat.mjs's OWN "^tell me about …" shape regex if fed through wholesale). Pure,
+ *  idempotent, same table as normalizeQuery's own first correction step. */
+export function correctMisspellings(text) {
+  return String(text || "").replace(MISSPELLING_RE, (m) => MISSPELLINGS[m.toLowerCase()]);
+}
+
 // ---- closed PREAMBLE frames (0.8.2 feel wave, PLAN_CHAT_FEEL item 2) — the
 // conversational wrapping a developer puts AROUND a real question: a greeting
 // lead-in with a delimiter ("hey there, quick question - …"), a thanks lead-in
@@ -88,7 +101,11 @@ const isListingRemainder = (rest) => {
  *  remainder are REQUIRED, so a bare "hey there" stays a greeting for chat's
  *  conversational lane, and "hey tmct, …" (a vocative, no delimiter after the
  *  greeting word) is left for the noise-strip tier that already owns it. */
-const GREETING_PREAMBLE_RE = /^(?:hi|hiya|hello|hey|yo|howdy)(?:\s+there)?\s*[,—–-]\s*(?:(?:just\s+a\s+)?quick\s+question\s*[,:—–-]?\s*)?(.+)$/i;
+// "g'day"/"gday" (AU/NZ dialect, §3b): the same lead-in-with-delimiter shape as
+// hi/hey/howdy — 0.9.14 Tier-2 playtest §3b spot-check found "g'day, what does
+// Base contain" fell through to a bogus "'g'day Base' matches more than one
+// module" object search instead of stripping the greeting.
+const GREETING_PREAMBLE_RE = /^(?:hi|hiya|hello|hey|yo|howdy|g'?day)(?:\s+there)?\s*[,—–-]\s*(?:(?:just\s+a\s+)?quick\s+question\s*[,:—–-]?\s*)?(.+)$/i;
 /** Thanks lead-in with a delimiter (+ optional "quick question" bridge), the
  *  sibling of GREETING_PREAMBLE_RE for the "thanks" word family (Bug B2, 0.8.2
  *  follow-up): "thanks, <Q>" / "thanks so much, <Q>" -> "<Q>". chat.mjs's

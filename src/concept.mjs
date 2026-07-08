@@ -249,6 +249,14 @@ export const RELATION_TERM = Object.freeze({
   define: "defines", defines: "defines", defining: "defines", defined: "defines", definition: "defines", definitions: "defines", declaration: "defines",
   touch: "touches", touches: "touches", touching: "touches", touched: "touches",
   cochange: "cochange", "co-change": "cochange", "change-coupling": "cochange", coupled: "cochange",
+  // "export"/"exports" is ALSO a curated seon lexicon noun (corpus/seon/definitions.jsonl
+  // "export"), same shape as "imports" — but that meta reading only owns the "what
+  // does export mean"/"what is an export" shape; vagueTouchTermOf/relationTermOf are
+  // deliberately scoped to the NON-meta "what about X"/"tell me about X" touch (see
+  // relationTermOf's own docblock, frozen case am-meta-imports), so no conflict here.
+  export: "reexports", exports: "reexports", exporting: "reexports", exported: "reexports",
+  reexport: "reexports", reexports: "reexports", reexporting: "reexports",
+  "re-export": "reexports", "re-exports": "reexports", "re-exporting": "reexports",
 });
 
 /** concept key → the relationKind()s whose edges it enumerates. A concept can span
@@ -263,6 +271,7 @@ const RELATION_KINDS = Object.freeze({
   defines: ["defines"],
   touches: ["touches", "touchesSymbol"],
   cochange: ["cochange"],
+  reexports: ["reexports"],
 });
 
 /** concept key → the verb phrase that renders an edge as an English sentence
@@ -276,6 +285,7 @@ const RELATION_RENDER = Object.freeze({
   defines: { verb: "defines", edgeNoun: "definition" },
   touches: { verb: "touches", edgeNoun: "touch" },
   cochange: { verb: "changes together with", edgeNoun: "change-coupling" },
+  reexports: { verb: "re-exports", edgeNoun: "re-export" },
 });
 
 /** Per concept key, the candidate follow-up shapes in priority order. Each shape
@@ -315,6 +325,10 @@ const RELATION_FOLLOWUP_SHAPES = Object.freeze({
   cochange: [
     { side: "obj", make: (x) => `where is ${x} defined` },
     { side: "subj", make: (x) => `which modules import ${x}` },
+  ],
+  reexports: [
+    { side: "subj", make: (x) => `what does ${x} export` },
+    { side: "obj", make: (x) => `where is ${x} defined` },
   ],
 });
 

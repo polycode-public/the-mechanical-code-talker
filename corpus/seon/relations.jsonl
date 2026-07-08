@@ -6,3 +6,4 @@
 {"relation":"defines","definition":"A definition is where a name (a class, function, or variable) is introduced.","sense":"software"}
 {"relation":"touches","definition":"A touch is a commit changing a file or a symbol in the codebase.","sense":"software"}
 {"relation":"cochange","definition":"Change-coupling is two files that tend to be changed together in the same commits.","sense":"software"}
+{"relation":"reexports","definition":"A re-export is a module passing another module's definition through as part of its own public API.","sense":"software"}
