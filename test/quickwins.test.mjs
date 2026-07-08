@@ -30,6 +30,13 @@ const FIXTURE = new URL("./fixtures/entities.fixture.json", import.meta.url);
 const FIXTURE_PAYLOAD = JSON.parse(await readFile(FIXTURE, "utf8"));
 const graph = parseEntities(ingestSchemaDocs(structuredClone(FIXTURE_PAYLOAD)));
 
+// FEATURE B (0.9.x): every runAsk-composed answer now carries an ALWAYS-ON
+// trailing "\n\nGoal (inferred): …" line (chat.mjs's withGoalLine) — this
+// suite pins quickwins' OWN routing/composition, orthogonal to that feature,
+// so it's stripped before the byte-exact / cross-phrasing comparisons below.
+const GOAL_LINE_RE = /\n\nGoal \(inferred\):[^\n]*$/;
+const noGoal = (s) => String(s).replace(GOAL_LINE_RE, "");
+
 /** A temp repo whose .tmct/graph.json IS the writer-ingested fixture (a producer runs
  *  ingestSchemaDocs before writing; the product loader — server.mjs — does not), so
  *  the schema-doc individuals a real shipped graph carries are present. The end-to-end
@@ -54,7 +61,7 @@ test("fix1: 'what is a test' composes the SAME relation-concept answer as 'what 
     clearCache();
     const plural = await runTurn("what are the tests", { config, graph });
     assert.equal(singular.record.miss, false, "the singular meta shape is no longer an honest miss");
-    assert.equal(singular.answer, plural.answer,
+    assert.equal(noGoal(singular.answer), noGoal(plural.answer),
       "'what is a test' fires the relation-concept force identically to its plural");
     assert.match(singular.answer, /^A test is code that exercises/, "the curated relation definition leads");
     assert.match(singular.answer, /tests app\/lib\/b\.mjs/, "real example test EDGES follow");
@@ -119,7 +126,7 @@ test("fix1 (0.8.2 WS1): a schema-vocabulary miss that IS a unique code-graph Cla
     clearCache();
     const r = await runTurn("what is a widget", { config, graph });
     assert.equal(r.record.miss, false, "a unique Class-label hit is a real answer");
-    assert.equal(r.answer,
+    assert.equal(noGoal(r.answer),
       'Widget is a class in this codebase, defined in app/lib/b.mjs — try "describe Widget" or "which classes inherit from Widget".',
       "the describe-style one-liner cites the defining module and offers next questions");
   } finally {

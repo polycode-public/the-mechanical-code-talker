@@ -12,6 +12,15 @@ import { clearCache } from "../src/source.mjs";
 const FIXTURE = fileURLToPath(new URL("./fixtures/entities.fixture.json", import.meta.url));
 const CONFIG = { graphFile: FIXTURE };
 
+// FEATURE B (0.9.x): every runAsk-composed answer now carries an ALWAYS-ON
+// trailing "\n\nGoal (inferred): …" line (chat.mjs's withGoalLine), including
+// on a meta-shaped MISS (deduceGoalFromParsed reads envelope.parsed, which
+// stands — shape:"meta" — even when the term itself misses) — orthogonal to
+// this suite's own corpus-aside licence citation, so it's stripped before the
+// end-anchored assertions below.
+const GOAL_LINE_RE = /\n\nGoal \(inferred\):[^\n]*$/;
+const noGoal = (s) => String(s).replace(GOAL_LINE_RE, "");
+
 test("W5: flag OFF (default) — the miss is byte-unchanged, no corpus consulted", async () => {
   const off = await runTurn("what is a cache", { config: CONFIG, env: {} });
   const bare = await runTurn("what is a cache", { config: CONFIG });
@@ -30,7 +39,7 @@ test("W5: flag ON — an unknown-term miss appends the grounded aside, licence c
   assert.match(answer, /isn't a term in this graph's own vocabulary/,
     "the honest miss still leads — the aside is context, not an answer");
   assert.match(answer, /\nthe corpus knows: a cache is a kind of \w+/);
-  assert.match(answer, /\(ConceptNet, CC-BY-SA\)$/, "licence + source cited");
+  assert.match(noGoal(answer), /\(ConceptNet, CC-BY-SA\)$/, "licence + source cited");
   assert.equal(record.via, "corpus");
   assert.equal(record.miss, true, "still recorded as the miss it honestly is");
   clearCache();

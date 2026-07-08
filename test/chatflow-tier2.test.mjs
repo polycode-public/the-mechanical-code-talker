@@ -280,6 +280,19 @@ const WALL = /couldn't parse this as a graph question/;
 const BAD_SEARCH = /no module matching/;
 const FIXTURE = new URL("./fixtures/entities.fixture.json", import.meta.url).pathname;
 
+// FEATURE B (0.9.x): every runAsk-composed answer now carries an ALWAYS-ON
+// trailing "\n\nGoal (inferred): …" line (chat.mjs's withGoalLine) — this
+// suite is about ROUTING/wall-avoidance, not that feature, so it's stripped
+// right where turns are collected (driveSession/driveSessionOverGraph, below)
+// rather than teaching every one of this file's exact-text assertions a new
+// goal-line-shaped tail. `last.answer` (the why/say-more re-render source) is
+// already goal-line-free by design (chat.mjs's withGoalLine docblock), so
+// only `.answer`/`.logLines` need it here.
+const GOAL_LINE_RE = /\n\nGoal \(inferred\):[^\n]*$/;
+const stripGoalLine = (t) => (t && typeof t.answer === "string"
+  ? { ...t, answer: t.answer.replace(GOAL_LINE_RE, ""), logLines: Array.isArray(t.logLines) ? t.logLines.map((l) => (l === t.answer ? l.replace(GOAL_LINE_RE, "") : l)) : t.logLines }
+  : t);
+
 async function repoWithFixture() {
   const dir = await mkdtemp(join(tmpdir(), "tmct-tier2-"));
   const payload = JSON.parse(await readFile(FIXTURE, "utf8"));
@@ -294,7 +307,7 @@ async function driveSession(queries) {
   const s = await createSession({ repoPath: dir });
   const turns = [];
   try {
-    for (const q of queries) turns.push(await s.turn(q));
+    for (const q of queries) turns.push(stripGoalLine(await s.turn(q)));
   } finally {
     await s.close();
   }
@@ -326,7 +339,7 @@ async function driveSessionOverGraph(dir, queries) {
   const s = await createSession({ repoPath: dir });
   const turns = [];
   try {
-    for (const q of queries) turns.push(await s.turn(q));
+    for (const q of queries) turns.push(stripGoalLine(await s.turn(q)));
   } finally {
     await s.close();
   }

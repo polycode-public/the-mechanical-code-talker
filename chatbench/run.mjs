@@ -280,8 +280,9 @@ export async function runTurnsCase(caseDef, deps) {
     const r = await runTurn(turn.say, { config, graph, focus, last });
     focus = r.focus ?? null;
     last = r.last ?? last;
+    const answer = String(r.answer ?? "").replace(GOAL_LINE_TRAILER, "");
     const outcome = {
-      answer: r.answer,
+      answer,
       miss: r.record?.miss ?? null,
       resolvedIds: r.record?.resolvedIds ?? [],
       answeredIds: r.record?.answeredIds ?? [],
@@ -323,6 +324,15 @@ function sink() {
  *  reproducible — the runner scrubs it to a stable placeholder (below) for byte-equal
  *  rows across identical runs. */
 const VOLATILE_PROVENANCE = /ace:chat:[0-9a-f-]{36}@\d{4}-\d{2}-\d{2}T[0-9:.]+Z/gi;
+
+/** Feature B (0.9.x): chat.mjs's withGoalLine appends an ALWAYS-ON, blank-line-
+ *  separated "Goal (inferred): …" trailer to every runAsk-composed answer —
+ *  presentation instrumentation, not graded content (the same category as the
+ *  volatile provenance scrub above). Every graded-pool `answerMatch` fixture
+ *  was written against the SUBSTANTIVE answer text; scrubbed here (both
+ *  runTurnsCase and runSessionCase, below) so those fixtures never need to
+ *  grow a goal-line-shaped tail on top of their own ground truth. */
+const GOAL_LINE_TRAILER = /\n\nGoal \(inferred\):[^\n]*$/;
 
 /** Run a session-mode case through the FULL runChat in a fresh temp dir:
  *  graph "fixture" seeds .tmct/graph.json from the committed fixture; "empty"
@@ -386,6 +396,7 @@ export async function runSessionCase(caseDef, deps) {
           ? (answers.get(turnKey(record.ts, record.query)) ?? "")
               .replaceAll(dir, "<repo>")
               .replace(VOLATILE_PROVENANCE, "ace:chat:<session>@<ts>")
+              .replace(GOAL_LINE_TRAILER, "")
           : "";
         const outcome = matched
           ? { answer, miss: record.miss, resolvedIds: record.resolvedIds, answeredIds: record.answeredIds }

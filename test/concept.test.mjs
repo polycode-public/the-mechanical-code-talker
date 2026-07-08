@@ -20,6 +20,13 @@ import { clearCache } from "../src/source.mjs";
 
 const FIXTURE = new URL("./fixtures/entities.fixture.json", import.meta.url).pathname;
 
+// FEATURE B (0.9.x): every runAsk-composed answer now carries an ALWAYS-ON
+// trailing "\n\nGoal (inferred): …" line (chat.mjs's withGoalLine) — this
+// suite pins the concept force's OWN byte-exact composition, orthogonal to
+// that feature, so it's stripped before the byte-exact comparisons below.
+const GOAL_LINE_RE = /\n\nGoal \(inferred\):[^\n]*$/;
+const noGoal = (s) => String(s).replace(GOAL_LINE_RE, "");
+
 /** The fixture graph, run through the same writer pipeline a producer uses
  *  (ingestSchemaDocs before parse), as an ask-ready graph object. */
 async function fixtureGraph() {
@@ -103,7 +110,7 @@ test("end-to-end: 'what is a class' composes the byte-exact target transcript", 
     clearCache();
     const config = { graphFile: join(dir, ".tmct", "graph.json") };
     const { answer, record } = await runTurn("what is a class", { config });
-    assert.equal(answer,
+    assert.equal(noGoal(answer),
       "A class is a template that defines the structure and behaviour of objects.\n"
       + "In this codebase, for example: Base, Widget and Button (3 classes).\n"
       + "Want to go deeper? Try:\n"
@@ -148,7 +155,7 @@ test("trigger discipline: a precise query is untouched (no definition/examples/f
     clearCache();
     const config = { graphFile: join(dir, ".tmct", "graph.json") };
     const { answer } = await runTurn("which modules import a.mjs", { config });
-    assert.equal(answer, "app/lib/b.mjs and app/lib/c.mjs and app/lib/e.mjs.",
+    assert.equal(noGoal(answer), "app/lib/b.mjs and app/lib/c.mjs and app/lib/e.mjs.",
       "a precise query keeps its exact answer — the concept force never fires on it");
     assert.doesNotMatch(answer, /Want to go deeper|In this codebase, for example/);
   } finally {

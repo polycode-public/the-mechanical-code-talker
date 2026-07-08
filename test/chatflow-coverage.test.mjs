@@ -20,6 +20,18 @@ import { clearCache } from "../src/source.mjs";
 
 const GRAPH = new URL("../examples/mini-webapp/.tmct/graph.json", import.meta.url).pathname;
 
+// FEATURE B (0.9.x): every runAsk-composed answer now carries an ALWAYS-ON
+// trailing "\n\nGoal (inferred): …" line (chat.mjs's withGoalLine) — this
+// suite is about ROUTING/wall-avoidance, not that feature, so it's stripped
+// right where turns are collected (drive, below) rather than teaching every
+// one of this file's exact-text assertions a new goal-line-shaped tail.
+// `r.last` (the continuation `last` threaded below) is already goal-line-free
+// by design, so continuity across turns is unaffected either way.
+const GOAL_LINE_RE = /\n\nGoal \(inferred\):[^\n]*$/;
+const stripGoalLine = (t) => (t && typeof t.answer === "string"
+  ? { ...t, answer: t.answer.replace(GOAL_LINE_RE, ""), logLines: Array.isArray(t.logLines) ? t.logLines.map((l) => (l === t.answer ? l.replace(GOAL_LINE_RE, "") : l)) : t.logLines }
+  : t);
+
 /** Drive turns through the real runTurn path, carrying `last` so discourse anaphora
  *  / "what about X" resolve exactly as the shell would. Read-only (queries only). */
 async function drive(queries) {
@@ -29,7 +41,7 @@ async function drive(queries) {
   for (const q of queries) {
     clearCache();
     const r = await runTurn(q, { config, last });
-    out.push(r);
+    out.push(stripGoalLine(r));
     last = r.last;
   }
   return out;

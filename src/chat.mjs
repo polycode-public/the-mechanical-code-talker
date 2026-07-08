@@ -218,6 +218,53 @@ function withNarration(result, trace, fallbackGoal) {
   return { ...result, answer, logLines };
 }
 
+/** FEATURE B ("Goal (inferred): …"): an ALWAYS-ON, single short goal line —
+ *  independent of the --narrate/TMCT_NARRATE opt-in debug trace above (which
+ *  stays exactly as-is: the FULL "--- narrate ---" block, off by default).
+ *  What the operator actually wants now is much lighter than that full dump:
+ *  one line, on every STRUCTURAL/query-shaped answer, APPENDED (blank-line
+ *  separated) so it never reads as part of the substantive answer — and so it
+ *  never disturbs the many existing START-anchored assertions this codebase's
+ *  own test suite pins composed answers with (see withGoalLine's own docblock,
+ *  just below, for why appended rather than led-with).
+ *
+ *  `result.goal` is set ONLY by runAsk (see its own docblock at its return
+ *  statement) — a plain count, a slash-command or a teach confirmation never
+ *  carries the field, so this is a no-op for those turn types BY
+ *  CONSTRUCTION, not a special-cased suppression list here. Also a no-op when
+ *  `result.goal` is null/empty — deduceGoalFromParsed's own "nothing to
+ *  bucket on" signal (a total grammar miss, or a would-miss a conversational-
+ *  in-ask lane answered) — so an unclear turn never grows a "Goal (inferred):
+ *  unclear" line, which would be worse than showing nothing.
+ *
+ *  Applied AFTER finish() (so the appended line is never grammar-rewritten) and
+ *  BEFORE `last` is captured in runTurn's withLast — mirrors withNarration's
+ *  own after-finish/never-touches-`last` discipline (see its docblock above),
+ *  so a goal-prefixed turn's own repeat-detection / why/say-more re-render
+ *  compares the EXACT SAME `last.answer` a goal-line-off run would have
+ *  produced. Purely additive to what's PRINTED, never to what's REMEMBERED —
+ *  the same contract narrate uses, a second, independent mechanism reusing
+ *  the same discipline (composes cleanly with narrate: a narrated turn gets
+ *  BOTH the short line up top and the full trace block below, never a
+ *  conflict). */
+function withGoalLine(result) {
+  const goal = result?.goal;
+  if (!goal) return result;
+  // APPENDED (not prepended), blank-line separated: this codebase's existing
+  // test suite pins a large number of composed answers with a START-anchored
+  // (`^…`, no trailing `$`) regex — appending keeps every one of those intact
+  // (the answer still STARTS with the real content) while a prepend would have
+  // broken them all. Still reads as clearly separate, non-substantive trailer
+  // text — the same "additive, never mixed into the substantive answer" intent
+  // a leading line would have given, just from the other end.
+  const suffix = `Goal (inferred): ${goal.charAt(0).toUpperCase()}${goal.slice(1)}.`;
+  const answer = `${result.answer}\n\n${suffix}`;
+  const logLines = Array.isArray(result.logLines)
+    ? result.logLines.map((l) => (l === result.answer ? answer : l))
+    : result.logLines;
+  return { ...result, answer, logLines };
+}
+
 /** Slash-command → (dispatchTool name, arg key). Arg keys are the EXACT ones the
  *  server.mjs dispatchTool switch reads (members/subclasses take `class`;
  *  impact/exports take `module`; architecture takes `package`; search takes
@@ -3321,10 +3368,16 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // completely different lane — an intent lane's own goal note, when it pushes one,
   // stays the more specific of the two since bucketTrace keeps every "goal:" line and
   // renderNarration shows them all, most-specific-last-written).
-  {
-    const deduced = deduceGoalFromParsed(envelope?.parsed);
-    note(trace, `goal: ${deduced ?? "unclear — the phrasing didn't resolve to a known query shape"}`);
-  }
+  //
+  // FEATURE B: `deduced` (declared here, not block-scoped) also rides the
+  // returned result as `goal` (see the return statement below) — the seam
+  // withLast's withGoalLine reads to prepend the always-on, short "Goal
+  // (inferred): …" line, independent of --narrate entirely. Deliberately the
+  // SAME value the debug trace's own "goal:" line uses (one deduction, two
+  // presentations) — null here (no parse stood at all) means withGoalLine
+  // shows nothing, never a "Goal (inferred): unclear" line.
+  const deduced = deduceGoalFromParsed(envelope?.parsed);
+  note(trace, `goal: ${deduced ?? "unclear — the phrasing didn't resolve to a known query shape"}`);
   // MISS handling. The intent lanes + short-miss are RECOGNIZER-gated on the query
   // text AND only consulted on a would-miss, so a real graph query — a hit, an honest
   // empty with a receipt, a fuzzy repair — is never hijacked. Order: (1) META/SELF
@@ -3683,7 +3736,14 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // `record.query`/the transcript untouched; only the swap-chain
   // CONTINUATION base changes.
   const effectiveQuery = (askQuery !== query && envelope?.parsed) ? askQuery : null;
-  return { answer, logLines, record, focus: newFocus, detail, effectiveQuery };
+  // `goal` (Feature B): the SAME deduced string the debug trace's own "goal:"
+  // line carries (deduced above, right after envelope resolution) — null when
+  // deduceGoalFromParsed found no genuine query shape to bucket on, which is
+  // exactly withGoalLine's own "say nothing" signal. Only runAsk ever sets
+  // this field (plainTurn/runCommand results never carry it), so the always-on
+  // goal line is scoped to real ask-engine turns by construction — a count, a
+  // slash-command or a teach confirmation never grows one.
+  return { answer, logLines, record, focus: newFocus, detail, effectiveQuery, goal: deduced };
 }
 
 /** A non-ask, non-dispatch chat turn (count answer, /stats) — the same
@@ -3995,6 +4055,19 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
       note(trace, "goal: get a count of a memory-store kind (facts/utterances)");
       note(trace, "lane: answerMemoryCount — matched a MEMORY_COUNT_NOUNS entry, answered off the .tmct/memory graph header");
       return withLast(plainTurn(line, memCount, { via: "count", focus }), "get a count of a memory-store kind");
+    }
+  }
+  // Feature A point 4: "how many Xs are Ys" — a taught-quantifier RECALL, checked
+  // explicitly ahead of answerCount (see answerQuantifierRecall's own "CRITICAL
+  // ORDERING NOTE" — mirrors answerMemoryCount's precedent just above). Its own
+  // authority gate declines (returns null) for anything answerCount should own,
+  // so ordinary structural counts fall through completely unaffected.
+  if (memoryDir) {
+    const quantifierRecall = await answerQuantifierRecall(memoryDir, line);
+    if (quantifierRecall != null) {
+      note(trace, 'goal: recall a taught quantifier for a class-membership pair ("how many Xs are Ys")');
+      note(trace, "lane: answerQuantifierRecall — matched HOW_MANY_ARE_RE with a subject tmct has facts about; literal recall, never real counting");
+      return withLast(plainTurn(line, quantifierRecall, { via: "fact", focus }), "recall a taught quantifier");
     }
   }
   // Aggregate/count questions are answered mechanically off the loaded graph header,
