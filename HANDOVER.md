@@ -200,14 +200,15 @@ piped session before its log flushed. Fixed with `try`/`catch` and `try`/`finall
 
 11. **Playtest sprint findings (round 3, `SKILL_PLAYTEST_SPRINT.md`), deferred as likely genuine
     ceilings — not forced this wave:**
-    1. The bare interrogative form of scoped listing ("what modules are in `<dir>`") declines
-       even though the imperative form ("list modules in `<dir>`") already works — `parseList`
-       (`src/ask.mjs`) deliberately declines any meaningful tail on the interrogative path to
-       avoid colliding with genuine reverse-clause predicates ("which modules import X"), and the
-       compat tests pin that decline. A real fix needs a narrowly-scoped exception (interrogative
-       + a leading scope preposition — "in"/"inside"/"under" — routed the same way the imperative
-       form already is) rather than a blanket widening; not attempted this round to avoid
-       regressing the pinned reverse-query tests without dedicated time to verify.
+    1. **The bare interrogative form of scoped listing — FIXED (commit `350b0bf`), same fix as
+       item 12.2 below.** "what modules are in `<dir>`" now answers exactly like "list modules in
+       `<dir>`": `parseList` (`src/ask.mjs`) gained a narrowly-scoped exception — interrogative +
+       a leading scope preposition ("in"/"inside"/"under", past an optional copula "is"/"are")
+       right after the entity noun — routed through the same `parseSetPhrase` membership path the
+       imperative form already uses. The general interrogative decline is untouched otherwise, so
+       "which modules import X" (a verb there, not a preposition) still falls through to the
+       reverse-query path, regression-tested (`test/ask-compositional.test.mjs`). Independently
+       re-verified live.
     2. "find me the task controller" (a compound proper-noun phrase, no generic type-noun like
        "class"/"module") doesn't match predicate-find's grammar — likely a genuine phrasing
        ceiling, not a routing bug (predicate-find requires a generic entity-type noun by design).
@@ -220,15 +221,21 @@ piped session before its log flushed. Fixed with `try`/`catch` and `try`/`finall
 12. **Playtest sprint — STOPPED by operator instruction at round 5 of the extended 5-9 run.**
     Rounds 1-4 shipped 4 real fixes (0.9.3-0.9.5 + Bug 6 folded into cluster A). Round 5 ran and
     returned a transcript but was never triaged/fixed before the operator called a stop; rounds
-    6-9 were never dispatched. Round 5's findings, logged here unfixed:
-    1. **New finding, not investigated**: a mid-sentence self-correction ("what -- sorry, who
-       inherits from Record") breaks term resolution — "couldn't resolve one of the terms in this
-       question." Likely the interruption dash/fragment pollutes the term-extraction the same way
-       other unhandled discourse-filler patterns have this session (see the "btw" fix, round 3) —
-       worth checking whether a similar closed-frame strip (leading self-correction clause,
-       delimited by "--"/"—"/"sorry,") would resolve it, or whether it's a genuine ceiling.
-    2. **Recurring, not new**: "what modules are in `<dir>`" (the interrogative scoped-listing
-       form) still declines — confirmed still broken live in round 5, same as item 11.1 above.
+    6-9 were never dispatched. Round 5's findings, both now fixed:
+    1. **Mid-sentence self-correction — FIXED (commit `ab8278b`).** "what -- sorry, who inherits
+       from Record" used to break term resolution ("couldn't resolve one of the terms in this
+       question") — the interruption dash/fragment polluted term extraction, same species of gap
+       as the round-3 "btw" filler fix but delimiter-anchored rather than bare-word filler. Fixed
+       with `applySelfCorrectionFrames` (`src/interpret/normalize.mjs`), a closed frame in the
+       same family as `applySubordinationFrames`/`applyConditionalFrames`: strips a leading
+       false-start fragment delimited by the marker "sorry"/"i mean" (optional leading interrupt
+       dash "--"/"—"/"-", required trailing separator), leaving the real question. Deliberately
+       does NOT match a bare dash with no marker word, so an ordinary em-dash aside ("modules —
+       like Base — that inherit from X") is never mistaken for a restart. Regression-tested
+       (`test/interpret.test.mjs`); independently re-verified live, including the
+       question-word-differs ("who -- sorry, what …") and multi-word ("what is a class -- i mean,
+       what is a module") variants.
+    2. **Interrogative scoped-listing — FIXED (commit `350b0bf`), same as item 11.1 above.**
 
 ### Bench reuse map (0.8.0–0.8.2 deterministic runs are FROZEN; judged state below)
 
