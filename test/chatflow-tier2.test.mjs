@@ -1031,3 +1031,156 @@ test("tier2/T24 sibling: a trailing discourse tag on a bare anaphora follow-up (
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+// ---- cycle 8 (6th Tier-2 pass): staccato comparison/superlative follow-ups
+// and deeper multi-hop RELATION-touch chain stress-testing (cycle 7's own
+// recommendation). ----
+
+test("tier2/T26 vague-touch/staccato 'cochange' reaches the relation force as a FRESH opener and as a bare mid-chain continuation, same as every sibling relation word", async () => {
+  // cochange is the one relation (ask-vocab.mjs RELATIONS.cochange) whose every
+  // registered verb phrase takes a preposition ("changed WITH X") — no bare
+  // "cochanges X" — so ask()'s own raw grammar never gives this shape a parse,
+  // tripping isConversational's <=3-word catch-all before the relation force
+  // ever ran. Every sibling relation word (imports/calls/tests/inherits/
+  // contains/defines/touches/reexports) already escaped this via its own bare
+  // verb form; cochange needed its own isVagueRelationTouch exemption.
+  const { dir: dir1, turns: turns1 } = await driveSession(["what about cochange"]);
+  try {
+    assert.doesNotMatch(turns1[0].answer, WALL);
+    assert.doesNotMatch(turns1[0].answer, /I'm tmct — a deterministic/, "a fresh opener must not fall to the generic orientation card");
+    assert.match(turns1[0].answer, /^Change-coupling is two files/);
+  } finally {
+    clearCache();
+    await rm(dir1, { recursive: true, force: true });
+  }
+
+  const { dir: dir2, turns: turns2 } = await driveSession(["and cochange?"]);
+  try {
+    assert.doesNotMatch(turns2[0].answer, /I'm tmct — a deterministic/, "a bare staccato continuation with no prior turn at all must still reach the relation force");
+    assert.match(turns2[0].answer, /^Change-coupling is two files/);
+  } finally {
+    clearCache();
+    await rm(dir2, { recursive: true, force: true });
+  }
+
+  const { dir: dir3, turns: turns3 } = await driveSession(["what about imports", "and cochange?"]);
+  try {
+    for (const [i, t] of turns3.entries()) {
+      assert.doesNotMatch(t.answer, /I'm tmct — a deterministic/, `turn ${i} must not fall to the generic orientation card`);
+    }
+    assert.equal(turns3[0].answer, IMPORTS_RELATION_TEXT);
+    assert.match(turns3[1].answer, /^Change-coupling is two files/, "'and cochange?' mid an existing relation-touch chain reaches the cochange relation force, not the wall it used to hit");
+  } finally {
+    clearCache();
+    await rm(dir3, { recursive: true, force: true });
+  }
+});
+
+test("tier2/T27 'what about <entity noun>' (classes/modules/functions — a NOUN, not a relation) surfaces the bare-kind-noun count via the relaxation cascade, not a bogus 'no X found matching \"about\"' search", async () => {
+  const { dir, turns } = await driveSession(["what about classes"]);
+  try {
+    assert.doesNotMatch(turns[0].answer, /no classes found matching "about"/,
+      "'about' used to be misread as the FIND search term itself (parseRelationalOrQualified's unknown-qualifier fallback), not the topic-lead-in filler CASCADE_NOISE already curates it as");
+    assert.equal(turns[0].answer, 'read as "count classes" — 3 classes.');
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("tier2/T28 a superlative's single unambiguous winner becomes the new focus, so an immediate pronoun follow-up ('what does it import', 'where is it defined') resolves instead of dead-ending on 'it needs a selected node'", async () => {
+  const { dir, turns } = await driveSession([
+    "which module has the most calls",
+    "what does it import",
+    "where is it defined",
+  ]);
+  try {
+    for (const [i, t] of turns.entries()) {
+      assert.doesNotMatch(t.answer, /needs a selected node to refer to/, `turn ${i} must not dead-end on a missing focus — the superlative winner (scripts/g.mjs) must already be the focus`);
+    }
+    assert.equal(turns[0].answer, "scripts/g.mjs — the most calls (1).");
+    assert.equal(turns[1].answer, "scripts/g.mjs has no imports edges in the index.", "an honest empty over the RIGHT entity (scripts/g.mjs genuinely has no outgoing imports in the fixture) — not a focus-missing dead-end");
+    assert.equal(turns[2].answer, "scripts/g.mjs is a module — the label is its repo path.");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("tier2/T29 staccato superlative repeat ('the biggest one'/'which is biggest'/'what about the biggest one') reuses the PRIOR ranking verbatim instead of the 'a superlative needs an entity kind' wall", async () => {
+  const SUPERLATIVE_TEXT = "scripts/g.mjs — the most calls (1).";
+  for (const followUp of ["the biggest one", "which is biggest", "what about the biggest one", "which one is the biggest"]) {
+    const { dir, turns } = await driveSession(["which module has the most calls", followUp]);
+    try {
+      assert.doesNotMatch(turns[1].answer, /a superlative needs an entity kind/, `"${followUp}" must not hit the missing-entity-kind wall`);
+      assert.equal(turns[1].answer, SUPERLATIVE_TEXT, `"${followUp}" repeats the exact prior ranking (same entityType, same metric) — never a guessed DIFFERENT metric like generic "connections"`);
+    } finally {
+      clearCache();
+      await rm(dir, { recursive: true, force: true });
+    }
+  }
+  // An unrelated prior turn must NOT be replayed — the ordinary honest miss stands.
+  const { dir: dir2, turns: turns2 } = await driveSession(["what about imports", "the biggest one"]);
+  try {
+    assert.match(turns2[1].answer, /a superlative needs an entity kind/,
+      "'the biggest one' after a NON-superlative last turn declines the repeat-rewrite and falls through to the ordinary honest miss, unchanged");
+  } finally {
+    clearCache();
+    await rm(dir2, { recursive: true, force: true });
+  }
+});
+
+test("tier2/T30 staccato comparative ('more than that'/'which is bigger') gets an honest capability nudge naming the standing focus, never a wall or the generic orientation card", async () => {
+  for (const followUp of ["more than that", "which is bigger", "is there anything bigger", "bigger than that"]) {
+    const { dir, turns } = await driveSession(["which module has the most calls", followUp]);
+    try {
+      assert.doesNotMatch(turns[1].answer, WALL, `"${followUp}" must not hit the grammar wall`);
+      assert.doesNotMatch(turns[1].answer, /I'm tmct — a deterministic/, `"${followUp}" must not fall to the generic orientation card`);
+      assert.equal(
+        turns[1].answer,
+        'I only name the single top (or bottom) match for a metric — no runner-up ranking, no comparing against a number. '
+          + 'Ask about a specific module/class/function directly to compare it with scripts/g.mjs (e.g. "how many imports does <name> have").',
+      );
+    } finally {
+      clearCache();
+      await rm(dir, { recursive: true, force: true });
+    }
+  }
+});
+
+test("tier2/T31 STACCATO CONNECTIVE LEAKAGE: a bare-connective relation-chain continuation ('and calls?') never lets the leftover 'and' silently corrupt the standing FOCUS, even though its own visible answer looks fine", async () => {
+  // Regression for the bug T23 (above) used to unknowingly pin: ask()'s raw
+  // grammar parses "and calls?" as kind=calls object="and" once "calls"
+  // matches as a bare verb, and resolveObject's substring tier has no
+  // minimum-length floor — "and" is a near-certain accidental substring of
+  // SOME real label. Here it would land on app/functions/d/h-AND-ler.mjs.
+  const { dir, turns } = await driveSession([
+    "what does app/lib/b.mjs import",
+    "and calls?",
+    "what calls it",
+    "also tests?",
+    "what tests it",
+  ]);
+  try {
+    for (const [i, t] of turns.entries()) {
+      assert.doesNotMatch(t.answer, WALL, `turn ${i} must not hit the grammar wall`);
+    }
+    assert.equal(turns[0].answer, "app/lib/a.mjs.");
+    assert.equal(turns[1].answer, CALLS_RELATION_TEXT);
+    assert.equal(turns[2].answer, "No modules found whose module directly calls it.",
+      "an honest empty over the RIGHT entity (app/lib/b.mjs) — nothing in the fixture calls it — not a corrupted focus's own (also empty, but WRONG-reasoned) answer");
+    assert.equal(
+      turns[3].answer,
+      "A test is code that exercises another unit and checks its behaviour.\n"
+        + "In this codebase, for example: app/unit-tests/b.test.mjs tests app/lib/b.mjs and app/unit-tests/b.test.mjs tests app/functions/d/handler.mjs (2 test edges).\n"
+        + "Want to go deeper? Try:\n"
+        + "  • what tests app/lib/b.mjs\n"
+        + "  • where is app/functions/d/handler.mjs defined",
+    );
+    assert.equal(turns[4].answer, "app/unit-tests/b.test.mjs.",
+      "the CORRECT answer — app/lib/b.mjs genuinely IS tested by app/unit-tests/b.test.mjs — proving the focus survived 'and calls?' untouched; before the fix this rendered the WRONG 'no tests cover it' because focus had been silently rebound to a substring-matched module");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
