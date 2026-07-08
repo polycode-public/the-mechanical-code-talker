@@ -135,13 +135,51 @@ test("teach: 'remember that <X> is <adjective>' reifies mgx:hasProperty with tea
   }
 });
 
-test("teach: a BARE 'X is deprecated' (no remember/note wrapper) is never silently reified", async () => {
+test("teach: a BARE 'X is <unrecognized word>' with a KNOWN subject (no remember/note wrapper) is still never silently reified", async () => {
+  // 'module' IS a declared lexicon noun (so it never reaches the unknown-SUBJECT
+  // free pass, Feature A point 2's bare-property extension) and 'banana' is
+  // neither a declared noun nor a declared adjective — the ACE grammar itself
+  // declines too, so this stays an honest miss exactly as before this feature.
+  // (NOTE: a known subject bare-paired with a KNOWN adjective, e.g. "module is
+  // deprecated", already stores via the ACE grammar's OWN bare adjective-copula
+  // pattern — pattern 8's copula arm, grammar/ace.mjs — which is pre-existing,
+  // unrelated to Feature A, and out of scope here.)
   const dir = await mkdtemp(join(tmpdir(), "tmct-teach-bare-"));
   try {
-    const bare = await runTurn("saveStore is deprecated", { config: CONFIG, memoryDir: dir, sessionId: "t-bare" });
+    const bare = await runTurn("module is banana", { config: CONFIG, memoryDir: dir, sessionId: "t-bare" });
     assert.doesNotMatch(bare.answer, /noted — remembered/i, "not swallowed into memory");
     assert.equal(bare.record.miss, true, "still an honest (teach-miss) turn");
     assert.equal(readFactRows(await loadMemory(dir)).length, 0, "nothing stored");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("teach (Feature A): a BARE 'X is deprecated' with an UNKNOWN subject now stores too — the same free pass the class-membership shape gets, reusing mgx:hasProperty", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-teach-bare-unknown-"));
+  try {
+    const bare = await runTurn("saveStore is deprecated", { config: CONFIG, memoryDir: dir, sessionId: "t-bare-unk" });
+    assert.match(bare.answer, /noted — remembered: savestore is deprecated/i);
+    assert.equal(bare.record.miss, false, "an unknown-subject bare property teach is no longer swallowed silently");
+    const rows = readFactRows(await loadMemory(dir));
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].subject, "savestore");
+    assert.equal(rows[0].predicate, "mgx:hasProperty");
+    assert.equal(rows[0].object, "deprecated");
+    assert.equal(rows[0].quantifier, "", "a property assertion is about ONE entity — never a quantifier");
+
+    // an object that resolves as neither a known noun nor a known adjective still
+    // declines honestly — the free pass is only about the SUBJECT, never the object.
+    const dir2 = await mkdtemp(join(tmpdir(), "tmct-teach-bare-unknown2-"));
+    try {
+      const stillMiss = await runTurn("saveStore is banana", { config: CONFIG, memoryDir: dir2, sessionId: "t-bare-unk2" });
+      assert.doesNotMatch(stillMiss.answer, /noted — remembered/i, "an unrecognized OBJECT is never guessed at");
+      assert.equal(stillMiss.record.miss, true);
+      assert.equal(readFactRows(await loadMemory(dir2)).length, 0);
+    } finally {
+      await rm(dir2, { recursive: true, force: true });
+    }
   } finally {
     clearCache();
     await rm(dir, { recursive: true, force: true });

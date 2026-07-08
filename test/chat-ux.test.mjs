@@ -64,16 +64,15 @@ test("#1 receipt-bearing misses KEEP their specific wording (not shortened)", as
 
 // ---- #2 MEMORY/TEACH lane (the coordinator's verbatim failing inputs) ----
 
-test("#2 teach: 'remember that redis is a cache' fails LOUD with the shape, never the wall / silent drop", async () => {
+test("#2 teach (Feature A, the 'redis' write-side fix): 'remember that redis is a cache' now STORES — the unknown SUBJECT gets a free pass once the OBJECT is a known lexicon noun", async () => {
   const dir = await mem();
   try {
     for (const say of ["remember that redis is a cache", "note that redis is a cache"]) {
       const { answer, record } = await runTurn(say, { config: CONFIG, graph: await graph(), memoryDir: dir, sessionId: "t" });
-      assert.match(answer, /every X is a Y/, "says what CAN be remembered");
-      assert.match(answer, /Did you mean: "every redis is a cache"/, "offers the corrected shape");
+      assert.match(answer, /noted — remembered: redis is a kind of cache/, "the unknown subject now stores, never a guess about the object");
       assert.doesNotMatch(answer, /couldn't parse this as a graph question/, "never the grammar wall");
       assert.doesNotMatch(answer, /no module matching/, "never the misleading 'no module' miss");
-      assert.equal(record.miss, true, "an un-storable teach is honestly a miss");
+      assert.equal(record.miss, false, "a now-storable teach is not a miss");
     }
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
@@ -146,14 +145,15 @@ test("#2 teach: a storable 'remember that every X is a Y' lands a Fact and confi
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
-test("#2 teach: a BARE 'X is a Y' declarative the ACE grammar can't fully parse is routed to teaching, not the wall", async () => {
+test("#2 teach (Feature A): a BARE 'X is a Y' declarative with an unknown SUBJECT the ACE grammar can't parse now stores too, via the direct-write fallback", async () => {
   const dir = await mem();
   try {
     // 'redis' is not in the ACE lexicon, so even 'every redis is a cache' is residue —
-    // but the user still gets the teach hint, never the grammar wall or a silent drop.
-    const { answer } = await runTurn("redis is a cache", { config: CONFIG, graph: await graph(), memoryDir: dir });
-    assert.match(answer, /every X is a Y/);
+    // the unknown-subject fallback stores it directly since 'cache' IS a known noun.
+    const { answer, record } = await runTurn("redis is a cache", { config: CONFIG, graph: await graph(), memoryDir: dir });
+    assert.match(answer, /noted — remembered: redis is a kind of cache/);
     assert.doesNotMatch(answer, /couldn't parse this as a graph question/);
+    assert.equal(record.miss, false);
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 

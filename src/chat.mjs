@@ -510,6 +510,47 @@ async function countFromFacts(graph, memoryDir, query) {
   return null;
 }
 
+// ---- Feature A point 4: "how many Xs are Ys" — literal recall of a taught
+// quantifier ("some"/"a few"/"every"), NEVER real cardinality counting
+// (consistent with this file's "grounded or honest miss" philosophy). The
+// SOME_A_FEW_RE / unknownSubjectFallback / assertTurn's own "every"-quantifier
+// follow-up (below) are what STORE the quantifier this reads back.
+//
+// CRITICAL ORDERING NOTE: dispatched explicitly ahead of answerCount in
+// runTurn (mirroring answerMemoryCount's own precedent, just below) —
+// answerCount's own noun-scan regex greedily grabs the FIRST word after "how
+// many" as a literal noun to count and would otherwise short-circuit to an
+// "I can't count 'Xs'" miss before this lane ever got a turn.
+//
+// AUTHORITY GATE (avoids shadowing real graph counts): claims authority
+// (always returns a non-null string — either the quantifier or an honest "I
+// don't know") ONLY when (a) the subject does NOT name a real graph-countable
+// class (COUNT_NOUNS — the same guard countFromFacts uses, so a corpus-seeded
+// fact that happens to share a subject word like "module" never shadows a
+// real "how many modules …" count) AND (b) tmct has SOME isa-family fact
+// about that subject at all (a subject never taught anything, e.g. "classes"
+// in "how many classes are there", falls through to answerCount's real
+// graph-cardinality count untouched — same honest-decline discipline as
+// every other lane here).
+const HOW_MANY_ARE_RE = /^how\s+many\s+([\w-]+)\s+(?:are|is)\s+(.+?)[?.!\s]*$/i;
+async function answerQuantifierRecall(memoryDir, query) {
+  if (!memoryDir) return null;
+  const m = String(query).trim().match(HOW_MANY_ARE_RE);
+  if (!m) return null;
+  const asked = m[1].toLowerCase();
+  if (COUNT_NOUNS[asked]) return null; // a real graph-countable class — answerCount owns it
+  let normFactTerm;
+  try { ({ normFactTerm } = await import("./memory/core.mjs")); } catch { return null; }
+  const subjVariants = factTermVariants(normFactTerm, asked);
+  const rows = (await factRows(memoryDir)).filter((f) => ISA_PREDICATES.has(f.predicate) && subjVariants.has(f.subject));
+  if (!rows.length) return null; // never heard of this subject at all — let answerCount own the shape
+  const objVariants = factTermVariants(normFactTerm, m[2]);
+  const hit = rows.filter((f) => objVariants.has(f.object)).sort((a, b) => (b.trust ?? 0) - (a.trust ?? 0))[0];
+  const q = hit?.quantifier;
+  if (!q) return "I don't know — I was never told a quantifier for that.";
+  return `${q.charAt(0).toUpperCase()}${q.slice(1)}.`;
+}
+
 // ---- memory-store counts (the .tmct/memory graph, distinct from the code graph
 // answerCount reads) — so "how many facts do you know" is answerable, consistent
 // with what `/memory` advertises. The code graph owns the structural kinds
@@ -1172,6 +1213,12 @@ const QUESTION_LEAD_RE = /^(?:what|who|which|where|when|why|how|is|are|do|does|d
 // The teach lane's fact predicates (rendered via FACT_PREDICATE_PHRASES).
 const OWNED_BY_PREDICATE = "mgx:ownedBy";
 const HAS_PROPERTY_PREDICATE = "mgx:hasProperty";
+// Class-membership — the SAME predicate family the ACE grammar's own
+// subClassOf pattern emits (grammar/ace.mjs); named here too (Feature A) so
+// the new direct-write paths below (the unknown-subject fallback, the plural
+// "some/a few Xs are Ys" shape) stay obviously in that same family rather than
+// re-typing the CURIE string at each call site.
+const SUBCLASS_PREDICATE = "rdfs:subClassOf";
 
 /** "<Name> owns/maintains <X>" — the ownership teach declarative. <Name> is one
  *  or two name tokens, <X> one code-ish token (a path, a file, a symbol). The
@@ -1194,7 +1241,7 @@ const teachProvenanceTag = (sessionId, ts) => `teach:chat${sessionId ? `:${sessi
 /** Reify one teach-lane fact + confirm (shared by the property and ownership
  *  frames). Lazy + failure-tolerated: a write failure degrades to null (the
  *  teach-miss text stands), never a crash. */
-async function teachFact(memoryDir, sessionId, { subject, predicate, object }) {
+async function teachFact(memoryDir, sessionId, { subject, predicate, object, quantifier = "" }) {
   try {
     const { appendFact, normFactTerm } = await import("./memory/core.mjs");
     const s = normFactTerm(subject);
@@ -1203,6 +1250,7 @@ async function teachFact(memoryDir, sessionId, { subject, predicate, object }) {
     await appendFact(memoryDir, {
       subject: s, predicate, object: o,
       provenance: teachProvenanceTag(sessionId, new Date().toISOString()),
+      ...(quantifier ? { quantifier } : {}),
     });
     const phrase = FACT_PREDICATE_PHRASES[predicate] || predicate;
     return { text: `noted — remembered: ${s} ${phrase} ${o}`, via: "assert", miss: false };
@@ -1210,6 +1258,99 @@ async function teachFact(memoryDir, sessionId, { subject, predicate, object }) {
     return null;
   }
 }
+
+// ---- FEATURE A (0.9.x): teach new terms + quantifier phrasings ("every X is
+// a/an Y", "some Xs are Ys", "your X is a/an Y", "X is Y", "a few Xs are
+// Ys") + "how many Xs are Ys" recall. Design (from two prior read-only
+// investigations, live-verified): the memory Facts store and EVERY read path
+// (factAnswer, factReadBack, the 2-hop findIsaChain proof-chase) already work
+// generically over ANY subject string — the ONLY thing stopping e.g. "redis is
+// a cache" from being remembered is that parseAce's resolveNP (grammar/ace.mjs)
+// only resolves subjects/objects against the closed 180-word lexicon-core.json
+// noun list, so an unknown SUBJECT becomes residue and the whole sentence is
+// rejected even though the OBJECT ("cache") is a perfectly good known term. The
+// fix below is write-side only and deliberately NARROW: only the SUBJECT gets
+// a free pass, never the OBJECT — this is not a general lexicon bypass, it's
+// one additional storable shape alongside the ACE grammar's own 8 patterns. ----
+
+/** Naive plural → singular fold for the "some/a few Xs are Ys" surface forms
+ *  (mirrors factTermVariants' own naive -es/-s stripping, below, but returns
+ *  ONE canonical spelling to STORE rather than a lookup Set of candidates to
+ *  match against). Deliberately tiny, no NLP — a stray false fold on an
+ *  already-singular noun ending in "s" is a known, accepted limitation of this
+ *  same naive scheme used elsewhere in this file (factTermVariants). */
+function singularizeSurface(word) {
+  const w = String(word || "").trim();
+  if (/[a-z]ies$/i.test(w)) return `${w.slice(0, -3)}y`;
+  if (/(ses|xes|zes|ches|shes)$/i.test(w)) return w.slice(0, -2);
+  if (/[a-z]s$/i.test(w) && !/ss$/i.test(w)) return w.slice(0, -1);
+  return w;
+}
+
+/** "some Xs are Ys" / "a few Xs are Ys" — the plural class-membership
+ *  quantifier shape. Captures the quantifier word itself (group 1) alongside
+ *  the plural subject/object (groups 2/3); singularized before storage/lookup. */
+const SOME_A_FEW_RE = /^(some|a few)\s+([\w-]+)\s+are\s+([\w-]+)$/i;
+
+/** "(every|each|all|a|an )?X is/are (a|an )?Y" — the shape the unknown-subject
+ *  fallback recognizes (group 2 = X, group 3 = Y); group 1 (when present)
+ *  names the determiner, so the caller can tell a genuine "every" universal
+ *  apart from a singular/specific-entity "a"/bare reading (only "every" gets a
+ *  recorded quantifier here — this function's OWN caller passes it through to
+ *  teachFact; assertTurn, below, records the same "every" quantifier
+ *  independently for the pre-existing ACE-success path). Single-token X and Y
+ *  only — the same fragment scope parseAce's own copula patterns cover, just
+ *  with X's lexicon-membership requirement lifted. */
+const UNKNOWN_SUBJECT_RE = /^(every\s+|each\s+|all\s+|a\s+|an\s+)?([\w-]+)\s+(?:is|are)\s+(?:an?\s+)?([\w-]+)$/i;
+
+/** The unknown-SUBJECT direct-write fallback (point 1 + point 2's bare-property
+ *  extension): tried ONLY after the real ACE grammar (assertTurn) has already
+ *  had its turn and declined. Declines itself (returns null, never a guess)
+ *  when:
+ *    - the payload doesn't fit the plain single-token "X is/are Y" shape at all
+ *      (a multi-word subject, a relation/cardinality/etc. sentence — those stay
+ *      the ACE grammar's territory, or the wrapped multi-word TEACH_PROPERTY_RE
+ *      path below, unchanged);
+ *    - X is actually a KNOWN lexicon word — then the ACE grammar's own miss was
+ *      a real structural/vocabulary problem elsewhere (e.g. Y itself unknown as
+ *      the WRONG part of speech), never silently reinterpreted through this
+ *      narrow exception;
+ *    - Y resolves as NEITHER a known noun NOR a known adjective — the OBJECT
+ *      must still be a term tmct actually knows; an unknown Y stays an honest
+ *      miss (never a guess), exactly like the pre-existing "monkey is an
+ *      animal" case.
+ *  Y resolving as a NOUN writes rdfs:subClassOf (mirrors the ACE grammar's own
+ *  subClassOf/typeAssertion pattern); Y resolving as an ADJECTIVE (and not also
+ *  a noun) writes mgx:hasProperty (mirrors the wrapped "remember that X is
+ *  deprecated" property frame — reused here for the bare/unwrapped form too,
+ *  since the free pass is about the SUBJECT, not about the "remember that"
+ *  wrapper). Only the "every" determiner records a quantifier (point 3: "a"/
+ *  bare/"your" read as one specific entity, not a class-level generalization). */
+async function unknownSubjectFallback(payload, { memoryDir, sessionId, lexicon }) {
+  if (!memoryDir) return null;
+  const m = String(payload).trim().match(UNKNOWN_SUBJECT_RE);
+  if (!m) return null;
+  const [, det, subjectRaw, objectRaw] = m;
+  const { loadLexicon, lookupNoun, lookupAdjective, classify } = await import("./grammar/lexicon.mjs");
+  const lex = lexicon || loadLexicon();
+  // A known X's own ACE miss is a real miss — never silently reinterpreted here.
+  if (classify(subjectRaw, lex)) return null;
+  const quantifier = /^every$/i.test((det || "").trim()) ? "every" : "";
+  if (lookupNoun(lex, objectRaw)) {
+    return teachFact(memoryDir, sessionId, {
+      subject: subjectRaw, predicate: SUBCLASS_PREDICATE, object: objectRaw, quantifier,
+    });
+  }
+  if (lookupAdjective(lex, objectRaw)) {
+    // property assertions are about ONE specific entity — never a quantifier,
+    // even when phrased with "every" (point 3).
+    return teachFact(memoryDir, sessionId, {
+      subject: subjectRaw, predicate: HAS_PROPERTY_PREDICATE, object: objectRaw,
+    });
+  }
+  return null; // Y unknown too — decline honestly, never guess
+}
+
 
 /** Sentence forms to try asserting for a teach payload: the payload as-is, and
  *  (if it carries no determiner) its "every …" universal — the ACE-OWL shape the
@@ -1239,9 +1380,19 @@ function teachSuggestion(payload) {
 }
 
 async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
-  const raw = String(query).trim();
-  const m = raw.match(TEACH_RE);
-  const wrapped = m ? m[1].trim() : null;
+  const rawInput = String(query).trim();
+  const m = rawInput.match(TEACH_RE);
+  const wrappedInput = m ? m[1].trim() : null;
+  // "your X is a/an Y" (Feature A) — a plain casual synonym for "a/an X is a
+  // Y": no special second-person semantics, so rewrite it to the ordinary
+  // indefinite-article determiner UP FRONT, before any downstream regex/ACE
+  // parsing ever sees it (ACE itself has no notion of "your" as a
+  // determiner). Only a LEADING "your" is rewritten, so this can't misfire on
+  // a "your" appearing mid-sentence; applied to both the bare and the
+  // remember-wrapped surface.
+  const stripYour = (s) => (s == null ? s : s.replace(/^your\s+/i, "a "));
+  const raw = stripYour(rawInput);
+  const wrapped = stripYour(wrappedInput);
 
   // OWNERSHIP — "<Name> owns/maintains <X>", bare or remember-wrapped. The bare
   // form is double-gated: a Capitalized name AND no interrogative lead, so the
@@ -1255,6 +1406,32 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
     if (stored) return stored;
   }
 
+  // "some Xs are Ys" / "a few Xs are Ys" (Feature A) — the plural class-
+  // membership quantifier shape. ACE has no quantifier-phrase pattern at all
+  // (parseAce never even attempts a fit), so this is ALWAYS a direct write,
+  // never routed through assertTurn below. Wrapper-optional, like the
+  // "every X is a Y" baseline — a plural "some/a few" claim reads as an
+  // ordinary declarative teach the same way "every" always has. The OBJECT
+  // still has to be a known lexicon noun (the same "subject gets the free
+  // pass, object doesn't" discipline as unknownSubjectFallback below) — an
+  // unknown object falls through to the generic honest-miss cascade at the
+  // bottom of this function, same as every other unstorable teach.
+  const someSrc = wrapped ?? raw.replace(/[.!?]+\s*$/, "");
+  const someMatch = memoryDir && !QUESTION_LEAD_RE.test(someSrc) ? someSrc.match(SOME_A_FEW_RE) : null;
+  if (someMatch) {
+    const quantifier = someMatch[1].toLowerCase();
+    const subject = singularizeSurface(someMatch[2]);
+    const object = singularizeSurface(someMatch[3]);
+    const { loadLexicon, lookupNoun } = await import("./grammar/lexicon.mjs");
+    const lex = lexicon || loadLexicon();
+    if (lookupNoun(lex, object)) {
+      const stored = await teachFact(memoryDir, sessionId, {
+        subject, predicate: SUBCLASS_PREDICATE, object, quantifier,
+      });
+      if (stored) return stored;
+    }
+  }
+
   let payload = null;
   if (wrapped && /\b(?:is|are)\b/i.test(wrapped)) payload = wrapped;
   else if (BARE_DECLARATIVE_RE.test(raw) && !QUESTION_LEAD_RE.test(raw)) payload = raw;
@@ -1263,9 +1440,20 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
   // the "noted — remembered …" confirmation or null (grammar miss / unknown words).
   if (memoryDir) {
     for (const cand of assertCandidates(payload)) {
+      // assertTurn ITSELF records the "every" quantifier (point 3) on a plain
+      // universal success, so every caller (this loop AND the top-level
+      // declarative-sentence dispatch in runTurn) gets it uniformly.
       const stored = await assertTurn(cand, { memoryDir, sessionId, focus: null, lexicon });
       if (stored) return { text: stored.answer, via: "assert", miss: false };
     }
+    // BUG "redis" fix (Feature A point 1): the real ACE grammar just declined
+    // (unknown words / not the membership shape) — try the narrow unknown-
+    // SUBJECT direct-write fallback before falling to the honest-miss cascade.
+    // Covers BOTH the bare and the wrapped surface (payload is already
+    // unwrapped either way) — see unknownSubjectFallback's own docblock for
+    // the exact narrowing rules (object must still be known, etc.).
+    const fallback = await unknownSubjectFallback(payload, { memoryDir, sessionId, lexicon });
+    if (fallback) return fallback;
     // PROPERTY teach — "remember/note that <X> is <adjective>": wrapper-REQUIRED
     // (a bare "X is deprecated" is never silently reified), and only after the
     // ACE grammar declined (unknown words / not the membership shape), so a
@@ -3639,13 +3827,36 @@ async function assertTurn(line, { memoryDir, sessionId, focus, lexicon = null })
     const parse = parseAce(line, lex);
     if (!parse || !parse.triples?.length || parse.residue?.length) return null;
     const { assertSentence } = await import("./grammar/assert.mjs");
-    const { normFactTerm } = await import("./memory/core.mjs");
+    const { normFactTerm, appendFact } = await import("./memory/core.mjs");
     const ts = new Date().toISOString();
     const res = await assertSentence(memoryDir, line, {
       lexicon: lex,
       provenance: { source: "chat", sessionId, ts },
     });
     if (!res || !res.ids?.length) return null;
+    // Feature A point 3: a plain universal "every X is a Y" ALSO records the
+    // "every" quantifier on the SAME fact — purely additive (appendFact
+    // upserts by (s,p,o) id, never a duplicate, never changes the confirmation
+    // text below), for the new "how many Xs are Ys" recall lane. Gated on the
+    // literal typed determiner (not on `parse.pattern`, which is "subClassOf"
+    // for the bare-copula variant too) — only "every" reads as a class-level
+    // generalization; a bare/indefinite "X is a Y" is one specific claim and
+    // gets no quantifier. `provenance` is deliberately omitted (appendFact
+    // treats "" as a no-op on the union) so this never grows a redundant tag
+    // alongside the fact's real ace:chat provenance. Best-effort: the base
+    // fact is already durably stored either way, so a failure here (a
+    // relation/cardinality/etc. axiom that happens to start with "every" and
+    // carries no rdfs:subClassOf triple, or any write error) is swallowed.
+    if (/^every\s+/i.test(String(line).trim())) {
+      const triple = res.triples.find((t) => t.predicate === "rdfs:subClassOf");
+      if (triple) {
+        try {
+          await appendFact(memoryDir, {
+            subject: triple.subject, predicate: "rdfs:subClassOf", object: triple.object, quantifier: "every",
+          });
+        } catch { /* best-effort — the base fact is already stored either way */ }
+      }
+    }
     const shown = res.triples
       .map((t) => `${normFactTerm(t.subject)} ${t.predicate} ${normFactTerm(t.object)}`)
       .join("; ");
@@ -3729,7 +3940,12 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
     // (commands, plain counts, misses) carries no such field, so `line` — the
     // existing, unchanged behavior — stands.
     const nextLast = { query: finished.effectiveQuery ?? line, answer: finished.answer, detail: finished.detail ?? null };
-    return { ...withNarration(finished, trace, fallbackGoal), last: nextLast };
+    // FEATURE B: the always-on short "Goal (inferred): …" line — computed from
+    // the SAME PRE-narration `finished` result `nextLast` was just captured
+    // from, so (like narrate) it never contaminates what why/say-more or
+    // repeat-detection compare against. Composes with narrate (below): a
+    // narrated turn gets the short line up top AND the full trace block after.
+    return { ...withNarration(withGoalLine(finished), trace, fallbackGoal), last: nextLast };
   };
 
   // Slash-optional system commands: a bare leading command word ("stats",

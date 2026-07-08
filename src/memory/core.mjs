@@ -74,6 +74,7 @@ const MEMORY_VOCABULARY = [
   { prop: "rdf:predicate", note: "reified fact: the triple's predicate term" },
   { prop: "rdf:object", note: "reified fact: the triple's object term" },
   { prop: "mgx:factProvenance", note: "LEGACY COMPAT SHIM: the ' | '-joined provenance tag string a fact came from; the source-of-truth is now the mgx:statedBy edges derived from it" },
+  { prop: "mgx:factQuantifier", note: "OPTIONAL: the quantifier word a plural class-membership teach used ('every'/'some'/'a few'), for literal recall by 'how many Xs are Ys' — never real cardinality counting" },
   { prop: CREATED_AT_PROP, note: "when an individual was FIRST written, ISO-8601 (first-write-wins on upsert); the audit 'when', the recency input to trust, the novelty signal" },
   { prop: DERIVED_FROM_PROP, predicate: "derivedFrom", note: "umbrella: a Fact derived from a Source (or another Fact). ext ref prov:wasDerivedFrom (UNVERIFIED-pending-web-check)" },
   { prop: STATED_BY_PROP, predicate: "statedBy", note: "subPropertyOf derivedFrom: a Source directly asserts this Fact (one edge per independent source — replaces the factProvenance union)" },
@@ -444,7 +445,7 @@ const factIdFor = (s, p, o) => `fact:${fnv1aHex(`${s}\0${p}\0${o}`)}`;
  *  carrying rdf:subject / rdf:predicate / rdf:object (+ provenance). The
  *  Phase-2 ACE parser's write point. Same (s,p,o) → same id → upsert, never a
  *  duplicate. Returns { id }. */
-export async function appendFact(dir, { subject, predicate, object, provenance = "", createdAt = "" } = {}) {
+export async function appendFact(dir, { subject, predicate, object, provenance = "", createdAt = "", quantifier = "" } = {}) {
   const s = normFactTerm(subject);
   const p = normText(predicate);
   const o = normFactTerm(object);
@@ -452,6 +453,7 @@ export async function appendFact(dir, { subject, predicate, object, provenance =
   const id = `fact:${fnv1aHex(`${s} ${p} ${o}`)}`;
   const text = `${s} ${p} ${o}`;
   const tokens = proseTokensFor({ doc: text });
+  const q = normText(quantifier);
   await mutateMemory(dir, (payload) => {
     const prior = payload.individuals.find((x) => x?.id === id);
     const priorProv = prior?.attributes?.find((a) => a?.prop === "mgx:factProvenance")?.value || "";
@@ -459,6 +461,10 @@ export async function appendFact(dir, { subject, predicate, object, provenance =
     // still key on); the Source edges below are DERIVED from it, purely additive.
     const provs = [...new Set([...priorProv.split(" | "), normText(provenance)].filter(Boolean))];
     const createdAtVal = firstWriteCreatedAt(prior, createdAt); // first-write-wins
+    // first-write-wins for the quantifier too (a re-assert with none, e.g. a
+    // plain re-teach, never SILENTLY erases an already-recorded quantifier).
+    const priorQ = prior?.attributes?.find((a) => a?.prop === "mgx:factQuantifier")?.value || "";
+    const qVal = q || priorQ;
     upsertIndividual(payload, {
       id, label: labelOf(text), class: FACT_CLASS,
       derived_from: [], mentions: [],
@@ -470,6 +476,7 @@ export async function appendFact(dir, { subject, predicate, object, provenance =
         { prop: CREATED_AT_PROP, key: "createdAt", value: createdAtVal },
         ...(provs.length ? [{ prop: "mgx:factProvenance", key: "provenance", value: provs.join(" | ") }] : []),
         ...(tokens.length ? [{ prop: "mgx:hasProseTokens", key: "prose_tokens", value: tokens.join(" ") }] : []),
+        ...(qVal ? [{ prop: "mgx:factQuantifier", key: "quantifier", value: qVal }] : []),
       ],
     });
     // Derive Source individuals + statedBy edges from the provenance union and
@@ -512,6 +519,7 @@ export async function appendFacts(dir, facts) {
       tokens: proseTokensFor({ doc: text }),
       provenance: normText(f?.provenance),
       createdAt: f?.createdAt || "",
+      quantifier: normText(f?.quantifier),
     });
   }
   const ids = [];
@@ -528,6 +536,9 @@ export async function appendFacts(dir, facts) {
       // compat shim); the Source edges below are DERIVED from it, purely additive.
       const provs = [...new Set([...priorProv.split(" | "), f.provenance].filter(Boolean))];
       const createdAtVal = firstWriteCreatedAt(prior, f.createdAt); // first-write-wins
+      // first-write-wins for the quantifier too — same discipline as appendFact.
+      const priorQ = prior?.attributes?.find((a) => a?.prop === "mgx:factQuantifier")?.value || "";
+      const qVal = f.quantifier || priorQ;
       const ind = {
         id: f.id, label: labelOf(f.text), class: FACT_CLASS,
         derived_from: [], mentions: [],
@@ -539,6 +550,7 @@ export async function appendFacts(dir, facts) {
           { prop: CREATED_AT_PROP, key: "createdAt", value: createdAtVal },
           ...(provs.length ? [{ prop: "mgx:factProvenance", key: "provenance", value: provs.join(" | ") }] : []),
           ...(f.tokens.length ? [{ prop: "mgx:hasProseTokens", key: "prose_tokens", value: f.tokens.join(" ") }] : []),
+          ...(qVal ? [{ prop: "mgx:factQuantifier", key: "quantifier", value: qVal }] : []),
         ],
       };
       // Upsert into BOTH the array (replace-in-place keeps order) and the index.
@@ -588,6 +600,7 @@ export function readFactRows(memory) {
       id: ind.id,
       subject: get("subject"), predicate: get("predicate"), object: get("object"),
       provenance: get("provenance"), // legacy compat string, verbatim
+      quantifier: get("quantifier"), // "" unless a plural class-membership teach set one (Feature A pt.3)
       sourceIds, sourceTypes,
       trust: Number((ind.attributes || []).find((a) => a?.prop === TRUST_SCORE_PROP)?.value) || 0,
     });
