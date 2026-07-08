@@ -1809,6 +1809,24 @@ const PERSONAL_ASSISTANT_NUDGE_RE = new RegExp(
 const STACCATO_NEGATION_RE = /^(?:and\s+)?(?:not|except(?:\s+for)?)\s+(.+?)(?:\s+then|\s+though)?[?.!]*$/i;
 const NEGATION_PRONOUN_RE = /^(?:it|that|this|those|them)(?:\s+ones?)?$/i;
 
+/** STACCATO COMPARATIVE (SKILL_CHAT_PLAYTEST Tier-2, 6th pass, cycle 8 —
+ *  cycle 7's own recommendation): "more than that", "which is bigger", "is
+ *  there anything bigger", "bigger than that" following a superlative answer
+ *  ("which module has the most imports" -> "src/handlers/tasks.mjs — 5").
+ *  Genuinely unanswerable as a real graph query, never fabricated: tmct's
+ *  superlative only ever names the single top (or bottom) match for a metric
+ *  (evalSuperlative) — it has no "runner-up"/"next ranked" or "greater than a
+ *  number" capability to reach for. Before this, both a short/non-codeish
+ *  phrasing ("more than that") and the wall these route to (once the
+ *  isConversational catch-all is deferred below) fell to the generic
+ *  orientation card or the raw grammar wall — neither says what actually went
+ *  wrong. Same "honest, guiding nudge, never a bare wall" discipline as
+ *  STACCATO_NEGATION_RE just above; the standing focus (now the superlative
+ *  WINNER after the chat.mjs fix that made a superlative set it) names what
+ *  the user can compare against directly. */
+const STACCATO_COMPARATIVE_RE =
+  /^(?:(?:is\s+there\s+|what(?:'s|\s+is)\s+)?(?:anything|something)?\s*(?:more|bigger|larger|smaller|fewer|less)\s*(?:than\s+(?:that|it|this))?|which(?:\s+one)?\s+is\s+(?:bigger|smaller|larger|more|less))\s*\??$/i;
+
 /** The <name> a nudge shows: the focus label when the query leans on a pronoun (or
  *  gave us nothing better), else the captured subject; "<name>" as the placeholder. */
 function nudgeName(captured, focus) {
@@ -1857,6 +1875,13 @@ function nudgeAnswer(query, focus) {
     }
     return "I can't filter a previous list by exclusion yet — ask the positive shape directly "
       + `(e.g. "which modules import <name>"), or ask about ${term} on its own.`;
+  }
+  if (STACCATO_COMPARATIVE_RE.test(q)) {
+    const name = focus?.label;
+    return "I only name the single top (or bottom) match for a metric — no runner-up ranking, no comparing against a number. "
+      + (name
+        ? `Ask about a specific module/class/function directly to compare it with ${name} (e.g. "how many imports does <name> have").`
+        : `Ask a specific ranking directly, e.g. "which module has the most imports".`);
   }
   return null;
 }
@@ -3530,6 +3555,14 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // branch ALWAYS returns a tailored nudge for this shape, never null, so
   // deferring here never strands the turn with nothing having claimed it.
   const isStaccatoNegation = STACCATO_NEGATION_RE.test(String(query).trim());
+  // Staccato comparative ("more than that", "which is bigger", "is there
+  // anything bigger" — Tier-2 playtest, 6th pass, cycle 8) needs the SAME
+  // deferral, for the SAME reason as isStaccatoNegation just above: these are
+  // short/non-codeish and trip isConversational's ≤3-word catch-all before
+  // nudgeAnswer's own STACCATO_COMPARATIVE_RE branch ever gets a turn.
+  // nudgeAnswer's comparative branch ALWAYS returns a tailored nudge for this
+  // shape, never null, so deferring here never strands the turn unclaimed.
+  const isStaccatoComparative = STACCATO_COMPARATIVE_RE.test(String(query).trim());
   // A vague relation touch ("what about cochange", "tell me about cochange",
   // the staccato chain continuation "and cochange?") whose relation word has NO
   // bare single-word VERB_TO_KIND form of its own needs the SAME deferral as
@@ -3558,7 +3591,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       } catch { /* leave false — the ordinary path decides */ }
     }
   }
-  if (!handled && miss && !envelope?.parsed && isConversational(query) && !isWhatAboutContinuation && !isDescribePronounContinuation && !isExplainTouch && !isStaccatoNegation && !isVagueRelationTouch) {
+  if (!handled && miss && !envelope?.parsed && isConversational(query) && !isWhatAboutContinuation && !isDescribePronounContinuation && !isExplainTouch && !isStaccatoNegation && !isVagueRelationTouch && !isStaccatoComparative) {
     // A conversational miss (a greeting, "what can you do", a very short non-code
     // line) gets the friendly orientation (module-aware: empty → --repo/tmct init).
     // Bug B1 (0.8.2 follow-up): this branch carries via:"template" and never
