@@ -107,6 +107,17 @@ const THANKS_PREAMBLE_RE = /^(?:thanks|thank\s+you|many\s+thanks|thx|ty|cheers)(
  *  passes, so "can you tell me a joke" -> "tell me a joke" -> (FILLER) "a joke"
  *  — byte-identical to what the bare form normalizes to (the hm-joke wall). */
 const MODAL_WRAPPER_RE = /^(?:can|could|would|will)\s+you\s+(?:please\s+)?(.+?)(?:[,\s]+please)?\??$/i;
+/** "explain" politeness/ESL wrapper: "explain [to me|please]* <Q>" -> "<Q>"
+ *  (0.9.13 Tier-1 playtest, §3b surface-variation axis) — a formal/ESL lead-in
+ *  around an ordinary structural question ("explain please where is it
+ *  defined") used to leave "explain"/"please" as noise words that corrupted the
+ *  object term into a bogus search ("no module matching 'explain it' found").
+ *  Anchored to an INTERROGATIVE remainder (same guard as the show/give-me
+ *  bridge below) so this frame only unwraps a real WH-question underneath —
+ *  chat.mjs's own IDENTITY_PHRASES ("explain what is this") and the bare
+ *  "explain" elaboration request (WHY set) are matched on the RAW turn text
+ *  before normalizeQuery ever runs, so neither is touched by this frame. */
+const EXPLAIN_WRAPPER_RE = /^explain\s+(?:to\s+me\s+|please\s+)*(.+?)\??$/i;
 /** show/give-me presentation bridge: "show me [the] <thing>". Three-way:
  *  a KIND-listing remainder is left untouched (the compositional list grammar
  *  owns "show me untested modules"); a remainder carrying a relation verb or an
@@ -129,6 +140,8 @@ export function applyPreambleFrames(text) {
     if (m) q = m[1].trim();
     m = q.match(MODAL_WRAPPER_RE);
     if (m) q = m[1].trim();
+    m = q.match(EXPLAIN_WRAPPER_RE);
+    if (m && INTERROGATIVE_LEAD_RE.test(m[1].trim())) q = m[1].trim();
     m = q.match(SHOW_GIVE_ME_RE);
     if (m) {
       const rest = m[1].trim();
@@ -378,6 +391,15 @@ export const PHRASING_FRAMES = Object.freeze([
   { re: /^what\s+(?:defined|declared)\s+(?:the\s+)?(?:function\s+|method\s+|class\s+|module\s+|variable\s+|constant\s+)?(.+?)\??$/i, to: (m) => `where is ${m[1]} defined` },
   //   "where's X defined" (the "where's" contraction is not in the contraction table)
   { re: /^where'?s\s+(?:the\s+)?(.+?)\s+(defined|declared|located|implemented)\??$/i, to: (m) => `where is ${m[1]} ${m[2]}` },
+  //   "were is X defined" (0.9.13 Tier-1 playtest: the missing-h typo of "where").
+  //   NOT curated as a blanket MISSPELLINGS entry — "were" is a real word already
+  //   load-bearing as the TEMPORAL_AUX auxiliary ("when were the modules last
+  //   touched"), so a global word-boundary rewrite would clobber that reading.
+  //   This frame is anchored to the WHERE-DEFINED shape specifically ("were is
+  //   … defined/declared/located/implemented"), a construction no legitimate
+  //   temporal query produces ("were" as an auxiliary never leads directly into
+  //   a bare "is").
+  { re: /^were\s+is\s+(?:the\s+)?(.+?)\s+(defined|declared|located|implemented)\??$/i, to: (m) => `where is ${m[1]} ${m[2]}` },
 
   // PREDICATIVE QUALIFIER → the ATTRIBUTIVE form the grammar already answers. The
   // adjective-qualifier post-filters (ask-vocab.mjs QUALIFIERS: tested/untested,

@@ -94,7 +94,7 @@ test("MISSPELLINGS/WRONG_WORDS: every value is a canonical word the grammar actu
     ...Object.keys(ENTITY_TO_TYPE),
     ...Object.keys(MODIFIER_TO_KIND),
     ...TRIGGER_WORDS,
-    "which", "what", "does", "the",
+    "which", "what", "does", "the", "where",
   ]);
   for (const [key, value] of [...Object.entries(MISSPELLINGS), ...Object.entries(WRONG_WORDS)]) {
     assert.ok(canonical.has(value), `"${key}" corrects to "${value}", which no grammar table owns`);

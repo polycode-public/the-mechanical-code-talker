@@ -333,6 +333,14 @@ export function asBareCommand(line) {
   // unconditionally): the predicate-find grammar's own shape wins regardless of
   // word count, see the precedence note above.
   if (fl === "find" && looksLikePredicateFind(restTok)) return null;
+  // "describe it"/"describe that" (0.9.13 Tier-1 playtest): a bare PRONOUN argument
+  // to /describe has no antecedent at this layer — dispatchTool("tmct_describe", …)
+  // does its own name-only resolveSymbol lookup with no notion of the standing
+  // focus, so routing it here as a bare command produced a raw "no such symbol"
+  // failure. Defer to the ordinary pipeline instead (return null): it reaches
+  // describeWrapperAnswer's rescue lane, which DOES resolve a bare pronoun against
+  // the standing focus. A named argument ("describe Widget") is untouched.
+  if (fl === "describe" && DESCRIBE_PRONOUN_RE.test(rest)) return null;
   // A NO-ARGUMENT command word ("untested") with trailing words is NOT a command
   // call — the /untested tool takes no argument and would silently drop the qualifier,
   // listing MODULES for "untested classes". "untested classes" / "untested modules"
@@ -2318,9 +2326,15 @@ async function recallSummary(memoryDir) {
 /** "[and/so/…] what about X" — a discourse continuation that re-asks the previous
  *  turn's question with X swapped in. */
 const WHAT_ABOUT_RE = /^(?:(?:and|so|but|ok|okay|now|then)\s+)*what about\s+(.+?)[?.!\s]*$/i;
-/** A code-ish name token in a prior query (a path/dotted name, or a CamelCase/
- *  Capitalized symbol) — the subject "what about X" replaces. */
-const NAME_TOKEN_RE = /\b[\w-]+(?:[/.][\w-]+)+\b|\b[A-Z][A-Za-z0-9_]*\b/;
+/** A code-ish name token in a prior query (a path/dotted name, a Capitalized
+ *  symbol, or a lowerCamelCase identifier like `saveStore`/`createTask`) — the
+ *  subject "what about X" replaces. The lowerCamelCase alternative (0.9.13
+ *  Tier-1 playtest) closes a real drill-down gap: a chain focused on a FUNCTION
+ *  ("what does saveStore call") has no Capitalized/path token at all, so "what
+ *  about X" after it used to fall straight through to the honest-miss instead
+ *  of continuing the shape — a mid-word capital never occurs in plain English,
+ *  so this is a safe, unambiguous code-identifier signal. */
+const NAME_TOKEN_RE = /\b[\w-]+(?:[/.][\w-]+)+\b|\b[A-Z][A-Za-z0-9_]*\b|\b[a-z][a-z0-9]*[A-Z][A-Za-z0-9]*\b/;
 
 /** DISCOURSE CONTINUATION (CHATBENCH_006 lever 2): "what about X" carries the PRIOR
  *  turn's question shape across the turn boundary — re-asking it with X in place of
@@ -2496,26 +2510,45 @@ function relationTermOf(query, envelope) {
 }
 
 /** A closed "describe"-intent wrapper: "can you describe X for me", "could you
- *  tell me about X", "tell me more about X" → attempt tmct_describe(X). Found
- *  live (playtest sprint round 2, SKILL_PLAYTEST_SPRINT.md): a describe-intent
- *  question wrapped in an ordinary polite request ("can you tell me more about
- *  Controller") fell all the way to the generic wall despite naming a real,
- *  just-listed entity — nothing recognized the wrapper at all. Same closed
- *  lead-in-alternation discipline as GREETING_PREAMBLE_RE/THANKS_PREAMBLE_RE
- *  (normalize.mjs). Deliberately used only as a LAST-RESORT lane (see its call
- *  site below) — "tell me about X" is ALSO the relation/concept force's own
- *  trigger phrase for enumerable concepts ("tell me about inheritance"), so
- *  this must never run before those have had their chance. Trails an optional
- *  "please" as well as "for me" (playtest sprint round 3): this lane reads the
- *  RAW turn text, not normalize.mjs's FILLER_WORDS-stripped one, so "could you
- *  tell me more about Router please" needs its own trailing-politeness strip. */
+ *  tell me about X", "tell me more about X", "what about X" → attempt
+ *  tmct_describe(X). Found live (playtest sprint round 2,
+ *  SKILL_PLAYTEST_SPRINT.md): a describe-intent question wrapped in an
+ *  ordinary polite request ("can you tell me more about Controller") fell all
+ *  the way to the generic wall despite naming a real, just-listed entity —
+ *  nothing recognized the wrapper at all. Same closed lead-in-alternation
+ *  discipline as GREETING_PREAMBLE_RE/THANKS_PREAMBLE_RE (normalize.mjs).
+ *  Deliberately used only as a LAST-RESORT lane (see its call site below) —
+ *  "tell me about X" is ALSO the relation/concept force's own trigger phrase
+ *  for enumerable concepts ("tell me about inheritance"), and "what about X"
+ *  is ALSO discourseRewrite's own trigger for continuing an ask()-shaped prior
+ *  turn — this must never run before those have had their chance. Trails an
+ *  optional "please" as well as "for me" (playtest sprint round 3): this lane
+ *  reads the RAW turn text, not normalize.mjs's FILLER_WORDS-stripped one, so
+ *  "could you tell me more about Router please" needs its own trailing-
+ *  politeness strip.
+ *  "what about X" (0.9.13 Tier-1 playtest): reaches this lane specifically
+ *  when the PRIOR turn was itself a describe-shaped question ("describe Task"
+ *  isn't an ask()-grammar verb, so discourseRewrite's "describe <X>" rewrite
+ *  can never parse and always misses) — a drill-down chain that opens with
+ *  "describe X" (the README's own example) used to dead-end on the very next
+ *  "what about it"/"what about Y" turn. */
 const DESCRIBE_WRAPPER_RE =
-  /^(?:(?:can|could|would)\s+you\s+(?:please\s+)?|please\s+)?(?:tell\s+me\s+(?:more\s+)?about|describe)\s+(.+?)(?:\s+for\s+me)?(?:\s+please)?\s*\??$/i;
+  /^(?:(?:can|could|would)\s+you\s+(?:please\s+)?|please\s+)?(?:tell\s+me\s+(?:more\s+)?about|describe|what(?:'s|\s+is)?\s+about)\s+(.+?)(?:\s+for\s+me)?(?:\s+please)?\s*\??$/i;
 
-async function describeWrapperAnswer(query, { config, source }) {
+/** Bare focus pronouns this lane resolves against the STANDING focus (0.9.13
+ *  Tier-1 playtest) — "describe that" / "tell me about it" after a prior turn
+ *  set the focus. Never a guess: no standing focus → the lane declines (null),
+ *  same as any unresolvable term. */
+const DESCRIBE_PRONOUN_RE = /^(?:it|that|this|those|them)$/i;
+
+async function describeWrapperAnswer(query, { config, source, focus }) {
   const m = DESCRIBE_WRAPPER_RE.exec(String(query || "").trim());
-  const term = m?.[1]?.trim();
+  let term = m?.[1]?.trim();
   if (!term) return null;
+  if (DESCRIBE_PRONOUN_RE.test(term)) {
+    if (!focus?.label) return null; // no standing focus to resolve against — honest decline
+    term = focus.label;
+  }
   try {
     const text = await dispatchTool("tmct_describe", { symbol: term }, { config, source });
     return text ? { text } : null;
@@ -2743,7 +2776,27 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       note(trace, `lane: (1) META/SELF — bare self/session question recognized, answered via="${meta.via}"`);
     }
   }
-  if (!handled && miss && !envelope?.parsed && isConversational(query)) {
+  // "what about X" with a genuine PRIOR turn to continue (0.9.13 Tier-1 playtest)
+  // is exempt from the conversational catch-all even when short/non-codeish
+  // ("what about that", "what about Task" — no dotted/camel token, ≤3 words):
+  // isConversational() can't see that ask() ALREADY tried discourseRewrite above
+  // and that the describe-wrapper rescue (4d) hasn't had its turn yet — without
+  // this exemption, EVERY "what about X" continuation whose prior turn was itself
+  // a describe-shaped question (discourseRewrite can't rewrite "describe X", so it
+  // always misses) or whose swapped-in subject is a bare Capitalized/pronoun term
+  // fell straight to the generic orientation card instead of reaching (4d).
+  const isWhatAboutContinuation = !!(last?.query && WHAT_ABOUT_RE.test(String(query)));
+  // Same exemption for the sibling shape "describe it"/"tell me about that"
+  // (0.9.13 Tier-1 playtest): a bare-pronoun describe/tell-me-about is exactly
+  // as short and non-codeish as "what about it", and needs the SAME deferral to
+  // reach describeWrapperAnswer's now-focus-aware pronoun resolution (4d) —
+  // WITHOUT this, "describe Widget" -> "describe that" (a natural drill-down
+  // re-ask) fell to the orientation card even though the standing focus made it
+  // perfectly answerable. Gated on an actual standing focus, same honest-decline
+  // discipline as describeWrapperAnswer itself.
+  const describeWrapperMatch = DESCRIBE_WRAPPER_RE.exec(String(query).trim());
+  const isDescribePronounContinuation = !!(focus?.label && describeWrapperMatch && DESCRIBE_PRONOUN_RE.test(describeWrapperMatch[1]?.trim() || ""));
+  if (!handled && miss && !envelope?.parsed && isConversational(query) && !isWhatAboutContinuation && !isDescribePronounContinuation) {
     // A conversational miss (a greeting, "what can you do", a very short non-code
     // line) gets the friendly orientation (module-aware: empty → --repo/tmct init).
     // Bug B1 (0.8.2 follow-up): this branch carries via:"template" and never
@@ -2943,7 +2996,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // for what would otherwise become the generic wall, never a competing route:
   // it only claims the turn if /describe actually resolves the captured term.
   if (miss && recordMiss && via === "composed") {
-    const described = await describeWrapperAnswer(query, { config, source });
+    const described = await describeWrapperAnswer(query, { config, source, focus: newFocus });
     if (described) {
       answer = described.text; via = "describe"; recordMiss = false;
       note(trace, "lane: (4d) DESCRIBE-WRAPPER RESCUE — a polite wrapper around \"describe/tell me about <symbol>\" resolved via /describe, tried last after every other lane declined");

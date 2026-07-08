@@ -316,6 +316,10 @@ export const MISSPELLINGS = Object.freeze({
   "extands": "extends", "extneds": "extends",
   "depnds": "depends",
   "touchs": "touches", "tuoches": "touches", "touhced": "touched",
+  // WHERE_MARKERS typo (0.9.13 Tier-1 playtest): "defined" itself had no typo
+  // entry, so "where is it defned" fell through to the bare-object search path
+  // instead of the where-shape ("no module matching 'it defned' found").
+  "defned": "defined",
   "chagned": "changed", "chnaged": "changed",
   "chagnes": "changes", "chnages": "changes",
   "calles": "calls",
@@ -323,6 +327,16 @@ export const MISSPELLINGS = Object.freeze({
   "tets": "tests",
   // grammar anchor words
   "whcih": "which", "wich": "which", "whihc": "which",
+  // "wehre"/"whre" (0.9.13 Tier-1 playtest, "where is it defined" drill-down):
+  // the WHERE-DEFINED shape's own anchor word had NO typo tolerance at all
+  // (unlike which/what/does/the above), so a plain dropped/transposed letter
+  // fell straight through resolveObject and hit either the grammar wall or a
+  // bogus "no module matching 'it defined'" search. "were" (the missing-h
+  // homophone slip) is NOT curated here — it's a real word already load-bearing
+  // as the TEMPORAL_AUX auxiliary ("when were the modules last touched"), so
+  // that one typo is handled by its own anchored phrasing frame instead
+  // (normalize.mjs PHRASING_FRAMES) to avoid clobbering the legitimate reading.
+  "wehre": "where", "whre": "where",
   // "wat" (chatbench cycle 2, tf-wat-calls): the internet-casual spelling of
   // "what" — neither curated noise nor a restorable trigger typo, so "wat calls
   // fnAlpha" used to die as "couldn't resolve one of the terms". Restored here
