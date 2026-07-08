@@ -3396,6 +3396,23 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     } else if (!isPronoun(obj)) {
       note(trace, `intermediate: object "${obj}" did NOT resolve to a graph entity — this is why an otherwise-parsed query still misses`);
     }
+  } else if (graph && envelope?.parsed?.node === "superlative" && Array.isArray(envelope?.matches) && envelope.matches.length === 1) {
+    // A superlative ("which module has the most imports") names no object at all —
+    // the branch above never runs — so the ranked WINNER never became the focus,
+    // and an immediate natural follow-up ("what does it import", "where is it
+    // defined") dead-ended on "'it' needs a selected node to refer to" right after
+    // the engine had just named one. Mirrors the object-resolution rule above
+    // exactly: a single, unambiguous winner (no tie — a multi-way tie names no
+    // one individual, so the focus is left alone rather than guessing which of
+    // the tied matches the user means) becomes the new focus, class-gated the
+    // same way (nextFocus). Found in Tier 2 playtest, cycle 8 (superlative
+    // follow-up chains, SKILL_CHAT_PLAYTEST.md).
+    const winner = envelope.matches[0];
+    if (winner?.id) {
+      resolvedIds = [winner.id];
+      newFocus = nextFocus(graph, focus, winner);
+      note(trace, `result: superlative winner ${winner.label} (${winner.id}) — becomes the new focus`);
+    }
   }
   const answeredIds = (envelope?.matches || []).map((m) => m?.id).filter(Boolean);
   const miss = envelope ? !!envelope.miss : true;
