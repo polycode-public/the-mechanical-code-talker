@@ -3508,8 +3508,20 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     // contextId — the resolved antecedent IS the focus. Re-resolving the literal
     // pronoun string is the CHATBENCH_0.7.1 B1-pron bug: "it" substring-matches the
     // "Commit" schema node (label contains "it"), so the focus jumped off the module
-    // to a Commit and the NEXT "it" bound wrong. Reuse the focus directly instead.
-    const ent = (isPronoun(obj) && focus?.id) ? focus : await resolveEntity(graph, obj);
+    // to a Commit and the NEXT "it" bound wrong. Reuse the focus directly instead —
+    // and when there is NO focus to reuse (Tier-2 playtest, 6th pass, cycle 8: a
+    // bare "where is it defined"/"what does it import" with nothing standing yet,
+    // or right after a superlative TIE, which deliberately never sets one — see
+    // the superlative-winner branch below), never fall through to resolveEntity on
+    // the raw pronoun string either: that is the EXACT SAME substring-match trap
+    // (a 2-letter "it" is a near-certain accidental substring of SOME real label —
+    // here, Task.t-IT-le) as STACCATO_LEAKED_CONNECTIVES fixes for "and"/"also"
+    // above, just triggered by a pronoun instead of a connective. ask()'s OWN
+    // evaluation already renders the honest "'it' needs a selected node…" miss in
+    // this case (contextId was null); silently adopting a bogus focus as a side
+    // effect here would corrupt the NEXT turn's pronoun into a confidently WRONG
+    // (not just empty) answer, exactly as the connective leak did.
+    const ent = isPronoun(obj) ? (focus?.id ? focus : null) : await resolveEntity(graph, obj);
     if (ent) {
       resolvedIds = [ent.id];
       // Class-gate the focus update: a Commit/Session/schema object never displaces a
