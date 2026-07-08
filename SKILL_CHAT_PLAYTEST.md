@@ -55,8 +55,14 @@ answers are real), hold a natural conversation at the current complexity tier (�
 `chat --repo` directly against the committed `examples/mini-webapp/.tmct/graph.json`** — a live
 session writes session/provenance state back into that fixture, dirtying a checked-in file (this bit
 several concurrent playtest cycles in the same session before the pattern was caught). Copy it into a
-tmpdir first and point `--repo` there: `cp -r examples/mini-webapp /tmp/pt-<tier> && node
-bin/tmct.mjs chat --repo /tmp/pt-<tier>`. Rules that make the play realistic:
+tmpdir first and point `--repo` there: `cp -r examples/mini-webapp $(mktemp -d) && node
+bin/tmct.mjs chat --repo <that exact path>`. **Use `mktemp -d` (or equivalent) to get a unique
+path, capture it in a variable, and clean up ONLY that exact path when done — never a wildcard
+glob like `rm -rf /tmp/pt-*`.** Multiple playtest cycles and other agents run concurrently in the
+same shared `/tmp`; a wildcard cleanup can delete another agent's still-in-use scratch directory
+out from under it (caught by the harness's own safety policy once — no actual damage that time,
+but it's exactly the kind of cross-agent collision this rule exists to prevent). Rules that make
+the play realistic:
 - **Follow the product's own guided questions.** When the concept force says "Want to go deeper? Try:
   which classes inherit from Record", ASK one of those next — then ask YOUR natural follow-up to its
   answer, in your own words, not the grammar's.
