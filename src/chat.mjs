@@ -519,7 +519,13 @@ const IDENTITY_PHRASES = [
   /^(tell me about|introduce) yourself\??$/i, /^what is this thing\??$/i,
   /^what am i (talking|speaking|chatting) (to|with)\??$/i,
   /^you are what\??$/i, /^what thing (are|is) you\??$/i,
-  /^explain( to me)? what (you are|this is)\??$/i,
+  // "explain [to me|please]* what (you are|this is)" in EITHER word order — a
+  // fluent-but-non-native speaker plausibly types the question-form "what is
+  // this" after "explain" as readily as the statement-form "this is" (SKILL_
+  // CHAT_PLAYTEST §3b's own ESL examples: "explain please what is this" used
+  // to fall through this regex to the grammar wall because only the statement
+  // order was declared).
+  /^explain(?:\s+(?:to me|please))*\s+what\s+(?:is\s+(?:this|it|you)|(?:you are|this is|it is))\??$/i,
   /^whoami\??$/i,
 ];
 /** "Are you an LLM/AI/bot" — tmct's actual positioning (no LLM, deterministic) is
@@ -1177,13 +1183,18 @@ const META_ORIENT_RE = /^(?:what(?:'s| is| are)?\s+this(?:\s+(?:app|codebase|rep
  *  vocabulary seeding either hasn't run or produced nothing, so the hook makes NO
  *  term-specific promise (an unconditionally-true pointer: the teach lane and
  *  `tmct init` both work with zero preconditions), rather than suggesting a
- *  vocabulary example that would be guaranteed to miss right after being offered. */
+ *  vocabulary example that would be guaranteed to miss right after being offered.
+ *  The no-code-graph branch's teach example is a CONCRETE pair from the closed
+ *  ACE lexicon (playtest: an abstract "every X is a Y" invites a curious user to
+ *  substitute intuitive-but-unknown words — "every cache is a thing" — which the
+ *  closed lexicon then rejects; "every bug is an issue" is confirmed to parse and
+ *  store, see test/chatflow-tier0.test.mjs). */
 async function memorySummary(memoryDir, graph) {
   const rows = memoryDir ? await memoryFacts(memoryDir) : [];
   if (!rows.length) {
     const hook = moduleCountOf(graph) > 0
       ? 'ask about this codebase\'s structure (imports, calls, definitions), or teach me with "every X is a Y"'
-      : 'run `tmct init` to seed a starter vocabulary, or teach me directly with "every X is a Y"';
+      : 'run `tmct init` to seed a starter vocabulary, or teach me directly, e.g. "every bug is an issue"';
     return `I haven't been told any facts yet — ${hook}. /memory to inspect, /help for commands.`;
   }
   const preds = new Set(rows.map((f) => f.predicate).filter(Boolean));
@@ -3364,11 +3375,19 @@ async function hasSeededVocabulary(repo) {
  *  seed.enabled=false, or corpus load failure), offering it would be a lie worse
  *  than no example — swap to an unconditionally-true pointer instead (the teach
  *  lane and `tmct init` both work with zero preconditions). Computed ONCE per
- *  session (createSession), not per turn. */
+ *  session (createSession), not per turn.
+ *  The unseeded branch's teach clause is a CONCRETE pair too, for the same
+ *  reason `cache` is concrete in the seeded branch: playtest found that an
+ *  abstract "every X is a Y" invites a curious user to fill X/Y with an
+ *  intuitive-but-unknown word ("every cache is a thing" — "thing" isn't in
+ *  the closed ACE lexicon) and hit the teach-miss dead-end right after being
+ *  offered the pattern. "every bug is an issue" is confirmed to parse and
+ *  store (both `bug` and `issue` are declared lexicon nouns — see
+ *  test/chatflow-tier0.test.mjs), so the offer resolves if copied verbatim. */
 function vocabExampleHint(seeded) {
   return seeded
     ? 'Try "what is a cache" for general vocabulary.'
-    : 'Run `tmct init` to seed a starter vocabulary, or teach me directly with "every X is a Y".';
+    : 'Run `tmct init` to seed a starter vocabulary, or teach me directly, e.g. "every bug is an issue".';
 }
 
 /** Trim a focus label for the prompt so a long module path can't run the line off. */
