@@ -24,3 +24,10 @@ npm-debug.log*
 
 # a `tmct init` run in this dev repo writes tmct.toml — not tracked here
 tmct.toml
+
+# public/engine/ and public/demo-graph.json are CI-GENERATED (see .gitlab-ci.yml's
+# `pages` job): literal copies of src/*.mjs + a regenerated demo graph, so src/ stays
+# the single source of truth and the published site can never silently drift from it.
+# Never commit them — `npm run demo:build` regenerates both locally for testing.
+public/engine/
+public/demo-graph.json

@@ -109,6 +109,17 @@ publish:npm:
 # GitLab Pages: the static home page. GitLab's convention is a job literally
 # named `pages` whose artifact is the `public/` directory — the repo already
 # keeps the site there, so this job just hands it over. Main branch only.
+#
+# The page embeds a LIVE, client-side chat demo that runs the real src/ask.mjs query
+# engine in the visitor's browser (no backend — GitLab Pages is static). src/ stays the
+# single source of truth: this job COPIES the small, already browser-clean transitive
+# import set src/ask.mjs actually needs (verified: zero Node built-ins reachable at
+# runtime once public/engine-shims/*.mjs stand in for the three still-unconditionally-
+# imported `node:*` specifiers) into public/engine/, unmodified, byte-for-byte — no
+# transpilation, no bundling. It also regenerates public/demo-graph.json from the
+# committed examples/mini-webapp fixture (scripts/build-demo-graph.mjs — real tmct code,
+# schema-docs.mjs's ingestSchemaDocs, run offline) so the published demo graph can never
+# drift from source.
 pages:
   stage: deploy
   rules:
@@ -118,6 +129,13 @@ pages:
     - if: '$CI_COMMIT_BRANCH == "main"'
   script:
     - echo "publishing public/ to GitLab Pages"
+    - npm ci
+    # Literal, unmodified copies of the browser-clean engine sources into
+    # public/engine/ (mirroring src/'s own directory structure so their relative
+    # `import`s keep resolving) + a freshly regenerated public/demo-graph.json — see
+    # scripts/build-demo-site.mjs's header for the full rationale. Both are
+    # .gitignored; this is the only place they're produced.
+    - npm run demo:build
   artifacts:
     paths:
       - public

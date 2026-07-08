@@ -5,6 +5,27 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>tmct — The Mechanical Code Talker</title>
 <meta name="description" content="A pure-JS, no-LLM, offline, $0 chatbot in the ELIZA/PARRY lineage: mechanical interpretation, OWL graph memory, honest misses.">
+<!--
+  Import map: resolves the tiny set of `node:*` specifiers the copied engine source
+  still carries (src/grammar/lexicon.mjs, src/embed.mjs, src/wink-model.mjs — see
+  engine-shims/*.mjs for what each shim actually does and why) to browser-safe
+  stand-ins, and resolves the wink-nlp / wink-eng-lite-web-model bare specifiers to
+  esm.sh CDN builds pinned to the exact versions package.json depends on. Nothing here
+  is bundled or transpiled — the engine/*.mjs files underneath are byte-identical
+  copies of src/*.mjs.
+-->
+<script type="importmap">
+{
+  "imports": {
+    "node:fs": "./engine-shims/node-fs.mjs",
+    "node:path": "./engine-shims/node-path.mjs",
+    "node:url": "./engine-shims/node-url.mjs",
+    "node:module": "./engine-shims/node-module.mjs",
+    "wink-nlp": "https://esm.sh/wink-nlp@2.4.0",
+    "wink-eng-lite-web-model": "https://esm.sh/wink-eng-lite-web-model@1.8.1"
+  }
+}
+</script>
 <style>
   :root {
     --bg: #fdfcf9;
@@ -27,6 +48,14 @@
       --code-bg: #11100d;
       --code-fg: #d8d2c4;
     }
+  }
+  :root[data-theme="dark"] {
+    --bg: #191713; --fg: #e8e2d4; --muted: #a39b8a; --accent: #e0a465;
+    --card: #221f1a; --border: #3a352c; --code-bg: #11100d; --code-fg: #d8d2c4;
+  }
+  :root[data-theme="light"] {
+    --bg: #fdfcf9; --fg: #23211c; --muted: #6b6559; --accent: #8a4b12;
+    --card: #f3efe7; --border: #ddd6c8; --code-bg: #2b2822; --code-fg: #e8e2d4;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
@@ -51,8 +80,6 @@
   p { margin: 0.7rem 0; }
   em { color: var(--accent); font-style: italic; }
   a { color: var(--accent); }
-  ul { margin: 0.7rem 0 0.7rem 1.4rem; }
-  li { margin: 0.35rem 0; }
   .lede { font-size: 1.1rem; margin-top: 1.2rem; }
   pre {
     background: var(--code-bg);
@@ -71,27 +98,56 @@
     padding: 0.05em 0.3em;
   }
   pre code { background: none; border: none; padding: 0; }
-  .card {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 0.9rem 1.1rem;
-    margin: 0.8rem 0;
-  }
-  .card h3 { font-size: 1rem; margin-bottom: 0.25rem; }
-  .card p { margin: 0.2rem 0; font-size: 0.95rem; color: var(--muted); }
-  .phase { display: flex; gap: 0.8rem; align-items: baseline; }
-  .phase .num {
-    font: bold 0.85rem "SF Mono", Menlo, Consolas, monospace;
-    color: var(--accent);
-    white-space: nowrap;
-  }
   footer {
     margin-top: 3rem;
     padding-top: 1rem;
     border-top: 1px solid var(--border);
     font-size: 0.9rem;
     color: var(--muted);
+  }
+
+  /* ---- live chat demo ------------------------------------------------------------ */
+  .demo-wrap { margin: 1.6rem 0 0.6rem; }
+  .demo-label {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin-bottom: 0.4rem;
+  }
+  #tmct-demo {
+    background: var(--code-bg);
+    color: var(--code-fg);
+    border-radius: 8px;
+    padding: 1rem 1.2rem;
+    font: 13.5px/1.6 "SF Mono", Menlo, Consolas, monospace;
+    overflow-x: auto;
+    min-height: 3.5em;
+  }
+  #tmct-demo .term-lines > div { white-space: pre-wrap; word-break: break-word; }
+  #tmct-demo .term-dim { color: var(--muted); }
+  #tmct-demo .term-error { color: #d9704f; }
+  #tmct-demo .term-answer { color: var(--code-fg); margin-bottom: 0.5em; }
+  #tmct-demo .term-prompt-line { color: var(--code-fg); }
+  #tmct-demo .term-prompt { color: var(--accent); }
+  #tmct-demo.compact .term-lines > div { margin: 0; }
+  .demo-status {
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-top: 0.5rem;
+  }
+  .demo-cli {
+    margin-top: 0.5rem;
+    font-size: 0.78rem;
+    color: var(--muted);
+  }
+  .demo-cli pre {
+    background: transparent;
+    border: 1px dashed var(--border);
+    color: var(--muted);
+    padding: 0.5rem 0.8rem;
+    margin: 0.3rem 0 0;
+    font-size: 0.78rem;
   }
 </style>
 </head>
@@ -108,6 +164,19 @@
     answer is either grounded or an honest miss.
   </p>
 
+  <div class="demo-wrap">
+    <div class="demo-label">Live demo — running the real engine, right now, in your browser</div>
+    <div id="tmct-demo"><div class="term-lines"></div></div>
+    <div class="demo-status term-status">wink-nlp: loading…</div>
+    <div class="demo-cli">
+      This box asks a real question of a small fixture repo's code graph
+      (<code>examples/mini-webapp</code>) using the exact same query engine the CLI
+      ships — computed live, client-side, nothing precomputed on a server (GitLab
+      Pages doesn't have one). The same question against a real repo, from a terminal:
+      <pre class="term-cli"></pre>
+    </div>
+  </div>
+
   <h2>Install &amp; quickstart</h2>
   <pre><code>npm install -g @polycode-projects/the-mechanical-code-talker
 
@@ -123,111 +192,14 @@ tmct&gt; /exit</code></pre>
   <pre><code>tmct init         # scaffold .tmct/, tmct.toml, seed corpus + provenance
 tmct syllogise    # offline: pre-derive entailed facts (a maintenance job)</code></pre>
 
-  <h2>How it works</h2>
-  <ul>
-    <li><strong>Multiple concurrent interpretation strategies</strong> per message —
-      grammar parse, keyword picking, noise-word removal, fuzzy matching. Same-class
-      results merge; distinct classes get an explicit
-      <em>&ldquo;if you mean X then &hellip;&rdquo;</em> instead of a silent guess.</li>
-    <li><strong>An ACE-inspired controlled grammar</strong> — text that fits it is
-      compiled to OWL-labelled triples the graph memory can store and answer from.</li>
-    <li><strong>Two-layer memory</strong> — an always-loaded OWL-labelled JSON graph
-      (<code>.tmct/</code>, local, never committed) plus text blocks under a
-      PageRank-style relevance index, both fed by every parsed exchange and by cleaned
-      session logs. Committed corpuses (a ConceptNet slice is planned) seed the vocabulary.</li>
-    <li><strong>Provenance &amp; trust on every fact</strong> — each fact records where it
-      came from and when; sources are first-class, and a deterministic, explainable trust
-      score (source-type prior &times; corroboration &times; recency) weights retrieval by
-      <em>relevance &times; trust</em>. When trusted sources disagree, <code>/memory</code>
-      shows both sides with their provenance instead of silently picking one.</li>
-    <li><strong>Negation &amp; passive</strong> — &ldquo;which modules do <em>not</em> import
-      X&rdquo; computes a bounded set complement (an honestly empty answer stays a miss);
-      &ldquo;imported by&rdquo; and &ldquo;imports&rdquo; traverse opposite edges.</li>
-    <li><strong>Response finishing</strong> — answers are segmented into prose vs
-      <em>protected</em> spans (entities, paths, numbers, code, provenance); a small grammar
-      pass touches prose only, under a guard that proves the protected spans pass through
-      byte-for-byte.</li>
-    <li><strong>Speculative inference, offline</strong> — <code>tmct syllogise</code>
-      forward-chains the OWL subclass closure into low-trust, retractable entailed facts as a
-      bounded maintenance job — never on the chat's hot path.</li>
-  </ul>
-
-  <h2>The repository interface</h2>
-  <p>tmct builds no index of its own — it consumes a graph through a <strong>versioned
-  (1.0.0), OWL-grounded, machine-readable service contract</strong> where a <em>miss is a
-  value, not a throw</em>. It ships reference providers (fixture + empty/bootstrap graph) and
-  a runnable <strong>conformance suite</strong>: any external producer (seonix first) runs the
-  same suite to claim conformance. Conformance is the suite, not prose.</p>
-
-  <h2>Security &amp; supply chain</h2>
-  <p>Offline and $0 means the supply chain has to be trustworthy too:</p>
-  <ul>
-    <li>CI runs SAST and secret detection.</li>
-    <li>A nightly <code>npm audit</code> + OSV-Scanner job watches dependencies.</li>
-    <li>Releases publish with <strong>npm provenance</strong>.</li>
-    <li>A <code>SECURITY.md</code> policy documents coordinated disclosure.</li>
-  </ul>
-
-  <h2>The no-LLM, honesty pitch</h2>
-  <ul>
-    <li><strong>No LLM, anywhere, ever</strong> — deterministic language libraries
-      (wink-nlp's local model), template sets, and graph lookups. Offline. $0 per message.</li>
-    <li><strong>Not an indexer</strong> — tmct consumes a graph via a provider seam;
-      it builds no codebase index of its own.</li>
-    <li><strong>Not a reasoning model</strong> — where it &ldquo;reasons&rdquo;, it
-      calculates, and shows the calculation as prose.</li>
-    <li><strong>Never guesses silently</strong> — a miss is declared, with a nudge
-      toward a question it <em>can</em> answer. A wrong confident answer is treated as
-      worse than an honest miss — that rule is wired into its eval rubric.</li>
-  </ul>
-
-  <h2>Roadmap</h2>
-  <div class="card phase"><span class="num">Phase 0</span>
-    <div><h3>Reshape (v0.2.0 — done)</h3>
-    <p>LLM fallback stripped, extraction stack and MCP server dropped, MPL-2.0,
-    tmct naming, empty-graph bootstrap, published to npm.</p></div></div>
-  <div class="card phase"><span class="num">Phase 1</span>
-    <div><h3>Interpretation pipeline + memory foundations</h3>
-    <p>The multi-strategy pipeline, the conversational memory graph, the
-    graph-provider adapter contract, an OpenTUI shell.</p></div></div>
-  <div class="card phase"><span class="num">Phase 2</span>
-    <div><h3>Grammar &rarr; OWL + corpus</h3>
-    <p>The ACE-inspired grammar emitting OWL triples, the tmct-core ontology,
-    template libraries, a committed ConceptNet slice (CC-BY-SA 4.0).</p></div></div>
-  <div class="card phase"><span class="num">Phase 3</span>
-    <div><h3>Chat tuning cycle (autonomous)</h3>
-    <p>A fixed chatbench case set, deterministic replay, LLM-as-judge scoring —
-    in the offline eval harness only; the product stays no-LLM.</p></div></div>
-  <div class="card phase"><span class="num">Provenance</span>
-    <div><h3>Source-link &amp; trust primitive (done)</h3>
-    <p>Timestamped facts, first-class sources, deterministic trust, trust-weighted
-    retrieval, contradiction surfacing in <code>/memory</code>.</p></div></div>
-  <div class="card phase"><span class="num">Phase 6</span>
-    <div><h3>Formulaic competence (done)</h3>
-    <p>A technical (C1) register of templates and productive-vs-performance
-    dual-banding in the benchmark.</p></div></div>
-  <div class="card phase"><span class="num">Phase 7</span>
-    <div><h3>Response finishing (done)</h3>
-    <p>Typed-span segmentation with a protected-span invariance guard; the a/an
-    fix is active, broader voice rules parked.</p></div></div>
-  <div class="card phase"><span class="num">Phase 8</span>
-    <div><h3>Repository interface (done)</h3>
-    <p>A versioned, OWL-grounded service contract, reference providers, a
-    conformance suite, and <code>tmct init</code>.</p></div></div>
-  <div class="card phase"><span class="num">Phase 9</span>
-    <div><h3>Speculative inference (done)</h3>
-    <p><code>tmct syllogise</code> — offline, bounded, deterministic
-    forward-chaining into low-trust, retractable facts.</p></div></div>
-
-  <h2>Links</h2>
-  <ul>
-    <li>Repository: <a href="https://gitlab.com/polycode-projects/the-mechanical-code-talker">gitlab.com/polycode-projects/the-mechanical-code-talker</a></li>
-    <li>Package: <a href="https://www.npmjs.com/package/@polycode-projects/the-mechanical-code-talker">npmjs.com/package/@polycode-projects/the-mechanical-code-talker</a></li>
-  </ul>
-
   <footer>
-    <p>MPL-2.0 &middot; corpus data under its own licences &middot; &copy; Polycode Limited.</p>
+    <p>MPL-2.0 &middot;
+      <a href="https://gitlab.com/polycode-projects/the-mechanical-code-talker">repository</a>
+      &middot;
+      <a href="https://www.npmjs.com/package/@polycode-projects/the-mechanical-code-talker">npm</a>
+      &middot; &copy; Polycode Limited.</p>
   </footer>
 </main>
+<script type="module" src="./demo-ui.mjs"></script>
 </body>
 </html>
