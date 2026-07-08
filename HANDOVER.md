@@ -12,8 +12,7 @@ All merged, `npm test` green (**1042**). **Version: 0.9.5, pushed** (0.9.0 → 0
 session — 5 HANDOVER bugs + predicate-find + research plans in 0.9.0, then one shipped fix per
 playtest-sprint round; see "Playtest sprint" below).
 
-### Playtest sprint (`SKILL_PLAYTEST_SPRINT.md`), rounds 1–3 of an 8-round run (cap raised from 3
-### to 8 mid-run by operator instruction)
+### Playtest sprint (`SKILL_PLAYTEST_SPRINT.md`) — STOPPED by operator at round 5, 5 rounds ran
 
 - **Round 1** (0.9.3): a redundant same-kind verb after a relation-trigger word polluted object
   extraction ("what tests cover X" — "cover" wasn't stripped); frequency adverbs ("usually" etc.)
@@ -24,7 +23,11 @@ playtest-sprint round; see "Playtest sprint" below).
   ("...about Router please" still failed); a leading "btw" with no delimiter derailed an otherwise-
   working query into the wrong clause shape — added to `FILLER_WORDS`. Also logged 4 deferred
   findings (likely genuine ceilings, not routing bugs) — see the numbered follow-up list below.
-- Rounds 4–8 continuing; results relayed as they land.
+- **Round 4**: confirmed Bug 6 (scoped-listing false-empty) reproducible on `examples/mini-webapp`
+  — folded into roll-in cluster A rather than fixed as a standalone round; shipped 0.9.8.
+- **Round 5**: ran, transcript returned, never triaged before the stop — 2 findings logged
+  unfixed in the numbered follow-up list below (item 12).
+- **Rounds 6-9: never dispatched.** Operator stopped the sprint here explicitly.
 
 ### The 5 bugs from the last follow-up list, all fixed
 
@@ -214,6 +217,18 @@ piped session before its log flushed. Fixed with `try`/`catch` and `try`/`finall
     4. "and what about addRoute, what's that for" (anaphoric topic-shift) — already-known,
        already-deferred ADVANCED_GRAMMAR track (b)/(e) territory (DRT-lite discourse). Not a new
        finding, just confirmed still open.
+12. **Playtest sprint — STOPPED by operator instruction at round 5 of the extended 5-9 run.**
+    Rounds 1-4 shipped 4 real fixes (0.9.3-0.9.5 + Bug 6 folded into cluster A). Round 5 ran and
+    returned a transcript but was never triaged/fixed before the operator called a stop; rounds
+    6-9 were never dispatched. Round 5's findings, logged here unfixed:
+    1. **New finding, not investigated**: a mid-sentence self-correction ("what -- sorry, who
+       inherits from Record") breaks term resolution — "couldn't resolve one of the terms in this
+       question." Likely the interruption dash/fragment pollutes the term-extraction the same way
+       other unhandled discourse-filler patterns have this session (see the "btw" fix, round 3) —
+       worth checking whether a similar closed-frame strip (leading self-correction clause,
+       delimited by "--"/"—"/"sorry,") would resolve it, or whether it's a genuine ceiling.
+    2. **Recurring, not new**: "what modules are in `<dir>`" (the interrogative scoped-listing
+       form) still declines — confirmed still broken live in round 5, same as item 11.1 above.
 
 ### Bench reuse map (0.8.0–0.8.2 deterministic runs are FROZEN; judged state below)
 

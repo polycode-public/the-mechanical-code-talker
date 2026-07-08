@@ -292,6 +292,202 @@ there before authoring anything new (track c).
    (f). This plan's stage 3 (numeric vocabulary) is Phase 2. Stage 4 and track (e)'s WordNet
    door stay Phase 3 (unstarted, re-confirm value first).
 
+---
+
+## 7. A separate, much bigger target: a shared ~2M-word cross-domain ontology (2026-07-08, walked into rather than scoped away)
+
+**This section is additive, not a revision.** Track (e) above (§3) is a settled, narrow finding:
+importing raw WordNet into TMCT's OWN small tier-1 corpus is wrong tier — it duplicates
+ConceptNet's already-filtered WordNet-derived core and reintroduces the exact word-sense noise
+the `RelatedTo` exclusion was built to avoid. That finding stands, unweakened. What follows is a
+different, much bigger, explicitly speculative idea the operator asked to be walked into rather
+than waved off: a hypothetical **connected ontology at ~2,000,000 words** — a ~1M-word
+general-English base (the "every word including technical vocabulary" scope estimated at roughly
+this size by Harvard/Google's 2010 corpus-linguistics count, distinct from WordNet 3.1's own
+155,327-word / 175,979-synset / 207,016-sense-pair inventory) merged with a ~1M-word
+technical/scientific/engineering/programming-language/slang vocabulary drawn from CS, physics,
+biology, and informal registers. A rough JSON-triple size estimate for a resource at that scale
+put it at 1.6–3.2 GB — three orders of magnitude past tier-1's ~2 MB budget and past tier-2's
+"extended neighbourhood" framing too. Named here as a real research target with citations, in the
+same register as ROADMAP.md's "After the horizon" list (`PLAN_CAPABILITY_ROUTER.md`'s open-world
+boundary, `PLAN_ADVANCED_GRAMMAR.md` tracks c/g, this doc's own INF knowledge-representation
+cross-reference) — not a stop sign, not a build plan.
+
+### 7.1 The real problem, named precisely
+
+Merging two 1M-word vocabularies is not simply additive because a huge fraction of the technical
+vocabulary is **lexically identical to, but semantically disjoint from, common general-English
+words** — the operator's own worked list is exactly right: `class`, `object`, `thread`, `cache`,
+`wave`, `pipe`, `stream`, `kernel`, `driver`, `packet`, `cell`, `field`, `type`, `state` each carry
+structurally different senses across general English, CS, physics, biology, and slang registers
+(a `thread` is a strand of fiber, a discussion sub-topic, or a unit of CPU execution; a `wave` is
+water motion, a hand gesture, or a physics oscillation; a `cell` is a prison room, a biological
+unit, a spreadsheet coordinate, or a battery). A flat merged sense inventory dilutes or collides
+these; the two structural options the operator already named are the two live approaches in the
+literature: **(a)** per-domain sense partitioning with explicit cross-domain disambiguation edges,
+or **(b)** some other mechanism — context-driven disambiguation at lookup/ingest time — that keeps
+senses from colliding without a full partition. This is precisely **word-sense disambiguation
+(WSD)** at construction time, plus its adjacent sub-field **domain adaptation for lexical resource
+construction / sense-inventory design** — both real, decades-old, extensively published areas, not
+an undiscovered problem.
+
+### 7.2 Foundations: knowledge-based (symbolic) WSD — the family compatible with no-LLM
+
+The one WSD family that fits tmct's permanent no-LLM/deterministic/explainable ground rule is the
+**knowledge-based** family, founded by Lesk, M., "Automatic sense disambiguation using machine
+readable dictionaries: how to tell a pine cone from an ice cream cone" (*Proceedings of the 5th
+Annual International Conference on Systems Documentation*, SIGDOC '86, pp. 24–26 — verified,
+ACM DL 10.1145/318723.318728): disambiguate a word by counting dictionary-gloss word overlap
+between candidate senses and the glosses of neighbouring words — purely symbolic, no training
+corpus, no statistics beyond a word count. Its most-cited WordNet-native descendant, Banerjee, S.
+& Pedersen, T., "An Adapted Lesk Algorithm for Word Sense Disambiguation Using WordNet" (*CICLing
+2002*, Springer LNCS 2276 — verified), extends the gloss set using WordNet's own relation graph
+(hypernym/hyponym/holonym/meronym/attribute) and reports a **concrete, real number worth citing
+rather than estimating**: 32% accuracy on the Senseval-2 English lexical-sample task, against
+16%/23% for plain-Lesk baseline variants — a real improvement, but a low absolute ceiling.
+
+**The honest comparative picture, not inflated.** Raganato, A., Camacho-Collados, J. & Navigli, R.,
+"Word Sense Disambiguation: A Unified Evaluation Framework and Empirical Comparison" (*EACL 2017*,
+ACL Anthology E17-1010 — verified), the standard modern benchmark harness across five
+Senseval/SemEval all-words datasets, found **supervised systems (IMS, IMS+embeddings) and neural
+approaches (Context2Vec) clearly outperform knowledge-based methods** including Lesk-family and
+graph-based knowledge-based systems; even the trivial Most-Frequent-Sense / WordNet-first-sense
+baselines score 55.2–67.8% across the five datasets — at or above what Lesk-family methods
+typically achieve. **This is the field's real, settled verdict, and it should not be softened**:
+WSD in general is not an unsolved problem — supervised and neural methods work well — but every
+method that beats knowledge-based WSD is statistical or neural, which tmct's ground rule rules
+out. The honest framing for tmct specifically: *the general field has strong solutions; the
+symbolic subset available to a no-LLM system is real but measurably, significantly weaker, and
+whether it can be made good enough at 2M-word merged-ontology scale is the open question for THIS
+system, not for WSD as a field.*
+
+One knowledge-based technique is worth flagging separately because it is a pure **graph walk**,
+not a corpus-trained model, and tmct already has a graph substrate to walk: Agirre, E. & Soroa, A.,
+"Personalizing PageRank for Word Sense Disambiguation" (*EACL 2009*, ACL Anthology E09-1005 —
+verified), which runs personalized PageRank directly over the WordNet graph (no training corpus,
+no embeddings) to pick senses — the UKB system. It is still a knowledge-based method and still
+loses to supervised/neural per Raganato et al. above, but it is architecturally the closest of the
+symbolic family to "disambiguate using the graph tmct already maintains," rather than requiring an
+external gloss corpus.
+
+### 7.3 Does a vehicle already exist? BabelNet — a real precedent, and a cautionary tale in the same breath
+
+The single most relevant existing project is Navigli, R. & Ponzetto, S.P., "BabelNet: The
+Automatic Construction, Evaluation and Application of a Wide-Coverage Multilingual Semantic
+Network" (*Artificial Intelligence* 193, Elsevier, 2012, pp. 217–250 — verified, ScienceDirect
+10.1016/j.artint.2012.07.001). BabelNet automatically merges WordNet synsets with Wikipedia pages
+(plus multilingual/MT-derived lexical data) into "Babel synsets" at millions-of-concepts scale,
+using its own WSD-based mapping: build a context from surrounding synsets and article text for
+each candidate pairing, map one-to-one where unambiguous, otherwise resolve via an argmax scoring
+step, then globally refine using Wikipedia's own link structure, disambiguation pages,
+inter-language links, and category assignments. It reports state-of-the-art results on multiple
+SemEval WSD tasks using the merged resource itself as the disambiguation substrate — this is real,
+published, working evidence that automatic large-scale cross-resource sense merging is achievable,
+not merely theorized.
+
+**Three honest caveats keep this from being a ready-made answer to the operator's problem:**
+
+1. **BabelNet's own pipeline moved away from purely symbolic mechanisms as it scaled.** Its
+   earliest releases used deterministic rules and bag-of-words gloss matching (closer to Lesk in
+   spirit); from version 3 onward it adopted Babelfy, which runs personalized PageRank over the
+   BabelNet graph combined with statistical/ML entity-linking features. The project that proves
+   the merge is achievable also demonstrates that achieving it *well* pushed past the
+   purely-symbolic toolkit tmct is restricted to — the same tension this plan's ground rules exist
+   to name honestly, not paper over.
+2. **BabelNet solves a different axis of the same-shaped problem.** Its merge is
+   general-encyclopedic-and-lexicographic **across languages** (English WordNet senses ↔
+   Wikipedia articles ↔ other-language equivalents), not **across technical domains within
+   English**. The `cache`/`thread`/`wave`-style collision the operator names is a within-English,
+   cross-register problem — BabelNet's cross-lingual alignment signal (translation equivalence,
+   inter-language Wikipedia links) doesn't directly transfer to it; a domain collision has no
+   analogous "this is obviously the French translation" anchor to exploit.
+3. **Licensing and scale are real, not incidental, obstacles.** BabelNet is distributed under a
+   non-commercial-research-only licence (redistribution and commercial/product use require a
+   separate negotiated agreement) — incompatible with tmct's MPL-2.0, commercially-usable
+   distribution model even before considering its size. So BabelNet is a genuine precedent that
+   automatic large-scale sense merging *can* be done — and simultaneously a cautionary tale that
+   doing it well, at this scale, has historically required leaving the symbolic-only toolkit and a
+   licence tmct could not ship under regardless.
+
+**Verdict: BabelNet answers "has anyone done something like this at scale" (yes, genuinely) but
+does not hand tmct a usable vehicle** — wrong axis of ambiguity, wrong licence, and its own
+evolution is evidence *against* staying purely symbolic at this scale, not evidence for it.
+
+### 7.4 Domain partitioning without a full statistical merge — the closer precedent for option (a)
+
+For the operator's option (a) — per-domain sense partitioning with explicit cross-domain
+disambiguation edges, rather than one flat sense inventory — the closer, genuinely symbolic
+precedent is **domain labeling of an existing sense inventory**, not the more famous WordNet
+Domains: Magnini, B. & Cavaglià, G., "Integrating Subject Field Codes into WordNet" (*LREC 2000*,
+ACL Anthology L00-1167 — verified) hand-seeds a small set of high-level WordNet synsets with
+subject-field labels, then propagates those labels through WordNet's own relation edges
+(hyponymy, troponymy, meronymy, pertain-to) to reach ~164 domain labels covering the whole synset
+graph — a purely symbolic, rule-propagation technique, no training corpus, no neural component,
+architecturally close to `syllogise.mjs`'s own subClassOf closure. It is a real, citable answer to
+"is there a general (non-software-specific) symbolic technique for tagging senses by domain rather
+than merging them into one flat inventory" — yes, and it predates and generalizes the
+already-cited SEthesaurus finding (§3 track e; Chen et al. 2019), which is the same idea applied
+narrowly to software terminology via a corpus-contrast-then-cluster pipeline instead of a relation-
+propagation pipeline. Both are evidence that domain-tagging (rather than full merge) is the more
+tractable, more symbolic-compatible half of the operator's two named options.
+
+### 7.5 The genuinely speculative angle: local-context mutual disambiguation over tmct's own graph
+
+For option (b) — using nearby already-resolved terms to disambiguate a word's domain, rather than
+a pre-built domain-labeled inventory — the closest prior art is two older, well-established
+empirical regularities, not a ready-made algorithm for this exact application: Gale, W.A., Church,
+K.W. & Yarowsky, D., "One Sense Per Discourse" (*Proceedings of the 4th DARPA Speech and Natural
+Language Workshop*, Harriman, NY, 1992, ACL Anthology H92-1045 — verified) and Yarowsky, D., "One
+Sense per Collocation" (*Human Language Technology Workshop*, 1993 — verified, reporting 90–99%
+accuracy for binary sense ambiguities under a fixed local-collocation definition). Both findings
+are symbolic/statistical regularities about *how* natural language stays locally consistent — a
+word tends to keep one sense across a discourse, and near-deterministically one sense within a
+fixed local collocation — not neural, not requiring a trained classifier to state as a rule (though
+Yarowsky's own follow-on algorithm, bootstrapped decision lists, is itself a corpus-statistical
+method and not directly reusable inside tmct's ground rules).
+
+**The speculative sketch, clearly labeled as speculation, not a build plan**: tmct's `src/interpret/`
+already performs closed-vocabulary keyword-spotting and context resolution over a request before
+it reaches the answering layer — i.e., the system already knows, per-turn, which OTHER terms in
+the same utterance/session resolved to which domain. A deterministic, table-driven rule of the
+shape "if an ambiguous term co-occurs, within N tokens or N graph-hops, with an already-resolved
+term from domain D, prefer D's sense of the ambiguous term; fall back to a declared default sense
+(or an honest 'which did you mean' nudge) if no neighbouring domain signal exists" is a
+structurally-bounded, deterministic instantiation of one-sense-per-collocation/discourse — using
+tmct's own closed graph as the "collocation" context instead of a training corpus. **No published
+prior art was found for this exact application** (domain-tagging a merged multi-domain lexical
+resource via mutual disambiguation from already-resolved neighbouring terms in a closed,
+deterministic system) — flagged honestly as an original angle worth spiking, in the same spirit as
+this repo's other "no vehicle yet" sketches (`PLAN_CAPABILITY_ROUTER.md`'s bounded goal
+recognition, `PLAN_ADVANCED_GRAMMAR.md` track (c)'s closed disjunct dictionary), not a claimed
+result.
+
+### 7.6 Honest summary
+
+**Solved, for the field:** WSD in general — supervised and neural methods achieve strong,
+well-measured results (Raganato et al. 2017), and BabelNet proves automatic cross-resource sense
+merging at millions-of-concepts scale is achievable in practice, not just in theory.
+
+**Genuinely hard, specifically because of tmct's constraints, not because the field failed:**
+every method that clears the accuracy bar (supervised WSD, neural WSD, BabelNet's own current
+Babelfy-era pipeline) is statistical or neural; the purely symbolic subset available under
+tmct's no-LLM/deterministic/explainable rule (Lesk-family, graph-walk methods like UKB, relation-
+propagation domain tagging like WordNet Domains/SEthesaurus) is real and citable but measurably
+weaker, and no one has published the combination this idea needs: a symbolic, deterministic,
+explainable disambiguation mechanism sufficient for a 2M-word, cross-domain, general+technical
+merged ontology at production quality. That combination is the actual open question for tmct —
+not "can WSD be done" (yes), not "can large-scale sense merging be done" (yes, BabelNet), but
+"can it be done symbolically, at this scale, well enough to trust" (unknown, unattempted at this
+scale under this constraint).
+
+**Not scheduled, not scoped, not contradicting track (e).** This section names a research
+direction the way ROADMAP.md's "After the horizon" list names the frame problem and Winograd-hard
+coreference: real, cited, honestly speculative where it is speculative, and explicitly not a
+commitment to build. Track (e)'s narrower finding (don't import raw WordNet into tmct's own tier-1
+corpus) stands unchanged; this is the bigger idea walked into, not the smaller idea revised.
+
+---
+
 ### Critical Files for Implementation
 - /Users/antony/projects/polycode-projects/the-mechanical-code-talker/src/corpus/conceptnet-map.toml
 - /Users/antony/projects/polycode-projects/the-mechanical-code-talker/src/corpus/conceptnet.mjs
