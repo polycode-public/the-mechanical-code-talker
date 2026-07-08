@@ -519,6 +519,19 @@ function parseTemporal(w, lc, nlp, depth = 0) {
  *  fires). Returns a {node:"anaphora"} (mode count|list), a miss (filter present but
  *  uncompilable), or null. */
 function parseAnaphora(w, lc, nlp) {
+  // "which ones"/"which one" — a bare anaphoric re-LIST of the previous result set,
+  // phrased as a QUESTION rather than the imperative ("list them") or pronoun-tail
+  // ("count them") shapes the loop below already covers. Found live (0.9.14 Tier-2
+  // playtest, third pass, numeric/quantifier relation touches): after "how many
+  // modules import app/lib/a.mjs" / "which modules import app/lib/a.mjs", the
+  // completely natural follow-up "which ones" fell straight through to the generic
+  // orientation card — "ones" isn't an ANAPHORA_TRIGGERS pronoun and bare "which"
+  // isn't a LIST_TRIGGERS head, so neither existing branch below ever fires for it.
+  // Pinned to the WHOLE query (exactly two words) so it never shadows an ordinary
+  // "which one of these two functions …" clause, which has more words after "one".
+  if (lc.length === 2 && lc[0] === "which" && (lc[1] === "ones" || lc[1] === "one")) {
+    return { node: "anaphora", mode: "list", filter: { type: "all" } };
+  }
   let p = -1;
   let viaOf = false;
   for (let i = 1; i < lc.length; i += 1) {

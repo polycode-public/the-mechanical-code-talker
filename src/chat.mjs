@@ -52,7 +52,7 @@ import { createTelemetry } from "./telemetry.mjs";
 import * as defaultSource from "./source.mjs";
 import { loadTemplates, render as renderTemplate } from "./corpus/templates.mjs";
 import { finish } from "./finish.mjs";
-import { VERB_TO_KIND, WHERE_MARKERS, MENTION_MARKERS, ENTITY_TO_TYPE } from "./ask-vocab.mjs";
+import { VERB_TO_KIND, WHERE_MARKERS, MENTION_MARKERS, ENTITY_TO_TYPE, PASSIVE_PARTICIPLE_TO_KIND } from "./ask-vocab.mjs";
 import { COUNTERFACTUAL_RE, correctMisspellings, applyPreambleFrames } from "./interpret/normalize.mjs";
 import { fuzzyMatchInSet, fuzzyBound } from "./interpret/fuzzy.mjs";
 
@@ -394,9 +394,58 @@ function countableKinds(graph) {
  *  by the ask engine's anaphora node, never the header-count path. */
 const ANAPHORA_COUNT_RE = /\b(?:how many|how much|count|number of)\s+(?:of\s+)?(?:those|them|these)\b/i;
 
+/** "have"/"has"/"holds"/"hold" are excluded from RESTRICTOR_VERB_RE below —
+ *  DELIBERATELY treated as non-restrictor cues here, not a bug fix skipped. Ask-
+ *  vocab's VERB_TO_KIND maps them to "defines" unconditionally, but the graph's
+ *  actual "have" semantics are subject-type-dependent (a Module "has" things it
+ *  defines; a Class "has" things it contains) — found live (0.9.14 Tier-2 playtest,
+ *  third pass, numeric/quantifier relation touches) that ask.mjs's own engine
+ *  resolves the two surface forms of the SAME query ("what methods does Widget
+ *  have" vs "which methods does Widget have") to DIFFERENT, inconsistent kinds (one
+ *  correctly reaches "contains", the other wrongly reaches "defines" and returns an
+ *  honest-but-wrong zero) — a genuine, pre-existing ambiguity in the core clause
+ *  grammar, orthogonal to dialogue flow/routing and out of this cycle's scope.
+ *  Deferring a "have" tail to the ask engine here would just trade one wrong-answer
+ *  risk for another rather than fixing anything, so it stays on the existing
+ *  bare-count path (unchanged behavior, no new regression) until a dedicated fix
+ *  teaches the grammar to pick "defines" vs "contains" by the resolved subject's
+ *  own class. */
+const AMBIGUOUS_HAVE_VERBS = new Set(["have", "has", "holds", "hold"]);
+
+/** A "how many <kind> …" tail carries a genuine RESTRICTOR clause — not filler — iff
+ *  it names a real relation verb (active, from VERB_TO_KIND, or passive-participle,
+ *  from PASSIVE_PARTICIPLE_TO_KIND — both ask-vocab.mjs's closed vocabulary, the
+ *  same one ask.mjs's own clause grammar reads), minus the ambiguous "have" family
+ *  above. Matching on the VERB specifically (not "any non-stopword word") matters:
+ *  a tail's own OBJECT NAME is also non-stopword content ("how many methods does
+ *  WIDGET have" — "Widget" alone isn't a restrictor cue), so a bare
+ *  content-word test would misfire on every qualified count regardless of verb. */
+const RESTRICTOR_VERB_RE = new RegExp(
+  `\\b(?:${
+    [...Object.keys(VERB_TO_KIND), ...Object.keys(PASSIVE_PARTICIPLE_TO_KIND)]
+      .filter((v) => !AMBIGUOUS_HAVE_VERBS.has(v))
+      .sort((a, b) => b.length - a.length)
+      .map((v) => v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+      .join("|")
+  })\\b`,
+  "i",
+);
+
 /** Recognise a count/aggregate question and answer it from the graph header, or
  *  null if it isn't one (→ fall through to tmct_ask). "how many X [are there]",
- *  "count [the] X", "number of X". An unknown kind lists what it CAN count. */
+ *  "count [the] X", "number of X". An unknown kind lists what it CAN count.
+ *
+ *  A RESTRICTOR tail ("how many modules IMPORT app/lib/a.mjs", "how many classes
+ *  INHERIT FROM Base") is NOT a bare header count — found live (0.9.14 Tier-2
+ *  playtest, third pass, numeric/quantifier relation touches): this regex only ever
+ *  captured the noun immediately after "how many" and silently discarded everything
+ *  after it, so a qualified count fell back to the UNQUALIFIED class total ("how many
+ *  modules import app/lib/a.mjs" answered "8 modules" — the whole-graph module count —
+ *  instead of the 3 that actually import it). ask.mjs's own AGGREGATE node
+ *  (parseAggregate) already evaluates a restrictor tail correctly via parseSetPhrase,
+ *  so once the tail names a real relation verb (RESTRICTOR_VERB_RE), decline here and
+ *  let the turn fall through to the real ask engine instead of returning a misleading
+ *  bare total. */
 export function answerCount(graph, query) {
   if (!graph) return null;
   // ANAPHORIC counts ("how many of those are tested", "count them", "how many of
@@ -409,6 +458,7 @@ export function answerCount(graph, query) {
   if (!m) return null;
   const noun = m[1].toLowerCase();
   const cls = COUNT_NOUNS[noun];
+  if (cls && RESTRICTOR_VERB_RE.test(String(query).slice(m.index + m[0].length))) return null;
   if (!cls) {
     return `I can't count "${noun}". I count: ${countableKinds(graph).join(", ")}. ` +
       `Try "how many classes are there".`;

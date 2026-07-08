@@ -93,6 +93,62 @@
 //       has-edges path. Fixed in src/concept.mjs: composeRelation now
 //       degrades to a two-band answer (definition + "this codebase has no X
 //       edges in the index") instead of null.
+//
+// THIRD PASS (0.9.14, repeated Tier 2 per SKILL_CHAT_PLAYTEST §1 Step 6 —
+// entry points NOT yet covered by passes 1-2: numeric/quantifier relation
+// touches, "which ones" anaphora, negation, rapid topic-switching, and the
+// two relation kinds — defines/touches — a background advisor tick flagged
+// as having zero dedicated coverage across T1-T12):
+//   T13 chat.mjs's answerCount (the mechanical header-count shortcut, checked
+//       BEFORE the ask engine on every turn) matched ONLY the noun immediately
+//       after "how many"/"count"/"number of" and silently discarded any
+//       RESTRICTOR tail — "how many modules import app/lib/a.mjs" answered
+//       "8 modules." (the whole-graph module total) instead of the 3 that
+//       actually import it; "how many classes inherit from Base" likewise
+//       answered the total class count instead of 1. ask.mjs's own AGGREGATE
+//       node already evaluates a restrictor tail correctly, so answerCount now
+//       declines (→ null, falls through to the real ask engine) whenever the
+//       tail names a genuine relation verb — RESTRICTOR_VERB_RE, built from
+//       ask-vocab.mjs's own VERB_TO_KIND + PASSIVE_PARTICIPLE_TO_KIND closed
+//       vocabulary, so "how many modules ARE NOT TESTED" (a passive-participle
+//       restrictor) is caught too. Deliberately NOT widened to "any non-filler
+//       tail word" — that misfires on the tail's own OBJECT NAME ("...does
+//       WIDGET have") and on discourse filler ("...are there THEN"), regressing
+//       an existing frozen case (chatbench-levers.test.mjs's "so, uh, how many
+//       classes are there then"). "have"/"has"/"holds"/"hold" are deliberately
+//       EXCLUDED from the restrictor-verb set: VERB_TO_KIND maps them to
+//       "defines" unconditionally, but ask.mjs's own engine resolves "what X
+//       does Y have" and "which X does Y have" to DIFFERENT, inconsistent kinds
+//       for the identical query (a genuine pre-existing ambiguity in the core
+//       clause grammar, out of THIS cycle's routing-only scope) — deferring a
+//       "have" tail would trade one wrong-answer risk for another, so it stays
+//       on the unchanged bare-count path.
+//   T14 "which ones"/"which one" — the natural question-form follow-up asking
+//       to re-list the previous answer's set ("which modules import
+//       app/lib/a.mjs" → "3 modules." → "which ones") had NO recognized shape
+//       at all: ask.mjs's parseAnaphora only fires on an ANAPHORA_TRIGGERS
+//       pronoun (them/those/these) via "of <pronoun>" or as a bare pronoun
+//       right after a LIST/AGGREGATE trigger ("list them") — "ones" is neither,
+//       so the turn fell to the generic orientation card instead of carrying
+//       focus. Fixed by a narrowly-scoped, whole-query-only "which
+//       ones"/"which one" branch reusing the SAME anaphora node a "list them"
+//       follow-up already gets — so it inherits that node's existing behavior
+//       for BOTH shapes of a previous answer: a prior LIST-shape turn re-lists
+//       correctly, and a prior COUNT-shape turn (which never carries a match
+//       set — count nodes deliberately return `matches: []`) gets the SAME
+//       honest, guiding "needs a previous answer to refer to" nudge a bare
+//       "which of those" already gets with no prior list — never a wall.
+//   T15/T16 defines/touches relation-force coverage (advisor-flagged: zero
+//       dedicated T1-T12 coverage for either kind, on both the populated and
+//       the zero-edge path) — found ALREADY FLOWING, no fix needed:
+//       composeRelation's T12 zero-edge degrade (this same file, above) is
+//       generic over every RELATION_KINDS entry, not reexports-specific, so
+//       "what about defines"/"tell me about the defines relation" and "what
+//       about touches"/"tell me about the touches relation" already compose
+//       correctly on a populated graph, and already degrade to the honest
+//       "this codebase has no X edges in the index" two-band answer on a graph
+//       with none. Frozen here per §4 ("freeze what flows") to close the
+//       coverage gap the advisor found, even though no dead-end turned up.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
@@ -132,9 +188,15 @@ async function driveSession(queries) {
  *  the 0.9.14 second-pass zero-edge degrade bug slip past cycle 3's own tests:
  *  they only ever exercised the has-edges path). */
 async function repoWithFixtureMinus(predicate) {
+  // Accepts a single predicate string OR an array — "touches" (RELATION_KINDS)
+  // spans TWO fixture predicates (coarse "touches" + symbol-grain
+  // "touchesSymbol"), so a true zero-edge test for that relation kind must
+  // strip both at once (T16), while every earlier single-predicate caller
+  // (T12's "reexports", T15's "defines") is unaffected.
+  const excluded = new Set(Array.isArray(predicate) ? predicate : [predicate]);
   const dir = await mkdtemp(join(tmpdir(), "tmct-tier2-"));
   const payload = JSON.parse(await readFile(FIXTURE, "utf8"));
-  payload.objectProperties = (payload.objectProperties || []).filter((g) => g.predicate !== predicate);
+  payload.objectProperties = (payload.objectProperties || []).filter((g) => !excluded.has(g.predicate));
   await mkdir(join(dir, ".tmct"), { recursive: true });
   await writeFile(join(dir, ".tmct", "graph.json"), JSON.stringify(payload));
   return dir;
@@ -400,5 +462,149 @@ test("tier2/T12 relation vague-touch on ZERO edges of a known kind degrades grac
   } finally {
     clearCache();
     await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---- THIRD PASS (T13-T16) ----
+
+test("tier2/T13 quantifier+relation counts: 'how many modules import X', 'how many classes inherit from Y' and 'how many modules are not tested' all count the RESTRICTED set, not the whole-graph total", async () => {
+  const { dir, turns } = await driveSession([
+    "how many modules import app/lib/a.mjs",
+    "how many classes inherit from Base",
+    "how many modules are not tested",
+    // "have" stays on the bare-count path deliberately (T13's own doc note) —
+    // this happens to read as a correct count in this fixture (Widget's one
+    // real method), not because the restrictor was evaluated.
+    "how many methods does Widget have",
+  ]);
+  try {
+    for (const [i, t] of turns.entries()) {
+      assert.doesNotMatch(t.answer, WALL, `turn ${i} must not hit the grammar wall`);
+    }
+    assert.equal(turns[0].answer, "3 modules.", "restricted to the 3 modules that actually import app/lib/a.mjs, not the graph's 8 total");
+    assert.equal(turns[1].answer, "1 class.", "restricted to Widget (which inherits from Base), not the graph's 3 total classes");
+    assert.equal(turns[2].answer, "6 modules.", "the passive-participle restrictor ('are not tested') is caught too");
+    assert.equal(turns[3].answer, "1 method.");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("tier2/T13 regression: a discourse-final filler tail stays a bare count ('so, uh, how many classes are there then')", async () => {
+  const { dir, turns } = await driveSession(["so, uh, how many classes are there then"]);
+  try {
+    assert.doesNotMatch(turns[0].answer, WALL);
+    assert.equal(turns[0].answer, "3 classes.", "'then' names no relation verb — stays the bare header count, not a restrictor miss");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("tier2/T14 'which ones' anaphora: re-lists a prior LIST-shape answer, and gives an honest guiding nudge (not a wall) after a prior COUNT-shape answer", async () => {
+  const { dir, turns } = await driveSession([
+    "which modules import app/lib/a.mjs",
+    "which ones",
+    "how many modules import app/lib/a.mjs",
+    "which ones",
+  ]);
+  try {
+    for (const [i, t] of turns.entries()) {
+      assert.doesNotMatch(t.answer, WALL, `turn ${i} must not hit the grammar wall`);
+      assert.doesNotMatch(t.answer, /I'm tmct — a deterministic/, `turn ${i} must not fall to the generic orientation card`);
+    }
+    assert.equal(turns[0].answer, "app/lib/b.mjs and app/lib/c.mjs and app/lib/e.mjs.");
+    assert.equal(turns[1].answer, "app/lib/b.mjs, app/lib/c.mjs and app/lib/e.mjs.", "'which ones' re-lists the same set the direct list query names");
+    assert.equal(turns[2].answer, "3 modules.");
+    assert.equal(
+      turns[3].answer,
+      "\"those\"/\"them\" needs a previous answer to refer to — ask a listing question first, then follow up.",
+      "a prior COUNT never carries a match set (by design) — the honest anaphora-miss nudge, not a wall",
+    );
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+const DEFINES_RELATION_TEXT =
+  "A definition is where a name (a class, function, or variable) is introduced.\n"
+  + "In this codebase, for example: app/lib/a.mjs defines fnAlpha, app/lib/b.mjs defines Widget and app/lib/b.mjs defines register (3 definition edges).\n"
+  + "Want to go deeper? Try:\n"
+  + "  • where is fnAlpha defined";
+
+test("tier2/T15 defines relation force (advisor-flagged coverage gap, T1-T12 never touched it): 'what about defines'/'tell me about the defines relation' both flow, and degrade gracefully on zero edges", async () => {
+  const { dir, turns } = await driveSession([
+    "what about defines",
+    "tell me about the defines relation",
+  ]);
+  try {
+    for (const [i, t] of turns.entries()) {
+      assert.doesNotMatch(t.answer, WALL, `turn ${i} must not hit the grammar wall`);
+      assert.doesNotMatch(t.answer, BAD_SEARCH, `turn ${i} must not fall through to a bogus object search`);
+      assert.equal(t.answer, DEFINES_RELATION_TEXT, `turn ${i} composes the defines relation force`);
+    }
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+  const zeroDir = await repoWithFixtureMinus("defines");
+  try {
+    const zeroTurns = await driveSessionOverGraph(zeroDir, [
+      "what about defines",
+      "what does app/lib/a.mjs define",
+    ]);
+    const expected =
+      "A definition is where a name (a class, function, or variable) is introduced.\n"
+      + "This codebase has no definition edges in the index.";
+    assert.doesNotMatch(zeroTurns[0].answer, WALL);
+    assert.equal(zeroTurns[0].answer, expected);
+    assert.equal(zeroTurns[1].answer, "app/lib/a.mjs has no defines edges in the index.",
+      "the per-object direct query keeps its own, already-honest empty phrasing");
+  } finally {
+    clearCache();
+    await rm(zeroDir, { recursive: true, force: true });
+  }
+});
+
+const TOUCHES_RELATION_TEXT =
+  "A touch is a commit changing a file or a symbol in the codebase.\n"
+  + "In this codebase, for example: abc1234 touches app/lib/a.mjs and abc1234 touches Widget.render (2 touch edges).\n"
+  + "Want to go deeper? Try:\n"
+  + "  • when did app/lib/a.mjs change\n"
+  + "  • what did commit abc1234 touch";
+
+test("tier2/T16 touches relation force (advisor-flagged coverage gap, T1-T12 never touched it): 'what about touches'/'tell me about the touches relation' both flow, and degrade gracefully on zero edges", async () => {
+  const { dir, turns } = await driveSession([
+    "what about touches",
+    "tell me about the touches relation",
+  ]);
+  try {
+    for (const [i, t] of turns.entries()) {
+      assert.doesNotMatch(t.answer, WALL, `turn ${i} must not hit the grammar wall`);
+      assert.doesNotMatch(t.answer, BAD_SEARCH, `turn ${i} must not fall through to a bogus object search`);
+      assert.equal(t.answer, TOUCHES_RELATION_TEXT, `turn ${i} composes the touches relation force`);
+    }
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+  const zeroDir = await repoWithFixtureMinus(["touches", "touchesSymbol"]);
+  try {
+    const zeroTurns = await driveSessionOverGraph(zeroDir, [
+      "what about touches",
+      "what did commit abc1234 touch",
+    ]);
+    const expected =
+      "A touch is a commit changing a file or a symbol in the codebase.\n"
+      + "This codebase has no touch edges in the index.";
+    assert.doesNotMatch(zeroTurns[0].answer, WALL);
+    assert.equal(zeroTurns[0].answer, expected);
+    assert.equal(zeroTurns[1].answer, "commit abc1234 touched nothing recorded in the index.",
+      "the per-object direct query keeps its own, already-honest empty phrasing");
+  } finally {
+    clearCache();
+    await rm(zeroDir, { recursive: true, force: true });
   }
 });
