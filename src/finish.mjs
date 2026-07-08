@@ -222,7 +222,7 @@ function leadingWord(text) {
 
 /** Does `word` begin with a VOWEL SOUND? true → "an", false → "a", null → cannot
  *  tell (refuse). Spelling-vs-sound exceptions come from the rule's TOML row. */
-function beginsWithVowelSound(word, rule) {
+export function beginsWithVowelSound(word, rule) {
   const w = String(word).toLowerCase().replace(/^[^a-z]+/, "");
   if (!w) return null;
   for (const ex of rule.vowel_sound_consonants || []) if (w.startsWith(ex)) return true;

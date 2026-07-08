@@ -78,6 +78,61 @@ test("#2 teach: 'remember that redis is a cache' fails LOUD with the shape, neve
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
+// ---- BUG 2 fix (2026-07-08): teachSuggestion article agreement + the "did
+// you mean" suppression guard. Both "monkey" and "animal" are outside the
+// closed ACE lexicon (lexicon-core.json), same "genuinely unstorable" shape
+// as the redis/cache case above — deliberately NOT widened here (that's a
+// separate product decision), but the message now (a) NAMES the unrecognized
+// words instead of a generic shrug, and (b) gets the "did you mean" article
+// right, so the hint is never confusingly identical-looking to (or silently
+// worse than) what the user actually typed. ----
+
+test("#2 teach: an already-canonical 'every X is a Y' (vowel-initial Y, correct article) suppresses the hint — nothing to add", async () => {
+  const dir = await mem();
+  try {
+    const { answer, record } = await runTurn("every monkey is an animal", {
+      config: CONFIG, graph: await graph(), memoryDir: dir, sessionId: "t",
+    });
+    assert.match(answer, /every X is a Y/, "says what CAN be remembered");
+    assert.match(answer, /I don't recognize "monkey" and "animal" as words I know/, "names the specific unrecognized words");
+    // the input was ALREADY the grammatically-correct canonical shape — a "did
+    // you mean" that echoed it back byte-for-byte would be redundant noise, so
+    // teachSuggestion's real a/an agreement makes it compare equal and suppress.
+    assert.doesNotMatch(answer, /Did you mean/, "no suggestion when the input is already canonical");
+    assert.equal(record.miss, true);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("#2 teach: 'every X is a Y' with the WRONG article (vowel-initial Y) now offers the corrected suggestion", async () => {
+  const dir = await mem();
+  try {
+    const { answer, record } = await runTurn("every monkey is a animal", {
+      config: CONFIG, graph: await graph(), memoryDir: dir, sessionId: "t",
+    });
+    assert.match(answer, /every X is a Y/);
+    // BEFORE the fix: teachSuggestion's own hardcoded "a" matched this exact
+    // (wrong-article) input byte-for-byte, so the equality guard SUPPRESSED the
+    // hint here — the one case where a correction was most useful. Now the
+    // suggestion is computed with real article agreement and differs from the
+    // (wrong-article) input, so it surfaces.
+    assert.match(answer, /Did you mean: "every monkey is an animal"\?/, "offers the grammatically-correct shape");
+    assert.equal(record.miss, true);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("#2 teach: unrecognized-word message distinguishes the vocabulary gap from a plain shape mismatch", async () => {
+  const dir = await mem();
+  try {
+    // "climb" is outside the closed ACE lexicon entirely (no noun/verb/adjective
+    // entry) — parseAce's residue still names it, same mechanism as monkey/animal.
+    const { answer } = await runTurn("every tree is a climb", {
+      config: CONFIG, graph: await graph(), memoryDir: dir, sessionId: "t",
+    });
+    assert.match(answer, /I don't recognize "tree" and "climb" as words I know/);
+    assert.match(answer, /tmct's own code-vocabulary nouns/);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
 test("#2 teach: a storable 'remember that every X is a Y' lands a Fact and confirms", async () => {
   const dir = await mem();
   try {

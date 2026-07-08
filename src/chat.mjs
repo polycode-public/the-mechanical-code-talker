@@ -51,7 +51,7 @@ import { uuidv7 } from "./uuid.mjs";
 import { createTelemetry } from "./telemetry.mjs";
 import * as defaultSource from "./source.mjs";
 import { loadTemplates, render as renderTemplate } from "./corpus/templates.mjs";
-import { finish } from "./finish.mjs";
+import { finish, beginsWithVowelSound, grammarRules } from "./finish.mjs";
 import { VERB_TO_KIND, WHERE_MARKERS, MENTION_MARKERS, ENTITY_TO_TYPE, PASSIVE_PARTICIPLE_TO_KIND } from "./ask-vocab.mjs";
 import { COUNTERFACTUAL_RE, correctMisspellings, applyPreambleFrames } from "./interpret/normalize.mjs";
 import { fuzzyMatchInSet, fuzzyBound } from "./interpret/fuzzy.mjs";
@@ -1220,10 +1220,22 @@ function assertCandidates(payload) {
   if (!/^(?:every|each|all|a|an)\b/i.test(p)) out.push(`every ${p}`);
   return [...new Set(out)];
 }
-/** The "every X is a Y" rewrite of a declarative, for the "did you mean …" hint. */
+/** The "every X is a Y" rewrite of a declarative, for the "did you mean …" hint.
+ *  BUG 2 fix (2026-07-08): the article was hardcoded to "a" regardless of Y's
+ *  vowel sound ("every monkey is a animal" — ungrammatical for a vowel-initial
+ *  Y), which made the suggestion silently WRONG for exactly the cases where a
+ *  correction is most useful. Real a/an agreement now reuses finish.mjs's own
+ *  beginsWithVowelSound + the SAME grammar-rules.toml "article" rule
+ *  (spelling-vowel/consonant exceptions included) rather than reimplementing
+ *  vowel-sound detection a second time. */
 function teachSuggestion(payload) {
   const m = String(payload).match(/^(?:every |each |all |a |an )?([\w-]+) (?:is|are) (?:a |an )?([\w-]+)$/i);
-  return m ? `every ${m[1].toLowerCase()} is a ${m[2].toLowerCase()}` : null;
+  if (!m) return null;
+  const subject = m[1].toLowerCase();
+  const object = m[2].toLowerCase();
+  const articleRule = grammarRules().find((r) => r.kind === "article");
+  const article = articleRule && beginsWithVowelSound(object, articleRule) ? "an" : "a";
+  return `every ${subject} is ${article} ${object}`;
 }
 
 async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
@@ -1268,10 +1280,52 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
       }
     }
   }
+  // BUG 2 fix (2026-07-08): compare the CORRECTED suggestion against a
+  // normalized (trimmed, whitespace-collapsed, lowercased) form of what the
+  // user actually typed, not the raw payload — so trivial formatting
+  // differences never manufacture a spurious "did you mean". With
+  // teachSuggestion's article now grammatically correct (above), this
+  // equality guard's original intent is restored rather than replaced: it
+  // suppresses the hint exactly when X and Y themselves are already spelled
+  // in the canonical "every X is a Y" shape (nothing useful to add), and
+  // shows it whenever the corrected form differs — including the wrong-
+  // article case ("every monkey is a animal") that used to be silently
+  // suppressed because the OLD teachSuggestion's own hardcoded "a" matched
+  // the user's mistake byte-for-byte.
+  const normalizedPayload = String(payload).trim().toLowerCase().replace(/\s+/g, " ");
   const suggestion = teachSuggestion(payload);
-  const did = suggestion && suggestion !== payload.toLowerCase() ? ` Did you mean: "${suggestion}"?` : "";
+  const did = suggestion && suggestion !== normalizedPayload ? ` Did you mean: "${suggestion}"?` : "";
+  // Honest miss reason (2026-07-08, "separately, not a bug" clarification): when
+  // the payload structurally fits the ACE fragment but names word(s) outside
+  // tmct's closed 180-word lexicon (lexicon-core.json), parseAce already
+  // reports exactly which tokens are unrecognized as `residue` — assertTurn's
+  // loop above discards it on a miss. Re-derive it here (same lexicon, same
+  // candidate sentences) so the miss message can NAME the word(s), rather than
+  // leaving the user to guess whether the problem was grammar shape or
+  // vocabulary. A payload that doesn't fit the fragment AT ALL (parseAce
+  // returns null, no residue) gets the plain generic message — genuinely a
+  // shape mismatch, not an unrecognized-word one. This does NOT widen the
+  // lexicon itself: "redis"/"monkey"/"animal" still fail to store; the
+  // message now says why.
+  let unknown = [];
+  if (memoryDir) {
+    try {
+      const { parseAce } = await import("./grammar/ace.mjs");
+      let lex = lexicon;
+      if (!lex) { const { loadLexicon } = await import("./grammar/lexicon.mjs"); lex = loadLexicon(); }
+      for (const cand of assertCandidates(payload)) {
+        const parse = parseAce(cand, lex);
+        if (parse?.residue?.length) { unknown = [...new Set(parse.residue.map((w) => String(w).toLowerCase()))]; break; }
+      }
+    } catch { /* lexicon unavailable — fall through to the generic message */ }
+  }
+  const why = unknown.length
+    ? ` I don't recognize ${joinList(unknown.map((w) => `"${w}"`))} as ${unknown.length === 1 ? "a word" : "words"} I know — `
+      + "I can only teach facts using tmct's own code-vocabulary nouns (like module, class, function…), "
+      + "not arbitrary new terms."
+    : "";
   return {
-    text: 'I couldn\'t store that — I remember facts in the shape "every X is a Y", where X and Y are '
+    text: `I couldn't store that —${why} I remember facts in the shape "every X is a Y", where X and Y are `
       + `words I know.${did} Type /memory to see what I already remember.`,
     via: "teach-miss", miss: true,
   };
