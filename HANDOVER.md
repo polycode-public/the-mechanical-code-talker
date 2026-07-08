@@ -63,15 +63,20 @@ matches) and a boolean-fold generalization for compositional predicate queries. 
   new construction families: subordination, conditional, ellipsis, discourse-deixis,
   presupposition, garden-path. See `chatbench/GRADED.md`.
 
-### A new benchmark: infbench
+### A new benchmark: infbench, now with stages 0-2 shipped
 
-`infbench/` is stage 0 of `PLAN_INFERENCE_TESTING.md`: a 6-band classical-logic ladder (INF-A1
-through C2), mirroring agentbench's shape, with mechanically generated (not hand-authored) cases.
-199 cases, first baseline in `INFBENCH_0.8.2.md`. Measured: kernel A1/A2 clean pass; chat A1 100%;
-chat A2 exactly 50% (the cax-sco gap, now measured rather than asserted). B1 sits at 33% and gates
-the ladder, because the disjointness proof rule doesn't exist yet. B2/C1/C2 sit at their honest
-ceiling because the rules those bands need aren't built. This is the plan working as designed, not
-a shortfall.
+`infbench/` is `PLAN_INFERENCE_TESTING.md`'s 6-band classical-logic ladder (INF-A1 through C2),
+mirroring agentbench's shape, mechanically generated cases. 199 cases, first baseline in
+`INFBENCH_0.8.2.md`. **The cax-sco gap is closed**: the `deriveTypePropagation` rule
+(`src/syllogise.mjs`) plus a live, bounded proof-chain chase (`findIsaChain`/`renderIsaChain`,
+`src/chat.mjs`) took chat-A2 from 50% to **100%, 0% fabrication**. Deliberately scoped narrow
+(2-hop cap, taught/entailed facts only) specifically to avoid two real regressions found during
+the work: an unbounded chase would have accidentally "solved" INF-B2's pinned multi-hop ceiling
+cases (miscounted as fabrication against a declared ceiling), and an unfiltered chase found a
+genuine corpus-coincidence fabrication (a seeded ConceptNet/SEON fact chain happened to "prove"
+an unrelated synthetic test case) — both closed by the scoping, not worked around. B1 still sits
+at 33% and gates the ladder (the disjointness proof rule doesn't exist yet); C1/C2 sit at their
+honest ceiling. This is the plan working as designed.
 
 ### A new demo, and the bug it surfaced
 

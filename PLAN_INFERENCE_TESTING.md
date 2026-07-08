@@ -1,8 +1,13 @@
 # PLAN_INFERENCE_TESTING.md — INFBENCH: classical logic on a 6-band CEFR-shaped ladder
 
-> **STATUS (2026-07-08): Stage 0 ✅ shipped. Stages 1–2 🔄 IN PROGRESS** (the `cax-sco` rule in
-> `src/syllogise.mjs` + proof-chain receipt rendering, targeting the measured chat-A2 50%
-> ceiling — rolled into the continuous fix-ship loop this session).
+> **STATUS (2026-07-08): Stages 0–2 ✅ shipped.** The `cax-sco` rule (`deriveTypePropagation`,
+> `src/syllogise.mjs`) + a live, bounded proof-chain chase (`findIsaChain`/`renderIsaChain`,
+> `src/chat.mjs`) closed chat-A2's measured 50% ceiling to **100%, 0% fabrication**. Deliberately
+> scoped narrow — `maxHops:2` (matching INF-A2's own spec) and taught/entailed facts only
+> (corpus-sourced edges excluded) — specifically so the live chase doesn't accidentally "solve"
+> INF-B2's pinned multi-hop ceiling cases or fabricate via an unrelated corpus coincidence; both
+> real risks were found and closed during this work. chat-B2 stays honestly at its ceiling
+> (40/40 "unproven", 0% fabrication — correctly declining, not failing).
 
 *(Revised 2026-07-07 — mechanizes CASE GENERATION. What changed vs the prior draft: §1's worked
 examples are reframed as hand-verified EXPRESSIBILITY WITNESSES, not the case-authoring mechanism;
