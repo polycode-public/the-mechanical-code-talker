@@ -2924,6 +2924,14 @@ const STACCATO_SWAP_RE = /^(?:and|also|so|then|now)\s+(.+?)[?.!\s]*$/i;
  *  to resolveEntity (see that guard's own docblock for the concrete failure). */
 const STACCATO_LEAKED_CONNECTIVES = new Set(["and", "also", "so", "then", "now"]);
 
+/** A whole-word occurrence of one of chat.mjs's own closed antecedent pronouns
+ *  (CONTEXT_WORDS: "it"/"this"/"that"/"here") inside a PRIOR turn's raw query
+ *  text — discourseRewrite's fallback swap target when that text has no real
+ *  NAME_TOKEN at all ("what calls it", "where is it defined"). Word-boundary
+ *  anchored so a real identifier merely CONTAINING one of these (e.g. a symbol
+ *  named `edithistory`) is never mistaken for the pronoun. */
+const PRONOUN_IN_QUERY_RE = new RegExp(`\\b(?:${[...CONTEXT_WORDS].join("|")})\\b`, "i");
+
 /** DISCOURSE CONTINUATION (CHATBENCH_006 lever 2): "what about X" carries the PRIOR
  *  turn's question shape across the turn boundary — re-asking it with X in place of
  *  the previous subject/object. Returns the reconstructed query (parsed like any
@@ -2942,8 +2950,22 @@ function discourseRewrite(query, last) {
   }
   if (!last?.query) return null;
   const prevQ = String(last.query);
-  if (!NAME_TOKEN_RE.test(prevQ)) return null;
-  return prevQ.replace(NAME_TOKEN_RE, () => newSubj);
+  if (NAME_TOKEN_RE.test(prevQ)) return prevQ.replace(NAME_TOKEN_RE, () => newSubj);
+  // PRONOUN-ANTECEDENT PRIOR QUERY (Tier-2 playtest, 6th pass, cycle 8, deep
+  // multi-hop relation-touch chain stress-test): the prior turn can ITSELF be
+  // pronoun-shaped ("what calls it", "where is it defined" — a drill-down
+  // step that resolved "it" against the standing focus rather than naming an
+  // entity literally) — such a query has NO NAME_TOKEN at all to swap, so the
+  // rule above always declined and a perfectly natural next hop ("and Task?"
+  // meaning "and what calls Task?") fell straight to the raw grammar wall.
+  // Swap the bare pronoun itself in that case ("what calls it" -> "what calls
+  // Task") — CONTEXT_WORDS is chat.mjs's own closed antecedent-pronoun set
+  // (the same one isPronoun/the focus-reuse guard above already trust), so
+  // this only ever touches a genuine referring pronoun, never a real word
+  // that happens to contain "it"/"this"/"that" as a substring (whole-word
+  // boundaries only).
+  if (PRONOUN_IN_QUERY_RE.test(prevQ)) return prevQ.replace(PRONOUN_IN_QUERY_RE, () => newSubj);
+  return null;
 }
 
 /** STACCATO SUPERLATIVE REPEAT (Tier-2 playtest, 6th pass, cycle 8): "the biggest
