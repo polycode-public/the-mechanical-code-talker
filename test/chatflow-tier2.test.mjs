@@ -923,7 +923,21 @@ test("tier2/T22 multi-hop staccato SWAP chain, 3+ turns deep: 'what calls X' -> 
   }
 });
 
-test("tier2/T23 staccato pronoun continuation tolerates a trailing 'one'/'ones': 'also that one?' mid a relation-touch chain describes the standing focus, not the generic orientation card", async () => {
+test("tier2/T23 staccato pronoun continuation tolerates a trailing 'one'/'ones': 'also that one?' after TWO vague relation touches (no entity ever named) gets an honest no-focus nudge, not the generic orientation card", async () => {
+  // Cycle 8 correction: this used to assert "also that one?" described
+  // app/functions/d/handler.mjs as its "new standing focus" — but neither
+  // "what about imports" nor "and calls?" ever names or resolves a real
+  // entity (both are vague RELATION touches, not entity touches), so there
+  // was never a legitimate focus to describe. That module was only ever
+  // reached because ask()'s raw grammar parsed "and calls?" as kind=calls
+  // object="and" (the leaked leading connective, once "calls" matched as a
+  // bare verb) and resolveObject's substring tier matched "and" against
+  // "h-AND-ler.mjs" — a confidently WRONG focus silently installed behind a
+  // correct-looking relation-force answer (see STACCATO_LEAKED_CONNECTIVES in
+  // chat.mjs). Now that leaked-connective resolution is excluded, the chain
+  // genuinely has no antecedent, and "also that one?" correctly gets an
+  // honest nudge (nudgeAnswer's own no-focus STACCATO_PRONOUN_RE branch) —
+  // never the wall, and never a fabricated focus either.
   const { dir, turns } = await driveSession([
     "what about imports",
     "and calls?",
@@ -936,8 +950,28 @@ test("tier2/T23 staccato pronoun continuation tolerates a trailing 'one'/'ones':
     }
     assert.equal(turns[0].answer, IMPORTS_RELATION_TEXT);
     assert.equal(turns[1].answer, CALLS_RELATION_TEXT);
-    assert.match(turns[2].answer, /^app\/functions\/d\/handler\.mjs — Module \(id: mod-d\)/,
-      "'also that one?' describes the focus the relation force's own example set as its new standing focus");
+    assert.equal(turns[2].answer, 'not sure what "that" refers to yet — name something directly, e.g. "what calls <name>".',
+      "'also that one?' honestly declines — neither prior turn ever named/resolved a real entity to describe");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("tier2/T25 staccato pronoun continuation resolves correctly when a relation-chain hop precedes it AND a real focus already stands: 'what does X import' -> 'and calls?' -> 'also that one?' still describes X, unaffected by the leaked-connective fix", async () => {
+  const { dir, turns } = await driveSession([
+    "what does app/lib/b.mjs import",
+    "and calls?",
+    "also that one?",
+  ]);
+  try {
+    for (const [i, t] of turns.entries()) {
+      assert.doesNotMatch(t.answer, WALL, `turn ${i} must not hit the grammar wall`);
+      assert.doesNotMatch(t.answer, /I'm tmct — a deterministic/, `turn ${i} must not fall to the generic orientation card`);
+    }
+    assert.equal(turns[1].answer, CALLS_RELATION_TEXT, "'and calls?' still reaches the generic relation force mid-chain");
+    assert.match(turns[2].answer, /^app\/lib\/b\.mjs — Module \(id: mod-b\)/,
+      "'also that one?' describes the REAL standing focus (app/lib/b.mjs, set by turn 1) — the leaked-connective fix leaves a genuine focus untouched");
   } finally {
     clearCache();
     await rm(dir, { recursive: true, force: true });

@@ -1883,6 +1883,24 @@ function nudgeAnswer(query, focus) {
         ? `Ask about a specific module/class/function directly to compare it with ${name} (e.g. "how many imports does <name> have").`
         : `Ask a specific ranking directly, e.g. "which module has the most imports".`);
   }
+  // A bare STACCATO PRONOUN continuation ("also that one?", "and it") with NO
+  // standing focus at all (Tier-2 playtest, 6th pass, cycle 8): describeWrapperAnswer
+  // (4d, below) already resolves this shape perfectly when a real focus stands
+  // (T18) — it honestly DECLINES (null) when there is none, same discipline as
+  // every other focus-dependent lane. Before this branch, that decline fell
+  // through all the way to the generic multi-line orientation card, which names
+  // nothing about what actually went wrong. Symmetric with STACCATO_NEGATION_RE's
+  // own no-focus nudge just above ("not sure what you'd like instead… — name it
+  // directly"): a positive pronoun with nothing to point at gets the same honest,
+  // tailored decline instead of the wall. (Exposed by the STACCATO_LEAKED_CONNECTIVES
+  // fix in runAsk: "what about imports" -> "and calls?" no longer silently — and
+  // WRONGLY — installs a substring-matched module as focus, so a chain of two
+  // vague relation touches genuinely has no antecedent for a third "also that
+  // one?" to resolve — this nudge is what such a chain should always have gotten.)
+  const pronounContinuation = q.match(STACCATO_PRONOUN_RE);
+  if (pronounContinuation && !focus?.label) {
+    return `not sure what "${pronounContinuation[1].toLowerCase()}" refers to yet — name something directly, e.g. "what calls <name>".`;
+  }
   return null;
 }
 
@@ -2898,6 +2916,14 @@ const NAME_TOKEN_RE = /\b[\w-]+(?:[/.][\w-]+)+\b|\b[A-Z][A-Za-z0-9_]*\b|\b[a-z][
  *  matches and falls through unchanged. */
 const STACCATO_SWAP_RE = /^(?:and|also|so|then|now)\s+(.+?)[?.!\s]*$/i;
 
+/** The five bare connective words STACCATO_SWAP_RE/relationTermOf's own STACCATO
+ *  branch lead with. Reused (runAsk's focus-resolution guard, below) to catch
+ *  the case where ask()'s OWN raw grammar, given an unstripped "and calls?",
+ *  happens to recognize "calls" as a verb and leaves the leading "and" as
+ *  parsed.object — a leaked connective, never real content, must never be fed
+ *  to resolveEntity (see that guard's own docblock for the concrete failure). */
+const STACCATO_LEAKED_CONNECTIVES = new Set(["and", "also", "so", "then", "now"]);
+
 /** DISCOURSE CONTINUATION (CHATBENCH_006 lever 2): "what about X" carries the PRIOR
  *  turn's question shape across the turn boundary — re-asking it with X in place of
  *  the previous subject/object. Returns the reconstructed query (parsed like any
@@ -3433,7 +3459,28 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // it becomes the new focus so a follow-up "what calls it" can reuse it.
   let resolvedIds = [];
   let newFocus = focus;
-  if (graph && envelope?.parsed?.object) {
+  // STACCATO CONNECTIVE LEAKAGE (Tier-2 playtest, 6th pass, cycle 8, multi-hop
+  // relation-touch chain stress-test): "and calls?" — the bare-connective
+  // relation-chain continuation STACCATO_SWAP_RE/relationTermOf's own STACCATO
+  // branch both recognize — is handed to ask() UNSTRIPPED as askQuery. When
+  // ask()'s own raw grammar happens to recognize "calls" as a verb (VERB_TO_KIND),
+  // the leftover "and" becomes parsed.object, and resolveObject's tier-3
+  // substring match (`label.includes(tLc)`) has no minimum-length floor — a
+  // 2-3 letter connective is a near-certain accidental substring of SOME real
+  // label ("and" -> Controller.h-AND-le). The visible answer still looks fine
+  // (relationForceAnswer, later, composes the correct generic relation text
+  // over the SAME query) — but this block ran FIRST and silently rebound the
+  // FOCUS to that bogus match, so the NEXT turn's pronoun ("what tests it")
+  // resolved against the wrong entity and rendered a confidently WRONG empty
+  // ("no tests cover it") for a module that genuinely has tests. The exact
+  // same class of bug as CHATBENCH_0.7.1's "it" reuse-focus fix just below —
+  // grammar scaffolding leaked into the object slot is never real content, so
+  // (mirroring that fix's own discipline) any of the five closed connective
+  // words STACCATO_SWAP_RE recognizes is excluded here from ever being resolved
+  // as an object at all: the branch is skipped entirely, leaving the standing
+  // focus untouched for the relation force (or ordinary miss) to answer over.
+  const isLeakedConnective = STACCATO_LEAKED_CONNECTIVES.has(String(envelope?.parsed?.object || "").toLowerCase());
+  if (graph && envelope?.parsed?.object && !isLeakedConnective) {
     const obj = envelope.parsed.object;
     // A PRONOUN object ("it"/"this") was already resolved against the focus via
     // contextId — the resolved antecedent IS the focus. Re-resolving the literal
@@ -3563,6 +3610,13 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // nudgeAnswer's comparative branch ALWAYS returns a tailored nudge for this
   // shape, never null, so deferring here never strands the turn unclaimed.
   const isStaccatoComparative = STACCATO_COMPARATIVE_RE.test(String(query).trim());
+  // A bare STACCATO PRONOUN continuation ("also that one?", "and it") with NO
+  // standing focus (Tier-2 playtest, 6th pass, cycle 8) needs the SAME deferral:
+  // nudgeAnswer's own STACCATO_PRONOUN_RE-no-focus branch (just above) ALWAYS
+  // returns a tailored nudge for this exact shape, never null, so deferring
+  // here never strands the turn unclaimed — see that branch's own docblock for
+  // why the no-focus case must never reach the generic orientation card.
+  const isStaccatoPronounNoFocus = STACCATO_PRONOUN_RE.test(String(query).trim()) && !focus?.label;
   // A vague relation touch ("what about cochange", "tell me about cochange",
   // the staccato chain continuation "and cochange?") whose relation word has NO
   // bare single-word VERB_TO_KIND form of its own needs the SAME deferral as
@@ -3591,7 +3645,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       } catch { /* leave false — the ordinary path decides */ }
     }
   }
-  if (!handled && miss && !envelope?.parsed && isConversational(query) && !isWhatAboutContinuation && !isDescribePronounContinuation && !isExplainTouch && !isStaccatoNegation && !isVagueRelationTouch && !isStaccatoComparative) {
+  if (!handled && miss && !envelope?.parsed && isConversational(query) && !isWhatAboutContinuation && !isDescribePronounContinuation && !isExplainTouch && !isStaccatoNegation && !isVagueRelationTouch && !isStaccatoComparative && !isStaccatoPronounNoFocus) {
     // A conversational miss (a greeting, "what can you do", a very short non-code
     // line) gets the friendly orientation (module-aware: empty → --repo/tmct init).
     // Bug B1 (0.8.2 follow-up): this branch carries via:"template" and never
