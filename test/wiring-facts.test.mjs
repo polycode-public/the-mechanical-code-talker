@@ -318,6 +318,48 @@ test("W4: no-fact questions stay byte-unchanged honest misses", async () => {
   }
 });
 
+// ---- BUG 1 fix (2026-07-08 chat.mjs dispatch): "what is a X <predicate-phrase>"
+// filters to ONLY that relation, instead of grammar.mjs's meta-whatis
+// template's lazy tail swallowing the whole "X <predicate-phrase>" as one
+// literal (unmatchable) term. ----
+
+test("BUG 1: 'what is a X used for' filters to ONLY the UsedFor facts, not every relation", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-bug1-predicate-"));
+  try {
+    await appendFact(dir, { subject: "widget", predicate: "mgx:usedFor", object: "testing", provenance: "test:manual" });
+    await appendFact(dir, { subject: "widget", predicate: "mgx:partOf", object: "toolkit", provenance: "test:manual" });
+
+    const filtered = await runTurn("what is a widget used for", { config: CONFIG, memoryDir: dir });
+    assert.match(filtered.answer, /widget is used for testing/);
+    assert.doesNotMatch(filtered.answer, /part of/, "the partOf fact is filtered OUT, not dumped alongside");
+    assert.equal(filtered.record.via, "fact");
+    assert.equal(filtered.record.miss, false);
+
+    const undifferentiated = await runTurn("what is a widget", { config: CONFIG, memoryDir: dir });
+    assert.match(undifferentiated.answer, /widget is used for testing/);
+    assert.match(undifferentiated.answer, /widget is part of toolkit/, "the bare (no-predicate) form still lists every relation");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("BUG 1: 'what is a X <predicate>' for a known subject with NO facts under that relation is an honest, specific miss", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-bug1-predicate-empty-"));
+  try {
+    await appendFact(dir, { subject: "widget", predicate: "mgx:usedFor", object: "testing", provenance: "test:manual" });
+    const r = await runTurn("what is a widget made of", { config: CONFIG, memoryDir: dir });
+    assert.match(r.answer, /I don't have any "is made of" facts about widget/);
+    // a specific, honest "no data under this relation" — not the misleading
+    // generic vocabulary-wall miss ("widget made of" isn't a term...), and (like
+    // every other factAnswer hit) recorded as an answered turn, not a miss.
+    assert.equal(r.record.miss, false);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 // ---- PLAN_ontology-hierarchies.md §3 tracks (a)+(b) — query-time synonym
 // expansion consuming the two already-parsed-but-inert resources: ConceptNet's
 // /r/Synonym rows (gated ace:"none" in conceptnet-map.toml — never a memory

@@ -1922,6 +1922,46 @@ const FACT_PREDICATE_PHRASES = {
 };
 const factPhrase = (f) => `${f.subject} ${FACT_PREDICATE_PHRASES[f.predicate] || f.predicate} ${f.object}`;
 
+// ---- BUG 1 fix (2026-07-08): "what is a tree used for" filters to JUST the
+// UsedFor facts, instead of grammar.mjs's meta-whatis template's lazy tail
+// swallowing "tree used for" whole as one literal term (a guaranteed
+// vocabulary-lookup miss — "tree used for" names no class/predicate). Reuses
+// FACT_PREDICATE_PHRASES itself as the marker vocabulary (no second table):
+// every phrase that reads as "<copula> <marker>" (e.g. "is used for", "is
+// part of") derives a trailing marker ("used for", "part of") a "what is a
+// <subject> <marker>" question can end on, since the leading "is" is already
+// consumed by the template's own "what is" anchor. Phrases with no leading
+// is/are copula ("can", "causes", "requires", "has", …) don't fit that
+// question shape at all and are correctly excluded automatically — this is a
+// DERIVATION, not a curated subset. The single-letter "a" (from rdf:type's
+// bare "is a") is excluded explicitly: too short to anchor on without a real
+// risk of eating a genuine multi-word subject ending in "a".
+const TRAILING_PREDICATE_MARKERS = Object.entries(FACT_PREDICATE_PHRASES)
+  .map(([predicate, phrase]) => {
+    const m = /^(?:is|are)\s+(.+)$/i.exec(phrase);
+    return m ? { predicate, marker: m[1].trim().toLowerCase() } : null;
+  })
+  .filter((e) => e && e.marker.length > 1)
+  .sort((a, b) => b.marker.length - a.marker.length); // longest marker first
+
+/** Split a meta-shaped term into {subject, predicate}: "tree used for" ->
+ *  {subject:"tree", predicate:"mgx:usedFor"} when the term ends in a known
+ *  TRAILING_PREDICATE_MARKERS marker with a non-empty subject ahead of it;
+ *  otherwise {subject: term, predicate: null} (the term stands as-is — the
+ *  ordinary undifferentiated "what is a X" behavior). Pure, no I/O. */
+function splitMetaPredicate(term) {
+  const t = String(term || "").trim();
+  const lower = t.toLowerCase();
+  for (const { marker, predicate } of TRAILING_PREDICATE_MARKERS) {
+    if (lower === marker) continue; // no subject left to the left of the marker
+    if (lower.endsWith(` ${marker}`)) {
+      const subject = t.slice(0, t.length - marker.length).trim();
+      if (subject) return { subject, predicate };
+    }
+  }
+  return { subject: t, predicate: null };
+}
+
 /** One rendered fact line. An OPERATOR-asserted fact keeps the true first-person
  *  provenance ("you told me: …"). A CORPUS fact is presented as clean DATA with its
  *  source cited — NEVER "i learned: …", which over-claims and anthropomorphises
@@ -2105,9 +2145,29 @@ async function factAnswer(memoryDir, query, envelope, miss) {
     if (m) metaTerm = m[1];
   }
   if (metaTerm) {
-    const variants = factTermVariants(normFactTerm, metaTerm);
-    const hits = (await memoryFacts(memoryDir)).filter((f) => variants.has(f.subject));
-    if (!hits.length) return null;
+    // BUG 1 fix: "what is a tree used for" parses (grammar.mjs T5) to the
+    // WHOLE tail "tree used for" as one literal term — split off a trailing
+    // FACT_PREDICATE_PHRASES marker (if any) so the real subject ("tree") is
+    // matched against fact subjects, and — the actual bug — the result is
+    // FILTERED to just that one predicate (mgx:usedFor) instead of every
+    // relation about the subject undifferentiated.
+    const { subject, predicate } = splitMetaPredicate(metaTerm);
+    const variants = factTermVariants(normFactTerm, subject);
+    const subjectHits = (await memoryFacts(memoryDir)).filter((f) => variants.has(f.subject));
+    const hits = predicate ? subjectHits.filter((f) => f.predicate === predicate) : subjectHits;
+    if (!hits.length) {
+      // The subject itself is known, but not under this specific relation —
+      // an honest, specific "no" rather than falling through to the generic
+      // "isn't a term in this graph's own vocabulary" wall (which would be
+      // actively misleading here: the subject IS a known term).
+      if (predicate && subjectHits.length) {
+        return {
+          text: `I don't have any "${FACT_PREDICATE_PHRASES[predicate]}" facts about ${subject}.`,
+          replace: miss,
+        };
+      }
+      return null;
+    }
     const lines = hits.map(renderFactLine);
     const shown = lines.slice(0, FACT_ANSWER_CAP);
     const rest = lines.slice(FACT_ANSWER_CAP);
