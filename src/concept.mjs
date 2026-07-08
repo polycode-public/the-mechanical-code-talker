@@ -361,12 +361,24 @@ function buildRelationFollowups(graph, key, subjLabels, objLabels) {
 }
 
 /** Compose the three bands for a RELATION concept term, or null when it is NOT a
- *  relation-force case — the term is not a known enumerable relation, has no curated
- *  definition, or the graph has NO edges of that kind (honest miss stands, never a
- *  fabricated edge). Returns the same string-band shape composeConcept does:
+ *  relation-force case at all — the term is not a known enumerable relation, or has no
+ *  curated definition. Returns the same string-band shape composeConcept does:
  *    { definition, examples, followups, followupQueries, remainder, noun }
- *  `examples` is always non-empty when non-null (we only fire with real edges);
- *  `followups` is "" when no validated next-question exists. */
+ *  `examples` is always non-empty when non-null; `followups` is "" when no validated
+ *  next-question exists.
+ *
+ *  A known relation whose graph has ZERO edges of that kind is NOT null — it degrades
+ *  to a two-band answer (the definition + an explicit "this codebase has no X edges"
+ *  line, `examples`-shaped so the caller renders it identically). Found live (an
+ *  advisor tick on the 0.9.14 Tier-2 playtest cycle): returning null here for the
+ *  zero-edge case let the caller's OWN raw grammar attempt at the vague-touch text
+ *  ("what about exports", "tell me about reexports") stand instead — but that text was
+ *  never meant to be parsed as an object search, so on a graph with no reexports edges
+ *  (the realistic case for most repos, e.g. examples/mini-webapp) it fell through to a
+ *  garbled `no module matching "about"/"exports" found`, not an honest miss. A relation
+ *  kind the graph has NEVER SEEN AT ALL (relationKind returns nothing in RELATION_KINDS
+ *  for this graph's shape) still degrades the same way — the definition is always
+ *  worth stating; only the fabricated edge is refused. */
 export function composeRelation(graph, relTerm, { definition = null } = {}) {
   const key = RELATION_TERM[String(relTerm || "").toLowerCase()];
   if (!key || !definition) return null;
@@ -374,13 +386,28 @@ export function composeRelation(graph, relTerm, { definition = null } = {}) {
   const groups = (graph && Array.isArray(graph.relations) ? graph.relations : [])
     .filter((g) => kinds.includes(relationKind(g)));
   const edges = groups.flatMap((g) => (Array.isArray(g.edges) ? g.edges : []));
-  if (!edges.length) return null; // no edges of this kind → honest miss stands
-  const total = groups.reduce((s, g) => s + (Number(g.count) || (g.edges || []).length), 0);
-
   const { verb, edgeNoun } = RELATION_RENDER[key] || { verb: key, edgeNoun: key };
 
-  // BAND 1 — the fact (the relation defined as a verb/relationship).
+  // BAND 1 — the fact (the relation defined as a verb/relationship). Stated
+  // regardless of whether the graph has any edges of this kind — only the
+  // fabricated EXAMPLE is refused when there are none.
   const bandDefinition = leadSentence(definition);
+
+  if (!edges.length) {
+    // No fabricated edge, but an honest, ON-TOPIC miss — never the caller's raw,
+    // unrelated object-search text.
+    return {
+      definition: bandDefinition,
+      examples: `This codebase has no ${edgeNoun} edges in the index.`,
+      followups: "",
+      followupQueries: [],
+      relation: key,
+      remainder: [],
+      noun: `${edgeNoun} edges`,
+      empty: true,
+    };
+  }
+  const total = groups.reduce((s, g) => s + (Number(g.count) || (g.edges || []).length), 0);
 
   // BAND 2 — the example edges, rendered as English sentences with a count. The
   // first MAX_EDGE_EXAMPLES are shown; the remainder is held for "more" pagination.

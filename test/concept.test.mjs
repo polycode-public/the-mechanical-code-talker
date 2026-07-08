@@ -243,19 +243,32 @@ test("composeRelation: gerund/synonym terms collapse to the same edge concept", 
   assert.deepEqual(a.examples, b.examples, "'importing' enumerates the same edges as 'imports'");
 });
 
-test("composeRelation: declines (null) for an unknown relation, no definition, or NO edges of that kind", async () => {
+test("composeRelation: declines (null) for an unknown relation or no definition; degrades (not null) for a KNOWN relation with NO edges of that kind", async () => {
   const graph = await fixtureGraph();
   assert.equal(RELATION_TERM.frobnicate, undefined);
   assert.equal(composeRelation(graph, "frobnicate", { definition: "x." }), null, "unknown relation → decline");
   assert.equal(composeRelation(graph, "imports", { definition: null }), null, "no definition → decline");
-  // a graph that has only import edges → asking for 'calls' finds no edges → honest miss.
+  // a graph that has only import edges → asking for 'calls' finds no edges of that kind.
+  // This is NOT the same as an unrecognized term: composeRelation must still degrade to
+  // an honest, ON-TOPIC two-band answer (definition + "no X edges in the index"), never
+  // null — null here would let the caller's raw grammar attempt at the vague-touch text
+  // ("what about calls") fall through to an unrelated, garbled object search (found live:
+  // an advisor tick on the 0.9.14 Tier-2 playtest cycle, reexports on examples/mini-webapp,
+  // which has zero reexports edges — the realistic case for most repos).
   const importsOnly = parseEntities({
     individuals: [],
     objectProperties: [{ predicate: "imports", prop: "mgx:importsNamespace", count: 1,
       examples: [{ subject: "a.mjs", object: "b.mjs", subjectLabel: "a.mjs", objectLabel: "b.mjs" }] }],
   });
-  assert.equal(composeRelation(importsOnly, "calls", { definition: "a call." }), null,
-    "no edges of the kind → no relation force (never a fabricated edge)");
+  const zeroEdges = composeRelation(importsOnly, "calls", { definition: "a call." });
+  assert.ok(zeroEdges, "a known relation with no edges of that kind still composes (never null)");
+  assert.equal(zeroEdges.empty, true, "flagged as the zero-edge degrade, not a real edge set");
+  assert.equal(zeroEdges.definition, "a call.");
+  assert.equal(zeroEdges.examples, "This codebase has no call edges in the index.",
+    "an honest, on-topic miss — never a fabricated edge, never the caller's unrelated object-search text");
+  assert.equal(zeroEdges.followups, "", "no edges to seed a validated follow-up from");
+  assert.deepEqual(zeroEdges.followupQueries, []);
+  assert.deepEqual(zeroEdges.remainder, []);
   assert.ok(composeRelation(importsOnly, "imports", { definition: IMPORTS_DEF }), "the present kind still composes");
 });
 
