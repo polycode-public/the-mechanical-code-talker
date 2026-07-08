@@ -12,7 +12,8 @@ import { fileURLToPath } from "node:url";
 import { interpret, STRATEGIES, normalizeInput, runStrategiesSync } from "../src/interpret/pipeline.mjs";
 import { mergeStrategyResults, alternateLines, sameParse } from "../src/interpret/merge.mjs";
 import {
-  applyPreambleFrames, applySubordinationFrames, applyConditionalFrames, COUNTERFACTUAL_RE,
+  applyPreambleFrames, applySubordinationFrames, applySelfCorrectionFrames, applyConditionalFrames,
+  COUNTERFACTUAL_RE, normalizeQuery,
 } from "../src/interpret/normalize.mjs";
 import { stripNoise } from "../src/interpret/strategies/noise-strip.mjs";
 import { parseQuery, ask } from "../src/ask.mjs";
@@ -577,6 +578,60 @@ test("subordination: the closed conjunction family (although/though/while/becaus
 test("subordination: a BARE clause (no delimiting comma) is untouched, and ordinary 'since' content stays intact", () => {
   assert.equal(applySubordinationFrames("since we're refactoring"), "since we're refactoring"); // empty remainder → no strip
   assert.equal(applySubordinationFrames("modules changed since last week"), "modules changed since last week");
+});
+
+// ---- self-correction (found live, playtest sprint round 5, HANDOVER item 12.1): a
+// mid-sentence false start ("what -- sorry, who inherits from Record") used to break
+// term resolution — "couldn't resolve one of the terms in this question" — because
+// the abandoned fragment/dash debris fed straight into term extraction. Same closed-
+// frame, delimiter-anchored strip discipline as the subordination frames above. ----
+
+test("self-correction: a false-start fragment before 'sorry,' strips to the bare question and answers identically", () => {
+  const graph = richGraph();
+  assert.equal(
+    applySelfCorrectionFrames("what -- sorry, which classes inherit from Base"),
+    "which classes inherit from Base",
+  );
+  assert.equal(normalizeQuery("what -- sorry, which classes inherit from Base"), "which classes inherit from Base");
+  const r = ask(graph, "what -- sorry, which classes inherit from Base");
+  const clean = ask(graph, "which classes inherit from Base");
+  assert.equal(r.content, clean.content);
+  assert.equal(r.tmct_ask.miss, false);
+});
+
+test("self-correction: the restarted question-word can differ from the abandoned one ('who -- sorry, what …')", () => {
+  assert.equal(
+    applySelfCorrectionFrames("who -- sorry, what inherits from Base"),
+    "what inherits from Base",
+  );
+});
+
+test("self-correction: a multi-word false start + 'i mean,' delimiter also strips", () => {
+  assert.equal(
+    applySelfCorrectionFrames("what is a class -- i mean, what is a module"),
+    "what is a module",
+  );
+});
+
+test("self-correction: delimiter variants — em-dash, no leading dash at all, trailing colon", () => {
+  assert.equal(applySelfCorrectionFrames("what — sorry, who touched Base"), "who touched Base");
+  assert.equal(applySelfCorrectionFrames("what, sorry, who touched Base"), "who touched Base");
+  assert.equal(applySelfCorrectionFrames("what -- i mean: who touched Base"), "who touched Base");
+});
+
+test("self-correction: a stacked restart peels to the FINAL restart", () => {
+  assert.equal(
+    applySelfCorrectionFrames("what -- sorry, who -- sorry, what inherits from Base"),
+    "what inherits from Base",
+  );
+});
+
+test("self-correction: ordinary text with no restart marker is untouched — a bare em-dash aside is NOT mistaken for a restart", () => {
+  assert.equal(applySelfCorrectionFrames("which modules import src/logging.mjs"), "which modules import src/logging.mjs");
+  assert.equal(
+    applySelfCorrectionFrames("modules — like Base — that inherit from Widget"),
+    "modules — like Base — that inherit from Widget",
+  );
 });
 
 test("conditional (qualifier composition): 'if a module imports X, is it tested' compiles to the working boolean-qualifier shape and answers correctly", () => {

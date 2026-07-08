@@ -192,6 +192,36 @@ export function applySubordinationFrames(text) {
   return q;
 }
 
+// ---- SELF-CORRECTION (found live, playtest sprint round 5, HANDOVER item 12.1): a
+// mid-sentence false start, abandoned and restarted — "what -- sorry, who inherits
+// from Record", "what is a class -- i mean, what is a module". Same species as the
+// preamble/subordination frames above (closed, delimiter-anchored, first-match-wins,
+// unmatched text passes through byte-unchanged), sized for a false-start clause
+// instead of a leading wrapper clause. The delimiter is the marker phrase "sorry" or
+// "i mean" — REQUIRED, with an optional interruption dash ("--"/"—"/"-") in front of
+// it and a required trailing separator (dash/comma/colon) after it. Deliberately does
+// NOT match on a bare dash alone with no marker word: an ordinary em-dash aside
+// ("modules — like Base — that inherit from X") is common prose, not a restart, and
+// treating every dash as a delimiter would be a guess this file's discipline forbids
+// everywhere else. ----
+const SELF_CORRECTION_RE =
+  /^.+?(?:\s*(?:--|—|-)\s*)?\b(?:sorry|i\s+mean)\b\s*(?:--|—|-|,|:)\s*(.+)$/i;
+
+/** Apply the self-correction strip to a small fixpoint (a stacked restart —
+ *  "what -- sorry, who -- sorry, what inherits from Record" — peels to the final
+ *  restart). Pure; unmatched text passes through byte-unchanged. */
+export function applySelfCorrectionFrames(text) {
+  let q = String(text || "");
+  for (let pass = 0; pass < 3; pass++) {
+    const m = q.match(SELF_CORRECTION_RE);
+    if (!m) break;
+    const next = m[1].trim();
+    if (!next || next === q) break;
+    q = next;
+  }
+  return q;
+}
+
 /** relation-verb (bare 3rd-person singular, the RELATIONS table's own primary
  *  form) -> gerund, the shape the compositional grammar's proven
  *  "<kind> <gerund> <object> and <qualifier>" pattern needs. A small, closed,
@@ -274,6 +304,12 @@ export function normalizeQuery(text) {
   // bridge) — AFTER the correction tables (a repaired "give me"/"show me" still
   // feeds the bridge) but BEFORE the filler strip erases their anchor words.
   q = applyPreambleFrames(q);
+  // self-correction (strip an abandoned false-start clause) BEFORE subordination/
+  // conditional: a false start can itself look like the OPENING of a subordination
+  // clause ("since -- sorry, which modules import X" — "since" would otherwise be
+  // read as SUBORDINATION_FRAMES_RE's own anchor), so peeling the restart first
+  // means the real remainder is all either frame ever sees.
+  q = applySelfCorrectionFrames(q);
   // subordination (strip a leading framing clause) THEN conditional (compile
   // "if …" to an existing working shape) — subordination first so a stacked
   // "since we're refactoring, if a module imports X, is it tested" peels its
