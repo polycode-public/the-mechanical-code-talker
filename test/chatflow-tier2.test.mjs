@@ -1324,3 +1324,64 @@ test("tier2/T36 existence recognizer: 'is there a class in <nonexistent module>'
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+// ---- SKILL_CHAT_PLAYTEST verification pass (this session): Seonix Batch 3's commit-
+// temporal + cochange work (HANDOVER item 3b), confirmed live end-to-end through a real
+// chat session against the SHIPPED examples/mini-webapp graph (real dated commits + a
+// real change-coupling edge) — the entities.fixture.json fixture above has neither, so
+// this uses the SAME `ephemeral: true` mini-webapp pattern test/chatflow-tier1-single-
+// touch.test.mjs and test/chatflow-tier4.test.mjs already rely on, not repoWithFixture. ----
+
+const MINIWEBAPP = new URL("../examples/mini-webapp", import.meta.url).pathname;
+
+async function driveSessionMiniWebapp(queries) {
+  clearCache();
+  const s = await createSession({ repoPath: MINIWEBAPP, env: {}, ephemeral: true });
+  const turns = [];
+  try {
+    for (const q of queries) turns.push(stripGoalLine(await s.turn(q)));
+  } finally {
+    await s.close();
+  }
+  return turns;
+}
+
+test("tier2/recent-commits drill-down: 'recent commits' -> 'what did the last commit touch' -> 'what did it touch' -> 'when did it change' (temporal substitution + anaphora carry-through)", async () => {
+  const queries = [
+    "recent commits",
+    "what did the last commit touch",
+    "what did it touch",
+    "when did it change",
+  ];
+  const turns = await driveSessionMiniWebapp(queries);
+  for (const [i, t] of turns.entries()) {
+    assert.doesNotMatch(t.answer, WALL, `turn ${i} "${queries[i]}" must not dead-end`);
+  }
+  // "recent commits" renders a real dated list, not a false find-miss
+  assert.match(turns[0].answer, /^8 recent commit\(s\): /);
+  assert.match(turns[0].answer, /1b2c3d4e5f60 \(2026-05-24\) — refactor store persistence API/);
+  // "the last commit" is substituted for the actual newest Commit individual BEFORE parsing
+  assert.equal(turns[1].answer, "commit 1b2c3d4e5f60 touched modules src/core/store.mjs and src/core/model.mjs.");
+  // "it" carries the focus the previous turn set (the same commit, named explicitly)
+  assert.equal(turns[2].answer, turns[1].answer, "'what did it touch' repeats the SAME real answer via anaphora, not a fresh miss");
+  assert.equal(turns[3].answer, 'commit 1b2c3d4e5f60 is dated 2026-05-24 ("refactor store persistence API").');
+});
+
+test("tier2/cochange natural follow-up: 'what usually changes with X' -> 'what about <the surfaced file>' -> 'where is it defined'", async () => {
+  const queries = [
+    "what usually changes with src/core/store.mjs",
+    "what about model.mjs",
+    "where is it defined",
+  ];
+  const turns = await driveSessionMiniWebapp(queries);
+  for (const [i, t] of turns.entries()) {
+    assert.doesNotMatch(t.answer, WALL, `turn ${i} "${queries[i]}" must not dead-end`);
+  }
+  assert.equal(turns[0].answer, "src/core/model.mjs.", "store.mjs's real change-coupling partner");
+  // naming the newly-surfaced file swaps the query subject and gets the RECIPROCAL real
+  // answer (model.mjs's own change-coupling partner is store.mjs) — genuine new information,
+  // not a bare repeat of turn 0.
+  assert.equal(turns[1].answer, "src/core/store.mjs.");
+  // "it" resolves to the entity NAMED in the prior query (model.mjs), not the answer it named
+  assert.match(turns[2].answer, /^src\/core\/model\.mjs is a module/);
+});

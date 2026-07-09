@@ -14,8 +14,18 @@ the file has been deleted.
 
 ## Where we are now (2026-07-09)
 
-`npm test` green (**1299**, up from 1258). **v1.0.7, pushed** (0.9.11 → 1.0.0 → 1.0.7 across this
+`npm test` green (**1303**, up from 1258). **v1.0.7, pushed** (0.9.11 → 1.0.0 → 1.0.7 across this
 session — see `HANDOVER.md` for the exact release chain and file:line detail).
+
+- **Playtest-freeze verification pass (session close-out).** Manually chat-tested this session's own
+  routing/recognition fixes (Tiers 0/1/2/4 + operator bugs A-F) via the real piped CLI against real
+  data (`examples/mini-webapp`'s commit history, cochange edge, and Controller/TaskController
+  inheritance pair), confirmed each flows to a useful outcome with zero dead-ends, and froze 4 new
+  regression tests across `test/chatflow-tier1-single-touch.test.mjs`,
+  `test/chatflow-tier2.test.mjs` (×2), and `test/chatflow-tier4.test.mjs` (**1299 → 1303**). One
+  genuine new dead-end surfaced (a `resolveObject` tier-4 prose-token over-match — "whats logging
+  for" resolves to an unrelated commit whose message happens to contain "logging") and is recorded,
+  unfixed, as `HANDOVER.md` open follow-up item 9 for a future session.
 
 ### Now: shipped this session
 

@@ -392,6 +392,50 @@ the moment of actually pushing a release, as part of that same push.
    on judged surfaces again (onboarding/identity responses, teach-lane wording, new relation
    phrasings), so the next judged pass needs to re-derive its stale set from answer-text diffs,
    not assume anything carries over from the 0.8.2-era baseline still on record.
+9. **A `resolveObject` tier-4 prose-token over-match**, found live during this session's own
+   playtest-freeze verification pass (not fixed — flagged per `SKILL_CHAT_PLAYTEST.md`'s discipline
+   of verifying-and-freezing only, not fresh dead-end hunting): `moduleOrientLane`'s purpose
+   phrasing ("whats X for") calls `resolveEntity` → `resolveObject`, which resolves ANY term —
+   including one that only matches via tier-4 PROSE-TOKEN search against a Commit's own message
+   text, with no gate requiring the query actually be commit-flavored. Live repro: "whats logging
+   for" against `examples/mini-webapp` resolves to commit `e5f6a1b2c3d4` (whose message is "leveled
+   logging") and answers with real-looking but totally unintended commit info, instead of an honest
+   miss/nudge toward the real intended module (`src/lib/logger.mjs`, labeled "logger" not "logging")
+   — a confidently-WRONG answer in the same family as this session's own resolveObject tier-3
+   substring-floor fixes, but at a different tier (prose match, not containment) and not covered by
+   any fix landed this session. A future session should add a length/quality floor or a kind-gate to
+   the tier-4 prose match (or restrict `moduleOrientLane`'s own `resolveEntity` call to Module/Class/
+   Function individuals only, excluding Commit) before this phrasing can be trusted generally; the
+   working purpose-phrasing case is frozen instead with a real module path
+   (`test/chatflow-tier1-single-touch.test.mjs`), not the bare word that triggers this gap.
+
+### Playtest-freeze verification pass (2026-07-09, same session)
+
+Per this session's own closing instruction: manually chat-tested (piped CLI, `mktemp -d` + exact-path
+cleanup throughout, never `chat --repo` on the committed `examples/mini-webapp` fixture directly) the
+Tier 0/1/2/4 fixes above plus operator bugs A-F, read every transcript top to bottom, and froze every
+conversation that flowed clean as a new regression test:
+- `test/chatflow-tier1-single-touch.test.mjs`: **"tier1/Seonix Batch 2+3 single-touch spot-check"** —
+  bare no-article "what is Commit", purpose phrasing ("whats X for/about"), the reverse
+  superclass/subclass verb pair, and the "in this graph" scope-filler trim, all against real
+  mini-webapp data.
+- `test/chatflow-tier2.test.mjs`: **"tier2/recent-commits drill-down"** ("recent commits" → "what did
+  the last commit touch" → "what did it touch" → "when did it change" — temporal substitution +
+  anaphora carry-through) and **"tier2/cochange natural follow-up"** ("what usually changes with X" →
+  "what about model.mjs" → "where is it defined") — both against real mini-webapp commit/cochange
+  data (the file's existing `entities.fixture.json`-based tests have neither).
+- `test/chatflow-tier4.test.mjs`: **"tier4/membership inheritance walk (item 6) against real
+  mini-webapp data"** — "public methods of TaskController" → "which class defines handle" → "what
+  about UserController", confirming item 6's inheritance-disclosure fix live against the shipped
+  example (the existing `test/ask-cascade.test.mjs` coverage only ever exercised a synthetic
+  inline-built graph).
+Bugs A-F (had/have conjugation, general-verb query retrieval, the no-graph count message, the memory
+summary/subtype-walk lanes, and the indirect-request wrapper stripping + command Goal-line) were all
+spot-checked live and confirmed flowing — no new tests needed there (already covered by the unit
+tests landed alongside each bug this session). One genuine new dead-end surfaced and is recorded as
+item 9 above, left unfixed per this pass's own verify-only scope. `npm test`: 1303 passing (up from
+1299), 0 failing; `test/showcase.test.mjs` unaffected; CLI smoke test (`printf 'hi\n/exit\n' | node
+bin/tmct.mjs`) exits 0.
 
 ## Discipline (unchanged)
 

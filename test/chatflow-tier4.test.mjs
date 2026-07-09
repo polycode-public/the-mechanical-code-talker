@@ -218,3 +218,26 @@ test("tier4/discourse chain over a plain listing: concept -> 'which of those are
   assert.match(turns[1].answer, /Task, User and Project/);
   assert.match(turns[2].answer, /^\d+ classes?\./);
 });
+
+// SKILL_CHAT_PLAYTEST verification pass (this session): HANDOVER item 6's membership
+// inheritance walk, confirmed live against the REAL shipped fixture (test/ask-cascade.test.mjs
+// already pins the mechanism on a synthetic Controller/TaskController graph built inline;
+// this drives the SAME shape end-to-end through a real chat session, against mini-webapp's
+// own real Controller/TaskController inheritance pair — TaskController defines no methods of
+// its own and inherits from Controller, which defines the single public method `handle`).
+test("tier4/membership inheritance walk (item 6) against real mini-webapp data: 'public methods of TaskController' -> 'which class defines handle' -> 'what about UserController'", async () => {
+  const queries = [
+    "public methods of TaskController",
+    "which class defines handle",
+    "what about UserController",
+  ];
+  const turns = await driveSession(queries);
+  assertAllFlow(turns, queries);
+  // the inherited answer is DISCLOSED out loud, never presented as TaskController's own
+  assert.match(turns[0].answer, /^TaskController has no own methods — inherited from Controller: Controller\.handle\(\)\./);
+  assert.match(turns[1].answer, /^in src\/handlers\/base\.mjs there is Controller\./);
+  // a natural next step names UserController directly — it shares the SAME inherits-from-
+  // Controller shape, surfaced via the describe force (a genuinely useful, non-wall outcome)
+  assert.match(turns[2].answer, /^UserController — Class/);
+  assert.match(turns[2].answer, /inherits \[seon:hasSuperType\] \(1\) → Controller/);
+});

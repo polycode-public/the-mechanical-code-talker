@@ -152,3 +152,30 @@ test("tier1/qualifier-check sanity: a NAMED entity with no anaphora at all also 
   assert.equal(turns[1].answer.startsWith("No — Task.title is not private."), true);
   assert.equal(turns[2].answer.startsWith("No — Task.title is not exported."), true);
 });
+
+// SKILL_CHAT_PLAYTEST verification pass (this session): Seonix Batch 2/3 single-touch
+// spot-checks, each its own independent turn (no drill-down needed — every one of these
+// IS the single touch): bare no-article "what is Commit" (Batch 2 Fix 1a, restricted to
+// ENTITY_TO_TYPE's closed vocabulary), the purpose-phrasing sibling of "what does X do"
+// (Batch 3a MODULE_PURPOSE_RE, "whats X for"/"whats X about"), the reverse "superclass of"
+// verb family (Batch 2 Fix 1b, subject/object swapped at parse time so both directions
+// agree), and TRAILING_SCOPE_FILLER trimming a "what is a <noun> in this graph" tail
+// (Batch 2 Fix 1c).
+test("tier1/Seonix Batch 2+3 single-touch spot-check: bare 'what is Commit', purpose phrasing, reverse superclass verb, and scope-filler trim all flow", async () => {
+  const queries = [
+    "what is Commit",
+    "whats src/lib/logger.mjs for",
+    "whats Task about",
+    "is Record a superclass of Task",
+    "is Task a subclass of Record",
+    "what is a Module in this graph",
+  ];
+  const turns = await driveSession(queries);
+  assertAllFlow(turns, queries);
+  assert.match(turns[0].answer, /^A commit is a recorded snapshot/, "bare no-article 'what is Commit' direct-hits the meta definition");
+  assert.equal(turns[1].answer, "src/lib/logger.mjs is a module — defines 3 (Logger, Logger.info, createLogger); no recorded tests. /describe src/lib/logger.mjs for the full breakdown.");
+  assert.equal(turns[2].answer, "Task is a class — no recorded tests. /describe Task for the full breakdown.");
+  assert.match(turns[3].answer, /^Yes — inherits edge from Task to Record\.?/, "'is Record a superclass of Task' swaps subject/object and agrees with the direct form");
+  assert.match(turns[4].answer, /^Yes — inherits edge from Task to Record\.?/, "'is Task a subclass of Record' agrees with the reverse phrasing above");
+  assert.match(turns[5].answer, /^A module is a source file/, "the trailing 'in this graph' scope filler is trimmed, reaching the same meta definition as bare 'what is a Module'");
+});
