@@ -18,6 +18,14 @@ playtest loop (deferred above) ran to completion — 5 cycles, `npm test` now **
 pushed; version still 1.0.9 locally, unchanged. See "The dialogue-flow playtest loop" section's
 Tier 5 entry and "Open follow-ups" item 1, both updated in place below.*
 
+*Final addendum (same 2026-07-09, the last dispatch of this session): Tier 6 (the messy real user)
+— the LAST rung of the SKILL_CHAT_PLAYTEST.md ladder — also ran to completion, 5 cycles (the cap),
+genuinely clean at the end: 23 routing/recognition fixes + 1 important correctness bug (a real
+structural answer for "is X tested" silently discarded in favor of a fabricated "I don't know that
+yet"). `npm test` now **1345** passing. Not pushed; version still 1.0.9 locally, unchanged. **The
+full tier ladder (0-6) is now complete.** See "The dialogue-flow playtest loop" section's Tier 6
+entry and "Open follow-ups" item 1, both updated in place below.*
+
 ### The trigger and the fix: 0.9.12 → 1.0.0
 
 Operator ran a real `npm install` + bare `tmct chat` in a fresh directory and got an apology for
@@ -138,8 +146,78 @@ preference for templates/pattern-matching over general rules where the fix allow
       above.
   `test/chatflow-tier5.test.mjs` (new, 21 cases) freezes every fixed conversation. `npm test`:
   1328 passing (from the 1307 baseline at dispatch start), 0 failing.
-- **Tier 6 (the messy real user) — not yet run.** Next session's starting point for the playtest
-  loop, now that Tier 5 is confirmed clean.
+- **Tier 6 (the messy real user) — DONE, 5 cycles (the cap), genuinely clean at the end.** A
+  dedicated dispatch, run alongside §3b (the surface-variation axis) per that section's own
+  instruction to treat them as one pass. This is the LAST rung of the SKILL_CHAT_PLAYTEST.md
+  ladder — Tiers 0-6 are now all complete. Commits `91d1164`, `6ac8549`, `460d188`, `3963781`,
+  `d9b9150`. Ran the full 5-cycle cap (every cycle found real fixable dead-ends, so it never hit
+  the "two clean cycles in a row" early stop) — 23 routing/recognition fixes plus one genuinely
+  important correctness bug, spread across `src/chat.mjs`, `src/ask.mjs`, `src/ask-vocab.mjs`, and
+  `src/interpret/normalize.mjs`:
+    - **Cycle 1** (9 fixes): a GRAIN-WORD resolution ambiguity — "the logger module"/"describe the
+      Task class" tied a real Module against a same-stem Class/Method sharing its name in
+      `resolveObject`'s word-overlap tier, silently declining the whole turn — fixed centrally with
+      a leading-article strip + trailing-grain-word class-narrowed retry (safe by construction: a
+      narrowed pool can only reduce ambiguity). A first attempt at the `/describe` command's own
+      rescue routed free text through the general `resolveObject` cascade instead and introduced a
+      REAL regression (caught by `test/sessions.test.mjs`'s own transcript guard: "tell me a joke"
+      falsely tier-3-matched a fixture module literally named "a.mjs" off the shared token "a"
+      alone) — reverted for a narrower, grain-word-gated rescue. Also: `moduleOrientLane` never ran
+      `correctMisspellings`/`applyPreambleFrames` ("waht dose the logger modul do", "scratch that,
+      what does X do"); a lane-scoped "abut"->"about" typo fix; three vague-opener
+      `CAPABILITY_PHRASES` additions ("what can you tell me about this repo", etc.); five new
+      preamble frames in `interpret/normalize.mjs` (topic-switch/self-interruption, acknowledgement,
+      hedge-adverb, a floating "if it's not too much trouble" parenthetical, a bare "tell me
+      `<question>`" bridge); `describeWrapperAnswer` now runs `applyPreambleFrames` first; a
+      subject-first "what X does" word order.
+    - **Cycle 2** (8 fixes): more dialect/register preamble gaps ("yeah nah", "howdy pardner" — a
+      vocative right after a greeting word), "ta for that" missing from `THANKS`, three more
+      vague-opener idioms, `CAPABILITY_PHRASES` not preamble-normalized, a "hwo"->"how" typo, and —
+      the deepest one — `teachLane` never ran `applyPreambleFrames` at all, so ANY closed
+      discourse-marker preamble ahead of a teach sentence corrupted its own `TEACH_RE` match
+      (verified safe against the full suite before landing). One near-miss caught and reverted
+      live: widening `SELF_CORRECTION_RE`'s trailing delimiter to be optional (to catch an
+      object-only restart with no comma) turned an acceptable "did you mean X or Y?" ambiguity
+      nudge into a worse hard wall — reverted, documented as a named ceiling in the regex's own
+      docblock.
+    - **Cycle 3** (4 fixes): bare "inherits"/"inherit" (no "from") had NO entry in
+      `RELATIONS.inherits.verbs` at all — its sibling verb "extends"/"extend" already worked bare,
+      but the arguably MORE common everyday phrasing didn't, so "TaskController inherits what"
+      walled outright; fixed additively (`VERB_ALT`'s longest-first sort keeps "... from" winning
+      when it's present). Two more vague-opener idioms ("what've we got here", "just poking around,
+      X" — a new `BROWSING_PREAMBLE_RE`). One genuine ceiling named: a REDUNDANT trailing
+      type-word after "what" ("the Task class extends what CLASS") mis-parses the type word itself
+      as a literal object name — a real grammar feature (typed WH-placeholders), not a routing fix.
+    - **Cycle 4** (2 fixes, one of them the most important of the whole dispatch): CRITICAL — "is
+      the logger module tested"/"is logger tested" answered a confident "I don't know anything
+      about 'logger' yet — teach me directly" even though `ask()`'s own structural grammar had
+      ALREADY correctly parsed and traversed this as a real "tests" reverse-relation question and
+      produced an honest answer ("No tests cover logger", exactly what "what tests cover logger"
+      already answers). Root cause: `IS_ADJECTIVE_YESNO_RE`'s own unrestricted backtracking (a
+      recurring risk this file's docblocks already flag) ALSO matches "tested" as a free-form
+      property adjective, and `factReadBack`'s three "unknown property" branches fired
+      unconditionally, discarding a real structural answer whenever one existed — but
+      "tested"/"covered" (`PASSIVE_PARTICIPLE_TO_KIND`) have genuine graph-computable meaning,
+      unlike "deprecated"/"fragile" (the branches' ORIGINAL Tier-5 target, which has none). Fixed by
+      gating all three branches on `!envelope?.parsed`; verified the ORIGINAL Tier-5 teach-offer
+      behavior is untouched, plus a new targeted test for the "stale unrelated fact" case (a
+      subject known only under a DIFFERENT property must not hide the real structural answer for
+      "tested" either). Also: "no worries, X" added to `ACK_PREAMBLE_RE`.
+    - **Cycle 5** (2 fixes, the cap) — found via a deliberately adversarial STACKED-marker
+      conversation, the same discipline Tier 5's own critical cycle-5 bug used: "aight" (further-
+      dropped "alright") had no `ACK_PREAMBLE_RE` entry; a leading connective ("so") SANDWICHED
+      between two other discourse markers blocked the whole fixpoint loop (the remainder right
+      after "so" wasn't itself a question yet, so `LEADING_CONNECTIVE_RE`'s interrogative-only gate
+      rejected the strip) — widened the gate to also accept a remainder matching one of the file's
+      OTHER closed preamble frames. Spot-checked (adversarial, per this tier's own collision-risk
+      warning) the cycle-1 grain-word fix and the cycle-4 structural-defers-to-memory guard against
+      several fresh entity pairs sharing a component/stem — no cross-subject collisions found. Two
+      more conversations tried heavier, more exotic hedge stacks ("honestly not sure but is store
+      tested tho", "innit though, ...") and found nothing further worth fixing at this file's own
+      closed-set-addition discipline — named as narrower ceilings, not forced.
+  `test/chatflow-tier6.test.mjs` (new, 17 cases) freezes every fixed conversation. `npm test`:
+  1345 passing (from the 1328 baseline at dispatch start), 0 failing. Genuinely clean at the end —
+  the full SKILL_CHAT_PLAYTEST.md tier ladder (0 through 6) is now complete for this project.
 
 Two real process incidents fed back into `SKILL_CHAT_PLAYTEST.md` itself: a cycle's cleanup step
 ran `rm -rf /tmp/pt-*` (a wildcard glob in *shared* `/tmp`, flagged by the harness's own safety
@@ -329,8 +407,12 @@ the moment of actually pushing a release, as part of that same push.
 1. **DONE: Tier 5 (teach + recall + reasoning in dialogue)** — run as its own dedicated dispatch,
    5 cycles (the cap), genuinely clean at the end (see "The dialogue-flow playtest loop" section
    above for the full per-cycle detail — 12 routing fixes + 1 important correctness bug, fabricated
-   cross-subject answer, all in `src/chat.mjs`). **Tier 6 (the messy real user) — still not yet
-   run**, now this dispatch's own next starting point.
+   cross-subject answer, all in `src/chat.mjs`). **DONE: Tier 6 (the messy real user)** — also run
+   to the 5-cycle cap, genuinely clean at the end (23 routing fixes + 1 important correctness bug —
+   a real structural answer silently discarded for "is X tested" — see the same section above for
+   full per-cycle detail). **The full SKILL_CHAT_PLAYTEST.md tier ladder (0-6) is now complete for
+   this project** — no further playtest tier is queued; any FUTURE playtest work would be a fresh
+   ratchet pass re-testing an already-clean tier (regression-hunting), not a new rung.
 2. **DONE: Seonix Batch 2 — cheap, high-confidence routing gaps.** All three landed. (a)
    `grammar.mjs`'s T5 ("meta-whatis") article is now optional, but the bare (no-article) form is
    restricted to `ENTITY_TO_TYPE`'s closed vocabulary (`what is Commit` now parses; the two pinned

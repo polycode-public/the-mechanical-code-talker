@@ -14,9 +14,13 @@ the file has been deleted.
 
 ## Where we are now (2026-07-09)
 
-`npm test` green (**1328**, up from 1258). **v1.0.7, pushed** (0.9.11 → 1.0.0 → 1.0.7 across an
+`npm test` green (**1345**, up from 1258). **v1.0.7, pushed** (0.9.11 → 1.0.0 → 1.0.7 across an
 earlier session — see `HANDOVER.md` for the exact release chain and file:line detail); not pushed
 again since (version stays at 1.0.9 locally, per the operator's own bump-at-push-time policy).
+
+**The full `SKILL_CHAT_PLAYTEST.md` dialogue-flow tier ladder (0 through 6) is now complete** — see
+the Tier 5/Tier 6 bullets just below and `HANDOVER.md`'s "The dialogue-flow playtest loop" section
+for full per-cycle detail.
 
 - **Tier 5 of the dialogue-flow playtest loop (teach + recall + reasoning in dialogue) — DONE, 5
   cycles (the cap), genuinely clean at the end.** 12 routing/recognition fixes across teach and
@@ -27,8 +31,21 @@ again since (version stays at 1.0.9 locally, per the operator's own bump-at-push
   final cycle: a FABRICATED cross-subject answer ("is the validate module deprecated" confidently
   answering off an unrelated "logger module" fact, via an over-loose word-overlap fallback with no
   exclusion for common code-noun suffixes like "module"). New `test/chatflow-tier5.test.mjs` (21
-  cases). **1307 → 1328.** Tier 6 (the messy real user) is next, still not yet run. Full detail:
-  `HANDOVER.md`'s "The dialogue-flow playtest loop" section, Tier 5 entry.
+  cases). **1307 → 1328.** Full detail: `HANDOVER.md`'s "The dialogue-flow playtest loop" section,
+  Tier 5 entry.
+- **Tier 6 of the dialogue-flow playtest loop (the messy real user) — DONE, 5 cycles (the cap),
+  genuinely clean at the end. This is the LAST rung of the ladder — Tiers 0-6 are all complete.**
+  23 routing/recognition fixes (a grain-word resolution ambiguity — "the logger module" tying a
+  Module against a same-stem Class; a fleet of new closed preamble frames in
+  `interpret/normalize.mjs` for topic-switch/self-interruption/acknowledgement/hedge-adverb/
+  browsing discourse markers, verified to chain correctly when several stack together; bare
+  "inherits"/"inherit" added alongside its sibling "extends"; a dozen more vague-opener idioms;
+  several dialect/register gaps — "yeah nah", "howdy pardner", "aight", "no worries") plus one
+  genuinely important correctness bug: "is the logger module tested" answered a fabricated "I don't
+  know that yet" even though the structural engine had ALREADY computed the real, honest answer —
+  an over-eager property-adjective matcher was discarding it whenever a real graph-computed parse
+  already existed. New `test/chatflow-tier6.test.mjs` (17 cases). **1328 → 1345.** Full detail:
+  `HANDOVER.md`'s "The dialogue-flow playtest loop" section, Tier 6 entry.
 - **Playtest-freeze verification pass (session close-out).** Manually chat-tested this session's own
   routing/recognition fixes (Tiers 0/1/2/4 + operator bugs A-F) via the real piped CLI against real
   data (`examples/mini-webapp`'s commit history, cochange edge, and Controller/TaskController
