@@ -9,10 +9,24 @@ Session handle (inbox): `tmct` (this session; earlier sessions used `mechanic`).
 
 ## Where we are (2026-07-09)
 
-`npm test` is green at **1361**. v1.0.7 is published; nothing has pushed since, so the local
+`npm test` is green at **1371** (1361 + 9 from the concurrent Rule-storage-foundation dispatch,
+`src/memory/core.mjs`, item 4 below + 1 from this fix's own new test). v1.0.7 is published; nothing has pushed since, so the local
 version stays at 1.0.9 per the bump-at-push-time policy recorded in `CLAUDE.md`. The full
-`SKILL_CHAT_PLAYTEST.md` dialogue-flow tier ladder (tiers 0 through 6) is complete. Everything
-before the two items below is progress narrative now, and lives in `ROADMAP.md`'s "Where we are
+`SKILL_CHAT_PLAYTEST.md` dialogue-flow tier ladder (tiers 0 through 6) is complete.
+
+**INF-C1 fabrication bug (top open follow-up below) is now FIXED.** `GENERAL_VERB_YESNO_RE`'s
+no-hit branch (`src/chat.mjs`, was lines 3852-3855) no longer synthesizes a confident "no" when
+no taught fact matches the queried triple — it returns `null` (an honest decline), falling
+through to the ordinary honest-miss cascade, exactly the fix `INFBENCH_1.2.0.md`/this file's
+open-follow-ups list called for. Re-ran `npm run infbench`: chat/INF-C1 goes from `1.2.0`'s
+**0% completion / 93% fabrication** back to **93% completion / 0% fabrication** — the same
+honest `0.8.2`-era ceiling, restored exactly as predicted (the 2 remaining non-passing rows are
+the pre-existing, unrelated "unclear" disambiguation quirk on `-max0-009`/`-014`, unchanged).
+Everything else in the ladder is unchanged (still gated at INF-B1, 33% completion, unaffected by
+this fix). `test/chat-generalverb-query.test.mjs`'s existing "does margo eat cake" test, which
+used to assert the OLD fabricating "no" behavior, now asserts the honest-decline behavior instead;
+one new test added for a subject with zero taught facts at all. Everything before this and the
+other item below is progress narrative now, and lives in `ROADMAP.md`'s "Where we are
 now" section, not here.
 
 ## Most recent completed work — start here
@@ -36,21 +50,18 @@ started. Nothing is wired into `chat.mjs` yet — zero effect on today's chat be
 `INFBENCH_1.2.0.md` re-ran the classical-logic ladder. Chat/INF-A2 now closes to a clean 100%,
 confirming the proof-chase win already claimed in `PLAN_INFERENCE_TESTING.md`'s status banner.
 
-> **OPEN BUG, not yet fixed — this is the top priority for next session.** Chat/INF-C1 flipped
-> from `0.8.2`'s honest 93%-completion near-ceiling to **93% fabrication**. This session's
-> general-verb-to-predicate query lane (`GENERAL_VERB_YESNO_RE`, its no-hit branch at
-> `src/chat.mjs:3852-3855`) answers a confident "no" on cardinality queries with no matching taught
-> fact, instead of declining. That's negation-as-failure, exactly what the OWA-honest house ethos
-> forbids everywhere on the inference ladder ("no" must always be a constructive proof, never an
-> absence-of-evidence guess). Example: premise "every scope has exactly 2 flags," query "does every
-> scope have at least 1 flag" now comes back a confident wrong "no" instead of an honest "I don't
-> know."
+> **FIXED (2026-07-09, follow-up dispatch).** Chat/INF-C1 had flipped from `0.8.2`'s honest
+> 93%-completion near-ceiling to **93% fabrication**. The general-verb-to-predicate query lane
+> (`GENERAL_VERB_YESNO_RE`, its no-hit branch, `src/chat.mjs`) answered a confident "no" on
+> cardinality queries with no matching taught fact, instead of declining — negation-as-failure,
+> exactly what the OWA-honest house ethos forbids everywhere on the inference ladder. Example:
+> premise "every scope has exactly 2 flags," query "does every scope have at least 1 flag" used to
+> come back a confident wrong "no" instead of an honest "I don't know."
 >
-> **The fix is cheap and needs no new entailment logic**: gate that no-hit branch to decline rather
-> than assert "no" when the subject/object pair was never taught under ANY predicate, not just the
-> one being queried. This was measurement-only work (`src/chat.mjs` was off-limits to that
-> dispatch); the fix itself is still open. Re-run `INFBENCH` after fixing it — it should restore
-> INF-C1 to at least its `0.8.2`-era ceiling.
+> The fix: that no-hit branch now returns `null` (declines) instead of asserting "no", falling
+> through to the ordinary honest-miss cascade — same convention as `WHO_OWNS_RE`'s own no-hit
+> branch just above it. Re-ran `INFBENCH`: INF-C1 is back to **93% completion / 0% fabrication**,
+> its `0.8.2`-era ceiling, exactly as predicted.
 
 ### 3. `PLAN_TAUGHT_RELATIONS.md` — design for teaching new relations and rules through chat (research only)
 
@@ -101,10 +112,8 @@ during implementation. Phase 4 (compose2 query-side wiring) is next in that plan
 
 ## Open follow-ups (next session, in priority order)
 
-1. **Fix the INF-C1 fabrication bug above.** `src/chat.mjs:3852-3855`
-   (`GENERAL_VERB_YESNO_RE`'s no-hit branch) needs to decline honestly instead of asserting "no."
-   Cheap, well-understood, a real regression from this session's own work — see item 2 above for
-   the full detail.
+1. ~~Fix the INF-C1 fabrication bug above.~~ **DONE (2026-07-09)** — see the updated item 2 note
+   above; `npm run infbench` confirms INF-C1 back to 93% completion / 0% fabrication.
 2. **Judged CHATBENCH re-run.** Not run this session. Onboarding/identity responses, teach-lane
    wording, and new relation phrasings all changed judged-surface answer text, so the next judged
    pass needs to re-derive its stale set from answer-text diffs, not assume anything carries over

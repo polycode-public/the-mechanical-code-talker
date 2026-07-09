@@ -35,13 +35,32 @@ test("general-verb query: 'does margo eat ribs' / 'did margo eat ribs' (past ten
   }
 });
 
-test("general-verb query: 'does margo eat cake' is an honest, closed-world 'no' — never a guess", async () => {
+test("general-verb query: 'does margo eat cake' (no matching taught fact) is an honest decline, never a fabricated 'no'", async () => {
+  // INFBENCH 1.2.0 fix: a no-hit here used to synthesize a confident "no" —
+  // that's a fabrication (indistinguishable, from the user's side, between a
+  // PROVEN absence and "I simply found nothing"). "margo eats ribs" is a
+  // taught fact about margo, but nothing says margo eats (or doesn't eat)
+  // cake, so this must decline (null from GENERAL_VERB_YESNO_RE's no-hit
+  // branch) and fall through to the ordinary honest-miss cascade — never a
+  // confident "no — no remembered fact says...".
   const dir = await mem("no");
   try {
     await runTurn("remember margo eats ribs", { config: CONFIG, memoryDir: dir, sessionId: "s1" });
     const r = await runTurn("does margo eat cake", { config: CONFIG, memoryDir: dir });
-    assert.equal(r.record.via, "fact");
-    assert.match(r.answer, /^no — no remembered fact says margo eats cake\./);
+    assert.notEqual(r.record.via, "fact", `"does margo eat cake" must not resolve via the fact lane -> ${r.answer}`);
+    assert.doesNotMatch(r.answer, /^no — no remembered fact says/, `must not fabricate a "no" -> ${r.answer}`);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("general-verb query: 'does anyone eat ribs' with ZERO taught facts at all is an honest decline, never a fabricated 'no'", async () => {
+  const dir = await mem("no-empty");
+  try {
+    const r = await runTurn("does anyone eat ribs", { config: CONFIG, memoryDir: dir });
+    assert.notEqual(r.record.via, "fact", `-> ${r.answer}`);
+    assert.doesNotMatch(r.answer, /^no — no remembered fact says/, `must not fabricate a "no" -> ${r.answer}`);
   } finally {
     clearCache();
     await rm(dir, { recursive: true, force: true });

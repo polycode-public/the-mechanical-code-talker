@@ -41,9 +41,18 @@ Test count across the session's later stretch:
 confirms chat/INF-A2 now closes to 100% (the cax-sco/proof-chase win the STATUS banner above already
 claimed) but also finds chat/INF-C1 has flipped from an honest ceiling to a genuine 93%-fabrication
 regression, traced to the new general-verb-to-predicate query lane answering "no" on an absent fact
-instead of declining — a real correctness bug, not yet fixed, separate from and cheaper than the
-still-gating INF-B1 (`cax-dw`) work. See `HANDOVER.md` for the fix location and priority; it's the
-current top open follow-up.
+instead of declining — a real correctness bug, separate from and cheaper than the still-gating
+INF-B1 (`cax-dw`) work.
+
+**INF-C1 fabrication FIXED (2026-07-09, follow-up dispatch)**: `GENERAL_VERB_YESNO_RE`'s no-hit
+branch (`src/chat.mjs`) now declines (`null`) instead of asserting a confident "no" when no taught
+fact matches the queried subject/predicate/object triple, falling through to the ordinary
+honest-miss cascade — same convention as `WHO_OWNS_RE`'s own no-hit branch. Re-ran `npm run
+infbench`: chat/INF-C1 is back to **93% completion / 0% fabrication**, its `0.8.2`-era honest
+ceiling, exactly as predicted (up from `1.2.0`'s 0% completion / 93% fabrication). Everything else
+in the ladder is unchanged — still gated at INF-B1 (33% completion), unaffected by this fix.
+`npm test` 1361 → 1362 (this fix's own contribution; see `HANDOVER.md` for the combined total
+alongside the concurrent Rule-storage dispatch).
 
 **`PLAN_TAUGHT_RELATIONS.md`** (research/design, 2026-07-09, nothing implemented): scopes teaching
 tmct brand-new relations and rules through ordinary chat (a Prolog-style family tree — father,

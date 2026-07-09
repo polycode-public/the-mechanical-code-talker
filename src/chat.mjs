@@ -3831,9 +3831,15 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
   // session): a taught general-verb fact ("margo eats ribs") answered back
   // directly. Yes/no form matches the taught triple EXACTLY (subject +
   // predicate + object, via the SAME factTermVariants/normFactTerm matching
-  // WHO_OWNS_RE just used above) — no match is an honest, closed-world "no",
-  // never a guess. Open form lists every stored fact row for {subject,
-  // predicate} regardless of object.
+  // WHO_OWNS_RE just used above) — a hit is a confident "yes". INFBENCH 1.2.0
+  // fix: a no-hit here used to synthesize a confident "no", but "no matching
+  // triple found after one lookup" is NOT a proof of absence (this project's
+  // OWA/honesty discipline — see PLAN_INFERENCE_TESTING.md) — it's
+  // indistinguishable from "I simply don't know". So a no-hit now returns
+  // null (declining), same as WHO_OWNS_RE's own no-hit above, falling through
+  // to the ordinary honest-miss cascade instead of fabricating a "no". Open
+  // form lists every stored fact row for {subject, predicate} regardless of
+  // object.
   const genYN = q.match(GENERAL_VERB_YESNO_RE);
   if (genYN && !GENERAL_VERB_ANYWHERE_EXCLUDE_RE.test(q)) {
     const [, subjectRaw, verbRaw, objectRaw] = genYN;
@@ -3849,10 +3855,7 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
           .filter((f) => f.predicate === predicate && subjVariants.has(f.subject) && objVariants.has(f.object))
           .sort(byTrust)[0];
         if (hit) return { text: `yes — ${renderFactLine(hit)}`, replace: true, generalVerbQuery: true };
-        return {
-          text: `no — no remembered fact says ${subject.toLowerCase()} ${predicatePhrase(predicate)} ${object}.`,
-          replace: true, generalVerbQuery: true,
-        };
+        return null; // no remembered fact — the honest miss stands (never a guessed "no")
       }
     }
   }
