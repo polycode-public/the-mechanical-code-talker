@@ -17,7 +17,9 @@ tmct> /callers checkout
 tmct> /exit
 ```
 
-Home page: https://polycode-projects.gitlab.io/the-mechanical-code-talker/
+**[Try it live in your browser →](https://polycode-projects.gitlab.io/the-mechanical-code-talker/)**
+— a real, interactive chat demo running client-side: your browser runs the
+actual query engine against a small example codebase, no server, no install.
 
 ## How it interprets you
 
