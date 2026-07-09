@@ -66,6 +66,105 @@ test("redis fix: the 2-hop transitive chase composes a taught-new-term hop with 
   }
 });
 
+// ---- Bug E (operator manual-chat find + follow-up request, this session):
+// KNOW_ABOUT_RE phrasing gap ("what is in your memory about X") + a subtype
+// walk — when X is used as a TYPE somewhere in taught facts (some other fact
+// says <something> is a kind of X), the answer also surfaces facts about every
+// TRANSITIVE SUBTYPE of X, not just literal mentions. See chat.mjs's
+// KNOW_ABOUT_RE / factAnswer's "(c)" branch docblock for the design. ----
+
+test("Bug E: 'what is in your memory about X'/\"what's in your memory about X\"/'what do you remember about X' are synonyms of 'what do you know about X'", async () => {
+  const dir = await mem("e-phrasing");
+  // Strip the independent "Goal (inferred): ..." suffix — a separate mechanism
+  // keyed off deduceGoalFromParsed's own read of envelope.parsed, unrelated to
+  // whether this fix's own answer TEXT is correct (same reasoning as the 3c/
+  // Bug D goal-line stripping elsewhere this session).
+  const stripGoal = (s) => s.replace(/\n\nGoal \(inferred\):.*$/s, "");
+  try {
+    await runTurn("redis is a cache", { config: CONFIG, memoryDir: dir, sessionId: "e1" });
+    const baseline = await runTurn("what do you know about redis", { config: CONFIG, memoryDir: dir });
+    for (const q of ["what is in your memory about redis", "what's in your memory about redis", "what do you remember about redis"]) {
+      const r = await runTurn(q, { config: CONFIG, memoryDir: dir });
+      assert.equal(r.record.via, "fact", `"${q}" should answer via the memory-fact lane`);
+      assert.equal(stripGoal(r.answer), stripGoal(baseline.answer), `"${q}" should read exactly like "what do you know about redis"`);
+    }
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("Bug E: the subtype walk surfaces a subtype's fact via a taught isa CHAIN, 2 hops deep, with the 'including its known subtypes' wording", async () => {
+  const dir = await mem("e-subtype");
+  try {
+    // component <- cache <- redis (2 hops): "redis has blue-color" never
+    // literally mentions "component" at all.
+    await runTurn("every cache is a component", { config: CONFIG, memoryDir: dir, sessionId: "e2" });
+    await runTurn("redis is a cache", { config: CONFIG, memoryDir: dir, sessionId: "e2" });
+    await runTurn("remember redis has a blue-color", { config: CONFIG, memoryDir: dir, sessionId: "e2" });
+
+    const r = await runTurn("what do you know about component", { config: CONFIG, memoryDir: dir });
+    assert.equal(r.record.via, "fact");
+    assert.match(r.answer, /remembered facts about component \(including its known subtypes\):/);
+    assert.match(r.answer, /cache is a kind of component/);
+    assert.match(r.answer, /redis is a kind of cache/);
+    assert.match(r.answer, /redis has blue-color/, "the 2-hop-deep subtype's own fact is surfaced, not just the 1-hop chain");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("Bug E: a literal-mention-only answer (no subtype involved) does NOT get the 'including its known subtypes' wording", async () => {
+  const dir = await mem("e-literal");
+  try {
+    await runTurn("redis is a cache", { config: CONFIG, memoryDir: dir, sessionId: "e3" });
+    const r = await runTurn("what do you know about redis", { config: CONFIG, memoryDir: dir });
+    assert.equal(r.record.via, "fact");
+    assert.match(r.answer, /^\d+ remembered facts? about redis:/, "plain header, no subtype-wording suffix");
+    assert.doesNotMatch(r.answer, /including its known subtypes/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("Bug E negative case: an unrelated fact about a subject that ISN'T a subtype of X is correctly excluded", async () => {
+  const dir = await mem("e-negative");
+  try {
+    await runTurn("every cache is a component", { config: CONFIG, memoryDir: dir, sessionId: "e4" });
+    await runTurn("redis is a cache", { config: CONFIG, memoryDir: dir, sessionId: "e4" });
+    // an UNRELATED subject/fact, never a subtype of "component" — nothing chains it in.
+    await runTurn("remember tony has a hat", { config: CONFIG, memoryDir: dir, sessionId: "e4" });
+
+    const r = await runTurn("what do you know about component", { config: CONFIG, memoryDir: dir });
+    assert.equal(r.record.via, "fact");
+    assert.match(r.answer, /cache is a kind of component/);
+    assert.doesNotMatch(r.answer, /tony has hat/, "an unrelated fact must never be pulled in by the subtype walk");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("Bug E: the subtype-discovery chain is TAUGHT-only — bulk background corpus isa facts never flood the walk", async () => {
+  const dir = await mem("e-corpus-guard");
+  try {
+    // "controller"/"model"/"view" are all real corpus (seon) subtypes of
+    // "component" already seeded — asking about "component" must not chain
+    // through THOSE corpus rows and explode into hundreds of coincidental
+    // "subtypes"; only what the OPERATOR actually taught should chain.
+    await runTurn("redis is a component", { config: CONFIG, memoryDir: dir, sessionId: "e5" });
+    const r = await runTurn("what do you know about component", { config: CONFIG, memoryDir: dir });
+    assert.equal(r.record.via, "fact");
+    const total = Number((r.answer.match(/^(\d+) remembered/) || [])[1] || NaN);
+    assert.ok(Number.isFinite(total) && total < 50, `subtype walk must stay bounded to taught facts, not corpus noise (got ${total})`);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("phrasing: 'every X is a Y' baseline is untouched AND now also records the 'every' quantifier (point 3)", async () => {
   const dir = await mem("every");
   try {

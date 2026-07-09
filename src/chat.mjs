@@ -2678,8 +2678,14 @@ async function synonymsOf(term) {
  *  doesn't parse; checked against the isa-family fact predicates only. */
 const ISA_ASK_RE = /^(?:is|are)\s+(?:an?\s+)?(.+?)\s+(?:a\s+kind\s+of|a\s+type\s+of|an?)\s+(.+?)[?.!\s]*$/i;
 const ISA_PREDICATES = new Set(["rdfs:subClassOf", "rdf:type"]);
-/** "what do you know about caches" — the open recall-everything form. */
-const KNOW_ABOUT_RE = /^what\s+do\s+you\s+know\s+about\s+(.+?)[?.!\s]*$/i;
+/** "what do you know about caches" — the open recall-everything form. Bug E
+ *  (operator manual-chat find, this session) widened this to also accept
+ *  "what is in your memory about X" / "what's in your memory about X" / "what
+ *  do you remember about X" as plain synonyms — none of these collide with an
+ *  existing more-specific lane (TOLD_ABOUT_RE only owns "what did i tell you
+ *  about X"; WHOLE_RECALL_RE's own "what do you remember" has no "about X"
+ *  tail, so it's a disjoint shape). */
+const KNOW_ABOUT_RE = /^(?:what\s+do\s+you\s+know\s+about|what(?:'s|s|\s+is)\s+in\s+your\s+memory\s+about|what\s+do\s+you\s+remember\s+about)\s+(.+?)[?.!\s]*$/i;
 /** How many facts a single answer lists before the remainder is paged with "more". */
 const FACT_ANSWER_CAP = 32;
 
@@ -2759,15 +2765,66 @@ async function factAnswer(memoryDir, query, envelope, miss) {
   const know = q.match(KNOW_ABOUT_RE);
   if (know) {
     const variants = factTermVariants(normFactTerm, know[1]);
-    const hits = (await memoryFacts(memoryDir)).filter((f) => variants.has(f.subject) || variants.has(f.object));
+    const rows = await memoryFacts(memoryDir);
+    // Bug E subtype walk (operator follow-up request, this session): a
+    // cycle-safe BFS DOWNWARD over isa-family facts from the term's own
+    // variants — every fact whose OBJECT is in the current frontier
+    // contributes its SUBJECT as a known SUBTYPE (and the next hop's
+    // frontier), so "every widget is a component" + "button is a widget" +
+    // "button has a blue-color" lets "what do you know about component"
+    // surface the button fact too, even though "button" never literally
+    // mentions "component". Capped at 8 hops — this is a listing operation,
+    // not findIsaChain's strict maxHops:2 proof-chase, but still bounded as a
+    // safety net against pathological data.
+    //
+    // The chain itself is walked over TAUGHT isa facts only (same "isTaught"
+    // discipline the live cax-sco/scm-sco proof chase already uses, below) —
+    // the bulk background corpus (thousands of ConceptNet/seon "is a kind of"
+    // rows) would otherwise chain almost ANY term into hundreds of coincidental
+    // "subtypes" that have nothing to do with what the OPERATOR actually
+    // taught, drowning the real answer and defeating the negative-case
+    // discipline this feature exists to preserve. The literal-mention hits
+    // (the ORIGINAL, non-subtype half of the filter below) still include
+    // corpus facts exactly as before — only the SUBTYPE DISCOVERY chain is
+    // taught-only.
+    // `rows` here is memoryFacts()'s plain {subject,predicate,object,provenance}
+    // shape (no `sourceTypes` — that's factRows()'s own trust-enriched shape),
+    // so the taught/corpus distinction reads the SAME provenance-string
+    // convention renderFactLine already keys its own corpus-vs-taught framing
+    // on, just above.
+    const isTaughtFact = (f) => !String(f.provenance || "").includes("corpus:") && !String(f.provenance || "").includes("web:");
+    const isaRows = rows.filter((f) => ISA_PREDICATES.has(f.predicate) && isTaughtFact(f));
+    const subtypeSubjects = new Set();
+    let frontier = variants;
+    for (let hop = 0; hop < 8 && frontier.size; hop += 1) {
+      const nextSubjects = new Set();
+      for (const f of isaRows) {
+        if (frontier.has(f.object) && !subtypeSubjects.has(f.subject)) nextSubjects.add(f.subject);
+      }
+      if (!nextSubjects.size) break;
+      for (const s of nextSubjects) subtypeSubjects.add(s);
+      const nextFrontier = new Set();
+      for (const s of nextSubjects) for (const v of factTermVariants(normFactTerm, s)) nextFrontier.add(v);
+      frontier = nextFrontier;
+    }
+    const hits = rows.filter((f) => variants.has(f.subject) || variants.has(f.object) || subtypeSubjects.has(f.subject));
     if (!hits.length) return null;
     // echo the STORED spelling ("caches" asked → "cache" known), never a guess
-    const term = variants.has(hits[0].subject) ? hits[0].subject : hits[0].object;
+    const literalHit = hits.find((f) => variants.has(f.subject) || variants.has(f.object));
+    const term = literalHit
+      ? (variants.has(literalHit.subject) ? literalHit.subject : literalHit.object)
+      : know[1].trim();
+    // when a subtype-derived hit contributed something a plain literal-mention
+    // match wouldn't have found, say so — lets the reader tell subtype-derived
+    // facts apart from literal mentions.
+    const viaSubtype = hits.some((f) => subtypeSubjects.has(f.subject) && !variants.has(f.subject) && !variants.has(f.object));
     const lines = hits.map((f) => `  ${renderFactLine(f)}`);
     const shown = lines.slice(0, FACT_ANSWER_CAP);
     const rest = lines.slice(FACT_ANSWER_CAP);
     const extra = rest.length ? `\n  …and ${rest.length} more — say 'more' to see them.` : "";
-    return { text: `${hits.length} remembered fact${hits.length === 1 ? "" : "s"} about ${term}:\n${shown.join("\n")}${extra}`, replace: true, ...(rest.length ? { pending: { items: rest.map((l) => l.trim()), noun: "facts" } } : {}) };
+    const header = `${hits.length} remembered fact${hits.length === 1 ? "" : "s"} about ${term}`
+      + `${viaSubtype ? " (including its known subtypes)" : ""}:`;
+    return { text: `${header}\n${shown.join("\n")}${extra}`, replace: true, ...(rest.length ? { pending: { items: rest.map((l) => l.trim()), noun: "facts" } } : {}) };
   }
   return null;
 }
