@@ -188,6 +188,44 @@
 //
 // Three more full conversations replayed clean afterward — frozen below.
 //
+// CYCLE 3 (ratcheting again — cycle 2 found real fixable dead-ends): four more
+// fixes, plus one genuine ceiling named:
+//
+//   T18 BARE "inherits"/"inherit" (no "from"): "TaskController inherits what",
+//       "does TaskController inherit Controller" — this list's own SIBLING verb
+//       "extends"/"extend" already worked bare, with no "from" required, but
+//       "inherits"/"inherit" (arguably the MORE common everyday phrasing of
+//       the two) had NO bare form at all in RELATIONS.inherits.verbs
+//       (ask-vocab.mjs), only "inherits from"/"inherit from". Added both bare
+//       forms; VERB_ALT's existing longest-first sort means the "... from"
+//       forms still win whenever "from" actually follows, so this is purely
+//       additive — verified against the full suite (no test relied on bare
+//       "inherits" NOT parsing).
+//   T19 "so what've we got here" / "just poking around, what's in this repo" —
+//       two more vague-opener idioms (§3's own family, cycle 1/2's T4/T13
+//       siblings): a new CAPABILITY_PHRASES entry for the casual "what've we
+//       got here", plus a NEW preamble frame (BROWSING_PREAMBLE_RE,
+//       normalize.mjs — "just poking around/browsing/exploring/looking
+//       around, X") and a new CAPABILITY_PHRASES entry for "what's in this
+//       repo/codebase" specifically (genuinely ambiguous with the real
+//       members/containment "what's in <X>" grammar for any OTHER term, so
+//       closed to the SAME self-referential noun set META_ORIENT_RE already
+//       uses — a real module/class literally named "repo"/"codebase" is never
+//       at risk).
+//
+// Genuine ceiling, NOT fixed: "the Task class extends what CLASS" (a
+// REDUNDANT trailing type-word after the WH-word "what") mis-parses "class"
+// itself as the literal object term to resolve ("no entity named 'class'"),
+// because "class"/"module"/"function" aren't in PLACEHOLDER_NOUNS the way
+// "something"/"anything" are — teaching the reverse-inherits parse to treat a
+// trailing entity-type noun after "what" as a TYPE FILTER rather than a
+// literal object name is a real grammar feature (recognizing "what class"
+// as a typed placeholder), not a routing fix, and out of this tier's
+// closed-set-addition scope. The un-redundant, more common phrasing ("the
+// Task class extends what", no trailing "class") already works cleanly.
+//
+// Two more full conversations replayed clean afterward — frozen below.
+//
 // Driven against the SHIPPED examples/mini-webapp graph via `ephemeral: true`
 // (chat.mjs's createSession) — same mechanism test/chatflow-tier4.test.mjs/
 // test/chatflow-tier5.test.mjs rely on: reads the real graph, writes session/
@@ -428,4 +466,43 @@ test("tier6/conversation 6: teach lane under a fused dialect+vocative preamble, 
   assert.match(turns[1].answer, /^yes — you told me: taskcontroller is fragile/);
   assert.match(turns[2].answer, /^No — no imports edge found from Store to src\/core\/model\.mjs\./);
   assert.match(turns[3].answer, /^Any time\./);
+});
+
+// ---- CYCLE 3 ----
+
+test("tier6/conversation 7: two more vague-opener idioms + reverse bare-inherits word order, zero dead-ends (T18/T19 fix)", async () => {
+  const queries = [
+    "so what've we got here",
+    "just poking around, what's in this repo",
+    "TaskController inherits what",
+    "ta",
+  ];
+  const turns = await driveSession(queries);
+  assertAllFlow(turns, queries);
+  // T19: "so" (LEADING_CONNECTIVE_RE) strips, then "what've we got here" is its
+  // own new CAPABILITY_PHRASES entry.
+  assert.match(turns[0].answer, /^I'm tmct — a deterministic, offline code-graph assistant/);
+  // T19: BROWSING_PREAMBLE_RE strips "just poking around,", then "what's in
+  // this repo" is its own new CAPABILITY_PHRASES entry — never the members/
+  // containment grammar's "no module matching 'this repo'" miss.
+  assert.match(turns[1].answer, /^I'm tmct — a deterministic, offline code-graph assistant/);
+  // T18: bare "inherits" (no "from") now parses; the reverse "X inherits
+  // what" word order answers the same as "what does X inherit from".
+  assert.match(turns[2].answer, /^Controller\./);
+  assert.match(turns[3].answer, /^Any time\./);
+});
+
+test("tier6/conversation 8: bare 'inherit(s)' verb form across yes/no, reverse-subject, and typo'd phrasings (T18 fix)", async () => {
+  const queries = [
+    "does TaskController inherit Controller",
+    "what inherits Controller",
+    "wat inherts from Record",
+  ];
+  const turns = await driveSession(queries);
+  assertAllFlow(turns, queries);
+  assert.match(turns[0].answer, /^Yes — inherits edge from TaskController to Controller\./);
+  assert.match(turns[1].answer, /TaskController and there is UserController/);
+  // pre-existing typo tolerance ("wat"->"what", "inherts"->"inherits") — compat guard,
+  // unaffected by T18's bare-verb addition.
+  assert.match(turns[2].answer, /in src\/core\/model\.mjs there is Task, User and Project/);
 });

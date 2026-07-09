@@ -153,7 +153,18 @@ export const RELATIONS = {
   inherits: {
     comment: "Class -> Class: subject's declared base resolves to object (subclassOf).",
     verbs: [
-      "inherits from", "inherit from", "extends", "extend", "subclasses", "subclass",
+      "inherits from", "inherit from",
+      // bare "inherits"/"inherit" (Tier 6 playtest, §3b surface-variation axis):
+      // this list's own SIBLING verb "extends"/"extend" already works bare, with
+      // no "from" required, but "inherits"/"inherit" — arguably the MORE common
+      // everyday phrasing of the two ("TaskController inherits Controller",
+      // "does TaskController inherit Controller") — had no bare form at all,
+      // only the "... from" variant. VERB_ALT's longest-first sort (already
+      // relied on elsewhere in this file for the same reason) means "inherits
+      // from"/"inherit from" still win whenever "from" actually follows, so
+      // this is purely additive.
+      "inherits", "inherit",
+      "extends", "extend", "subclasses", "subclass",
       "derives from", "derive from", "is a subclass of", "are a subclass of",
       "is a kind of", "are a kind of", "is built off", "are built off",
       "is built on top of", "are built on top of",

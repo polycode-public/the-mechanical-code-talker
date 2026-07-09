@@ -181,6 +181,13 @@ const THANKS_PREAMBLE_RE = /^(?:thanks|thank\s+you|many\s+thanks|thx|ty|cheers)(
  *  cool" both go), each followed by whitespace/comma; same delimiter- and
  *  non-empty-remainder-REQUIRED discipline as the two frames above. */
 const ACK_PREAMBLE_RE = /^(?:(?:ok(?:ay)?|cool|alright|sure|right|fine|great|nice|got it|gotcha|sounds good)[\s,]+)+(.+)$/i;
+/** A SELF-ORIENTATION lead-in with a delimiter — "just poking around, what's
+ *  in this repo", "just browsing, X", "just exploring, X" (Tier 6 playtest,
+ *  §3: the vague-opener family a genuine first-time stranger types). Same
+ *  delimiter-required discipline as GREETING/THANKS/ACK_PREAMBLE_RE above —
+ *  a bare "just poking around" with no question stays small-talk (this file
+ *  never claims a turn that has no remainder to hand back). */
+const BROWSING_PREAMBLE_RE = /^just\s+(?:poking\s+around|looking\s+around|browsing|exploring|checking\s+(?:this|it)\s+out)\s*[,.—–-]\s*(.+)$/i;
 /** A repeated leading HEDGE ADVERB ("maybe", "possibly", "perhaps") ahead of a
  *  polite request verb — the sibling of ACK_PREAMBLE_RE for HEDGING rather than
  *  acknowledging (Tier 6 playtest §3's own stacked-politeness example: "could
@@ -297,6 +304,8 @@ export function applyPreambleFrames(text) {
     m = q.match(THANKS_PREAMBLE_RE);
     if (m) q = m[1].trim();
     m = q.match(ACK_PREAMBLE_RE);
+    if (m) q = m[1].trim();
+    m = q.match(BROWSING_PREAMBLE_RE);
     if (m) q = m[1].trim();
     m = q.match(HEDGE_ADVERB_PREAMBLE_RE);
     if (m) q = m[1].trim();

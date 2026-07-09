@@ -721,6 +721,18 @@ const CAPABILITY_PHRASES = [
   /^(?:can you\s+)?walk me through (?:this|the)\s+(?:app|codebase|repo|repository|project|code)\??$/i,
   /^what(?:'s|s|\s+is) the big picture(?:\s+here)?\??$/i,
   /^(?:give me|what's) the lay of the land\??$/i,
+  // Tier 6 playtest cycle 3: "what have we got here"/"what've we got here" —
+  // a casual, self-answering opener (found after a leading "so" strips via
+  // LEADING_CONNECTIVE_RE, leaving this as the bare remainder).
+  /^what(?:'ve| have) (?:we|i) got here\??$/i,
+  // "what's in this repo/codebase" — arguably the MOST natural vague opener of
+  // this whole family, and genuinely ambiguous with the real "what's in <X>"
+  // members/containment grammar (ask.mjs) for any OTHER term — closed to
+  // exactly the same self-referential noun set META_ORIENT_RE already uses,
+  // so a real module/class named literally "repo"/"codebase" is never at risk
+  // (this repo's own fixture has none, and the noun list itself excludes
+  // ordinary code-ish names).
+  /^what(?:'s|s|\s+is) in (?:this|the)\s+(?:app|codebase|repo|repository|project|code)\??$/i,
 ];
 /** IDENTITY questions — "who/what are you", by name, in plain or ESL-ish phrasing.
  *  Routed to a self-description (identity-self) that works regardless of graph
