@@ -2,6 +2,47 @@
 
 Status: RESEARCH / DESIGN — not yet implemented. Nothing in this document is live code.
 
+## Phase 3 — DONE (2026-07-09)
+
+Rule storage foundation landed in `src/memory/core.mjs`, pure plumbing per §4's phase list — zero
+`chat.mjs` behavior change, no new teach-shape recognizers wired anywhere. `RULE_CLASS = "Rule"`
+added to `recountClasses`'s fixed class-name array; `appendRule(dir, { name, kind, slots,
+provenance, createdAt })` mirrors `appendFact` exactly (same load→mutate→write discipline, same
+content-addressed-id-upserts convention); `findRuleByName(memory, name)` proves the stored shape
+answers the future query-dispatcher's "what kind of thing is X" lookup (§2's closing paragraph),
+without building the dispatcher itself (that's Phase 4/5/6). New `test/memory-rules.test.mjs`, 9
+tests. `npm test` 1361 → 1371 (concurrent `chat.mjs` work in the same window added its own tests
+too, so 1371 isn't purely +9 — the Rule-storage tests themselves are the 9 in the new file).
+
+Two small adjustments to §2's original design, found while implementing (both resolved in the
+direction §2's own prose already pointed, not a redesign):
+
+- §2's slot-attribute list names only 5 `mgx:rule<Slot>` attributes total
+  (`ruleBase1`/`ruleBase2`/`ruleFilterProperty`/`ruleBaseCase`/`ruleRecStep`) even though `filter`'s
+  `slots` object has TWO keys (`{ base, property }`). Resolved by having `filter`'s `base` slot
+  write to `mgx:ruleBase1` — the SAME attribute compose2's first slot uses — since §3's own
+  query-dispatcher design already reads a filter rule by "recursively resolv[ing] `ruleBase1`'s
+  candidate set," i.e. §3 had already assumed this exact attribute-name reuse; §2's slot list was
+  just one short. No separate `mgx:ruleBase` attribute exists.
+- §2 doesn't show `mgx:ruleName` in `appendRule`'s attribute list explicitly (only inferred from
+  §2's own closing paragraph and §3's dispatcher design). Implemented as a plain top-level attribute
+  written by `appendRule` itself, alongside `mgx:ruleKind` — confirmed this is what `findRuleByName`
+  needs to scan on.
+
+Provenance/trust reuse claim **held exactly as claimed**: reread `syncFactSources`
+(`src/memory/core.mjs:268-283`) and `recomputeFactTrust` (`:254-262`) in full — neither checks
+`individual.class`/`fact.class` anywhere in either body (both only touch `.attributes`/`.id`/
+`.label`), so a `Rule` individual carrying the same `mgx:factProvenance` compat attribute rides the
+identical Source-derivation + trust-materialisation pipeline with zero code changes to either
+function. Proven by a dedicated test (not just "the code looks unchanged"): the same provenance tag
+taught once as a Fact and once as a Rule in the same store produces an identical `mgx:trustScore`.
+
+"Re-teaching a different rule under the same name" (§2/requirement 3) resolved as: a distinct
+content-addressed id (kind+name+slots all feed the hash), so both the original and the redefinition
+coexist as separate `Rule` individuals sharing one `mgx:ruleName` — the same non-merging precedent
+`appendFact` already sets for two Facts sharing a subject but differing predicate/object. Picking
+"which one wins" at query time is explicitly left to the Phase 4/5/6 dispatcher, not decided here.
+
 ## Origin
 
 2026-07-09 session. The operator's own framing, verbatim (this is the design target, not a

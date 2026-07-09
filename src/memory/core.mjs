@@ -41,6 +41,9 @@ export const UTTERANCE_CLASS = "Utterance";
 export const FACT_CLASS = "Fact";
 export const MEMORY_SESSION_CLASS = "Session";
 export const SOURCE_CLASS = "Source";
+// PLAN_TAUGHT_RELATIONS.md Phase 3: a taught RULE (a composed/filtered/
+// recursive relation-shape) — a sibling of Fact, never a taught concept itself.
+export const RULE_CLASS = "Rule";
 
 export const SAID_IN_SESSION_PROP = "mgx:saidInSession";
 export const IN_REPLY_TO_PROP = "mgx:inReplyTo";
@@ -75,6 +78,13 @@ const MEMORY_VOCABULARY = [
   { prop: "rdf:object", note: "reified fact: the triple's object term" },
   { prop: "mgx:factProvenance", note: "LEGACY COMPAT SHIM: the ' | '-joined provenance tag string a fact came from; the source-of-truth is now the mgx:statedBy edges derived from it" },
   { prop: "mgx:factQuantifier", note: "OPTIONAL: the quantifier word a plural class-membership teach used ('every'/'some'/'a few'), for literal recall by 'how many Xs are Ys' — never real cardinality counting" },
+  { prop: "mgx:ruleName", note: "a taught Rule's own name (e.g. 'grandparent') — the query-dispatcher's lookup key, PLAN_TAUGHT_RELATIONS.md §2/§3" },
+  { prop: "mgx:ruleKind", note: "a taught Rule's SHAPE tag — the closed vocabulary compose2 | filter | recursive (structural, like 'Fact'/'Rule' themselves, never a domain word)" },
+  { prop: "mgx:ruleBase1", note: "compose2: the first hop's base relation name; filter: the base rule/relation being filtered (same 'base relation' role in both kinds, so the name is shared)" },
+  { prop: "mgx:ruleBase2", note: "compose2 only: the second hop's base relation name" },
+  { prop: "mgx:ruleFilterProperty", note: "filter only: the property literal candidates are filtered by (an mgx:hasProperty-shaped Fact lookup)" },
+  { prop: "mgx:ruleBaseCase", note: "recursive only: the base-case relation name (hop zero)" },
+  { prop: "mgx:ruleRecStep", note: "recursive only: the self-referential recursive-step relation name" },
   { prop: CREATED_AT_PROP, note: "when an individual was FIRST written, ISO-8601 (first-write-wins on upsert); the audit 'when', the recency input to trust, the novelty signal" },
   { prop: DERIVED_FROM_PROP, predicate: "derivedFrom", note: "umbrella: a Fact derived from a Source (or another Fact). ext ref prov:wasDerivedFrom (UNVERIFIED-pending-web-check)" },
   { prop: STATED_BY_PROP, predicate: "statedBy", note: "subPropertyOf derivedFrom: a Source directly asserts this Fact (one edge per independent source — replaces the factProvenance union)" },
@@ -328,7 +338,7 @@ function upsertEdge(payload, { predicate, prop }, edge) {
 /** Recount `classes[]` from the individuals — every memory class stays counted
  *  and sampled the way graph-build.mjs counts the code classes. */
 function recountClasses(payload) {
-  const names = [MEMORY_SESSION_CLASS, UTTERANCE_CLASS, FACT_CLASS, SOURCE_CLASS];
+  const names = [MEMORY_SESSION_CLASS, UTTERANCE_CLASS, FACT_CLASS, SOURCE_CLASS, RULE_CLASS];
   payload.classes = payload.classes.filter((c) => !names.includes(c?.name));
   for (const name of names) {
     const of = payload.individuals.filter((i) => i?.class === name);
@@ -580,6 +590,112 @@ export async function appendFacts(dir, facts) {
     recountClasses(payload);
   });
   return { ids, appended: ids.length, skipped };
+}
+
+// ---- Rules (PLAN_TAUGHT_RELATIONS.md Phase 3: storage foundation) -----------
+// A taught RULE — a composed/filtered/recursive relation SHAPE, distinct from a
+// plain Fact triple. Same convention as a Fact's subject/predicate/object: every
+// slot is a plain string ATTRIBUTE, never an edge to a per-term individual.
+
+export const RULE_KIND_COMPOSE2 = "compose2";
+export const RULE_KIND_FILTER = "filter";
+export const RULE_KIND_RECURSIVE = "recursive";
+export const RULE_KINDS = Object.freeze([RULE_KIND_COMPOSE2, RULE_KIND_FILTER, RULE_KIND_RECURSIVE]);
+
+export const RULE_NAME_PROP = "mgx:ruleName";
+export const RULE_KIND_PROP = "mgx:ruleKind";
+
+// Per-kind slot contract: JS slot key -> the mgx: attribute it's written under.
+// filter's "base" slot deliberately reuses ruleBase1 (not a fresh "ruleBase") —
+// §3's own query-dispatcher design chases a filter rule's candidate set via
+// "ruleBase1's candidate set (step (a) or (b) again)", the exact same attribute
+// name compose2's first hop already uses, since both play the identical "base
+// relation this rule builds on" role. Order within each array is the (slot1,
+// slot2) order the content-address hash below uses — fixed and load-bearing.
+const RULE_SLOT_SPEC = {
+  [RULE_KIND_COMPOSE2]: [["base1", "mgx:ruleBase1"], ["base2", "mgx:ruleBase2"]],
+  [RULE_KIND_FILTER]: [["base", "mgx:ruleBase1"], ["property", "mgx:ruleFilterProperty"]],
+  [RULE_KIND_RECURSIVE]: [["baseCase", "mgx:ruleBaseCase"], ["recStep", "mgx:ruleRecStep"]],
+};
+
+// The rule-id contract, mirroring factIdFor's (:456) NUL-delimited discipline
+// exactly: content-addressed over (kind, name, slot1, slot2), so re-teaching an
+// IDENTICAL rule (same kind + name + slots) upserts, never duplicates; teaching
+// a DIFFERENT rule under the SAME name (different slots) hashes to a distinct
+// id — both individuals exist side by side, the same way two different Facts
+// sharing a subject are two distinct Fact individuals, never a silent overwrite.
+const ruleIdFor = (kind, name, slot1, slot2) => `rule:${fnv1aHex(`${kind}\0${name}\0${slot1}\0${slot2}`)}`;
+
+/** Append one taught RULE (compose2 | filter | recursive) — a sibling of
+ *  appendFact (:462) for the relation-composition shapes PLAN_TAUGHT_RELATIONS.md
+ *  items 3/4/6 need, storing a `Rule` individual instead of a `Fact`. Same
+ *  load→mutate→write discipline via mutateMemory, same content-addressed-id
+ *  upsert convention as appendFact.
+ *
+ *  { name, kind, slots, provenance = "", createdAt = "" }: `kind` is the ONE
+ *  closed vocabulary this store needs to know — compose2 | filter | recursive,
+ *  three STRUCTURAL tags describing the SHAPE of what was taught (never a
+ *  domain word, the same way "Fact"/"Rule" describe the store's own shape, not
+ *  what's stored in it). `slots` is the matching per-kind object (RULE_SLOT_SPEC
+ *  above). `name` and every slot value are normFactTerm-normalized, exactly like
+ *  a Fact's subject/object.
+ *
+ *  Provenance/trust ride the EXACT SAME syncFactSources/recomputeFactTrust
+ *  pipeline appendFact uses, unmodified — neither function ever checks
+ *  `individual.class`, so a Rule carrying the same mgx:factProvenance compat
+ *  attribute + CREATED_AT_PROP gets the same Source-derivation + trust score an
+ *  ordinary Fact would. Returns { id }. */
+export async function appendRule(dir, { name, kind, slots, provenance = "", createdAt = "" } = {}) {
+  const spec = RULE_SLOT_SPEC[kind];
+  if (!spec) throw new Error(`a rule kind must be one of ${RULE_KINDS.join(", ")}, got ${JSON.stringify(kind)}`);
+  const n = normFactTerm(name);
+  if (!n) throw new Error("a rule needs a name");
+  const slotValues = spec.map(([slotKey]) => normFactTerm(slots?.[slotKey]));
+  if (slotValues.some((v) => !v)) {
+    throw new Error(`a ${kind} rule needs ${spec.map(([slotKey]) => slotKey).join(" + ")}`);
+  }
+  const id = ruleIdFor(kind, n, slotValues[0], slotValues[1]);
+  const label = labelOf(`${n} = ${kind}(${slotValues.join(", ")})`);
+  await mutateMemory(dir, (payload) => {
+    const prior = payload.individuals.find((x) => x?.id === id);
+    const priorProv = prior?.attributes?.find((a) => a?.prop === "mgx:factProvenance")?.value || "";
+    // Same union-of-tags discipline as appendFact — the compat string stays
+    // byte-identical in spirit; the Source edges below are DERIVED from it.
+    const provs = [...new Set([...priorProv.split(" | "), normText(provenance)].filter(Boolean))];
+    const createdAtVal = firstWriteCreatedAt(prior, createdAt); // first-write-wins
+    upsertIndividual(payload, {
+      id, label, class: RULE_CLASS,
+      derived_from: [], mentions: [],
+      attributes: [
+        { prop: "rdf:type", key: "type", value: "owl:NamedIndividual" },
+        { prop: RULE_NAME_PROP, key: "ruleName", value: n },
+        { prop: RULE_KIND_PROP, key: "ruleKind", value: kind },
+        ...spec.map(([slotKey, prop], i) => ({ prop, key: slotKey, value: slotValues[i] })),
+        { prop: CREATED_AT_PROP, key: "createdAt", value: createdAtVal },
+        ...(provs.length ? [{ prop: "mgx:factProvenance", key: "provenance", value: provs.join(" | ") }] : []),
+      ],
+    });
+    // Same Source-derivation + trust-materialisation call appendFact makes —
+    // syncFactSources/recomputeFactTrust only ever touch fact.attributes/id/
+    // label, never fact.class, so a Rule individual rides it unmodified.
+    syncFactSources(payload, payload.individuals.find((x) => x?.id === id));
+    recountClasses(payload);
+  });
+  return { id };
+}
+
+/** Genericity lookup for the future query-dispatcher (PLAN_TAUGHT_RELATIONS.md
+ *  §2's closing paragraph / §3 step (b)): "what kind of thing is name X" — scan
+ *  for the Rule individual whose mgx:ruleName matches, the SAME lookup serving
+ *  every taught rule name uniformly (no per-rule-name branch). This phase only
+ *  proves the stored shape supports the lookup correctly; Phase 4/5/6 build the
+ *  actual kind-dispatch (compose2/filter/recursive branching) on top of this.
+ *  Returns the raw individual, or undefined if no Rule has that name. */
+export function findRuleByName(memory, name) {
+  const n = normFactTerm(name);
+  return (memory?.individuals || []).find(
+    (i) => i?.class === RULE_CLASS && (i.attributes || []).find((a) => a?.prop === RULE_NAME_PROP)?.value === n,
+  );
 }
 
 // ---- Chat-facing seams (W4 fact lookup + contradiction) ---------------------

@@ -85,6 +85,20 @@ None of this is fixed. It's recorded so a future implementation session (or a ti
 `TEACH_PROPERTY_RE`) starts from the real gaps found live, not the original conversation's
 assumptions.
 
+### 4. `PLAN_TAUGHT_RELATIONS.md` Phase 3 — Rule storage foundation (pure plumbing, no `chat.mjs` change)
+
+`src/memory/core.mjs` gained `RULE_CLASS = "Rule"` (added to `recountClasses`'s counted classes),
+`appendRule(dir, { name, kind, slots, provenance, createdAt })` (a sibling of `appendFact`, same
+load→mutate→write + content-addressed-upsert discipline, over the closed `kind` vocabulary
+`compose2`/`filter`/`recursive`), and `findRuleByName(memory, name)` (the future query-dispatcher's
+"what kind of thing is X" lookup, proven but not wired to any dispatcher yet). Provenance/trust ride
+`syncFactSources`/`recomputeFactTrust` completely unmodified — confirmed neither checks
+`individual.class`, and proven with a test showing a Fact and a Rule taught under the same
+provenance tag get an identical trust score. New `test/memory-rules.test.mjs`, 9 tests. Zero
+`chat.mjs` changes — no new teach-shape recognizers, nothing user-visible yet. See
+`PLAN_TAUGHT_RELATIONS.md`'s new "Phase 3 — DONE" note for the two small design gaps resolved
+during implementation. Phase 4 (compose2 query-side wiring) is next in that plan's build order.
+
 ## Open follow-ups (next session, in priority order)
 
 1. **Fix the INF-C1 fabrication bug above.** `src/chat.mjs:3852-3855`

@@ -56,6 +56,11 @@ shape (`TEACH_PROPERTY_RE`) has no groundedness check at all, unlike the newer s
 mint-fallback pair's explicit discipline. See `HANDOVER.md` for the full finding list; this is
 next-session pickup material, not yet started.
 
+**`PLAN_TAUGHT_RELATIONS.md` Phase 3 — DONE (2026-07-09)**: the Rule storage foundation landed in
+`src/memory/core.mjs` (`RULE_CLASS`, `appendRule`, `findRuleByName`) — pure plumbing, zero
+`chat.mjs` change, reusing the existing Source/trust pipeline unmodified. `npm test` 1361 → 1371.
+Phase 4 (compose2 query-side wiring) is next in that plan's build order.
+
 ### Shipped this session
 
 - **Tier 5** found 12 routing/recognition fixes across teach and recall: article/head-word gaps
