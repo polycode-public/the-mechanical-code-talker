@@ -700,6 +700,19 @@ const CAPABILITY_PHRASES = [
   // today (bin/tmct.mjs), dead once inside the chat loop; route to the same
   // capability answer a plain "help" gets.
   /^--help$/i, /^-h$/i, /^man( tmct)?\??$/i,
+  // Tier 6 playtest ("the messy real user", §3): the vague-opener family a
+  // stranger genuinely asks before knowing any query shapes — "what can you
+  // tell me about this repo", "tell me something interesting (about this
+  // codebase)", "so, what is going on in this codebase" (an optional leading
+  // "so," discourse connective, same species as LEADING_CONNECTIVE_RE
+  // elsewhere). All three used to fall straight to the raw grammar wall
+  // (isConversational's own ≤3-word/no-codeish catch-all never claims an
+  // 8-word sentence like these) even though orientationAnswer is EXACTLY the
+  // right answer — the same overview CAPABILITY_PHRASES' other entries already
+  // reach. The noun set mirrors META_ORIENT_RE's own closed list.
+  /^what can (?:you|u) tell me(?:\s+(?:more|anything))?\s+about (?:this|the)\s+(?:app|codebase|repo|repository|project|code|thing)\??$/i,
+  /^tell me something interesting(?:\s+about (?:this|the)\s+(?:app|codebase|repo|repository|project|code))?\??$/i,
+  /^(?:so,?\s+)?what(?:'s|s|\s+is)\s+(?:going on|happening)\s+(?:in|with)\s+(?:this|the)\s+(?:app|codebase|repo|repository|project|code)\??$/i,
 ];
 /** IDENTITY questions — "who/what are you", by name, in plain or ESL-ish phrasing.
  *  Routed to a self-description (identity-self) that works regardless of graph
@@ -1986,6 +1999,16 @@ async function memorySummary(memoryDir, graph) {
 // case-sensitive, so this reads the ORIGINAL query text, never metaLane's
 // lowercased `q` (authorLane's same discipline, just above/below).
 const MODULE_ORIENT_RE = /^what\s+does\s+(.+?)\s+do\??$/i;
+/** The SUBJECT-FIRST word order of the SAME question ("what saveStore does" vs
+ *  "what does saveStore do") — Tier 6 playtest, §3b surface-variation axis: a
+ *  perfectly natural alternate phrasing of an ALREADY-recognized intent that
+ *  used to hit the raw grammar wall outright (MODULE_ORIENT_RE's own anchor
+ *  requires "does" BEFORE the term). Tried only when MODULE_ORIENT_RE/
+ *  MODULE_PURPOSE_RE both miss; the entity-resolution gate just below (a real,
+ *  UNIQUE graph entity or this lane declines) is what keeps this loose an
+ *  ending safe — a syntactic match against a term that isn't a real entity
+ *  simply falls through unchanged, same as every other lane in this file. */
+const MODULE_ORIENT_SVO_RE = /^what\s+(.+?)\s+does\??$/i;
 // Seonix Batch 3 (3a) — purpose/identity phrasing: "whats X for"/"what's X
 // about"/"what is X for", the sibling of "what does X do" that asks for the
 // SAME module-grain overview. Deliberately does NOT claim the literal noun
@@ -1996,6 +2019,16 @@ const MODULE_ORIENT_RE = /^what\s+does\s+(.+?)\s+do\??$/i;
 // tolerance for the bare "whats" contraction spelling, just below.
 const MODULE_PURPOSE_RE = /^what(?:'s|s|\s+is)\s+(.+?)\s+(?:for|about)\??$/i;
 
+/** A leading politeness/formal-ESL wrapper this lane's own anchored regexes
+ *  otherwise miss entirely (Tier 6 playtest): "please explain what does X do"
+ *  starts with neither "what"/"whats" (MODULE_ORIENT_RE/MODULE_PURPOSE_RE's own
+ *  anchor) nor bare "explain" (normalize.mjs's own EXPLAIN_WRAPPER_RE, which
+ *  requires NOTHING before "explain" — a leading "please" defeats it too), so
+ *  it fell straight to the raw grammar wall. A repeated (please|kindly) plus an
+ *  optional "explain [to me]" — both closed, both optional, so a bare "what
+ *  does X do" is untouched (the whole prefix matches empty). */
+const MODULE_ORIENT_POLITENESS_RE = /^(?:(?:please|kindly)\s+)*(?:explain\s+(?:to\s+me\s+)?)?/i;
+
 /** authorLane's discipline, mirrored: a closed regex + an EXACT, UNIQUE
  *  resolution via resolveEntity, else null — never a guess. Pronoun/self
  *  subjects ("what does it/this do", "what's it for") are META_ORIENT_RE's/
@@ -2003,8 +2036,20 @@ const MODULE_PURPOSE_RE = /^what(?:'s|s|\s+is)\s+(.+?)\s+(?:for|about)\??$/i;
  *  fall through unchanged. */
 async function moduleOrientLane(query, { graph }) {
   if (!graph) return null;
-  const q = String(query).trim().replace(/[?.!]+$/, "").replace(/\s+/g, " ");
-  const m = q.match(MODULE_ORIENT_RE) || q.match(MODULE_PURPOSE_RE);
+  let q = String(query).trim().replace(/[?.!]+$/, "").replace(/\s+/g, " ");
+  // Tier 6 playtest: this lane reads the ORIGINAL (case-preserving) query text
+  // and never ran any of the general-purpose normalization passes the rest of
+  // the file uses for the SAME class of surface noise — correctMisspellings
+  // for a typo'd anchor word ("waht dose the logger modul do"), applyPreambleFrames
+  // for a topic-switch/self-interruption preamble ("scratch that, what does X
+  // do") — plus a lane-local politeness strip for "please explain X" (applyPreambleFrames's
+  // own EXPLAIN_WRAPPER_RE requires the string to literally START with "explain",
+  // so a LEADING "please"/"kindly" ahead of it defeats that frame; see
+  // MODULE_ORIENT_POLITENESS_RE's own docblock). All three are additive,
+  // closed-set, and idempotent on an already-clean query, so applying them here
+  // only ever WIDENS what resolves, never narrows it.
+  q = applyPreambleFrames(correctMisspellings(q)).replace(MODULE_ORIENT_POLITENESS_RE, "");
+  const m = q.match(MODULE_ORIENT_RE) || q.match(MODULE_PURPOSE_RE) || q.match(MODULE_ORIENT_SVO_RE);
   if (!m) return null;
   const term = m[1].trim();
   if (/^(?:it|this|that|they|them)$/i.test(term)) return null;
@@ -2380,7 +2425,11 @@ function configFor(repoPath) {
 /** Resolve a free-text term to a single graph entity via the ask engine's own
  *  tiered resolver — {id,label} on a UNIQUE hit, null on a miss/ambiguity/no graph.
  *  Lazy + failure-tolerated (see the file docblock): the worst case is a turn that
- *  records fewer ids / does not update the focus, never a crash or a wrong id. */
+ *  records fewer ids / does not update the focus, never a crash or a wrong id.
+ *  The leading-article-strip + trailing-grain-word disambiguation ("the logger
+ *  module" -> Module-only "logger") lives centrally in resolveObject itself
+ *  (ask.mjs) so every direct caller of resolveObject (ask()'s own WHERE/describe
+ *  grammar, traverse(), etc.) gets it too, not just this wrapper. */
 async function resolveEntity(graph, term) {
   if (!graph || !term) return null;
   try {
@@ -3973,6 +4022,18 @@ async function curatedDefinitionAnswer(query, envelope, { memoryDir, lexicon }) 
 // SHORTHAND_CONTRACTIONS above: scoped locally to the lane that owns the word.
 // Word-boundary matched so "hotel"/"intel" are untouched.
 const VAGUE_TOUCH_TEL_RE = /\btel\b/i;
+// "abut" -> "about" (Tier 6 playtest, §3b typo axis): a one-letter-dropped
+// typo of THIS lane's own anchor word ("what abut imports" used to miss the
+// "what about …" regex entirely and search for a module literally named
+// "abut" instead). "about" is real English on its own (a genuine word) but is
+// not itself part of ask.mjs's code-graph grammar (VERB_TO_KIND/ENTITY_TO_TYPE/
+// anchor words) — same reasoning as VAGUE_TOUCH_TEL_RE just above, so this
+// stays a local, lane-scoped replace rather than a shared MISSPELLINGS entry
+// (test/ask-vocab.test.mjs enforces every correction TABLE value is grammar-
+// owned; a bare discourse word like "about" fails that gate on purpose).
+// Word-boundary matched so a real identifier merely containing "abut" (rare,
+// but e.g. "rebuttal") is untouched.
+const VAGUE_TOUCH_ABUT_RE = /\babut\b/i;
 /** "explain X" / "please explain X" / "kindly explain X" / "explain X to me" /
  *  "explain X please" — a bare vague-touch shape, sibling of WHAT_ABOUT_RE
  *  above. Named (not inlined) so both vagueTouchTermOf (term extraction) and
@@ -3993,6 +4054,7 @@ function vagueTouchTermOf(query) {
   // bridge frame), breaking this very regex.
   let q = correctMisspellings(String(query).trim());
   q = q.replace(VAGUE_TOUCH_TEL_RE, "tell");
+  q = q.replace(VAGUE_TOUCH_ABUT_RE, "about");
   q = applyPreambleFrames(q);
   const m = q.match(/^(?:kindly\s+)?tell me about\s+(?:an?\s+|the\s+)?(.+?)[?.!\s]*$/i)
     || q.match(/^(?:(?:and|so|but|ok|okay|now|then|kindly)\s+)*what about\s+(?:an?\s+|the\s+)?(.+?)(?:\s+then|\s+though)?[?.!\s]*$/i)
@@ -4142,14 +4204,77 @@ const DESCRIBE_PRONOUN_RE = /^(?:it|that|this|those|them)$/i;
  *  unaffected either way. */
 const STACCATO_PRONOUN_RE = /^(?:and|also|so|then|now)\s+(it|that|this|those|them)(?:\s+ones?)?\s*\??$/i;
 
-async function describeWrapperAnswer(query, { config, source, focus }) {
-  const q = String(query || "").trim();
+/** Tier 6 playtest: "describe the logger module"/"describe the Task class" —
+ *  dispatchTool("tmct_describe") resolves its `symbol` arg via codegraph.mjs's
+ *  resolveSymbol, a separate, simpler path/basename matcher with NO article- or
+ *  grain-word tolerance. A first attempt routed this whole free-text `term`
+ *  through resolveEntity/resolveObject instead (which DOES have that tolerance,
+ *  just added above) — reverted live, found via this same playtest cycle's own
+ *  regression run: resolveObject's tier-3 ANY-overlap fallback is tuned for
+ *  near-path/near-symbol terms, not arbitrary English sentences, and a genuine
+ *  English article ("a", "the") can itself be a real one-character path
+ *  component of some fixture module ("a.mjs") — "tell me A JOKE" tier-3-matched
+ *  that module by the shared bare "a" alone (test/sessions.test.mjs's own guard
+ *  test caught it: a turn meant to fall through as an honest grammar miss
+ *  instead silently "described" an unrelated module). Scoped down to ONLY ever
+ *  attempt a resolution when the term carries an EXPLICIT trailing grain word
+ *  (module/class/function/method/…, ENTITY_TO_TYPE's own closed table) — the
+ *  class-narrowed pool that then searches is both far smaller and still
+ *  requires the head noun to actually match a stem, so it stays safe; a bare
+ *  "the X"/"an X" or ordinary sentence (no grain word) gets NO rescue attempt
+ *  at all and falls through to the untouched, always-safe resolveSymbol path,
+ *  exactly as before this fix. */
+const DESCRIBE_GRAIN_WORD_RE = new RegExp(
+  `^(?:(?:the|a|an)\\s+)?(.+?)\\s+(${Object.keys(ENTITY_TO_TYPE).join("|")})$`, "i",
+);
+async function describeGrainRescue(graph, term) {
+  if (!graph) return null;
+  const m = String(term || "").trim().match(DESCRIBE_GRAIN_WORD_RE);
+  if (!m) return null;
+  const [, head, grainWord] = m;
+  const expectedClass = ENTITY_TO_TYPE[grainWord.toLowerCase()];
+  if (!head?.trim() || !expectedClass) return null;
+  try {
+    const { resolveObject } = await import("./ask.mjs");
+    const r = resolveObject(graph, head.trim(), { expectedClass });
+    if (r?.match?.id && !r.ambiguous) return { id: r.match.id, label: r.match.label };
+  } catch { /* tolerated */ }
+  return null;
+}
+
+async function describeWrapperAnswer(query, { config, source, focus, graph }) {
+  // Tier 6 playtest: this lane is the LAST-RESORT rescue (4d, tried after every
+  // earlier lane declines on the ORIGINAL query) — but it tested its own
+  // DESCRIBE_WRAPPER_RE against the RAW, un-normalized text, so a preamble an
+  // earlier lane (relationForceAnswer/vagueTouchTermOf) already knows how to
+  // strip ("ok cool, what about the TaskController" — relationForceAnswer
+  // correctly declines since "TaskController" isn't an enumerable RELATION_TERM,
+  // but never hands its own stripped text forward) reappeared here, unstripped,
+  // and broke DESCRIBE_WRAPPER_RE's own anchor. applyPreambleFrames is the same
+  // general-purpose, closed, idempotent pass every other lane in this file
+  // already runs first.
+  const q = applyPreambleFrames(String(query || "").trim());
   const m = DESCRIBE_WRAPPER_RE.exec(q) || STACCATO_PRONOUN_RE.exec(q);
   let term = m?.[1]?.trim();
   if (!term) return null;
   if (DESCRIBE_PRONOUN_RE.test(term)) {
     if (!focus?.label) return null; // no standing focus to resolve against — honest decline
     term = focus.label;
+  } else {
+    const rescued = await describeGrainRescue(graph, term);
+    if (rescued?.label) {
+      term = rescued.label;
+    } else {
+      // Tier 6 playtest: "what about the TaskController" (no grain word, just a
+      // bare article) — resolveSymbol (codegraph.mjs) has no component/overlap
+      // tier at all, only exact/endsWith/basename/includes checks, so a leading
+      // "the"/"a"/"an" is pure NOISE here (unlike resolveObject's looser tiers,
+      // there is no accidental-match risk this could introduce — stripping it
+      // only ever REMOVES characters no real label ever contains as a match
+      // signal). "TaskController" resolves exactly where "the TaskController"
+      // didn't.
+      term = term.replace(/^(?:the|a|an)\s+/i, "");
+    }
   }
   try {
     const text = await dispatchTool("tmct_describe", { symbol: term }, { config, source });
@@ -4867,7 +4992,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // for what would otherwise become the generic wall, never a competing route:
   // it only claims the turn if /describe actually resolves the captured term.
   if (miss && recordMiss && via === "composed") {
-    const described = await describeWrapperAnswer(query, { config, source, focus: newFocus });
+    const described = await describeWrapperAnswer(query, { config, source, focus: newFocus, graph });
     if (described) {
       answer = described.text; via = "describe"; recordMiss = false;
       note(trace, "lane: (4d) DESCRIBE-WRAPPER RESCUE — a polite wrapper around \"describe/tell me about <symbol>\" resolved via /describe, tried last after every other lane declined");
@@ -5138,6 +5263,20 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
   if (entityArg && (!value || isPronoun(value))) {
     value = focus?.label || "";
     if (value) note(trace, `intermediate: no/pronoun argument -> fell back to the standing focus "${value}"`);
+  }
+  // Tier 6 playtest: a bare English "describe the logger module"/"describe the
+  // Task class" is short enough (≤3 tokens, no query connective) that
+  // asBareCommand (above) already rewrote it into a literal slash command
+  // BEFORE this function ever sees it — so describeGrainRescue's OWN lane
+  // (describeWrapperAnswer) never runs for this exact shape; the rescue has to
+  // happen HERE too, on the raw command argument, before it reaches
+  // dispatchTool's resolveSymbol (which has no article/grain-word tolerance).
+  if (entityArg && value) {
+    const rescued = await describeGrainRescue(graph, value);
+    if (rescued?.label) {
+      note(trace, `intermediate: "${value}" carries a grain word -> resolved to ${rescued.label} before dispatch`);
+      value = rescued.label;
+    }
   }
   if (spec.arg && !spec.optional && !value) {
     const need = entityArg ? `${spec.arg} (none given and no focus set — /focus <x> or pass one)` : spec.arg;

@@ -2189,7 +2189,7 @@ function derivationalStem(w) {
  *  for a caller (traverse()'s reverse case) that already knows what class the
  *  relation's object slot expects ("which modules import logger" must never
  *  resolve "logger" to a same-stem Class). */
-export function resolveObject(graph, term, { expectedClass = null } = {}) {
+function resolveObjectCore(graph, term, { expectedClass = null } = {}) {
   const t = String(term || "").trim();
   if (!t) return { match: null, candidates: [], tier: null, ambiguous: false };
   const tLc = t.toLowerCase();
@@ -2479,6 +2479,65 @@ export function resolveObject(graph, term, { expectedClass = null } = {}) {
   // fuzzy couldn't resolve uniquely: surface the prose tie (when there was one)
   // exactly as before, else the honest miss.
   return proseResult || { match: null, candidates: [], tier: null, ambiguous: false };
+}
+
+/** A leading article is pure noise on a structural entity term ("the logger" ==
+ *  "logger") — mirrors memory/core.mjs's normFactTerm article-strip for taught
+ *  facts (Tier 5, T1), applied here on the graph-resolution side instead. */
+const LEADING_ARTICLE_RE = /^(?:the|a|an)\s+/i;
+
+/** A trailing GENERIC GRAIN WORD ("the logger MODULE", "the Task CLASS") is a
+ *  TYPE HINT a real user attaches to disambiguate WHICH grain they mean — but
+ *  resolveObjectCore's plain word-overlap scoring (tier 3) can't read
+ *  grammatical role, so the grain word instead becomes an ordinary overlapping
+ *  component and can manufacture an accidental TIE between the actual module and
+ *  any same-stem Class/Method sharing its name (Tier 6 playtest, found live:
+ *  "the logger module" tied mod:src/lib/logger.mjs against fn:...#Logger and
+ *  fn:...#Logger.info, all scoring identically on the shared "logger" component
+ *  once "module"/"the" themselves matched nothing — the caller's own
+ *  `!ambiguous` gate then silently declined the whole thing, walling
+ *  moduleOrientLane/"describe the logger module"/"where is the logger module
+ *  defined"/etc. even though a human reads "module" as fully disambiguating).
+ *  Reuses ENTITY_TO_TYPE (ask-vocab.mjs) — the SAME closed noun→grain table the
+ *  grammar's own entity-slot parsing already trusts — so this never invents a
+ *  new vocabulary, only a new place the existing one gets consulted. */
+const TRAILING_GRAIN_WORD_RE = new RegExp(`\\s+(${Object.keys(ENTITY_TO_TYPE).join("|")})$`, "i");
+
+/** resolveObject: the grain-aware disambiguation PRE-PASS, wrapping
+ *  resolveObjectCore (the tiered resolver, unchanged) — only when the CALLER
+ *  hasn't already pinned an expectedClass (a caller that already knows the
+ *  class, e.g. traverse()'s reverse case, needs no help). Tries, in order:
+ *  (1) a trailing grain word ("module"/"class"/"function"/"method"/…, after a
+ *  leading-article strip) narrows the pool to that ONE grain and retries on
+ *  just the head noun — closing exactly the accidental-tie class this
+ *  docblock above describes; (2) failing that, a plain leading-article strip
+ *  alone (no grain word) — "the logger" resolves the same way bare "logger"
+ *  always has. Either retry is used ONLY on an unambiguous hit; any miss/tie
+ *  falls through unchanged to the ORIGINAL (unstripped) term via
+ *  resolveObjectCore, so this is purely additive — a term that already
+ *  resolved before resolves exactly the same way now (a multi-word "the X
+ *  module"-shaped term never equals a real label outright, so the exact-match
+ *  tier the pre-pass could theoretically shadow is never actually in play). */
+export function resolveObject(graph, term, opts = {}) {
+  const { expectedClass = null } = opts;
+  if (!expectedClass) {
+    const raw = String(term || "").trim();
+    const stripped = raw.replace(LEADING_ARTICLE_RE, "").trim();
+    const grainMatch = stripped.match(TRAILING_GRAIN_WORD_RE);
+    if (grainMatch) {
+      const head = stripped.slice(0, grainMatch.index).trim();
+      const grainClass = ENTITY_TO_TYPE[grainMatch[1].toLowerCase()];
+      if (head && grainClass) {
+        const rGrain = resolveObjectCore(graph, head, { expectedClass: grainClass });
+        if (rGrain?.match?.id && !rGrain.ambiguous) return rGrain;
+      }
+    }
+    if (stripped && stripped !== raw) {
+      const rStripped = resolveObjectCore(graph, stripped, opts);
+      if (rStripped?.match?.id && !rStripped.ambiguous) return rStripped;
+    }
+  }
+  return resolveObjectCore(graph, term, opts);
 }
 
 /** Resolve a term that may be a context pronoun ("this"/"it"/"that"/"here") —

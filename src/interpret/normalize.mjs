@@ -158,6 +158,33 @@ const GREETING_PREAMBLE_RE = /^(?:hi|hiya|hello|hey|yo|howdy|g'?day|good\s+(?:mo
  *  non-empty-remainder-REQUIRED discipline as the greeting frame, so a bare
  *  "thanks so much" (no delimiter, no question) stays small-talk. */
 const THANKS_PREAMBLE_RE = /^(?:thanks|thank\s+you|many\s+thanks|thx|ty|cheers)(?:\s+(?:so\s+much|a\s+lot|very\s+much|a\s+bunch))?\s*[,—–-]\s*(?:(?:just\s+a\s+)?quick\s+question\s*[,:—–-]?\s*)?(.+)$/i;
+/** An ACKNOWLEDGEMENT lead-in with a delimiter, the sibling of GREETING_PREAMBLE_RE/
+ *  THANKS_PREAMBLE_RE for the "ok"/"cool" word family (Tier 6 playtest: "ok cool,
+ *  what about the TaskController" — a drill-down continuation politely
+ *  acknowledging the PREVIOUS answer before asking the next question). chat.mjs's
+ *  OK_ACK set already treats a BARE "ok"/"cool"/"sounds good" as small-talk, but a
+ *  CHAINED lead-in ("ok cool, X") left "cool"/"," debris ahead of the real
+ *  question — same failure class GREETING/THANKS' own multi-word lead-ins had.
+ *  The marker group repeats (`+`) so a stack of ack-words peels in one pass ("ok
+ *  cool" both go), each followed by whitespace/comma; same delimiter- and
+ *  non-empty-remainder-REQUIRED discipline as the two frames above. */
+const ACK_PREAMBLE_RE = /^(?:(?:ok(?:ay)?|cool|alright|sure|right|fine|great|nice|got it|gotcha|sounds good)[\s,]+)+(.+)$/i;
+/** A repeated leading HEDGE ADVERB ("maybe", "possibly", "perhaps") ahead of a
+ *  polite request verb — the sibling of ACK_PREAMBLE_RE for HEDGING rather than
+ *  acknowledging (Tier 6 playtest §3's own stacked-politeness example: "could
+ *  you maybe possibly tell me... what saveStore does"). Unlike ACK_PREAMBLE_RE,
+ *  no delimiter is required — a hedge adverb modifies the verb it precedes
+ *  directly ("maybe possibly tell me"), so requiring a comma would miss the
+ *  common case; unconditional strip, same as the other preamble frames (none
+ *  of these three words is grammar-owned vocabulary). Deliberately a narrow,
+ *  closed three-word set. */
+const HEDGE_ADVERB_PREAMBLE_RE = /^(?:(?:maybe|possibly|perhaps)\s+)+(.+)$/i;
+/** A floating "if it's not too much trouble"/"if that's not too much bother"
+ *  aside — a genuine mid-sentence PARENTHETICAL (unlike every other frame
+ *  here, this is NOT anchored to the start of the string), stripped wherever
+ *  it appears, comma-bounded on either side. Tier 6 playtest's own example
+ *  phrase: "...tell me, if its not too much trouble, what saveStore does". */
+const TROUBLE_ASIDE_RE = /,?\s*if\s+(?:it'?s|it\s+is|that'?s|that\s+is)\s+not\s+too\s+much\s+(?:trouble|bother|hassle)\s*,?\s*/i;
 /** Modal politeness wrapper: "can/could/would/will you [please] <Q>[, please][?]"
  *  -> "<Q>". FILLER_WORDS already ate "can you"/"please" as words; this frame
  *  removes them as a WRAPPER so the ", please" comma never survives into the
@@ -176,6 +203,16 @@ const MODAL_WRAPPER_RE = /^(?:can|could|would|will)\s+you\s+(?:please\s+)?(.+?)(
  *  "explain" elaboration request (WHY set) are matched on the RAW turn text
  *  before normalizeQuery ever runs, so neither is touched by this frame. */
 const EXPLAIN_WRAPPER_RE = /^explain\s+(?:to\s+me\s+|please\s+)*(.+?)\??$/i;
+/** "tell me <Q>" (bare, no "about") -> "<Q>" — the sibling of EXPLAIN_WRAPPER_RE
+ *  for the "tell me" verb family when what follows is already a full WH-question
+ *  rather than a bare noun. "tell me about X" is vagueTouchTermOf's own separate
+ *  territory (chat.mjs) and is untouched here: this frame's interrogative-lead
+ *  gate can only ever fire on a remainder that "about X" never satisfies (it
+ *  starts with "about", not a WH-word). Found live (Tier 6 playtest): "could you
+ *  maybe possibly tell me... what saveStore does" left "tell me what saveStore
+ *  does" needing one more unwrap after HEDGE_ADVERB_PREAMBLE_RE and
+ *  MODAL_WRAPPER_RE peeled their own layers. */
+const TELL_ME_WRAPPER_RE = /^tell\s+me\s+(.+?)\??$/i;
 /** show/give-me presentation bridge: "show me [the] <thing>". Three-way:
  *  a KIND-listing remainder is left untouched (the compositional list grammar
  *  owns "show me untested modules"); a remainder carrying a relation verb or an
@@ -204,20 +241,60 @@ const SHOW_GIVE_ME_RE = /^(?:show|give)\s+me\s+(?:the\s+)?(.+?)\??$/i;
 const LEADING_CONNECTIVE_RE = /^(?:and|also|so|then|now|but)\s+(.+)$/i;
 const QUESTION_AUX_LEAD_RE = /^(?:does|do|did|is|are|was|were|has|have|had|can|could|will|would|should)\b/i;
 
+/** A TOPIC-SWITCH / self-interruption preamble — "actually never mind, what
+ *  calls X", "no wait, I meant what calls Y", "hold on, where is Z defined"
+ *  (Tier 6 playtest, §3: "no wait", mid-conversation topic switches). A real
+ *  user abandoning whatever they were about to say and asking something else
+ *  instead — same species as LEADING_CONNECTIVE_RE just above (a discourse
+ *  marker carrying no query content of its own, gated on a real question
+ *  following it), just a richer closed marker set than a single connective
+ *  word, and CHAINABLE ("actually" + "never mind" + "i meant" can all stack —
+ *  the fixpoint loop below peels one per pass). Deliberately NOT the same
+ *  mechanism as SELF_CORRECTION_RE (this file, further down): that shape
+ *  requires an explicit "sorry"/"i mean" marker WITH a mandatory trailing
+ *  delimiter, modeling a mid-sentence restart of the SAME clause with real
+ *  text on both sides; this one is a STANDALONE marker at the very start of
+ *  the turn with nothing meaningful before it, and the delimiter (a comma) is
+ *  optional — colloquial speech routinely drops it ("no wait i meant …"). The
+ *  marker group REPEATS (`+`, mirroring ACK_PREAMBLE_RE just above) so a stack
+ *  of markers peels in ONE pass ("actually" + "never mind," both go) — unlike
+ *  LEADING_CONNECTIVE_RE's single-word frame, gating on the remainder after
+ *  only the FIRST marker would reject the strip before later markers ever get
+ *  a chance to peel (found live: "actually never mind, X" left "never mind,
+ *  X" as the gated remainder, which itself never looks like a question lead,
+ *  so the whole frame silently declined). None of these markers is grammar-
+ *  owned vocabulary (VERB_TO_KIND/ENTITY_TO_TYPE), so — same as GREETING_
+ *  PREAMBLE_RE/THANKS_PREAMBLE_RE/ACK_PREAMBLE_RE above — the strip is
+ *  unconditional; no interrogative-lead gate needed. */
+const TOPIC_SWITCH_PREAMBLE_RE =
+  /^(?:(?:actually|no\s+wait|wait|hold\s+on|never\s+mind|scratch\s+that|on\s+second\s+thought|i\s+mean(?:t)?)[\s,.]+)+(.+)$/i;
+
 /** Apply the closed preamble frames in order (greeting -> modal -> show/give-me),
  *  repeated to a small fixpoint so stacked wrappers ("hey, can you show me X
  *  please") peel fully. Pure and idempotent; unmatched text passes through. */
 export function applyPreambleFrames(text) {
   let q = String(text || "");
+  // The trouble-aside is a mid-sentence parenthetical, not a start-anchored
+  // wrapper — stripped unconditionally, once, before the fixpoint loop (it
+  // never interacts with the other frames' anchoring).
+  q = q.replace(TROUBLE_ASIDE_RE, " ").replace(/\s+/g, " ").trim();
   for (let pass = 0; pass < 3; pass++) {
     const before = q;
     let m = q.match(GREETING_PREAMBLE_RE);
     if (m) q = m[1].trim();
     m = q.match(THANKS_PREAMBLE_RE);
     if (m) q = m[1].trim();
+    m = q.match(ACK_PREAMBLE_RE);
+    if (m) q = m[1].trim();
+    m = q.match(HEDGE_ADVERB_PREAMBLE_RE);
+    if (m) q = m[1].trim();
+    m = q.match(TOPIC_SWITCH_PREAMBLE_RE);
+    if (m) q = m[1].trim();
     m = q.match(MODAL_WRAPPER_RE);
     if (m) q = m[1].trim();
     m = q.match(EXPLAIN_WRAPPER_RE);
+    if (m && INTERROGATIVE_LEAD_RE.test(m[1].trim())) q = m[1].trim();
+    m = q.match(TELL_ME_WRAPPER_RE);
     if (m && INTERROGATIVE_LEAD_RE.test(m[1].trim())) q = m[1].trim();
     m = q.match(SHOW_GIVE_ME_RE);
     if (m) {
