@@ -31,6 +31,54 @@
  *  `verbs: [...]` shape) since ask.mjs only needs phrase -> kind, never the
  *  register itself. A misparsed casual phrase costs nothing beyond an honest
  *  object-miss (resolveObject never guesses), so breadth here is genuinely low-risk. */
+// REVERSE inherits phrasings (Seonix Batch 2 Fix 2) — "is X a superclass of Y" /
+// "is X a parent class of Y" name the SAME `inherits` relation as the forward
+// "is X a subclass of Y" verbs above, but with subject/object semantically
+// SWAPPED: the questioner's X is the base, not the derived class. The "a"-forms
+// (below) are folded into RELATIONS.inherits.verbs so VERB_TO_KIND maps them to
+// kind "inherits" exactly like every forward verb — every existing
+// inherits-consuming template/renderer keeps working unmodified — but ALSO kept
+// as this separate exported list so the strategies that build "ask" shapes
+// (subject-before/object-after by regex capture POSITION, not semantic
+// direction — see grammar.mjs T1 and keywords.mjs's decomposition) can detect a
+// reverse verb and swap subject/object at parse time, before evaluation ever
+// sees it.
+//
+// Bare "superclass"/"superclasses" (single word, no "is … of" wrapper) are ALSO
+// folded in: keyword-spot's decomposition (keywords.mjs) finds a verb phrase as
+// a CONTIGUOUS run of words, and the interrogative word order ("is Base a
+// superclass of Widget") puts the subject BETWEEN "is" and "a superclass of",
+// breaking that contiguity for the 4-word phrase — exactly mirroring why the
+// forward direction already carries bare "subclass"/"subclasses" alongside its
+// own "is a subclass of" (both above, in RELATIONS.inherits.verbs): the bare
+// stem is what actually lets keyword-spot's decomposition recognize the
+// aux-first question form ("is Foo a subclass of Bar" only resolves today via
+// that same bare "subclass" stem — see grammar.mjs T1's own comment).
+//
+// The "the"-DEFINITE forms ("is the superclass of", "are the superclass of",
+// "is the parent class of") are named in INHERITS_REVERSE_VERBS below (the
+// caller-requested literal set) but deliberately NOT folded into
+// RELATIONS.inherits.verbs / VERB_TO_KIND: ask.mjs's CONTENT_VOCAB is built by
+// splitting every VERB_TO_KIND key into its individual words (wordsOf), so a
+// verb phrase containing the bare word "the" would leak "the" itself into
+// CONTENT_VOCAB — and the progressive-relaxation cascade's NOISE-STRIP layer
+// treats anything in CONTENT_VOCAB as un-strippable content, not noise. Verified
+// live: folding the "the"-forms in broke test/ask-cascade.test.mjs's pinned
+// NOISE-STRIP/DROP-UNMATCHED/SYNONYM-NORMALISE cases (each expects "the" to stay
+// strippable) and test/chatflow-tier2.test.mjs's ESL-pronoun case, all of which
+// rely on the pre-existing invariant that NO verb phrase in this file's tables
+// ever contains the bare word "the" (confirmed true before this change). So the
+// "the"-forms stay honest misses for now — "is a superclass of"/"are a
+// superclass of" (the forms this Batch's own tests exercise) work; reinstating
+// the "the"-forms would need a CONTENT_VOCAB fix first, out of this fix's scope.
+const INHERITS_REVERSE_VERB_LIST = [
+  "is a superclass of",
+  "are a superclass of",
+  "is a parent class of",
+  "are a parent class of",
+  "superclass", "superclasses",
+];
+
 export const RELATIONS = {
   imports: {
     comment: "Module -> Module: subject's import graph references object (usesComplexType).",
@@ -116,6 +164,12 @@ export const RELATIONS = {
       // the gerund-lead check reads) are listed; longest-match-first prefers the
       // two-word form when "from" follows.
       "extending", "inheriting from", "inheriting", "subclassing", "extends from",
+      // REVERSE phrasings (Seonix Batch 2 Fix 2, see INHERITS_REVERSE_VERB_LIST's own
+      // comment above): "is/are a|the superclass/parent class of" — folded in here so
+      // VERB_TO_KIND maps them to "inherits" like every other verb in this list; the
+      // subject/object SWAP their direction requires is handled at parse time by the
+      // strategies that build the "ask" shape, not here.
+      ...INHERITS_REVERSE_VERB_LIST,
     ],
   },
   touches: {
@@ -180,6 +234,22 @@ export const RELATIONS = {
   },
 };
 
+/** The closed set of reverse `inherits` verb phrasings a strategy that has already
+ *  matched a verb phrase can check ("was this one of the reverse ones?") to decide
+ *  whether to swap subject/object before returning its parsed shape (see the
+ *  comment above INHERITS_REVERSE_VERB_LIST, right before RELATIONS, for the full
+ *  story). Every phrase here EXCEPT the three "the"-definite forms is ALSO folded
+ *  into RELATIONS.inherits.verbs (so VERB_TO_KIND routes it to kind "inherits"
+ *  like any other inherits verb) — the "the"-forms are named here for
+ *  completeness (matching the originally-specified closed set) but are not yet
+ *  reachable through VERB_TO_KIND, so a strategy will never actually see one as
+ *  a matched verb; keeping them in this list is harmless and future-proofs the
+ *  swap check for whenever the CONTENT_VOCAB constraint is lifted. */
+export const INHERITS_REVERSE_VERBS = Object.freeze([
+  ...INHERITS_REVERSE_VERB_LIST,
+  "is the superclass of", "are the superclass of", "is the parent class of",
+]);
+
 // ---- where/when/mentions markers (2026-07-02 query families) — the location and
 // prose-mention questions carry NO relation verb ("where is X defined", "where is
 // X mentioned"), so ask.mjs routes them by these marker words instead of
@@ -190,6 +260,34 @@ export const WHERE_MARKERS = Object.freeze(["defined", "declared", "located", "i
 
 /** Prose-mention markers: "where is X <marker>" -> the prose/mentions surface. */
 export const MENTION_MARKERS = Object.freeze(["mentioned", "referenced"]);
+
+// ---- trailing scope filler (Seonix Batch 2 Fix 3) — a "what is a <noun phrase>"
+// question sometimes tacks on a trailing clause that scopes the question back onto
+// the graph/codebase ITSELF, not onto any additional term: "what is a Module in
+// this graph" means exactly "what is a Module", not a literal lookup of the glued
+// phrase "Module in this graph". Closed and curated like every other table here —
+// an unlisted trailing clause is left alone (an honest literal lookup), never
+// silently swallowed by a general heuristic. ----
+
+/** Trailing filler clauses stripped from the END of a captured meta-whatis object,
+ *  case-insensitive, before the term is used as a lookup key. */
+export const TRAILING_SCOPE_FILLER = Object.freeze([
+  "in this graph", "in the graph", "in this codebase", "in the codebase",
+  "in this repo", "in the repo", "here",
+]);
+
+const TRAILING_SCOPE_FILLER_RE = new RegExp(
+  `\\s+(?:${TRAILING_SCOPE_FILLER.join("|")})\\s*[?.!]*$`, "i",
+);
+
+/** Strip ONE trailing scope-filler clause (TRAILING_SCOPE_FILLER, above) off the end
+ *  of a captured meta-whatis object — "what is a Module in this graph" resolves the
+ *  same term as "what is a Module". Applied once, not in a loop: no worked phrasing
+ *  stacks two filler clauses. Every TRAILING_SCOPE_FILLER entry is plain words (no
+ *  regex metacharacters), so no escaping is needed building the alternation. */
+export function stripTrailingScopeFiller(text) {
+  return text.replace(TRAILING_SCOPE_FILLER_RE, "").trim();
+}
 
 /** relation token -> flat verb-phrase list, the shape ask.mjs's VERB_TO_KIND
  *  table needs (phrase -> kind), derived once from RELATIONS. */

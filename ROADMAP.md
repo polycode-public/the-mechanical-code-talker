@@ -14,7 +14,7 @@ the file has been deleted.
 
 ## Where we are now (2026-07-09)
 
-`npm test` green (**1245**). **v1.0.7, pushed** (0.9.11 → 1.0.0 → 1.0.7 across this session —
+`npm test` green (**1252**). **v1.0.7, pushed** (0.9.11 → 1.0.0 → 1.0.7 across this session —
 see `HANDOVER.md` for the exact release chain and file:line detail).
 
 ### Now: shipped this session
@@ -80,6 +80,11 @@ see `HANDOVER.md` for the exact release chain and file:line detail).
   self-index and a real 27,929-module production estate, relaying findings via the inter-session
   inbox. Triaged into 5 priority batches (4 items were already fixed by intervening work); Batch 1
   (existence-query correctness) shipped. Batches 2-5 queued — see "Next" below.
+- **Seonix Batch 2 landed.** Bare "what is Commit" now parses (article optional, restricted to
+  `ENTITY_TO_TYPE`'s closed vocabulary); a reverse `inherits` verb family ("is X a superclass/
+  parent class of Y") swaps subject/object at parse time so it agrees with the existing forward
+  phrasing; a curated trailing-scope-filler strip ("what is a Module in this graph" → "Module") at
+  both the grammar and chat-fact-lookup layers.
 - **The version-bump policy, set then revised.** Tried "bump immediately after every push, hold
   locally until the next batch" (to keep the published npm version always matching the last
   pushed commit); reverted after it produced confusing "referencing a version that doesn't exist
@@ -92,16 +97,15 @@ see `HANDOVER.md` for the exact release chain and file:line detail).
    remaining two rungs of the dialogue-flow ladder, not yet run. Tier 5's territory substantially
    overlaps functionality shipped this session (new-term teaching, quantifier recall) but hasn't
    been run through the playtest loop's own dead-end-hunting discipline yet.
-2. **Seonix Batches 2-5** (full detail relayed via the inbox, triage summary in this session's
-   history): Batch 2 — "what is X" vs "what is a X" grammar-level minimal pair (the chat-layer
-   fact-lookup side is now fixed; the underlying `grammar.mjs` T5 template still requires the
-   article, left alone deliberately pending a closer look at why), a missing reverse-direction
-   "is X a superclass of Y" verb entry, "what is a `<noun phrase>`" swallowing the whole phrase
-   instead of extracting the head noun. Batch 3 — recurring wall patterns (purpose/identity
+2. **Seonix Batches 3-5** (Batch 2 landed — see "Now" above; full detail relayed via the inbox,
+   triage summary in this session's history). Batch 3 — recurring wall patterns (purpose/identity
    "whats X for/about", temporal qualifiers on Commit queries, onboarding/closing questions read
    as literal search strings). Batch 4/5 — lower-priority, including a cross-graph disambiguation-
    candidate-ranking weakness seonix evidenced 5 times independently but that doesn't reproduce on
-   tmct's own small fixture graph (needs a larger graph to chase).
+   tmct's own small fixture graph (needs a larger graph to chase). One Batch 2 follow-up remains:
+   the reverse `inherits` verb family's "the"-definite forms ("is the superclass of") aren't wired
+   into `VERB_TO_KIND` yet — doing so would leak the bare word "the" into ask.mjs's CONTENT_VOCAB
+   and break the relaxation cascade's noise-strip tests; needs a CONTENT_VOCAB fix first.
 3. **General verb-to-predicate teaching's natural follow-up**: dedicated direct-question
    recognition ("does margo eat ribs", "what does margo eat") — this session's work covers
    teaching + generic retrieval, not verb-specific query phrasings.

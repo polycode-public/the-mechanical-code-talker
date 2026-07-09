@@ -314,6 +314,18 @@ test("Bug 2: no-regression — the structural 'what is a X' grammar path (T5, ar
   assert.doesNotMatch(articled.answer, /couldn't parse this as a graph question/, "the mandatory-article structural form still resolves exactly as before");
 });
 
+// Seonix Batch 2 Fix 3: a trailing scope clause ("in this graph"/"in this codebase"/…)
+// tacked onto a "what is a X" question is stripped before the term is looked up — both
+// at the grammar layer (T5 — see grammar.mjs's own test) and here, at the chat layer,
+// via metaTermOf/factAnswer's shared stripTrailingScopeFiller call.
+test("Batch 2 Fix 3: 'what is a cache in this graph' resolves the same answer as 'what is a cache' — trailing scope filler stripped, chat layer", async () => {
+  const g = await graph();
+  const withFiller = await runTurn("what is a cache in this graph", { config: CONFIG, graph: g });
+  const withoutFiller = await runTurn("what is a cache", { config: CONFIG, graph: g });
+  assert.equal(withFiller.answer, withoutFiller.answer);
+  assert.doesNotMatch(withFiller.answer, /couldn't parse this as a graph question/);
+});
+
 // ---- Bug 1 (2026-07-09 dispatch): "what else is X" repeated the primary
 // definition verbatim instead of surfacing more. Root cause: ask()'s own
 // relaxation cascade silently drops "else" as an unmatched token once the

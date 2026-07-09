@@ -208,14 +208,21 @@ the moment of actually pushing a release, as part of that same push.
 1. **Tier 5 (teach + recall + reasoning in dialogue) and Tier 6 (the messy real user)** — not yet
    run. Tier 5's territory substantially overlaps this session's own new-term/quantifier-teaching
    work, but hasn't been through the playtest loop's own dead-end-hunting discipline yet.
-2. **Seonix Batch 2 — cheap, high-confidence routing gaps.** "what is X" vs "what is a X" at the
-   GRAMMAR level (`grammar.mjs`'s T5 template still requires the article — this session only
-   fixed the chat-layer fact-lookup side, not the structural grammar path; T5's article
-   requirement was deliberate for a specific documented reason, worth understanding before
-   touching it). A missing reverse-direction "is X a superclass of Y" verb-phrase entry (the
-   forward "is X a subclass of Y" exists, the reverse doesn't — a one-line `ask-vocab.mjs`
-   addition). "what is a `<noun phrase>`" swallowing the whole phrase instead of extracting the
-   head noun.
+2. **DONE: Seonix Batch 2 — cheap, high-confidence routing gaps.** All three landed. (a)
+   `grammar.mjs`'s T5 ("meta-whatis") article is now optional, but the bare (no-article) form is
+   restricted to `ENTITY_TO_TYPE`'s closed vocabulary (`what is Commit` now parses; the two pinned
+   honest-miss regressions — "what is the meaning of this codebase", "what is exposed" — still
+   return null). (b) Added the reverse `inherits` verb family (`is X a superclass/parent class of
+   Y`) to `ask-vocab.mjs`, with subject/object swapped at parse time in both `grammar.mjs` T1 and
+   `keywords.mjs`'s decomposition, so "is Base a superclass of Widget" and "is Widget a subclass of
+   Base" agree; the "the"-definite forms ("is the superclass of") are named in the export but not
+   yet wired into `VERB_TO_KIND` — folding them in leaked the bare word "the" into ask.mjs's
+   CONTENT_VOCAB and broke the cascade's noise-strip tests, so that's deferred. (c) A curated
+   `TRAILING_SCOPE_FILLER` table (`ask-vocab.mjs`) strips trailing clauses like "in this graph" off
+   a `what is a <noun phrase>` capture, at both the grammar layer and chat.mjs's fact-lookup path.
+   One pre-existing test (`chatflow-tier2.test.mjs` T11) was updated: bare "what is Class" now
+   direct-hits the meta definition instead of falling through to the cascade's count-reading
+   rescue — a strictly better, non-wall answer, so the test's expectation was updated to match.
 3. **Seonix Batch 3 — recurring wall patterns, 3+ independent confirmations each.** Purpose/
    identity phrasing ("whats X for/about") walling while "what does X do" and superlatives work;
    temporal qualifiers on Commit queries ("the last commit", "recent commits") treated as literal

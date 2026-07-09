@@ -7,6 +7,7 @@
 import {
   VERB_TO_KIND, ENTITY_TO_TYPE, MODIFIER_TO_KIND,
   META_MEANING_VERBS, WHERE_MARKERS, MENTION_MARKERS,
+  INHERITS_REVERSE_VERBS, stripTrailingScopeFiller,
 } from "../../ask-vocab.mjs";
 import { escapeRegex } from "../normalize.mjs";
 
@@ -20,13 +21,28 @@ const TEMPLATES = [
   // does/is/do/did, which the reverse/forward templates below never match (those start with
   // which/what), so precedence between T1 and the rest is structural, not a tie-break guess.
   // "did" joins does/do for the past-tense commit forms ("did commit <sha> touch X").
+  // REVERSE VERB SWAP (Seonix Batch 2 Fix 2): this template fixes subject/object by regex
+  // capture POSITION, not by the verb's semantic direction — fine for every forward verb
+  // ("subclass of", "imports", …), but "is X a superclass of Y" MEANS the reverse of "is X
+  // a subclass of Y" (Y inherits from X, not X from Y). INHERITS_REVERSE_VERBS (ask-vocab.mjs)
+  // is the closed set of such reverse phrasings; when the matched verb is one of them,
+  // subject/object are swapped here, once, at parse time — so downstream evaluation (ask.mjs)
+  // sees "is Y a subclass of X" and needs zero changes of its own. (In practice this exact
+  // regex only ever matches a does/do/did lead, so "is …" phrasings actually reach the "ask"
+  // shape via keywords.mjs's decomposition strategy instead — that strategy applies the same
+  // swap for the same reason; this branch is kept for any does/do/did-led phrasing that names
+  // a reverse verb, and for structural symmetry with that sibling strategy.)
   {
     name: "ask",
     re: new RegExp(`^(?:does|do|did)\\s+(.+?)\\s+(${VERB_ALT})\\s+(.+?)\\??$`, "i"),
-    build: (m) => ({
-      shape: "ask", entityType: null, modifier: "direct",
-      kind: VERB_TO_KIND[m[2].toLowerCase()], subject: m[1].trim(), object: m[3].trim(),
-    }),
+    build: (m) => {
+      const verb = m[2].toLowerCase();
+      const kind = VERB_TO_KIND[verb];
+      let subject = m[1].trim();
+      let object = m[3].trim();
+      if (INHERITS_REVERSE_VERBS.includes(verb)) [subject, object] = [object, subject];
+      return { shape: "ask", entityType: null, modifier: "direct", kind, subject, object };
+    },
   },
   // T2 reverse: "which <entity> [<modifier>] <verb> <object>" — the operator's own example shape.
   {
@@ -63,15 +79,32 @@ const TEMPLATES = [
     build: (m) => ({ shape: "meta", entityType: null, modifier: "direct", kind: "meta", object: m[1].trim() }),
   },
   // T5 meta: "what is a/an <term>" — the OTHER worked phrasing ("what is a Commit").
-  // The indefinite article is REQUIRED (not optional): a bare "what is <anything>"
-  // would also swallow "what is the meaning of this codebase" (an existing, deliberately
-  // honest grammar-miss regression case — ask.test.mjs/ask-dual-strategy.test.mjs both
-  // assert it stays null), which never mentions "a"/"an" before its tail. Requiring the
-  // article keeps this template's reach to the one worked shape without reopening that.
+  // Seonix Batch 2 Fix 1: the indefinite article is now OPTIONAL, but the BARE
+  // (no-article) form is restricted to the CLOSED vocabulary ENTITY_TO_TYPE already
+  // imported above (function/method/class/module/attribute/variable/change/commit,
+  // singular and plural) — build() returns null (same "this template didn't actually
+  // match, keep scanning" contract T8/"when" below already relies on — see
+  // parseAnchored's own docblock) when the bare form's object isn't one of those
+  // closed terms, so the scan falls through exactly as if this template had not
+  // matched at all. This keeps "what is a doohickey"/"widget"/"gizmo" (still routed
+  // here via the WITH-article, fully unrestricted `(.+?)` path — pinned to resolve as
+  // an honest meta miss downstream, ask-combo.test.mjs/chat-readback.test.mjs) working
+  // unmodified, while ALSO keeping the two pinned bare-form honest misses intact:
+  // "what is the meaning of this codebase" (ask.test.mjs/ask-dual-strategy.test.mjs)
+  // and "what is exposed" (ask.test.mjs:840) both have bare objects absent from
+  // ENTITY_TO_TYPE, so build() still rejects them and they still fall through to null.
+  // Fix 3: stripTrailingScopeFiller (ask-vocab.mjs) trims a curated trailing clause
+  // ("what is a Module in this graph" -> "Module") off the object before it's
+  // returned, so a scoping tail never corrupts the lookup term either the bare-form
+  // check above or downstream resolution/rendering perform.
   {
     name: "meta-whatis",
-    re: new RegExp(`^what\\s+(?:is|are)\\s+(?:an?)\\s+(.+?)\\??$`, "i"),
-    build: (m) => ({ shape: "meta", entityType: null, modifier: "direct", kind: "meta", object: m[1].trim() }),
+    re: new RegExp(`^what\\s+(?:is|are)\\s+(?:(an?)\\s+)?(.+?)\\??$`, "i"),
+    build: (m) => {
+      const object = m[2].trim();
+      if (!m[1] && !ENTITY_TO_TYPE[object.toLowerCase()]) return null; // bare form: closed-set only
+      return { shape: "meta", entityType: null, modifier: "direct", kind: "meta", object: stripTrailingScopeFiller(object) };
+    },
   },
   // T6 mention: "where is <term> mentioned/referenced" — the prose/mentions surface
   // (2026-07-02 query families). Tried BEFORE T7: T7's trailing marker is optional,

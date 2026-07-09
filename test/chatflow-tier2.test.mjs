@@ -584,11 +584,22 @@ test("tier2/T10 bare 'explain X' family: 'explain cochange', 'please explain coc
   }
 });
 
-test("tier2/T11 ESL leading pronoun: 'please you tell me what is Class' reaches the bare no-article count reading", async () => {
+// Seonix Batch 2 Fix 1 (2026-07-09): "what is Class" (bare, no article) now parses
+// DIRECTLY via grammar.mjs's meta-whatis template (T5) — "class" is one of the
+// ENTITY_TO_TYPE closed-vocabulary terms Fix 1 opened the bare form to — so the
+// direct parse no longer misses and the cascade's bare-kind-noun terminal rescue
+// (the "read as \"count class\"" repair receipt this test used to pin) is never
+// reached at all. The turn still lands a real, non-wall answer — now the meta
+// definition of Class itself, which is at least as natural a reading of "what is
+// Class" as the count — so this test is updated to the new direct-hit content
+// rather than reverted; the T11 regression this test freezes (an ESL leading
+// pronoun must not dead-end at the grammar wall) still holds.
+test("tier2/T11 ESL leading pronoun: 'please you tell me what is Class' reaches a real answer (now the direct meta-whatis hit, Batch 2 Fix 1)", async () => {
   const { dir, turns } = await driveSession(["please you tell me what is Class"]);
   try {
     assert.doesNotMatch(turns[0].answer, WALL);
-    assert.equal(turns[0].answer, "read as \"count class\" — 3 classes.");
+    assert.doesNotMatch(turns[0].answer, /I'm tmct — a deterministic/);
+    assert.match(turns[0].answer, /^A class is a template that defines/);
   } finally {
     clearCache();
     await rm(dir, { recursive: true, force: true });

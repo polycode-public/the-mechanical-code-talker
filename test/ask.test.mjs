@@ -361,6 +361,28 @@ test("ask(): inherits verb family — which classes inherit from Base", () => {
   assert.match(content, /Widget/);
 });
 
+// Seonix Batch 2 Fix 2 — the reverse "is X a superclass of Y" phrasing (fixture:
+// Widget extends Base, so Widget is the subclass and Base the superclass). Both
+// phrasings of the SAME true relationship must produce the SAME Yes content — the
+// reverse phrasing's subject/object are swapped at parse time (grammar.mjs T1 /
+// keywords.mjs), not silently answered backwards.
+test("ask(): \"is Base a superclass of Widget\" and \"is Widget a subclass of Base\" agree (Batch 2 Fix 2 — reverse inherits)", () => {
+  const graph = buildGraph();
+  const reverse = ask(graph, "is Base a superclass of Widget");
+  const forward = ask(graph, "is Widget a subclass of Base");
+  assert.equal(reverse.tmct_ask.miss, false);
+  assert.equal(forward.tmct_ask.miss, false);
+  assert.match(reverse.content, /^Yes/);
+  assert.equal(reverse.content, forward.content);
+});
+
+test("ask(): \"is Widget a superclass of Base\" honestly says No — the reverse phrasing is not silently flipped to a wrong Yes (Batch 2 Fix 2)", () => {
+  const graph = buildGraph();
+  const { content, tmct_ask } = ask(graph, "is Widget a superclass of Base");
+  assert.equal(tmct_ask.miss, true);
+  assert.match(content, /^No/);
+});
+
 test("ask(): tests verb family — which modules test app.widget's module", () => {
   const graph = buildGraph();
   const { tmct_ask } = ask(graph, "which modules tests app/widget.mjs");
@@ -473,8 +495,38 @@ test("parseQuery: \"what is a Commit\" parses to the meta shape via the mandator
   assert.equal(p.object, "Commit");
 });
 
+// Seonix Batch 2 Fix 1: the article is now OPTIONAL, but only for terms in the closed
+// ENTITY_TO_TYPE vocabulary — "what is Commit" (no article) now parses identically to
+// "what is a Commit" since "commit" is one of ENTITY_TO_TYPE's keys.
+test("parseQuery: bare \"what is Commit\" (no article) parses identically to \"what is a Commit\" — closed-vocabulary bare form (Batch 2 Fix 1)", () => {
+  const p = parseQuery("what is Commit");
+  assert.equal(p.shape, "meta");
+  assert.equal(p.object, "Commit");
+});
+
 test("parseQuery: the existing honest-miss regression (\"what is the meaning of this codebase\") still returns null — the meta-whatis template's mandatory article keeps it from swallowing this", () => {
   assert.equal(parseQuery("what is the meaning of this codebase"), null);
+});
+
+// Batch 2 Fix 1 re-assertion: the bare-form closed-vocabulary restriction must still
+// reject a bare term that ISN'T in ENTITY_TO_TYPE, same as before the article was
+// loosened — both of the pinned honest-miss regressions below must keep failing null.
+test("parseQuery: bare \"what is the meaning of this codebase\" still returns null after Batch 2 Fix 1 (not an ENTITY_TO_TYPE term)", () => {
+  assert.equal(parseQuery("what is the meaning of this codebase"), null);
+});
+
+test("parseQuery: bare \"what is exposed\" still returns null after Batch 2 Fix 1 (\"exposed\" isn't an ENTITY_TO_TYPE term)", () => {
+  assert.equal(parseQuery("what is exposed", { nlp: null }), null);
+});
+
+// Seonix Batch 2 Fix 3: a curated trailing scope clause is stripped from the captured
+// object before it's used as a lookup term, so a scoping tail never corrupts it.
+test("parseQuery: \"what is a Module in this graph\" resolves the same object as \"what is a Module\" (Batch 2 Fix 3, trailing scope filler stripped)", () => {
+  const withFiller = parseQuery("what is a Module in this graph");
+  const withoutFiller = parseQuery("what is a Module");
+  assert.equal(withFiller.shape, "meta");
+  assert.equal(withFiller.object, "Module");
+  assert.deepEqual(withFiller, withoutFiller);
 });
 
 test("ask(): \"what does cochange mean\" answers from the graph's own SchemaPredicate individual, by human-facing kind name", () => {

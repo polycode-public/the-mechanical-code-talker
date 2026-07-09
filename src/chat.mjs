@@ -52,7 +52,10 @@ import { createTelemetry } from "./telemetry.mjs";
 import * as defaultSource from "./source.mjs";
 import { loadTemplates, render as renderTemplate } from "./corpus/templates.mjs";
 import { finish, beginsWithVowelSound, grammarRules } from "./finish.mjs";
-import { VERB_TO_KIND, WHERE_MARKERS, MENTION_MARKERS, ENTITY_TO_TYPE, PASSIVE_PARTICIPLE_TO_KIND } from "./ask-vocab.mjs";
+import {
+  VERB_TO_KIND, WHERE_MARKERS, MENTION_MARKERS, ENTITY_TO_TYPE, PASSIVE_PARTICIPLE_TO_KIND,
+  stripTrailingScopeFiller,
+} from "./ask-vocab.mjs";
 import { COUNTERFACTUAL_RE, correctMisspellings, applyPreambleFrames } from "./interpret/normalize.mjs";
 import { fuzzyMatchInSet, fuzzyBound } from "./interpret/fuzzy.mjs";
 
@@ -2631,7 +2634,11 @@ async function factAnswer(memoryDir, query, envelope, miss) {
   if (!metaTerm && miss && !envelope?.parsed) {
     const m = q.match(BARE_WHATIS_RE)
       || q.match(/^what\s+(?:does|do)\s+(.+?)\s+means?[?.!\s]*$/i);
-    if (m) metaTerm = m[1];
+    // Seonix Batch 2 Fix 3: strip a curated trailing scope clause ("… in this
+    // graph"/"… in this codebase"/…) the same way grammar.mjs's T5 and
+    // metaTermOf do — BARE_WHATIS_RE's capture is otherwise the literal glued
+    // tail, verbatim.
+    if (m) metaTerm = stripTrailingScopeFiller(m[1]);
   }
   if (metaTerm) {
     // BUG 1 fix: "what is a tree used for" parses (grammar.mjs T5) to the
@@ -3326,14 +3333,19 @@ const BARE_WHATIS_RE = /^what\s+(?:is|are)\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
  *  question asks about — from the parse when present, else recognized directly
  *  via BARE_WHATIS_RE (article optional — see its own docblock for why that's
  *  safe here even though the grammar's own T5 keeps the article mandatory).
- *  Null when the line isn't such a form. */
+ *  Null when the line isn't such a form. Seonix Batch 2 Fix 3: a curated trailing
+ *  scope clause ("what is a Module in this graph") is stripped off the captured
+ *  term the same way grammar.mjs's T5 does (stripTrailingScopeFiller,
+ *  ask-vocab.mjs) — the envelope.parsed.object branch above already carries a
+ *  trimmed term when it came from that template, so the strip here only needs to
+ *  cover this function's own regex fallback. */
 function metaTermOf(query, envelope) {
   if (envelope?.parsed?.shape === "meta" && envelope.parsed.object) return envelope.parsed.object;
   const q = String(query).trim();
   const m = q.match(BARE_WHATIS_RE)
     || q.match(/^what\s+(?:does|do)\s+(?:an?\s+)?(.+?)\s+means?[?.!\s]*$/i)
     || q.match(/^define\s+(?:an?\s+)?(.+?)[?.!\s]*$/i);
-  return m ? m[1].trim() : null;
+  return m ? stripTrailingScopeFiller(m[1].trim()) : null;
 }
 
 /** The curated SEON definition to PREFER for a "what is a <lexicon term>", or null.

@@ -8,6 +8,7 @@
 import {
   VERB_TO_KIND, ENTITY_TO_TYPE, MODIFIER_TO_KIND,
   WHERE_MARKERS, MENTION_MARKERS, PLACEHOLDER_NOUNS, PASSIVE_PARTICIPLE_TO_KIND,
+  INHERITS_REVERSE_VERBS,
 } from "../../ask-vocab.mjs";
 import { STOPWORDS } from "../normalize.mjs";
 import { VOCAB_WORDS, eligibleForCanon, fuzzyVocabWord } from "../fuzzy.mjs";
@@ -227,7 +228,20 @@ export function parseKeywordSpot(text, nlp = null) {
     }
   }
 
-  if (beforeText && afterText) return { shape: "ask", entityType: null, modifier: "direct", kind, subject: beforeText, object: afterText };
+  if (beforeText && afterText) {
+    // REVERSE VERB SWAP (Seonix Batch 2 Fix 2): this decomposition assigns subject/
+    // object by POSITION (before the verb / after it), not by the verb's semantic
+    // direction — the same structural fact grammar.mjs's T1 "ask" template comment
+    // explains. "is X a superclass of Y" (or its bare "superclass" stem — see
+    // INHERITS_REVERSE_VERBS's own comment in ask-vocab.mjs) means the REVERSE of
+    // "is X a subclass of Y": swap once, here, at parse time, so evaluation always
+    // sees the equivalent forward-phrased question.
+    const verbPhrase = canonWords.slice(verbHit.start, verbHit.end).join(" ");
+    let subject = beforeText;
+    let object = afterText;
+    if (INHERITS_REVERSE_VERBS.includes(verbPhrase)) [subject, object] = [object, subject];
+    return { shape: "ask", entityType: null, modifier: "direct", kind, subject, object };
+  }
   if (afterText) return { shape: "reverse", entityType, modifier, kind, object: afterText };
   // forward keeps the spotted entityType ("which modules did commit <sha> touch" is a
   // forward decomposition — subject before the verb — whose asked grain would otherwise
