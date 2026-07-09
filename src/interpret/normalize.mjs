@@ -165,6 +165,25 @@ const EXPLAIN_WRAPPER_RE = /^explain\s+(?:to\s+me\s+|please\s+)*(.+?)\??$/i;
  *  module" -> "describe store module"). */
 const SHOW_GIVE_ME_RE = /^(?:show|give)\s+me\s+(?:the\s+)?(.+?)\??$/i;
 
+/** Leading STACCATO connective before an ALREADY well-formed question ("and
+ *  what imports it", "so does it import anything else", "also where is X
+ *  defined") -> the question alone (0.9.15 Tier-1 single-touch playtest). A
+ *  rapid-fire drill-down naturally opens its next turn with a bare discourse
+ *  connective (chat.mjs's own STACCATO_LEAKED_CONNECTIVES set: and/also/so/
+ *  then/now, here joined by "but" for the same family); when what follows is
+ *  ALREADY an interrogative lead or an auxiliary-question opener, the
+ *  connective carries no query content of its own — conversational
+ *  scaffolding, same species as the greeting/subordination preambles. Gated
+ *  on the REMAINDER starting a real question, so a genuine mid-clause boolean
+ *  composition ("classes that inherit from Base and are tested") is never
+ *  touched — that "and" never sits at position 0 to begin with. Without this,
+ *  "and what imports it" parsed as an "ask"-shape question with "and" itself
+ *  MISREAD as the subject term — a miss the relaxation cascade can't rescue,
+ *  because "and" is protected CONTENT_VOCAB (a boolean connective elsewhere)
+ *  and the noise-strip layer never drops content vocab. */
+const LEADING_CONNECTIVE_RE = /^(?:and|also|so|then|now|but)\s+(.+)$/i;
+const QUESTION_AUX_LEAD_RE = /^(?:does|do|did|is|are|was|were|has|have|had|can|could|will|would|should)\b/i;
+
 /** Apply the closed preamble frames in order (greeting -> modal -> show/give-me),
  *  repeated to a small fixpoint so stacked wrappers ("hey, can you show me X
  *  please") peel fully. Pure and idempotent; unmatched text passes through. */
@@ -186,6 +205,11 @@ export function applyPreambleFrames(text) {
       if (!isListingRemainder(rest)) {
         q = (RELATION_VERB_RE.test(rest) || INTERROGATIVE_LEAD_RE.test(rest)) ? rest : `describe ${rest}`;
       }
+    }
+    m = q.match(LEADING_CONNECTIVE_RE);
+    if (m) {
+      const rest = m[1].trim();
+      if (INTERROGATIVE_LEAD_RE.test(rest) || QUESTION_AUX_LEAD_RE.test(rest)) q = rest;
     }
     if (q === before) break;
   }
