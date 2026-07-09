@@ -207,8 +207,12 @@ test("(d) contradictions are surfaced, both kept with provenance, never silently
   const dir = await tmpRepo();
   try {
     // same (subject, predicate), DIFFERENT object, both above the trust floor
-    await appendFact(dir, { subject: "the sky", predicate: "mgx:hasProperty", object: "blue", provenance: "ace:chat:s1@2026-07-05T00:00:00.000Z" });
-    await appendFact(dir, { subject: "the sky", predicate: "mgx:hasProperty", object: "grey", provenance: "corpus:conceptnet /r/HasProperty" });
+    // (subject "sky", not "the sky" — normFactTerm now strips a leading article,
+    // a Tier-5 playtest fix so a recall query like "who maintains the tasks
+    // handler" matches a fact taught as "the tasks handler …"; the article was
+    // never load-bearing to this contradiction-surfacing feature itself)
+    await appendFact(dir, { subject: "sky", predicate: "mgx:hasProperty", object: "blue", provenance: "ace:chat:s1@2026-07-05T00:00:00.000Z" });
+    await appendFact(dir, { subject: "sky", predicate: "mgx:hasProperty", object: "grey", provenance: "corpus:conceptnet /r/HasProperty" });
     const m = await loadMemory(dir);
     const groups = findContradictions(m);
     assert.equal(groups.length, 1, "one contradiction detected");
@@ -216,7 +220,7 @@ test("(d) contradictions are surfaced, both kept with provenance, never silently
     // the inspector surfaces BOTH with provenance
     const text = renderMemory({ memory: m, blocks: { blocks: {} } });
     assert.match(text, /contradictions \(1 — both kept, never silently resolved\):/);
-    assert.match(text, /the sky mgx:hasProperty\?/);
+    assert.match(text, /sky mgx:hasProperty\?/);
     assert.match(text, /blue \(trust /);
     assert.match(text, /grey \(trust /);
   } finally {

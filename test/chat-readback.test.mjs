@@ -175,7 +175,7 @@ test("multi-turn: an un-asserted membership still honestly MISSES (byte-identica
   }
 });
 
-test("read-back: an un-asserted superclass term still honestly misses (byte-identical to no-memory)", async () => {
+test("read-back: an un-asserted superclass term still honestly misses (byte-identical to no-memory, aside from the TEACH-OFFER)", async () => {
   // (0.8.2 WS1: "widget" now resolves via ask's meta fallback — the fixture's Class
   // Widget — so this pin uses a term matching neither memory, schema, nor a class.)
   const dir = await mkdtemp(join(tmpdir(), "tmct-rb-miss-"));
@@ -185,7 +185,15 @@ test("read-back: an un-asserted superclass term still honestly misses (byte-iden
 
     const withMemory = await runTurn("what is a gizmo", { config: CONFIG, memoryDir: dir });
     const bare = await runTurn("what is a gizmo", { config: CONFIG });
-    assert.equal(withMemory.answer, bare.answer, "un-asserted term unchanged by the read-back");
+    // Tier-5 playtest fix (this session): a genuinely-unknown-everywhere "what
+    // is X" miss now gets a TEACH-OFFER appended UNDER the unchanged wall text
+    // — but ONLY when memoryDir exists (there's nowhere to write a taught fact
+    // otherwise), so `withMemory` and `bare` now deliberately diverge on that
+    // one trailing line; the WALL TEXT ITSELF (this test's own original point
+    // — read-back never spuriously matches an unrelated term) stays identical.
+    assert.equal(withMemory.answer.split("\n")[0], bare.answer.split("\n")[0], "the wall text itself is unchanged by the read-back");
+    assert.match(withMemory.answer, /I don't know "gizmo" yet — teach me directly/);
+    assert.doesNotMatch(bare.answer, /teach me directly/, "no memoryDir -> no teach-offer (nowhere to store it)");
     assert.equal(withMemory.record.miss, true);
     assert.notEqual(withMemory.record.via, "fact");
   } finally {

@@ -424,12 +424,26 @@ export async function appendUtterances(dir, utterances) {
  *  spelling and the graph stays queryable: ConceptNet's /c/en/foo_bar, a
  *  grammar's tmct:Foo_bar and a bare "Foo bar" all become "foo bar". The
  *  PREDICATE is deliberately NOT normalized this way - it is a controlled
- *  vocabulary term (rdfs:subClassOf) whose casing is meaningful. */
+ *  vocabulary term (rdfs:subClassOf) whose casing is meaningful.
+ *
+ *  Tier-5 playtest fix (2026-07-09): also strips a leading "the"/"a"/"an" —
+ *  found live via "remember that THE logger module is deprecated" (teach-side
+ *  already stripped it before this ran, so storage was unaffected) followed by
+ *  "what do you know about THE logger module" / "who maintains THE tasks
+ *  handler" (recall-side queries, which do NOT pre-strip their own captured
+ *  term before calling this) genuinely missing the just-taught fact — every
+ *  recall regex in chat.mjs (KNOW_ABOUT_RE, WHO_OWNS_RE, ISA_ASK_RE, …) calls
+ *  factTermVariants -> normFactTerm on the raw captured term, so fixing it
+ *  ONCE here closes the gap for all of them instead of patching each site.
+ *  Safe for storage too (idempotent — an already-stripped subject is
+ *  unaffected); the article is a determiner, never semantically distinguishing
+ *  for a code-entity or common-noun term in this domain. */
 export function normFactTerm(t) {
   let s = normText(t);
   s = s.replace(/^\/c\/[a-z]{2,3}\//i, "");
   s = s.replace(/^[a-z][\w.-]*:/i, "");
   s = s.replace(/_/g, " ").replace(/\s+/g, " ").trim();
+  s = s.replace(/^(?:the|an?)\s+/i, "");
   return s.toLowerCase();
 }
 

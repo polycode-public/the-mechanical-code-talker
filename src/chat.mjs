@@ -1307,10 +1307,19 @@ const SUBCLASS_PREDICATE = "rdfs:subClassOf";
 const HAS_A_PREDICATE = "mgx:hasA";
 
 /** "<Name> owns/maintains <X>" — the ownership teach declarative. <Name> is one
- *  or two name tokens, <X> one code-ish token (a path, a file, a symbol). The
- *  BARE form additionally requires a Capitalized name (see teachLane), so
- *  ordinary lowercase prose never lands a fact without the explicit wrapper. */
-const OWNS_TEACH_RE = /^([A-Za-z][\w'-]*(?:\s+[A-Z][\w'-]*)?)\s+(?:owns|maintains)\s+(\S+?)[.!?]*$/;
+ *  or two name tokens; <X> is a code-ish token (a path, a file, a symbol) OR a
+ *  short natural noun phrase ("the tasks handler") — widened from a
+ *  single-token-only object (Tier-5 playtest fix, found live: "remember that
+ *  margo maintains the tasks handler" WALLED entirely, because the object
+ *  didn't fit ONE bare token and generalVerbTeach explicitly stands down for
+ *  "owns"/"maintains" anywhere in the sentence, deferring to this frame — so
+ *  neither recognizer ever stored the fact). The article-stripping needed so
+ *  "the tasks handler" reads back the same as a bare "tasks handler" is
+ *  handled once, centrally, by normFactTerm (memory/core.mjs) — teachFact
+ *  already normalizes both subject and object through it. The BARE form
+ *  additionally requires a Capitalized name (see teachLane), so ordinary
+ *  lowercase prose never lands a fact without the explicit wrapper. */
+const OWNS_TEACH_RE = /^([A-Za-z][\w'-]*(?:\s+[A-Z][\w'-]*)?)\s+(?:owns|maintains)\s+(.+?)[.!?]*$/;
 
 /** "<X> is <adjective>" — the property teach payload (wrapper-REQUIRED): a lazy
  *  subject and a single bare complement word. Never matches the "is a <noun>"
@@ -1384,10 +1393,18 @@ const SOME_A_FEW_RE = /^(some|a few)\s+([\w-]+)\s+are\s+([\w-]+)$/i;
  *  apart from a singular/specific-entity "a"/bare reading (only "every" gets a
  *  recorded quantifier here — this function's OWN caller passes it through to
  *  teachFact; assertTurn, below, records the same "every" quantifier
- *  independently for the pre-existing ACE-success path). Single-token X and Y
- *  only — the same fragment scope parseAce's own copula patterns cover, just
- *  with X's lexicon-membership requirement lifted. */
-const UNKNOWN_SUBJECT_RE = /^(every\s+|each\s+|all\s+|a\s+|an\s+)?([\w-]+)\s+(?:is|are)\s+(?:an?\s+)?([\w-]+)$/i;
+ *  independently for the pre-existing ACE-success path). Y (the object) is a
+ *  single token, same as parseAce's own copula fragments; X (the subject) is
+ *  ONE OR TWO tokens (Tier-5 playtest fix: "vulcan gizmo is a tool"/"remember
+ *  vulcan gizmo is a tool" fell straight to a "teach me" nudge that offered
+ *  THIS EXACT phrasing as the fix, then itself failed when tried — a
+ *  single-token-only subject was too narrow for a natural 2-word noun phrase,
+ *  the same class of gap OWNS_TEACH_RE's own object had before its own
+ *  Tier-5 widening, above). The greedy quantifier tries the longer 2-word
+ *  subject first, backtracking to 1 word only if the tail doesn't then start
+ *  with is/are — the "is/are" anchor immediately after the subject removes
+ *  the ambiguity a fully free-form multi-word subject would otherwise have. */
+const UNKNOWN_SUBJECT_RE = /^(every\s+|each\s+|all\s+|a\s+|an\s+)?([\w-]+(?:\s+[\w-]+)?)\s+(?:is|are)\s+(?:an?\s+)?([\w-]+)$/i;
 
 /** The unknown-SUBJECT direct-write fallback (point 1 + point 2's bare-property
  *  extension): tried ONLY after the real ACE grammar (assertTurn) has already
@@ -1475,7 +1492,21 @@ async function unknownSubjectFallback(payload, { memoryDir, sessionId, lexicon }
  *  multi-word subject simply doesn't match here and honestly declines
  *  (point 6) rather than risk a wrong split — the is/are-specific frames
  *  elsewhere in this lane already own that broader territory. */
-const GENERAL_VERB_TEACH_RE = /^([\w'-]+)\s+([a-z]+)\s+(.+?)[.!?]*$/i;
+// Tier-5 playtest fix (this session): a frequency/degree ADVERB commonly sits
+// between a bare-name subject and the real verb in a natural teaching
+// sentence — the operator's own example, "remember that TaskController
+// usually needs review", mis-split subject="TaskController", VERB="usually"
+// (GENERAL_VERB_TEACH_RE had no way to see "usually" wasn't the verb), minting
+// a nonsense mgx:usually predicate and, worse, garbling the confirmation
+// itself: thirdPersonSingularSurface's naive fallback appended "-ies" to the
+// unrecognized lemma, surfacing "taskcontroller usuallies needs review". A
+// closed, non-capturing adverb-skip (never itself eligible to BE the verb)
+// fixes this at the source for both the teach shape and its query-side twins
+// below, without widening what counts as a recognized shape at all — the same
+// "recognition closed, mapping generalized" split this lane already uses.
+const TEACH_ADVERB_SKIP_SRC = "(?:(?:usually|often|sometimes|rarely|never|always|typically|generally|"
+  + "occasionally|frequently|normally|regularly|commonly|mostly|currently|still|also|really|actually)\\s+)?";
+const GENERAL_VERB_TEACH_RE = new RegExp(`^([\\w'-]+)\\s+${TEACH_ADVERB_SKIP_SRC}([a-z]+)\\s+(.+?)[.!?]*$`, "i");
 /** Determiners/quantifiers that make the FIRST token an article, not a real
  *  bare-name subject ("every controller…", "the cache…") — GENERAL_VERB_TEACH_RE
  *  would otherwise happily bind them as a 1-token subject and misread the
@@ -1565,8 +1596,12 @@ async function generalVerbTeach(payload) {
 // EXCLUDE_RE decline guards generalVerbTeach uses, and route the verb through
 // the SAME generalVerbPredicate (not a re-implementation), so the has/have
 // bridge (and Bug A's had/having lemma fix) is automatic on the query side too. ----
-const GENERAL_VERB_YESNO_RE = /^(?:does|did)\s+([\w'-]+)\s+([a-z]+)\s+(.+?)[?.!\s]*$/i;
-const GENERAL_VERB_OPEN_RE = /^what\s+(?:does|did)\s+([\w'-]+)\s+([a-z]+)[?.!\s]*$/i;
+// Same adverb-skip as GENERAL_VERB_TEACH_RE above (TEACH_ADVERB_SKIP_SRC),
+// reused so "does TaskController usually need review"/"what does
+// TaskController usually need" read back a fact taught with the adverb
+// skipped the same way, never mis-splitting "usually" as the verb here either.
+const GENERAL_VERB_YESNO_RE = new RegExp(`^(?:does|did)\\s+([\\w'-]+)\\s+${TEACH_ADVERB_SKIP_SRC}([a-z]+)\\s+(.+?)[?.!\\s]*$`, "i");
+const GENERAL_VERB_OPEN_RE = new RegExp(`^what\\s+(?:does|did)\\s+([\\w'-]+)\\s+${TEACH_ADVERB_SKIP_SRC}([a-z]+)[?.!\\s]*$`, "i");
 /** GENERAL_VERB_EXCLUDE_RE was written for generalVerbTeach's fully-conjugated
  *  declarative verb ("X OWNS Y", "X MAINTAINS Y") — but "does/did X <verb> Y"
  *  captures the BARE INFINITIVE after do-support ("does X OWN Y", never "does X
@@ -2826,7 +2861,26 @@ async function factAnswer(memoryDir, query, envelope, miss) {
       for (const s of nextSubjects) for (const v of factTermVariants(normFactTerm, s)) nextFrontier.add(v);
       frontier = nextFrontier;
     }
-    const hits = rows.filter((f) => variants.has(f.subject) || variants.has(f.object) || subtypeSubjects.has(f.subject));
+    let hits = rows.filter((f) => variants.has(f.subject) || variants.has(f.object) || subtypeSubjects.has(f.subject));
+    // Tier-5 playtest fallback: a taught fact's subject is often a real NOUN
+    // PHRASE ("logger module", "tasks handler"), but a natural follow-up
+    // shortens it to one head word ("what do you know about the logger") —
+    // an exact-variant miss above, since "logger" !== "logger module". Only
+    // tried when the exact/subtype pass found NOTHING (never overrides a real
+    // hit), and only on a whole WORD (length >= 4, the same floor
+    // resolveObject's own tier-3/5 containment checks use to keep a short
+    // staccato word from hijacking an unrelated fact) shared between the
+    // query term and a fact's subject/object — a listing/discovery feature
+    // (like the subtype walk above), not a yes/no claim, so a slightly wider
+    // recall net is consistent with this lane's existing inclusiveness.
+    if (!hits.length) {
+      const queryWords = normFactTerm(know[1]).split(/\s+/).filter((w) => w.length >= 4);
+      if (queryWords.length) {
+        const wordsOf = (s) => new Set(String(s || "").split(/\s+/));
+        const overlaps = (term) => { const w = wordsOf(term); return queryWords.some((qw) => w.has(qw)); };
+        hits = rows.filter((f) => overlaps(f.subject) || overlaps(f.object));
+      }
+    }
     if (!hits.length) return null;
     // echo the STORED spelling ("caches" asked → "cache" known), never a guess
     const literalHit = hits.find((f) => variants.has(f.subject) || variants.has(f.object));
@@ -2969,6 +3023,27 @@ const KIND_OF_RE = /^what\s+kind\s+of\s+(?:thing|class|type|category|entity)?\s*
 /** "who owns <X>" / "who maintains <X>" — the closed ownership read-back over
  *  the teach lane's mgx:ownedBy facts. */
 const WHO_OWNS_RE = /^who\s+(?:owns|maintains)\s+(.+?)[?.!\s]*$/i;
+/** "does/did <Name> own/maintain <X>" — the yes/no ownership claim over the
+ *  SAME mgx:ownedBy facts WHO_OWNS_RE reads (Tier-5 playtest fix). The bare
+ *  infinitive after do-support ("does X own Y", never "does X owns Y") mirrors
+ *  GENERAL_VERB_YESNO_RE's own do-support convention. */
+const OWNS_YESNO_RE = /^(?:does|did)\s+([\w'-]+)\s+(?:owns?|maintains?)\s+(.+?)[?.!\s]*$/i;
+/** "is/are/was/were <X> <adjective>" — a yes/no claim over a taught
+ *  mgx:hasProperty fact (Tier-5 playtest fix). Deliberately has NO marker
+ *  between subject and complement — "a"/"an"/"a kind of"/"a type of" is
+ *  ISA_ASK_RE's own mandatory territory just below (matched and handled, or
+ *  matched-and-declined, BEFORE this code ever runs), so a genuine "is a
+ *  module a component" is never reachable here. Anaphoric "it"/"this"/"that"
+ *  resolves against the session's current FOCUS (threaded in as `focusLabel`)
+ *  — never a guess when there's no standing focus. Only ever answers "yes"
+ *  (a real fact found) or DECLINES (null) — never a fabricated closed-world
+ *  "no", unlike its ownership/general-verb siblings above: a bare copula
+ *  ("is this good", "is it done") is the single most common CASUAL English
+ *  shape, so a wrong-feeling "no — no remembered fact says X is Y" for
+ *  ordinary small talk would be worse than deferring to the ordinary
+ *  cascade/orientation nudge that already handles it. */
+const IS_ADJECTIVE_YESNO_RE = /^(?:is|are|was|were)\s+(.+?)\s+([A-Za-z][\w-]*)[?.!\s]*$/i;
+const IS_ADJECTIVE_PRONOUN_RE = /^(?:it|this|that)$/i;
 /** WHOLE-STORE recall (CHATBENCH_006 lever 3): "what did i tell you [last time]",
  *  "what facts do you know", "what do you remember" — list EVERY remembered fact
  *  (no subject/object term to filter on), cited, higher-trust first. The multi-turn
@@ -3034,7 +3109,7 @@ function inheritsChain(graph, startId) {
  *        "what kind of thing is an X" reports X's own type (subject-side first).
  *  Miss-only and run AFTER factAnswer returns null, so it never shadows the
  *  subject-side answer or a schema hit. Returns { text, replace:true } or null. */
-async function factReadBack(memoryDir, query, envelope, miss, graph = null) {
+async function factReadBack(memoryDir, query, envelope, miss, graph = null, focusLabel = null) {
   if (!miss) return null;
   let normFactTerm;
   try { ({ normFactTerm } = await import("./memory/core.mjs")); } catch { return null; }
@@ -3144,6 +3219,83 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null) {
       .sort(byTrust);
     if (!hits.length) return null;
     return renderMany(hits);
+  }
+
+  // (a2b) OWNERSHIP yes/no — "does/did <Name> own/maintain <X>": Tier-5
+  // playtest fix, found live — WHO_OWNS_RE only ever answered the OPEN "who
+  // owns X" form; a direct yes/no claim about a specific (owner, thing) pair
+  // ("does margo maintain the tasks handler") fell all the way through to the
+  // structural code-graph wall, even right after teaching exactly that fact,
+  // because GENERAL_VERB_QUERY_EXCLUDE_RE deliberately stands the general-verb
+  // reader down for "own"/"maintain" (they mint a DIFFERENT predicate,
+  // mgx:own/mgx:maintain, than this frame's own OWNED_BY_PREDICATE) — this is
+  // that missing specific reader. Same closed-world convention as (a3)'s
+  // general-verb yes/no just below: a hit answers "yes", no stored fact
+  // answers a definite "no" (never a guessed owner name, unlike the OPEN "who
+  // owns" form above, which stays an honest miss rather than guess WHO).
+  const ownsYN = q.match(OWNS_YESNO_RE);
+  if (ownsYN) {
+    const [, ownerRaw, thingRaw] = ownsYN;
+    const ownerVariants = factTermVariants(normFactTerm, ownerRaw.trim());
+    const thingVariants = factTermVariants(normFactTerm, thingRaw.replace(/^an?\s+/i, "").trim());
+    const hit = rows
+      .filter((f) => f.predicate === OWNED_BY_PREDICATE && thingVariants.has(f.subject) && ownerVariants.has(f.object))
+      .sort(byTrust)[0];
+    if (hit) return { text: `yes — ${renderFactLine(hit)}`, replace: true };
+    return {
+      text: `no — no remembered fact says ${ownerRaw.trim().toLowerCase()} owns/maintains ${thingRaw.trim()}.`,
+      replace: true,
+    };
+  }
+
+  // (a2c) PROPERTY yes/no — "is/are/was/were <X> <adjective>": Tier-5 playtest
+  // fix, found live — "remember that the logger module is deprecated" taught a
+  // real mgx:hasProperty fact, but there was no direct-question reader for it
+  // AT ALL (only presuppositionNudge's own narrow "why does X still Y" embeds
+  // this same check) — "is the logger deprecated" fell straight to the
+  // structural wall. Checks BOTH shapes a taught "<X> is <adjective>" can land
+  // as (mirrors presuppositionNudge's own dual check, above): the teach lane's
+  // mgx:hasProperty fact, or — when the adjective is a known ACE-OWL lexicon
+  // data-property word — the ACE grammar's own tmct:<adjective> "true" triple.
+  // "it"/"this"/"that" resolve against `focusLabel` — a bare pronoun with no
+  // standing focus declines (null), same discipline STACCATO_PRONOUN_RE uses.
+  const isAdj = q.match(IS_ADJECTIVE_YESNO_RE);
+  if (isAdj) {
+    const rawSubject = isAdj[1].trim();
+    const subject = IS_ADJECTIVE_PRONOUN_RE.test(rawSubject) ? (focusLabel || null) : rawSubject;
+    const adjective = isAdj[2].trim().toLowerCase();
+    if (subject) {
+      const subjVariants = factTermVariants(normFactTerm, subject);
+      const propertyMatch = (f) => (f.predicate === HAS_PROPERTY_PREDICATE && normFactTerm(f.object) === adjective)
+        || (f.predicate === `tmct:${adjective}` && f.object === "true");
+      // Same head-word fallback as factAnswer's "(c) what do you know about"
+      // lane: a taught subject is often a real noun PHRASE ("logger module"),
+      // shortened in the natural follow-up ("is the logger deprecated") — an
+      // exact-variant miss on its own, on a whole word (length >= 4, the same
+      // floor used elsewhere) shared between the query subject and the fact's
+      // own subject.
+      const subjWords = normFactTerm(subject).split(/\s+/).filter((w) => w.length >= 4);
+      const wordOverlap = (f) => subjWords.some((w) => new Set(String(f.subject || "").split(/\s+/)).has(w));
+      const subjectMatch = (f) => subjVariants.has(f.subject) || (subjWords.length && wordOverlap(f));
+      const hit = rows.filter((f) => subjectMatch(f) && propertyMatch(f)).sort(byTrust)[0];
+      if (hit) return { text: `yes — ${renderFactLine(hit)}`, replace: true };
+      // no hit on THIS property — never a guessed "no" (see
+      // IS_ADJECTIVE_YESNO_RE's own docblock for why this stays silent on a
+      // truth claim, unlike its ownership/general-verb siblings above). But a
+      // subject we DO know something else about ("the logger" has a
+      // deprecated-fact, just not a fast-fact) still deserves an honest, named
+      // receipt — never a bare wall — mirroring factAnswer's own established
+      // convention for a known-subject/wrong-predicate miss ("I don't have
+      // any 'X' facts about Y"). The SAME subjectMatch (exact-variant OR
+      // head-word overlap) decides "known", so a shortened/article-led
+      // subject that found its fact via the overlap fallback is recognized
+      // as known too. A subject with NO known facts at all falls through
+      // undecided — there's nothing honest to say beyond the ordinary
+      // cascade's own miss/orientation nudge.
+      if (rows.some(subjectMatch)) {
+        return { text: `I don't have a fact saying ${subject.toLowerCase()} is ${adjective}.`, replace: true };
+      }
+    }
   }
 
   // (a3) GENERAL VERB-TO-PREDICATE direct-question retrieval (item 5, this
@@ -4224,16 +4376,28 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // guarantees a real answer before it defers, never stranding the turn on a
   // worse outcome — see isStaccatoPronounNoFocus's own docblock for the same
   // discipline).
+  // Tier-5 playtest fix (this session): "is it deprecated" is EXACTLY the same
+  // race BUG 2 (above) fixed for "what is john" — 3 words, no code-ish token,
+  // so isConversationalCandidate would otherwise win unconditionally and a
+  // just-taught property fact ("logger module is deprecated") becomes
+  // unreachable the moment it's asked back about with a short pronoun/bare
+  // form ("is it deprecated" / "is the logger deprecated"). Widened the SAME
+  // divert-only-on-a-real-hit gate to also try IS_ADJECTIVE_YESNO_RE shapes —
+  // factAnswer itself declines for this shape (no metaTerm), so the only
+  // change in practice is that factReadBack's (a2c) property lane gets a
+  // chance to run before the orientation card claims the turn.
+  const bareWhatisShape = BARE_WHATIS_RE.test(String(query).trim());
+  const isAdjectiveShape = IS_ADJECTIVE_YESNO_RE.test(String(query).trim());
   let bareMetaHit = null;
-  if (isConversationalCandidate && memoryDir && BARE_WHATIS_RE.test(String(query).trim())) {
+  if (isConversationalCandidate && memoryDir && (bareWhatisShape || isAdjectiveShape)) {
     bareMetaHit = (await factAnswer(memoryDir, query, envelope, miss))
-      ?? (await factReadBack(memoryDir, query, envelope, miss, graph));
+      ?? (await factReadBack(memoryDir, query, envelope, miss, graph, newFocus?.label));
   }
   if (bareMetaHit) {
     answer = bareMetaHit.replace ? bareMetaHit.text : `${answer}\n${bareMetaHit.text}`;
     via = "fact"; recordMiss = false; handled = true;
     if (bareMetaHit.pending) factPending = bareMetaHit.pending;
-    note(trace, "lane: (2b) BARE META FACT — \"what is X\" (no article) resolved to a remembered fact before the conversational catch-all could claim it");
+    note(trace, "lane: (2b) BARE META FACT — \"what is X\" (no article) / \"is X <adjective>\" resolved to a remembered fact before the conversational catch-all could claim it");
     note(trace, "source: .tmct/memory Facts (see /memory for provenance per line)");
   } else if (isConversationalCandidate) {
     // A conversational miss (a greeting, "what can you do", a very short non-code
@@ -4269,7 +4433,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     // first (factAnswer), then the reverse-membership read-back (factReadBack) so an
     // asserted "every X is a Y" answers "what is a Y" too.
     const fact = (await factAnswer(memoryDir, query, envelope, miss))
-      ?? (await factReadBack(memoryDir, query, envelope, miss, graph));
+      ?? (await factReadBack(memoryDir, query, envelope, miss, graph, newFocus?.label));
     if (fact) {
       answer = fact.replace ? fact.text : `${answer}\n${fact.text}`;
       via = "fact";
@@ -4497,6 +4661,52 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       && noCodeGraph(graph) && !/--repo|tmct init|no code graph/i.test(answer)) {
     answer = `${answer}\n(this repo has no code graph — for structure, point me at a \`.tmct/graph.json\` with \`--repo <path>\` or run \`npm run example:mini\`; tmct doesn't index code itself.)`;
     note(trace, "intermediate: HONEST-EMPTY POLISH — the loaded graph has 0 modules, so the dead-end got a --repo/tmct init pointer appended");
+  }
+  // TEACH-OFFER (Tier-5 playtest, this session) — SKILL_CHAT_PLAYTEST.md §0
+  // names "'X' isn't a term in this graph's own vocabulary" as its own
+  // dead-end example, and Tier 5 (§3) explicitly wants "the honest 'I don't
+  // know that yet' that offers to learn" rather than a bare wall. A "what is
+  // X" miss where X is genuinely unknown EVERYWHERE — not a real graph entity
+  // (resolveEntity), not a schema/vocab term (that's what "still standing
+  // miss" already means here), and not already in memory (checked directly,
+  // not via factAnswer's OWN metaTerm branch, so this never duplicates its
+  // more specific "no X facts about Y" miss) — gets a short offer appended
+  // UNDER the existing miss text, never replacing it (every pinned assertion
+  // on the miss wording elsewhere stays intact; this is purely additive, the
+  // same discipline the corpus aside (W5) and empty-graph polish above use).
+  if (recordMiss && (via === "composed" || via === "miss") && memoryDir) {
+    const offerTerm = metaTermOf(query, envelope);
+    if (offerTerm) {
+      let normFactTerm;
+      try { ({ normFactTerm } = await import("./memory/core.mjs")); } catch { normFactTerm = null; }
+      if (normFactTerm) {
+        const ent = await resolveEntity(graph, offerTerm);
+        if (!ent) {
+          const variants = factTermVariants(normFactTerm, offerTerm);
+          const known = (await memoryFacts(memoryDir)).some((f) => variants.has(f.subject) || variants.has(f.object));
+          if (!known) {
+            const article = /^[aeiou]/i.test(offerTerm) ? "an" : "a";
+            // Verified in-state (SKILL_CHAT_PLAYTEST.md §4's own "verify every
+            // offered example" rule — an unwrapped bare declarative only
+            // stores for a SINGLE-token subject, BARE_DECLARATIVE_RE's own
+            // scope; the wrapped "remember X is a Y" form tolerates up to a
+            // TWO-token subject (unknownSubjectFallback's UNKNOWN_SUBJECT_RE,
+            // widened this session). A 3+-word term ("vulcan gizmo repair kit")
+            // fits neither shape — never offer a concrete example that would
+            // itself fail; the plain nudge to teach it still guides, honestly.
+            const words = offerTerm.trim().split(/\s+/);
+            const remember = `remember ${offerTerm} is ${article} <thing>`;
+            const example = words.length === 1
+              ? `"${offerTerm} is ${article} <thing>" or "${remember}"`
+              : words.length === 2
+                ? `"${remember}"`
+                : null;
+            answer = `${answer}\nI don't know "${offerTerm}" yet — teach me directly${example ? `, e.g. ${example}` : ` (e.g. "remember <name> is ${article} <thing>")`}.`;
+            note(trace, `intermediate: TEACH-OFFER — "${offerTerm}" is unknown to both the graph and memory, so the miss got an offer to learn appended`);
+          }
+        }
+      }
+    }
   }
   // W5 (flag-gated, default OFF): an unknown-term miss may consult the LOCAL
   // committed corpus slice — a hit APPENDS a grounded, licence-cited aside under

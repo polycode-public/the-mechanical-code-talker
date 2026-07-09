@@ -479,13 +479,21 @@ test("ontology: a real concept-force answer never sprouts an unrelated synonym a
   }
 });
 
-test("ontology: no known synonym anywhere → the honest miss stands, byte-unchanged", async () => {
+test("ontology: no known synonym anywhere → the honest miss stands, byte-unchanged (aside from the TEACH-OFFER)", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-ontology-none-"));
   try {
     const q = "what is a zzzznonexistentword";
     const withMemory = await runTurn(q, { config: CONFIG, memoryDir: dir });
     const bare = await runTurn(q, { config: CONFIG });
-    assert.equal(withMemory.answer, bare.answer);
+    // Tier-5 playtest fix (this session): a genuinely-unknown-everywhere miss
+    // now gets a TEACH-OFFER appended under the unchanged wall text, only when
+    // memoryDir exists — this test's own original point (no known synonym →
+    // the ontology-synonym lane never fires) is the WALL TEXT itself, which
+    // stays byte-identical; the two answers now deliberately diverge only on
+    // that trailing offer line.
+    assert.equal(withMemory.answer.split("\n")[0], bare.answer.split("\n")[0], "the wall text itself is unchanged — no synonym lane fired");
+    assert.match(withMemory.answer, /I don't know "zzzznonexistentword" yet — teach me directly/);
+    assert.doesNotMatch(bare.answer, /teach me directly/, "no memoryDir -> no teach-offer (nowhere to store it)");
     assert.equal(withMemory.record.miss, true);
   } finally {
     clearCache();
