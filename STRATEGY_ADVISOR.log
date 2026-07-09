@@ -65,3 +65,368 @@ ADVISOR CLOSED (stopped by operator instruction, 2026-07-08). 1 tick run this wa
 22:56Z, narrate-mode/worktree-merge-order finding — actioned, see the tick-1-follow-up note
 above). No tick 2 was ever re-armed after tick 1 completed — nothing was actively running to
 stop. Re-arm fresh for the next wave rather than resuming this block.
+
+═══════════════════════════════════════
+[2026-07-08 17:15Z] source=strategy-advisor(sonnet5,deep) · topic=playtest-stop-condition + fuzzy-identity-gap
+OBSERVATION (1, stop-condition): the concurrent Tier-0 playtest loop's stop rule is "10
+cycles or a cycle finds nothing useful." Historical precedent (SKILL_PLAYTEST_SPRINT.md,
+HANDOVER.md lines 15-30) shows this branch is unlikely to ever fire: the prior sprint ran 5
+rounds and STILL had 2 unfixed findings logged at round 5 — the operator had to manually cut
+it off at round 5 of a planned 5-9 run; no round ever naturally hit zero. A "finds nothing"
+bar this high means the new loop will very likely burn the full 10 cycles by default, each
+costing a real npm test run + commit.
+OBSERVATION (2, false-positive dry-run): ran the actual binary against adversarial inputs.
+The `!envelope?.parsed` gate at src/chat.mjs:2701 is robust — "extends Foo" and "what extends
+Router" both resolve as real structural queries (honest "no module found") despite
+isConversational() itself returning true for them in isolation (STRUCT_WORDS lacks "extends"),
+because the real VERB_TO_KIND grammar parse takes priority. No swallow of recognized-vocabulary
+structural queries observed. But the NEW fuzzy-typo layer (fuzzyConversationalMatch,
+src/chat.mjs ~L717-740) has a coverage gap the exact-regex tier does not: AI_IDENTITY_PHRASES
+explicitly recognizes "r u" as an identity/AI token, but a typo of it ("waht r u") falls through
+fuzzyMatchInSet (CONVERSATIONAL_PHRASES pool has no "r u"/shorthand entries) and lands on the
+generic orientation card instead of the identity-self/AI-identity answer — verified live:
+`printf 'waht r u\n/exit\n' | node bin/tmct.mjs chat --repo examples/mini-webapp --ephemeral`
+prints the capability card, not "No — no LLM involved...".
+RECOMMENDED ACTION: (1) lower the playtest hard cap to 5 with an explicit operator check-in
+before continuing further (matching how the prior sprint was actually run), OR redefine "finds
+nothing useful" as 2 consecutive cycles with only cosmetic/non-actionable findings rather than a
+literal zero-findings bar — as written the loop will almost certainly just run to 10. (2) add
+texting-shorthand variants ("r u", "wat r u", "u ai") to CONVERSATIONAL_PHRASES so the fuzzy tier's
+identity coverage matches the exact-regex tier's; low severity (the fallback answer is still
+coherent), so bundle with other chat.mjs work rather than a standalone commit.
+STATUS: OPEN
+
+[2026-07-08 17:2x] source=strategy-advisor(sonnet5,deep) · topic=fuzzy-identity-gap-confirmed + commit-claim-mismatch
+Commit 6542621 landed (identity/capability split, elongation-collapse, fuzzyConversationalMatch
+typo tier) — read in full; the mechanism itself is sound (bounded edit distance shared with the
+vocab fuzzy matcher, tie-refused not guessed, guarded by looksCodeish so structural near-misses
+are never grabbed) and the new tests (chat-ux.test.mjs "broadened conversational coverage...")
+assert real routing behavior (assert.doesNotMatch WALL across ~20 phrasings, identity vs
+AI-identity kept distinct) — genuine flow work, not transcript overfitting.
+HOWEVER: the tick-1 gap is NOT closed, and is worse than tick 1 characterized it. Dry-run against
+the live binary (bin/tmct.mjs + direct runTurn(), narrate:true) confirms "waht r u", "wat r u",
+"hru", and "wyd" ALL still fall through conversationalTurn entirely and land on the generic
+orientation card via the unrelated isConversational()-short-input path (chat.mjs:2712), not the
+identity or fuzzy-typo lane. Root cause verified in code: fuzzyConversationalMatch's editDistance
+has an early-exit `if (abs(len(a)-len(b)) > max) return max+1` (fuzzy.mjs:24) — "waht r u" (8
+chars) vs "who are you" (11 chars) or "what are you" (13 chars) both exceed the bound-2 length
+gap before any character comparison happens. This is NOT a typo-tolerance problem (which the new
+layer solves well); it's WORD-CONTRACTION ("r"→"are", "u"→"you", words dropped), a different
+normalization class that whole-string edit distance structurally cannot reach regardless of
+bound tuning. Confirms tick 1's suspicion that this is a class of gap, not one string: hru/wyd
+fail for the identical structural reason.
+NOTABLE: the commit's own source comment (chat.mjs ~L733, "the helo/thnx/wat r u/byee tier")
+explicitly claims "wat r u" as a fuzzy-tier example — that claim is false as shipped; verified
+live. No test asserts it either (grep confirms "wat r u" appears only in comments, never in a
+test file). Low severity, same as tick 1, but now double-confirmed with a concrete root cause
+and a spec/behavior mismatch worth a one-line comment fix regardless of whether the
+underlying gap gets closed this wave.
+RECOMMENDED ACTION: if/when this class gets fixed, don't extend CONVERSATIONAL_PHRASES with
+literal strings ("hru","wyd","wat r u") — that's the exact overfit pattern SKILL_CHAT_PLAYTEST.md
+§4 warns against. Instead add a cheap word-contraction normalization pass (expand "r"→"are",
+"u"→"you" as standalone tokens only, pre-edit-distance) so the EXISTING identity-phrase pool is
+reachable — one mechanism closes the whole class instead of enumerating instances. Also fix the
+now-inaccurate "wat r u" comment at chat.mjs ~L733 either way (cheap, standalone, no behavior
+risk).
+STATUS: OPEN
+
+═══════════════════════════════════════
+[2026-07-08 18:2x] source=strategy-advisor(sonnet5,deep) · topic=word-contraction-fix-location-refined
+Two checks this tick, both refine (not repeat) tick 2's diagnosis:
+(1) Commit 7cbcf76 (Tier-0 playtest cycle) is genuine flow work, same discipline as 6542621: the
+ESL word-order regex extension (chat.mjs IDENTITY_PHRASES) is a real grammar generalization
+(question-order AND statement-order both compile to identity-self), not a literal-string
+special-case, and test/chatflow-tier0.test.mjs asserts actual routing (doesNotMatch the grammar-
+wall regex, matches the identity-self template text) across seeded AND TMCT_NO_SEED=1 sessions —
+not string presence. No issue found.
+(2) Read normalize.mjs + fuzzy.mjs directly, as briefed. There IS an existing word-contraction
+mechanism — ask-vocab.mjs:257-272 CONTRACTIONS (already has the exact precedent: "ur"->"your" as
+a standalone \b-bounded token, applied via normalize.mjs:31 CONTRACTION_RE) — but it is the WRONG
+hook point: chat.mjs's conversationalTurn (chat.mjs:771) never calls normalizeQuery at all (chat.mjs
+imports only COUNTERFACTUAL_RE from interpret/normalize.mjs, confirmed by grep) and operates
+directly on raw/lowercased text; normalizeQuery is wired only into ask.mjs/interpret/pipeline.mjs's
+code-graph question grammar. Adding "r"->"are","u"->"you" to the SHARED CONTRACTIONS table would
+leak single-letter token rewrites into the code-graph grammar path too (a real collision-risk
+regression the docstring's own "no guessing" discipline would flag), with zero effect on the
+conversational lane it's meant to fix. CONCRETE FIX LOCATION: apply a small, LOCAL r/u-only
+contraction pass inside chat.mjs's conversational lane itself, at the same prep step as
+collapseRuns/fuzzyConversationalMatch (chat.mjs:737-742) — reusing that lane's existing
+looksCodeish + ≤4-word guard as the safety perimeter, not the shared vocab table's broader surface.
+Dry-run check: "waht r u" -> (r/u expansion) "waht are you" -> editDistance to "who are you"/"what
+are you" pool entries is now 1 (h/a adjacent transposition, already supported by fuzzy.mjs's
+Damerau-Levenshtein) at matching length — confirms the fix design closes the gap without touching
+CONTRACTIONS.
+(3) "hru" and "wyd" do NOT decompose under any word-contraction pass — they're glued (no space
+between h/r/u or w/y/d), so a \b-token contraction regex structurally cannot split them; they need
+a SEPARATE literal-shorthand table entry (same species as GREET's existing literal set), not the
+r/u contraction mechanism. Flagging so the eventual fix doesn't conflate "spaced contraction"
+(mechanism: token-substitution regex) with "glued shorthand" (mechanism: literal closed-set
+lookup) into one over-reaching change.
+STATUS: OPEN (informational refinement of the tick-2 OPEN item — same underlying gap, no new
+severity)
+
+═══════════════════════════════════════
+[2026-07-08 tick4] source=strategy-advisor(sonnet5,deep) · topic=3-agent working-tree collision check
+BRIEF: check for messy interleaving now that 3 background agents (A: chat.mjs texting-shorthand
+fix, B: HANDOVER item-12 fixes in src/ask.mjs + src/interpret/normalize.mjs, playtest paused) are
+all editing the live working tree (not worktree-isolated).
+FINDINGS:
+(1) `git status --short` shows only agent B's work dirty: `src/ask.mjs` (+46/-9, adds
+SCOPE_PREPOSITIONS exception to parseList — item 12.2/11.1) and `src/interpret/normalize.mjs`
+(+36, adds applySelfCorrectionFrames — item 12.1), both well-commented and internally consistent
+with the diagnosis referenced in the task brief. Agent A has NOT yet touched chat.mjs (no dirty
+entry) — either still reading/planning or hasn't reached the edit step; no collision has occurred
+because there is nothing to collide with yet. Untracked `PLAM_marginalia.md` is unrelated stray
+content (a task prompt for a DIFFERENT repo/session, apparently misplaced) — zero risk since this
+project's convention adds files by name, never `git add -A`.
+(2) parseList co-touch check: grepped test/chatflow-tier0.test.mjs and test/chat-ux.test.mjs for
+list-shaped queries. All existing assertions ("which modules import X", "which modules
+transitively import X", "which classes are there") hit either the verb-predicate reverse-query
+branch or the pre-existing filler-tail branch — neither touches B's new SCOPE_PREPOSITIONS
+("in"/"inside"/"under") branch. Ran the actual suite against B's uncommitted diff:
+`node --test test/ask-vocab.test.mjs test/chat-ux.test.mjs test/chatflow-tier0.test.mjs` → 74/74
+pass. No concrete collision found — this is a confirmed negative, not a gap.
+(3) `git log --oneline -10`: ecf0ad5 → 7cbcf76 → 6542621 → 57058d1 → 3f3c19a → ... — clean linear
+history, no merges, no reverted work, matches prior ticks' record exactly (no new commits landed
+this tick; both A and B are still mid-flight).
+RECOMMENDATION (mild, not urgent): B's diff is complete and already green — worth having B commit
+soon rather than let it accumulate, since the brief's named risk (interleaved commits atop another
+agent's uncommitted state) grows with dwell time, not with file overlap. No action needed on A/B's
+actual code.
+STATUS: CLOSED (negative result — no collision found this tick)
+
+═══════════════════════════════════════
+[2026-07-08 tick5] source=strategy-advisor(sonnet5,deep) · topic=adversarial verify of A's shorthand fix + full-suite check of B's HANDOVER fix
+BRIEF: verify A's live chat.mjs behavior for "waht r u"/"wat r u"/"hru"/"wyd" against its own
+claims; confirm B hasn't committed scope-creep; re-check B's readiness.
+FINDINGS:
+(1) A's fix VERIFIED LIVE (not self-report): piped `waht r u`, `wat r u`, `hru`, `who are you`
+through `node bin/tmct.mjs chat` — all four produce the byte-identical identity answer. `wyd` was
+correctly NOT routed to identity — it produces the distinct multi-line generic orientation card,
+exactly as A's own code comment says it should ("forcing [an identity route] would be a fabricated
+route"). The tick-2-flagged chat.mjs:733-area comment now accurately describes coverage (updated
+alongside the fix) — no stale/inaccurate claim remains.
+(2) CORRECTION TO TICK 4: `npm test` (full suite, 1123 tests) — not the 3-file subset tick 4 ran —
+shows 1 FAILING test: `test/ask-compositional.test.mjs:314` ("list HIT (interrogative,
+directory-scoped): 'which classes are in <dir>', 'what methods are inside <file>' …"), which is B's
+own HANDOVER-12.2 feature test. `what methods are in widget.mjs` returns "widget.mjs has no
+contains edges in the index." instead of the expected method list — the scope-preposition
+exception works for module-in-directory scoping (line 304's test passes) but breaks for
+methods-in-file scoping. Tick 4's "already green… worth committing soon" call was based on a
+3-file spot-check that never included ask-compositional.test.mjs, the file the feature's own new
+tests live in — this is why the full suite is the ground truth, not a curated subset.
+(3) No new commits from A or B since tick 4 (HEAD still ecf0ad5, a docs commit); both are still
+mid-flight, all changes uncommitted in the live tree — consistent with B holding off on the
+premature commit nudge, which in hindsight was correct to hold off on.
+RECOMMENDATION: do NOT commit B's ask.mjs change yet — relay the widget.mjs/methods-in-file
+failure to agent B directly so it can fix the file-scope case before committing. A's chat.mjs work
+is verified correct and ready to commit independently (no shared-file conflict with B's ask.mjs/
+normalize.mjs).
+STATUS: OPEN (blocks B's commit; A is commit-ready)
+
+═══════════════════════════════════════
+[2026-07-08 tick6] source=strategy-advisor(sonnet5,deep) · topic=70d9b24 diff audit vs Track-1 gate + fixture-dirtying root cause + npm test reverify
+BRIEF: (1) does 70d9b24's isConversational() 3-part fix touch/risk-reopen HANDOVER §7's Track-1
+`!envelope?.parsed` gate; (2) find the actual repeat offender behind the committed
+examples/mini-webapp graph fixture getting dirtied; (3) independently reverify npm test 1131.
+FINDINGS:
+(1) VERIFIED SAFE — additive, not a reopening risk. HANDOVER.md:166-171 (Track-1 trio, commits
+2525e08/62e26cb) describes the exact gate at src/chat.mjs:2799: `!handled && miss &&
+!envelope?.parsed && isConversational(query)`. `git show 70d9b24 -- src/chat.mjs` confirms the
+`!envelope?.parsed` conjunct is untouched, character-for-character, in the Tier-1 diff. The new
+work only ANDs in two more restrictive conjuncts — `&& !isWhatAboutContinuation &&
+!isDescribePronounContinuation` — both narrowly scoped (require `last?.query` truthy /
+`focus?.label` truthy respectively, i.e. only fire when a genuine standing focus/prior turn
+exists). A conjunction can only shrink the set of queries hitting the orientation-wall branch,
+never grow it back into cases the Track-1 fix excluded — no path for this to reopen the
+pronoun-binding bug HANDOVER describes.
+(2) ROOT CAUSE FOUND — it's the skill doc's own canonical instruction, not agent collision.
+SKILL_CHAT_PLAYTEST.md:54 (§1 Step 1) reads: "Against a loaded graph (start with a shipped
+example so the answers are real — `node bin/tmct.mjs chat --repo examples/mini-webapp`)…" — every
+cycle that follows Step 1 literally runs an interactive chat session directly against the
+committed example, which persists session/provenance state into
+examples/mini-webapp/.tmct/graph.json. Confirmed 70d9b24 already worked around this for its OWN
+frozen regression tests (test/chatflow-tier1.test.mjs uses "a synthetic fixture graph in a fresh
+tmpdir per test (never the shipped examples/mini-webapp graph...)" per its own commit message),
+but that fix only covers the frozen-test step, not the exploratory Step-1 chat sessions the skill
+doc still tells every future cycle to run live against the checked-in fixture. Grepped
+SKILL_CHAT_PLAYTEST.md for any existing discard/tmpdir-copy instruction at the exploratory step —
+none exists. RECOMMENDATION (concrete, one-line): add a line to SKILL_CHAT_PLAYTEST.md §1 Step 1,
+e.g. "Never chat directly against the committed example — `cp -r examples/mini-webapp
+$(mktemp -d)/fixture && node bin/tmct.mjs chat --repo <that copy>`, or `git checkout --
+examples/mini-webapp` immediately after each exploratory session" — otherwise every future
+cycle (including single-agent, non-concurrent runs) will keep re-dirtying the fixture regardless
+of how many agents are running at once.
+(3) `npm test` run fresh, in full, this tick: 1131 pass / 0 fail / 0 skipped (33.4s). Matches the
+self-reported 1131 exactly — independently reverified, not trusted from report text.
+STATUS: CLOSED (finding 2 is actionable — a one-line SKILL_CHAT_PLAYTEST.md edit closes it;
+findings 1 and 3 are confirmed-sound, no action needed)
+
+═══════════════════════════════════════
+[2026-07-08 tick7] source=strategy-advisor(sonnet5,deep) · topic=dafab8e diff confirm + fixture-cleanliness check + Tier-3 pre-read (cycle 3 not yet landed)
+BRIEF: (1) confirm dafab8e matches tick 6's recommendation; (2) if cycle 3 landed, adversarially
+re-verify its fixes live + check tmpdir-rule timing + fixture cleanliness; (3) if not landed, flag
+concrete Tier-3 gaps in src/ask.mjs's compositional handling ahead of time.
+FINDINGS:
+(1) VERIFIED — dafab8e (`docs(playtest): Step 1 must copy examples/mini-webapp to a tmpdir…`)
+matches tick 6's recommendation almost verbatim: SKILL_CHAT_PLAYTEST.md §1 Step 1 now reads
+"Never run `chat --repo` directly against the committed…graph.json…Copy it into a tmpdir first".
+(2) Cycle 3 (Tier 2) had NOT landed a commit as of this tick — HEAD is still dafab8e, no cycle-3
+process visible in `ps aux`. Checked the timing question anyway: cycle 3 was dispatched at
+2026-07-08T17:57:35Z, dafab8e committed at 2026-07-08T18:00:42Z (author line shows 19:00:42+01:00
+= 18:00:42 UTC) — cycle 3 was dispatched ~3min BEFORE the doc fix landed, so it did NOT inherit
+the doc change; it got the tmpdir instruction as an ad-hoc line in its own dispatch prompt instead
+("prefer testing against a synthetic fixture graph in a tmpdir…"). No gap: both paths converged on
+the same behavior independently. `examples/mini-webapp/.tmct/graph.json` is currently clean in git
+(`git diff --stat` empty) — confirmed live. Note: the fixture dir DOES contain ~60 gitignored
+session-*.log files from earlier (pre-dafab8e) live runs, all with mtimes before 18:55 UTC — inert
+clutter, not a git-status risk (`.gitignore:12` covers `examples/**/.tmct/session-*.log`, plus a
+blanket `*.log` rule).
+(3) TIER-3 GAP FOUND (live-verified, not just read): "which functions call X and are untested" —
+one of the Tier-3 example queries named in this tick's own brief — currently FAILS. Copied
+examples/mini-webapp into /tmp/pt-advisor7 (respecting the new tmpdir rule) and ran it live via
+`chat --repo … --ephemeral --plain`. Three phrasings, three different failure modes, none
+succeed: "which functions call loadStore and are untested" → false ambiguity ("this could mean
+more than one thing: 1) functions that calls 'loadStore and are untested' or 2) …'loadStore and
+untested'"); "which functions are untested and call loadStore" → "couldn't resolve one of the
+terms in this question"; "which untested functions call loadStore" → "nothing in the index
+matches that." By contrast, a same-tier control worked cleanly: "which module has the most
+imports" → "src/handlers/tasks.mjs — the most imports (5)." Root cause (read, not just guessed):
+src/ask.mjs's relational-clause parser (~line 790 parseRelationalOrQualified, the call-target
+capture) appears to swallow "loadStore and are untested" as a literal search term instead of
+stopping at the boolean connective "and" before folding a qualifier atom — even though the
+boolean/qualifier fold machinery itself exists and clearly works for same-kind chains ("call X and
+call Y" per compositionalHint()) and for qualifier-only sets ("tested"/"untested" via qualHolds
+case "tested", line ~1098). This is a mixed relation+qualifier fold specifically, and it's the
+literal example named in the operator's own Tier-3 scope — worth cycle 3/4's attention as a
+concrete head start, not invented scope.
+STATUS: OPEN (finding 3 is a real, reproduced gap for a future cycle to pick up; findings 1-2 are
+confirmed-clean, no action needed)
+
+═══════════════════════════════════════
+[2026-07-08 tick8] source=strategy-advisor(sonnet5,deep) · topic=Tier-3 root-cause CORRECTION (tick7 location was wrong) + npm test status (inconclusive, mid-edit tree)
+BRIEF: (1) check if cycle 3 landed; (2) deepen tick 7's Tier-3 root-cause read into a near-
+literal diff; (3) verify npm test green, directly.
+FINDINGS:
+(1) Cycle 3 (Tier 2) has NOT committed yet — HEAD still dafab8e — but IS actively in-flight:
+`git status --short` shows uncommitted edits to src/ask-vocab.mjs, src/chat.mjs, src/concept.mjs,
+src/interpret/normalize.mjs, corpus/seon/relations.jsonl. No collision with tick 7's Tier-3 area
+(src/ask.mjs untouched in this diff).
+(2) TICK 7's ROOT-CAUSE LOCATION WAS WRONG — corrected here, live-verified, not guessed. Ran
+`parseQuery("which functions call loadStore and are untested")` directly (node -e, importing
+src/ask.mjs). Result: `{ambiguousParse:true, candidates:[{shape:"reverse", kind:"calls",
+object:"loadStore and are untested"}, {shape:"reverse", object:"loadStore and untested"}]}` — this
+is the shape emitted by the LEGACY `parseAnchored` pipeline (src/interpret/strategies/grammar.mjs),
+NOT ask.mjs's compositional AST (which would emit a `{node:...}` shape). Traced why: ask.mjs's
+`parseRelationalOrQualified` marker gate at line 904 (`if (!(quals.length || relFlag ||
+membershipLed || gerundLed)) return null;`) requires a leading qualifier / relative pronoun /
+gerund verb / of-in-membership before it engages the boolean-fold machinery at all. "which
+functions call X and are untested" has none of those (plain verb "call", no relative pronoun) so
+parseRelationalOrQualified correctly returns null BY DESIGN (its own comment, ask.mjs:793-796,
+says plain reverse queries defer untouched) — the query falls straight to the legacy pipeline,
+where grammar.mjs's T2 "reverse" template (line 34: `^which\s+(ENTITY)\s+(?:(MODIFIER)\s+)?(VERB)\s+
+(.+?)\??$`) greedily captures everything after the verb to end-of-string, with no boundary at a
+boolean connective — hence the swallow.
+NEAR-LITERAL FIX (narrowed, not just a symptom description): widen the marker gate at
+src/ask.mjs:904 to also trigger when `predLc` contains a BOOLEAN_CONNECTIVES key (already imported
+at ask.mjs:46, already used identically in `splitBoolean`'s own scan at ask.mjs:972-979) — e.g.
+`|| predLc.some((t) => t in BOOLEAN_CONNECTIVES)` (or reuse splitBoolean's own longest-match scan
+for multi-word connectives like "but not"). No new fold logic needed once gated in: QUALIFIERS
+already has tested/untested (ask-vocab.mjs:520) and BOOLEAN_CONNECTIVES already has "and"
+(ask-vocab.mjs:509) — splitBoolean/buildPredicateAtoms already handle a verb-clause branch plus a
+qualifier-only branch correctly (this is exactly the same fold that already works for "call X and
+call Y" and for "tested"/"untested" alone). Fix belongs in ask.mjs's gate, NOT in grammar.mjs's
+regex — leave the legacy T2 template untouched as the correct fallback for genuine single-term
+reverse queries.
+(3) `npm test`: 1130 pass / 1 FAIL this run (test/tui.test.mjs:237 — "reaches a working prompt
+within a bounded time — no open-ended hang" timed out at 43.5s) — full suite took 251s vs the
+prior clean baseline's 33.4s. NOT treated as a confirmed regression: this run executed against
+cycle 3's live mid-edit, uncommitted tree (see finding 1) with a background editing agent
+consuming CPU concurrently — both the timing blowup and a bounded-time TUI assertion failing are
+consistent with resource contention, not a code defect. Recommend: re-run `npm test` once cycle 3
+commits cleanly before treating this as real; do not block cycle 3 on it yet.
+STATUS: OPEN — finding 2 supersedes tick 7's Tier-3 location claim (same symptom, corrected root
+cause + file); finding 3 is INCONCLUSIVE pending a clean-tree re-run, flagged not fixed.
+
+═══════════════════════════════════════
+[2026-07-08 18:30Z] source=strategy-advisor(sonnet5,deep) · topic=tick8 flake CLOSED (green, clean tree) + adversarial spot-check finds a REAL reexports-relation gap cycle 3 did not catch
+OBSERVATION: (1) Ran `npm test` on clean committed HEAD ef319f6 (working tree only had this log file dirty, no code edits, cycle 4 not yet started) — 1137/1137 pass, 16.8s, tui.test.mjs green. Confirms tick 8's CPU-contention theory: the earlier tui.test.mjs timeout was resource contention from a concurrently-editing agent, not a code defect. CLOSED, no action needed.
+(2) Live-verified g'day dialect fix (ef319f6) against examples/mini-webapp (copied to tmpdir per dafab8e discipline): "g'day, what does Base contain" correctly strips the greeting and resolves Base -> src/handlers/base.mjs, honest miss, no bogus ambiguous-module error. CONFIRMED WORKING as claimed.
+(3) Live-verified the NEW reexports relation entry and found a REAL gap cycle 3's own test did not catch: "what about exports" / "tell me about reexports" on mini-webapp (which has zero reexports-kind edges, confirmed via graph.json grep) returns a broken fallback — "no module matching \"about\" found in the index" (no prior turn) or "no module matching \"exports\" found" (with a prior export-related turn) — NOT the graceful orientation-card fallback that a comparable zero-edge relation ("what about cochange") correctly degrades to. Cycle 3's own chatflow-tier2.test.mjs passes cleanly (verified: `node --test test/chatflow-tier2.test.mjs`, 6/6 green) ONLY because its synthetic fixture happens to contain actual reexports-kind edges — the test never exercises the zero-reexports-edges path, which is the realistic case for most real repos (reexports is a narrow, unusual relation). This is a genuine routing bug: the vague-touch "reexports" relation force crashes into a bad module-name search instead of falling back to the orientation card like its sibling zero-edge relations do.
+RECOMMENDED ACTION: File as a new Tier-2 dead-end for the next cycle (4 or a follow-up): when a curated RELATION_KINDS concept has zero matching edges in the index, relationTermOf/vagueTouchTermOf's downstream handler must fall through to the orientation card (as cochange already does) rather than leaking to a raw module-name search on a fragment of the query text ("about"/"exports"). Also worth a fixture note: chatflow-tier2.test.mjs should add a zero-edge-reexports case (repo with no reexports edges) alongside its happy-path case, so this class of regression is caught in-suite next time rather than requiring live binary spot-checks.
+STATUS: OPEN
+
+## Tick 10 — 2026-07-08T19:06Z
+STATUS: cycle 5 (Tier 2, 3rd pass) not yet landed; HEAD still 80c075c (9 commits, 1143/1143 green, re-verified live this tick).
+FINDING: independent cross-reference of src/concept.mjs RELATION_KINDS (9 kinds: imports, calls, contains,
+inherits, tests, defines, touches, cochange, reexports) against test/chatflow-tier2.test.mjs T1-T12 (all
+three Tier-2 passes combined) shows TWO relation kinds with zero dedicated relation-force test coverage:
+  - defines: no test exercises RELATION_TERM define/defining/defined/definition/declaration -> "defines"
+    via composeRelation. All "definition" hits in the test file are incidental (module docstrings, or the
+    unrelated where-defined code path) — never the relation force itself, populated OR zero-edge case.
+  - touches: no test exercises RELATION_TERM touch/touching/touched -> "touches" via composeRelation. All
+    "touch" hits are about the unrelated vagueTouchTermOf grammar mechanism ("what about X" pattern), not
+    the touches relation kind (RELATION_KINDS.touches = ["touches","touchesSymbol"]).
+Given last tick's precedent (T6 reexports zero-edge bug only surfaced because someone finally tested that
+path), these two are a plausible next place to look — not a confirmed bug, just an untested surface flagged
+for whichever cycle runs next.
+RE-ARM: yes, unchanged cadence. Not escalation-worthy — routine progress, no decision point yet.
+
+═══════════════════════════════════════
+[2026-07-08 19:10Z] source=strategy-advisor(sonnet5,deep) · topic=Tier-3 label correction + confirmed-still-open compositional-fold bug, ready for next cycle
+OBSERVATION: (1) Cycle 5 (Tier-2, 3rd pass) had NOT landed as of this tick — HEAD still 80c075c
+(9 commits), `git status --short` shows no src/ diff (only this log + an unrelated untracked
+PLAM_marginalia.md). `npm test` on this clean HEAD: 1143/1143 pass, 17.4s — green, matches tick
+10s baseline exactly. (2) LABEL CORRECTION: SKILL_CHAT_PLAYTEST.md §3 (lines 132-135) defines
+Tier 3 = "cross-concept & relation touches" ("what about imports", the relation concept force)
+and Tier 4 = "compositional & comparative" ("which functions call X and are untested", "which
+module has the most imports"). Ticks 7/8s findings and this ticks own brief both called the
+latter "Tier 3" — its actually Tier 4. Cosmetic only (the technical findings under that label are
+correct), but worth using the right number in future dispatch prompts so a cycle assigned "Tier 3"
+doesnt end up doing Tier 4 work by mistake. (3) RE-VERIFIED LIVE: the Tier-4 compositional-fold
+bug tick 8 diagnosed (ask.mjs:904 marker gate does not trigger on a bare boolean connective, so
+"which functions call X and are untested" falls to the legacy pipeline and swallows the qualifier
+as literal search text) is STILL PRESENT, unchanged, on current HEAD — reproduced directly via
+`parseQuery("which functions call loadStore and are untested")`, still returns the same
+ambiguousParse/reverse-shape result tick 8 recorded. Not touched by cycles 4/5 (expected — theyre
+working Tier 2). This is a verified, ready-to-apply fix (widen the ask.mjs:904 gate with a
+BOOLEAN_CONNECTIVES check, reusing splitBoolean/QUALIFIERS machinery that already works for the
+same-kind and qualifier-only cases) waiting for whichever cycle reaches Tier 4.
+RECOMMENDED ACTION: no interrupt needed. When dispatching the eventual Tier-3/Tier-4 cycle, (a)
+use "Tier 4" in the prompt per the docs own numbering, and (b) hand it this ticks confirmed
+fix location directly (ask.mjs:904) as a pre-verified head start rather than a cold diagnosis.
+STATUS: OPEN
+
+═══════════════════════════════════════
+[2026-07-08 19:34Z] source=strategy-advisor(sonnet5,deep) · topic=cycle-5 resume verified clean; cycle 6 not yet landed; unpushed count rising
+OBSERVATION: (1) Independently re-read `git show 5cbbffa` in full (src/ask.mjs, src/chat.mjs,
+test/chatflow-tier2.test.mjs diffs) after the mid-flight-interruption resume — commit is coherent:
+RESTRICTOR_VERB_RE correctly built from VERB_TO_KIND+PASSIVE_PARTICIPLE_TO_KIND (both confirmed
+exported at ask-vocab.mjs:196/241), AMBIGUOUS_HAVE_VERBS exclusion verified live (VERB_TO_KIND["have"]
+=== "defines", matches the code comment claim), the new driveSessionOverGraph calls in T15/T16
+resolve to a pre-existing helper (test/chatflow-tier2.test.mjs:205), not an orphaned reference. No
+half-finished piece, no debug leftovers, no test asserting unimplemented behavior. `npm test`:
+1148/1148 green on this exact HEAD, 48.5s. Resume left the repo fully consistent. (2) Cycle 6 (Tier
+2, 4th pass) has NOT landed yet this tick — HEAD still 5cbbffa, `git status --short` shows only the
+log file + unrelated untracked PLAM_marginalia.md; nothing to adversarially spot-check yet. (3)
+Branch is now 12 commits ahead of origin/main (up from 10 two ticks ago), all from this one
+uninterrupted local session — no external risk signal (single working tree, no evidence of crash
+risk) but the accumulation rate (~1 commit/tick) means a lost/corrupted local .git before the next
+operator-approved push would cost proportionally more work than it would have two ticks ago.
+RECOMMENDED ACTION: no interrupt. Purely informational: if the session runs materially longer before
+an operator-approved push, worth a passive one-line mention next status update (not a push
+recommendation) — the growing local-only delta is the only mildly time-sensitive fact in an
+otherwise clean tick.
+STATUS: OPEN
+
+═══════════════════════════════════════
+[2026-07-08 20:10Z] source=strategy-advisor(sonnet5,deep) · topic=tick13 premature-turn-end root cause confirmed distinct from cycle 5; pacing read on Tier-2 convergence
+OBSERVATION: (1) Coordinator's own transcript text (this tick, ~19:56Z) confirms the hypothesized pattern directly: cycle 6 "ended its turn while a background npm test was still running, without actually reporting results," leaving an uncommitted src/chat.mjs change requiring a manual SendMessage resume. This is mechanically distinct from cycle 5, which the coordinator separately attributed to a genuine external API error. Two of six cycles (33%) have now needed a mid-task resume, for two different root causes -- one external (API 500, not preventable by prompt wording) and one behavioral (backgrounding npm test and ending the turn before the notification, which IS preventable by dispatch-prompt wording). The coordinator already applied the fix ad hoc for cycle 7 ("run npm test in the FOREGROUND and give a complete report before ending its turn") -- recommend promoting this from a one-off instruction to a standing line in the Tier-2+ cycle dispatch template (SKILL_TUNING_CYCLE.md or wherever cycle prompts are assembled) so future cycles don't regress to backgrounding it again once this tick's memory of the incident fades. (2) Pacing: per-pass dead-end counts across the four completed Tier-2 passes (read directly from commit bodies ef319f6/80c075c/5cbbffa/dddcc4e) are 5, 6, 2, 3 -- not a clean monotonic decline, fluctuating in a 2-6 band. Pass 4 also newly reports spot-checks that found nothing to fix ("already flowing, no fix needed"), a mild saturation signal, but the raw count trend alone does not support confident convergence within 1-2 more passes. With 6 of 10 cycles used and cycle 7 (5th Tier-2 pass) now the 7th cycle overall, realistic budget for Tier 2 to fully close plus any of Tier 3/4 is tight: if Tier 2 needs 2-3 more passes (consistent with the fluctuating-not-declining trend), cycles 8-10 could be entirely consumed by Tier 2, leaving Tier 3 (relation-touch, distinct from Tier 2's scope per tick 10's label correction) and Tier 4 (the pre-diagnosed, ready-to-apply ask.mjs:904 compositional-fold fix) unstarted at the 10-cycle cap. This is a "different outcomes worth being aware of" case per the operator's own framing, not yet a decision point -- flagging for visibility, not recommending an interrupt.
+RECOMMENDED ACTION: (a) add "run npm test in the foreground; do not background it; report full pass/fail counts before ending your turn" as a standing line in the cycle-dispatch template, not just this one-off instruction to cycle 7. (b) No pacing action needed yet, but if cycle 8 dispatch is being drafted, worth an explicit operator-visible note that Tier 2 may consume the remaining budget and Tier 4's fix (location already known: ask.mjs:904, widen gate with BOOLEAN_CONNECTIVES check) could be handed to whichever cycle reaches it as a fast, pre-diagnosed win rather than cold-started, to bank at least one Tier-4 win even if full Tier-2 convergence eats the rest of the budget.
+STATUS: OPEN
+
+═══════════════════════════════════════
+[2026-07-08 22:23Z] source=strategy-advisor(sonnet5,deep) · topic=tick14-verification
+OBSERVATION: Tick 14 verification sweep, all clear. (1) Version-bump commits b90dad2 (1.0.2) and 41a5107 (1.0.3) diffed clean — only package.json/package-lock.json version fields, nothing else smuggled in. (2) npm test independently reconfirmed 1190/1190 on committed HEAD 41a5107 (working tree had only STRATEGY_ADVISOR.log + untracked PLAM_marginalia.md, no in-flight cycle-8 code). (3) Live adversarial test of c9dd281 new-term-teaching against real binary (isolated tmpdir repo, examples/mini-webapp copy): "redis is a cache" teaches correctly; "is redis a cache" and "what is a redis" read back with provenance; "some gizmos are components" teaches with quantifier "some"; "how many gizmos are components" -> "Some." (no fabrication); crucially "how many classes are there" -> "0 classes." and "how many modules are there" -> "0 modules." confirmed UNAFFECTED by the new quantifier-recall lane (no regression to answerCount ordering). One minor rough edge found (not a regression, not urgent): "some Xs are <Y>" where Y is a known ADJECTIVE but not a known NOUN (e.g. "some caches are fast") falls through to the generic "couldn't parse this as a graph question" wall rather than a lane-specific honest decline. This is permitted by chat-teach-quantifier.test.mjs's own assertion (only checks non-storage, not message wording), so it is not a test-violating regression — just a UX polish opportunity.
+RECOMMENDED ACTION: Optional, low-priority: when the "some/a few Xs are Ys" plural teach-lane declines because Y is an adjective (known) rather than a noun, consider a lane-specific message (e.g. "I know Y as a property, not a class — can't make Xs a kind of it") instead of falling through to the generic graph-question wall. No urgency; queue behind Tier-4 compositional-fold bug (ask.mjs:904, still open/unassigned).
+STATUS: OPEN
