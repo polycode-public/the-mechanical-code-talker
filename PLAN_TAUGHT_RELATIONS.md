@@ -1,13 +1,98 @@
 # PLAN_TAUGHT_RELATIONS.md — teaching tmct new RELATIONS and RULES through chat, validated against a classic Prolog family-tree
 
-Status: **DONE (2026-07-09) — all six items + the full storage/query dispatcher are live.** All six
-of the plan's own §1 illustrations (relational fact teach, relation alias/union, fixed-hop
-composition, property-filtered composition, adjective-mint, recursive/reachability) are implemented,
-tested, and live-verified end-to-end over the classic family-tree example this document's own
-"Origin" section named as the validation target. See each "Phase N — DONE" section below for the
-full design-vs-implementation record, including the two real deviations found along the way (the
-shared `relAsk`/`resolveRelationChase` dispatcher substrate, Phase 2/4/5's own note; and Phase 6's
-`findReachableSet` kernel/wiring split). Nothing in the original six-item scope remains outstanding.
+Status: **DONE (2026-07-09) — all six items + the full storage/query dispatcher are live, plus a
+live-testing follow-up (same day) that closed two real gaps the operator found end-to-end testing the
+finished build.** All six of the plan's own §1 illustrations (relational fact teach, relation
+alias/union, fixed-hop composition, property-filtered composition, adjective-mint,
+recursive/reachability) are implemented, tested, and live-verified end-to-end over the classic
+family-tree example this document's own "Origin" section named as the validation target. See each
+"Phase N — DONE" section below for the full design-vs-implementation record, including the two real
+deviations found along the way (the shared `relAsk`/`resolveRelationChase` dispatcher substrate,
+Phase 2/4/5's own note; and Phase 6's `findReachableSet` kernel/wiring split). See the "Live-testing
+follow-up — DONE" section (just below the Phase notes) for the two post-ship gaps (generic honest-miss
+messages; the missing reverse "who is the &lt;relation&gt; of &lt;X&gt;" query shape) and their fixes.
+Nothing in the original six-item scope, or the follow-up, remains outstanding.
+
+## Live-testing follow-up — DONE (2026-07-09)
+
+The operator live-tested the full family-tree example end-to-end (all six items, one session) and
+found two real gaps, both verified live before AND after the fix — the same rigor this plan's own
+"Verification method" section was built with.
+
+**Gap 1 — honest-miss messages were generic, not specific.** `resolveRelationChase`
+(`src/chat.mjs`, factReadBack's `(a0)` block) correctly RECOGNIZED the query shape (subject, relation
+name, and object all parsed) but, on a failed chase, its caller `return null`ed unconditionally — an
+ordinary "I don't know" that the outer `runTurn` cascade then rendered as the GENERIC structural wall
+("couldn't parse this as a graph question. Try: …"), which doesn't even mention the relation the user
+asked about. Live-verified before the fix: `"is ahab a grandparent of john"` (only 1 hop taught, needs
+2) and `"is ahab a grandmother of ishmael"` ("grandmother" never taught at all) both showed the same
+generic wall text, indistinguishable from a truly unparseable sentence.
+
+Fixed by distinguishing two cases right in the `(a0)` block, after `resolveRelationChase` misses,
+never deferred to the generic wall:
+1. The relation/rule NAME itself isn't known at all — neither `relationFactsFor(relationName)` (any
+   fact/alias reaching it) nor `findRuleByName` finds anything — decline: `"I don't know a relation or
+   rule called '<name>' yet."`
+2. The name IS known (a fact/alias reaches it, or a Rule is stored under it), but THIS specific
+   (subject, object) pair's chase came up short — decline, naming the relation: `"I know the '<name>'
+   relation, but I can't confirm <subject> is the <name> of <object> from what you've told me."`
+
+Live-verified after the fix (piped CLI, fresh tmpdir): both messages render exactly as designed, and
+neither matches `WALL_MISS_RE`/`WALL_REPEAT_ONELINER`'s generic wall text.
+
+**Gap 2 — the reverse query shape didn't exist: "who is the grandparent of john".** Every relational
+recognizer built so far (`RELATION_FACT_YESNO_RE`, item 1's own query-side fix) is "is X the/a
+RELATION of Y" — subject AND object both given, yes/no answer. Nobody had built the REVERSE shape:
+given a relation name and an OBJECT, find every SUBJECT that satisfies it. Live-verified before the
+fix: `"who is the grandparent of john"` fell all the way to the generic structural wall — not even
+recognized as relation-shaped, confirmed by checking `authorLane`'s own `AUTHOR_WHO_IS_RE` (a
+different, would-miss-gated git-authorship lane that ALSO structurally matches "who is <up to 4
+words>") declines silently for a non-author name, so it wasn't the actual blocker; the query simply
+had no recognizer of its own at all.
+
+New closed-set recognizer `RELATION_WHO_ASK_RE` (`src/chat.mjs`) + a new `(a0.2)` block in
+`factReadBack`, sitting between the existing `(a0)` yes/no block and `(a0.5)`'s reachability-list
+block. Its `resolveRelationChaseReverse` closure re-derives `resolveRelationChase`'s SAME resolution
+logic (direct fact, alias via `findIsaChain`, `compose2` via a hop-counted chase, `filter` via a
+recursive base-then-property chase) — never duplicating the underlying SEARCH kernels
+(`findIsaChain`, `findReachableSet`), only the small, cheap, pure list-builder around them, re-derived
+for the same reason `(a0.5)`'s own list block already re-derives `relationFactsFor` rather than
+sharing it with `(a0)`: the two regexes never both match the same query (one requires a leading
+"who", the other a leading "is/are/was/were"), so the blocks never run in the same call.
+
+The one genuinely new piece of machinery: the `compose2` REVERSE hop-chase. Rather than building a
+new search kernel, it inverts the existing edge lookup — seeds `findReachableSet`
+(`src/planning.mjs`, reused completely UNCHANGED) from the TARGET object, reverse-hopping via
+`base2`'s edges first (the second forward hop, closest to the object) then `base1`'s edges (the first
+forward hop), swapping which side of each fact is queried (object instead of subject) at each step,
+filtered to results reached at EXACTLY 2 reverse hops (the same exact-hop-count discipline the
+forward chase's own `isGoal` uses — never just "reachable within budget"). The citation order is
+reversed back to a natural subject→object reading before rendering, since the reverse walk
+accumulates actions object-first. The `filter`-rule reverse case recurses into
+`resolveRelationChaseReverse` itself for its base (generic over whether that base is a plain relation
+or another rule — the same genericity Phase 5's forward `filter` chase already established), then
+filters the resulting subjects by the property.
+
+A hit lists every matching subject, one line each (`"<subject> — <citation>"`), citing its own
+derivation; no hits renders Gap 1's SAME two-case honest-miss discipline (name unknown vs. name known
+but empty for this object) — `"I don't know anyone who is the <name> of <object> from what you've
+told me."` for the latter.
+
+**Getting the direction right, live-verified against the operator's own repro, not assumed**: taught
+`ahab` fathers `john` fathers `ishmael`, `father ⊑ parent`, `grandparent = parent-of-parent` —
+"grandparent OF john" asks for X such that X is john's grandparent, i.e. john is the grandCHILD side;
+ahab is john's FATHER (one hop), not john's grandparent, and no data makes anyone john's grandparent,
+so `"who is the grandparent of john"` correctly returns an HONEST EMPTY (never ahab, never a wrong
+guess). `"who is the grandparent of ishmael"` correctly returns **ahab** (ahab→john→ishmael is exactly
+the 2-hop chain the rule needs), citing both hops plus the alias. Both verified live via the piped
+CLI before finalizing either message.
+
+Tests: `test/chat-taught-relations.test.mjs`, extended with 8 more tests (Gap 1's two distinct
+honest-miss messages; Gap 2's plain-relation/alias/compose2/filter-rule reverse positives, the
+compose2 honest-empty negative matching the operator's own repro, and the unknown-name reverse case)
+— 26 total in the file. `npm test`: 1400 → 1408, zero regressions in the full suite or in
+`test/chat-generalverb-query.test.mjs`/`test/chat-teach-quantifier.test.mjs` (re-run in full,
+unmodified). CLI smoke test (`printf 'hi\n/exit\n' | node bin/tmct.mjs`) still exits 0.
 
 ## Phase 6 — DONE (2026-07-09) — WIRING half (the kernel, `findReachableSet`, shipped earlier as its own commit)
 

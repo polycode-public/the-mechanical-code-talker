@@ -260,6 +260,40 @@ direct grep of every case's premises/query confirmed none of INFBENCH's seven te
 the new relational-teach phrasing. Still gated at INF-B1 (33% completion), unchanged for a fourth
 consecutive measured version.
 
+### 11. `PLAN_TAUGHT_RELATIONS.md` live-testing follow-up — specific honest-miss messages + the reverse "who" query — `chat.mjs` (2026-07-09)
+
+The operator live-tested the full family-tree example end-to-end after Phase 6 shipped and found two
+real gaps. **Gap 1**: a recognized-but-unsatisfied relational query (`"is ahab a grandparent of
+john"`, only 1 hop taught; `"is ahab a grandmother of ishmael"`, relation never taught at all) used to
+`return null` from `resolveRelationChase`'s caller, falling all the way through to the GENERIC
+structural wall ("couldn't parse this as a graph question…") — wrong, since the shape WAS recognized.
+Fixed by distinguishing two cases right there in the `(a0)` block: the relation/rule name itself never
+taught (`"I don't know a relation or rule called '<name>' yet."`) vs. the name known but this specific
+pair's chase came up short (`"I know the '<name>' relation, but I can't confirm <subject> is the <name>
+of <object> from what you've told me."`).
+
+**Gap 2**: no recognizer existed for the REVERSE shape — given a relation name and only an OBJECT,
+find every SUBJECT that satisfies it ("who is the grandparent of john"). New closed-set recognizer
+`RELATION_WHO_ASK_RE` + a new `(a0.2)` block in `factReadBack` (`src/chat.mjs`), with its own
+`resolveRelationChaseReverse` closure re-deriving the SAME resolution logic `resolveRelationChase`
+uses (direct fact, alias via `findIsaChain`, compose2 via a REVERSE hop-counted chase, filter via a
+recursive base-then-property chase) — walked backward: for compose2, seed from the target object,
+reverse-hop via `base2`'s edges first then `base1`'s, via `findReachableSet` (`src/planning.mjs`,
+reused completely unmodified) filtered to exactly-2-reverse-hops results, citation order reversed
+back to natural subject→object reading. Live-verified the operator's own repro exactly: `"who is the
+grandparent of ishmael"` → **ahab** (ahab fathers john, john fathers ishmael, father⊑parent,
+grandparent=parent-of-parent), citing the full derivation; `"who is the grandparent of john"` →
+**honest empty** (ahab is john's FATHER, not john's grandparent — no data makes anyone john's
+grandparent), never a wrong guess; plain-relation, alias, and filter-rule (`"who is the grandfather of
+ishmael"` → ahab, citing the base chase + the male property fact) reverse cases all verified too.
+
+`test/chat-taught-relations.test.mjs` extended with 8 more tests (Gap 1's two distinct honest-miss
+messages; Gap 2's plain/alias/compose2/filter reverse positives, the compose2 honest-empty negative,
+and the unknown-name reverse case) — 26 total in the file. `npm test`: 1400 → 1408, zero regressions
+in `test/chat-generalverb-query.test.mjs`/`test/chat-teach-quantifier.test.mjs` (unmodified, re-run in
+full). CLI smoke test still exits 0. See `PLAN_TAUGHT_RELATIONS.md`'s new "Live-testing follow-up"
+note for the full transcripts.
+
 ## Open follow-ups (next session, in priority order)
 
 1. ~~Fix the INF-C1 fabrication bug above.~~ **DONE (2026-07-09)** — see the updated item 2 note
@@ -289,7 +323,10 @@ consecutive measured version.
 10. ~~`PLAN_TAUGHT_RELATIONS.md` Phase 6 (item 6's `recursive` rule, WIRING half).~~ **DONE
     (2026-07-09)** — see item 10 above. **This was the last outstanding item — the entire
     `PLAN_TAUGHT_RELATIONS.md` six-item scope, and its full storage + query-dispatcher build, is now
-    complete.** Nothing remains outstanding from this plan.
+    complete.**
+11. ~~`PLAN_TAUGHT_RELATIONS.md` live-testing follow-up — Gap 1 (specific honest-miss messages) + Gap
+    2 (the reverse "who is the &lt;relation&gt; of &lt;X&gt;" query shape).~~ **DONE (2026-07-09)** —
+    see item 11 above. Nothing remains outstanding from this plan.
 
 ## Discipline (unchanged)
 

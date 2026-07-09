@@ -142,6 +142,20 @@ files plus a direct check that no INFBENCH case's premises/query ever reach the 
 phrasing. Still gated at INF-B1 (33% completion), unchanged for a fourth consecutive measured
 version — an honest, expected result given the new surface and the ladder measure different things.
 
+**`PLAN_TAUGHT_RELATIONS.md` live-testing follow-up — DONE (2026-07-09)**: the operator live-tested
+the full family-tree example end-to-end and found two real gaps, both fixed in `src/chat.mjs`. Gap 1:
+a recognized-but-unsatisfied relational query used to fall to the GENERIC structural wall instead of
+naming the relation — fixed by distinguishing "relation/rule name never taught" from "name known, this
+pair's chase came up short" right in the `(a0)` block, each with its own specific decline text. Gap 2:
+the REVERSE query shape ("who is the grandparent of john") didn't exist at all — new recognizer
+`RELATION_WHO_ASK_RE` + a new `(a0.2)` block in `factReadBack`, re-deriving `resolveRelationChase`'s
+same resolution logic (direct/alias/compose2/filter) walked backward from the object, reusing
+`findReachableSet` unmodified for the compose2 reverse hop-chase. Live-verified the operator's own
+repro exactly: "who is the grandparent of ishmael" → ahab (full 2-hop derivation cited); "who is the
+grandparent of john" → an honest empty (never a wrong guess). `test/chat-taught-relations.test.mjs`
+extended with 8 more tests (26 total). `npm test` 1400 → 1408, zero regressions. **Nothing remains
+outstanding from `PLAN_TAUGHT_RELATIONS.md`.**
+
 ### Shipped this session
 
 - **Tier 5** found 12 routing/recognition fixes across teach and recall: article/head-word gaps

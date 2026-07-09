@@ -401,6 +401,152 @@ test("Phase 6 item 6: a malformed recursive-rule teach attempt (mismatched self-
   }
 });
 
+// ---- Gap 1 (live-tested 2026-07-09 follow-up): specific honest-miss ------
+// messages, not the generic structural wall ------------------------------
+
+test("Gap 1: 'is ahab a grandmother of ishmael' (relation NEVER taught at all) declines by NAME, not the generic structural wall", async () => {
+  const dir = await mem("gap1-unknown-name");
+  try {
+    await runTurn("ahab is the father of john", { config: CONFIG, memoryDir: dir, sessionId: "g1u" });
+    await runTurn("john is the father of ishmael", { config: CONFIG, memoryDir: dir, sessionId: "g1u" });
+    await runTurn("a father is a kind of parent", { config: CONFIG, memoryDir: dir, sessionId: "g1u" });
+    await runTurn("a grandparent is a parent of a parent", { config: CONFIG, memoryDir: dir, sessionId: "g1u" });
+
+    const miss = await runTurn("is ahab a grandmother of ishmael", { config: CONFIG, memoryDir: dir });
+    assert.equal(miss.answer, "I don't know a relation or rule called 'grandmother' yet.");
+    assert.doesNotMatch(miss.answer, /couldn't parse this as a graph question/);
+    assert.doesNotMatch(miss.answer, /still couldn't parse that/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("Gap 1: 'is ahab a grandparent of john' (relation KNOWN, only 1 hop taught — needs 2) declines by NAMING the relation, not the generic structural wall", async () => {
+  const dir = await mem("gap1-insufficient-chain");
+  try {
+    await runTurn("ahab is the father of john", { config: CONFIG, memoryDir: dir, sessionId: "g1i" });
+    await runTurn("a father is a kind of parent", { config: CONFIG, memoryDir: dir, sessionId: "g1i" });
+    await runTurn("a grandparent is a parent of a parent", { config: CONFIG, memoryDir: dir, sessionId: "g1i" });
+
+    const miss = await runTurn("is ahab a grandparent of john", { config: CONFIG, memoryDir: dir });
+    assert.match(miss.answer, /grandparent/, "names the relation, unlike the generic wall");
+    assert.doesNotMatch(miss.answer, /^yes —/);
+    assert.doesNotMatch(miss.answer, /couldn't parse this as a graph question/);
+    assert.doesNotMatch(miss.answer, /still couldn't parse that/);
+    // The two Gap 1 cases must be DISTINCT messages, not the same generic text.
+    const unknown = await runTurn("is ahab a grandmother of john", { config: CONFIG, memoryDir: dir });
+    assert.notEqual(miss.answer, unknown.answer);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---- Gap 2 (live-tested 2026-07-09 follow-up): the reverse "who is the ---
+// <relation> of <X>" query shape ------------------------------------------
+
+test("Gap 2: 'who is the father of john' (plain-relation reverse) returns ahab, citing the direct fact", async () => {
+  const dir = await mem("gap2-plain-reverse");
+  try {
+    await runTurn("ahab is the father of john", { config: CONFIG, memoryDir: dir, sessionId: "g2p" });
+    const who = await runTurn("who is the father of john", { config: CONFIG, memoryDir: dir });
+    assert.match(who.answer, /^ahab —/);
+    assert.match(who.answer, /ahab fathers john/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("Gap 2: 'who is a parent of john' (alias reverse) returns ahab through the taught father ⊑ parent link, citing both facts", async () => {
+  const dir = await mem("gap2-alias-reverse");
+  try {
+    await runTurn("ahab is the father of john", { config: CONFIG, memoryDir: dir, sessionId: "g2a" });
+    await runTurn("a father is a kind of parent", { config: CONFIG, memoryDir: dir, sessionId: "g2a" });
+    const who = await runTurn("who is a parent of john", { config: CONFIG, memoryDir: dir });
+    assert.match(who.answer, /^ahab —/);
+    assert.match(who.answer, /ahab fathers john/);
+    assert.match(who.answer, /father is a kind of parent/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("Gap 2: 'who is the grandparent of ishmael' (compose2 reverse, the operator's own repro) correctly returns ahab, citing the full 2-hop derivation", async () => {
+  const dir = await mem("gap2-compose2-reverse");
+  try {
+    await runTurn("ahab is the father of john", { config: CONFIG, memoryDir: dir, sessionId: "g2c" });
+    await runTurn("john is the father of ishmael", { config: CONFIG, memoryDir: dir, sessionId: "g2c" });
+    await runTurn("a father is a kind of parent", { config: CONFIG, memoryDir: dir, sessionId: "g2c" });
+    await runTurn("a grandparent is a parent of a parent", { config: CONFIG, memoryDir: dir, sessionId: "g2c" });
+
+    const who = await runTurn("who is the grandparent of ishmael", { config: CONFIG, memoryDir: dir });
+    assert.match(who.answer, /^ahab —/);
+    assert.match(who.answer, /ahab fathers john/);
+    assert.match(who.answer, /john fathers ishmael/);
+    assert.match(who.answer, /father is a kind of parent/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("Gap 2: 'who is the grandparent of john' (the operator's own repro) correctly returns an HONEST EMPTY — never ahab, never a wrong guess", async () => {
+  const dir = await mem("gap2-compose2-reverse-empty");
+  try {
+    await runTurn("ahab is the father of john", { config: CONFIG, memoryDir: dir, sessionId: "g2e" });
+    await runTurn("john is the father of ishmael", { config: CONFIG, memoryDir: dir, sessionId: "g2e" });
+    await runTurn("a father is a kind of parent", { config: CONFIG, memoryDir: dir, sessionId: "g2e" });
+    await runTurn("a grandparent is a parent of a parent", { config: CONFIG, memoryDir: dir, sessionId: "g2e" });
+
+    // john has no CHILD taught (ahab fathers john — john is the CHILD, not
+    // the parent, of anyone in this store), so nobody is john's grandparent.
+    const who = await runTurn("who is the grandparent of john", { config: CONFIG, memoryDir: dir });
+    assert.doesNotMatch(who.answer, /^ahab —/, "ahab is john's father, NOT john's grandparent — must not be guessed");
+    assert.doesNotMatch(who.answer, / — /, "an honest empty lists no subjects at all");
+    assert.match(who.answer, /grandparent/, "names the relation, unlike the generic wall");
+    assert.doesNotMatch(who.answer, /couldn't parse this as a graph question/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("Gap 2: 'who is the grandfather of ishmael' (filter-rule reverse) returns ahab, citing the base 2-hop derivation AND the male property fact", async () => {
+  const dir = await mem("gap2-filter-reverse");
+  try {
+    await runTurn("ahab is the father of john", { config: CONFIG, memoryDir: dir, sessionId: "g2f" });
+    await runTurn("john is the father of ishmael", { config: CONFIG, memoryDir: dir, sessionId: "g2f" });
+    await runTurn("a father is a kind of parent", { config: CONFIG, memoryDir: dir, sessionId: "g2f" });
+    await runTurn("a grandparent is a parent of a parent", { config: CONFIG, memoryDir: dir, sessionId: "g2f" });
+    await runTurn("remember that ahab is male", { config: CONFIG, memoryDir: dir, sessionId: "g2f" });
+    await runTurn("a grandfather is a grandparent who is male", { config: CONFIG, memoryDir: dir, sessionId: "g2f" });
+
+    const who = await runTurn("who is the grandfather of ishmael", { config: CONFIG, memoryDir: dir });
+    assert.match(who.answer, /^ahab —/);
+    assert.match(who.answer, /ahab fathers john/);
+    assert.match(who.answer, /john fathers ishmael/);
+    assert.match(who.answer, /ahab is male/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("Gap 2: an entirely unknown relation name in a 'who' query declines the SAME way Gap 1's unknown-name case does", async () => {
+  const dir = await mem("gap2-unknown-name");
+  try {
+    await runTurn("ahab is the father of john", { config: CONFIG, memoryDir: dir, sessionId: "g2n" });
+    const who = await runTurn("who is the grandmother of john", { config: CONFIG, memoryDir: dir });
+    assert.equal(who.answer, "I don't know a relation or rule called 'grandmother' yet.");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 // ---- Full family-tree chain, ALL SIX items, end-to-end ------------------
 
 test("PLAN_TAUGHT_RELATIONS.md ALL SIX items, end-to-end: relational facts, alias, compose2, filter, and recursive-reachability rules all resolve together over one family tree", async () => {
