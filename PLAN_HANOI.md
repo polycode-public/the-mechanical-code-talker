@@ -359,3 +359,47 @@ committable/testable, `npm test` green throughout, nothing here implemented yet.
 - Not a replacement for HANDOVER.md's ordinary bug-fix backlog — this is a separate, longer-horizon
   initiative, tracked here on purpose so it doesn't get lost or half-built inside an unrelated
   session's routing-fix batch.
+
+## 2026-07-09 (later same day) — Phase 2's search kernel landed, ahead of the phased plan
+
+The generic search kernel this document's §2/§5 scoped for Phase 2 now exists, landed as a
+standalone proof-of-mechanism ahead of Phases 1/3/4 below (none of which are started):
+
+- `findActionPath(startState, isGoal, applyActions, { maxDepth, stateKey })`,
+  `src/planning.mjs:80` (new file, new sibling of `syllogise.mjs`, NOT a change to
+  `findIsaChain` itself — see the file's own header comment for why it lands as an independent
+  sibling rather than a shared-code extraction: `findIsaChain`'s edge lists are pre-built once
+  into a `Map` before its search loop starts, a real optimization for its own static-edge-list
+  domain that doesn't transfer to on-demand successor generation).
+- Same discipline as `findIsaChain` (`syllogise.mjs:289-327`): frontier-expansion BFS, a `seen`
+  state-key set for cycle safety, check-the-frontier-BEFORE-extending (the exact
+  "hop counts the LENGTH of the paths currently in frontier" comment this document quoted in §2
+  — carried over verbatim into `planning.mjs`'s own comment, and the off-by-one it once fixed was
+  not reintroduced), `maxDepth`-bounded, and a real path returned on success (`{ actions, states
+  }`, the full sequence, not just a boolean) or `null` on an honest miss.
+- Toy-domain proof (`test/planning.test.mjs`, 6 tests, all passing): a small 5-node fixed graph
+  (`S/M1/M2/G/X`) with a dead-end branch and two cycle edges (`M1->S`, `M2->M1`), where the only
+  route to the goal is a genuine 3-hop discovery (`S->M1->M2->G`) the search must actually find,
+  not assume — plus a second 3-node cycle domain (`P<->Q->Goal`) proving the `seen`-set guard
+  both terminates AND still returns the correct shortest path through a cycle sitting directly on
+  the route to the goal. Covers: shortest-path success, no-path-at-all (null), budget-exhaustion
+  (a real 3-hop path exists but `maxDepth:2` correctly misses it, not a truncated path), and the
+  zero-hop start-already-satisfies-goal case.
+- Regression: `test/syllogise.test.mjs` (`findIsaChain`'s own suite) reran green, unchanged,
+  21/21 — this function was not touched. Full suite: 1355 → 1361 (`npm test`).
+
+**Still missing before real Hanoi could be attempted** (everything else this document scopes,
+untouched by this landing):
+- Phase 1: the actual Hanoi state representation as memory-store facts (the `restsOn` edge
+  convention sketched in §1, `boardToFacts`/`factsToBoard`, the snapshot-per-step write path
+  from §3) — none of that exists yet; `findActionPath` itself has no notion of Hanoi, disks,
+  pegs, or facts at all, by design (it is domain-agnostic, proven only against the toy graph
+  above).
+- Hanoi's own `legalMoves`/`isGoal` functions (the genuinely-new "successor state generator"
+  piece §2 called out) — not written. `applyActions` in this landing's tests is a toy 5-node
+  adjacency list, not a disk/peg legality check.
+- Phase 3's chat-turn wiring (a "plan" lane in `runAsk`'s miss-cascade, the per-step goal-line
+  composition) — explicitly out of scope for this landing and not started; nothing in
+  `chat.mjs` calls `findActionPath`, so this has zero effect on any existing chat behavior.
+- Phase 4's domain-general extraction/second-domain plug-in and the `PLAN_GUESS_NUMBER.md`
+  convergence point — not started.

@@ -35,6 +35,7 @@ Test count across the session's later stretch:
 | Tier 6 (the messy real user), 5 cycles, run alongside a background test-suite health pass | 1328 → 1345 |
 | Compound-name resolution (multi-word queries to joined-token symbol names) | 1345 → 1352 |
 | Vocabulary-growth mirror fix — known-subject/unknown-object mint (`unknownObjectFallback`), so new terms compound turn over turn | 1352 → 1355 |
+| `findActionPath` (`src/planning.mjs`) — generic bounded on-demand-successor state-space search, `PLAN_HANOI.md`'s Phase 2 kernel, proven against a small toy graph; not wired into chat, Hanoi itself not started | 1355 → 1361 |
 
 ### Shipped this session
 

@@ -57,6 +57,22 @@ The full `SKILL_CHAT_PLAYTEST.md` dialogue-flow tier ladder (0 through 6) is now
 "Compound-name resolution" for the last piece of work this session. Nothing has pushed since
 1.0.7, so the version stays at 1.0.9 locally throughout everything below.
 
+### `findActionPath` — a generic bounded state-space search primitive (2026-07-09, +6 tests → 1361)
+
+`PLAN_HANOI.md` (research/design, still not implemented as a feature) identified `syllogise.mjs`'s
+`findIsaChain` as, in shape, already a bounded rooted BFS path search over a fixed, pre-loaded
+edge list. Landed the generalization that same doc's Phase 2 scoped: `findActionPath(startState,
+isGoal, applyActions, { maxDepth })` (`src/planning.mjs`, new file — a sibling of `syllogise.mjs`,
+not a change to it) walks a state space whose successors are generated ON DEMAND by a
+caller-supplied `applyActions(state)`, instead of looked up in a static array — same
+frontier/seen-set/check-then-extend/shortest-path discipline as `findIsaChain`, cycle-safe,
+`maxDepth`-bounded, returns the full action+state path or `null` on an honest miss. Proven against
+a small toy graph (5 nodes, a dead end, two cycle edges, a genuine 3-hop discovery to the goal),
+not Hanoi itself — see `PLAN_HANOI.md`'s own new dated section for exactly what's still missing
+(the real Hanoi state/fact representation, `legalMoves`, and the chat-turn wiring, none of which
+this task touched). Nothing wired into `chat.mjs`; zero effect on existing chat behavior.
+`test/planning.test.mjs`, 6 new tests, `test/syllogise.test.mjs` reran green/unchanged.
+
 ### The trigger and the fix: 0.9.12 → 1.0.0
 
 The operator ran a real `npm install` plus bare `tmct chat` in a fresh directory and got an
