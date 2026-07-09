@@ -1075,15 +1075,48 @@ function parseRelationalOrQualified(w, lc, nlp, depth) {
     const { blc } = dropLeadCopula(bw, bw.map((x) => x.toLowerCase()));
     return blc.length && blc.every((x) => QUALIFIERS[x]);
   });
+  // A bare "call X and call Y" / "call X but not Y" chain — verb+verb (or
+  // verb+bare-object), no qualifier, no "that" — is ALSO the compositional shape
+  // when branch0 leads with an explicit verb and every OTHER branch is either (a)
+  // an explicit repeat of that SAME mapped verb kind ("call loadStore and call
+  // saveStore" == calls(loadStore) ∩ calls(saveStore)) or (b) a bare object with NO
+  // verb of its own at all ("call saveStore but not loadStore" — "loadStore" alone
+  // inherits "call" via the SAME ellipsis-borrowing buildPredicateAtoms/the atoms
+  // loop below already do for OR-chains like "importing X or Y"; this only widens
+  // the GATE that lets that borrowing fire for and/but-not too). Deliberately
+  // narrower than "any verb+verb and": the compat-guarded bare case ("which classes
+  // extends Base and couples to logging") gives its SECOND branch its own DIFFERENT
+  // explicit verb (coupled-to, not inherits) and so fails case (a) and isn't bare
+  // for case (b) either — it still has no marker and correctly stays on the legacy
+  // ambiguous-parse path, untouched.
+  const sameVerbBranches = predWords.length > 0 ? splitBoolean(predLc, predWords).branches : [];
+  let sameVerbLed = false;
+  if (sameVerbBranches.length > 1) {
+    const firstBlc = sameVerbBranches[0].map((x) => x.toLowerCase());
+    const firstVh = findPhrase(firstBlc, VERB_TO_KIND);
+    if (firstVh && firstVh.start === 0) {
+      sameVerbLed = sameVerbBranches.slice(1).every((bw) => {
+        const blc = bw.map((x) => x.toLowerCase());
+        const vh = findPhrase(blc, VERB_TO_KIND);
+        return vh && vh.start === 0 ? vh.kind === firstVh.kind : !vh;
+      });
+    }
+  }
   // marker gate — the crux of backward-compat: without one of these, this is not a
   // compositional query and we must NOT hijack it from the existing parser.
-  if (!(quals.length || relFlag || membershipLed || gerundLed || boolQualLed)) return null;
+  if (!(quals.length || relFlag || membershipLed || gerundLed || boolQualLed || sameVerbLed)) return null;
 
   // empty predicate → a bare qualified class ("public methods")
   if (!predWords.length) {
     let base = { node: "allOfClass", entityType };
     if (!quals.length) return { node: "miss", reason: "nothing to filter or traverse" };
-    return { node: "qualifier", filters: quals, inner: base };
+    // entityType carried on the qualifier node itself too (not just `inner`) — a
+    // top-level "qualifier" AST has no dedicated evalComposite case, so it falls to
+    // the generic {compositeKind:"set", entityType: ast.entityType||null} catch-all;
+    // without this, a zero-match qualifier query ("public methods of X" with no
+    // public methods) rendered a bare "nothing in the index matches that." with no
+    // entity-kind receipt, same wall-shaped miss as a genuinely unrecognized query.
+    return { node: "qualifier", filters: quals, inner: base, entityType };
   }
 
   const subjPrefix = noun.placeholder ? "what" : `which ${entWord}`;
@@ -1123,7 +1156,9 @@ function parseRelationalOrQualified(w, lc, nlp, depth) {
   } else {
     result = { node: "boolean", entityType, atoms };
   }
-  if (quals.length) result = { node: "qualifier", filters: quals, inner: result };
+  // entityType carried on the qualifier wrapper too — see the identical comment on
+  // the empty-predicate qualifier node above; same catch-all-miss-receipt fix.
+  if (quals.length) result = { node: "qualifier", filters: quals, inner: result, entityType };
   return result;
 }
 
@@ -1549,7 +1584,8 @@ function evalBoolean(graph, ast, opts) {
 function evalAnaphora(graph, ast, opts) {
   const prev = opts && opts.prev;
   if (!Array.isArray(prev) || !prev.length) return { compositeMiss: true, reason: "no-prev", matches: [] };
-  let items = prev.map((id) => graph.byId.get(id)).filter(Boolean);
+  const baseItems = prev.map((id) => graph.byId.get(id)).filter(Boolean);
+  let items = baseItems;
   const f = ast.filter;
   if (f && f.type === "qual") {
     items = items.filter((ind) => f.filters.every((q) => qualHolds(graph, ind, QUALIFIERS[q])));
@@ -1566,7 +1602,14 @@ function evalAnaphora(graph, ast, opts) {
     }
   }
   // a count over a prior set names the entity kind when the survivors share a class.
-  const common = items.length && items.every((x) => x.class === items[0].class) ? items[0].class : null;
+  // When the filter narrows a real prior set down to ZERO, fall back to the PRIOR
+  // set's own class (still shared, pre-filter) so the honest-empty render still
+  // names what was checked ("nothing in the index matches that (methods)."
+  // instead of a bare, kind-less "nothing in the index matches that.") — the
+  // filter genuinely found no survivors, but the entity kind it filtered is not
+  // itself unknown, so the miss shouldn't read as if it were.
+  const sameClass = (list) => (list.length && list.every((x) => x.class === list[0].class) ? list[0].class : null);
+  const common = items.length ? sameClass(items) : sameClass(baseItems);
   if (ast.mode === "count") return { compositeKind: "count", count: items.length, entityType: common, matches: [] };
   return { compositeKind: "set", matches: items, entityType: common };
 }
