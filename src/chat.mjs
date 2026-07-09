@@ -2731,6 +2731,25 @@ function factTermVariants(normFactTerm, term) {
   return v;
 }
 
+/** GENERIC "kind" nouns a taught subject's head word is often built from
+ *  ("logger MODULE", "task CONTROLLER") — excluded from the head-word
+ *  overlap fallback both KNOW_ABOUT_RE's "what do you know about X" listing
+ *  and IS_ADJECTIVE_YESNO_RE's property yes/no reader use (below): a bare
+ *  length >= 4 floor alone isn't enough, since "module" (6 chars) is shared
+ *  by "logger module" AND "validate module" and any OTHER "X module" taught
+ *  subject — without this exclusion, "is the validate module deprecated"
+ *  confidently answered YES off a fact taught for "logger module" (found
+ *  live, Tier-5 playtest cycle 5 — a real false-positive fabrication, not a
+ *  routing gap, caught before shipping). Mirrors RECALL_STOPWORDS' own
+ *  path-noise exclusion (src/lib/mjs never counting as a real overlap
+ *  either) — same principle, a different word class. */
+const GENERIC_ENTITY_WORDS = new Set([
+  "module", "modules", "class", "classes", "function", "functions",
+  "method", "methods", "handler", "handlers", "controller", "controllers",
+  "service", "services", "component", "components", "flow", "flows",
+  "thing", "things", "item", "items", "object", "objects", "commit", "commits",
+]);
+
 // ---- PLAN_ontology-hierarchies.md §3 tracks (a)+(b): synonymsOf(term) —
 // QUERY-TIME term expansion wiring the two already-parsed-but-inert synonym
 // resources. §1's "two vocabulary gates" distinction: this widens what a
@@ -2955,7 +2974,7 @@ async function factAnswer(memoryDir, query, envelope, miss) {
     // (like the subtype walk above), not a yes/no claim, so a slightly wider
     // recall net is consistent with this lane's existing inclusiveness.
     if (!hits.length) {
-      const queryWords = normFactTerm(know[1]).split(/\s+/).filter((w) => w.length >= 4);
+      const queryWords = normFactTerm(know[1]).split(/\s+/).filter((w) => w.length >= 4 && !GENERIC_ENTITY_WORDS.has(w));
       if (queryWords.length) {
         const wordsOf = (s) => new Set(String(s || "").split(/\s+/));
         const overlaps = (term) => { const w = wordsOf(term); return queryWords.some((qw) => w.has(qw)); };
@@ -3449,7 +3468,7 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
       // exact-variant miss on its own, on a whole word (length >= 4, the same
       // floor used elsewhere) shared between the query subject and the fact's
       // own subject.
-      const subjWords = normFactTerm(subject).split(/\s+/).filter((w) => w.length >= 4);
+      const subjWords = normFactTerm(subject).split(/\s+/).filter((w) => w.length >= 4 && !GENERIC_ENTITY_WORDS.has(w));
       const wordOverlap = (f) => subjWords.some((w) => new Set(String(f.subject || "").split(/\s+/)).has(w));
       const subjectMatch = (f) => subjVariants.has(f.subject) || (subjWords.length && wordOverlap(f));
       const hit = rows.filter((f) => subjectMatch(f) && propertyMatch(f)).sort(byTrust)[0];

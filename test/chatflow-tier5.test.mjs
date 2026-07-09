@@ -193,6 +193,32 @@
 //   and guiding, just not perfectly diagnostic of the real cause; left as-is
 //   rather than risk reopening either fix.
 //
+// CYCLE 5 (the last cycle, per SKILL_CHAT_PLAYTEST_SPRINT's cap-of-5
+// discipline) — found the session's single most important bug, a
+// CONFIDENTLY WRONG answer, not a dead-end:
+//
+//   T12 CRITICAL: "is the validate module deprecated" answered a confident
+//       "yes — you told me: logger module is deprecated" — a real
+//       FABRICATION, not a routing gap. Root cause: T1's own head-word
+//       overlap fallback (factAnswer's "what do you know about X", and
+//       IS_ADJECTIVE_YESNO_RE's property reader) used a bare length >= 4
+//       floor for a "significant" shared word — but "module" (6 chars) is
+//       shared by EVERY "<X> module" taught subject, so "validate module"
+//       and "logger module" overlapped on "module" alone and the WRONG
+//       fact answered. Fixed with a new GENERIC_ENTITY_WORDS stopset
+//       (module/class/function/method/handler/controller/service/…) excluded
+//       from the overlap check in BOTH sites — mirrors RECALL_STOPWORDS'
+//       own path-noise exclusion (src/lib/mjs never counting as a real
+//       overlap either), same principle, a different word class. Found via
+//       a deliberately adversarial two-DIFFERENT-subjects-sharing-a-generic-
+//       head-word conversation, exactly the kind of test the earlier
+//       cycles' single-subject conversations never exercised.
+//
+// Four other cycle-5 conversations (two taught subjects cross-checked for no
+// leakage post-fix, a "note that" wrapper + circle-back with different
+// phrasing, a single-word-subject sanity check) all flowed clean — the well
+// is dry at this tier; this cycle stops the loop at the 5-cycle cap.
+//
 // Driven against the SHIPPED examples/mini-webapp graph via `ephemeral: true`
 // (chat.mjs's createSession) — same mechanism test/chatflow-tier4.test.mjs
 // relies on: reads the real graph, writes session/provenance state to a
@@ -524,4 +550,44 @@ test("tier5/genuine ceiling (not fixed): a general-verb teach with a multi-word 
   // diagnosis of the real cause (generalVerbTeach's deliberate single-token
   // subject restriction), but a real decline all the same.
   assert.match(turns[0].answer, /^I couldn't store that —/);
+});
+
+// ---- CYCLE 5 ----
+
+test("tier5/CRITICAL (T12 fix): two DIFFERENT subjects sharing a generic head word ('X module') never cross-contaminate", async () => {
+  const queries = [
+    "remember that the logger module is deprecated",
+    "remember that the validate module is fast",
+    "is the logger deprecated",
+    "is the validate module deprecated",
+    "what do you know about validate",
+  ];
+  const turns = await driveSession(queries);
+  assertNeverBareWall(turns, queries);
+  assert.match(turns[2].answer, /^yes — you told me: logger module is deprecated/);
+  // THE bug: this used to confidently answer "yes — you told me: logger
+  // module is deprecated" (the WRONG fact, off the shared generic word
+  // "module" alone) — must now either honestly decline (a real fact about
+  // "validate module" exists, just not this property) or, if genuinely
+  // nothing were known, offer to teach — but NEVER claim the logger's fact.
+  assert.doesNotMatch(turns[3].answer, /logger/, "must never answer off the WRONG subject's fact");
+  assert.match(turns[3].answer, /^I don't have a fact saying the validate module is deprecated\./);
+  // "what do you know about validate" must list ONLY the validate fact
+  assert.match(turns[4].answer, /^1 remembered facts? about validate:\n\s+you told me: validate module is fast/);
+  assert.doesNotMatch(turns[4].answer, /logger/, "the logger fact must never leak into an unrelated subject's listing");
+});
+
+test("tier5/note-wrapper teach + circle back with different phrasing, unaffected by the T12 fix (compat, already flowed)", async () => {
+  const queries = [
+    "note that TaskController is owned by margo",
+    "which classes inherit from Record",
+    "who maintains TaskController",
+    "what do you know about TaskController",
+  ];
+  const turns = await driveSession(queries);
+  assertNeverBareWall(turns, queries);
+  assert.match(turns[0].answer, /^noted — remembered: taskcontroller is owned by margo/);
+  assert.match(turns[1].answer, /Task, User and Project/);
+  assert.match(turns[2].answer, /you told me: taskcontroller is owned by margo/);
+  assert.match(turns[3].answer, /1 remembered fact about taskcontroller:\n\s+you told me: taskcontroller is owned by margo/);
 });
