@@ -322,3 +322,81 @@ test("bare kind determinism: 'the classes' yields an identical relaxed result bo
   assert.equal(a.content, b.content);
   assert.deepEqual(a.tmct_ask.relaxed, b.tmct_ask.relaxed);
 });
+
+// ---- 10. HANDOVER item 6: "of X" MEMBERSHIP walks UP `inherits` when the owner's
+//          own surface is empty — "public methods of TaskController" used to answer a
+//          genuine-looking-but-incomplete empty even when TaskController inherits real
+//          methods from Controller, because the membership lookup only ever checked
+//          TaskController's OWN contains-edges, never walked the inheritance chain the
+//          way predicate-find's computeFind already does. A Controller/TaskController
+//          fixture: Controller defines a public method (render) and a private one
+//          (_log); TaskController inherits Controller and defines NOTHING of its own;
+//          TaskControllerWithOwn inherits Controller too but DOES define its own public
+//          method (assign) — the "own always wins outright, never blended" control. ----
+
+const INHERIT_MODULES = [
+  { path: "src/controllers.mjs", dotted: "src.controllers", imports: [], calls: [], defines: [
+    { name: "Controller", kind: "class", lineno: 1, decorators: [] },
+    { name: "Controller.render", kind: "method", lineno: 2, decorators: [], visibility: "public" },
+    { name: "Controller._log", kind: "method", lineno: 3, decorators: [], visibility: "private" },
+    { name: "TaskController", kind: "class", lineno: 10, decorators: [], bases: ["Controller"] },
+    { name: "TaskControllerWithOwn", kind: "class", lineno: 20, decorators: [], bases: ["Controller"] },
+    { name: "TaskControllerWithOwn.assign", kind: "method", lineno: 21, decorators: [], visibility: "public" },
+  ] },
+];
+function buildInheritGraph() {
+  const entities = buildEntities(INHERIT_MODULES, []);
+  ingestSchemaDocs(entities);
+  return parseEntities(entities);
+}
+
+test("membership inheritance walk: 'which methods of TaskController' surfaces Controller's inherited methods, clearly disclosed (never silently presented as TaskController's own)", () => {
+  const graph = buildInheritGraph();
+  // "which …" (not the bare "methods of X") — the bare form is deliberately routed by
+  // interpret/normalize.mjs's PHRASING_FRAMES onto the older, separate "what does X
+  // contain" simple-clause shape (a pre-existing, unrelated feature); "which methods of
+  // X" carries no such rewrite and reaches the compositional "membership" AST node this
+  // fix actually targets (evalComposite/evalMembershipComposite, src/ask.mjs).
+  const r = ask(graph, "which methods of TaskController", OPTS);
+  assert.equal(r.tmct_ask.miss, false);
+  assert.match(r.content, /Controller\.render/);
+  assert.match(r.content, /Controller\._log/);
+  // the disclosure — never a bare, silent "TaskController's methods are: …"
+  assert.match(r.content, /no own methods/);
+  assert.match(r.content, /inherited from Controller/);
+  const labels = r.tmct_ask.matches.map((m) => m.label).sort();
+  assert.deepEqual(labels, ["Controller._log", "Controller.render"]);
+});
+
+test("membership inheritance walk + qualifier: 'public methods of TaskController' surfaces just the inherited public one, correctly qualifier-filtered at the inheritance level", () => {
+  const graph = buildInheritGraph();
+  const r = ask(graph, "public methods of TaskController", OPTS);
+  assert.equal(r.tmct_ask.miss, false);
+  assert.match(r.content, /Controller\.render/);
+  assert.doesNotMatch(r.content, /Controller\._log/); // the private one never leaks in
+  assert.match(r.content, /inherited from Controller/);
+  const labels = r.tmct_ask.matches.map((m) => m.label).sort();
+  assert.deepEqual(labels, ["Controller.render"]);
+});
+
+test("membership inheritance walk DISCIPLINE: an owner with its OWN member wins outright — inheritance is never consulted, even for a partial qualifier-filtered own set", () => {
+  const graph = buildInheritGraph();
+  const r = ask(graph, "which methods of TaskControllerWithOwn", OPTS);
+  assert.equal(r.tmct_ask.miss, false);
+  assert.match(r.content, /TaskControllerWithOwn\.assign/);
+  // never blended with the ancestor's members, and never disclosed as inherited —
+  // TaskControllerWithOwn genuinely owns this one.
+  assert.doesNotMatch(r.content, /Controller\.render/);
+  assert.doesNotMatch(r.content, /Controller\._log/);
+  assert.doesNotMatch(r.content, /inherited from/);
+  const labels = r.tmct_ask.matches.map((m) => m.label).sort();
+  assert.deepEqual(labels, ["TaskControllerWithOwn.assign"]);
+
+  // same discipline holds through the qualifier: a non-empty OWN qualifier-filtered
+  // set wins outright too, never walking up just because the unqualified own set
+  // happens to be a single method.
+  const rq = ask(graph, "public methods of TaskControllerWithOwn", OPTS);
+  assert.equal(rq.tmct_ask.miss, false);
+  assert.doesNotMatch(rq.content, /inherited from/);
+  assert.deepEqual(rq.tmct_ask.matches.map((m) => m.label).sort(), ["TaskControllerWithOwn.assign"]);
+});

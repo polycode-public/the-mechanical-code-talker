@@ -160,6 +160,61 @@ here.)
   only the *predicate minted from a recognized verb* generalizes, which doesn't carry the same
   false-positive risk the template-preference guidance exists to prevent.)
 
+### Operator-found bugs A-F (2026-07-09, manual chat-testing this session)
+
+Six more bugs found by the operator hand-testing the shipped CLI live, on top of Batch 3 and
+item 5 above (same dispatch, landed as separate commits per group):
+
+- **Bug A** — "remember X had soup" taught the malformed "x haves soup". `generalVerbPredicate`
+  only special-cased the raw strings "has"/"have", so past-tense "had" (lemma "have") fell
+  through to the generic `mgx:<lemma>` mint, and `predicatePhrase`'s naive third-person-singular
+  fallback appended "s" to the unrecognized lemma ending. Fixed by checking the LEMMA (not just
+  the raw verb) for "have" in `generalVerbPredicate`, plus a safety-net irregular case in
+  `thirdPersonSingularSurface` itself.
+- **Bug B** — past tense in the new general-verb query recognizers (item 5, above) — covered by
+  that same fix ("did" joins "does" in both `GENERAL_VERB_YESNO_RE`/`GENERAL_VERB_OPEN_RE`).
+- **Bug C** — "count soup" with no code graph loaded rendered the grammatically-broken "I count:
+  ." (a dangling empty list) and then suggested "how many classes are there", which would ALSO
+  fail. `answerCount` now special-cases `countableKinds(graph)` being empty with an honest
+  message pointing at `--repo`/`example:mini`.
+- **Bug D** — "what is in your memory" (bare) fell to the structural code-graph miss ("no module
+  matching 'your memory'"). `WHAT_KNOW_RE` widened to accept it (and "what's"/"whats in your
+  memory") as a synonym of bare "what do you know" — deliberately NOT "what do you remember",
+  which is already `WHOLE_RECALL_RE`'s own, more specific (fact-listing) territory.
+- **Bug E** — "what is in your memory about X" phrasing gap + a subtype walk (operator follow-up
+  request): `KNOW_ABOUT_RE` widened to accept "what is/what's in your memory about X"/"what do
+  you remember about X"; the handler now also walks TRANSITIVE SUBTYPES of X (a cycle-safe BFS
+  over TAUGHT isa-family facts only, capped at 8 hops — corpus/web-provenance isa rows are
+  excluded from the walk itself, found live to otherwise flood almost any term into hundreds of
+  coincidental "subtypes"), so "what do you know about component" surfaces a fact about "button"
+  once "every widget is a component" + "button is a widget" are both taught, even though "button"
+  never literally mentions "component". A subtype-derived hit gets a distinguishing "(including
+  its known subtypes)" header suffix.
+- **Bug F** — closed-set indirect-request wrapper stripping, five sub-points: "I want you to
+  remember X"/"I'd like you to remember X" teaches like bare "remember X" (`TEACH_RE` widened);
+  "search for X" (bare) strips the leading "for" filler before it becomes the search term
+  (`asBareCommand`); "I want you to search for X" strips the whole lead-in centrally, very early
+  in `runTurn` (a new `INDIRECT_REQUEST_RE`/`workingLine`) — found live: without this, it was
+  mis-swallowed by `GENERAL_VERB_TEACH_RE` as a bare `<subject> <verb> <object>` teach triple
+  (subject "I"), declined by the pronoun-subject guard with a confusing message instead of ever
+  reaching `/search`; "please tell me X" (no "about") now answers like "describe X"
+  (`DESCRIBE_WRAPPER_RE`'s "tell me" branch made "about" optional); and a new `GOAL_BY_COMMAND`
+  table threaded through `runCommand`'s `mk()` gives every command dispatch (search/find/
+  describe/…) a real "Goal (inferred): …" line, reusing `GOAL_BY_KIND`'s existing wording
+  verbatim wherever a command's intent overlaps one of those kinds — generalizing the
+  Goal-inference mechanism to command dispatches, not just `ask()`-parsed queries.
+
+New tests: `test/chat-teach-quantifier.test.mjs` (Bug A + Bug E, 6 cases), `test/chat.test.mjs`
+(Bug C), `test/chat-ux.test.mjs` (Bug D), `test/chat-indirect-request.test.mjs` (Bug F, 11 cases,
+new file). Manually verified live via the real CLI (piped stdin) as well as unit tests — see this
+session's own transcript for the exact chat excerpts.
+
+**Future direction flagged by the operator (out of scope for this dispatch, noted for a dedicated
+future design session):** a genuine planning/agentic loop — infer the goal, read the relevant
+subgraph, reason about candidate action-paths and their effects, pick the next step, execute,
+repeat — substantially bigger than the routing-level Goal-inference generalization above (which
+only labels an already-computed answer's intent, never plans ahead of one).
+
 ### New-term teaching + quantifiers (`c9dd281`)
 
 "redis is a cache" (a genuinely new term, not in the closed ~180-word ACE lexicon) is now
@@ -223,11 +278,27 @@ the moment of actually pushing a release, as part of that same push.
    One pre-existing test (`chatflow-tier2.test.mjs` T11) was updated: bare "what is Class" now
    direct-hits the meta definition instead of falling through to the cascade's count-reading
    rescue — a strictly better, non-wall answer, so the test's expectation was updated to match.
-3. **Seonix Batch 3 — recurring wall patterns, 3+ independent confirmations each.** Purpose/
-   identity phrasing ("whats X for/about") walling while "what does X do" and superlatives work;
-   temporal qualifiers on Commit queries ("the last commit", "recent commits") treated as literal
-   filter values; onboarding/closing questions ("what should I read first") read as literal
-   search strings.
+3. **DONE (this session): Seonix Batch 3 — recurring wall patterns.** All three landed. (a)
+   `MODULE_PURPOSE_RE` ("whats X for"/"what's X about"/"what is X for") joins `MODULE_ORIENT_RE`
+   in `moduleOrientLane` (`chat.mjs`), reusing the same `resolveEntity` + `moduleOverviewText`
+   rendering and pronoun-subject guard "what does X do" already had; does not shadow
+   `META_ORIENT_RE`'s literal "what is this app for". (b) Bare "recent commits"/"latest commits"/
+   "newest commits" (`ask.mjs`, a new `parseRelationalOrQualified` "recentCommits" AST node) render
+   a real dated commit list instead of a false "no Commit found matching 'recent'" find-miss;
+   "the last/latest/most recent commit" as a query SUBJECT is substituted for the actual newest
+   Commit individual's own id BEFORE parsing (`ask()`'s new `substituteLastCommitPhrase`), so "what
+   did the last commit touch" reads exactly like "what did commit `<sha>` touch"; a bare "when
+   was/did commit X" left with no change-verb after substitution is bridged onto the existing
+   "when" shape's own Commit-as-object special case by appending a neutral "touched" tail.
+   `HISTORY_CAP` exported from `codegraph.mjs` and reused for the cap. (c) `META_ORIENT_RE` widened
+   for onboarding/closing phrasings beyond the original closed set ("what should i read first [to
+   understand this codebase]", "where should i start reading [this code]", "where do i begin
+   reading", "what should i look at first"). Also (grouped here for file-locality, part of Batch
+   4/5): `RELATIONS.cochange.verbs` (`ask-vocab.mjs`) gained the present-tense forms ("changes
+   with", "change with", "tends/tend to change with", "usually changes with") — `VERB_ALT`'s
+   longest-first sort already resolved the `ENTITY_TO_TYPE` "Change"-noun collision risk,
+   verified empirically, so no parser guard was needed. New/updated tests in `test/chat-ux.test.mjs`,
+   `test/ask.test.mjs`, `test/ask-vocab.test.mjs`.
 4. **Seonix Batch 4/5 — lower priority.**
    - **DONE: the disambiguation-candidate-ranking weakness's exact-basename-vs-siblings case.**
      Built a realistic, committed fixture (`test/fixtures/large-scale/` — vendored commander.js +
@@ -249,15 +320,68 @@ the moment of actually pushing a release, as part of that same push.
      exact/prefix/suffix hit. New regression test `test/ask-resolve-ranking.test.mjs` (6 cases:
      exact-beats-siblings ×2, genuine tie stays `ambiguous:true` ×1, cross-"repo" isolation ×2,
      fixture sanity ×1) — all passing; full suite green (1258/1258) at the time of this fix.
-   - **Still open**: cochange phrasing variants, compositional-AND edge cases beyond what Tier 4
-     covered, a "multi-root" substring over-match (single instance, not independently reverified).
-5. **General verb-to-predicate teaching's natural follow-up**: dedicated direct-question
-   recognition ("does margo eat ribs", "what does margo eat") — this session shipped teaching +
-   generic retrieval only, not verb-specific query phrasings.
-6. **The Tier-4 "of X" membership gap**: "public methods of TaskController" returns a genuine,
-   receipted empty because the class declares no methods of its own (inherited from `Controller`)
-   — extending membership queries to walk inheritance is a bigger structural change than a
-   routing fix, deliberately deferred.
+   - **DONE (this session): compositional-AND, the two-different-recognized-verbs case.**
+     `sameVerbLed` (`src/ask.mjs`, `parseRelationalOrQualified`) only opened the marker gate for a
+     same-kind repeat ("call X and call Y") or a bare ellipsis-borrowed object ("call X but not
+     Y") — a later "and"-branch with its OWN DIFFERENT but still-recognized verb ("which functions
+     call X and test Y": `calls` then `tests`) fell outside the gate entirely and dropped to the
+     legacy `ambiguousParse` path. Added `differentVerbLed`, additive alongside `sameVerbLed`: opens
+     when every later branch carries its own recognized verb at a SINGLE word (`vh.end - vh.start
+     === 1`) — the atom-building loop needed no change, it already builds one independent atom per
+     verb-led branch and `evalBoolean` intersects them regardless of kind. The single-word
+     restriction is deliberate and load-bearing, not cosmetic: the pre-existing 610915a compat case
+     ("which classes extends Base and couples to logging", pinned `ambiguousParse:true` in
+     `test/ask-compositional.test.mjs:67` and `:144`) is STRUCTURALLY the same "two different,
+     both-recognized verbs" shape (`couples to` genuinely resolves via `VERB_TO_KIND` to `imports`,
+     despite that file's own prior comment implying otherwise) — accepting any recognized different
+     verb regressed both pinned tests; restricting to a single-word later verb is the narrowest rule
+     that admits the target case ("test") while leaving the multi-word compat case exactly as closed
+     as before. New test `test/chatflow-tier4.test.mjs` ("boolean-AND two-different-recognized-verbs")
+     verifies the real set intersection against `examples/mini-webapp` (a genuinely empty
+     intersection there — the fixture's callers and testers are disjoint populations — receipted
+     honestly, never the old ambiguousParse misread of the whole tail as one object string); a
+     sibling test re-confirms the 610915a compat case end-to-end, unaffected.
+   - **Still open**: cochange phrasing variants, a "multi-root" substring over-match (single
+     instance, not independently reverified).
+5. **DONE (this session): general verb-to-predicate teaching's natural follow-up.**
+   `GENERAL_VERB_YESNO_RE` ("does/did X `<verb>` Y") and `GENERAL_VERB_OPEN_RE` ("what does/did X
+   `<verb>`") wired into `factReadBack` (`chat.mjs`), directly after the `WHO_OWNS_RE` block: a
+   taught general-verb fact answers back directly ("does margo eat ribs" → yes; "did margo eat
+   ribs" → yes, past tense; "does margo eat cake" → an honest, closed-world no; "what does margo
+   eat" → lists ribs). Both run the SAME `GENERAL_VERB_EXCLUDE_RE`/`GENERAL_VERB_ANYWHERE_EXCLUDE_RE`
+   guards `generalVerbTeach` uses and route the verb through the SAME `generalVerbPredicate`, so the
+   has/have bridge works on the query side too; `factReadBack` only ever runs on an already-true
+   `miss`, so a real structural query ("does `<module>` import `<module>`") is never shadowed. Found
+   + fixed live while writing tests: `GENERAL_VERB_EXCLUDE_RE` was written for `generalVerbTeach`'s
+   fully-conjugated verb ("X OWNS Y"), but "does/did X `<verb>` Y" captures the bare infinitive after
+   do-support ("does X OWN Y") — a real false "no" against a genuinely-true taught ownership fact,
+   since `generalVerbPredicate("own")` mints a different predicate than the ownership frame's own
+   `OWNED_BY_PREDICATE`. Added `GENERAL_VERB_QUERY_EXCLUDE_RE` (be/own/maintain) as the query-side's
+   own bare-infinitive exclude set. A successful answer gets its own goal-line revision
+   ("look up a taught fact about a subject/verb/object"), mirroring the TEACH lane's own pattern.
+   New `test/chat-generalverb-query.test.mjs` (6 cases).
+6. **DONE (this session): the Tier-4 "of X" membership gap, walk inheritance.** "public methods of
+   TaskController" used to return a genuine-looking but incomplete empty because a class with no
+   own members never checked whether it INHERITS members from a superclass. Fixed in `src/ask.mjs`:
+   the old inline own-lookup in `evalSet`'s `"membership"` case was extracted into
+   `membershipOwnSet(graph, id, entityType)`; a new `computeMembership(graph, ownerId, ownerClass,
+   entityType, filterFn)` tries the owner's own (optionally `filterFn`-qualifier-filtered) member
+   set first, and ONLY when that's empty AND `inheritsApplicable(graph, ownerClass)` walks
+   `ancestorsOf` nearest-first, applying the SAME filter at each level (so a qualifier that empties
+   an otherwise-non-empty own set still correctly triggers the walk — "public methods of X" is not
+   equivalent to "methods of X" filtered once after resolving). A new top-level composite path,
+   `evalMembershipComposite` (wired into `evalComposite` for both a bare `"membership"` node and a
+   `"qualifier"` node wrapping one), carries the inheritance provenance through to
+   `renderComposite` so an inherited answer is DISCLOSED out loud ("TaskController has no own
+   methods — inherited from Controller: …") rather than ever silently presented as the owner's own;
+   an owner with its own (even qualifier-filtered) members always wins outright, no blending.
+   New tests in `test/ask-cascade.test.mjs` (Controller/TaskController/TaskControllerWithOwn
+   fixture, 3 cases: inherited walk, qualifier-filtered inherited walk, own-always-wins discipline).
+   Note: the BARE "methods of X" phrasing (no leading qualifier/`which`) is separately intercepted
+   by `interpret/normalize.mjs`'s `PHRASING_FRAMES` onto the older, unrelated "what does X contain"
+   simple-clause shape before the compositional grammar ever sees it — a pre-existing routing
+   feature, out of this fix's scope; "which methods of X" (or any qualifier-led form) reaches this
+   fix's actual code path.
 7. **DONE: `test/chatflow-tier1.test.mjs` naming.** Was mislabeled — its own header described
    Tier 2's territory ("drill-down chains with anaphora... what calls it → what uses that"), not
    Tier 1's "single touch + one drill-down". Renamed to `test/chatflow-tier2-drilldown.test.mjs`

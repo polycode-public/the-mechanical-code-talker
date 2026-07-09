@@ -19,6 +19,21 @@ see `HANDOVER.md` for the exact release chain and file:line detail).
 
 ### Now: shipped this session
 
+- **Tier-4 "of X" membership gap, walk inheritance (HANDOVER item 6).** "public methods of
+  TaskController" used to return a genuine-looking but incomplete empty when the class declares no
+  members of its own but inherits real ones from a superclass. `src/ask.mjs`'s membership eval now
+  tries the owner's own (qualifier-filtered) members first and only walks `ancestorsOf`
+  nearest-first when that's empty and the class participates in `inherits` — an inherited answer is
+  DISCLOSED out loud ("… has no own methods — inherited from Controller: …"), never silently
+  presented as the owner's own; an owner's own members (even a partial qualifier-filtered set)
+  always win outright.
+- **Compositional-AND: two different, both-recognized verbs (HANDOVER item 4/Batch 4/5).** "which
+  functions call X and test Y" (two different relation verbs joined by "and") used to fall to the
+  legacy `ambiguousParse` path and misread the whole tail as one unresolvable object string. The
+  marker gate now also opens when every later "and"-branch names its own single-word recognized
+  verb, composing a real set intersection instead — narrowly scoped (single-word only) so the
+  pre-existing "which classes extends Base and couples to logging" compat case stays exactly as
+  closed as before.
 - **1.0.0 — the first-run chat experience, rewritten.** The original trigger: a brand-new
   `npm install` + bare `tmct chat` led with a "no code graph loaded" apology for *any* input,
   including plain greetings and identity questions, even though the seeded ontology/lexicon

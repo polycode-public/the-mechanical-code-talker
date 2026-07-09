@@ -123,6 +123,54 @@ test("tier4/compat guard (unaffected): a bare verb+verb 'and' with two DIFFERENT
   assert.doesNotMatch(turns[0].answer, /the most|superlative/i);
 });
 
+test("tier4/boolean-AND two-different-recognized-verbs (Batch 4/5 fix): 'which functions call X and test Y' composes to the real set intersection, not the legacy ambiguousParse", async () => {
+  // "call" (kind calls) and "test" (kind tests) are TWO DIFFERENT, BOTH-recognized
+  // verbs — previously this whole shape fell OUTSIDE sameVerbLed's gate (which only
+  // accepted a same-kind repeat or a bare ellipsis-borrowed object) and dropped to
+  // the legacy ambiguousParse path, misreading "Task and test src/core/store.mjs"
+  // as one literal (unresolvable) object string. differentVerbLed (src/ask.mjs,
+  // parseRelationalOrQualified) now also opens the gate when a later branch names
+  // its OWN single-word recognized verb, so this composes as a genuine two-atom
+  // boolean intersection instead.
+  const queries = [
+    // sanity: each branch's own clause is independently a REAL, non-empty answer in
+    // this fixture (mini-webapp) — saveStore/validateTask both call Task (callsSymbol);
+    // testCreateTask/testLoadStore are the functions in the two modules that test
+    // src/core/store.mjs (refined from the module-coarse tests edge via defines).
+    "which functions call Task",
+    "which functions test src/core/store.mjs",
+    // the composed query: the ACTUAL intersection of those two real sets. In this
+    // fixture the "callers of Task" and "testers of store.mjs" are disjoint
+    // real populations (test functions here call nothing themselves) — so the
+    // intersection is genuinely empty, and a real, receipted empty (naming the
+    // entity kind) is exactly the honest, correct answer — never the old
+    // ambiguousParse misread of "Task and test src/core/store.mjs" as one term.
+    "which functions call Task and test src/core/store.mjs",
+  ];
+  const turns = await driveSession(queries);
+  assertAllFlow(turns, queries);
+  assert.match(turns[0].answer, /saveStore/);
+  assert.match(turns[0].answer, /validateTask/);
+  assert.match(turns[1].answer, /testCreateTask/);
+  assert.match(turns[1].answer, /testLoadStore/);
+  assert.match(turns[2].answer, /^nothing in the index matches that \(functions\)\./);
+  // never the pre-fix misread of the whole tail as one unresolved object term
+  assert.doesNotMatch(turns[2].answer, /Task and test/);
+});
+
+test("tier4/compat guard RE-CONFIRMED (Batch 4/5, unaffected): 'which classes extends Base and couples to logging' still falls to the legacy ambiguousParse path", async () => {
+  // Re-run of the SAME 610915a compat case the differentVerbLed addition above must
+  // not touch: "couples to" IS a recognized verb (VERB_TO_KIND maps it to "imports"),
+  // so this is structurally the SAME "two different, both-recognized verbs" shape as
+  // the fix above — the ONLY reason it stays off the compositional path is the
+  // single-WORD restriction on differentVerbLed's later-branch verb ("couples to" is
+  // two words; "test" above is one) — see ask.mjs's own doc on this exact narrowing.
+  // ask-compositional.test.mjs pins the parseQuery-level shape (`ambiguousParse:
+  // true`) directly; this confirms the end-to-end chat answer is unaffected too.
+  const turns = await driveSession(["which classes extends Base and couples to logging"]);
+  assert.doesNotMatch(turns[0].answer, /the most|superlative/i);
+});
+
 test("tier4/superlative ranking: 'which module has the most imports' -> discourse follow-up 'which of those are tested'", async () => {
   const queries = ["which module has the most imports", "which of those are tested"];
   const turns = await driveSession(queries);

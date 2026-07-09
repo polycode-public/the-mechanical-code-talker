@@ -1117,9 +1117,46 @@ function parseRelationalOrQualified(w, lc, nlp, depth) {
       });
     }
   }
+  // Batch 4/5 (HANDOVER item 4, compositional-AND): a later AND-branch with its OWN
+  // DIFFERENT, but still RECOGNIZED, verb ("which functions call X and test Y" —
+  // "test" maps to "tests", a different kind from the lead "call"/"calls") is ALSO
+  // the compositional shape — additive to sameVerbLed above, not a replacement:
+  // sameVerbLed already covers a same-kind repeat or a bare ellipsis-borrowed
+  // object; this covers the one case it deliberately left closed (a branch with
+  // its own explicit, different verb). The atom-building loop below needs no
+  // change: it already builds one independent {kind:"set", ast} per verb-led
+  // branch regardless of kind, and evalBoolean intersects them the same way a
+  // qualifier atom is intersected (610915a) — this only widens the GATE that lets
+  // that existing machinery fire for a mixed-kind "and" chain too.
+  // NARROWED to a single-WORD later verb (`vh.end - vh.start === 1`) — same
+  // "narrow, low-risk signal" discipline 610915a itself used (it deliberately did
+  // NOT widen to "any boolean connective"): a bare single content word ("call",
+  // "test", "tests") reads unambiguously as its own relation no matter what
+  // follows it, whereas a multi-word verb PHRASE ("couples to", "is a subclass
+  // of", "depends on") is exactly the shape the pre-existing compat guard pins
+  // OFF (ask-compositional.test.mjs:67 and :144, both asserting
+  // `ambiguousParse:true` for "which classes extends Base and couples to
+  // logging" STRICTLY) — "couples to" IS recognized (VERB_TO_KIND maps it to
+  // "imports"; the two-different-recognized-verbs shape is structurally
+  // identical to the target case), so accepting ANY recognized different verb
+  // here regressed both pinned tests when tried; the single-word restriction is
+  // the narrowest rule that admits the required target case ("test") while
+  // leaving the multi-word compat case exactly as closed as it always was.
+  let differentVerbLed = false;
+  if (sameVerbBranches.length > 1) {
+    const firstBlc = sameVerbBranches[0].map((x) => x.toLowerCase());
+    const firstVh = findPhrase(firstBlc, VERB_TO_KIND);
+    if (firstVh && firstVh.start === 0) {
+      differentVerbLed = sameVerbBranches.slice(1).every((bw) => {
+        const blc = bw.map((x) => x.toLowerCase());
+        const vh = findPhrase(blc, VERB_TO_KIND);
+        return !!vh && vh.start === 0 && vh.end - vh.start === 1;
+      });
+    }
+  }
   // marker gate — the crux of backward-compat: without one of these, this is not a
   // compositional query and we must NOT hijack it from the existing parser.
-  if (!(quals.length || relFlag || membershipLed || gerundLed || boolQualLed || sameVerbLed)) return null;
+  if (!(quals.length || relFlag || membershipLed || gerundLed || boolQualLed || sameVerbLed || differentVerbLed)) return null;
 
   // empty predicate → a bare qualified class ("public methods")
   if (!predWords.length) {
@@ -1304,6 +1341,67 @@ function moduleIdOf(graph, ind) {
   if (!ind) return null;
   if (ind.class === "Module") return ind.id;
   return qualSets(graph).moduleOfSymbol.get(ind.id) || null;
+}
+
+// ---- MEMBERSHIP inheritance cascade (HANDOVER item 6) — "<kind> of <owner>" walks
+// UP `inherits` when the owner's own surface has nothing, exactly the way
+// computeFind's narrow-then-broaden pass does for predicate-find, below. ----
+
+/** OWN-ONLY membership hits for exactly ONE owner id — every MEMBERSHIP_KINDS
+ *  forward-hit from `id` alone (never an ancestor), filtered to `entityType` when
+ *  given. This IS the un-broadened lookup the "membership" case always ran before
+ *  item 6 — extracted so both the plain evalSet case and the inheritance-aware
+ *  cascade below (computeMembership) share the exact same one-node lookup. */
+function membershipOwnSet(graph, id, entityType) {
+  const objs = uniqueById(MEMBERSHIP_KINDS.flatMap((k) => forwardOverSet(graph, k, new Set([id]))));
+  return entityType ? objs.filter((o) => o.class === entityType) : objs;
+}
+
+/** Resolve a "<kind> of/in <term>" owner term to either a DIRECTORY scope (a bare
+ *  path prefix with no exact node of its own — see directoryScopeModules's own
+ *  doc) or a single container individual, exactly like the "membership" case's own
+ *  pre-item-6 resolution — extracted unchanged so evalSet's plain path and the
+ *  composite/disclosure path (evalMembershipComposite) can never drift. */
+function resolveMembershipOwner(graph, term) {
+  const r = resolveObject(graph, term);
+  if (!(r.match && r.tier === 1)) {
+    const dirMods = directoryScopeModules(graph, term);
+    if (dirMods.length) return { kind: "dir", mods: dirMods };
+  }
+  if (!r.match) return { kind: "miss" };
+  return { kind: "single", id: r.match.id, entityClass: r.match.class, label: r.match.label };
+}
+
+/** The narrow-then-walk inheritance cascade behind a "<kind> of <owner>" membership
+ *  query (HANDOVER item 6): the owner's OWN members — optionally `filterFn`-
+ *  filtered (a qualifier, e.g. "public") — win outright whenever non-empty; only
+ *  when that (possibly filtered) own result is EMPTY, and the owner's class
+ *  actually participates in `inherits` today (inheritsApplicable), do we walk
+ *  `ancestorsOf` NEAREST-FIRST, stopping at the first ancestor whose own
+ *  (identically filtered) member set is non-empty. Applying `filterFn` INSIDE the
+ *  walk — not once after it returns — is what makes a QUALIFIED query ("public
+ *  methods of TaskController") correctly walk up when the owner has own members
+ *  but none satisfy the qualifier, rather than stopping early on an unfiltered
+ *  non-empty own-set that the qualifier alone would have emptied (see the two
+ *  call sites: an omitted/identity `filterFn` is the plain unqualified case).
+ *  Returns {own, inherited, viaId, viaLabel} — `inherited`/`viaId`/`viaLabel` are
+ *  populated ONLY when the walk actually found something on an ancestor, so a
+ *  caller can disclose "inherited from <viaLabel>" rather than silently
+ *  presenting an ancestor's members as the owner's own (never-fabricate — the
+ *  same discipline computeFind's "related, not exact" broad pass documents). */
+function computeMembership(graph, ownerId, ownerClass, entityType, filterFn) {
+  const pass = filterFn || (() => true);
+  const own = membershipOwnSet(graph, ownerId, entityType).filter(pass);
+  if (own.length || !inheritsApplicable(graph, ownerClass)) {
+    return { own, inherited: [], viaId: null, viaLabel: null };
+  }
+  for (const ancId of ancestorsOf(graph, ownerId)) {
+    const anc = graph.byId.get(ancId);
+    if (!anc) continue;
+    const ancOwn = membershipOwnSet(graph, ancId, entityType).filter(pass);
+    if (ancOwn.length) return { own, inherited: ancOwn, viaId: ancId, viaLabel: anc.label };
+  }
+  return { own, inherited: [], viaId: null, viaLabel: null };
 }
 
 /** Does an individual satisfy one qualifier (spec from QUALIFIERS)? Reads only
@@ -1546,22 +1644,34 @@ function evalSet(graph, ast, opts) {
       // node match (tier 1 — a real file/symbol named that) still wins outright
       // (unchanged single-container-node behavior, e.g. "methods in widget.mjs");
       // only when there is no exact match do we try directory-prefix scope first.
-      const r = resolveObject(graph, ast.term);
-      if (!(r.match && r.tier === 1)) {
-        const dirMods = directoryScopeModules(graph, ast.term);
-        if (dirMods.length) {
-          if (!ast.entityType || ast.entityType === "Module") return dirMods;
-          const ids = new Set(dirMods.map((m) => m.id));
-          const objs = uniqueById(MEMBERSHIP_KINDS.flatMap((k) => forwardOverSet(graph, k, ids)));
-          return objs.filter((o) => o.class === ast.entityType);
-        }
+      const owner = resolveMembershipOwner(graph, ast.term);
+      if (owner.kind === "dir") {
+        if (!ast.entityType || ast.entityType === "Module") return owner.mods;
+        const ids = new Set(owner.mods.map((m) => m.id));
+        const objs = uniqueById(MEMBERSHIP_KINDS.flatMap((k) => forwardOverSet(graph, k, ids)));
+        return objs.filter((o) => o.class === ast.entityType);
       }
-      if (!r.match) return [];
-      const ids = new Set([r.match.id]);
-      const objs = uniqueById(MEMBERSHIP_KINDS.flatMap((k) => forwardOverSet(graph, k, ids)));
-      return ast.entityType ? objs.filter((o) => o.class === ast.entityType) : objs;
+      if (owner.kind === "miss") return [];
+      // item 6 (HANDOVER): the owner's own members win outright when non-empty;
+      // only an EMPTY own set walks up `inherits` (computeMembership) — see its
+      // own doc above. evalSet's flat-array embedding (a find-seed inside a
+      // boolean/qualifier fold, §6-style) transparently flattens own vs. inherited,
+      // same as evalSet's "find" case does for computeFind's narrow/broad split;
+      // the DISCLOSED (never-silent) version lives in evalMembershipComposite,
+      // below, for the top-level (and qualifier-wrapped) membership query shapes.
+      const { own, inherited } = computeMembership(graph, owner.id, owner.entityClass, ast.entityType);
+      return own.length ? own : inherited;
     }
     case "qualifier": {
+      // a qualifier wrapping a MEMBERSHIP inner needs the filter applied INSIDE
+      // the inheritance walk, at each level, not once after a flat resolve (item
+      // 6, Fix 1's per-level requirement — see computeMembership's own doc: a
+      // class can own a non-empty member set that the qualifier alone empties
+      // out, which must still walk up rather than stopping on the unfiltered own
+      // set). evalMembershipComposite is the single source of truth for this;
+      // reused here (matches-only) so evalSet's embedded-atom shape and the
+      // top-level composite path can never drift on WHICH set they compute.
+      if (ast.inner.node === "membership") return evalMembershipComposite(graph, ast, opts).matches;
       const base = evalSet(graph, ast.inner, opts);
       return base.filter((ind) => ast.filters.every((f) => qualHolds(graph, ind, QUALIFIERS[f])));
     }
@@ -1688,6 +1798,47 @@ function evalSuperlative(graph, ast) {
   return { compositeKind: "superlative", entityType: ast.entityType, metricNoun: ast.metricNoun, extreme: ast.extreme, score: best, matches: winners };
 }
 
+/** TOP-LEVEL "<kind> of/in <owner>" membership eval (HANDOVER item 6), covering
+ *  both a bare membership node and a QUALIFIER node wrapping one ("public methods
+ *  of TaskController") — the two share this one function so the qualifier's
+ *  filter is threaded INSIDE computeMembership's inheritance walk (item 6, Fix 1's
+ *  per-level requirement) rather than applied once, after a plain flat resolve
+ *  (which would wrongly stop on a non-empty-but-unfiltered own set that the
+ *  qualifier alone would empty out — see computeMembership's own doc). Unlike
+ *  evalSet's embedded (flattening) "membership"/"qualifier" cases — used when this
+ *  shape is nested inside a boolean fold — this keeps the inheritance provenance
+ *  (`inheritedNotOwn`/`viaLabel`/`ownerLabel`) so renderComposite can disclose an
+ *  ancestor-sourced answer ("TaskController has no own public methods — inherited
+ *  from Controller: render.") rather than ever silently presenting an ancestor's
+ *  members as the owner's own. A directory scope (no single owner individual) has
+ *  no inheritance chain to walk — unaffected by item 6, same behavior as before. */
+function evalMembershipComposite(graph, ast, opts) {
+  const qualNode = ast.node === "qualifier" && ast.inner.node === "membership" ? ast : null;
+  const memNode = qualNode ? qualNode.inner : ast;
+  const entityType = memNode.entityType;
+  const filterFn = qualNode
+    ? (ind) => qualNode.filters.every((f) => qualHolds(graph, ind, QUALIFIERS[f]))
+    : null;
+  const owner = resolveMembershipOwner(graph, memNode.term);
+  if (owner.kind === "dir") {
+    let objs;
+    if (!entityType || entityType === "Module") objs = owner.mods;
+    else {
+      const ids = new Set(owner.mods.map((m) => m.id));
+      objs = uniqueById(MEMBERSHIP_KINDS.flatMap((k) => forwardOverSet(graph, k, ids))).filter((o) => o.class === entityType);
+    }
+    if (filterFn) objs = objs.filter(filterFn);
+    return { compositeKind: "set", matches: objs, entityType };
+  }
+  if (owner.kind === "miss") return { compositeKind: "set", matches: [], entityType };
+  const { own, inherited, viaLabel } = computeMembership(graph, owner.id, owner.entityClass, entityType, filterFn);
+  const inheritedNotOwn = !own.length && inherited.length > 0;
+  return {
+    compositeKind: "membership", entityType, matches: inheritedNotOwn ? inherited : own,
+    inheritedNotOwn, viaLabel, ownerLabel: owner.label,
+  };
+}
+
 /** EXISTENCE eval — "is there a/an <kind> [called/named <term>] [in <module>]": a
  *  direct membership/name check against the graph, never routed through the
  *  relation-verb machinery. A named check resolves the term against the SAME
@@ -1748,6 +1899,13 @@ export function evalComposite(graph, ast, opts = {}) {
   if (ast.node === "temporal") return evalTemporal(graph, ast, opts);
   if (ast.node === "recentCommits") return evalRecentCommits(graph);
   if (ast.node === "anaphora") return evalAnaphora(graph, ast, opts);
+  // membership inheritance cascade (HANDOVER item 6), TOP-LEVEL: a bare "<kind> of
+  // <owner>" node, or a qualifier wrapping one ("public methods of <owner>") — see
+  // evalMembershipComposite's own doc for why the two share one function and why
+  // this keeps disclosure provenance the embedded evalSet path deliberately drops.
+  if (ast.node === "membership" || (ast.node === "qualifier" && ast.inner.node === "membership")) {
+    return evalMembershipComposite(graph, ast, opts);
+  }
   // predicate-find (Workstream 2), TOP-LEVEL: unlike evalSet's "find" case (used
   // when a find-seed is embedded inside a boolean/qualifier fold, §6), this keeps
   // the broad-pass provenance so renderComposite can label a "related, not exact"
@@ -1853,6 +2011,26 @@ function renderComposite(parsed, result) {
       ? ` — narrow with "${nounFor(result.entityType, 2)} in <module>"`
       : "";
     return { content: `${compositeList(result.matches)}${hint}.`, miss: false, ambiguous: false, matches: result.matches };
+  }
+  // membership inheritance cascade (HANDOVER item 6): a zero-hit is the ordinary
+  // set-producing honest miss below; a non-empty INHERITED result (the owner's own
+  // set was empty, an ancestor's wasn't) is disclosed OUT LOUD — "X has no own
+  // <kind> — inherited from <ancestor>: …" — never silently presented as though
+  // the owner declared them itself (never-fabricate, the same discipline
+  // computeFind's "related, not exact" broad pass documents for predicate-find).
+  if (result.compositeKind === "membership") {
+    if (!result.matches.length) {
+      return { content: `nothing in the index matches that${result.entityType ? ` (${nounFor(result.entityType, 2)})` : ""}.`, miss: true, ambiguous: false, matches: [] };
+    }
+    if (result.inheritedNotOwn) {
+      const kindPlural = nounFor(result.entityType, 2);
+      const ownerPhrase = result.ownerLabel ? `${result.ownerLabel} has no own ${kindPlural}` : `no own ${kindPlural}`;
+      return {
+        content: `${ownerPhrase} — inherited from ${result.viaLabel}: ${compositeList(result.matches)}.`,
+        miss: false, ambiguous: false, matches: result.matches, inheritedNotOwn: true,
+      };
+    }
+    return { content: `${compositeList(result.matches)}.`, miss: false, ambiguous: false, matches: result.matches };
   }
   // predicate-find (Workstream 2): zero hits -> an honest miss naming BOTH the type
   // and the term; the broad ("related, not exact") pass is ALWAYS clearly labeled,
