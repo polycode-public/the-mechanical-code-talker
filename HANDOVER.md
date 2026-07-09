@@ -251,6 +251,15 @@ comprehensive ALL-SIX-items integration test) — 18 total in the file. `npm tes
 smoke test still exits 0. See `PLAN_TAUGHT_RELATIONS.md`'s "Phase 6 — DONE" note (and its now-updated
 top-of-file status line) for the full transcript and design-vs-plan deviation record.
 
+**INFBENCH re-measured against 1.3.1 (2026-07-09, measurement-only dispatch)**: `INFBENCH_1.3.1.md`
+confirms the four `PLAN_TAUGHT_RELATIONS.md` phases that finished the plan since `1.3.0`'s own
+measurement (Phase 2 relation-alias/union, Phase 4 `compose2`, Phase 5 property-filter, Phase 6's
+wiring half) moved **nothing** on the ladder — a row-by-row diff of the two runs' raw
+`product.jsonl` files found zero differences in verdict OR answer text across all 229 rows, and a
+direct grep of every case's premises/query confirmed none of INFBENCH's seven templates ever reach
+the new relational-teach phrasing. Still gated at INF-B1 (33% completion), unchanged for a fourth
+consecutive measured version.
+
 ## Open follow-ups (next session, in priority order)
 
 1. ~~Fix the INF-C1 fabrication bug above.~~ **DONE (2026-07-09)** — see the updated item 2 note

@@ -134,6 +134,14 @@ live-verified. `test/chat-taught-relations.test.mjs` extended with 5 more tests,
 comprehensive ALL-SIX-items integration test (18 total). `npm test` 1395 → 1400. **Nothing remains
 outstanding from `PLAN_TAUGHT_RELATIONS.md`'s original six-item scope.**
 
+**INFBENCH re-measured against 1.3.1** (measurement-only dispatch, 2026-07-09): `INFBENCH_1.3.1.md`
+finds the ladder unchanged, byte-for-byte, since `1.3.0` — the four `PLAN_TAUGHT_RELATIONS.md`
+phases that completed the plan (alias/union, `compose2`, property-filter, recursive/reachability
+wiring) don't touch any band, confirmed by a zero-diff row comparison of both runs' raw product
+files plus a direct check that no INFBENCH case's premises/query ever reach the new relational-teach
+phrasing. Still gated at INF-B1 (33% completion), unchanged for a fourth consecutive measured
+version — an honest, expected result given the new surface and the ladder measure different things.
+
 ### Shipped this session
 
 - **Tier 5** found 12 routing/recognition fixes across teach and recall: article/head-word gaps
