@@ -42,7 +42,19 @@ confirms chat/INF-A2 now closes to 100% (the cax-sco/proof-chase win the STATUS 
 claimed) but also finds chat/INF-C1 has flipped from an honest ceiling to a genuine 93%-fabrication
 regression, traced to the new general-verb-to-predicate query lane answering "no" on an absent fact
 instead of declining — a real correctness bug, not yet fixed, separate from and cheaper than the
-still-gating INF-B1 (`cax-dw`) work.
+still-gating INF-B1 (`cax-dw`) work. See `HANDOVER.md` for the fix location and priority; it's the
+current top open follow-up.
+
+**`PLAN_TAUGHT_RELATIONS.md`** (research/design, 2026-07-09, nothing implemented): scopes teaching
+tmct brand-new relations and rules through ordinary chat (a Prolog-style family tree — father,
+parent, grandparent, descendant — none of it hardcoded, all of it taught), reusing
+`findActionPath` for the hop-counted relation chase and a new sibling kernel, `findReachableSet`,
+for open-ended enumeration. Live-testing while designing it surfaced real, already-shipped gaps:
+the "is a kind of" teach phrasing isn't accepted anywhere today, a "parent" example in the original
+scoping conversation only worked by an accidental lexicon collision, and a wrapped property-teach
+shape (`TEACH_PROPERTY_RE`) has no groundedness check at all, unlike the newer subject/object
+mint-fallback pair's explicit discipline. See `HANDOVER.md` for the full finding list; this is
+next-session pickup material, not yet started.
 
 ### Shipped this session
 
@@ -71,6 +83,17 @@ still-gating INF-B1 (`cax-dw`) work.
   hand-rolled copy of `WALL_MISS_RE` with the real export; and extracted a shared session-driver
   helper (`test/helpers/session.mjs`), replacing 11 near-duplicate `drive()`/`driveSession()`
   implementations. Full detail is in `HANDOVER.md`'s "Test-suite health pass" entry.
+- **Vocabulary-growth mirror fix.** New vocabulary used to grow one-directionally only: "redis is
+  a cache" could mint the unknown subject "redis" because the object "cache" was already a known
+  noun, but the reverse ("every cache is a store," subject known, object unknown) declined
+  outright. Added `unknownObjectFallback`, gated on a genuine universal quantifier ("every"/"each"/
+  "all") so it can't reopen the general lexicon bypass the existing bare/"a" shapes rely on. A term
+  minted by either direction now grounds a later sentence exactly like a lexicon word, using
+  taught-only groundedness checks that deliberately exclude the bulk ConceptNet corpus seed (the
+  corpus mentions ordinary English words constantly and must never silently count as "grounded").
+  When both sides are totally ungrounded, tmct still declines, but now with an actionable grounding
+  nudge instead of a bare "I couldn't store that." New coverage in
+  `test/chat-teach-quantifier.test.mjs`.
 - **Compound-name resolution**, from the operator's own worked example: "the payment system" now
   finds `PaymentSystem`, `payment-system`, a compound path like
   `westfield-payment-system/src/MyCode.cs`, and an interface-style name like
@@ -993,14 +1016,22 @@ minimal benchmark domains before anything domain-general is attempted:
   slot (`game`) threaded through `createSession`/`runTurn` exactly the way `focus` already is,
   kept deliberately separate from the `pending` pagination field since a game must survive an
   aside mid-play, unlike a listing remainder.
+- `PLAN_TAUGHT_RELATIONS.md` — teaching tmct brand-new relations and rules through ordinary chat
+  (a taught Prolog-style family tree, none of the kinship vocabulary hardcoded), the first of the
+  three to need a successor function SYNTHESIZED from data the user taught in an earlier turn,
+  rather than hand-written per domain the way Hanoi's `legalMoves` and guess-number's
+  interval-update rule are. Its own enumeration capability ("list the descendants of X," no fixed
+  goal) needs a genuine new sibling kernel, `findReachableSet`, since `findActionPath` only ever
+  searches toward one goal.
 
-Both docs converge on the SAME one genuinely new primitive neither doc found already built
+All three docs converged on the one genuinely new primitive none of them found already built
 anywhere in tmct: something that computes a SUCCESSOR STATE (apply a chosen action, produce the
 next graph/belief to reason over) — every existing traversal (`ancestorsOf`, `computeFind`,
-`findIsaChain` itself) is read-only. That primitive, plus a still-open recognition question (how
-tmct notices "the user wants goal-directed action" at all, and whether multi-step execution needs
-confirmation before running) is the real next-session scope — a dedicated design/implementation
-session, not a routing fix.
+`findIsaChain` itself) is read-only. That primitive now exists (`findActionPath`, `src/planning.mjs`,
+shipped this session — see "Shipped this session" above), proven against a small toy graph but not
+wired into any of the three domains yet. The remaining next-session scope is that wiring, plus a
+still-open recognition question: how tmct notices "the user wants goal-directed action" at all, and
+whether multi-step execution needs confirmation before running.
 
 ### The design horizon
 

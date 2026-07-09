@@ -127,6 +127,15 @@ Teaching isn't limited to the ACE grammar's fixed shapes. Tell tmct an
 arbitrary fact, like "margo eats ribs", and it mints a fact you can later ask
 about directly: "what does margo eat", or "does margo eat ribs".
 
+New vocabulary compounds as you teach it. "redis is a cache" mints "redis" as
+a class-level concept even though it was never in the built-in lexicon, and a
+later "every cache is a store" does the same for "store," the other way
+round, as long as one side of the sentence is already grounded. tmct never
+mints a fact between two totally ungrounded terms; it declines and nudges you
+to ground one side first. Quantified teaching works too: "some functions are
+risky" stores the quantifier, and a later "how many functions are risky"
+answers "A few."
+
 ### Provenance and trust
 
 Every fact and text block records **where it came from and when**. Sources are
