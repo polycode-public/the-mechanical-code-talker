@@ -1474,6 +1474,112 @@ const SOME_A_FEW_RE = /^(some|a few)\s+([\w-]+)\s+are\s+([\w-]+)$/i;
  *  the ambiguity a fully free-form multi-word subject would otherwise have. */
 const UNKNOWN_SUBJECT_RE = /^(every\s+|each\s+|all\s+|a\s+|an\s+)?([\w-]+(?:\s+[\w-]+)?)\s+(?:is|are)\s+(?:an?\s+)?([\w-]+)$/i;
 
+/** ISA-family predicates (mirrors the private ISA_PREDICATES set defined near
+ *  memoryFacts, below, at module scope — both are simple top-level consts
+ *  evaluated once at load time, so referencing either from a function defined
+ *  earlier in this file is safe: no function here actually RUNS until well
+ *  after the whole module has finished loading). Named again here, right by
+ *  its one caller, so isGroundedByFact reads standalone. */
+const MINT_ISA_PREDICATES = new Set(["rdfs:subClassOf", "rdf:type"]);
+
+/** Small CLOSED set of generic English root nouns that count as always-
+ *  grounded anchor terms for the mint-fallbacks below (operator refinement,
+ *  2026-07-09) — deliberately NOT added to lexicon-core.json itself (that
+ *  file stays the curated ~180-word CODE vocabulary; these are ordinary-
+ *  English root nouns with no code meaning at all, confirmed absent from it
+ *  today). Their only job is to give a user who hits the "both sides
+ *  ungrounded" decline (groundingSuggestionMiss, below) an honest, guessable
+ *  way in: ground one brand-new term via one of THESE words first ("every
+ *  zorp is a thing"), then chain the other new term off the now-grounded one. */
+const GENERIC_ANCHOR_NOUNS = new Set(["thing", "concept", "object", "entity"]);
+
+/** Shared fact-groundedness primitive (Feature A mint-extension, point 2):
+ *  true when `term` already appears as the SUBJECT or OBJECT of a previously
+ *  taught isa-family fact (rdfs:subClassOf/rdf:type) in memory. A term minted
+ *  by EITHER mint-fallback below (this session, or an earlier one — this
+ *  reads persisted memory, not session-scoped state) is exactly as legitimate
+ *  an anchor for a NEW fact as a static lexicon-core.json word — the whole
+ *  point of this extension is letting new vocabulary compound turn over turn
+ *  ("every cache is a store" mints "store"; "every store is a container" then
+ *  needs "store" to read as known even though it's not in the static lexicon
+ *  at all). Read-only, reuses memoryFacts' plain read path (existence only —
+ *  no trust-ranking needed here) and normFactTerm's own normalization, so a
+ *  fact-grounded term matches under the EXACT spelling teachFact itself stored
+ *  it under. Failure-tolerated: no memory dir / no match → false, never a
+ *  guessed "yes". */
+async function isGroundedByFact(term, memoryDir) {
+  if (!memoryDir) return false;
+  const raw = String(term ?? "").trim();
+  if (!raw) return false;
+  const { normFactTerm } = await import("./memory/core.mjs");
+  const t = normFactTerm(raw);
+  if (!t) return false;
+  // TAUGHT-only (same discipline factReadBack's own cax-sco/scm-sco proof
+  // chase already uses, above, for the identical reason: the bulk background
+  // corpus band (ConceptNet, trust 0.7, seeded by the thousands on a fresh
+  // repo) mentions ordinary English words like "store"/"container" constantly
+  // — treating THOSE as "grounded" would silently reopen the general lexicon
+  // bypass this whole feature is deliberately narrow to avoid. Only what the
+  // OPERATOR actually taught (or a prior `tmct syllogise` entailment) anchors
+  // a term here. factRows (not memoryFacts) is used specifically because it's
+  // the one read path that carries sourceTypes for this filter.
+  const rows = await factRows(memoryDir);
+  const isTaught = (f) => !f.sourceTypes?.includes("corpus") && !f.sourceTypes?.includes("web");
+  return rows.some((f) => MINT_ISA_PREDICATES.has(f.predicate) && isTaught(f) && (f.subject === t || f.object === t));
+}
+
+/** Shared "is this term grounded in ANY sense" aggregate (Feature A mint-
+ *  extension, point 2's named shared helper) — a static lexicon word (any
+ *  part of speech, via `classify`), a GENERIC_ANCHOR_NOUNS root, OR a term
+ *  already anchored by a previously taught isa-family fact (isGroundedByFact,
+ *  above). Used by unknownObjectFallback's subject/object groundedness checks
+ *  below, where no part-of-speech branching follows — just "known or not".
+ *  (unknownSubjectFallback's own object-known check, above/below, stays
+ *  narrower and NOUN-specific — see its own comment — so an object that's
+ *  merely a known ADJECTIVE doesn't get misrouted into the class/subClassOf
+ *  branch instead of the property branch.) */
+async function isGroundedTerm(term, lex, memoryDir) {
+  const raw = String(term ?? "").trim();
+  if (!raw) return false;
+  if (GENERIC_ANCHOR_NOUNS.has(raw.toLowerCase())) return true;
+  const { classify } = await import("./grammar/lexicon.mjs");
+  if (classify(raw, lex)) return true;
+  return isGroundedByFact(raw, memoryDir);
+}
+
+/** The "both sides ungrounded" grounding NUDGE (operator refinement,
+ *  2026-07-09): reuses teachSuggestion's own "compute a hint, APPEND it to
+ *  the existing honest-miss message, never replace/silently guess" pattern
+ *  (see its docblock, above, and the "did"/"why" append-style construction in
+ *  teachLane's own final decline, below) for a DIFFERENT decline case —
+ *  rather than mint a relationship between two brand-new terms (a real
+ *  fabrication risk, unknownObjectFallback's own explicit safety guard,
+ *  below), teachLane's final honest-miss text gets an EXTRA appended nudge
+ *  whenever the declined payload fit the "X is/are Y" shape
+ *  (UNKNOWN_SUBJECT_RE) but NEITHER side is grounded — an honest, actionable
+ *  way in: ground one side via a GENERIC_ANCHOR_NOUNS root first ("every zorp
+ *  is a thing"), then chain the other off the now-grounded term. Deliberately
+ *  APPENDED rather than a replacement/short-circuit: a "both sides
+ *  ungrounded" is/are sentence with a KNOWN subject on one side (e.g. "module
+ *  is banana") never reaches this at all (isGroundedTerm(subject) is true, so
+ *  the very first return below fires) — that stays unknownObjectFallback's
+ *  own mint territory, entirely unaffected here. Returns "" (message
+ *  unchanged) whenever the payload doesn't fit the shape, or at least one
+ *  side IS already grounded — a DIFFERENT, more specific reason it declined,
+ *  where this nudge would be actively unhelpful noise. */
+async function ungroundedPairHint(payload, lexicon, memoryDir) {
+  if (!memoryDir) return "";
+  const m = String(payload).trim().match(UNKNOWN_SUBJECT_RE);
+  if (!m) return "";
+  const [, , subjectRaw, objectRaw] = m;
+  const { loadLexicon } = await import("./grammar/lexicon.mjs");
+  const lex = lexicon || loadLexicon();
+  if (await isGroundedTerm(subjectRaw, lex, memoryDir)) return "";
+  if (await isGroundedTerm(objectRaw, lex, memoryDir)) return "";
+  return ` I don't know "${subjectRaw}" or "${objectRaw}" yet. Try grounding one first, e.g. `
+    + `"every ${subjectRaw} is a thing", then "every ${objectRaw} is a ${subjectRaw}".`;
+}
+
 /** The unknown-SUBJECT direct-write fallback (point 1 + point 2's bare-property
  *  extension): tried ONLY after the real ACE grammar (assertTurn) has already
  *  had its turn and declined. Declines itself (returns null, never a guess)
@@ -1485,18 +1591,25 @@ const UNKNOWN_SUBJECT_RE = /^(every\s+|each\s+|all\s+|a\s+|an\s+)?([\w-]+(?:\s+[
  *    - X is actually a KNOWN lexicon word — then the ACE grammar's own miss was
  *      a real structural/vocabulary problem elsewhere (e.g. Y itself unknown as
  *      the WRONG part of speech), never silently reinterpreted through this
- *      narrow exception;
- *    - Y resolves as NEITHER a known noun NOR a known adjective — the OBJECT
- *      must still be a term tmct actually knows; an unknown Y stays an honest
- *      miss (never a guess), exactly like the pre-existing "monkey is an
- *      animal" case.
- *  Y resolving as a NOUN writes rdfs:subClassOf (mirrors the ACE grammar's own
- *  subClassOf/typeAssertion pattern); Y resolving as an ADJECTIVE (and not also
- *  a noun) writes mgx:hasProperty (mirrors the wrapped "remember that X is
- *  deprecated" property frame — reused here for the bare/unwrapped form too,
- *  since the free pass is about the SUBJECT, not about the "remember that"
- *  wrapper). Only the "every" determiner records a quantifier (point 3: "a"/
- *  bare/"your" read as one specific entity, not a class-level generalization). */
+ *      narrow exception. (NOTE: this stays a STATIC-lexicon-only check,
+ *      deliberately not widened to isGroundedTerm — a subject that's grounded
+ *      only via a PRIOR taught fact, not the static lexicon, is precisely the
+ *      case unknownObjectFallback, below, owns instead.)
+ *    - Y resolves as NEITHER a known noun NOR a known adjective NOR a term
+ *      already grounded by a prior taught fact / a GENERIC_ANCHOR_NOUNS root
+ *      (Feature A mint-extension, point 2 — a term minted by
+ *      unknownObjectFallback, below, reads exactly as known here as any
+ *      lexicon word) — the OBJECT must still be a term tmct actually knows;
+ *      an unknown Y stays an honest miss (never a guess), exactly like the
+ *      pre-existing "monkey is an animal" case.
+ *  Y resolving as a NOUN (or fact-/anchor-grounded) writes rdfs:subClassOf
+ *  (mirrors the ACE grammar's own subClassOf/typeAssertion pattern); Y
+ *  resolving as an ADJECTIVE (and not also a noun) writes mgx:hasProperty
+ *  (mirrors the wrapped "remember that X is deprecated" property frame —
+ *  reused here for the bare/unwrapped form too, since the free pass is about
+ *  the SUBJECT, not about the "remember that" wrapper). Only the "every"
+ *  determiner records a quantifier (point 3: "a"/bare/"your" read as one
+ *  specific entity, not a class-level generalization). */
 async function unknownSubjectFallback(payload, { memoryDir, sessionId, lexicon }) {
   if (!memoryDir) return null;
   const m = String(payload).trim().match(UNKNOWN_SUBJECT_RE);
@@ -1507,7 +1620,12 @@ async function unknownSubjectFallback(payload, { memoryDir, sessionId, lexicon }
   // A known X's own ACE miss is a real miss — never silently reinterpreted here.
   if (classify(subjectRaw, lex)) return null;
   const quantifier = /^every$/i.test((det || "").trim()) ? "every" : "";
-  if (lookupNoun(lex, objectRaw)) {
+  // Point 2 (mint-extension): a PRIOR turn's minted term, or a
+  // GENERIC_ANCHOR_NOUNS root, grounds Y just as legitimately as a static
+  // lexicon noun — both are always treated as class-level (never property),
+  // consistent with unknownObjectFallback (below) always minting a CLASS.
+  if (lookupNoun(lex, objectRaw) || GENERIC_ANCHOR_NOUNS.has(String(objectRaw).toLowerCase())
+    || (await isGroundedByFact(objectRaw, memoryDir))) {
     return teachFact(memoryDir, sessionId, {
       subject: subjectRaw, predicate: SUBCLASS_PREDICATE, object: objectRaw, quantifier,
     });
@@ -1520,6 +1638,67 @@ async function unknownSubjectFallback(payload, { memoryDir, sessionId, lexicon }
     });
   }
   return null; // Y unknown too — decline honestly, never guess
+}
+
+/** The unknown-OBJECT mint fallback (Feature A, 2026-07-09 operator-authorized
+ *  vocabulary-growth extension): the MIRROR of unknownSubjectFallback, above —
+ *  same "X is/are Y" payload shape (UNKNOWN_SUBJECT_RE, reused verbatim,
+ *  never a second regex for the identical shape), tried as a SIBLING call
+ *  right after unknownSubjectFallback in teachLane (below), but firing on the
+ *  OPPOSITE asymmetry: SUBJECT already grounded (a real lexicon-core.json
+ *  word of ANY part of speech, a GENERIC_ANCHOR_NOUNS root, OR a term a PRIOR
+ *  turn already minted via either fallback — isGroundedTerm, shared with this
+ *  check) and OBJECT completely ungrounded. Mints the object as a new
+ *  class-level concept (rdfs:subClassOf, same predicate/quantifier machinery
+ *  teachFact/unknownSubjectFallback already use) so ordinary conversation can
+ *  build up new vocabulary turn over turn: "every cache is a store" (subject
+ *  "cache" grounded via the static lexicon) mints "store"; a LATER "every
+ *  store is a container" then finds "store" grounded via the fact just
+ *  minted (not the static lexicon at all) and mints "container" the same way.
+ *
+ *  GATED ON A GENUINE UNIVERSAL QUANTIFIER ("every"/"each"/"all" — never bare/
+ *  "a"/"an"/"your"): minting a NEW CLASS-LEVEL CONCEPT is inherently a general
+ *  claim about a class, the same "every"/bare distinction unknownSubjectFallback's
+ *  own docblock already draws (point 3) between a class generalization and a
+ *  claim about ONE specific entity. This is load-bearing, not cosmetic: a bare
+ *  "module is banana" (a KNOWN lexicon subject, an unrecognized bare object,
+ *  NO determiner at all) is a pinned regression — it must stay a plain honest
+ *  miss, never silently minted — and a WRAPPED "remember that X is <adjective>"
+ *  (also determiner-less at the subject) must keep falling through to
+ *  TEACH_PROPERTY_RE's own, more permissive arbitrary-adjective path
+ *  unimpeded. Requiring the determiner keeps this fallback's mint exactly as
+ *  narrow as the vocabulary-growth feature actually needs (every required
+ *  test case in this feature's own spec phrases the mint sentence with
+ *  "every"), without swallowing either of those pre-existing shapes.
+ *
+ *  The critical safety guard (operator's own stated worry, mirrored from
+ *  unknownSubjectFallback's docblock): this must NEVER silently mint when
+ *  BOTH sides are ungrounded ("every zorp is a florp" — two brand-new,
+ *  never-seen terms with no relation to each other tmct actually knows) —
+ *  declines here (null), and teachLane's own final honest-miss text picks up
+ *  an appended grounding NUDGE for exactly this case (ungroundedPairHint,
+ *  above) — never a silent guess, never a silent hard-swallowed decline
+ *  either. Any OTHER decline (subject ungrounded + object grounded — not this
+ *  fallback's asymmetry; or both grounded — already known, nothing to mint;
+ *  or no genuine universal quantifier) falls through as a plain null,
+ *  letting the ordinary teachLane cascade (property teach, then the generic
+ *  honest-miss text) continue unaffected. */
+async function unknownObjectFallback(payload, { memoryDir, sessionId, lexicon }) {
+  if (!memoryDir) return null;
+  const m = String(payload).trim().match(UNKNOWN_SUBJECT_RE);
+  if (!m) return null;
+  const [, det, subjectRaw, objectRaw] = m;
+  if (!/^(?:every|each|all)$/i.test((det || "").trim())) return null; // class-level mint needs a real universal quantifier
+  const { loadLexicon } = await import("./grammar/lexicon.mjs");
+  const lex = lexicon || loadLexicon();
+  const subjectGrounded = await isGroundedTerm(subjectRaw, lex, memoryDir);
+  if (!subjectGrounded) return null; // ungrounded subject isn't this fallback's asymmetry — never a guessed mint
+  const objectGrounded = await isGroundedTerm(objectRaw, lex, memoryDir);
+  if (objectGrounded) return null; // object already known — nothing to mint
+  const quantifier = /^every$/i.test((det || "").trim()) ? "every" : "";
+  return teachFact(memoryDir, sessionId, {
+    subject: subjectRaw, predicate: SUBCLASS_PREDICATE, object: objectRaw, quantifier,
+  });
 }
 
 // ---- BUG 3 (2026-07-09, operator-authorized generalizing — "I don't know
@@ -1922,6 +2101,14 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
     // the exact narrowing rules (object must still be known, etc.).
     const fallback = await unknownSubjectFallback(payload, { memoryDir, sessionId, lexicon });
     if (fallback) return fallback;
+    // MIRROR mint fallback (Feature A, 2026-07-09 operator-authorized vocabulary-
+    // growth extension): the known-subject/unknown-object asymmetry — tried
+    // right after the unknown-subject case declines, so a subject the STATIC
+    // lexicon (or a prior taught fact) already grounds can mint a brand-new
+    // object term. See unknownObjectFallback's own docblock for the exact
+    // narrowing rules (the "both sides ungrounded" safety guard, etc.).
+    const objectFallback = await unknownObjectFallback(payload, { memoryDir, sessionId, lexicon });
+    if (objectFallback) return objectFallback;
     // PROPERTY teach — "remember/note that <X> is <adjective>": wrapper-REQUIRED
     // (a bare "X is deprecated" is never silently reified), and only after the
     // ACE grammar declined (unknown words / not the membership shape), so a
@@ -1980,9 +2167,14 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
       + "I can only teach facts using tmct's own code-vocabulary nouns (like module, class, function…), "
       + "not arbitrary new terms."
     : "";
+  // Grounding NUDGE (operator refinement, 2026-07-09): APPENDED, never a
+  // replacement, exactly like "did" above — see ungroundedPairHint's own
+  // docblock for why this is scoped to the "both sides ungrounded, fits the
+  // X is/are Y shape" case only.
+  const groundingHint = await ungroundedPairHint(payload, lexicon, memoryDir);
   return {
     text: `I couldn't store that —${why} I remember facts in the shape "every X is a Y", where X and Y are `
-      + `words I know.${did} Type /memory to see what I already remember.`,
+      + `words I know.${did}${groundingHint} Type /memory to see what I already remember.`,
     via: "teach-miss", miss: true,
   };
 }

@@ -448,6 +448,128 @@ test("Bug 3: the Goal-line is correct and consistent for teach-success turns (ne
 // the unrecognized lemma "have" ("haves"). Fixed by checking the LEMMA (not
 // just the raw verb) for "have", so had/having/has/have all land on the SAME
 // curated mgx:hasA predicate. See generalVerbPredicate/thirdPersonSingularSurface.
+// ---- Feature A mirror (2026-07-09, operator-authorized "build it" extension):
+// unknownSubjectFallback's own docblock explicitly stated the free pass was
+// ONE-directional — subject unknown/object known, never the reverse — to
+// avoid a general lexicon bypass. The operator hit this live ("every cache is
+// a store" declined outright, since "cache" IS a known subject and "store"
+// isn't a known object) and asked for the MIRROR: a known SUBJECT + an
+// unknown OBJECT now mints the object as a brand-new class-level concept
+// (unknownObjectFallback, chat.mjs), gated on a genuine universal quantifier
+// ("every"/"each"/"all") so a bare "X is Y" (no determiner at all — e.g. the
+// pre-existing "module is banana" pinned regression) and a wrapped
+// "remember that X is <adjective>" property claim both keep declining/
+// routing exactly as before. A term minted by EITHER direction's fallback
+// grounds just as legitimately as a static lexicon word for a LATER sentence
+// (isGroundedTerm/isGroundedByFact, shared helpers), so vocabulary compounds
+// turn over turn — see chat.mjs's unknownObjectFallback/isGroundedTerm
+// docblocks for the full design. ----
+
+test("Feature A mirror: known-subject/unknown-object mint compounds vocabulary turn over turn, chains resolve via findIsaChain, and every pre-existing path stays unaffected", async () => {
+  const dir = await mem("mirror-mint");
+  try {
+    // 1. "cache" is a real lexicon noun (known subject); "store" is not a
+    // known term anywhere yet (neither lexicon nor a taught fact) — mints it.
+    const t1 = await runTurn("every cache is a store", { config: CONFIG, memoryDir: dir, sessionId: "m1" });
+    assert.match(t1.answer, /^noted — remembered: cache is a kind of store/);
+    assert.equal(t1.record.miss, false);
+
+    // 2. "store" is NOT a lexicon word at all — it only reads as "known" here
+    // because turn 1 just minted it (isGroundedByFact) — this is the actual
+    // regression guard for the "previously-minted counts as known" extension:
+    // without it, this line would still decline exactly like turn 6, below.
+    const t2 = await runTurn("every store is a container", { config: CONFIG, memoryDir: dir, sessionId: "m1" });
+    assert.match(t2.answer, /^noted — remembered: store is a kind of container/);
+    assert.equal(t2.record.miss, false);
+
+    // 3. unchanged existing path: unknown subject ("redis"), known object
+    // ("cache", the static lexicon noun) — unknownSubjectFallback, untouched.
+    const t3 = await runTurn("redis is a cache", { config: CONFIG, memoryDir: dir, sessionId: "m1" });
+    assert.match(t3.answer, /^noted — remembered: redis is a kind of cache/);
+    assert.equal(t3.record.miss, false);
+
+    // 4. 2-hop chain: redis->cache (unknownSubjectFallback's own free pass)
+    // composed with cache->store (the NEW mirror mint) — findIsaChain proves it.
+    const t4 = await runTurn("is redis a store", { config: CONFIG, memoryDir: dir });
+    assert.match(t4.answer, /^yes/i, "the 2-hop chain (redis->cache->store) is found");
+    assert.match(t4.answer, /redis is a kind of cache/);
+    assert.match(t4.answer, /cache is a kind of store/);
+    assert.match(t4.answer, /so redis is a store/);
+
+    // 5. 2-hop chain entirely through the NEW mirror mint: cache->store->container.
+    const t5 = await runTurn("is cache a container", { config: CONFIG, memoryDir: dir });
+    assert.match(t5.answer, /^yes/i, "the 2-hop chain (cache->store->container) is found");
+    assert.match(t5.answer, /cache is a kind of store/);
+    assert.match(t5.answer, /store is a kind of container/);
+    assert.match(t5.answer, /so cache is a container/);
+
+    // 6. safety guard: BOTH sides totally ungrounded ("zorp"/"florp", never
+    // seen anywhere) still declines honestly — never a guessed mint off two
+    // names that merely fit the shape — but now with the grounding-nudge
+    // refinement appended instead of the old bare "I couldn't store that".
+    const t6 = await runTurn("every zorp is a florp", { config: CONFIG, memoryDir: dir, sessionId: "m1" });
+    assert.doesNotMatch(t6.answer, /^noted — remembered/);
+    assert.equal(t6.record.miss, true);
+    assert.match(t6.answer, /I don't know "zorp" or "florp" yet\. Try grounding one first, e\.g\. "every zorp is a thing", then "every florp is a zorp"\./);
+    assert.equal(readFactRows(await loadMemory(dir)).filter((f) => f.subject === "zorp" || f.subject === "florp").length, 0, "the ungrounded pair itself is never stored");
+
+    // 7. UNAFFECTED by this change, on purpose: a 3-hop chain (redis->cache->
+    // store->container) still hits the pre-existing, deliberately out-of-scope
+    // maxHops:2 honest ceiling — a SEPARATE INFBENCH-gated decision, untouched.
+    const t7 = await runTurn("is redis a container", { config: CONFIG, memoryDir: dir });
+    assert.doesNotMatch(t7.answer, /^yes/i, "the 3-hop chain still hits the maxHops:2 ceiling, unwidened by this change");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("Feature A mirror regression guard: a KNOWN subject bare-paired with an unrecognized bare object (no determiner) is still never silently reified", async () => {
+  // Pre-existing pinned behavior (wiring-facts.test.mjs): "module" is a real
+  // lexicon noun (known subject) and "banana" is neither a noun nor an
+  // adjective — a BARE "X is Y" (no "every"/"each"/"all" at all) must stay an
+  // honest miss. unknownObjectFallback gates its mint on a genuine universal
+  // quantifier for exactly this reason — minting a class is a general claim,
+  // never implied by a bare/singular-entity phrasing.
+  const dir = await mem("mirror-bare-guard");
+  try {
+    const bare = await runTurn("module is banana", { config: CONFIG, memoryDir: dir, sessionId: "mb1" });
+    assert.doesNotMatch(bare.answer, /noted — remembered/i);
+    assert.equal(bare.record.miss, true);
+    assert.equal(readFactRows(await loadMemory(dir)).length, 0);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("Feature A mint refinement (operator, 2026-07-09): the 'both sides ungrounded' decline's grounding nudge is actually actionable — following it grounds the new terms for real", async () => {
+  const dir = await mem("mint-anchor");
+  try {
+    const decline = await runTurn("every zorp is a florp", { config: CONFIG, memoryDir: dir, sessionId: "a1" });
+    assert.equal(decline.record.miss, true);
+    assert.doesNotMatch(decline.answer, /^noted — remembered/);
+    assert.match(decline.answer, /I don't know "zorp" or "florp" yet/);
+    assert.equal(readFactRows(await loadMemory(dir)).length, 0, "the ungrounded pair itself is never stored");
+
+    // follow the nudge literally: ground "zorp" via the generic anchor noun "thing"
+    const ground = await runTurn("every zorp is a thing", { config: CONFIG, memoryDir: dir, sessionId: "a1" });
+    assert.match(ground.answer, /^noted — remembered: zorp is a kind of thing/);
+    assert.equal(ground.record.miss, false);
+
+    // "florp" now chains off the just-grounded "zorp" — the exact 2nd half of the nudge
+    const chain = await runTurn("every florp is a zorp", { config: CONFIG, memoryDir: dir, sessionId: "a1" });
+    assert.match(chain.answer, /^noted — remembered: florp is a kind of zorp/);
+    assert.equal(chain.record.miss, false);
+
+    const rows = readFactRows(await loadMemory(dir));
+    assert.equal(rows.length, 2);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("Bug A: 'remember X had soup' (past tense) reads back 'has soup', never the malformed 'haves soup'", async () => {
   const dir = await mem("verb-hada");
   try {

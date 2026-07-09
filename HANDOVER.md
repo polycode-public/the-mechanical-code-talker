@@ -7,11 +7,38 @@ Session handle (inbox): `tmct` (this session; earlier sessions used `mechanic`).
 
 ## Where we are (2026-07-09)
 
-`npm test` is green at **1352**, up from 1258 at the start of this session. v1.0.7 is
+`npm test` is green at **1355**, up from 1258 at the start of this session. v1.0.7 is
 **published** (0.9.11 → 0.9.12 → 1.0.0 → 1.0.7 across this session); nothing has pushed since, so
 the local version stays at 1.0.9. Prior sessions' detailed handover (the 0.9.5-era playtest
 sprint, Bug 6/7/8, the predicate-find feature, infbench stages 0-2) is superseded by everything
 below and still lives in this file's git history.
+
+### Vocabulary-growth mirror fix (2026-07-09, later same day, +3 tests → 1355)
+
+`unknownSubjectFallback` (chat.mjs) was a deliberately ONE-directional free pass: an unknown
+SUBJECT could reach the store when the OBJECT was a known lexicon term ("redis is a cache"), but
+never the reverse — "every cache is a store" (subject "cache" known, object "store" unknown)
+declined outright. Operator hit this live and asked for the mirror, so new vocabulary can compound
+turn over turn in ordinary conversation. Added `unknownObjectFallback` (mints the object as a new
+class-level `rdfs:subClassOf` concept when the subject is grounded and the object isn't), gated on
+a genuine universal quantifier ("every"/"each"/"all", never bare/"a"/"your") so the pre-existing
+"module is banana" (bare, no determiner) and "remember that X is `<adjective>`" (wrapped property
+claim) shapes keep declining/routing exactly as before — this gate is what makes the two
+directions compose safely rather than reopening a general lexicon bypass. A term minted by EITHER
+direction's fallback now grounds a LATER sentence just as legitimately as a static lexicon word
+(`isGroundedTerm`/`isGroundedByFact`, shared helpers — TAUGHT-only, deliberately excluding the bulk
+background ConceptNet corpus seed, the same discipline the existing 2-hop `findIsaChain` proof-
+chase already uses, for the same reason: the corpus mentions ordinary English words constantly and
+must never silently count as "grounded"). When BOTH sides are totally ungrounded ("every zorp is a
+florp"), it still never guesses a mint — but the final honest-miss message now appends an
+actionable grounding nudge ("Try grounding one first, e.g. 'every zorp is a thing'...") instead of
+a bare "I couldn't store that", reusing a small closed `GENERIC_ANCHOR_NOUNS` set (thing/concept/
+object/entity — never added to `lexicon-core.json` itself). Verified live via the real CLI
+(`--repo <tmpdir>` with no code graph): the full 7-turn operator sequence resolves correctly,
+including the 2-hop `findIsaChain` citations through newly-minted terms and the pre-existing
+`maxHops:2` ceiling on a 3-hop chain staying untouched. See `unknownObjectFallback`/
+`isGroundedTerm`/`ungroundedPairHint`'s own docblocks in `src/chat.mjs` for the full design; new
+coverage in `test/chat-teach-quantifier.test.mjs` ("Feature A mirror" tests).
 
 The test count moved in these stages over the course of the session:
 

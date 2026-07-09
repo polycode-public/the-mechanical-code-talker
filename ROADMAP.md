@@ -20,7 +20,7 @@ Tiers 0, 1, 2, and 4 each closed in one pass. Tier 3 took 7 passes to track down
 turned up one genuinely important correctness bug alongside a batch of routing fixes. Full
 per-cycle detail is in `HANDOVER.md`'s "The dialogue-flow playtest loop" section.
 
-`npm test` is green at **1352** (up from 1258 at the start of this session). v1.0.7 is
+`npm test` is green at **1355** (up from 1258 at the start of this session). v1.0.7 is
 published (0.9.11 → 1.0.0 → 1.0.7 across an earlier session; the exact release chain and
 file:line detail are in `HANDOVER.md`). Nothing has pushed since, so the local version sits at
 1.0.9 per the bump-at-push-time policy.
@@ -34,6 +34,7 @@ Test count across the session's later stretch:
 | Tier 5 (teach + recall + reasoning in dialogue), 5 cycles | 1307 → 1328 |
 | Tier 6 (the messy real user), 5 cycles, run alongside a background test-suite health pass | 1328 → 1345 |
 | Compound-name resolution (multi-word queries to joined-token symbol names) | 1345 → 1352 |
+| Vocabulary-growth mirror fix — known-subject/unknown-object mint (`unknownObjectFallback`), so new terms compound turn over turn | 1352 → 1355 |
 
 ### Shipped this session
 
