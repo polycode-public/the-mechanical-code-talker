@@ -122,31 +122,33 @@ test("runTurn: a bare (non-slash) line still dispatches tmct_ask (the default)",
 // proves the command→tool→arg wiring for real, against the fixture graph.
 test("runTurn: every slash-command dispatches the tool + arg key it maps to", async () => {
   const g = await graph();
+  // Bug F point 5: every command dispatch now carries its own "Goal (inferred):
+  // …" line (GOAL_BY_COMMAND) — expected here alongside the tool's raw answer.
   const cases = [
-    ["/find fnAlpha",             "tmct_search",       { query: "fnAlpha" }],
-    ["/search fnAlpha",           "tmct_search",       { query: "fnAlpha" }],
-    ["/context app/lib/a.mjs",    "tmct_context",      { symbol: "app/lib/a.mjs" }],
-    ["/snippet fnAlpha",          "tmct_snippet",      { symbol: "fnAlpha" }],
-    ["/describe Base",            "tmct_describe",     { symbol: "Base" }],
-    ["/signature fnAlpha",        "tmct_signature",    { symbol: "fnAlpha" }],
-    ["/members Widget",           "tmct_members",      { class: "Widget" }],
-    ["/subclasses Base",          "tmct_subclasses",   { class: "Base" }],
-    ["/impact app/lib/a.mjs",     "tmct_impact",       { module: "app/lib/a.mjs" }],
-    ["/callers fnAlpha",          "tmct_callers",      { symbol: "fnAlpha" }],
-    ["/callees fnAlpha",          "tmct_callees",      { symbol: "fnAlpha" }],
-    ["/tests fnAlpha",            "tmct_tests_for",    { symbol: "fnAlpha" }],
-    ["/untested",                 "tmct_untested",     {}],
-    ["/history fnAlpha",          "tmct_history",      { symbol: "fnAlpha" }],
-    ["/exports app/lib/a.mjs",    "tmct_exports",      { module: "app/lib/a.mjs" }],
-    ["/arch",                     "tmct_architecture", { package: "" }],
+    ["/find fnAlpha",             "tmct_search",       { query: "fnAlpha" },        "Locate a specific named entity."],
+    ["/search fnAlpha",           "tmct_search",       { query: "fnAlpha" },        "Locate a specific named entity."],
+    ["/context app/lib/a.mjs",    "tmct_context",      { symbol: "app/lib/a.mjs" }, "Gather the sized edit bundle for a symbol before changing code."],
+    ["/snippet fnAlpha",          "tmct_snippet",      { symbol: "fnAlpha" },       "View a symbol's exact source."],
+    ["/describe Base",            "tmct_describe",     { symbol: "Base" },          "Look up a symbol's definition and relations."],
+    ["/signature fnAlpha",        "tmct_signature",    { symbol: "fnAlpha" },       "View a symbol's signature."],
+    ["/members Widget",           "tmct_members",      { class: "Widget" },         "Understand class membership (methods/attributes)."],
+    ["/subclasses Base",          "tmct_subclasses",   { class: "Base" },           "Understand a class hierarchy/inheritance relationship."],
+    ["/impact app/lib/a.mjs",     "tmct_impact",       { module: "app/lib/a.mjs" }, "Understand what a change to this module would reach (impact closure)."],
+    ["/callers fnAlpha",          "tmct_callers",      { symbol: "fnAlpha" },       "Understand a call relationship."],
+    ["/callees fnAlpha",          "tmct_callees",      { symbol: "fnAlpha" },       "Understand a call relationship."],
+    ["/tests fnAlpha",            "tmct_tests_for",    { symbol: "fnAlpha" },       "Assess test coverage."],
+    ["/untested",                 "tmct_untested",     {},                         "Assess test coverage."],
+    ["/history fnAlpha",          "tmct_history",      { symbol: "fnAlpha" },       "Understand commit/change history."],
+    ["/exports app/lib/a.mjs",    "tmct_exports",      { module: "app/lib/a.mjs" }, "Understand a module's public exports/API surface."],
+    ["/arch",                     "tmct_architecture", { package: "" },             "Understand the overall architecture (package/module boundaries)."],
   ];
-  for (const [line, tool, args] of cases) {
+  for (const [line, tool, args, goal] of cases) {
     const { answer } = await runTurn(line, { config: CONFIG, graph: g });
     // /snippet and /context READ the real source file (absent from the fixture dir), so
     // the tool throws ENOENT there — runTurn catches it into the answer, so compare against
     // the same caught message: either way this proves the exact tool+arg the command mapped to.
     const direct = await dispatchTool(tool, args, { config: CONFIG }).catch((e) => String(e?.message || e));
-    assert.equal(answer, direct, `${line} → ${tool}(${JSON.stringify(args)})`);
+    assert.equal(answer, `${direct}\n\nGoal (inferred): ${goal}`, `${line} → ${tool}(${JSON.stringify(args)})`);
   }
 });
 
@@ -169,7 +171,9 @@ test("runTurn: a bad symbol prints the tool's clean error, never a stack; miss r
 test("runTurn: /help lists the commands (from COMMANDS) and the ask question shapes", async () => {
   const { answer } = await runTurn("/help", { config: CONFIG, graph: await graph() });
   const direct = await helpText();
-  assert.equal(answer, direct);
+  // Bug F point 5: /help isn't worth a bespoke GOAL_BY_COMMAND entry — it gets
+  // the short generic fallback goal line, same as /stats/memory/focus.
+  assert.equal(answer, `${direct}\n\nGoal (inferred): Use a specific tool/command directly.`);
   for (const name of Object.keys(COMMANDS)) assert.ok(answer.includes(`/${name}`), `help lists /${name}`);
   assert.ok(answer.includes("/focus"), "help lists /focus");
   assert.ok(answer.includes("/exit"), "help lists /exit");
@@ -201,7 +205,8 @@ test("runTurn: a no-arg entity command reuses the focus", async () => {
   const g = await graph();
   const focus = { id: "mod-a", label: "app/lib/a.mjs" };
   const { answer, record } = await runTurn("/impact", { config: CONFIG, graph: g, focus });
-  assert.equal(answer, await dispatchTool("tmct_impact", { module: "app/lib/a.mjs" }, { config: CONFIG }));
+  const direct = await dispatchTool("tmct_impact", { module: "app/lib/a.mjs" }, { config: CONFIG });
+  assert.equal(answer, `${direct}\n\nGoal (inferred): Understand what a change to this module would reach (impact closure).`);
   assert.deepEqual(record.resolvedIds, ["mod-a"]);
   // no arg AND no focus → a helpful "needs a …" line, not a crash
   const bare = await runTurn("/impact", { config: CONFIG, graph: g, focus: null });
@@ -279,7 +284,9 @@ test("renderStats / /stats: entity counts, predicate counts and package totals o
   assert.match(stats, /relationships by predicate:/);
   assert.match(stats, /module\(s\) across \d+ top-level package\(s\)/);
   const { answer, record } = await runTurn("/stats", { config: CONFIG, graph: g });
-  assert.equal(answer, stats);
+  // Bug F point 5: /stats isn't worth a bespoke GOAL_BY_COMMAND entry — it gets
+  // the short generic fallback goal line, same as /help/memory/focus.
+  assert.equal(answer, `${stats}\n\nGoal (inferred): Use a specific tool/command directly.`);
   assert.equal(record.command, "stats");
   assert.equal(record.miss, false);
 });

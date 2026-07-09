@@ -231,8 +231,10 @@ function withNarration(result, trace, fallbackGoal) {
  *  own test suite pins composed answers with (see withGoalLine's own docblock,
  *  just below, for why appended rather than led-with).
  *
- *  `result.goal` is set ONLY by runAsk (see its own docblock at its return
- *  statement) — a plain count, a slash-command or a teach confirmation never
+ *  `result.goal` is set by runAsk (see its own docblock at its return
+ *  statement) AND by runCommand's own mk() (Bug F point 5 — GOAL_BY_COMMAND,
+ *  below — generalizes the SAME mechanism to slash-command dispatches like
+ *  /search and /describe); a plain count or a teach confirmation never
  *  carries the field, so this is a no-op for those turn types BY
  *  CONSTRUCTION, not a special-cased suppression list here. Also a no-op when
  *  `result.goal` is null/empty — deduceGoalFromParsed's own "nothing to
@@ -373,12 +375,23 @@ function looksLikePredicateFind(restTok) {
 export function asBareCommand(line) {
   const trimmed = String(line || "").trim();
   if (!trimmed || trimmed.startsWith("/")) return null;
-  const [first, ...restTok] = trimmed.split(/\s+/);
+  const [first, ...restTokRaw] = trimmed.split(/\s+/);
   if (!COMMAND_WORDS.has(first.toLowerCase())) return null;
   const fl = first.toLowerCase();
+  // Bug F point 2 (operator follow-up request): "search for X" (bare, via this
+  // function) used to route with "for X" as the literal command argument — "for"
+  // is filler, not part of the search term, and burning one of the 3 allowed
+  // tokens on it could wrongly reject an otherwise-short query as "too long"
+  // ("search for the payment controller" is 4 tokens WITH "for", 3 without).
+  // Strip a leading "for " before it becomes the argument, and rebuild the
+  // returned command line from the STRIPPED remainder — the token-count check
+  // below already reads the stripped `restTok`/`rest`.
+  const stripped = (fl === "search" || fl === "find") && restTokRaw[0]?.toLowerCase() === "for";
+  const restTok = stripped ? restTokRaw.slice(1) : restTokRaw;
   const rest = restTok.join(" ");
+  const effectiveLine = stripped ? `${fl}${rest ? ` ${rest}` : ""}` : trimmed;
   // Zero-arg system commands are always the command; a bare command word is too.
-  if (!rest || fl === "stats" || fl === "memory") return `/${trimmed}`;
+  if (!rest || fl === "stats" || fl === "memory") return `/${effectiveLine}`;
   // "find" (only — "search", its /find-tool alias, keeps its original behavior
   // unconditionally): the predicate-find grammar's own shape wins regardless of
   // word count, see the precedence note above.
@@ -401,7 +414,7 @@ export function asBareCommand(line) {
   if (COMMANDS[fl]?.arg == null && rest) return null;
   // Arg commands: route only a short, name-like argument (no query connectives),
   // so "describe Widget" / "members my class" route but a compositional query does not.
-  if (restTok.length <= 3 && !QUERY_CONNECTIVES.test(rest)) return `/${trimmed}`;
+  if (restTok.length <= 3 && !QUERY_CONNECTIVES.test(rest)) return `/${effectiveLine}`;
   return null;
 }
 
@@ -1265,7 +1278,13 @@ const WALL_MISS_ANYWHERE_RE = /couldn't parse this as a graph question\. Try:/;
 //     silently swallowed);
 //   - "<Name> owns/maintains <X>" (bare declarative or wrapped) → an
 //     mgx:ownedBy fact, read back by "who owns <X>" (factReadBack).
-const TEACH_RE = /^(?:please\s+)?(?:remember|note|keep in mind|jot down|for the record|fyi)\b[:,]?\s*(?:that\s+)?(.+?)[.?!]*$/i;
+// Bug F point 1 (operator follow-up request, this session): "I want you to
+// remember X"/"I'd like you to remember X" teaches exactly like bare "remember
+// X" — a closed-set optional lead-in before the existing verb list, so it
+// automatically inherits the correct "teach/remember a new fact" goal line for
+// free (it flows through the SAME teach-lane goal revision, chat.mjs's runTurn
+// cascade — no extra wiring needed for this phrasing).
+const TEACH_RE = /^(?:please\s+)?(?:i\s+(?:want|wanted)\s+you\s+to\s+|i(?:'d|\s+would)\s+like\s+you\s+to\s+)?(?:remember|note|keep in mind|jot down|for the record|fyi)\b[:,]?\s*(?:that\s+)?(.+?)[.?!]*$/i;
 const BARE_DECLARATIVE_RE = /^(?:every |each |all |a |an )?[\w-]+ (?:is|are) (?:a |an )?[\w-]+$/i;
 /** Interrogative / auxiliary leads that make an "X is a Y"-shaped line a QUESTION
  *  ("what is a cache", "is a module a component"), never a teach declarative. */
@@ -3701,8 +3720,22 @@ function relationTermOf(query, envelope) {
  *  can never parse and always misses) — a drill-down chain that opens with
  *  "describe X" (the README's own example) used to dead-end on the very next
  *  "what about it"/"what about Y" turn. */
+// Bug F point 4 (operator follow-up request): "please tell me X" (no "about")
+// answers like "describe X"/"what is X" — the "tell me" branch's own "about"
+// is now OPTIONAL, so "please tell me Widget" reaches the same rescue "please
+// tell me about Widget" already did. "describe"/"what(?:'s|\s+is)? about" stay
+// unchanged (describe never took "about" at all; the "what about" branch
+// still requires it — a bare "what X" is BARE_WHATIS_RE's own territory, not
+// this lane's, and folding it in here would risk double-claiming that shape).
+// Note the trailing \s+ moved INSIDE each alternation branch (rather than one
+// shared \s+ after the whole group): making "about" optional inside the "tell
+// me" branch means that branch's own separator is sometimes owned by "me\s+"
+// and sometimes by "about\s+" — a single external \s+ double-counted the
+// separator when "about" fired (swallowing the one real space and then
+// requiring a second one that was never there, an always-null regex found
+// live while testing this fix).
 const DESCRIBE_WRAPPER_RE =
-  /^(?:(?:can|could|would)\s+you\s+(?:please\s+)?|please\s+)?(?:tell\s+me\s+(?:more\s+)?about|describe|what(?:'s|\s+is)?\s+about)\s+(.+?)(?:\s+for\s+me)?(?:\s+please)?\s*\??$/i;
+  /^(?:(?:can|could|would)\s+you\s+(?:please\s+)?|please\s+)?(?:tell\s+me\s+(?:more\s+)?(?:about\s+)?|describe\s+|what(?:'s|\s+is)?\s+about\s+)(.+?)(?:\s+for\s+me)?(?:\s+please)?\s*\??$/i;
 
 /** Bare focus pronouns this lane resolves against the STANDING focus (0.9.13
  *  Tier-1 playtest) — "describe that" / "tell me about it" after a prior turn
@@ -4555,6 +4588,38 @@ function plainTurn(query, answer, { command, via = "composed", miss = false, foc
   };
 }
 
+// Bug F point 5 (operator's explicit, most important ask this round): a
+// command name -> a short, honest one-line goal string, mirroring GOAL_BY_KIND's
+// own spirit (above) — but for COMMAND dispatches (find/search/describe/…)
+// instead of ask()-parsed relation queries, so "I want you to search for
+// Widget" (now reachable via a slash command per Bug F point 3) ALSO gets a
+// real "Goal (inferred): …" line instead of none at all, generalizing the
+// existing mechanism exactly as asked. Reuses GOAL_BY_KIND's EXISTING wording
+// verbatim wherever a command's intent overlaps one of those kinds (members/
+// subclasses reuse contains/inherits's own phrasing; callers/callees reuse
+// calls's; tests/untested reuse tests's; history reuses touches's; exports
+// reuses reexports's) — never invents new phrasing for the same concept. A
+// command not worth a bespoke entry (help/stats/memory/focus/narrate/unknown)
+// falls back to a short generic line in mk() itself, below.
+const GOAL_BY_COMMAND = {
+  find: "locate a specific named entity",
+  search: "locate a specific named entity",
+  context: "gather the sized edit bundle for a symbol before changing code",
+  snippet: "view a symbol's exact source",
+  describe: "look up a symbol's definition and relations",
+  signature: "view a symbol's signature",
+  members: GOAL_BY_KIND.contains,
+  subclasses: GOAL_BY_KIND.inherits,
+  impact: "understand what a change to this module would reach (impact closure)",
+  callers: GOAL_BY_KIND.calls,
+  callees: GOAL_BY_KIND.calls,
+  tests: GOAL_BY_KIND.tests,
+  untested: GOAL_BY_KIND.tests,
+  history: GOAL_BY_KIND.touches,
+  exports: GOAL_BY_KIND.reexports,
+  arch: "understand the overall architecture (package/module boundaries)",
+};
+
 /** A slash-command → the mapped tool (or the /help, /focus, /narrate, unknown
  *  cases). Returns the same { answer, logLines, record, focus } shape as
  *  runAsk; the record carries the command name and the resolved entity id
@@ -4562,7 +4627,10 @@ function plainTurn(query, answer, { command, via = "composed", miss = false, foc
  *  wherever it resolves an entity. `ctx.trace` (narrate mode, or undefined
  *  when off) gets one "goal:"/"lane:" note per branch — a slash-command's
  *  "decision" is simply which command+tool ran, so this is intentionally
- *  lighter than runAsk's miss-cascade instrumentation. */
+ *  lighter than runAsk's miss-cascade instrumentation. Also carries a `goal`
+ *  field now (Bug F point 5) — mirrors runAsk's own `goal` field so
+ *  withGoalLine's short "Goal (inferred): …" line fires for command
+ *  dispatches too, not just ask()-parsed queries. */
 async function runCommand(line, { config, source, graph, focus, memoryDir, trace, narrate = false }) {
   const ts = new Date().toISOString();
   const sp = line.indexOf(" ");
@@ -4573,6 +4641,7 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
     logLines: [ts, `> ${line}`, answer, ""],
     record: { type: "turn", ts, query: line, command: name, via: "command", resolvedIds, answeredIds: [], miss },
     focus: newFocus,
+    goal: GOAL_BY_COMMAND[name] || "use a specific tool/command directly",
     ...(narrateNext !== undefined ? { narrate: narrateNext } : {}),
   });
 
@@ -4762,8 +4831,30 @@ function morePage(query, { last, focus }) {
   return turn;
 }
 
+// Bug F point 3 (operator follow-up request): "I want you to search for
+// Widget" / "I'd like you to search for Widget" — a closed-set indirect-
+// request wrapper, checked VERY early (before asBareCommand/conversationalTurn/
+// the ask engine ever see the raw prefix). Found live: without this, "I want
+// you to search for Widget" was mis-swallowed by GENERAL_VERB_TEACH_RE as a
+// bare <subject> <verb> <object> teach triple (subject "I", verb "want") —
+// declined by the pronoun-subject guard with a confusing "pronouns aren't
+// things I can classify" message, instead of ever reaching /search at all.
+// Deliberately does NOT strip bare "please X" alone — that's already handled
+// ad hoc by many individual regexes throughout this file (TEACH_RE,
+// EXPLAIN_TOUCH_RE, describeWrapperAnswer's own regex, IMPERATIVE_NUDGE_RE) and
+// re-stripping it centrally here risks double-processing interactions across
+// the whole file — out of scope for this fix, higher risk than the concrete
+// gain.
+const INDIRECT_REQUEST_RE = /^(?:i\s+(?:want|wanted)\s+you\s+to\s+|i(?:'d|\s+would)\s+like\s+you\s+to\s+)\s*(.+)$/i;
+
 export async function runTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, vocabHint = null } = {}) {
   const line = String(input ?? "").trim();
+  // The captured residue is used for RECOGNITION at every dispatch site below
+  // (asBareCommand, conversationalTurn, assertTurn, the count lanes, runAsk);
+  // the ORIGINAL `line` survives untouched for record.query/logLines fidelity
+  // — restored centrally inside withLast (below), once, for every dispatch path.
+  const indirectMatch = line.match(INDIRECT_REQUEST_RE);
+  const workingLine = indirectMatch ? indirectMatch[1].trim() : line;
   const templates = await chatTemplates(); // failure-tolerated: null degrades, never throws
   // narrate mode: allocate the mutable trace array ONLY when on (`null` when off,
   // matching every OTHER optional collaborator here — templates/memoryDir/lexicon
@@ -4790,6 +4881,14 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // the PRE-narration finished result — see withNarration's docblock for why.
   const withLast = (result, fallbackGoal = "unclear — no goal signal for this turn type") => {
     const finished = finish(result, { graph });
+    // Bug F point 3 fidelity: every dispatch path below built its own record off
+    // `workingLine` (the indirect-request wrapper stripped, above) — restore the
+    // ORIGINAL raw `line` into record.query and the logged "> …" transcript echo
+    // here, once, centrally, for every path (they all funnel through withLast).
+    if (indirectMatch) {
+      if (finished.record) finished.record.query = line;
+      if (Array.isArray(finished.logLines) && finished.logLines.length > 1) finished.logLines[1] = `> ${line}`;
+    }
     // runAsk's own effectiveQuery (set only when discourseRewrite substituted a
     // new subject AND the rewrite produced a genuine non-miss answer) takes
     // over as the continuation base for the NEXT turn's own discourseRewrite —
@@ -4809,32 +4908,32 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // "memory", "describe X") is routed to its slash form BEFORE the conversational
   // layer, so a forgiving shell answers "stats" the way it answers "/stats" instead
   // of falling through to the generic orientation.
-  const bareCmd = asBareCommand(line);
+  const bareCmd = asBareCommand(workingLine);
   if (bareCmd) return withLast(await runCommand(bareCmd, ctx), "use a specific tool/command directly");
 
   // Conversational layer next (greetings, thanks, help, bye, why/say-more) — these
   // resolve no entity and carry their own preserved `last`. Bypasses withLast (a
   // conversational turn is never finish()'d / never becomes a new `last`), so the
   // narrate block is applied directly here instead.
-  const convo = conversationalTurn(line, ctx);
+  const convo = conversationalTurn(workingLine, ctx);
   if (convo) return withNarration(convo, trace, "casual/social — no graph intent");
 
   // "more" — page the remainder of a previous long listing, if one is held. Gated on
   // an actual pending remainder so a bare "more" with nothing to continue falls through
   // to the ordinary path (an honest miss), never a pretend page.
-  if (MORE_RE.test(line) && Array.isArray(last?.detail?.pending?.items) && last.detail.pending.items.length) {
+  if (MORE_RE.test(workingLine) && Array.isArray(last?.detail?.pending?.items) && last.detail.pending.items.length) {
     note(trace, "goal: continue viewing a previous long listing (pagination)");
     note(trace, "lane: MORE_RE matched a held pending remainder from the previous turn's detail.pending");
-    return withLast(morePage(line, ctx), "continue viewing a previous long listing");
+    return withLast(morePage(workingLine, ctx), "continue viewing a previous long listing");
   }
 
-  if (line.startsWith("/")) return withLast(await runCommand(line, ctx), "use a specific tool/command directly");
+  if (workingLine.startsWith("/")) return withLast(await runCommand(workingLine, ctx), "use a specific tool/command directly");
   // Declarative ACE sentences ("every module is a artifact") ASSERT into tmct's
   // own memory and confirm — they are statements to remember, not graph queries.
   // Gated on memoryDir: only a session shell provides a write target, so a bare
   // runTurn (tests, library callers) stays pure and falls through to the engine.
   if (memoryDir) {
-    const asserted = await assertTurn(line, ctx);
+    const asserted = await assertTurn(workingLine, ctx);
     if (asserted) {
       note(trace, "goal: teach/remember a new fact (declarative ACE sentence)");
       note(trace, "lane: assertTurn — grammar/ace.mjs parseAce matched a full triple with no residue");
@@ -4847,11 +4946,11 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // otherwise say "I can't count facts"); it only speaks for a memory-class noun, so
   // structural counts (classes/functions/…) and sessions fall through unaffected.
   if (memoryDir) {
-    const memCount = await answerMemoryCount(memoryDir, line);
+    const memCount = await answerMemoryCount(memoryDir, workingLine);
     if (memCount != null) {
       note(trace, "goal: get a count of a memory-store kind (facts/utterances)");
       note(trace, "lane: answerMemoryCount — matched a MEMORY_COUNT_NOUNS entry, answered off the .tmct/memory graph header");
-      return withLast(plainTurn(line, memCount, { via: "count", focus }), "get a count of a memory-store kind");
+      return withLast(plainTurn(workingLine, memCount, { via: "count", focus }), "get a count of a memory-store kind");
     }
   }
   // Feature A point 4: "how many Xs are Ys" — a taught-quantifier RECALL, checked
@@ -4860,32 +4959,32 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // authority gate declines (returns null) for anything answerCount should own,
   // so ordinary structural counts fall through completely unaffected.
   if (memoryDir) {
-    const quantifierRecall = await answerQuantifierRecall(memoryDir, line);
+    const quantifierRecall = await answerQuantifierRecall(memoryDir, workingLine);
     if (quantifierRecall != null) {
       note(trace, 'goal: recall a taught quantifier for a class-membership pair ("how many Xs are Ys")');
       note(trace, "lane: answerQuantifierRecall — matched HOW_MANY_ARE_RE with a subject tmct has facts about; literal recall, never real counting");
-      return withLast(plainTurn(line, quantifierRecall, { via: "fact", focus }), "recall a taught quantifier");
+      return withLast(plainTurn(workingLine, quantifierRecall, { via: "fact", focus }), "recall a taught quantifier");
     }
   }
   // Aggregate/count questions are answered mechanically off the loaded graph header,
   // BEFORE falling through to the ask engine (focus unchanged — a count names no entity).
-  const count = answerCount(graph, line);
+  const count = answerCount(graph, workingLine);
   if (count != null) {
     // An "I can't count <noun>" from a bare kind may still be answerable from an
     // ASSERTED vocabulary fact ("every class is a type" → "how many types" = the
     // class count). countFromFacts declines on a real graph kind, so ordinary
     // counts are unaffected; it only speaks for a remembered object noun.
-    const viaFact = memoryDir ? await countFromFacts(graph, memoryDir, line) : null;
+    const viaFact = memoryDir ? await countFromFacts(graph, memoryDir, workingLine) : null;
     if (viaFact != null) {
       note(trace, 'goal: get a count of an asserted-vocabulary kind ("every X is a Y" inherited cardinality)');
       note(trace, "lane: countFromFacts — the counted noun matched a remembered isa-fact's SUBJECT, whose class IS countable");
-      return withLast(plainTurn(line, viaFact, { via: "fact", focus }), "get a count");
+      return withLast(plainTurn(workingLine, viaFact, { via: "fact", focus }), "get a count");
     }
     note(trace, "goal: get a count of a graph kind (classes/functions/modules/…)");
     note(trace, "lane: answerCount — a header-count aggregate question, answered mechanically off the graph header, never dispatched to the ask engine");
-    return withLast(plainTurn(line, count, { via: "count", focus }), "get a count of a graph kind");
+    return withLast(plainTurn(workingLine, count, { via: "count", focus }), "get a count of a graph kind");
   }
-  return withLast(await runAsk(line, ctx), "unclear — no goal signal computed by the ask engine");
+  return withLast(await runAsk(workingLine, ctx), "unclear — no goal signal computed by the ask engine");
 }
 
 // ---- W3: seedMemory → bootstrap (first run in a graph-less repo) ----
