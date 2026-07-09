@@ -180,7 +180,10 @@ const THANKS_PREAMBLE_RE = /^(?:thanks|thank\s+you|many\s+thanks|thx|ty|cheers)(
  *  The marker group repeats (`+`) so a stack of ack-words peels in one pass ("ok
  *  cool" both go), each followed by whitespace/comma; same delimiter- and
  *  non-empty-remainder-REQUIRED discipline as the two frames above. */
-const ACK_PREAMBLE_RE = /^(?:(?:ok(?:ay)?|cool|alright|sure|right|fine|great|nice|got it|gotcha|sounds good)[\s,]+)+(.+)$/i;
+// "no worries" (Tier 6 playtest, §3b dialect axis, AU/NZ): a casual "that's
+// fine"/"no problem" opener that also, like the other ack words, sometimes
+// leads straight into the NEXT question rather than standing alone.
+const ACK_PREAMBLE_RE = /^(?:(?:ok(?:ay)?|cool|alright|sure|right|fine|great|nice|got it|gotcha|sounds good|no worries|no problem)[\s,]+)+(.+)$/i;
 /** A SELF-ORIENTATION lead-in with a delimiter — "just poking around, what's
  *  in this repo", "just browsing, X", "just exploring, X" (Tier 6 playtest,
  *  §3: the vague-opener family a genuine first-time stranger types). Same

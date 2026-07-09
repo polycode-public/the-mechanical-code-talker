@@ -226,6 +226,41 @@
 //
 // Two more full conversations replayed clean afterward — frozen below.
 //
+// CYCLE 4: two more fixes, one of them the most important of this whole
+// dispatch — a real WRONG-ANSWER bug (a genuine structural answer silently
+// DISCARDED), not a routing gap:
+//
+//   T20 CRITICAL: "is the logger module tested" / "is logger tested" answered
+//       "I don't know anything about 'logger' yet — teach me directly" — a
+//       genuinely misleading response, because ask()'s OWN structural grammar
+//       had ALREADY correctly parsed and traversed this as a real "tests"
+//       reverse-relation question (shape=reverse kind=tests) and produced an
+//       honest structural answer ("No tests cover logger", exactly what "what
+//       tests cover logger" already answers correctly). Root cause:
+//       IS_ADJECTIVE_YESNO_RE's own unrestricted backtracking (a recurring
+//       risk this file's own docblocks already flag — see the ISA_ASK_RE/"is
+//       there" exclusions found the same way) ALSO matches "tested" as if it
+//       were a free-form property adjective, and factReadBack's three
+//       "unknown property" branches (the empty-memory teach-offer, the
+//       known-subject-wrong-property receipt, and the non-empty-rows
+//       teach-offer) all fired UNCONDITIONALLY, discarding the real
+//       structural answer regardless of whether one already existed. But
+//       "tested"/"covered" (PASSIVE_PARTICIPLE_TO_KIND, ask-vocab.mjs) have
+//       genuine graph-computable meaning, unlike "deprecated"/"fragile" (this
+//       branch's own ORIGINAL Tier-5 T8 target, which has none). Fixed by
+//       gating all three branches on `!envelope?.parsed` — when ask()'s own
+//       grammar already produced a real parse, factReadBack defers to it
+//       instead of competing; when it didn't (the ordinary case these
+//       branches were built for), behavior is byte-identical to before.
+//       Verified this doesn't just move the bug: a subject known ONLY under
+//       an unrelated property ("the logger is deprecated") no longer wrongly
+//       offers to teach "tested" either, once "is the logger tested" itself
+//       is asked — the real structural empty answers instead.
+//   T21 "no worries, X" (AU/NZ casual acknowledgement) — the "no worries"/"no
+//       problem" sibling of ACK_PREAMBLE_RE's existing "ok"/"cool" family.
+//
+// Three more full conversations replayed clean afterward — frozen below.
+//
 // Driven against the SHIPPED examples/mini-webapp graph via `ephemeral: true`
 // (chat.mjs's createSession) — same mechanism test/chatflow-tier4.test.mjs/
 // test/chatflow-tier5.test.mjs rely on: reads the real graph, writes session/
@@ -505,4 +540,56 @@ test("tier6/conversation 8: bare 'inherit(s)' verb form across yes/no, reverse-s
   // pre-existing typo tolerance ("wat"->"what", "inherts"->"inherits") — compat guard,
   // unaffected by T18's bare-verb addition.
   assert.match(turns[2].answer, /in src\/core\/model\.mjs there is Task, User and Project/);
+});
+
+// ---- CYCLE 4 ----
+
+test("tier6/CRITICAL (T20 fix): 'is X tested' answers the REAL structural coverage question, never a fabricated 'I don't know that yet'", async () => {
+  const queries = [
+    "is the logger module tested",
+    "is logger tested",
+    "is the store module tested",
+  ];
+  const turns = await driveSession(queries);
+  assertAllFlow(turns, queries);
+  // THE bug: these two used to answer "I don't know anything about 'logger'
+  // yet — teach me directly" — a real structural answer existed and was
+  // silently discarded. Must now give the SAME honest empty "what tests cover
+  // logger" already gives.
+  assert.match(turns[0].answer, /^No modules found whose module directly tests logger\./);
+  assert.doesNotMatch(turns[0].answer, /teach me directly/);
+  assert.match(turns[1].answer, /^No tests cover logger\./);
+  assert.doesNotMatch(turns[1].answer, /teach me directly/);
+  // a module that DOES have real test coverage still answers correctly too —
+  // never regressed by the new guard.
+  assert.match(turns[2].answer, /test\/tasks\.test\.mjs and test\/store\.test\.mjs/);
+});
+
+test("tier6/T20's guard never breaks the ORIGINAL Tier-5 T8 teach-offer for a property with no structural meaning, and never lets a stale unrelated fact hide the real structural answer", async () => {
+  const queries = [
+    "remember that the logger module is deprecated",
+    "is the logger deprecated",
+    "is the logger tested",
+    "is the logger fast",
+  ];
+  const turns = await driveSession(queries);
+  assertAllFlow(turns, queries);
+  assert.match(turns[0].answer, /^noted — remembered: logger module is deprecated/);
+  // the taught fact still reads back correctly — T20's guard only ever fires
+  // when envelope.parsed stands, and "deprecated" has no structural parse.
+  assert.match(turns[1].answer, /^yes — you told me: logger module is deprecated/);
+  // THE regression this guard had to avoid: once ANY fact is known about "the
+  // logger" (here, an unrelated deprecation fact), the OLDER, non-empty-rows
+  // code path could ALSO wrongly claim "tested" — now the real structural
+  // empty answers instead, even with unrelated facts on file.
+  assert.match(turns[2].answer, /^No tests cover logger\./);
+  // "fast" has no structural meaning at all — the ORIGINAL known-subject/
+  // wrong-property receipt (Tier 5) still stands, untouched.
+  assert.match(turns[3].answer, /^I don't have a fact saying the logger is fast\./);
+});
+
+test("tier6/conversation 9: AU/NZ 'no worries' ack-preamble reaches the full class detail (T21 fix)", async () => {
+  const turns = await driveSession(["no worries, what about the router"]);
+  assertAllFlow(turns, ["no worries, what about the router"]);
+  assert.match(turns[0].answer, /^Router — Class \(id: fn:src\/server\/router\.mjs#Router\)/);
 });

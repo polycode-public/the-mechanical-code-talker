@@ -3375,7 +3375,24 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
       if (emptyIsAdj) {
         const rawSubject = emptyIsAdj[1].trim();
         const subject = IS_ADJECTIVE_PRONOUN_RE.test(rawSubject) ? (focusLabel || null) : rawSubject;
-        if (subject && !/^there\b/i.test(subject)) {
+        // Tier 6 playtest: "is logger tested"/"is the store module tested" —
+        // IS_ADJECTIVE_YESNO_RE's own unrestricted backtracking (already flagged
+        // as a recurring risk, see this branch's own docblock above for the
+        // ISA_ASK_RE/"is there" exclusions found the SAME way) ALSO matches
+        // "tested" as if it were a free-form property adjective — but "tested"/
+        // "covered"/"untested"/"uncovered" are REAL structural relation words
+        // (PASSIVE_PARTICIPLE_TO_KIND/QUALIFIERS, ask-vocab.mjs) with an actual
+        // graph-computable meaning ask()'s own grammar already resolved
+        // (envelope.parsed stands — a genuine "tests" reverse-relation
+        // traversal, hit or honest empty). Offering "I don't know that yet —
+        // teach me" here would silently DISCARD a real, honest structural
+        // answer in favor of an irrelevant memory teach-offer — the opposite
+        // failure from every other exclusion in this function (a wrong
+        // OVER-eager offer, not a missed one). Declines only when a real parse
+        // already stood; "is the checkout flow deprecated" (this branch's own
+        // ORIGINAL T8 target — "deprecated" has no structural meaning at all)
+        // has no envelope.parsed to defer to, so it is untouched.
+        if (subject && !/^there\b/i.test(subject) && !envelope?.parsed) {
           return unknownAdjectiveOffer(subject, emptyIsAdj[2].trim().toLowerCase());
         }
       }
@@ -3581,7 +3598,18 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
       // as known too. A subject with NO known facts at all falls through
       // undecided — there's nothing honest to say beyond the ordinary
       // cascade's own miss/orientation nudge.
-      if (rows.some(subjectMatch)) {
+      //
+      // Tier 6 playtest: gated on `!envelope?.parsed`, the SAME guard this
+      // function's empty-memory branch above just added, for the identical
+      // reason — "is the logger tested" (after teaching an UNRELATED
+      // "logger... is deprecated" fact) used to return "I don't have a fact
+      // saying the logger is tested" here, discarding a REAL structural
+      // answer ("No tests cover logger") for a word ("tested") that already
+      // has genuine graph-computable meaning. A subject with a KNOWN taught
+      // fact under some OTHER, non-structural property (the common,
+      // originally-intended case here) still gets this receipt exactly as
+      // before, since envelope.parsed is null for those adjectives.
+      if (rows.some(subjectMatch) && !envelope?.parsed) {
         return { text: `I don't have a fact saying ${subject.toLowerCase()} is ${adjective}.`, replace: true };
       }
       // Tier-5 playtest fix (cycle 2), found live: "is the checkout flow
@@ -3598,7 +3626,12 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
       // subject like this one. Same helper (unknownAdjectiveOffer) the
       // empty-memory special-case above this function's own rows.length
       // bail-out reuses, so the two paths can never disagree on wording.
-      return unknownAdjectiveOffer(subject, adjective);
+      //
+      // Tier 6 playtest: same `!envelope?.parsed` guard as just above — a
+      // subject known only under an UNRELATED property (e.g. "deprecated")
+      // must not offer to teach "tested" when ask()'s own grammar already
+      // resolved it structurally.
+      if (!envelope?.parsed) return unknownAdjectiveOffer(subject, adjective);
     }
   }
 
