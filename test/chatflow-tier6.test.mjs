@@ -120,6 +120,74 @@
 // genuinely ambiguous even to a human reader, and forcing a specific route
 // would be exactly the kind of guess this project's discipline forbids.
 //
+// CYCLE 2 (this pass found real fixable dead-ends in cycle 1, so it ratcheted
+// per SKILL_CHAT_PLAYTEST.md §1 Step 7): eight more dead-ends, all sibling
+// gaps of cycle 1's own preamble-frame mechanism plus two standalone typo/
+// vocabulary fixes, found from fresh entry points (more dialect/register
+// variation, ESL-shaped self-correction, and the teach lane's own preamble
+// blind spot):
+//
+//   T10 "yeah nah, what does the router do" — the AU/NZ discourse opener
+//       chat.mjs's own GREET closed set already recognizes BARE, but had no
+//       PREAMBLE (fused lead-in) form at all, the exact gap g'day's own fix
+//       closed in an earlier session for that same dialect. Added to
+//       GREETING_PREAMBLE_RE (normalize.mjs).
+//   T11 "howdy pardner, remember that X" — "howdy" alone already matched, but
+//       a VOCATIVE word right after it ("pardner", US-Western register) sat
+//       between the greeting and its delimiter, where only the literal word
+//       "there" was tolerated. Widened GREETING_PREAMBLE_RE's vocative group
+//       to a small closed set (pardner/folks/friend/mate).
+//   T12 "ta for that" — "cheers for that" was already in chat.mjs's THANKS
+//       set, but its "ta" sibling (both dropped-word forms of "thanks for
+//       that") was missing, so it fell to the generic orientation card via
+//       isConversational's ≤3-word catch-all instead of a thanks reply.
+//   T13 Three more vague-opener idioms, same family as cycle 1's T4: "walk me
+//       through this codebase", "what's the big picture (here)", "give me the
+//       lay of the land" — new CAPABILITY_PHRASES entries.
+//   T14 CAPABILITY_PHRASES' vague-opener entries are self-contained closed
+//       regexes, but a preamble ahead of one ("right, can you walk me through
+//       this codebase" — an ACK_PREAMBLE_RE + MODAL_WRAPPER_RE stack) was
+//       tested nowhere upstream of conversationalTurn's own raw-text check,
+//       unlike vagueTouchTermOf/describeWrapperAnswer (both already run
+//       applyPreambleFrames first, per cycle 1's T7). Now tries the SAME
+//       closed set again against the preamble-stripped text too — purely
+//       additive, can only ADD a match, never remove one.
+//   T15 "hwo many classes are there" (a transposed-letter typo of "how") lost
+//       the aggregate/list trigger entirely, same failure class as the
+//       existing "manyn"/"mnay" entries one word to the right of it in
+//       ask-vocab.mjs's MISSPELLINGS table — "how" is grammar-owned via
+//       AGGREGATE_TRIGGERS' own "how many"/"how much" multi-word entries.
+//   T16 teachLane (chat.mjs) read the raw, un-normalized query and never ran
+//       applyPreambleFrames at all, so ANY closed discourse-marker preamble
+//       ahead of a teach sentence corrupted TEACH_RE's own match ("howdy
+//       pardner, remember that TaskController is fragile" walled outright).
+//       Verified safe against this lane's own extensive test corpus before
+//       landing (none of applyPreambleFrames' frames match ordinary teach
+//       phrasing) — confirmed empirically by the full suite staying green.
+//   T17 factReadBack's own qHedge hedge-adverb strip (Tier 5's own fix for
+//       "actually"/"really"/"honestly") didn't cover "yeah nah" — the exact
+//       T10 dialect gap, just reached through a different lane (a yes/no
+//       property read-back rather than a module-purpose overview). Widened
+//       the SAME narrow, lane-scoped hedge set rather than routing through
+//       applyPreambleFrames (which doesn't know "really"/"honestly" either,
+//       and this lane's own Tier 5 precedent deliberately keeps its hedge set
+//       separate from the broader preamble mechanism).
+//
+// One near-miss caught and reverted live during this cycle: widening
+// SELF_CORRECTION_RE's own trailing delimiter to be optional (to catch "what
+// calls listTasks -- oh wait, i mean createTask", no comma after "i mean")
+// looked promising in isolation but broke this EXACT object-only-restart case
+// worse than before — the regex's `.+?` prefix discards the whole verb clause
+// ("what calls"), not just the abandoned object, so the fix reduced the query
+// to a bare noun with no verb at all (a hard wall) instead of the honest
+// "did you mean listTasks or createTask?" ambiguity nudge the UNCHANGED regex
+// already gives (a real candidate list including the correct answer — an
+// acceptable FLOW under §0/§2, not a dead end). Reverted; left as a named,
+// narrower ceiling (see SELF_CORRECTION_RE's own updated docblock) rather than
+// risk widening a proven, tested regex for a net-negative outcome.
+//
+// Three more full conversations replayed clean afterward — frozen below.
+//
 // Driven against the SHIPPED examples/mini-webapp graph via `ephemeral: true`
 // (chat.mjs's createSession) — same mechanism test/chatflow-tier4.test.mjs/
 // test/chatflow-tier5.test.mjs rely on: reads the real graph, writes session/
@@ -290,4 +358,74 @@ test("tier6/bare single-word 'logger' still resolves to the Class (pre-existing 
   const turns = await driveSession(["what does logger do"]);
   assertAllFlow(turns, ["what does logger do"]);
   assert.match(turns[0].answer, /^Logger is a class/);
+});
+
+// ---- CYCLE 2 ----
+
+test("tier6/conversation 4: dialect preamble + vague-opener idioms + ack-preamble + module-grain overview, zero dead-ends (T10/T13/T14 fix)", async () => {
+  const queries = [
+    "g'day, what modules import model.mjs then",
+    "yeah nah, what does the router do",
+    "ta for that",
+    "right, can you walk me through this codebase",
+    "what's the big picture here",
+    "give me the lay of the land",
+  ];
+  const turns = await driveSession(queries);
+  assertAllFlow(turns, queries);
+  assert.match(turns[0].answer, /^src\/core\/store\.mjs and src\/core\/validate\.mjs and src\/handlers\/tasks\.mjs and src\/handlers\/users\.mjs\./);
+  // T10: "yeah nah," (AU/NZ dialect opener) strips cleanly, reaching the module-
+  // grain overview for the Router class (article-strip T1 territory).
+  assert.match(turns[1].answer, /^Router is a class — no recorded tests\./);
+  // T12: "ta for that" reads as thanks, not the generic orientation card.
+  assert.match(turns[2].answer, /^Any time\./);
+  // T14: an ack-preamble ("right,") + modal wrapper ("can you") stacked ahead of
+  // a brand-new vague-opener idiom (T13) all peel, reaching orientationAnswer.
+  assert.match(turns[3].answer, /^I'm tmct — a deterministic, offline code-graph assistant/);
+  assert.match(turns[4].answer, /^I'm tmct — a deterministic, offline code-graph assistant/);
+  assert.match(turns[5].answer, /^I'm tmct — a deterministic, offline code-graph assistant/);
+});
+
+test("tier6/conversation 5: ESL/self-correction typo variants + a typo'd count trigger, zero dead-ends where fixed (T15 fix; ambiguity-nudge FLOW noted, not walls)", async () => {
+  const queries = [
+    "which functions does saveStore call",
+    "what calls listTasks -- oh wait, i mean createTask",
+    "define Task -- no actually, define User",
+    "hwo many classes are there",
+    "wich modules touch model.mjs",
+  ];
+  const turns = await driveSession(queries);
+  // Every turn either answers, offers a real "did you mean" candidate list (an
+  // honest ambiguity nudge — acceptable FLOW per §0/§2, never a bare wall), or
+  // gives a receipted honest empty — never the raw grammar wall / vocab-miss /
+  // short-wall this file's DEAD_END pattern catches.
+  assertAllFlow(turns, queries);
+  assert.match(turns[0].answer, /^Task\./);
+  // T9's sibling near-miss (SELF_CORRECTION_RE): an object-only restart with no
+  // comma after "i mean" is a GENUINE ceiling (see SELF_CORRECTION_RE's own
+  // docblock) — the ambiguity nudge's candidate list still names the CORRECT
+  // answer ("createTask"), so a user who takes the hint still gets there.
+  assert.match(turns[1].answer, /did you mean listTasks and createTask\? Try one of those\./);
+  assert.match(turns[2].answer, /did you mean Task, Task\.title, Task\.complete, Task\.assignTo and User\? Try one of those\./);
+  // T15: the transposed-letter typo "hwo" no longer loses the aggregate trigger.
+  assert.match(turns[3].answer, /^10 classes\./);
+  assert.match(turns[4].answer, /^No modules found whose module directly touches model\.mjs\./);
+});
+
+test("tier6/conversation 6: teach lane under a fused dialect+vocative preamble, then recall under a dialect hedge, zero dead-ends (T11/T16/T17 fix)", async () => {
+  const queries = [
+    "howdy pardner, remember that TaskController is fragile",
+    "yeah nah, is TaskController fragile",
+    "wait what, does the store module import model",
+    "cheers",
+  ];
+  const turns = await driveSession(queries);
+  assertAllFlow(turns, queries);
+  // T11/T16: "howdy pardner," (a greeting + US-Western vocative) no longer
+  // corrupts teachLane's own TEACH_RE match.
+  assert.match(turns[0].answer, /^noted — remembered: taskcontroller is fragile/);
+  // T17: "yeah nah," no longer misaligns factReadBack's yes/no property reader.
+  assert.match(turns[1].answer, /^yes — you told me: taskcontroller is fragile/);
+  assert.match(turns[2].answer, /^No — no imports edge found from Store to src\/core\/model\.mjs\./);
+  assert.match(turns[3].answer, /^Any time\./);
 });

@@ -457,6 +457,14 @@ export const MISSPELLINGS = Object.freeze({
   // curated here so the intended trigger is restored BEFORE parsing (the general
   // bounded fuzzy path in ask.mjs's cascade is the backstop for uncurated typos).
   "manyn": "many", "mnay": "many", "amny": "many", "mnany": "many",
+  // "hwo" (Tier 6 playtest, §3b typo axis): a transposed-letter typo of "how" —
+  // "hwo many classes are there" used to lose the aggregate/list trigger
+  // outright ("how many" only reads as a count trigger when both words are
+  // exact), same failure class as "manyn"/"mnay" just above, one word to the
+  // left of it. "how" is grammar-owned via AGGREGATE_TRIGGERS' own "how many"/
+  // "how much" entries (test/ask-vocab.test.mjs's canonical-value check
+  // splits those multi-word triggers into individual words).
+  "hwo": "how",
   "coutn": "count", "conut": "count", "cuont": "count", "ocunt": "count",
   "numer": "number", "nubmer": "number", "numbr": "number", "nmuber": "number",
   "lst": "list", "lsit": "list", "ilst": "list",

@@ -146,7 +146,19 @@ const isListingRemainder = (rest) => {
 // splice — "." joins the delimiter class for exactly this reason; a bare
 // greeting alone ("hi.") still can't match since the regex also requires a
 // non-empty remainder AFTER the delimiter.
-const GREETING_PREAMBLE_RE = /^(?:hi|hiya|hello|hey|yo|howdy|g'?day|good\s+(?:morning|afternoon|evening|day)|greetings|salutations)(?:\s+there)?\s*[,.—–-]\s*(?:(?:just\s+a\s+)?quick\s+question\s*[,:—–-]?\s*)?(.+)$/i;
+// "yeah nah" (AU/NZ informal opener, §3b, Tier 6 playtest): a soft discourse
+// filler AU/NZ speakers lead a sentence with, distinct from an actual "no" —
+// chat.mjs's own GREET closed set already recognizes the BARE phrase, but a
+// fused lead-in ("yeah nah, what does the router do") had no preamble form at
+// all and fell straight to the raw grammar wall, the exact failure g'day's own
+// fix (just above) closed for that dialect's greeting word.
+// "howdy pardner" (Tier 6 playtest, §3b dialect axis): "howdy" alone already
+// matched, but a VOCATIVE word right after it ("pardner", a US-Western/cowboy
+// register touch) sat between the greeting and its delimiter, where only the
+// literal word "there" was tolerated — "howdy pardner, remember that X" fell
+// straight to the raw grammar wall. A small closed vocative set, same
+// discipline as the greeting word list itself.
+const GREETING_PREAMBLE_RE = /^(?:hi|hiya|hello|hey|yo|howdy|g'?day|yeah\s+nah|good\s+(?:morning|afternoon|evening|day)|greetings|salutations)(?:\s+(?:there|pardner|folks|friend|mate))?\s*[,.—–-]\s*(?:(?:just\s+a\s+)?quick\s+question\s*[,:—–-]?\s*)?(.+)$/i;
 /** Thanks lead-in with a delimiter (+ optional "quick question" bridge), the
  *  sibling of GREETING_PREAMBLE_RE for the "thanks" word family (Bug B2, 0.8.2
  *  follow-up): "thanks, <Q>" / "thanks so much, <Q>" -> "<Q>". chat.mjs's
@@ -375,7 +387,23 @@ export function applySubordinationFrames(text) {
 // NOT match on a bare dash alone with no marker word: an ordinary em-dash aside
 // ("modules — like Base — that inherit from X") is common prose, not a restart, and
 // treating every dash as a delimiter would be a guess this file's discipline forbids
-// everywhere else. ----
+// everywhere else.
+//
+// Tier 6 playtest tried making the trailing delimiter optional too (to catch
+// "what calls listTasks -- oh wait, i mean createTask" — no comma after "i
+// mean") and reverted it live: this regex's `.+?` prefix discards EVERYTHING
+// before the marker, which is correct for a FULL-CLAUSE restart (the remainder
+// is a complete new question, verb included, e.g. "which classes inherit from
+// Base") but wrong for an OBJECT-ONLY restart, where the verb clause ("what
+// calls") must survive and only the object swaps. Without the delimiter, this
+// object-only shape reduced to the bare noun "createTask" alone (no verb at
+// all) — a genuine regression from the honest "did you mean listTasks or
+// createTask?" ambiguity nudge the UNCHANGED regex already gives (a real
+// candidate list including the correct answer is an acceptable FLOW under
+// SKILL_CHAT_PLAYTEST.md §0/§2, not a dead end) to a hard wall. Fixing the
+// object-only case properly needs verb-clause-preserving logic this closed,
+// delimiter-anchored frame mechanism isn't shaped for — left as a genuine,
+// narrower ceiling rather than risk widening this proven, tested regex. ----
 const SELF_CORRECTION_RE =
   /^.+?(?:\s*(?:--|—|-)\s*)?\b(?:sorry|i\s+mean)\b\s*(?:--|—|-|,|:)\s*(.+)$/i;
 

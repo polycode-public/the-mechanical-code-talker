@@ -713,6 +713,14 @@ const CAPABILITY_PHRASES = [
   /^what can (?:you|u) tell me(?:\s+(?:more|anything))?\s+about (?:this|the)\s+(?:app|codebase|repo|repository|project|code|thing)\??$/i,
   /^tell me something interesting(?:\s+about (?:this|the)\s+(?:app|codebase|repo|repository|project|code))?\??$/i,
   /^(?:so,?\s+)?what(?:'s|s|\s+is)\s+(?:going on|happening)\s+(?:in|with)\s+(?:this|the)\s+(?:app|codebase|repo|repository|project|code)\??$/i,
+  // Tier 6 playtest cycle 2: three more vague-opener idioms found live, same
+  // family as the three just above — a stranger's orientation request has no
+  // fixed wording, so this closed set keeps growing additively as new natural
+  // phrasings surface, never a general "any long question is an orientation
+  // request" rule.
+  /^(?:can you\s+)?walk me through (?:this|the)\s+(?:app|codebase|repo|repository|project|code)\??$/i,
+  /^what(?:'s|s|\s+is) the big picture(?:\s+here)?\??$/i,
+  /^(?:give me|what's) the lay of the land\??$/i,
 ];
 /** IDENTITY questions — "who/what are you", by name, in plain or ESL-ish phrasing.
  *  Routed to a self-description (identity-self) that works regardless of graph
@@ -871,6 +879,11 @@ const THANKS = new Set([
   "thanks", "thank you", "thankyou", "thx", "ty", "ta", "cheers", "nice one",
   "much appreciated", "cool thanks", "many thanks", "much obliged", "ta very much",
   "cheers mate", "cheers for that", "tks", "sweet thanks", "nice",
+  // "ta for that" (Tier 6 playtest): "cheers for that" was already here, but
+  // its "ta" sibling (both dropped-word forms of the SAME "thanks for that"
+  // shape) was missing — fell to the generic orientation card via
+  // isConversational's ≤3-word catch-all instead of a thanks reply.
+  "ta for that",
 ]);
 /** Farewells → a goodbye AND a clean end of session (same path as /exit). */
 const BYE = new Set([
@@ -1074,7 +1087,16 @@ function conversationalTurn(line, ctx) {
     note(ctx.trace, "lane: conversational — identity (IDENTITY_PHRASES closed set)");
     return mk(t(T_IDENTITY_SELF));
   }
-  if (q === "help" || q === "?" || CAPABILITY_PHRASES.some((re) => re.test(raw)) || ORIENT_OPENERS.has(q)) {
+  // Tier 6 playtest cycle 2: CAPABILITY_PHRASES' vague-opener entries are
+  // self-contained closed regexes, but a preamble ahead of one ("right, can
+  // you walk me through this codebase" — an ACK_PREAMBLE_RE + MODAL_WRAPPER_RE
+  // stack) is tested nowhere upstream of this check, unlike vagueTouchTermOf/
+  // describeWrapperAnswer (both run applyPreambleFrames first). Trying the
+  // SAME closed set again against the preamble-stripped text is purely
+  // additive — it can only ever ADD a match CAPABILITY_PHRASES.test(raw)
+  // alone would have missed, never take one away.
+  if (q === "help" || q === "?" || CAPABILITY_PHRASES.some((re) => re.test(raw))
+    || CAPABILITY_PHRASES.some((re) => re.test(applyPreambleFrames(raw))) || ORIENT_OPENERS.has(q)) {
     note(ctx.trace, "goal: get oriented — what can tmct answer, how do I start");
     note(ctx.trace, "lane: conversational — help/orientation (CAPABILITY_PHRASES/ORIENT_OPENERS / bare help / ?)");
     return mk(orientationAnswer(ctx.templates, ctx.graph, ctx.vocabHint));
@@ -1711,7 +1733,14 @@ function teachSuggestion(payload) {
 const TEACH_PRONOUN_RE = /^(?:every\s+|each\s+|all\s+|some\s+|a few\s+|a\s+|an\s+)?(you|i|it|they|he|she|we)\s+\S+/i;
 
 async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
-  const rawInput = String(query).trim();
+  // Tier 6 playtest: this lane read the raw, un-normalized query, so a closed
+  // discourse-marker preamble ahead of a teach sentence ("howdy pardner,
+  // remember that TaskController is fragile") corrupted TEACH_RE's own match —
+  // applyPreambleFrames is idempotent no-op on an already-clean teach sentence
+  // (none of its frames' anchors — greeting/thanks/ack/modal/explain/show-give-me/
+  // topic-switch/hedge — match ordinary teach phrasing, verified against this
+  // lane's own test corpus), so this is purely additive.
+  const rawInput = applyPreambleFrames(String(query).trim());
   const m = rawInput.match(TEACH_RE);
   const wrappedInput = m ? m[1].trim() : null;
   // "your X is a/an Y" (Feature A) — a plain casual synonym for "a/an X is a
@@ -3300,7 +3329,12 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
   // tolerance (and/also/so/…) is STACCATO_LEAKED_CONNECTIVES' own separate,
   // broader territory elsewhere in this file — this is a narrower, adjacent
   // closed set (hedge adverbs, not coordinators).
-  const qHedge = q.replace(/^(?:actually|really|honestly)\s*,?\s+/i, "");
+  // "yeah nah" (Tier 6 playtest, §3b dialect axis): the same AU/NZ discourse
+  // opener chat.mjs's own GREET closed set and GREETING_PREAMBLE_RE already
+  // recognize elsewhere, added here too — "yeah nah, is TaskController
+  // fragile" is the SAME one-word-out-of-alignment problem the hedge adverbs
+  // above were fixed for, just a dialect opener instead of a hedge adverb.
+  const qHedge = q.replace(/^(?:actually|really|honestly|yeah\s+nah)\s*,?\s+/i, "");
   const rows = await factRows(memoryDir);
   if (!rows.length) {
     // Tier-5 playtest fix (cycle 2), found live: with TRULY zero facts
