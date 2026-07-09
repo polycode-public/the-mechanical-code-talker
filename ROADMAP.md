@@ -14,9 +14,21 @@ the file has been deleted.
 
 ## Where we are now (2026-07-09)
 
-`npm test` green (**1307**, up from 1258). **v1.0.7, pushed** (0.9.11 → 1.0.0 → 1.0.7 across this
-session — see `HANDOVER.md` for the exact release chain and file:line detail).
+`npm test` green (**1328**, up from 1258). **v1.0.7, pushed** (0.9.11 → 1.0.0 → 1.0.7 across an
+earlier session — see `HANDOVER.md` for the exact release chain and file:line detail); not pushed
+again since (version stays at 1.0.9 locally, per the operator's own bump-at-push-time policy).
 
+- **Tier 5 of the dialogue-flow playtest loop (teach + recall + reasoning in dialogue) — DONE, 5
+  cycles (the cap), genuinely clean at the end.** 12 routing/recognition fixes across teach and
+  recall (article/head-word gaps in "what do you know about X", an adverb mis-parsed as a verb in
+  general-verb teach, passive ownership phrasing, a quantified-property mis-teach, several missing
+  yes/no readers for taught facts, a silently-null teach path, past-tense property support, a
+  leading hedge-adverb gap) plus one genuinely important correctness bug found and fixed in the
+  final cycle: a FABRICATED cross-subject answer ("is the validate module deprecated" confidently
+  answering off an unrelated "logger module" fact, via an over-loose word-overlap fallback with no
+  exclusion for common code-noun suffixes like "module"). New `test/chatflow-tier5.test.mjs` (21
+  cases). **1307 → 1328.** Tier 6 (the messy real user) is next, still not yet run. Full detail:
+  `HANDOVER.md`'s "The dialogue-flow playtest loop" section, Tier 5 entry.
 - **Playtest-freeze verification pass (session close-out).** Manually chat-tested this session's own
   routing/recognition fixes (Tiers 0/1/2/4 + operator bugs A-F) via the real piped CLI against real
   data (`examples/mini-webapp`'s commit history, cochange edge, and Controller/TaskController

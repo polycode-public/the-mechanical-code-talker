@@ -13,6 +13,11 @@ pushed** (0.9.11 → 0.9.12 → 1.0.0 → 1.0.7 across this session). Prior sess
 (0.9.5 era — the playtest sprint, Bug 6/7/8, the predicate-find feature, infbench stages 0-2) is
 superseded by everything below; its content still lives in git history of this file if needed.
 
+*Later addendum (same 2026-07-09, a separate follow-on dispatch): Tier 5 of the dialogue-flow
+playtest loop (deferred above) ran to completion — 5 cycles, `npm test` now **1328** passing. Not
+pushed; version still 1.0.9 locally, unchanged. See "The dialogue-flow playtest loop" section's
+Tier 5 entry and "Open follow-ups" item 1, both updated in place below.*
+
 ### The trigger and the fix: 0.9.12 → 1.0.0
 
 Operator ran a real `npm install` + bare `tmct chat` in a fresh directory and got an apology for
@@ -73,8 +78,68 @@ preference for templates/pattern-matching over general rules where the fix allow
   deliberately left open ("call X and call Y" without "that"), plus a superlative fix (metric
   word leading "the most" instead of following it) and entity-kind receipts on empty
   qualifier/anaphora results.
-- **Tier 5 (teach + recall + reasoning in dialogue) and Tier 6 (the messy real user) — not yet
-  run.** Next session's starting point for the playtest loop.
+- **Tier 5 (teach + recall + reasoning in dialogue) — DONE, 5 cycles (the cap), genuinely clean at
+  the end.** A dedicated dispatch, separate from the session above (commits `fc48e18`, `a3231f5`,
+  `c5d1ddc`, `d485020`, `09d4e7a`). Ran the full 5-cycle cap (each cycle found real fixable
+  dead-ends, so it never hit the "two clean cycles in a row" early-stop) — 12 routing/recognition
+  fixes plus one genuinely important correctness bug, all in `src/chat.mjs` (+ one line in
+  `src/memory/core.mjs`):
+    - **Cycle 1** (6 fixes): `normFactTerm` never stripped a leading "the"/"a"/"an", so EVERY
+      recall regex in the file (which all call `factTermVariants` → `normFactTerm` with no strip
+      of their own) missed a just-taught multi-word-subject fact the moment a query used an
+      article or shortened the subject to its head word — fixed once, centrally, plus a head-word
+      overlap fallback in `factAnswer`'s "what do you know about X". A frequency ADVERB between a
+      bare-name subject and the real verb (the operator's own example, "TaskController usually
+      needs review") mis-split the adverb AS the verb, garbling the confirmation into "usuallies";
+      fixed with a closed adverb-skip reused by the teach shape and its query-side twins.
+      `OWNS_TEACH_RE`'s object widened from single-token to a short noun phrase ("margo maintains
+      the tasks handler" used to WALL entirely); added `OWNS_YESNO_RE` for the missing yes/no
+      ownership claim form. Added `IS_ADJECTIVE_YESNO_RE` (a taught property fact like "X is
+      deprecated" had NO direct-question reader at all), with anaphora against the live focus and
+      a "known-subject-wrong-property" honest receipt. A genuinely-unknown-everywhere "what is X"
+      miss now gets a TEACH-OFFER appended (verified in-state per the skill's own rule — required
+      widening `UNKNOWN_SUBJECT_RE` to 2 tokens too, since the first offered example failed).
+    - **Cycle 2** (3 fixes): passive ownership ("`<X>` is owned by `<Name>`") had zero recognizer,
+      teach or read, even though it's at least as natural as the active form cycle 1 fixed; added
+      `OWNS_PASSIVE_TEACH_RE`/`OWNS_PASSIVE_YESNO_RE`. A quantified PROPERTY claim ("some functions
+      are risky") silently mis-taught the literal string "some functions" as a bogus subject
+      (SOME_A_FEW_RE's own subclass-only gate correctly declined, but a later vocabulary-blind
+      frame caught it anyway) — now declines honestly. A genuinely first-ever "is X `<adjective>`"
+      question (zero facts in memory at all) fell to the raw wall because `factReadBack`'s
+      `!rows.length` fast path bailed out before the cycle-1 teach-offer code ever ran — special-
+      cased narrowly (found + fixed two real regressions on the first attempt, "is a zebra a
+      mammal"/"is there anything bigger", both caught by the full suite before shipping).
+    - **Cycle 3** (2 fixes): a quantified subject + non-copula verb ("remember that every
+      controller needs review") fit no recognizer at all, so `teachLane` returned null silently
+      and the sentence fell through to the raw structural wall — now always gives an honest
+      decline once "remember/note/…" wrapped it. "what do you know about X" (genuinely unknown)
+      gained the same TEACH-OFFER treatment as "what is X" (shared wording via a new
+      `unknownVocabTermOffer()` helper); `TEACH_PROPERTY_RE` widened to accept past-tense
+      "was"/"were" too. Two genuine ceilings named, not forced: negated property assertions ("X
+      is NOT deprecated") have no supported shape anywhere in tmct's grammar; a bare class-
+      inheritance existence check against the GRAPH ("is TaskController a Controller") has no
+      structural reader — real, but Tier-3/4 territory.
+    - **Cycle 4** (1 fix): a leading hedge adverb ("actually"/"really"/"honestly") put a sentence
+      one word out of alignment with the session's own three new yes/no openers — fixed narrowly
+      (`qHedge`, scoped to just those three regexes). One more genuine ceiling: a general-verb
+      teach with a multi-word subject only gets a generic decline — a widening attempt was tried
+      and reverted (the laziness cycle 1's adverb-skip needs directly conflicts with the
+      greediness a multi-word subject needs; a positional regex can't satisfy both).
+    - **Cycle 5** (1 fix, the important one — a FABRICATION, not a dead-end): "is the validate
+      module deprecated" answered a confident "yes — you told me: logger module is deprecated" —
+      the WRONG fact, off the shared generic word "module" alone (cycle 1's head-word overlap
+      fallback used a bare length-floor with no exclusion for common code-noun suffixes). Fixed
+      with a `GENERIC_ENTITY_WORDS` stopset (module/class/function/handler/controller/…), the same
+      principle `RECALL_STOPWORDS` already applies to path-noise tokens. Found via a deliberately
+      adversarial two-different-subjects-sharing-a-generic-head-word conversation the earlier
+      cycles' single-subject conversations never exercised — a reminder that this class of bug
+      (accidental substring/word overlap hijacking a DIFFERENT entity's fact) is a recurring risk
+      whenever a fallback loosens exact-matching, echoing Tier 3's own `resolveObject` history
+      above.
+  `test/chatflow-tier5.test.mjs` (new, 21 cases) freezes every fixed conversation. `npm test`:
+  1328 passing (from the 1307 baseline at dispatch start), 0 failing.
+- **Tier 6 (the messy real user) — not yet run.** Next session's starting point for the playtest
+  loop, now that Tier 5 is confirmed clean.
 
 Two real process incidents fed back into `SKILL_CHAT_PLAYTEST.md` itself: a cycle's cleanup step
 ran `rm -rf /tmp/pt-*` (a wildcard glob in *shared* `/tmp`, flagged by the harness's own safety
@@ -261,9 +326,11 @@ the moment of actually pushing a release, as part of that same push.
 
 ## Open follow-ups (next session, in priority order)
 
-1. **Tier 5 (teach + recall + reasoning in dialogue) and Tier 6 (the messy real user)** — not yet
-   run. Tier 5's territory substantially overlaps this session's own new-term/quantifier-teaching
-   work, but hasn't been through the playtest loop's own dead-end-hunting discipline yet.
+1. **DONE: Tier 5 (teach + recall + reasoning in dialogue)** — run as its own dedicated dispatch,
+   5 cycles (the cap), genuinely clean at the end (see "The dialogue-flow playtest loop" section
+   above for the full per-cycle detail — 12 routing fixes + 1 important correctness bug, fabricated
+   cross-subject answer, all in `src/chat.mjs`). **Tier 6 (the messy real user) — still not yet
+   run**, now this dispatch's own next starting point.
 2. **DONE: Seonix Batch 2 — cheap, high-confidence routing gaps.** All three landed. (a)
    `grammar.mjs`'s T5 ("meta-whatis") article is now optional, but the bare (no-article) form is
    restricted to `ENTITY_TO_TYPE`'s closed vocabulary (`what is Commit` now parses; the two pinned
