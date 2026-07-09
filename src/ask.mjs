@@ -863,6 +863,18 @@ function parseSuperlative(w, lc, nlp) {
   for (let i = extIdx; i < lc.length; i += 1) {
     if (EDGE_NOUN_TO_METRIC[lc[i]]) { metric = EDGE_NOUN_TO_METRIC[lc[i]]; metricNoun = lc[i]; break; }
   }
+  // Fallback: a passive-verb-led phrasing puts the participle metric word BEFORE
+  // the extreme, not after ("which function IS CALLED the most" — cf. "which
+  // module is MOST imported", the already-supported order where the participle
+  // trails "most" and the forward scan above already catches it). Scan backward
+  // from just before the extreme, taking the CLOSEST metric word — the natural
+  // reading when one exists at all. Only a fallback (never overrides a forward
+  // hit), so it can't touch any phrasing that already resolves correctly today.
+  if (!metric) {
+    for (let i = extIdx - 1; i >= 0; i -= 1) {
+      if (EDGE_NOUN_TO_METRIC[lc[i]]) { metric = EDGE_NOUN_TO_METRIC[lc[i]]; metricNoun = lc[i]; break; }
+    }
+  }
   const connectivity = lc.includes("connected") || lc.slice(extIdx, extIdx + 2).join(" ") === "most connected"
     || ["largest", "biggest", "smallest"].includes(lc[extIdx]);
   if (!metric) {
