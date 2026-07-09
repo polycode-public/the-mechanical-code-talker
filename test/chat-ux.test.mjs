@@ -390,6 +390,45 @@ test("#2 meta: bare 'what do you know' → a SHORT summary, never a raw fact dum
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
+// Bug D (operator manual-chat find, this session): "what is in your memory"/
+// "what's in your memory"/"whats in your memory" is a plain synonym of the bare
+// "what do you know" — used to fall through to the structural parser (which
+// misread "in your memory" as a membership-phrasing-frame target, "no module
+// matching 'your memory' found in the index").
+test("Bug D: 'what is in your memory'/\"what's in your memory\"/'whats in your memory' get the SAME short summary as bare 'what do you know'", async () => {
+  const dir = await mem();
+  // Strip the independent "Goal (inferred): ..." suffix (a separate mechanism
+  // keyed off deduceGoalFromParsed's own read of envelope.parsed — a query that
+  // partially LOOKS structural before the meta/self lane claims it can carry a
+  // different incidental goal guess than a plain "what do you know"; unrelated
+  // to whether this fix's own answer TEXT is correct).
+  const stripGoal = (s) => s.replace(/\n\nGoal \(inferred\):.*$/s, "");
+  try {
+    await runTurn("every class is a component", { config: CONFIG, graph: await graph(), memoryDir: dir, sessionId: "m" });
+    const baseline = await runTurn("what do you know", { config: CONFIG, graph: await graph(), memoryDir: dir });
+    for (const q of ["what is in your memory", "what's in your memory", "whats in your memory"]) {
+      const r = await runTurn(q, { config: CONFIG, graph: await graph(), memoryDir: dir });
+      assert.equal(r.record.via, "meta", `"${q}" should route to the meta/self lane`);
+      assert.equal(stripGoal(r.answer), stripGoal(baseline.answer), `"${q}" should read exactly like "what do you know"`);
+      assert.doesNotMatch(r.answer, /no module matching/i, `"${q}" must never fall to the structural miss`);
+    }
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+// Bug D no-regression: an empty-memory session (no facts taught) still routes
+// correctly, matching the same message the bare "what do you know" gets.
+test("Bug D no-regression: 'what is in your memory' with NO facts taught yet still routes to memorySummary's empty-memory message", async () => {
+  const dir = await mem();
+  const stripGoal = (s) => s.replace(/\n\nGoal \(inferred\):.*$/s, "");
+  try {
+    const g = await graph();
+    const baseline = await runTurn("what do you know", { config: CONFIG, graph: g, memoryDir: dir });
+    const r = await runTurn("what is in your memory", { config: CONFIG, graph: g, memoryDir: dir });
+    assert.equal(r.record.via, "meta");
+    assert.equal(stripGoal(r.answer), stripGoal(baseline.answer));
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
 test("#2 meta: 'what do you remember' / 'what facts do you know' STILL list facts (pinned readers unbroken)", async () => {
   const dir = await mem();
   try {

@@ -1803,7 +1803,14 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
 // ONLY (the caller gates on a miss) and every pattern is a WHOLE-LINE self/session
 // reference with no graph entity or predicate, so real graph queries ("what does X
 // import", the meta "what does imports mean", "what did i ask before") never match.
-const WHAT_KNOW_RE = /^what\s+(?:do\s+you|d'?you)\s+know(?:\s+so\s+far)?$/;
+// Bug D (operator manual-chat find, this session): "what is in your memory"/
+// "what's in your memory" is a plain synonym of the bare "what do you know" —
+// widened here rather than folded in as "what do you remember" (that phrase is
+// ALREADY WHOLE_RECALL_RE's own, more specific, territory — it lists every
+// remembered fact, a strictly better answer than this lane's short summary; see
+// WHOLE_RECALL_RE's docblock below and the pinned "'what do you remember' ...
+// STILL list facts" test — folding it in here would silently regress that).
+const WHAT_KNOW_RE = /^(?:what\s+(?:do\s+you|d'?you)\s+know(?:\s+so\s+far)?|what(?:'s|s|\s+is)\s+in\s+your\s+memory)$/;
 // 0.8.2 WS4 wall kindness (c): the most likely stranger openers — "what does this
 // app/codebase do", "what is this app (for)" — join the orientation lane, so a
 // first-touch question gets the live overview instead of the grammar wall.
