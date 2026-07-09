@@ -121,6 +121,47 @@
 //       both already have a correct, MORE SPECIFIC answer elsewhere that an
 //       unguarded teach-offer would have silently pre-empted).
 //
+// CYCLE 3 (ratcheting again — cycle 2 found real fixable dead-ends): TWO
+// more fixed, plus two genuine CEILINGS named rather than forced:
+//
+//   T9  "remember that every controller needs review" (a QUANTIFIED subject
+//       + a non-copula verb) fit NONE of the teach recognizers — generalVerbTeach
+//       declines by design on a quantified subject (ambiguity risk, see its
+//       own docblock), and no is/are/owns/maintains shape matches "needs"
+//       either — so `payload` stayed null and teachLane returned null
+//       SILENTLY, falling through to the raw structural wall (the exact
+//       "wrong-context wall" class Bug 3's generalVerbTeach was built to
+//       close for "remember margo eats ribs", re-escaping through a
+//       combination that fix's own scope doesn't cover). Now: an explicit
+//       "remember/note/…"-wrapped sentence always gets SOME honest decline,
+//       never silence, even when nothing here can actually store it.
+//       Sibling finding, NOT fixed (a genuine ceiling): negated property
+//       assertions ("the logger module is NOT deprecated") aren't a
+//       supported shape anywhere in tmct's closed grammar — declines with
+//       the existing generic ACE-miss message (a real decline, just not a
+//       tailored one); extending negation support is a grammar feature, not
+//       a routing fix. Also noted, out of THIS tier's scope: "is TaskController
+//       a Controller" (a bare class-inheritance existence check against the
+//       GRAPH, not memory) has no structural reader either — a real gap, but
+//       Tier 3/4 territory (structural/compositional), not Tier 5.
+//   T10 "what do you know about the last commit" (nothing in memory, the
+//       sentence doesn't fit ask.mjs's own grammar either) fell to the raw
+//       wall — needs the SAME teach-offer treatment as "what is X" (T5), but
+//       "what do you know about X" is inherently a memory question so it
+//       skips T5's resolveEntity(graph) gate (no better graph-side answer to
+//       defer to). Extracted the shared phrasing into unknownVocabTermOffer()
+//       so T5 and T10 can never disagree on wording. Found + fixed a SECOND
+//       gap alongside while testing this: teaching the offer's own answer
+//       through factAnswer's normal return contract pre-empted runTurn's
+//       wall-SHORTENING pass (lane 5), leaving the full unshortened grammar
+//       cheat-sheet standing under the offer — moved to a late, runTurn-level
+//       addition instead (mirroring T5's own placement) so shortening still
+//       applies first. Also widened TEACH_PROPERTY_RE to accept past-tense
+//       "was"/"were" alongside "is"/"are" (a sibling of Bug A's had->have
+//       bridge for general-verb facts) — "remember that the last commit WAS
+//       risky" reads back as a present-tense property fact, found live while
+//       building this conversation's own teach step.
+//
 // Driven against the SHIPPED examples/mini-webapp graph via `ephemeral: true`
 // (chat.mjs's createSession) — same mechanism test/chatflow-tier4.test.mjs
 // relies on: reads the real graph, writes session/provenance state to a
@@ -339,4 +380,71 @@ test("tier5/T8's empty-memory special-case never pre-empts a DIFFERENT, more spe
   const turns = await driveSession(["is a zebra a mammal"]);
   assert.match(turns[0].answer, WALL);
   assert.doesNotMatch(turns[0].answer, /teach me directly/);
+});
+
+// ---- CYCLE 3 ----
+
+test("tier5/two facts about the same subject list together; 'what else' honestly says there's nothing more (compat, already flowed)", async () => {
+  const queries = [
+    "remember that the logger module is deprecated",
+    "remember that the logger module is slow",
+    "what do you know about the logger",
+    "what else is the logger",
+  ];
+  const turns = await driveSession(queries);
+  assertNeverBareWall(turns, queries);
+  assert.match(turns[2].answer, /2 remembered facts about the logger:\n\s+you told me: logger module is deprecated.*\n\s+you told me: logger module is slow/);
+  assert.match(turns[3].answer, /^That's everything I know about "the logger"/);
+});
+
+test("tier5/a quantified-subject teach with a non-copula verb gets an honest decline, never a silent wrong-context wall (T9 fix)", async () => {
+  const turns = await driveSession(["remember that every controller needs review"]);
+  assert.doesNotMatch(turns[0].answer, WALL, "never the raw structural wall — the sentence explicitly signaled teach-intent");
+  assert.match(turns[0].answer, /^I couldn't store that —/);
+});
+
+test("tier5/genuine ceiling (not fixed): a negated property assertion has no supported shape, but still declines with a real message, never a bare wall", async () => {
+  const turns = await driveSession([
+    "remember that the logger module is deprecated",
+    "remember that the logger module is not deprecated",
+  ]);
+  assertNeverBareWall(turns, [
+    "remember that the logger module is deprecated",
+    "remember that the logger module is not deprecated",
+  ]);
+  // an honest ACE-grammar decline (negation isn't a supported teach shape
+  // anywhere in tmct) — never a bare wall, and never silently overwriting
+  // the ALREADY-taught (non-negated) fact from turn 0.
+  assert.match(turns[1].answer, /^I couldn't store that —/);
+});
+
+test("tier5/'what do you know about X' offers to teach when genuinely unknown everywhere, and past-tense 'was' teaches a property fact too (T10 fix)", async () => {
+  const queries = [
+    "what do you know about the last commit",
+    "remember that the last commit was risky",
+    "was the last commit risky",
+    "what do you know about the last commit",
+  ];
+  const turns = await driveSession(queries);
+  assertNeverBareWall(turns, queries);
+  assert.match(turns[0].answer, /I don't know "last commit" yet — teach me directly, e\.g\. "remember last commit is a <thing>"\./);
+  // past-tense "was" reads back as a present-tense property fact ("...is
+  // risky"), the same normalization Bug A's had->have bridge already does
+  // for general-verb facts.
+  assert.match(turns[1].answer, /^noted — remembered: last commit is risky/);
+  assert.match(turns[2].answer, /^yes — you told me: last commit is risky/);
+  assert.match(turns[3].answer, /1 remembered fact about last commit:\n\s+you told me: last commit is risky/);
+});
+
+test("tier5/T10's teach-offer never breaks the wall-shortening pass on a repeated miss (compat guard)", async () => {
+  // A genuinely unrelated "what do you know about X" miss must still get the
+  // SAME short, tailored wall (lane 5) as a bare structural miss would — the
+  // teach-offer is appended AFTER shortening, never instead of it (found live:
+  // an earlier attempt at this fix routed the offer through factAnswer's
+  // normal contract, which pre-empted shortening and left the FULL unshortened
+  // grammar cheat-sheet standing under the offer).
+  const turns = await driveSession(["what do you know about giraffes"]);
+  assertNeverBareWall(turns, ["what do you know about giraffes"]);
+  assert.doesNotMatch(turns[0].answer, /which <functions\|classes\|modules>/, "the wall is the SHORT tailored one, not the full cheat-sheet");
+  assert.match(turns[0].answer, /I don't know "giraffes" yet — teach me directly/);
 });

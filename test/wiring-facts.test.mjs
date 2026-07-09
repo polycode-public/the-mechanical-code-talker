@@ -343,13 +343,25 @@ test("cax-sco/scm-sco chase: a chain that ISN'T there stays an honest miss — n
 test("W4: no-fact questions stay byte-unchanged honest misses", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-w4-nofact-"));
   try {
-    for (const q of ["is a zebra a mammal", "what do you know about giraffes"]) {
-      const withMemory = await runTurn(q, { config: CONFIG, memoryDir: dir });
-      const bare = await runTurn(q, { config: CONFIG });
-      assert.equal(withMemory.answer, bare.answer, `"${q}" unchanged`);
-      assert.equal(withMemory.record.miss, true);
-      assert.notEqual(withMemory.record.via, "fact");
-    }
+    // "is a zebra a mammal" (ISA_ASK_RE's own territory) is genuinely
+    // untouched by memory either way.
+    const withMemory1 = await runTurn("is a zebra a mammal", { config: CONFIG, memoryDir: dir });
+    const bare1 = await runTurn("is a zebra a mammal", { config: CONFIG });
+    assert.equal(withMemory1.answer, bare1.answer, "\"is a zebra a mammal\" unchanged");
+    assert.equal(withMemory1.record.miss, true);
+    assert.notEqual(withMemory1.record.via, "fact");
+
+    // "what do you know about giraffes" — Tier-5 playtest fix (cycle 3):
+    // genuinely nothing about "giraffes" anywhere in memory now gets a
+    // TEACH-OFFER appended (never replacing the wall), only when memoryDir
+    // exists — this is a deliberate divergence from `bare`, unlike the
+    // zebra case above, which no lane in this file touches at all.
+    const withMemory2 = await runTurn("what do you know about giraffes", { config: CONFIG, memoryDir: dir });
+    const bare2 = await runTurn("what do you know about giraffes", { config: CONFIG });
+    assert.equal(withMemory2.answer.split("\n")[0], bare2.answer.split("\n")[0], "the wall text itself is unchanged");
+    assert.match(withMemory2.answer, /I don't know "giraffes" yet — teach me directly/);
+    assert.doesNotMatch(bare2.answer, /teach me directly/, "no memoryDir -> no teach-offer (nowhere to store it)");
+    assert.equal(withMemory2.record.miss, true);
   } finally {
     clearCache();
     await rm(dir, { recursive: true, force: true });

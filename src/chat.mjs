@@ -1336,8 +1336,17 @@ const OWNS_PASSIVE_TEACH_RE = /^(.+?)\s+(?:is|are|was|were)\s+owned\s+by\s+([A-Z
 /** "<X> is <adjective>" — the property teach payload (wrapper-REQUIRED): a lazy
  *  subject and a single bare complement word. Never matches the "is a <noun>"
  *  membership shape (that stays the ACE grammar's), so "remember that cache is
- *  a store" still lands as rdfs:subClassOf, not a property. */
-const TEACH_PROPERTY_RE = /^(?:every\s+|each\s+|all\s+|the\s+)?(.+?)\s+(?:is|are)\s+(?!an?\b|the\b)([A-Za-z][\w-]*)$/i;
+ *  a store" still lands as rdfs:subClassOf, not a property. "was"/"were" join
+ *  "is"/"are" (Tier-5 playtest fix, cycle 3, sibling of Bug A's had->have
+ *  bridge for general-verb facts): "remember that the last commit was risky"
+ *  reads back as a present-tense property fact ("...is risky") the same way a
+ *  general-verb "had" fact already reads back as "has" — properties are
+ *  timeless facts in this store, not tensed events. Safe to widen here
+ *  (unlike the entry gates further up that decide whether `payload` even
+ *  reaches this match at all): this path only runs on an explicit
+ *  "remember/note/…"-WRAPPED sentence, never a bare one, so there's no real
+ *  question-shape ("was X Y?") this could ever misfire on. */
+const TEACH_PROPERTY_RE = /^(?:every\s+|each\s+|all\s+|the\s+)?(.+?)\s+(?:is|are|was|were)\s+(?!an?\b|the\b)([A-Za-z][\w-]*)$/i;
 
 /** The teach lane's provenance tag — mirrors grammar/assert.mjs's provenanceTag
  *  shape under a distinct "teach:" family, so a taught fact is auditable apart
@@ -1819,7 +1828,28 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
   let payload = null;
   if (wrapped && /\b(?:is|are)\b/i.test(wrapped)) payload = wrapped;
   else if (BARE_DECLARATIVE_RE.test(raw) && !QUESTION_LEAD_RE.test(raw)) payload = raw;
-  if (!payload) return null;
+  if (!payload) {
+    // Tier-5 playtest fix (cycle 3), found live: "remember that every
+    // controller needs review" — a QUANTIFIED subject ("every X", declined
+    // by generalVerbTeach's own GENERAL_VERB_DETERMINER_RE, by design — see
+    // its docblock on the ambiguity risk of a free-form multi-word subject)
+    // combined with a non-copula verb ("needs", not is/are/owns/maintains)
+    // fits NONE of the recognizers above, so `payload` stays null and this
+    // used to return null SILENTLY — the exact "wrong-context wall" bug
+    // class Bug 3's generalVerbTeach mechanism was built to close for
+    // "remember margo eats ribs", re-escaping here through a combination
+    // that mechanism's own deliberate subject-shape restriction doesn't
+    // cover. An explicit "remember/note/…"-wrapped sentence is an
+    // UNAMBIGUOUS teach-intent signal — falling through to the ordinary
+    // structural-query wall is a wrong-context reply even when nothing here
+    // can actually STORE the fact; if `wrapped` stood, keep going with it as
+    // the payload so the residue-detection/final-decline logic below still
+    // runs (never a guess at storing it, just never silence either). A bare,
+    // unwrapped sentence that also fits no shape has no such signal — return
+    // null and let the ordinary cascade decide, unchanged.
+    if (!wrapped) return null;
+    payload = wrapped;
+  }
   // Try to store it (a live session provides the write target). assertTurn returns
   // the "noted — remembered …" confirmation or null (grammar miss / unknown words).
   if (memoryDir) {
@@ -2932,6 +2962,14 @@ async function factAnswer(memoryDir, query, envelope, miss) {
         hits = rows.filter((f) => overlaps(f.subject) || overlaps(f.object));
       }
     }
+    // A genuinely empty result here is a real miss (Tier-5 playtest cycle 3:
+    // "what do you know about the last commit" needs a TEACH-OFFER, not a
+    // bare wall — added as a LATE runTurn-level addition, below, alongside
+    // the sibling "what is X" offer, rather than returned from here: an
+    // early return through this function's normal contract would pre-empt
+    // runTurn's own wall-shortening pass (shortMissHint/lane 5), leaving the
+    // FULL unshortened grammar cheat-sheet standing under the offer instead
+    // of the nicer tailored one-liner — found live while adding this fix).
     if (!hits.length) return null;
     // echo the STORED spelling ("caches" asked → "cache" known), never a guess
     const literalHit = hits.find((f) => variants.has(f.subject) || variants.has(f.object));
@@ -3828,6 +3866,29 @@ function metaTermOf(query, envelope) {
     || q.match(/^what\s+(?:does|do)\s+(?:an?\s+)?(.+?)\s+means?[?.!\s]*$/i)
     || q.match(/^define\s+(?:an?\s+)?(.+?)[?.!\s]*$/i);
   return m ? stripTrailingScopeFiller(m[1].trim()) : null;
+}
+
+/** The TEACH-OFFER line for a term that's genuinely unknown everywhere (Tier-5
+ *  playtest fix): "I don't know 'X' yet — teach me directly, e.g. …". The
+ *  concrete example is worded by WORD COUNT, verified in-state
+ *  (SKILL_CHAT_PLAYTEST.md §4's own rule) — an unwrapped bare declarative
+ *  only stores for a single-token subject (BARE_DECLARATIVE_RE's own scope);
+ *  the wrapped "remember X is a Y" form tolerates up to a two-token subject
+ *  (unknownSubjectFallback's UNKNOWN_SUBJECT_RE). A 3+-word term fits
+ *  neither shape — never offer a concrete example that would itself fail,
+ *  the plain nudge to teach it still guides, honestly. Shared by runTurn's
+ *  own "what is X" miss nudge and factAnswer's "what do you know about X"
+ *  miss nudge, below, so the two can never disagree on wording. */
+function unknownVocabTermOffer(term) {
+  const article = /^[aeiou]/i.test(term) ? "an" : "a";
+  const words = term.trim().split(/\s+/);
+  const remember = `remember ${term} is ${article} <thing>`;
+  const example = words.length === 1
+    ? `"${term} is ${article} <thing>" or "${remember}"`
+    : words.length === 2
+      ? `"${remember}"`
+      : null;
+  return `I don't know "${term}" yet — teach me directly${example ? `, e.g. ${example}` : ` (e.g. "remember <name> is ${article} <thing>")`}.`;
 }
 
 /** The curated SEON definition to PREFER for a "what is a <lexicon term>", or null.
@@ -4815,34 +4876,29 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // on the miss wording elsewhere stays intact; this is purely additive, the
   // same discipline the corpus aside (W5) and empty-graph polish above use).
   if (recordMiss && (via === "composed" || via === "miss") && memoryDir) {
-    const offerTerm = metaTermOf(query, envelope);
+    // Tier-5 playtest fix (cycle 3): "what do you know about X" is its OWN
+    // sibling shape — checked FIRST (and, unlike metaTermOf below, without a
+    // resolveEntity(graph) gate): it's inherently a MEMORY question, not a
+    // graph-structure one, so "nothing yet, teach me" is appropriate even
+    // when X also happens to be a real graph entity — there's no genuinely
+    // BETTER answer path to defer to the way "what is X" has (the concept
+    // force, schema docs, …). Found live: "what do you know about the last
+    // commit" (nothing in memory, and the whole sentence never fits ask.mjs's
+    // grammar either) fell to the raw wall, unguided.
+    const knowAboutTerm = String(query).trim().match(KNOW_ABOUT_RE)?.[1]?.trim();
+    const offerTerm = knowAboutTerm || metaTermOf(query, envelope);
     if (offerTerm) {
       let normFactTerm;
       try { ({ normFactTerm } = await import("./memory/core.mjs")); } catch { normFactTerm = null; }
       if (normFactTerm) {
-        const ent = await resolveEntity(graph, offerTerm);
+        const cleanTerm = normFactTerm(offerTerm);
+        const ent = knowAboutTerm ? null : await resolveEntity(graph, offerTerm);
         if (!ent) {
           const variants = factTermVariants(normFactTerm, offerTerm);
           const known = (await memoryFacts(memoryDir)).some((f) => variants.has(f.subject) || variants.has(f.object));
           if (!known) {
-            const article = /^[aeiou]/i.test(offerTerm) ? "an" : "a";
-            // Verified in-state (SKILL_CHAT_PLAYTEST.md §4's own "verify every
-            // offered example" rule — an unwrapped bare declarative only
-            // stores for a SINGLE-token subject, BARE_DECLARATIVE_RE's own
-            // scope; the wrapped "remember X is a Y" form tolerates up to a
-            // TWO-token subject (unknownSubjectFallback's UNKNOWN_SUBJECT_RE,
-            // widened this session). A 3+-word term ("vulcan gizmo repair kit")
-            // fits neither shape — never offer a concrete example that would
-            // itself fail; the plain nudge to teach it still guides, honestly.
-            const words = offerTerm.trim().split(/\s+/);
-            const remember = `remember ${offerTerm} is ${article} <thing>`;
-            const example = words.length === 1
-              ? `"${offerTerm} is ${article} <thing>" or "${remember}"`
-              : words.length === 2
-                ? `"${remember}"`
-                : null;
-            answer = `${answer}\nI don't know "${offerTerm}" yet — teach me directly${example ? `, e.g. ${example}` : ` (e.g. "remember <name> is ${article} <thing>")`}.`;
-            note(trace, `intermediate: TEACH-OFFER — "${offerTerm}" is unknown to both the graph and memory, so the miss got an offer to learn appended`);
+            answer = `${answer}\n${unknownVocabTermOffer(cleanTerm)}`;
+            note(trace, `intermediate: TEACH-OFFER — "${cleanTerm}" is unknown to both the graph and memory, so the miss got an offer to learn appended`);
           }
         }
       }
