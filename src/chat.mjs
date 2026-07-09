@@ -1320,6 +1320,18 @@ const HAS_A_PREDICATE = "mgx:hasA";
  *  additionally requires a Capitalized name (see teachLane), so ordinary
  *  lowercase prose never lands a fact without the explicit wrapper. */
 const OWNS_TEACH_RE = /^([A-Za-z][\w'-]*(?:\s+[A-Z][\w'-]*)?)\s+(?:owns|maintains)\s+(.+?)[.!?]*$/;
+/** "<X> is owned by <Name>" — the PASSIVE ownership teach declarative
+ *  (Tier-5 playtest fix, cycle 2, found live): at least as natural a way to
+ *  state ownership as the active "<Name> owns <X>" above ("TaskController is
+ *  owned by sam" WALLED entirely — "is" put it in generalVerbTeach's own
+ *  GENERAL_VERB_ANYWHERE_EXCLUDE_RE stand-down territory, but no frame in
+ *  this lane actually recognized the passive shape, so nothing ever claimed
+ *  it). <X> (the owned thing) is a lazy multi-word capture, same discipline
+ *  OWNS_TEACH_RE's own object got widened to; <Name> (the owner) mirrors
+ *  OWNS_TEACH_RE's own 1-2-token name capture. Stores the SAME
+ *  OWNED_BY_PREDICATE shape (subject=thing, object=owner), so "who owns X" /
+ *  the yes/no readers below answer either phrasing identically. */
+const OWNS_PASSIVE_TEACH_RE = /^(.+?)\s+(?:is|are|was|were)\s+owned\s+by\s+([A-Za-z][\w'-]*(?:\s+[A-Z][\w'-]*)?)[.!?]*$/i;
 
 /** "<X> is <adjective>" — the property teach payload (wrapper-REQUIRED): a lazy
  *  subject and a single bare complement word. Never matches the "is a <noun>"
@@ -1720,6 +1732,18 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
     });
     if (stored) return stored;
   }
+  // PASSIVE ownership — "<X> is owned by <Name>" (Tier-5 playtest, cycle 2).
+  // Same bare-form gate as the active shape just above: a Capitalized owner
+  // name AND no interrogative lead, so "is TaskController owned by anyone"
+  // (a genuine yes/no QUESTION, handled by factReadBack instead) never lands
+  // a bogus fact here.
+  const ownPassive = ownSrc.match(OWNS_PASSIVE_TEACH_RE);
+  if (ownPassive && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && (wrapped || /^[A-Z]/.test(ownPassive[2]))) {
+    const stored = await teachFact(memoryDir, sessionId, {
+      subject: ownPassive[1], predicate: OWNED_BY_PREDICATE, object: ownPassive[2],
+    });
+    if (stored) return stored;
+  }
 
   // "some Xs are Ys" / "a few Xs are Ys" (Feature A) — the plural class-
   // membership quantifier shape. ACE has no quantifier-phrase pattern at all
@@ -1744,6 +1768,33 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
         subject, predicate: SUBCLASS_PREDICATE, object, quantifier,
       });
       if (stored) return stored;
+    } else {
+      // Tier-5 playtest fix (cycle 2), found live: "remember that some
+      // functions are risky" — Y ("risky") is not a lexicon NOUN, so the
+      // subclass path just above correctly declines it (SOME_A_FEW_RE is
+      // subclass-only, by design — "risky" isn't even in the closed
+      // lexicon at all, as either noun or adjective, so gating this decline
+      // on "is Y a known adjective" missed the actual case entirely on the
+      // first attempt at this fix). Without this guard, the sentence fell
+      // through to unknownSubjectFallback/TEACH_PROPERTY_RE below, which DO
+      // tolerate a multi-word subject with NO vocabulary check on the
+      // complement at all — silently mis-teaching the LITERAL 2-word string
+      // "some functions" as if it were one proper-noun subject ("noted —
+      // remembered: some functions is risky", the quantifier word baked
+      // wrongly into the subject and a subject/verb agreement error to
+      // boot), a fact "how many functions are risky" could never sensibly
+      // read back either (HOW_MANY_ARE_RE's own reader only ever looks for
+      // the SUBCLASS_PREDICATE shape this path would have stored, not this
+      // one). A quantified PROPERTY claim isn't a supported shape yet (only
+      // a quantified SUBCLASS claim is) — decline honestly here instead of
+      // silently mis-teaching, rather than let a later, less-specific frame
+      // guess a wrong split.
+      return {
+        text: `I can only remember a quantified fact as "${quantifier} ${someMatch[2]} are <a kind of thing>" (like "${quantifier} bugs are issues") — `
+          + `a quantified claim about a PROPERTY ("${quantifier} ${someMatch[2]} are ${object}") isn't a shape I can store yet. `
+          + `I can remember "${someMatch[2]} are ${object}" for one specific ${subject}, though — try naming it directly.`,
+        via: "teach-miss", miss: true,
+      };
     }
   }
 
@@ -3028,6 +3079,13 @@ const WHO_OWNS_RE = /^who\s+(?:owns|maintains)\s+(.+?)[?.!\s]*$/i;
  *  infinitive after do-support ("does X own Y", never "does X owns Y") mirrors
  *  GENERAL_VERB_YESNO_RE's own do-support convention. */
 const OWNS_YESNO_RE = /^(?:does|did)\s+([\w'-]+)\s+(?:owns?|maintains?)\s+(.+?)[?.!\s]*$/i;
+/** "is/are/was/were <X> owned by <Name>" — the PASSIVE yes/no ownership
+ *  claim, sibling of OWNS_YESNO_RE just above and OWNS_PASSIVE_TEACH_RE
+ *  (chat.mjs's teach lane) — same mgx:ownedBy facts, matched BEFORE
+ *  IS_ADJECTIVE_YESNO_RE below (which would otherwise also match this shape,
+ *  backtracking "owned by" into its own subject capture and "<Name>" into its
+ *  adjective slot, silently declining rather than answering). */
+const OWNS_PASSIVE_YESNO_RE = /^(?:is|are|was|were)\s+(.+?)\s+owned\s+by\s+([A-Za-z][\w'-]*(?:\s+[A-Z][\w'-]*)?)[?.!\s]*$/i;
 /** "is/are/was/were <X> <adjective>" — a yes/no claim over a taught
  *  mgx:hasProperty fact (Tier-5 playtest fix). Deliberately has NO marker
  *  between subject and complement — "a"/"an"/"a kind of"/"a type of" is
@@ -3044,6 +3102,17 @@ const OWNS_YESNO_RE = /^(?:does|did)\s+([\w'-]+)\s+(?:owns?|maintains?)\s+(.+?)[
  *  cascade/orientation nudge that already handles it. */
 const IS_ADJECTIVE_YESNO_RE = /^(?:is|are|was|were)\s+(.+?)\s+([A-Za-z][\w-]*)[?.!\s]*$/i;
 const IS_ADJECTIVE_PRONOUN_RE = /^(?:it|this|that)$/i;
+/** The TEACH-OFFER for a subject IS_ADJECTIVE_YESNO_RE resolved but has no
+ *  fact about at all (Tier-5 playtest, cycle 2) — the offered "remember that
+ *  X is Y" phrasing is verified in-state: TEACH_PROPERTY_RE's own subject
+ *  capture is unbounded multi-word with no lexicon gate on the complement, so
+ *  this always actually stores, unlike the bare unwrapped form (which only
+ *  reaches TEACH_PROPERTY_RE via BARE_DECLARATIVE_RE's single-token-subject
+ *  restriction and would fail here). */
+const unknownAdjectiveOffer = (subject, adjective) => ({
+  text: `I don't know anything about "${subject}" yet — teach me directly, e.g. "remember that ${subject.toLowerCase()} is ${adjective}".`,
+  replace: true,
+});
 /** WHOLE-STORE recall (CHATBENCH_006 lever 3): "what did i tell you [last time]",
  *  "what facts do you know", "what do you remember" — list EVERY remembered fact
  *  (no subject/object term to filter on), cited, higher-trust first. The multi-turn
@@ -3115,7 +3184,40 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
   try { ({ normFactTerm } = await import("./memory/core.mjs")); } catch { return null; }
   const q = String(query).trim();
   const rows = await factRows(memoryDir);
-  if (!rows.length) return null;
+  if (!rows.length) {
+    // Tier-5 playtest fix (cycle 2), found live: with TRULY zero facts
+    // remembered yet (a fresh session, nothing taught at all), the early
+    // bail-out below skipped even IS_ADJECTIVE_YESNO_RE's own "subject
+    // completely unknown" TEACH-OFFER further down in this function — "is
+    // the checkout flow deprecated" as someone's genuinely FIRST question
+    // fell to the raw structural wall, unguided. Special-cased here (ahead
+    // of the general empty-memory bail-out every other lane in this function
+    // still relies on) rather than removing the bail-out outright.
+    //
+    // IS_ADJECTIVE_YESNO_RE's own backtracking (no vocabulary restriction on
+    // either capture) means it ALSO syntactically matches shapes that are
+    // NOT a property claim at all — "is a zebra a mammal" (ISA_ASK_RE's own
+    // territory, tried first in the non-empty-rows path below, so never
+    // reached here) and "is there anything bigger" (an existence/staccato-
+    // comparative shape a LATER lane elsewhere in runTurn owns and answers
+    // better than a teach-offer ever could) both regressed real, pinned
+    // tests on first attempt at this fix — caught by running the full suite,
+    // not just the live playtest transcript. Excluded explicitly: ISA_ASK_RE
+    // matches take the SAME priority here they get in the non-empty-rows
+    // path below, and a leading "there" is existential, never a real named
+    // subject a property claim would name.
+    if (!ISA_ASK_RE.test(q)) {
+      const emptyIsAdj = q.match(IS_ADJECTIVE_YESNO_RE);
+      if (emptyIsAdj) {
+        const rawSubject = emptyIsAdj[1].trim();
+        const subject = IS_ADJECTIVE_PRONOUN_RE.test(rawSubject) ? (focusLabel || null) : rawSubject;
+        if (subject && !/^there\b/i.test(subject)) {
+          return unknownAdjectiveOffer(subject, emptyIsAdj[2].trim().toLowerCase());
+        }
+      }
+    }
+    return null;
+  }
   const isa = rows.filter((f) => ISA_PREDICATES.has(f.predicate));
   const byTrust = (a, b) => b.trust - a.trust;
   const renderMany = (hits) => {
@@ -3248,6 +3350,29 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
     };
   }
 
+  // (a2b-ii) PASSIVE ownership yes/no — "is/are/was/were <X> owned by <Name>"
+  // (Tier-5 playtest, cycle 2): same OWNED_BY_PREDICATE facts as (a2b) above,
+  // just the passive phrasing — "is TaskController owned by sam" found live
+  // to WALL entirely (no recognizer at all, teach OR read, for the passive
+  // shape) even right after teaching that exact fact via OWNS_PASSIVE_TEACH_RE.
+  // Checked BEFORE (a2c)'s adjective reader, which would otherwise also match
+  // this shape (backtracking "owned by" into its subject and the owner name
+  // into its adjective slot) and silently decline instead of answering.
+  const ownsPassiveYN = q.match(OWNS_PASSIVE_YESNO_RE);
+  if (ownsPassiveYN) {
+    const [, thingRaw, ownerRaw] = ownsPassiveYN;
+    const thingVariants = factTermVariants(normFactTerm, thingRaw.replace(/^an?\s+/i, "").trim());
+    const ownerVariants = factTermVariants(normFactTerm, ownerRaw.trim());
+    const hit = rows
+      .filter((f) => f.predicate === OWNED_BY_PREDICATE && thingVariants.has(f.subject) && ownerVariants.has(f.object))
+      .sort(byTrust)[0];
+    if (hit) return { text: `yes — ${renderFactLine(hit)}`, replace: true };
+    return {
+      text: `no — no remembered fact says ${thingRaw.trim().toLowerCase()} is owned by ${ownerRaw.trim()}.`,
+      replace: true,
+    };
+  }
+
   // (a2c) PROPERTY yes/no — "is/are/was/were <X> <adjective>": Tier-5 playtest
   // fix, found live — "remember that the logger module is deprecated" taught a
   // real mgx:hasProperty fact, but there was no direct-question reader for it
@@ -3295,6 +3420,21 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
       if (rows.some(subjectMatch)) {
         return { text: `I don't have a fact saying ${subject.toLowerCase()} is ${adjective}.`, replace: true };
       }
+      // Tier-5 playtest fix (cycle 2), found live: "is the checkout flow
+      // deprecated" as a genuinely FIRST-EVER question about a subject tmct
+      // has never heard of (no fact at all, not even under a different
+      // property) fell through to the raw structural wall, unguided — the
+      // exact "honest 'I don't know that yet' offers to learn" case
+      // SKILL_CHAT_PLAYTEST.md's Tier 5 (§3) itself names. The offered
+      // phrasing is the SAME verified "remember that X is Y" wrapped form
+      // TEACH_PROPERTY_RE actually accepts (arbitrary-length subject, no
+      // lexicon gate on the complement) — never the bare unwrapped form,
+      // which TEACH_PROPERTY_RE only reaches via BARE_DECLARATIVE_RE's own
+      // single-token-subject restriction and would fail for a multi-word
+      // subject like this one. Same helper (unknownAdjectiveOffer) the
+      // empty-memory special-case above this function's own rows.length
+      // bail-out reuses, so the two paths can never disagree on wording.
+      return unknownAdjectiveOffer(subject, adjective);
     }
   }
 

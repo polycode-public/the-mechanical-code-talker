@@ -80,6 +80,47 @@
 //       T3-sibling) "remember" form, 3+ words offers no unverifiable concrete
 //       example at all, only the honest general nudge.
 //
+// CYCLE 2 (this pass found real fixable dead-ends in cycle 1, so it ratcheted
+// per SKILL_CHAT_PLAYTEST.md §1 Step 7): three more dead-ends, all sibling
+// gaps of the cycle-1 fixes above, found from fresh entry points (passive
+// ownership phrasing, a quantifier+property mix, and a genuinely-first-ever
+// question with zero facts in memory at all):
+//
+//   T6  "<X> is owned by <Name>" (the PASSIVE ownership phrasing — at least
+//       as natural as the active "<Name> owns <X>" T3 fixed) had NO
+//       recognizer at all, teach or read: "TaskController is owned by sam"
+//       WALLED entirely (generalVerbTeach stands down on "is" appearing
+//       anywhere, and no frame recognized the passive shape). Added
+//       OWNS_PASSIVE_TEACH_RE (teach) and OWNS_PASSIVE_YESNO_RE (read,
+//       matched BEFORE IS_ADJECTIVE_YESNO_RE — which would otherwise ALSO
+//       backtrack-match this shape and silently decline) — both store/read
+//       the SAME OWNED_BY_PREDICATE shape T3's active forms use, so "who
+//       owns X" answers either phrasing identically.
+//   T7  "some functions are risky" — Y ("risky") isn't a lexicon NOUN, so
+//       SOME_A_FEW_RE's own subclass-only path correctly declined it, but
+//       the sentence then fell through to TEACH_PROPERTY_RE (which has NO
+//       vocabulary gate on its complement at all), silently mis-teaching the
+//       LITERAL 2-word string "some functions" as a proper-noun subject
+//       ("noted — remembered: some functions is risky" — a quantifier word
+//       baked wrongly into the subject, plus a subject/verb agreement
+//       error). A quantified PROPERTY claim isn't a supported shape (only a
+//       quantified SUBCLASS claim is) — now honestly declines with a
+//       specific, guiding explanation instead of silently mis-teaching.
+//   T8  "is the checkout flow deprecated" as someone's genuinely FIRST
+//       question (zero facts in memory at all yet) fell to the raw
+//       structural wall — the exact "honest 'I don't know that yet' offers
+//       to learn" case Tier 5 (§3) itself names, but IS_ADJECTIVE_YESNO_RE's
+//       own "subject completely unknown" TEACH-OFFER (T4) never got a
+//       chance, because factReadBack's `!rows.length` fast-path bails out
+//       before that code even runs when memory is TRULY empty. Special-
+//       cased ahead of that bail-out — narrowly: excludes ISA_ASK_RE matches
+//       and a leading "there" (existential, not a named subject), found live
+//       via two real regressions on the FIRST attempt at this fix ("is a
+//       zebra a mammal" and "is there anything bigger" both syntactically
+//       match IS_ADJECTIVE_YESNO_RE's unrestricted backtracking too, and
+//       both already have a correct, MORE SPECIFIC answer elsewhere that an
+//       unguarded teach-offer would have silently pre-empted).
+//
 // Driven against the SHIPPED examples/mini-webapp graph via `ephemeral: true`
 // (chat.mjs's createSession) — same mechanism test/chatflow-tier4.test.mjs
 // relies on: reads the real graph, writes session/provenance state to a
@@ -233,4 +274,69 @@ test("tier5/a single-word unknown term's teach-offer still names BOTH the bare a
   const turns = await driveSession(["what is a widgetzz"]);
   assertNeverBareWall(turns, ["what is a widgetzz"]);
   assert.match(turns[0].answer, /I don't know "widgetzz" yet — teach me directly, e\.g\. "widgetzz is a <thing>" or "remember widgetzz is a <thing>"\./);
+});
+
+// ---- CYCLE 2 ----
+
+test("tier5/passive ownership teach + yes/no + who-owns read-back, alongside the active form (T6 fix)", async () => {
+  const queries = [
+    "remember that TaskController is owned by sam",
+    "who owns TaskController",
+    "is TaskController owned by sam",
+    "is TaskController owned by margo",
+    "does sam own TaskController",
+  ];
+  const turns = await driveSession(queries);
+  assertNeverBareWall(turns, queries);
+  assert.match(turns[0].answer, /^noted — remembered: taskcontroller is owned by sam/);
+  assert.match(turns[1].answer, /you told me: taskcontroller is owned by sam/);
+  assert.match(turns[2].answer, /^yes — you told me: taskcontroller is owned by sam/);
+  assert.match(turns[3].answer, /^no — no remembered fact says taskcontroller is owned by margo\./);
+  // the ACTIVE yes/no form (T3) reads back the SAME fact the passive form taught
+  assert.match(turns[4].answer, /^yes — you told me: taskcontroller is owned by sam/);
+});
+
+test("tier5/a quantified PROPERTY claim ('some Xs are Y-adjective') declines honestly instead of mis-teaching a garbled fact (T7 fix)", async () => {
+  const queries = [
+    "remember that some functions are risky",
+    "remember that some bugs are issues",
+    "remember that saveStore is risky",
+    "is saveStore risky",
+  ];
+  const turns = await driveSession(queries);
+  assertNeverBareWall(turns, queries);
+  // never the pre-fix mis-teach ("noted — remembered: some functions is risky")
+  assert.doesNotMatch(turns[0].answer, /^noted —/);
+  assert.match(turns[0].answer, /isn't a shape I can store yet/);
+  // the quantified SUBCLASS shape (an object that IS a lexicon noun) is unaffected
+  assert.match(turns[1].answer, /^noted — remembered: bug is a kind of issue/);
+  // naming ONE specific entity (never a quantifier) still teaches + reads back
+  // cleanly, exactly as the decline message itself suggests
+  assert.match(turns[2].answer, /^noted — remembered: savestore is risky/);
+  assert.match(turns[3].answer, /^yes — you told me: savestore is risky/);
+});
+
+test("tier5/a genuinely first-ever 'is X <adjective>' question (zero facts in memory) offers to learn, never a bare wall (T8 fix)", async () => {
+  const queries = [
+    "is the checkout flow deprecated",
+    "remember that checkout flow is deprecated",
+    "is the checkout flow deprecated",
+  ];
+  const turns = await driveSession(queries);
+  assertNeverBareWall(turns, queries);
+  assert.match(turns[0].answer, /^I don't know anything about "the checkout flow" yet — teach me directly, e\.g\. "remember that the checkout flow is deprecated"\./);
+  assert.match(turns[1].answer, /^noted — remembered: checkout flow is deprecated/);
+  assert.match(turns[2].answer, /^yes — you told me: checkout flow is deprecated/);
+});
+
+test("tier5/T8's empty-memory special-case never pre-empts a DIFFERENT, more specific honest miss (compat guard)", async () => {
+  // "is a zebra a mammal" is ISA_ASK_RE's own territory (a genuine "is a <X> a
+  // <kind>" shape) — IS_ADJECTIVE_YESNO_RE's unrestricted backtracking would
+  // ALSO syntactically match this (subject="a zebra a", adjective="mammal")
+  // with zero facts in memory; T8's own fix explicitly excludes ISA_ASK_RE
+  // matches so the ORIGINAL, correct wall stands, never a confusing teach-offer
+  // about the nonsensical literal fragment "a zebra a".
+  const turns = await driveSession(["is a zebra a mammal"]);
+  assert.match(turns[0].answer, WALL);
+  assert.doesNotMatch(turns[0].answer, /teach me directly/);
 });
