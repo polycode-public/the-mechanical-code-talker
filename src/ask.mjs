@@ -1861,15 +1861,66 @@ export function resolveObject(graph, term, { expectedClass = null } = {}) {
       }
     }
   } else {
-    const termComps = componentSet(t);
+    // Root-cause fix (Tier-2 playtest cycle 9, targeted substring-match sweep):
+    // this raw containment check has no minimum-length floor, so a short
+    // closed-vocabulary word is a near-certain ACCIDENTAL substring of SOME
+    // real label — confirmed empirically against the shipped mini-webapp
+    // fixture: "so"->sendJson, "or"->Store, "a"->Task, "is"->listTasks
+    // (ambiguous), "in"->Logger.info, "on"->sendJson, "at"->createApp,
+    // "to"->Store, all via this exact branch. Cycle 8 patched three of these
+    // ("and"/"also"/"so"/"then"/"now" and bare "it") one word at a time at
+    // individual chat.mjs CALL SITES (STACCATO_LEAKED_CONNECTIVES, the
+    // pronoun-reuse guard) — necessary there because those bugs are about
+    // FOCUS bookkeeping, not resolution per se, but leaving resolveObject
+    // itself unguarded meant every OTHER caller (existence checks, expectedClass
+    // lookups, etc.) stayed exposed to the same trap for every not-yet-hit
+    // short word. Gating the containment check at the same floor tier 5's own
+    // fuzzy pass already uses (`tLc.length >= 4` below) closes it at the
+    // source. A whole-token component match (just below) is unaffected by this
+    // floor — it requires an EXACT path/identifier segment equality, never a
+    // raw substring, so a genuinely short real identifier ("db", "fs") is
+    // still resolvable by literally matching a whole segment.
+    const termComps = [...componentSet(t)];
+    // A SLASHED term's final path segment, extension stripped ("src/nope.mjs"
+    // -> "nope", "cover app/lib/b.mjs" -> "b") — the semantically load-bearing
+    // FILENAME STEM, as opposed to a directory segment or a leaked verb noise
+    // word. Isolated from the actual whitespace-delimited PATH TOKEN (not the
+    // raw multi-word string as a whole) — "app/lib/f.mjs but untested" (a
+    // trailing-noise leak, distinct from the leading-verb-noise shape above)
+    // has no extension at the end of the whole string, so splitting the whole
+    // string would strand "f.mjs but untested" as a bogus non-matching "stem";
+    // finding the one token that itself contains "/" keeps the path term
+    // intact regardless of what noise surrounds it on either side. Only
+    // slash-shaped terms compute this; a bare identifier/multi-word query has
+    // no path structure to anchor on, so it's null and the gate below is a
+    // no-op for those (unaffected — original ANY-overlap behavior).
+    const pathToken = tLc.split(/\s+/).find((tok) => tok.includes("/"));
+    const slashStem = pathToken ? pathToken.split("/").pop().replace(/\.[a-z0-9]+$/, "") : null;
     for (const m of pool) {
       const label = String(m.label || "").toLowerCase();
-      if (label.includes(tLc)) {
+      if (tLc.length >= 4 && label.includes(tLc)) {
         scored.push({ ind: m, score: 1000 - Math.abs(label.length - tLc.length) });
         continue;
       }
-      const overlap = [...termComps].filter((c) => componentSet(m.label).has(c)).length;
-      if (overlap > 0) scored.push({ ind: m, score: overlap * 10 });
+      const labelComps = componentSet(m.label);
+      const overlap = termComps.filter((c) => labelComps.has(c)).length;
+      // For a slashed term, the stem MUST be among the label's own components
+      // — an ANY-overlap match otherwise lets a NONEXISTENT path land on a
+      // real module that merely shares its generic directory/extension
+      // segments ("src", "mjs") with every other module in the pool (found
+      // via the existence recognizer's "is there a class in src/nope.mjs"
+      // scope clause, Tier-2 playtest cycle 9: it ambiguously "matched"
+      // src/core/model.mjs even though no such module exists — the same
+      // accidental-match disease as the short-word substring bug just above,
+      // just triggered by GENERIC components instead of raw containment).
+      // A leaked leading VERB ("cover app/lib/b.mjs", "touch app/lib/f.mjs" —
+      // router-interface.test.mjs's own frozen contract) still resolves: the
+      // stem ("b"/"f") is a real component of the target label even though
+      // "cover"/"touch" themselves never overlap anything, so overlap>0 and
+      // the stem gate both hold.
+      if (overlap > 0 && (!slashStem || labelComps.has(slashStem))) {
+        scored.push({ ind: m, score: overlap * 10 });
+      }
     }
   }
   scored.sort((a, b) => b.score - a.score);
@@ -1890,12 +1941,24 @@ export function resolveObject(graph, term, { expectedClass = null } = {}) {
   // browser `lookupByProseTokens` is an undeclared identifier — without the guard,
   // ANY term reaching this tier threw a ReferenceError in the page instead of
   // rendering the honest miss (a real, previously-untested viewer bug).
-  // DOTTED terms never consult prose: "res.json" word-matches test/res.json.js's
-  // own path tokens, which is the tier-3 phantom-path bug reappearing through a
-  // side door — a dotted term names an identifier, and identifiers resolve by
-  // label (tiers above) or the bounded fuzzy pass below, or they honestly miss.
+  // DOTTED or SLASHED terms never consult prose: "res.json" word-matches
+  // test/res.json.js's own path tokens, which is the tier-3 phantom-path bug
+  // reappearing through a side door — a dotted term names an identifier, and
+  // identifiers resolve by label (tiers above) or the bounded fuzzy pass
+  // below, or they honestly miss. The SAME side door was open for SLASHED
+  // path terms too (Tier-2 playtest cycle 9, existence-recognizer follow-up):
+  // "src/nope.mjs" — a nonexistent module — no longer false-matches tier 3
+  // (the AND-across-components fix just above), but fell through to THIS
+  // prose tier and ambiguously "matched" real modules anyway, because
+  // lookupByProseTokens scores by ANY-token overlap (sum-scored, by design,
+  // for genuine prose ranking) and "src"/"mjs" are near-universal path/
+  // extension tokens shared by every module in the pool — the identical
+  // accidental-match disease, just one tier further down. A slash-shaped term
+  // names a literal path exactly like a dotted term names a literal symbol;
+  // neither is prose, so neither should ever reach the prose fallback.
+  const pathShaped = dotted || tLc.includes("/");
   let proseResult = null;
-  const proseHits = !dotted && typeof lookupByProseTokens === "function"
+  const proseHits = !pathShaped && typeof lookupByProseTokens === "function"
     ? lookupByProseTokens(graph.proseIndex, t).filter((h) => !expectedClass || graph.byId.get(h.id)?.class === expectedClass)
     : [];
   if (proseHits.length) {

@@ -147,6 +147,64 @@ test("resolveObject: no match — honest miss, never a fuzzy guess", () => {
   assert.equal(tier, null);
 });
 
+// ---- resolveObject tier 3: minimum-length floor on the raw containment check
+// (Tier-2 playtest cycle 9, targeted substring-match sweep) ----
+//
+// Cycle 8 found and patched THREE short-word accidental-substring focus-corruption
+// bugs one word at a time, at individual chat.mjs call sites ("and"/"also"/"so"/
+// "then"/"now" via STACCATO_LEAKED_CONNECTIVES, bare "it" via the pronoun-reuse
+// guard). This sweep confirmed the root cause lives in resolveObject's tier-3
+// containment check itself (`label.includes(tLc)`, no minimum-length floor) —
+// EVERY one of these closed-vocabulary words is a genuine accidental substring of
+// a real label in THIS fixture (several via the schema/meta individuals
+// ingestSchemaDocs adds — "imports" contains "or", "defines" contains "in",
+// "Attribute" contains "at"/"but", "touches" contains "to", "Session" contains
+// "on", "src/someOtherFile.mjs" contains "so"/"the", "Base" contains "a") — so
+// fixing it once here, at the source, closes every current AND future short-word
+// variant, not just the ones already found.
+test("resolveObject: a closed-vocabulary word ≤3 chars never wins via raw substring containment, even though it IS an accidental substring of a real label", () => {
+  const graph = buildGraph();
+  for (const w of ["so", "then", "now", "or", "but", "the", "a", "is", "in", "on", "at", "to", "of"]) {
+    const { match, tier } = resolveObject(graph, w);
+    assert.equal(match, null, `"${w}" must stay an honest miss, not a substring guess`);
+    assert.equal(tier, null, `"${w}" must not report a stale tier`);
+  }
+});
+
+test("resolveObject: the SAME containment tier still resolves a real ≥4-char term by substring (the floor doesn't over-reach)", () => {
+  const graph = buildGraph();
+  const { match, tier } = resolveObject(graph, "logging");
+  assert.equal(match.label, "src/logging.mjs");
+  assert.equal(tier, 3);
+});
+
+// ---- resolveObject tier 3: slashed-path terms require the FILENAME STEM, not
+// just any component overlap (Tier-2 playtest cycle 9, existence-recognizer
+// follow-up) ----
+//
+// "is there a class in src/nope.mjs" (a NONEXISTENT module) used to ambiguously
+// "match" a real module purely because both share generic directory/extension
+// components ("app"/"mjs") with every other module in the pool — the identical
+// accidental-match disease as the short-word bug above, one tier's mechanism
+// over (component-overlap rather than raw containment). Fixed by requiring a
+// slashed term's final path segment (extension stripped) to be a genuine
+// component of the matched label — while still tolerating a leaked verb/noise
+// word elsewhere in the term (router-interface.test.mjs's own frozen "cover
+// app/lib/b.mjs" contract), since the stem itself still matches in that case.
+test("resolveObject: a slashed term for a module that genuinely doesn't exist stays an honest miss, never an ambiguous guess at a same-directory module", () => {
+  const graph = buildGraph();
+  const { match, tier, ambiguous } = resolveObject(graph, "app/nope.mjs", { expectedClass: "Module" });
+  assert.equal(match, null);
+  assert.equal(tier, null);
+  assert.equal(ambiguous, false);
+});
+
+test("resolveObject: a leaked verb/noise word around a REAL slashed path still resolves it (the stem gate doesn't over-reach)", () => {
+  const graph = buildGraph();
+  assert.equal(resolveObject(graph, "cover app/base.mjs", { expectedClass: "Module" }).match?.label, "app/base.mjs");
+  assert.equal(resolveObject(graph, "app/base.mjs but untested", { expectedClass: "Module" }).match?.label, "app/base.mjs");
+});
+
 // ---- resolveObject tier 4: prose-index fallback (PLAN_PROSE_INDEX.md §6) ----
 
 test("resolveObject: tier 4 prose-index fallback resolves a term that ONLY matches via a doc-comment word, never the symbol's own literal name", () => {

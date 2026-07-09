@@ -268,6 +268,29 @@
 //       those" when there's truly no prior set. Fixed by adding "then"/
 //       "though" to ask.mjs's PRED_LEAD_SKIP (the same discourse-tag
 //       tolerance WHAT_ABOUT_RE already carries for "what about X then").
+//
+// SEVENTH PASS (cycle 9, targeted substring-match sweep per cycle 8's own
+// recommendation — every OTHER short closed-vocabulary word in a staccato/
+// leftover-object position, not just the five already patched):
+//   T35 root-cause fix, not a call-site patch: resolveObject's own tier-3
+//       containment check (src/ask.mjs) had NO minimum-length floor, so ANY
+//       short closed-vocabulary word left over as parsed.object (not just the
+//       five STACCATO_LEAKED_CONNECTIVES words already guarded in chat.mjs)
+//       was a near-certain accidental substring of some real label. "or
+//       calls?" (an un-guarded connective — "or" was never in the closed
+//       five-word set) proves the class: before the fix it silently rebound
+//       FOCUS to a bogus substring match exactly like "and calls?" did;
+//       after, resolveObject itself declines below a 4-char floor (matching
+//       tier 5's own established floor), so every future short word is
+//       closed at the source, not one call site at a time.
+//   T36 a sibling fix one tier further down: the closed-set "is there a/an
+//       <kind> in <module>" existence recognizer (d1491e6) resolves its scope
+//       clause via the SAME resolveObject — a nonexistent module
+//       ("app/lib/nope.mjs") used to ambiguously "match" a real module purely
+//       by sharing generic directory/extension components ("app"/"mjs") with
+//       every module in the pool. Fixed by requiring a slashed term's
+//       filename STEM (not just any component) to be present, while still
+//       tolerating a leaked verb/noise word elsewhere in the term.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
@@ -1245,6 +1268,46 @@ test("tier2/T34 a bare pronoun with NO standing focus never resolves via the raw
       assert.equal(t.answer, '"it" needs a selected node to refer to — click a node first, or name it directly.',
         `turn ${i}: with no focus ever set, EVERY bare "it" must render the SAME honest miss — never a specific answer fabricated off a substring-matched bogus focus adopted by a PRIOR turn`);
     }
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("tier2/T35 an UN-guarded connective ('or', never in the closed STACCATO_LEAKED_CONNECTIVES five-word set) proves the fix belongs in resolveObject itself: 'or calls?' never corrupts the standing FOCUS either", async () => {
+  // Cycle 8 fixed "and"/"also"/"so"/"then"/"now" one word at a time at a
+  // chat.mjs call site (STACCATO_LEAKED_CONNECTIVES). "or" was never added to
+  // that set, so if the fix were still call-site-scoped, this would reproduce
+  // T31's exact bug (focus silently rebound to a substring-matched module).
+  // resolveObject's own tier-3 minimum-length floor (src/ask.mjs) closes it
+  // at the source instead — every short word, guarded or not.
+  const { dir, turns } = await driveSession([
+    "what does app/lib/b.mjs import",
+    "and calls?",
+    "or calls?",
+    "what tests it",
+  ]);
+  try {
+    for (const [i, t] of turns.entries()) {
+      assert.doesNotMatch(t.answer, WALL, `turn ${i} must not hit the grammar wall`);
+    }
+    assert.equal(turns[0].answer, "app/lib/a.mjs.");
+    assert.equal(turns[1].answer, CALLS_RELATION_TEXT);
+    assert.equal(turns[2].answer, 'no module matching "or" found in the index.',
+      "an honest object-resolution miss — 'or' is a genuine accidental substring of a real label pre-fix, but the length floor keeps it an honest miss instead of a silent focus hijack");
+    assert.equal(turns[3].answer, "app/unit-tests/b.test.mjs.",
+      "the CORRECT answer — app/lib/b.mjs genuinely IS tested by app/unit-tests/b.test.mjs — proving the focus survived 'or calls?' untouched, exactly like T31 proved for 'and calls?'");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("tier2/T36 existence recognizer: 'is there a class in <nonexistent module>' stays an honest miss, never an ambiguous guess at a same-directory module sharing only generic path/extension components", async () => {
+  const { dir, turns } = await driveSession(["is there a class in app/lib/nope.mjs"]);
+  try {
+    assert.equal(turns[0].answer, 'no module matching "app/lib/nope.mjs" found in the index.',
+      "app/lib/nope.mjs doesn't exist — before the fix this ambiguously 'matched' a real app/lib/*.mjs module purely by sharing the 'app'/'mjs' path/extension components with every module in the pool");
   } finally {
     clearCache();
     await rm(dir, { recursive: true, force: true });
