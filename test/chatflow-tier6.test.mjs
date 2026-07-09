@@ -261,6 +261,44 @@
 //
 // Three more full conversations replayed clean afterward — frozen below.
 //
+// CYCLE 5 (the last cycle, per SKILL_CHAT_PLAYTEST's cap-of-5 discipline) —
+// found two more real fixes, both surfaced by a deliberately adversarial
+// STACKED-marker conversation (mirroring Tier 5's own final-cycle discipline:
+// its critical T12 bug only surfaced from a deliberately adversarial
+// two-subjects-sharing-a-generic-word conversation, not the single-marker
+// ones earlier cycles used):
+//
+//   T22 "aight" (the further-dropped texting-register contraction of
+//       "alright") had no ACK_PREAMBLE_RE entry at all.
+//   T23 A leading connective ("so") SANDWICHED between two OTHER discourse
+//       markers ("aight cool, SO actually wait, what calls X") blocked the
+//       whole fixpoint loop: the remainder right after "so" ("actually wait,
+//       X") isn't itself a question YET (it still carries its own marker
+//       prefix), so LEADING_CONNECTIVE_RE's original interrogative-only gate
+//       rejected the strip, and TOPIC_SWITCH_PREAMBLE_RE (anchored to the
+//       string's start) never got a chance at "actually" while "so " still
+//       sat in front of it. Widened the gate to ALSO accept a remainder that
+//       matches one of this file's own OTHER closed preamble frames
+//       (TOPIC_SWITCH/ACK/HEDGE_ADVERB/BROWSING) — each is itself anchored +
+//       closed-vocabulary, so a match there guarantees the NEXT fixpoint pass
+//       strips it too, never a guess.
+//
+// Verified NOT a fabrication risk (this tier's own explicit warning: a fuzzy/
+// grain-word match is exactly the kind of mechanism that can confidently
+// return the WRONG thing if under-gated, the same class T1/T20 both already
+// guard against): spot-checked T1's grain-word narrowing and T20's structural-
+// defers-to-memory guard against several FRESH entity pairs sharing a
+// component/stem (tasks.mjs vs test/tasks.test.mjs, base.mjs, users.mjs vs a
+// "User" class, several "is X <relation>" qualifier words with genuinely empty
+// results) — all resolved to the correct, honest, non-colliding answer.
+//
+// Two more full conversations replayed clean afterward — frozen below. The
+// well is genuinely getting shallower (2 cycle-5 conversations tried heavier,
+// more exotic hedge stacks — "honestly not sure but is store tested tho",
+// "innit though, what imports http.mjs" — and found nothing more worth fixing
+// at the SAME closed-set-addition discipline the rest of this file uses; both
+// are named as narrower, lower-priority ceilings rather than forced fixes).
+//
 // Driven against the SHIPPED examples/mini-webapp graph via `ephemeral: true`
 // (chat.mjs's createSession) — same mechanism test/chatflow-tier4.test.mjs/
 // test/chatflow-tier5.test.mjs rely on: reads the real graph, writes session/
@@ -592,4 +630,29 @@ test("tier6/conversation 9: AU/NZ 'no worries' ack-preamble reaches the full cla
   const turns = await driveSession(["no worries, what about the router"]);
   assertAllFlow(turns, ["no worries, what about the router"]);
   assert.match(turns[0].answer, /^Router — Class \(id: fn:src\/server\/router\.mjs#Router\)/);
+});
+
+// ---- CYCLE 5 (final cycle) ----
+
+test("tier6/T20's structural-defers-to-memory guard generalizes across every relation qualifier, never just 'tested' (compat/adversarial guard)", async () => {
+  const queries = ["is logger touched", "is logger imported", "is logger called", "is logger covered"];
+  const turns = await driveSession(queries);
+  assertAllFlow(turns, queries);
+  // every one of these is a genuinely empty relation for Logger in this
+  // fixture — each must give its OWN real structural empty, never a fabricated
+  // "I don't know that yet" teach-offer (T20's fix generalizes via
+  // envelope.parsed, not a per-word special case).
+  assert.match(turns[0].answer, /^Logger has no touches edges in the index\./);
+  assert.match(turns[1].answer, /^Logger has no imports edges in the index\./);
+  assert.match(turns[2].answer, /^Logger has no calls edges in the index\./);
+  assert.match(turns[3].answer, /^No — Logger is not covered\./);
+});
+
+test("tier6/conversation 10: a 5-deep stacked discourse-marker chain (ack+ack+connective+topic-switch+topic-switch) fully peels, zero dead-ends (T22/T23 fix)", async () => {
+  const turns = await driveSession(["aight cool so actually wait, what calls createTask"]);
+  assertAllFlow(turns, ["aight cool so actually wait, what calls createTask"]);
+  // "aight" (T22) + "cool" (ACK) + "so" (LEADING_CONNECTIVE, T23's widened
+  // gate) + "actually" + "wait" (TOPIC_SWITCH) all peel in one normalization
+  // pass, reaching the exact same honest empty the bare question gives.
+  assert.match(turns[0].answer, /^No modules found whose module directly calls createTask\./);
 });

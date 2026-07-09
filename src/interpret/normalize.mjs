@@ -182,8 +182,10 @@ const THANKS_PREAMBLE_RE = /^(?:thanks|thank\s+you|many\s+thanks|thx|ty|cheers)(
  *  non-empty-remainder-REQUIRED discipline as the two frames above. */
 // "no worries" (Tier 6 playtest, §3b dialect axis, AU/NZ): a casual "that's
 // fine"/"no problem" opener that also, like the other ack words, sometimes
-// leads straight into the NEXT question rather than standing alone.
-const ACK_PREAMBLE_RE = /^(?:(?:ok(?:ay)?|cool|alright|sure|right|fine|great|nice|got it|gotcha|sounds good|no worries|no problem)[\s,]+)+(.+)$/i;
+// leads straight into the NEXT question rather than standing alone. "aight"
+// (cycle 5, §3b typo/elongation axis): the further-dropped texting-register
+// contraction of "alright", chainable with the others just like "ok cool,".
+const ACK_PREAMBLE_RE = /^(?:(?:ok(?:ay)?|aight|cool|alright|sure|right|fine|great|nice|got it|gotcha|sounds good|no worries|no problem)[\s,]+)+(.+)$/i;
 /** A SELF-ORIENTATION lead-in with a delimiter — "just poking around, what's
  *  in this repo", "just browsing, X", "just exploring, X" (Tier 6 playtest,
  *  §3: the vague-opener family a genuine first-time stranger types). Same
@@ -330,7 +332,22 @@ export function applyPreambleFrames(text) {
     m = q.match(LEADING_CONNECTIVE_RE);
     if (m) {
       const rest = m[1].trim();
-      if (INTERROGATIVE_LEAD_RE.test(rest) || QUESTION_AUX_LEAD_RE.test(rest)) q = rest;
+      // Tier 6 playtest cycle 5: a leading connective ("so") sandwiched
+      // BETWEEN two other discourse markers ("aight cool, so actually wait,
+      // what calls X") used to block the WHOLE fixpoint — the remainder right
+      // after "so" ("actually wait, X") isn't ITSELF a question yet (it still
+      // has its own marker prefix), so the original interrogative-only gate
+      // rejected the strip, and TOPIC_SWITCH_PREAMBLE_RE (anchored to start)
+      // never got a chance at "actually" while "so " still sat in front of
+      // it. Also accepting a remainder that matches one of this file's OWN
+      // other closed preamble frames is safe by the same logic those frames
+      // already rely on: each is anchored + closed-vocabulary, so a match
+      // here guarantees the NEXT pass strips it too, not a guess.
+      if (
+        INTERROGATIVE_LEAD_RE.test(rest) || QUESTION_AUX_LEAD_RE.test(rest)
+        || TOPIC_SWITCH_PREAMBLE_RE.test(rest) || ACK_PREAMBLE_RE.test(rest)
+        || HEDGE_ADVERB_PREAMBLE_RE.test(rest) || BROWSING_PREAMBLE_RE.test(rest)
+      ) q = rest;
     }
     if (q === before) break;
   }
