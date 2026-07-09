@@ -15,12 +15,12 @@ import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { runTurn, SEED_PREFER, SEED_LIMIT } from "../src/chat.mjs";
+import { runTurn } from "../src/chat.mjs";
 import { appendFact, loadMemory, readFactRows } from "../src/memory/core.mjs";
 import { parseEntities } from "../src/codegraph.mjs";
-import { seedMemory } from "../src/corpus/conceptnet.mjs";
 import { ingestSchemaDocs } from "../src/schema-docs.mjs";
 import { clearCache } from "../src/source.mjs";
+import { freshConceptNetRepo } from "./helpers/seeded-fixture.mjs";
 
 const FIXTURE = fileURLToPath(new URL("./fixtures/entities.fixture.json", import.meta.url));
 const CONFIG = { graphFile: FIXTURE };
@@ -53,11 +53,15 @@ test("W4: assert-then-ask round-trip — the remembered fact answers, provenance
 });
 
 test("W4: corpus-seeded facts (the W3 seed) answer vocabulary questions, cited to the corpus", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "tmct-w4-corpus-"));
+  // Shared fixture (test/helpers/seeded-fixture.mjs): the corpus parse+write is
+  // the expensive part and doesn't change between runs (content-addressed,
+  // deterministic), so it's built ONCE per process and copied here — this test
+  // only cares that the resulting facts answer vocabulary questions, not that
+  // THIS call is the one that performed the seed.
+  const { dir, seedResult: res } = await freshConceptNetRepo("tmct-w4-corpus-");
   try {
     // the ConceptNet band of the W3 bootstrap — now UNCAPPED (0.7.0 "seed all"), so
     // res.appended is the whole seedable slice (thousands), not a finite cap.
-    const res = await seedMemory(dir, { limit: SEED_LIMIT, prefer: SEED_PREFER });
     assert.ok(res.appended > 1000, `the whole ConceptNet band seeds uncapped (got ${res.appended})`);
     const config = { graphFile: join(dir, ".tmct", "graph.json") }; // empty bootstrap graph
 

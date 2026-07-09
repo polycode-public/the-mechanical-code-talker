@@ -14,8 +14,7 @@ import {
   deriveSubClassClosure, deriveTypePropagation, findIsaChain, syllogise,
   ENTAILED_PROVENANCE, SUBCLASS_PREDICATE, ENTAILED_TYPE_PROVENANCE, TYPE_PREDICATE,
 } from "../src/syllogise.mjs";
-import { seedMemory } from "../src/corpus/conceptnet.mjs";
-import { SEED_LIMIT, SEED_PREFER } from "../src/chat.mjs";
+import { freshConceptNetRepo } from "./helpers/seeded-fixture.mjs";
 
 const mkRepo = () => mkdtemp(join(tmpdir(), "tmct-syllog-"));
 const subClassRows = (rows) => rows.filter((r) => r.predicate === SUBCLASS_PREDICATE);
@@ -269,9 +268,12 @@ test("syllogise: materializes cax-sco (x:C) too, in the SAME pass as scm-sco, se
 // loudly — the honest STOP signal, never weakened to force a pass.
 
 test("KILL CRITERION: on the default seed, a bounded pass flips a real subclass-chain miss to a hit", async () => {
-  const dir = await mkRepo();
+  // Shared fixture (test/helpers/seeded-fixture.mjs): the seed's own parse+write
+  // pass is built ONCE per process and copied here — this test consumes the
+  // seeded material (its closure-worthy chains), it isn't testing the seed
+  // pipeline itself.
+  const { dir, seedResult: seeded } = await freshConceptNetRepo("tmct-syllog-");
   try {
-    const seeded = await seedMemory(dir, { limit: SEED_LIMIT, prefer: SEED_PREFER });
     assert.ok(seeded.appended > 0, "the default seed wrote real material");
 
     const before = readFactRows(await loadMemory(dir));

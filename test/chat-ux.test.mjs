@@ -16,6 +16,7 @@ import { parseEntities } from "../src/codegraph.mjs";
 import { loadMemory, FACT_CLASS } from "../src/memory/core.mjs";
 import { clearCache } from "../src/source.mjs";
 import * as source from "../src/source.mjs";
+import { freshBootstrapRepo } from "./helpers/seeded-fixture.mjs";
 
 const FIXTURE = fileURLToPath(new URL("./fixtures/entities.fixture.json", import.meta.url));
 const CONFIG = { graphFile: FIXTURE };
@@ -543,8 +544,12 @@ test("vocab-hint is never a lie: an unseeded session never offers a term-specifi
     await s.close();
   } finally { clearCache(); await rm(dirA, { recursive: true, force: true }); }
 
-  // SEEDED (default): the offered term must actually resolve when asked.
-  const dirB = await mkdtemp(join(tmpdir(), "tmct-ux-hinttrue-"));
+  // SEEDED (default): the offered term must actually resolve when asked. A
+  // copy of the shared bootstrap fixture (test/helpers/seeded-fixture.mjs)
+  // stands in for a fresh empty-repo seed — this test only consumes the
+  // seeded state (the vocab hint resolving), it doesn't test the seed
+  // mechanism itself (that's wiring-seed.test.mjs's job).
+  const dirB = await freshBootstrapRepo("tmct-ux-hinttrue-");
   try {
     const s = await createSession({ repoPath: dirB });
     assert.match(s.bannerLines.join("\n"), /what is a cache/, "a seeded session's banner offers the term");

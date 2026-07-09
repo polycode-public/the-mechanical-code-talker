@@ -24,12 +24,19 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createSession } from "../src/chat.mjs";
 import { clearCache } from "../src/source.mjs";
+import { freshBootstrapRepo } from "./helpers/seeded-fixture.mjs";
 
 const WALL = /couldn't parse this as a graph question/;
 
 async function driveSession(env, queries) {
   clearCache();
-  const dir = await mkdtemp(join(tmpdir(), "tmct-tier0-"));
+  // env === undefined means "let the default (seeded) bootstrap apply" — for
+  // those cases, start from a copy of the once-built shared bootstrap fixture
+  // instead of paying the corpus parse+write cost per test (this suite only
+  // ever CONSUMES the seeded state — the mechanism itself is wiring-seed.test.mjs's
+  // job). An explicit env (e.g. TMCT_NO_SEED:"1") never seeds anyway, so it
+  // stays on a plain empty tmpdir.
+  const dir = env === undefined ? await freshBootstrapRepo("tmct-tier0-") : await mkdtemp(join(tmpdir(), "tmct-tier0-"));
   const s = await createSession({ repoPath: dir, env });
   const turns = [];
   try {
