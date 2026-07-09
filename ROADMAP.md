@@ -14,220 +14,187 @@ the file has been deleted.
 
 ## Where we are now (2026-07-09)
 
-`npm test` green (**1352**, up from 1258). **v1.0.7, pushed** (0.9.11 → 1.0.0 → 1.0.7 across an
-earlier session — see `HANDOVER.md` for the exact release chain and file:line detail); not pushed
-again since (version stays at 1.0.9 locally, per the operator's own bump-at-push-time policy).
+The full `SKILL_CHAT_PLAYTEST.md` dialogue-flow tier ladder is complete, tiers 0 through 6.
+Tiers 0, 1, 2, and 4 each closed in one pass. Tier 3 took 7 passes to track down a recurring
+`resolveObject` substring-match weakness. Tiers 5 and 6 each ran the full 5-cycle cap and each
+turned up one genuinely important correctness bug alongside a batch of routing fixes. Full
+per-cycle detail is in `HANDOVER.md`'s "The dialogue-flow playtest loop" section.
 
-**The full `SKILL_CHAT_PLAYTEST.md` dialogue-flow tier ladder (0 through 6) is now complete** — see
-the Tier 5/Tier 6 bullets just below and `HANDOVER.md`'s "The dialogue-flow playtest loop" section
-for full per-cycle detail.
+`npm test` is green at **1352** (up from 1258 at the start of this session). v1.0.7 is
+published (0.9.11 → 1.0.0 → 1.0.7 across an earlier session; the exact release chain and
+file:line detail are in `HANDOVER.md`). Nothing has pushed since, so the local version sits at
+1.0.9 per the bump-at-push-time policy.
 
-- **Tier 5 of the dialogue-flow playtest loop (teach + recall + reasoning in dialogue) — DONE, 5
-  cycles (the cap), genuinely clean at the end.** 12 routing/recognition fixes across teach and
-  recall (article/head-word gaps in "what do you know about X", an adverb mis-parsed as a verb in
-  general-verb teach, passive ownership phrasing, a quantified-property mis-teach, several missing
-  yes/no readers for taught facts, a silently-null teach path, past-tense property support, a
-  leading hedge-adverb gap) plus one genuinely important correctness bug found and fixed in the
-  final cycle: a FABRICATED cross-subject answer ("is the validate module deprecated" confidently
-  answering off an unrelated "logger module" fact, via an over-loose word-overlap fallback with no
-  exclusion for common code-noun suffixes like "module"). New `test/chatflow-tier5.test.mjs` (21
-  cases). **1307 → 1328.** Full detail: `HANDOVER.md`'s "The dialogue-flow playtest loop" section,
-  Tier 5 entry.
-- **Tier 6 of the dialogue-flow playtest loop (the messy real user) — DONE, 5 cycles (the cap),
-  genuinely clean at the end. This is the LAST rung of the ladder — Tiers 0-6 are all complete.**
-  23 routing/recognition fixes (a grain-word resolution ambiguity — "the logger module" tying a
-  Module against a same-stem Class; a fleet of new closed preamble frames in
-  `interpret/normalize.mjs` for topic-switch/self-interruption/acknowledgement/hedge-adverb/
-  browsing discourse markers, verified to chain correctly when several stack together; bare
-  "inherits"/"inherit" added alongside its sibling "extends"; a dozen more vague-opener idioms;
-  several dialect/register gaps — "yeah nah", "howdy pardner", "aight", "no worries") plus one
-  genuinely important correctness bug: "is the logger module tested" answered a fabricated "I don't
-  know that yet" even though the structural engine had ALREADY computed the real, honest answer —
-  an over-eager property-adjective matcher was discarding it whenever a real graph-computed parse
-  already existed. New `test/chatflow-tier6.test.mjs` (17 cases). **1328 → 1345.** Full detail:
-  `HANDOVER.md`'s "The dialogue-flow playtest loop" section, Tier 6 entry.
-- **Playtest-freeze verification pass (session close-out).** Manually chat-tested this session's own
-  routing/recognition fixes (Tiers 0/1/2/4 + operator bugs A-F) via the real piped CLI against real
-  data (`examples/mini-webapp`'s commit history, cochange edge, and Controller/TaskController
-  inheritance pair), confirmed each flows to a useful outcome with zero dead-ends, and froze 4 new
-  regression tests across `test/chatflow-tier1-single-touch.test.mjs`,
-  `test/chatflow-tier2.test.mjs` (×2), and `test/chatflow-tier4.test.mjs` (**1299 → 1303**). One
-  genuine new dead-end surfaced (a `resolveObject` tier-4 prose-token over-match — "whats logging
-  for" resolved to an unrelated commit whose message happens to contain "logging") and was recorded
-  as `HANDOVER.md` open follow-up item 9.
-- **HANDOVER item 9 fixed: the tier-4 prose-token over-match.** Root cause was actually a tier-3 gap
-  — no morphological link between a query word ("logging") and a module's own basename one
-  gerund/agent-noun suffix away ("logger", `src/lib/logger.mjs`) — so tier 3 missed entirely and fell
-  through to tier 4, whose only hit was an unrelated commit's message text. Fixed with a narrow,
-  Module-only derivational-suffix basename bridge in tier 3 (`derivationalStem`, `src/ask.mjs`),
-  gated off tier 5's own typo-correction territory so a genuine typo still falls through and gets
-  announced. "whats logging for" now answers with the real `src/lib/logger.mjs` module, never the
-  commit. **1303 → 1307.**
-- **Test-suite health pass (background dispatch, alongside Tier 6).** 5 independent fixes:
-  batched `syllogise()`'s per-fact writes via `appendFacts`; let two chatbench plumbing tests opt
-  out of the corpus seed (`TMCT_NO_SEED`); a shared once-per-process seeded-fixture builder
-  (`test/helpers/seeded-fixture.mjs`) for tests that only consume seeded content (not the seed
-  mechanism itself); real `WALL_MISS_RE` reuse where a byte-identical hand-rolled copy existed;
-  and a shared session-driver helper (`test/helpers/session.mjs`) replacing 11 near-duplicate
-  `drive()`/`driveSession()` implementations. Full detail: `HANDOVER.md`'s "Test-suite health
-  pass" entry. `npm test` stayed green throughout (**1335** at the end, moved by the concurrent
-  Tier 6 dispatch's own commits during this run).
-- **Compound-name resolution (operator's own worked example): "the payment system" now finds
-  `PaymentSystem`/`payment-system`/a compound path like `westfield-payment-system/src/MyCode.cs`/
-  an interface-style name like `IPaymentSystemImpl.cs`.** `resolveObject` (`src/ask.mjs`) gained a
-  multi-word compound-term tier, the same shape as the existing single-word basename-exact/
-  prefix-suffix (`9dde2b3`) and derivational-stem (`6e2d96b`) tiers: a 2+-space-word query is
-  compared, article- and separator-stripped, against each candidate's own joined form — exact
-  match scores level with the single-word exact-stem tier, containment scores below every
-  single-word tier but above raw overlap, gated to require an explicit separator in the candidate
-  label so a pure-camelCase identifier is left to tier 4's prose fallback unaffected (protects a
-  frozen "total price" → `calculateTotalPrice` tier-4 test). A mashed-together typo
-  ("paymntsystem") needed no new code — it already resolves via the existing tier-5 fuzzy pass.
-  New `test/ask-compound-resolve.test.mjs` (7 cases). **1345 → 1352.** Full detail: `HANDOVER.md`'s
+Test count across the session's later stretch:
+
+| Work | `npm test` |
+| --- | --- |
+| Playtest-freeze verification pass (Tiers 0/1/2/4 + operator bugs A-F, chat-tested live and frozen as regressions) | 1299 → 1303 |
+| `resolveObject` tier-3 derivational-stem bridge, closing the one dead-end the freeze pass found | 1303 → 1307 |
+| Tier 5 (teach + recall + reasoning in dialogue), 5 cycles | 1307 → 1328 |
+| Tier 6 (the messy real user), 5 cycles, run alongside a background test-suite health pass | 1328 → 1345 |
+| Compound-name resolution (multi-word queries to joined-token symbol names) | 1345 → 1352 |
+
+### Shipped this session
+
+- **Tier 5** found 12 routing/recognition fixes across teach and recall: article/head-word gaps
+  in "what do you know about X", an adverb mis-parsed as a verb in general-verb teach, passive
+  ownership phrasing, a quantified-property mis-teach, missing yes/no readers for taught facts, a
+  silently-null teach path, past-tense property support, a leading hedge-adverb gap. The final
+  cycle also caught a real correctness bug: "is the validate module deprecated" confidently
+  answered off an unrelated "logger module" fact, through a word-overlap fallback with no
+  exclusion for common code-noun suffixes like "module". New `test/chatflow-tier5.test.mjs` (21
+  cases).
+- **Tier 6**, the last rung of the ladder, found 23 routing/recognition fixes: a grain-word
+  resolution ambiguity ("the logger module" tying a Module against a same-stem Class); five new
+  closed preamble frames in `interpret/normalize.mjs` for topic-switch, self-interruption,
+  acknowledgement, hedge-adverb, and browsing discourse markers, chaining correctly when several
+  stack together; bare "inherits"/"inherit" alongside its sibling "extends"; a dozen more
+  vague-opener idioms; dialect and register gaps like "yeah nah", "howdy pardner", "aight", "no
+  worries". It also caught one important bug: "is the logger module tested" answered a
+  fabricated "I don't know that yet" even though the structural engine had already computed the
+  real, honest answer. An over-eager property-adjective matcher discarded it whenever a real
+  graph-computed parse already existed. New `test/chatflow-tier6.test.mjs` (17 cases).
+- **A test-suite health pass**, run in the background alongside Tier 6: batched `syllogise()`'s
+  per-fact writes via `appendFacts`; let two chatbench plumbing tests opt out of the corpus seed
+  (`TMCT_NO_SEED`); added a shared once-per-process seeded-fixture builder
+  (`test/helpers/seeded-fixture.mjs`) for tests that only consume seeded content; replaced a
+  hand-rolled copy of `WALL_MISS_RE` with the real export; and extracted a shared session-driver
+  helper (`test/helpers/session.mjs`), replacing 11 near-duplicate `drive()`/`driveSession()`
+  implementations. Full detail is in `HANDOVER.md`'s "Test-suite health pass" entry.
+- **Compound-name resolution**, from the operator's own worked example: "the payment system" now
+  finds `PaymentSystem`, `payment-system`, a compound path like
+  `westfield-payment-system/src/MyCode.cs`, and an interface-style name like
+  `IPaymentSystemImpl.cs`. `resolveObject` (`src/ask.mjs`) gained a multi-word compound-term
+  tier, the same shape as the existing single-word basename-exact/prefix-suffix (`9dde2b3`) and
+  derivational-stem (`6e2d96b`) tiers, gated to require an explicit separator in the candidate
+  label so a pure-camelCase identifier still falls to tier 4's prose fallback unaffected (this
+  protects a frozen "total price" → `calculateTotalPrice` test). New
+  `test/ask-compound-resolve.test.mjs` (7 cases). Full detail is in `HANDOVER.md`'s
   "Compound-name resolution addendum" entry.
-
-### Now: shipped this session
-
-- **Tier-4 "of X" membership gap, walk inheritance (HANDOVER item 6).** "public methods of
-  TaskController" used to return a genuine-looking but incomplete empty when the class declares no
-  members of its own but inherits real ones from a superclass. `src/ask.mjs`'s membership eval now
-  tries the owner's own (qualifier-filtered) members first and only walks `ancestorsOf`
-  nearest-first when that's empty and the class participates in `inherits` — an inherited answer is
-  DISCLOSED out loud ("… has no own methods — inherited from Controller: …"), never silently
-  presented as the owner's own; an owner's own members (even a partial qualifier-filtered set)
-  always win outright.
-- **Compositional-AND: two different, both-recognized verbs (HANDOVER item 4/Batch 4/5).** "which
-  functions call X and test Y" (two different relation verbs joined by "and") used to fall to the
-  legacy `ambiguousParse` path and misread the whole tail as one unresolvable object string. The
-  marker gate now also opens when every later "and"-branch names its own single-word recognized
-  verb, composing a real set intersection instead — narrowly scoped (single-word only) so the
-  pre-existing "which classes extends Base and couples to logging" compat case stays exactly as
-  closed as before.
-- **Seonix Batch 3 + general verb-to-predicate query follow-up (HANDOVER items 3/5).** Purpose/
-  identity phrasing ("whats X for/about") now joins "what does X do"; bare "recent/latest/newest
-  commits" render a real dated list instead of a false find-miss, and "the last/latest/most
-  recent commit" as a query subject substitutes the actual newest Commit before parsing;
-  onboarding/closing phrasings beyond the original closed set ("what should i read first", "where
-  should i start reading") get the orientation nudge; present-tense cochange phrasing ("changes
-  with") joins the past-tense form. A taught general-verb fact now answers direct questions too
-  ("does margo eat ribs" → yes, "did margo eat ribs" → yes, "does margo eat cake" → an honest no,
-  "what does margo eat" → lists ribs), reusing the same has/have predicate bridge the teach side
-  already had.
-- **Six more operator-found bugs (A-F) from manual chat-testing this session.** A malformed
-  "haves soup" render for past-tense "had" (lemma fix); a grammatically-broken "count soup"
-  message when no code graph is loaded; "what is in your memory" (bare, and "… about X") falling
-  to the structural miss instead of the memory summary/fact-lookup lanes — the "about X" form now
-  also walks TRANSITIVE SUBTYPES of X over taught (never corpus-noise) isa facts; and a closed-set
-  indirect-request wrapper ("I want you to search for Widget") that used to be mis-swallowed by
-  the general-verb teach recognizer, now stripped centrally before dispatch, plus a "search for
-  X"/"tell me X" (no "about") phrasing fix and a `GOAL_BY_COMMAND` table that gives every
-  slash-command dispatch its own honest "Goal (inferred): …" line, generalizing the existing
-  goal-inference mechanism to command dispatches (search/find/describe/…), not just ask()-parsed
-  queries. See `HANDOVER.md`'s "Operator-found bugs A-F" for the full detail per bug.
-- **1.0.0 — the first-run chat experience, rewritten.** The original trigger: a brand-new
-  `npm install` + bare `tmct chat` led with a "no code graph loaded" apology for *any* input,
-  including plain greetings and identity questions, even though the seeded ontology/lexicon
-  could already answer them. Root-caused to a 0.6.0-era design that over-applied its own honest
-  empty-graph orientation. Fixed: identity/capability-led responses (`I'm tmct — ...` before any
-  caveat), a real self-description + a distinct "no LLM involved" answer for the identity/AI-ID
-  family, provably-correct "try this" examples (a `vocabExampleHint` that only ever offers a term
-  confirmed to resolve in the session's actual seed state — the prior hint could silently lie
-  under `TMCT_NO_SEED=1`), and substantially broadened conversational recognition (dialect,
-  register, slang, elongation, a bounded-fuzzy-match typo layer) — all via curated closed-set
-  additions, not a generalized grammar rule, per the project's standing preference.
-- **The `SKILL_CHAT_PLAYTEST.md` dialogue-flow loop, run for real across 5 tiers.** Tier 0
-  (bootstrap/identity), Tier 1 (single touch + one drill-down), Tier 2 (drill-down chains with
-  anaphora), and Tier 4 (compositional & comparative) each closed in one pass; **Tier 3
-  (cross-concept & relation touches) took 7 passes** — cycles 3-9 progressively found and fixed a
-  recurring `resolveObject` substring-match weakness (a missing minimum-length floor let short
-  staccato connectives like "and"/"it" silently hijack the conversation's focus, producing
-  confidently WRONG answers on a *later* turn while looking honest) — patched three times
-  point-by-point before cycle 9 found and fixed the actual root cause in one place. Tier 5/6 not
-  yet started. The skill doc itself gained two new rules from real incidents this run: always
-  `mktemp -d` + exact-path cleanup for scratch fixtures (a wildcard `rm -rf /tmp/pt-*` cleanup
-  step got flagged by the harness's own safety policy — no damage, but a real cross-agent risk),
-  and never `chat --repo` the committed example fixture directly (dirties a checked-in file).
-- **A live, client-side chat demo on the GitLab Pages homepage.** Not a scripted/pre-recorded
-  fake — the real `src/ask.mjs` query engine runs in the visitor's browser (wink-nlp loaded from
-  `esm.sh`, an import-map shim working around 3 leaf files' Node-only static imports, zero
-  changes needed to the engine itself since it was already browser-clean pure JS). Boots with a
+- **The first-run chat experience, rewritten (1.0.0).** A brand-new `npm install` plus a bare
+  `tmct chat` used to lead with a "no code graph loaded" apology for any input, including plain
+  greetings, even though the seeded ontology/lexicon could already answer them. This was a
+  0.6.0-era design over-applying its own honest empty-graph orientation. The fix: identity/
+  capability-led responses ("I'm tmct — ..." before any caveat), a real self-description and a
+  distinct "no LLM involved" answer for the identity/AI-ID family, provably-correct "try this"
+  examples (a `vocabExampleHint` that only offers a term confirmed to resolve in the session's
+  actual seed state), and broadened conversational recognition (dialect, register, slang,
+  elongation, a bounded-fuzzy typo layer). All of it landed as curated closed-set additions, per
+  the project's standing preference over general grammar rules.
+- **The dialogue-flow playtest loop, tiers 0-4.** Tier 0 (bootstrap/identity), Tier 1 (single
+  touch plus one drill-down), Tier 2 (drill-down chains with anaphora), and Tier 4
+  (compositional and comparative) each closed in one pass. Tier 3 (cross-concept and relation
+  touches) took 7 passes: cycles 3-9 progressively found and fixed a recurring `resolveObject`
+  substring-match weakness, where a missing minimum-length floor let short staccato connectives
+  like "and"/"it" silently hijack the conversation's focus and produce confidently wrong answers
+  on a later turn while the triggering turn still looked honest. It took three point-by-point
+  patches before cycle 9 found and fixed the actual root cause in one place. The skill doc itself
+  gained two rules from real incidents this run: always `mktemp -d` plus exact-path cleanup for
+  scratch fixtures, and never `chat --repo` the committed example fixture directly.
+- **A live, client-side chat demo on the GitLab Pages homepage.** The real `src/ask.mjs` query
+  engine runs directly in the visitor's browser as a live demo, not a scripted replay. wink-nlp
+  loads from `esm.sh`, an import-map shim works around 3 leaf files' Node-only static imports, and
+  the engine itself needed no changes since it was already browser-clean pure JS. It boots with a
   banner, replays a few real pre-verified Q&A turns as "history", asks one randomized (or
-  `?q=`-primed) question live, and — as of this session's last addition — has a genuine
-  interactive input box so a visitor can type their own questions and get real computed answers.
-  `?compact=1` for a minimal primed-link view; `window.tmctAnswer`/`tmctAsk`/`tmctParseEntities`
-  exposed for headless/Playwright consumers (curl/jq can never see it — no backend on GitLab
-  Pages, JS never executes for a plain HTTP client — documented plainly, not oversold).
-- **Operator-found bugs, fixed as they were found by hand-testing the shipped CLI**: relation-
-  specific vocabulary filtering ("what is a tree used for" was dumping every known relation
-  instead of filtering to UsedFor); a teach-lane "did you mean" suggestion that could echo back
-  the user's own input byte-identical (a missing a/an agreement check); out-of-domain small talk
-  ("what time is it") hitting the raw grammar wall instead of an honest nudge; a pronoun-subject
-  teach-lane gap that could silently store a bogus fact ("he is a module"); a closed-set
-  existence-question recognizer ("is there a class called X anywhere" was silently mis-answering
-  a *different* question — a relationship check — as if it were a verified existence negative);
-  "what else is X" repeating the primary definition verbatim instead of surfacing more; bare
-  "what is X" (no article) having no fact-lookup route at all, including for a fact the user had
-  *just* taught; and general verb-to-predicate teaching ("remember margo eats ribs" mints its own
-  predicate now, not just the closed is/has/are set — "has a" interoperates with the existing
-  ConceptNet-sourced `mgx:hasA` data).
-- **New-term teaching + quantifiers.** "redis is a cache" (a genuinely new term, not previously
-  in the closed ACE lexicon) is now teachable via a write-side-only fix — the read path already
-  worked generically over any subject string, including the existing 2-hop transitive `IsA` proof
-  chase. Plus four new phrasings ("some/a few Xs are Ys", "your X is a Y", bare "X is Y" as a
-  property assertion) and a stored-quantifier recall ("how many Xs are Ys" → "A few.").
-- **An always-on, short "Goal (inferred): ..." line** on every real structural/vocabulary answer
-  — distinct from the pre-existing opt-in `/narrate` full-trace mode, which stays as the deeper
-  debug tool. Two correctness bugs in the goal-deduction hook itself got fixed along the way
-  (a confidently wrong goal shown on failed teach attempts; a missing goal on relation-force
-  answers that resolve via a different path than the normal parse).
-- **Seonix's 17-round dogfooding backlog, triaged and Batch 1 shipped.** A sibling project
-  (seonix, consuming tmct as a real dependency) ran extensive dogfooding against both a synthetic
-  self-index and a real 27,929-module production estate, relaying findings via the inter-session
-  inbox. Triaged into 5 priority batches (4 items were already fixed by intervening work); Batch 1
-  (existence-query correctness) shipped. Batches 2-5 queued — see "Next" below.
-- **Seonix Batch 2 landed.** Bare "what is Commit" now parses (article optional, restricted to
-  `ENTITY_TO_TYPE`'s closed vocabulary); a reverse `inherits` verb family ("is X a superclass/
-  parent class of Y") swaps subject/object at parse time so it agrees with the existing forward
-  phrasing; a curated trailing-scope-filler strip ("what is a Module in this graph" → "Module") at
-  both the grammar and chat-fact-lookup layers.
-- **Seonix Batch 4/5's disambiguation-ranking bug, reproduced and fixed at realistic scale.** The
-  cross-graph candidate-ranking weakness never reproduced on tmct's own tiny example fixtures, so
-  a new committed fixture graph was built — `test/fixtures/large-scale/` (vendored commander.js +
-  express.js source, indexed via seonix's own indexer, schema-docs-ingested, committed at
-  `.tmct/graph.json` per the `examples/*/.tmct/graph.json` precedent) — that reliably reproduces
-  it: an exact basename match (e.g. `option` → `lib/option.js`) losing to a same-directory sibling
-  that only shared a component. Fixed in `resolveObject`'s tier-3 scoring (`src/ask.mjs`): a new
-  exact/prefix/suffix basename tier now outranks the (now length-normalized) overlap fallback. New
-  `test/ask-resolve-ranking.test.mjs` locks it in. Cochange phrasing variants, compositional-AND
-  edge cases, and the "multi-root" substring over-match remain open (see `HANDOVER.md`).
-- **The version-bump policy, set then revised.** Tried "bump immediately after every push, hold
-  locally until the next batch" (to keep the published npm version always matching the last
-  pushed commit); reverted after it produced confusing "referencing a version that doesn't exist
-  yet" noise mid-session. Current policy: bump only at the moment of actually pushing, as part of
-  that same push. Recorded in `CLAUDE.md`.
+  `?q=`-primed) question live, and gives the visitor a genuine interactive input box to type
+  their own questions and get real computed answers. `?compact=1` gives a minimal primed-link
+  view; `window.tmctAnswer`/`tmctAsk`/`tmctParseEntities` are exposed for headless/Playwright
+  consumers. There's no backend on GitLab Pages, so plain `curl`/`jq` never sees a computed
+  answer, which is stated plainly in the code rather than oversold.
+- **Operator-found bugs, fixed as they turned up in hand-testing the shipped CLI.** Relation-
+  specific vocabulary filtering (an ask like "what is a tree used for" was dumping every known
+  relation instead of filtering to UsedFor); a teach-lane "did you mean" suggestion that could
+  echo the user's own input byte-for-byte (a missing a/an agreement check); out-of-domain small
+  talk ("what time is it") hitting the raw grammar wall instead of an honest nudge; a
+  pronoun-subject teach-lane gap that could silently store a bogus fact ("he is a module"); a
+  closed-set existence-question recognizer misreporting a relationship check as a verified
+  existence negative; "what else is X" repeating the primary definition instead of surfacing
+  more; bare "what is X" (no article) having no fact-lookup route at all, including for a fact
+  the user had just taught; and general verb-to-predicate teaching ("remember margo eats ribs"
+  mints its own predicate now, not just the closed is/has/are set, and "has a" interoperates with
+  the existing ConceptNet-sourced `mgx:hasA` data).
+- **Six more operator-found bugs (A-F), from a later manual chat-testing pass.** A malformed
+  "haves soup" render for past-tense "had" (a lemma fix); a broken "count soup" message when no
+  code graph is loaded; "what is in your memory" (bare, and "... about X") falling to the
+  structural miss instead of the memory summary/fact-lookup lanes. The "about X" form now also
+  walks transitive subtypes of X over taught (never corpus-noise) isa facts; a closed-set
+  indirect-request wrapper ("I want you to search for Widget") that used to be swallowed whole by
+  the general-verb teach recognizer, now stripped centrally before dispatch, plus a "search for
+  X"/"tell me X" (no "about") phrasing fix; and a `GOAL_BY_COMMAND` table that gives every
+  slash-command dispatch its own honest "Goal (inferred): ..." line. Full detail per bug is in
+  `HANDOVER.md`'s "Operator-found bugs A-F" entry.
+- **General verb-to-predicate teaching's query-side follow-up.** A taught general-verb fact now
+  answers direct questions too: "does margo eat ribs" → yes, "did margo eat ribs" → yes, "does
+  margo eat cake" → an honest no, "what does margo eat" → lists ribs. It reuses the same has/have
+  predicate bridge the teach side already had.
+- **New-term teaching and quantifiers.** "redis is a cache" (a genuinely new term, not
+  previously in the closed ACE lexicon) is now teachable through a write-side-only fix; the read
+  path already worked generically over any subject string, including the existing 2-hop
+  transitive `IsA` proof chase. Plus four new phrasings ("some/a few Xs are Ys", "your X is a Y",
+  bare "X is Y" as a property assertion) and a stored-quantifier recall ("how many Xs are Ys" →
+  "A few.").
+- **An always-on, short "Goal (inferred): ..." line** on every real structural or vocabulary
+  answer, distinct from the pre-existing opt-in `/narrate` full-trace mode. Two correctness bugs
+  in the goal-deduction hook itself got fixed along the way: a confidently wrong goal shown on
+  failed teach attempts, and a missing goal on relation-force answers that resolve through a
+  different path than the normal parse.
+- **Seonix's 17-round dogfooding backlog, triaged and worked through.** Seonix, a sibling
+  project consuming tmct as a real dependency, ran extensive dogfooding against both a synthetic
+  self-index and a real 27,929-module production estate, and relayed the findings over the
+  inter-session inbox. The backlog was triaged into 5 priority batches (4 items were already
+  fixed by intervening work). **Batch 1** (existence-query correctness) shipped first. **Batch
+  2**: bare "what is Commit" now parses (article optional, restricted to `ENTITY_TO_TYPE`'s
+  closed vocabulary); a reverse `inherits` verb family ("is X a superclass/parent class of Y")
+  swaps subject and object at parse time to agree with the existing forward phrasing; a curated
+  trailing-scope-filler strip ("what is a Module in this graph" → "Module") works at both the
+  grammar and chat-fact-lookup layers. **Batch 3**: purpose/identity phrasing ("whats X for/
+  about") joins "what does X do"; bare "recent/latest/newest commits" render a real dated list
+  instead of a false find-miss, and "the last/latest/most recent commit" as a query subject
+  substitutes the actual newest Commit before parsing; onboarding/closing phrasings beyond the
+  original closed set get the orientation nudge; present-tense cochange phrasing ("changes with")
+  joins the past-tense form. **Batch 4/5**: the cross-graph disambiguation-ranking weakness never
+  reproduced on tmct's own tiny example fixtures, so a new committed fixture graph
+  (`test/fixtures/large-scale/`, vendored commander.js + express.js source) was built to
+  reproduce it. It surfaced an exact basename match losing to a same-directory sibling that only
+  shared a component; fixed in `resolveObject`'s tier-3 scoring, where a new exact/prefix/suffix
+  basename tier now outranks the length-normalized overlap fallback. Separately, "which functions
+  call X and test Y" (two different, both-recognized relation verbs joined by "and") used to fall
+  to the legacy `ambiguousParse` path; the marker gate now also opens when every later
+  "and"-branch names its own single-word recognized verb, composing a real set intersection,
+  narrowly scoped so the pre-existing "which classes extends Base and couples to logging" compat
+  case stays exactly as closed as before. Still open: cochange phrasing variants, and a single,
+  not independently reverified "multi-root" substring over-match.
+- **The Tier-4 "of X" membership gap, walked through inheritance.** "public methods of
+  TaskController" used to return a genuine-looking but incomplete empty when the class declared
+  no members of its own but inherited real ones from a superclass. `src/ask.mjs`'s membership
+  eval now tries the owner's own (qualifier-filtered) members first, and only walks
+  `ancestorsOf` nearest-first when that's empty and the class participates in `inherits`. An
+  inherited answer is disclosed out loud ("… has no own methods — inherited from Controller:
+  …"), never silently presented as the owner's own.
+- **The version-bump policy, set then revised.** The session first tried bumping immediately
+  after every push and holding the bump locally until the next batch shipped, to keep the
+  published npm version matching the last pushed commit. That produced confusing "referencing a
+  version that doesn't exist yet" noise, so it was reverted mid-session. Current policy, recorded
+  in `CLAUDE.md`: bump only at the moment of actually pushing, as part of that same push.
 
 ### Next: the open follow-ups
 
-1. **Tier 5 (teach + recall + reasoning in dialogue) and Tier 6 (the messy real user)** — the
-   remaining two rungs of the dialogue-flow ladder, not yet run. Tier 5's territory substantially
-   overlaps functionality shipped this session (new-term teaching, quantifier recall) but hasn't
-   been run through the playtest loop's own dead-end-hunting discipline yet.
-2. **Seonix Batches 3-5** (Batch 2 landed — see "Now" above; full detail relayed via the inbox,
-   triage summary in this session's history). Batch 3 — recurring wall patterns (purpose/identity
-   "whats X for/about", temporal qualifiers on Commit queries, onboarding/closing questions read
-   as literal search strings). Batch 4/5 — lower-priority, including a cross-graph disambiguation-
-   candidate-ranking weakness seonix evidenced 5 times independently but that doesn't reproduce on
-   tmct's own small fixture graph (needs a larger graph to chase). One Batch 2 follow-up remains:
-   the reverse `inherits` verb family's "the"-definite forms ("is the superclass of") aren't wired
-   into `VERB_TO_KIND` yet — doing so would leak the bare word "the" into ask.mjs's CONTENT_VOCAB
-   and break the relaxation cascade's noise-strip tests; needs a CONTENT_VOCAB fix first.
-3. **General verb-to-predicate teaching's natural follow-up**: dedicated direct-question
-   recognition ("does margo eat ribs", "what does margo eat") — this session's work covers
-   teaching + generic retrieval, not verb-specific query phrasings.
-4. **The Tier-4 "of X" membership gap**: "public methods of TaskController" returns a genuine,
-   receipted empty because the class declares no methods of its own (they're inherited) —
-   extending membership queries to walk inheritance is a bigger structural change than a routing
-   fix, deliberately deferred.
+1. **Judged CHATBENCH re-run.** Not run this session. This session's changes touch answer text
+   on judged surfaces again (onboarding/identity responses, teach-lane wording, new relation
+   phrasings), so the next judged pass needs to re-derive its stale set from answer-text diffs,
+   not assume anything carries over from the 0.8.2-era baseline still on record.
+2. **The reverse-`inherits` verb family's "the"-definite forms** from Seonix Batch 2 ("is the
+   superclass of") aren't wired into `VERB_TO_KIND` yet. Doing so leaked the bare word "the"
+   into `ask.mjs`'s CONTENT_VOCAB and broke the relaxation cascade's noise-strip tests, so it
+   needs a CONTENT_VOCAB fix first.
+3. **Seonix Batch 4/5's remaining items**: cochange phrasing variants, and the single,
+   not-independently-reverified "multi-root" substring over-match noted above.
+4. **Extend compound-symbol matching to `/describe`'s own resolver.** The compound-name
+   resolution above only covers `resolveObject` (`src/ask.mjs`); `/describe`'s own resolver
+   (`resolveSymbol` in `codegraph.mjs`) is a separate, stricter, pre-existing resolver that
+   doesn't share `resolveObject`'s tiered scoring, so "describe the payment system" doesn't
+   benefit yet. Not a regression, just not yet covered.
 
 ### Later: deferred by design, staged inside each plan
 
@@ -235,7 +202,9 @@ Each plan doc stages its own later phases; this list just points to them rather 
 their tables.
 
 - **infbench stages 1-5** (`PLAN_INFERENCE_TESTING.md` §4). The disjointness proof rule (unlocks
-  B1), proof-chain materialization, cardinality entailment, consistency checking.
+  B1), proof-chain materialization, cardinality entailment, consistency checking. The repeatable
+  measure/gate/advance cycle for this ladder is now also captured as an invokable skill,
+  `SKILL_INFERENCE_TESTING.md`.
 - **Advanced-grammar tracks b/d/e** (`PLAN_ADVANCED_GRAMMAR.md`). The constructions not landed
   this wave: stacked modality/passive, implicit arguments, and the rest of the CEFR inventory
   audit table.
