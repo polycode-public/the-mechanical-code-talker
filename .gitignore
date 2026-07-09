@@ -13,6 +13,16 @@ examples/**/.tmct/session-*.log
 examples/**/.tmct/memory/
 examples/**/.tmct/sessions/
 
+# ...and the large-scale test fixture's own pre-built graph (test/ask-resolve-ranking.test.mjs
+# et al load it directly, same reasoning as the examples above — a realistic multi-file graph
+# that reproduces the disambiguation-ranking bug at scale, built once via seonix's indexer +
+# ingestSchemaDocs, not regenerated per test run).
+!test/fixtures/large-scale/.tmct/
+!test/fixtures/large-scale/.tmct/graph.json
+test/fixtures/large-scale/.tmct/session-*.log
+test/fixtures/large-scale/.tmct/memory/
+test/fixtures/large-scale/.tmct/sessions/
+
 # Claude Code's transient agent worktrees (git-internal checkouts, never committed)
 .claude/worktrees/
 

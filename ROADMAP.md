@@ -14,7 +14,7 @@ the file has been deleted.
 
 ## Where we are now (2026-07-09)
 
-`npm test` green (**1252**). **v1.0.7, pushed** (0.9.11 → 1.0.0 → 1.0.7 across this session —
+`npm test` green (**1258**). **v1.0.7, pushed** (0.9.11 → 1.0.0 → 1.0.7 across this session —
 see `HANDOVER.md` for the exact release chain and file:line detail).
 
 ### Now: shipped this session
@@ -85,6 +85,16 @@ see `HANDOVER.md` for the exact release chain and file:line detail).
   parent class of Y") swaps subject/object at parse time so it agrees with the existing forward
   phrasing; a curated trailing-scope-filler strip ("what is a Module in this graph" → "Module") at
   both the grammar and chat-fact-lookup layers.
+- **Seonix Batch 4/5's disambiguation-ranking bug, reproduced and fixed at realistic scale.** The
+  cross-graph candidate-ranking weakness never reproduced on tmct's own tiny example fixtures, so
+  a new committed fixture graph was built — `test/fixtures/large-scale/` (vendored commander.js +
+  express.js source, indexed via seonix's own indexer, schema-docs-ingested, committed at
+  `.tmct/graph.json` per the `examples/*/.tmct/graph.json` precedent) — that reliably reproduces
+  it: an exact basename match (e.g. `option` → `lib/option.js`) losing to a same-directory sibling
+  that only shared a component. Fixed in `resolveObject`'s tier-3 scoring (`src/ask.mjs`): a new
+  exact/prefix/suffix basename tier now outranks the (now length-normalized) overlap fallback. New
+  `test/ask-resolve-ranking.test.mjs` locks it in. Cochange phrasing variants, compositional-AND
+  edge cases, and the "multi-root" substring over-match remain open (see `HANDOVER.md`).
 - **The version-bump policy, set then revised.** Tried "bump immediately after every push, hold
   locally until the next batch" (to keep the published npm version always matching the last
   pushed commit); reverted after it produced confusing "referencing a version that doesn't exist

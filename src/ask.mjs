@@ -2051,6 +2051,27 @@ export function resolveObject(graph, term, { expectedClass = null } = {}) {
     const slashStem = pathToken ? pathToken.split("/").pop().replace(/\.[a-z0-9]+$/, "") : null;
     for (const m of pool) {
       const label = String(m.label || "").toLowerCase();
+      // Basename-exact/prefix/suffix tier (large-scale-fixture bug, 2026-07-09): a bare
+      // term that IS a file's basename ("verify-shipped" -> scripts/verify-shipped.mjs)
+      // must outrank every sibling that merely shares a directory or a component
+      // ("verify") with it — checked BEFORE the raw-containment/overlap passes below so
+      // an exact stem match always wins over a same-directory partial. Only meaningful
+      // for a bare (unslashed) term, since `stem` is compared directly against the whole
+      // `tLc` — a slashed query term (e.g. "src/nope.mjs") already contains "/" and can
+      // never equal/prefix/suffix a bare stem, so it falls through unaffected to the
+      // existing slashStem-gated overlap logic just below, unchanged.
+      // The prefix/suffix half (not the exact-equality half) shares the SAME sub-4-char
+      // floor as the containment tier just below it — an unguarded stem.startsWith(tLc)
+      // reintroduces the exact short-word accidental-match bug that floor was added to
+      // close (e.g. bare "so" prefix-matching "someOtherFile"'s stem). A full stem
+      // EQUALITY, at any length, is never an accidental substring — "db"/"fs"-shaped
+      // short real identifiers must still resolve — so it stays unguarded.
+      const stem = label.split("/").pop().replace(/\.[a-z0-9]+$/, "");
+      if (stem === tLc) { scored.push({ ind: m, score: 5000 }); continue; }
+      if (tLc.length >= 4 && (stem.startsWith(tLc) || stem.endsWith(tLc))) {
+        scored.push({ ind: m, score: 4000 - Math.abs(stem.length - tLc.length) });
+        continue;
+      }
       if (tLc.length >= 4 && label.includes(tLc)) {
         scored.push({ ind: m, score: 1000 - Math.abs(label.length - tLc.length) });
         continue;
@@ -2072,7 +2093,13 @@ export function resolveObject(graph, term, { expectedClass = null } = {}) {
       // "cover"/"touch" themselves never overlap anything, so overlap>0 and
       // the stem gate both hold.
       if (overlap > 0 && (!slashStem || labelComps.has(slashStem))) {
-        scored.push({ ind: m, score: overlap * 10 });
+        // Normalized by the TERM's own component count (not a flat overlap*10): a
+        // 1-of-3-component partial match ("verify" out of "verify-shipped"'s two
+        // components, or similar) must never outscore a clean exact/prefix/suffix
+        // stem hit from the tier above, nor a fuller-fraction overlap on another
+        // candidate. termComps.length > 0 is guaranteed here (overlap > 0 requires
+        // at least one termComps entry to have matched).
+        scored.push({ ind: m, score: (overlap / termComps.length) * 10 });
       }
     }
   }

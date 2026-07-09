@@ -14,5 +14,21 @@ fixtures.
 No `.git`, `node_modules`, tests, or build config — just source + each
 project's original `LICENSE` file, retained per MIT's attribution term.
 
-No `.tmct/` is ever committed here — any test using this fixture must build its
-own graph fresh (ephemeral/tmpdir), per this repo's own CLAUDE.md convention.
+`.tmct/graph.json` IS committed here (an exception to tmct's usual `.tmct/`
+convention, allow-listed in `.gitignore` the same way `examples/*/.tmct/
+graph.json` is) — it's a pre-built, one-time artifact, not something tests
+regenerate. It was built by running seonix's own indexer
+(`seonix cli index_repository '{"repo_path":"<abs path to this dir>"}'`)
+against this fixture, expanding the resulting v2 interned wire format back to
+tmct's plain edge shape (`expandGraphPayload` from seonix's
+`src/graph-format.mjs` — seonix's on-disk graph.json is id-interned; tmct's own
+graph reader expects the expanded shape, the same one
+`examples/mini-webapp/.tmct/graph.json` uses), then merging in tmct's static
+schema documentation via `ingestSchemaDocs` (`src/schema-docs.mjs`), mirroring
+`scripts/build-demo-graph.mjs`'s own precedent. Tests load it read-only via
+`createSession({ repoPath: "test/fixtures/large-scale", env: {}, ephemeral:
+true })` — same ephemeral-session pattern as `test/chatflow-tier4.test.mjs`.
+
+To rebuild after re-vendoring or upgrading the fixture sources: re-run the
+seonix indexer against this directory, expand + re-ingest schema docs as
+above, and overwrite `.tmct/graph.json`.

@@ -228,12 +228,29 @@ the moment of actually pushing a release, as part of that same push.
    temporal qualifiers on Commit queries ("the last commit", "recent commits") treated as literal
    filter values; onboarding/closing questions ("what should I read first") read as literal
    search strings.
-4. **Seonix Batch 4/5 — lower priority.** A cross-graph disambiguation-candidate-ranking
-   weakness seonix evidenced 5 times independently (chat's ambiguous-match picker is
-   architecturally separate from and worse-ranked than the `/find` → search path) — didn't
-   reproduce on tmct's own small fixture graph, needs a larger graph to chase. Cochange phrasing
-   variants, compositional-AND edge cases beyond what Tier 4 covered, a "multi-root" substring
-   over-match (single instance, not independently reverified).
+4. **Seonix Batch 4/5 — lower priority.**
+   - **DONE: the disambiguation-candidate-ranking weakness's exact-basename-vs-siblings case.**
+     Built a realistic, committed fixture (`test/fixtures/large-scale/` — vendored commander.js +
+     express.js source, 14 modules across two "repos") specifically because the bug never
+     reproduced on tmct's own tiny `examples/mini-webapp`/`examples/polyglot` graphs (too few
+     same-directory siblings to collide). Indexed it with seonix's own indexer
+     (`seonix cli index_repository`), expanded its v2 interned wire format back to tmct's plain
+     edge shape (`expandGraphPayload` from seonix's `src/graph-format.mjs`), merged in tmct's
+     static schema docs (`ingestSchemaDocs`, confirmed a correct idempotent no-op here — seonix's
+     own indexer already bakes in ID-compatible schema docs), and committed the result at
+     `test/fixtures/large-scale/.tmct/graph.json` (allow-listed in `.gitignore`, mirroring the
+     `examples/*/.tmct/graph.json` exception). Reproduced the bug on this graph (an exact
+     basename match losing to a same-directory sibling that only shared a component) and fixed it
+     in `resolveObject`'s tier-3 scoring (`src/ask.mjs`): a new basename-exact/prefix/suffix check
+     (score 5000/~4000, length-floored at 4 chars for the prefix/suffix half to avoid reopening the
+     short-word accidental-substring bug) now runs before the raw-containment/overlap passes, and
+     the overlap-tier score is now normalized by the term's own component count instead of a flat
+     `overlap * 10` — so a 1-of-N-component partial match can no longer outrank a clean
+     exact/prefix/suffix hit. New regression test `test/ask-resolve-ranking.test.mjs` (6 cases:
+     exact-beats-siblings ×2, genuine tie stays `ambiguous:true` ×1, cross-"repo" isolation ×2,
+     fixture sanity ×1) — all passing; full suite green (1258/1258) at the time of this fix.
+   - **Still open**: cochange phrasing variants, compositional-AND edge cases beyond what Tier 4
+     covered, a "multi-root" substring over-match (single instance, not independently reverified).
 5. **General verb-to-predicate teaching's natural follow-up**: dedicated direct-question
    recognition ("does margo eat ribs", "what does margo eat") — this session shipped teaching +
    generic retrieval only, not verb-specific query phrasings.
