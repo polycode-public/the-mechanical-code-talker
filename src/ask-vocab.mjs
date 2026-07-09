@@ -217,6 +217,13 @@ export const RELATIONS = {
       // Commit->Module kind, structurally unable to match a Module subject), always
       // producing a confidently-empty answer regardless of real cochange data.
       "changed together with", "change together with", "changes together with",
+      // Present-tense bare form (Seonix Batch 4/5 follow-up): only the past tense
+      // "changed with" existed above — "what changes with X"/"what usually changes
+      // with X" fell through entirely (ENTITY_TO_TYPE's own "changes"->"Change"
+      // pseudo-type noun risked consuming the word first; see parseRelationalOrQualified's
+      // guard against exactly that in ask.mjs).
+      "changes with", "change with", "tends to change with", "tend to change with",
+      "usually changes with",
     ],
   },
   reexports: {

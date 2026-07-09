@@ -62,6 +62,13 @@ const NEW_PHRASE_CASES = [
   ["which modules was modified by a.py", "touches"],
   ["which modules changes alongside a.py", "cochange"],
   ["which modules shares commits with a.py", "cochange"],
+  // Present-tense bare cochange form (Seonix Batch 4/5 follow-up) — only the past
+  // tense "changed with" existed before; empirically verified that VERB_ALT's
+  // longest-first sort alone resolves this (no ENTITY_TO_TYPE "Change"-noun
+  // collision reached parseRelationalOrQualified's fallback scan for this shape).
+  ["which modules changes with a.py", "cochange"],
+  ["which modules usually changes with a.py", "cochange"],
+  ["which modules tends to change with a.py", "cochange"],
 ];
 
 for (const [query, expectedKind] of NEW_PHRASE_CASES) {

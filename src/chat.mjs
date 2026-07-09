@@ -1761,7 +1761,7 @@ const WHAT_KNOW_RE = /^what\s+(?:do\s+you|d'?you)\s+know(?:\s+so\s+far)?$/;
 // 0.8.2 WS4 wall kindness (c): the most likely stranger openers — "what does this
 // app/codebase do", "what is this app (for)" — join the orientation lane, so a
 // first-touch question gets the live overview instead of the grammar wall.
-const META_ORIENT_RE = /^(?:what(?:'s| is| are)?\s+this(?:\s+(?:app|codebase|repo|repository|project|code|thing))?|what\s+(?:codebase|repo|repository|project)\s+is\s+this|what\s+does\s+(?:this|the)\s+(?:app|code|codebase|project|repo)\s+do|what\s+is\s+(?:this|the)\s+app(?:\s+for)?|what\s+am\s+i\s+looking\s+at|what\s+is\s+tmct|how\s+do\s+i\s+(?:start|begin|get\s+started|get\s+going|load\s+(?:my\s+)?code|index\s+(?:my\s+)?(?:code|repo|repository)|use\s+(?:this|you|tmct))|where\s+do\s+i\s+(?:start|begin))$/;
+const META_ORIENT_RE = /^(?:what(?:'s| is| are)?\s+this(?:\s+(?:app|codebase|repo|repository|project|code|thing))?|what\s+(?:codebase|repo|repository|project)\s+is\s+this|what\s+does\s+(?:this|the)\s+(?:app|code|codebase|project|repo)\s+do|what\s+is\s+(?:this|the)\s+app(?:\s+for)?|what\s+am\s+i\s+looking\s+at|what\s+is\s+tmct|how\s+do\s+i\s+(?:start|begin|get\s+started|get\s+going|load\s+(?:my\s+)?code|index\s+(?:my\s+)?(?:code|repo|repository)|use\s+(?:this|you|tmct))|where\s+do\s+i\s+(?:start|begin)|what\s+should\s+i\s+(?:read|look\s+at)\s+first(?:\s+to\s+understand\s+(?:this\s+)?(?:codebase|code|repo|repository|project))?|where\s+should\s+i\s+start\s+reading(?:\s+(?:this\s+)?(?:codebase|code|repo|repository|project))?|where\s+do\s+i\s+begin\s+reading(?:\s+(?:this\s+)?(?:codebase|code|repo|repository|project))?)$/;
 
 /** A SHORT memory summary (never a fact dump) for the bare "what do you know".
  *  This branch only fires when rows.length === 0 — i.e. precisely the case where
@@ -1798,15 +1798,25 @@ async function memorySummary(memoryDir, graph) {
 // case-sensitive, so this reads the ORIGINAL query text, never metaLane's
 // lowercased `q` (authorLane's same discipline, just above/below).
 const MODULE_ORIENT_RE = /^what\s+does\s+(.+?)\s+do\??$/i;
+// Seonix Batch 3 (3a) — purpose/identity phrasing: "whats X for"/"what's X
+// about"/"what is X for", the sibling of "what does X do" that asks for the
+// SAME module-grain overview. Deliberately does NOT claim the literal noun
+// "app" ("what is this app for") — META_ORIENT_RE (above) already hardcodes
+// that exact phrasing and is checked BEFORE moduleOrientLane runs (metaLane's
+// own ordering), so this regex only ever gets a chance at OTHER resolvable
+// terms. "what(?:'s|s|\s+is)" mirrors PERSONAL_ASSISTANT_NUDGE_RE's own
+// tolerance for the bare "whats" contraction spelling, just below.
+const MODULE_PURPOSE_RE = /^what(?:'s|s|\s+is)\s+(.+?)\s+(?:for|about)\??$/i;
 
 /** authorLane's discipline, mirrored: a closed regex + an EXACT, UNIQUE
  *  resolution via resolveEntity, else null — never a guess. Pronoun/self
- *  subjects ("what does it/this do") are META_ORIENT_RE's/isConversational's
- *  territory, not this lane's — declined here so they fall through unchanged. */
+ *  subjects ("what does it/this do", "what's it for") are META_ORIENT_RE's/
+ *  isConversational's territory, not this lane's — declined here so they
+ *  fall through unchanged. */
 async function moduleOrientLane(query, { graph }) {
   if (!graph) return null;
   const q = String(query).trim().replace(/[?.!]+$/, "").replace(/\s+/g, " ");
-  const m = q.match(MODULE_ORIENT_RE);
+  const m = q.match(MODULE_ORIENT_RE) || q.match(MODULE_PURPOSE_RE);
   if (!m) return null;
   const term = m[1].trim();
   if (/^(?:it|this|that|they|them)$/i.test(term)) return null;

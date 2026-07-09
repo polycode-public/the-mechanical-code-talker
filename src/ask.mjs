@@ -38,7 +38,7 @@
 // edges (mgx:touchedByCommit / mgx:changeCoupledWith), which is a different (and
 // simpler) question than the browser's time-scrubbing view.
 
-import { relationKind, impactClosure, normPath } from "./codegraph.mjs";
+import { relationKind, impactClosure, normPath, HISTORY_CAP } from "./codegraph.mjs";
 import {
   VERB_TO_KIND, ENTITY_TO_TYPE, MODIFIER_TO_KIND,
   CONTEXT_PRONOUNS, META_MEANING_VERBS,
@@ -1005,6 +1005,10 @@ function buildPredicateAtoms(entityType, subjPrefix, predLc, predWords, nlp, dep
   return { atoms };
 }
 
+// Seonix Batch 3 (3b): the closed set of temporal-lead words a bare "<lead> commits"
+// query can use — see the dedicated recentCommits AST node this feeds, below.
+const RECENT_COMMIT_LEAD = new Set(["recent", "latest", "newest"]);
+
 function parseRelationalOrQualified(w, lc, nlp, depth) {
   // §6 generalization (predicate-find): seeds the SAME boolean/qualifier fold
   // below with a {node:"find",…} atom instead of the plain {node:"allOfClass"}
@@ -1038,6 +1042,17 @@ function parseRelationalOrQualified(w, lc, nlp, depth) {
     // auxiliary in that position ("what DID commit X touch") is left for the existing
     // parser, not mistaken for a term.
     const nextNoun = i + 1 < lc.length ? entityNoun(lc[i + 1]) : null;
+    // Seonix Batch 3 (3b) — a bare temporal-qualifier lead on a Commit noun with no
+    // further term ("recent commits", "latest commits", "newest commits") used to
+    // fall into the generic find-fallback just below with the qualifier WORD ITSELF
+    // as the search term ("no Commit found matching 'recent'") — a false miss, since
+    // "recent"/"latest"/"newest" were never meant as a name to search for, just a
+    // sort direction the graph already has (mgx:commitDate). Checked BEFORE the
+    // generic fallback, and only when nothing follows the noun (a real filter tail,
+    // e.g. "recent commits touching a.py", is left to the ordinary parser).
+    if (RECENT_COMMIT_LEAD.has(lc[i]) && nextNoun && nextNoun.entityType === "Commit" && i + 2 === lc.length) {
+      return { node: "recentCommits" };
+    }
     // CASCADE_NOISE_SET excluded alongside STOPWORDS (Tier-2 playtest, cycle 8):
     // "what about classes"/"how about the modules" used to reach here with
     // "about" sitting right where a real qualifying adjective would ("payment"
@@ -1632,6 +1647,19 @@ function degreeMetric(graph, ind, metric) {
   }
   return n;
 }
+/** Seonix Batch 3 (3b): every Commit individual, newest date first — the eval side of
+ *  the bare "recent commits"/"latest commits"/"newest commits" AST node (see
+ *  RECENT_COMMIT_LEAD/parseRelationalOrQualified above). Reuses the SAME
+ *  dateOf/localeCompare sort every other Commit-date reader in this file already
+ *  uses (ISO-8601 sorts correctly lexically). An empty graph is an honest empty,
+ *  never a guess. */
+function evalRecentCommits(graph) {
+  const commits = graph.individuals.filter((i) => i.class === "Commit");
+  const dateOf = (c) => String((c.attributes || []).find((a) => a.key === "date")?.value || "");
+  commits.sort((a, b) => dateOf(b).localeCompare(dateOf(a)));
+  return { compositeKind: "recentCommits", matches: commits };
+}
+
 /** TEMPORAL over a nested set (lever 3) — the commits that touched ANY member of the
  *  inner set, newest commit date first. Reuses the SAME touches→commit→date-sort the
  *  flat when-shape runs (mgx:commitDate is ISO-8601, so a lexical sort IS a date sort;
@@ -1718,6 +1746,7 @@ export function evalComposite(graph, ast, opts = {}) {
   if (ast.node === "list") return { compositeKind: "list", matches: evalSet(graph, ast.base, opts), entityType: ast.entityType, scoped: ast.scoped };
   if (ast.node === "superlative") return evalSuperlative(graph, ast);
   if (ast.node === "temporal") return evalTemporal(graph, ast, opts);
+  if (ast.node === "recentCommits") return evalRecentCommits(graph);
   if (ast.node === "anaphora") return evalAnaphora(graph, ast, opts);
   // predicate-find (Workstream 2), TOP-LEVEL: unlike evalSet's "find" case (used
   // when a find-seed is embedded inside a boolean/qualifier fold, §6), this keeps
@@ -1843,6 +1872,24 @@ function renderComposite(parsed, result) {
       };
     }
     return { content: `${cited}.`, miss: false, ambiguous: false, matches: result.matches };
+  }
+  // Seonix Batch 3 (3b): bare "recent/latest/newest commits" — a real dated commit
+  // list, newest first, capped at HISTORY_CAP for consistency with renderFileHistory/
+  // renderSymbolHistory's own listing convention (codegraph.mjs) — never the false
+  // "no Commit found matching 'recent'" find-miss this used to fall into.
+  if (result.compositeKind === "recentCommits") {
+    if (!result.matches.length) return { content: `no commits recorded in this index.`, miss: true, ambiguous: false, matches: [] };
+    const dateOf = (c) => String((c.attributes || []).find((a) => a.key === "date")?.value || "");
+    const shown = result.matches.slice(0, HISTORY_CAP).map((c) => {
+      const day = dateOf(c).slice(0, 10);
+      const msg = (c.attributes || []).find((a) => a.key === "message")?.value || "";
+      return `${c.label}${day ? ` (${day})` : ""}${msg ? ` — ${msg}` : ""}`;
+    });
+    const tail = result.matches.length > HISTORY_CAP ? ` …+${result.matches.length - HISTORY_CAP} more` : "";
+    return {
+      content: `${result.matches.length} recent commit(s): ${shown.join(", ")}${tail}.`,
+      miss: false, ambiguous: false, matches: result.matches,
+    };
   }
   if (result.compositeKind === "superlative") {
     if (!result.matches.length) return { content: `no ${nounFor(result.entityType, 2)} to rank in this index.`, miss: true, ambiguous: false };
@@ -3306,6 +3353,46 @@ export function relaxParse(graph, query, { nlp = undefined, contextId = null, pr
  *  miss. Returns the full {content, tmct_ask:
  *  {mechanical,parsed,matches,traversal,miss,ambiguous,candidates?}} envelope
  *  §6.2 specifies. Zero generative model calls. */
+// Seonix Batch 3 (3b), singular subject: "the last commit"/"the latest commit"/"the
+// most recent commit" — literal-phrase substitution, checked as a whole-word match
+// (not anchored to the whole line, since it may sit mid-sentence as the subject of a
+// longer question, e.g. "what did the last commit touch").
+const LAST_COMMIT_PHRASE_RE = /\b(?:the\s+)?(?:last|latest|most\s+recent)\s+commit\b/i;
+
+/** resolveObject has no notion of "the newest Commit individual" — it only matches
+ *  literal graph labels, and the bare word "commit" itself component-matches the
+ *  Commit SchemaClass node (a known risk noted around resolveObject's own tier-3
+ *  comments), so "what did the last commit touch" used to render a false "Commit
+ *  has no touches edges in the index" instead of an honest answer. Fixed by textual
+ *  substitution BEFORE the normal parse/resolve pipeline runs: the phrase is swapped
+ *  for "commit <newest-sha>" (the SAME dateOf/localeCompare sort every other
+ *  Commit-date reader in this file already uses), so the rest of the pipeline sees
+ *  exactly what it would for "what did commit <realsha> touch" and needs no other
+ *  change. A graph with no commits, or no date on any commit, leaves the query text
+ *  untouched — an honest miss downstream, never a guess at which commit is "last". */
+// A bare "when was/did commit X" with no change-verb tail at all (the shape left
+// once "the latest commit" is substituted out of "when was the latest commit") —
+// grammar.mjs's T8 "when" template requires a touches-family verb to fire, so this
+// would otherwise honestly miss even though traverse()'s own "when" branch already
+// special-cases a Commit OBJECT to answer with its own date (see the commit-as-
+// subject flip's sibling branch, just above the flip itself). Bridged by appending
+// the neutral "touched" tail — never for a query that already names its own verb
+// ("what did the last commit touch" is untouched).
+const BARE_WHEN_COMMIT_RE = /^when\s+(?:was|were|is|did|does|do)\s+commit\s+[0-9a-fA-F:]+$/i;
+
+function substituteLastCommitPhrase(graph, query) {
+  const q = String(query || "");
+  if (!graph || !LAST_COMMIT_PHRASE_RE.test(q)) return q;
+  const commits = graph.individuals.filter((i) => i.class === "Commit");
+  if (!commits.length) return q;
+  const dateOf = (c) => String((c.attributes || []).find((a) => a.key === "date")?.value || "");
+  const newest = [...commits].sort((a, b) => dateOf(b).localeCompare(dateOf(a)))[0];
+  if (!newest) return q;
+  const out = q.replace(LAST_COMMIT_PHRASE_RE, `commit ${newest.label}`);
+  const bareTrimmed = out.trim().replace(/[?.!]+$/, "");
+  return BARE_WHEN_COMMIT_RE.test(bareTrimmed) ? `${bareTrimmed} touched` : out;
+}
+
 export function ask(graph, query, { contextId = null, nlp = undefined, prev = null } = {}) {
   // Explicit help/orientation request → the rephrase hint directly (the honest bottom
   // of the cascade, reached on demand), never a pretend answer or a relaxation attempt.
@@ -3318,6 +3405,11 @@ export function ask(graph, query, { contextId = null, nlp = undefined, prev = nu
       },
     };
   }
+  // Seonix Batch 3 (3b), singular subject: substitute "the last/latest/most recent
+  // commit" for the real newest Commit's own id BEFORE anything else runs, so the
+  // rest of the pipeline (direct parse, relaxation, resolveObject) never has to know
+  // this phrase existed — see substituteLastCommitPhrase's own doc above.
+  query = substituteLastCommitPhrase(graph, query);
   const direct = parseQuery(query, { nlp });
   // The relaxation cascade fires ONLY when the DIRECT parse would miss (no parse, a
   // compositional {node:"miss"}, or an unresolved named term) — a clean hit, an

@@ -762,6 +762,55 @@ test("Bug E MODULE_ORIENT_RE: a pronoun subject is left to isConversational/META
     "moduleOrientLane must decline a pronoun subject, not silently resolve it via focus");
 });
 
+test("Seonix Batch 3 (3a) MODULE_PURPOSE_RE: \"whats X for\"/\"what's X about\" resolve exactly like \"what does X do\"", async () => {
+  const g = await graph();
+  const doDoes = await runTurn("what does app/lib/b.mjs do", { config: CONFIG, graph: g });
+  const forWhats = await runTurn("whats app/lib/b.mjs for", { config: CONFIG, graph: g });
+  const aboutApostrophe = await runTurn("what's app/lib/b.mjs about", { config: CONFIG, graph: g });
+  const isFor = await runTurn("what is app/lib/b.mjs for", { config: CONFIG, graph: g });
+  assert.equal(forWhats.record.via, "meta");
+  assert.equal(forWhats.answer, doDoes.answer);
+  assert.equal(aboutApostrophe.answer, doDoes.answer);
+  assert.equal(isFor.answer, doDoes.answer);
+});
+
+test("Seonix Batch 3 (3a) MODULE_PURPOSE_RE: a pronoun subject is left alone (never guessed at via focus)", async () => {
+  const g = await graph();
+  const focus = g.individuals.find((i) => i.id === "mod-d");
+  const r = await runTurn("what's it for", { config: CONFIG, graph: g, focus });
+  assert.notEqual(r.answer.split(" ")[0], "app/functions/d/handler.mjs",
+    "moduleOrientLane must decline a pronoun subject for the purpose phrasing too");
+});
+
+test("Seonix Batch 3 (3a) MODULE_PURPOSE_RE: does not shadow META_ORIENT_RE's literal \"what is this app for\"", async () => {
+  const g = await graph();
+  const r = await runTurn("what is this app for", { config: CONFIG, graph: g });
+  assert.equal(r.record.via, "meta");
+  assert.doesNotMatch(r.answer, /^app\//, "the literal \"app\" noun stays META_ORIENT_RE's orientation blurb, not a module overview");
+});
+
+test("Seonix Batch 3 (3c): onboarding/closing questions beyond the original closed set get the same orientation nudge as \"where do i start\"", async () => {
+  const g = await graph();
+  // Strip the independent "Goal (inferred): ..." suffix (a separate mechanism keyed
+  // off incidental words in the raw query, e.g. "start" — unrelated to whether
+  // META_ORIENT_RE itself claimed the turn) before comparing orientation text.
+  const stripGoal = (s) => s.replace(/\n\nGoal \(inferred\):.*$/s, "");
+  const baseline = await runTurn("where do i start", { config: CONFIG, graph: g });
+  for (const q of [
+    "what should i read first to understand this codebase",
+    "where should i start reading this code",
+    "what should i read first",
+    "where should i start reading",
+    "where do i begin reading",
+    "what should i look at first",
+  ]) {
+    const r = await runTurn(q, { config: CONFIG, graph: g });
+    assert.equal(r.record.via, "meta", `"${q}" should route to the meta/orientation lane`);
+    assert.equal(r.record.miss, false, `"${q}" should not be an honest-but-unhelpful miss`);
+    assert.equal(stripGoal(r.answer), stripGoal(baseline.answer), `"${q}" should get the identical orientation answer`);
+  }
+});
+
 test("ADVANCED_GRAMMAR track (a): a counterfactual deletion query gets a hypothetical marker on its real answer", async () => {
   const g = await graph();
   const r = await runTurn("if app/lib/a.mjs were deleted, what would break", { config: CONFIG, graph: g });

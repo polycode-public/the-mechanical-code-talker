@@ -667,6 +667,35 @@ test("ask(): \"what did commit <sha> touch\" (forward) and the passive \"what wa
   assert.equal(passive.content, content);
 });
 
+// ---- Seonix Batch 3 (3b): temporal qualifiers on Commit queries ----
+
+test("ask(): bare \"recent commits\"/\"latest commits\"/\"newest commits\" render a real dated list, newest first — never the false find-miss", () => {
+  const graph = buildGraph();
+  for (const q of ["recent commits", "latest commits", "newest commits"]) {
+    const { content, tmct_ask } = ask(graph, q);
+    assert.equal(tmct_ask.miss, false, `"${q}" should not miss`);
+    assert.match(content, new RegExp(`^2 recent commit\\(s\\): ${FIXTURE_SHORT} \\(2026-07-01\\).*abc123`), `"${q}" -> ${content}`);
+  }
+});
+
+test("ask(): \"what did the last commit touch\" substitutes the real newest Commit individual before resolution", () => {
+  const graph = buildGraph();
+  const direct = ask(graph, `what did commit ${FIXTURE_SHORT} touch`);
+  for (const q of ["what did the last commit touch", "what did the latest commit touch", "what did the most recent commit touch"]) {
+    const { content, tmct_ask } = ask(graph, q);
+    assert.equal(tmct_ask.miss, false, `"${q}" should not miss`);
+    assert.equal(content, direct.content, `"${q}" should read exactly like the real-sha form`);
+  }
+});
+
+test("ask(): \"when was the latest commit\" resolves against the real newest commit's own date", () => {
+  const graph = buildGraph();
+  const { content, tmct_ask } = ask(graph, "when was the latest commit");
+  assert.equal(tmct_ask.miss, false);
+  assert.match(content, new RegExp(FIXTURE_SHORT));
+  assert.match(content, /2026-07-01/);
+});
+
 test("ask(): the existing commit-as-answer direction still works — \"which commits touched myFile.mjs\" lists commits flat", () => {
   const graph = buildGraph();
   const { content, tmct_ask } = ask(graph, "which commits touched myFile.mjs");

@@ -1408,7 +1408,7 @@ export function renderUntested(graph) {
   return `${untested.length} source module(s) with no covering test module:\n  ${capJoin(untested, COVERAGE_CAP, "\n  ")}`;
 }
 
-const HISTORY_CAP = 15;
+export const HISTORY_CAP = 15;
 
 /** Recent commits that touched a symbol's module — from `touches` (seon:history).
  *  Replaces `git log -- <file>`. Commits are listed newest-first (git-log order). */
