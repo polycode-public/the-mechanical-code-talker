@@ -43,6 +43,73 @@ coexist as separate `Rule` individuals sharing one `mgx:ruleName` — the same n
 `appendFact` already sets for two Facts sharing a subject but differing predicate/object. Picking
 "which one wins" at query time is explicitly left to the Phase 4/5/6 dispatcher, not decided here.
 
+## Phase 1 — DONE (2026-07-09)
+
+Item 1 (relational fact teach) and Item 5 (adjective-mint) both landed in `src/chat.mjs`, exactly
+as this doc's own §1 subsections specified, with one implementation adjustment for Item 5 found
+live (below) — everything else held as designed, including the load-bearing detail that Item 1's
+literal `the` anchor keeps it structurally disjoint from Item 3's future indefinite-article
+regex.
+
+**Item 1** (`RELATION_FACT_TEACH_RE`, `src/chat.mjs`, defined right after `OWNS_PASSIVE_TEACH_RE`;
+matched in `teachLane` right after the passive-ownership block, before `SOME_A_FEW_RE`): "ahab is
+the father of john" mints an ordinary Fact (`teachFact`) with `predicate: await
+generalVerbPredicate(m[2])` — reused verbatim, no sibling function, exactly as designed.
+Query-side needed **no new machinery**: `"what do you know about ahab"` (factAnswer's
+`KNOW_ABOUT_RE`) and `"does ahab father john"` (factReadBack's pre-existing general-verb yes/no
+reader) both already confirm the taught fact correctly. One thing live-tested and NOT used: `"is
+ahab the father of john"` does **not** resolve correctly today — it accidentally matches
+`IS_ADJECTIVE_YESNO_RE`'s unrestricted backtracking (mis-splits "ahab the father of" as the subject
+and "john" as a bogus adjective, then declines with a confusing, wrong-shaped message). A genuine
+"is X the ROLE of Y" reader is real Phase 2+ work; not built here, per the plan's own scoping.
+
+**Item 5** (`unknownAdjectiveFallback`, `src/chat.mjs`, a standalone function tried in `teachLane`
+right after `unknownObjectFallback` declines and before the wrapped-only `TEACH_PROPERTY_RE`
+block): mints `mgx:hasProperty`, no quantifier, exactly as designed, gated on subject-side
+groundedness (`isGroundedTerm`) or a bare Capitalized name-shaped token.
+
+**Adjustment found live** (the one place the original design needed sharpening, not a redesign):
+the plan's stated guard ("subject grounded via `isGroundedTerm`, OR bare Capitalized") turned out
+to be too permissive on its own — it reopened the pre-existing, explicitly pinned "module is
+banana" regression (`test/chat-teach-quantifier.test.mjs`, `test/wiring-facts.test.mjs`, both from
+commit `901528f`): a bare KNOWN-lexicon-noun subject with no article/capitalization/quantifier and
+an unrecognized bare object must stay a plain honest miss, and a naive `isGroundedTerm(subjectRaw)`
+check (true for any known lexicon noun, including a completely bare "module") would have silently
+minted it as a property instead. Fixed by requiring an explicit "deliberate entity reference"
+signal alongside plain lexicon groundedness: a subject grounded ONLY by a bare static-lexicon match
+(no article, no capitalization) does not qualify on its own — a stripped leading article ("the
+cache" → "cache"), a capitalized name-shape ("Mary"), or a prior-TAUGHT fact anchor
+(`isGroundedByFact`) each stand in for the "this is deliberate teaching, not ordinary bare prose"
+signal a quantifier provides for `unknownObjectFallback`'s own class-mint (property claims have no
+quantifier to lean on instead). "the cache is bespoke" (wrapped — see below) and "TaskController is
+bespoke" (bare, capitalized) both mint correctly under this tightened guard; "module is banana"
+still declines, confirmed unchanged by the full pre-existing test suite (1371 → 1377, zero
+modifications to any existing test).
+
+**A second, cross-cutting finding, confirmed live, sharper than the plan's own Verification finding
+4**: the plan named the risk as "`isConversational`'s ≤3-word heuristic can swallow a short
+teach-miss's own honest DECLINE text." Live-testing the plan's own canonical illustration, bare
+`"mary is female"`, showed the risk is stronger than that: `runTurn`'s lane order runs "(2)
+conversational orientation" strictly BEFORE "(4) TEACH" — so a short (≤3-word), non-code-ish bare
+sentence never reaches `teachLane` AT ALL, success or failure, not merely "reaches it and then has
+its decline text overridden." The literal bare `"mary is female"` (3 words, no code-ish token)
+returns the generic orientation card with `miss: true` and nothing stored; the wrapped `"remember
+that mary is female"` (5 words) escapes the word-count gate and stores correctly (though via the
+pre-existing, deliberately out-of-scope `TEACH_PROPERTY_RE` gap in this specific case, since bare
+lowercase "mary" carries none of `unknownAdjectiveFallback`'s own groundedness signals either); a
+bare, capitalized, code-ish-shaped subject ("TaskController is bespoke") escapes the word-count gate
+on its own and mints via `unknownAdjectiveFallback` itself, proving the new function's own success
+path displays correctly end-to-end whenever the lane is actually reached — confirming the plan's own
+claim that a SUCCESS is never gated on `isConversational` (a success makes `miss` false immediately,
+so `isConversationalCandidate`'s own `miss` precondition can't fire). This distinction (routing
+pre-emption vs. decline-text override) is recorded here because it changes what a future "fix
+isConversational" follow-up actually needs to do — widen when the teach lane is CONSULTED, not just
+when its decline text is allowed to stand. Per the plan's own "Open risks" section, this remains
+explicitly out of scope for Phase 1 (a change to already-shipped routing) — not fixed here.
+
+Both items' tests live in `test/chat-teach-quantifier.test.mjs` (six new tests, all passing
+alongside the full pre-existing suite, unmodified). `npm test`: 1371 → 1377.
+
 ## Origin
 
 2026-07-09 session. The operator's own framing, verbatim (this is the design target, not a
@@ -418,6 +485,23 @@ vocabulary — never a relation NAME:
   on either), but is the highest-novelty kernel work (a genuinely new search function, not reuse) —
   sequencing it last is the prudent default regardless of the dependency graph technically allowing
   earlier placement.
+
+**Phase 6, KERNEL half — DONE (2026-07-09)**: `findReachableSet(startState, applyActions,
+{ maxDepth, stateKey })` landed in `src/planning.mjs`, a sibling of `findActionPath` sharing only
+the literal-identical frontier-seeding step (`seedFrontier`, extracted since it has no
+goal/accumulation semantics to differ on) — the main expand loops stayed independent, since their
+halting/result-accumulation semantics (return-the-instant-vs-accumulate-every-reachable-state)
+differ enough that a shared core would need a mode parameter recreating the complexity a merge is
+supposed to remove; see the file's own new comments above `findReachableSet` for the full
+reasoning. Proven against a toy graph with a genuine cycle AND a same-length two-path convergence
+(one node reachable via two different routes) — dedup, cycle-safety, and budget-exhaustion
+exclusion all confirmed by new tests in `test/planning.test.mjs`; `findActionPath`'s own existing 6
+tests re-verified unaffected. `npm test`: +5 new tests, full suite green. The WIRING half —
+`RECURSIVE_RULE_TEACH_RE` (the teach-shape recognizer above) plus the query-dispatcher branch
+(§3.2.b's `recursive` case) — is deliberately NOT done here; both touch `chat.mjs`, which a
+concurrent dispatch held exclusively at the time this kernel work was done, per this repo's
+coordinator-model file-ownership discipline (`CLAUDE.md`). Picking up the wiring half is next once
+`chat.mjs` is free.
 
 ## 5. Relationship to `PLAN_HANOI.md` / `PLAN_GUESS_NUMBER.md`
 

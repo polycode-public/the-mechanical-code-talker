@@ -1380,6 +1380,24 @@ const OWNS_TEACH_RE = /^([A-Za-z][\w'-]*(?:\s+[A-Z][\w'-]*)?)\s+(?:owns|maintain
  *  the yes/no readers below answer either phrasing identically. */
 const OWNS_PASSIVE_TEACH_RE = /^(.+?)\s+(?:is|are|was|were)\s+owned\s+by\s+([A-Za-z][\w'-]*(?:\s+[A-Z][\w'-]*)?)[.!?]*$/i;
 
+/** "<Name> is the <role> of <Name>" — the relational-fact teach declarative
+ *  (PLAN_TAUGHT_RELATIONS.md Item 1, Phase 1): a NAMED relationship between
+ *  two entities ("ahab is the father of john"), grouped here with the other
+ *  relational/possessive teach shapes above (ownership) since it's tried on
+ *  the SAME ownSrc in teachLane, right after OWNS_PASSIVE_TEACH_RE and before
+ *  SOME_A_FEW_RE — unconditionally ahead of generalVerbTeach's own call site,
+ *  so GENERAL_VERB_ANYWHERE_EXCLUDE_RE never gets a say. The literal "the" +
+ *  bare role-noun + "of" anchor is deliberate: PLAN_TAUGHT_RELATIONS.md's
+ *  Item 3 (a future, not-yet-implemented "a <rule> is a <relation> of a
+ *  <relation>" composition-rule teach shape) uses an INDEFINITE "a"/"an" in
+ *  the same slot instead, so the two shapes structurally can never collide —
+ *  this regex must keep requiring literal "the", never "a"/"an", so any
+ *  future Item 3 work stays disjoint from this one. Subject/object each use
+ *  the SAME 1-2-token name-capture convention OWNS_TEACH_RE's own subject/
+ *  owner already use. */
+const RELATION_FACT_TEACH_RE =
+  /^([\w'-]+(?:\s+[A-Z][\w'-]*)?)\s+(?:is|are|was|were)\s+the\s+([a-z][\w-]*)\s+of\s+([\w'-]+(?:\s+[A-Z][\w'-]*)?)[.!?]*$/i;
+
 /** "<X> is <adjective>" — the property teach payload (wrapper-REQUIRED): a lazy
  *  subject and a single bare complement word. Never matches the "is a <noun>"
  *  membership shape (that stays the ACE grammar's), so "remember that cache is
@@ -1701,6 +1719,99 @@ async function unknownObjectFallback(payload, { memoryDir, sessionId, lexicon })
   });
 }
 
+/** The adjective-MINT fallback (PLAN_TAUGHT_RELATIONS.md Item 1's sibling
+ *  design, Item 5, Phase 1): "mary is female" / "the cache is bespoke" — a
+ *  brand-new adjective with no lexicon entry at all, on a SUBJECT that's
+ *  already grounded (by ANY of the same senses isGroundedTerm already tests
+ *  for unknownObjectFallback, OR a bare Capitalized name-shaped token, the
+ *  exact convention OWNS_TEACH_RE's own bare-form gate uses). Deliberately
+ *  its own standalone function, tried ALONGSIDE unknownSubjectFallback rather
+ *  than nested inside it: unknownSubjectFallback's own very first line
+ *  (`classify(subjectRaw, lex)` truthy -> immediate `return null`) exists to
+ *  hand a KNOWN subject's ACE miss back as a real miss — precisely the case
+ *  this fallback needs to keep working for ("the cache is bespoke" — "cache"
+ *  is a known lexicon noun), so nesting this inside that early-return would
+ *  make it unreachable.
+ *
+ *  GROUNDING — property-specific, NOT unknownObjectFallback's class-mint
+ *  guard: no "every"-quantifier gate at all. A property claim is about ONE
+ *  entity, never a quantified class claim (unknownSubjectFallback's own
+ *  point 3 precedent: property assertions never carry a quantifier even
+ *  under "every"). So the guard here is SUBJECT-side only — isGroundedTerm,
+ *  OR a bare Capitalized token — and the OBJECT (the new adjective) is never
+ *  required to be independently grounded (minting it is the entire point).
+ *  UNKNOWN_SUBJECT_RE's own determiner alternation has no "the" (only
+ *  every/each/all/a/an), so a leading "the" rides into the subject capture
+ *  itself ("the cache") rather than being split off as a determiner — the
+ *  SAME leading-article strip normFactTerm (memory/core.mjs) applies before
+ *  storage is applied here too, purely for the groundedness check, so this
+ *  recognizes exactly the head noun ("cache") teachFact will actually store
+ *  under. Branch order mirrors unknownSubjectFallback's own noun-then-
+ *  adjective order: declines (null) first when the OBJECT already resolves
+ *  as a known NOUN or a fact-grounded CLASS term, so a genuine class-
+ *  membership sentence is never misread as a property. Matches
+ *  UNKNOWN_SUBJECT_RE verbatim (the same regex unknownObjectFallback already
+ *  reuses) and writes HAS_PROPERTY_PREDICATE, no quantifier, ever.
+ *
+ *  Sits strictly UPSTREAM of the pre-existing TEACH_PROPERTY_RE gap (the
+ *  wrapped-only surface that mints ANY bare complement word with zero
+ *  grounding check at all, e.g. "remember that zorp is florpy" —
+ *  Verification finding 3, PLAN_TAUGHT_RELATIONS.md): this fallback does not
+ *  close that gap (out of scope, a deliberate separate operator decision),
+ *  only adds a properly-grounded alternative ahead of it.
+ *
+ *  IMPLEMENTATION ADJUSTMENT found live (not in the original plan text): a
+ *  bare "module is banana" (a KNOWN lexicon-noun subject, NO article, NO
+ *  capitalization, an unrecognized bare object) is an EXISTING pinned
+ *  regression (test/chat-teach-quantifier.test.mjs, test/wiring-facts.test.mjs
+ *  — both from unknownObjectFallback's own commit 901528f) that must stay a
+ *  plain honest miss. unknownObjectFallback's own mint is guarded against
+ *  this exact shape by requiring a genuine "every/each/all" quantifier — but
+ *  a property claim never carries one (this function's whole premise), so a
+ *  plain "subject grounded via the static lexicon alone" test would
+ *  re-open precisely that regression for the property case instead. The
+ *  fix: a subject grounded ONLY by a bare static-lexicon match (no article,
+ *  no capitalization) does NOT qualify on its own — an article (stripped
+ *  above into `bareSubject`), a capitalized name-shape, or a PRIOR-TAUGHT
+ *  fact anchor (isGroundedByFact) each stand in as the "this is a deliberate
+ *  entity reference, not ordinary bare prose" signal a quantifier would
+ *  otherwise provide. "the cache is bespoke" and "Mary is female" both carry
+ *  one of those signals (the leading "the", and capitalization,
+ *  respectively); "module is banana" carries none. */
+async function unknownAdjectiveFallback(payload, { memoryDir, sessionId, lexicon }) {
+  if (!memoryDir) return null;
+  const m = String(payload).trim().match(UNKNOWN_SUBJECT_RE);
+  if (!m) return null;
+  const [, , subjectRaw, objectRaw] = m;
+  const { loadLexicon, lookupNoun, classify } = await import("./grammar/lexicon.mjs");
+  const lex = lexicon || loadLexicon();
+  // Y already a known NOUN or a fact-grounded CLASS term — a genuine class-
+  // membership sentence, unknownSubjectFallback/unknownObjectFallback's own
+  // territory (already had first refusal on it) — never misread as a property.
+  if (lookupNoun(lex, objectRaw) || GENERIC_ANCHOR_NOUNS.has(String(objectRaw).toLowerCase())
+    || (await isGroundedByFact(objectRaw, memoryDir))) return null;
+  // Subject-side groundedness — strip a leading "the"/"a"/"an" first
+  // (normFactTerm's own article-strip, mirrored here) so "the cache" checks
+  // groundedness under its real head noun "cache", the same spelling
+  // teachFact will actually normalize and store.
+  const bareSubject = subjectRaw.replace(/^(?:the|an?)\s+/i, "").trim() || subjectRaw;
+  const hadArticle = bareSubject !== subjectRaw;
+  const capitalized = /^[A-Z]/.test(bareSubject);
+  const factGrounded = await isGroundedByFact(bareSubject, memoryDir);
+  const genericAnchor = GENERIC_ANCHOR_NOUNS.has(bareSubject.toLowerCase());
+  // A bare (no article, no capitalization) subject grounded ONLY via the
+  // static lexicon is exactly the pinned "module is banana" shape — see this
+  // function's own docblock. Requires the article/capitalization/prior-fact
+  // signal ALONGSIDE (not instead of) lexicon groundedness before an
+  // article-only subject qualifies.
+  const lexiconGrounded = hadArticle && classify(bareSubject, lex) != null;
+  const subjectGrounded = capitalized || factGrounded || genericAnchor || lexiconGrounded;
+  if (!subjectGrounded) return null; // no deliberate-entity signal — never a guessed mint
+  return teachFact(memoryDir, sessionId, {
+    subject: subjectRaw, predicate: HAS_PROPERTY_PREDICATE, object: objectRaw,
+  });
+}
+
 // ---- BUG 3 (2026-07-09, operator-authorized generalizing — "I don't know
 // where that ban came from, overturn it. build it."): general verb-to-
 // predicate teaching. "remember tony has a hat" / "remember margo eats ribs"
@@ -1987,6 +2098,22 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
     if (stored) return stored;
   }
 
+  // RELATIONAL FACT — "<Name> is the <role> of <Name>" (PLAN_TAUGHT_RELATIONS.md
+  // Item 1, Phase 1). Grouped with the other relational/possessive teach shapes
+  // just above (both ownership forms), tried on the SAME ownSrc, unconditionally
+  // ahead of generalVerbTeach's own call site below so
+  // GENERAL_VERB_ANYWHERE_EXCLUDE_RE never gets a say. Predicate minting reuses
+  // generalVerbPredicate VERBATIM (no sibling function) — implementation-agnostic
+  // to part of speech, so a role noun like "father" mints mgx:father the same
+  // way a general verb would; an ordinary Fact, no new storage shape.
+  const rel = ownSrc.match(RELATION_FACT_TEACH_RE);
+  if (rel && memoryDir && !QUESTION_LEAD_RE.test(ownSrc)) {
+    const stored = await teachFact(memoryDir, sessionId, {
+      subject: rel[1], predicate: await generalVerbPredicate(rel[2]), object: rel[3],
+    });
+    if (stored) return stored;
+  }
+
   // "some Xs are Ys" / "a few Xs are Ys" (Feature A) — the plural class-
   // membership quantifier shape. ACE has no quantifier-phrase pattern at all
   // (parseAce never even attempts a fit), so this is ALWAYS a direct write,
@@ -2109,6 +2236,15 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
     // narrowing rules (the "both sides ungrounded" safety guard, etc.).
     const objectFallback = await unknownObjectFallback(payload, { memoryDir, sessionId, lexicon });
     if (objectFallback) return objectFallback;
+    // ADJECTIVE-MINT fallback (PLAN_TAUGHT_RELATIONS.md Item 5, Phase 1): tried
+    // right after unknownObjectFallback declines, so a grounded subject (static
+    // lexicon, a prior taught fact, or a bare Capitalized name) can mint a
+    // brand-new adjective's property fact. See unknownAdjectiveFallback's own
+    // docblock for the exact narrowing rules (the "both sides ungrounded"
+    // safety guard, and why this must be a standalone function rather than
+    // nested inside unknownSubjectFallback).
+    const adjectiveFallback = await unknownAdjectiveFallback(payload, { memoryDir, sessionId, lexicon });
+    if (adjectiveFallback) return adjectiveFallback;
     // PROPERTY teach — "remember/note that <X> is <adjective>": wrapper-REQUIRED
     // (a bare "X is deprecated" is never silently reified), and only after the
     // ACE grammar declined (unknown words / not the membership shape), so a

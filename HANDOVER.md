@@ -9,10 +9,12 @@ Session handle (inbox): `tmct` (this session; earlier sessions used `mechanic`).
 
 ## Where we are (2026-07-09)
 
-`npm test` is green at **1371** (1361 + 9 from the concurrent Rule-storage-foundation dispatch,
-`src/memory/core.mjs`, item 4 below + 1 from this fix's own new test). v1.0.7 is published; nothing has pushed since, so the local
-version stays at 1.0.9 per the bump-at-push-time policy recorded in `CLAUDE.md`. The full
-`SKILL_CHAT_PLAYTEST.md` dialogue-flow tier ladder (tiers 0 through 6) is complete.
+`npm test` is green at **1377** (1361 + 9 from the concurrent Rule-storage-foundation dispatch,
+`src/memory/core.mjs`, item 4 below + 1 from this fix's own new test + 6 from item 5's
+`PLAN_TAUGHT_RELATIONS.md` Phase 1 dispatch, relational-fact-teach + adjective-mint). v1.0.7 is
+published; nothing has pushed since, so the local version stays ahead of npm per the
+bump-at-push-time policy recorded in `CLAUDE.md`. The full `SKILL_CHAT_PLAYTEST.md` dialogue-flow
+tier ladder (tiers 0 through 6) is complete.
 
 **INF-C1 fabrication bug (top open follow-up below) is now FIXED.** `GENERAL_VERB_YESNO_RE`'s
 no-hit branch (`src/chat.mjs`, was lines 3852-3855) no longer synthesizes a confident "no" when
@@ -110,6 +112,42 @@ provenance tag get an identical trust score. New `test/memory-rules.test.mjs`, 9
 `PLAN_TAUGHT_RELATIONS.md`'s new "Phase 3 — DONE" note for the two small design gaps resolved
 during implementation. Phase 4 (compose2 query-side wiring) is next in that plan's build order.
 
+### 5. `PLAN_TAUGHT_RELATIONS.md` Phase 1 — relational fact teach + adjective-mint (`chat.mjs`)
+
+Item 1 (`RELATION_FACT_TEACH_RE` + a `teachLane` call site, both new): "ahab is the father of john"
+mints an ordinary Fact via `generalVerbPredicate` reused verbatim — no new storage shape. Query-side
+needed zero new machinery: `"what do you know about ahab"` and `"does ahab father john"` both
+already confirm it correctly (`"is ahab the father of john"` does not — a real Phase 2+ gap,
+recorded, not built).
+
+Item 5 (`unknownAdjectiveFallback`, a new standalone function tried in `teachLane` right after
+`unknownObjectFallback` declines): "the cache is bespoke" / "TaskController is bespoke" mint
+`mgx:hasProperty`, gated on subject-side groundedness or a bare Capitalized name. One adjustment
+found live: a naive groundedness check alone reopened the pinned "module is banana" regression, so
+minting now also requires an explicit "deliberate entity reference" signal (an article, a
+capitalized name, or a prior-taught fact) alongside plain lexicon groundedness — see
+`PLAN_TAUGHT_RELATIONS.md`'s new "Phase 1 — DONE" note for the full story, including a sharper,
+live-confirmed restatement of that doc's own Verification finding 4 (`isConversational`'s ≤3-word
+gate pre-empts the teach lane entirely for a short bare sentence, not merely its decline text — a
+real cross-cutting risk, still out of scope to fix here).
+
+`test/chat-teach-quantifier.test.mjs`, 6 new tests. `npm test`: 1371 → 1377.
+
+### 6. `PLAN_TAUGHT_RELATIONS.md` Phase 6, KERNEL half only — `findReachableSet` (`src/planning.mjs`)
+
+`findReachableSet(startState, applyActions, { maxDepth, stateKey })`, a sibling of `findActionPath`
+in the same file: no `isGoal` at all — every state reachable from `startState` within `maxDepth`
+hops is a result (`{ node, path }` per node), not just the first one found. Shares only the
+literal-identical frontier-seeding step with `findActionPath` (`seedFrontier`); the main expand
+loops stayed independent siblings since their halting/accumulation semantics genuinely differ (see
+the new comments in `src/planning.mjs` for the full reasoning). Proven against a toy graph with a
+real cycle and a same-length two-path convergence (dedup correctness, not just termination).
+`test/planning.test.mjs`, 5 new tests; `findActionPath`'s own 6 existing tests reconfirmed
+unaffected. Deliberately KERNEL-ONLY — the WIRING half (`RECURSIVE_RULE_TEACH_RE` + the
+query-dispatcher's `recursive` branch) is NOT done; both touch `chat.mjs`, held by a concurrent
+dispatch at the time, so wiring is deferred until that file is free. Zero `chat.mjs` changes, zero
+effect on chat behavior.
+
 ## Open follow-ups (next session, in priority order)
 
 1. ~~Fix the INF-C1 fabrication bug above.~~ **DONE (2026-07-09)** — see the updated item 2 note
@@ -127,9 +165,10 @@ during implementation. Phase 4 (compose2 query-side wiring) is next in that plan
    shipped this session only covers `resolveObject` (`src/ask.mjs`); `/describe`'s own resolver
    (`resolveSymbol` in `codegraph.mjs`) is separate, stricter, and doesn't share `resolveObject`'s
    tiered scoring. Not a regression, just not yet covered.
-6. **`PLAN_TAUGHT_RELATIONS.md` implementation.** Design is done (above); Phase 1 (relational fact
-   teaching plus the adjective-mint groundedness tightening) is the cheapest, most independent
-   starting point.
+6. ~~`PLAN_TAUGHT_RELATIONS.md` Phase 1 (relational fact teach + adjective-mint).~~ **DONE
+   (2026-07-09)** — see item 5 above. Phase 2 (item 2's query-side alias-chase dispatcher) is next
+   in that plan's build order; a proper "is X the ROLE of Y" reader (found live to NOT already work,
+   above) is a natural companion for that same dispatch.
 
 ## Discipline (unchanged)
 

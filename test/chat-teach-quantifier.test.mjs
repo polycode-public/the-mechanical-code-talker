@@ -591,3 +591,158 @@ test("Bug A: 'remember X had soup' (past tense) reads back 'has soup', never the
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+// ---- PLAN_TAUGHT_RELATIONS.md Phase 1 (2026-07-09): Item 1 (relational fact
+// teach, "X is the ROLE of Y" — RELATION_FACT_TEACH_RE) + Item 5
+// (adjective-mint, "X is <brand-new adjective>" — unknownAdjectiveFallback).
+// See chat.mjs's docblocks on both for the full design; the two are
+// independent capabilities that happen to share this test file because both
+// touch teachLane. ----
+
+test("PLAN_TAUGHT_RELATIONS Item 1: 'X is the ROLE of Y' teaches an ordinary relational Fact (generalVerbPredicate reused verbatim, no new storage shape), read back via pre-existing query machinery", async () => {
+  const dir = await mem("rel-fact");
+  try {
+    const taught = await runTurn("ahab is the father of john", { config: CONFIG, memoryDir: dir, sessionId: "r1" });
+    assert.match(taught.answer, /^noted — remembered: ahab fathers john/);
+    assert.equal(taught.record.miss, false);
+
+    const rows = readFactRows(await loadMemory(dir));
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].subject, "ahab");
+    assert.equal(rows[0].predicate, "mgx:father", "the role noun mints mgx:<role> via generalVerbPredicate, same as a general verb");
+    assert.equal(rows[0].object, "john");
+    assert.equal(rows[0].quantifier, "", "a relational fact names ONE pair, never a quantified class claim");
+    assert.match(rows[0].provenance, /^teach:chat:r1@/);
+
+    // Readback needs NO new query-side machinery (Phase 2+ territory) — two
+    // already-working shapes both confirm the SAME taught fact: factAnswer's
+    // "what do you know about X" (KNOW_ABOUT_RE) lists any Fact mentioning
+    // the subject, and factReadBack's general-verb yes/no reader
+    // (GENERAL_VERB_YESNO_RE, "does X <verb> Y") already resolves the role
+    // noun as a bare-infinitive verb over the SAME mgx:father predicate.
+    // (Checked live: "is ahab the father of john" does NOT resolve correctly
+    // today — it accidentally matches IS_ADJECTIVE_YESNO_RE's own
+    // unrestricted backtracking, mis-splitting "ahab the father of" as the
+    // subject and "john" as a bogus adjective — a genuine "is X the ROLE of
+    // Y" reader is real Phase 2+ work, not attempted here.)
+    const know = await runTurn("what do you know about ahab", { config: CONFIG, memoryDir: dir });
+    assert.match(know.answer, /ahab fathers john/);
+
+    const yesno = await runTurn("does ahab father john", { config: CONFIG, memoryDir: dir });
+    assert.match(yesno.answer, /^yes — you told me: ahab fathers john/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("PLAN_TAUGHT_RELATIONS Item 5: a KNOWN subject ('cache') + a brand-new adjective ('bespoke') mints a property fact — 'remember that the cache is bespoke'", async () => {
+  const dir = await mem("adj-mint-cache");
+  try {
+    const taught = await runTurn("remember that the cache is bespoke", { config: CONFIG, memoryDir: dir, sessionId: "a1" });
+    assert.match(taught.answer, /^noted — remembered: cache is bespoke/);
+    assert.equal(taught.record.miss, false);
+
+    const rows = readFactRows(await loadMemory(dir));
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].subject, "cache", "the leading 'the' is normFactTerm-stripped at storage, same as every other taught fact");
+    assert.equal(rows[0].predicate, "mgx:hasProperty");
+    assert.equal(rows[0].object, "bespoke");
+    assert.equal(rows[0].quantifier, "", "a property claim never carries a quantifier, even though the sentence itself carries none to record either");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("PLAN_TAUGHT_RELATIONS Item 5: a BARE Capitalized-name-shaped subject mints too ('TaskController is bespoke') — proves unknownAdjectiveFallback itself fires (the pre-existing wrapped-only TEACH_PROPERTY_RE gap never even runs on a bare, unwrapped payload)", async () => {
+  const dir = await mem("adj-mint-bare");
+  try {
+    const taught = await runTurn("TaskController is bespoke", { config: CONFIG, memoryDir: dir, sessionId: "a2" });
+    assert.match(taught.answer, /^noted — remembered: taskcontroller is bespoke/);
+    assert.equal(taught.record.miss, false);
+
+    const rows = readFactRows(await loadMemory(dir));
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].subject, "taskcontroller");
+    assert.equal(rows[0].predicate, "mgx:hasProperty");
+    assert.equal(rows[0].object, "bespoke");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("PLAN_TAUGHT_RELATIONS Item 5 regression guard: the pre-existing 'module is banana' pinned decline (a KNOWN bare subject, no article/capitalization/quantifier, an unrecognized bare object) stays a plain honest miss — unknownAdjectiveFallback does not reopen it", async () => {
+  const dir = await mem("adj-mint-module-banana");
+  try {
+    const declined = await runTurn("module is banana", { config: CONFIG, memoryDir: dir, sessionId: "a3" });
+    assert.doesNotMatch(declined.answer, /noted — remembered/i);
+    assert.equal(declined.record.miss, true);
+    assert.equal(readFactRows(await loadMemory(dir)).length, 0);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("PLAN_TAUGHT_RELATIONS Item 5 safety guard: two completely ungrounded terms on both sides still decline honestly — unknownAdjectiveFallback never weakens the existing ungroundedness discipline", async () => {
+  const dir = await mem("adj-mint-decline");
+  try {
+    const declined = await runTurn("zorp is glorpy", { config: CONFIG, memoryDir: dir, sessionId: "d1" });
+    assert.equal(declined.record.miss, true);
+    assert.doesNotMatch(declined.answer, /noted — remembered/);
+    assert.equal(readFactRows(await loadMemory(dir)).length, 0);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("PLAN_TAUGHT_RELATIONS Item 5's own canonical illustration, 'mary is female', live-verified against isConversational's ≤3-word override (Verification finding 4) — a STRONGER form of the named risk than the plan anticipated", async () => {
+  const dir = await mem("adj-mint-mary");
+  try {
+    // The LITERAL bare 3-word phrase never even reaches teachLane: it's ≤3
+    // words with no code-ish token, so isConversationalCandidate claims the
+    // turn in runTurn's own lane (2) — BEFORE lane (4) TEACH is ever tried.
+    // This is a stronger form of Verification finding 4 than the plan
+    // documented: the risk isn't only that a DECLINE's own honest text gets
+    // swallowed by the generic orientation card — the teach lane (success or
+    // failure) is never attempted at all for a short, non-code-ish bare
+    // sentence. Pre-existing, cross-cutting `isConversational` routing —
+    // named in the plan's own "Open risks" as explicitly out of scope for
+    // this phase (widening it is "a change to already-shipped routing") — so
+    // this is asserted here as a live-confirmed, documented characteristic,
+    // not something this phase fixes.
+    const bare = await runTurn("mary is female", { config: CONFIG, memoryDir: dir, sessionId: "m1" });
+    assert.equal(bare.record.miss, true);
+    assert.doesNotMatch(bare.answer, /noted — remembered/);
+    assert.equal(readFactRows(await loadMemory(dir)).length, 0);
+
+    // The SAME sentence, wrapped ("remember that ..."), is 5 words — it
+    // escapes isConversational's ≤3-word gate entirely and reaches teachLane.
+    // Note what actually stores it here: "mary" (lowercase, no article, no
+    // prior fact) has no groundedness signal at all, so
+    // unknownAdjectiveFallback itself correctly DECLINES (same discipline as
+    // the "module is banana" guard above) — this succeeds via the
+    // pre-existing, deliberately out-of-scope TEACH_PROPERTY_RE gap
+    // (Verification finding 3), which this phase's own new fallback sits
+    // upstream of without closing. The confirmation text still displays
+    // correctly end-to-end regardless of which of the two paths stored it —
+    // a SUCCESS is never gated on isConversational at all (miss is false the
+    // moment any lane stores the fact, so isConversationalCandidate's own
+    // `miss` precondition never fires).
+    const wrapped = await runTurn("remember that mary is female", { config: CONFIG, memoryDir: dir, sessionId: "m1" });
+    assert.match(wrapped.answer, /^noted — remembered: mary is female/);
+    assert.equal(wrapped.record.miss, false);
+
+    const rows = readFactRows(await loadMemory(dir));
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].subject, "mary");
+    assert.equal(rows[0].predicate, "mgx:hasProperty");
+    assert.equal(rows[0].object, "female");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});

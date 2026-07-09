@@ -70,6 +70,27 @@ next-session pickup material, not yet started.
 `chat.mjs` change, reusing the existing Source/trust pipeline unmodified. `npm test` 1361 → 1371.
 Phase 4 (compose2 query-side wiring) is next in that plan's build order.
 
+**`PLAN_TAUGHT_RELATIONS.md` Phase 1 — DONE (2026-07-09)**: Item 1 (relational fact teach,
+`RELATION_FACT_TEACH_RE` — "ahab is the father of john" mints an ordinary Fact via
+`generalVerbPredicate`, reused verbatim) and Item 5 (adjective-mint, `unknownAdjectiveFallback` —
+"the cache is bespoke" / "TaskController is bespoke" mint `mgx:hasProperty`) both landed in
+`src/chat.mjs`. Query-side readback for Item 1 needed zero new machinery ("what do you know about
+X" / "does X <role> Y" both already confirm it); Item 5's own groundedness guard needed tightening
+beyond the original design to avoid reopening the pinned "module is banana" regression — see
+`PLAN_TAUGHT_RELATIONS.md`'s "Phase 1 — DONE" note for the full adjustment, plus a sharper,
+live-confirmed restatement of that doc's Verification finding 4 (`isConversational`'s ≤3-word gate
+pre-empts the teach lane entirely for a short bare sentence, not just its decline text — flagged,
+not fixed, still out of scope). `npm test` 1371 → 1377.
+
+**`PLAN_TAUGHT_RELATIONS.md` Phase 6, KERNEL half — DONE (2026-07-09)**: `findReachableSet`
+(`src/planning.mjs`), a sibling of `findActionPath` with no `isGoal` at all — every state reachable
+from the start within `maxDepth` is a result, not just one goal. Shares only the frontier-seeding
+step with `findActionPath`; the expand loops stayed independent (halting/accumulation semantics
+differ enough to make a shared core more complex, not less). Proven against a toy graph with a real
+cycle and a same-length two-path convergence. `test/planning.test.mjs`, 5 new tests. The WIRING half
+(teach-shape recognizer + query-dispatcher branch, both in `chat.mjs`) is deliberately deferred,
+kernel-only per this task's own scoping — see `PLAN_TAUGHT_RELATIONS.md`/`HANDOVER.md` for detail.
+
 ### Shipped this session
 
 - **Tier 5** found 12 routing/recognition fixes across teach and recall: article/head-word gaps
