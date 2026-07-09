@@ -1480,13 +1480,23 @@ const GENERAL_VERB_ANYWHERE_EXCLUDE_RE = /\b(?:is|are|am|owns|maintains)\b/i;
  *  documented contract) and this falls back to the verb AS TYPED — still a
  *  perfectly storable/retrievable predicate, just not cross-inflection
  *  canonicalized. Never a hand-curated per-verb table entry required. */
+// Bug A (operator manual-chat find, this session): only the exact raw strings
+// "has"/"have" were special-cased onto HAS_A_PREDICATE above — past tense "had"
+// (or "having") fell through to the generic mgx:<lemma> path, where the lemma of
+// "had" IS "have", and predicatePhrase's thirdPersonSingularSurface fallback
+// naively appends "s" to any unrecognized lemma ending ("have"+"s" = "haves" —
+// wrong; the correct irregular is "has"). Fixed by checking the LEMMA (not just
+// the raw verb) for "have" — this catches had/having/has/have uniformly, so
+// "remember X had soup" reads back "...has soup", never "...haves soup".
 async function generalVerbPredicate(verb) {
   const v = String(verb || "").toLowerCase();
   if (v === "has" || v === "have") return HAS_A_PREDICATE;
   try {
     const { proseLemma } = await import("./prose-nlp.mjs");
     const lemma = proseLemma();
-    return `mgx:${lemma ? lemma(v) : v}`;
+    const l = lemma ? lemma(v) : v;
+    if (l === "have") return HAS_A_PREDICATE;
+    return `mgx:${l}`;
   } catch {
     return `mgx:${v}`;
   }
@@ -1512,6 +1522,31 @@ async function generalVerbTeach(payload) {
   const predicate = await generalVerbPredicate(verb);
   return { subject, predicate, object };
 }
+
+// ---- General verb-to-predicate DIRECT-QUESTION retrieval (item 5, this
+// session's follow-up to the teach mechanism above): "does margo eat ribs" /
+// "did margo eat ribs" / "what does margo eat" against a fact taught via
+// generalVerbTeach. "did" joins "does" so past-tense forms work too (also
+// GROUP 3 Bug B — "what did X have"/"did margo eat ribs"). Wired into
+// factReadBack (below), which only runs on an already-true `miss`, so these
+// never race ask.mjs's closed structural grammar for a real graph query
+// ("does TaskController call widget" resolves there first, this lane is never
+// reached). Both run the SAME GENERAL_VERB_EXCLUDE_RE/GENERAL_VERB_ANYWHERE_
+// EXCLUDE_RE decline guards generalVerbTeach uses, and route the verb through
+// the SAME generalVerbPredicate (not a re-implementation), so the has/have
+// bridge (and Bug A's had/having lemma fix) is automatic on the query side too. ----
+const GENERAL_VERB_YESNO_RE = /^(?:does|did)\s+([\w'-]+)\s+([a-z]+)\s+(.+?)[?.!\s]*$/i;
+const GENERAL_VERB_OPEN_RE = /^what\s+(?:does|did)\s+([\w'-]+)\s+([a-z]+)[?.!\s]*$/i;
+/** GENERAL_VERB_EXCLUDE_RE was written for generalVerbTeach's fully-conjugated
+ *  declarative verb ("X OWNS Y", "X MAINTAINS Y") — but "does/did X <verb> Y"
+ *  captures the BARE INFINITIVE after do-support ("does X OWN Y", never "does X
+ *  owns Y"), so "owns"/"maintains" literally never appear in genYN/genOpen's
+ *  captured verb even when the sentence names exactly that relation. Found live
+ *  (a real false "no" against a genuinely-true taught ownership fact, since
+ *  generalVerbPredicate("own") mints a DIFFERENT predicate — mgx:own — than the
+ *  ownership frame's own OWNED_BY_PREDICATE): the query-side guard needs the
+ *  bare-infinitive counterpart too. */
+const GENERAL_VERB_QUERY_EXCLUDE_RE = /^(?:be|own|maintain)$/i;
 
 /** Sentence forms to try asserting for a teach payload: the payload as-is, and
  *  (if it carries no determiner) its "every …" universal — the ACE-OWL shape the
@@ -2411,6 +2446,13 @@ const FACT_PREDICATE_PHRASES = {
  *  renders verbatim, unchanged from before this fix. */
 function thirdPersonSingularSurface(lemma) {
   const w = String(lemma || "");
+  // Bug A safety net: "have" should never reach this naive fallback at all
+  // (generalVerbPredicate special-cases it onto mgx:hasA before a predicate is
+  // ever minted), but if some OTHER path ever reaches here with it as typed —
+  // e.g. wink-nlp unavailable so lemma degrades to the raw verb — the naive
+  // "+s" rule would produce the wrong-MEANING "haves" instead of the correct
+  // irregular "has".
+  if (/^have$/i.test(w)) return "has";
   if (/[a-z]y$/i.test(w) && !/[aeiou]y$/i.test(w)) return `${w.slice(0, -1)}ies`;
   if (/(?:s|x|z|ch|sh|o)$/i.test(w)) return `${w}es`;
   return `${w}s`;
@@ -3008,6 +3050,50 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null) {
       .sort(byTrust);
     if (!hits.length) return null;
     return renderMany(hits);
+  }
+
+  // (a3) GENERAL VERB-TO-PREDICATE direct-question retrieval (item 5, this
+  // session): a taught general-verb fact ("margo eats ribs") answered back
+  // directly. Yes/no form matches the taught triple EXACTLY (subject +
+  // predicate + object, via the SAME factTermVariants/normFactTerm matching
+  // WHO_OWNS_RE just used above) — no match is an honest, closed-world "no",
+  // never a guess. Open form lists every stored fact row for {subject,
+  // predicate} regardless of object.
+  const genYN = q.match(GENERAL_VERB_YESNO_RE);
+  if (genYN && !GENERAL_VERB_ANYWHERE_EXCLUDE_RE.test(q)) {
+    const [, subjectRaw, verbRaw, objectRaw] = genYN;
+    const verb = verbRaw.toLowerCase();
+    if (!GENERAL_VERB_EXCLUDE_RE.test(verb) && !GENERAL_VERB_QUERY_EXCLUDE_RE.test(verb)) {
+      const subject = subjectRaw.trim();
+      const object = objectRaw.replace(/^an?\s+/i, "").trim();
+      if (subject && object) {
+        const predicate = await generalVerbPredicate(verb);
+        const subjVariants = factTermVariants(normFactTerm, subject);
+        const objVariants = factTermVariants(normFactTerm, object);
+        const hit = rows
+          .filter((f) => f.predicate === predicate && subjVariants.has(f.subject) && objVariants.has(f.object))
+          .sort(byTrust)[0];
+        if (hit) return { text: `yes — ${renderFactLine(hit)}`, replace: true, generalVerbQuery: true };
+        return {
+          text: `no — no remembered fact says ${subject.toLowerCase()} ${predicatePhrase(predicate)} ${object}.`,
+          replace: true, generalVerbQuery: true,
+        };
+      }
+    }
+  }
+  const genOpen = q.match(GENERAL_VERB_OPEN_RE);
+  if (genOpen && !GENERAL_VERB_ANYWHERE_EXCLUDE_RE.test(q)) {
+    const [, subjectRaw, verbRaw] = genOpen;
+    const verb = verbRaw.toLowerCase();
+    if (!GENERAL_VERB_EXCLUDE_RE.test(verb) && !GENERAL_VERB_QUERY_EXCLUDE_RE.test(verb)) {
+      const subject = subjectRaw.trim();
+      if (subject) {
+        const predicate = await generalVerbPredicate(verb);
+        const subjVariants = factTermVariants(normFactTerm, subject);
+        const hits = rows.filter((f) => f.predicate === predicate && subjVariants.has(f.subject)).sort(byTrust);
+        if (hits.length) return { ...renderMany(hits), generalVerbQuery: true };
+      }
+    }
   }
 
   // (b) RECALL — "what did i tell you about X": every remembered fact mentioning X.
@@ -4083,6 +4169,15 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       if (fact.pending) factPending = fact.pending; // a truncated fact list → paginable remainder
       note(trace, `lane: (3) memory facts — factAnswer/factReadBack matched (memoryDir=${memoryDir})`);
       note(trace, "source: .tmct/memory Facts (see /memory for provenance per line)");
+      // Goal-line fix (item 5 follow-up, this session): mirrors the TEACH lane's
+      // own goal revision just below (Bug 3 point 4) — `deduced` was computed
+      // WAY above off envelope.parsed alone, but a general-verb direct question
+      // ("does margo eat ribs") never parses as a structural graph query at all,
+      // so it either landed on an unrelated GOAL_BY_KIND guess or nothing.
+      if (fact.generalVerbQuery) {
+        deduced = "look up a taught fact about a subject/verb/object";
+        note(trace, `goal: ${deduced} (revised — a general-verb direct-question fact lookup answered this turn)`);
+      }
     } else if (miss) {
       // W2: after the honest miss is composed, consult the folded-session memory. A
       // relevant enough block ANSWERS — recalled Q/A framed + cited first, with the

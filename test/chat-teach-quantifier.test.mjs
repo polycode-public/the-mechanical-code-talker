@@ -340,3 +340,33 @@ test("Bug 3: the Goal-line is correct and consistent for teach-success turns (ne
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+// ---- Bug A (operator manual-chat find, this session): "remember X had soup"
+// teaches malformed "x haves soup". Root cause: generalVerbPredicate only
+// special-cased the raw strings "has"/"have" onto HAS_A_PREDICATE — past tense
+// "had" (lemma "have") fell through to the generic mgx:<lemma> mint, and
+// predicatePhrase's thirdPersonSingularSurface fallback naively appended "s" to
+// the unrecognized lemma "have" ("haves"). Fixed by checking the LEMMA (not
+// just the raw verb) for "have", so had/having/has/have all land on the SAME
+// curated mgx:hasA predicate. See generalVerbPredicate/thirdPersonSingularSurface.
+test("Bug A: 'remember X had soup' (past tense) reads back 'has soup', never the malformed 'haves soup'", async () => {
+  const dir = await mem("verb-hada");
+  try {
+    const taught = await runTurn("remember tony had soup", { config: CONFIG, memoryDir: dir, sessionId: "va1" });
+    assert.match(taught.answer, /^noted — remembered: tony has soup/);
+    assert.doesNotMatch(taught.answer, /haves/);
+    assert.equal(taught.record.miss, false);
+
+    const rows = readFactRows(await loadMemory(dir));
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].predicate, "mgx:hasA", "had's lemma (have) lands on the SAME curated predicate as has/have");
+    assert.equal(rows[0].object, "soup");
+
+    const readBack = await runTurn("what is tony", { config: CONFIG, memoryDir: dir });
+    assert.match(readBack.answer, /tony has soup/);
+    assert.doesNotMatch(readBack.answer, /haves/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
