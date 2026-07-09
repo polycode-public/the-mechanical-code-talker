@@ -18,12 +18,12 @@ tmct> /exit
 ```
 
 **[Try it live in your browser →](https://polycode-projects.gitlab.io/the-mechanical-code-talker/)**
-— a real, interactive chat demo running client-side: your browser runs the
+is a real, interactive chat demo running client-side. Your browser runs the
 actual query engine against a small example codebase, no server, no install.
 
 ## How it interprets you
 
-Every message runs through **multiple concurrent interpretation strategies** —
+Every message runs through **multiple concurrent interpretation strategies**:
 a grammar parse, keyword picking, noise-word removal, fuzzy matching. Their
 results are grouped by class:
 
@@ -32,10 +32,20 @@ results are grouped by class:
   *"if you mean X then …"* so ambiguity is shown, never silently resolved.
 
 One of the strategies is an **ACE-inspired controlled grammar**: when your
-text fits the controlled fragment, tmct emits OWL-labelled triples from it —
-statements it can store, retrieve, and answer from later. Text that doesn't
-fit the grammar still gets the tolerant strategies; nothing is rejected for
-being loose, fuzzy, or misspelled.
+text fits the controlled fragment, tmct emits OWL-labelled triples from it.
+Those triples are statements it can store, retrieve, and answer from later.
+Text that doesn't fit the grammar still gets the tolerant strategies; nothing
+is rejected for being loose, fuzzy, or misspelled.
+
+**Everyday question shapes.** Bare "what is Commit" (no article) now resolves
+like "what is a commit" for tmct's own vocabulary. "What's model.mjs for" and
+"what's model.mjs about" answer like "what does model.mjs do". "Is Base a
+superclass of Widget" is read as the reverse of "is Widget a subclass of
+Base", the same relationship either way round. "Recent commits" and "the last
+commit" resolve to real dated history, not a literal string miss. Polite or
+indirect framing reaches the same capability as a direct request: "I'd like
+you to remember X" teaches like bare "remember X"; "please tell me about X"
+and "search for X" describe and find exactly as their direct forms do.
 
 **Negation and passive.** "Which modules do *not* import X?" computes a bounded
 **set complement** over the graph, and an honestly empty result stays a miss
@@ -59,36 +69,41 @@ breaks"). It flags a question whose premise doesn't hold, too: "why does X
 still import Y" when it no longer does.
 
 **Response finishing.** Before an answer is printed it is segmented into typed
-spans — prose versus *protected* entities, paths, numbers, code, provenance, and
-receipts — and a small data-driven grammar pass runs on the prose spans only,
+spans: prose versus *protected* entities, paths, numbers, code, provenance, and
+receipts. A small data-driven grammar pass then runs on the prose spans only,
 under a guard that proves the protected spans came through byte-for-byte. Today
 that pass fixes the a/an article defect; broader voice and agreement rules are
 implemented but parked until they earn their place on the benchmark.
 
+A frozen regression suite plays out full multi-turn dialogues built from these
+phrasings, at every complexity level this project defines, from a single
+question up to a messy, typo-ridden real user. Tier-by-tier detail is in
+`HANDOVER.md` and `ROADMAP.md`.
+
 ## How it guides you
 
-When you touch a **concept** without asking a precise question — "what is a
-class", "what about imports", "what calls are there" — tmct answers in three
+When you touch a **concept** without asking a precise question, like "what is a
+class", "what about imports", or "what calls are there", tmct answers in three
 bands instead of dead-ending:
 
 1. the **definition** (a plain-English one-liner: *"A class is a template that
    defines the structure and behaviour of objects."* / *"To import is to bring
    another module's definitions into the current one."*);
-2. **real instances from your graph** — *"In this codebase, for example: Record,
+2. **real instances from your graph**: *"In this codebase, for example: Record,
    Task and User (10 classes)"*, or actual edges *"src/core/store.mjs imports
    src/core/model.mjs (18 import edges)"*;
-3. **guided follow-ups** — two or three concrete next questions, each one
+3. **guided follow-ups**: two or three concrete next questions, each one
    *pre-checked against your graph* so every suggestion is guaranteed to resolve:
    *"Want to go deeper? Try: which classes inherit from Record / what does Task
    contain / where is User defined"*.
 
 It fires for both **noun** concepts (class, module, function, method) and
-**relation** concepts (imports, calls, contains, inherits, tests), and only when
-tmct genuinely knows the concept *and* has instances of it — otherwise the honest
-miss stands. The effect is a conversation that drills down from a vague opener to
-a useful answer without ever hitting a wall. Natural phrasings are routed to the
-capability you meant: *"what functions are in Task"* → its members, *"what
-defined saveStore"* → where it's defined.
+**relation** concepts (imports, calls, contains, inherits, tests), and only
+when tmct genuinely knows the concept *and* has instances of it. Otherwise the
+honest miss stands. The effect is a conversation that drills down from a vague
+opener to a useful answer without ever hitting a wall. Natural phrasings are
+routed to the capability you meant: *"what functions are in Task"* → its
+members, *"what defined saveStore"* → where it's defined.
 
 ## How it remembers
 
@@ -100,22 +115,26 @@ by cleaned session logs:
 - **text blocks under a PageRank-style index**, pulled into context on
   relevance rather than loaded wholesale.
 
-With no graph at all, tmct starts empty and remembers what you tell it — the
+With no graph at all, tmct starts empty and remembers what you tell it. The
 `.tmct/` graph is created from the conversation. On a first run it seeds the
 committed vocabulary so it knows what it's talking about from turn one: a curated
 **SEON** software ontology plus the whole filtered **ConceptNet slice**
-(CC-BY-SA 4.0) — every term carries an English definition, so "what is a cache?"
+(CC-BY-SA 4.0). Every term carries an English definition, so "what is a cache?"
 answers offline, from disk, on turn one. `--ephemeral` (used by the shipped
 `npm run example:*` demos) reads a graph but writes nothing back.
+
+Teaching isn't limited to the ACE grammar's fixed shapes. Tell tmct an
+arbitrary fact, like "margo eats ribs", and it mints a fact you can later ask
+about directly: "what does margo eat", or "does margo eat ribs".
 
 ### Provenance and trust
 
 Every fact and text block records **where it came from and when**. Sources are
-first-class individuals — operator chat, a curated corpus, a provider graph, a
-web scrape, a rule-derived entailment — and a fact links back to *all* of them
+first-class individuals: operator chat, a curated corpus, a provider graph, a
+web scrape, a rule-derived entailment. A fact links back to *all* of them
 (`mgx:derivedFrom` / `mgx:statedBy` / `mgx:canonicalisedFrom`), timestamped with
 `mgx:createdAt`. From those links tmct computes a **deterministic, explainable
-trust score** — a source-type prior combined with corroboration (how many
+trust score**: a source-type prior combined with corroboration (how many
 independent sources agree) and recency. It is never hand-set, always traceable
 to its inputs. Retrieval then ranks by **relevance × trust**, so a corroborated,
 operator-stated fact outranks a lone web scrape on the same question. When two
@@ -126,7 +145,7 @@ provenance** rather than silently picking a winner.
 
 `tmct syllogise [--depth n] [--budget n]` is an offline, bounded, deterministic
 batch that forward-chains the memory's `rdfs:subClassOf` closure into new
-**entailed** facts — pre-deriving what the trusted sources already imply. It runs
+**entailed** facts, pre-deriving what the trusted sources already imply. It runs
 once automatically after seeding and on demand; the entailed facts are
 **low-trust and retractable** (never outranking a stated fact) and this never runs
 on the chat's hot path.
@@ -140,9 +159,9 @@ on the chat's hot path.
   *calculation* surfaced as prose ("there are a lot of tests for a codebase of
   that size"). It is deterministic, explainable, and cheap. Even its forward-chaining
   entailment (`tmct syllogise`) is mechanical OWL rule materialization applied
-  offline, rule-by-rule and retractable — not an LLM. There is **no LLM anywhere
+  offline, rule-by-rule and retractable, not an LLM. There is **no LLM anywhere
   in the product**. (An LLM-as-judge exists only in the offline eval harness
-  that tunes tmct — see `SKILL_TUNING_CYCLE.md` — never in the product path.)
+  that tunes tmct, see `SKILL_TUNING_CYCLE.md`, never in the product path.)
 - **It never guesses silently.** When it cannot resolve your question it says
   so and nudges you toward a query it *can* answer.
 
@@ -162,7 +181,7 @@ Inside the chat: `/help` lists commands, `/memory` inspects what tmct remembers
 
 `tmct init` is the onboarding surface for the repository interface below: it
 creates the `.tmct/` directory, writes the externalized `tmct.toml`
-configuration, seeds the tier-1 corpus, and records provenance — a host package
+configuration, seeds the tier-1 corpus, and records provenance. A host package
 or a bare user gets a working install in one command.
 
 > Install-size note: tmct depends on wink-nlp's deterministic English language
@@ -170,7 +189,7 @@ or a bare user gets a working install in one command.
 
 ### Try it on an example graph
 
-tmct *consumes* a code graph at `<repo>/.tmct/graph.json` — it does not build
+tmct *consumes* a code graph at `<repo>/.tmct/graph.json`; it does not build
 one. Two ready-made example graphs ship in `examples/` so you can see it answer
 real questions with no setup:
 
@@ -190,7 +209,7 @@ which modules import src/core/model.mjs
 what tests cover src/handlers/tasks.mjs
 ```
 
-The **polyglot** graph shows the language-neutral idea — Java, Python and C#
+The **polyglot** graph shows the language-neutral idea: Java, Python and C#
 entities all typed to the same `seon:Class` / `seon:Method` / `seon:Module`
 concepts, so one query reasons across every language at once:
 
@@ -254,9 +273,9 @@ naming, license, and memory model were reset to the vision above. See
 
 **MPL-2.0.** Free for commercial use; if you modify the covered files and
 distribute them, you must publish those files' source under the MPL with
-attribution — the copyleft is file-level, not project-level. See `LICENSE`.
+attribution. The copyleft is file-level, not project-level. See `LICENSE`.
 
-Corpus data carries its own licenses, separate from the code: the planned
-ConceptNet slice is **CC-BY-SA 4.0** and will ship with its own notice.
+Corpus data carries its own licenses, separate from the code: the shipped
+ConceptNet slice is **CC-BY-SA 4.0**, with its own notice alongside it.
 
 © Polycode Limited.
