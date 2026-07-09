@@ -48,8 +48,7 @@
 //       PRE-filter set's shared class when the filter empties it out.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createSession } from "../src/chat.mjs";
-import { clearCache } from "../src/source.mjs";
+import { driveSessionTurns } from "./helpers/session.mjs";
 
 const WALL = /couldn't parse this as a graph question/;
 const AMBIGUOUS = /this could mean more than one thing/;
@@ -67,17 +66,7 @@ const DEAD_END = new RegExp(
 
 const REPO = new URL("../examples/mini-webapp", import.meta.url).pathname;
 
-async function driveSession(queries) {
-  clearCache();
-  const s = await createSession({ repoPath: REPO, env: {}, ephemeral: true });
-  const turns = [];
-  try {
-    for (const q of queries) turns.push(await s.turn(q));
-  } finally {
-    await s.close();
-  }
-  return turns;
-}
+const driveSession = (queries) => driveSessionTurns({ repoPath: REPO, env: {}, ephemeral: true }, queries);
 
 function assertAllFlow(turns, queries) {
   for (const [i, t] of turns.entries()) {

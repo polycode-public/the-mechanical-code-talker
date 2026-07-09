@@ -225,8 +225,7 @@
 // throwaway temp dir, so the committed fixture is never touched.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createSession } from "../src/chat.mjs";
-import { clearCache } from "../src/source.mjs";
+import { driveSessionTurns } from "./helpers/session.mjs";
 
 const WALL = /couldn't parse this as a graph question/;
 const VOCAB_MISS = /isn't a term in this graph's own vocabulary/;
@@ -234,17 +233,7 @@ const DEAD_END = new RegExp([WALL, VOCAB_MISS].map((r) => r.source).join("|"));
 
 const REPO = new URL("../examples/mini-webapp", import.meta.url).pathname;
 
-async function driveSession(queries) {
-  clearCache();
-  const s = await createSession({ repoPath: REPO, env: {}, ephemeral: true });
-  const turns = [];
-  try {
-    for (const q of queries) turns.push(await s.turn(q));
-  } finally {
-    await s.close();
-  }
-  return turns;
-}
+const driveSession = (queries) => driveSessionTurns({ repoPath: REPO, env: {}, ephemeral: true }, queries);
 
 // A dead-end here is a BARE wall/vocab-miss with NOTHING else in the answer —
 // every fixed lane in this file APPENDS a nudge/offer alongside a standing

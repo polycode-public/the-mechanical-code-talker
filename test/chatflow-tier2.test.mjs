@@ -296,25 +296,20 @@ import assert from "node:assert/strict";
 import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createSession } from "../src/chat.mjs";
 import { clearCache } from "../src/source.mjs";
+import { driveSessionTurns, stripGoalLine } from "./helpers/session.mjs";
 
 const WALL = /couldn't parse this as a graph question/;
 const BAD_SEARCH = /no module matching/;
 const FIXTURE = new URL("./fixtures/entities.fixture.json", import.meta.url).pathname;
 
-// FEATURE B (0.9.x): every runAsk-composed answer now carries an ALWAYS-ON
-// trailing "\n\nGoal (inferred): …" line (chat.mjs's withGoalLine) — this
-// suite is about ROUTING/wall-avoidance, not that feature, so it's stripped
-// right where turns are collected (driveSession/driveSessionOverGraph, below)
-// rather than teaching every one of this file's exact-text assertions a new
-// goal-line-shaped tail. `last.answer` (the why/say-more re-render source) is
-// already goal-line-free by design (chat.mjs's withGoalLine docblock), so
-// only `.answer`/`.logLines` need it here.
-const GOAL_LINE_RE = /\n\nGoal \(inferred\):[^\n]*$/;
-const stripGoalLine = (t) => (t && typeof t.answer === "string"
-  ? { ...t, answer: t.answer.replace(GOAL_LINE_RE, ""), logLines: Array.isArray(t.logLines) ? t.logLines.map((l) => (l === t.answer ? l.replace(GOAL_LINE_RE, "") : l)) : t.logLines }
-  : t);
+// FEATURE B (0.9.x): every runAsk-composed answer carries an ALWAYS-ON trailing
+// "\n\nGoal (inferred): …" line — this suite is about ROUTING/wall-avoidance,
+// not that feature, so it's stripped right where turns are collected
+// (driveSession/driveSessionOverGraph, below) rather than teaching every one of
+// this file's exact-text assertions a new goal-line-shaped tail. `last.answer`
+// (the why/say-more re-render source) is already goal-line-free by design
+// (chat.mjs's withGoalLine docblock), so only `.answer`/`.logLines` need it here.
 
 async function repoWithFixture() {
   const dir = await mkdtemp(join(tmpdir(), "tmct-tier2-"));
@@ -325,15 +320,8 @@ async function repoWithFixture() {
 }
 
 async function driveSession(queries) {
-  clearCache();
   const dir = await repoWithFixture();
-  const s = await createSession({ repoPath: dir });
-  const turns = [];
-  try {
-    for (const q of queries) turns.push(stripGoalLine(await s.turn(q)));
-  } finally {
-    await s.close();
-  }
+  const turns = await driveSessionTurns({ repoPath: dir }, queries, { strip: stripGoalLine });
   return { dir, turns };
 }
 
@@ -357,17 +345,7 @@ async function repoWithFixtureMinus(predicate) {
   return dir;
 }
 
-async function driveSessionOverGraph(dir, queries) {
-  clearCache();
-  const s = await createSession({ repoPath: dir });
-  const turns = [];
-  try {
-    for (const q of queries) turns.push(stripGoalLine(await s.turn(q)));
-  } finally {
-    await s.close();
-  }
-  return turns;
-}
+const driveSessionOverGraph = (dir, queries) => driveSessionTurns({ repoPath: dir }, queries, { strip: stripGoalLine });
 
 const CALLS_RELATION_TEXT =
   "A call is one function invoking another.\n"
@@ -1334,17 +1312,8 @@ test("tier2/T36 existence recognizer: 'is there a class in <nonexistent module>'
 
 const MINIWEBAPP = new URL("../examples/mini-webapp", import.meta.url).pathname;
 
-async function driveSessionMiniWebapp(queries) {
-  clearCache();
-  const s = await createSession({ repoPath: MINIWEBAPP, env: {}, ephemeral: true });
-  const turns = [];
-  try {
-    for (const q of queries) turns.push(stripGoalLine(await s.turn(q)));
-  } finally {
-    await s.close();
-  }
-  return turns;
-}
+const driveSessionMiniWebapp = (queries) =>
+  driveSessionTurns({ repoPath: MINIWEBAPP, env: {}, ephemeral: true }, queries, { strip: stripGoalLine });
 
 test("tier2/recent-commits drill-down: 'recent commits' -> 'what did the last commit touch' -> 'what did it touch' -> 'when did it change' (temporal substitution + anaphora carry-through)", async () => {
   const queries = [

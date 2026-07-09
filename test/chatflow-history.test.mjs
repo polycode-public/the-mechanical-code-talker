@@ -15,23 +15,10 @@
 // src/core/model.mjs — src/core/store.mjs), so the answers are real.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { runTurn } from "../src/chat.mjs";
-import { clearCache } from "../src/source.mjs";
+import { driveTurns } from "./helpers/session.mjs";
 
 const GRAPH = new URL("../examples/mini-webapp/.tmct/graph.json", import.meta.url).pathname;
-
-async function drive(queries) {
-  const config = { graphFile: GRAPH };
-  const out = [];
-  let last = null;
-  for (const q of queries) {
-    clearCache();
-    const r = await runTurn(q, { config, last });
-    out.push(r);
-    last = r.last;
-  }
-  return out;
-}
+const drive = (queries) => driveTurns({ graphFile: GRAPH }, queries);
 
 test("history flow: the change-coupling conversation flows end to end (was a dead-end)", async () => {
   const turns = [

@@ -25,6 +25,7 @@ import { ingestSchemaDocs } from "../src/schema-docs.mjs";
 import { clearCache } from "../src/source.mjs";
 import { normalizeQuery } from "../src/interpret/normalize.mjs";
 import { stripNoise, noiseStripStrategy } from "../src/interpret/strategies/noise-strip.mjs";
+import { driveTurns } from "./helpers/session.mjs";
 
 const FIXTURE = new URL("./fixtures/entities.fixture.json", import.meta.url);
 const FIXTURE_PAYLOAD = JSON.parse(await readFile(FIXTURE, "utf8"));
@@ -39,19 +40,7 @@ async function repoDriver() {
   await mkdir(join(dir, ".tmct"), { recursive: true });
   await writeFile(join(dir, ".tmct", "graph.json"), JSON.stringify(FIXTURE_PAYLOAD));
   const config = { graphFile: join(dir, ".tmct", "graph.json") };
-  const drive = async (queries) => {
-    const out = [];
-    let last = null;
-    let focus = null;
-    for (const q of queries) {
-      clearCache();
-      const r = await runTurn(q, { config, graph, last, focus });
-      out.push(r);
-      last = r.last;
-      focus = r.focus;
-    }
-    return out;
-  };
+  const drive = (queries) => driveTurns(config, queries, { graph, carryFocus: true });
   return { dir, drive, cleanup: () => rm(dir, { recursive: true, force: true }) };
 }
 

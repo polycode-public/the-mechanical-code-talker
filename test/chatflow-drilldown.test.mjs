@@ -18,6 +18,7 @@ import { parseEntities } from "../src/codegraph.mjs";
 import { ingestSchemaDocs } from "../src/schema-docs.mjs";
 import { runTurn } from "../src/chat.mjs";
 import { clearCache } from "../src/source.mjs";
+import { driveTurns } from "./helpers/session.mjs";
 
 const FIXTURE = new URL("./fixtures/entities.fixture.json", import.meta.url).pathname;
 
@@ -30,19 +31,9 @@ async function repoWithFixture() {
   return dir;
 }
 
-/** Drive a sequence of turns through the real runTurn path, carrying `last` so
- *  discourse anaphora / "what about X" resolve exactly as the shell would. */
-async function drive(config, queries) {
-  const out = [];
-  let last = null;
-  for (const q of queries) {
-    clearCache();
-    const r = await runTurn(q, { config, last });
-    out.push(r);
-    last = r.last;
-  }
-  return out;
-}
+// Drive a sequence of turns through the real runTurn path, carrying `last` so
+// discourse anaphora / "what about X" resolve exactly as the shell would.
+const drive = driveTurns;
 
 test("drill-down flow: the six-turn replay transcript flows end to end (was 4 dead-ends)", async () => {
   const dir = await repoWithFixture();
