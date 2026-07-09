@@ -934,14 +934,36 @@ Features we have deliberately shaped seams for but will not build until the phas
 earned them. **Not everything below is deferred for the same reason** — the design horizon,
 stated explicitly (2026-07-08 research pass):
 
-### Future direction: a genuine planning/agentic loop (flagged 2026-07-09, not designed)
+### Future direction: a genuine planning/agentic loop (flagged 2026-07-09, research pass done, not implemented)
 
 The operator's own framing, explicitly out of scope for the routing-level `GOAL_BY_COMMAND`/
 Goal-inference generalization this session shipped (HANDOVER's Bug F point 5, which only labels
 an already-computed answer's intent — it never plans ahead of one): infer the goal, read the
 relevant subgraph, reason about candidate action-paths and their effects, pick the next step,
-execute, repeat. A dedicated future design session's territory, not a routing fix — noted here so
-it isn't lost, not sketched further.
+execute, repeat.
+
+Two companion research docs (2026-07-09, design only, zero code shipped) scope this against
+minimal benchmark domains before anything domain-general is attempted:
+- `PLAN_HANOI.md` — the OPEN-LOOP case (a whole solution path is computable up front from the
+  start state). Recommends representing state as taught facts in the memory store (not the
+  read-only, provider-owned code graph), a new `restsOn` edge encoding stack order, and genuine
+  bounded state-space search — reusing `syllogise.mjs`'s `findIsaChain` (already, in shape, a
+  bounded rooted BFS path search) — over hard-coding Hanoi's known closed-form recursive solution,
+  so the result is an actual generalizable planner, not a Hanoi-shaped trick.
+- `PLAN_GUESS_NUMBER.md` — the CLOSED-LOOP case ("I am thinking of a number," both as guesser —
+  belief-interval bisection over repeated higher/lower observations — and as thinker — tmct holds
+  a secret and gives honest feedback, no search needed). Recommends a new parallel session-state
+  slot (`game`) threaded through `createSession`/`runTurn` exactly the way `focus` already is,
+  kept deliberately separate from the `pending` pagination field since a game must survive an
+  aside mid-play, unlike a listing remainder.
+
+Both docs converge on the SAME one genuinely new primitive neither doc found already built
+anywhere in tmct: something that computes a SUCCESSOR STATE (apply a chosen action, produce the
+next graph/belief to reason over) — every existing traversal (`ancestorsOf`, `computeFind`,
+`findIsaChain` itself) is read-only. That primitive, plus a still-open recognition question (how
+tmct notices "the user wants goal-directed action" at all, and whether multi-step execution needs
+confirmation before running) is the real next-session scope — a dedicated design/implementation
+session, not a routing fix.
 
 ### The design horizon
 
