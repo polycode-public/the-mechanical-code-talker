@@ -1398,6 +1398,24 @@ const OWNS_PASSIVE_TEACH_RE = /^(.+?)\s+(?:is|are|was|were)\s+owned\s+by\s+([A-Z
 const RELATION_FACT_TEACH_RE =
   /^([\w'-]+(?:\s+[A-Z][\w'-]*)?)\s+(?:is|are|was|were)\s+the\s+([a-z][\w-]*)\s+of\s+([\w'-]+(?:\s+[A-Z][\w'-]*)?)[.!?]*$/i;
 
+/** "a <name> is a <base1> of a <base2>" — the fixed-hop COMPOSITION-RULE teach
+ *  declarative (PLAN_TAUGHT_RELATIONS.md Item 3, Phase 4): "a grandparent is a
+ *  parent of a parent" teaches a RULE (mgx:ruleKind "compose2"), never a Fact —
+ *  the query side chases it via a hop-counted findActionPath search (see
+ *  teachLane's own call site below and factReadBack's relational-query
+ *  dispatcher). Both slots use an INDEFINITE article ("a"/"an"), the
+ *  structural anchor that keeps this shape disjoint from Item 1's
+ *  RELATION_FACT_TEACH_RE just above: that regex requires a literal "the" +
+ *  a lone role word with no second "of"-clause; this one requires "a"/"an" in
+ *  BOTH determiner slots plus a second relation-name word after "of" — the
+ *  two can never both match the same input (re-verified against the real
+ *  regexes, not just the design doc's own claim). m[1] = the new rule name
+ *  ("grandparent"), m[2]/m[3] = the two base relation names ("parent",
+ *  "parent" — may differ, e.g. an out-of-scope "an aunt is a sibling of a
+ *  parent"). */
+const COMPOSE2_RULE_TEACH_RE =
+  /^an?\s+([a-z][\w-]*)\s+(?:is|are)\s+an?\s+([a-z][\w-]*)\s+of\s+an?\s+([a-z][\w-]*)[.!?]*$/i;
+
 /** "<X> is <adjective>" — the property teach payload (wrapper-REQUIRED): a lazy
  *  subject and a single bare complement word. Never matches the "is a <noun>"
  *  membership shape (that stays the ACE grammar's), so "remember that cache is
@@ -2126,6 +2144,31 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
       subject: rel[1], predicate: await generalVerbPredicate(rel[2]), object: rel[3],
     });
     if (stored) return stored;
+  }
+
+  // COMPOSE2 RULE TEACH — "a <name> is a <base1> of a <base2>"
+  // (PLAN_TAUGHT_RELATIONS.md Item 3, Phase 4): stores a RULE (appendRule,
+  // kind "compose2"), never a Fact — tried right after item 1's relational
+  // fact above, on the SAME ownSrc, disjoint from it by determiner alone (see
+  // COMPOSE2_RULE_TEACH_RE's own docblock). The query-side hop-counted chase
+  // lives in factReadBack's relational-query dispatcher.
+  const compose2 = ownSrc.match(COMPOSE2_RULE_TEACH_RE);
+  if (compose2 && memoryDir && !QUESTION_LEAD_RE.test(ownSrc)) {
+    try {
+      const { appendRule, RULE_KIND_COMPOSE2 } = await import("./memory/core.mjs");
+      const { id } = await appendRule(memoryDir, {
+        name: compose2[1],
+        kind: RULE_KIND_COMPOSE2,
+        slots: { base1: compose2[2], base2: compose2[3] },
+        provenance: teachProvenanceTag(sessionId, new Date().toISOString()),
+      });
+      if (id) {
+        return {
+          text: `noted — remembered: a ${compose2[1]} is a ${compose2[2]} of a ${compose2[3]}`,
+          via: "assert", miss: false,
+        };
+      }
+    } catch { /* malformed slots — fall through to the ordinary honest-miss cascade */ }
   }
 
   // "some Xs are Ys" / "a few Xs are Ys" (Feature A) — the plural class-
@@ -3886,9 +3929,50 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
         )].join("; ");
         return { text: `yes — ${citation}`, replace: true };
       }
-      // Phase 4 (item 3, compose2 rule chase) extends this SAME dispatcher
-      // with a third step here — not yet built in this phase.
-      return null; // no remembered fact or alias reaches this — honest miss
+      // (iii) the queried name may itself be a taught compose2 RULE.
+      // findRuleByName is the SAME lookup §2/§3's own genericity design uses
+      // ("what kind of thing is X") — no per-rule-name branch, just a
+      // class/kind check.
+      const {
+        loadMemory, findRuleByName, RULE_KIND_PROP: ruleKindProp, RULE_KIND_COMPOSE2: composeKind,
+      } = await import("./memory/core.mjs");
+      const memory = await loadMemory(memoryDir);
+      const rule = findRuleByName(memory, relationName);
+      const ruleKind = rule?.attributes?.find((a) => a.prop === ruleKindProp)?.value;
+      if (rule && ruleKind === composeKind) {
+        const base1 = rule.attributes.find((a) => a.prop === "mgx:ruleBase1")?.value;
+        const base2 = rule.attributes.find((a) => a.prop === "mgx:ruleBase2")?.value;
+        const startEntity = normFactTerm(subject);
+        const targetEntity = normFactTerm(object);
+        if (base1 && base2 && startEntity && targetEntity) {
+          const { findActionPath } = await import("./planning.mjs");
+          const applyActions = (state) => {
+            if (state.hopsTaken >= 2) return [];
+            const relName = state.hopsTaken === 0 ? base1 : base2;
+            return relationFactsFor(relName)
+              .filter((e) => e.fact.subject === state.entity)
+              .map((e) => ({ action: e, nextState: { entity: e.fact.object, hopsTaken: state.hopsTaken + 1 } }));
+          };
+          const isGoal = (state) => state.hopsTaken === 2 && state.entity === targetEntity;
+          const stateKey = (state) => `${state.entity}#${state.hopsTaken}`;
+          const found = findActionPath({ entity: startEntity, hopsTaken: 0 }, isGoal, applyActions, { maxDepth: 2, stateKey });
+          if (found) {
+            const seenAlias = new Set();
+            const parts = [];
+            for (const e of found.actions) {
+              parts.push(renderFactLine(e.fact));
+              for (const af of e.aliasFacts) {
+                const key = af.id || `${af.subject}|${af.predicate}|${af.object}`;
+                if (seenAlias.has(key)) continue;
+                seenAlias.add(key);
+                parts.push(`${factPhrase(af)}${af.provenance ? ` (source: ${af.provenance})` : ""}`);
+              }
+            }
+            return { text: `yes — ${parts.join("; ")}`, replace: true };
+          }
+        }
+      }
+      return null; // no remembered fact, alias, or rule chase reaches this — honest miss
     }
   }
 

@@ -44,6 +44,55 @@ Tests: `test/chat-taught-relations.test.mjs` (new file), covering direct readbac
 of" teach normalization, the alias-chase positive case (citing both facts), and a negative case (an
 alias relationship never taught, honest decline). `npm test`: 1382 → 1386 (+4).
 
+## Phase 4 — DONE (2026-07-09)
+
+Item 3 (fixed-hop `compose2` composition rule), landed in `src/chat.mjs` in a follow-up commit
+right after Phase 2 above, exactly as designed — including the hop-counting nuance the plan itself
+flagged as the real risk, verified live to be NECESSARY, not just theoretically prudent (see the
+negative tests below).
+
+**Teach side**: `COMPOSE2_RULE_TEACH_RE` (`/^an?\s+([a-z][\w-]*)\s+(?:is|are)\s+an?\s+([a-z][\w-]*)\s+of\s+an?\s+([a-z][\w-]*)[.!?]*$/i`),
+tried in `teachLane` right after item 1's `RELATION_FACT_TEACH_RE` block, on the same `ownSrc`.
+Re-verified the plan's own disjointness claim against the REAL regexes (not just the design doc):
+`RELATION_FACT_TEACH_RE` requires a literal "the" with no second "of"-clause; `COMPOSE2_RULE_TEACH_RE`
+requires "a"/"an" in BOTH determiner slots plus a second relation-name word after "of" — confirmed
+structurally disjoint, and confirmed live (teaching "ahab is the father of john" alongside "a
+grandparent is a parent of a parent" in the same session stores exactly one Fact and one Rule, no
+cross-contamination). Stores via `appendRule` (already landed, Phase 3) with `kind: "compose2"`,
+`slots: { base1, base2 }` — never a Fact.
+
+**Query side**: extends Phase 2's `relAsk` dispatcher with a third step, reusing Phase 2's own
+`relationFactsFor(name)` list-builder unmodified as the per-hop edge lookup (so a compose2 rule's
+base relations are ALSO alias-chased — "parent" resolves through the taught "father ⊑ parent" link
+exactly the way a direct query does, needed for the family-tree illustration itself, since no fact is
+ever taught directly under the literal word "parent"). Verified the naive version FIRST, live, per
+the coordinator's own instruction not to assume the hop-counting nuance was necessary — confirmed it
+really does over-generate: without the `hopsTaken` discipline, a plain `entity === target` goal at
+any depth would (and, in an early throwaway version, did) let a 1-hop "is ahab a grandparent of john"
+(john is ahab's CHILD, one hop, not two) falsely resolve yes off the same father/parent edges the
+true 2-hop query uses. Fixed exactly as the plan specified: the search state is `{ entity,
+hopsTaken }`; `applyActions` dispatches on `hopsTaken` to select `ruleBase1`'s edges (hop 0) vs
+`ruleBase2`'s edges (hop 1); `isGoal` requires `hopsTaken === 2 && entity === target`, never just
+`entity === target` at any depth. Reuses `findActionPath` (`src/planning.mjs`) unmodified — the
+hop-count discipline lives entirely in the caller-supplied `applyActions`/`isGoal`, not in
+`findActionPath` itself.
+
+**Two negative tests prove the hop-count discipline is load-bearing, not decorative** (per the
+coordinator's own instruction to prove it, not just assert it): a 1-hop father/parent edge
+(ahab -> john) and a 3-hop father chain (ahab -> john -> ishmael -> shem) BOTH correctly decline "is
+ahab a grandparent of \<X\>" in the SAME store where a genuine 2-hop pair (ahab -> ishmael) resolves
+yes — live-verified via the CLI (transcript below) and pinned in `test/chat-taught-relations.test.mjs`.
+
+Live-verified the full family-tree chain from this plan's own illustration end-to-end (teach the two
+father facts, the father⊑parent alias, and the compose2 grandparent rule; ask the direct relational
+question, the alias-chased question, and the full 2-hop compose2 question — all three resolve yes,
+citing the complete derivation; a 1-hop and a never-taught relation both decline honestly in the same
+session). See `HANDOVER.md`/the implementing session's own report for the verbatim transcript.
+
+Tests: `test/chat-taught-relations.test.mjs`, extended with 5 more tests (compose2 storage,
+hop-counted positive, both hop-count negative cases, one full-chain integration test) — 9 total in
+the file. `npm test`: 1386 → 1391 (+5 this commit; +9 total across both phases).
+
 ## Phase 3 — DONE (2026-07-09)
 
 Rule storage foundation landed in `src/memory/core.mjs`, pure plumbing per §4's phase list — zero

@@ -9,13 +9,12 @@ Session handle (inbox): `tmct` (this session; earlier sessions used `mechanic`).
 
 ## Where we are (2026-07-09)
 
-`npm test` is green at **1386** (1382 baseline — which already included the concurrent
+`npm test` is green at **1391** (1382 baseline — which already included the concurrent
 Rule-storage-foundation + `findActionPath`/`findReachableSet` planning.mjs work landing in the same
-window as Phase 1 — + 4 from item 7's Phase 2 `PLAN_TAUGHT_RELATIONS.md` dispatch, below; Phase 4 is
-next in that plan's build order, in a follow-up commit).
-v1.0.7 is published; nothing has pushed since, so the local version stays ahead of npm per the
-bump-at-push-time policy recorded in `CLAUDE.md`. The full `SKILL_CHAT_PLAYTEST.md` dialogue-flow
-tier ladder (tiers 0 through 6) is complete.
+window as Phase 1 — + 4 from item 7's Phase 2 `PLAN_TAUGHT_RELATIONS.md` dispatch + 5 from item 8's
+Phase 4 dispatch, both below). v1.0.7 is published; nothing has pushed since, so the local version
+stays ahead of npm per the bump-at-push-time policy recorded in `CLAUDE.md`. The full
+`SKILL_CHAT_PLAYTEST.md` dialogue-flow tier ladder (tiers 0 through 6) is complete.
 
 **INF-C1 fabrication bug (top open follow-up below) is now FIXED.** `GENERAL_VERB_YESNO_RE`'s
 no-hit branch (`src/chat.mjs`, was lines 3852-3855) no longer synthesizes a confident "no" when
@@ -165,6 +164,23 @@ no alias) declines honestly. `test/chat-taught-relations.test.mjs` (new file), 4
 1382 → 1386. Phase 4 (item 3's compose2 rule, reusing `relationFactsFor` as its per-hop edge lookup)
 is next in this plan's build order — see item 8 below.
 
+### 8. `PLAN_TAUGHT_RELATIONS.md` Phase 4 — fixed-hop compose2 composition rule — `chat.mjs` (2026-07-09)
+
+Item 3 (fixed-hop `compose2` composition rule), a follow-up commit right after item 7 above. New
+closed-set teach regex `COMPOSE2_RULE_TEACH_RE` ("a grandparent is a parent of a parent") stores a
+`Rule` via the already-landed `appendRule`; query side extends Phase 2's `relAsk` dispatcher with a
+third step, reusing `relationFactsFor` unmodified as the hop search's per-hop edge lookup (so a
+compose2 rule's base relations are ALSO alias-chased). Reuses `findActionPath`
+(`src/planning.mjs`) with a `{ entity, hopsTaken }` state and an EXACT `hopsTaken === 2` goal —
+live-verified this hop-counting discipline is load-bearing, not just theoretically prudent: a 1-hop
+and a 3-hop path through the SAME father/parent edges both correctly decline "is ahab a grandparent
+of X" in the same store where the genuine 2-hop pair resolves yes. Full family-tree chain
+live-verified end-to-end via the piped CLI (see `PLAN_TAUGHT_RELATIONS.md`'s "Phase 2 — DONE" /
+"Phase 4 — DONE" notes for the full transcript and design detail).
+`test/chat-taught-relations.test.mjs` extended with 5 more tests (compose2 storage, hop-counted
+positive + BOTH negative hop-count cases, full-chain integration) — 9 total in the file. `npm test`:
+1386 → 1391.
+
 ## Open follow-ups (next session, in priority order)
 
 1. ~~Fix the INF-C1 fabrication bug above.~~ **DONE (2026-07-09)** — see the updated item 2 note
@@ -185,11 +201,13 @@ is next in this plan's build order — see item 8 below.
 6. ~~`PLAN_TAUGHT_RELATIONS.md` Phase 1 (relational fact teach + adjective-mint).~~ **DONE
    (2026-07-09)** — see item 5 above.
 7. ~~`PLAN_TAUGHT_RELATIONS.md` Phase 2 (relation alias/union query-side chase).~~ **DONE
-   (2026-07-09)** — see item 7 above. Phase 4 (item 3's compose2 composition rule) is next in that
-   plan's build order, reusing Phase 2's own `relationFactsFor` list-builder as its per-hop edge
-   lookup. After that: item 4 (Phase 5, `filter` rules — "a grandfather is a grandparent who is
-   male") and item 6 (Phase 6's WIRING half — `RECURSIVE_RULE_TEACH_RE` + the query-dispatcher's
-   `recursive` branch; the KERNEL half, `findReachableSet`, already shipped per item 6 above).
+   (2026-07-09)** — see item 7 above.
+8. ~~`PLAN_TAUGHT_RELATIONS.md` Phase 4 (item 3's compose2 composition rule).~~ **DONE
+   (2026-07-09)** — see item 8 above, reusing Phase 2's own `relationFactsFor` list-builder as its
+   per-hop edge lookup. Remaining from the original six-item scope: item 4 (Phase 5, `filter`
+   rules — "a grandfather is a grandparent who is male") and item 6 (Phase 6's WIRING half —
+   `RECURSIVE_RULE_TEACH_RE` + the query-dispatcher's `recursive` branch; the KERNEL half,
+   `findReachableSet`, already shipped per item 6 above).
 
 ## Discipline (unchanged)
 

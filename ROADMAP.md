@@ -100,6 +100,18 @@ shape. The teach-side "kind of"/"type of" fix (`stripKindOf`) is a genuine one-l
 `test/chat-taught-relations.test.mjs` (new file), 4 tests. `npm test` 1382 → 1386. Phase 4 (compose2
 rule, next in this plan's build order) reuses `relationFactsFor` as its own per-hop edge lookup.
 
+**`PLAN_TAUGHT_RELATIONS.md` Phase 4 — DONE (2026-07-09)**: Item 3 (fixed-hop `compose2` composition
+rule — "a grandparent is a parent of a parent" teaches a Rule, and "is ahab a grandparent of
+ishmael" resolves via a hop-counted `findActionPath` search over the taught father facts,
+alias-chased through "parent" via Phase 2's own `relationFactsFor`). The hop-counting discipline
+(`{ entity, hopsTaken }` state, `isGoal` requiring exactly 2 hops) is live-verified load-bearing: a
+1-hop and a 3-hop path through the SAME father/parent edges both correctly decline in the same store
+where the genuine 2-hop pair resolves yes. Full family-tree chain (two father facts + the alias + the
+compose2 rule) live-verified end-to-end via the piped CLI. `test/chat-taught-relations.test.mjs`
+extended with 5 more tests (9 total). `npm test` 1386 → 1391. Remaining from the original six-item
+scope: Item 4 (Phase 5, `filter` rules) and Item 6's WIRING half (Phase 6, `recursive` rules — the
+kernel already shipped above).
+
 ### Shipped this session
 
 - **Tier 5** found 12 routing/recognition fixes across teach and recall: article/head-word gaps
