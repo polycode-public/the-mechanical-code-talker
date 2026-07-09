@@ -3300,7 +3300,13 @@ async function describeWrapperAnswer(query, { config, source, focus }) {
  *  known edge concept (RELATION_TERM), no curated definition, or the graph has NO
  *  edges of that kind (composeRelation's own honest-miss gate). Loads the definition
  *  from the shipped corpus/seon/relations.jsonl, so it works without per-repo memory
- *  seeding. Lazy + failure-tolerated throughout. Returns { text, pending }. */
+ *  seeding. Lazy + failure-tolerated throughout. Returns { text, pending, kind } —
+ *  `kind` is the resolved RELATION_TERM canonical kind (imports/calls/…), the SAME
+ *  vocabulary GOAL_BY_KIND keys on, so a caller whose own envelope.parsed never
+ *  stood (this force's whole reason to exist — see relationTermOf/
+ *  isVagueRelationTouch's own docs) can still deduce the correct "Goal (inferred):
+ *  …" line instead of silently carrying forward a null goal from earlier in the
+ *  turn. */
 async function relationForceAnswer(query, envelope, { graph, config, source, templates }) {
   const rawTerm = relationTermOf(query, envelope);
   if (!rawTerm) return null;
@@ -3308,8 +3314,9 @@ async function relationForceAnswer(query, envelope, { graph, config, source, tem
   try { ({ composeRelation, RELATION_TERM } = await import("./concept.mjs")); }
   catch { return null; }
   const term = String(rawTerm).toLowerCase();
-  if (!RELATION_TERM[term]) return null; // not an enumerable edge concept — ordinary path owns it
-  const definition = (await relationDefinitions()).get(RELATION_TERM[term]) ?? null;
+  const kind = RELATION_TERM[term];
+  if (!kind) return null; // not an enumerable edge concept — ordinary path owns it
+  const definition = (await relationDefinitions()).get(kind) ?? null;
   if (!definition) return null;
   // Same graph-load fallback as conceptForceAnswer: the shell hands the loaded graph
   // straight in; the pure runTurn(config) path loads it the way dispatchTool does.
@@ -3329,7 +3336,7 @@ async function relationForceAnswer(query, envelope, { graph, config, source, tem
   const pending = composed.remainder && composed.remainder.length
     ? { items: composed.remainder, noun: composed.noun }
     : null;
-  return { text, pending };
+  return { text, pending, kind };
 }
 
 /** THE CONCEPT FORCE — compose the three-band answer (corpus/seon definition + real
@@ -3571,7 +3578,23 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // SAME value the debug trace's own "goal:" line uses (one deduction, two
   // presentations) — null here (no parse stood at all) means withGoalLine
   // shows nothing, never a "Goal (inferred): unclear" line.
-  const deduced = deduceGoalFromParsed(envelope?.parsed);
+  // `let`, not `const`: the RELATION CONCEPT FORCE (relationForceAnswer, below)
+  // can answer a turn CORRECTLY with no envelope.parsed at all to deduce from —
+  // a staccato relation-chain continuation whose leading connective never
+  // itself parses ("and inherits?": ask()'s raw grammar has no production for
+  // a bare relation word with no verb, exactly like the "cochange" vague-touch
+  // gap composeRelation's own degrade fix addressed) still reaches the SAME
+  // relation force a normally-parsed "what about inherits" would. Tier-2
+  // playtest cycle 9, the Goal-line gap cycle 8 flagged: the answer content
+  // was always correct here — only the cosmetic trailing "Goal (inferred): …"
+  // line went missing, because it was computed once, this early, straight off
+  // envelope.parsed and never revisited even when a LATER lane went on to
+  // answer the turn through a completely different path. Reassigned at the
+  // relation-force call site below (never overwritten with something worse:
+  // only filled in from the SAME GOAL_BY_KIND table deduceGoalFromParsed
+  // itself already uses for a normally-parsed relation query, so the two
+  // never disagree on the cases where both would fire).
+  let deduced = deduceGoalFromParsed(envelope?.parsed);
   note(trace, `goal: ${deduced ?? "unclear — the phrasing didn't resolve to a known query shape"}`);
   // MISS handling. The intent lanes + short-miss are RECOGNIZER-gated on the query
   // text AND only consulted on a would-miss, so a real graph query — a hit, an honest
@@ -3800,6 +3823,19 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
         conceptPending = relation.pending;
         note(trace, "lane: THE RELATION CONCEPT FORCE — the touched word named a known, edge-bearing relation kind");
         note(trace, "source: relationForceAnswer over the loaded graph's own edges (not corpus)");
+        // Goal-line gap fix (Tier-2 playtest cycle 9): this force just answered
+        // the turn CORRECTLY over a query shape ask()'s own grammar may never
+        // have parsed at all (a staccato relation-chain continuation whose
+        // leading connective never itself parses, "and inherits?") — `deduced`
+        // was computed way above, off envelope.parsed alone, and would
+        // otherwise stay null forever here even though the answer is real.
+        // relation.kind is the SAME GOAL_BY_KIND vocabulary a normally-parsed
+        // relation query already deduces its goal line from, so this can never
+        // disagree with the ordinary path on a case where both would fire.
+        if (relation.kind && GOAL_BY_KIND[relation.kind]) {
+          deduced = GOAL_BY_KIND[relation.kind];
+          note(trace, `goal: ${deduced} (revised — the relation concept force answered where the raw parse never stood)`);
+        }
       }
     }
   }

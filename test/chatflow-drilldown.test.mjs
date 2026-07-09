@@ -95,7 +95,12 @@ test("relation force: emits definition + example edges + validated follow-ups (v
       + "In this codebase, for example: Widget inherits from Base and Button inherits from Widget (2 inheritance edges).\n"
       + "Want to go deeper? Try:\n"
       + "  • which classes inherit from Base\n"
-      + "  • where is Widget defined");
+      + "  • where is Widget defined\n"
+      + "\n"
+      + "Goal (inferred): Understand a class hierarchy/inheritance relationship.",
+      "Tier-2 playtest cycle 9 Goal-line-gap fix: a relation-force answer (envelope.parsed "
+      + "never stands for this vague-touch shape) now deduces its goal from the SAME relation "
+      + "kind the force itself resolved, instead of silently carrying forward a null goal");
   } finally {
     clearCache();
     await rm(dir, { recursive: true, force: true });
