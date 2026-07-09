@@ -234,13 +234,11 @@ the moment of actually pushing a release, as part of that same push.
    receipted empty because the class declares no methods of its own (inherited from `Controller`)
    — extending membership queries to walk inheritance is a bigger structural change than a
    routing fix, deliberately deferred.
-7. **`test/chatflow-tier1.test.mjs` naming.** Pre-existing file, but its own header describes
+7. **DONE: `test/chatflow-tier1.test.mjs` naming.** Was mislabeled — its own header described
    Tier 2's territory ("drill-down chains with anaphora... what calls it → what uses that"), not
-   Tier 1's "single touch + one drill-down" — a labeling artifact from early in this session
-   before the tier ladder was read carefully. This session's genuine Tier-1 pass froze its tests
-   in a distinctly-named `test/chatflow-tier1-single-touch.test.mjs` instead of touching the
-   older file. Renaming the older file (and updating any doc that references it) is a judgment
-   call for whoever picks this up — nothing is broken, just mislabeled.
+   Tier 1's "single touch + one drill-down". Renamed to `test/chatflow-tier2-drilldown.test.mjs`
+   this session (`git mv`, history preserved), its header corrected to describe Tier 2 content,
+   and the now-obsolete naming note in `test/chatflow-tier1-single-touch.test.mjs` removed.
 8. **Judged CHATBENCH re-run.** Not run this session — this session's changes touch answer text
    on judged surfaces again (onboarding/identity responses, teach-lane wording, new relation
    phrasings), so the next judged pass needs to re-derive its stale set from answer-text diffs,

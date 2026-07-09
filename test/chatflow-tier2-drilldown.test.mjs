@@ -1,4 +1,4 @@
-// chatflow-tier1.test.mjs — SKILL_CHAT_PLAYTEST regression transcripts, Tier 1
+// chatflow-tier2-drilldown.test.mjs — SKILL_CHAT_PLAYTEST regression transcripts, Tier 2
 // (drill-down chains with anaphora: concept → instance → "what calls it" →
 // "what uses that" → "where is it defined", focus carried throughout — §3).
 // Freezes the flowing turns found in the 0.9.13 playtest cycle so a

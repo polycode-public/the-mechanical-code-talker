@@ -3,16 +3,6 @@
 // ONE of the product's own guided "Want to go deeper?" questions verbatim -> ONE
 // natural follow-up in the user's own words to ITS answer, then stop).
 //
-// NAMING NOTE for the operator: this file is DELIBERATELY named distinctly from the
-// existing `test/chatflow-tier1.test.mjs`, which — despite its name — actually covers
-// TIER-2-shaped content (its own header says so: "drill-down chains with anaphora:
-// concept -> instance -> 'what calls it' -> 'what uses that' -> 'where is it defined'",
-// §3's Tier 2 definition verbatim). That file was apparently mislabeled when it was
-// created; renaming it is a separate decision left to the operator (it has its own
-// history and other files may reference it). This file is the first one that actually
-// freezes single-touch-plus-one-drill-down (three turns: concept touch, one verbatim
-// guided question, one natural follow-up to THAT answer — no chaining beyond it).
-//
 // Driven against the SHIPPED examples/mini-webapp graph via `ephemeral: true`
 // (chat.mjs's createSession) — reads the real graph but writes session/provenance
 // state to a throwaway temp dir, so the committed fixture is never touched (verified
