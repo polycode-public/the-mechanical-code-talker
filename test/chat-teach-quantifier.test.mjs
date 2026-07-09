@@ -230,3 +230,113 @@ test("answerCount regression: real graph-cardinality counts are UNAFFECTED by th
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+// ---- Bug 3 (2026-07-09 dispatch): general verb-to-predicate teaching. The
+// operator's own repro: "remember tony has a hat" / "remember margo eats
+// ribs" used to fall straight through teachLane returning null (not even
+// this lane's own honest miss text) because only is/are and owns/maintains
+// were recognized verbs — the sentence then hit the STRUCTURAL code-graph
+// grammar, which produced a confusing wrong-context miss (and sometimes a
+// confidently WRONG "Goal (inferred)" line). See chat.mjs's generalVerbTeach/
+// generalVerbPredicate/GENERAL_VERB_TEACH_RE docblocks for the design.
+
+test("Bug 3: 'remember X has a Y' stores via the EXISTING mgx:hasA predicate (interop with ConceptNet HasA data) and is retrievable", async () => {
+  const dir = await mem("verb-hasa");
+  try {
+    const taught = await runTurn("remember tony has a hat", { config: CONFIG, memoryDir: dir, sessionId: "v1" });
+    assert.match(taught.answer, /^noted — remembered: tony has hat/);
+    assert.equal(taught.record.miss, false);
+    assert.match(taught.answer, /Goal \(inferred\): Teach\/remember a new fact\./);
+
+    const rows = readFactRows(await loadMemory(dir));
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].subject, "tony");
+    assert.equal(rows[0].predicate, "mgx:hasA", "the SAME predicate ConceptNet's own HasA facts use");
+    assert.equal(rows[0].object, "hat");
+    assert.match(rows[0].provenance, /^teach:chat:v1@/);
+
+    const readBack = await runTurn("what is tony", { config: CONFIG, memoryDir: dir });
+    assert.match(readBack.answer, /tony has hat/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("Bug 3: 'remember X <novel-verb> Y' mints mgx:<lemma>, stores, and reads back with a sensible mechanically-derived render", async () => {
+  const dir = await mem("verb-novel");
+  try {
+    const taught = await runTurn("remember margo eats ribs", { config: CONFIG, memoryDir: dir, sessionId: "v2" });
+    assert.match(taught.answer, /^noted — remembered: margo eats ribs/);
+    assert.equal(taught.record.miss, false);
+
+    const rows = readFactRows(await loadMemory(dir));
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].subject, "margo");
+    assert.equal(rows[0].predicate, "mgx:eat", "minted from the verb's own lemma, no hand-curated table entry");
+    assert.equal(rows[0].object, "ribs");
+
+    const readBack = await runTurn("what is margo", { config: CONFIG, memoryDir: dir });
+    assert.match(readBack.answer, /margo eats ribs/, "the mechanical mgx:<lemma> render fallback reconstructs the natural surface form");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("Bug 3: the pronoun-subject guard (fc58c19) still declines 'remember you/i/he/… <verb> Y' for the NEW general-verb path — no regression", async () => {
+  const dir = await mem("verb-pronoun");
+  try {
+    for (const q of ["remember you has a hat", "remember i have a hat", "remember he eats ribs", "remember they drive a car"]) {
+      const r = await runTurn(q, { config: CONFIG, memoryDir: dir, sessionId: "v3" });
+      assert.match(r.answer, /pronouns aren't things I can classify/, `"${q}" still gets the distinct pronoun decline`);
+      assert.equal(r.record.miss, true, `"${q}" is never silently stored`);
+    }
+    assert.equal(readFactRows(await loadMemory(dir)).length, 0, "no pronoun-subject fact was ever written");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("Bug 3: a determiner-led or is/are-bearing sentence is NOT hijacked by the general-verb path — the existing class-membership frame still owns it", async () => {
+  const dir = await mem("verb-noregress");
+  try {
+    const r = await runTurn("remember every controller is a handler", { config: CONFIG, memoryDir: dir, sessionId: "v4" });
+    assert.match(r.answer, /noted — remembered.*controller.*handler/, "the ordinary ACE class-membership path answers, not a bogus general-verb mint");
+    const rows = readFactRows(await loadMemory(dir));
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].predicate, "rdfs:subClassOf", "still the ordinary class-membership predicate, not a bogus mgx:<noun> mint");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("Bug 3: a genuinely unparseable teach payload (no real object) still declines honestly — the predicate generalization never accepts garbage", async () => {
+  const dir = await mem("verb-garbage");
+  try {
+    const r = await runTurn("remember tony", { config: CONFIG, memoryDir: dir, sessionId: "v5" });
+    assert.doesNotMatch(r.answer, /^noted — remembered/);
+    assert.equal(readFactRows(await loadMemory(dir)).length, 0);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("Bug 3: the Goal-line is correct and consistent for teach-success turns (never the wrong structural 'defines' goal, never silently absent)", async () => {
+  const dir = await mem("verb-goal");
+  try {
+    const hasA = await runTurn("remember tony has a hat", { config: CONFIG, memoryDir: dir, sessionId: "v6" });
+    assert.match(hasA.answer, /Goal \(inferred\): Teach\/remember a new fact\./);
+    assert.doesNotMatch(hasA.answer, /Locate what a module\/class defines/i);
+
+    const novel = await runTurn("remember margo eats ribs", { config: CONFIG, memoryDir: dir, sessionId: "v6" });
+    assert.match(novel.answer, /Goal \(inferred\): Teach\/remember a new fact\./);
+    assert.doesNotMatch(novel.answer, /Locate what a module\/class defines/i);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});

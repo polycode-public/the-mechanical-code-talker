@@ -264,6 +264,106 @@ test("pronoun guard control: a REAL unknown-subject noun ('widget is a component
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
+// ---- Bug 2 (2026-07-09 dispatch, HIGH PRIORITY): "what is X" (no article) has
+// no route, including for FRESHLY TAUGHT facts. Root cause: metaTermOf's
+// mandatory-article regex (mirroring grammar.mjs's T5 discipline) never even
+// attempted a fact lookup for a bare "what is john" — envelope.parsed stayed
+// null (T5 requires the article too), which let isConversational() claim the
+// turn as a would-miss BEFORE the memory-facts lane ever got a look, landing
+// on the generic capability-orientation card as if "john" had never been
+// taught. See chat.mjs's BARE_WHATIS_RE / isConversationalCandidate /
+// bareMetaHit docblocks for the fix (article optional on the fact-lookup path
+// ONLY — grammar.mjs's own T5 stays untouched, still article-mandatory). ----
+
+test("Bug 2: 'what is X' (bare, no article) surfaces a FRESHLY TAUGHT fact — both bare and articled forms agree", async () => {
+  const dir = await mem();
+  try {
+    const taught = await runTurn("john is a function", { config: CONFIG, memoryDir: dir, sessionId: "b2" });
+    assert.match(taught.answer, /noted — remembered: john is a kind of function/);
+
+    const bare = await runTurn("what is john", { config: CONFIG, memoryDir: dir });
+    assert.match(bare.answer, /you told me: john is a kind of function/, "bare 'what is john' now surfaces the taught fact");
+    assert.equal(bare.record.miss, false);
+    assert.doesNotMatch(bare.answer, /I'm tmct — a deterministic/, "never the generic capability-orientation card once a real fact exists");
+
+    const articled = await runTurn("what is a john", { config: CONFIG, memoryDir: dir });
+    assert.match(articled.answer, /you told me: john is a kind of function/, "the WITH-article form surfaces the same fact");
+    // Both surface the SAME fact — they may differ on the trailing "Goal (inferred)"
+    // line (the articled form parses to a real envelope.parsed shape via grammar.mjs's
+    // T5, the bare form doesn't — T5's own mandatory article is deliberately left
+    // untouched by this fix), so compare just the substantive fact line, not the
+    // full byte-for-byte answer.
+    assert.equal(bare.answer.split("\n")[0], articled.answer.split("\n")[0], "bare and articled forms surface the identical fact line");
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("Bug 2: a bare 'what is X' with NOTHING behind it still falls through to the SAME friendly orientation card as before — never a speculative reroute, never stranded on the grammar wall", async () => {
+  const dir = await mem();
+  try {
+    const withoutFix = await runTurn("what is up", { config: CONFIG, memoryDir: dir });
+    assert.match(withoutFix.answer, /I'm tmct — a deterministic/, "no fact for 'up' — falls through to the ordinary orientation card");
+    assert.doesNotMatch(withoutFix.answer, /couldn't parse this as a graph question/, "never the raw structural grammar wall either");
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("Bug 2: no-regression — the structural 'what is a X' grammar path (T5, article mandatory) is untouched; a bare 'what is X' with NO memoryDir behaves exactly as before", async () => {
+  const g = await graph();
+  const bareNoMemory = await runTurn("what is doohickey", { config: CONFIG, graph: g });
+  assert.doesNotMatch(bareNoMemory.answer, /couldn't parse this as a graph question/, "still no raw wall — falls through to the ordinary conversational orientation, unaffected by the bare-fact-lookup fix (no memoryDir to look anything up in)");
+  const articled = await runTurn("what is a cache", { config: CONFIG, graph: g });
+  assert.doesNotMatch(articled.answer, /couldn't parse this as a graph question/, "the mandatory-article structural form still resolves exactly as before");
+});
+
+// ---- Bug 1 (2026-07-09 dispatch): "what else is X" repeated the primary
+// definition verbatim instead of surfacing more. Root cause: ask()'s own
+// relaxation cascade silently drops "else" as an unmatched token once the
+// anchored grammar misses "what else is X" as typed, and re-parses the
+// survivor as an ordinary "what is X" — a real, non-miss answer, so by the
+// time chat.mjs sees the query "else" is already gone. whatElseAnswer is
+// recognized off the RAW query text, first, before any other lane. ----
+
+test("Bug 1: 'what else is X' surfaces genuinely additional facts, never repeats the primary curated definition verbatim", async () => {
+  const dir = await mem();
+  try {
+    const { seedMemory, SEON_CONCEPTS_FILE } = await import("../src/corpus/conceptnet.mjs");
+    await seedMemory(dir, { slicePath: SEON_CONCEPTS_FILE, provenancePrefix: "corpus:seon" });
+    const config = { graphFile: join(dir, ".tmct", "graph.json") };
+
+    const first = await runTurn("what is a function", { config, memoryDir: dir });
+    assert.match(first.answer, /^A function is a named, reusable block of code/);
+    assert.equal(first.record.via, "corpus/seon");
+
+    const again = await runTurn("what else is a function", { config, memoryDir: dir, last: first.last });
+    assert.notEqual(again.answer, first.answer, "never byte-identical to the primary definition turn");
+    assert.doesNotMatch(again.answer, /^A function is a named, reusable block of code/, "never repeats the primary definition sentence verbatim");
+    assert.match(again.answer, /what else I know about "function"/i);
+    // real ConceptNet/SEON facts about "function" beyond the prose definition
+    assert.match(again.answer, /function/);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("Bug 1: 'what else is X' with genuinely nothing more gives an honest 'that's everything' line, never a spurious repeat", async () => {
+  const dir = await mem();
+  try {
+    const none = await runTurn("what else is a zzznonexistentterm", { config: CONFIG, memoryDir: dir });
+    assert.match(none.answer, /That's everything I know about "zzznonexistentterm"/);
+
+    // a term whose ONLY prior answer already listed every known fact about it
+    // (via:"fact", not a curated prose definition) has nothing left to add either.
+    await runTurn("widget is a cache", { config: CONFIG, memoryDir: dir, sessionId: "b1" });
+    const primary = await runTurn("what is a widget", { config: CONFIG, memoryDir: dir });
+    assert.equal(primary.record.via, "fact");
+    const again = await runTurn("what else is a widget", { config: CONFIG, memoryDir: dir, last: primary.last });
+    assert.match(again.answer, /That's everything I know about "widget"/, "the primary answer already listed every known fact — nothing genuinely new to add");
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("Bug 1: no-regression — 'what else is IN <class>' still resolves the EXISTING members-of-class feature, not the new fact-lookup lane", async () => {
+  const g = await graph();
+  const r = await runTurn("what else is in Widget", { config: CONFIG, graph: g });
+  assert.doesNotMatch(r.answer, /That's everything I know about "in widget"/i, "never swallowed as a literal vocabulary term by the new whatElseAnswer lane");
+});
+
 // ---- #2 META/SELF lane ----
 
 test("#2 meta: bare 'what do you know' → a SHORT summary, never a raw fact dump", async () => {

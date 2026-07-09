@@ -1266,6 +1266,12 @@ const HAS_PROPERTY_PREDICATE = "mgx:hasProperty";
 // "some/a few Xs are Ys" shape) stay obviously in that same family rather than
 // re-typing the CURIE string at each call site.
 const SUBCLASS_PREDICATE = "rdfs:subClassOf";
+// Bug 3 (2026-07-09): the SAME "has a" predicate ConceptNet's own /r/HasA
+// facts already use (FACT_PREDICATE_PHRASES, conceptnet-map.toml) — named
+// here too so generalVerbTeach's "has"/"have" special case (below) stays
+// obviously in that same family, interoperable with corpus HasA data on the
+// read side, rather than minting a redundant mgx:has.
+const HAS_A_PREDICATE = "mgx:hasA";
 
 /** "<Name> owns/maintains <X>" — the ownership teach declarative. <Name> is one
  *  or two name tokens, <X> one code-ish token (a path, a file, a symbol). The
@@ -1299,7 +1305,7 @@ async function teachFact(memoryDir, sessionId, { subject, predicate, object, qua
       provenance: teachProvenanceTag(sessionId, new Date().toISOString()),
       ...(quantifier ? { quantifier } : {}),
     });
-    const phrase = FACT_PREDICATE_PHRASES[predicate] || predicate;
+    const phrase = predicatePhrase(predicate);
     return { text: `noted — remembered: ${s} ${phrase} ${o}`, via: "assert", miss: false };
   } catch {
     return null;
@@ -1398,6 +1404,111 @@ async function unknownSubjectFallback(payload, { memoryDir, sessionId, lexicon }
   return null; // Y unknown too — decline honestly, never guess
 }
 
+// ---- BUG 3 (2026-07-09, operator-authorized generalizing — "I don't know
+// where that ban came from, overturn it. build it."): general verb-to-
+// predicate teaching. "remember tony has a hat" / "remember margo eats ribs"
+// used to fall straight through teachLane returning null (not even this
+// lane's own honest miss text) because the ONLY verbs the lane recognized at
+// all were is/are (class-membership/property) and owns/maintains
+// (ownership) — a sentence with any OTHER verb never matched a single
+// recognizer, and fell to the STRUCTURAL code-graph grammar, which of course
+// can't resolve an arbitrary proper noun as a code entity (confusing,
+// wrong-context miss text, and sometimes a confidently WRONG "Goal
+// (inferred)" line — runAsk's own teach-lane goal deduction fixes that half).
+//
+// RECOGNITION stays exactly as CLOSED as every other frame in this lane:
+// wrapper-REQUIRED (teachLane only ever calls generalVerbTeach on `wrapped`,
+// i.e. only inside an already "remember/note/…"-triggered payload — a bare
+// "tony has a hat" is never silently reified, same discipline
+// TEACH_PROPERTY_RE already uses), and only a well-formed <subject> <verb>
+// <object> triple matches AT ALL (point 6 — a missing/unparseable object
+// still declines honestly, never a guess). What's generalized is ONLY the
+// PREDICATE a recognized shape maps to, never what counts as a recognized
+// shape — the same "recognition closed, mapping generalized" split the
+// operator explicitly authorized over this dispatch's default "prefer
+// templates" guidance. ----
+
+/** <subject> (ONE bare word — a name, "tony"/"margo") <verb> (one lowercase
+ *  word) <object> (the rest). Deliberately bounded to a SINGLE-TOKEN subject
+ *  with no leading determiner — not the lazy/greedy multi-word subject the
+ *  is/are frames elsewhere in this lane tolerate. Reasoning (found live while
+ *  building this): without real verb-position knowledge, a positional regex
+ *  over an ARBITRARY-length subject is genuinely ambiguous — "every
+ *  controller is a handler" would just as happily (mis)parse as
+ *  subject="every", verb="controller", object="is a handler" as it would the
+ *  intended reading. Bounding the subject to one bare word removes that
+ *  ambiguity for exactly the shape this mechanism targets (a name-like
+ *  subject, per the operator's own examples); a determiner/quantifier-led or
+ *  multi-word subject simply doesn't match here and honestly declines
+ *  (point 6) rather than risk a wrong split — the is/are-specific frames
+ *  elsewhere in this lane already own that broader territory. */
+const GENERAL_VERB_TEACH_RE = /^([\w'-]+)\s+([a-z]+)\s+(.+?)[.!?]*$/i;
+/** Determiners/quantifiers that make the FIRST token an article, not a real
+ *  bare-name subject ("every controller…", "the cache…") — GENERAL_VERB_TEACH_RE
+ *  would otherwise happily bind them as a 1-token subject and misread the
+ *  REAL subject's second word as the verb. Declining here hands the sentence
+ *  back to the is/are-specific frames above/below (their own territory) or an
+ *  honest miss — never a guessed split. */
+const GENERAL_VERB_DETERMINER_RE = /^(?:every|each|all|some|a|an|the|your|my|our|their|his|her|its)$/i;
+/** Verbs owned by an earlier, more specific recognizer in this lane — is/are
+ *  (class-membership/property, above) and owns/maintains (ownership, above).
+ *  generalVerbTeach declines outright on these so it can never race a more
+ *  specific frame for the same sentence; a genuine miss on one of THESE verbs
+ *  stays that frame's own honest miss, never silently reinterpreted here. */
+const GENERAL_VERB_EXCLUDE_RE = /^(?:is|are|am|owns|maintains)$/i;
+/** Whole-payload safety net (defense in depth alongside the single-token
+ *  subject bound above): if "is"/"are"/"am"/"owns"/"maintains" appears
+ *  ANYWHERE in the sentence — not just at the guessed verb position — this
+ *  is territory another frame in this lane already owns (or will, in the
+ *  is/are payload block right after this one runs), so generalVerbTeach
+ *  stands down entirely rather than risk a positional misread of a longer
+ *  copula/ownership sentence it was never meant to parse. */
+const GENERAL_VERB_ANYWHERE_EXCLUDE_RE = /\b(?:is|are|am|owns|maintains)\b/i;
+
+/** The predicate a general-verb teach payload's VERB maps to. "has"/"have"
+ *  special-cases onto the EXISTING mgx:hasA predicate (point 2) — the same
+ *  one ConceptNet's own /r/HasA facts already use (FACT_PREDICATE_PHRASES),
+ *  so a taught "X has a Y" fact reads back interoperably with corpus HasA
+ *  data, rather than minting a redundant mgx:has. Any OTHER verb mints
+ *  mgx:<lemma> (point 3a) — proseLemma, the wink-nlp lemmatiser this
+ *  codebase already loads elsewhere (prose-nlp.mjs), canonicalizes "eats"/
+ *  "ate"/"eating" alike onto the same mgx:eat predicate; when the optional
+ *  wink model isn't installed, proseLemma degrades to null (its own
+ *  documented contract) and this falls back to the verb AS TYPED — still a
+ *  perfectly storable/retrievable predicate, just not cross-inflection
+ *  canonicalized. Never a hand-curated per-verb table entry required. */
+async function generalVerbPredicate(verb) {
+  const v = String(verb || "").toLowerCase();
+  if (v === "has" || v === "have") return HAS_A_PREDICATE;
+  try {
+    const { proseLemma } = await import("./prose-nlp.mjs");
+    const lemma = proseLemma();
+    return `mgx:${lemma ? lemma(v) : v}`;
+  } catch {
+    return `mgx:${v}`;
+  }
+}
+
+/** Recognize + resolve a general-verb teach payload into {subject, predicate,
+ *  object}, or null when it doesn't fit the shape / names an excluded verb /
+ *  is missing a real subject or object (point 6 — an honest decline, never a
+ *  guess). Pure recognition + predicate mapping; the caller (teachLane) does
+ *  the actual write via the shared teachFact. */
+async function generalVerbTeach(payload) {
+  const p = String(payload || "").trim();
+  if (GENERAL_VERB_ANYWHERE_EXCLUDE_RE.test(p)) return null; // another frame's territory — stand down
+  const m = p.match(GENERAL_VERB_TEACH_RE);
+  if (!m) return null;
+  const [, subjectRaw, verbRaw, objectRaw] = m;
+  const verb = verbRaw.toLowerCase();
+  if (GENERAL_VERB_EXCLUDE_RE.test(verb)) return null; // owned by a more specific frame above
+  if (GENERAL_VERB_DETERMINER_RE.test(subjectRaw)) return null; // not a bare-name subject
+  const subject = subjectRaw.trim();
+  const object = objectRaw.replace(/^an?\s+/i, "").trim();
+  if (!subject || !object) return null; // no well-formed triple — honest decline (point 6)
+  const predicate = await generalVerbPredicate(verb);
+  return { subject, predicate, object };
+}
 
 /** Sentence forms to try asserting for a teach payload: the payload as-is, and
  *  (if it carries no determiner) its "every …" universal — the ACE-OWL shape the
@@ -1448,8 +1559,19 @@ function teachSuggestion(payload) {
  *  double as legitimate demonstrative entity references elsewhere in this
  *  file (DESCRIBE_PRONOUN_RE, NEGATION_PRONOUN_RE et al.), and a claim about
  *  a demonstrated entity ("that is a bug", pointing at something real) is a
- *  much closer call than "every you is a womble" — not this bug's territory. */
-const TEACH_PRONOUN_RE = /^(?:every\s+|each\s+|all\s+|some\s+|a few\s+|a\s+|an\s+)?(you|i|it|they|he|she|we)\s+(?:is|are|am)\b/i;
+ *  much closer call than "every you is a womble" — not this bug's territory.
+ *
+ *  WIDENED (Bug 3, 2026-07-09): the verb group used to be the closed
+ *  is/are/am copula set — correct while pronoun subjects could only ever
+ *  reach a class-membership/property claim, but Bug 3's generalVerbTeach
+ *  (below) opens a SECOND way a pronoun subject can reach the store, via ANY
+ *  verb ("remember you has a hat", "remember he eats ribs"). A pronoun is
+ *  just as invalid a fact subject under a general verb as it is under "is" —
+ *  this is a grammatical category error regardless of the verb — so the verb
+ *  slot now matches ANY word, not just the copula three, keeping the guard
+ *  ahead of every teach recognizer (copula AND general-verb alike) the same
+ *  way it already stood ahead of teachSuggestion/unknownSubjectFallback. */
+const TEACH_PRONOUN_RE = /^(?:every\s+|each\s+|all\s+|some\s+|a few\s+|a\s+|an\s+)?(you|i|it|they|he|she|we)\s+\S+/i;
 
 async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
   const rawInput = String(query).trim();
@@ -1518,6 +1640,24 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
       const stored = await teachFact(memoryDir, sessionId, {
         subject, predicate: SUBCLASS_PREDICATE, object, quantifier,
       });
+      if (stored) return stored;
+    }
+  }
+
+  // GENERAL VERB-TO-PREDICATE TEACH (Bug 3) — "remember <Subject> <verb>
+  // <Object>" where <verb> is neither is/are (handled below via the ACE/
+  // unknown-subject/property paths) nor owns/maintains (handled above).
+  // Wrapper-REQUIRED (`wrapped`, not `raw`) — see generalVerbTeach's own
+  // docblock for why this keeps recognition exactly as closed as every other
+  // frame in this lane. Tried before the is/are `payload` block below so a
+  // non-copula verb never falls through this function returning null with no
+  // miss text at all (the ORIGINAL bug: "remember tony has a hat" never even
+  // reached this lane's own honest-miss cascade, landing on the structural
+  // grammar's wrong-context wall instead).
+  if (wrapped && memoryDir && !QUESTION_LEAD_RE.test(wrapped)) {
+    const gv = await generalVerbTeach(wrapped);
+    if (gv) {
+      const stored = await teachFact(memoryDir, sessionId, gv);
       if (stored) return stored;
     }
   }
@@ -2241,7 +2381,33 @@ const FACT_PREDICATE_PHRASES = {
   "mgx:hasPrerequisite": "requires",
   "mgx:ownedBy": "is owned by", // the teach lane's ownership frame ("Priya owns tasks.mjs")
 };
-const factPhrase = (f) => `${f.subject} ${FACT_PREDICATE_PHRASES[f.predicate] || f.predicate} ${f.object}`;
+
+/** Bug 3 (2026-07-09) point 3b: the MECHANICAL fallback for a predicate this
+ *  table has no curated entry for — specifically generalVerbTeach's minted
+ *  "mgx:<lemma>" predicates ("mgx:eat", "mgx:drive", …), which by design have
+ *  no per-verb table row (that would be the anti-pattern the operator's
+ *  dispatch explicitly called out to avoid). Reconstructs the naive third-
+ *  person-singular surface form so "margo mgx:eat ribs" still renders as the
+ *  natural "margo eats ribs" — the mechanical INVERSE of singularizeSurface's
+ *  own naive -s/-es/-ies fold used elsewhere in this file, same accepted-
+ *  limitation trade (no real morphology; a handful of doubly-irregular verbs
+ *  render slightly off but never wrong-MEANING). "has"/"have" never reach
+ *  this fallback — generalVerbPredicate special-cases them onto the CURATED
+ *  mgx:hasA entry above before a predicate is ever minted. Any OTHER unknown
+ *  predicate (not the "mgx:<lemma>" shape — e.g. a stray/foreign CURIE) still
+ *  renders verbatim, unchanged from before this fix. */
+function thirdPersonSingularSurface(lemma) {
+  const w = String(lemma || "");
+  if (/[a-z]y$/i.test(w) && !/[aeiou]y$/i.test(w)) return `${w.slice(0, -1)}ies`;
+  if (/(?:s|x|z|ch|sh|o)$/i.test(w)) return `${w}es`;
+  return `${w}s`;
+}
+function predicatePhrase(predicate) {
+  if (FACT_PREDICATE_PHRASES[predicate]) return FACT_PREDICATE_PHRASES[predicate];
+  const m = /^mgx:([a-z]+)$/i.exec(String(predicate || ""));
+  return m ? thirdPersonSingularSurface(m[1]) : predicate;
+}
+const factPhrase = (f) => `${f.subject} ${predicatePhrase(f.predicate)} ${f.object}`;
 
 // ---- BUG 1 fix (2026-07-08): "what is a tree used for" filters to JUST the
 // UsedFor facts, instead of grammar.mjs's meta-whatis template's lazy tail
@@ -2458,10 +2624,12 @@ async function factAnswer(memoryDir, query, envelope, miss) {
   // alongside the schema-docs answer) and misses (facts answer alone) alike.
   // When the engine produced NO parse at all (the empty-bootstrap graph
   // short-circuits before parsing), the meta FORM is recognized directly on a
-  // miss — same required-article discipline as the grammar's own T5 template.
+  // miss — via BARE_WHATIS_RE (chat.mjs's own fact-lookup discipline, article
+  // OPTIONAL — see that regex's docblock for why this is safe to loosen here
+  // even though the structural grammar's T5 keeps the article mandatory).
   let metaTerm = envelope?.parsed?.shape === "meta" ? envelope.parsed.object : null;
   if (!metaTerm && miss && !envelope?.parsed) {
-    const m = q.match(/^what\s+(?:is|are)\s+an?\s+(.+?)[?.!\s]*$/i)
+    const m = q.match(BARE_WHATIS_RE)
       || q.match(/^what\s+(?:does|do)\s+(.+?)\s+means?[?.!\s]*$/i);
     if (m) metaTerm = m[1];
   }
@@ -2525,6 +2693,83 @@ async function factAnswer(memoryDir, query, envelope, miss) {
     return { text: `${hits.length} remembered fact${hits.length === 1 ? "" : "s"} about ${term}:\n${shown.join("\n")}${extra}`, replace: true, ...(rest.length ? { pending: { items: rest.map((l) => l.trim()), noun: "facts" } } : {}) };
   }
   return null;
+}
+
+// ---- BUG 1 fix (2026-07-09): "what else is X" repeated the SAME primary
+// definition sentence verbatim, byte-identical to a plain "what is X" turn
+// right before it. Root cause: "what else is a function" is NOT itself a
+// recognized shape anywhere in this file — ask()'s own relaxation cascade
+// (relaxParse, ask.mjs: NOISE-STRIP then DROP-UNMATCHED) quietly treats
+// "else" as an unmatched leftover token once the anchored grammar misses the
+// sentence as typed, drops it, and re-parses the survivor as the ORDINARY
+// "what is a function" meta shape — a real, non-miss answer, so relaxParse
+// happily accepts it. By the time curatedDefinitionAnswer/factAnswer see the
+// query, "else" is already gone and there is nothing left to distinguish a
+// follow-up asking for MORE from the original question. whatElseAnswer is
+// recognized FIRST, off the RAW query text (never the relaxed envelope), so
+// it always gets first look regardless of what the ask engine's own parse
+// collapsed the sentence to. ----
+
+/** "what else is/are X" / "what else about X" / "what else do you know about
+ *  X" — the follow-up shape asking for information BEYOND whatever the
+ *  primary answer already said. Two separate anchors (not one alternation)
+ *  because the "is/are" copula form and the "about" form take the article
+ *  differently ("what else is a function" vs "what else about the cache").
+ *  The negative lookahead on the "is/are" form excludes "what else is
+ *  in/inside X" — that's a DIFFERENT, already-working feature (normalize.mjs
+ *  PHRASING_FRAMES rewrites it to "what does X contain", a members-of-class
+ *  query, tested by chatflow-tier1-single-touch.test.mjs); without this
+ *  exclusion this lane's own raw-text-first priority (it runs BEFORE ask()'s
+ *  pipeline even gets a look) would wrongly swallow that idiom as a
+ *  vocabulary-term lookup for the literal term "in X". */
+const WHAT_ELSE_IS_RE = /^what\s+else\s+(?:is|are)\s+(?!in\b|inside\b)(?:an?\s+)?(.+?)[?.!\s]*$/i;
+const WHAT_ELSE_ABOUT_RE = /^what\s+else\s+(?:do\s+you\s+know\s+)?about\s+(?:an?\s+|the\s+)?(.+?)[?.!\s]*$/i;
+
+/** "what else is X" — surface remembered facts about X BEYOND the primary
+ *  curated (corpus/seon) prose definition, which is itself never a Facts row
+ *  (it comes from a separate prose file, seonDefinitions() — see
+ *  curatedDefinitionAnswer) — so every subject-side fact this returns is
+ *  genuinely additional information, never a repeat of the definition
+ *  sentence. Reuses factAnswer's own subject-scan machinery (memoryFacts +
+ *  factTermVariants + renderFactLine + the SAME FACT_ANSWER_CAP/'more'-paging
+ *  convention as factAnswer/factReadBack), just filtered/framed differently.
+ *
+ *  Honest "nothing more" fallback (never a spurious repeat) in TWO cases: (a)
+ *  the term carries no facts at all — there is nothing to add beyond the
+ *  definition; (b) every fact line this would show ALREADY appears verbatim
+ *  in the immediately-preceding turn's answer (`last.answer`) — meaning the
+ *  primary answer was itself an exhaustive fact listing (via:"fact", not a
+ *  curated prose definition), so "what else" truly has nothing new to say.
+ *  That second check reuses this codebase's own established repeat-detection
+ *  discipline (comparing rendered lines against `last.answer` bytes — see
+ *  ORIENTATION_REPEAT_ONELINER/WALL_REPEAT_ONELINER for the same pattern). */
+async function whatElseAnswer(memoryDir, query, last) {
+  if (!memoryDir) return null;
+  const q = String(query).trim();
+  const m = q.match(WHAT_ELSE_IS_RE) || q.match(WHAT_ELSE_ABOUT_RE);
+  if (!m) return null;
+  const term = m[1].trim();
+  if (!term) return null;
+  let normFactTerm;
+  try { ({ normFactTerm } = await import("./memory/core.mjs")); } catch { return null; }
+  const variants = factTermVariants(normFactTerm, term);
+  const hits = (await memoryFacts(memoryDir)).filter((f) => variants.has(f.subject));
+  const nothingMore = {
+    text: `That's everything I know about "${term}" — /memory to see the full picture.`,
+    replace: true,
+  };
+  if (!hits.length) return nothingMore;
+  const lines = hits.map(renderFactLine);
+  const prevAnswer = String(last?.answer || "");
+  if (lines.every((l) => prevAnswer.includes(l))) return nothingMore;
+  const shown = lines.slice(0, FACT_ANSWER_CAP);
+  const rest = lines.slice(FACT_ANSWER_CAP);
+  const extra = rest.length ? `\n…and ${rest.length} more — say 'more' to see them.` : "";
+  return {
+    text: `Beyond that, here's what else I know about "${term}":\n${shown.join("\n")}${extra}`,
+    replace: true,
+    ...(rest.length ? { pending: { items: rest, noun: "facts" } } : {}),
+  };
 }
 
 /** Ontology plan tracks (a)+(b) (PLAN_ontology-hierarchies.md §3): a LAST-
@@ -3058,13 +3303,34 @@ function relationDefinitions() {
   return seonRelsPromise;
 }
 
-/** The meta term a "what is a X" / "what does X mean" / "define X" question asks
- *  about — from the parse when present, else recognized directly (same required-
- *  article discipline as the grammar's T5). Null when the line isn't such a form. */
+/** BUG 2 fix (2026-07-09): "what is a/an <term>" with the article made OPTIONAL,
+ *  for the FACT-LOOKUP path only (metaTermOf/factAnswer's own bare-form fallback)
+ *  — NOT grammar.mjs's structural T5 template, which keeps its article MANDATORY
+ *  on purpose (a bare "what is <anything>" would also swallow "what is the
+ *  meaning of this codebase", an existing, deliberately honest grammar-miss
+ *  regression — test/ask.test.mjs pins it null; see T5's own docblock). That
+ *  collision risk is a STRUCTURAL-PARSE concern (T5's tail becomes the literal
+ *  graph-query object); it doesn't apply here: this regex only extracts a
+ *  SUBJECT STRING to look up against the memory Facts store / curated lexicon —
+ *  a miss (no fact, no lexicon entry) is silently absorbed by the caller and
+ *  falls through to the ordinary honest-miss cascade, exactly like today's
+ *  mandatory-article miss does. Root cause this fixes: "what is john" (no
+ *  article) never matched the old mandatory-article regex at all, so a freshly
+ *  taught "john rdfs:subClassOf function" fact was invisible to "what is john"
+ *  even though "what is a john" (or "what is john used for") would have found
+ *  it — the fact-lookup path is a low-collision subject lookup, not a structural
+ *  parse, so loosening it here is safe. */
+const BARE_WHATIS_RE = /^what\s+(?:is|are)\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
+
+/** The meta term a "what is a X" / "what is X" / "what does X mean" / "define X"
+ *  question asks about — from the parse when present, else recognized directly
+ *  via BARE_WHATIS_RE (article optional — see its own docblock for why that's
+ *  safe here even though the grammar's own T5 keeps the article mandatory).
+ *  Null when the line isn't such a form. */
 function metaTermOf(query, envelope) {
   if (envelope?.parsed?.shape === "meta" && envelope.parsed.object) return envelope.parsed.object;
   const q = String(query).trim();
-  const m = q.match(/^what\s+(?:is|are)\s+an?\s+(.+?)[?.!\s]*$/i)
+  const m = q.match(BARE_WHATIS_RE)
     || q.match(/^what\s+(?:does|do)\s+(?:an?\s+)?(.+?)\s+means?[?.!\s]*$/i)
     || q.match(/^define\s+(?:an?\s+)?(.+?)[?.!\s]*$/i);
   return m ? m[1].trim() : null;
@@ -3603,6 +3869,27 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // facts/recall (a fact EXTENDS a non-miss schema hit too — NOT miss-gated),
   // (4) TEACH lane (would-miss), (5) the short tailored miss (would-miss).
   let handled = false;
+  // (0) BUG 1 fix (2026-07-09): "what else is X" — recognized off the RAW
+  // query text, before every other lane below (all of which read `envelope`,
+  // already relaxed/reparsed by ask()'s own noise-strip cascade — "else" is
+  // exactly the kind of unmatched token that cascade silently drops, which is
+  // why a plain factAnswer/curatedDefinitionAnswer lookup used to answer
+  // "what else is X" with the byte-identical primary definition, as if
+  // repeating it were new information). via is set to a value NONE of the
+  // downstream `via === "composed"/"fact"/"corpus/seon"` gates match, so a
+  // hit here is final — curatedDefinitionAnswer/conceptForceAnswer never get
+  // a chance to re-answer with the same primary definition afterward.
+  if (memoryDir) {
+    const whatElse = await whatElseAnswer(memoryDir, query, last);
+    if (whatElse) {
+      answer = whatElse.text; via = "fact:what-else"; recordMiss = false; handled = true;
+      if (whatElse.pending) factPending = whatElse.pending;
+      deduced = "surface additional remembered facts beyond the primary definition";
+      note(trace, "lane: (0) WHAT ELSE — \"what else is/about X\" recognized off the raw query, before the relaxation cascade could quietly drop \"else\" and reduce it to a plain \"what is X\"");
+      note(trace, "source: .tmct/memory Facts (see /memory for provenance per line)");
+      note(trace, `goal: ${deduced} (revised — the raw \"what else\" phrasing was recognized directly, not the relaxed/reparsed envelope)`);
+    }
+  }
   // (1) #2 META/SELF: bare self/session questions ("what do you know", "what is this
   // codebase", "how do i start") → a summary / orientation, answered before the
   // fact-dump readers so "what do you know" gets a summary, not raw facts.
@@ -3702,7 +3989,37 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       } catch { /* leave false — the ordinary path decides */ }
     }
   }
-  if (!handled && miss && !envelope?.parsed && isConversational(query) && !isWhatAboutContinuation && !isDescribePronounContinuation && !isExplainTouch && !isStaccatoNegation && !isVagueRelationTouch && !isStaccatoComparative && !isStaccatoPronounNoFocus) {
+  const isConversationalCandidate = !handled && miss && !envelope?.parsed && isConversational(query) && !isWhatAboutContinuation && !isDescribePronounContinuation && !isExplainTouch && !isStaccatoNegation && !isVagueRelationTouch && !isStaccatoComparative && !isStaccatoPronounNoFocus;
+  // BUG 2 fix (2026-07-09): "what is X" with NO article ("what is john") is BOTH
+  // conversational-shaped (≤3 words, no code-ish token — isConversational() would
+  // claim it) AND a legitimate bare meta/fact-lookup form (BARE_WHATIS_RE —
+  // metaTermOf's own docblock explains why the article is safe to make optional on
+  // this fact-lookup path specifically). Root cause: grammar.mjs's T5 template
+  // requires the article, so envelope.parsed stays null for the bare form — which
+  // is exactly isConversationalCandidate's own `!envelope?.parsed` gate — so
+  // isConversational used to win the race unconditionally, and a freshly taught
+  // "john is a function" fact became invisible the moment its own subject was
+  // asked back about bare ("what is john" fell to the generic capability-
+  // orientation card, byte-identical to asking about a term tmct had never heard
+  // of). Diverts ONLY when a REAL fact actually resolves for the bare term —
+  // never a speculative reroute: a bare "what is up"/"what is wrong" with nothing
+  // behind it falls straight through to the SAME orientation card as before,
+  // exactly like every other isConversationalCandidate exemption above (each one
+  // guarantees a real answer before it defers, never stranding the turn on a
+  // worse outcome — see isStaccatoPronounNoFocus's own docblock for the same
+  // discipline).
+  let bareMetaHit = null;
+  if (isConversationalCandidate && memoryDir && BARE_WHATIS_RE.test(String(query).trim())) {
+    bareMetaHit = (await factAnswer(memoryDir, query, envelope, miss))
+      ?? (await factReadBack(memoryDir, query, envelope, miss, graph));
+  }
+  if (bareMetaHit) {
+    answer = bareMetaHit.replace ? bareMetaHit.text : `${answer}\n${bareMetaHit.text}`;
+    via = "fact"; recordMiss = false; handled = true;
+    if (bareMetaHit.pending) factPending = bareMetaHit.pending;
+    note(trace, "lane: (2b) BARE META FACT — \"what is X\" (no article) resolved to a remembered fact before the conversational catch-all could claim it");
+    note(trace, "source: .tmct/memory Facts (see /memory for provenance per line)");
+  } else if (isConversationalCandidate) {
     // A conversational miss (a greeting, "what can you do", a very short non-code
     // line) gets the friendly orientation (module-aware: empty → --repo/tmct init).
     // Bug B1 (0.8.2 follow-up): this branch carries via:"template" and never
@@ -3861,7 +4178,21 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     if (taught) {
       answer = taught.text; via = taught.via; recordMiss = taught.miss;
       note(trace, `lane: (4) TEACH — TEACH_RE/OWNS_TEACH_RE/BARE_DECLARATIVE_RE matched, ${taught.miss ? "but the payload could not be stored" : "reified into .tmct/memory"}`);
-      note(trace, "goal: teach/remember a new fact");
+      // Goal-line fix (Bug 3 point 4, 2026-07-09): `deduced` was computed WAY
+      // above, straight off envelope.parsed alone (deduceGoalFromParsed) —
+      // the structural grammar has no business parsing a teach-shaped
+      // sentence at all ("remember tony has a hat" isn't a code-graph
+      // question), so whatever it landed on there was either confidently
+      // WRONG (a stray structural template matched part of the sentence and
+      // deduced an unrelated GOAL_BY_KIND entry, e.g. "locate what a
+      // module/class defines") or silently absent (no parse stood). Every
+      // successfully-RECOGNIZED teach attempt (`taught` stood — whether it
+      // went on to STORE or to its own honest teach-miss text) gets the SAME
+      // honest, consistent goal line here instead — the same "revise off the
+      // LANE that actually answered, not the raw structural parse"
+      // discipline the relation-force fix above already uses.
+      deduced = "teach/remember a new fact";
+      note(trace, `goal: ${deduced} (revised — the teach lane recognized this shape where the raw structural parse never should have)`);
     }
   }
   // (4b) #4 AUTHOR lane (0.8.2 WS4) — "who is <Name>", "what did <Name> touch",
