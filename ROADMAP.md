@@ -14,8 +14,8 @@ the file has been deleted.
 
 ## Where we are now (2026-07-09)
 
-`npm test` green (**1258**). **v1.0.7, pushed** (0.9.11 → 1.0.0 → 1.0.7 across this session —
-see `HANDOVER.md` for the exact release chain and file:line detail).
+`npm test` green (**1299**, up from 1258). **v1.0.7, pushed** (0.9.11 → 1.0.0 → 1.0.7 across this
+session — see `HANDOVER.md` for the exact release chain and file:line detail).
 
 ### Now: shipped this session
 
@@ -34,6 +34,27 @@ see `HANDOVER.md` for the exact release chain and file:line detail).
   verb, composing a real set intersection instead — narrowly scoped (single-word only) so the
   pre-existing "which classes extends Base and couples to logging" compat case stays exactly as
   closed as before.
+- **Seonix Batch 3 + general verb-to-predicate query follow-up (HANDOVER items 3/5).** Purpose/
+  identity phrasing ("whats X for/about") now joins "what does X do"; bare "recent/latest/newest
+  commits" render a real dated list instead of a false find-miss, and "the last/latest/most
+  recent commit" as a query subject substitutes the actual newest Commit before parsing;
+  onboarding/closing phrasings beyond the original closed set ("what should i read first", "where
+  should i start reading") get the orientation nudge; present-tense cochange phrasing ("changes
+  with") joins the past-tense form. A taught general-verb fact now answers direct questions too
+  ("does margo eat ribs" → yes, "did margo eat ribs" → yes, "does margo eat cake" → an honest no,
+  "what does margo eat" → lists ribs), reusing the same has/have predicate bridge the teach side
+  already had.
+- **Six more operator-found bugs (A-F) from manual chat-testing this session.** A malformed
+  "haves soup" render for past-tense "had" (lemma fix); a grammatically-broken "count soup"
+  message when no code graph is loaded; "what is in your memory" (bare, and "… about X") falling
+  to the structural miss instead of the memory summary/fact-lookup lanes — the "about X" form now
+  also walks TRANSITIVE SUBTYPES of X over taught (never corpus-noise) isa facts; and a closed-set
+  indirect-request wrapper ("I want you to search for Widget") that used to be mis-swallowed by
+  the general-verb teach recognizer, now stripped centrally before dispatch, plus a "search for
+  X"/"tell me X" (no "about") phrasing fix and a `GOAL_BY_COMMAND` table that gives every
+  slash-command dispatch its own honest "Goal (inferred): …" line, generalizing the existing
+  goal-inference mechanism to command dispatches (search/find/describe/…), not just ask()-parsed
+  queries. See `HANDOVER.md`'s "Operator-found bugs A-F" for the full detail per bug.
 - **1.0.0 — the first-run chat experience, rewritten.** The original trigger: a brand-new
   `npm install` + bare `tmct chat` led with a "no code graph loaded" apology for *any* input,
   including plain greetings and identity questions, even though the seeded ontology/lexicon
@@ -902,6 +923,15 @@ critical build path:
 Features we have deliberately shaped seams for but will not build until the phases above have
 earned them. **Not everything below is deferred for the same reason** — the design horizon,
 stated explicitly (2026-07-08 research pass):
+
+### Future direction: a genuine planning/agentic loop (flagged 2026-07-09, not designed)
+
+The operator's own framing, explicitly out of scope for the routing-level `GOAL_BY_COMMAND`/
+Goal-inference generalization this session shipped (HANDOVER's Bug F point 5, which only labels
+an already-computed answer's intent — it never plans ahead of one): infer the goal, read the
+relevant subgraph, reason about candidate action-paths and their effects, pick the next step,
+execute, repeat. A dedicated future design session's territory, not a routing fix — noted here so
+it isn't lost, not sketched further.
 
 ### The design horizon
 

@@ -7,10 +7,11 @@ Session handle (inbox): `tmct` (this session; earlier sessions used `mechanic` �
 
 ## Where we are (2026-07-09)
 
-`npm test` green (**1245**). **v1.0.7, pushed** (0.9.11 → 0.9.12 → 1.0.0 → 1.0.7 across this
-session). Prior session's detailed handover (0.9.5 era — the playtest sprint, Bug 6/7/8, the
-predicate-find feature, infbench stages 0-2) is superseded by everything below; its content
-still lives in git history of this file if needed.
+`npm test` green (**1299**, up from 1258 at the start of this dispatch — see "Operator-found bugs
+A-F" and items 3/4/5/6 in "Open follow-ups" below for this session's own continuation). **v1.0.7,
+pushed** (0.9.11 → 0.9.12 → 1.0.0 → 1.0.7 across this session). Prior session's detailed handover
+(0.9.5 era — the playtest sprint, Bug 6/7/8, the predicate-find feature, infbench stages 0-2) is
+superseded by everything below; its content still lives in git history of this file if needed.
 
 ### The trigger and the fix: 0.9.12 → 1.0.0
 
