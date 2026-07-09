@@ -44,6 +44,13 @@ const correctionRe = (table) => new RegExp(
 const MISSPELLING_RE = correctionRe(MISSPELLINGS);
 const WRONG_WORD_RE = correctionRe(WRONG_WORDS);
 
+// every relation verb phrase VERB_TO_KIND knows, as one alternation (longest-first
+// so a multi-word verb like "inherit from" wins over its own leading word "inherit"
+// appearing elsewhere) — feeds the DOES-X-VERB-ANYTHING-ELSE frame below, which needs
+// to recognize "does <subject> <ANY closed relation verb> anything/something [else]"
+// without hardcoding its own parallel verb list.
+const VERB_ALTERNATION = Object.keys(VERB_TO_KIND).sort((a, b) => b.length - a.length).map(escapeRegex).join("|");
+
 /** Just the curated MISSPELLINGS correction (ask-vocab.mjs), standalone — for a
  *  caller that needs typo-tolerant ANCHOR-WORD matching (a closed regex shape
  *  keyed on a literal "what"/"which"/"where" etc.) without running the rest of
@@ -512,6 +519,26 @@ export const PHRASING_FRAMES = Object.freeze([
   // survey the bare "what is untested" frame lands on. Closed to the tests/coverage
   // object, so it can't swallow a general "what needs X".
   { re: /^what\s+needs\s+(?:to\s+be\s+)?(?:a\s+)?(?:tested|tests?|testing|coverage|covering)\??$/i, to: () => "untested modules" },
+
+  // DOES-X-VERB-ANYTHING-ELSE → the plain forward "what does X <verb>" listing
+  // (0.9.15 Tier-1 single-touch playtest). A very natural drill-down follow-up
+  // after a relation answer — "does listTasks call anything else", "does
+  // src/handlers/tasks.mjs import something else" — used to dead-end: "anything"/
+  // "something" [else] is a placeholder standing in for "the rest of the list",
+  // not a real object term, but the two parse strategies disagreed on the SPAN
+  // (grammar kept "anything else" whole as the object, keyword-spot dropped
+  // "anything" and kept only "else"), landing on the {ambiguousParse} surface —
+  // two nonsense readings offered as if one might be right. "what does X <verb>"
+  // is the exact working canonical shape (see the MEMBERS-of-class frames above),
+  // so rewriting the whole closed pattern onto it sidesteps the disagreement
+  // instead of teaching either strategy's tokenizer to special-case "else".
+  // Anchored to the closed VERB_TO_KIND vocabulary so it can never swallow a
+  // genuine named object that happens to start with "any"/"some" (only the bare
+  // placeholder nouns "anything"/"something", optionally trailed by "else", match).
+  {
+    re: new RegExp(`^(?:do|does)\\s+(.+?)\\s+(${VERB_ALTERNATION})\\s+(?:anything|something)(?:\\s+else)?\\??$`, "i"),
+    to: (m) => `what does ${m[1]} ${m[2]}`,
+  },
 ]);
 
 /** Apply the phrasing frames (members-of-class + where-defined) — first match wins
