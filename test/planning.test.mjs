@@ -8,7 +8,7 @@
 // boolean return) before anything Hanoi-scale is attempted.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { findActionPath } from "../src/planning.mjs";
+import { findActionPath, findReachableSet } from "../src/planning.mjs";
 
 // ---- Toy domain 1: a small fixed graph with two dead-end branches and a ---
 // ---- cycle, requiring a genuine 3-hop discovery to reach the goal. -------
@@ -78,4 +78,74 @@ test("findActionPath: cycle-safety — a cycle with NO reachable goal still term
   const isGoalNever = (state) => state === "unreachable";
   const result = findActionPath("P", isGoalNever, applyCycleActions, { maxDepth: 25 });
   assert.equal(result, null);
+});
+
+// ---------------------------------------------------------------------------
+// findReachableSet — PLAN_TAUGHT_RELATIONS.md Item 6's kernel half: unlike
+// `findActionPath` above, there is no goal at all — every state reachable
+// from the start, within budget, is a result. Toy domain built specifically
+// to exercise a genuine SAME-LENGTH multi-path convergence (C is reachable
+// from S via both A and B, at the same depth) on top of a real cycle
+// (A can loop back to S), so the dedup proof isn't just "a cycle didn't
+// hang" but "a node reached two different ways is reported exactly once."
+//
+//   S --> A --> C --> D
+//   S --> B --> C          (B's route to C converges with A's, same depth)
+//   A --> S                (cycle back to the start)
+const REACH_GRAPH = {
+  S: [{ to: "A", action: "S->A" }, { to: "B", action: "S->B" }],
+  A: [{ to: "C", action: "A->C" }, { to: "S", action: "A->S" }],
+  B: [{ to: "C", action: "B->C" }],
+  C: [{ to: "D", action: "C->D" }],
+  D: [],
+  ISOLATED: [],
+};
+const applyReachActions = (state) => (REACH_GRAPH[state] || []).map(({ to, action }) => ({ action, nextState: to }));
+
+test("findReachableSet: toy graph — every reachable node within budget is returned, each with a correct path", () => {
+  const result = findReachableSet("S", applyReachActions, { maxDepth: 10 });
+  const byNode = new Map(result.map((r) => [r.node, r.path]));
+  assert.deepEqual([...byNode.keys()].sort(), ["A", "B", "C", "D"], "start state itself must not be in the result");
+  assert.deepEqual(byNode.get("A"), { actions: ["S->A"], states: ["S", "A"] });
+  assert.deepEqual(byNode.get("B"), { actions: ["S->B"], states: ["S", "B"] });
+  // C is reachable via both A and B at the same depth (2 hops) — the shorter/
+  // first-discovered route (via A, since A precedes B in S's own action list)
+  // must be the one recorded, not a mix, not both.
+  assert.deepEqual(byNode.get("C"), { actions: ["S->A", "A->C"], states: ["S", "A", "C"] });
+  assert.deepEqual(byNode.get("D"), { actions: ["S->A", "A->C", "C->D"], states: ["S", "A", "C", "D"] });
+});
+
+test("findReachableSet: cycle-safety + same-length multi-path convergence — terminates, no double-counting", () => {
+  const result = findReachableSet("S", applyReachActions, { maxDepth: 10 });
+  // Exactly one entry per node — the A->S cycle and the A/B->C convergence
+  // must not produce duplicate or repeated entries for the same node.
+  const nodes = result.map((r) => r.node);
+  assert.deepEqual(nodes.slice().sort(), ["A", "B", "C", "D"].slice().sort());
+  assert.equal(new Set(nodes).size, nodes.length, "no node should appear more than once");
+  assert.ok(!nodes.includes("S"), "the cycle back to S must not resurrect the start state as a result");
+});
+
+test("findReachableSet: budget exhaustion — nodes beyond maxDepth are excluded, nodes at exactly maxDepth are included", () => {
+  const result = findReachableSet("S", applyReachActions, { maxDepth: 2 });
+  const nodes = result.map((r) => r.node).sort();
+  // D is 3 hops away (S->A->C->D) — strictly beyond a budget of 2, must be excluded.
+  assert.deepEqual(nodes, ["A", "B", "C"]);
+  assert.ok(!nodes.includes("D"), "a node reachable only beyond maxDepth must be excluded, not silently included");
+});
+
+test("findReachableSet: an isolated start state with no outgoing actions returns an empty array, not null/undefined/an error", () => {
+  const result = findReachableSet("ISOLATED", applyReachActions, { maxDepth: 5 });
+  assert.deepEqual(result, []);
+  assert.ok(Array.isArray(result));
+});
+
+test("findReachableSet: findActionPath itself is completely unaffected by the new sibling function", () => {
+  // Rerun a representative slice of findActionPath's own assertions against
+  // the shared REACH_GRAPH domain and the original GRAPH domain, to confirm
+  // introducing `findReachableSet` (and the shared `seedFrontier` helper)
+  // changed nothing about findActionPath's own behavior.
+  const result = findActionPath("S", isGoalG, applyGraphActions, { maxDepth: 5 });
+  assert.deepEqual(result.actions, ["S->M1", "M1->M2", "M2->G"]);
+  assert.deepEqual(result.states, ["S", "M1", "M2", "G"]);
+  assert.equal(findActionPath("S", (s) => s === "nowhere", applyGraphActions, { maxDepth: 10 }), null);
 });
