@@ -46,6 +46,15 @@ again since (version stays at 1.0.9 locally, per the operator's own bump-at-push
   gated off tier 5's own typo-correction territory so a genuine typo still falls through and gets
   announced. "whats logging for" now answers with the real `src/lib/logger.mjs` module, never the
   commit. **1303 → 1307.**
+- **Test-suite health pass (background dispatch, alongside Tier 6).** 5 independent fixes:
+  batched `syllogise()`'s per-fact writes via `appendFacts`; let two chatbench plumbing tests opt
+  out of the corpus seed (`TMCT_NO_SEED`); a shared once-per-process seeded-fixture builder
+  (`test/helpers/seeded-fixture.mjs`) for tests that only consume seeded content (not the seed
+  mechanism itself); real `WALL_MISS_RE` reuse where a byte-identical hand-rolled copy existed;
+  and a shared session-driver helper (`test/helpers/session.mjs`) replacing 11 near-duplicate
+  `drive()`/`driveSession()` implementations. Full detail: `HANDOVER.md`'s "Test-suite health
+  pass" entry. `npm test` stayed green throughout (**1335** at the end, moved by the concurrent
+  Tier 6 dispatch's own commits during this run).
 
 ### Now: shipped this session
 

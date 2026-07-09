@@ -512,6 +512,47 @@ item 9 above, left unfixed per this pass's own verify-only scope. `npm test`: 13
 1299), 0 failing; `test/showcase.test.mjs` unaffected; CLI smoke test (`printf 'hi\n/exit\n' | node
 bin/tmct.mjs`) exits 0.
 
+### Test-suite health pass (2026-07-09, background dispatch alongside the Tier 6 playtest)
+
+A read-only audit this session found 5 concrete, independent test-suite health opportunities
+(perf + duplication), fixed one per commit, scoped strictly to `src/syllogise.mjs`,
+`chatbench/run.mjs`, and `test/**` (never touching `src/chat.mjs`/`src/ask.mjs`/
+`src/interpret/strategies/*`, off-limits while the concurrent Tier 6 dispatch was actively
+editing them):
+1. **`syllogise()`'s unbatched writes** — its two derivation-writing loops called `appendFact`
+   once per fact (the same O(N²) per-fact read-mutate-write pattern `appendFacts` was built to
+   fix for `seedMemory`). Switched to one `appendFacts` call for both rules' conclusions,
+   zipping the returned ids back positionally. The KILL CRITERION test's own write-loop cost
+   dropped to near-zero (its remaining ~3s is the corpus seed, not the writes).
+2. **chatbench's two `graph:"empty"` plumbing tests** paid the full corpus-seed pass
+   (~7.7s/~4.3s) for assertions that never touch seeded content. `runSessionCase` now merges an
+   optional `caseDef.env` into its default env; those two cases opt in with
+   `TMCT_NO_SEED:"1"` — both now run in tens of milliseconds.
+3. **Shared seeded-fixture caching** (`test/helpers/seeded-fixture.mjs`) — a once-per-process
+   builder for the two seed shapes (full W3 bootstrap; direct ConceptNet-only) that hands every
+   caller a fresh `fs.cp` copy instead of re-running the corpus parse+write. Wired into the
+   tests that only *consume* a seeded repo (chatflow-tier0.test.mjs's 3 seeded turns,
+   chat-ux.test.mjs's seeded session, wiring-facts.test.mjs / syllogise.test.mjs's direct-seed
+   tests) — measured ~34% off that subset in isolation. Left untouched: tests that assert on the
+   seed *mechanism itself* (wiring-seed.test.mjs, tui.test.mjs's fresh-seed TUI test,
+   init.test.mjs's seed/idempotency contract tests) — a copied fixture would silently stop
+   testing what they claim to. Note: Node's test runner isolates each matched file into its own
+   process by default, so this shares a build within a file, not across the whole suite.
+4. **`WALL_MISS_RE` reuse** — `chat.test.mjs` and `chat-ux.test.mjs` (8 call sites) now import
+   the real exported constant instead of a hand-rolled copy. The other ~14 files' copies are the
+   *unanchored* substring form (chat.mjs's private, unexported twin) and aren't a safe drop-in
+   for the anchored export. The identity-card greeting-fragment half of this fix is blocked:
+   the text isn't exported from `chat.mjs`, which was off-limits to edit this session.
+5. **Shared session-driver helper** (`test/helpers/session.mjs`) — extracted the two
+   genuinely-distinct `drive()`/`driveSession()` shapes duplicated across 12
+   chatflow-*/chatbench-levers test files into `driveTurns`/`driveSessionTurns`; converted 11 of
+   them (left `chatflow-tier0.test.mjs`'s driveSession alone — a real third shape needing
+   bannerLines + the seeded-fixture env-toggle from item 3).
+
+`npm test`: 1335 passing throughout (baseline moved during this dispatch as the concurrent Tier
+6 playtest landed commits); CLI smoke (`printf 'hi\n/exit\n' | node bin/tmct.mjs`) exits 0. Five
+commits, no push, no version bump (stays 1.0.9).
+
 ## Discipline (unchanged)
 
 Repo-local identity (`antony@polycode.co.uk` / `Antony at Polycode`); `npm test` green at every
