@@ -1,8 +1,8 @@
-# SKILL_TUNING_CYCLE.md — the autonomous chat tuning cycle (continuous iterations, no hard pause)
+# SKILL_BENCHMARK_CHAT.md — the autonomous chat tuning cycle (continuous iterations, no hard pause)
 
 The orchestration skill that runs the tmct **chat tuning cycle**: read the last result, pick +
 apply the next lever, smoke, run the chatbench, analyse, write it up, and **continue to the next
-cycle**. It is the conductor; the worker skill it drives is **`SKILL_STRATEGY_ADVISOR.md`** (the
+cycle**. It is the conductor; the worker skill it drives is **`SKILL_AGENT_STRATEGY_ADVISOR.md`** (the
 second pair of eyes). The measurement rules live in **§1 of this document**. This skill both
 defines and enforces them (there is no separate benchmarking skill in this repo).
 
@@ -13,7 +13,7 @@ menu as a **decision log** in the write-up, picking the top lever, and starting 
 **The operator can interrupt at any time**; the decision logs are the audit trail of what the loop
 chose and why.
 
-> **Invoke it by telling a session:** *"Follow `SKILL_TUNING_CYCLE.md` and run the chat tuning
+> **Invoke it by telling a session:** *"Follow `SKILL_BENCHMARK_CHAT.md` and run the chat tuning
 > cycle"* (optionally naming a lever to start from, or a cycle budget). The session then executes
 > the loop below repeatedly until interrupted or the budget is spent.
 
@@ -33,14 +33,20 @@ chose and why.
 
 Every cycle MUST satisfy:
 
-- **Artifact naming — match the `package.json` version.** A benchmark's write-up and its raw
-  snapshot are named after the tmct version they measure: `CHATBENCH_<version>.md` +
-  `CHATBENCH_<version>_TRANSCRIPTS.md`, raw under `chatbench/results/raw/run-<version>/`. A RE-RUN
-  of the SAME version (re-measure without a version bump — a harness fix, a re-judge, a second draw)
-  appends `_00N`: `CHATBENCH_0.7.0_001.md`, `_002`, …, `run-0.7.0_001/`. So the artifact name always
-  says which shipped version it scores, and the `_00N` suffix orders re-runs of that version. (The
-  historical `CHATBENCH_001…006` cycle-numbered artifacts stay as-is; version-matched naming applies
-  from 0.7.0 onward.)
+- **Artifact naming — match the `package.json` version.** A benchmark's write-up is named after the
+  tmct version it measures: `CHATBENCH_<version>.md`, raw under
+  `chatbench/results/raw/run-<version>/`. A RE-RUN of the SAME version (re-measure without a version
+  bump — a harness fix, a re-judge, a second draw) appends `_00N`: `CHATBENCH_0.7.0_001.md`, `_002`,
+  …, `run-0.7.0_001/`. So the artifact name always says which shipped version it scores, and the
+  `_00N` suffix orders re-runs of that version. (The historical `CHATBENCH_001…006` cycle-numbered
+  artifacts stay as-is; version-matched naming applies from 0.7.0 onward.)
+- **One combined file per run — no separate `_TRANSCRIPTS.md`.** `CHATBENCH_<version>.md` now
+  carries the transcript evidence itself, as an "Evidence / transcripts" section near the end
+  (discriminating examples first — the cases where arms/cycles differ, so the behaviour change is
+  visible at a glance). Earlier cycles wrote the report and its transcripts as two files
+  (`CHATBENCH_<version>.md` + `CHATBENCH_<version>_TRANSCRIPTS.md`); that split ends here. The
+  already-archived `_TRANSCRIPTS.md` files under `archive/` stay exactly as they are — historical
+  artifacts, not something to merge or backfill.
 - **Fixed, versioned case set:** `chatbench/cases.jsonl` — one JSON object per line:
   `{ id, turns[], expectations, tags }`. The set is **append-only per cycle**: new cases may be
   added between runs (record the addition in the write-up), but existing cases are never edited
@@ -89,14 +95,18 @@ which cases/tags it should move, and by how much.
 **Step 2 — APPLY the lever.** Implement it. Keep `npm test` green at each step; keep the ROADMAP
 status and any handover doc current.
 
-> **Build concurrently (workstream fan-out).** A cycle's changes usually decompose into
-> mostly-independent **workstreams** — e.g. the *interpretation pipeline* (`src/interpret/`),
-> *memory* (`src/memory/`), the *bench harness* (`chatbench/`), and *docs* — that can be built
-> **in parallel by separate subagents**. Two rules make this safe: (a) **serialize on shared
-> files** — `chat.mjs` and `runTurn`'s orchestration are touched by several workstreams, so land
-> the foundational change there first, then layer the others on; (b) **give each agent a precise
-> file-ownership boundary + acceptance test** (its suite must stay green) and verify its diff
-> summary.
+> **Build concurrently (workstream fan-out) — the coordinator model.** This is `CLAUDE.md`'s
+> standing working model in practice: the main session is the COORDINATOR, not the worker. A
+> cycle's changes usually decompose into mostly-independent **workstreams** — e.g. the
+> *interpretation pipeline* (`src/interpret/`), *memory* (`src/memory/`), the *bench harness*
+> (`chatbench/`), and *docs* — that can be built **in parallel by background subagents** while the
+> coordinator keeps the main chat free for the operator. Two rules make this safe: (a)
+> **serialize on shared files** — `chat.mjs` and `runTurn`'s orchestration are touched by several
+> workstreams, so land the foundational change there first, then layer the others on; (b) **give
+> each agent a precise file-ownership boundary + acceptance test** (its suite must stay green) and
+> verify its diff summary. Any other long-running, parallelizable step in this cycle (not just
+> Step 2) should default to a background sub-agent under this same model — see Step 4's bench run
+> and Step 5's advisor.
 
 **Step 3 — SMOKE (mandatory; a failed smoke VOIDS the run).** Run:
 1. `npm test` — the full suite, green;
@@ -114,7 +124,7 @@ executes as a background task: **the chat stays for chat** — the coordinator l
 keeps coordinating (merges, advisor ticks, operator questions), and picks the results up on the
 completion notification. Never block the conversation on a benchmark.
 
-**Step 5 — STRATEGY ADVISOR runs ALONGSIDE the whole time.** Per `SKILL_STRATEGY_ADVISOR.md`,
+**Step 5 — STRATEGY ADVISOR runs ALONGSIDE the whole time.** Per `SKILL_AGENT_STRATEGY_ADVISOR.md`,
 spawn the background advisor and let it ride the check-in cadence with the chat-eval watch-list
 (its §6): judge integrity, overfit-to-judge, regressions, interpretation telemetry, process
 slips. Because the loop no longer pauses for the operator, **the advisor is also the drift alarm
@@ -125,19 +135,23 @@ between operator check-ins** — surface anything non-obvious; it appends `OPEN`
 "Artifact naming" in §1): `CHATBENCH_<version>.md` for the release under test (e.g.
 `CHATBENCH_0.7.0.md`), and a same-version RE-RUN appends `_00N` (`CHATBENCH_0.7.0_001.md`, `_002`,
 …). On completion: **snapshot the raw judge outputs to `chatbench/results/raw/run-<version>[_00N]/`
-BEFORE the next run overwrites them**, then write:
-- **`CHATBENCH_<version>.md`** — the headline mean (+ hard-fail count) at the top; a **BEST-EXAMPLES
-  pick in the summary** — 3-5 verbatim transcript excerpts showing the most complex sequences the
-  chat handled THIS cycle (multi-turn focus/pronoun chains, cross-session memory, declarative
-  asserts, repaired noise/typo queries, ambiguity surrounds), each with a one-line "what this
-  demonstrates"; the operator reads these first — they are the product's demo reel and the
-  fastest smell test for whether the mean is measuring something real; the per-tag
-  breakdown; the **predictions-vs-actuals** table (step 1's prediction against what moved); the
-  **per-lever analysis** tying the applied lever to the cases it moved; the judge model + prompt
-  version pin; **and the decision log** — the re-ranked menu of next-cycle levers with a one-line
-  justification each and the pick named.
-- **`CHATBENCH_<version>_TRANSCRIPTS.md`** — the transcript appendix, **discriminating transcripts
-  first** (the cases where arms/cycles differ), so the behaviour change is visible at a glance.
+BEFORE the next run overwrites them**, then write **one file**, `CHATBENCH_<version>.md`:
+- the headline mean (+ hard-fail count) at the top;
+- a **BEST-EXAMPLES pick in the summary** — 3-5 verbatim transcript excerpts showing the most
+  complex sequences the chat handled THIS cycle (multi-turn focus/pronoun chains, cross-session
+  memory, declarative asserts, repaired noise/typo queries, ambiguity surrounds), each with a
+  one-line "what this demonstrates"; the operator reads these first — they are the product's demo
+  reel and the fastest smell test for whether the mean is measuring something real;
+- the per-tag breakdown;
+- the **predictions-vs-actuals** table (step 1's prediction against what moved);
+- the **per-lever analysis** tying the applied lever to the cases it moved;
+- the judge model + prompt version pin;
+- **the decision log** — the re-ranked menu of next-cycle levers with a one-line justification each
+  and the pick named;
+- an **"Evidence / transcripts" section near the end** — the transcript appendix folded into this
+  same file, **discriminating transcripts first** (the cases where arms/cycles differ), so the
+  behaviour change is visible at a glance. This replaces the earlier two-file convention: a cycle's
+  report and its transcript evidence are now one document, not a companion `_TRANSCRIPTS.md`.
 
 **Step 7 — CONTINUE.** Apply the decision rule (§1). Re-rank the lever board from this cycle's
 evidence, record it (that's the step-6 decision log), pick the top lever, and go to step 1 of the
@@ -146,7 +160,7 @@ next cycle. No pause — the operator interrupts when they want the wheel.
 ## 3. Cadence
 
 - Cycles run back-to-back; within a run, a ~5-minute check-in is the heartbeat and doubles as the
-  advisor's tick (`SKILL_STRATEGY_ADVISOR.md` §3 Step D).
+  advisor's tick (`SKILL_AGENT_STRATEGY_ADVISOR.md` §3 Step D).
 - The advisor is the only thing that runs *continuously*; everything else is sequential
   (read → apply → smoke → run → write → continue).
 
@@ -177,9 +191,10 @@ and fixture-graph dirs — a failed smoke voids the run); **runs** the chatbench
 product run per arm over the append-only `chatbench/cases.jsonl`, then N≥3 pinned-judge samples
 per case on the 0–2 groundedness/correctness/honesty-on-miss/rephrase-hint rubric — wrong-confident
 scores below honest-miss; judge refusals void, never fail), with the **strategy advisor riding
-alongside as the drift alarm**; **writes** `CHATBENCH_0NN.md` (headline mean + hard-fails + the best-examples pick,
-per-tag, predictions-vs-actuals, per-lever analysis, ranked next-cycle decision log) +
-`CHATBENCH_0NN_TRANSCRIPTS.md` (discriminating transcripts first), snapshotting raw judge output
+alongside as the drift alarm**; **writes one file**, `CHATBENCH_0NN.md` (headline mean + hard-fails
++ the best-examples pick, per-tag, predictions-vs-actuals, per-lever analysis, ranked next-cycle
+decision log, and an "Evidence / transcripts" section near the end with discriminating transcripts
+first — no separate `_TRANSCRIPTS.md` file), snapshotting raw judge output
 to `chatbench/results/raw/run-<version>[_00N]/` first; then applies the decision rule (**PASS = mean up AND no
 pass→fail regression**) and **continues to the next cycle** — no hard pause; the operator
 interrupts at will.

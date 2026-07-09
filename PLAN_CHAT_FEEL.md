@@ -15,7 +15,7 @@
 
 Written 2026-07-06 from a 4-source sweep: `ROADMAP.md` (Track 1 + Next), `CHATBENCH_0.8.1.md`
 (+ `_TRANSCRIPTS`), `AGENTBENCH_0.8.1_002.md`, and a **live lightweight playtest** (7 CLI sessions
-against `examples/mini-webapp`, method borrowed loosely from `SKILL_CHAT_PLAYTEST.md` — no full
+against `examples/mini-webapp`, method borrowed loosely from `SKILL_BENCHMARK_PLAYTEST.md` — no full
 ceremony). Playtest evidence is quoted below; the ranking follows it.
 
 Guardrails for everything here: deterministic tier-1 (333/333) stays green; any lever that changes

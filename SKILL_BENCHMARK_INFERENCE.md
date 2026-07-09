@@ -1,4 +1,4 @@
-# SKILL_INFERENCE_TESTING.md — the INFBENCH measure-then-build cycle (regenerate, run, gate, stage)
+# SKILL_BENCHMARK_INFERENCE.md — the INFBENCH measure-then-build cycle (regenerate, run, gate, stage)
 
 The repeatable loop that drives `PLAN_INFERENCE_TESTING.md`'s 6-band classical-logic ladder
 (INF-A1…INF-C2) forward one engine capability at a time. The plan doc is a one-time design/staging
@@ -7,17 +7,23 @@ skill is the loop a session actually RUNS every time it wants to advance the lad
 cases, run the bench, read the rung table, decide ship-or-build, and if building, pick the next
 `PLAN_INFERENCE_TESTING.md` §4 stage, implement it by hand, regression-test, and re-measure.
 
-This shape is closer to **`SKILL_TUNING_CYCLE.md`'s** measure→apply-one-lever→re-measure loop than
-to `SKILL_PLAYTEST_SPRINT.md`'s delegated chat-round sprint, and this doc follows `SKILL_TUNING_
-CYCLE.md`'s structure most closely for that reason: INFBENCH is a deterministic benchmark replay
-(`node infbench/run.mjs`), not a natural conversation, so there is no "curious user" to delegate to
-a sub-agent round-by-round the way `SKILL_PLAYTEST_SPRINT.md` delegates chat turns — the loop's
-unit is "one engine-build stage measured against a fixed ladder," the same unit `SKILL_TUNING_
-CYCLE.md` calls "one lever." Where `SKILL_PLAYTEST_SPRINT.md`'s structure genuinely fits (a short,
+**`INF-A1…INF-C2` is its own scale, not CHATBENCH's CEFR.** The band labels look like CEFR grades
+(A1, A2, B1, B2, C1, C2) but measure a different axis: INFBENCH grades classical-logic inference
+capability (fabrication vs completion on a rule ladder), while `SKILL_BENCHMARK_CHAT.md`'s CEFR
+bands grade linguistic complexity in conversation. Don't compare an `INF-B1` result against a
+CEFR B1 result — they are unrelated measurements that happen to share a naming convention.
+
+This shape is closer to **`SKILL_BENCHMARK_CHAT.md`'s** measure→apply-one-lever→re-measure loop than
+to a delegated chat-round sprint (`SKILL_BENCHMARK_PLAYTEST.md`'s capped sprint mode), and this doc
+follows `SKILL_BENCHMARK_CHAT.md`'s structure most closely for that reason: INFBENCH is a
+deterministic benchmark replay (`node infbench/run.mjs`), not a natural conversation, so there is no
+"curious user" to delegate to a sub-agent round-by-round the way a playtest sprint delegates chat
+turns — the loop's unit is "one engine-build stage measured against a fixed ladder," the same unit
+`SKILL_BENCHMARK_CHAT.md` calls "one lever." Where the capped-sprint shape genuinely fits (a short,
 invokable callout; a numbered discipline section; a closing TL;DR) this doc keeps it; where it
 doesn't (delegated rounds, live chat transcripts, a round cap) it doesn't force the metaphor.
 
-> **Invoke it by telling a session:** *"Follow `SKILL_INFERENCE_TESTING.md` and run an INFBENCH
+> **Invoke it by telling a session:** *"Follow `SKILL_BENCHMARK_INFERENCE.md` and run an INFBENCH
 > cycle"* (optionally: a seed for `generate-cases.mjs`, or a specific §4 stage to target).
 
 ---
@@ -43,7 +49,7 @@ future session finds it missing again, that is a real regression to fix before c
 assumption to paper over.
 
 **Step 3 — READ.** Read the console rung table (or write it up as `INFBENCH_<version>.md` if this
-cycle is measuring a just-shipped version — same artifact-naming convention `SKILL_TUNING_CYCLE.md`
+cycle is measuring a just-shipped version — same artifact-naming convention `SKILL_BENCHMARK_CHAT.md`
 §1 uses for chatbench: `INFBENCH_<version>.md`, re-runs of the same version append `_00N`). For each
 band, compare its measured completion/fabrication against `PLAN_INFERENCE_TESTING.md` §1's
 "Reachable today?" column — is each band landing where the plan predicted, or did something drift?
@@ -73,13 +79,13 @@ Bands run **INF-A1 → INF-A2 → INF-B1 → INF-B2 → INF-C1 → INF-C2**, str
 band: PASS requires **completion ≥ 50% at 0% fabrication**; fabrication = any answered
 verdict/entailment not pinned by the case's own literal at generation time. **The first band that
 fails this gate gates every band above it** — this is chatbench's Meta-2 rule
-(`SKILL_CHAT_PLAYTEST.md`'s own house ethos, borrowed via `agentbench`'s `ladderGate`: "don't pay to
+(`SKILL_BENCHMARK_PLAYTEST.md`'s own house ethos, borrowed via `agentbench`'s `ladderGate`: "don't pay to
 judge a ceiling while the floor leaks") applied mechanically. A band at a clean **0%** on a
 capability that genuinely isn't implemented yet is a **ceiling marker** — legitimate, expected, and
 should be reported as such, never silently patched around or forced to a fake pass. Dual-draw
-agreement (the parallel-forms reliability check `SKILL_TUNING_CYCLE.md` §1 requires for chatbench's
+agreement (the parallel-forms reliability check `SKILL_BENCHMARK_CHAT.md` §1 requires for chatbench's
 judged tier) is **not** needed here — INFBENCH is deterministic-replay, one run per arm suffices,
-exactly as `SKILL_TUNING_CYCLE.md`'s own deterministic-replay clause already allows.
+exactly as `SKILL_BENCHMARK_CHAT.md`'s own deterministic-replay clause already allows.
 
 ---
 
@@ -107,6 +113,14 @@ banner before picking a stage; don't trust this snapshot as still-current.**
 4. **Confirm the target band's gate now PASSES** before treating the stage as done, and before
    considering whether to move further up the ladder to the next stage.
 
+> **Coordinator model applies here too.** Per `CLAUDE.md`'s standing working model, the main
+> session is the coordinator, not the worker. `npm run infbench` (Step 1's regenerate + Step 2's
+> run) and `npm test` are both cheap here — INFBENCH is deterministic and free — but a
+> substantial stage's engine work (a new forward-chainer, a consistency checker) is real
+> implementation effort and can run as a background sub-agent while the coordinator keeps the
+> main chat free for the operator; the coordinator picks the result up on the completion
+> notification, same as any other long-running step in this repo's skills.
+
 ---
 
 ## 4. Discipline
@@ -129,7 +143,7 @@ banner before picking a stage; don't trust this snapshot as still-current.**
   before that convenience script landed; verify it's still there (`grep infbench package.json`)
   each time this skill is invoked rather than assuming a prior cycle's state persists.
 - **Regression is still sacred.** `npm test` green after every stage's engine change, same contract
-  `SKILL_CHAT_PLAYTEST.md` §4 and `SKILL_TUNING_CYCLE.md` §1 hold every other loop in this repo to.
+  `SKILL_BENCHMARK_PLAYTEST.md` §4 and `SKILL_BENCHMARK_CHAT.md` §1 hold every other loop in this repo to.
 
 ---
 

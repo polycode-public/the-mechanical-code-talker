@@ -170,7 +170,7 @@ on the chat's hot path.
   entailment (`tmct syllogise`) is mechanical OWL rule materialization applied
   offline, rule-by-rule and retractable, not an LLM. There is **no LLM anywhere
   in the product**. (An LLM-as-judge exists only in the offline eval harness
-  that tunes tmct, see `SKILL_TUNING_CYCLE.md`, never in the product path.)
+  that tunes tmct, see `SKILL_BENCHMARK_CHAT.md`, never in the product path.)
 - **It never guesses silently.** When it cannot resolve your question it says
   so and nudges you toward a query it *can* answer.
 

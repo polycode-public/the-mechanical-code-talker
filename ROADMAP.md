@@ -382,6 +382,31 @@ resolver/guardrail/planner (96% plan completion, 0% hallucination, closed-world 
 levers; the `../bedrock-meter` $0 rung; the playtest; Stage-2/Stage-5 research notes. Full detail:
 `CHATBENCH_0.8.0.md`, `AGENTBENCH_0.8.0.md`.
 
+**Doc restructuring — `PLAN_AGENTS.md` (2026-07-10)**: `PLAN_TMCT_ECOSYSTEM_INTEGRATION.md` was
+rewritten and renamed to `PLAN_AGENTS.md`, absorbing six sibling docs (`PLAN_AGI_ARCHITECTURE.md`,
+`PLAN_CAPABILITY_ROUTER.md`, `PLAN_TAUGHT_RELATIONS.md`, `PLAN_OSS_ACE_PARSER.md`,
+`PLAN_ontology-hierarchies.md`, `PLAN_ADVANCED_GRAMMAR.md` — all now in `archive/`) and sequencing
+their durable content into Phase 0 (foundations) through Phase 4 (tmct as a pluggable LLM rung for
+Claude Code/Bedrock/Copilot), plus a tiered research horizon (R1–R3). Two fresh comparative audits
+of `../marginalia` and `../seonix` fed a new §2, "tmct uplift" — mechanisms those sibling repos
+already have that tmct lacks or does more crudely (memory-tree versioning, actor-level trust, a
+declarative SHACL-style ingest gate, real multi-language AST extraction, Chronograph-style temporal
+diffing, and several Repository-Interface wrapper gaps that just need to be pointed at logic already
+sitting in tmct's own `codegraph.mjs`). A new sibling doc, `PLAN_COMPLETIONS.md`, specs a second,
+competing "tmct produces an artifact" capability alongside `PLAN_CODE.md`'s program synthesis:
+mechanical, extractive text generation (broad search → group → infer between groups → summarize →
+prune → grammar/voice pass), never LLM-style free generation. Separately, the benchmark/skill doc
+landscape was unified: CHATBENCH stops splitting report+transcripts into two files going forward;
+`SKILL_CHAT_PLAYTEST.md` and `SKILL_PLAYTEST_SPRINT.md` merged into `SKILL_BENCHMARK_PLAYTEST.md`
+(with a new `PLAYTESTBENCH_<version>.md` report convention); `SKILL_TUNING_CYCLE.md` and
+`SKILL_INFERENCE_TESTING.md` renamed to `SKILL_BENCHMARK_CHAT.md`/`SKILL_BENCHMARK_INFERENCE.md`;
+a new `SKILL_BENCHMARK_AGENT.md` formalizes the previously-ad-hoc AGENTBENCH cycle;
+`SKILL_STRATEGY_ADVISOR.md`/`SKILL_PLAIN_PROSE.md` renamed to `SKILL_AGENT_STRATEGY_ADVISOR.md`/
+`SKILL_AGENT_PLAIN_PROSE.md`. A new shared reference doc, `docs/references/research-horizon.md`,
+consolidates three near-duplicate "research frontier" essays (the frame problem, word-sense
+disambiguation/ontology scale, Winograd-hard coreference) that had independently grown across the
+now-archived docs.
+
 ## The umbrella product definition (item 1)
 
 **A tolerant, ELIZA/PARRY-style chat, obsessed with software.** A best-efforts
@@ -1093,6 +1118,16 @@ critical build path:
 Features we have deliberately shaped seams for but will not build until the phases above have
 earned them. **Not everything below is deferred for the same reason** — the design horizon,
 stated explicitly (2026-07-08 research pass):
+
+**`PLAN_AGENTS.md` (2026-07-10) is the governing plan for tmct's next major arc** — mounting tmct
+hard into `../marginalia` and `../seonix` as their shared NL↔graph engine and tool-loop/completions
+API, plus a pluggable LLM rung for Claude Code, Amazon Bedrock, and GitHub Copilot. It sequences
+Phase 0 (foundations — an extension-pack/corpus-lexicon seam, RI wrapper fixes, several other
+small known-how items) through Phase 4 (the LLM-rung protocol shims), a "tmct uplift" section
+grounded in fresh comparative audits of both sibling repos, and a tiered research horizon (R1–R3).
+It supersedes the six phase/track pointers below that reference now-archived docs — treat this
+paragraph as the up-to-date entry point, and the items below as historical record of how those six
+docs' scope was reached before consolidation.
 
 ### Future direction: a genuine planning/agentic loop (flagged 2026-07-09, research pass done, not implemented)
 

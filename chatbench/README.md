@@ -1,6 +1,6 @@
 # chatbench — the tmct chat measurement harness
 
-The measurement half of `SKILL_TUNING_CYCLE.md` §1: a **fixed, versioned case
+The measurement half of `SKILL_BENCHMARK_CHAT.md` §1: a **fixed, versioned case
 set** replayed deterministically through the real product (tier 1, free), then
 scored by a **pinned LLM judge** (tier 2, the only paid step). The product
 stays no-LLM; the judge lives only here.

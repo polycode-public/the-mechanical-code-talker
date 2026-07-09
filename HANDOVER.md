@@ -294,6 +294,35 @@ in `test/chat-generalverb-query.test.mjs`/`test/chat-teach-quantifier.test.mjs` 
 full). CLI smoke test still exits 0. See `PLAN_TAUGHT_RELATIONS.md`'s new "Live-testing follow-up"
 note for the full transcripts.
 
+### 12. Doc restructuring — `PLAN_AGENTS.md`, `PLAN_COMPLETIONS.md`, benchmark/skill unification (2026-07-10)
+
+`PLAN_TMCT_ECOSYSTEM_INTEGRATION.md` rewritten and renamed to `PLAN_AGENTS.md`, absorbing six
+sibling docs (`PLAN_AGI_ARCHITECTURE.md`, `PLAN_CAPABILITY_ROUTER.md`, `PLAN_TAUGHT_RELATIONS.md`,
+`PLAN_OSS_ACE_PARSER.md`, `PLAN_ontology-hierarchies.md`, `PLAN_ADVANCED_GRAMMAR.md` — all `git mv`d
+to `archive/`), sequenced into Phase 0 (foundations) through Phase 4 (tmct as a pluggable LLM rung
+for Claude Code/Bedrock/Copilot) plus a tiered research horizon. Two fresh comparative audits of
+`../marginalia` and `../seonix` (read in full, code-grounded) fed a new §2, "tmct uplift" —
+low-risk Repository Interface wrapper fixes (ranked search, real `context()`, depth-capped
+`impact()`, source-backed `snippet()`, response pagination — all logic that already exists in
+tmct's own `codegraph.mjs`, just not wired to the provider surface) folded straight into Phase 0,
+plus real-but-bounded and genuinely-harder items (memory-tree versioning, actor-level trust, a
+SHACL-style ingest gate, multi-language AST extraction, Chronograph-style temporal diffing) as
+standing backlog. A new sibling doc, `PLAN_COMPLETIONS.md`, specs mechanical extractive text
+generation (broad search → group → infer between groups → summarize → prune → grammar/voice pass)
+as a second, competing "tmct produces an artifact" capability alongside `PLAN_CODE.md`'s program
+synthesis — `PLAN_CODE.md` §0 updated to reflect it's no longer the only such category. Benchmark/
+skill docs unified: CHATBENCH stops splitting report+transcripts going forward; `SKILL_CHAT_PLAYTEST.md`
++ `SKILL_PLAYTEST_SPRINT.md` merged into `SKILL_BENCHMARK_PLAYTEST.md` (new `PLAYTESTBENCH_<version>.md`
+convention); `SKILL_TUNING_CYCLE.md`/`SKILL_INFERENCE_TESTING.md` renamed to
+`SKILL_BENCHMARK_CHAT.md`/`SKILL_BENCHMARK_INFERENCE.md`; new `SKILL_BENCHMARK_AGENT.md` formalizes
+the AGENTBENCH cycle; `SKILL_STRATEGY_ADVISOR.md`/`SKILL_PLAIN_PROSE.md` renamed to
+`SKILL_AGENT_STRATEGY_ADVISOR.md`/`SKILL_AGENT_PLAIN_PROSE.md`. New shared reference doc
+`docs/references/research-horizon.md` consolidates three near-duplicate research-frontier essays
+that had independently grown across the archived docs. All dangling filename references in active
+(non-archived) docs fixed (`CLAUDE.md`, `README.md`, `PLAN_CHAT_FEEL.md`, `PLAN_INFERENCE_TESTING.md`,
+`chatbench/README.md`, `chatbench/GRADED.md`); historical references inside `archive/` and inside
+this file's/`ROADMAP.md`'s own past-tense narrative entries were deliberately left as-is.
+
 ## Open follow-ups (next session, in priority order)
 
 1. ~~Fix the INF-C1 fabrication bug above.~~ **DONE (2026-07-09)** — see the updated item 2 note

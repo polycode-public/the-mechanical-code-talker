@@ -224,7 +224,7 @@ is the standing prescription before trusting their cell means.
 ### The SKILL §1 amendment for graded cases
 
 Sampling changes the regression contract (this section amends
-`SKILL_TUNING_CYCLE.md` §1 for graded cases; v1 cases are untouched):
+`SKILL_BENCHMARK_CHAT.md` §1 for graded cases; v1 cases are untouched):
 
 1. **Promoted always-run grades are FIXED** — cells of `PROMOTED_GRADES`
    contribute their fixed promoted subset to every draw (never sampled out);

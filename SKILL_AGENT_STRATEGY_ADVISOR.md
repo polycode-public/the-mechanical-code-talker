@@ -1,4 +1,4 @@
-# SKILL_STRATEGY_ADVISOR.md — a deep-process background "strategy advisor" for a Claude Code session
+# SKILL_AGENT_STRATEGY_ADVISOR.md — a deep-process background "strategy advisor" for a Claude Code session
 
 A reusable recipe for running a second pair of eyes alongside the main agent: a background agent
 on Sonnet 5 (the default model as of 2026-07-07; previously Opus 4.8 — see §5) that, on a
@@ -9,17 +9,22 @@ non-obvious recommendations that the main loop surfaces into the chat. It runs a
 longer-term process than the main chat: the main agent executes; the advisor verifies, gates,
 and attacks.
 
+This is `CLAUDE.md`'s coordinator model in its purest form: the main session stays the
+COORDINATOR — it never does the advisor's research or verification work itself — while the
+advisor runs as a background sub-agent and the main loop's only job is to launch it, keep
+coordinating, and relay its findings on the completion notification.
+
 Born from a real session where the operator suggested running benchmark batches concurrently
 (a 5x speedup) the main agent had not proposed. Revamped 2026-07-01 after the deep-process
 variant ran live through the B016 spec session (see §7).
 
-In this repo the advisor rides the **autonomous chat tuning cycle** (`SKILL_TUNING_CYCLE.md`) —
+In this repo the advisor rides the **autonomous chat tuning cycle** (`SKILL_BENCHMARK_CHAT.md`) —
 a loop with **no hard pause** between iterations. That makes the advisor more than a second pair
 of eyes: it is **the drift alarm between operator check-ins**. When the loop is running
 unattended, the advisor's watch-list (§6) is the mechanism that catches judge drift,
 overfitting-to-judge, and regressions before several cycles compound them.
 
-> **Invoke it by telling a session:** *"Follow `SKILL_STRATEGY_ADVISOR.md` and start a strategy
+> **Invoke it by telling a session:** *"Follow `SKILL_AGENT_STRATEGY_ADVISOR.md` and start a strategy
 > advisor for this session"* (optionally: focus, cadence). The main agent then sets up the loop below.
 
 ---
@@ -168,7 +173,7 @@ ledger and a fresh focused brief.
 
 **Step D — cadence: re-arm on exit, ~5-minute return (operator standing preference).** Start the
 advisor on this 5-minute re-arm by DEFAULT for any non-trivial session (it rides
-`SKILL_TUNING_CYCLE`'s autonomous loop). The completion notification is the trigger: deep ticks
+`SKILL_BENCHMARK_CHAT`'s autonomous loop). The completion notification is the trigger: deep ticks
 naturally take 2–4 minutes, so re-arming on each completion lands on the cadence without any timer.
 Three adjustments:
 - **Check the inbox on every re-arm (and on start).** Each time the main loop re-arms the advisor,
@@ -230,7 +235,7 @@ advisor's standing instruction is "do NOT repeat these".
 ## 6. Run-time telemetry watch brief (the alternate brief during chatbench cycles)
 
 While a chatbench cycle runs (apply → smoke → run → judge → write; measurement rules in
-`SKILL_TUNING_CYCLE.md` §1), swap the focused brief for this watch-list. Same mechanics:
+`SKILL_BENCHMARK_CHAT.md` §1), swap the focused brief for this watch-list. Same mechanics:
 background, signal-only, 1–3 non-obvious flags per tick or the literal "No new advice",
 append-only log. Because the tuning cycle runs **autonomously with no hard pause**, this
 watch-list is the drift alarm between operator check-ins. Priority order:

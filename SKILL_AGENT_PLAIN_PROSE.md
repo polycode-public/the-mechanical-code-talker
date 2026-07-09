@@ -1,4 +1,4 @@
-# SKILL_PLAIN_PROSE.md — write plain, human prose; keep the proof out of the shop window
+# SKILL_AGENT_PLAIN_PROSE.md — write plain, human prose; keep the proof out of the shop window
 
 The stock LLM writing voice reads as generic and machine-made, and on a project whose whole pitch is
 "no LLM, deterministic, grounded or an honest miss," that voice undercuts trust in the claims. This
@@ -17,8 +17,9 @@ of them.
 
 > **Use it whenever you draft or edit human-facing text** in this repo: `README.md`, `ROADMAP.md`,
 > `public/index.html` (the GitLab Pages homepage, also the landing surface), the `PLAN_*.md` design
-> docs, the `CHATBENCH_0NN.md` write-ups and their `_TRANSCRIPTS` files, the `SKILL_*.md` docs, any
-> other `*.md`, code comments, and chat.
+> docs, the `CHATBENCH_0NN.md` / `INFBENCH_<version>.md` / `AGENTBENCH_<version>.md` /
+> `PLAYTESTBENCH_<version>.md` write-ups, the `SKILL_*.md` docs, any other `*.md`, code comments,
+> and chat.
 
 ---
 
@@ -112,8 +113,10 @@ before they hit any methodology. Bury the value under proof apparatus and they l
 - State conditions in one clause, not three hedged paragraphs.
 - Link out for the proof: "full method and scores in the cycle write-up (`CHATBENCH_0NN.md`)."
 
-**Keep the full detail in the `CHATBENCH_0NN.md` write-ups and their `_TRANSCRIPTS` files.** That is
-the home for the complete tables, the judge scores and spreads, the per-cell breakdowns, the
+**Keep the full detail in the `CHATBENCH_0NN.md` write-ups** (and their sibling `INFBENCH_<version>.md`,
+`AGENTBENCH_<version>.md`, `PLAYTESTBENCH_<version>.md` reports — each bench family folds its own
+transcript/evidence section into the one report file, no separate companion files). That is the
+home for the complete tables, the judge scores and spreads, the per-cell breakdowns, the
 tuning-cycle contract, the caveats, and the raw transcripts. The `PLAN_*.md` docs hold the
 design-level detail behind a feature. A reader who wants to verify follows the link and finds
 everything; a reader who just wants to know what tmct does is not made to wade through the proof.
@@ -142,6 +145,11 @@ scaffolding it against something else.
 
 ## 5. Workflow — edit before you ship
 
+**Delegate the drafting of a large deliverable.** When a task calls for a long doc rewrite or a big
+report, prefer handing the drafting itself to a background sub-agent under the coordinator model
+(`CLAUDE.md`), then review and edit the result in the main session. This keeps the main chat free
+for the operator, the same standing preference this repo applies to any other long-running work.
+
 After drafting any human-facing text:
 
 1. **Cut length first.** Split every sentence over ~25 words. Delete redundant openers and filler.
@@ -168,6 +176,7 @@ of that, cut the LLM tells: em-dash sprinkling, "not X it's Y", announced-honest
 anthropomorphized parsers or benchmarks, hype, rule-of-three padding, listicle bloat. On the homepage
 (`public/index.html`) and README, lead with the benefit, state the headline claim in a sentence, and
 link to the proof instead of reproducing it; the full tables, judge scores, contract, caveats, and
-transcripts live in the `CHATBENCH_0NN.md` write-ups (and `_TRANSCRIPTS`), and the design detail in
-the `PLAN_*.md` docs. Base rules are the Plain English Campaign's (plainenglish.co.uk). Match the
-honest, terse voice the repo already uses. Applies to docs, code comments, site copy, and chat.
+transcripts live in the `CHATBENCH_0NN.md` write-ups (and the sibling BENCH reports), and the
+design detail in the `PLAN_*.md` docs. Base rules are the Plain English Campaign's
+(plainenglish.co.uk). Match the honest, terse voice the repo already uses. Applies to docs, code
+comments, site copy, and chat.
