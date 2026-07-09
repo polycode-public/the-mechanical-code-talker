@@ -247,6 +247,19 @@ test("answerCount: an unknown kind lists what it CAN count, and a non-count line
   assert.equal(answerCount(g, "which modules import a.mjs"), null, "not a count query → falls through to ask");
 });
 
+// Bug C (operator manual-chat find, this session): "count soup" with NO code
+// graph loaded rendered the grammatically-broken "I count: ." (a dangling
+// empty list) and then pointlessly suggested "how many classes are there",
+// which would ALSO fail — countableKinds(graph) is genuinely empty when no
+// class individual is present at all.
+test("answerCount Bug C: an unknown kind with a graph carrying NO countable individuals gets an honest 'no code graph loaded' message, never the broken dangling-list one", () => {
+  const empty = { individuals: [], byId: new Map(), relations: [], truncated: [], proseIndex: {} };
+  const r = answerCount(empty, "count soup");
+  assert.match(r, /^I can't count "soup" — no code graph is loaded yet, so there's nothing to count/);
+  assert.doesNotMatch(r, /I count: \./, "never the dangling-empty-list phrasing");
+  assert.doesNotMatch(r, /how many classes are there/, "never a suggested example that would ALSO fail on this graph");
+});
+
 test("runTurn: a count question is answered before ask, recorded as a non-miss turn, focus untouched", async () => {
   const g = await graph();
   const focus = { id: "mod-a", label: "app/lib/a.mjs" };

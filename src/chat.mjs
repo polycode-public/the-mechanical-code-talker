@@ -528,7 +528,18 @@ export function answerCount(graph, query) {
   const cls = COUNT_NOUNS[noun];
   if (cls && RESTRICTOR_VERB_RE.test(String(query).slice(m.index + m[0].length))) return null;
   if (!cls) {
-    return `I can't count "${noun}". I count: ${countableKinds(graph).join(", ")}. ` +
+    const kinds = countableKinds(graph);
+    // Bug C (operator manual-chat find, this session): when NO code graph is
+    // loaded, countableKinds(graph) is genuinely EMPTY (no class is present at
+    // all) — the old message rendered "I count: ." (a dangling empty list
+    // before the period) and then pointlessly suggested "how many classes are
+    // there", which would ALSO fail for the same reason. An honest, non-dangling
+    // message instead, pointing at how to actually get a graph loaded.
+    if (!kinds.length) {
+      return `I can't count "${noun}" — no code graph is loaded yet, so there's nothing to count ` +
+        `(point me at one with --repo, or run "npm run example:mini").`;
+    }
+    return `I can't count "${noun}". I count: ${kinds.join(", ")}. ` +
       `Try "how many classes are there".`;
   }
   const n = countClass(graph, cls);
