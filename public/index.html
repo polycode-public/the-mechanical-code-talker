@@ -179,7 +179,8 @@
     A chatbot in the <em>ELIZA/PARRY lineage</em>, obsessed with software the way PARRY
     was obsessed with the mafia. No model calls anywhere. Interpretation is
     <em>mechanical</em>, memory is an <em>OWL-labelled graph</em> on disk, and every
-    answer is either grounded or an honest miss.
+    answer is either grounded or an honest miss. It also holds a thread. Ask about
+    something, then ask "what calls it?" and tmct still knows what "it" means.
   </p>
 
   <div class="demo-wrap">
@@ -208,6 +209,8 @@
 
 $ tmct
 tmct&gt; what talks to the payment module?
+…
+tmct&gt; what calls it?
 …
 tmct&gt; which modules do not import logger?
 …

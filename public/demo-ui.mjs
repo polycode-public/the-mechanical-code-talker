@@ -16,15 +16,27 @@ const params = new URLSearchParams(location.search);
 const compact = params.has("compact") && params.get("compact") !== "0";
 const primedQuestion = params.get("q");
 
-// 2-3 REAL Q&A pairs, verified against the real engine (see the implementation
-// report's Node-side verification run) — genuinely computed output, pasted here
-// verbatim rather than re-run on every page load purely to save the visitor a beat
-// of extra engine warmup before the "history" appears. The live, randomly-picked (or
-// ?q=-primed) question below is ALWAYS computed live, never precomputed.
+// REAL Q&A turns, verified against the real engine — genuinely computed output,
+// pasted here verbatim rather than re-run on every page load purely to save the
+// visitor a beat of extra engine warmup before the "history" appears. The live,
+// randomly-picked (or ?q=-primed) question below is ALWAYS computed live, never
+// precomputed.
+//
+// The first two turns are flat single-question lookups; the last three are one
+// continuous exchange showing tmct carry a pronoun ("it") across turns — ask about
+// Task, then ask "what calls it?" and "where is it defined?" without repeating the
+// name. Verified turn by turn with src/ask.mjs's real ask(graph, query, {contextId,
+// prev}), threading contextId/prev exactly as src/chat.mjs's runAsk does: `prev` is
+// each turn's full match-id set, and the focus (contextId) only moves when the
+// question names a new entity outright — a pronoun object resolves against the
+// standing focus instead of replacing it, so "it" keeps meaning Task through the
+// "what calls it?" aside about its callers. All five turns come back non-miss.
 const HISTORY = [
   { q: "which modules import src/core/store.mjs?", a: "src/handlers/tasks.mjs and src/handlers/users.mjs." },
-  { q: "where is Controller defined?", a: "Controller is defined in src/handlers/base.mjs at lines 1-7." },
   { q: "which module has the most imports?", a: "src/handlers/tasks.mjs — the most imports (5)." },
+  { q: "what is a Task?", a: "Task is a class in this codebase, defined in src/core/model.mjs — try \"describe Task\" or \"which classes inherit from Task\"." },
+  { q: "what calls it?", a: "in src/core/store.mjs there is function saveStore() and there is function validateTask() in src/core/validate.mjs." },
+  { q: "where is it defined?", a: "Task is defined in src/core/model.mjs at lines 9-15." },
 ];
 
 const PROMPT = "tmct> "; // matches src/chat.mjs's real PROMPT constant
