@@ -1,8 +1,11 @@
 // PLAN_TAUGHT_RELATIONS.md Phase 2 (item 1's query-side gap + item 2's
 // relation alias/union chase) + Phase 4 (item 3's fixed-hop compose2
-// composition rule) — chat.mjs docblocks on RELATION_FACT_YESNO_RE,
-// COMPOSE2_RULE_TEACH_RE, and factReadBack's relAsk dispatcher carry the
-// full design; this file freezes the live behavior end-to-end.
+// composition rule) + Phase 5 (item 4's property-filtered composition) +
+// Phase 6 (item 6's recursive/reachability rule, wiring half) — chat.mjs
+// docblocks on RELATION_FACT_YESNO_RE, COMPOSE2_RULE_TEACH_RE,
+// FILTER_RULE_TEACH_RE, RECURSIVE_RULE_TEACH_RE, RECURSIVE_LIST_ASK_RE, and
+// factReadBack's resolveRelationChase dispatcher carry the full design; this
+// file freezes the live behavior end-to-end.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -226,3 +229,93 @@ test("PLAN_TAUGHT_RELATIONS.md full family-tree chain, end-to-end: relational fa
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+// ---- Phase 5 ------------------------------------------------------------
+
+test("Phase 5 item 4: filter rule teaching + storage — 'a grandfather is a grandparent who is male' stores a Rule (kind filter, base/property slots), never a Fact", async () => {
+  const dir = await mem("filter-store");
+  try {
+    const taught = await runTurn("a grandfather is a grandparent who is male", { config: CONFIG, memoryDir: dir, sessionId: "flt1" });
+    assert.equal(taught.record.miss, false);
+    assert.match(taught.answer, /noted — remembered: a grandfather is a grandparent who is male/);
+
+    assert.equal(readFactRows(await loadMemory(dir)).length, 0, "never stored as a Fact");
+    const rule = findRuleByName(await loadMemory(dir), "grandfather");
+    assert.ok(rule, "a Rule individual named 'grandfather' exists");
+    assert.equal(rule.class, "Rule");
+    const attr = (key) => rule.attributes.find((a) => a.key === key)?.value;
+    assert.equal(attr("ruleKind"), "filter");
+    assert.equal(attr("base"), "grandparent");
+    assert.equal(attr("property"), "male");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("Phase 5 item 4: filter query resolves when the base (a compose2 RULE) holds and the subject carries the taught property, citing the whole derivation", async () => {
+  const dir = await mem("filter-compose2-positive");
+  try {
+    await runTurn("ahab is the father of john", { config: CONFIG, memoryDir: dir, sessionId: "flt2" });
+    await runTurn("john is the father of ishmael", { config: CONFIG, memoryDir: dir, sessionId: "flt2" });
+    await runTurn("a father is a kind of parent", { config: CONFIG, memoryDir: dir, sessionId: "flt2" });
+    await runTurn("a grandparent is a parent of a parent", { config: CONFIG, memoryDir: dir, sessionId: "flt2" });
+    await runTurn("remember that ahab is male", { config: CONFIG, memoryDir: dir, sessionId: "flt2" });
+    await runTurn("a grandfather is a grandparent who is male", { config: CONFIG, memoryDir: dir, sessionId: "flt2" });
+
+    const yesno = await runTurn("is ahab the grandfather of ishmael", { config: CONFIG, memoryDir: dir });
+    assert.match(yesno.answer, /^yes —/);
+    assert.match(yesno.answer, /ahab fathers john/, "cites the base rule's first hop");
+    assert.match(yesno.answer, /john fathers ishmael/, "cites the base rule's second hop");
+    assert.match(yesno.answer, /ahab is male/, "cites the property fact that satisfies the filter");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("Phase 5 item 4 NEGATIVE: the base rule (compose2) holds but the subject was never taught the filter property — the filter correctly EXCLUDES the candidate (not a blanket decline)", async () => {
+  const dir = await mem("filter-negative");
+  try {
+    await runTurn("sarah is the mother of john", { config: CONFIG, memoryDir: dir, sessionId: "flt3" });
+    await runTurn("john is the father of ishmael", { config: CONFIG, memoryDir: dir, sessionId: "flt3" });
+    await runTurn("a mother is a kind of parent", { config: CONFIG, memoryDir: dir, sessionId: "flt3" });
+    await runTurn("a father is a kind of parent", { config: CONFIG, memoryDir: dir, sessionId: "flt3" });
+    await runTurn("a grandparent is a parent of a parent", { config: CONFIG, memoryDir: dir, sessionId: "flt3" });
+    await runTurn("a grandfather is a grandparent who is male", { config: CONFIG, memoryDir: dir, sessionId: "flt3" });
+    // Deliberately no gender taught for sarah at all.
+
+    // Sanity: the base rule itself genuinely holds in this store (proves the
+    // negative below is the FILTER excluding it, not the base chase failing).
+    const base = await runTurn("is sarah the grandparent of ishmael", { config: CONFIG, memoryDir: dir });
+    assert.match(base.answer, /^yes —/);
+
+    const filtered = await runTurn("is sarah the grandfather of ishmael", { config: CONFIG, memoryDir: dir });
+    assert.doesNotMatch(filtered.answer, /^yes —/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("Phase 5 item 4: a filter rule's base may be a PLAIN taught relation (not a compose2 rule) — genericity over what kind of thing the base name resolves to", async () => {
+  const dir = await mem("filter-plain-base");
+  try {
+    await runTurn("ahab is the father of john", { config: CONFIG, memoryDir: dir, sessionId: "flt4" });
+    await runTurn("a father is a kind of parent", { config: CONFIG, memoryDir: dir, sessionId: "flt4" });
+    await runTurn("remember that ahab is male", { config: CONFIG, memoryDir: dir, sessionId: "flt4" });
+    // "guardian" here filters the PLAIN relation "parent" (alias-chased off
+    // the taught "father" fact) — never a compose2/other rule at all.
+    const taught = await runTurn("a guardian is a parent who is male", { config: CONFIG, memoryDir: dir, sessionId: "flt4" });
+    assert.equal(taught.record.miss, false);
+
+    const yesno = await runTurn("is ahab the guardian of john", { config: CONFIG, memoryDir: dir });
+    assert.match(yesno.answer, /^yes —/);
+    assert.match(yesno.answer, /ahab fathers john/);
+    assert.match(yesno.answer, /ahab is male/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+

@@ -9,10 +9,11 @@ Session handle (inbox): `tmct` (this session; earlier sessions used `mechanic`).
 
 ## Where we are (2026-07-09)
 
-`npm test` is green at **1391** (1382 baseline — which already included the concurrent
+`npm test` is green at **1395** (1382 baseline — which already included the concurrent
 Rule-storage-foundation + `findActionPath`/`findReachableSet` planning.mjs work landing in the same
 window as Phase 1 — + 4 from item 7's Phase 2 `PLAN_TAUGHT_RELATIONS.md` dispatch + 5 from item 8's
-Phase 4 dispatch, both below). v1.0.7 is published; nothing has pushed since, so the local version
+Phase 4 dispatch + 4 from item 9's Phase 5 `filter`-rule dispatch, all below). v1.0.7 is published;
+nothing has pushed since, so the local version
 stays ahead of npm per the bump-at-push-time policy recorded in `CLAUDE.md`. The full
 `SKILL_CHAT_PLAYTEST.md` dialogue-flow tier ladder (tiers 0 through 6) is complete.
 
@@ -181,6 +182,31 @@ live-verified end-to-end via the piped CLI (see `PLAN_TAUGHT_RELATIONS.md`'s "Ph
 positive + BOTH negative hop-count cases, full-chain integration) — 9 total in the file. `npm test`:
 1386 → 1391.
 
+### 9. `PLAN_TAUGHT_RELATIONS.md` Phase 5 — property-filtered composition rule (`filter`) — `chat.mjs` (2026-07-09)
+
+Item 4: new closed-set teach regex `FILTER_RULE_TEACH_RE` ("a grandfather is a grandparent who is
+male") stores a `Rule` (kind `filter`, reusing the SAME `mgx:ruleBase1` attribute `compose2`'s first
+slot already uses, per Phase 3's own resolved convention). Query side required a genuine refactor,
+not just a new branch: the Phase 2/4 `relAsk` dispatcher's three inline steps (direct fact, alias
+chase, compose2 hop-search) were pulled out into one explicit recursive closure,
+`resolveRelationChase(name, subject, object)` — a `filter` rule's base is resolved by the function
+CALLING ITSELF, generic over whether the base turns out to be a plain relation (steps i/ii) or
+another Rule (step iii's compose2 chase), exactly the genericity §3 always specified but the
+original three-branch code hadn't yet been reshaped to actually deliver. A hit requires BOTH the
+base chase to resolve AND the subject to carry the taught property (`mgx:hasProperty`, a plain Fact
+lookup over the already-loaded `rows`); either failing is an honest decline, and the two failure
+modes are tested separately (base fails outright vs. base holds but the property filter correctly
+EXCLUDES the candidate). Also live-verified: a `filter` rule whose base is a PLAIN taught relation
+(never a compose2 rule at all) resolves identically — the genericity holds, not just for the
+family-tree illustration's own two-rule chain.
+
+`test/chat-taught-relations.test.mjs` extended with 4 more tests (filter storage, positive
+compose2-base chase, negative "base holds/filter excludes" case, positive plain-relation-base case)
+— 13 total in the file. `npm test`: 1391 → 1395. CLI smoke test (`printf 'hi\n/exit\n' | node
+bin/tmct.mjs`) still exits 0. Live-verified end-to-end via the piped CLI in a fresh tmpdir (full
+family-tree chain + the filter positive/negative cases) — see `PLAN_TAUGHT_RELATIONS.md`'s "Phase 5
+— DONE" note for the full transcript.
+
 ## Open follow-ups (next session, in priority order)
 
 1. ~~Fix the INF-C1 fabrication bug above.~~ **DONE (2026-07-09)** — see the updated item 2 note
@@ -204,10 +230,11 @@ positive + BOTH negative hop-count cases, full-chain integration) — 9 total in
    (2026-07-09)** — see item 7 above.
 8. ~~`PLAN_TAUGHT_RELATIONS.md` Phase 4 (item 3's compose2 composition rule).~~ **DONE
    (2026-07-09)** — see item 8 above, reusing Phase 2's own `relationFactsFor` list-builder as its
-   per-hop edge lookup. Remaining from the original six-item scope: item 4 (Phase 5, `filter`
-   rules — "a grandfather is a grandparent who is male") and item 6 (Phase 6's WIRING half —
-   `RECURSIVE_RULE_TEACH_RE` + the query-dispatcher's `recursive` branch; the KERNEL half,
-   `findReachableSet`, already shipped per item 6 above).
+   per-hop edge lookup.
+9. ~~`PLAN_TAUGHT_RELATIONS.md` Phase 5 (item 4's `filter` rule).~~ **DONE (2026-07-09)** — see item
+   9 above. Remaining from the original six-item scope: item 6 only (Phase 6's WIRING half —
+   `RECURSIVE_RULE_TEACH_RE` + the query-dispatcher's `recursive`/reachability-list branch; the
+   KERNEL half, `findReachableSet`, already shipped per item 6 above).
 
 ## Discipline (unchanged)
 

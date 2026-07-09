@@ -1416,6 +1416,23 @@ const RELATION_FACT_TEACH_RE =
 const COMPOSE2_RULE_TEACH_RE =
   /^an?\s+([a-z][\w-]*)\s+(?:is|are)\s+an?\s+([a-z][\w-]*)\s+of\s+an?\s+([a-z][\w-]*)[.!?]*$/i;
 
+/** "a <name> is a <base> who is <property>" — the PROPERTY-FILTERED
+ *  composition-rule teach declarative (PLAN_TAUGHT_RELATIONS.md Item 4,
+ *  Phase 5): "a grandfather is a grandparent who is male" teaches a RULE
+ *  (mgx:ruleKind "filter"), never a Fact. `m[1]` = the new rule name
+ *  ("grandfather"), `m[2]` = the base rule/relation name ("grandparent" —
+ *  may itself resolve as EITHER a plain taught relation OR another Rule,
+ *  e.g. a compose2 rule; the query-side dispatcher below handles either
+ *  generically, never assuming which), `m[3]` = the property literal
+ *  ("male"). Structurally disjoint from COMPOSE2_RULE_TEACH_RE (anchored on
+ *  a literal "who", never "of" a second time) and from
+ *  RECURSIVE_RULE_TEACH_RE below (anchored on "or", never "who") — the three
+ *  rule-teach shapes are told apart purely by their own distinct anchor
+ *  word ("of" only / "who" / "or … of … <same name>"), re-verified against
+ *  the real regexes, not just this claim. */
+const FILTER_RULE_TEACH_RE =
+  /^an?\s+([a-z][\w-]*)\s+(?:is|are)\s+an?\s+([a-z][\w-]*)\s+who\s+(?:is|are)\s+([a-z][\w-]*)[.!?]*$/i;
+
 /** "<X> is <adjective>" — the property teach payload (wrapper-REQUIRED): a lazy
  *  subject and a single bare complement word. Never matches the "is a <noun>"
  *  membership shape (that stays the ACE grammar's), so "remember that cache is
@@ -2165,6 +2182,32 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
       if (id) {
         return {
           text: `noted — remembered: a ${compose2[1]} is a ${compose2[2]} of a ${compose2[3]}`,
+          via: "assert", miss: false,
+        };
+      }
+    } catch { /* malformed slots — fall through to the ordinary honest-miss cascade */ }
+  }
+
+  // FILTER RULE TEACH — "a <name> is a <base> who is <property>"
+  // (PLAN_TAUGHT_RELATIONS.md Item 4, Phase 5): stores a RULE (appendRule,
+  // kind "filter"), never a Fact — tried right after item 3's compose2
+  // block above, same ownSrc, disjoint from it by anchor word alone
+  // ("who", never a second "of" — see FILTER_RULE_TEACH_RE's own docblock).
+  // The query-side generic base-then-property chase lives in factReadBack's
+  // relational-query dispatcher (resolveRelation's own "filter" branch).
+  const filterRule = ownSrc.match(FILTER_RULE_TEACH_RE);
+  if (filterRule && memoryDir && !QUESTION_LEAD_RE.test(ownSrc)) {
+    try {
+      const { appendRule, RULE_KIND_FILTER } = await import("./memory/core.mjs");
+      const { id } = await appendRule(memoryDir, {
+        name: filterRule[1],
+        kind: RULE_KIND_FILTER,
+        slots: { base: filterRule[2], property: filterRule[3] },
+        provenance: teachProvenanceTag(sessionId, new Date().toISOString()),
+      });
+      if (id) {
+        return {
+          text: `noted — remembered: a ${filterRule[1]} is a ${filterRule[2]} who is ${filterRule[3]}`,
           via: "assert", miss: false,
         };
       }
@@ -3851,13 +3894,15 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
     return renderMany(hits);
   }
 
-  // (a0) RELATIONAL FACT / ALIAS-CHASE / COMPOSE2-RULE yes/no — "is/are/was/
+  // (a0) RELATIONAL FACT / ALIAS-CHASE / RULE-CHASE yes/no — "is/are/was/
   // were <X> the/a/an <role> of <Y>" (PLAN_TAUGHT_RELATIONS.md Phase 2 item
   // 1's own query-side gap + item 2's alias chase + Phase 4 item 3's
-  // hop-counted compose2 chase, all dispatched from ONE recognizer, tried
-  // BEFORE ISA_ASK_RE gets a chance at this shape — see RELATION_FACT_YESNO_RE's
-  // own docblock for why placement, not regex disjointness, keeps this ahead
-  // of ISA_ASK_RE). Three-step lookup, exactly §3's own dispatcher design:
+  // hop-counted compose2 chase + Phase 5 item 4's property-filtered chase,
+  // all dispatched from ONE recognizer, tried BEFORE ISA_ASK_RE gets a
+  // chance at this shape — see RELATION_FACT_YESNO_RE's own docblock for why
+  // placement, not regex disjointness, keeps this ahead of ISA_ASK_RE). The
+  // actual dispatch lives in resolveRelationChase, below (a recursive
+  // closure, not four independent branches):
   //   (i)  DIRECT — a fact already taught under the queried role word exactly
   //        ("is ahab the father of john" against a literal mgx:father fact —
   //        Phase 1's own live-found gap, closed here).
@@ -3876,11 +3921,16 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
   //        entity === target at any depth (the load-bearing nuance: a
   //        coincidental 1-hop or 3-hop path through the SAME edge relation
   //        must NOT falsely satisfy a rule that must be exactly 2 hops).
-  // (i) and (ii) share one candidate list (relationFactsFor); (iii) reuses the
-  // SAME list-builder as its per-hop edge lookup, so all three steps agree on
-  // what "a fact under relation X" means. No hit at any step → null, the
-  // honest miss stands (never a guessed "no" — the same OWA discipline every
-  // other yes/no reader in this function follows).
+  //   (iv) FILTER RULE CHASE (Phase 5 item 4) — the queried name may be a
+  //        `filter`-kind Rule: recursively resolve its OWN base (step i/ii OR
+  //        iii again, generic over which the base turns out to be — the same
+  //        function calls itself), then require the SUBJECT also carry the
+  //        taught property (mgx:hasProperty, a plain Fact lookup).
+  // (i) and (ii) share one candidate list (relationFactsFor); (iii)/(iv) reuse
+  // the SAME list-builder as their per-hop edge lookup, so all four steps
+  // agree on what "a fact under relation X" means. No hit at any step → null,
+  // the honest miss stands (never a guessed "no" — the same OWA discipline
+  // every other yes/no reader in this function follows).
   const relAsk = qHedge.match(RELATION_FACT_YESNO_RE);
   if (relAsk) {
     const rawSubject = relAsk[1].trim();
@@ -3888,8 +3938,6 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
     const relationName = relAsk[2].trim().toLowerCase();
     const object = relAsk[3].trim();
     if (subject) {
-      const subjVariants = factTermVariants(normFactTerm, subject);
-      const objVariants = factTermVariants(normFactTerm, object);
       const isTaughtRow = (f) => !f.sourceTypes?.includes("corpus") && !f.sourceTypes?.includes("web");
       const aliasSubClassEdges = rows
         .filter((f) => f.predicate === SUBCLASS_PREDICATE && isTaughtRow(f))
@@ -3917,34 +3965,56 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
         }
         return out;
       };
-      // (i)+(ii): direct hit or alias-chased hit for this exact (subject,
-      // object) pair under the queried relation name.
-      const pairHits = relationFactsFor(relationName).filter(
-        (e) => subjVariants.has(e.fact.subject) && objVariants.has(e.fact.object),
-      );
-      if (pairHits.length) {
-        const hit = pairHits.slice().sort((a, b) => byTrust(a.fact, b.fact))[0];
-        const citation = [renderFactLine(hit.fact), ...hit.aliasFacts.map(
-          (af) => `${factPhrase(af)}${af.provenance ? ` (source: ${af.provenance})` : ""}`,
-        )].join("; ");
-        return { text: `yes — ${citation}`, replace: true };
-      }
-      // (iii) the queried name may itself be a taught compose2 RULE.
-      // findRuleByName is the SAME lookup §2/§3's own genericity design uses
-      // ("what kind of thing is X") — no per-rule-name branch, just a
-      // class/kind check.
-      const {
-        loadMemory, findRuleByName, RULE_KIND_PROP: ruleKindProp, RULE_KIND_COMPOSE2: composeKind,
-      } = await import("./memory/core.mjs");
-      const memory = await loadMemory(memoryDir);
-      const rule = findRuleByName(memory, relationName);
-      const ruleKind = rule?.attributes?.find((a) => a.prop === ruleKindProp)?.value;
-      if (rule && ruleKind === composeKind) {
-        const base1 = rule.attributes.find((a) => a.prop === "mgx:ruleBase1")?.value;
-        const base2 = rule.attributes.find((a) => a.prop === "mgx:ruleBase2")?.value;
-        const startEntity = normFactTerm(subject);
-        const targetEntity = normFactTerm(object);
-        if (base1 && base2 && startEntity && targetEntity) {
+      // Generic relation-NAME resolver (PLAN_TAUGHT_RELATIONS.md Phase 5's
+      // own genericity requirement) — the SAME "what kind of thing is this
+      // name" dispatch §3 designs, made explicitly RECURSIVE so a Rule's
+      // own base can be EITHER a plain taught relation (terminal — steps
+      // i/ii, direct fact or alias chase) OR ANOTHER Rule (compose2's
+      // hop-counted chase, step iii; filter's own base-then-property chase,
+      // Phase 5 item 4, step iv). Returns `{ citation: string[] }` on a
+      // genuine hit, or null on an honest miss — never a guessed "no", the
+      // same OWA discipline every other yes/no reader in this function
+      // follows. Recursion is naturally bounded (§3.3): a filter rule's
+      // base is always either a plain relation (case a, terminal) or
+      // another rule (case b, one dispatch level deeper) — FILTER_RULE_TEACH_RE
+      // never lets a rule name its OWN name as its own base, so no cycle
+      // guard is needed at THIS dispatch level (the search kernels
+      // underneath — findActionPath — carry their own `seen`-set safety
+      // regardless).
+      const resolveRelationChase = async (name, subjectTerm, objectTerm) => {
+        const target = String(name || "").trim().toLowerCase();
+        // (i)+(ii): direct hit or alias-chased hit for this exact (subject,
+        // object) pair under the queried relation name.
+        const sv = factTermVariants(normFactTerm, subjectTerm);
+        const ov = factTermVariants(normFactTerm, objectTerm);
+        const pairHits = relationFactsFor(target).filter((e) => sv.has(e.fact.subject) && ov.has(e.fact.object));
+        if (pairHits.length) {
+          const hit = pairHits.slice().sort((a, b) => byTrust(a.fact, b.fact))[0];
+          return { citation: [renderFactLine(hit.fact), ...hit.aliasFacts.map(
+            (af) => `${factPhrase(af)}${af.provenance ? ` (source: ${af.provenance})` : ""}`,
+          )] };
+        }
+        // The queried name may itself be a taught RULE. findRuleByName is
+        // the SAME lookup §2/§3's own genericity design uses ("what kind of
+        // thing is X") — no per-rule-name branch, just a class/kind check.
+        const {
+          loadMemory, findRuleByName, RULE_KIND_PROP: ruleKindProp,
+          RULE_KIND_COMPOSE2: composeKind, RULE_KIND_FILTER: filterKind,
+        } = await import("./memory/core.mjs");
+        const memory = await loadMemory(memoryDir);
+        const rule = findRuleByName(memory, target);
+        const ruleKind = rule?.attributes?.find((a) => a.prop === ruleKindProp)?.value;
+        // (iii) COMPOSE2 RULE CHASE (Phase 4 item 3) — a hop-counted
+        // findActionPath search over { entity, hopsTaken } states,
+        // dispatching base1's edges at hop 0 and base2's edges at hop 1,
+        // requiring EXACTLY hopsTaken === 2 at the goal — never just
+        // entity === target at any depth.
+        if (rule && ruleKind === composeKind) {
+          const base1 = rule.attributes.find((a) => a.prop === "mgx:ruleBase1")?.value;
+          const base2 = rule.attributes.find((a) => a.prop === "mgx:ruleBase2")?.value;
+          const startEntity = normFactTerm(subjectTerm);
+          const targetEntity = normFactTerm(objectTerm);
+          if (!base1 || !base2 || !startEntity || !targetEntity) return null;
           const { findActionPath } = await import("./planning.mjs");
           const applyActions = (state) => {
             if (state.hopsTaken >= 2) return [];
@@ -3956,23 +4026,48 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
           const isGoal = (state) => state.hopsTaken === 2 && state.entity === targetEntity;
           const stateKey = (state) => `${state.entity}#${state.hopsTaken}`;
           const found = findActionPath({ entity: startEntity, hopsTaken: 0 }, isGoal, applyActions, { maxDepth: 2, stateKey });
-          if (found) {
-            const seenAlias = new Set();
-            const parts = [];
-            for (const e of found.actions) {
-              parts.push(renderFactLine(e.fact));
-              for (const af of e.aliasFacts) {
-                const key = af.id || `${af.subject}|${af.predicate}|${af.object}`;
-                if (seenAlias.has(key)) continue;
-                seenAlias.add(key);
-                parts.push(`${factPhrase(af)}${af.provenance ? ` (source: ${af.provenance})` : ""}`);
-              }
+          if (!found) return null;
+          const seenAlias = new Set();
+          const parts = [];
+          for (const e of found.actions) {
+            parts.push(renderFactLine(e.fact));
+            for (const af of e.aliasFacts) {
+              const key = af.id || `${af.subject}|${af.predicate}|${af.object}`;
+              if (seenAlias.has(key)) continue;
+              seenAlias.add(key);
+              parts.push(`${factPhrase(af)}${af.provenance ? ` (source: ${af.provenance})` : ""}`);
             }
-            return { text: `yes — ${parts.join("; ")}`, replace: true };
           }
+          return { citation: parts };
         }
-      }
-      return null; // no remembered fact, alias, or rule chase reaches this — honest miss
+        // (iv) FILTER RULE CHASE (Phase 5 item 4) — recursively resolve the
+        // base (a plain relation OR another rule — this SAME function,
+        // generic over which one it turns out to be), then filter by
+        // whether the SUBJECT carries the property literal
+        // (mgx:hasProperty, a plain Fact lookup over the already-loaded
+        // `rows`). A base chase that fails declines here too (never a
+        // guess); a base chase that succeeds but whose subject lacks the
+        // taught property declines as well — the filter correctly EXCLUDES
+        // that candidate rather than silently ignoring the property clause.
+        if (rule && ruleKind === filterKind) {
+          const base = rule.attributes.find((a) => a.prop === "mgx:ruleBase1")?.value;
+          const property = rule.attributes.find((a) => a.prop === "mgx:ruleFilterProperty")?.value;
+          if (!base || !property) return null;
+          const baseHit = await resolveRelationChase(base, subjectTerm, objectTerm);
+          if (!baseHit) return null;
+          const subjectEntity = normFactTerm(subjectTerm);
+          const propertyNorm = normFactTerm(property);
+          const propHit = rows.find(
+            (f) => f.predicate === HAS_PROPERTY_PREDICATE && f.subject === subjectEntity && normFactTerm(f.object) === propertyNorm,
+          );
+          if (!propHit) return null; // base relation holds, but the property filter excludes this candidate
+          return { citation: [...baseHit.citation, renderFactLine(propHit)] };
+        }
+        return null; // no remembered fact, alias, or rule (of any kind) reaches this
+      };
+      const hit = await resolveRelationChase(relationName, subject, object);
+      if (hit) return { text: `yes — ${hit.citation.join("; ")}`, replace: true };
+      return null; // honest miss — never a guessed "no"
     }
   }
 

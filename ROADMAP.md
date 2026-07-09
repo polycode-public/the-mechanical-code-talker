@@ -108,9 +108,19 @@ alias-chased through "parent" via Phase 2's own `relationFactsFor`). The hop-cou
 1-hop and a 3-hop path through the SAME father/parent edges both correctly decline in the same store
 where the genuine 2-hop pair resolves yes. Full family-tree chain (two father facts + the alias + the
 compose2 rule) live-verified end-to-end via the piped CLI. `test/chat-taught-relations.test.mjs`
-extended with 5 more tests (9 total). `npm test` 1386 → 1391. Remaining from the original six-item
-scope: Item 4 (Phase 5, `filter` rules) and Item 6's WIRING half (Phase 6, `recursive` rules — the
-kernel already shipped above).
+extended with 5 more tests (9 total). `npm test` 1386 → 1391.
+
+**`PLAN_TAUGHT_RELATIONS.md` Phase 5 — DONE (2026-07-09)**: Item 4 (property-filtered composition
+rule — "a grandfather is a grandparent who is male" teaches a `filter`-kind Rule). Required
+refactoring Phase 2/4's `relAsk` dispatcher's three inline steps into one recursive closure,
+`resolveRelationChase`, so a filter rule's base resolves GENERICALLY — the function calling itself —
+whether the base is a plain taught relation or another Rule (e.g. compose2), never assuming which.
+A hit requires both the base chase to resolve AND the subject to carry the taught property
+(`mgx:hasProperty`); live-verified both failure modes separately (base fails outright vs. base holds
+but the property filter correctly excludes the candidate) plus a filter whose base is a plain
+relation (not a compose2 rule at all), proving the genericity. `test/chat-taught-relations.test.mjs`
+extended with 4 more tests (13 total). `npm test` 1391 → 1395. Remaining from the original six-item
+scope: Item 6's WIRING half only (Phase 6, `recursive` rules — the kernel already shipped above).
 
 ### Shipped this session
 

@@ -93,6 +93,69 @@ Tests: `test/chat-taught-relations.test.mjs`, extended with 5 more tests (compos
 hop-counted positive, both hop-count negative cases, one full-chain integration test) — 9 total in
 the file. `npm test`: 1386 → 1391 (+5 this commit; +9 total across both phases).
 
+## Phase 5 — DONE (2026-07-09)
+
+Item 4 (property-filtered composition rule), landed in `src/chat.mjs` in a follow-up commit right
+after Phase 4 above.
+
+**Teach side**: `FILTER_RULE_TEACH_RE`
+(`/^an?\s+([a-z][\w-]*)\s+(?:is|are)\s+an?\s+([a-z][\w-]*)\s+who\s+(?:is|are)\s+([a-z][\w-]*)[.!?]*$/i`),
+tried in `teachLane` right after Phase 4's `COMPOSE2_RULE_TEACH_RE` block, on the same `ownSrc`.
+Structurally disjoint from `COMPOSE2_RULE_TEACH_RE` by anchor word alone ("who", never a second
+"of"), re-verified against the real regex, not just the design doc's own claim. Stores via
+`appendRule` with `kind: "filter"`, `slots: { base, property }` — confirmed live that Phase 3's own
+implementation note held exactly as documented: `filter`'s `base` slot writes to the SAME
+`mgx:ruleBase1` attribute `compose2`'s first slot uses (`RULE_SLOT_SPEC` in `src/memory/core.mjs`
+already had this wired since Phase 3 — no `memory/core.mjs` change needed at all this phase, pure
+`chat.mjs` work).
+
+**Query side — the one real design deviation this phase needed, flagged explicitly per the
+coordinator's own brief**: the plan's §3 sketch described `filter` as a THIRD independent branch
+alongside `compose2`'s. Implementing it that way would have meant literally copy-pasting Phase 2/4's
+three-step (direct/alias/compose2) dispatch logic a second time just to add a fourth "look up the
+base again" step — instead, the existing inline code inside `relAsk`'s `if (subject)` block was
+PULLED OUT into one named, explicitly RECURSIVE closure, `resolveRelationChase(name, subject,
+object)`: steps (i)/(ii) (direct fact + alias chase) are the base case; step (iii) (compose2 hop
+search) and the new step (iv) (`filter`) are both `if` branches inside the SAME function; step (iv)
+resolves its own `base` slot by **calling `resolveRelationChase` again** — generic over whether that
+base turns out to be a plain relation (recursing into steps i/ii) or another Rule (recursing into
+step iii's compose2 chase), exactly the genericity §3 always specified, but which the Phase 2/4 code
+as literally landed hadn't yet been reshaped to actually deliver (it was three sequential ifs in one
+function body, not a function that could call itself). This is a refactor of already-shipped Phase
+2/4 code, not just an addition — re-ran the FULL Phase 2/4 test suite unmodified after the refactor
+to confirm zero behavior change to the existing dispatch (all 9 pre-existing tests in
+`test/chat-taught-relations.test.mjs` passed unchanged before a single new Phase 5 test was added).
+
+A `filter` hit requires BOTH: (a) `resolveRelationChase(base, subject, object)` resolves (the base
+relation/rule holds for this exact pair), AND (b) the SUBJECT carries the property literal
+(`mgx:hasProperty(subject, property)`, a plain Fact lookup over `rows`, the same read path Phase 2/4
+already established `readFactRows` backs). Either failing declines (never a guessed yes) — live- and
+test-verified as two DISTINCT failure modes, not conflated: a case where the base chase itself fails
+outright, and a separate case where the base chase SUCCEEDS (proven by a sanity query against the
+un-filtered base rule in the same store) but the property filter correctly EXCLUDES the candidate
+because no matching property fact was ever taught. Also live-verified the genericity claim
+concretely, not just asserted: a `filter` rule whose `base` is a PLAIN taught relation (never a
+compose2 rule at all — "an uncle is a parent who is male", filtering the alias-chased "parent"
+relation directly) resolves through the exact same `resolveRelationChase` code path as the
+compose2-base case, with zero special-casing.
+
+Live-verified the full family-tree chain end-to-end via the piped CLI: father facts + the
+father/mother⊑parent aliases + the compose2 grandparent rule + "ahab is male" (taught via the
+pre-existing wrapped `TEACH_PROPERTY_RE` surface — confirmed live which of Phase 1's two paths
+actually carries it: bare "ahab is male" is 3 words with no code-ish token, so it never reaches
+`teachLane` at all, intercepted upstream by `isConversational`'s ≤3-word catch-all per the plan's own
+Verification finding 4; `unknownAdjectiveFallback` also declines for it even when wrapped, since bare
+lowercase "ahab" carries none of that function's own subject-groundedness signals — so the WRAPPED
+"remember that ahab is male" lands via the pre-existing, deliberately-out-of-scope `TEACH_PROPERTY_RE`
+gap, Verification finding 3, not the new Phase 1 fallback) + the filter grandfather rule — all
+resolve correctly, including the negative filter case (a second grandparent, taught via mother/alias
+with no gender fact at all, correctly declines the grandfather filter while still resolving yes to
+the plain grandparent query in the same store).
+
+Tests: `test/chat-taught-relations.test.mjs`, extended with 4 more tests (filter storage, positive
+compose2-base chase, negative "base holds/filter excludes" case, positive plain-relation-base case)
+— 13 total in the file. `npm test`: 1391 → 1395.
+
 ## Phase 3 — DONE (2026-07-09)
 
 Rule storage foundation landed in `src/memory/core.mjs`, pure plumbing per §4's phase list — zero
