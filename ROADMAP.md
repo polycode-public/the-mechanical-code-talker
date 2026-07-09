@@ -37,6 +37,13 @@ Test count across the session's later stretch:
 | Vocabulary-growth mirror fix — known-subject/unknown-object mint (`unknownObjectFallback`), so new terms compound turn over turn | 1352 → 1355 |
 | `findActionPath` (`src/planning.mjs`) — generic bounded on-demand-successor state-space search, `PLAN_HANOI.md`'s Phase 2 kernel, proven against a small toy graph; not wired into chat, Hanoi itself not started | 1355 → 1361 |
 
+**INFBENCH re-measured against 1.2.0** (measurement-only dispatch, 2026-07-09): `INFBENCH_1.2.0.md`
+confirms chat/INF-A2 now closes to 100% (the cax-sco/proof-chase win the STATUS banner above already
+claimed) but also finds chat/INF-C1 has flipped from an honest ceiling to a genuine 93%-fabrication
+regression, traced to the new general-verb-to-predicate query lane answering "no" on an absent fact
+instead of declining — a real correctness bug, not yet fixed, separate from and cheaper than the
+still-gating INF-B1 (`cax-dw`) work.
+
 ### Shipped this session
 
 - **Tier 5** found 12 routing/recognition fixes across teach and recall: article/head-word gaps

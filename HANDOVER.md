@@ -558,6 +558,17 @@ actively editing them:
 Tier 6 playtest landed commits); CLI smoke (`printf 'hi\n/exit\n' | node bin/tmct.mjs`) exits 0.
 Five commits, no push, no version bump (stays 1.0.9).
 
+### INFBENCH re-measured against 1.2.0 (2026-07-09, measurement-only dispatch)
+
+`INFBENCH_1.2.0.md` (repo root) re-ran the classical-logic ladder against the current codebase:
+chat/INF-A2 closes to a clean 100% (confirming the `PLAN_INFERENCE_TESTING.md` STATUS banner's
+cax-sco/proof-chase claim, independently re-measured), but chat/INF-C1 flips from `0.8.2`'s honest
+93%-completion near-ceiling to **93% fabrication** — this session's general-verb-to-predicate query
+lane (`GENERAL_VERB_YESNO_RE`, `src/chat.mjs:3852-3855`) answers a confident "no" on cardinality
+queries with no matching taught fact instead of declining, a negation-as-failure violation of the
+OWA-honest house ethos. Not fixed in that dispatch (measurement-only, `src/chat.mjs` off-limits);
+see the doc's "Next" section for the targeted guard this surfaces as a cheap, high-value follow-up.
+
 ## Open follow-ups (next session, in priority order)
 
 1. **DONE: Tier 5 (teach, recall, and reasoning in dialogue) and Tier 6 (the messy real user).**
