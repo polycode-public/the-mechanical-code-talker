@@ -340,7 +340,12 @@ const GOAL_LINE_TRAILER = /\n\nGoal \(inferred\):[^\n]*$/;
  *  separate scripted sessions in the SAME dir, so session N+1 sees whatever
  *  session N folded in (graph Session individuals, memory) — the recall
  *  measurement. Answers and records are read back from the session log +
- *  structured sidecar (sessions.mjs), matched to turns by order. */
+ *  structured sidecar (sessions.mjs), matched to turns by order.
+ *
+ *  `caseDef.env` (optional) is merged over the default env for every runChat
+ *  call this case makes — e.g. `{ TMCT_NO_SEED: "1" }` for a case that only
+ *  exercises plumbing on an empty graph and doesn't need (and shouldn't pay
+ *  for) the corpus-seed pass a bare "empty" graph would otherwise trigger. */
 export async function runSessionCase(caseDef, deps) {
   const { runChat, parseSessionJsonl, parseSessionLog, turnKey, graphJson } = deps;
   const dir = await mkdtemp(join(tmpdir(), `tmct-chatbench-${caseDef.id.replace(/[^A-Za-z0-9-]/g, "_")}-`));
@@ -376,7 +381,9 @@ export async function runSessionCase(caseDef, deps) {
         repoPath: dir,
         input: Readable.from(lines),
         output: sink(),
-        env: { NO_COLOR: "1" }, // no inherited env: telemetry stays off, output undecorated
+        // no inherited env: telemetry stays off, output undecorated; caseDef.env
+        // (opt-in only) layers on top, e.g. TMCT_NO_SEED for seed-agnostic cases.
+        env: { NO_COLOR: "1", ...(caseDef.env || {}) },
       });
       const rec = parseSessionJsonl(await readFile(sidecarFile, "utf8"));
       const answers = parseSessionLog(await readFile(logFile, "utf8"));

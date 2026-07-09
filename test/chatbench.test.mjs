@@ -192,6 +192,9 @@ test("runTurnsCase: threads focus/last turn-to-turn and stops on end, like runCh
 test("runSessionCase: drives full runChat in a temp dir, reads answers + records back, evaluates tier-1", async () => {
   const caseDef = {
     id: "stub-session", tags: ["bootstrap-empty"], mode: "session", graph: "empty",
+    // Plumbing-only (greeting + a literal module count on an empty repo) — none
+    // of it depends on the corpus seed, so opt out of paying that tax.
+    env: { TMCT_NO_SEED: "1" },
     turns: [
       { say: "hi", session: 1, expect: { miss: false, answerMatch: ["^Hi\\."] } },
       { say: "how many modules are there", session: 1, expect: { miss: false, answerMatch: ["^0 modules\\.$"] } },
@@ -216,6 +219,9 @@ test("runSessionCase: clears the product read cache before EVERY session (H1a be
   let cleared = 0;
   const caseDef = {
     id: "stub-two-sessions", tags: ["memory-recall"], mode: "session", graph: "empty",
+    // Only asserts the cache-clear counter — no seeded content is checked, so
+    // skip the corpus-seed pass on both sessions.
+    env: { TMCT_NO_SEED: "1" },
     turns: [
       { say: "hi", session: 1 },
       { say: "hi", session: 2 },
