@@ -392,22 +392,30 @@ the moment of actually pushing a release, as part of that same push.
    on judged surfaces again (onboarding/identity responses, teach-lane wording, new relation
    phrasings), so the next judged pass needs to re-derive its stale set from answer-text diffs,
    not assume anything carries over from the 0.8.2-era baseline still on record.
-9. **A `resolveObject` tier-4 prose-token over-match**, found live during this session's own
-   playtest-freeze verification pass (not fixed — flagged per `SKILL_CHAT_PLAYTEST.md`'s discipline
-   of verifying-and-freezing only, not fresh dead-end hunting): `moduleOrientLane`'s purpose
-   phrasing ("whats X for") calls `resolveEntity` → `resolveObject`, which resolves ANY term —
-   including one that only matches via tier-4 PROSE-TOKEN search against a Commit's own message
-   text, with no gate requiring the query actually be commit-flavored. Live repro: "whats logging
-   for" against `examples/mini-webapp` resolves to commit `e5f6a1b2c3d4` (whose message is "leveled
-   logging") and answers with real-looking but totally unintended commit info, instead of an honest
-   miss/nudge toward the real intended module (`src/lib/logger.mjs`, labeled "logger" not "logging")
-   — a confidently-WRONG answer in the same family as this session's own resolveObject tier-3
-   substring-floor fixes, but at a different tier (prose match, not containment) and not covered by
-   any fix landed this session. A future session should add a length/quality floor or a kind-gate to
-   the tier-4 prose match (or restrict `moduleOrientLane`'s own `resolveEntity` call to Module/Class/
-   Function individuals only, excluding Commit) before this phrasing can be trusted generally; the
-   working purpose-phrasing case is frozen instead with a real module path
-   (`test/chatflow-tier1-single-touch.test.mjs`), not the bare word that triggers this gap.
+9. **DONE: the `resolveObject` tier-4 prose-token over-match** flagged during this session's
+   playtest-freeze verification pass. Root cause was NOT actually in tier 4 itself: tier 3
+   (`resolveObject`'s undotted/unslashed branch, `src/ask.mjs`) had no way to see that "logging"
+   (the query word) and "logger" (`src/lib/logger.mjs`'s real basename) are the SAME underlying
+   word one gerund/agent-noun suffix-swap apart — its stem/component checks are substring/exact
+   only, no morphology — so tier 3 found nothing at all and fell straight through to tier 4, whose
+   ONLY hit was an unrelated Commit's free-text message ("leveled logging"); tier 4 then correctly
+   (per its own contract: a unique, non-tied prose hit stands) returned that commit, which was a
+   confidently-WRONG entity, not the module. Fix: a narrow, closed, Module-only
+   derivational-suffix basename bridge in tier 3 (`derivationalStem`, `src/ask.mjs`) — strips one of
+   a small suffix set (`ing`/`er`/`ers`/`or`/`ors`) and collapses a doubled trailing consonant
+   (`logging`/`logger` both reduce to `log`), scored between the existing exact/prefix-suffix tier
+   and the raw-containment tier, and gated to never fire when the term is already within tier 5's
+   own fuzzy-typo distance budget of an existing literal stem (so a genuine typo like "loging" for
+   `src/logging.mjs` still falls through to tier 5 and is announced, unaffected). Module-only by
+   design so it can never also fire for a same-stem Class/Method/Function and manufacture a false
+   ambiguous tie (`Logger`/`Logger.info` do NOT also match). "whats logging for" against
+   `examples/mini-webapp` now answers "src/lib/logger.mjs is a module — defines 3 (Logger,
+   Logger.info, createLogger); no recorded tests. …", never the commit. New tests:
+   `test/ask.test.mjs` (3 unit cases against the real `examples/mini-webapp` graph: resolves to the
+   module not the commit, the prose index itself is untouched/still consultable via the separate
+   `mentions` shape, and the typo-vs-derivational guard-rail) and
+   `test/chatflow-tier1-single-touch.test.mjs` (one live end-to-end `whats logging for` case via
+   `createSession`/`runTurn`).
 
 ### Playtest-freeze verification pass (2026-07-09, same session)
 

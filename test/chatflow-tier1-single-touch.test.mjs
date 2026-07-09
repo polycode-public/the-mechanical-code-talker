@@ -179,3 +179,26 @@ test("tier1/Seonix Batch 2+3 single-touch spot-check: bare 'what is Commit', pur
   assert.match(turns[4].answer, /^Yes — inherits edge from Task to Record\.?/, "'is Task a subclass of Record' agrees with the reverse phrasing above");
   assert.match(turns[5].answer, /^A module is a source file/, "the trailing 'in this graph' scope filler is trimmed, reaching the same meta definition as bare 'what is a Module'");
 });
+
+// HANDOVER.md item 9 (found during this session's playtest-freeze verification pass):
+// "whats logging for" — a bare, NOT-a-real-path term routed correctly to moduleOrientLane
+// (MODULE_PURPOSE_RE) but resolveObject's tier 4 prose-index fallback then confidently
+// resolved "logging" to an UNRELATED Commit individual (one whose commit MESSAGE happens
+// to contain the word "logging") instead of src/lib/logger.mjs — the intended module,
+// whose own basename ("logger") is a real morphological match (gerund/agent-noun pair) one
+// suffix-swap away from the query word, not a substring of it. Root cause: resolveObject's
+// tier 3 (src/ask.mjs) had no way to see that relationship at all (its component/stem
+// checks are substring/exact only), so it fell straight through to tier 4, whose only hit
+// was the commit's free-text message — a genuinely confident WRONG answer, the dead-end
+// shape this whole project exists to prevent. Fixed with a narrow, Module-only
+// derivational-suffix basename bridge in tier 3 (derivationalStem, src/ask.mjs) that never
+// competes with tier 5's own typo-correction territory (see test/ask.test.mjs's own unit
+// coverage for the tier-level mechanics) — this is the end-to-end confirmation that the
+// real chat path now reaches the real module, not the commit.
+test("tier1/Seonix item 9 fix: bare 'whats logging for' resolves to the real src/lib/logger.mjs module, never the unrelated Commit whose message happens to mention the word", async () => {
+  const queries = ["whats logging for"];
+  const turns = await driveSession(queries);
+  assertAllFlow(turns, queries);
+  assert.equal(turns[0].answer, "src/lib/logger.mjs is a module — defines 3 (Logger, Logger.info, createLogger); no recorded tests. /describe src/lib/logger.mjs for the full breakdown.");
+  assert.doesNotMatch(turns[0].answer, /is a commit/, "must never resolve to the commit whose message merely mentions the word");
+});

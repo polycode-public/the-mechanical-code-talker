@@ -2124,6 +2124,28 @@ function componentSet(s) {
   return new Set(String(s).toLowerCase().split(/[^a-z0-9]+/).filter(Boolean));
 }
 
+/** A minimal, CLOSED derivational-suffix normalizer for tier 3's Module-basename
+ *  bridge (item 9 fix, 2026-07-09 playtest-freeze dead-end) — deliberately NOT a
+ *  general stemmer (prose.mjs's own tokenizer comment explicitly avoids a stemmer
+ *  dependency; this stays a few hand-picked suffixes, same "closed set over general
+ *  rule" preference as everywhere else in this file). Strips exactly one of a small
+ *  suffix set ("ing"/"er"/"ers"/"or"/"ors" — the gerund and agent-noun endings that
+ *  regularly pair up in English: "logging"/"logger", "routing"/"router") off the
+ *  END of the word, then collapses a doubled trailing letter the strip exposed (the
+ *  consonant-doubling spelling short CVC roots take before -ing/-er: "log" ->
+ *  "logging"/"logger", both reducing here to "log"). Length-floored at 5 BEFORE
+ *  stripping so it can never fire on a short word and reopen the accidental-
+ *  short-word-match bug tier 3's other floors guard against; returns the word
+ *  unchanged (so callers can detect "no-op" via `=== w`) when no suffix matches. */
+function derivationalStem(w) {
+  if (w.length < 5) return w;
+  const stripped = w.replace(/(ing|ers|ors|er|or)$/, "");
+  if (stripped === w) return w;
+  return stripped.length >= 3 && stripped[stripped.length - 1] === stripped[stripped.length - 2]
+    ? stripped.slice(0, -1)
+    : stripped;
+}
+
 /** Resolve a free-text object/subject term against the graph's individuals, in priority
  *  order (§4, generalized beyond the module-coupling worked example to cover every verb
  *  family's object grain — `inherits`/`calls` resolve against Class/Function names, not
@@ -2296,6 +2318,39 @@ export function resolveObject(graph, term, { expectedClass = null } = {}) {
       if (tLc.length >= 4 && (stem.startsWith(tLc) || stem.endsWith(tLc))) {
         scored.push({ ind: m, score: 4000 - Math.abs(stem.length - tLc.length) });
         continue;
+      }
+      // Derivational-suffix basename bridge (item 9 fix, 2026-07-09): a bare term
+      // that is a MODULE's own basename one gerund/agent-noun suffix-swap away
+      // ("logging" for src/lib/logger.mjs's basename "logger" — neither is a
+      // substring/prefix/suffix of the other, so the tiers just above miss it)
+      // is still a real NAME match, not free text — Module-only (mirrors the
+      // dotted-branch's own Module-only exact-basename special case just above
+      // in this file), specifically so it can never also fire for a same-stem
+      // Class/Method/Function sharing the same root ("Logger", "Logger.info")
+      // and manufacture a false three-way tie; a bare-word class-ambiguity like
+      // that is exactly the documented, already-accepted expectedClass-gated
+      // case this function's own docblock calls out ("logger" -> Class), left
+      // untouched. Scored below the literal exact/prefix/suffix tiers above (a
+      // real substring is always stronger evidence) but above plain containment/
+      // overlap (a genuine one-suffix-away basename match is still far more
+      // specific than an accidental shared word). Guarded against tier 5's OWN
+      // territory: a term that is merely a near-miss TYPO of an already-close
+      // literal stem ("loging" for "logging", 1 edit away) must still fall
+      // through to the bounded-fuzzy tier and be ANNOUNCED ("assuming you
+      // meant…") — it is not a distinct derivational word-form, it is the same
+      // word misspelled — so this bridge only fires when the term is OUTSIDE
+      // the fuzzy tier's own distance bound (a real morphological pair like
+      // "logging"/"logger" is 3 edits apart, well past tier 5's 2-edit budget
+      // for words this length, so there is no overlap between the two tiers).
+      if (m.class === "Module") {
+        const termRoot = derivationalStem(tLc);
+        if (termRoot !== tLc && termRoot === derivationalStem(stem)) {
+          const bound = fuzzyBound(tLc);
+          if (editDistance(stem, tLc, bound) > bound) {
+            scored.push({ ind: m, score: 3000 - Math.abs(stem.length - tLc.length) });
+            continue;
+          }
+        }
       }
       if (tLc.length >= 4 && label.includes(tLc)) {
         scored.push({ ind: m, score: 1000 - Math.abs(label.length - tLc.length) });

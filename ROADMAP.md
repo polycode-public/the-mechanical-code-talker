@@ -14,7 +14,7 @@ the file has been deleted.
 
 ## Where we are now (2026-07-09)
 
-`npm test` green (**1303**, up from 1258). **v1.0.7, pushed** (0.9.11 → 1.0.0 → 1.0.7 across this
+`npm test` green (**1307**, up from 1258). **v1.0.7, pushed** (0.9.11 → 1.0.0 → 1.0.7 across this
 session — see `HANDOVER.md` for the exact release chain and file:line detail).
 
 - **Playtest-freeze verification pass (session close-out).** Manually chat-tested this session's own
@@ -24,8 +24,16 @@ session — see `HANDOVER.md` for the exact release chain and file:line detail).
   regression tests across `test/chatflow-tier1-single-touch.test.mjs`,
   `test/chatflow-tier2.test.mjs` (×2), and `test/chatflow-tier4.test.mjs` (**1299 → 1303**). One
   genuine new dead-end surfaced (a `resolveObject` tier-4 prose-token over-match — "whats logging
-  for" resolves to an unrelated commit whose message happens to contain "logging") and is recorded,
-  unfixed, as `HANDOVER.md` open follow-up item 9 for a future session.
+  for" resolved to an unrelated commit whose message happens to contain "logging") and was recorded
+  as `HANDOVER.md` open follow-up item 9.
+- **HANDOVER item 9 fixed: the tier-4 prose-token over-match.** Root cause was actually a tier-3 gap
+  — no morphological link between a query word ("logging") and a module's own basename one
+  gerund/agent-noun suffix away ("logger", `src/lib/logger.mjs`) — so tier 3 missed entirely and fell
+  through to tier 4, whose only hit was an unrelated commit's message text. Fixed with a narrow,
+  Module-only derivational-suffix basename bridge in tier 3 (`derivationalStem`, `src/ask.mjs`),
+  gated off tier 5's own typo-correction territory so a genuine typo still falls through and gets
+  announced. "whats logging for" now answers with the real `src/lib/logger.mjs` module, never the
+  commit. **1303 → 1307.**
 
 ### Now: shipped this session
 

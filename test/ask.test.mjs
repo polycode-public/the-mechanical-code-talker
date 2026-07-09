@@ -4,6 +4,8 @@
 // in isolation (parseQuery/resolveObject/traverse/render) and end-to-end (ask()).
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { buildEntities } from "../src/graph-build.mjs";
 import { parseEntities } from "../src/codegraph.mjs";
 import { ingestSchemaDocs } from "../src/schema-docs.mjs";
@@ -241,6 +243,52 @@ test("resolveObject: a term that resolves at an earlier tier never falls through
   const { tier, matchedVia } = resolveObject(graph, "logging");
   assert.equal(tier, 3);
   assert.equal(matchedVia, undefined);
+});
+
+// ---- resolveObject: item 9 fix (2026-07-09 playtest-freeze dead-end) — a bare
+// term one gerund/agent-noun suffix-swap away from a real MODULE's own basename
+// ("logging" for src/lib/logger.mjs) must resolve to that module at tier 3, never
+// fall through to tier 4's prose-index fallback and land on an unrelated Commit
+// individual whose free-text MESSAGE merely happens to contain the same word. Driven
+// against the real, committed examples/mini-webapp graph (the same fixture the
+// chatflow-tier* playtest-freeze passes use) rather than this file's own synthetic
+// buildGraph() fixture, because the bug is specifically about a module named
+// "logger.mjs" (an agent-noun basename) vs. the query word "logging" (its gerund
+// form) — buildGraph()'s own "src/logging.mjs" fixture module is already an EXACT
+// substring match for "logging" and can't reproduce this dead-end. ----
+const MINI_WEBAPP_GRAPH = fileURLToPath(new URL("../examples/mini-webapp/.tmct/graph.json", import.meta.url));
+const miniWebappGraph = parseEntities(JSON.parse(readFileSync(MINI_WEBAPP_GRAPH, "utf8")));
+
+test("resolveObject: 'logging' resolves to the real src/lib/logger.mjs module (tier 3, derivational basename bridge), never the unrelated Commit whose message mentions the word", () => {
+  const { match, tier, ambiguous, matchedVia } = resolveObject(miniWebappGraph, "logging");
+  assert.equal(match?.class, "Module");
+  assert.equal(match?.label, "src/lib/logger.mjs");
+  assert.equal(tier, 3);
+  assert.equal(ambiguous, false);
+  assert.equal(matchedVia, undefined);
+  // the dead-end this fix closes: never a Commit, no matter how it got there.
+  assert.notEqual(match?.class, "Commit");
+});
+
+test("resolveObject: 'logging' still prose-matches the real Commit's message directly via the mentions surface (mentions shape, untouched) — only resolveObject's OWN entity-resolution tier is redirected", () => {
+  // Sanity that the fix is a targeted tier-3 redirect, not a deletion of the prose
+  // token itself: the raw prose index still carries the commit hit (traverse()'s
+  // "mentions" shape consults lookupByProseTokens directly, bypassing resolveObject
+  // entirely — see ask.mjs's `shape === "mentions"` branch — so a genuine "where is
+  // logging mentioned" query is unaffected by this fix either way).
+  assert.deepEqual(miniWebappGraph.proseIndex.logging, ["commit:e5f6a1b2c3d4"]);
+});
+
+test("resolveObject: a genuine near-miss TYPO of an existing literal basename still falls through to tier 5 and is announced ('loging' for src/logging.mjs, unaffected by the new derivational bridge)", () => {
+  // Guard-rail on the item 9 fix itself: the new Module-basename bridge must never
+  // steal a case that is really tier 5's own territory — a term within the ordinary
+  // fuzzy edit-distance budget of an EXISTING literal stem is a typo of that word,
+  // not a distinct derivational form, and must stay silently unresolved at tier 3 so
+  // tier 5 announces it ("assuming you meant …").
+  const graph = buildGraph();
+  const { tier, matchedVia } = resolveObject(graph, "loging");
+  assert.equal(tier, 5);
+  assert.equal(matchedVia, "fuzzy");
 });
 
 test("ask(): end-to-end — a reverse-shape query resolves its object term via the prose fallback and still returns a correct, real graph answer", () => {
