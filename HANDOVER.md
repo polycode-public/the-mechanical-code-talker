@@ -9,10 +9,11 @@ Session handle (inbox): `tmct` (this session; earlier sessions used `mechanic`).
 
 ## Where we are (2026-07-09)
 
-`npm test` is green at **1377** (1361 + 9 from the concurrent Rule-storage-foundation dispatch,
-`src/memory/core.mjs`, item 4 below + 1 from this fix's own new test + 6 from item 5's
-`PLAN_TAUGHT_RELATIONS.md` Phase 1 dispatch, relational-fact-teach + adjective-mint). v1.0.7 is
-published; nothing has pushed since, so the local version stays ahead of npm per the
+`npm test` is green at **1386** (1382 baseline — which already included the concurrent
+Rule-storage-foundation + `findActionPath`/`findReachableSet` planning.mjs work landing in the same
+window as Phase 1 — + 4 from item 7's Phase 2 `PLAN_TAUGHT_RELATIONS.md` dispatch, below; Phase 4 is
+next in that plan's build order, in a follow-up commit).
+v1.0.7 is published; nothing has pushed since, so the local version stays ahead of npm per the
 bump-at-push-time policy recorded in `CLAUDE.md`. The full `SKILL_CHAT_PLAYTEST.md` dialogue-flow
 tier ladder (tiers 0 through 6) is complete.
 
@@ -148,6 +149,22 @@ query-dispatcher's `recursive` branch) is NOT done; both touch `chat.mjs`, held 
 dispatch at the time, so wiring is deferred until that file is free. Zero `chat.mjs` changes, zero
 effect on chat behavior.
 
+### 7. `PLAN_TAUGHT_RELATIONS.md` Phase 2 — relation alias/union query-side chase — `chat.mjs` (2026-07-09)
+
+Item 1's own query-side gap (Phase 1's live finding: "is ahab the father of john" mis-parsed via
+`IS_ADJECTIVE_YESNO_RE`) is now closed, alongside item 2 (relation alias/union query-side chase).
+One new recognizer, `RELATION_FACT_YESNO_RE`, tried in `factReadBack` BEFORE `ISA_ASK_RE` gets a
+chance at the shape (live-confirmed necessary — the two regexes genuinely overlap on "is ahab a
+parent of john", and `ISA_ASK_RE`'s own block always returns, so placement order decides the
+winner). One new local helper, `relationFactsFor`, enumerates every stored Fact whose predicate
+resolves to a queried relation name either directly or via a taught `rdfs:subClassOf` alias chain
+(`findIsaChain` reused completely unmodified over relation-name strings). The "kind of"/"type of"
+teach-side fix is a genuine one-liner (`stripKindOf`, alongside the existing `stripYour`). A hit
+cites both the direct relational fact and the alias fact that licensed it; a genuine miss (no fact,
+no alias) declines honestly. `test/chat-taught-relations.test.mjs` (new file), 4 tests. `npm test`:
+1382 → 1386. Phase 4 (item 3's compose2 rule, reusing `relationFactsFor` as its per-hop edge lookup)
+is next in this plan's build order — see item 8 below.
+
 ## Open follow-ups (next session, in priority order)
 
 1. ~~Fix the INF-C1 fabrication bug above.~~ **DONE (2026-07-09)** — see the updated item 2 note
@@ -166,9 +183,13 @@ effect on chat behavior.
    (`resolveSymbol` in `codegraph.mjs`) is separate, stricter, and doesn't share `resolveObject`'s
    tiered scoring. Not a regression, just not yet covered.
 6. ~~`PLAN_TAUGHT_RELATIONS.md` Phase 1 (relational fact teach + adjective-mint).~~ **DONE
-   (2026-07-09)** — see item 5 above. Phase 2 (item 2's query-side alias-chase dispatcher) is next
-   in that plan's build order; a proper "is X the ROLE of Y" reader (found live to NOT already work,
-   above) is a natural companion for that same dispatch.
+   (2026-07-09)** — see item 5 above.
+7. ~~`PLAN_TAUGHT_RELATIONS.md` Phase 2 (relation alias/union query-side chase).~~ **DONE
+   (2026-07-09)** — see item 7 above. Phase 4 (item 3's compose2 composition rule) is next in that
+   plan's build order, reusing Phase 2's own `relationFactsFor` list-builder as its per-hop edge
+   lookup. After that: item 4 (Phase 5, `filter` rules — "a grandfather is a grandparent who is
+   male") and item 6 (Phase 6's WIRING half — `RECURSIVE_RULE_TEACH_RE` + the query-dispatcher's
+   `recursive` branch; the KERNEL half, `findReachableSet`, already shipped per item 6 above).
 
 ## Discipline (unchanged)
 

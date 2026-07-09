@@ -2,6 +2,48 @@
 
 Status: RESEARCH / DESIGN — not yet implemented. Nothing in this document is live code.
 
+## Phase 2 — DONE (2026-07-09)
+
+Item 1's query-side gap (closed here) + item 2 (relation alias/union chase) both landed in
+`src/chat.mjs`, largely as designed.
+
+**Item 1's fix**: a single new recognizer, `RELATION_FACT_YESNO_RE` (mirrors
+`RELATION_FACT_TEACH_RE`'s "is/are/was/were X the/a/an ROLE of Y" shape, accepting "the" for a
+direct query and "a"/"an" for item 2's alias-chase queries below), matched in `factReadBack`
+**before** `ISA_ASK_RE` gets a chance at the shape — checked live and confirmed load-bearing:
+`ISA_ASK_RE`'s own "a"/"an" alternation ALSO matches "is ahab a parent of john" (backtracking
+"parent of john" into its single free-form object capture), and since `ISA_ASK_RE`'s own block
+always `return`s (a hit or an explicit `null`), whichever regex's block runs first wins the shape
+outright — a placement decision, not a regex-disjointness one. "is ahab the father of john" (no
+"of"-chase, literal "the") never collided with `ISA_ASK_RE` at all (that regex has no "the" in its
+alternation), so item 1's own fix needed no such precedence fight — only item 2's "a"/"an" forms did.
+
+**Item 2's teach-side** landed exactly as the plan's own Verification finding 1/2 scoped it: a
+one-line normalization (`stripKindOf`, `src/chat.mjs`, alongside the existing `stripYour`) folds
+"is/are/was/were (a/an) kind/type of " down to "is/are/was/were a " right after the copula, applied
+to both `raw` and `wrapped` before any teach regex ever sees the sentence. "a father is a kind of
+parent" now normalizes to "a father is a parent", which `unknownSubjectFallback` already stores as
+`father ⊑ parent` today (no new mint path, no new predicate, exactly as designed).
+
+**Item 2's query-side** (the genuinely new work): `factReadBack`'s new `relAsk` block —
+`relationFactsFor(name)`, a small local closure, enumerates every stored Fact whose predicate
+resolves to the queried relation name either DIRECTLY (a mechanical inverse of
+`generalVerbPredicate`, `relationRoleWord(predicate)` — "mgx:father" -> "father") or via a TAUGHT
+`rdfs:subClassOf` chain over relation-NAME strings, reusing `findIsaChain`
+(`src/syllogise.mjs`) **completely unmodified**, exactly as the plan's own §1 Item 2 recommended —
+candidate enumeration is bounded by facts that already connect the query's exact (subject, object)
+pair, never the whole vocabulary. A hit cites BOTH the direct relational fact and the alias fact
+that licensed reading it under the queried name; no hit (a genuinely un-taught relationship, with or
+without an alias in play) declines with `null`, the same "never a guessed no" discipline every other
+yes/no reader in this file already follows. `relationFactsFor` is deliberately written as a small,
+reusable list-builder rather than an inline filter, anticipating Phase 4's compose2 rule chase (next
+in this plan's build order) reusing the identical candidate-fact substrate for its own per-hop edge
+lookup — noted here so Phase 4's own entry doesn't have to re-derive why the shape looks that way.
+
+Tests: `test/chat-taught-relations.test.mjs` (new file), covering direct readback, "kind of"/"type
+of" teach normalization, the alias-chase positive case (citing both facts), and a negative case (an
+alias relationship never taught, honest decline). `npm test`: 1382 → 1386 (+4).
+
 ## Phase 3 — DONE (2026-07-09)
 
 Rule storage foundation landed in `src/memory/core.mjs`, pure plumbing per §4's phase list — zero

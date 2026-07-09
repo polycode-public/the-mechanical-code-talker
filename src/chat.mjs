@@ -2053,8 +2053,22 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
   // a "your" appearing mid-sentence; applied to both the bare and the
   // remember-wrapped surface.
   const stripYour = (s) => (s == null ? s : s.replace(/^your\s+/i, "a "));
-  const raw = stripYour(rawInput);
-  const wrapped = stripYour(wrappedInput);
+  // "X is a KIND OF Y" / "X is a TYPE OF Y" (PLAN_TAUGHT_RELATIONS.md Item 2,
+  // Phase 2): the teach-side half of this item is a ONE-LINE normalization,
+  // not new storage — "a father is a kind of parent" reaches NEITHER
+  // UNKNOWN_SUBJECT_RE nor BARE_DECLARATIVE_RE nor TEACH_PROPERTY_RE today,
+  // because every one of those regexes requires a SINGLE-token object and
+  // "kind of parent" is three tokens (Verification finding 1). Stripping the
+  // "kind/type of" run down to a bare "a "/"an " immediately after the
+  // is/are/was/were copula — BEFORE any teach regex ever sees the sentence —
+  // recognition stays exactly as closed as before (still only "X is a Y",
+  // just one more determiner-phrase spelling of "a"), no new mint path, no
+  // new predicate: "a father is a kind of parent" normalizes to "a father is
+  // a parent", which unknownSubjectFallback already stores as
+  // father ⊑ parent today (finding 2: "parent" is already a lexicon noun).
+  const stripKindOf = (s) => (s == null ? s : s.replace(/\b(is|are|was|were)\s+(?:an?\s+)?(?:kind|type)\s+of\s+/i, "$1 a "));
+  const raw = stripKindOf(stripYour(rawInput));
+  const wrapped = stripKindOf(stripYour(wrappedInput));
 
   // PRONOUN-SUBJECT GUARD — tried against BOTH surfaces (bare and remember-
   // wrapped; trailing punctuation stripped the same way the OWNS/SOME_A_FEW
@@ -3035,6 +3049,22 @@ function predicatePhrase(predicate) {
 }
 const factPhrase = (f) => `${f.subject} ${predicatePhrase(f.predicate)} ${f.object}`;
 
+/** The mechanical INVERSE of generalVerbPredicate: recovers the bare role/verb
+ *  word a taught relational Fact's predicate was minted from ("mgx:father" ->
+ *  "father"), or null for a predicate that isn't the "mgx:<word>" mint shape at
+ *  all (a curated predicate like mgx:hasProperty/mgx:ownedBy/mgx:hasA never
+ *  names a chaseable relation, so callers below simply never match it against
+ *  a queried relation name). PLAN_TAUGHT_RELATIONS.md Phase 2/4's own shared
+ *  substrate: factReadBack's relational-query dispatcher (RELATION_FACT_YESNO_RE)
+ *  uses this to enumerate "which already-taught fact-predicates touch this
+ *  (subject, object) pair" without hand-rolling a second lemma table — the
+ *  SAME "mgx:<lemma>" shape generalVerbPredicate mints is simply read backward,
+ *  synchronously (no lemmatizer round-trip needed to go this direction). */
+function relationRoleWord(predicate) {
+  const m = /^mgx:([a-z][\w-]*)$/i.exec(String(predicate || ""));
+  return m ? m[1].toLowerCase() : null;
+}
+
 // ---- BUG 1 fix (2026-07-08): "what is a tree used for" filters to JUST the
 // UsedFor facts, instead of grammar.mjs's meta-whatis template's lazy tail
 // swallowing "tree used for" whole as one literal term (a guaranteed
@@ -3245,6 +3275,35 @@ async function synonymsOf(term) {
   const index = await synonymIndex();
   return index.get(String(term || "").trim().toLowerCase()) || [];
 }
+
+/** "is/are/was/were <X> the/a/an <role> of <Y>" — the RELATIONAL-QUERY yes/no
+ *  reader (PLAN_TAUGHT_RELATIONS.md Phase 2, item 1's own query-side gap +
+ *  item 2's alias chase + Phase 4 item 3's compose2-rule chase, all three
+ *  dispatched from ONE recognizer — see factReadBack's own relAsk block for
+ *  the full 3-step lookup: direct fact, alias-chased fact, then compose2 rule).
+ *  Deliberately tried BEFORE ISA_ASK_RE gets a chance at this shape (see
+ *  factReadBack's own placement, ahead of ISA_ASK_RE's match site): "is ahab a
+ *  parent of john" ALSO fits ISA_ASK_RE's own "a"/"an" determiner alternation
+ *  (backtracking "parent of john" into ISA_ASK_RE's single free-form object
+ *  capture) — checked live, ISA_ASK_RE's own block always returns (a hit or an
+ *  explicit `return null`), so whichever regex's block runs FIRST wins the
+ *  shape outright; this is the same "add a more specific recognizer earlier in
+ *  the cascade" precedent WHO_OWNS_RE/ISA_ASK_RE themselves already set
+ *  relative to the more general readers below them. Accepts "the" (item 1's
+ *  own literal-"the" direct-fact query, "is ahab the father of john") AND
+ *  "a"/"an" (item 2/4's alias-chase and rule-chase queries, which need the
+ *  indefinite article since the relation/rule name being asked about is
+ *  itself often the more general or composed one) — the determiner carries no
+ *  write-time collision risk here the way RELATION_FACT_TEACH_RE vs
+ *  COMPOSE2_RULE_TEACH_RE's determiner split does, because this is a READ-side
+ *  reader with a single unified dispatcher, not two competing WRITE shapes.
+ *  Structurally disjoint from plain ISA_ASK_RE/OWNS_PASSIVE_YESNO_RE shapes
+ *  that have no trailing " of <Y>" clause at all (verified: "is a module a
+ *  component" — no "of" clause — never matches this regex; see this file's
+ *  own PLAN_TAUGHT_RELATIONS.md "Phase 2 — DONE" note for the full collision
+ *  analysis). */
+const RELATION_FACT_YESNO_RE =
+  /^(?:is|are|was|were)\s+([\w'-]+(?:\s+[A-Z][\w'-]*)?)\s+(?:the|an?)\s+([a-z][\w-]*)\s+of\s+([\w'-]+(?:\s+[A-Z][\w'-]*)?)[?.!\s]*$/i;
 
 /** "is a module a component" — the yes/no vocabulary form the graph grammar
  *  doesn't parse; checked against the isa-family fact predicates only. */
@@ -3697,8 +3756,11 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
     // not just the live playtest transcript. Excluded explicitly: ISA_ASK_RE
     // matches take the SAME priority here they get in the non-empty-rows
     // path below, and a leading "there" is existential, never a real named
-    // subject a property claim would name.
-    if (!ISA_ASK_RE.test(qHedge)) {
+    // subject a property claim would name. RELATION_FACT_YESNO_RE (Phase 2/4)
+    // gets the SAME exclusion for the SAME reason — "is ahab a parent of
+    // john" with truly zero facts remembered is an honest miss on the
+    // relational reader below, never a bogus adjective teach-offer here.
+    if (!ISA_ASK_RE.test(qHedge) && !RELATION_FACT_YESNO_RE.test(qHedge)) {
       const emptyIsAdj = qHedge.match(IS_ADJECTIVE_YESNO_RE);
       if (emptyIsAdj) {
         const rawSubject = emptyIsAdj[1].trim();
@@ -3744,6 +3806,90 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
     const hits = (isa.length ? isa : rows).slice().sort(byTrust);
     if (!hits.length) return null;
     return renderMany(hits);
+  }
+
+  // (a0) RELATIONAL FACT / ALIAS-CHASE / COMPOSE2-RULE yes/no — "is/are/was/
+  // were <X> the/a/an <role> of <Y>" (PLAN_TAUGHT_RELATIONS.md Phase 2 item
+  // 1's own query-side gap + item 2's alias chase + Phase 4 item 3's
+  // hop-counted compose2 chase, all dispatched from ONE recognizer, tried
+  // BEFORE ISA_ASK_RE gets a chance at this shape — see RELATION_FACT_YESNO_RE's
+  // own docblock for why placement, not regex disjointness, keeps this ahead
+  // of ISA_ASK_RE). Three-step lookup, exactly §3's own dispatcher design:
+  //   (i)  DIRECT — a fact already taught under the queried role word exactly
+  //        ("is ahab the father of john" against a literal mgx:father fact —
+  //        Phase 1's own live-found gap, closed here).
+  //   (ii) ALIAS CHASE (item 2) — the SAME candidate list, widened: any fact
+  //        connecting this exact (subject, object) pair whose OWN role word
+  //        reaches the queried name via a TAUGHT rdfs:subClassOf chain over
+  //        relation-NAME strings (findIsaChain, reused completely unmodified,
+  //        maxHops:2, corpus-excluded — the identical isTaught discipline the
+  //        cax-sco/scm-sco class-term proof chase below already uses, just
+  //        walked over relation names instead of class names).
+  //   (iii) COMPOSE2 RULE CHASE (Phase 4 item 3) — the queried name may itself
+  //        be an already-taught Rule (findRuleByName), not a plain relation at
+  //        all: a hop-counted findActionPath search over { entity, hopsTaken }
+  //        states, dispatching base1's edges at hop 0 and base2's edges at hop
+  //        1, requiring EXACTLY hopsTaken === 2 at the goal — never just
+  //        entity === target at any depth (the load-bearing nuance: a
+  //        coincidental 1-hop or 3-hop path through the SAME edge relation
+  //        must NOT falsely satisfy a rule that must be exactly 2 hops).
+  // (i) and (ii) share one candidate list (relationFactsFor); (iii) reuses the
+  // SAME list-builder as its per-hop edge lookup, so all three steps agree on
+  // what "a fact under relation X" means. No hit at any step → null, the
+  // honest miss stands (never a guessed "no" — the same OWA discipline every
+  // other yes/no reader in this function follows).
+  const relAsk = qHedge.match(RELATION_FACT_YESNO_RE);
+  if (relAsk) {
+    const rawSubject = relAsk[1].trim();
+    const subject = IS_ADJECTIVE_PRONOUN_RE.test(rawSubject) ? (focusLabel || null) : rawSubject;
+    const relationName = relAsk[2].trim().toLowerCase();
+    const object = relAsk[3].trim();
+    if (subject) {
+      const subjVariants = factTermVariants(normFactTerm, subject);
+      const objVariants = factTermVariants(normFactTerm, object);
+      const isTaughtRow = (f) => !f.sourceTypes?.includes("corpus") && !f.sourceTypes?.includes("web");
+      const aliasSubClassEdges = rows
+        .filter((f) => f.predicate === SUBCLASS_PREDICATE && isTaughtRow(f))
+        .map((f) => [f.subject, f.object]);
+      const { findIsaChain: chaseAlias } = await import("./syllogise.mjs");
+      // Shared alias-chase substrate (item 2): every stored Fact whose
+      // predicate resolves — directly, or via a TAUGHT rdfs:subClassOf chain
+      // over relation-NAME strings, never corpus noise — to `name`. Reused for
+      // BOTH the direct/alias yes-no readback just below AND the compose2
+      // hop-search's per-hop edge lookup further down, so the two never
+      // disagree on what "a fact under relation X" means.
+      const relationFactsFor = (name) => {
+        const target = String(name || "").trim().toLowerCase();
+        const out = [];
+        for (const f of rows) {
+          const role = relationRoleWord(f.predicate);
+          if (!role) continue;
+          if (role === target) { out.push({ fact: f, aliasFacts: [] }); continue; }
+          const chain = chaseAlias(role, new Set([target]), [], aliasSubClassEdges, { maxHops: 2 });
+          if (!chain) continue;
+          const aliasFacts = chain.map((step) => rows.find(
+            (r) => r.predicate === SUBCLASS_PREDICATE && r.subject === step.subject && r.object === step.object,
+          ));
+          if (aliasFacts.every(Boolean)) out.push({ fact: f, aliasFacts });
+        }
+        return out;
+      };
+      // (i)+(ii): direct hit or alias-chased hit for this exact (subject,
+      // object) pair under the queried relation name.
+      const pairHits = relationFactsFor(relationName).filter(
+        (e) => subjVariants.has(e.fact.subject) && objVariants.has(e.fact.object),
+      );
+      if (pairHits.length) {
+        const hit = pairHits.slice().sort((a, b) => byTrust(a.fact, b.fact))[0];
+        const citation = [renderFactLine(hit.fact), ...hit.aliasFacts.map(
+          (af) => `${factPhrase(af)}${af.provenance ? ` (source: ${af.provenance})` : ""}`,
+        )].join("; ");
+        return { text: `yes — ${citation}`, replace: true };
+      }
+      // Phase 4 (item 3, compose2 rule chase) extends this SAME dispatcher
+      // with a third step here — not yet built in this phase.
+      return null; // no remembered fact or alias reaches this — honest miss
+    }
   }
 
   // (a) FORWARD membership — "is an X a Y". X's fact-subject candidates are the

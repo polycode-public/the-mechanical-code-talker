@@ -91,6 +91,15 @@ cycle and a same-length two-path convergence. `test/planning.test.mjs`, 5 new te
 (teach-shape recognizer + query-dispatcher branch, both in `chat.mjs`) is deliberately deferred,
 kernel-only per this task's own scoping — see `PLAN_TAUGHT_RELATIONS.md`/`HANDOVER.md` for detail.
 
+**`PLAN_TAUGHT_RELATIONS.md` Phase 2 — DONE (2026-07-09)**: closes Item 1's own live-found
+query-side gap ("is ahab the father of john" now resolves directly) and Item 2 (relation alias/union
+query-side chase — a taught "father ⊑ parent" alias lets "is ahab a parent of john" resolve off the
+father fact). One new recognizer (`RELATION_FACT_YESNO_RE`) and one new local helper
+(`relationFactsFor`) in `factReadBack`, tried BEFORE `ISA_ASK_RE` gets a chance at the overlapping
+shape. The teach-side "kind of"/"type of" fix (`stripKindOf`) is a genuine one-liner.
+`test/chat-taught-relations.test.mjs` (new file), 4 tests. `npm test` 1382 → 1386. Phase 4 (compose2
+rule, next in this plan's build order) reuses `relationFactsFor` as its own per-hop edge lookup.
+
 ### Shipped this session
 
 - **Tier 5** found 12 routing/recognition fixes across teach and recall: article/head-word gaps
