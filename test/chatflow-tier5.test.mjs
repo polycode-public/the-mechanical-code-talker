@@ -162,6 +162,37 @@
 //       risky" reads back as a present-tense property fact, found live while
 //       building this conversation's own teach step.
 //
+// CYCLE 4: one fix, one genuine ceiling named (the well is visibly getting
+// shallower — most of this cycle's conversations flowed clean first try):
+//
+//   T11 "actually is the store module fragile" WALLED — a leading hedge
+//       adverb ("actually"/"really"/"honestly", optionally comma'd) put the
+//       sentence one word out of alignment with this session's own three new
+//       yes/no openers (IS_ADJECTIVE_YESNO_RE/OWNS_YESNO_RE/
+//       OWNS_PASSIVE_YESNO_RE all anchor on "is/are/was/were/does/did" at the
+//       very start). Fixed narrowly: a qHedge variable (factReadBack) strips
+//       just this closed hedge-adverb set before those three specific
+//       matches — NOT the older ISA_ASK_RE/WHO_OWNS_RE paths, which already
+//       work without it. General leading-connective tolerance (and/also/so/…)
+//       is STACCATO_LEAKED_CONNECTIVES' own separate, broader territory;
+//       hedge adverbs are a narrower, adjacent closed set.
+//   Genuine ceiling, NOT fixed: "remember that the checkout module handles
+//   payments" (a general-verb teach with a MULTI-WORD subject) declines with
+//   only a generic (not perfectly tailored) message — generalVerbTeach's
+//   single-bare-token subject restriction is deliberate (its own docblock:
+//   an arbitrary multi-word subject is genuinely ambiguous with the verb
+//   position). A widening attempt was tried and reverted here: laziness
+//   needed to keep the cycle-1 adverb-skip fix working ("TaskController
+//   usually needs review" must still find "TaskController" as the MINIMAL
+//   subject first) directly conflicts with the greediness a multi-word
+//   subject needs (a longer subject match must be preferred, or "the
+//   checkout module handles payments" wrongly reads as subject="checkout",
+//   verb="module") — the two can't both be satisfied by a positional regex
+//   without real verb-position detection. The existing decline ("I couldn't
+//   store that — I remember facts in the shape 'every X is a Y'…") is honest
+//   and guiding, just not perfectly diagnostic of the real cause; left as-is
+//   rather than risk reopening either fix.
+//
 // Driven against the SHIPPED examples/mini-webapp graph via `ephemeral: true`
 // (chat.mjs's createSession) — same mechanism test/chatflow-tier4.test.mjs
 // relies on: reads the real graph, writes session/provenance state to a
@@ -447,4 +478,50 @@ test("tier5/T10's teach-offer never breaks the wall-shortening pass on a repeate
   assertNeverBareWall(turns, ["what do you know about giraffes"]);
   assert.doesNotMatch(turns[0].answer, /which <functions\|classes\|modules>/, "the wall is the SHORT tailored one, not the full cheat-sheet");
   assert.match(turns[0].answer, /I don't know "giraffes" yet — teach me directly/);
+});
+
+// ---- CYCLE 4 ----
+
+test("tier5/a leading hedge adverb ('actually'/'really') no longer breaks the new yes/no readers (T11 fix)", async () => {
+  const queries = [
+    "please remember that the store module is fragile",
+    "actually is the store module fragile",
+    "really is the store module fragile",
+    "honestly, is the store module fragile",
+  ];
+  const turns = await driveSession(queries);
+  assertNeverBareWall(turns, queries);
+  assert.match(turns[0].answer, /^noted — remembered: store module is fragile/);
+  for (let i = 1; i < turns.length; i += 1) {
+    assert.match(turns[i].answer, /^yes — you told me: store module is fragile/, `turn ${i} ("${queries[i]}") should read the fact back despite the leading hedge`);
+  }
+});
+
+test("tier5/long conversation: a taught fact survives many unrelated real graph turns with zero decay (compat, already flowed)", async () => {
+  const queries = [
+    "remember that the logger module is deprecated",
+    "what calls saveStore",
+    "which classes inherit from Record",
+    "what calls TaskController",
+    "where is Task defined",
+    "how many classes are there",
+    "what do you know about the logger",
+    "is the logger deprecated",
+  ];
+  const turns = await driveSession(queries);
+  assertNeverBareWall(turns, queries);
+  assert.match(turns[0].answer, /^noted — remembered: logger module is deprecated/);
+  assert.match(turns[1].answer, /createTask/);
+  assert.match(turns[5].answer, /^\d+ classes?\./);
+  assert.match(turns[6].answer, /1 remembered fact about the logger:\n\s+you told me: logger module is deprecated/);
+  assert.match(turns[7].answer, /^yes — you told me: logger module is deprecated/);
+});
+
+test("tier5/genuine ceiling (not fixed): a general-verb teach with a multi-word subject declines honestly, never a bare wall", async () => {
+  const turns = await driveSession(["remember that the checkout module handles payments"]);
+  assertNeverBareWall(turns, ["remember that the checkout module handles payments"]);
+  // an honest, guiding decline (never silence) — not a perfectly tailored
+  // diagnosis of the real cause (generalVerbTeach's deliberate single-token
+  // subject restriction), but a real decline all the same.
+  assert.match(turns[0].answer, /^I couldn't store that —/);
 });

@@ -3221,6 +3221,18 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
   let normFactTerm;
   try { ({ normFactTerm } = await import("./memory/core.mjs")); } catch { return null; }
   const q = String(query).trim();
+  // Tier-5 playtest fix (cycle 4), found live: "actually is the store module
+  // fragile" WALLED — a leading hedge adverb ("actually"/"really"/"honestly",
+  // optionally comma'd) put the sentence one word out of alignment with
+  // IS_ADJECTIVE_YESNO_RE/OWNS_YESNO_RE/OWNS_PASSIVE_YESNO_RE's own anchored
+  // "is|are|was|were|does|did" openers — this session's own three new yes/no
+  // readers, so scoped narrowly to just them (qHedge), not the older
+  // ISA_ASK_RE/WHO_OWNS_RE paths above, which already work without it and
+  // don't need the extra risk of a behavior change. Full leading-connective
+  // tolerance (and/also/so/…) is STACCATO_LEAKED_CONNECTIVES' own separate,
+  // broader territory elsewhere in this file — this is a narrower, adjacent
+  // closed set (hedge adverbs, not coordinators).
+  const qHedge = q.replace(/^(?:actually|really|honestly)\s*,?\s+/i, "");
   const rows = await factRows(memoryDir);
   if (!rows.length) {
     // Tier-5 playtest fix (cycle 2), found live: with TRULY zero facts
@@ -3244,8 +3256,8 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
     // matches take the SAME priority here they get in the non-empty-rows
     // path below, and a leading "there" is existential, never a real named
     // subject a property claim would name.
-    if (!ISA_ASK_RE.test(q)) {
-      const emptyIsAdj = q.match(IS_ADJECTIVE_YESNO_RE);
+    if (!ISA_ASK_RE.test(qHedge)) {
+      const emptyIsAdj = qHedge.match(IS_ADJECTIVE_YESNO_RE);
       if (emptyIsAdj) {
         const rawSubject = emptyIsAdj[1].trim();
         const subject = IS_ADJECTIVE_PRONOUN_RE.test(rawSubject) ? (focusLabel || null) : rawSubject;
@@ -3373,7 +3385,7 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
   // general-verb yes/no just below: a hit answers "yes", no stored fact
   // answers a definite "no" (never a guessed owner name, unlike the OPEN "who
   // owns" form above, which stays an honest miss rather than guess WHO).
-  const ownsYN = q.match(OWNS_YESNO_RE);
+  const ownsYN = qHedge.match(OWNS_YESNO_RE);
   if (ownsYN) {
     const [, ownerRaw, thingRaw] = ownsYN;
     const ownerVariants = factTermVariants(normFactTerm, ownerRaw.trim());
@@ -3396,7 +3408,7 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
   // Checked BEFORE (a2c)'s adjective reader, which would otherwise also match
   // this shape (backtracking "owned by" into its subject and the owner name
   // into its adjective slot) and silently decline instead of answering.
-  const ownsPassiveYN = q.match(OWNS_PASSIVE_YESNO_RE);
+  const ownsPassiveYN = qHedge.match(OWNS_PASSIVE_YESNO_RE);
   if (ownsPassiveYN) {
     const [, thingRaw, ownerRaw] = ownsPassiveYN;
     const thingVariants = factTermVariants(normFactTerm, thingRaw.replace(/^an?\s+/i, "").trim());
@@ -3422,7 +3434,7 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
   // data-property word — the ACE grammar's own tmct:<adjective> "true" triple.
   // "it"/"this"/"that" resolve against `focusLabel` — a bare pronoun with no
   // standing focus declines (null), same discipline STACCATO_PRONOUN_RE uses.
-  const isAdj = q.match(IS_ADJECTIVE_YESNO_RE);
+  const isAdj = qHedge.match(IS_ADJECTIVE_YESNO_RE);
   if (isAdj) {
     const rawSubject = isAdj[1].trim();
     const subject = IS_ADJECTIVE_PRONOUN_RE.test(rawSubject) ? (focusLabel || null) : rawSubject;
