@@ -12,87 +12,103 @@ mapped into them (item numbers retained for traceability); the seven sketches
 formerly held in `code-talker-ideas.txt` are folded into items 8–11 below and
 the file has been deleted.
 
-## Where we are now (2026-07-08)
+## Where we are now (2026-07-09)
 
-`npm test` green (**1055**). **v0.9.6, pushed** (0.8.2 → 0.9.6 across this session — see
-`HANDOVER.md` for the exact release chain).
-
-### Doing right now (5 background clusters, all worktree-isolated, merged sequentially as each lands)
-
-- **Cluster A** — Bug 6 (scoped-listing false-empty) + Bug 7 (modal-in-fuzzy-cascade) + the
-  chat-feel residual pair (items 1-2 of the trio's siblings) + `edgesOfKind` memoization +
-  ontology numeric-vocabulary declaration.
-- **Cluster B** — Bug 8 (goal-reasoner confident-wrong on off-domain requests) + refreshing
-  `PLAN_CAPABILITY_ROUTER.md`'s stale stage-5 status text.
-- **Cluster C** — `PLAN_CHAT_FEEL.md` item 6, the pronoun/temporal/discourse-count trio
-  (measured red sets from an earlier advisor tick; re-measured against the current graded pool
-  before any fix).
-- ~~**Cluster D** — `PLAN_CODE.md` Track 1~~ **shipped** (see "Now" below). Tracks 2-4 remain
-  unsigned-off and untouched.
-- **Cluster E** — `PLAN_INFERENCE_TESTING.md` Stage 1 (`cax-sco` rule) + Stage 2 (proof-chain
-  receipts) in `src/syllogise.mjs`, targeting the measured chat-A2 50% ceiling.
-
-Also in flight: playtest sprint rounds 4-8 (3/3 rounds so far shipped a real fix), the strategy
-advisor (restarted, 5-min re-arm).
+`npm test` green (**1245**). **v1.0.7, pushed** (0.9.11 → 1.0.0 → 1.0.7 across this session —
+see `HANDOVER.md` for the exact release chain and file:line detail).
 
 ### Now: shipped this session
 
-- **5 bugs fixed.** Recall half-match replay + staple-onto-wall; 4 wall-kindness gaps (orientation
-  blurb repeat, "thanks, `<clause>`" walls, a reexports vocabulary leak, `/describe` not surfacing
-  taught facts); grain-aware entity resolution (fixes the fuzzy-entity false-empty and a
-  function/module coverage contradiction); module-grain overview gap. Full list in `HANDOVER.md`.
-- **A new feature: predicate-based "find" queries.** "find me the payment class" now works:
-  type-filtered, fuzzy property-surface matching, with a narrow-then-broaden inheritance-aware
-  cascade and a boolean-fold generalization for compositional predicate queries. Design:
-  `archive/PLAN_PREDICATE_QUERIES.md`.
-- **Two research tracks landed as code.** The ontology plan's two inert synonym resources
-  (ConceptNet synonym/similar-to rows, phrasebook synonym families) are now wired into query-time
-  matching, and the disjointness premise set plus numeric vocabulary grew
-  (`PLAN_ontology-hierarchies.md`). The advanced-grammar plan's closed-frame subordination and
-  conditional support, plus presupposition honest-nudges, landed (`PLAN_ADVANCED_GRAMMAR.md`); the
-  graded pool grew 925 to 1075 cases across 6 new construction families (`chatbench/GRADED.md`).
-- **A new benchmark: infbench.** A 6-band classical-logic ladder (INF-A1..C2), mechanically
-  generated, first baseline in `INFBENCH_0.8.2.md`. Kernel A1/A2 clean; chat A1 100%, A2 exactly
-  50% (the cax-sco gap, now measured). The ladder gates at B1 (33%) because the disjointness proof
-  rule doesn't exist yet.
-- **A new demo** (`demo/agentic-loop-demo.mjs`) shows the zero-LLM deduce-plan-execute-compose loop
-  end to end, and surfaced a real goal-reasoner honesty gap (Bug 8, below).
-- **A session-loop fix.** A throwing turn no longer aborts a piped/non-interactive session.
-- **4 new plan docs.** `PLAN_ontology-hierarchies.md`, `PLAN_INFERENCE_TESTING.md` (revised so
-  infbench generation is mechanical, not hand-authored), `archive/PLAN_PREDICATE_QUERIES.md`, and
-  `PLAN_CODE.md` (new, program synthesis over tmct's closed DSLs, gated on explicit operator
-  sign-off per track — Track 1 signed off, see "Doing" above).
-- **`PLAN_TMCT_ECOSYSTEM_INTEGRATION.md`**, landed — a code-grounded tmct/bedrock-meter/marginalia
-  integration plan. Corrects a standing wrong assumption (the `/v1/messages` shim was believed
-  unmerged; it's been on `main` since 0.8.0) and confirms seonix has already fully migrated onto
-  tmct as a real dependency.
-- **A `/narrate` debug mode.** Opt-in (`/narrate on`, `--narrate`, `TMCT_NARRATE=1`) per-turn
-  decision narrative — which lane/pattern matched, results + sources, a deterministic goal
-  deduction — built for playtest-sprint debugging; zero cost when off (byte-identical regression
-  guard).
+- **1.0.0 — the first-run chat experience, rewritten.** The original trigger: a brand-new
+  `npm install` + bare `tmct chat` led with a "no code graph loaded" apology for *any* input,
+  including plain greetings and identity questions, even though the seeded ontology/lexicon
+  could already answer them. Root-caused to a 0.6.0-era design that over-applied its own honest
+  empty-graph orientation. Fixed: identity/capability-led responses (`I'm tmct — ...` before any
+  caveat), a real self-description + a distinct "no LLM involved" answer for the identity/AI-ID
+  family, provably-correct "try this" examples (a `vocabExampleHint` that only ever offers a term
+  confirmed to resolve in the session's actual seed state — the prior hint could silently lie
+  under `TMCT_NO_SEED=1`), and substantially broadened conversational recognition (dialect,
+  register, slang, elongation, a bounded-fuzzy-match typo layer) — all via curated closed-set
+  additions, not a generalized grammar rule, per the project's standing preference.
+- **The `SKILL_CHAT_PLAYTEST.md` dialogue-flow loop, run for real across 5 tiers.** Tier 0
+  (bootstrap/identity), Tier 1 (single touch + one drill-down), Tier 2 (drill-down chains with
+  anaphora), and Tier 4 (compositional & comparative) each closed in one pass; **Tier 3
+  (cross-concept & relation touches) took 7 passes** — cycles 3-9 progressively found and fixed a
+  recurring `resolveObject` substring-match weakness (a missing minimum-length floor let short
+  staccato connectives like "and"/"it" silently hijack the conversation's focus, producing
+  confidently WRONG answers on a *later* turn while looking honest) — patched three times
+  point-by-point before cycle 9 found and fixed the actual root cause in one place. Tier 5/6 not
+  yet started. The skill doc itself gained two new rules from real incidents this run: always
+  `mktemp -d` + exact-path cleanup for scratch fixtures (a wildcard `rm -rf /tmp/pt-*` cleanup
+  step got flagged by the harness's own safety policy — no damage, but a real cross-agent risk),
+  and never `chat --repo` the committed example fixture directly (dirties a checked-in file).
+- **A live, client-side chat demo on the GitLab Pages homepage.** Not a scripted/pre-recorded
+  fake — the real `src/ask.mjs` query engine runs in the visitor's browser (wink-nlp loaded from
+  `esm.sh`, an import-map shim working around 3 leaf files' Node-only static imports, zero
+  changes needed to the engine itself since it was already browser-clean pure JS). Boots with a
+  banner, replays a few real pre-verified Q&A turns as "history", asks one randomized (or
+  `?q=`-primed) question live, and — as of this session's last addition — has a genuine
+  interactive input box so a visitor can type their own questions and get real computed answers.
+  `?compact=1` for a minimal primed-link view; `window.tmctAnswer`/`tmctAsk`/`tmctParseEntities`
+  exposed for headless/Playwright consumers (curl/jq can never see it — no backend on GitLab
+  Pages, JS never executes for a plain HTTP client — documented plainly, not oversold).
+- **Operator-found bugs, fixed as they were found by hand-testing the shipped CLI**: relation-
+  specific vocabulary filtering ("what is a tree used for" was dumping every known relation
+  instead of filtering to UsedFor); a teach-lane "did you mean" suggestion that could echo back
+  the user's own input byte-identical (a missing a/an agreement check); out-of-domain small talk
+  ("what time is it") hitting the raw grammar wall instead of an honest nudge; a pronoun-subject
+  teach-lane gap that could silently store a bogus fact ("he is a module"); a closed-set
+  existence-question recognizer ("is there a class called X anywhere" was silently mis-answering
+  a *different* question — a relationship check — as if it were a verified existence negative);
+  "what else is X" repeating the primary definition verbatim instead of surfacing more; bare
+  "what is X" (no article) having no fact-lookup route at all, including for a fact the user had
+  *just* taught; and general verb-to-predicate teaching ("remember margo eats ribs" mints its own
+  predicate now, not just the closed is/has/are set — "has a" interoperates with the existing
+  ConceptNet-sourced `mgx:hasA` data).
+- **New-term teaching + quantifiers.** "redis is a cache" (a genuinely new term, not previously
+  in the closed ACE lexicon) is now teachable via a write-side-only fix — the read path already
+  worked generically over any subject string, including the existing 2-hop transitive `IsA` proof
+  chase. Plus four new phrasings ("some/a few Xs are Ys", "your X is a Y", bare "X is Y" as a
+  property assertion) and a stored-quantifier recall ("how many Xs are Ys" → "A few.").
+- **An always-on, short "Goal (inferred): ..." line** on every real structural/vocabulary answer
+  — distinct from the pre-existing opt-in `/narrate` full-trace mode, which stays as the deeper
+  debug tool. Two correctness bugs in the goal-deduction hook itself got fixed along the way
+  (a confidently wrong goal shown on failed teach attempts; a missing goal on relation-force
+  answers that resolve via a different path than the normal parse).
+- **Seonix's 17-round dogfooding backlog, triaged and Batch 1 shipped.** A sibling project
+  (seonix, consuming tmct as a real dependency) ran extensive dogfooding against both a synthetic
+  self-index and a real 27,929-module production estate, relaying findings via the inter-session
+  inbox. Triaged into 5 priority batches (4 items were already fixed by intervening work); Batch 1
+  (existence-query correctness) shipped. Batches 2-5 queued — see "Next" below.
+- **The version-bump policy, set then revised.** Tried "bump immediately after every push, hold
+  locally until the next batch" (to keep the published npm version always matching the last
+  pushed commit); reverted after it produced confusing "referencing a version that doesn't exist
+  yet" noise mid-session. Current policy: bump only at the moment of actually pushing, as part of
+  that same push. Recorded in `CLAUDE.md`.
 
 ### Next: the open follow-ups
 
-In priority order (full detail and measured targets in `HANDOVER.md`):
-
-1. **Bug 8 — FIXED.** A global-mode domain gate now requires the request itself (not just the
-   caller's declared toolset) to parse as a query about the deduced goal's domain, reusing
-   `ask.mjs`'s own grammar. Zero-hallucination baseline unchanged; independently re-verified.
-2. **Bug 6.** Scoped listing false-empty: "list modules in `<pkg>`" returns empty though the
-   unscoped lister shows matches. Found dogfooding a 191k-entity monorepo graph.
-3. **Bug 7.** A modal auxiliary ("should") survives the fuzzy-correction cascade and misreads as
-   "hold". The diagnosed fix is adding modals to `STOPWORDS`.
-4. ~~`PLAN_TMCT_ECOSYSTEM_INTEGRATION.md`~~ **shipped** — see "Now" above.
-5. ~~`PLAN_CODE.md` Track 1 sign-off~~ **signed off and shipped** — see "Now" above.
-6. **Still open**: the function-grain forward-shape gap (Bug C+D's grain resolution doesn't
-   cover the "forward" traversal shape), 8 remaining temporal red ids (each a distinct small
-   grammar gap), the un-flagged `C1:presupposition`/`C2:garden-path` regression, the
-   `edgesOfKind` by-subject/by-object endpoint indices (memoization itself is done). Full
-   detail in `HANDOVER.md`.
-7. **`SKILL_PLAYTEST_SPRINT.md`, in progress.** A capped, delegated, chained playtest loop (each
-   round a background chat session against `examples/mini-webapp`, appraised and fixed+shipped
-   live). Rounds 1-3 shipped 3 real fixes (0.9.3-0.9.5); cap raised from 3 to 8 rounds mid-run;
-   continuing.
+1. **Tier 5 (teach + recall + reasoning in dialogue) and Tier 6 (the messy real user)** — the
+   remaining two rungs of the dialogue-flow ladder, not yet run. Tier 5's territory substantially
+   overlaps functionality shipped this session (new-term teaching, quantifier recall) but hasn't
+   been run through the playtest loop's own dead-end-hunting discipline yet.
+2. **Seonix Batches 2-5** (full detail relayed via the inbox, triage summary in this session's
+   history): Batch 2 — "what is X" vs "what is a X" grammar-level minimal pair (the chat-layer
+   fact-lookup side is now fixed; the underlying `grammar.mjs` T5 template still requires the
+   article, left alone deliberately pending a closer look at why), a missing reverse-direction
+   "is X a superclass of Y" verb entry, "what is a `<noun phrase>`" swallowing the whole phrase
+   instead of extracting the head noun. Batch 3 — recurring wall patterns (purpose/identity
+   "whats X for/about", temporal qualifiers on Commit queries, onboarding/closing questions read
+   as literal search strings). Batch 4/5 — lower-priority, including a cross-graph disambiguation-
+   candidate-ranking weakness seonix evidenced 5 times independently but that doesn't reproduce on
+   tmct's own small fixture graph (needs a larger graph to chase).
+3. **General verb-to-predicate teaching's natural follow-up**: dedicated direct-question
+   recognition ("does margo eat ribs", "what does margo eat") — this session's work covers
+   teaching + generic retrieval, not verb-specific query phrasings.
+4. **The Tier-4 "of X" membership gap**: "public methods of TaskController" returns a genuine,
+   receipted empty because the class declares no methods of its own (they're inherited) —
+   extending membership queries to walk inheritance is a bigger structural change than a routing
+   fix, deliberately deferred.
 
 ### Later: deferred by design, staged inside each plan
 
@@ -111,6 +127,18 @@ their tables.
   on its own operator sign-off.
 
 ### History — what shipped in earlier releases
+
+**v0.9.12 → v1.0.7** (this session — the first-run UX rewrite + the 5-tier playtest sweep +
+the live browser demo): see "Where we are now" above for the full narrative; short form —
+1.0.0 shipped the identity/capability-led onboarding rewrite; 1.0.1-1.0.7 shipped, in order, the
+redis/new-term teaching + quantifier phrasings, the always-on Goal-inference line, a teach-lane
+pronoun-subject guard, three operator-found bugs (used-for filtering, teach-suggestion echo,
+out-of-domain small talk), Tier-0/1/2 playtest passes, Tier-3's 7-pass convergence (ending in a
+root-cause fix for the recurring substring-match focus-corruption bug), the diagnosed Tier-4
+compositional-fold fix, the live in-browser chat demo, Seonix Batch 1 (existence-query
+correctness), Tier 4's own playtest pass, and a final bundle ("what else is X", bare "what is X",
+general verb-to-predicate teaching). `npm test` 1055 → 1245 across the session, every commit
+green. Full commit-level detail in `HANDOVER.md`.
 
 **v0.8.2** (the chat-feel wave + rule-general C2): tier-1 CHATBENCH 334/334 (draw A) + 285/285
 (draw B), zero regressions; the cycle-1 hard-fail `gq-functions-call-fnalpha` flipped green.
