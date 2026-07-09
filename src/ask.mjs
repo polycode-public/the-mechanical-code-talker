@@ -320,6 +320,7 @@ function parseComposite(text, nlp) {
   const w = splitWords(text);
   const lc = w.map((x) => x.toLowerCase());
   return parseExistence(w, lc)
+    || parseQualifierCheck(w, lc)
     || parseNegation(text, nlp, 0)
     || parseForwardNegation(w, lc, nlp)
     || parseTemporal(w, lc, nlp, 0)
@@ -653,6 +654,43 @@ function parseExistence(w, lc) {
 
   return null; // a relative clause / verb phrase / anything else — genuinely a
                // different (relationship) question; leave it for the parsers below.
+}
+
+/** QUALIFIER-CHECK: "is <term> [a/an] <qualifier> [<kind>]?", "is <term> not
+ *  <qualifier> …" — a single-ENTITY Yes/No property check ("is Task.title
+ *  public", "is it exported", "is that class abstract"), reusing the SAME
+ *  closed QUALIFIERS vocabulary and qualHolds() evaluator the attributive/
+ *  predicative-survey filters already fold over a SET ("public methods",
+ *  "which methods are public") — this is the missing single-entity sibling
+ *  (0.9.15 Tier-1 single-touch playtest: "is it a public attribute?", a
+ *  natural follow-up to a concept-force touch, had no recognizer at all and
+ *  hit the bare grammar wall — even "is Task.title public", a concretely
+ *  NAMED entity with no anaphora involved, walled the same way). Scoped
+ *  tight: a leading "is"/"are", then TERM tokens up to the FIRST recognized
+ *  qualifier word — a leading "the" and a trailing "a"/"an" article around
+ *  the boundary are dropped, and a trailing decorative kind noun ("… public
+ *  ATTRIBUTE") is simply never consumed, never required to agree with the
+ *  resolved entity's real class. Guarded off "is/are THERE …" (parseExistence
+ *  above owns that shape) and off any text with no qualifier word at all, so
+ *  it can never swallow a genuine relationship/existence question. The term
+ *  is resolved at EVAL time (a pronoun binds through the standing contextId,
+ *  exactly like every other object term), never here. */
+function parseQualifierCheck(w, lc) {
+  if (lc[0] !== "is" && lc[0] !== "are") return null;
+  if (lc[1] === "there") return null; // parseExistence's own shape
+  let qualIdx = -1;
+  let negated = false;
+  for (let i = 1; i < lc.length; i += 1) {
+    if (QUALIFIERS[lc[i]]) { qualIdx = i; negated = lc[i - 1] === "not"; break; }
+  }
+  if (qualIdx < 0) return null; // no qualifier word at all → not this shape
+  let termStart = 1;
+  if (lc[termStart] === "the") termStart += 1;
+  let termEnd = negated ? qualIdx - 1 : qualIdx;
+  if (termEnd > termStart && (lc[termEnd - 1] === "a" || lc[termEnd - 1] === "an")) termEnd -= 1;
+  const term = termEnd > termStart ? w.slice(termStart, termEnd).join(" ").trim() : "";
+  if (!term) return { node: "miss", reason: `"is/are <qualifier>" needs a named thing to check first` };
+  return { node: "qualCheck", term, qualifier: lc[qualIdx], negated };
 }
 
 /** Trailing "and that's the whole question" filler an aggregate/list tail can carry
@@ -1598,11 +1636,29 @@ function evalExists(graph, ast) {
   return { compositeKind: "exists", entityType, term: null, scopeModule, scopeMatch, matches: pool };
 }
 
+/** QUALIFIER-CHECK eval — resolve the term (a context pronoun binds through
+ *  contextId, exactly like resolveTermOrContext's every other caller), then
+ *  read the SAME qualHolds() predicate the set-filter path already uses.
+ *  `holds` here means "the STATEMENT AS ASKED is true" (negation already
+ *  folded in), so the renderer can answer Yes/No directly off it without
+ *  re-deriving the negation. An unresolved term is an honest miss, never a
+ *  guess — no different from any other named-object lookup. */
+function evalQualCheck(graph, ast, opts) {
+  const { term, qualifier, negated } = ast;
+  const r = resolveTermOrContext(graph, term, opts.contextId);
+  if (r.unresolvedPronoun) return { compositeKind: "qualCheck", qualCheckMiss: "pronoun", term, matches: [] };
+  if (!r.match) return { compositeKind: "qualCheck", qualCheckMiss: "unresolved", term, matches: [] };
+  const rawHolds = qualHolds(graph, r.match, QUALIFIERS[qualifier]);
+  const holds = negated ? !rawHolds : rawHolds;
+  return { compositeKind: "qualCheck", subject: r.match, qualifier, negated, holds, matches: [r.match] };
+}
+
 /** Compile any compositional AST to a result object traverse() returns for the
  *  simple path — {matches, …} plus compositeKind/compositeMiss flags render() reads. */
 export function evalComposite(graph, ast, opts = {}) {
   if (ast.node === "miss") return { compositeMiss: true, reason: ast.reason || null, matches: [] };
   if (ast.node === "exists") return evalExists(graph, ast);
+  if (ast.node === "qualCheck") return evalQualCheck(graph, ast, opts);
   if (ast.node === "count") return { compositeKind: "count", count: evalSet(graph, ast.base, opts).length, entityType: ast.entityType, matches: [] };
   if (ast.node === "list") return { compositeKind: "list", matches: evalSet(graph, ast.base, opts), entityType: ast.entityType, scoped: ast.scoped };
   if (ast.node === "superlative") return evalSuperlative(graph, ast);
@@ -1675,6 +1731,27 @@ function renderComposite(parsed, result) {
       return { content: `No — no ${kindPlural} found${scopeSuffix}.`, miss: true, ambiguous: false };
     }
     return { content: `Yes — ${compositeList(result.matches)}${scopeSuffix}.`, miss: false, ambiguous: false, matches: result.matches };
+  }
+  // qualCheck: "is <term> [a/an] <qualifier> […]" — the single-entity sibling of
+  // "is there a/an <kind> …" above: a direct Yes/No over one already-named/-
+  // focused individual, never a set listing. `result.holds` already has the
+  // negation folded in (evalQualCheck), so the renderer states the actual truth
+  // plainly — "No — X is tested." for "is X not tested" when X IS tested, never
+  // an echo of the (now-false) question's own wording.
+  if (result.compositeKind === "qualCheck") {
+    if (result.qualCheckMiss === "pronoun") {
+      return { content: `"${result.term}" needs a selected node to refer to — click a node first, or name it directly.`, miss: true, ambiguous: false };
+    }
+    if (result.qualCheckMiss === "unresolved") {
+      return { content: `couldn't find "${result.term}" in the index to check.`, miss: true, ambiguous: false };
+    }
+    const label = result.subject.label;
+    const truePhrase = result.negated ? `not ${result.qualifier}` : result.qualifier;
+    const falsePhrase = result.negated ? result.qualifier : `not ${result.qualifier}`;
+    return {
+      content: `${result.holds ? "Yes" : "No"} — ${label} is ${result.holds ? truePhrase : falsePhrase}.`,
+      miss: false, ambiguous: false, matches: result.matches,
+    };
   }
   if (result.compositeKind === "count") {
     const noun = result.entityType ? nounFor(result.entityType, result.count) : (result.count === 1 ? "result" : "results");
