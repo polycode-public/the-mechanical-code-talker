@@ -26,6 +26,33 @@ yet"). `npm test` now **1345** passing. Not pushed; version still 1.0.9 locally,
 full tier ladder (0-6) is now complete.** See "The dialogue-flow playtest loop" section's Tier 6
 entry and "Open follow-ups" item 1, both updated in place below.*
 
+*Compound-name resolution addendum (2026-07-09, a follow-on dispatch): `resolveObject`
+(`src/ask.mjs`) now bridges a natural-language query whose words are space-separated
+("payment system", "the payment system") to a graph symbol/path that encodes the SAME concept as
+one joined token in some OTHER naming convention — PascalCase (`PaymentSystem`), kebab-case
+(`payment-system`), embedded as a substring within a longer compound path
+(`westfield-payment-system/src/MyCode.cs`), or embedded within an interface-style file name
+(`IPaymentSystemImpl.cs`). Same shape as the two basename tiers already in tier 3 (`9dde2b3`'s
+exact/prefix/suffix stem tier, `6e2d96b`'s derivational-stem bridge): a query with 2+
+space-separated words is compared, article-stripped and separator-stripped, against each
+candidate's own joined (separator-stripped) label — an exact joined match scores level with the
+single-word exact-stem tier (5000); a joined-substring CONTAINS match scores below every
+single-word tier but above raw component-overlap, and is gated on the candidate label actually
+carrying an explicit separator (path slash, hyphen, underscore, or file extension) so a
+pure-camelCase identifier with none of those (e.g. `calculateTotalPrice`) is left untouched and
+still falls through to tier 4's prose/decomposed-identifier fallback exactly as before (a frozen
+tier-4 test — "total price" → `calculateTotalPrice` — is the regression this gate specifically
+protects). A mashed-together typo ("paymntsystem") needed no new code: it already resolves
+uniquely via the existing tier-5 bounded-fuzzy pass once a clean (separator-free) candidate exists
+in the pool. New `test/ask-compound-resolve.test.mjs` (7 cases, a small in-memory fixture built
+through `buildEntities()`/`ingestSchemaDocs()`/`parseEntities()` — the same pattern
+`ask.test.mjs`'s own `buildGraph()` helper uses, not a new real-source-file fixture) locks in all
+of: unique PascalCase resolution, the kebab-case module surfacing as a candidate, containment
+into a longer compound path, containment into an interface-style name, the typo case via tier 5,
+a genuine tie between two equally-scored compound entities (`ambiguous: true`), and a negative
+case. `npm test` now **1352** passing (was 1345). Not pushed; version still 1.0.9 locally,
+unchanged.*
+
 ### The trigger and the fix: 0.9.12 → 1.0.0
 
 Operator ran a real `npm install` + bare `tmct chat` in a fresh directory and got an apology for

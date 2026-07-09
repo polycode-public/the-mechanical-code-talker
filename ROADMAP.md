@@ -14,7 +14,7 @@ the file has been deleted.
 
 ## Where we are now (2026-07-09)
 
-`npm test` green (**1345**, up from 1258). **v1.0.7, pushed** (0.9.11 → 1.0.0 → 1.0.7 across an
+`npm test` green (**1352**, up from 1258). **v1.0.7, pushed** (0.9.11 → 1.0.0 → 1.0.7 across an
 earlier session — see `HANDOVER.md` for the exact release chain and file:line detail); not pushed
 again since (version stays at 1.0.9 locally, per the operator's own bump-at-push-time policy).
 
@@ -72,6 +72,19 @@ for full per-cycle detail.
   `drive()`/`driveSession()` implementations. Full detail: `HANDOVER.md`'s "Test-suite health
   pass" entry. `npm test` stayed green throughout (**1335** at the end, moved by the concurrent
   Tier 6 dispatch's own commits during this run).
+- **Compound-name resolution (operator's own worked example): "the payment system" now finds
+  `PaymentSystem`/`payment-system`/a compound path like `westfield-payment-system/src/MyCode.cs`/
+  an interface-style name like `IPaymentSystemImpl.cs`.** `resolveObject` (`src/ask.mjs`) gained a
+  multi-word compound-term tier, the same shape as the existing single-word basename-exact/
+  prefix-suffix (`9dde2b3`) and derivational-stem (`6e2d96b`) tiers: a 2+-space-word query is
+  compared, article- and separator-stripped, against each candidate's own joined form — exact
+  match scores level with the single-word exact-stem tier, containment scores below every
+  single-word tier but above raw overlap, gated to require an explicit separator in the candidate
+  label so a pure-camelCase identifier is left to tier 4's prose fallback unaffected (protects a
+  frozen "total price" → `calculateTotalPrice` tier-4 test). A mashed-together typo
+  ("paymntsystem") needed no new code — it already resolves via the existing tier-5 fuzzy pass.
+  New `test/ask-compound-resolve.test.mjs` (7 cases). **1345 → 1352.** Full detail: `HANDOVER.md`'s
+  "Compound-name resolution addendum" entry.
 
 ### Now: shipped this session
 

@@ -2146,6 +2146,37 @@ function derivationalStem(w) {
     : stripped;
 }
 
+/** Strip EXPLICIT separator characters only (path slashes, hyphens, underscores, a
+ *  trailing file extension) — never camelCase boundaries — so a candidate's own
+ *  label/path collapses to the same joined lowercase token a naming-convention-blind
+ *  user would type: "PaymentSystem" -> "paymentsystem", "payment-system" ->
+ *  "paymentsystem", "westfield-payment-system/src/MyCode.cs" ->
+ *  "westfieldpaymentsystemsrcmycode", "IPaymentSystemImpl.cs" -> "ipaymentsystemimpl".
+ *  Used by the compound-term tier just below (multi-word query bridge, 2026-07-09
+ *  compound-name fix, item: "match symbols where the question breaks a symbol into
+ *  2 words"). The extension strip is deliberately the SAME single-trailing-
+ *  extension regex tier 3's own `stem` computation already uses elsewhere in this
+ *  file — not reinvented. */
+function joinedForm(label) {
+  return String(label || "")
+    .replace(/\.[a-z0-9]+$/i, "")
+    .toLowerCase()
+    .replace(/[/\-_.]+/g, "");
+}
+
+/** Same joined-token normalization as joinedForm(), applied to the QUERY side of a
+ *  multi-word term: a leading article is stripped first (mirrors LEADING_ARTICLE_RE
+ *  below — "the payment system" and "payment system" must produce the identical
+ *  joined form), then whitespace/hyphens/underscores between words collapse out —
+ *  "the payment system" -> "payment system" -> "paymentsystem". */
+function joinedQueryForm(term) {
+  return String(term || "")
+    .trim()
+    .replace(/^(?:the|a|an)\s+/i, "")
+    .toLowerCase()
+    .replace(/[\s\-_]+/g, "");
+}
+
 /** Resolve a free-text object/subject term against the graph's individuals, in priority
  *  order (§4, generalized beyond the module-coupling worked example to cover every verb
  *  family's object grain — `inherits`/`calls` resolve against Class/Function names, not
@@ -2296,6 +2327,20 @@ function resolveObjectCore(graph, term, { expectedClass = null } = {}) {
     // no-op for those (unaffected — original ANY-overlap behavior).
     const pathToken = tLc.split(/\s+/).find((tok) => tok.includes("/"));
     const slashStem = pathToken ? pathToken.split("/").pop().replace(/\.[a-z0-9]+$/, "") : null;
+    // Compound-term bridge (2026-07-09, "match symbols where the question breaks a
+    // symbol into 2 [words]"): a query with 2+ SPACE-SEPARATED words ("payment
+    // system", "the payment system") has no separator of its own to compare against
+    // a label's literal spelling — the tiers above/below all compare tLc verbatim,
+    // so "payment system" never equals/contains/overlaps "PaymentSystem" or
+    // "payment-system" by those checks even though a human reads them as the same
+    // concept. Computed ONCE per query (article-stripped, space-collapsed — see
+    // joinedQueryForm) and checked per-candidate below via each candidate's OWN
+    // joinedForm(). Single-word queries are unaffected: isMultiWord is false, the
+    // branch below never fires, and they resolve exactly as before through the
+    // tiers already in this loop.
+    const qWords = t.trim().replace(/^(?:the|a|an)\s+/i, "").trim().split(/\s+/).filter(Boolean);
+    const isMultiWord = qWords.length >= 2;
+    const qJoined = isMultiWord ? joinedQueryForm(t) : null;
     for (const m of pool) {
       const label = String(m.label || "").toLowerCase();
       // Basename-exact/prefix/suffix tier (large-scale-fixture bug, 2026-07-09): a bare
@@ -2318,6 +2363,43 @@ function resolveObjectCore(graph, term, { expectedClass = null } = {}) {
       if (tLc.length >= 4 && (stem.startsWith(tLc) || stem.endsWith(tLc))) {
         scored.push({ ind: m, score: 4000 - Math.abs(stem.length - tLc.length) });
         continue;
+      }
+      // Compound-term bridge (2026-07-09): the multi-word analog of the exact/
+      // prefix-suffix tier just above — a query that breaks a single joined symbol
+      // into 2+ words ("payment system") is compared against the candidate's OWN
+      // joined form (separators stripped, camelCase left alone), not its literal
+      // spelling. An exact joined match ("payment system" == "PaymentSystem"'s
+      // "paymentsystem") is scored the SAME as the single-word exact-stem tier
+      // above (5000) — it is equally strong evidence, just phrased with spaces.
+      // A CONTAINMENT match ("payment system" found inside "westfield-payment-
+      // system"'s or "IPaymentSystemImpl.cs"'s joined form) is scored strictly
+      // BELOW every single-word tier above (a real single-word substring/prefix/
+      // suffix hit is stronger evidence than a multi-word query merely appearing
+      // somewhere in a longer joined string) but ABOVE the raw component-overlap
+      // tier further below (score <= 10). CONTAINMENT is additionally gated on the
+      // candidate label carrying an EXPLICIT separator (path slash, hyphen,
+      // underscore, or a real file extension) — a pure-camelCase label with none
+      // of those (e.g. Function "calculateTotalPrice") is deliberately left to
+      // tier 4's prose/decomposed-identifier fallback below, which already owns
+      // exactly that "query words are a sub-sequence of a compound identifier's
+      // OWN decomposed tokens" territory (frozen test: "total price" ->
+      // calculateTotalPrice must resolve at tier 4 via matchedVia:"prose", not
+      // tier 3) — without this gate, EVERY multi-word query touching prose
+      // territory would be silently reclassified as a tier-3 containment hit and
+      // break that precedent. The EXACT tier just above has no such gate: an
+      // exact joined-form equality is unambiguous evidence regardless of whether
+      // the label happens to use an explicit separator (PascalCase "PaymentSystem"
+      // included) — only the fuzzier CONTAINMENT check needs the extra guard.
+      // Gated on isMultiWord so a single-word query is never affected (it already
+      // resolves via the tiers above/below, unchanged).
+      if (isMultiWord) {
+        const candJoined = joinedForm(m.label);
+        if (candJoined && candJoined === qJoined) { scored.push({ ind: m, score: 5000 }); continue; }
+        const hasExplicitSeparator = /[/_-]/.test(m.label) || /\.[a-z0-9]+$/i.test(String(m.label || ""));
+        if (candJoined && hasExplicitSeparator && qJoined.length >= 4 && candJoined.includes(qJoined)) {
+          scored.push({ ind: m, score: 2000 - Math.abs(candJoined.length - qJoined.length) });
+          continue;
+        }
       }
       // Derivational-suffix basename bridge (item 9 fix, 2026-07-09): a bare term
       // that is a MODULE's own basename one gerund/agent-noun suffix-swap away
