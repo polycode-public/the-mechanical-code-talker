@@ -11,7 +11,7 @@ import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { runTurn, createSession, shortMissHint, moduleCountOf } from "../src/chat.mjs";
+import { runTurn, createSession, shortMissHint, moduleCountOf, WALL_MISS_RE } from "../src/chat.mjs";
 import { parseEntities } from "../src/codegraph.mjs";
 import { loadMemory, FACT_CLASS } from "../src/memory/core.mjs";
 import { clearCache } from "../src/source.mjs";
@@ -29,7 +29,7 @@ const mem = () => mkdtemp(join(tmpdir(), "tmct-ux-"));
 test("#1 shortMissHint: keeps the honest opening, drops the wall, tailors to keywords", () => {
   const wall = /which <functions\|classes\|modules>/;
   const imp = shortMissHint("does the frobnicator import things");
-  assert.match(imp, /^couldn't parse this as a graph question\. Try:/, "graded hm-joke opening preserved");
+  assert.match(imp, WALL_MISS_RE, "graded hm-joke opening preserved");
   assert.match(imp, /Type \/help for all query shapes\.$/);
   assert.doesNotMatch(imp, wall, "the full grammar cheat-sheet is gone");
   assert.match(imp, /import/, "an import-flavoured query gets an import example");
@@ -39,7 +39,7 @@ test("#1 shortMissHint: keeps the honest opening, drops the wall, tailors to key
 
 test("#1 a grammar miss over a POPULATED graph is short, not the wall", async () => {
   const { answer, record } = await runTurn("tell me a joke", { config: CONFIG, graph: await graph() });
-  assert.match(answer, /^couldn't parse this as a graph question\. Try:/);
+  assert.match(answer, WALL_MISS_RE);
   assert.doesNotMatch(answer, /which <functions\|classes\|modules>/);
   assert.doesNotMatch(answer, /compositional queries also work/, "the compositional wall is gone too");
   assert.equal(record.miss, true, "still an honest miss");
@@ -484,7 +484,7 @@ test("#2 guard: ordinary graph queries with import/call keywords stay graph quer
 
 test("membership: 'is a algorithm information' hints the missing article, not the wall", async () => {
   const { answer } = await runTurn("is a algorithm information", { config: CONFIG, graph: await graph() });
-  assert.match(answer, /^couldn't parse this as a graph question\. Try:/);
+  assert.match(answer, WALL_MISS_RE);
   assert.match(answer, /article before the kind/);
   assert.doesNotMatch(answer, /which <functions\|classes\|modules>/);
 });
@@ -671,10 +671,10 @@ test("WS4(a) wall repeat suppression: 2nd consecutive wall is a one-liner, 3rd r
     answers.push(r.answer);
     last = r.last ?? last;
   }
-  assert.match(answers[0], /^couldn't parse this as a graph question\. Try:/, "1st miss: the tailored hint");
+  assert.match(answers[0], WALL_MISS_RE, "1st miss: the tailored hint");
   assert.equal(answers[1], "still couldn't parse that — /help lists every query shape.", "2nd miss: the one-liner");
-  assert.doesNotMatch(answers[1], /^couldn't parse this as a graph question\. Try:/, "the one-liner never matches WALL_MISS_RE");
-  assert.match(answers[2], /^couldn't parse this as a graph question\. Try:/, "3rd miss: the tailored hint re-offered (self-limiting)");
+  assert.doesNotMatch(answers[1], WALL_MISS_RE, "the one-liner never matches WALL_MISS_RE");
+  assert.match(answers[2], WALL_MISS_RE, "3rd miss: the tailored hint re-offered (self-limiting)");
 });
 
 test("WS4(b) orientation examples are LIVE from the loaded graph — and both answer", async () => {
@@ -945,7 +945,7 @@ test("WS4(8) guard: 'tell me a joke' keeps its ordinary honest miss (no imperati
   const g = await graph();
   const r = await runTurn("tell me a joke", { config: CONFIG, graph: g });
   assert.doesNotMatch(r.answer, /I don't write code/, "'tell' is not an imperative-nudge verb");
-  assert.match(r.answer, /^couldn't parse this as a graph question\. Try:/, "the graded hm-joke wording stands");
+  assert.match(r.answer, WALL_MISS_RE, "the graded hm-joke wording stands");
 });
 
 // ---- ADVANCED_GRAMMAR track (f) (PLAN_ADVANCED_GRAMMAR.md §2f): the

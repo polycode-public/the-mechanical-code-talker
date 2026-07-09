@@ -14,7 +14,7 @@ import { PassThrough, Readable } from "node:stream";
 import {
   uuidv7, runTurn, runChat, helpText, COMMANDS, SESSION_LOG_DIR, PROMPT,
   answerCount, renderStats, isConversational,
-  renderVerbose,
+  renderVerbose, WALL_MISS_RE,
 } from "../src/chat.mjs";
 import { dispatchTool } from "../src/server.mjs";
 import { parseEntities } from "../src/codegraph.mjs";
@@ -92,7 +92,7 @@ test("runTurn: a grammar miss gets the SHORT tailored miss (#1), not the full gr
   // parse-miss keeps the honest "couldn't parse … Try:" opening (graded hm-joke pins
   // those words) + at most two RELEVANT example shapes + a /help pointer.
   const { answer, logLines } = await runTurn("tell me a joke", { config: { graphFile: FIXTURE } });
-  assert.match(answer, /^couldn't parse this as a graph question\. Try:/);
+  assert.match(answer, WALL_MISS_RE);
   assert.match(answer, /Type \/help for all query shapes\./);
   assert.doesNotMatch(answer, /which <functions\|classes\|modules>/, "the full grammar wall is gone (it lives behind /help)");
   assert.equal(logLines[2], answer, "the miss text is logged verbatim too");
