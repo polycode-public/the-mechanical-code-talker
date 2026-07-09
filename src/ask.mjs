@@ -2994,10 +2994,22 @@ export function relaxParse(graph, query, { nlp = undefined, contextId = null, pr
   // own as vocabulary/scaffolding? Guards against a relaxation that drops the actual
   // asked term and lets a bare marker slide into its place ("where is [X] defined" →
   // "where is defined", "defined" is a WHERE_MARKER, never the thing being located).
-  const hasRealTerm = (s) => splitWords(String(s || "")).some((w) => {
-    const lc = w.toLowerCase();
-    return !CONTENT_VOCAB.has(lc) && !STRUCTURAL_WORDS.has(lc);
-  });
+  // A bare CONTEXT PRONOUN ("it"/"this"/"that"/"here"/…) is the one exception: it IS
+  // the real, deliberate object here — it resolves through contextId, not through
+  // vocabulary the grammar "already owns" as scaffolding — so it must count as a real
+  // term rather than being mistaken for a dropped-into-place marker. Without this, a
+  // relaxed candidate whose object survived layer 2 as a lone pronoun ("what else is
+  // in that class" → drop "class"/"else" → "what does that contain") was rejected as
+  // if it named nothing at all, even though the pronoun resolves to a real, answerable
+  // focus (0.9.15 Tier-1 single-touch playtest).
+  const hasRealTerm = (s) => {
+    const whole = String(s || "").trim().toLowerCase();
+    if (CONTEXT_PRONOUNS.includes(whole)) return true;
+    return splitWords(whole).some((w) => {
+      const lc = w.toLowerCase();
+      return !CONTENT_VOCAB.has(lc) && !STRUCTURAL_WORDS.has(lc);
+    });
+  };
   // Accept a relaxed attempt ONLY if it is a genuinely answerable parse (terms resolve)
   // AND it renders a REAL positive answer — never another empty/miss (relaxation earns a
   // win only by turning a miss into an answer, never a differently-worded miss) — and

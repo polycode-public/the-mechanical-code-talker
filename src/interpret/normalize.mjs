@@ -44,6 +44,26 @@ const correctionRe = (table) => new RegExp(
 const MISSPELLING_RE = correctionRe(MISSPELLINGS);
 const WRONG_WORD_RE = correctionRe(WRONG_WORDS);
 
+/** "that class"/"this module"/"that function" (a context pronoun immediately
+ *  followed by the SINGULAR kind noun it's already standing in for) -> the bare
+ *  pronoun alone (0.9.15 Tier-1 single-touch playtest). "which class contains
+ *  Task.complete" answers by NAMING the class ("… there is Task"); a curious
+ *  user's very next turn naturally says "what is in that class", not the bare
+ *  "what is in that" the grammar already understands. Left unstripped, the two
+ *  parse strategies disagreed on the SPAN (grammar kept "that class" as one
+ *  literal 2-word object term; keyword-spot split off "class" as an entityType
+ *  keyword, leaving bare "that" as the object) — same PARSE, different shape,
+ *  so merge.mjs's honest {ambiguousParse} tie fired even though a human reads
+ *  this as one unambiguous sentence. Folding the kind noun away BEFORE either
+ *  strategy runs leaves exactly one reading: CONTEXT_PRONOUNS' own existing
+ *  focus-resolution (ask.mjs's resolveTermOrContext) then takes it from there,
+ *  unchanged — this frame only removes the strategy disagreement, it does not
+ *  touch how the pronoun itself resolves. Singular kind nouns only ("that
+ *  classes" isn't grammatical, so plurals are never a real anaphora and are
+ *  left alone); "one" is excluded ("that one" is already its own literal
+ *  CONTEXT_PRONOUNS entry). */
+const KIND_NOUN_ANAPHORA_RE = /\b(this|that)\s+(class|module|function|method|attribute|variable|file|commit)\b/gi;
+
 // every relation verb phrase VERB_TO_KIND knows, as one alternation (longest-first
 // so a multi-word verb like "inherit from" wins over its own leading word "inherit"
 // appearing elsewhere) — feeds the DOES-X-VERB-ANYTHING-ELSE frame below, which needs
@@ -374,6 +394,7 @@ export function normalizeQuery(text) {
   q = q.replace(CONTRACTION_RE, (m) => CONTRACTIONS[m.toLowerCase()]);
   q = q.replace(MISSPELLING_RE, (m) => MISSPELLINGS[m.toLowerCase()]);
   q = q.replace(WRONG_WORD_RE, (m) => WRONG_WORDS[m.toLowerCase()]);
+  q = q.replace(KIND_NOUN_ANAPHORA_RE, (_, pron) => pron);
   q = q.replace(G_DROP, "$1ing");
   // closed preamble frames (greeting lead-in, modal wrapper, show/give-me
   // bridge) — AFTER the correction tables (a repaired "give me"/"show me" still
@@ -445,6 +466,23 @@ export const PHRASING_FRAMES = Object.freeze([
   { re: /^(?:the\s+)?(?:members?|methods?|attributes?|contents)\s+of\s+(?:the\s+)?(.+?)\??$/i, to: (m) => `what does ${m[1]} contain` },
   //   "what's in X" / "what is in X" (contraction already expanded; sha handled above)
   { re: /^what\s+is\s+(?:in|inside)\s+(?:the\s+)?(.+?)\??$/i, to: (m) => `what does ${m[1]} contain` },
+  //   "what else is in X" (0.9.15 Tier-1 single-touch playtest) — the natural
+  //   "besides what I already know" drill-down after a members-of-class answer.
+  //   Distinct from the "what else does X <verb>" family (which the compositional
+  //   grammar already tolerates, dropping "else" as noise on its own): the "is
+  //   in" idiom is NOT a compositional marker, so parseComposite never sees it and
+  //   "what else is in X" fell through to the strategies with NO candidate at all
+  //   (neither recognizes the bare "is in" idiom once "else" sits in front of it).
+  //   The only rescue was the relaxation cascade's drop-unmatched layer — but that
+  //   layer refuses to accept a relaxed reading that still renders an honest EMPTY
+  //   (by design: relaxation must turn a miss into a real answer, never into
+  //   another kind of miss), so a genuinely empty class ("what else is in
+  //   Task.complete" — a method, no members) bottomed out at the bare grammar
+  //   wall instead of the specific "no contains edges" receipt. Routing this
+  //   frame onto the SAME direct "what does X contain" path the plain "what is
+  //   in X" frame above already uses sidesteps the cascade's conservative gate
+  //   entirely, so a real empty is reported honestly instead of walled.
+  { re: /^what\s+else\s+is\s+(?:in|inside)\s+(?:the\s+)?(.+?)\??$/i, to: (m) => `what does ${m[1]} contain` },
 
   // WHERE-DEFINED → "where is X defined". PAST TENSE ONLY ("what defined X", "what
   // declared X"): the PRESENT "what defines X" already parses as a reverse-defines
