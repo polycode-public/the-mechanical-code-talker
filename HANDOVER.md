@@ -9,11 +9,25 @@ Session handle (inbox): `tmct` (this session; earlier sessions used `mechanic`).
 
 ## Where we are (2026-07-09)
 
-`npm test` is green at **1395** (1382 baseline — which already included the concurrent
+**`PLAN_TAUGHT_RELATIONS.md` is now FULLY COMPLETE — all six items, and the entire storage +
+query-dispatcher build, are done and live.** Item 6 (Phase 6's wiring half — the `recursive` rule
+and its reachability-list query, item 9 below) was the last piece outstanding; with it landed,
+every one of the plan's own six illustrative capabilities (relational fact teach, relation
+alias/union, fixed-hop composition, property-filtered composition, adjective-mint, and
+recursive/reachability) works end-to-end over the classic Prolog family-tree validation target the
+plan named as its benchmark, with zero hardcoded domain vocabulary anywhere in the engine — every
+kinship word in every example was taught in ordinary chat, exactly as the plan's own "Origin"
+section framed the goal ("minimum system wiring, maximum learning through chat"). This is a genuinely
+significant milestone, not a routine bullet: a from-scratch relation/rule-teaching system, generic
+enough to learn an entire Prolog-style family tree (facts, aliases, 2-hop composition, gendered
+filtering, and unbounded-depth reachability) purely through natural-language chat turns, with no
+per-relation code anywhere.
+
+`npm test` is green at **1400** (1382 baseline — which already included the concurrent
 Rule-storage-foundation + `findActionPath`/`findReachableSet` planning.mjs work landing in the same
 window as Phase 1 — + 4 from item 7's Phase 2 `PLAN_TAUGHT_RELATIONS.md` dispatch + 5 from item 8's
-Phase 4 dispatch + 4 from item 9's Phase 5 `filter`-rule dispatch, all below). v1.0.7 is published;
-nothing has pushed since, so the local version
+Phase 4 dispatch + 4 from item 9's Phase 5 `filter`-rule dispatch + 5 from item 10's Phase 6 wiring,
+all below). v1.0.7 is published; nothing has pushed since, so the local version
 stays ahead of npm per the bump-at-push-time policy recorded in `CLAUDE.md`. The full
 `SKILL_CHAT_PLAYTEST.md` dialogue-flow tier ladder (tiers 0 through 6) is complete.
 
@@ -207,6 +221,36 @@ bin/tmct.mjs`) still exits 0. Live-verified end-to-end via the piped CLI in a fr
 family-tree chain + the filter positive/negative cases) — see `PLAN_TAUGHT_RELATIONS.md`'s "Phase 5
 — DONE" note for the full transcript.
 
+### 10. `PLAN_TAUGHT_RELATIONS.md` Phase 6 — recursive/reachability rule, WIRING half — `chat.mjs` (2026-07-09)
+
+**This completes the ENTIRE `PLAN_TAUGHT_RELATIONS.md` build — all six items, all storage, all
+query dispatch.** Item 6 (recursive rule): new closed-set teach regex `RECURSIVE_RULE_TEACH_RE` ("a
+descendant is a parent, or a parent of a descendant") stores a `Rule` (kind `recursive`) via the
+already-landed `appendRule`; its own `\1` backreference (the rule's new name must literally recur in
+its own recursive-step clause) doubles as the malformed-self-reference guard, so a mismatched attempt
+("... or a parent of a robot") simply never matches, no extra runtime validation needed. Query side
+is the one genuine KIND-CHANGE among all six items: a new recognizer, `RECURSIVE_LIST_ASK_RE`
+("list the descendants of ahab"), dispatches to a new `(a0.5)` block in `factReadBack` — a
+REACHABILITY-SET enumeration via `findReachableSet` (`src/planning.mjs`, the kernel half already
+shipped a session earlier, reused here completely UNCHANGED), not a yes/no chase, so it's a sibling
+of Phase 5's `resolveRelationChase` rather than a fourth branch inside it (mirroring
+`findActionPath`/`findReachableSet`'s own sibling relationship at the kernel level — a single-goal
+search and a full-set enumeration have irreducibly different halting/result shapes). The search
+state's `stateKey` is the entity ALONE (dropping the hop count from cycle/dedup identity, unlike
+Phase 4's compose2 chase) — this is what gives "one entry per node, via its shortest derivation" and
+is also exactly what makes a genuine cycle in the taught edges terminate safely.
+
+Live-verified, not just asserted: the full six-item family tree end-to-end (facts + alias + compose2
++ filter + recursive, all in one session); cycle safety (two individuals mutually taught as each
+other's parent — `list the descendants of adam` returns `eve` only, in well under a second, never a
+hang); the malformed self-reference declining honestly with no rule ever stored.
+
+`test/chat-taught-relations.test.mjs` extended with 5 more tests (recursive-rule storage, the
+reachability-list positive case, cycle-safety, malformed-self-reference decline, and one
+comprehensive ALL-SIX-items integration test) — 18 total in the file. `npm test`: 1395 → 1400. CLI
+smoke test still exits 0. See `PLAN_TAUGHT_RELATIONS.md`'s "Phase 6 — DONE" note (and its now-updated
+top-of-file status line) for the full transcript and design-vs-plan deviation record.
+
 ## Open follow-ups (next session, in priority order)
 
 1. ~~Fix the INF-C1 fabrication bug above.~~ **DONE (2026-07-09)** — see the updated item 2 note
@@ -232,9 +276,11 @@ family-tree chain + the filter positive/negative cases) — see `PLAN_TAUGHT_REL
    (2026-07-09)** — see item 8 above, reusing Phase 2's own `relationFactsFor` list-builder as its
    per-hop edge lookup.
 9. ~~`PLAN_TAUGHT_RELATIONS.md` Phase 5 (item 4's `filter` rule).~~ **DONE (2026-07-09)** — see item
-   9 above. Remaining from the original six-item scope: item 6 only (Phase 6's WIRING half —
-   `RECURSIVE_RULE_TEACH_RE` + the query-dispatcher's `recursive`/reachability-list branch; the
-   KERNEL half, `findReachableSet`, already shipped per item 6 above).
+   9 above.
+10. ~~`PLAN_TAUGHT_RELATIONS.md` Phase 6 (item 6's `recursive` rule, WIRING half).~~ **DONE
+    (2026-07-09)** — see item 10 above. **This was the last outstanding item — the entire
+    `PLAN_TAUGHT_RELATIONS.md` six-item scope, and its full storage + query-dispatcher build, is now
+    complete.** Nothing remains outstanding from this plan.
 
 ## Discipline (unchanged)
 

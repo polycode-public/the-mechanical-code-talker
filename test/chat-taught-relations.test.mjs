@@ -319,3 +319,125 @@ test("Phase 5 item 4: a filter rule's base may be a PLAIN taught relation (not a
   }
 });
 
+// ---- Phase 6 --------------------------------------------------------------
+
+test("Phase 6 item 6: recursive rule teaching + storage — 'a descendant is a parent, or a parent of a descendant' stores a Rule (kind recursive, baseCase/recStep slots), never a Fact", async () => {
+  const dir = await mem("recursive-store");
+  try {
+    const taught = await runTurn("a descendant is a parent, or a parent of a descendant", { config: CONFIG, memoryDir: dir, sessionId: "rec1" });
+    assert.equal(taught.record.miss, false);
+    assert.match(taught.answer, /noted — remembered: a descendant is a parent, or a parent of a descendant/);
+
+    assert.equal(readFactRows(await loadMemory(dir)).length, 0, "never stored as a Fact");
+    const rule = findRuleByName(await loadMemory(dir), "descendant");
+    assert.ok(rule, "a Rule individual named 'descendant' exists");
+    assert.equal(rule.class, "Rule");
+    const attr = (key) => rule.attributes.find((a) => a.key === key)?.value;
+    assert.equal(attr("ruleKind"), "recursive");
+    assert.equal(attr("baseCase"), "parent");
+    assert.equal(attr("recStep"), "parent");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("Phase 6 item 6: 'list the descendants of ahab' enumerates the full reachability set, each entry citing its own derivation (direct child vs. a 2-hop chase)", async () => {
+  const dir = await mem("recursive-list");
+  try {
+    await runTurn("ahab is the father of john", { config: CONFIG, memoryDir: dir, sessionId: "rec2" });
+    await runTurn("john is the father of ishmael", { config: CONFIG, memoryDir: dir, sessionId: "rec2" });
+    await runTurn("a father is a kind of parent", { config: CONFIG, memoryDir: dir, sessionId: "rec2" });
+    await runTurn("a descendant is a parent, or a parent of a descendant", { config: CONFIG, memoryDir: dir, sessionId: "rec2" });
+
+    const list = await runTurn("list the descendants of ahab", { config: CONFIG, memoryDir: dir });
+    assert.equal(list.record.miss, false);
+    assert.match(list.answer, /^john —/m, "john reached directly (1 hop)");
+    assert.match(list.answer, /ahab fathers john/);
+    assert.match(list.answer, /^ishmael —/m, "ishmael reached via the recursive step (2 hops)");
+    assert.match(list.answer, /john fathers ishmael/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("Phase 6 item 6 CYCLE-SAFETY: two individuals mutually taught as each other's parent must not infinite-loop — terminates with a sane, non-crashing result", async () => {
+  const dir = await mem("recursive-cycle");
+  try {
+    await runTurn("adam is the parent of eve", { config: CONFIG, memoryDir: dir, sessionId: "rec3" });
+    await runTurn("eve is the parent of adam", { config: CONFIG, memoryDir: dir, sessionId: "rec3" });
+    await runTurn("a descendant is a parent, or a parent of a descendant", { config: CONFIG, memoryDir: dir, sessionId: "rec3" });
+
+    const start = Date.now();
+    const list = await runTurn("list the descendants of adam", { config: CONFIG, memoryDir: dir });
+    const elapsedMs = Date.now() - start;
+    assert.ok(elapsedMs < 5000, "terminates promptly, never hangs");
+    assert.equal(list.record.miss, false);
+    // adam itself (the start entity) is never listed as its own descendant;
+    // eve is — the cycle is walked exactly once, never looped.
+    assert.match(list.answer, /^eve —/m);
+    assert.doesNotMatch(list.answer, /^adam —/m);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("Phase 6 item 6: a malformed recursive-rule teach attempt (mismatched self-reference name) declines honestly, never guesses a rule into existence", async () => {
+  const dir = await mem("recursive-malformed");
+  try {
+    // The trailing name ("robot") doesn't match the rule's own new name
+    // ("descendant") — RECURSIVE_RULE_TEACH_RE's own \1 backreference
+    // requires them to be identical, so this never matches at all.
+    const taught = await runTurn("a descendant is a parent, or a parent of a robot", { config: CONFIG, memoryDir: dir, sessionId: "rec4" });
+    assert.doesNotMatch(taught.answer, /noted — remembered/);
+
+    const rule = findRuleByName(await loadMemory(dir), "descendant");
+    assert.equal(rule, undefined, "no rule was ever stored under this malformed attempt");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---- Full family-tree chain, ALL SIX items, end-to-end ------------------
+
+test("PLAN_TAUGHT_RELATIONS.md ALL SIX items, end-to-end: relational facts, alias, compose2, filter, and recursive-reachability rules all resolve together over one family tree", async () => {
+  const dir = await mem("all-six");
+  try {
+    // Item 1 (relational fact teach) + item 2 (alias).
+    await runTurn("ahab is the father of john", { config: CONFIG, memoryDir: dir, sessionId: "six" });
+    await runTurn("john is the father of ishmael", { config: CONFIG, memoryDir: dir, sessionId: "six" });
+    await runTurn("a father is a kind of parent", { config: CONFIG, memoryDir: dir, sessionId: "six" });
+    // Item 5 (property-mint, via the pre-existing wrapped property-teach path).
+    await runTurn("remember that ahab is male", { config: CONFIG, memoryDir: dir, sessionId: "six" });
+    // Item 3 (compose2).
+    await runTurn("a grandparent is a parent of a parent", { config: CONFIG, memoryDir: dir, sessionId: "six" });
+    // Item 4 (filter).
+    await runTurn("a grandfather is a grandparent who is male", { config: CONFIG, memoryDir: dir, sessionId: "six" });
+    // Item 6 (recursive/reachability).
+    await runTurn("a descendant is a parent, or a parent of a descendant", { config: CONFIG, memoryDir: dir, sessionId: "six" });
+
+    // Item 1's own query-side fix.
+    const direct = await runTurn("is ahab the father of john", { config: CONFIG, memoryDir: dir });
+    assert.match(direct.answer, /^yes —/);
+    // Item 2's alias chase.
+    const alias = await runTurn("is ahab a parent of john", { config: CONFIG, memoryDir: dir });
+    assert.match(alias.answer, /^yes —/);
+    // Item 3's compose2 chase.
+    const grandparent = await runTurn("is ahab a grandparent of ishmael", { config: CONFIG, memoryDir: dir });
+    assert.match(grandparent.answer, /^yes —/);
+    // Item 4's filter chase (base rule + property).
+    const grandfather = await runTurn("is ahab the grandfather of ishmael", { config: CONFIG, memoryDir: dir });
+    assert.match(grandfather.answer, /^yes —/);
+    assert.match(grandfather.answer, /ahab is male/);
+    // Item 6's reachability-set enumeration.
+    const descendants = await runTurn("list the descendants of ahab", { config: CONFIG, memoryDir: dir });
+    assert.match(descendants.answer, /^john —/m);
+    assert.match(descendants.answer, /^ishmael —/m);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});

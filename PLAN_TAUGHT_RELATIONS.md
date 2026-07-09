@@ -1,6 +1,83 @@
 # PLAN_TAUGHT_RELATIONS.md — teaching tmct new RELATIONS and RULES through chat, validated against a classic Prolog family-tree
 
-Status: RESEARCH / DESIGN — not yet implemented. Nothing in this document is live code.
+Status: **DONE (2026-07-09) — all six items + the full storage/query dispatcher are live.** All six
+of the plan's own §1 illustrations (relational fact teach, relation alias/union, fixed-hop
+composition, property-filtered composition, adjective-mint, recursive/reachability) are implemented,
+tested, and live-verified end-to-end over the classic family-tree example this document's own
+"Origin" section named as the validation target. See each "Phase N — DONE" section below for the
+full design-vs-implementation record, including the two real deviations found along the way (the
+shared `relAsk`/`resolveRelationChase` dispatcher substrate, Phase 2/4/5's own note; and Phase 6's
+`findReachableSet` kernel/wiring split). Nothing in the original six-item scope remains outstanding.
+
+## Phase 6 — DONE (2026-07-09) — WIRING half (the kernel, `findReachableSet`, shipped earlier as its own commit)
+
+Item 6 (recursive/reachability rule), landed in `src/chat.mjs` in a follow-up commit right after
+Phase 5 above — the LAST of the plan's original six items, completing the full build.
+
+**Teach side**: `RECURSIVE_RULE_TEACH_RE`
+(`/^an?\s+([a-z][\w-]*)\s+(?:is|are)\s+an?\s+([a-z][\w-]*),?\s+or\s+an?\s+([a-z][\w-]*)\s+of\s+an?\s+\1[.!?]*$/i`),
+tried in `teachLane` alongside Phase 4/5's other rule-teach shapes, on the same `ownSrc`. The `\1`
+backreference (requiring the recursive slot's trailing name to be the LITERAL SAME word as the rule's
+own new name) does double duty: it recognizes the self-referential shape AND guards against a
+malformed/mismatched self-reference ever being stored — "a descendant is a parent, or a parent of a
+robot" (wrong trailing name) simply never matches the regex at all, an honest structural decline with
+zero extra runtime validation code needed. Stores via `appendRule` with `kind: "recursive"`, `slots:
+{ baseCase, recStep }` — confirmed live that Phase 3's `RULE_SLOT_SPEC` already had these two
+attributes (`mgx:ruleBaseCase`/`mgx:ruleRecStep`) wired since Phase 3, no `memory/core.mjs` change
+needed this phase either.
+
+**Query side is the one genuine KIND-CHANGE** among all six items, exactly as the plan's own §1 Item
+6 and §4's build-order note anticipated: a new closed-set query recognizer, `RECURSIVE_LIST_ASK_RE`
+(`/^list\s+(?:the\s+|all\s+)?([a-z][\w-]*)\s+of\s+([\w'-]+(?:\s+[A-Z][\w'-]*)?)[?.!\s]*$/i`), dispatches
+to a NEW block in `factReadBack` (`(a0.5)`, sitting right after the yes/no `relAsk` block, before ISA
+membership) — deliberately NOT folded into `resolveRelationChase` (Phase 5's own recursive yes/no
+closure), because a reachability-SET enumeration has no yes/no shape to share with it: it dispatches
+via the SAME `findRuleByName` "what kind of thing is this name" lookup, then seeds `findReachableSet`
+(`src/planning.mjs`, Phase 6's own kernel half, landed earlier and completely UNCHANGED by this
+wiring commit — confirmed by rereading it once before use, exactly as this phase's brief asked) from
+`baseCase`'s taught edges, stepping via `recStep`'s edges at every hop after the first. The plural
+rule name in the query ("descendants") is singularized via `singularizeSurface` (already defined,
+reused verbatim from the "some Xs are Ys" teach-side surface) before the `findRuleByName` lookup.
+
+**A genuinely load-bearing design choice, not obvious from the plan's prose alone**: the search
+state carries `{ entity, hop }`, but the `stateKey` used for `findReachableSet`'s cycle/dedup
+identity is `state.entity` ALONE — deliberately dropping `hop` from the identity (unlike Phase 4's
+compose2 chase, whose `stateKey` DOES include `hopsTaken`, because that search needs an EXACT hop
+count as its goal). A reachability LIST has no such goal — it wants each node reported once, via its
+SHORTEST derivation, never once per hop-count it happens to be reachable at. Keying on `entity` alone
+gives exactly that: a node discovered at hop 1 is `seen` by the time a coincidental hop-3 path to the
+SAME node would otherwise be explored, so it's recorded once, via the shortest route — and this is
+also precisely what makes a genuine CYCLE in the taught edges terminate safely and correctly (see
+below), since the same "already `seen`" mechanism that prevents duplicate entries also prevents
+revisiting the cycle's own back-edge.
+
+**Cycle safety, live- and test-verified, not just inherited by assertion**: two individuals taught as
+each other's parent (`adam` parents `eve`; `eve` parents `adam` — nonsensical family-tree data, but a
+real possible user mistake) produces `list the descendants of adam` → `eve` only, in well under a
+second, never a hang or a crash — `findReachableSet`'s own `seen`-set guard (already proven in
+isolation by Phase 6's kernel-half tests in `test/planning.test.mjs`) carries through end-to-end via
+this wiring exactly as designed.
+
+Live-verified the full six-item family-tree chain end-to-end via the piped CLI: relational facts +
+alias + compose2 grandparent rule + filter grandfather rule + the recursive descendant rule, all in
+one session, plus the cycle-safety and malformed-self-reference cases in a separate session.
+
+Tests: `test/chat-taught-relations.test.mjs`, extended with 5 more tests (recursive-rule storage,
+the descendants reachability-list positive case, the cycle-safety case, the malformed-self-reference
+decline, and one comprehensive ALL-SIX-items integration test covering every one of the plan's six
+capabilities over a single family tree) — 18 total in the file. `npm test`: 1395 → 1400.
+
+**Design-vs-plan deviation check (per the coordinator's own instruction to note whether the Phase
+2/4/5 shared-dispatcher pattern held or needed further adjustment)**: it held cleanly, and Phase 6
+needed NO further adjustment to that pattern — `resolveRelationChase` (Phase 5's yes/no closure) and
+the new `(a0.5)` reachability-list block are SIBLINGS, not a further-merged single dispatcher, because
+(exactly mirroring `findActionPath`/`findReachableSet`'s own kernel-level sibling relationship in
+`src/planning.mjs`) a yes/no chase and a reachability-set enumeration have irreducibly different
+halting/result shapes — forcing them through one shared function would recreate the same complexity
+`planning.mjs`'s own header comment already argued against merging at the kernel level. The one thing
+duplicated across the two (the `relationFactsFor`-shaped alias-chase closure) is a small, cheap,
+pure list-builder — re-deriving it once more here reads more honestly than threading it across two
+`if` blocks that never both run in the same call.
 
 ## Phase 2 — DONE (2026-07-09)
 

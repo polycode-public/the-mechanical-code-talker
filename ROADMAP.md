@@ -119,8 +119,20 @@ A hit requires both the base chase to resolve AND the subject to carry the taugh
 (`mgx:hasProperty`); live-verified both failure modes separately (base fails outright vs. base holds
 but the property filter correctly excludes the candidate) plus a filter whose base is a plain
 relation (not a compose2 rule at all), proving the genericity. `test/chat-taught-relations.test.mjs`
-extended with 4 more tests (13 total). `npm test` 1391 → 1395. Remaining from the original six-item
-scope: Item 6's WIRING half only (Phase 6, `recursive` rules — the kernel already shipped above).
+extended with 4 more tests (13 total). `npm test` 1391 → 1395.
+
+**`PLAN_TAUGHT_RELATIONS.md` Phase 6 — DONE (2026-07-09), WIRING half — the plan's build is now
+COMPLETE, all six items.** Item 6 (recursive/reachability rule — "a descendant is a parent, or a
+parent of a descendant" teaches a `recursive`-kind Rule; "list the descendants of ahab" enumerates
+the full reachability set via `findReachableSet`, the kernel half already shipped, reused unchanged).
+The query side is the one genuine kind-change among all six items (a reachability-SET enumeration,
+not a yes/no chase), landed as a sibling of Phase 5's `resolveRelationChase` rather than a fourth
+branch inside it — mirroring `findActionPath`/`findReachableSet`'s own sibling split at the kernel
+level. Cycle safety (two individuals mutually taught as each other's parent) and a malformed
+self-reference teach attempt (guarded for free by the teach regex's own backreference) both
+live-verified. `test/chat-taught-relations.test.mjs` extended with 5 more tests, including one
+comprehensive ALL-SIX-items integration test (18 total). `npm test` 1395 → 1400. **Nothing remains
+outstanding from `PLAN_TAUGHT_RELATIONS.md`'s original six-item scope.**
 
 ### Shipped this session
 

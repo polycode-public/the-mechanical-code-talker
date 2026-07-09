@@ -1433,6 +1433,26 @@ const COMPOSE2_RULE_TEACH_RE =
 const FILTER_RULE_TEACH_RE =
   /^an?\s+([a-z][\w-]*)\s+(?:is|are)\s+an?\s+([a-z][\w-]*)\s+who\s+(?:is|are)\s+([a-z][\w-]*)[.!?]*$/i;
 
+/** "a <name> is a <baseCase>, or a <recStep> of a <name>" — the
+ *  RECURSIVE/REACHABILITY rule teach declarative (PLAN_TAUGHT_RELATIONS.md
+ *  Item 6, Phase 6): "a descendant is a parent, or a parent of a
+ *  descendant" teaches a RULE (mgx:ruleKind "recursive"), never a Fact. The
+ *  rule's OWN name reappears inside its own definition — the `\1`
+ *  backreference requires the recursive slot's trailing name to be the
+ *  LITERAL SAME word as `m[1]`, so a mismatched/malformed self-reference
+ *  ("a descendant is a parent, or a parent of a person") simply never
+ *  matches this regex at all — an honest structural decline, not a runtime
+ *  guess. `m[1]` = the new rule name ("descendant"), `m[2]` = the base-case
+ *  relation ("parent", hop zero), `m[3]` = the recursive step's first-hop
+ *  relation ("parent" again in the illustration, though `m[2]`/`m[3]` are
+ *  independently captured and need not be identical to each other — only
+ *  `m[1]`'s OWN name must recur at the end). Query side is a genuine
+ *  KIND-CHANGE (reachability-SET enumeration via `findReachableSet`,
+ *  src/planning.mjs) from items 3/4's single-target search — see the
+ *  RECURSIVE_LIST_ASK_RE query recognizer, below. */
+const RECURSIVE_RULE_TEACH_RE =
+  /^an?\s+([a-z][\w-]*)\s+(?:is|are)\s+an?\s+([a-z][\w-]*),?\s+or\s+an?\s+([a-z][\w-]*)\s+of\s+an?\s+\1[.!?]*$/i;
+
 /** "<X> is <adjective>" — the property teach payload (wrapper-REQUIRED): a lazy
  *  subject and a single bare complement word. Never matches the "is a <noun>"
  *  membership shape (that stays the ACE grammar's), so "remember that cache is
@@ -2208,6 +2228,35 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
       if (id) {
         return {
           text: `noted — remembered: a ${filterRule[1]} is a ${filterRule[2]} who is ${filterRule[3]}`,
+          via: "assert", miss: false,
+        };
+      }
+    } catch { /* malformed slots — fall through to the ordinary honest-miss cascade */ }
+  }
+
+  // RECURSIVE RULE TEACH — "a <name> is a <baseCase>, or a <recStep> of a
+  // <name>" (PLAN_TAUGHT_RELATIONS.md Item 6, Phase 6): stores a RULE
+  // (appendRule, kind "recursive"), never a Fact. Tried alongside the other
+  // rule-teach shapes above, on the same ownSrc — RECURSIVE_RULE_TEACH_RE's
+  // own `\1` backreference already guarantees a malformed/mismatched
+  // self-reference never matches at all, so no extra validation is needed
+  // here beyond appendRule's own slot-presence check. The query-side
+  // reachability-SET enumeration (a genuine kind-change from the other two
+  // rule kinds' single-target search) lives in factReadBack's own
+  // RECURSIVE_LIST_ASK_RE dispatch, below.
+  const recursiveRule = ownSrc.match(RECURSIVE_RULE_TEACH_RE);
+  if (recursiveRule && memoryDir && !QUESTION_LEAD_RE.test(ownSrc)) {
+    try {
+      const { appendRule, RULE_KIND_RECURSIVE } = await import("./memory/core.mjs");
+      const { id } = await appendRule(memoryDir, {
+        name: recursiveRule[1],
+        kind: RULE_KIND_RECURSIVE,
+        slots: { baseCase: recursiveRule[2], recStep: recursiveRule[3] },
+        provenance: teachProvenanceTag(sessionId, new Date().toISOString()),
+      });
+      if (id) {
+        return {
+          text: `noted — remembered: a ${recursiveRule[1]} is a ${recursiveRule[2]}, or a ${recursiveRule[3]} of a ${recursiveRule[1]}`,
           via: "assert", miss: false,
         };
       }
@@ -3391,6 +3440,18 @@ async function synonymsOf(term) {
 const RELATION_FACT_YESNO_RE =
   /^(?:is|are|was|were)\s+([\w'-]+(?:\s+[A-Z][\w'-]*)?)\s+(?:the|an?)\s+([a-z][\w-]*)\s+of\s+([\w'-]+(?:\s+[A-Z][\w'-]*)?)[?.!\s]*$/i;
 
+/** "list the descendants of ahab" — the REACHABILITY-SET list query
+ *  (PLAN_TAUGHT_RELATIONS.md Item 6, Phase 6's wiring half): a genuine
+ *  KIND-CHANGE from RELATION_FACT_YESNO_RE just above — every entity
+ *  reachable from the named start entity through a taught `recursive` Rule,
+ *  not a single yes/no. `m[1]` = the rule's PLURAL name ("descendants",
+ *  singularized via singularizeSurface before the findRuleByName lookup —
+ *  the same naive plural fold SOME_A_FEW_RE's own teach-side surface already
+ *  uses elsewhere in this file), `m[2]` = the start entity ("ahab"). Dispatch
+ *  lives in factReadBack's own (a0.5) block, below — findRuleByName +
+ *  findReachableSet (src/planning.mjs), never a yes/no answer. */
+const RECURSIVE_LIST_ASK_RE = /^list\s+(?:the\s+|all\s+)?([a-z][\w-]*)\s+of\s+([\w'-]+(?:\s+[A-Z][\w'-]*)?)[?.!\s]*$/i;
+
 /** "is a module a component" — the yes/no vocabulary form the graph grammar
  *  doesn't parse; checked against the isa-family fact predicates only. */
 const ISA_ASK_RE = /^(?:is|are)\s+(?:an?\s+)?(.+?)\s+(?:a\s+kind\s+of|a\s+type\s+of|an?)\s+(.+?)[?.!\s]*$/i;
@@ -4068,6 +4129,101 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
       const hit = await resolveRelationChase(relationName, subject, object);
       if (hit) return { text: `yes — ${hit.citation.join("; ")}`, replace: true };
       return null; // honest miss — never a guessed "no"
+    }
+  }
+
+  // (a0.5) RECURSIVE-RULE REACHABILITY LIST — "list the <plural> of <X>"
+  // (PLAN_TAUGHT_RELATIONS.md Item 6, Phase 6's wiring half): a genuine
+  // KIND-CHANGE from the yes/no dispatcher just above — REACHABILITY-SET
+  // enumeration (every node ever reached), not single-target search.
+  // Dispatches to a `recursive`-kind taught Rule via the SAME "what kind of
+  // thing is this name" lookup (findRuleByName) the yes/no dispatcher uses,
+  // then calls findReachableSet (src/planning.mjs, Phase 6's own kernel
+  // half, landed unmodified here) seeded from baseCase's taught edges for
+  // the start entity, stepping via recStep's edges at every further hop.
+  // Renders each result with its own derivation path, mirroring the yes/no
+  // chain-citation style above (renderFactLine + interleaved alias-fact
+  // citations, deduped). No hit at all → null, the honest miss stands.
+  const listAsk = qHedge.match(RECURSIVE_LIST_ASK_RE);
+  if (listAsk) {
+    const ruleName = singularizeSurface(listAsk[1].trim().toLowerCase());
+    const rawSubject = listAsk[2].trim();
+    const subject = IS_ADJECTIVE_PRONOUN_RE.test(rawSubject) ? (focusLabel || null) : rawSubject;
+    if (subject) {
+      const {
+        loadMemory, findRuleByName, RULE_KIND_PROP: ruleKindProp, RULE_KIND_RECURSIVE: recKind,
+      } = await import("./memory/core.mjs");
+      const memory = await loadMemory(memoryDir);
+      const rule = findRuleByName(memory, ruleName);
+      const ruleKind = rule?.attributes?.find((a) => a.prop === ruleKindProp)?.value;
+      if (rule && ruleKind === recKind) {
+        const baseCase = rule.attributes.find((a) => a.prop === "mgx:ruleBaseCase")?.value;
+        const recStep = rule.attributes.find((a) => a.prop === "mgx:ruleRecStep")?.value;
+        const startEntity = normFactTerm(subject);
+        if (baseCase && recStep && startEntity) {
+          const isTaughtRow = (f) => !f.sourceTypes?.includes("corpus") && !f.sourceTypes?.includes("web");
+          const aliasSubClassEdges = rows
+            .filter((f) => f.predicate === SUBCLASS_PREDICATE && isTaughtRow(f))
+            .map((f) => [f.subject, f.object]);
+          const { findIsaChain: chaseAlias } = await import("./syllogise.mjs");
+          // Same alias-chase substrate the yes/no dispatcher's own
+          // relationFactsFor uses (re-derived here rather than shared across
+          // the two `if` blocks, which never run in the same call — one
+          // regex or the other matches, never both).
+          const relationFactsForList = (name) => {
+            const target = String(name || "").trim().toLowerCase();
+            const out = [];
+            for (const f of rows) {
+              const role = relationRoleWord(f.predicate);
+              if (!role) continue;
+              if (role === target) { out.push({ fact: f, aliasFacts: [] }); continue; }
+              const chain = chaseAlias(role, new Set([target]), [], aliasSubClassEdges, { maxHops: 2 });
+              if (!chain) continue;
+              const aliasFacts = chain.map((step) => rows.find(
+                (r) => r.predicate === SUBCLASS_PREDICATE && r.subject === step.subject && r.object === step.object,
+              ));
+              if (aliasFacts.every(Boolean)) out.push({ fact: f, aliasFacts });
+            }
+            return out;
+          };
+          // hop 0 (the base case) uses baseCase's edges; every hop after
+          // that uses recStep's edges — a plain hop counter would need to
+          // fold into the state-identity key (defeating dedup-by-node), so
+          // the dedup key is the ENTITY alone (stateKey below): once a node
+          // is reached via its SHORTEST path, a longer alternate path to the
+          // same node is correctly pruned, never re-recorded or re-expanded
+          // (this is also what makes a genuine cycle in the taught edges —
+          // e.g. two individuals mutually taught as each other's parent —
+          // terminate safely: the cyclic-back node is already `seen`).
+          const { findReachableSet } = await import("./planning.mjs");
+          const applyActions = (state) => {
+            const relName = state.hop === 0 ? baseCase : recStep;
+            return relationFactsForList(relName)
+              .filter((e) => e.fact.subject === state.entity)
+              .map((e) => ({ action: e, nextState: { entity: e.fact.object, hop: state.hop + 1 } }));
+          };
+          const stateKey = (state) => state.entity;
+          const results = findReachableSet({ entity: startEntity, hop: 0 }, applyActions, { maxDepth: 20, stateKey });
+          if (results.length) {
+            const lines = results.map(({ node, path }) => {
+              const seenAlias = new Set();
+              const parts = [];
+              for (const e of path.actions) {
+                parts.push(renderFactLine(e.fact));
+                for (const af of e.aliasFacts) {
+                  const key = af.id || `${af.subject}|${af.predicate}|${af.object}`;
+                  if (seenAlias.has(key)) continue;
+                  seenAlias.add(key);
+                  parts.push(`${factPhrase(af)}${af.provenance ? ` (source: ${af.provenance})` : ""}`);
+                }
+              }
+              return `${node.entity} — ${parts.join("; ")}`;
+            });
+            return { text: lines.join("\n"), replace: true };
+          }
+        }
+      }
+      return null; // no taught recursive rule of this name reaches anything — honest miss
     }
   }
 
