@@ -291,6 +291,14 @@ const NEST_SENTINEL = "zzinnerset";
 // then"/"what about X though".
 const PRED_LEAD_SKIP = new Set(["that", "which", "who", "are", "is", "was", "were", "do", "does", "also", "still", "both", "and", "then", "though"]);
 const FRAME_WORDS = new Set(["which", "what", "who", "list", "show", "find", "give", "me", "us", "all"]);
+// A bare copula leading a boolean branch ("...and ARE untested") is discourse glue,
+// not part of the qualifier — dropped before a branch is tested/used as a
+// qualifier-only atom (both the marker-gate probe below and the two atom-building
+// folds — buildPredicateAtoms, parseRelationalOrQualified's own fold — apply it).
+const COPULA_WORDS = new Set(["are", "is", "was", "were"]);
+function dropLeadCopula(bw, blc) {
+  return blc.length && COPULA_WORDS.has(blc[0]) ? { bw: bw.slice(1), blc: blc.slice(1) } : { bw, blc };
+}
 
 const entityNoun = (w) => (ENTITY_TO_TYPE[w] ? { entityType: ENTITY_TO_TYPE[w], placeholder: false }
   : (PLACEHOLDER_NOUNS.includes(w) ? { entityType: null, placeholder: true } : null));
@@ -930,7 +938,8 @@ function buildPredicateAtoms(entityType, subjPrefix, predLc, predWords, nlp, dep
     const bw = branches[b];
     const blc = bw.map((x) => x.toLowerCase());
     const op = b === 0 ? "intersection" : ops[b - 1];
-    if (bw.length && blc.every((x) => QUALIFIERS[x])) { atoms.push({ op, kind: "qual", filters: blc }); continue; }
+    const qc = dropLeadCopula(bw, blc);
+    if (qc.blc.length && qc.blc.every((x) => QUALIFIERS[x])) { atoms.push({ op, kind: "qual", filters: qc.blc }); continue; }
     if (blc[0] === "of" || blc[0] === "in") {
       atoms.push({ op, kind: "set", ast: { node: "membership", entityType, term: bw.slice(1).join(" ") } });
       continue;
@@ -1005,9 +1014,20 @@ function parseRelationalOrQualified(w, lc, nlp, depth) {
   if (predLc.length && RELATIVE_PRONOUNS.includes(predLc[0])) { relFlag = true; predLc = predLc.slice(1); predWords = predWords.slice(1); }
   const membershipLed = predLc[0] === "of" || predLc[0] === "in";
   const gerundLed = predLc.length > 0 && isGerundVerb(predLc[0]);
+  // A boolean branch whose OWN content — past an optional leading copula ("and ARE
+  // untested") — collapses to qualifier words alone is the compositional shape too
+  // ("functions that call X and are untested": verb clause AND qualifier, same
+  // subject). Probe with the same splitBoolean+QUALIFIERS fold the atoms loop below
+  // uses, so a bare verb+verb boolean chain with NO qualifier signal anywhere
+  // ("which classes extends Base and couples to logging") still has no marker here
+  // and correctly stays on the legacy ambiguous-parse path, untouched.
+  const boolQualLed = predWords.length > 0 && splitBoolean(predLc, predWords).branches.some((bw) => {
+    const { blc } = dropLeadCopula(bw, bw.map((x) => x.toLowerCase()));
+    return blc.length && blc.every((x) => QUALIFIERS[x]);
+  });
   // marker gate — the crux of backward-compat: without one of these, this is not a
   // compositional query and we must NOT hijack it from the existing parser.
-  if (!(quals.length || relFlag || membershipLed || gerundLed)) return null;
+  if (!(quals.length || relFlag || membershipLed || gerundLed || boolQualLed)) return null;
 
   // empty predicate → a bare qualified class ("public methods")
   if (!predWords.length) {
@@ -1026,7 +1046,8 @@ function parseRelationalOrQualified(w, lc, nlp, depth) {
     const bw = branches[b];
     const blc = bw.map((x) => x.toLowerCase());
     const op = b === 0 ? "seed" : ops[b - 1];
-    if (bw.length && blc.every((x) => QUALIFIERS[x])) { atoms.push({ op, kind: "qual", filters: blc }); continue; }
+    const qc = dropLeadCopula(bw, blc);
+    if (qc.blc.length && qc.blc.every((x) => QUALIFIERS[x])) { atoms.push({ op, kind: "qual", filters: qc.blc }); continue; }
     if (blc[0] === "of" || blc[0] === "in") {
       atoms.push({ op, kind: "set", ast: { node: "membership", entityType, term: bw.slice(1).join(" ") } });
       continue;

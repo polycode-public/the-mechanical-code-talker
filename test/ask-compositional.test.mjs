@@ -121,6 +121,39 @@ test("boolean intersection HIT: 'functions that call alpha and call beta'", () =
   assert.deepEqual(labels(ask(graph, "functions that call alpha and call beta")), ["callsBoth"]);
 });
 
+test("boolean AND HIT: 'which functions call alpha and are untested' — verb clause + qualifier, NO leading qualifier/that/gerund marker (bare boolean-connective gate)", () => {
+  // Regression for the "which functions call X and are untested" bug: this phrasing
+  // carries none of the ORIGINAL marker-gate signals (no leading qualifier before
+  // "functions", no relative pronoun, no gerund-led predicate) — only a bare "and"
+  // connective whose second branch collapses to a qualifier past its copula ("are
+  // untested" -> "untested"). Before the fix this fell through to the legacy
+  // relational-clause pipeline, which swallowed "and are untested" as literal
+  // search text and produced a garbled ambiguousParse instead of a real answer.
+  const p = parseQuery("which functions call alpha and are untested");
+  assert.equal(p.node, "boolean");
+  assert.equal(p.atoms.length, 2);
+  assert.equal(p.atoms[1].kind, "qual");
+  assert.deepEqual(p.atoms[1].filters, ["untested"]);
+  const r = ask(graph, "which functions call alpha and are untested");
+  assert.equal(r.tmct_ask.miss, false);
+  // callsBoth and callsOne both call alpha and both live in caller.mjs, which no
+  // test module covers — both are honestly "untested".
+  assert.deepEqual(labels(r), ["callsBoth", "callsOne"]);
+});
+
+test("boolean AND no-regression: the marker-gate widening for qualifier branches must NOT also open the gate for a bare verb+verb 'and' chain with no qualifier signal anywhere", () => {
+  // "which classes extends Base and couples to logging" has a boolean 'and' too, but
+  // NEITHER branch collapses to a qualifier (past an optional copula) — so the new
+  // boolQualLed probe must stay false here, exactly like the pre-existing compat
+  // guard above ("bare-template ambiguous case") already asserts.
+  const p = parseQuery("which classes extends Base and couples to logging");
+  assert.equal(p.node, undefined);
+  assert.equal(p.ambiguousParse, true);
+  // and the pre-existing "functions THAT call X and call Y" boolean-verb-chain shape
+  // (relFlag-marked, unrelated to the new bare boolQualLed gate) is unaffected.
+  assert.deepEqual(labels(ask(graph, "functions that call alpha and call beta")), ["callsBoth"]);
+});
+
 test("boolean union HIT: 'modules importing core.mjs or targets.mjs' (verb distributed across branches)", () => {
   assert.deepEqual(labels(ask(graph, "modules importing core.mjs or targets.mjs")),
     ["caller.mjs", "mid.mjs", "mid2.mjs"]);
