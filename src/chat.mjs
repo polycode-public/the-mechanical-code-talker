@@ -900,6 +900,14 @@ const THANKS = new Set([
   // shape) was missing — fell to the generic orientation card via
   // isConversational's ≤3-word catch-all instead of a thanks reply.
   "ta for that",
+  // Playtest sprint round 3 (2026-07-10): a natural session-closing remark
+  // hit the raw grammar wall instead of a warm sign-off — the LAST turn of a
+  // session is a bad place to end on a wall. Same discipline as "ta for
+  // that": add the SPECIFIC found phrasing, not a general "closing remark"
+  // grammar.
+  "cheers, that's everything for now, thanks",
+  "that's everything for now, thanks",
+  "that's all for now, thanks",
 ]);
 /** Farewells → a goodbye AND a clean end of session (same path as /exit). */
 const BYE = new Set([
