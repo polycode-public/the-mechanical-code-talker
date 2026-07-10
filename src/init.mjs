@@ -28,6 +28,7 @@
 import { mkdir, readFile, writeFile, stat } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { stringify as stringifyToml } from "smol-toml";
 
 export const CONFIG_FILE = "tmct.toml";
 export const PROVENANCE_REL = join(".tmct", "init.json");
@@ -83,7 +84,7 @@ export function renderTomlConfig(config = defaultConfig()) {
   const c = { ...defaultConfig(), ...config };
   const corpus = { ...defaultConfig().corpus, ...(config.corpus || {}) };
   const seed = { ...defaultConfig().seed, ...(config.seed || {}) };
-  return `# tmct.toml — the mechanical code talker, project configuration.
+  const base = `# tmct.toml — the mechanical code talker, project configuration.
 # Written by \`tmct init\`. An ABSENT file means shipped defaults (this file
 # just makes them explicit and editable). Documented in the repository-interface
 # onboarding surface (ROADMAP Phase 8, "Distribution: tmct init").
@@ -109,6 +110,23 @@ enabled = ${seed.enabled ? "true" : "false"}
 # To cap it, uncomment and set a number (definitional band first):
 ${seed.limit != null ? `limit = ${Number(seed.limit)}` : "# limit = 500"}
 `;
+  // Extension-pack / bias sections (src/extensions.mjs) — ONLY emitted when a
+  // caller actually supplies them (an explicit `--with-persona`, or a manual
+  // override); the plain zero-flag `tmct init` output stays BYTE-IDENTICAL to
+  // before this feature existed. Rendered via smol-toml's own stringify (not
+  // hand-written prose like the base file above) — a plain, uncommented
+  // config fragment is honest about being machine-written/round-tripped.
+  const extras = {};
+  if (config.extensions !== undefined) extras.extensions = config.extensions;
+  if (config.bias !== undefined) extras.bias = config.bias;
+  if (!Object.keys(extras).length) return base;
+  return `${base}
+# Extension packs + bias (src/extensions.mjs) — written by \`tmct init --with-persona\`
+# or a manual edit. Recognized names (seon, conceptnet, tier2-aws, tier2-python,
+# tier2-java) override the shipped defaults; any other name declares a new
+# host-supplied bundle (needs its own "kind"). [bias] is a flat bundle-name ->
+# weight table consumed by src/memory/bias.mjs's ranking.
+${stringifyToml(extras)}`;
 }
 
 /** Should the seed run? Explicit `opts.seed` wins; otherwise the config's
@@ -245,6 +263,11 @@ async function readWrittenConfig(tomlPath, base) {
       if (raw.seed.enabled !== undefined) cfg.seed.enabled = Boolean(raw.seed.enabled);
       if (raw.seed.limit !== undefined) cfg.seed.limit = Number(raw.seed.limit);
     }
+    // Sparse pass-through (src/extensions.mjs validates; this layer just carries
+    // the raw tables through unmodified, same discipline as toml-config.mjs's
+    // normalizeConfig).
+    if (raw.extensions !== undefined) cfg.extensions = raw.extensions;
+    if (raw.bias !== undefined) cfg.bias = raw.bias;
     return cfg;
   } catch {
     return base;

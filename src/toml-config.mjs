@@ -101,6 +101,13 @@ export async function normalizeConfig(raw, { configDir } = {}) {
   if (seed.limit !== undefined) seedCfg.limit = seed.limit;
   if (Object.keys(seedCfg).length) cfg.seed = seedCfg;
 
+  // Extension-pack seam (src/extensions.mjs): sparse PASS-THROUGH only — the
+  // raw `[extensions]`/`[bias]` tables ride through unmodified so a caller can
+  // see they're present; validation happens one layer up, in
+  // resolveExtensions() (never here — this module stays a plain raw reader).
+  if (src.extensions !== undefined) cfg.extensions = src.extensions;
+  if (src.bias !== undefined) cfg.bias = src.bias;
+
   const idx = src.index || {};
   const index = {};
   if (idx.languages !== undefined) index.languages = idx.languages;
