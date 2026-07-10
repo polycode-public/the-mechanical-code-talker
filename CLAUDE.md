@@ -24,6 +24,14 @@ session is the COORDINATOR (plans, launches, integrates, answers the operator), 
   that doesn't exist yet" noise in practice and was reverted by operator instruction 2026-07-09.
   Between pushes, `package.json`'s version should always equal whatever's actually live on npm.
 
+## Writing style
+
+Follow `SKILL_AGENT_PLAIN_PROSE.md` for every human-facing surface this project touches: docs,
+code comments, benchmark write-ups, and the assistant's own chat replies. Plain English Campaign
+base rules first (short sentences, active voice, everyday words, "you"/"we"), then cut the
+LLM-voice tells (em-dashes as glue, "not X, it's Y", announced-honesty preambles, colon reveals,
+hype, listicle bloat). Read the skill doc itself for the full rules before writing anything long.
+
 ## Project
 
 `@polycode-projects/the-mechanical-code-talker` (short: **tmct**) — a pure-JS, **no-LLM**
