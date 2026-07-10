@@ -12,6 +12,14 @@
 //     the codegraph "capped nudge" philosophy, so recency breaks ties and
 //     freshens but never flips a source-type ordering by itself.
 //
+// A fourth, per-Source bounded nudge folds into the type-prior term above (not a
+// separate multiplicative stage): each Source may carry mgx:sourceReliability in
+// [0.5, 1.5] (neutral 1.0 when absent, true of every Source until a session's
+// actor-level trust — sessionReliabilityFrom, core.mjs's recomputeSourceReliability —
+// starts writing it), so a session with a track record of corroborated facts
+// nudges its own Source's contribution up, one contradicted repeatedly nudges it
+// down — additive and safe: absent, every existing score is byte-identical.
+//
 // For ENTAILED facts (tier-5): trust = min(premise trusts) × rule-confidence — a
 // conclusion is only as trustworthy as its weakest premise. Premises may be
 // absent for now, so this is a documented HOOK: pass opts.premiseTrusts (and
@@ -44,8 +52,32 @@ export const SOURCE_PRIOR = Object.freeze({
 export const RECENCY_HALF_LIFE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 export const RECENCY_FLOOR = 0.9; // recency multiplier stays within [0.9, 1.0]
 
+// Actor-level (session-scoped) trust — a bounded NUDGE on top of a Source's
+// type prior, read off the same already-passed Source individual a fact's
+// corroboration already resolves via sourceTypeOf. `mgx:sourceReliability`
+// lives in [SOURCE_RELIABILITY_MIN, SOURCE_RELIABILITY_MAX], NEUTRAL (1.0,
+// exactly — no rounding drift) when absent, which is true of every Source
+// until core.mjs's recomputeSourceReliability starts writing it. Neutral-when-
+// absent makes this safely additive: every existing score is byte-identical
+// until something actually writes the attribute.
+export const SOURCE_RELIABILITY_MIN = 0.5;
+export const SOURCE_RELIABILITY_MAX = 1.5;
+export const SOURCE_RELIABILITY_NEUTRAL = 1.0;
+
 const round = (n, p = 6) => Number(n.toFixed(p));
 const sourceTypeOf = (s) => (s?.attributes || []).find((a) => a.prop === "mgx:sourceType")?.value || "";
+
+/** A Source's reliability multiplier: the raw mgx:sourceReliability attribute,
+ *  clamped into [SOURCE_RELIABILITY_MIN, SOURCE_RELIABILITY_MAX] (a corrupt or
+ *  out-of-range stored value is defended against, never trusted blindly), or
+ *  the neutral 1.0 when the attribute is absent/unparseable. */
+function sourceReliabilityOf(s) {
+  const raw = (s?.attributes || []).find((a) => a.prop === "mgx:sourceReliability")?.value;
+  if (raw === undefined) return SOURCE_RELIABILITY_NEUTRAL;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return SOURCE_RELIABILITY_NEUTRAL;
+  return Math.max(SOURCE_RELIABILITY_MIN, Math.min(SOURCE_RELIABILITY_MAX, n));
+}
 
 /**
  * Bounded recency multiplier in [RECENCY_FLOOR, 1] from an ISO-8601 createdAt.
@@ -81,21 +113,31 @@ export function computeTrust(fact, sourcesById = {}, opts = {}) {
   const now = typeof opts.now === "number" ? opts.now : Date.now();
   const ids = Array.isArray(fact?.sourceIds) ? fact.sourceIds : [];
 
-  // distinct sources → their type priors
+  // distinct sources → their type priors, nudged by each Source's own
+  // mgx:sourceReliability (neutral 1.0 when absent — see sourceReliabilityOf).
+  // `types` stays the plain type multiset (the audit-trail shape callers/tests
+  // already read off `inputs.sourceTypes` is unchanged); `priors` is the
+  // per-source EFFECTIVE prior (type prior × reliability, clamped to [0,1])
+  // the noisy-OR below actually corroborates over.
   const seen = new Set();
   const types = [];
+  const priors = [];
   for (const id of ids) {
     if (seen.has(id)) continue;
     seen.add(id);
-    const t = sourceTypeOf(sourcesById[id]);
-    if (t) types.push(t);
+    const source = sourcesById[id];
+    const t = sourceTypeOf(source);
+    if (!t) continue;
+    types.push(t);
+    const p = (SOURCE_PRIOR[t] ?? 0) * sourceReliabilityOf(source);
+    priors.push(Math.max(0, Math.min(1, p)));
   }
 
-  // corroboration via noisy-OR over distinct-source priors, capped at 1
+  // corroboration via noisy-OR over distinct-source EFFECTIVE priors, capped at 1
   let base = 0;
   let complement = 1;
-  for (const t of types) complement *= 1 - (SOURCE_PRIOR[t] ?? 0);
-  if (types.length) base = Math.min(1, 1 - complement);
+  for (const p of priors) complement *= 1 - p;
+  if (priors.length) base = Math.min(1, 1 - complement);
 
   // entailed hook (tier-5): a conclusion is only as trustworthy as its weakest
   // premise × the rule confidence. Engages only when premises are supplied;
