@@ -56,6 +56,19 @@ export function defaultConfig() {
   };
 }
 
+/** `tmct init --with-persona <name>` presets (Part 7 of the extension-pack
+ *  batch): a named bundle of `extensions`/`bias` overrides, written into
+ *  tmct.toml alongside the plain defaults. `code` is TODAY'S IMPLICIT
+ *  DEFAULT made explicit — an empty `extensions` override (seon + conceptnet
+ *  are already the shipped builtin defaults; nothing to add) plus an
+ *  EXPLICIT bias table naming them both at neutral weight, so a repo that
+ *  chose the `code` persona has a self-documenting tmct.toml rather than
+ *  relying on an unstated implicit default. Kept minimal on purpose — this
+ *  batch's job is the persona SEAM, not a curated library of presets. */
+export const PERSONA_PRESETS = Object.freeze({
+  code: { extensions: {}, bias: { seon: 1.0, conceptnet: 1.0 } },
+});
+
 /** Read this package's version (best-effort, for provenance). */
 async function tmctVersion() {
   try {
@@ -150,13 +163,20 @@ function seedRequested({ optSeed, configEnabled, env }) {
  *   `seed.enabled` (TMCT_NO_SEED still vetoes).
  * @param {object}  [opts.env]    environment (for TMCT_NO_SEED); defaults to
  *   process.env.
+ * @param {object}  [opts.persona] a resolved PERSONA_PRESETS entry
+ *   ({extensions?, bias?}) to merge into the FRESH config before it's written
+ *   (Part 7, `tmct init --with-persona <name>`). Name -> preset resolution
+ *   and unknown-name validation are the CALLER'S job (bin/tmct.mjs) — this
+ *   only ever sees an already-resolved preset object (or nothing). Has no
+ *   effect when tmct.toml already exists and `force` isn't set (the existing
+ *   "preserve a user's tmct.toml" rule wins, same as `seed`/`corpus.tier`).
  * @returns {Promise<{
  *   created: string[], config: object, seeded: boolean,
  *   alreadyInitialized: boolean, seedResult: (object|null), message: string
  * }>} `created` lists the ABSOLUTE paths this call brought into being (empty on a
  *   benign no-op re-init). Never throws on a benign re-init or a corpus failure.
  */
-export async function initRepo(dir, { force = false, seed, env = process.env } = {}) {
+export async function initRepo(dir, { force = false, seed, env = process.env, persona = null } = {}) {
   const root = resolve(dir);
   const created = [];
   const paths = {
@@ -180,6 +200,15 @@ export async function initRepo(dir, { force = false, seed, env = process.env } =
 
   // ---- 2. The externalised config (preserve an existing file unless force) ----
   let config = defaultConfig();
+  // Persona overrides (Part 7) apply ONLY to a FRESH write — an empty preset
+  // field (e.g. `code`'s `extensions: {}`) is a genuine no-op, never an
+  // explicit-empty-section write (renderTomlConfig only emits [extensions]/
+  // [bias] when the merged config actually carries a non-empty one — the
+  // plain zero-flag `tmct init` output stays byte-identical either way).
+  if (persona) {
+    if (persona.extensions && Object.keys(persona.extensions).length) config.extensions = persona.extensions;
+    if (persona.bias && Object.keys(persona.bias).length) config.bias = persona.bias;
+  }
   const tomlPresent = await exists(paths.toml);
   if (!tomlPresent || force) {
     await writeFile(paths.toml, renderTomlConfig(config));

@@ -49,6 +49,8 @@ Usage:
                                offline, $0; init is tier-1-only unless asked
        [--detect]              suggest a tier-2 corpus from the repo's manifests
                                (pyproject.toml → python, pom.xml → java); never seeds unasked
+       [--with-persona <name>] write an explicit [extensions]/[bias] preset into tmct.toml
+                               ("code" — today's implicit default, made explicit)
   tmct extend --validate <dir>  validate a third-party extension pack's declared
                                resources (corpus/lexicon/templates) before activating
                                it in any repo's tmct.toml; exits non-zero on failure
@@ -329,7 +331,7 @@ async function main() {
     // documented STUB: it inspects the repo's manifests (pyproject.toml → python,
     // pom.xml → java) and SUGGESTS the matching corpus, but never seeds it unasked.
     const rest = process.argv.slice(3);
-    const { initRepo, defaultConfig, renderTomlConfig, CONFIG_FILE } = await import("../src/init.mjs");
+    const { initRepo, defaultConfig, renderTomlConfig, CONFIG_FILE, PERSONA_PRESETS } = await import("../src/init.mjs");
     const { loadTomlConfig } = await import("../src/toml-config.mjs");
 
     const ci = rest.indexOf("--corpus");
@@ -351,7 +353,22 @@ async function main() {
       }
     }
 
-    const res = await initRepo(process.cwd(), { force: rest.includes("--force") });
+    // `--with-persona <name>` (Part 7): resolve + validate BEFORE touching
+    // disk, mirroring `--corpus`'s own unknown-id error handling — a bad
+    // persona name never scaffolds anything.
+    const pi = rest.indexOf("--with-persona");
+    const personaName = pi !== -1 ? rest[pi + 1] : undefined;
+    let personaPreset = null;
+    if (personaName) {
+      if (!Object.prototype.hasOwnProperty.call(PERSONA_PRESETS, personaName)) {
+        const names = Object.keys(PERSONA_PRESETS).join(", ");
+        process.stderr.write(`tmct init: unknown --with-persona "${personaName}". Available personas: ${names}.\n`);
+        process.exit(2);
+      }
+      personaPreset = PERSONA_PRESETS[personaName];
+    }
+
+    const res = await initRepo(process.cwd(), { force: rest.includes("--force"), persona: personaPreset });
     process.stdout.write(res.message + "\n");
 
     if (manifestEntry) {
