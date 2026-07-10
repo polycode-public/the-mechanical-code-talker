@@ -5814,7 +5814,28 @@ async function completionsRescueAnswer(query, { memoryDir, graph }) {
   if (!term) return null;
   try {
     const { generateCompletion } = await import("./completions/complete.mjs");
-    const result = await generateCompletion(memoryDir, term, { query: term, graph });
+    // HANDOVER.md item 1: broadSearch (src/completions/search.mjs) already accepts an
+    // optional Repository-Interface `graphService` — its own docblock names
+    // createGraphService(graph) (src/providers/graph-service.mjs) as the reference
+    // shape — but until now nothing ever handed one through, so this lane could only
+    // ever see memory BLOCKS saved via an explicit saveBlock() call. Ordinary chat
+    // teaching/asking never calls saveBlock(), so a subject's first-ever mention in a
+    // session always declined here, no matter how much the already-loaded graph (and
+    // any taught Facts about it) actually knew. createCompletionsGraphAdapter
+    // (src/completions/graph-adapter.mjs) wraps the SAME graph object this turn already
+    // has in scope (runTurn's own `graph` param, loaded once per session by the chat
+    // shell) plus this repo's already-loaded Fact store — no re-load, no new search
+    // machinery, just handing broadSearch the adapter it was always built to accept.
+    // Loading memory here (rather than letting generateCompletion load it itself at
+    // Stage 3) lets the SAME loaded payload double as the adapter's Fact-search source;
+    // passed straight through as opts.memory so Stage 3 doesn't re-read it a second
+    // time. A null/empty graph (no code entities loaded yet) or empty memory (no Facts
+    // taught yet) degrades to the pre-existing block-only search, exactly as before.
+    const { createCompletionsGraphAdapter } = await import("./completions/graph-adapter.mjs");
+    const { loadMemory } = await import("./memory/core.mjs");
+    const memory = await loadMemory(memoryDir);
+    const graphService = createCompletionsGraphAdapter(graph, memory);
+    const result = await generateCompletion(memoryDir, term, { query: term, graph, memory, graphService });
     if (!result || result.declined || !result.text) return null; // honest decline — never fabricate
     return { text: result.text };
   } catch {
