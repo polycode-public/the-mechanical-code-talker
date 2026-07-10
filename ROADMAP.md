@@ -1052,19 +1052,25 @@ candidate for the plan's next spike, not a claimed result. Everything else is de
 plan's open questions, where the relevance problem is named as the open research risk it is.
 
 ### Open-source the ACE-OWL parser as a standalone library
-> **STATUS: deferred follow-up** — not yet started; still gated on the Phase 8 library-surface
-> work settling the extraction boundary. See `PLAN_OSS_ACE_PARSER.md`.
+> **STATUS: tried, reverted (2026-07-10).** A session extracted `ace.mjs`/`lexicon.mjs` into
+> `packages/ace-owl`, a new npm workspace, and pointed tmct's own `package.json` at it as a
+> registry dependency — but never published the package. That broke `npm install` for tmct
+> itself (`@polycode-projects/ace-owl` 404s on the public registry, since it only ever existed as
+> a local workspace symlink). Folded back into `src/grammar/` the same day, on operator
+> instruction, once the break was found. If this is worth doing again, publish the package FIRST
+> (or in the same change), never split the two steps across a batch. See `PLAN_OSS_ACE_PARSER.md`.
 
 *(Operator-specified 2026-07-05, from the dependency audit's publish-not-replace finding.)* The
 pure-JS, ESM, dependency-free ACE-OWL controlled-grammar parser (`src/grammar/ace.mjs` +
 `lexicon.mjs`) that turns controlled-English sentences into OWL-labelled triples is a RARE thing:
 the reference implementation (APE) is GPL + SWI-Prolog (native), so there is no permissive,
 browser-capable, npm-installable ACE→OWL parser in the JS ecosystem. tmct's is exactly that.
-Extract it to its own MPL-2.0 package (tmct depends on it back), so the wider RDF/OWL/semantic-web
-JS community gains a controlled-natural-language front-end that runs in the browser. Gated on the
-Repository Interface library-surface work (Phase 8) settling the extraction boundary; see
-`PLAN_OSS_ACE_PARSER.md`. Sibling publish-candidates (the bounded-Damerau fuzzy matcher, the
-PageRank+IDF block ranker) may follow the same path if there is demand.
+Extracting it to its own MPL-2.0 package (tmct depending on it back) would give the wider
+RDF/OWL/semantic-web JS community a controlled-natural-language front-end that runs in the
+browser — genuine value, but only once actually published; see `PLAN_OSS_ACE_PARSER.md` for the
+full design and the note above for what went wrong the first attempt. Sibling publish-candidates
+(the bounded-Damerau fuzzy matcher, the PageRank+IDF block ranker) are lower priority than getting
+this one right before trying another.
 
 ## Phase 10 — Conversational competence & onboarding (0.6.0 → 0.7.0)
 

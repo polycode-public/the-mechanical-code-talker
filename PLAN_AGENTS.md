@@ -283,11 +283,15 @@ Near-term, mostly known-how, individually small. No item here requires research.
   The three shipped-but-inactive tier2 bundles (aws/python/java corpora) are now genuinely
   activatable, not just committed-and-dead. This is also the config surface §4's bias weighting
   hangs off of, also shipped — see §4.
-- ✅ **`ace-owl` open-source extraction — shipped 2026-07-10.** `packages/ace-owl/`, a standalone
-  `@polycode-projects/ace-owl` MPL-2.0, dependency-free workspace package (parser, lexicon, tests,
-  README, LICENSE). tmct's own `src/grammar/ace.mjs`/`lexicon.mjs` are now thin re-export shims
-  binding the package's neutral namespace to `tmct:` — one implementation, not two. `npm publish`
-  not run (stays operator-gated).
+- ⛔ **`ace-owl` open-source extraction — shipped 2026-07-10, reverted the same day.** Extracted into
+  `packages/ace-owl/` (a standalone `@polycode-projects/ace-owl` MPL-2.0 workspace package) with
+  tmct's own `src/grammar/ace.mjs`/`lexicon.mjs` left as thin re-export shims. The extraction
+  commit itself noted `npm publish` was never run (operator-gated) — but shipped the registry
+  dependency anyway, so `npm install` of tmct broke for everyone outside this workspace (a 404 on
+  `@polycode-projects/ace-owl`, unpublished). Found and reverted the same day on operator
+  instruction: `ace.mjs`/`lexicon.mjs`/`lexicon-core.json` are back in `src/grammar/` as the real
+  implementation (not shims), the workspace and dependency are gone. See ROADMAP.md's "Open-source
+  the ACE-OWL parser" entry for the full account and what to do differently if attempted again.
 - ✅ **Ontology-hierarchies tracks a–d — shipped.** Tracks (a) synonym/similarTo activation and (b)
   the phrasebook-synonym wiring were found already shipped from an earlier session; this session
   added a precision follow-up (`SYNONYM_DENYLIST` in `chat.mjs`, closing 9 confirmed-bad
@@ -630,7 +634,7 @@ Explicit pruning record, so these aren't re-asked:
 
 | Phase | What ships | Status (2026-07-11) | Depends on | Repo(s) |
 |---|---|---|---|---|
-| 0 | Foundations (§3): smoke test, envelope.json, extension-pack seam, ace-owl extraction, ontology tracks a–d, grammar tracks a/d/f, debt re-measure, RI wrapper fixes + hub-dampened memory ranking (§2) | **Nearly done — extension-pack seam ✅, RI wrapper fixes ✅, hub-dampening ✅ (v1.4.0); smoke test ✅, envelope.json ✅, ace-owl ✅, ontology tracks a–d ✅, grammar tracks a/d/f ✅ (all 2026-07-10). Only the chat-surface debt re-measure remains open.** | Nothing (all build on shipped work) | tmct |
+| 0 | Foundations (§3): smoke test, envelope.json, extension-pack seam, ace-owl extraction, ontology tracks a–d, grammar tracks a/d/f, debt re-measure, RI wrapper fixes + hub-dampened memory ranking (§2) | **Nearly done — extension-pack seam ✅, RI wrapper fixes ✅, hub-dampening ✅ (v1.4.0); smoke test ✅, envelope.json ✅, ontology tracks a–d ✅, grammar tracks a/d/f ✅, chat-surface debt re-measure ✅ (all 2026-07-10). ace-owl extraction shipped 2026-07-10, reverted the same day (see above) — not tracked as done.** | Nothing (all build on shipped work) | tmct |
 | 1 | Bias-weighted ambiguity resolution & wider seed sets (§4): `tmct.toml` `[bias]` table, wider general-knowledge corpus, context-preserving unknown-word ingestion | **Partial — `[bias]` table + ranking + `--with-persona` ✅ (v1.4.0); a fourth tier2 bundle (`tier2-general`) added 2026-07-10 (◐, still opt-in); context-preserving ingestion built + unit-tested 2026-07-10 but its one production call site never activates it (◐, dormant — see §4)** | Phase 0's extension-pack seam | tmct |
 | 2 | tmct as marginalia's interpreter (§5): seon-mcp adapter, Formulate validation, mechanical-chat replacement | Not started | Phase 0's extension-pack seam | tmct, marginalia |
 | 3 | tmct × seonix combined index (§6): mount seonix's (multi-language) graph, re-verify RI depth at scale | Not started (multi-language extraction itself now out of scope — stays in seonix, §2.2) | Phase 0's extension-pack seam | tmct, seonix |
