@@ -42,10 +42,14 @@
 >
 > **Still open**: Medium/Large tier content (this doc's own §3 numbers are the target, not yet
 > built); the `createSession`→full-`initRepo` auto-init convergence (§2, deliberately deferred by
-> the persona-content agent to avoid a collision with the CLI/config agent's own `chat.mjs` work);
-> `scm-svf`/cardinality monotonicity (tracked separately, still in progress as of this update).
-> Full-suite verification after all 3 merges (persistence backends + CLI/config + persona content):
-> **1828/1828 passing, 0 failures.**
+> the persona-content agent to avoid a collision with the CLI/config agent's own `chat.mjs` work).
+> `scm-svf`/cardinality monotonicity (tracked separately in `HANDOVER.md`/`PLAN_INFERENCE_TESTING.md`)
+> is now also done and merged — all 4 of this batch's concurrent workstreams are complete.
+> Full-suite verification after all 4 merges (persistence backends + CLI/config + persona content +
+> `scm-svf`): **1852/1852 passing, 0 failures.** Also added `npm run init:large` (combines every
+> already-committed bundle — human persona + seon + conceptnet + aws/python/java — on the default
+> flat-JSON backend, ~7,380 facts), a convenience script distinct from this doc's own not-yet-built
+> Large tier (~13,600 facts, designed to pair with the SQLite backend).
 
 **Goal:** replace tmct's implicit code-domain default (SEON + a tech-filtered ConceptNet slice) with
 a genuinely general "human-world" persona, so a fresh `npx @polycode-projects/the-mechanical-code-talker

@@ -514,11 +514,15 @@ SQLite store whose schema was adapted from a real, working store already built i
 seonix — reused directly, but with its write model changed from seonix's rebuild-and-swap to real
 per-fact `INSERT`/`UPDATE`, since tmct's problem is write-heavy per-turn accumulation, not seonix's
 read-latency-on-a-static-artifact problem). Built by 4 concurrent background sub-agents in isolated
-worktrees, merged one at a time with 3 real conflicts resolved by hand. `npm test`: 1756 → 1828.
-Full design in `PLAN_SEED.md` (a new permanent design doc, this batch's own Stage 0 deliverable);
-current build status and next-session follow-ups (Medium/Large tiers, the auto-init convergence,
-the seonix migration note) in `HANDOVER.md`. `scm-svf`/cardinality monotonicity was dispatched
-alongside this batch as its own background agent; see `HANDOVER.md` for its status.
+worktrees, merged one at a time with 4 real conflicts resolved by hand. `scm-svf`/cardinality
+monotonicity — the fourth concurrent agent — also shipped in this same batch: `scm-svf1`, cardinality
+monotonicity, and `cax-maxc0`, all wired into live chat, verified live by the coordinator directly
+("every cat has exactly 4 legs" → "does every cat have at least 2 legs" → yes, entailment named;
+"every cache has at most 0 risks" → "does a cache have a risk" → no, proven not guessed). INFBENCH
+chat arm 99% (216/219), kernel arm 100%. `npm test`: 1756 → 1852 across the whole batch. Full design
+in `PLAN_SEED.md` (a new permanent design doc, this batch's own Stage 0 deliverable); current build
+status and next-session follow-ups (Medium/Large tiers, the auto-init convergence, the seonix
+migration note) in `HANDOVER.md`.
 
 ## The umbrella product definition (item 1)
 
