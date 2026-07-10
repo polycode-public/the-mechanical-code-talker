@@ -56,8 +56,17 @@ export const STATED_BY_PROP = "mgx:statedBy";              // a Source directly 
 export const CANONICALISED_FROM_PROP = "mgx:canonicalisedFrom"; // a canonical Fact ← its raw form
 export const CREATED_AT_PROP = "mgx:createdAt";           // first-write-wins ISO-8601 on every individual
 
-// The one deterministic operator Source id — the operator chatting to tmct.
+// The bare (session-less) singleton Source ids — the fallback for an
+// operator/teach provenance tag that carries no session-id segment (e.g. a
+// hand-authored "chat:"/"session:"/"operator" tag, or a direct API caller
+// that never threaded a session id through). Once a provenance tag DOES carry
+// a session-id segment (every real chat/teach write does — see
+// grammar/assert.mjs's provenanceTag / chat.mjs's teachProvenanceTag), each
+// session mints its OWN Source individual instead: `${ID}:<sessionId>`
+// (sourceIdFor below) — actor-level (session-scoped) trust, unconditional,
+// no config flag (PLAN_PROVENANCE_TRUST Part B).
 export const OPERATOR_SOURCE_ID = "src:operator-chat";
+export const TEACH_SOURCE_ID = "src:teach-chat";
 
 const ROLES = new Set(["visitor", "tmct"]);
 const LABEL_CAP = 48;    // utterance/fact labels stay skimmable in renders
@@ -287,11 +296,20 @@ function setAttr(ind, prop, key, value) {
 // ---- Sources (step (b)): first-class provenance individuals -----------------
 
 /** Deterministic Source id + type over the closed kind set. Returns null for an
- *  unknown kind (an unmappable provenance tag → no Source, honestly). */
+ *  unknown kind (an unmappable provenance tag → no Source, honestly).
+ *
+ *  operator/teach kinds are SESSION-SCOPED when `desc.sessionId` is present
+ *  (unconditional — every real chat/teach provenance tag carries one; see
+ *  provenanceTagToSource): `${OPERATOR_SOURCE_ID}:<sessionId>` /
+ *  `${TEACH_SOURCE_ID}:<sessionId>` instead of the bare singleton, so each
+ *  session's operator/teach facts attach to their OWN Source individual
+ *  rather than every session ever collapsing onto one. Session ids are
+ *  uuidv7s (hex + hyphens only — see uuid.mjs), so `:`/`@` never collide with
+ *  this id scheme's own delimiters. */
 function sourceIdFor(desc) {
   switch (desc?.kind) {
-    case "operator": return { id: OPERATOR_SOURCE_ID, type: "operator" };
-    case "teach": return { id: "src:teach-chat", type: "teach" };
+    case "operator": return { id: desc.sessionId ? `${OPERATOR_SOURCE_ID}:${desc.sessionId}` : OPERATOR_SOURCE_ID, type: "operator" };
+    case "teach": return { id: desc.sessionId ? `${TEACH_SOURCE_ID}:${desc.sessionId}` : TEACH_SOURCE_ID, type: "teach" };
     case "provider": return { id: `src:provider:${desc.name}`, type: "provider" };
     case "corpus": return { id: `src:corpus:${desc.name}`, type: "corpus" };
     case "web": return { id: `src:learned:web:${fnv1aHex(String(desc.url || ""))}`, type: "web", url: String(desc.url || "") };
@@ -324,30 +342,44 @@ function upsertSource(payload, desc, createdAtCandidate) {
   return info.id;
 }
 
+/** Parse the "chat" shape both provenanceTag (grammar/assert.mjs) and
+ *  teachProvenanceTag (chat.mjs) emit — `<source>[:<sessionId>][@<ts>]` after
+ *  their kind prefix has already been stripped — into { createdAt, sessionId? }.
+ *  `sessionId` is present only when the tag actually carried one (every real
+ *  chat/teach write does; a hand-authored/legacy tag without one degrades to
+ *  the bare singleton Source, honestly — see sourceIdFor). */
+function parseChatTagRest(rest) {
+  const at = rest.indexOf("@");
+  const beforeAt = at >= 0 ? rest.slice(0, at) : rest;
+  const createdAt = at >= 0 ? rest.slice(at + 1) : "";
+  const colon = beforeAt.indexOf(":");
+  const sessionId = colon >= 0 ? beforeAt.slice(colon + 1) : "";
+  return { createdAt, ...(sessionId ? { sessionId } : {}) };
+}
+
 /**
  * Parse one legacy provenance TAG into a Source descriptor over the closed kind
  * set — the inverse the migration and the live write path both name Sources
  * through. The tag formats are exactly what the writers produce:
  *   corpus:conceptnet /r/IsA   → { kind:"corpus",   name:"conceptnet" }
- *   ace:chat:<session>@<ts>    → { kind:"operator",  createdAt:<ts> }
- *   teach:chat:<session>@<ts>  → { kind:"teach",     createdAt:<ts> }
+ *   ace:chat:<session>@<ts>    → { kind:"operator",  createdAt:<ts>, sessionId:<session> }
+ *   teach:chat:<session>@<ts>  → { kind:"teach",     createdAt:<ts>, sessionId:<session> }
  *   web:<url> | url:<url>      → { kind:"web",       url:<url> }
  *   entailed:<rule>            → { kind:"entailed",  rule:<rule> }
  * chat:/session: refs map to the operator; an unknown tag → null (no Source).
+ * The session-id segment (Part B: session-scoped actor-level trust) feeds
+ * sourceIdFor, which mints a PER-SESSION Source id when present, instead of
+ * collapsing every session onto one singleton operator/teach Source.
  */
 export function provenanceTagToSource(tag) {
   const t = String(tag || "").trim();
   if (!t) return null;
   const head = t.split(/\s+/)[0]; // drop trailing " /r/IsA" etc.
   if (head.startsWith("corpus:")) return { kind: "corpus", name: head.slice("corpus:".length) || "unknown" };
-  if (head.startsWith("ace:")) {
-    const at = head.indexOf("@");
-    return { kind: "operator", createdAt: at >= 0 ? head.slice(at + 1) : "" };
-  }
+  if (head.startsWith("ace:")) return { kind: "operator", ...parseChatTagRest(head.slice("ace:".length)) };
   if (head.startsWith("teach:")) {
     // the chat teach lane's natural frames — chat.mjs's teachProvenanceTag
-    const at = head.indexOf("@");
-    return { kind: "teach", createdAt: at >= 0 ? head.slice(at + 1) : "" };
+    return { kind: "teach", ...parseChatTagRest(head.slice("teach:".length)) };
   }
   if (head.startsWith("web:")) return { kind: "web", url: head.slice("web:".length) };
   if (head.startsWith("url:")) return { kind: "web", url: head.slice("url:".length) };

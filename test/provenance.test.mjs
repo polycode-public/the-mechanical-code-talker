@@ -65,7 +65,11 @@ test("(a) createdAt first-write-wins on an utterance; a Source keeps its first-s
 
 test("(b) provenanceTagToSource: parses the closed kind set; unknown → null", () => {
   assert.deepEqual(provenanceTagToSource("corpus:conceptnet /r/IsA"), { kind: "corpus", name: "conceptnet" });
-  assert.deepEqual(provenanceTagToSource("ace:chat:sess-1@2026-07-01T00:00:00.000Z"), { kind: "operator", createdAt: "2026-07-01T00:00:00.000Z" });
+  // ace:/teach: tags carry a session-id segment (Part B: actor-level, session-
+  // scoped trust) — extracted alongside createdAt, feeding sourceIdFor's
+  // per-session Source minting.
+  assert.deepEqual(provenanceTagToSource("ace:chat:sess-1@2026-07-01T00:00:00.000Z"), { kind: "operator", createdAt: "2026-07-01T00:00:00.000Z", sessionId: "sess-1" });
+  assert.deepEqual(provenanceTagToSource("teach:chat:sess-2@2026-07-01T00:00:00.000Z"), { kind: "teach", createdAt: "2026-07-01T00:00:00.000Z", sessionId: "sess-2" });
   assert.deepEqual(provenanceTagToSource("ace:chat"), { kind: "operator", createdAt: "" });
   assert.deepEqual(provenanceTagToSource("web:https://x.example/p"), { kind: "web", url: "https://x.example/p" });
   assert.deepEqual(provenanceTagToSource("entailed:transitivity"), { kind: "entailed", rule: "transitivity" });
@@ -106,12 +110,18 @@ test("(b) the ' | '-union becomes N statedBy edges (one per independent source);
     const [f] = factsOf(m);
     // the legacy compat shim is preserved verbatim (chat.mjs readers key on it)
     assert.equal(attr(f, "mgx:factProvenance"), "corpus:conceptnet /r/IsA | ace:chat:s1@2026-07-01T00:00:00.000Z");
-    // and two real statedBy edges now exist, one per distinct Source
+    // and two real statedBy edges now exist, one per distinct Source — the
+    // operator Source is SESSION-SCOPED (Part B): "s1"'s own Source id, never
+    // the bare singleton (every session's facts collapsing onto ONE operator
+    // Source is exactly the desync Part B closes).
     const objs = statedEdges(m).filter((e) => e.subject === f.id).map((e) => e.object).sort();
-    assert.deepEqual(objs, ["src:corpus:conceptnet", OPERATOR_SOURCE_ID].sort());
-    // recovered @ts seeds the operator Source's createdAt
-    const op = sourcesOf(m).find((s) => s.id === OPERATOR_SOURCE_ID);
+    assert.deepEqual(objs, ["src:corpus:conceptnet", "src:operator-chat:s1"].sort());
+    // recovered @ts seeds the session-scoped operator Source's createdAt
+    const op = sourcesOf(m).find((s) => s.id === "src:operator-chat:s1");
+    assert.ok(op, "a per-session operator Source individual exists");
     assert.equal(attr(op, CREATED_AT_PROP), "2026-07-01T00:00:00.000Z");
+    // and the old bare singleton is NOT what got written
+    assert.equal(sourcesOf(m).some((s) => s.id === OPERATOR_SOURCE_ID), false, "the bare singleton is not minted when a session id is present");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -146,8 +156,9 @@ test("(b) lazy migration: a legacy store (factProvenance string, no edges) gains
     const m1 = await loadMemory(dir);
     const f1 = factsOf(m1).find((f) => f.id === factId);
     assert.equal(attr(f1, "mgx:factProvenance"), "corpus:conceptnet /r/IsA | ace:chat:s0@2026-06-01T00:00:00.000Z", "string kept, never dropped");
+    // the migrated operator Source is session-scoped too ("s0"'s own Source)
     const objs1 = statedEdges(m1).filter((e) => e.subject === factId).map((e) => e.object).sort();
-    assert.deepEqual(objs1, ["src:corpus:conceptnet", OPERATOR_SOURCE_ID].sort(), "both Sources linked");
+    assert.deepEqual(objs1, ["src:corpus:conceptnet", "src:operator-chat:s0"].sort(), "both Sources linked");
     assert.ok(attr(f1, "mgx:trustScore"), "trust materialised on migration");
     assert.equal(f1.id, "fact:aaaaaaaa", "fact id never re-keyed by migration");
 
