@@ -32,8 +32,14 @@ import {
 // grown for dual-draw reliability) else the MIN_PER_CELL floor.
 const cellSample = (cell) => CELL_SAMPLE[cellKey(cell)] ?? MIN_PER_CELL;
 
-const POOL_FILE = fileURLToPath(new URL("../chatbench/graded-pool.jsonl", import.meta.url));
-const CASES_FILE = fileURLToPath(new URL("../chatbench/cases.jsonl", import.meta.url));
+// Case-set v3 (2026-07-10): chatbench/graded-pool.jsonl is now the smaller
+// GO-TO default (109 cases, 10/CEFR-grade, the folded-in frozen v1 core
+// included — SKILL_BENCHMARK_CHAT.md §1). The tests below validate the
+// canonical FULL pool's own structural invariants (GRADED_MATRIX cell sizes,
+// the stratified-sampling algorithm's behavior against a real ~10x-run-size
+// pool) — those invariants apply to the untouched full pool, preserved at
+// graded-pool-max.jsonl, not the go-to default.
+const POOL_FILE = fileURLToPath(new URL("../chatbench/graded-pool-max.jsonl", import.meta.url));
 
 const poolText = await readFile(POOL_FILE, "utf8");
 const { cases: pool, errors: poolErrors } = parseCases(poolText);
@@ -59,13 +65,12 @@ test("graded pool: every case carries grade + construction + the graded tag; ids
     assert.ok(typeof c.judge?.context === "string" && c.judge.context.length, `${c.id}: judge context`);
     if (c.mode === "session") assert.equal(c.graph, "fixture", `${c.id}: session cases run over the seeded fixture`);
   }
-  // no collision with the frozen v1 set
-  const { cases: v1 } = parseCases(await readFile(CASES_FILE, "utf8"));
-  for (const c of pool) assert.ok(!v1.some((v) => v.id === c.id), `${c.id} collides with cases.jsonl`);
-  // 49 = the frozen v1 48 + gq-forward-method-calls (0.8.2 WS1, append-only:
-  // deterministic tier-1 coverage for the forward call union — "what does
-  // Widget.render call" — which previously had no chatbench case at all).
-  assert.equal(v1.length, 49, "the case set only ever grows by appends (48 frozen v1 + 1)");
+  // Case-set v3: the frozen v1 core no longer lives in a separate file to
+  // check collision against — it was folded into the go-to graded-pool.jsonl
+  // (test/chatbench.test.mjs's "frozen v1 core" tests cover its own
+  // invariants there). Every id in THIS pool (the full, untouched generator
+  // output) already asserted above to start with "g-", which is disjoint by
+  // construction from the v1 core's own non-"g-" id scheme.
 });
 
 test("graded pool: cell coverage matches GRADED_MATRIX exactly (the design doc's matrix is enforced, not aspirational)", () => {

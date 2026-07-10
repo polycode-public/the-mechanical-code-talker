@@ -25,22 +25,32 @@ import {
 import { runChat } from "../src/chat.mjs";
 import { parseSessionJsonl, parseSessionLog, turnKey } from "../src/sessions.mjs";
 
-const CASES_FILE = fileURLToPath(new URL("../chatbench/cases.jsonl", import.meta.url));
+const POOL_FILE = fileURLToPath(new URL("../chatbench/graded-pool.jsonl", import.meta.url));
 const PROMPT_FILE = fileURLToPath(new URL("../chatbench/judge-prompt-v1.txt", import.meta.url));
 const SCHEMA_FILE = fileURLToPath(new URL("../chatbench/rubric.schema.json", import.meta.url));
 
-// ---- cases.jsonl lint ----
+// ---- frozen v1 core lint (case-set v3, 2026-07-10: folded into graded-
+// pool.jsonl as fully-graded cells rather than a separate ungraded file —
+// GRADED.md; identified here by id, since the pool's own ids are "g-*" and
+// the frozen-core ids never were) ----
 
-test("cases.jsonl: parses clean — unique ids, known tags/expect keys, valid modes", async () => {
-  const { cases, errors } = parseCases(await readFile(CASES_FILE, "utf8"));
+const v1CoreCases = (cases) => cases.filter((c) => !c.id.startsWith("g-"));
+
+test("frozen v1 core (in graded-pool.jsonl): parses clean — unique ids, known tags/expect keys, valid modes", async () => {
+  const { cases, errors } = parseCases(await readFile(POOL_FILE, "utf8"));
   assert.deepEqual(errors, [], "lint errors");
-  assert.ok(cases.length >= 36 && cases.length <= 64, `case count in contract range (got ${cases.length})`);
+  const core = v1CoreCases(cases);
+  assert.ok(core.length >= 36 && core.length <= 64, `case count in contract range (got ${core.length})`);
 });
 
-test("cases.jsonl: every coverage tag is populated; baselineFail weaknesses are documented", async () => {
-  const { cases } = parseCases(await readFile(CASES_FILE, "utf8"));
+test("frozen v1 core (in graded-pool.jsonl): every coverage tag is populated; baselineFail weaknesses are documented", async () => {
+  const { cases: allCases } = parseCases(await readFile(POOL_FILE, "utf8"));
+  const cases = v1CoreCases(allCases);
   const byTag = new Map(TAGS.map((t) => [t, 0]));
-  for (const c of cases) for (const t of c.tags) byTag.set(t, byTag.get(t) + 1);
+  // every core case now also carries "graded" (case-set v3) so it validates
+  // as a pool member; that's an EXTRA_TAG, not part of the v1 coverage
+  // registry above, so it's deliberately not counted here.
+  for (const c of cases) for (const t of c.tags) if (byTag.has(t)) byTag.set(t, byTag.get(t) + 1);
   for (const [tag, n] of byTag) assert.ok(n >= 2, `tag "${tag}" has at least 2 cases (got ${n})`);
   const baseline = cases.filter((c) => c.turns.some((t) => t.expect?.baselineFail));
   assert.ok(baseline.length >= 5, `documented baseline weaknesses exist (got ${baseline.length})`);

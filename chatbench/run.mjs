@@ -590,7 +590,15 @@ export async function main(argv = process.argv.slice(2)) {
   }
   const outDir = args.out ?? join(HERE, "results", "raw", `run-${args.stamp}`);
 
-  const { cases, errors } = parseCases(await readFile(args.cases, "utf8"));
+  // cases.jsonl is optional (case-set v3, 2026-07-10): the frozen v1 core was
+  // folded into graded-pool.jsonl as fully-graded cells rather than kept as a
+  // separate always-run, ungraded tier — see GRADED.md. A caller may still
+  // point --cases at a local file for a custom always-run set; absent that,
+  // this tier is simply empty and every case runs through the graded pool.
+  const casesPath = args.cases === DEFAULT_CASES && !(await fileExists(DEFAULT_CASES)) ? null : args.cases;
+  const { cases, errors } = casesPath
+    ? parseCases(await readFile(casesPath, "utf8"))
+    : { cases: [], errors: [] };
   if (errors.length) {
     console.error(`cases lint failed (${errors.length}):`);
     for (const e of errors) console.error(`  - ${e}`);
