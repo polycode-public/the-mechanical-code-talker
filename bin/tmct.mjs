@@ -34,6 +34,9 @@ software repository. No model calls; no codebase index of its own.
 Usage:
   tmct                         interactive chat (the headline surface)
   tmct chat [--repo <abs>]     chat over a specific repo's graph
+       [--graph <path>]        explicit graph file (repeatable — multiple graphs merge;
+                               see src/graph-merge.mjs); wins over --repo/TMCT_GRAPH_FILE/tmct.toml
+       [--config <path>]       an alternate tmct.toml location (a file or a directory)
        [--ephemeral]           read the graph but write nothing back (demo/read-only)
        [--narrate]             start with narrate mode on — a verbose, developer-facing
                                trace of decision points/matched pattern/results/goal per
@@ -42,31 +45,47 @@ Usage:
        [--plain]               force the plain readline shell (the default when
                                stdin/stdout is not a terminal)
   tmct memory [--repo <abs>]   what tmct remembers: facts, utterances, sessions,
-       [--verbose]             folded blocks (the /memory chat command, from the shell)
-  tmct init [--force]          initialize the current directory for tmct: .tmct/,
-                               tmct.toml, tier-1 corpus seed, provenance record
-       [--corpus <id>]         also seed a tier-2 corpus (aws|python|java) — opt-in,
-                               offline, $0; init is tier-1-only unless asked
+       [--config <path>]       folded blocks (the /memory chat command, from the shell)
+       [--verbose]
+  tmct init [--repo <abs>]     initialize a repo for tmct (default: cwd): .tmct/,
+       [--force]               tmct.toml, tier-1 corpus seed, provenance record
+       [--corpus <id|path>]    also seed a corpus — a tier-2 manifest id (aws|python|java|
+                               general) or a jsonl file path — opt-in, offline, $0
+       [--ontology <name|path>]  activate+seed an ontology bundle (a recognized name or a path)
+       [--lexicon <name|path>]   activate a lexicon bundle (recognized name or a path;
+                               merged read-time, never seeded — see mergedLexiconExtra)
+       [--graph <path>]        set graph_file/graph_files in tmct.toml (repeatable)
+       [--config <path>]       write to an alternate tmct.toml location
        [--detect]              suggest a tier-2 corpus from the repo's manifests
                                (pyproject.toml → python, pom.xml → java); never seeds unasked
        [--with-persona <name>] write an explicit [extensions]/[bias] preset into tmct.toml
                                ("code" — today's implicit default, made explicit)
+  tmct import [--repo <abs>]   activate+seed into an ALREADY-initialized repo (any
+       [--corpus <id|path>]    combination of these flags in one call). --graph is a
+       [--ontology <name|path>]  DIFFERENT operation from the others: it APPENDS to
+       [--lexicon <name|path>]   tmct.toml's graph_files array (multi-graph growth),
+       [--graph <path>]        never an extensions-bundle activation.
+       [--config <path>]
   tmct extend --validate <dir>  validate a third-party extension pack's declared
-                               resources (corpus/lexicon/templates) before activating
+       [--config <path>]      resources (corpus/lexicon/templates) before activating
                                it in any repo's tmct.toml; exits non-zero on failure
   tmct syllogise [--repo <abs>] speculative inference (offline maintenance job): forward-
        [--depth <n>] [--budget <n>]  chain the memory's rdfs:subClassOf closure, materialising
-                               bounded, low-trust, retractable entailed facts (never on the chat path)
+       [--config <path>]      bounded, low-trust, retractable entailed facts (never on the chat path)
   tmct serve [--repo <abs>]    run the Anthropic Messages API-compatible endpoint
        [--host <h>] [--port <n>]  (POST /v1/messages) over the graph — a deterministic,
-                               no-LLM "model" a tool-loop client can call; $0 usage.
-                               Defaults: host 127.0.0.1, port 8787. Ctrl+C to stop.
+       [--graph <path>]        no-LLM "model" a tool-loop client can call; $0 usage.
+       [--config <path>]       Defaults: host 127.0.0.1, port 8787. Ctrl+C to stop.
   tmct cli <tool> '{…}'        invoke a graph tool directly (carry-over, de-emphasized)
   tmct cli digest '{…}'        architecture map + per-module context bundles
   tmct --help                  show this help
 
 On a terminal, chat opens the full-screen TUI; piped input gets the plain shell.
 In chat: /help lists slash-commands; /exit leaves. Session log → <repo>/.tmct/session-<id>.log.
+
+Shared graph-path precedence (chat/serve; see src/cli-args.mjs): --graph flag(s) >
+TMCT_GRAPH_FILE env > tmct.toml graph_file/graph_files > --repo-derived
+<repo>/.tmct/graph.json > git-root/cwd default.
 `;
 
 const argv = process.argv.slice(2);
@@ -274,6 +293,165 @@ async function runCliMode() {
   process.exit(2);
 }
 
+// ---- shared `init`/`import` pluggable-input helpers ---------------------------
+//
+// Both `tmct init --corpus/--ontology/--lexicon` and the new `tmct import` verb
+// funnel through the SAME two-step seam: resolvePluggableInput (name/id/path →
+// a resolved descriptor) then activatePluggableInput (write tmct.toml + seed via
+// src/extensions.mjs's unified loop) — one seam instead of three near-duplicate
+// hand-rolled call sites.
+
+/** Read `repoRoot`'s current tmct.toml (if any) into the shape init.mjs's
+ *  renderTomlConfig/defaultConfig expect, so a caller can add ONE key and
+ *  write it straight back without losing every other already-written key.
+ *  Mirrors `tmct init --corpus`'s original inline config-merge exactly. */
+async function readConfigForRewrite(repoRoot) {
+  const { defaultConfig } = await import("../src/init.mjs");
+  const { loadTomlConfig } = await import("../src/toml-config.mjs");
+  const raw = await loadTomlConfig(repoRoot);
+  const cfg = { ...defaultConfig() };
+  if (raw?.graph_file !== undefined) cfg.graphFile = String(raw.graph_file);
+  if (Array.isArray(raw?.graph_files)) cfg.graphFiles = raw.graph_files.slice();
+  if (raw?.corpus?.tier !== undefined) cfg.corpus = { tier: raw.corpus.tier };
+  if (raw?.seed) {
+    cfg.seed = { ...cfg.seed };
+    if (raw.seed.enabled !== undefined) cfg.seed.enabled = Boolean(raw.seed.enabled);
+    if (raw.seed.limit !== undefined) cfg.seed.limit = Number(raw.seed.limit);
+  }
+  if (raw?.extensions !== undefined) cfg.extensions = raw.extensions;
+  if (raw?.bias !== undefined) cfg.bias = raw.bias;
+  return { raw, cfg };
+}
+
+async function writeConfig(repoRoot, cfg) {
+  const { renderTomlConfig, CONFIG_FILE } = await import("../src/init.mjs");
+  const { writeFile } = await import("node:fs/promises");
+  const { join: joinPath } = await import("node:path");
+  await writeFile(joinPath(repoRoot, CONFIG_FILE), renderTomlConfig(cfg));
+}
+
+/** Resolve a `--corpus`/`--ontology`/`--lexicon` value to something
+ *  activatePluggableInput can act on: either a RECOGNIZED name (a
+ *  BUILTIN_EXTENSIONS entry of the matching kind; for `--corpus` specifically,
+ *  also a tier-2 manifest id like "aws" — today's `--corpus <id>` contract,
+ *  preserved byte-for-byte) or a filesystem PATH, to be declared as a brand
+ *  new `[extensions.<slug>]` entry. Throws the same clear "unknown --corpus"
+ *  error the original tier-2-only implementation gave (naming the available
+ *  ids), generalized to name a checked file path too. Validates before any
+ *  disk write — callers resolve every pluggable input BEFORE calling
+ *  initRepo, so a bad name/path touches nothing. */
+async function resolvePluggableInput(kind, nameOrPath, { repoRoot }) {
+  const { BUILTIN_EXTENSIONS } = await import("../src/extensions.mjs");
+  if (Object.prototype.hasOwnProperty.call(BUILTIN_EXTENSIONS, nameOrPath) && BUILTIN_EXTENSIONS[nameOrPath].kind === kind) {
+    return { known: true, name: nameOrPath };
+  }
+  let manifestIds = null;
+  if (kind === "corpus") {
+    const { readFile } = await import("node:fs/promises");
+    const { TIER2_MANIFEST_FILE } = await import("../src/corpus/conceptnet.mjs");
+    try {
+      const manifest = JSON.parse(await readFile(TIER2_MANIFEST_FILE, "utf8"));
+      const corpuses = manifest.corpuses || [];
+      manifestIds = corpuses.map((c) => c.id);
+      const manifestEntry = corpuses.find((c) => c.id === nameOrPath);
+      if (manifestEntry) return { known: true, name: `tier2-${manifestEntry.id}`, manifestEntry };
+    } catch { /* manifest unreadable — fall through to path resolution */ }
+  }
+  const { access } = await import("node:fs/promises");
+  const { resolve: resolvePath, basename, isAbsolute } = await import("node:path");
+  const abs = isAbsolute(nameOrPath) ? nameOrPath : resolvePath(repoRoot, nameOrPath);
+  try {
+    await access(abs);
+  } catch {
+    if (manifestIds) {
+      throw new Error(`unknown --corpus "${nameOrPath}". Available tier-2 corpuses: ${manifestIds.join(", ")}.`);
+    }
+    throw new Error(`unknown --${kind} "${nameOrPath}" — not a recognized name, and no file found at ${abs}`);
+  }
+  const slug = basename(abs).replace(/\.[^.]+$/, "").replace(/[^a-zA-Z0-9_-]+/g, "-").toLowerCase() || kind;
+  return { known: false, name: slug, kind, path: abs };
+}
+
+/** Activate one resolvePluggableInput() result in `repoRoot`'s tmct.toml and —
+ *  for corpus/ontology-kind entries (or a pack-kind entry with a corpusPath) —
+ *  seed it via the SAME unified loop every other bundle uses
+ *  (src/extensions.mjs's seedActiveCorpusEntries). A lexicon/templates-kind
+ *  entry only activates (merged read-time via mergedLexiconExtra, never
+ *  seeded — matching today's behavior for those kinds). Returns a
+ *  human-readable status line for stdout. */
+async function activatePluggableInput(repoRoot, resolved) {
+  const { raw, cfg } = await readConfigForRewrite(repoRoot);
+  const name = resolved.name;
+  const existingEntry = raw?.extensions?.[name] || {};
+  const newEntry = { ...existingEntry, active: true };
+  if (!resolved.known) {
+    newEntry.kind = resolved.kind;
+    const pathKey = resolved.kind === "ontology" ? "ontology_path"
+      : resolved.kind === "lexicon" ? "lexicon_path"
+        : resolved.kind === "templates" ? "templates_path"
+          : "corpus_path";
+    const { relative } = await import("node:path");
+    const rel = relative(repoRoot, resolved.path);
+    newEntry[pathKey] = rel && !rel.startsWith("..") ? rel : resolved.path;
+  }
+  cfg.extensions = { ...(cfg.extensions || {}), [name]: newEntry };
+  await writeConfig(repoRoot, cfg);
+
+  const { resolveExtensions, seedActiveCorpusEntries } = await import("../src/extensions.mjs");
+  const { entries } = await resolveExtensions(repoRoot);
+  const entry = entries.get(name);
+  const seedable = entry.kind === "corpus" || entry.kind === "ontology" || (entry.kind === "pack" && entry.corpusPath);
+  if (!seedable) {
+    return `activated "${name}" (${entry.kind}) in tmct.toml — no corpus facts to seed for this kind.\n`;
+  }
+  const { perBundle } = await seedActiveCorpusEntries(repoRoot, new Map([[name, entry]]));
+  const seeded = perBundle[name];
+  if (seeded.error) {
+    throw new Error(`could not seed "${name}" — ${seeded.error}`);
+  }
+  if (resolved.manifestEntry) {
+    // Preserve the ORIGINAL `--corpus <tier2-id>` wording byte-for-byte
+    // (test/init-cli.test.mjs asserts on this exact shape).
+    return `seeded tier-2 corpus "${resolved.manifestEntry.id}" (${resolved.manifestEntry.kind}) — ${seeded.appended} fact(s) added`
+      + `${seeded.skipped ? `, ${seeded.skipped} already present` : ""}. Source: corpus/tier2/${resolved.manifestEntry.file} (${resolved.manifestEntry.license}). `
+      + `Activated in tmct.toml — future \`tmct init\`/chat sessions seed it automatically.\n`;
+  }
+  return `seeded "${name}" (${entry.kind}) — ${seeded.appended} fact(s) added`
+    + `${seeded.skipped ? `, ${seeded.skipped} already present` : ""}. `
+    + `Activated in tmct.toml — future \`tmct init\`/chat sessions seed it automatically.\n`;
+}
+
+/** `--graph <path>` (repeatable) APPENDS to `repoRoot`'s tmct.toml
+ *  `graph_files` array — a DIFFERENT, purely additive operation from
+ *  activatePluggableInput (no extensions-bundle activation). Each path is
+ *  sanity-checked (readable, valid JSON, has an "individuals" array) before
+ *  being recorded — `tmct import` targets an ALREADY-initialized repo, so the
+ *  named graph is expected to genuinely exist. */
+async function appendGraphFiles(repoRoot, graphPaths) {
+  const { readFile } = await import("node:fs/promises");
+  const { resolve: resolvePath, relative } = await import("node:path");
+  for (const p of graphPaths) {
+    const abs = resolvePath(repoRoot, p);
+    let text;
+    try { text = await readFile(abs, "utf8"); }
+    catch (e) { throw new Error(`--graph ${p}: cannot read ${abs} (${e?.message || e})`); }
+    let payload;
+    try { payload = JSON.parse(text); }
+    catch (e) { throw new Error(`--graph ${p}: ${abs} is not valid JSON (${e?.message || e})`); }
+    if (typeof payload !== "object" || payload === null || !Array.isArray(payload.individuals)) {
+      throw new Error(`--graph ${p}: ${abs} doesn't look like a graph entities payload (missing an "individuals" array)`);
+    }
+  }
+  const { cfg } = await readConfigForRewrite(repoRoot);
+  const additions = graphPaths.map((p) => {
+    const abs = resolvePath(repoRoot, p);
+    const rel = relative(repoRoot, abs);
+    return rel && !rel.startsWith("..") ? rel : abs;
+  });
+  cfg.graphFiles = [...(cfg.graphFiles || []), ...additions];
+  await writeConfig(repoRoot, cfg);
+}
+
 async function main() {
   const mode = process.argv[2];
 
@@ -291,30 +469,42 @@ async function main() {
     // session with the verbose developer/debug narrate mode already on. Default
     // OFF; `/narrate on`/`/narrate off` also toggles it mid-session.
     const narrate = rest.includes("--narrate");
+    // `--graph <path>` (repeatable) / `--config <path>` (src/cli-args.mjs): threaded
+    // through as the new top tier of createSession's graph-resolution order (above
+    // TMCT_GRAPH_FILE — see chat.mjs's own docblock at createSession). Omitted from
+    // the call entirely when absent, so a plain `tmct chat [--repo]` invocation is
+    // byte-identical to before these flags existed.
+    const { repeatedFlag, strFlag } = await import("../src/cli-args.mjs");
+    const graphPaths = repeatedFlag(rest, ["--graph"]);
+    const configPath = strFlag(rest, ["--config"]);
+    const extra = {};
+    if (graphPaths.length) extra.graphPaths = graphPaths;
+    if (configPath) extra.configPath = configPath;
     // The shell gate: a real terminal gets the full-screen Ink TUI; `--plain` or a
     // non-TTY stream (pipes, scripts, the test suite) gets the readline shell. Both
     // drive the same createSession sink — only the drawing differs.
     const plain = rest.includes("--plain") || !process.stdin.isTTY || !process.stdout.isTTY;
     if (plain) {
       const { runChat } = await import("../src/chat.mjs");
-      await runChat({ repoPath, ephemeral, narrate });
+      await runChat({ repoPath, ephemeral, narrate, ...extra });
     } else {
       const { runTui } = await import("../src/tui/app.mjs");
-      await runTui({ repoPath, ephemeral, narrate });
+      await runTui({ repoPath, ephemeral, narrate, ...extra });
     }
     return;
   }
 
   if (mode === "memory") {
     // `tmct memory` — the /memory chat command from the shell: same renderer
-    // (src/memory/inspect.mjs), same repo resolution as chat (git root default).
+    // (src/memory/inspect.mjs). Repo resolution now goes through the shared
+    // resolveRuntimeConfig (src/cli-args.mjs) — --repo > git root > cwd, same
+    // as before, plus a (currently inert but accepted) `--config` for symmetry
+    // with every other subcommand. No `--graph`: memory reads no code graph.
     const rest = process.argv.slice(3);
-    const i = rest.indexOf("--repo");
-    const repoPath = i !== -1 ? rest[i + 1] : undefined;
     const verbose = rest.includes("--verbose") || rest.includes("-v");
-    const { gitToplevel } = await import("../src/chat.mjs");
+    const { resolveRuntimeConfig } = await import("../src/cli-args.mjs");
     const { inspectMemory } = await import("../src/memory/inspect.mjs");
-    const repo = repoPath || gitToplevel(process.cwd()) || process.cwd();
+    const { repo } = await resolveRuntimeConfig({ argv: rest });
     process.stdout.write(await inspectMemory(repo, { verbose }) + "\n");
     return;
   }
@@ -330,34 +520,40 @@ async function main() {
     // explicitly asked via `--corpus <id>`. The `--detect` auto-detect is a
     // documented STUB: it inspects the repo's manifests (pyproject.toml → python,
     // pom.xml → java) and SUGGESTS the matching corpus, but never seeds it unasked.
+    //
+    // `--repo <abs>` (NEW): init used to always hardcode process.cwd() — the only
+    // subcommand without a --repo flag. It now takes one like every other
+    // subcommand, defaulting to cwd exactly as before when absent.
     const rest = process.argv.slice(3);
-    const { initRepo, defaultConfig, renderTomlConfig, CONFIG_FILE, PERSONA_PRESETS } = await import("../src/init.mjs");
-    const { loadTomlConfig } = await import("../src/toml-config.mjs");
+    const { strFlag, repeatedFlag } = await import("../src/cli-args.mjs");
+    const { resolve: resolvePath } = await import("node:path");
+    const { initRepo, PERSONA_PRESETS } = await import("../src/init.mjs");
 
-    const ci = rest.indexOf("--corpus");
-    const corpusId = ci !== -1 ? rest[ci + 1] : undefined;
-    let manifest = null;
-    let manifestEntry = null;
-    if (corpusId) {
-      // Validate the id against the tier-2 manifest (same source of truth the
-      // old ad hoc path used) BEFORE touching anything on disk.
-      const { readFile } = await import("node:fs/promises");
-      const { TIER2_MANIFEST_FILE } = await import("../src/corpus/conceptnet.mjs");
-      try { manifest = JSON.parse(await readFile(TIER2_MANIFEST_FILE, "utf8")); }
-      catch (e) { process.stderr.write(`tmct init: cannot read the tier-2 manifest — ${e?.message || e}\n`); process.exit(1); }
-      manifestEntry = (manifest.corpuses || []).find((c) => c.id === corpusId);
-      if (!manifestEntry) {
-        const ids = (manifest.corpuses || []).map((c) => c.id).join(", ");
-        process.stderr.write(`tmct init: unknown --corpus "${corpusId}". Available tier-2 corpuses: ${ids}.\n`);
-        process.exit(2);
-      }
+    const repoFlag = strFlag(rest, ["--repo"]);
+    const repoRoot = repoFlag ? resolvePath(process.cwd(), repoFlag) : process.cwd();
+
+    const corpusVal = strFlag(rest, ["--corpus"]);
+    const ontologyVal = strFlag(rest, ["--ontology"]);
+    const lexiconVal = strFlag(rest, ["--lexicon"]);
+    const graphFlags = repeatedFlag(rest, ["--graph"]);
+
+    // Resolve + validate EVERY pluggable input BEFORE touching disk — mirrors
+    // `--with-persona`'s own "validate before scaffolding" discipline, and the
+    // original `--corpus`'s "unknown id touches nothing" contract.
+    let corpusResolved = null, ontologyResolved = null, lexiconResolved = null;
+    try {
+      if (corpusVal) corpusResolved = await resolvePluggableInput("corpus", corpusVal, { repoRoot });
+      if (ontologyVal) ontologyResolved = await resolvePluggableInput("ontology", ontologyVal, { repoRoot });
+      if (lexiconVal) lexiconResolved = await resolvePluggableInput("lexicon", lexiconVal, { repoRoot });
+    } catch (e) {
+      process.stderr.write(`tmct init: ${e?.message || e}\n`);
+      process.exit(2);
     }
 
     // `--with-persona <name>` (Part 7): resolve + validate BEFORE touching
     // disk, mirroring `--corpus`'s own unknown-id error handling — a bad
     // persona name never scaffolds anything.
-    const pi = rest.indexOf("--with-persona");
-    const personaName = pi !== -1 ? rest[pi + 1] : undefined;
+    const personaName = strFlag(rest, ["--with-persona"]);
     let personaPreset = null;
     if (personaName) {
       if (!Object.prototype.hasOwnProperty.call(PERSONA_PRESETS, personaName)) {
@@ -368,60 +564,59 @@ async function main() {
       personaPreset = PERSONA_PRESETS[personaName];
     }
 
-    const res = await initRepo(process.cwd(), { force: rest.includes("--force"), persona: personaPreset });
+    const res = await initRepo(repoRoot, { force: rest.includes("--force"), persona: personaPreset });
     process.stdout.write(res.message + "\n");
 
-    if (manifestEntry) {
-      // `--corpus <id>` now means "activate extensions.tier2-<id> and PERSIST
-      // that into tmct.toml" — so a second `tmct init` (or the next chat
-      // bootstrap) remembers the choice, unlike the old ad hoc path, which had
-      // to be repeated every time. This changes the tier-2 provenance tag from
-      // the old colon-separated "corpus:tier2:<id>" to the hyphenated
-      // "corpus:tier2-<id>" (matching the TOML-legal extension name) — a
-      // deliberate, low-risk rename; nothing in chat.mjs's runtime logic keys
-      // on the old colon-separated string (verified via grep).
-      const extName = `tier2-${manifestEntry.id}`;
-      const raw = await loadTomlConfig(process.cwd()); // just-written by initRepo above
-      const cfg = { ...defaultConfig() };
-      if (raw?.graph_file !== undefined) cfg.graphFile = String(raw.graph_file);
-      if (raw?.corpus?.tier !== undefined) cfg.corpus = { tier: raw.corpus.tier };
-      if (raw?.seed) {
-        cfg.seed = { ...cfg.seed };
-        if (raw.seed.enabled !== undefined) cfg.seed.enabled = Boolean(raw.seed.enabled);
-        if (raw.seed.limit !== undefined) cfg.seed.limit = Number(raw.seed.limit);
-      }
-      cfg.extensions = { ...(raw?.extensions || {}), [extName]: { ...(raw?.extensions?.[extName] || {}), active: true } };
-      if (raw?.bias !== undefined) cfg.bias = raw.bias;
-      const { writeFile } = await import("node:fs/promises");
-      const { join } = await import("node:path");
-      await writeFile(join(process.cwd(), CONFIG_FILE), renderTomlConfig(cfg));
-
-      // Seed it now too — through the SAME unified corpus loader every other
-      // bundle goes through (src/extensions.mjs), not a bespoke seedMemory call.
-      const { resolveExtensions, seedActiveCorpusEntries } = await import("../src/extensions.mjs");
-      const { entries } = await resolveExtensions(process.cwd());
-      const entry = entries.get(extName);
-      const { perBundle } = await seedActiveCorpusEntries(process.cwd(), new Map([[extName, entry]]));
-      const seeded = perBundle[extName];
-      if (seeded.error) {
-        process.stderr.write(`tmct init: could not seed tier-2 corpus "${manifestEntry.id}" — ${seeded.error}\n`);
+    // `--corpus`/`--ontology`/`--lexicon` now mean "activate this bundle and
+    // PERSIST that into tmct.toml" — so a second `tmct init` (or the next chat
+    // bootstrap) remembers the choice, unlike the old ad hoc path, which had
+    // to be repeated every time. (For a tier-2 --corpus id this changes the
+    // provenance tag from the old colon-separated "corpus:tier2:<id>" to the
+    // hyphenated "corpus:tier2-<id>" — a deliberate, low-risk rename predating
+    // this batch; nothing in chat.mjs's runtime logic keys on the old string.)
+    let anyActivation = false;
+    for (const resolved of [corpusResolved, ontologyResolved, lexiconResolved]) {
+      if (!resolved) continue;
+      anyActivation = true;
+      try {
+        process.stdout.write(await activatePluggableInput(repoRoot, resolved));
+      } catch (e) {
+        process.stderr.write(`tmct init: ${e?.message || e}\n`);
         process.exit(1);
       }
-      process.stdout.write(
-        `seeded tier-2 corpus "${manifestEntry.id}" (${manifestEntry.kind}) — ${seeded.appended} fact(s) added`
-        + `${seeded.skipped ? `, ${seeded.skipped} already present` : ""}. Source: corpus/tier2/${manifestEntry.file} (${manifestEntry.license}). `
-        + `Activated in tmct.toml — future \`tmct init\`/chat sessions seed it automatically.\n`,
-      );
-      return;
     }
+
+    // `--graph <path>` (repeatable): SETS (not appends — that's `tmct import`'s
+    // job) the fresh scaffold's graph pointer(s). No existence check: like
+    // init's own default graph_file, this just names where a future indexer
+    // will write, and a brand new repo's graph typically doesn't exist yet.
+    if (graphFlags.length) {
+      const { relative } = await import("node:path");
+      const { cfg } = await readConfigForRewrite(repoRoot);
+      const rel = (p) => {
+        const abs = resolvePath(repoRoot, p);
+        const r = relative(repoRoot, abs);
+        return r && !r.startsWith("..") ? r : abs;
+      };
+      if (graphFlags.length === 1) {
+        cfg.graphFile = rel(graphFlags[0]);
+        delete cfg.graphFiles;
+      } else {
+        cfg.graphFiles = graphFlags.map(rel);
+      }
+      await writeConfig(repoRoot, cfg);
+      process.stdout.write(`graph path${graphFlags.length > 1 ? "s" : ""} set in tmct.toml: ${graphFlags.join(", ")}\n`);
+      anyActivation = true;
+    }
+
+    if (anyActivation) return;
 
     if (rest.includes("--detect")) {
       // AUTO-DETECT STUB (documented, non-seeding): map a build manifest to the
       // tier-2 corpus that fits, and tell the operator how to add it. Kept a stub on
       // purpose — the $0/offline default never expands the corpus without an ask.
       const { access } = await import("node:fs/promises");
-      const { join } = await import("node:path");
-      const has = (f) => access(join(process.cwd(), f)).then(() => true, () => false);
+      const has = (f) => access(resolvePath(repoRoot, f)).then(() => true, () => false);
       const DETECT = [["pyproject.toml", "python"], ["pom.xml", "java"]];
       const found = [];
       for (const [file, id] of DETECT) if (await has(file)) found.push([file, id]);
@@ -433,6 +628,61 @@ async function main() {
         }
       }
       return;
+    }
+    return;
+  }
+
+  if (mode === "import") {
+    // `tmct import` — activate+seed into an ALREADY-initialized repo, reusing
+    // the SAME resolvePluggableInput/activatePluggableInput seam `init`'s own
+    // --corpus/--ontology/--lexicon flags use. `--graph` is a DIFFERENT, purely
+    // additive operation (appendGraphFiles) — it grows tmct.toml's graph_files
+    // array, never activates an extensions bundle.
+    const rest = process.argv.slice(3);
+    const { strFlag, repeatedFlag } = await import("../src/cli-args.mjs");
+    const { resolve: resolvePath } = await import("node:path");
+
+    const repoFlag = strFlag(rest, ["--repo"]);
+    const repoRoot = repoFlag ? resolvePath(process.cwd(), repoFlag) : process.cwd();
+
+    const corpusVal = strFlag(rest, ["--corpus"]);
+    const ontologyVal = strFlag(rest, ["--ontology"]);
+    const lexiconVal = strFlag(rest, ["--lexicon"]);
+    const graphFlags = repeatedFlag(rest, ["--graph"]);
+
+    if (!corpusVal && !ontologyVal && !lexiconVal && !graphFlags.length) {
+      process.stderr.write("tmct import: needs at least one of --corpus/--ontology/--lexicon/--graph\n");
+      process.exit(2);
+    }
+
+    let corpusResolved = null, ontologyResolved = null, lexiconResolved = null;
+    try {
+      if (corpusVal) corpusResolved = await resolvePluggableInput("corpus", corpusVal, { repoRoot });
+      if (ontologyVal) ontologyResolved = await resolvePluggableInput("ontology", ontologyVal, { repoRoot });
+      if (lexiconVal) lexiconResolved = await resolvePluggableInput("lexicon", lexiconVal, { repoRoot });
+    } catch (e) {
+      process.stderr.write(`tmct import: ${e?.message || e}\n`);
+      process.exit(2);
+    }
+
+    for (const resolved of [corpusResolved, ontologyResolved, lexiconResolved]) {
+      if (!resolved) continue;
+      try {
+        process.stdout.write(await activatePluggableInput(repoRoot, resolved));
+      } catch (e) {
+        process.stderr.write(`tmct import: ${e?.message || e}\n`);
+        process.exit(1);
+      }
+    }
+
+    if (graphFlags.length) {
+      try {
+        await appendGraphFiles(repoRoot, graphFlags);
+        process.stdout.write(`added ${graphFlags.length} graph file(s) to tmct.toml's graph_files: ${graphFlags.join(", ")}\n`);
+      } catch (e) {
+        process.stderr.write(`tmct import: ${e?.message || e}\n`);
+        process.exit(1);
+      }
     }
     return;
   }
@@ -456,11 +706,26 @@ async function main() {
       process.exit(2);
     }
     const { resolve: resolvePath } = await import("node:path");
+    const { strFlag } = await import("../src/cli-args.mjs");
     const target = resolvePath(process.cwd(), dirArg);
+    // `--config <path>` (optional): an alternate tmct.toml to validate against,
+    // INSTEAD of `<target>/tmct.toml` — `target` still anchors every resource
+    // path (a pure validator stays that way; this never mutates anything).
+    // Accepts either a FILE (the tmct.toml itself) or a DIRECTORY (look for
+    // tmct.toml under it), same as every other subcommand's --config.
+    const configFlag = strFlag(rest, ["--config"]);
+    let configFile;
+    if (configFlag) {
+      const { stat } = await import("node:fs/promises");
+      const abs = resolvePath(process.cwd(), configFlag);
+      let isDir = false;
+      try { isDir = (await stat(abs)).isDirectory(); } catch { /* missing path — treat as a file target */ }
+      configFile = isDir ? resolvePath(abs, "tmct.toml") : abs;
+    }
     const { resolveExtensions, BUILTIN_EXTENSIONS, validateExtensionPack } = await import("../src/extensions.mjs");
     let entries;
     try {
-      ({ entries } = await resolveExtensions(target));
+      ({ entries } = await resolveExtensions(target, configFile ? { configFile } : {}));
     } catch (e) {
       process.stderr.write(`tmct extend --validate: ${e?.message || e}\n`);
       process.exit(1);
@@ -490,18 +755,18 @@ async function main() {
   if (mode === "syllogise") {
     // `tmct syllogise` — the explicit speculative-inference batch (never on the chat
     // hot path): forward-chain the memory's rdfs:subClassOf closure into bounded,
-    // low-trust, retractable entailed facts. Same repo resolution as `memory`.
+    // low-trust, retractable entailed facts. Same repo resolution as `memory` —
+    // resolveRuntimeConfig (src/cli-args.mjs): --repo > git root > cwd. Also
+    // accepts `--config` for symmetry (syllogise reads no code graph either).
     const rest = process.argv.slice(3);
-    const i = rest.indexOf("--repo");
-    const repoPath = i !== -1 ? rest[i + 1] : undefined;
     const numFlag = (name, dflt) => {
       const j = rest.indexOf(name);
       const v = j !== -1 ? Number(rest[j + 1]) : NaN;
       return Number.isFinite(v) ? v : dflt;
     };
-    const { gitToplevel } = await import("../src/chat.mjs");
+    const { resolveRuntimeConfig } = await import("../src/cli-args.mjs");
     const { syllogise } = await import("../src/syllogise.mjs");
-    const repo = repoPath || gitToplevel(process.cwd()) || process.cwd();
+    const { repo } = await resolveRuntimeConfig({ argv: rest });
     const res = await syllogise(repo, { depth: numFlag("--depth", 32), budget: numFlag("--budget", 50) });
     process.stdout.write(
       `tmct syllogise — derived ${res.count} entailed fact(s) (subClassOf closure, depth ${res.depth}, budget ${res.budget})`
@@ -521,8 +786,11 @@ async function main() {
       process.stdout.write(
         "tmct serve — Anthropic Messages API-compatible endpoint (POST /v1/messages)\n\n" +
         "Usage:\n" +
-        "  tmct serve [--repo <abs>] [--host <h>] [--port <n>]\n\n" +
-        "  --repo <abs>   target a repo's graph (<abs>/.tmct/graph.json); default: cwd/TMCT_GRAPH_FILE\n" +
+        "  tmct serve [--repo <abs>] [--graph <path>] [--config <path>] [--host <h>] [--port <n>]\n\n" +
+        "  --repo <abs>   target a repo's graph (<abs>/.tmct/graph.json); default: git root/cwd\n" +
+        "  --graph <path> explicit graph file (repeatable — multiple graphs merge; wins\n" +
+        "                 over --repo/TMCT_GRAPH_FILE/tmct.toml)\n" +
+        "  --config <path>  an alternate tmct.toml location (a file or a directory)\n" +
         "  --host <h>     bind address (default 127.0.0.1)\n" +
         "  --port <n>     TCP port (default 8787; 0 picks an ephemeral port)\n\n" +
         "Request:  { model, messages:[...], tools:[...], max_tokens, system? }\n" +
@@ -531,16 +799,19 @@ async function main() {
       );
       return;
     }
-    const strFlag = (name, dflt) => { const j = rest.indexOf(name); return j !== -1 ? rest[j + 1] : dflt; };
-    const repoPath = strFlag("--repo", undefined);
-    const host = strFlag("--host", "127.0.0.1");
-    const portRaw = strFlag("--port", undefined);
+    const { strFlag, resolveRuntimeConfig } = await import("../src/cli-args.mjs");
+    const host = strFlag(rest, ["--host"], "127.0.0.1");
+    const portRaw = strFlag(rest, ["--port"]);
     const port = portRaw !== undefined && Number.isFinite(Number(portRaw)) ? Number(portRaw) : 8787;
-    const { join } = await import("node:path");
     const { startServer } = await import("../src/server-http.mjs");
-    const { loadConfig, DEFAULT_GRAPH_REL } = await import("../src/config.mjs");
-    const configFor = (rp) => rp ? { graphFile: join(rp, DEFAULT_GRAPH_REL) } : loadConfig();
-    const srv = await startServer({ config: configFor(repoPath), host, port });
+    // Graph-path precedence (src/cli-args.mjs, shared with `chat`): --graph
+    // flag(s) > TMCT_GRAPH_FILE env > tmct.toml graph_file/graph_files >
+    // --repo-derived <repo>/.tmct/graph.json > git-root/cwd default. This
+    // REPLACES serve's old cwd-only default (loadConfig had no git-root
+    // fallback) with the same git-root-aware default every other subcommand
+    // now shares — a deliberate, documented unification, not a regression.
+    const { config } = await resolveRuntimeConfig({ argv: rest });
+    const srv = await startServer({ config, host, port });
     process.stdout.write(
       `tmct serve — Anthropic Messages API at ${srv.url}/v1/messages (POST) — ` +
       `graph ${srv.config.graphFile} — usage billed $0 — Ctrl+C to stop\n`,
@@ -559,7 +830,7 @@ async function main() {
   // An unknown mode gets the instructive usage line and exit 2. (A bare invocation
   // never lands here — the argv splice above rewrote it to `chat`.)
   process.stderr.write(`tmct: unknown invocation "${process.argv.slice(2).join(" ")}". ` +
-    "Use `cli digest …`, `cli <tool> …`, `memory`, or `chat`.\n");
+    "Use `chat`, `memory`, `init`, `import`, `extend --validate`, `syllogise`, `serve`, `cli digest …`, or `cli <tool> …`.\n");
   process.exit(2);
 }
 

@@ -325,6 +325,38 @@ or a bare user gets a working install in one command.
 > Install-size note: tmct depends on wink-nlp's deterministic English language
 > model (~3.8 MB installed). That model is a lookup table, not an LLM.
 
+### Flags, config, and multiple graphs
+
+Every subcommand shares one flag/config resolver (`src/cli-args.mjs`). The
+graph-path precedence is the same everywhere: `--graph` flag(s) beat
+`TMCT_GRAPH_FILE`, which beats `tmct.toml`'s `graph_file`/`graph_files`, which
+beats the `--repo`-derived `<repo>/.tmct/graph.json` default.
+
+```bash
+tmct init --repo /abs/path                    # scaffold a specific repo, not just cwd
+tmct init --corpus <id|path>                  # a tier-2 manifest id (aws|python|java|general)
+                                               # or your own corpus jsonl file
+tmct init --ontology <name|path>              # activate+seed an ontology bundle
+tmct init --lexicon <name|path>               # activate a lexicon bundle (never seeded)
+tmct init --graph <path> [--graph <path> …]   # set tmct.toml's graph_file/graph_files
+tmct init --config <path>                     # write to an alternate tmct.toml location
+
+tmct import --corpus <id|path>                # activate+seed into an ALREADY-initialized
+tmct import --ontology <name|path>            # repo — any combination of these flags in
+tmct import --lexicon <name|path>             # one call. --graph is a DIFFERENT, purely
+tmct import --graph <path>                    # additive op: it appends to graph_files,
+                                               # never activates an extensions bundle.
+
+tmct chat --graph <path> [--graph <path> …]   # explicit graph file(s) — multiple merge
+                                               # (ids that collide across graphs are
+                                               # auto-prefixed; see src/graph-merge.mjs)
+tmct chat --config <path>                     # an alternate tmct.toml (a file or a dir)
+tmct serve --graph <path> --config <path>     # same two flags, for the HTTP endpoint
+```
+
+`tmct extend --validate <dir> --config <path>` validates a third-party
+extension pack against an alternate tmct.toml, without mutating anything.
+
 ### Try it on an example graph
 
 tmct *consumes* a code graph at `<repo>/.tmct/graph.json`; it does not build

@@ -105,7 +105,14 @@ export function renderTomlConfig(config = defaultConfig()) {
 # Where the code-graph JSON artifact lives, relative to this file. The
 # TMCT_GRAPH_FILE environment variable overrides it at runtime.
 graph_file = ${JSON.stringify(c.graphFile)}
-
+${Array.isArray(c.graphFiles) && c.graphFiles.length ? `
+# graph_files — additional graph artifacts (multi-graph). Merged with
+# graph_file at read time (src/graph-merge.mjs); an id that collides
+# across graphs is auto-prefixed with its graph's name, everything else
+# passes through unchanged. Written by \`tmct init --graph\`/\`tmct import
+# --graph\`.
+graph_files = ${JSON.stringify(c.graphFiles)}
+` : ""}
 [corpus]
 # Corpus-tiering policy (ROADMAP Phase 4). The $0-offline default is inviolable;
 # higher tiers are ADDITIVE and never required to answer.

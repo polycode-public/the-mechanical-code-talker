@@ -111,10 +111,43 @@ test("a corpus entry missing its path throws", () => {
   assert.throws(() => validateExtensionEntry("x", { kind: "lexicon", active: true }), /needs lexicon_path/);
   assert.throws(() => validateExtensionEntry("x", { kind: "templates", active: true }), /needs templates_path/);
   assert.throws(() => validateExtensionEntry("x", { kind: "pack", active: true }), /needs at least one of/);
+  assert.throws(() => validateExtensionEntry("x", { kind: "ontology", active: true }), /needs ontology_path/);
 });
 
 test("EXTENSION_KINDS is the closed vocabulary the validator checks against", () => {
-  assert.deepEqual(EXTENSION_KINDS, ["corpus", "lexicon", "templates", "pack"]);
+  assert.deepEqual(EXTENSION_KINDS, ["corpus", "lexicon", "templates", "pack", "ontology"]);
+});
+
+// ---- ontology kind (CLI/config unification batch) -----------------------
+
+test("an ontology-kind host entry: ontology_path aliases the same corpusPath field a corpus entry uses", async () => {
+  const dir = await tmp();
+  try {
+    await writeFile(join(dir, "onto.jsonl"), "");
+    await writeFile(join(dir, "tmct.toml"),
+      '[extensions.myonto]\nkind = "ontology"\nactive = true\nontology_path = "onto.jsonl"\n');
+    const { entries } = await resolveExtensions(dir);
+    const e = entries.get("myonto");
+    assert.equal(e.kind, "ontology");
+    assert.equal(e.active, true);
+    assert.equal(e.corpusPath, join(dir, "onto.jsonl"), "ontology_path resolves into the same internal corpusPath field");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("an ontology entry missing ontology_path throws, naming it", async () => {
+  const dir = await tmp();
+  try {
+    await writeFile(join(dir, "tmct.toml"), '[extensions.myonto]\nkind = "ontology"\nactive = true\n');
+    await assert.rejects(() => resolveExtensions(dir), /extension "myonto".*ontology.*needs ontology_path/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("seon's existing corpus-kind entry is left alone — no relabel to ontology", () => {
+  assert.equal(BUILTIN_EXTENSIONS.seon.kind, "corpus");
 });
 
 // ---- [bias] table -------------------------------------------------------

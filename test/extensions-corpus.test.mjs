@@ -74,6 +74,46 @@ test("idempotent re-run: seeding the SAME entries twice appends nothing the seco
   }
 });
 
+// BUGFIX regression (CLI/config unification batch): a "pack"-kind entry's
+// corpusPath used to be silently skipped by seedActiveCorpusEntries — the
+// module's own docblock has always claimed pack entries combine corpus_path/
+// lexicon_path/etc, but the seed loop only ever matched kind === "corpus".
+test("BUGFIX: an active pack-kind entry with a corpusPath now seeds (previously silently skipped)", async () => {
+  const dir = await tmp();
+  try {
+    await writeFile(join(dir, "pack-corpus.jsonl"), '{"start":"/c/en/widget","rel":"/r/IsA","end":"/c/en/gadget"}\n');
+    await writeFile(join(dir, "tmct.toml"),
+      '[extensions.mypack]\nkind = "pack"\nactive = true\ncorpus_path = "pack-corpus.jsonl"\nprovenance_prefix = "corpus:mypack"\n');
+    const { entries } = await resolveExtensions(dir);
+    const { perBundle } = await seedActiveCorpusEntries(dir, entries);
+    assert.ok(perBundle.mypack, "the pack bundle ran at all");
+    assert.equal(perBundle.mypack.appended, 1, "the pack's one fact was actually written");
+    assert.equal(perBundle.mypack.error, undefined);
+
+    const mem = await loadMemory(dir);
+    const facts = mem.individuals.filter((i) => i.class === FACT_CLASS);
+    const fromPack = facts.filter((f) =>
+      (f.attributes || []).some((a) => a.key === "provenance" && String(a.value).includes("corpus:mypack")));
+    assert.ok(fromPack.length > 0, "the pack's fact carries its own provenance tag");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a pack-kind entry with NO corpusPath (lexicon/templates-only pack) is still skipped — never a crash", async () => {
+  const dir = await tmp();
+  try {
+    await writeFile(join(dir, "lex.json"), '{"nouns":{},"verbs":{},"adjectives":{},"properNames":[]}\n');
+    await writeFile(join(dir, "tmct.toml"),
+      '[extensions.lexonly]\nkind = "pack"\nactive = true\nlexicon_path = "lex.json"\n');
+    const { entries } = await resolveExtensions(dir);
+    const { perBundle } = await seedActiveCorpusEntries(dir, entries);
+    assert.equal(perBundle.lexonly, undefined, "a lexicon-only pack entry never enters the corpus seed loop");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("a mid-list active bundle (tier2-aws, activated via tmct.toml) seeds alongside seon+conceptnet in one loop", async () => {
   const dir = await tmp();
   try {
