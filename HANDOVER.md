@@ -323,6 +323,12 @@ that had independently grown across the archived docs. All dangling filename ref
 `chatbench/README.md`, `chatbench/GRADED.md`); historical references inside `archive/` and inside
 this file's/`ROADMAP.md`'s own past-tense narrative entries were deliberately left as-is.
 
+### 13. v1.4.0 shipped (2026-07-11) — see `PLAN_AGENTS.md` §13 / `ROADMAP.md` for detail, not here
+
+RI wrapper fixes + security fix, hub-dampened memory ranking, memory versioning + actor-level
+trust, extension-pack seam + bias-weighted ranking + persona init. 1543/1543, pushed at `b1b6a95`.
+Items 12–14 below are what it left open.
+
 ## Open follow-ups (next session, in priority order)
 
 1. ~~Fix the INF-C1 fabrication bug above.~~ **DONE (2026-07-09)** — see the updated item 2 note
@@ -356,6 +362,18 @@ this file's/`ROADMAP.md`'s own past-tense narrative entries were deliberately le
 11. ~~`PLAN_TAUGHT_RELATIONS.md` live-testing follow-up — Gap 1 (specific honest-miss messages) + Gap
     2 (the reverse "who is the &lt;relation&gt; of &lt;X&gt;" query shape).~~ **DONE (2026-07-09)** —
     see item 11 above. Nothing remains outstanding from this plan.
+12. **`PLAN_AGENTS.md` Phase 0's remaining foundations**: cross-repo smoke test, `agentbench/
+    envelope.json`, `ace-owl` open-source extraction (unblocked, not started), ontology-hierarchies
+    tracks a–d, advanced-grammar tracks a/d/f, and the inherited-chat-surface-debt re-measure. None
+    started this session — see `PLAN_AGENTS.md` §3 for the live per-item status.
+13. **`PLAN_AGENTS.md` Phase 1's still-open half**: the extension-pack seam and bias-weighted
+    ranking mechanism shipped (v1.4.0), but nobody has actually grown the corpus with a wider
+    general-knowledge seed set yet (the shipped-but-inactive tier2 bundles are activatable, which is
+    real progress, but narrower than "wider general-knowledge"), and context-preserving unknown-word
+    ingestion is still unbuilt.
+14. **The SHACL-style declarative ingest gate** (`PLAN_AGENTS.md` §2.1) — real, bounded, new
+    dependency, not started this session (memory versioning and actor-level trust, its two siblings
+    in the same backlog bullet, both shipped).
 
 ## Discipline (unchanged)
 

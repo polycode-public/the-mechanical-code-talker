@@ -407,6 +407,28 @@ consolidates three near-duplicate "research frontier" essays (the frame problem,
 disambiguation/ontology scale, Winograd-hard coreference) that had independently grown across the
 now-archived docs.
 
+**v1.4.0 — the first PLAN_AGENTS.md uplift batch (2026-07-11)**: built as four parallel,
+worktree-isolated background tracks, merged sequentially, watched throughout by a background
+strategy-advisor agent (full tick-by-tick record in `STRATEGY_ADVISOR.log`). 1543/1543 tests green
+at the final merge. Shipped: the Repository Interface wrapper fixes from the seonix audit (ranked
+`search()`, a real graph-only `context()` — `INTERFACE_VERSION` 1.0.0→1.1.0 — depth-capped
+`impact()`, source-backed `snippet()`, `edges()`/`search()` pagination, telemetry wiring), a
+path-traversal security fix found and closed along the way (`src/source-slice.mjs`), hub-dampened
+memory-fact ranking (on by default — the build found the original "modest degree, modest penalty"
+assumption was mathematically wrong and proved the real bound instead), memory-tree versioning
+(`snapshotMemory()`, manual trigger only), full session-scoped actor-level trust (shipped
+unconditionally, no config flag — operator decision, single consumer), the extension-pack seam
+(`src/extensions.mjs`, `[extensions]`/`[bias]` in `tmct.toml`, `tmct extend --validate`, and a
+deliberate bug fix — `tmct init` now seeds SEON as well as ConceptNet), bias-weighted fact ranking
+(`src/memory/bias.mjs`, verified by control-flow tracing to never drop a fact, only reorder it), and
+`tmct init --with-persona <name>`. One real merge conflict (Track A's `tel` param and Track D's
+`biasByBundle` param both threading through the same `chat.mjs` function signatures — resolved by
+keeping both). One bug the strategy advisor caught that the original brief missed: the
+path-traversal guard failed closed *incorrectly* under a relative `TMCT_GRAPH_FILE`, rejecting
+legitimate reads, not just traversal attempts — fixed at the source and defensively in the guard.
+One scope decision made mid-build: multi-language AST extraction stays in seonix permanently, not
+tmct's job — full detail in `PLAN_AGENTS.md` §13.
+
 ## The umbrella product definition (item 1)
 
 **A tolerant, ELIZA/PARRY-style chat, obsessed with software.** A best-efforts

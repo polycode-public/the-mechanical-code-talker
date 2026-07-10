@@ -6,6 +6,22 @@ sibling docs — `PLAN_AGI_ARCHITECTURE.md`, `PLAN_CAPABILITY_ROUTER.md`, `PLAN_
 `PLAN_OSS_ACE_PARSER.md`, `PLAN_ontology-hierarchies.md`, `PLAN_ADVANCED_GRAMMAR.md` — now archived.
 See §12, Provenance, for what each contributed.)*
 
+> **STATUS (2026-07-11, v1.4.0 shipped):** the (a)-tier uplift items from §2 landed in full — RI
+> wrapper fixes (ranked search, graph-only `context()` with `INTERFACE_VERSION` 1.1.0, depth-capped
+> `impact()`, source-backed `snippet()`, `edges()`/`search()` pagination), hub-dampened memory-fact
+> ranking (on by default), memory-tree versioning (`snapshotMemory()`, manual trigger), and —
+> further than §2.1 scoped — **actor-level trust shipped in full, unconditionally** (session-scoped
+> Source IDs for operator/teach facts, no config flag; operator decision: single consumer, no
+> backward-compat need). Phase 0's extension-pack seam and Phase 1's bias-weighted ranking + `tmct
+> init --with-persona` also shipped. Still open in Phase 0: cross-repo smoke test, envelope.json,
+> ace-owl extraction, ontology-hierarchies tracks a–d, advanced-grammar tracks a/d/f, the debt
+> re-measure. Still open in Phase 1: the wider general-knowledge seed set itself (shipped-but-inactive
+> tier2 bundles are now activatable via the extension-pack seam, which is real progress, but nobody
+> has grown the corpus further) and context-preserving unknown-word ingestion (not built). **New
+> scope decision:** multi-language AST extraction (§2.2, §6) stays in seonix, permanently — "seonix
+> is the connection of the SEON ontology with software language," not tmct's job; tmct stays a pure
+> downstream graph consumer, per the operator's explicit instruction. See §13 for the full record.)*
+
 ## 0. The architecture, in one picture
 
 tmct is a deterministic, $0, provable NL↔graph engine and tool-loop/completions API. The operator's
@@ -70,7 +86,10 @@ The two audits this doc supersedes (`PLAN_TMCT_ECOSYSTEM_INTEGRATION.md`,
 | marginalia's "mechanical chat" replaced by tmct | **Not started** — the real open work | `app/lib/mechanical/`, 1,043 LOC, dark-flagged sub-path today |
 | marginalia LLM-decided facts (`typed-edges.mjs`) trust-tagged like tmct's own facts | **Not started** | confidence computed then discarded before persistence — the actual gap |
 | Chat-taught relations, rules, backward-chaining query dispatch | **Shipped** (`PLAN_TAUGHT_RELATIONS.md`, 2026-07-09) | Rule storage (compose2/filter/recursive kinds) + `resolveRelationChase` — see §1.2 |
-| Bias-weighted ambiguity resolution across seed sets | **Not started** — new this session | tmct's own domain is currently the only implicit bias; see §4 |
+| Bias-weighted ambiguity resolution across seed sets | **Shipped**, v1.4.0 | `src/memory/bias.mjs`, `tmct.toml` `[bias]` table, `tmct init --with-persona` — see §4 |
+| Memory-tree versioning + full actor-level trust | **Shipped**, v1.4.0 | `snapshotMemory()` (manual trigger); session-scoped Source IDs, unconditional — see §2.1 |
+| RI wrapper fixes + hub-dampened memory ranking (the (a)-tier uplift) | **Shipped**, v1.4.0 | `INTERFACE_VERSION` 1.1.0; `src/memory/blocks.mjs` dampening on by default — see §2 |
+| Extension-pack seam | **Shipped**, v1.4.0 | `src/extensions.mjs`, `[extensions]`/`[bias]` in `tmct.toml`, `tmct extend --validate` — see §3 |
 
 ### 1.1 Foundational precedent: seonix proves the integration pattern
 
@@ -107,18 +126,24 @@ bounded, (c) genuinely harder — and feed §2.3 below.
 
 ### 2.1 From marginalia
 
-- **Memory-tree versioning (b).** `app/lib/s3-tree.mjs` writes immutable, monotonically-versioned
-  snapshots with a tiny manifest pointer to the current version; tmct's `.tmct/memory/graph.json`
-  overwrites in place — one copy, no rollback, no "what did the graph look like before this fold."
-  Port: `graph.v{N}.json` + a `manifest.json` pointer, a contained change to `core.mjs`'s write path,
-  no new dependency. Main open design question is a retention/pruning policy.
-- **Actor-level, behavior-driven trust (b).** `app/lib/trust.mjs` tracks a persistent, evolving
-  per-actor score from behavioral signals (corroboration, guardrail-fire-rate, longevity); tmct's
-  `SOURCE_PRIOR` is fact-level/source-type-level only — two different human teachers both tagged
-  `teach` get identical trust, and a repeatedly-wrong web source scores no worse than a first-time
-  one. Port narrowly: a per-source-id reliability score layered onto the existing `Source`
-  individuals, nudged by corroboration/contradiction outcomes over time — not marginalia's full
-  actor-lifecycle machinery (no external agents to recontact, so that part doesn't transfer).
+- **Memory-tree versioning (b) — ✅ shipped v1.4.0.** `app/lib/s3-tree.mjs` writes immutable,
+  monotonically-versioned snapshots with a tiny manifest pointer to the current version; tmct's
+  `.tmct/memory/graph.json` used to overwrite in place. Shipped as `snapshotMemory(dir)` in
+  `src/memory/core.mjs` — `graph.v{N}.json` + `manifest.json`, `[memory] retention_versions` in
+  `tmct.toml` (default 5). Manual trigger only, by design — not wired to any automatic call site;
+  an operator or maintenance job snapshots explicitly before a risky bulk operation.
+- **Actor-level, behavior-driven trust (b) — ✅ shipped v1.4.0, further than originally scoped.**
+  `app/lib/trust.mjs` tracks a persistent, evolving per-actor score from behavioral signals; tmct's
+  `SOURCE_PRIOR` was fact-level/source-type-level only. Shipped: session-scoped Source IDs for
+  `operator`/`teach` facts (`src:operator-chat:<sessionId>` / `src:teach-chat:<sessionId>`,
+  parsed from provenance tags that already carried the session ID but discarded it) plus a bounded
+  `mgx:sourceReliability` nudge (`[0.5, 1.5]`, computed from a session's corroborated-vs-contradicted
+  fact ratio via Laplace/add-k confidence scaling — a literal saturating formula broke an existing
+  trust invariant, caught and fixed during the build). Shipped **unconditionally, no config flag** —
+  an explicit operator decision (single consumer, no backward-compat need with an existing graph) —
+  not the narrower "layer a score onto existing Source individuals" port originally scoped here.
+  marginalia's full actor-lifecycle machinery (recontact scheduling, guardrail-fire-rate) still
+  does not transfer — no external agents to recontact in tmct's world.
 - **Gazetteer-based entity/predicate recognition (b).** `app/lib/mechanical/matcher.mjs` builds a
   wink-nlp gazetteer straight from the graph's own entity labels/aliases plus lemma/stem-tolerant
   verb-phrase tables, so new vocabulary flows through with zero new grammar code. tmct's ACE grammar
@@ -130,12 +155,15 @@ bounded, (c) genuinely harder — and feed §2.3 below.
   standards-based, declarative write-boundary contract. tmct's `src/conformance.mjs` is hand-rolled,
   imperative shape validation, not one declarative gate at the write boundary. A new dependency plus
   real schema-authoring effort, not a quick port.
-- **Hub-dampening + thin-concept detection (a).** tmct already implements exactly this pattern in
-  `src/codegraph.mjs` (degree-quantile hub gating, min-heap frontier expansion) — for the **code**
-  graph only. `src/memory/blocks.mjs`'s fact retrieval (PageRank + query-time IDF) has no equivalent,
-  so a fact hanging off a heavily-connected subject ranks purely on trust/provenance count, not
-  structural specificity. Copy-the-idea-not-the-code into memory ranking: pure JS, no new dependency,
-  tmct has already solved this problem once.
+- **Hub-dampening + thin-concept detection (a) — ✅ shipped v1.4.0, on by default.** tmct already
+  implements exactly this pattern in `src/codegraph.mjs` (degree-quantile hub gating, min-heap
+  frontier expansion) — for the **code** graph only. Ported into `src/memory/blocks.mjs`'s
+  `retrieveBlocks` (`/ √(1 + degree)`, degree surfaced from the block-similarity graph's already-
+  computed but previously-discarded adjacency). Shipped on unconditionally, per operator decision —
+  the build found the original "modest degree, modest penalty" assumption was mathematically wrong
+  (a nonzero-degree block can never out-rank a genuinely isolated one on a tie, bounded below √2)
+  and redesigned the test corpus around the real math rather than a contrived fixture that happened
+  to pass.
 - **Contradiction detection — checked explicitly, tmct is ahead here.** marginalia's `mg:contradicts`
   is only ever LLM-proposed at ingest or materialized via symmetric closure — no algorithm actually
   detects disagreement. tmct's `findContradictions` (`src/memory/core.mjs`) is fully automatic and
@@ -153,31 +181,40 @@ are naming/gated-feature only). Most findings below are gaps in what tmct's Repo
 algorithmic capability tmct would have to invent — the logic already sits in tmct's own
 `codegraph.mjs`, just not wired to the provider surface.
 
-- **Search/context are stubs relative to logic tmct already owns (a).** `graph-service.mjs`'s
-  `search()` is an unranked substring filter with no limit/pagination; `context()` unconditionally
-  misses. IDF-weighted lexical scoring (`scoreModules`) and context bundling (`contextPlan`/
-  `sizeBundle`) already exist verbatim in tmct's own `codegraph.mjs`, used by tmct's standalone
-  `src/server.mjs` — this is a call-site fix, pointing the wrapper's methods at logic tmct already
-  owns, not new design.
-- **Depth-capped impact + source-backed snippets (a).** Both repos run the identical `impactClosure`
-  BFS reverse-dependency closure — seonix threads an opt-in `depth` argument through (e.g. one-hop
-  only); tmct's RI `impact(moduleId)` takes none. seonix's snippet tool reads real source via
-  `sourceAccess:true`; tmct's RI `snippet()` always returns `body:null` because no provider defaults
-  it on, even though the exact readFile+slice code exists in tmct's own `src/server.mjs`. Both are a
-  few hours of call-site work, following seonix's own pattern almost verbatim.
-- **Unbounded search/edges responses (a for the cap, b for cost telemetry).** `edges()`/`search()`
-  return every match with no limit or pagination, unlike seonix's `SEARCH_LIMIT`/page cursors and
-  per-call token-cost telemetry. tmct already has the same telemetry module (`src/telemetry.mjs`),
-  just not wired to any tool-dispatch surface — the cap is a contained fix; wiring telemetry needs
-  tmct to first decide what its tool-dispatch surface even is.
-- **Real multi-language AST extraction (b, genuine engineering scope).** seonix parses Python/
-  TypeScript/C#/Java via real compiler front ends (a Python `ast`-based extractor, the TS compiler
-  API, a compiled Roslyn tool, JavaParser+`JavaSymbolSolver` for real semantic call resolution).
-  tmct's `graph-build.mjs` explicitly does no parsing at all — "no subprocesses, no filesystem, no
-  git: data in, graph out." tmct is a pure downstream graph consumer, never a graph builder from
-  source. Wiring seonix's parsers to feed `graph-build.mjs` is plumbing (subprocess orchestration,
-  multi-runtime packaging for JVM/dotnet tools), not new algorithm design — the assembly logic is
-  already duplicated between the repos.
+- **Search/context are stubs relative to logic tmct already owns (a) — ✅ shipped v1.4.0.**
+  `graph-service.mjs`'s `search()` was an unranked substring filter with no limit/pagination;
+  `context()` unconditionally missed. Now: `search()` calls the same IDF-weighted `scoreModules`/
+  `searchModulesRanked` and a newly-extracted structured `scoreSymbolsRanked` (split out of
+  `searchSymbols`, which used to fuse scoring and text-rendering); `context()` returns a real
+  graph-only hit (siblings/registration/tests/exports/insertion-region) even without source access,
+  via `contextPlan`/`sizeBundle` — a deliberate, documented interface contract change, so
+  `INTERFACE_VERSION` bumped `1.0.0 → 1.1.0`.
+- **Depth-capped impact + source-backed snippets (a) — ✅ shipped v1.4.0.** `impact(moduleId,
+  {maxDepth})` now threads through to `impactClosure`'s existing `maxDepth` support. `snippet()`/
+  `context()` are source-capable via an injected `{repoRoot, readFile}` on `createGraphService`
+  (keeping the module's "pure graph queries, no fs" contract honest — fs access is an explicit,
+  injected capability, not an ambient one). Building this surfaced and fixed a real, previously
+  unguarded path-traversal gap in `server.mjs`'s inline readers (`src/source-slice.mjs`'s
+  `readSpanSafe`, now the shared, guarded implementation both `server.mjs` and `graph-service.mjs`
+  use) — found by the strategy-advisor background agent watching the build, not by the original
+  brief.
+- **Unbounded search/edges responses (a for the cap, b for cost telemetry) — ✅ shipped v1.4.0,
+  telemetry wiring built but not yet live in production traffic.** `edges()`/`search()` now accept
+  `{limit, offset}`. `src/telemetry.mjs` now wraps every `graph-service.mjs` service once at
+  construction (optional `tel`, zero overhead when absent) and redacts `snippet()`'s `body` field
+  (a real, if previously unreachable, log-leak fix). Caveat worth recording: `server.mjs`'s
+  `dispatchTool` branches were deliberately NOT consolidated onto the wrapped `svc.*()` methods (the
+  RI's result shapes lack the richer presentation `dispatchTool` needs — candidates, call hints,
+  truncation notices — and consolidating risked real regressions for low benefit), so this
+  telemetry is real, tested infrastructure, currently exercised only by direct RI callers/tests, not
+  by the live chat tool-dispatch path.
+- **Real multi-language AST extraction — scope decision (2026-07-11): stays in seonix,
+  permanently.** seonix parses Python/TypeScript/C#/Java via real compiler front ends; tmct's
+  `graph-build.mjs` does no parsing at all. Originally scoped here as "genuine engineering, tmct
+  could wire seonix's parsers into its own `graph-build.mjs`." The operator's explicit call:
+  seonix *is* the connection point between the SEON ontology and software language — that's its
+  job, not tmct's. tmct stays a pure downstream graph consumer permanently, by design, not by gap.
+  See §6 for how this reshapes Phase 3.
 - **Chronograph temporal diffing (c, genuinely hard).** seonix's `chronograph/lib/temporal.mjs`
   gives every node/edge a validity interval and computes real structural diffs between arbitrary
   commits (added/removed/changed, wired/unwired/rewired edges) plus deterministic prose narration
@@ -200,77 +237,62 @@ algorithmic capability tmct would have to invent — the logic already sits in t
 
 ### 2.3 What this changes in the phase sequence
 
-The (a)-tier findings — hub-dampened memory ranking, RI search/context/impact/snippet wiring,
-response pagination — fold straight into Phase 0 (§3) as additional foundations: genuinely low-risk,
-no new dependency, mostly exposing logic tmct already owns rather than building anything new. The
-(b)/(c)-tier findings — memory versioning, actor-level trust, the SHACL ingest gate, multi-language
-AST extraction, Chronograph-style temporal diffing — are real, scoped engineering. Multi-language
-extraction and RI depth/telemetry feed Phase 3 (§6, the seonix combined index) most directly;
-memory versioning, actor trust, and the SHACL gate are standing tmct-quality backlog, not yet
-phase-assigned, independent of any specific integration. None of this is research — every item
-above cites an existing, working mechanism in a sibling repo, not a proposal to invent something
-new.
+**Update, v1.4.0 (2026-07-11): all of the (a)-tier findings shipped, and so did memory versioning
+and actor-level trust — further and faster than this section originally staged.** The (a)-tier
+findings — hub-dampened memory ranking, RI search/context/impact/snippet wiring, response
+pagination — landed as Phase 0 foundations, genuinely low-risk, no new dependency, mostly exposing
+logic tmct already owned. Memory versioning and actor-level trust (originally "standing tmct-quality
+backlog, not yet phase-assigned") were pulled forward and shipped in the same batch, actor-level
+trust in full rather than the narrower port originally scoped. Remaining backlog: the SHACL ingest
+gate (still real, still bounded, still not started). Multi-language AST extraction is no longer
+backlog at all — it's explicitly out of scope for tmct, permanently (§2.2). Chronograph-style
+temporal diffing remains genuinely hard, unstarted, no change.
 
 ## 3. Phase 0 — Foundations
 
 Near-term, mostly known-how, individually small. No item here requires research.
 
-- **Cross-repo smoke test** — a real `tmct serve` process, hit over HTTP by bedrock-meter's
+- ⬜ **Cross-repo smoke test** — a real `tmct serve` process, hit over HTTP by bedrock-meter's
   `httpDispatch`, proving the documented response shape holds outside hand-built fixture objects.
   Cheapest, highest-value gap to close first; everything else assumes this wire contract is real.
-- **Machine-readable capability envelope** (`agentbench/envelope.json`) — generated from the latest
+  Not started.
+- ⬜ **Machine-readable capability envelope** (`agentbench/envelope.json`) — generated from the latest
   gate-PASS AGENTBENCH rungs (`maxContextTokens`, reasoning depth, `structuredOk`/`toolsOk`), so
   bedrock-meter's hand-set `TMCT_ENVELOPE` calibration stops drifting from tmct's actual measured
-  capability every release.
-- **The extension-pack / corpus-lexicon loading seam** — the one genuinely new tmct primitive this
-  whole plan hinges on. Today tmct's corpus, lexicon, and templates are committed inside the package
-  and loaded by hardcoded paths (`src/chat.mjs`, `src/grammar/lexicon.mjs`,
-  `src/corpus/templates.mjs`); there is no `[extensions]` config surface, no `registerExtension()`,
-  no host-declared-lexicon knob of any kind. A host package can supply its own **graph** through the
-  provider seam already, but not its own **vocabulary**. This phase adds: an `[extensions]` table in
-  `tmct.toml` (or `registerExtension()` for the library path) naming extra corpus JSONL, lexicon
-  entries, and template rows in the same shapes tmct's own core files already use; namespacing so
-  extension facts enter with a distinct `Source` (e.g. `corpus:marginalia`) and never silently
-  shadow core vocabulary — a conflicting definition surfaces as a visible contradiction, the
-  already-shipped provenance behavior; and `tmct extend --validate` running the same shape checks
-  the core corpus already gets, so a malformed extension pack fails at build time, not query time.
-  This is the first time tmct's answer surface can be shaped by data its own maintainers didn't
-  author or review — the namespacing/provenance design is load-bearing, not a nice-to-have. **This
-  is also the config surface §4's bias weighting hangs off of** — each named extension becomes a
-  named seed set a bias weight can attach to.
-- **`ace-owl` open-source extraction** — pulling tmct's ACE-OWL controlled-English parser
+  capability every release. Not started.
+- ✅ **The extension-pack / corpus-lexicon loading seam — shipped v1.4.0.** `src/extensions.mjs`:
+  `resolveExtensions()`, an `[extensions]`/`[bias]` table in `tmct.toml`, `seedActiveCorpusEntries`
+  replacing `chat.mjs`'s hardcoded two-call corpus bootstrap (this also fixed a real, deliberate bug
+  — `tmct init` previously seeded ConceptNet only, never SEON), `mergedLexiconExtra`/
+  `loadTemplatesMerged` for lexicon/template bundles, and `tmct extend --validate <dir>` for
+  third-party pack validation. Namespacing/provenance verified end-to-end: a conflicting fact from
+  two active bundles surfaces via the already-shipped `findContradictions`, never a silent overwrite.
+  The three shipped-but-inactive tier2 bundles (aws/python/java corpora) are now genuinely
+  activatable, not just committed-and-dead. This is also the config surface §4's bias weighting
+  hangs off of, also shipped — see §4.
+- ⬜ **`ace-owl` open-source extraction** — pulling tmct's ACE-OWL controlled-English parser
   (`src/grammar/ace.mjs` + lexicon) out into a standalone, MPL-2.0, dependency-free npm package.
   Nothing like it exists as a permissive, ESM, browser-capable English-to-OWL-triples parser (the
-  reference implementation, APE, is GPL/LGPL and SWI-Prolog-native). Was gated on the Repository
-  Interface's library-surface discipline existing first (so `ace-owl` is the second proof of the
-  same boundary, not inventing it twice) — that gate shipped, so this is now unblocked. Both seonix
-  and marginalia are plausible consumers of a standalone NL-to-OWL parser.
-- **Ontology-hierarchies tracks a–d** — activate ConceptNet `/r/Synonym`/`/r/SimilarTo`; wire the
+  reference implementation, APE, is GPL/LGPL and SWI-Prolog-native). Unblocked, not started.
+- ⬜ **Ontology-hierarchies tracks a–d** — activate ConceptNet `/r/Synonym`/`/r/SimilarTo`; wire the
   already-parsed but unused phrasebook synonyms; hand-curate the SEON upper-ontology spine; grow
-  `owl:disjointWith` premises. All rated high feasibility, small-to-medium effort, direct feeders
-  for the "combined lexicon, ontology, seeded graph" vision in §6. Track (e), importing WordNet
-  wholesale, is rejected — wrong tier, would reintroduce the word-sense noise the ConceptNet filter
-  exists to avoid. (§4 revisits this rejection's premise for the wider-seed-set question
-  specifically — the objection was to noise with no way to rank through it, not to breadth itself.)
-- **Advanced-grammar tracks a/d/f** — subordination/conditional frames, construction-grammar
-  template banks, presupposition-as-honest-nudge. High feasibility, small-to-medium effort, direct
-  precedent in shipped 0.8.2 code. Cheap comprehension wins that raise the floor everything else in
-  this doc is built on.
-- **Re-measure inherited chat-surface debt** — the capability router doc named three specific gaps
+  `owl:disjointWith` premises. Not started. (§4 revisits this rejection's premise for the
+  wider-seed-set question specifically — the objection was to noise with no way to rank through it,
+  not to breadth itself.)
+- ⬜ **Advanced-grammar tracks a/d/f** — subordination/conditional frames, construction-grammar
+  template banks, presupposition-as-honest-nudge. Not started.
+- ⬜ **Re-measure inherited chat-surface debt** — the capability router doc named three specific gaps
   (pronoun/focus binding, discourse-count anaphora, temporal-over-relative composition) as blocking
-  its later stages, measured back in CHATBENCH_0.7.1. The Tier 5/6 dialogue-flow playtest closures
-  landed since then plausibly fixed some of these as a side effect. Nobody's checked. Cheap,
-  informative, tells us whether the router's stated floor is already higher than assumed — do this
-  before scoping new comprehension work.
-- **RI wrapper fixes from the seonix audit (§2.2)** — ranked search, real `context()` bundling,
-  depth-capped `impact()`, source-backed `snippet()`, response pagination on `search()`/`edges()`.
-  All (a)-tier: point the Repository Interface wrapper at logic that already exists in tmct's own
-  `codegraph.mjs`, no new dependency.
-- **Hub-dampened memory-fact ranking, from the marginalia audit (§2.1)** — port the degree-based hub
-  dampening tmct's own `codegraph.mjs` already implements for the code graph into `memory/blocks.mjs`'s
-  fact retrieval, so a fact off a heavily-connected subject ranks on structural specificity, not just
-  trust/provenance count. Pure JS, no new dependency, copy-the-idea-not-the-code.
-- **Benchmark/skill doc unification** — this restructuring itself (§12).
+  its later stages, measured back in CHATBENCH_0.7.1. Not started — still worth doing before scoping
+  new comprehension work.
+- ✅ **RI wrapper fixes from the seonix audit (§2.2) — shipped v1.4.0.** Ranked search, real
+  `context()` bundling (`INTERFACE_VERSION` 1.1.0), depth-capped `impact()`, source-backed
+  `snippet()`, response pagination on `search()`/`edges()`. Also closed a real path-traversal gap
+  found during the build (`src/source-slice.mjs`).
+- ✅ **Hub-dampened memory-fact ranking, from the marginalia audit (§2.1) — shipped v1.4.0, on by
+  default.** Ported the degree-based hub dampening tmct's own `codegraph.mjs` already implements for
+  the code graph into `memory/blocks.mjs`'s `retrieveBlocks`.
+- ✅ **Benchmark/skill doc unification** — shipped 2026-07-10 (this restructuring itself, §12).
 
 ## 4. Phase 1 — Bias-weighted ambiguity resolution & wider general-knowledge seed sets
 
@@ -279,17 +301,16 @@ specialization was never a special case — it is one particular seed set with a
 mechanism that makes tmct "the code talker" generalizes to any seed set, including a future one
 that isn't code at all.
 
-- **The default stays honest ambiguity over guessing.** §2.2 already confirmed this is the right
-  posture — tmct's resolver refuses and lists candidates on a genuine tie, and seonix's own
-  conversational path defers to tmct's resolver for exactly this reason. This phase does not weaken
-  that default. It adds one new ranking input ahead of the existing tie-break: a declared bias.
-- **`tmct.toml` gets a `[bias]` table** naming active seed sets (Phase 0's `[extensions]` entries, or
-  tmct's own built-in code-domain vocabulary) and a numeric weight each — e.g. `code = 1.0, general =
-  0.6`. A polysemous lexicon entry — the operator's own example: "class" mapping to both a code
-  construct and a school class, one sense contributed by each of two seed sets — resolves toward the
-  higher-weighted sense by default. The lower-weighted sense stays reachable and is disclosed in the
-  answer, never silently dropped: bias changes ranking, not truth. A tied bias falls back to today's
-  honest-refusal behavior, unchanged.
+- ✅ **The default stays honest ambiguity over guessing — confirmed, unchanged.** §2.2 already
+  confirmed this is the right posture — tmct's resolver refuses and lists candidates on a genuine
+  tie, and seonix's own conversational path defers to tmct's resolver for exactly this reason.
+- ✅ **`tmct.toml` `[bias]` table — shipped v1.4.0.** `src/memory/bias.mjs` (`biasForSourceId`,
+  `biasForRow`, `rankByBiasThenTrust`), wired into `chat.mjs`'s fact-listing lanes (`factAnswer`,
+  `factReadBack`'s listing branches, `describedFacts`, plus the count/quantifier-recall single-winner
+  sites). Verified by control-flow tracing, not just code review: `rankByBiasThenTrust` is a pure
+  map→sort chain with no `filter()` — structurally cannot drop a fact, only reorder it. The
+  lower-biased sense stays reachable and disclosed, never silently dropped. A tied/absent bias is
+  byte-identical to pre-bias behavior (regression-tested).
 - **This is the missing piece the WordNet-rejection rationale didn't have** (§3's ontology-hierarchies
   bullet; the archived `PLAN_ontology-hierarchies.md` track (e); R3's 2M-word-ontology entry, §9).
   That rationale rejected wide general vocabulary because it reintroduces word-sense noise a narrow,
@@ -297,34 +318,26 @@ that isn't code at all.
   declared, inspectable way to rank through it instead of needing to avoid it by staying narrow. Next
   time R3's 2M-word-ontology assessment is revisited, this changes what it should weigh — not a green
   light to build it, but a genuine change in the calculus.
-- **A wider general-knowledge seed set becomes worth ingesting on these terms** — not to replace
-  tmct's code-domain depth, but to sit alongside it as a lower-biased-by-default general layer, the
-  "any seed set" framing above made concrete. Grow the committed/seeded corpus tiers (`ROADMAP.md`'s
-  4-tier corpus policy) with a broader ConceptNet slice or comparable general-purpose source, gated
-  by the same shape-validation discipline `tmct extend --validate` (§3) already applies to extension
-  packs.
-- **Context-preserving ingestion for unknown words — new, not yet built.** When a wider seed set (or
+- ◐ **A wider general-knowledge seed set — partially realized.** The three shipped-but-inactive
+  tier2 bundles (aws/python/java) are now genuinely activatable via the extension-pack seam (§3) —
+  real progress toward "shipped optional bundles, selectable by config." But nobody has actually
+  grown the corpus with a broader ConceptNet slice or comparable general-purpose source yet — the
+  mechanism to ingest a wider seed set exists now; a wider seed set doesn't yet.
+- ⬜ **Context-preserving ingestion for unknown words — still not built.** When a wider seed set (or
   Phase 4's scraped web content, §7) introduces a term tmct doesn't recognize, it should not be
   silently dropped. It enters the graph as a real individual tagged with the passage it was found in
   (a stored context paragraph, as provenance), and other words — known or unknown — co-occurring in
   that same passage get linked to it. This is deliberately **not** distributional/embedding-style
-  meaning induction — that would cross into LLM-shaped territory. It is a bounded, structural
-  provenance mechanism: a future resolution pass, or an explicit teaching turn, has real context to
-  work from instead of a bare, contextless token. Scoped honestly: this buys traceable context, not
-  automatic sense disambiguation, and should be graded on that basis, not oversold as understanding.
-- **Config surface, concretely.** Extends Phase 0's `[extensions]` table — each named
-  extension/seed set gets an optional `bias` weight. The resolver's existing tie-break logic (already
-  principled — refuse-and-list-candidates on a genuine tie, §2.2) gets one new input ahead of that
-  tie-break: prefer the sense whose owning seed set has the higher declared bias, falling back to
-  today's honest-refusal behavior only when biases are equal or absent.
-- **CLI ergonomics: `tmct init --with-persona <name>`.** So a JS developer doesn't have to
-  hand-write a `[bias]` table from scratch, `tmct init` gains an opt-in `--with-persona` flag that
-  scaffolds a starter `tmct.toml` for a named, pre-declared seed-set/bias combination — e.g.
-  `npx @polycode-projects/the-mechanical-code-talker init --with-persona code` writes a `tmct.toml`
-  with the code seed set active and a sensible default bias already set (tmct's own current,
-  implicit default, made explicit and editable). A persona is just a named preset over §4's own
-  config surface, not a new mechanism — later personas (e.g. a `general` persona once the wider
-  seed set from this phase ships) are more presets over the same table, not new code paths.
+  meaning induction — that would cross into LLM-shaped territory. Scoped honestly: this buys
+  traceable context, not automatic sense disambiguation.
+- ✅ **Config surface, concretely — shipped v1.4.0.** Each named extension/seed set gets an optional
+  `bias` weight in `tmct.toml`'s `[bias]` table (a flat bundle-name → weight table, not nested under
+  `[extensions.*]` — a deliberate simplification versus this doc's own illustrative sketch).
+- ✅ **CLI ergonomics: `tmct init --with-persona <name>` — shipped v1.4.0.** `PERSONA_PRESETS.code`
+  (today's implicit default, made explicit: empty extension overrides, `bias: {seon: 1.0, conceptnet:
+  1.0}`). Zero-flag `tmct init` output stays byte-identical (persona sections only appear when
+  requested). Unknown persona name → loud stderr error + non-zero exit, mirroring `--corpus`'s
+  existing error style.
 
 ## 5. Phase 2 — tmct as marginalia's interpreter
 
@@ -385,16 +398,17 @@ tmct" rather than validate against synthetic benchmarks.
   substantially longer and exhibited "probabilistic indexing incompleteness" — files silently
   skipped. This directly validates tmct's no-LLM philosophy applied to seonix's own graph-build step
   too, not just tmct's chat surface.
-- **Real multi-language AST extraction, from the seonix audit (§2.2).** seonix already runs real
-  compiler front ends (Roslyn for C#, JavaParser+SymbolSolver for Java, the TS compiler API,
-  Python's `ast`) that tmct's own `graph-build.mjs` has none of — it is a pure downstream graph
-  consumer today. Wiring seonix's extraction pipeline to feed tmct's graph-build step is the
-  concrete engineering this phase needs for the combined index to cover more than one language.
-- **Depth-capped impact, source-backed snippets, and cost telemetry, from the seonix audit (§2.2).**
-  Once the combined index is real, the Repository Interface's own thinness (unbounded traversal, no
-  source access by default, no per-call cost accounting) stops being a paper cut — these are the
-  same fixes as Phase 0's RI wrapper items, worth re-verifying against the larger combined graph
-  specifically once it exists.
+- **Multi-language coverage stays seonix's job, not tmct's (scope decision, 2026-07-11 — see §2.2).**
+  This phase originally proposed wiring seonix's Roslyn/JavaParser/TS-compiler extraction pipeline
+  into tmct's own `graph-build.mjs`. Superseded: seonix is the connection point between the SEON
+  ontology and software language, permanently — tmct stays a pure downstream graph consumer. The
+  combined index still gets multi-language coverage, just by seonix handing tmct a multi-language
+  graph through the provider seam (already the proven integration pattern, §1.1), not by tmct
+  learning to parse anything itself.
+- **RI wrapper fixes — already shipped (§3), worth re-verifying against the combined graph
+  specifically once it exists.** Depth-capped impact, source-backed snippets, and pagination all
+  landed in Phase 0/v1.4.0; this phase's job is confirming they hold up at the larger scale a
+  combined multi-language index implies, not building them again.
 - **tmct becomes the NL surface over the combined index** — the same escalation discipline as
   everywhere else in this doc: answer what's provably in the combined graph/ontology, decline
   honestly outside it, never guess.
@@ -531,18 +545,18 @@ Explicit pruning record, so these aren't re-asked:
 
 ## 11. Sequencing
 
-| Phase | What ships | Depends on | Repo(s) |
-|---|---|---|---|
-| 0 | Foundations (§3): smoke test, envelope.json, extension-pack seam, ace-owl extraction, ontology tracks a–d, grammar tracks a/d/f, debt re-measure, RI wrapper fixes + hub-dampened memory ranking (§2) | Nothing (all build on shipped work) | tmct |
-| 1 | Bias-weighted ambiguity resolution & wider seed sets (§4): `tmct.toml` `[bias]` table, wider general-knowledge corpus, context-preserving unknown-word ingestion | Phase 0's extension-pack seam | tmct |
-| 2 | tmct as marginalia's interpreter (§5): seon-mcp adapter, Formulate validation, mechanical-chat replacement | Phase 0's extension-pack seam | tmct, marginalia |
-| 3 | tmct × seonix combined index (§6): multi-language AST extraction, combined graph/ontology | Phase 0's extension-pack seam | tmct, seonix |
-| 4 | marginalia scrape→teach pipeline (§7) | PLAN_TAUGHT_RELATIONS (shipped); Phase 1 for context-preserving ingestion specifically | marginalia |
-| 5 | Pluggable LLM rung — Claude Code hardening, Bedrock integration test + assessor, Copilot shim (§8) | Phase 0's envelope.json (Bedrock); nothing new (Claude Code, Copilot) | tmct, bedrock-meter |
-| Backlog | Memory-tree versioning, actor-level trust, SHACL ingest gate, Chronograph-style temporal diffing (§2) | None — independent tmct-quality work | tmct |
-| R1 | Bounded goal recognition spike, DRT-lite discourse record | Phase 2 (validation target) | tmct |
-| R2 | Dependency/categorial grammar idea, cross-repo trust vocabulary | LLM-decision provenance gap (§9) | tmct, marginalia |
-| R3 | Open-world planning, Winograd coreference, shared ontology scale — recorded, not scheduled | — | — |
+| Phase | What ships | Status (2026-07-11) | Depends on | Repo(s) |
+|---|---|---|---|---|
+| 0 | Foundations (§3): smoke test, envelope.json, extension-pack seam, ace-owl extraction, ontology tracks a–d, grammar tracks a/d/f, debt re-measure, RI wrapper fixes + hub-dampened memory ranking (§2) | **Partial — extension-pack seam ✅, RI wrapper fixes ✅, hub-dampening ✅ (all v1.4.0); smoke test/envelope.json/ace-owl/ontology tracks/grammar tracks/debt re-measure still open** | Nothing (all build on shipped work) | tmct |
+| 1 | Bias-weighted ambiguity resolution & wider seed sets (§4): `tmct.toml` `[bias]` table, wider general-knowledge corpus, context-preserving unknown-word ingestion | **Partial — `[bias]` table + ranking + `--with-persona` ✅ (v1.4.0); wider corpus content and context-preserving ingestion still open** | Phase 0's extension-pack seam | tmct |
+| 2 | tmct as marginalia's interpreter (§5): seon-mcp adapter, Formulate validation, mechanical-chat replacement | Not started | Phase 0's extension-pack seam | tmct, marginalia |
+| 3 | tmct × seonix combined index (§6): mount seonix's (multi-language) graph, re-verify RI depth at scale | Not started (multi-language extraction itself now out of scope — stays in seonix, §2.2) | Phase 0's extension-pack seam | tmct, seonix |
+| 4 | marginalia scrape→teach pipeline (§7) | Not started | PLAN_TAUGHT_RELATIONS (shipped); Phase 1 for context-preserving ingestion specifically | marginalia |
+| 5 | Pluggable LLM rung — Claude Code hardening, Bedrock integration test + assessor, Copilot shim (§8) | Not started | Phase 0's envelope.json (Bedrock); nothing new (Claude Code, Copilot) | tmct, bedrock-meter |
+| Backlog | SHACL ingest gate, Chronograph-style temporal diffing (§2) — memory versioning + actor-level trust shipped v1.4.0, no longer backlog | Partial — 2 of 4 original items shipped | None — independent tmct-quality work | tmct |
+| R1 | Bounded goal recognition spike, DRT-lite discourse record | Not started | Phase 2 (validation target) | tmct |
+| R2 | Dependency/categorial grammar idea, cross-repo trust vocabulary | Not started | LLM-decision provenance gap (§9) | tmct, marginalia |
+| R3 | Open-world planning, Winograd coreference, shared ontology scale — recorded, not scheduled | Not started, not scheduled | — | — |
 
 ## 12. Provenance
 
@@ -568,3 +582,44 @@ What this doc absorbed from each archived source, and what was cut:
   research this session) → §2 in full.
 - **The operator's bias-weighting realization** (2026-07-10, mid-session, not from any archived
   doc) → §4 in full, plus the R3 revisit note.
+
+## 13. v1.4.0 build record (2026-07-11)
+
+The (a)-tier uplift items from §2, plus Phase 0's extension-pack seam and Phase 1's bias-weighted
+ranking, were built as four parallel, worktree-isolated background tracks, merged sequentially into
+`main`, watched throughout by a background strategy-advisor agent (`SKILL_AGENT_STRATEGY_ADVISOR.md`,
+full tick-by-tick record in `STRATEGY_ADVISOR.log`). 1543/1543 tests green at the final merge.
+
+- **Track A — security fix + Repository Interface wrapper + telemetry.** 7 commits. Closed a real,
+  previously unguarded path-traversal gap in `server.mjs`'s inline file readers (extracted into
+  `src/source-slice.mjs`). Wired real ranking/pagination/depth into `search()`/`edges()`/`impact()`;
+  made `context()` a graph-only hit even without source access (`INTERFACE_VERSION` → 1.1.0, a
+  deliberate, documented interface change); wired telemetry (redacts `snippet()` bodies; wraps every
+  RI service once at construction, currently exercised only by direct callers/tests, not the live
+  `dispatchTool` path — a deliberate scope cut, not an oversight, see §2.2).
+- **Track B — hub-dampened block ranking.** 1 commit. Shipped on by default. Found the original
+  "modest degree, modest penalty" assumption was mathematically wrong (proved analytically and
+  numerically: a nonzero-degree block can never out-rank a genuinely isolated one on a tie, bounded
+  below √2) and redesigned the test corpus around the real math.
+- **Track C — memory versioning + actor-level trust.** 5 commits. `snapshotMemory()` (manual
+  trigger only). Session-scoped Source IDs for operator/teach facts, shipped unconditionally (no
+  config flag — operator decision, single consumer). Caught and fixed two regressions the literal
+  brief would have introduced: a saturating trust-reliability formula (redesigned with Laplace/add-k
+  confidence scaling) and a Fact/Rule staleness bug in the trust-refresh step.
+- **Track D — extension-pack seam + bias-weighted ranking + persona init.** 7 commits. Needed one
+  resume cycle: two parts (`tmct extend --validate`, `tmct init --with-persona`) were left
+  uncommitted/unbuilt at the track's first "done" report, caught by the coordinator's merge-time
+  verification, finished on request.
+- **One real merge conflict**, in `src/chat.mjs`: Track A threaded a `tel` param through
+  `runAsk`/`runCommand`/`runTurn`'s signatures at the same time Track D threaded a `biasByBundle`
+  param through the same functions. Resolved by keeping both in every signature/ctx object/call site
+  — verified end-to-end, not just merged and trusted.
+- **One bug found by the strategy advisor, not the original brief, fixed during merge**: `src/
+  source-slice.mjs`'s path-traversal guard failed closed incorrectly (rejecting *legitimate* reads,
+  not just traversal attempts) when `TMCT_GRAPH_FILE` was a relative path, because nothing resolved
+  it to absolute before the containment check. Fixed at the source (`src/config.mjs`) and
+  defensively in the guard itself, with regression tests for both.
+- **Scope decision made mid-build, not pre-planned**: multi-language AST extraction (§2.2, originally
+  slated for Phase 3, §6) stays in seonix permanently — see the top-of-doc status banner and §6.
+
+Version: `1.3.2 → 1.4.0` (minor — real feature work). Full commit range: `0c31d79..b1b6a95`.
