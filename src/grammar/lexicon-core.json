@@ -532,7 +532,21 @@
     "object": {},
     "location": {},
     "quantity": {},
-    "organization": {}
+    "organization": {},
+    "animal": {},
+    "plant": {},
+    "furniture": {},
+    "vehicle": {},
+    "insect": {},
+    "emotion": {},
+    "metal": {},
+    "liquid": {},
+    "weather": {},
+    "planet": {},
+    "jewelry": {},
+    "cutlery": {},
+    "government": {},
+    "material": {}
   },
   "verbs": {
     "import": {},

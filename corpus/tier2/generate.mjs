@@ -325,6 +325,13 @@ export const CORPUSES = {
         // "worker"/"engineer"/"table" already exist as software-domain
         // nouns — reused, not redeclared)
         "object", "artifact", "location", "quantity", "organization",
+        // category-root nouns used as a hypernym TARGET by several facts
+        // above (e.g. "dog IsA animal") — declared directly too, since a
+        // hypernym root is exactly the kind of word someone would plausibly
+        // ask or teach about on its own ("what is an animal").
+        "animal", "plant", "furniture", "vehicle", "insect", "emotion",
+        "metal", "liquid", "weather", "planet", "jewelry", "cutlery",
+        "government", "material",
       ],
       verbs: [
         "like", "want", "need", "believe", "trust", "love", "hate", "fear",
@@ -730,6 +737,72 @@ export async function fetchCorpus(url, expectedSha) {
   return text;
 }
 
+/**
+ * Alignment drift-guard for a corpus entry that declares an optional
+ * `lexicon` sub-key (today: only `human` — PLAN_SEED.md §4's "two vocabulary
+ * surfaces" seam): the corpus fact set and the ACE parser's closed-set
+ * vocabulary (src/grammar/lexicon-core.json) are two SEPARATE files, gated
+ * independently, so nothing stops them drifting apart over time. Two
+ * directions, both real (mirroring conceptnet-map.toml's own "slice relation
+ * missing from map = error" precedent):
+ *
+ *   1. every declared lexicon word ACTUALLY resolves in the real, committed
+ *      lexicon-core.json — catches a `lexicon` sub-key entry that was
+ *      declared here but never actually added to the file (orphaned intent);
+ *   2. every declared lexicon word has AT LEAST ONE supporting occurrence
+ *      (as a subject or object) somewhere in this SAME corpus's own facts —
+ *      catches a typo'd or stale `lexicon` sub-key entry with nothing behind
+ *      it (orphaned metadata, the reverse mistake).
+ *
+ * Deliberately NOT the other direction (every corpus fact's subject/object
+ * term must itself be a declared lexicon word) — that would force every
+ * ConceptNet-style background CONCEPT filler this corpus's facts use as an
+ * object (e.g. "treating_illness", "growing_into_a_plant") to also become a
+ * parseable ACE noun, contradicting the "breadth over depth, no
+ * over-modeling" discipline this whole batch was built under, and breaking
+ * with EVERY other tier2 corpus's own long-standing precedent (aws.jsonl's
+ * "object_storage"/"cloud_platform" concept objects were never lexicon
+ * nouns either, and no such stricter check exists for them). The `lexicon`
+ * sub-key's OWN declared words (the genuinely teachable/askable common
+ * words this corpus's curation deliberately picked out) are what this
+ * check verifies both ends of. */
+async function verifyLexiconAlignment(id, spec) {
+  if (!spec.lexicon) return; // no alignment declared for this corpus — nothing to check
+  const nouns = spec.lexicon.nouns || [];
+  const verbs = spec.lexicon.verbs || [];
+  const adjectives = spec.lexicon.adjectives || [];
+  const properNames = (spec.lexicon.properNames || []).map((n) => n.toLowerCase());
+  const declared = [...nouns, ...verbs, ...adjectives, ...properNames];
+
+  const lexPath = fileURLToPath(new URL("../../src/grammar/lexicon-core.json", import.meta.url));
+  const lex = JSON.parse(await readFile(lexPath, "utf8"));
+  const inLexicon = (w) => Boolean(lex.nouns[w] || lex.verbs[w] || lex.adjectives[w]
+    || (lex.properNames || []).some((n) => n.toLowerCase() === w));
+  const orphanedIntent = declared.filter((w) => !inLexicon(w));
+  if (orphanedIntent.length) {
+    throw new Error(`${id}: lexicon sub-key names ${orphanedIntent.length} word(s) never actually declared in lexicon-core.json: ${orphanedIntent.slice(0, 10).join(", ")}`);
+  }
+
+  // Coverage check 2 is NOUN-only: a fact triple's subject/object are always
+  // concept (noun-shaped) terms, so every declared noun should be FOUND
+  // there — a real drift signal if not (a typo, or a word dropped from the
+  // facts array but left in the lexicon list). VERBS never appear as a bare
+  // term at all (a verb maps to the RELATION between two terms, never a term
+  // itself) and ADJECTIVES are declared primarily for the LIVE ACE teaching
+  // surface ("the man is happy") rather than pre-existing corpus coverage —
+  // neither is a meaningful drift signal, so this check is scoped to nouns.
+  const factTerms = new Set();
+  for (const f of spec.facts) {
+    factTerms.add(humanize(f[0]).toLowerCase());
+    factTerms.add(humanize(f[2]).toLowerCase());
+  }
+  const orphanedMetadata = nouns.filter((w) => !factTerms.has(w));
+  if (orphanedMetadata.length) {
+    throw new Error(`${id}: lexicon sub-key names ${orphanedMetadata.length} noun(s) with no supporting fact in this corpus: ${orphanedMetadata.slice(0, 10).join(", ")}`);
+  }
+  console.error(`  verify ${id}: lexicon sub-key (${declared.length} words: ${nouns.length} nouns, ${verbs.length} verbs, ${adjectives.length} adjectives, ${properNames.length} proper names) is aligned both ways`);
+}
+
 async function main() {
   const verify = process.argv.includes("--verify");
   const manifest = { version: 1, generated: "by corpus/tier2/generate.mjs", corpuses: [] };
@@ -764,6 +837,7 @@ async function main() {
       if (assertions.length !== c.facts) throw new Error(`${c.id}: loadSlice count ${assertions.length} != ${c.facts}`);
       if (facts.length !== c.facts) throw new Error(`${c.id}: ${c.facts - facts.length} fact(s) did not seed (ace=none rel?)`);
       console.error(`  verify ${c.id}: ${assertions.length} assertions load, all ${facts.length} seed cleanly`);
+      await verifyLexiconAlignment(c.id, CORPUSES[c.id]);
     }
     console.error("verify: OK — every tier-2 corpus loads and seeds through the tier-1 path");
   }

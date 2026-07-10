@@ -23,7 +23,7 @@
 // convenience tool, never a build dependency, never required for `npm test`
 // or the product path.
 
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -337,7 +337,48 @@ function parseSchemaClasses(text) {
   return classes;
 }
 
-// ---- Part 5: main ----------------------------------------------------------
+// ---- Part 5: example-sentence candidates (PLAN_SEED.md §9, the "tenth
+// deliverable") -------------------------------------------------------------
+//
+//   node scripts/extract-persona-sources.mjs --examples [--out <path>]
+//
+// Reads EVERY noun.*.yaml file (not just one clump's own source files — the
+// already-curated word list in corpus/tier2/generate.mjs's own
+// CORPUSES.human.lexicon.nouns spans words drawn from several source files
+// each, and by this point the words are fixed and committed, so there is no
+// more reason to keep the per-clump file split) and pulls each word's real
+// WordNet inline `example:` sentence, where one exists (real coverage varies
+// ~1-8% by category, PLAN_SEED.md §9 — most words won't have one, that's
+// expected). Writes a candidate list — NOT the final committed file — for a
+// human to hand-pick corpus/tier2/human-examples.jsonl from (same "curate
+// down from a big source" discipline as everything else here).
+async function loadAllNounSynsets() {
+  const files = (await readdir(WORDNET_YAML_DIR)).filter((f) => f.startsWith("noun."));
+  return loadSynsets(files);
+}
+
+// A handful of WordNet examples are cross-reference stubs ("see table 1"),
+// not real sentences — filtered here so a re-run reproduces the committed
+// corpus/tier2/human-examples.jsonl exactly (this was the one candidate
+// dropped by hand when that file was first curated).
+const isRealSentence = (s) => !/^see\s+\w+\s*\d*\.?$/i.test(String(s).trim());
+
+async function writeExampleCandidates(outPath) {
+  const { CORPUSES } = await import("../corpus/tier2/generate.mjs");
+  const words = CORPUSES.human.lexicon.nouns.filter((w) => !w.includes(" "));
+  const synsets = await loadAllNounSynsets();
+  const entries = await loadEntriesFor(new Set(words));
+  const candidates = [];
+  for (const word of words) {
+    const c = candidateFor(word, entries, synsets, "n");
+    if (c && c.example && isRealSentence(c.example)) candidates.push({ term: word, sentence: c.example, sourceSynset: c.synsetId });
+  }
+  const { writeFile } = await import("node:fs/promises");
+  await writeFile(outPath, JSON.stringify(candidates, null, 2) + "\n");
+  console.error(`extract-persona-sources --examples: wrote ${outPath} (${candidates.length}/${words.length} words have a real WordNet example)`);
+}
+
+// ---- Part 6: main -----------------------------------------------------------
 
 async function main() {
   if (!existsSync(WORDNET_YAML_DIR)) {
@@ -348,6 +389,13 @@ async function main() {
   if (!existsSync(SCHEMA_TTL)) {
     console.error(`extract-persona-sources: Schema.org source not found at ${SCHEMA_TTL}`);
     console.error(`  (set TMCT_SCHEMAORG_SRC to override — this is a maintainer convenience tool, not a build dependency)`);
+    return;
+  }
+
+  if (process.argv.includes("--examples")) {
+    const i = process.argv.indexOf("--out");
+    const outPath = i !== -1 && process.argv[i + 1] ? process.argv[i + 1] : join("scripts", "persona-examples-candidates.json");
+    await writeExampleCandidates(outPath);
     return;
   }
 
