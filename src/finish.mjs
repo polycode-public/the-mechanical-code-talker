@@ -312,13 +312,46 @@ function ruleAgreement(segments, rule) {
   return out;
 }
 
-// Rule 3 — sentence capitalisation. Only when the answer OPENS on a prose span
-// whose first non-space character is a lowercase letter. An answer that opens on
-// a protected span (a path/entity) is left exactly as grounded.
+// Rule 3 — sentence capitalisation. Capitalises (a) the very first character
+// when the answer OPENS on a prose span (the ORIGINAL single-answer scope,
+// unchanged), (b) every INTERNAL sentence boundary inside a single prose span
+// — a run of terminal punctuation + whitespace followed by a lowercase letter
+// — and (c) a sentence boundary that CROSSES a span boundary: a prose span
+// ends in terminal punctuation (+ optional trailing whitespace) and the next
+// real-content span is itself prose starting lowercase (any purely-whitespace
+// prose spans in between are skipped over). (b) and (c) are the
+// PLAN_COMPLETIONS.md Stage 6 generalisation — a genuinely multi-sentence
+// completion needs every internal boundary capitalised, not just the whole-
+// answer opener. A boundary that lands on a PROTECTED span (path/entity/…) is
+// left exactly as grounded — a protected span's casing is never
+// rule-transformed, the same guard (a) always applied to an answer that opens
+// on one.
 function ruleCapitalise(segments) {
-  if (!segments.length || segments[0].type !== "prose") return segments;
+  if (!segments.length) return segments;
   const out = segments.map((s) => ({ ...s }));
-  out[0].text = out[0].text.replace(/^(\s*)([a-z])/, (m, sp, ch) => sp + ch.toUpperCase());
+
+  // (a) answer-initial capitalisation
+  if (out[0].type === "prose") {
+    out[0].text = out[0].text.replace(/^(\s*)([a-z])/, (m, sp, ch) => sp + ch.toUpperCase());
+  }
+
+  // (b) every internal sentence boundary WITHIN a single prose span
+  for (const seg of out) {
+    if (seg.type !== "prose") continue;
+    seg.text = seg.text.replace(/([.!?])(\s+)([a-z])/g, (m, stop, sp, ch) => stop + sp + ch.toUpperCase());
+  }
+
+  // (c) a sentence boundary that CROSSES a span boundary
+  for (let i = 0; i < out.length; i += 1) {
+    const seg = out[i];
+    if (seg.type !== "prose" || !/[.!?]\s*$/.test(seg.text)) continue;
+    let j = i + 1;
+    while (j < out.length && out[j].type === "prose" && /^\s*$/.test(out[j].text)) j += 1;
+    if (j < out.length && out[j].type === "prose") {
+      out[j].text = out[j].text.replace(/^(\s*)([a-z])/, (m, sp, ch) => sp + ch.toUpperCase());
+    }
+  }
+
   return out;
 }
 
@@ -345,19 +378,18 @@ function ruleList(segments, rule) {
   return out;
 }
 
-// Rule 5 — terminal punctuation. Collapse a trailing run of 2+ sentence stops in
-// the LAST prose span to a single stop ("done.." → "done."). Adds nothing where
-// a fragment/list answer legitimately ends without a stop.
+// Rule 5 — terminal punctuation. Collapses ANY run of 2+ sentence stops within
+// a prose span to a single stop ("done.." → "done."; "Sentence one.. Sentence
+// two!!" → "Sentence one. Sentence two!") — generalised (PLAN_COMPLETIONS.md
+// Stage 6) from the original single-answer scope (only the LAST prose span,
+// only a run anchored at the very end of the answer) to every internal
+// sentence boundary a multi-sentence completion can carry. A legitimate
+// fragment/list answer that ends without a stop is unaffected — there is
+// nothing to collapse.
 function ruleTerminal(segments, rule) {
   const stops = (rule.stops && rule.stops.length ? rule.stops : [".", "!", "?"]).map(escapeRe2).join("");
-  const out = segments.map((s) => ({ ...s }));
-  let idx = -1;
-  for (let i = out.length - 1; i >= 0; i -= 1) if (out[i].type === "prose") { idx = i; break; }
-  if (idx < 0) return out;
-  const re = new RegExp(`([${stops}])(?:\\s*[${stops}])+(\\s*)$`);
-  const m = out[idx].text.match(re);
-  if (m) out[idx].text = out[idx].text.slice(0, m.index) + m[1] + m[2];
-  return out;
+  const re = new RegExp(`([${stops}])(?:\\s*[${stops}])+(\\s*)`, "g");
+  return segments.map((s) => (s.type === "prose" ? { ...s, text: s.text.replace(re, "$1$2") } : { ...s }));
 }
 
 const HANDLERS = {
@@ -421,16 +453,27 @@ export function applyGrammar(segments, rules = grammarRules()) {
 // runTurn, at the `withLast` seam, `result = finish(result, { graph })` so every
 // producer passes through once. Until then finish() is exercised by its unit +
 // golden tests; wiring it changes no fact, only fixes our own generated defects.
+//
+// ctx.rules (optional, additive): a caller-supplied rule table overriding the
+// cached grammarRules() for this call only — e.g. completions/complete.mjs's
+// Stage 6 pass force-enables the sentence-capitalisation rule (PARKED in the
+// live chat table per grammar-rules.toml's own cycle-006 note) because a
+// genuinely multi-sentence extractive completion needs every internal sentence
+// boundary capitalised to read as one voice, without touching the chat
+// pipeline's default live/parked flags. Every EXISTING call site omits
+// ctx.rules and is therefore byte-identical to before this option existed.
 
 /** Finish a turn result: grammar-correct its prose spans, preserving every fact.
  *  Byte-stable when neutral (returns its argument unchanged); rebuilds only on a
- *  genuine fix. Throws if finishing would move any protected span (guard #4). */
+ *  genuine fix. Throws if finishing would move any protected span (guard #4).
+ *  @param {{rules?: object[]}} [ctx.rules] optional rule-table override (see above) */
 export function finish(result, ctx = {}) {
   if (!result || typeof result.answer !== "string") return result;
+  const rules = Array.isArray(ctx.rules) ? ctx.rules : grammarRules();
   const before = Array.isArray(result.segments) && result.segments.length
     ? result.segments
     : maskSegments(result.answer, ctx);
-  const after = applyGrammar(before, grammarRules());
+  const after = applyGrammar(before, rules);
   assertInvariance(before, after);
   const answer = flatten(after);
   if (answer === result.answer) return result; // neutral → byte-stable, same reference

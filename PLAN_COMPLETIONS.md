@@ -1,7 +1,26 @@
 # PLAN_COMPLETIONS.md — mechanical text generation via retrieve, group, infer, summarize, prune, voice
 
-*(Drafted 2026-07-10. Status: RESEARCH PLAN, not a build order — explicit operator sign-off required
-before any implementation, same discipline as `PLAN_CODE.md` §8. Origin: operator's request to add
+> **STATUS (2026-07-10): Stages 0–3 ✅ SHIPPED** — all four §4 staging rows landed: Stage 1+2
+> (`src/completions/search.mjs`'s `broadSearch`, `src/completions/group.mjs`'s `groupHits`,
+> connected-components over the shared-token block-similarity graph), Stage 3 (`src/completions/
+> infer.mjs`'s `inferRelations`, the closed 4-relation vocabulary — supports/contradicts/
+> elaborates/exemplifies — each licensed by its own concrete test, reusing `resolveRelationChase`),
+> Stage 4 (`src/completions/rank.mjs`'s `rankSentences`, PageRank+IDF sentence ranking reusing
+> `memory/blocks.mjs`'s `rankBlocks`/`degreeOf` verbatim at sentence granularity), and Stage 5+6
+> (`src/completions/prune.mjs`'s `pruneCompletion` — top-K-per-group + positive-score keep, a
+> relation-anchor salvage so an asserted cross-group claim always keeps one real sentence, and an
+> itemized drop log; `src/finish.mjs`'s `ruleCapitalise`/`ruleTerminal` generalized from
+> single-answer first/last-span-only to every internal sentence boundary, gated behind a new
+> optional `ctx.rules` override on `finish()` so every existing single-answer call site stays
+> byte-identical). `src/completions/complete.mjs`'s `generateCompletion(dir, prompt, opts)` wires
+> all six stages end to end — every output sentence traces to a source span (block id + group id)
+> in `sourceSpans`, every cross-group claim carries its `relations` licensing evidence untouched by
+> pruning, and a prompt/corpus that clears no pruning bar declines honestly (`declined: true`)
+> rather than fabricating a completion. Extractive fidelity holds throughout: Stage 6 fixes
+> casing/punctuation only, never words — a disjointed read where the source material doesn't chain
+> is the plan's own accepted, documented limit (§3), not smoothed over.
+
+*(Drafted 2026-07-10. Origin: operator's request to add
 a text-generation feature to `PLAN_AGENTS.md`'s architecture — not LLM-style generation, but a
 mechanical pipeline: broad search over a prompt, group the results, infer relationships between the
 groups, mechanically summarize, drop elements that don't contribute to an inference or the summary,
@@ -122,12 +141,12 @@ visibly flag the seam, the same honesty discipline as every other tmct capabilit
 
 ## 4. Staging (measure-before-building)
 
-| Stage | What ships | New machinery? | Exit criterion |
-|---|---|---|---|
-| 0 | Stage 1+2 only — broad search + grouping over a fixed corpus, no inference or summarization yet | Grouping formalized from the existing tag-clustering | Groups are stable and inspectable for a hand-picked prompt set |
-| 1 | Stage 3 — cross-group inference wired to the existing entailment/rule-chase machinery, closed inference-relation vocabulary | Reuses `syllogise.mjs`/`resolveRelationChase`, no new engine | Every asserted inference cites a concrete licensing test, zero fabricated relationships on a hand-labeled set |
-| 2 | Stage 4 — extractive ranking (graph-ranking/PageRank+IDF-style) | New — the un-pruned block ranker, scoped to this plan | Selected sentences cover the labeled key points of a hand-picked source set at a target recall |
-| 3 | Stage 5+6 — pruning + grammar/voice pass wired end to end | Stage 6 reuses `finish.mjs` directly | A full end-to-end completion reads as one consistent voice and every sentence traces to a source span |
+| Stage | What ships | New machinery? | Exit criterion | Status |
+|---|---|---|---|---|
+| 0 | Stage 1+2 only — broad search + grouping over a fixed corpus, no inference or summarization yet | Grouping formalized from the existing tag-clustering | Groups are stable and inspectable for a hand-picked prompt set | ✅ shipped |
+| 1 | Stage 3 — cross-group inference wired to the existing entailment/rule-chase machinery, closed inference-relation vocabulary | Reuses `syllogise.mjs`/`resolveRelationChase`, no new engine | Every asserted inference cites a concrete licensing test, zero fabricated relationships on a hand-labeled set | ✅ shipped |
+| 2 | Stage 4 — extractive ranking (graph-ranking/PageRank+IDF-style) | New — the un-pruned block ranker, scoped to this plan | Selected sentences cover the labeled key points of a hand-picked source set at a target recall | ✅ shipped |
+| 3 | Stage 5+6 — pruning + grammar/voice pass wired end to end | Stage 6 reuses `finish.mjs` directly | A full end-to-end completion reads as one consistent voice and every sentence traces to a source span | ✅ shipped |
 
 Each stage is measured before the next is attempted, the same discipline `PLAN_CODE.md` §6 and
 `PLAN_ADVANCED_GRAMMAR.md` §2 both apply.
