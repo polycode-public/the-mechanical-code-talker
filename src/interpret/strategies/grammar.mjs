@@ -7,7 +7,7 @@
 import {
   VERB_TO_KIND, ENTITY_TO_TYPE, MODIFIER_TO_KIND,
   META_MEANING_VERBS, WHERE_MARKERS, MENTION_MARKERS,
-  INHERITS_REVERSE_VERBS, stripTrailingScopeFiller,
+  INHERITS_REVERSE_VERBS, stripTrailingScopeFiller, stripTrailingDiscourseTag,
 } from "../../ask-vocab.mjs";
 import { escapeRegex } from "../normalize.mjs";
 
@@ -96,12 +96,15 @@ const TEMPLATES = [
   // Fix 3: stripTrailingScopeFiller (ask-vocab.mjs) trims a curated trailing clause
   // ("what is a Module in this graph" -> "Module") off the object before it's
   // returned, so a scoping tail never corrupts the lookup term either the bare-form
-  // check above or downstream resolution/rendering perform.
+  // check above or downstream resolution/rendering perform. HANDOVER.md 2026-07-10
+  // item 8: stripTrailingDiscourseTag trims a bare trailing "then"/"though" the
+  // same way ("what is a component then" -> "component") — applied first, since a
+  // discourse tag sits outermost when both happen to stack.
   {
     name: "meta-whatis",
     re: new RegExp(`^what\\s+(?:is|are)\\s+(?:(an?)\\s+)?(.+?)\\??$`, "i"),
     build: (m) => {
-      const object = m[2].trim();
+      const object = stripTrailingDiscourseTag(m[2].trim());
       if (!m[1] && !ENTITY_TO_TYPE[object.toLowerCase()]) return null; // bare form: closed-set only
       return { shape: "meta", entityType: null, modifier: "direct", kind: "meta", object: stripTrailingScopeFiller(object) };
     },

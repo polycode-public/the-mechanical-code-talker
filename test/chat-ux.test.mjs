@@ -327,6 +327,34 @@ test("Batch 2 Fix 3: 'what is a cache in this graph' resolves the same answer as
   assert.doesNotMatch(withFiller.answer, /couldn't parse this as a graph question/);
 });
 
+// HANDOVER.md 2026-07-10 item 8: "so what is a component then" left the trailing
+// bare discourse tag "then" glued to the captured meta term ("component then"),
+// so a freshly-taught fact was invisible to the follow-up even though it had just
+// been taught. Fixed via stripTrailingDiscourseTag, the same closed-list
+// discipline as Batch 2 Fix 3's stripTrailingScopeFiller just above.
+test("HANDOVER item 8: 'what is a widget then' surfaces a freshly taught fact — trailing discourse tag 'then' stripped, chat layer", async () => {
+  const dir = await mem();
+  try {
+    const taught = await runTurn("widget is a component", { config: CONFIG, memoryDir: dir, sessionId: "then1" });
+    assert.match(taught.answer, /noted — remembered: widget is a kind of component/);
+
+    const withThen = await runTurn("what is a widget then", { config: CONFIG, memoryDir: dir });
+    const withoutThen = await runTurn("what is a widget", { config: CONFIG, memoryDir: dir });
+    assert.equal(withThen.answer, withoutThen.answer);
+    assert.match(withThen.answer, /you told me: widget is a kind of component/);
+    assert.doesNotMatch(withThen.answer, /couldn't parse this as a graph question/);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("HANDOVER item 8: 'what is a widget though' also strips its trailing discourse tag — same curated then/though pair", async () => {
+  const dir = await mem();
+  try {
+    await runTurn("widget is a component", { config: CONFIG, memoryDir: dir, sessionId: "then2" });
+    const withThough = await runTurn("what is a widget though", { config: CONFIG, memoryDir: dir });
+    assert.match(withThough.answer, /you told me: widget is a kind of component/);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
 // ---- Bug 1 (2026-07-09 dispatch): "what else is X" repeated the primary
 // definition verbatim instead of surfacing more. Root cause: ask()'s own
 // relaxation cascade silently drops "else" as an unmatched token once the

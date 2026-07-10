@@ -307,6 +307,27 @@ export function stripTrailingScopeFiller(text) {
   return text.replace(TRAILING_SCOPE_FILLER_RE, "").trim();
 }
 
+/** Trailing bare discourse tags — the same curated "then"/"though" pair
+ *  ask.mjs's PRED_LEAD_SKIP already recognizes as a trailing discourse tag on
+ *  an otherwise-bare follow-up ("how many of those then"). A "what is X"
+ *  meta-whatis question wasn't tolerant of this yet: "what is a component
+ *  then" captured the literal unknown term "component then" instead of
+ *  "component" (HANDOVER.md 2026-07-10, item 8). Stripped the same
+ *  closed-list way as TRAILING_SCOPE_FILLER, just above. */
+export const TRAILING_DISCOURSE_TAG = Object.freeze(["then", "though"]);
+
+const TRAILING_DISCOURSE_TAG_RE = new RegExp(
+  `\\s+(?:${TRAILING_DISCOURSE_TAG.join("|")})\\s*[?.!]*$`, "i",
+);
+
+/** Strip ONE trailing bare discourse tag (TRAILING_DISCOURSE_TAG, above) off
+ *  the end of a captured meta-whatis term — "what is a component then"
+ *  resolves the same term as "what is a component". Applied once, mirroring
+ *  stripTrailingScopeFiller's own discipline. */
+export function stripTrailingDiscourseTag(text) {
+  return text.replace(TRAILING_DISCOURSE_TAG_RE, "").trim();
+}
+
 /** relation token -> flat verb-phrase list, the shape ask.mjs's VERB_TO_KIND
  *  table needs (phrase -> kind), derived once from RELATIONS. */
 export const VERB_TO_KIND = Object.freeze(

@@ -56,7 +56,7 @@ import { rankByBiasThenTrust } from "./memory/bias.mjs";
 import { finish, beginsWithVowelSound, grammarRules } from "./finish.mjs";
 import {
   VERB_TO_KIND, WHERE_MARKERS, MENTION_MARKERS, ENTITY_TO_TYPE, PASSIVE_PARTICIPLE_TO_KIND,
-  stripTrailingScopeFiller,
+  stripTrailingScopeFiller, stripTrailingDiscourseTag,
 } from "./ask-vocab.mjs";
 import { COUNTERFACTUAL_RE, correctMisspellings, applyPreambleFrames } from "./interpret/normalize.mjs";
 import { fuzzyMatchInSet, fuzzyBound } from "./interpret/fuzzy.mjs";
@@ -4994,14 +4994,16 @@ const BARE_WHATIS_RE = /^what\s+(?:is|are)\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
  *  term the same way grammar.mjs's T5 does (stripTrailingScopeFiller,
  *  ask-vocab.mjs) — the envelope.parsed.object branch above already carries a
  *  trimmed term when it came from that template, so the strip here only needs to
- *  cover this function's own regex fallback. */
+ *  cover this function's own regex fallback. HANDOVER.md 2026-07-10 item 8: a
+ *  trailing bare discourse tag ("what is a component THEN") is stripped the same
+ *  way (stripTrailingDiscourseTag) before the scope-filler strip. */
 function metaTermOf(query, envelope) {
   if (envelope?.parsed?.shape === "meta" && envelope.parsed.object) return envelope.parsed.object;
   const q = String(query).trim();
   const m = q.match(BARE_WHATIS_RE)
     || q.match(/^what\s+(?:does|do)\s+(?:an?\s+)?(.+?)\s+means?[?.!\s]*$/i)
     || q.match(/^define\s+(?:an?\s+)?(.+?)[?.!\s]*$/i);
-  return m ? stripTrailingScopeFiller(m[1].trim()) : null;
+  return m ? stripTrailingScopeFiller(stripTrailingDiscourseTag(m[1].trim())) : null;
 }
 
 /** The TEACH-OFFER line for a term that's genuinely unknown everywhere (Tier-5
