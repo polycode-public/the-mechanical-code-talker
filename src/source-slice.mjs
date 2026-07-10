@@ -51,8 +51,14 @@ export function sliceSpan(lines, start, end, maxLines) {
  * When both are given, also slices via sliceSpan and spreads its result in.
  */
 export async function readSpanSafe({ readFile, repoRoot, path, start, end, maxLines }) {
-  const resolved = resolve(repoRoot, path);
-  if (resolved !== repoRoot && !resolved.startsWith(repoRoot + sep)) {
+  // Normalize repoRoot to absolute here too (defense in depth) — resolve(repoRoot, path)
+  // is always absolute, so comparing it against a RELATIVE repoRoot would make this guard
+  // reject every read, not just traversal attempts (the actual bug this normalization
+  // fixes; callers should already pass an absolute repoRoot via src/config.mjs, but this
+  // function is the real security boundary and must not depend on that).
+  const root = resolve(repoRoot);
+  const resolved = resolve(root, path);
+  if (resolved !== root && !resolved.startsWith(root + sep)) {
     throw new ToolError(`refusing to read outside the repository root: ${path}`);
   }
   const text = await readFile(resolved, "utf8");

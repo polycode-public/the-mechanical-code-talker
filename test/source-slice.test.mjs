@@ -111,6 +111,25 @@ test("readSpanSafe: rejects a sibling-directory-prefix bypass (repoRoot='/x/foo'
   }
 });
 
+test("readSpanSafe: a RELATIVE repoRoot is normalized to absolute, not rejected outright", async () => {
+  // Regression: resolve(repoRoot, path) is always absolute, so comparing it against a
+  // relative repoRoot (e.g. from a relative TMCT_GRAPH_FILE) used to make the guard reject
+  // every legitimate read, not just traversal attempts. readSpanSafe must normalize repoRoot
+  // itself (defense in depth — src/config.mjs also normalizes at the source).
+  const dir = await mkdtemp(join(tmpdir(), "tmct-slice-"));
+  const prevCwd = process.cwd();
+  try {
+    await writeFile(join(dir, "file.txt"), "hello\nworld\n");
+    process.chdir(dir);
+    const relativeRepoRoot = "."; // a relative repoRoot, as a relative TMCT_GRAPH_FILE would produce
+    const r = await readSpanSafe({ readFile, repoRoot: relativeRepoRoot, path: "file.txt", start: 1, end: 1 });
+    assert.equal(r.text, "1\thello");
+  } finally {
+    process.chdir(prevCwd);
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("readSpanSafe: a path resolving to repoRoot itself is allowed (boundary case)", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-slice-"));
   try {
