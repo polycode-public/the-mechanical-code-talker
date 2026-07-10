@@ -4886,7 +4886,7 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
     // this block.
     const {
       deriveSomeValuesFromApplication, ON_PROPERTY_PREDICATE, SOME_VALUES_FROM_PREDICATE,
-      deriveSomeValuesFromSubsumption, ENTAILED_SCM_SVF_PROVENANCE,
+      deriveSomeValuesFromSubsumption, ENTAILED_SCM_SVF_PROVENANCE, SCM_SVF_RULE_CONFIDENCE, entailedTrustFrom,
     } = await import("./syllogise.mjs");
     const onPropertyRows = rows.filter((f) => f.predicate === ON_PROPERTY_PREDICATE && isTaught(f));
     const someValuesFromRows = rows.filter((f) => f.predicate === SOME_VALUES_FROM_PREDICATE && isTaught(f));
@@ -4931,26 +4931,65 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
         : [];
       if (svfSubsumption.length) {
         const enlargedSubClassEdges = chainSubClassEdges.concat(svfSubsumption.map((d) => [d.subject, d.object]));
+        // Trust-hook gap fix (this session): the SAME `min(premiseTrusts) x
+        // ruleConfidence` discipline syllogise()'s own batch pass now applies
+        // to scm-svf1 (src/syllogise.mjs), computed here for this LIVE,
+        // read-only chase — each restriction's own onProperty/someValuesFrom
+        // scaffolding trust plus the y1⊑y2 subClassOf premise that licensed
+        // the comparison (always present, mirroring syllogise()'s own
+        // scmSvfDerived mapping). `restrictionByRid` looks a restriction's
+        // OWN (property, target) pair up by id — the same lookup
+        // syllogise()'s batch pass uses.
+        const restrictionByRid = new Map(restrictionEdges.map((r) => [r.restriction, r]));
+        const svfTrustByTriple = new Map();
+        for (const f of rows) svfTrustByTriple.set(`${f.subject} ${f.predicate} ${f.object}`, f.trust);
+        const svfPremiseTrust = (s, p, o) => svfTrustByTriple.get(`${s} ${p} ${o}`);
+        const svfTrustOf = new Map(); // "c1\0c2" -> computed trust, for the synthetic row below
+        for (const d of svfSubsumption) {
+          const r1 = restrictionByRid.get(d.subject);
+          const r2 = restrictionByRid.get(d.object);
+          const premiseTrusts = [
+            r1 && svfPremiseTrust(d.subject, ON_PROPERTY_PREDICATE, r1.property),
+            svfPremiseTrust(d.subject, SOME_VALUES_FROM_PREDICATE, d.viaY1),
+            r2 && svfPremiseTrust(d.object, ON_PROPERTY_PREDICATE, r2.property),
+            svfPremiseTrust(d.object, SOME_VALUES_FROM_PREDICATE, d.viaY2),
+            svfPremiseTrust(d.viaY1, SC_PREDICATE, d.viaY2),
+          ].filter((t) => typeof t === "number");
+          const t = entailedTrustFrom(premiseTrusts, SCM_SVF_RULE_CONFIDENCE);
+          if (t !== null) svfTrustOf.set(`${d.subject} ${d.object}`, t);
+        }
         // A derived restriction⊑restriction edge has no underlying stored
         // Fact row to cite (it's a schema-level conclusion, not a taught
         // sentence) — falls back to a SYNTHETIC row carrying scm-svf1's own
-        // entailed provenance, so renderIsaChain's citation still names the
-        // real (low-trust, non-taught) source honestly, same discipline as
-        // every "entailed:*" provenance tag elsewhere in this file.
+        // entailed provenance + its own computed trust, so renderIsaChain's
+        // citation still names the real (low-trust, non-taught) source
+        // honestly, same discipline as every "entailed:*" provenance tag
+        // elsewhere in this file.
         const factForStepOrSvf = (step) => {
           if (step.predicate !== SC_PREDICATE) return chainTypeRows.find((f) => f.subject === step.subject && f.object === step.object);
           const stated = chainSubClassRows.find((f) => f.subject === step.subject && f.object === step.object);
           if (stated) return stated;
           const derived = svfSubsumption.find((d) => d.subject === step.subject && d.object === step.object);
           return derived
-            ? { subject: derived.subject, predicate: SC_PREDICATE, object: derived.object, provenance: ENTAILED_SCM_SVF_PROVENANCE }
+            ? {
+              subject: derived.subject, predicate: SC_PREDICATE, object: derived.object, provenance: ENTAILED_SCM_SVF_PROVENANCE,
+              trust: svfTrustOf.get(`${derived.subject} ${derived.object}`),
+            }
             : undefined;
         };
         for (const subj of subjCandidates) {
           const chain = findIsaChain(subj, objVariants, chainTypeEdges, enlargedSubClassEdges, { maxHops: 3 });
           if (!chain) continue;
           const premises = chain.map(factForStepOrSvf);
-          if (premises.every(Boolean)) return { text: `yes — ${renderIsaChain(premises)}`, replace: true };
+          if (premises.every(Boolean)) {
+            // The WHOLE chain's own trust is the weakest link across every step
+            // (each step's own trust, including the synthetic scm-svf1 step's
+            // already-discounted figure computed above) — no further
+            // ruleConfidence discount at this outer level; it is already
+            // baked into whichever step was entailed rather than taught.
+            const chainTrust = entailedTrustFrom(premises.map((p) => p.trust), 1);
+            return { text: `yes — ${renderIsaChain(premises)}`, replace: true, ...(chainTrust !== null ? { trust: chainTrust } : {}) };
+          }
         }
       }
     }
@@ -4967,7 +5006,7 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
     const [, subjRaw, mRaw, objRaw] = cardAtLeast;
     const {
       SUBCLASS_PREDICATE: CARD_SC_PREDICATE, ON_PROPERTY_PREDICATE: CARD_ON_PROPERTY_PREDICATE,
-      buildCardinalityRestrictions, proveCardinalityAtLeast,
+      buildCardinalityRestrictions, proveCardinalityAtLeast, CARDINALITY_RULE_CONFIDENCE, entailedTrustFrom,
     } = await import("./syllogise.mjs");
     const isTaughtCard = (f) => !f.sourceTypes?.includes("corpus") && !f.sourceTypes?.includes("web");
     const cardSubClassEdges = isa.filter((f) => f.predicate === CARD_SC_PREDICATE && isTaughtCard(f)).map((f) => [f.subject, f.object]);
@@ -4983,9 +5022,25 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
         const cite = restrictionFact?.provenance ? ` (source: ${restrictionFact.provenance})` : "";
         const kindWord = witness.kind === "exactly" ? "exactly" : "at least";
         const plural = (w, n) => `${w}${n === 1 ? "" : "s"}`;
+        // Trust-hook gap fix (this session): premise-derived trust for THIS
+        // rule's answer (src/syllogise.mjs's CARDINALITY_RULE_CONFIDENCE doc
+        // comment explains why there is no persisted Fact for it to attach
+        // to) — the restriction's OWN scaffolding rows (onProperty/kind/
+        // onClass, all keyed to witness.viaRestriction), the declaring
+        // subClassOf edge, and (when this is a ⊑-lift) the one-hop premise
+        // from the actually-queried subject up to viaClass.
+        const cardPremiseTrusts = [
+          restrictionFact?.trust,
+          ...cardRows.filter((f) => f.subject === witness.viaRestriction).map((f) => f.trust),
+          ...(witness.viaClass !== witness.subject
+            ? [isa.find((f) => f.predicate === CARD_SC_PREDICATE && f.subject === witness.subject && f.object === witness.viaClass)?.trust]
+            : []),
+        ].filter((t) => typeof t === "number");
+        const trust = entailedTrustFrom(cardPremiseTrusts, CARDINALITY_RULE_CONFIDENCE);
         return {
           text: `yes — every ${witness.viaClass} has ${kindWord} ${witness.n} ${plural(witness.object, witness.n)}${cite}, so at least ${m} follows.`,
           replace: true,
+          ...(trust !== null ? { trust } : {}),
         };
       }
     }
@@ -5002,7 +5057,7 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
     const [, subjRaw, objRaw] = cardExistence;
     const {
       SUBCLASS_PREDICATE: CARD_SC_PREDICATE, ON_PROPERTY_PREDICATE: CARD_ON_PROPERTY_PREDICATE,
-      buildCardinalityRestrictions, proveMaxCardinalityZeroDenial,
+      buildCardinalityRestrictions, proveMaxCardinalityZeroDenial, CAX_MAXC0_RULE_CONFIDENCE, entailedTrustFrom,
     } = await import("./syllogise.mjs");
     const isTaughtCard = (f) => !f.sourceTypes?.includes("corpus") && !f.sourceTypes?.includes("web");
     const cardSubClassEdges = isa.filter((f) => f.predicate === CARD_SC_PREDICATE && isTaughtCard(f)).map((f) => [f.subject, f.object]);
@@ -5015,7 +5070,17 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
       if (witness) {
         const restrictionFact = rows.find((f) => f.predicate === CARD_SC_PREDICATE && f.subject === witness.viaClass && f.object === witness.viaRestriction);
         const cite = restrictionFact?.provenance ? ` (source: ${restrictionFact.provenance})` : "";
-        return { text: `no — every ${witness.viaClass} has at most 0 ${witness.object}${cite}.`, replace: true };
+        // Trust-hook gap fix (this session) — same discipline as the
+        // cardinality-monotonicity reader just above (see its own comment).
+        const cardPremiseTrusts = [
+          restrictionFact?.trust,
+          ...cardRows.filter((f) => f.subject === witness.viaRestriction).map((f) => f.trust),
+          ...(witness.viaClass !== witness.subject
+            ? [isa.find((f) => f.predicate === CARD_SC_PREDICATE && f.subject === witness.subject && f.object === witness.viaClass)?.trust]
+            : []),
+        ].filter((t) => typeof t === "number");
+        const trust = entailedTrustFrom(cardPremiseTrusts, CAX_MAXC0_RULE_CONFIDENCE);
+        return { text: `no — every ${witness.viaClass} has at most 0 ${witness.object}${cite}.`, replace: true, ...(trust !== null ? { trust } : {}) };
       }
     }
     // falls through — no witnessing restriction (or none declared at all)
@@ -6342,6 +6407,15 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   let via = "composed";
   let recordMiss = miss;
   let factPending = null; // a truncated fact listing's held remainder (for "more" paging)
+  // Trust-hook gap fix (this session): scm-svf1/cardinality-monotonicity/
+  // cax-maxc0's LIVE proof chases (factReadBack) have no persisted Fact to
+  // attach trust.mjs's entailed hook to (syllogise.mjs's own
+  // CARDINALITY_RULE_CONFIDENCE/CAX_MAXC0_RULE_CONFIDENCE doc comments explain
+  // why), so they compute `min(premiseTrusts) × ruleConfidence`
+  // (`entailedTrustFrom`) themselves and hand it back on the answer object —
+  // surfaced here onto the turn's own record (`record.entailedTrust` below)
+  // so it is audit-observable from a real chat turn, not silently discarded.
+  let entailedTrust = null;
   // GOAL DEDUCTION: from the parsed AST when one stood (deterministic, table-driven —
   // see deduceGoalFromParsed); a total grammar miss (no parse at all) gets the honest
   // "didn't resolve" goal line verbatim, matching the operator's own wording for that
@@ -6618,6 +6692,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       via = "fact";
       recordMiss = false;
       if (fact.pending) factPending = fact.pending; // a truncated fact list → paginable remainder
+      if (typeof fact.trust === "number") entailedTrust = fact.trust; // scm-svf1/cardinality/cax-maxc0's live-chase trust (see the `entailedTrust` declaration above)
       note(trace, `lane: (3) memory facts — factAnswer/factReadBack matched (memoryDir=${memoryDir})`);
       note(trace, "source: .tmct/memory Facts (see /memory for provenance per line)");
       // Goal-line fix (item 5 follow-up, this session): mirrors the TEACH lane's
@@ -6933,7 +7008,14 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // turn "asked about" (the SchemaClass meta-node is documentation, not a code entity),
   // so record + expand them, not the schema match.
   const finalAnsweredIds = conceptInstances ? conceptInstances.map((i) => i.id) : answeredIds;
-  const record = { type: "turn", ts, query, via, resolvedIds, answeredIds: finalAnsweredIds, miss: recordMiss };
+  const record = {
+    type: "turn", ts, query, via, resolvedIds, answeredIds: finalAnsweredIds, miss: recordMiss,
+    // premise-derived trust for a LIVE-CHASE-ONLY entailment answer (scm-svf1/
+    // cardinality-monotonicity/cax-maxc0 — see the `entailedTrust` declaration
+    // above); omitted entirely when this turn didn't answer via one of those,
+    // so every other turn's record shape stays byte-identical.
+    ...(entailedTrust !== null ? { entailedTrust } : {}),
+  };
   const logLines = [ts, `> ${query}`, answer, ""];
   // `detail` feeds why/say-more's verbose re-render: the traversal receipt + the
   // matched entities the terse render trims (see renderVerbose). `pending` carries a

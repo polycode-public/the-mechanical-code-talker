@@ -11,7 +11,7 @@
 // INF-A2) without that being "the batch pass on the hot path" — nothing is
 // written to memory unless `syllogise()` itself is called.
 //
-// Deliberately narrow (the plan's kill-criterion discipline): FOUR rules —
+// Deliberately narrow (the plan's kill-criterion discipline): FIVE rules —
 //   - scm-sco: rdfs:subClassOf transitivity — (a ⊑ b), (b ⊑ c) ⊨ (a ⊑ c).
 //     The simplest OWL 2 RL rule, exactly what the ACE grammar's pattern 1
 //     emits (`deriveSubClassClosure`).
@@ -39,8 +39,20 @@
 //     then cax-sco across `⊑ N3`, three more rules deep. That composition is
 //     a documented follow-up (PLAN_INFERENCE_TESTING.md §4 stage 4's
 //     remaining scm-svf row), not attempted here (`deriveSomeValuesFromApplication`).
+//   - scm-svf1: someValuesFrom restriction SUBSUMPTION — two INDEPENDENTLY
+//     declared restrictions over the SAME property, whose filler classes are
+//     ⊑-related, entail the restriction NODES are themselves ⊑-related (W3C
+//     OWL 2 RL Table 9's scm-svf1 — confirmed, against the real downloaded
+//     spec, a DISTINCT rule from scm-svf2, which needs `rdfs:subPropertyOf`
+//     instead; tmct's ACE grammar has no way to teach property subsumption at
+//     all, so scm-svf2 is out of scope for a real reason, not laziness). Joined
+//     the batch pass in a follow-up build (this session): originally deferred
+//     (INFBENCH's two drive points never touched the batch pass, so nothing
+//     was lost by deferring), closed once a positive INFBENCH fixture case
+//     (`c1ScmSvfApply`) existed to measure it against
+//     (`deriveSomeValuesFromSubsumption`).
 //
-// The whole safety story is four guards, all mechanical, shared by all four rules:
+// The whole safety story is four guards, all mechanical, shared by all five rules:
 //   - BUDGET — at most `budget` NEW derivations per pass (default 50), and at
 //     most `depth` fixpoint rounds (scm-sco only — cax-sco/cax-dw need no
 //     fixpoint, see their own doc comments). The pass stops at whichever bites
@@ -54,33 +66,25 @@
 //     content key — the same novelty test appendFact's content-hash id enforces).
 //
 // Every derived fact is written via appendFacts with `entailed:subClassOf`
-// (scm-sco), `entailed:type` (cax-sco), `entailed:disjointWith` (cax-dw), or
-// `entailed:someValuesFrom` (cls-svf1) provenance (a first-class entailed
-// Source, trust prior 0.3 in memory/trust.mjs) so it is LOW trust, NEVER
-// outranks a stated fact, and is fully RETRACTABLE by provenance when the
-// source graph moves. cax-dw's and cls-svf1's conclusions additionally ride
-// trust.mjs's entailed hook when their OWN premises are resolvable in the
-// pre-pass snapshot — premise-derived (`min(premiseTrusts) × ruleConfidence`),
-// still always strictly below its weakest premise (see syllogise()'s own doc
+// (scm-sco), `entailed:type` (cax-sco), `entailed:disjointWith` (cax-dw),
+// `entailed:someValuesFrom` (cls-svf1), or `entailed:someValuesFromSubsumption`
+// (scm-svf1) provenance (a first-class entailed Source, trust prior 0.3 in
+// memory/trust.mjs) so it is LOW trust, NEVER outranks a stated fact, and is
+// fully RETRACTABLE by provenance when the source graph moves. cax-dw's,
+// cls-svf1's, and scm-svf1's conclusions additionally ride trust.mjs's
+// entailed hook when their OWN premises are resolvable in the pre-pass
+// snapshot — premise-derived (`min(premiseTrusts) × ruleConfidence`), still
+// always strictly below its weakest premise (see syllogise()'s own doc
 // comment) — rather than the bare entailed floor; scm-sco/cax-sco do not
 // (yet) engage that hook — see syllogise()'s doc comment for why that
 // specific extension is non-trivial.
 //
-// THREE MORE capabilities live below (PLAN_INFERENCE_TESTING.md §4 stage 4's
-// remainder, INF-C1), all LIVE-CHASE ONLY — never added to `syllogise()`'s own
-// materializing batch pass (documented as a deliberate deferral at each
-// export's own doc comment, not an oversight):
-//   - scm-svf1: someValuesFrom restriction SUBSUMPTION — two INDEPENDENTLY
-//     declared restrictions over the SAME property, whose filler classes are
-//     ⊑-related, entail the restriction NODES are themselves ⊑-related (W3C
-//     OWL 2 RL Table 9's scm-svf1 — confirmed, against the real downloaded
-//     spec, a DISTINCT rule from scm-svf2, which needs `rdfs:subPropertyOf`
-//     instead; tmct's ACE grammar has no way to teach property subsumption at
-//     all, so scm-svf2 is out of scope for a real reason, not laziness).
-//     Deferred from the batch pass for THIS build specifically (unlike the
-//     four rules above): INFBENCH's two drive points never touch the batch
-//     pass, so nothing is lost by deferring the batch-integration follow-up
-//     (`deriveSomeValuesFromSubsumption`).
+// TWO MORE capabilities live below (PLAN_INFERENCE_TESTING.md §4 stage 4's
+// remainder, INF-C1), both LIVE-CHASE ONLY — never added to `syllogise()`'s own
+// materializing batch pass (documented as a deliberate design choice at each
+// export's own doc comment, not an oversight — see each one for the specific
+// reason: neither is an enumerable "derive every new fact of this shape"
+// closure the way the five rules above are):
 //   - cardinality monotonicity: a class's OWN declared exactly/min cardinality
 //     restriction (n) proves "at least m" for any QUERIED m ≤ n. Confirmed
 //     OUTSIDE OWL 2 RL's own decidable profile (the spec's own `cls-*` rule
@@ -169,6 +173,30 @@ const isOnClass = (p) => String(p || "").trim().toLowerCase() === "owl:onclass";
 const RESERVED_PREDICATES = new Set([
   "rdfs:subclassof", "rdf:type", "owl:disjointwith", "owl:onproperty", "owl:somevaluesfrom", "owl:intersectionof",
 ]);
+
+/**
+ * PURE `min(premiseTrusts) × ruleConfidence` — the entailed hook's own core
+ * arithmetic (memory/trust.mjs `computeTrust`), exposed here so a caller that
+ * has NO Fact/appendFacts call to delegate to (a LIVE, read-only chat proof
+ * chase — chat.mjs's scm-svf1/cardinality-monotonicity/cax-maxc0 call sites)
+ * can still compute the SAME premise-derived figure `computeTrust` would land
+ * on for a materialized fact (recency sits at ~1.0 for a freshly-derived
+ * conclusion, so the two agree). `syllogise()`'s own `appendFacts` mapping
+ * does NOT call this — it hands `premiseTrusts`/`ruleConfidence` straight to
+ * `appendFacts` → `computeTrust`, which ALSO applies the recency nudge; this
+ * helper is for the read-only case that has no Fact to nudge. Returns `null`
+ * when no numeric premise trust was supplied (nothing to compute from — never
+ * a magic default), else clamped to [0,1]. Pure, no I/O.
+ */
+export function entailedTrustFrom(premiseTrusts, ruleConfidence = 1) {
+  const nums = (Array.isArray(premiseTrusts) ? premiseTrusts : []).filter((t) => typeof t === "number");
+  if (!nums.length) return null;
+  const clamped = Math.max(0, Math.min(1, Math.min(...nums) * ruleConfidence));
+  // rounded to 6dp — mirrors memory/trust.mjs's own `round(n, 6)` convention,
+  // so a live-chase figure reads identically to what computeTrust would have
+  // stored had this conclusion been persisted.
+  return Number(clamped.toFixed(6));
+}
 
 /** Normalize a focus hint (Set|array of terms) into the same normalized-term
  *  space stored facts live in, or null for "no focus → whole graph". */
@@ -574,6 +602,13 @@ export function buildCardinalityRestrictions(rows) {
 // subsumption tmct can't teach yet, see this file's header comment) ----
 export const SCM_SVF_RULE = "someValuesFromSubsumption";
 export const ENTAILED_SCM_SVF_PROVENANCE = `entailed:${SCM_SVF_RULE}`;
+/** trust.mjs's entailed hook's rule-confidence for scm-svf1 — the same sub-1
+ *  discount cax-dw/cls-svf1 use and for the identical reason (see
+ *  CAX_DW_RULE_CONFIDENCE's own comment): keeps a premise-derived conclusion
+ *  STRICTLY below its weakest premise's trust, every time. Wired into
+ *  `syllogise()`'s own materializing pass (below) — scm-svf1 joined the batch
+ *  pass in a follow-up build, see this file's header comment. */
+export const SCM_SVF_RULE_CONFIDENCE = 0.95;
 
 /**
  * PURE scm-svf1: c1 someValuesFrom y1, c1 onProperty p, c2 someValuesFrom y2,
@@ -689,6 +724,20 @@ function findOwnCardinalityRestriction(subClassEdges, cardinalityRestrictionEdge
 // ---- cardinality monotonicity (confirmed OUTSIDE OWL 2 RL's own decidable
 // profile, see this file's header comment) ----
 export const SCM_CARD_RULE = "cardinalityMonotonicity";
+/** trust.mjs's entailed hook's rule-confidence for cardinality monotonicity —
+ *  the same sub-1 discount every other rule on this ladder uses (see
+ *  CAX_DW_RULE_CONFIDENCE's own comment). Unlike CAX_DW_RULE_CONFIDENCE/
+ *  CLS_SVF1_RULE_CONFIDENCE/SCM_SVF_RULE_CONFIDENCE, this constant has no
+ *  `syllogise()`/`appendFacts` call site to feed: `proveCardinalityAtLeast` is
+ *  QUERY-rooted (see its own doc comment) and never produces an enumerable
+ *  Fact for the entailed hook to score — there is no `mgx:trustScore` for this
+ *  rule's answer to carry. Defined here anyway, for the same reason every
+ *  other rule-confidence constant is a named export rather than an inline
+ *  literal: chat.mjs's LIVE proof chase (the only caller) computes and
+ *  attaches a `min(premiseTrusts) × ruleConfidence` figure to its OWN answer
+ *  for auditability (`entailedTrustFrom`, below), even though today's answer
+ *  plumbing does not yet surface it past that one function's return value. */
+export const CARDINALITY_RULE_CONFIDENCE = 0.95;
 
 /**
  * PURE: given one class `subject`'s OWN declared cardinality restriction
@@ -699,7 +748,8 @@ export const SCM_CARD_RULE = "cardinalityMonotonicity";
  * fixed enumerable "new fact" to write — `m` is query-specific, a different
  * shape than every derivation-producing rule above) — genuinely LIVE-CHASE
  * ONLY (see this file's header comment: this is outside OWL 2 RL's own
- * profile, not merely deferred from the batch pass like scm-svf1 above).
+ * profile, and unlike scm-svf1, this one has no enumerable fact shape to ever
+ * join the batch pass — not merely deferred).
  *
  * Returns the witnessing `{ subject, object: onClass, m, n, kind, viaClass,
  * viaRestriction }` or null (`viaClass` is the specific class in `subject`'s
@@ -722,6 +772,14 @@ export function proveCardinalityAtLeast(subClassEdges, cardinalityRestrictionEdg
 // ladder's "produces a provable no" naming convention, same epistemic status
 // as cax-dw) ----
 export const CAX_MAXC0_RULE = "maxCardinalityZero";
+/** trust.mjs's entailed hook's rule-confidence for cax-maxc0 — same sub-1
+ *  discount, same reason (CAX_DW_RULE_CONFIDENCE's own comment). Same caveat
+ *  as CARDINALITY_RULE_CONFIDENCE just above: `proveMaxCardinalityZeroDenial`
+ *  is QUERY-rooted and never produces an enumerable Fact either, so there is
+ *  no `mgx:trustScore` for this rule to carry — chat.mjs's LIVE proof chase
+ *  computes and attaches the `min(premiseTrusts) × ruleConfidence` figure to
+ *  its own answer for auditability (`entailedTrustFrom`, below). */
+export const CAX_MAXC0_RULE_CONFIDENCE = 0.95;
 
 /**
  * PURE: `subject` ⊑ r (lifted through `subject`'s FULL ⊑-ancestor closure), r
@@ -835,28 +893,32 @@ export function findConsistencyViolations(typeEdges, subClassEdges, disjointEdge
 /**
  * Run one bounded speculative pass over the memory graph under `repoDir`
  * (the repo dir whose .tmct/memory/graph.json appendFact/loadMemory manage).
- * Reads the stored subClassOf, rdf:type, owl:disjointWith AND (for cls-svf1)
- * owl:onProperty/owl:someValuesFrom + every other object-property fact,
- * forward-chains FOUR rules — scm-sco (⊑-transitivity) then cax-sco (type
- * propagation, seeing THIS pass's own scm-sco conclusions too, so a fresh
- * two-hop taught chain and its type propagation both materialize in one
+ * Reads the stored subClassOf, rdf:type, owl:disjointWith AND (for cls-svf1/
+ * scm-svf1) owl:onProperty/owl:someValuesFrom + every other object-property
+ * fact, forward-chains FIVE rules — scm-sco (⊑-transitivity) then cax-sco
+ * (type propagation, seeing THIS pass's own scm-sco conclusions too, so a
+ * fresh two-hop taught chain and its type propagation both materialize in one
  * call) then cax-dw (disjointness violations, seeing THIS pass's own scm-sco
  * AND cax-sco conclusions too) then cls-svf1 (someValuesFrom restriction
- * membership, also seeing the enlarged subClassOf set for its own ⊑-lift) —
- * and materializes each NEW conclusion via `appendFacts` with
+ * membership, also seeing the enlarged subClassOf set for its own ⊑-lift)
+ * then scm-svf1 (restriction-to-restriction subsumption, seeing the SAME
+ * enlarged subClassOf set — its own ⊑-lift over the two restrictions' filler
+ * classes) — and materializes each NEW conclusion via `appendFacts` with
  * `entailed:subClassOf`/`entailed:type`/`entailed:disjointWith`/
- * `entailed:someValuesFrom` provenance + trust (PLAN_INFERENCE_TESTING.md S4
- * stage 2's entailed hook: `min(premiseTrusts) x ruleConfidence` when the
- * conclusion's OWN premises are resolvable in the pre-pass snapshot, falling
- * back to the bare entailed prior — memory/trust.mjs's SOURCE_PRIOR floor —
- * when they are not, e.g. a premise itself only exists because THIS SAME
- * pass just derived it a round earlier; still low, still never outranks a
- * stated fact, just less precisely premise-derived for that one case).
+ * `entailed:someValuesFrom`/`entailed:someValuesFromSubsumption` provenance +
+ * trust (PLAN_INFERENCE_TESTING.md S4 stage 2's entailed hook:
+ * `min(premiseTrusts) x ruleConfidence` when the conclusion's OWN premises
+ * are resolvable in the pre-pass snapshot, falling back to the bare entailed
+ * prior — memory/trust.mjs's SOURCE_PRIOR floor — when they are not, e.g. a
+ * premise itself only exists because THIS SAME pass just derived it a round
+ * earlier; still low, still never outranks a stated fact, just less
+ * precisely premise-derived for that one case).
  *
  * opts:
  *   - depth   max fixpoint rounds (scm-sco chain growth), default 32
- *   - budget  max NEW derivations written this pass, SHARED across all four
- *             rules (scm-sco, then cax-sco, then cax-dw, then cls-svf1), default 50
+ *   - budget  max NEW derivations written this pass, SHARED across all five
+ *             rules (scm-sco, then cax-sco, then cax-dw, then cls-svf1, then
+ *             scm-svf1), default 50
  *   - focus   Set|array of class terms; when given, only derivations touching
  *             focus (subject, pivot, or object ∈ focus) are admitted. Omit for a
  *             whole-graph batch pass.
@@ -943,9 +1005,23 @@ export async function syllogise(repoDir, { depth = 32, budget = 50, focus = null
   const svf1Derived = remainingBudgetSvf1 > 0 && restrictionEdges.length
     ? deriveSomeValuesFromApplication(propertyEdges, typeEdges, enlargedSubClassEdges, restrictionEdges, { budget: remainingBudgetSvf1, focus: normalizedFocus })
     : [];
+  // scm-svf1 sees the SAME enlarged subClassOf set (its own ⊑-lift over the
+  // two restrictions' filler classes) and reuses the SAME restrictionEdges
+  // just built for cls-svf1 above — needs at least two independently-declared
+  // restrictions over one property to have anything to compare (the kernel's
+  // own guard, `deriveSomeValuesFromSubsumption`'s doc comment).
+  const remainingBudgetScmSvf = Math.max(0, budget - scmDerived.length - caxDerived.length - dwDerived.length - svf1Derived.length);
+  const scmSvfDerived = remainingBudgetScmSvf > 0 && restrictionEdges.length > 1
+    ? deriveSomeValuesFromSubsumption(restrictionEdges, enlargedSubClassEdges, { budget: remainingBudgetScmSvf, focus: normalizedFocus })
+    : [];
+  // scm-svf1's own two structural premises per restriction (owl:onProperty /
+  // owl:someValuesFrom) are looked up by restriction id — restrictionEdges
+  // already carries each restriction's (property, target) pair, keyed the
+  // same way `deriveSomeValuesFromSubsumption`'s own output does.
+  const restrictionByRid = new Map(restrictionEdges.map((r) => [r.restriction, r]));
 
   // Batched write: ONE mutateMemory pass for the whole pass's conclusions
-  // (all four rules), not one appendFact per derived fact — appendFacts (the
+  // (all five rules), not one appendFact per derived fact — appendFacts (the
   // appendUtterances-precedent batch path, memory/core.mjs) does the same
   // normalize+prose-tokenize+upsert work per fact but a SINGLE read-mutate-
   // write, so a pass with many derivations no longer pays per-fact I/O.
@@ -1011,6 +1087,29 @@ export async function syllogise(repoDir, { depth = 32, budget = 50, focus = null
         ...(premiseTrusts.length ? { premiseTrusts, ruleConfidence: CLS_SVF1_RULE_CONFIDENCE } : {}),
       };
     }),
+    ...scmSvfDerived.map((d) => {
+      // each restriction's own two structural premises (owl:onProperty /
+      // owl:someValuesFrom rows), for BOTH restrictions being compared, plus
+      // the y1⊑y2 subClassOf premise that licensed the comparison — always
+      // present here (unlike cax-dw/cls-svf1's optional lift premise): the
+      // kernel's own tautology screen guarantees viaY1 !== viaY2 for every
+      // derived scm-svf1 fact (`deriveSomeValuesFromSubsumption`'s doc comment).
+      const r1 = restrictionByRid.get(d.subject);
+      const r2 = restrictionByRid.get(d.object);
+      const premiseTrusts = numericOnly([
+        r1 && premiseTrust(d.subject, ON_PROPERTY_PREDICATE, r1.property),
+        premiseTrust(d.subject, SOME_VALUES_FROM_PREDICATE, d.viaY1),
+        r2 && premiseTrust(d.object, ON_PROPERTY_PREDICATE, r2.property),
+        premiseTrust(d.object, SOME_VALUES_FROM_PREDICATE, d.viaY2),
+        premiseTrust(d.viaY1, SUBCLASS_PREDICATE, d.viaY2),
+      ]);
+      return {
+        subject: d.subject, predicate: SUBCLASS_PREDICATE, object: d.object,
+        provenance: ENTAILED_SCM_SVF_PROVENANCE,
+        // same sub-1 discount as cax-dw/cls-svf1, same reason (see CAX_DW_RULE_CONFIDENCE).
+        ...(premiseTrusts.length ? { premiseTrusts, ruleConfidence: SCM_SVF_RULE_CONFIDENCE } : {}),
+      };
+    }),
   ];
   const { ids } = await appendFacts(repoDir, toWrite);
   const written = [];
@@ -1029,6 +1128,10 @@ export async function syllogise(repoDir, { depth = 32, budget = 50, focus = null
   }
   for (const d of svf1Derived) {
     written.push({ id: ids[i], subject: d.subject, object: d.object, via: d.viaValue, rule: CLS_SVF1_RULE });
+    i += 1;
+  }
+  for (const d of scmSvfDerived) {
+    written.push({ id: ids[i], subject: d.subject, object: d.object, via: d.viaY1, rule: SCM_SVF_RULE });
     i += 1;
   }
   return { derived: written, count: written.length, budget, depth, truncated: written.length >= budget };

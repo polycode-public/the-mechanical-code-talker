@@ -19,6 +19,8 @@ import {
   CLS_SVF1_RULE, CLS_SVF1_RULE_CONFIDENCE,
   buildCardinalityRestrictions, deriveSomeValuesFromSubsumption,
   proveCardinalityAtLeast, proveMaxCardinalityZeroDenial,
+  ENTAILED_SCM_SVF_PROVENANCE, SCM_SVF_RULE, SCM_SVF_RULE_CONFIDENCE,
+  CARDINALITY_RULE_CONFIDENCE, CAX_MAXC0_RULE_CONFIDENCE, entailedTrustFrom,
 } from "../src/syllogise.mjs";
 import { assertSentence } from "../src/grammar/assert.mjs";
 import { freshConceptNetRepo } from "./helpers/seeded-fixture.mjs";
@@ -844,6 +846,105 @@ test("syllogise: cls-svf1's entailed trust is PREMISE-DERIVED (min(premiseTrusts
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+// ---- scm-svf1 joins syllogise()'s materializing batch pass (this session's ---
+// ---- own trust-hook-gap fix — was LIVE-CHASE ONLY, see src/syllogise.mjs's --
+// ---- header comment for the "deferred, not merely" distinction) --------------
+
+test("syllogise: scm-svf1 materializes restriction-to-restriction subsumption from TWO independently-taught "
+  + "someValuesFrom restrictions over the SAME property, whose fillers are ⊑-related", async () => {
+  const dir = await mkRepo();
+  try {
+    await assertSentence(dir, "every module that imports a method is a formatter", { provenance: { source: "chat" } });
+    await assertSentence(dir, "every module that imports a fixture is a suite", { provenance: { source: "chat" } });
+    await appendFact(dir, { subject: "method", predicate: SUBCLASS_PREDICATE, object: "fixture", provenance: "ace:chat:s1" });
+
+    const before = readFactRows(await loadMemory(dir));
+    assert.ok(!hasEdge(before, "some-imports-method", "some-imports-fixture"), "MISS before the pass");
+
+    const res = await syllogise(dir);
+    assert.ok(res.derived.some((d) => d.rule === SCM_SVF_RULE && d.subject === "some-imports-method" && d.object === "some-imports-fixture"));
+
+    const after = readFactRows(await loadMemory(dir));
+    const derived = subClassRows(after).find((r) => r.subject === "some-imports-method" && r.object === "some-imports-fixture");
+    assert.ok(derived, "'some-imports-method ⊑ some-imports-fixture' is now a stored Fact (miss → hit)");
+    assert.match(derived.provenance, /entailed:someValuesFromSubsumption/);
+    assert.ok(derived.sourceTypes.includes("entailed"), "backed by a first-class entailed Source");
+    assert.ok(derived.trust < 1, "entailed trust never reaches the ACE-operator 1.0 ceiling its premises sit at");
+
+    // idempotent: a second pass derives nothing new
+    assert.equal((await syllogise(dir)).count, 0, "the restriction subsumption is already materialized → nothing to add");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("syllogise: scm-svf1 NEVER asserts subsumption for unrelated fillers — silence, not a guess", async () => {
+  const dir = await mkRepo();
+  try {
+    await assertSentence(dir, "every module that imports a method is a formatter", { provenance: { source: "chat" } });
+    await assertSentence(dir, "every module that imports a widget is a suite", { provenance: { source: "chat" } });
+    // no ⊑ relation taught between "method" and "widget" at all
+
+    const res = await syllogise(dir);
+    assert.ok(!res.derived.some((d) => d.rule === SCM_SVF_RULE), "unrelated fillers — scm-svf1 derives nothing");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("syllogise: scm-svf1's entailed trust is PREMISE-DERIVED (min(premiseTrusts) × ruleConfidence), "
+  + "not the bare 0.3 floor — mirrors cax-dw/cls-svf1's own exit criterion, closed here for scm-svf1", async () => {
+  const dir = await mkRepo();
+  try {
+    // Different trust tiers so min() is meaningfully picking the weaker
+    // premise: the two restrictions' own scaffolding is ACE-operator (1.0),
+    // the method⊑fixture lift premise is corpus-sourced (0.7).
+    await assertSentence(dir, "every module that imports a method is a formatter", { provenance: { source: "chat" } });
+    await assertSentence(dir, "every module that imports a fixture is a suite", { provenance: { source: "chat" } });
+    await appendFact(dir, { subject: "method", predicate: SUBCLASS_PREDICATE, object: "fixture", provenance: "corpus:conceptnet /r/IsA" });
+
+    const before = readFactRows(await loadMemory(dir));
+    const onPropTrust = before.find((r) => r.predicate === ON_PROPERTY_PREDICATE && r.subject === "some-imports-method").trust;
+    const liftTrust = before.find((r) => r.predicate === SUBCLASS_PREDICATE && r.subject === "method" && r.object === "fixture").trust;
+    assert.notEqual(onPropTrust, liftTrust, "premises must sit at DIFFERENT trust tiers for min() to matter");
+
+    await syllogise(dir);
+    const after = readFactRows(await loadMemory(dir));
+    const derived = subClassRows(after).find((r) => r.subject === "some-imports-method" && r.object === "some-imports-fixture");
+    assert.ok(derived, "the restriction subsumption was derived");
+    assert.equal(derived.trust, round6(Math.min(onPropTrust, liftTrust) * SCM_SVF_RULE_CONFIDENCE));
+    assert.ok(derived.trust < Math.min(onPropTrust, liftTrust), "strictly below its weakest premise — never outranks a stated fact");
+    assert.notEqual(derived.trust, 0.3, "not the bare entailed floor");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---- entailedTrustFrom: the live-chase trust hook (chat.mjs's scm-svf1/ -----
+// ---- cardinality-monotonicity/cax-maxc0 call sites, which have no Fact/ -----
+// ---- appendFacts call to delegate to — src/syllogise.mjs's own doc comment) -
+
+test("entailedTrustFrom: min(premiseTrusts) × ruleConfidence, rounded to 6dp", () => {
+  assert.equal(entailedTrustFrom([1, 0.7, 0.95], CARDINALITY_RULE_CONFIDENCE), round6(0.7 * CARDINALITY_RULE_CONFIDENCE));
+  assert.equal(entailedTrustFrom([0.9], CAX_MAXC0_RULE_CONFIDENCE), round6(0.9 * CAX_MAXC0_RULE_CONFIDENCE));
+});
+
+test("entailedTrustFrom: no numeric premise at all → null, never a magic default", () => {
+  assert.equal(entailedTrustFrom([], SCM_SVF_RULE_CONFIDENCE), null);
+  assert.equal(entailedTrustFrom([undefined, undefined], SCM_SVF_RULE_CONFIDENCE), null);
+  assert.equal(entailedTrustFrom(null, SCM_SVF_RULE_CONFIDENCE), null);
+});
+
+test("entailedTrustFrom: clamped to [0,1] even if a caller hands a confidence > 1", () => {
+  assert.equal(entailedTrustFrom([1], 2), 1);
+});
+
+test("entailedTrustFrom: never outranks its weakest premise (ruleConfidence < 1 strictly discounts)", () => {
+  const t = entailedTrustFrom([1, 1], SCM_SVF_RULE_CONFIDENCE);
+  assert.ok(t < 1);
+  assert.equal(t, SCM_SVF_RULE_CONFIDENCE);
 });
 
 // ---- THE KILL CRITERION, on the real default seed ----------------------------
