@@ -76,3 +76,22 @@ test("cross-'repo' case: an exact basename match in js-commander ('argument') is
   assert.deepEqual(r.candidates, []);
   assert.ok(!r.candidates.some((c) => c.label.startsWith("js-express/")));
 });
+
+// ---- Part 6 negative regression (extension-pack batch, bias-weighted ranking) ----
+// src/memory/bias.mjs's rankByBiasThenTrust is EXPLICITLY scoped to the memory
+// Fact-listing lanes in chat.mjs — never to ask.mjs's resolveObjectCore (a
+// different resolution layer entirely: code-graph ENTITY disambiguation, no
+// provenance/bundle tag available at this point, and the operator's own
+// "class" worked example was never a code-entity disambiguation case). This
+// pins that resolveObjectCore still REFUSES on a genuine tie (the "index" case
+// above) with zero bias-related behaviour change — cheap insurance against
+// future scope creep into this resolver.
+test("Part 6 regression: resolveObjectCore is UNTOUCHED by bias-weighted ranking — a genuine tie still refuses (ambiguous:true), no bias import anywhere in ask.mjs", async () => {
+  const r = resolveObject(graph, "index", { expectedClass: "Module" });
+  assert.equal(r.ambiguous, true, "the genuine tie still refuses to silently pick a winner");
+  assert.ok(r.candidates.length >= 1, "the tie still surfaces real candidates, never a fabricated single match");
+  const { readFileSync: rfs } = await import("node:fs");
+  const askSrc = rfs(new URL("../src/ask.mjs", import.meta.url), "utf8");
+  assert.doesNotMatch(askSrc, /memory\/bias\.mjs/, "ask.mjs never imports the bias module");
+  assert.doesNotMatch(askSrc, /rankByBiasThenTrust/, "resolveObjectCore's own ranking is untouched by Part 6");
+});
