@@ -301,10 +301,64 @@ Near-term, mostly known-how, individually small. No item here requires research.
   constructions.mjs`, three new closed templates (T11-T13: "X of Y", "Y's X", "Y X" relation
   phrasings). Track (f) presupposition-as-honest-nudge (`presuppositionNudge`, `src/chat.mjs`) also
   found already shipped from an earlier session, not newly built this session.
-- ⬜ **Re-measure inherited chat-surface debt** — the capability router doc named three specific gaps
+- ◐ **Re-measure inherited chat-surface debt — partially re-measured 2026-07-10, all three narrowed
+  this session, none fully closed.** The capability router doc named three specific gaps
   (pronoun/focus binding, discourse-count anaphora, temporal-over-relative composition) as blocking
-  its later stages, measured back in CEFR_ENGLISH_0.7.1. Not started — still worth doing before scoping
-  new comprehension work.
+  its later stages, last measured against the stale CEFR_ENGLISH_0.7.1 baseline. Re-run this session
+  as representative multi-turn conversations via `createSession`/`runTurn` against the current HEAD
+  (`examples/mini-webapp` + `test/fixtures/entities.fixture.json`), independently re-verified turn by
+  turn (not just trusted from an earlier pass) — see `test/chatflow-agents-debt-remeasure.test.mjs`
+  for the frozen transcripts, both passing and confirmed-still-failing.
+  - **Gap 1, pronoun/focus binding — partially closed.** "what calls fnAlpha" → "what does
+    Widget.render call" → "does it call fnAlpha": "it" resolves correctly to Widget.render (the
+    forward turn's own answer proves it), but the yes/no check wrongly answers "No — no calls edge
+    found from Widget.render to fnAlpha" even though the immediately preceding turn just confirmed
+    the call. Root cause pinned: `src/ask.mjs`'s `shape === "ask"` branch calls `kindsFor(kind)`,
+    and `KIND_UNIONS` (~line 134) only defines a union for `kind: "uses"` — never for bare `"calls"`
+    — so the yes/no check scans only the module-coarse `calls` kind, unlike the `forward`/`reverse`
+    shapes (~line 3032 onward), which explicitly widen to the `callsSymbol` sibling via
+    `SYMBOL_GRAIN_SIBLING` when the resolved endpoint is a fine-grain Function/Method. This is a
+    **new, previously-undocumented, confidently-wrong bug** (not in the 0.7.1-era finding) — flagged
+    here rather than fixed, per this pass's read-only scope. Re-verifying the two other named
+    follow-up shapes refines rather than confirms the earlier read-only pass's wording: "who touched
+    it" after a calls-focused turn actually resolves "it" to fnAlpha correctly (fnAlpha genuinely has
+    zero `touchesSymbol` edges in the fixture, so the empty answer is honest) — the real bug is that
+    the honest-empty template prints the literal word "it" instead of substituting the resolved
+    label ("No modules found whose module directly touches it." should name "fnAlpha"). "was it
+    touched recently" fails for a different, unrelated reason: the decomposition strategy reads
+    "recently" itself as the ask-shape's comparison object (not a modifier to strip), so it honestly
+    fails to resolve "recently" as a graph entity — not a pronoun-resolution gap at all.
+  - **Gap 2, discourse-count anaphora — mostly closed for relation filters, one confirmed gap
+    remains.** "which modules import http.mjs" (→ base.mjs/router.mjs/tasks.mjs) → "how many of
+    those also import logger.mjs" correctly answers "1 module" (router.mjs); "...are tested"
+    correctly answers "1 module" (tasks.mjs) — both re-verified against the real mini-webapp graph,
+    not just the earlier pass's word. The gap holds exactly as previously found: a BARE entity-type
+    filter with no relation verb ("which of them are functions") still fails — "couldn't compile this
+    compositional question (the follow-up filter didn't parse)."
+  - **Gap 3, temporal-over-relative composition — single-turn solid, cross-turn composition
+    confirmed unbuilt, and its fallback path has its own bug.** "what changed since 2026-01-01" and
+    "what changed before <sha>" both give real, correctly-dated answers against the mini-webapp
+    graph's actual commit history. Genuine cross-turn composition ("what changed before <sha>"
+    → "was that before <X> was touched") is confirmed NOT built — the follow-up mis-parses as a
+    fresh query. Re-measuring this deepened the root cause: the fresh-query fallback it falls through
+    to is **itself** wrong, independent of any discourse tracking. A bare passive yes/no with no
+    "by"-agent clause ("was store.mjs touched", "is model.mjs imported", "is base.mjs called") is
+    silently misparsed as an ACTIVE `forward` query — the named entity read as the verb's SUBJECT
+    (scanning its OUTGOING edges) — instead of the intended PASSIVE reading (the entity as OBJECT,
+    scanning INCOMING edges). Confirmed with real, asymmetric graph data: `store.mjs` has 3 recorded
+    touching commits (proven by the working phrasing "has store.mjs been touched"), yet "was
+    store.mjs touched"/"is store.mjs touched" both falsely answer "src/core/store.mjs has no touches
+    edges in the index." Root cause pinned: `src/interpret/strategies/keywords.mjs`'s
+    `parseKeywordSpot`, the final `if (beforeText) return { shape: "forward", ... }` fallback — fired
+    whenever text precedes the verb and nothing follows it, true for "X is touched" since there's no
+    explicit object after the participle — never consults `PASSIVE_AUX` the way the "by"-agent
+    reversible-passive branch a few lines above already does. **A second new, previously-undocumented,
+    confidently-wrong bug** — flagged, not fixed, per this pass's read-only scope.
+  - **Overall verdict, unchanged from the read-only pass's own framing:** none of the three are still
+    blockers at their 0.7.1-era severity — each narrowed, temporal single-turn filtering especially —
+    but none are fully closed either, and this pass surfaced two further confidently-wrong bugs beyond
+    the original three gaps. Worth a real fix pass before scoping new comprehension work on top, not
+    just a re-scope of the three original gaps.
 - ✅ **RI wrapper fixes from the seonix audit (§2.2) — shipped v1.4.0.** Ranked search, real
   `context()` bundling (`INTERFACE_VERSION` 1.1.0), depth-capped `impact()`, source-backed
   `snippet()`, response pagination on `search()`/`edges()`. Also closed a real path-traversal gap
