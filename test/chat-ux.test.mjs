@@ -129,7 +129,11 @@ test("#2 teach: unrecognized-word message distinguishes the vocabulary gap from 
       config: CONFIG, graph: await graph(), memoryDir: dir, sessionId: "t",
     });
     assert.match(answer, /I don't recognize "tree" and "climb" as words I know/);
-    assert.match(answer, /tmct's own code-vocabulary nouns/);
+    // HANDOVER.md 2026-07-10 item 3: the message used to falsely claim a
+    // "code-vocabulary nouns only" restriction — the real constraint is
+    // grounding (at least one side already known), not a vocabulary limit.
+    assert.match(answer, /any vocabulary works, but at least one side of a fact needs to already be grounded/);
+    assert.doesNotMatch(answer, /code-vocabulary nouns/);
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 

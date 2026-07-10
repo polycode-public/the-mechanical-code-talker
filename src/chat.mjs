@@ -2468,10 +2468,17 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
       }
     } catch { /* lexicon unavailable — fall through to the generic message */ }
   }
+  // HANDOVER.md 2026-07-10 item 3: this used to claim "I can only teach facts
+  // using tmct's own code-vocabulary nouns" — false (general vocabulary teaching
+  // is fully supported elsewhere, e.g. "Paris is the capital of France" stores
+  // directly, and unknownSubjectFallback/ungroundedPairHint above both accept
+  // ANY new vocabulary once one side is grounded). The real constraint named
+  // here now: at least one side of a fact must already be grounded (or the
+  // sentence must fit a specific relation shape) — not a vocabulary restriction.
   const why = unknown.length
     ? ` I don't recognize ${joinList(unknown.map((w) => `"${w}"`))} as ${unknown.length === 1 ? "a word" : "words"} I know — `
-      + "I can only teach facts using tmct's own code-vocabulary nouns (like module, class, function…), "
-      + "not arbitrary new terms."
+      + "any vocabulary works, but at least one side of a fact needs to already be grounded to something I "
+      + "know (or fit one of my specific relation shapes), not two brand-new terms at once."
     : "";
   // Grounding NUDGE (operator refinement, 2026-07-09): APPENDED, never a
   // replacement, exactly like "did" above — see ungroundedPairHint's own
@@ -3509,9 +3516,17 @@ const RELATION_FACT_YESNO_RE =
  *  below — a `resolveRelationChaseReverse` closure re-deriving the SAME
  *  resolution logic as (a0)'s `resolveRelationChase` (direct fact, alias via
  *  findIsaChain, compose2 via a reverse hop-counted chase, filter via a
- *  recursive base-then-property chase), walked backward from the object. */
+ *  recursive base-then-property chase), walked backward from the object.
+ *  HANDOVER.md 2026-07-10 item 3 (teach-then-recall gap): "who" also accepts
+ *  "what" — a taught relation whose role isn't a person ("paris is the capital
+ *  of france") reads naturally as "what is the capital of france", and the
+ *  resolution below is identical either way (it just returns the satisfying
+ *  subject(s)); the two words never compete for a query built from a DIFFERENT
+ *  shape, since T5's bare meta-whatis grammar shape ("what is X") only wins the
+ *  turn when factAnswer/factReadBack's own more specific readers upstream (this
+ *  one included) have already declined. */
 const RELATION_WHO_ASK_RE =
-  /^who\s+(?:is|are)\s+(?:the|an?)\s+([a-z][\w-]*)\s+of\s+([\w'-]+(?:\s+[A-Z][\w'-]*)?)[?.!\s]*$/i;
+  /^(?:who|what)\s+(?:is|are)\s+(?:the|an?)\s+([a-z][\w-]*)\s+of\s+([\w'-]+(?:\s+[A-Z][\w'-]*)?)[?.!\s]*$/i;
 
 /** "list the descendants of ahab" — the REACHABILITY-SET list query
  *  (PLAN_TAUGHT_RELATIONS.md Item 6, Phase 6's wiring half): a genuine
@@ -4264,8 +4279,15 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
       if (!nameKnownWho) {
         return { text: `I don't know a relation or rule called '${relationName}' yet.`, replace: true };
       }
+      // HANDOVER.md 2026-07-10 item 3: "what is the capital of france" reads
+      // oddly as "I don't know ANYONE who is the capital…" — the neutral
+      // "nothing/anyone" split below matches whichever interrogative word the
+      // query actually used.
+      const isWhatAsk = /^what\b/i.test(qHedge);
       return {
-        text: `I don't know anyone who is the ${relationName} of ${object} from what you've told me.`,
+        text: isWhatAsk
+          ? `I don't know what the ${relationName} of ${object} is from what you've told me.`
+          : `I don't know anyone who is the ${relationName} of ${object} from what you've told me.`,
         replace: true,
       };
     }

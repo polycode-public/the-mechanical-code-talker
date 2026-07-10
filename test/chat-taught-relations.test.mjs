@@ -459,6 +459,36 @@ test("Gap 2: 'who is the father of john' (plain-relation reverse) returns ahab, 
   }
 });
 
+// HANDOVER.md 2026-07-10 item 3 (teach-then-recall gap): a relation whose role
+// isn't a person ("paris is the capital of france") could only be asked back
+// via the (semantically odd) "who" phrasing — the natural "what is the capital
+// of france" fell through to the grammar wall. RELATION_WHO_ASK_RE now accepts
+// "what" as well as "who"; the resolution is identical either way.
+test("HANDOVER item 3: 'what is the capital of france' (natural phrasing for a non-person role) resolves the same fact as the 'who' phrasing", async () => {
+  const dir = await mem("gap2-what-reverse");
+  try {
+    await runTurn("paris is the capital of france", { config: CONFIG, memoryDir: dir, sessionId: "g2w" });
+    const what = await runTurn("what is the capital of france", { config: CONFIG, memoryDir: dir });
+    assert.match(what.answer, /^paris —/);
+    assert.match(what.answer, /paris capitals france/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("HANDOVER item 3: 'what is the mentor of an unknown name' declines with neutral wording, not 'I don't know ANYONE who is'", async () => {
+  const dir = await mem("gap2-what-miss");
+  try {
+    await runTurn("paris is the capital of france", { config: CONFIG, memoryDir: dir, sessionId: "g2wm" });
+    const miss = await runTurn("what is the capital of spain", { config: CONFIG, memoryDir: dir });
+    assert.match(miss.answer, /I don't know what the capital of spain is from what you've told me\./);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("Gap 2: 'who is a parent of john' (alias reverse) returns ahab through the taught father ⊑ parent link, citing both facts", async () => {
   const dir = await mem("gap2-alias-reverse");
   try {
