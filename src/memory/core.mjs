@@ -28,11 +28,11 @@
 // (utt:<session>#<ts>#<role>) and fact ids hash the triple, so the per-turn
 // re-append sessions.mjs performs replaces rather than duplicates.
 
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { proseTokensFor, buildProseIndex } from "../prose.mjs";
 import { fnv1aHex } from "../hash.mjs";
-import { computeTrust, TRUST_SCORE_PROP, TRUST_INPUTS_PROP } from "./trust.mjs";
+import { computeTrust, sessionReliabilityFrom, TRUST_SCORE_PROP, TRUST_INPUTS_PROP } from "./trust.mjs";
 
 export const MEMORY_DIR_REL = join(".tmct", "memory");
 export const MEMORY_GRAPH_REL = join(MEMORY_DIR_REL, "graph.json");
@@ -55,9 +55,19 @@ export const DERIVED_FROM_PROP = "mgx:derivedFrom";        // umbrella: Fact →
 export const STATED_BY_PROP = "mgx:statedBy";              // a Source directly asserts a Fact
 export const CANONICALISED_FROM_PROP = "mgx:canonicalisedFrom"; // a canonical Fact ← its raw form
 export const CREATED_AT_PROP = "mgx:createdAt";           // first-write-wins ISO-8601 on every individual
+export const SOURCE_RELIABILITY_PROP = "mgx:sourceReliability"; // actor-level (session-scoped) trust nudge on a Source, [0.5,1.5]
 
-// The one deterministic operator Source id — the operator chatting to tmct.
+// The bare (session-less) singleton Source ids — the fallback for an
+// operator/teach provenance tag that carries no session-id segment (e.g. a
+// hand-authored "chat:"/"session:"/"operator" tag, or a direct API caller
+// that never threaded a session id through). Once a provenance tag DOES carry
+// a session-id segment (every real chat/teach write does — see
+// grammar/assert.mjs's provenanceTag / chat.mjs's teachProvenanceTag), each
+// session mints its OWN Source individual instead: `${ID}:<sessionId>`
+// (sourceIdFor below) — actor-level (session-scoped) trust, unconditional,
+// no config flag (PLAN_PROVENANCE_TRUST Part B).
 export const OPERATOR_SOURCE_ID = "src:operator-chat";
+export const TEACH_SOURCE_ID = "src:teach-chat";
 
 const ROLES = new Set(["visitor", "tmct"]);
 const LABEL_CAP = 48;    // utterance/fact labels stay skimmable in renders
@@ -92,6 +102,7 @@ const MEMORY_VOCABULARY = [
   { prop: "mgx:sourceType", note: "a Source's kind: operator | teach | provider | corpus | web | entailed (the trust-prior key)" },
   { prop: "mgx:sourceUrl", note: "a web Source's URL" },
   { prop: "mgx:sourceRule", note: "an entailed Source's rule id" },
+  { prop: "mgx:sourceReliability", note: "actor-level (session-scoped) trust nudge in [0.5,1.5], neutral 1.0 when absent — materialised by recomputeSourceReliability from a session's asserted-vs-contradicted track record (memory/trust.mjs's sessionReliabilityFrom); folds into computeTrust's per-source prior" },
   { prop: TRUST_SCORE_PROP, note: "materialised trust cache in [0,1] — pure function of a fact's Sources + createdAt (memory/trust.mjs); invalidated when a statedBy edge is added" },
   { prop: TRUST_INPUTS_PROP, note: "JSON of the inputs the trust score was computed from (source-type multiset, corroboration count, createdAt, recency) — makes the score auditable" },
   { prop: "mgx:hasProseTokens", note: "prose tokens (prose.mjs tokenizer) backing the payload's proseIndex" },
@@ -119,14 +130,123 @@ export function emptyMemory() {
   };
 }
 
-const memoryGraphFile = (dir) => join(dir, MEMORY_GRAPH_REL);
+/** Resolve the on-disk path of a memory graph file for `dir`. `version === null`
+ *  (the default) is the LIVE graph (`graph.json`) — the one path every mutator
+ *  funnels through (mutateMemory here, writeMemoryGraph in fold.mjs). A numeric
+ *  `version` resolves a SNAPSHOT copy (`graph.v{version}.json`, see
+ *  snapshotMemory below) — never the live file. The single source of truth for
+ *  "where does the memory graph live on disk", closing the desync risk of two
+ *  independent path-resolution copies (core.mjs's mutateMemory and fold.mjs's
+ *  writeMemoryGraph used to compute this path separately). */
+export function resolveMemoryGraphFile(dir, version = null) {
+  if (version === null) return join(dir, MEMORY_GRAPH_REL);
+  return join(dir, MEMORY_DIR_REL, `graph.v${version}.json`);
+}
+
+const memoryGraphFile = (dir) => resolveMemoryGraphFile(dir);
+
+/** Atomic write of raw text (temp in the same dir + rename) — the discipline
+ *  every writer in this module (and fold.mjs/sessions.mjs's own copies) uses:
+ *  a crash never destroys the previous file, a concurrent reader never sees a
+ *  torn one. */
+async function atomicWriteText(file, text) {
+  const tmp = `${file}.tmp-${process.pid}-${Math.random().toString(36).slice(2, 10)}`;
+  await writeFile(tmp, text);
+  await rename(tmp, file);
+}
 
 /** Atomic JSON write (temp in the same dir + rename) — same discipline as
  *  sessions.mjs's graph append: a crash never destroys the previous store. */
 async function atomicWriteJson(file, obj) {
-  const tmp = `${file}.tmp-${process.pid}-${Math.random().toString(36).slice(2, 10)}`;
-  await writeFile(tmp, JSON.stringify(obj));
-  await rename(tmp, file);
+  await atomicWriteText(file, JSON.stringify(obj));
+}
+
+// ---- Manifest-versioned snapshots (manual trigger only — NOT wired to any ----
+// ---- automatic call site; a primitive for a future CLI command/maintenance --
+// ---- hook, PLAN item "memory-tree versioning") -------------------------------
+
+export const MEMORY_MANIFEST_REL = join(MEMORY_DIR_REL, "manifest.json");
+export const DEFAULT_RETENTION = 5;
+
+const resolveManifestFile = (dir) => join(dir, MEMORY_MANIFEST_REL);
+
+/** Snapshot the CURRENT live graph.json into a numbered `graph.v{N}.json`
+ *  (N = the manifest's version BEFORE this call increments it), then advance
+ *  the manifest and best-effort prune the oldest snapshot that falls outside
+ *  the retention window.
+ *
+ *  `graph.json` itself is NEVER touched or renamed here — it stays the one
+ *  live file every mutator (mutateMemory / fold.mjs's writeMemoryGraph) reads
+ *  and writes; only a COPY of its pre-snapshot content becomes the new
+ *  numbered version. NOT called from mutateMemory, writeMemoryGraph, or
+ *  anywhere else in this codebase — it has zero callers today by design; a
+ *  future CLI command or maintenance hook calls it explicitly.
+ *
+ *  Manifest bootstrap (no manifest.json yet): `{ version: 0, retentionVersions:
+ *  opts.retentionVersions ?? DEFAULT_RETENTION }` — the optional
+ *  `retentionVersions` lets a caller that already loaded tmct.toml's
+ *  `[memory] retention_versions` seed the bootstrap default without this
+ *  module doing its own config I/O (core.mjs has no toml-loading precedent;
+ *  toml-config.mjs stays the one place that reads tmct.toml). Once a
+ *  manifest.json exists on disk, ITS retentionVersions is authoritative and a
+ *  later opts.retentionVersions is ignored (the persisted setting wins over a
+ *  possibly-stale caller default).
+ *
+ *  "No graph.json exists yet" is handled as a clean no-op: `{ skipped: true,
+ *  version: null }` — nothing to snapshot is not an error, it is the honest
+ *  bootstrap state (a brand-new repo that has never written a memory graph).
+ *
+ *  Retention: after writing `graph.v{N}.json` and bumping the manifest to
+ *  N+1, the snapshot at `graph.v{N - retentionVersions}.json` (if it exists)
+ *  is deleted (best-effort — ENOENT is swallowed). Using N (the version just
+ *  written), not N+1, for the prune target keeps a clean sliding window of
+ *  exactly `retentionVersions` files on disk at all times, with no orphaned
+ *  v0 ever left behind once the window starts sliding.
+ *
+ *  Returns `{ skipped, version, prunedVersion }` — `version` is the number of
+ *  the snapshot just written (or null if skipped); `prunedVersion` is the
+ *  number pruned, or null if nothing was in range to prune yet. */
+export async function snapshotMemory(dir, { retentionVersions } = {}) {
+  const graphFile = resolveMemoryGraphFile(dir);
+  let graphText;
+  try {
+    graphText = await readFile(graphFile, "utf8");
+  } catch (e) {
+    if (e?.code === "ENOENT") return { skipped: true, version: null, prunedVersion: null };
+    throw e;
+  }
+
+  const manifestFile = resolveManifestFile(dir);
+  let manifest;
+  try {
+    manifest = JSON.parse(await readFile(manifestFile, "utf8"));
+  } catch (e) {
+    if (e?.code !== "ENOENT") throw e;
+    manifest = { version: 0, retentionVersions: retentionVersions ?? DEFAULT_RETENTION };
+  }
+  if (!Number.isInteger(manifest.version)) manifest.version = 0;
+  if (!Number.isInteger(manifest.retentionVersions)) manifest.retentionVersions = retentionVersions ?? DEFAULT_RETENTION;
+
+  const v = manifest.version; // the version being written THIS call
+  const versionedFile = resolveMemoryGraphFile(dir, v);
+  await mkdir(dirname(versionedFile), { recursive: true });
+  await atomicWriteText(versionedFile, graphText);
+
+  manifest.version = v + 1;
+
+  let prunedVersion = null;
+  const pruneTarget = v - manifest.retentionVersions;
+  if (pruneTarget >= 0) {
+    try {
+      await unlink(resolveMemoryGraphFile(dir, pruneTarget));
+      prunedVersion = pruneTarget;
+    } catch (e) {
+      if (e?.code !== "ENOENT") throw e; // best-effort: a vanished snapshot is fine, anything else is not
+    }
+  }
+
+  await atomicWriteJson(manifestFile, manifest);
+  return { skipped: false, version: v, prunedVersion };
 }
 
 /** Load the memory graph for a repo dir. A missing store is the bootstrap:
@@ -147,11 +267,14 @@ export async function loadMemory(dir) {
  *  goes through here so a concurrent reader never sees a torn store. The lazy,
  *  idempotent legacy-provenance migration rides this same cycle (step (b)): any
  *  Fact still carrying only the old mgx:factProvenance string gets its Sources +
- *  statedBy edges + trust materialised on the next write of any kind. */
+ *  statedBy edges + trust materialised on the next write of any kind. Part B3's
+ *  actor-level (session-scoped) Source reliability rides the SAME cycle, after
+ *  migration (so it sees every Fact's Sources, migrated or not). */
 async function mutateMemory(dir, fn) {
   const payload = await loadMemory(dir);
   const out = fn(payload) ?? payload;
   migrateLegacyProvenance(out);
+  recomputeSourceReliability(out);
   out.proseIndex = buildProseIndex(out.individuals);
   await mkdir(dirname(memoryGraphFile(dir)), { recursive: true });
   await atomicWriteJson(memoryGraphFile(dir), out);
@@ -178,11 +301,20 @@ function setAttr(ind, prop, key, value) {
 // ---- Sources (step (b)): first-class provenance individuals -----------------
 
 /** Deterministic Source id + type over the closed kind set. Returns null for an
- *  unknown kind (an unmappable provenance tag → no Source, honestly). */
+ *  unknown kind (an unmappable provenance tag → no Source, honestly).
+ *
+ *  operator/teach kinds are SESSION-SCOPED when `desc.sessionId` is present
+ *  (unconditional — every real chat/teach provenance tag carries one; see
+ *  provenanceTagToSource): `${OPERATOR_SOURCE_ID}:<sessionId>` /
+ *  `${TEACH_SOURCE_ID}:<sessionId>` instead of the bare singleton, so each
+ *  session's operator/teach facts attach to their OWN Source individual
+ *  rather than every session ever collapsing onto one. Session ids are
+ *  uuidv7s (hex + hyphens only — see uuid.mjs), so `:`/`@` never collide with
+ *  this id scheme's own delimiters. */
 function sourceIdFor(desc) {
   switch (desc?.kind) {
-    case "operator": return { id: OPERATOR_SOURCE_ID, type: "operator" };
-    case "teach": return { id: "src:teach-chat", type: "teach" };
+    case "operator": return { id: desc.sessionId ? `${OPERATOR_SOURCE_ID}:${desc.sessionId}` : OPERATOR_SOURCE_ID, type: "operator" };
+    case "teach": return { id: desc.sessionId ? `${TEACH_SOURCE_ID}:${desc.sessionId}` : TEACH_SOURCE_ID, type: "teach" };
     case "provider": return { id: `src:provider:${desc.name}`, type: "provider" };
     case "corpus": return { id: `src:corpus:${desc.name}`, type: "corpus" };
     case "web": return { id: `src:learned:web:${fnv1aHex(String(desc.url || ""))}`, type: "web", url: String(desc.url || "") };
@@ -215,30 +347,44 @@ function upsertSource(payload, desc, createdAtCandidate) {
   return info.id;
 }
 
+/** Parse the "chat" shape both provenanceTag (grammar/assert.mjs) and
+ *  teachProvenanceTag (chat.mjs) emit — `<source>[:<sessionId>][@<ts>]` after
+ *  their kind prefix has already been stripped — into { createdAt, sessionId? }.
+ *  `sessionId` is present only when the tag actually carried one (every real
+ *  chat/teach write does; a hand-authored/legacy tag without one degrades to
+ *  the bare singleton Source, honestly — see sourceIdFor). */
+function parseChatTagRest(rest) {
+  const at = rest.indexOf("@");
+  const beforeAt = at >= 0 ? rest.slice(0, at) : rest;
+  const createdAt = at >= 0 ? rest.slice(at + 1) : "";
+  const colon = beforeAt.indexOf(":");
+  const sessionId = colon >= 0 ? beforeAt.slice(colon + 1) : "";
+  return { createdAt, ...(sessionId ? { sessionId } : {}) };
+}
+
 /**
  * Parse one legacy provenance TAG into a Source descriptor over the closed kind
  * set — the inverse the migration and the live write path both name Sources
  * through. The tag formats are exactly what the writers produce:
  *   corpus:conceptnet /r/IsA   → { kind:"corpus",   name:"conceptnet" }
- *   ace:chat:<session>@<ts>    → { kind:"operator",  createdAt:<ts> }
- *   teach:chat:<session>@<ts>  → { kind:"teach",     createdAt:<ts> }
+ *   ace:chat:<session>@<ts>    → { kind:"operator",  createdAt:<ts>, sessionId:<session> }
+ *   teach:chat:<session>@<ts>  → { kind:"teach",     createdAt:<ts>, sessionId:<session> }
  *   web:<url> | url:<url>      → { kind:"web",       url:<url> }
  *   entailed:<rule>            → { kind:"entailed",  rule:<rule> }
  * chat:/session: refs map to the operator; an unknown tag → null (no Source).
+ * The session-id segment (Part B: session-scoped actor-level trust) feeds
+ * sourceIdFor, which mints a PER-SESSION Source id when present, instead of
+ * collapsing every session onto one singleton operator/teach Source.
  */
 export function provenanceTagToSource(tag) {
   const t = String(tag || "").trim();
   if (!t) return null;
   const head = t.split(/\s+/)[0]; // drop trailing " /r/IsA" etc.
   if (head.startsWith("corpus:")) return { kind: "corpus", name: head.slice("corpus:".length) || "unknown" };
-  if (head.startsWith("ace:")) {
-    const at = head.indexOf("@");
-    return { kind: "operator", createdAt: at >= 0 ? head.slice(at + 1) : "" };
-  }
+  if (head.startsWith("ace:")) return { kind: "operator", ...parseChatTagRest(head.slice("ace:".length)) };
   if (head.startsWith("teach:")) {
     // the chat teach lane's natural frames — chat.mjs's teachProvenanceTag
-    const at = head.indexOf("@");
-    return { kind: "teach", createdAt: at >= 0 ? head.slice(at + 1) : "" };
+    return { kind: "teach", ...parseChatTagRest(head.slice("teach:".length)) };
   }
   if (head.startsWith("web:")) return { kind: "web", url: head.slice("web:".length) };
   if (head.startsWith("url:")) return { kind: "web", url: head.slice("url:".length) };
@@ -312,6 +458,77 @@ function migrateLegacyProvenance(payload) {
     changed = true;
   }
   if (changed) recountClasses(payload);
+}
+
+/** A session-scoped operator/teach Source id (Part B2's `${SINGLETON}:<sessionId>`
+ *  shape) — the only Source kind actor-level reliability applies to; a corpus/
+ *  web/provider/entailed Source has no "session" to hold a track record for. */
+const isSessionScopedSourceId = (id) =>
+  typeof id === "string" && (id.startsWith(`${OPERATOR_SOURCE_ID}:`) || id.startsWith(`${TEACH_SOURCE_ID}:`));
+
+/**
+ * Recompute + materialise mgx:sourceReliability on every session-scoped
+ * operator/teach Source (Part B3): for each such Source, count the facts it
+ * stated (`factsAsserted`) and how many of those are part of a live
+ * contradiction (`factsContradicted`, via findContradictions — its own
+ * detection logic is untouched, this only READS its result), run
+ * sessionReliabilityFrom, and write the bounded result onto the Source.
+ *
+ * Contradiction membership is evaluated against the CURRENT trust scores at
+ * the point this runs (already materialised by this same mutation's
+ * syncFactSources/migrateLegacyProvenance calls) — it does NOT recursively
+ * re-evaluate contradictions after reliability changes shift trust scores
+ * (no fixed-point iteration; one pass is enough for a monotonic, self-
+ * correcting signal that only ever gets more accurate on the NEXT write).
+ *
+ * Every individual (Fact OR RULE) touched by a recomputed Source then has its
+ * OWN trust re-materialised (recomputeFactTrust — class-agnostic, same as
+ * syncFactSources: neither ever checks `.class`) so mgx:trustScore reflects
+ * the fresh reliability within THIS SAME mutation cycle — a session's
+ * reliability shift is visible immediately, not just on some future
+ * unrelated re-write. This refresh is scanned off the statedBy edge group
+ * DIRECTLY (every individual it names, any class), not off readFactRows
+ * (Fact-only) — a Rule can never be "contradicted" (findContradictions is a
+ * Fact-shape concept, so contradiction ACCOUNTING stays Fact-scoped above),
+ * but it rides the identical Source-derivation + trust pipeline a Fact does
+ * (appendRule's own doc comment), so it must not go stale here either.
+ *
+ * Called from mutateMemory itself (below), riding every mutation's existing
+ * bookkeeping cycle — not a separate write path.
+ */
+function recomputeSourceReliability(payload) {
+  if (!Array.isArray(payload?.individuals) || !Array.isArray(payload?.objectProperties)) return;
+  const rows = readFactRows(payload); // Fact-only — contradiction accounting is inherently Fact-shaped
+  const contradictedFactIds = new Set();
+  for (const group of findContradictions(payload)) for (const r of group) contradictedFactIds.add(r.id);
+
+  const bySource = new Map(); // sessionSourceId -> { factsAsserted, factsContradicted }
+  for (const row of rows) {
+    for (const sid of row.sourceIds) {
+      if (!isSessionScopedSourceId(sid)) continue;
+      const bucket = bySource.get(sid) || { factsAsserted: 0, factsContradicted: 0 };
+      bucket.factsAsserted += 1;
+      if (contradictedFactIds.has(row.id)) bucket.factsContradicted += 1;
+      bySource.set(sid, bucket);
+    }
+  }
+  if (!bySource.size) return;
+
+  for (const [sid, counts] of bySource) {
+    const source = payload.individuals.find((i) => i?.id === sid);
+    if (!source) continue;
+    setAttr(source, SOURCE_RELIABILITY_PROP, "sourceReliability", String(sessionReliabilityFrom(counts)));
+  }
+
+  // Re-materialise trust for EVERY individual statedBy a recomputed session
+  // Source — Fact or Rule alike — via the statedBy edge group directly.
+  const statedGroup = payload.objectProperties.find((g) => g?.prop === STATED_BY_PROP);
+  const affected = new Set();
+  for (const e of statedGroup?.examples || []) if (bySource.has(e?.object)) affected.add(e.subject);
+  for (const id of affected) {
+    const ind = payload.individuals.find((i) => i?.id === id);
+    if (ind) recomputeFactTrust(payload, ind);
+  }
 }
 
 /** Upsert an individual by id (replace-in-place keeps ordering stable). */
