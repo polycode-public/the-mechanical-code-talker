@@ -51,6 +51,8 @@ import { uuidv7 } from "./uuid.mjs";
 import { createTelemetry } from "./telemetry.mjs";
 import * as defaultSource from "./source.mjs";
 import { loadTemplates, render as renderTemplate } from "./corpus/templates.mjs";
+import { resolveExtensions, seedActiveCorpusEntries, mergedLexiconExtra } from "./extensions.mjs";
+import { rankByBiasThenTrust } from "./memory/bias.mjs";
 import { finish, beginsWithVowelSound, grammarRules } from "./finish.mjs";
 import {
   VERB_TO_KIND, WHERE_MARKERS, MENTION_MARKERS, ENTITY_TO_TYPE, PASSIVE_PARTICIPLE_TO_KIND,
@@ -565,7 +567,7 @@ export function answerCount(graph, query) {
  *  Consulted only when answerCount can't map the noun to a graph class (an unknown
  *  kind) AND a session's memory is in hand. Returns the count string or null (no
  *  such fact → the honest "I can't count …" from answerCount stands). */
-async function countFromFacts(graph, memoryDir, query) {
+async function countFromFacts(graph, memoryDir, query, biasByBundle = {}) {
   if (!graph || !memoryDir) return null;
   const m = String(query).match(/\b(?:how many|number of|count(?:\s+the)?)\s+([a-z]+)\b/i);
   if (!m) return null;
@@ -576,8 +578,10 @@ async function countFromFacts(graph, memoryDir, query) {
   const objVariants = factTermVariants(normFactTerm, asked);
   const isa = (await factRows(memoryDir))
     .filter((f) => ISA_PREDICATES.has(f.predicate) && objVariants.has(f.object));
-  // pick the highest-trust asserted subject that maps to a countable graph class
-  for (const f of isa.sort((a, b) => (b.trust ?? 0) - (a.trust ?? 0))) {
+  // pick the highest-bias, then highest-trust asserted subject that maps to a
+  // countable graph class (rankByBiasThenTrust: bias-tied/unconfigured degrades
+  // to the same trust-desc scan this always ran).
+  for (const f of rankByBiasThenTrust(isa, biasByBundle)) {
     const cls = COUNT_NOUNS[String(f.subject).toLowerCase()];
     if (cls) { const n = countClass(graph, cls); return `${n} ${asked}.`; }
   }
@@ -607,7 +611,7 @@ async function countFromFacts(graph, memoryDir, query) {
 // graph-cardinality count untouched — same honest-decline discipline as
 // every other lane here).
 const HOW_MANY_ARE_RE = /^how\s+many\s+([\w-]+)\s+(?:are|is)\s+(.+?)[?.!\s]*$/i;
-async function answerQuantifierRecall(memoryDir, query) {
+async function answerQuantifierRecall(memoryDir, query, biasByBundle = {}) {
   if (!memoryDir) return null;
   const m = String(query).trim().match(HOW_MANY_ARE_RE);
   if (!m) return null;
@@ -619,7 +623,7 @@ async function answerQuantifierRecall(memoryDir, query) {
   const rows = (await factRows(memoryDir)).filter((f) => ISA_PREDICATES.has(f.predicate) && subjVariants.has(f.subject));
   if (!rows.length) return null; // never heard of this subject at all — let answerCount own the shape
   const objVariants = factTermVariants(normFactTerm, m[2]);
-  const hit = rows.filter((f) => objVariants.has(f.object)).sort((a, b) => (b.trust ?? 0) - (a.trust ?? 0))[0];
+  const hit = rankByBiasThenTrust(rows.filter((f) => objVariants.has(f.object)), biasByBundle)[0];
   const q = hit?.quantifier;
   if (!q) return "I don't know — I was never told a quantifier for that.";
   return `${q.charAt(0).toUpperCase()}${q.slice(1)}.`;
@@ -3491,7 +3495,7 @@ const FACT_ANSWER_CAP = 32;
  *  graph's Facts. Returns { text, replace } — `replace:false` means the engine's
  *  own (schema-docs) answer stands and the fact lines are appended under it —
  *  or null when memory holds nothing relevant (misses stay unchanged). */
-async function factAnswer(memoryDir, query, envelope, miss) {
+async function factAnswer(memoryDir, query, envelope, miss, biasByBundle = {}) {
   let normFactTerm;
   try { ({ normFactTerm } = await import("./memory/core.mjs")); } catch { return null; }
   const q = String(query).trim();
@@ -3523,8 +3527,11 @@ async function factAnswer(memoryDir, query, envelope, miss) {
     // relation about the subject undifferentiated.
     const { subject, predicate } = splitMetaPredicate(metaTerm);
     const variants = factTermVariants(normFactTerm, subject);
-    const subjectHits = (await memoryFacts(memoryDir)).filter((f) => variants.has(f.subject));
-    const hits = predicate ? subjectHits.filter((f) => f.predicate === predicate) : subjectHits;
+    // factRows (trust+sourceIds-bearing), not the plain memoryFacts shape — the
+    // bias-weighted ranking below needs each hit's sourceIds to resolve which
+    // bundle it came from (memory/bias.mjs's biasForRow).
+    const subjectHits = (await factRows(memoryDir)).filter((f) => variants.has(f.subject));
+    let hits = predicate ? subjectHits.filter((f) => f.predicate === predicate) : subjectHits;
     if (!hits.length) {
       // The subject itself is known, but not under this specific relation —
       // an honest, specific "no" rather than falling through to the generic
@@ -3538,6 +3545,10 @@ async function factAnswer(memoryDir, query, envelope, miss) {
       }
       return null;
     }
+    // Bias only REORDERS — every hit still renders and is cited (Part 6's
+    // "disclosed, never dropped" contract). Unconfigured/tied bias degrades to
+    // trust-desc, byte-identical to before this feature existed.
+    hits = rankByBiasThenTrust(hits, biasByBundle);
     const lines = hits.map(renderFactLine);
     const shown = lines.slice(0, FACT_ANSWER_CAP);
     const rest = lines.slice(FACT_ANSWER_CAP);
@@ -3563,7 +3574,7 @@ async function factAnswer(memoryDir, query, envelope, miss) {
   const know = q.match(KNOW_ABOUT_RE);
   if (know) {
     const variants = factTermVariants(normFactTerm, know[1]);
-    const rows = await memoryFacts(memoryDir);
+    const rows = await factRows(memoryDir);
     // Bug E subtype walk (operator follow-up request, this session): a
     // cycle-safe BFS DOWNWARD over isa-family facts from the term's own
     // variants — every fact whose OBJECT is in the current frontier
@@ -3585,11 +3596,11 @@ async function factAnswer(memoryDir, query, envelope, miss) {
     // (the ORIGINAL, non-subtype half of the filter below) still include
     // corpus facts exactly as before — only the SUBTYPE DISCOVERY chain is
     // taught-only.
-    // `rows` here is memoryFacts()'s plain {subject,predicate,object,provenance}
-    // shape (no `sourceTypes` — that's factRows()'s own trust-enriched shape),
-    // so the taught/corpus distinction reads the SAME provenance-string
-    // convention renderFactLine already keys its own corpus-vs-taught framing
-    // on, just above.
+    // `rows` here is factRows()'s trust+sourceIds-bearing shape (Part 6: the
+    // bias-weighted ranking below needs sourceIds) — it still carries the SAME
+    // `provenance` legacy-compat string the taught/corpus distinction below
+    // reads, the SAME convention renderFactLine keys its own corpus-vs-taught
+    // framing on, just above.
     const isTaughtFact = (f) => !String(f.provenance || "").includes("corpus:") && !String(f.provenance || "").includes("web:");
     const isaRows = rows.filter((f) => ISA_PREDICATES.has(f.predicate) && isTaughtFact(f));
     const subtypeSubjects = new Set();
@@ -3643,6 +3654,10 @@ async function factAnswer(memoryDir, query, envelope, miss) {
     // match wouldn't have found, say so — lets the reader tell subtype-derived
     // facts apart from literal mentions.
     const viaSubtype = hits.some((f) => subtypeSubjects.has(f.subject) && !variants.has(f.subject) && !variants.has(f.object));
+    // Bias only REORDERS, right before render/cite — every hit above still
+    // renders (Part 6's "disclosed, never dropped" contract); literalHit/
+    // viaSubtype above already resolved off the pre-rank order.
+    hits = rankByBiasThenTrust(hits, biasByBundle);
     const lines = hits.map((f) => `  ${renderFactLine(f)}`);
     const shown = lines.slice(0, FACT_ANSWER_CAP);
     const rest = lines.slice(FACT_ANSWER_CAP);
@@ -3879,7 +3894,7 @@ function inheritsChain(graph, startId) {
  *        "what kind of thing is an X" reports X's own type (subject-side first).
  *  Miss-only and run AFTER factAnswer returns null, so it never shadows the
  *  subject-side answer or a schema hit. Returns { text, replace:true } or null. */
-async function factReadBack(memoryDir, query, envelope, miss, graph = null, focusLabel = null) {
+async function factReadBack(memoryDir, query, envelope, miss, graph = null, focusLabel = null, biasByBundle = {}) {
   if (!miss) return null;
   let normFactTerm;
   try { ({ normFactTerm } = await import("./memory/core.mjs")); } catch { return null; }
@@ -3970,7 +3985,10 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
   // "what facts do you know": no term to bind, so list every remembered fact,
   // higher-trust first, each cited. Answers the cross-session assert-recall surfaces.
   if (WHOLE_RECALL_RE.test(q)) {
-    const hits = (isa.length ? isa : rows).slice().sort(byTrust);
+    // Part 6: bias-then-trust — every hit still renders (renderMany caps for
+    // display, never drops), just reordered; unconfigured bias degrades to the
+    // same trust-desc order this always used.
+    const hits = rankByBiasThenTrust(isa.length ? isa : rows, biasByBundle);
     if (!hits.length) return null;
     return renderMany(hits);
   }
@@ -4699,7 +4717,7 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
       if (subject) {
         const predicate = await generalVerbPredicate(verb);
         const subjVariants = factTermVariants(normFactTerm, subject);
-        const hits = rows.filter((f) => f.predicate === predicate && subjVariants.has(f.subject)).sort(byTrust);
+        const hits = rankByBiasThenTrust(rows.filter((f) => f.predicate === predicate && subjVariants.has(f.subject)), biasByBundle);
         if (hits.length) return { ...renderMany(hits), generalVerbQuery: true };
       }
     }
@@ -4709,7 +4727,7 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
   const told = q.match(TOLD_ABOUT_RE);
   if (told) {
     const variants = factTermVariants(normFactTerm, told[1]);
-    const hits = rows.filter((f) => variants.has(f.subject) || variants.has(f.object)).sort(byTrust);
+    const hits = rankByBiasThenTrust(rows.filter((f) => variants.has(f.subject) || variants.has(f.object)), biasByBundle);
     if (!hits.length) return null;
     const term = variants.has(hits[0].subject) ? hits[0].subject : hits[0].object;
     const lines = hits.map((f) => `  ${renderFactLine(f)}`);
@@ -4735,8 +4753,8 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
   }
   if (!term) return null;
   const variants = factTermVariants(normFactTerm, term);
-  const subjectHits = isa.filter((f) => variants.has(f.subject)).sort(byTrust);
-  const objectHits = isa.filter((f) => variants.has(f.object)).sort(byTrust);
+  const subjectHits = rankByBiasThenTrust(isa.filter((f) => variants.has(f.subject)), biasByBundle);
+  const objectHits = rankByBiasThenTrust(isa.filter((f) => variants.has(f.object)), biasByBundle);
   const hits = kindOf
     ? (subjectHits.length ? subjectHits : objectHits)
     : (objectHits.length ? objectHits : subjectHits);
@@ -4756,13 +4774,13 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
  *  only (a `/describe` names ONE code entity as the subject of its own facts,
  *  not every fact that merely mentions it in passing) — null when memory holds
  *  nothing about this subject. */
-async function describedFacts(memoryDir, label) {
+async function describedFacts(memoryDir, label, biasByBundle = {}) {
   let normFactTerm;
   try { ({ normFactTerm } = await import("./memory/core.mjs")); } catch { return null; }
   const rows = await factRows(memoryDir);
   if (!rows.length) return null;
   const variants = factTermVariants(normFactTerm, label);
-  const hits = rows.filter((f) => variants.has(f.subject)).sort((a, b) => b.trust - a.trust);
+  const hits = rankByBiasThenTrust(rows.filter((f) => variants.has(f.subject)), biasByBundle);
   if (!hits.length) return null;
   return `taught facts:\n${hits.map((f) => `  ${renderFactLine(f)}`).join("\n")}`;
 }
@@ -5484,7 +5502,7 @@ async function conceptForceAnswer(query, envelope, { graph, config, source, memo
  *  otherwise the unchanged dispatchTool path (which also yields the no-graph error).
  *  A hit updates the focus to the resolved object. Grammar miss / ToolError → a
  *  normal answer, never a crash. */
-async function runAsk(query, { config, source, graph, focus, last, templates, memoryDir, sessionId = "", lexicon = null, env, trace, vocabHint = null, tel = null }) {
+async function runAsk(query, { config, source, graph, focus, last, templates, memoryDir, sessionId = "", lexicon = null, env, trace, vocabHint = null, tel = null, biasByBundle = {} }) {
   const ts = new Date().toISOString();
   // DISCOURSE ANAPHORA (CHATBENCH_006 levers 1+2): a follow-up like "which of those
   // are tested" / "how many of those" / "count them" filters or counts the PREVIOUS
@@ -5852,8 +5870,8 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   const isAdjectiveShape = IS_ADJECTIVE_YESNO_RE.test(String(query).trim());
   let bareMetaHit = null;
   if (isConversationalCandidate && memoryDir && (bareWhatisShape || isAdjectiveShape)) {
-    bareMetaHit = (await factAnswer(memoryDir, query, envelope, miss))
-      ?? (await factReadBack(memoryDir, query, envelope, miss, graph, newFocus?.label));
+    bareMetaHit = (await factAnswer(memoryDir, query, envelope, miss, biasByBundle))
+      ?? (await factReadBack(memoryDir, query, envelope, miss, graph, newFocus?.label, biasByBundle));
   }
   if (bareMetaHit) {
     answer = bareMetaHit.replace ? bareMetaHit.text : `${answer}\n${bareMetaHit.text}`;
@@ -5894,8 +5912,8 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     // reified fact is stronger evidence than a transcript echo. Subject-side facts
     // first (factAnswer), then the reverse-membership read-back (factReadBack) so an
     // asserted "every X is a Y" answers "what is a Y" too.
-    const fact = (await factAnswer(memoryDir, query, envelope, miss))
-      ?? (await factReadBack(memoryDir, query, envelope, miss, graph, newFocus?.label));
+    const fact = (await factAnswer(memoryDir, query, envelope, miss, biasByBundle))
+      ?? (await factReadBack(memoryDir, query, envelope, miss, graph, newFocus?.label, biasByBundle));
     if (fact) {
       answer = fact.replace ? fact.text : `${answer}\n${fact.text}`;
       via = "fact";
@@ -6298,7 +6316,7 @@ const GOAL_BY_COMMAND = {
  *  field now (Bug F point 5) — mirrors runAsk's own `goal` field so
  *  withGoalLine's short "Goal (inferred): …" line fires for command
  *  dispatches too, not just ask()-parsed queries. */
-async function runCommand(line, { config, source, graph, focus, memoryDir, trace, narrate = false, tel = null }) {
+async function runCommand(line, { config, source, graph, focus, memoryDir, trace, narrate = false, tel = null, biasByBundle = {} }) {
   const ts = new Date().toISOString();
   const sp = line.indexOf(" ");
   const name = (sp === -1 ? line.slice(1) : line.slice(1, sp)).toLowerCase();
@@ -6409,7 +6427,7 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
       // matching taught facts (subject === the resolved entity, trust-ranked)
       // under the code-map answer, mirroring the ask-path's fact-append pattern.
       if (name === "describe" && memoryDir) {
-        const facts = await describedFacts(memoryDir, ent.label);
+        const facts = await describedFacts(memoryDir, ent.label, biasByBundle);
         if (facts) { answer = `${answer}\n${facts}`; note(trace, "source: memory facts (describedFacts) appended to the code-map answer"); }
       }
       return mk(answer, { resolvedIds: [ent.id], newFocus: nextFocus(graph, focus, ent) });
@@ -6528,7 +6546,7 @@ function morePage(query, { last, focus }) {
 // gain.
 const INDIRECT_REQUEST_RE = /^(?:i\s+(?:want|wanted)\s+you\s+to\s+|i(?:'d|\s+would)\s+like\s+you\s+to\s+)\s*(.+)$/i;
 
-export async function runTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, vocabHint = null, tel = null } = {}) {
+export async function runTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, vocabHint = null, tel = null, biasByBundle = {} } = {}) {
   const line = String(input ?? "").trim();
   // The captured residue is used for RECOGNITION at every dispatch site below
   // (asBareCommand, conversationalTurn, assertTurn, the count lanes, runAsk);
@@ -6549,7 +6567,7 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // pass one gets it computed here instead, so "try this vocabulary example" is
   // never wrong regardless of caller.
   const resolvedVocabHint = vocabHint ?? vocabExampleHint(await hasSeededVocabulary(memoryDir));
-  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates, env, lexicon, trace, narrate, vocabHint: resolvedVocabHint, tel };
+  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates, env, lexicon, trace, narrate, vocabHint: resolvedVocabHint, tel, biasByBundle };
   // A DISPATCHED turn (count / slash-command / ask) becomes the new "last answer"
   // that why/say-more re-renders; a conversational turn does not (it preserves it).
   // FINISH SEAM (PLAN_RESPONSE_FINISHING §"Where it lives"): every dispatched turn's
@@ -6640,7 +6658,7 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // authority gate declines (returns null) for anything answerCount should own,
   // so ordinary structural counts fall through completely unaffected.
   if (memoryDir) {
-    const quantifierRecall = await answerQuantifierRecall(memoryDir, workingLine);
+    const quantifierRecall = await answerQuantifierRecall(memoryDir, workingLine, biasByBundle);
     if (quantifierRecall != null) {
       note(trace, 'goal: recall a taught quantifier for a class-membership pair ("how many Xs are Ys")');
       note(trace, "lane: answerQuantifierRecall — matched HOW_MANY_ARE_RE with a subject tmct has facts about; literal recall, never real counting");
@@ -6655,7 +6673,7 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
     // ASSERTED vocabulary fact ("every class is a type" → "how many types" = the
     // class count). countFromFacts declines on a real graph kind, so ordinary
     // counts are unaffected; it only speaks for a remembered object noun.
-    const viaFact = memoryDir ? await countFromFacts(graph, memoryDir, workingLine) : null;
+    const viaFact = memoryDir ? await countFromFacts(graph, memoryDir, workingLine, biasByBundle) : null;
     if (viaFact != null) {
       note(trace, 'goal: get a count of an asserted-vocabulary kind ("every X is a Y" inherited cardinality)');
       note(trace, "lane: countFromFacts — the counted noun matched a remembered isa-fact's SUBJECT, whose class IS countable");
@@ -6690,20 +6708,19 @@ export const SEED_PREFER = ["rdfs:subClassOf", "rdf:type", "mgx:usedFor", "mgx:p
  *  corpus seed, so re-runs skip without even reading the slice. */
 export const SEED_MARKER_REL = join(".tmct", "memory", "corpus-seed.json");
 
-/** Seed the starter corpus into <repo>/.tmct/memory once, in TWO passes:
- *    1. the curated SEON ontology (corpus/seon/concepts.jsonl) FIRST and UNCAPPED
- *       — it is small + fully curated (the SE vocabulary + orientation facts),
- *       tagged "corpus:seon", so a fresh repo knows the curated terms before any
- *       general ConceptNet noise;
- *    2. THEN the capped ConceptNet slice (the definitional band first, SEED_LIMIT
- *       facts), tagged "corpus:conceptnet".
- *  seon runs first so its curated facts win the content-hash idempotency race — a
- *  term the ConceptNet slice also carries keeps the seon provenance. Idempotent
- *  twice over (the marker short-circuits; seedMemory content-hashes fact ids) and
- *  failure-tolerated: a missing/broken corpus degrades to the unseeded bootstrap —
- *  never an error before the prompt. Returns { appended, skipped, total, seon,
- *  conceptnet } on a fresh seed (the banner counts stay honest), null when
- *  skipped/failed. */
+/** Seed the starter corpus into <repo>/.tmct/memory once — a loop over every
+ *  ACTIVE `corpus`-kind extension entry (src/extensions.mjs's resolveExtensions,
+ *  the SAME seam `tmct init`'s seed step and `tmct init --corpus <id>` now
+ *  share), in the resolver's FIXED order: seon first, then conceptnet, then any
+ *  other active bundle sorted by name. seon runs first so its curated facts win
+ *  the content-hash idempotency race — a term the ConceptNet slice also carries
+ *  keeps the seon provenance. Idempotent twice over (the marker short-circuits;
+ *  seedMemory content-hashes fact ids) and failure-tolerated PER BUNDLE
+ *  (seedActiveCorpusEntries): one bad third-party pack degrades to "not seeded"
+ *  for that bundle alone (its error is recorded, not silently swallowed) while
+ *  every other bundle still lands — never an error before the prompt. Returns
+ *  { appended, skipped, total, seon, conceptnet, perBundle } on a fresh seed
+ *  (the banner counts stay honest), null when skipped/failed outright. */
 async function seedBootstrapMemory(repo) {
   const marker = join(repo, SEED_MARKER_REL);
   try {
@@ -6711,27 +6728,40 @@ async function seedBootstrapMemory(repo) {
     return null; // already seeded — the marker is authoritative
   } catch { /* no marker → first run */ }
   try {
-    const { seedMemory, SEON_CONCEPTS_FILE } = await import("./corpus/conceptnet.mjs");
-    // (1) curated SEON ontology — uncapped, seon-tagged, seeded FIRST.
-    const seon = await seedMemory(repo, { slicePath: SEON_CONCEPTS_FILE, provenancePrefix: "corpus:seon" });
-    // (2) the capped ConceptNet band — byte-identical to the prior single seed.
-    const conceptnet = await seedMemory(repo, { limit: SEED_LIMIT, prefer: SEED_PREFER });
+    const { entries } = await resolveExtensions(repo);
+    const { appended, skipped, total, perBundle } = await seedActiveCorpusEntries(repo, entries);
     const res = {
-      appended: seon.appended + conceptnet.appended,
-      skipped: seon.skipped + conceptnet.skipped,
-      total: seon.total + conceptnet.total,
-      seon: seon.appended,
-      conceptnet: conceptnet.appended,
+      appended, skipped, total, perBundle,
+      // seon/conceptnet stay named fields (not just perBundle lookups) so the
+      // banner's default two-bundle rendering (below) — and any external
+      // reader keyed on `.seon`/`.conceptnet` — stays byte-identical.
+      seon: perBundle.seon?.appended || 0,
+      conceptnet: perBundle.conceptnet?.appended || 0,
     };
     await mkdir(dirname(marker), { recursive: true });
     await writeFile(marker, JSON.stringify({
-      seededAt: new Date().toISOString(), limit: SEED_LIMIT,
+      seededAt: new Date().toISOString(),
       appended: res.appended, skipped: res.skipped, seon: res.seon, conceptnet: res.conceptnet,
+      perBundle,
     }) + "\n");
     return res;
   } catch {
     return null; // corpus unavailable — bootstrap proceeds unseeded
   }
+}
+
+/** The seed banner line — byte-identical to before for the default zero-config
+ *  seon+conceptnet case; a THIRD (or more) active bundle appends its own
+ *  "<n> <bundle-name>" clause rather than changing the base sentence, so a
+ *  fresh `TMCT_NO_SEED`-unset run with no tmct.toml renders EXACTLY what
+ *  test/wiring-seed.test.mjs's SEED_BANNER_RE already pins. */
+function seedBannerLine(seeded) {
+  const extra = Object.entries(seeded.perBundle || {})
+    .filter(([name]) => name !== "seon" && name !== "conceptnet")
+    .filter(([, r]) => r && r.appended > 0)
+    .map(([name, r]) => `${r.appended} ${name}`);
+  const extraClause = extra.length ? ` + ${extra.join(" + ")}` : "";
+  return `seeded ${seeded.appended} starter facts (${seeded.seon} curated SEON + ${seeded.conceptnet} ConceptNet${extraClause}) — /memory to inspect`;
 }
 
 /** Whether THIS repo's memory actually carries the corpus seed — the marker is
@@ -6871,13 +6901,29 @@ export async function createSession({
   const moduleCount = graph.individuals.filter((i) => (i.class || "") === "Module").length;
   const { version } = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
 
+  // Resolve this handle's extension entries + bias table ONCE per session
+  // (src/extensions.mjs's resolveExtensions) — no new per-turn I/O. Failure-
+  // tolerated: a malformed tmct.toml degrades to the shipped builtins with an
+  // empty bias table (every bundle ranks at bias 1 — see memory/bias.mjs),
+  // never an error before the prompt.
+  let extEntries = null;
+  let biasByBundle = {};
+  try { ({ entries: extEntries, biasByBundle } = await resolveExtensions(repo)); }
+  catch { extEntries = null; biasByBundle = {}; }
+
   // Load this handle's lexicon once (the immutable cached core vocabulary the ACE
-  // assert path parses against). Threaded into every turn so the grammar layer never
-  // re-imports per turn; failure-tolerated — a broken lexicon degrades to the lazy
-  // per-turn load inside assertTurn, never an error before the prompt.
+  // assert path parses against), MERGED with any active lexicon/pack extension
+  // entries (Part 3 — mergedLexiconExtra, ascending-bias merge order so a
+  // higher-bias bundle's same-lemma entry wins deterministically). Threaded
+  // into every turn so the grammar layer never re-imports per turn;
+  // failure-tolerated — a broken lexicon degrades to the lazy per-turn load
+  // inside assertTurn, never an error before the prompt.
   let lexicon = null;
-  try { const { loadLexicon } = await import("./grammar/lexicon.mjs"); lexicon = loadLexicon(); }
-  catch { lexicon = null; }
+  try {
+    const { loadLexicon } = await import("./grammar/lexicon.mjs");
+    const extra = extEntries ? await mergedLexiconExtra(extEntries, biasByBundle) : null;
+    lexicon = loadLexicon(extra ?? undefined);
+  } catch { lexicon = null; }
 
   // Opt-in telemetry (default OFF → null → the sink's `tel?.record` is a no-op, and
   // nothing is written). The conversational session log + sidecar above stay the
@@ -6945,8 +6991,9 @@ export async function createSession({
         `the conversation is remembered to ${DEFAULT_GRAPH_REL} — log ${logFile}`
       : `tmct chat — ${repo} — ${moduleCount} module(s) — log ${logFile}`,
     // the honest seed line appears ONLY on the run that actually seeded — the count
-    // is the TOTAL appended, split into the curated SEON ontology + the ConceptNet band.
-    ...(seeded ? [`seeded ${seeded.appended} starter facts (${seeded.seon} curated SEON + ${seeded.conceptnet} ConceptNet) — /memory to inspect`] : []),
+    // is the TOTAL appended, split into the curated SEON ontology + the ConceptNet band
+    // (+ any other active extension bundle, e.g. an activated tier-2 corpus).
+    ...(seeded ? [seedBannerLine(seeded)] : []),
     // no code graph → point at how to GET one (a graph producer / --repo / the shipped
     // example), and at what IS answerable now — `vocabHint` is only ever a term
     // confirmed to resolve in THIS session's actual seed state (see vocabExampleHint),
@@ -6964,7 +7011,7 @@ export async function createSession({
 
   return {
     repo, config, graph, lexicon, memoryDir: repo, moduleCount, version, sessionId,
-    logFile, sidecarFile, bannerLines, empty,
+    logFile, sidecarFile, bannerLines, empty, biasByBundle,
     // Mutable between-turn state — read-only to the caller, so a shell can render the
     // prompt/expand-hint without reaching into runTurn's threading.
     get focus() { return focus; },
@@ -6982,7 +7029,7 @@ export async function createSession({
     async turn(line) {
       let result;
       try {
-        result = await runTurn(line, { config, source, graph, focus, last, memoryDir: repo, sessionId, env, lexicon, narrate: narrateOn, vocabHint, tel });
+        result = await runTurn(line, { config, source, graph, focus, last, memoryDir: repo, sessionId, env, lexicon, narrate: narrateOn, vocabHint, tel, biasByBundle });
       } catch (e) {
         const ts = new Date().toISOString();
         const message = e instanceof Error ? e.message : String(e);

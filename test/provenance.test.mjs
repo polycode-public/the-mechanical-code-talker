@@ -258,6 +258,53 @@ test("(d) same (s,p,o) from two writers is CORROBORATION, not a contradiction", 
   }
 });
 
+// ---- Part 5 (extension-pack batch): namespacing/provenance across BUNDLES ---
+// Mostly confirming EXISTING, UNTOUCHED machinery (findContradictions,
+// syncFactSources) already does the right thing once two different EXTENSION
+// BUNDLES (not just two ad hoc provenance tags) assert conflicting facts via
+// the real seedMemory() seeding path — never a hand-built payload.
+
+test("(e) two extension bundles asserting a conflicting fact: distinct Fact/Source individuals, never silently overwritten, findContradictions surfaces it", async () => {
+  const dir = await tmpRepo();
+  try {
+    const sliceA = join(dir, "bundle-a.jsonl");
+    const sliceB = join(dir, "bundle-b.jsonl");
+    // same (subject, predicate) — /r/HasProperty maps to mgx:hasProperty in the
+    // committed conceptnet-map.toml — DIFFERENT object, from two DIFFERENT
+    // provenancePrefixes (the exact shape a tier2-aws bundle and a seon bundle
+    // would each pass to seedMemory via src/extensions.mjs's resolved entries).
+    await writeFile(sliceA, JSON.stringify({ start: "/c/en/widget_x", rel: "/r/HasProperty", end: "/c/en/red", weight: 1 }) + "\n");
+    await writeFile(sliceB, JSON.stringify({ start: "/c/en/widget_x", rel: "/r/HasProperty", end: "/c/en/blue", weight: 1 }) + "\n");
+    const { seedMemory } = await import("../src/corpus/conceptnet.mjs");
+    await seedMemory(dir, { slicePath: sliceA, provenancePrefix: "corpus:tier2-aws" });
+    await seedMemory(dir, { slicePath: sliceB, provenancePrefix: "corpus:seon" });
+
+    const m = await loadMemory(dir);
+    const facts = factsOf(m).filter((f) => attr(f, "rdf:subject") === "widget x");
+    assert.equal(facts.length, 2, "two DISTINCT Fact individuals — the second bundle's fact never overwrote the first's");
+    assert.deepEqual(facts.map((f) => attr(f, "rdf:object")).sort(), ["blue", "red"]);
+
+    // distinct, correctly-typed Source individuals — one per bundle, deterministic id
+    const sources = sourcesOf(m);
+    const awsSrc = sources.find((s) => s.id === "src:corpus:tier2-aws");
+    const seonSrc = sources.find((s) => s.id === "src:corpus:seon");
+    assert.ok(awsSrc, "a src:corpus:tier2-aws Source individual exists");
+    assert.ok(seonSrc, "a src:corpus:seon Source individual exists");
+    assert.equal(attr(awsSrc, "mgx:sourceType"), "corpus");
+    assert.equal(attr(seonSrc, "mgx:sourceType"), "corpus");
+
+    // the EXISTING, UNTOUCHED findContradictions surfaces the conflict rather
+    // than either fact silently winning.
+    const groups = findContradictions(m);
+    const group = groups.find((g) => g[0].subject === "widget x");
+    assert.ok(group, "findContradictions surfaces the cross-bundle conflict");
+    assert.deepEqual(group.map((r) => r.object).sort(), ["blue", "red"], "both facts kept, never silently resolved");
+    assert.ok(group.every((r) => r.trust > 0), "both facts clear the trust floor (corpus-sourced)");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 // ensure the memory dir constant is exercised (kept honest, no unused import)
 test("MEMORY_DIR_REL points under .tmct/memory", () => {
   assert.equal(MEMORY_DIR_REL, join(".tmct", "memory"));

@@ -49,6 +49,11 @@ Usage:
                                offline, $0; init is tier-1-only unless asked
        [--detect]              suggest a tier-2 corpus from the repo's manifests
                                (pyproject.toml → python, pom.xml → java); never seeds unasked
+       [--with-persona <name>] write an explicit [extensions]/[bias] preset into tmct.toml
+                               ("code" — today's implicit default, made explicit)
+  tmct extend --validate <dir>  validate a third-party extension pack's declared
+                               resources (corpus/lexicon/templates) before activating
+                               it in any repo's tmct.toml; exits non-zero on failure
   tmct syllogise [--repo <abs>] speculative inference (offline maintenance job): forward-
        [--depth <n>] [--budget <n>]  chain the memory's rdfs:subClassOf closure, materialising
                                bounded, low-trust, retractable entailed facts (never on the chat path)
@@ -316,41 +321,96 @@ async function main() {
 
   if (mode === "init") {
     // `tmct init` — the Repository-Interface onboarding surface: scaffold .tmct/,
-    // write tmct.toml, seed the tier-1 corpus (offline, opt-out via TMCT_NO_SEED),
-    // and record provenance. Idempotent; --force rewrites config + re-records.
+    // write tmct.toml, seed the corpus (offline, opt-out via TMCT_NO_SEED), and
+    // record provenance. Idempotent; --force rewrites config + re-records.
     //
-    // TIERING POLICY: init is OFFLINE, $0 and TIER-1-ONLY by default. A tier-2
-    // domain/language corpus (corpus/tier2/: aws, python, java) is added ONLY when
+    // TIERING POLICY: init is OFFLINE, $0 and TIER-1-ONLY by default (seon +
+    // conceptnet — src/extensions.mjs's BUILTIN_EXTENSIONS). A tier-2 domain/
+    // language corpus (corpus/tier2/: aws, python, java) is added ONLY when
     // explicitly asked via `--corpus <id>`. The `--detect` auto-detect is a
     // documented STUB: it inspects the repo's manifests (pyproject.toml → python,
     // pom.xml → java) and SUGGESTS the matching corpus, but never seeds it unasked.
     const rest = process.argv.slice(3);
-    const { initRepo } = await import("../src/init.mjs");
-    const res = await initRepo(process.cwd(), { force: rest.includes("--force") });
-    process.stdout.write(res.message + "\n");
+    const { initRepo, defaultConfig, renderTomlConfig, CONFIG_FILE, PERSONA_PRESETS } = await import("../src/init.mjs");
+    const { loadTomlConfig } = await import("../src/toml-config.mjs");
 
     const ci = rest.indexOf("--corpus");
     const corpusId = ci !== -1 ? rest[ci + 1] : undefined;
+    let manifest = null;
+    let manifestEntry = null;
     if (corpusId) {
-      // Seed a tier-2 corpus by id from corpus/tier2/ (same slice shape as tier-1;
-      // provenance-tagged corpus:tier2:<id>). Idempotent (content-hashed fact ids).
+      // Validate the id against the tier-2 manifest (same source of truth the
+      // old ad hoc path used) BEFORE touching anything on disk.
       const { readFile } = await import("node:fs/promises");
-      const { join, dirname } = await import("node:path");
-      const { seedMemory, TIER2_MANIFEST_FILE } = await import("../src/corpus/conceptnet.mjs");
-      let manifest;
+      const { TIER2_MANIFEST_FILE } = await import("../src/corpus/conceptnet.mjs");
       try { manifest = JSON.parse(await readFile(TIER2_MANIFEST_FILE, "utf8")); }
       catch (e) { process.stderr.write(`tmct init: cannot read the tier-2 manifest — ${e?.message || e}\n`); process.exit(1); }
-      const entry = (manifest.corpuses || []).find((c) => c.id === corpusId);
-      if (!entry) {
+      manifestEntry = (manifest.corpuses || []).find((c) => c.id === corpusId);
+      if (!manifestEntry) {
         const ids = (manifest.corpuses || []).map((c) => c.id).join(", ");
         process.stderr.write(`tmct init: unknown --corpus "${corpusId}". Available tier-2 corpuses: ${ids}.\n`);
         process.exit(2);
       }
-      const slicePath = join(dirname(TIER2_MANIFEST_FILE), entry.file);
-      const seeded = await seedMemory(process.cwd(), { slicePath, provenancePrefix: `corpus:tier2:${entry.id}` });
+    }
+
+    // `--with-persona <name>` (Part 7): resolve + validate BEFORE touching
+    // disk, mirroring `--corpus`'s own unknown-id error handling — a bad
+    // persona name never scaffolds anything.
+    const pi = rest.indexOf("--with-persona");
+    const personaName = pi !== -1 ? rest[pi + 1] : undefined;
+    let personaPreset = null;
+    if (personaName) {
+      if (!Object.prototype.hasOwnProperty.call(PERSONA_PRESETS, personaName)) {
+        const names = Object.keys(PERSONA_PRESETS).join(", ");
+        process.stderr.write(`tmct init: unknown --with-persona "${personaName}". Available personas: ${names}.\n`);
+        process.exit(2);
+      }
+      personaPreset = PERSONA_PRESETS[personaName];
+    }
+
+    const res = await initRepo(process.cwd(), { force: rest.includes("--force"), persona: personaPreset });
+    process.stdout.write(res.message + "\n");
+
+    if (manifestEntry) {
+      // `--corpus <id>` now means "activate extensions.tier2-<id> and PERSIST
+      // that into tmct.toml" — so a second `tmct init` (or the next chat
+      // bootstrap) remembers the choice, unlike the old ad hoc path, which had
+      // to be repeated every time. This changes the tier-2 provenance tag from
+      // the old colon-separated "corpus:tier2:<id>" to the hyphenated
+      // "corpus:tier2-<id>" (matching the TOML-legal extension name) — a
+      // deliberate, low-risk rename; nothing in chat.mjs's runtime logic keys
+      // on the old colon-separated string (verified via grep).
+      const extName = `tier2-${manifestEntry.id}`;
+      const raw = await loadTomlConfig(process.cwd()); // just-written by initRepo above
+      const cfg = { ...defaultConfig() };
+      if (raw?.graph_file !== undefined) cfg.graphFile = String(raw.graph_file);
+      if (raw?.corpus?.tier !== undefined) cfg.corpus = { tier: raw.corpus.tier };
+      if (raw?.seed) {
+        cfg.seed = { ...cfg.seed };
+        if (raw.seed.enabled !== undefined) cfg.seed.enabled = Boolean(raw.seed.enabled);
+        if (raw.seed.limit !== undefined) cfg.seed.limit = Number(raw.seed.limit);
+      }
+      cfg.extensions = { ...(raw?.extensions || {}), [extName]: { ...(raw?.extensions?.[extName] || {}), active: true } };
+      if (raw?.bias !== undefined) cfg.bias = raw.bias;
+      const { writeFile } = await import("node:fs/promises");
+      const { join } = await import("node:path");
+      await writeFile(join(process.cwd(), CONFIG_FILE), renderTomlConfig(cfg));
+
+      // Seed it now too — through the SAME unified corpus loader every other
+      // bundle goes through (src/extensions.mjs), not a bespoke seedMemory call.
+      const { resolveExtensions, seedActiveCorpusEntries } = await import("../src/extensions.mjs");
+      const { entries } = await resolveExtensions(process.cwd());
+      const entry = entries.get(extName);
+      const { perBundle } = await seedActiveCorpusEntries(process.cwd(), new Map([[extName, entry]]));
+      const seeded = perBundle[extName];
+      if (seeded.error) {
+        process.stderr.write(`tmct init: could not seed tier-2 corpus "${manifestEntry.id}" — ${seeded.error}\n`);
+        process.exit(1);
+      }
       process.stdout.write(
-        `seeded tier-2 corpus "${entry.id}" (${entry.kind}) — ${seeded.appended} fact(s) added`
-        + `${seeded.skipped ? `, ${seeded.skipped} already present` : ""}. Source: corpus/tier2/${entry.file} (${entry.license}).\n`,
+        `seeded tier-2 corpus "${manifestEntry.id}" (${manifestEntry.kind}) — ${seeded.appended} fact(s) added`
+        + `${seeded.skipped ? `, ${seeded.skipped} already present` : ""}. Source: corpus/tier2/${manifestEntry.file} (${manifestEntry.license}). `
+        + `Activated in tmct.toml — future \`tmct init\`/chat sessions seed it automatically.\n`,
       );
       return;
     }
@@ -375,6 +435,56 @@ async function main() {
       return;
     }
     return;
+  }
+
+  if (mode === "extend") {
+    // `tmct extend --validate <dir>` — validate a THIRD-PARTY extension pack
+    // (the shape a package like seonix/marginalia ships) BEFORE it's activated
+    // in any repo's tmct.toml. Reuses existing throw-loudly primitives
+    // (loadSlice/loadMap/toFacts, loadLexicon, loadTemplates) via
+    // src/extensions.mjs's validateExtensionPack — never invents new
+    // shape-checking logic. `<dir>` must carry its own tmct.toml declaring one
+    // or more `[extensions.<name>]` host entries (the SAME [extensions] table
+    // shape a repo's own tmct.toml uses) naming the resource(s) to validate;
+    // the shipped builtins (seon/conceptnet/tier2-*) are never re-validated
+    // here — this command is about a PACK's OWN declared resources.
+    const rest = process.argv.slice(3);
+    const vi = rest.indexOf("--validate");
+    const dirArg = vi !== -1 ? rest[vi + 1] : undefined;
+    if (!dirArg) {
+      process.stderr.write("tmct extend: --validate <dir> requires a directory\n");
+      process.exit(2);
+    }
+    const { resolve: resolvePath } = await import("node:path");
+    const target = resolvePath(process.cwd(), dirArg);
+    const { resolveExtensions, BUILTIN_EXTENSIONS, validateExtensionPack } = await import("../src/extensions.mjs");
+    let entries;
+    try {
+      ({ entries } = await resolveExtensions(target));
+    } catch (e) {
+      process.stderr.write(`tmct extend --validate: ${e?.message || e}\n`);
+      process.exit(1);
+    }
+    const hostEntries = [...entries].filter(([name]) => !(name in BUILTIN_EXTENSIONS));
+    if (!hostEntries.length) {
+      process.stderr.write(`tmct extend --validate: no host-declared [extensions.*] entries found in ${target}/tmct.toml\n`);
+      process.exit(1);
+    }
+    let allOk = true;
+    for (const [name, entry] of hostEntries) {
+      process.stdout.write(`${name} (${entry.kind}):\n`);
+      const { ok, results } = await validateExtensionPack(target, entry);
+      if (!ok) allOk = false;
+      for (const r of results) {
+        const status = r.ok ? "PASS" : "FAIL";
+        const detail = r.ok
+          ? (r.counts ? ` (${Object.entries(r.counts).map(([k, v]) => `${k}=${v}`).join(", ")})` : "")
+          : ` — ${r.error}`;
+        process.stdout.write(`  [${status}] ${r.kind}: ${r.path}${detail}\n`);
+      }
+    }
+    process.stdout.write(allOk ? "tmct extend --validate: all resources passed.\n" : "tmct extend --validate: one or more resources FAILED.\n");
+    process.exit(allOk ? 0 : 1);
   }
 
   if (mode === "syllogise") {

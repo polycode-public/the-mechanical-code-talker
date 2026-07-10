@@ -14,7 +14,7 @@ import { join } from "node:path";
 import { parse as parseToml } from "smol-toml";
 import {
   initRepo, defaultConfig, renderTomlConfig,
-  CONFIG_FILE, PROVENANCE_REL, SEED_MARKER_REL,
+  CONFIG_FILE, PROVENANCE_REL, SEED_MARKER_REL, PERSONA_PRESETS,
 } from "../src/init.mjs";
 import { loadTomlConfig, normalizeConfig } from "../src/toml-config.mjs";
 import { loadMemory } from "../src/memory/core.mjs";
@@ -92,6 +92,41 @@ test("seeding: on by default, offline, writes facts into .tmct/memory + a marker
     assert.equal(prov.seeded, true);
     assert.equal(prov.tool, "tmct init");
     assert.ok(prov.initializedAt);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("DELIBERATE BUG FIX (this batch): `tmct init`'s zero-flag seed now seeds SEON too, matching chat.mjs's own bootstrap (it used to seed ConceptNet ONLY)", async () => {
+  const dir = await tmp();
+  try {
+    const res = await initRepo(dir, { seed: true });
+    assert.ok(res.seedResult.seon > 0, "the curated SEON ontology landed (was 0 before this fix)");
+    assert.ok(res.seedResult.conceptnet > 1000, "the ConceptNet band still landed, uncapped");
+    assert.equal(res.seedResult.appended, res.seedResult.seon + res.seedResult.conceptnet, "counts are internally consistent");
+    assert.equal(res.seedResult.perBundle.seon.appended, res.seedResult.seon);
+    assert.equal(res.seedResult.perBundle.conceptnet.appended, res.seedResult.conceptnet);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a tmct.toml activating tier2-aws: `tmct init`'s unified seed loop also seeds the tier-2 bundle", async () => {
+  const dir = await tmp();
+  try {
+    // pre-write a tmct.toml with tier2-aws active (Part 1's [extensions] table) —
+    // initRepo must PRESERVE it (not force) and honour it during the seed step.
+    const toml = renderTomlConfig({ ...defaultConfig(), extensions: { "tier2-aws": { active: true } } });
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, "tmct.toml"), toml);
+    const res = await initRepo(dir, { seed: true });
+    assert.equal(res.seeded, true);
+    assert.ok(res.seedResult.perBundle["tier2-aws"], "the tier-2 bundle ran in the same loop");
+    assert.ok(res.seedResult.perBundle["tier2-aws"].appended > 0, "tier2-aws facts landed");
+    const mem = await loadMemory(dir);
+    const facts = (mem.individuals || []).filter((i) => i.class === "Fact");
+    const awsFact = facts.find((f) => (f.attributes || []).some((a) => a.key === "provenance" && String(a.value).includes("corpus:tier2-aws")));
+    assert.ok(awsFact, "a fact provenance-tagged corpus:tier2-aws is in memory");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -186,5 +221,99 @@ test("nested/non-existent target dir is created (mkdir recursive)", async () => 
     assert.equal(res.config.graphFile, join(".tmct", "graph.json"));
   } finally {
     await rm(base, { recursive: true, force: true });
+  }
+});
+
+// ---- Part 7 (extension-pack batch): `tmct init --with-persona <name>` ------
+
+test("no persona (the plain zero-flag path): renderTomlConfig output is BYTE-IDENTICAL to today — no [extensions]/[bias] sections", () => {
+  const plain = renderTomlConfig(defaultConfig());
+  assert.doesNotMatch(plain, /\[extensions/);
+  assert.doesNotMatch(plain, /\[bias\]/);
+  // pinned byte-for-byte, so any future accidental persona-section leak into
+  // the default path is caught immediately, not just by a loose regex.
+  assert.equal(
+    plain,
+    `# tmct.toml — the mechanical code talker, project configuration.
+# Written by \`tmct init\`. An ABSENT file means shipped defaults (this file
+# just makes them explicit and editable). Documented in the repository-interface
+# onboarding surface (ROADMAP Phase 8, "Distribution: tmct init").
+
+# Where the code-graph JSON artifact lives, relative to this file. The
+# TMCT_GRAPH_FILE environment variable overrides it at runtime.
+graph_file = ".tmct/graph.json"
+
+[corpus]
+# Corpus-tiering policy (ROADMAP Phase 4). The $0-offline default is inviolable;
+# higher tiers are ADDITIVE and never required to answer.
+#   "tier1" — committed slice only. Offline, $0. The default.
+#   "tier2" — also fetch growable corpora at seed time (network, once, cached).
+#   "tier3" — also consult live sources at question time (network, per-query, opt-in).
+tier = "tier1"
+
+[seed]
+# Seed the committed tier-1 ConceptNet slice into .tmct/memory during init.
+# Offline and deterministic. Set false, or export TMCT_NO_SEED=1, to opt out —
+# the repo still initialises, just empty of corpus facts.
+enabled = true
+# By default the WHOLE committed slice seeds (no cap — the operator's "seed all").
+# To cap it, uncomment and set a number (definitional band first):
+# limit = 500
+`,
+  );
+});
+
+test("PERSONA_PRESETS.code: today's implicit default made explicit — empty extensions override, explicit neutral bias", () => {
+  assert.deepEqual(PERSONA_PRESETS.code, { extensions: {}, bias: { seon: 1.0, conceptnet: 1.0 } });
+});
+
+test("initRepo({persona: PERSONA_PRESETS.code}): tmct.toml carries an EXPLICIT [bias] section (no [extensions] — the override is empty) and round-trips back through the read-back path", async () => {
+  const dir = await tmp();
+  try {
+    const res = await initRepo(dir, { seed: false, persona: PERSONA_PRESETS.code });
+    const text = await readFile(join(dir, CONFIG_FILE), "utf8");
+    assert.match(text, /\[bias\]/);
+    assert.match(text, /seon = 1/);
+    assert.match(text, /conceptnet = 1/);
+    assert.doesNotMatch(text, /\[extensions/, "code's extensions override is empty — nothing to write");
+    // round-trips through the config loader
+    const raw = await loadTomlConfig(dir);
+    assert.deepEqual(raw.bias, { seon: 1, conceptnet: 1 });
+    assert.equal(raw.extensions, undefined);
+    // re-init (read-back path) reflects it in res.config too
+    assert.deepEqual(res.config.bias, { seon: 1.0, conceptnet: 1.0 });
+    const res2 = await initRepo(dir, { seed: false }); // no persona passed — file already exists, preserved
+    assert.deepEqual(res2.config.bias, { seon: 1.0, conceptnet: 1.0 }, "the written [bias] section is read back on a plain re-init");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("bin/tmct.mjs: `tmct init --with-persona code` writes the persona, `--with-persona <unknown>` exits loudly and touches nothing", async () => {
+  const { spawnSync } = await import("node:child_process");
+  const { fileURLToPath } = await import("node:url");
+  const BIN = fileURLToPath(new URL("../bin/tmct.mjs", import.meta.url));
+
+  const dir = await tmp();
+  try {
+    const r = spawnSync(process.execPath, [BIN, "init", "--with-persona", "code"], { encoding: "utf8", cwd: dir });
+    assert.equal(r.status, 0, r.stderr);
+    const text = await readFile(join(dir, CONFIG_FILE), "utf8");
+    assert.match(text, /\[bias\]/);
+    assert.match(text, /seon = 1/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+
+  const badDir = await tmp();
+  try {
+    const r = spawnSync(process.execPath, [BIN, "init", "--with-persona", "bogus"], { encoding: "utf8", cwd: badDir });
+    assert.notEqual(r.status, 0);
+    assert.match(r.stderr, /unknown --with-persona "bogus"/);
+    assert.match(r.stderr, /Available personas: code/);
+    assert.equal(await exists(join(badDir, ".tmct")), false, "an unknown persona name never scaffolds anything");
+    assert.equal(await exists(join(badDir, CONFIG_FILE)), false);
+  } finally {
+    await rm(badDir, { recursive: true, force: true });
   }
 });

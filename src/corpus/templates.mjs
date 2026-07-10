@@ -152,6 +152,44 @@ export async function loadTemplates(path = TEMPLATES_FILE) {
   return byId;
 }
 
+/** Load + merge several EXTENSION-PACK template files (each independently
+ *  validated by loadTemplates() — same loud-on-malformed-row guarantee) into
+ *  one Map<id,row>. Every extension-pack template id MUST be namespaced
+ *  "<packname>:<id>" — enforced here as a validation rule (also the check
+ *  Part 4's validateExtensionPack runs on a single candidate file), rather
+ *  than inventing a same-id collision-precedence policy: a bare, unnamespaced
+ *  id, or the SAME id appearing under two different paths, both throw loudly
+ *  naming the offending path/id.
+ *
+ *  loadTemplates(path) mutates the module's own render()-serving `cache` as a
+ *  side effect; this function restores it to whatever it was before the merge
+ *  ran, so calling loadTemplatesMerged() never clobbers the "current" default
+ *  templates map for an unrelated caller (e.g. a concurrent render() call
+ *  elsewhere in the same process). The returned map is NOT installed as the
+ *  render() default — a caller that wants render() to serve the merged set
+ *  passes it explicitly: render(id, slots, mergedMap). */
+export async function loadTemplatesMerged(paths = []) {
+  const savedCache = cache;
+  const merged = new Map();
+  try {
+    for (const path of paths) {
+      const rows = await loadTemplates(path);
+      for (const [id, row] of rows) {
+        if (!id.includes(":")) {
+          throw new Error(`${path}: extension-pack template id "${id}" is not namespaced ("<packname>:<id>")`);
+        }
+        if (merged.has(id)) {
+          throw new Error(`${path}: duplicate template id "${id}" already loaded from an earlier path`);
+        }
+        merged.set(id, row);
+      }
+    }
+  } finally {
+    cache = savedCache;
+  }
+  return merged;
+}
+
 /** Fill template `id` with `slots` — strict: unknown id throws; ANY missing
  *  slot throws (named), so a response is complete or not emitted at all.
  *  Extra slots are ignored. Uses the map from loadTemplates() (pass

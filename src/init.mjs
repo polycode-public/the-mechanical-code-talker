@@ -28,6 +28,7 @@
 import { mkdir, readFile, writeFile, stat } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { stringify as stringifyToml } from "smol-toml";
 
 export const CONFIG_FILE = "tmct.toml";
 export const PROVENANCE_REL = join(".tmct", "init.json");
@@ -54,6 +55,19 @@ export function defaultConfig() {
     seed: { enabled: true },
   };
 }
+
+/** `tmct init --with-persona <name>` presets (Part 7 of the extension-pack
+ *  batch): a named bundle of `extensions`/`bias` overrides, written into
+ *  tmct.toml alongside the plain defaults. `code` is TODAY'S IMPLICIT
+ *  DEFAULT made explicit — an empty `extensions` override (seon + conceptnet
+ *  are already the shipped builtin defaults; nothing to add) plus an
+ *  EXPLICIT bias table naming them both at neutral weight, so a repo that
+ *  chose the `code` persona has a self-documenting tmct.toml rather than
+ *  relying on an unstated implicit default. Kept minimal on purpose — this
+ *  batch's job is the persona SEAM, not a curated library of presets. */
+export const PERSONA_PRESETS = Object.freeze({
+  code: { extensions: {}, bias: { seon: 1.0, conceptnet: 1.0 } },
+});
 
 /** Read this package's version (best-effort, for provenance). */
 async function tmctVersion() {
@@ -83,7 +97,7 @@ export function renderTomlConfig(config = defaultConfig()) {
   const c = { ...defaultConfig(), ...config };
   const corpus = { ...defaultConfig().corpus, ...(config.corpus || {}) };
   const seed = { ...defaultConfig().seed, ...(config.seed || {}) };
-  return `# tmct.toml — the mechanical code talker, project configuration.
+  const base = `# tmct.toml — the mechanical code talker, project configuration.
 # Written by \`tmct init\`. An ABSENT file means shipped defaults (this file
 # just makes them explicit and editable). Documented in the repository-interface
 # onboarding surface (ROADMAP Phase 8, "Distribution: tmct init").
@@ -109,6 +123,23 @@ enabled = ${seed.enabled ? "true" : "false"}
 # To cap it, uncomment and set a number (definitional band first):
 ${seed.limit != null ? `limit = ${Number(seed.limit)}` : "# limit = 500"}
 `;
+  // Extension-pack / bias sections (src/extensions.mjs) — ONLY emitted when a
+  // caller actually supplies them (an explicit `--with-persona`, or a manual
+  // override); the plain zero-flag `tmct init` output stays BYTE-IDENTICAL to
+  // before this feature existed. Rendered via smol-toml's own stringify (not
+  // hand-written prose like the base file above) — a plain, uncommented
+  // config fragment is honest about being machine-written/round-tripped.
+  const extras = {};
+  if (config.extensions !== undefined) extras.extensions = config.extensions;
+  if (config.bias !== undefined) extras.bias = config.bias;
+  if (!Object.keys(extras).length) return base;
+  return `${base}
+# Extension packs + bias (src/extensions.mjs) — written by \`tmct init --with-persona\`
+# or a manual edit. Recognized names (seon, conceptnet, tier2-aws, tier2-python,
+# tier2-java) override the shipped defaults; any other name declares a new
+# host-supplied bundle (needs its own "kind"). [bias] is a flat bundle-name ->
+# weight table consumed by src/memory/bias.mjs's ranking.
+${stringifyToml(extras)}`;
 }
 
 /** Should the seed run? Explicit `opts.seed` wins; otherwise the config's
@@ -132,13 +163,20 @@ function seedRequested({ optSeed, configEnabled, env }) {
  *   `seed.enabled` (TMCT_NO_SEED still vetoes).
  * @param {object}  [opts.env]    environment (for TMCT_NO_SEED); defaults to
  *   process.env.
+ * @param {object}  [opts.persona] a resolved PERSONA_PRESETS entry
+ *   ({extensions?, bias?}) to merge into the FRESH config before it's written
+ *   (Part 7, `tmct init --with-persona <name>`). Name -> preset resolution
+ *   and unknown-name validation are the CALLER'S job (bin/tmct.mjs) — this
+ *   only ever sees an already-resolved preset object (or nothing). Has no
+ *   effect when tmct.toml already exists and `force` isn't set (the existing
+ *   "preserve a user's tmct.toml" rule wins, same as `seed`/`corpus.tier`).
  * @returns {Promise<{
  *   created: string[], config: object, seeded: boolean,
  *   alreadyInitialized: boolean, seedResult: (object|null), message: string
  * }>} `created` lists the ABSOLUTE paths this call brought into being (empty on a
  *   benign no-op re-init). Never throws on a benign re-init or a corpus failure.
  */
-export async function initRepo(dir, { force = false, seed, env = process.env } = {}) {
+export async function initRepo(dir, { force = false, seed, env = process.env, persona = null } = {}) {
   const root = resolve(dir);
   const created = [];
   const paths = {
@@ -162,6 +200,15 @@ export async function initRepo(dir, { force = false, seed, env = process.env } =
 
   // ---- 2. The externalised config (preserve an existing file unless force) ----
   let config = defaultConfig();
+  // Persona overrides (Part 7) apply ONLY to a FRESH write — an empty preset
+  // field (e.g. `code`'s `extensions: {}`) is a genuine no-op, never an
+  // explicit-empty-section write (renderTomlConfig only emits [extensions]/
+  // [bias] when the merged config actually carries a non-empty one — the
+  // plain zero-flag `tmct init` output stays byte-identical either way).
+  if (persona) {
+    if (persona.extensions && Object.keys(persona.extensions).length) config.extensions = persona.extensions;
+    if (persona.bias && Object.keys(persona.bias).length) config.bias = persona.bias;
+  }
   const tomlPresent = await exists(paths.toml);
   if (!tomlPresent || force) {
     await writeFile(paths.toml, renderTomlConfig(config));
@@ -172,7 +219,16 @@ export async function initRepo(dir, { force = false, seed, env = process.env } =
     config = await readWrittenConfig(paths.toml, config);
   }
 
-  // ---- 3. Seed the tier-1 committed corpus (offline, failure-tolerant) ----
+  // ---- 3. Seed the committed corpus (offline, failure-tolerant) ----
+  // DELIBERATE BUG FIX (this batch): `tmct init`'s zero-flag seed step used to
+  // seed ONLY the ConceptNet band, never the curated SEON ontology — unlike
+  // chat.mjs's own first-run bootstrap (seedBootstrapMemory), which has always
+  // seeded BOTH. Both now go through the SAME unified loop
+  // (src/extensions.mjs's resolveExtensions + seedActiveCorpusEntries), so
+  // `tmct init`'s seed matches chat's bootstrap exactly — this changes
+  // `initRepo`'s seeded fact COUNT (test/init.test.mjs's seed-count assertions
+  // were updated for the larger post-fix totals, deliberately, in the same
+  // commit as this fix).
   let seeded = false;
   let seedResult = null;
   let seedNote = "";
@@ -185,18 +241,42 @@ export async function initRepo(dir, { force = false, seed, env = process.env } =
     seedNote = "seed skipped (already seeded — marker present)";
   } else {
     try {
-      const { seedMemory } = await import("./corpus/conceptnet.mjs");
-      const limit = config.seed?.limit != null ? Number(config.seed.limit) : SEED_LIMIT;
-      seedResult = await seedMemory(root, { limit, prefer: SEED_PREFER });
+      const { resolveExtensions, seedActiveCorpusEntries } = await import("./extensions.mjs");
+      const { entries } = await resolveExtensions(root);
+      // `tmct.toml`'s `[seed] limit` knob is documented as capping the tier-1
+      // ConceptNet band specifically (the curated SEON ontology is small and
+      // always seeds whole) — so it overrides ONLY the resolved "conceptnet"
+      // entry's limit, exactly like the pre-fix single-corpus seed did.
+      if (config.seed?.limit != null && entries.has("conceptnet")) {
+        entries.set("conceptnet", { ...entries.get("conceptnet"), limit: Number(config.seed.limit) });
+      }
+      const { appended, skipped, total, perBundle } = await seedActiveCorpusEntries(root, entries);
+      // seedActiveCorpusEntries is failure-tolerant PER BUNDLE (a bad third-party
+      // pack never aborts the others) — but initRepo's own "FAILURE-TOLERANT
+      // SEED" contract is about the SEED AS A WHOLE degrading honestly. If every
+      // active bundle failed (e.g. the memory graph file itself is unwritable —
+      // see test/init.test.mjs "seed failure degrades"), re-throw the first
+      // bundle's error so the SAME outer catch below reports the familiar "seed
+      // skipped (corpus unavailable: …)" note, rather than claiming success with
+      // zero facts actually written.
+      const bundleNames = Object.keys(perBundle);
+      const allFailed = bundleNames.length > 0 && bundleNames.every((n) => perBundle[n].error);
+      if (allFailed) throw new Error(perBundle[bundleNames[0]].error);
+      seedResult = {
+        appended, skipped, total, perBundle,
+        seon: perBundle.seon?.appended || 0,
+        conceptnet: perBundle.conceptnet?.appended || 0,
+      };
       const markerNew = !(await exists(paths.marker));
       await mkdir(dirname(paths.marker), { recursive: true });
       await writeFile(
         paths.marker,
         JSON.stringify({
           seededAt: new Date().toISOString(),
-          limit,
+          limit: config.seed?.limit != null ? Number(config.seed.limit) : SEED_LIMIT,
           appended: seedResult.appended,
           skipped: seedResult.skipped,
+          perBundle,
         }) + "\n",
       );
       if (markerNew) created.push(paths.marker);
@@ -245,6 +325,11 @@ async function readWrittenConfig(tomlPath, base) {
       if (raw.seed.enabled !== undefined) cfg.seed.enabled = Boolean(raw.seed.enabled);
       if (raw.seed.limit !== undefined) cfg.seed.limit = Number(raw.seed.limit);
     }
+    // Sparse pass-through (src/extensions.mjs validates; this layer just carries
+    // the raw tables through unmodified, same discipline as toml-config.mjs's
+    // normalizeConfig).
+    if (raw.extensions !== undefined) cfg.extensions = raw.extensions;
+    if (raw.bias !== undefined) cfg.bias = raw.bias;
     return cfg;
   } catch {
     return base;
