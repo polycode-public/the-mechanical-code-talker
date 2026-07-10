@@ -5536,6 +5536,84 @@ async function describeWrapperAnswer(query, { config, source, focus, graph, tel 
   }
 }
 
+/** DETAILED-SUMMARY / EXPLAIN-IN-DETAIL closed phrasings (HANDOVER.md 2026-07-10 item
+ *  7) — "give me a detailed summary of how the task system works" / "explain in detail
+ *  how X works" / "give me a detailed overview of X". PLAYTESTBENCH_1.4.1.md round 3
+ *  caught this EXACT phrasing hitting the plain grammar wall with NO inferred goal at
+ *  all, even though src/completions/'s extractive multi-sentence pipeline (Stages 0-3,
+ *  built and unit-tested the same session) already existed and could answer it when
+ *  called directly — it was simply unreachable from any real chat turn.
+ *
+ *  Two closed shapes, deliberately narrow (this project's own discipline: curated
+ *  closed patterns, never a general "any long question" catch-all):
+ *   1. DETAILED_HOW_WORKS_RE — "...detailed (summary|overview|explanation) of how X
+ *      works" / "explain ... in detail how X works" — the "how X works" shape
+ *      PLAYTESTBENCH's own probe used. Tried FIRST (its "works" anchor is strictly
+ *      more specific, so it must win over #2 whenever both could parse).
+ *   2. DETAILED_OVERVIEW_RE — "...detailed (overview|summary|explanation) of X" — the
+ *      bare-subject sibling, no "how...works" wrapper.
+ *  Distinct from DESCRIBE_WRAPPER_RE (a single-answer "one definition" lane, anchored
+ *  on "tell me about"/"describe"/"what about") — neither of these two anchors on
+ *  "give me"/"explain ... in detail", so there is no overlap to shadow. */
+const DETAILED_HOW_WORKS_RE =
+  /^(?:(?:can|could|would)\s+you\s+(?:please\s+)?|please\s+)?(?:give\s+me\s+a\s+detailed\s+(?:summary|overview|explanation)\s+of\s+how|explain\s+(?:to\s+me\s+)?in\s+detail\s+how)\s+(.+?)\s+works\s*\??$/i;
+
+const DETAILED_OVERVIEW_RE =
+  /^(?:(?:can|could|would)\s+you\s+(?:please\s+)?|please\s+)?give\s+me\s+a\s+detailed\s+(?:overview|summary|explanation)\s+of\s+(.+?)\s*\??$/i;
+
+/** THE COMPLETIONS RESCUE (HANDOVER.md 2026-07-10 item 7) — wires src/completions/'s
+ *  extractive, cited, groundedness-checked multi-sentence pipeline (generateCompletion(),
+ *  src/completions/complete.mjs) into live chat dispatch. Tried in runAsk ONLY after
+ *  (4d) DESCRIBE-WRAPPER RESCUE (and everything above it) has already declined — the
+ *  same "last-resort lane" discipline synonymFactAnswer's and describeWrapperAnswer's
+ *  own docblocks each spell out: "describe X" / "tell me about X" phrasings must keep
+ *  reaching describeWrapperAnswer's (or the relation force's) single-answer rescue
+ *  unmolested; this lane only ever claims a turn shaped as an EXPLICIT request for a
+ *  detailed/multi-sentence account (DETAILED_HOW_WORKS_RE / DETAILED_OVERVIEW_RE,
+ *  above), a shape neither DESCRIBE_WRAPPER_RE nor vagueTouchTermOf recognizes.
+ *
+ *  Honest by construction: generateCompletion() itself declines (returns
+ *  `declined:true`, empty text) whenever nothing in the corpus/graph clears its own
+ *  pruning bar for the term (PLAN_COMPLETIONS.md §3's honest ceiling) — this lane
+ *  passes that decline straight through as null, falling through to the ordinary miss
+ *  below. NEVER fabricates. Lazy + failure-tolerated (dynamic import, try/catch) like
+ *  every other lane in this file. src/completions/ itself is untouched by this change —
+ *  this is the call site only. */
+async function completionsRescueAnswer(query, { memoryDir, graph }) {
+  if (!memoryDir) return null; // no repo/memory to search — honest decline
+  // Deliberately NOT applyPreambleFrames here (unlike describeWrapperAnswer just
+  // above) — found live while wiring this lane: its own SHOW_GIVE_ME_RE frame turns
+  // ANY "give me (the)? X" into "describe X" before this lane would ever see it,
+  // which is exactly right for describeWrapperAnswer (DESCRIBE_WRAPPER_RE has its own
+  // "describe " branch to catch that) but SILENTLY DESTROYS this lane's own
+  // "give me a detailed summary/overview of ..." anchor — "give me a detailed summary
+  // of how the Widget works" became "describe a detailed summary of how the Widget
+  // works" and neither DETAILED_HOW_WORKS_RE nor DETAILED_OVERVIEW_RE could match it
+  // anymore, so the turn silently fell through to the plain grammar wall exactly like
+  // before this lane existed. Matching the RAW trimmed query instead is safe: this
+  // lane's own two regexes already carry their own optional "can/could/would you
+  // (please)?"/"please" politeness prefix (mirroring DESCRIBE_WRAPPER_RE's own), so no
+  // separate normalization pass is needed for the phrasings this lane targets.
+  const q = String(query || "").trim();
+  const m = DETAILED_HOW_WORKS_RE.exec(q) || DETAILED_OVERVIEW_RE.exec(q);
+  let term = m?.[1]?.trim();
+  if (!term) return null;
+  // same bare-article strip describeWrapperAnswer's resolveSymbol-facing branch
+  // already uses just above — pure retrieval/ranking noise, never a real content
+  // signal, and stripping it only ever REMOVES characters, never changes a
+  // correctly-captured term.
+  term = term.replace(/^(?:the|a|an)\s+/i, "").trim();
+  if (!term) return null;
+  try {
+    const { generateCompletion } = await import("./completions/complete.mjs");
+    const result = await generateCompletion(memoryDir, term, { query: term, graph });
+    if (!result || result.declined || !result.text) return null; // honest decline — never fabricate
+    return { text: result.text };
+  } catch {
+    return null; // unresolvable/errored — decline, the ordinary wall stands unchanged
+  }
+}
+
 /** THE RELATION CONCEPT FORCE — compose the three-band answer (curated relation
  *  definition + real example EDGES + pre-validated follow-ups) for a vague touch on a
  *  relation/edge kind ("what about imports", "what are the calls", "tell me about
@@ -6283,6 +6361,26 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       answer = described.text; via = "describe"; recordMiss = false;
       note(trace, "lane: (4d) DESCRIBE-WRAPPER RESCUE — a polite wrapper around \"describe/tell me about <symbol>\" resolved via /describe, tried last after every other lane declined");
       note(trace, "goal: get a symbol's definition/kind/relations (phrased conversationally)");
+    }
+  }
+  // (4e) COMPLETIONS RESCUE (HANDOVER.md 2026-07-10 item 7) — wires src/completions/'s
+  // extractive multi-sentence pipeline in as a genuine last-resort lane, tried ONLY
+  // here, after EVERY lane above (including (4d) DESCRIBE-WRAPPER RESCUE) has already
+  // declined — "describe X"/"tell me about X" must keep reaching describeWrapperAnswer's
+  // (or the relation force's) single-answer rescue unmolested; this lane only fires for
+  // an EXPLICIT "detailed summary/overview of how X works" phrasing
+  // (DETAILED_HOW_WORKS_RE/DETAILED_OVERVIEW_RE), a shape neither DESCRIBE_WRAPPER_RE
+  // nor vagueTouchTermOf recognizes. PLAYTESTBENCH_1.4.1.md round 3's own
+  // architecturally-confirmed gap: this exact phrasing hit the plain grammar wall with
+  // no inferred goal at all, even though the pipeline that could answer it already
+  // existed — it was simply unreachable from any real chat turn.
+  if (miss && recordMiss && via === "composed") {
+    const completed = await completionsRescueAnswer(query, { memoryDir, graph });
+    if (completed) {
+      answer = completed.text; via = "completion"; recordMiss = false;
+      note(trace, "lane: (4e) COMPLETIONS RESCUE — a \"detailed summary/overview of how X works\" phrasing matched, answered via src/completions/'s extractive multi-sentence pipeline (generateCompletion())");
+      note(trace, "source: src/completions/complete.mjs generateCompletion() (broadSearch + groupHits + rankSentences + inferRelations + pruneCompletion + finish())");
+      note(trace, "goal: produce a grounded, cited, multi-sentence account of the subject (not a single fact/definition)");
     }
   }
   // (5) #1 SHORT TAILORED MISS — replace ONLY the engine's full grammar cheat-sheet
