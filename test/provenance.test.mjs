@@ -221,8 +221,14 @@ test("(d) contradictions are surfaced, both kept with provenance, never silently
     // (subject "sky", not "the sky" — normFactTerm now strips a leading article,
     // a Tier-5 playtest fix so a recall query like "who maintains the tasks
     // handler" matches a fact taught as "the tasks handler …"; the article was
-    // never load-bearing to this contradiction-surfacing feature itself)
-    await appendFact(dir, { subject: "sky", predicate: "mgx:hasProperty", object: "blue", provenance: "ace:chat:s1@2026-07-05T00:00:00.000Z" });
+    // never load-bearing to this contradiction-surfacing feature itself).
+    // A session-LESS "ace:chat@ts" tag (no session-id segment) deliberately, so
+    // this fixture exercises findContradictions/renderMemory in isolation —
+    // NOT Part B3's session-reliability nudge (a session-scoped operator tag
+    // here would make THIS very fact its own session's sole contradicted
+    // assertion, self-penalising its trust — a real, separately-tested B3
+    // behavior, but not what this test is about).
+    await appendFact(dir, { subject: "sky", predicate: "mgx:hasProperty", object: "blue", provenance: "ace:chat@2026-07-05T00:00:00.000Z" });
     await appendFact(dir, { subject: "sky", predicate: "mgx:hasProperty", object: "grey", provenance: "corpus:conceptnet /r/HasProperty" });
     const m = await loadMemory(dir);
     const groups = findContradictions(m);

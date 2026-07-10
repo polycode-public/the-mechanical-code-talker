@@ -32,7 +32,7 @@ import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { proseTokensFor, buildProseIndex } from "../prose.mjs";
 import { fnv1aHex } from "../hash.mjs";
-import { computeTrust, TRUST_SCORE_PROP, TRUST_INPUTS_PROP } from "./trust.mjs";
+import { computeTrust, sessionReliabilityFrom, TRUST_SCORE_PROP, TRUST_INPUTS_PROP } from "./trust.mjs";
 
 export const MEMORY_DIR_REL = join(".tmct", "memory");
 export const MEMORY_GRAPH_REL = join(MEMORY_DIR_REL, "graph.json");
@@ -55,6 +55,7 @@ export const DERIVED_FROM_PROP = "mgx:derivedFrom";        // umbrella: Fact →
 export const STATED_BY_PROP = "mgx:statedBy";              // a Source directly asserts a Fact
 export const CANONICALISED_FROM_PROP = "mgx:canonicalisedFrom"; // a canonical Fact ← its raw form
 export const CREATED_AT_PROP = "mgx:createdAt";           // first-write-wins ISO-8601 on every individual
+export const SOURCE_RELIABILITY_PROP = "mgx:sourceReliability"; // actor-level (session-scoped) trust nudge on a Source, [0.5,1.5]
 
 // The bare (session-less) singleton Source ids — the fallback for an
 // operator/teach provenance tag that carries no session-id segment (e.g. a
@@ -101,6 +102,7 @@ const MEMORY_VOCABULARY = [
   { prop: "mgx:sourceType", note: "a Source's kind: operator | teach | provider | corpus | web | entailed (the trust-prior key)" },
   { prop: "mgx:sourceUrl", note: "a web Source's URL" },
   { prop: "mgx:sourceRule", note: "an entailed Source's rule id" },
+  { prop: "mgx:sourceReliability", note: "actor-level (session-scoped) trust nudge in [0.5,1.5], neutral 1.0 when absent — materialised by recomputeSourceReliability from a session's asserted-vs-contradicted track record (memory/trust.mjs's sessionReliabilityFrom); folds into computeTrust's per-source prior" },
   { prop: TRUST_SCORE_PROP, note: "materialised trust cache in [0,1] — pure function of a fact's Sources + createdAt (memory/trust.mjs); invalidated when a statedBy edge is added" },
   { prop: TRUST_INPUTS_PROP, note: "JSON of the inputs the trust score was computed from (source-type multiset, corroboration count, createdAt, recency) — makes the score auditable" },
   { prop: "mgx:hasProseTokens", note: "prose tokens (prose.mjs tokenizer) backing the payload's proseIndex" },
@@ -265,11 +267,14 @@ export async function loadMemory(dir) {
  *  goes through here so a concurrent reader never sees a torn store. The lazy,
  *  idempotent legacy-provenance migration rides this same cycle (step (b)): any
  *  Fact still carrying only the old mgx:factProvenance string gets its Sources +
- *  statedBy edges + trust materialised on the next write of any kind. */
+ *  statedBy edges + trust materialised on the next write of any kind. Part B3's
+ *  actor-level (session-scoped) Source reliability rides the SAME cycle, after
+ *  migration (so it sees every Fact's Sources, migrated or not). */
 async function mutateMemory(dir, fn) {
   const payload = await loadMemory(dir);
   const out = fn(payload) ?? payload;
   migrateLegacyProvenance(out);
+  recomputeSourceReliability(out);
   out.proseIndex = buildProseIndex(out.individuals);
   await mkdir(dirname(memoryGraphFile(dir)), { recursive: true });
   await atomicWriteJson(memoryGraphFile(dir), out);
@@ -453,6 +458,77 @@ function migrateLegacyProvenance(payload) {
     changed = true;
   }
   if (changed) recountClasses(payload);
+}
+
+/** A session-scoped operator/teach Source id (Part B2's `${SINGLETON}:<sessionId>`
+ *  shape) — the only Source kind actor-level reliability applies to; a corpus/
+ *  web/provider/entailed Source has no "session" to hold a track record for. */
+const isSessionScopedSourceId = (id) =>
+  typeof id === "string" && (id.startsWith(`${OPERATOR_SOURCE_ID}:`) || id.startsWith(`${TEACH_SOURCE_ID}:`));
+
+/**
+ * Recompute + materialise mgx:sourceReliability on every session-scoped
+ * operator/teach Source (Part B3): for each such Source, count the facts it
+ * stated (`factsAsserted`) and how many of those are part of a live
+ * contradiction (`factsContradicted`, via findContradictions — its own
+ * detection logic is untouched, this only READS its result), run
+ * sessionReliabilityFrom, and write the bounded result onto the Source.
+ *
+ * Contradiction membership is evaluated against the CURRENT trust scores at
+ * the point this runs (already materialised by this same mutation's
+ * syncFactSources/migrateLegacyProvenance calls) — it does NOT recursively
+ * re-evaluate contradictions after reliability changes shift trust scores
+ * (no fixed-point iteration; one pass is enough for a monotonic, self-
+ * correcting signal that only ever gets more accurate on the NEXT write).
+ *
+ * Every individual (Fact OR RULE) touched by a recomputed Source then has its
+ * OWN trust re-materialised (recomputeFactTrust — class-agnostic, same as
+ * syncFactSources: neither ever checks `.class`) so mgx:trustScore reflects
+ * the fresh reliability within THIS SAME mutation cycle — a session's
+ * reliability shift is visible immediately, not just on some future
+ * unrelated re-write. This refresh is scanned off the statedBy edge group
+ * DIRECTLY (every individual it names, any class), not off readFactRows
+ * (Fact-only) — a Rule can never be "contradicted" (findContradictions is a
+ * Fact-shape concept, so contradiction ACCOUNTING stays Fact-scoped above),
+ * but it rides the identical Source-derivation + trust pipeline a Fact does
+ * (appendRule's own doc comment), so it must not go stale here either.
+ *
+ * Called from mutateMemory itself (below), riding every mutation's existing
+ * bookkeeping cycle — not a separate write path.
+ */
+function recomputeSourceReliability(payload) {
+  if (!Array.isArray(payload?.individuals) || !Array.isArray(payload?.objectProperties)) return;
+  const rows = readFactRows(payload); // Fact-only — contradiction accounting is inherently Fact-shaped
+  const contradictedFactIds = new Set();
+  for (const group of findContradictions(payload)) for (const r of group) contradictedFactIds.add(r.id);
+
+  const bySource = new Map(); // sessionSourceId -> { factsAsserted, factsContradicted }
+  for (const row of rows) {
+    for (const sid of row.sourceIds) {
+      if (!isSessionScopedSourceId(sid)) continue;
+      const bucket = bySource.get(sid) || { factsAsserted: 0, factsContradicted: 0 };
+      bucket.factsAsserted += 1;
+      if (contradictedFactIds.has(row.id)) bucket.factsContradicted += 1;
+      bySource.set(sid, bucket);
+    }
+  }
+  if (!bySource.size) return;
+
+  for (const [sid, counts] of bySource) {
+    const source = payload.individuals.find((i) => i?.id === sid);
+    if (!source) continue;
+    setAttr(source, SOURCE_RELIABILITY_PROP, "sourceReliability", String(sessionReliabilityFrom(counts)));
+  }
+
+  // Re-materialise trust for EVERY individual statedBy a recomputed session
+  // Source — Fact or Rule alike — via the statedBy edge group directly.
+  const statedGroup = payload.objectProperties.find((g) => g?.prop === STATED_BY_PROP);
+  const affected = new Set();
+  for (const e of statedGroup?.examples || []) if (bySource.has(e?.object)) affected.add(e.subject);
+  for (const id of affected) {
+    const ind = payload.individuals.find((i) => i?.id === id);
+    if (ind) recomputeFactTrust(payload, ind);
+  }
 }
 
 /** Upsert an individual by id (replace-in-place keeps ordering stable). */

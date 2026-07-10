@@ -5,7 +5,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   computeTrust, recencyNudge, SOURCE_PRIOR, RECENCY_FLOOR,
-  SOURCE_RELIABILITY_MIN, SOURCE_RELIABILITY_MAX,
+  SOURCE_RELIABILITY_MIN, SOURCE_RELIABILITY_MAX, SOURCE_RELIABILITY_NEUTRAL,
+  sessionReliabilityFrom,
 } from "../src/memory/trust.mjs";
 
 // A fixture Source individual of a given type, as it lives in a memory payload.
@@ -132,6 +133,52 @@ test("mgx:sourceReliability: an out-of-range or unparseable stored value is clam
   assert.equal(computeTrust({ sourceIds: ["w"], createdAt: FRESH }, tooHigh, { now: NOW }).score, round(SOURCE_PRIOR.web * SOURCE_RELIABILITY_MAX));
   assert.equal(computeTrust({ sourceIds: ["w"], createdAt: FRESH }, tooLow, { now: NOW }).score, round(SOURCE_PRIOR.web * SOURCE_RELIABILITY_MIN));
   assert.equal(computeTrust({ sourceIds: ["w"], createdAt: FRESH }, junk, { now: NOW }).score, SOURCE_PRIOR.web, "unparseable → neutral, not zero");
+});
+
+// ---- B3: sessionReliabilityFrom — actor-level (session-scoped) reliability
+
+test("sessionReliabilityFrom: zero assertions is exactly neutral (no track record, no opinion)", () => {
+  assert.equal(sessionReliabilityFrom({ factsAsserted: 0, factsContradicted: 0 }), SOURCE_RELIABILITY_NEUTRAL);
+  assert.equal(sessionReliabilityFrom({}), SOURCE_RELIABILITY_NEUTRAL);
+});
+
+test("sessionReliabilityFrom: bounded to [MIN, MAX] — a huge clean/dirty track record asymptotically approaches, never exceeds, the edge", () => {
+  const nearMax = sessionReliabilityFrom({ factsAsserted: 100000, factsContradicted: 0 });
+  const nearMin = sessionReliabilityFrom({ factsAsserted: 100000, factsContradicted: 100000 });
+  assert.ok(nearMax <= SOURCE_RELIABILITY_MAX && nearMax > 1.49, `${nearMax} approaches but never exceeds the max`);
+  assert.ok(nearMin >= SOURCE_RELIABILITY_MIN && nearMin < 0.51, `${nearMin} approaches but never drops below the min`);
+  // negative/garbage inputs never go out of range or throw
+  assert.ok(sessionReliabilityFrom({ factsAsserted: -5, factsContradicted: -5 }) >= SOURCE_RELIABILITY_MIN);
+  assert.ok(sessionReliabilityFrom({ factsAsserted: NaN, factsContradicted: NaN }) <= SOURCE_RELIABILITY_MAX);
+});
+
+test("sessionReliabilityFrom: monotonic — more uncontradicted assertions raise it, more contradictions lower it", () => {
+  const grows = [1, 2, 5, 10, 30].map((n) => sessionReliabilityFrom({ factsAsserted: n, factsContradicted: 0 }));
+  for (let i = 1; i < grows.length; i += 1) assert.ok(grows[i] >= grows[i - 1], `${grows} must be non-decreasing`);
+  assert.ok(grows.at(-1) > grows[0], "a real track record clears a thin one");
+
+  const shrinks = [0, 1, 2, 5, 10].map((c) => sessionReliabilityFrom({ factsAsserted: 10, factsContradicted: c }));
+  for (let i = 1; i < shrinks.length; i += 1) assert.ok(shrinks[i] <= shrinks[i - 1], `${shrinks} must be non-increasing`);
+  assert.ok(shrinks.at(-1) < shrinks[0], "heavy contradiction clearly beats a clean record down");
+});
+
+test("sessionReliabilityFrom: confidence-scaled — a THIN track record (few assertions) stays close to neutral either way", () => {
+  const oneGood = sessionReliabilityFrom({ factsAsserted: 1, factsContradicted: 0 });
+  const oneBad = sessionReliabilityFrom({ factsAsserted: 1, factsContradicted: 1 });
+  // neither a single success nor a single contradiction saturates to the
+  // extreme — this is the exact regression this shape fixes: a lone,
+  // uncontradicted teach fact must still score below the operator prior
+  // (0.95 x reliability < 1.0), which a naive un-scaled formula broke by
+  // maxing a single success straight to 1.5.
+  assert.ok(oneGood > SOURCE_RELIABILITY_NEUTRAL && oneGood < SOURCE_RELIABILITY_MAX, `${oneGood} stays a modest nudge, not the ceiling`);
+  assert.ok(oneBad < SOURCE_RELIABILITY_NEUTRAL && oneBad > SOURCE_RELIABILITY_MIN, `${oneBad} stays a modest nudge, not the floor`);
+  assert.ok(SOURCE_PRIOR.teach * oneGood < 1, "a lone uncontradicted teach fact's effective prior still stays under the operator's 1.0");
+});
+
+test("sessionReliabilityFrom: deterministic and pure — same inputs, same output, no I/O", () => {
+  const a = sessionReliabilityFrom({ factsAsserted: 7, factsContradicted: 2 });
+  const b = sessionReliabilityFrom({ factsAsserted: 7, factsContradicted: 2 });
+  assert.equal(a, b);
 });
 
 test("entailed hook: min(premise trusts) × rule-confidence when premises are supplied; bare prior otherwise", () => {

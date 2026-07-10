@@ -157,3 +157,49 @@ export function computeTrust(fact, sourcesById = {}, opts = {}) {
   };
   return { score, inputs };
 }
+
+// How many facts a session needs to have amassed before its track record can
+// swing mgx:sourceReliability with full confidence toward an extreme. Without
+// this, a SINGLE data point saturates the score immediately (asserted=1,
+// contradicted=0 → the bare max 1.5) — measured in practice, this broke the
+// standing invariant that a lone, uncontradicted teach-sourced fact must
+// still score below the operator prior (0.95 × 1.5 clamps past 1.0). This
+// pseudo-count keeps a thin track record close to NEUTRAL and only lets a
+// session earn a confident nudge once it has a real history — the classic
+// Bayesian-smoothing shape (Laplace/"add-k" pseudo-count) for small-sample
+// rates.
+export const RELIABILITY_CONFIDENCE_PSEUDOCOUNT = 19;
+
+/**
+ * Pure actor-level (session-scoped) reliability from one session's track
+ * record: how many facts it asserted vs. how many of those later turned out
+ * to be CONTRADICTED (findContradictions, core.mjs). Bounded to
+ * [SOURCE_RELIABILITY_MIN, SOURCE_RELIABILITY_MAX] — the same range
+ * mgx:sourceReliability lives in (B1 above), so the result of this function is
+ * exactly what a caller materialises onto a session's Source individual.
+ *
+ * Monotonic in the right direction: more uncontradicted assertions → closer to
+ * the max (1.5); more contradicted ones → closer to the min (0.5) — but
+ * CONFIDENCE-SCALED by sample size, so a session with only one or two
+ * assertions stays close to neutral (1.0) either way, and only a real track
+ * record (many assertions) earns a confident swing toward an extreme. Zero
+ * assertions is exactly neutral (1.0) — no track record, no opinion, matching
+ * the neutral default a Source without this attribute at all already gets
+ * (sourceReliabilityOf above). The shape:
+ *   net        = clamp[-1,1]((asserted − 2×contradicted) / max(1, asserted))
+ *   confidence = asserted / (asserted + RELIABILITY_CONFIDENCE_PSEUDOCOUNT)
+ *   ratio      = (net × confidence + 1) / 2         → [0, 1], 0.5 at confidence 0
+ *   reliability = MIN + (MAX − MIN) × ratio
+ * Each contradicted fact costs DOUBLE an asserted fact's worth of `net` (the
+ * `2×` term), so a session that is right twice and wrong once nets a positive
+ * but reduced score rather than a wash — corroboration should count for less
+ * than the reputational cost of a contradiction. Deterministic, no I/O.
+ */
+export function sessionReliabilityFrom({ factsAsserted = 0, factsContradicted = 0 } = {}) {
+  const asserted = Math.max(0, Number(factsAsserted) || 0);
+  const contradicted = Math.max(0, Number(factsContradicted) || 0);
+  const net = Math.max(-1, Math.min(1, (asserted - 2 * contradicted) / Math.max(1, asserted)));
+  const confidence = asserted / (asserted + RELIABILITY_CONFIDENCE_PSEUDOCOUNT);
+  const ratio = (net * confidence + 1) / 2;
+  return round(SOURCE_RELIABILITY_MIN + (SOURCE_RELIABILITY_MAX - SOURCE_RELIABILITY_MIN) * ratio);
+}
