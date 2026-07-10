@@ -1,0 +1,664 @@
+{"start":"/c/en/schema_person","rel":"/r/IsA","end":"/c/en/schema_thing","weight":1,"surfaceText":"[[schema person]] IsA [[schema thing]]"}
+{"start":"/c/en/schema_place","rel":"/r/IsA","end":"/c/en/schema_thing","weight":1,"surfaceText":"[[schema place]] IsA [[schema thing]]"}
+{"start":"/c/en/schema_object","rel":"/r/IsA","end":"/c/en/schema_thing","weight":1,"surfaceText":"[[schema object]] IsA [[schema thing]]"}
+{"start":"/c/en/schema_event","rel":"/r/IsA","end":"/c/en/schema_thing","weight":1,"surfaceText":"[[schema event]] IsA [[schema thing]]"}
+{"start":"/c/en/schema_time","rel":"/r/IsA","end":"/c/en/schema_thing","weight":1,"surfaceText":"[[schema time]] IsA [[schema thing]]"}
+{"start":"/c/en/schema_quantity","rel":"/r/IsA","end":"/c/en/schema_thing","weight":1,"surfaceText":"[[schema quantity]] IsA [[schema thing]]"}
+{"start":"/c/en/schema_organization","rel":"/r/IsA","end":"/c/en/schema_thing","weight":1,"surfaceText":"[[schema organization]] IsA [[schema thing]]"}
+{"start":"/c/en/schema_event","rel":"/r/AtLocation","end":"/c/en/schema_place","weight":1,"surfaceText":"[[schema event]] AtLocation [[schema place]]"}
+{"start":"/c/en/schema_organization","rel":"/r/HasA","end":"/c/en/schema_person","weight":1,"surfaceText":"[[schema organization]] HasA [[schema person]]"}
+{"start":"/c/en/schema_person","rel":"/r/AtLocation","end":"/c/en/schema_place","weight":1,"surfaceText":"[[schema person]] AtLocation [[schema place]]"}
+{"start":"/c/en/schema_object","rel":"/r/AtLocation","end":"/c/en/schema_place","weight":1,"surfaceText":"[[schema object]] AtLocation [[schema place]]"}
+{"start":"/c/en/schema_event","rel":"/r/HasA","end":"/c/en/schema_time","weight":1,"surfaceText":"[[schema event]] HasA [[schema time]]"}
+{"start":"/c/en/schema_organization","rel":"/r/UsedFor","end":"/c/en/organizing_people","weight":1,"surfaceText":"[[schema organization]] UsedFor [[organizing people]]"}
+{"start":"/c/en/schema_quantity","rel":"/r/UsedFor","end":"/c/en/measuring","weight":1,"surfaceText":"[[schema quantity]] UsedFor [[measuring]]"}
+{"start":"/c/en/schema_time","rel":"/r/UsedFor","end":"/c/en/scheduling_events","weight":1,"surfaceText":"[[schema time]] UsedFor [[scheduling events]]"}
+{"start":"/c/en/schema_place","rel":"/r/HasProperty","end":"/c/en/physical","weight":1,"surfaceText":"[[schema place]] HasProperty [[physical]]"}
+{"start":"/c/en/schema_object","rel":"/r/HasProperty","end":"/c/en/ownable","weight":1,"surfaceText":"[[schema object]] HasProperty [[ownable]]"}
+{"start":"/c/en/schema_event","rel":"/r/HasProperty","end":"/c/en/temporary","weight":1,"surfaceText":"[[schema event]] HasProperty [[temporary]]"}
+{"start":"/c/en/man","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[man]] IsA [[person]]"}
+{"start":"/c/en/man","rel":"/r/HasProperty","end":"/c/en/male","weight":1,"surfaceText":"[[man]] HasProperty [[male]]"}
+{"start":"/c/en/woman","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[woman]] IsA [[person]]"}
+{"start":"/c/en/woman","rel":"/r/HasProperty","end":"/c/en/female","weight":1,"surfaceText":"[[woman]] HasProperty [[female]]"}
+{"start":"/c/en/person","rel":"/r/CapableOf","end":"/c/en/think","weight":1,"surfaceText":"[[person]] CapableOf [[think]]"}
+{"start":"/c/en/person","rel":"/r/CapableOf","end":"/c/en/speak","weight":1,"surfaceText":"[[person]] CapableOf [[speak]]"}
+{"start":"/c/en/person","rel":"/r/Desires","end":"/c/en/happiness","weight":1,"surfaceText":"[[person]] Desires [[happiness]]"}
+{"start":"/c/en/child","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[child]] IsA [[person]]"}
+{"start":"/c/en/child","rel":"/r/HasProperty","end":"/c/en/young","weight":1,"surfaceText":"[[child]] HasProperty [[young]]"}
+{"start":"/c/en/boy","rel":"/r/IsA","end":"/c/en/child","weight":1,"surfaceText":"[[boy]] IsA [[child]]"}
+{"start":"/c/en/boy","rel":"/r/HasProperty","end":"/c/en/male","weight":1,"surfaceText":"[[boy]] HasProperty [[male]]"}
+{"start":"/c/en/girl","rel":"/r/IsA","end":"/c/en/child","weight":1,"surfaceText":"[[girl]] IsA [[child]]"}
+{"start":"/c/en/girl","rel":"/r/HasProperty","end":"/c/en/female","weight":1,"surfaceText":"[[girl]] HasProperty [[female]]"}
+{"start":"/c/en/baby","rel":"/r/IsA","end":"/c/en/child","weight":1,"surfaceText":"[[baby]] IsA [[child]]"}
+{"start":"/c/en/baby","rel":"/r/HasProperty","end":"/c/en/young","weight":1,"surfaceText":"[[baby]] HasProperty [[young]]"}
+{"start":"/c/en/adult","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[adult]] IsA [[person]]"}
+{"start":"/c/en/adult","rel":"/r/HasProperty","end":"/c/en/grown","weight":1,"surfaceText":"[[adult]] HasProperty [[grown]]"}
+{"start":"/c/en/friend","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[friend]] IsA [[person]]"}
+{"start":"/c/en/friend","rel":"/r/CapableOf","end":"/c/en/help","weight":1,"surfaceText":"[[friend]] CapableOf [[help]]"}
+{"start":"/c/en/friend","rel":"/r/Desires","end":"/c/en/trust","weight":1,"surfaceText":"[[friend]] Desires [[trust]]"}
+{"start":"/c/en/neighbor","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[neighbor]] IsA [[person]]"}
+{"start":"/c/en/neighbor","rel":"/r/AtLocation","end":"/c/en/nearby_house","weight":1,"surfaceText":"[[neighbor]] AtLocation [[nearby house]]"}
+{"start":"/c/en/stranger","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[stranger]] IsA [[person]]"}
+{"start":"/c/en/stranger","rel":"/r/HasProperty","end":"/c/en/unknown","weight":1,"surfaceText":"[[stranger]] HasProperty [[unknown]]"}
+{"start":"/c/en/guest","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[guest]] IsA [[person]]"}
+{"start":"/c/en/guest","rel":"/r/AtLocation","end":"/c/en/house","weight":1,"surfaceText":"[[guest]] AtLocation [[house]]"}
+{"start":"/c/en/visitor","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[visitor]] IsA [[person]]"}
+{"start":"/c/en/visitor","rel":"/r/CapableOf","end":"/c/en/visit","weight":1,"surfaceText":"[[visitor]] CapableOf [[visit]]"}
+{"start":"/c/en/doctor","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[doctor]] IsA [[person]]"}
+{"start":"/c/en/doctor","rel":"/r/UsedFor","end":"/c/en/treating_illness","weight":1,"surfaceText":"[[doctor]] UsedFor [[treating illness]]"}
+{"start":"/c/en/doctor","rel":"/r/CapableOf","end":"/c/en/treat_patients","weight":1,"surfaceText":"[[doctor]] CapableOf [[treat patients]]"}
+{"start":"/c/en/doctor","rel":"/r/AtLocation","end":"/c/en/hospital","weight":1,"surfaceText":"[[doctor]] AtLocation [[hospital]]"}
+{"start":"/c/en/teacher","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[teacher]] IsA [[person]]"}
+{"start":"/c/en/teacher","rel":"/r/UsedFor","end":"/c/en/teaching","weight":1,"surfaceText":"[[teacher]] UsedFor [[teaching]]"}
+{"start":"/c/en/teacher","rel":"/r/CapableOf","end":"/c/en/teach","weight":1,"surfaceText":"[[teacher]] CapableOf [[teach]]"}
+{"start":"/c/en/teacher","rel":"/r/AtLocation","end":"/c/en/school","weight":1,"surfaceText":"[[teacher]] AtLocation [[school]]"}
+{"start":"/c/en/nurse","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[nurse]] IsA [[person]]"}
+{"start":"/c/en/nurse","rel":"/r/UsedFor","end":"/c/en/caring_for_patients","weight":1,"surfaceText":"[[nurse]] UsedFor [[caring for patients]]"}
+{"start":"/c/en/nurse","rel":"/r/AtLocation","end":"/c/en/hospital","weight":1,"surfaceText":"[[nurse]] AtLocation [[hospital]]"}
+{"start":"/c/en/student","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[student]] IsA [[person]]"}
+{"start":"/c/en/student","rel":"/r/CapableOf","end":"/c/en/learn","weight":1,"surfaceText":"[[student]] CapableOf [[learn]]"}
+{"start":"/c/en/student","rel":"/r/AtLocation","end":"/c/en/school","weight":1,"surfaceText":"[[student]] AtLocation [[school]]"}
+{"start":"/c/en/worker","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[worker]] IsA [[person]]"}
+{"start":"/c/en/worker","rel":"/r/CapableOf","end":"/c/en/work","weight":1,"surfaceText":"[[worker]] CapableOf [[work]]"}
+{"start":"/c/en/worker","rel":"/r/AtLocation","end":"/c/en/workplace","weight":1,"surfaceText":"[[worker]] AtLocation [[workplace]]"}
+{"start":"/c/en/farmer","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[farmer]] IsA [[person]]"}
+{"start":"/c/en/farmer","rel":"/r/CapableOf","end":"/c/en/farm","weight":1,"surfaceText":"[[farmer]] CapableOf [[farm]]"}
+{"start":"/c/en/farmer","rel":"/r/AtLocation","end":"/c/en/farm","weight":1,"surfaceText":"[[farmer]] AtLocation [[farm]]"}
+{"start":"/c/en/mother","rel":"/r/IsA","end":"/c/en/parent","weight":1,"surfaceText":"[[mother]] IsA [[parent]]"}
+{"start":"/c/en/mother","rel":"/r/HasProperty","end":"/c/en/female","weight":1,"surfaceText":"[[mother]] HasProperty [[female]]"}
+{"start":"/c/en/father","rel":"/r/IsA","end":"/c/en/parent","weight":1,"surfaceText":"[[father]] IsA [[parent]]"}
+{"start":"/c/en/father","rel":"/r/HasProperty","end":"/c/en/male","weight":1,"surfaceText":"[[father]] HasProperty [[male]]"}
+{"start":"/c/en/parent","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[parent]] IsA [[person]]"}
+{"start":"/c/en/parent","rel":"/r/CapableOf","end":"/c/en/care_for_a_child","weight":1,"surfaceText":"[[parent]] CapableOf [[care for a child]]"}
+{"start":"/c/en/brother","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[brother]] IsA [[person]]"}
+{"start":"/c/en/brother","rel":"/r/HasProperty","end":"/c/en/male","weight":1,"surfaceText":"[[brother]] HasProperty [[male]]"}
+{"start":"/c/en/brother","rel":"/r/PartOf","end":"/c/en/family","weight":1,"surfaceText":"[[brother]] PartOf [[family]]"}
+{"start":"/c/en/sister","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[sister]] IsA [[person]]"}
+{"start":"/c/en/sister","rel":"/r/HasProperty","end":"/c/en/female","weight":1,"surfaceText":"[[sister]] HasProperty [[female]]"}
+{"start":"/c/en/sister","rel":"/r/PartOf","end":"/c/en/family","weight":1,"surfaceText":"[[sister]] PartOf [[family]]"}
+{"start":"/c/en/family","rel":"/r/IsA","end":"/c/en/group","weight":1,"surfaceText":"[[family]] IsA [[group]]"}
+{"start":"/c/en/family","rel":"/r/HasA","end":"/c/en/parent","weight":1,"surfaceText":"[[family]] HasA [[parent]]"}
+{"start":"/c/en/family","rel":"/r/HasA","end":"/c/en/child","weight":1,"surfaceText":"[[family]] HasA [[child]]"}
+{"start":"/c/en/king","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[king]] IsA [[person]]"}
+{"start":"/c/en/king","rel":"/r/CapableOf","end":"/c/en/rule","weight":1,"surfaceText":"[[king]] CapableOf [[rule]]"}
+{"start":"/c/en/king","rel":"/r/AtLocation","end":"/c/en/kingdom","weight":1,"surfaceText":"[[king]] AtLocation [[kingdom]]"}
+{"start":"/c/en/queen","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[queen]] IsA [[person]]"}
+{"start":"/c/en/queen","rel":"/r/CapableOf","end":"/c/en/rule","weight":1,"surfaceText":"[[queen]] CapableOf [[rule]]"}
+{"start":"/c/en/queen","rel":"/r/AtLocation","end":"/c/en/kingdom","weight":1,"surfaceText":"[[queen]] AtLocation [[kingdom]]"}
+{"start":"/c/en/soldier","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[soldier]] IsA [[person]]"}
+{"start":"/c/en/soldier","rel":"/r/CapableOf","end":"/c/en/fight","weight":1,"surfaceText":"[[soldier]] CapableOf [[fight]]"}
+{"start":"/c/en/soldier","rel":"/r/UsedFor","end":"/c/en/defending_a_country","weight":1,"surfaceText":"[[soldier]] UsedFor [[defending a country]]"}
+{"start":"/c/en/artist","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[artist]] IsA [[person]]"}
+{"start":"/c/en/artist","rel":"/r/CapableOf","end":"/c/en/create_art","weight":1,"surfaceText":"[[artist]] CapableOf [[create art]]"}
+{"start":"/c/en/writer","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[writer]] IsA [[person]]"}
+{"start":"/c/en/writer","rel":"/r/CapableOf","end":"/c/en/write","weight":1,"surfaceText":"[[writer]] CapableOf [[write]]"}
+{"start":"/c/en/cook","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[cook]] IsA [[person]]"}
+{"start":"/c/en/cook","rel":"/r/CapableOf","end":"/c/en/cook","weight":1,"surfaceText":"[[cook]] CapableOf [[cook]]"}
+{"start":"/c/en/cook","rel":"/r/AtLocation","end":"/c/en/kitchen","weight":1,"surfaceText":"[[cook]] AtLocation [[kitchen]]"}
+{"start":"/c/en/team","rel":"/r/IsA","end":"/c/en/group","weight":1,"surfaceText":"[[team]] IsA [[group]]"}
+{"start":"/c/en/team","rel":"/r/HasA","end":"/c/en/player","weight":1,"surfaceText":"[[team]] HasA [[player]]"}
+{"start":"/c/en/team","rel":"/r/UsedFor","end":"/c/en/playing_a_game","weight":1,"surfaceText":"[[team]] UsedFor [[playing a game]]"}
+{"start":"/c/en/group","rel":"/r/HasA","end":"/c/en/person","weight":1,"surfaceText":"[[group]] HasA [[person]]"}
+{"start":"/c/en/group","rel":"/r/CapableOf","end":"/c/en/work_together","weight":1,"surfaceText":"[[group]] CapableOf [[work together]]"}
+{"start":"/c/en/crowd","rel":"/r/IsA","end":"/c/en/group","weight":1,"surfaceText":"[[crowd]] IsA [[group]]"}
+{"start":"/c/en/crowd","rel":"/r/HasProperty","end":"/c/en/large","weight":1,"surfaceText":"[[crowd]] HasProperty [[large]]"}
+{"start":"/c/en/audience","rel":"/r/IsA","end":"/c/en/group","weight":1,"surfaceText":"[[audience]] IsA [[group]]"}
+{"start":"/c/en/audience","rel":"/r/CapableOf","end":"/c/en/watch","weight":1,"surfaceText":"[[audience]] CapableOf [[watch]]"}
+{"start":"/c/en/club","rel":"/r/IsA","end":"/c/en/group","weight":1,"surfaceText":"[[club]] IsA [[group]]"}
+{"start":"/c/en/club","rel":"/r/UsedFor","end":"/c/en/meeting_together","weight":1,"surfaceText":"[[club]] UsedFor [[meeting together]]"}
+{"start":"/c/en/president","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[president]] IsA [[person]]"}
+{"start":"/c/en/president","rel":"/r/CapableOf","end":"/c/en/lead","weight":1,"surfaceText":"[[president]] CapableOf [[lead]]"}
+{"start":"/c/en/president","rel":"/r/AtLocation","end":"/c/en/country","weight":1,"surfaceText":"[[president]] AtLocation [[country]]"}
+{"start":"/c/en/human","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[human]] IsA [[person]]"}
+{"start":"/c/en/lawyer","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[lawyer]] IsA [[person]]"}
+{"start":"/c/en/lawyer","rel":"/r/CapableOf","end":"/c/en/give_legal_advice","weight":1,"surfaceText":"[[lawyer]] CapableOf [[give legal advice]]"}
+{"start":"/c/en/lawyer","rel":"/r/AtLocation","end":"/c/en/office","weight":1,"surfaceText":"[[lawyer]] AtLocation [[office]]"}
+{"start":"/c/en/engineer","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[engineer]] IsA [[person]]"}
+{"start":"/c/en/engineer","rel":"/r/CapableOf","end":"/c/en/build_things","weight":1,"surfaceText":"[[engineer]] CapableOf [[build things]]"}
+{"start":"/c/en/engineer","rel":"/r/AtLocation","end":"/c/en/office","weight":1,"surfaceText":"[[engineer]] AtLocation [[office]]"}
+{"start":"/c/en/driver","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[driver]] IsA [[person]]"}
+{"start":"/c/en/driver","rel":"/r/CapableOf","end":"/c/en/drive","weight":1,"surfaceText":"[[driver]] CapableOf [[drive]]"}
+{"start":"/c/en/driver","rel":"/r/UsedFor","end":"/c/en/transporting_people","weight":1,"surfaceText":"[[driver]] UsedFor [[transporting people]]"}
+{"start":"/c/en/manager","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[manager]] IsA [[person]]"}
+{"start":"/c/en/manager","rel":"/r/CapableOf","end":"/c/en/manage_a_team","weight":1,"surfaceText":"[[manager]] CapableOf [[manage a team]]"}
+{"start":"/c/en/officer","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[officer]] IsA [[person]]"}
+{"start":"/c/en/officer","rel":"/r/CapableOf","end":"/c/en/enforce_law","weight":1,"surfaceText":"[[officer]] CapableOf [[enforce law]]"}
+{"start":"/c/en/judge","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[judge]] IsA [[person]]"}
+{"start":"/c/en/judge","rel":"/r/CapableOf","end":"/c/en/judge_a_case","weight":1,"surfaceText":"[[judge]] CapableOf [[judge a case]]"}
+{"start":"/c/en/judge","rel":"/r/AtLocation","end":"/c/en/court","weight":1,"surfaceText":"[[judge]] AtLocation [[court]]"}
+{"start":"/c/en/priest","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[priest]] IsA [[person]]"}
+{"start":"/c/en/priest","rel":"/r/CapableOf","end":"/c/en/lead_worship","weight":1,"surfaceText":"[[priest]] CapableOf [[lead worship]]"}
+{"start":"/c/en/priest","rel":"/r/AtLocation","end":"/c/en/church","weight":1,"surfaceText":"[[priest]] AtLocation [[church]]"}
+{"start":"/c/en/servant","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[servant]] IsA [[person]]"}
+{"start":"/c/en/servant","rel":"/r/CapableOf","end":"/c/en/serve","weight":1,"surfaceText":"[[servant]] CapableOf [[serve]]"}
+{"start":"/c/en/employee","rel":"/r/IsA","end":"/c/en/worker","weight":1,"surfaceText":"[[employee]] IsA [[worker]]"}
+{"start":"/c/en/employee","rel":"/r/CapableOf","end":"/c/en/work_for_a_company","weight":1,"surfaceText":"[[employee]] CapableOf [[work for a company]]"}
+{"start":"/c/en/boss","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[boss]] IsA [[person]]"}
+{"start":"/c/en/boss","rel":"/r/CapableOf","end":"/c/en/manage_employees","weight":1,"surfaceText":"[[boss]] CapableOf [[manage employees]]"}
+{"start":"/c/en/husband","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[husband]] IsA [[person]]"}
+{"start":"/c/en/husband","rel":"/r/HasProperty","end":"/c/en/married","weight":1,"surfaceText":"[[husband]] HasProperty [[married]]"}
+{"start":"/c/en/husband","rel":"/r/HasProperty","end":"/c/en/male","weight":1,"surfaceText":"[[husband]] HasProperty [[male]]"}
+{"start":"/c/en/wife","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[wife]] IsA [[person]]"}
+{"start":"/c/en/wife","rel":"/r/HasProperty","end":"/c/en/married","weight":1,"surfaceText":"[[wife]] HasProperty [[married]]"}
+{"start":"/c/en/wife","rel":"/r/HasProperty","end":"/c/en/female","weight":1,"surfaceText":"[[wife]] HasProperty [[female]]"}
+{"start":"/c/en/son","rel":"/r/IsA","end":"/c/en/child","weight":1,"surfaceText":"[[son]] IsA [[child]]"}
+{"start":"/c/en/son","rel":"/r/HasProperty","end":"/c/en/male","weight":1,"surfaceText":"[[son]] HasProperty [[male]]"}
+{"start":"/c/en/daughter","rel":"/r/IsA","end":"/c/en/child","weight":1,"surfaceText":"[[daughter]] IsA [[child]]"}
+{"start":"/c/en/daughter","rel":"/r/HasProperty","end":"/c/en/female","weight":1,"surfaceText":"[[daughter]] HasProperty [[female]]"}
+{"start":"/c/en/grandmother","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[grandmother]] IsA [[person]]"}
+{"start":"/c/en/grandmother","rel":"/r/PartOf","end":"/c/en/family","weight":1,"surfaceText":"[[grandmother]] PartOf [[family]]"}
+{"start":"/c/en/grandmother","rel":"/r/HasProperty","end":"/c/en/female","weight":1,"surfaceText":"[[grandmother]] HasProperty [[female]]"}
+{"start":"/c/en/grandfather","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[grandfather]] IsA [[person]]"}
+{"start":"/c/en/grandfather","rel":"/r/PartOf","end":"/c/en/family","weight":1,"surfaceText":"[[grandfather]] PartOf [[family]]"}
+{"start":"/c/en/grandfather","rel":"/r/HasProperty","end":"/c/en/male","weight":1,"surfaceText":"[[grandfather]] HasProperty [[male]]"}
+{"start":"/c/en/citizen","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[citizen]] IsA [[person]]"}
+{"start":"/c/en/citizen","rel":"/r/PartOf","end":"/c/en/country","weight":1,"surfaceText":"[[citizen]] PartOf [[country]]"}
+{"start":"/c/en/customer","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[customer]] IsA [[person]]"}
+{"start":"/c/en/customer","rel":"/r/CapableOf","end":"/c/en/buy_things","weight":1,"surfaceText":"[[customer]] CapableOf [[buy things]]"}
+{"start":"/c/en/leader","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[leader]] IsA [[person]]"}
+{"start":"/c/en/leader","rel":"/r/CapableOf","end":"/c/en/lead","weight":1,"surfaceText":"[[leader]] CapableOf [[lead]]"}
+{"start":"/c/en/champion","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[champion]] IsA [[person]]"}
+{"start":"/c/en/champion","rel":"/r/CapableOf","end":"/c/en/win","weight":1,"surfaceText":"[[champion]] CapableOf [[win]]"}
+{"start":"/c/en/volunteer","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[volunteer]] IsA [[person]]"}
+{"start":"/c/en/volunteer","rel":"/r/CapableOf","end":"/c/en/help_without_pay","weight":1,"surfaceText":"[[volunteer]] CapableOf [[help without pay]]"}
+{"start":"/c/en/resident","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[resident]] IsA [[person]]"}
+{"start":"/c/en/resident","rel":"/r/AtLocation","end":"/c/en/house","weight":1,"surfaceText":"[[resident]] AtLocation [[house]]"}
+{"start":"/c/en/place","rel":"/r/HasProperty","end":"/c/en/physical","weight":1,"surfaceText":"[[place]] HasProperty [[physical]]"}
+{"start":"/c/en/place","rel":"/r/CapableOf","end":"/c/en/contain_things","weight":1,"surfaceText":"[[place]] CapableOf [[contain things]]"}
+{"start":"/c/en/city","rel":"/r/IsA","end":"/c/en/place","weight":1,"surfaceText":"[[city]] IsA [[place]]"}
+{"start":"/c/en/city","rel":"/r/HasA","end":"/c/en/building","weight":1,"surfaceText":"[[city]] HasA [[building]]"}
+{"start":"/c/en/city","rel":"/r/HasA","end":"/c/en/street","weight":1,"surfaceText":"[[city]] HasA [[street]]"}
+{"start":"/c/en/town","rel":"/r/IsA","end":"/c/en/place","weight":1,"surfaceText":"[[town]] IsA [[place]]"}
+{"start":"/c/en/town","rel":"/r/HasProperty","end":"/c/en/small","weight":1,"surfaceText":"[[town]] HasProperty [[small]]"}
+{"start":"/c/en/village","rel":"/r/IsA","end":"/c/en/place","weight":1,"surfaceText":"[[village]] IsA [[place]]"}
+{"start":"/c/en/village","rel":"/r/HasProperty","end":"/c/en/small","weight":1,"surfaceText":"[[village]] HasProperty [[small]]"}
+{"start":"/c/en/country","rel":"/r/IsA","end":"/c/en/place","weight":1,"surfaceText":"[[country]] IsA [[place]]"}
+{"start":"/c/en/country","rel":"/r/HasA","end":"/c/en/city","weight":1,"surfaceText":"[[country]] HasA [[city]]"}
+{"start":"/c/en/country","rel":"/r/HasA","end":"/c/en/government","weight":1,"surfaceText":"[[country]] HasA [[government]]"}
+{"start":"/c/en/house","rel":"/r/IsA","end":"/c/en/place","weight":1,"surfaceText":"[[house]] IsA [[place]]"}
+{"start":"/c/en/house","rel":"/r/PartOf","end":"/c/en/city","weight":1,"surfaceText":"[[house]] PartOf [[city]]"}
+{"start":"/c/en/house","rel":"/r/HasA","end":"/c/en/room","weight":1,"surfaceText":"[[house]] HasA [[room]]"}
+{"start":"/c/en/home","rel":"/r/IsA","end":"/c/en/house","weight":1,"surfaceText":"[[home]] IsA [[house]]"}
+{"start":"/c/en/home","rel":"/r/HasProperty","end":"/c/en/comfortable","weight":1,"surfaceText":"[[home]] HasProperty [[comfortable]]"}
+{"start":"/c/en/room","rel":"/r/IsA","end":"/c/en/place","weight":1,"surfaceText":"[[room]] IsA [[place]]"}
+{"start":"/c/en/room","rel":"/r/PartOf","end":"/c/en/house","weight":1,"surfaceText":"[[room]] PartOf [[house]]"}
+{"start":"/c/en/kitchen","rel":"/r/IsA","end":"/c/en/room","weight":1,"surfaceText":"[[kitchen]] IsA [[room]]"}
+{"start":"/c/en/kitchen","rel":"/r/UsedFor","end":"/c/en/cooking","weight":1,"surfaceText":"[[kitchen]] UsedFor [[cooking]]"}
+{"start":"/c/en/bedroom","rel":"/r/IsA","end":"/c/en/room","weight":1,"surfaceText":"[[bedroom]] IsA [[room]]"}
+{"start":"/c/en/bedroom","rel":"/r/UsedFor","end":"/c/en/sleeping","weight":1,"surfaceText":"[[bedroom]] UsedFor [[sleeping]]"}
+{"start":"/c/en/bathroom","rel":"/r/IsA","end":"/c/en/room","weight":1,"surfaceText":"[[bathroom]] IsA [[room]]"}
+{"start":"/c/en/bathroom","rel":"/r/UsedFor","end":"/c/en/washing","weight":1,"surfaceText":"[[bathroom]] UsedFor [[washing]]"}
+{"start":"/c/en/school","rel":"/r/IsA","end":"/c/en/place","weight":1,"surfaceText":"[[school]] IsA [[place]]"}
+{"start":"/c/en/school","rel":"/r/UsedFor","end":"/c/en/teaching","weight":1,"surfaceText":"[[school]] UsedFor [[teaching]]"}
+{"start":"/c/en/school","rel":"/r/HasA","end":"/c/en/teacher","weight":1,"surfaceText":"[[school]] HasA [[teacher]]"}
+{"start":"/c/en/hospital","rel":"/r/IsA","end":"/c/en/place","weight":1,"surfaceText":"[[hospital]] IsA [[place]]"}
+{"start":"/c/en/hospital","rel":"/r/UsedFor","end":"/c/en/treating_illness","weight":1,"surfaceText":"[[hospital]] UsedFor [[treating illness]]"}
+{"start":"/c/en/hospital","rel":"/r/HasA","end":"/c/en/doctor","weight":1,"surfaceText":"[[hospital]] HasA [[doctor]]"}
+{"start":"/c/en/shop","rel":"/r/IsA","end":"/c/en/place","weight":1,"surfaceText":"[[shop]] IsA [[place]]"}
+{"start":"/c/en/shop","rel":"/r/UsedFor","end":"/c/en/selling_goods","weight":1,"surfaceText":"[[shop]] UsedFor [[selling goods]]"}
+{"start":"/c/en/market","rel":"/r/IsA","end":"/c/en/place","weight":1,"surfaceText":"[[market]] IsA [[place]]"}
+{"start":"/c/en/market","rel":"/r/UsedFor","end":"/c/en/selling_goods","weight":1,"surfaceText":"[[market]] UsedFor [[selling goods]]"}
+{"start":"/c/en/church","rel":"/r/IsA","end":"/c/en/place","weight":1,"surfaceText":"[[church]] IsA [[place]]"}
+{"start":"/c/en/church","rel":"/r/UsedFor","end":"/c/en/worship","weight":1,"surfaceText":"[[church]] UsedFor [[worship]]"}
+{"start":"/c/en/park","rel":"/r/IsA","end":"/c/en/place","weight":1,"surfaceText":"[[park]] IsA [[place]]"}
+{"start":"/c/en/park","rel":"/r/HasA","end":"/c/en/tree","weight":1,"surfaceText":"[[park]] HasA [[tree]]"}
+{"start":"/c/en/park","rel":"/r/UsedFor","end":"/c/en/playing","weight":1,"surfaceText":"[[park]] UsedFor [[playing]]"}
+{"start":"/c/en/garden","rel":"/r/IsA","end":"/c/en/place","weight":1,"surfaceText":"[[garden]] IsA [[place]]"}
+{"start":"/c/en/garden","rel":"/r/HasA","end":"/c/en/flower","weight":1,"surfaceText":"[[garden]] HasA [[flower]]"}
+{"start":"/c/en/garden","rel":"/r/UsedFor","end":"/c/en/growing_plants","weight":1,"surfaceText":"[[garden]] UsedFor [[growing plants]]"}
+{"start":"/c/en/street","rel":"/r/IsA","end":"/c/en/place","weight":1,"surfaceText":"[[street]] IsA [[place]]"}
+{"start":"/c/en/street","rel":"/r/PartOf","end":"/c/en/city","weight":1,"surfaceText":"[[street]] PartOf [[city]]"}
+{"start":"/c/en/street","rel":"/r/HasA","end":"/c/en/car","weight":1,"surfaceText":"[[street]] HasA [[car]]"}
+{"start":"/c/en/road","rel":"/r/IsA","end":"/c/en/place","weight":1,"surfaceText":"[[road]] IsA [[place]]"}
+{"start":"/c/en/road","rel":"/r/UsedFor","end":"/c/en/traveling","weight":1,"surfaceText":"[[road]] UsedFor [[traveling]]"}
+{"start":"/c/en/bridge","rel":"/r/IsA","end":"/c/en/structure","weight":1,"surfaceText":"[[bridge]] IsA [[structure]]"}
+{"start":"/c/en/bridge","rel":"/r/UsedFor","end":"/c/en/crossing_a_river","weight":1,"surfaceText":"[[bridge]] UsedFor [[crossing a river]]"}
+{"start":"/c/en/farm","rel":"/r/IsA","end":"/c/en/place","weight":1,"surfaceText":"[[farm]] IsA [[place]]"}
+{"start":"/c/en/farm","rel":"/r/UsedFor","end":"/c/en/growing_food","weight":1,"surfaceText":"[[farm]] UsedFor [[growing food]]"}
+{"start":"/c/en/farm","rel":"/r/HasA","end":"/c/en/farmer","weight":1,"surfaceText":"[[farm]] HasA [[farmer]]"}
+{"start":"/c/en/office","rel":"/r/IsA","end":"/c/en/place","weight":1,"surfaceText":"[[office]] IsA [[place]]"}
+{"start":"/c/en/office","rel":"/r/UsedFor","end":"/c/en/working","weight":1,"surfaceText":"[[office]] UsedFor [[working]]"}
+{"start":"/c/en/factory","rel":"/r/IsA","end":"/c/en/place","weight":1,"surfaceText":"[[factory]] IsA [[place]]"}
+{"start":"/c/en/factory","rel":"/r/UsedFor","end":"/c/en/making_goods","weight":1,"surfaceText":"[[factory]] UsedFor [[making goods]]"}
+{"start":"/c/en/library","rel":"/r/IsA","end":"/c/en/place","weight":1,"surfaceText":"[[library]] IsA [[place]]"}
+{"start":"/c/en/library","rel":"/r/HasA","end":"/c/en/book","weight":1,"surfaceText":"[[library]] HasA [[book]]"}
+{"start":"/c/en/library","rel":"/r/UsedFor","end":"/c/en/reading","weight":1,"surfaceText":"[[library]] UsedFor [[reading]]"}
+{"start":"/c/en/museum","rel":"/r/IsA","end":"/c/en/place","weight":1,"surfaceText":"[[museum]] IsA [[place]]"}
+{"start":"/c/en/museum","rel":"/r/HasA","end":"/c/en/artifact","weight":1,"surfaceText":"[[museum]] HasA [[artifact]]"}
+{"start":"/c/en/museum","rel":"/r/UsedFor","end":"/c/en/learning","weight":1,"surfaceText":"[[museum]] UsedFor [[learning]]"}
+{"start":"/c/en/hotel","rel":"/r/IsA","end":"/c/en/place","weight":1,"surfaceText":"[[hotel]] IsA [[place]]"}
+{"start":"/c/en/hotel","rel":"/r/UsedFor","end":"/c/en/sleeping","weight":1,"surfaceText":"[[hotel]] UsedFor [[sleeping]]"}
+{"start":"/c/en/airport","rel":"/r/IsA","end":"/c/en/place","weight":1,"surfaceText":"[[airport]] IsA [[place]]"}
+{"start":"/c/en/airport","rel":"/r/UsedFor","end":"/c/en/traveling_by_plane","weight":1,"surfaceText":"[[airport]] UsedFor [[traveling by plane]]"}
+{"start":"/c/en/stadium","rel":"/r/IsA","end":"/c/en/place","weight":1,"surfaceText":"[[stadium]] IsA [[place]]"}
+{"start":"/c/en/stadium","rel":"/r/UsedFor","end":"/c/en/playing_a_game","weight":1,"surfaceText":"[[stadium]] UsedFor [[playing a game]]"}
+{"start":"/c/en/court","rel":"/r/IsA","end":"/c/en/place","weight":1,"surfaceText":"[[court]] IsA [[place]]"}
+{"start":"/c/en/court","rel":"/r/UsedFor","end":"/c/en/judging_a_case","weight":1,"surfaceText":"[[court]] UsedFor [[judging a case]]"}
+{"start":"/c/en/castle","rel":"/r/IsA","end":"/c/en/place","weight":1,"surfaceText":"[[castle]] IsA [[place]]"}
+{"start":"/c/en/castle","rel":"/r/HasProperty","end":"/c/en/old","weight":1,"surfaceText":"[[castle]] HasProperty [[old]]"}
+{"start":"/c/en/castle","rel":"/r/UsedFor","end":"/c/en/defense","weight":1,"surfaceText":"[[castle]] UsedFor [[defense]]"}
+{"start":"/c/en/beach","rel":"/r/IsA","end":"/c/en/place","weight":1,"surfaceText":"[[beach]] IsA [[place]]"}
+{"start":"/c/en/beach","rel":"/r/HasA","end":"/c/en/sand","weight":1,"surfaceText":"[[beach]] HasA [[sand]]"}
+{"start":"/c/en/forest","rel":"/r/IsA","end":"/c/en/place","weight":1,"surfaceText":"[[forest]] IsA [[place]]"}
+{"start":"/c/en/forest","rel":"/r/HasA","end":"/c/en/tree","weight":1,"surfaceText":"[[forest]] HasA [[tree]]"}
+{"start":"/c/en/mountain","rel":"/r/IsA","end":"/c/en/place","weight":1,"surfaceText":"[[mountain]] IsA [[place]]"}
+{"start":"/c/en/mountain","rel":"/r/HasProperty","end":"/c/en/tall","weight":1,"surfaceText":"[[mountain]] HasProperty [[tall]]"}
+{"start":"/c/en/hat","rel":"/r/IsA","end":"/c/en/clothing","weight":1,"surfaceText":"[[hat]] IsA [[clothing]]"}
+{"start":"/c/en/hat","rel":"/r/UsedFor","end":"/c/en/covering_the_head","weight":1,"surfaceText":"[[hat]] UsedFor [[covering the head]]"}
+{"start":"/c/en/shirt","rel":"/r/IsA","end":"/c/en/clothing","weight":1,"surfaceText":"[[shirt]] IsA [[clothing]]"}
+{"start":"/c/en/shirt","rel":"/r/PartOf","end":"/c/en/outfit","weight":1,"surfaceText":"[[shirt]] PartOf [[outfit]]"}
+{"start":"/c/en/coat","rel":"/r/IsA","end":"/c/en/clothing","weight":1,"surfaceText":"[[coat]] IsA [[clothing]]"}
+{"start":"/c/en/coat","rel":"/r/UsedFor","end":"/c/en/keeping_warm","weight":1,"surfaceText":"[[coat]] UsedFor [[keeping warm]]"}
+{"start":"/c/en/shoe","rel":"/r/IsA","end":"/c/en/clothing","weight":1,"surfaceText":"[[shoe]] IsA [[clothing]]"}
+{"start":"/c/en/shoe","rel":"/r/PartOf","end":"/c/en/outfit","weight":1,"surfaceText":"[[shoe]] PartOf [[outfit]]"}
+{"start":"/c/en/dress","rel":"/r/IsA","end":"/c/en/clothing","weight":1,"surfaceText":"[[dress]] IsA [[clothing]]"}
+{"start":"/c/en/dress","rel":"/r/HasProperty","end":"/c/en/female","weight":1,"surfaceText":"[[dress]] HasProperty [[female]]"}
+{"start":"/c/en/clothing","rel":"/r/HasProperty","end":"/c/en/wearable","weight":1,"surfaceText":"[[clothing]] HasProperty [[wearable]]"}
+{"start":"/c/en/clothing","rel":"/r/UsedFor","end":"/c/en/covering_the_body","weight":1,"surfaceText":"[[clothing]] UsedFor [[covering the body]]"}
+{"start":"/c/en/table","rel":"/r/IsA","end":"/c/en/furniture","weight":1,"surfaceText":"[[table]] IsA [[furniture]]"}
+{"start":"/c/en/table","rel":"/r/UsedFor","end":"/c/en/holding_things","weight":1,"surfaceText":"[[table]] UsedFor [[holding things]]"}
+{"start":"/c/en/chair","rel":"/r/IsA","end":"/c/en/furniture","weight":1,"surfaceText":"[[chair]] IsA [[furniture]]"}
+{"start":"/c/en/chair","rel":"/r/UsedFor","end":"/c/en/sitting","weight":1,"surfaceText":"[[chair]] UsedFor [[sitting]]"}
+{"start":"/c/en/bed","rel":"/r/IsA","end":"/c/en/furniture","weight":1,"surfaceText":"[[bed]] IsA [[furniture]]"}
+{"start":"/c/en/bed","rel":"/r/UsedFor","end":"/c/en/sleeping","weight":1,"surfaceText":"[[bed]] UsedFor [[sleeping]]"}
+{"start":"/c/en/door","rel":"/r/PartOf","end":"/c/en/house","weight":1,"surfaceText":"[[door]] PartOf [[house]]"}
+{"start":"/c/en/door","rel":"/r/UsedFor","end":"/c/en/entering_a_room","weight":1,"surfaceText":"[[door]] UsedFor [[entering a room]]"}
+{"start":"/c/en/window","rel":"/r/PartOf","end":"/c/en/house","weight":1,"surfaceText":"[[window]] PartOf [[house]]"}
+{"start":"/c/en/window","rel":"/r/UsedFor","end":"/c/en/letting_in_light","weight":1,"surfaceText":"[[window]] UsedFor [[letting in light]]"}
+{"start":"/c/en/wall","rel":"/r/PartOf","end":"/c/en/house","weight":1,"surfaceText":"[[wall]] PartOf [[house]]"}
+{"start":"/c/en/wall","rel":"/r/UsedFor","end":"/c/en/dividing_rooms","weight":1,"surfaceText":"[[wall]] UsedFor [[dividing rooms]]"}
+{"start":"/c/en/roof","rel":"/r/PartOf","end":"/c/en/house","weight":1,"surfaceText":"[[roof]] PartOf [[house]]"}
+{"start":"/c/en/roof","rel":"/r/UsedFor","end":"/c/en/covering_a_building","weight":1,"surfaceText":"[[roof]] UsedFor [[covering a building]]"}
+{"start":"/c/en/pen","rel":"/r/UsedFor","end":"/c/en/writing","weight":1,"surfaceText":"[[pen]] UsedFor [[writing]]"}
+{"start":"/c/en/pen","rel":"/r/MadeOf","end":"/c/en/plastic","weight":1,"surfaceText":"[[pen]] MadeOf [[plastic]]"}
+{"start":"/c/en/paper","rel":"/r/UsedFor","end":"/c/en/writing","weight":1,"surfaceText":"[[paper]] UsedFor [[writing]]"}
+{"start":"/c/en/paper","rel":"/r/MadeOf","end":"/c/en/wood","weight":1,"surfaceText":"[[paper]] MadeOf [[wood]]"}
+{"start":"/c/en/key","rel":"/r/UsedFor","end":"/c/en/opening_a_lock","weight":1,"surfaceText":"[[key]] UsedFor [[opening a lock]]"}
+{"start":"/c/en/key","rel":"/r/PartOf","end":"/c/en/lock_and_key","weight":1,"surfaceText":"[[key]] PartOf [[lock and key]]"}
+{"start":"/c/en/lock","rel":"/r/UsedFor","end":"/c/en/securing_a_door","weight":1,"surfaceText":"[[lock]] UsedFor [[securing a door]]"}
+{"start":"/c/en/lock","rel":"/r/HasA","end":"/c/en/key","weight":1,"surfaceText":"[[lock]] HasA [[key]]"}
+{"start":"/c/en/box","rel":"/r/UsedFor","end":"/c/en/storing_things","weight":1,"surfaceText":"[[box]] UsedFor [[storing things]]"}
+{"start":"/c/en/box","rel":"/r/MadeOf","end":"/c/en/cardboard","weight":1,"surfaceText":"[[box]] MadeOf [[cardboard]]"}
+{"start":"/c/en/car","rel":"/r/IsA","end":"/c/en/vehicle","weight":1,"surfaceText":"[[car]] IsA [[vehicle]]"}
+{"start":"/c/en/car","rel":"/r/HasA","end":"/c/en/wheel","weight":1,"surfaceText":"[[car]] HasA [[wheel]]"}
+{"start":"/c/en/car","rel":"/r/UsedFor","end":"/c/en/traveling","weight":1,"surfaceText":"[[car]] UsedFor [[traveling]]"}
+{"start":"/c/en/bicycle","rel":"/r/IsA","end":"/c/en/vehicle","weight":1,"surfaceText":"[[bicycle]] IsA [[vehicle]]"}
+{"start":"/c/en/bicycle","rel":"/r/HasA","end":"/c/en/wheel","weight":1,"surfaceText":"[[bicycle]] HasA [[wheel]]"}
+{"start":"/c/en/bicycle","rel":"/r/CapableOf","end":"/c/en/carry_a_person","weight":1,"surfaceText":"[[bicycle]] CapableOf [[carry a person]]"}
+{"start":"/c/en/boat","rel":"/r/IsA","end":"/c/en/vehicle","weight":1,"surfaceText":"[[boat]] IsA [[vehicle]]"}
+{"start":"/c/en/boat","rel":"/r/UsedFor","end":"/c/en/traveling_on_water","weight":1,"surfaceText":"[[boat]] UsedFor [[traveling on water]]"}
+{"start":"/c/en/train","rel":"/r/IsA","end":"/c/en/vehicle","weight":1,"surfaceText":"[[train]] IsA [[vehicle]]"}
+{"start":"/c/en/train","rel":"/r/UsedFor","end":"/c/en/traveling","weight":1,"surfaceText":"[[train]] UsedFor [[traveling]]"}
+{"start":"/c/en/train","rel":"/r/HasA","end":"/c/en/wheel","weight":1,"surfaceText":"[[train]] HasA [[wheel]]"}
+{"start":"/c/en/wheel","rel":"/r/PartOf","end":"/c/en/vehicle","weight":1,"surfaceText":"[[wheel]] PartOf [[vehicle]]"}
+{"start":"/c/en/wheel","rel":"/r/HasProperty","end":"/c/en/round","weight":1,"surfaceText":"[[wheel]] HasProperty [[round]]"}
+{"start":"/c/en/knife","rel":"/r/UsedFor","end":"/c/en/cutting","weight":1,"surfaceText":"[[knife]] UsedFor [[cutting]]"}
+{"start":"/c/en/knife","rel":"/r/HasProperty","end":"/c/en/sharp","weight":1,"surfaceText":"[[knife]] HasProperty [[sharp]]"}
+{"start":"/c/en/spoon","rel":"/r/UsedFor","end":"/c/en/eating","weight":1,"surfaceText":"[[spoon]] UsedFor [[eating]]"}
+{"start":"/c/en/spoon","rel":"/r/PartOf","end":"/c/en/cutlery","weight":1,"surfaceText":"[[spoon]] PartOf [[cutlery]]"}
+{"start":"/c/en/fork","rel":"/r/UsedFor","end":"/c/en/eating","weight":1,"surfaceText":"[[fork]] UsedFor [[eating]]"}
+{"start":"/c/en/fork","rel":"/r/PartOf","end":"/c/en/cutlery","weight":1,"surfaceText":"[[fork]] PartOf [[cutlery]]"}
+{"start":"/c/en/plate","rel":"/r/UsedFor","end":"/c/en/holding_food","weight":1,"surfaceText":"[[plate]] UsedFor [[holding food]]"}
+{"start":"/c/en/plate","rel":"/r/MadeOf","end":"/c/en/ceramic","weight":1,"surfaceText":"[[plate]] MadeOf [[ceramic]]"}
+{"start":"/c/en/cup","rel":"/r/UsedFor","end":"/c/en/drinking","weight":1,"surfaceText":"[[cup]] UsedFor [[drinking]]"}
+{"start":"/c/en/cup","rel":"/r/MadeOf","end":"/c/en/ceramic","weight":1,"surfaceText":"[[cup]] MadeOf [[ceramic]]"}
+{"start":"/c/en/bottle","rel":"/r/UsedFor","end":"/c/en/storing_liquid","weight":1,"surfaceText":"[[bottle]] UsedFor [[storing liquid]]"}
+{"start":"/c/en/bottle","rel":"/r/MadeOf","end":"/c/en/glass","weight":1,"surfaceText":"[[bottle]] MadeOf [[glass]]"}
+{"start":"/c/en/bag","rel":"/r/UsedFor","end":"/c/en/carrying_things","weight":1,"surfaceText":"[[bag]] UsedFor [[carrying things]]"}
+{"start":"/c/en/bag","rel":"/r/HasA","end":"/c/en/handle","weight":1,"surfaceText":"[[bag]] HasA [[handle]]"}
+{"start":"/c/en/money","rel":"/r/UsedFor","end":"/c/en/buying_things","weight":1,"surfaceText":"[[money]] UsedFor [[buying things]]"}
+{"start":"/c/en/money","rel":"/r/HasProperty","end":"/c/en/valuable","weight":1,"surfaceText":"[[money]] HasProperty [[valuable]]"}
+{"start":"/c/en/coin","rel":"/r/IsA","end":"/c/en/money","weight":1,"surfaceText":"[[coin]] IsA [[money]]"}
+{"start":"/c/en/coin","rel":"/r/MadeOf","end":"/c/en/metal","weight":1,"surfaceText":"[[coin]] MadeOf [[metal]]"}
+{"start":"/c/en/toy","rel":"/r/UsedFor","end":"/c/en/playing","weight":1,"surfaceText":"[[toy]] UsedFor [[playing]]"}
+{"start":"/c/en/toy","rel":"/r/CapableOf","end":"/c/en/entertain_a_child","weight":1,"surfaceText":"[[toy]] CapableOf [[entertain a child]]"}
+{"start":"/c/en/tool","rel":"/r/UsedFor","end":"/c/en/working","weight":1,"surfaceText":"[[tool]] UsedFor [[working]]"}
+{"start":"/c/en/tool","rel":"/r/CapableOf","end":"/c/en/help_build_things","weight":1,"surfaceText":"[[tool]] CapableOf [[help build things]]"}
+{"start":"/c/en/machine","rel":"/r/CapableOf","end":"/c/en/do_work","weight":1,"surfaceText":"[[machine]] CapableOf [[do work]]"}
+{"start":"/c/en/machine","rel":"/r/HasProperty","end":"/c/en/mechanical","weight":1,"surfaceText":"[[machine]] HasProperty [[mechanical]]"}
+{"start":"/c/en/clock","rel":"/r/UsedFor","end":"/c/en/telling_time","weight":1,"surfaceText":"[[clock]] UsedFor [[telling time]]"}
+{"start":"/c/en/clock","rel":"/r/HasA","end":"/c/en/hand","weight":1,"surfaceText":"[[clock]] HasA [[hand]]"}
+{"start":"/c/en/phone","rel":"/r/UsedFor","end":"/c/en/communicating","weight":1,"surfaceText":"[[phone]] UsedFor [[communicating]]"}
+{"start":"/c/en/phone","rel":"/r/CapableOf","end":"/c/en/make_calls","weight":1,"surfaceText":"[[phone]] CapableOf [[make calls]]"}
+{"start":"/c/en/book","rel":"/r/MadeOf","end":"/c/en/paper","weight":1,"surfaceText":"[[book]] MadeOf [[paper]]"}
+{"start":"/c/en/book","rel":"/r/UsedFor","end":"/c/en/reading","weight":1,"surfaceText":"[[book]] UsedFor [[reading]]"}
+{"start":"/c/en/letter","rel":"/r/MadeOf","end":"/c/en/paper","weight":1,"surfaceText":"[[letter]] MadeOf [[paper]]"}
+{"start":"/c/en/letter","rel":"/r/UsedFor","end":"/c/en/communicating","weight":1,"surfaceText":"[[letter]] UsedFor [[communicating]]"}
+{"start":"/c/en/umbrella","rel":"/r/UsedFor","end":"/c/en/staying_dry","weight":1,"surfaceText":"[[umbrella]] UsedFor [[staying dry]]"}
+{"start":"/c/en/umbrella","rel":"/r/CapableOf","end":"/c/en/block_rain","weight":1,"surfaceText":"[[umbrella]] CapableOf [[block rain]]"}
+{"start":"/c/en/glove","rel":"/r/IsA","end":"/c/en/clothing","weight":1,"surfaceText":"[[glove]] IsA [[clothing]]"}
+{"start":"/c/en/glove","rel":"/r/UsedFor","end":"/c/en/covering_the_hand","weight":1,"surfaceText":"[[glove]] UsedFor [[covering the hand]]"}
+{"start":"/c/en/sock","rel":"/r/IsA","end":"/c/en/clothing","weight":1,"surfaceText":"[[sock]] IsA [[clothing]]"}
+{"start":"/c/en/sock","rel":"/r/PartOf","end":"/c/en/outfit","weight":1,"surfaceText":"[[sock]] PartOf [[outfit]]"}
+{"start":"/c/en/ring","rel":"/r/IsA","end":"/c/en/jewelry","weight":1,"surfaceText":"[[ring]] IsA [[jewelry]]"}
+{"start":"/c/en/ring","rel":"/r/MadeOf","end":"/c/en/gold","weight":1,"surfaceText":"[[ring]] MadeOf [[gold]]"}
+{"start":"/c/en/watch","rel":"/r/UsedFor","end":"/c/en/telling_time","weight":1,"surfaceText":"[[watch]] UsedFor [[telling time]]"}
+{"start":"/c/en/watch","rel":"/r/PartOf","end":"/c/en/jewelry","weight":1,"surfaceText":"[[watch]] PartOf [[jewelry]]"}
+{"start":"/c/en/mirror","rel":"/r/UsedFor","end":"/c/en/seeing_your_reflection","weight":1,"surfaceText":"[[mirror]] UsedFor [[seeing your reflection]]"}
+{"start":"/c/en/mirror","rel":"/r/MadeOf","end":"/c/en/glass","weight":1,"surfaceText":"[[mirror]] MadeOf [[glass]]"}
+{"start":"/c/en/candle","rel":"/r/UsedFor","end":"/c/en/giving_light","weight":1,"surfaceText":"[[candle]] UsedFor [[giving light]]"}
+{"start":"/c/en/candle","rel":"/r/MadeOf","end":"/c/en/wax","weight":1,"surfaceText":"[[candle]] MadeOf [[wax]]"}
+{"start":"/c/en/ladder","rel":"/r/UsedFor","end":"/c/en/climbing","weight":1,"surfaceText":"[[ladder]] UsedFor [[climbing]]"}
+{"start":"/c/en/ladder","rel":"/r/MadeOf","end":"/c/en/wood","weight":1,"surfaceText":"[[ladder]] MadeOf [[wood]]"}
+{"start":"/c/en/hammer","rel":"/r/UsedFor","end":"/c/en/hitting_nails","weight":1,"surfaceText":"[[hammer]] UsedFor [[hitting nails]]"}
+{"start":"/c/en/hammer","rel":"/r/PartOf","end":"/c/en/toolbox","weight":1,"surfaceText":"[[hammer]] PartOf [[toolbox]]"}
+{"start":"/c/en/basket","rel":"/r/UsedFor","end":"/c/en/carrying_things","weight":1,"surfaceText":"[[basket]] UsedFor [[carrying things]]"}
+{"start":"/c/en/basket","rel":"/r/MadeOf","end":"/c/en/woven_material","weight":1,"surfaceText":"[[basket]] MadeOf [[woven material]]"}
+{"start":"/c/en/wallet","rel":"/r/UsedFor","end":"/c/en/carrying_money","weight":1,"surfaceText":"[[wallet]] UsedFor [[carrying money]]"}
+{"start":"/c/en/wallet","rel":"/r/PartOf","end":"/c/en/outfit","weight":1,"surfaceText":"[[wallet]] PartOf [[outfit]]"}
+{"start":"/c/en/dog","rel":"/r/IsA","end":"/c/en/animal","weight":1,"surfaceText":"[[dog]] IsA [[animal]]"}
+{"start":"/c/en/dog","rel":"/r/HasA","end":"/c/en/tail","weight":1,"surfaceText":"[[dog]] HasA [[tail]]"}
+{"start":"/c/en/dog","rel":"/r/CapableOf","end":"/c/en/bark","weight":1,"surfaceText":"[[dog]] CapableOf [[bark]]"}
+{"start":"/c/en/cat","rel":"/r/IsA","end":"/c/en/animal","weight":1,"surfaceText":"[[cat]] IsA [[animal]]"}
+{"start":"/c/en/cat","rel":"/r/CapableOf","end":"/c/en/meow","weight":1,"surfaceText":"[[cat]] CapableOf [[meow]]"}
+{"start":"/c/en/cat","rel":"/r/HasA","end":"/c/en/fur","weight":1,"surfaceText":"[[cat]] HasA [[fur]]"}
+{"start":"/c/en/horse","rel":"/r/IsA","end":"/c/en/animal","weight":1,"surfaceText":"[[horse]] IsA [[animal]]"}
+{"start":"/c/en/horse","rel":"/r/CapableOf","end":"/c/en/run","weight":1,"surfaceText":"[[horse]] CapableOf [[run]]"}
+{"start":"/c/en/horse","rel":"/r/UsedFor","end":"/c/en/riding","weight":1,"surfaceText":"[[horse]] UsedFor [[riding]]"}
+{"start":"/c/en/cow","rel":"/r/IsA","end":"/c/en/animal","weight":1,"surfaceText":"[[cow]] IsA [[animal]]"}
+{"start":"/c/en/cow","rel":"/r/UsedFor","end":"/c/en/producing_milk","weight":1,"surfaceText":"[[cow]] UsedFor [[producing milk]]"}
+{"start":"/c/en/pig","rel":"/r/IsA","end":"/c/en/animal","weight":1,"surfaceText":"[[pig]] IsA [[animal]]"}
+{"start":"/c/en/pig","rel":"/r/HasProperty","end":"/c/en/pink","weight":1,"surfaceText":"[[pig]] HasProperty [[pink]]"}
+{"start":"/c/en/sheep","rel":"/r/IsA","end":"/c/en/animal","weight":1,"surfaceText":"[[sheep]] IsA [[animal]]"}
+{"start":"/c/en/sheep","rel":"/r/HasA","end":"/c/en/wool","weight":1,"surfaceText":"[[sheep]] HasA [[wool]]"}
+{"start":"/c/en/bird","rel":"/r/IsA","end":"/c/en/animal","weight":1,"surfaceText":"[[bird]] IsA [[animal]]"}
+{"start":"/c/en/bird","rel":"/r/HasA","end":"/c/en/feather","weight":1,"surfaceText":"[[bird]] HasA [[feather]]"}
+{"start":"/c/en/bird","rel":"/r/CapableOf","end":"/c/en/fly","weight":1,"surfaceText":"[[bird]] CapableOf [[fly]]"}
+{"start":"/c/en/fish","rel":"/r/IsA","end":"/c/en/animal","weight":1,"surfaceText":"[[fish]] IsA [[animal]]"}
+{"start":"/c/en/fish","rel":"/r/AtLocation","end":"/c/en/water","weight":1,"surfaceText":"[[fish]] AtLocation [[water]]"}
+{"start":"/c/en/fish","rel":"/r/CapableOf","end":"/c/en/swim","weight":1,"surfaceText":"[[fish]] CapableOf [[swim]]"}
+{"start":"/c/en/mouse","rel":"/r/IsA","end":"/c/en/animal","weight":1,"surfaceText":"[[mouse]] IsA [[animal]]"}
+{"start":"/c/en/mouse","rel":"/r/HasProperty","end":"/c/en/small","weight":1,"surfaceText":"[[mouse]] HasProperty [[small]]"}
+{"start":"/c/en/rabbit","rel":"/r/IsA","end":"/c/en/animal","weight":1,"surfaceText":"[[rabbit]] IsA [[animal]]"}
+{"start":"/c/en/rabbit","rel":"/r/CapableOf","end":"/c/en/hop","weight":1,"surfaceText":"[[rabbit]] CapableOf [[hop]]"}
+{"start":"/c/en/bear","rel":"/r/IsA","end":"/c/en/animal","weight":1,"surfaceText":"[[bear]] IsA [[animal]]"}
+{"start":"/c/en/bear","rel":"/r/HasProperty","end":"/c/en/large","weight":1,"surfaceText":"[[bear]] HasProperty [[large]]"}
+{"start":"/c/en/lion","rel":"/r/IsA","end":"/c/en/animal","weight":1,"surfaceText":"[[lion]] IsA [[animal]]"}
+{"start":"/c/en/lion","rel":"/r/CapableOf","end":"/c/en/roar","weight":1,"surfaceText":"[[lion]] CapableOf [[roar]]"}
+{"start":"/c/en/tiger","rel":"/r/IsA","end":"/c/en/animal","weight":1,"surfaceText":"[[tiger]] IsA [[animal]]"}
+{"start":"/c/en/tiger","rel":"/r/HasProperty","end":"/c/en/striped","weight":1,"surfaceText":"[[tiger]] HasProperty [[striped]]"}
+{"start":"/c/en/elephant","rel":"/r/IsA","end":"/c/en/animal","weight":1,"surfaceText":"[[elephant]] IsA [[animal]]"}
+{"start":"/c/en/elephant","rel":"/r/HasProperty","end":"/c/en/large","weight":1,"surfaceText":"[[elephant]] HasProperty [[large]]"}
+{"start":"/c/en/elephant","rel":"/r/HasA","end":"/c/en/trunk","weight":1,"surfaceText":"[[elephant]] HasA [[trunk]]"}
+{"start":"/c/en/snake","rel":"/r/IsA","end":"/c/en/animal","weight":1,"surfaceText":"[[snake]] IsA [[animal]]"}
+{"start":"/c/en/snake","rel":"/r/HasProperty","end":"/c/en/legless","weight":1,"surfaceText":"[[snake]] HasProperty [[legless]]"}
+{"start":"/c/en/tree","rel":"/r/IsA","end":"/c/en/plant","weight":1,"surfaceText":"[[tree]] IsA [[plant]]"}
+{"start":"/c/en/tree","rel":"/r/HasA","end":"/c/en/leaf","weight":1,"surfaceText":"[[tree]] HasA [[leaf]]"}
+{"start":"/c/en/tree","rel":"/r/HasA","end":"/c/en/root","weight":1,"surfaceText":"[[tree]] HasA [[root]]"}
+{"start":"/c/en/flower","rel":"/r/IsA","end":"/c/en/plant","weight":1,"surfaceText":"[[flower]] IsA [[plant]]"}
+{"start":"/c/en/flower","rel":"/r/HasProperty","end":"/c/en/colorful","weight":1,"surfaceText":"[[flower]] HasProperty [[colorful]]"}
+{"start":"/c/en/grass","rel":"/r/IsA","end":"/c/en/plant","weight":1,"surfaceText":"[[grass]] IsA [[plant]]"}
+{"start":"/c/en/grass","rel":"/r/AtLocation","end":"/c/en/ground","weight":1,"surfaceText":"[[grass]] AtLocation [[ground]]"}
+{"start":"/c/en/leaf","rel":"/r/PartOf","end":"/c/en/plant","weight":1,"surfaceText":"[[leaf]] PartOf [[plant]]"}
+{"start":"/c/en/leaf","rel":"/r/CapableOf","end":"/c/en/photosynthesize","weight":1,"surfaceText":"[[leaf]] CapableOf [[photosynthesize]]"}
+{"start":"/c/en/root","rel":"/r/PartOf","end":"/c/en/plant","weight":1,"surfaceText":"[[root]] PartOf [[plant]]"}
+{"start":"/c/en/root","rel":"/r/AtLocation","end":"/c/en/underground","weight":1,"surfaceText":"[[root]] AtLocation [[underground]]"}
+{"start":"/c/en/seed","rel":"/r/PartOf","end":"/c/en/plant","weight":1,"surfaceText":"[[seed]] PartOf [[plant]]"}
+{"start":"/c/en/seed","rel":"/r/CapableOf","end":"/c/en/grow_into_a_plant","weight":1,"surfaceText":"[[seed]] CapableOf [[grow into a plant]]"}
+{"start":"/c/en/fruit","rel":"/r/PartOf","end":"/c/en/plant","weight":1,"surfaceText":"[[fruit]] PartOf [[plant]]"}
+{"start":"/c/en/fruit","rel":"/r/UsedFor","end":"/c/en/eating","weight":1,"surfaceText":"[[fruit]] UsedFor [[eating]]"}
+{"start":"/c/en/water","rel":"/r/IsA","end":"/c/en/liquid","weight":1,"surfaceText":"[[water]] IsA [[liquid]]"}
+{"start":"/c/en/water","rel":"/r/UsedFor","end":"/c/en/drinking","weight":1,"surfaceText":"[[water]] UsedFor [[drinking]]"}
+{"start":"/c/en/air","rel":"/r/UsedFor","end":"/c/en/breathing","weight":1,"surfaceText":"[[air]] UsedFor [[breathing]]"}
+{"start":"/c/en/air","rel":"/r/AtLocation","end":"/c/en/sky","weight":1,"surfaceText":"[[air]] AtLocation [[sky]]"}
+{"start":"/c/en/fire","rel":"/r/CapableOf","end":"/c/en/produce_heat","weight":1,"surfaceText":"[[fire]] CapableOf [[produce heat]]"}
+{"start":"/c/en/fire","rel":"/r/CapableOf","end":"/c/en/produce_light","weight":1,"surfaceText":"[[fire]] CapableOf [[produce light]]"}
+{"start":"/c/en/earth","rel":"/r/IsA","end":"/c/en/planet","weight":1,"surfaceText":"[[earth]] IsA [[planet]]"}
+{"start":"/c/en/earth","rel":"/r/HasA","end":"/c/en/ocean","weight":1,"surfaceText":"[[earth]] HasA [[ocean]]"}
+{"start":"/c/en/stone","rel":"/r/IsA","end":"/c/en/material","weight":1,"surfaceText":"[[stone]] IsA [[material]]"}
+{"start":"/c/en/stone","rel":"/r/HasProperty","end":"/c/en/hard","weight":1,"surfaceText":"[[stone]] HasProperty [[hard]]"}
+{"start":"/c/en/sand","rel":"/r/AtLocation","end":"/c/en/beach","weight":1,"surfaceText":"[[sand]] AtLocation [[beach]]"}
+{"start":"/c/en/sand","rel":"/r/HasProperty","end":"/c/en/small","weight":1,"surfaceText":"[[sand]] HasProperty [[small]]"}
+{"start":"/c/en/gold","rel":"/r/IsA","end":"/c/en/metal","weight":1,"surfaceText":"[[gold]] IsA [[metal]]"}
+{"start":"/c/en/gold","rel":"/r/HasProperty","end":"/c/en/valuable","weight":1,"surfaceText":"[[gold]] HasProperty [[valuable]]"}
+{"start":"/c/en/iron","rel":"/r/IsA","end":"/c/en/metal","weight":1,"surfaceText":"[[iron]] IsA [[metal]]"}
+{"start":"/c/en/iron","rel":"/r/HasProperty","end":"/c/en/strong","weight":1,"surfaceText":"[[iron]] HasProperty [[strong]]"}
+{"start":"/c/en/rain","rel":"/r/IsA","end":"/c/en/weather","weight":1,"surfaceText":"[[rain]] IsA [[weather]]"}
+{"start":"/c/en/rain","rel":"/r/MadeOf","end":"/c/en/water","weight":1,"surfaceText":"[[rain]] MadeOf [[water]]"}
+{"start":"/c/en/snow","rel":"/r/IsA","end":"/c/en/weather","weight":1,"surfaceText":"[[snow]] IsA [[weather]]"}
+{"start":"/c/en/snow","rel":"/r/HasProperty","end":"/c/en/cold","weight":1,"surfaceText":"[[snow]] HasProperty [[cold]]"}
+{"start":"/c/en/wind","rel":"/r/CapableOf","end":"/c/en/move_things","weight":1,"surfaceText":"[[wind]] CapableOf [[move things]]"}
+{"start":"/c/en/wind","rel":"/r/AtLocation","end":"/c/en/sky","weight":1,"surfaceText":"[[wind]] AtLocation [[sky]]"}
+{"start":"/c/en/cloud","rel":"/r/PartOf","end":"/c/en/sky","weight":1,"surfaceText":"[[cloud]] PartOf [[sky]]"}
+{"start":"/c/en/cloud","rel":"/r/CapableOf","end":"/c/en/produce_rain","weight":1,"surfaceText":"[[cloud]] CapableOf [[produce rain]]"}
+{"start":"/c/en/sun","rel":"/r/IsA","end":"/c/en/star","weight":1,"surfaceText":"[[sun]] IsA [[star]]"}
+{"start":"/c/en/sun","rel":"/r/CapableOf","end":"/c/en/produce_light","weight":1,"surfaceText":"[[sun]] CapableOf [[produce light]]"}
+{"start":"/c/en/moon","rel":"/r/AtLocation","end":"/c/en/sky","weight":1,"surfaceText":"[[moon]] AtLocation [[sky]]"}
+{"start":"/c/en/moon","rel":"/r/CapableOf","end":"/c/en/orbit_the_earth","weight":1,"surfaceText":"[[moon]] CapableOf [[orbit the earth]]"}
+{"start":"/c/en/star","rel":"/r/AtLocation","end":"/c/en/sky","weight":1,"surfaceText":"[[star]] AtLocation [[sky]]"}
+{"start":"/c/en/star","rel":"/r/CapableOf","end":"/c/en/produce_light","weight":1,"surfaceText":"[[star]] CapableOf [[produce light]]"}
+{"start":"/c/en/owl","rel":"/r/IsA","end":"/c/en/bird","weight":1,"surfaceText":"[[owl]] IsA [[bird]]"}
+{"start":"/c/en/owl","rel":"/r/CapableOf","end":"/c/en/hunt_at_night","weight":1,"surfaceText":"[[owl]] CapableOf [[hunt at night]]"}
+{"start":"/c/en/wolf","rel":"/r/IsA","end":"/c/en/animal","weight":1,"surfaceText":"[[wolf]] IsA [[animal]]"}
+{"start":"/c/en/wolf","rel":"/r/CapableOf","end":"/c/en/hunt_in_packs","weight":1,"surfaceText":"[[wolf]] CapableOf [[hunt in packs]]"}
+{"start":"/c/en/frog","rel":"/r/IsA","end":"/c/en/animal","weight":1,"surfaceText":"[[frog]] IsA [[animal]]"}
+{"start":"/c/en/frog","rel":"/r/CapableOf","end":"/c/en/jump","weight":1,"surfaceText":"[[frog]] CapableOf [[jump]]"}
+{"start":"/c/en/bee","rel":"/r/IsA","end":"/c/en/insect","weight":1,"surfaceText":"[[bee]] IsA [[insect]]"}
+{"start":"/c/en/bee","rel":"/r/CapableOf","end":"/c/en/make_honey","weight":1,"surfaceText":"[[bee]] CapableOf [[make honey]]"}
+{"start":"/c/en/ant","rel":"/r/IsA","end":"/c/en/insect","weight":1,"surfaceText":"[[ant]] IsA [[insect]]"}
+{"start":"/c/en/butterfly","rel":"/r/IsA","end":"/c/en/insect","weight":1,"surfaceText":"[[butterfly]] IsA [[insect]]"}
+{"start":"/c/en/butterfly","rel":"/r/HasProperty","end":"/c/en/colorful","weight":1,"surfaceText":"[[butterfly]] HasProperty [[colorful]]"}
+{"start":"/c/en/spider","rel":"/r/IsA","end":"/c/en/animal","weight":1,"surfaceText":"[[spider]] IsA [[animal]]"}
+{"start":"/c/en/spider","rel":"/r/HasA","end":"/c/en/leg","weight":1,"surfaceText":"[[spider]] HasA [[leg]]"}
+{"start":"/c/en/river","rel":"/r/IsA","end":"/c/en/waterway","weight":1,"surfaceText":"[[river]] IsA [[waterway]]"}
+{"start":"/c/en/river","rel":"/r/CapableOf","end":"/c/en/flow","weight":1,"surfaceText":"[[river]] CapableOf [[flow]]"}
+{"start":"/c/en/ocean","rel":"/r/IsA","end":"/c/en/body_of_water","weight":1,"surfaceText":"[[ocean]] IsA [[body of water]]"}
+{"start":"/c/en/ocean","rel":"/r/HasProperty","end":"/c/en/salty","weight":1,"surfaceText":"[[ocean]] HasProperty [[salty]]"}
+{"start":"/c/en/time","rel":"/r/HasProperty","end":"/c/en/measurable","weight":1,"surfaceText":"[[time]] HasProperty [[measurable]]"}
+{"start":"/c/en/time","rel":"/r/CapableOf","end":"/c/en/pass","weight":1,"surfaceText":"[[time]] CapableOf [[pass]]"}
+{"start":"/c/en/day","rel":"/r/PartOf","end":"/c/en/week","weight":1,"surfaceText":"[[day]] PartOf [[week]]"}
+{"start":"/c/en/day","rel":"/r/HasA","end":"/c/en/morning","weight":1,"surfaceText":"[[day]] HasA [[morning]]"}
+{"start":"/c/en/night","rel":"/r/PartOf","end":"/c/en/day","weight":1,"surfaceText":"[[night]] PartOf [[day]]"}
+{"start":"/c/en/night","rel":"/r/HasProperty","end":"/c/en/dark","weight":1,"surfaceText":"[[night]] HasProperty [[dark]]"}
+{"start":"/c/en/morning","rel":"/r/PartOf","end":"/c/en/day","weight":1,"surfaceText":"[[morning]] PartOf [[day]]"}
+{"start":"/c/en/morning","rel":"/r/HasProperty","end":"/c/en/early","weight":1,"surfaceText":"[[morning]] HasProperty [[early]]"}
+{"start":"/c/en/evening","rel":"/r/PartOf","end":"/c/en/day","weight":1,"surfaceText":"[[evening]] PartOf [[day]]"}
+{"start":"/c/en/evening","rel":"/r/HasProperty","end":"/c/en/late","weight":1,"surfaceText":"[[evening]] HasProperty [[late]]"}
+{"start":"/c/en/week","rel":"/r/PartOf","end":"/c/en/month","weight":1,"surfaceText":"[[week]] PartOf [[month]]"}
+{"start":"/c/en/week","rel":"/r/HasA","end":"/c/en/day","weight":1,"surfaceText":"[[week]] HasA [[day]]"}
+{"start":"/c/en/month","rel":"/r/PartOf","end":"/c/en/year","weight":1,"surfaceText":"[[month]] PartOf [[year]]"}
+{"start":"/c/en/month","rel":"/r/HasA","end":"/c/en/week","weight":1,"surfaceText":"[[month]] HasA [[week]]"}
+{"start":"/c/en/year","rel":"/r/HasA","end":"/c/en/month","weight":1,"surfaceText":"[[year]] HasA [[month]]"}
+{"start":"/c/en/year","rel":"/r/HasA","end":"/c/en/season","weight":1,"surfaceText":"[[year]] HasA [[season]]"}
+{"start":"/c/en/hour","rel":"/r/PartOf","end":"/c/en/day","weight":1,"surfaceText":"[[hour]] PartOf [[day]]"}
+{"start":"/c/en/hour","rel":"/r/HasA","end":"/c/en/minute","weight":1,"surfaceText":"[[hour]] HasA [[minute]]"}
+{"start":"/c/en/minute","rel":"/r/PartOf","end":"/c/en/hour","weight":1,"surfaceText":"[[minute]] PartOf [[hour]]"}
+{"start":"/c/en/minute","rel":"/r/HasA","end":"/c/en/second","weight":1,"surfaceText":"[[minute]] HasA [[second]]"}
+{"start":"/c/en/second","rel":"/r/PartOf","end":"/c/en/minute","weight":1,"surfaceText":"[[second]] PartOf [[minute]]"}
+{"start":"/c/en/second","rel":"/r/HasProperty","end":"/c/en/brief","weight":1,"surfaceText":"[[second]] HasProperty [[brief]]"}
+{"start":"/c/en/moment","rel":"/r/HasProperty","end":"/c/en/brief","weight":1,"surfaceText":"[[moment]] HasProperty [[brief]]"}
+{"start":"/c/en/moment","rel":"/r/IsA","end":"/c/en/time","weight":1,"surfaceText":"[[moment]] IsA [[time]]"}
+{"start":"/c/en/season","rel":"/r/PartOf","end":"/c/en/year","weight":1,"surfaceText":"[[season]] PartOf [[year]]"}
+{"start":"/c/en/season","rel":"/r/HasProperty","end":"/c/en/recurring","weight":1,"surfaceText":"[[season]] HasProperty [[recurring]]"}
+{"start":"/c/en/spring","rel":"/r/IsA","end":"/c/en/season","weight":1,"surfaceText":"[[spring]] IsA [[season]]"}
+{"start":"/c/en/spring","rel":"/r/HasProperty","end":"/c/en/warm","weight":1,"surfaceText":"[[spring]] HasProperty [[warm]]"}
+{"start":"/c/en/summer","rel":"/r/IsA","end":"/c/en/season","weight":1,"surfaceText":"[[summer]] IsA [[season]]"}
+{"start":"/c/en/summer","rel":"/r/HasProperty","end":"/c/en/hot","weight":1,"surfaceText":"[[summer]] HasProperty [[hot]]"}
+{"start":"/c/en/winter","rel":"/r/IsA","end":"/c/en/season","weight":1,"surfaceText":"[[winter]] IsA [[season]]"}
+{"start":"/c/en/winter","rel":"/r/HasProperty","end":"/c/en/cold","weight":1,"surfaceText":"[[winter]] HasProperty [[cold]]"}
+{"start":"/c/en/wedding","rel":"/r/IsA","end":"/c/en/event","weight":1,"surfaceText":"[[wedding]] IsA [[event]]"}
+{"start":"/c/en/wedding","rel":"/r/HasA","end":"/c/en/family","weight":1,"surfaceText":"[[wedding]] HasA [[family]]"}
+{"start":"/c/en/race","rel":"/r/IsA","end":"/c/en/event","weight":1,"surfaceText":"[[race]] IsA [[event]]"}
+{"start":"/c/en/race","rel":"/r/CapableOf","end":"/c/en/determine_a_winner","weight":1,"surfaceText":"[[race]] CapableOf [[determine a winner]]"}
+{"start":"/c/en/dozen","rel":"/r/IsA","end":"/c/en/number","weight":1,"surfaceText":"[[dozen]] IsA [[number]]"}
+{"start":"/c/en/dozen","rel":"/r/HasProperty","end":"/c/en/twelve","weight":1,"surfaceText":"[[dozen]] HasProperty [[twelve]]"}
+{"start":"/c/en/half","rel":"/r/IsA","end":"/c/en/quantity","weight":1,"surfaceText":"[[half]] IsA [[quantity]]"}
+{"start":"/c/en/half","rel":"/r/HasProperty","end":"/c/en/fractional","weight":1,"surfaceText":"[[half]] HasProperty [[fractional]]"}
+{"start":"/c/en/amount","rel":"/r/IsA","end":"/c/en/quantity","weight":1,"surfaceText":"[[amount]] IsA [[quantity]]"}
+{"start":"/c/en/amount","rel":"/r/UsedFor","end":"/c/en/measuring","weight":1,"surfaceText":"[[amount]] UsedFor [[measuring]]"}
+{"start":"/c/en/meeting","rel":"/r/IsA","end":"/c/en/event","weight":1,"surfaceText":"[[meeting]] IsA [[event]]"}
+{"start":"/c/en/meeting","rel":"/r/UsedFor","end":"/c/en/discussing_ideas","weight":1,"surfaceText":"[[meeting]] UsedFor [[discussing ideas]]"}
+{"start":"/c/en/game","rel":"/r/IsA","end":"/c/en/event","weight":1,"surfaceText":"[[game]] IsA [[event]]"}
+{"start":"/c/en/game","rel":"/r/CapableOf","end":"/c/en/entertain_people","weight":1,"surfaceText":"[[game]] CapableOf [[entertain people]]"}
+{"start":"/c/en/war","rel":"/r/IsA","end":"/c/en/event","weight":1,"surfaceText":"[[war]] IsA [[event]]"}
+{"start":"/c/en/war","rel":"/r/CapableOf","end":"/c/en/cause_death","weight":1,"surfaceText":"[[war]] CapableOf [[cause death]]"}
+{"start":"/c/en/trip","rel":"/r/IsA","end":"/c/en/event","weight":1,"surfaceText":"[[trip]] IsA [[event]]"}
+{"start":"/c/en/trip","rel":"/r/UsedFor","end":"/c/en/traveling","weight":1,"surfaceText":"[[trip]] UsedFor [[traveling]]"}
+{"start":"/c/en/birthday","rel":"/r/IsA","end":"/c/en/event","weight":1,"surfaceText":"[[birthday]] IsA [[event]]"}
+{"start":"/c/en/birthday","rel":"/r/PartOf","end":"/c/en/year","weight":1,"surfaceText":"[[birthday]] PartOf [[year]]"}
+{"start":"/c/en/holiday","rel":"/r/IsA","end":"/c/en/event","weight":1,"surfaceText":"[[holiday]] IsA [[event]]"}
+{"start":"/c/en/holiday","rel":"/r/HasProperty","end":"/c/en/festive","weight":1,"surfaceText":"[[holiday]] HasProperty [[festive]]"}
+{"start":"/c/en/autumn","rel":"/r/IsA","end":"/c/en/season","weight":1,"surfaceText":"[[autumn]] IsA [[season]]"}
+{"start":"/c/en/autumn","rel":"/r/HasProperty","end":"/c/en/cool","weight":1,"surfaceText":"[[autumn]] HasProperty [[cool]]"}
+{"start":"/c/en/century","rel":"/r/HasA","end":"/c/en/year","weight":1,"surfaceText":"[[century]] HasA [[year]]"}
+{"start":"/c/en/century","rel":"/r/HasProperty","end":"/c/en/long","weight":1,"surfaceText":"[[century]] HasProperty [[long]]"}
+{"start":"/c/en/body","rel":"/r/HasA","end":"/c/en/head","weight":1,"surfaceText":"[[body]] HasA [[head]]"}
+{"start":"/c/en/body","rel":"/r/HasA","end":"/c/en/arm","weight":1,"surfaceText":"[[body]] HasA [[arm]]"}
+{"start":"/c/en/body","rel":"/r/HasA","end":"/c/en/leg","weight":1,"surfaceText":"[[body]] HasA [[leg]]"}
+{"start":"/c/en/head","rel":"/r/PartOf","end":"/c/en/body","weight":1,"surfaceText":"[[head]] PartOf [[body]]"}
+{"start":"/c/en/head","rel":"/r/HasA","end":"/c/en/eye","weight":1,"surfaceText":"[[head]] HasA [[eye]]"}
+{"start":"/c/en/hand","rel":"/r/PartOf","end":"/c/en/arm","weight":1,"surfaceText":"[[hand]] PartOf [[arm]]"}
+{"start":"/c/en/hand","rel":"/r/UsedFor","end":"/c/en/holding_things","weight":1,"surfaceText":"[[hand]] UsedFor [[holding things]]"}
+{"start":"/c/en/arm","rel":"/r/PartOf","end":"/c/en/body","weight":1,"surfaceText":"[[arm]] PartOf [[body]]"}
+{"start":"/c/en/arm","rel":"/r/HasA","end":"/c/en/hand","weight":1,"surfaceText":"[[arm]] HasA [[hand]]"}
+{"start":"/c/en/leg","rel":"/r/PartOf","end":"/c/en/body","weight":1,"surfaceText":"[[leg]] PartOf [[body]]"}
+{"start":"/c/en/leg","rel":"/r/HasA","end":"/c/en/foot","weight":1,"surfaceText":"[[leg]] HasA [[foot]]"}
+{"start":"/c/en/foot","rel":"/r/PartOf","end":"/c/en/leg","weight":1,"surfaceText":"[[foot]] PartOf [[leg]]"}
+{"start":"/c/en/foot","rel":"/r/UsedFor","end":"/c/en/walking","weight":1,"surfaceText":"[[foot]] UsedFor [[walking]]"}
+{"start":"/c/en/eye","rel":"/r/PartOf","end":"/c/en/face","weight":1,"surfaceText":"[[eye]] PartOf [[face]]"}
+{"start":"/c/en/eye","rel":"/r/UsedFor","end":"/c/en/seeing","weight":1,"surfaceText":"[[eye]] UsedFor [[seeing]]"}
+{"start":"/c/en/ear","rel":"/r/PartOf","end":"/c/en/head","weight":1,"surfaceText":"[[ear]] PartOf [[head]]"}
+{"start":"/c/en/ear","rel":"/r/UsedFor","end":"/c/en/hearing","weight":1,"surfaceText":"[[ear]] UsedFor [[hearing]]"}
+{"start":"/c/en/mouth","rel":"/r/PartOf","end":"/c/en/face","weight":1,"surfaceText":"[[mouth]] PartOf [[face]]"}
+{"start":"/c/en/mouth","rel":"/r/UsedFor","end":"/c/en/eating","weight":1,"surfaceText":"[[mouth]] UsedFor [[eating]]"}
+{"start":"/c/en/nose","rel":"/r/PartOf","end":"/c/en/face","weight":1,"surfaceText":"[[nose]] PartOf [[face]]"}
+{"start":"/c/en/nose","rel":"/r/UsedFor","end":"/c/en/smelling","weight":1,"surfaceText":"[[nose]] UsedFor [[smelling]]"}
+{"start":"/c/en/hair","rel":"/r/PartOf","end":"/c/en/head","weight":1,"surfaceText":"[[hair]] PartOf [[head]]"}
+{"start":"/c/en/hair","rel":"/r/HasProperty","end":"/c/en/growing","weight":1,"surfaceText":"[[hair]] HasProperty [[growing]]"}
+{"start":"/c/en/heart","rel":"/r/PartOf","end":"/c/en/body","weight":1,"surfaceText":"[[heart]] PartOf [[body]]"}
+{"start":"/c/en/heart","rel":"/r/CapableOf","end":"/c/en/pump_blood","weight":1,"surfaceText":"[[heart]] CapableOf [[pump blood]]"}
+{"start":"/c/en/blood","rel":"/r/PartOf","end":"/c/en/body","weight":1,"surfaceText":"[[blood]] PartOf [[body]]"}
+{"start":"/c/en/blood","rel":"/r/HasProperty","end":"/c/en/red","weight":1,"surfaceText":"[[blood]] HasProperty [[red]]"}
+{"start":"/c/en/bone","rel":"/r/PartOf","end":"/c/en/body","weight":1,"surfaceText":"[[bone]] PartOf [[body]]"}
+{"start":"/c/en/bone","rel":"/r/HasProperty","end":"/c/en/hard","weight":1,"surfaceText":"[[bone]] HasProperty [[hard]]"}
+{"start":"/c/en/skin","rel":"/r/PartOf","end":"/c/en/body","weight":1,"surfaceText":"[[skin]] PartOf [[body]]"}
+{"start":"/c/en/skin","rel":"/r/UsedFor","end":"/c/en/protecting_the_body","weight":1,"surfaceText":"[[skin]] UsedFor [[protecting the body]]"}
+{"start":"/c/en/face","rel":"/r/PartOf","end":"/c/en/head","weight":1,"surfaceText":"[[face]] PartOf [[head]]"}
+{"start":"/c/en/face","rel":"/r/HasA","end":"/c/en/eye","weight":1,"surfaceText":"[[face]] HasA [[eye]]"}
+{"start":"/c/en/food","rel":"/r/UsedFor","end":"/c/en/eating","weight":1,"surfaceText":"[[food]] UsedFor [[eating]]"}
+{"start":"/c/en/food","rel":"/r/CapableOf","end":"/c/en/provide_energy","weight":1,"surfaceText":"[[food]] CapableOf [[provide energy]]"}
+{"start":"/c/en/bread","rel":"/r/IsA","end":"/c/en/food","weight":1,"surfaceText":"[[bread]] IsA [[food]]"}
+{"start":"/c/en/bread","rel":"/r/MadeOf","end":"/c/en/flour","weight":1,"surfaceText":"[[bread]] MadeOf [[flour]]"}
+{"start":"/c/en/meat","rel":"/r/IsA","end":"/c/en/food","weight":1,"surfaceText":"[[meat]] IsA [[food]]"}
+{"start":"/c/en/meat","rel":"/r/MadeOf","end":"/c/en/animal_flesh","weight":1,"surfaceText":"[[meat]] MadeOf [[animal flesh]]"}
+{"start":"/c/en/milk","rel":"/r/CapableOf","end":"/c/en/provide_calcium","weight":1,"surfaceText":"[[milk]] CapableOf [[provide calcium]]"}
+{"start":"/c/en/milk","rel":"/r/AtLocation","end":"/c/en/cow","weight":1,"surfaceText":"[[milk]] AtLocation [[cow]]"}
+{"start":"/c/en/egg","rel":"/r/IsA","end":"/c/en/food","weight":1,"surfaceText":"[[egg]] IsA [[food]]"}
+{"start":"/c/en/egg","rel":"/r/AtLocation","end":"/c/en/chicken","weight":1,"surfaceText":"[[egg]] AtLocation [[chicken]]"}
+{"start":"/c/en/cheese","rel":"/r/IsA","end":"/c/en/food","weight":1,"surfaceText":"[[cheese]] IsA [[food]]"}
+{"start":"/c/en/cheese","rel":"/r/MadeOf","end":"/c/en/milk","weight":1,"surfaceText":"[[cheese]] MadeOf [[milk]]"}
+{"start":"/c/en/vegetable","rel":"/r/IsA","end":"/c/en/food","weight":1,"surfaceText":"[[vegetable]] IsA [[food]]"}
+{"start":"/c/en/vegetable","rel":"/r/AtLocation","end":"/c/en/garden","weight":1,"surfaceText":"[[vegetable]] AtLocation [[garden]]"}
+{"start":"/c/en/meal","rel":"/r/HasA","end":"/c/en/food","weight":1,"surfaceText":"[[meal]] HasA [[food]]"}
+{"start":"/c/en/meal","rel":"/r/AtLocation","end":"/c/en/table","weight":1,"surfaceText":"[[meal]] AtLocation [[table]]"}
+{"start":"/c/en/breakfast","rel":"/r/IsA","end":"/c/en/meal","weight":1,"surfaceText":"[[breakfast]] IsA [[meal]]"}
+{"start":"/c/en/breakfast","rel":"/r/AtLocation","end":"/c/en/morning","weight":1,"surfaceText":"[[breakfast]] AtLocation [[morning]]"}
+{"start":"/c/en/dinner","rel":"/r/IsA","end":"/c/en/meal","weight":1,"surfaceText":"[[dinner]] IsA [[meal]]"}
+{"start":"/c/en/dinner","rel":"/r/AtLocation","end":"/c/en/evening","weight":1,"surfaceText":"[[dinner]] AtLocation [[evening]]"}
+{"start":"/c/en/drink","rel":"/r/UsedFor","end":"/c/en/drinking","weight":1,"surfaceText":"[[drink]] UsedFor [[drinking]]"}
+{"start":"/c/en/drink","rel":"/r/CapableOf","end":"/c/en/quench_thirst","weight":1,"surfaceText":"[[drink]] CapableOf [[quench thirst]]"}
+{"start":"/c/en/wine","rel":"/r/IsA","end":"/c/en/drink","weight":1,"surfaceText":"[[wine]] IsA [[drink]]"}
+{"start":"/c/en/wine","rel":"/r/MadeOf","end":"/c/en/grape","weight":1,"surfaceText":"[[wine]] MadeOf [[grape]]"}
+{"start":"/c/en/tea","rel":"/r/IsA","end":"/c/en/drink","weight":1,"surfaceText":"[[tea]] IsA [[drink]]"}
+{"start":"/c/en/tea","rel":"/r/MadeOf","end":"/c/en/leaf","weight":1,"surfaceText":"[[tea]] MadeOf [[leaf]]"}
+{"start":"/c/en/coffee","rel":"/r/IsA","end":"/c/en/drink","weight":1,"surfaceText":"[[coffee]] IsA [[drink]]"}
+{"start":"/c/en/coffee","rel":"/r/MadeOf","end":"/c/en/bean","weight":1,"surfaceText":"[[coffee]] MadeOf [[bean]]"}
+{"start":"/c/en/tongue","rel":"/r/PartOf","end":"/c/en/mouth","weight":1,"surfaceText":"[[tongue]] PartOf [[mouth]]"}
+{"start":"/c/en/tongue","rel":"/r/UsedFor","end":"/c/en/tasting","weight":1,"surfaceText":"[[tongue]] UsedFor [[tasting]]"}
+{"start":"/c/en/tooth","rel":"/r/PartOf","end":"/c/en/mouth","weight":1,"surfaceText":"[[tooth]] PartOf [[mouth]]"}
+{"start":"/c/en/tooth","rel":"/r/UsedFor","end":"/c/en/chewing","weight":1,"surfaceText":"[[tooth]] UsedFor [[chewing]]"}
+{"start":"/c/en/finger","rel":"/r/PartOf","end":"/c/en/hand","weight":1,"surfaceText":"[[finger]] PartOf [[hand]]"}
+{"start":"/c/en/finger","rel":"/r/UsedFor","end":"/c/en/grabbing_things","weight":1,"surfaceText":"[[finger]] UsedFor [[grabbing things]]"}
+{"start":"/c/en/toe","rel":"/r/PartOf","end":"/c/en/foot","weight":1,"surfaceText":"[[toe]] PartOf [[foot]]"}
+{"start":"/c/en/shoulder","rel":"/r/PartOf","end":"/c/en/arm","weight":1,"surfaceText":"[[shoulder]] PartOf [[arm]]"}
+{"start":"/c/en/shoulder","rel":"/r/PartOf","end":"/c/en/body","weight":1,"surfaceText":"[[shoulder]] PartOf [[body]]"}
+{"start":"/c/en/knee","rel":"/r/PartOf","end":"/c/en/leg","weight":1,"surfaceText":"[[knee]] PartOf [[leg]]"}
+{"start":"/c/en/knee","rel":"/r/CapableOf","end":"/c/en/bend","weight":1,"surfaceText":"[[knee]] CapableOf [[bend]]"}
+{"start":"/c/en/brain","rel":"/r/PartOf","end":"/c/en/head","weight":1,"surfaceText":"[[brain]] PartOf [[head]]"}
+{"start":"/c/en/brain","rel":"/r/CapableOf","end":"/c/en/think","weight":1,"surfaceText":"[[brain]] CapableOf [[think]]"}
+{"start":"/c/en/lung","rel":"/r/PartOf","end":"/c/en/body","weight":1,"surfaceText":"[[lung]] PartOf [[body]]"}
+{"start":"/c/en/lung","rel":"/r/UsedFor","end":"/c/en/breathing","weight":1,"surfaceText":"[[lung]] UsedFor [[breathing]]"}
+{"start":"/c/en/sugar","rel":"/r/IsA","end":"/c/en/food","weight":1,"surfaceText":"[[sugar]] IsA [[food]]"}
+{"start":"/c/en/sugar","rel":"/r/HasProperty","end":"/c/en/sweet","weight":1,"surfaceText":"[[sugar]] HasProperty [[sweet]]"}
+{"start":"/c/en/salt","rel":"/r/IsA","end":"/c/en/food","weight":1,"surfaceText":"[[salt]] IsA [[food]]"}
+{"start":"/c/en/salt","rel":"/r/HasProperty","end":"/c/en/salty","weight":1,"surfaceText":"[[salt]] HasProperty [[salty]]"}
+{"start":"/c/en/word","rel":"/r/PartOf","end":"/c/en/language","weight":1,"surfaceText":"[[word]] PartOf [[language]]"}
+{"start":"/c/en/word","rel":"/r/UsedFor","end":"/c/en/communicating","weight":1,"surfaceText":"[[word]] UsedFor [[communicating]]"}
+{"start":"/c/en/language","rel":"/r/UsedFor","end":"/c/en/communicating","weight":1,"surfaceText":"[[language]] UsedFor [[communicating]]"}
+{"start":"/c/en/language","rel":"/r/HasA","end":"/c/en/word","weight":1,"surfaceText":"[[language]] HasA [[word]]"}
+{"start":"/c/en/story","rel":"/r/UsedFor","end":"/c/en/entertaining","weight":1,"surfaceText":"[[story]] UsedFor [[entertaining]]"}
+{"start":"/c/en/story","rel":"/r/HasA","end":"/c/en/character","weight":1,"surfaceText":"[[story]] HasA [[character]]"}
+{"start":"/c/en/news","rel":"/r/UsedFor","end":"/c/en/informing_people","weight":1,"surfaceText":"[[news]] UsedFor [[informing people]]"}
+{"start":"/c/en/news","rel":"/r/AtLocation","end":"/c/en/newspaper","weight":1,"surfaceText":"[[news]] AtLocation [[newspaper]]"}
+{"start":"/c/en/question","rel":"/r/UsedFor","end":"/c/en/asking","weight":1,"surfaceText":"[[question]] UsedFor [[asking]]"}
+{"start":"/c/en/question","rel":"/r/Desires","end":"/c/en/an_answer","weight":1,"surfaceText":"[[question]] Desires [[an answer]]"}
+{"start":"/c/en/answer","rel":"/r/UsedFor","end":"/c/en/answering_a_question","weight":1,"surfaceText":"[[answer]] UsedFor [[answering a question]]"}
+{"start":"/c/en/answer","rel":"/r/CapableOf","end":"/c/en/resolve_a_question","weight":1,"surfaceText":"[[answer]] CapableOf [[resolve a question]]"}
+{"start":"/c/en/idea","rel":"/r/PartOf","end":"/c/en/mind","weight":1,"surfaceText":"[[idea]] PartOf [[mind]]"}
+{"start":"/c/en/idea","rel":"/r/CapableOf","end":"/c/en/inspire_action","weight":1,"surfaceText":"[[idea]] CapableOf [[inspire action]]"}
+{"start":"/c/en/thought","rel":"/r/PartOf","end":"/c/en/mind","weight":1,"surfaceText":"[[thought]] PartOf [[mind]]"}
+{"start":"/c/en/thought","rel":"/r/CapableOf","end":"/c/en/lead_to_an_idea","weight":1,"surfaceText":"[[thought]] CapableOf [[lead to an idea]]"}
+{"start":"/c/en/mind","rel":"/r/CapableOf","end":"/c/en/think","weight":1,"surfaceText":"[[mind]] CapableOf [[think]]"}
+{"start":"/c/en/mind","rel":"/r/HasA","end":"/c/en/thought","weight":1,"surfaceText":"[[mind]] HasA [[thought]]"}
+{"start":"/c/en/memory","rel":"/r/PartOf","end":"/c/en/mind","weight":1,"surfaceText":"[[memory]] PartOf [[mind]]"}
+{"start":"/c/en/memory","rel":"/r/CapableOf","end":"/c/en/fade","weight":1,"surfaceText":"[[memory]] CapableOf [[fade]]"}
+{"start":"/c/en/dream","rel":"/r/AtLocation","end":"/c/en/sleep","weight":1,"surfaceText":"[[dream]] AtLocation [[sleep]]"}
+{"start":"/c/en/dream","rel":"/r/HasA","end":"/c/en/image","weight":1,"surfaceText":"[[dream]] HasA [[image]]"}
+{"start":"/c/en/belief","rel":"/r/PartOf","end":"/c/en/mind","weight":1,"surfaceText":"[[belief]] PartOf [[mind]]"}
+{"start":"/c/en/belief","rel":"/r/CapableOf","end":"/c/en/guide_action","weight":1,"surfaceText":"[[belief]] CapableOf [[guide action]]"}
+{"start":"/c/en/love","rel":"/r/IsA","end":"/c/en/emotion","weight":1,"surfaceText":"[[love]] IsA [[emotion]]"}
+{"start":"/c/en/love","rel":"/r/CapableOf","end":"/c/en/bring_happiness","weight":1,"surfaceText":"[[love]] CapableOf [[bring happiness]]"}
+{"start":"/c/en/hate","rel":"/r/IsA","end":"/c/en/emotion","weight":1,"surfaceText":"[[hate]] IsA [[emotion]]"}
+{"start":"/c/en/hate","rel":"/r/CapableOf","end":"/c/en/cause_conflict","weight":1,"surfaceText":"[[hate]] CapableOf [[cause conflict]]"}
+{"start":"/c/en/fear","rel":"/r/IsA","end":"/c/en/emotion","weight":1,"surfaceText":"[[fear]] IsA [[emotion]]"}
+{"start":"/c/en/fear","rel":"/r/CapableOf","end":"/c/en/cause_worry","weight":1,"surfaceText":"[[fear]] CapableOf [[cause worry]]"}
+{"start":"/c/en/joy","rel":"/r/IsA","end":"/c/en/emotion","weight":1,"surfaceText":"[[joy]] IsA [[emotion]]"}
+{"start":"/c/en/joy","rel":"/r/CapableOf","end":"/c/en/bring_happiness","weight":1,"surfaceText":"[[joy]] CapableOf [[bring happiness]]"}
+{"start":"/c/en/anger","rel":"/r/IsA","end":"/c/en/emotion","weight":1,"surfaceText":"[[anger]] IsA [[emotion]]"}
+{"start":"/c/en/anger","rel":"/r/CapableOf","end":"/c/en/cause_conflict","weight":1,"surfaceText":"[[anger]] CapableOf [[cause conflict]]"}
+{"start":"/c/en/hope","rel":"/r/IsA","end":"/c/en/emotion","weight":1,"surfaceText":"[[hope]] IsA [[emotion]]"}
+{"start":"/c/en/hope","rel":"/r/CapableOf","end":"/c/en/inspire_action","weight":1,"surfaceText":"[[hope]] CapableOf [[inspire action]]"}
+{"start":"/c/en/surprise","rel":"/r/IsA","end":"/c/en/emotion","weight":1,"surfaceText":"[[surprise]] IsA [[emotion]]"}
+{"start":"/c/en/surprise","rel":"/r/CapableOf","end":"/c/en/cause_astonishment","weight":1,"surfaceText":"[[surprise]] CapableOf [[cause astonishment]]"}
+{"start":"/c/en/pride","rel":"/r/IsA","end":"/c/en/emotion","weight":1,"surfaceText":"[[pride]] IsA [[emotion]]"}
+{"start":"/c/en/pride","rel":"/r/CapableOf","end":"/c/en/bring_satisfaction","weight":1,"surfaceText":"[[pride]] CapableOf [[bring satisfaction]]"}
+{"start":"/c/en/name","rel":"/r/UsedFor","end":"/c/en/identifying_a_person","weight":1,"surfaceText":"[[name]] UsedFor [[identifying a person]]"}
+{"start":"/c/en/name","rel":"/r/PartOf","end":"/c/en/identity","weight":1,"surfaceText":"[[name]] PartOf [[identity]]"}
+{"start":"/c/en/song","rel":"/r/HasA","end":"/c/en/word","weight":1,"surfaceText":"[[song]] HasA [[word]]"}
+{"start":"/c/en/song","rel":"/r/UsedFor","end":"/c/en/entertaining","weight":1,"surfaceText":"[[song]] UsedFor [[entertaining]]"}
+{"start":"/c/en/music","rel":"/r/HasA","end":"/c/en/song","weight":1,"surfaceText":"[[music]] HasA [[song]]"}
+{"start":"/c/en/music","rel":"/r/CapableOf","end":"/c/en/bring_joy","weight":1,"surfaceText":"[[music]] CapableOf [[bring joy]]"}
+{"start":"/c/en/sound","rel":"/r/CapableOf","end":"/c/en/travel_through_air","weight":1,"surfaceText":"[[sound]] CapableOf [[travel through air]]"}
+{"start":"/c/en/sound","rel":"/r/UsedFor","end":"/c/en/communicating","weight":1,"surfaceText":"[[sound]] UsedFor [[communicating]]"}
+{"start":"/c/en/voice","rel":"/r/UsedFor","end":"/c/en/speaking","weight":1,"surfaceText":"[[voice]] UsedFor [[speaking]]"}
+{"start":"/c/en/voice","rel":"/r/PartOf","end":"/c/en/a_person","weight":1,"surfaceText":"[[voice]] PartOf [[a person]]"}
+{"start":"/c/en/picture","rel":"/r/CapableOf","end":"/c/en/show_an_image","weight":1,"surfaceText":"[[picture]] CapableOf [[show an image]]"}
+{"start":"/c/en/picture","rel":"/r/UsedFor","end":"/c/en/remembering","weight":1,"surfaceText":"[[picture]] UsedFor [[remembering]]"}
+{"start":"/c/en/art","rel":"/r/CapableOf","end":"/c/en/express_emotion","weight":1,"surfaceText":"[[art]] CapableOf [[express emotion]]"}
+{"start":"/c/en/art","rel":"/r/UsedFor","end":"/c/en/decoration","weight":1,"surfaceText":"[[art]] UsedFor [[decoration]]"}
+{"start":"/c/en/knowledge","rel":"/r/PartOf","end":"/c/en/mind","weight":1,"surfaceText":"[[knowledge]] PartOf [[mind]]"}
+{"start":"/c/en/knowledge","rel":"/r/CapableOf","end":"/c/en/grow","weight":1,"surfaceText":"[[knowledge]] CapableOf [[grow]]"}
+{"start":"/c/en/opinion","rel":"/r/PartOf","end":"/c/en/mind","weight":1,"surfaceText":"[[opinion]] PartOf [[mind]]"}
+{"start":"/c/en/opinion","rel":"/r/CapableOf","end":"/c/en/differ_between_people","weight":1,"surfaceText":"[[opinion]] CapableOf [[differ between people]]"}
+{"start":"/c/en/reason","rel":"/r/PartOf","end":"/c/en/mind","weight":1,"surfaceText":"[[reason]] PartOf [[mind]]"}
+{"start":"/c/en/reason","rel":"/r/UsedFor","end":"/c/en/explaining","weight":1,"surfaceText":"[[reason]] UsedFor [[explaining]]"}
+{"start":"/c/en/imagination","rel":"/r/PartOf","end":"/c/en/mind","weight":1,"surfaceText":"[[imagination]] PartOf [[mind]]"}
+{"start":"/c/en/imagination","rel":"/r/CapableOf","end":"/c/en/create_ideas","weight":1,"surfaceText":"[[imagination]] CapableOf [[create ideas]]"}
+{"start":"/c/en/laughter","rel":"/r/CapableOf","end":"/c/en/bring_joy","weight":1,"surfaceText":"[[laughter]] CapableOf [[bring joy]]"}
+{"start":"/c/en/laughter","rel":"/r/AtLocation","end":"/c/en/a_joke","weight":1,"surfaceText":"[[laughter]] AtLocation [[a joke]]"}
+{"start":"/c/en/tear","rel":"/r/CapableOf","end":"/c/en/show_sadness","weight":1,"surfaceText":"[[tear]] CapableOf [[show sadness]]"}
+{"start":"/c/en/tear","rel":"/r/PartOf","end":"/c/en/crying","weight":1,"surfaceText":"[[tear]] PartOf [[crying]]"}
+{"start":"/c/en/smile","rel":"/r/CapableOf","end":"/c/en/show_happiness","weight":1,"surfaceText":"[[smile]] CapableOf [[show happiness]]"}
+{"start":"/c/en/smile","rel":"/r/PartOf","end":"/c/en/a_face","weight":1,"surfaceText":"[[smile]] PartOf [[a face]]"}
+{"start":"/c/en/silence","rel":"/r/HasProperty","end":"/c/en/quiet","weight":1,"surfaceText":"[[silence]] HasProperty [[quiet]]"}
+{"start":"/c/en/silence","rel":"/r/CapableOf","end":"/c/en/calm_the_mind","weight":1,"surfaceText":"[[silence]] CapableOf [[calm the mind]]"}
+{"start":"/c/en/person","rel":"/r/IsA","end":"/c/en/schema_person","weight":1,"surfaceText":"[[person]] IsA [[schema person]]"}
+{"start":"/c/en/place","rel":"/r/IsA","end":"/c/en/schema_place","weight":1,"surfaceText":"[[place]] IsA [[schema place]]"}
+{"start":"/c/en/object","rel":"/r/IsA","end":"/c/en/schema_object","weight":1,"surfaceText":"[[object]] IsA [[schema object]]"}
+{"start":"/c/en/event","rel":"/r/IsA","end":"/c/en/schema_event","weight":1,"surfaceText":"[[event]] IsA [[schema event]]"}
+{"start":"/c/en/time","rel":"/r/IsA","end":"/c/en/schema_time","weight":1,"surfaceText":"[[time]] IsA [[schema time]]"}
+{"start":"/c/en/quantity","rel":"/r/IsA","end":"/c/en/schema_quantity","weight":1,"surfaceText":"[[quantity]] IsA [[schema quantity]]"}
+{"start":"/c/en/organization","rel":"/r/IsA","end":"/c/en/schema_organization","weight":1,"surfaceText":"[[organization]] IsA [[schema organization]]"}
+{"start":"/c/en/artifact","rel":"/r/IsA","end":"/c/en/schema_object","weight":1,"surfaceText":"[[artifact]] IsA [[schema object]]"}
+{"start":"/c/en/group","rel":"/r/IsA","end":"/c/en/schema_organization","weight":1,"surfaceText":"[[group]] IsA [[schema organization]]"}
+{"start":"/c/en/location","rel":"/r/IsA","end":"/c/en/schema_place","weight":1,"surfaceText":"[[location]] IsA [[schema place]]"}

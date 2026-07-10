@@ -57,6 +57,20 @@
       "bytes": 5826,
       "sha256": "01284f1350fa2ca9653b1c5f52a39fdcb657727c65e77693eae954cb95a14a2e",
       "license": "MPL-2.0"
+    },
+    {
+      "id": "human",
+      "kind": "domain",
+      "description": "The default human-world persona (PLAN_SEED.md): everyday people, places, objects, nature, time/events, body/food and mind vocabulary, hand-curated from Open English WordNet (CC-BY-4.0) and bridged to Schema.org's (Apache-2.0) top-level classes — replaces the code-domain SEON+ConceptNet default.",
+      "source": {
+        "kind": "curated",
+        "tool": "corpus/tier2/generate.mjs"
+      },
+      "file": "human.jsonl",
+      "facts": 664,
+      "bytes": 81430,
+      "sha256": "040e6d1f6761a29a080f7825ff8aae60caf879125c1f7a1480340ef04129bcd5",
+      "license": "MPL-2.0"
     }
   ]
 }

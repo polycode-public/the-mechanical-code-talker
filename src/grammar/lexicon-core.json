@@ -1,5 +1,5 @@
 {
-  "comment": "tmct's starter software-domain lexicon (ROADMAP Phase 2, item 2). Every word the ACE-OWL sub-fragment parser (src/grammar/ace.mjs) is allowed to understand is DECLARED here — tmct never guesses a word's category. Nouns may declare a possessive property typing ('data' or 'object', pattern 7); adjectives MUST declare a type ('subclass' forms a class, 'data' asserts a boolean-ish datatype property, pattern 8); verbs may declare a preposition ('depend' + 'on' → dependsOn). Extend via loadLexicon(extra) with this same shape.",
+  "comment": "tmct's starter lexicon (ROADMAP Phase 2, item 2), now covering BOTH the original software domain and (PLAN_SEED.md, the default 'human-world' persona) everyday people/places/objects/nature/time/body/mind vocabulary. Every word the ACE-OWL sub-fragment parser (src/grammar/ace.mjs) is allowed to understand is DECLARED here — tmct never guesses a word's category. Nouns may declare a possessive property typing ('data' or 'object', pattern 7) or an irregular 'plural' (WordNet-sourced human nouns like 'man'/'child' need this — the morphology fold only handles regular -s/-ies/-es endings); adjectives MUST declare a type ('subclass' forms a class, 'data' asserts a boolean-ish datatype property, pattern 8); verbs may declare a preposition ('depend' + 'on' → dependsOn). The human-domain additions are flat and simple by design (breadth over depth — no gender/kinship taxonomy, no formal role hierarchy), matching corpus/tier2/generate.mjs's CORPUSES.human.lexicon sub-key, which --verify drift-checks against. Extend via loadLexicon(extra) with this same shape.",
   "nouns": {
     "module": {},
     "class": {},
@@ -42,7 +42,9 @@
     "database": {},
     "table": {},
     "query": {},
-    "index": { "plural": "indices" },
+    "index": {
+      "plural": "indices"
+    },
     "cache": {},
     "queue": {},
     "worker": {},
@@ -160,27 +162,377 @@
     "refactor": {},
     "review": {},
     "merge": {},
-    "license": { "property": "data" },
-    "version": { "property": "data" },
-    "name": { "property": "data" },
-    "path": { "property": "data" },
-    "size": { "property": "data" },
-    "status": { "property": "data" },
-    "language": { "property": "data" },
-    "extension": { "property": "data" },
-    "churn": { "property": "data" },
-    "impact": { "property": "data" },
-    "complexity": { "property": "data" },
-    "latency": { "property": "data" },
-    "duration": { "property": "data" },
-    "frequency": { "property": "data" },
-    "severity": { "property": "data" },
-    "owner": { "property": "object" },
-    "maintainer": { "property": "object" },
-    "author": { "property": "object" },
-    "reviewer": { "property": "object" },
-    "parent": { "property": "object" },
-    "dependency": { "property": "object" }
+    "license": {
+      "property": "data"
+    },
+    "version": {
+      "property": "data"
+    },
+    "name": {
+      "property": "data"
+    },
+    "path": {
+      "property": "data"
+    },
+    "size": {
+      "property": "data"
+    },
+    "status": {
+      "property": "data"
+    },
+    "language": {
+      "property": "data"
+    },
+    "extension": {
+      "property": "data"
+    },
+    "churn": {
+      "property": "data"
+    },
+    "impact": {
+      "property": "data"
+    },
+    "complexity": {
+      "property": "data"
+    },
+    "latency": {
+      "property": "data"
+    },
+    "duration": {
+      "property": "data"
+    },
+    "frequency": {
+      "property": "data"
+    },
+    "severity": {
+      "property": "data"
+    },
+    "owner": {
+      "property": "object"
+    },
+    "maintainer": {
+      "property": "object"
+    },
+    "author": {
+      "property": "object"
+    },
+    "reviewer": {
+      "property": "object"
+    },
+    "parent": {
+      "property": "object"
+    },
+    "dependency": {
+      "property": "object"
+    },
+    "man": {
+      "plural": "men"
+    },
+    "woman": {
+      "plural": "women"
+    },
+    "person": {
+      "plural": "people"
+    },
+    "child": {
+      "plural": "children"
+    },
+    "boy": {},
+    "girl": {},
+    "baby": {},
+    "adult": {},
+    "friend": {},
+    "neighbor": {},
+    "stranger": {},
+    "guest": {},
+    "doctor": {},
+    "teacher": {},
+    "nurse": {},
+    "student": {},
+    "farmer": {},
+    "mother": {},
+    "father": {},
+    "brother": {},
+    "sister": {},
+    "family": {},
+    "king": {},
+    "queen": {},
+    "soldier": {},
+    "artist": {},
+    "writer": {},
+    "cook": {},
+    "group": {},
+    "crowd": {},
+    "audience": {},
+    "club": {},
+    "president": {},
+    "human": {},
+    "lawyer": {},
+    "driver": {},
+    "manager": {},
+    "officer": {},
+    "judge": {},
+    "priest": {},
+    "servant": {},
+    "employee": {},
+    "boss": {},
+    "husband": {},
+    "wife": {
+      "plural": "wives"
+    },
+    "son": {},
+    "daughter": {},
+    "grandmother": {},
+    "grandfather": {},
+    "citizen": {},
+    "customer": {},
+    "leader": {},
+    "champion": {},
+    "volunteer": {},
+    "resident": {},
+    "place": {},
+    "city": {},
+    "town": {},
+    "village": {},
+    "country": {},
+    "house": {},
+    "home": {},
+    "room": {},
+    "kitchen": {},
+    "bedroom": {},
+    "bathroom": {},
+    "school": {},
+    "hospital": {},
+    "shop": {},
+    "market": {},
+    "church": {},
+    "park": {},
+    "garden": {},
+    "street": {},
+    "road": {},
+    "bridge": {},
+    "farm": {},
+    "office": {},
+    "factory": {},
+    "museum": {},
+    "hotel": {},
+    "airport": {},
+    "castle": {},
+    "beach": {},
+    "forest": {},
+    "mountain": {},
+    "hat": {},
+    "shirt": {},
+    "coat": {},
+    "shoe": {},
+    "dress": {},
+    "clothing": {},
+    "chair": {},
+    "bed": {},
+    "door": {},
+    "window": {},
+    "wall": {},
+    "roof": {},
+    "pen": {},
+    "paper": {},
+    "key": {},
+    "lock": {},
+    "box": {},
+    "car": {},
+    "bicycle": {},
+    "boat": {},
+    "train": {},
+    "wheel": {},
+    "knife": {
+      "plural": "knives"
+    },
+    "spoon": {},
+    "fork": {},
+    "plate": {},
+    "cup": {},
+    "bottle": {},
+    "bag": {},
+    "money": {},
+    "coin": {},
+    "toy": {},
+    "machine": {},
+    "clock": {},
+    "phone": {},
+    "book": {},
+    "letter": {},
+    "umbrella": {},
+    "glove": {},
+    "sock": {},
+    "ring": {},
+    "watch": {},
+    "mirror": {},
+    "candle": {},
+    "ladder": {},
+    "hammer": {},
+    "basket": {},
+    "wallet": {},
+    "dog": {},
+    "cat": {},
+    "horse": {},
+    "cow": {},
+    "pig": {},
+    "sheep": {},
+    "bird": {},
+    "fish": {},
+    "mouse": {
+      "plural": "mice"
+    },
+    "rabbit": {},
+    "bear": {},
+    "lion": {},
+    "tiger": {},
+    "elephant": {},
+    "snake": {},
+    "tree": {},
+    "flower": {},
+    "grass": {},
+    "leaf": {
+      "plural": "leaves"
+    },
+    "root": {},
+    "seed": {},
+    "fruit": {},
+    "water": {},
+    "air": {},
+    "fire": {},
+    "earth": {},
+    "stone": {},
+    "sand": {},
+    "gold": {},
+    "iron": {},
+    "rain": {},
+    "snow": {},
+    "wind": {},
+    "cloud": {},
+    "sun": {},
+    "moon": {},
+    "star": {},
+    "owl": {},
+    "wolf": {
+      "plural": "wolves"
+    },
+    "frog": {},
+    "bee": {},
+    "ant": {},
+    "butterfly": {},
+    "spider": {},
+    "river": {},
+    "ocean": {},
+    "time": {},
+    "day": {},
+    "night": {},
+    "morning": {},
+    "evening": {},
+    "week": {},
+    "month": {},
+    "year": {},
+    "hour": {},
+    "minute": {},
+    "second": {},
+    "moment": {},
+    "season": {},
+    "spring": {},
+    "summer": {},
+    "winter": {},
+    "wedding": {},
+    "race": {},
+    "dozen": {},
+    "half": {
+      "plural": "halves"
+    },
+    "amount": {},
+    "meeting": {},
+    "game": {},
+    "war": {},
+    "trip": {},
+    "birthday": {},
+    "holiday": {},
+    "autumn": {},
+    "century": {},
+    "body": {},
+    "head": {},
+    "hand": {},
+    "arm": {},
+    "leg": {},
+    "foot": {
+      "plural": "feet"
+    },
+    "eye": {},
+    "ear": {},
+    "mouth": {},
+    "nose": {},
+    "hair": {},
+    "heart": {},
+    "blood": {},
+    "bone": {},
+    "skin": {},
+    "face": {},
+    "food": {},
+    "bread": {},
+    "meat": {},
+    "milk": {},
+    "egg": {},
+    "cheese": {},
+    "vegetable": {},
+    "meal": {},
+    "breakfast": {},
+    "dinner": {},
+    "drink": {},
+    "wine": {},
+    "tea": {},
+    "coffee": {},
+    "tongue": {},
+    "tooth": {
+      "plural": "teeth"
+    },
+    "finger": {},
+    "toe": {},
+    "shoulder": {},
+    "knee": {},
+    "brain": {},
+    "lung": {},
+    "sugar": {},
+    "salt": {},
+    "word": {},
+    "story": {},
+    "news": {},
+    "idea": {},
+    "thought": {},
+    "mind": {},
+    "memory": {},
+    "dream": {},
+    "belief": {},
+    "love": {},
+    "hate": {},
+    "fear": {},
+    "joy": {},
+    "anger": {},
+    "hope": {},
+    "surprise": {},
+    "pride": {},
+    "song": {},
+    "music": {},
+    "sound": {},
+    "voice": {},
+    "picture": {},
+    "art": {},
+    "knowledge": {},
+    "opinion": {},
+    "reason": {},
+    "imagination": {},
+    "laughter": {},
+    "tear": {},
+    "smile": {},
+    "silence": {},
+    "object": {},
+    "location": {},
+    "quantity": {},
+    "organization": {}
   },
   "verbs": {
     "import": {},
@@ -189,11 +541,21 @@
     "contain": {},
     "extend": {},
     "use": {},
-    "depend": { "prep": "on" },
-    "rely": { "prep": "on" },
-    "inherit": { "prep": "from" },
-    "belong": { "prep": "to" },
-    "point": { "prep": "to" },
+    "depend": {
+      "prep": "on"
+    },
+    "rely": {
+      "prep": "on"
+    },
+    "inherit": {
+      "prep": "from"
+    },
+    "belong": {
+      "prep": "to"
+    },
+    "point": {
+      "prep": "to"
+    },
     "implement": {},
     "override": {},
     "export": {},
@@ -245,42 +607,212 @@
     "build": {},
     "write": {},
     "read": {},
-    "have": {}
+    "have": {},
+    "like": {},
+    "want": {},
+    "need": {},
+    "believe": {},
+    "trust": {},
+    "love": {},
+    "hate": {},
+    "fear": {},
+    "hope": {},
+    "teach": {},
+    "learn": {},
+    "drive": {},
+    "cook": {},
+    "sing": {},
+    "visit": {},
+    "care": {},
+    "grow": {},
+    "marry": {},
+    "wear": {},
+    "eat": {},
+    "sleep": {},
+    "walk": {},
+    "buy": {},
+    "sell": {},
+    "give": {},
+    "take": {},
+    "meet": {},
+    "ride": {},
+    "speak": {}
   },
   "adjectives": {
-    "legacy": { "type": "subclass" },
-    "internal": { "type": "subclass" },
-    "external": { "type": "subclass" },
-    "public": { "type": "subclass" },
-    "private": { "type": "subclass" },
-    "abstract": { "type": "subclass" },
-    "static": { "type": "subclass" },
-    "async": { "type": "subclass" },
-    "experimental": { "type": "subclass" },
-    "stable": { "type": "subclass" },
-    "core": { "type": "subclass" },
-    "shared": { "type": "subclass" },
-    "global": { "type": "subclass" },
-    "local": { "type": "subclass" },
-    "generated": { "type": "subclass" },
-    "standalone": { "type": "subclass" },
-    "primary": { "type": "subclass" },
-    "secondary": { "type": "subclass" },
-    "deprecated": { "type": "data" },
-    "fast": { "type": "data" },
-    "slow": { "type": "data" },
-    "large": { "type": "data" },
-    "small": { "type": "data" },
-    "flaky": { "type": "data" },
-    "tested": { "type": "data" },
-    "documented": { "type": "data" },
-    "buggy": { "type": "data" },
-    "broken": { "type": "data" },
-    "green": { "type": "data" },
-    "deterministic": { "type": "data" },
-    "pure": { "type": "data" },
-    "empty": { "type": "data" },
-    "stale": { "type": "data" }
+    "legacy": {
+      "type": "subclass"
+    },
+    "internal": {
+      "type": "subclass"
+    },
+    "external": {
+      "type": "subclass"
+    },
+    "public": {
+      "type": "subclass"
+    },
+    "private": {
+      "type": "subclass"
+    },
+    "abstract": {
+      "type": "subclass"
+    },
+    "static": {
+      "type": "subclass"
+    },
+    "async": {
+      "type": "subclass"
+    },
+    "experimental": {
+      "type": "subclass"
+    },
+    "stable": {
+      "type": "subclass"
+    },
+    "core": {
+      "type": "subclass"
+    },
+    "shared": {
+      "type": "subclass"
+    },
+    "global": {
+      "type": "subclass"
+    },
+    "local": {
+      "type": "subclass"
+    },
+    "generated": {
+      "type": "subclass"
+    },
+    "standalone": {
+      "type": "subclass"
+    },
+    "primary": {
+      "type": "subclass"
+    },
+    "secondary": {
+      "type": "subclass"
+    },
+    "deprecated": {
+      "type": "data"
+    },
+    "fast": {
+      "type": "data"
+    },
+    "slow": {
+      "type": "data"
+    },
+    "large": {
+      "type": "data"
+    },
+    "small": {
+      "type": "data"
+    },
+    "flaky": {
+      "type": "data"
+    },
+    "tested": {
+      "type": "data"
+    },
+    "documented": {
+      "type": "data"
+    },
+    "buggy": {
+      "type": "data"
+    },
+    "broken": {
+      "type": "data"
+    },
+    "green": {
+      "type": "data"
+    },
+    "deterministic": {
+      "type": "data"
+    },
+    "pure": {
+      "type": "data"
+    },
+    "empty": {
+      "type": "data"
+    },
+    "stale": {
+      "type": "data"
+    },
+    "male": {
+      "type": "data"
+    },
+    "female": {
+      "type": "data"
+    },
+    "young": {
+      "type": "data"
+    },
+    "old": {
+      "type": "data"
+    },
+    "hot": {
+      "type": "data"
+    },
+    "cold": {
+      "type": "data"
+    },
+    "sweet": {
+      "type": "data"
+    },
+    "salty": {
+      "type": "data"
+    },
+    "sharp": {
+      "type": "data"
+    },
+    "round": {
+      "type": "data"
+    },
+    "tall": {
+      "type": "data"
+    },
+    "short": {
+      "type": "data"
+    },
+    "happy": {
+      "type": "data"
+    },
+    "sad": {
+      "type": "data"
+    },
+    "angry": {
+      "type": "data"
+    },
+    "afraid": {
+      "type": "data"
+    },
+    "strong": {
+      "type": "data"
+    },
+    "weak": {
+      "type": "data"
+    },
+    "rich": {
+      "type": "data"
+    },
+    "poor": {
+      "type": "data"
+    },
+    "hard": {
+      "type": "data"
+    },
+    "soft": {
+      "type": "data"
+    },
+    "wild": {
+      "type": "data"
+    },
+    "gentle": {
+      "type": "data"
+    },
+    "colorful": {
+      "type": "data"
+    }
   },
   "properNames": [
     "tmct",
@@ -297,6 +829,13 @@
     "Linux",
     "macOS",
     "Windows",
-    "Polycode"
+    "Polycode",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday"
   ]
 }
