@@ -4898,6 +4898,30 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
     const adjective = isAdj[2].trim().toLowerCase();
     if (subject) {
       const subjVariants = factTermVariants(normFactTerm, subject);
+      // CLASS↔INSTANCE BRIDGE (playtest sprint round 2, 2026-07-10): "is Task
+      // auditable" used to say "I don't know anything about Task yet" even
+      // with "every Record is auditable" taught and Task inheriting Record in
+      // the code graph — this property-yes/no reader had no inheritance
+      // bridging at all, unlike isaAsk's own CLASS↔INSTANCE BRIDGE just above
+      // (chat.mjs's `inheritsChain`). Same bridge, same discipline: when the
+      // subject resolves to a real graph entity, its superclass LABELS are
+      // ADDITIONAL subject candidates, so a taught property on an ancestor
+      // class is found too — never a guess, still just a direct fact lookup,
+      // now over a wider (but still fact-backed) candidate set.
+      const bridgeSubjects = new Map(); // fact-term variant → superclass label, as spelled in the graph
+      let bridgeEnt = null;
+      if (graph) {
+        const ent = await resolveEntity(graph, subject);
+        bridgeEnt = ent;
+        if (ent) {
+          for (const sup of inheritsChain(graph, ent.id)) {
+            for (const v of factTermVariants(normFactTerm, sup.label)) {
+              if (!subjVariants.has(v) && !bridgeSubjects.has(v)) bridgeSubjects.set(v, sup.label);
+              subjVariants.add(v);
+            }
+          }
+        }
+      }
       const propertyMatch = (f) => (f.predicate === HAS_PROPERTY_PREDICATE && normFactTerm(f.object) === adjective)
         || (f.predicate === `tmct:${adjective}` && f.object === "true");
       // Same head-word fallback as factAnswer's "(c) what do you know about"
@@ -4910,7 +4934,17 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
       const wordOverlap = (f) => subjWords.some((w) => new Set(String(f.subject || "").split(/\s+/)).has(w));
       const subjectMatch = (f) => subjVariants.has(f.subject) || (subjWords.length && wordOverlap(f));
       const hit = rows.filter((f) => subjectMatch(f) && propertyMatch(f)).sort(byTrust)[0];
-      if (hit) return { text: `yes — ${renderFactLine(hit)}`, replace: true };
+      if (hit) {
+        const viaSuper = bridgeSubjects.get(hit.subject);
+        // Named explicitly (never a silent subject swap) — same honesty
+        // discipline isaAsk's own class↔instance bridge follows just above.
+        return {
+          text: viaSuper
+            ? `yes — the code graph says ${bridgeEnt.label} inherits ${viaSuper}, and ${renderFactLine(hit)}`
+            : `yes — ${renderFactLine(hit)}`,
+          replace: true,
+        };
+      }
       // no hit on THIS property — never a guessed "no" (see
       // IS_ADJECTIVE_YESNO_RE's own docblock for why this stays silent on a
       // truth claim, unlike its ownership/general-verb siblings above). But a

@@ -313,19 +313,32 @@ export function stripTrailingScopeFiller(text) {
  *  meta-whatis question wasn't tolerant of this yet: "what is a component
  *  then" captured the literal unknown term "component then" instead of
  *  "component" (HANDOVER.md 2026-07-10, item 8). Stripped the same
- *  closed-list way as TRAILING_SCOPE_FILLER, just above. */
-export const TRAILING_DISCOURSE_TAG = Object.freeze(["then", "though"]);
+ *  closed-list way as TRAILING_SCOPE_FILLER, just above. "too" (playtest
+ *  sprint round 2): "is UserController a validator too then" — a STACKED
+ *  pair of trailing tags — needed both "too" added to the set AND the strip
+ *  applied twice (below), since a single pass only ever removes the
+ *  outermost tag. */
+export const TRAILING_DISCOURSE_TAG = Object.freeze(["then", "though", "too"]);
 
 const TRAILING_DISCOURSE_TAG_RE = new RegExp(
   `\\s+(?:${TRAILING_DISCOURSE_TAG.join("|")})\\s*[?.!]*$`, "i",
 );
 
-/** Strip ONE trailing bare discourse tag (TRAILING_DISCOURSE_TAG, above) off
- *  the end of a captured meta-whatis term — "what is a component then"
- *  resolves the same term as "what is a component". Applied once, mirroring
- *  stripTrailingScopeFiller's own discipline. */
+/** Strip trailing bare discourse tags (TRAILING_DISCOURSE_TAG, above) off the
+ *  end of a captured meta-whatis term — "what is a component then" resolves
+ *  the same term as "what is a component". Applied up to twice (a stacked
+ *  "too then"/"then too" is the only worked case that ever needs a second
+ *  pass; no phrasing seen so far stacks a third), mirroring
+ *  stripTrailingScopeFiller's own single-clause discipline for the common
+ *  single-tag case while still covering the rarer double-tag one. */
 export function stripTrailingDiscourseTag(text) {
-  return text.replace(TRAILING_DISCOURSE_TAG_RE, "").trim();
+  let out = text;
+  for (let pass = 0; pass < 2; pass += 1) {
+    const next = out.replace(TRAILING_DISCOURSE_TAG_RE, "").trim();
+    if (next === out) break;
+    out = next;
+  }
+  return out;
 }
 
 /** relation token -> flat verb-phrase list, the shape ask.mjs's VERB_TO_KIND
