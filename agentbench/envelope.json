@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "generatedFrom": {
+    "agentbenchVersion": "1.4.1",
+    "drivers": [
+      "goal-0.8.1",
+      "resolver-0.8.0"
+    ],
+    "stamp": "1.4.1",
+    "caseCount": 56
+  },
+  "ladder": {
+    "rungs": [
+      "A0",
+      "A1",
+      "A2",
+      "B1",
+      "B2",
+      "C1",
+      "C2"
+    ],
+    "rungReached": "C2",
+    "gatedAt": null
+  },
+  "capability": {
+    "maxContextTokens": null,
+    "maxContextTokensMeasured": false,
+    "structuredOk": true,
+    "toolsOk": true
+  },
+  "metrics": {
+    "overall": {
+      "planCompletion": 1,
+      "resultCompletion": 0.9821428571428571,
+      "hallucinationRate": 0,
+      "gatePass": true
+    },
+    "byRung": {
+      "A0": {
+        "n": 7,
+        "planCompletion": 1,
+        "resultCompletion": 1,
+        "hallucinationRate": 0,
+        "gatePass": true
+      },
+      "A1": {
+        "n": 12,
+        "planCompletion": 1,
+        "resultCompletion": 1,
+        "hallucinationRate": 0,
+        "gatePass": true
+      },
+      "A2": {
+        "n": 4,
+        "planCompletion": 1,
+        "resultCompletion": 1,
+        "hallucinationRate": 0,
+        "gatePass": true
+      },
+      "B1": {
+        "n": 6,
+        "planCompletion": 1,
+        "resultCompletion": 1,
+        "hallucinationRate": 0,
+        "gatePass": true
+      },
+      "B2": {
+        "n": 7,
+        "planCompletion": 1,
+        "resultCompletion": 1,
+        "hallucinationRate": 0,
+        "gatePass": true
+      },
+      "C1": {
+        "n": 9,
+        "planCompletion": 1,
+        "resultCompletion": 1,
+        "hallucinationRate": 0,
+        "gatePass": true
+      },
+      "C2": {
+        "n": 11,
+        "planCompletion": 1,
+        "resultCompletion": 0.9090909090909091,
+        "hallucinationRate": 0,
+        "gatePass": true
+      }
+    }
+  },
+  "notes": [
+    "rungReached is the highest A0-C2 rung with an unbroken gate-PASS chain from A0 (0% hallucination AT >=50% completion, agentbench/grade.mjs COMPLETION_FLOOR) — see agentbench/grade.mjs ladderGate()/highestGatePassRung().",
+    "toolsOk is false iff any produced call across the run named an undeclared or unknown-registry tool (the 'declared tools only, refuse otherwise' invariant). structuredOk is false iff any produced call had an unknown or missing argument against its declared schema. Both derive from src/router/call-validator.mjs's hallucination taxonomy, not a hand-set guess.",
+    "maxContextTokens is not measured by AGENTBENCH today; it is intentionally left null rather than copying a downstream calibration's hand-set figure (that copy is exactly the drift this envelope exists to prevent).",
+    "Regenerate with `node agentbench/generate-envelope.mjs` after any AGENTBENCH-affecting change; the output is deterministic (no Date.now) so a clean re-run over an unchanged tree is byte-identical."
+  ]
+}
