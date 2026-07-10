@@ -49,6 +49,9 @@ Usage:
                                offline, $0; init is tier-1-only unless asked
        [--detect]              suggest a tier-2 corpus from the repo's manifests
                                (pyproject.toml → python, pom.xml → java); never seeds unasked
+  tmct extend --validate <dir>  validate a third-party extension pack's declared
+                               resources (corpus/lexicon/templates) before activating
+                               it in any repo's tmct.toml; exits non-zero on failure
   tmct syllogise [--repo <abs>] speculative inference (offline maintenance job): forward-
        [--depth <n>] [--budget <n>]  chain the memory's rdfs:subClassOf closure, materialising
                                bounded, low-trust, retractable entailed facts (never on the chat path)
@@ -415,6 +418,56 @@ async function main() {
       return;
     }
     return;
+  }
+
+  if (mode === "extend") {
+    // `tmct extend --validate <dir>` — validate a THIRD-PARTY extension pack
+    // (the shape a package like seonix/marginalia ships) BEFORE it's activated
+    // in any repo's tmct.toml. Reuses existing throw-loudly primitives
+    // (loadSlice/loadMap/toFacts, loadLexicon, loadTemplates) via
+    // src/extensions.mjs's validateExtensionPack — never invents new
+    // shape-checking logic. `<dir>` must carry its own tmct.toml declaring one
+    // or more `[extensions.<name>]` host entries (the SAME [extensions] table
+    // shape a repo's own tmct.toml uses) naming the resource(s) to validate;
+    // the shipped builtins (seon/conceptnet/tier2-*) are never re-validated
+    // here — this command is about a PACK's OWN declared resources.
+    const rest = process.argv.slice(3);
+    const vi = rest.indexOf("--validate");
+    const dirArg = vi !== -1 ? rest[vi + 1] : undefined;
+    if (!dirArg) {
+      process.stderr.write("tmct extend: --validate <dir> requires a directory\n");
+      process.exit(2);
+    }
+    const { resolve: resolvePath } = await import("node:path");
+    const target = resolvePath(process.cwd(), dirArg);
+    const { resolveExtensions, BUILTIN_EXTENSIONS, validateExtensionPack } = await import("../src/extensions.mjs");
+    let entries;
+    try {
+      ({ entries } = await resolveExtensions(target));
+    } catch (e) {
+      process.stderr.write(`tmct extend --validate: ${e?.message || e}\n`);
+      process.exit(1);
+    }
+    const hostEntries = [...entries].filter(([name]) => !(name in BUILTIN_EXTENSIONS));
+    if (!hostEntries.length) {
+      process.stderr.write(`tmct extend --validate: no host-declared [extensions.*] entries found in ${target}/tmct.toml\n`);
+      process.exit(1);
+    }
+    let allOk = true;
+    for (const [name, entry] of hostEntries) {
+      process.stdout.write(`${name} (${entry.kind}):\n`);
+      const { ok, results } = await validateExtensionPack(target, entry);
+      if (!ok) allOk = false;
+      for (const r of results) {
+        const status = r.ok ? "PASS" : "FAIL";
+        const detail = r.ok
+          ? (r.counts ? ` (${Object.entries(r.counts).map(([k, v]) => `${k}=${v}`).join(", ")})` : "")
+          : ` — ${r.error}`;
+        process.stdout.write(`  [${status}] ${r.kind}: ${r.path}${detail}\n`);
+      }
+    }
+    process.stdout.write(allOk ? "tmct extend --validate: all resources passed.\n" : "tmct extend --validate: one or more resources FAILED.\n");
+    process.exit(allOk ? 0 : 1);
   }
 
   if (mode === "syllogise") {
