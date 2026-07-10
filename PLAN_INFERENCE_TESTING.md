@@ -1,6 +1,7 @@
 # PLAN_INFERENCE_TESTING.md — INFBENCH: classical logic on a 6-band CEFR-shaped ladder
 
-> **STATUS (2026-07-10): Stages 0–5 ✅ ALL SHIPPED — the full 6-band ladder now passes the gate.**
+> **STATUS (2026-07-11): Stages 0–5 ✅ ALL SHIPPED, and the one open follow-up this file used to
+> flag is closed too — the full 6-band ladder passes the gate with every rule chat-wired.**
 > Stages 0–2 (2026-07-08): `cax-sco` + the live `findIsaChain` proof chase closed chat-A2 to 100%,
 > 0% fabrication (detail below, unchanged). Stages 3–5 (2026-07-10): `cax-dw` (disjointness,
 > `deriveDisjointViolations`) + a LIVE, read-only chat-query wiring closing a real gap where the
@@ -8,21 +9,34 @@
 > stuck **33%** to **100%, 0% fabrication**. `cls-svf1` (someValuesFrom restriction membership,
 > `deriveSomeValuesFromApplication`) plus a new positive infbench template (`b2Svf1Apply`) needed to
 > measure it at all (the original `b2Svf1` template was permanent negative witnesses only, per a
-> strategy-advisor finding — cls-svf1-only would have been unmeasurable without it). A new
-> consistency checker (`findConsistencyViolations`) that REFUSES to answer from a subject whose own
-> taught/entailed types contradict each other, naming the clash — INF-C2 moved from its 0% ceiling
-> to **100%, 0% fabrication**.
+> strategy-advisor finding — cls-svf1-only would have been unmeasurable without it), THEN chat-wired
+> live (commit `304a16c`, same session as the follow-up below). A new consistency checker
+> (`findConsistencyViolations`) that REFUSES to answer from a subject whose own taught/entailed
+> types contradict each other, naming the clash — INF-C2 moved from its 0% ceiling to **100%, 0%
+> fabrication**.
 >
-> **Fresh measurement (version 1.4.1, chat arm, 209 cases):** INF-A1 100%, INF-A2 100%, **INF-B1
-> 100%** (was 33%), INF-B2 80%, INF-C1 90%, **INF-C2 100%** (was 0%) — overall 94% completion, 0%
-> fabrication, **every band passes the gate, no gating skip anywhere on the ladder** (previously
-> gated at INF-B1, blocking everything above it). Kernel arm: INF-A1/A2/B2 all 100%.
+> **The follow-up closed (2026-07-10, commits `07b8035`/`1110488`/`304a16c`):** `scm-svf1`
+> (someValuesFrom restriction subsumption, W3C OWL 2 RL Table 9), cardinality monotonicity ("every X
+> has exactly 3 Ys" ⊢ "every X has at least 2 Ys" — confirmed genuinely outside OWL 2 RL's own
+> decidable profile), and `cax-maxc0` (max-0 as encoded negation, grounded in `cls-maxc1`'s ABox
+> contradiction via a one-step universal generalization) all shipped and were wired into live chat.
+> A new positive infbench template, `c1ScmSvfApply`, had to be added FIRST — §4 stage 4's own
+> two-step recipe (build the measuring case, then the rule) applied a second time, since the
+> original `c1Cardinality` fixture had zero cases that could ever show a pass. See §4 stage 4's row
+> for the exact recipe.
 >
-> **One known, non-gate-blocking gap:** INF-B2's 10 new `b2Svf1Apply` positive cases show
-> "unproven" in the chat arm despite `cls-svf1` passing 100% in the kernel arm — `cls-svf1` needs
-> the same live chat-query wiring treatment `cax-dw` just got (this session only built that for
-> `cax-dw`); documented follow-up, not attempted here. INF-C1's 3 non-passing rows are the
-> long-standing, unrelated `-max0-*` "unclear" quirk, unchanged since 0.8.2.
+> **Fresh measurement (version 1.4.1+, INFBENCH kernel arm: 80/80, 100%; chat arm: 216/219, 99%).**
+> The chat arm's 3 non-passing rows are the same pre-existing "unclear max0" quirk named below,
+> confirmed unrelated to this session's build and unchanged by it. Every band passes the gate, no
+> gating skip anywhere on the ladder.
+>
+> **What's left, and where it lives now:** the one real code gap this session found — three
+> entailment rules that had never been wired to trust.mjs's premise-derived-trust hook — is closed
+> (`src/syllogise.mjs`, `SCM_SVF_RULE_CONFIDENCE`/`CARDINALITY_RULE_CONFIDENCE`/
+> `CAX_MAXC0_RULE_CONFIDENCE`). The one genuinely open RESEARCH question this file used to carry
+> (retraction-aware incremental reasoning under a trust-tiered budget) has moved to its own doc,
+> `PLAN_SYLLOGIST_HORIZON.md` — nothing here is unimplemented-and-silently-dropped; it is either
+> shipped or has a named home.
 
 *(Revised 2026-07-07 — mechanizes CASE GENERATION. What changed vs the prior draft: §1's worked
 examples are reframed as hand-verified EXPRESSIBILITY WITNESSES, not the case-authoring mechanism;
@@ -269,103 +283,16 @@ deterministic-replay clause); it applies only if a judged phrasing tier is enabl
 | 1 | **cax-sco** in syllogise.mjs (x rdf:type C₁, C₁⊑C₂ ⊢ x rdf:type C₂) — same budget/focus/screen guards, provenance `entailed:type` (hand-written Node.js — §2.3) | S | INF-A2 gate PASS |
 | 2 | **Proof-chain receipts**: derivations carry premise fact-ids + rule name (the tier-5 `via:"entailed"` proof-chain provenance, ROADMAP L788); engage the trust hook already waiting in trust.mjs L103-106 (min(premiseTrusts) × ruleConfidence) | M | proofs grade connected; entailed trust is premise-derived, not the bare 0.3 floor |
 | 3 | **B1 rules**: cax-dw (+ its ⊑-lift) and the "cannot be proven" answer shape wired into the miss path (hand-written Node.js — §2.3) | M | ✅ **SHIPPED 2026-07-10** — INF-B1 gate PASS (33%→100%) — unlocks C-band judging per the ladder rule |
-| 4 | **Tier-5 proper**: OWL 2 RL subset as semi-naive forward-chaining per ROADMAP's engine choice (L796-803) — cls-svf1, scm-svf, cardinality monotonicity; entailment-on-miss wiring (hand-written Node.js — §2.3) | L | ◐ **PARTIAL 2026-07-10** — cls-svf1 shipped (kernel 100%, chat-arm live-query wiring still needed, follow-up); scm-svf/cardinality-monotonicity skipped as genuinely unmeasurable against today's cases (INF-C1 already 90-93% pre-existing, unrelated `-max0-*` quirk) — INF-B2 gate PASSES (80%, 0% fabrication) |
+| 4 | **Tier-5 proper**: OWL 2 RL subset as semi-naive forward-chaining per ROADMAP's engine choice (L796-803) — cls-svf1, scm-svf, cardinality monotonicity; entailment-on-miss wiring (hand-written Node.js — §2.3) | L | ✅ **SHIPPED** — `cls-svf1` shipped 2026-07-10 (kernel 100%) then chat-wired live the same session (commit `304a16c`). `scm-svf1`/cardinality monotonicity/`cax-maxc0` followed a real two-step recipe, not a skip: the original `c1Cardinality` fixture had zero cases that could ever show a pass, so a new positive template (`c1ScmSvfApply`) was added FIRST (commit `1110488`) to make the rules measurable at all, THEN the rules were built (`07b8035`) and chat-wired (`304a16c`). INFBENCH kernel arm 100% (80/80), chat arm 99% (216/219 — the 3 non-passing rows are the same pre-existing `-max0-*` "unclear" quirk, confirmed unrelated and unchanged) |
 | 5 | **Consistency checker** over the closure + refuse-on-contradiction (hand-written Node.js — §2.3) | M | ✅ **SHIPPED 2026-07-10** — INF-C2 completion 0%→100%, gate PASS |
 | — | Progol/ILP (learning NEW rules) stays a SEPARATE far spike — ROADMAP Item 11's own language ("exploratory until a spike confirms the mapping is tractable") | — | not on this ladder |
 
-**The literature behind stages 3–5 and the Progol row, verified against real sources — most of it
-is solved, a narrower slice is genuinely open.** Named honestly so "we haven't built it" is never
-conflated with "nobody knows how":
-
-- **OWL 2 RL + DL tableau reasoning is a mature, solved field — reimplementing it here is real
-  engineering, not research.** OWL 2 RL was purpose-designed to be implementable as forward-chaining
-  Datalog: the W3C's own profile document states the design goal directly ("OWL 2 RL reasoning
-  systems can be implemented using rule-based reasoning engines") and proves it — Theorem PR1
-  gives soundness+completeness of the rule-based reading for query answering, and §4.3's Tables 4-9
-  enumerate the COMPLETE rule set as first-order implications over a ternary triple predicate (W3C,
-  *OWL 2 Web Ontology Language Profiles*, Second Edition, 2012, `https://www.w3.org/TR/owl2-profiles/`
-  — verified by direct fetch). Stage 4's tier-5 "the Syllogist" is, in the literature's own terms,
-  an implementation of an already-published complete rule table, not an open design question. The
-  same holds for the harder DL fragments beyond RL: satisfiability/consistency checking for
-  expressive DLs is solved by tableau algorithms (Baader & Sattler, "An Overview of Tableau
-  Algorithms for Description Logics," *Studia Logica* 69(1):5-40, 2001; Horrocks & Sattler, "A
-  Tableau Decision Procedure for SHOIQ," *Journal of Automated Reasoning*, 2007 — both verified),
-  and production reasoners built on exactly this theory exist and are widely deployed: Pellet and
-  HermiT are tableau-based OWL DL reasoners, RDFox is an in-memory parallel Datalog/OWL-2-RL engine
-  materialising up to 6.1M triples/sec (Motik, Nenov, Piro & Horrocks, "RDFox: A Highly-Scalable RDF
-  Store," ISWC 2015 — verified), and Apache Jena ships a general rule engine for exactly this rule
-  shape. **The genuinely tmct-specific part is narrower than "build a reasoner": these mainstream
-  systems assume a single trust tier — a fact is IN the closure or it is not.** tmct's own
-  requirement (`memory/trust.mjs` `SOURCE_PRIOR`, corpus 0.7 < teach 0.95 < operator 1.0, entailed
-  floor 0.3) that a corpus-sourced entailment must NEVER outrank a taught fact, stay low-trust, and
-  remain independently retractable is a governance layer the OWL 2 RL/tableau literature does not
-  address at all — it is silent on trust tiers because DL semantics has none. That governance layer
-  is this repo's own invention (already shipped), not a gap in the literature to fill.
-
-- **Incrementality (RETE / semi-naive evaluation) is also solved — `syllogise.mjs` just hasn't
-  adopted it yet.** `deriveSubClassClosure` (`src/syllogise.mjs:57-103`) re-scans the full
-  `succ` adjacency snapshot every pass; the budget/focus/screen guards bound HOW MUCH work a pass
-  does but not whether the pass reuses work from the last one — there is no persisted match-state
-  across calls. The classical answer (compile the rule set into a discrimination network so a new
-  fact only re-triggers the joins it could actually affect) is Forgy's RETE algorithm (Forgy, C.L.,
-  "Rete: A Fast Algorithm for the Many Pattern/Many Object Pattern Match Problem," *Artificial
-  Intelligence* 19(1):17-37, 1982 — verified) and its Datalog-world descendant, semi-naive
-  evaluation, is exactly what ROADMAP L796-803 already names as tier-5's intended engine choice and
-  what RDFox's production incremental engine actually runs at scale (Motik et al. 2015, above). This
-  session's `edgesOfKind`-style predicate memoization is a real step in this direction (indexing
-  facts by predicate so a pass doesn't rescan irrelevant rows) but it is NOT yet an alpha/beta
-  network — a genuinely incremental `syllogise()` (new fact in ⇒ only the newly-enabled derivations
-  computed, not a re-scan bounded by budget) is a known, citable technique to port, not an open
-  question.
-
-- **Retraction-aware consistency under a hard budget and trust tiers is the one piece that is
-  genuinely narrower than "known algorithm, not yet ported" — worth naming precisely rather than
-  folding into the OWL 2 RL bucket above.** The classical AI answer to "a belief was derived from
-  premises, one premise later disappears, what else must be un-believed?" is a Truth Maintenance
-  System: Doyle's original JTMS (Doyle, J., "A Truth Maintenance System," *Artificial Intelligence*
-  12(3):231-272, 1979 — verified) attaches a justification (its supporting premise set) to every
-  derived belief so retracting a premise triggers dependency-directed removal of exactly the beliefs
-  that justification supported; de Kleer's ATMS generalizes this to track, per fact, the FULL SET of
-  minimal premise-sets ("environments") that would justify it, so a fact survives a retraction as
-  long as ANY of its environments still holds (de Kleer, J., "An Assumption-Based TMS," *Artificial
-  Intelligence* 28:127-162, 1986 — verified). The database/Datalog literature has its own answer to
-  the same shape of problem in the classical two-valued (in/out, one trust tier) setting: DRed
-  deletes a superset of affected tuples then selectively rederives them (Gupta, Mumick &
-  Subrahmanian, "Maintaining Views Incrementally," ACM SIGMOD 1993 — verified), and RDFox's own
-  Backward/Forward algorithm improves on DRed specifically because DRed over-deletes when a fact has
-  many alternate derivations (Motik, Nenov, Piro & Horrocks, "Incremental Update of Datalog
-  Materialisation: the Backward/Forward Algorithm," AAAI 2015 — verified). **None of these four
-  citations natively carries tmct's actual requirement**: multiple co-existing entailments at
-  DIFFERENT trust tiers, where retracting a low-trust corpus premise must re-evaluate only the
-  derivations that actually depended on it, must never touch a higher-trust taught-only derivation
-  that happens to reach the same conclusion, and where the re-evaluation step itself has to be
-  boundable under the same hard idle-CPU budget the forward pass already obeys (`syllogise.mjs:10-25`)
-  — not "eventually consistent," bounded on every call. That specific conjunction — bounded +
-  incremental + trust-tiered + retraction-safe justification tracking over a tiny rule set — is not
-  a named, worked problem anywhere the search above surfaced; the building blocks are each 30-45
-  years old and individually well understood, but their combination under a hard low-resource budget
-  looks like a genuine "no vehicle yet" gap, not a reimplementation task.
-
-  **A concretely speculative, budget-respecting sketch** (offered as a direction, not a design):
-  today every entailed fact carries only a flat provenance TAG (`entailed:subClassOf`,
-  `syllogise.mjs:32,130-136`) — the pivot class `via` that produced it is computed and returned in
-  the pass's report but never persisted onto the fact itself, so there is no stored justification to
-  walk at all today. Stage 2 (this table, row 2) already plans to fix that partially: premise
-  fact-ids + rule name per derivation, a JTMS-shaped single justification per fact. A further,
-  NOT-currently-planned step toward the ATMS proper would track the small SET of alternate premise-
-  sets per derived fact rather than just one — cheap for tmct specifically because the rule count is
-  tiny (two rules today) so the number of alternate derivations per fact is expected to stay small,
-  unlike the general case ATMS was built for. Retraction would then become a set-membership check
-  ("does this fact still have any surviving justification after premise X is retracted?") scoped to
-  the fact's own small environment set, rather than a whole-graph re-scan — and the environment-set
-  size itself could carry a fourth budget knob alongside `depth`/`budget`/`focus`, so the mechanism
-  inherits tmct's existing bounded-idle-CPU promise instead of importing an unbounded ATMS
-  implementation. This stays within the ground rules (deterministic — justifications are computed
-  facts, not heuristics; explainable — a retraction's cause is the exact environment that failed;
-  bounded — a capped environment-set size; low-trust/retractable — the whole point). Untested,
-  unbuilt, and honestly speculative: nobody has published this exact narrow combination as a working
-  system, so there is no citation to verify here beyond the separately-real building blocks above —
-  flagged as such rather than dressed up as prior art.
+**The literature behind stages 3–5, verified against real sources, is mostly a solved field — this
+plan's own build stayed hand-written engineering against it, never open research.** The one slice
+that IS genuinely open (retraction-aware incremental reasoning under a trust-tiered hard budget) has
+moved to its own document, `PLAN_SYLLOGIST_HORIZON.md`, along with the incrementality (RETE/
+semi-naive) and OWL 2 RL/tableau literature review that frames it — read that file for the full
+citations. What's left here is the one item that's a separate, much smaller topic:
 
 - **Progol/ILP vs. Track 1's CEGIS rule synthesis — related family, genuinely different mechanism,
   worth distinguishing precisely now that Track 1 has actually shipped
@@ -471,16 +398,12 @@ contradicting the closure is quarantined, not blended).
   the same act rather than generation-then-traversal.
 - **Trust/provenance interaction.** Entailed-from-taught (premises at `teach` 0.95 / `operator`
   1.0) vs entailed-from-graph (`provider` 0.9) vs mixed: the conclusion carries
-  min(premises) × ruleConfidence once stage 2 engages the hook — never above its weakest premise,
-  never silently mixed with stated facts (the tier-5 gate, ROADMAP L806-808). **Retraction is a
-  real gap:** syllogise.mjs promises retractability by provenance but no incremental
-  closure-maintenance exists; INFBENCH must NOT test retraction until it does. Name it, stage it
-  after stage 4.
-- **The frame problem stays named** (ROADMAP L590's own language): the residual hard half of
-  entailment-on-miss is RELEVANCE — which axioms to chain from a large base under budget.
-  Budget/focus truncation (`deriveSubClassClosure` L57) means a truthful "unproven" may really be
-  "unproven within budget"; the answer shape must say which, and §2.2's `unproven` templates pin
-  fixtures small enough (bounded chain-length/pair parameters) that budget is never the reason.
+  min(premises) × ruleConfidence now that stage 2's hook is engaged for every rule
+  (`SCM_SVF_RULE_CONFIDENCE`/`CARDINALITY_RULE_CONFIDENCE`/`CAX_MAXC0_RULE_CONFIDENCE`, closed
+  2026-07-11) — never above its weakest premise, never silently mixed with stated facts (the
+  tier-5 gate, ROADMAP L806-808). Retraction and relevance-under-budget (the two real open
+  questions this bullet and the next one used to name separately) are now one write-up,
+  `PLAN_SYLLOGIST_HORIZON.md` — INFBENCH must NOT test retraction until that work lands.
 
 ---
 
