@@ -1,12 +1,63 @@
 # CAPABILITIES_AUDIT_2026-07-10.md — tmct capability audit (refresh 2)
 
-> **◻ Pending, sequenced after this refresh: a comparative model-tier table** (tmct vs. local/AWS/
-> Anthropic model tiers, plus a speculative TO-BE sketch) — not started, tracked separately, not part
-> of this doc's own scope.
+## Comparative model-tier table: tmct vs. local/AWS/Anthropic models, and a speculative TO-BE
+
+**Read this framing before the table, not after.** tmct is not a general-purpose LLM and this is
+not an IQ-style "tmct is as smart as X" claim. tmct is a narrow, deterministic, zero-cost system —
+hand-built grammar + ontology + graph reasoning over a bounded domain — and it has never attempted
+open-ended generation, coding, creative writing, or general reasoning. The rows below are scoped
+strictly to the four task shapes tmct is actually measured on (`AGENTBENCH_1.4.1.md`,
+`INFBENCH_1.4.1.md`, `CEFR_ENGLISH_1.4.1.md`, `PLAYTESTBENCH_1.4.1.md`). tmct's own column cites a
+real report number. **Every other column is an informed estimate from general knowledge of these
+models' well-known public capability tiers, not a measured cross-benchmark result** — nobody has run
+Llama-3-8B or Claude Opus against tmct's exact task shapes, and this table doesn't pretend otherwise.
+Tiers referenced: **small/local** (Llama 3/3.1 8B, Phi-3/3.5-mini, Mistral 7B class — laptop/single-GPU
+open-weight models), **AWS Bedrock** (Titan Text, Nova Micro/Lite/Pro), **Anthropic** (Haiku, Sonnet,
+Opus, across available generations).
+
+| Task shape | tmct — measured | Small/local open-weight | AWS Bedrock | Anthropic |
+| --- | --- | --- | --- | --- |
+| Controlled-English graph Q&A, zero-fabrication grounding | 0% fabrication/hallucination across every INFBENCH and AGENTBENCH row; CEFR tier-1 89/109 green | **tmct stronger** (informed estimate) — a base small model answering closed-KB questions without RAG shows real fabrication rates; tmct is structurally incapable of asserting past its taught/seeded facts | **tmct stronger** than a bare Titan/Nova call (informed estimate); roughly **comparable** to the same tier wired into a well-built RAG/grounding harness — the fairer comparison, and one tmct wasn't measured against | Roughly **comparable** to Haiku/Sonnet under strict grounding+citation prompting (informed estimate) — achievable there with prompt discipline; tmct gets it for free from having no other mode |
+| Taught-syllogism / classical-logic inference (INF ladder) | Full ladder passes; chat arm 94% completion, 0% fabrication; INF-B1 100% (was 33% pre-fix); INF-C2 consistency-refusal 100% | **tmct stronger** on the consistency-refusal shape specifically (informed estimate) — small local models are known to answer confidently from contradictory premises rather than refuse; roughly **comparable** on plain 2-hop chains | Roughly **comparable** to the small/local tier; Nova Pro plausibly **comparable-to-stronger** on general multi-step logic, likely **weaker** on consistency-refusal discipline specifically (informed estimate) | Roughly **comparable** on this narrow closed-ladder shape (informed estimate) — likely matches tmct's completion rate here, but also handles open-ended/unbounded logic puzzles tmct cannot attempt |
+| Agentic/tool-use rung ladder (AGENTBENCH, A0–C2) | 100% plan-completion, 98% result-completion, 0% hallucination, every rung gate PASS | **tmct stronger** on this specific closed/fixed-toolset ladder (informed estimate) — small models doing plan-then-compose over bounded tools show more composition noise; tmct's determinism removes that failure class entirely | Roughly **comparable** to Nova Pro-tier structured tool-use on similarly bounded task ladders (informed estimate) | Roughly **comparable-to-stronger** — likely matches or exceeds 98% result-completion on a ladder this bounded, plus handles open-ended/ambiguous tool selection tmct's fixed router cannot touch |
+| CEFR-graded conversational quality (closed case set) | mean 1.624/2 (81%); 89/109 tier-1 green; hard fails concentrated in C2 `pronoun-binding` (0/10 tier-1) and A2 `naming-vocabulary` | Roughly **comparable** on narrow graded-case fidelity (informed estimate) — but a small model degrades with fluent-but-wrong prose rather than tmct's hard grammar-wall/honest-miss, arguably worse for this rubric's honesty dimension; **stronger** than tmct on open-ended fluency/paraphrase outside any closed template, where tmct cannot generate at all | Comparable pattern to small/local tier on the graded rubric; **stronger** on open-ended conversational range | **Stronger** — near-ceiling on graded correctness/honesty at Sonnet/Opus tier, plus full open-ended fluency tmct structurally lacks |
+
+**The pattern across all four rows**: tmct is plausibly stronger or comparable specifically on the
+axis all four benchmarks gate on — zero-fabrication, bounded-task completion — and clearly weaker the
+moment a task shape needs open-ended generation or reasoning outside its closed grammar/template set.
+That is exactly the specialist-vs-generalist trade-off, not a uniform ranking.
+
+### Speculative TO-BE — where the table could move, if the backlog lands
+
+Purely speculative, not a roadmap commitment. Drawing on the four reports' own "Next" sections and
+`HANDOVER.md`'s ranked follow-ups:
+
+- **`cls-svf1`'s live chat-query wiring** (`HANDOVER.md` item 4; `INFBENCH_1.4.1.md` "Next") — the
+  kernel rule is already 100%-passing, only the chat-query path is missing, the same shape of fix that
+  took INF-B1 from 33%→100% this session. Landing it would plausibly take INF-B2 from 80%→~100%,
+  pushing the taught-syllogism row further toward "stronger across the board" rather than
+  "comparable on plain chains."
+- **Wiring `src/completions/` into chat dispatch** (`PLAYTESTBENCH_1.4.1.md` "Next"; confirmed
+  unreachable live this session — a broad "detailed summary of how X works" question still hits the
+  grammar wall) — would let tmct answer open-ended "explain how X works" questions with cited,
+  groundedness-checked multi-sentence prose. This is the one lever that could move tmct off the
+  "clearly weaker on open-ended generation" side of the CEFR/conversational row without giving up its
+  zero-fabrication floor — closing part of the gap with small local models' open-ended fluency while
+  keeping a hallucination floor those models don't have.
+- **C2 `pronoun-binding`** (`CEFR_ENGLISH_1.4.1.md` "Next", `HANDOVER.md` item 1 — the clearest,
+  highest-impact lever identified) — 0/10 tier-1, 4/10 judged hard fails, all confidently-wrong. A fix
+  here is the most direct route to moving the CEFR row's mean and hard-fail rate, though it stays
+  within tmct's existing closed-template ceiling rather than adding new generative range.
+
+None of these change tmct's fundamental shape — a fixed grammar/ontology system, not a generalist —
+they would only sharpen its position on the rows where it already competes on completion/groundedness
+terms, and marginally narrow (not close) the open-ended-generation gap via the completions pipeline.
+
+---
 
 **Refresh 2 — re-pinned at commit `4a102b5` ("docs: refresh HANDOVER.md — ranked follow-ups from
 the 4 fresh 1.4.1 benchmark reports"), 2026-07-10, after the full session's batch landed and all
-four fresh benchmark reports (`AGENTBENCH_1.4.1.md`, `INFBENCH_1.4.1.md`, `CHATBENCH_1.4.1.md`,
+four fresh benchmark reports (`AGENTBENCH_1.4.1.md`, `INFBENCH_1.4.1.md`, `CEFR_ENGLISH_1.4.1.md`,
 `PLAYTESTBENCH_1.4.1.md`) were written.** The prior version of this doc (refresh 1, pinned at
 `0b730ad`, written *during* the session while tracks were still landing) is superseded by this one;
 its own git history preserves it if needed. Unlike refresh 1, the working tree is now fully clean —
@@ -37,8 +88,8 @@ unchanged from refresh 1 — re-verified spot-checks, not blind carry-forward.
 | — | PLAN_COMPLETIONS Stage 1 (cross-group inference, closed 4-relation vocabulary) | **implemented, new row** | `PLAN_COMPLETIONS.md` | `src/completions/infer.mjs` (commit `48578b2`) — supports/contradicts/elaborates/exemplifies, each with a named mechanical licensing test, zero-fabrication proven against all 28 pairs in its own fixture |
 | — | PLAN_COMPLETIONS Stage 3 (pruning + grammar/voice pass, wired end to end) | **implemented, new row** | `PLAN_COMPLETIONS.md` | `src/completions/prune.mjs` + `complete.mjs` (commit `dc51168`) — `generateCompletion()` chains all six stages; `finish.mjs` generalized from single-answer to genuinely multi-sentence |
 | — | SHACL ingest gate — using `shacl-engine` | **NOT implemented (deliberately rejected, refresh 1 undersold this)** | `PLAN_AGENTS.md` §2.1 | `shacl-engine`/`rdf-ext` were installed, found to pull in a full federated SPARQL engine (~560 packages, `@comunica/query-sparql-rdfjs-lite`), and explicitly ripped out in favor of the hand-rolled `src/memory/shacl.mjs` refresh 1 already correctly described — noted here only to make the *rejection* itself an explicit, documented decision, not silent |
-| — | Chatbench case-set v3 (`graded-pool.jsonl` as a 109-case go-to default, full pool preserved at `graded-pool-max.jsonl`) | **implemented, new row** | `SKILL_BENCHMARK_CHAT.md` §1 | Commit `eaf33f0`; former `cases.jsonl`'s 49 cases folded in as real graded cells (Leg B — classified into CEFR grade+construction, not left ungraded); `CHATBENCH_1.4.1.md` is the first judged run against it |
-| — | Playtest sprint capability — 2 real dead-ends found and fixed live | **implemented, new row** | `SKILL_BENCHMARK_PLAYTEST.md` §3 | Commits `e2b6f57` (bare "what does this do") and `bc1b441` (closing/thanks remark); `PLAYTESTBENCH_1.4.1.md` is the first versioned write-up under this convention — refresh 1 noted no `PLAYTESTBENCH_*.md` existed yet; it now does |
+| — | Chatbench case-set v3 (`graded-pool.jsonl` as a 109-case go-to default, full pool preserved at `graded-pool-max.jsonl`) | **implemented, new row** | `SKILL_BENCHMARK_CEFR_ENGLISH.md` §1 | Commit `eaf33f0`; former `cases.jsonl`'s 49 cases folded in as real graded cells (Leg B — classified into CEFR grade+construction, not left ungraded); `CEFR_ENGLISH_1.4.1.md` is the first judged run against it |
+| — | Playtest sprint capability — 2 real dead-ends found and fixed live | **implemented, new row** | `SKILL_BENCHMARK_CONVERSATION.md` §3 | Commits `e2b6f57` (bare "what does this do") and `bc1b441` (closing/thanks remark); `PLAYTESTBENCH_1.4.1.md` is the first versioned write-up under this convention — refresh 1 noted no `PLAYTESTBENCH_*.md` existed yet; it now does |
 | — | Four fresh 1.4.1 benchmark reports (AGENTBENCH/INFBENCH/CHATBENCH/PLAYTESTBENCH) | **implemented, new row** | all four `SKILL_BENCHMARK_*.md` docs | Root-level `.md` files, each with a real timing section (start/end/write-up timestamps, concurrency, duration) reconstructed from result-file mtimes + commit timestamps. All pre-1.4.1 reports archived to `archive/` (commit `17019e0`) |
 | — | Live wiring gap pattern, named generically | **new finding, not a row** | — | Two capabilities this session (`cax-dw`, the completions pipeline) shared the exact same failure shape: a real, unit-tested engine/module that nothing in the live chat dispatch surface actually calls. `cax-dw`'s case is now fixed; the completions pipeline's is not. Worth naming as a class of gap this project should watch for going forward — "unit-tested" and "reachable from a real chat turn" are not the same claim, and this audit (both refreshes) found real capabilities on both the fixed and unfixed side of that line |
 
@@ -67,10 +118,10 @@ byte-identical to `0.8.2`, fully gate-passing on every rung (100% plan / 98% res
 hallucination). No feature-support bullet needs updating; nothing on this benchmark's measured
 surface changed this session.
 
-### `SKILL_BENCHMARK_CHAT.md` (CHATBENCH)
+### `SKILL_BENCHMARK_CEFR_ENGLISH.md` (CHATBENCH)
 
 - Case-set v3 (`graded-pool.jsonl` as the 109-case go-to default) — **complete**, this session's own
-  restructuring; `CHATBENCH_1.4.1.md` is the first-ever judged run against it (mean 1.624/2)
+  restructuring; `CEFR_ENGLISH_1.4.1.md` is the first-ever judged run against it (mean 1.624/2)
 - C2 `pronoun-binding` — **todo**, confirmed by fresh measurement as the clearest concentrated
   weakness: 0/10 tier-1, 4/10 judged hard fails, every one confidently-wrong not honest-miss
 - A2 `naming-vocabulary` — **todo, new signal**: 2 fresh hard fails not previously known as a
@@ -89,15 +140,22 @@ surface changed this session.
   (pre-check found INF-C1 already at 90%, unrelated to either rule) — correctly NOT built this
   session rather than built-and-unmeasurable
 
-### `SKILL_BENCHMARK_PLAYTEST.md` (dialogue-flow, → pending rename to `SKILL_BENCHMARK_CONVERSATION.md`)
+### `SKILL_BENCHMARK_CONVERSATION.md` (dialogue-flow — renamed and refocused this session from `SKILL_BENCHMARK_PLAYTEST.md`)
 
 - Capped sprint mode, run for real this session — **complete** as a proven process, not just a
   documented one; `PLAYTESTBENCH_1.4.1.md` is the first versioned write-up
-- Regression-freezing of playtest-found fixes into `test/chatflow-*.test.mjs` — **todo**, explicitly
-  skipped this cycle per the report's own "Next" section, a real gap in the loop's own discipline
-- (Once renamed/refocused per the pending task: conversation fluidity, knowledge-acceptance+
-  inference, and completions-detail retrieval become this benchmark's explicit territory — see §5
-  below for what that would newly cover)
+- Regression-freezing of playtest-found fixes into `test/chatflow-*.test.mjs` — **done for the
+  canonical/textbook class of miss** (`test/chatflow-canonical.test.mjs`, 6 frozen transcripts,
+  including the john/man syllogism fix found live post-session); the original 2 playtest-sprint
+  dead-ends from `PLAYTESTBENCH_1.4.1.md` itself are still unfrozen — a real, narrower gap in the
+  loop's own discipline than refresh 1 had
+- **Renamed and refocused — DONE, not pending.** Now explicit territory: conversation fluidity
+  (greetings/closing, §0.1's mandatory canonical-example-first check), knowledge-acceptance+
+  inference (teach-then-INFER, not just recall), completions-detail retrieval via the hub-avoiding
+  crawl, and a new **§3.4 persona-sweep mode** (parallel background agents, each a genuinely
+  different persona/frame, not a different topic) — the first live sweep already ran and surfaced
+  2 new high-signal findings, folded into `HANDOVER.md`'s ranked follow-ups. See §5 below for what
+  this newly covers.
 
 ---
 
@@ -159,8 +217,8 @@ it. Naming these explicitly rather than letting "no benchmark moved" read as "no
   not just recalled verbatim — is exactly what this session's playtest sprint tested and CHATBENCH
   structurally cannot (it grades single isolated cases, not session arcs).
 
-**This is precisely the gap the pending `SKILL_BENCHMARK_PLAYTEST.md` → `SKILL_BENCHMARK_CONVERSATION.md`
-rename/refocus (queued, not yet done) is meant to close**: fluid conversation with greetings and
+**This is precisely the gap the `SKILL_BENCHMARK_PLAYTEST.md` → `SKILL_BENCHMARK_CONVERSATION.md`
+rename/refocus (done this session, not merely queued) closes**: fluid conversation with greetings and
 guided exploration, the ability to accept taught knowledge and use it to make further inferences
 (not just recall it), and obtaining a detailed PLAN_COMPLETIONS response via the hub-avoiding crawl
 (the degree-dampened `broadSearch`/`groupHits`/`rankSentences` pipeline in `src/completions/`) are
