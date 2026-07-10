@@ -316,41 +316,81 @@ async function main() {
 
   if (mode === "init") {
     // `tmct init` — the Repository-Interface onboarding surface: scaffold .tmct/,
-    // write tmct.toml, seed the tier-1 corpus (offline, opt-out via TMCT_NO_SEED),
-    // and record provenance. Idempotent; --force rewrites config + re-records.
+    // write tmct.toml, seed the corpus (offline, opt-out via TMCT_NO_SEED), and
+    // record provenance. Idempotent; --force rewrites config + re-records.
     //
-    // TIERING POLICY: init is OFFLINE, $0 and TIER-1-ONLY by default. A tier-2
-    // domain/language corpus (corpus/tier2/: aws, python, java) is added ONLY when
+    // TIERING POLICY: init is OFFLINE, $0 and TIER-1-ONLY by default (seon +
+    // conceptnet — src/extensions.mjs's BUILTIN_EXTENSIONS). A tier-2 domain/
+    // language corpus (corpus/tier2/: aws, python, java) is added ONLY when
     // explicitly asked via `--corpus <id>`. The `--detect` auto-detect is a
     // documented STUB: it inspects the repo's manifests (pyproject.toml → python,
     // pom.xml → java) and SUGGESTS the matching corpus, but never seeds it unasked.
     const rest = process.argv.slice(3);
-    const { initRepo } = await import("../src/init.mjs");
-    const res = await initRepo(process.cwd(), { force: rest.includes("--force") });
-    process.stdout.write(res.message + "\n");
+    const { initRepo, defaultConfig, renderTomlConfig, CONFIG_FILE } = await import("../src/init.mjs");
+    const { loadTomlConfig } = await import("../src/toml-config.mjs");
 
     const ci = rest.indexOf("--corpus");
     const corpusId = ci !== -1 ? rest[ci + 1] : undefined;
+    let manifest = null;
+    let manifestEntry = null;
     if (corpusId) {
-      // Seed a tier-2 corpus by id from corpus/tier2/ (same slice shape as tier-1;
-      // provenance-tagged corpus:tier2:<id>). Idempotent (content-hashed fact ids).
+      // Validate the id against the tier-2 manifest (same source of truth the
+      // old ad hoc path used) BEFORE touching anything on disk.
       const { readFile } = await import("node:fs/promises");
-      const { join, dirname } = await import("node:path");
-      const { seedMemory, TIER2_MANIFEST_FILE } = await import("../src/corpus/conceptnet.mjs");
-      let manifest;
+      const { TIER2_MANIFEST_FILE } = await import("../src/corpus/conceptnet.mjs");
       try { manifest = JSON.parse(await readFile(TIER2_MANIFEST_FILE, "utf8")); }
       catch (e) { process.stderr.write(`tmct init: cannot read the tier-2 manifest — ${e?.message || e}\n`); process.exit(1); }
-      const entry = (manifest.corpuses || []).find((c) => c.id === corpusId);
-      if (!entry) {
+      manifestEntry = (manifest.corpuses || []).find((c) => c.id === corpusId);
+      if (!manifestEntry) {
         const ids = (manifest.corpuses || []).map((c) => c.id).join(", ");
         process.stderr.write(`tmct init: unknown --corpus "${corpusId}". Available tier-2 corpuses: ${ids}.\n`);
         process.exit(2);
       }
-      const slicePath = join(dirname(TIER2_MANIFEST_FILE), entry.file);
-      const seeded = await seedMemory(process.cwd(), { slicePath, provenancePrefix: `corpus:tier2:${entry.id}` });
+    }
+
+    const res = await initRepo(process.cwd(), { force: rest.includes("--force") });
+    process.stdout.write(res.message + "\n");
+
+    if (manifestEntry) {
+      // `--corpus <id>` now means "activate extensions.tier2-<id> and PERSIST
+      // that into tmct.toml" — so a second `tmct init` (or the next chat
+      // bootstrap) remembers the choice, unlike the old ad hoc path, which had
+      // to be repeated every time. This changes the tier-2 provenance tag from
+      // the old colon-separated "corpus:tier2:<id>" to the hyphenated
+      // "corpus:tier2-<id>" (matching the TOML-legal extension name) — a
+      // deliberate, low-risk rename; nothing in chat.mjs's runtime logic keys
+      // on the old colon-separated string (verified via grep).
+      const extName = `tier2-${manifestEntry.id}`;
+      const raw = await loadTomlConfig(process.cwd()); // just-written by initRepo above
+      const cfg = { ...defaultConfig() };
+      if (raw?.graph_file !== undefined) cfg.graphFile = String(raw.graph_file);
+      if (raw?.corpus?.tier !== undefined) cfg.corpus = { tier: raw.corpus.tier };
+      if (raw?.seed) {
+        cfg.seed = { ...cfg.seed };
+        if (raw.seed.enabled !== undefined) cfg.seed.enabled = Boolean(raw.seed.enabled);
+        if (raw.seed.limit !== undefined) cfg.seed.limit = Number(raw.seed.limit);
+      }
+      cfg.extensions = { ...(raw?.extensions || {}), [extName]: { ...(raw?.extensions?.[extName] || {}), active: true } };
+      if (raw?.bias !== undefined) cfg.bias = raw.bias;
+      const { writeFile } = await import("node:fs/promises");
+      const { join } = await import("node:path");
+      await writeFile(join(process.cwd(), CONFIG_FILE), renderTomlConfig(cfg));
+
+      // Seed it now too — through the SAME unified corpus loader every other
+      // bundle goes through (src/extensions.mjs), not a bespoke seedMemory call.
+      const { resolveExtensions, seedActiveCorpusEntries } = await import("../src/extensions.mjs");
+      const { entries } = await resolveExtensions(process.cwd());
+      const entry = entries.get(extName);
+      const { perBundle } = await seedActiveCorpusEntries(process.cwd(), new Map([[extName, entry]]));
+      const seeded = perBundle[extName];
+      if (seeded.error) {
+        process.stderr.write(`tmct init: could not seed tier-2 corpus "${manifestEntry.id}" — ${seeded.error}\n`);
+        process.exit(1);
+      }
       process.stdout.write(
-        `seeded tier-2 corpus "${entry.id}" (${entry.kind}) — ${seeded.appended} fact(s) added`
-        + `${seeded.skipped ? `, ${seeded.skipped} already present` : ""}. Source: corpus/tier2/${entry.file} (${entry.license}).\n`,
+        `seeded tier-2 corpus "${manifestEntry.id}" (${manifestEntry.kind}) — ${seeded.appended} fact(s) added`
+        + `${seeded.skipped ? `, ${seeded.skipped} already present` : ""}. Source: corpus/tier2/${manifestEntry.file} (${manifestEntry.license}). `
+        + `Activated in tmct.toml — future \`tmct init\`/chat sessions seed it automatically.\n`,
       );
       return;
     }

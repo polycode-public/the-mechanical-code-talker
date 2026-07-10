@@ -190,7 +190,16 @@ export async function initRepo(dir, { force = false, seed, env = process.env } =
     config = await readWrittenConfig(paths.toml, config);
   }
 
-  // ---- 3. Seed the tier-1 committed corpus (offline, failure-tolerant) ----
+  // ---- 3. Seed the committed corpus (offline, failure-tolerant) ----
+  // DELIBERATE BUG FIX (this batch): `tmct init`'s zero-flag seed step used to
+  // seed ONLY the ConceptNet band, never the curated SEON ontology — unlike
+  // chat.mjs's own first-run bootstrap (seedBootstrapMemory), which has always
+  // seeded BOTH. Both now go through the SAME unified loop
+  // (src/extensions.mjs's resolveExtensions + seedActiveCorpusEntries), so
+  // `tmct init`'s seed matches chat's bootstrap exactly — this changes
+  // `initRepo`'s seeded fact COUNT (test/init.test.mjs's seed-count assertions
+  // were updated for the larger post-fix totals, deliberately, in the same
+  // commit as this fix).
   let seeded = false;
   let seedResult = null;
   let seedNote = "";
@@ -203,18 +212,42 @@ export async function initRepo(dir, { force = false, seed, env = process.env } =
     seedNote = "seed skipped (already seeded — marker present)";
   } else {
     try {
-      const { seedMemory } = await import("./corpus/conceptnet.mjs");
-      const limit = config.seed?.limit != null ? Number(config.seed.limit) : SEED_LIMIT;
-      seedResult = await seedMemory(root, { limit, prefer: SEED_PREFER });
+      const { resolveExtensions, seedActiveCorpusEntries } = await import("./extensions.mjs");
+      const { entries } = await resolveExtensions(root);
+      // `tmct.toml`'s `[seed] limit` knob is documented as capping the tier-1
+      // ConceptNet band specifically (the curated SEON ontology is small and
+      // always seeds whole) — so it overrides ONLY the resolved "conceptnet"
+      // entry's limit, exactly like the pre-fix single-corpus seed did.
+      if (config.seed?.limit != null && entries.has("conceptnet")) {
+        entries.set("conceptnet", { ...entries.get("conceptnet"), limit: Number(config.seed.limit) });
+      }
+      const { appended, skipped, total, perBundle } = await seedActiveCorpusEntries(root, entries);
+      // seedActiveCorpusEntries is failure-tolerant PER BUNDLE (a bad third-party
+      // pack never aborts the others) — but initRepo's own "FAILURE-TOLERANT
+      // SEED" contract is about the SEED AS A WHOLE degrading honestly. If every
+      // active bundle failed (e.g. the memory graph file itself is unwritable —
+      // see test/init.test.mjs "seed failure degrades"), re-throw the first
+      // bundle's error so the SAME outer catch below reports the familiar "seed
+      // skipped (corpus unavailable: …)" note, rather than claiming success with
+      // zero facts actually written.
+      const bundleNames = Object.keys(perBundle);
+      const allFailed = bundleNames.length > 0 && bundleNames.every((n) => perBundle[n].error);
+      if (allFailed) throw new Error(perBundle[bundleNames[0]].error);
+      seedResult = {
+        appended, skipped, total, perBundle,
+        seon: perBundle.seon?.appended || 0,
+        conceptnet: perBundle.conceptnet?.appended || 0,
+      };
       const markerNew = !(await exists(paths.marker));
       await mkdir(dirname(paths.marker), { recursive: true });
       await writeFile(
         paths.marker,
         JSON.stringify({
           seededAt: new Date().toISOString(),
-          limit,
+          limit: config.seed?.limit != null ? Number(config.seed.limit) : SEED_LIMIT,
           appended: seedResult.appended,
           skipped: seedResult.skipped,
+          perBundle,
         }) + "\n",
       );
       if (markerNew) created.push(paths.marker);

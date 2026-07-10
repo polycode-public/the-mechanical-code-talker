@@ -51,6 +51,7 @@ import { uuidv7 } from "./uuid.mjs";
 import { createTelemetry } from "./telemetry.mjs";
 import * as defaultSource from "./source.mjs";
 import { loadTemplates, render as renderTemplate } from "./corpus/templates.mjs";
+import { resolveExtensions, seedActiveCorpusEntries } from "./extensions.mjs";
 import { finish, beginsWithVowelSound, grammarRules } from "./finish.mjs";
 import {
   VERB_TO_KIND, WHERE_MARKERS, MENTION_MARKERS, ENTITY_TO_TYPE, PASSIVE_PARTICIPLE_TO_KIND,
@@ -6690,20 +6691,19 @@ export const SEED_PREFER = ["rdfs:subClassOf", "rdf:type", "mgx:usedFor", "mgx:p
  *  corpus seed, so re-runs skip without even reading the slice. */
 export const SEED_MARKER_REL = join(".tmct", "memory", "corpus-seed.json");
 
-/** Seed the starter corpus into <repo>/.tmct/memory once, in TWO passes:
- *    1. the curated SEON ontology (corpus/seon/concepts.jsonl) FIRST and UNCAPPED
- *       — it is small + fully curated (the SE vocabulary + orientation facts),
- *       tagged "corpus:seon", so a fresh repo knows the curated terms before any
- *       general ConceptNet noise;
- *    2. THEN the capped ConceptNet slice (the definitional band first, SEED_LIMIT
- *       facts), tagged "corpus:conceptnet".
- *  seon runs first so its curated facts win the content-hash idempotency race — a
- *  term the ConceptNet slice also carries keeps the seon provenance. Idempotent
- *  twice over (the marker short-circuits; seedMemory content-hashes fact ids) and
- *  failure-tolerated: a missing/broken corpus degrades to the unseeded bootstrap —
- *  never an error before the prompt. Returns { appended, skipped, total, seon,
- *  conceptnet } on a fresh seed (the banner counts stay honest), null when
- *  skipped/failed. */
+/** Seed the starter corpus into <repo>/.tmct/memory once — a loop over every
+ *  ACTIVE `corpus`-kind extension entry (src/extensions.mjs's resolveExtensions,
+ *  the SAME seam `tmct init`'s seed step and `tmct init --corpus <id>` now
+ *  share), in the resolver's FIXED order: seon first, then conceptnet, then any
+ *  other active bundle sorted by name. seon runs first so its curated facts win
+ *  the content-hash idempotency race — a term the ConceptNet slice also carries
+ *  keeps the seon provenance. Idempotent twice over (the marker short-circuits;
+ *  seedMemory content-hashes fact ids) and failure-tolerated PER BUNDLE
+ *  (seedActiveCorpusEntries): one bad third-party pack degrades to "not seeded"
+ *  for that bundle alone (its error is recorded, not silently swallowed) while
+ *  every other bundle still lands — never an error before the prompt. Returns
+ *  { appended, skipped, total, seon, conceptnet, perBundle } on a fresh seed
+ *  (the banner counts stay honest), null when skipped/failed outright. */
 async function seedBootstrapMemory(repo) {
   const marker = join(repo, SEED_MARKER_REL);
   try {
@@ -6711,27 +6711,40 @@ async function seedBootstrapMemory(repo) {
     return null; // already seeded — the marker is authoritative
   } catch { /* no marker → first run */ }
   try {
-    const { seedMemory, SEON_CONCEPTS_FILE } = await import("./corpus/conceptnet.mjs");
-    // (1) curated SEON ontology — uncapped, seon-tagged, seeded FIRST.
-    const seon = await seedMemory(repo, { slicePath: SEON_CONCEPTS_FILE, provenancePrefix: "corpus:seon" });
-    // (2) the capped ConceptNet band — byte-identical to the prior single seed.
-    const conceptnet = await seedMemory(repo, { limit: SEED_LIMIT, prefer: SEED_PREFER });
+    const { entries } = await resolveExtensions(repo);
+    const { appended, skipped, total, perBundle } = await seedActiveCorpusEntries(repo, entries);
     const res = {
-      appended: seon.appended + conceptnet.appended,
-      skipped: seon.skipped + conceptnet.skipped,
-      total: seon.total + conceptnet.total,
-      seon: seon.appended,
-      conceptnet: conceptnet.appended,
+      appended, skipped, total, perBundle,
+      // seon/conceptnet stay named fields (not just perBundle lookups) so the
+      // banner's default two-bundle rendering (below) — and any external
+      // reader keyed on `.seon`/`.conceptnet` — stays byte-identical.
+      seon: perBundle.seon?.appended || 0,
+      conceptnet: perBundle.conceptnet?.appended || 0,
     };
     await mkdir(dirname(marker), { recursive: true });
     await writeFile(marker, JSON.stringify({
-      seededAt: new Date().toISOString(), limit: SEED_LIMIT,
+      seededAt: new Date().toISOString(),
       appended: res.appended, skipped: res.skipped, seon: res.seon, conceptnet: res.conceptnet,
+      perBundle,
     }) + "\n");
     return res;
   } catch {
     return null; // corpus unavailable — bootstrap proceeds unseeded
   }
+}
+
+/** The seed banner line — byte-identical to before for the default zero-config
+ *  seon+conceptnet case; a THIRD (or more) active bundle appends its own
+ *  "<n> <bundle-name>" clause rather than changing the base sentence, so a
+ *  fresh `TMCT_NO_SEED`-unset run with no tmct.toml renders EXACTLY what
+ *  test/wiring-seed.test.mjs's SEED_BANNER_RE already pins. */
+function seedBannerLine(seeded) {
+  const extra = Object.entries(seeded.perBundle || {})
+    .filter(([name]) => name !== "seon" && name !== "conceptnet")
+    .filter(([, r]) => r && r.appended > 0)
+    .map(([name, r]) => `${r.appended} ${name}`);
+  const extraClause = extra.length ? ` + ${extra.join(" + ")}` : "";
+  return `seeded ${seeded.appended} starter facts (${seeded.seon} curated SEON + ${seeded.conceptnet} ConceptNet${extraClause}) — /memory to inspect`;
 }
 
 /** Whether THIS repo's memory actually carries the corpus seed — the marker is
@@ -6945,8 +6958,9 @@ export async function createSession({
         `the conversation is remembered to ${DEFAULT_GRAPH_REL} — log ${logFile}`
       : `tmct chat — ${repo} — ${moduleCount} module(s) — log ${logFile}`,
     // the honest seed line appears ONLY on the run that actually seeded — the count
-    // is the TOTAL appended, split into the curated SEON ontology + the ConceptNet band.
-    ...(seeded ? [`seeded ${seeded.appended} starter facts (${seeded.seon} curated SEON + ${seeded.conceptnet} ConceptNet) — /memory to inspect`] : []),
+    // is the TOTAL appended, split into the curated SEON ontology + the ConceptNet band
+    // (+ any other active extension bundle, e.g. an activated tier-2 corpus).
+    ...(seeded ? [seedBannerLine(seeded)] : []),
     // no code graph → point at how to GET one (a graph producer / --repo / the shipped
     // example), and at what IS answerable now — `vocabHint` is only ever a term
     // confirmed to resolve in THIS session's actual seed state (see vocabExampleHint),

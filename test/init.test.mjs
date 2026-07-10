@@ -97,6 +97,41 @@ test("seeding: on by default, offline, writes facts into .tmct/memory + a marker
   }
 });
 
+test("DELIBERATE BUG FIX (this batch): `tmct init`'s zero-flag seed now seeds SEON too, matching chat.mjs's own bootstrap (it used to seed ConceptNet ONLY)", async () => {
+  const dir = await tmp();
+  try {
+    const res = await initRepo(dir, { seed: true });
+    assert.ok(res.seedResult.seon > 0, "the curated SEON ontology landed (was 0 before this fix)");
+    assert.ok(res.seedResult.conceptnet > 1000, "the ConceptNet band still landed, uncapped");
+    assert.equal(res.seedResult.appended, res.seedResult.seon + res.seedResult.conceptnet, "counts are internally consistent");
+    assert.equal(res.seedResult.perBundle.seon.appended, res.seedResult.seon);
+    assert.equal(res.seedResult.perBundle.conceptnet.appended, res.seedResult.conceptnet);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a tmct.toml activating tier2-aws: `tmct init`'s unified seed loop also seeds the tier-2 bundle", async () => {
+  const dir = await tmp();
+  try {
+    // pre-write a tmct.toml with tier2-aws active (Part 1's [extensions] table) —
+    // initRepo must PRESERVE it (not force) and honour it during the seed step.
+    const toml = renderTomlConfig({ ...defaultConfig(), extensions: { "tier2-aws": { active: true } } });
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, "tmct.toml"), toml);
+    const res = await initRepo(dir, { seed: true });
+    assert.equal(res.seeded, true);
+    assert.ok(res.seedResult.perBundle["tier2-aws"], "the tier-2 bundle ran in the same loop");
+    assert.ok(res.seedResult.perBundle["tier2-aws"].appended > 0, "tier2-aws facts landed");
+    const mem = await loadMemory(dir);
+    const facts = (mem.individuals || []).filter((i) => i.class === "Fact");
+    const awsFact = facts.find((f) => (f.attributes || []).some((a) => a.key === "provenance" && String(a.value).includes("corpus:tier2-aws")));
+    assert.ok(awsFact, "a fact provenance-tagged corpus:tier2-aws is in memory");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("seed opt-out: TMCT_NO_SEED vetoes even when config enables it", async () => {
   const dir = await tmp();
   try {

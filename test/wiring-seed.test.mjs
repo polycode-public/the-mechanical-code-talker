@@ -101,6 +101,32 @@ test("W3: a repo WITH a graph artifact never seeds", async () => {
   }
 });
 
+test("W3 + extensions: a tmct.toml activating tier2-aws seeds a THIRD bundle — banner grows an extra clause, base sentence unchanged", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-w3-tier2-"));
+  try {
+    await writeFile(join(dir, "tmct.toml"), '[extensions.tier2-aws]\nactive = true\n');
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    await s.close();
+    const line = s.bannerLines.find((l) => /^seeded \d+ starter facts/.test(l));
+    assert.ok(line, `a seed banner line is present: ${JSON.stringify(s.bannerLines)}`);
+    // the base sentence's shape is UNCHANGED (same parens contents up front),
+    // just with a third "+ <n> tier2-aws" clause appended before the close-paren.
+    const m = /^seeded (\d+) starter facts \((\d+) curated SEON \+ (\d+) ConceptNet \+ (\d+) tier2-aws\) — \/memory to inspect$/.exec(line);
+    assert.ok(m, `banner carries the extra tier2-aws clause: ${line}`);
+    const [, total, seon, conceptnet, tier2aws] = m.map(Number);
+    assert.ok(seon > 0 && conceptnet > UNCAPPED_MIN && tier2aws > 0);
+    assert.equal(total, seon + conceptnet + tier2aws, "banner arithmetic includes the third bundle");
+    const mem = await loadMemory(dir);
+    const facts = (mem.individuals || []).filter((i) => i.class === "Fact");
+    const awsFact = facts.find((f) => (f.attributes || []).some((a) => a.key === "provenance" && String(a.value).includes("corpus:tier2-aws")));
+    assert.ok(awsFact, "a tier2-aws-provenance fact landed in memory");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("W3 gate: the real binary in an empty dir seeds, greets and exits 0", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-w3-gate-"));
   try {

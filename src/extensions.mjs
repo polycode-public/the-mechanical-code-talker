@@ -204,6 +204,49 @@ export async function resolveExtensions(repoRoot) {
   return { entries, biasByBundle };
 }
 
+// ---- Part 2: the unified corpus loader loop ---------------------------------
+
+/** Seed every ACTIVE `corpus`-kind entry (in the Map's own fixed order — seon,
+ *  conceptnet, then the rest sorted by name) into `repo`'s memory, ONE
+ *  seedMemory() call per bundle. Shared by chat.mjs's first-run bootstrap,
+ *  `tmct init`'s seed step and `tmct init --corpus <id>` — so all three read
+ *  the SAME loop instead of three independent hardcoded call sites.
+ *
+ *  FAILURE-TOLERANT per bundle (init.mjs's own doctrine: a missing/broken
+ *  corpus degrades to "not seeded", never a crash): one bad third-party pack's
+ *  seedMemory throw is CAUGHT and recorded as `perBundle[name].error` — logged
+ *  in the structured result rather than silently swallowed — while every
+ *  OTHER bundle still seeds normally. Returns
+ *  `{ appended, skipped, total, perBundle: { name: {appended,skipped,total,error?} } }`. */
+export async function seedActiveCorpusEntries(repo, entries) {
+  const { seedMemory } = await import("./corpus/conceptnet.mjs");
+  const perBundle = {};
+  let appended = 0;
+  let skipped = 0;
+  let total = 0;
+  for (const [name, entry] of entries instanceof Map ? entries : new Map()) {
+    if (entry.kind !== "corpus" || !entry.active) continue;
+    try {
+      const res = await seedMemory(repo, {
+        slicePath: entry.corpusPath,
+        mapPath: entry.mapPath,
+        provenancePrefix: entry.provenancePrefix,
+        limit: entry.limit,
+        prefer: entry.prefer,
+      });
+      perBundle[name] = { appended: res.appended, skipped: res.skipped, total: res.total };
+      appended += res.appended;
+      skipped += res.skipped;
+      total += res.total;
+    } catch (err) {
+      // Logged (in the structured result), never silently swallowed — but this
+      // ONE bundle's failure never aborts the others.
+      perBundle[name] = { appended: 0, skipped: 0, total: 0, error: err && err.message ? err.message : String(err) };
+    }
+  }
+  return { appended, skipped, total, perBundle };
+}
+
 // ---- Part 3: lexicon-bundle merge -------------------------------------------
 
 /** Merge every ACTIVE `lexicon`/`pack` entry's declared lexicon file into one
