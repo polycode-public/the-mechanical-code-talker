@@ -40,7 +40,7 @@ session is the COORDINATOR (plans, launches, integrates, answers the operator), 
   that doesn't exist yet" noise in practice and was reverted by operator instruction 2026-07-09.
   Between pushes, `package.json`'s version should always equal whatever's actually live on npm.
 
-## Where we are now (2026-07-09)
+## Where we are now (2026-07-10)
 
 The full `SKILL_CHAT_PLAYTEST.md` dialogue-flow tier ladder is complete, tiers 0 through 6.
 Tiers 0, 1, 2, and 4 each closed in one pass. Tier 3 took 7 passes to track down a recurring
@@ -493,6 +493,32 @@ claimed-only, 3 partial, its most notable finding being that `PLAN_AGENTS.md` it
 same session) already listed several now-shipped items as "not started," a same-session docs-lag
 issue, not months-old drift. See `HANDOVER.md` for the ranked next-steps this batch's four fresh
 benchmark runs (AGENTBENCH/INFBENCH/PLAYTEST/CHATBENCH) surfaced.
+
+**The `ace-owl` extraction and revert (2026-07-10, later same session)**: an earlier commit
+(`c57adbe`) had extracted `src/grammar/ace.mjs`/`lexicon.mjs` into a new npm workspace
+(`packages/ace-owl`) as a registry dependency, but the package was never published — breaking
+`npm install` of tmct for anyone outside this workspace for five days. Found and reverted the same
+day it was found: the parser is back in `src/grammar/` as the real implementation, verified with a
+real `npm pack` + fresh install in an empty folder. See `HANDOVER.md` for the full account.
+
+**The default human-world persona, unified CLI/config model, and new memory persistence backends —
+Small tier SHIPPED (2026-07-10, later same session)**: the largest batch of the day. `tmct init`
+with no flags now seeds a genuine everyday-knowledge persona by default (664 hand-curated facts
+across 9 source-tied clumps, a lexicon grown from 291 to 650 words, 120 real WordNet-sourced example
+sentences, a working cross-ontology bridge test proving `scm-sco` composes WordNet's and Schema.org's
+independently-built taxonomies), with SEON/ConceptNet now opt-in rather than default. Alongside it:
+a unified `--repo`/`--graph`/`--config` flag model replacing four independently-duplicated
+`configFor` implementations, multi-graph loading, a new `ontology` extension kind, and a `tmct import`
+verb; plus two new memory persistence backends (a pure in-memory store with zero disk I/O, and a
+SQLite store whose schema was adapted from a real, working store already built in the sibling repo
+seonix — reused directly, but with its write model changed from seonix's rebuild-and-swap to real
+per-fact `INSERT`/`UPDATE`, since tmct's problem is write-heavy per-turn accumulation, not seonix's
+read-latency-on-a-static-artifact problem). Built by 4 concurrent background sub-agents in isolated
+worktrees, merged one at a time with 3 real conflicts resolved by hand. `npm test`: 1756 → 1828.
+Full design in `PLAN_SEED.md` (a new permanent design doc, this batch's own Stage 0 deliverable);
+current build status and next-session follow-ups (Medium/Large tiers, the auto-init convergence,
+the seonix migration note) in `HANDOVER.md`. `scm-svf`/cardinality monotonicity was dispatched
+alongside this batch as its own background agent; see `HANDOVER.md` for its status.
 
 ## The umbrella product definition (item 1)
 
