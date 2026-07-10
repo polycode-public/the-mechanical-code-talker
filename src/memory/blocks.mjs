@@ -15,8 +15,12 @@
 //   2. QUERY-time IDF match — each query token is weighted by rarity across
 //      blocks (idf = log(1 + N/(1+df)), the codegraph.mjs locate discipline),
 //      so a whole-question query is not dominated by its ubiquitous words.
-// retrieveBlocks() scores idf-sum × (1 + rank): the IDF match decides topic,
-// the static rank breaks ties toward well-connected blocks.
+// retrieveBlocks() scores idf-sum × (1 + rank) ÷ sqrt(1 + degree): the IDF
+// match decides topic, the static rank breaks ties toward well-connected
+// blocks, and the degree divisor (hub dampening, ported from codegraph.mjs's
+// spiralExpand degree-quantile gate; on by default here) stops a block that
+// merely shares vocabulary with disproportionately many others — a generic
+// "boilerplate" hub — from winning on inflated rank alone.
 //
 // All writes are temp+rename atomic; saveBlock is an upsert (same id replaces —
 // what makes fold.mjs's re-fold idempotent).
@@ -79,20 +83,15 @@ export async function loadBlockIndex(dir) {
 }
 
 /**
- * Iterative PageRank over the block-similarity graph. `tokensById` is a plain
- * { id: tokens[] } map; an undirected edge joins two blocks sharing at least
- * `overlapMin` tokens. Standard damped iteration (d=0.85, 20 rounds), dangling
- * mass redistributed evenly, ranks summing to ~1. Pure — returns { id: rank }.
+ * Build the block-similarity adjacency shared by rankBlocks and degreeOf:
+ * `tokensById` is a plain { id: tokens[] } map; an undirected edge joins two
+ * blocks sharing at least `overlapMin` tokens. Returns { ids, neighbours }
+ * (neighbours[i] is an array of adjacent indices into ids).
  */
-export function rankBlocks(tokensById, {
-  damping = PAGERANK_DAMPING, iterations = PAGERANK_ITERATIONS, overlapMin = OVERLAP_MIN,
-} = {}) {
+function buildNeighbours(tokensById, overlapMin) {
   const ids = Object.keys(tokensById || {});
   const N = ids.length;
-  if (!N) return {};
   const sets = ids.map((id) => new Set(tokensById[id] || []));
-
-  // similarity edges: shared-token count ≥ overlapMin (undirected → both directions)
   const neighbours = ids.map(() => []);
   for (let i = 0; i < N; i += 1) {
     for (let j = i + 1; j < N; j += 1) {
@@ -107,6 +106,35 @@ export function rankBlocks(tokensById, {
       }
     }
   }
+  return { ids, neighbours };
+}
+
+/**
+ * Each block's degree (neighbour count) in the same block-similarity graph
+ * rankBlocks runs PageRank over. Pure — returns { id: degree }. Used to
+ * dampen retrieveBlocks' hub bias (a block linked to many others shouldn't
+ * win purely by being well-connected — codegraph.mjs's spiralExpand applies
+ * the same degree-quantile idea to module search).
+ */
+export function degreeOf(tokensById, { overlapMin = OVERLAP_MIN } = {}) {
+  const { ids, neighbours } = buildNeighbours(tokensById, overlapMin);
+  const out = {};
+  for (let i = 0; i < ids.length; i += 1) out[ids[i]] = neighbours[i].length;
+  return out;
+}
+
+/**
+ * Iterative PageRank over the block-similarity graph. `tokensById` is a plain
+ * { id: tokens[] } map; an undirected edge joins two blocks sharing at least
+ * `overlapMin` tokens. Standard damped iteration (d=0.85, 20 rounds), dangling
+ * mass redistributed evenly, ranks summing to ~1. Pure — returns { id: rank }.
+ */
+export function rankBlocks(tokensById, {
+  damping = PAGERANK_DAMPING, iterations = PAGERANK_ITERATIONS, overlapMin = OVERLAP_MIN,
+} = {}) {
+  const { ids, neighbours } = buildNeighbours(tokensById, overlapMin);
+  const N = ids.length;
+  if (!N) return {};
 
   let rank = new Array(N).fill(1 / N);
   for (let round = 0; round < iterations; round += 1) {
@@ -133,7 +161,11 @@ function rerank(index) {
   const tokensById = {};
   for (const [id, b] of Object.entries(index.blocks)) tokensById[id] = b.tokens || [];
   const ranks = rankBlocks(tokensById);
-  for (const [id, b] of Object.entries(index.blocks)) b.rank = ranks[id] ?? 0;
+  const degrees = degreeOf(tokensById);
+  for (const [id, b] of Object.entries(index.blocks)) {
+    b.rank = ranks[id] ?? 0;
+    b.degree = degrees[id] ?? 0;
+  }
   return index;
 }
 
@@ -177,9 +209,10 @@ export async function removeBlock(dir, id) {
 /**
  * The top-k blocks a question "touches": IDF-weighted token match (rarity-
  * weighted, so common words can't dominate) combined with the static PageRank
- * (score × (1 + rank) — on an IDF tie the better-connected block wins).
- * Returns [{ id, score, rank, file, text }], best first; [] when nothing
- * matches (never a guessed block).
+ * (score × (1 + rank), divided by sqrt(1 + degree) to dampen hubs — a block
+ * that shares vocabulary with disproportionately many others doesn't win on
+ * inflated rank alone). Returns [{ id, score, rank, file, text }], best
+ * first; [] when nothing matches (never a guessed block).
  */
 export async function retrieveBlocks(dir, query, k = 3) {
   const index = await loadBlockIndex(dir);
@@ -204,12 +237,18 @@ export async function retrieveBlocks(dir, query, k = 3) {
     for (const t of qTokens) if (sets[i].has(t)) idfSum += idf.get(t);
     if (idfSum <= 0) continue;
     const rank = b.rank ?? 0;
+    const degree = b.degree ?? 0;
     // relevance × connectivity × TRUST — a bounded trustFactor (~[0.5, 1.5]) so a
     // corroborated/operator block outranks a lone low-trust one on a relevance tie,
-    // yet a weakly-trusted but perfectly-relevant block still surfaces.
+    // yet a weakly-trusted but perfectly-relevant block still surfaces. Divided by
+    // sqrt(1 + degree) — hub dampening (the codegraph.mjs spiralExpand idea, ported
+    // here): a block that shares vocabulary with disproportionately many others
+    // shouldn't win purely by being well-connected.
     const trust = typeof b.trust === "number" ? b.trust : blockTrust(b.sourceType);
     const trustFactor = trustFactorOf(trust);
-    scored.push({ id, score: idfSum * (1 + rank) * trustFactor, rank, trust, file: b.file });
+    scored.push({
+      id, score: (idfSum * (1 + rank) * trustFactor) / Math.sqrt(1 + degree), rank, trust, file: b.file,
+    });
   }
   scored.sort((a, b) => b.score - a.score || b.rank - a.rank || a.id.localeCompare(b.id));
   const top = scored.slice(0, Math.max(1, k));
