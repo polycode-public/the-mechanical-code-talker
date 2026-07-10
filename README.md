@@ -4,9 +4,77 @@
 
 A pure-JS, **no-LLM**, offline, **$0** chatbot in the ELIZA/PARRY lineage:
 pattern-driven, best-efforts, and obsessed with software the way PARRY was
-obsessed with the mafia. No model calls anywhere. Interpretation is mechanical
-(deterministic language libraries, template sets, committed corpuses). Memory is
-a graph on disk. Every answer is either grounded or an honest miss.
+obsessed with the mafia. No model calls anywhere.
+
+tmct turns natural language directly into a graph database. The graph starts
+seeded with an **ontology** (a curated software vocabulary with real
+definitions), a **lexicon** (everyday words mapped onto that vocabulary), and
+a **corpus** (a filtered ConceptNet slice of general-world terms). Teach it a
+fact in plain English and it mints a node. Ask it a question and it answers
+from what it was seeded with, what you taught it, and what it can derive by
+rule from both. Every answer is either grounded or an honest miss.
+
+## Teach it, then ask it to reason
+
+This is real, runnable output. No cherry-picking, no model anywhere in the
+loop. Copy it into a file and run it:
+
+```js
+import { runChat } from "@polycode-projects/the-mechanical-code-talker";
+import { Readable, PassThrough } from "node:stream";
+import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+// A graph producer feeds tmct a code graph like this one (see "The repository
+// interface" below). This is a 4-node slice: two modules, a base class, and a
+// class that inherits it.
+const graph = {
+  individuals: [
+    { id: "mod:src/handlers/base.mjs", label: "src/handlers/base.mjs", class: "Module" },
+    { id: "mod:src/handlers/tasks.mjs", label: "src/handlers/tasks.mjs", class: "Module" },
+    { id: "fn:src/handlers/base.mjs#Controller", label: "Controller", class: "Class" },
+    { id: "fn:src/handlers/tasks.mjs#TaskController", label: "TaskController", class: "Class" },
+  ],
+  objectProperties: [{
+    predicate: "inherits", prop: "seon:hasSuperType", count: 1,
+    examples: [{ subject: "fn:src/handlers/tasks.mjs#TaskController", object: "fn:src/handlers/base.mjs#Controller",
+                 subjectLabel: "TaskController", objectLabel: "Controller" }],
+  }],
+};
+
+const repoPath = await mkdtemp(join(tmpdir(), "tmct-demo-"));
+await mkdir(join(repoPath, ".tmct"), { recursive: true });
+await writeFile(join(repoPath, ".tmct", "graph.json"), JSON.stringify(graph));
+
+// tmct has one API surface for both teaching and asking: a chat turn, in
+// English. Each call below is a short session over the same repo, so what
+// gets taught in the first call is still remembered in the second.
+async function tell(line) {
+  const out = new PassThrough();
+  let transcript = "";
+  out.on("data", (chunk) => { transcript += chunk; });
+  await runChat({ repoPath, input: Readable.from([line + "\n", "/exit\n"]), output: out });
+  return transcript.split("\n").find((l) => l.startsWith("tmct> "));
+}
+
+await tell("a controller is a kind of handler");         // Learn
+console.log(await tell("is TaskController a handler"));  // Infer from learnings
+```
+
+Output, captured from an actual run:
+
+```
+tmct> yes — the code graph says TaskController inherits Controller, and you
+told me: controller is a kind of handler (source: ace:chat:<session-id>@<timestamp>)
+```
+
+Nothing here was told that "handler" and "Controller" relate. tmct combined a
+fact already in the graph (`TaskController inherits Controller`) with a fact
+you just taught it in English (`controller is a kind of handler`) and wrote
+the connecting sentence itself, citing both sources. The `source: ace:chat:…`
+part is a real provenance receipt. Every fact tmct stores records where it
+came from and when (more on that below).
 
 ```
 $ tmct
@@ -20,6 +88,67 @@ tmct> /exit
 **[Try it live in your browser →](https://polycode-projects.gitlab.io/the-mechanical-code-talker/)**
 is a real, interactive chat demo running client-side. Your browser runs the
 actual query engine against a small example codebase, no server, no install.
+
+## Compared to other JS libraries
+
+Nothing found in the JS ecosystem does this exact combination: teach in
+English, reason over a seeded ontology, answer in English, with no model call
+anywhere. Three kinds of library each cover one piece of it well.
+
+**[compromise](https://github.com/spencermountain/compromise)** (`npm i
+compromise`, 12k+ GitHub stars, describes itself as "modest natural language
+processing") is the general-purpose NLP toolkit of the three. Its own README
+example:
+
+```js
+import nlp from 'compromise'
+let doc = nlp('she sells seashells by the seashore.')
+doc.verbs().toPastTense()
+doc.text()
+// 'she sold seashells by the seashore.'
+```
+
+It tags part-of-speech, conjugates verbs, and parses fractions and money far
+more broadly than tmct attempts to. It has no graph, no ontology, and no
+memory between calls. Each call is stateless text in, text out.
+
+**[N3.js](https://github.com/rdfjs/N3.js)** (`npm i n3`) is a mature,
+spec-compliant RDF/OWL toolkit: parsing, writing, and in-memory storage of
+triples. Its own README example:
+
+```js
+const parser = new N3.Parser();
+parser.parse(tomAndJerry, (error, quad, prefixes) => {
+  if (quad) console.log(quad);
+  else console.log("That's all, folks!", prefixes);
+});
+```
+
+(`tomAndJerry` is Turtle text the caller writes by hand: `c:Tom a c:Cat.
+c:Jerry a c:Mouse; c:smarterThan c:Tom.`) N3.js is the right choice if you
+already have RDF and need to parse or serialize it fast. It has no
+natural-language front end (you write the triples yourself) and no built-in
+reasoning beyond an optional, limited basic-graph-pattern reasoner.
+
+**[elizabot](https://github.com/tkafka/node-elizabot)** (`npm i elizabot`) is
+the direct ELIZA lineage in JS, the same territory tmct's chat surface sits
+in. Its own README example:
+
+```js
+var eliza = new ElizaBot();
+var initial = eliza.getInitial();
+var reply = eliza.transform(inputstring);
+```
+
+It is deterministic and needs no model, same as tmct. But it has no graph and
+no persistent memory: a fact from one line never carries into the next, and
+its "reasoning" is pattern substitution, not a stored, queryable fact.
+
+Put together: broad NLP without a graph (compromise), a graph without a
+natural-language front end (N3.js), or a conversational front end without a
+graph (elizabot). Combining ontology-seeded graph memory, English teaching,
+and rule-based inference into one no-model pipeline is what looks distinctive
+about tmct as of this writing.
 
 ## How it interprets you
 
@@ -199,7 +328,8 @@ or a bare user gets a working install in one command.
 ### Try it on an example graph
 
 tmct *consumes* a code graph at `<repo>/.tmct/graph.json`; it does not build
-one. Two ready-made example graphs ship in `examples/` so you can see it answer
+one. Two ready-made example graphs live in `examples/` in this repo (not in the
+published npm package — clone the repo to use them) so you can see it answer
 real questions with no setup:
 
 ```bash
@@ -237,9 +367,13 @@ full tours.
 import { runChat, ask, resolveObject, fetchEntities } from "@polycode-projects/the-mechanical-code-talker";
 ```
 
-The `exports` map and the chat primitives (`ask`, `resolveObject`,
-`relationKind`, `impactClosure`, `dispatchTool`, `fetchEntities`) are the
-extension surface.
+`runChat` is the full teach-and-ask surface (see "Teach it, then ask it to
+reason" above — it works over injectable streams, so a script can drive a
+session the same way the tests do). `ask`/`resolveObject` are the lower-level,
+read-only query primitives over an already-loaded graph, for a caller that
+wants to query without a chat session. The `exports` map and the chat
+primitives (`ask`, `resolveObject`, `relationKind`, `impactClosure`,
+`dispatchTool`, `fetchEntities`) are the extension surface.
 
 ## The repository interface
 
