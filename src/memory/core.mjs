@@ -28,7 +28,7 @@
 // (utt:<session>#<ts>#<role>) and fact ids hash the triple, so the per-turn
 // re-append sessions.mjs performs replaces rather than duplicates.
 
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { proseTokensFor, buildProseIndex } from "../prose.mjs";
 import { fnv1aHex } from "../hash.mjs";
@@ -134,12 +134,108 @@ export function resolveMemoryGraphFile(dir, version = null) {
 
 const memoryGraphFile = (dir) => resolveMemoryGraphFile(dir);
 
+/** Atomic write of raw text (temp in the same dir + rename) — the discipline
+ *  every writer in this module (and fold.mjs/sessions.mjs's own copies) uses:
+ *  a crash never destroys the previous file, a concurrent reader never sees a
+ *  torn one. */
+async function atomicWriteText(file, text) {
+  const tmp = `${file}.tmp-${process.pid}-${Math.random().toString(36).slice(2, 10)}`;
+  await writeFile(tmp, text);
+  await rename(tmp, file);
+}
+
 /** Atomic JSON write (temp in the same dir + rename) — same discipline as
  *  sessions.mjs's graph append: a crash never destroys the previous store. */
 async function atomicWriteJson(file, obj) {
-  const tmp = `${file}.tmp-${process.pid}-${Math.random().toString(36).slice(2, 10)}`;
-  await writeFile(tmp, JSON.stringify(obj));
-  await rename(tmp, file);
+  await atomicWriteText(file, JSON.stringify(obj));
+}
+
+// ---- Manifest-versioned snapshots (manual trigger only — NOT wired to any ----
+// ---- automatic call site; a primitive for a future CLI command/maintenance --
+// ---- hook, PLAN item "memory-tree versioning") -------------------------------
+
+export const MEMORY_MANIFEST_REL = join(MEMORY_DIR_REL, "manifest.json");
+export const DEFAULT_RETENTION = 5;
+
+const resolveManifestFile = (dir) => join(dir, MEMORY_MANIFEST_REL);
+
+/** Snapshot the CURRENT live graph.json into a numbered `graph.v{N}.json`
+ *  (N = the manifest's version BEFORE this call increments it), then advance
+ *  the manifest and best-effort prune the oldest snapshot that falls outside
+ *  the retention window.
+ *
+ *  `graph.json` itself is NEVER touched or renamed here — it stays the one
+ *  live file every mutator (mutateMemory / fold.mjs's writeMemoryGraph) reads
+ *  and writes; only a COPY of its pre-snapshot content becomes the new
+ *  numbered version. NOT called from mutateMemory, writeMemoryGraph, or
+ *  anywhere else in this codebase — it has zero callers today by design; a
+ *  future CLI command or maintenance hook calls it explicitly.
+ *
+ *  Manifest bootstrap (no manifest.json yet): `{ version: 0, retentionVersions:
+ *  opts.retentionVersions ?? DEFAULT_RETENTION }` — the optional
+ *  `retentionVersions` lets a caller that already loaded tmct.toml's
+ *  `[memory] retention_versions` seed the bootstrap default without this
+ *  module doing its own config I/O (core.mjs has no toml-loading precedent;
+ *  toml-config.mjs stays the one place that reads tmct.toml). Once a
+ *  manifest.json exists on disk, ITS retentionVersions is authoritative and a
+ *  later opts.retentionVersions is ignored (the persisted setting wins over a
+ *  possibly-stale caller default).
+ *
+ *  "No graph.json exists yet" is handled as a clean no-op: `{ skipped: true,
+ *  version: null }` — nothing to snapshot is not an error, it is the honest
+ *  bootstrap state (a brand-new repo that has never written a memory graph).
+ *
+ *  Retention: after writing `graph.v{N}.json` and bumping the manifest to
+ *  N+1, the snapshot at `graph.v{N - retentionVersions}.json` (if it exists)
+ *  is deleted (best-effort — ENOENT is swallowed). Using N (the version just
+ *  written), not N+1, for the prune target keeps a clean sliding window of
+ *  exactly `retentionVersions` files on disk at all times, with no orphaned
+ *  v0 ever left behind once the window starts sliding.
+ *
+ *  Returns `{ skipped, version, prunedVersion }` — `version` is the number of
+ *  the snapshot just written (or null if skipped); `prunedVersion` is the
+ *  number pruned, or null if nothing was in range to prune yet. */
+export async function snapshotMemory(dir, { retentionVersions } = {}) {
+  const graphFile = resolveMemoryGraphFile(dir);
+  let graphText;
+  try {
+    graphText = await readFile(graphFile, "utf8");
+  } catch (e) {
+    if (e?.code === "ENOENT") return { skipped: true, version: null, prunedVersion: null };
+    throw e;
+  }
+
+  const manifestFile = resolveManifestFile(dir);
+  let manifest;
+  try {
+    manifest = JSON.parse(await readFile(manifestFile, "utf8"));
+  } catch (e) {
+    if (e?.code !== "ENOENT") throw e;
+    manifest = { version: 0, retentionVersions: retentionVersions ?? DEFAULT_RETENTION };
+  }
+  if (!Number.isInteger(manifest.version)) manifest.version = 0;
+  if (!Number.isInteger(manifest.retentionVersions)) manifest.retentionVersions = retentionVersions ?? DEFAULT_RETENTION;
+
+  const v = manifest.version; // the version being written THIS call
+  const versionedFile = resolveMemoryGraphFile(dir, v);
+  await mkdir(dirname(versionedFile), { recursive: true });
+  await atomicWriteText(versionedFile, graphText);
+
+  manifest.version = v + 1;
+
+  let prunedVersion = null;
+  const pruneTarget = v - manifest.retentionVersions;
+  if (pruneTarget >= 0) {
+    try {
+      await unlink(resolveMemoryGraphFile(dir, pruneTarget));
+      prunedVersion = pruneTarget;
+    } catch (e) {
+      if (e?.code !== "ENOENT") throw e; // best-effort: a vanished snapshot is fine, anything else is not
+    }
+  }
+
+  await atomicWriteJson(manifestFile, manifest);
+  return { skipped: false, version: v, prunedVersion };
 }
 
 /** Load the memory graph for a repo dir. A missing store is the bootstrap:

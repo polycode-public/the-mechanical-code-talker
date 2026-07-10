@@ -137,6 +137,16 @@ export async function normalizeConfig(raw, { configDir } = {}) {
   const tel = src.telemetry || {};
   if (tel.enabled !== undefined) cfg.telemetry = { enabled: tel.enabled };
 
+  // [memory] retention_versions — read by memory/core.mjs's snapshotMemory as
+  // the manifest-bootstrap default (only when no manifest.json exists yet; a
+  // persisted manifest's own retentionVersions wins after that). Sparse like
+  // every other table here: absent when unset, so "unset" stays distinguishable
+  // from "set to the default" — the shipped default (5, memory/core.mjs's
+  // DEFAULT_RETENTION) is applied where the value is actually CONSUMED
+  // (snapshotMemory), not injected here.
+  const mem = src.memory || {};
+  if (mem.retention_versions !== undefined) cfg.memory = { retentionVersions: mem.retention_versions };
+
   const unwired = [];
   for (const [a, b] of UNWIRED_KEYS) {
     if (src[a] && src[a][b] !== undefined) unwired.push(`${a}.${b}`);
