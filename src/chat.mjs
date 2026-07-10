@@ -1661,8 +1661,17 @@ async function ungroundedPairHint(payload, lexicon, memoryDir) {
   const lex = lexicon || loadLexicon();
   if (await isGroundedTerm(subjectRaw, lex, memoryDir)) return "";
   if (await isGroundedTerm(objectRaw, lex, memoryDir)) return "";
-  return ` I don't know "${subjectRaw}" or "${objectRaw}" yet. Try grounding one first, e.g. `
-    + `"every ${subjectRaw} is a thing", then "every ${objectRaw} is a ${subjectRaw}".`;
+  // 2026-07-10 (found live via SKILL_BENCHMARK_CONVERSATION.md playtest, a
+  // classic first-thing-a-user-tries example: "john is a man"): the original
+  // suggestion chained the second term UNDER the first's now-grounded proper
+  // name ("every man is a john") — technically accepted by the grammar (once
+  // "john" is grounded, ANY term can be taught as a kind of it), but reads as
+  // nonsense to a human, since a proper name is never a category. Ground both
+  // sides independently instead — two clear, parallel, semantically sane
+  // suggestions, not a confusing chain through an arbitrary first term.
+  return ` I don't know "${subjectRaw}" or "${objectRaw}" yet. Try grounding each one first, e.g. `
+    + `"every ${subjectRaw} is a thing" and "every ${objectRaw} is a thing", then re-teach the`
+    + ` original fact.`;
 }
 
 /** The unknown-SUBJECT direct-write fallback (point 1 + point 2's bare-property

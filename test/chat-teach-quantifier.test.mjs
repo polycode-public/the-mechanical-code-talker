@@ -510,7 +510,13 @@ test("Feature A mirror: known-subject/unknown-object mint compounds vocabulary t
     const t6 = await runTurn("every zorp is a florp", { config: CONFIG, memoryDir: dir, sessionId: "m1" });
     assert.doesNotMatch(t6.answer, /^noted — remembered/);
     assert.equal(t6.record.miss, true);
-    assert.match(t6.answer, /I don't know "zorp" or "florp" yet\. Try grounding one first, e\.g\. "every zorp is a thing", then "every florp is a zorp"\./);
+    // 2026-07-10: the suggestion now grounds BOTH sides independently ("every
+    // zorp is a thing" AND "every florp is a thing") rather than chaining the
+    // second term under the first's now-grounded proper name ("every florp is
+    // a zorp") — the old chained suggestion was accepted by the grammar but
+    // read as nonsense (a name is never a category); found live via
+    // SKILL_BENCHMARK_CONVERSATION.md playtest ("john is a man").
+    assert.match(t6.answer, /I don't know "zorp" or "florp" yet\. Try grounding each one first, e\.g\. "every zorp is a thing" and "every florp is a thing", then re-teach the original fact\./);
     assert.equal(readFactRows(await loadMemory(dir)).filter((f) => f.subject === "zorp" || f.subject === "florp").length, 0, "the ungrounded pair itself is never stored");
 
     // 7. UNAFFECTED by this change, on purpose: a 3-hop chain (redis->cache->
