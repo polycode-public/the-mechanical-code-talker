@@ -3734,6 +3734,21 @@ const RECURSIVE_LIST_ASK_RE = /^list\s+(?:the\s+|all\s+)?([a-z][\w-]*)\s+of\s+([
  *  doesn't parse; checked against the isa-family fact predicates only. */
 const ISA_ASK_RE = /^(?:is|are)\s+(?:an?\s+)?(.+?)\s+(?:a\s+kind\s+of|a\s+type\s+of|an?)\s+(.+?)[?.!\s]*$/i;
 const ISA_PREDICATES = new Set(["rdfs:subClassOf", "rdf:type"]);
+/** "so john is a man now right?" / "john is a man, right?" — a DECLARATIVE
+ *  statement wrapped in a confirmation-check tag ("now right?"/"right?"/
+ *  "correct?"), found live (playtest sprint round 1, 2026-07-10) after a
+ *  just-declined teach attempt: the user reasonably assumes it worked and
+ *  asks to confirm — but this shape doesn't match ISA_ASK_RE at all (no
+ *  leading "is/are"), so it fell to the fully GENERIC grammar wall instead of
+ *  the same (already ISA-tailored) honest miss/hint the plain "is X a Y" form
+ *  gets. Deliberately narrow (requires "right?"/"correct?"/"yeah?" as the
+ *  VERY LAST word, optionally preceded by "now" and/or a comma) so it can
+ *  only ever REDIRECT a would-be-wall to the isaAsk block's own answer —
+ *  never a fabricated confirmation, and never touches phrasings that already
+ *  have their own home (e.g. OPINION_NUDGE_RE's own "is the code good"
+ *  ordering is unaffected — that starts with "is", leaving no room for this
+ *  regex's required leading subject clause). */
+const CONFIRM_TAG_RE = /^(?:so\s+)?(.+?)\s+(?:is|are)\s+(?:an?\s+)?(.+?)\s*,?\s*(?:now\s+)?(?:right|correct|yeah)\??$/i;
 /** "what do you know about caches" — the open recall-everything form. Bug E
  *  (operator manual-chat find, this session) widened this to also accept
  *  "what is in your memory about X" / "what's in your memory about X" / "what
@@ -4621,9 +4636,20 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
   // (a) FORWARD membership — "is an X a Y". X's fact-subject candidates are the
   // term itself (a class word) AND, when it resolves in the graph, its class-noun
   // (an instance) — so "is app/lib/a.mjs a component" answers off "module …".
-  const isaAsk = q.match(ISA_ASK_RE);
+  // A confirmation-check wrapper ("so X is a Y now right?") is rewritten to the
+  // plain "is X a Y" form and re-tried when the raw query itself doesn't match —
+  // see CONFIRM_TAG_RE's own docblock.
+  const confirmTag = q.match(CONFIRM_TAG_RE);
+  const isaAsk = q.match(ISA_ASK_RE) || (confirmTag && `is ${confirmTag[1].trim()} a ${confirmTag[2].trim()}`.match(ISA_ASK_RE));
   if (isaAsk) {
-    const objVariants = factTermVariants(normFactTerm, isaAsk[2]);
+    // Playtest sprint round 1 (2026-07-10): "is TaskController a validator then"
+    // — the same trailing bare discourse tag item 8 fixed for metaTermOf's bare
+    // "what is X" shape also glues onto ISA_ASK_RE's captured kind term (its own
+    // trailing anchor only allows punctuation/whitespace, not a stray word), so
+    // "validator then" never matched any taught fact even though the CLASS↔
+    // INSTANCE BRIDGE below would otherwise answer yes. Same stripTrailingDiscourseTag
+    // fix, applied here too.
+    const objVariants = factTermVariants(normFactTerm, stripTrailingDiscourseTag(isaAsk[2]));
     const subjCandidates = new Set(factTermVariants(normFactTerm, isaAsk[1]));
     const noun = await entityClassNoun(graph, isaAsk[1]);
     if (noun) for (const v of factTermVariants(normFactTerm, noun)) subjCandidates.add(v);
