@@ -64,11 +64,7 @@ names as unmeasurable/no-action. `npm test` is green at 1740 (was ~1673 at sessi
    consider a no-standing-focus fallback for bare "what is in here"-shaped queries to the
    orientation reading. Found live, playtest sprint round 1; not fixed this session (lower priority
    than the two real fixes that round did ship).
-4. **`A2 naming-vocabulary`'s 2 CHATBENCH hard fails are now fixed** (`g-a2-naming-2`,
-   `g-a2-naming-6` — item 6) — noted here only because CHATBENCH's own case-set may still show them
-   as `baselineFail`-tagged from the pre-fix run; re-run the judge (not just tier-1) to confirm the
-   graded mean actually moved, if that number matters for the next write-up.
-5. **`scm-svf`/cardinality monotonicity** (`PLAN_INFERENCE_TESTING.md` stage 4's remainder) —
+4. **`scm-svf`/cardinality monotonicity** (`PLAN_INFERENCE_TESTING.md` stage 4's remainder) —
    still confirmed unmeasurable against the current INF-C1 fixture (steady at 90%, unrelated to
    what either rule would fix, unchanged this session); revisit only if a future case-generation
    pass adds a template that actually exercises them.
@@ -82,6 +78,10 @@ future benchmark sprints either; see `SKILL_BENCHMARK_CONVERSATION.md` §5 for t
 **Dropped by operator decision (2026-07-10): confirming AGENTBENCH stays byte-identical to `0.8.2`.**
 Not tracked as a follow-up any more; revisit only if something near the router/goal-reasoner
 actually changes.
+
+**Dropped by operator decision (2026-07-10): re-judging CHATBENCH for the A2 naming-vocabulary
+fixes.** The two fixes (`g-a2-naming-2`, `g-a2-naming-6`) already pass tier-1. Running the graded
+judge is the operator's call to make when they want it, not a standing follow-up.
 
 **The stale git worktrees are gone.** 13 of the original 15 were already merged and gone by the
 time this session checked; the operator removed the remaining 2 directly (2026-07-10). Those 2 had
