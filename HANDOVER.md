@@ -53,15 +53,7 @@ names as unmeasurable/no-action. `npm test` is green at 1740 (was ~1673 at sessi
    mis-firing ahead of `generalVerbTeach`/`OWNS_TEACH_RE` and swallowing the sentence without
    storing). Needs tracing through `teachLane`'s actual call sequence with a real payload, not just
    isolated regex tests. Found live, playtest sprint round 3.
-3. **The farewell/thanks multi-clause generalization (this session's own item 2 fix) still has a
-   narrower gap than a plain THANKS-set miss: an unlisted acknowledgement word combined with a
-   longer-than-3-word second clause.** "brilliant, that's all I needed" hit the wall — "brilliant"
-   itself is now fixed (added to `THANKS`, this session), but the underlying `farewellOrThanksSignal`
-   guard requiring every OTHER clause be ≤3 words/non-codeish is stricter than real closings need
-   ("that's all I needed" is 4 words). Worth revisiting that specific threshold/guard now that it's
-   been hit by a second real phrasing (see the guard's own docblock in `src/chat.mjs` for why it was
-   set conservatively in the first place). Found live, playtest sprint round 3.
-4. **A stranger's very first turn, wrapped in an unrecognized opener, still hits the raw wall.**
+3. **A stranger's very first turn, wrapped in an unrecognized opener, still hits the raw wall.**
    "hey, first time trying this out - what is in here?" — `GREETING_PREAMBLE_RE` strips "hey,"
    correctly, but the remainder ("first time trying this out - what is in here?") matches no
    existing preamble frame (`BROWSING_PREAMBLE_RE` only covers "just poking/looking around" style
@@ -72,21 +64,31 @@ names as unmeasurable/no-action. `npm test` is green at 1740 (was ~1673 at sessi
    consider a no-standing-focus fallback for bare "what is in here"-shaped queries to the
    orientation reading. Found live, playtest sprint round 1; not fixed this session (lower priority
    than the two real fixes that round did ship).
-5. **`A2 naming-vocabulary`'s 2 CHATBENCH hard fails are now fixed** (`g-a2-naming-2`,
+4. **`A2 naming-vocabulary`'s 2 CHATBENCH hard fails are now fixed** (`g-a2-naming-2`,
    `g-a2-naming-6` — item 6) — noted here only because CHATBENCH's own case-set may still show them
    as `baselineFail`-tagged from the pre-fix run; re-run the judge (not just tier-1) to confirm the
    graded mean actually moved, if that number matters for the next write-up.
-6. **`scm-svf`/cardinality monotonicity** (`PLAN_INFERENCE_TESTING.md` stage 4's remainder) —
+5. **`scm-svf`/cardinality monotonicity** (`PLAN_INFERENCE_TESTING.md` stage 4's remainder) —
    still confirmed unmeasurable against the current INF-C1 fixture (steady at 90%, unrelated to
    what either rule would fix, unchanged this session); revisit only if a future case-generation
    pass adds a template that actually exercises them.
-7. **AGENTBENCH needs no action** — not re-run this session (nothing touched its surface); confirm
-   it's still byte-identical to `0.8.2` next time something near the router/goal-reasoner changes.
-8. **15 stale git worktrees under `.claude/worktrees/`** (dated 2026-07-06/07, unrelated to this
-   session) were found and left untouched pending operator confirmation — see the operator's own
-   chat log this session for the exact list + `git worktree remove` commands per one, 13 of 15
-   confirmed fully merged into `main` already (safe to delete), 2 not (worth a `git diff` check
-   first). Not acted on without explicit sign-off, per this repo's own destructive-action discipline.
+
+**Dropped by operator decision (2026-07-10): the farewell/thanks clause-length guard.** "brilliant,
+that's all I needed" still trips the guard's 3-word-per-clause limit, but this is deliberately out
+of scope now, not deferred. Elaborate goodbye phrasing is low value and risks making the hang-up
+itself ambiguous — a short, clear close beats a clever one. Don't add farewell-phrasing cases to
+future benchmark sprints either; see `SKILL_BENCHMARK_CONVERSATION.md` §5 for the standing note.
+
+**Dropped by operator decision (2026-07-10): confirming AGENTBENCH stays byte-identical to `0.8.2`.**
+Not tracked as a follow-up any more; revisit only if something near the router/goal-reasoner
+actually changes.
+
+**The stale git worktrees are gone.** 13 of the original 15 were already merged and gone by the
+time this session checked; the operator removed the remaining 2 directly (2026-07-10). Those 2 had
+unmerged CHATBENCH 0.8.0/0.8.1 report commits (`2b724fd`, `3fdc983`) on branches
+`worktree-agent-a162c165a7ce6bca6`/`worktree-agent-a3a54d6e7c5ef9172`, still in the branch list —
+if those reports still matter, pull them from those branches or `git reflog` before pruning the
+branches too.
 
 **Everything else from the prior "Open follow-ups" list (items 1–12: C2 pronoun-binding, the
 farewell/thanks closed-set generalization, the teach-refusal message + recall gap, `cls-svf1`'s live

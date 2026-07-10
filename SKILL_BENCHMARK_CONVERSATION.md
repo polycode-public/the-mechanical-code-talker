@@ -486,6 +486,11 @@ Report structure:
 - **Then measure.** After a tier or sprint flows clean, run the version-matched `CEFR_ENGLISH_<version>`
   benchmark to confirm the flow fixes moved the aggregate and regressed nothing. Flow and mean are
   two views of the same product; this loop shapes the flow, the benchmark scores it.
+- **Farewells stay out of scope.** Don't add cases that test elaborate goodbye or thanks phrasing.
+  A short, clear close beats a clever one, and stretching the closing-phrase matcher to cover more
+  wording adds ambiguity about when the conversation actually ends. If a round turns up a genuine
+  farewell dead-end, note it and move on rather than generalizing the matcher further (operator
+  decision, 2026-07-10).
 - **Delegate long-running work under the coordinator model.** Capped sprint mode (§3) is the default
   example of this — the CHAT step is a background sub-agent by design. In full ladder mode, a
   substantial fix (§1 Step 3) that needs real implementation effort can equally be handed to a
