@@ -2484,7 +2484,16 @@ const WHAT_KNOW_RE = /^(?:what\s+(?:do\s+you|d'?you)\s+know(?:\s+so\s+far)?|what
 // 0.8.2 WS4 wall kindness (c): the most likely stranger openers — "what does this
 // app/codebase do", "what is this app (for)" — join the orientation lane, so a
 // first-touch question gets the live overview instead of the grammar wall.
-const META_ORIENT_RE = /^(?:what(?:'s| is| are)?\s+this(?:\s+(?:app|codebase|repo|repository|project|code|thing))?|what\s+(?:codebase|repo|repository|project)\s+is\s+this|what\s+does\s+(?:this|the)\s+(?:app|code|codebase|project|repo)\s+do|what\s+is\s+(?:this|the)\s+app(?:\s+for)?|what\s+am\s+i\s+looking\s+at|what\s+is\s+tmct|how\s+do\s+i\s+(?:start|begin|get\s+started|get\s+going|load\s+(?:my\s+)?code|index\s+(?:my\s+)?(?:code|repo|repository)|use\s+(?:this|you|tmct))|where\s+do\s+i\s+(?:start|begin)|what\s+should\s+i\s+(?:read|look\s+at)\s+first(?:\s+to\s+understand\s+(?:this\s+)?(?:codebase|code|repo|repository|project))?|where\s+should\s+i\s+start\s+reading(?:\s+(?:this\s+)?(?:codebase|code|repo|repository|project))?|where\s+do\s+i\s+begin\s+reading(?:\s+(?:this\s+)?(?:codebase|code|repo|repository|project))?)$/;
+// Playtest sprint round 1 (2026-07-10): "what does this do" — the bare pronoun,
+// no explicit noun — used to fall through this lane entirely (the "do" branch
+// required an explicit app/code/codebase/project/repo noun after this/the) into
+// MODULE_ORIENT_RE, which tried to resolve "this" as a graph entity, failed, and
+// hit the raw grammar wall — even though the identical-intent "what can you tell
+// me about this project" already answers cleanly via this same lane. The noun is
+// now OPTIONAL after "this" specifically (kept REQUIRED after "the", since bare
+// "what does the do" is not real input) — a natural stranger-opener that was one
+// token away from already working.
+const META_ORIENT_RE = /^(?:what(?:'s| is| are)?\s+this(?:\s+(?:app|codebase|repo|repository|project|code|thing))?|what\s+(?:codebase|repo|repository|project)\s+is\s+this|what\s+does\s+this(?:\s+(?:app|code|codebase|project|repo))?\s+do|what\s+does\s+the\s+(?:app|code|codebase|project|repo)\s+do|what\s+is\s+(?:this|the)\s+app(?:\s+for)?|what\s+am\s+i\s+looking\s+at|what\s+is\s+tmct|how\s+do\s+i\s+(?:start|begin|get\s+started|get\s+going|load\s+(?:my\s+)?code|index\s+(?:my\s+)?(?:code|repo|repository)|use\s+(?:this|you|tmct))|where\s+do\s+i\s+(?:start|begin)|what\s+should\s+i\s+(?:read|look\s+at)\s+first(?:\s+to\s+understand\s+(?:this\s+)?(?:codebase|code|repo|repository|project))?|where\s+should\s+i\s+start\s+reading(?:\s+(?:this\s+)?(?:codebase|code|repo|repository|project))?|where\s+do\s+i\s+begin\s+reading(?:\s+(?:this\s+)?(?:codebase|code|repo|repository|project))?)$/;
 
 /** A SHORT memory summary (never a fact dump) for the bare "what do you know".
  *  This branch only fires when rows.length === 0 — i.e. precisely the case where
