@@ -67,7 +67,7 @@ documented gaps) · `undocumented` (built and working, but no doc in the Step-1 
 | 30 | `tmct init --with-persona <name>` | implemented | `PLAN_AGENTS.md` §4 | `bin/tmct.mjs:52,356-365` (`--with-persona` flag, unknown-persona error handling) |
 | 31 | Tier-2 general-knowledge corpus bundle (`tier2-general`) shipped and activatable | implemented | `PLAN_AGENTS.md` §4 | `corpus/tier2/general.jsonl` + `manifest.json`; `src/extensions.mjs:94-98` registers it as a builtin |
 | 32 | A wider general-knowledge seed set actually grown beyond the tier2 bundles | claimed-only | `PLAN_AGENTS.md` §4 | The mechanism to activate wider seed sets exists (#31); nobody has grown the corpus content itself further, per `PLAN_AGENTS.md`'s own "◐ partially realized" framing — consistent with what's on disk |
-| 33 | Context-preserving unknown-word ingestion (co-occurrence passages as provenance) | **implemented — contradicts `PLAN_AGENTS.md`'s own "not built" claim** | `PLAN_AGENTS.md` §4 | `src/corpus/unknown-ingest.mjs`, whose own header literally cites "PLAN_AGENTS.md §4 Phase 1, the 'still not built at all' bullet" as the gap it closes. Landed at commit `b670987`, an ancestor of the pin — **the plan doc text itself is stale as of the pinned sha**, not just "will go stale later" |
+| 33 | Context-preserving unknown-word ingestion (co-occurrence passages as provenance) | partial — mechanism built and tested, but **dormant in production** | `PLAN_AGENTS.md` §4 | `src/corpus/unknown-ingest.mjs` + `seedMemory`'s `captureUnknownContext` flag (`src/corpus/conceptnet.mjs:167-169`), default `false`, "every existing call stays byte-identical" per its own doc comment. Verified at the pinned sha: `src/extensions.mjs:240-246`'s `seedActiveCorpusEntries` — the ONLY production call site, shared by `chat.mjs`'s first-run bootstrap and `tmct init` — never passes `captureUnknownContext: true`; the flag is exercised solely by `test/corpus-unknown-ingest.test.mjs`. So `PLAN_AGENTS.md`'s "still not built" claim is wrong (the code exists and is unit-tested), but "still not built" and "built-and-live" are both inaccurate — the honest state is "built, wired as a parameter, never activated by any real seed path" |
 | 34 | SHACL-style declarative ingest gate for the memory graph | **implemented — contradicts `PLAN_AGENTS.md`'s "not started" claim** | `PLAN_AGENTS.md` §2.1 ("Declarative SHACL ingest gate (c)") | `ontology/memory-shapes.ttl` (documentation) + `src/memory/shacl.mjs` (hand-rolled JS validator, not `shacl-engine` — a deliberate dependency-weight decision recorded in the `.ttl` file's own header) wired into `appendFact`/`appendRule` (`src/memory/core.mjs:754,949`, `assertIndividualValid` called before every write); `test/memory-shacl.test.mjs`. **This is the pinned commit itself** (`0b730ad`) |
 | 35 | Cross-repo HTTP smoke test (`tmct serve` hit over real HTTP) | **implemented — contradicts `PLAN_AGENTS.md`'s "not started" claim** | `PLAN_AGENTS.md` §3 | `test/server-http-smoke.test.mjs`. Landed at commit `c4517bf`, an ancestor of the pin |
 | 36 | Machine-readable capability envelope (`agentbench/envelope.json`) | **implemented — contradicts `PLAN_AGENTS.md`'s "not started" claim** | `PLAN_AGENTS.md` §3 | `agentbench/envelope.json` (96 lines, populated: `generatedFrom.agentbenchVersion: "1.4.1"`, ladder rungs, driver list). Same commit as #35 |
@@ -140,6 +140,23 @@ has not actually been re-measured against the new rule**. Read the "still gated"
 `ROADMAP.md`/`HANDOVER.md` as itself stale relative to the pinned sha, not just relative to "now" —
 this is a genuine, checkable claim that the doc text and the code have already diverged before this
 audit even started, independent of the ongoing session's later tracks.
+
+**A second, narrower data point from the same stage, cross-checked against `STRATEGY_ADVISOR.log`'s
+live tick record and then re-verified against the pinned commit directly (the log entry alone was
+not trusted at face value):** at `2026-07-10 08:05Z` (`topic=stage4-trust-gap+track-B-D2-ordering`),
+the strategy advisor flagged that `computeTrust`'s `premiseTrusts`/`ruleConfidence` hook
+(`src/memory/trust.mjs:105-107,145-148`, PLAN_INFERENCE_TESTING.md §4 stage 2's own exit criterion —
+"entailed trust is premise-derived, not the bare 0.3 floor") had exactly one call site and that call
+site never actually supplied `premiseTrusts`/`ruleConfidence`, so every entailed fact was still
+riding the bare `SOURCE_PRIOR.entailed = 0.3` floor despite stage 2 being marked "✅ shipped." Re-checked
+directly against the pinned commit (not just the log's claim): by `0b730ad` this appears to have been
+**fixed as part of the `cax-dw` work itself** — `src/syllogise.mjs:447` now passes
+`{ premiseTrusts, ruleConfidence: CAX_DW_RULE_CONFIDENCE }` into `appendFacts`, and
+`src/memory/core.mjs`'s `appendFacts` (the `prepared.push({..., premiseTrusts, ruleConfidence})`
+block) threads both fields through per-fact into the trust computation. Recorded here as a
+resolved-in-session example of the advisor/track loop working as designed, not as an open gap — but
+flagged explicitly because taking the log entry alone (without the follow-up code check) would have
+produced a stale, wrong claim in this very audit.
 
 ---
 
@@ -232,13 +249,16 @@ audit even started, independent of the ongoing session's later tracks.
 grep against the table itself, not eyeballed:
 
 - **implemented** (including the 5 rows that read "implemented — contradicts \[doc\]'s claim",
-  which are genuinely built despite what the plan doc says): **58**. Several of these carry a real,
+  which are genuinely built despite what the plan doc says): **57**. Several of these carry a real,
   named caveat in their Evidence cell that stops short of full "no gaps" (e.g. `findActionPath`
   proven only on a toy graph and wired to no real domain, item #42; telemetry wired but not
   exercised by the live chat dispatch path, item #61; `cax-dw` implemented but not yet
   re-measured, item #19) — read the Evidence column, not just the status word, for these.
 - **claimed-only**: **21**
-- **partial** (literal word in the Status column): **2** (items #8, #16)
+- **partial** (literal word in the Status column): **3** (items #8, #16, #33 — item #33 was corrected
+  during this audit's own review pass from an initial "implemented" call: the mechanism is real and
+  tested, but the one production call site that could activate it never passes the flag that turns
+  it on, so it is currently dormant for every real user, not "not built" and not "shipped" either)
 - **explicit scope decision, not a gap** (multi-language AST extraction, permanently seonix's job): **1**
 - **in-flight/uncommitted at time of writing** (the construction-grammar bank, item #40): **1**
 - **undocumented**: 0 rows carry this literal status — the one reverse-check finding this survey
