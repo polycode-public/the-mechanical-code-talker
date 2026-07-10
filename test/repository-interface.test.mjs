@@ -157,6 +157,62 @@ test("[fixture] search is provider-local lexical; ask returns the NL envelope", 
 });
 
 // =============================================================================
+// 2a/2b/2c: search() is REALLY ranked (not a flat substring filter), edges()/
+// impact() take optional pagination/depth args, additive and backward-compatible.
+// =============================================================================
+test("[fixture] search(): module-mode is ranked (path/symbol/import-proximity), not flat filter order", () => {
+  const svc = fixtureProvider();
+  const labels = svc.search("widget").value.results.map((r) => r.label);
+  // widget.mjs itself outranks its own test module (path match beats a looser one) — the OLD flat
+  // filter had no ranking at all, so this ordering is only guaranteed by the new scored search.
+  assert.deepEqual(labels, ["pkg/ui/widget.mjs", "pkg/test/widget.test.mjs"]);
+});
+
+test("[fixture] search(): symbol-mode honours name (regex) + decorator filters, module-mode does not", () => {
+  const svc = fixtureProvider();
+  const named = svc.search("", { kind: "class", name: "^W" }).value.results;
+  assert.deepEqual(named.map((c) => c.label), ["Widget"]);
+  const decorated = svc.search("", { kind: "method", decorator: "property" }).value.results;
+  assert.deepEqual(decorated.map((m) => m.label), ["Widget.render"]);
+  // module mode: a name filter that would exclude everything if it applied here is simply ignored
+  // (renderSearch's module branch never supported name/decorator either — no new semantic invented).
+  const modules = svc.search("widget", { name: "definitely-does-not-match-anything" }).value.results;
+  assert.ok(modules.length > 0, "module-mode search ignores the name filter, unlike symbol-mode");
+});
+
+test("[fixture] search(): limit/offset paginate the full ranked array", () => {
+  const svc = fixtureProvider();
+  const all = svc.search("", { kind: "class" }).value.results;
+  assert.equal(all.length, 3);
+  const page1 = svc.search("", { kind: "class", limit: 2 }).value.results;
+  const page2 = svc.search("", { kind: "class", limit: 2, offset: 2 }).value.results;
+  assert.equal(page1.length, 2);
+  assert.equal(page2.length, 1);
+  assert.deepEqual([...page1, ...page2].map((c) => c.id), all.map((c) => c.id));
+});
+
+test("[fixture] edges(): optional { limit, offset } paginate; omitted limit is unchanged full-list behavior", () => {
+  const svc = fixtureProvider();
+  const full = svc.edges("mod:widget.mjs", "defines").value.edges;
+  assert.equal(full.length, 2, "widget.mjs defines Widget + register");
+  const first = svc.edges("mod:widget.mjs", "defines", { limit: 1 }).value.edges;
+  const second = svc.edges("mod:widget.mjs", "defines", { limit: 1, offset: 1 }).value.edges;
+  assert.deepEqual(first, [full[0]]);
+  assert.deepEqual(second, [full[1]]);
+  // omitted limit (no opts arg at all) stays byte-identical to the pre-pagination call.
+  assert.deepEqual(svc.edges("mod:widget.mjs", "defines"), { ok: true, value: { kind: "defines", edges: full } });
+});
+
+test("[fixture] impact(): optional { maxDepth } threads straight into impactClosure", () => {
+  const svc = fixtureProvider();
+  const full = svc.impact("mod:graph.mjs").value;
+  assert.equal(full.levels.length, 2, "button.mjs is a depth-2 dependent via widget.mjs");
+  const shallow = svc.impact("mod:graph.mjs", { maxDepth: 1 }).value;
+  assert.equal(shallow.levels.length, 1, "maxDepth:1 stops before the depth-2 dependent");
+  assert.ok(shallow.total < full.total);
+});
+
+// =============================================================================
 // Bootstrap conformance — the provider with no data still conforms (honest empties)
 // =============================================================================
 test("[bootstrap] every id-taking service misses UNRESOLVED_TERM; aggregates are empty hits", () => {

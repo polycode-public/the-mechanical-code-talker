@@ -19,6 +19,9 @@ import {
   edgesOfKind,
   relationKind,
   impactClosure,
+  scoreSymbolsRanked,
+  searchModulesRanked,
+  SEARCH_LIMIT,
 } from "../codegraph.mjs";
 import { ask } from "../ask.mjs";
 import {
@@ -169,23 +172,27 @@ export function createGraphService(graph, { sourceAccess = false } = {}) {
       });
     },
 
-    edges(id, kind) {
+    edges(id, kind, { limit, offset = 0 } = {}) {
       if (!EDGE_KINDS.includes(kind)) {
         throw new TypeError(`edges(): unknown kind "${kind}" (not in EDGE_KINDS)`);
       }
       const ind = resolveId(id);
       if (!ind) return miss(MISS_REASONS.UNRESOLVED_TERM, { term: id });
       const meta = groupMetaForKind(graph, kind);
-      const edges = edgesOfKind(graph, kind)
+      // edge order is stable/memoized (edgesOfKind's own docblock in codegraph.mjs) — a plain
+      // slice after filter/map is a safe, backward-compatible pagination: an omitted `limit`
+      // leaves the full list untouched (limit=undefined → slice(offset) → everything from offset).
+      let edges = edgesOfKind(graph, kind)
         .filter((e) => e.subject === id)
         .map((e) => toEdge(e, meta));
+      edges = limit == null ? edges.slice(offset) : edges.slice(offset, offset + limit);
       return hit({ kind, edges });
     },
 
-    impact(moduleId) {
+    impact(moduleId, { maxDepth } = {}) {
       const ind = resolveId(moduleId);
       if (!ind) return miss(MISS_REASONS.UNRESOLVED_TERM, { term: moduleId });
-      const levels = impactClosure(graph, ind);
+      const levels = maxDepth == null ? impactClosure(graph, ind) : impactClosure(graph, ind, { maxDepth });
       const total = levels.reduce((n, l) => n + l.length, 0);
       return hit({ total, levels });
     },
@@ -281,21 +288,37 @@ export function createGraphService(graph, { sourceAccess = false } = {}) {
       return hit({ commits });
     },
 
-    search(query, { kind = "", name = "", decorator = "" } = {}) {
-      const q = String(query || "").trim().toLowerCase();
+    // Ranked lexical search, mirroring codegraph.mjs's renderSearch/searchSymbols semantics
+    // instead of the old flat substring filter: module-mode (no kind, or kind="module") ranks
+    // via searchModulesRanked/scoreModules (path + defined-symbol + import-proximity scoring),
+    // symbol-mode (kind names a symbol kind) ranks via scoreSymbolsRanked. name/decorator
+    // filters apply in SYMBOL mode only — module mode never supported them in codegraph.mjs
+    // either (renderSearch's module branch ignores both beyond the "was anything specified"
+    // check), so this does not invent a new filter semantic. Results are capped at
+    // `limit` (default SEARCH_LIMIT), sliced after the full ranked array is computed.
+    search(query, { kind = "", name = "", decorator = "", limit = SEARCH_LIMIT, offset = 0 } = {}) {
+      const rawQuery = String(query || "");
       const k = String(kind || "").trim().toLowerCase();
-      const nm = String(name || "").trim().toLowerCase();
+      const nm = String(name || "").trim();
       const dec = String(decorator || "").trim().toLowerCase();
-      const results = graph.individuals
-        .filter((i) => {
-          const label = String(i.label || "").toLowerCase();
-          if (k && (i.class || "").toLowerCase() !== k) return false;
-          if (nm && !label.includes(nm)) return false;
-          if (dec && !String(attrOf(i, "decorators") || "").toLowerCase().includes(dec)) return false;
-          if (q && !label.includes(q)) return false;
-          return true;
-        })
-        .map(toIndividual);
+      let nameRe = null;
+      if (nm) {
+        try { nameRe = new RegExp(nm, "i"); } catch { nameRe = null; }
+      }
+      let rankedInds; // Individual[], highest-ranked first
+      if (k && k !== "module") {
+        const tokens = rawQuery.toLowerCase().split(/[^a-z0-9_]+/).filter(Boolean);
+        rankedInds = scoreSymbolsRanked(graph, tokens, { kind: k, decFilter: dec, nameRe }).map((s) => s.ind);
+      } else {
+        // label→individual, scoped to this call (no persistent cache) — maps searchModulesRanked's
+        // `path` labels (a copy of the label, not the live individual) back to real Individuals.
+        const byLabel = new Map();
+        for (const i of graph.individuals) if ((i.class || "") === "Module") byLabel.set(i.label, i);
+        rankedInds = searchModulesRanked(graph, rawQuery)
+          .map(({ path }) => byLabel.get(path))
+          .filter(Boolean);
+      }
+      const results = rankedInds.slice(offset, offset + limit).map(toIndividual);
       return hit({ results });
     },
 

@@ -407,7 +407,7 @@ function definesIndex(graph) {
  * with a penalty for test modules. Renders each hit compactly with the matching
  * symbols, so the agent can jump straight to tmct_describe. No model calls.
  */
-const SEARCH_LIMIT = 10;
+export const SEARCH_LIMIT = 10;
 const SEARCH_SYMBOLS_SHOWN = 8;
 // Locate scoring — IDF-weighted, component-aware. The rig queries with the WHOLE problem
 // statement, so ubiquitous tokens (template/filter/value/text) would swamp the score; weight each
@@ -1649,9 +1649,17 @@ export function renderCommitAuthor(graph, sha) {
 
 const SYMBOL_CLASSES = { function: "Function", class: "Class", method: "Method", attribute: "Attribute" };
 
-function searchSymbols(graph, tokens, { limit = SEARCH_LIMIT, kind, decFilter, nameRe }) {
+/** The structured scorer behind searchSymbols (kind=function/class/method/attribute, with
+ *  name/decorator filters): filters graph individuals to `kind`'s class, scores by token
+ *  substring hits (or 1 for an empty query, matching everything of that kind), and sorts
+ *  score desc, tie-broken by SHORTER label first (matches searchSymbols's original inline
+ *  sort exactly). An unrecognised `kind` yields an empty ranked list — callers that need to
+ *  distinguish "unknown kind" from "kind valid, nothing matched" check SYMBOL_CLASSES
+ *  themselves (see searchSymbols below). Pure; deterministic.
+ *  @returns {Array<{ind: object, score: number}>} */
+export function scoreSymbolsRanked(graph, tokens, { kind, decFilter = "", nameRe = null } = {}) {
   const targetClass = SYMBOL_CLASSES[kind];
-  if (!targetClass) return `unknown kind "${kind}" (use function, class, method, attribute, or module).`;
+  if (!targetClass) return [];
   const hits = [];
   for (const ind of graph.individuals) {
     if ((ind.class || "") !== targetClass) continue;
@@ -1663,8 +1671,15 @@ function searchSymbols(graph, tokens, { limit = SEARCH_LIMIT, kind, decFilter, n
     if (tokens.length && !score) continue;
     hits.push({ ind, score });
   }
-  if (!hits.length) return `no ${kind} matches the given filters.`;
   hits.sort((a, b) => b.score - a.score || String(a.ind.label).length - String(b.ind.label).length);
+  return hits;
+}
+
+function searchSymbols(graph, tokens, { limit = SEARCH_LIMIT, kind, decFilter, nameRe }) {
+  const targetClass = SYMBOL_CLASSES[kind];
+  if (!targetClass) return `unknown kind "${kind}" (use function, class, method, attribute, or module).`;
+  const hits = scoreSymbolsRanked(graph, tokens, { kind, decFilter, nameRe });
+  if (!hits.length) return `no ${kind} matches the given filters.`;
   const top = hits.slice(0, limit);
   const lines = [`${hits.length} ${kind}(s) match (top ${top.length}):`];
   for (const { ind } of top) lines.push(`- ${ind.label}${spanTag(siteOf(ind))}`);
