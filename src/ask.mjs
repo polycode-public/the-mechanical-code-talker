@@ -1383,6 +1383,42 @@ function moduleIdOf(graph, ind) {
   return qualSets(graph).moduleOfSymbol.get(ind.id) || null;
 }
 
+/** META FALLBACK TO REAL ENTITIES (0.8.2 WS1; widened + extracted HANDOVER.md
+ *  2026-07-10 item 6): "what is a Record" used to say "'Record' isn't a term in
+ *  this graph's own vocabulary" even when Record is a real code-graph entity —
+ *  after a SchemaClass/SchemaPredicate miss, an exact case-insensitive UNIQUE
+ *  label match against a small set of real code-entity classes (Class/Function/
+ *  Method/GlobalVariable/Attribute — not just Class; CHATBENCH g-a2-naming-6:
+ *  "what does fnAlpha mean", a Function, hit this same false vocabulary-miss
+ *  wall). Uniqueness is GLOBAL across all these classes together, not per-class:
+ *  a name colliding across two different classes stays an honest miss, never a
+ *  guess at which one was meant. Extracted (not just inlined in traverse()'s own
+ *  meta branch below) so chat.mjs's BARE "what is X" last-resort lane — no
+ *  article, so T5's structural parse never even produces a meta shape to reach
+ *  traverse() at all (CHATBENCH g-a2-naming-2: "what is Widget") — can reuse the
+ *  exact same lookup + wording, rather than risk the two silently drifting
+ *  apart. Returns null on anything less than a unique exact hit. */
+const META_FALLBACK_CLASSES = new Set(["Class", "Function", "Method", "GlobalVariable", "Attribute"]);
+export function metaFallbackEntityAnswer(graph, term) {
+  const termLc = String(term || "").trim().toLowerCase();
+  if (!termLc) return null;
+  const hits = (graph?.individuals || []).filter((i) => META_FALLBACK_CLASSES.has(i.class) && String(i.label).toLowerCase() === termLc);
+  if (hits.length !== 1) return null;
+  const hit = hits[0];
+  const mid = moduleIdOf(graph, hit);
+  const modLabel = (mid && graph.byId.get(mid)?.label)
+    || String((hit.attributes || []).find((a) => a.key === "site")?.value || "").split(":")[0]
+    || null;
+  const noun = nounFor(hit.class, 1);
+  const article = noun === "attribute" ? "an" : "a";
+  const definedIn = modLabel ? `, defined in ${modLabel}` : "";
+  const followUp = hit.class === "Class" ? ` or "which classes inherit from ${hit.label}"` : "";
+  return {
+    text: `${hit.label} is ${article} ${noun} in this codebase${definedIn} — try "describe ${hit.label}"${followUp}.`,
+    hit, modLabel,
+  };
+}
+
 // ---- MEMBERSHIP inheritance cascade (HANDOVER item 6) — "<kind> of <owner>" walks
 // UP `inherits` when the owner's own surface has nothing, exactly the way
 // computeFind's narrow-then-broaden pass does for predicate-find, below. ----
@@ -2836,24 +2872,17 @@ export function traverse(graph, parsed, { contextId = null, prev = null } = {}) 
       return token && String(token).toLowerCase() === termLc;
     });
     if (!match) {
-      // META FALLBACK TO REAL ENTITIES (0.8.2 WS1): "what is a Record" used to say
-      // "'Record' isn't a term in this graph's own vocabulary" even when Record is a
-      // code-graph Class individual. After the SchemaClass/SchemaPredicate miss, try
-      // an exact case-insensitive UNIQUE label match against class === "Class"
-      // individuals; a unique hit renders a describe-style one-liner (see render's
-      // metaCodeClass branch). Anything less than a unique exact hit keeps the
-      // honest vocabulary miss — never a guess.
-      const classHits = (graph.individuals || []).filter((i) => i.class === "Class" && String(i.label).toLowerCase() === termLc);
-      if (classHits.length === 1) {
-        const hit = classHits[0];
-        const mid = moduleIdOf(graph, hit);
-        const modLabel = (mid && graph.byId.get(mid)?.label)
-          || String((hit.attributes || []).find((a) => a.key === "site")?.value || "").split(":")[0]
-          || null;
+      // META FALLBACK TO REAL ENTITIES (0.8.2 WS1; widened + extracted to
+      // metaFallbackEntityAnswer, HANDOVER.md 2026-07-10 item 6) — see that
+      // function's own docblock for the full "what is a Record"/"what does
+      // fnAlpha mean" history. A unique hit renders straight from its own text
+      // (render()'s metaCodeClass branch just passes it through).
+      const fallback = metaFallbackEntityAnswer(graph, term);
+      if (fallback) {
         return {
-          matches: [hit], objMatch: hit, candidates: [], ambiguous: false,
-          metaCodeClass: true, metaModuleLabel: modLabel,
-          traversal: `schema lookup for "${term}" (miss), then unique Class individual by label`,
+          matches: [fallback.hit], objMatch: fallback.hit, candidates: [], ambiguous: false,
+          metaCodeClass: true, metaFallbackText: fallback.text,
+          traversal: `schema lookup for "${term}" (miss), then unique code-entity individual by label`,
         };
       }
       return { matches: [], objMatch: null, candidates: [], traversal: `schema lookup for "${term}"`, ambiguous: false };
@@ -3298,16 +3327,14 @@ function renderCore(parsed, result) {
         miss: true, ambiguous: false,
       };
     }
-    // meta fallback hit (0.8.2 WS1, see traverse's meta branch): the term is not
-    // schema vocabulary but IS a unique code-graph Class — a describe-style
-    // one-liner pointing at the real entity, instead of the false vocabulary miss.
+    // meta fallback hit (0.8.2 WS1, widened + extracted to metaFallbackEntityAnswer,
+    // HANDOVER.md 2026-07-10 item 6, see traverse's meta branch): the term is not
+    // schema vocabulary but IS a unique code-graph entity (Class/Function/Method/
+    // GlobalVariable/Attribute) — its pre-rendered describe-style one-liner is
+    // passed straight through, so this stays byte-identical to whatever chat.mjs's
+    // bare "what is X" last-resort lane produces by calling the SAME function.
     if (result.metaCodeClass) {
-      const label = result.objMatch.label;
-      const definedIn = result.metaModuleLabel ? `, defined in ${result.metaModuleLabel}` : "";
-      return {
-        content: `${label} is a class in this codebase${definedIn} — try "describe ${label}" or "which classes inherit from ${label}".`,
-        miss: false, ambiguous: false, matches: result.matches,
-      };
+      return { content: result.metaFallbackText, miss: false, ambiguous: false, matches: result.matches };
     }
     const doc = (result.objMatch.attributes || []).find((a) => a.key === "doc")?.value || "";
     const kindWord = result.objMatch.class === "SchemaClass" ? "a class in the graph's schema" : "a predicate (relation) in the graph's schema";

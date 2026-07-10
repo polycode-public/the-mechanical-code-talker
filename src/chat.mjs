@@ -5998,20 +5998,42 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   const bareWhatisShape = BARE_WHATIS_RE.test(String(query).trim());
   const isAdjectiveShape = IS_ADJECTIVE_YESNO_RE.test(String(query).trim());
   let bareMetaHit = null;
-  if (isConversationalCandidate && memoryDir && (bareWhatisShape || isAdjectiveShape)) {
-    bareMetaHit = (await factAnswer(memoryDir, query, envelope, miss, biasByBundle))
-      ?? (await factReadBack(memoryDir, query, envelope, miss, graph, newFocus?.label, biasByBundle));
-    // HANDOVER.md 2026-07-10 item 10 (dropped-article gap): a bare "what is X"
-    // with NO taught fact but a KNOWN curated corpus term ("what is cache", no
-    // article) used to lose this exact same isConversationalCandidate race —
-    // curatedDefinitionAnswer was only ever reached once the article made T5's
-    // structural parse succeed (envelope.parsed non-null), never on the bare
-    // form. Same "only diverts on a REAL hit" discipline as the rest of this
-    // lane — an unknown bare term still falls through to the ordinary
-    // orientation card, exactly as before.
-    if (!bareMetaHit) {
-      const def = await curatedDefinitionAnswer(query, envelope, { memoryDir, lexicon });
-      if (def) bareMetaHit = { text: def.text, replace: true };
+  if (isConversationalCandidate && (bareWhatisShape || isAdjectiveShape)) {
+    if (memoryDir) {
+      bareMetaHit = (await factAnswer(memoryDir, query, envelope, miss, biasByBundle))
+        ?? (await factReadBack(memoryDir, query, envelope, miss, graph, newFocus?.label, biasByBundle));
+      // HANDOVER.md 2026-07-10 item 10 (dropped-article gap): a bare "what is X"
+      // with NO taught fact but a KNOWN curated corpus term ("what is cache", no
+      // article) used to lose this exact same isConversationalCandidate race —
+      // curatedDefinitionAnswer was only ever reached once the article made T5's
+      // structural parse succeed (envelope.parsed non-null), never on the bare
+      // form. Same "only diverts on a REAL hit" discipline as the rest of this
+      // lane — an unknown bare term still falls through to the ordinary
+      // orientation card, exactly as before.
+      if (!bareMetaHit) {
+        const def = await curatedDefinitionAnswer(query, envelope, { memoryDir, lexicon });
+        if (def) bareMetaHit = { text: def.text, replace: true };
+      }
+    }
+    // HANDOVER.md 2026-07-10 item 6 (CHATBENCH g-a2-naming-2: "what is Widget",
+    // no article): a bare "what is X" naming a REAL code-graph entity (Class/
+    // Function/Method/GlobalVariable/Attribute — not a taught fact, not a
+    // curated corpus term) lost this SAME isConversationalCandidate race too.
+    // metaFallbackEntityAnswer (ask.mjs) is the exact fallback the ARTICLED
+    // form's structural parse already reaches once T5 succeeds; tried here so
+    // the bare form gets the byte-identical answer, never a worse one just
+    // because it dropped the article. Deliberately OUTSIDE the `memoryDir`
+    // check above — this is a pure graph lookup, no memory/Facts access
+    // needed, and CHATBENCH's own "turns" replay mode drives runTurn with a
+    // graph but no memoryDir at all, so gating this on memoryDir too would
+    // silently never fire in the one harness this fix specifically targets.
+    if (!bareMetaHit && graph) {
+      const term = metaTermOf(query, envelope);
+      if (term) {
+        const { metaFallbackEntityAnswer } = await import("./ask.mjs");
+        const fallback = metaFallbackEntityAnswer(graph, term);
+        if (fallback) bareMetaHit = { text: fallback.text, replace: true };
+      }
     }
   }
   if (bareMetaHit) {
