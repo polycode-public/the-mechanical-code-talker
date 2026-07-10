@@ -9,6 +9,7 @@ import { join } from "node:path";
 import {
   TEMPLATES_FILE, PHRASEBOOK_FILE,
   loadTemplates, render, slotsOf, loadPhrasebook, TECHNICAL_SLOTS,
+  loadTemplatesMerged,
 } from "../src/corpus/templates.mjs";
 
 test("lint: every responses.jsonl row parses, ids are unique, registers valid, every template has a class", async () => {
@@ -147,5 +148,65 @@ test("phrasebook: malformed synonym family fails loudly", async () => {
     await assert.rejects(() => loadPhrasebook(bad), /:2: a synonym family needs at least 2 entries/);
   } finally {
     await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---- Part 3 (extension-pack batch): loadTemplatesMerged + namespacing -------
+
+test("loadTemplatesMerged: merges several namespaced extension-pack files into one Map", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-tplmerge-"));
+  try {
+    const a = join(dir, "a.jsonl");
+    const b = join(dir, "b.jsonl");
+    await writeFile(a, '{"id":"packa:greet","class":"describe","template":"hi from a.","register":"terse"}\n');
+    await writeFile(b, '{"id":"packb:greet","class":"describe","template":"hi from b.","register":"terse"}\n');
+    const merged = await loadTemplatesMerged([a, b]);
+    assert.equal(merged.size, 2);
+    assert.equal(render("packa:greet", {}, merged), "hi from a.");
+    assert.equal(render("packb:greet", {}, merged), "hi from b.");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("loadTemplatesMerged: a bare, non-namespaced id throws, naming the path and id", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-tplmerge-"));
+  try {
+    const bad = join(dir, "bad.jsonl");
+    await writeFile(bad, '{"id":"greet","class":"describe","template":"hi.","register":"terse"}\n');
+    await assert.rejects(() => loadTemplatesMerged([bad]), /not namespaced.*"<packname>:<id>"/);
+    await assert.rejects(() => loadTemplatesMerged([bad]), /"greet"/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("loadTemplatesMerged: the SAME id across two paths throws (cross-file id uniqueness), rather than silently shadowing", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-tplmerge-"));
+  try {
+    const a = join(dir, "a.jsonl");
+    const b = join(dir, "b.jsonl");
+    await writeFile(a, '{"id":"pack:greet","class":"describe","template":"hi from a.","register":"terse"}\n');
+    await writeFile(b, '{"id":"pack:greet","class":"describe","template":"hi from b.","register":"terse"}\n');
+    await assert.rejects(() => loadTemplatesMerged([a, b]), /duplicate template id "pack:greet"/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("loadTemplatesMerged: never clobbers the module's own render() default cache as a side effect", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-tplmerge-"));
+  try {
+    await loadTemplates(); // prime the default cache with the real responses.jsonl
+    const before = render("miss-plain", { query: "flurble" });
+    const pack = join(dir, "pack.jsonl");
+    await writeFile(pack, '{"id":"pack:greet","class":"describe","template":"hi.","register":"terse"}\n');
+    await loadTemplatesMerged([pack]);
+    // the default cache still serves the ORIGINAL responses.jsonl, not the pack
+    assert.equal(render("miss-plain", { query: "flurble" }), before);
+    assert.throws(() => render("pack:greet"), /unknown template id/, "the merged pack was never installed as the default");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+    await loadTemplates(); // restore the module cache for later tests
   }
 });

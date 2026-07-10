@@ -3,11 +3,15 @@
 // committed core JSON (every declared typing is a legal one).
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   loadLexicon, classify, numberOf, thirdPerson, predicateOf,
   lookupNoun, lookupVerb, lookupAdjective, lookupProperName,
   DETERMINERS, QUANTIFIERS,
 } from "../src/grammar/lexicon.mjs";
+import { mergedLexiconExtra } from "../src/extensions.mjs";
 
 test("loadLexicon: the committed core is a real starter vocabulary (size floors), cached when unextended", () => {
   const lex = loadLexicon();
@@ -124,4 +128,91 @@ test("numberOf: digits and small number words only — no fuzzy numerals", () =>
 test("exported closed classes match the pattern table (every/a/no + at least/at most/exactly)", () => {
   assert.deepEqual(Object.keys(DETERMINERS).sort(), ["a", "an", "every", "no", "the"]);
   assert.deepEqual(Object.keys(QUANTIFIERS).sort(), ["at least", "at most", "exactly"]);
+});
+
+// ---- Part 3 (extension-pack batch): mergedLexiconExtra bias-ordering merge ----
+
+const tmp = () => mkdtemp(join(tmpdir(), "tmct-lex-merge-"));
+
+test("mergedLexiconExtra: no active lexicon/pack entries -> null (loadLexicon(undefined) stays the byte-identical cached core)", async () => {
+  const entries = new Map([
+    ["seon", { kind: "corpus", active: true, corpusPath: "/x/seon.jsonl" }],
+    ["mypack", { kind: "lexicon", active: false, lexiconPath: "/x/inactive.json" }],
+  ]);
+  assert.equal(await mergedLexiconExtra(entries), null);
+  assert.equal(await mergedLexiconExtra(new Map()), null);
+});
+
+test("mergedLexiconExtra: a HIGHER-bias bundle's same-lemma entry wins on collision (ascending merge order)", async () => {
+  const dir = await tmp();
+  try {
+    const lowPath = join(dir, "low.json");
+    const highPath = join(dir, "high.json");
+    await writeFile(lowPath, JSON.stringify({ nouns: { widget: { property: "data" } } }));
+    await writeFile(highPath, JSON.stringify({ nouns: { widget: { property: "object" } } }));
+    const entries = new Map([
+      ["low", { kind: "lexicon", active: true, lexiconPath: lowPath }],
+      ["high", { kind: "lexicon", active: true, lexiconPath: highPath }],
+    ]);
+    const extra = await mergedLexiconExtra(entries, { low: 0.5, high: 2 });
+    assert.equal(extra.nouns.widget.property, "object", "the higher-bias bundle's entry wins");
+
+    // flip the bias assignment — the merge order flips, so the winner flips too
+    const extraFlipped = await mergedLexiconExtra(entries, { low: 5, high: 0.5 });
+    assert.equal(extraFlipped.nouns.widget.property, "data", "now the (relabelled) higher-bias bundle wins");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("mergedLexiconExtra: ties (equal/absent bias) keep the entries Map's own iteration order — last-in-order wins", async () => {
+  const dir = await tmp();
+  try {
+    const aPath = join(dir, "a.json");
+    const bPath = join(dir, "b.json");
+    await writeFile(aPath, JSON.stringify({ nouns: { widget: { property: "data" } } }));
+    await writeFile(bPath, JSON.stringify({ nouns: { widget: { property: "object" } } }));
+    // Map iteration order: a, then b — both unconfigured (bias defaults to 1, a tie)
+    const entries = new Map([
+      ["a", { kind: "lexicon", active: true, lexiconPath: aPath }],
+      ["b", { kind: "lexicon", active: true, lexiconPath: bPath }],
+    ]);
+    const extra = await mergedLexiconExtra(entries);
+    assert.equal(extra.nouns.widget.property, "object", "b, later in iteration order, wins the tie");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("mergedLexiconExtra: merges verbs/adjectives/properNames too, deduping properNames; feeds loadLexicon(extra) directly", async () => {
+  const dir = await tmp();
+  try {
+    const path = join(dir, "pack.json");
+    await writeFile(path, JSON.stringify({
+      nouns: { frob: {} },
+      verbs: { frobnicate: {} },
+      adjectives: { bespoke: { type: "subclass" } },
+      properNames: ["Seonix"],
+    }));
+    const entries = new Map([["mypack", { kind: "pack", active: true, lexiconPath: path }]]);
+    const extra = await mergedLexiconExtra(entries);
+    const lex = loadLexicon(extra);
+    assert.equal(lookupNoun(lex, "frobs").lemma, "frob");
+    assert.equal(lookupVerb(lex, "frobnicates").lemma, "frobnicate");
+    assert.equal(lookupAdjective(lex, "bespoke").type, "subclass");
+    assert.equal(lookupProperName(lex, "seonix"), "Seonix");
+    // core vocabulary is still there (extra MERGES, never replaces)
+    assert.ok(lex.nouns.has("module"));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("mergedLexiconExtra: inactive entries and non-lexicon/pack kinds are skipped; a corpus-only pack entry (no lexiconPath) is skipped too", async () => {
+  const entries = new Map([
+    ["inactive", { kind: "lexicon", active: false, lexiconPath: "/does/not/matter.json" }],
+    ["corpus-only-pack", { kind: "pack", active: true, corpusPath: "/x.jsonl" }], // no lexiconPath
+    ["templates", { kind: "templates", active: true, templatesPath: "/x.jsonl" }],
+  ]);
+  assert.equal(await mergedLexiconExtra(entries), null);
 });

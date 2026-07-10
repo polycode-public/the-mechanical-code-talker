@@ -51,7 +51,7 @@ import { uuidv7 } from "./uuid.mjs";
 import { createTelemetry } from "./telemetry.mjs";
 import * as defaultSource from "./source.mjs";
 import { loadTemplates, render as renderTemplate } from "./corpus/templates.mjs";
-import { resolveExtensions, seedActiveCorpusEntries } from "./extensions.mjs";
+import { resolveExtensions, seedActiveCorpusEntries, mergedLexiconExtra } from "./extensions.mjs";
 import { rankByBiasThenTrust } from "./memory/bias.mjs";
 import { finish, beginsWithVowelSound, grammarRules } from "./finish.mjs";
 import {
@@ -6901,22 +6901,29 @@ export async function createSession({
   const moduleCount = graph.individuals.filter((i) => (i.class || "") === "Module").length;
   const { version } = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
 
-  // Load this handle's lexicon once (the immutable cached core vocabulary the ACE
-  // assert path parses against). Threaded into every turn so the grammar layer never
-  // re-imports per turn; failure-tolerated — a broken lexicon degrades to the lazy
-  // per-turn load inside assertTurn, never an error before the prompt.
-  let lexicon = null;
-  try { const { loadLexicon } = await import("./grammar/lexicon.mjs"); lexicon = loadLexicon(); }
-  catch { lexicon = null; }
-
-  // Resolve this handle's bias table ONCE per session (src/extensions.mjs's
-  // resolveExtensions → the `[bias]` table) — no new per-turn I/O. Failure-
-  // tolerated exactly like the lexicon load just above: a malformed tmct.toml
-  // degrades to the neutral {} (every bundle ranks at bias 1 — see
-  // memory/bias.mjs), never an error before the prompt.
+  // Resolve this handle's extension entries + bias table ONCE per session
+  // (src/extensions.mjs's resolveExtensions) — no new per-turn I/O. Failure-
+  // tolerated: a malformed tmct.toml degrades to the shipped builtins with an
+  // empty bias table (every bundle ranks at bias 1 — see memory/bias.mjs),
+  // never an error before the prompt.
+  let extEntries = null;
   let biasByBundle = {};
-  try { ({ biasByBundle } = await resolveExtensions(repo)); }
-  catch { biasByBundle = {}; }
+  try { ({ entries: extEntries, biasByBundle } = await resolveExtensions(repo)); }
+  catch { extEntries = null; biasByBundle = {}; }
+
+  // Load this handle's lexicon once (the immutable cached core vocabulary the ACE
+  // assert path parses against), MERGED with any active lexicon/pack extension
+  // entries (Part 3 — mergedLexiconExtra, ascending-bias merge order so a
+  // higher-bias bundle's same-lemma entry wins deterministically). Threaded
+  // into every turn so the grammar layer never re-imports per turn;
+  // failure-tolerated — a broken lexicon degrades to the lazy per-turn load
+  // inside assertTurn, never an error before the prompt.
+  let lexicon = null;
+  try {
+    const { loadLexicon } = await import("./grammar/lexicon.mjs");
+    const extra = extEntries ? await mergedLexiconExtra(extEntries, biasByBundle) : null;
+    lexicon = loadLexicon(extra ?? undefined);
+  } catch { lexicon = null; }
 
   // Opt-in telemetry (default OFF → null → the sink's `tel?.record` is a no-op, and
   // nothing is written). The conversational session log + sidecar above stay the
