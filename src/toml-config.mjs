@@ -7,7 +7,7 @@
 // behaviour, byte-for-byte).
 //
 // Three pure entry points, consumed later by the cli:
-//   loadTomlConfig(rootDir)          → raw parsed TOML, or null when absent
+//   loadTomlConfig(rootDir,{file})   → raw parsed TOML, or null when absent
 //   normalizeConfig(raw,{configDir}) → canonical sparse shape (present keys only)
 //   mergeEffective({args,toml,defaults}) → {effective, sources} (arg>toml>default)
 
@@ -17,12 +17,13 @@ import { parse } from "smol-toml";
 
 export const CONFIG_FILE = "tmct.toml";
 
-/** Read `<rootDir>/tmct.toml` and return the raw parsed table.
+/** Read `<rootDir>/tmct.toml` (or an explicit `{file}` override — `--config
+ *  <path>`, a file, not a dir) and return the raw parsed table.
  *  - Absent file → `null` (the "today" signal: shipped defaults, byte-identical).
  *  - Present but unparseable → throws a clear error naming the file + parse cause
  *    (a `secret_exclude` misparse is security-relevant — never swallow it). */
-export async function loadTomlConfig(rootDir) {
-  const file = join(rootDir, CONFIG_FILE);
+export async function loadTomlConfig(rootDir, { file: fileOverride } = {}) {
+  const file = fileOverride || join(rootDir, CONFIG_FILE);
   let text;
   try {
     text = await readFile(file, "utf8");
@@ -92,6 +93,14 @@ export async function normalizeConfig(raw, { configDir } = {}) {
   // the default". `graph_file` is resolved against configDir to match outRoot.
   if (src.graph_file !== undefined) {
     cfg.graphFile = resolve(dir, String(src.graph_file));
+  }
+  // `graph_files` (array, multi-graph — the CLI/config unification batch):
+  // sits ALONGSIDE `graph_file`, never replaces it. A single-element array is
+  // legal but `graph_file` stays the byte-identical single-graph path most
+  // repos use; `graph_files` only matters once it names more than one file.
+  if (src.graph_files !== undefined) {
+    const arr = Array.isArray(src.graph_files) ? src.graph_files : [src.graph_files];
+    cfg.graphFiles = arr.map((p) => resolve(dir, String(p)));
   }
   const corpus = src.corpus || {};
   if (corpus.tier !== undefined) cfg.corpus = { tier: corpus.tier };
