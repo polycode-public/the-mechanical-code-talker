@@ -33,6 +33,7 @@ import { dirname, join } from "node:path";
 import { proseTokensFor, buildProseIndex } from "../prose.mjs";
 import { fnv1aHex } from "../hash.mjs";
 import { computeTrust, sessionReliabilityFrom, TRUST_SCORE_PROP, TRUST_INPUTS_PROP } from "./trust.mjs";
+import { assertIndividualValid } from "./shacl.mjs";
 
 export const MEMORY_DIR_REL = join(".tmct", "memory");
 export const MEMORY_GRAPH_REL = join(MEMORY_DIR_REL, "graph.json");
@@ -269,10 +270,18 @@ export async function loadMemory(dir) {
  *  Fact still carrying only the old mgx:factProvenance string gets its Sources +
  *  statedBy edges + trust materialised on the next write of any kind. Part B3's
  *  actor-level (session-scoped) Source reliability rides the SAME cycle, after
- *  migration (so it sees every Fact's Sources, migrated or not). */
+ *  migration (so it sees every Fact's Sources, migrated or not).
+ *
+ *  `fn` may be async (PLAN_AGENTS.md §2.1's SHACL ingest gate: appendFact/
+ *  appendRule build their candidate individual, `await assertIndividualValid`
+ *  it, and only then upsert — all inside `fn`, so a rejection throws before
+ *  ANY mutation of `payload` happens and this function's write is never
+ *  reached). `await fn(payload)` is a documented no-op for every existing
+ *  SYNC caller (appendUtterance(s), appendFacts) — awaiting a non-Promise
+ *  value just resolves to it, byte-identical behaviour to calling it plain. */
 async function mutateMemory(dir, fn) {
   const payload = await loadMemory(dir);
-  const out = fn(payload) ?? payload;
+  const out = (await fn(payload)) ?? payload;
   migrateLegacyProvenance(out);
   recomputeSourceReliability(out);
   out.proseIndex = buildProseIndex(out.individuals);
@@ -700,7 +709,13 @@ const factIdFor = (s, p, o) => `fact:${fnv1aHex(`${s}\0${p}\0${o}`)}`;
  *  duplicate. `premiseTrusts`/`ruleConfidence` (optional) engage trust.mjs's
  *  entailed hook — see recomputeFactTrust; a rule-derived write (e.g.
  *  syllogise.mjs) passes these, a plain taught/asserted write omits them and
- *  is byte-identical to before. Returns { id }. */
+ *  is byte-identical to before.
+ *
+ *  PLAN_AGENTS.md 2.1's SHACL ingest gate: the candidate Fact individual is
+ *  validated against ontology/memory-shapes.ttl (memory/shacl.mjs) BEFORE
+ *  upsertIndividual runs -- a violation throws here, inside mutateMemory's
+ *  `fn`, so the write never happens (mutateMemory's atomic write is never
+ *  reached; the on-disk graph is untouched). Returns { id }. */
 export async function appendFact(dir, { subject, predicate, object, provenance = "", createdAt = "", quantifier = "", premiseTrusts, ruleConfidence } = {}) {
   const s = normFactTerm(subject);
   const p = normText(predicate);
@@ -710,7 +725,7 @@ export async function appendFact(dir, { subject, predicate, object, provenance =
   const text = `${s} ${p} ${o}`;
   const tokens = proseTokensFor({ doc: text });
   const q = normText(quantifier);
-  await mutateMemory(dir, (payload) => {
+  await mutateMemory(dir, async (payload) => {
     const prior = payload.individuals.find((x) => x?.id === id);
     const priorProv = prior?.attributes?.find((a) => a?.prop === "mgx:factProvenance")?.value || "";
     // The mgx:factProvenance union stays BYTE-IDENTICAL (a compat shim readers
@@ -721,7 +736,7 @@ export async function appendFact(dir, { subject, predicate, object, provenance =
     // plain re-teach, never SILENTLY erases an already-recorded quantifier).
     const priorQ = prior?.attributes?.find((a) => a?.prop === "mgx:factQuantifier")?.value || "";
     const qVal = q || priorQ;
-    upsertIndividual(payload, {
+    const candidate = {
       id, label: labelOf(text), class: FACT_CLASS,
       derived_from: [], mentions: [],
       attributes: [
@@ -734,7 +749,9 @@ export async function appendFact(dir, { subject, predicate, object, provenance =
         ...(tokens.length ? [{ prop: "mgx:hasProseTokens", key: "prose_tokens", value: tokens.join(" ") }] : []),
         ...(qVal ? [{ prop: "mgx:factQuantifier", key: "quantifier", value: qVal }] : []),
       ],
-    });
+    };
+    await assertIndividualValid(candidate); // the SHACL gate -- throws, never writes, on a violation
+    upsertIndividual(payload, candidate);
     // Derive Source individuals + statedBy edges from the provenance union and
     // (re)materialise this fact's trust — the live half of steps (b)/(c).
     syncFactSources(payload, payload.individuals.find((x) => x?.id === id), undefined, { premiseTrusts, ruleConfidence });
@@ -892,7 +909,12 @@ const ruleIdFor = (kind, name, slot1, slot2) => `rule:${fnv1aHex(`${kind}\0${nam
  *  pipeline appendFact uses, unmodified — neither function ever checks
  *  `individual.class`, so a Rule carrying the same mgx:factProvenance compat
  *  attribute + CREATED_AT_PROP gets the same Source-derivation + trust score an
- *  ordinary Fact would. Returns { id }. */
+ *  ordinary Fact would.
+ *
+ *  PLAN_AGENTS.md 2.1's SHACL ingest gate: the candidate Rule individual is
+ *  validated against ontology/memory-shapes.ttl (memory/shacl.mjs) BEFORE
+ *  upsertIndividual runs, same discipline as appendFact -- a violation
+ *  throws before mutateMemory's write is ever reached. Returns { id }. */
 export async function appendRule(dir, { name, kind, slots, provenance = "", createdAt = "" } = {}) {
   const spec = RULE_SLOT_SPEC[kind];
   if (!spec) throw new Error(`a rule kind must be one of ${RULE_KINDS.join(", ")}, got ${JSON.stringify(kind)}`);
@@ -904,14 +926,14 @@ export async function appendRule(dir, { name, kind, slots, provenance = "", crea
   }
   const id = ruleIdFor(kind, n, slotValues[0], slotValues[1]);
   const label = labelOf(`${n} = ${kind}(${slotValues.join(", ")})`);
-  await mutateMemory(dir, (payload) => {
+  await mutateMemory(dir, async (payload) => {
     const prior = payload.individuals.find((x) => x?.id === id);
     const priorProv = prior?.attributes?.find((a) => a?.prop === "mgx:factProvenance")?.value || "";
     // Same union-of-tags discipline as appendFact — the compat string stays
     // byte-identical in spirit; the Source edges below are DERIVED from it.
     const provs = [...new Set([...priorProv.split(" | "), normText(provenance)].filter(Boolean))];
     const createdAtVal = firstWriteCreatedAt(prior, createdAt); // first-write-wins
-    upsertIndividual(payload, {
+    const candidate = {
       id, label, class: RULE_CLASS,
       derived_from: [], mentions: [],
       attributes: [
@@ -922,7 +944,9 @@ export async function appendRule(dir, { name, kind, slots, provenance = "", crea
         { prop: CREATED_AT_PROP, key: "createdAt", value: createdAtVal },
         ...(provs.length ? [{ prop: "mgx:factProvenance", key: "provenance", value: provs.join(" | ") }] : []),
       ],
-    });
+    };
+    await assertIndividualValid(candidate); // the SHACL gate -- throws, never writes, on a violation
+    upsertIndividual(payload, candidate);
     // Same Source-derivation + trust-materialisation call appendFact makes —
     // syncFactSources/recomputeFactTrust only ever touch fact.attributes/id/
     // label, never fact.class, so a Rule individual rides it unmodified.

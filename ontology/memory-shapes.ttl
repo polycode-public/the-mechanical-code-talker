@@ -1,0 +1,153 @@
+# ontology/memory-shapes.ttl — the declarative SHACL SPEC for tmct's own
+# memory-graph ingest gate (PLAN_AGENTS.md §2.1 "Declarative SHACL ingest
+# gate (c)"), modelled on marginalia's app/ontology/shapes.ttl (same
+# standards-based idiom, a DIFFERENT graph and vocabulary).
+#
+# IMPORTANT — this file is DOCUMENTATION, not machine-read. It is the
+# canonical, auditable, standards-based (SHACL/Turtle) description of the
+# three shapes the gate enforces; the ACTUAL enforcement is a small,
+# hand-rolled JS validator, src/memory/shacl.mjs, that implements exactly
+# what this file describes against memory/core.mjs's own {id, label, class,
+# attributes} individual shape. See that file's header for why: the plan's
+# named tooling, `shacl-engine` + `rdf-ext`, was tried first and measured to
+# transitively pull in `@comunica/query-sparql-rdfjs-lite` — a full federated
+# SPARQL engine — across 560+ packages, wildly disproportionate to tmct's
+# minimal-deps floor for three closed, bounded shapes. Keep this file and
+# src/memory/shacl.mjs in sync BY HAND when either shape changes.
+#
+# tmct's src/conformance.mjs is a DIFFERENT thing — an imperative Repository
+# Interface contract-test SUITE (assert.* calls against a provider), not a
+# memory-write gate. This file (and shacl.mjs) is the write-boundary shape
+# contract; that file is unrelated.
+#
+# No OWL/RDFS reasoning applies (there is no engine at all, let alone a
+# reasoning one), so shapes target predicates a memory individual actually
+# carries — never a class hierarchy, never an edge's far end (an edge's
+# OTHER node is not present when a single leaf is validated in isolation).
+# Two targeting idioms, both borrowed from marginalia's own shapes.ttl for
+# exactly this reason:
+#   - sh:targetSubjectsOf <predicate> — for every shape below, distinguished
+#     by which predicate a node carries: rdf:subject only appears on a
+#     reified Fact; mgx:ruleKind only appears on a Rule; mgx:memoryClass
+#     appears on every memory node (see next paragraph) — the right target
+#     for the generic "every individual" shape.
+#
+# mgx:memoryClass is a SYNTHETIC, spec-only property: it stands in for the
+# payload individual's own JS `.class` field (Utterance | Fact | Session |
+# Source | Rule) — it is never written into the actual graph.json payload.
+# It exists only so this file has a concrete, closed-vocabulary value to
+# constrain ("must have a class") and a stable predicate every node carries
+# to target the generic shape on; src/memory/shacl.mjs reads `.class`
+# directly rather than projecting this property.
+#
+# PERMISSIVENESS NOTE: every shape below is intentionally permissive beyond
+# memory/core.mjs's own existing structural floor (appendFact/appendRule
+# already throw before ever reaching a write if subject/predicate/object or
+# name/kind/slots are missing — these shapes mirror, not tighten, that
+# floor). mgx:factProvenance in particular is OPTIONAL (sh:minCount 0, "when
+# present" only) — appendFact's own signature defaults provenance to `""`,
+# and real call sites/tests legitimately omit it (e.g. re-writing createdAt
+# on an existing fact without re-asserting provenance). A strict "must cite a
+# source" requirement would reject the very first re-teach of pre-existing,
+# legitimately-sparse rows in a live .tmct/memory/graph.json — exactly the
+# kind of false-positive rejection this gate must never produce.
+
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix sh:   <http://www.w3.org/ns/shacl#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix mgx:  <urn:tmct:mgx#> .
+
+# ---- Individual: every memory node must carry a valid, closed-vocabulary --
+# ---- class -------------------------------------------------------------------
+mgx:IndividualShape a sh:NodeShape ;
+    sh:targetSubjectsOf mgx:memoryClass ;
+    rdfs:comment "Every memory node: exactly one class from the closed memory-class vocabulary." ;
+    sh:property [
+        sh:path mgx:memoryClass ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:in ( "Utterance" "Fact" "Session" "Source" "Rule" ) ;
+        sh:message "A memory individual must carry exactly one class, from the closed vocabulary Utterance | Fact | Session | Source | Rule." ;
+    ] .
+
+# ---- Fact: the reified (subject, predicate, object) triple shape, plus -----
+# ---- OPTIONAL provenance ------------------------------------------------------
+# Targeted by rdf:subject rather than mgx:memoryClass "Fact" — a Fact is
+# reified RDF-style (memory/core.mjs's own documented convention), so the
+# presence of rdf:subject is itself the structural signal, matching
+# marginalia's own "target by distinguishing predicate" idiom.
+mgx:FactShape a sh:NodeShape ;
+    sh:targetSubjectsOf rdf:subject ;
+    rdfs:comment "A reified Fact: subject/predicate/object each present exactly once, non-empty. mgx:factProvenance, WHEN PRESENT, must be non-empty — but is not required (see the file header's permissiveness note: appendFact's own API allows an empty/omitted provenance)." ;
+    sh:property [
+        sh:path rdf:subject ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:minLength 1 ;
+        sh:message "A Fact needs exactly one non-empty rdf:subject." ;
+    ] ;
+    sh:property [
+        sh:path rdf:predicate ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:minLength 1 ;
+        sh:message "A Fact needs exactly one non-empty rdf:predicate." ;
+    ] ;
+    sh:property [
+        sh:path rdf:object ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:minLength 1 ;
+        sh:message "A Fact needs exactly one non-empty rdf:object." ;
+    ] ;
+    sh:property [
+        sh:path mgx:factProvenance ;
+        sh:datatype xsd:string ;
+        sh:minCount 0 ;
+        sh:minLength 1 ;
+        sh:message "mgx:factProvenance, when present, must be non-empty (optional — not every legitimate write carries one)." ;
+    ] .
+
+# ---- Rule: name/kind/slots per the closed kind vocabulary -------------------
+# Targeted by mgx:ruleKind (only a Rule individual ever carries it).
+mgx:RuleShape a sh:NodeShape ;
+    sh:targetSubjectsOf mgx:ruleKind ;
+    rdfs:comment "A taught Rule: one non-empty name, one kind from the closed compose2|filter|recursive vocabulary, and the matching pair of slots for that kind (RULE_SLOT_SPEC in src/memory/core.mjs — the single source of truth this shape mirrors)." ;
+    sh:property [
+        sh:path mgx:ruleName ;
+        sh:datatype xsd:string ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:minLength 1 ;
+        sh:message "A Rule needs exactly one non-empty name." ;
+    ] ;
+    sh:property [
+        sh:path mgx:ruleKind ;
+        sh:in ( "compose2" "filter" "recursive" ) ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:message "A Rule's kind must be exactly one of compose2 | filter | recursive." ;
+    ] ;
+    sh:xone (
+        [
+            sh:property [ sh:path mgx:ruleKind ; sh:hasValue "compose2" ] ;
+            sh:property [ sh:path mgx:ruleBase1 ; sh:minCount 1 ; sh:minLength 1 ] ;
+            sh:property [ sh:path mgx:ruleBase2 ; sh:minCount 1 ; sh:minLength 1 ] ;
+        ]
+        [
+            sh:property [ sh:path mgx:ruleKind ; sh:hasValue "filter" ] ;
+            sh:property [ sh:path mgx:ruleBase1 ; sh:minCount 1 ; sh:minLength 1 ] ;
+            sh:property [ sh:path mgx:ruleFilterProperty ; sh:minCount 1 ; sh:minLength 1 ] ;
+        ]
+        [
+            sh:property [ sh:path mgx:ruleKind ; sh:hasValue "recursive" ] ;
+            sh:property [ sh:path mgx:ruleBaseCase ; sh:minCount 1 ; sh:minLength 1 ] ;
+            sh:property [ sh:path mgx:ruleRecStep ; sh:minCount 1 ; sh:minLength 1 ] ;
+        ]
+    ) ;
+    sh:message "A Rule's slots must exactly match its declared kind: compose2 needs ruleBase1+ruleBase2, filter needs ruleBase1+ruleFilterProperty, recursive needs ruleBaseCase+ruleRecStep." .
