@@ -370,7 +370,12 @@ test("tier6/conversation 1: vague opener + typo + ack-preamble + topic-switch dr
   // T5: "no wait, I meant" strips cleanly too — an honest, receipted empty
   // (nothing in this fixture calls createTask), never a dead end.
   assert.match(turns[5].answer, /^No modules found whose module directly calls createTask\./);
-  assert.match(turns[6].answer, /^I'm tmct — a deterministic, offline code-graph assistant/);
+  // HANDOVER.md 2026-07-10 item 2: "cheers, that helps" now generalizes to a
+  // real thanks reply (chat.mjs's farewellOrThanksSignal) instead of the
+  // generic orientation card this test previously pinned as merely "not a
+  // dead end" — a warm sign-off is a strictly better answer to a thanks-plus-
+  // filler remark than a self-introduction card.
+  assert.match(turns[6].answer, /^Any time\./);
 });
 
 test("tier6/conversation 2: heavy hedge-stack politeness + vague opener + typo + relation-touch typo, zero dead-ends (T3/T4/T8 fix)", async () => {

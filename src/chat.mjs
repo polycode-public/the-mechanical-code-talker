@@ -58,7 +58,7 @@ import {
   VERB_TO_KIND, WHERE_MARKERS, MENTION_MARKERS, ENTITY_TO_TYPE, PASSIVE_PARTICIPLE_TO_KIND,
   stripTrailingScopeFiller, stripTrailingDiscourseTag,
 } from "./ask-vocab.mjs";
-import { COUNTERFACTUAL_RE, correctMisspellings, applyPreambleFrames } from "./interpret/normalize.mjs";
+import { COUNTERFACTUAL_RE, correctMisspellings, applyPreambleFrames, escapeRegex } from "./interpret/normalize.mjs";
 import { fuzzyMatchInSet, fuzzyBound } from "./interpret/fuzzy.mjs";
 
 // uuidv7 lives in ./uuid.mjs (shared with telemetry + the bench stamp); re-exported
@@ -966,6 +966,82 @@ function closedOrCollapsed(q, set, idx) {
   return idx.get(collapseRuns(q)) ?? null;
 }
 
+/** HANDOVER.md 2026-07-10 item 2: THANKS/BYE were exact-match-the-WHOLE-line
+ *  closed sets, grown one literal phrase at a time across sessions — and kept
+ *  failing on the very next unlisted phrasing tried (3 independently-run
+ *  personas each hit this in one persona-sweep: "thanks, that was fun",
+ *  "ok thank you very much, bye bye", "thanks, bye"). The generalization is
+ *  over PHRASE SHAPE (a thanks/bye clause tacked onto a larger sentence),
+ *  not another one-off literal string:
+ *    - split on comma/semicolon/a standalone "and" into clauses
+ *    - strip a leading bare OK_ACK lead-in off each clause ("ok thank you…")
+ *    - strip a trailing intensifier ("very much"/"so much"/"a lot"/"a bunch" —
+ *      the SAME curated set THANKS_PREAMBLE_RE, interpret/normalize.mjs,
+ *      already recognizes) before matching THANKS
+ *    - fold an exact word-repeated clause ("bye bye") to one instance before
+ *      matching BYE — informal reduplication for emphasis, not a new phrase
+ *  Still the SAME closed THANKS/BYE sets underneath (same closedOrCollapsed
+ *  matcher) — only the SEGMENTATION generalizes. Bounded to short, non-codeish
+ *  lines (same discipline as isConversational/fuzzyConversationalMatch) so a
+ *  genuine structural question is never grabbed. A single-clause line (no
+ *  comma/semicolon/"and") is left to the exact whole-line checks above/below —
+ *  this only handles the MULTI-clause case those can't. Returns "bye"/"thanks"/
+ *  null; bye wins when a line carries both (a farewell should end the session
+ *  even alongside a thanks — the small-talk persona's "thanks, bye" finding:
+ *  the README implies "bye" phrasing should end the session, full stop). */
+const ACK_LEAD_RE = new RegExp(`^(?:${[...OK_ACK].map(escapeRegex).join("|")})\\s+(.+)$`, "i");
+const TRAILING_INTENSIFIER_RE = /\s+(?:very\s+much|so\s+much|a\s+lot|a\s+bunch)\s*$/i;
+const REPEATED_WORD_RE = /^(\S+)\s+\1$/i;
+// Comma/semicolon (optionally swallowing a following "and") OR a standalone
+// "and" — a single combined pattern so "X, and Y" splits into ["X", "Y"], not
+// ["X", "and Y"] (a naive comma-only split leaves "and" glued to the second
+// clause, which then fails every closed-set match downstream).
+const CLAUSE_SPLIT_RE = /\s*[,;]\s*(?:and\s+)?|\s+and\s+/;
+function conversationalClauses(q) {
+  return q.split(CLAUSE_SPLIT_RE).map((c) => c.trim()).filter(Boolean);
+}
+/** BYE match tolerant of informal reduplication ("bye bye", "no no" — general,
+ *  not specific to any one word): a clause consisting of the SAME word twice
+ *  folds to one instance before the ordinary closed/collapsed BYE lookup.
+ *  Shared by the single-clause whole-line check and the multi-clause scan
+ *  below, so "bye bye" resolves the same way whether or not a comma follows it. */
+function foldedBye(clause) {
+  if (closedOrCollapsed(clause, BYE, BYE_COLLAPSED)) return true;
+  const folded = clause.match(REPEATED_WORD_RE);
+  return !!(folded && closedOrCollapsed(folded[1], BYE, BYE_COLLAPSED));
+}
+function farewellOrThanksSignal(raw, q) {
+  const words = q.split(/\s+/).filter(Boolean);
+  if (words.length < 2 || words.length > 8 || looksCodeish(raw, q)) return null;
+  const clauses = conversationalClauses(q);
+  if (clauses.length < 2) return null; // single-clause lines: the exact whole-line checks own this
+  // OK_ACK is deliberately NOT a signal here (unlike the exact whole-line check
+  // above/below): "ok"/"cool"/"right"/"sure" are constitutionally ACK-PREAMBLE
+  // words in this codebase (ACK_PREAMBLE_RE, interpret/normalize.mjs) — "right,
+  // can you walk me through this codebase" is an ack-preamble before a REAL
+  // question, not a closing acknowledgement, and treating a bare OK_ACK clause
+  // as a thanks-signal regressed exactly that live case. THANKS itself is more
+  // specific (genuine gratitude words rarely lead into an unrelated question),
+  // but still gated below: a THANKS-hit only counts when every OTHER clause is
+  // itself small-talk-shaped (≤3 words, non-codeish) — the SAME bound
+  // isConversational's own catch-all uses — so "cheers, what does X do" is left
+  // to the existing THANKS_PREAMBLE_RE lane, never grabbed here.
+  let thanksClauseIdx = -1;
+  let byeHit = false;
+  for (let i = 0; i < clauses.length; i += 1) {
+    const rawClause = clauses[i];
+    const ackMatch = rawClause.match(ACK_LEAD_RE);
+    const clause = ackMatch ? ackMatch[1].trim() : rawClause;
+    if (foldedBye(clause)) { byeHit = true; break; }
+    const deIntensified = clause.replace(TRAILING_INTENSIFIER_RE, "").trim();
+    if (thanksClauseIdx < 0 && closedOrCollapsed(deIntensified, THANKS, THANKS_COLLAPSED)) thanksClauseIdx = i;
+  }
+  if (byeHit) return "bye";
+  const thanksHit = thanksClauseIdx >= 0 && clauses.every((c, i) => i === thanksClauseIdx
+    || (c.split(/\s+/).filter(Boolean).length <= 3 && !looksCodeish(c, c.toLowerCase())));
+  return thanksHit ? "thanks" : null;
+}
+
 /** The fuzzy-typo fallback's candidate pool: every canonical phrase across the
  *  closed conversational sets, flattened once. Consulted only after every exact/
  *  collapsed lookup misses (see fuzzyConversationalMatch). */
@@ -1059,10 +1135,28 @@ function conversationalTurn(line, ctx) {
       ...(end ? { end: true } : {}),
     };
   };
-  if (BYE.has(q)) {
+  if (foldedBye(q)) {
     note(ctx.trace, "goal: casual/social — ending the session (no graph intent)");
-    note(ctx.trace, "lane: conversational — farewell (BYE closed set)");
+    note(ctx.trace, "lane: conversational — farewell (BYE closed set, incl. bare reduplication e.g. \"bye bye\")");
     return mk(t(T_FAREWELL), { end: true });
+  }
+  {
+    // HANDOVER.md 2026-07-10 item 2: a multi-clause line carrying a bye/thanks
+    // clause tacked onto a larger sentence ("thanks, that was fun", "ok thank
+    // you very much, bye bye", "thanks, bye") — see farewellOrThanksSignal's
+    // own docblock. Never fires on a single-clause line (those are the exact
+    // checks just above/below), so this only ADDS coverage, never shadows it.
+    const signal = farewellOrThanksSignal(raw, q);
+    if (signal === "bye") {
+      note(ctx.trace, "goal: casual/social — ending the session (no graph intent)");
+      note(ctx.trace, "lane: conversational — farewell (multi-clause phrase-shape match)");
+      return mk(t(T_FAREWELL), { end: true });
+    }
+    if (signal === "thanks") {
+      note(ctx.trace, "goal: casual/social — acknowledgement, no graph intent");
+      note(ctx.trace, "lane: conversational — thanks (multi-clause phrase-shape match)");
+      return mk(t(T_THANKS));
+    }
   }
   if (WHY.has(q)) {
     note(ctx.trace, "goal: elaborate on the previous answer (why/say-more)");
@@ -4483,6 +4577,47 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
           || (f.subject === v.object && f.object === v.viaClass));
         const parts = [typeFact, disjointFact].filter(Boolean).map(renderFactLine);
         return { text: `no — ${parts.length ? parts.join("; ") : `${v.viaClass} and ${v.object} are disjoint.`}`, replace: true };
+      }
+    }
+    // LIVE cls-svf1 PROOF CHASE (HANDOVER.md 2026-07-10 item 4,
+    // PLAN_INFERENCE_TESTING.md INF-B2, §4 stage 4): every strategy above
+    // missed — check whether X, having taught-P'd something of a taught type
+    // (lifted through that type's FULL ⊑-ancestor closure), satisfies a
+    // TAUGHT someValuesFrom restriction declared over that SAME (property,
+    // type) pair — the restriction CLASS itself entailed (OWL 2 RL Table 8's
+    // cls-svf1), via syllogise.mjs's deriveSomeValuesFromApplication, LIVE and
+    // READ-ONLY (same discipline as the cax-dw chase just above: nothing is
+    // written; syllogise()'s materializing batch pass is the persisting
+    // counterpart of this same rule). The restriction's own scaffolding
+    // (owl:onProperty/owl:someValuesFrom) and every property/type premise must
+    // all be TAUGHT (never corpus-sourced), same as every other live chase in
+    // this block.
+    const { deriveSomeValuesFromApplication, ON_PROPERTY_PREDICATE, SOME_VALUES_FROM_PREDICATE } = await import("./syllogise.mjs");
+    const onPropertyRows = rows.filter((f) => f.predicate === ON_PROPERTY_PREDICATE && isTaught(f));
+    const someValuesFromRows = rows.filter((f) => f.predicate === SOME_VALUES_FROM_PREDICATE && isTaught(f));
+    if (onPropertyRows.length && someValuesFromRows.length) {
+      const someValuesFromOf = new Map(someValuesFromRows.map((f) => [f.subject, f.object]));
+      const restrictionEdges = onPropertyRows
+        .map((f) => ({ restriction: f.subject, property: f.object, target: someValuesFromOf.get(f.subject) }))
+        .filter((r) => r.target);
+      // Every OTHER taught object-property assertion is a candidate premise —
+      // never hard-coded to one verb, mirroring syllogise()'s own generic
+      // propertyEdges scan (RESERVED_PREDICATES, syllogise.mjs) minus the
+      // predicates the other rules on this ladder already own.
+      const svf1Reserved = new Set([SC_PREDICATE, RDF_TYPE_PREDICATE, DISJOINT_PREDICATE, ON_PROPERTY_PREDICATE, SOME_VALUES_FROM_PREDICATE, "owl:intersectionOf"]);
+      const propertyRows = rows.filter((f) => isTaught(f) && !svf1Reserved.has(f.predicate));
+      const propertyEdges = propertyRows.map((f) => [f.subject, f.predicate, f.object]);
+      const svf1Derived = deriveSomeValuesFromApplication(propertyEdges, chainTypeEdges, chainSubClassEdges, restrictionEdges, { budget: 10 });
+      for (const subj of subjCandidates) {
+        const hit = svf1Derived.find((d) => d.subject === subj && objVariants.has(d.object));
+        if (!hit) continue;
+        const propFact = propertyRows.find((f) => f.subject === hit.subject && f.predicate === hit.viaProperty && f.object === hit.viaValue);
+        const typeFact = chainTypeRows.find((f) => f.subject === hit.viaValue && f.object === hit.viaType);
+        const parts = [propFact, typeFact].filter(Boolean).map(renderFactLine);
+        return {
+          text: `yes — ${parts.length ? parts.join("; ") : `${hit.subject} ${hit.viaProperty} ${hit.viaValue}, and ${hit.viaValue} is a ${hit.viaType}.`}`,
+          replace: true,
+        };
       }
     }
     return null; // no remembered fact — the honest miss stands (never a guessed "no")
