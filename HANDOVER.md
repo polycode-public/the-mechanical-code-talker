@@ -29,10 +29,25 @@ install in an empty folder. See `ROADMAP.md`'s "Open-source the ACE-OWL parser" 
 
 ## Open follow-ups
 
-1. **`scm-svf`/cardinality monotonicity** (`PLAN_INFERENCE_TESTING.md` stage 4's remainder) —
-   still confirmed unmeasurable against the current INF-C1 fixture (steady at 90%, unrelated to
-   what either rule would fix); revisit only if a future case-generation pass adds a template that
-   actually exercises them.
+1. **Build `scm-svf`/cardinality monotonicity, and extend INFBENCH to actually score it.**
+   `PLAN_INFERENCE_TESTING.md` stage 4's remainder — three related INF-C1 capabilities, none built:
+   cardinality monotonicity ("every X has exactly 3 Ys" ⊢ "every X has at least 2 Ys"), max-0 as
+   encoded negation ("every X has at most 0 Ys" answers an existence query directly), and `scm-svf`
+   (a someValuesFrom restriction interacting correctly with a subsumption chain). `src/syllogise.mjs`
+   implements exactly four rules today (`scm-sco`, `cax-sco`, `cax-dw`, `cls-svf1`) — none of these
+   three are among them. This is a genuine absent capability, not a wiring gap like `cls-svf1` was.
+   **Do the benchmark half FIRST, not the rule half**: every one of INF-C1's 30 cases in
+   `infbench/generate-cases.mjs`'s `c1Cardinality` generator is hardcoded `expect: { verdict:
+   "unproven", entailed: [] }` — the fixture has zero cases that would ever show a pass, so building
+   the rule against today's fixture would move nothing. This is the exact situation INF-B2 was in
+   before this session (the original `b2Svf1` template's cases were permanently-unproven negative
+   witnesses by construction), fixed by adding a new positive template, `b2Svf1Apply`, before
+   `cls-svf1`'s fix became measurable at all — the same two-step recipe applies here: (1) add a new
+   positive-expectation template (a case where the rule, once built, produces a genuine `entailed`
+   answer — mirroring `b2Svf1Apply`'s shape), confirm it's currently `unproven` as expected against
+   today's ceiling; (2) build the rule(s) in `src/syllogise.mjs`, then chat-wire them the same way
+   `cax-dw`/`cls-svf1` were wired into live chat query dispatch; (3) re-run INFBENCH and confirm the
+   new template's cases flip from `unproven` to a passing `entailed` verdict.
 
 **Closed out this session** (each built by an isolated background sub-agent, merged clean, verified
 live by the coordinator against real merged `main` before being marked done — not just trusted from
