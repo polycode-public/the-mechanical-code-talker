@@ -516,3 +516,27 @@ test("ontology: no known synonym anywhere → the honest miss stands, byte-uncha
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("ontology (a) precision follow-up: SYNONYM_DENYLIST blocks a confirmed in-domain false pair ('interpreter'~'compiler')", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-ontology-denylist-"));
+  try {
+    // The raw ConceptNet slice really does carry an "interpreter"~"compiler"
+    // /r/SimilarTo row that survives the single-word-alpha heuristic filter —
+    // but the two are NOT interchangeable (different execution strategies),
+    // the exact "confidently wrong within the domain" failure this codebase's
+    // ground rules treat as worse than an honest miss (a follow-up precision
+    // spot check over the already-shipped ontology tracks a+b, PLAN
+    // §3 track a's own risk note). SYNONYM_DENYLIST (chat.mjs) blocks it.
+    await appendFact(dir, {
+      subject: "compiler", predicate: "rdfs:subClassOf", object: "tool",
+      provenance: "ace:chat:t-deny@2026-07-07T00:00:00.000Z",
+    });
+    const r = await runTurn("what is an interpreter", { config: CONFIG, memoryDir: dir });
+    assert.equal(r.record.miss, true);
+    assert.doesNotMatch(r.answer, /known synonym/);
+    assert.doesNotMatch(r.answer, /compiler/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});

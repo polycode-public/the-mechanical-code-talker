@@ -3364,8 +3364,30 @@ const GENERIC_ENTITY_WORDS = new Set([
  *  index admits only SINGLE-WORD, purely-alphabetic ConceptNet endpoints on
  *  BOTH sides of a row — a first-cut heuristic filter, not a full manual
  *  review of all 1,228 rows (a natural follow-up, not claimed as done here).
- *  Lazy + failure-tolerated: a missing/broken corpus file degrades to an
- *  empty (or phrasebook-only) index, never a throw. */
+ *  A FOLLOW-UP spot check (later dispatch, same plan) sampled the 903 rows
+ *  this heuristic admits and confirmed the risk note is real even after the
+ *  single-word filter: generic-English collisions ("battalion"~"heap",
+ *  "bash"~"sock") and, more dangerously, IN-DOMAIN false synonyms — pairs
+ *  where both endpoints are real software terms but are NOT interchangeable
+ *  ("interpreter"~"compiler", "string"~"thread") — the exact "confidently
+ *  wrong within the domain" failure this codebase's ground rules treat as
+ *  worse than an honest miss. SYNONYM_DENYLIST below removes the specific
+ *  false pairs found by that spot check (a manually-reviewed blocklist, the
+ *  same shape as `conceptnet-map.toml`'s own reviewed relation-gate — not a
+ *  general noise heuristic); a full manual review of the remaining ~900
+ *  rows is still the honest follow-up, not claimed as done here either. */
+const SYNONYM_DENYLIST = new Set([
+  ["interpreter", "compiler"], // different execution strategies, not synonyms
+  ["string", "thread"], // unrelated CS concepts (text data vs. execution thread)
+  ["heart", "kernel"], // generic-English collision on "kernel"
+  ["battalion", "heap"], // generic-English collision on "heap" (data structure)
+  ["bash", "sock"], // generic-English collision ("bash"/"sock" = to hit)
+  ["command", "skill"], // too loose to be a safe query-time substitution
+  ["docker", "longshoreman"], // proper-noun/tool name vs. unrelated profession
+  ["name", "list"], // generic-English collision, not a domain synonym
+  ["list", "number"], // generic-English collision, not a domain synonym
+].map(([a, b]) => [a, b].sort().join("|")));
+
 let synonymIndexCache = null;
 async function synonymIndex() {
   if (synonymIndexCache) return synonymIndexCache;
@@ -3374,6 +3396,7 @@ async function synonymIndex() {
     const ta = String(a || "").trim().toLowerCase();
     const tb = String(b || "").trim().toLowerCase();
     if (!ta || !tb || ta === tb) return;
+    if (SYNONYM_DENYLIST.has([ta, tb].sort().join("|"))) return;
     if (!index.has(ta)) index.set(ta, []);
     if (!index.get(ta).some((e) => e.variant === tb)) index.get(ta).push({ variant: tb, source });
     if (!index.has(tb)) index.set(tb, []);
