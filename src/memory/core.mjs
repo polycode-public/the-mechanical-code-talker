@@ -211,6 +211,229 @@ export function createInMemoryStore() {
   return { backend: BACKEND_MEMORY, payload: emptyMemory() };
 }
 
+// ---- Backend C — SQLite (new; schema shape adapted from seonix's src/store.mjs,
+// write model is NOT) ----------------------------------------------------------
+//
+// seonix (a sibling repo consuming tmct as a library) already has a working,
+// opt-in node:sqlite store (SEONIX_STORE=sqlite, node:sqlite lazily imported,
+// zero external dependency): an `ids`/`nodes`/`relations`/`edges`/`meta` table
+// set. Its WRITE MODEL is a full rebuild-and-atomic-swap on every write — correct
+// for seonix's problem (read-latency on a relatively static, rebuild-on-change
+// code graph), wrong for tmct's (write-heavy, one-fact-at-a-time accumulation
+// across a session's lifetime): lifting it as-is would just replace "rewrite the
+// whole JSON file per turn" with "rebuild the whole SQLite file per turn."
+//
+// tmct's Backend C reuses the SHAPE, not the write model: real per-row
+// INSERT/REPLACE/DELETE against a LIVE, OPEN connection kept for the session's
+// lifetime (see createSqliteMemoryStore/closeSqliteMemoryStore below),
+// diffed against whatever is already on that row so only touched
+// individuals/edges are ever written — not seonix's rebuild-and-swap.
+//
+// Schema, adapted (not ported) to tmct's actual payload shape (emptyMemory(),
+// above — { generated_at, memory, prefixes, vocabulary, classes,
+// objectProperties, individuals, proseIndex }, distinct from seonix's code-graph
+// `entities` shape): seonix's separate integer-interning `ids` table exists to
+// cover edge endpoints that AREN'T always node ids (e.g. an `inherits` edge's
+// `ext:<Base>` target). tmct's own edge groups (saidInSession, inReplyTo,
+// statedBy, canonicalisedFrom) only ever link two individuals-table ids, so
+// that interning table is dropped here — individuals/edges reference each
+// other by their natural TEXT id directly, a deliberate simplification over a
+// literal port. A Fact's reified rdf:subject/rdf:predicate/rdf:object live as
+// ATTRIBUTES on the individual (tmct's own reification style, no seonix
+// equivalent), so they ride inside that individual's own JSON blob column —
+// no separate fact-triple columns needed.
+//
+// Honest shortcut (flagged, matching seonix's own C13-deferred note): the READ
+// side (readSqlitePayload) reconstructs the FULL in-memory payload shape on
+// every call, not a targeted/indexed query handle — acceptable for a first
+// pass per PLAN_SEED.md §6, real indexed query handles are future work. The
+// WRITE side (persistSqlitePayload) is NOT a shortcut: it diffs the incoming
+// payload against what is already in each row/edge-group and only issues a
+// real INSERT/REPLACE/DELETE for what actually changed, which is the actual
+// point of this backend (write cost proportional to what changed this turn,
+// not to the total store size).
+
+const SQLITE_DDL = `
+CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS individuals (id TEXT PRIMARY KEY, ord INTEGER NOT NULL, class TEXT, label TEXT, json TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS relations (prop TEXT PRIMARY KEY, ord INTEGER NOT NULL, predicate TEXT, count INTEGER);
+CREATE TABLE IF NOT EXISTS edges (prop TEXT NOT NULL, subject TEXT NOT NULL, object TEXT NOT NULL, subject_label TEXT, object_label TEXT, extra TEXT, PRIMARY KEY (prop, subject, object));
+CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
+`;
+
+// Edge keys with dedicated columns; any other key on an edge example object
+// (none exist in core.mjs's own edge groups today, but a future/external
+// writer might add one) round-trips via the `extra` JSON column, same
+// discipline as seonix's own STD_EDGE_KEYS.
+const STD_EDGE_KEYS = new Set(["subject", "object", "subjectLabel", "objectLabel"]);
+
+/**
+ * Open (creating if absent) a resident node:sqlite connection for `dbPath` and
+ * return a Backend C handle: `{ backend: "sqlite", db, dbPath }`. `node:sqlite`
+ * is imported LAZILY here — calling this function is the ONLY way it is ever
+ * loaded, so a caller that never opts into this backend never even imports it
+ * (matching seonix's own SEONIX_STORE=sqlite gating discipline, and tmct's
+ * minimal-deps philosophy: zero external dependency either way).
+ *
+ * The connection is meant to be opened ONCE per session and kept open for the
+ * session's lifetime (not re-opened per call) — close it via
+ * closeSqliteMemoryStore when the session ends.
+ */
+export async function createSqliteMemoryStore(dbPath) {
+  const { DatabaseSync } = await import("node:sqlite");
+  const db = new DatabaseSync(dbPath);
+  db.exec("PRAGMA journal_mode = WAL");
+  db.exec("PRAGMA synchronous = NORMAL");
+  db.exec(SQLITE_DDL);
+  return { backend: BACKEND_SQLITE, db, dbPath };
+}
+
+/** Close a Backend C handle's connection. A no-op for anything else (so a
+ *  caller that doesn't know which backend it has can call this unconditionally
+ *  at session end). */
+export function closeSqliteMemoryStore(handle) {
+  if (isSqliteHandle(handle)) handle.db.close();
+}
+
+/** Reconstruct the full payload from a Backend C handle's tables — the
+ *  loadMemory-equivalent read for this backend (see the "honest shortcut" note
+ *  above: a full reconstruction, not a targeted/indexed query). A brand-new
+ *  store (no meta rows written yet) reconstructs to the same shape
+ *  emptyMemory() returns, so a fresh handle behaves like Backend A's
+ *  ENOENT-bootstrap and Backend B's fresh createInMemoryStore(). */
+function readSqlitePayload(handle) {
+  const db = handle.db;
+  const empty = emptyMemory();
+  const getMeta = (k, fallback) => {
+    const row = db.prepare("SELECT v FROM meta WHERE k = ?").get(k);
+    return row ? JSON.parse(row.v) : fallback;
+  };
+
+  const individuals = db.prepare("SELECT json FROM individuals ORDER BY ord").all()
+    .map((r) => JSON.parse(r.json));
+
+  const edgesForProp = db.prepare(
+    "SELECT subject, object, subject_label, object_label, extra FROM edges WHERE prop = ? ORDER BY rowid",
+  );
+  const objectProperties = db.prepare("SELECT prop, predicate, count FROM relations ORDER BY ord").all()
+    .map((r) => ({
+      predicate: r.predicate,
+      prop: r.prop,
+      count: r.count,
+      examples: edgesForProp.all(r.prop).map((e) => {
+        const edge = { subject: e.subject, object: e.object, subjectLabel: e.subject_label, objectLabel: e.object_label };
+        if (e.extra) Object.assign(edge, JSON.parse(e.extra));
+        return edge;
+      }),
+    }));
+
+  return {
+    generated_at: getMeta("generated_at", empty.generated_at),
+    memory: getMeta("memory", empty.memory),
+    prefixes: getMeta("prefixes", empty.prefixes),
+    vocabulary: getMeta("vocabulary", empty.vocabulary),
+    classes: getMeta("classes", empty.classes),
+    objectProperties,
+    individuals,
+    proseIndex: getMeta("proseIndex", empty.proseIndex),
+  };
+}
+
+/** Persist a mutated payload into a Backend C handle: real per-row
+ *  INSERT/REPLACE/DELETE, diffed against whatever is ALREADY in the table for
+ *  that individual id / (prop,subject,object) edge key — not seonix's
+ *  rebuild-and-swap. Every statement runs inside one transaction so a session
+ *  never observes (or leaves on disk) a half-applied mutation. */
+function persistSqlitePayload(handle, payload) {
+  const db = handle.db;
+  const empty = emptyMemory();
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const setMeta = db.prepare("INSERT OR REPLACE INTO meta(k, v) VALUES (?, ?)");
+    setMeta.run("generated_at", JSON.stringify(payload.generated_at ?? empty.generated_at));
+    setMeta.run("memory", JSON.stringify(payload.memory ?? empty.memory));
+    setMeta.run("prefixes", JSON.stringify(payload.prefixes ?? empty.prefixes));
+    setMeta.run("vocabulary", JSON.stringify(payload.vocabulary ?? empty.vocabulary));
+    setMeta.run("classes", JSON.stringify(payload.classes ?? empty.classes));
+    setMeta.run("proseIndex", JSON.stringify(payload.proseIndex ?? empty.proseIndex));
+
+    // individuals: a real per-row upsert, only for an id that is new or whose
+    // JSON actually changed since the last persist — every other row is left
+    // untouched (no whole-table rewrite).
+    const getInd = db.prepare("SELECT ord, json FROM individuals WHERE id = ?");
+    const maxOrd = db.prepare("SELECT COALESCE(MAX(ord), -1) AS m FROM individuals").get().m;
+    let nextOrd = maxOrd + 1;
+    const upsertInd = db.prepare("INSERT OR REPLACE INTO individuals(id, ord, class, label, json) VALUES (?, ?, ?, ?, ?)");
+    const seenIds = new Set();
+    for (const ind of payload.individuals || []) {
+      seenIds.add(ind.id);
+      const json = JSON.stringify(ind);
+      const existing = getInd.get(ind.id);
+      if (existing && existing.json === json) continue; // unchanged — skip the write entirely
+      const ord = existing ? existing.ord : nextOrd++;
+      upsertInd.run(ind.id, ord, ind.class ?? null, ind.label ?? null, json);
+    }
+    // Removal (no appendX function in this file ever removes an individual
+    // today — dead code path in practice, kept for correctness): a cheap
+    // index-only scan of the primary-key column only, never the JSON payload.
+    const deleteInd = db.prepare("DELETE FROM individuals WHERE id = ?");
+    for (const row of db.prepare("SELECT id FROM individuals").all()) {
+      if (!seenIds.has(row.id)) deleteInd.run(row.id);
+    }
+
+    // objectProperties/edges: per-edge diff WITHIN each group, scoped to that
+    // group's own rows (edges_by_prop) rather than the whole edges table — a
+    // group that gains one new edge (e.g. statedBy, touched by nearly every
+    // appendFact call) writes exactly that one new row, not the group's
+    // entire history.
+    const getRelOrd = db.prepare("SELECT ord FROM relations WHERE prop = ?");
+    const maxRelOrd = db.prepare("SELECT COALESCE(MAX(ord), -1) AS m FROM relations").get().m;
+    let nextRelOrd = maxRelOrd + 1;
+    const upsertRel = db.prepare("INSERT OR REPLACE INTO relations(prop, ord, predicate, count) VALUES (?, ?, ?, ?)");
+    const edgesForProp = db.prepare("SELECT subject, object, subject_label, object_label, extra FROM edges WHERE prop = ?");
+    const upsertEdge = db.prepare("INSERT OR REPLACE INTO edges(prop, subject, object, subject_label, object_label, extra) VALUES (?, ?, ?, ?, ?, ?)");
+    const deleteEdge = db.prepare("DELETE FROM edges WHERE prop = ? AND subject = ? AND object = ?");
+    const seenProps = new Set();
+    for (const group of payload.objectProperties || []) {
+      seenProps.add(group.prop);
+      const existingRows = edgesForProp.all(group.prop);
+      const existingByKey = new Map(existingRows.map((r) => [`${r.subject}\u0000${r.object}`, r]));
+      const newKeys = new Set();
+      for (const e of group.examples || []) {
+        const key = `${e.subject}\u0000${e.object}`;
+        newKeys.add(key);
+        const extraKeys = Object.keys(e).filter((k) => !STD_EDGE_KEYS.has(k));
+        const extra = extraKeys.length ? JSON.stringify(Object.fromEntries(extraKeys.map((k) => [k, e[k]]))) : null;
+        const existing = existingByKey.get(key);
+        const unchanged = existing
+          && (existing.subject_label ?? null) === (e.subjectLabel ?? null)
+          && (existing.object_label ?? null) === (e.objectLabel ?? null)
+          && (existing.extra ?? null) === (extra ?? null);
+        if (unchanged) continue;
+        upsertEdge.run(group.prop, e.subject, e.object, e.subjectLabel ?? null, e.objectLabel ?? null, extra);
+      }
+      for (const key of existingByKey.keys()) {
+        if (newKeys.has(key)) continue;
+        const [s, o] = key.split("\u0000");
+        deleteEdge.run(group.prop, s, o);
+      }
+      const relOrd = getRelOrd.get(group.prop)?.ord ?? nextRelOrd++;
+      upsertRel.run(group.prop, relOrd, group.predicate ?? null,
+        Number.isFinite(group.count) ? group.count : (group.examples || []).length);
+    }
+    for (const row of db.prepare("SELECT prop FROM relations").all()) {
+      if (seenProps.has(row.prop)) continue;
+      db.prepare("DELETE FROM edges WHERE prop = ?").run(row.prop);
+      db.prepare("DELETE FROM relations WHERE prop = ?").run(row.prop);
+    }
+
+    db.exec("COMMIT");
+  } catch (e) {
+    db.exec("ROLLBACK");
+    throw e;
+  }
+}
+
 /** Atomic write of raw text (temp in the same dir + rename) — the discipline
  *  every writer in this module (and fold.mjs/sessions.mjs's own copies) uses:
  *  a crash never destroys the previous file, a concurrent reader never sees a

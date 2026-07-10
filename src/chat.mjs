@@ -7434,6 +7434,16 @@ export async function createSession({
   gitRoot = gitToplevel,
   ephemeral = false,
   narrate = false,
+  // PLAN_SEED.md §6's storage-backend seam: "file" (default, unchanged) keeps
+  // memoryDir a plain repo-path string (Backend A, memory/core.mjs). "memory"
+  // selects Backend B (createInMemoryStore — zero disk I/O, session-scoped, no
+  // module-global state). "sqlite" selects Backend C (createSqliteMemoryStore
+  // — a live node:sqlite connection kept open for the session's lifetime,
+  // lazily imported only when this is actually chosen). TMCT_MEMORY_BACKEND
+  // mirrors the TMCT_EPHEMERAL/TMCT_NARRATE on/off env convention. No CLI flag
+  // wires this yet (bin/tmct.mjs's flag parsing is out of this change's
+  // scope) — a library/test caller sets the option directly for now.
+  memoryBackend = null,
 } = {}) {
   // EPHEMERAL mode (--ephemeral, or TMCT_EPHEMERAL=1): read the target graph but
   // write NOTHING back into it. The shipped examples run this way so a demo never
@@ -7545,14 +7555,61 @@ export async function createSession({
     catch { /* best-effort — see above */ }
   };
 
+  // PLAN_SEED.md §6's storage-backend seam: `memoryDir` is the opaque token
+  // every memory/core.mjs call in this file threads through unchanged (it
+  // never inspects `dir` itself — that's the whole point of the seam). Backend
+  // A (default, unchanged) keeps it the plain repo string every earlier
+  // version of this function used. Backend B/C swap in a handle instead;
+  // `closeMemoryStore` is a no-op unless Backend C actually opened a
+  // connection (Backend C's node:sqlite import is lazy — it only happens if
+  // this branch is actually taken).
+  const backendChoice = String(memoryBackend || env.TMCT_MEMORY_BACKEND || "").trim().toLowerCase();
+  let memoryDir = repo;
+  let closeMemoryStore = async () => {};
+  if (backendChoice === "memory") {
+    const { createInMemoryStore } = await import("./memory/core.mjs");
+    memoryDir = createInMemoryStore();
+  } else if (backendChoice === "sqlite") {
+    const { createSqliteMemoryStore, closeSqliteMemoryStore } = await import("./memory/core.mjs");
+    const dbPath = join(repo, ".tmct", "memory", "graph.sqlite");
+    await mkdir(dirname(dbPath), { recursive: true });
+    const handle = await createSqliteMemoryStore(dbPath);
+    memoryDir = handle;
+    closeMemoryStore = async () => closeSqliteMemoryStore(handle);
+  }
+
   const empty = graph.individuals.length === 0;
   // W3: FIRST RUN in a graph-less repo seeds a capped ConceptNet slice into
   // .tmct/memory so vocabulary questions ("what is a cache?") have something
   // honest to stand on from turn one. Guarded three ways: only the empty
   // bootstrap (a fixture/provider graph never seeds), only once (the marker),
   // and never when TMCT_NO_SEED=1 opts out.
+  //
+  // Backend B/C follow-ups (documented, not fixed here — out of this change's
+  // scope):
+  //   - seedBootstrapMemory/seedActiveCorpusEntries/hasSeededVocabulary all
+  //     resolve their own marker file + corpus writes directly off the STRING
+  //     `repo` path (extensions.mjs territory, not touched by this seam), so
+  //     they'd seed the on-disk Backend-A file even for a Backend B/C session
+  //     rather than the handle actually in use. Skipping W3 seeding for a
+  //     non-default backend is the honest choice for now.
+  //   - sessions.mjs's OWN per-turn utterance mirror (appendSessionToGraph ->
+  //     recordSessionMemory -> appendUtterances) derives its OWN repoDir from
+  //     config.graphFile independently of this function's `memoryDir`, and
+  //     reads the session LOG/sidecar files by real path — it can't simply be
+  //     handed a Backend B/C handle (that path needs a real directory for the
+  //     log/sidecar reads, not just for the memory write). So a Backend B/C
+  //     session's Utterance/Session individuals (NEVER Facts/Rules — those
+  //     only ever go through THIS function's `memoryDir`, see runTurn's
+  //     options below) still land in an ordinary Backend-A .tmct/memory/
+  //     graph.json, independent of the chosen backend. Teaching that path to
+  //     thread a handle too (and fold.mjs's own direct writeMemoryGraph
+  //     alongside it) is future work for whoever finishes the seeding/persona
+  //     work (PLAN_SEED.md's own §2/§3) — out of this change's scope.
+  //     Taught FACTS themselves are unaffected by this gap: only the
+  //     conversational transcript mirror leaks onto disk, never the facts.
   let seeded = null;
-  if (empty && String(env.TMCT_NO_SEED || "") !== "1") {
+  if (empty && backendChoice === "" && String(env.TMCT_NO_SEED || "") !== "1") {
     seeded = await seedBootstrapMemory(repo);
   }
   // vocabHint: computed ONCE per session (not per-turn — see runTurn's own
@@ -7593,7 +7650,7 @@ export async function createSession({
   let closed = false;
 
   return {
-    repo, config, graph, lexicon, memoryDir: repo, moduleCount, version, sessionId,
+    repo, config, graph, lexicon, memoryDir, moduleCount, version, sessionId,
     logFile, sidecarFile, bannerLines, empty, biasByBundle,
     // Mutable between-turn state — read-only to the caller, so a shell can render the
     // prompt/expand-hint without reaching into runTurn's threading.
@@ -7612,7 +7669,7 @@ export async function createSession({
     async turn(line) {
       let result;
       try {
-        result = await runTurn(line, { config, source, graph, focus, last, memoryDir: repo, sessionId, env, lexicon, narrate: narrateOn, vocabHint, tel, biasByBundle });
+        result = await runTurn(line, { config, source, graph, focus, last, memoryDir, sessionId, env, lexicon, narrate: narrateOn, vocabHint, tel, biasByBundle });
       } catch (e) {
         const ts = new Date().toISOString();
         const message = e instanceof Error ? e.message : String(e);
@@ -7645,7 +7702,8 @@ export async function createSession({
     },
 
     /** End-of-session close: end lines in both artifacts, the final graph upsert
-     *  (which also triggers the memory fold), stream flush. Idempotent. */
+     *  (which also triggers the memory fold), stream flush, the Backend C
+     *  connection close (a no-op for Backend A/B). Idempotent. */
     async close() {
       if (closed) return;
       closed = true;
@@ -7655,6 +7713,7 @@ export async function createSession({
       await upsertGraph(endIso);
       await new Promise((resolve) => stream.end(resolve));
       await new Promise((resolve) => sidecar.end(resolve));
+      await closeMemoryStore();
     },
   };
 }
@@ -7677,6 +7736,7 @@ export async function runChat({
   gitRoot = gitToplevel,
   ephemeral = false,
   narrate = false,
+  memoryBackend = null,
 } = {}) {
   // createSession's first-run seed (~2-3s, corpus/seon + ConceptNet) produces ZERO
   // output until it fully resolves — found live: an operator reported `npm run chat`
@@ -7684,7 +7744,7 @@ export async function runChat({
   // fast subsequent run just flashes it briefly) and removes the "is this even
   // running" uncertainty during the one case that's genuinely slow.
   output.write("tmct — starting…\n");
-  const session = await createSession({ repoPath, source, env, cwd, gitRoot, ephemeral, narrate });
+  const session = await createSession({ repoPath, source, env, cwd, gitRoot, ephemeral, narrate, memoryBackend });
 
   const dim = (s) => (env.NO_COLOR || !output.isTTY ? s : `\x1b[2m${s}\x1b[0m`);
   for (const line of session.bannerLines) output.write(dim(line) + "\n");
