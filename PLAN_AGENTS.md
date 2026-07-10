@@ -317,6 +317,14 @@ that isn't code at all.
   principled — refuse-and-list-candidates on a genuine tie, §2.2) gets one new input ahead of that
   tie-break: prefer the sense whose owning seed set has the higher declared bias, falling back to
   today's honest-refusal behavior only when biases are equal or absent.
+- **CLI ergonomics: `tmct init --with-persona <name>`.** So a JS developer doesn't have to
+  hand-write a `[bias]` table from scratch, `tmct init` gains an opt-in `--with-persona` flag that
+  scaffolds a starter `tmct.toml` for a named, pre-declared seed-set/bias combination — e.g.
+  `npx @polycode-projects/the-mechanical-code-talker init --with-persona code` writes a `tmct.toml`
+  with the code seed set active and a sensible default bias already set (tmct's own current,
+  implicit default, made explicit and editable). A persona is just a named preset over §4's own
+  config surface, not a new mechanism — later personas (e.g. a `general` persona once the wider
+  seed set from this phase ships) are more presets over the same table, not new code paths.
 
 ## 5. Phase 2 — tmct as marginalia's interpreter
 
