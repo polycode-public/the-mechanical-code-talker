@@ -141,11 +141,75 @@ export function emptyMemory() {
  *  independent path-resolution copies (core.mjs's mutateMemory and fold.mjs's
  *  writeMemoryGraph used to compute this path separately). */
 export function resolveMemoryGraphFile(dir, version = null) {
+  if (isMemoryHandle(dir) || isSqliteHandle(dir)) {
+    throw new Error("resolveMemoryGraphFile: dir is a memory/sqlite handle, not a file path (Backend A only)");
+  }
   if (version === null) return join(dir, MEMORY_GRAPH_REL);
   return join(dir, MEMORY_DIR_REL, `graph.v${version}.json`);
 }
 
 const memoryGraphFile = (dir) => resolveMemoryGraphFile(dir);
+
+// ---- Storage-backend seam (PLAN_SEED.md §6) ---------------------------------
+//
+// Every dir-taking export in this file historically assumed `dir` was a plain
+// string repo path that resolveMemoryGraphFile joins into an on-disk file
+// (Backend A, unchanged below — still the exact byte-identical default for
+// every existing caller that never opts into anything else).
+//
+// `dir` may now ALSO be a memory HANDLE: a small tagged object created by
+// createInMemoryStore() (Backend B, pure in-memory, zero disk I/O) or
+// createSqliteMemoryStore() (Backend C, a live node:sqlite connection kept
+// open for the session's lifetime). loadMemory/mutateMemory below recognize
+// both and dispatch the LOAD/PERSIST steps only; every other function in this
+// file (appendFact, appendFacts, appendUtterance(s), appendRule,
+// readFactRows, findRuleByName, resolveRelationChase(Reverse),
+// findContradictions) takes `memory`/`dir` exactly as before and never
+// branches on backend — they operate on the plain JS payload object
+// mutateMemory hands them, regardless of where it came from or where it goes
+// next. That is the whole point of the seam: id hashing, provenance/trust
+// computation, migrateLegacyProvenance, recomputeSourceReliability and
+// buildProseIndex are backend-agnostic logic, unchanged either way.
+//
+// snapshotMemory (manifest-versioned snapshots) and resolveMemoryGraphFile
+// stay Backend-A-only (a handle has no on-disk file to snapshot) — both throw
+// a clear error if given a handle rather than silently doing the wrong thing.
+
+const BACKEND_MEMORY = "memory";
+const BACKEND_SQLITE = "sqlite";
+
+function isMemoryHandle(dir) {
+  return !!dir && typeof dir === "object" && dir.backend === BACKEND_MEMORY;
+}
+function isSqliteHandle(dir) {
+  return !!dir && typeof dir === "object" && dir.backend === BACKEND_SQLITE;
+}
+function isMemoryOrSqliteHandle(dir) {
+  return isMemoryHandle(dir) || isSqliteHandle(dir);
+}
+
+/**
+ * Backend B — pure in-memory store (new). A plain JS object held by the
+ * CALLER (never module-global state, which would break multiple concurrent
+ * sessions in one process): `{ backend: "memory", payload }`. loadMemory
+ * returns `payload` directly (the live reference, not a fresh parse — there
+ * is nothing to parse); mutateMemory's persist step is a no-op assignment
+ * (`handle.payload = out` — already the same object in every real caller,
+ * since none of appendFact/appendFacts/appendUtterance(s)/appendRule ever
+ * return a NEW object from their mutateMemory callback, they all mutate the
+ * payload in place). ZERO readFile/writeFile/JSON.parse/JSON.stringify calls
+ * ever happen for this backend — verified directly by this module's own
+ * dispatch (no fs import is even reachable from this path) and by
+ * test/memory-backend-memory.test.mjs's fs-spy assertions.
+ *
+ * Distinct from `--ephemeral` (createSession): ephemeral mode still does real
+ * readFile/JSON.parse/writeFile round-trips against a throwaway mkdtemp temp
+ * dir every turn — "disposable disk," not "no disk." Backend B is genuinely
+ * disk-free.
+ */
+export function createInMemoryStore() {
+  return { backend: BACKEND_MEMORY, payload: emptyMemory() };
+}
 
 /** Atomic write of raw text (temp in the same dir + rename) — the discipline
  *  every writer in this module (and fold.mjs/sessions.mjs's own copies) uses:
@@ -209,6 +273,9 @@ const resolveManifestFile = (dir) => join(dir, MEMORY_MANIFEST_REL);
  *  the snapshot just written (or null if skipped); `prunedVersion` is the
  *  number pruned, or null if nothing was in range to prune yet. */
 export async function snapshotMemory(dir, { retentionVersions } = {}) {
+  if (isMemoryOrSqliteHandle(dir)) {
+    throw new Error("snapshotMemory only supports the flat-JSON backend (Backend A) — a memory/sqlite handle has no on-disk graph.json to snapshot");
+  }
   const graphFile = resolveMemoryGraphFile(dir);
   let graphText;
   try {
@@ -251,10 +318,14 @@ export async function snapshotMemory(dir, { retentionVersions } = {}) {
   return { skipped: false, version: v, prunedVersion };
 }
 
-/** Load the memory graph for a repo dir. A missing store is the bootstrap:
- *  return the empty payload (uncached — the first append creates the file).
- *  The result is a raw entities payload; parseEntities() loads it. */
+/** Load the memory graph for a repo dir OR a Backend B/C handle (see the
+ *  storage-backend seam above `createInMemoryStore`). A missing Backend-A
+ *  store is the bootstrap: return the empty payload (uncached — the first
+ *  append creates the file). The result is a raw entities payload;
+ *  parseEntities() loads it. */
 export async function loadMemory(dir) {
+  if (isMemoryHandle(dir)) return dir.payload;
+  if (isSqliteHandle(dir)) return readSqlitePayload(dir);
   let text;
   try {
     text = await readFile(memoryGraphFile(dir), "utf8");
@@ -263,6 +334,19 @@ export async function loadMemory(dir) {
     throw e;
   }
   return JSON.parse(text);
+}
+
+/** Persist a mutated payload back to `dir` — the seam's other half. Backend A
+ *  (unchanged): atomic write of the whole file. Backend B: the payload IS the
+ *  handle's live object already (every real caller mutates in place); this
+ *  assignment is a documented no-op safety net, never I/O. Backend C: a real,
+ *  diffed per-row INSERT/UPDATE/DELETE against the live connection — see
+ *  persistSqlitePayload. */
+async function persistMemory(dir, payload) {
+  if (isMemoryHandle(dir)) { dir.payload = payload; return; }
+  if (isSqliteHandle(dir)) { persistSqlitePayload(dir, payload); return; }
+  await mkdir(dirname(memoryGraphFile(dir)), { recursive: true });
+  await atomicWriteJson(memoryGraphFile(dir), payload);
 }
 
 /** Fresh read → mutate → atomic write. Serialized per call; every public append
@@ -286,8 +370,7 @@ async function mutateMemory(dir, fn) {
   migrateLegacyProvenance(out);
   recomputeSourceReliability(out);
   out.proseIndex = buildProseIndex(out.individuals);
-  await mkdir(dirname(memoryGraphFile(dir)), { recursive: true });
-  await atomicWriteJson(memoryGraphFile(dir), out);
+  await persistMemory(dir, out);
   return out;
 }
 
