@@ -85,7 +85,7 @@ Purely speculative, not a roadmap commitment. Drawing on the four reports' own "
   took INF-B1 from 33%→100% this session. Landing it would plausibly take INF-B2 from 80%→~100%,
   pushing the **reasoning** row's "fixed-depth ladder" caveat further toward "handles deeper chains
   reliably," though still short of the open-ended depth Sonnet/Opus already have.
-- **Wiring `src/completions/` into chat dispatch** (`PLAYTESTBENCH_1.4.1.md` "Next"; confirmed
+- **Wiring `src/completions/` into chat dispatch** (`CONVERSATIONBENCH_1.4.1.md` "Next"; confirmed
   unreachable live this session — a broad "detailed summary of how X works" question still hits the
   grammar wall) — would let tmct answer open-ended "explain how X works" questions with cited,
   groundedness-checked multi-sentence prose. This is the one lever that could move the **natural
@@ -109,7 +109,7 @@ autonomously, or generate freely, and no backlog item on this list changes that 
 **Refresh 2 — re-pinned at commit `4a102b5` ("docs: refresh HANDOVER.md — ranked follow-ups from
 the 4 fresh 1.4.1 benchmark reports"), 2026-07-10, after the full session's batch landed and all
 four fresh benchmark reports (`AGENTBENCH_1.4.1.md`, `INFBENCH_1.4.1.md`, `CEFR_ENGLISH_1.4.1.md`,
-`PLAYTESTBENCH_1.4.1.md`) were written.** The prior version of this doc (refresh 1, pinned at
+`CONVERSATIONBENCH_1.4.1.md`) were written.** The prior version of this doc (refresh 1, pinned at
 `0b730ad`, written *during* the session while tracks were still landing) is superseded by this one;
 its own git history preserves it if needed. Unlike refresh 1, the working tree is now fully clean —
 every capability below was verified against a committed, stable HEAD, not a moving target.
@@ -133,15 +133,15 @@ unchanged from refresh 1 — re-verified spot-checks, not blind carry-forward.
 | 22 | Consistency checking (INF-C2) | **implemented — was `claimed-only` in refresh 1** | `PLAN_INFERENCE_TESTING.md` stage 5 | `src/syllogise.mjs` `findConsistencyViolations` + live wiring into `chat.mjs`'s `KNOW_ABOUT_RE` handler (commit `be1a22f`). `INFBENCH_1.4.1.md`: INF-C2 0%→**100%** |
 | 19b | `cls-svf1` (someValuesFrom restriction membership) | **partial, new row** | `PLAN_INFERENCE_TESTING.md` stage 4 | `src/syllogise.mjs` `deriveSomeValuesFromApplication` (commit `2386a07`) — kernel-level 100% pass, but **no live chat-query wiring built** (unlike `cax-dw`); `INFBENCH_1.4.1.md`: 10 new `b2Svf1Apply` cases all show `unproven` in the chat arm despite kernel 100%. Ranked `HANDOVER.md`'s #2 follow-up |
 | 40 | Advanced-grammar: construction-grammar template bank | **implemented — was in-flight/uncommitted in refresh 1** | `PLAN_AGENTS.md` §3; `archive/PLAN_ADVANCED_GRAMMAR.md` track (d) | `src/interpret/strategies/constructions.mjs` + `data/templates/constructions/agent-noun-relations.toml` (commit `397a7a3`) — T11-T13 templates, cleanly committed |
-| 50 | Mechanical text-generation pipeline (`src/completions/`) wired into a user-facing chat answer path | **claimed-only, now LIVE-CONFIRMED via playtest (was inferred from a grep in refresh 1, now directly observed)** | `PLAN_COMPLETIONS.md` | `PLAYTESTBENCH_1.4.1.md` round 3: "give me a detailed summary of how the task system works" hits the plain grammar wall with no inferred goal at all — direct behavioral confirmation the pipeline (Stages 0-3, all shipped this session) has zero chat-dispatch reachability. Ranked `HANDOVER.md`'s #5 follow-up — the single largest unlock available |
+| 50 | Mechanical text-generation pipeline (`src/completions/`) wired into a user-facing chat answer path | **claimed-only, now LIVE-CONFIRMED via playtest (was inferred from a grep in refresh 1, now directly observed)** | `PLAN_COMPLETIONS.md` | `CONVERSATIONBENCH_1.4.1.md` round 3: "give me a detailed summary of how the task system works" hits the plain grammar wall with no inferred goal at all — direct behavioral confirmation the pipeline (Stages 0-3, all shipped this session) has zero chat-dispatch reachability. Ranked `HANDOVER.md`'s #5 follow-up — the single largest unlock available |
 | 3 | ACE-OWL parser extracted to standalone MPL-2.0 npm package | implemented (unchanged from refresh 1, now fully settled — no longer "post-pin drift", this is stably committed) | `PLAN_AGENTS.md` §3 | `packages/ace-owl/` (commit `c57adbe`) |
 | — | `resolveRelationChase`/`resolveRelationChaseReverse` extracted from `chat.mjs` into standalone exported functions | **implemented, new row** | `PLAN_COMPLETIONS.md` Stage 1's own prerequisite | `src/memory/core.mjs` (commit `5f44b2b`) — pure refactor, 26 existing relation tests pass byte-identical + 5 new standalone unit tests |
 | — | PLAN_COMPLETIONS Stage 1 (cross-group inference, closed 4-relation vocabulary) | **implemented, new row** | `PLAN_COMPLETIONS.md` | `src/completions/infer.mjs` (commit `48578b2`) — supports/contradicts/elaborates/exemplifies, each with a named mechanical licensing test, zero-fabrication proven against all 28 pairs in its own fixture |
 | — | PLAN_COMPLETIONS Stage 3 (pruning + grammar/voice pass, wired end to end) | **implemented, new row** | `PLAN_COMPLETIONS.md` | `src/completions/prune.mjs` + `complete.mjs` (commit `dc51168`) — `generateCompletion()` chains all six stages; `finish.mjs` generalized from single-answer to genuinely multi-sentence |
 | — | SHACL ingest gate — using `shacl-engine` | **NOT implemented (deliberately rejected, refresh 1 undersold this)** | `PLAN_AGENTS.md` §2.1 | `shacl-engine`/`rdf-ext` were installed, found to pull in a full federated SPARQL engine (~560 packages, `@comunica/query-sparql-rdfjs-lite`), and explicitly ripped out in favor of the hand-rolled `src/memory/shacl.mjs` refresh 1 already correctly described — noted here only to make the *rejection* itself an explicit, documented decision, not silent |
 | — | Chatbench case-set v3 (`graded-pool.jsonl` as a 109-case go-to default, full pool preserved at `graded-pool-max.jsonl`) | **implemented, new row** | `SKILL_BENCHMARK_CEFR_ENGLISH.md` §1 | Commit `eaf33f0`; former `cases.jsonl`'s 49 cases folded in as real graded cells (Leg B — classified into CEFR grade+construction, not left ungraded); `CEFR_ENGLISH_1.4.1.md` is the first judged run against it |
-| — | Playtest sprint capability — 2 real dead-ends found and fixed live | **implemented, new row** | `SKILL_BENCHMARK_CONVERSATION.md` §3 | Commits `e2b6f57` (bare "what does this do") and `bc1b441` (closing/thanks remark); `PLAYTESTBENCH_1.4.1.md` is the first versioned write-up under this convention — refresh 1 noted no `PLAYTESTBENCH_*.md` existed yet; it now does |
-| — | Four fresh 1.4.1 benchmark reports (AGENTBENCH/INFBENCH/CHATBENCH/PLAYTESTBENCH) | **implemented, new row** | all four `SKILL_BENCHMARK_*.md` docs | Root-level `.md` files, each with a real timing section (start/end/write-up timestamps, concurrency, duration) reconstructed from result-file mtimes + commit timestamps. All pre-1.4.1 reports archived to `archive/` (commit `17019e0`) |
+| — | Playtest sprint capability — 2 real dead-ends found and fixed live | **implemented, new row** | `SKILL_BENCHMARK_CONVERSATION.md` §3 | Commits `e2b6f57` (bare "what does this do") and `bc1b441` (closing/thanks remark); `CONVERSATIONBENCH_1.4.1.md` is the first versioned write-up under this convention — refresh 1 noted no `CONVERSATIONBENCH_*.md` existed yet; it now does |
+| — | Four fresh 1.4.1 benchmark reports (AGENTBENCH/INFBENCH/CHATBENCH/CONVERSATIONBENCH) | **implemented, new row** | all four `SKILL_BENCHMARK_*.md` docs | Root-level `.md` files, each with a real timing section (start/end/write-up timestamps, concurrency, duration) reconstructed from result-file mtimes + commit timestamps. All pre-1.4.1 reports archived to `archive/` (commit `17019e0`) |
 | — | Live wiring gap pattern, named generically | **new finding, not a row** | — | Two capabilities this session (`cax-dw`, the completions pipeline) shared the exact same failure shape: a real, unit-tested engine/module that nothing in the live chat dispatch surface actually calls. `cax-dw`'s case is now fixed; the completions pipeline's is not. Worth naming as a class of gap this project should watch for going forward — "unit-tested" and "reachable from a real chat turn" are not the same claim, and this audit (both refreshes) found real capabilities on both the fixed and unfixed side of that line |
 
 ---
@@ -194,11 +194,11 @@ surface changed this session.
 ### `SKILL_BENCHMARK_CONVERSATION.md` (dialogue-flow — renamed and refocused this session from `SKILL_BENCHMARK_PLAYTEST.md`)
 
 - Capped sprint mode, run for real this session — **complete** as a proven process, not just a
-  documented one; `PLAYTESTBENCH_1.4.1.md` is the first versioned write-up
+  documented one; `CONVERSATIONBENCH_1.4.1.md` is the first versioned write-up
 - Regression-freezing of playtest-found fixes into `test/chatflow-*.test.mjs` — **done for the
   canonical/textbook class of miss** (`test/chatflow-canonical.test.mjs`, 6 frozen transcripts,
   including the john/man syllogism fix found live post-session); the original 2 playtest-sprint
-  dead-ends from `PLAYTESTBENCH_1.4.1.md` itself are still unfrozen — a real, narrower gap in the
+  dead-ends from `CONVERSATIONBENCH_1.4.1.md` itself are still unfrozen — a real, narrower gap in the
   loop's own discipline than refresh 1 had
 - **Renamed and refocused — DONE, not pending.** Now explicit territory: conversation fluidity
   (greetings/closing, §0.1's mandatory canonical-example-first check), knowledge-acceptance+

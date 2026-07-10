@@ -16,7 +16,7 @@ Session handle (inbox): `tmct` (this session; earlier sessions used `mechanic`).
 stages 3–5 (the full 6-band INFBENCH ladder now passes the gate for the first time — INF-B1
 33%→100%, INF-C2 0%→100%), closed out most of `PLAN_AGENTS.md` Phase 0, restructured CHATBENCH's
 case set (case-set v3, a 109-case go-to default), and ran all four benchmarks fresh
-(`AGENTBENCH_1.4.1.md`, `INFBENCH_1.4.1.md`, `CEFR_ENGLISH_1.4.1.md`, `PLAYTESTBENCH_1.4.1.md`) plus a
+(`AGENTBENCH_1.4.1.md`, `INFBENCH_1.4.1.md`, `CEFR_ENGLISH_1.4.1.md`, `CONVERSATIONBENCH_1.4.1.md`) plus a
 full capability audit (`CAPABILITIES_AUDIT_2026-07-10.md`). All pre-1.4.1 benchmark reports are now
 in `archive/`.
 
@@ -55,7 +55,7 @@ in `archive/`.
    phrasing ("what is the capital of France") — a teach-then-recall gap for a headline capability,
    not just teach-then-infer (§0's existing dead-end category). Fix the message text at minimum;
    scope the recall-phrasing gap separately. See the sweep's "total stranger" transcript (not yet
-   written up as a numbered `PLAYTESTBENCH_*` — captured live in the persona-sweep dispatch this
+   written up as a numbered `CONVERSATIONBENCH_*` — captured live in the persona-sweep dispatch this
    session).
 4. **`cls-svf1`'s live chat-query wiring — INFBENCH's last open gap, and the best-scoped item on
    this list.** The kernel rule passes 100%; the chat arm shows `unproven` on all 10 new positive
@@ -63,29 +63,29 @@ in `archive/`.
    exact pattern to copy (`src/chat.mjs`'s `isaAsk` block, the `deriveDisjointViolations` live-chase
    shape) is fresh in the codebase from this session's own `cax-dw` fix. Would plausibly close
    INF-B2 from 80% to ~100%. See `INFBENCH_1.4.1.md`'s "Next" section.
-5. **"who last touched X" ignores the superlative — PLAYTESTBENCH's clearest lever.** Lists the full
+5. **"who last touched X" ignores the superlative — CONVERSATIONBENCH's clearest lever.** Lists the full
    touch history instead of the single most-recent toucher; no distinct code path exists for this
    shape at all (a single-answer "last touched" shape exists for *when*-questions, not
    *who*-questions). Closely related to this session's own temporal-composition work
-   (`PLAN_CHAT_FEEL.md` item 6). See `PLAYTESTBENCH_1.4.1.md` round 2.
+   (`PLAN_CHAT_FEEL.md` item 6). See `CONVERSATIONBENCH_1.4.1.md` round 2.
 6. **`A2 naming-vocabulary`'s 2 new CHATBENCH hard fails** (`g-a2-naming-2`, `g-a2-naming-6`) —
    fresh signal, not a known ceiling the way C2 pronoun-binding is. Needs a transcript read before
    it can even be prioritized properly; may be a quick fix or may reveal something deeper.
 7. **Wire `src/completions/` into live chat dispatch.** The extractive pipeline (Stages 0–3) shipped
    this session and is real, tested, and unreachable from any actual chat turn — confirmed live by
-   PLAYTESTBENCH round 3 ("give me a detailed summary of how X works" still hits the plain grammar
+   CONVERSATIONBENCH round 3 ("give me a detailed summary of how X works" still hits the plain grammar
    wall). This is expected (wiring was never in this session's scope), not a regression, but it's
    the single largest unlock available: a whole shipped capability nobody can currently reach from
    chat.
 8. **Trailing filler word "then" not stripped** — "so what is a component then" parses as the
    literal unknown term `"component then"` instead of surfacing the just-taught fact. Likely a small
    fix (extend whatever filler-stripping frame doesn't currently cover trailing "then"). See
-   `PLAYTESTBENCH_1.4.1.md` round 3.
+   `CONVERSATIONBENCH_1.4.1.md` round 3.
 9. **A has-a-method teach shape** ("every Component has a render method") fails with a vague,
    non-actionable error. **Needs an operator scope decision before any implementation** — is this a
    new ACE pattern worth building, or a deliberate scope boundary (mirroring the lines
    `PLAN_TAUGHT_RELATIONS.md` already drew around which teach shapes to support)? See
-   `PLAYTESTBENCH_1.4.1.md` round 2.
+   `CONVERSATIONBENCH_1.4.1.md` round 2.
 10. **A handful of smaller, lower-signal misses from the same persona sweep** (items 2/3 above are
     the two highest-impact): the "deliberate breaker" persona found "are you secretly GPT" mis-
     segments the subject as `"you secretly"` and "class is not a class" mis-classifies as a negated
@@ -125,7 +125,7 @@ renamed to match), PLUS a comparative agent-capability table added to the top of
 grounding, memory, instruction-following, generation, coding, safety/honesty, autonomy — against 5
 named models: Llama 3.1 8B, Amazon Nova Pro, Claude Haiku 4.5/Sonnet 5/Opus 4.8; a fixed-width ASCII
 quick-reference table plus the full explanatory table; a speculative TO-BE sketch). Still open:
-turning the persona-sweep's own transcripts into a proper `PLAYTESTBENCH_*` write-up, plus regression
+turning the persona-sweep's own transcripts into a proper `CONVERSATIONBENCH_*` write-up, plus regression
 freezes for items 2/3 once fixed.
 
 ## Discipline (unchanged)
@@ -160,6 +160,6 @@ every stage to avoid sweeping in another track's pre-staged files (a real near-m
 caught and fixed before it landed). No LLM in the product path, ever.
 
 *Prior sessions' detailed handover (phases 0-13, releases 0.2.0 → 1.4.0) lives in this file's git
-history plus the `CEFR_ENGLISH_*`/`AGENTBENCH_*`/`INFBENCH_*`/`PLAYTESTBENCH_*`/`archive/PLAN_*`
+history plus the `CEFR_ENGLISH_*`/`AGENTBENCH_*`/`INFBENCH_*`/`CONVERSATIONBENCH_*`/`archive/PLAN_*`
 artifacts. `ROADMAP.md`'s "Where we are now" holds the fuller progress narrative for everything
 shipped before the items above, including this session's own dated entry in full.*

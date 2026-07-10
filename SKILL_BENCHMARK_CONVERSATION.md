@@ -27,7 +27,7 @@ This is the complement to `SKILL_BENCHMARK_CEFR_ENGLISH.md`, not a replacement:
 | signal | LLM-judge rubric mean over a case set | dead-ends + unnatural breaks in a real dialogue |
 | cost/speed | judge calls, ~an hour, $ per cycle | no judge, no $, minutes per iteration |
 | unit | one lever, measured | one conversation, made to flow |
-| output | `CEFR_ENGLISH_<version>.md` + a mean | `PLAYTESTBENCH_<version>.md` + a growing suite of frozen "must-flow" transcripts |
+| output | `CEFR_ENGLISH_<version>.md` + a mean | `CONVERSATIONBENCH_<version>.md` + a growing suite of frozen "must-flow" transcripts |
 | covers | isolated, single-turn/single-case quality | session ARCS: open→explore→teach→infer→close, and broad completions-shaped questions — territory CEFR_ENGLISH structurally can't reach (single isolated cases, not session arcs) |
 
 Use them together: this loop catches the dead-ends a mean can hide (a 1.4 mean can still leave a
@@ -82,7 +82,7 @@ conversation stops. A dead-end is any turn whose reply is one of:
 - **(2026-07-10) a broad, open-ended question that should route to `src/completions/`'s pipeline**
   ("give me a detailed summary of how X works", "walk me through what happens when Y") hitting the
   plain grammar wall with no inferred goal at all. Confirmed live, not hypothetical:
-  `PLAYTESTBENCH_1.4.1.md` round 3 found exactly this — the pipeline is real, shipped, and currently
+  `CONVERSATIONBENCH_1.4.1.md` round 3 found exactly this — the pipeline is real, shipped, and currently
   unreachable from any chat turn. Until it's wired in, this is a NAMED, expected ceiling (say so
   plainly, per the discipline below), not silently treated as a routing bug to fix on the spot.
 
@@ -141,7 +141,7 @@ this rule exists to prevent). Rules that make the play realistic:
 - **Open AND close like a real session, not just a query stream.** Include a genuine greeting turn
   and a genuine closing/thanks turn — not just structural questions in the middle. A conversation
   that flows perfectly in the middle but hits a wall on "cheers, that's everything, thanks" still
-  fails the fluid-conversation bar (found live, 2026-07-10 — see `PLAYTESTBENCH_1.4.1.md` round 3).
+  fails the fluid-conversation bar (found live, 2026-07-10 — see `CONVERSATIONBENCH_1.4.1.md` round 3).
 - **Test teach-then-INFER, not just teach-then-recall.** After teaching a fact, don't just ask for it
   back verbatim — ask a FOLLOW-UP question that requires COMBINING the taught fact with something
   else the graph or a prior taught fact already holds. A round-trip recall passing tells you almost
@@ -358,7 +358,7 @@ After the loop stops, report to the operator in the primary chat:
   this complexity tier and recommend either stopping here or ratcheting the tier (§2.1) rather than
   repeating the same tier.
 
-This report also feeds the `PLAYTESTBENCH_<version>.md` write-up (§4) when the sprint's findings are
+This report also feeds the `CONVERSATIONBENCH_<version>.md` write-up (§4) when the sprint's findings are
 worth recording as a versioned artifact.
 
 ### 3.3 Discipline specific to capped sprint mode
@@ -442,13 +442,13 @@ would itself become the thing exploration drifts toward):
 
 ---
 
-## 4. The `PLAYTESTBENCH_<version>.md` report
+## 4. The `CONVERSATIONBENCH_<version>.md` report
 
 Every playtest run — a full-ladder tier completion (§2) or a capped sprint (§3) — writes ONE
 versioned report doc, matching the naming convention `SKILL_BENCHMARK_CEFR_ENGLISH.md` §1 and
-`SKILL_BENCHMARK_INFERENCE.md` already use: `PLAYTESTBENCH_<version>.md`, named after the
+`SKILL_BENCHMARK_INFERENCE.md` already use: `CONVERSATIONBENCH_<version>.md`, named after the
 `package.json` version the run measured. A re-run of the same version (no version bump between
-runs) appends `_00N`: `PLAYTESTBENCH_0.9.0_001.md`, `_002`, … This sits alongside, and does not
+runs) appends `_00N`: `CONVERSATIONBENCH_0.9.0_001.md`, `_002`, … This sits alongside, and does not
 replace, the existing frozen `test/chatflow-*.test.mjs` regression files — the write-up is the
 narrative record, the frozen tests are the enforcement.
 
@@ -506,6 +506,6 @@ outcome with zero dead-ends — and freeze them as regression transcripts. Run t
 mode** (§2: ratchet the Tier 0–6 complexity ladder one tier at a time, open-ended, run inline) or
 **capped sprint mode** (§3: a bounded, default-3-round cadence with each round's chat delegated to a
 background sub-agent under the coordinator model, chained off the prior round, shipping confirmed
-fixes immediately). Either way, write up the run as `PLAYTESTBENCH_<version>.md` (§4) — headline,
+fixes immediately). Either way, write up the run as `CONVERSATIONBENCH_<version>.md` (§4) — headline,
 per-round/per-tier breakdown, ladder position reached, and a next-steps recommendation — alongside
 the frozen `test/chatflow-*.test.mjs` regression tests.

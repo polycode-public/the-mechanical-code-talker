@@ -426,7 +426,7 @@ mechanical, extractive text generation (broad search → group → infer between
 prune → grammar/voice pass), never LLM-style free generation. Separately, the benchmark/skill doc
 landscape was unified: CHATBENCH stops splitting report+transcripts into two files going forward;
 `SKILL_CHAT_PLAYTEST.md` and `SKILL_PLAYTEST_SPRINT.md` merged into `SKILL_BENCHMARK_PLAYTEST.md`
-(with a new `PLAYTESTBENCH_<version>.md` report convention); `SKILL_TUNING_CYCLE.md` and
+(with a new `CONVERSATIONBENCH_<version>.md` report convention); `SKILL_TUNING_CYCLE.md` and
 `SKILL_INFERENCE_TESTING.md` renamed to `SKILL_BENCHMARK_CEFR_ENGLISH.md`/`SKILL_BENCHMARK_INFERENCE.md`;
 a new `SKILL_BENCHMARK_AGENT.md` formalizes the previously-ad-hoc AGENTBENCH cycle;
 `SKILL_STRATEGY_ADVISOR.md`/`SKILL_PLAIN_PROSE.md` renamed to `SKILL_AGENT_STRATEGY_ADVISOR.md`/

@@ -18,7 +18,7 @@ of them.
 > **Use it whenever you draft or edit human-facing text** in this repo: `README.md`, `ROADMAP.md`,
 > `public/index.html` (the GitLab Pages homepage, also the landing surface), the `PLAN_*.md` design
 > docs, the `CEFR_ENGLISH_0NN.md` / `INFBENCH_<version>.md` / `AGENTBENCH_<version>.md` /
-> `PLAYTESTBENCH_<version>.md` write-ups, the `SKILL_*.md` docs, any other `*.md`, code comments,
+> `CONVERSATIONBENCH_<version>.md` write-ups, the `SKILL_*.md` docs, any other `*.md`, code comments,
 > and chat.
 
 ---
@@ -114,7 +114,7 @@ before they hit any methodology. Bury the value under proof apparatus and they l
 - Link out for the proof: "full method and scores in the cycle write-up (`CEFR_ENGLISH_0NN.md`)."
 
 **Keep the full detail in the `CEFR_ENGLISH_0NN.md` write-ups** (and their sibling `INFBENCH_<version>.md`,
-`AGENTBENCH_<version>.md`, `PLAYTESTBENCH_<version>.md` reports — each bench family folds its own
+`AGENTBENCH_<version>.md`, `CONVERSATIONBENCH_<version>.md` reports — each bench family folds its own
 transcript/evidence section into the one report file, no separate companion files). That is the
 home for the complete tables, the judge scores and spreads, the per-cell breakdowns, the
 tuning-cycle contract, the caveats, and the raw transcripts. The `PLAN_*.md` docs hold the
