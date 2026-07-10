@@ -2196,6 +2196,31 @@ async function generalVerbTeach(payload) {
   return { subject, predicate, object };
 }
 
+/** HANDOVER.md 2026-07-10 item 2 — is `word` a genuine NOUN/PROPN, per wink-nlp's
+ *  optional POS tagger (ask-nlp.mjs's nlpAdapter, the SAME adapter the closed
+ *  structural grammar already leans on)? Used to let ONE narrow bare (unwrapped)
+ *  general-verb teach sentence through below: GENERAL_VERB_TEACH_RE's shape
+ *  ("<word> <word> <rest>") is too permissive to trust on a bare sentence with no
+ *  "remember"/"note" signal at all — "tell me a joke" and "explain the class
+ *  hierarchy to me" match the IDENTICAL shape (subject="tell"/"explain", the
+ *  imperative verb itself, mistaken for a subject) and must never be silently
+ *  reified as bogus mgx:me/mgx:the facts (confirmed live: both are tagged VERB).
+ *  A genuine declarative's first word is a NOUN/PROPN instead ("grace mentors
+ *  alan", "sam owns TaskController" — confirmed live: both tagged NOUN). No wink
+ *  installed degrades to false (never a guess), same as every other optional-
+ *  adapter path in this codebase. */
+async function subjectIsNounOrPropn(word) {
+  try {
+    const { nlpAdapter } = await import("./ask-nlp.mjs");
+    const adapter = nlpAdapter();
+    if (!adapter) return false;
+    const [tag] = adapter.posTags([String(word || "")]);
+    return tag === "NOUN" || tag === "PROPN";
+  } catch {
+    return false;
+  }
+}
+
 // ---- General verb-to-predicate DIRECT-QUESTION retrieval (item 5, this
 // session's follow-up to the teach mechanism above): "does margo eat ribs" /
 // "did margo eat ribs" / "what does margo eat" against a fact taught via
@@ -2343,11 +2368,18 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
   }
 
   // OWNERSHIP — "<Name> owns/maintains <X>", bare or remember-wrapped. The bare
-  // form is double-gated: a Capitalized name AND no interrogative lead, so the
-  // "who owns <X>" READ question and ordinary prose never land a fact here.
+  // form is double-gated: no interrogative lead, PLUS either side spelling a
+  // Capitalized token — so the "who owns <X>" READ question and ordinary
+  // lowercase prose ("everybody owns a share") never land a fact here.
+  // HANDOVER.md 2026-07-10 item 2 fix: the gate used to check ONLY the owner
+  // name (own[1]) — "sam owns TaskController" WALLED entirely, because "sam"
+  // isn't capitalized, even though "TaskController" (own[2], the owned thing)
+  // is an obviously code-shaped proper name and just as strong a signal that
+  // this isn't ordinary prose. Either side capitalized is now enough.
   const ownSrc = wrapped ?? raw.replace(/[.!?]+\s*$/, "");
   const own = ownSrc.match(OWNS_TEACH_RE);
-  if (own && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && (wrapped || /^[A-Z]/.test(own[1]))) {
+  if (own && memoryDir && !QUESTION_LEAD_RE.test(ownSrc)
+    && (wrapped || /^[A-Z]/.test(own[1]) || /^[A-Z]/.test(own[2]))) {
     const stored = await teachFact(memoryDir, sessionId, {
       subject: own[2], predicate: OWNED_BY_PREDICATE, object: own[1],
     });
@@ -2550,6 +2582,33 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
     if (gv) {
       const stored = await teachFact(memoryDir, sessionId, gv);
       if (stored) return stored;
+    }
+  } else if (!wrapped && memoryDir && !QUESTION_LEAD_RE.test(correctMisspellings(raw))) {
+    // BARE path (HANDOVER.md 2026-07-10 item 2 fix): "grace mentors alan" — no
+    // "remember"/"note" wrapper at all — used to silently reach neither this
+    // frame NOR an honest miss, landing on the raw structural wall instead
+    // (or, at exactly <=3 words with no code-ish token, the UNRELATED
+    // isConversational() orientation card — see subjectIsNounOrPropn's own
+    // docblock for why a plain wrapper-required gate can't safely widen to
+    // bare sentences on shape alone: "tell me a joke" fits the identical SVO
+    // shape and must never be reified). Only a POS-confirmed NOUN/PROPN
+    // subject earns a try here — the same distinction that separates a
+    // genuine declarative from an imperative request. The QUESTION_LEAD_RE
+    // check runs the SAME correctMisspellings() pass ask.mjs's own typo
+    // tolerance already uses (not `raw` itself) — found live: "wich modules
+    // touch model.mjs" (a typo'd "which…" structural question, MISSPELLINGS-
+    // table-corrected everywhere ELSE in this file) POS-tags its uncorrected
+    // "wich" as a bare NOUN (wink's honest fallback for any unrecognized
+    // token, not a real signal), which would otherwise mis-store it as a
+    // fact instead of leaving it for the structural grammar's own typo-
+    // tolerant retry to answer for real.
+    const subjectWord = raw.match(/^([\w'-]+)/)?.[1];
+    if (subjectWord && (await subjectIsNounOrPropn(subjectWord))) {
+      const gv = await generalVerbTeach(raw);
+      if (gv) {
+        const stored = await teachFact(memoryDir, sessionId, gv);
+        if (stored) return stored;
+      }
     }
   }
 
