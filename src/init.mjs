@@ -57,16 +57,34 @@ export function defaultConfig() {
 }
 
 /** `tmct init --with-persona <name>` presets (Part 7 of the extension-pack
- *  batch): a named bundle of `extensions`/`bias` overrides, written into
- *  tmct.toml alongside the plain defaults. `code` is TODAY'S IMPLICIT
- *  DEFAULT made explicit — an empty `extensions` override (seon + conceptnet
- *  are already the shipped builtin defaults; nothing to add) plus an
- *  EXPLICIT bias table naming them both at neutral weight, so a repo that
- *  chose the `code` persona has a self-documenting tmct.toml rather than
- *  relying on an unstated implicit default. Kept minimal on purpose — this
- *  batch's job is the persona SEAM, not a curated library of presets. */
+ *  batch; PLAN_SEED.md §2 flips which preset is the SHIPPED implicit
+ *  default): a named bundle of `extensions`/`bias` overrides, written into
+ *  tmct.toml alongside the plain defaults.
+ *
+ *  - `human` — the NEW implicit default (src/extensions.mjs's
+ *    BUILTIN_EXTENSIONS already ships `human` active and `seon`/`conceptnet`
+ *    inactive) made EXPLICIT: an empty `extensions` override (nothing to
+ *    add — the builtin defaults already are this persona) plus an explicit
+ *    `[bias] human = 1.0`, so a repo that asks for `--with-persona human`
+ *    has a self-documenting tmct.toml rather than relying on an unstated
+ *    implicit default — the exact same discipline `code` below already used
+ *    for the OLD default.
+ *  - `code` — TODAY'S OLD IMPLICIT DEFAULT, now something a repo must
+ *    request explicitly: re-activates `seon`+`conceptnet` (both now
+ *    shipped inactive) and sets their bias, for a caller (e.g. seonix's own
+ *    code-domain chat surface) that still wants the software-domain seed.
+ *  - `empty` — the advanced escape hatch (PLAN_SEED.md §7): deactivates the
+ *    one bundle now active by default (`human`), leaving a repo genuinely
+ *    empty of corpus facts for a consumer bringing its own ontology/lexicon/
+ *    corpus. Does NOT reduce npm package size (§7's own documented caveat —
+ *    `corpus/` ships unconditionally either way).
+ *
+ *  Kept minimal on purpose — this batch's job is the persona SEAM, not a
+ *  curated library of presets. */
 export const PERSONA_PRESETS = Object.freeze({
-  code: { extensions: {}, bias: { seon: 1.0, conceptnet: 1.0 } },
+  human: { extensions: {}, bias: { human: 1.0 } },
+  code: { extensions: { seon: { active: true }, conceptnet: { active: true } }, bias: { seon: 1.0, conceptnet: 1.0 } },
+  empty: { extensions: { human: { active: false } }, bias: {} },
 });
 
 /** Read this package's version (best-effort, for provenance). */
@@ -142,10 +160,11 @@ ${seed.limit != null ? `limit = ${Number(seed.limit)}` : "# limit = 500"}
   if (!Object.keys(extras).length) return base;
   return `${base}
 # Extension packs + bias (src/extensions.mjs) — written by \`tmct init --with-persona\`
-# or a manual edit. Recognized names (seon, conceptnet, tier2-aws, tier2-python,
-# tier2-java) override the shipped defaults; any other name declares a new
-# host-supplied bundle (needs its own "kind"). [bias] is a flat bundle-name ->
-# weight table consumed by src/memory/bias.mjs's ranking.
+# or a manual edit. Recognized names (human, seon, conceptnet, tier2-aws,
+# tier2-python, tier2-java, tier2-general) override the shipped defaults; any
+# other name declares a new host-supplied bundle (needs its own "kind").
+# [bias] is a flat bundle-name -> weight table consumed by
+# src/memory/bias.mjs's ranking.
 ${stringifyToml(extras)}`;
 }
 

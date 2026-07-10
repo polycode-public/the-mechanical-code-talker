@@ -97,15 +97,32 @@ test("seeding: on by default, offline, writes facts into .tmct/memory + a marker
   }
 });
 
-test("DELIBERATE BUG FIX (this batch): `tmct init`'s zero-flag seed now seeds SEON too, matching chat.mjs's own bootstrap (it used to seed ConceptNet ONLY)", async () => {
+test("DELIBERATE BUG FIX (this batch): `tmct init`'s zero-flag seed now seeds SEON too, matching chat.mjs's own bootstrap (it used to seed ConceptNet ONLY) — exercised via the `code` persona, since PLAN_SEED.md's later flip made seon/conceptnet opt-in", async () => {
+  const dir = await tmp();
+  try {
+    const res = await initRepo(dir, { seed: true, persona: PERSONA_PRESETS.code });
+    assert.ok(res.seedResult.seon > 0, "the curated SEON ontology landed (was 0 before this fix)");
+    assert.ok(res.seedResult.conceptnet > 1000, "the ConceptNet band still landed, uncapped");
+    assert.equal(res.seedResult.perBundle.seon.appended, res.seedResult.seon);
+    assert.equal(res.seedResult.perBundle.conceptnet.appended, res.seedResult.conceptnet);
+    // the `code` persona's own extensions override doesn't touch `human` (still
+    // shipped active:true), so the total also includes it — internal
+    // consistency is against the SUM of every bundle that actually ran, not
+    // just the two named fields.
+    const total = Object.values(res.seedResult.perBundle).reduce((n, b) => n + (b.appended || 0), 0);
+    assert.equal(res.seedResult.appended, total, "counts are internally consistent");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("`tmct init`'s zero-flag (default) seed: the human persona, not seon/conceptnet, per PLAN_SEED.md's persona flip", async () => {
   const dir = await tmp();
   try {
     const res = await initRepo(dir, { seed: true });
-    assert.ok(res.seedResult.seon > 0, "the curated SEON ontology landed (was 0 before this fix)");
-    assert.ok(res.seedResult.conceptnet > 1000, "the ConceptNet band still landed, uncapped");
-    assert.equal(res.seedResult.appended, res.seedResult.seon + res.seedResult.conceptnet, "counts are internally consistent");
-    assert.equal(res.seedResult.perBundle.seon.appended, res.seedResult.seon);
-    assert.equal(res.seedResult.perBundle.conceptnet.appended, res.seedResult.conceptnet);
+    assert.ok(res.seedResult.perBundle.human?.appended > 0, "the default human bundle landed");
+    assert.equal(res.seedResult.seon, 0, "seon is opt-in now, not seeded by default");
+    assert.equal(res.seedResult.conceptnet, 0, "conceptnet is opt-in now, not seeded by default");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -263,11 +280,26 @@ enabled = true
   );
 });
 
-test("PERSONA_PRESETS.code: today's implicit default made explicit — empty extensions override, explicit neutral bias", () => {
-  assert.deepEqual(PERSONA_PRESETS.code, { extensions: {}, bias: { seon: 1.0, conceptnet: 1.0 } });
+// PLAN_SEED.md's persona flip: `code` is no longer today's IMPLICIT default
+// made explicit — it's the OLD default, now something a repo must opt back
+// INTO (seon/conceptnet ship inactive; `human` is the new implicit default —
+// see the `human`/`empty` presets below).
+test("PERSONA_PRESETS.code: re-activates seon+conceptnet (now shipped inactive), explicit neutral bias", () => {
+  assert.deepEqual(PERSONA_PRESETS.code, {
+    extensions: { seon: { active: true }, conceptnet: { active: true } },
+    bias: { seon: 1.0, conceptnet: 1.0 },
+  });
 });
 
-test("initRepo({persona: PERSONA_PRESETS.code}): tmct.toml carries an EXPLICIT [bias] section (no [extensions] — the override is empty) and round-trips back through the read-back path", async () => {
+test("PERSONA_PRESETS.human: the new implicit default made explicit — empty extensions override (human already ships active), explicit bias", () => {
+  assert.deepEqual(PERSONA_PRESETS.human, { extensions: {}, bias: { human: 1.0 } });
+});
+
+test("PERSONA_PRESETS.empty: deactivates the one bundle now active by default", () => {
+  assert.deepEqual(PERSONA_PRESETS.empty, { extensions: { human: { active: false } }, bias: {} });
+});
+
+test("initRepo({persona: PERSONA_PRESETS.code}): tmct.toml carries an EXPLICIT [extensions]+[bias] section and round-trips back through the read-back path", async () => {
   const dir = await tmp();
   try {
     const res = await initRepo(dir, { seed: false, persona: PERSONA_PRESETS.code });
@@ -275,15 +307,33 @@ test("initRepo({persona: PERSONA_PRESETS.code}): tmct.toml carries an EXPLICIT [
     assert.match(text, /\[bias\]/);
     assert.match(text, /seon = 1/);
     assert.match(text, /conceptnet = 1/);
-    assert.doesNotMatch(text, /\[extensions/, "code's extensions override is empty — nothing to write");
+    assert.match(text, /\[extensions\.seon\]/, "code's extensions override re-activates seon");
+    assert.match(text, /\[extensions\.conceptnet\]/, "code's extensions override re-activates conceptnet");
     // round-trips through the config loader
     const raw = await loadTomlConfig(dir);
     assert.deepEqual(raw.bias, { seon: 1, conceptnet: 1 });
-    assert.equal(raw.extensions, undefined);
+    assert.deepEqual(raw.extensions, { seon: { active: true }, conceptnet: { active: true } });
     // re-init (read-back path) reflects it in res.config too
     assert.deepEqual(res.config.bias, { seon: 1.0, conceptnet: 1.0 });
     const res2 = await initRepo(dir, { seed: false }); // no persona passed — file already exists, preserved
     assert.deepEqual(res2.config.bias, { seon: 1.0, conceptnet: 1.0 }, "the written [bias] section is read back on a plain re-init");
+    assert.deepEqual(res2.config.extensions, { seon: { active: true }, conceptnet: { active: true } });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("initRepo({persona: PERSONA_PRESETS.human}): the new default persona's tmct.toml carries [bias] only (extensions override is empty — nothing to write)", async () => {
+  const dir = await tmp();
+  try {
+    await initRepo(dir, { seed: false, persona: PERSONA_PRESETS.human });
+    const text = await readFile(join(dir, CONFIG_FILE), "utf8");
+    assert.match(text, /\[bias\]/);
+    assert.match(text, /human = 1/);
+    assert.doesNotMatch(text, /\[extensions/, "human's extensions override is empty — nothing to write");
+    const raw = await loadTomlConfig(dir);
+    assert.deepEqual(raw.bias, { human: 1 });
+    assert.equal(raw.extensions, undefined);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -310,7 +360,7 @@ test("bin/tmct.mjs: `tmct init --with-persona code` writes the persona, `--with-
     const r = spawnSync(process.execPath, [BIN, "init", "--with-persona", "bogus"], { encoding: "utf8", cwd: badDir });
     assert.notEqual(r.status, 0);
     assert.match(r.stderr, /unknown --with-persona "bogus"/);
-    assert.match(r.stderr, /Available personas: code/);
+    assert.match(r.stderr, /Available personas: human, code, empty/);
     assert.equal(await exists(join(badDir, ".tmct")), false, "an unknown persona name never scaffolds anything");
     assert.equal(await exists(join(badDir, CONFIG_FILE)), false);
   } finally {

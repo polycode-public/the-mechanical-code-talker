@@ -82,6 +82,8 @@
     "chat": "node bin/tmct.mjs",
     "chat:repo": "node bin/tmct.mjs chat --repo",
     "init": "node bin/tmct.mjs init",
+    "init:persona:human": "node bin/tmct.mjs init --with-persona human",
+    "init:persona:empty": "node bin/tmct.mjs init --with-persona empty",
     "memory": "node bin/tmct.mjs memory",
     "syllogise": "node bin/tmct.mjs syllogise",
     "example:mini": "node bin/tmct.mjs chat --repo examples/mini-webapp --ephemeral",

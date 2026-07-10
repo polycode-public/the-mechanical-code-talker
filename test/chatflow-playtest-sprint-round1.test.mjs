@@ -34,11 +34,18 @@ test("round 1: 'is X a Y then' resolves the class-instance bridge instead of wal
 test("round 1: a confirmation-check wrapper ('so X is a Y, right?') resolves a genuinely taught/grounded fact", async () => {
   const dir = await mem();
   try {
-    await runTurn("every dog is a thing", { config: CONFIG, memoryDir: dir, sessionId: "s2" });
-    await runTurn("every animal is a thing", { config: CONFIG, memoryDir: dir, sessionId: "s2" });
-    await runTurn("a dog is an animal", { config: CONFIG, memoryDir: dir, sessionId: "s2" });
-    const r = await runTurn("so a dog is an animal, right?", { config: CONFIG, memoryDir: dir, sessionId: "s2" });
-    assert.match(r.answer, /^yes — you told me: dog is a kind of animal/);
+    // Fictional word pair, deliberately outside the closed ACE lexicon on
+    // BOTH sides (this test's own point is grounding two brand-new terms via
+    // the "every X is a thing" mint pattern, then relating them — "dog"/
+    // "animal" were this test's original example before PLAN_SEED.md's
+    // human-persona lexicon growth declared "dog" a real static noun, which
+    // changes which fallback handles it; a genuinely-unknown pair keeps this
+    // test's actual point intact regardless of future vocabulary growth).
+    await runTurn("every zibblet is a thing", { config: CONFIG, memoryDir: dir, sessionId: "s2" });
+    await runTurn("every quorbin is a thing", { config: CONFIG, memoryDir: dir, sessionId: "s2" });
+    await runTurn("a zibblet is a quorbin", { config: CONFIG, memoryDir: dir, sessionId: "s2" });
+    const r = await runTurn("so a zibblet is a quorbin, right?", { config: CONFIG, memoryDir: dir, sessionId: "s2" });
+    assert.match(r.answer, /^yes — you told me: zibblet is a kind of quorbin/);
     assert.equal(r.record.miss, false);
   } finally { await rm(dir, { recursive: true, force: true }); }
 });

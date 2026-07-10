@@ -21,25 +21,34 @@ import { clearCache } from "../src/source.mjs";
 const BIN = fileURLToPath(new URL("../bin/tmct.mjs", import.meta.url));
 const FIXTURE = fileURLToPath(new URL("./fixtures/entities.fixture.json", import.meta.url));
 
-// The graph-less bootstrap seeds in TWO passes (chat.mjs seedBootstrapMemory): the
-// curated SEON ontology FIRST and uncapped (provenance corpus:seon), THEN the WHOLE
-// ConceptNet band — the 0.7.0 "seed all" (the old SEED_LIMIT=500 cap was lifted; a
-// handful of ConceptNet facts overlap SEON facts and dedup on their content-hash id).
-// The exact counts are CORPUS-DATA-DRIVEN — they move whenever the committed slice is
-// regrown — so these tests assert the bootstrap's SHAPE, not brittle literals: the
-// banner's three numbers are internally consistent, they equal the on-disk fact count,
-// and the ConceptNet band is genuinely UNCAPPED (thousands, not a small cap).
-const SEED_BANNER_RE = /^seeded (\d+) starter facts \((\d+) curated SEON \+ (\d+) ConceptNet\) — \/memory to inspect$/;
-const UNCAPPED_MIN = 1000; // proof the cap is lifted: far above any old finite cap
+// The graph-less bootstrap seeds every ACTIVE bundle (chat.mjs seedBootstrapMemory,
+// via src/extensions.mjs's resolveExtensions + seedActiveCorpusEntries), in the
+// entries' own fixed order (seon, conceptnet, then the rest sorted by name).
+// PLAN_SEED.md's persona flip: the default active bundle is now `human` (seon/
+// conceptnet ship but are opt-in) — the banner is BUNDLE-LIST-DRIVEN (every
+// `perBundle` entry with appended > 0, no privileged first-two names), so these
+// tests assert the bootstrap's SHAPE against a GENERIC "(N1 bundle1 + N2 bundle2 +
+// …)" banner, not the old hardcoded "N curated SEON + N ConceptNet" literal.
+const SEED_BANNER_RE = /^seeded (\d+) starter facts \((.+)\) — \/memory to inspect$/;
+const UNCAPPED_MIN = 1000; // proof the ConceptNet band's own cap is lifted, when active
 
 const factCount = async (dir) =>
   (await loadMemory(dir)).individuals.filter((i) => i.class === FACT_CLASS).length;
 const exists = (p) => access(p).then(() => true, () => false);
 
-/** Find the banner's seed line and return { total, seon, conceptnet } — or null. */
+/** Find the banner's seed line and return { total, clauses, byBundle } — or null.
+ *  `clauses` is the ordered ["N1 bundle1", "N2 bundle2", …] list; `byBundle` is
+ *  the same thing keyed by bundle name -> its appended count, for easy lookup. */
 const parseSeedBanner = (line) => {
   const m = SEED_BANNER_RE.exec(String(line));
-  return m ? { total: Number(m[1]), seon: Number(m[2]), conceptnet: Number(m[3]) } : null;
+  if (!m) return null;
+  const clauses = m[2].split(" + ");
+  const byBundle = {};
+  for (const c of clauses) {
+    const cm = /^(\d+) (.+)$/.exec(c);
+    if (cm) byBundle[cm[2]] = Number(cm[1]);
+  }
+  return { total: Number(m[1]), clauses, byBundle };
 };
 
 test("W3: a graph-less first run seeds once — banner line, marker, facts; a second session skips", async () => {
@@ -50,10 +59,11 @@ test("W3: a graph-less first run seeds once — banner line, marker, facts; a se
     await s1.close();
     const banner = s1.bannerLines.map(parseSeedBanner).find(Boolean);
     assert.ok(banner, `the banner reports the seed honestly: ${JSON.stringify(s1.bannerLines)}`);
-    assert.equal(banner.total, banner.seon + banner.conceptnet, "banner arithmetic is internally consistent");
-    assert.ok(banner.seon > 0, "the curated SEON pass landed");
-    assert.ok(banner.conceptnet > UNCAPPED_MIN, `the ConceptNet band is uncapped (got ${banner.conceptnet})`);
-    assert.equal(await factCount(dir), banner.total, "both corpus passes landed in .tmct/memory");
+    const sumOfClauses = Object.values(banner.byBundle).reduce((a, b) => a + b, 0);
+    assert.equal(banner.total, sumOfClauses, "banner arithmetic is internally consistent");
+    assert.ok(banner.byBundle.human > 0, "the default human bundle landed");
+    assert.equal(Object.keys(banner.byBundle).length, 1, "only the one default bundle seeded (seon/conceptnet are opt-in)");
+    assert.equal(await factCount(dir), banner.total, "the corpus pass landed in .tmct/memory");
     assert.ok(await exists(join(dir, SEED_MARKER_REL)), "the seed marker was written");
 
     clearCache();
@@ -101,7 +111,7 @@ test("W3: a repo WITH a graph artifact never seeds", async () => {
   }
 });
 
-test("W3 + extensions: a tmct.toml activating tier2-aws seeds a THIRD bundle — banner grows an extra clause, base sentence unchanged", async () => {
+test("W3 + extensions: a tmct.toml activating tier2-aws seeds a SECOND bundle alongside the default human bundle — banner grows an extra clause, base sentence unchanged", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-w3-tier2-"));
   try {
     await writeFile(join(dir, "tmct.toml"), '[extensions.tier2-aws]\nactive = true\n');
@@ -110,13 +120,11 @@ test("W3 + extensions: a tmct.toml activating tier2-aws seeds a THIRD bundle —
     await s.close();
     const line = s.bannerLines.find((l) => /^seeded \d+ starter facts/.test(l));
     assert.ok(line, `a seed banner line is present: ${JSON.stringify(s.bannerLines)}`);
-    // the base sentence's shape is UNCHANGED (same parens contents up front),
-    // just with a third "+ <n> tier2-aws" clause appended before the close-paren.
-    const m = /^seeded (\d+) starter facts \((\d+) curated SEON \+ (\d+) ConceptNet \+ (\d+) tier2-aws\) — \/memory to inspect$/.exec(line);
-    assert.ok(m, `banner carries the extra tier2-aws clause: ${line}`);
-    const [, total, seon, conceptnet, tier2aws] = m.map(Number);
-    assert.ok(seon > 0 && conceptnet > UNCAPPED_MIN && tier2aws > 0);
-    assert.equal(total, seon + conceptnet + tier2aws, "banner arithmetic includes the third bundle");
+    const banner = parseSeedBanner(line);
+    assert.ok(banner, `banner parses generically: ${line}`);
+    assert.ok(banner.byBundle.human > 0 && banner.byBundle["tier2-aws"] > 0, `both bundles present: ${line}`);
+    const sumOfClauses = Object.values(banner.byBundle).reduce((a, b) => a + b, 0);
+    assert.equal(banner.total, sumOfClauses, "banner arithmetic includes both bundles");
     const mem = await loadMemory(dir);
     const facts = (mem.individuals || []).filter((i) => i.class === "Fact");
     const awsFact = facts.find((f) => (f.attributes || []).some((a) => a.key === "provenance" && String(a.value).includes("corpus:tier2-aws")));
@@ -137,12 +145,13 @@ test("W3 gate: the real binary in an empty dir seeds, greets and exits 0", async
     assert.match(r.stdout, /no code graph loaded — starting empty/); // #3
     const banner = r.stdout.split("\n").map(parseSeedBanner).find(Boolean);
     assert.ok(banner, `the seed banner is present: ${JSON.stringify(r.stdout)}`);
-    assert.equal(banner.total, banner.seon + banner.conceptnet, "banner arithmetic consistent");
-    assert.ok(banner.conceptnet > UNCAPPED_MIN, `ConceptNet band uncapped (got ${banner.conceptnet})`);
+    const sumOfClauses = Object.values(banner.byBundle).reduce((a, b) => a + b, 0);
+    assert.equal(banner.total, sumOfClauses, "banner arithmetic consistent");
+    assert.ok(banner.byBundle.human > 0, `the default human bundle seeded (got ${JSON.stringify(banner.byBundle)})`);
     // #3: empty greeting orients — leads with identity + the (now seed-confirmed)
     // vocabulary example, not an apology; this run DID seed, so the hint is the
     // term-specific one (see the TMCT_NO_SEED sibling test for the other branch).
-    assert.match(r.stdout, /Hi\. I'm tmct\. Try "what is a cache"/);
+    assert.match(r.stdout, /Hi\. I'm tmct\. Try "what is a dog"/);
     assert.equal(await factCount(dir), banner.total);
     // Load-tolerant budget: this project MANDATES concurrent background agents,
     // so an absolute wall-clock cap false-fails a healthy seed under contention

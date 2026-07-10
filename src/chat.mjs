@@ -3076,7 +3076,7 @@ function nudgeAnswer(query, focus) {
   const q = String(query).trim().replace(/[?.!]+$/, "").replace(/\s+/g, " ");
   if (PERSONAL_ASSISTANT_NUDGE_RE.test(q)) {
     return "I don't have access to that — I'm a deterministic code/vocabulary assistant, not a general assistant. "
-      + 'Ask me about code structure ("which modules import <name>") or try "what is a cache".';
+      + 'Ask me about code structure ("which modules import <name>") or try "what is a dog".';
   }
   if (OPINION_NUDGE_RE.test(q)) {
     const name = focus?.label || "<name>";
@@ -7328,18 +7328,24 @@ async function seedBootstrapMemory(repo) {
   }
 }
 
-/** The seed banner line — byte-identical to before for the default zero-config
- *  seon+conceptnet case; a THIRD (or more) active bundle appends its own
- *  "<n> <bundle-name>" clause rather than changing the base sentence, so a
- *  fresh `TMCT_NO_SEED`-unset run with no tmct.toml renders EXACTLY what
- *  test/wiring-seed.test.mjs's SEED_BANNER_RE already pins. */
+/** The seed banner line — BUNDLE-LIST-DRIVEN (PLAN_SEED.md §2 fix): renders
+ *  every `perBundle` entry that actually appended facts this run, in the
+ *  entries' own fixed order (src/extensions.mjs's resolveExtensions —
+ *  seon, conceptnet, then the rest sorted by name), joined with " + ". No
+ *  bundle is privileged as one of "the first two" any more — with the
+ *  persona flip (seon/conceptnet now opt-in, `human` the new default) the
+ *  old hardcoded "N curated SEON + N ConceptNet" shape would render the
+ *  misleading "seeded 664 starter facts (0 curated SEON + 0 ConceptNet + 664
+ *  human)" for the new default. A single active bundle renders with no
+ *  " + " at all ("seeded 664 starter facts (664 human) — …"), matching the
+ *  common case cleanly. test/wiring-seed.test.mjs's SEED_BANNER_RE is
+ *  relaxed to match this generic form (still asserting the SHAPE, not a
+ *  brittle literal — see that test file's own header comment). */
 function seedBannerLine(seeded) {
-  const extra = Object.entries(seeded.perBundle || {})
-    .filter(([name]) => name !== "seon" && name !== "conceptnet")
+  const clauses = Object.entries(seeded.perBundle || {})
     .filter(([, r]) => r && r.appended > 0)
     .map(([name, r]) => `${r.appended} ${name}`);
-  const extraClause = extra.length ? ` + ${extra.join(" + ")}` : "";
-  return `seeded ${seeded.appended} starter facts (${seeded.seon} curated SEON + ${seeded.conceptnet} ConceptNet${extraClause}) — /memory to inspect`;
+  return `seeded ${seeded.appended} starter facts (${clauses.join(" + ")}) — /memory to inspect`;
 }
 
 /** Whether THIS repo's memory actually carries the corpus seed — the marker is
@@ -7358,15 +7364,16 @@ async function hasSeededVocabulary(repo) {
 /** A "try this" vocabulary-example clause that's PROVABLY correct in the session
  *  it's shown, mirroring the discipline orientationExamples() already applies to
  *  structural examples (never offer an example that isn't confirmed to resolve).
- *  `cache` is confirmed live: present in corpus/seon/definitions.jsonl, backed by
- *  a corpus:seon concept fact, and a recognized lexicon noun — but only actually
- *  answerable once the seed has run. When it hasn't (TMCT_NO_SEED=1,
- *  seed.enabled=false, or corpus load failure), offering it would be a lie worse
- *  than no example — swap to an unconditionally-true pointer instead (the teach
- *  lane and `tmct init` both work with zero preconditions). Computed ONCE per
- *  session (createSession), not per turn.
+ *  `dog` is confirmed live (PLAN_SEED.md's default human-world persona): present
+ *  in corpus/tier2/human.jsonl's human-nature clump, backed by a corpus:human
+ *  concept fact, and a recognized lexicon noun — but only actually answerable
+ *  once the seed has run. When it hasn't (TMCT_NO_SEED=1, seed.enabled=false, or
+ *  corpus load failure), offering it would be a lie worse than no example —
+ *  swap to an unconditionally-true pointer instead (the teach lane and `tmct
+ *  init` both work with zero preconditions). Computed ONCE per session
+ *  (createSession), not per turn.
  *  The unseeded branch's teach clause is a CONCRETE pair too, for the same
- *  reason `cache` is concrete in the seeded branch: playtest found that an
+ *  reason `dog` is concrete in the seeded branch: playtest found that an
  *  abstract "every X is a Y" invites a curious user to fill X/Y with an
  *  intuitive-but-unknown word ("every cache is a thing" — "thing" isn't in
  *  the closed ACE lexicon) and hit the teach-miss dead-end right after being
@@ -7375,7 +7382,7 @@ async function hasSeededVocabulary(repo) {
  *  test/chatflow-tier0.test.mjs), so the offer resolves if copied verbatim. */
 function vocabExampleHint(seeded) {
   return seeded
-    ? 'Try "what is a cache" for general vocabulary.'
+    ? 'Try "what is a dog" for general vocabulary.'
     : 'Run `tmct init` to seed a starter vocabulary, or teach me directly, e.g. "every bug is an issue".';
 }
 

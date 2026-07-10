@@ -45,7 +45,13 @@ test("Phase 2 item 2 teach-side: 'a father is a kind of parent' normalizes (one-
   try {
     const taught = await runTurn("a father is a kind of parent", { config: CONFIG, memoryDir: dir, sessionId: "k1" });
     assert.equal(taught.record.miss, false);
-    assert.match(taught.answer, /noted — remembered: father is a kind of parent/);
+    // PLAN_SEED.md's lexicon growth declared "father" (like "parent" already
+    // was) a real common noun — BOTH sides of this fact are now grounded
+    // lexicon words, so the fully-grounded ACE assert path answers (not the
+    // one-side-ungrounded "noted — remembered: X is a kind of Y" phrasing a
+    // bare/undeclared "father" used to hit); the underlying stored triple
+    // (asserted below) is unchanged either way.
+    assert.match(taught.answer, /noted — remembered 1 fact: father rdfs:subClassOf parent/);
 
     const rows = readFactRows(await loadMemory(dir));
     assert.equal(rows.length, 1);

@@ -90,11 +90,16 @@ test("#2 teach (Feature A, the 'redis' write-side fix): 'remember that redis is 
 test("#2 teach: an already-canonical 'every X is a Y' (vowel-initial Y, correct article) suppresses the hint — nothing to add", async () => {
   const dir = await mem();
   try {
-    const { answer, record } = await runTurn("every monkey is an animal", {
+    // Fictional word pair, deliberately outside the closed ACE lexicon on
+    // BOTH sides — same reasoning as the sibling wrong-article test just
+    // above ("monkey"/"animal" were this test's original example before
+    // PLAN_SEED.md's human-persona lexicon growth declared "animal" a real
+    // static noun).
+    const { answer, record } = await runTurn("every zibbot is an ovantry", {
       config: CONFIG, graph: await graph(), memoryDir: dir, sessionId: "t",
     });
     assert.match(answer, /every X is a Y/, "says what CAN be remembered");
-    assert.match(answer, /I don't recognize "monkey" and "animal" as words I know/, "names the specific unrecognized words");
+    assert.match(answer, /I don't recognize "zibbot" and "ovantry" as words I know/, "names the specific unrecognized words");
     // the input was ALREADY the grammatically-correct canonical shape — a "did
     // you mean" that echoed it back byte-for-byte would be redundant noise, so
     // teachSuggestion's real a/an agreement makes it compare equal and suppress.
@@ -106,7 +111,14 @@ test("#2 teach: an already-canonical 'every X is a Y' (vowel-initial Y, correct 
 test("#2 teach: 'every X is a Y' with the WRONG article (vowel-initial Y) now offers the corrected suggestion", async () => {
   const dir = await mem();
   try {
-    const { answer, record } = await runTurn("every monkey is a animal", {
+    // Fictional word pair, deliberately outside the closed ACE lexicon on
+    // BOTH sides — this test's own point is the "both ungrounded" wrong-
+    // article suggestion, which only fires when NEITHER side is already
+    // known ("monkey"/"animal" were this test's original example before
+    // PLAN_SEED.md's human-persona lexicon growth declared "animal" a real
+    // static noun, which routes a grounded-object pair through a different,
+    // no-suggestion mint path instead).
+    const { answer, record } = await runTurn("every zibbot is a ovantry", {
       config: CONFIG, graph: await graph(), memoryDir: dir, sessionId: "t",
     });
     assert.match(answer, /every X is a Y/);
@@ -115,7 +127,7 @@ test("#2 teach: 'every X is a Y' with the WRONG article (vowel-initial Y) now of
     // hint here — the one case where a correction was most useful. Now the
     // suggestion is computed with real article agreement and differs from the
     // (wrong-article) input, so it surfaces.
-    assert.match(answer, /Did you mean: "every monkey is an animal"\?/, "offers the grammatically-correct shape");
+    assert.match(answer, /Did you mean: "every zibbot is an ovantry"\?/, "offers the grammatically-correct shape");
     assert.equal(record.miss, true);
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
@@ -123,12 +135,14 @@ test("#2 teach: 'every X is a Y' with the WRONG article (vowel-initial Y) now of
 test("#2 teach: unrecognized-word message distinguishes the vocabulary gap from a plain shape mismatch", async () => {
   const dir = await mem();
   try {
-    // "climb" is outside the closed ACE lexicon entirely (no noun/verb/adjective
-    // entry) — parseAce's residue still names it, same mechanism as monkey/animal.
-    const { answer } = await runTurn("every tree is a climb", {
+    // "kangaroo"/"climb" are outside the closed ACE lexicon entirely (no
+    // noun/verb/adjective entry) — parseAce's residue still names them, same
+    // mechanism as monkey/animal. ("tree" was this test's own example before
+    // PLAN_SEED.md's human-persona lexicon growth declared it a real noun.)
+    const { answer } = await runTurn("every kangaroo is a climb", {
       config: CONFIG, graph: await graph(), memoryDir: dir, sessionId: "t",
     });
-    assert.match(answer, /I don't recognize "tree" and "climb" as words I know/);
+    assert.match(answer, /I don't recognize "kangaroo" and "climb" as words I know/);
     // HANDOVER.md 2026-07-10 item 3: the message used to falsely claim a
     // "code-vocabulary nouns only" restriction — the real constraint is
     // grounding (at least one side already known), not a vocabulary limit.
@@ -553,21 +567,21 @@ test("#3 an empty-graph session orients: banner + greeting point at --repo/tmct 
 test("vocab-hint is never a lie: an unseeded session never offers a term-specific example, a seeded session's offered term actually resolves", async () => {
   clearCache();
   // UNSEEDED (TMCT_NO_SEED=1): none of the 5 "try this" surfaces may claim "what
-  // is a cache" — the corpus was never seeded, so that example would fail if
+  // is a dog" — the corpus was never seeded, so that example would fail if
   // followed. This is the exact bug found in research: every surface used to be
   // gated only on "no code graph", never on whether seeding actually happened.
   const dirA = await mkdtemp(join(tmpdir(), "tmct-ux-hintlie-"));
   try {
     const s = await createSession({ repoPath: dirA, env: { TMCT_NO_SEED: "1" } });
-    assert.doesNotMatch(s.bannerLines.join("\n"), /what is a cache/, "banner");
+    assert.doesNotMatch(s.bannerLines.join("\n"), /what is a dog/, "banner");
     const hi = await s.turn("hi");
-    assert.doesNotMatch(hi.answer, /what is a cache/, "greeting");
+    assert.doesNotMatch(hi.answer, /what is a dog/, "greeting");
     const cap = await s.turn("what can you do");
-    assert.doesNotMatch(cap.answer, /what is a cache/, "capability orientation");
+    assert.doesNotMatch(cap.answer, /what is a dog/, "capability orientation");
     const meta = await s.turn("what is this");
-    assert.doesNotMatch(meta.answer, /what is a cache/, "meta/self lane (orientationText)");
+    assert.doesNotMatch(meta.answer, /what is a dog/, "meta/self lane (orientationText)");
     const know = await s.turn("what do you know");
-    assert.doesNotMatch(know.answer, /what is a cache/, "memory summary");
+    assert.doesNotMatch(know.answer, /what is a dog/, "memory summary");
     // The unseeded state must still be ACTIONABLE (not just an absence) — every
     // surface above should point at how to actually get vocabulary.
     for (const [label, r] of [["greeting", hi], ["capability", cap]]) {
@@ -584,9 +598,9 @@ test("vocab-hint is never a lie: an unseeded session never offers a term-specifi
   const dirB = await freshBootstrapRepo("tmct-ux-hinttrue-");
   try {
     const s = await createSession({ repoPath: dirB });
-    assert.match(s.bannerLines.join("\n"), /what is a cache/, "a seeded session's banner offers the term");
-    const cache = await s.turn("what is a cache");
-    assert.doesNotMatch(cache.answer, /couldn't parse|isn't a term in this graph/i, "the offered example actually resolves, end to end");
+    assert.match(s.bannerLines.join("\n"), /what is a dog/, "a seeded session's banner offers the term");
+    const dog = await s.turn("what is a dog");
+    assert.doesNotMatch(dog.answer, /couldn't parse|isn't a term in this graph/i, "the offered example actually resolves, end to end");
     await s.close();
   } finally { clearCache(); await rm(dirB, { recursive: true, force: true }); }
 });
