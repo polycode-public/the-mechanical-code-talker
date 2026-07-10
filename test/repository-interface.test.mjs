@@ -10,6 +10,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -36,6 +37,13 @@ const REASONS = new Set(Object.values(MISS_REASONS));
 // ---- run the kit against BOTH reference providers ----------------------------
 runConformance("fixture", fixtureProvider);
 runConformance("bootstrap", bootstrapProvider);
+
+// 2f: a THIRD run against a SOURCE-CAPABLE fixture provider — the only thing that actually
+// exercises conformance.mjs's source-capable branch (dead code otherwise: no provider anywhere
+// else ever sets sourceAccess:true). test/fixtures/source-provider/ holds real source files
+// whose paths/line-spans match FIXTURE_ENTITIES' `site` attributes exactly (see fixture.mjs).
+const SOURCE_PROVIDER_ROOT = fileURLToPath(new URL("./fixtures/source-provider", import.meta.url));
+runConformance("fixture-source-capable", () => fixtureProvider({ sourceAccess: true, repoRoot: SOURCE_PROVIDER_ROOT, readFile }));
 
 // =============================================================================
 // Interface-definition invariants (the versioned shape + no doc drift)
