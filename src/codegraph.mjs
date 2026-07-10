@@ -2040,6 +2040,60 @@ export function renderContextMore(plan) {
   return out.join("\n");
 }
 
+// ---- Repository Interface: graph-only context() bundle (no fs) -----------------
+
+/** Render a graph-only edit bundle for `plan` — every contextPlan section EXCEPT the
+ *  fs-dependent anchor/exemplar/inlined-callee body text (registration globals, class
+ *  members, ranked siblings, __all__, re-exports, the insertion point, covering tests,
+ *  co-change neighbours), gated by `mask` (see bundleMask/sizeBundle). Pure — no fs.
+ *  Used by graph-service.mjs's context() service so a graph-only provider (no working
+ *  tree) can still return a real HIT instead of an NO_SOURCE miss — see PLAN item 2d /
+ *  INTERFACE_VERSION 1.1.0. A source-capable provider layers the body sections on top
+ *  (it has fs access this module deliberately does not). */
+export function renderGraphOnlyBundle(plan, mask) {
+  const out = [
+    `Edit context for ${plan.moduleLabel} (graph-only bundle — siblings/registration/tests are real graph truth; ` +
+      "no source body without a source-capable provider).",
+  ];
+  if (mask.registration && plan.globals.length) {
+    out.push(`\n## registration / module globals (replicate this pattern):`);
+    for (const g of plan.globals) out.push(`  ${g.label} = ${g.value}${g.site ? `  [:${g.site.start}]` : ""}`);
+  }
+  if (mask.classMembers && plan.classMembers && plan.classMembers.members.length) {
+    out.push(`\n## members of ${plan.classMembers.className}:`);
+    for (const m of plan.classMembers.members) {
+      const short = String(m.label).split(".").pop();
+      const sig = m.params != null && m.params !== "" ? `(${m.params})${m.returns ? ` -> ${m.returns}` : ""}` : "";
+      const dec = m.decorators ? `@${m.decorators} ` : "";
+      const r = m.raises ? `  raises=${m.raises}` : "";
+      out.push(`  ${m.class} ${short}${m.site ? ` :${m.site.start}` : ""}  ${dec}${short}${sig}${r}`);
+    }
+  }
+  if (mask.siblings && plan.siblings.length) {
+    out.push(`\n## sibling symbols to copy the style of (most relevant first; ${plan.siblings.length} total):`);
+    for (const s of plan.siblings.slice(0, plan.siblingCap)) {
+      const dec = s.decorators ? `@${s.decorators} ` : "";
+      const r = s.raises ? `  raises=${s.raises}` : "";
+      out.push(`  ${s.class} ${s.label}${s.site ? ` :${s.site.start}` : ""}  ${dec}${r}`);
+    }
+    if (plan.siblings.length > plan.siblingCap) out.push(`  …+${plan.siblings.length - plan.siblingCap} more`);
+  }
+  if (mask.allExports && plan.allExports) out.push(`\n## module __all__: ${plan.allExports}`);
+  if (mask.reexports && plan.exports && plan.exports.length) out.push(`\n## re-exported symbols: ${plan.exports.join(", ")}`);
+  if (mask.insertionRegion) {
+    if (plan.insertionRegion) {
+      out.push(`\n## insertion region starts at ${plan.moduleLabel}:${plan.insertionRegion.start} (write your new sibling here — no source body in this graph-only bundle).`);
+    } else if (plan.insertion) {
+      out.push(`\n## insert the new sibling after line ~${plan.insertion} (end of the last top-level definition).`);
+    }
+  }
+  if (mask.tests && plan.tests.length) out.push(`\n## covering tests: ${plan.tests.join(", ")}`);
+  if (mask.cochange && plan.cochange && plan.cochange.length) {
+    out.push(`\n## usually changed together (consider editing these too): ${plan.cochange.map((c) => `${c.label} (×${c.weight})`).join(", ")}`);
+  }
+  return out.join("\n");
+}
+
 // ---- #7 cold-tool catalog (written to <repo>/.tmct/TOOLS.md by the index step) --
 
 /** Markdown catalog of the COLD tools (everything except the hot catalog tools): each

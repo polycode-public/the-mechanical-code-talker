@@ -79,7 +79,7 @@ test("hit() / toIndividual / toEdge produce the documented shapes", () => {
 // =============================================================================
 // Capability negotiation — CAPABILITY_ABSENT is a value, not a wall
 // =============================================================================
-test("invoke() degrades an absent capability to miss(CAPABILITY_ABSENT), never throws", () => {
+test("invoke() degrades an absent capability to miss(CAPABILITY_ABSENT), never throws", async () => {
   const partial = { capabilities: ["resolve"], resolve: () => hit("here") };
   const absent = invoke(partial, "impact", "x");
   assert.ok(isMiss(absent) && absent.miss.reason === MISS_REASONS.CAPABILITY_ABSENT);
@@ -94,7 +94,9 @@ test("invoke() degrades an absent capability to miss(CAPABILITY_ABSENT), never t
     return ["no:id"];
   };
   for (const service of SERVICES) {
-    const r = invoke(svc, service, ...argsFor(service));
+    // snippet/context are async (real fs reads are inherently async) — awaiting every result is
+    // safe regardless (a non-Promise value resolves through `await` as a documented no-op).
+    const r = await invoke(svc, service, ...argsFor(service));
     assert.ok(r && (r.ok === true || REASONS.has(r.miss.reason)), `${service} negotiates to a real Result`);
     if (isMiss(r)) assert.notEqual(r.miss.reason, MISS_REASONS.CAPABILITY_ABSENT, `${service} is implemented, not absent`);
   }
@@ -140,12 +142,21 @@ test("[fixture] traversal + aggregates + history return real numbers", () => {
   assert.equal(commits[0].author, "Grace Hopper");
 });
 
-test("[fixture] snippet/context are source-reaching → honest NO_SOURCE (span in detail)", () => {
+test("[fixture] snippet is source-reaching → honest NO_SOURCE (span in detail); context is a graph-only HIT (INTERFACE_VERSION 1.1.0)", async () => {
   const svc = fixtureProvider();
-  const snip = svc.snippet("m:render");
+  // snippet: UNCHANGED — nothing useful without fs, still an honest NO_SOURCE miss.
+  const snip = await svc.snippet("m:render");
   assert.ok(isMiss(snip) && snip.miss.reason === MISS_REASONS.NO_SOURCE);
   assert.match(snip.miss.detail, /widget\.mjs/); // the span is still communicated honestly
-  assert.ok(isMiss(svc.context("Widget")) && svc.context("Widget").miss.reason === MISS_REASONS.NO_SOURCE);
+  // context: NARROWED — a graph-only provider now returns a real hit (siblings/registration/
+  // tests/etc, no body text) for any resolvable symbol; only an unresolvable symbol misses.
+  const ctx = await svc.context("Widget");
+  assert.ok(isHit(ctx), "context(Widget) is a graph-only hit, not NO_SOURCE");
+  assert.equal(typeof ctx.value.text, "string");
+  assert.match(ctx.value.text, /pkg\/ui\/widget\.mjs/, "the graph-only bundle still names the real module");
+  assert.doesNotMatch(ctx.value.text, /## anchor:|## closest example/, "no body sections without a source-capable provider");
+  const missCtx = await svc.context("definitely-not-a-symbol-xyz");
+  assert.ok(isMiss(missCtx) && missCtx.miss.reason === MISS_REASONS.UNRESOLVED_TERM, "an unresolvable symbol still misses");
 });
 
 test("[fixture] search is provider-local lexical; ask returns the NL envelope", () => {

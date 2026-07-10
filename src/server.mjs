@@ -217,7 +217,14 @@ export async function buildContextBundle(args, { config, source = defaultSource,
   // by the tmct-max arm to test whether more injection re-bloats.
   const max = Boolean(args?.max);
   const graph = await loadGraph(config, source);
-  const svc = createGraphService(graph);
+  // repo root = the dir containing .tmct/ (graphFile = <repo>/.tmct/graph.json) — computed
+  // before createGraphService so the RI service can be constructed source-capable (2e): this
+  // module still does its OWN safe reads below (readSpanSafe/sliceSpan, Item 1) rather than
+  // delegating to svc.context() — see the module docblock's note on why. Passing sourceAccess
+  // through anyway keeps svc.snippet()/svc.context() usable by any future/external caller of
+  // this same service object without a second, divergent construction path.
+  const repoRoot = dirname(dirname(config.graphFile));
+  const svc = createGraphService(graph, { sourceAccess: true, repoRoot, readFile });
   const { match } = resolveOrThrow(svc, symbol, "symbol");
   const plan = contextPlan(graph, match);
   // #6/B1/B6: pick the section mask by depth — min forces TINY, full/max forces everything, auto
@@ -229,7 +236,6 @@ export async function buildContextBundle(args, { config, source = defaultSource,
   else if (max || depth === "full") { tier = "FULL"; mask = bundleMask("FULL"); topup = true; }
   else ({ tier, mask, topup } = sizeBundle(plan, graph, { untuned }));
   if (trim && !max) mask = trimBundleMask(mask); // B2: secondary digest module → signatures + region only (max keeps the full bundle)
-  const repoRoot = dirname(dirname(config.graphFile));
   let lines = null;
   if (plan.moduleLabel) {
     try { ({ lines } = await readSpanSafe({ readFile, repoRoot, path: plan.moduleLabel })); }
@@ -349,7 +355,13 @@ export async function dispatchTool(name, args, { config, source = defaultSource 
   // the result with tmct's own render* layer (which reads svc.graph). This is the
   // switch's operations extracted into a named, typed seam without changing bytes.
   const graph = await loadGraph(config, source);
-  const svc = createGraphService(graph);
+  // repo root = the dir containing .tmct/ (graphFile = <repo>/.tmct/graph.json). Passed through
+  // to createGraphService (2e) so svc.snippet()/svc.context() are usable directly; this
+  // dispatcher still does its OWN safe read for tmct_snippet below (readSpanSafe/sliceSpan,
+  // Item 1) rather than delegating, to keep its richer presentation (candidates, call hints,
+  // truncation notices) — see the tmct_snippet branch below.
+  const repoRoot = dirname(dirname(config.graphFile));
+  const svc = createGraphService(graph, { sourceAccess: true, repoRoot, readFile });
   if (name === "tmct_context_more") {
     const symbol = String(args?.symbol || "").trim();
     if (!symbol) throw new ToolError("symbol is required");
@@ -376,8 +388,6 @@ export async function dispatchTool(name, args, { config, source = defaultSource 
           "it is likely a module. Use tmct_describe for its contents, then tmct_snippet one of the functions/classes it defines.",
       );
     }
-    // repo root = the dir containing .tmct/ (graphFile = <repo>/.tmct/graph.json)
-    const repoRoot = dirname(dirname(config.graphFile));
     let sliced;
     try {
       sliced = await readSpanSafe({

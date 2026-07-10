@@ -112,7 +112,11 @@ export function fixtureGraph() {
   return parseEntities(FIXTURE_ENTITIES);
 }
 
-/** The fixture provider: a Repository-Interface service over the small real graph. */
-export function fixtureProvider() {
-  return createGraphService(fixtureGraph());
+/** The fixture provider: a Repository-Interface service over the small real graph.
+ *  `opts` passes straight through to createGraphService — e.g. `{ sourceAccess: true,
+ *  repoRoot, readFile }` to construct a source-capable fixture provider for testing
+ *  (see test/repository-interface.test.mjs's third runConformance call, which is the
+ *  only thing that exercises the conformance kit's source-capable branch). */
+export function fixtureProvider(opts = {}) {
+  return createGraphService(fixtureGraph(), opts);
 }

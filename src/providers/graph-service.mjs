@@ -22,7 +22,12 @@ import {
   scoreSymbolsRanked,
   searchModulesRanked,
   SEARCH_LIMIT,
+  contextPlan,
+  sizeBundle,
+  bundleMask,
+  renderGraphOnlyBundle,
 } from "../codegraph.mjs";
+import { readSpanSafe, sliceSpan } from "../source-slice.mjs";
 import { ask } from "../ask.mjs";
 import {
   hit,
@@ -59,14 +64,81 @@ function groupMetaForKind(graph, kind) {
   return { predicate: kind, prop: null };
 }
 
+const CONTEXT_BODY_MAX_LINES = 200; // mirrors server.mjs's SNIPPET_MAX_LINES for the source-capable body sections
+const CONTEXT_INLINE_CALLEE_LOC = 120; // mirrors server.mjs's INLINE_CALLEE_LOC budget
+
+/** The fs-dependent half of context()'s bundle — anchor / exemplar / inlined-callee body
+ *  TEXT — layered on top of renderGraphOnlyBundle's pure sections when the provider is
+ *  source-capable. Mirrors server.mjs's buildContextBundle body sections (same shape, same
+ *  safe readSpanSafe/sliceSpan primitives from Item 1) but lives here because it needs fs,
+ *  which codegraph.mjs deliberately never touches. Read failures degrade silently (an
+ *  omitted section), matching buildContextBundle's own graceful-degradation behavior —
+ *  this is a best-effort enrichment on top of an already-real graph-only hit, not a new
+ *  failure mode. Returns "" when nothing could be rendered. */
+async function renderSourceBodies(plan, mask, { readFile, repoRoot }) {
+  if (!plan.moduleLabel) return "";
+  let lines = null;
+  try {
+    ({ lines } = await readSpanSafe({ readFile, repoRoot, path: plan.moduleLabel }));
+  } catch {
+    lines = null;
+  }
+  if (!lines) return "";
+  const out = [];
+  if (mask.anchor && plan.anchor?.site) {
+    const { start, end } = plan.anchor.site;
+    out.push(`\n## anchor: ${plan.anchor.label} (${plan.anchor.class}) @ ${plan.moduleLabel}:${start}-${end}`);
+    out.push(sliceSpan(lines, start, end, CONTEXT_BODY_MAX_LINES).text);
+    if (plan.callHint) out.push(plan.callHint);
+  }
+  if (mask.exemplar && plan.exemplar?.site) {
+    const { start, end } = plan.exemplar.site;
+    const dec = plan.exemplar.decorators ? ` @${plan.exemplar.decorators}` : "";
+    out.push(`\n## closest example (full body) — copy this style: ${plan.exemplar.label} (${plan.exemplar.class})${dec} @ ${plan.moduleLabel}:${start}-${end}`);
+    out.push(sliceSpan(lines, start, end, CONTEXT_BODY_MAX_LINES).text);
+    if (plan.callHint) out.push(plan.callHint);
+  }
+  if (mask.inlinedCallees && plan.calleeBodies.length) {
+    let budget = CONTEXT_INLINE_CALLEE_LOC;
+    for (const cb of plan.calleeBodies) {
+      if (budget <= 0) break;
+      const start = cb.site.start;
+      const fromThisFile = cb.site.path === plan.moduleLabel;
+      let bodyLines = fromThisFile ? lines : null;
+      if (!bodyLines) {
+        try { ({ lines: bodyLines } = await readSpanSafe({ readFile, repoRoot, path: cb.site.path })); }
+        catch { bodyLines = null; }
+      }
+      if (!bodyLines) continue;
+      const sliced = sliceSpan(bodyLines, start, cb.site.end, budget);
+      out.push(`\n## inlined callee body (depth-1 in-repo call): ${cb.label} @ ${cb.site.path}:${start}-${cb.site.end}`);
+      out.push(sliced.text);
+      budget -= (sliced.end - start + 1);
+    }
+  }
+  return out.join("\n");
+}
+
 /**
  * @param {object} graph  a parseEntities() result
  * @param {object} [opts]
- * @param {boolean} [opts.sourceAccess=false]  whether source services can read bodies
+ * @param {boolean} [opts.sourceAccess=false]  whether source services (snippet, context) read
+ *   real fs bodies. When true, `repoRoot` + `readFile` are REQUIRED (a programmer error to
+ *   omit either — this module stays fs-free otherwise, "pure graph queries, no fs" by default;
+ *   fs is an explicit INJECTED capability, never an ambient import).
+ * @param {string} [opts.repoRoot]  absolute repo root; required when sourceAccess is true.
+ * @param {Function} [opts.readFile]  async (path, encoding) => string, e.g. node:fs/promises'
+ *   readFile; required when sourceAccess is true.
  * @returns the typed service object
  */
-export function createGraphService(graph, { sourceAccess = false } = {}) {
+export function createGraphService(graph, { sourceAccess = false, repoRoot = null, readFile = null } = {}) {
   const byId = graph.byId;
+  if (sourceAccess && (!repoRoot || typeof readFile !== "function")) {
+    throw new TypeError(
+      "createGraphService({ sourceAccess: true }) requires both repoRoot and readFile — " +
+        "fs access is an injected capability, not an ambient import.",
+    );
+  }
 
   const resolveId = (id) => byId.get(id) || null;
 
@@ -197,7 +269,12 @@ export function createGraphService(graph, { sourceAccess = false } = {}) {
       return hit({ total, levels });
     },
 
-    snippet(id) {
+    // NOTE: async (returns Promise<Result>) — real source reads (node:fs/promises) are
+    // inherently async, and unlike the pure graph services above, a caller of a
+    // source-reaching service should always `await` it regardless of whether THIS
+    // particular provider happens to be source-capable (awaiting a non-Promise value is a
+    // safe no-op, so this is backward-compatible for a caller that already awaits).
+    async snippet(id) {
       const ind = resolveId(id);
       if (!ind) return miss(MISS_REASONS.UNRESOLVED_TERM, { term: id });
       const site = siteOf(ind);
@@ -208,18 +285,37 @@ export function createGraphService(graph, { sourceAccess = false } = {}) {
         });
       }
       if (!site) return miss(MISS_REASONS.NO_SOURCE, { term: id, detail: "no source span in the graph (likely a module)" });
-      // A source-capable subclass overrides snippet to read the body; the graph-only
-      // base returns the span with a null body.
-      return hit({ path: site.path, span: { start: site.start, end: site.end }, body: null });
+      try {
+        const sliced = await readSpanSafe({
+          readFile, repoRoot, path: site.path, start: site.start, end: site.end, maxLines: CONTEXT_BODY_MAX_LINES,
+        });
+        return hit({ path: site.path, span: { start: site.start, end: site.end }, body: sliced.text });
+      } catch (e) {
+        // A path-traversal ToolError or any other read failure both land here — honestly,
+        // never a throw (the interface's error contract: a clean miss is a value).
+        return miss(MISS_REASONS.NO_SOURCE, { term: id, detail: `could not read ${site.path}: ${e?.message || e}` });
+      }
     },
 
-    context(symbol) {
+    // INTERFACE_VERSION 1.1.0 (2d): context() is now a graph-only HIT for any resolvable
+    // symbol — contextPlan/sizeBundle/renderGraphOnlyBundle are pure graph queries, so a
+    // graph-only provider (no working tree) can genuinely answer with siblings/registration/
+    // globals/tests/exports/insertion-region, everything EXCEPT anchor/exemplar/inlined-callee
+    // body TEXT. Only an unresolvable symbol still misses (UNRESOLVED_TERM). A source-capable
+    // provider layers the body sections on top via renderSourceBodies (below).
+    async context(symbol, { depth = "auto" } = {}) {
       const { match } = resolveSymbol(graph, String(symbol ?? ""));
       if (!match) return miss(MISS_REASONS.UNRESOLVED_TERM, { term: String(symbol ?? "") });
-      return miss(MISS_REASONS.NO_SOURCE, {
-        term: String(symbol ?? ""),
-        detail: "the edit bundle reaches into the working tree; this provider exposes no source",
-      });
+      const plan = contextPlan(graph, match);
+      const d = String(depth || "auto").trim().toLowerCase();
+      let tier, mask;
+      if (d === "min") { tier = "TINY"; mask = bundleMask("TINY"); }
+      else if (d === "full") { tier = "FULL"; mask = bundleMask("FULL"); }
+      else ({ tier, mask } = sizeBundle(plan, graph, {}));
+      const graphText = renderGraphOnlyBundle(plan, mask);
+      if (!svc.sourceAccess) return hit({ text: graphText, tier });
+      const bodyText = await renderSourceBodies(plan, mask, { readFile, repoRoot });
+      return hit({ text: bodyText ? `${graphText}\n${bodyText}` : graphText, tier });
     },
 
     architecture({ package: pkg = "" } = {}) {
