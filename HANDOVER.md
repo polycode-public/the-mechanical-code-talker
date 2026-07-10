@@ -109,8 +109,8 @@ in `archive/`.
     every rung; the router/goal-reasoner surface is stable. Noted for completeness, not because
     anything is broken.
 
-**Also from this session's own tail, not benchmark-derived:** `SKILL_BENCHMARK_PLAYTEST.md` →
-`SKILL_BENCHMARK_CONVERSATION.md` (renamed and refocused — DONE) on fluid conversation/knowledge-
+**Also from this session's own tail, not benchmark-derived — all DONE:** `SKILL_BENCHMARK_PLAYTEST.md`
+→ `SKILL_BENCHMARK_CONVERSATION.md` (renamed and refocused) on fluid conversation/knowledge-
 acceptance-and-inference/completions retrieval via the hub-avoiding crawl, with a new mandatory
 §0.1 "canonical example first" step **and a new §3.4 "persona-sweep" mode** (parallel background
 agents, each a genuinely different persona/frame rather than a different topic — the operator's own
@@ -118,10 +118,14 @@ proposed strategy for surfacing dead-ends like "john is a man" that single-frame
 reach by construction). The first live sweep already ran (5 parallel personas: total stranger,
 deliberate breaker, non-native speaker, pure small talk, rushed/fragment-typing dev) and its two
 highest-impact findings are folded into items 2 and 3 above; its lower-signal findings are item 10.
-`CAPABILITIES_AUDIT_2026-07-10.md` refreshed against all four benchmark reports (DONE). Still open:
-`SKILL_BENCHMARK_CEFR_ENGLISH.md` → `SKILL_BENCHMARK_CEFR_ENGLISH.md` with historic report renames to match,
-a speculative comparative table (tmct vs. local/AWS/Anthropic model tiers, plus a to-be sketch), and
-turning the persona-sweep's own transcripts into a proper `PLAYTESTBENCH_*` write-up plus regression
+`CAPABILITIES_AUDIT_2026-07-10.md` refreshed against all four benchmark reports, PLUS `SKILL_
+BENCHMARK_CHAT.md` → `SKILL_BENCHMARK_CEFR_ENGLISH.md` (skill doc + all 18 archived historic reports
+renamed to match), PLUS a comparative agent-capability table added to the top of
+`CAPABILITIES_AUDIT_2026-07-10.md` (general agent-capability rows — tool use, planning, reasoning,
+grounding, memory, instruction-following, generation, coding, safety/honesty, autonomy — against 5
+named models: Llama 3.1 8B, Amazon Nova Pro, Claude Haiku 4.5/Sonnet 5/Opus 4.8; a fixed-width ASCII
+quick-reference table plus the full explanatory table; a speculative TO-BE sketch). Still open:
+turning the persona-sweep's own transcripts into a proper `PLAYTESTBENCH_*` write-up, plus regression
 freezes for items 2/3 once fixed.
 
 ## Discipline (unchanged)
