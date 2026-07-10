@@ -191,8 +191,19 @@ const ACK_PREAMBLE_RE = /^(?:(?:ok(?:ay)?|aight|cool|alright|sure|right|fine|gre
  *  §3: the vague-opener family a genuine first-time stranger types). Same
  *  delimiter-required discipline as GREETING/THANKS/ACK_PREAMBLE_RE above —
  *  a bare "just poking around" with no question stays small-talk (this file
- *  never claims a turn that has no remainder to hand back). */
-const BROWSING_PREAMBLE_RE = /^just\s+(?:poking\s+around|looking\s+around|browsing|exploring|checking\s+(?:this|it)\s+out)\s*[,.—–-]\s*(.+)$/i;
+ *  never claims a turn that has no remainder to hand back).
+ *  HANDOVER.md 2026-07-10 item 3: "first time trying this out"/"first time
+ *  using this"/"first time here" is the SAME self-orientation species — a
+ *  genuine stranger's opener, just phrased around their own inexperience
+ *  rather than what they're doing right now — found live as "hey, first
+ *  time trying this out - what is in here?" falling straight to the raw
+ *  grammar wall (GREETING_PREAMBLE_RE peels "hey,", but nothing recognized
+ *  the remainder as a preamble at all). Added as a sibling alternative in
+ *  the SAME regex/capture group, so it strips into the identical downstream
+ *  shape ("just poking around, X" and "first time trying this out, X" both
+ *  hand back the bare "X" for the ordinary pipeline to answer) rather than a
+ *  new frame with its own behavior. */
+const BROWSING_PREAMBLE_RE = /^(?:just\s+(?:poking\s+around|looking\s+around|browsing|exploring|checking\s+(?:this|it)\s+out)|first\s+time\s+(?:trying\s+this\s+out|using\s+this|here))\s*[,.—–-]\s*(.+)$/i;
 /** A repeated leading HEDGE ADVERB ("maybe", "possibly", "perhaps") ahead of a
  *  polite request verb — the sibling of ACK_PREAMBLE_RE for HEDGING rather than
  *  acknowledging (Tier 6 playtest §3's own stacked-politeness example: "could

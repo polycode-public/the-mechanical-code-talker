@@ -58,7 +58,7 @@ import {
   VERB_TO_KIND, WHERE_MARKERS, MENTION_MARKERS, ENTITY_TO_TYPE, PASSIVE_PARTICIPLE_TO_KIND,
   stripTrailingScopeFiller, stripTrailingDiscourseTag,
 } from "./ask-vocab.mjs";
-import { COUNTERFACTUAL_RE, correctMisspellings, applyPreambleFrames, escapeRegex } from "./interpret/normalize.mjs";
+import { COUNTERFACTUAL_RE, correctMisspellings, applyPreambleFrames, normalizeQuery, escapeRegex } from "./interpret/normalize.mjs";
 import { fuzzyMatchInSet, fuzzyBound } from "./interpret/fuzzy.mjs";
 
 // uuidv7 lives in ./uuid.mjs (shared with telemetry + the bench stamp); re-exported
@@ -2716,6 +2716,24 @@ const WHAT_KNOW_RE = /^(?:what\s+(?:do\s+you|d'?you)\s+know(?:\s+so\s+far)?|what
 // "what does the do" is not real input) — a natural stranger-opener that was one
 // token away from already working.
 const META_ORIENT_RE = /^(?:what(?:'s| is| are)?\s+this(?:\s+(?:app|codebase|repo|repository|project|code|thing))?|what\s+(?:codebase|repo|repository|project)\s+is\s+this|what\s+does\s+this(?:\s+(?:app|code|codebase|project|repo))?\s+do|what\s+does\s+the\s+(?:app|code|codebase|project|repo)\s+do|what\s+is\s+(?:this|the)\s+app(?:\s+for)?|what\s+am\s+i\s+looking\s+at|what\s+is\s+tmct|how\s+do\s+i\s+(?:start|begin|get\s+started|get\s+going|load\s+(?:my\s+)?code|index\s+(?:my\s+)?(?:code|repo|repository)|use\s+(?:this|you|tmct))|where\s+do\s+i\s+(?:start|begin)|what\s+should\s+i\s+(?:read|look\s+at)\s+first(?:\s+to\s+understand\s+(?:this\s+)?(?:codebase|code|repo|repository|project))?|where\s+should\s+i\s+start\s+reading(?:\s+(?:this\s+)?(?:codebase|code|repo|repository|project))?|where\s+do\s+i\s+begin\s+reading(?:\s+(?:this\s+)?(?:codebase|code|repo|repository|project))?)$/;
+/** HANDOVER.md 2026-07-10 item 3 (part 2): a bare "what is in here"/"what's in
+ *  here"/"whats in here" — the SAME orientation intent as META_ORIENT_RE's own
+ *  "what's in this repo"-shaped members, just phrased with the CONTEXT_WORDS
+ *  pronoun "here" instead of a named noun (app/codebase/repo/…). ask.mjs's own
+ *  containment grammar parses "here" as a genuine pronoun object and, when a
+ *  focus IS standing, resolves it there exactly as intended — this regex is
+ *  ONLY ever tried when there is NO focus (see the call site's `!focus?.label`
+ *  gate), so that existing resolution path is completely untouched. With
+ *  nothing to resolve "here" against, ask.mjs's grammar instead renders the
+ *  honest but unhelpful "'here' needs a selected node…" miss — a poor answer
+ *  for a genuine first-time stranger who has never selected anything yet.
+ *  Tested against the NORMALIZED query (metaLane's call site runs
+ *  normalizeQuery first) rather than the raw text, so a preamble-wrapped
+ *  opener ("hey, first time trying this out - what is in here?") reaches this
+ *  exactly as the BARE "what is in here?" does — same preamble/filler-word
+ *  stripping ask.mjs's own grammar already applies before it ever sees the
+ *  pronoun. */
+const NO_FOCUS_WHATS_IN_HERE_RE = /^what(?:'s|s|\s+is)\s+in\s+here\??$/i;
 
 /** A SHORT memory summary (never a fact dump) for the bare "what do you know".
  *  This branch only fires when rows.length === 0 — i.e. precisely the case where
@@ -2813,7 +2831,7 @@ async function moduleOrientLane(query, { graph }) {
   return { text: moduleOverviewText(graph, ind), via: "meta" };
 }
 
-async function metaLane(query, { graph, memoryDir, last = null, templates = null, vocabHint = null }) {
+async function metaLane(query, { graph, memoryDir, last = null, templates = null, vocabHint = null, focus = null }) {
   const q = String(query).trim().toLowerCase().replace(/[?.!]+$/, "").replace(/\s+/g, " ");
   if (WHAT_KNOW_RE.test(q) || q === "what have you learned" || q === "what have you learnt") {
     return { text: await memorySummary(memoryDir, graph), via: "meta" };
@@ -2828,6 +2846,22 @@ async function metaLane(query, { graph, memoryDir, last = null, templates = null
     // distinct oneliner text (self-limiting for the same reason).
     const text = orientationText(graph, templates, vocabHint);
     return { text: last?.answer === text ? META_ORIENT_REPEAT_ONELINER : text, via: "meta" };
+  }
+  // HANDOVER.md 2026-07-10 item 3 (part 2): a bare "what is in here" with NO
+  // standing focus — see NO_FOCUS_WHATS_IN_HERE_RE's own docblock. Tested
+  // against normalizeQuery's output (the SAME normalization ask.mjs's own
+  // grammar runs before it ever sees the "here" pronoun), not the raw `q`
+  // above, so a preamble-wrapped opener reaches it identically to the bare
+  // form. Gated on !focus?.label so a real standing focus (where ask.mjs
+  // already resolves "here" against it) is completely unaffected — this only
+  // ADDS a fallback for the true first-turn case, never changes resolution
+  // when a focus exists.
+  if (!focus?.label) {
+    const stripped = normalizeQuery(String(query)).trim().replace(/[?.!]+$/, "").trim();
+    if (NO_FOCUS_WHATS_IN_HERE_RE.test(stripped)) {
+      const text = orientationText(graph, templates, vocabHint);
+      return { text: last?.answer === text ? META_ORIENT_REPEAT_ONELINER : text, via: "meta" };
+    }
   }
   // Bug E: an arbitrary "what does <term> do" that META_ORIENT_RE's closed noun
   // list didn't claim — try the module-grain overview before falling through to
@@ -6157,7 +6191,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // codebase", "how do i start") → a summary / orientation, answered before the
   // fact-dump readers so "what do you know" gets a summary, not raw facts.
   if (miss) {
-    const meta = await metaLane(query, { graph, memoryDir, last, templates, vocabHint });
+    const meta = await metaLane(query, { graph, memoryDir, last, templates, vocabHint, focus });
     if (meta) {
       answer = meta.text; via = meta.via; recordMiss = false; handled = true;
       note(trace, `lane: (1) META/SELF — bare self/session question recognized, answered via="${meta.via}"`);
