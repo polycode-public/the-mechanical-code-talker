@@ -43,7 +43,7 @@ const INDEX_NAME = "index.json";
 
 export const PAGERANK_DAMPING = 0.85;
 export const PAGERANK_ITERATIONS = 20;
-const OVERLAP_MIN = 2;          // shared tokens for a similarity edge
+export const OVERLAP_MIN = 2;   // shared tokens for a similarity edge
 const MAX_TOKENS_PER_BLOCK = 800; // beyond tokenizeProse's per-doc cap: union over lines
 
 const blocksDir = (dir) => join(dir, BLOCKS_DIR_REL);
@@ -87,8 +87,13 @@ export async function loadBlockIndex(dir) {
  * `tokensById` is a plain { id: tokens[] } map; an undirected edge joins two
  * blocks sharing at least `overlapMin` tokens. Returns { ids, neighbours }
  * (neighbours[i] is an array of adjacent indices into ids).
+ *
+ * Exported (as of Stage 0 of PLAN_COMPLETIONS.md) so src/completions/group.mjs can build
+ * connected components over the same similarity graph rankBlocks/degreeOf already use,
+ * rather than re-deriving the shared-token-overlap logic — this IS the clustering
+ * primitive this graph was missing; grouping is layered on top of it, not duplicated.
  */
-function buildNeighbours(tokensById, overlapMin) {
+export function buildNeighbours(tokensById, overlapMin) {
   const ids = Object.keys(tokensById || {});
   const N = ids.length;
   const sets = ids.map((id) => new Set(tokensById[id] || []));

@@ -26,7 +26,11 @@
 // individual's attributes. Both are derived from the identical token set, so they can never
 // disagree; (b) is just (a) inverted once, cheaply, at build time.
 
-const STOPWORDS = new Set(
+// Exported (as of PLAN_COMPLETIONS.md Stage 0) so src/completions/group.mjs can filter
+// splitIdentifierWords' output (which, unlike tokenizeProse, does NOT apply this list — it's
+// built for code identifiers, where stopword-shaped fragments are rare) down to real content
+// words before using it as a text-clustering similarity signal.
+export const STOPWORDS = new Set(
   ("a an and or but the of to in on at for with from by as is are was were be been being " +
     "it its this that these those i you he she they we me my your our do does did not no " +
     "yes if then else than so such can will would should could may might about into over " +
