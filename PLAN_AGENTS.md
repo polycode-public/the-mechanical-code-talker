@@ -4,7 +4,7 @@
 is known-how, staged by horizon. Supersedes `PLAN_TMCT_ECOSYSTEM_INTEGRATION.md` and absorbs six
 sibling docs — `PLAN_AGI_ARCHITECTURE.md`, `PLAN_CAPABILITY_ROUTER.md`, `PLAN_TAUGHT_RELATIONS.md`,
 `PLAN_OSS_ACE_PARSER.md`, `PLAN_ontology-hierarchies.md`, `PLAN_ADVANCED_GRAMMAR.md` — now archived.
-See §11, Provenance, for what each contributed.)*
+See §12, Provenance, for what each contributed.)*
 
 ## 0. The architecture, in one picture
 
@@ -19,16 +19,16 @@ Four concrete mounts:
 1. **seonix mounts its own code→graph** (already shipped, in production since seonix 0.8.0). tmct
    combines that graph with its own lexicon/ontology/seeded graph to become the NL interface over a
    **codebase-specific combined index** — one chat surface over "this repo's code" and "software
-   engineering in general" at once (§5).
+   engineering in general" at once (§6).
 2. **marginalia gets a web-scrape ingestion tool** (a BeautifulSoup-equivalent) that turns a `GET`
    into clean prose, fed into tmct's existing explicit-teaching surface — the chat-taught
-   relations/rules machinery `PLAN_TAUGHT_RELATIONS.md` just shipped (§6).
+   relations/rules machinery `PLAN_TAUGHT_RELATIONS.md` just shipped (§7).
 3. **marginalia's own "mechanical chat" gets replaced by tmct** — an NL→SPARQL front end over
-   marginalia's general-knowledge ontology, with real vocabulary bridging work (§4).
+   marginalia's general-knowledge ontology, with real vocabulary bridging work (§5).
 4. **tmct becomes a pluggable LLM rung** for tool-routing tasks in Claude Code, Amazon Bedrock (via
    bedrock-meter's already-tested router), and now GitHub Copilot — confirmed BYOK support via
    OpenAI-Chat-Completions-compatible or Ollama-style endpoints, shipped through Copilot App/CLI in
-   2026 (§7).
+   2026 (§8).
 
 A fifth, sibling track sits alongside these four rather than inside the phase sequence: **mechanical
 text generation** — broad search over a prompt, group the results, infer relationships between
@@ -36,8 +36,15 @@ groups, mechanically summarize, drop what doesn't contribute, then a grammar/voi
 LLM-style generation — extractive and compositional, never inventing text beyond what was retrieved.
 Detailed in the sibling doc `PLAN_COMPLETIONS.md`, a competing-but-kindred capability to
 `PLAN_CODE.md`'s program synthesis (both are "tmct produces an artifact" categories; see
-`PLAN_COMPLETIONS.md` §0 for the comparison). Cross-referenced from Phase 3 (§6) and the research
-horizon (§8).
+`PLAN_COMPLETIONS.md` §0 for the comparison). Cross-referenced from Phase 4 (§7) and the research
+horizon (§9).
+
+A sixth thread, realized mid-session (2026-07-10): tmct's own code-domain specialization was never
+a special case — it is one particular seed set with an implicit bias, and the mechanism that makes
+it "the code talker" generalizes to any seed set. §4 details a bias-weighted ambiguity-resolution
+scheme (`tmct.toml`, named seed sets, declared weights) that turns this into a first-class,
+configurable capability, and opens the door to ingesting much wider general-knowledge vocabulary
+without abandoning the honest-ambiguity discipline that vocabulary would otherwise strain.
 
 Before any of the above, though, tmct itself has real, verified gaps against its two closest sibling
 codebases — §2 catalogs them, code-grounded, and feeds the low-risk items straight into Phase 0.
@@ -63,6 +70,7 @@ The two audits this doc supersedes (`PLAN_TMCT_ECOSYSTEM_INTEGRATION.md`,
 | marginalia's "mechanical chat" replaced by tmct | **Not started** — the real open work | `app/lib/mechanical/`, 1,043 LOC, dark-flagged sub-path today |
 | marginalia LLM-decided facts (`typed-edges.mjs`) trust-tagged like tmct's own facts | **Not started** | confidence computed then discarded before persistence — the actual gap |
 | Chat-taught relations, rules, backward-chaining query dispatch | **Shipped** (`PLAN_TAUGHT_RELATIONS.md`, 2026-07-09) | Rule storage (compose2/filter/recursive kinds) + `resolveRelationChase` — see §1.2 |
+| Bias-weighted ambiguity resolution across seed sets | **Not started** — new this session | tmct's own domain is currently the only implicit bias; see §4 |
 
 ### 1.1 Foundational precedent: seonix proves the integration pattern
 
@@ -75,7 +83,7 @@ already-well-shaped tool calls stay native to the host.** tmct's job was never t
 `seonix_impact`'s reverse-closure computation — it was to decide, from natural language, that
 impact is what's being asked for and bind the right module. marginalia's `seon-mcp` (§1.1 of the
 old ecosystem plan) is a near-1:1 vocabulary match with tmct's own `EDGE_KINDS` for the same
-reason — proven twice now, low-risk, staged first (§10).
+reason — proven twice now, low-risk, staged first (§11).
 
 ### 1.2 Foundational precedent: PLAN_TAUGHT_RELATIONS is a working Stage 0/1 prototype
 
@@ -88,13 +96,13 @@ named thing with structure (base relation, a property filter, a recursive step �
 effects, decomposition), then chase a query against taught facts to find what satisfies it — the
 same "STRIPS/PDDL operator model" the router doc cites. Generalizing from "person A fathers person
 B" to "tool X, given args, produces effect Y" is a real step, but a smaller one than starting from
-nothing. Worth remembering when scoping Phase 1's slot-filling work (§4).
+nothing. Worth remembering when scoping Phase 2's slot-filling work (§5).
 
 ## 2. tmct uplift — what marginalia and seonix already do better
 
 Two deep, code-grounded comparative audits (2026-07-10) surveyed both sibling repos for mechanisms
 tmct lacks or has a cruder version of, deliberately separate from the vocabulary/integration gaps
-§1 and §4-§7 already cover. Findings are risk-graded — (a) mechanical/low-risk, (b) real but
+§1 and §5-§8 already cover. Findings are risk-graded — (a) mechanical/low-risk, (b) real but
 bounded, (c) genuinely harder — and feed §2.3 below.
 
 ### 2.1 From marginalia
@@ -182,7 +190,8 @@ algorithmic capability tmct would have to invent — the logic already sits in t
   matching) plus a hard refuse-and-list-candidates on ties; seonix's own conversational path already
   delegates to tmct's resolver. Nothing to port except an optional frequency-based tie-break, which
   conflicts with tmct's "honest ambiguity over guessing" principle — a judgment call, not a clear
-  win.
+  win. (§4 adds a different, complementary answer to the same question — a declared bias rather than
+  a frequency heuristic.)
 - **Visualizers + repo-level incremental sync (b, optional).** seonix ships a standalone Cytoscape
   ego-neighborhood viewer (`viz.mjs`, distinct from Chronograph) and multi-repo incremental re-index
   (`manifest.mjs`, git-SHA + dirty-worktree fingerprinting); tmct has neither — no graph-rendering
@@ -196,7 +205,7 @@ response pagination — fold straight into Phase 0 (§3) as additional foundatio
 no new dependency, mostly exposing logic tmct already owns rather than building anything new. The
 (b)/(c)-tier findings — memory versioning, actor-level trust, the SHACL ingest gate, multi-language
 AST extraction, Chronograph-style temporal diffing — are real, scoped engineering. Multi-language
-extraction and RI depth/telemetry feed Phase 2 (§5, the seonix combined index) most directly;
+extraction and RI depth/telemetry feed Phase 3 (§6, the seonix combined index) most directly;
 memory versioning, actor trust, and the SHACL gate are standing tmct-quality backlog, not yet
 phase-assigned, independent of any specific integration. None of this is research — every item
 above cites an existing, working mechanism in a sibling repo, not a proposal to invent something
@@ -226,7 +235,9 @@ Near-term, mostly known-how, individually small. No item here requires research.
   already-shipped provenance behavior; and `tmct extend --validate` running the same shape checks
   the core corpus already gets, so a malformed extension pack fails at build time, not query time.
   This is the first time tmct's answer surface can be shaped by data its own maintainers didn't
-  author or review — the namespacing/provenance design is load-bearing, not a nice-to-have.
+  author or review — the namespacing/provenance design is load-bearing, not a nice-to-have. **This
+  is also the config surface §4's bias weighting hangs off of** — each named extension becomes a
+  named seed set a bias weight can attach to.
 - **`ace-owl` open-source extraction** — pulling tmct's ACE-OWL controlled-English parser
   (`src/grammar/ace.mjs` + lexicon) out into a standalone, MPL-2.0, dependency-free npm package.
   Nothing like it exists as a permissive, ESM, browser-capable English-to-OWL-triples parser (the
@@ -237,9 +248,10 @@ Near-term, mostly known-how, individually small. No item here requires research.
 - **Ontology-hierarchies tracks a–d** — activate ConceptNet `/r/Synonym`/`/r/SimilarTo`; wire the
   already-parsed but unused phrasebook synonyms; hand-curate the SEON upper-ontology spine; grow
   `owl:disjointWith` premises. All rated high feasibility, small-to-medium effort, direct feeders
-  for the "combined lexicon, ontology, seeded graph" vision in §5. Track (e), importing WordNet
+  for the "combined lexicon, ontology, seeded graph" vision in §6. Track (e), importing WordNet
   wholesale, is rejected — wrong tier, would reintroduce the word-sense noise the ConceptNet filter
-  exists to avoid.
+  exists to avoid. (§4 revisits this rejection's premise for the wider-seed-set question
+  specifically — the objection was to noise with no way to rank through it, not to breadth itself.)
 - **Advanced-grammar tracks a/d/f** — subordination/conditional frames, construction-grammar
   template banks, presupposition-as-honest-nudge. High feasibility, small-to-medium effort, direct
   precedent in shipped 0.8.2 code. Cheap comprehension wins that raise the floor everything else in
@@ -258,9 +270,55 @@ Near-term, mostly known-how, individually small. No item here requires research.
   dampening tmct's own `codegraph.mjs` already implements for the code graph into `memory/blocks.mjs`'s
   fact retrieval, so a fact off a heavily-connected subject ranks on structural specificity, not just
   trust/provenance count. Pure JS, no new dependency, copy-the-idea-not-the-code.
-- **Benchmark/skill doc unification** — this restructuring itself (§11).
+- **Benchmark/skill doc unification** — this restructuring itself (§12).
 
-## 4. Phase 1 — tmct as marginalia's interpreter
+## 4. Phase 1 — Bias-weighted ambiguity resolution & wider general-knowledge seed sets
+
+The realization driving this phase, in the operator's own framing: tmct's own code-domain
+specialization was never a special case — it is one particular seed set with an implicit bias. The
+mechanism that makes tmct "the code talker" generalizes to any seed set, including a future one
+that isn't code at all.
+
+- **The default stays honest ambiguity over guessing.** §2.2 already confirmed this is the right
+  posture — tmct's resolver refuses and lists candidates on a genuine tie, and seonix's own
+  conversational path defers to tmct's resolver for exactly this reason. This phase does not weaken
+  that default. It adds one new ranking input ahead of the existing tie-break: a declared bias.
+- **`tmct.toml` gets a `[bias]` table** naming active seed sets (Phase 0's `[extensions]` entries, or
+  tmct's own built-in code-domain vocabulary) and a numeric weight each — e.g. `code = 1.0, general =
+  0.6`. A polysemous lexicon entry — the operator's own example: "class" mapping to both a code
+  construct and a school class, one sense contributed by each of two seed sets — resolves toward the
+  higher-weighted sense by default. The lower-weighted sense stays reachable and is disclosed in the
+  answer, never silently dropped: bias changes ranking, not truth. A tied bias falls back to today's
+  honest-refusal behavior, unchanged.
+- **This is the missing piece the WordNet-rejection rationale didn't have** (§3's ontology-hierarchies
+  bullet; the archived `PLAN_ontology-hierarchies.md` track (e); R3's 2M-word-ontology entry, §9).
+  That rationale rejected wide general vocabulary because it reintroduces word-sense noise a narrow,
+  curated corpus was built to avoid. Bias weighting doesn't eliminate that noise — it gives tmct a
+  declared, inspectable way to rank through it instead of needing to avoid it by staying narrow. Next
+  time R3's 2M-word-ontology assessment is revisited, this changes what it should weigh — not a green
+  light to build it, but a genuine change in the calculus.
+- **A wider general-knowledge seed set becomes worth ingesting on these terms** — not to replace
+  tmct's code-domain depth, but to sit alongside it as a lower-biased-by-default general layer, the
+  "any seed set" framing above made concrete. Grow the committed/seeded corpus tiers (`ROADMAP.md`'s
+  4-tier corpus policy) with a broader ConceptNet slice or comparable general-purpose source, gated
+  by the same shape-validation discipline `tmct extend --validate` (§3) already applies to extension
+  packs.
+- **Context-preserving ingestion for unknown words — new, not yet built.** When a wider seed set (or
+  Phase 4's scraped web content, §7) introduces a term tmct doesn't recognize, it should not be
+  silently dropped. It enters the graph as a real individual tagged with the passage it was found in
+  (a stored context paragraph, as provenance), and other words — known or unknown — co-occurring in
+  that same passage get linked to it. This is deliberately **not** distributional/embedding-style
+  meaning induction — that would cross into LLM-shaped territory. It is a bounded, structural
+  provenance mechanism: a future resolution pass, or an explicit teaching turn, has real context to
+  work from instead of a bare, contextless token. Scoped honestly: this buys traceable context, not
+  automatic sense disambiguation, and should be graded on that basis, not oversold as understanding.
+- **Config surface, concretely.** Extends Phase 0's `[extensions]` table — each named
+  extension/seed set gets an optional `bias` weight. The resolver's existing tie-break logic (already
+  principled — refuse-and-list-candidates on a genuine tie, §2.2) gets one new input ahead of that
+  tie-break: prefer the sense whose owning seed set has the higher declared bias, falling back to
+  today's honest-refusal behavior only when biases are equal or absent.
+
+## 5. Phase 2 — tmct as marginalia's interpreter
 
 Two paired within-horizon efforts: both are "point a real external NL→structured-query surface at
 tmct" rather than validate against synthetic benchmarks.
@@ -306,7 +364,7 @@ tmct" rather than validate against synthetic benchmarks.
   marginalia's own `formulate-grammar.mjs` + `matcher.mjs` (387 lines combined). A multi-day task,
   not a code-generation exercise. Gated on Phase 0's extension-pack seam existing.
 
-## 5. Phase 2 — tmct × seonix combined codebase index
+## 6. Phase 3 — tmct × seonix combined codebase index
 
 - **Mount seonix's code→graph** through the Phase-0 extension-pack seam alongside tmct's own
   ontology/lexicon/seeded graph, so one chat surface answers both "what does this repo's code do"
@@ -333,7 +391,7 @@ tmct" rather than validate against synthetic benchmarks.
   everywhere else in this doc: answer what's provably in the combined graph/ontology, decline
   honestly outside it, never guess.
 
-## 6. Phase 3 — marginalia web-scrape → tmct learning pipeline
+## 7. Phase 4 — marginalia web-scrape → tmct learning pipeline
 
 - **A scraping tool** (a BeautifulSoup-equivalent, or a Node/JS HTML-extraction library) that turns
   a web `GET` into clean prose blocks.
@@ -342,6 +400,9 @@ tmct" rather than validate against synthetic benchmarks.
   explicit-teaching half (marginalia's own capability audit already found "X is the Y of Z"-style
   explicit teaching moves cleanly to tmct + effort). This phase wires a new ingestion source to
   capability tmct already has.
+- **Also feeds §4's context-preserving unknown-word ingestion** once that lands — scraped prose is
+  exactly the source material that mechanism is meant for: unknown terms enter the graph tagged with
+  the scraped passage they came from, not dropped.
 - **Also a natural Stage-1 input source for `PLAN_COMPLETIONS.md`'s mechanical text-generation
   pipeline** once that track is scoped — scraped web content is exactly the kind of broad-search
   material that pipeline's grouping/inference/summarization stages consume.
@@ -351,7 +412,7 @@ tmct" rather than validate against synthetic benchmarks.
   one. This phase is strictly about wiring a new ingestion source to existing explicit-pattern
   extraction, not new NLU capability. Don't scope-creep it into open-world extraction.
 
-## 7. Phase 4 — tmct as a pluggable LLM rung
+## 8. Phase 5 — tmct as a pluggable LLM rung
 
 Three targets, each a protocol-adapter problem, not a research problem. MCP is the dominant 2026
 tool-integration standard (spec 2025-11-25, donated to the Linux Foundation's Agentic AI Foundation
@@ -377,11 +438,11 @@ directly rather than MCP.
   between the OpenAI Chat Completions JSON shape and tmct's existing internal `runTurn`/`dispatchTool`
   engine — the same kind of mechanical adapter the Messages-API shim already is, not a new capability.
 
-## 8. Research horizon
+## 9. Research horizon
 
 Tiered by hardness. Each item gets one paragraph here; full literature and citations live in the
 new shared reference doc, `docs/references/research-horizon.md`, cross-linked rather than repeated
-(three archived docs independently grew near-identical essays on this territory — see §11).
+(three archived docs independently grew near-identical essays on this territory — see §12).
 
 **R1 — nearest, worth a scoping spike soon:**
 
@@ -389,7 +450,7 @@ new shared reference doc, `docs/references/research-horizon.md`, cross-linked ra
   N declared goals plus an explicit reject class. Not published or built anywhere this research
   found. The capability router's own next spike to scope, not a result to claim yet.
 - **DRT-lite typed discourse record** — a bounded discourse-representation structure for tracking
-  entities/relations across turns, feeding better slot-filling for Phase 1's marginalia work. Close
+  entities/relations across turns, feeding better slot-filling for Phase 2's marginalia work. Close
   kin to `PLAN_COMPLETIONS.md`'s Stage 3 (inference between retrieved-text groups, §1.3 there) — both
   track relationships between spans of text, one across chat turns, one across retrieved groups;
   worth designing together if both are ever scoped.
@@ -416,7 +477,9 @@ new shared reference doc, `docs/references/research-horizon.md`, cross-linked ra
   commonsense.
 - **A shared ~2M-word cross-domain ontology** — no one has published the combination this idea
   needs (general + technical vocabulary, merged, at this scale, under a no-LLM constraint). Unknown,
-  unattempted — the actual open question, not a commitment to build.
+  unattempted — the actual open question, not a commitment to build. §4's bias-weighting mechanism is
+  a genuinely new input to this question — not a solution, but a real change in what "merged, at
+  this scale" would mean if disambiguation no longer had to rely on narrowness alone.
 - **"All of a typical human's knowledge"** — the operator's own AGI framing, checked honestly: Cyc
   (40 years, ~100M hand-encoded assertions) is remembered mainly as a cautionary tale of effort vs.
   payoff at that scale; WordNet's own scope problem reintroduces the same sense-disambiguation noise
@@ -434,7 +497,7 @@ instead of dropping it, a `derived_by: "llm"` provenance tag, and a principled t
 retraction path instead of an admin hide-flag. Not research — an integration spec between two
 existing systems — staged into Phase 0/R2 depending on how it lands.
 
-## 9. Non-goals
+## 10. Non-goals
 
 Explicit pruning record, so these aren't re-asked:
 
@@ -444,7 +507,7 @@ Explicit pruning record, so these aren't re-asked:
   PageRank+IDF block ranker) — both have permissive JS alternatives already, unlike ACE. Reduced to
   a single ROADMAP backlog line, not a phase here. (The block ranker specifically is un-pruned and
   re-scoped inside `PLAN_COMPLETIONS.md` §1.4, where it has a real job — see that doc, not this one.)
-- **Duplicate WordNet/SEthesaurus rejection rationale** — stated once (§8, R3), not repeated across
+- **Duplicate WordNet/SEthesaurus rejection rationale** — stated once (§9, R3), not repeated across
   every doc that touches ontology scale.
 - **Making marginalia or bedrock-meter no-LLM.** Never proposed, not proposed here. Both keep their
   own LLM usage; tmct's contribution is the deterministic floor with an honest escalation boundary.
@@ -454,40 +517,46 @@ Explicit pruning record, so these aren't re-asked:
 - **marginalia's full actor-lifecycle trust machinery (§2.1)** — the behavioral-signal scoring and
   recontact-scheduling apparatus is scoped for an ecosystem with external agents to track; tmct
   adopts only the narrower per-source reliability idea, not the whole system.
+- **Bias weighting silently overriding honest refusal (§4).** Explicitly rejected: bias only breaks
+  ties in ranking; a genuine tie in declared bias still refuses and lists candidates, exactly as
+  today. Bias is not a license to guess confidently.
 
-## 10. Sequencing
+## 11. Sequencing
 
 | Phase | What ships | Depends on | Repo(s) |
 |---|---|---|---|
 | 0 | Foundations (§3): smoke test, envelope.json, extension-pack seam, ace-owl extraction, ontology tracks a–d, grammar tracks a/d/f, debt re-measure, RI wrapper fixes + hub-dampened memory ranking (§2) | Nothing (all build on shipped work) | tmct |
-| 1 | tmct as marginalia's interpreter (§4): seon-mcp adapter, Formulate validation, mechanical-chat replacement | Phase 0's extension-pack seam | tmct, marginalia |
-| 2 | tmct × seonix combined index (§5): multi-language AST extraction, combined graph/ontology | Phase 0's extension-pack seam | tmct, seonix |
-| 3 | marginalia scrape→teach pipeline (§6) | PLAN_TAUGHT_RELATIONS (shipped) | marginalia |
-| 4 | Pluggable LLM rung — Claude Code hardening, Bedrock integration test + assessor, Copilot shim (§7) | Phase 0's envelope.json (Bedrock); nothing new (Claude Code, Copilot) | tmct, bedrock-meter |
+| 1 | Bias-weighted ambiguity resolution & wider seed sets (§4): `tmct.toml` `[bias]` table, wider general-knowledge corpus, context-preserving unknown-word ingestion | Phase 0's extension-pack seam | tmct |
+| 2 | tmct as marginalia's interpreter (§5): seon-mcp adapter, Formulate validation, mechanical-chat replacement | Phase 0's extension-pack seam | tmct, marginalia |
+| 3 | tmct × seonix combined index (§6): multi-language AST extraction, combined graph/ontology | Phase 0's extension-pack seam | tmct, seonix |
+| 4 | marginalia scrape→teach pipeline (§7) | PLAN_TAUGHT_RELATIONS (shipped); Phase 1 for context-preserving ingestion specifically | marginalia |
+| 5 | Pluggable LLM rung — Claude Code hardening, Bedrock integration test + assessor, Copilot shim (§8) | Phase 0's envelope.json (Bedrock); nothing new (Claude Code, Copilot) | tmct, bedrock-meter |
 | Backlog | Memory-tree versioning, actor-level trust, SHACL ingest gate, Chronograph-style temporal diffing (§2) | None — independent tmct-quality work | tmct |
-| R1 | Bounded goal recognition spike, DRT-lite discourse record | Phase 1 (validation target) | tmct |
-| R2 | Dependency/categorial grammar idea, cross-repo trust vocabulary | LLM-decision provenance gap (§8) | tmct, marginalia |
+| R1 | Bounded goal recognition spike, DRT-lite discourse record | Phase 2 (validation target) | tmct |
+| R2 | Dependency/categorial grammar idea, cross-repo trust vocabulary | LLM-decision provenance gap (§9) | tmct, marginalia |
 | R3 | Open-world planning, Winograd coreference, shared ontology scale — recorded, not scheduled | — | — |
 
-## 11. Provenance
+## 12. Provenance
 
 What this doc absorbed from each archived source, and what was cut:
 
 - **`PLAN_AGI_ARCHITECTURE.md`** → §1.2 (five-part architecture verification, kept as one line: four
-  of five parts already exist, just not unified), §8's LLM-decision-provenance gap and R3's Cyc/
+  of five parts already exist, just not unified), §9's LLM-decision-provenance gap and R3's Cyc/
   WordNet framing. Cut: the full five-part verification table narrative (condensed to §1).
-- **`PLAN_CAPABILITY_ROUTER.md`** → §1 (shipped-stage evidence), §7 (Claude Code/Bedrock hardening),
-  §8 R1/R3 (bounded goal recognition, open-world boundary). Cut: the "Open questions (for tonight)"
-  section (§9); the full open-world-boundary literature review moved to
+- **`PLAN_CAPABILITY_ROUTER.md`** → §1 (shipped-stage evidence), §8 (Claude Code/Bedrock hardening),
+  §9 R1/R3 (bounded goal recognition, open-world boundary). Cut: the "Open questions (for tonight)"
+  section (§10); the full open-world-boundary literature review moved to
   `docs/references/research-horizon.md`.
 - **`PLAN_TAUGHT_RELATIONS.md`** → §1.2 (the Stage 0/1 prototype insight) only. Archived as-is
   (operator decision) — its 70KB build narrative is historical record, not carried forward.
 - **`PLAN_OSS_ACE_PARSER.md`** → §3 (now-unblocked ace-owl extraction). Cut: the "sibling publish
-  candidates" section (§9).
-- **`PLAN_ontology-hierarchies.md`** → §3 (tracks a–d), §8 R3 (the 2M-word ontology question). Cut:
-  the duplicated WordNet-rejection rationale; the full §8 literature review moved to
+  candidates" section (§10).
+- **`PLAN_ontology-hierarchies.md`** → §3 (tracks a–d), §9 R3 (the 2M-word ontology question). Cut:
+  the duplicated WordNet-rejection rationale; the full §9 literature review moved to
   `docs/references/research-horizon.md`.
-- **`PLAN_ADVANCED_GRAMMAR.md`** → §3 (tracks a/d/f), §8 R2/R3 (dependency grammar, Winograd). Cut:
+- **`PLAN_ADVANCED_GRAMMAR.md`** → §3 (tracks a/d/f), §9 R2/R3 (dependency grammar, Winograd). Cut:
   the full literature reviews for tracks (c) and (g), moved to `docs/references/research-horizon.md`.
 - **Two 2026-07-10 comparative audits of marginalia and seonix** (not archived docs — fresh
   research this session) → §2 in full.
+- **The operator's bias-weighting realization** (2026-07-10, mid-session, not from any archived
+  doc) → §4 in full, plus the R3 revisit note.
