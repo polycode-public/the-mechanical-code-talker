@@ -5,15 +5,23 @@
 //
 //   resolveExtensions(repoRoot) → { entries: Map<name, ResolvedEntry>, biasByBundle }
 //
-// BUILTIN_EXTENSIONS ships the exact two bundles chat.mjs's bootstrap has
-// always seeded — `seon` and `conceptnet`, both active — plus four shipped-
-// but-INACTIVE tier-2 bundles (`tier2-aws` / `tier2-python` / `tier2-java` /
-// `tier2-general`). Activating one is a config-only edit (`tmct init --corpus
+// BUILTIN_EXTENSIONS' DEFAULT ACTIVE BUNDLE IS `human` (PLAN_SEED.md, the
+// persona flip): a fresh repo now seeds an everyday-world vocabulary (people,
+// places, objects, nature, time/events, body/food, mind — hand-curated from
+// Open English WordNet + Schema.org) rather than the old implicit code-domain
+// default. `seon` and `conceptnet` are SHIPPED but now INACTIVE — both are
+// equally code/tech-domain-biased (conceptnet's committed slice was filtered
+// via a tech-domain seed-term match, PLAN_SEED.md §2), so BOTH flip together,
+// not just seon — a repo that wants the old behavior asks for it explicitly
+// (`tmct init --with-persona code`, or `[extensions.seon]`/`[extensions.
+// conceptnet]` `active = true`). Four more shipped-but-INACTIVE tier-2 bundles
+// (`tier2-aws` / `tier2-python` / `tier2-java` / `tier2-general`) round out the
+// catalog. Activating any of these is a config-only edit (`tmct init --corpus
 // aws`, or a `[extensions.tier2-aws] active = true` in tmct.toml) — zero code
-// change. `tier2-general` (PLAN_AGENTS.md Phase 1) is deliberately NOT a
-// language/domain bundle like the other three — everyday-knowledge concepts
-// with zero code-domain framing, the "wider general-knowledge seed set"
-// bullet made real instead of just mechanically activatable.
+// change. `tier2-general`'s own 49-fact animal/weather set (PLAN_AGENTS.md
+// Phase 1) is superseded IN DEFAULT ROLE by `human`'s much larger
+// `human-nature` clump, but stays shipped/selectable on its own for a caller
+// that wants that narrow slice without the rest of the human persona.
 //
 // A `tmct.toml` may carry a top-level `[extensions]` table-of-tables
 // (`[extensions.tier2-aws]`, …): a RECOGNIZED name (one of the builtins above)
@@ -57,21 +65,36 @@ const CONCEPTNET_PREFER = ["rdfs:subClassOf", "rdf:type", "mgx:usedFor", "mgx:pa
  *  accidentally mutate a module-level singleton. */
 function builtinExtensions() {
   return {
+    // WAS active:true (the implicit code-domain default) — now opt-in.
+    // PLAN_SEED.md §2: re-activate explicitly (`tmct init --with-persona
+    // code`, or `[extensions.seon] active = true`) for the old behavior.
     seon: {
       kind: "corpus",
-      active: true,
+      active: false,
       corpusPath: SEON_CONCEPTS_FILE,
       provenancePrefix: "corpus:seon",
     },
+    // WAS active:true — now opt-in too, not just seon (PLAN_SEED.md §2: the
+    // committed slice is itself tech-domain-filtered, equally biased).
     conceptnet: {
       kind: "corpus",
-      active: true,
+      active: false,
       corpusPath: CONCEPTNET_SLICE_FILE,
       provenancePrefix: "corpus:conceptnet",
       // matches chat.mjs's seedBootstrapMemory exactly: uncapped, definitional
       // band first.
       limit: undefined,
       prefer: CONCEPTNET_PREFER,
+    },
+    // NEW — the default active bundle (PLAN_SEED.md). Everyday-world
+    // vocabulary: people, places, objects, nature, time/events, body/food,
+    // mind, plus the human-base/human-bridge scaffolding connecting WordNet's
+    // and Schema.org's independently-built taxonomies (PLAN_SEED.md §3, §8).
+    human: {
+      kind: "corpus",
+      active: true,
+      corpusPath: join(TIER2_DIR, "human.jsonl"),
+      provenancePrefix: "corpus:human",
     },
     "tier2-aws": {
       kind: "corpus",
@@ -235,7 +258,15 @@ export async function seedActiveCorpusEntries(repo, entries) {
   let skipped = 0;
   let total = 0;
   for (const [name, entry] of entries instanceof Map ? entries : new Map()) {
-    if (entry.kind !== "corpus" || !entry.active) continue;
+    // PLAN_SEED.md §2 bug fix: a "pack"-kind entry with its own corpusPath
+    // combines corpus/lexicon/templates under one active flag (this module's
+    // own docblock says so) but was previously never actually seeded here —
+    // only bare `kind: "corpus"` entries were. Broadened, not narrowed: every
+    // existing `kind: "corpus"` entry (seon/conceptnet/human/tier2-*) behaves
+    // identically to before; only a pack entry that DOES carry a corpusPath
+    // newly qualifies.
+    const seedable = entry.kind === "corpus" || (entry.kind === "pack" && entry.corpusPath);
+    if (!seedable || !entry.active) continue;
     try {
       const res = await seedMemory(repo, {
         slicePath: entry.corpusPath,

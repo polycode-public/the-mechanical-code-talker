@@ -2,10 +2,11 @@
 //
 // resolveExtensions(repoRoot) is the ONE seam every corpus-loading, lexicon-
 // merging and bias-ranking caller consults: a bare/no-toml dir must resolve to
-// exactly today's implicit seon+conceptnet default; a tmct.toml can flip a
-// shipped-but-inactive tier-2 bundle active, or declare a brand new
-// host-supplied pack entry; malformed entries and a malformed [bias] table
-// both fail loudly, naming the bad key.
+// exactly today's implicit `human` default (PLAN_SEED.md's persona flip —
+// `seon`/`conceptnet` ship but are now opt-in); a tmct.toml can flip a
+// shipped-but-inactive tier-2 bundle (or seon/conceptnet) active, or declare a
+// brand new host-supplied pack entry; malformed entries and a malformed
+// [bias] table both fail loudly, naming the bad key.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -14,28 +15,33 @@ import { join } from "node:path";
 import {
   resolveExtensions, validateExtensionEntry, BUILTIN_EXTENSIONS, EXTENSION_KINDS,
 } from "../src/extensions.mjs";
-import { SEON_CONCEPTS_FILE, SLICE_FILE as CONCEPTNET_SLICE_FILE } from "../src/corpus/conceptnet.mjs";
+import { SEON_CONCEPTS_FILE, SLICE_FILE as CONCEPTNET_SLICE_FILE, TIER2_DIR } from "../src/corpus/conceptnet.mjs";
 
 const tmp = () => mkdtemp(join(tmpdir(), "tmct-ext-"));
 
-test("bare/no-toml dir: resolves to exactly today's implicit seon+conceptnet default, byte-identical", async () => {
+test("bare/no-toml dir: resolves to exactly today's implicit `human` default (seon/conceptnet shipped but inactive)", async () => {
   const dir = await tmp();
   try {
     const { entries, biasByBundle } = await resolveExtensions(dir);
     assert.deepEqual(biasByBundle, {});
     // fixed order: seon, conceptnet, then the rest sorted
-    assert.deepEqual([...entries.keys()], ["seon", "conceptnet", "tier2-aws", "tier2-general", "tier2-java", "tier2-python"]);
+    assert.deepEqual([...entries.keys()], ["seon", "conceptnet", "human", "tier2-aws", "tier2-general", "tier2-java", "tier2-python"]);
     const seon = entries.get("seon");
     assert.equal(seon.kind, "corpus");
-    assert.equal(seon.active, true);
+    assert.equal(seon.active, false, "seon ships inactive now — opt-in via --with-persona code");
     assert.equal(seon.corpusPath, SEON_CONCEPTS_FILE);
     assert.equal(seon.provenancePrefix, "corpus:seon");
     const conceptnet = entries.get("conceptnet");
-    assert.equal(conceptnet.active, true);
+    assert.equal(conceptnet.active, false, "conceptnet ships inactive now — equally code/tech-domain-biased (PLAN_SEED.md §2)");
     assert.equal(conceptnet.corpusPath, CONCEPTNET_SLICE_FILE);
     assert.equal(conceptnet.provenancePrefix, "corpus:conceptnet");
     assert.equal(conceptnet.limit, undefined);
     assert.deepEqual(conceptnet.prefer, ["rdfs:subClassOf", "rdf:type", "mgx:usedFor", "mgx:partOf", "mgx:capableOf"]);
+    const human = entries.get("human");
+    assert.equal(human.kind, "corpus");
+    assert.equal(human.active, true, "human is the new default active bundle");
+    assert.equal(human.corpusPath, join(TIER2_DIR, "human.jsonl"));
+    assert.equal(human.provenancePrefix, "corpus:human");
     // the four tier-2 bundles ship but stay inactive
     for (const id of ["tier2-aws", "tier2-python", "tier2-java", "tier2-general"]) {
       assert.equal(entries.get(id).kind, "corpus");
@@ -47,9 +53,10 @@ test("bare/no-toml dir: resolves to exactly today's implicit seon+conceptnet def
 });
 
 test("BUILTIN_EXTENSIONS matches the resolved defaults' shape (kind/active for every shipped bundle)", () => {
-  assert.deepEqual(Object.keys(BUILTIN_EXTENSIONS).sort(), ["conceptnet", "seon", "tier2-aws", "tier2-general", "tier2-java", "tier2-python"]);
-  assert.equal(BUILTIN_EXTENSIONS.seon.active, true);
-  assert.equal(BUILTIN_EXTENSIONS.conceptnet.active, true);
+  assert.deepEqual(Object.keys(BUILTIN_EXTENSIONS).sort(), ["conceptnet", "human", "seon", "tier2-aws", "tier2-general", "tier2-java", "tier2-python"]);
+  assert.equal(BUILTIN_EXTENSIONS.seon.active, false);
+  assert.equal(BUILTIN_EXTENSIONS.conceptnet.active, false);
+  assert.equal(BUILTIN_EXTENSIONS.human.active, true);
   assert.equal(BUILTIN_EXTENSIONS["tier2-aws"].active, false);
 });
 
@@ -80,7 +87,7 @@ test("a tmct.toml with an unrecognized-key host pack entry", async () => {
     assert.equal(e.corpusPath, join(dir, "corpus.jsonl"), "a relative path resolves against repoRoot");
     assert.equal(e.provenancePrefix, "corpus:seonix");
     // ordering: seon, conceptnet, then the rest (including the new one) sorted
-    assert.deepEqual([...entries.keys()], ["seon", "conceptnet", "seonix", "tier2-aws", "tier2-general", "tier2-java", "tier2-python"]);
+    assert.deepEqual([...entries.keys()], ["seon", "conceptnet", "human", "seonix", "tier2-aws", "tier2-general", "tier2-java", "tier2-python"]);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

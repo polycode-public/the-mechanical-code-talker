@@ -246,11 +246,14 @@ by cleaned session logs:
 
 With no graph at all, tmct starts empty and remembers what you tell it. The
 `.tmct/` graph is created from the conversation. On a first run it seeds the
-committed vocabulary so it knows what it's talking about from turn one: a curated
-**SEON** software ontology plus the whole filtered **ConceptNet slice**
-(CC-BY-SA 4.0). Every term carries an English definition, so "what is a cache?"
-answers offline, from disk, on turn one. `--ephemeral` (used by the shipped
-`npm run example:*` demos) reads a graph but writes nothing back.
+committed vocabulary so it knows what it's talking about from turn one: an
+everyday **human-world** persona — people, places, objects, nature, time/
+events, body/food and mind vocabulary hand-curated from Open English WordNet
+and bridged to Schema.org's top-level classes — so "what is a dog?" answers
+offline, from disk, on turn one. A code-domain persona (a curated **SEON**
+software ontology plus the whole filtered **ConceptNet slice**, CC-BY-SA 4.0)
+is available opt-in: `tmct init --with-persona code`. `--ephemeral` (used by
+the shipped `npm run example:*` demos) reads a graph but writes nothing back.
 
 Teaching isn't limited to the ACE grammar's fixed shapes. Tell tmct an
 arbitrary fact, like "margo eats ribs", and it mints a fact you can later ask

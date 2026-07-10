@@ -11,13 +11,22 @@ import { loadMemory, FACT_CLASS } from "../src/memory/core.mjs";
 
 const tmp = () => mkdtemp(join(tmpdir(), "tmct-extcorpus-"));
 
+// PLAN_SEED.md's persona flip: seon/conceptnet ship but are no longer active
+// by default (that's `human` now — see extensions.test.mjs). Several tests
+// below are specifically about SEON/ConceptNet's OWN seeding mechanics
+// (ordering, failure tolerance alongside them) — they now explicitly
+// reactivate both AND deactivate `human` via a written tmct.toml, so this
+// file's own assertions stay scoped to seon+conceptnet exactly as before,
+// undiluted by the new default bundle also being active alongside them.
+const CODE_PERSONA_TOML = "[extensions.seon]\nactive = true\n\n[extensions.conceptnet]\nactive = true\n\n[extensions.human]\nactive = false\n";
+
 test("seedActiveCorpusEntries: only ACTIVE corpus-kind entries seed; inactive/non-corpus entries are skipped", async () => {
   const dir = await tmp();
   try {
-    const { entries } = await resolveExtensions(dir); // default: seon+conceptnet active, 3 tier2 inactive
+    const { entries } = await resolveExtensions(dir); // default: human active, seon/conceptnet/3 tier2 inactive
     const { appended, perBundle } = await seedActiveCorpusEntries(dir, entries);
     assert.ok(appended > 0);
-    assert.deepEqual(Object.keys(perBundle).sort(), ["conceptnet", "seon"], "only the two active bundles ran");
+    assert.deepEqual(Object.keys(perBundle).sort(), ["human"], "only the one active bundle ran");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -26,6 +35,7 @@ test("seedActiveCorpusEntries: only ACTIVE corpus-kind entries seed; inactive/no
 test("seon seeds BEFORE conceptnet — a term both corpora carry keeps the seon provenance (idempotency-ordering precedent)", async () => {
   const dir = await tmp();
   try {
+    await writeFile(join(dir, "tmct.toml"), CODE_PERSONA_TOML);
     const { entries } = await resolveExtensions(dir);
     await seedActiveCorpusEntries(dir, entries);
     const mem = await loadMemory(dir);
@@ -46,6 +56,7 @@ test("seon seeds BEFORE conceptnet — a term both corpora carry keeps the seon 
 test("failure tolerance: one bad bundle's error is recorded, never thrown, and never blocks the others", async () => {
   const dir = await tmp();
   try {
+    await writeFile(join(dir, "tmct.toml"), CODE_PERSONA_TOML);
     const { entries } = await resolveExtensions(dir);
     // graft in a bogus third active corpus entry pointing at a missing file
     entries.set("bogus", { kind: "corpus", active: true, corpusPath: join(dir, "does-not-exist.jsonl"), provenancePrefix: "corpus:bogus" });
@@ -77,7 +88,7 @@ test("idempotent re-run: seeding the SAME entries twice appends nothing the seco
 test("a mid-list active bundle (tier2-aws, activated via tmct.toml) seeds alongside seon+conceptnet in one loop", async () => {
   const dir = await tmp();
   try {
-    await writeFile(join(dir, "tmct.toml"), "[extensions.tier2-aws]\nactive = true\n");
+    await writeFile(join(dir, "tmct.toml"), `${CODE_PERSONA_TOML}\n[extensions.tier2-aws]\nactive = true\n`);
     const { entries } = await resolveExtensions(dir);
     assert.deepEqual([...entries.keys()].filter((n) => entries.get(n).active), ["seon", "conceptnet", "tier2-aws"]);
     const { perBundle } = await seedActiveCorpusEntries(dir, entries);
@@ -97,7 +108,7 @@ for (const name of ["tier2-python", "tier2-java", "tier2-general"]) {
   test(`activation seam: [extensions.${name}] active = true seeds real facts alongside seon+conceptnet`, async () => {
     const dir = await tmp();
     try {
-      await writeFile(join(dir, "tmct.toml"), `[extensions.${name}]\nactive = true\n`);
+      await writeFile(join(dir, "tmct.toml"), `${CODE_PERSONA_TOML}\n[extensions.${name}]\nactive = true\n`);
       const { entries } = await resolveExtensions(dir);
       assert.deepEqual([...entries.keys()].filter((n) => entries.get(n).active), ["seon", "conceptnet", name]);
       const { perBundle } = await seedActiveCorpusEntries(dir, entries);

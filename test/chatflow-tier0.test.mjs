@@ -86,15 +86,15 @@ test("tier0/AI-identity: dialect/slang/typo greetings plus the AI-identity famil
   }
 });
 
-test("tier0/vocab-hint (seeded): the offered 'what is a cache' example actually resolves when tried in-session", async () => {
+test("tier0/vocab-hint (seeded): the offered 'what is a dog' example actually resolves when tried in-session", async () => {
   const { dir, turns, banner } = await driveSession(undefined, [
     "hi",
-    "what is a cache",
+    "what is a dog",
   ]);
   try {
-    assert.match(banner, /what is a cache/, "seeded banner offers the term");
+    assert.match(banner, /what is a dog/, "seeded banner offers the term");
     assert.doesNotMatch(turns[1].answer, /couldn't parse|isn't a term in this graph/i, "the offered example resolves");
-    assert.match(turns[1].answer, /fast, temporary store/, "the vocabulary answer is the real definition");
+    assert.match(turns[1].answer, /dog is a kind of animal/, "the vocabulary answer is the real definition");
   } finally {
     clearCache();
     await rm(dir, { recursive: true, force: true });

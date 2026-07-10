@@ -41,6 +41,7 @@ tmct.toml
 # (that's corpus/tier2/human.jsonl + src/grammar/lexicon-core.json, hand-picked
 # FROM this worksheet — see PLAN_SEED.md §5).
 scripts/persona-worksheet.json
+scripts/persona-examples-candidates.json
 
 # public/engine/ and public/demo-graph.json are CI-GENERATED (see .gitlab-ci.yml's
 # `pages` job): literal copies of src/*.mjs + a regenerated demo graph, so src/ stays

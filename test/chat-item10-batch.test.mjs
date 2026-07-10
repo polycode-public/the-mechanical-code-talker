@@ -57,14 +57,14 @@ test("HANDOVER item 10: 'please describe about Task' strips the redundant 'about
   assert.equal(doubled.answer, plain.answer, "the doubled verb ('describe about X') must resolve the same as the clean form ('describe X')");
 });
 
-test("HANDOVER item 10: 'what is cache' (dropped article) resolves the same curated definition as 'what is a cache'", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "tmct-item10-cache-"));
+test("HANDOVER item 10: 'what is dog' (dropped article) resolves the same curated definition as 'what is a dog'", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-item10-dog-"));
   try {
     const s = await createSession({ repoPath: dir, env: {} });
-    const articled = await s.turn("what is a cache");
-    const bare = await s.turn("what is cache");
+    const articled = await s.turn("what is a dog");
+    const bare = await s.turn("what is dog");
     await s.close();
-    assert.match(articled.answer, /cache/i);
+    assert.match(articled.answer, /dog/i);
     assert.equal(bare.answer, articled.answer, "the bare form must resolve the same curated definition as the articled form");
   } finally { await rm(dir, { recursive: true, force: true }); }
 });

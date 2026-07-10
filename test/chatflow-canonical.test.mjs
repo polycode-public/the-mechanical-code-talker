@@ -37,16 +37,28 @@ async function driveSession(queries) {
   return { dir, turns };
 }
 
-test("canonical: the classic textbook syllogism ('john is a man') never hits the wall, and its ungrounded-pair hint is sane, not a nonsensical chain", async () => {
+test("canonical: the classic textbook syllogism ('john is a man') never hits the wall — PLAN_SEED.md's human-persona lexicon growth grounds 'man' directly, so it now stores cleanly with no hint needed at all", async () => {
   const { turns } = await driveSession(["john is a man"]);
   const [t0] = turns;
   assert.doesNotMatch(t0.answer, WALL, "the classic syllogism must never hit the raw grammar wall");
+  // "man" is now a declared lexicon noun (PLAN_SEED.md's default human-world
+  // persona) — one side of the pair is ALREADY grounded, so this resolves as
+  // a direct, fully-grounded teach ("john is a kind of man"), a strictly
+  // better outcome than the old ungrounded-pair hint this test used to pin
+  // (both "john" and "man" were unknown words before the persona flip).
+  assert.match(t0.answer, /noted — remembered: john is a kind of man/);
+});
+
+test("canonical: a genuinely UNGROUNDED pair's hint is still sane, not a nonsensical chain (the 2026-07-10 fix this file was born from)", async () => {
+  const { turns } = await driveSession(["zorblax is a glorpling"]);
+  const [t0] = turns;
+  assert.doesNotMatch(t0.answer, WALL, "an ungrounded pair must never hit the raw grammar wall either");
   // Regression pin for the 2026-07-10 fix: the OLD suggestion chained the
   // second unknown term under the first's now-grounded proper name ("every
-  // man is a john") -- accepted by the grammar, nonsense to a human. The
-  // fixed suggestion grounds both sides independently.
-  assert.doesNotMatch(t0.answer, /is a john"/, "must never suggest chaining a common noun under a proper name");
-  assert.match(t0.answer, /every man is a thing/, "must suggest grounding the second term independently");
+  // glorpling is a zorblax") -- accepted by the grammar, nonsense to a human.
+  // The fixed suggestion grounds both sides independently.
+  assert.doesNotMatch(t0.answer, /is a zorblax"/, "must never suggest chaining a common noun under a proper name");
+  assert.match(t0.answer, /every glorpling is a thing/, "must suggest grounding the second term independently");
 });
 
 test("canonical: the suggested grounding workaround for an ungrounded-pair teach actually works end to end", async () => {
@@ -97,12 +109,13 @@ test("canonical: README's own headline 'teach it, then ask it to reason' example
   }
 });
 
-test("canonical: 'what is a cache' (README's own general-vocabulary claim) returns a real definition, not a miss", async () => {
-  const { turns } = await driveSession(["what is a cache"]);
+test("canonical: 'what is a dog' (README's own general-vocabulary claim, PLAN_SEED.md's human persona) returns a real definition, not a miss", async () => {
+  const { turns } = await driveSession(["what is a dog"]);
   const [t0] = turns;
   assert.doesNotMatch(t0.answer, WALL);
-  assert.match(t0.answer, /cache/i);
+  assert.match(t0.answer, /dog is a kind of animal/i, "a real definition, not just an echo of the word in a decline");
   assert.doesNotMatch(t0.answer, /isn't a term in this graph/);
+  assert.doesNotMatch(t0.answer, /I don't know "dog" yet/, "must not be an honest miss dressed up as a match");
 });
 
 test("canonical: a plain greeting gets a real greeting back, not the grammar wall", async () => {
