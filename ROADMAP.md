@@ -429,6 +429,43 @@ legitimate reads, not just traversal attempts — fixed at the source and defens
 One scope decision made mid-build: multi-language AST extraction stays in seonix permanently, not
 tmct's job — full detail in `PLAN_AGENTS.md` §13.
 
+**The 2026-07-10 uplift batch — largest single session to date, coordinator + ~20 concurrent
+background tracks.** `PLAN_CHAT_FEEL.md` fully archived (all 12 items shipped — item 6's
+remainder: 8 remaining temporal-composition red ids fixed via new `parseCommitFilter`/NP templates/
+a `PERFECT_AUX` carve-out; the presupposition regression turned out to be a stale test fixture, not
+a product bug; the garden-path regression is real, narrow, and documented open). `PLAN_COMPLETIONS.md`
+— a brand-new capability, operator-sign-off given this session — shipped end-to-end, Stages 0-3:
+`src/completions/` (`search.mjs`/`group.mjs`/`rank.mjs`/`infer.mjs`/`prune.mjs`/`complete.mjs`),
+connected-components grouping over `memory/blocks.mjs`'s block-similarity graph, a closed 4-relation
+cross-group inference vocabulary (supports/contradicts/elaborates/exemplifies, each with a named
+mechanical licensing test), PageRank+IDF extractive sentence ranking, and an auditable prune/assemble/
+grammar-pass pipeline — every output sentence traces to a source span, `finish.mjs` generalized from
+single-answer to genuinely multi-sentence output. `PLAN_INFERENCE_TESTING.md` stages 3-5: the
+`cax-dw` disjointness rule (kernel + a live, read-only chat-query wiring closing a real gap where the
+rule existed but was never reachable from a chat turn — INF-B1's gate), `cls-svf1` (someValuesFrom
+restriction membership) plus a new positive infbench template needed to actually measure it, and a
+new consistency checker (`findConsistencyViolations`) that REFUSES to answer from a subject whose own
+taught types contradict each other, naming the clash — INF-C2. `resolveRelationChase`/
+`resolveRelationChaseReverse` extracted from `chat.mjs` closures into standalone exported functions in
+`memory/core.mjs` (PLAN_COMPLETIONS Stage 1's prerequisite). `PLAN_AGENTS.md` Phase 0 essentially
+closed out (cross-repo smoke test, `agentbench/envelope.json`, the `ace-owl` standalone MPL-2.0
+package extraction, ontology-hierarchies tracks a-d, advanced-grammar tracks a/d/f — several tracks
+found already-shipped from earlier sessions and verified/extended rather than redone) — only the
+chat-surface debt re-measure remains open. The SHACL-style declarative ingest gate shipped as a small
+hand-rolled validator (`src/memory/shacl.mjs`) after `shacl-engine` was tried and rejected as
+disproportionately heavy for tmct's minimal-deps floor. A fourth tier2 corpus bundle
+(`tier2-general`) and a context-preserving unknown-word ingestion module shipped, though the latter's
+one production call site doesn't activate it yet (`PLAN_AGENTS.md` §4). CHATBENCH restructured
+(case-set v3): the full 1,075-case CEFR pool preserved at `chatbench/graded-pool-max.jsonl`;
+`chatbench/graded-pool.jsonl` is now a 109-case go-to default (10/CEFR-grade + the former
+`cases.jsonl`'s 49 hand-authored capability cases, each assigned a real grade+construction cell) at
+N=2/single-draw by default. A full capability audit (`CAPABILITIES_AUDIT_2026-07-10.md`) cataloged
+83 distinct capabilities against every doc claim and the actual code — 57 implemented, 21
+claimed-only, 3 partial, its most notable finding being that `PLAN_AGENTS.md` itself (drafted the
+same session) already listed several now-shipped items as "not started," a same-session docs-lag
+issue, not months-old drift. See `HANDOVER.md` for the ranked next-steps this batch's four fresh
+benchmark runs (AGENTBENCH/INFBENCH/PLAYTEST/CHATBENCH) surfaced.
+
 ## The umbrella product definition (item 1)
 
 **A tolerant, ELIZA/PARRY-style chat, obsessed with software.** A best-efforts

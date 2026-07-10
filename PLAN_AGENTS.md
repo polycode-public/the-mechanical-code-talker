@@ -150,11 +150,21 @@ bounded, (c) genuinely harder — and feed §2.3 below.
   (`src/grammar/ace.mjs`) is deliberately strict — a sentence fits one of 8 declared patterns whole
   or falls through by design (a documented ground rule, not an oversight). Not a replacement: a more
   tolerant recall path feeding the strict grammar as an additional front end, not instead of it.
-- **Declarative SHACL ingest gate (c).** Every marginalia memory node is validated against a shape
-  contract (`app/ontology/shapes.ttl`, via `shacl-engine`) before it enters the shared tree — a
-  standards-based, declarative write-boundary contract. tmct's `src/conformance.mjs` is hand-rolled,
-  imperative shape validation, not one declarative gate at the write boundary. A new dependency plus
-  real schema-authoring effort, not a quick port.
+- **Declarative SHACL ingest gate (c) — ✅ shipped 2026-07-10.** Every marginalia memory node is
+  validated against a shape contract (`app/ontology/shapes.ttl`, via `shacl-engine`) before it enters
+  the shared tree — a standards-based, declarative write-boundary contract. tmct's own version:
+  `shacl-engine`/`rdf-ext` were tried first (per this bullet's own original framing) but rejected —
+  they transitively pull in a full federated SPARQL engine (`@comunica/query-sparql-rdfjs-lite`,
+  ~560 packages), disproportionate to tmct's 5-runtime-dep minimal-deps floor. Replaced with a small
+  hand-rolled validator, `src/memory/shacl.mjs`, mirroring `src/conformance.mjs`'s own existing
+  imperative-assertion precedent (same idea as marginalia's gate — a declarative shape spec checked
+  before every write — different implementation weight). The shape contract itself lives at
+  `ontology/memory-shapes.ttl` (documentation/spec, kept in sync by hand, not machine-parsed) for
+  `Individual`/`Fact`/`Rule`; wired at exactly two write points, `appendFact` and `appendRule`
+  (`src/memory/core.mjs`) — deliberately not the batch `appendFacts`/chat-hot-path `appendUtterance`
+  call sites, matching the two explicit, structured write shapes this bullet named. Permissive
+  beyond core.mjs's own existing structural floor (provenance stays optional) so it doesn't reject
+  legitimate sparse re-teaches of pre-existing data.
 - **Hub-dampening + thin-concept detection (a) — ✅ shipped v1.4.0, on by default.** tmct already
   implements exactly this pattern in `src/codegraph.mjs` (degree-quantile hub gating, min-heap
   frontier expansion) — for the **code** graph only. Ported into `src/memory/blocks.mjs`'s
@@ -243,8 +253,9 @@ findings — hub-dampened memory ranking, RI search/context/impact/snippet wirin
 pagination — landed as Phase 0 foundations, genuinely low-risk, no new dependency, mostly exposing
 logic tmct already owned. Memory versioning and actor-level trust (originally "standing tmct-quality
 backlog, not yet phase-assigned") were pulled forward and shipped in the same batch, actor-level
-trust in full rather than the narrower port originally scoped. Remaining backlog: the SHACL ingest
-gate (still real, still bounded, still not started). Multi-language AST extraction is no longer
+trust in full rather than the narrower port originally scoped. **Update, 2026-07-10: the SHACL
+ingest gate also shipped** (§2.1's bullet, above) — all four of this backlog's original items are
+now closed except Chronograph-style temporal diffing. Multi-language AST extraction is no longer
 backlog at all — it's explicitly out of scope for tmct, permanently (§2.2). Chronograph-style
 temporal diffing remains genuinely hard, unstarted, no change.
 
@@ -252,14 +263,16 @@ temporal diffing remains genuinely hard, unstarted, no change.
 
 Near-term, mostly known-how, individually small. No item here requires research.
 
-- ⬜ **Cross-repo smoke test** — a real `tmct serve` process, hit over HTTP by bedrock-meter's
-  `httpDispatch`, proving the documented response shape holds outside hand-built fixture objects.
-  Cheapest, highest-value gap to close first; everything else assumes this wire contract is real.
-  Not started.
-- ⬜ **Machine-readable capability envelope** (`agentbench/envelope.json`) — generated from the latest
-  gate-PASS AGENTBENCH rungs (`maxContextTokens`, reasoning depth, `structuredOk`/`toolsOk`), so
-  bedrock-meter's hand-set `TMCT_ENVELOPE` calibration stops drifting from tmct's actual measured
-  capability every release. Not started.
+- ✅ **Cross-repo smoke test — shipped 2026-07-10.** `test/server-http-smoke.test.mjs` boots a real
+  `tmct serve` child process and drives it over HTTP with bedrock-meter's `httpDispatch`/
+  `extractUsage` logic mimicked inline (no bedrock-meter dependency added), proving text-only
+  end_turn, tool_use/tool_result, malformed-JSON 400, and usage-folding all hold against a real
+  process outside hand-built fixture objects.
+- ✅ **Machine-readable capability envelope — shipped 2026-07-10.** `agentbench/envelope.json` +
+  `agentbench/generate-envelope.mjs`, generated from the latest gate-PASS AGENTBENCH goal-driver
+  ladder run (`rungReached`/`structuredOk`/`toolsOk` derived from the real hallucination-taxonomy
+  checks, not hand-set; `maxContextTokens` deliberately left `null` rather than fabricated, since
+  AGENTBENCH does no token accounting).
 - ✅ **The extension-pack / corpus-lexicon loading seam — shipped v1.4.0.** `src/extensions.mjs`:
   `resolveExtensions()`, an `[extensions]`/`[bias]` table in `tmct.toml`, `seedActiveCorpusEntries`
   replacing `chat.mjs`'s hardcoded two-call corpus bootstrap (this also fixed a real, deliberate bug
@@ -270,17 +283,24 @@ Near-term, mostly known-how, individually small. No item here requires research.
   The three shipped-but-inactive tier2 bundles (aws/python/java corpora) are now genuinely
   activatable, not just committed-and-dead. This is also the config surface §4's bias weighting
   hangs off of, also shipped — see §4.
-- ⬜ **`ace-owl` open-source extraction** — pulling tmct's ACE-OWL controlled-English parser
-  (`src/grammar/ace.mjs` + lexicon) out into a standalone, MPL-2.0, dependency-free npm package.
-  Nothing like it exists as a permissive, ESM, browser-capable English-to-OWL-triples parser (the
-  reference implementation, APE, is GPL/LGPL and SWI-Prolog-native). Unblocked, not started.
-- ⬜ **Ontology-hierarchies tracks a–d** — activate ConceptNet `/r/Synonym`/`/r/SimilarTo`; wire the
-  already-parsed but unused phrasebook synonyms; hand-curate the SEON upper-ontology spine; grow
-  `owl:disjointWith` premises. Not started. (§4 revisits this rejection's premise for the
-  wider-seed-set question specifically — the objection was to noise with no way to rank through it,
-  not to breadth itself.)
-- ⬜ **Advanced-grammar tracks a/d/f** — subordination/conditional frames, construction-grammar
-  template banks, presupposition-as-honest-nudge. Not started.
+- ✅ **`ace-owl` open-source extraction — shipped 2026-07-10.** `packages/ace-owl/`, a standalone
+  `@polycode-projects/ace-owl` MPL-2.0, dependency-free workspace package (parser, lexicon, tests,
+  README, LICENSE). tmct's own `src/grammar/ace.mjs`/`lexicon.mjs` are now thin re-export shims
+  binding the package's neutral namespace to `tmct:` — one implementation, not two. `npm publish`
+  not run (stays operator-gated).
+- ✅ **Ontology-hierarchies tracks a–d — shipped.** Tracks (a) synonym/similarTo activation and (b)
+  the phrasebook-synonym wiring were found already shipped from an earlier session; this session
+  added a precision follow-up (`SYNONYM_DENYLIST` in `chat.mjs`, closing 9 confirmed-bad
+  cross-domain synonym pairs a live spot-check found, e.g. `interpreter`~`compiler`). Tracks (c)
+  hand-curated SEON upper-ontology spine (47 new rows: artifact/agent/event/quality/quantity roots
+  + part-whole) and (d) `owl:disjointWith` growth (72 new rows, 42→114 total) shipped 2026-07-10.
+- ✅ **Advanced-grammar tracks a/d/f — shipped.** Track (a) subordination/conditional frames
+  (`SUBORDINATION_FRAMES`/`CONDITIONAL_QUALIFIER_RE` in `src/interpret/normalize.mjs`) found already
+  shipped from an earlier session. Track (d) construction-grammar template bank shipped 2026-07-10:
+  `data/templates/constructions/agent-noun-relations.toml` + `src/interpret/strategies/
+  constructions.mjs`, three new closed templates (T11-T13: "X of Y", "Y's X", "Y X" relation
+  phrasings). Track (f) presupposition-as-honest-nudge (`presuppositionNudge`, `src/chat.mjs`) also
+  found already shipped from an earlier session, not newly built this session.
 - ⬜ **Re-measure inherited chat-surface debt** — the capability router doc named three specific gaps
   (pronoun/focus binding, discourse-count anaphora, temporal-over-relative composition) as blocking
   its later stages, measured back in CHATBENCH_0.7.1. Not started — still worth doing before scoping
@@ -318,18 +338,27 @@ that isn't code at all.
   declared, inspectable way to rank through it instead of needing to avoid it by staying narrow. Next
   time R3's 2M-word-ontology assessment is revisited, this changes what it should weigh — not a green
   light to build it, but a genuine change in the calculus.
-- ◐ **A wider general-knowledge seed set — partially realized.** The three shipped-but-inactive
-  tier2 bundles (aws/python/java) are now genuinely activatable via the extension-pack seam (§3) —
-  real progress toward "shipped optional bundles, selectable by config." But nobody has actually
-  grown the corpus with a broader ConceptNet slice or comparable general-purpose source yet — the
-  mechanism to ingest a wider seed set exists now; a wider seed set doesn't yet.
-- ⬜ **Context-preserving ingestion for unknown words — still not built.** When a wider seed set (or
-  Phase 4's scraped web content, §7) introduces a term tmct doesn't recognize, it should not be
-  silently dropped. It enters the graph as a real individual tagged with the passage it was found in
-  (a stored context paragraph, as provenance), and other words — known or unknown — co-occurring in
-  that same passage get linked to it. This is deliberately **not** distributional/embedding-style
-  meaning induction — that would cross into LLM-shaped territory. Scoped honestly: this buys
-  traceable context, not automatic sense disambiguation.
+- ◐ **A wider general-knowledge seed set — partially realized, grown further 2026-07-10.** The
+  three shipped-but-inactive tier2 bundles (aws/python/java) are confirmed genuinely activatable
+  end-to-end via the extension-pack seam (§3, manually verified this session). A fourth bundle,
+  `tier2-general` (49 curated everyday-knowledge facts — animals, weather, natural world, common
+  objects — deliberately zero code-domain framing), was added, same checksum/provenance/
+  config-gated-off-by-default discipline as the existing three. Still ◐: this grows the *available*
+  seed content, but stays opt-in/config-gated — not a default-on wider corpus.
+- ◐ **Context-preserving ingestion for unknown words — built and unit-tested, but DORMANT in
+  production.** `src/corpus/unknown-ingest.mjs` (new, 2026-07-10): an unrecognized term encountered
+  during seeding becomes a graph individual tagged with its source passage as `mgx:contextPassage`
+  provenance, with co-occurring known terms linked via `mgx:coOccursWith` — reusing
+  `appendFacts`/`normFactTerm` unmodified, wired into `seedMemory` as an opt-in
+  `captureUnknownContext` flag. Deliberately **not** distributional/embedding-style meaning
+  induction — that would cross into LLM-shaped territory; this buys traceable context, not automatic
+  sense disambiguation. **The gap found by `CAPABILITIES_AUDIT_2026-07-10.md`'s review (item #33):**
+  the one production call site that could activate this (`src/extensions.mjs`'s
+  `seedActiveCorpusEntries`, shared by `chat.mjs`'s bootstrap and `tmct init`) never actually passes
+  `captureUnknownContext: true` — the mechanism is real and tested, but no real user's seed path
+  exercises it yet. Also still open, out of this session's scope: an analogous hook in the LIVE chat
+  teach/miss path (raw utterance text as the passage, no ConceptNet `surfaceText` to fall back on) —
+  needs a `chat.mjs` edit not attempted here.
 - ✅ **Config surface, concretely — shipped v1.4.0.** Each named extension/seed set gets an optional
   `bias` weight in `tmct.toml`'s `[bias]` table (a flat bundle-name → weight table, not nested under
   `[extensions.*]` — a deliberate simplification versus this doc's own illustrative sketch).
@@ -547,13 +576,13 @@ Explicit pruning record, so these aren't re-asked:
 
 | Phase | What ships | Status (2026-07-11) | Depends on | Repo(s) |
 |---|---|---|---|---|
-| 0 | Foundations (§3): smoke test, envelope.json, extension-pack seam, ace-owl extraction, ontology tracks a–d, grammar tracks a/d/f, debt re-measure, RI wrapper fixes + hub-dampened memory ranking (§2) | **Partial — extension-pack seam ✅, RI wrapper fixes ✅, hub-dampening ✅ (all v1.4.0); smoke test/envelope.json/ace-owl/ontology tracks/grammar tracks/debt re-measure still open** | Nothing (all build on shipped work) | tmct |
-| 1 | Bias-weighted ambiguity resolution & wider seed sets (§4): `tmct.toml` `[bias]` table, wider general-knowledge corpus, context-preserving unknown-word ingestion | **Partial — `[bias]` table + ranking + `--with-persona` ✅ (v1.4.0); wider corpus content and context-preserving ingestion still open** | Phase 0's extension-pack seam | tmct |
+| 0 | Foundations (§3): smoke test, envelope.json, extension-pack seam, ace-owl extraction, ontology tracks a–d, grammar tracks a/d/f, debt re-measure, RI wrapper fixes + hub-dampened memory ranking (§2) | **Nearly done — extension-pack seam ✅, RI wrapper fixes ✅, hub-dampening ✅ (v1.4.0); smoke test ✅, envelope.json ✅, ace-owl ✅, ontology tracks a–d ✅, grammar tracks a/d/f ✅ (all 2026-07-10). Only the chat-surface debt re-measure remains open.** | Nothing (all build on shipped work) | tmct |
+| 1 | Bias-weighted ambiguity resolution & wider seed sets (§4): `tmct.toml` `[bias]` table, wider general-knowledge corpus, context-preserving unknown-word ingestion | **Partial — `[bias]` table + ranking + `--with-persona` ✅ (v1.4.0); a fourth tier2 bundle (`tier2-general`) added 2026-07-10 (◐, still opt-in); context-preserving ingestion built + unit-tested 2026-07-10 but its one production call site never activates it (◐, dormant — see §4)** | Phase 0's extension-pack seam | tmct |
 | 2 | tmct as marginalia's interpreter (§5): seon-mcp adapter, Formulate validation, mechanical-chat replacement | Not started | Phase 0's extension-pack seam | tmct, marginalia |
 | 3 | tmct × seonix combined index (§6): mount seonix's (multi-language) graph, re-verify RI depth at scale | Not started (multi-language extraction itself now out of scope — stays in seonix, §2.2) | Phase 0's extension-pack seam | tmct, seonix |
 | 4 | marginalia scrape→teach pipeline (§7) | Not started | PLAN_TAUGHT_RELATIONS (shipped); Phase 1 for context-preserving ingestion specifically | marginalia |
 | 5 | Pluggable LLM rung — Claude Code hardening, Bedrock integration test + assessor, Copilot shim (§8) | Not started | Phase 0's envelope.json (Bedrock); nothing new (Claude Code, Copilot) | tmct, bedrock-meter |
-| Backlog | SHACL ingest gate, Chronograph-style temporal diffing (§2) — memory versioning + actor-level trust shipped v1.4.0, no longer backlog | Partial — 2 of 4 original items shipped | None — independent tmct-quality work | tmct |
+| Backlog | Chronograph-style temporal diffing (§2) — memory versioning + actor-level trust shipped v1.4.0, SHACL ingest gate shipped 2026-07-10, no longer backlog | Partial — 3 of 4 original items shipped | None — independent tmct-quality work | tmct |
 | R1 | Bounded goal recognition spike, DRT-lite discourse record | Not started | Phase 2 (validation target) | tmct |
 | R2 | Dependency/categorial grammar idea, cross-repo trust vocabulary | Not started | LLM-decision provenance gap (§9) | tmct, marginalia |
 | R3 | Open-world planning, Winograd coreference, shared ontology scale — recorded, not scheduled | Not started, not scheduled | — | — |
