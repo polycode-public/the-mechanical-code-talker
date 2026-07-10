@@ -156,6 +156,7 @@ function deduceGoalFromParsed(parsed) {
   if (shape === "meta") return `understand a vocabulary/definition term ("${parsed.object}")`;
   if (shape === "where") return `locate where something is defined ("${parsed.object}")`;
   if (shape === "when") return "understand when something last changed (history)";
+  if (shape === "whoLast") return "find who most recently touched something (history)";
   if (shape === "mentions") return `find where something is mentioned in prose ("${parsed.object}")`;
   if (shape === "ask") return (kind && GOAL_BY_KIND[kind]) || "check a specific subject/object relationship";
   if ((shape === "reverse" || shape === "forward") && kind) return GOAL_BY_KIND[kind] || `understand a "${kind}" relationship`;

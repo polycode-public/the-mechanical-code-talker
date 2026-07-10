@@ -213,6 +213,19 @@ export function parseKeywordSpot(text, nlp = null) {
     if (objText) return { shape: "when", entityType: null, modifier: "direct", kind: "touches", object: objText };
   }
 
+  // who-last shape (HANDOVER.md 2026-07-10 item 5): "who last touched X" / "who
+  // touched X last" used to fall into the ordinary reverse-list shape below and
+  // list EVERY touching commit's author, ignoring "last" entirely — the mirror
+  // gap of the "when" shape just above, which already answers a single newest
+  // commit. "who"/"last" are both STOPWORDS (normalize.mjs), so they never
+  // survive into beforeText/afterText either way — checked here, before they're
+  // stripped, the same way the "when" check above reads `lcWords` directly
+  // rather than the post-strip text.
+  if (kind === "touches" && lcWords.includes("who") && lcWords.includes("last")) {
+    const objText = beforeText || afterText;
+    if (objText) return { shape: "whoLast", entityType: null, modifier: "direct", kind: "touches", object: objText };
+  }
+
   // reversible passive (Cycle 6, archive/PLAN_CYCLE_4.md): "PATIENT is VERBed BY AGENT" — an
   // agent-marking "by" plus a passive auxiliary flips the active reading, so the AGENT
   // (after "by") is the edge SUBJECT and the PATIENT the edge OBJECT. Object-first

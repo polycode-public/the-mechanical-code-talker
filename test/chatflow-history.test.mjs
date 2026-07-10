@@ -42,6 +42,24 @@ test("history flow: the change-coupling conversation flows end to end (was a dea
   assert.equal(rs[2].answer, rs[3].answer, "'changes together with' == 'co-changes with'");
 });
 
+// HANDOVER.md 2026-07-10 item 5: "who last touched X" used to ignore "last"
+// entirely and dump the FULL touch history, the same as bare "who touched X" —
+// no distinct single-most-recent-toucher path existed for *who*-questions (only
+// for *when*-questions). store.mjs has 3 touching commits in this fixture;
+// Barbara Liskov's is the newest (2026-05-24).
+test("history flow: 'who last touched X' answers the single most recent toucher, not the full history", async () => {
+  const [who, whoLast] = await drive([
+    "who touched src/core/store.mjs",
+    "who last touched src/core/store.mjs",
+  ]);
+  assert.doesNotMatch(whoLast.answer, /couldn't parse this as a graph question/);
+  assert.match(who.answer, /Grace Hopper/, "the plain 'who touched' form still lists every toucher");
+  assert.match(who.answer, /Alan Kay/);
+  assert.match(who.answer, /Barbara Liskov/);
+  assert.match(whoLast.answer, /^src\/core\/store\.mjs was last touched by Barbara Liskov \(commit 1b2c3d4e5f60\); 2 earlier commits recorded\./, "'who last touched' names only the single newest toucher");
+  assert.doesNotMatch(whoLast.answer, /Grace Hopper/, "earlier touchers are not named, just counted");
+});
+
 test("co-change routing: an uncoupled module is an honest empty with a receipt, never a wall", async () => {
   // the cochange edge is stored subject=model → object=store, so asking the SUBJECT
   // side ("what does model change together with") has no object-side match: an honest

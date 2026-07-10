@@ -2965,6 +2965,30 @@ export function traverse(graph, parsed, { contextId = null, prev = null } = {}) 
     };
   }
 
+  // who-last (HANDOVER.md 2026-07-10 item 5): "who last touched X" — the SAME
+  // newest-commit-first resolution as "when" just above (single most-recent
+  // toucher, not the full touch history), rendered as the commit's AUTHOR
+  // instead of its date. A dedicated shape rather than reusing "when" outright:
+  // render() needs to know to answer with "who", not "when", off the same
+  // sorted commit list.
+  if (shape === "whoLast") {
+    const dateOf = (c) => String((c.attributes || []).find((a) => a.key === "date")?.value || "");
+    const edges = ["touches", "touchesSymbol"].flatMap((k) => edgesOfKind(graph, k)).filter((e) => e.object === objMatch.id);
+    const seen = new Set();
+    const commits = [];
+    for (const e of edges) {
+      if (seen.has(e.subject)) continue;
+      seen.add(e.subject);
+      const c = graph.byId.get(e.subject);
+      if (c && c.class === "Commit") commits.push(c);
+    }
+    commits.sort((a, b) => dateOf(b).localeCompare(dateOf(a)));
+    return {
+      matches: commits, objMatch, candidates, ambiguous, matchedVia, whoLastShape: true,
+      traversal: `touches+touchesSymbol edges where object = ${objMatch.label}, newest commit's author`,
+    };
+  }
+
   // commit-as-subject flip: touches edges are stored commit -> entity, so when the
   // RESOLVED term of a touches question is itself a Commit — "which changes touch
   // commit ef74e44e25c8" (reverse), "what did commit abc1234 touch" (forward),
@@ -3385,6 +3409,30 @@ function renderCore(parsed, result) {
     const more = result.matches.length - 1;
     return {
       content: `${subject} was last touched by commit ${newest.label} on ${day}${msg ? ` ("${msg}")` : ""}${more ? `; ${more} earlier commit${more === 1 ? "" : "s"} recorded` : ""}.`,
+      miss: false, ambiguous: false, matches: result.matches,
+    };
+  }
+  // who-last: newest touching commit's AUTHOR (HANDOVER.md 2026-07-10 item 5) — the
+  // superlative "who" mirror of whenShape just above. "who last touched X" used to
+  // fall into the ordinary reverse-list render below and name EVERY toucher; this
+  // answers with the single most recent one instead. Unlike whenShape, no date is
+  // needed to answer "who" — an undated-but-authored commit still resolves.
+  if (result.whoLastShape) {
+    const subject = result.objMatch.label;
+    if (!result.matches.length) {
+      return { content: `no recorded commit touches ${subject} in this index.`, miss: true, ambiguous: false };
+    }
+    const newest = result.matches[0];
+    const author = (newest.attributes || []).find((a) => a.key === "author")?.value;
+    if (!author) {
+      return {
+        content: `commit ${newest.label} last touched ${subject}, but this index records no commit author — regenerate the graph to attach mgx:commitAuthor.`,
+        miss: true, ambiguous: false,
+      };
+    }
+    const more = result.matches.length - 1;
+    return {
+      content: `${subject} was last touched by ${author} (commit ${newest.label})${more ? `; ${more} earlier commit${more === 1 ? "" : "s"} recorded` : ""}.`,
       miss: false, ambiguous: false, matches: result.matches,
     };
   }
