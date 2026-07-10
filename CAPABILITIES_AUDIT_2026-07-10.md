@@ -1,31 +1,51 @@
 # CAPABILITIES_AUDIT_2026-07-10.md — tmct capability audit (refresh 2)
 
-## Comparative model-tier table: tmct vs. local/AWS/Anthropic models, and a speculative TO-BE
+## Comparative agent-capability table: tmct vs. named models, and a speculative TO-BE
 
 **Read this framing before the table, not after.** tmct is not a general-purpose LLM and this is
 not an IQ-style "tmct is as smart as X" claim. tmct is a narrow, deterministic, zero-cost system —
 hand-built grammar + ontology + graph reasoning over a bounded domain — and it has never attempted
-open-ended generation, coding, creative writing, or general reasoning. The rows below are scoped
-strictly to the four task shapes tmct is actually measured on (`AGENTBENCH_1.4.1.md`,
-`INFBENCH_1.4.1.md`, `CEFR_ENGLISH_1.4.1.md`, `PLAYTESTBENCH_1.4.1.md`). tmct's own column cites a
-real report number. **Every other column is an informed estimate from general knowledge of these
-models' well-known public capability tiers, not a measured cross-benchmark result** — nobody has run
-Llama-3-8B or Claude Opus against tmct's exact task shapes, and this table doesn't pretend otherwise.
-Tiers referenced: **small/local** (Llama 3/3.1 8B, Phi-3/3.5-mini, Mistral 7B class — laptop/single-GPU
-open-weight models), **AWS Bedrock** (Titan Text, Nova Micro/Lite/Pro), **Anthropic** (Haiku, Sonnet,
-Opus, across available generations).
+open-ended generation, coding, creative writing, or general reasoning. Rows are a GENERAL agent-
+capability taxonomy (the dimensions Anthropic and others use to describe what an agent can do —
+tool use, planning, reasoning, grounding, memory, instruction-following, generation, coding,
+safety/honesty, autonomy), not tmct's own internal benchmark names — the point is to place tmct on
+a scale someone would already recognize, not grade it against a rubric tmct itself designed. Columns
+are specific named MODELS, not umbrella brands or hosting surfaces — "AWS Bedrock" is a hosting
+service (it serves several vendors' models, not one model of its own) and "Anthropic" is a company,
+so neither belongs as a column header:
 
-| Task shape | tmct — measured | Small/local open-weight | AWS Bedrock | Anthropic |
-| --- | --- | --- | --- | --- |
-| Controlled-English graph Q&A, zero-fabrication grounding | 0% fabrication/hallucination across every INFBENCH and AGENTBENCH row; CEFR tier-1 89/109 green | **tmct stronger** (informed estimate) — a base small model answering closed-KB questions without RAG shows real fabrication rates; tmct is structurally incapable of asserting past its taught/seeded facts | **tmct stronger** than a bare Titan/Nova call (informed estimate); roughly **comparable** to the same tier wired into a well-built RAG/grounding harness — the fairer comparison, and one tmct wasn't measured against | Roughly **comparable** to Haiku/Sonnet under strict grounding+citation prompting (informed estimate) — achievable there with prompt discipline; tmct gets it for free from having no other mode |
-| Taught-syllogism / classical-logic inference (INF ladder) | Full ladder passes; chat arm 94% completion, 0% fabrication; INF-B1 100% (was 33% pre-fix); INF-C2 consistency-refusal 100% | **tmct stronger** on the consistency-refusal shape specifically (informed estimate) — small local models are known to answer confidently from contradictory premises rather than refuse; roughly **comparable** on plain 2-hop chains | Roughly **comparable** to the small/local tier; Nova Pro plausibly **comparable-to-stronger** on general multi-step logic, likely **weaker** on consistency-refusal discipline specifically (informed estimate) | Roughly **comparable** on this narrow closed-ladder shape (informed estimate) — likely matches tmct's completion rate here, but also handles open-ended/unbounded logic puzzles tmct cannot attempt |
-| Agentic/tool-use rung ladder (AGENTBENCH, A0–C2) | 100% plan-completion, 98% result-completion, 0% hallucination, every rung gate PASS | **tmct stronger** on this specific closed/fixed-toolset ladder (informed estimate) — small models doing plan-then-compose over bounded tools show more composition noise; tmct's determinism removes that failure class entirely | Roughly **comparable** to Nova Pro-tier structured tool-use on similarly bounded task ladders (informed estimate) | Roughly **comparable-to-stronger** — likely matches or exceeds 98% result-completion on a ladder this bounded, plus handles open-ended/ambiguous tool selection tmct's fixed router cannot touch |
-| CEFR-graded conversational quality (closed case set) | mean 1.624/2 (81%); 89/109 tier-1 green; hard fails concentrated in C2 `pronoun-binding` (0/10 tier-1) and A2 `naming-vocabulary` | Roughly **comparable** on narrow graded-case fidelity (informed estimate) — but a small model degrades with fluent-but-wrong prose rather than tmct's hard grammar-wall/honest-miss, arguably worse for this rubric's honesty dimension; **stronger** than tmct on open-ended fluency/paraphrase outside any closed template, where tmct cannot generate at all | Comparable pattern to small/local tier on the graded rubric; **stronger** on open-ended conversational range | **Stronger** — near-ceiling on graded correctness/honesty at Sonnet/Opus tier, plus full open-ended fluency tmct structurally lacks |
+- **Llama 3.1 8B Instruct** (Meta, open-weight, laptop/single-GPU class — the small/local tier)
+- **Amazon Nova Pro** (AWS's own strongest general-purpose model, served on Bedrock — not "Bedrock"
+  itself, which also hosts Llama, Mistral, and Anthropic models under the same API)
+- **Claude Haiku 4.5**, **Claude Sonnet 5**, **Claude Opus 4.8** (Anthropic's small → mid → large tier)
 
-**The pattern across all four rows**: tmct is plausibly stronger or comparable specifically on the
-axis all four benchmarks gate on — zero-fabrication, bounded-task completion — and clearly weaker the
-moment a task shape needs open-ended generation or reasoning outside its closed grammar/template set.
-That is exactly the specialist-vs-generalist trade-off, not a uniform ranking.
+Each tmct cell is backed by a real number from `AGENTBENCH_1.4.1.md`/`INFBENCH_1.4.1.md`/
+`CEFR_ENGLISH_1.4.1.md`, translated into the general capability it evidences. **Every model column is
+an informed estimate from general knowledge of these models' well-known public capability tiers, not
+a measured cross-benchmark result** — nobody has run any of these five models against tmct's exact
+task shapes. Verdict key: **W** weaker than tmct on this capability, **C** roughly comparable,
+**S** stronger.
+
+| General agent capability | tmct — measured evidence | Llama 3.1 8B | Amazon Nova Pro | Claude Haiku 4.5 | Claude Sonnet 5 | Claude Opus 4.8 |
+| --- | --- | --- | --- | --- | --- | --- |
+| **Tool use / function calling** | Closed, rule-based router over a FIXED toolset (AGENTBENCH: 100% plan-completion, every rung PASS) — not general function-calling, a bounded dispatch table | **S** — genuine open-ended function-calling over arbitrary declared tools, not a closed set | **S**, plus reliable multi-tool composition | **S** | **S** | **S** — real function-calling generalizes past any fixed router by design |
+| **Planning & multi-step task decomposition** | AGENTBENCH A0–C2 rung ladder, every gate PASS, but bounded to pre-defined rungs | **C** — general planning ability exists but noisier/less reliable composing steps than tmct's deterministic bounded ladder | **C-S** | **C-S** | **S** | **S** — handles open-ended plans tmct's fixed rungs structurally can't represent |
+| **Reasoning (logical / multi-hop inference)** | Full INF-A1…C2 ladder passes; INF-B1 100% (was 33%); fixed-depth 2-hop taught-syllogism chains | **C** on short chains, **W** as chain depth/ambiguity grows | **C** | **C** | **S** | **S** — arbitrary-depth reasoning, not capped at a fixed ladder depth |
+| **Knowledge grounding / retrieval (avoiding fabrication)** | 0% fabrication across every INFBENCH/AGENTBENCH row; CEFR tier-1 89/109 green — a STRUCTURAL guarantee (can't assert past taught/seeded facts), not a tuned behavior | **W** — no RAG discipline out of the box, real fabrication rate on closed-KB questions | **W** bare call / **C** with a real grounding harness (unmeasured here) | **C** under strict grounding+citation prompting — achievable, not automatic | **C** | **C** — best self-calibrated uncertainty of the five, but still probabilistic, not a structural floor the way tmct's is |
+| **Memory & multi-turn context retention** | Session-scoped persistent graph (`.tmct/graph.json`); anaphora/focus carried within a session; no cross-session memory beyond what's explicitly written to the graph | **W** — context-window/attention degradation over long sessions, no persistent store | **C** | **C** | **C-S** — long context window, but still no persistent cross-session memory without external tooling, the same limitation tmct has | **C-S** |
+| **Instruction following / constraint adherence** | A recognized phrasing is followed 100% of the time (rule match, not a probabilistic score); unrecognized phrasing = decline, never a best-effort guess | **W** — occasional drift off format/constraint instructions | **C** | **C** | **C-S** | **S** — best-in-class adherence among the five, though still probabilistic, not tmct's deterministic guarantee |
+| **Natural language generation & fluency** | **None** — structurally zero free generation; every reply is a template/grammar slot fill | **S** | **S** | **S** | **S** | **S** — tmct's one uniform, structural weak row; every model here beats it by design |
+| **Code generation & execution** | **None** — not attempted, explicitly out of scope (no LLM anywhere in tmct's product path) | **S** | **S** | **S** | **S** | **S** |
+| **Safety, honesty & refusal calibration** | Structural zero-fabrication + INF-C2 consistency-refusal 100% (was 0%) — refuses BY CONSTRUCTION when it can't ground an answer, not by tuned judgment | **W** — answers confidently from contradictory premises more often than it refuses | **W-C** | **C** | **C** | **C** — good calibration, but still a tuned behavior, not tmct's structural guarantee |
+| **Autonomy / external action (browsing, files, computer use)** | **None** — read-only chat against a local graph; no external actions of any kind | **S** if tool-augmented | **S** if tool-augmented | **S** if tool-augmented | **S** if tool-augmented | **S** if tool-augmented (Claude's own computer-use capability) |
+
+**The pattern**: tmct beats or matches every model here on exactly two axes — zero-fabrication
+grounding and deterministic instruction adherence within its known phrasing set — because those are
+structural guarantees for tmct and only tuned, probabilistic behaviors for an LLM. On every other
+general agent capability, tmct is flat weaker, usually by construction (it was never built to
+generate, plan open-endedly, or act autonomously) rather than by a fixable gap. That is the
+specialist-vs-generalist trade-off in its sharpest form: two rows of structural strength, eight rows
+of structural absence, not a spread of comparable scores.
 
 ### Speculative TO-BE — where the table could move, if the backlog lands
 
@@ -35,23 +55,26 @@ Purely speculative, not a roadmap commitment. Drawing on the four reports' own "
 - **`cls-svf1`'s live chat-query wiring** (`HANDOVER.md` item 4; `INFBENCH_1.4.1.md` "Next") — the
   kernel rule is already 100%-passing, only the chat-query path is missing, the same shape of fix that
   took INF-B1 from 33%→100% this session. Landing it would plausibly take INF-B2 from 80%→~100%,
-  pushing the taught-syllogism row further toward "stronger across the board" rather than
-  "comparable on plain chains."
+  pushing the **reasoning** row's "fixed-depth ladder" caveat further toward "handles deeper chains
+  reliably," though still short of the open-ended depth Sonnet/Opus already have.
 - **Wiring `src/completions/` into chat dispatch** (`PLAYTESTBENCH_1.4.1.md` "Next"; confirmed
   unreachable live this session — a broad "detailed summary of how X works" question still hits the
   grammar wall) — would let tmct answer open-ended "explain how X works" questions with cited,
-  groundedness-checked multi-sentence prose. This is the one lever that could move tmct off the
-  "clearly weaker on open-ended generation" side of the CEFR/conversational row without giving up its
-  zero-fabrication floor — closing part of the gap with small local models' open-ended fluency while
-  keeping a hallucination floor those models don't have.
+  groundedness-checked multi-sentence prose. This is the one lever that could move the **natural
+  language generation & fluency** row off a flat "None" without giving up the **knowledge grounding**
+  row's zero-fabrication floor — the only plausible path to a genuinely mixed verdict on that row
+  instead of a uniform **S** for every model.
 - **C2 `pronoun-binding`** (`CEFR_ENGLISH_1.4.1.md` "Next", `HANDOVER.md` item 1 — the clearest,
   highest-impact lever identified) — 0/10 tier-1, 4/10 judged hard fails, all confidently-wrong. A fix
-  here is the most direct route to moving the CEFR row's mean and hard-fail rate, though it stays
-  within tmct's existing closed-template ceiling rather than adding new generative range.
+  here sharpens the **memory & multi-turn context retention** row (anaphora is a context-tracking
+  failure specifically), though it stays within tmct's existing closed-template ceiling rather than
+  adding new generative range.
 
 None of these change tmct's fundamental shape — a fixed grammar/ontology system, not a generalist —
-they would only sharpen its position on the rows where it already competes on completion/groundedness
-terms, and marginally narrow (not close) the open-ended-generation gap via the completions pipeline.
+they would only sharpen tmct's position on the two rows where it already competes structurally, and
+marginally narrow (not close) the generation gap on one more row via the completions pipeline. The
+eight-row structural-absence pattern above holds regardless: tmct was never designed to plan, act
+autonomously, or generate freely, and no backlog item on this list changes that scope.
 
 ---
 
