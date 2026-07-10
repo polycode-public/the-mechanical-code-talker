@@ -1533,6 +1533,53 @@ const OWNS_PASSIVE_TEACH_RE = /^(.+?)\s+(?:is|are|was|were)\s+owned\s+by\s+([A-Z
 const RELATION_FACT_TEACH_RE =
   /^([\w'-]+(?:\s+[A-Z][\w'-]*)?)\s+(?:is|are|was|were)\s+the\s+([a-z][\w-]*)\s+of\s+([\w'-]+(?:\s+[A-Z][\w'-]*)?)[.!?]*$/i;
 
+/** "every/a/an/the <N1> has a/an <N2> method" — the HAS-A-METHOD teach
+ *  declarative (HANDOVER.md 2026-07-10 item 9, a new pattern the operator
+ *  explicitly authorized this session — NOT one of PLAN_TAUGHT_RELATIONS.md's
+ *  own six items): a possession-of-capability claim about a class/entity's
+ *  method ("every Component has a render method", "a Widget has a render
+ *  method"). Before this pattern existed, this exact phrasing reached NO teach
+ *  recognizer at all: RELATION_FACT_TEACH_RE (above) requires a literal "is/
+ *  are the ROLE of", never "has a ROLE method"; GENERAL_VERB_TEACH_RE (below)
+ *  maps "has"/"have" onto the same HAS_A_PREDICATE this pattern uses, but only
+ *  for a BARE, wrapper-required, single-token subject with NO leading
+ *  determiner (GENERAL_VERB_DETERMINER_RE explicitly declines "every"/"a"/
+ *  "the" as a subject, by design — see its own docblock) — so a determiner-led
+ *  subject (the operator's own canonical example, "every Component…") fell
+ *  all the way through teachLane, landing on ask.mjs's own structural
+ *  "defines" grammar instead (VERB_TO_KIND maps "has"/"have" to the code-graph
+ *  "defines" relation), which can't resolve "Component"/"render" as real
+ *  code-graph entities and reports the vague, non-actionable
+ *  `"couldn't resolve one of the terms in this question."` wall — exactly the
+ *  symptom HANDOVER.md item 9 names.
+ *
+ *  Deliberately a NARROW, EXPLICIT new pattern, not a widening of
+ *  GENERAL_VERB_TEACH_RE's own bare-subject shape (this project's own
+ *  discipline: small curated closed-set patterns, each independently tested,
+ *  never one generalized catch-all) — the literal trailing word "method" is
+ *  the anchor that keeps this pattern structurally DISJOINT from
+ *  generalVerbTeach's broader "X has a Y" territory (an ordinary "TaskController
+ *  has a hat" still never matches here, and falls through to generalVerbTeach
+ *  unaffected). Tried on the SAME ownSrc the other relational/possessive teach
+ *  shapes above already use, ahead of generalVerbTeach's own call site, so a
+ *  wrapped sentence with NO determiner ("remember that Component has a render
+ *  method" — already handled by generalVerbTeach today) is claimed here first
+ *  instead, producing the byte-identical stored fact and confirmation text —
+ *  a widening of COVERAGE (the determiner-led/bare-unwrapped case), never a
+ *  behavior change to the case that already worked.
+ *
+ *  Predicate minting reuses the EXISTING HAS_A_PREDICATE (mgx:hasA) —
+ *  generalVerbTeach's own has/have special case already mints this, so a fact
+ *  taught via either recognizer reads back interoperably. m[1] = the subject
+ *  (N1, "Component"); m[2] = the capability word (N2, "render") — stored as
+ *  the object `"<N2> method"` ("render method"), so the query-side readers
+ *  below (HAS_METHOD_YESNO_RE/HAS_METHOD_OPEN_RE) can match on the whole
+ *  "<capability> method" phrase, never just the bare capability word (which
+ *  would risk colliding with an unrelated mgx:hasA fact about the same
+ *  capability noun taught some other way). */
+const TEACH_HAS_METHOD_RE =
+  /^(?:every\s+|each\s+|all\s+|a\s+|an\s+|the\s+)?([A-Za-z][\w'-]*)\s+has\s+an?\s+([a-z][\w-]*)\s+method[.!?]*$/i;
+
 /** "a <name> is a <base1> of a <base2>" — the fixed-hop COMPOSITION-RULE teach
  *  declarative (PLAN_TAUGHT_RELATIONS.md Item 3, Phase 4): "a grandparent is a
  *  parent of a parent" teaches a RULE (mgx:ruleKind "compose2"), never a Fact —
@@ -2323,6 +2370,26 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
   if (rel && memoryDir && !QUESTION_LEAD_RE.test(ownSrc)) {
     const stored = await teachFact(memoryDir, sessionId, {
       subject: rel[1], predicate: await generalVerbPredicate(rel[2]), object: rel[3],
+    });
+    if (stored) return stored;
+  }
+
+  // HAS-A-METHOD TEACH — "every/a/an/the <N1> has a/an <N2> method"
+  // (HANDOVER.md 2026-07-10 item 9): a possession-of-capability claim, stored
+  // as an ordinary Fact via the SAME HAS_A_PREDICATE generalVerbTeach's own
+  // has/have special case already uses (see TEACH_HAS_METHOD_RE's own
+  // docblock above for the full design). Grouped with the other relational/
+  // possessive teach shapes above, tried on the SAME ownSrc, unconditionally
+  // ahead of generalVerbTeach's own call site below — disjoint from
+  // RELATION_FACT_TEACH_RE just above (that shape requires a literal "the
+  // ROLE of", never "has a … method") and from generalVerbTeach's own bare-
+  // subject shape (this one is the ONLY recognizer in this lane that accepts
+  // a leading determiner — "every"/"a"/"an"/"the" — before a "has a … method"
+  // claim).
+  const hasMethod = ownSrc.match(TEACH_HAS_METHOD_RE);
+  if (hasMethod && memoryDir && !QUESTION_LEAD_RE.test(ownSrc)) {
+    const stored = await teachFact(memoryDir, sessionId, {
+      subject: hasMethod[1], predicate: HAS_A_PREDICATE, object: `${hasMethod[2]} method`,
     });
     if (stored) return stored;
   }
@@ -4015,6 +4082,46 @@ const OWNS_YESNO_RE = /^(?:does|did)\s+([\w'-]+)\s+(?:owns?|maintains?)\s+(.+?)[
  *  backtracking "owned by" into its own subject capture and "<Name>" into its
  *  adjective slot, silently declining rather than answering). */
 const OWNS_PASSIVE_YESNO_RE = /^(?:is|are|was|were)\s+(.+?)\s+owned\s+by\s+([A-Za-z][\w'-]*(?:\s+[A-Z][\w'-]*)?)[?.!\s]*$/i;
+/** "does/did <N1> have a/an <N2> method" — the HAS-A-METHOD yes/no reader
+ *  (HANDOVER.md 2026-07-10 item 9), sibling of OWNS_YESNO_RE above: mirrors
+ *  TEACH_HAS_METHOD_RE's own subject/capability shape, answering a direct
+ *  yes/no claim against a fact taught via that pattern (mgx:hasA, object
+ *  `"<capability> method"`).
+ *
+ *  NOTE — a real, pre-existing structural collision, confirmed live before
+ *  wiring this: ask.mjs's OWN structural grammar already maps "has"/"have"
+ *  onto the code-graph "defines" relation (ask-vocab.mjs's VERB_TO_KIND), so
+ *  when a real code graph is loaded this EXACT phrasing is parsed there
+ *  FIRST — and because "a <word> method" is separately ambiguous with a
+ *  QUALIFIER reading there ("a public method"), ask.mjs resolves with its own
+ *  (possibly confusing) disambiguation choice, `miss: false`, before this
+ *  reader (factReadBack, gated on `miss` already being true) ever gets a
+ *  turn. Verified live: with a populated code graph, "does Component have a
+ *  render method" always lands on ask.mjs's disambiguation prompt, regardless
+ *  of subject/object identity or any taught fact; with NO code graph loaded
+ *  (this project's other supported mode — a purely conceptual teach-and-
+ *  recall session, see PLAN_TAUGHT_RELATIONS.md's own CONFIG={} test
+ *  convention) ask.mjs's structural attempt declines outright and this reader
+ *  answers correctly. Changing ask.mjs's own qualifier-disambiguation
+ *  behavior is a pre-existing, unrelated structural-grammar concern — out of
+ *  scope for this item.
+ *
+ *  Same "never a guessed no" discipline as IS_ADJECTIVE_YESNO_RE/
+ *  GENERAL_VERB_YESNO_RE below (not OWNS_YESNO_RE's closed-world "no" text):
+ *  a hit answers "yes"; no matching fact DECLINES (null), since "nothing
+ *  taught yet" is not proof the class genuinely lacks the method. */
+const HAS_METHOD_YESNO_RE = /^(?:does|did)\s+([\w'-]+)\s+(?:has|have)\s+an?\s+([a-z][\w-]*)\s+method[?.!\s]*$/i;
+/** "what methods does <N1> have" — the HAS-A-METHOD open-list reader
+ *  (HANDOVER.md 2026-07-10 item 9): the read-back companion to
+ *  HAS_METHOD_YESNO_RE just above — lists every taught mgx:hasA fact for
+ *  <N1> whose object is a "<word> method" phrase. A distinct query shape
+ *  (object noun right after "what", not after the subject), so it does NOT
+ *  share HAS_METHOD_YESNO_RE's own ask.mjs collision: "what methods does X
+ *  have" already reaches an honest `miss: true` from ask.mjs even against a
+ *  populated code graph (confirmed live — "no module matching X found in the
+ *  index" when X isn't a real graph entity), so this reader is reachable in
+ *  both configurations. */
+const HAS_METHOD_OPEN_RE = /^what\s+methods\s+does\s+([\w'-]+)\s+have[?.!\s]*$/i;
 /** "is/are/was/were <X> <adjective>" — a yes/no claim over a taught
  *  mgx:hasProperty fact (Tier-5 playtest fix). Deliberately has NO marker
  *  between subject and complement — "a"/"an"/"a kind of"/"a type of" is
@@ -4712,6 +4819,39 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
       text: `no — no remembered fact says ${thingRaw.trim().toLowerCase()} is owned by ${ownerRaw.trim()}.`,
       replace: true,
     };
+  }
+
+  // (a2b-iii) HAS-A-METHOD yes/no — "does/did <N1> have a/an <N2> method"
+  // (HANDOVER.md 2026-07-10 item 9): see HAS_METHOD_YESNO_RE's own docblock
+  // for the full design, including the confirmed pre-existing ask.mjs
+  // structural collision when a real code graph is loaded. A hit answers
+  // "yes"; no matching fact DECLINES (null) — never a guessed "no" (this
+  // reader follows IS_ADJECTIVE_YESNO_RE/GENERAL_VERB_YESNO_RE's OWA
+  // discipline below, not OWNS_YESNO_RE's closed-world "no" just above).
+  const hasMethodYN = qHedge.match(HAS_METHOD_YESNO_RE);
+  if (hasMethodYN) {
+    const [, subjRaw, capRaw] = hasMethodYN;
+    const subjVariants = factTermVariants(normFactTerm, subjRaw.trim());
+    const objVariants = factTermVariants(normFactTerm, `${capRaw.trim()} method`);
+    const hit = rows
+      .filter((f) => f.predicate === HAS_A_PREDICATE && subjVariants.has(f.subject) && objVariants.has(f.object))
+      .sort(byTrust)[0];
+    if (hit) return { text: `yes — ${renderFactLine(hit)}`, replace: true };
+    return null; // no remembered fact — honest decline, never a guessed "no"
+  }
+
+  // (a2b-iv) HAS-A-METHOD open list — "what methods does <N1> have"
+  // (HANDOVER.md 2026-07-10 item 9): every taught mgx:hasA fact for <N1>
+  // whose object is a "<word> method" phrase. An honest empty (null, never a
+  // guessed method name) when nothing was taught for this subject.
+  const hasMethodOpen = qHedge.match(HAS_METHOD_OPEN_RE);
+  if (hasMethodOpen) {
+    const subjVariants = factTermVariants(normFactTerm, hasMethodOpen[1].trim());
+    const hits = rows
+      .filter((f) => f.predicate === HAS_A_PREDICATE && subjVariants.has(f.subject) && / method$/.test(f.object))
+      .sort(byTrust);
+    if (!hits.length) return null;
+    return renderMany(hits);
   }
 
   // (a2c) PROPERTY yes/no — "is/are/was/were <X> <adjective>": Tier-5 playtest
