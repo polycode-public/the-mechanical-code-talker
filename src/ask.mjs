@@ -557,6 +557,38 @@ function parseCommitFilter(w, lc) {
   return { node: "commitFilter", op, pivotRaw };
 }
 
+// Minimal code-identifier token shape — dotted paths ("app/lib/e.mjs"), Capitalized
+// symbols ("Store"), or lowerCamelCase symbols ("fnAlpha"). Intentionally DUPLICATED
+// from chat.mjs's own NAME_TOKEN_RE (chat.mjs ~line 4998, used there for exactly this
+// kind of code-identifier detection in discourseRewrite) rather than imported:
+// chat.mjs only ever imports ask.mjs LAZILY (dynamic `await import("./ask.mjs")`,
+// per chat.mjs's own top-of-file comment), so a static ask.mjs -> chat.mjs import
+// would invert that layering for the sake of one regex. Keep the two in sync by
+// hand if either changes.
+const ANAPHORA_NAME_TOKEN_RE = /\b[\w-]+(?:[/.][\w-]+)+\b|\b[A-Z][A-Za-z0-9_]*\b|\b[a-z][a-z0-9]*[A-Z][A-Za-z0-9]*\b/;
+
+/** Distinct code-identifier-shaped tokens in `words` (original case preserved —
+ *  the regex cares about case), in first-occurrence order, de-duplicated
+ *  case-insensitively. Feeds parseAnaphora's in-sentence candidate-set fix
+ *  (HANDOVER.md item 1, C2 pronoun-binding): "which of them <filter>" doesn't
+ *  ALWAYS mean "the previous turn's answer set" — when the SAME sentence already
+ *  named 2+ real candidates before the trigger ("app/lib/e.mjs ... app/lib/f.mjs
+ *  ... which of them ...", a single turn, no prior turn at all), THAT'S the
+ *  referent. Ordinary English words (even repeated nouns) never match this
+ *  regex, so this never widens beyond genuine code identifiers. */
+function inSentenceNameTokens(words) {
+  const seen = new Set();
+  const out = [];
+  for (const raw of words) {
+    if (!raw || !ANAPHORA_NAME_TOKEN_RE.test(raw)) continue;
+    const key = raw.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(raw);
+  }
+  return out;
+}
+
 /** ANAPHORA over the previous result set: "which of those/them <filter>", "how many
  *  of those <filter>". Requires "of <pronoun>" (so a bare "those" in a term never
  *  fires). Returns a {node:"anaphora"} (mode count|list), a miss (filter present but
@@ -593,7 +625,19 @@ function parseAnaphora(w, lc, nlp) {
   const mode = AGGREGATE_TRIGGERS.includes(head) || /^(how many|how much|count|number|quantity|total)\b/.test(head) ? "count" : "list";
   const filter = parsePredicateFilter(w.slice(p + 1), nlp);
   if (filter === undefined) return { node: "miss", reason: "the follow-up filter didn't parse" };
-  return { node: "anaphora", mode, filter };
+  // in-sentence candidate set (HANDOVER.md item 1): if the SAME utterance already
+  // named 2+ real code identifiers BEFORE the "of them"/"of those" trigger — e.g.
+  // "app/lib/e.mjs ... because it imports app/lib/f.mjs — which of them imports
+  // app/lib/f.mjs" — those are the referent, not a previous turn's cached result
+  // set. evalAnaphora tries this FIRST and only falls back to opts.prev when it's
+  // absent or resolves to fewer than 2 real graph entities, so an ordinary
+  // multi-turn follow-up (no named entities in the current utterance at all) is
+  // completely unaffected.
+  const cutIdx = viaOf ? p - 1 : p;
+  const candidateTerms = inSentenceNameTokens(w.slice(0, cutIdx));
+  const ast = { node: "anaphora", mode, filter };
+  if (candidateTerms.length >= 2) ast.candidateTerms = candidateTerms;
+  return ast;
 }
 
 /** Parse a trailing filter (for anaphora, and any "of those that …" tail) into
@@ -1780,12 +1824,36 @@ function evalBoolean(graph, ast, opts) {
   return acc;
 }
 
-/** Anaphora over ask()'s `prev` id array — filter/count the previous answer's ids.
- *  No prev supplied → honest miss (never a guess), like an unresolved pronoun. */
+/** Resolve parseAnaphora's in-sentence candidateTerms (HANDOVER.md item 1) to real
+ *  graph entities, de-duplicated by resolved id. Returns null (not just []) when
+ *  fewer than 2 resolve, so the caller can tell "no in-sentence candidates" apart
+ *  from "named candidates that happen to fail resolution" and fall back to
+ *  opts.prev either way — never a guess, same discipline as everywhere else in
+ *  this function. */
+function resolveInSentenceCandidates(graph, terms) {
+  if (!Array.isArray(terms) || terms.length < 2) return null;
+  const seen = new Set();
+  const resolved = [];
+  for (const term of terms) {
+    const r = resolveObject(graph, term);
+    if (r && r.match && !seen.has(r.match.id)) { seen.add(r.match.id); resolved.push(r.match); }
+  }
+  return resolved.length >= 2 ? resolved : null;
+}
+
+/** Anaphora over the candidate set: EITHER the current utterance's own in-sentence
+ *  named entities (parseAnaphora's candidateTerms — a single turn, no prior turn
+ *  needed at all, HANDOVER.md item 1), tried first, OR ask()'s `prev` id array (a
+ *  genuine previous-turn follow-up), filtered/counted the same way either way. No
+ *  candidate set at all → honest miss (never a guess), like an unresolved pronoun. */
 function evalAnaphora(graph, ast, opts) {
-  const prev = opts && opts.prev;
-  if (!Array.isArray(prev) || !prev.length) return { compositeMiss: true, reason: "no-prev", matches: [] };
-  const baseItems = prev.map((id) => graph.byId.get(id)).filter(Boolean);
+  const inSentence = resolveInSentenceCandidates(graph, ast.candidateTerms);
+  let baseItems = inSentence;
+  if (!baseItems) {
+    const prev = opts && opts.prev;
+    if (!Array.isArray(prev) || !prev.length) return { compositeMiss: true, reason: "no-prev", matches: [] };
+    baseItems = prev.map((id) => graph.byId.get(id)).filter(Boolean);
+  }
   let items = baseItems;
   const f = ast.filter;
   if (f && f.type === "qual") {
