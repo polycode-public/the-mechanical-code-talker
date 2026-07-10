@@ -18,10 +18,14 @@
 // A `tmct.toml` may carry a top-level `[extensions]` table-of-tables
 // (`[extensions.tier2-aws]`, …): a RECOGNIZED name (one of the builtins above)
 // may override `active`/paths/etc; an UNRECOGNIZED name declares a brand new
-// host entry and MUST carry a `kind` (corpus | lexicon | templates | pack) — a
-// `pack` entry may combine any of corpus_path/lexicon_path/templates_path/
-// phrasebook_path under one `active` flag and one provenance name, the shape a
-// third-party vocabulary package hands tmct.
+// host entry and MUST carry a `kind` (corpus | lexicon | templates | pack |
+// ontology) — a `pack` entry may combine any of corpus_path/lexicon_path/
+// templates_path/phrasebook_path under one `active` flag and one provenance
+// name, the shape a third-party vocabulary package hands tmct. `ontology` is a
+// DISTINCT, nameable kind for an ontology bundle (as opposed to a plain
+// `corpus` bundle) — its `ontology_path` key is just an alias populating the
+// SAME internal `corpusPath` field a corpus entry uses, so every downstream
+// seeder/loader needs zero branching by kind name.
 //
 // A SEPARATE top-level `[bias]` table (flat: bundle-name → number) feeds
 // src/memory/bias.mjs's ranking — never nested under `[extensions.*]`.
@@ -45,7 +49,7 @@ import {
   toFacts,
 } from "./corpus/conceptnet.mjs";
 
-export const EXTENSION_KINDS = Object.freeze(["corpus", "lexicon", "templates", "pack"]);
+export const EXTENSION_KINDS = Object.freeze(["corpus", "lexicon", "templates", "pack", "ontology"]);
 
 // The definitional-band-first predicate order chat.mjs's bootstrap has always
 // passed for the ConceptNet seed (SEED_PREFER) — re-declared here (not
@@ -118,6 +122,9 @@ export function validateExtensionEntry(name, entry) {
   if (entry.kind === "corpus" && !entry.corpusPath) {
     throw new Error(`extension "${name}": a "corpus" entry needs corpus_path`);
   }
+  if (entry.kind === "ontology" && !entry.corpusPath) {
+    throw new Error(`extension "${name}": an "ontology" entry needs ontology_path`);
+  }
   if (entry.kind === "lexicon" && !entry.lexiconPath) {
     throw new Error(`extension "${name}": a "lexicon" entry needs lexicon_path`);
   }
@@ -154,6 +161,7 @@ function mergeExtensionEntry(name, builtin, override, repoRoot) {
   };
   const paths = [
     ["corpus_path", "corpusPath"],
+    ["ontology_path", "corpusPath"], // alias: an "ontology" entry's own path key, same internal field as "corpus"
     ["lexicon_path", "lexiconPath"],
     ["templates_path", "templatesPath"],
     ["phrasebook_path", "phrasebookPath"],
@@ -216,11 +224,18 @@ export async function resolveExtensions(repoRoot) {
 
 // ---- Part 2: the unified corpus loader loop ---------------------------------
 
-/** Seed every ACTIVE `corpus`-kind entry (in the Map's own fixed order — seon,
+/** Seed every ACTIVE `corpus`/`ontology`-kind entry, plus any ACTIVE `pack`-kind
+ *  entry that declares a `corpusPath` (in the Map's own fixed order — seon,
  *  conceptnet, then the rest sorted by name) into `repo`'s memory, ONE
  *  seedMemory() call per bundle. Shared by chat.mjs's first-run bootstrap,
  *  `tmct init`'s seed step and `tmct init --corpus <id>` — so all three read
  *  the SAME loop instead of three independent hardcoded call sites.
+ *
+ *  BUGFIX (this batch): a `pack`-kind entry's `corpusPath` used to be silently
+ *  skipped here despite this module's own docblock claiming pack entries
+ *  combine corpus_path/lexicon_path/etc — a pack's corpus facts never made it
+ *  into memory. Fixed by seeding any active pack entry that declares a
+ *  corpusPath, alongside corpus/ontology entries.
  *
  *  FAILURE-TOLERANT per bundle (init.mjs's own doctrine: a missing/broken
  *  corpus degrades to "not seeded", never a crash): one bad third-party pack's
@@ -235,7 +250,9 @@ export async function seedActiveCorpusEntries(repo, entries) {
   let skipped = 0;
   let total = 0;
   for (const [name, entry] of entries instanceof Map ? entries : new Map()) {
-    if (entry.kind !== "corpus" || !entry.active) continue;
+    if (!entry.active) continue;
+    const seedable = entry.kind === "corpus" || entry.kind === "ontology" || (entry.kind === "pack" && entry.corpusPath);
+    if (!seedable) continue;
     try {
       const res = await seedMemory(repo, {
         slicePath: entry.corpusPath,
