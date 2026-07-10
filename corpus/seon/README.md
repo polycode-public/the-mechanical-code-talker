@@ -18,7 +18,7 @@ CC-BY-SA like the ConceptNet slice.
 
 | file | shape | count |
 |------|-------|-------|
-| `concepts.jsonl`    | relation facts, byte-identical shape to `corpus/conceptnet/slice.jsonl` | 238 facts |
+| `concepts.jsonl`    | relation facts, byte-identical shape to `corpus/conceptnet/slice.jsonl` | 399 facts |
 | `definitions.jsonl` | `{ "term", "definition", "sense": "software" }`, one per line             | 288 definitions |
 | `LICENSE-NOTICE`    | MPL-2.0 provenance for this directory | — |
 
@@ -42,14 +42,15 @@ emitted-predicate breakdown:
 
 | ConceptNet rel | → predicate | facts | meaning |
 |----------------|-------------|-------|---------|
-| `/r/IsA`         | `rdfs:subClassOf` | 109 | taxonomy (`class` ⊑ `type`) — the load-bearing layer the syllogise closure walks |
+| `/r/IsA`         | `rdfs:subClassOf` | 132 | taxonomy (`class` ⊑ `type`) — the load-bearing layer the syllogise closure walks. Includes the upper-ontology spine (`artifact`/`agent`/`event`/`quality`/`quantity`) added 2026-07-10 |
 | `/r/UsedFor`     | `mgx:usedFor`     | 48  | purpose (`cache` usedFor `performance`) |
-| `/r/PartOf`      | `mgx:partOf`      | 35  | meronymy (`method` partOf `class`) |
-| `/r/HasA`        | `mgx:hasA`        | 11  | holonymy (`class` hasA `method`) |
+| `/r/PartOf`      | `mgx:partOf`      | 37  | meronymy (`method` partOf `class`) |
+| `/r/HasA`        | `mgx:hasA`        | 18  | holonymy (`class` hasA `method`) |
 | `/r/CapableOf`   | `mgx:capableOf`   | 8   | behaviour (`cache` capableOf `store data`) |
 | `/r/CreatedBy`   | `mgx:createdBy`   | 4   | provenance (`commit` createdBy `developer`) |
-| `/r/HasProperty` | `mgx:hasProperty` | 4   | attributes (`cache` hasProperty `fast`) |
+| `/r/HasProperty` | `mgx:hasProperty` | 19  | attributes (`cache` hasProperty `fast`) |
 | `/r/RelatedTo`   | *(none — non-emitting)* | 19 | weak peer hints (`interface` relatedTo `class`); kept per the map's own note as a future fuzzy-match signal — they load without drift but emit no fact today |
+| `/r/DistinctFrom`| `owl:disjointWith` | 114 | mutual exclusion (`cache` disjointWith `queue`); grown 2026-07-10 (was 42) from a token starter set to a genuine upper-ontology + sibling-cluster disjointness spine for `PLAN_INFERENCE_TESTING.md`'s `cax-dw` rule |
 
 `normFactTerm` lowercases and de-underscores endpoints, so `/c/en/java_class` stores
 as the term `java class`.
@@ -98,7 +99,7 @@ This directory is **data only**; wiring it into seeding is the coordinator's
 `chat.mjs` / `init.mjs` change. Recommended:
 
 1. **Seed `corpus/seon` FIRST, ahead of the ConceptNet slice**, and **exempt it from
-   the 500-fact cap** (`SEED_LIMIT`). It is small (238 lines → 219 emitted facts) and
+   the 500-fact cap** (`SEED_LIMIT`). It is small (399 lines → 380 emitted facts) and
    fully curated, so the whole tier belongs in memory before any capped ConceptNet
    fill. Concretely: call `seedMemory(repo, { slicePath: SEON_CONCEPTS_FILE })` with
    **no `limit`**, then run the existing capped ConceptNet seed after it. The
