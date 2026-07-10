@@ -699,7 +699,12 @@ export function renderStats(graph) {
  *  which meant "who are you" always got the "here's what I can query" blurb and
  *  never a self-description — split so each gets the answer it actually asked for. */
 const CAPABILITY_PHRASES = [
-  /^what can (you|u) do\??$/i, /^what do you do\??$/i, /^help( me)?\??$/i, /^\?+$/,
+  // HANDOVER.md 2026-07-10 item 10: "what can you actually do" (an intensifier
+  // adverb inserted before the verb) used to miss this exact-match regex entirely
+  // and fall to the raw grammar wall instead of orientationAnswer — the same
+  // question in every way that matters, just phrased with emphasis.
+  /^(?:so,?\s+)?what can (?:you|u)(?:\s+(?:actually|really))? do\??$/i, /^(?:so,?\s+)?what do you(?:\s+(?:actually|really))? do\??$/i,
+  /^help( me)?\??$/i, /^\?+$/,
   /^how do (i|you) work\??$/i, /^how does (this|it) work\??$/i,
   // unix-habit openers typed inside the REPL out of muscle memory — argv-only
   // today (bin/tmct.mjs), dead once inside the chat loop; route to the same
@@ -771,10 +776,27 @@ const IDENTITY_PHRASES = [
  *  a genuinely different, more specific answer than the generic self-description,
  *  and this is a very likely first question given how most chat tools work today. */
 const AI_IDENTITY_PHRASES = [
-  /^(are you|r u) (an? )?(ai|a bot|chatgpt|gpt|an? llm|a language model|a robot)\??$/i,
+  // HANDOVER.md 2026-07-10 item 10: "are you secretly GPT" — an adverb ("secretly"/
+  // "really"/"actually") wedged between "are you" and the noun (a deliberate-breaker
+  // persona's own phrasing) used to mis-segment the subject as "you secretly" and
+  // fall through to the ordinary graph-query grammar instead of this lane.
+  /^(are you|r u)\s+(?:secretly|really|actually)?\s*(an? )?(ai|a bot|chatgpt|gpt|an? llm|a language model|a robot)\??$/i,
   /^is this (chatgpt|gpt|claude|an? ai|an? llm)\??$/i,
   /^do you use ai\??$/i, /^what language model are you( using)?\??$/i,
   /^am i (talking|speaking|chatting) (to|with) a (real )?(person|human|bot|ai)\??$/i,
+];
+/** "Do you have feelings/emotions" — HANDOVER.md 2026-07-10 item 10 (small-talk
+ *  persona finding): with no closed-set match, this used to misfire into a
+ *  literal module-name lookup for the bare noun ("no module matching 'feelings'
+ *  found in the index") — a wrong-flavor wall, not an honest personality decline.
+ *  Same family/placement as AI_IDENTITY_PHRASES just above (a self-awareness
+ *  question about tmct, not a code-graph query), checked in conversationalTurn
+ *  BEFORE any graph query is attempted. */
+const FEELINGS_PHRASES = [
+  /^do you have (?:feelings|emotions|opinions|thoughts)\??$/i,
+  /^are you (?:sentient|conscious|self[- ]aware)\??$/i,
+  /^can you feel(?:\s+(?:things|emotions|anything))?\??$/i,
+  /^do you (?:feel|think|dream)\??$/i,
 ];
 /** The structural verbs/nouns that mark a near-miss code question (→ keep the
  *  precise grammar hint, not the friendly nudge). */
@@ -844,6 +866,7 @@ const T_ORIENTATION_EMPTY = "orientation-empty";
  *  depend on whether a repo is loaded. */
 const T_IDENTITY_SELF = "identity-self";
 const T_IDENTITY_NOT_LLM = "identity-not-an-llm";
+const T_IDENTITY_NO_FEELINGS = "identity-no-feelings";
 /** THE CONCEPT FORCE (concept.mjs): the three-band answer to a vague "what is a X"
  *  that names a known concept WITH instances — {definition}/{examples}/{followups}. */
 const T_CONCEPT = "concept-force";
@@ -1200,6 +1223,11 @@ function conversationalTurn(line, ctx) {
     note(ctx.trace, "goal: identity — is tmct an AI/LLM (a very likely first question)");
     note(ctx.trace, "lane: conversational — identity/AI (AI_IDENTITY_PHRASES closed set)");
     return mk(t(T_IDENTITY_NOT_LLM));
+  }
+  if (FEELINGS_PHRASES.some((re) => re.test(raw))) {
+    note(ctx.trace, "goal: identity — does tmct have feelings/consciousness (small-talk persona finding)");
+    note(ctx.trace, "lane: conversational — identity/feelings (FEELINGS_PHRASES closed set)");
+    return mk(t(T_IDENTITY_NO_FEELINGS));
   }
   if (IDENTITY_PHRASES.some((re) => re.test(raw))) {
     note(ctx.trace, "goal: identity — who/what tmct is, not a capability listing");
@@ -5473,6 +5501,14 @@ async function describeWrapperAnswer(query, { config, source, focus, graph, tel 
   const m = DESCRIBE_WRAPPER_RE.exec(q) || STACCATO_PRONOUN_RE.exec(q);
   let term = m?.[1]?.trim();
   if (!term) return null;
+  // HANDOVER.md 2026-07-10 item 10: "describe about X" (a doubled verb — the
+  // "describe" branch of DESCRIBE_WRAPPER_RE never expects a following "about",
+  // unlike its own "tell me about"/"what about" branches, which already consume
+  // theirs inside the regex) leaves a redundant leading "about " glued to the
+  // captured term. Stripped once, here, before any resolution — the other two
+  // branches never leave this residue, so this can only ever help the doubled-
+  // verb case, never change a correctly-captured term.
+  term = term.replace(/^about\s+/i, "");
   if (DESCRIBE_PRONOUN_RE.test(term)) {
     if (!focus?.label) return null; // no standing focus to resolve against — honest decline
     term = focus.label;
@@ -5965,6 +6001,18 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   if (isConversationalCandidate && memoryDir && (bareWhatisShape || isAdjectiveShape)) {
     bareMetaHit = (await factAnswer(memoryDir, query, envelope, miss, biasByBundle))
       ?? (await factReadBack(memoryDir, query, envelope, miss, graph, newFocus?.label, biasByBundle));
+    // HANDOVER.md 2026-07-10 item 10 (dropped-article gap): a bare "what is X"
+    // with NO taught fact but a KNOWN curated corpus term ("what is cache", no
+    // article) used to lose this exact same isConversationalCandidate race —
+    // curatedDefinitionAnswer was only ever reached once the article made T5's
+    // structural parse succeed (envelope.parsed non-null), never on the bare
+    // form. Same "only diverts on a REAL hit" discipline as the rest of this
+    // lane — an unknown bare term still falls through to the ordinary
+    // orientation card, exactly as before.
+    if (!bareMetaHit) {
+      const def = await curatedDefinitionAnswer(query, envelope, { memoryDir, lexicon });
+      if (def) bareMetaHit = { text: def.text, replace: true };
+    }
   }
   if (bareMetaHit) {
     answer = bareMetaHit.replace ? bareMetaHit.text : `${answer}\n${bareMetaHit.text}`;

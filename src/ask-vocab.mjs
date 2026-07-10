@@ -340,7 +340,11 @@ export const ENTITY_TO_TYPE = Object.freeze({
   function: "Function", functions: "Function",
   method: "Method", methods: "Method",
   class: "Class", classes: "Class",
-  module: "Module", modules: "Module", file: "Module", files: "Module",
+  // "mod"/"mods" (HANDOVER.md 2026-07-10 item 10): a rushed-dev abbreviation
+  // prefix ("mod store.mjs imports") used to land in disambiguation instead of
+  // resolving cleanly, since nothing recognized "mod" as this same Module noun
+  // — same alias-of-Module trade "file"/"files" already make just above.
+  module: "Module", modules: "Module", mod: "Module", mods: "Module", file: "Module", files: "Module",
   attribute: "Attribute", attributes: "Attribute", field: "Attribute", fields: "Attribute",
   variable: "GlobalVariable", variables: "GlobalVariable", global: "GlobalVariable", globals: "GlobalVariable",
   // "changes" in a touch question ("which changes touch commit <sha>") means the
