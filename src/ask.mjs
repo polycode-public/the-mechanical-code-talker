@@ -324,6 +324,7 @@ function parseComposite(text, nlp) {
     || parseNegation(text, nlp, 0)
     || parseForwardNegation(w, lc, nlp)
     || parseTemporal(w, lc, nlp, 0)
+    || parseCommitFilter(w, lc)
     || parseAnaphora(w, lc, nlp)
     || parseAggregate(w, lc, nlp)
     || parseSuperlative(w, lc, nlp)
@@ -531,6 +532,29 @@ function parseTemporal(w, lc, nlp, depth = 0) {
   if (!inner || inner.node === "miss") return inner ? { node: "miss", reason: inner.reason || "the inner set of the temporal query didn't parse" } : { node: "miss", reason: "the inner set of the temporal query didn't parse" };
   const noun = entityNoun(subjLc[0]);
   return { node: "temporal", inner, entityType: (noun && noun.entityType) || null };
+}
+
+// COMMIT FILTER (Track 1 temporal lever, PLAN_CHAT_FEEL item 6 remainder) — "what
+// changed since/before/after/on <date-or-commit>": a date-qualified SURVEY of every
+// recorded commit (distinct from the flat when-shape above, which dates ONE named
+// entity's touch history). The pivot is either a literal ISO-8601 date (yyyy-mm-dd,
+// mgx:commitDate's own format, so a lexical compare is a chronological one) or a
+// named commit — resolved at EVAL time (graph-dependent), whose own recorded date
+// becomes the pivot and who is excluded from its own before/after comparison (never
+// "before/after itself"). "in"/"during" are deliberately NOT among the qualifiers:
+// "what changed in <commit>" already means something else (that commit's own touch-
+// set — the commit-as-subject flip elsewhere in this file), and this recognizer must
+// never shadow it.
+const COMMIT_FILTER_OPS = new Set(["since", "before", "after", "on"]);
+function parseCommitFilter(w, lc) {
+  if (lc[0] !== "what" || lc[1] !== "changed") return null;
+  let i = 2;
+  if (lc[i] === "ever") i += 1;
+  if (!COMMIT_FILTER_OPS.has(lc[i])) return null;
+  const op = lc[i];
+  const pivotRaw = w.slice(i + 1).join(" ").trim();
+  if (!pivotRaw) return { node: "miss", reason: `"what changed ${op}" needs a date or commit afterward` };
+  return { node: "commitFilter", op, pivotRaw };
 }
 
 /** ANAPHORA over the previous result set: "which of those/them <filter>", "how many
@@ -1052,6 +1076,22 @@ function parseRelationalOrQualified(w, lc, nlp, depth) {
     // e.g. "recent commits touching a.py", is left to the ordinary parser).
     if (RECENT_COMMIT_LEAD.has(lc[i]) && nextNoun && nextNoun.entityType === "Commit" && i + 2 === lc.length) {
       return { node: "recentCommits" };
+    }
+    // Track 1 temporal lever (remainder) — the SAME bare lead, past an optional
+    // copula + determiner ("what IS THE newest commit", "what WAS THE latest
+    // commit"): FRAME_WORDS only strips "what"/"which"/…, so "is the"/"was the"
+    // left `i` sitting on the copula, never reaching the check above at all. A
+    // narrow lookahead (never mutating `i`, so every OTHER branch here is
+    // byte-identical) that re-tries the exact same closed RECENT_COMMIT_LEAD
+    // check past those two filler words only — an honest decline (falls through)
+    // the instant either word doesn't match, never a guess.
+    if (COPULA_WORDS.has(lc[i])) {
+      let j = i + 1;
+      if (j < lc.length && (lc[j] === "the" || lc[j] === "a" || lc[j] === "an")) j += 1;
+      const leadNoun = j + 1 < lc.length ? entityNoun(lc[j + 1]) : null;
+      if (RECENT_COMMIT_LEAD.has(lc[j]) && leadNoun && leadNoun.entityType === "Commit" && j + 2 === lc.length) {
+        return { node: "recentCommits" };
+      }
     }
     // CASCADE_NOISE_SET excluded alongside STOPWORDS (Tier-2 playtest, cycle 8):
     // "what about classes"/"how about the modules" used to reach here with
@@ -1770,6 +1810,41 @@ function evalRecentCommits(graph) {
   return { compositeKind: "recentCommits", matches: commits };
 }
 
+const COMMIT_FILTER_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+/** COMMIT FILTER eval — resolves the pivot (a literal ISO date, or a NAMED commit
+ *  whose own recorded date becomes the pivot — resolved here, graph-dependent, per
+ *  the parser's own doc), then filters every Commit individual's date against it.
+ *  A pivot that IS itself a commit is excluded from its own comparison. An
+ *  unresolvable pivot (neither a date nor a known commit) declines honestly
+ *  (pivotResolved:false) rather than guessing an empty result. */
+function evalCommitFilter(graph, ast) {
+  const { op, pivotRaw } = ast;
+  const dateOf = (c) => String((c.attributes || []).find((a) => a.key === "date")?.value || "").slice(0, 10);
+  let pivotDate = null;
+  let pivotId = null;
+  if (COMMIT_FILTER_DATE_RE.test(pivotRaw)) {
+    pivotDate = pivotRaw;
+  } else {
+    const { match, ambiguous } = resolveObject(graph, pivotRaw, { expectedClass: "Commit" });
+    if (match && !ambiguous && match.class === "Commit" && dateOf(match)) {
+      pivotId = match.id;
+      pivotDate = dateOf(match);
+    }
+  }
+  if (!pivotDate) return { compositeKind: "commitFilter", op, pivotRaw, pivotResolved: false, matches: [] };
+  const matches = graph.individuals
+    .filter((i) => i.class === "Commit" && i.id !== pivotId && dateOf(i))
+    .filter((c) => {
+      const d = dateOf(c);
+      if (op === "since") return d >= pivotDate;
+      if (op === "before") return d < pivotDate;
+      if (op === "after") return d > pivotDate;
+      return d === pivotDate; // "on"
+    })
+    .sort((a, b) => dateOf(b).localeCompare(dateOf(a)));
+  return { compositeKind: "commitFilter", op, pivotRaw, pivotDate, pivotResolved: true, matches };
+}
+
 /** TEMPORAL over a nested set (lever 3) — the commits that touched ANY member of the
  *  inner set, newest commit date first. Reuses the SAME touches→commit→date-sort the
  *  flat when-shape runs (mgx:commitDate is ISO-8601, so a lexical sort IS a date sort;
@@ -1898,6 +1973,7 @@ export function evalComposite(graph, ast, opts = {}) {
   if (ast.node === "superlative") return evalSuperlative(graph, ast);
   if (ast.node === "temporal") return evalTemporal(graph, ast, opts);
   if (ast.node === "recentCommits") return evalRecentCommits(graph);
+  if (ast.node === "commitFilter") return evalCommitFilter(graph, ast);
   if (ast.node === "anaphora") return evalAnaphora(graph, ast, opts);
   // membership inheritance cascade (HANDOVER item 6), TOP-LEVEL: a bare "<kind> of
   // <owner>" node, or a qualifier wrapping one ("public methods of <owner>") — see
@@ -2066,6 +2142,33 @@ function renderComposite(parsed, result) {
     const tail = result.matches.length > HISTORY_CAP ? ` …+${result.matches.length - HISTORY_CAP} more` : "";
     return {
       content: `${result.matches.length} recent commit(s): ${shown.join(", ")}${tail}.`,
+      miss: false, ambiguous: false, matches: result.matches,
+    };
+  }
+  // Track 1 temporal lever (remainder): "what changed since/before/after/on
+  // <date-or-commit>" — same dated-list rendering convention as recentCommits just
+  // above, scoped to the resolved pivot. An unresolvable pivot names itself and the
+  // two supported pivot shapes (never a silent guess); a resolved pivot with no
+  // qualifying commits is an honest empty (never the generic orientation blurb).
+  if (result.compositeKind === "commitFilter") {
+    if (!result.pivotResolved) {
+      return {
+        content: `"${result.pivotRaw}" isn't a recognized date (yyyy-mm-dd) or a known commit — try "what changed since 2026-06-01" or "what changed before <commit>".`,
+        miss: true, ambiguous: false, matches: [],
+      };
+    }
+    if (!result.matches.length) {
+      return { content: `no commits recorded ${result.op} ${result.pivotRaw}.`, miss: true, ambiguous: false, matches: [] };
+    }
+    const dateOf = (c) => String((c.attributes || []).find((a) => a.key === "date")?.value || "");
+    const shown = result.matches.slice(0, HISTORY_CAP).map((c) => {
+      const day = dateOf(c).slice(0, 10);
+      const msg = (c.attributes || []).find((a) => a.key === "message")?.value || "";
+      return `${c.label}${day ? ` (${day})` : ""}${msg ? ` — ${msg}` : ""}`;
+    });
+    const tail = result.matches.length > HISTORY_CAP ? ` …+${result.matches.length - HISTORY_CAP} more` : "";
+    return {
+      content: `${result.matches.length} commit(s) changed ${result.op} ${result.pivotRaw}: ${shown.join(", ")}${tail}.`,
       miss: false, ambiguous: false, matches: result.matches,
     };
   }

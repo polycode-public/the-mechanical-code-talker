@@ -1924,12 +1924,22 @@ function c1Presupposition(t) {
       ));
     }
   }
+  // 2026-07-10 correction: a refuted presupposition is NOT a "miss" — chat.mjs's
+  // presuppositionNudge docstring (db60099, the SAME commit that authors this
+  // behavior) says so explicitly: "A CONFIRMED presupposition is a real answer
+  // (recordMiss:false); a REFUTED one is still an honest, confident correction,
+  // not a miss." A refutation names both entities exactly as informatively as a
+  // confirmation does, so it carries the SAME miss:false/answerMatch shape as the
+  // true-pair check above. This cell's original miss:true expectation (case-set
+  // v2, d984d58) was authored ~40 minutes BEFORE presuppositionNudge existed
+  // (db60099 landed later the same day) and was never re-measured against it —
+  // see PLAN_CHAT_FEEL.md's item 6 status banner for the fresh-replay finding.
   const falseSample = falsePairs.filter((_, i) => i % 5 === 0);
   for (const trigger of triggers) {
     for (const [x, y] of falseSample) {
       items.push(turnsItem(
-        `Presupposition check: "${trigger}" presupposes ${x} imports ${y} — FALSE per the fixture (no such edge exists). The honest answer must CORRECT the false presupposition, never silently confirm it.`,
-        { say: `why does ${x} ${trigger} import ${y}`, expect: { miss: true, answerNotMatch: ["I answer questions about"] } },
+        `Presupposition check: "${trigger}" presupposes ${x} imports ${y} — FALSE per the fixture (no such edge exists). The honest answer must CORRECT the false presupposition, naming both entities, never silently confirm it.`,
+        { say: `why does ${x} ${trigger} import ${y}`, expect: { miss: false, answerMatch: [esc(x), esc(y)], answerNotMatch: ["I answer questions about"] } },
       ));
     }
   }

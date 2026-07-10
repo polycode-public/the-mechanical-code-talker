@@ -1,17 +1,35 @@
 # PLAN_CHAT_FEEL — ranked next steps for chat feel + agent capability (post-0.8.1)
 
-> **STATUS (annotated 2026-07-08):** items **1–5, 7–12 ✅ delivered in 0.8.2**
-> (merge named per item below; deterministic gate 334/334 + 285/285, zero regressions;
-> confirmation playtest greenlit the wave). Item **6 → mostly ✅ shipped this session**:
-> pronoun/focus binding **fully cleared** (B1 census 34/50 → 50/50, 0 frontier — root cause was
-> `isConversational()` discarding an already-parsed structural query, not the earlier "it→Commit"
-> mis-bind); discourse-count **confirmed already green** (25/25, no fix needed); temporal
-> **partially cleared** (cochange sub-cluster: B1 45/50→48/50, C1 41/50→44/50 — 8 of 14 red ids
-> remain, each a distinct small grammar gap, documented in `HANDOVER.md`). Also surfaced a live,
-> un-flagged regression outside this item's scope: `C1:presupposition` (11/25) and
-> `C2:garden-path` (12/25) show real hard fails not marked `baselineFail` — worth a look next
-> tick. Original text kept
-> verbatim below the markers.
+> **STATUS (annotated 2026-07-10):** items **1–12 ✅ fully shipped** — item 6's remainder (the
+> last open item) closed this session. Pronoun/focus binding **fully cleared** (B1 census
+> 34/50 → 50/50, 0 frontier — root cause was `isConversational()` discarding an already-parsed
+> structural query, not the earlier "it→Commit" mis-bind); discourse-count **confirmed already
+> green** (25/25, no fix needed); temporal **now fully cleared** (B1:temporal 48/50→50/50,
+> C1:temporal 45/50→50/50 — the remaining 8 red ids each closed as a distinct closed-recognizer
+> gap: "the commit history of X"/"cochange partners of X" NP forms, bare "has X changed"
+> misparsing onto `defines`, no superlative over commits ("what is the newest commit"), and
+> before/since/after/on date qualifiers on "what changed" being ignored outright — see
+> `src/ask.mjs` (`parseCommitFilter`/`evalCommitFilter`, the `RECENT_COMMIT_LEAD` copula/
+> determiner tolerance) and `src/interpret/strategies/{grammar,keywords}.mjs`).
+>
+> The two un-flagged regressions this item's prior tick surfaced were re-measured and resolved
+> differently: `C1:presupposition`'s "11/25" was **not a live engine regression** — the cell's
+> `miss:true` expectation for a refuted presupposition was authored (case-set v2, `d984d58`,
+> 2026-07-07 20:20) ~40 minutes *before* `presuppositionNudge` existed (`db60099`, 21:02) and was
+> never re-measured against it; the feature's own docstring says a refutation is "still an
+> honest, confident correction, not a miss" (`recordMiss:false` in both branches, by design).
+> `chatbench/generate-graded.mjs`'s expectation was corrected to match (now 25/25, no product
+> code touched — nothing was broken). `C2:garden-path` **is** a real, narrow regression (18/25,
+> down from the 20/25 the stale committed pool showed — 2 of the 25 sampled items): the family-A
+> stacked-reduced-relative form ("modules imported by X tested by Y", intersection reading) now
+> returns a wrong single-entity guess instead of the previous honest miss, on cases where the
+> true intersection is empty — traced to `resolveObject`'s tier-3 fuzzy/substring matching (a
+> later, unrelated hardening) now resolving an entity out of a longer un-consumed relative-clause
+> span that the general composition path was never taught to intersect. Left **open**, by design
+> (per this item's own framing: garden-path has no dedicated handler, and the general
+> relative-clause composition path in `src/ask.mjs`/keyword-spot is a large, heavily-tuned
+> shared surface — a real fix belongs in its own dispatch, not a drive-by here). Original text
+> kept verbatim below the markers.
 
 Written 2026-07-06 from a 4-source sweep: `ROADMAP.md` (Track 1 + Next), `CHATBENCH_0.8.1.md`
 (+ `_TRANSCRIPTS`), `AGENTBENCH_0.8.1_002.md`, and a **live lightweight playtest** (7 CLI sessions
@@ -82,11 +100,15 @@ short tailored nudge first, full shapes only in /help, canonical verb in coverag
 graph-derived examples, app-overview route.
 
 ### 6. ROADMAP Track 1 trio (feel + agent; the big rock)
-> ⏳ **post-release** — deferred with MEASURED targets (advisor tick-4 full-pool dry-run): pronoun
-> red set = 18 g-b1-pron ids (1,4,5,7,12,13,16,18,20,21,22,28,30,33,35,36,48,50); temporal =
-> g-b1-temp ×5 (7,31,44,46,49) + g-c1-temp ×9 (10,12,23,28,29,33,39,47,48 — 24/25 already flipped
-> by the author lane); **re-measure g-b1-disc-count full-25 first** (sampled 0/5 red — likely
-> already green; redirect budget to pronoun reds). HANDOVER follow-up #3.
+> ✅ **fully shipped 2026-07-10** — all three cleared. Pronoun/focus binding: B1 census
+> 34/50 → 50/50, 0 frontier (root cause: `isConversational()` discarding an already-parsed
+> structural query). Discourse-count anaphora: confirmed already green (25/25), no fix needed.
+> Temporal-over-relative composition: B1:temporal 48/50→50/50, C1:temporal 45/50→50/50 — the
+> remaining 8 red ids (the cochange sub-cluster) each closed as a distinct closed-recognizer gap
+> (`src/ask.mjs`'s `parseCommitFilter`/`evalCommitFilter` + `RECENT_COMMIT_LEAD` copula
+> tolerance, `src/interpret/strategies/grammar.mjs`'s NP templates, `keywords.mjs`'s
+> has-changed carve-out). See the status banner above for the presupposition/garden-path
+> follow-up this tick also resolved (one stale test, one left-open real regression).
 Pronoun/focus binding (B1 pron 1.24 — "biggest movable mass"), discourse-count anaphora ("count
 them" — clears 2 standing tier-1 misses), C1 temporal-over-relative composition (0.31 ceiling).
 ROADMAP: "Land all three (not just #1); they raise the chat floor *and* the router's floor at once"

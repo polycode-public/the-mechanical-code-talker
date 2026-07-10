@@ -96,6 +96,27 @@ export function parseKeywordSpot(text, nlp = null) {
       return { shape: kind, entityType: null, modifier: "direct", kind, object: objText };
     }
   }
+  // has/have/had-changed carve-out (PLAN_CHAT_FEEL item 6 remainder): "has X
+  // changed" / "have X touched" / "had X ever been updated" — the present/past-
+  // perfect yes/no frame over the SAME touches-family verb the "when" branch below
+  // already answers ("when did X change"). Routed BEFORE the general verb-priority
+  // scan: "has"/"have"/"had" is ALSO a curated `defines` verb ("this module HAS
+  // three functions") and, sitting first in the sentence, would otherwise win that
+  // scan outright, misreading "has X changed" as a `defines` reverse-query over
+  // the object "X changed" — a confidently-wrong grain, not an honest miss. Gated
+  // on the sentence's OWN final word being a genuine touches verb (never a guess
+  // at which verb the sentence "really" means) — an ordinary defines question
+  // ("has app.mjs three functions") never ends in one, so this can't shadow it.
+  const PERFECT_AUX = new Set(["has", "have", "had"]);
+  if (PERFECT_AUX.has(lcWords[0])) {
+    let end = lcWords.length;
+    while (end > 1 && (lcWords[end - 1] === "ever" || lcWords[end - 1] === "been")) end -= 1;
+    const tailVerb = end > 1 ? VERB_TO_KIND[lcWords[end - 1]] : null;
+    if (tailVerb === "touches") {
+      const objText = words.slice(1, end - 1).filter((_, j) => !STOPWORDS.has(lcWords[1 + j])).join(" ").trim();
+      if (objText) return { shape: "when", entityType: null, modifier: "direct", kind: "touches", object: objText };
+    }
+  }
   let canonWords = lcWords;
   let verbHit = findPhrase(lcWords, VERB_TO_KIND);
   if (!verbHit && nlp) {

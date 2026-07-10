@@ -135,6 +135,24 @@ const TEMPLATES = [
       ? { shape: "when", entityType: null, modifier: "direct", kind: "touches", object: m[1].trim() }
       : null),
   },
+  // T9 commit-history NP (PLAN_CHAT_FEEL item 6 remainder): "the commit history of
+  // X" / "commit history for X" — an NP form of T8's SAME "when did X change"
+  // intent; reuses shape="when" verbatim so evaluation/rendering are byte-
+  // identical, only the recognizer surface differs.
+  {
+    name: "commit-history",
+    re: /^(?:the\s+)?commit\s+history\s+(?:of|for)\s+(.+?)\??$/i,
+    build: (m) => ({ shape: "when", entityType: null, modifier: "direct", kind: "touches", object: m[1].trim() }),
+  },
+  // T10 cochange-partners NP (PLAN_CHAT_FEEL item 6 remainder): "cochange partners
+  // of X" — an NP form of the existing "which modules cochange with X" verb-phrase
+  // shape (ask-vocab.mjs's cochange verb table); reuses shape="reverse"/
+  // kind="cochange" so evaluation is byte-identical.
+  {
+    name: "cochange-partners",
+    re: /^co-?change\s+partners\s+(?:of|for|with)\s+(.+?)\??$/i,
+    build: (m) => ({ shape: "reverse", entityType: "Module", modifier: "direct", kind: "cochange", object: m[1].trim() }),
+  },
 ];
 
 /** Strategy 1: the original P0 anchored grammar — the whole (normalized) string
