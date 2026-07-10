@@ -8,14 +8,19 @@
 // COMPARISON, never a replay of the engine testing itself.
 //
 // TWO DRIVE POINTS (§2.1):
-//   - kernel: calls src/syllogise.mjs's deriveSubClassClosure directly over
-//     the premises' rdfs:subClassOf edges — the pure prover, blind to the
-//     codegraph and to any rule outside subClassOf transitivity. Only
-//     meaningful for cases whose `arms` declares "kernel" (a1Lookup/subClassOf
-//     and a2ChainLen2/taught-only — the only templates that are pure
-//     class-to-class subClassOf questions; every other template is outside
-//     the kernel's actual domain by construction, so it is never asked one —
-//     see generate-cases.mjs's per-template `arms`).
+//   - kernel: calls src/syllogise.mjs's pure provers directly over the
+//     premises' own emitted triples — deriveSubClassClosure (subClassOf
+//     transitivity) and, as of PLAN_INFERENCE_TESTING.md §4 stage 4,
+//     deriveSomeValuesFromApplication (cls-svf1 restriction membership) —
+//     blind to the codegraph. Only meaningful for cases whose `arms` declares
+//     "kernel": a1Lookup/subClassOf and a2ChainLen2/taught-only (pure
+//     class-to-class subClassOf questions) plus b2Svf1Apply (the cls-svf1
+//     positive template — its query asks about the restriction node itself,
+//     deliberately checked HERE rather than via chat.mjs, which this dispatch
+//     does not touch; see generate-cases.mjs's own comment on that template).
+//     Every other template is outside the kernel's actual domain by
+//     construction, so it is never asked one — see generate-cases.mjs's
+//     per-template `arms`.
 //   - chat: interprets a real runTurn/runChat transcript (driven by
 //     infbench/run.mjs) via the turn's own `miss` flag — the SAME honest-miss
 //     signal chat.mjs itself computes (recordMiss), not a text-pattern guess.
@@ -25,7 +30,7 @@
 // confident directional verdict ("yes"/"no") that isn't the pinned literal —
 // the automatic FAIL, exactly agentbench's hallucinated-call gate.
 
-import { deriveSubClassClosure } from "../src/syllogise.mjs";
+import { deriveSubClassClosure, deriveSomeValuesFromApplication } from "../src/syllogise.mjs";
 import { parseAce } from "../src/grammar/ace.mjs";
 import { loadLexicon } from "../src/grammar/lexicon.mjs";
 import { normFactTerm } from "../src/memory/core.mjs";
@@ -82,36 +87,68 @@ export function parseCases(text) {
   return { cases, errors };
 }
 
-// ---- kernel arm: the pure closure/prover, over ONLY rdfs:subClassOf edges --
+// ---- kernel arm: the pure closure/prover — subClassOf transitivity AND -----
+// ---- (as of PLAN_INFERENCE_TESTING.md §4 stage 4) cls-svf1 someValuesFrom --
+// ---- restriction membership, over the premises' own emitted triples --------
 
 /** The canonical "is X a Y" query surface every generated case uses. Shared
  *  by the kernel's own (bench-side) query interpretation — NOT by the chat
- *  arm, which never parses text: it reads chat.mjs's own `miss` flag. */
+ *  arm, which never parses text: it reads chat.mjs's own `miss` flag. Also
+ *  doubles as the cls-svf1 template's query surface: "Y" there is the
+ *  restriction node's own readable term (e.g. "some-imports-test"), a plain
+ *  string with no spaces, so the same "is X a Y" shape parses it unchanged —
+ *  no second query grammar needed. */
 const QUERY_RE = /^is\s+(?:an?\s+)?(.+?)\s+an?\s+(.+?)[?.!\s]*$/i;
 
 /** Kernel verdict for one case: null when the case's `arms` does not declare
  *  "kernel" (not applicable — see file header); otherwise "yes" (the query's
- *  (subject,object) pair is present or derivable in the premises' subClassOf
- *  closure) or "unproven" (kernel's rdfs:subClassOf-only domain cannot see
- *  it — an honest structural ceiling, e.g. it has no notion of the codegraph
- *  or of disjointWith/cardinality/someValuesFrom). Pure; no I/O. */
+ *  (subject,object) pair is present, subClassOf-derivable, a directly stated
+ *  rdf:type, or cls-svf1-derivable from the premises' own triples) or
+ *  "unproven" (the kernel's domain cannot see it — an honest structural
+ *  ceiling, e.g. it has no notion of the codegraph or of disjointWith/
+ *  cardinality/the further owl:intersectionOf step past cls-svf1). Pure; no
+ *  I/O — this is a bench-side check over `src/syllogise.mjs`'s pure kernels
+ *  directly, deliberately NOT going through `chat.mjs` (out of scope for
+ *  this dispatch — see the cls-svf1 template's own generator comment), so a
+ *  cls-svf1-shaped case only ever declares `arms: ["kernel"]`, never "chat". */
 export function kernelVerdict(caseDef) {
   if (!(caseDef.arms || []).includes("kernel")) return null;
   const lexicon = loadLexicon();
-  const edges = [];
+  const subClassEdges = [];
+  const typeEdges = [];
+  const propertyEdges = [];
+  const onPropertyOf = new Map();     // restriction -> owl:onProperty's (normalized) object
+  const someValuesFromOf = new Map(); // restriction -> owl:someValuesFrom's (normalized) object
   for (const premise of caseDef.premises || []) {
     const parsed = parseAce(premise, lexicon);
     for (const t of parsed?.triples || []) {
-      if (t.predicate === "rdfs:subClassOf") edges.push([normFactTerm(t.subject), normFactTerm(t.object)]);
+      const s = normFactTerm(t.subject);
+      const o = normFactTerm(t.object);
+      if (t.predicate === "rdfs:subClassOf") subClassEdges.push([s, o]);
+      else if (t.predicate === "rdf:type") typeEdges.push([s, o]);
+      else if (t.predicate === "owl:onProperty") onPropertyOf.set(s, o);
+      else if (t.predicate === "owl:someValuesFrom") someValuesFromOf.set(s, o);
+      else if (t.predicate !== "owl:intersectionOf") propertyEdges.push([s, t.predicate, o]);
     }
   }
   const m = String(caseDef.query || "").match(QUERY_RE);
   if (!m) return "unproven";
   const subj = normFactTerm(m[1]);
   const obj = normFactTerm(m[2]);
-  if (edges.some(([a, b]) => a === subj && b === obj)) return "yes";
-  const derived = deriveSubClassClosure(edges, {});
-  return derived.some((d) => d.subject === subj && d.object === obj) ? "yes" : "unproven";
+  if (subClassEdges.some(([a, b]) => a === subj && b === obj)) return "yes";
+  const derivedSco = deriveSubClassClosure(subClassEdges, {});
+  if (derivedSco.some((d) => d.subject === subj && d.object === obj)) return "yes";
+  if (typeEdges.some(([a, b]) => a === subj && b === obj)) return "yes";
+  const restrictionEdges = [];
+  for (const [restriction, property] of onPropertyOf) {
+    const target = someValuesFromOf.get(restriction);
+    if (target) restrictionEdges.push({ restriction, property, target });
+  }
+  if (restrictionEdges.length) {
+    const derivedSvf1 = deriveSomeValuesFromApplication(propertyEdges, typeEdges, subClassEdges, restrictionEdges, {});
+    if (derivedSvf1.some((d) => d.subject === subj && d.object === obj)) return "yes";
+  }
+  return "unproven";
 }
 
 /** Grade the kernel arm of one case, or null when not applicable (arms lacks

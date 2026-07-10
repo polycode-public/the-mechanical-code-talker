@@ -72,7 +72,12 @@ export function seededShuffle(arr, rng) {
 }
 
 // ---- fixture: the committed lexicon's class-noun vocabulary ----
-const LEXICON_PATH = join(ROOT, "src", "grammar", "lexicon-core.json");
+// PLAN_OSS_ACE_PARSER.md's ace-owl extraction (landed concurrently with this
+// dispatch) moved the canonical lexicon-core.json out of src/grammar/ into
+// the extracted workspace package — src/grammar/lexicon.mjs's own header
+// comment: "this repo no longer carries its own lexicon-core.json". Same
+// file, same vocabulary, new home.
+const LEXICON_PATH = join(ROOT, "packages", "ace-owl", "src", "lexicon-core.json");
 const RAW_LEXICON = JSON.parse(readFileSync(LEXICON_PATH, "utf8"));
 const lexicon = loadLexicon();
 
@@ -442,6 +447,62 @@ function b2Svf1(rng) {
   return cases;
 }
 
+// ---- INF-B2 — b2Svf1Apply: a genuinely POSITIVE instance-level cls-svf1
+// application, added per a strategy-advisor feasibility pass (2026-07-10):
+// b2ChainLenK's 30 cases are pure scm-sco chain-transitivity ceilings whose
+// blocker is proof-chain materialization (§4 stage 2), not cls-svf1; b2Svf1's
+// 10 cases are PERMANENTLY unproven negative witnesses (see its own note,
+// above) that can never flip to "yes" no matter what engine ships — so
+// neither template gave a real cls-svf1 implementation anything to move.
+// This template does: "every N1 that VERBs a N2 is a N3" + "IND1 VERBs IND2"
+// + "IND2 is a N2" ⊨ "IND1 is a some-VERB-N2" — the restriction CLASS itself
+// (cls-svf1's actual conclusion, `src/syllogise.mjs`'s `deriveSomeValuesFromApplication`),
+// NOT the further "IND1 is a N3" intersection step (that needs cls-int1 +
+// cax-sco too — out of this stage's scope, see `src/syllogise.mjs`'s header
+// comment). The query asks about the restriction node's own readable term
+// directly ("is IND1 a some-imports-test"), which is not a lexicon noun, so
+// `chat.mjs` (out of scope for this dispatch, and not equipped to answer a
+// query about a synthetic restriction-node term today regardless) is never
+// going to parse it as an ISA question — this template therefore declares
+// `arms: ["kernel"]` ONLY, checked directly against `src/syllogise.mjs`'s
+// pure kernel via `infbench/grade.mjs`'s `kernelVerdict` (a legitimate
+// bench-side drive point, exactly what the kernel arm already exists for —
+// see grade.mjs's own file-header comment), never against chat.mjs. ----
+function b2Svf1Apply(rng) {
+  const cases = [];
+  const shuffled = seededShuffle(CLASS_NOUNS, rng);
+  let cursor = 0;
+  for (let i = 0; i < 10; i += 1) {
+    const { picked, next } = pickClean(shuffled, cursor, 3);
+    cursor = next;
+    const [n1, n2, n3] = picked;
+    const verb = VERB_LEMMAS_NO_PREP[i % VERB_LEMMAS_NO_PREP.length];
+    const vform = thirdPerson(verb);
+    const ind1 = mintIndividual();
+    const ind2 = mintIndividual();
+    const restriction = `some-${vform}-${n2}`;
+    const premises = [
+      `every ${n1} that ${vform} a ${n2} is a ${n3}`,
+      `${ind1} ${vform} ${ind2}`,
+      `${ind2} is a ${n2}`,
+    ];
+    const query = `is ${ind1} a ${restriction}`;
+    const entailed = [
+      { subject: ind1, predicate: `tmct:${vform}`, object: ind2 },
+      { subject: ind2, predicate: "rdf:type", object: n2 },
+      { subject: ind1, predicate: "rdf:type", object: restriction },
+    ];
+    checkEntailed(`b2-svf1apply-${i + 1}`, premises, entailed);
+    cases.push(mkCase({
+      band: "INF-B2", template: "b2Svf1Apply", variant: "positive",
+      arms: ["kernel"], checkType: "isa",
+      premises, query, expect: { verdict: "yes", entailed, proof: true },
+      note: "cls-svf1's actual positive conclusion (PLAN_INFERENCE_TESTING.md §4 stage 4): the restriction CLASS itself, not the further owl:intersectionOf step to N3 — a deliberately narrower, honestly-scoped claim than the original worked example's 'is chat.mjs a suite'. kernel-arm only: the query names a synthetic restriction node term, which chat.mjs was never taught to answer (and is out of scope for this dispatch either way).",
+    }));
+  }
+  return cases;
+}
+
 // ======================================================================
 // INF-C1 — c1Cardinality: (exactly n, queried min m≤n) / (max 0, existence)
 // GENERATED NOW, ceiling until §4 stage 4 (cardinality entailment rules).
@@ -519,7 +580,8 @@ function c2Inconsistent(rng) {
 // ---- id assignment (mirrors chatbench's `g-${grade}-${slug}-${i+1}`) ----
 const TEMPLATE_SLUG = {
   a1Lookup: "lookup", a2ChainLen2: "chain2", b1Disjoint: "disjoint",
-  b2ChainLenK: "chaink", b2Svf1: "svf1", c1Cardinality: "card", c2Inconsistent: "inconsistent",
+  b2ChainLenK: "chaink", b2Svf1: "svf1", b2Svf1Apply: "svf1apply",
+  c1Cardinality: "card", c2Inconsistent: "inconsistent",
 };
 function assignIds(cases) {
   const counters = new Map();
@@ -543,6 +605,7 @@ export function generateCases({ seed = DEFAULT_SEED } = {}) {
     b1Disjoint: b1Disjoint(rng),
     b2ChainLenK: b2ChainLenK(rng),
     b2Svf1: b2Svf1(rng),
+    b2Svf1Apply: b2Svf1Apply(rng),
     c1Cardinality: c1Cardinality(rng),
     c2Inconsistent: c2Inconsistent(rng),
   };

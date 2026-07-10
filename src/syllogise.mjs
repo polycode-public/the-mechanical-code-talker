@@ -11,7 +11,7 @@
 // INF-A2) without that being "the batch pass on the hot path" — nothing is
 // written to memory unless `syllogise()` itself is called.
 //
-// Deliberately narrow (the plan's kill-criterion discipline): THREE rules —
+// Deliberately narrow (the plan's kill-criterion discipline): FOUR rules —
 //   - scm-sco: rdfs:subClassOf transitivity — (a ⊑ b), (b ⊑ c) ⊨ (a ⊑ c).
 //     The simplest OWL 2 RL rule, exactly what the ACE grammar's pattern 1
 //     emits (`deriveSubClassClosure`).
@@ -23,8 +23,24 @@
 //     (the ⊑-lift, PLAN_INFERENCE_TESTING.md §1 footnote²) — the first rule on
 //     this ladder to produce a PROVABLE "no" rather than only "yes"/"unproven"
 //     (`deriveDisjointViolations`, PLAN_INFERENCE_TESTING.md §4 stage 3).
+//   - cls-svf1: someValuesFrom application — (x P y), (y rdf:type C2), (R
+//     owl:onProperty P), (R owl:someValuesFrom C2) ⊨ (x rdf:type R) — anyone
+//     who P's something of type C2 is of type R, the restriction CLASS
+//     itself (OWL 2 RL Table 8's cls-svf1, W3C OWL 2 RL profile). Joins over
+//     exactly the triple shape the ACE grammar's pattern 4 ("every N1 that
+//     VERBs a N2 is a N3") already emits for its restriction node `R` (`R
+//     rdf:type owl:Restriction`, `R owl:onProperty P`, `R owl:someValuesFrom
+//     N2` — `src/grammar/ace.mjs`'s `parseRestriction`) — no representational
+//     gap, this rule was simply never implemented. Deliberately scoped to
+//     JUST cls-svf1 (the restriction-membership half): it does NOT chase the
+//     further `owl:intersectionOf`/cls-int1 step pattern 4 ALSO emits (`(N1 ⊓
+//     R) ⊑ N3`) — concluding the ORIGINAL worked example's "chat.mjs is a
+//     suite" needs x typed in BOTH N1 and R, then intersection-membership,
+//     then cax-sco across `⊑ N3`, three more rules deep. That composition is
+//     a documented follow-up (PLAN_INFERENCE_TESTING.md §4 stage 4's
+//     remaining scm-svf row), not attempted here (`deriveSomeValuesFromApplication`).
 //
-// The whole safety story is three guards, all mechanical, shared by all three rules:
+// The whole safety story is four guards, all mechanical, shared by all four rules:
 //   - BUDGET — at most `budget` NEW derivations per pass (default 50), and at
 //     most `depth` fixpoint rounds (scm-sco only — cax-sco/cax-dw need no
 //     fixpoint, see their own doc comments). The pass stops at whichever bites
@@ -38,16 +54,17 @@
 //     content key — the same novelty test appendFact's content-hash id enforces).
 //
 // Every derived fact is written via appendFacts with `entailed:subClassOf`
-// (scm-sco), `entailed:type` (cax-sco), or `entailed:disjointWith` (cax-dw)
-// provenance (a first-class entailed Source, trust prior 0.3 in
-// memory/trust.mjs) so it is LOW trust, NEVER outranks a stated fact, and is
-// fully RETRACTABLE by provenance when the source graph moves. cax-dw's own
-// conclusion additionally rides trust.mjs's entailed hook when its OWN
-// premises are resolvable in the pre-pass snapshot — premise-derived
-// (`min(premiseTrusts) × ruleConfidence`), still always strictly below its
-// weakest premise (see syllogise()'s own doc comment) — rather than the bare
-// entailed floor; scm-sco/cax-sco do not (yet) engage that hook — see
-// syllogise()'s doc comment for why that specific extension is non-trivial.
+// (scm-sco), `entailed:type` (cax-sco), `entailed:disjointWith` (cax-dw), or
+// `entailed:someValuesFrom` (cls-svf1) provenance (a first-class entailed
+// Source, trust prior 0.3 in memory/trust.mjs) so it is LOW trust, NEVER
+// outranks a stated fact, and is fully RETRACTABLE by provenance when the
+// source graph moves. cax-dw's and cls-svf1's conclusions additionally ride
+// trust.mjs's entailed hook when their OWN premises are resolvable in the
+// pre-pass snapshot — premise-derived (`min(premiseTrusts) × ruleConfidence`),
+// still always strictly below its weakest premise (see syllogise()'s own doc
+// comment) — rather than the bare entailed floor; scm-sco/cax-sco do not
+// (yet) engage that hook — see syllogise()'s doc comment for why that
+// specific extension is non-trivial.
 
 import { loadMemory, appendFacts, readFactRows, normFactTerm } from "./memory/core.mjs";
 
@@ -81,10 +98,45 @@ export const ENTAILED_DISJOINT_PROVENANCE = `entailed:${CAX_DW_RULE}`;
  *  above the bare entailed prior (memory/trust.mjs SOURCE_PRIOR.entailed). */
 export const CAX_DW_RULE_CONFIDENCE = 0.95;
 
+/** cls-svf1: x P y, y rdf:type C2, R owl:onProperty P, R owl:someValuesFrom
+ *  C2 |= x rdf:type R — anyone who P's something of type C2 is of type R,
+ *  the restriction CLASS itself (OWL 2 RL Table 8's cls-svf1, PLAN_INFERENCE
+ *  _TESTING.md S1 INF-B2, S4 stage 4). Joins over the SAME `owl:Restriction`/
+ *  `owl:onProperty`/`owl:someValuesFrom` triple shape the ACE grammar's
+ *  pattern 4 already emits for "every N1 that VERBs a N2 is a N3"
+ *  (`src/grammar/ace.mjs`'s `parseRestriction`) - no new representational
+ *  work, this rule simply consumes triples the grammar was already writing.
+ *  `owl:onProperty`'s object and a taught property edge's PREDICATE are
+ *  stored in two different casings today (a stored fact's predicate keeps
+ *  its raw vocabulary spelling, e.g. "tmct:imports"; a triple's OBJECT slot -
+ *  which is what `owl:onProperty`'s value occupies - is normFactTerm'd down
+ *  to "imports" at write time, `memory/core.mjs` `appendFact`) - the pure
+ *  kernel below normFactTerm's the raw predicate itself before comparing, so
+ *  both sides converge on the same spelling without a special case. */
+export const ON_PROPERTY_PREDICATE = "owl:onProperty";
+export const SOME_VALUES_FROM_PREDICATE = "owl:someValuesFrom";
+export const CLS_SVF1_RULE = "someValuesFrom";
+export const ENTAILED_SVF1_PROVENANCE = `entailed:${CLS_SVF1_RULE}`;
+/** trust.mjs's entailed hook's rule-confidence for cls-svf1 - the same
+ *  sub-1 discount cax-dw uses and for the identical reason (see
+ *  CAX_DW_RULE_CONFIDENCE's own comment): keeps a premise-derived conclusion
+ *  STRICTLY below its weakest premise's trust, every time. */
+export const CLS_SVF1_RULE_CONFIDENCE = 0.95;
+
 const SEP = "␟"; // an in-key separator no fact term can contain
 const isSubClassOf = (p) => String(p || "").trim().toLowerCase() === "rdfs:subclassof";
 const isType = (p) => String(p || "").trim().toLowerCase() === "rdf:type";
 const isDisjoint = (p) => String(p || "").trim().toLowerCase() === "owl:disjointwith";
+const isOnProperty = (p) => String(p || "").trim().toLowerCase() === "owl:onproperty";
+const isSomeValuesFrom = (p) => String(p || "").trim().toLowerCase() === "owl:somevaluesfrom";
+/** The four structural OWL predicates cls-svf1 itself consumes/emits, plus
+ *  the two subClassOf/type/disjointWith predicates the other three rules
+ *  own — excluded from `syllogise()`'s generic "property edge" scan so a
+ *  restriction's own scaffolding triples are never mistaken for a taught
+ *  object-property assertion (see `syllogise()`'s `propertyEdges` build). */
+const RESERVED_PREDICATES = new Set([
+  "rdfs:subclassof", "rdf:type", "owl:disjointwith", "owl:onproperty", "owl:somevaluesfrom", "owl:intersectionof",
+]);
 
 /** Normalize a focus hint (Set|array of terms) into the same normalized-term
  *  space stored facts live in, or null for "no focus → whole graph". */
@@ -325,27 +377,136 @@ export function deriveDisjointViolations(typeEdges, subClassEdges, disjointEdges
 }
 
 /**
+ * PURE cls-svf1: x P y, y rdf:type C2, R owl:onProperty P, R
+ * owl:someValuesFrom C2 |= x rdf:type R (OWL 2 RL Table 8's cls-svf1,
+ * PLAN_INFERENCE_TESTING.md S1 INF-B2, S4 stage 4) - see this module's
+ * header comment for the deliberate scope line (stops at restriction
+ * membership, does not chase the further owl:intersectionOf/cls-int1 step
+ * pattern 4 also emits).
+ *
+ * `propertyEdges` ([[x, predicate, y], …], `predicate` the RAW, un-normalized
+ * vocabulary spelling exactly as a stored Fact's predicate reads, e.g.
+ * "tmct:imports") is every taught/prior-entailed object-property assertion —
+ * `syllogise()` builds this from every stored row whose predicate is NOT one
+ * of the other three rules' reserved predicates (RESERVED_PREDICATES, above),
+ * so ANY declared object property is a candidate, not just one hard-coded
+ * verb. `typeEdges`/`subClassEdges` are the same shape `deriveTypePropagation`/
+ * `deriveDisjointViolations` take (already-normalized [x,C] / [a,b] pairs);
+ * `y`'s type is lifted through its FULL ⊑-ancestor closure (`buildAncestorCloser`,
+ * shared machinery, same ⊑-lift discipline as cax-dw's own footnote2 case) so
+ * "y is a mock" still satisfies a restriction declared over "fixture" when
+ * mock⊑fixture is taught. `restrictionEdges` ([{ restriction, property,
+ * target }, …], `property`/`target` already normFactTerm-normalized — the
+ * spelling `owl:onProperty`/`owl:someValuesFrom` rows store their OBJECT in)
+ * is every restriction node's (P, C2) declaration, reconstructed by joining
+ * a restriction's `owl:onProperty` row with its `owl:someValuesFrom` row on
+ * the restriction's own subject — exactly `syllogise()`'s own join, exposed
+ * here as a plain parameter so the pure kernel stays I/O-free and unit-
+ * testable without a memory store.
+ *
+ * Returns ONLY new `{ subject, object, viaProperty, viaPropertyKey, viaValue,
+ * viaType, viaTarget }` conclusions — `object` is the restriction node R
+ * itself (the newly-entailed rdf:type value), `viaProperty` the RAW predicate
+ * matched, `viaPropertyKey` its normalized form (R's own `owl:onProperty`
+ * value), `viaValue` the property's object `y`, `viaType` the specific class
+ * `y` was directly taught as, `viaTarget` the class in that type's
+ * ⊑-closure the restriction was actually declared against (itself, for a
+ * direct hit, or an ancestor, for the lift) — bounded by `budget`,
+ * focus-filtered, tautology- and dedup-screened, deterministic order. No I/O.
+ */
+export function deriveSomeValuesFromApplication(propertyEdges, typeEdges, subClassEdges, restrictionEdges, { budget = 50, focus = null } = {}) {
+  const ancestorsOf = buildAncestorCloser(subClassEdges);
+
+  // restriction index: "propertyKey\0targetClass" -> Set(restriction node) —
+  // a restriction is looked up by the (property, target-class) pair its OWN
+  // owl:onProperty/owl:someValuesFrom rows declare; more than one restriction
+  // MAY declare the same pair (two differently-named restriction nodes over
+  // the same property/class), so this is a Set, not a single value.
+  const byPropTarget = new Map();
+  for (const r of restrictionEdges || []) {
+    if (!r || !r.restriction || !r.property || !r.target) continue;
+    const key = `${r.property}${SEP}${r.target}`;
+    if (!byPropTarget.has(key)) byPropTarget.set(key, new Set());
+    byPropTarget.get(key).add(r.restriction);
+  }
+  if (!byPropTarget.size) return []; // no restriction declared at all - fast, honest exit
+
+  const present = new Set();      // "x\0R" for every rdf:type edge already known
+  const typesOf = new Map();      // y -> Set(direct taught types)
+  for (const [x, c] of typeEdges || []) {
+    if (!x || !c) continue;
+    present.add(`${x}${SEP}${c}`);
+    if (!typesOf.has(x)) typesOf.set(x, new Set());
+    typesOf.get(x).add(c);
+  }
+
+  const focusSet = focus instanceof Set ? (focus.size ? focus : null) : normalizeFocus(focus);
+  const inFocus = (x, y, r) => !focusSet || focusSet.has(x) || focusSet.has(y) || focusSet.has(r);
+
+  const seenEdge = new Set(); // dedup repeated (x,predicate,y) input rows
+  const candidates = [];
+  for (const [x, p, y] of propertyEdges || []) {
+    if (!x || !p || !y) continue;
+    const pKey = normFactTerm(p);
+    const ek = `${x}${SEP}${pKey}${SEP}${y}`;
+    if (seenEdge.has(ek)) continue;
+    seenEdge.add(ek);
+    const yTypes = typesOf.get(y);
+    if (!yTypes) continue;
+    for (const c of yTypes) {
+      // the ⊑-lift: y's own class closure is {c} ∪ ancestorsOf(c) - a direct
+      // hit needs no lift (target === c), the fixture/mock-shaped case needs
+      // one hop or more (mirrors deriveDisjointViolations' own ⊑-lift).
+      for (const target of [c, ...ancestorsOf(c)]) {
+        const restrictions = byPropTarget.get(`${pKey}${SEP}${target}`);
+        if (!restrictions) continue;
+        for (const r of restrictions) {
+          if (x === r) continue;                          // tautology screen (defensive)
+          const key = `${x}${SEP}${r}`;
+          if (present.has(key)) continue;                 // dedup / novelty screen
+          if (!inFocus(x, y, r)) continue;                 // focus-connection screen
+          candidates.push([x, p, pKey, y, c, target, r, key]);
+        }
+      }
+    }
+  }
+  candidates.sort((a, b) => a[0].localeCompare(b[0]) || a[6].localeCompare(b[6]) || a[1].localeCompare(b[1]) || a[3].localeCompare(b[3]));
+  const derived = [];
+  const derivedKeys = new Set();
+  for (const [x, p, pKey, y, c, target, r, key] of candidates) {
+    if (derivedKeys.has(key)) continue;
+    if (derived.length >= budget) break;
+    derivedKeys.add(key);
+    derived.push({ subject: x, object: r, viaProperty: p, viaPropertyKey: pKey, viaValue: y, viaType: c, viaTarget: target });
+  }
+  return derived;
+}
+
+/**
  * Run one bounded speculative pass over the memory graph under `repoDir`
  * (the repo dir whose .tmct/memory/graph.json appendFact/loadMemory manage).
- * Reads the stored subClassOf, rdf:type AND owl:disjointWith facts, forward-
- * chains THREE rules — scm-sco (⊑-transitivity) then cax-sco (type
+ * Reads the stored subClassOf, rdf:type, owl:disjointWith AND (for cls-svf1)
+ * owl:onProperty/owl:someValuesFrom + every other object-property fact,
+ * forward-chains FOUR rules — scm-sco (⊑-transitivity) then cax-sco (type
  * propagation, seeing THIS pass's own scm-sco conclusions too, so a fresh
  * two-hop taught chain and its type propagation both materialize in one
  * call) then cax-dw (disjointness violations, seeing THIS pass's own scm-sco
- * AND cax-sco conclusions too) — and materializes each NEW conclusion via
- * `appendFacts` with `entailed:subClassOf`/`entailed:type`/`entailed:disjointWith`
- * provenance + trust (PLAN_INFERENCE_TESTING.md S4 stage 2's entailed hook:
- * `min(premiseTrusts) x ruleConfidence` when the conclusion's OWN premises are
- * resolvable in the pre-pass snapshot, falling back to the bare entailed
- * prior — memory/trust.mjs's SOURCE_PRIOR floor — when they are not, e.g. a
- * premise itself only exists because THIS SAME pass just derived it a round
- * earlier; still low, still never outranks a stated fact, just less precisely
- * premise-derived for that one case).
+ * AND cax-sco conclusions too) then cls-svf1 (someValuesFrom restriction
+ * membership, also seeing the enlarged subClassOf set for its own ⊑-lift) —
+ * and materializes each NEW conclusion via `appendFacts` with
+ * `entailed:subClassOf`/`entailed:type`/`entailed:disjointWith`/
+ * `entailed:someValuesFrom` provenance + trust (PLAN_INFERENCE_TESTING.md S4
+ * stage 2's entailed hook: `min(premiseTrusts) x ruleConfidence` when the
+ * conclusion's OWN premises are resolvable in the pre-pass snapshot, falling
+ * back to the bare entailed prior — memory/trust.mjs's SOURCE_PRIOR floor —
+ * when they are not, e.g. a premise itself only exists because THIS SAME
+ * pass just derived it a round earlier; still low, still never outranks a
+ * stated fact, just less precisely premise-derived for that one case).
  *
  * opts:
  *   - depth   max fixpoint rounds (scm-sco chain growth), default 32
- *   - budget  max NEW derivations written this pass, SHARED across all three
- *             rules (scm-sco, then cax-sco, then cax-dw), default 50
+ *   - budget  max NEW derivations written this pass, SHARED across all four
+ *             rules (scm-sco, then cax-sco, then cax-dw, then cls-svf1), default 50
  *   - focus   Set|array of class terms; when given, only derivations touching
  *             focus (subject, pivot, or object ∈ focus) are admitted. Omit for a
  *             whole-graph batch pass.
@@ -360,6 +521,27 @@ export async function syllogise(repoDir, { depth = 32, budget = 50, focus = null
   const subClassEdges = rows.filter((r) => isSubClassOf(r.predicate)).map((r) => [r.subject, r.object]);
   const typeEdges = rows.filter((r) => isType(r.predicate)).map((r) => [r.subject, r.object]);
   const disjointEdges = rows.filter((r) => isDisjoint(r.predicate)).map((r) => [r.subject, r.object]);
+  // cls-svf1's own join inputs: a restriction's owl:onProperty and
+  // owl:someValuesFrom rows, keyed by the restriction's OWN subject so the
+  // two can be paired without a second graph pass; `propertyEdges` is every
+  // OTHER stored fact (any predicate not one of the three rules' reserved
+  // predicates above) — a taught object-property assertion is a candidate
+  // premise for whichever restriction (if any) was declared over its
+  // predicate, never hard-coded to one verb.
+  const onPropertyOf = new Map();      // restriction -> owl:onProperty's (normalized) object
+  const someValuesFromOf = new Map();  // restriction -> owl:someValuesFrom's (normalized) object
+  const propertyEdges = [];            // [[x, rawPredicate, y], …]
+  for (const r of rows) {
+    const pLower = String(r.predicate || "").trim().toLowerCase();
+    if (isOnProperty(r.predicate)) onPropertyOf.set(r.subject, r.object);
+    else if (isSomeValuesFrom(r.predicate)) someValuesFromOf.set(r.subject, r.object);
+    else if (!RESERVED_PREDICATES.has(pLower)) propertyEdges.push([r.subject, r.predicate, r.object]);
+  }
+  const restrictionEdges = [];
+  for (const [restriction, property] of onPropertyOf) {
+    const target = someValuesFromOf.get(restriction);
+    if (target) restrictionEdges.push({ restriction, property, target });
+  }
   const normalizedFocus = normalizeFocus(focus);
 
   // Pre-pass trust snapshot, keyed by exact (subject, predicate, object) —
@@ -400,9 +582,20 @@ export async function syllogise(repoDir, { depth = 32, budget = 50, focus = null
   const dwDerived = remainingBudgetDw > 0
     ? deriveDisjointViolations(typeEdges, enlargedSubClassEdges, disjointEdges, { budget: remainingBudgetDw, focus: normalizedFocus })
     : [];
+  // cls-svf1 sees the SAME enlarged subClassOf set (its own ⊑-lift, mirroring
+  // cax-dw's) — it deliberately does NOT see the enlarged type edge set: a
+  // direct taught type on the property's VALUE is the common case (the B2
+  // worked example), and enlarging risks a same-pass cax-sco conclusion on
+  // `y` being consumed before a human can audit it; a documented scope line,
+  // not an oversight (mirrors cax-dw's own "does not need the enlarged TYPE
+  // edge set" choice, just for a different reason here).
+  const remainingBudgetSvf1 = Math.max(0, budget - scmDerived.length - caxDerived.length - dwDerived.length);
+  const svf1Derived = remainingBudgetSvf1 > 0 && restrictionEdges.length
+    ? deriveSomeValuesFromApplication(propertyEdges, typeEdges, enlargedSubClassEdges, restrictionEdges, { budget: remainingBudgetSvf1, focus: normalizedFocus })
+    : [];
 
   // Batched write: ONE mutateMemory pass for the whole pass's conclusions
-  // (all three rules), not one appendFact per derived fact — appendFacts (the
+  // (all four rules), not one appendFact per derived fact — appendFacts (the
   // appendUtterances-precedent batch path, memory/core.mjs) does the same
   // normalize+prose-tokenize+upsert work per fact but a SINGLE read-mutate-
   // write, so a pass with many derivations no longer pays per-fact I/O.
@@ -447,6 +640,27 @@ export async function syllogise(repoDir, { depth = 32, budget = 50, focus = null
         ...(premiseTrusts.length ? { premiseTrusts, ruleConfidence: CAX_DW_RULE_CONFIDENCE } : {}),
       };
     }),
+    ...svf1Derived.map((d) => {
+      // the restriction's own two structural premises (owl:onProperty /
+      // owl:someValuesFrom rows) are stored with the restriction node as
+      // SUBJECT and the (already-normalized) property/target as OBJECT —
+      // premiseTrust's exact-triple lookup, so no extra normalization here.
+      const premiseTrusts = numericOnly([
+        premiseTrust(d.subject, d.viaProperty, d.viaValue),
+        premiseTrust(d.viaValue, TYPE_PREDICATE, d.viaType),
+        premiseTrust(d.object, ON_PROPERTY_PREDICATE, d.viaPropertyKey),
+        premiseTrust(d.object, SOME_VALUES_FROM_PREDICATE, d.viaTarget),
+        // the ⊑-lift premise only exists when this IS a lift (viaType !==
+        // viaTarget) — a direct hit has no extra subClassOf premise to price in.
+        ...(d.viaType !== d.viaTarget ? [premiseTrust(d.viaType, SUBCLASS_PREDICATE, d.viaTarget)] : []),
+      ]);
+      return {
+        subject: d.subject, predicate: TYPE_PREDICATE, object: d.object,
+        provenance: ENTAILED_SVF1_PROVENANCE,
+        // same sub-1 discount as cax-dw, same reason (see CAX_DW_RULE_CONFIDENCE).
+        ...(premiseTrusts.length ? { premiseTrusts, ruleConfidence: CLS_SVF1_RULE_CONFIDENCE } : {}),
+      };
+    }),
   ];
   const { ids } = await appendFacts(repoDir, toWrite);
   const written = [];
@@ -461,6 +675,10 @@ export async function syllogise(repoDir, { depth = 32, budget = 50, focus = null
   }
   for (const d of dwDerived) {
     written.push({ id: ids[i], subject: d.subject, object: d.object, via: d.viaClass, rule: CAX_DW_RULE });
+    i += 1;
+  }
+  for (const d of svf1Derived) {
+    written.push({ id: ids[i], subject: d.subject, object: d.object, via: d.viaValue, rule: CLS_SVF1_RULE });
     i += 1;
   }
   return { derived: written, count: written.length, budget, depth, truncated: written.length >= budget };

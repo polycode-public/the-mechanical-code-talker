@@ -11,10 +11,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendFact, loadMemory, readFactRows } from "../src/memory/core.mjs";
 import {
-  deriveSubClassClosure, deriveTypePropagation, deriveDisjointViolations, findIsaChain, syllogise,
+  deriveSubClassClosure, deriveTypePropagation, deriveDisjointViolations,
+  deriveSomeValuesFromApplication, findIsaChain, syllogise,
   ENTAILED_PROVENANCE, SUBCLASS_PREDICATE, ENTAILED_TYPE_PROVENANCE, TYPE_PREDICATE,
   ENTAILED_DISJOINT_PROVENANCE, DISJOINT_PREDICATE, CAX_DW_RULE, CAX_DW_RULE_CONFIDENCE,
+  ENTAILED_SVF1_PROVENANCE, ON_PROPERTY_PREDICATE, SOME_VALUES_FROM_PREDICATE,
+  CLS_SVF1_RULE, CLS_SVF1_RULE_CONFIDENCE,
 } from "../src/syllogise.mjs";
+import { assertSentence } from "../src/grammar/assert.mjs";
 import { freshConceptNetRepo } from "./helpers/seeded-fixture.mjs";
 
 const mkRepo = () => mkdtemp(join(tmpdir(), "tmct-syllog-"));
@@ -194,6 +198,106 @@ test("deriveDisjointViolations: hard budget caps derivations, deterministically"
   const d = deriveDisjointViolations(typeEdges, [], disjointEdges, { budget: 2 });
   assert.equal(d.length, 2);
   const again = deriveDisjointViolations(typeEdges, [], disjointEdges, { budget: 2 });
+  assert.deepEqual(d, again, "same inputs → same truncation (deterministic)");
+});
+
+// ---- cls-svf1: someValuesFrom application — x P y, y:C2, R onProperty P, ----
+// ---- R someValuesFrom C2 ⊨ x:R (the restriction CLASS itself) --------------
+
+test("deriveSomeValuesFromApplication: x P y, y:C2, R onProperty P, R someValuesFrom C2 ⊨ x:R", () => {
+  const d = deriveSomeValuesFromApplication(
+    [["chat.mjs", "tmct:imports", "parse.test.mjs"]],
+    [["parse.test.mjs", "test"]],
+    [],
+    [{ restriction: "some-imports-test", property: "imports", target: "test" }],
+  );
+  assert.deepEqual(d, [{
+    subject: "chat.mjs", object: "some-imports-test",
+    viaProperty: "tmct:imports", viaPropertyKey: "imports",
+    viaValue: "parse.test.mjs", viaType: "test", viaTarget: "test",
+  }]);
+});
+
+test("deriveSomeValuesFromApplication: no restriction declared over the property at all ⊨ nothing derived", () => {
+  const d = deriveSomeValuesFromApplication(
+    [["chat.mjs", "tmct:imports", "parse.test.mjs"]],
+    [["parse.test.mjs", "test"]],
+    [], [],
+  );
+  assert.deepEqual(d, []);
+});
+
+test("deriveSomeValuesFromApplication: the ⊑-lift — y's type is a SUBCLASS of the restriction's declared target "
+  + "(y:mock, mock⊑fixture, R someValuesFrom fixture ⊨ x:R)", () => {
+  const d = deriveSomeValuesFromApplication(
+    [["x", "tmct:uses", "e01.mjs"]],
+    [["e01.mjs", "mock"]],
+    [["mock", "fixture"]],
+    [{ restriction: "some-uses-fixture", property: "uses", target: "fixture" }],
+  );
+  assert.deepEqual(d, [{
+    subject: "x", object: "some-uses-fixture",
+    viaProperty: "tmct:uses", viaPropertyKey: "uses",
+    viaValue: "e01.mjs", viaType: "mock", viaTarget: "fixture",
+  }]);
+});
+
+test("deriveSomeValuesFromApplication: an unmatched property/type pair is NEVER asserted — silence, not a guess", () => {
+  const d = deriveSomeValuesFromApplication(
+    [["chat.mjs", "tmct:imports", "widget.mjs"]],
+    [["widget.mjs", "widget"]],
+    [],
+    [{ restriction: "some-imports-test", property: "imports", target: "test" }],
+  );
+  assert.deepEqual(d, [], "widget.mjs is not a test — no restriction matches, nothing derived");
+});
+
+test("deriveSomeValuesFromApplication: dedup/novelty screen — x:R already present is not re-derived", () => {
+  const d = deriveSomeValuesFromApplication(
+    [["chat.mjs", "tmct:imports", "parse.test.mjs"]],
+    [["parse.test.mjs", "test"], ["chat.mjs", "some-imports-test"]],
+    [],
+    [{ restriction: "some-imports-test", property: "imports", target: "test" }],
+  );
+  assert.deepEqual(d, []);
+});
+
+test("deriveSomeValuesFromApplication: raw vs. normalized predicate spelling converge — a stored fact's RAW "
+  + "predicate (e.g. 'tmct:imports') matches an owl:onProperty row's normFactTerm'd object ('imports')", () => {
+  const d = deriveSomeValuesFromApplication(
+    [["chat.mjs", "TMCT:Imports", "parse.test.mjs"]], // deliberately odd casing — normFactTerm lowercases
+    [["parse.test.mjs", "test"]],
+    [],
+    [{ restriction: "some-imports-test", property: "imports", target: "test" }],
+  );
+  assert.equal(d.length, 1, "the raw predicate normalizes to the same key the restriction was declared under");
+});
+
+test("deriveSomeValuesFromApplication: focus-connection — a derivation must touch focus (one step out)", () => {
+  const propertyEdges = [["chat.mjs", "tmct:imports", "parse.test.mjs"]];
+  const typeEdges = [["parse.test.mjs", "test"]];
+  const restrictionEdges = [{ restriction: "some-imports-test", property: "imports", target: "test" }];
+  assert.deepEqual(
+    deriveSomeValuesFromApplication(propertyEdges, typeEdges, [], restrictionEdges, { focus: new Set(["z"]) }),
+    [], "unrelated focus → nothing",
+  );
+  assert.deepEqual(
+    deriveSomeValuesFromApplication(propertyEdges, typeEdges, [], restrictionEdges, { focus: new Set(["parse.test.mjs"]) }),
+    [{
+      subject: "chat.mjs", object: "some-imports-test",
+      viaProperty: "tmct:imports", viaPropertyKey: "imports",
+      viaValue: "parse.test.mjs", viaType: "test", viaTarget: "test",
+    }],
+  );
+});
+
+test("deriveSomeValuesFromApplication: hard budget caps derivations, deterministically", () => {
+  const propertyEdges = [["x1", "tmct:imports", "y"], ["x2", "tmct:imports", "y"], ["x3", "tmct:imports", "y"]];
+  const typeEdges = [["y", "test"]];
+  const restrictionEdges = [{ restriction: "some-imports-test", property: "imports", target: "test" }];
+  const d = deriveSomeValuesFromApplication(propertyEdges, typeEdges, [], restrictionEdges, { budget: 2 });
+  assert.equal(d.length, 2);
+  const again = deriveSomeValuesFromApplication(propertyEdges, typeEdges, [], restrictionEdges, { budget: 2 });
   assert.deepEqual(d, again, "same inputs → same truncation (deterministic)");
 });
 
@@ -430,6 +534,105 @@ test("syllogise: cax-dw's entailed trust is PREMISE-DERIVED (min(premiseTrusts) 
     assert.equal(derived.trust, expected, `entailed trust is premise-derived: expected ${expected}, got ${derived.trust}`);
     assert.notEqual(derived.trust, 0.3, "not the bare entailed floor");
     assert.ok(derived.trust < Math.min(typeTrust, dwTrust), "still strictly below its weakest premise — never outranks a stated fact");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---- cls-svf1: syllogise() materializes someValuesFrom restriction membership -
+// ---- (PLAN_INFERENCE_TESTING.md INF-B2's worked "chat.mjs imports parse.test.mjs" -
+// ---- example — deliberately stops at "x is a some-imports-test" restriction ----
+// ---- membership, NOT the further "x is a suite" intersection step, see this ----
+// ---- module's own header comment) -----------------------------------------------
+
+test("syllogise: cls-svf1 materializes someValuesFrom restriction membership from THREE ACE-taught "
+  + "sentences — 'every module that imports a test is a suite', 'chat.mjs imports parse.test.mjs', "
+  + "'parse.test.mjs is a test' — no representational gap, pattern 4's own triples", async () => {
+  const dir = await mkRepo();
+  try {
+    await assertSentence(dir, "every module that imports a test is a suite", { provenance: { source: "chat" } });
+    await assertSentence(dir, "chat.mjs imports parse.test.mjs", { provenance: { source: "chat" } });
+    await assertSentence(dir, "parse.test.mjs is a test", { provenance: { source: "chat" } });
+
+    const before = readFactRows(await loadMemory(dir));
+    assert.ok(!hasType(before, "chat.mjs", "some-imports-test"), "'chat.mjs is a some-imports-test' is a MISS before the pass");
+
+    const res = await syllogise(dir);
+    assert.ok(res.derived.some((d) => d.rule === CLS_SVF1_RULE && d.subject === "chat.mjs" && d.object === "some-imports-test"));
+
+    const after = readFactRows(await loadMemory(dir));
+    const derived = typeRows(after).find((r) => r.subject === "chat.mjs" && r.object === "some-imports-test");
+    assert.ok(derived, "'chat.mjs is a some-imports-test' is now a stored Fact (miss → hit)");
+    assert.match(derived.provenance, /entailed:someValuesFrom/, "carries entailed:someValuesFrom provenance");
+    assert.ok(derived.sourceTypes.includes("entailed"), "backed by a first-class entailed Source");
+    assert.ok(derived.trust < 1, "entailed trust never reaches the ACE-operator 1.0 ceiling its premises sit at");
+
+    // idempotent: a second pass derives nothing new
+    assert.equal((await syllogise(dir)).count, 0, "the restriction membership is already materialized → nothing to add");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("syllogise: cls-svf1's ⊑-lift — y's type is a SUBCLASS of the restriction's declared target class "
+  + "(mirrors cax-dw's own footnote2 lift, PLAN_INFERENCE_TESTING.md §1 footnote²)", async () => {
+  const dir = await mkRepo();
+  try {
+    await assertSentence(dir, "every module that uses a fixture is a suite", { provenance: { source: "chat" } });
+    await appendFact(dir, { subject: "e01.mjs", predicate: "tmct:uses", object: "e02.mjs", provenance: "ace:chat:s1" });
+    await appendFact(dir, { subject: "e02.mjs", predicate: SUBCLASS_PREDICATE, object: "fixture", provenance: "ace:chat:s1" });
+    // e02.mjs is never directly typed "fixture" — only a SUBCLASS "mock" of it.
+    await appendFact(dir, { subject: "mock", predicate: SUBCLASS_PREDICATE, object: "fixture", provenance: "ace:chat:s1" });
+    await appendFact(dir, { subject: "e03.mjs", predicate: TYPE_PREDICATE, object: "mock", provenance: "ace:chat:s1" });
+    await appendFact(dir, { subject: "e01.mjs", predicate: "tmct:uses", object: "e03.mjs", provenance: "ace:chat:s1" });
+
+    const before = readFactRows(await loadMemory(dir));
+    assert.ok(!hasType(before, "e01.mjs", "some-uses-fixture"), "MISS before the pass");
+
+    await syllogise(dir);
+    const after = readFactRows(await loadMemory(dir));
+    assert.ok(hasType(after, "e01.mjs", "some-uses-fixture"), "reached via the mock⊑fixture lift on e03.mjs's type");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("syllogise: cls-svf1 NEVER asserts membership for an unmatched property/type pair — silence, not a guess", async () => {
+  const dir = await mkRepo();
+  try {
+    await assertSentence(dir, "every module that imports a test is a suite", { provenance: { source: "chat" } });
+    await assertSentence(dir, "chat.mjs imports widget.mjs", { provenance: { source: "chat" } });
+    await assertSentence(dir, "widget.mjs is a widget", { provenance: { source: "chat" } });
+
+    const res = await syllogise(dir);
+    assert.ok(!res.derived.some((d) => d.rule === CLS_SVF1_RULE), "widget.mjs is not a test — cax-svf1 derives nothing for it");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("syllogise: cls-svf1's entailed trust is PREMISE-DERIVED (min(premiseTrusts) × ruleConfidence), "
+  + "not the bare 0.3 floor — mirrors cax-dw's own exit criterion, closed here for cls-svf1", async () => {
+  const dir = await mkRepo();
+  try {
+    // Different trust tiers so min() is meaningfully picking the weaker
+    // premise: the restriction + property-edge premises are ACE-operator
+    // (prior 1.0), the type premise is corpus-sourced (prior 0.7).
+    await assertSentence(dir, "every module that imports a test is a suite", { provenance: { source: "chat" } });
+    await assertSentence(dir, "chat.mjs imports parse.test.mjs", { provenance: { source: "chat" } });
+    await appendFact(dir, { subject: "parse.test.mjs", predicate: TYPE_PREDICATE, object: "test", provenance: "corpus:conceptnet /r/IsA" });
+
+    const before = readFactRows(await loadMemory(dir));
+    const onPropTrust = before.find((r) => r.predicate === ON_PROPERTY_PREDICATE && r.subject === "some-imports-test").trust;
+    const typeTrust = before.find((r) => r.predicate === TYPE_PREDICATE && r.subject === "parse.test.mjs" && r.object === "test").trust;
+    assert.notEqual(onPropTrust, typeTrust, "premises must sit at DIFFERENT trust tiers for min() to matter");
+
+    await syllogise(dir);
+    const after = readFactRows(await loadMemory(dir));
+    const derived = typeRows(after).find((r) => r.subject === "chat.mjs" && r.object === "some-imports-test");
+    assert.ok(derived, "the restriction membership was derived");
+    assert.ok(derived.trust < Math.min(onPropTrust, typeTrust), "strictly below its weakest premise — never outranks a stated fact");
+    assert.notEqual(derived.trust, 0.3, "not the bare entailed floor");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
