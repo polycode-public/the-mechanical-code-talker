@@ -12,6 +12,34 @@ mapped into them (item numbers retained for traceability); the seven sketches
 formerly held in `code-talker-ideas.txt` are folded into items 8–11 below and
 the file has been deleted.
 
+## Working model: coordinator + background sub-agents
+
+Standing orders for every session working this repo (copied verbatim from this repo's own
+`CLAUDE.md` on 2026-07-10, at the operator's request, so the discipline is visible directly in
+the project's own operating docs and not just the config file):
+
+Run big tasks in **concurrent background sub-agents** and keep the main chat free — the main
+session is the COORDINATOR (plans, launches, integrates, answers the operator), not the worker.
+
+- Decompose into workstreams with **clear file-ownership boundaries**; serialize on shared
+  files (one agent owns `package.json`, `src/`, `bin/`, `test/` sequences; docs/site tracks
+  run in parallel).
+- **Keep the chat for chat**: anything long-running (benchmarks, judge passes, builds, test
+  sweeps) executes as a BACKGROUND task at maximum safe concurrency (the chatbench judge
+  defaults to `--concurrency 12`); the main session launches it, keeps coordinating and
+  conversing, and collects results on the completion notification. Never block the
+  conversation on a run.
+- Commit per completed step with the repo-local identity (`antony@polycode.co.uk` /
+  `Antony at Polycode`); keep `npm test` green at every commit.
+- Push/publish is gated on the operator (CI publishes on version bump on `main`).
+- **Version bump timing:** only bump the version (`package.json` + `package-lock.json`) at the
+  moment of actually pushing a release — the bump commit is part of that same push, not a
+  separate step staged in advance. Default to a patch bump unless the batch is clearly
+  feature-level (minor) or breaking (major). Do NOT pre-stage a future version number and leave
+  it sitting unpushed in git between releases — that produced confusing "linking to a version
+  that doesn't exist yet" noise in practice and was reverted by operator instruction 2026-07-09.
+  Between pushes, `package.json`'s version should always equal whatever's actually live on npm.
+
 ## Where we are now (2026-07-09)
 
 The full `SKILL_CHAT_PLAYTEST.md` dialogue-flow tier ladder is complete, tiers 0 through 6.

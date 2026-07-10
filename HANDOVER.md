@@ -130,6 +130,21 @@ freezes for items 2/3 once fixed.
 
 ## Discipline (unchanged)
 
+**Working model: coordinator + background sub-agents** (copied verbatim from this repo's own
+`CLAUDE.md` on 2026-07-10, at the operator's request, so it's visible directly in this file too):
+run big tasks in concurrent background sub-agents and keep the main chat free — the main session
+is the COORDINATOR (plans, launches, integrates, answers the operator), not the worker. Decompose
+into workstreams with clear file-ownership boundaries; serialize on shared files (one agent owns
+`package.json`, `src/`, `bin/`, `test/` sequences; docs/site tracks run in parallel). Keep the chat
+for chat: anything long-running (benchmarks, judge passes, builds, test sweeps) executes as a
+BACKGROUND task at maximum safe concurrency (the chatbench judge defaults to `--concurrency 12`);
+the main session launches it, keeps coordinating and conversing, and collects results on the
+completion notification — never block the conversation on a run. Push/publish is gated on the
+operator (CI publishes on version bump on `main`). Version bump timing: only bump the version at
+the moment of actually pushing a release, never pre-staged and left sitting unpushed between
+releases — `package.json`'s version should always equal whatever's actually live on npm between
+pushes.
+
 Repo-local identity (`antony@polycode.co.uk` / `Antony at Polycode`). `npm test` green at every
 commit. Coordinator plus background sub-agents, disjoint file-ownership where possible, serialized
 on shared files — this repo's heaviest-touched files (`src/chat.mjs`, `src/ask.mjs`) get edited by
