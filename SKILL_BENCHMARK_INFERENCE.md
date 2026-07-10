@@ -1,11 +1,15 @@
 # SKILL_BENCHMARK_INFERENCE.md — the INFBENCH measure-then-build cycle (regenerate, run, gate, stage)
 
-The repeatable loop that drives `PLAN_INFERENCE_TESTING.md`'s 6-band classical-logic ladder
+The repeatable loop that drives `archive/PLAN_INFERENCE_TESTING.md`'s 6-band classical-logic ladder
 (INF-A1…INF-C2) forward one engine capability at a time. The plan doc is a one-time design/staging
 document (the band ladder, the generator design, the build-staging table, the risk ledger); this
 skill is the loop a session actually RUNS every time it wants to advance the ladder — regenerate
 cases, run the bench, read the rung table, decide ship-or-build, and if building, pick the next
-`PLAN_INFERENCE_TESTING.md` §4 stage, implement it by hand, regression-test, and re-measure.
+`archive/PLAN_INFERENCE_TESTING.md` §4 stage, implement it by hand, regression-test, and re-measure.
+**As of 2026-07-11, every §4 stage is shipped and the ladder gates nowhere** — this loop still
+applies verbatim to any FUTURE band/rule this ladder grows to cover; for the one genuinely open
+research question behind growing the reasoning engine further (not a new band, the engine's own
+retraction/incrementality limits), see `PLAN_SYLLOGIST_HORIZON.md`.
 
 **`INF-A1…INF-C2` is its own scale, not CHATBENCH's CEFR.** The band labels look like CEFR grades
 (A1, A2, B1, B2, C1, C2) but measure a different axis: INFBENCH grades classical-logic inference
@@ -32,7 +36,7 @@ doesn't (delegated rounds, live chat transcripts, a round cap) it doesn't force 
 
 **Step 1 — REGENERATE.** Run `node infbench/generate-cases.mjs --seed <n>` (default seed recorded
 in the generator; omit `--seed` to reuse it). This is deterministic and generated-first, mirroring
-`chatbench/generate-graded.mjs`'s discipline (`PLAN_INFERENCE_TESTING.md` §2.2): same seed →
+`chatbench/generate-graded.mjs`'s discipline (`archive/PLAN_INFERENCE_TESTING.md` §2.2): same seed →
 byte-identical `infbench/cases.jsonl`. It prints per-template counts — treat that printed table as
 the authoritative count, the same convention `GRADED.md` uses for chatbench's pool. Never hand-edit
 `infbench/cases.jsonl`; it is a build artifact, not a fixture.
@@ -51,7 +55,7 @@ assumption to paper over.
 **Step 3 — READ.** Read the console rung table (or write it up as `INFBENCH_<version>.md` if this
 cycle is measuring a just-shipped version — same artifact-naming convention `SKILL_BENCHMARK_CEFR_ENGLISH.md`
 §1 uses for chatbench: `INFBENCH_<version>.md`, re-runs of the same version append `_00N`). For each
-band, compare its measured completion/fabrication against `PLAN_INFERENCE_TESTING.md` §1's
+band, compare its measured completion/fabrication against `archive/PLAN_INFERENCE_TESTING.md` §1's
 "Reachable today?" column — is each band landing where the plan predicted, or did something drift?
 
 **Step 4 — DECIDE (apply the ladder gate, §2 below).** Walk the bands INF-A1→INF-C2 in order.
@@ -67,7 +71,7 @@ is a **ceiling marker**, not a failure — name it as exactly that.
   where it should be:** ship as-is — nothing to build this cycle. This is a legitimate, reportable
   outcome, not a null result.
 - **The gating band is the one you're trying to move past (or you want to push the ladder
-  further):** go to §3 — pick the next `PLAN_INFERENCE_TESTING.md` §4 build-staging row, implement
+  further):** go to §3 — pick the next `archive/PLAN_INFERENCE_TESTING.md` §4 build-staging row, implement
   it, regression-test, and re-run this cycle from Step 1 to confirm the target band's gate now
   passes before considering the next stage above it.
 
@@ -91,7 +95,7 @@ exactly as `SKILL_BENCHMARK_CEFR_ENGLISH.md`'s own deterministic-replay clause a
 
 ## 3. Advancing a gated band — picking and executing the next build stage
 
-When Step 5 says "build," consult `PLAN_INFERENCE_TESTING.md` §4's build-staging table (stages
+When Step 5 says "build," consult `archive/PLAN_INFERENCE_TESTING.md` §4's build-staging table (stages
 0–5, each with an effort estimate and an exit criterion) and pick the **next unimplemented stage
 that unlocks the currently-gating band** — do not skip ahead to a later stage while an earlier one
 is still open; the ladder rule (§2) means a later stage's rules can't be honestly measured until the
@@ -157,7 +161,7 @@ anywhere in this loop. Read the printed per-band rung table (or write it up as
 at ≥50% completion passes a band, the first band that fails gates every band above it
 skipped-with-a-receipt, and a clean 0% on a not-yet-built capability is a ceiling marker, not a
 failure — never force a fake pass. If every band lands where predicted, ship as-is; if you want to
-push the ladder further, pick the next unimplemented `PLAN_INFERENCE_TESTING.md` §4 build stage that
+push the ladder further, pick the next unimplemented `archive/PLAN_INFERENCE_TESTING.md` §4 build stage that
 unlocks the currently-gating band, hand-write that engine rule code (never mechanized — only case
 generation is), keep `npm test` green, and re-run this whole cycle to confirm the target band's gate
 now passes before moving to the next stage.

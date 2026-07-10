@@ -361,10 +361,12 @@ outstanding from `PLAN_TAUGHT_RELATIONS.md`.**
 Each plan doc stages its own later phases; this list just points to them rather than repeating
 their tables.
 
-- **infbench stages 1-5** (`PLAN_INFERENCE_TESTING.md` §4). The disjointness proof rule (unlocks
-  B1), proof-chain materialization, cardinality entailment, consistency checking. The repeatable
-  measure/gate/advance cycle for this ladder is now also captured as an invokable skill,
-  `SKILL_INFERENCE_TESTING.md`.
+- **infbench stages 1-5 — all shipped** (`archive/PLAN_INFERENCE_TESTING.md` §4, archived
+  2026-07-11 once every stage's exit criterion was met). The disjointness proof rule (B1),
+  proof-chain materialization, cardinality entailment, and consistency checking all landed and are
+  chat-wired; the one remaining open research question (retraction-aware incremental reasoning)
+  moved to `PLAN_SYLLOGIST_HORIZON.md`. The repeatable measure/gate/advance cycle for this ladder
+  is still captured as an invokable skill, `SKILL_BENCHMARK_INFERENCE.md`.
 - **Advanced-grammar tracks b/d/e** (`PLAN_ADVANCED_GRAMMAR.md`). The constructions not landed
   this wave: stacked modality/passive, implicit arguments, and the rest of the CEFR inventory
   audit table.
@@ -468,7 +470,7 @@ connected-components grouping over `memory/blocks.mjs`'s block-similarity graph,
 cross-group inference vocabulary (supports/contradicts/elaborates/exemplifies, each with a named
 mechanical licensing test), PageRank+IDF extractive sentence ranking, and an auditable prune/assemble/
 grammar-pass pipeline — every output sentence traces to a source span, `finish.mjs` generalized from
-single-answer to genuinely multi-sentence output. `PLAN_INFERENCE_TESTING.md` stages 3-5: the
+single-answer to genuinely multi-sentence output. `archive/PLAN_INFERENCE_TESTING.md` stages 3-5: the
 `cax-dw` disjointness rule (kernel + a live, read-only chat-query wiring closing a real gap where the
 rule existed but was never reachable from a chat turn — INF-B1's gate), `cls-svf1` (someValuesFrom
 restriction membership) plus a new positive infbench template needed to actually measure it, and a
@@ -1300,10 +1302,11 @@ tone-of-voice adaptation (below — deliberately dropped by design choice, not u
 tier-4 learn-on-miss (below — prerequisites not yet met, not research-blocked); `PLAN_CODE.md`
 Tracks 2–4 (mutation search/repair, JS/HTML/CSS synthesis — APR and CEGIS are established
 techniques); `PLAN_OSS_ACE_PARSER.md` (pure extraction/packaging); OWL 2 RL forward-chaining and
-DL tableau consistency checking (`PLAN_INFERENCE_TESTING.md` stages 3–5 — the W3C's own OWL 2 RL
-profile is a published, complete rule table; Pellet/HermiT/RDFox/Jena are real production
-reasoners built on solved theory); RETE/incremental forward-chaining (same doc — Forgy 1982 is a
-citable, portable algorithm); contingent/conformant planning under initial-state uncertainty
+DL tableau consistency checking (`archive/PLAN_INFERENCE_TESTING.md` stages 3–5, all now shipped —
+literature review moved to `PLAN_SYLLOGIST_HORIZON.md` §1 — the W3C's own OWL 2 RL profile is a
+published, complete rule table; Pellet/HermiT/RDFox/Jena are real production reasoners built on
+solved theory); RETE/incremental forward-chaining (`PLAN_SYLLOGIST_HORIZON.md` §2 — Forgy 1982 is a
+citable, portable algorithm, not yet ported); contingent/conformant planning under initial-state uncertainty
 (`PLAN_CAPABILITY_ROUTER.md` — Bonet & Geffner 2000, Hoffmann & Brafman 2006, Petrick & Bacchus
 2002 all have working algorithms); ordinary closed-domain anaphora resolution (`nextFocus`,
 already shipped, plus a real theoretical grounding available in Grosz/Joshi/Weinstein's centering
@@ -1330,7 +1333,8 @@ stop signs (full detail + full citation lists in each owning doc):
   *narrow slice* of Winograd-shaped ambiguity a graph-query-filtering problem rather than
   open-domain commonsense reasoning — explicitly not the same as solving Winograd.
 - **Bounded, incremental, trust-tiered, retraction-safe justification tracking** —
-  `PLAN_INFERENCE_TESTING.md`'s stage-3/4/5 discussion. Doyle's JTMS (1979) and de Kleer's ATMS
+  `PLAN_SYLLOGIST_HORIZON.md` §3 (moved out of `PLAN_INFERENCE_TESTING.md` on that plan's own
+  retirement, once its build stages all shipped). Doyle's JTMS (1979) and de Kleer's ATMS
   (1986) solve retraction; DRed/RDFox's Backward-Forward solve incremental Datalog maintenance;
   nobody has published the specific combination with tmct's multi-trust-tier, hard-budget
   requirement. Speculative angle: an ATMS-lite extension to `syllogise.mjs`'s currently-flat

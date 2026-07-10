@@ -4,7 +4,7 @@
 > agents (isolated worktrees), each merged back with real conflicts resolved by hand where two agents
 > touched the same file. Everything below the design sections now reflects what's actually landed,
 > not just planned. See `HANDOVER.md` for the rest of this batch (`scm-svf`/cardinality monotonicity
-> lives in `PLAN_INFERENCE_TESTING.md` instead).
+> lives in `archive/PLAN_INFERENCE_TESTING.md` instead).
 >
 > **What's merged so far** (this session, in order):
 > 1. Persistence backends (§6) — Backend B (pure in-memory) + Backend C (SQLite, schema adapted
@@ -43,7 +43,7 @@
 > **Still open**: Medium/Large tier content (this doc's own §3 numbers are the target, not yet
 > built); the `createSession`→full-`initRepo` auto-init convergence (§2, deliberately deferred by
 > the persona-content agent to avoid a collision with the CLI/config agent's own `chat.mjs` work).
-> `scm-svf`/cardinality monotonicity (tracked separately in `HANDOVER.md`/`PLAN_INFERENCE_TESTING.md`)
+> `scm-svf`/cardinality monotonicity (tracked separately in `HANDOVER.md`/`archive/PLAN_INFERENCE_TESTING.md`)
 > is now also done and merged — all 4 of this batch's concurrent workstreams are complete.
 > Full-suite verification after all 4 merges (persistence backends + CLI/config + persona content +
 > `scm-svf`): **1852/1852 passing, 0 failures.** Also added `npm run init:large` (combines every

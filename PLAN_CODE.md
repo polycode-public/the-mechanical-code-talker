@@ -21,7 +21,7 @@ three times in-session: first to the operator's own idea of a Playwright sandbox
 verify/execute step, then to a three-language target set — "we'll support 3 languages... JS, HTML
 and CSS" (§4/§5 below) — then to a bounded-mutation-search/program-repair track (§2, grounded in
 Automated Program Repair literature) for the JS case specifically. This plan does not duplicate
-[[PLAN_INFERENCE_TESTING.md]]'s own program-synthesis finding — §2.3 there records that ROADMAP
+[[archive/PLAN_INFERENCE_TESTING.md]]'s own program-synthesis finding — §2.3 there records that ROADMAP
 Item 11 (Progol/ILP, learning new *inference rules*) is "a separate far spike… this repo has
 already looked at that door and left it shut." This plan is a **different** synthesis target — not
 learning logic rules, but synthesizing small **declarative router data** (Track 1), **repairing
@@ -111,7 +111,7 @@ every labeled example — mirroring `agentbench/driver-goal.mjs`'s own in-proces
 `agentbench/grade.mjs`'s zero-fabrication discipline (`grade.mjs:152` `gradeCase` value-compares the
 driver's `composed` field to the case's **static** `expect` literal, "no composition function
 imported — it only compares… so the check is not the code testing itself"; also the exact posture
-`PLAN_INFERENCE_TESTING.md:111-117` names for INFBENCH's grader). A candidate **passes** an example
+`archive/PLAN_INFERENCE_TESTING.md:111-117` names for INFBENCH's grader). A candidate **passes** an example
 iff the produced `calls`/`composed`/`proof` match `expect` exactly (`proofConnected`,
 `grade.mjs:251`). A failing example is a genuine **counter-example**: it prunes every candidate
 whose `subGoals`/`compose` combination cannot reproduce it, shrinking the enumeration on the next
@@ -323,7 +323,7 @@ Structure and computed-style checks are exact-match, like the earlier tracks. **
 layout/visual correctness is not**, and this plan explicitly does NOT stage it as an exit criterion:
 viewport-dependent widths/heights, sub-pixel rounding, and font-metric variance make exact dimension
 assertions flaky rather than deterministic — directly against the repo's own determinism bar
-(`PLAN_INFERENCE_TESTING.md:126-128`'s "byte-identical replay… run twice and byte-compare" is the
+(`archive/PLAN_INFERENCE_TESTING.md:126-128`'s "byte-identical replay… run twice and byte-compare" is the
 standard every other bench in this repo holds itself to). Track 4's exit criterion is therefore
 scoped to structural presence + a bounded, spec-declared set of computed-style equalities only;
 screenshot/visual-regression diffing is named here as an explicit **non-goal**, not a deferred
@@ -387,7 +387,7 @@ exit) before Tracks 2-4 are attempted at all — each a genuinely separable unit
 | 8 | Track 4 | HTML/CSS fragment synthesis (§4) — closed tag/property enumeration keyed to the spec's own assertions, verified by rendering in the same Playwright page | Playwright (shared) | L | synthesizes a fragment passing all structure + computed-style assertions for a small hand-authored spec set; explicitly excludes pixel/layout exactness (§4.4) from the exit bar |
 
 Stages 0-4 (Track 1) are deliberately built and measured **before** stages 5-8 (Tracks 2-4) are
-attempted — the same measure-before-building discipline `PLAN_INFERENCE_TESTING.md`'s staging table
+attempted — the same measure-before-building discipline `archive/PLAN_INFERENCE_TESTING.md`'s staging table
 (§4 there) and `PLAN_ADVANCED_GRAMMAR.md`'s track table (§2 there) both apply: a stage that doesn't
 clear its exit bar is parked and written up, not silently carried forward into the next stage's
 scope. Track 2 (stages 5-6) is staged *before* Track 3 (stage 7) even though both need the same
@@ -438,7 +438,7 @@ new artifacts, not squeezed into agentbench's tool-call shape where they don't f
   load-bearing for this reason, not just for tractability.
 - **Determinism under Playwright.** `getComputedStyle` normalizes color/layout representation
   (§4.3), but browser engine choice still matters — pin to one engine (Chromium) and one Playwright
-  version so replay is byte-identical, mirroring `PLAN_INFERENCE_TESTING.md:126-128`'s "same seed →
+  version so replay is byte-identical, mirroring `archive/PLAN_INFERENCE_TESTING.md:126-128`'s "same seed →
   byte-identical" bar for INFBENCH; Playwright's multi-browser support is a distraction here, not a
   feature to exercise. Property-based test generation (§2.2/§2.3) needs the same seeded-PRNG
   discipline every other bench in this repo already uses, or replay stops being byte-identical too.
