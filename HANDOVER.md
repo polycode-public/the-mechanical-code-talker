@@ -56,10 +56,19 @@ in `archive/`.
    new ACE pattern worth building, or a deliberate scope boundary (mirroring the lines
    `PLAN_TAUGHT_RELATIONS.md` already drew around which teach shapes to support)? See
    `PLAYTESTBENCH_1.4.1.md` round 2.
-8. **Freeze the 2 dead-ends this session's playtest sprint fixed** (bare "what does this do";
-   the closing-remark/thanks gap) as `test/chatflow-*.test.mjs` regression transcripts, per
-   `SKILL_BENCHMARK_PLAYTEST.md` §5's "freeze what flows" discipline — skipped this cycle, flagged
-   honestly rather than silently dropped.
+8. **Freeze the 3 dead-ends this session's playtest work fixed** (bare "what does this do"; the
+   closing-remark/thanks gap; the nonsensical ungrounded-pair teach suggestion, found live by the
+   operator immediately post-session) as `test/chatflow-*.test.mjs` regression transcripts, per
+   `SKILL_BENCHMARK_CONVERSATION.md` §5's "freeze what flows" discipline — skipped this cycle,
+   flagged honestly rather than silently dropped.
+8b. **Run a canonical-examples-first pass per `SKILL_BENCHMARK_CONVERSATION.md` §0.1 (new this
+    session) before any further codebase-flavored playtest exploration.** The 3-round sprint this
+    session missed the single most obvious test case (a plain-English syllogism, "john is a man")
+    because every round was framed around codebase exploration — found instead by the operator's
+    own first try immediately after the session. Fixed live (the suggestion message; verified
+    against README's own headline teach-then-infer example too), and the skill doc now mandates
+    this check as step zero of every future round — but it hasn't been systematically run yet
+    beyond the one spot-check this session did.
 9. **`scm-svf`/cardinality monotonicity** (`PLAN_INFERENCE_TESTING.md` stage 4's remainder) —
    confirmed unmeasurable against today's INF-C1 fixture (it's already at 90%, unrelated to what
    either rule would fix); revisit only if a future case-generation pass adds a template that
@@ -70,13 +79,13 @@ in `archive/`.
     every rung; the router/goal-reasoner surface is stable. Noted for completeness, not because
     anything is broken.
 
-**Also still open from this session's own tail, not benchmark-derived:** two pending skill-doc
-renames (`SKILL_BENCHMARK_PLAYTEST.md` → `SKILL_BENCHMARK_CONVERSATION.md`, refocused on fluid
-conversation/knowledge-acceptance-and-inference/completions retrieval via the hub-avoiding crawl;
-`SKILL_BENCHMARK_CHAT.md` → `SKILL_BENCHMARK_CEFR_ENGLISH.md` with historic report renames to
-match), a refresh of `CAPABILITIES_AUDIT_2026-07-10.md` incorporating this batch's benchmark
-results, and a speculative comparative table (tmct vs. local/AWS/Anthropic model tiers, plus a
-to-be sketch) — all explicitly operator-sequenced to run after this list, not yet started.
+**Also from this session's own tail, not benchmark-derived:** `SKILL_BENCHMARK_PLAYTEST.md` →
+`SKILL_BENCHMARK_CONVERSATION.md` (renamed and refocused — DONE) on fluid conversation/knowledge-
+acceptance-and-inference/completions retrieval via the hub-avoiding crawl, with a new mandatory
+§0.1 "canonical example first" step. `CAPABILITIES_AUDIT_2026-07-10.md` refreshed against all four
+benchmark reports (DONE). Still open: `SKILL_BENCHMARK_CHAT.md` → `SKILL_BENCHMARK_CEFR_ENGLISH.md`
+with historic report renames to match, and a speculative comparative table (tmct vs. local/AWS/
+Anthropic model tiers, plus a to-be sketch).
 
 ## Discipline (unchanged)
 

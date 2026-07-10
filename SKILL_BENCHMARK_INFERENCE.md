@@ -14,7 +14,7 @@ bands grade linguistic complexity in conversation. Don't compare an `INF-B1` res
 CEFR B1 result — they are unrelated measurements that happen to share a naming convention.
 
 This shape is closer to **`SKILL_BENCHMARK_CHAT.md`'s** measure→apply-one-lever→re-measure loop than
-to a delegated chat-round sprint (`SKILL_BENCHMARK_PLAYTEST.md`'s capped sprint mode), and this doc
+to a delegated chat-round sprint (`SKILL_BENCHMARK_CONVERSATION.md`'s capped sprint mode), and this doc
 follows `SKILL_BENCHMARK_CHAT.md`'s structure most closely for that reason: INFBENCH is a
 deterministic benchmark replay (`node infbench/run.mjs`), not a natural conversation, so there is no
 "curious user" to delegate to a sub-agent round-by-round the way a playtest sprint delegates chat
@@ -79,7 +79,7 @@ Bands run **INF-A1 → INF-A2 → INF-B1 → INF-B2 → INF-C1 → INF-C2**, str
 band: PASS requires **completion ≥ 50% at 0% fabrication**; fabrication = any answered
 verdict/entailment not pinned by the case's own literal at generation time. **The first band that
 fails this gate gates every band above it** — this is chatbench's Meta-2 rule
-(`SKILL_BENCHMARK_PLAYTEST.md`'s own house ethos, borrowed via `agentbench`'s `ladderGate`: "don't pay to
+(`SKILL_BENCHMARK_CONVERSATION.md`'s own house ethos, borrowed via `agentbench`'s `ladderGate`: "don't pay to
 judge a ceiling while the floor leaks") applied mechanically. A band at a clean **0%** on a
 capability that genuinely isn't implemented yet is a **ceiling marker** — legitimate, expected, and
 should be reported as such, never silently patched around or forced to a fake pass. Dual-draw
@@ -143,7 +143,7 @@ banner before picking a stage; don't trust this snapshot as still-current.**
   before that convenience script landed; verify it's still there (`grep infbench package.json`)
   each time this skill is invoked rather than assuming a prior cycle's state persists.
 - **Regression is still sacred.** `npm test` green after every stage's engine change, same contract
-  `SKILL_BENCHMARK_PLAYTEST.md` §4 and `SKILL_BENCHMARK_CHAT.md` §1 hold every other loop in this repo to.
+  `SKILL_BENCHMARK_CONVERSATION.md` §4 and `SKILL_BENCHMARK_CHAT.md` §1 hold every other loop in this repo to.
 
 ---
 

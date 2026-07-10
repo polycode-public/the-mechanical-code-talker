@@ -1,4 +1,17 @@
-# SKILL_BENCHMARK_PLAYTEST.md — the dialogue-flow playtest cycle (dead-ends, fixes, two run modes)
+# SKILL_BENCHMARK_CONVERSATION.md — the fluid-conversation playtest cycle (dead-ends, learning-then-inference, completions retrieval, two run modes)
+
+*(Renamed from `SKILL_BENCHMARK_PLAYTEST.md` and refocused, 2026-07-10 — the mechanism below is
+unchanged, but its scope is now explicit about three things a scalar benchmark structurally can't
+see, named directly by the operator: (1) whether a session **feels like a fluid conversation** —
+greetings that land naturally, guided exploration that a curious user would actually follow, and a
+closing that doesn't end on a wall; (2) whether tmct can **accept taught knowledge and then actually
+USE it to make a further inference**, not just recall it verbatim on the next turn (teach-then-INFER,
+not just teach-then-recall); and (3) whether a broad, open-ended question gets a **detailed
+completions-style response** via `src/completions/`'s hub-avoiding crawl (the degree-dampened
+`broadSearch`/`groupHits`/`rankSentences` pipeline in `PLAN_COMPLETIONS.md`) rather than the plain
+grammar wall. `CAPABILITIES_AUDIT_2026-07-10.md` §5 names exactly this gap: two of this session's
+biggest capabilities — taught-relation inference and the completions pipeline — are real, shipped,
+and invisible to AGENTBENCH/INFBENCH/CHATBENCH alike. This skill is where they get tested.)*
 
 A fast, qualitative improvement loop for the CHAT SURFACE. Claude plays a curious user, holds
 natural conversations with tmct, reviews the transcripts for **dead-ends** and broken flow, fixes
@@ -6,34 +19,41 @@ them, regression-tests, then **replays the same conversations** to confirm they 
 a tier of conversations flows to a useful outcome with zero dead-ends, **ratchets up the
 complexity** and repeats.
 
-This is the complement to `SKILL_BENCHMARK_CHAT.md`, not a replacement:
+This is the complement to `SKILL_BENCHMARK_CEFR_ENGLISH.md`, not a replacement:
 
-| | `SKILL_BENCHMARK_CHAT` | `SKILL_BENCHMARK_PLAYTEST` (this) |
+| | `SKILL_BENCHMARK_CEFR_ENGLISH` | `SKILL_BENCHMARK_CONVERSATION` (this) |
 |---|---|---|
 | question | is the aggregate quality UP? | does the conversation FLOW, or hit a wall? |
 | signal | LLM-judge rubric mean over a case set | dead-ends + unnatural breaks in a real dialogue |
 | cost/speed | judge calls, ~an hour, $ per cycle | no judge, no $, minutes per iteration |
 | unit | one lever, measured | one conversation, made to flow |
 | output | `CHATBENCH_<version>.md` + a mean | `PLAYTESTBENCH_<version>.md` + a growing suite of frozen "must-flow" transcripts |
+| covers | isolated, single-turn/single-case quality | session ARCS: open→explore→teach→infer→close, and broad completions-shaped questions — territory CEFR_ENGLISH structurally can't reach (single isolated cases, not session arcs) |
 
 Use them together: this loop catches the dead-ends a mean can hide (a 1.4 mean can still leave a
 user stuck at turn 4); the benchmark confirms the fixes moved the aggregate and didn't regress it.
 
-This skill has **two modes**, sharing the same discipline (§1):
+This skill has **three modes**, sharing the same discipline (§1):
 
 - **Full ladder mode** (§2) — open-ended, run by the main agent inline, ratcheting a Tier 0–6
   complexity ladder one tier at a time.
 - **Capped sprint mode** (§3) — a bounded, small number of rounds (default 3), each round's chat
   delegated to a background sub-agent under the coordinator model, chained off the prior round's
   transcript.
+- **Persona-sweep mode** (§3.4) — several background sub-agents dispatched IN PARALLEL, each seeded
+  with a genuinely different persona/frame (not a different topic within the same frame), each
+  generating its own conversation freely. This is the mode that actually finds a dead-end like
+  "john is a man" — capped-sprint chaining and full-ladder domain exploration both stay inside
+  whichever single frame the operator or the tier ladder started with.
 
 Pick full ladder mode to push into new complexity territory; pick capped sprint mode for a
 bounded, mostly-hands-off pass, or when the operator wants a clear stop and a recommendation at
-the end.
+the end; pick persona-sweep mode when the goal is specifically to find dead-ends a single-frame
+exploration structurally can't reach.
 
-> **Invoke it:** *"Follow `SKILL_BENCHMARK_PLAYTEST.md` and run the dialogue-flow loop"*
-> (optionally: a starting graph, a complexity tier, or "as a capped sprint" / a round cap for
-> capped sprint mode).
+> **Invoke it:** *"Follow `SKILL_BENCHMARK_CONVERSATION.md` and run the dialogue-flow loop"*
+> (optionally: a starting graph, a complexity tier, "as a capped sprint" / a round cap for capped
+> sprint mode, or "as a persona sweep" for §3.4's parallel-diverse-frames mode).
 
 ---
 
@@ -53,11 +73,43 @@ conversation stops. A dead-end is any turn whose reply is one of:
 - an offered example ("try `X`") that ITSELF fails when actually asked, in the exact session state
   it was offered in (0.9.12: five surfaces once suggested `what is a cache` unconditionally, even
   under `TMCT_NO_SEED`/`seed.enabled=false` where it always missed — an unverified suggestion is
-  worse than no suggestion, because it spends the user's trust on a promise the product didn't keep).
+  worse than no suggestion, because it spends the user's trust on a promise the product didn't keep),
+- **(2026-07-10) a taught fact that never gets USED.** Teaching "every Widget is a Component" and
+  getting it back verbatim on "what is a Widget" is necessary but not sufficient — if a LATER turn
+  needs to combine that taught fact with something else to answer (a real inference, not a lookup)
+  and instead hits a wall or an honest-but-avoidable miss, that's a dead-end too. Teach-then-RECALL
+  passing while teach-then-INFER fails is exactly the gap this addition targets.
+- **(2026-07-10) a broad, open-ended question that should route to `src/completions/`'s pipeline**
+  ("give me a detailed summary of how X works", "walk me through what happens when Y") hitting the
+  plain grammar wall with no inferred goal at all. Confirmed live, not hypothetical:
+  `PLAYTESTBENCH_1.4.1.md` round 3 found exactly this — the pipeline is real, shipped, and currently
+  unreachable from any chat turn. Until it's wired in, this is a NAMED, expected ceiling (say so
+  plainly, per the discipline below), not silently treated as a routing bug to fix on the spot.
 
 The bar: **every turn either answers, or gives a guiding nudge toward a precise query** (the "if you
 mean X then…" surround, a "did you mean" repair, a short tailored hint). A turn that does neither is
 a dead-end, and dead-ends are the whole quarry.
+
+### 0.1 MANDATORY first move, every round: the canonical textbook example, not domain exploration
+
+**(2026-07-10, operator-mandated after a real miss.)** A full 3-round playtest sprint this session
+carefully explored `examples/mini-webapp` and found real dead-ends — but every round was framed
+around "explore this codebase," so every teach-test used codebase vocabulary ("every Widget is a
+Component"). The operator's own very first try after the session, unprompted, was the classic
+textbook syllogism — **"john is a man"** — and it hit a confusing, semantically-backwards decline
+message (fixed, commit-pending as of this edit). Thorough exploration inside a narrow frame still
+missed the single most obvious test case, because the frame itself (codebase exploration) excluded
+it by construction.
+
+**The rule, not optional, checked before anything else in Step 1 below:** for EVERY core capability
+this product claims (check `README.md`'s own headline examples — that IS the canonical set), test
+its single most canonical, "anyone would try this first" textbook example, VERBATIM, by name,
+BEFORE any codebase-flavored exploration in that round. For "teach me a fact in natural language,"
+that's a plain-English syllogism with a person's name and a common noun (`"Socrates is a man"` /
+`"john is a man"`), never a code-vocabulary substitute. Domain-flavored exploration is still
+required and valuable (§1 Step 1 below) — this is an ADDITION before it, not a replacement for it.
+If a canonical example is broken, fix it before anything else the round finds — it's definitionally
+the highest-impact dead-end, since it's the one every future stranger session will hit first.
 
 ---
 
@@ -86,6 +138,19 @@ this rule exists to prevent). Rules that make the play realistic:
   carry ("what calls it", "what uses that", "where is it defined").
 - **Phrase naturally, not to the grammar.** "what functions are in Task", "what defined saveStore",
   "what about imports" — the way a developer actually types, including typos and politeness frames.
+- **Open AND close like a real session, not just a query stream.** Include a genuine greeting turn
+  and a genuine closing/thanks turn — not just structural questions in the middle. A conversation
+  that flows perfectly in the middle but hits a wall on "cheers, that's everything, thanks" still
+  fails the fluid-conversation bar (found live, 2026-07-10 — see `PLAYTESTBENCH_1.4.1.md` round 3).
+- **Test teach-then-INFER, not just teach-then-recall.** After teaching a fact, don't just ask for it
+  back verbatim — ask a FOLLOW-UP question that requires COMBINING the taught fact with something
+  else the graph or a prior taught fact already holds. A round-trip recall passing tells you almost
+  nothing about whether the fact is actually usable in reasoning.
+- **Try at least one broad, open-ended "detail" question per session** ("give me a detailed summary
+  of how X works", "explain what happens when Y") — this is `PLAN_COMPLETIONS.md`'s own territory
+  (the hub-avoiding crawl: `broadSearch` → `groupHits` → `rankSentences`/`inferRelations` →
+  `prune`/voice pass, `src/completions/complete.mjs`). Until it's wired into chat dispatch, expect
+  and NAME the wall as a known ceiling (§0) rather than treating it as a fresh routing bug each time.
 - Capture the transcript VERBATIM (pipe the turns: `printf 'q1\nq2\n…\n/exit\n' | node bin/tmct.mjs
   chat --repo <graph>`). In full ladder mode, run 3–6 short conversations per tier from different
   entry points (§2); in capped sprint mode, one conversation per round, chained off the prior round
@@ -223,7 +288,7 @@ does not redefine it, only wraps it in a capped, delegated, per-round-shippable 
 ladder mode (§2) for the open-ended tier-ladder pass; use this mode when the operator wants a
 bounded sprint with a clear stop and a recommendation at the end, run mostly hands-off.
 
-> **Invoke it specifically:** *"Follow `SKILL_BENCHMARK_PLAYTEST.md` and run a playtest sprint"*
+> **Invoke it specifically:** *"Follow `SKILL_BENCHMARK_CONVERSATION.md` and run a playtest sprint"*
 > (optionally: a round cap other than 3, a starting graph/repo, a focus area).
 
 ### 3.1 The loop (one round)
@@ -315,6 +380,65 @@ worth recording as a versioned artifact.
 - **Cap is a ceiling, not a target.** If two rounds in a row come back clean before the cap is
   reached, stop early (§3.1 Round-Step 5) — don't force a 3rd round's worth of manufactured fixes
   just to hit the number.
+
+### 3.4 Persona-sweep mode — parallel, genuinely different frames, not chained rounds
+
+**(2026-07-10, born directly from the "john is a man" miss.)** Capped sprint mode (§3) chains
+rounds for realism — each round follows naturally from the last, which is exactly right for
+depth, but it means every round in a sprint shares ONE frame (whatever the first round opened
+with). Full ladder mode's surface-variation axis (§2.2) varies wording, not the user's underlying
+GOAL. Neither mode, run as designed, will reliably produce the single most obvious test case for a
+capability if that case falls outside the frame the round happened to start in — this is exactly
+what happened this session: a full 3-round sprint thoroughly explored `examples/mini-webapp` and
+found real dead-ends, but every teach-test used codebase vocabulary, because every round was framed
+around "explore this codebase." The operator's own first try, unprompted, was a plain-English
+syllogism, and it broke.
+
+**The strategy: use Claude's own generative capability to produce genuinely diverse personas and
+frames, not just diverse questions within one frame — because that's the actual root cause. Every
+playtest round that used the same lens ("explore this codebase") could never produce "john is a
+man," no matter how much question-variety ran inside it.** Concretely:
+
+1. **Run multiple agents in parallel, each seeded with a deliberately different persona/goal, not a
+   different topic.** For example: a total stranger who's never heard of code-graphs and tests the
+   plain-English teaching claim with generic real-world facts; someone deliberately trying to break
+   it (nonsense, contradictions, edge-case phrasing); a non-native English speaker; someone testing
+   if it's secretly an LLM / trying to jailbreak it; someone doing pure small talk with no code
+   intent at all; a rushed user typing fragments and typos. Different lens each time, not different
+   targets within the same lens.
+2. **Let each agent generate its own questions freely from that persona**, using Claude's own
+   language-generation range — not a script, not a fixed list — the way an actual diverse
+   population of real users would type, which is exactly what a language model is good at
+   generating and what a hand-picked example list structurally can't cover.
+3. **Every dead-end any of them finds gets frozen into the permanent regression file immediately**,
+   same mechanism as `test/chatflow-*.test.mjs` (§1 Step 5) — this is how the generative exploration
+   compounds into a permanent, growing gate instead of being a one-off exercise.
+4. **Run this as a standing practice, not a one-time sweep** — every substantial session that
+   touches the chat surface, before calling the chat-surface work done, the same way §0.1 already
+   mandates the single canonical example first.
+
+**Mechanically**, this is capped sprint mode's dispatch shape (§3.1 Round-Step 1) with two changes:
+dispatch happens as one `parallel`/single-message fan-out (not one-round-at-a-time chaining), and
+each agent's prompt seeds a PERSONA + GOAL, not a prior transcript to continue. Each agent still:
+drives the REAL CLI (never a mock, never the committed `examples/mini-webapp` fixture directly —
+copy to a tmpdir first, exactly as §1 Step 1 requires), returns its raw verbatim transcript plus a
+one-line dead-end/flow note, and does NOT appraise, fix, or judge anything itself — that stays with
+the coordinator, same as §3.3's "delegate the CHAT, not the JUDGMENT" rule. The coordinator then
+reads every transcript, ranks the dead-ends found across ALL personas together (a dead-end several
+personas hit independently is higher-signal than one only a single persona's phrasing produced),
+fixes and freezes per §1 Steps 3–5, and reports the sweep as a whole — not per-agent — to the
+operator.
+
+Persona ideas to rotate (not exhaustive — generate fresh ones each sweep; a fixed persona list
+would itself become the thing exploration drifts toward):
+- total stranger, generic real-world facts only (the one that would have caught "john is a man")
+- deliberate breaker (contradictions, nonsense, "are you an LLM", jailbreak attempts)
+- non-native English speaker (natural imperfect grammar, not a caricature)
+- pure small talk, no code/teach intent at all (tests personality + graceful redirect, not just
+  parsing)
+- rushed/fragment-typing developer (terse, typo-heavy, impatient)
+- a skeptical tester deliberately probing the product's own stated boundaries (asks it to do things
+  the README explicitly says it can't)
 
 ---
 

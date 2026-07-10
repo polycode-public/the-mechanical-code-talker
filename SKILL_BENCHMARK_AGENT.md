@@ -57,7 +57,7 @@ Every cycle MUST satisfy:
   `agentbench/grade.mjs`). The FIRST rung that fails this gate gates every rung above it — report
   those higher rungs as **skipped-with-a-receipt** (e.g. `rung C1 skipped: gated by A2 completion
   40% < 50%`), the same Meta-2 discipline `SKILL_BENCHMARK_INFERENCE.md` §2 borrows for INFBENCH and
-  `SKILL_BENCHMARK_PLAYTEST.md`'s ladder honors for flow tiers: don't pay to judge a ceiling while
+  `SKILL_BENCHMARK_CONVERSATION.md`'s ladder honors for flow tiers: don't pay to judge a ceiling while
   the floor leaks. `--ladder` runs the rungs ascending and applies this automatically.
 - **Refusal is a legitimate pass.** For an `expect.refuse` case, a clean refusal (no call, when no
   declared tool fits or the entity does not resolve) is a PASS at the honest-miss level — refusing
