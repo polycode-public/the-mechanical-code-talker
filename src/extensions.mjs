@@ -192,9 +192,13 @@ function mergeExtensionEntry(name, builtin, override, repoRoot) {
  *     table (default {} — every bundle then ranks at bias 1, see bias.mjs).
  * No `tmct.toml` (or one with no `[extensions]`/`[bias]` tables) resolves to
  * exactly today's implicit seon+conceptnet default, byte-identical.
+ *
+ * `configFile` (optional): an explicit tmct.toml path override — `tmct extend
+ * --validate <dir> --config <path>` — read INSTEAD of `<repoRoot>/tmct.toml`;
+ * `repoRoot` still anchors every resource path (unchanged).
  */
-export async function resolveExtensions(repoRoot) {
-  const raw = repoRoot ? await loadTomlConfig(repoRoot) : null;
+export async function resolveExtensions(repoRoot, { configFile } = {}) {
+  const raw = repoRoot ? await loadTomlConfig(repoRoot, configFile ? { file: configFile } : {}) : null;
   const defs = builtinExtensions();
   const rawExtensions = (raw && raw.extensions && typeof raw.extensions === "object") ? raw.extensions : {};
   const rawBias = (raw && raw.bias && typeof raw.bias === "object") ? raw.bias : {};
