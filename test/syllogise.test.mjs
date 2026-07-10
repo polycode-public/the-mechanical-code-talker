@@ -11,16 +11,20 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendFact, loadMemory, readFactRows } from "../src/memory/core.mjs";
 import {
-  deriveSubClassClosure, deriveTypePropagation, findIsaChain, syllogise,
+  deriveSubClassClosure, deriveTypePropagation, deriveDisjointViolations, findIsaChain, syllogise,
   ENTAILED_PROVENANCE, SUBCLASS_PREDICATE, ENTAILED_TYPE_PROVENANCE, TYPE_PREDICATE,
+  ENTAILED_DISJOINT_PROVENANCE, DISJOINT_PREDICATE, CAX_DW_RULE, CAX_DW_RULE_CONFIDENCE,
 } from "../src/syllogise.mjs";
 import { freshConceptNetRepo } from "./helpers/seeded-fixture.mjs";
 
 const mkRepo = () => mkdtemp(join(tmpdir(), "tmct-syllog-"));
 const subClassRows = (rows) => rows.filter((r) => r.predicate === SUBCLASS_PREDICATE);
 const typeRows = (rows) => rows.filter((r) => r.predicate === TYPE_PREDICATE);
+const disjointRows = (rows) => rows.filter((r) => r.predicate === DISJOINT_PREDICATE);
 const hasEdge = (rows, s, o) => subClassRows(rows).some((r) => r.subject === s && r.object === o);
 const hasType = (rows, s, o) => typeRows(rows).some((r) => r.subject === s && r.object === o);
+const hasDisjoint = (rows, s, o) => disjointRows(rows).some((r) => r.subject === s && r.object === o);
+const round6 = (n) => Number(n.toFixed(6)); // mirrors memory/trust.mjs's own `round`
 
 // ---- the pure kernel: bounded, screened, focus-filtered, deterministic -------
 
@@ -116,6 +120,80 @@ test("deriveTypePropagation: hard budget caps derivations, deterministically", (
   const d = deriveTypePropagation(typeEdges, subClassEdges, { budget: 2 });
   assert.equal(d.length, 2);
   const again = deriveTypePropagation(typeEdges, subClassEdges, { budget: 2 });
+  assert.deepEqual(d, again, "same inputs → same truncation (deterministic)");
+});
+
+// ---- cax-dw: disjointness violations — x:C1, C1 disjointWith C2 ⊨ x∉C2 -------
+
+test("deriveDisjointViolations: direct member — x:C1, C1 disjointWith C2 ⊨ x is NOT C2", () => {
+  const d = deriveDisjointViolations([["redis.mjs", "cache"]], [], [["cache", "queue"]]);
+  assert.deepEqual(d, [{ subject: "redis.mjs", object: "queue", viaType: "cache", viaClass: "cache" }]);
+});
+
+test("deriveDisjointViolations: disjointWith is symmetric — the taught direction doesn't matter", () => {
+  const d = deriveDisjointViolations([["redis.mjs", "cache"]], [], [["queue", "cache"]]); // reverse of the above
+  assert.deepEqual(d, [{ subject: "redis.mjs", object: "queue", viaType: "cache", viaClass: "cache" }]);
+});
+
+test("deriveDisjointViolations: the ⊑-lift — x∈mock, mock⊑fixture, fixture disjointWith test ⊨ x∉test "
+  + "(PLAN_INFERENCE_TESTING.md §1 footnote², B1's hardest cell)", () => {
+  const d = deriveDisjointViolations(
+    [["e01.mjs", "mock"]],
+    [["mock", "fixture"]],
+    [["fixture", "test"]],
+  );
+  assert.deepEqual(d, [{ subject: "e01.mjs", object: "test", viaType: "mock", viaClass: "fixture" }]);
+});
+
+test("deriveDisjointViolations: a MULTI-hop ⊑-lift also reaches the disjoint ancestor (mock⊑fixture⊑asset)", () => {
+  const d = deriveDisjointViolations(
+    [["e01.mjs", "mock"]],
+    [["mock", "fixture"], ["fixture", "asset"]],
+    [["asset", "test"]],
+  );
+  assert.deepEqual(d, [{ subject: "e01.mjs", object: "test", viaType: "mock", viaClass: "asset" }]);
+});
+
+test("deriveDisjointViolations: an unrelated pair is NEVER asserted — no connecting disjointness, nothing derived "
+  + "(the honest 'cannot be proven' floor is the CALLER's job, not a fabricated 'no' here)", () => {
+  const d = deriveDisjointViolations([["e02.mjs", "widget"]], [], [["cache", "queue"]]);
+  assert.deepEqual(d, [], "widget has no stated disjointness with anything — silence, never a guessed no");
+});
+
+test("deriveDisjointViolations: no disjointWith facts at all ⊨ nothing derived", () => {
+  assert.deepEqual(deriveDisjointViolations([["x", "c"]], [], []), []);
+});
+
+test("deriveDisjointViolations: dedup/novelty screen — an already-known instance-level disjointWith is not re-derived "
+  + "(this is ALSO syllogise()'s idempotency mechanism: a prior pass's own entailed rows feed back in as disjointEdges)", () => {
+  const d = deriveDisjointViolations(
+    [["redis.mjs", "cache"]],
+    [],
+    [["cache", "queue"], ["redis.mjs", "queue"]], // the conclusion is already present
+  );
+  assert.deepEqual(d, []);
+});
+
+test("deriveDisjointViolations: focus-connection — a derivation must touch focus (one step out)", () => {
+  const typeEdges = [["redis.mjs", "cache"]];
+  const disjointEdges = [["cache", "queue"]];
+  assert.deepEqual(deriveDisjointViolations(typeEdges, [], disjointEdges, { focus: new Set(["z"]) }), [], "unrelated focus → nothing");
+  assert.deepEqual(
+    deriveDisjointViolations(typeEdges, [], disjointEdges, { focus: new Set(["cache"]) }),
+    [{ subject: "redis.mjs", object: "queue", viaType: "cache", viaClass: "cache" }],
+  );
+  assert.deepEqual(
+    deriveDisjointViolations(typeEdges, [], disjointEdges, { focus: new Set(["redis.mjs"]) }),
+    [{ subject: "redis.mjs", object: "queue", viaType: "cache", viaClass: "cache" }],
+  );
+});
+
+test("deriveDisjointViolations: hard budget caps derivations, deterministically", () => {
+  const typeEdges = [["x", "c"]];
+  const disjointEdges = [["c", "d1"], ["c", "d2"], ["c", "d3"]];
+  const d = deriveDisjointViolations(typeEdges, [], disjointEdges, { budget: 2 });
+  assert.equal(d.length, 2);
+  const again = deriveDisjointViolations(typeEdges, [], disjointEdges, { budget: 2 });
   assert.deepEqual(d, again, "same inputs → same truncation (deterministic)");
 });
 
@@ -254,6 +332,104 @@ test("syllogise: materializes cax-sco (x:C) too, in the SAME pass as scm-sco, se
 
     // idempotent: a second pass derives nothing new
     assert.equal((await syllogise(dir)).count, 0, "closure already materialized (both rules) → nothing to add");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---- cax-dw: syllogise() materializes disjointness violations, a provable "no" -
+
+test("syllogise: cax-dw materializes a direct disjoint-type violation as a provable 'no' Fact "
+  + "(PLAN_INFERENCE_TESTING.md INF-B1)", async () => {
+  const dir = await mkRepo();
+  try {
+    await appendFact(dir, { subject: "cache", predicate: DISJOINT_PREDICATE, object: "queue", provenance: "ace:chat:s1" });
+    await appendFact(dir, { subject: "redis.mjs", predicate: TYPE_PREDICATE, object: "cache", provenance: "ace:chat:s1" });
+
+    const before = readFactRows(await loadMemory(dir));
+    assert.ok(!hasDisjoint(before, "redis.mjs", "queue"), "'redis.mjs is not a queue' is a MISS before the pass");
+
+    const res = await syllogise(dir);
+    assert.ok(res.derived.some((d) => d.rule === CAX_DW_RULE && d.subject === "redis.mjs" && d.object === "queue"));
+
+    const after = readFactRows(await loadMemory(dir));
+    const derived = disjointRows(after).find((r) => r.subject === "redis.mjs" && r.object === "queue");
+    assert.ok(derived, "'redis.mjs is not a queue' is now a stored, provable Fact (miss → hit)");
+    assert.match(derived.provenance, /entailed:disjointWith/, "carries entailed:disjointWith provenance");
+    assert.ok(derived.sourceTypes.includes("entailed"), "backed by a first-class entailed Source");
+
+    // idempotent: a second pass derives nothing new
+    assert.equal((await syllogise(dir)).count, 0, "the violation is already materialized → nothing to add");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("syllogise: cax-dw materializes the ⊑-LIFTED case — x∈mock, mock⊑fixture, fixture disjointWith test "
+  + "(PLAN_INFERENCE_TESTING.md §1 footnote², B1's hardest cell — reuses deriveSubClassClosure's/"
+  + "deriveTypePropagation's ancestor-closure machinery, not a reimplementation)", async () => {
+  const dir = await mkRepo();
+  try {
+    await appendFact(dir, { subject: "fixture", predicate: DISJOINT_PREDICATE, object: "test", provenance: "ace:chat:s1" });
+    await appendFact(dir, { subject: "mock", predicate: SUBCLASS_PREDICATE, object: "fixture", provenance: "ace:chat:s1" });
+    await appendFact(dir, { subject: "e01.mjs", predicate: TYPE_PREDICATE, object: "mock", provenance: "ace:chat:s1" });
+
+    const before = readFactRows(await loadMemory(dir));
+    assert.ok(!hasDisjoint(before, "e01.mjs", "test"), "'e01.mjs is not a test' is a MISS before the pass");
+
+    const res = await syllogise(dir);
+    assert.ok(res.derived.some((d) => d.rule === CAX_DW_RULE && d.subject === "e01.mjs" && d.object === "test"));
+
+    const after = readFactRows(await loadMemory(dir));
+    assert.ok(hasDisjoint(after, "e01.mjs", "test"), "'e01.mjs is not a test' now stored, reached via the mock⊑fixture lift");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("syllogise: cax-dw NEVER asserts a 'no' for an unrelated pair — silence, not a guessed no "
+  + "(the 'cannot be proven' answer shape is chat.mjs's job, not this rule's)", async () => {
+  const dir = await mkRepo();
+  try {
+    await appendFact(dir, { subject: "cache", predicate: DISJOINT_PREDICATE, object: "queue", provenance: "ace:chat:s1" });
+    await appendFact(dir, { subject: "e02.mjs", predicate: TYPE_PREDICATE, object: "widget", provenance: "ace:chat:s1" });
+
+    const res = await syllogise(dir);
+    assert.ok(!res.derived.some((d) => d.rule === CAX_DW_RULE), "widget has no stated disjointness — cax-dw derives nothing for it");
+
+    const after = readFactRows(await loadMemory(dir));
+    assert.equal(disjointRows(after).filter((r) => r.subject === "e02.mjs").length, 0, "no fabricated disjointWith fact for e02.mjs");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("syllogise: cax-dw's entailed trust is PREMISE-DERIVED (min(premiseTrusts) × ruleConfidence), "
+  + "not the bare 0.3 floor — PLAN_INFERENCE_TESTING.md §4 stage 2's exit criterion, closed here for cax-dw", async () => {
+  const dir = await mkRepo();
+  try {
+    // Two DIFFERENT trust tiers so min() is meaningfully picking the weaker
+    // premise: the type premise is operator-taught (prior 1.0), the
+    // disjointness premise is corpus-sourced (prior 0.7). createdAt is
+    // omitted on both (defaults to "now"), so recency is ~1.0 for both and
+    // the arithmetic below is exact, not just approximately bounded.
+    await appendFact(dir, { subject: "redis.mjs", predicate: TYPE_PREDICATE, object: "cache", provenance: "ace:chat:s1" });
+    await appendFact(dir, { subject: "cache", predicate: DISJOINT_PREDICATE, object: "queue", provenance: "corpus:conceptnet /r/IsA" });
+
+    const before = readFactRows(await loadMemory(dir));
+    const typeTrust = before.find((r) => r.predicate === TYPE_PREDICATE && r.subject === "redis.mjs" && r.object === "cache").trust;
+    const dwTrust = before.find((r) => r.predicate === DISJOINT_PREDICATE && r.subject === "cache" && r.object === "queue").trust;
+    assert.notEqual(typeTrust, dwTrust, "premises must sit at DIFFERENT trust tiers for min() to matter");
+
+    await syllogise(dir);
+    const after = readFactRows(await loadMemory(dir));
+    const derived = disjointRows(after).find((r) => r.subject === "redis.mjs" && r.object === "queue");
+    assert.ok(derived, "the violation was derived");
+
+    const expected = round6(Math.min(typeTrust, dwTrust) * CAX_DW_RULE_CONFIDENCE);
+    assert.equal(derived.trust, expected, `entailed trust is premise-derived: expected ${expected}, got ${derived.trust}`);
+    assert.notEqual(derived.trust, 0.3, "not the bare entailed floor");
+    assert.ok(derived.trust < Math.min(typeTrust, dwTrust), "still strictly below its weakest premise — never outranks a stated fact");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

@@ -408,11 +408,22 @@ function statedByObjectsFor(payload, factId) {
 }
 
 /** Recompute + materialise a Fact's trust cache (mgx:trustScore + the auditable
- *  mgx:trustInputs). Called exactly where a statedBy edge could have changed. */
-function recomputeFactTrust(payload, fact, nowMs = Date.now()) {
+ *  mgx:trustInputs). Called exactly where a statedBy edge could have changed.
+ *  `trustOpts` (optional) is the entailed hook (trust.mjs `computeTrust`'s
+ *  `premiseTrusts`/`ruleConfidence`) — threaded through from appendFact/
+ *  appendFacts's own opts so a rule (e.g. syllogise.mjs's cax-dw) can make its
+ *  conclusion's trust premise-derived (`min(premiseTrusts) × ruleConfidence`)
+ *  instead of riding the bare entailed prior. Absent (the default, `{}`), this
+ *  is a no-op passthrough — every existing caller's score is byte-identical
+ *  (PLAN_INFERENCE_TESTING.md §4 stage 2's exit criterion). */
+function recomputeFactTrust(payload, fact, nowMs = Date.now(), trustOpts = {}) {
   const sourceIds = statedByObjectsFor(payload, fact.id);
   const createdAt = (fact.attributes || []).find((a) => a?.prop === CREATED_AT_PROP)?.value || "";
-  const { score, inputs } = computeTrust({ sourceIds, createdAt }, sourcesByIdMap(payload), { now: nowMs });
+  const { score, inputs } = computeTrust({ sourceIds, createdAt }, sourcesByIdMap(payload), {
+    now: nowMs,
+    ...(Array.isArray(trustOpts?.premiseTrusts) ? { premiseTrusts: trustOpts.premiseTrusts } : {}),
+    ...(typeof trustOpts?.ruleConfidence === "number" ? { ruleConfidence: trustOpts.ruleConfidence } : {}),
+  });
   setAttr(fact, TRUST_SCORE_PROP, "trustScore", String(score));
   setAttr(fact, TRUST_INPUTS_PROP, "trustInputs", JSON.stringify(inputs));
 }
@@ -420,8 +431,9 @@ function recomputeFactTrust(payload, fact, nowMs = Date.now()) {
 /** Reconcile a Fact's Sources + statedBy edges with its (unchanged, compat)
  *  mgx:factProvenance string, then recompute its trust. ADD-only over
  *  deterministic Source ids and upsertEdge's subject>object dedupe, so it is
- *  idempotent and NEVER re-keys the fact (its id still hashes only (s,p,o)). */
-function syncFactSources(payload, fact, nowMs = Date.now()) {
+ *  idempotent and NEVER re-keys the fact (its id still hashes only (s,p,o)).
+ *  `trustOpts` passes straight through to recomputeFactTrust (see there). */
+function syncFactSources(payload, fact, nowMs = Date.now(), trustOpts = {}) {
   const prov = (fact.attributes || []).find((a) => a?.prop === "mgx:factProvenance")?.value || "";
   // a Source's createdAt candidate is the FIRST stating fact's createdAt (its
   // "first seen"), falling back to now — first-write-wins keeps the earliest.
@@ -435,7 +447,7 @@ function syncFactSources(payload, fact, nowMs = Date.now()) {
       subject: fact.id, object: sid, subjectLabel: fact.label, objectLabel: sourceLabel(sid),
     });
   }
-  recomputeFactTrust(payload, fact, nowMs);
+  recomputeFactTrust(payload, fact, nowMs, trustOpts);
 }
 
 /** Lazy, idempotent migration of the legacy provenance union (step (b)): any
@@ -685,8 +697,11 @@ const factIdFor = (s, p, o) => `fact:${fnv1aHex(`${s}\0${p}\0${o}`)}`;
 /** Append one grammar-derived OWL triple, RDF-reified: a `Fact` individual
  *  carrying rdf:subject / rdf:predicate / rdf:object (+ provenance). The
  *  Phase-2 ACE parser's write point. Same (s,p,o) → same id → upsert, never a
- *  duplicate. Returns { id }. */
-export async function appendFact(dir, { subject, predicate, object, provenance = "", createdAt = "", quantifier = "" } = {}) {
+ *  duplicate. `premiseTrusts`/`ruleConfidence` (optional) engage trust.mjs's
+ *  entailed hook — see recomputeFactTrust; a rule-derived write (e.g.
+ *  syllogise.mjs) passes these, a plain taught/asserted write omits them and
+ *  is byte-identical to before. Returns { id }. */
+export async function appendFact(dir, { subject, predicate, object, provenance = "", createdAt = "", quantifier = "", premiseTrusts, ruleConfidence } = {}) {
   const s = normFactTerm(subject);
   const p = normText(predicate);
   const o = normFactTerm(object);
@@ -722,7 +737,7 @@ export async function appendFact(dir, { subject, predicate, object, provenance =
     });
     // Derive Source individuals + statedBy edges from the provenance union and
     // (re)materialise this fact's trust — the live half of steps (b)/(c).
-    syncFactSources(payload, payload.individuals.find((x) => x?.id === id));
+    syncFactSources(payload, payload.individuals.find((x) => x?.id === id), undefined, { premiseTrusts, ruleConfidence });
     recountClasses(payload);
   });
   return { id };
@@ -743,6 +758,10 @@ export async function appendFact(dir, { subject, predicate, object, provenance =
  *  same statedBy Source edges, same mgx:trustScore, same first-write-wins
  *  createdAt. Malformed facts (missing subject/predicate/object) are SKIPPED (a
  *  bad row never aborts a 6 k-fact seed), not thrown as appendFact does.
+ *  Each fact may also carry `premiseTrusts`/`ruleConfidence` (optional) —
+ *  appendFact's own entailed-hook passthrough, batched: syllogise.mjs's
+ *  materializing pass is this function's main caller, so this is the write
+ *  path a rule's conclusion trust actually rides (recomputeFactTrust, above).
  *  Returns { ids, appended, skipped } — ids one per applied fact (in order),
  *  appended = ids.length, skipped = malformed count. */
 export async function appendFacts(dir, facts) {
@@ -761,6 +780,8 @@ export async function appendFacts(dir, facts) {
       provenance: normText(f?.provenance),
       createdAt: f?.createdAt || "",
       quantifier: normText(f?.quantifier),
+      premiseTrusts: Array.isArray(f?.premiseTrusts) ? f.premiseTrusts : undefined,
+      ruleConfidence: typeof f?.ruleConfidence === "number" ? f.ruleConfidence : undefined,
     });
   }
   const ids = [];
@@ -770,6 +791,7 @@ export async function appendFacts(dir, facts) {
     const byId = new Map(payload.individuals.map((i) => [i?.id, i]));
     const touched = [];
     const seen = new Set();
+    const trustOptsById = new Map();
     for (const f of prepared) {
       const prior = byId.get(f.id);
       const priorProv = prior?.attributes?.find((a) => a?.prop === "mgx:factProvenance")?.value || "";
@@ -800,10 +822,19 @@ export async function appendFacts(dir, facts) {
       byId.set(f.id, ind);
       ids.push(f.id);
       if (!seen.has(f.id)) { seen.add(f.id); touched.push(f.id); }
+      // Last-prepared-row-wins per id for the trust hook opts (mirrors the
+      // provenance/quantifier/ind upsert above, which is also last-wins per id
+      // within one batch — a duplicate id inside the same call is rare, but
+      // when it happens the SAME single-write-per-id discipline applies here).
+      if (f.premiseTrusts !== undefined || f.ruleConfidence !== undefined) {
+        trustOptsById.set(f.id, { premiseTrusts: f.premiseTrusts, ruleConfidence: f.ruleConfidence });
+      }
     }
     // Reconcile each touched fact's Sources + trust once (add-only, idempotent),
-    // then recount classes a SINGLE time at the end.
-    for (const id of touched) syncFactSources(payload, byId.get(id));
+    // then recount classes a SINGLE time at the end. trustOptsById threads the
+    // entailed hook (recomputeFactTrust, above) per fact — absent for a fact
+    // that didn't declare premiseTrusts, so its trust is unchanged from before.
+    for (const id of touched) syncFactSources(payload, byId.get(id), undefined, trustOptsById.get(id));
     recountClasses(payload);
   });
   return { ids, appended: ids.length, skipped };
