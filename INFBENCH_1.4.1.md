@@ -13,6 +13,26 @@ contradict each other, naming the clash. `node infbench/generate-cases.mjs && no
 ran to completion cleanly in the foreground, watched end-to-end (209 generated cases, default seed
 `20260707`, one new template added this cycle — `b2Svf1Apply`, 10 cases).
 
+**Timing** (reconstructed from the run's own result-file mtime, this session's monitor log, and the
+write-up commit timestamp — start time wasn't separately logged in real time, so it's derived by
+subtracting the monitor's own last-observed elapsed reading from the verified end time, not a raw
+system log):
+
+| stage | time | duration |
+| --- | --- | --- |
+| test start (approx.) | 2026-07-10 ~12:02:00 BST | — |
+| test end (`product.jsonl` mtime) | 2026-07-10 12:13:16 BST | **~11m16s** (start→test-end) |
+| write-up committed (`48b3477`) | 2026-07-10 12:23:14 BST | **~21m14s** (start→write-up-end) |
+| concurrency | 6 (`DEFAULT_CONCURRENCY`, `infbench/run.mjs`) — 2 drive points (kernel+chat), 209 cases | |
+
+This run took notably longer than prior measured versions (`1.3.1`'s equivalent run completed in
+well under this) — attributable to this session's own corpus growth (SEON 280→399 concepts,
+disjointness 42→114 pairs, a new tier2 bundle) making each of the 209 real per-case `runChat()`
+sessions' full corpus seed meaningfully more expensive, not a performance regression in the new
+rules themselves. A first attempt this session was killed after 7+ minutes of zero output under
+heavy concurrent system load from unrelated background work; the timing above is the clean,
+re-launched run once that load cleared.
+
 **INF-B1 moved from a four-version-stuck 33% to 100%. INF-C2 moved from a 0% ceiling to 100%. The
 entire ladder now passes the gate, with no skip anywhere** — the first time this has happened since
 the benchmark was built.

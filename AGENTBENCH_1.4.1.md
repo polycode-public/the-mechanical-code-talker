@@ -7,6 +7,18 @@ files, and packaging — nothing in `src/router/`, `agentbench/`, or the goal-re
 set. The numbers below are, case-for-case, byte-identical to `AGENTBENCH_0.8.2.md`'s own table —
 the honest, correct result of a re-measurement against unchanged router code, not a stale copy.
 
+**Timing** (from real result-file mtimes and the write-up commit timestamp; both runs were fast,
+foreground, single-shot commands, not backgrounded — start times below are the moment each `node
+agentbench/run.mjs` invocation was issued):
+
+| stage | time | duration |
+| --- | --- | --- |
+| goal-driver run start (approx.) | 2026-07-10 ~12:15:40 BST | — |
+| goal-driver run end (`run-1.4.1/product.jsonl` mtime) | 2026-07-10 12:16:30 BST | ~50s |
+| resolver-floor run end (`run-1.4.1r/product.jsonl` mtime) | 2026-07-10 12:24:15 BST | — |
+| write-up committed (`3ab1ef0`) | 2026-07-10 12:24:55 BST | **~9m15s** (goal-driver start→write-up-end) |
+| concurrency | 8 (`DEFAULT_CONCURRENCY`, `agentbench/run.mjs`), 56 cases per run | |
+
 ## The metric pair, per rung — goal driver (Stage 5), 56 cases
 
 `node agentbench/run.mjs --driver goal --ladder --stamp 1.4.1` (raw:

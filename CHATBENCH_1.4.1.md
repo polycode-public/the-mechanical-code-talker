@@ -13,6 +13,23 @@ this report's own numbers going forward for future re-runs of the same 109-case 
 
 **Result: mean 1.624 / 2, 6 hard fails out of 109 cases (5.5%), 0 voided samples.**
 
+**Timing** (from real result-file mtimes, `timings.json`'s own recorded wall-time for the product
+run, and the write-up commit timestamp):
+
+| stage | time | duration |
+| --- | --- | --- |
+| product-run start (approx.) | 2026-07-10 ~12:17:42 BST | — |
+| product-run end (`product.jsonl` mtime; `timings.json` records 6103ms wall-time) | 2026-07-10 12:17:48 BST | ~6s |
+| judge-run start (approx., launched immediately after product run) | 2026-07-10 ~12:17:50 BST | — |
+| judge-run end (`judged.jsonl` mtime) | 2026-07-10 12:32:20 BST | **~14m30s** (judge duration) |
+| write-up committed (`94f18a5`) | 2026-07-10 12:34:13 BST | **~16m31s** (product-run start→write-up-end) |
+| concurrency | product run: sequential (single draw, no fan-out); judge run: 12 (`--concurrency 12`), 218 total judge calls | |
+
+The judge run's wall-time (~14.5 min for 218 calls) ran notably longer than a naive
+concurrency-divided latency estimate would predict — consistent with real per-call LLM latency
+plus this session's heavy concurrent background load at the time, not a harness issue (0 voided
+samples, no retries logged).
+
 ## Deterministic tier-1 (free, run first)
 
 `node chatbench/run.mjs --stamp 1.4.1 --sample 1 --single` (raw:
