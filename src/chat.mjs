@@ -3637,6 +3637,21 @@ function factTermVariants(normFactTerm, term) {
   return v;
 }
 
+/** Try `prove(subj, obj)` over every (subject variant × object variant)
+ *  combination, returning the first truthy witness or null — the small
+ *  shared search the two cardinality readers below both need (a taught
+ *  restriction's subject/onClass are singular, but a queried term may be
+ *  spelled slightly differently, e.g. pluralized). */
+function findAcrossVariants(subjVariants, objVariants, prove) {
+  for (const subj of subjVariants) {
+    for (const obj of objVariants) {
+      const w = prove(subj, obj);
+      if (w) return w;
+    }
+  }
+  return null;
+}
+
 /** GENERIC "kind" nouns a taught subject's head word is often built from
  *  ("logger MODULE", "task CONTROLLER") — excluded from the head-word
  *  overlap fallback both KNOW_ABOUT_RE's "what do you know about X" listing
@@ -4178,6 +4193,26 @@ const TOLD_ABOUT_RE = /^what\s+(?:did|have)\s+(?:i|we|you)\s+(?:told|tell|said|s
 /** "what kind of thing is an X" — the subject-side membership phrasing the grammar
  *  doesn't parse: reports X's OWN remembered type (falling back to X's members). */
 const KIND_OF_RE = /^what\s+kind\s+of\s+(?:thing|class|type|category|entity)?\s*(?:is|are)\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
+/** "does every <N1> have at least <m> <N2>" — cardinality monotonicity
+ *  (PLAN_INFERENCE_TESTING.md INF-C1, this build): a class's OWN declared
+ *  exactly/min cardinality restriction proves "at least m" for any queried
+ *  m <= n (src/syllogise.mjs's proveCardinalityAtLeast). */
+const CARD_AT_LEAST_ASK_RE = /^does\s+every\s+(.+?)\s+have\s+at\s+least\s+(\d+)\s+(.+?)[?.!\s]*$/i;
+/** "does a/an <N1> have a/an <N2>" — cax-maxc0 (this build): a declared
+ *  max-cardinality-0 restriction proves the class-level "no" directly
+ *  (src/syllogise.mjs's proveMaxCardinalityZeroDenial). Both readers FALL
+ *  THROUGH ON A MISS (no unconditional decline, unlike isaAsk's own closing
+ *  `return null`): "does SUBJ have OBJ" is broad enough to otherwise collide
+ *  with GENERAL_VERB_YESNO_RE below and a pre-existing "3 unclear max0 cases"
+ *  quirk (HANDOVER.md) — a miss here simply lets the query continue to
+ *  whatever would have handled it before this build existed. */
+const CARD_EXISTENCE_ASK_RE = /^does\s+an?\s+(.+?)\s+have\s+an?\s+(.+?)[?.!\s]*$/i;
+/** The 4 pattern-5 cardinality-restriction predicates buildCardinalityRestrictions
+ *  reconstructs from — owl:onProperty (shared scaffolding with someValuesFrom
+ *  restrictions too) is added alongside this set by each reader below, not
+ *  folded into it here, mirroring infbench/grade.mjs's own identically-named
+ *  set + separate owl:onProperty handling. */
+const CARDINALITY_ROW_PREDICATES = new Set(["owl:cardinality", "owl:minCardinality", "owl:maxCardinality", "owl:onClass"]);
 /** "who owns <X>" / "who maintains <X>" — the closed ownership read-back over
  *  the teach lane's mgx:ownedBy facts. */
 const WHO_OWNS_RE = /^who\s+(?:owns|maintains)\s+(.+?)[?.!\s]*$/i;
@@ -4849,7 +4884,10 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
     // (owl:onProperty/owl:someValuesFrom) and every property/type premise must
     // all be TAUGHT (never corpus-sourced), same as every other live chase in
     // this block.
-    const { deriveSomeValuesFromApplication, ON_PROPERTY_PREDICATE, SOME_VALUES_FROM_PREDICATE } = await import("./syllogise.mjs");
+    const {
+      deriveSomeValuesFromApplication, ON_PROPERTY_PREDICATE, SOME_VALUES_FROM_PREDICATE,
+      deriveSomeValuesFromSubsumption, ENTAILED_SCM_SVF_PROVENANCE,
+    } = await import("./syllogise.mjs");
     const onPropertyRows = rows.filter((f) => f.predicate === ON_PROPERTY_PREDICATE && isTaught(f));
     const someValuesFromRows = rows.filter((f) => f.predicate === SOME_VALUES_FROM_PREDICATE && isTaught(f));
     if (onPropertyRows.length && someValuesFromRows.length) {
@@ -4876,8 +4914,111 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
           replace: true,
         };
       }
+      // LIVE scm-svf1 PROOF CHASE (PLAN_INFERENCE_TESTING.md INF-C1, this
+      // build; W3C OWL 2 RL Table 9's scm-svf1 — confirmed distinct from
+      // scm-svf2, which needs rdfs:subPropertyOf, which the ACE grammar can't
+      // teach at all — see src/syllogise.mjs's own header comment): every
+      // strategy above missed — two INDEPENDENTLY taught someValuesFrom
+      // restrictions sharing the SAME property, whose filler classes are
+      // themselves ⊑-related, license a restriction-to-restriction ⊑ fact
+      // (deriveSomeValuesFromSubsumption). Reuses the SAME restrictionEdges
+      // just built for cls-svf1 above — a SEPARATE findIsaChain call
+      // (maxHops: 3, one hop of headroom over the A2 chase's maxHops: 2)
+      // rather than folding into that earlier call, so INF-A2's pinned
+      // behavior is untouched.
+      const svfSubsumption = restrictionEdges.length > 1
+        ? deriveSomeValuesFromSubsumption(restrictionEdges, chainSubClassEdges, { budget: 10 })
+        : [];
+      if (svfSubsumption.length) {
+        const enlargedSubClassEdges = chainSubClassEdges.concat(svfSubsumption.map((d) => [d.subject, d.object]));
+        // A derived restriction⊑restriction edge has no underlying stored
+        // Fact row to cite (it's a schema-level conclusion, not a taught
+        // sentence) — falls back to a SYNTHETIC row carrying scm-svf1's own
+        // entailed provenance, so renderIsaChain's citation still names the
+        // real (low-trust, non-taught) source honestly, same discipline as
+        // every "entailed:*" provenance tag elsewhere in this file.
+        const factForStepOrSvf = (step) => {
+          if (step.predicate !== SC_PREDICATE) return chainTypeRows.find((f) => f.subject === step.subject && f.object === step.object);
+          const stated = chainSubClassRows.find((f) => f.subject === step.subject && f.object === step.object);
+          if (stated) return stated;
+          const derived = svfSubsumption.find((d) => d.subject === step.subject && d.object === step.object);
+          return derived
+            ? { subject: derived.subject, predicate: SC_PREDICATE, object: derived.object, provenance: ENTAILED_SCM_SVF_PROVENANCE }
+            : undefined;
+        };
+        for (const subj of subjCandidates) {
+          const chain = findIsaChain(subj, objVariants, chainTypeEdges, enlargedSubClassEdges, { maxHops: 3 });
+          if (!chain) continue;
+          const premises = chain.map(factForStepOrSvf);
+          if (premises.every(Boolean)) return { text: `yes — ${renderIsaChain(premises)}`, replace: true };
+        }
+      }
     }
     return null; // no remembered fact — the honest miss stands (never a guessed "no")
+  }
+
+  // (a1c-i) CARDINALITY MONOTONICITY — "does every X have at least N Y" over
+  // a TAUGHT exactly/min cardinality restriction (PLAN_INFERENCE_TESTING.md
+  // INF-C1, this build; pattern-5, src/grammar/ace.mjs's parseCardinality).
+  // FALLS THROUGH ON A MISS (see CARD_AT_LEAST_ASK_RE's own doc comment) —
+  // never an unconditional decline, unlike isaAsk's own closing `return null`.
+  const cardAtLeast = q.match(CARD_AT_LEAST_ASK_RE);
+  if (cardAtLeast) {
+    const [, subjRaw, mRaw, objRaw] = cardAtLeast;
+    const {
+      SUBCLASS_PREDICATE: CARD_SC_PREDICATE, ON_PROPERTY_PREDICATE: CARD_ON_PROPERTY_PREDICATE,
+      buildCardinalityRestrictions, proveCardinalityAtLeast,
+    } = await import("./syllogise.mjs");
+    const isTaughtCard = (f) => !f.sourceTypes?.includes("corpus") && !f.sourceTypes?.includes("web");
+    const cardSubClassEdges = isa.filter((f) => f.predicate === CARD_SC_PREDICATE && isTaughtCard(f)).map((f) => [f.subject, f.object]);
+    const cardRows = rows.filter((f) => (f.predicate === CARD_ON_PROPERTY_PREDICATE || CARDINALITY_ROW_PREDICATES.has(f.predicate)) && isTaughtCard(f));
+    const cardinalityRestrictionEdges = buildCardinalityRestrictions(cardRows);
+    if (cardinalityRestrictionEdges.length) {
+      const subjVariants = factTermVariants(normFactTerm, subjRaw.trim());
+      const objVariants = factTermVariants(normFactTerm, objRaw.trim());
+      const m = Number(mRaw);
+      const witness = findAcrossVariants(subjVariants, objVariants, (s, o) => proveCardinalityAtLeast(cardSubClassEdges, cardinalityRestrictionEdges, s, o, m, {}));
+      if (witness) {
+        const restrictionFact = rows.find((f) => f.predicate === CARD_SC_PREDICATE && f.subject === witness.viaClass && f.object === witness.viaRestriction);
+        const cite = restrictionFact?.provenance ? ` (source: ${restrictionFact.provenance})` : "";
+        const kindWord = witness.kind === "exactly" ? "exactly" : "at least";
+        const plural = (w, n) => `${w}${n === 1 ? "" : "s"}`;
+        return {
+          text: `yes — every ${witness.viaClass} has ${kindWord} ${witness.n} ${plural(witness.object, witness.n)}${cite}, so at least ${m} follows.`,
+          replace: true,
+        };
+      }
+    }
+    // falls through — no witnessing restriction (or none declared at all)
+  }
+
+  // (a1c-ii) cax-maxc0 — "does a/an X have a/an Y" over a TAUGHT
+  // max-cardinality-0 restriction (PLAN_INFERENCE_TESTING.md INF-C1, this
+  // build). NEVER infers "no" from absence, matching cax-dw's own discipline
+  // above — a miss here FALLS THROUGH too (see CARD_EXISTENCE_ASK_RE's own
+  // doc comment).
+  const cardExistence = q.match(CARD_EXISTENCE_ASK_RE);
+  if (cardExistence) {
+    const [, subjRaw, objRaw] = cardExistence;
+    const {
+      SUBCLASS_PREDICATE: CARD_SC_PREDICATE, ON_PROPERTY_PREDICATE: CARD_ON_PROPERTY_PREDICATE,
+      buildCardinalityRestrictions, proveMaxCardinalityZeroDenial,
+    } = await import("./syllogise.mjs");
+    const isTaughtCard = (f) => !f.sourceTypes?.includes("corpus") && !f.sourceTypes?.includes("web");
+    const cardSubClassEdges = isa.filter((f) => f.predicate === CARD_SC_PREDICATE && isTaughtCard(f)).map((f) => [f.subject, f.object]);
+    const cardRows = rows.filter((f) => (f.predicate === CARD_ON_PROPERTY_PREDICATE || CARDINALITY_ROW_PREDICATES.has(f.predicate)) && isTaughtCard(f));
+    const cardinalityRestrictionEdges = buildCardinalityRestrictions(cardRows);
+    if (cardinalityRestrictionEdges.length) {
+      const subjVariants = factTermVariants(normFactTerm, subjRaw.trim());
+      const objVariants = factTermVariants(normFactTerm, objRaw.trim());
+      const witness = findAcrossVariants(subjVariants, objVariants, (s, o) => proveMaxCardinalityZeroDenial(cardSubClassEdges, cardinalityRestrictionEdges, s, o, {}));
+      if (witness) {
+        const restrictionFact = rows.find((f) => f.predicate === CARD_SC_PREDICATE && f.subject === witness.viaClass && f.object === witness.viaRestriction);
+        const cite = restrictionFact?.provenance ? ` (source: ${restrictionFact.provenance})` : "";
+        return { text: `no — every ${witness.viaClass} has at most 0 ${witness.object}${cite}.`, replace: true };
+      }
+    }
+    // falls through — no witnessing restriction (or none declared at all)
   }
 
   // (a2) OWNERSHIP read-back — "who owns/maintains <X>": the teach lane's

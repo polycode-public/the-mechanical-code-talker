@@ -17,6 +17,8 @@ import {
   ENTAILED_DISJOINT_PROVENANCE, DISJOINT_PREDICATE, CAX_DW_RULE, CAX_DW_RULE_CONFIDENCE,
   ENTAILED_SVF1_PROVENANCE, ON_PROPERTY_PREDICATE, SOME_VALUES_FROM_PREDICATE,
   CLS_SVF1_RULE, CLS_SVF1_RULE_CONFIDENCE,
+  buildCardinalityRestrictions, deriveSomeValuesFromSubsumption,
+  proveCardinalityAtLeast, proveMaxCardinalityZeroDenial,
 } from "../src/syllogise.mjs";
 import { assertSentence } from "../src/grammar/assert.mjs";
 import { freshConceptNetRepo } from "./helpers/seeded-fixture.mjs";
@@ -299,6 +301,212 @@ test("deriveSomeValuesFromApplication: hard budget caps derivations, determinist
   assert.equal(d.length, 2);
   const again = deriveSomeValuesFromApplication(propertyEdges, typeEdges, [], restrictionEdges, { budget: 2 });
   assert.deepEqual(d, again, "same inputs → same truncation (deterministic)");
+});
+
+// ---- buildCardinalityRestrictions: pattern-5 reconstruction (PLAN_INFERENCE_TESTING.md INF-C1) ----
+
+const CARD_ROWS = [
+  { subject: "exactly-3-test", predicate: "rdf:type", object: "restriction" },
+  { subject: "exactly-3-test", predicate: "owl:onProperty", object: "has" },
+  { subject: "exactly-3-test", predicate: "owl:cardinality", object: "3" },
+  { subject: "exactly-3-test", predicate: "owl:onClass", object: "test" },
+  { subject: "min-2-fixture", predicate: "owl:onProperty", object: "has" },
+  { subject: "min-2-fixture", predicate: "owl:minCardinality", object: "2" },
+  { subject: "min-2-fixture", predicate: "owl:onClass", object: "fixture" },
+  { subject: "max-0-queue", predicate: "owl:onProperty", object: "has" },
+  { subject: "max-0-queue", predicate: "owl:maxCardinality", object: "0" },
+  { subject: "max-0-queue", predicate: "owl:onClass", object: "queue" },
+];
+
+test("buildCardinalityRestrictions: reconstructs exactly/min/max records, joined by restriction id", () => {
+  const recs = buildCardinalityRestrictions(CARD_ROWS);
+  assert.deepEqual(recs, [
+    { restriction: "exactly-3-test", kind: "exactly", n: 3, onClass: "test" },
+    { restriction: "max-0-queue", kind: "max", n: 0, onClass: "queue" },
+    { restriction: "min-2-fixture", kind: "min", n: 2, onClass: "fixture" },
+  ]);
+});
+
+test("buildCardinalityRestrictions: a someValuesFrom restriction's onProperty (a REAL verb, not \"has\") "
+  + "is never mistaken for a cardinality restriction, even scanned in the SAME row set", () => {
+  const mixedRows = [
+    ...CARD_ROWS,
+    { subject: "some-imports-test", predicate: "owl:onProperty", object: "imports" },
+    { subject: "some-imports-test", predicate: "owl:someValuesFrom", object: "test" },
+  ];
+  const recs = buildCardinalityRestrictions(mixedRows);
+  assert.equal(recs.length, 3, "the someValuesFrom restriction contributes no cardinality record at all");
+  assert.ok(!recs.some((r) => r.restriction === "some-imports-test"));
+});
+
+test("buildCardinalityRestrictions: a restriction missing owl:onClass is never returned", () => {
+  const rows = [
+    { subject: "exactly-3-x", predicate: "owl:onProperty", object: "has" },
+    { subject: "exactly-3-x", predicate: "owl:cardinality", object: "3" },
+  ];
+  assert.deepEqual(buildCardinalityRestrictions(rows), []);
+});
+
+test("buildCardinalityRestrictions: no rows at all is a fast, honest empty", () => {
+  assert.deepEqual(buildCardinalityRestrictions([]), []);
+});
+
+// ---- deriveSomeValuesFromSubsumption: scm-svf1 (W3C OWL 2 RL Table 9) ----
+
+test("deriveSomeValuesFromSubsumption: two restrictions, SAME property, ⊑-related fillers ⊨ restriction ⊑ restriction", () => {
+  const restrictionEdges = [
+    { restriction: "some-imports-test", property: "imports", target: "test" },
+    { restriction: "some-imports-fixture", property: "imports", target: "fixture" },
+  ];
+  const d = deriveSomeValuesFromSubsumption(restrictionEdges, [["test", "fixture"]]);
+  assert.deepEqual(d, [{
+    subject: "some-imports-test", object: "some-imports-fixture", viaY1: "test", viaY2: "fixture",
+  }]);
+});
+
+test("deriveSomeValuesFromSubsumption: the ⊑-lift — a MULTI-hop filler chain (test⊑mock⊑fixture) still connects", () => {
+  const restrictionEdges = [
+    { restriction: "some-imports-test", property: "imports", target: "test" },
+    { restriction: "some-imports-fixture", property: "imports", target: "fixture" },
+  ];
+  const subClassEdges = [["test", "mock"], ["mock", "fixture"]];
+  const d = deriveSomeValuesFromSubsumption(restrictionEdges, subClassEdges);
+  assert.deepEqual(d, [{
+    subject: "some-imports-test", object: "some-imports-fixture", viaY1: "test", viaY2: "fixture",
+  }]);
+});
+
+test("deriveSomeValuesFromSubsumption: DIFFERENT properties are never compared, even with ⊑-related fillers", () => {
+  const restrictionEdges = [
+    { restriction: "some-imports-test", property: "imports", target: "test" },
+    { restriction: "some-uses-fixture", property: "uses", target: "fixture" },
+  ];
+  const d = deriveSomeValuesFromSubsumption(restrictionEdges, [["test", "fixture"]]);
+  assert.deepEqual(d, []);
+});
+
+test("deriveSomeValuesFromSubsumption: only ONE restriction declared over a property ⊨ nothing to compare", () => {
+  const restrictionEdges = [{ restriction: "some-imports-test", property: "imports", target: "test" }];
+  assert.deepEqual(deriveSomeValuesFromSubsumption(restrictionEdges, [["test", "fixture"]]), []);
+});
+
+test("deriveSomeValuesFromSubsumption: unrelated fillers (no ⊑ either way) ⊨ nothing derived — silence, not a guess", () => {
+  const restrictionEdges = [
+    { restriction: "some-imports-test", property: "imports", target: "test" },
+    { restriction: "some-imports-widget", property: "imports", target: "widget" },
+  ];
+  const d = deriveSomeValuesFromSubsumption(restrictionEdges, []);
+  assert.deepEqual(d, []);
+});
+
+test("deriveSomeValuesFromSubsumption: dedup/novelty screen — an already-known restriction⊑restriction edge is not re-derived", () => {
+  const restrictionEdges = [
+    { restriction: "some-imports-test", property: "imports", target: "test" },
+    { restriction: "some-imports-fixture", property: "imports", target: "fixture" },
+  ];
+  const subClassEdges = [["test", "fixture"], ["some-imports-test", "some-imports-fixture"]];
+  const d = deriveSomeValuesFromSubsumption(restrictionEdges, subClassEdges);
+  assert.deepEqual(d, []);
+});
+
+test("deriveSomeValuesFromSubsumption: focus-connection — a derivation must touch focus (one step out)", () => {
+  const restrictionEdges = [
+    { restriction: "some-imports-test", property: "imports", target: "test" },
+    { restriction: "some-imports-fixture", property: "imports", target: "fixture" },
+  ];
+  const subClassEdges = [["test", "fixture"]];
+  assert.deepEqual(
+    deriveSomeValuesFromSubsumption(restrictionEdges, subClassEdges, { focus: new Set(["z"]) }),
+    [], "unrelated focus → nothing",
+  );
+  assert.equal(
+    deriveSomeValuesFromSubsumption(restrictionEdges, subClassEdges, { focus: new Set(["some-imports-fixture"]) }).length,
+    1,
+  );
+});
+
+test("deriveSomeValuesFromSubsumption: hard budget caps derivations, deterministically", () => {
+  const restrictionEdges = [
+    { restriction: "some-imports-test", property: "imports", target: "test" },
+    { restriction: "some-imports-fixture", property: "imports", target: "fixture" },
+    { restriction: "some-imports-mock", property: "imports", target: "mock" },
+  ];
+  const subClassEdges = [["test", "fixture"], ["test", "mock"]];
+  const d = deriveSomeValuesFromSubsumption(restrictionEdges, subClassEdges, { budget: 1 });
+  assert.equal(d.length, 1);
+  const again = deriveSomeValuesFromSubsumption(restrictionEdges, subClassEdges, { budget: 1 });
+  assert.deepEqual(d, again, "same inputs → same truncation (deterministic)");
+});
+
+// ---- proveCardinalityAtLeast: cardinality monotonicity (PLAN_INFERENCE_TESTING.md INF-C1, "confirmed OUTSIDE OWL 2 RL's own profile") ----
+
+test("proveCardinalityAtLeast: exactly n ⊨ at least m, whenever m ≤ n", () => {
+  const recs = buildCardinalityRestrictions(CARD_ROWS);
+  const w = proveCardinalityAtLeast([["suite", "exactly-3-test"]], recs, "suite", "test", 2);
+  assert.deepEqual(w, {
+    subject: "suite", object: "test", m: 2, n: 3, kind: "exactly", viaClass: "suite", viaRestriction: "exactly-3-test",
+  });
+});
+
+test("proveCardinalityAtLeast: min n ⊨ at least m too, whenever m ≤ n", () => {
+  const recs = buildCardinalityRestrictions(CARD_ROWS);
+  const w = proveCardinalityAtLeast([["fixture-suite", "min-2-fixture"]], recs, "fixture-suite", "fixture", 1);
+  assert.equal(w.kind, "min");
+});
+
+test("proveCardinalityAtLeast: a queried m > n is NEVER proven — silence, not a guess", () => {
+  const recs = buildCardinalityRestrictions(CARD_ROWS);
+  assert.equal(proveCardinalityAtLeast([["suite", "exactly-3-test"]], recs, "suite", "test", 4), null);
+});
+
+test("proveCardinalityAtLeast: a max-kind restriction never licenses an \"at least\" claim", () => {
+  const recs = buildCardinalityRestrictions(CARD_ROWS);
+  assert.equal(proveCardinalityAtLeast([["cache", "max-0-queue"]], recs, "cache", "queue", 1), null);
+});
+
+test("proveCardinalityAtLeast: the ⊑-lift — an inherited restriction (fixture-suite ⊑ suite ⊑ exactly-3-test) still proves", () => {
+  const recs = buildCardinalityRestrictions(CARD_ROWS);
+  const subClassEdges = [["fixture-suite", "suite"], ["suite", "exactly-3-test"]];
+  const w = proveCardinalityAtLeast(subClassEdges, recs, "fixture-suite", "test", 2);
+  assert.equal(w.viaClass, "suite");
+});
+
+test("proveCardinalityAtLeast: an unrelated onClass is never proven", () => {
+  const recs = buildCardinalityRestrictions(CARD_ROWS);
+  assert.equal(proveCardinalityAtLeast([["suite", "exactly-3-test"]], recs, "suite", "widget", 1), null);
+});
+
+test("proveCardinalityAtLeast: no declared restriction at all is a fast, honest null", () => {
+  assert.equal(proveCardinalityAtLeast([], [], "suite", "test", 1), null);
+});
+
+// ---- proveMaxCardinalityZeroDenial: cax-maxc0, grounded in cls-maxc1 via universal generalization ----
+
+test("proveMaxCardinalityZeroDenial: a declared max-0 restriction proves a class-level \"no\"", () => {
+  const recs = buildCardinalityRestrictions(CARD_ROWS);
+  const w = proveMaxCardinalityZeroDenial([["cache", "max-0-queue"]], recs, "cache", "queue");
+  assert.deepEqual(w, { subject: "cache", object: "queue", viaClass: "cache", viaRestriction: "max-0-queue" });
+});
+
+test("proveMaxCardinalityZeroDenial: an exactly/min restriction never licenses a denial", () => {
+  const recs = buildCardinalityRestrictions(CARD_ROWS);
+  assert.equal(proveMaxCardinalityZeroDenial([["suite", "exactly-3-test"]], recs, "suite", "test"), null);
+});
+
+test("proveMaxCardinalityZeroDenial: the ⊑-lift — an inherited max-0 restriction still denies", () => {
+  const recs = buildCardinalityRestrictions(CARD_ROWS);
+  const subClassEdges = [["redis.mjs", "cache"], ["cache", "max-0-queue"]];
+  const w = proveMaxCardinalityZeroDenial(subClassEdges, recs, "redis.mjs", "queue");
+  assert.equal(w.viaClass, "cache");
+});
+
+test("proveMaxCardinalityZeroDenial: NEVER infers \"no\" from absence — a subject with no declared restriction is null", () => {
+  assert.equal(proveMaxCardinalityZeroDenial([], [], "widget", "queue"), null);
+});
+
+test("proveMaxCardinalityZeroDenial: an unrelated onClass is never denied", () => {
+  const recs = buildCardinalityRestrictions(CARD_ROWS);
+  assert.equal(proveMaxCardinalityZeroDenial([["cache", "max-0-queue"]], recs, "cache", "widget"), null);
 });
 
 // ---- findIsaChain: a bounded, ROOTED proof search (not a third rule) ---------

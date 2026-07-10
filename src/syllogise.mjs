@@ -65,6 +65,37 @@
 // comment) — rather than the bare entailed floor; scm-sco/cax-sco do not
 // (yet) engage that hook — see syllogise()'s doc comment for why that
 // specific extension is non-trivial.
+//
+// THREE MORE capabilities live below (PLAN_INFERENCE_TESTING.md §4 stage 4's
+// remainder, INF-C1), all LIVE-CHASE ONLY — never added to `syllogise()`'s own
+// materializing batch pass (documented as a deliberate deferral at each
+// export's own doc comment, not an oversight):
+//   - scm-svf1: someValuesFrom restriction SUBSUMPTION — two INDEPENDENTLY
+//     declared restrictions over the SAME property, whose filler classes are
+//     ⊑-related, entail the restriction NODES are themselves ⊑-related (W3C
+//     OWL 2 RL Table 9's scm-svf1 — confirmed, against the real downloaded
+//     spec, a DISTINCT rule from scm-svf2, which needs `rdfs:subPropertyOf`
+//     instead; tmct's ACE grammar has no way to teach property subsumption at
+//     all, so scm-svf2 is out of scope for a real reason, not laziness).
+//     Deferred from the batch pass for THIS build specifically (unlike the
+//     four rules above): INFBENCH's two drive points never touch the batch
+//     pass, so nothing is lost by deferring the batch-integration follow-up
+//     (`deriveSomeValuesFromSubsumption`).
+//   - cardinality monotonicity: a class's OWN declared exactly/min cardinality
+//     restriction (n) proves "at least m" for any QUERIED m ≤ n. Confirmed
+//     OUTSIDE OWL 2 RL's own decidable profile (the spec's own `cls-*` rule
+//     table has no rule comparing exactly/min/max cardinalities to each
+//     other, and the profile's syntactic restriction limits cardinality
+//     expressions to 0 or 1 only) — genuinely LIVE-CHASE ONLY, never a
+//     candidate for the batch pass at all, not merely deferred
+//     (`proveCardinalityAtLeast`).
+//   - cax-maxc0: max-cardinality-0 as encoded negation. Grounded in W3C OWL 2
+//     RL's real `cls-maxc1` rule (an ABox contradiction: asserting a specific
+//     individual has a value for a max-0-restricted property is
+//     inconsistent) via a one-step universal generalization — since ANY
+//     witnessed individual would be a contradiction, no true witness can
+//     exist, so a general "no" is provable without needing one
+//     (`proveMaxCardinalityZeroDenial`).
 
 import { loadMemory, appendFacts, readFactRows, normFactTerm } from "./memory/core.mjs";
 
@@ -129,6 +160,7 @@ const isType = (p) => String(p || "").trim().toLowerCase() === "rdf:type";
 const isDisjoint = (p) => String(p || "").trim().toLowerCase() === "owl:disjointwith";
 const isOnProperty = (p) => String(p || "").trim().toLowerCase() === "owl:onproperty";
 const isSomeValuesFrom = (p) => String(p || "").trim().toLowerCase() === "owl:somevaluesfrom";
+const isOnClass = (p) => String(p || "").trim().toLowerCase() === "owl:onclass";
 /** The four structural OWL predicates cls-svf1 itself consumes/emits, plus
  *  the two subClassOf/type/disjointWith predicates the other three rules
  *  own — excluded from `syllogise()`'s generic "property edge" scan so a
@@ -480,6 +512,242 @@ export function deriveSomeValuesFromApplication(propertyEdges, typeEdges, subCla
     derived.push({ subject: x, object: r, viaProperty: p, viaPropertyKey: pKey, viaValue: y, viaType: c, viaTarget: target });
   }
   return derived;
+}
+
+// ---- shared cardinality-restriction reconstruction (pattern-5, parseCardinality) ----
+// "every N1 has exactly n N2s" already stores `{N1, rdfs:subClassOf, r}` as a
+// plain row (`r = tmct:exactly-N-n2`) plus the restriction node r's own
+// scaffolding: `r owl:onProperty tmct:has`, `r <kind> "n"` (kind one of
+// owl:cardinality/owl:minCardinality/owl:maxCardinality), `r owl:onClass N2`
+// (`src/grammar/ace.mjs`'s `parseCardinality`, ~lines 234-257) — the SAME
+// per-fact storage discipline `deriveSomeValuesFromApplication`'s
+// `restrictionEdges` already reconstructs for someValuesFrom restrictions,
+// applied to pattern 5's shape instead.
+const HAS_PROPERTY_KEY = "has"; // the fixed synthetic marker property parseCardinality always mints (ace.mjs ~line 252) — never a real taught verb, so it doubles as this reconstruction's own defensive filter (see buildCardinalityRestrictions below): a someValuesFrom restriction's onProperty is always a REAL taught verb, never this literal marker.
+const CARDINALITY_KIND_OF = { "owl:cardinality": "exactly", "owl:mincardinality": "min", "owl:maxcardinality": "max" };
+export const ON_CLASS_PREDICATE = "owl:onClass";
+
+/** Reconstructs pattern-5 cardinality restriction records from raw stored
+ *  rows touching a restriction node — same reconstruction discipline
+ *  `deriveSomeValuesFromApplication` already uses for someValuesFrom
+ *  restrictions, applied to pattern 5's shape instead. `rows` is the same
+ *  `[{subject,predicate,object}, …]` shape `readFactRows`/`syllogise()`'s own
+ *  `rows` param takes (raw predicate casing, already-normalized subject/
+ *  object) — a caller may hand it EVERY stored row (this function ignores
+ *  anything that isn't one of the four predicates it cares about) or a
+ *  pre-filtered subset. A restriction is only admitted when its OWN
+ *  `owl:onProperty` row resolves to `HAS_PROPERTY_KEY` — the defensive belt
+ *  that keeps a someValuesFrom restriction's scaffolding (which ALSO uses
+ *  `owl:onProperty`, just with a real verb) from ever being mistaken for a
+ *  cardinality restriction when both kinds' rows are scanned together (e.g.
+ *  chat.mjs's live wiring, which reads the whole taught-fact set at once).
+ *  Returns `[{ restriction, kind, n, onClass }, …]`, deterministic order
+ *  (sorted by restriction id). Pure, no I/O. */
+export function buildCardinalityRestrictions(rows) {
+  const onPropertyOf = new Map(); // restriction -> owl:onProperty's object
+  const kindOf = new Map();       // restriction -> { kind, n }
+  const onClassOf = new Map();    // restriction -> owl:onClass's object
+  for (const r of rows || []) {
+    if (!r || !r.subject || !r.predicate) continue;
+    if (isOnProperty(r.predicate)) onPropertyOf.set(r.subject, r.object);
+    else if (isOnClass(r.predicate)) onClassOf.set(r.subject, r.object);
+    else {
+      const kind = CARDINALITY_KIND_OF[String(r.predicate).trim().toLowerCase()];
+      if (!kind) continue;
+      const n = Number(r.object);
+      if (Number.isFinite(n)) kindOf.set(r.subject, { kind, n });
+    }
+  }
+  const restrictions = [];
+  for (const [restriction, { kind, n }] of kindOf) {
+    if (onPropertyOf.get(restriction) !== HAS_PROPERTY_KEY) continue; // not a cardinality restriction's own onProperty row — skip (the defensive belt, see doc comment)
+    const onClass = onClassOf.get(restriction);
+    if (!onClass) continue;
+    restrictions.push({ restriction, kind, n, onClass });
+  }
+  restrictions.sort((a, b) => a.restriction.localeCompare(b.restriction));
+  return restrictions;
+}
+
+// ---- scm-svf1: someValuesFrom restriction subsumption (W3C OWL 2 RL Table 9,
+// scm-svf1 — confirmed distinct from scm-svf2, which needs property
+// subsumption tmct can't teach yet, see this file's header comment) ----
+export const SCM_SVF_RULE = "someValuesFromSubsumption";
+export const ENTAILED_SCM_SVF_PROVENANCE = `entailed:${SCM_SVF_RULE}`;
+
+/**
+ * PURE scm-svf1: c1 someValuesFrom y1, c1 onProperty p, c2 someValuesFrom y2,
+ * c2 onProperty p, y1 ⊑ y2 (lifted through y1's FULL ⊑-ancestor closure, same
+ * lift discipline as cax-dw/cls-svf1) |= c1 ⊑ c2 — a schema-level fact about
+ * the restriction NODES themselves, TWO independently-declared restrictions
+ * being required to compare (unlike cardinality monotonicity/cax-maxc0 below,
+ * each sufficient from a SINGLE declared restriction). `restrictionEdges` is
+ * the SAME `[{ restriction, property, target }, …]` shape
+ * `deriveSomeValuesFromApplication` already takes (`property`/`target`
+ * already normFactTerm-normalized); `subClassEdges` is the ordinary
+ * `[[a,b], …]` shape every other rule in this file takes, a FIXED input never
+ * mutated by this function (so no fixpoint rounds are needed, same reasoning
+ * as `deriveTypePropagation`'s own doc comment). Restrictions are grouped by
+ * their (normalized) property — only restrictions sharing the SAME property
+ * are ever compared, matching the rule's own premise shape (`c1 onProperty p`,
+ * `c2 onProperty p`, the SAME p).
+ *
+ * Deliberately LIVE-CHASE ONLY for this build (see this file's header
+ * comment): never added to `syllogise()`'s materializing batch pass.
+ *
+ * Returns ONLY new `{ subject, object, viaY1, viaY2 }` conclusions (`subject`/
+ * `object` are the two restriction node ids, `viaY1`/`viaY2` the specific
+ * filler classes whose ⊑-relation licensed it), bounded by `budget`,
+ * focus-filtered, tautology- and dedup-screened, deterministic order. No I/O.
+ */
+export function deriveSomeValuesFromSubsumption(restrictionEdges, subClassEdges, { budget = 50, focus = null } = {}) {
+  const ancestorsOf = buildAncestorCloser(subClassEdges);
+
+  const byProperty = new Map(); // normalized property -> [{ restriction, target }]
+  for (const r of restrictionEdges || []) {
+    if (!r || !r.restriction || !r.property || !r.target) continue;
+    const pKey = normFactTerm(r.property);
+    if (!byProperty.has(pKey)) byProperty.set(pKey, []);
+    byProperty.get(pKey).push({ restriction: r.restriction, target: r.target });
+  }
+
+  const present = new Set(); // "c1\0c2" for a subClassOf edge already known between two restriction nodes (dedup/novelty screen, same discipline as every other rule here)
+  for (const [a, b] of subClassEdges || []) if (a && b) present.add(`${a}${SEP}${b}`);
+
+  const focusSet = focus instanceof Set ? (focus.size ? focus : null) : normalizeFocus(focus);
+  const inFocus = (c1, c2) => !focusSet || focusSet.has(c1) || focusSet.has(c2);
+
+  const candidates = [];
+  for (const [, group] of byProperty) {
+    if (group.length < 2) continue; // need TWO independently-declared restrictions to compare
+    for (const r1 of group) {
+      for (const r2 of group) {
+        if (r1.restriction === r2.restriction) continue;    // tautology screen
+        if (r1.target === r2.target) continue;              // same filler, same node by construction — no new fact
+        if (!ancestorsOf(r1.target).has(r2.target)) continue; // y1 must be ⊑ y2 (the FULL ⊑-lift)
+        const key = `${r1.restriction}${SEP}${r2.restriction}`;
+        if (present.has(key)) continue;                      // dedup / novelty screen
+        if (!inFocus(r1.restriction, r2.restriction)) continue; // focus-connection screen
+        candidates.push([r1.restriction, r2.restriction, r1.target, r2.target, key]);
+      }
+    }
+  }
+  candidates.sort((a, b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]));
+  const derived = [];
+  const derivedKeys = new Set();
+  for (const [c1, c2, y1, y2, key] of candidates) {
+    if (derivedKeys.has(key)) continue;
+    if (derived.length >= budget) break;
+    derivedKeys.add(key);
+    derived.push({ subject: c1, object: c2, viaY1: y1, viaY2: y2 });
+  }
+  return derived;
+}
+
+// ---- shared machinery for cardinality monotonicity / cax-maxc0: both are
+// single-premise-sufficient (no SECOND independently-taught restriction
+// needed, unlike scm-svf1 above) — a class's OWN declared cardinality
+// restriction, walked through its FULL ⊑-ancestor closure (same lift
+// discipline as every other rule in this file). ----
+
+/** Shared bounded proof search for `proveCardinalityAtLeast`/
+ *  `proveMaxCardinalityZeroDenial`: walks `subject`'s OWN ⊑-ancestor closure
+ *  (itself first, then ancestors — the FULL lift, same discipline as cax-dw/
+ *  cls-svf1) looking for a class with a DIRECTLY declared cardinality
+ *  restriction satisfying `matches(record)`. `cardinalityRestrictionEdges` is
+ *  `buildCardinalityRestrictions`'s own output shape. Returns the first
+ *  `{ viaClass, viaRestriction, record }` found (deterministic — the ancestor
+ *  walk's order is fixed for a given edge set) or null. `budget` bounds how
+ *  many candidate classes (subject + ancestors) are examined, a QUERY-rooted
+ *  proof search in the same spirit as `findIsaChain`'s `maxHops`, not a
+ *  batch-derivation cap. Pure, no I/O. */
+function findOwnCardinalityRestriction(subClassEdges, cardinalityRestrictionEdges, subject, matches, { budget = 20, focus = null } = {}) {
+  if (!subject) return null;
+  const ancestorsOf = buildAncestorCloser(subClassEdges);
+  const focusSet = focus instanceof Set ? (focus.size ? focus : null) : normalizeFocus(focus);
+  const inFocus = (c) => !focusSet || focusSet.has(subject) || focusSet.has(c);
+  const classToRestrictions = new Map(); // class -> Set(restriction ids DIRECTLY declared class ⊑ restriction)
+  for (const [a, b] of subClassEdges || []) {
+    if (!a || !b) continue;
+    if (!classToRestrictions.has(a)) classToRestrictions.set(a, new Set());
+    classToRestrictions.get(a).add(b);
+  }
+  const restrictionsByRid = new Map((cardinalityRestrictionEdges || []).map((r) => [r.restriction, r]));
+  let checked = 0;
+  for (const c of [subject, ...ancestorsOf(subject)]) {
+    if (checked >= budget) break;
+    checked += 1;
+    if (!inFocus(c)) continue;
+    for (const rid of classToRestrictions.get(c) || []) {
+      const rec = restrictionsByRid.get(rid);
+      if (rec && matches(rec)) return { viaClass: c, viaRestriction: rid, record: rec };
+    }
+  }
+  return null;
+}
+
+// ---- cardinality monotonicity (confirmed OUTSIDE OWL 2 RL's own decidable
+// profile, see this file's header comment) ----
+export const SCM_CARD_RULE = "cardinalityMonotonicity";
+
+/**
+ * PURE: given one class `subject`'s OWN declared cardinality restriction
+ * (kind ∈ {exactly,min}, n, onClass — lifted through `subject`'s FULL
+ * ⊑-ancestor closure, so an inherited restriction counts too) and a QUERIED
+ * (`onClass`, `m`), proves "`subject` has at least `m` `onClass`" whenever
+ * `onClass` matches and `n ≥ m`. A bounded, QUERY-rooted proof (there is no
+ * fixed enumerable "new fact" to write — `m` is query-specific, a different
+ * shape than every derivation-producing rule above) — genuinely LIVE-CHASE
+ * ONLY (see this file's header comment: this is outside OWL 2 RL's own
+ * profile, not merely deferred from the batch pass like scm-svf1 above).
+ *
+ * Returns the witnessing `{ subject, object: onClass, m, n, kind, viaClass,
+ * viaRestriction }` or null (`viaClass` is the specific class in `subject`'s
+ * ⊑-closure the restriction was actually declared against — itself, for a
+ * direct hit, or an ancestor, for the lift). No I/O.
+ */
+export function proveCardinalityAtLeast(subClassEdges, cardinalityRestrictionEdges, subject, onClass, m, opts = {}) {
+  if (!onClass || !Number.isFinite(m)) return null;
+  const found = findOwnCardinalityRestriction(
+    subClassEdges, cardinalityRestrictionEdges, subject,
+    (rec) => rec.onClass === onClass && (rec.kind === "exactly" || rec.kind === "min") && rec.n >= m,
+    opts,
+  );
+  return found ? { subject, object: onClass, m, n: found.record.n, kind: found.record.kind, viaClass: found.viaClass, viaRestriction: found.viaRestriction } : null;
+}
+
+// ---- cax-maxc0: max-cardinality-0 as encoded negation (grounded in the real
+// W3C OWL 2 RL `cls-maxc1` ABox contradiction rule via a one-step universal
+// generalization — see this file's header comment; `cax-` prefix per this
+// ladder's "produces a provable no" naming convention, same epistemic status
+// as cax-dw) ----
+export const CAX_MAXC0_RULE = "maxCardinalityZero";
+
+/**
+ * PURE: `subject` ⊑ r (lifted through `subject`'s FULL ⊑-ancestor closure), r
+ * a maxCardinality-0 restriction (property `has`, onClass `onClass`) |= "no
+ * `subject` has a `onClass`" — the universal-generalization bridge from
+ * `cls-maxc1`'s per-individual ABox contradiction (asserting a witnessed
+ * individual would be inconsistent) to a class-level provable negative: since
+ * NO witness can exist without contradiction, the general "no" is sound.
+ * Same query-rooted, LIVE-CHASE-ONLY scope as `proveCardinalityAtLeast`
+ * (never `syllogise()`'s batch pass). NEVER infers "no" from absence — a
+ * subject with no declared max-0 restriction at all simply returns null
+ * (matching cax-dw's own discipline, `deriveDisjointViolations`'s doc
+ * comment above).
+ *
+ * Returns `{ subject, object: onClass, viaClass, viaRestriction }` or null
+ * (`viaClass` — itself, for a direct hit, or an ancestor, for the lift). No
+ * I/O.
+ */
+export function proveMaxCardinalityZeroDenial(subClassEdges, cardinalityRestrictionEdges, subject, onClass, opts = {}) {
+  if (!onClass) return null;
+  const found = findOwnCardinalityRestriction(
+    subClassEdges, cardinalityRestrictionEdges, subject,
+    (rec) => rec.onClass === onClass && rec.kind === "max" && rec.n === 0,
+    opts,
+  );
+  return found ? { subject, object: onClass, viaClass: found.viaClass, viaRestriction: found.viaRestriction } : null;
 }
 
 /**

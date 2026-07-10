@@ -72,12 +72,15 @@ export function seededShuffle(arr, rng) {
 }
 
 // ---- fixture: the committed lexicon's class-noun vocabulary ----
-// PLAN_OSS_ACE_PARSER.md's ace-owl extraction (landed concurrently with this
-// dispatch) moved the canonical lexicon-core.json out of src/grammar/ into
-// the extracted workspace package — src/grammar/lexicon.mjs's own header
-// comment: "this repo no longer carries its own lexicon-core.json". Same
-// file, same vocabulary, new home.
-const LEXICON_PATH = join(ROOT, "packages", "ace-owl", "src", "lexicon-core.json");
+// PLAN_OSS_ACE_PARSER.md's ace-owl extraction briefly moved lexicon-core.json
+// out of src/grammar/, but that extraction was REVERTED on operator
+// instruction (HANDOVER.md, 2026-07-10 — the unpublished-package incident):
+// the parser and its lexicon are back in src/grammar/ as the real
+// implementation, and the packages/ace-owl/ workspace is gone. This path had
+// gone stale pointing at the removed workspace (found while regenerating
+// cases.jsonl for the scm-svf1/cardinality-monotonicity/cax-maxc0 build) —
+// fixed back to the real committed location.
+const LEXICON_PATH = join(ROOT, "src", "grammar", "lexicon-core.json");
 const RAW_LEXICON = JSON.parse(readFileSync(LEXICON_PATH, "utf8"));
 const lexicon = loadLexicon();
 
@@ -504,8 +507,17 @@ function b2Svf1Apply(rng) {
 }
 
 // ======================================================================
-// INF-C1 — c1Cardinality: (exactly n, queried min m≤n) / (max 0, existence)
-// GENERATED NOW, ceiling until §4 stage 4 (cardinality entailment rules).
+// INF-C1 — c1Cardinality: (exactly n, queried min m≤n) / (max 0, existence).
+// FIXED IN PLACE (this build, PLAN_INFERENCE_TESTING.md §4 stage 4): both
+// variants now carry the TRUE classical verdict, proven by
+// proveCardinalityAtLeast/proveMaxCardinalityZeroDenial (src/syllogise.mjs) —
+// the generator's own `m = 1 + (i % n)` construction makes `m ≤ n`
+// unconditionally true, so exactly-min is always "yes"; "has at most 0" is an
+// honest encoded negation, so max0 is always "no". Leaving these pinned at
+// the old placeholder "unproven" now that the rules genuinely prove them
+// would itself be a fabrication-check regression (a real yes/no answer
+// graded against a stale "unproven" literal is exactly what grade.mjs's
+// fabrication check flags).
 // ======================================================================
 function c1Cardinality(rng) {
   const cases = [];
@@ -518,15 +530,21 @@ function c1Cardinality(rng) {
     cursor = next;
     const [n1, n2] = picked;
     const n = 2 + (i % 3); // 2..4
-    const m = 1 + (i % n); // 1..n
+    const m = 1 + (i % n); // 1..n — always ≤ n by construction
     const premises = [`every ${n1} has exactly ${n} ${plural(n2)}`];
     const query = `does every ${n1} have at least ${m} ${m === 1 ? n2 : plural(n2)}`;
-    checkEntailed(`c1-exact-${i + 1}`, premises, []);
+    const r = `exactly-${n}-${n2}`;
+    const entailed = [
+      { subject: n1, predicate: "rdfs:subClassOf", object: r },
+      { subject: r, predicate: "owl:cardinality", object: String(n) },
+      { subject: r, predicate: "owl:onClass", object: n2 },
+    ];
+    checkEntailed(`c1-exact-${i + 1}`, premises, entailed);
     cases.push(mkCase({
       band: "INF-C1", template: "c1Cardinality", variant: "exactly-min",
-      arms: ["chat"], checkType: "isa",
-      premises, query, expect: { verdict: "unproven", entailed: [] },
-      note: "cardinality monotonicity (exactly n ⊢ min m≤n) is real classical entailment, but no cardinality rule is implemented — ceiling until §4 stage 4.",
+      arms: ["kernel", "chat"], checkType: "isa",
+      premises, query, expect: { verdict: "yes", entailed, proof: true },
+      note: "cardinality monotonicity (exactly n ⊢ min m≤n): proveCardinalityAtLeast (src/syllogise.mjs) proves it directly from the restriction's own declared n against the queried m — sound whenever m≤n, which this template's own m=1+(i%n) construction always satisfies.",
     }));
   }
   for (let i = 0; i < 15; i += 1) {
@@ -535,12 +553,71 @@ function c1Cardinality(rng) {
     const [n1, n2] = picked;
     const premises = [`every ${n1} has at most 0 ${plural(n2)}`];
     const query = `does a ${n1} have a ${n2}`;
-    checkEntailed(`c1-max0-${i + 1}`, premises, []);
+    const r = `max-0-${n2}`;
+    const entailed = [
+      { subject: n1, predicate: "rdfs:subClassOf", object: r },
+      { subject: r, predicate: "owl:maxCardinality", object: "0" },
+      { subject: r, predicate: "owl:onClass", object: n2 },
+    ];
+    checkEntailed(`c1-max0-${i + 1}`, premises, entailed);
     cases.push(mkCase({
       band: "INF-C1", template: "c1Cardinality", variant: "max0",
-      arms: ["chat"], checkType: "isa",
-      premises, query, expect: { verdict: "unproven", entailed: [] },
-      note: "found capability (§5): 'has at most 0' parses today as an honest encoded negation (owl:maxCardinality 0), but no rule yet CONSUMES it to answer the existence query — ceiling until §4 stage 4.",
+      arms: ["kernel", "chat"], checkType: "isa",
+      premises, query, expect: { verdict: "no", entailed, proof: true },
+      note: "cax-maxc0 (§5's found capability, now consumed): 'has at most 0' is an honest encoded negation (owl:maxCardinality 0) — proveMaxCardinalityZeroDenial (src/syllogise.mjs) proves the class-level 'no' via a one-step universal generalization from cls-maxc1's ABox contradiction rule.",
+    }));
+  }
+  return cases;
+}
+
+// ---- INF-C1 — c1ScmSvfApply: scm-svf1 (someValuesFrom restriction
+// SUBSUMPTION, W3C OWL 2 RL Table 9 — see src/syllogise.mjs's own header
+// comment for why scm-svf2, the property-subsumption sibling rule, is out of
+// scope: tmct's ACE grammar has no way to teach property subsumption at all).
+// Two INDEPENDENTLY taught someValuesFrom restrictions sharing the SAME
+// verb/property, whose filler classes are related by a taught ⊑ — r1 via
+// "every N1 that VERBs a N2 is a N3" (declares ∃VERB.N2), a taught "every N2
+// is a N2b" (N2 ⊑ N2b), r2 via "every N4 that VERBs a N2b is a N5" (declares
+// ∃VERB.N2b) — entail the restriction NODES themselves are ⊑-related (r1 ⊑
+// r2), NOT r1's further N1⊓∃VERB.N2 intersection step (out of scope per the
+// same header comment, mirroring b2Svf1Apply's own deliberately narrower
+// claim). Query asks about the two restriction nodes directly
+// ("is a some-VERB-N2 a some-VERB-N2b"), a plain "is X a Y" surface both the
+// kernel arm's QUERY_RE and chat.mjs's ISA_ASK_RE already parse — unlike
+// b2Svf1Apply's restriction-node QUERY (kernel-only), this one names NO
+// individual at all, so both arms apply. ----
+function c1ScmSvfApply(rng) {
+  const cases = [];
+  const shuffled = seededShuffle(CLASS_NOUNS, rng);
+  let cursor = 0;
+  for (let i = 0; i < 10; i += 1) {
+    const { picked, next } = pickClean(shuffled, cursor, 6);
+    cursor = next;
+    const [n1, n2, n3, n2b, n4, n5] = picked;
+    const verb = VERB_LEMMAS_NO_PREP[i % VERB_LEMMAS_NO_PREP.length];
+    const vform = thirdPerson(verb);
+    const r1 = `some-${vform}-${n2}`;
+    const r2 = `some-${vform}-${n2b}`;
+    const premises = [
+      `every ${n1} that ${vform} a ${n2} is a ${n3}`,
+      `every ${n2} is a ${n2b}`,
+      `every ${n4} that ${vform} a ${n2b} is a ${n5}`,
+    ];
+    const query = `is a ${r1} a ${r2}`;
+    const entailed = [
+      { subject: r1, predicate: "owl:onProperty", object: `tmct:${vform}` },
+      { subject: r1, predicate: "owl:someValuesFrom", object: n2 },
+      { subject: n2, predicate: "rdfs:subClassOf", object: n2b },
+      { subject: r2, predicate: "owl:onProperty", object: `tmct:${vform}` },
+      { subject: r2, predicate: "owl:someValuesFrom", object: n2b },
+      { subject: r1, predicate: "rdfs:subClassOf", object: r2 },
+    ];
+    checkEntailed(`c1-scmsvf-${i + 1}`, premises, entailed);
+    cases.push(mkCase({
+      band: "INF-C1", template: "c1ScmSvfApply", variant: "positive",
+      arms: ["kernel", "chat"], checkType: "isa",
+      premises, query, expect: { verdict: "yes", entailed, proof: true },
+      note: "scm-svf1 (W3C OWL 2 RL Table 9): two independently taught someValuesFrom restrictions sharing the same property, whose filler classes are ⊑-related, entail the restriction-to-restriction subsumption itself (src/syllogise.mjs's deriveSomeValuesFromSubsumption) — not the further owl:intersectionOf step, mirroring b2Svf1Apply's own deliberately narrower scope.",
     }));
   }
   return cases;
@@ -581,7 +658,7 @@ function c2Inconsistent(rng) {
 const TEMPLATE_SLUG = {
   a1Lookup: "lookup", a2ChainLen2: "chain2", b1Disjoint: "disjoint",
   b2ChainLenK: "chaink", b2Svf1: "svf1", b2Svf1Apply: "svf1apply",
-  c1Cardinality: "card", c2Inconsistent: "inconsistent",
+  c1Cardinality: "card", c1ScmSvfApply: "scmsvf", c2Inconsistent: "inconsistent",
 };
 function assignIds(cases) {
   const counters = new Map();
@@ -607,6 +684,7 @@ export function generateCases({ seed = DEFAULT_SEED } = {}) {
     b2Svf1: b2Svf1(rng),
     b2Svf1Apply: b2Svf1Apply(rng),
     c1Cardinality: c1Cardinality(rng),
+    c1ScmSvfApply: c1ScmSvfApply(rng),
     c2Inconsistent: c2Inconsistent(rng),
   };
   const all = Object.values(groups).flat();
