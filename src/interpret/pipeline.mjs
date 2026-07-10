@@ -34,6 +34,15 @@ import { noiseStripStrategy } from "./strategies/noise-strip.mjs";
 // ace-less registry instead of throwing over an undeclared identifier. (ACE is
 // async-only anyway, so the sync parseQuery path the viewer uses never ran it.)
 import { aceStrategy } from "./strategies/ace.mjs";
+// Optional Node-only construction-grammar bank (PLAN_ADVANCED_GRAMMAR.md track
+// (d)) — same viewer-bundle boundary as ACE and the wink adapter: the loader
+// reads its committed TOML data via Node fs/path (interpret/strategies/
+// constructions.mjs), so an inlining viewer bundle strips this import too; the
+// same `typeof` guard below degrades to a constructions-less registry instead
+// of throwing over an undeclared identifier (test/ask-nlp.test.mjs's "viewer
+// bundle without wink" test proves the boundary — its bundled file list never
+// includes this strategy file, matching ace.mjs's own exclusion there).
+import { constructionsStrategy } from "./strategies/constructions.mjs";
 import { mergeStrategyResults } from "./merge.mjs";
 // Optional Node-only wink adapter — same viewer-bundle boundary as ask.mjs: an
 // inlining bundle strips this import and the `typeof` read below degrades to
@@ -52,9 +61,21 @@ import { nlpAdapter } from "../ask-nlp.mjs";
  *  adds declarative-fragment reach to interpret() while leaving the sync spine
  *  byte-stable (see strategies/ace.mjs for the full rationale). The `typeof` guard
  *  mirrors the nlpAdapter degradation: a stripped ACE import (viewer bundle) leaves
- *  the identifier undeclared, so the registry is ace-less there instead of a crash. */
+ *  the identifier undeclared, so the registry is ace-less there instead of a crash.
+ *  interpret/strategies/constructions.mjs (PLAN_ADVANCED_GRAMMAR.md track (d)) is
+ *  the construction-grammar template bank — data-driven (data/templates/
+ *  constructions/*.toml), registered as its own additive, own-class
+ *  ("construction") strategy at grammar-level confidence (0.9) so it outranks a
+ *  same-text keyword-spot guess outright instead of colliding with it (see that
+ *  file's header for why: keyword-spot mis-parses the genitive/compound surface
+ *  forms this bank exists to fix). Sync (unlike ACE), so it participates on the
+ *  parseQuery path too, not just interpret(). */
 // eslint-disable-next-line no-undef
-const OPTIONAL_STRATEGIES = typeof aceStrategy !== "undefined" ? [aceStrategy] : [];
+const OPTIONAL_STRATEGIES = [
+  ...(typeof aceStrategy !== "undefined" ? [aceStrategy] : []),
+  // eslint-disable-next-line no-undef
+  ...(typeof constructionsStrategy !== "undefined" ? [constructionsStrategy] : []),
+];
 export const STRATEGIES = [grammarStrategy, keywordSpotStrategy, noiseStripStrategy, ...OPTIONAL_STRATEGIES];
 
 /** The documented normalization pre-pass: whitespace-collapse + the §3.5

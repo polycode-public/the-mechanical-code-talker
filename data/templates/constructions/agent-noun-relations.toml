@@ -1,0 +1,98 @@
+# data/templates/constructions/agent-noun-relations.toml — construction-grammar
+# template bank (PLAN_ADVANCED_GRAMMAR.md track (d)): per-construction closed
+# template families as DATA, loaded by src/interpret/strategies/constructions.mjs
+# beside grammar.mjs's anchored T1-T10 grammar (this file's constructions are the
+# next numbers, T11-T13 — see the `id` field on each [[construction]] below; do
+# not renumber grammar.mjs's own T1-T10, this is an ADDITIVE, own-class strategy).
+#
+# The linguistic point (Construction Grammar, Goldberg 1995/2006): the SAME
+# underlying relation ("things that import X") is realized by a developer through
+# several distinct surface CONSTRUCTIONS — a prepositional NP ("importers of X"),
+# a genitive-'s NP ("X's importers"), and a bare compound-juxtaposition NP ("X
+# importers") — each its own grammatical FORM pairing with the same MEANING. This
+# is a genuine gap, not a duplicate of grammar.mjs's T1-T10 or normalize.mjs's
+# PHRASING_FRAMES: the "of"-NP form already reaches the graph correctly via the
+# keyword-spot strategy's decomposition (interpret/strategies/keywords.mjs), but
+# the genitive/compound forms do NOT — keyword-spot mis-parses "store.mjs's
+# importers" / "store.mjs importers" as shape "forward" (reading store.mjs as the
+# grammatical SUBJECT doing the importing) instead of "reverse" (store.mjs is the
+# OBJECT being imported; the agent noun names WHO does the verb TO it) — confirmed
+# live before this file existed. These three constructions fix that, and route
+# the "of" form through the same anchored, closed table for consistency.
+#
+# Two [[relation]] tables define the closed AGENT-NOUN vocabulary (a plural
+# nominalization of a relation verb -> {kind, entityType?}), validated at load
+# time by the strategy against RELATIONS' own kind vocabulary (ask-vocab.mjs) and
+# ENTITY_TO_TYPE's canonical class names — an unrecognized kind/entityType is
+# REJECTED (the entry is dropped, never guessed into the nearest match), same
+# "closed is deliberate" discipline as ask-vocab.mjs's RELATIONS table itself.
+#
+# Deliberately narrow, hand-curated set (not exhaustive): each noun is one a
+# developer plausibly types for THIS codebase's relations, same judgment-call
+# discipline ask-vocab.mjs's file header already states. "testers"/"containers"/
+# "exporters"/"definers" were considered and left out — too easily confused with
+# unrelated code-domain nouns (a Docker "container", a DI "container", a test
+# "runner") or simply not natural developer phrasing; a false-positive match on
+# an unrelated identifier is worse than an honest miss, so the set stays small.
+
+[[relation]]
+noun = "importers"
+kind = "imports"
+entityType = "Module"     # the imports edge is module-grain only
+
+[[relation]]
+noun = "callers"
+kind = "calls"
+# no entityType: calls resolves at function/method OR module grain (ask.mjs's
+# own fine/coarse call-edge handling) — leaving this unset means entityType null,
+# "any grain", exactly like grammar.mjs's own bare "what calls X" (T3 forward).
+
+[[relation]]
+noun = "users"
+kind = "uses"
+# uses is itself a query-side union (imports + calls + callsSymbol, ask-vocab.mjs)
+# — no single entityType is correct, so this stays grain-agnostic too.
+
+[[relation]]
+noun = "subclasses"
+kind = "inherits"
+entityType = "Class"      # inherits is Class -> Class only
+
+# ---- constructions: pattern -> AST skeleton -------------------------------
+# Pattern DSL (src/interpret/strategies/constructions.mjs compiles this):
+#   <AGENT>  one of the [[relation]] nouns above (closed alternation, longest
+#            noun first so e.g. a hypothetical multi-word noun would never be
+#            shadowed by a shorter one sharing a prefix)
+#   <TERM>   a free-text object term, non-greedy — the SAME "capture the rest,
+#            let resolveObject do real matching" contract every anchored
+#            template in grammar.mjs already uses
+#   any other text is a literal (case-insensitive, whitespace-normalized)
+# Every construction here compiles to shape="reverse": the AGENT noun names the
+# relation's SUBJECT side, <TERM> is the OBJECT being related-to — precisely
+# grammar.mjs's own T2 "reverse" shape (entityType/modifier/kind/object), just
+# reached from a different surface form. A future construction needing a
+# different `shape` is free to declare one; the strategy loader supports the
+# full anchored-template shape vocabulary (ask/reverse/forward/where/when/
+# meta/mentions), not "reverse" exclusively — this bank simply doesn't need the
+# others yet.
+
+[[construction]]
+id = "T11"
+name = "agent-noun-of"
+comment = "\"importers of X\" -> reverse imports X. Also reached (correctly) by keyword-spot today; kept here for a single closed, anchored source of truth and byte-identical precedence with the other two surface forms below."
+pattern = "<AGENT> of <TERM>"
+shape = "reverse"
+
+[[construction]]
+id = "T12"
+name = "agent-noun-genitive"
+comment = "\"X's importers\" -> reverse imports X. The genitive-'s NP; keyword-spot currently mis-reads this as forward (X importing things) — this construction is the fix."
+pattern = "<TERM>'s <AGENT>"
+shape = "reverse"
+
+[[construction]]
+id = "T13"
+name = "agent-noun-compound"
+comment = "\"X importers\" (bare compound-noun juxtaposition, no possessive marker or preposition) -> reverse imports X. The same mis-parse as T12's genitive form, without the apostrophe; a developer drops the 's as often as they keep it."
+pattern = "<TERM> <AGENT>"
+shape = "reverse"
