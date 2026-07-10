@@ -301,3 +301,64 @@ test("bridge: a term unknown to BOTH graphs keeps the honest code-map ToolError"
     );
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
+
+// ---- security fix regression: a crafted/corrupted graph.json carrying a `site.path` that
+// escapes the repo root (e.g. "../secret.txt") must never reach fs. Real repoRoot + a real
+// sibling "secret" file OUTSIDE it, so an unguarded readFile would genuinely read it. ----
+
+/** A temp repo whose graph.json has a Function individual with NO backing Module individual —
+ *  contextPlan/siteOf then fall back to the function's own (attacker-controlled) site.path as
+ *  moduleLabel — plus a real sibling file one level above repoRoot the traversal path targets. */
+async function repoWithTraversalGraph() {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-traversal-"));
+  const secretMarker = `TOP-SECRET-${Date.now()}`;
+  // A real sibling file OUTSIDE repoRoot (dir) — an unguarded readFile would genuinely read it.
+  const secretPath = join(dir, "..", "tmct-secret-sibling.txt");
+  await writeFile(secretPath, secretMarker);
+  const evilRelPath = "../tmct-secret-sibling.txt";
+  const graph = {
+    generated_at: "2026-07-10T00:00:00.000Z",
+    objectProperties: [],
+    individuals: [
+      {
+        id: "fn:evil#pwn", label: "pwn", class: "Function", derived_from: [], mentions: [],
+        attributes: [{ prop: "seon:startsAt", key: "site", value: `${evilRelPath}:1-3` }],
+      },
+    ],
+  };
+  await mkdir(join(dir, ".tmct"), { recursive: true });
+  const graphFile = join(dir, ".tmct", "graph.json");
+  await writeFile(graphFile, JSON.stringify(graph));
+  return { dir, secretPath, secretMarker, config: { graphFile }, source: { fetchEntities: async () => graph } };
+}
+
+test("security: tmct_snippet refuses a path-traversal site.path end-to-end", async () => {
+  const { dir, secretPath, config: repoConfig, source } = await repoWithTraversalGraph();
+  try {
+    await assert.rejects(
+      dispatchTool("tmct_snippet", { symbol: "pwn" }, { config: repoConfig, source }),
+      (e) => {
+        assert.ok(e instanceof ToolError, "a ToolError, not a raw fs error or leaked content");
+        assert.match(e.message, /refusing to read outside the repository root/);
+        assert.match(e.message, /tmct-secret-sibling\.txt/, "names the offending path");
+        return true;
+      },
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+    await rm(secretPath, { force: true });
+  }
+});
+
+test("security: tmct_context never leaks a path-traversal site.path's content end-to-end", async () => {
+  const { dir, secretPath, secretMarker, config: repoConfig, source } = await repoWithTraversalGraph();
+  try {
+    // buildContextBundle swallows fs errors gracefully (degraded bundle, no anchor body) —
+    // it must NOT throw a raw fs error and, critically, must never include the secret content.
+    const text = await dispatchTool("tmct_context", { symbol: "pwn", depth: "full" }, { config: repoConfig, source });
+    assert.doesNotMatch(text, new RegExp(secretMarker), "secret sibling content must never leak into the bundle");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+    await rm(secretPath, { force: true });
+  }
+});

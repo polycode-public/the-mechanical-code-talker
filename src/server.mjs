@@ -15,8 +15,9 @@
 // otherwise hand-compose into one deterministic round-trip. See ask.mjs.
 
 import { readFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname } from "node:path";
 import { ToolError } from "./config.mjs";
+import { sliceSpan, readSpanSafe } from "./source-slice.mjs";
 import * as defaultSource from "./source.mjs";
 import {
   parseEntities,
@@ -231,14 +232,11 @@ export async function buildContextBundle(args, { config, source = defaultSource,
   const repoRoot = dirname(dirname(config.graphFile));
   let lines = null;
   if (plan.moduleLabel) {
-    try { lines = (await readFile(join(repoRoot, plan.moduleLabel), "utf8")).split("\n"); }
+    try { ({ lines } = await readSpanSafe({ readFile, repoRoot, path: plan.moduleLabel })); }
     catch { lines = null; }
   }
   const lineAt = (n) => (lines && lines[n - 1] != null ? lines[n - 1].trim() : "");
-  const sliceBody = (start, end) => {
-    const e = Math.min(lines.length, Math.min(end, start + SNIPPET_MAX_LINES - 1));
-    return lines.slice(start - 1, e).map((l, i) => `${start + i}\t${l}`).join("\n");
-  };
+  const sliceBody = (start, end) => sliceSpan(lines, start, end, SNIPPET_MAX_LINES).text;
   const out = [
     `Edit context for ${plan.moduleLabel} [${tier}${trim ? " secondary" : ""}] — assembled from the typed graph + that file. ` +
       "You do NOT need to Read it; write the new code directly after reviewing this.",
@@ -266,16 +264,15 @@ export async function buildContextBundle(args, { config, source = defaultSource,
     for (const cb of plan.calleeBodies) {
       if (budget <= 0) break;
       const start = cb.site.start;
-      const end = Math.min(cb.site.end, start + budget - 1);
       const fromThisFile = cb.site.path === plan.moduleLabel;
       const bodyLines = fromThisFile && lines
         ? lines
-        : await readFile(join(repoRoot, cb.site.path), "utf8").then((t) => t.split("\n")).catch(() => null);
+        : await readSpanSafe({ readFile, repoRoot, path: cb.site.path }).then((r) => r.lines).catch(() => null);
       if (!bodyLines) continue;
-      const e = Math.min(bodyLines.length, end);
+      const sliced = sliceSpan(bodyLines, start, cb.site.end, budget);
       out.push(`\n## inlined callee body (depth-1 in-repo call): ${cb.label} @ ${cb.site.path}:${start}-${cb.site.end}`);
-      out.push(bodyLines.slice(start - 1, e).map((l, i) => `${start + i}\t${l}`).join("\n"));
-      budget -= (e - start + 1);
+      out.push(sliced.text);
+      budget -= (sliced.end - start + 1);
     }
   }
   if (mask.classMembers && plan.classMembers && plan.classMembers.members.length) {
@@ -381,16 +378,16 @@ export async function dispatchTool(name, args, { config, source = defaultSource 
     }
     // repo root = the dir containing .tmct/ (graphFile = <repo>/.tmct/graph.json)
     const repoRoot = dirname(dirname(config.graphFile));
-    const abs = join(repoRoot, site.path);
-    let text;
-    try { text = await readFile(abs, "utf8"); }
-    catch (e) { throw new ToolError(`could not read ${site.path} (${e?.code || e?.message || e})`); }
-    const lines = text.split("\n");
-    const start = Math.max(1, site.start);
-    let end = Math.min(lines.length, site.end);
-    let truncated = false;
-    if (end - start + 1 > SNIPPET_MAX_LINES) { end = start + SNIPPET_MAX_LINES - 1; truncated = true; }
-    const body = lines.slice(start - 1, end).map((l, i) => `${start + i}\t${l}`).join("\n");
+    let sliced;
+    try {
+      sliced = await readSpanSafe({
+        readFile, repoRoot, path: site.path, start: site.start, end: site.end, maxLines: SNIPPET_MAX_LINES,
+      });
+    } catch (e) {
+      if (e instanceof ToolError) throw e; // path-traversal guard: message already names the offending path
+      throw new ToolError(`could not read ${site.path} (${e?.code || e?.message || e})`);
+    }
+    const { text: body, truncated } = sliced;
     const span = site.end > site.start ? `${site.start}-${site.end}` : `${site.start}`;
     const header = `${match.label} — ${match.class || "Entity"} @ ${site.path}:${span}`;
     const note = truncated ? `\n… (truncated to ${SNIPPET_MAX_LINES} lines; full span ${span})` : "";
