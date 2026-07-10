@@ -39,3 +39,12 @@ export { foldSessionLogs } from "./memory/fold.mjs";
 // (docs/adapter-contract.md): registerProvider() plugs a producer in;
 // fetchEntities() is the one read path.
 export { fetchEntities, registerProvider } from "./source.mjs";
+
+// `tmct init` onboarding (also reachable as the `./init` subpath export).
+// init.mjs and toml-config.mjs each export a same-named `CONFIG_FILE`
+// constant ("tmct.toml") — aliased here so both can ride the one `.` entry
+// point without colliding.
+export { initRepo, defaultConfig, renderTomlConfig, PERSONA_PRESETS, CONFIG_FILE as INIT_CONFIG_FILE } from "./init.mjs";
+
+// tmct.toml loading (also reachable as the `./toml-config` subpath export).
+export { CONFIG_FILE as TOML_CONFIG_FILE } from "./toml-config.mjs";

@@ -53,7 +53,10 @@
     "./graph-service": "./src/providers/graph-service.mjs",
     "./providers/fixture": "./src/providers/fixture.mjs",
     "./providers/bootstrap": "./src/providers/bootstrap.mjs",
-    "./conformance": "./src/conformance.mjs"
+    "./conformance": "./src/conformance.mjs",
+    "./init": "./src/init.mjs",
+    "./extensions": "./src/extensions.mjs",
+    "./toml-config": "./src/toml-config.mjs"
   },
   "files": [
     "bin/",
