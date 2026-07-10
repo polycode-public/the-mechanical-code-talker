@@ -919,6 +919,14 @@ const THANKS = new Set([
   "thanks", "thank you", "thankyou", "thx", "ty", "ta", "cheers", "nice one",
   "much appreciated", "cool thanks", "many thanks", "much obliged", "ta very much",
   "cheers mate", "cheers for that", "tks", "sweet thanks", "nice",
+  // "brilliant" (playtest sprint round 3, 2026-07-10): a UK-English enthusiasm
+  // interjection functioning as a bare acknowledgement, the same shape as
+  // "nice"/"cheers" just above — "brilliant, that's all I needed" hit the raw
+  // grammar wall via item 2's own multi-clause scan (which deliberately checks
+  // THANKS only, not OK_ACK — see farewellOrThanksSignal's own docblock for why
+  // "ok"/"cool"/"right" stay excluded there) because "brilliant" wasn't in
+  // EITHER closed set yet.
+  "brilliant",
   // "ta for that" (Tier 6 playtest): "cheers for that" was already here, but
   // its "ta" sibling (both dropped-word forms of the SAME "thanks for that"
   // shape) was missing — fell to the generic orientation card via
