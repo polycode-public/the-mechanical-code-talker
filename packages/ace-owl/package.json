@@ -1,0 +1,51 @@
+{
+  "name": "@polycode-projects/ace-owl",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "description": "A deterministic, dependency-free, ESM controlled-English -> OWL-triples parser. No Prolog runtime, no NLP model — a small, declared-lexicon sub-fragment inspired by Attempto Controlled English (ACE), runnable anywhere JS runs (Node, browser).",
+  "keywords": [
+    "ace",
+    "owl",
+    "rdf",
+    "controlled-natural-language",
+    "controlled-english",
+    "nlp",
+    "ontology",
+    "knowledge-graph",
+    "semantic-web",
+    "parser"
+  ],
+  "license": "MPL-2.0",
+  "author": "Polycode Limited",
+  "homepage": "https://gitlab.com/polycode-projects/the-mechanical-code-talker/-/tree/main/packages/ace-owl",
+  "repository": {
+    "type": "git",
+    "url": "git+https://gitlab.com/polycode-projects/the-mechanical-code-talker.git",
+    "directory": "packages/ace-owl"
+  },
+  "bugs": {
+    "url": "https://gitlab.com/polycode-projects/the-mechanical-code-talker/-/issues"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "main": "./src/index.mjs",
+  "exports": {
+    ".": "./src/index.mjs",
+    "./ace": "./src/ace.mjs",
+    "./lexicon": "./src/lexicon.mjs"
+  },
+  "files": [
+    "src/",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {},
+  "scripts": {
+    "test": "node --test \"test/**/*.test.mjs\""
+  }
+}

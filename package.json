@@ -36,6 +36,9 @@
   "engines": {
     "node": ">=24"
   },
+  "workspaces": [
+    "packages/*"
+  ],
   "bin": {
     "tmct": "./bin/tmct.mjs"
   },
@@ -68,6 +71,7 @@
     "access": "public"
   },
   "dependencies": {
+    "@polycode-projects/ace-owl": "^0.1.0",
     "ink": "^7.1.0",
     "react": "^19.2.7",
     "smol-toml": "^1.7.0",
