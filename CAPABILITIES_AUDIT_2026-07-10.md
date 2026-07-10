@@ -23,21 +23,49 @@ Each tmct cell is backed by a real number from `AGENTBENCH_1.4.1.md`/`INFBENCH_1
 `CEFR_ENGLISH_1.4.1.md`, translated into the general capability it evidences. **Every model column is
 an informed estimate from general knowledge of these models' well-known public capability tiers, not
 a measured cross-benchmark result** — nobody has run any of these five models against tmct's exact
-task shapes. Verdict key: **W** weaker than tmct on this capability, **C** roughly comparable,
-**S** stronger.
+task shapes. Every model cell below opens with a plain verdict word (Weaker / Comparable /
+Comparable-to-stronger / Stronger, relative to tmct on that specific capability) followed by why.
+
+**Quick-reference (verdict only — see the full table below for the "why" per cell):**
+
+```
+┌─────────────────────────────┬────────────────────────┬──────────────┬───────────────┬───────────────┬───────────────┬───────────────┐
+│         Capability          │          tmct          │ Llama 3.1 8B │   Nova Pro    │   Haiku 4.5   │   Sonnet 5    │   Opus 4.8    │
+├─────────────────────────────┼────────────────────────┼──────────────┼───────────────┼───────────────┼───────────────┼───────────────┤
+│ Tool use / function calling │ closed router          │ Stronger     │ Stronger      │ Stronger      │ Stronger      │ Stronger      │
+├─────────────────────────────┼────────────────────────┼──────────────┼───────────────┼───────────────┼───────────────┼───────────────┤
+│ Planning & decomposition    │ bounded ladder         │ Comparable   │ Comp-Stronger │ Comp-Stronger │ Stronger      │ Stronger      │
+├─────────────────────────────┼────────────────────────┼──────────────┼───────────────┼───────────────┼───────────────┼───────────────┤
+│ Reasoning (multi-hop)       │ fixed-depth 2-hop      │ Comparable   │ Comparable    │ Comparable    │ Stronger      │ Stronger      │
+├─────────────────────────────┼────────────────────────┼──────────────┼───────────────┼───────────────┼───────────────┼───────────────┤
+│ Knowledge grounding         │ 0% fabrication         │ Weaker       │ Weaker        │ Comparable    │ Comparable    │ Comparable    │
+├─────────────────────────────┼────────────────────────┼──────────────┼───────────────┼───────────────┼───────────────┼───────────────┤
+│ Memory & context            │ session-only           │ Weaker       │ Comparable    │ Comparable    │ Comp-Stronger │ Comp-Stronger │
+├─────────────────────────────┼────────────────────────┼──────────────┼───────────────┼───────────────┼───────────────┼───────────────┤
+│ Instruction following       │ 100% on known phrasing │ Weaker       │ Comparable    │ Comparable    │ Comp-Stronger │ Stronger      │
+├─────────────────────────────┼────────────────────────┼──────────────┼───────────────┼───────────────┼───────────────┼───────────────┤
+│ NL generation & fluency     │ none                   │ Stronger     │ Stronger      │ Stronger      │ Stronger      │ Stronger      │
+├─────────────────────────────┼────────────────────────┼──────────────┼───────────────┼───────────────┼───────────────┼───────────────┤
+│ Code generation             │ none                   │ Stronger     │ Stronger      │ Stronger      │ Stronger      │ Stronger      │
+├─────────────────────────────┼────────────────────────┼──────────────┼───────────────┼───────────────┼───────────────┼───────────────┤
+│ Safety/honesty calibration  │ structural refusal     │ Weaker       │ Weak-Comp     │ Comparable    │ Comparable    │ Comparable    │
+├─────────────────────────────┼────────────────────────┼──────────────┼───────────────┼───────────────┼───────────────┼───────────────┤
+│ Autonomy / external action  │ none                   │ Stronger     │ Stronger      │ Stronger      │ Stronger      │ Stronger      │
+└─────────────────────────────┴────────────────────────┴──────────────┴───────────────┴───────────────┴───────────────┴───────────────┘
+```
 
 | General agent capability | tmct — measured evidence | Llama 3.1 8B | Amazon Nova Pro | Claude Haiku 4.5 | Claude Sonnet 5 | Claude Opus 4.8 |
 | --- | --- | --- | --- | --- | --- | --- |
-| **Tool use / function calling** | Closed, rule-based router over a FIXED toolset (AGENTBENCH: 100% plan-completion, every rung PASS) — not general function-calling, a bounded dispatch table | **S** — genuine open-ended function-calling over arbitrary declared tools, not a closed set | **S**, plus reliable multi-tool composition | **S** | **S** | **S** — real function-calling generalizes past any fixed router by design |
-| **Planning & multi-step task decomposition** | AGENTBENCH A0–C2 rung ladder, every gate PASS, but bounded to pre-defined rungs | **C** — general planning ability exists but noisier/less reliable composing steps than tmct's deterministic bounded ladder | **C-S** | **C-S** | **S** | **S** — handles open-ended plans tmct's fixed rungs structurally can't represent |
-| **Reasoning (logical / multi-hop inference)** | Full INF-A1…C2 ladder passes; INF-B1 100% (was 33%); fixed-depth 2-hop taught-syllogism chains | **C** on short chains, **W** as chain depth/ambiguity grows | **C** | **C** | **S** | **S** — arbitrary-depth reasoning, not capped at a fixed ladder depth |
-| **Knowledge grounding / retrieval (avoiding fabrication)** | 0% fabrication across every INFBENCH/AGENTBENCH row; CEFR tier-1 89/109 green — a STRUCTURAL guarantee (can't assert past taught/seeded facts), not a tuned behavior | **W** — no RAG discipline out of the box, real fabrication rate on closed-KB questions | **W** bare call / **C** with a real grounding harness (unmeasured here) | **C** under strict grounding+citation prompting — achievable, not automatic | **C** | **C** — best self-calibrated uncertainty of the five, but still probabilistic, not a structural floor the way tmct's is |
-| **Memory & multi-turn context retention** | Session-scoped persistent graph (`.tmct/graph.json`); anaphora/focus carried within a session; no cross-session memory beyond what's explicitly written to the graph | **W** — context-window/attention degradation over long sessions, no persistent store | **C** | **C** | **C-S** — long context window, but still no persistent cross-session memory without external tooling, the same limitation tmct has | **C-S** |
-| **Instruction following / constraint adherence** | A recognized phrasing is followed 100% of the time (rule match, not a probabilistic score); unrecognized phrasing = decline, never a best-effort guess | **W** — occasional drift off format/constraint instructions | **C** | **C** | **C-S** | **S** — best-in-class adherence among the five, though still probabilistic, not tmct's deterministic guarantee |
-| **Natural language generation & fluency** | **None** — structurally zero free generation; every reply is a template/grammar slot fill | **S** | **S** | **S** | **S** | **S** — tmct's one uniform, structural weak row; every model here beats it by design |
-| **Code generation & execution** | **None** — not attempted, explicitly out of scope (no LLM anywhere in tmct's product path) | **S** | **S** | **S** | **S** | **S** |
-| **Safety, honesty & refusal calibration** | Structural zero-fabrication + INF-C2 consistency-refusal 100% (was 0%) — refuses BY CONSTRUCTION when it can't ground an answer, not by tuned judgment | **W** — answers confidently from contradictory premises more often than it refuses | **W-C** | **C** | **C** | **C** — good calibration, but still a tuned behavior, not tmct's structural guarantee |
-| **Autonomy / external action (browsing, files, computer use)** | **None** — read-only chat against a local graph; no external actions of any kind | **S** if tool-augmented | **S** if tool-augmented | **S** if tool-augmented | **S** if tool-augmented | **S** if tool-augmented (Claude's own computer-use capability) |
+| **Tool use / function calling** | Closed, rule-based router over a FIXED toolset (AGENTBENCH: 100% plan-completion, every rung PASS) — not general function-calling, a bounded dispatch table | **Stronger** — genuine open-ended function-calling over arbitrary declared tools, not a closed set | **Stronger**, plus reliable multi-tool composition | **Stronger** | **Stronger** | **Stronger** — real function-calling generalizes past any fixed router by design |
+| **Planning & multi-step task decomposition** | AGENTBENCH A0–C2 rung ladder, every gate PASS, but bounded to pre-defined rungs | **Comparable** — general planning ability exists but noisier/less reliable composing steps than tmct's deterministic bounded ladder | **Comparable-to-stronger** | **Comparable-to-stronger** | **Stronger** | **Stronger** — handles open-ended plans tmct's fixed rungs structurally can't represent |
+| **Reasoning (logical / multi-hop inference)** | Full INF-A1…C2 ladder passes; INF-B1 100% (was 33%); fixed-depth 2-hop taught-syllogism chains | **Comparable** on short chains, **Weaker** as chain depth/ambiguity grows | **Comparable** | **Comparable** | **Stronger** | **Stronger** — arbitrary-depth reasoning, not capped at a fixed ladder depth |
+| **Knowledge grounding / retrieval (avoiding fabrication)** | 0% fabrication across every INFBENCH/AGENTBENCH row; CEFR tier-1 89/109 green — a STRUCTURAL guarantee (can't assert past taught/seeded facts), not a tuned behavior | **Weaker** — no RAG discipline out of the box, real fabrication rate on closed-KB questions | **Weaker** bare call / **Comparable** with a real grounding harness (unmeasured here) | **Comparable** under strict grounding+citation prompting — achievable, not automatic | **Comparable** | **Comparable** — best self-calibrated uncertainty of the five, but still probabilistic, not a structural floor the way tmct's is |
+| **Memory & multi-turn context retention** | Session-scoped persistent graph (`.tmct/graph.json`); anaphora/focus carried within a session; no cross-session memory beyond what's explicitly written to the graph | **Weaker** — context-window/attention degradation over long sessions, no persistent store | **Comparable** | **Comparable** | **Comparable-to-stronger** — long context window, but still no persistent cross-session memory without external tooling, the same limitation tmct has | **Comparable-to-stronger** |
+| **Instruction following / constraint adherence** | A recognized phrasing is followed 100% of the time (rule match, not a probabilistic score); unrecognized phrasing = decline, never a best-effort guess | **Weaker** — occasional drift off format/constraint instructions | **Comparable** | **Comparable** | **Comparable-to-stronger** | **Stronger** — best-in-class adherence among the five, though still probabilistic, not tmct's deterministic guarantee |
+| **Natural language generation & fluency** | **None** — structurally zero free generation; every reply is a template/grammar slot fill | **Stronger** | **Stronger** | **Stronger** | **Stronger** | **Stronger** — tmct's one uniform, structural weak row; every model here beats it by design |
+| **Code generation & execution** | **None** — not attempted, explicitly out of scope (no LLM anywhere in tmct's product path) | **Stronger** | **Stronger** | **Stronger** | **Stronger** | **Stronger** |
+| **Safety, honesty & refusal calibration** | Structural zero-fabrication + INF-C2 consistency-refusal 100% (was 0%) — refuses BY CONSTRUCTION when it can't ground an answer, not by tuned judgment | **Weaker** — answers confidently from contradictory premises more often than it refuses | **Weaker-to-comparable** | **Comparable** | **Comparable** | **Comparable** — good calibration, but still a tuned behavior, not tmct's structural guarantee |
+| **Autonomy / external action (browsing, files, computer use)** | **None** — read-only chat against a local graph; no external actions of any kind | **Stronger** if tool-augmented | **Stronger** if tool-augmented | **Stronger** if tool-augmented | **Stronger** if tool-augmented | **Stronger** if tool-augmented (Claude's own computer-use capability) |
 
 **The pattern**: tmct beats or matches every model here on exactly two axes — zero-fabrication
 grounding and deterministic instruction adherence within its known phrasing set — because those are
@@ -63,7 +91,7 @@ Purely speculative, not a roadmap commitment. Drawing on the four reports' own "
   groundedness-checked multi-sentence prose. This is the one lever that could move the **natural
   language generation & fluency** row off a flat "None" without giving up the **knowledge grounding**
   row's zero-fabrication floor — the only plausible path to a genuinely mixed verdict on that row
-  instead of a uniform **S** for every model.
+  instead of a uniform **Stronger** for every model.
 - **C2 `pronoun-binding`** (`CEFR_ENGLISH_1.4.1.md` "Next", `HANDOVER.md` item 1 — the clearest,
   highest-impact lever identified) — 0/10 tier-1, 4/10 judged hard fails, all confidently-wrong. A fix
   here sharpens the **memory & multi-turn context retention** row (anaphora is a context-tracking
