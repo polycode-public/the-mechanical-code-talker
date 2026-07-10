@@ -43,6 +43,20 @@
       "bytes": 3920,
       "sha256": "d089426833c393f6f1574fe75c4ac94a1483ee80f72f79bd7fd32aaaa24a6e44",
       "license": "MPL-2.0"
+    },
+    {
+      "id": "general",
+      "kind": "domain",
+      "description": "General-purpose everyday-knowledge concepts (animals, weather, the natural world, common objects) — a non-code-domain seed set, deliberately outside tmct's own code-domain bias.",
+      "source": {
+        "kind": "curated",
+        "tool": "corpus/tier2/generate.mjs"
+      },
+      "file": "general.jsonl",
+      "facts": 49,
+      "bytes": 5826,
+      "sha256": "01284f1350fa2ca9653b1c5f52a39fdcb657727c65e77693eae954cb95a14a2e",
+      "license": "MPL-2.0"
     }
   ]
 }

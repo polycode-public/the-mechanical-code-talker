@@ -24,7 +24,7 @@ test("bare/no-toml dir: resolves to exactly today's implicit seon+conceptnet def
     const { entries, biasByBundle } = await resolveExtensions(dir);
     assert.deepEqual(biasByBundle, {});
     // fixed order: seon, conceptnet, then the rest sorted
-    assert.deepEqual([...entries.keys()], ["seon", "conceptnet", "tier2-aws", "tier2-java", "tier2-python"]);
+    assert.deepEqual([...entries.keys()], ["seon", "conceptnet", "tier2-aws", "tier2-general", "tier2-java", "tier2-python"]);
     const seon = entries.get("seon");
     assert.equal(seon.kind, "corpus");
     assert.equal(seon.active, true);
@@ -36,8 +36,8 @@ test("bare/no-toml dir: resolves to exactly today's implicit seon+conceptnet def
     assert.equal(conceptnet.provenancePrefix, "corpus:conceptnet");
     assert.equal(conceptnet.limit, undefined);
     assert.deepEqual(conceptnet.prefer, ["rdfs:subClassOf", "rdf:type", "mgx:usedFor", "mgx:partOf", "mgx:capableOf"]);
-    // the three tier-2 bundles ship but stay inactive
-    for (const id of ["tier2-aws", "tier2-python", "tier2-java"]) {
+    // the four tier-2 bundles ship but stay inactive
+    for (const id of ["tier2-aws", "tier2-python", "tier2-java", "tier2-general"]) {
       assert.equal(entries.get(id).kind, "corpus");
       assert.equal(entries.get(id).active, false, `${id} ships inactive`);
     }
@@ -47,7 +47,7 @@ test("bare/no-toml dir: resolves to exactly today's implicit seon+conceptnet def
 });
 
 test("BUILTIN_EXTENSIONS matches the resolved defaults' shape (kind/active for every shipped bundle)", () => {
-  assert.deepEqual(Object.keys(BUILTIN_EXTENSIONS).sort(), ["conceptnet", "seon", "tier2-aws", "tier2-java", "tier2-python"]);
+  assert.deepEqual(Object.keys(BUILTIN_EXTENSIONS).sort(), ["conceptnet", "seon", "tier2-aws", "tier2-general", "tier2-java", "tier2-python"]);
   assert.equal(BUILTIN_EXTENSIONS.seon.active, true);
   assert.equal(BUILTIN_EXTENSIONS.conceptnet.active, true);
   assert.equal(BUILTIN_EXTENSIONS["tier2-aws"].active, false);
@@ -80,7 +80,7 @@ test("a tmct.toml with an unrecognized-key host pack entry", async () => {
     assert.equal(e.corpusPath, join(dir, "corpus.jsonl"), "a relative path resolves against repoRoot");
     assert.equal(e.provenancePrefix, "corpus:seonix");
     // ordering: seon, conceptnet, then the rest (including the new one) sorted
-    assert.deepEqual([...entries.keys()], ["seon", "conceptnet", "seonix", "tier2-aws", "tier2-java", "tier2-python"]);
+    assert.deepEqual([...entries.keys()], ["seon", "conceptnet", "seonix", "tier2-aws", "tier2-general", "tier2-java", "tier2-python"]);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

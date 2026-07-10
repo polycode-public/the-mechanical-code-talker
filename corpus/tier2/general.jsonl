@@ -1,0 +1,49 @@
+{"start":"/c/en/dog","rel":"/r/IsA","end":"/c/en/mammal","weight":1,"surfaceText":"[[dog]] IsA [[mammal]]"}
+{"start":"/c/en/dog","rel":"/r/HasA","end":"/c/en/tail","weight":1,"surfaceText":"[[dog]] HasA [[tail]]"}
+{"start":"/c/en/dog","rel":"/r/CapableOf","end":"/c/en/bark","weight":1,"surfaceText":"[[dog]] CapableOf [[bark]]"}
+{"start":"/c/en/cat","rel":"/r/IsA","end":"/c/en/mammal","weight":1,"surfaceText":"[[cat]] IsA [[mammal]]"}
+{"start":"/c/en/cat","rel":"/r/CapableOf","end":"/c/en/meow","weight":1,"surfaceText":"[[cat]] CapableOf [[meow]]"}
+{"start":"/c/en/mammal","rel":"/r/IsA","end":"/c/en/animal","weight":1,"surfaceText":"[[mammal]] IsA [[animal]]"}
+{"start":"/c/en/mammal","rel":"/r/HasProperty","end":"/c/en/warm_blooded","weight":1,"surfaceText":"[[mammal]] HasProperty [[warm blooded]]"}
+{"start":"/c/en/bird","rel":"/r/IsA","end":"/c/en/animal","weight":1,"surfaceText":"[[bird]] IsA [[animal]]"}
+{"start":"/c/en/bird","rel":"/r/CapableOf","end":"/c/en/fly","weight":1,"surfaceText":"[[bird]] CapableOf [[fly]]"}
+{"start":"/c/en/bird","rel":"/r/HasA","end":"/c/en/feather","weight":1,"surfaceText":"[[bird]] HasA [[feather]]"}
+{"start":"/c/en/fish","rel":"/r/IsA","end":"/c/en/animal","weight":1,"surfaceText":"[[fish]] IsA [[animal]]"}
+{"start":"/c/en/fish","rel":"/r/AtLocation","end":"/c/en/water","weight":1,"surfaceText":"[[fish]] AtLocation [[water]]"}
+{"start":"/c/en/fish","rel":"/r/CapableOf","end":"/c/en/swim","weight":1,"surfaceText":"[[fish]] CapableOf [[swim]]"}
+{"start":"/c/en/rain","rel":"/r/IsA","end":"/c/en/weather","weight":1,"surfaceText":"[[rain]] IsA [[weather]]"}
+{"start":"/c/en/rain","rel":"/r/MadeOf","end":"/c/en/water","weight":1,"surfaceText":"[[rain]] MadeOf [[water]]"}
+{"start":"/c/en/snow","rel":"/r/IsA","end":"/c/en/weather","weight":1,"surfaceText":"[[snow]] IsA [[weather]]"}
+{"start":"/c/en/snow","rel":"/r/HasProperty","end":"/c/en/cold","weight":1,"surfaceText":"[[snow]] HasProperty [[cold]]"}
+{"start":"/c/en/cloud","rel":"/r/PartOf","end":"/c/en/sky","weight":1,"surfaceText":"[[cloud]] PartOf [[sky]]"}
+{"start":"/c/en/cloud","rel":"/r/CapableOf","end":"/c/en/produce_rain","weight":1,"surfaceText":"[[cloud]] CapableOf [[produce rain]]"}
+{"start":"/c/en/sun","rel":"/r/IsA","end":"/c/en/star","weight":1,"surfaceText":"[[sun]] IsA [[star]]"}
+{"start":"/c/en/sun","rel":"/r/CapableOf","end":"/c/en/produce_light","weight":1,"surfaceText":"[[sun]] CapableOf [[produce light]]"}
+{"start":"/c/en/moon","rel":"/r/AtLocation","end":"/c/en/sky","weight":1,"surfaceText":"[[moon]] AtLocation [[sky]]"}
+{"start":"/c/en/moon","rel":"/r/PartOf","end":"/c/en/solar_system","weight":1,"surfaceText":"[[moon]] PartOf [[solar system]]"}
+{"start":"/c/en/earth","rel":"/r/IsA","end":"/c/en/planet","weight":1,"surfaceText":"[[earth]] IsA [[planet]]"}
+{"start":"/c/en/earth","rel":"/r/PartOf","end":"/c/en/solar_system","weight":1,"surfaceText":"[[earth]] PartOf [[solar system]]"}
+{"start":"/c/en/planet","rel":"/r/CapableOf","end":"/c/en/orbit_a_star","weight":1,"surfaceText":"[[planet]] CapableOf [[orbit a star]]"}
+{"start":"/c/en/water","rel":"/r/IsA","end":"/c/en/liquid","weight":1,"surfaceText":"[[water]] IsA [[liquid]]"}
+{"start":"/c/en/water","rel":"/r/UsedFor","end":"/c/en/drinking","weight":1,"surfaceText":"[[water]] UsedFor [[drinking]]"}
+{"start":"/c/en/ice","rel":"/r/IsA","end":"/c/en/solid","weight":1,"surfaceText":"[[ice]] IsA [[solid]]"}
+{"start":"/c/en/ice","rel":"/r/MadeOf","end":"/c/en/water","weight":1,"surfaceText":"[[ice]] MadeOf [[water]]"}
+{"start":"/c/en/fire","rel":"/r/CapableOf","end":"/c/en/produce_heat","weight":1,"surfaceText":"[[fire]] CapableOf [[produce heat]]"}
+{"start":"/c/en/fire","rel":"/r/CapableOf","end":"/c/en/produce_light","weight":1,"surfaceText":"[[fire]] CapableOf [[produce light]]"}
+{"start":"/c/en/tree","rel":"/r/IsA","end":"/c/en/plant","weight":1,"surfaceText":"[[tree]] IsA [[plant]]"}
+{"start":"/c/en/tree","rel":"/r/HasA","end":"/c/en/root","weight":1,"surfaceText":"[[tree]] HasA [[root]]"}
+{"start":"/c/en/tree","rel":"/r/HasA","end":"/c/en/leaf","weight":1,"surfaceText":"[[tree]] HasA [[leaf]]"}
+{"start":"/c/en/plant","rel":"/r/CapableOf","end":"/c/en/photosynthesize","weight":1,"surfaceText":"[[plant]] CapableOf [[photosynthesize]]"}
+{"start":"/c/en/forest","rel":"/r/HasA","end":"/c/en/tree","weight":1,"surfaceText":"[[forest]] HasA [[tree]]"}
+{"start":"/c/en/kitchen","rel":"/r/PartOf","end":"/c/en/house","weight":1,"surfaceText":"[[kitchen]] PartOf [[house]]"}
+{"start":"/c/en/kitchen","rel":"/r/UsedFor","end":"/c/en/cooking","weight":1,"surfaceText":"[[kitchen]] UsedFor [[cooking]]"}
+{"start":"/c/en/bread","rel":"/r/IsA","end":"/c/en/food","weight":1,"surfaceText":"[[bread]] IsA [[food]]"}
+{"start":"/c/en/bread","rel":"/r/MadeOf","end":"/c/en/flour","weight":1,"surfaceText":"[[bread]] MadeOf [[flour]]"}
+{"start":"/c/en/bicycle","rel":"/r/HasA","end":"/c/en/wheel","weight":1,"surfaceText":"[[bicycle]] HasA [[wheel]]"}
+{"start":"/c/en/bicycle","rel":"/r/UsedFor","end":"/c/en/transportation","weight":1,"surfaceText":"[[bicycle]] UsedFor [[transportation]]"}
+{"start":"/c/en/car","rel":"/r/IsA","end":"/c/en/vehicle","weight":1,"surfaceText":"[[car]] IsA [[vehicle]]"}
+{"start":"/c/en/car","rel":"/r/HasA","end":"/c/en/engine","weight":1,"surfaceText":"[[car]] HasA [[engine]]"}
+{"start":"/c/en/engine","rel":"/r/CapableOf","end":"/c/en/produce_power","weight":1,"surfaceText":"[[engine]] CapableOf [[produce power]]"}
+{"start":"/c/en/book","rel":"/r/MadeOf","end":"/c/en/paper","weight":1,"surfaceText":"[[book]] MadeOf [[paper]]"}
+{"start":"/c/en/book","rel":"/r/UsedFor","end":"/c/en/reading","weight":1,"surfaceText":"[[book]] UsedFor [[reading]]"}
+{"start":"/c/en/clock","rel":"/r/UsedFor","end":"/c/en/telling_time","weight":1,"surfaceText":"[[clock]] UsedFor [[telling time]]"}

@@ -13,7 +13,7 @@ tmct's knowledge arrives in three tiers, distinguished by **when** it lands and
 | Tier | What | Ships in the package? | Lands when | Provenance |
 |---|---|---|---|---|
 | **1 — base** | the general English/tech ConceptNet slice + the response templates + the SE phrasebook — the vocabulary every tmct has out of the box | **yes**, committed here | `tmct init` seeds `.tmct/` from committed data (offline, $0) | `corpus:conceptnet /r/…` |
-| **2 — specialised** | LANGUAGE- or DOMAIN-specific fact sets (`aws`, `python`, `java`, …) so tmct can "expand into a concept for an applicable codebase" | **no** — selected per repo | `tmct init` fetches/generates the chosen tier-2 corpuses into `.tmct/` (Wave-2 wiring) | `corpus:tier2:<id> /r/…` |
+| **2 — specialised** | LANGUAGE- or DOMAIN-specific fact sets (`aws`, `python`, `java`) plus one deliberately NON-code-domain "wider general-knowledge" bundle (`general`) so tmct can "expand into a concept for an applicable codebase" — or into a seed set that isn't code at all | **no** — selected per repo | activated via `src/extensions.mjs`'s `[extensions.tier2-<id>] active = true` (or `tmct init --corpus <id>`), inactive by default | `corpus:tier2-<id> /r/…` |
 | **3 — learned** | facts tmct writes from the actual conversation / the actual codebase it is pointed at | never committed | at runtime, into `.tmct/memory/` | `chat:…`, `codegraph:…` |
 
 **Offline / $0 is the default at every tier.** Tier-1 is committed. Tier-2's
@@ -38,7 +38,7 @@ loudly instead of seeding garbage.
 | `conceptnet/README.md` | provenance, retrieval date, seed terms, filter rules, row counts | — | — |
 | `tier2/manifest.json` | tier-2: index of specialised corpuses (id, kind, description, source, sha256, size) | — | MPL-2.0 |
 | `tier2/generate.mjs` | tier-2: the curated-corpus generator + manifest writer (+ opt-in network-fetch path) | — | MPL-2.0 |
-| `tier2/{aws,python,java}.jsonl` | tier-2 SAMPLE corpuses — same fact shape as the tier-1 slice, loadable via the same path | ~4 KB each | MPL-2.0 |
+| `tier2/{aws,python,java,general}.jsonl` | tier-2 SAMPLE corpuses — same fact shape as the tier-1 slice, loadable via the same path (`general` is the one deliberately non-code-domain bundle) | ~4-6 KB each | MPL-2.0 |
 
 And alongside (same phase, different directory because it is tmct-original
 data, not a derived corpus):
@@ -94,26 +94,27 @@ sha256) in one deterministic pass. Curated data is authored in that file so it
 stays reviewable; a corpus too big to hand-curate is a `fetch` manifest entry
 (URL + sha256, opt-in network — `fetchCorpus()` is the reference downloader).
 
-**How the coordinator should wire tier-2 into `tmct init` (Wave-2 — NOT done
-here):**
+**How tier-2 wires into `tmct init` (done — `src/extensions.mjs`):**
+`resolveExtensions(repoRoot)` ships all four tier-2 bundles as
+shipped-but-inactive `BUILTIN_EXTENSIONS` entries (`tier2-aws`/`tier2-python`/
+`tier2-java`/`tier2-general`); `[extensions.tier2-<id>] active = true` in
+`tmct.toml` (or `tmct init --corpus <id>`) flips one on, and
+`seedActiveCorpusEntries` runs it through the exact same
+`loadSlice → toFacts → appendFacts` pipeline as tier-1, stamped
+`corpus:tier2-<id> <rel>` via `toFacts`'s `provenancePrefix` argument — no
+separate tier-2 code path. Idempotency is free (`seedMemory`'s content-hashed
+fact ids + pre-read skip). None of this touches `package.json` or the tier-1
+budget; tier-2 files are not shipped, so they do not count against the
+≤ 1.5 MB slice budget. Codebase auto-detection (a `requirements.txt` →
+`python`, a `pom.xml`/`build.gradle` → `java`, an AWS SDK dep → `aws`) is
+still unbuilt — activation today is config-only, never automatic.
 
-1. Add a tier-2-aware seeder next to `seedMemory()` (e.g. `seedTier2(dir, id)`)
-   that reads `corpus/tier2/manifest.json`, resolves the requested corpus's
-   `file` (curated → already on disk; `fetch` → download + `sha256`-verify
-   first, only when network is explicitly enabled), then runs the SAME
-   `loadSlice → toFacts → appendFact` pipeline — **but stamps provenance
-   `corpus:tier2:<id> <rel>`** instead of the hard-coded `corpus:conceptnet …`
-   string in `toFacts()`. (Simplest: give `toFacts` an optional
-   `provenancePrefix` argument, default `"corpus:conceptnet"`.)
-2. Give `tmct init` a `--corpus <id>[,<id>…]` flag (and/or codebase
-   auto-detection: a `requirements.txt`/`pyproject.toml` → `python`, a
-   `pom.xml`/`build.gradle` → `java`, an AWS SDK dep / `serverless.yml` →
-   `aws`). Default stays tier-1-only, offline, $0.
-3. Idempotency is free — `seedMemory`'s content-hashed fact ids and pre-read
-   skip already handle re-seeds; tier-2 rides the same path.
-
-None of that touches `package.json` or the tier-1 budget; tier-2 files are not
-shipped, so they do not count against the ≤ 1.5 MB slice budget.
+A term that would otherwise be silently dropped when a bundle is seeded (an
+`ace = "none"` relation like RelatedTo/HasContext, e.g. from a broader slice)
+can optionally be captured instead of vanishing: `seedMemory`'s
+`captureUnknownContext: true` option (default off) runs
+`src/corpus/unknown-ingest.mjs` over the same batch — see that module's own
+doc comment.
 
 ## How to regenerate / extend
 

@@ -6,10 +6,14 @@
 //   resolveExtensions(repoRoot) → { entries: Map<name, ResolvedEntry>, biasByBundle }
 //
 // BUILTIN_EXTENSIONS ships the exact two bundles chat.mjs's bootstrap has
-// always seeded — `seon` and `conceptnet`, both active — plus three shipped-
-// but-INACTIVE tier-2 bundles (`tier2-aws` / `tier2-python` / `tier2-java`).
-// Activating one is a config-only edit (`tmct init --corpus aws`, or a
-// `[extensions.tier2-aws] active = true` in tmct.toml) — zero code change.
+// always seeded — `seon` and `conceptnet`, both active — plus four shipped-
+// but-INACTIVE tier-2 bundles (`tier2-aws` / `tier2-python` / `tier2-java` /
+// `tier2-general`). Activating one is a config-only edit (`tmct init --corpus
+// aws`, or a `[extensions.tier2-aws] active = true` in tmct.toml) — zero code
+// change. `tier2-general` (PLAN_AGENTS.md Phase 1) is deliberately NOT a
+// language/domain bundle like the other three — everyday-knowledge concepts
+// with zero code-domain framing, the "wider general-knowledge seed set"
+// bullet made real instead of just mechanically activatable.
 //
 // A `tmct.toml` may carry a top-level `[extensions]` table-of-tables
 // (`[extensions.tier2-aws]`, …): a RECOGNIZED name (one of the builtins above)
@@ -86,6 +90,12 @@ function builtinExtensions() {
       active: false,
       corpusPath: join(TIER2_DIR, "java.jsonl"),
       provenancePrefix: "corpus:tier2-java",
+    },
+    "tier2-general": {
+      kind: "corpus",
+      active: false,
+      corpusPath: join(TIER2_DIR, "general.jsonl"),
+      provenancePrefix: "corpus:tier2-general",
     },
   };
 }

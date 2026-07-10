@@ -147,8 +147,27 @@ export function toFacts(assertions, map, provenancePrefix = "corpus:conceptnet")
  *  survivors are written in ONE batched appendFacts call, not a per-fact loop.
  *  Returns { appended, skipped, total }. `provenancePrefix` is threaded through to
  *  toFacts (default "corpus:conceptnet" → byte-identical seed) so a seon/tier-2
- *  corpus can tag its facts "corpus:seon" / "corpus:tier2:<id>". */
-export async function seedMemory(dir, { limit, slicePath = SLICE_FILE, mapPath = MAP_FILE, prefer, provenancePrefix } = {}) {
+ *  corpus can tag its facts "corpus:seon" / "corpus:tier2:<id>".
+ *
+ *  `captureUnknownContext` (default false — every existing call stays
+ *  byte-identical): when true, also runs corpus/unknown-ingest.mjs's
+ *  `ingestUnknownFromAssertions` over this same assertions/map pair — the
+ *  PLAN_AGENTS.md §4 "context-preserving ingestion for unknown words"
+ *  mechanism — so a term that ONLY ever appears in a row `toFacts` silently
+ *  drops (an `ace = "none"` relation like RelatedTo/HasContext) still lands
+ *  in memory, tagged with the passage it was found in, instead of vanishing.
+ *  `unknownContextLimit` bounds how many distinct unknown terms one call
+ *  captures (default 500 — see that module's own doc comment for why an
+ *  unbounded sweep over a wide slice would not be "bounded, not padding").
+ *  The result's `unknown` key is present only when the flag is set. Loaded
+ *  dynamically (not a static import) to avoid a load-time import cycle with
+ *  unknown-ingest.mjs, which itself statically imports `termText` from here —
+ *  the same "avoid the cycle" discipline extensions.mjs's
+ *  seedActiveCorpusEntries already uses for this very module. */
+export async function seedMemory(dir, {
+  limit, slicePath = SLICE_FILE, mapPath = MAP_FILE, prefer, provenancePrefix,
+  captureUnknownContext = false, unknownContextLimit,
+} = {}) {
   const [assertions, map] = await Promise.all([loadSlice(slicePath), loadMap(mapPath)]);
   let facts = toFacts(assertions, map, provenancePrefix);
   if (Array.isArray(prefer) && prefer.length) {
@@ -186,5 +205,19 @@ export async function seedMemory(dir, { limit, slicePath = SLICE_FILE, mapPath =
   // for the 6 k-fact slice). appendFacts also skips any malformed row rather than
   // throwing, so its skipped count folds into the dedup skips here.
   const res = await appendFacts(dir, toWrite);
-  return { appended: res.appended, skipped: skipped + res.skipped, total: facts.length };
+
+  let unknown;
+  if (captureUnknownContext) {
+    const { ingestUnknownFromAssertions } = await import("./unknown-ingest.mjs");
+    unknown = await ingestUnknownFromAssertions(dir, {
+      assertions, map, mappedFacts: facts, memory,
+      provenancePrefix: provenancePrefix ? `${provenancePrefix}-unknown` : undefined,
+      limit: unknownContextLimit,
+    });
+  }
+
+  return {
+    appended: res.appended, skipped: skipped + res.skipped, total: facts.length,
+    ...(unknown ? { unknown } : {}),
+  };
 }

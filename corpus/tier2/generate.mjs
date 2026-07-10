@@ -172,6 +172,74 @@ export const CORPUSES = {
       ["method", "/r/IsA", "function"],
     ],
   },
+
+  // PLAN_AGENTS.md Phase 1's "wider general-knowledge seed set" bullet: the
+  // three corpuses above are all code-domain-specific (a LANGUAGE or a cloud
+  // DOMAIN); this one deliberately is NOT — everyday-knowledge concepts (the
+  // natural world, weather, food, common objects) with zero code-domain
+  // framing, proving the extension-pack seam generalizes to a seed set that
+  // isn't code at all (the operator's own framing: tmct's code specialization
+  // was never a special case, just one seed set among possible others).
+  general: {
+    kind: "domain",
+    description: "General-purpose everyday-knowledge concepts (animals, weather, the natural world, common objects) — a non-code-domain seed set, deliberately outside tmct's own code-domain bias.",
+    facts: [
+      // animals
+      ["dog", "/r/IsA", "mammal"],
+      ["dog", "/r/HasA", "tail"],
+      ["dog", "/r/CapableOf", "bark"],
+      ["cat", "/r/IsA", "mammal"],
+      ["cat", "/r/CapableOf", "meow"],
+      ["mammal", "/r/IsA", "animal"],
+      ["mammal", "/r/HasProperty", "warm_blooded"],
+      ["bird", "/r/IsA", "animal"],
+      ["bird", "/r/CapableOf", "fly"],
+      ["bird", "/r/HasA", "feather"],
+      ["fish", "/r/IsA", "animal"],
+      ["fish", "/r/AtLocation", "water"],
+      ["fish", "/r/CapableOf", "swim"],
+      // weather / sky
+      ["rain", "/r/IsA", "weather"],
+      ["rain", "/r/MadeOf", "water"],
+      ["snow", "/r/IsA", "weather"],
+      ["snow", "/r/HasProperty", "cold"],
+      ["cloud", "/r/PartOf", "sky"],
+      ["cloud", "/r/CapableOf", "produce_rain"],
+      ["sun", "/r/IsA", "star"],
+      ["sun", "/r/CapableOf", "produce_light"],
+      ["moon", "/r/AtLocation", "sky"],
+      ["moon", "/r/PartOf", "solar_system"],
+      ["earth", "/r/IsA", "planet"],
+      ["earth", "/r/PartOf", "solar_system"],
+      ["planet", "/r/CapableOf", "orbit_a_star"],
+      // matter / basic science
+      ["water", "/r/IsA", "liquid"],
+      ["water", "/r/UsedFor", "drinking"],
+      ["ice", "/r/IsA", "solid"],
+      ["ice", "/r/MadeOf", "water"],
+      ["fire", "/r/CapableOf", "produce_heat"],
+      ["fire", "/r/CapableOf", "produce_light"],
+      // plants
+      ["tree", "/r/IsA", "plant"],
+      ["tree", "/r/HasA", "root"],
+      ["tree", "/r/HasA", "leaf"],
+      ["plant", "/r/CapableOf", "photosynthesize"],
+      ["forest", "/r/HasA", "tree"],
+      // everyday objects / places
+      ["kitchen", "/r/PartOf", "house"],
+      ["kitchen", "/r/UsedFor", "cooking"],
+      ["bread", "/r/IsA", "food"],
+      ["bread", "/r/MadeOf", "flour"],
+      ["bicycle", "/r/HasA", "wheel"],
+      ["bicycle", "/r/UsedFor", "transportation"],
+      ["car", "/r/IsA", "vehicle"],
+      ["car", "/r/HasA", "engine"],
+      ["engine", "/r/CapableOf", "produce_power"],
+      ["book", "/r/MadeOf", "paper"],
+      ["book", "/r/UsedFor", "reading"],
+      ["clock", "/r/UsedFor", "telling_time"],
+    ],
+  },
 };
 
 const conceptUri = (term) => `/c/en/${term}`;

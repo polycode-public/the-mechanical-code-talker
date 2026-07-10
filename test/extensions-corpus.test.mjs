@@ -87,3 +87,30 @@ test("a mid-list active bundle (tier2-aws, activated via tmct.toml) seeds alongs
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+// PLAN_AGENTS.md §4 Phase 1 TASK 1(a): confirm EVERY shipped tier-2 bundle
+// (not just aws, above) genuinely activates end-to-end via the same
+// config-only [extensions.<name>] active = true seam, and that the newly
+// added tier2-general bundle (a non-code-domain "wider general-knowledge"
+// seed set, TASK 1(b)) rides the identical path.
+for (const name of ["tier2-python", "tier2-java", "tier2-general"]) {
+  test(`activation seam: [extensions.${name}] active = true seeds real facts alongside seon+conceptnet`, async () => {
+    const dir = await tmp();
+    try {
+      await writeFile(join(dir, "tmct.toml"), `[extensions.${name}]\nactive = true\n`);
+      const { entries } = await resolveExtensions(dir);
+      assert.deepEqual([...entries.keys()].filter((n) => entries.get(n).active), ["seon", "conceptnet", name]);
+      const { perBundle } = await seedActiveCorpusEntries(dir, entries);
+      assert.ok(perBundle[name].appended > 0, `${name} actually wrote facts`);
+      assert.equal(perBundle[name].error, undefined, `${name} seeded without error`);
+
+      const mem = await loadMemory(dir);
+      const facts = mem.individuals.filter((i) => i.class === FACT_CLASS);
+      const fromBundle = facts.filter((f) =>
+        (f.attributes || []).some((a) => a.key === "provenance" && String(a.value).includes(`corpus:${name}`)));
+      assert.ok(fromBundle.length > 0, `some fact carries ${name}'s own provenance tag`);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+}
