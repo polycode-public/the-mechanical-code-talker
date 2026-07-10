@@ -119,7 +119,20 @@ export function emptyMemory() {
   };
 }
 
-const memoryGraphFile = (dir) => join(dir, MEMORY_GRAPH_REL);
+/** Resolve the on-disk path of a memory graph file for `dir`. `version === null`
+ *  (the default) is the LIVE graph (`graph.json`) — the one path every mutator
+ *  funnels through (mutateMemory here, writeMemoryGraph in fold.mjs). A numeric
+ *  `version` resolves a SNAPSHOT copy (`graph.v{version}.json`, see
+ *  snapshotMemory below) — never the live file. The single source of truth for
+ *  "where does the memory graph live on disk", closing the desync risk of two
+ *  independent path-resolution copies (core.mjs's mutateMemory and fold.mjs's
+ *  writeMemoryGraph used to compute this path separately). */
+export function resolveMemoryGraphFile(dir, version = null) {
+  if (version === null) return join(dir, MEMORY_GRAPH_REL);
+  return join(dir, MEMORY_DIR_REL, `graph.v${version}.json`);
+}
+
+const memoryGraphFile = (dir) => resolveMemoryGraphFile(dir);
 
 /** Atomic JSON write (temp in the same dir + rename) — same discipline as
  *  sessions.mjs's graph append: a crash never destroys the previous store. */
