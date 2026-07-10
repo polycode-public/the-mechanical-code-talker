@@ -98,6 +98,38 @@ parsing gaps, and the chat-surface debt re-measure) is DONE, committed, and conf
 by the post-merge full CHATBENCH/INFBENCH re-run above — see `git log --oneline` for the individual
 commits, each referencing its item number.**
 
+## Proposed: a default human-world persona (not built, a suggestion for next session)
+
+Today `tmct init` ships with one persona (`PERSONA_PRESETS.code`) and a thin tier2 `general`
+corpus (49 facts, ~10 root concepts: dog/cat/bird/fish/mammal/animal, rain/weather, a handful of
+IsA/HasA/CapableOf/HasProperty/AtLocation/MadeOf edges — `corpus/tier2/general.jsonl`). That's a
+seed, not a default persona. A repo that never asks `--corpus`/`--with-persona` gets no everyday
+world knowledge at all, only code-domain SEON facts.
+
+**Lexicon.** Widen `general.jsonl` past animals and weather to cover the categories a person
+actually talks about day to day: people and roles (parent, friend, doctor, teacher), places
+(house, city, school, kitchen), time (morning, week, yesterday), quantities (few, many, dozen),
+common objects and tools (chair, knife, phone, book), food, the body, family relations, and
+emotions/wants (happy, hungry, want, need). Aim for breadth over depth — a couple of relations per
+concept, not an exhaustive tree.
+
+**Ontology.** Add a lightweight top-level split alongside SEON's existing code-domain classes,
+reusing the same relation vocabulary already in `general.jsonl` (`IsA`, `HasA`, `HasProperty`,
+`CapableOf`, `AtLocation`, `MadeOf`) rather than inventing new ones: `Person`/`Agent`, `Place`,
+`Object`/`Artifact`, `Event`, `Time`, `Quantity`. Root everything under the same `Thing` SEON
+already anchors code concepts to, so a class-membership question ("is a dog a mammal") and a
+code-membership question ("is `HttpError` an `Error`") walk the same inheritance-chase logic tmct
+already has, not two parallel systems.
+
+**Corpus set.** A few hundred curated facts across 15-20 root categories, built the same way the
+existing `aws`/`python`/`java`/`general` tier2 bundles were: hand-curated, deterministic,
+MPL-2.0-licensed JSONL, generated via `corpus/tier2/generate.mjs`, never scraped or LLM-generated
+at build time (keeps the $0-offline, no-LLM-in-product-path guarantee intact). Ship it as either a
+grown `general.jsonl` or a new `human-world` tier2 id, then add a `PERSONA_PRESETS.default` (or
+similar) entry that activates it with a real bias weight, so `tmct init` with no flags at all can
+optionally point at it once the operator decides it should be the shipped default rather than an
+opt-in.
+
 ## Discipline (unchanged)
 
 **Working model: coordinator + background sub-agents** (copied verbatim from this repo's own
