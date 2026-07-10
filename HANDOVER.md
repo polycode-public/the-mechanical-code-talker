@@ -10,64 +10,49 @@ Session handle (inbox): `tmct` (this session; earlier sessions used `mechanic`).
 
 ## Where we are (2026-07-10, later same day)
 
-`v1.5.0` is the current version (not yet pushed this session — see "Discipline" below), one commit
-(`ae926a8`) ahead of what shipped. This session closed all 12 of the prior "Open follow-ups" below
-(items 1–12, each committed individually — see `git log` for the exact commit per item) plus ran a
-3-round `SKILL_BENCHMARK_CONVERSATION.md` capped sprint that found and fixed 5 more real dead-ends
-along the way. Full narrative (what each item's fix actually was) lives in `ROADMAP.md`'s "Where we
-are now" and the git history itself, per this file's own no-completed-work-narrative discipline.
-Post-merge full re-runs confirmed **zero regressions**: CHATBENCH 108/109 tier-1 (the one fail is
-pre-existing, present in the `run-1.4.1` baseline from before this session started); INFBENCH
-206/209 (99%), the only 3 fails the same pre-existing INF-C1 cardinality cases item 11 already
-names as unmeasurable/no-action. `npm test` is green at 1740 (was ~1673 at session start).
+`v1.5.5` is the current version. `v1.5.3` is what's actually live on npm (pushed and published this
+session, containing an `ace-owl` dependency fix — see below). Since that push: three more ranked
+follow-ups closed (completions `graphService` wiring, the teachLane silent-failure, and the
+stranger first-turn preamble — see the closed-out list below), each built by an isolated background
+sub-agent and merged clean with no conflicts. `npm test` is green at 1756 (was 1740 at the last
+push).
 
-## Open follow-ups (next session, ranked by what was actually found working the sprint end to end)
+**A real incident this session: the `ace-owl` extraction and its revert.** An earlier session
+(2026-07-10, commit `c57adbe`) extracted `src/grammar/ace.mjs`/`lexicon.mjs` into a new npm
+workspace (`packages/ace-owl`) and pointed tmct's own `package.json` at it as a registry
+dependency — but never published the package. That broke `npm install` of tmct for anyone outside
+this workspace (a 404 on the unpublished dependency) for five days before it was found and fixed
+this session. Reverted on operator instruction: the parser is back in `src/grammar/` as the real
+implementation, the workspace and dependency are gone, verified with a real `npm pack` + fresh
+install in an empty folder. See `ROADMAP.md`'s "Open-source the ACE-OWL parser" entry and
+`PLAN_AGENTS.md` for the full account.
 
-1. **`src/completions/`'s live wiring is real but structurally can't answer a first-time question —
-   this is the single biggest lever left.** The (4e) COMPLETIONS RESCUE lane (shipped this session)
-   correctly calls `generateCompletion()`, but `completionsRescueAnswer` never passes a
-   `graphService` adapter through to `broadSearch` (`src/completions/search.mjs`) — so `broadSearch`
-   can ONLY ever search memory **blocks** written via an explicit `saveBlock()` call
-   (`src/memory/blocks.mjs`), never the live code graph or taught Facts directly. Nothing in
-   ordinary chat teaching/asking ever calls `saveBlock()`. Net effect: "give me a detailed summary
-   of how X works" declines for ANY subject on its first real mention in a session, no matter how
-   much the graph or memory actually knows about it — confirmed live, twice, in the playtest sprint
-   (round 1: `src/core/store.mjs`; round 2: `TaskController`), and it only ever worked in this
-   session's own unit tests because they pre-seed blocks directly via `saveBlock()`. The fix is a
-   real `graphService`-shaped adapter (an object with `.search(q, {limit})`/`.ask(q)` methods —
-   `src/completions/search.mjs`'s own `broadSearch` already expects this shape) wrapping the loaded
-   graph/`ask()`, wired into `completionsRescueAnswer`'s call to `generateCompletion`. Non-trivial
-   (needs its own scoping pass), not a quick regex fix.
-2. **A short (≤3-word) general-verb or ownership teach sentence silently fails to store, with no
-   diagnostic — root cause not yet traced.** "grace mentors alan" and "sam owns TaskController"
-   (memoryDir set, real graph loaded) both produce the raw structural wall
-   ("couldn't parse this as a graph question…") instead of either storing or giving an honest
-   teach-miss message. `generalVerbTeach`'s own regex (`GENERAL_VERB_TEACH_RE`) matches "mentors" in
-   isolation; `OWNS_TEACH_RE` matches "owns"/"TaskController" in isolation too — both confirmed via
-   direct regex testing. But neither actually fires through the real `teachLane` dispatch, even at
-   4+ words (ruling out the isConversationalCandidate word-count race that explains a related,
-   already-understood class of bug elsewhere). `teachLane` is gated on `via === "composed"`
-   (chat.mjs ~6486) after `assertTurn` (the formal ACE-OWL `parseAce` path, a completely different
-   mechanism) has already declined — the actual failure point is somewhere in that handoff or in
-   `teachLane`'s own internal pattern sequence (multiple regexes tried in order — one may be
-   mis-firing ahead of `generalVerbTeach`/`OWNS_TEACH_RE` and swallowing the sentence without
-   storing). Needs tracing through `teachLane`'s actual call sequence with a real payload, not just
-   isolated regex tests. Found live, playtest sprint round 3.
-3. **A stranger's very first turn, wrapped in an unrecognized opener, still hits the raw wall.**
-   "hey, first time trying this out - what is in here?" — `GREETING_PREAMBLE_RE` strips "hey,"
-   correctly, but the remainder ("first time trying this out - what is in here?") matches no
-   existing preamble frame (`BROWSING_PREAMBLE_RE` only covers "just poking/looking around" style
-   phrasings) nor any `CAPABILITY_PHRASES` entry, so it falls through to ask()'s structural
-   pipeline and fails outright. A narrower, standalone bare "hey what is in here" already resolves
-   as a context-pronoun-unresolved miss (better, but still not ideal for a first-time user with no
-   focus at all). Two independent, smaller fixes needed: widen the preamble-frame recognition, and
-   consider a no-standing-focus fallback for bare "what is in here"-shaped queries to the
-   orientation reading. Found live, playtest sprint round 1; not fixed this session (lower priority
-   than the two real fixes that round did ship).
-4. **`scm-svf`/cardinality monotonicity** (`PLAN_INFERENCE_TESTING.md` stage 4's remainder) —
+## Open follow-ups
+
+1. **`scm-svf`/cardinality monotonicity** (`PLAN_INFERENCE_TESTING.md` stage 4's remainder) —
    still confirmed unmeasurable against the current INF-C1 fixture (steady at 90%, unrelated to
-   what either rule would fix, unchanged this session); revisit only if a future case-generation
-   pass adds a template that actually exercises them.
+   what either rule would fix); revisit only if a future case-generation pass adds a template that
+   actually exercises them.
+
+**Closed out this session** (each built by an isolated background sub-agent, merged clean, verified
+live by the coordinator against real merged `main` before being marked done — not just trusted from
+the agent's own report):
+
+- **`src/completions/`'s search layer now has a real `graphService` adapter**
+  (`src/completions/graph-adapter.mjs`, commit `798a77f`). "Give me a detailed summary of how X
+  works" now answers on a subject's first mention in a session, grounded in the graph/taught Facts,
+  not just pre-seeded memory blocks. Verified live for `src/core/store.mjs` and `TaskController`.
+- **The teachLane silent-failure is fixed** (commit `245b3af`). Root cause: `OWNS_TEACH_RE`'s bare
+  gate required the OWNER's name capitalized (missed "sam owns TaskController" — lowercase owner);
+  `generalVerbTeach` had no bare (unwrapped) path at all. Fixed both, gated the new bare path on a
+  real POS check (`subjectIsNounOrPropn`, via wink-nlp) so imperatives like "tell me a joke" still
+  correctly decline instead of being mistaught. Verified live: both repro sentences now store and
+  are retrievable ("does sam own TaskController" → yes).
+- **A stranger's first turn now gets an orientation card, not the raw wall** (commit `68d0d27`).
+  "hey, first time trying this out - what is in here?" resolves via a widened preamble regex plus a
+  new no-standing-focus fallback. One flagged side effect, confirmed intentional: the bare "hey what
+  is in here" case also improves (pronoun-miss → orientation card), since both phrasings reduce to
+  the same shape after stripping. An existing focus still resolves exactly as before — verified live.
 
 **Dropped by operator decision (2026-07-10): the farewell/thanks clause-length guard.** "brilliant,
 that's all I needed" still trips the guard's 3-word-per-clause limit, but this is deliberately out
