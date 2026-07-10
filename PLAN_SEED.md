@@ -1,11 +1,51 @@
 # PLAN_SEED.md — the default "human-world" persona: seeding, lexicons, corpora, backends
 
-> **STATUS (2026-07-10): design complete, not yet built.** This is Stage 0 of a larger batch —
-> documentation only, no code changes. Everything below is grounded in direct reads of the actual
-> codebase, two locally-cloned reference repos, the real W3C OWL 2 spec, and measured numbers from
-> this repo's own dev store — not estimates. See `HANDOVER.md` for what else is in this batch
-> (the CLI/config unification and `scm-svf`/cardinality monotonicity live in `PLAN_INFERENCE_TESTING.md`
-> and this batch's own tracking instead — this doc is scoped to seeding/lexicon/corpus work only).
+> **STATUS (2026-07-10): Small tier SHIPPED and merged to main.** Built by 4 concurrent background
+> agents (isolated worktrees), each merged back with real conflicts resolved by hand where two agents
+> touched the same file. Everything below the design sections now reflects what's actually landed,
+> not just planned. See `HANDOVER.md` for the rest of this batch (`scm-svf`/cardinality monotonicity
+> lives in `PLAN_INFERENCE_TESTING.md` instead).
+>
+> **What's merged so far** (this session, in order):
+> 1. Persistence backends (§6) — Backend B (pure in-memory) + Backend C (SQLite, schema adapted
+>    from seonix's real `store.mjs`, write model changed to per-fact `INSERT`/`UPDATE`). Commits
+>    `7d2be4a`, `bcfa987`. 1756→1771 tests.
+> 2. CLI/config unification (a sibling workstream, not detailed in this doc — see `HANDOVER.md`) —
+>    `src/cli-args.mjs`, multi-graph loading, the `ontology` extension kind, `tmct import`. Merged
+>    with one real conflict in `chat.mjs`'s `createSession` call site (both this and #1 added new
+>    params to it — merged, not overwritten). 1771→1822 tests (after both merges verified together).
+> 3. **Persona content (§3, §4, §8) — the Small tier, built and verified end to end.** Real counts
+>    vs. this doc's own targets: **664 facts** (target ~665-670 — spot on) across the 9 clumps;
+>    lexicon grew **180→478 nouns, 63→92 verbs, 33→58 adjectives, 15→22 proper names** (359 new
+>    words total — above the ~295 estimate, since curation covered all 8 clumps broadly rather than
+>    hitting a fixed quota); **120 WordNet-sourced example sentences** (§9, target ~120-150 — within
+>    range). Real facts landed: `farmer CapableOf farm`, `garden IsA place`, `room PartOf house`,
+>    `summer HasProperty hot`. Real example sentences: "there were two women and six men on the bus"
+>    (man), "the woman kept house while the man hunted" (woman). The cross-ontology bridge (§8)
+>    works exactly as designed — `test/chat-cross-ontology-bridge.test.mjs` teaches a WordNet-side
+>    chain live, composes it with the committed `doctor⊑person`/`person⊑schema_person` bridge facts,
+>    and both the live proof chase AND the offline `syllogise()` batch pass independently prove the
+>    same 3-hop, two-source chain. Merged with two real conflicts (package.json's persona scripts —
+>    the persona-content agent had re-added `init:persona:code`/`init:corpus:*` from a base that
+>    predated the CLI/config merge's deletion of them, resolved by keeping only the new
+>    `init:persona:human`/`init:persona:empty` scripts; `extensions.mjs`'s `seedActiveCorpusEntries` —
+>    both agents independently fixed the same pack-kind seeding bug, merged to keep both that fix
+>    and the sibling workstream's new `ontology`-kind check together).
+>    **One real naming correction found during the build**: Schema.org-bridged classes use distinct
+>    terms like `schema_person` rather than this doc's illustrative bare `Person`, because
+>    `memory/core.mjs`'s `normFactTerm` lowercases every fact term — `"Person"` and `"person"` would
+>    otherwise collide into one graph node, erasing exactly the WordNet/Schema.org distinction the
+>    bridge exists to demonstrate.
+>    Live-verified (fresh `tmct init`, no flags, scratch dir): seeds "664 corpus facts" by default;
+>    `a man has a hat` → stores; `what is a man` → cites the taught fact plus `man is a kind of
+>    person` / `man is male`, both sourced `corpus:human`.
+>
+> **Still open**: Medium/Large tier content (this doc's own §3 numbers are the target, not yet
+> built); the `createSession`→full-`initRepo` auto-init convergence (§2, deliberately deferred by
+> the persona-content agent to avoid a collision with the CLI/config agent's own `chat.mjs` work);
+> `scm-svf`/cardinality monotonicity (tracked separately, still in progress as of this update).
+> Full-suite verification after all 3 merges (persistence backends + CLI/config + persona content):
+> **1828/1828 passing, 0 failures.**
 
 **Goal:** replace tmct's implicit code-domain default (SEON + a tech-filtered ConceptNet slice) with
 a genuinely general "human-world" persona, so a fresh `npx @polycode-projects/the-mechanical-code-talker

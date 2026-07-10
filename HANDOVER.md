@@ -10,12 +10,15 @@ Session handle (inbox): `tmct` (this session; earlier sessions used `mechanic`).
 
 ## Where we are (2026-07-10, later same day)
 
-`v1.5.5` is the current version. `v1.5.3` is what's actually live on npm (pushed and published this
-session, containing an `ace-owl` dependency fix — see below). Since that push: three more ranked
-follow-ups closed (completions `graphService` wiring, the teachLane silent-failure, and the
-stranger first-turn preamble — see the closed-out list below), each built by an isolated background
-sub-agent and merged clean with no conflicts. `npm test` is green at 1756 (was 1740 at the last
-push).
+`v1.5.6` is the current version (not yet pushed — `v1.5.3` is what's live on npm). Since the last
+push: three ranked follow-ups closed (completions `graphService` wiring, the teachLane
+silent-failure, the stranger first-turn preamble), then a much larger batch — **the default
+human-world persona (Small tier) shipped**, alongside a unified CLI/config model and new memory
+persistence backends, built by 4 concurrent background sub-agents in isolated worktrees and merged
+one at a time (3 real conflicts resolved by hand where two agents touched the same file — see
+`PLAN_SEED.md`'s status header for the exact conflicts and resolutions). `npm test` is green at
+**1828** (was 1740 at the last push). Full design and current build status for the persona batch
+lives in `PLAN_SEED.md` — read its status header first, not this file, for that narrative.
 
 **A real incident this session: the `ace-owl` extraction and its revert.** An earlier session
 (2026-07-10, commit `c57adbe`) extracted `src/grammar/ace.mjs`/`lexicon.mjs` into a new npm
@@ -29,7 +32,9 @@ install in an empty folder. See `ROADMAP.md`'s "Open-source the ACE-OWL parser" 
 
 ## Open follow-ups
 
-1. **Build `scm-svf`/cardinality monotonicity, and extend INFBENCH to actually score it.**
+1. **Build `scm-svf`/cardinality monotonicity, and extend INFBENCH to actually score it** — a
+   background sub-agent is actively building this now (dispatched alongside the persona batch
+   below), not yet merged as of this update.
    `PLAN_INFERENCE_TESTING.md` stage 4's remainder — three related INF-C1 capabilities, none built:
    cardinality monotonicity ("every X has exactly 3 Ys" ⊢ "every X has at least 2 Ys"), max-0 as
    encoded negation ("every X has at most 0 Ys" answers an existence query directly), and `scm-svf`
@@ -98,37 +103,30 @@ parsing gaps, and the chat-surface debt re-measure) is DONE, committed, and conf
 by the post-merge full CHATBENCH/INFBENCH re-run above — see `git log --oneline` for the individual
 commits, each referencing its item number.**
 
-## Proposed: a default human-world persona (not built, a suggestion for next session)
+## The default human-world persona — SHIPPED (Small tier), full detail in `PLAN_SEED.md`
 
-Today `tmct init` ships with one persona (`PERSONA_PRESETS.code`) and a thin tier2 `general`
-corpus (49 facts, ~10 root concepts: dog/cat/bird/fish/mammal/animal, rain/weather, a handful of
-IsA/HasA/CapableOf/HasProperty/AtLocation/MadeOf edges — `corpus/tier2/general.jsonl`). That's a
-seed, not a default persona. A repo that never asks `--corpus`/`--with-persona` gets no everyday
-world knowledge at all, only code-domain SEON facts.
+What was a proposal earlier this session is now built and merged: `tmct init` with no flags seeds
+a genuine everyday-knowledge persona by default (664 curated facts across 9 clumps, a lexicon grown
+from 291 to 650 words, 120 real WordNet-sourced example sentences, plus a working cross-ontology
+bridge test proving `scm-sco` can chain WordNet's and Schema.org's independently-built taxonomies
+together). SEON/ConceptNet are opt-in now (`--with-persona code`), not default. Read `PLAN_SEED.md`
+for the full design, the real numbers vs. targets, and every conflict resolved during the merge —
+this file doesn't repeat that narrative, per its own discipline.
 
-**Lexicon.** Widen `general.jsonl` past animals and weather to cover the categories a person
-actually talks about day to day: people and roles (parent, friend, doctor, teacher), places
-(house, city, school, kitchen), time (morning, week, yesterday), quantities (few, many, dozen),
-common objects and tools (chair, knife, phone, book), food, the body, family relations, and
-emotions/wants (happy, hungry, want, need). Aim for breadth over depth — a couple of relations per
-concept, not an exhaustive tree.
-
-**Ontology.** Add a lightweight top-level split alongside SEON's existing code-domain classes,
-reusing the same relation vocabulary already in `general.jsonl` (`IsA`, `HasA`, `HasProperty`,
-`CapableOf`, `AtLocation`, `MadeOf`) rather than inventing new ones: `Person`/`Agent`, `Place`,
-`Object`/`Artifact`, `Event`, `Time`, `Quantity`. Root everything under the same `Thing` SEON
-already anchors code concepts to, so a class-membership question ("is a dog a mammal") and a
-code-membership question ("is `HttpError` an `Error`") walk the same inheritance-chase logic tmct
-already has, not two parallel systems.
-
-**Corpus set.** A few hundred curated facts across 15-20 root categories, built the same way the
-existing `aws`/`python`/`java`/`general` tier2 bundles were: hand-curated, deterministic,
-MPL-2.0-licensed JSONL, generated via `corpus/tier2/generate.mjs`, never scraped or LLM-generated
-at build time (keeps the $0-offline, no-LLM-in-product-path guarantee intact). Ship it as either a
-grown `general.jsonl` or a new `human-world` tier2 id, then add a `PERSONA_PRESETS.default` (or
-similar) entry that activates it with a real bias weight, so `tmct init` with no flags at all can
-optionally point at it once the operator decides it should be the shipped default rather than an
-opt-in.
+**Next-session follow-ups from this batch:**
+- **Medium and Large tiers** — `PLAN_SEED.md` §3 sizes both (Medium ~1,605 facts, Large ~13,600
+  facts, the latter deliberately sized to justify the new SQLite backend) but only Small has been
+  authored and merged so far.
+- **The `createSession`→full-`initRepo` auto-init convergence** (`PLAN_SEED.md` §2) — deliberately
+  skipped this pass to avoid a collision with the CLI/config work landing in the same file; a
+  programmatic `runChat()` call on a bare directory still only gets an in-memory seed marker, not a
+  real `tmct.toml`.
+- **seonix migration note** (documented, can't be acted on from this repo): if seonix's own chat
+  surface goes through `runChat`/`createSession`, its `tmct.toml` needs to explicitly re-activate
+  SEON/ConceptNet now that tmct's own default has flipped.
+- **Backend C (SQLite)'s read side** does a full payload reconstruction per call (an explicitly
+  permitted shortcut in `PLAN_SEED.md` §6) — measured 8% slower than flat JSON at the Large tier's
+  scale, faster below it. Closing this needs real indexed query handles, not more diffing.
 
 ## Discipline (unchanged)
 
@@ -160,6 +158,15 @@ configurations (no live user to approve a permission-gated action) — the coord
 committing itself in the foreground when this happens, verifying `git status` immediately before
 every stage to avoid sweeping in another track's pre-staged files (a real near-miss this session,
 caught and fixed before it landed). No LLM in the product path, ever.
+
+**A second hard-won lesson (this same later session, the 4-agent persona batch)**: a background
+sub-agent's own final "completed" notification is not reliable proof it actually finished — one
+agent reported a vague "I'll wait for the Monitor notification" message as its terminal output
+(twice, on resume), when its worktree in fact held complete, real, committed work. Always verify via
+`git log`/`git status` on the agent's own worktree directly before deciding whether to resume it or
+treat it as done — trust the commits, not the prose. An agent stuck repeating the same "still
+waiting" message across multiple notifications is a sign to `TaskStop` it explicitly rather than
+keep resuming, once its worktree confirms the real work is already complete.
 
 *Prior sessions' detailed handover (phases 0-13, releases 0.2.0 → 1.4.0) lives in this file's git
 history plus the `CEFR_ENGLISH_*`/`AGENTBENCH_*`/`INFBENCH_*`/`CONVERSATIONBENCH_*`/`archive/PLAN_*`
