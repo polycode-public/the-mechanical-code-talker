@@ -10,6 +10,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -36,6 +37,13 @@ const REASONS = new Set(Object.values(MISS_REASONS));
 // ---- run the kit against BOTH reference providers ----------------------------
 runConformance("fixture", fixtureProvider);
 runConformance("bootstrap", bootstrapProvider);
+
+// 2f: a THIRD run against a SOURCE-CAPABLE fixture provider — the only thing that actually
+// exercises conformance.mjs's source-capable branch (dead code otherwise: no provider anywhere
+// else ever sets sourceAccess:true). test/fixtures/source-provider/ holds real source files
+// whose paths/line-spans match FIXTURE_ENTITIES' `site` attributes exactly (see fixture.mjs).
+const SOURCE_PROVIDER_ROOT = fileURLToPath(new URL("./fixtures/source-provider", import.meta.url));
+runConformance("fixture-source-capable", () => fixtureProvider({ sourceAccess: true, repoRoot: SOURCE_PROVIDER_ROOT, readFile }));
 
 // =============================================================================
 // Interface-definition invariants (the versioned shape + no doc drift)
@@ -79,7 +87,7 @@ test("hit() / toIndividual / toEdge produce the documented shapes", () => {
 // =============================================================================
 // Capability negotiation — CAPABILITY_ABSENT is a value, not a wall
 // =============================================================================
-test("invoke() degrades an absent capability to miss(CAPABILITY_ABSENT), never throws", () => {
+test("invoke() degrades an absent capability to miss(CAPABILITY_ABSENT), never throws", async () => {
   const partial = { capabilities: ["resolve"], resolve: () => hit("here") };
   const absent = invoke(partial, "impact", "x");
   assert.ok(isMiss(absent) && absent.miss.reason === MISS_REASONS.CAPABILITY_ABSENT);
@@ -94,7 +102,9 @@ test("invoke() degrades an absent capability to miss(CAPABILITY_ABSENT), never t
     return ["no:id"];
   };
   for (const service of SERVICES) {
-    const r = invoke(svc, service, ...argsFor(service));
+    // snippet/context are async (real fs reads are inherently async) — awaiting every result is
+    // safe regardless (a non-Promise value resolves through `await` as a documented no-op).
+    const r = await invoke(svc, service, ...argsFor(service));
     assert.ok(r && (r.ok === true || REASONS.has(r.miss.reason)), `${service} negotiates to a real Result`);
     if (isMiss(r)) assert.notEqual(r.miss.reason, MISS_REASONS.CAPABILITY_ABSENT, `${service} is implemented, not absent`);
   }
@@ -140,12 +150,21 @@ test("[fixture] traversal + aggregates + history return real numbers", () => {
   assert.equal(commits[0].author, "Grace Hopper");
 });
 
-test("[fixture] snippet/context are source-reaching → honest NO_SOURCE (span in detail)", () => {
+test("[fixture] snippet is source-reaching → honest NO_SOURCE (span in detail); context is a graph-only HIT (INTERFACE_VERSION 1.1.0)", async () => {
   const svc = fixtureProvider();
-  const snip = svc.snippet("m:render");
+  // snippet: UNCHANGED — nothing useful without fs, still an honest NO_SOURCE miss.
+  const snip = await svc.snippet("m:render");
   assert.ok(isMiss(snip) && snip.miss.reason === MISS_REASONS.NO_SOURCE);
   assert.match(snip.miss.detail, /widget\.mjs/); // the span is still communicated honestly
-  assert.ok(isMiss(svc.context("Widget")) && svc.context("Widget").miss.reason === MISS_REASONS.NO_SOURCE);
+  // context: NARROWED — a graph-only provider now returns a real hit (siblings/registration/
+  // tests/etc, no body text) for any resolvable symbol; only an unresolvable symbol misses.
+  const ctx = await svc.context("Widget");
+  assert.ok(isHit(ctx), "context(Widget) is a graph-only hit, not NO_SOURCE");
+  assert.equal(typeof ctx.value.text, "string");
+  assert.match(ctx.value.text, /pkg\/ui\/widget\.mjs/, "the graph-only bundle still names the real module");
+  assert.doesNotMatch(ctx.value.text, /## anchor:|## closest example/, "no body sections without a source-capable provider");
+  const missCtx = await svc.context("definitely-not-a-symbol-xyz");
+  assert.ok(isMiss(missCtx) && missCtx.miss.reason === MISS_REASONS.UNRESOLVED_TERM, "an unresolvable symbol still misses");
 });
 
 test("[fixture] search is provider-local lexical; ask returns the NL envelope", () => {
@@ -154,6 +173,62 @@ test("[fixture] search is provider-local lexical; ask returns the NL envelope", 
   assert.deepEqual(classes.map((c) => c.label).sort(), ["Base", "Button", "Widget"]);
   const a = svc.ask("which modules import graph.mjs");
   assert.ok(isHit(a) && typeof a.value.content === "string" && a.value.tmct_ask);
+});
+
+// =============================================================================
+// 2a/2b/2c: search() is REALLY ranked (not a flat substring filter), edges()/
+// impact() take optional pagination/depth args, additive and backward-compatible.
+// =============================================================================
+test("[fixture] search(): module-mode is ranked (path/symbol/import-proximity), not flat filter order", () => {
+  const svc = fixtureProvider();
+  const labels = svc.search("widget").value.results.map((r) => r.label);
+  // widget.mjs itself outranks its own test module (path match beats a looser one) — the OLD flat
+  // filter had no ranking at all, so this ordering is only guaranteed by the new scored search.
+  assert.deepEqual(labels, ["pkg/ui/widget.mjs", "pkg/test/widget.test.mjs"]);
+});
+
+test("[fixture] search(): symbol-mode honours name (regex) + decorator filters, module-mode does not", () => {
+  const svc = fixtureProvider();
+  const named = svc.search("", { kind: "class", name: "^W" }).value.results;
+  assert.deepEqual(named.map((c) => c.label), ["Widget"]);
+  const decorated = svc.search("", { kind: "method", decorator: "property" }).value.results;
+  assert.deepEqual(decorated.map((m) => m.label), ["Widget.render"]);
+  // module mode: a name filter that would exclude everything if it applied here is simply ignored
+  // (renderSearch's module branch never supported name/decorator either — no new semantic invented).
+  const modules = svc.search("widget", { name: "definitely-does-not-match-anything" }).value.results;
+  assert.ok(modules.length > 0, "module-mode search ignores the name filter, unlike symbol-mode");
+});
+
+test("[fixture] search(): limit/offset paginate the full ranked array", () => {
+  const svc = fixtureProvider();
+  const all = svc.search("", { kind: "class" }).value.results;
+  assert.equal(all.length, 3);
+  const page1 = svc.search("", { kind: "class", limit: 2 }).value.results;
+  const page2 = svc.search("", { kind: "class", limit: 2, offset: 2 }).value.results;
+  assert.equal(page1.length, 2);
+  assert.equal(page2.length, 1);
+  assert.deepEqual([...page1, ...page2].map((c) => c.id), all.map((c) => c.id));
+});
+
+test("[fixture] edges(): optional { limit, offset } paginate; omitted limit is unchanged full-list behavior", () => {
+  const svc = fixtureProvider();
+  const full = svc.edges("mod:widget.mjs", "defines").value.edges;
+  assert.equal(full.length, 2, "widget.mjs defines Widget + register");
+  const first = svc.edges("mod:widget.mjs", "defines", { limit: 1 }).value.edges;
+  const second = svc.edges("mod:widget.mjs", "defines", { limit: 1, offset: 1 }).value.edges;
+  assert.deepEqual(first, [full[0]]);
+  assert.deepEqual(second, [full[1]]);
+  // omitted limit (no opts arg at all) stays byte-identical to the pre-pagination call.
+  assert.deepEqual(svc.edges("mod:widget.mjs", "defines"), { ok: true, value: { kind: "defines", edges: full } });
+});
+
+test("[fixture] impact(): optional { maxDepth } threads straight into impactClosure", () => {
+  const svc = fixtureProvider();
+  const full = svc.impact("mod:graph.mjs").value;
+  assert.equal(full.levels.length, 2, "button.mjs is a depth-2 dependent via widget.mjs");
+  const shallow = svc.impact("mod:graph.mjs", { maxDepth: 1 }).value;
+  assert.equal(shallow.levels.length, 1, "maxDepth:1 stops before the depth-2 dependent");
+  assert.ok(shallow.total < full.total);
 });
 
 // =============================================================================

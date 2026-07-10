@@ -5347,7 +5347,7 @@ async function describeGrainRescue(graph, term) {
   return null;
 }
 
-async function describeWrapperAnswer(query, { config, source, focus, graph }) {
+async function describeWrapperAnswer(query, { config, source, focus, graph, tel = null }) {
   // Tier 6 playtest: this lane is the LAST-RESORT rescue (4d, tried after every
   // earlier lane declines on the ORIGINAL query) — but it tested its own
   // DESCRIBE_WRAPPER_RE against the RAW, un-normalized text, so a preamble an
@@ -5382,7 +5382,7 @@ async function describeWrapperAnswer(query, { config, source, focus, graph }) {
     }
   }
   try {
-    const text = await dispatchTool("tmct_describe", { symbol: term }, { config, source });
+    const text = await dispatchTool("tmct_describe", { symbol: term }, { config, source, tel });
     return text ? { text } : null;
   } catch {
     return null; // unresolvable term — decline, the ordinary wall stands unchanged
@@ -5484,7 +5484,7 @@ async function conceptForceAnswer(query, envelope, { graph, config, source, memo
  *  otherwise the unchanged dispatchTool path (which also yields the no-graph error).
  *  A hit updates the focus to the resolved object. Grammar miss / ToolError → a
  *  normal answer, never a crash. */
-async function runAsk(query, { config, source, graph, focus, last, templates, memoryDir, sessionId = "", lexicon = null, env, trace, vocabHint = null }) {
+async function runAsk(query, { config, source, graph, focus, last, templates, memoryDir, sessionId = "", lexicon = null, env, trace, vocabHint = null, tel = null }) {
   const ts = new Date().toISOString();
   // DISCOURSE ANAPHORA (CHATBENCH_006 levers 1+2): a follow-up like "which of those
   // are tested" / "how many of those" / "count them" filters or counts the PREVIOUS
@@ -5547,7 +5547,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       const r = ask(graph, askQuery, { contextId: focus?.id ?? null, prev });
       text = `${r.content}${ASK_ENVELOPE_DELIM}${JSON.stringify(r.tmct_ask, null, 2)}`;
     } else {
-      text = await dispatchTool("tmct_ask", { query: askQuery }, { config, source });
+      text = await dispatchTool("tmct_ask", { query: askQuery }, { config, source, tel });
     }
     const [content, envJson] = text.split(ASK_ENVELOPE_DELIM);
     answer = content;
@@ -6097,7 +6097,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // for what would otherwise become the generic wall, never a competing route:
   // it only claims the turn if /describe actually resolves the captured term.
   if (miss && recordMiss && via === "composed") {
-    const described = await describeWrapperAnswer(query, { config, source, focus: newFocus, graph });
+    const described = await describeWrapperAnswer(query, { config, source, focus: newFocus, graph, tel });
     if (described) {
       answer = described.text; via = "describe"; recordMiss = false;
       note(trace, "lane: (4d) DESCRIBE-WRAPPER RESCUE — a polite wrapper around \"describe/tell me about <symbol>\" resolved via /describe, tried last after every other lane declined");
@@ -6298,7 +6298,7 @@ const GOAL_BY_COMMAND = {
  *  field now (Bug F point 5) — mirrors runAsk's own `goal` field so
  *  withGoalLine's short "Goal (inferred): …" line fires for command
  *  dispatches too, not just ask()-parsed queries. */
-async function runCommand(line, { config, source, graph, focus, memoryDir, trace, narrate = false }) {
+async function runCommand(line, { config, source, graph, focus, memoryDir, trace, narrate = false, tel = null }) {
   const ts = new Date().toISOString();
   const sp = line.indexOf(" ");
   const name = (sp === -1 ? line.slice(1) : line.slice(1, sp)).toLowerCase();
@@ -6390,7 +6390,7 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
 
   let answer;
   try {
-    answer = await dispatchTool(spec.tool, spec.arg ? { [spec.arg]: value } : {}, { config, source });
+    answer = await dispatchTool(spec.tool, spec.arg ? { [spec.arg]: value } : {}, { config, source, tel });
   } catch (e) {
     note(trace, `intermediate: dispatchTool("${spec.tool}") threw — ${String(e?.message || e)}`);
     return mk(String(e?.message || e), { miss: true }); // the tool's own clean error, never a stack
@@ -6528,7 +6528,7 @@ function morePage(query, { last, focus }) {
 // gain.
 const INDIRECT_REQUEST_RE = /^(?:i\s+(?:want|wanted)\s+you\s+to\s+|i(?:'d|\s+would)\s+like\s+you\s+to\s+)\s*(.+)$/i;
 
-export async function runTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, vocabHint = null } = {}) {
+export async function runTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, vocabHint = null, tel = null } = {}) {
   const line = String(input ?? "").trim();
   // The captured residue is used for RECOGNITION at every dispatch site below
   // (asBareCommand, conversationalTurn, assertTurn, the count lanes, runAsk);
@@ -6549,7 +6549,7 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // pass one gets it computed here instead, so "try this vocabulary example" is
   // never wrong regardless of caller.
   const resolvedVocabHint = vocabHint ?? vocabExampleHint(await hasSeededVocabulary(memoryDir));
-  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates, env, lexicon, trace, narrate, vocabHint: resolvedVocabHint };
+  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates, env, lexicon, trace, narrate, vocabHint: resolvedVocabHint, tel };
   // A DISPATCHED turn (count / slash-command / ask) becomes the new "last answer"
   // that why/say-more re-renders; a conversational turn does not (it preserves it).
   // FINISH SEAM (PLAN_RESPONSE_FINISHING §"Where it lives"): every dispatched turn's
@@ -6982,7 +6982,7 @@ export async function createSession({
     async turn(line) {
       let result;
       try {
-        result = await runTurn(line, { config, source, graph, focus, last, memoryDir: repo, sessionId, env, lexicon, narrate: narrateOn, vocabHint });
+        result = await runTurn(line, { config, source, graph, focus, last, memoryDir: repo, sessionId, env, lexicon, narrate: narrateOn, vocabHint, tel });
       } catch (e) {
         const ts = new Date().toISOString();
         const message = e instanceof Error ? e.message : String(e);

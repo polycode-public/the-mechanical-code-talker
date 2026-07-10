@@ -1,5 +1,5 @@
 {
-  "version": "1.0.0",
+  "version": "1.1.0",
   "ontology": "urn:tmct:core",
   "missReasons": [
     "UNRESOLVED_TERM",
@@ -47,7 +47,7 @@
       "shape": "{ reason: MISS_REASONS, detail: string, term: string|null }"
     }
   },
-  "capabilitiesModel": "A provider advertises `capabilities: string[]` (service names it implements). A service outside the set is negotiated away to miss(CAPABILITY_ABSENT) — never an error. Source services (snippet, context) may be advertised yet answer miss(NO_SOURCE) when no working tree exists.",
+  "capabilitiesModel": "A provider advertises `capabilities: string[]` (service names it implements). A service outside the set is negotiated away to miss(CAPABILITY_ABSENT) — never an error. snippet may be advertised yet answer miss(NO_SOURCE) when no working tree exists (it has nothing useful without fs); context is graph-only-capable since INTERFACE_VERSION 1.1.0 — it returns a real hit (graph-only bundle) for any resolvable symbol even with no working tree, only escalating NO_SOURCE-style behavior to richer body text when source-capable.",
   "services": {
     "resolve": {
       "group": "resolution",
@@ -152,13 +152,14 @@
       "args": {
         "id": "string"
       },
-      "result": "{ path: string, span: { start, end }, body: string|null }",
+      "result": "{ path: string, span: { start, end }, body: string|null } — Promise<Result>",
       "misses": [
         "UNRESOLVED_TERM",
         "NO_SOURCE"
       ],
       "concurrency": "concurrent-safe: reads immutable graph truth; no shared mutable state",
-      "purpose": "The exact source span of a symbol. A provider with no working tree returns miss(NO_SOURCE) honestly."
+      "purpose": "The exact source span of a symbol. A provider with no working tree returns miss(NO_SOURCE) honestly — snippet has nothing useful without fs.",
+      "note": "ASYNC (returns Promise<Result>) — a real body read is inherently fs I/O; callers should always await it. A graph-only provider still resolves synchronously-in-spirit (the promise settles on the same tick) but the return type is uniformly a Promise regardless of sourceAccess."
     },
     "context": {
       "group": "source",
@@ -166,13 +167,13 @@
         "symbol": "string",
         "depth": "min|auto|full?"
       },
-      "result": "{ text: string, tier: string } (a sized edit bundle)",
+      "result": "{ text: string, tier: string } (a sized edit bundle) — Promise<Result>",
       "misses": [
-        "UNRESOLVED_TERM",
-        "NO_SOURCE"
+        "UNRESOLVED_TERM"
       ],
       "concurrency": "concurrent-safe: reads immutable graph truth; no shared mutable state",
-      "purpose": "The composed edit bundle (exemplar, siblings, registration, insertion region). Source-reaching."
+      "purpose": "The composed edit bundle (exemplar, siblings, registration, insertion region). A graph-only provider returns the graph-only sections as a real hit; a source-capable provider (sourceAccess:true, repoRoot, readFile) additionally includes the anchor/exemplar/inlined-callee body text.",
+      "note": "ASYNC (returns Promise<Result>) — see snippet's note; source-capable rendering is fs I/O."
     },
     "architecture": {
       "group": "aggregate",

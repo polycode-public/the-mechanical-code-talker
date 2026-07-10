@@ -19,7 +19,15 @@ import {
   edgesOfKind,
   relationKind,
   impactClosure,
+  scoreSymbolsRanked,
+  searchModulesRanked,
+  SEARCH_LIMIT,
+  contextPlan,
+  sizeBundle,
+  bundleMask,
+  renderGraphOnlyBundle,
 } from "../codegraph.mjs";
+import { readSpanSafe, sliceSpan } from "../source-slice.mjs";
 import { ask } from "../ask.mjs";
 import {
   hit,
@@ -56,14 +64,86 @@ function groupMetaForKind(graph, kind) {
   return { predicate: kind, prop: null };
 }
 
+const CONTEXT_BODY_MAX_LINES = 200; // mirrors server.mjs's SNIPPET_MAX_LINES for the source-capable body sections
+const CONTEXT_INLINE_CALLEE_LOC = 120; // mirrors server.mjs's INLINE_CALLEE_LOC budget
+
+/** The fs-dependent half of context()'s bundle — anchor / exemplar / inlined-callee body
+ *  TEXT — layered on top of renderGraphOnlyBundle's pure sections when the provider is
+ *  source-capable. Mirrors server.mjs's buildContextBundle body sections (same shape, same
+ *  safe readSpanSafe/sliceSpan primitives from Item 1) but lives here because it needs fs,
+ *  which codegraph.mjs deliberately never touches. Read failures degrade silently (an
+ *  omitted section), matching buildContextBundle's own graceful-degradation behavior —
+ *  this is a best-effort enrichment on top of an already-real graph-only hit, not a new
+ *  failure mode. Returns "" when nothing could be rendered. */
+async function renderSourceBodies(plan, mask, { readFile, repoRoot }) {
+  if (!plan.moduleLabel) return "";
+  let lines = null;
+  try {
+    ({ lines } = await readSpanSafe({ readFile, repoRoot, path: plan.moduleLabel }));
+  } catch {
+    lines = null;
+  }
+  if (!lines) return "";
+  const out = [];
+  if (mask.anchor && plan.anchor?.site) {
+    const { start, end } = plan.anchor.site;
+    out.push(`\n## anchor: ${plan.anchor.label} (${plan.anchor.class}) @ ${plan.moduleLabel}:${start}-${end}`);
+    out.push(sliceSpan(lines, start, end, CONTEXT_BODY_MAX_LINES).text);
+    if (plan.callHint) out.push(plan.callHint);
+  }
+  if (mask.exemplar && plan.exemplar?.site) {
+    const { start, end } = plan.exemplar.site;
+    const dec = plan.exemplar.decorators ? ` @${plan.exemplar.decorators}` : "";
+    out.push(`\n## closest example (full body) — copy this style: ${plan.exemplar.label} (${plan.exemplar.class})${dec} @ ${plan.moduleLabel}:${start}-${end}`);
+    out.push(sliceSpan(lines, start, end, CONTEXT_BODY_MAX_LINES).text);
+    if (plan.callHint) out.push(plan.callHint);
+  }
+  if (mask.inlinedCallees && plan.calleeBodies.length) {
+    let budget = CONTEXT_INLINE_CALLEE_LOC;
+    for (const cb of plan.calleeBodies) {
+      if (budget <= 0) break;
+      const start = cb.site.start;
+      const fromThisFile = cb.site.path === plan.moduleLabel;
+      let bodyLines = fromThisFile ? lines : null;
+      if (!bodyLines) {
+        try { ({ lines: bodyLines } = await readSpanSafe({ readFile, repoRoot, path: cb.site.path })); }
+        catch { bodyLines = null; }
+      }
+      if (!bodyLines) continue;
+      const sliced = sliceSpan(bodyLines, start, cb.site.end, budget);
+      out.push(`\n## inlined callee body (depth-1 in-repo call): ${cb.label} @ ${cb.site.path}:${start}-${cb.site.end}`);
+      out.push(sliced.text);
+      budget -= (sliced.end - start + 1);
+    }
+  }
+  return out.join("\n");
+}
+
 /**
  * @param {object} graph  a parseEntities() result
  * @param {object} [opts]
- * @param {boolean} [opts.sourceAccess=false]  whether source services can read bodies
+ * @param {boolean} [opts.sourceAccess=false]  whether source services (snippet, context) read
+ *   real fs bodies. When true, `repoRoot` + `readFile` are REQUIRED (a programmer error to
+ *   omit either — this module stays fs-free otherwise, "pure graph queries, no fs" by default;
+ *   fs is an explicit INJECTED capability, never an ambient import).
+ * @param {string} [opts.repoRoot]  absolute repo root; required when sourceAccess is true.
+ * @param {Function} [opts.readFile]  async (path, encoding) => string, e.g. node:fs/promises'
+ *   readFile; required when sourceAccess is true.
+ * @param {object|null} [opts.tel]  an optional telemetry sink ({ record(fields) }, e.g. from
+ *   telemetry.mjs's createTelemetry). When present, every service is wrapped ONCE here to time
+ *   it and record `{ tool: "ri.<name>", perf: { ms_total }, response: { ok, count } }` — counts
+ *   only, never raw text/body. Null (the default) skips the wrapping loop entirely — zero
+ *   overhead, and fixtureProvider()/bootstrapProvider() (which pass no tel) are unaffected.
  * @returns the typed service object
  */
-export function createGraphService(graph, { sourceAccess = false } = {}) {
+export function createGraphService(graph, { sourceAccess = false, repoRoot = null, readFile = null, tel = null } = {}) {
   const byId = graph.byId;
+  if (sourceAccess && (!repoRoot || typeof readFile !== "function")) {
+    throw new TypeError(
+      "createGraphService({ sourceAccess: true }) requires both repoRoot and readFile — " +
+        "fs access is an injected capability, not an ambient import.",
+    );
+  }
 
   const resolveId = (id) => byId.get(id) || null;
 
@@ -169,28 +249,37 @@ export function createGraphService(graph, { sourceAccess = false } = {}) {
       });
     },
 
-    edges(id, kind) {
+    edges(id, kind, { limit, offset = 0 } = {}) {
       if (!EDGE_KINDS.includes(kind)) {
         throw new TypeError(`edges(): unknown kind "${kind}" (not in EDGE_KINDS)`);
       }
       const ind = resolveId(id);
       if (!ind) return miss(MISS_REASONS.UNRESOLVED_TERM, { term: id });
       const meta = groupMetaForKind(graph, kind);
-      const edges = edgesOfKind(graph, kind)
+      // edge order is stable/memoized (edgesOfKind's own docblock in codegraph.mjs) — a plain
+      // slice after filter/map is a safe, backward-compatible pagination: an omitted `limit`
+      // leaves the full list untouched (limit=undefined → slice(offset) → everything from offset).
+      let edges = edgesOfKind(graph, kind)
         .filter((e) => e.subject === id)
         .map((e) => toEdge(e, meta));
+      edges = limit == null ? edges.slice(offset) : edges.slice(offset, offset + limit);
       return hit({ kind, edges });
     },
 
-    impact(moduleId) {
+    impact(moduleId, { maxDepth } = {}) {
       const ind = resolveId(moduleId);
       if (!ind) return miss(MISS_REASONS.UNRESOLVED_TERM, { term: moduleId });
-      const levels = impactClosure(graph, ind);
+      const levels = maxDepth == null ? impactClosure(graph, ind) : impactClosure(graph, ind, { maxDepth });
       const total = levels.reduce((n, l) => n + l.length, 0);
       return hit({ total, levels });
     },
 
-    snippet(id) {
+    // NOTE: async (returns Promise<Result>) — real source reads (node:fs/promises) are
+    // inherently async, and unlike the pure graph services above, a caller of a
+    // source-reaching service should always `await` it regardless of whether THIS
+    // particular provider happens to be source-capable (awaiting a non-Promise value is a
+    // safe no-op, so this is backward-compatible for a caller that already awaits).
+    async snippet(id) {
       const ind = resolveId(id);
       if (!ind) return miss(MISS_REASONS.UNRESOLVED_TERM, { term: id });
       const site = siteOf(ind);
@@ -201,18 +290,37 @@ export function createGraphService(graph, { sourceAccess = false } = {}) {
         });
       }
       if (!site) return miss(MISS_REASONS.NO_SOURCE, { term: id, detail: "no source span in the graph (likely a module)" });
-      // A source-capable subclass overrides snippet to read the body; the graph-only
-      // base returns the span with a null body.
-      return hit({ path: site.path, span: { start: site.start, end: site.end }, body: null });
+      try {
+        const sliced = await readSpanSafe({
+          readFile, repoRoot, path: site.path, start: site.start, end: site.end, maxLines: CONTEXT_BODY_MAX_LINES,
+        });
+        return hit({ path: site.path, span: { start: site.start, end: site.end }, body: sliced.text });
+      } catch (e) {
+        // A path-traversal ToolError or any other read failure both land here — honestly,
+        // never a throw (the interface's error contract: a clean miss is a value).
+        return miss(MISS_REASONS.NO_SOURCE, { term: id, detail: `could not read ${site.path}: ${e?.message || e}` });
+      }
     },
 
-    context(symbol) {
+    // INTERFACE_VERSION 1.1.0 (2d): context() is now a graph-only HIT for any resolvable
+    // symbol — contextPlan/sizeBundle/renderGraphOnlyBundle are pure graph queries, so a
+    // graph-only provider (no working tree) can genuinely answer with siblings/registration/
+    // globals/tests/exports/insertion-region, everything EXCEPT anchor/exemplar/inlined-callee
+    // body TEXT. Only an unresolvable symbol still misses (UNRESOLVED_TERM). A source-capable
+    // provider layers the body sections on top via renderSourceBodies (below).
+    async context(symbol, { depth = "auto" } = {}) {
       const { match } = resolveSymbol(graph, String(symbol ?? ""));
       if (!match) return miss(MISS_REASONS.UNRESOLVED_TERM, { term: String(symbol ?? "") });
-      return miss(MISS_REASONS.NO_SOURCE, {
-        term: String(symbol ?? ""),
-        detail: "the edit bundle reaches into the working tree; this provider exposes no source",
-      });
+      const plan = contextPlan(graph, match);
+      const d = String(depth || "auto").trim().toLowerCase();
+      let tier, mask;
+      if (d === "min") { tier = "TINY"; mask = bundleMask("TINY"); }
+      else if (d === "full") { tier = "FULL"; mask = bundleMask("FULL"); }
+      else ({ tier, mask } = sizeBundle(plan, graph, {}));
+      const graphText = renderGraphOnlyBundle(plan, mask);
+      if (!svc.sourceAccess) return hit({ text: graphText, tier });
+      const bodyText = await renderSourceBodies(plan, mask, { readFile, repoRoot });
+      return hit({ text: bodyText ? `${graphText}\n${bodyText}` : graphText, tier });
     },
 
     architecture({ package: pkg = "" } = {}) {
@@ -281,21 +389,37 @@ export function createGraphService(graph, { sourceAccess = false } = {}) {
       return hit({ commits });
     },
 
-    search(query, { kind = "", name = "", decorator = "" } = {}) {
-      const q = String(query || "").trim().toLowerCase();
+    // Ranked lexical search, mirroring codegraph.mjs's renderSearch/searchSymbols semantics
+    // instead of the old flat substring filter: module-mode (no kind, or kind="module") ranks
+    // via searchModulesRanked/scoreModules (path + defined-symbol + import-proximity scoring),
+    // symbol-mode (kind names a symbol kind) ranks via scoreSymbolsRanked. name/decorator
+    // filters apply in SYMBOL mode only — module mode never supported them in codegraph.mjs
+    // either (renderSearch's module branch ignores both beyond the "was anything specified"
+    // check), so this does not invent a new filter semantic. Results are capped at
+    // `limit` (default SEARCH_LIMIT), sliced after the full ranked array is computed.
+    search(query, { kind = "", name = "", decorator = "", limit = SEARCH_LIMIT, offset = 0 } = {}) {
+      const rawQuery = String(query || "");
       const k = String(kind || "").trim().toLowerCase();
-      const nm = String(name || "").trim().toLowerCase();
+      const nm = String(name || "").trim();
       const dec = String(decorator || "").trim().toLowerCase();
-      const results = graph.individuals
-        .filter((i) => {
-          const label = String(i.label || "").toLowerCase();
-          if (k && (i.class || "").toLowerCase() !== k) return false;
-          if (nm && !label.includes(nm)) return false;
-          if (dec && !String(attrOf(i, "decorators") || "").toLowerCase().includes(dec)) return false;
-          if (q && !label.includes(q)) return false;
-          return true;
-        })
-        .map(toIndividual);
+      let nameRe = null;
+      if (nm) {
+        try { nameRe = new RegExp(nm, "i"); } catch { nameRe = null; }
+      }
+      let rankedInds; // Individual[], highest-ranked first
+      if (k && k !== "module") {
+        const tokens = rawQuery.toLowerCase().split(/[^a-z0-9_]+/).filter(Boolean);
+        rankedInds = scoreSymbolsRanked(graph, tokens, { kind: k, decFilter: dec, nameRe }).map((s) => s.ind);
+      } else {
+        // label→individual, scoped to this call (no persistent cache) — maps searchModulesRanked's
+        // `path` labels (a copy of the label, not the live individual) back to real Individuals.
+        const byLabel = new Map();
+        for (const i of graph.individuals) if ((i.class || "") === "Module") byLabel.set(i.label, i);
+        rankedInds = searchModulesRanked(graph, rawQuery)
+          .map(({ path }) => byLabel.get(path))
+          .filter(Boolean);
+      }
+      const results = rankedInds.slice(offset, offset + limit).map(toIndividual);
       return hit({ results });
     },
 
@@ -305,7 +429,60 @@ export function createGraphService(graph, { sourceAccess = false } = {}) {
     },
   };
 
+  // Optional telemetry (Item 3.2): when `tel` is supplied, wrap every RI service ONCE here at
+  // construction — never per-method by hand — to time it and record COUNTS only (never raw
+  // text/body; see responseCounts below and telemetry.mjs's redact() as a second net). When
+  // `tel` is null (the default), this loop does not run at all: zero overhead, and
+  // fixtureProvider()/bootstrapProvider() (which pass no `tel`) are completely unaffected.
+  if (tel) {
+    for (const name of SERVICES) {
+      const orig = svc[name];
+      if (typeof orig !== "function") continue;
+      svc[name] = (...args) => {
+        const t0 = performance.now();
+        const result = orig.apply(svc, args);
+        // snippet/context are ASYNC (Promise<Result>) — record after settling, still return a
+        // promise; every other service is synchronous — record immediately, return the value
+        // as-is. Detected at the ACTUAL call (not a static per-service list) so this is correct
+        // even if a future service's sync/async-ness varies by branch.
+        if (result && typeof result.then === "function") {
+          return result.then((r) => {
+            recordTelemetry(tel, name, performance.now() - t0, r);
+            return r;
+          });
+        }
+        recordTelemetry(tel, name, performance.now() - t0, result);
+        return result;
+      };
+    }
+  }
+
   return svc;
+}
+
+/** tel.record({ tool: `ri.${name}`, perf: { ms_total }, response }) for one wrapped service
+ *  call — swallows any error (telemetry must never break the call it's observing). */
+function recordTelemetry(tel, name, ms, result) {
+  try {
+    tel.record({ tool: `ri.${name}`, perf: { ms_total: ms }, response: responseCounts(result) });
+  } catch { /* telemetry must never break the caller's turn */ }
+}
+
+/** Counts only, never raw text/body: { ok, count } — count is the sum of every array-valued
+ *  field's length under result.value (edges.length, results.length, candidates.length, …), a
+ *  single generic aggregate rather than guessing each service's own field names. A miss
+ *  records its reason (a closed-set token, not free text) instead of a count. */
+function responseCounts(result) {
+  if (!result || typeof result !== "object" || result.ok !== true) {
+    return { ok: false, reason: result?.miss?.reason || null };
+  }
+  let count = 0;
+  const value = result.value;
+  if (Array.isArray(value)) count = value.length;
+  else if (value && typeof value === "object") {
+    for (const v of Object.values(value)) if (Array.isArray(v)) count += v.length;
+  }
+  return { ok: true, count };
 }
 
 /** The source-reaching services a graph-only provider satisfies with NO_SOURCE. */

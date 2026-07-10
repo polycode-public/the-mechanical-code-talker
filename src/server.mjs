@@ -15,8 +15,9 @@
 // otherwise hand-compose into one deterministic round-trip. See ask.mjs.
 
 import { readFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname } from "node:path";
 import { ToolError } from "./config.mjs";
+import { sliceSpan, readSpanSafe } from "./source-slice.mjs";
 import * as defaultSource from "./source.mjs";
 import {
   parseEntities,
@@ -202,7 +203,7 @@ function resolveOrThrow(svc, symbol, what) {
  * variable, history-derived tails (covering tests, co-change) come LAST, so a stable prefix
  * maximises prompt-cache reuse.
  */
-export async function buildContextBundle(args, { config, source = defaultSource, trim = false } = {}) {
+export async function buildContextBundle(args, { config, source = defaultSource, trim = false, tel = null } = {}) {
   const symbol = String(args?.symbol || "").trim();
   if (!symbol) throw new ToolError("symbol is required");
   const depth = String(args?.depth || "auto").trim().toLowerCase();
@@ -216,7 +217,17 @@ export async function buildContextBundle(args, { config, source = defaultSource,
   // by the tmct-max arm to test whether more injection re-bloats.
   const max = Boolean(args?.max);
   const graph = await loadGraph(config, source);
-  const svc = createGraphService(graph);
+  // repo root = the dir containing .tmct/ (graphFile = <repo>/.tmct/graph.json) — computed
+  // before createGraphService so the RI service can be constructed source-capable (2e): this
+  // module still does its OWN safe reads below (readSpanSafe/sliceSpan, Item 1) rather than
+  // delegating to svc.context() — see the module docblock's note on why. Passing sourceAccess
+  // through anyway keeps svc.snippet()/svc.context() usable by any future/external caller of
+  // this same service object without a second, divergent construction path. `tel` (optional,
+  // Item 3.3) is an already-constructed telemetry sink threaded down from the caller (e.g.
+  // chat.mjs's session-level createTelemetry) — never minted here, so a caller that never
+  // passes one costs nothing extra (createGraphService's own wrapping loop no-ops on tel:null).
+  const repoRoot = dirname(dirname(config.graphFile));
+  const svc = createGraphService(graph, { sourceAccess: true, repoRoot, readFile, tel });
   const { match } = resolveOrThrow(svc, symbol, "symbol");
   const plan = contextPlan(graph, match);
   // #6/B1/B6: pick the section mask by depth — min forces TINY, full/max forces everything, auto
@@ -228,17 +239,13 @@ export async function buildContextBundle(args, { config, source = defaultSource,
   else if (max || depth === "full") { tier = "FULL"; mask = bundleMask("FULL"); topup = true; }
   else ({ tier, mask, topup } = sizeBundle(plan, graph, { untuned }));
   if (trim && !max) mask = trimBundleMask(mask); // B2: secondary digest module → signatures + region only (max keeps the full bundle)
-  const repoRoot = dirname(dirname(config.graphFile));
   let lines = null;
   if (plan.moduleLabel) {
-    try { lines = (await readFile(join(repoRoot, plan.moduleLabel), "utf8")).split("\n"); }
+    try { ({ lines } = await readSpanSafe({ readFile, repoRoot, path: plan.moduleLabel })); }
     catch { lines = null; }
   }
   const lineAt = (n) => (lines && lines[n - 1] != null ? lines[n - 1].trim() : "");
-  const sliceBody = (start, end) => {
-    const e = Math.min(lines.length, Math.min(end, start + SNIPPET_MAX_LINES - 1));
-    return lines.slice(start - 1, e).map((l, i) => `${start + i}\t${l}`).join("\n");
-  };
+  const sliceBody = (start, end) => sliceSpan(lines, start, end, SNIPPET_MAX_LINES).text;
   const out = [
     `Edit context for ${plan.moduleLabel} [${tier}${trim ? " secondary" : ""}] — assembled from the typed graph + that file. ` +
       "You do NOT need to Read it; write the new code directly after reviewing this.",
@@ -266,16 +273,15 @@ export async function buildContextBundle(args, { config, source = defaultSource,
     for (const cb of plan.calleeBodies) {
       if (budget <= 0) break;
       const start = cb.site.start;
-      const end = Math.min(cb.site.end, start + budget - 1);
       const fromThisFile = cb.site.path === plan.moduleLabel;
       const bodyLines = fromThisFile && lines
         ? lines
-        : await readFile(join(repoRoot, cb.site.path), "utf8").then((t) => t.split("\n")).catch(() => null);
+        : await readSpanSafe({ readFile, repoRoot, path: cb.site.path }).then((r) => r.lines).catch(() => null);
       if (!bodyLines) continue;
-      const e = Math.min(bodyLines.length, end);
+      const sliced = sliceSpan(bodyLines, start, cb.site.end, budget);
       out.push(`\n## inlined callee body (depth-1 in-repo call): ${cb.label} @ ${cb.site.path}:${start}-${cb.site.end}`);
-      out.push(bodyLines.slice(start - 1, e).map((l, i) => `${start + i}\t${l}`).join("\n"));
-      budget -= (e - start + 1);
+      out.push(sliced.text);
+      budget -= (sliced.end - start + 1);
     }
   }
   if (mask.classMembers && plan.classMembers && plan.classMembers.members.length) {
@@ -337,11 +343,11 @@ const DISPATCH_TOOLS = new Set([
   "tmct_file_history", "tmct_method_history", "tmct_class_history",
 ]);
 
-export async function dispatchTool(name, args, { config, source = defaultSource } = {}) {
+export async function dispatchTool(name, args, { config, source = defaultSource, tel = null } = {}) {
   // tmct_context builds (and loads) its own edit bundle — return early so we don't
   // double-load the graph for it.
   if (name === "tmct_context") {
-    return (await buildContextBundle(args, { config, source })).text;
+    return (await buildContextBundle(args, { config, source, tel })).text;
   }
   // Reject an unknown tool BEFORE touching the graph — preserves the original
   // ordering (an unknown name never triggers a load).
@@ -352,7 +358,13 @@ export async function dispatchTool(name, args, { config, source = defaultSource 
   // the result with tmct's own render* layer (which reads svc.graph). This is the
   // switch's operations extracted into a named, typed seam without changing bytes.
   const graph = await loadGraph(config, source);
-  const svc = createGraphService(graph);
+  // repo root = the dir containing .tmct/ (graphFile = <repo>/.tmct/graph.json). Passed through
+  // to createGraphService (2e) so svc.snippet()/svc.context() are usable directly; this
+  // dispatcher still does its OWN safe read for tmct_snippet below (readSpanSafe/sliceSpan,
+  // Item 1) rather than delegating, to keep its richer presentation (candidates, call hints,
+  // truncation notices) — see the tmct_snippet branch below.
+  const repoRoot = dirname(dirname(config.graphFile));
+  const svc = createGraphService(graph, { sourceAccess: true, repoRoot, readFile, tel });
   if (name === "tmct_context_more") {
     const symbol = String(args?.symbol || "").trim();
     if (!symbol) throw new ToolError("symbol is required");
@@ -379,18 +391,16 @@ export async function dispatchTool(name, args, { config, source = defaultSource 
           "it is likely a module. Use tmct_describe for its contents, then tmct_snippet one of the functions/classes it defines.",
       );
     }
-    // repo root = the dir containing .tmct/ (graphFile = <repo>/.tmct/graph.json)
-    const repoRoot = dirname(dirname(config.graphFile));
-    const abs = join(repoRoot, site.path);
-    let text;
-    try { text = await readFile(abs, "utf8"); }
-    catch (e) { throw new ToolError(`could not read ${site.path} (${e?.code || e?.message || e})`); }
-    const lines = text.split("\n");
-    const start = Math.max(1, site.start);
-    let end = Math.min(lines.length, site.end);
-    let truncated = false;
-    if (end - start + 1 > SNIPPET_MAX_LINES) { end = start + SNIPPET_MAX_LINES - 1; truncated = true; }
-    const body = lines.slice(start - 1, end).map((l, i) => `${start + i}\t${l}`).join("\n");
+    let sliced;
+    try {
+      sliced = await readSpanSafe({
+        readFile, repoRoot, path: site.path, start: site.start, end: site.end, maxLines: SNIPPET_MAX_LINES,
+      });
+    } catch (e) {
+      if (e instanceof ToolError) throw e; // path-traversal guard: message already names the offending path
+      throw new ToolError(`could not read ${site.path} (${e?.code || e?.message || e})`);
+    }
+    const { text: body, truncated } = sliced;
     const span = site.end > site.start ? `${site.start}-${site.end}` : `${site.start}`;
     const header = `${match.label} — ${match.class || "Entity"} @ ${site.path}:${span}`;
     const note = truncated ? `\n… (truncated to ${SNIPPET_MAX_LINES} lines; full span ${span})` : "";

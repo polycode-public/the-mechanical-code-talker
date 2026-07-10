@@ -1,4 +1,4 @@
-# The Repository Interface (v1.0.0)
+# The Repository Interface (v1.1.0)
 
 The versioned contract between **tmct** (the query interpreter — the brittle side) and a
 **graph provider** (seonix, a fixture, a browser page — the stable side). tmct **owns and versions**
@@ -85,8 +85,11 @@ contract is for *domain* misses, not misuse.
 A provider advertises `capabilities: string[]` — the service names it implements. A host calls through
 `invoke(svc, service, ...args)`: a service outside the set returns `miss(CAPABILITY_ABSENT)` rather
 than throwing, so the interpreter **degrades** the query (to a lesser strategy or an honest miss),
-never errors. Source services (`snippet`, `context`) may be *advertised yet answer* `miss(NO_SOURCE)`
-when there is no working tree — a graph-only provider still conforms.
+never errors. `snippet` may be *advertised yet answer* `miss(NO_SOURCE)` when there is no working
+tree — it has nothing useful without fs. `context` is **graph-only-capable** since v1.1.0: a
+graph-only provider still returns a real `hit` (the graph-only sections of the edit bundle) for any
+resolvable symbol; only a source-capable provider adds the source body text on top. Either way, a
+graph-only provider still conforms.
 
 **Versioning is additive by default.** New services and new optional args are minor bumps; the suite
 for version *N* stays green under *N+1*. A breaking change is a new **major** interface version with
@@ -120,17 +123,34 @@ Grouped as in the plan's six-group inventory. Full arg/result/miss detail is in
 
 ### Edge traversal
 
-- **`edges(id, kind) → { kind, edges: Edge[] }`** — outgoing edges of one closed kind. An unknown
-  kind throws `TypeError`; an empty result is an honest `hit`.
-- **`impact(moduleId) → { total, levels }`** — the transitive dependent closure the interpreter
-  cannot compute without provider truth.
+- **`edges(id, kind, { limit?, offset? }) → { kind, edges: Edge[] }`** — outgoing edges of one closed
+  kind. An unknown kind throws `TypeError`; an empty result is an honest `hit`. `limit`/`offset`
+  (both optional) paginate the already-stable edge order; an omitted `limit` is the full list,
+  byte-identical to pre-pagination behavior.
+- **`impact(moduleId, { maxDepth? }) → { total, levels }`** — the transitive dependent closure the
+  interpreter cannot compute without provider truth. `maxDepth` (optional, default 8) bounds how
+  many levels the closure walks.
 
 ### Source spans (source capability)
 
-- **`snippet(id) → { path, span, body }`** — the exact source span. A provider with no working tree
-  returns `miss(NO_SOURCE)` (carrying the span in `detail`) rather than throwing.
-- **`context(symbol) → { text, tier }`** — the composed edit bundle. Source-reaching; `NO_SOURCE`
-  when absent.
+`graph-service.mjs`'s reference implementation keeps fs access an **explicit injected capability**,
+never an ambient import: `createGraphService(graph, { sourceAccess, repoRoot, readFile })` — when
+`sourceAccess` is true, `repoRoot` and `readFile` (e.g. `node:fs/promises`' `readFile`) are
+**required**, or construction throws `TypeError` (a programmer error, caught at construction time,
+not a runtime miss). Both `snippet` and `context` are **async** (`Promise<Result>`) — a real body
+read is inherently fs I/O; callers should always `await` them regardless of whether a given
+provider happens to be source-capable.
+
+- **`snippet(id) → Promise<{ path, span, body }>`** — the exact source span. A provider with no
+  working tree returns `miss(NO_SOURCE)` (carrying the span in `detail`) rather than throwing —
+  UNCHANGED by v1.1.0, snippet has nothing useful without fs.
+- **`context(symbol, { depth? }) → Promise<{ text, tier }>`** — the composed edit bundle.
+  **Narrowed miss contract as of v1.1.0**: `contextPlan`/`sizeBundle`/`renderGraphOnlyBundle` are
+  pure graph queries, so a graph-only provider now returns a real `hit` — siblings, registration,
+  class members, `__all__`/re-exports, insertion region, covering tests, co-change — for ANY
+  resolvable symbol. Only an unresolvable symbol still misses (`UNRESOLVED_TERM`); `NO_SOURCE` is
+  no longer a reason `context` can return. A source-capable provider additionally includes the
+  anchor/exemplar/inlined-callee body TEXT sections on top of the same graph-only bundle.
 
 ### Aggregates / architecture
 
@@ -145,18 +165,25 @@ Grouped as in the plan's six-group inventory. Full arg/result/miss detail is in
 
 ### Search / locate
 
-- **`search(query, { kind?, name?, decorator? }) → { results: Individual[] }`** — lexical,
-  provider-local. An empty set is honest, not a miss.
+- **`search(query, { kind?, name?, decorator?, limit?, offset? }) → { results: Individual[] }`** —
+  REALLY ranked, not a flat filter: module-mode (no `kind`, or `kind: "module"`) ranks via the same
+  path/symbol/import-proximity scorer `tmct_search` uses; symbol-mode (`kind` names a symbol kind —
+  function/class/method/attribute) ranks via a dedicated symbol scorer, with real `name` (regex,
+  case-insensitive) / `decorator` filters. Module-mode does not support `name`/`decorator` (matching
+  `tmct_search`'s own module branch — no new filter semantic invented). `limit` (default 10) /
+  `offset` paginate the full ranked array. An empty set is honest, not a miss.
 - **`ask(query) → { content, tmct_ask }`** — the composed, zero-model NL round-trip.
 
 ## Reference implementations
 
 - **`src/providers/fixture.mjs`** — a small, real, self-contained graph. Every non-source service
-  returns real truth; `snippet`/`context` answer `NO_SOURCE` (no working tree). Read it first: it is
-  the executable specification.
+  returns real truth; `snippet` answers `NO_SOURCE` and `context` returns a graph-only bundle unless
+  constructed source-capable. Read it first: it is the executable specification.
 - **`src/providers/bootstrap.mjs`** — the empty graph a fresh repo "contains". Every id-taking
   service misses `UNRESOLVED_TERM`; every aggregate returns an honest empty. The provider with no data
   must still conform.
 
-Both are `createGraphService(graph)` (`src/providers/graph-service.mjs`) over different graphs. A host
-with a working tree layers source access on top by overriding `snippet`/`context`.
+Both are `createGraphService(graph, opts)` (`src/providers/graph-service.mjs`) over different graphs;
+`opts` passes straight through, so either can be constructed source-capable for testing:
+`fixtureProvider({ sourceAccess: true, repoRoot, readFile })`. A host with a real working tree
+constructs its own provider the same way to get real `snippet`/`context` body text.

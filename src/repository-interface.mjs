@@ -18,7 +18,7 @@
 /** SemVer of the interface. Additive-by-default: new services / optional args are
  *  minor bumps; the suite for version N stays green under N+1. A breaking change
  *  is a new MAJOR with its own suite (see the versioning policy in the plan). */
-export const INTERFACE_VERSION = "1.0.0";
+export const INTERFACE_VERSION = "1.1.0";
 
 /** The OWL vocabulary the types are grounded in. */
 export const ONTOLOGY_IRI = "urn:tmct:core";
@@ -211,7 +211,10 @@ export const REPOSITORY_INTERFACE = Object.freeze({
   capabilitiesModel:
     "A provider advertises `capabilities: string[]` (service names it implements). " +
     "A service outside the set is negotiated away to miss(CAPABILITY_ABSENT) — never an error. " +
-    "Source services (snippet, context) may be advertised yet answer miss(NO_SOURCE) when no working tree exists.",
+    "snippet may be advertised yet answer miss(NO_SOURCE) when no working tree exists (it has " +
+    "nothing useful without fs); context is graph-only-capable since INTERFACE_VERSION 1.1.0 — " +
+    "it returns a real hit (graph-only bundle) for any resolvable symbol even with no working " +
+    "tree, only escalating NO_SOURCE-style behavior to richer body text when source-capable.",
   services: {
     resolve: {
       group: "resolution", args: { term: "string" },
@@ -264,15 +267,26 @@ export const REPOSITORY_INTERFACE = Object.freeze({
     },
     snippet: {
       group: "source", args: { id: "string" },
-      result: "{ path: string, span: { start, end }, body: string|null }",
+      result: "{ path: string, span: { start, end }, body: string|null } — Promise<Result>",
       misses: ["UNRESOLVED_TERM", "NO_SOURCE"], concurrency: CONCURRENT_SAFE,
-      purpose: "The exact source span of a symbol. A provider with no working tree returns miss(NO_SOURCE) honestly.",
+      purpose: "The exact source span of a symbol. A provider with no working tree returns miss(NO_SOURCE) honestly — snippet has nothing useful without fs.",
+      note: "ASYNC (returns Promise<Result>) — a real body read is inherently fs I/O; callers should always await it. A graph-only provider still resolves synchronously-in-spirit (the promise settles on the same tick) but the return type is uniformly a Promise regardless of sourceAccess.",
     },
     context: {
       group: "source", args: { symbol: "string", depth: "min|auto|full?" },
-      result: "{ text: string, tier: string } (a sized edit bundle)",
-      misses: ["UNRESOLVED_TERM", "NO_SOURCE"], concurrency: CONCURRENT_SAFE,
-      purpose: "The composed edit bundle (exemplar, siblings, registration, insertion region). Source-reaching.",
+      result: "{ text: string, tier: string } (a sized edit bundle) — Promise<Result>",
+      // INTERFACE_VERSION 1.1.0 (2026-07): NARROWED miss contract — context() used to
+      // unconditionally miss(NO_SOURCE) (its whole edit bundle was implemented as fs-only).
+      // contextPlan/sizeBundle/renderGraphOnlyBundle are pure graph queries, so a graph-only
+      // provider (sourceAccess:false) now returns a REAL HIT for any resolvable symbol —
+      // siblings, registration, class members, __all__/re-exports, insertion region, covering
+      // tests, co-change — everything except anchor/exemplar/inlined-callee BODY TEXT, which
+      // still needs a source-capable provider. NO_SOURCE is consequently no longer a miss
+      // reason context() can return (dropped from the list below) — the only remaining miss is
+      // an unresolvable symbol.
+      misses: ["UNRESOLVED_TERM"], concurrency: CONCURRENT_SAFE,
+      purpose: "The composed edit bundle (exemplar, siblings, registration, insertion region). A graph-only provider returns the graph-only sections as a real hit; a source-capable provider (sourceAccess:true, repoRoot, readFile) additionally includes the anchor/exemplar/inlined-callee body text.",
+      note: "ASYNC (returns Promise<Result>) — see snippet's note; source-capable rendering is fs I/O.",
     },
     architecture: {
       group: "aggregate", args: { package: "string?" },

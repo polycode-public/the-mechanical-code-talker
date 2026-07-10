@@ -407,7 +407,7 @@ function definesIndex(graph) {
  * with a penalty for test modules. Renders each hit compactly with the matching
  * symbols, so the agent can jump straight to tmct_describe. No model calls.
  */
-const SEARCH_LIMIT = 10;
+export const SEARCH_LIMIT = 10;
 const SEARCH_SYMBOLS_SHOWN = 8;
 // Locate scoring — IDF-weighted, component-aware. The rig queries with the WHOLE problem
 // statement, so ubiquitous tokens (template/filter/value/text) would swamp the score; weight each
@@ -1649,9 +1649,17 @@ export function renderCommitAuthor(graph, sha) {
 
 const SYMBOL_CLASSES = { function: "Function", class: "Class", method: "Method", attribute: "Attribute" };
 
-function searchSymbols(graph, tokens, { limit = SEARCH_LIMIT, kind, decFilter, nameRe }) {
+/** The structured scorer behind searchSymbols (kind=function/class/method/attribute, with
+ *  name/decorator filters): filters graph individuals to `kind`'s class, scores by token
+ *  substring hits (or 1 for an empty query, matching everything of that kind), and sorts
+ *  score desc, tie-broken by SHORTER label first (matches searchSymbols's original inline
+ *  sort exactly). An unrecognised `kind` yields an empty ranked list — callers that need to
+ *  distinguish "unknown kind" from "kind valid, nothing matched" check SYMBOL_CLASSES
+ *  themselves (see searchSymbols below). Pure; deterministic.
+ *  @returns {Array<{ind: object, score: number}>} */
+export function scoreSymbolsRanked(graph, tokens, { kind, decFilter = "", nameRe = null } = {}) {
   const targetClass = SYMBOL_CLASSES[kind];
-  if (!targetClass) return `unknown kind "${kind}" (use function, class, method, attribute, or module).`;
+  if (!targetClass) return [];
   const hits = [];
   for (const ind of graph.individuals) {
     if ((ind.class || "") !== targetClass) continue;
@@ -1663,8 +1671,15 @@ function searchSymbols(graph, tokens, { limit = SEARCH_LIMIT, kind, decFilter, n
     if (tokens.length && !score) continue;
     hits.push({ ind, score });
   }
-  if (!hits.length) return `no ${kind} matches the given filters.`;
   hits.sort((a, b) => b.score - a.score || String(a.ind.label).length - String(b.ind.label).length);
+  return hits;
+}
+
+function searchSymbols(graph, tokens, { limit = SEARCH_LIMIT, kind, decFilter, nameRe }) {
+  const targetClass = SYMBOL_CLASSES[kind];
+  if (!targetClass) return `unknown kind "${kind}" (use function, class, method, attribute, or module).`;
+  const hits = scoreSymbolsRanked(graph, tokens, { kind, decFilter, nameRe });
+  if (!hits.length) return `no ${kind} matches the given filters.`;
   const top = hits.slice(0, limit);
   const lines = [`${hits.length} ${kind}(s) match (top ${top.length}):`];
   for (const { ind } of top) lines.push(`- ${ind.label}${spanTag(siteOf(ind))}`);
@@ -2022,6 +2037,60 @@ export function renderContextMore(plan) {
     out.push(`\n## usually changed together: ${plan.cochange.map((c) => `${c.label} (×${c.weight})`).join(", ")}`);
   }
   if (out.length === 1) out.push("(no omitted sections — the lean bundle already contained everything for this symbol.)");
+  return out.join("\n");
+}
+
+// ---- Repository Interface: graph-only context() bundle (no fs) -----------------
+
+/** Render a graph-only edit bundle for `plan` — every contextPlan section EXCEPT the
+ *  fs-dependent anchor/exemplar/inlined-callee body text (registration globals, class
+ *  members, ranked siblings, __all__, re-exports, the insertion point, covering tests,
+ *  co-change neighbours), gated by `mask` (see bundleMask/sizeBundle). Pure — no fs.
+ *  Used by graph-service.mjs's context() service so a graph-only provider (no working
+ *  tree) can still return a real HIT instead of an NO_SOURCE miss — see PLAN item 2d /
+ *  INTERFACE_VERSION 1.1.0. A source-capable provider layers the body sections on top
+ *  (it has fs access this module deliberately does not). */
+export function renderGraphOnlyBundle(plan, mask) {
+  const out = [
+    `Edit context for ${plan.moduleLabel} (graph-only bundle — siblings/registration/tests are real graph truth; ` +
+      "no source body without a source-capable provider).",
+  ];
+  if (mask.registration && plan.globals.length) {
+    out.push(`\n## registration / module globals (replicate this pattern):`);
+    for (const g of plan.globals) out.push(`  ${g.label} = ${g.value}${g.site ? `  [:${g.site.start}]` : ""}`);
+  }
+  if (mask.classMembers && plan.classMembers && plan.classMembers.members.length) {
+    out.push(`\n## members of ${plan.classMembers.className}:`);
+    for (const m of plan.classMembers.members) {
+      const short = String(m.label).split(".").pop();
+      const sig = m.params != null && m.params !== "" ? `(${m.params})${m.returns ? ` -> ${m.returns}` : ""}` : "";
+      const dec = m.decorators ? `@${m.decorators} ` : "";
+      const r = m.raises ? `  raises=${m.raises}` : "";
+      out.push(`  ${m.class} ${short}${m.site ? ` :${m.site.start}` : ""}  ${dec}${short}${sig}${r}`);
+    }
+  }
+  if (mask.siblings && plan.siblings.length) {
+    out.push(`\n## sibling symbols to copy the style of (most relevant first; ${plan.siblings.length} total):`);
+    for (const s of plan.siblings.slice(0, plan.siblingCap)) {
+      const dec = s.decorators ? `@${s.decorators} ` : "";
+      const r = s.raises ? `  raises=${s.raises}` : "";
+      out.push(`  ${s.class} ${s.label}${s.site ? ` :${s.site.start}` : ""}  ${dec}${r}`);
+    }
+    if (plan.siblings.length > plan.siblingCap) out.push(`  …+${plan.siblings.length - plan.siblingCap} more`);
+  }
+  if (mask.allExports && plan.allExports) out.push(`\n## module __all__: ${plan.allExports}`);
+  if (mask.reexports && plan.exports && plan.exports.length) out.push(`\n## re-exported symbols: ${plan.exports.join(", ")}`);
+  if (mask.insertionRegion) {
+    if (plan.insertionRegion) {
+      out.push(`\n## insertion region starts at ${plan.moduleLabel}:${plan.insertionRegion.start} (write your new sibling here — no source body in this graph-only bundle).`);
+    } else if (plan.insertion) {
+      out.push(`\n## insert the new sibling after line ~${plan.insertion} (end of the last top-level definition).`);
+    }
+  }
+  if (mask.tests && plan.tests.length) out.push(`\n## covering tests: ${plan.tests.join(", ")}`);
+  if (mask.cochange && plan.cochange && plan.cochange.length) {
+    out.push(`\n## usually changed together (consider editing these too): ${plan.cochange.map((c) => `${c.label} (×${c.weight})`).join(", ")}`);
+  }
   return out.join("\n");
 }
 

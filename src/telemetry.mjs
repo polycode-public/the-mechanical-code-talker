@@ -14,8 +14,11 @@ import { appendFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { uuidv7 } from "./uuid.mjs";
 
-/** Field names whose VALUES are (or embed) raw source and must never be logged. */
-const DROP_KEYS = new Set(["text", "content", "snippet"]);
+/** Field names whose VALUES are (or embed) raw source and must never be logged. `body` is
+ *  the Repository Interface's own field name for real source text (snippet()/context()'s
+ *  source-capable body sections, PLAN item 2/3) — without it, raw source read via the
+ *  now-source-capable createGraphService could leak straight into a telemetry log. */
+const DROP_KEYS = new Set(["text", "content", "snippet", "body"]);
 /** String fields longer than this are truncated — except query.raw (the user's own
  *  question, which is the correlation key and is not file content). */
 const MAX_STR = 500;

@@ -18,7 +18,9 @@ export function bootstrapGraph() {
   return parseEntities(emptyEntities());
 }
 
-/** The bootstrap provider: every service over the empty graph — honest empties. */
-export function bootstrapProvider() {
-  return createGraphService(bootstrapGraph());
+/** The bootstrap provider: every service over the empty graph — honest empties.
+ *  `opts` passes straight through to createGraphService (e.g. `{ sourceAccess: true,
+ *  repoRoot, readFile }`), same pass-through as fixtureProvider. */
+export function bootstrapProvider(opts = {}) {
+  return createGraphService(bootstrapGraph(), opts);
 }
