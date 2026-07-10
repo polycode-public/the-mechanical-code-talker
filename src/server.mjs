@@ -203,7 +203,7 @@ function resolveOrThrow(svc, symbol, what) {
  * variable, history-derived tails (covering tests, co-change) come LAST, so a stable prefix
  * maximises prompt-cache reuse.
  */
-export async function buildContextBundle(args, { config, source = defaultSource, trim = false } = {}) {
+export async function buildContextBundle(args, { config, source = defaultSource, trim = false, tel = null } = {}) {
   const symbol = String(args?.symbol || "").trim();
   if (!symbol) throw new ToolError("symbol is required");
   const depth = String(args?.depth || "auto").trim().toLowerCase();
@@ -222,9 +222,12 @@ export async function buildContextBundle(args, { config, source = defaultSource,
   // module still does its OWN safe reads below (readSpanSafe/sliceSpan, Item 1) rather than
   // delegating to svc.context() — see the module docblock's note on why. Passing sourceAccess
   // through anyway keeps svc.snippet()/svc.context() usable by any future/external caller of
-  // this same service object without a second, divergent construction path.
+  // this same service object without a second, divergent construction path. `tel` (optional,
+  // Item 3.3) is an already-constructed telemetry sink threaded down from the caller (e.g.
+  // chat.mjs's session-level createTelemetry) — never minted here, so a caller that never
+  // passes one costs nothing extra (createGraphService's own wrapping loop no-ops on tel:null).
   const repoRoot = dirname(dirname(config.graphFile));
-  const svc = createGraphService(graph, { sourceAccess: true, repoRoot, readFile });
+  const svc = createGraphService(graph, { sourceAccess: true, repoRoot, readFile, tel });
   const { match } = resolveOrThrow(svc, symbol, "symbol");
   const plan = contextPlan(graph, match);
   // #6/B1/B6: pick the section mask by depth — min forces TINY, full/max forces everything, auto
@@ -340,11 +343,11 @@ const DISPATCH_TOOLS = new Set([
   "tmct_file_history", "tmct_method_history", "tmct_class_history",
 ]);
 
-export async function dispatchTool(name, args, { config, source = defaultSource } = {}) {
+export async function dispatchTool(name, args, { config, source = defaultSource, tel = null } = {}) {
   // tmct_context builds (and loads) its own edit bundle — return early so we don't
   // double-load the graph for it.
   if (name === "tmct_context") {
-    return (await buildContextBundle(args, { config, source })).text;
+    return (await buildContextBundle(args, { config, source, tel })).text;
   }
   // Reject an unknown tool BEFORE touching the graph — preserves the original
   // ordering (an unknown name never triggers a load).
@@ -361,7 +364,7 @@ export async function dispatchTool(name, args, { config, source = defaultSource 
   // Item 1) rather than delegating, to keep its richer presentation (candidates, call hints,
   // truncation notices) — see the tmct_snippet branch below.
   const repoRoot = dirname(dirname(config.graphFile));
-  const svc = createGraphService(graph, { sourceAccess: true, repoRoot, readFile });
+  const svc = createGraphService(graph, { sourceAccess: true, repoRoot, readFile, tel });
   if (name === "tmct_context_more") {
     const symbol = String(args?.symbol || "").trim();
     if (!symbol) throw new ToolError("symbol is required");
