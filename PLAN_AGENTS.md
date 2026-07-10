@@ -303,7 +303,7 @@ Near-term, mostly known-how, individually small. No item here requires research.
   found already shipped from an earlier session, not newly built this session.
 - ⬜ **Re-measure inherited chat-surface debt** — the capability router doc named three specific gaps
   (pronoun/focus binding, discourse-count anaphora, temporal-over-relative composition) as blocking
-  its later stages, measured back in CHATBENCH_0.7.1. Not started — still worth doing before scoping
+  its later stages, measured back in CEFR_ENGLISH_0.7.1. Not started — still worth doing before scoping
   new comprehension work.
 - ✅ **RI wrapper fixes from the seonix audit (§2.2) — shipped v1.4.0.** Ranked search, real
   `context()` bundling (`INTERFACE_VERSION` 1.1.0), depth-capped `impact()`, source-backed

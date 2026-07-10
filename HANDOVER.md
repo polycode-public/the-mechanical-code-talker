@@ -16,7 +16,7 @@ Session handle (inbox): `tmct` (this session; earlier sessions used `mechanic`).
 stages 3–5 (the full 6-band INFBENCH ladder now passes the gate for the first time — INF-B1
 33%→100%, INF-C2 0%→100%), closed out most of `PLAN_AGENTS.md` Phase 0, restructured CHATBENCH's
 case set (case-set v3, a 109-case go-to default), and ran all four benchmarks fresh
-(`AGENTBENCH_1.4.1.md`, `INFBENCH_1.4.1.md`, `CHATBENCH_1.4.1.md`, `PLAYTESTBENCH_1.4.1.md`) plus a
+(`AGENTBENCH_1.4.1.md`, `INFBENCH_1.4.1.md`, `CEFR_ENGLISH_1.4.1.md`, `PLAYTESTBENCH_1.4.1.md`) plus a
 full capability audit (`CAPABILITIES_AUDIT_2026-07-10.md`). All pre-1.4.1 benchmark reports are now
 in `archive/`.
 
@@ -25,7 +25,7 @@ in `archive/`.
 1. **C2 `pronoun-binding` — CHATBENCH's clearest, highest-impact lever.** 0/10 tier-1 green, 4/10
    judged hard fails, every one confidently-wrong (0 on both correctness AND honesty — the worse
    failure mode, not an honest miss). Long-standing, `PLAN_CHAT_FEEL.md`'s own hardest-tier ceiling;
-   no work landed on it this session. See `CHATBENCH_1.4.1.md`'s hard-fail table for the exact case
+   no work landed on it this session. See `CEFR_ENGLISH_1.4.1.md`'s hard-fail table for the exact case
    ids and dimension scores.
 2. **The closing-remark/farewell closed set is far too narrow — confirmed independently by 3 of 5
    personas in the first `SKILL_BENCHMARK_CONVERSATION.md` §3.4 persona sweep (2026-07-10).** The
@@ -119,7 +119,7 @@ reach by construction). The first live sweep already ran (5 parallel personas: t
 deliberate breaker, non-native speaker, pure small talk, rushed/fragment-typing dev) and its two
 highest-impact findings are folded into items 2 and 3 above; its lower-signal findings are item 10.
 `CAPABILITIES_AUDIT_2026-07-10.md` refreshed against all four benchmark reports (DONE). Still open:
-`SKILL_BENCHMARK_CHAT.md` → `SKILL_BENCHMARK_CEFR_ENGLISH.md` with historic report renames to match,
+`SKILL_BENCHMARK_CEFR_ENGLISH.md` → `SKILL_BENCHMARK_CEFR_ENGLISH.md` with historic report renames to match,
 a speculative comparative table (tmct vs. local/AWS/Anthropic model tiers, plus a to-be sketch), and
 turning the persona-sweep's own transcripts into a proper `PLAYTESTBENCH_*` write-up plus regression
 freezes for items 2/3 once fixed.
@@ -141,6 +141,6 @@ every stage to avoid sweeping in another track's pre-staged files (a real near-m
 caught and fixed before it landed). No LLM in the product path, ever.
 
 *Prior sessions' detailed handover (phases 0-13, releases 0.2.0 → 1.4.0) lives in this file's git
-history plus the `CHATBENCH_*`/`AGENTBENCH_*`/`INFBENCH_*`/`PLAYTESTBENCH_*`/`archive/PLAN_*`
+history plus the `CEFR_ENGLISH_*`/`AGENTBENCH_*`/`INFBENCH_*`/`PLAYTESTBENCH_*`/`archive/PLAN_*`
 artifacts. `ROADMAP.md`'s "Where we are now" holds the fuller progress narrative for everything
 shipped before the items above, including this session's own dated entry in full.*

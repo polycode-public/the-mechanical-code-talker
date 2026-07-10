@@ -448,7 +448,7 @@ const STUB_ROWS = [
 
 test("renderReport: headline, judge pin, per-tag table, hard fails, lever board + predictions stubs", () => {
   const md = renderReport(STUB_SUMMARY, STUB_ROWS, 2);
-  assert.match(md, /^# CHATBENCH_002 /);
+  assert.match(md, /^# CEFR_ENGLISH_002 /);
   assert.match(md, /Mean rubric score: 1\.4 \/ 2/);
   assert.match(md, /hard fails: 1/);
   assert.match(md, new RegExp(JUDGE_MODEL));
@@ -460,14 +460,14 @@ test("renderReport: headline, judge pin, per-tag table, hard fails, lever board 
   assert.match(md, /## Predictions vs actuals/);
   assert.match(md, /RANKED LEVER BOARD/);
   assert.match(md, /## Top discriminating transcripts/);
-  assert.match(md, /vs CHATBENCH_001/, "names the previous cycle for the decision rule");
+  assert.match(md, /vs CEFR_ENGLISH_001/, "names the previous cycle for the decision rule");
 });
 
 test("renderTranscripts / orderDiscriminating: discriminating transcripts first", () => {
   const ordered = orderDiscriminating(STUB_SUMMARY, STUB_ROWS).map((r) => r.caseId);
   assert.deepEqual(ordered, ["c", "b", "a"], "tier-1 fail, then hard fail, then highest mean last");
   const md = renderTranscripts(STUB_SUMMARY, STUB_ROWS, 2);
-  assert.match(md, /^# CHATBENCH_002_TRANSCRIPTS /);
+  assert.match(md, /^# CEFR_ENGLISH_002_TRANSCRIPTS /);
   assert.ok(md.indexOf("## c ") < md.indexOf("## b "), "c leads");
   assert.ok(md.indexOf("## b ") < md.indexOf("## a "));
   assert.match(md, /TIER-1 FAIL/);

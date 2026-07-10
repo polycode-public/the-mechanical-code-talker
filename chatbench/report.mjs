@@ -1,4 +1,4 @@
-// chatbench/report.mjs — renders the CHATBENCH_0NN.md write-up skeleton (and
+// chatbench/report.mjs — renders the CEFR_ENGLISH_0NN.md write-up skeleton (and
 // its transcript appendix) from a run's summary.json + product.jsonl.
 //
 // The skeleton carries everything mechanical — headline mean + hard-fail
@@ -14,7 +14,7 @@
 //
 // Usage:
 //   node chatbench/report.mjs --summary <summary.json> --product <product.jsonl>
-//     --n <NNN> [--outdir <dir>]      (writes CHATBENCH_0NN.md + _TRANSCRIPTS.md)
+//     --n <NNN> [--outdir <dir>]      (writes CEFR_ENGLISH_0NN.md + _TRANSCRIPTS.md)
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
@@ -69,7 +69,7 @@ function transcriptBlock(row) {
   return "```\n" + lines.join("\n") + "\n```";
 }
 
-/** The CHATBENCH_0NN.md skeleton. `summary` is judge.mjs's summary.json,
+/** The CEFR_ENGLISH_0NN.md skeleton. `summary` is judge.mjs's summary.json,
  *  `rows` the product.jsonl rows, `n` the cycle number. */
 export function renderReport(summary, rows, n) {
   const o = summary.overall || {};
@@ -79,14 +79,14 @@ export function renderReport(summary, rows, n) {
   const baselineCount = rows.filter((r) => r.tier1?.baselineFailTurns?.length).length;
   const discriminating = orderDiscriminating(summary, rows).slice(0, 5);
 
-  return `# CHATBENCH_${pad3(n)} — chat tuning cycle ${n}
+  return `# CEFR_ENGLISH_${pad3(n)} — chat tuning cycle ${n}
 
 ## Headline
 
 - **Mean rubric score: ${fmt(o.mean)} / 2** over ${fmt(o.cases)} cases (**hard fails: ${fmt(o.hardFailCount)}**, voided judge samples: ${fmt(o.voidCount)}).
 - Tier-1 (deterministic): ${fmt(o.tier1PassCount)}/${fmt(o.cases)} pass; ${tier1Fails.length} failing; ${baselineCount} cases carry documented baselineFail turns${improved.length ? `; **${improved.length} baseline weakness(es) IMPROVED this cycle: ${improved.map((r) => r.caseId).join(", ")}**` : ""}.
 - Judge pin: **${summary.judgeModel}**, prompt **${summary.promptVersion}**, ${fmt(summary.samplesPerCase)} sample(s)/case. Run stamp: \`${fmt(summary.stamp)}\`.
-- Decision rule (SKILL §1): PASS = mean up vs previous cycle AND no pass→fail regression. _<fill: PASS/FAIL vs CHATBENCH_${pad3(Math.max(n - 1, 0))}>_
+- Decision rule (SKILL §1): PASS = mean up vs previous cycle AND no pass→fail regression. _<fill: PASS/FAIL vs CEFR_ENGLISH_${pad3(Math.max(n - 1, 0))}>_
 
 ## Lever applied this cycle
 
@@ -112,7 +112,7 @@ ${tier1Fails.length ? tier1Fails.map((r) => `- **${r.caseId}**: ${r.tier1.failin
 
 ## Per-lever analysis
 
-_<fill: tie the applied lever to the cases it moved (use the discriminating transcripts below + CHATBENCH_${pad3(n)}_TRANSCRIPTS.md)>_
+_<fill: tie the applied lever to the cases it moved (use the discriminating transcripts below + CEFR_ENGLISH_${pad3(n)}_TRANSCRIPTS.md)>_
 
 ## Top discriminating transcripts
 
@@ -137,7 +137,7 @@ export function renderTranscripts(summary, rows, n) {
   const byId = new Map((summary.perCase || []).map((c) => [c.caseId, c]));
   const ordered = orderDiscriminating(summary, rows);
   const parts = [
-    `# CHATBENCH_${pad3(n)}_TRANSCRIPTS — appendix (discriminating transcripts first)`,
+    `# CEFR_ENGLISH_${pad3(n)}_TRANSCRIPTS — appendix (discriminating transcripts first)`,
     "",
     `Judge pin: ${summary.judgeModel}, prompt ${summary.promptVersion}. Run stamp: \`${fmt(summary.stamp)}\`.`,
     "",
@@ -184,8 +184,8 @@ export async function main(argv = process.argv.slice(2)) {
   const summary = JSON.parse(await readFile(args.summary, "utf8"));
   const rows = parseJsonl(await readFile(args.product, "utf8"));
   await mkdir(args.outdir, { recursive: true });
-  const reportFile = join(args.outdir, `CHATBENCH_${pad3(args.n)}.md`);
-  const transcriptsFile = join(args.outdir, `CHATBENCH_${pad3(args.n)}_TRANSCRIPTS.md`);
+  const reportFile = join(args.outdir, `CEFR_ENGLISH_${pad3(args.n)}.md`);
+  const transcriptsFile = join(args.outdir, `CEFR_ENGLISH_${pad3(args.n)}_TRANSCRIPTS.md`);
   await writeFile(reportFile, renderReport(summary, rows, args.n));
   await writeFile(transcriptsFile, renderTranscripts(summary, rows, args.n));
   console.log(`wrote ${reportFile}\nwrote ${transcriptsFile}`);

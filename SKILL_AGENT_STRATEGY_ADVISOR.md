@@ -18,7 +18,7 @@ Born from a real session where the operator suggested running benchmark batches 
 (a 5x speedup) the main agent had not proposed. Revamped 2026-07-01 after the deep-process
 variant ran live through the B016 spec session (see §7).
 
-In this repo the advisor rides the **autonomous chat tuning cycle** (`SKILL_BENCHMARK_CHAT.md`) —
+In this repo the advisor rides the **autonomous chat tuning cycle** (`SKILL_BENCHMARK_CEFR_ENGLISH.md`) —
 a loop with **no hard pause** between iterations. That makes the advisor more than a second pair
 of eyes: it is **the drift alarm between operator check-ins**. When the loop is running
 unattended, the advisor's watch-list (§6) is the mechanism that catches judge drift,
@@ -68,7 +68,7 @@ tail, the repo, and the brief.
   tail (`tail -c 120000 <transcript>`): the operator's recent messages plus the main agent's
   recent actions, not the whole file (it can be MBs).
 - **Other agents' outputs** live under the session's `tasks/<agentId>.output`.
-- **A distilled state file** the main agent keeps current (e.g. the latest `CHATBENCH_0NN.md`
+- **A distilled state file** the main agent keeps current (e.g. the latest `CEFR_ENGLISH_0NN.md`
   with its decision log, or `ROADMAP.md` phase status). Cheapest and most reliable signal; point
   the advisor here first.
 - **The repo itself**: worktree, git history, chatbench telemetry, raw judge outputs
@@ -235,7 +235,7 @@ advisor's standing instruction is "do NOT repeat these".
 ## 6. Run-time telemetry watch brief (the alternate brief during chatbench cycles)
 
 While a chatbench cycle runs (apply → smoke → run → judge → write; measurement rules in
-`SKILL_BENCHMARK_CHAT.md` §1), swap the focused brief for this watch-list. Same mechanics:
+`SKILL_BENCHMARK_CEFR_ENGLISH.md` §1), swap the focused brief for this watch-list. Same mechanics:
 background, signal-only, 1–3 non-obvious flags per tick or the literal "No new advice",
 append-only log. Because the tuning cycle runs **autonomously with no hard pause**, this
 watch-list is the drift alarm between operator check-ins. Priority order:
@@ -247,7 +247,7 @@ watch-list is the drift alarm between operator check-ins. Priority order:
   recommend re-pinning the judge model + prompt version.
 - **Overfit-to-judge.** The mean going up while the transcripts read *worse* is the loop gaming
   its own grader. Spot-read the discriminating transcripts
-  (`CHATBENCH_0NN_TRANSCRIPTS.md`, top of file) each cycle and say whether the improvement is
+  (`CEFR_ENGLISH_0NN_TRANSCRIPTS.md`, top of file) each cycle and say whether the improvement is
   real conversation quality or rubric-shaped noise.
 - **Regression watch.** Any previously-passing case failing is FAIL outright regardless of the
   mean (the hard decision rule) — flag it the moment per-case results show it, don't wait for

@@ -27,7 +27,7 @@ This is the complement to `SKILL_BENCHMARK_CEFR_ENGLISH.md`, not a replacement:
 | signal | LLM-judge rubric mean over a case set | dead-ends + unnatural breaks in a real dialogue |
 | cost/speed | judge calls, ~an hour, $ per cycle | no judge, no $, minutes per iteration |
 | unit | one lever, measured | one conversation, made to flow |
-| output | `CHATBENCH_<version>.md` + a mean | `PLAYTESTBENCH_<version>.md` + a growing suite of frozen "must-flow" transcripts |
+| output | `CEFR_ENGLISH_<version>.md` + a mean | `PLAYTESTBENCH_<version>.md` + a growing suite of frozen "must-flow" transcripts |
 | covers | isolated, single-turn/single-case quality | session ARCS: open→explore→teach→infer→close, and broad completions-shaped questions — territory CEFR_ENGLISH structurally can't reach (single isolated cases, not session arcs) |
 
 Use them together: this loop catches the dead-ends a mean can hide (a 1.4 mean can still leave a
@@ -445,7 +445,7 @@ would itself become the thing exploration drifts toward):
 ## 4. The `PLAYTESTBENCH_<version>.md` report
 
 Every playtest run — a full-ladder tier completion (§2) or a capped sprint (§3) — writes ONE
-versioned report doc, matching the naming convention `SKILL_BENCHMARK_CHAT.md` §1 and
+versioned report doc, matching the naming convention `SKILL_BENCHMARK_CEFR_ENGLISH.md` §1 and
 `SKILL_BENCHMARK_INFERENCE.md` already use: `PLAYTESTBENCH_<version>.md`, named after the
 `package.json` version the run measured. A re-run of the same version (no version bump between
 runs) appends `_00N`: `PLAYTESTBENCH_0.9.0_001.md`, `_002`, … This sits alongside, and does not
@@ -476,14 +476,14 @@ Report structure:
 - **Freeze what flows.** Every passed conversation becomes a regression transcript. The suite is the
   memory; without it, fixed dead-ends silently return.
 - **Regression is sacred.** `npm test` green, showcase byte-exact, no tier-1 bench regression at
-  every iteration — same contract as `SKILL_BENCHMARK_CHAT.md`.
+  every iteration — same contract as `SKILL_BENCHMARK_CEFR_ENGLISH.md`.
 - **Honest dead-non-ends.** When there is truly no answer, the turn still must GUIDE (a nudge, a
   "did you mean", an offer to learn) — an honest miss that keeps the conversation alive is FLOW, a
   bare wall is a dead-end.
 - **Verify every offered example, in-state.** If a turn's reply says `try "X"`, actually ask `X` in
   that same session/seed state before calling the turn FLOW. A suggestion that wasn't checked is a
   guess wearing a helpful voice — score it a dead-end if it would fail (§0).
-- **Then measure.** After a tier or sprint flows clean, run the version-matched `CHATBENCH_<version>`
+- **Then measure.** After a tier or sprint flows clean, run the version-matched `CEFR_ENGLISH_<version>`
   benchmark to confirm the flow fixes moved the aggregate and regressed nothing. Flow and mean are
   two views of the same product; this loop shapes the flow, the benchmark scores it.
 - **Delegate long-running work under the coordinator model.** Capped sprint mode (§3) is the default

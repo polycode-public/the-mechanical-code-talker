@@ -1,6 +1,6 @@
 # chatbench — the tmct chat measurement harness
 
-The measurement half of `SKILL_BENCHMARK_CHAT.md` §1: a **fixed, versioned case
+The measurement half of `SKILL_BENCHMARK_CEFR_ENGLISH.md` §1: a **fixed, versioned case
 set** replayed deterministically through the real product (tier 1, free), then
 scored by a **pinned LLM judge** (tier 2, the only paid step). The product
 stays no-LLM; the judge lives only here.
@@ -18,7 +18,7 @@ stays no-LLM; the judge lives only here.
 | `judge.mjs` | judge fan-out: N samples/case against the pinned model+prompt, writes `judged.jsonl` + `summary.json` |
 | `judge-prompt-v1.txt` | the versioned judge prompt (bump the file name to version it; record the pin in every write-up) |
 | `rubric.schema.json` | the structured-output schema the judge must satisfy |
-| `report.mjs` | renders the `CHATBENCH_0NN.md` skeleton + `CHATBENCH_0NN_TRANSCRIPTS.md` appendix |
+| `report.mjs` | renders the `CEFR_ENGLISH_0NN.md` skeleton + `CEFR_ENGLISH_0NN_TRANSCRIPTS.md` appendix |
 | `results/` | run output; `results/raw/` is transient (gitignored) — **snapshot to `results/raw-<NNN>/` before the next run** per the SKILL |
 
 ## Running a full cycle measurement

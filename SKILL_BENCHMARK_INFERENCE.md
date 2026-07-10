@@ -9,17 +9,17 @@ cases, run the bench, read the rung table, decide ship-or-build, and if building
 
 **`INF-A1…INF-C2` is its own scale, not CHATBENCH's CEFR.** The band labels look like CEFR grades
 (A1, A2, B1, B2, C1, C2) but measure a different axis: INFBENCH grades classical-logic inference
-capability (fabrication vs completion on a rule ladder), while `SKILL_BENCHMARK_CHAT.md`'s CEFR
+capability (fabrication vs completion on a rule ladder), while `SKILL_BENCHMARK_CEFR_ENGLISH.md`'s CEFR
 bands grade linguistic complexity in conversation. Don't compare an `INF-B1` result against a
 CEFR B1 result — they are unrelated measurements that happen to share a naming convention.
 
-This shape is closer to **`SKILL_BENCHMARK_CHAT.md`'s** measure→apply-one-lever→re-measure loop than
+This shape is closer to **`SKILL_BENCHMARK_CEFR_ENGLISH.md`'s** measure→apply-one-lever→re-measure loop than
 to a delegated chat-round sprint (`SKILL_BENCHMARK_CONVERSATION.md`'s capped sprint mode), and this doc
-follows `SKILL_BENCHMARK_CHAT.md`'s structure most closely for that reason: INFBENCH is a
+follows `SKILL_BENCHMARK_CEFR_ENGLISH.md`'s structure most closely for that reason: INFBENCH is a
 deterministic benchmark replay (`node infbench/run.mjs`), not a natural conversation, so there is no
 "curious user" to delegate to a sub-agent round-by-round the way a playtest sprint delegates chat
 turns — the loop's unit is "one engine-build stage measured against a fixed ladder," the same unit
-`SKILL_BENCHMARK_CHAT.md` calls "one lever." Where the capped-sprint shape genuinely fits (a short,
+`SKILL_BENCHMARK_CEFR_ENGLISH.md` calls "one lever." Where the capped-sprint shape genuinely fits (a short,
 invokable callout; a numbered discipline section; a closing TL;DR) this doc keeps it; where it
 doesn't (delegated rounds, live chat transcripts, a round cap) it doesn't force the metaphor.
 
@@ -49,7 +49,7 @@ future session finds it missing again, that is a real regression to fix before c
 assumption to paper over.
 
 **Step 3 — READ.** Read the console rung table (or write it up as `INFBENCH_<version>.md` if this
-cycle is measuring a just-shipped version — same artifact-naming convention `SKILL_BENCHMARK_CHAT.md`
+cycle is measuring a just-shipped version — same artifact-naming convention `SKILL_BENCHMARK_CEFR_ENGLISH.md`
 §1 uses for chatbench: `INFBENCH_<version>.md`, re-runs of the same version append `_00N`). For each
 band, compare its measured completion/fabrication against `PLAN_INFERENCE_TESTING.md` §1's
 "Reachable today?" column — is each band landing where the plan predicted, or did something drift?
@@ -83,9 +83,9 @@ fails this gate gates every band above it** — this is chatbench's Meta-2 rule
 judge a ceiling while the floor leaks") applied mechanically. A band at a clean **0%** on a
 capability that genuinely isn't implemented yet is a **ceiling marker** — legitimate, expected, and
 should be reported as such, never silently patched around or forced to a fake pass. Dual-draw
-agreement (the parallel-forms reliability check `SKILL_BENCHMARK_CHAT.md` §1 requires for chatbench's
+agreement (the parallel-forms reliability check `SKILL_BENCHMARK_CEFR_ENGLISH.md` §1 requires for chatbench's
 judged tier) is **not** needed here — INFBENCH is deterministic-replay, one run per arm suffices,
-exactly as `SKILL_BENCHMARK_CHAT.md`'s own deterministic-replay clause already allows.
+exactly as `SKILL_BENCHMARK_CEFR_ENGLISH.md`'s own deterministic-replay clause already allows.
 
 ---
 
@@ -143,7 +143,7 @@ banner before picking a stage; don't trust this snapshot as still-current.**
   before that convenience script landed; verify it's still there (`grep infbench package.json`)
   each time this skill is invoked rather than assuming a prior cycle's state persists.
 - **Regression is still sacred.** `npm test` green after every stage's engine change, same contract
-  `SKILL_BENCHMARK_CONVERSATION.md` §4 and `SKILL_BENCHMARK_CHAT.md` §1 hold every other loop in this repo to.
+  `SKILL_BENCHMARK_CONVERSATION.md` §4 and `SKILL_BENCHMARK_CEFR_ENGLISH.md` §1 hold every other loop in this repo to.
 
 ---
 

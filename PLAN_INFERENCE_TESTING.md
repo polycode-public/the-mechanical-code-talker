@@ -117,7 +117,7 @@ New sibling directory `infbench/` mirroring `agentbench/`, now with a fourth fil
 regenerated, not hand-edited, exactly as `chatbench/graded-pool.jsonl` is a build artifact of
 `chatbench/generate-graded.mjs` (confirmed: `node chatbench/generate-graded.mjs [--seed 20260704]
 [--out …]` "rebuilds the pool deterministically — same seed, byte-identical file", `chatbench/
-GRADED.md:73`). Artifact naming per the §1 measurement contract of `SKILL_BENCHMARK_CHAT.md`:
+GRADED.md:73`). Artifact naming per the §1 measurement contract of `SKILL_BENCHMARK_CEFR_ENGLISH.md`:
 **`INFBENCH_<version>.md`**, re-runs `_00N`.
 
 ### 2.1 Already mechanical (unchanged by this revision — the grader was close to zero-touch already)
@@ -256,7 +256,7 @@ pay to judge a ceiling while the floor leaks") mechanically, via agentbench's `l
 `b2ChainLenK`/`b2Svf1`/`c1Cardinality`/`c2Inconsistent` templates, run against not-yet-implemented
 rules) and expected to sit at 0% until tier-5 lands, exactly as agentbench declared B1-C2 rungs
 before any driver could climb them (`agentbench/grade.mjs:24-25`). Dual-draw agreement is NOT
-needed at the deterministic tier (one run per arm suffices — `SKILL_BENCHMARK_CHAT.md` §1
+needed at the deterministic tier (one run per arm suffices — `SKILL_BENCHMARK_CEFR_ENGLISH.md` §1
 deterministic-replay clause); it applies only if a judged phrasing tier is enabled.
 
 ---

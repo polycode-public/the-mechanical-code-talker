@@ -1,8 +1,8 @@
-# CHATBENCH_1.4.1 — first judged run under case-set v3 (the 109-case go-to default), a new baseline
+# CEFR_ENGLISH_1.4.1 — first judged run under case-set v3 (the 109-case go-to default), a new baseline
 
 **Headline:** first judged CHATBENCH run since `0.8.2` (which shipped judge-free, deliberately —
 see that report's deferral section), and the **first run ever against case-set v3**
-(`SKILL_BENCHMARK_CHAT.md` §1, this session): the go-to profile is now `chatbench/graded-pool.jsonl`
+(`SKILL_BENCHMARK_CEFR_ENGLISH.md` §1, this session): the go-to profile is now `chatbench/graded-pool.jsonl`
 alone (109 cases — 10/CEFR-grade plus the former `chatbench/cases.jsonl`'s 49 hand-authored
 capability cases, each assigned a real grade+construction cell), judged at **N=2 samples, single
 draw** (218 judge calls total), a deliberate cost reduction from the historical default (N≥3,
@@ -118,7 +118,7 @@ exactly the intended relationship between the two benchmarks.
   in `summary.json`.
 - **Judge integrity**: 0 voided samples — no refusal/format failure this run.
 - **Determinism (tier-1)**: single product run, single draw (`--sample 1 --single`) — deliberate,
-  documented departure from the historical dual-draw default, per `SKILL_BENCHMARK_CHAT.md`'s
+  documented departure from the historical dual-draw default, per `SKILL_BENCHMARK_CEFR_ENGLISH.md`'s
   case-set v3 update (the 10/grade cap is itself the anti-overfitting control now, not a further
   runtime sample).
 - **`npm test`**: 1665/1665 green at the commit this measurement is pinned to.

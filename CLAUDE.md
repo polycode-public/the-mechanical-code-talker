@@ -33,5 +33,5 @@ the offline eval harness (LLM-as-judge in the chat tuning cycle), never in the p
 
 - `npm test` — node --test suite; must stay green.
 - CLI smoke: `printf 'hi\n/exit\n' | node bin/tmct.mjs` must greet and exit 0.
-- See `ROADMAP.md` (phases), `SKILL_BENCHMARK_CHAT.md` (autonomous chat tuning loop),
+- See `ROADMAP.md` (phases), `SKILL_BENCHMARK_CEFR_ENGLISH.md` (autonomous chat tuning loop),
   `SKILL_AGENT_STRATEGY_ADVISOR.md` (background advisor recipe).

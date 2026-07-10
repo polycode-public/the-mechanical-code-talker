@@ -28,7 +28,7 @@ Every cycle MUST satisfy:
   tmct version it measures: `AGENTBENCH_<version>.md`, raw under
   `agentbench/results/raw/run-<version>/`. A RE-RUN of the same version (a harness fix, a second
   driver, a re-verify) appends `_00N`: `AGENTBENCH_0.8.2_001.md`, `_002`, … — the same convention
-  `SKILL_BENCHMARK_CHAT.md` §1 and `SKILL_BENCHMARK_INFERENCE.md` §1 already use.
+  `SKILL_BENCHMARK_CEFR_ENGLISH.md` §1 and `SKILL_BENCHMARK_INFERENCE.md` §1 already use.
 - **Fixed, versioned case set:** `agentbench/cases.jsonl` — one JSON object per line
   (`id`, `rung`, `request`, `tools`, `expect`). Append-only once the AGENTBENCH arc starts: new
   cases may be added between cycles (record the addition in the write-up), existing cases are never
@@ -86,7 +86,7 @@ coordinator model described below when it's one of several concurrent workstream
 > **Coordinator model — background sub-agents for the build, not (usually) the run.** Per
 > `CLAUDE.md`'s standing working model, the main session is the coordinator, not the worker. The
 > AGENTBENCH run itself is cheap enough to run inline most cycles. What benefits from delegation is
-> the SAME kind of work `SKILL_BENCHMARK_CHAT.md`'s Step 2 calls out: a cycle that touches multiple
+> the SAME kind of work `SKILL_BENCHMARK_CEFR_ENGLISH.md`'s Step 2 calls out: a cycle that touches multiple
 > mostly-independent workstreams — a new HTN method in `src/router/planner.mjs`, a new declared goal
 > rule in `src/router/goal-reasoner.mjs`, new fixture-linted cases in `agentbench/cases.jsonl`, the
 > write-up itself — can fan those out to background sub-agents with clear file-ownership boundaries,
@@ -126,7 +126,7 @@ overfit/leakage, boundary refusals still sharp, determinism); and a decision lin
 
 **Step 7 — CONTINUE.** If the operator wants the ladder pushed further, go to Step 1 of the next
 cycle with the next gated rung as the target. There is no autonomous no-pause loop here the way
-`SKILL_BENCHMARK_CHAT.md` runs one — AGENTBENCH cycles are naturally coarser-grained (one router
+`SKILL_BENCHMARK_CEFR_ENGLISH.md` runs one — AGENTBENCH cycles are naturally coarser-grained (one router
 capability is real implementation work, not a lever toggle), so each cycle ends with a normal
 operator check-in rather than an automatic re-arm.
 
@@ -139,7 +139,7 @@ operator check-in rather than an automatic re-arm.
   change) — size the cycle to that, not to a fixed time box.
 - A pure re-measurement (no build) is a fast, cheap cycle — worth running whenever `src/router/` or
   `agentbench/cases.jsonl` changes, to catch a regression before it compounds.
-- Run alongside `SKILL_BENCHMARK_CHAT.md` and `SKILL_BENCHMARK_INFERENCE.md` cycles when a release
+- Run alongside `SKILL_BENCHMARK_CEFR_ENGLISH.md` and `SKILL_BENCHMARK_INFERENCE.md` cycles when a release
   touches both the chat surface and the router — they measure different axes of the same release
   and belong in the same write-up cadence, not necessarily the same run.
 

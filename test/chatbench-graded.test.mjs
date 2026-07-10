@@ -34,7 +34,7 @@ const cellSample = (cell) => CELL_SAMPLE[cellKey(cell)] ?? MIN_PER_CELL;
 
 // Case-set v3 (2026-07-10): chatbench/graded-pool.jsonl is now the smaller
 // GO-TO default (109 cases, 10/CEFR-grade, the folded-in frozen v1 core
-// included — SKILL_BENCHMARK_CHAT.md §1). The tests below validate the
+// included — SKILL_BENCHMARK_CEFR_ENGLISH.md §1). The tests below validate the
 // canonical FULL pool's own structural invariants (GRADED_MATRIX cell sizes,
 // the stratified-sampling algorithm's behavior against a real ~10x-run-size
 // pool) — those invariants apply to the untouched full pool, preserved at

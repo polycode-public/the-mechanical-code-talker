@@ -1,4 +1,4 @@
-# SKILL_BENCHMARK_CHAT.md — the autonomous chat tuning cycle (continuous iterations, no hard pause)
+# SKILL_BENCHMARK_CEFR_ENGLISH.md — the autonomous chat tuning cycle (continuous iterations, no hard pause)
 
 The orchestration skill that runs the tmct **chat tuning cycle**: read the last result, pick +
 apply the next lever, smoke, run the chatbench, analyse, write it up, and **continue to the next
@@ -13,7 +13,7 @@ menu as a **decision log** in the write-up, picking the top lever, and starting 
 **The operator can interrupt at any time**; the decision logs are the audit trail of what the loop
 chose and why.
 
-> **Invoke it by telling a session:** *"Follow `SKILL_BENCHMARK_CHAT.md` and run the chat tuning
+> **Invoke it by telling a session:** *"Follow `SKILL_BENCHMARK_CEFR_ENGLISH.md` and run the chat tuning
 > cycle"* (optionally naming a lever to start from, or a cycle budget). The session then executes
 > the loop below repeatedly until interrupted or the budget is spent.
 
@@ -21,7 +21,7 @@ chose and why.
 
 ## 0. When to use (and when not)
 
-- **Use it** to drive the CHATBENCH_001→002→0NN arc: one lever applied per cycle, measured against
+- **Use it** to drive the CEFR_ENGLISH_001→002→0NN arc: one lever applied per cycle, measured against
   the contract in §1, written up, decision-logged, and iterated.
 - **Do NOT use it** for a one-off smoke, a docs-only change, or to apply several levers at once.
   One cycle = one lever, so movement in the mean is attributable.
@@ -36,9 +36,9 @@ Every cycle MUST satisfy:
 - **Artifact naming — match the `package.json` version.** A benchmark's write-up is named after the
   tmct version it measures: `CHATBENCH_<version>.md`, raw under
   `chatbench/results/raw/run-<version>/`. A RE-RUN of the SAME version (re-measure without a version
-  bump — a harness fix, a re-judge, a second draw) appends `_00N`: `CHATBENCH_0.7.0_001.md`, `_002`,
+  bump — a harness fix, a re-judge, a second draw) appends `_00N`: `CEFR_ENGLISH_0.7.0_001.md`, `_002`,
   …, `run-0.7.0_001/`. So the artifact name always says which shipped version it scores, and the
-  `_00N` suffix orders re-runs of that version. (The historical `CHATBENCH_001…006` cycle-numbered
+  `_00N` suffix orders re-runs of that version. (The historical `CEFR_ENGLISH_001…006` cycle-numbered
   artifacts stay as-is; version-matched naming applies from 0.7.0 onward.)
 - **One combined file per run — no separate `_TRANSCRIPTS.md`.** `CHATBENCH_<version>.md` now
   carries the transcript evidence itself, as an "Evidence / transcripts" section near the end
@@ -72,7 +72,7 @@ Every cycle MUST satisfy:
   parallel-forms check (§ below), stay available** for a higher-confidence pass (e.g. before a
   release, or against the full `graded-pool-max.jsonl`) but are no longer the default — see the
   "Dual-draw agreement" bullet below for when to reach for it. **Judge model + prompt version are
-  pinned and recorded** in every `CHATBENCH_0NN.md`.
+  pinned and recorded** in every `CEFR_ENGLISH_0NN.md`.
 - **Rubric (0–2 each):**
   - **groundedness** — is the answer supported by the graph/memory tmct actually holds?
   - **correctness** — is it right?
@@ -105,11 +105,11 @@ Every cycle MUST satisfy:
   **UNDER-COVERED — an instrument failure, not product signal**: the cell is excluded from the
   cycle's PASS/FAIL statistics (unmeasured, not failed) and the prescription is to grow its pool
   or per-run sample. The overall agreement rate is the benchmark's own reliability score and is
-  reported in every `CHATBENCH_0NN.md` beside the product mean.
+  reported in every `CEFR_ENGLISH_0NN.md` beside the product mean.
 
 ## 2. The loop (one cycle; repeats without pausing)
 
-**Step 1 — READ (pick the next lever).** Read, in order: the latest `CHATBENCH_0NN.md` (including
+**Step 1 — READ (pick the next lever).** Read, in order: the latest `CEFR_ENGLISH_0NN.md` (including
 its decision log — the previous cycle's ranked menu is this cycle's starting recommendation);
 `STRATEGY_ADVISOR.log` (the `OPEN` items the advisor flagged); and the **ROADMAP phase items**
 (the lever board — Phase 1–3 items are the levers). Pick **one lever** and write the prediction:
@@ -156,7 +156,7 @@ between operator check-ins** — surface anything non-obvious; it appends `OPEN`
 
 **Step 6 — WRITE the cycle up.** The artifact name **matches `package.json`'s version** (see
 "Artifact naming" in §1): `CHATBENCH_<version>.md` for the release under test (e.g.
-`CHATBENCH_0.7.0.md`), and a same-version RE-RUN appends `_00N` (`CHATBENCH_0.7.0_001.md`, `_002`,
+`CEFR_ENGLISH_0.7.0.md`), and a same-version RE-RUN appends `_00N` (`CEFR_ENGLISH_0.7.0_001.md`, `_002`,
 …). On completion: **snapshot the raw judge outputs to `chatbench/results/raw/run-<version>[_00N]/`
 BEFORE the next run overwrites them**, then write **one file**, `CHATBENCH_<version>.md`:
 - the headline mean (+ hard-fail count) at the top;
@@ -206,7 +206,7 @@ next cycle. No pause — the operator interrupts when they want the wheel.
 
 ## 5. One-paragraph TL;DR
 
-Run the chat tuning cycle **autonomously**: each cycle **reads** the last `CHATBENCH_0NN.md`
+Run the chat tuning cycle **autonomously**: each cycle **reads** the last `CEFR_ENGLISH_0NN.md`
 decision log, `STRATEGY_ADVISOR.log`, and the ROADMAP lever board to pick ONE lever + a
 prediction; **applies** it (fanning independent workstreams to parallel subagents, serialized on
 shared files); **smokes** (`npm test` + `printf 'hi\n/exit\n' | node bin/tmct.mjs` in graph-less
@@ -217,7 +217,7 @@ per case by default (N≥3 + dual-draw remain available against the full `graded
 footnote profile for a higher-confidence pass) on the 0–2
 groundedness/correctness/honesty-on-miss/rephrase-hint rubric — wrong-confident
 scores below honest-miss; judge refusals void, never fail), with the **strategy advisor riding
-alongside as the drift alarm**; **writes one file**, `CHATBENCH_0NN.md` (headline mean + hard-fails
+alongside as the drift alarm**; **writes one file**, `CEFR_ENGLISH_0NN.md` (headline mean + hard-fails
 + the best-examples pick, per-tag, predictions-vs-actuals, per-lever analysis, ranked next-cycle
 decision log, and an "Evidence / transcripts" section near the end with discriminating transcripts
 first — no separate `_TRANSCRIPTS.md` file), snapshotting raw judge output

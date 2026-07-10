@@ -367,7 +367,7 @@ author lane, wall kindness + honest capability nudges, teach-lane widening, rece
 prose→detail, plus a live-found scale hotfix (`edgesOfKind` argument-spread overflow past ~100k
 edges). AGENTBENCH ladder grew 43→56 cases; goal driver 100% plan / 98% result / 0% hallucination,
 all rungs gate-PASS; resolver floor clean A0–C1 100/100; C2 became rule-general (two declared
-goal-rules, pure `applicableRules` selection). Full detail: `CHATBENCH_0.8.2.md`,
+goal-rules, pure `applicableRules` selection). Full detail: `CEFR_ENGLISH_0.8.2.md`,
 `AGENTBENCH_0.8.2.md`.
 
 **v0.8.1** (published): AGENTBENCH grades the executed composed result, not just the call-plan.
@@ -375,12 +375,12 @@ Resolver 97% plan / 91% result / 0% hallucination. Stage 5 (the C2 goal-reasoner
 Autonomy) lifted result-completion +10pp on a like-for-like driver swap. Stage 2 (imperative intent
 frames + ACE reach) shipped at 100% plan / 95% result / 0% hallucination, `tmct_calls` genuinely
 NL-reachable. Chat surface: quick wins + two frozen playtest transcripts, no tier-1 regression vs
-0.7.1. Full detail: `CHATBENCH_0.8.1.md`, `AGENTBENCH_0.8.1.md`.
+0.7.1. Full detail: `CEFR_ENGLISH_0.8.1.md`, `AGENTBENCH_0.8.1.md`.
 
 **v0.8.0** (published): all five Phase-11 tracks. The `/v1/messages` shim + Stage-0 registry +
 resolver/guardrail/planner (96% plan completion, 0% hallucination, closed-world C1); three chat
 levers; the `../bedrock-meter` $0 rung; the playtest; Stage-2/Stage-5 research notes. Full detail:
-`CHATBENCH_0.8.0.md`, `AGENTBENCH_0.8.0.md`.
+`CEFR_ENGLISH_0.8.0.md`, `AGENTBENCH_0.8.0.md`.
 
 **Doc restructuring — `PLAN_AGENTS.md` (2026-07-10)**: `PLAN_TMCT_ECOSYSTEM_INTEGRATION.md` was
 rewritten and renamed to `PLAN_AGENTS.md`, absorbing six sibling docs (`PLAN_AGI_ARCHITECTURE.md`,
@@ -399,7 +399,7 @@ prune → grammar/voice pass), never LLM-style free generation. Separately, the 
 landscape was unified: CHATBENCH stops splitting report+transcripts into two files going forward;
 `SKILL_CHAT_PLAYTEST.md` and `SKILL_PLAYTEST_SPRINT.md` merged into `SKILL_BENCHMARK_PLAYTEST.md`
 (with a new `PLAYTESTBENCH_<version>.md` report convention); `SKILL_TUNING_CYCLE.md` and
-`SKILL_INFERENCE_TESTING.md` renamed to `SKILL_BENCHMARK_CHAT.md`/`SKILL_BENCHMARK_INFERENCE.md`;
+`SKILL_INFERENCE_TESTING.md` renamed to `SKILL_BENCHMARK_CEFR_ENGLISH.md`/`SKILL_BENCHMARK_INFERENCE.md`;
 a new `SKILL_BENCHMARK_AGENT.md` formalizes the previously-ad-hoc AGENTBENCH cycle;
 `SKILL_STRATEGY_ADVISOR.md`/`SKILL_PLAIN_PROSE.md` renamed to `SKILL_AGENT_STRATEGY_ADVISOR.md`/
 `SKILL_AGENT_PLAIN_PROSE.md`. A new shared reference doc, `docs/references/research-horizon.md`,
@@ -625,7 +625,7 @@ in `SKILL_TUNING_CYCLE.md`:
 - **LLM-as-judge** scoring (N≥3 samples per case; groundedness / correctness /
   honesty-on-miss / rephrase-hint helpfulness). The judge lives in the **eval
   harness only** — the product stays no-LLM;
-- `CHATBENCH_0NN.md` artifacts and an autonomous cycle loop (no hard pause;
+- `CEFR_ENGLISH_0NN.md` artifacts and an autonomous cycle loop (no hard pause;
   each cycle logs its ranked decision menu and continues).
 - **The graded benchmark** (case-set v2, operator-specified 2026-07-04): a
   scaled ladder fitted to HUMAN LANGUAGE STANDARDS, not AI-benchmark mechanics
@@ -742,7 +742,7 @@ and the block-index summary (blocks, tokens, top PageRank blocks). Same renderer
 > near-term actions, both shipped — see below).
 
 The immediate work: drive the graded benchmark up the CEFR ladder, one lever per cycle, per
-`SKILL_TUNING_CYCLE.md`. Cycle 3 (post-wiring-wave, CHATBENCH_003) gave the first full-spectrum
+`SKILL_TUNING_CYCLE.md`. Cycle 3 (post-wiring-wave, CEFR_ENGLISH_003) gave the first full-spectrum
 reading — A1 1.72 / A2 1.70 / **B1 0.77 (the cliff)** / B2 0.97 / C1 1.07 / C2 0.69 — and two
 META-fixes gate everything:
 
@@ -1079,7 +1079,7 @@ you toward precision" promise on the conversational surface.
   ROUTING to existing capabilities, replays the same conversations until they flow, freezes them as
   regression transcripts, then ratchets the complexity tier. The drill-down transcript above is its
   first frozen fixture (`test/chatflow-drilldown.test.mjs`).
-- **Measured** by the version-matched benchmark (`CHATBENCH_<version>` per `SKILL_TUNING_CYCLE.md`),
+- **Measured** by the version-matched benchmark (`CEFR_ENGLISH_<version>` per `SKILL_BENCHMARK_CEFR_ENGLISH.md`),
   with new graded cells for the miss / empty-graph / concept-touch surfaces so these become
   regression-protected levers, not one-off polish.
 
@@ -1113,11 +1113,11 @@ remain designed-not-built by intent.
 > g-b1-pron ids; temporal = g-b1-temp ×5 + g-c1-temp ×9; discourse-count re-measure first — it
 > sampled 0/5 red and is likely already green. See HANDOVER follow-up #3.
 
-The three levers `CHATBENCH_0.7.1` measured + ranked — which **double as router prerequisites** (they
+The three levers `CEFR_ENGLISH_0.7.1` measured + ranked — which **double as router prerequisites** (they
 gate the A2→B1→C1 rungs, per Phase B of the router plan):
 1. **Pronoun / focus binding** — the "it → Commit" mis-bind (`B1 pron 1.24`); biggest movable mass.
 2. **Discourse-count anaphora** — "count them / how many of those" over a prior listing (clears the 2
-   `CHATBENCH_0.7.1` tier-1 misses).
+   `CEFR_ENGLISH_0.7.1` tier-1 misses).
 3. **C1 temporal-over-relative composition** — the two-hop ceiling (`C1 temp 0.31`).
 Land all three (not just #1); they raise the chat floor *and* the router's floor at once.
 
@@ -1132,7 +1132,7 @@ Buildable now with a frontier model as co-author (see PLAN §"solved vs unsolved
 - **Phase A — the shim.** An Anthropic Messages API endpoint (`/v1/messages`, `tool_use`/`tool_result`
   blocks). **Extended:** also present as a **`bedrock-meter`-compatible routing target** (see below).
 - **Phase B — measure today → `AGENTBENCH_0.7.2.md`.** Shim + a small graph-query toolset up the
-  A0→C2 ladder; the honest baseline (expected A0 solid, A1–A2 partial, per the CHATBENCH_0.7.1
+  A0→C2 ladder; the honest baseline (expected A0 solid, A1–A2 partial, per the CEFR_ENGLISH_0.7.1
   inherited assets).
 - **Phase C — the grading ladder.** The AGENTBENCH benchmark itself (rungs as levels, comparable
   local/hosted models as reference bands, zero-hallucination gate).
