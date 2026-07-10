@@ -37,7 +37,7 @@
 // load-bearing — see its docblock), telemetry, and the close. runChat is the
 // readline shell over it; src/tui/app.mjs is the Ink shell over the same sink.
 
-import { join, dirname } from "node:path";
+import { join, dirname, resolve } from "node:path";
 import { createWriteStream } from "node:fs";
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -45,6 +45,7 @@ import { createInterface } from "node:readline/promises";
 import { spawnSync } from "node:child_process";
 import { dispatchTool } from "./server.mjs";
 import { loadConfig, DEFAULT_GRAPH_REL } from "./config.mjs";
+import { resolveRuntimeConfig } from "./cli-args.mjs";
 import { parseEntities, edgesOfKind, renderAuthorCard, renderAuthorTouches, renderCommitAuthor } from "./codegraph.mjs";
 import { SESSIONS_DIR_REL, appendSessionToGraph } from "./sessions.mjs";
 import { uuidv7 } from "./uuid.mjs";
@@ -3260,12 +3261,6 @@ export function gitToplevel(cwd = process.cwd()) {
     if (r.status === 0) { const p = String(r.stdout || "").trim(); return p || null; }
   } catch { /* git missing / not a repo — fall back to cwd */ }
   return null;
-}
-
-/** Mirror bin/tmct.mjs's configFor: an explicit repo pins the artifact path; no
- *  repo falls back to the cwd/env-derived default. */
-function configFor(repoPath) {
-  return repoPath ? { graphFile: join(repoPath, DEFAULT_GRAPH_REL) } : loadConfig();
 }
 
 /** Resolve a free-text term to a single graph entity via the ask engine's own
@@ -7428,6 +7423,8 @@ const promptFor = (focus) => (focus ? `tmct(${shortLabel(focus.label)})> ` : PRO
  */
 export async function createSession({
   repoPath,
+  graphPaths,
+  configPath,
   source = defaultSource,
   env = process.env,
   cwd = process.cwd(),
@@ -7449,27 +7446,59 @@ export async function createSession({
   // (see `turn()` below: a turn result's `narrate` field, when present,
   // updates this closure-private variable). Default OFF, as the operator asked.
   let narrateOn = narrate || /^(1|true|yes)$/i.test(String(env.TMCT_NARRATE || ""));
-  // Graph resolution order for the chat surface (documented; --repo wins):
-  //   1. --repo <path>       → pins <path>/.tmct/graph.json (repo AND graph).
-  //   2. TMCT_GRAPH_FILE env → loads that graph anywhere (loadConfig reads it), so
-  //      `TMCT_GRAPH_FILE=<path> tmct chat` works even inside a git repo — the chat
-  //      surface used to ignore it (only the `cli` tool path honoured it). The repo
-  //      for logs/memory is still the git root / cwd; only the graph file is overridden.
-  //   3. git root            → <root>/.tmct/graph.json (the default target).
-  //   4. cwd                 → <cwd>/.tmct/graph.json (not a git repo).
+  // Graph resolution order for the chat surface (documented; --repo still
+  // wins over TMCT_GRAPH_FILE env — a deliberate, TESTED chat-specific
+  // contract predating this batch: an explicit --repo means "use exactly
+  // this repo's graph", never silently redirected by env. Every other tier
+  // below delegates to the shared resolver, src/cli-args.mjs's
+  // resolveRuntimeConfig:
+  //   0. --graph <path> (repeatable, graphPaths) → the NEW top tier: an explicit
+  //      graph file (or files — multi-graph, see src/graph-merge.mjs), wins
+  //      outright over everything below, including --repo.
+  //   1. --repo <path>       → pins <path>/.tmct/graph.json (repo AND graph);
+  //      tmct.toml's graph_file/graph_files at that repo is now ALSO consulted
+  //      (new — chat used to hardcode the default regardless of tmct.toml),
+  //      but TMCT_GRAPH_FILE env is deliberately excluded from this tier.
+  //   2. TMCT_GRAPH_FILE env → loads that graph anywhere, so
+  //      `TMCT_GRAPH_FILE=<path> tmct chat` works even inside a git repo.
+  //   3. tmct.toml's graph_file/graph_files at the resolved repo root (--config
+  //      <path>, `configPath`, can point this at an alternate location) — NEW.
+  //   4. git root            → <root>/.tmct/graph.json (the default target).
+  //   5. cwd                 → <cwd>/.tmct/graph.json (not a git repo).
   // Default the target to the GIT ROOT, not raw cwd: running from a nested package
   // dir (npm sets cwd there) would otherwise index only that package's ~few modules
   // instead of the whole repo.
   let repo;
   let config;
-  if (repoPath) { repo = repoPath; config = configFor(repoPath); }
-  else {
+  const explicitGraphs = (graphPaths || []).filter(Boolean);
+  if (explicitGraphs.length) {
+    repo = repoPath || gitRoot(cwd) || cwd;
+    const resolvedGraphs = explicitGraphs.map((p) => resolve(cwd, p));
+    config = resolvedGraphs.length > 1
+      ? { graphFile: resolvedGraphs[0], graphFiles: resolvedGraphs }
+      : { graphFile: resolvedGraphs[0] };
+  } else if (repoPath) {
+    repo = repoPath;
+    // env is deliberately withheld from resolveRuntimeConfig here (passed as
+    // {}), so its own env-beats-repo-default tier can never fire — the ONLY
+    // way this differs from the old hardcoded `{graphFile: join(repoPath,
+    // DEFAULT_GRAPH_REL)}` default is that a repo's own tmct.toml
+    // graph_file/graph_files (or an explicit --config override) is now
+    // honored too.
+    const argv = ["--repo", repoPath];
+    if (configPath) argv.push("--config", configPath);
+    ({ config } = await resolveRuntimeConfig({ argv, cwd, env: {}, gitRoot }));
+  } else {
     const root = gitRoot(cwd);
     repo = root || cwd;
     const envGraph = env.TMCT_GRAPH_FILE && String(env.TMCT_GRAPH_FILE).trim();
-    // TMCT_GRAPH_FILE (via loadConfig) overrides the repo-derived default graph path;
-    // otherwise the repo's own .tmct/graph.json is the target.
-    config = envGraph ? loadConfig(env, cwd) : { graphFile: join(repo, DEFAULT_GRAPH_REL) };
+    if (envGraph) {
+      config = loadConfig(env, cwd);
+    } else {
+      const argv = [];
+      if (configPath) argv.push("--config", configPath);
+      ({ config } = await resolveRuntimeConfig({ argv, cwd, env, gitRoot }));
+    }
   }
 
   // Ephemeral: keep config.graphFile pointing at the READ graph, but divert the
@@ -7669,6 +7698,8 @@ export async function createSession({
  */
 export async function runChat({
   repoPath,
+  graphPaths,
+  configPath,
   input = process.stdin,
   output = process.stdout,
   source = defaultSource,
@@ -7684,7 +7715,7 @@ export async function runChat({
   // fast subsequent run just flashes it briefly) and removes the "is this even
   // running" uncertainty during the one case that's genuinely slow.
   output.write("tmct — starting…\n");
-  const session = await createSession({ repoPath, source, env, cwd, gitRoot, ephemeral, narrate });
+  const session = await createSession({ repoPath, graphPaths, configPath, source, env, cwd, gitRoot, ephemeral, narrate });
 
   const dim = (s) => (env.NO_COLOR || !output.isTTY ? s : `\x1b[2m${s}\x1b[0m`);
   for (const line of session.bannerLines) output.write(dim(line) + "\n");
