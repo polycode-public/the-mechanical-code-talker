@@ -3668,6 +3668,32 @@ async function factAnswer(memoryDir, query, envelope, miss, biasByBundle = {}) {
     // FULL unshortened grammar cheat-sheet standing under the offer instead
     // of the nicer tailored one-liner — found live while adding this fix).
     if (!hits.length) return null;
+    // LIVE CONSISTENCY CHECK (PLAN_INFERENCE_TESTING.md INF-C2, §4 stage 5):
+    // before answering from this subject's memory, check whether its OWN
+    // taught/entailed types contradict each other (x rdf:type C1, x rdf:type
+    // C2, C1 owl:disjointWith C2, lifted through both types' ⊑-ancestor
+    // closures) via syllogise.mjs's findConsistencyViolations, LIVE and
+    // READ-ONLY — same discipline as the cax-dw chase in the isaAsk block
+    // above. A hit REFUSES the whole answer (every belief about a
+    // contradictory subject is suspect, not just the clashing pair) rather
+    // than silently answering from a memory that's already inconsistent.
+    const { findConsistencyViolations, TYPE_PREDICATE: CONS_TYPE_PREDICATE, SUBCLASS_PREDICATE: CONS_SC_PREDICATE, DISJOINT_PREDICATE: CONS_DISJOINT_PREDICATE } = await import("./syllogise.mjs");
+    const consIsTaught = (f) => !f.provenance?.includes("corpus:") && !f.provenance?.includes("web:");
+    const consTypeEdges = rows.filter((f) => f.predicate === CONS_TYPE_PREDICATE && consIsTaught(f)).map((f) => [f.subject, f.object]);
+    const consSubClassEdges = rows.filter((f) => f.predicate === CONS_SC_PREDICATE && consIsTaught(f)).map((f) => [f.subject, f.object]);
+    const consDisjointEdges = rows.filter((f) => f.predicate === CONS_DISJOINT_PREDICATE && consIsTaught(f)).map((f) => [f.subject, f.object]);
+    if (consDisjointEdges.length) {
+      const clashes = findConsistencyViolations(consTypeEdges, consSubClassEdges, consDisjointEdges, { focus: variants, budget: 5 });
+      const clash = clashes.find((c) => variants.has(c.subject));
+      if (clash) {
+        return {
+          text: `I can't answer that — what I've been told about ${clash.subject} is inconsistent: it's taught to be both `
+            + `${clash.classA} and ${clash.classB}, but ${clash.viaA} and ${clash.viaB} are disjoint (${clash.viaA} owl:disjointWith `
+            + `${clash.viaB}). I'd need one of those retracted before I can answer honestly.`,
+          replace: true,
+        };
+      }
+    }
     // echo the STORED spelling ("caches" asked → "cache" known), never a guess
     const literalHit = hits.find((f) => variants.has(f.subject) || variants.has(f.object));
     const term = literalHit
@@ -4383,6 +4409,32 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
       if (!chain) continue;
       const premises = chain.map(factForStep);
       if (premises.every(Boolean)) return { text: `yes — ${renderIsaChain(premises)}`, replace: true };
+    }
+    // LIVE cax-dw PROOF CHASE (PLAN_INFERENCE_TESTING.md INF-B1, §4 stage 3):
+    // every "yes" strategy above missed — check whether X's taught type
+    // (lifted through its FULL ⊑-ancestor closure) is disjointWith the
+    // queried class, via syllogise.mjs's deriveDisjointViolations, LIVE and
+    // READ-ONLY (same discipline as the findIsaChain chase just above:
+    // nothing is written; syllogise()'s materializing batch pass is the
+    // persisting counterpart of this same rule, never on the chat hot path).
+    // A hit here is a PROVABLE "no" — the one shape on this ladder allowed to
+    // answer "no" from absence-of-membership rather than decline; anything
+    // this chase can't connect through a stated disjointness falls through
+    // to the honest miss below, never a guessed "no".
+    const { deriveDisjointViolations, DISJOINT_PREDICATE } = await import("./syllogise.mjs");
+    const disjointRows = rows.filter((f) => f.predicate === DISJOINT_PREDICATE && isTaught(f));
+    if (disjointRows.length) {
+      const disjointEdges = disjointRows.map((f) => [f.subject, f.object]);
+      const violations = deriveDisjointViolations(chainTypeEdges, chainSubClassEdges, disjointEdges, { budget: 10 });
+      for (const subj of subjCandidates) {
+        const v = violations.find((vv) => vv.subject === subj && objVariants.has(vv.object));
+        if (!v) continue;
+        const typeFact = chainTypeRows.find((f) => f.subject === v.subject && f.object === v.viaType);
+        const disjointFact = disjointRows.find((f) => (f.subject === v.viaClass && f.object === v.object)
+          || (f.subject === v.object && f.object === v.viaClass));
+        const parts = [typeFact, disjointFact].filter(Boolean).map(renderFactLine);
+        return { text: `no — ${parts.length ? parts.join("; ") : `${v.viaClass} and ${v.object} are disjoint.`}`, replace: true };
+      }
     }
     return null; // no remembered fact — the honest miss stands (never a guessed "no")
   }

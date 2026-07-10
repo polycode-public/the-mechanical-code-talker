@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { appendFact, loadMemory, readFactRows } from "../src/memory/core.mjs";
 import {
   deriveSubClassClosure, deriveTypePropagation, deriveDisjointViolations,
-  deriveSomeValuesFromApplication, findIsaChain, syllogise,
+  deriveSomeValuesFromApplication, findConsistencyViolations, findIsaChain, syllogise,
   ENTAILED_PROVENANCE, SUBCLASS_PREDICATE, ENTAILED_TYPE_PROVENANCE, TYPE_PREDICATE,
   ENTAILED_DISJOINT_PROVENANCE, DISJOINT_PREDICATE, CAX_DW_RULE, CAX_DW_RULE_CONFIDENCE,
   ENTAILED_SVF1_PROVENANCE, ON_PROPERTY_PREDICATE, SOME_VALUES_FROM_PREDICATE,
@@ -690,4 +690,72 @@ test("KILL CRITERION: on the default seed, a bounded pass flips a real subclass-
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+// ---- findConsistencyViolations (PLAN_INFERENCE_TESTING.md INF-C2, stage 5) ----
+
+test("findConsistencyViolations: a subject taught two directly-disjoint types is a clash", () => {
+  const typeEdges = [["e90.mjs", "event"], ["e90.mjs", "server"]];
+  const disjointEdges = [["event", "server"]];
+  const clashes = findConsistencyViolations(typeEdges, [], disjointEdges);
+  assert.equal(clashes.length, 1);
+  assert.equal(clashes[0].subject, "e90.mjs");
+  assert.deepEqual([clashes[0].classA, clashes[0].classB].sort(), ["event", "server"]);
+  assert.deepEqual([clashes[0].viaA, clashes[0].viaB].sort(), ["event", "server"]);
+});
+
+test("findConsistencyViolations: the ⊑-lift — a clash via ancestor classes, not the direct types", () => {
+  const typeEdges = [["x1", "mock"], ["x1", "test"]];
+  const subClassEdges = [["mock", "fixture"]];
+  const disjointEdges = [["fixture", "test"]];
+  const clashes = findConsistencyViolations(typeEdges, subClassEdges, disjointEdges);
+  assert.equal(clashes.length, 1);
+  assert.equal(clashes[0].subject, "x1");
+  assert.deepEqual([clashes[0].classA, clashes[0].classB].sort(), ["mock", "test"]);
+  assert.deepEqual([clashes[0].viaA, clashes[0].viaB].sort(), ["fixture", "test"]);
+});
+
+test("findConsistencyViolations: two compatible types (no disjointness between them) is not a clash", () => {
+  const typeEdges = [["m1", "module"], ["m1", "component"]];
+  const disjointEdges = [["cache", "queue"]]; // unrelated pair
+  const clashes = findConsistencyViolations(typeEdges, [], disjointEdges);
+  assert.deepEqual(clashes, []);
+});
+
+test("findConsistencyViolations: a subject with only ONE type never clashes with itself", () => {
+  const typeEdges = [["m1", "module"]];
+  const disjointEdges = [["module", "module"]]; // pathological self-pair, defensively ignored
+  const clashes = findConsistencyViolations(typeEdges, [], disjointEdges);
+  assert.deepEqual(clashes, []);
+});
+
+test("findConsistencyViolations: no disjointWith facts at all is a fast, honest empty", () => {
+  const typeEdges = [["e1", "a"], ["e1", "b"]];
+  assert.deepEqual(findConsistencyViolations(typeEdges, [], []), []);
+});
+
+test("findConsistencyViolations: a subject clashing on two DIFFERENT pairs reports both, deduped, deterministic order", () => {
+  const typeEdges = [["e1", "a"], ["e1", "b"], ["e1", "c"]];
+  const disjointEdges = [["a", "b"], ["a", "c"]];
+  const clashes = findConsistencyViolations(typeEdges, [], disjointEdges);
+  assert.equal(clashes.length, 2);
+  const pairs = clashes.map((c) => [c.classA, c.classB].sort().join("+"));
+  assert.deepEqual(pairs.sort(), ["a+b", "a+c"]);
+  // deterministic: re-running produces byte-identical output
+  assert.deepEqual(findConsistencyViolations(typeEdges, [], disjointEdges), clashes);
+});
+
+test("findConsistencyViolations: budget caps the number of reported clashes", () => {
+  const typeEdges = [["e1", "a"], ["e1", "b"], ["e1", "c"], ["e1", "d"]];
+  const disjointEdges = [["a", "b"], ["a", "c"], ["a", "d"]];
+  const clashes = findConsistencyViolations(typeEdges, [], disjointEdges, { budget: 2 });
+  assert.equal(clashes.length, 2);
+});
+
+test("findConsistencyViolations: focus excludes subjects outside the focus set", () => {
+  const typeEdges = [["e1", "a"], ["e1", "b"], ["e2", "a"], ["e2", "b"]];
+  const disjointEdges = [["a", "b"]];
+  const clashes = findConsistencyViolations(typeEdges, [], disjointEdges, { focus: new Set(["e1"]) });
+  assert.equal(clashes.length, 1);
+  assert.equal(clashes[0].subject, "e1");
 });

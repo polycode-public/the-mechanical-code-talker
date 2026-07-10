@@ -483,6 +483,88 @@ export function deriveSomeValuesFromApplication(propertyEdges, typeEdges, subCla
 }
 
 /**
+ * PURE consistency checker (PLAN_INFERENCE_TESTING.md S1 INF-C2, S4 stage 5):
+ * detects when a SINGLE subject's own already-asserted types contradict each
+ * other — x rdf:type C1, x rdf:type C2, C1 owl:disjointWith C2 (checked over
+ * BOTH types' FULL ⊑-ancestor closures, the same lift `deriveDisjointViolations`
+ * uses) — a REFUSE-worthy clash, not a "no" to derive and move on from. This is
+ * a fundamentally different shape than cax-dw: cax-dw asks "can I derive a NO
+ * for an UNASSERTED type"; this asks "do X's OWN taught/entailed types already
+ * clash with each other" — every stored belief about a contradictory subject is
+ * suspect, not just the one pair being queried, so the caller's job (chat.mjs)
+ * is to REFUSE to answer from that subject's memory at all, not to keep
+ * answering everything except the one clashing pair.
+ *
+ * Returns ONLY the clashes found — `{ subject, classA, classB, viaA, viaB }`
+ * (`viaA`/`viaB` are the specific taught types whose ⊑-closures actually
+ * licensed the clash — itself, for a direct hit, or an ancestor, for the
+ * lift) — bounded by `budget`, focus-filtered, deterministic order, DEDUPED
+ * so a subject with N mutually-clashing types reports each unordered pair
+ * once. No I/O; nothing is written — same read-only discipline as
+ * `deriveDisjointViolations`'s own live chat-side use (chat.mjs's INF-B1
+ * cax-dw chase).
+ */
+export function findConsistencyViolations(typeEdges, subClassEdges, disjointEdges, { budget = 50, focus = null } = {}) {
+  const ancestorsOf = buildAncestorCloser(subClassEdges);
+
+  const disjointOf = new Map(); // term -> Set(disjoint partner terms) — symmetric, same as deriveDisjointViolations
+  for (const [a, b] of disjointEdges || []) {
+    if (!a || !b || a === b) continue;
+    if (!disjointOf.has(a)) disjointOf.set(a, new Set());
+    disjointOf.get(a).add(b);
+    if (!disjointOf.has(b)) disjointOf.set(b, new Set());
+    disjointOf.get(b).add(a);
+  }
+  if (!disjointOf.size) return []; // nothing can clash — fast, honest exit
+
+  const typesBySubject = new Map(); // x -> Set(directly-taught/entailed types)
+  for (const [x, c] of typeEdges || []) {
+    if (!x || !c) continue;
+    if (!typesBySubject.has(x)) typesBySubject.set(x, new Set());
+    typesBySubject.get(x).add(c);
+  }
+
+  const focusSet = focus instanceof Set ? (focus.size ? focus : null) : normalizeFocus(focus);
+  const inFocus = (x) => !focusSet || focusSet.has(x);
+
+  const candidates = [];
+  const seenPair = new Set(); // "x\0classA\0classB" (classA<classB lexically) — dedup per subject+pair
+  for (const [x, types] of typesBySubject) {
+    if (!inFocus(x)) continue;
+    const typeList = [...types].sort();
+    for (let i = 0; i < typeList.length; i += 1) {
+      for (let j = i + 1; j < typeList.length; j += 1) {
+        const [ta, tb] = [typeList[i], typeList[j]];
+        // check ta's closure against tb's closure for ANY disjoint-linked pair
+        const closureA = [ta, ...ancestorsOf(ta)];
+        const closureB = [tb, ...ancestorsOf(tb)];
+        let hit = null;
+        for (const da of closureA) {
+          const partners = disjointOf.get(da);
+          if (!partners) continue;
+          for (const db of closureB) {
+            if (partners.has(db)) { hit = [da, db]; break; }
+          }
+          if (hit) break;
+        }
+        if (!hit) continue;
+        const pairKey = `${x}${SEP}${ta}${SEP}${tb}`;
+        if (seenPair.has(pairKey)) continue;
+        seenPair.add(pairKey);
+        candidates.push([x, ta, tb, hit[0], hit[1]]);
+      }
+    }
+  }
+  candidates.sort((p, q) => p[0].localeCompare(q[0]) || p[1].localeCompare(q[1]) || p[2].localeCompare(q[2]));
+  const derived = [];
+  for (const [x, ta, tb, viaA, viaB] of candidates) {
+    if (derived.length >= budget) break;
+    derived.push({ subject: x, classA: ta, classB: tb, viaA, viaB });
+  }
+  return derived;
+}
+
+/**
  * Run one bounded speculative pass over the memory graph under `repoDir`
  * (the repo dir whose .tmct/memory/graph.json appendFact/loadMemory manage).
  * Reads the stored subClassOf, rdf:type, owl:disjointWith AND (for cls-svf1)
