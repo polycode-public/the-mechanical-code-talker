@@ -10,17 +10,25 @@
 // TWO DRIVE POINTS (§2.1):
 //   - kernel: calls src/syllogise.mjs's pure provers directly over the
 //     premises' own emitted triples — deriveSubClassClosure (subClassOf
-//     transitivity) and, as of PLAN_INFERENCE_TESTING.md §4 stage 4,
-//     deriveSomeValuesFromApplication (cls-svf1 restriction membership) —
-//     blind to the codegraph. Only meaningful for cases whose `arms` declares
+//     transitivity), deriveSomeValuesFromApplication (cls-svf1 restriction
+//     membership), and, as of this build, deriveSomeValuesFromSubsumption
+//     (scm-svf1 restriction-to-restriction subsumption), proveCardinalityAtLeast
+//     (cardinality monotonicity), and proveMaxCardinalityZeroDenial (cax-maxc0)
+//     — blind to the codegraph. Only meaningful for cases whose `arms` declares
 //     "kernel": a1Lookup/subClassOf and a2ChainLen2/taught-only (pure
-//     class-to-class subClassOf questions) plus b2Svf1Apply (the cls-svf1
+//     class-to-class subClassOf questions), b2Svf1Apply (the cls-svf1
 //     positive template — its query asks about the restriction node itself,
-//     deliberately checked HERE rather than via chat.mjs, which this dispatch
-//     does not touch; see generate-cases.mjs's own comment on that template).
-//     Every other template is outside the kernel's actual domain by
-//     construction, so it is never asked one — see generate-cases.mjs's
-//     per-template `arms`.
+//     deliberately checked HERE rather than via chat.mjs, which an earlier
+//     dispatch did not touch; see generate-cases.mjs's own comment on that
+//     template), c1ScmSvfApply (scm-svf1's positive template — a plain
+//     restriction-to-restriction "is X a Y" ask, so BOTH arms apply, unlike
+//     b2Svf1Apply), and c1Cardinality (both variants, fixed in place this
+//     build — see generate-cases.mjs). Every other template is outside the
+//     kernel's actual domain by construction, so it is never asked one — see
+//     generate-cases.mjs's per-template `arms`. Unlike every other rule this
+//     kernel arm exercises, the kernel CAN now return "no" (cax-maxc0) —
+//     `gradeKernelRow`'s fabrication check is symmetric accordingly (see its
+//     own comment).
 //   - chat: interprets a real runTurn/runChat transcript (driven by
 //     infbench/run.mjs) via the turn's own `miss` flag — the SAME honest-miss
 //     signal chat.mjs itself computes (recordMiss), not a text-pattern guess.
@@ -30,7 +38,10 @@
 // confident directional verdict ("yes"/"no") that isn't the pinned literal —
 // the automatic FAIL, exactly agentbench's hallucinated-call gate.
 
-import { deriveSubClassClosure, deriveSomeValuesFromApplication } from "../src/syllogise.mjs";
+import {
+  deriveSubClassClosure, deriveSomeValuesFromApplication, deriveSomeValuesFromSubsumption,
+  buildCardinalityRestrictions, proveCardinalityAtLeast, proveMaxCardinalityZeroDenial,
+} from "../src/syllogise.mjs";
 import { parseAce } from "../src/grammar/ace.mjs";
 import { loadLexicon } from "../src/grammar/lexicon.mjs";
 import { normFactTerm } from "../src/memory/core.mjs";
@@ -94,23 +105,56 @@ export function parseCases(text) {
 /** The canonical "is X a Y" query surface every generated case uses. Shared
  *  by the kernel's own (bench-side) query interpretation — NOT by the chat
  *  arm, which never parses text: it reads chat.mjs's own `miss` flag. Also
- *  doubles as the cls-svf1 template's query surface: "Y" there is the
+ *  doubles as the cls-svf1/scm-svf1 templates' query surface: "Y" there is a
  *  restriction node's own readable term (e.g. "some-imports-test"), a plain
  *  string with no spaces, so the same "is X a Y" shape parses it unchanged —
  *  no second query grammar needed. */
 const QUERY_RE = /^is\s+(?:an?\s+)?(.+?)\s+an?\s+(.+?)[?.!\s]*$/i;
 
+/** The two NEW cardinality ask-shapes (this build) — mirrors src/chat.mjs's
+ *  own CARD_AT_LEAST_ASK_RE/CARD_EXISTENCE_ASK_RE exactly (same surface, two
+ *  independent copies: this one is bench-side and pure, chat.mjs's is the
+ *  product-side live-chat reader — no shared import between them, same
+ *  discipline as QUERY_RE above already keeping bench-side query parsing
+ *  separate from chat.mjs's own regexes). */
+const CARD_AT_LEAST_KERNEL_RE = /^does\s+every\s+(.+?)\s+have\s+at\s+least\s+(\d+)\s+(.+?)[?.!\s]*$/i;
+const CARD_EXISTENCE_KERNEL_RE = /^does\s+an?\s+(.+?)\s+have\s+an?\s+(.+?)[?.!\s]*$/i;
+
+/** The 4 pattern-5 cardinality-restriction predicates (buildCardinalityRestrictions'
+ *  own input shape) — excluded from the generic `propertyEdges` scan below,
+ *  matching how `owl:intersectionOf` is already excluded (neither is a real
+ *  taught object-property assertion). owl:onProperty is handled separately
+ *  (it's shared scaffolding between someValuesFrom AND cardinality
+ *  restrictions — see src/syllogise.mjs's `buildCardinalityRestrictions` doc
+ *  comment on the HAS_PROPERTY_KEY defensive belt). */
+const CARDINALITY_ROW_PREDICATES = new Set(["owl:cardinality", "owl:minCardinality", "owl:maxCardinality", "owl:onClass"]);
+
+/** Naive singular fold for a queried noun phrase that may be plural
+ *  ("does every suite have at least 2 tests" — the object noun is pluralized
+ *  when m>1) — mirrors src/chat.mjs's own `factTermVariants` exactly (a
+ *  self-contained copy: grade.mjs is bench-side and doesn't import chat.mjs). */
+function singularCandidates(term) {
+  const t = normFactTerm(term);
+  const v = new Set([t]);
+  if (t.endsWith("es")) v.add(t.slice(0, -2));
+  if (t.endsWith("s")) v.add(t.slice(0, -1));
+  return v;
+}
+
 /** Kernel verdict for one case: null when the case's `arms` does not declare
  *  "kernel" (not applicable — see file header); otherwise "yes" (the query's
  *  (subject,object) pair is present, subClassOf-derivable, a directly stated
- *  rdf:type, or cls-svf1-derivable from the premises' own triples) or
- *  "unproven" (the kernel's domain cannot see it — an honest structural
- *  ceiling, e.g. it has no notion of the codegraph or of disjointWith/
- *  cardinality/the further owl:intersectionOf step past cls-svf1). Pure; no
+ *  rdf:type, cls-svf1-derivable, or scm-svf1-derivable from the premises' own
+ *  triples), "no" (cax-maxc0: a declared max-0 restriction denies the queried
+ *  existence claim), or "unproven" (the kernel's domain cannot see it — an
+ *  honest structural ceiling, e.g. it has no notion of the codegraph or of
+ *  disjointWith/the further owl:intersectionOf step past cls-svf1). Pure; no
  *  I/O — this is a bench-side check over `src/syllogise.mjs`'s pure kernels
- *  directly, deliberately NOT going through `chat.mjs` (out of scope for
- *  this dispatch — see the cls-svf1 template's own generator comment), so a
- *  cls-svf1-shaped case only ever declares `arms: ["kernel"]`, never "chat". */
+ *  directly, deliberately NOT going through `chat.mjs` for the cls-svf1/
+ *  scm-svf1 restriction-node query shapes (out of an earlier dispatch's
+ *  scope — see the cls-svf1 template's own generator comment; c1ScmSvfApply's
+ *  query, by contrast, names no individual at all and IS also chat-arm
+ *  checked, per its own generator comment). */
 export function kernelVerdict(caseDef) {
   if (!(caseDef.arms || []).includes("kernel")) return null;
   const lexicon = loadLexicon();
@@ -119,6 +163,7 @@ export function kernelVerdict(caseDef) {
   const propertyEdges = [];
   const onPropertyOf = new Map();     // restriction -> owl:onProperty's (normalized) object
   const someValuesFromOf = new Map(); // restriction -> owl:someValuesFrom's (normalized) object
+  const cardinalityRows = [];         // buildCardinalityRestrictions' own input shape
   for (const premise of caseDef.premises || []) {
     const parsed = parseAce(premise, lexicon);
     for (const t of parsed?.triples || []) {
@@ -126,41 +171,77 @@ export function kernelVerdict(caseDef) {
       const o = normFactTerm(t.object);
       if (t.predicate === "rdfs:subClassOf") subClassEdges.push([s, o]);
       else if (t.predicate === "rdf:type") typeEdges.push([s, o]);
-      else if (t.predicate === "owl:onProperty") onPropertyOf.set(s, o);
+      else if (t.predicate === "owl:onProperty") { onPropertyOf.set(s, o); cardinalityRows.push({ subject: s, predicate: t.predicate, object: o }); }
       else if (t.predicate === "owl:someValuesFrom") someValuesFromOf.set(s, o);
+      else if (CARDINALITY_ROW_PREDICATES.has(t.predicate)) cardinalityRows.push({ subject: s, predicate: t.predicate, object: o });
       else if (t.predicate !== "owl:intersectionOf") propertyEdges.push([s, t.predicate, o]);
     }
   }
-  const m = String(caseDef.query || "").match(QUERY_RE);
-  if (!m) return "unproven";
-  const subj = normFactTerm(m[1]);
-  const obj = normFactTerm(m[2]);
-  if (subClassEdges.some(([a, b]) => a === subj && b === obj)) return "yes";
-  const derivedSco = deriveSubClassClosure(subClassEdges, {});
-  if (derivedSco.some((d) => d.subject === subj && d.object === obj)) return "yes";
-  if (typeEdges.some(([a, b]) => a === subj && b === obj)) return "yes";
+
   const restrictionEdges = [];
   for (const [restriction, property] of onPropertyOf) {
     const target = someValuesFromOf.get(restriction);
     if (target) restrictionEdges.push({ restriction, property, target });
   }
-  if (restrictionEdges.length) {
-    const derivedSvf1 = deriveSomeValuesFromApplication(propertyEdges, typeEdges, subClassEdges, restrictionEdges, {});
-    if (derivedSvf1.some((d) => d.subject === subj && d.object === obj)) return "yes";
+  // scm-svf1 (this build): enlarge subClassEdges with restriction⊑restriction
+  // subsumption BEFORE the final deriveSubClassClosure re-check below, so
+  // c1ScmSvfApply's kernel query ("is R1 a R2", a restriction-to-restriction
+  // ask) passes through the SAME machinery every other subClassOf query
+  // already uses, unchanged.
+  const svfSubsumption = restrictionEdges.length > 1
+    ? deriveSomeValuesFromSubsumption(restrictionEdges, subClassEdges, {})
+    : [];
+  const enlargedSubClassEdges = svfSubsumption.length
+    ? subClassEdges.concat(svfSubsumption.map((d) => [d.subject, d.object]))
+    : subClassEdges;
+  const cardinalityRestrictionEdges = buildCardinalityRestrictions(cardinalityRows);
+
+  const isaMatch = String(caseDef.query || "").match(QUERY_RE);
+  if (isaMatch) {
+    const subj = normFactTerm(isaMatch[1]);
+    const obj = normFactTerm(isaMatch[2]);
+    if (enlargedSubClassEdges.some(([a, b]) => a === subj && b === obj)) return "yes";
+    const derivedSco = deriveSubClassClosure(enlargedSubClassEdges, {});
+    if (derivedSco.some((d) => d.subject === subj && d.object === obj)) return "yes";
+    if (typeEdges.some(([a, b]) => a === subj && b === obj)) return "yes";
+    if (restrictionEdges.length) {
+      const derivedSvf1 = deriveSomeValuesFromApplication(propertyEdges, typeEdges, enlargedSubClassEdges, restrictionEdges, {});
+      if (derivedSvf1.some((d) => d.subject === subj && d.object === obj)) return "yes";
+    }
+    return "unproven";
+  }
+  const cardAtLeast = String(caseDef.query || "").match(CARD_AT_LEAST_KERNEL_RE);
+  if (cardAtLeast) {
+    const subj = normFactTerm(cardAtLeast[1]);
+    const mQ = Number(cardAtLeast[2]);
+    for (const obj of singularCandidates(cardAtLeast[3])) {
+      if (proveCardinalityAtLeast(enlargedSubClassEdges, cardinalityRestrictionEdges, subj, obj, mQ, {})) return "yes";
+    }
+    return "unproven";
+  }
+  const cardExistence = String(caseDef.query || "").match(CARD_EXISTENCE_KERNEL_RE);
+  if (cardExistence) {
+    const subj = normFactTerm(cardExistence[1]);
+    for (const obj of singularCandidates(cardExistence[2])) {
+      if (proveMaxCardinalityZeroDenial(enlargedSubClassEdges, cardinalityRestrictionEdges, subj, obj, {})) return "no";
+    }
+    return "unproven";
   }
   return "unproven";
 }
 
 /** Grade the kernel arm of one case, or null when not applicable (arms lacks
- *  "kernel"). fabricated = the kernel asserted "yes" on a case whose pinned
- *  literal is not "yes" (kernel never produces "no"/"inconsistent" — it has
- *  no rule for either, so those directions can't be fabricated FROM kernel). */
+ *  "kernel"). fabricated = a CONFIDENT directional verdict ("yes"/"no") that
+ *  isn't the pinned literal — the SAME symmetric definition `gradeChatRow`
+ *  already uses. Was asymmetric (yes-only) before this build, when the
+ *  kernel had no rule that could ever produce "no" at all; cax-maxc0 changes
+ *  that (see kernelVerdict's own doc comment), so the check widens to match. */
 export function gradeKernelRow(caseDef) {
   const observed = kernelVerdict(caseDef);
   if (observed == null) return null;
   const expected = caseDef.expect.verdict;
   const pass = observed === expected;
-  const fabricated = observed === "yes" && expected !== "yes";
+  const fabricated = (observed === "yes" || observed === "no") && observed !== expected;
   return { pass, fabricated, completed: pass, observed, expected };
 }
 
