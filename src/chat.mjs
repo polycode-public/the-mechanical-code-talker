@@ -4103,91 +4103,17 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
       // guard is needed at THIS dispatch level (the search kernels
       // underneath — findActionPath — carry their own `seen`-set safety
       // regardless).
-      const resolveRelationChase = async (name, subjectTerm, objectTerm) => {
-        const target = String(name || "").trim().toLowerCase();
-        // (i)+(ii): direct hit or alias-chased hit for this exact (subject,
-        // object) pair under the queried relation name.
-        const sv = factTermVariants(normFactTerm, subjectTerm);
-        const ov = factTermVariants(normFactTerm, objectTerm);
-        const pairHits = relationFactsFor(target).filter((e) => sv.has(e.fact.subject) && ov.has(e.fact.object));
-        if (pairHits.length) {
-          const hit = pairHits.slice().sort((a, b) => byTrust(a.fact, b.fact))[0];
-          return { citation: [renderFactLine(hit.fact), ...hit.aliasFacts.map(
-            (af) => `${factPhrase(af)}${af.provenance ? ` (source: ${af.provenance})` : ""}`,
-          )] };
-        }
-        // The queried name may itself be a taught RULE. findRuleByName is
-        // the SAME lookup §2/§3's own genericity design uses ("what kind of
-        // thing is X") — no per-rule-name branch, just a class/kind check.
-        const {
-          loadMemory, findRuleByName, RULE_KIND_PROP: ruleKindProp,
-          RULE_KIND_COMPOSE2: composeKind, RULE_KIND_FILTER: filterKind,
-        } = await import("./memory/core.mjs");
-        const memory = await loadMemory(memoryDir);
-        const rule = findRuleByName(memory, target);
-        const ruleKind = rule?.attributes?.find((a) => a.prop === ruleKindProp)?.value;
-        // (iii) COMPOSE2 RULE CHASE (Phase 4 item 3) — a hop-counted
-        // findActionPath search over { entity, hopsTaken } states,
-        // dispatching base1's edges at hop 0 and base2's edges at hop 1,
-        // requiring EXACTLY hopsTaken === 2 at the goal — never just
-        // entity === target at any depth.
-        if (rule && ruleKind === composeKind) {
-          const base1 = rule.attributes.find((a) => a.prop === "mgx:ruleBase1")?.value;
-          const base2 = rule.attributes.find((a) => a.prop === "mgx:ruleBase2")?.value;
-          const startEntity = normFactTerm(subjectTerm);
-          const targetEntity = normFactTerm(objectTerm);
-          if (!base1 || !base2 || !startEntity || !targetEntity) return null;
-          const { findActionPath } = await import("./planning.mjs");
-          const applyActions = (state) => {
-            if (state.hopsTaken >= 2) return [];
-            const relName = state.hopsTaken === 0 ? base1 : base2;
-            return relationFactsFor(relName)
-              .filter((e) => e.fact.subject === state.entity)
-              .map((e) => ({ action: e, nextState: { entity: e.fact.object, hopsTaken: state.hopsTaken + 1 } }));
-          };
-          const isGoal = (state) => state.hopsTaken === 2 && state.entity === targetEntity;
-          const stateKey = (state) => `${state.entity}#${state.hopsTaken}`;
-          const found = findActionPath({ entity: startEntity, hopsTaken: 0 }, isGoal, applyActions, { maxDepth: 2, stateKey });
-          if (!found) return null;
-          const seenAlias = new Set();
-          const parts = [];
-          for (const e of found.actions) {
-            parts.push(renderFactLine(e.fact));
-            for (const af of e.aliasFacts) {
-              const key = af.id || `${af.subject}|${af.predicate}|${af.object}`;
-              if (seenAlias.has(key)) continue;
-              seenAlias.add(key);
-              parts.push(`${factPhrase(af)}${af.provenance ? ` (source: ${af.provenance})` : ""}`);
-            }
-          }
-          return { citation: parts };
-        }
-        // (iv) FILTER RULE CHASE (Phase 5 item 4) — recursively resolve the
-        // base (a plain relation OR another rule — this SAME function,
-        // generic over which one it turns out to be), then filter by
-        // whether the SUBJECT carries the property literal
-        // (mgx:hasProperty, a plain Fact lookup over the already-loaded
-        // `rows`). A base chase that fails declines here too (never a
-        // guess); a base chase that succeeds but whose subject lacks the
-        // taught property declines as well — the filter correctly EXCLUDES
-        // that candidate rather than silently ignoring the property clause.
-        if (rule && ruleKind === filterKind) {
-          const base = rule.attributes.find((a) => a.prop === "mgx:ruleBase1")?.value;
-          const property = rule.attributes.find((a) => a.prop === "mgx:ruleFilterProperty")?.value;
-          if (!base || !property) return null;
-          const baseHit = await resolveRelationChase(base, subjectTerm, objectTerm);
-          if (!baseHit) return null;
-          const subjectEntity = normFactTerm(subjectTerm);
-          const propertyNorm = normFactTerm(property);
-          const propHit = rows.find(
-            (f) => f.predicate === HAS_PROPERTY_PREDICATE && f.subject === subjectEntity && normFactTerm(f.object) === propertyNorm,
-          );
-          if (!propHit) return null; // base relation holds, but the property filter excludes this candidate
-          return { citation: [...baseHit.citation, renderFactLine(propHit)] };
-        }
-        return null; // no remembered fact, alias, or rule (of any kind) reaches this
-      };
-      const hit = await resolveRelationChase(relationName, subject, object);
+      // Extracted to memory/core.mjs (PLAN_COMPLETIONS.md Stage 1
+      // prerequisite: cross-group inference reuses this SAME resolution
+      // logic outside chat.mjs's dispatch context) — findRuleByName's own
+      // natural sibling there. `relationFactsFor`/`renderFactLine`/
+      // `factPhrase`/`factTermVariants`/`byTrust`/`rows`/
+      // `HAS_PROPERTY_PREDICATE` are this block's own local closures/
+      // constants, threaded through explicitly rather than re-derived.
+      const { loadMemory, findRuleByName, resolveRelationChase } = await import("./memory/core.mjs");
+      const memory = await loadMemory(memoryDir);
+      const relationChaseHelpers = { relationFactsFor, renderFactLine, factPhrase, factTermVariants, byTrust, rows, HAS_PROPERTY_PREDICATE };
+      const hit = await resolveRelationChase(memory, relationName, subject, object, relationChaseHelpers);
       if (hit) return { text: `yes — ${hit.citation.join("; ")}`, replace: true };
       // Gap 1 fix (live-tested 2026-07-09, PLAN_TAUGHT_RELATIONS.md follow-up):
       // this used to `return null` unconditionally on any miss here — the
@@ -4203,10 +4129,8 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
       // object) pair's chase came up short (e.g. a 2-hop rule with only 1
       // hop of facts taught, or an unrelated pair) — an honest, specific
       // decline that NAMES the relation, never a guessed "no".
-      const { loadMemory: loadMemForMiss, findRuleByName: findRuleByNameForMiss } = await import("./memory/core.mjs");
-      const memoryForMiss = await loadMemForMiss(memoryDir);
       const nameKnown = relationFactsFor(relationName).length > 0
-        || !!findRuleByNameForMiss(memoryForMiss, relationName);
+        || !!findRuleByName(memory, relationName);
       if (!nameKnown) {
         return { text: `I don't know a relation or rule called '${relationName}' yet.`, replace: true };
       }
@@ -4260,10 +4184,7 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
         }
         return out;
       };
-      const {
-        loadMemory: loadMemWho, findRuleByName: findRuleByNameWho, RULE_KIND_PROP: ruleKindPropWho,
-        RULE_KIND_COMPOSE2: composeKindWho, RULE_KIND_FILTER: filterKindWho,
-      } = await import("./memory/core.mjs");
+      const { loadMemory: loadMemWho, findRuleByName: findRuleByNameWho, resolveRelationChaseReverse } = await import("./memory/core.mjs");
       const memoryWho = await loadMemWho(memoryDir);
       // Generic REVERSE relation-NAME resolver — the mirror image of (a0)'s
       // resolveRelationChase: given a relation/rule name and a FIXED OBJECT,
@@ -4272,102 +4193,13 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
       // bounded the SAME way (a0)'s own chase is (§3.3): a filter rule's base
       // is always either a plain relation (terminal) or another rule (one
       // level deeper), never itself.
-      const resolveRelationChaseReverse = async (name, objectTerm) => {
-        const target = String(name || "").trim().toLowerCase();
-        const ov = factTermVariants(normFactTerm, objectTerm);
-        // (i)+(ii): every direct/alias-chased fact under this name whose
-        // object matches the target — one result per distinct subject (the
-        // highest-trust fact when more than one reaches the same subject).
-        const directHits = relationFactsForWho(target).filter((e) => ov.has(e.fact.object));
-        if (directHits.length) {
-          const bySubject = new Map();
-          for (const e of directHits) {
-            if (!bySubject.has(e.fact.subject)) bySubject.set(e.fact.subject, []);
-            bySubject.get(e.fact.subject).push(e);
-          }
-          return [...bySubject.entries()].map(([subj, hits]) => {
-            const hit = hits.slice().sort((a, b) => byTrust(a.fact, b.fact))[0];
-            return {
-              subject: subj,
-              citation: [renderFactLine(hit.fact), ...hit.aliasFacts.map(
-                (af) => `${factPhrase(af)}${af.provenance ? ` (source: ${af.provenance})` : ""}`,
-              )],
-            };
-          });
-        }
-        const rule = findRuleByNameWho(memoryWho, target);
-        const ruleKind = rule?.attributes?.find((a) => a.prop === ruleKindPropWho)?.value;
-        // (iii) COMPOSE2 REVERSE CHASE — the same hop-counted search (a0)'s
-        // forward chase uses, walked BACKWARD: seed from the TARGET object,
-        // reverse-hop via base2's edges first (the SECOND forward hop,
-        // closest to the object), then base1's edges (the FIRST forward
-        // hop) — swapping which side of each fact is queried (object instead
-        // of subject) rather than building a new search kernel. Enumerates
-        // every subject reachable at EXACTLY 2 reverse hops (never just
-        // "reachable within budget" — the same exact-hop-count discipline
-        // (a0)'s own isGoal uses), via findReachableSet (already proven
-        // cycle-safe by item 6's own reachability-list wiring, (a0.5) below).
-        if (rule && ruleKind === composeKindWho) {
-          const base1 = rule.attributes.find((a) => a.prop === "mgx:ruleBase1")?.value;
-          const base2 = rule.attributes.find((a) => a.prop === "mgx:ruleBase2")?.value;
-          const targetEntity = normFactTerm(objectTerm);
-          if (!base1 || !base2 || !targetEntity) return [];
-          const { findReachableSet: findReachableSetWho } = await import("./planning.mjs");
-          const applyActionsRev = (state) => {
-            if (state.hopsTaken >= 2) return [];
-            const relName = state.hopsTaken === 0 ? base2 : base1;
-            return relationFactsForWho(relName)
-              .filter((e) => e.fact.object === state.entity)
-              .map((e) => ({ action: e, nextState: { entity: e.fact.subject, hopsTaken: state.hopsTaken + 1 } }));
-          };
-          const stateKeyRev = (state) => `${state.entity}#${state.hopsTaken}`;
-          const reached = findReachableSetWho(
-            { entity: targetEntity, hopsTaken: 0 }, applyActionsRev, { maxDepth: 2, stateKey: stateKeyRev },
-          );
-          return reached.filter((r) => r.node.hopsTaken === 2).map(({ node, path }) => {
-            const seenAlias = new Set();
-            const parts = [];
-            // path.actions was accumulated walking BACKWARD from the object
-            // (base2's edge first, base1's edge second) — reversed here so
-            // the citation reads in the natural subject-to-object order
-            // ("ahab fathers john; …; john fathers ishmael"), matching (a0)'s
-            // own forward-chase citation order rather than exposing the
-            // reverse-walk's internal accumulation order to the user.
-            for (const e of path.actions.slice().reverse()) {
-              parts.push(renderFactLine(e.fact));
-              for (const af of e.aliasFacts) {
-                const key = af.id || `${af.subject}|${af.predicate}|${af.object}`;
-                if (seenAlias.has(key)) continue;
-                seenAlias.add(key);
-                parts.push(`${factPhrase(af)}${af.provenance ? ` (source: ${af.provenance})` : ""}`);
-              }
-            }
-            return { subject: node.entity, citation: parts };
-          });
-        }
-        // (iv) FILTER REVERSE CHASE — reverse-chase the base (recursively,
-        // same as the forward filter chase — this SAME function calls
-        // itself), then filter the resulting subjects by whether EACH
-        // carries the taught property.
-        if (rule && ruleKind === filterKindWho) {
-          const base = rule.attributes.find((a) => a.prop === "mgx:ruleBase1")?.value;
-          const property = rule.attributes.find((a) => a.prop === "mgx:ruleFilterProperty")?.value;
-          if (!base || !property) return [];
-          const baseHits = await resolveRelationChaseReverse(base, objectTerm);
-          const propertyNorm = normFactTerm(property);
-          const out = [];
-          for (const bh of baseHits) {
-            const subjectEntity = normFactTerm(bh.subject);
-            const propHit = rows.find(
-              (f) => f.predicate === HAS_PROPERTY_PREDICATE && f.subject === subjectEntity && normFactTerm(f.object) === propertyNorm,
-            );
-            if (propHit) out.push({ subject: bh.subject, citation: [...bh.citation, renderFactLine(propHit)] });
-          }
-          return out;
-        }
-        return []; // no remembered fact, alias, or rule (of any kind) reaches this
-      };
-      const hits = await resolveRelationChaseReverse(relationName, object);
+      // Extracted to memory/core.mjs alongside (a0)'s own resolveRelationChase
+      // (PLAN_COMPLETIONS.md Stage 1 prerequisite — see (a0)'s own comment for
+      // why); `relationFactsForWho`/`renderFactLine`/`factPhrase`/
+      // `factTermVariants`/`byTrust`/`rows`/`HAS_PROPERTY_PREDICATE` are this
+      // block's own local closures/constants, threaded through explicitly.
+      const relationChaseHelpersWho = { relationFactsFor: relationFactsForWho, renderFactLine, factPhrase, factTermVariants, byTrust, rows, HAS_PROPERTY_PREDICATE };
+      const hits = await resolveRelationChaseReverse(memoryWho, relationName, object, relationChaseHelpersWho);
       if (hits.length) {
         const lines = hits.map((h) => `${h.subject} — ${h.citation.join("; ")}`);
         return { text: lines.join("\n"), replace: true };

@@ -10,6 +10,8 @@ import {
   MEMORY_GRAPH_REL, UTTERANCE_CLASS, FACT_CLASS,
   SAID_IN_SESSION_PROP, IN_REPLY_TO_PROP,
   emptyMemory, loadMemory, appendUtterance, appendUtterances, appendFact, appendFacts,
+  appendRule, findRuleByName, readFactRows, normFactTerm,
+  resolveRelationChase, resolveRelationChaseReverse,
 } from "../src/memory/core.mjs";
 import { parseEntities } from "../src/codegraph.mjs";
 import { lookupByProseTokens } from "../src/prose.mjs";
@@ -292,6 +294,144 @@ test("appendFact: provenance is UNIONED across writers, never overwritten", asyn
     assert.equal(facts.length, 1);
     const prov = facts[0].attributes.find((x) => x.key === "provenance")?.value;
     assert.equal(prov, "corpus:conceptnet | chat:session-1", "both provenances kept, deduped");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---- resolveRelationChase / resolveRelationChaseReverse ---------------------
+// These used to be unexported closures inside chat.mjs's factReadBack (the
+// (a0)/(a0.2) blocks). Extracted here as plain, standalone, importable
+// functions (PLAN_COMPLETIONS.md Stage 1 prerequisite). Called DIRECTLY here —
+// never through chat.mjs — with minimal, self-contained helper implementations
+// (not chat.mjs's own renderFactLine/factPhrase/factTermVariants) to prove the
+// functions carry no hidden chat.mjs coupling: any caller supplying a
+// conforming `helpers` bag gets identical dispatch behavior.
+const testByTrust = (a, b) => b.trust - a.trust;
+const testRenderFactLine = (f) => `${f.subject} ${f.predicate} ${f.object}`;
+const testFactPhrase = (f) => `${f.subject} ${f.predicate} ${f.object}`;
+const testFactTermVariants = (normFn, term) => new Set([normFn(term)]);
+const testHasPropertyPredicate = "mgx:hasProperty";
+// A minimal candidate-list builder — direct-predicate match only (no alias
+// chase — resolveRelationChase/Reverse never call the alias substrate
+// themselves; that's entirely inside the caller's own relationFactsFor, which
+// is exactly what this test proves by supplying a deliberately simpler one).
+function testRelationFactsFor(rows) {
+  return (name) => rows
+    .filter((f) => f.predicate === `mgx:${name}`)
+    .map((f) => ({ fact: f, aliasFacts: [] }));
+}
+
+test("resolveRelationChase: direct fact hit — a plain taught relation resolves to a citation", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-mem-relchase-"));
+  try {
+    await appendFact(dir, { subject: "ahab", predicate: "mgx:father", object: "john", provenance: "teach:chat" });
+    const memory = await loadMemory(dir);
+    const rows = readFactRows(memory);
+    const helpers = {
+      relationFactsFor: testRelationFactsFor(rows),
+      renderFactLine: testRenderFactLine, factPhrase: testFactPhrase,
+      factTermVariants: testFactTermVariants, byTrust: testByTrust,
+      rows, HAS_PROPERTY_PREDICATE: testHasPropertyPredicate,
+    };
+    const hit = await resolveRelationChase(memory, "father", "ahab", "john", helpers);
+    assert.ok(hit, "direct fact resolves");
+    assert.deepEqual(hit.citation, ["ahab mgx:father john"]);
+
+    const miss = await resolveRelationChase(memory, "father", "ahab", "ishmael", helpers);
+    assert.equal(miss, null, "honest miss — never a guessed no");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("resolveRelationChase: compose2 rule chase — a 2-hop rule resolves via the SAME relationFactsFor candidate list, recursively", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-mem-relchase-"));
+  try {
+    await appendFact(dir, { subject: "ahab", predicate: "mgx:father", object: "john", provenance: "teach:chat" });
+    await appendFact(dir, { subject: "john", predicate: "mgx:father", object: "ishmael", provenance: "teach:chat" });
+    await appendRule(dir, { name: "grandparent", kind: "compose2", slots: { base1: "father", base2: "father" }, provenance: "teach:chat" });
+    const memory = await loadMemory(dir);
+    const rows = readFactRows(memory);
+    const helpers = {
+      relationFactsFor: testRelationFactsFor(rows),
+      renderFactLine: testRenderFactLine, factPhrase: testFactPhrase,
+      factTermVariants: testFactTermVariants, byTrust: testByTrust,
+      rows, HAS_PROPERTY_PREDICATE: testHasPropertyPredicate,
+    };
+    const hit = await resolveRelationChase(memory, "grandparent", "ahab", "ishmael", helpers);
+    assert.ok(hit, "2-hop compose2 chase resolves");
+    assert.deepEqual(hit.citation, ["ahab mgx:father john", "john mgx:father ishmael"]);
+
+    // hop-count discipline: a 1-hop path must NOT satisfy the 2-hop rule
+    const oneHop = await resolveRelationChase(memory, "grandparent", "ahab", "john", helpers);
+    assert.equal(oneHop, null);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("resolveRelationChase: filter rule chase — recurses into its own base (itself), then requires the taught property", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-mem-relchase-"));
+  try {
+    await appendFact(dir, { subject: "ahab", predicate: "mgx:father", object: "john", provenance: "teach:chat" });
+    await appendFact(dir, { subject: "john", predicate: "mgx:father", object: "ishmael", provenance: "teach:chat" });
+    await appendFact(dir, { subject: "ahab", predicate: testHasPropertyPredicate, object: "male", provenance: "teach:chat" });
+    await appendRule(dir, { name: "grandparent", kind: "compose2", slots: { base1: "father", base2: "father" }, provenance: "teach:chat" });
+    await appendRule(dir, { name: "grandfather", kind: "filter", slots: { base: "grandparent", property: "male" }, provenance: "teach:chat" });
+    const memory = await loadMemory(dir);
+    const rows = readFactRows(memory);
+    const helpers = {
+      relationFactsFor: testRelationFactsFor(rows),
+      renderFactLine: testRenderFactLine, factPhrase: testFactPhrase,
+      factTermVariants: testFactTermVariants, byTrust: testByTrust,
+      rows, HAS_PROPERTY_PREDICATE: testHasPropertyPredicate,
+    };
+    const hit = await resolveRelationChase(memory, "grandfather", "ahab", "ishmael", helpers);
+    assert.ok(hit, "filter chase resolves when base holds AND the property is taught");
+    assert.deepEqual(hit.citation, [
+      "ahab mgx:father john", "john mgx:father ishmael", `ahab ${testHasPropertyPredicate} male`,
+    ]);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("resolveRelationChaseReverse: given a name + fixed object, returns every satisfying subject — direct, compose2, and unknown-name cases", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-mem-relchase-"));
+  try {
+    await appendFact(dir, { subject: "ahab", predicate: "mgx:father", object: "john", provenance: "teach:chat" });
+    await appendFact(dir, { subject: "john", predicate: "mgx:father", object: "ishmael", provenance: "teach:chat" });
+    await appendRule(dir, { name: "grandparent", kind: "compose2", slots: { base1: "father", base2: "father" }, provenance: "teach:chat" });
+    const memory = await loadMemory(dir);
+    const rows = readFactRows(memory);
+    const helpers = {
+      relationFactsFor: testRelationFactsFor(rows),
+      renderFactLine: testRenderFactLine, factPhrase: testFactPhrase,
+      factTermVariants: testFactTermVariants, byTrust: testByTrust,
+      rows, HAS_PROPERTY_PREDICATE: testHasPropertyPredicate,
+    };
+    const direct = await resolveRelationChaseReverse(memory, "father", "john", helpers);
+    assert.deepEqual(direct.map((h) => h.subject), ["ahab"]);
+
+    const reverse2Hop = await resolveRelationChaseReverse(memory, "grandparent", "ishmael", helpers);
+    assert.deepEqual(reverse2Hop.map((h) => h.subject), ["ahab"]);
+    assert.deepEqual(reverse2Hop[0].citation, ["ahab mgx:father john", "john mgx:father ishmael"]);
+
+    const unknown = await resolveRelationChaseReverse(memory, "grandmother", "ishmael", helpers);
+    assert.deepEqual(unknown, [], "unknown relation/rule name — honest empty, never a guess");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("resolveRelationChase / resolveRelationChaseReverse: genuinely standalone — findRuleByName + normFactTerm confirm the same memory payload underneath, called with NO chat.mjs import anywhere in this file", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-mem-relchase-"));
+  try {
+    await appendRule(dir, { name: "grandparent", kind: "compose2", slots: { base1: "father", base2: "father" }, provenance: "teach:chat" });
+    const memory = await loadMemory(dir);
+    assert.ok(findRuleByName(memory, "grandparent"), "the same loaded memory the chase functions consume is independently queryable");
+    assert.equal(normFactTerm("Grandparent"), "grandparent");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
