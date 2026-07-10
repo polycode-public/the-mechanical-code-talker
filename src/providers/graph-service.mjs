@@ -129,9 +129,14 @@ async function renderSourceBodies(plan, mask, { readFile, repoRoot }) {
  * @param {string} [opts.repoRoot]  absolute repo root; required when sourceAccess is true.
  * @param {Function} [opts.readFile]  async (path, encoding) => string, e.g. node:fs/promises'
  *   readFile; required when sourceAccess is true.
+ * @param {object|null} [opts.tel]  an optional telemetry sink ({ record(fields) }, e.g. from
+ *   telemetry.mjs's createTelemetry). When present, every service is wrapped ONCE here to time
+ *   it and record `{ tool: "ri.<name>", perf: { ms_total }, response: { ok, count } }` — counts
+ *   only, never raw text/body. Null (the default) skips the wrapping loop entirely — zero
+ *   overhead, and fixtureProvider()/bootstrapProvider() (which pass no tel) are unaffected.
  * @returns the typed service object
  */
-export function createGraphService(graph, { sourceAccess = false, repoRoot = null, readFile = null } = {}) {
+export function createGraphService(graph, { sourceAccess = false, repoRoot = null, readFile = null, tel = null } = {}) {
   const byId = graph.byId;
   if (sourceAccess && (!repoRoot || typeof readFile !== "function")) {
     throw new TypeError(
@@ -424,7 +429,60 @@ export function createGraphService(graph, { sourceAccess = false, repoRoot = nul
     },
   };
 
+  // Optional telemetry (Item 3.2): when `tel` is supplied, wrap every RI service ONCE here at
+  // construction — never per-method by hand — to time it and record COUNTS only (never raw
+  // text/body; see responseCounts below and telemetry.mjs's redact() as a second net). When
+  // `tel` is null (the default), this loop does not run at all: zero overhead, and
+  // fixtureProvider()/bootstrapProvider() (which pass no `tel`) are completely unaffected.
+  if (tel) {
+    for (const name of SERVICES) {
+      const orig = svc[name];
+      if (typeof orig !== "function") continue;
+      svc[name] = (...args) => {
+        const t0 = performance.now();
+        const result = orig.apply(svc, args);
+        // snippet/context are ASYNC (Promise<Result>) — record after settling, still return a
+        // promise; every other service is synchronous — record immediately, return the value
+        // as-is. Detected at the ACTUAL call (not a static per-service list) so this is correct
+        // even if a future service's sync/async-ness varies by branch.
+        if (result && typeof result.then === "function") {
+          return result.then((r) => {
+            recordTelemetry(tel, name, performance.now() - t0, r);
+            return r;
+          });
+        }
+        recordTelemetry(tel, name, performance.now() - t0, result);
+        return result;
+      };
+    }
+  }
+
   return svc;
+}
+
+/** tel.record({ tool: `ri.${name}`, perf: { ms_total }, response }) for one wrapped service
+ *  call — swallows any error (telemetry must never break the call it's observing). */
+function recordTelemetry(tel, name, ms, result) {
+  try {
+    tel.record({ tool: `ri.${name}`, perf: { ms_total: ms }, response: responseCounts(result) });
+  } catch { /* telemetry must never break the caller's turn */ }
+}
+
+/** Counts only, never raw text/body: { ok, count } — count is the sum of every array-valued
+ *  field's length under result.value (edges.length, results.length, candidates.length, …), a
+ *  single generic aggregate rather than guessing each service's own field names. A miss
+ *  records its reason (a closed-set token, not free text) instead of a count. */
+function responseCounts(result) {
+  if (!result || typeof result !== "object" || result.ok !== true) {
+    return { ok: false, reason: result?.miss?.reason || null };
+  }
+  let count = 0;
+  const value = result.value;
+  if (Array.isArray(value)) count = value.length;
+  else if (value && typeof value === "object") {
+    for (const v of Object.values(value)) if (Array.isArray(v)) count += v.length;
+  }
+  return { ok: true, count };
 }
 
 /** The source-reaching services a graph-only provider satisfies with NO_SOURCE. */

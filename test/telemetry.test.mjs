@@ -7,6 +7,8 @@ import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { telemetryEnabled, invocationId, redact, createTelemetry } from "../src/telemetry.mjs";
+import { createGraphService } from "../src/providers/graph-service.mjs";
+import { fixtureGraph } from "../src/providers/fixture.mjs";
 
 test("telemetryEnabled: OFF by default; env TMCT_TELEMETRY=1/0 wins both directions over toml", () => {
   assert.equal(telemetryEnabled({}, null), false);
@@ -70,6 +72,49 @@ test("createTelemetry: enabled → appends a redacted JSONL line per record()", 
     }
     assert.match(text, /"tool":"tmct_describe"/);
     assert.doesNotMatch(text, /must never appear on disk/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// =============================================================================
+// createGraphService(graph, { tel }) — the RI wrapping smoke test (Item 3.2)
+// =============================================================================
+test("createGraphService({ tel: null }) — the default — never wraps; identical service either way", () => {
+  const graph = fixtureGraph();
+  const svc = createGraphService(graph);
+  assert.equal(typeof svc.resolve, "function");
+  assert.deepEqual(svc.resolve("widget.mjs").value.match.label, "pkg/ui/widget.mjs");
+});
+
+test("createGraphService({ tel }) wraps every service to time + record it once at construction", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-telemetry-gs-"));
+  try {
+    const records = [];
+    const tel = { record: (fields) => records.push(fields) };
+    const graph = fixtureGraph();
+    const svc = createGraphService(graph, { tel });
+    const r = svc.resolve("widget.mjs");
+    assert.ok(r.ok, "wrapping never changes the returned Result");
+    assert.equal(r.value.match.label, "pkg/ui/widget.mjs");
+    assert.equal(records.length, 1, "one record() call per invocation");
+    assert.equal(records[0].tool, "ri.resolve");
+    assert.equal(typeof records[0].perf.ms_total, "number");
+    // response carries COUNTS only — never raw text/body (the redact() layer is a second net,
+    // but the wrapper itself must not hand raw individuals/edges to tel.record either).
+    assert.ok(!("value" in records[0]), "no raw Result value handed to telemetry");
+
+    // async services (snippet/context) are timed/recorded too, after the promise settles.
+    const untested = svc.untested();
+    assert.ok(untested.ok);
+    assert.equal(records[records.length - 1].tool, "ri.untested");
+    assert.equal(typeof records[records.length - 1].response.count, "number");
+
+    const ctx = await svc.context("Widget");
+    assert.ok(ctx.ok);
+    const ctxRecord = records.find((r2) => r2.tool === "ri.context");
+    assert.ok(ctxRecord, "context() (async) is recorded too");
+    assert.equal(typeof ctxRecord.perf.ms_total, "number");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
