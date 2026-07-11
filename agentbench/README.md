@@ -3,7 +3,7 @@
 The **sibling of chatbench**, on a new axis. chatbench measures the *chat turn*
 (a request → the right grounded answer) on the CEFR ladder; AGENTBENCH measures
 the **tool loop** (a request → the right *tool call(s)*) on the **A0→C2 agentic
-rungs**. Same versioned-naming + regression discipline (`AGENTBENCH_<version>.md`,
+rungs**. Same versioned-naming + regression discipline (`BENCHMARK_AGENT_<version>.md`,
 `_00N` for re-runs), one decisive difference:
 
 > **A hallucinated tool call is an AUTOMATIC FAIL.** Emitting a call to a tool

@@ -1,4 +1,4 @@
-# INFBENCH_1.4.1 — the full 6-band ladder passes the gate for the first time
+# BENCHMARK_INFERENCE_1.4.1 — the full 6-band ladder passes the gate for the first time
 
 **Headline:** first INFBENCH re-run since `1.3.1`, against the current **1.4.1** codebase
 (per `package.json`). Since `1.3.1` (unchanged across four consecutive prior measured versions —

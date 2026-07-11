@@ -1,4 +1,4 @@
-# CEFR_ENGLISH_1.4.1 — first judged run under case-set v3 (the 109-case go-to default), a new baseline
+# BENCHMARK_CEFR_ENGLISH_1.4.1 — first judged run under case-set v3 (the 109-case go-to default), a new baseline
 
 **Headline:** first judged CHATBENCH run since `0.8.2` (which shipped judge-free, deliberately —
 see that report's deferral section), and the **first run ever against case-set v3**

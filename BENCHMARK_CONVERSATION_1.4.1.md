@@ -1,4 +1,4 @@
-# CONVERSATIONBENCH_1.4.1 — capped sprint (3 rounds), 2 dead-ends found and fixed, 1 documented open
+# BENCHMARK_CONVERSATION_1.4.1 — capped sprint (3 rounds), 2 dead-ends found and fixed, 1 documented open
 
 **Headline:** capped sprint mode (`SKILL_BENCHMARK_PLAYTEST.md` §3), cap=3, all 3 rounds run against
 `examples/mini-webapp` via the real CLI, each round delegated to a background sub-agent, appraised
