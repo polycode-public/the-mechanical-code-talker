@@ -8,7 +8,7 @@ closing that doesn't end on a wall; (2) whether tmct can **accept taught knowled
 USE it to make a further inference**, not just recall it verbatim on the next turn (teach-then-INFER,
 not just teach-then-recall); and (3) whether a broad, open-ended question gets a **detailed
 completions-style response** via `src/completions/`'s hub-avoiding crawl (the degree-dampened
-`broadSearch`/`groupHits`/`rankSentences` pipeline in `PLAN_COMPLETIONS.md`) rather than the plain
+`broadSearch`/`groupHits`/`rankSentences` pipeline in `archive/PLAN_COMPLETIONS.md`) rather than the plain
 grammar wall. `CAPABILITIES_AUDIT_2026-07-10.md` §5 names exactly this gap: two of this session's
 biggest capabilities — taught-relation inference and the completions pipeline — are real, shipped,
 and invisible to AGENTBENCH/INFBENCH/CHATBENCH alike. This skill is where they get tested.)*
@@ -147,7 +147,7 @@ this rule exists to prevent). Rules that make the play realistic:
   else the graph or a prior taught fact already holds. A round-trip recall passing tells you almost
   nothing about whether the fact is actually usable in reasoning.
 - **Try at least one broad, open-ended "detail" question per session** ("give me a detailed summary
-  of how X works", "explain what happens when Y") — this is `PLAN_COMPLETIONS.md`'s own territory
+  of how X works", "explain what happens when Y") — this is `archive/PLAN_COMPLETIONS.md`'s own territory
   (the hub-avoiding crawl: `broadSearch` → `groupHits` → `rankSentences`/`inferRelations` →
   `prune`/voice pass, `src/completions/complete.mjs`). Until it's wired into chat dispatch, expect
   and NAME the wall as a known ceiling (§0) rather than treating it as a fresh routing bug each time.

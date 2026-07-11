@@ -41,7 +41,7 @@ with an empty delete-list (`registry.mjs:93`, "the closed-world 'queries mutate 
 Synthesis is the first of two capability categories that **write/generate** anything, even a
 declarative rule object — that is a genuine first for the product's ethos, not an incremental
 feature, and is called out again in §8. (The second, a sibling and competing approach targeting
-natural-language completions rather than structured/executable artifacts, is `PLAN_COMPLETIONS.md`
+natural-language completions rather than structured/executable artifacts, is `archive/PLAN_COMPLETIONS.md`
 — see its §0 for how the two compare.)
 
 ---

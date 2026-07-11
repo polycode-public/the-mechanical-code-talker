@@ -50,9 +50,9 @@ A fifth, sibling track sits alongside these four rather than inside the phase se
 text generation** — broad search over a prompt, group the results, infer relationships between
 groups, mechanically summarize, drop what doesn't contribute, then a grammar/voice pass. Not
 LLM-style generation — extractive and compositional, never inventing text beyond what was retrieved.
-Detailed in the sibling doc `PLAN_COMPLETIONS.md`, a competing-but-kindred capability to
+Detailed in the sibling doc `archive/PLAN_COMPLETIONS.md`, a competing-but-kindred capability to
 `PLAN_CODE.md`'s program synthesis (both are "tmct produces an artifact" categories; see
-`PLAN_COMPLETIONS.md` §0 for the comparison). Cross-referenced from Phase 4 (§7) and the research
+`archive/PLAN_COMPLETIONS.md` §0 for the comparison). Cross-referenced from Phase 4 (§7) and the research
 horizon (§9).
 
 A sixth thread, realized mid-session (2026-07-10): tmct's own code-domain specialization was never
@@ -512,7 +512,7 @@ tmct" rather than validate against synthetic benchmarks.
 - **Also feeds §4's context-preserving unknown-word ingestion** once that lands — scraped prose is
   exactly the source material that mechanism is meant for: unknown terms enter the graph tagged with
   the scraped passage they came from, not dropped.
-- **Also a natural Stage-1 input source for `PLAN_COMPLETIONS.md`'s mechanical text-generation
+- **Also a natural Stage-1 input source for `archive/PLAN_COMPLETIONS.md`'s mechanical text-generation
   pipeline** once that track is scoped — scraped web content is exactly the kind of broad-search
   material that pipeline's grouping/inference/summarization stages consume.
 - **Explicit honesty boundary, carried over from marginalia's own capability audit**: open-world
@@ -560,7 +560,7 @@ new shared reference doc, `docs/references/research-horizon.md`, cross-linked ra
   found. The capability router's own next spike to scope, not a result to claim yet.
 - **DRT-lite typed discourse record** — a bounded discourse-representation structure for tracking
   entities/relations across turns, feeding better slot-filling for Phase 2's marginalia work. Close
-  kin to `PLAN_COMPLETIONS.md`'s Stage 3 (inference between retrieved-text groups, §1.3 there) — both
+  kin to `archive/PLAN_COMPLETIONS.md`'s Stage 3 (inference between retrieved-text groups, §1.3 there) — both
   track relationships between spans of text, one across chat turns, one across retrieved groups;
   worth designing together if both are ever scoped.
 
@@ -615,7 +615,7 @@ Explicit pruning record, so these aren't re-asked:
 - **PLAN_OSS_ACE_PARSER's "sibling publish candidates"** (a bounded-Damerau fuzzy matcher, a
   PageRank+IDF block ranker) — both have permissive JS alternatives already, unlike ACE. Reduced to
   a single ROADMAP backlog line, not a phase here. (The block ranker specifically is un-pruned and
-  re-scoped inside `PLAN_COMPLETIONS.md` §1.4, where it has a real job — see that doc, not this one.)
+  re-scoped inside `archive/PLAN_COMPLETIONS.md` §1.4, where it has a real job — see that doc, not this one.)
 - **Duplicate WordNet/SEthesaurus rejection rationale** — stated once (§9, R3), not repeated across
   every doc that touches ontology scale.
 - **Making marginalia or bedrock-meter no-LLM.** Never proposed, not proposed here. Both keep their

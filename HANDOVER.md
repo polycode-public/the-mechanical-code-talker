@@ -8,18 +8,36 @@ no completed-work narrative (that lives in `ROADMAP.md`), per this project's own
 Session handle (inbox): `tmct` (this session; earlier sessions used `mechanic`). See
 `~/.claude/inboxes/tmct.md` and `~/.claude/inboxes/mechanic.md`, both still live.
 
-## Where we are (2026-07-10, later same day)
+## Where we are (2026-07-11)
 
 `v1.5.6` is the current version (not yet pushed — `v1.5.3` is what's live on npm). Since the last
 push: three ranked follow-ups closed (completions `graphService` wiring, the teachLane
 silent-failure, the stranger first-turn preamble), then a much larger batch — **the default
-human-world persona (Small tier), a unified CLI/config model, new memory persistence backends, and
-`scm-svf`/cardinality monotonicity all shipped**, built by 4 concurrent background sub-agents in
-isolated worktrees and merged one at a time (4 real conflicts resolved by hand where two agents
-touched the same file — see `PLAN_SEED.md`'s status header for the exact conflicts and
-resolutions). `npm test` is green at **1852** (was 1740 at the last push). Full design and current
-build status for the persona batch lives in `PLAN_SEED.md` — read its status header first, not this
-file, for that narrative.
+human-world persona (all three size tiers), a unified CLI/config model, new memory persistence
+backends, and `scm-svf`/cardinality monotonicity all shipped**, built by 4 concurrent background
+sub-agents in isolated worktrees and merged one at a time (4 real conflicts resolved by hand where
+two agents touched the same file — see `PLAN_SEED.md`'s status header for the exact conflicts and
+resolutions). A follow-up batch then closed out every item that batch had left open: Medium (1,608
+facts) and Large (13,609 facts) persona tiers, the `createSession`→`initRepo` auto-init convergence,
+and the premise-derived trust hook for the three newest inference rules
+(`scm-svf1`/cardinality-monotonicity/`cax-maxc0`). `npm test` is green at **1864** (was 1740 at the
+last push). Full design and current build status for the persona batch lives in `PLAN_SEED.md` —
+read its status header first, not this file, for that narrative.
+
+**Two plans fully shipped and archived this session**: `archive/PLAN_INFERENCE_TESTING.md` (all 6
+stages done, its two stale status lines corrected with real numbers before archival, its still-open
+speculative research on RETE/incrementality and retraction-aware reasoning extracted into a new
+`PLAN_SYLLOGIST_HORIZON.md` so that research isn't lost) and `archive/PLAN_COMPLETIONS.md` (all 4
+staging rows done). Cross-references to both in living docs (`ROADMAP.md`, `PLAN_CODE.md`,
+`PLAN_AGENTS.md`, `SKILL_BENCHMARK_CONVERSATION.md`, `SKILL_BENCHMARK_INFERENCE.md`) now point at
+their `archive/` paths.
+
+**README.md/the GitLab Pages homepage refresh is in flight** — a background agent is updating both
+to document the default persona (`--persona-size` flags), the unified CLI (`tmct import`, the
+single-value-per-flag caveat, `npm run init:large`), and the completions pipeline (both the
+chat-triggered "detailed summary of how X works" phrasing and a verified JS/programmatic example),
+following `SKILL_AGENT_PLAIN_PROSE.md` §3's shop-window discipline. Not yet merged as of this
+writing — see "Open follow-ups" below for what happens once it lands.
 
 **A real incident this session: the `ace-owl` extraction and its revert.** An earlier session
 (2026-07-10, commit `c57adbe`) extracted `src/grammar/ace.mjs`/`lexicon.mjs` into a new npm
@@ -33,8 +51,24 @@ install in an empty folder. See `ROADMAP.md`'s "Open-source the ACE-OWL parser" 
 
 ## Open follow-ups
 
-None from this batch — see the persona-batch follow-ups (Medium/Large tiers, the auto-init
-convergence, the seonix migration note) under "The default human-world persona" below.
+1. **Wait for the README.md/homepage refresh agent, then merge it.** Dispatched sequentially, after
+   the two content workstreams below were already merged and verified — an earlier concurrent
+   dispatch of this same agent was blocked by the auto-mode safety classifier (its denial reasoning
+   described a different sibling agent's content-authoring scope, not this one's docs-only brief);
+   rather than work around the block, the run was re-sequenced solo per operator instruction
+   ("proceed that way"). Once it lands: verify its worktree's real `git log`/`git status` directly
+   (per the lesson below — never trust an agent's own "done" prose alone), merge, run `npm test`,
+   clean up the worktree/branch.
+2. **Backend C (SQLite)'s read side** does a full payload reconstruction per call (an explicitly
+   permitted shortcut in `PLAN_SEED.md` §6) — measured 8% slower than flat JSON at the Large tier's
+   scale, faster below it. Closing this needs real indexed query handles, not more diffing.
+3. **`PLAN_SYLLOGIST_HORIZON.md`'s one genuinely open research question** (retraction-aware
+   consistency under a hard budget + trust tiers) has a speculative sketch but no implementation —
+   next up only if the operator wants to push the reasoning engine further; not a near-term default.
+
+The persona batch itself (Small/Medium/Large tiers, the auto-init convergence, the trust-hook gap,
+both plan archivals) is now fully closed — see "The default human-world persona" below and
+`PLAN_SEED.md`'s status header for the full account, not this list.
 
 **`scm-svf`/cardinality monotonicity — DONE this session** (commits `07b8035`, `1110488`, `304a16c`,
 merged clean, verified live by the coordinator, not just trusted from the agent's report). Built
@@ -101,30 +135,27 @@ parsing gaps, and the chat-surface debt re-measure) is DONE, committed, and conf
 by the post-merge full CHATBENCH/INFBENCH re-run above — see `git log --oneline` for the individual
 commits, each referencing its item number.**
 
-## The default human-world persona — SHIPPED (Small tier), full detail in `PLAN_SEED.md`
+## The default human-world persona — SHIPPED, all three tiers, full detail in `PLAN_SEED.md`
 
-What was a proposal earlier this session is now built and merged: `tmct init` with no flags seeds
-a genuine everyday-knowledge persona by default (664 curated facts across 9 clumps, a lexicon grown
-from 291 to 650 words, 120 real WordNet-sourced example sentences, plus a working cross-ontology
-bridge test proving `scm-sco` can chain WordNet's and Schema.org's independently-built taxonomies
-together). SEON/ConceptNet are opt-in now (`--with-persona code`), not default. Read `PLAN_SEED.md`
-for the full design, the real numbers vs. targets, and every conflict resolved during the merge —
-this file doesn't repeat that narrative, per its own discipline.
+What was a proposal earlier this session is now built and merged, all three size tiers: `tmct init`
+with no flags seeds a genuine everyday-knowledge persona by default (Small: 664 curated facts across
+9 clumps, a lexicon grown from 291 to 650 words, 120 real WordNet-sourced example sentences, plus a
+working cross-ontology bridge test proving `scm-sco` can chain WordNet's and Schema.org's
+independently-built taxonomies together). SEON/ConceptNet are opt-in now (`--with-persona code`),
+not default. `tmct init --persona-size medium|large` selects Medium (1,608 facts, 476 example
+sentences) or Large (13,609 facts, genuine multi-hop hypernym chains up to 4 real WordNet hops,
+2,404 example sentences) — both built by ranking real WordNet candidates by sense-count as a
+commonness proxy, not hand-typed. The `createSession`→full-`initRepo` auto-init convergence also
+landed: a programmatic `runChat()`/`createSession()` call on a bare directory now runs the same full
+`initRepo` path as CLI `tmct init`, leaving a real `tmct.toml` + `.tmct/init.json`, not just an
+in-memory seed marker. Read `PLAN_SEED.md` for the full design, the real numbers vs. targets, and
+every conflict resolved during the merge — this file doesn't repeat that narrative, per its own
+discipline.
 
-**Next-session follow-ups from this batch:**
-- **Medium and Large tiers** — `PLAN_SEED.md` §3 sizes both (Medium ~1,605 facts, Large ~13,600
-  facts, the latter deliberately sized to justify the new SQLite backend) but only Small has been
-  authored and merged so far.
-- **The `createSession`→full-`initRepo` auto-init convergence** (`PLAN_SEED.md` §2) — deliberately
-  skipped this pass to avoid a collision with the CLI/config work landing in the same file; a
-  programmatic `runChat()` call on a bare directory still only gets an in-memory seed marker, not a
-  real `tmct.toml`.
-- **seonix migration note** (documented, can't be acted on from this repo): if seonix's own chat
-  surface goes through `runChat`/`createSession`, its `tmct.toml` needs to explicitly re-activate
-  SEON/ConceptNet now that tmct's own default has flipped.
-- **Backend C (SQLite)'s read side** does a full payload reconstruction per call (an explicitly
-  permitted shortcut in `PLAN_SEED.md` §6) — measured 8% slower than flat JSON at the Large tier's
-  scale, faster below it. Closing this needs real indexed query handles, not more diffing.
+**One item stays a documented, cross-repo-only note, nothing left to action here**: if seonix's own
+chat surface goes through `runChat`/`createSession`, its `tmct.toml` needs to explicitly re-activate
+SEON/ConceptNet now that tmct's own default has flipped. Backend C (SQLite)'s read-side perf gap is
+tracked in "Open follow-ups" above, not repeated here.
 
 ## Discipline (unchanged)
 

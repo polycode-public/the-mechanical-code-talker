@@ -504,27 +504,44 @@ day it was found: the parser is back in `src/grammar/` as the real implementatio
 real `npm pack` + fresh install in an empty folder. See `HANDOVER.md` for the full account.
 
 **The default human-world persona, unified CLI/config model, and new memory persistence backends —
-Small tier SHIPPED (2026-07-10, later same session)**: the largest batch of the day. `tmct init`
-with no flags now seeds a genuine everyday-knowledge persona by default (664 hand-curated facts
-across 9 source-tied clumps, a lexicon grown from 291 to 650 words, 120 real WordNet-sourced example
-sentences, a working cross-ontology bridge test proving `scm-sco` composes WordNet's and Schema.org's
-independently-built taxonomies), with SEON/ConceptNet now opt-in rather than default. Alongside it:
-a unified `--repo`/`--graph`/`--config` flag model replacing four independently-duplicated
-`configFor` implementations, multi-graph loading, a new `ontology` extension kind, and a `tmct import`
-verb; plus two new memory persistence backends (a pure in-memory store with zero disk I/O, and a
-SQLite store whose schema was adapted from a real, working store already built in the sibling repo
-seonix — reused directly, but with its write model changed from seonix's rebuild-and-swap to real
-per-fact `INSERT`/`UPDATE`, since tmct's problem is write-heavy per-turn accumulation, not seonix's
-read-latency-on-a-static-artifact problem). Built by 4 concurrent background sub-agents in isolated
-worktrees, merged one at a time with 4 real conflicts resolved by hand. `scm-svf`/cardinality
-monotonicity — the fourth concurrent agent — also shipped in this same batch: `scm-svf1`, cardinality
-monotonicity, and `cax-maxc0`, all wired into live chat, verified live by the coordinator directly
-("every cat has exactly 4 legs" → "does every cat have at least 2 legs" → yes, entailment named;
-"every cache has at most 0 risks" → "does a cache have a risk" → no, proven not guessed). INFBENCH
-chat arm 99% (216/219), kernel arm 100%. `npm test`: 1756 → 1852 across the whole batch. Full design
-in `PLAN_SEED.md` (a new permanent design doc, this batch's own Stage 0 deliverable); current build
-status and next-session follow-ups (Medium/Large tiers, the auto-init convergence, the seonix
-migration note) in `HANDOVER.md`.
+SHIPPED (2026-07-10/11), all three size tiers plus every follow-up now closed**: the largest batch
+of the session. `tmct init` with no flags now seeds a genuine everyday-knowledge persona by default
+(Small tier: 664 hand-curated facts across 9 source-tied clumps, a lexicon grown from 291 to 650
+words, 120 real WordNet-sourced example sentences, a working cross-ontology bridge test proving
+`scm-sco` composes WordNet's and Schema.org's independently-built taxonomies), with SEON/ConceptNet
+now opt-in rather than default. Alongside it: a unified `--repo`/`--graph`/`--config` flag model
+replacing four independently-duplicated `configFor` implementations, multi-graph loading, a new
+`ontology` extension kind, and a `tmct import` verb; plus two new memory persistence backends (a
+pure in-memory store with zero disk I/O, and a SQLite store whose schema was adapted from a real,
+working store already built in the sibling repo seonix — reused directly, but with its write model
+changed from seonix's rebuild-and-swap to real per-fact `INSERT`/`UPDATE`, since tmct's problem is
+write-heavy per-turn accumulation, not seonix's read-latency-on-a-static-artifact problem). Built by
+4 concurrent background sub-agents in isolated worktrees, merged one at a time with 4 real conflicts
+resolved by hand. `scm-svf`/cardinality monotonicity — the fourth concurrent agent — also shipped in
+this same batch: `scm-svf1`, cardinality monotonicity, and `cax-maxc0`, all wired into live chat,
+verified live by the coordinator directly ("every cat has exactly 4 legs" → "does every cat have at
+least 2 legs" → yes, entailment named; "every cache has at most 0 risks" → "does a cache have a
+risk" → no, proven not guessed). INFBENCH chat arm 99% (216/219), kernel arm 100%. `npm test`:
+1756 → 1852 across the whole batch.
+
+**Follow-up batch closed out (2026-07-11)**: Medium (1,608 facts total, 944 incremental over Small)
+and Large (13,609 facts, 12,001 incremental over Medium, with genuine multi-hop hypernym chains up
+to 4 real WordNet hops) tiers both built, matching `PLAN_SEED.md`'s targets almost exactly, selected
+via `tmct init --persona-size medium|large`. Matching example-sentence tiers shipped alongside them
+(476/2,404 sentences). The `createSession`→`initRepo` auto-init convergence landed too: a
+programmatic `runChat()`/`createSession()` call on a bare directory now runs the same full `initRepo`
+path as CLI `tmct init`, leaving a real `tmct.toml` + `.tmct/init.json` instead of just an in-memory
+seed marker. The premise-derived trust hook (`min(premiseTrusts) × ruleConfidence`, replacing a flat
+0.3 entailed-fact floor) was wired into `scm-svf1`'s batch-pass materialization and surfaced as
+`record.entailedTrust` for the two rules that stay live-chase-only (cardinality monotonicity,
+`cax-maxc0`), closing the one real gap the three newest inference rules had. The seonix migration
+note (SEON/ConceptNet need re-activating in seonix's own `tmct.toml` now that tmct's default has
+flipped) stays a documented, cross-repo-only item — nothing left to action from this repo. Both
+`PLAN_SEED.md` and `archive/PLAN_INFERENCE_TESTING.md` now show every item shipped; the latter was
+archived once its trust-hook gap closed (see "Later: deferred by design" above), and
+`archive/PLAN_COMPLETIONS.md` was archived separately the same day (all 4 staging rows shipped, see
+the 2026-07-10 uplift batch entry above). Full design and every real merge conflict's resolution:
+`PLAN_SEED.md`.
 
 ## The umbrella product definition (item 1)
 
