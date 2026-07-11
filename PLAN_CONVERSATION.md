@@ -486,10 +486,17 @@ above, for a fourth predicate (`rdfs:subClassOf`, i.e. tmct's own `inherits`/"ki
 whoever picks up this Finding should treat it as a `WHAT_INHERITS_RE` sibling of the three sketched
 above, not a separate investigation.
 
-Note this also closes the loop on `"what is a kind of horse"`'s own genuine parse-level ambiguity (the
-`ambiguousParse` surface between a `"meta"` reading and this `"inherits"` reading, `ask.mjs:3455-3461`)
-— rephrasing to `"what inherits from horse"` (or bare `"what inherits horse"`) correctly resolves that
-ambiguity today; it just then hits this separate, still-open dead end.
+**Update, live-caught by the operator this same session, fixed (commit `5c858bf`):** `"what is a kind
+of X"` itself — not just the `"what inherits from X"` rephrasing — used to hit a forced
+`ambiguousParse` tie between a `"meta"` reading (`grammar.mjs`'s T5 template, treating `"a kind of X"`
+as a literal term to define) and this `"inherits"` reading. Fixed by having T5 reject the meta reading
+when the object is the tail of a registered non-reverse inherits verb's "is a/are a ..." phrasing (new
+`ARTICLE_RELATION_CONTINUATIONS` in `ask-vocab.mjs`), and by having `chat.mjs`'s reverse-inherits
+reader consult `envelope.parsed` directly instead of only the fixed `WHAT_INHERITS_RE` regex. Genuine
+ambiguities (e.g. `"what is a superclass of X"`, which needs a subject/object swap keyword-spot only
+applies in the two-sided form) are untouched — verified live. `"what is a kind of animal"` now lists
+every corpus animal directly; the original `"boney is a dog"` → `"what is a kind of animal"` sequence
+flows end-to-end with real answers at every turn.
 
 ### Concrete implementation (2026-07-11 session)
 
