@@ -2965,7 +2965,7 @@ const TRANSITIVE_MAX_DEPTH = 8;
  *  needed one. Returns {matches, objMatch, candidates, traversal, ambiguous,
  *  answer?, unresolvedPronoun?} — `answer` only set for the "ask" shape.
  *  `matches` is always an array of individuals (or edge records for "ask"). */
-export function traverse(graph, parsed, { contextId = null, prev = null } = {}) {
+export function traverse(graph, parsed, { contextId = null, prev = null, pinnedObjMatch = null } = {}) {
   if (!parsed) return { matches: [], objMatch: null, candidates: [], traversal: null, ambiguous: false };
   // compositional AST (PLAN §5.16 P3) — the new grammar's nodes carry a `node` tag;
   // everything else (simple clauses, ambiguousParse) flows through the original path
@@ -3103,47 +3103,76 @@ export function traverse(graph, parsed, { contextId = null, prev = null } = {}) 
   // either way; both resolve cleanly to DIFFERENT entities -> genuine
   // ambiguity, surfaced the same honest way resolveObject's own tier ties
   // already are, never silently guessed.
-  let objRes = resolveTermOrContext(graph, parsed.object, contextId);
-  if (parsed.altObject && parsed.altObject !== parsed.object) {
-    const altRes = resolveTermOrContext(graph, parsed.altObject, contextId);
-    const primaryClean = !!objRes.match && !objRes.ambiguous;
-    const altClean = !!altRes.match && !altRes.ambiguous;
-    if (!primaryClean && altClean) {
-      objRes = altRes;
-    } else if (primaryClean && altClean && objRes.match.id !== altRes.match.id) {
-      objRes = { ...objRes, ambiguous: true, candidates: [altRes.match, ...(objRes.candidates || [])] };
+  // ENTITY-TIE BRANCHES (breadth-first ambiguity, PLAN_BREADTH_FIRST_NLU.md §1): a
+  // recursive traverse() call for one already-tied candidate arrives here with
+  // `pinnedObjMatch` set — skip re-resolution entirely (no re-derived tie is
+  // possible, so `ambiguous` is structurally false on every such call) rather
+  // than re-resolving by label text, which would risk a second individual
+  // sharing the same label, a stale `altObject` re-triggering a spurious new
+  // tie, or the test-variant-collision guard misfiring on a non-Module label.
+  let objRes;
+  if (pinnedObjMatch) {
+    objRes = { match: pinnedObjMatch, candidates: [], ambiguous: false, matchedVia: null };
+  } else {
+    objRes = resolveTermOrContext(graph, parsed.object, contextId);
+    if (parsed.altObject && parsed.altObject !== parsed.object) {
+      const altRes = resolveTermOrContext(graph, parsed.altObject, contextId);
+      const primaryClean = !!objRes.match && !objRes.ambiguous;
+      const altClean = !!altRes.match && !altRes.ambiguous;
+      if (!primaryClean && altClean) {
+        objRes = altRes;
+      } else if (primaryClean && altClean && objRes.match.id !== altRes.match.id) {
+        objRes = { ...objRes, ambiguous: true, candidates: [altRes.match, ...(objRes.candidates || [])] };
+      }
     }
-  }
-  // TEST-VARIANT COLLISION (CHATBENCH decision-log item 2, am-tests-cover: "which
-  // tests cover b.mjs"): a "tests"-kind query's object may also honestly name its
-  // OWN conventional test-variant sibling ("b.mjs" -> "b.test.mjs"/"b.spec.mjs"),
-  // a DIFFERENT real Module — app/lib/b.mjs and app/unit-tests/b.test.mjs both
-  // plausibly answer "b.mjs" when the question is specifically about test
-  // coverage. Deliberately scoped to kind==="tests" (never touches, imports,
-  // calls, …) — the SAME bare filename in an unrelated query ("has store.mjs
-  // been touched", chatflow-agents-debt-remeasure.test.mjs BUG-B's ground truth,
-  // examples/mini-webapp genuinely has the same store.mjs/store.test.mjs pair) has
-  // no such self-referential reading and must stay untouched. ALSO scoped to a
-  // BARE (unslashed) term — same convention as resolveObjectCore's own `dotted`
-  // tier just above resolveObject's call site: a query that already spells out
-  // the full path ("which functions test src/core/store.mjs",
-  // chatflow-tier4.test.mjs Batch 4/5; "app/lib/b.mjs", chatflow-tier2.test.mjs
-  // T18) is already unambiguous by construction and must stay untouched — only
-  // the bare basename is genuinely open to either reading. Same discipline as
-  // the altObject prune just above: only a CLEAN primary match plus a genuinely
-  // DIFFERENT real Module promotes to honest ambiguity, never a silent guess.
-  if (parsed.kind === "tests" && objRes.match && !objRes.ambiguous && !String(parsed.object || "").includes("/")) {
-    const stripTestInfix = (base) => base.replace(/\.(?:test|spec|tests)(?=\.[^.]+$)/, "");
-    const termBase = stripTestInfix(String(parsed.object || "").trim().toLowerCase());
-    const collision = (graph.individuals || []).find((i) => {
-      if (i.class !== "Module" || i.id === objRes.match.id) return false;
-      const base = String(i.label || "").toLowerCase().split("/").pop();
-      return base !== stripTestInfix(base) && stripTestInfix(base) === termBase;
-    });
-    if (collision) objRes = { ...objRes, ambiguous: true, candidates: [collision, ...(objRes.candidates || [])] };
+    // TEST-VARIANT COLLISION (CHATBENCH decision-log item 2, am-tests-cover: "which
+    // tests cover b.mjs"): a "tests"-kind query's object may also honestly name its
+    // OWN conventional test-variant sibling ("b.mjs" -> "b.test.mjs"/"b.spec.mjs"),
+    // a DIFFERENT real Module — app/lib/b.mjs and app/unit-tests/b.test.mjs both
+    // plausibly answer "b.mjs" when the question is specifically about test
+    // coverage. Deliberately scoped to kind==="tests" (never touches, imports,
+    // calls, …) — the SAME bare filename in an unrelated query ("has store.mjs
+    // been touched", chatflow-agents-debt-remeasure.test.mjs BUG-B's ground truth,
+    // examples/mini-webapp genuinely has the same store.mjs/store.test.mjs pair) has
+    // no such self-referential reading and must stay untouched. ALSO scoped to a
+    // BARE (unslashed) term — same convention as resolveObjectCore's own `dotted`
+    // tier just above resolveObject's call site: a query that already spells out
+    // the full path ("which functions test src/core/store.mjs",
+    // chatflow-tier4.test.mjs Batch 4/5; "app/lib/b.mjs", chatflow-tier2.test.mjs
+    // T18) is already unambiguous by construction and must stay untouched — only
+    // the bare basename is genuinely open to either reading. Same discipline as
+    // the altObject prune just above: only a CLEAN primary match plus a genuinely
+    // DIFFERENT real Module promotes to honest ambiguity, never a silent guess.
+    if (parsed.kind === "tests" && objRes.match && !objRes.ambiguous && !String(parsed.object || "").includes("/")) {
+      const stripTestInfix = (base) => base.replace(/\.(?:test|spec|tests)(?=\.[^.]+$)/, "");
+      const termBase = stripTestInfix(String(parsed.object || "").trim().toLowerCase());
+      const collision = (graph.individuals || []).find((i) => {
+        if (i.class !== "Module" || i.id === objRes.match.id) return false;
+        const base = String(i.label || "").toLowerCase().split("/").pop();
+        return base !== stripTestInfix(base) && stripTestInfix(base) === termBase;
+      });
+      if (collision) objRes = { ...objRes, ambiguous: true, candidates: [collision, ...(objRes.candidates || [])] };
+    }
   }
   const { match: objMatch, candidates, ambiguous, unresolvedPronoun, matchedVia } = objRes;
   if (!objMatch) return { matches: [], objMatch: null, candidates, traversal: null, ambiguous: false, unresolvedPronoun };
+  // BREADTH-FIRST ENTITY-TIE RESOLUTION (PLAN_BREADTH_FIRST_NLU.md §1): mirrors the
+  // parsed.ambiguousParse branch above — every tied candidate is independently
+  // traversed and rendered for real (via the pinnedObjMatch short-circuit just
+  // above), never left as a bare name list. Capped at OVERFLOW_CAP BEFORE
+  // traversing (not just before rendering) to avoid wasted work on candidates
+  // that won't be shown. One accepted, narrow trade-off: a general reverse-case
+  // query whose grain-refine retry below would previously have silently
+  // recovered to a different class-correct match now short-circuits to branches
+  // instead — not exercised by any pinned test/bench case today.
+  if (ambiguous) {
+    const pool = uniqueById([objMatch, ...(candidates || [])]).slice(0, OVERFLOW_CAP);
+    const branches = pool.map((c) => {
+      const branchResult = traverse(graph, parsed, { contextId, prev, pinnedObjMatch: c });
+      return { candidate: c, result: branchResult, rendered: render(parsed, branchResult) };
+    });
+    return { matches: [], objMatch, candidates, traversal: null, ambiguous: true, branches };
+  }
 
   // where: "where is X [defined]" (2026-07-02 query families) — the resolved
   // entity IS the answer; render() reads its class + site attribute ("path:
@@ -3649,9 +3678,16 @@ function renderCore(parsed, result) {
     const noun = pool.length && pool.every((i) => i.class === "Commit") ? "commit" : "module";
     const shown = pool.slice(0, OVERFLOW_CAP).map((i) => i.label);
     const extra = pool.length > OVERFLOW_CAP ? `, …and ${pool.length - OVERFLOW_CAP} more` : "";
+    const lead = `"${parsed.object}" matches more than one ${noun} ambiguously — did you mean ${listJoin(shown)}${extra}? Try one of those. If you're not sure, narrow it to one name.`;
+    // BREADTH-FIRST (PLAN_BREADTH_FIRST_NLU.md §1): strictly additive to `lead` —
+    // every currently-pinned assertion (test/chat-cefr-1.6.1-decision-log.test.mjs,
+    // chatbench/graded-pool.jsonl's am-tests-cover) is a substring check against
+    // `lead` alone, so appending each branch's real answer never breaks a pin.
+    const content = (result.branches && result.branches.length)
+      ? `${lead}\n${result.branches.map((b, i) => `${i + 1}) ${b.candidate.label}: ${b.rendered.content}`).join("\n")}`
+      : lead;
     return {
-      content: `"${parsed.object}" matches more than one ${noun} ambiguously — did you mean ${listJoin(shown)}${extra}? Try one of those. If you're not sure, narrow it to one name.`,
-      miss: false, ambiguous: true, candidates: pool.map((i) => i.label),
+      content, miss: false, ambiguous: true, candidates: pool.map((i) => i.label),
     };
   }
   // where: the resolved entity's own location, cited off the site attribute.
