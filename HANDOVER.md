@@ -10,9 +10,9 @@ Session handle (inbox): `tmct` (this session; earlier sessions used `mechanic`).
 
 ## Version state (2026-07-11)
 
-`package.json` is `1.6.5`, held locally, about to bump to `1.7.0` and push. What's live on npm is
-`1.6.1`. Push/publish is gated on the operator; don't bump the version again until the moment of
-actually pushing (see Discipline, below).
+`package.json` is `1.7.0`, bumped and about to push. What's live on npm is `1.6.1` — will update to
+`1.7.0` once CI's publish-on-push runs. Don't bump the version again until the next release's push
+(see Discipline, below).
 
 ## Open items
 
