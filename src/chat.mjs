@@ -2947,7 +2947,12 @@ async function metaLane(query, { graph, memoryDir, last = null, templates = null
 // an unknown name renders null here and falls through to the ordinary honest miss
 // (never a guess, never a hijacked graph query).
 const AUTHOR_NAME_SRC = "([A-Za-z][\\w'.-]*(?:\\s+[A-Za-z][\\w'.-]*){0,3})";
-const AUTHOR_WHO_IS_RE = new RegExp(`^who\\s+is\\s+${AUTHOR_NAME_SRC}$`, "i");
+// "was" joins "is" (2026-07-11 playtest find): "who was grace hopper" is the same
+// identity-card ask as "who is grace hopper", just past-tense phrasing — the way a
+// curious user actually asks about a person, code author or not. Previously only
+// present tense matched, so "who was <name>" fell all the way to the plain
+// grammar wall even for a name IN the author index.
+const AUTHOR_WHO_IS_RE = new RegExp(`^who\\s+(?:is|was)\\s+${AUTHOR_NAME_SRC}$`, "i");
 const AUTHOR_TOUCHED_RE = new RegExp(
   `^what\\s+(?:did|has)\\s+${AUTHOR_NAME_SRC}\\s+(?:touch(?:ed)?|chang(?:e|ed)|work(?:ed)?\\s+on|commit(?:ted)?)$`, "i");
 // The sha authorship forms — the interpret layer no longer rewrites these (WS2 guard).
