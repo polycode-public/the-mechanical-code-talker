@@ -5614,6 +5614,29 @@ function superlativeRepeatRewrite(query, last) {
   return prevQ;
 }
 
+/** EXISTENTIAL "is there anything/something/anyone/anybody that/which/who
+ *  <verb-phrase>" -> "what <verb-phrase>". Round 2 playtest (2026-07-11):
+ *  parseExistence (ask.mjs) correctly DECLINES this shape — "anything" is a
+ *  placeholder, not a real entity-kind noun, so it rightly leaves a relative-
+ *  clause verb-phrase for the relation parsers below. But those parsers then
+ *  treat the ELIDED subject as an ANAPHORA continuation (reusing the standing
+ *  focus) instead of recognizing "anything that <verb> X" as the SAME open
+ *  reverse-lookup "is anything <verb-ing> X" already answers correctly
+ *  ("test/tasks.test.mjs."). Live finding: "is there anything that tests
+ *  Task", asked right after focus had landed on UserController, answered "No
+ *  — no tests edge found from UserController to Task" — a confidently WRONG
+ *  answer (worse than a miss), not the real answer. A closed textual rewrite
+ *  onto the ALREADY-CORRECT "what <verb> X" shape sidesteps the AST-shape
+ *  work entirely: no new capability, just aiming an existing one (the
+ *  reverse-relation lookup "what tests X"/"who calls X") at input that means
+ *  the same thing. Applied UNCONDITIONALLY (no `last` dependency, unlike
+ *  discourseRewrite) — this shape carries its own complete meaning. */
+const EXISTENTIAL_ANYTHING_RE = /^is\s+there\s+(?:anything|something|anyone|anybody)\s+(?:that|which|who)\s+(.+?)\s*\??$/i;
+function existentialAnythingRewrite(query) {
+  const m = EXISTENTIAL_ANYTHING_RE.exec(String(query || "").trim());
+  return m ? `what ${m[1].trim()}` : null;
+}
+
 // ---- curated SEON definitions (corpus/seon/definitions.jsonl) ----
 // A "what is a <term>" for a LEXICON term prefers the curated one-sentence
 // definition — the richer surface form of the same curated SEON knowledge that the
@@ -6288,7 +6311,8 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // The query the ENGINE parses: a "what about X" continuation is rewritten to the
   // prior shape with X swapped in; everything else parses verbatim. The record and
   // transcript keep the user's ACTUAL words (`query`), only the parse target changes.
-  let askQuery = superlativeRepeatRewrite(query, last) ?? discourseRewrite(query, last) ?? query;
+  let askQuery = superlativeRepeatRewrite(query, last) ?? discourseRewrite(query, last)
+    ?? existentialAnythingRewrite(query) ?? query;
   // IMPLICIT ANAPHORIC COUNT (Tier-2 playtest, 5th pass): "how many are tested" /
   // "and how many are tested" drops the "of those/them" a fuller phrasing carries
   // — ask()'s own anaphora node (parseAnaphora) already understands "how many of
