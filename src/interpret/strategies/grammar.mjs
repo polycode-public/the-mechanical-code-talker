@@ -8,6 +8,7 @@ import {
   VERB_TO_KIND, ENTITY_TO_TYPE, MODIFIER_TO_KIND,
   META_MEANING_VERBS, WHERE_MARKERS, MENTION_MARKERS,
   INHERITS_REVERSE_VERBS, stripTrailingScopeFiller, stripTrailingDiscourseTag,
+  ARTICLE_RELATION_CONTINUATIONS,
 } from "../../ask-vocab.mjs";
 import { escapeRegex } from "../normalize.mjs";
 
@@ -106,6 +107,15 @@ const TEMPLATES = [
     build: (m) => {
       const object = stripTrailingDiscourseTag(m[2].trim());
       if (!m[1] && !ENTITY_TO_TYPE[object.toLowerCase()]) return null; // bare form: closed-set only
+      // "what is a kind of X" / "what is a subclass of X" (ARTICLE_RELATION_CONTINUATIONS,
+      // ask-vocab.mjs): the captured object is itself the tail of a registered inherits
+      // verb's own "is a .../are a ..." phrasing, not a term to define — reject so this
+      // template yields no candidate at all and only keyword-spot's (unambiguous) reverse-
+      // inherits reading survives, instead of a spurious meta/inherits {ambiguousParse} tie.
+      const objLower = object.toLowerCase();
+      if (m[1] && ARTICLE_RELATION_CONTINUATIONS.some(
+        (c) => objLower === c || objLower.startsWith(`${c} `),
+      )) return null;
       return { shape: "meta", entityType: null, modifier: "direct", kind: "meta", object: stripTrailingScopeFiller(object) };
     },
   },

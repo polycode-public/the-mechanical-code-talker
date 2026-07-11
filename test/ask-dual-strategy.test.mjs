@@ -115,6 +115,60 @@ test("merge: an out-of-grammar sentence neither strategy can parse is still an h
   assert.equal(parseQuery("what is the meaning of this codebase"), null);
 });
 
+// ---- "what is a kind of X" (2026-07-11 live bug): the anchored grammar's T5
+// "meta-whatis" template ALSO matches this phrasing (reading "kind of animal" as a
+// literal term to define) and used to collide with keyword-spot's correct
+// "is a kind of" -> reverse/inherits reading to manufacture a spurious
+// {ambiguousParse} tie — a genuine follow-up question ("dog is a kind of animal" ->
+// "what is a kind of animal") hit a forced disambiguation wall instead of an answer.
+// grammar.mjs's T5 now rejects the meta reading for this shape (ARTICLE_RELATION_
+// CONTINUATIONS, ask-vocab.mjs), so only keyword-spot's reading survives — no tie. ----
+
+test("kind-of collision fix: \"what is a kind of animal\" / \"what is a kind of horse\" parse UNAMBIGUOUSLY to the reverse/inherits reading, not the spurious meta tie", () => {
+  const a = parseQuery("what is a kind of animal");
+  assert.deepEqual(a, { shape: "reverse", entityType: null, modifier: "direct", kind: "inherits", object: "animal" });
+  const b = parseQuery("what is a kind of horse");
+  assert.deepEqual(b, { shape: "reverse", entityType: null, modifier: "direct", kind: "inherits", object: "horse" });
+});
+
+test("kind-of collision fix: \"what is a subclass of X\" (the sibling inherits verb) gets the same unambiguous fix", () => {
+  const p = parseQuery("what is a subclass of animal");
+  assert.deepEqual(p, { shape: "reverse", entityType: null, modifier: "direct", kind: "inherits", object: "animal" });
+});
+
+test("kind-of collision fix: plain \"what is a Commit\"/\"what is a Module\" (no relation-verb continuation) is UNCHANGED — still the closed-set bare-form meta reading", () => {
+  const commit = parseQuery("what is a Commit");
+  assert.deepEqual(commit, { shape: "meta", entityType: null, modifier: "direct", kind: "meta", object: "Commit" });
+});
+
+test("kind-of collision fix scoping: \"what is a superclass of X\" / \"what is a parent class of X\" (the REVERSE-direction inherits verbs) still surface the honest {ambiguousParse} — NOT silently resolved", () => {
+  // "is a superclass of"/"is a parent class of" mean the OPPOSITE direction of "is a
+  // kind of"/"is a subclass of" (INHERITS_REVERSE_VERBS, ask-vocab.mjs) — keyword-spot's
+  // decomposition only applies that direction swap in the two-sided "ask" shape, not
+  // this afterText-only "reverse" shape, so blindly suppressing the meta reading here
+  // too would trade an honest wall for a confidently WRONG answer. ARTICLE_RELATION_
+  // CONTINUATIONS deliberately excludes these two verbs — this test locks that scoping in.
+  const sup = parseQuery("what is a superclass of shirehorse");
+  assert.equal(sup.ambiguousParse, true);
+  const kinds = sup.candidates.map((c) => c.kind).sort();
+  assert.deepEqual(kinds, ["inherits", "meta"]);
+  const parent = parseQuery("what is a parent class of shirehorse");
+  assert.equal(parent.ambiguousParse, true);
+});
+
+test("kind-of collision fix scoping: the frozen 'what does imports mean' ambiguity (am-meta-imports) is untouched by this fix", () => {
+  const p = parseQuery("what does imports mean");
+  assert.equal(p.ambiguousParse, true);
+  const kinds = p.candidates.map((c) => c.kind).sort();
+  assert.deepEqual(kinds, ["imports", "meta"]);
+});
+
+test("kind-of collision fix scoping: the pinned genuine cross-strategy ambiguity (\"which classes extends Base and couples to logging\") is untouched", () => {
+  const p = parseQuery("which classes extends Base and couples to logging");
+  assert.equal(p.ambiguousParse, true);
+  assert.equal(p.candidates.length, 2);
+});
+
 test("merge: when only the keyword-spotting strategy fires, its result is returned as-is (no anchored fallback needed)", () => {
   // "what calls this" cannot match any anchored TEMPLATE (none of the three fixed shapes
   // start with "what" + a bare verb with no "does"/"do") — proof this phrasing genuinely
