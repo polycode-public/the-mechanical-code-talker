@@ -154,16 +154,52 @@ export function loadLexicon(extra, ns = DEFAULT_NS) {
   return lex;
 }
 
-/** Noun lookup with plural folding; returns the entry ({lemma, property?}) or null. */
-export function lookupNoun(lexicon, word) {
+/** Noun lookup with plural folding; returns the entry ({lemma, property?}) or null.
+ *  `opts.singularOnly` (set by ace.mjs's resolveNP for an "a"/"an" determiner —
+ *  the only ACE determiners that are grammatically singular-ONLY) prunes the
+ *  irregular-plural fold when the SAME surface word is ALSO declared as its own
+ *  standalone noun (die/dice, person/people, tooth/teeth): a singular-only
+ *  determiner is incompatible with the plural-fold reading but fully compatible
+ *  with the standalone-singular reading, so that's the one grammar agreement
+ *  allows. A general rule keyed on determiner agreement, not a per-word carve-out
+ *  — see lookupNounCandidates below for the multi-candidate form this wraps. */
+export function lookupNoun(lexicon, word, opts = {}) {
+  return lookupNounCandidates(lexicon, word, opts)[0] ?? null;
+}
+
+/** Every lexicon entry `word` could plausibly resolve to, ranked with the SAME
+ *  top choice lookupNoun would return (opts.singularOnly applies identically)
+ *  but without discarding a genuine alternate — e.g. the die/dice collision
+ *  returns BOTH the `dice` and `die` entries (order depends on
+ *  opts.singularOnly), a regular -s fold with both forms independently
+ *  declared returns both. Additive: existing callers that only want the single
+ *  best answer keep using lookupNoun untouched. */
+export function lookupNounCandidates(lexicon, word, opts = {}) {
   const w = String(word ?? "").toLowerCase();
+  const standalone = lexicon.nouns.get(w);
   const irregular = lexicon.nounPlurals.get(w);
-  if (irregular) return lexicon.nouns.get(irregular) ?? null;
-  for (const cand of foldCandidates(w)) {
-    const hit = lexicon.nouns.get(cand);
-    if (hit) return hit;
+  const out = [];
+  const seen = new Set();
+  const push = (entry) => {
+    if (entry && !seen.has(entry.lemma)) { seen.add(entry.lemma); out.push(entry); }
+  };
+  if (irregular) {
+    const irregularEntry = lexicon.nouns.get(irregular) ?? null;
+    if (opts.singularOnly && standalone) {
+      // grammatical-agreement pruning: "a"/"an" rules out the plural-fold
+      // reading, so the standalone singular entry is ranked FIRST here.
+      push(standalone);
+      push(irregularEntry);
+    } else {
+      push(irregularEntry);
+      push(standalone);
+    }
+    return out;
   }
-  return null;
+  for (const cand of foldCandidates(w)) {
+    push(lexicon.nouns.get(cand));
+  }
+  return out;
 }
 
 /** Verb lookup with 3sg folding; returns the entry ({lemma, prep?, predicate?}) or null. */

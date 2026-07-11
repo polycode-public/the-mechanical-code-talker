@@ -39,6 +39,11 @@ import {
   predicateOf, numberOf, classify,
 } from "./lexicon.mjs";
 
+// "a"/"an" are the only ACE determiners that are grammatically SINGULAR-ONLY —
+// "the" and a bare/no determiner are number-neutral (see resolveNP's
+// singularOnly below, and lexicon.mjs's lookupNoun doc for what this prunes).
+const SINGULAR_ONLY_DET = new Set(["a", "an"]);
+
 export const PATTERN_SUB_CLASS_OF = "subClassOf";
 export const PATTERN_TYPE_ASSERTION = "typeAssertion";
 export const PATTERN_RELATION = "relation";
@@ -89,22 +94,29 @@ const stripDet = (tokens) =>
  *  Returns { term, individual, extras, unknown } — `term` null on a miss with
  *  the undeclared tokens in `unknown` (empty `unknown` = structurally
  *  unparseable phrase → the caller returns a hard null). `extras` carries the
- *  pattern-8 adjective triples (subclass axioms / hasValue restriction). */
+ *  pattern-8 adjective triples (subclass axioms / hasValue restriction).
+ *
+ *  `singularOnly` is grammatical-agreement pruning (see lexicon.mjs's
+ *  lookupNoun doc): true only when the ORIGINAL (pre-strip) phrase opened
+ *  with "a"/"an" — the one signal that a singular-plural-fold collision
+ *  (die/dice, person/people, tooth/teeth) can be resolved by, rather than
+ *  silently committing to whichever the lexicon happens to fold to first. */
 function resolveNP(lexicon, tokensIn) {
   const ns = lexicon.ns;
+  const singularOnly = tokensIn.length > 1 && SINGULAR_ONLY_DET.has(tokensIn[0].toLowerCase());
   const tokens = stripDet(tokensIn);
   if (tokens.length === 1) {
     const t = tokens[0];
     const proper = lookupProperName(lexicon, t);
     if (proper) return { term: `${ns}${proper}`, individual: true, extras: [], unknown: [] };
     if (CODE_REF.test(t)) return { term: `${ns}${t}`, individual: true, extras: [], unknown: [] };
-    const noun = lookupNoun(lexicon, t);
+    const noun = lookupNoun(lexicon, t, { singularOnly });
     if (noun) return { term: `${ns}${noun.lemma}`, individual: false, noun, extras: [], unknown: [] };
     return { term: null, individual: false, extras: [], unknown: [t] };
   }
   if (tokens.length === 2) {
     const adj = lookupAdjective(lexicon, tokens[0]);
-    const noun = lookupNoun(lexicon, tokens[1]);
+    const noun = lookupNoun(lexicon, tokens[1], { singularOnly });
     if (adj && noun) {
       const term = `${ns}${adj.lemma}-${noun.lemma}`;
       const extras = [
