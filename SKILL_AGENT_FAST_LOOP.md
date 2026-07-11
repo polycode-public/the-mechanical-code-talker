@@ -108,6 +108,36 @@ shipped or "clean round"), and an overall tally of fixes vs. clean rounds.
 
 ---
 
+## 3.5 The scope boundary: local traps here, wider capability limits go to a `PLAN_*.md` doc
+
+The operator's own framing, worth stating exactly: *"the fast loop should be exploring within edges
+to catch the traps human visitors are likely to fall in, then benchmarking is the way we explore the
+limit of a wider capability and decide where to push."* Two different tools, two different jobs:
+
+- **This loop finds and fixes LOCAL traps within existing capability** — a routing gap, a missing
+  phrasing variant, a small recognition miss. §1 step 3's bias-toward-not-fixing rule is what keeps
+  it safe to run unattended: a round only ships when it's confident the fix is small and scoped.
+- **The formal benchmarks decide whether and how far to push a WIDER capability forward.**
+  `SKILL_BENCHMARK_CONVERSATION.md`'s full-ladder mode (§2 there) and the other three
+  `SKILL_BENCHMARK_*.md` docs are where that decision's evidence comes from — a graded measurement
+  across a whole tier or capability, not a single round's spot-check.
+
+**When a round's investigation bottoms out at a genuine architectural question instead of a small
+safe fix, that is the signal to stop investigating further in-loop.** Report the finding honestly
+(§1 step 3 already says this), and write it up in a `PLAN_*.md` doc instead of trying another round
+at it — the same graduation this repo already does for reasoning-engine research
+(`PLAN_SYLLOGIST.md` holds what got pulled out of `PLAN_INFERENCE_TESTING.md` once it stopped being
+a build-plan item and became an open design question).
+
+**The first real example of this**: `PLAN_CONVERSATION.md`, born directly from this loop's own
+rounds 2, 3, 5, and 6 (2026-07-11) — an adjective/noun teach-routing gap and a noise-stripping
+fragility, both investigated as far as a single round safely could, both graduated out once the fix
+needed touched shared, high-blast-radius machinery rather than one local routing rule. Read it for
+the shape a graduated finding should take: precise mechanism, why it's out of this loop's safe-fix
+scope, and a concrete (not vague) fix sketch for whoever picks it up next — not a full build plan.
+
+---
+
 ## 4. Discipline — two hard-won lessons from the session this loop was born in
 
 **A round's own "I'll wait for the notification" is never a real report — treat it as a failure to
@@ -148,4 +178,7 @@ independently verifies via `git log`/`git status` before trusting any report, me
 respawns (tied to a round cap, two clean rounds, or — this session's actual case — until the other
 concurrent work it's running alongside finishes) or stops. Never trust "waiting for a notification"
 as a finished report, and never resume a round whose worktree has already been auto-removed —
-relaunch fresh instead.
+relaunch fresh instead. Catches LOCAL traps only — when a round bottoms out at a genuine
+architectural question, that's the signal to graduate the finding into a `PLAN_*.md` doc (§3.5;
+`PLAN_CONVERSATION.md` is the first one) rather than force another round at it; the formal
+benchmarks are the tool for deciding whether to push a wider capability forward from there.
