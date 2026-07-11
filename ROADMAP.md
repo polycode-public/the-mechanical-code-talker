@@ -56,7 +56,10 @@ audit — always check the latest-dated one, not this file, for real numbers.
   phase status, not this file.
 - **`PLAN_VIZ.md`** — visualise the memory graph: a recency-seeded, hub-avoiding spiral walk
   (reusing `spiralExpand`, already in `src/codegraph.mjs`) rendered with a pseudo-3D depth effect
-  (older nodes deeper/darker, newer shallower/higher-contrast). Design-only.
+  (older nodes deeper/darker, newer shallower/higher-contrast). Also covers real node/property
+  `updatedAt` timestamps (currently write-once `createdAt` only) and situational-fact seeding (a
+  pre-baked git-history corpus, target-repo `README.md` ingestion, session/sessionless invocation
+  metadata). Design-only.
 
 ## Research horizon
 
