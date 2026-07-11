@@ -51,14 +51,26 @@ install in an empty folder. See `ROADMAP.md`'s "Open-source the ACE-OWL parser" 
 
 ## Open follow-ups
 
-1. **Wait for the README.md/homepage refresh agent, then merge it.** Dispatched sequentially, after
-   the two content workstreams below were already merged and verified — an earlier concurrent
-   dispatch of this same agent was blocked by the auto-mode safety classifier (its denial reasoning
-   described a different sibling agent's content-authoring scope, not this one's docs-only brief);
-   rather than work around the block, the run was re-sequenced solo per operator instruction
-   ("proceed that way"). Once it lands: verify its worktree's real `git log`/`git status` directly
-   (per the lesson below — never trust an agent's own "done" prose alone), merge, run `npm test`,
-   clean up the worktree/branch.
+**The README.md/homepage refresh is DONE (2026-07-11, commits `92ec1a3`, `266d84d`, merged
+`72a52ae`).** Dispatched solo after the two content workstreams were already merged and verified —
+an earlier concurrent dispatch of this same agent was blocked by the auto-mode safety classifier
+(its denial reasoning described a different sibling agent's content-authoring scope, not this one's
+docs-only brief); rather than work around the block, the run was re-sequenced solo per operator
+instruction ("proceed that way"). Verified independently (worktree `git log`/`git status`, not just
+the agent's own report): both README.md and public/index.html now document the default persona,
+`--persona-size` tiers, memory backends, and the completions pipeline (a verified chat-triggered
+example and a verified JS example). Real gap found and honestly documented rather than papered
+over: `generateCompletion` isn't on the package's public `exports` map yet, so the JS example only
+works from a cloned checkout, not a plain npm install — see item 1 below. `npm test` 1864/1864 after
+merge, worktree/branch cleaned up.
+
+1. **`generateCompletion` has no public package export.** `src/index.mjs` doesn't re-export it and
+   `package.json`'s `exports` map has no `./completions` entry — confirmed via a real `npm pack` +
+   scratch install, which throws `ERR_PACKAGE_PATH_NOT_EXPORTED` on the deep import. The README's JS
+   example documents this honestly (relative import from a cloned checkout only) rather than
+   inventing a working public path. Adding a `./completions` export (and re-exporting
+   `generateCompletion`/`createCompletionsGraphAdapter` from `src/index.mjs`) is a small, isolated
+   follow-up if the operator wants the JS example to work from a plain npm install too.
 2. **Backend C (SQLite)'s read side** does a full payload reconstruction per call (an explicitly
    permitted shortcut in `PLAN_SEED.md` §6) — measured 8% slower than flat JSON at the Large tier's
    scale, faster below it. Closing this needs real indexed query handles, not more diffing.
