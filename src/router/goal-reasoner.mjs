@@ -197,13 +197,20 @@ export function threatsAmong(candidateName, _pending) {
 }
 
 /** Resolve the FOCUS the request scopes the goal model to — an entity binding
- *  (extractEntity + the graph oracle), NOT an intent keyword. Returns the bound
- *  individual or null (no bindable focus => a whole-graph / global goal). */
+ *  (extractEntity + the graph oracle), NOT an intent keyword. Returns
+ *  `{match, ambiguous, candidates}`: `match` is the bound individual or null (no
+ *  bindable focus => a whole-graph / global goal); `ambiguous`+`candidates` let
+ *  the caller distinguish "genuinely no focus" from "a focus term that TIED"
+ *  (PLAN_BREADTH_FIRST_NLU.md §4 — the latter must never silently fall back to
+ *  a global answer, since that would silently answer a DIFFERENT goal than the
+ *  one the user actually named). */
 function focusOf(request, ctx) {
   const term = extractEntity(String(request || ""));
-  if (!term || !ctx || !ctx.resolve) return null;
+  if (!term || !ctx || !ctx.resolve) return { match: null, ambiguous: false, candidates: [] };
   const r = ctx.resolve(term);
-  return r && r.match && !r.ambiguous ? r.match : null;
+  if (r && r.match && !r.ambiguous) return { match: r.match, ambiguous: false, candidates: [] };
+  if (r && r.ambiguous) return { match: null, ambiguous: true, candidates: [r.match, ...(r.candidates || [])].filter(Boolean) };
+  return { match: null, ambiguous: false, candidates: [] };
 }
 
 /** The GLOBAL-MODE DOMAIN GATE's primitive: what entity CLASS (if any) did
@@ -268,14 +275,41 @@ export function dropCondition(intention, observed, mode, focus, focusClass) {
  *  omits it). PLAN_CODE.md Track 1's synthesis oracle (synthbench/rules/
  *  oracle.mjs) is the one caller that overrides it, with a CLONED array
  *  holding a candidate rule — the candidate then runs through this exact same
- *  meta-loop a hand-written rule does, never a parallel re-implementation. */
-export async function goalReason(request, tools, ctx, { driver = "goal-0.8.1", ruleSet = GOAL_RULES } = {}) {
+ *  meta-loop a hand-written rule does, never a parallel re-implementation.
+ *
+ *  `pinnedFocus` (internal — PLAN_BREADTH_FIRST_NLU.md §4's breadth-first
+ *  ambiguity fix) skips `focusOf` entirely and scopes straight to the given
+ *  individual: the mechanism the ambiguous-focus branch below uses to run this
+ *  SAME meta-loop once per tied candidate, "pin, don't re-resolve" (the same
+ *  idiom PLAN_BREADTH_FIRST_NLU.md §1 uses for ask.mjs's entity ties). No
+ *  product call site ever passes it. */
+export async function goalReason(request, tools, ctx, { driver = "goal-0.8.1", ruleSet = GOAL_RULES, pinnedFocus = null } = {}) {
   const declared = Array.isArray(tools) ? tools : [];
 
   // STEP 1 — deduce the goal scope from the DECLARED model + a bound focus,
   // then SELECT the goal-rule by pure applicability (no request keyword ever):
   // a bound focus reads scoped, no focus reads global (keystone arbitration).
-  const focus = focusOf(request, ctx);
+  const focusRes = pinnedFocus ? { match: pinnedFocus, ambiguous: false, candidates: [] } : focusOf(request, ctx);
+  const focus = focusRes.match;
+
+  // An AMBIGUOUS focus term must never silently collapse to "global" — that
+  // would silently answer a DIFFERENT goal (whole-graph keystone arbitration)
+  // than the one the user actually named. Refuse honestly, the same "never a
+  // guess" discipline resolver.mjs/guardrail.mjs apply to an ambiguous resolved
+  // term — and, when the tied candidates share ONE class a declared goal-rule
+  // scopes and a dispatcher is wired, ADDITIONALLY run this SAME meta-loop once
+  // per (pinned) candidate, so a machine caller gets both the honest "still
+  // ambiguous" signal and every candidate's real composed answer.
+  if (!pinnedFocus && focusRes.ambiguous) {
+    const term = extractEntity(String(request || ""));
+    const pool = focusRes.candidates.slice(0, 4);
+    const why2 = `open-world: focus "${term}" is ambiguous (${pool.map((c) => c.label).join(", ")}) — narrow it`;
+    const scopable = pool.length > 0 && pool.every((c) => c.class === pool[0].class) && ruleSet.some((r) => r.focusClass === pool[0].class);
+    if (!scopable || !ctx.dispatch) return refuse(why2, driver);
+    const candidateResults = [];
+    for (const c of pool) candidateResults.push({ candidate: c.label, result: await goalReason(request, tools, ctx, { driver, ruleSet, pinnedFocus: c }) });
+    return { ...refuse(why2, driver), candidateResults };
+  }
   const mode = focus ? "scoped" : "global";
 
   // The open-world goal-generation seam, named honestly: a resolved focus whose
