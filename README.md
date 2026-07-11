@@ -6,13 +6,16 @@ A pure-JS, **no-LLM**, offline, **$0** chatbot in the ELIZA/PARRY lineage:
 pattern-driven, best-efforts, and obsessed with software the way PARRY was
 obsessed with the mafia. No model calls anywhere.
 
-tmct turns natural language directly into a graph database. The graph starts
-seeded with an **ontology** (a curated software vocabulary with real
-definitions), a **lexicon** (everyday words mapped onto that vocabulary), and
-a **corpus** (a filtered ConceptNet slice of general-world terms). Teach it a
-fact in plain English and it mints a node. Ask it a question and it answers
-from what it was seeded with, what you taught it, and what it can derive by
-rule from both. Every answer is either grounded or an honest miss.
+tmct turns natural language directly into a graph database. On first run it
+seeds an everyday **human-world persona** — people, places, objects, nature,
+time — so it already has a vocabulary before you teach it anything. A
+code-focused persona is available as an opt-in alternative: a software
+**ontology** (real definitions), a **lexicon** (everyday words mapped onto
+it), and a wider ConceptNet **corpus**. Point tmct at a real codebase's graph
+and it reasons over that too, whichever persona is active. Teach it a fact in
+plain English and it mints a node. Ask it a question and it answers from what
+it was seeded with, what you taught it, and what it can derive by rule from
+both. Every answer is either grounded or an honest miss.
 
 ## Teach it, then ask it to reason
 
@@ -234,6 +237,56 @@ opener to a useful answer without ever hitting a wall. Natural phrasings are
 routed to the capability you meant: *"what functions are in Task"* → its
 members, *"what defined saveStore"* → where it's defined.
 
+## Detailed, grounded answers
+
+Ask a precise question and tmct gives you a precise answer. Ask for more and
+it gives you more: "give me a detailed summary of how X works" (or "explain
+in detail how X works", or "...detailed overview/explanation of X") gets a
+longer, multi-sentence account instead of one line. Every sentence in it is
+lifted from a real graph edge, attribute, or taught fact — never generated
+free text — and it declines outright rather than pad the gap when nothing
+clears its own relevance bar.
+
+From chat, a real run against the shipped `examples/mini-webapp` fixture
+(banner lines trimmed):
+
+```
+$ node bin/tmct.mjs chat --repo examples/mini-webapp --ephemeral
+tmct> give me a detailed overview of how the Store works
+Attribute: prose_tokens = memory record store [mgx:hasProseTokens]. Attribute:
+doc = In-memory record store. [seon:hasDoc]. Other matches: src/core/store.mjs
+(Module), loadStore (Function), saveStore (Function), testLoadStore (Function).
+```
+
+Programmatically, the same pipeline is `generateCompletion()`
+(`src/completions/complete.mjs`). It isn't on the published package's
+`exports` map yet, so this only works from a cloned checkout today, not the
+installed npm package — worth knowing before you build against it:
+
+```js
+import { fetchEntities } from "./src/source.mjs";
+import { parseEntities } from "./src/codegraph.mjs";
+import { loadMemory } from "./src/memory/core.mjs";
+import { createCompletionsGraphAdapter } from "./src/completions/graph-adapter.mjs";
+import { generateCompletion } from "./src/completions/complete.mjs";
+
+const dir = "examples/mini-webapp";
+const graph = parseEntities(await fetchEntities({ graphFile: `${dir}/.tmct/graph.json` }));
+const memory = await loadMemory(dir);
+const graphService = createCompletionsGraphAdapter(graph, memory);
+
+const { text } = await generateCompletion(dir, "Store", { query: "Store", graph, memory, graphService });
+console.log(text);
+```
+
+```
+Attribute: prose_tokens = memory record store [mgx:hasProseTokens]. Attribute:
+doc = In-memory record store. [seon:hasDoc]. Other matches: src/core/store.mjs
+(Module), loadStore (Function), saveStore (Function), testLoadStore (Function).
+```
+
+Full pipeline design in `archive/PLAN_COMPLETIONS.md`.
+
 ## How it remembers
 
 tmct's memory has two layers, both fed by every parsed request and response and
@@ -254,6 +307,21 @@ offline, from disk, on turn one. A code-domain persona (a curated **SEON**
 software ontology plus the whole filtered **ConceptNet slice**, CC-BY-SA 4.0)
 is available opt-in: `tmct init --with-persona code`. `--ephemeral` (used by
 the shipped `npm run example:*` demos) reads a graph but writes nothing back.
+
+The default persona also comes in three sizes: Small (~664 facts, the
+default), Medium (~1,608, `tmct init --persona-size medium`) and Large
+(~13,609, `--persona-size large`, deep enough to chain real multi-hop
+reasoning). Design detail and the full fact-count tables are in `PLAN_SEED.md`.
+
+### Memory backends
+
+The default memory backend writes an OWL-labelled JSON file under `.tmct/`.
+Two more exist for a library caller who doesn't want that: `runChat({
+memoryBackend: "memory" })` keeps taught facts in the process only, nothing
+written to disk; `runChat({ memoryBackend: "sqlite" })` persists them to a
+local SQLite file instead. `TMCT_MEMORY_BACKEND=memory|sqlite` does the same
+from the environment. There's no CLI flag yet — this is a library-level
+option for now, newer and less exercised than the default backend.
 
 Teaching isn't limited to the ACE grammar's fixed shapes. Tell tmct an
 arbitrary fact, like "margo eats ribs", and it mints a fact you can later ask
@@ -322,8 +390,8 @@ Inside the chat: `/help` lists commands, `/memory` inspects what tmct remembers
 
 `tmct init` is the onboarding surface for the repository interface below: it
 creates the `.tmct/` directory, writes the externalized `tmct.toml`
-configuration, seeds the tier-1 corpus, and records provenance. A host package
-or a bare user gets a working install in one command.
+configuration, seeds the default persona, and records provenance. A host
+package or a bare user gets a working install in one command.
 
 > Install-size note: tmct depends on wink-nlp's deterministic English language
 > model (~3.8 MB installed). That model is a lookup table, not an LLM.
@@ -343,6 +411,7 @@ tmct init --ontology <name|path>              # activate+seed an ontology bundle
 tmct init --lexicon <name|path>               # activate a lexicon bundle (never seeded)
 tmct init --graph <path> [--graph <path> …]   # set tmct.toml's graph_file/graph_files
 tmct init --config <path>                     # write to an alternate tmct.toml location
+tmct init --persona-size medium|large         # grow the default persona (Small is default)
 
 tmct import --corpus <id|path>                # activate+seed into an ALREADY-initialized
 tmct import --ontology <name|path>            # repo — any combination of these flags in
@@ -356,6 +425,12 @@ tmct chat --graph <path> [--graph <path> …]   # explicit graph file(s) — mul
 tmct chat --config <path>                     # an alternate tmct.toml (a file or a dir)
 tmct serve --graph <path> --config <path>     # same two flags, for the HTTP endpoint
 ```
+
+`--corpus`/`--ontology`/`--lexicon` each take one value; chain multiple `tmct
+import` calls to combine several. `npm run init:large` in `package.json`
+chains one `init` and five `import --corpus` calls to combine every shipped
+bundle (human persona + seon + conceptnet + aws/python/java) into ~7,380
+facts on the default flat-JSON backend — a working example to copy from.
 
 `tmct extend --validate <dir> --config <path>` validates a third-party
 extension pack against an alternate tmct.toml, without mutating anything.
