@@ -15,6 +15,22 @@ version bumps (`1.6.0` through `1.7.3`) have accumulated locally without a push.
 own version-bump discipline (`CLAUDE.md`), the next push should land whatever's actually ready as one
 release, not chase every intermediate bump — don't bump again until that push.
 
+## In progress — `PLAN_BREADTH_FIRST_NLU.md` (started 2026-07-11)
+
+Five tracks, live status (update this block as each lands, don't let it go stale):
+
+- **Track 1 — entity-tie ambiguity fix** (`src/ask.mjs`): not started.
+- **Track 2 — router try-every-candidate enrichment** (`src/router/*.mjs`,
+  `SKILL_BENCHMARK_AGENT.md`): not started.
+- **Track 3 — `tmct viz` CLI** (`src/viz.mjs`, `bin/tmct.mjs`, `README.md`, `package.json`): not
+  started.
+- **Track 4 — template generation + coverage harness** (new `corpus/`/harness files,
+  `PLAN_TEMPLATE_COVERAGE.md`): not started.
+- **Track 5 — surface alternates on hits** (`src/ask.mjs`, depends on Track 1 landing first): not
+  started.
+
+Full design, file targets, and verification steps in `PLAN_BREADTH_FIRST_NLU.md`.
+
 ## Open items
 
 - **`archive/PLAN_CONVERSATION.md` Finding 4** — an anaphoric "it uses which controller as its base"

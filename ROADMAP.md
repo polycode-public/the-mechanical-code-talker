@@ -9,7 +9,33 @@ open items, session-scoped), see `HANDOVER.md` instead — this file doesn't dup
 
 A tolerant, ELIZA/PARRY-style chat surface over a codebase, obsessed with software the way PARRY was
 obsessed with the mafia — deterministic, zero-cost, **no LLM anywhere in the product path**. Guides a
-user toward precision queries rather than guessing; every answer is grounded or an honest miss.
+user toward precision queries rather than guessing; every answer is grounded, restates every genuine
+reading it finds in full, or is an honest miss when nothing grounds it at all.
+
+## Ambition
+
+Declared, forward-looking goals — not yet achieved, stated here so they steer future work instead of
+getting silently traded away by inherited caution:
+
+- **Reach for Llama-3-level natural language fluency.** Not by putting an LLM in the product path
+  (still permanent, see "Explicitly out of scope") — by growing rich template/surface-realization
+  variety, so an answer shape has many valid phrasings instead of one fixed slot-fill.
+- **Resolve ambiguity breadth-first, always.** Every genuinely valid reading gets its own real answer
+  restated in full, never a bare "could mean X or Y — try rephrasing" punt, bounded only by existing
+  clipping/pagination limits. `renderCore`'s real-answer resolution (`CAPABILITIES_1.7.3.md` item 92)
+  is the first instance of this principle; the goal is to generalize it everywhere ambiguity still
+  gets a bare hedge instead of a full answer set.
+- **Paraphrase alongside the original, verified, never instead of it.** A surface-realization variant
+  sits next to the literal grounded answer, never replacing it, and its accuracy is checked, not
+  assumed — by running tmct's own deterministic inference/consistency machinery (`src/syllogise.mjs`)
+  against both the original and the paraphrase: they must entail the same conclusions, and neither may
+  contradict the other sentence-by-sentence. The paraphrase generator itself stays template/rule-based,
+  same as everything else in the product path — the novelty is verifying that variety costs nothing in
+  accuracy, not the generation mechanism itself.
+
+These sit alongside, not against, the zero-fabrication discipline: an answer with no grounding is
+still an honest miss, and breadth-first resolution means showing every real answer a genuine reading
+produces, never inventing one to fill a gap.
 
 ## Current capability surface
 
@@ -38,7 +64,8 @@ user toward precision queries rather than guessing; every answer is grounded or 
   derived `updatedAt` (max over own attributes and attached edges) — groundwork for the graph
   visualisation in `PLAN_VIZ.md`, not yet exposed on the CLI.
 - **Completions** (`src/completions/`): extractive, multi-sentence answers for broad "how does X
-  work" questions, grounded and source-cited, never freely generated.
+  work" questions, grounded and source-cited — never invents a fact beyond what's retrieved, though
+  see "Ambition" above for growing the phrasing variety around what's retrieved.
 - **Capability router** (`src/router/`): a deterministic, closed-toolset agentic router behind an
   Anthropic-compatible API — measured by `AGENTBENCH`, not general function-calling.
 - **Interfaces**: the `tmct` CLI, a documented library `exports` surface, and a Repository Interface
@@ -50,6 +77,16 @@ audit — always check the latest-dated one, not this file, for real numbers.
 
 ## What's next (feature-shaped — see `HANDOVER.md` for the current task-level list)
 
+- **`PLAN_BREADTH_FIRST_NLU.md` (in progress, 2026-07-11)** — five tracks executing now: (1) entity-tie
+  ambiguity resolves every candidate to a real answer, not a bare name list (generalizing the
+  `renderCore`/item-92 mechanism from parse-level ties to entity-level ties); (2) the capability router
+  tries every candidate on an ambiguous tool argument instead of bare-refusing, carrying real
+  per-candidate results alongside the honest refusal; (3) `tmct viz` — a new CLI verb producing one
+  self-contained, locally-navigable HTML file of the memory graph, no server, no external deps; (4) a
+  template-generation + coverage-testing pass sourced from `english-wordnet`'s synonym sets and the ACE
+  grammar's own patterns, measured against real open-source prose (the concrete first build of the
+  "Ambition" section's NL-fluency goal); (5) surfacing silently-discarded alternate readings on
+  already-successful answers. See the plan doc for full design and `HANDOVER.md` for live status.
 - **`PLAN_ADVENTURE.md`** — a text-adventure architectural stretch: an imperative command grammar,
   mutable turn-by-turn world/player state as ordinary graph nodes (no special player-state store),
   and an NPC turn scheduler. Design-only.
@@ -115,11 +152,6 @@ the fetched text into the ACE-OWL controlled grammar → store with source prove
 original question, citing what was just learned. Strictly opt-in, offline default inviolable.
 Prerequisites: the provenance-trust policy must extend to `via:"learned:web"`, never silently
 blending web-sourced facts with graph/operator facts.
-
-**Dropped by design, not forgotten**: tone-of-voice adaptation (per-voice synonym substitution over
-prose) — tmct's protected-span analysis leaves too little safely-substitutable text once any
-technically-significant term is excluded; accuracy outranks helpfulness trickery. Revisit only if a
-provably-safe substitutable subset emerges.
 
 ## Explicitly out of scope
 
