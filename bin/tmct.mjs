@@ -78,6 +78,10 @@ Usage:
   tmct syllogise [--repo <abs>] speculative inference (offline maintenance job): forward-
        [--depth <n>] [--budget <n>]  chain the memory's rdfs:subClassOf closure, materialising
        [--config <path>]      bounded, low-trust, retractable entailed facts (never on the chat path)
+  tmct viz [--repo <abs>]      write one self-contained, navigable HTML file rendering the
+       [--focus <id>]         memory graph: pan/zoom, click a node for its label/class/
+       [--output <path>]      timestamps. Seeds from the most recently created individual
+       [--config <path>]      by default; --output defaults to graph.html in the cwd.
   tmct serve [--repo <abs>]    run the Anthropic Messages API-compatible endpoint
        [--host <h>] [--port <n>]  (POST /v1/messages) over the graph — a deterministic,
        [--graph <path>]        no-LLM "model" a tool-loop client can call; $0 usage.
@@ -811,6 +815,29 @@ async function main() {
     process.stdout.write(
       `tmct syllogise — derived ${res.count} entailed fact(s) (subClassOf closure, depth ${res.depth}, budget ${res.budget})`
       + (res.truncated ? " — budget reached, more available" : "") + "\n",
+    );
+    return;
+  }
+
+  if (mode === "viz") {
+    // `tmct viz` — one self-contained, navigable HTML file rendering the
+    // memory graph (PLAN_BREADTH_FIRST_NLU.md §5, PLAN_VIZ.md's design):
+    // pan/zoom, click-a-node, a concentric ring layout keyed on hop with a
+    // depth/age falloff. Same repo resolution as `memory`/`syllogise` —
+    // resolveRuntimeConfig: --repo > git root > cwd.
+    const rest = process.argv.slice(3);
+    const { strFlag, resolveRuntimeConfig } = await import("../src/cli-args.mjs");
+    const { computeVizGraph, renderVizHtml } = await import("../src/viz.mjs");
+    const { writeFile } = await import("node:fs/promises");
+    const { resolve } = await import("node:path");
+    const focus = strFlag(rest, ["--focus"]);
+    const outPath = resolve(process.cwd(), strFlag(rest, ["--output", "--out"], "graph.html"));
+    const { repo } = await resolveRuntimeConfig({ argv: rest });
+    const vizGraph = await computeVizGraph(repo, focus ? { focus } : {});
+    const html = renderVizHtml(vizGraph);
+    await writeFile(outPath, html, "utf8");
+    process.stdout.write(
+      `tmct viz — wrote ${vizGraph.nodes.length} node(s), ${vizGraph.edges.length} edge(s) to ${outPath}\n`,
     );
     return;
   }

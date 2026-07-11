@@ -380,6 +380,7 @@ tmct                                  # bare = chat (the headline)
 tmct chat --repo /abs/path/to/repo    # chat over a specific repo's graph
 tmct init                             # scaffold .tmct/, tmct.toml, seed + provenance
 tmct syllogise                        # offline: pre-derive entailed facts (maintenance)
+npm run viz -- --output graph.html && open graph.html   # self-contained HTML graph view
 ```
 
 Inside the chat: `/help` lists commands, `/memory` inspects what tmct remembers

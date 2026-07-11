@@ -1,11 +1,12 @@
 # PLAN_VIZ.md — graph visualisation: recency-seeded spiral walk, pseudo-3D depth rendering, node/property timestamps, and situational-fact seeding
 
-> **STATUS: the three scoped traversal/timestamp items are IMPLEMENTED (commit `9510a43`) —
-> `adjacencyForKinds`'s id-normalizer + `relationKind`/`PROP_KIND` fix, `upsertEdge()` createdAt +
-> derived `updatedAt`, and `spiralExpand`'s generalization. Everything else below (situational-fact
-> seeding, rendering, the code-graph architectural decision) is still design-only.** Grounded
-> directly against real code in both repos (citations below), not a from-scratch idea. Not staffed,
-> not scheduled.
+> **STATUS: traversal/timestamp groundwork IMPLEMENTED (commit `9510a43`) — `adjacencyForKinds`'s
+> id-normalizer + `relationKind`/`PROP_KIND` fix, `upsertEdge()` createdAt + derived `updatedAt`,
+> and `spiralExpand`'s generalization. CLI wiring + rendering IMPLEMENTED (PLAN_BREADTH_FIRST_NLU.md
+> §5) — `tmct viz` / `npm run viz`, `src/viz.mjs`'s `computeVizGraph`/`renderVizHtml`, a hand-rolled
+> self-contained HTML/canvas renderer per §4 below. Situational-fact seeding and the code-graph
+> architectural decision are still design-only.** Grounded directly against real code in both repos
+> (citations below), not a from-scratch idea.
 
 ## Origin
 
@@ -343,11 +344,10 @@ for v1. A true-3D option is named below as a considered alternative, not ruled o
 
 ## Next step
 
-Traversal/timestamp groundwork (items 1-3) is done — see "Concrete implementation" above. Not
+Traversal/timestamp groundwork (items 1-3) and the CLI-wiring + rendering layer (§4, `tmct viz` /
+`src/viz.mjs`) are done — see "Concrete implementation" above and PLAN_BREADTH_FIRST_NLU.md §5. Not
 staffed beyond that. When picked up, roughly in dependency order: (1) settle the code-graph
 architectural question (provider-populated vs. a new tmct-owned local-git mode); (2) build the
 maintainer-side git-log-corpus generation step and wire seed-time README ingestion + the new
 `Source` "seed" kind; (3) add the eager session/sessionless anchor individual with a `mode` field,
-deciding the two-Session-classes question at the same time; (4) spike the CSS-depth-effect renderer
-against a real `.tmct/memory/graph.json` from an active session, checking the "structurally less
-noisy than seonix's default" hypothesis for real.
+deciding the two-Session-classes question at the same time.
