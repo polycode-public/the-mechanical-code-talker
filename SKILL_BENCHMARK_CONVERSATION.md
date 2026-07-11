@@ -125,11 +125,19 @@ the highest-impact dead-end, since it's the one every future stranger session wi
 
 ---
 
-## 1. The shared discipline: chat, find dead-ends, fix, freeze, replay
+## 1. The shared discipline: chat, find dead-ends, document, hand off
 
-Both modes run the same five-step loop. Full ladder mode runs it inline, one tier at a time (§2).
+**(Re-scoped 2026-07-11, operator instruction: this skill MEASURES and DOCUMENTS only, matching
+`SKILL_BENCHMARK_AGENT.md`/`SKILL_BENCHMARK_CEFR_ENGLISH.md`/`SKILL_BENCHMARK_INFERENCE.md` — none of
+those three fix anything inline, they measure and write a ranked "what to do next" list. This skill
+used to fix, freeze, and ship inline too, which made its own runtime unpredictable (an open-ended
+implementation-and-test cycle bolted onto what should be a bounded measurement pass) and duplicated
+`SKILL_AGENT_FAST_LOOP.md`'s actual job. Fixing dead-ends now happens ONLY in `SKILL_AGENT_FAST_LOOP.md`
+(small, local, self-verified) or a `PLAN_*.md` (anything architectural) — never here.**
+
+Both modes run the same four-step loop. Full ladder mode runs it inline, one tier at a time (§2).
 Capped sprint mode runs it in bounded rounds, with Step 1 delegated to a background sub-agent and
-Steps 2–5 handled by the coordinator in the primary chat (§3).
+Steps 2–4 handled by the coordinator in the primary chat (§3).
 
 **Step 1 — CHAT (play a curious user).** Against a loaded graph (start with a shipped example so the
 answers are real), hold a natural conversation. **Never run `chat --repo` directly against the
@@ -174,24 +182,30 @@ what the user meant, and the capability that SHOULD have served it (usually one 
 `/members`, "where is X defined", the concept force, a relation the graph has). The output is a
 ranked dead-end list, most-flow-breaking first.
 
-**Step 3 — IMPROVE (map the natural phrasing to the capability).** Fix the dead-ends as one coherent
-change. The fix is almost always **routing/recognition**, not new capability: teach the parser that
-"what functions are in X" ≡ members-of-class, "what defined X" ≡ where-is-X-defined, "what about
-imports" ≡ the relation concept force. Never fabricate an answer; if a phrasing genuinely has no
-answerable meaning, make its reply a **guiding nudge**, never a wall. Prefer extending the tolerant
-strategies (`src/interpret/`), the concept force (`src/concept.mjs`), and the miss renderer
-(`src/ask.mjs`) over adding grammar rigidity.
+**Step 3 — DIAGNOSE (name the capability that should have served it, don't build it).** For each
+dead-end, write down what the fix would almost certainly be — **routing/recognition**, not new
+capability, in the large majority of cases ("what functions are in X" ≡ members-of-class, "what
+defined X" ≡ where-is-X-defined, "what about imports" ≡ the relation concept force) — and which
+existing module it would likely touch (`src/interpret/`, `src/concept.mjs`, `src/ask.mjs`'s miss
+renderer). This is a diagnosis for whoever picks it up next, not an implementation: **do not edit any
+source file in this step.**
 
-**Step 4 — REGRESSION-TEST.** `npm test` green; the byte-exact `test/showcase.test.mjs` intact; the
-graded bench `--compare` shows no tier-1 regressions (`node chatbench/run.mjs --stamp playtest --dual
---out /tmp/pt --compare chatbench/results/raw/run-<lastversion>/product-a.jsonl`). A fix that flows
-one conversation but regresses a frozen case is not done.
+**Step 4 — RANK AND ROUTE.** Order every dead-end found, most-flow-breaking first (§3.4 already ranks
+persona-sweep findings by how many independent personas hit the same one — reuse that signal here
+too). For each: route it to exactly one of —
+- **`SKILL_AGENT_FAST_LOOP.md`** — a small, local, obviously-scoped routing fix (the common case).
+  Hand off the verbatim input, the current wrong/missing output, and Step 3's diagnosis; a fast-loop
+  round fixes it, verifies live, freezes a `test/chatflow-*.test.mjs` regression, and ships it —
+  outside this skill's own runtime.
+- **A `PLAN_*.md` doc** — anything that needs a real design decision, touches shared/high-blast-radius
+  machinery, or risks a pinned-case regression (the same graduation criteria `SKILL_AGENT_FAST_LOOP.md`
+  §3.5 already uses). Find an existing open plan doc this fits under, or name a new one specifically
+  for the issue — never leave it as a bare line item with no owner.
+- **A named, honest ceiling** — a capability tmct deliberately doesn't have yet (§0's completions-
+  pipeline example). Say so plainly in the report; don't manufacture a fix target for it.
 
-**Step 5 — REPLAY (the same conversations, verbatim).** Re-run the EXACT transcripts from Step 1. Each
-dead-end must now be FLOW. Read the whole conversation again end-to-end: does it reach a **useful
-outcome** (the user learned something real about the codebase) with **zero dead-ends** (§1b)? Freeze
-the now-flowing conversations as regression transcripts (a `test/chatflow-*.test.mjs`, kin to
-`showcase.test.mjs`) — a dead-end that reappears there later is a regression, caught for free.
+This skill's own job stops here. It never edits `src/`, never runs `npm test` as a verification step
+for a fix (there is no fix to verify), and never bumps or pushes a version.
 
 ### 1b. What "flows to a useful outcome" means
 
@@ -210,8 +224,11 @@ it fails regardless of how many earlier turns answered.
 
 ## 2. Full ladder mode
 
-The open-ended variant: the main agent chats inline at the current complexity tier, fixes what
-breaks, replays, and only ratchets the tier up once the current one is reliably dead-end-free.
+The open-ended variant: the main agent chats inline at the current complexity tier, documents what
+breaks (§1 Steps 3–4 — never fixes it here), and only ratchets the tier up once the current one is
+reliably dead-end-free per the LAST measured pass at it (a tier stays "clean" once its dead-ends have
+been routed out and fixed elsewhere, confirmed by a fresh conversation, not by this skill re-fixing
+anything itself).
 
 **Step 6 — REPEAT at this tier** until several fresh conversations at the current complexity flow
 clean, first try, from any entry point.
@@ -271,9 +288,10 @@ Vary each recognized closed-set intent across:
 
 The pass bar is the same as any turn (§0): FLOW, not necessarily verbatim-identical wording to the
 canonical phrasing's answer. A variant that falls through to the grammar wall or the code-graph
-apology is a dead-end exactly like a missed structural phrasing — fix it the same way (§1 Step 3):
-extend the closed set / the bounded-fuzzy fallback (`fuzzyMatchInSet`, `interpret/fuzzy.mjs`), never
-loosen into a guess.
+apology is a dead-end exactly like a missed structural phrasing — diagnose and route it the same way
+(§1 Steps 3–4): the likely fix is extending the closed set / the bounded-fuzzy fallback
+(`fuzzyMatchInSet`, `interpret/fuzzy.mjs`), never loosening into a guess, but that fix is made in
+`SKILL_AGENT_FAST_LOOP.md`, not here.
 
 ---
 
@@ -284,9 +302,10 @@ inline, this runs a **fixed, small number of rounds** (default 3), each round's 
 a background sub-agent**, each round's questions **chaining off the previous round's transcript** (a
 real user's next question usually follows from what they just learned, not a fresh unrelated
 topic), with the **main agent appraising each transcript in the primary chat** (never hidden in a
-sub-agent's own output) and **shipping a confirmed fix immediately** (version bump + push) rather
-than batching fixes to the end. Stops at the round cap or the first pair of rounds that finds
-nothing worth fixing, whichever comes first, then reports a recommendation on whether to keep going.
+sub-agent's own output) and **routing every real finding to `SKILL_AGENT_FAST_LOOP.md` or a
+`PLAN_*.md` doc** (§1 Step 4) rather than fixing it here. Stops at the round cap or the first pair of
+rounds that finds nothing worth routing, whichever comes first, then reports a recommendation on
+whether to keep going.
 
 This mode is `CLAUDE.md`'s standing coordinator model applied directly to playtesting: the CHAT step
 is genuinely long-running and independently drivable, so it goes to a background sub-agent while the
@@ -331,28 +350,21 @@ the CHAT step but keeping the LOOP in the primary conversation.
 FLOW (answered or honestly nudged) or DEAD-END (a wall, an unrecognized qualifier, a phrasing-miss, a
 confident-wrong answer, an invited follow-up the engine can't take). State the appraisal plainly in
 the primary chat: what worked, what didn't, and — this is the gate for Round-Step 4 — whether
-anything found is a REAL, FIXABLE issue (a routing/recognition gap to an existing capability, per §1
-Step 3's "fix routing, not rigidity" discipline) or a genuine ceiling (name it as one, don't force a
-fix).
+anything found is a REAL, ROUTABLE issue (a routing/recognition gap to an existing capability, per §1
+Step 3's diagnosis discipline) or a genuine ceiling (name it as one, don't force a fix target).
 
-**Round-Step 4 — FIX + SHIP, if warranted.** If Round-Step 3 found something real and fixable:
-1. Make the fix (directly, or via a further-delegated sub-agent if the fix itself is substantial —
-   the main agent's judgment call, same as any other fix in this repo).
-2. `npm test` green, same regression discipline §1 Step 4 requires.
-3. **Verify live** against the exact failing turn from the transcript — confirm it's now FLOW, not
-   just that tests pass (tests can be wrong too; this whole mode exists because a real
-   conversation is a better oracle than a fixture).
-4. Bump `package.json` (patch, for a fix — same convention this repo's release commits already
-   use), commit, **push immediately** — don't batch fixes across rounds. A round that ships is a
-   round the operator can see land in real time, and a later round's chaining should build on the
-   ACTUALLY-shipped state, not a pending one.
-5. If Round-Step 3 found nothing worth fixing (a clean round, or only genuine ceilings), do not force
-   a change — say so plainly and move to the next round anyway (a clean round is a good outcome, not
-   a failure, and still gets chained into the next round's opener).
+**Round-Step 4 — ROUTE, if warranted.** If Round-Step 3 found something real:
+1. Write Step 3's diagnosis (what the fix would likely be, which module it'd touch) — do not
+   implement it here.
+2. Route it per §1 Step 4: a small local gap goes to `SKILL_AGENT_FAST_LOOP.md`, anything
+   architectural to a `PLAN_*.md`. Note in the round's own log which one it went to.
+3. If Round-Step 3 found nothing worth routing (a clean round, or only genuine ceilings), say so
+   plainly and move to the next round anyway (a clean round is a good outcome, not a failure, and
+   still gets chained into the next round's opener).
 
 **Round-Step 5 — CONTINUE OR STOP.** Increment the round counter. Stop when EITHER:
 - the round cap is reached (default 3), or
-- a round finds nothing fixable AND the previous round also found nothing fixable (two clean
+- a round finds nothing to route AND the previous round also found nothing to route (two clean
   rounds in a row — "getting nowhere," the operator's own phrase, read as a stopping signal, not
   just a round-count limit).
 
@@ -361,12 +373,12 @@ Whichever triggers first, go to §3.2.
 ### 3.2 The end-of-sprint report
 
 After the loop stops, report to the operator in the primary chat:
-- **Per round**: one line — what was tested, what was found, what shipped (or "clean round,
-  nothing to fix").
-- **Overall**: how many of the N rounds shipped a real fix vs. came back clean.
-- **A recommendation**, not just a status: if fixes kept landing and the well doesn't look dry,
-  say so and suggest another sprint (or escalating to full ladder mode, §2, for a deeper pass). If
-  the last one or two rounds came back clean, say the sprint found what it was going to find at
+- **Per round**: one line — what was tested, what was found, where it was routed (or "clean round,
+  nothing to route").
+- **Overall**: how many of the N rounds found something routable vs. came back clean.
+- **A recommendation**, not just a status: if real findings kept landing and the well doesn't look
+  dry, say so and suggest another sprint (or escalating to full ladder mode, §2, for a deeper pass).
+  If the last one or two rounds came back clean, say the sprint found what it was going to find at
   this complexity tier and recommend either stopping here or ratcheting the tier (§2.1) rather than
   repeating the same tier.
 
@@ -376,21 +388,20 @@ worth recording as a versioned artifact.
 ### 3.3 Discipline specific to capped sprint mode
 
 - **Delegate the CHAT, not the JUDGMENT.** The sub-agent's only job is to hold a real, natural
-  conversation and hand back the raw transcript. Appraisal, the fix-or-not decision, and the
-  ship-or-not decision all stay with the main agent, visible to the operator — a sub-agent silently
-  deciding "this is fine" would defeat the point of asking to see every round.
+  conversation and hand back the raw transcript. Appraisal and the route-or-not decision stay with
+  the main agent, visible to the operator — a sub-agent silently deciding "this is fine" would defeat
+  the point of asking to see every round.
 - **Chain for realism, not padding.** The point of leading each round with the prior transcript is
   that real users ask follow-ups shaped by what they just learned — a fresh unrelated topic every
   round tests breadth, not depth, and this mode is explicitly the depth-and-follow-through variant
   (breadth is full ladder mode's multiple-entry-points-per-tier job, §1 Step 1).
-- **Ship per-round, not in a batch.** A confirmed fix goes out immediately (version bump + push)
-  rather than accumulating — this is a genuine choice (batching would be marginally more efficient
-  release-wise) made because the operator asked for exactly this cadence, and because it means a
-  crash mid-sprint still leaves every already-shipped fix live.
+- **Route per-round, not in a batch.** A confirmed finding gets handed off (to `SKILL_AGENT_FAST_LOOP.md`
+  or a `PLAN_*.md`) immediately rather than accumulating — this skill's job ends at diagnosis and
+  routing, so there's nothing to batch.
 - **A clean round is a real result, not a null one.** Report it as such. Two clean rounds in a row
-  is the stop signal, not a failure to find something to fix.
+  is the stop signal, not a failure to find something to route.
 - **Cap is a ceiling, not a target.** If two rounds in a row come back clean before the cap is
-  reached, stop early (§3.1 Round-Step 5) — don't force a 3rd round's worth of manufactured fixes
+  reached, stop early (§3.1 Round-Step 5) — don't force a 3rd round's worth of manufactured findings
   just to hit the number.
 
 ### 3.4 Persona-sweep mode — parallel, genuinely different frames, not chained rounds — the default single-run mode
@@ -423,9 +434,11 @@ man," no matter how much question-variety ran inside it.** Concretely:
    language-generation range — not a script, not a fixed list — the way an actual diverse
    population of real users would type, which is exactly what a language model is good at
    generating and what a hand-picked example list structurally can't cover.
-3. **Every dead-end any of them finds gets frozen into the permanent regression file immediately**,
-   same mechanism as `test/chatflow-*.test.mjs` (§1 Step 5) — this is how the generative exploration
-   compounds into a permanent, growing gate instead of being a one-off exercise.
+3. **Every dead-end any of them finds gets recorded in the sweep's report and routed** (§1 Step 4) —
+   to `SKILL_AGENT_FAST_LOOP.md` for a local fix (which is what freezes it into
+   `test/chatflow-*.test.mjs` once actually fixed there) or to a `PLAN_*.md` for anything
+   architectural — this is how the generative exploration compounds into a permanent, growing gate
+   instead of being a one-off exercise, without this skill fixing anything itself.
 4. **Run this as a standing practice, not a one-time sweep** — every substantial session that
    touches the chat surface, before calling the chat-surface work done, the same way §0.1 already
    mandates the single canonical example first.
@@ -439,7 +452,7 @@ one-line dead-end/flow note, and does NOT appraise, fix, or judge anything itsel
 the coordinator, same as §3.3's "delegate the CHAT, not the JUDGMENT" rule. The coordinator then
 reads every transcript, ranks the dead-ends found across ALL personas together (a dead-end several
 personas hit independently is higher-signal than one only a single persona's phrasing produced),
-fixes and freezes per §1 Steps 3–5, and reports the sweep as a whole — not per-agent — to the
+diagnoses and routes each per §1 Steps 3–4, and reports the sweep as a whole — not per-agent — to the
 operator.
 
 Persona ideas to rotate (not exhaustive — generate fresh ones each sweep; a fixed persona list
@@ -462,21 +475,26 @@ capped sprint (§3) — writes ONE versioned report doc, matching the naming con
 `SKILL_BENCHMARK_CEFR_ENGLISH.md` §1 and `SKILL_BENCHMARK_INFERENCE.md` already use:
 `BENCHMARK_CONVERSATION_<version>.md`, named after the `package.json` version the run measured. A
 re-run of the same version (no version bump between runs) appends `_00N`:
-`BENCHMARK_CONVERSATION_0.9.0_001.md`, `_002`, … This sits alongside, and does not replace, the
-existing frozen `test/chatflow-*.test.mjs` regression files — the write-up is the narrative record,
-the frozen tests are the enforcement.
+`BENCHMARK_CONVERSATION_0.9.0_001.md`, `_002`, … Same shape as `BENCHMARK_AGENT_<version>.md`'s own
+"decision log"/"ranked menu for the next cycle": this report is the measurement and the routed
+backlog, not a changelog of fixes made in the same cycle. It sits alongside, and does not replace,
+`test/chatflow-*.test.mjs` — those regression files get frozen when `SKILL_AGENT_FAST_LOOP.md` (or a
+dev pass working a `PLAN_*.md` item) actually lands a fix for something this report found, not by
+this skill directly.
 
 Report structure:
 - **Headline** — which mode ran (persona sweep, full ladder, or capped sprint), the persona count or
-  tier reached or the round count, the number of dead-ends found and fixed, and how many regression
-  tests were frozen this run.
+  tier reached or the round count, and the number of dead-ends found.
 - **Per-persona, per-round, or per-tier breakdown** — persona-sweep mode: one entry per persona
   (its frame, what it found, ranked by how many other personas independently hit the same dead-end
   per §3.4's own ranking rule); full ladder mode: one entry per tier played this run, entry
-  points tried, dead-ends found, fixes made; capped sprint mode: one entry per round (the same shape
-  as §3.2's end-of-sprint report), what was tested, found, and shipped.
+  points tried, dead-ends found; capped sprint mode: one entry per round (the same shape
+  as §3.2's end-of-sprint report), what was tested, found, and where it was routed.
 - **Ladder position reached** — the Tier 0–6 position this run reaches or confirms clean (§2.1). This
   stays the existing qualitative flow ladder — it is not CEFR and is never relabeled as such.
+- **Routed backlog** — every dead-end found this run, one line each: verbatim input, Step 3's
+  diagnosis, and where it was routed (`SKILL_AGENT_FAST_LOOP.md` / a named `PLAN_*.md` / "named
+  ceiling, no route"). This is the report's actionable output — the list a future session works from.
 - **Next** — the recommended next tier, sprint, or focus area, mirroring the recommendation §3.2
   already produces for capped sprints, generalized to full ladder mode too (which tier to ratchet to
   next, or which dead-end class most needs attention).
@@ -487,50 +505,42 @@ Report structure:
 
 - **Play, don't cheat.** Ask the way a user would, not the way the grammar wants. The value is the
   gap between them.
-- **Fix routing, not rigidity.** A dead-end is usually a missing SYNONYM/route to an existing
-  capability. Reach for the tolerant strategies and the concept force before adding grammar that
-  makes the next phrasing fail.
-- **Freeze what flows.** Every passed conversation becomes a regression transcript. The suite is the
-  memory; without it, fixed dead-ends silently return.
-- **Regression is sacred.** `npm test` green, showcase byte-exact, no tier-1 bench regression at
-  every iteration — same contract as `SKILL_BENCHMARK_CEFR_ENGLISH.md`.
+- **This skill never edits `src/` or `test/`.** Diagnose the likely fix (§1 Step 3 — usually a missing
+  SYNONYM/route to an existing capability, not new capability) and route it (§1 Step 4). Implementation
+  happens in `SKILL_AGENT_FAST_LOOP.md` or against a `PLAN_*.md`, never in this skill's own run.
 - **Honest dead-non-ends.** When there is truly no answer, the turn still must GUIDE (a nudge, a
   "did you mean", an offer to learn) — an honest miss that keeps the conversation alive is FLOW, a
   bare wall is a dead-end.
 - **Verify every offered example, in-state.** If a turn's reply says `try "X"`, actually ask `X` in
   that same session/seed state before calling the turn FLOW. A suggestion that wasn't checked is a
   guess wearing a helpful voice — score it a dead-end if it would fail (§0).
-- **Then measure.** After a tier or sprint flows clean, run the version-matched `BENCHMARK_CEFR_ENGLISH_<version>`
-  benchmark to confirm the flow fixes moved the aggregate and regressed nothing. Flow and mean are
-  two views of the same product; this loop shapes the flow, the benchmark scores it.
 - **Farewells stay out of scope.** Don't add cases that test elaborate goodbye or thanks phrasing.
   A short, clear close beats a clever one, and stretching the closing-phrase matcher to cover more
   wording adds ambiguity about when the conversation actually ends. If a round turns up a genuine
   farewell dead-end, note it and move on rather than generalizing the matcher further (operator
-  decision, 2026-07-10).
+  decision, 2026-07-10). This is about not INVENTING new farewell cases to chase, not a bar on fixing
+  a real bug where a non-farewell gets MISREAD as one — that's an ordinary dead-end, route it normally.
 - **Delegate long-running work under the coordinator model.** Persona-sweep mode (§3.4) is the
   clearest example of this — every persona's CHAT step is an independent, parallel background
   sub-agent by design, which is also why it's the default single-run mode (§3's capped sprint is
-  serial by construction; parallel wins on wall-clock whenever chained realism isn't the point). In
-  full ladder mode, a
-  substantial fix (§1 Step 3) that needs real implementation effort can equally be handed to a
-  background sub-agent while the coordinator holds the appraisal/replay loop, per `CLAUDE.md`'s
-  standing working model — the point in either mode is to keep the main chat free for judgment calls
-  and the operator, not to hand-run every long step inline by default.
+  serial by construction; parallel wins on wall-clock whenever chained realism isn't the point). The
+  point in either mode is to keep the main chat free for judgment calls and the operator, not to
+  hand-run every long step inline by default.
 
 ---
 
 ## 6. One-paragraph TL;DR
 
 This skill is the WIDE assessment: where does a capability actually stop working, across genuinely
-different kinds of user, so the operator can decide whether an architectural uplift is worth it — the
-narrower job of catching and fixing local traps quickly now belongs to `SKILL_AGENT_FAST_LOOP.md`.
-Play a curious user against a loaded example graph: follow the product's own guided questions, drill
-down with natural phrasing, and mark every DEAD-END (wall / "isn't a term" / "unknown qualifier" /
-phrasing-miss / an invited follow-up the engine can't take). Fix the dead-ends by ROUTING natural
-phrasings to capabilities tmct already has (not by adding grammar rigidity), keep `npm test` +
-showcase + the bench green, then REPLAY the exact same conversations until they flow to a useful
-outcome with zero dead-ends — and freeze them as regression transcripts. Run this as **persona-sweep
+different kinds of user, so the operator can decide whether an architectural uplift is worth it. Like
+`SKILL_BENCHMARK_AGENT.md`/`SKILL_BENCHMARK_CEFR_ENGLISH.md`/`SKILL_BENCHMARK_INFERENCE.md`, it
+MEASURES AND DOCUMENTS ONLY — it never edits `src/` or `test/` itself. Play a curious user against a
+loaded example graph: follow the product's own guided questions, drill down with natural phrasing,
+and mark every DEAD-END (wall / "isn't a term" / "unknown qualifier" / phrasing-miss / an invited
+follow-up the engine can't take). For each one, diagnose the likely fix (almost always ROUTING a
+natural phrasing to a capability tmct already has, not new capability) and ROUTE it: a small local
+gap goes to `SKILL_AGENT_FAST_LOOP.md`, which fixes it, verifies live, and freezes it into
+`test/chatflow-*.test.mjs`; anything architectural goes to a `PLAN_*.md`. Run this as **persona-sweep
 mode** by default (§3.4: several genuinely different persona/frame sub-agents dispatched IN
 PARALLEL — fast, because it's parallel, and the only mode that reliably finds a dead-end outside
 whatever single frame a chained or ladder run happens to start in), or ask explicitly for **full
@@ -538,6 +548,6 @@ ladder mode** (§2: ratchet the Tier 0–6 complexity ladder one tier at a time,
 or **capped sprint mode** (§3: a bounded, default-3-round CHAINED cadence, serial by construction —
 reserve it for when the operator wants to watch a sprint's follow-up depth in real time, not as the
 default single-run pass). Whichever mode, write up the run as `BENCHMARK_CONVERSATION_<version>.md`
-(§4) — headline, per-persona/per-round/per-tier breakdown, ladder position reached, and a next-steps
-recommendation, feeding a `PLAN_*.md` doc when a finding turns out to be an architectural limit
-rather than a routing fix — alongside the frozen `test/chatflow-*.test.mjs` regression tests.
+(§4) — headline, per-persona/per-round/per-tier breakdown, ladder position reached, and a routed
+backlog (every dead-end found, its diagnosis, and where it was sent) — the same "decision log" shape
+the other three benchmarks already use.
