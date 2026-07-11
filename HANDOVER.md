@@ -60,15 +60,22 @@ let it go stale):
   answer). `npm test` 1919/1919 (one `tmct serve` timeout was a system-load flake under concurrent
   background agents — confirmed clean, 17/17, in isolation).
 - **Track 6 — canonical query representation, every response** (operator directive, added
-  mid-session): every answer — not just an ambiguous one — should carry (a) the canonical English
-  restatement of what tmct understood the request to mean, in tmct's own preferred phrasing/lexicon,
-  and (b) the same thing in a machine-parsable, human-readable syntax. `describeParse`/`parsed`
-  already exist for the `ask()`/graph-query path (built for the ambiguity branches, generalizing
-  now); other `chat.mjs` lanes (teach/assert, fact-answer, conversational — ~78 distinct return
-  sites) need their own canonical-form logic, a materially bigger surface. In progress: `ask.mjs`'s
-  path first (self-contained, testable, highest-value, directly continues this session's own
-  ambiguity work); chat.mjs-wide coverage scoped honestly as a larger follow-on, not silently
-  half-done.
+  mid-session): **landed for the two highest-value lanes, commit `2010126`.** New `canonicalOf(parsed)`
+  in `ask.mjs` renders every flat query shape into `{english, machine}` — `english` a plain-language
+  gloss, `machine` a compact `shape(kind, args...)` notation (not raw JSON) — wired into
+  `ask()`'s `tmct_ask.canonical` unconditionally (every parse, not just ambiguous ones).
+  `chat.mjs`'s `runAsk` threads it into `record.canonical`; `assertTurn`'s two paths (resolved teach,
+  ambiguous teach) build their own from the real triple(s) already computed, reusing the exact
+  confirmation text already shown for `english` and a matching `fact(...)` form for `machine` — one
+  consistent notation across both lanes. `plainTurn` (every other lane's shared helper) now defaults
+  `canonical: null` explicitly, so the field is always PRESENT on every response, even where it isn't
+  populated yet. **Still open, real remaining scope, not silently done**: `chat.mjs` has ~78 distinct
+  return sites; only the ask/query and teach/assert lanes have a real canonical form today —
+  conversational replies, bare slash-commands, fact-recall/orientation lanes all still return
+  `canonical: null`. Filling those in for real is a materially bigger pass (bespoke per-lane logic,
+  not a generalization of one existing helper) — worth scoping as its own follow-on if full coverage
+  is wanted, not rushed alongside everything else already in flight this session. `npm test`
+  1926/1926, both lanes live-verified end-to-end.
 
 Full design, file targets, and verification steps in `PLAN_BREADTH_FIRST_NLU.md`.
 

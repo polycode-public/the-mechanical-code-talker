@@ -363,3 +363,37 @@ session's task list (`TaskList`), can run as parallel background sub-agents:
 
 Doc updates (§7) land alongside whichever track they describe, not as a separate pass. `npm test`
 green at every track's own completion, per the project's own standing discipline.
+
+## §8. Track 6 — canonical query/fact representation (operator directive, added mid-session)
+
+Every response should carry (a) the canonical English restatement of what tmct understood the
+request to mean, in tmct's own preferred phrasing/lexicon, and (b) the same fact in a syntax that's
+both machine-parsable and human-readable — the English form IS the human-readable rendering of the
+same underlying structured fact the machine form expresses.
+
+**Landed** (commit `2010126`): `ask.mjs`'s new `canonicalOf(parsed)` covers every flat query shape
+(reverse/forward/ask/where/meta/mentions), returning `{english, machine}` — `machine` is a compact
+`shape(kind, args...)` call notation, not raw JSON, so it reads at a glance too. Wired into
+`ask()`'s `tmct_ask.canonical` unconditionally — present on every parse, not gated on ambiguity the
+way the existing ambiguity-branch labels are. `chat.mjs`'s `runAsk` threads it into
+`record.canonical`; `assertTurn`'s two paths (a resolved teach, a genuinely ambiguous one) build
+their own canonical from the real triple(s) already computed, reusing the exact confirmation text
+already shown for `english` and a matching `fact(subject, predicate, object)` form for `machine` —
+one consistent notation shared across both lanes. `plainTurn` (every other lane's shared helper)
+defaults `canonical: null` explicitly, so the field is always present in every response shape.
+
+**Not yet done, real remaining scope**: `chat.mjs` has ~78 distinct `return` sites. Only the
+ask/query and teach/assert lanes have a genuine canonical form today — conversational replies, bare
+slash-commands, fact-recall/orientation lanes still return `canonical: null`. Closing that gap for
+real needs bespoke per-lane logic (there's no single existing helper to generalize the way
+`describeParse`/`parsed` already existed for the query lane) — a materially bigger pass, worth its
+own scoping rather than rushing shallow, inconsistent coverage across dozens of unrelated lanes.
+
+**Files**: `src/ask.mjs` (`canonicalOf`, `ask()`'s return envelope), `src/chat.mjs` (`plainTurn`,
+`runAsk`'s `record`, `assertTurn`'s two return sites).
+
+**Verification**: `npm test` 1926/1926. Live-verified end-to-end: a query lane example
+(`"which modules import a.mjs"` → `canonical: {english: 'modules that imports "a.mjs"', machine:
+'reverse(imports, entityType=Module, "a.mjs")'}`) and a teach lane example (`"every cache is a
+component"` → `canonical: {english: 'cache rdfs:subClassOf component', machine: 'fact("cache",
+"rdfs:subClassOf", "component")'}`).
