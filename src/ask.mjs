@@ -3019,7 +3019,36 @@ export function traverse(graph, parsed, { contextId = null, prev = null } = {}) 
 
   // reverse and forward both resolve one named term ("object" in the parsed shape — for
   // forward it is the query's grammatical subject, e.g. "what does X import" -> parsed.object = X).
-  const { match: objMatch, candidates, ambiguous, unresolvedPronoun, matchedVia } = resolveTermOrContext(graph, parsed.object, contextId);
+  //
+  // altObject pruning (PLAN_CONVERSATION.md Finding 2): noise-strip.mjs's bare
+  // "where"/"mentions" reading may carry `parsed.altObject` — the SAME reading
+  // with a wink-POS-flagged, plausibly-noise light verb ALSO dropped ("store
+  // router" -> "router"; see that file's own doc for why the signal needs full-
+  // sentence context and can't be decided there, where there is no graph).
+  // This is the one place both the alternate reading and the graph are
+  // available together, so it's where the pruning actually happens — mirroring
+  // resolveObject's own grain-word retry just above (try a variant, keep it
+  // ONLY on an unambiguous hit, else fall through unchanged) and
+  // grammar/ace.mjs's parseAceAmbiguous ("keep only complete, valid parses,
+  // dead ends pruned"). Four outcomes: primary misses/ties + alt resolves
+  // cleanly -> the alt reading wins (the dead end is pruned); primary resolves
+  // cleanly -> untouched, regardless of what the alt does (byte-identical to
+  // before this existed); both resolve cleanly to the SAME entity -> untouched
+  // either way; both resolve cleanly to DIFFERENT entities -> genuine
+  // ambiguity, surfaced the same honest way resolveObject's own tier ties
+  // already are, never silently guessed.
+  let objRes = resolveTermOrContext(graph, parsed.object, contextId);
+  if (parsed.altObject && parsed.altObject !== parsed.object) {
+    const altRes = resolveTermOrContext(graph, parsed.altObject, contextId);
+    const primaryClean = !!objRes.match && !objRes.ambiguous;
+    const altClean = !!altRes.match && !altRes.ambiguous;
+    if (!primaryClean && altClean) {
+      objRes = altRes;
+    } else if (primaryClean && altClean && objRes.match.id !== altRes.match.id) {
+      objRes = { ...objRes, ambiguous: true, candidates: [altRes.match, ...(objRes.candidates || [])] };
+    }
+  }
+  const { match: objMatch, candidates, ambiguous, unresolvedPronoun, matchedVia } = objRes;
   if (!objMatch) return { matches: [], objMatch: null, candidates, traversal: null, ambiguous: false, unresolvedPronoun };
 
   // where: "where is X [defined]" (2026-07-02 query families) — the resolved
