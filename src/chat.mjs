@@ -2191,6 +2191,46 @@ const GENERAL_VERB_EXCLUDE_RE = /^(?:is|are|am|owns|maintains)$/i;
  *  stands down entirely rather than risk a positional misread of a longer
  *  copula/ownership sentence it was never meant to parse. */
 const GENERAL_VERB_ANYWHERE_EXCLUDE_RE = /\b(?:is|are|am|owns|maintains)\b/i;
+/** SKILL_BENCHMARK_CONVERSATION.md persona-sweep (2026-07-11), Priority 1 —
+ *  confirmed 4x independently across 2 personas: GENERAL_VERB_TEACH_RE's verb
+ *  slot is a bare `[a-z]+` with NO check that the captured word is a real
+ *  verb at all — a closed-class function word (a possessive/personal pronoun,
+ *  a preposition, a subordinating conjunction) sitting in that position reads
+ *  as an ordinary lemma just as happily as a genuine verb does, so
+ *  generalVerbPredicate mints a nonsense mgx:<word> predicate and
+ *  thirdPersonSingularSurface's naive -s/-es/-ies fold renders it as a
+ *  garbled "confirmation" that LOOKS like a successful teach (worse than a
+ *  wall — no error, no nudge). Four live repros, all misreading a closed-
+ *  class second token as the verb: "can you review my code for me" (after
+ *  MODAL_WRAPPER_RE's own preamble strip removes "can you", verb="my" ->
+ *  mgx:my -> "mies"), "impact if i change it??" (verb="if" -> mgx:if ->
+ *  "ifs"), "defs in model.mjs" (verb="in" -> mgx:in -> "ins"). A genuine verb
+ *  ("mentors", "eats", "owns", "needs", "maintains" — every existing teach
+ *  test's verb) is never one of these closed-class words, so this is a pure
+ *  narrowing: it can only turn an already-wrong absorb into an honest
+ *  decline, never break a real teach. Wink-nlp POS tagging was tried first
+ *  and rejected — out of sentence context it tags "my"/"if"/"in" correctly,
+ *  but IN context it also mistags the legit "mentors" (test/chat-teachlane-
+ *  general-verb.test.mjs's own pinned case) as NOUN, so a POS gate would have
+ *  regressed a real teach; a closed list (this project's own stated
+ *  preference for chat-layer fixes — templates over general grammar rules)
+ *  is both more reliable here and, being closed, can never widen recognition
+ *  the way a probabilistic POS heuristic could. */
+const GENERAL_VERB_NOT_A_VERB_RE = new RegExp(
+  "^(?:"
+  // personal/possessive/demonstrative pronouns + determiners (mirrors, and
+  // extends, GENERAL_VERB_DETERMINER_RE's own closed set — that one gates the
+  // SUBJECT slot, this gates the VERB slot)
+  + "i|me|you|he|him|she|her|it|we|us|they|them|my|your|his|its|our|their|mine|yours|hers|ours|theirs"
+  + "|this|that|these|those|a|an|the|every|each|all|some|any|no|both|either|neither"
+  // prepositions
+  + "|in|on|at|to|from|by|with|for|of|about|into|onto|over|under|near|before|after|during|through"
+  + "|up|down|off|out|above|below|between|among|against|without|within|along|across|behind|beyond|upon|toward|towards|per"
+  // conjunctions/subordinators
+  + "|and|but|or|if|because|although|though|while|when|since|unless|until|whether|so|nor|than|as"
+  + ")$",
+  "i",
+);
 
 /** The predicate a general-verb teach payload's VERB maps to. "has"/"have"
  *  special-cases onto the EXISTING mgx:hasA predicate (point 2) — the same
@@ -2233,12 +2273,19 @@ async function generalVerbPredicate(verb) {
  *  the actual write via the shared teachFact. */
 async function generalVerbTeach(payload) {
   const p = String(payload || "").trim();
+  // A genuine declarative assertion never ends in a question mark — "g day
+  // mate, you alright?" (Priority 1, above) reaches this function with no
+  // leading question-word signal left to catch it (it never matched a
+  // wrapper, and QUESTION_LEAD_RE only checks the FIRST word), but the
+  // trailing "?" is still an unambiguous "this is a question" marker.
+  if (/\?\s*$/.test(p)) return null;
   if (GENERAL_VERB_ANYWHERE_EXCLUDE_RE.test(p)) return null; // another frame's territory — stand down
   const m = p.match(GENERAL_VERB_TEACH_RE);
   if (!m) return null;
   const [, subjectRaw, verbRaw, objectRaw] = m;
   const verb = verbRaw.toLowerCase();
   if (GENERAL_VERB_EXCLUDE_RE.test(verb)) return null; // owned by a more specific frame above
+  if (GENERAL_VERB_NOT_A_VERB_RE.test(verb)) return null; // a closed-class word can never be the real verb
   if (GENERAL_VERB_DETERMINER_RE.test(subjectRaw)) return null; // not a bare-name subject
   const subject = subjectRaw.trim();
   const object = objectRaw.replace(/^an?\s+/i, "").trim();
