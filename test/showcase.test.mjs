@@ -112,14 +112,17 @@ test("showcase 3: typo onto the schema trap repairs with a receipt (tf-modles)",
   }
 });
 
-test("showcase 4: the ambiguity surround — distinct readings are offered, not guessed", async () => {
+test("showcase 4: the ambiguity surround — distinct readings are RESOLVED and shown, not just described", async () => {
   const { answer } = await runTurn("which classes extends Base and couples to app/lib/b.mjs", {
     config: { graphFile: FIXTURE },
   });
   assert.match(answer, /this could mean more than one thing/, "ambiguity is surfaced");
   assert.match(answer, /1\)/, "reading 1 offered");
   assert.match(answer, /2\)/, "reading 2 offered");
-  assert.match(answer, /try rephrasing more specifically/, "and the user is guided");
+  // each reading now carries its own REAL resolved answer, not a bare "try rephrasing"
+  // punt — same honest admission of ambiguity, backed by real content for both branches.
+  assert.match(answer, /no class named/, "reading 1's real honest-miss answer is shown");
+  assert.match(answer, /no imports edge found/, "reading 2's real honest-miss answer is shown");
 });
 
 test("showcase 5: the symbol-level caller surfaced through noise (callsSymbol fix)", async () => {

@@ -2971,7 +2971,23 @@ export function traverse(graph, parsed, { contextId = null, prev = null } = {}) 
   // everything else (simple clauses, ambiguousParse) flows through the original path
   // below completely unchanged.
   if (parsed.node) return evalComposite(graph, parsed, { contextId, prev });
-  if (parsed.ambiguousParse) return { matches: [], objMatch: null, candidates: [], traversal: null, ambiguous: false };
+  // (fix, 2026-07-11) A same-class parse-level tie ({ambiguousParse, candidates})
+  // used to short-circuit here with an empty result, so renderCore's ambiguousParse
+  // branch could only ever describe each reading ("1) meta X or 2) Y — try
+  // rephrasing"), never actually answer any of them — an honest admission of
+  // ambiguity with no real content behind it. Every candidate IS a normal,
+  // individually-resolvable parse (merge.mjs only ties same-class DISTINCT parses,
+  // never nests another ambiguousParse inside one), so each one can be traversed
+  // and rendered for real right here — the combined answer stays deterministic on
+  // the same input (no guessing, no picking a winner) while actually telling the
+  // user what each reading resolves to, instead of making them ask twice.
+  if (parsed.ambiguousParse) {
+    const branches = parsed.candidates.map((c) => {
+      const branchResult = traverse(graph, c, { contextId, prev });
+      return { parsed: c, result: branchResult, rendered: render(c, branchResult) };
+    });
+    return { matches: [], objMatch: null, candidates: parsed.candidates, traversal: null, ambiguous: true, branches };
+  }
   const { shape, kind, entityType } = parsed;
 
   // meta: a question about the graph's OWN vocabulary ("what does cochange mean", "what
@@ -3505,6 +3521,21 @@ function renderCore(parsed, result) {
   }
   if (parsed.node) return renderComposite(parsed, result);
   if (parsed.ambiguousParse) {
+    // Each branch was actually resolved in traverse() above (never guessed at) —
+    // show every reading's real, effective answer, not just its one-line label, so
+    // the same input always reproduces the same full multi-reading answer (copy the
+    // same prompt back in and get the identical result, not a coin flip).
+    if (result.branches && result.branches.length) {
+      const options = result.branches
+        .map((b, i) => `${i + 1}) as ${describeParse(b.parsed)}: ${b.rendered.content}`)
+        .join("\n");
+      return {
+        content: `this could mean more than one thing:\n${options}\n(ask one of these directly to get just that reading)`,
+        miss: false, ambiguous: true, candidates: parsed.candidates.map(describeParse),
+      };
+    }
+    // Fallback (no `result.branches` — e.g. a caller invoking render() directly
+    // with a hand-built result, bypassing traverse()): the old bare-label listing.
     const options = parsed.candidates.map((p, i) => `${i + 1}) ${describeParse(p)}`).join(" or ");
     return {
       content: `this could mean more than one thing: ${options} — try rephrasing more specifically.`,

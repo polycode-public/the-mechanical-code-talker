@@ -1,5 +1,16 @@
 # BENCHMARK_CEFR_ENGLISH_1.7.0 — mean up to 1.750/2, 0 hard fails; the gain traces to already-shipped 1.6.1 fixes, not this cycle's VIZ/CONVERSATION work
 
+**CORRECTION (post-1.7.0, same release cycle):** every "permanent"/"cannot be reconciled" claim below
+about `g-a1-naming-9` vs `am-meta-imports` was wrong. Both were satisfiable on the same input all
+along — the render just needed to RESOLVE each ambiguous candidate reading and show its real answer,
+instead of only describing the readings ("this could mean more than one thing: 1) X or 2) Y — try
+rephrasing"). Fixed in `src/ask.mjs`'s `traverse()`/`renderCore()`: the same input now shows both
+`"could mean more than one thing"` + `meta "imports"` (am-meta-imports's requirement) AND `"imports is
+a predicate…"` (g-a1-naming-9's requirement), in one deterministic answer. No test was weakened to get
+there — see `test/chat-cefr-1.6.1-decision-log.test.mjs`'s updated third assertion. Leaving the
+measurement narrative below unedited (it's what this cycle actually found and believed at the time);
+this note is the correction of record.
+
 **Headline:** CEFR_ENGLISH re-run against **1.7.0** (per `package.json`), following
 `SKILL_BENCHMARK_CEFR_ENGLISH.md`'s cycle. This is a **measurement-only cycle**: no lever was
 applied to this benchmark's case pool this session, and — checked directly, not assumed — none of

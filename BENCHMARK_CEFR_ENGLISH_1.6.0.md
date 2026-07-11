@@ -1,5 +1,11 @@
 # BENCHMARK_CEFR_ENGLISH_1.6.0 — flat re-measurement, both 1.5.7 weak spots confirmed untouched by the ambiguity fix
 
+**CORRECTION (1.7.0 cycle):** this report's "permanent structural non-fix"/"permanently blocked"
+verdict on `g-a1-naming-9` vs `am-meta-imports` (line ~255, ~302 below) was wrong — see
+`BENCHMARK_CEFR_ENGLISH_1.7.0.md`'s own correction note for the real fix (resolve and show every
+ambiguous reading's real answer, instead of only describing them). Left unedited below as the
+measurement record of what this cycle actually found at the time.
+
 **Headline:** CEFR_ENGLISH re-run against **1.6.0** (per `package.json`), following
 `SKILL_BENCHMARK_CEFR_ENGLISH.md`'s cycle. Like `1.5.7`'s own report, this is a **catch-up
 measurement, not a single-lever cycle**: no lever was applied to this benchmark's case pool this

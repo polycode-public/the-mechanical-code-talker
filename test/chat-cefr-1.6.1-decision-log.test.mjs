@@ -9,10 +9,18 @@
 //      — a spurious parse ("mean" is never a graph entity) that collided with
 //      the grammar strategy's own clean "meta" parse to manufacture the legacy
 //      {ambiguousParse} surface. Pruned generally in ask.mjs's parseQuery
-//      (pruneSpuriousMeaningAmbiguity), EXCEPT for "imports" — see test 3 below,
-//      the sibling case g-a1-naming-9 is a permanent, structural non-fix: its
-//      exact input text is also am-meta-imports's own frozen expectation, and a
-//      deterministic function cannot honor both on the same input.
+//      (pruneSpuriousMeaningAmbiguity), EXCEPT for "imports" — see test 3 below.
+//      UPDATE (2026-07-11): the sibling case g-a1-naming-9 was wrongly written
+//      up here as a permanent, structural non-fix on the theory that a
+//      deterministic function can't honor both am-meta-imports's and
+//      g-a1-naming-9's expectations on the identical input string. That's true
+//      only if the ambiguity render stays a bare "could mean X or Y" hedge —
+//      once ask.mjs's traverse()/renderCore() actually RESOLVES and shows every
+//      candidate reading's real answer instead of just describing it, the
+//      combined answer satisfies both: it still surfaces "could mean more than
+//      one thing" and "meta \"imports\"" (am-meta-imports), AND now also
+//      contains the real definition text "imports is a predicate…"
+//      (g-a1-naming-9). No compromise, no test changed — see test 3 below.
 //
 //   2. am-tests-cover "which tests cover b.mjs" — 'b.mjs' matches both
 //      app/lib/b.mjs and its own conventional test-variant sibling
@@ -93,11 +101,12 @@ test("am-tests-cover guard: the SAME bare filename in a non-'tests' query never 
     assert.equal(record.miss, false);
   }));
 
-test("frozen guard: 'what does imports mean' keeps its existing ambiguity surround — am-meta-imports and quickwins.test.mjs both require it, and g-a1-naming-9 cannot be reconciled with that on the same input", () =>
+test("'what does imports mean' now satisfies am-meta-imports AND g-a1-naming-9 on the same input — every ambiguous reading is resolved and shown, not just described", () =>
   withFixtureConfig(async (config) => {
     const { answer } = await runTurn("what does imports mean", { config, graph: GRAPH });
-    assert.match(answer, /could mean more than one thing/);
-    assert.match(answer, /meta "imports"/);
+    assert.match(answer, /could mean more than one thing/, "am-meta-imports: ambiguity still honestly surfaced");
+    assert.match(answer, /meta "imports"/, "am-meta-imports: the meta reading is still labeled");
+    assert.match(answer, /imports is a predicate/, "g-a1-naming-9: the meta reading's REAL answer is now shown, not just described");
   }));
 
 test("frozen guard: 'what does fnAlpha mean' (A2 fix, 07f4805) is untouched by the new prune — no relation-keyword collision to begin with", () =>
