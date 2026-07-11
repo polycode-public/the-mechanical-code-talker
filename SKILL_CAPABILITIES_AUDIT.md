@@ -58,11 +58,92 @@ to, every time, for every row, even rows you expect are unchanged. If you genuin
 narrow the catalog (a capability was removed from the product entirely, a whole area was descoped),
 say so explicitly in the doc — don't let the scope shrink silently by omission the way it did here.
 "Full scope" doesn't mean every row needs equal words: an unchanged row gets a terse confirmation (see
-§3). It means every row from the last full catalog gets checked and appears somewhere in the new one.
+§4). It means every row from the last full catalog gets checked and appears somewhere in the new one.
 
 ---
 
-## 3. The back-referencing rule
+## 3. Required sections — mandatory, not optional
+
+An audit is not just the status table from §2. **Every `CAPABILITIES_<version>.md` MUST also contain
+the four sections below**, in addition to the full status table. This is not a style preference: an
+earlier pass at this skill dropped all four in a from-scratch rewrite, and they had to be restored by
+hand from `CAPABILITIES_1.4.1.md`'s own git history. Making them mandatory here is what stops that from
+happening again. `CAPABILITIES_1.4.1.md` is the structural reference for what each of these looks like
+— read it in full before writing any of the four, but never copy its content forward: every claim below
+must be re-derived against your own pinned commit, the same discipline §2 already requires for the
+status table.
+
+### 3.1 Comparative agent-capability table + speculative TO-BE
+
+A general agent-capability taxonomy (tool use, planning, reasoning, grounding, memory,
+instruction-following, generation, coding, safety/honesty, autonomy — or whatever the current
+equivalent list is; don't just copy this list forward without checking it still fits) as rows, with
+tmct plus a small set of named, specific models as columns — real model names (`Claude Sonnet 5`,
+`Llama 3.1 8B Instruct`), never an umbrella brand or hosting surface (`AWS Bedrock` hosts several
+vendors, `Anthropic` is a company — neither is a column). Structure:
+
+- A framing paragraph stating plainly that this is not an IQ-style "as smart as" claim — tmct is a
+  narrow, deterministic, zero-cost system, and the table exists to place it on a scale a reader already
+  recognizes, not to grade it against a rubric tmct itself designed.
+- A fixed-width ASCII quick-reference table: verdict word only per cell (`Weaker` / `Comparable` /
+  `Comparable-to-stronger` / `Stronger`, relative to tmct on that specific capability).
+- The full prose table: same rows/columns, each cell carrying the "why," not just the verdict word.
+  **Every tmct cell must cite a real number from that version's own current `BENCHMARK_*.md` reports**
+  — never a stale number carried forward from a prior version's reports. If a benchmark is blocked or
+  degraded this cycle (see §2's own "report that plainly" rule), say so honestly in that row instead of
+  reusing an old number or inventing a new one.
+- Model-column verdicts are informed estimates from general knowledge of those models' public
+  capability tiers, not a measured cross-benchmark result — say so explicitly. They change slowly
+  version to version, but **re-confirm each one against the current capability rather than assuming
+  it still holds** — don't blind-copy the model columns forward either.
+- A `### Speculative TO-BE` subsection: purely speculative, explicitly **not a roadmap commitment**,
+  drawn only from the current `BENCHMARK_*.md` reports' own "Next" sections and the current
+  `HANDOVER.md`'s ranked follow-ups — never from a prior audit's stale backlog. Before listing anything
+  as still-TO-BE, confirm directly against current code that it hasn't already shipped since the
+  backlog item was written.
+
+### 3.2 Per-benchmark feature-support
+
+One subsection per current `SKILL_BENCHMARK_*.md` doc. Bulleted, terse, specific — each bullet ends in
+a bold status word, **complete** or **todo**, and cites the real current `BENCHMARK_*_<version>.md`
+report by name. If a benchmark's harness itself is blocked or degraded this cycle, its subsection says
+so plainly (see §2) rather than reporting stale feature bullets as if nothing changed.
+
+### 3.3 Per-plan feature-support (Done / Doing / Todo)
+
+One subsection per currently-live `PLAN_*.md` doc — survey the actual root-level `PLAN_*.md` files plus
+any `archive/PLAN_*.md` still actively referenced as open/deferred scope (check `ROADMAP.md`'s
+"deferred by design" or equivalent section for the current live set; a plan that's fully shipped and
+archived with nothing left open doesn't need its own bucketed subsection, a one-line "fully done,
+archived, see `archive/PLAN_X.md`'s own STATUS block" is enough).
+
+Each subsection opens with a **`pinned at <commit-or-version>`** line — the same discipline the audit
+itself uses to pin its own evidence — then three clean bulleted lists scoped to that plan's own scope
+only, never the whole product:
+
+- **Done** — capabilities/stages within this plan's scope that are shipped, each with a real code or
+  commit citation.
+- **Doing** — anything genuinely in progress or partially done.
+- **Todo** — anything the plan itself still marks open, not-started, or research-only.
+
+This is a structural upgrade over `CAPABILITIES_1.4.1.md`'s own §4, which used prose paragraphs ending
+in a "which benchmark uplift helps most" note — that framing is not required going forward, three clean
+buckets is. Keep the same terse, evidence-cited style as the rest of the doc: no invented capabilities,
+only what's real and checked.
+
+### 3.4 Non-benchmarked capabilities
+
+Real, shipped work that doesn't reduce to any current benchmark's scalar — the class of thing a scalar
+benchmark structurally can't measure (a whole pipeline unreachable from any benchmarked surface, a
+default-behavior flip no case set probes, an end-to-end session quality no single-turn grading captures).
+Name these explicitly rather than letting "no benchmark moved" read as "nothing happened" —
+`CAPABILITIES_1.4.1.md`'s §5 is the structural reference for tone and shape. Re-derive for the current
+pinned commit; don't carry a prior version's list forward without checking whether those items have
+since become benchmarked, shipped further, or gone stale.
+
+---
+
+## 4. The back-referencing rule
 
 When a capability's status differs from a prior audit's recorded verdict, **name that prior audit and
 say exactly what changed** — the same discipline `CAPABILITIES_1.4.1.md`'s own status table already
@@ -86,19 +167,21 @@ what's stable.
 
 ---
 
-## 4. The cycle
+## 5. The cycle
 
 **Step 1 — Gather evidence you don't re-measure.** Read the current `BENCHMARK_AGENT_<version>.md`,
 `BENCHMARK_CEFR_ENGLISH_<version>.md`, `BENCHMARK_CONVERSATION_<version>.md`, and
 `BENCHMARK_INFERENCE_<version>.md` in full — not their one-line summaries. These are your primary
 evidence for anything they measure (routing/planning, conversational quality, dialogue-flow dead-ends,
-classical-logic inference). **Do not re-run any of them.** This audit is a synthesis-plus-code-check
-pass, not a fifth benchmark. If one of the four is blocked or degraded (a broken harness, a capped
-sprint), report that plainly — it's real evidence about the current state, not a gap in the audit.
+classical-logic inference), and for §3.1's comparative table and §3.2's per-benchmark feature-support.
+**Do not re-run any of them.** This audit is a synthesis-plus-code-check pass, not a fifth benchmark.
+If one of the four is blocked or degraded (a broken harness, a capped sprint), report that plainly —
+it's real evidence about the current state, not a gap in the audit.
 
 **Step 2 — Recover the last full catalog.** Find the most recent `CAPABILITIES_<version>.md` (or, if
 its own scope was already narrowed per §2, the git history of whichever revision last held the full
-row set). Read it end to end, including its own back-references to anything before it.
+row set). Read it end to end, including its own back-references to anything before it, and including
+its own §3.1–§3.4-equivalent sections if it has them.
 
 **Step 3 — Re-verify every row against real code, not against the prior doc.** For each capability in
 the recovered catalog: find the real file/line evidence at the commit you're pinned to. Use `git log`,
@@ -111,23 +194,28 @@ capability re-verification is exactly the kind of long-running, parallelizable r
 coordinator model (`CLAUDE.md`) exists for. Split the catalog into ranges (for example, four chunks of
 ~20 rows), launch one background agent per chunk with the specific capability numbers/names and the
 worktree path, and have each report back a compact table (status, evidence, change-note) rather than
-prose — the coordinator then assembles and cross-checks the final doc. Reserve a separate agent for
-"what shipped since the last audit that isn't on the existing catalog at all" (see §5) — that search
-is qualitatively different from re-verifying a known row.
+prose — the coordinator then assembles and cross-checks the final doc. Reserve separate agents for
+"what shipped since the last audit that isn't on the existing catalog at all" (see §6) and for §3's
+four mandatory sections — those searches are qualitatively different from re-verifying a known row.
 
 **Step 5 — Write new rows for anything that shipped but isn't on the catalog at all.** A genuinely new
 capability area (a new storage backend, a new CLI verb, a default-behavior flip) doesn't fit into an
 existing numbered row — give it a new number, continuing the existing sequence, and say plainly why it
 wasn't on the prior catalog (it's new work, not a miss).
 
-**Step 6 — Summarize with real counts, not vibes.** Close with a summary section giving the total row
+**Step 6 — Write §3's four mandatory sections.** Comparative table + speculative TO-BE, per-benchmark
+feature-support, per-plan feature-support (Done/Doing/Todo), non-benchmarked capabilities — see §3 for
+what each requires. Do this after the status table, not before: the table's file/line evidence is what
+grounds the comparative table's tmct cells and the plan sections' Done/Doing/Todo buckets.
+
+**Step 7 — Summarize with real counts, not vibes.** Close with a summary section giving the total row
 count, how many are `implemented`/`partial`/`claimed-only`, and which specific rows flipped status
 since the last audit. Grep the table for the status word, don't eyeball it — the same discipline
 `CAPABILITIES_1.4.1.md`'s own §5/§6 already applied.
 
 ---
 
-## 5. Finding what's new (not just what changed)
+## 6. Finding what's new (not just what changed)
 
 A status-change sweep over the existing catalog will miss capabilities that shipped with no prior row
 to compare against at all. Before finishing, check specifically for:
@@ -138,23 +226,27 @@ to compare against at all. Before finishing, check specifically for:
   `bin/tmct.mjs`'s own usage banner.
 - New top-level `PLAN_*.md`/`SKILL_*.md` docs, and any `archive/PLAN_*.md` that got archived since
   (its own final STATUS block is usually the fastest authoritative source for what a whole workstream
-  shipped).
+  shipped) — this feeds §3.3's per-plan sections directly.
 - Anything a fresh `BENCHMARK_*.md` report names as a "new finding" or "not on the prior audit's
   radar at all" — playtest/sprint reports are especially good at surfacing this, since they exercise
-  real conversation flow a scalar benchmark doesn't reach.
+  real conversation flow a scalar benchmark doesn't reach. This also feeds §3.1's speculative TO-BE and
+  §3.4's non-benchmarked capabilities.
 
 ---
 
-## 6. Discipline
+## 7. Discipline
 
 - **Never assume a prior audit's verdict still holds.** Every row gets checked against the real code
   at the commit you're pinned to, every time.
 - **Full scope, every time, unless you say otherwise explicitly.** No silent narrowing (§2). If you
   have a real reason to drop something from the catalog, write the reason down.
-- **Name the prior audit and the exact change for every status flip** (§3) — no bare "now
+- **Name the prior audit and the exact change for every status flip** (§4) — no bare "now
   implemented" without a commit citation.
 - **Regressions get the same direct treatment as progress.** A capability that used to work and no
   longer does is exactly as reportable as one that newly shipped.
+- **§3's four sections are mandatory, not optional.** A `CAPABILITIES_<version>.md` missing the
+  comparative table + TO-BE, per-benchmark feature-support, per-plan Done/Doing/Todo, or
+  non-benchmarked capabilities is an incomplete audit, not a shorter one.
 - **This is not a benchmark run.** Cite the four `BENCHMARK_*.md` reports; don't re-execute them. If
   you find yourself running `node chatbench/run.mjs` or similar, you've stepped outside this skill's
   scope — that belongs to `SKILL_BENCHMARK_CEFR_ENGLISH.md` and its siblings.
@@ -166,7 +258,7 @@ to compare against at all. Before finishing, check specifically for:
 
 ---
 
-## 7. One-paragraph TL;DR
+## 8. One-paragraph TL;DR
 
 Name it `CAPABILITIES_<version>.md` after the `package.json` version current when you run it, no
 "AUDIT" in the name, `_00N` for same-version reruns. Read the four current `BENCHMARK_*.md` reports as
@@ -177,4 +269,7 @@ against what the prior doc says. Fan the re-verification out across parallel bac
 capability range. Cite the specific prior audit and the exact commit for every status change, in
 either direction, including regressions. Give unchanged rows a brief confirmation, not a full
 re-derivation. Add new numbered rows for anything that shipped with no prior catalog entry to compare
-against. Close with real, grepped counts. Keep `npm test` green and check it yourself.
+against. Then write the four mandatory §3 sections — comparative model-tier table + speculative TO-BE,
+per-benchmark feature-support, per-plan Done/Doing/Todo, non-benchmarked capabilities — re-derived
+against your own pinned commit, never copied forward from a prior audit. Close with real, grepped
+counts. Keep `npm test` green and check it yourself.
