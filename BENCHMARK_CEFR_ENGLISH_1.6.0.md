@@ -274,10 +274,26 @@ land outside this pool's reach — see "What moved since 1.5.7" above.
 > Verified: `npm test` 1872/1872 before this cycle's fixes, 1879/1879 after (7 new regression tests in
 > `test/chat-cefr-1.6.1-decision-log.test.mjs`). `node chatbench/run.mjs --stamp 1.6.1 --sample 1
 > --single`: tier-1 109/109 (up from 108/109), `am-tests-cover` and `g-a1-naming-8` both flip to
-> passing, `g-a1-naming-9` remains the pool's sole tier-1/hard-fail frontier case exactly as predicted.
-> A stashed-vs-fixed product-run diff across all 109 cases confirms only 4 cases' answers moved at all
-> (the two targeted here, the `g-a1-naming-1` bonus, and `mr-asked-before`'s already-documented
-> per-run session-id text) — zero other case's answer changed.
+> passing. A stashed-vs-fixed product-run diff across all 109 cases confirms only 4 cases' answers
+> moved at all (the two targeted here, the `g-a1-naming-1` bonus, and `mr-asked-before`'s
+> already-documented per-run session-id text) — zero other case's answer changed.
+>
+> **Judge pass (`node chatbench/judge.mjs --product .../run-1.6.1/product.jsonl --samples 2
+> --concurrency 12`, `claude-haiku-4-5-20251001` @ `judge-prompt-v1`, same pin as every prior cycle):**
+> overall mean **1.742/2** (up from `1.6.0`'s 1.710), **hard fails 0** (down from 1), tier-1 109/109, 1
+> voided sample (`g-b1-pron-4`, unrelated to this cycle's changes, mean 2/2 anyway per the
+> never-count-a-void-as-a-fail rule). Per-case:
+> - `am-tests-cover`: mean **2/2** (honesty 2, rephrase 2 — its only two judged dimensions).
+> - `g-a1-naming-8` ("tests"): mean 1/2 (groundedness 1, correctness 1, honesty 1) — tier-1 passes and
+>   it is not a hard fail; a real, if imperfect, improvement over the honest-ambiguity answer it
+>   replaced.
+> - `g-a1-naming-1` ("defines", the bonus fix): mean **2/2** (groundedness 2, correctness 2, honesty 2).
+> - `g-a1-naming-9` ("imports", deliberately untouched): mean 1.125, **not a hard fail this run**
+>   (0.625 in `1.5.7`/`1.6.0`) — consistent with `1.5.7`'s own documented finding that this exact case
+>   sits right at the hard-fail cutoff and flips sides on judge-sample noise alone ("a coin-flip on
+>   which side of the hard-fail cutoff the judge's noise landed"); its code path is unchanged, so this
+>   is measurement noise, not a fix. It remains the pool's sole open weak spot from the original
+>   decision log.
 
 Unchanged from `1.5.7`'s own ranking until this cycle — the two items below are now resolved as
 described above; 3 and 4 remain open:
