@@ -489,7 +489,7 @@ one production call site doesn't activate it yet (`PLAN_AGENTS.md` §4). CHATBEN
 (case-set v3): the full 1,075-case CEFR pool preserved at `chatbench/graded-pool-max.jsonl`;
 `chatbench/graded-pool.jsonl` is now a 109-case go-to default (10/CEFR-grade + the former
 `cases.jsonl`'s 49 hand-authored capability cases, each assigned a real grade+construction cell) at
-N=2/single-draw by default. A full capability audit (`CAPABILITIES_AUDIT_2026-07-10.md`) cataloged
+N=2/single-draw by default. A full capability audit (`CAPABILITIES_1.4.1.md`) cataloged
 83 distinct capabilities against every doc claim and the actual code — 57 implemented, 21
 claimed-only, 3 partial, its most notable finding being that `PLAN_AGENTS.md` itself (drafted the
 same session) already listed several now-shipped items as "not started," a same-session docs-lag

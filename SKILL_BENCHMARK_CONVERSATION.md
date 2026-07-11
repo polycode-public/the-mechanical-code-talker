@@ -9,7 +9,7 @@ USE it to make a further inference**, not just recall it verbatim on the next tu
 not just teach-then-recall); and (3) whether a broad, open-ended question gets a **detailed
 completions-style response** via `src/completions/`'s hub-avoiding crawl (the degree-dampened
 `broadSearch`/`groupHits`/`rankSentences` pipeline in `archive/PLAN_COMPLETIONS.md`) rather than the plain
-grammar wall. `CAPABILITIES_AUDIT_2026-07-10.md` §5 names exactly this gap: two of this session's
+grammar wall. `CAPABILITIES_1.4.1.md` §5 names exactly this gap: two of this session's
 biggest capabilities — taught-relation inference and the completions pipeline — are real, shipped,
 and invisible to AGENTBENCH/INFBENCH/CHATBENCH alike. This skill is where they get tested.)*
 

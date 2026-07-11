@@ -410,7 +410,7 @@ that isn't code at all.
   `appendFacts`/`normFactTerm` unmodified, wired into `seedMemory` as an opt-in
   `captureUnknownContext` flag. Deliberately **not** distributional/embedding-style meaning
   induction — that would cross into LLM-shaped territory; this buys traceable context, not automatic
-  sense disambiguation. **The gap found by `CAPABILITIES_AUDIT_2026-07-10.md`'s review (item #33):**
+  sense disambiguation. **The gap found by `CAPABILITIES_1.4.1.md`'s review (item #33):**
   the one production call site that could activate this (`src/extensions.mjs`'s
   `seedActiveCorpusEntries`, shared by `chat.mjs`'s bootstrap and `tmct init`) never actually passes
   `captureUnknownContext: true` — the mechanism is real and tested, but no real user's seed path
