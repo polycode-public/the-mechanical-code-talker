@@ -65,124 +65,28 @@ Test count across the session's later stretch:
 | Vocabulary-growth mirror fix — known-subject/unknown-object mint (`unknownObjectFallback`), so new terms compound turn over turn | 1352 → 1355 |
 | `findActionPath` (`src/planning.mjs`) — generic bounded on-demand-successor state-space search, `PLAN_HANOI.md`'s Phase 2 kernel, proven against a small toy graph; not wired into chat, Hanoi itself not started | 1355 → 1361 |
 
-**INFBENCH re-measured against 1.2.0** (measurement-only dispatch, 2026-07-09): `INFBENCH_1.2.0.md`
-confirms chat/INF-A2 now closes to 100% (the cax-sco/proof-chase win the STATUS banner above already
-claimed) but also finds chat/INF-C1 has flipped from an honest ceiling to a genuine 93%-fabrication
-regression, traced to the new general-verb-to-predicate query lane answering "no" on an absent fact
-instead of declining — a real correctness bug, separate from and cheaper than the still-gating
-INF-B1 (`cax-dw`) work.
+**INFBENCH re-measured twice this stretch** (against 1.2.0, then 1.3.1, both 2026-07-09,
+measurement-only dispatches). The 1.2.0 pass caught a genuine chat/INF-C1 fabrication regression —
+the new general-verb-to-predicate query lane was answering a confident "no" on an absent fact
+instead of declining — fixed same-day in `GENERAL_VERB_YESNO_RE`'s no-hit branch and confirmed back
+at its 93%-completion/0%-fabrication honest ceiling. The 1.3.1 pass found the ladder unchanged
+byte-for-byte since `1.3.0`, confirming the `PLAN_TAUGHT_RELATIONS.md` work below doesn't touch any
+INFBENCH band. Both runs stayed gated at INF-B1 (33% completion). Full numbers:
+`archive/INFBENCH_1.2.0.md`, `archive/INFBENCH_1.3.1.md`.
 
-**INF-C1 fabrication FIXED (2026-07-09, follow-up dispatch)**: `GENERAL_VERB_YESNO_RE`'s no-hit
-branch (`src/chat.mjs`) now declines (`null`) instead of asserting a confident "no" when no taught
-fact matches the queried subject/predicate/object triple, falling through to the ordinary
-honest-miss cascade — same convention as `WHO_OWNS_RE`'s own no-hit branch. Re-ran `npm run
-infbench`: chat/INF-C1 is back to **93% completion / 0% fabrication**, its `0.8.2`-era honest
-ceiling, exactly as predicted (up from `1.2.0`'s 0% completion / 93% fabrication). Everything else
-in the ladder is unchanged — still gated at INF-B1 (33% completion), unaffected by this fix.
-`npm test` 1361 → 1362 (this fix's own contribution; see `HANDOVER.md` for the combined total
-alongside the concurrent Rule-storage dispatch).
-
-**`PLAN_TAUGHT_RELATIONS.md`** (research/design, 2026-07-09, nothing implemented): scopes teaching
-tmct brand-new relations and rules through ordinary chat (a Prolog-style family tree — father,
-parent, grandparent, descendant — none of it hardcoded, all of it taught), reusing
-`findActionPath` for the hop-counted relation chase and a new sibling kernel, `findReachableSet`,
-for open-ended enumeration. Live-testing while designing it surfaced real, already-shipped gaps:
-the "is a kind of" teach phrasing isn't accepted anywhere today, a "parent" example in the original
-scoping conversation only worked by an accidental lexicon collision, and a wrapped property-teach
-shape (`TEACH_PROPERTY_RE`) has no groundedness check at all, unlike the newer subject/object
-mint-fallback pair's explicit discipline. See `HANDOVER.md` for the full finding list; this is
-next-session pickup material, not yet started.
-
-**`PLAN_TAUGHT_RELATIONS.md` Phase 3 — DONE (2026-07-09)**: the Rule storage foundation landed in
-`src/memory/core.mjs` (`RULE_CLASS`, `appendRule`, `findRuleByName`) — pure plumbing, zero
-`chat.mjs` change, reusing the existing Source/trust pipeline unmodified. `npm test` 1361 → 1371.
-Phase 4 (compose2 query-side wiring) is next in that plan's build order.
-
-**`PLAN_TAUGHT_RELATIONS.md` Phase 1 — DONE (2026-07-09)**: Item 1 (relational fact teach,
-`RELATION_FACT_TEACH_RE` — "ahab is the father of john" mints an ordinary Fact via
-`generalVerbPredicate`, reused verbatim) and Item 5 (adjective-mint, `unknownAdjectiveFallback` —
-"the cache is bespoke" / "TaskController is bespoke" mint `mgx:hasProperty`) both landed in
-`src/chat.mjs`. Query-side readback for Item 1 needed zero new machinery ("what do you know about
-X" / "does X <role> Y" both already confirm it); Item 5's own groundedness guard needed tightening
-beyond the original design to avoid reopening the pinned "module is banana" regression — see
-`PLAN_TAUGHT_RELATIONS.md`'s "Phase 1 — DONE" note for the full adjustment, plus a sharper,
-live-confirmed restatement of that doc's Verification finding 4 (`isConversational`'s ≤3-word gate
-pre-empts the teach lane entirely for a short bare sentence, not just its decline text — flagged,
-not fixed, still out of scope). `npm test` 1371 → 1377.
-
-**`PLAN_TAUGHT_RELATIONS.md` Phase 6, KERNEL half — DONE (2026-07-09)**: `findReachableSet`
-(`src/planning.mjs`), a sibling of `findActionPath` with no `isGoal` at all — every state reachable
-from the start within `maxDepth` is a result, not just one goal. Shares only the frontier-seeding
-step with `findActionPath`; the expand loops stayed independent (halting/accumulation semantics
-differ enough to make a shared core more complex, not less). Proven against a toy graph with a real
-cycle and a same-length two-path convergence. `test/planning.test.mjs`, 5 new tests. The WIRING half
-(teach-shape recognizer + query-dispatcher branch, both in `chat.mjs`) is deliberately deferred,
-kernel-only per this task's own scoping — see `PLAN_TAUGHT_RELATIONS.md`/`HANDOVER.md` for detail.
-
-**`PLAN_TAUGHT_RELATIONS.md` Phase 2 — DONE (2026-07-09)**: closes Item 1's own live-found
-query-side gap ("is ahab the father of john" now resolves directly) and Item 2 (relation alias/union
-query-side chase — a taught "father ⊑ parent" alias lets "is ahab a parent of john" resolve off the
-father fact). One new recognizer (`RELATION_FACT_YESNO_RE`) and one new local helper
-(`relationFactsFor`) in `factReadBack`, tried BEFORE `ISA_ASK_RE` gets a chance at the overlapping
-shape. The teach-side "kind of"/"type of" fix (`stripKindOf`) is a genuine one-liner.
-`test/chat-taught-relations.test.mjs` (new file), 4 tests. `npm test` 1382 → 1386. Phase 4 (compose2
-rule, next in this plan's build order) reuses `relationFactsFor` as its own per-hop edge lookup.
-
-**`PLAN_TAUGHT_RELATIONS.md` Phase 4 — DONE (2026-07-09)**: Item 3 (fixed-hop `compose2` composition
-rule — "a grandparent is a parent of a parent" teaches a Rule, and "is ahab a grandparent of
-ishmael" resolves via a hop-counted `findActionPath` search over the taught father facts,
-alias-chased through "parent" via Phase 2's own `relationFactsFor`). The hop-counting discipline
-(`{ entity, hopsTaken }` state, `isGoal` requiring exactly 2 hops) is live-verified load-bearing: a
-1-hop and a 3-hop path through the SAME father/parent edges both correctly decline in the same store
-where the genuine 2-hop pair resolves yes. Full family-tree chain (two father facts + the alias + the
-compose2 rule) live-verified end-to-end via the piped CLI. `test/chat-taught-relations.test.mjs`
-extended with 5 more tests (9 total). `npm test` 1386 → 1391.
-
-**`PLAN_TAUGHT_RELATIONS.md` Phase 5 — DONE (2026-07-09)**: Item 4 (property-filtered composition
-rule — "a grandfather is a grandparent who is male" teaches a `filter`-kind Rule). Required
-refactoring Phase 2/4's `relAsk` dispatcher's three inline steps into one recursive closure,
-`resolveRelationChase`, so a filter rule's base resolves GENERICALLY — the function calling itself —
-whether the base is a plain taught relation or another Rule (e.g. compose2), never assuming which.
-A hit requires both the base chase to resolve AND the subject to carry the taught property
-(`mgx:hasProperty`); live-verified both failure modes separately (base fails outright vs. base holds
-but the property filter correctly excludes the candidate) plus a filter whose base is a plain
-relation (not a compose2 rule at all), proving the genericity. `test/chat-taught-relations.test.mjs`
-extended with 4 more tests (13 total). `npm test` 1391 → 1395.
-
-**`PLAN_TAUGHT_RELATIONS.md` Phase 6 — DONE (2026-07-09), WIRING half — the plan's build is now
-COMPLETE, all six items.** Item 6 (recursive/reachability rule — "a descendant is a parent, or a
-parent of a descendant" teaches a `recursive`-kind Rule; "list the descendants of ahab" enumerates
-the full reachability set via `findReachableSet`, the kernel half already shipped, reused unchanged).
-The query side is the one genuine kind-change among all six items (a reachability-SET enumeration,
-not a yes/no chase), landed as a sibling of Phase 5's `resolveRelationChase` rather than a fourth
-branch inside it — mirroring `findActionPath`/`findReachableSet`'s own sibling split at the kernel
-level. Cycle safety (two individuals mutually taught as each other's parent) and a malformed
-self-reference teach attempt (guarded for free by the teach regex's own backreference) both
-live-verified. `test/chat-taught-relations.test.mjs` extended with 5 more tests, including one
-comprehensive ALL-SIX-items integration test (18 total). `npm test` 1395 → 1400. **Nothing remains
-outstanding from `PLAN_TAUGHT_RELATIONS.md`'s original six-item scope.**
-
-**INFBENCH re-measured against 1.3.1** (measurement-only dispatch, 2026-07-09): `INFBENCH_1.3.1.md`
-finds the ladder unchanged, byte-for-byte, since `1.3.0` — the four `PLAN_TAUGHT_RELATIONS.md`
-phases that completed the plan (alias/union, `compose2`, property-filter, recursive/reachability
-wiring) don't touch any band, confirmed by a zero-diff row comparison of both runs' raw product
-files plus a direct check that no INFBENCH case's premises/query ever reach the new relational-teach
-phrasing. Still gated at INF-B1 (33% completion), unchanged for a fourth consecutive measured
-version — an honest, expected result given the new surface and the ladder measure different things.
-
-**`PLAN_TAUGHT_RELATIONS.md` live-testing follow-up — DONE (2026-07-09)**: the operator live-tested
-the full family-tree example end-to-end and found two real gaps, both fixed in `src/chat.mjs`. Gap 1:
-a recognized-but-unsatisfied relational query used to fall to the GENERIC structural wall instead of
-naming the relation — fixed by distinguishing "relation/rule name never taught" from "name known, this
-pair's chase came up short" right in the `(a0)` block, each with its own specific decline text. Gap 2:
-the REVERSE query shape ("who is the grandparent of john") didn't exist at all — new recognizer
-`RELATION_WHO_ASK_RE` + a new `(a0.2)` block in `factReadBack`, re-deriving `resolveRelationChase`'s
-same resolution logic (direct/alias/compose2/filter) walked backward from the object, reusing
-`findReachableSet` unmodified for the compose2 reverse hop-chase. Live-verified the operator's own
-repro exactly: "who is the grandparent of ishmael" → ahab (full 2-hop derivation cited); "who is the
-grandparent of john" → an honest empty (never a wrong guess). `test/chat-taught-relations.test.mjs`
-extended with 8 more tests (26 total). `npm test` 1400 → 1408, zero regressions. **Nothing remains
-outstanding from `PLAN_TAUGHT_RELATIONS.md`.**
+**`PLAN_TAUGHT_RELATIONS.md` — SHIPPED and archived (2026-07-09, all six phases landed the same
+day).** Taught tmct to learn brand-new relations and rules through ordinary chat — a Prolog-style
+family tree (father/parent/grandparent/descendant), none of it hardcoded, all of it taught —
+covering every scoped item: relational fact teaching, relation alias/union, fixed-hop composition
+(`compose2`), property-filtered composition, property-minting, and recursive/reachability
+enumeration. Two new kernels do the traversal work, both in `src/planning.mjs`: `findActionPath`
+(hop-counted goal search) and its sibling `findReachableSet` (open-ended reachability, no fixed
+goal). A live-testing follow-up with the operator then found and fixed two real gaps: an
+unsatisfied relational query used to fall to a generic wall instead of naming the relation, and the
+REVERSE query shape ("who is the grandparent of X") didn't exist at all. `test/chat-taught-relations.test.mjs`
+grew to 26 cases; `npm test` climbed 1361 → 1408 across the whole run, zero regressions. See
+`archive/PLAN_TAUGHT_RELATIONS.md` for the full phase-by-phase build order, every design decision,
+and the six capability definitions.
 
 ### Shipped this session
 
@@ -340,21 +244,11 @@ outstanding from `PLAN_TAUGHT_RELATIONS.md`.**
 
 ### Next: the open follow-ups
 
-1. **Judged CHATBENCH re-run.** Not run this session. This session's changes touch answer text
-   on judged surfaces again (onboarding/identity responses, teach-lane wording, new relation
-   phrasings), so the next judged pass needs to re-derive its stale set from answer-text diffs,
-   not assume anything carries over from the 0.8.2-era baseline still on record.
-2. **The reverse-`inherits` verb family's "the"-definite forms** from Seonix Batch 2 ("is the
-   superclass of") aren't wired into `VERB_TO_KIND` yet. Doing so leaked the bare word "the"
-   into `ask.mjs`'s CONTENT_VOCAB and broke the relaxation cascade's noise-strip tests, so it
-   needs a CONTENT_VOCAB fix first.
-3. **Seonix Batch 4/5's remaining items**: cochange phrasing variants, and the single,
-   not-independently-reverified "multi-root" substring over-match noted above.
-4. **Extend compound-symbol matching to `/describe`'s own resolver.** The compound-name
-   resolution above only covers `resolveObject` (`src/ask.mjs`); `/describe`'s own resolver
-   (`resolveSymbol` in `codegraph.mjs`) is a separate, stricter, pre-existing resolver that
-   doesn't share `resolveObject`'s tiered scoring, so "describe the payment system" doesn't
-   benefit yet. Not a regression, just not yet covered.
+This section used to carry its own numbered open-items list, which duplicated `HANDOVER.md`'s job
+and went stale within a version or two (the last list here was still citing a 0.8.2-era baseline
+long after the project had moved on). `ROADMAP.md`'s job is the historical record, not the kickoff
+doc — for what's open right now, see `HANDOVER.md`'s "Open follow-ups" section, which is kept
+current every session.
 
 ### Later: deferred by design, staged inside each plan
 
@@ -365,7 +259,7 @@ their tables.
   2026-07-11 once every stage's exit criterion was met). The disjointness proof rule (B1),
   proof-chain materialization, cardinality entailment, and consistency checking all landed and are
   chat-wired; the one remaining open research question (retraction-aware incremental reasoning)
-  moved to `PLAN_SYLLOGIST_HORIZON.md`. The repeatable measure/gate/advance cycle for this ladder
+  moved to `PLAN_SYLLOGIST.md`. The repeatable measure/gate/advance cycle for this ladder
   is still captured as an invokable skill, `SKILL_BENCHMARK_INFERENCE.md`.
 - **Advanced-grammar tracks b/d/e** (`PLAN_ADVANCED_GRAMMAR.md`). The constructions not landed
   this wave: stacked modality/passive, implicit arguments, and the rest of the CEFR inventory
@@ -1300,18 +1194,18 @@ minimal benchmark domains before anything domain-general is attempted:
   (a taught Prolog-style family tree, none of the kinship vocabulary hardcoded), the first of the
   three to need a successor function SYNTHESIZED from data the user taught in an earlier turn,
   rather than hand-written per domain the way Hanoi's `legalMoves` and guess-number's
-  interval-update rule are. Its own enumeration capability ("list the descendants of X," no fixed
-  goal) needs a genuine new sibling kernel, `findReachableSet`, since `findActionPath` only ever
-  searches toward one goal.
+  interval-update rule are. **DONE and archived the same day** — see "Where we are now" above and
+  `archive/PLAN_TAUGHT_RELATIONS.md` for the full build, including the `findReachableSet` sibling
+  kernel this doc predicted it would need.
 
 All three docs converged on the one genuinely new primitive none of them found already built
 anywhere in tmct: something that computes a SUCCESSOR STATE (apply a chosen action, produce the
 next graph/belief to reason over) — every existing traversal (`ancestorsOf`, `computeFind`,
-`findIsaChain` itself) is read-only. That primitive now exists (`findActionPath`, `src/planning.mjs`,
-shipped this session — see "Shipped this session" above), proven against a small toy graph but not
-wired into any of the three domains yet. The remaining next-session scope is that wiring, plus a
-still-open recognition question: how tmct notices "the user wants goal-directed action" at all, and
-whether multi-step execution needs confirmation before running.
+`findIsaChain` itself) is read-only. That primitive now exists (`findActionPath`, `src/planning.mjs`)
+and, with `findReachableSet`, is fully wired for `PLAN_TAUGHT_RELATIONS.md` (done, see above); Hanoi
+and guess-the-number still need their own wiring — the remaining next-session scope for those two —
+plus a still-open recognition question: how tmct notices "the user wants goal-directed action" at
+all, and whether multi-step execution needs confirmation before running.
 
 ### The design horizon
 
@@ -1323,9 +1217,9 @@ tier-4 learn-on-miss (below — prerequisites not yet met, not research-blocked)
 Tracks 2–4 (mutation search/repair, JS/HTML/CSS synthesis — APR and CEGIS are established
 techniques); `PLAN_OSS_ACE_PARSER.md` (pure extraction/packaging); OWL 2 RL forward-chaining and
 DL tableau consistency checking (`archive/PLAN_INFERENCE_TESTING.md` stages 3–5, all now shipped —
-literature review moved to `PLAN_SYLLOGIST_HORIZON.md` §1 — the W3C's own OWL 2 RL profile is a
+literature review moved to `PLAN_SYLLOGIST.md` §1 — the W3C's own OWL 2 RL profile is a
 published, complete rule table; Pellet/HermiT/RDFox/Jena are real production reasoners built on
-solved theory); RETE/incremental forward-chaining (`PLAN_SYLLOGIST_HORIZON.md` §2 — Forgy 1982 is a
+solved theory); RETE/incremental forward-chaining (`PLAN_SYLLOGIST.md` §2 — Forgy 1982 is a
 citable, portable algorithm, not yet ported); contingent/conformant planning under initial-state uncertainty
 (`PLAN_CAPABILITY_ROUTER.md` — Bonet & Geffner 2000, Hoffmann & Brafman 2006, Petrick & Bacchus
 2002 all have working algorithms); ordinary closed-domain anaphora resolution (`nextFocus`,
@@ -1353,7 +1247,7 @@ stop signs (full detail + full citation lists in each owning doc):
   *narrow slice* of Winograd-shaped ambiguity a graph-query-filtering problem rather than
   open-domain commonsense reasoning — explicitly not the same as solving Winograd.
 - **Bounded, incremental, trust-tiered, retraction-safe justification tracking** —
-  `PLAN_SYLLOGIST_HORIZON.md` §3 (moved out of `PLAN_INFERENCE_TESTING.md` on that plan's own
+  `PLAN_SYLLOGIST.md` §3 (moved out of `PLAN_INFERENCE_TESTING.md` on that plan's own
   retirement, once its build stages all shipped). Doyle's JTMS (1979) and de Kleer's ATMS
   (1986) solve retraction; DRed/RDFox's Backward-Forward solve incremental Datalog maintenance;
   nobody has published the specific combination with tmct's multi-trust-tier, hard-budget
