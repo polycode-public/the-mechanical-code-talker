@@ -16,14 +16,6 @@ version again until the moment of actually pushing (see Discipline, below).
 
 ## Open items
 
-- **`BENCHMARK_CEFR_ENGLISH_1.6.0.md` re-measurement — not yet landed.** A re-run was dispatched to
-  check whether the multi-candidate ambiguity fix (`PLAN_DID_YOU_SEE_HER_DUCK.md`) shows up in
-  graded chat quality, alongside `CAPABILITIES_1.6.0.md`'s overlay audit. `CAPABILITIES_1.6.0.md`
-  has since landed on `main` (commit `facbe6b`); the CEFR_ENGLISH re-measurement has not — no such
-  file exists on `main` or in either of the other two live worktrees as of this check. Pick this up
-  next: run the CEFR_ENGLISH benchmark at 1.6.0 and fold the result into `CAPABILITIES_1.6.0.md` if
-  it changes the synthesis there.
-
 - **`PLAN_CONVERSATION.md`'s two findings are unresolved, no fix landed for either.** (1) An unknown
   "every X is Y" always mints Y as a class, never a property, because `unknownObjectFallback`
   (`src/chat.mjs:1959`) has no POS check before minting — fix sketch and regression-guard caveats

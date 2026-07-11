@@ -315,6 +315,14 @@ diff looked safe."
 
 ### What a future CEFR re-measurement should watch for
 
+> **Update — confirmed empirically by `BENCHMARK_CEFR_ENGLISH_1.6.0.md`.** The re-measurement this
+> section called for has since run: mean 1.710/2 (flat vs `1.5.7`'s 1.724, within single-draw judge
+> noise), same 1 tier-1 fail (`am-tests-cover`), same 1 hard fail (`g-a1-naming-9`), no case crossed
+> pass/fail. That report's own case-level check (grep across all 109 cases' turn text for the fix's
+> vocabulary and for any Pattern-3 declarative shape) independently reaches the same conclusion as
+> item 1 below and as the static analysis two paragraphs up: the pool cannot reach the new code path,
+> and neither weak-spot case is touched by it. Items 2–4 below stay open exactly as written.
+
 1. **No regression is expected, and this is checkable in advance of a re-run**: the word-overlap check
    above already rules out the most direct risk (an existing case tripping the new lexicon logic
    differently). A fresh run should still confirm this empirically, not rely on the static check alone.
