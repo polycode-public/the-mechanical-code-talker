@@ -23,3 +23,32 @@ STATUS: OPEN
 OBSERVATION: Verified agent a7138cc47c7d81f93 directly (not trusting prior status). Worktree .claude/worktrees/agent-a7138cc47c7d81f93 present, locked (lock pid 56708, live claude process, elapsed 1d1h18m = whole session span, not idle time). Uncommitted diff: src/ask.mjs only. Newest files chatbench/results/raw/run-1.6.1/{product.jsonl,timings.json} written 15:01:01-15:01:12 BST, under 2 min before this check. A node --test process (test/server-http.test.mjs, 130%% CPU) was caught alive at 15:02:30 and had exited by the next command seconds later -- a benchmark/test run completed live during this tick investigation. Verdict: HEALTHY-IN-PROGRESS, effectively zero idle gap. main package.json version is still 1.6.0 -- the planned 1.6.1 bump has NOT landed yet, consistent with agent still mid-task (bump is its last step). No orphan worktrees found: .claude/worktrees/ contains only this one entry. main git log -5 sanity-checked clean: 035fd64 (newest, ROADMAP feature-status docs commit) sits on top of the tick-1-reported merges (c60e55c, ce15af8, a4b2579, 94c8bbf) -- no surprises. Process note: tick-1-to-tick-2 gap was ~13 min against a declared ~5 min re-arm (already flagged by tick 1 as a pattern to watch, not a new alarm).
 RECOMMENDED ACTION: No action needed this tick -- agent is healthy and actively producing output. Continue standing 5-minute watch; re-arm promptly right after handling any findings rather than letting concurrent coordinator work delay the next tick, since a lapsed watch defeats the purpose of having one. Re-check agent a7138cc47c7d81f93 next tick for: new commits in its worktree log, uncommitted src/ask.mjs diff either landing or growing stale, and whether package.json in main has moved to 1.6.1 (clearest completion signal).
 STATUS: OPEN
+
+═══════════════════════════════════════
+[2026-07-11 15:34Z] source=strategy-advisor(sonnet5,deep) · topic=PLAN_VIZ.md citation audit
+OBSERVATION: PLAN_VIZ.md claims only "three things need to change, all scoped, none a
+rewrite" to run spiralExpand over the memory graph (seed selection, class restriction,
+edge-kind set). Verified false by reading the real code: spiralExpand (src/codegraph.mjs:727)
+calls adjacencyForKinds() (:627-640), which funnels EVERY edge endpoint through
+moduleIdOfId->moduleIdOf (:1209-1224) before linking it into the adjacency map. moduleIdOf
+returns the individual itself only when ind.class==="Module"; otherwise it requires a
+code-graph "site" attribute or an fn:<path>#name id. Every real memory-graph individual
+(Utterance/Fact/Session/Source/Rule; ids like utt:.../fact:...) matches none of these, so
+moduleIdOf returns null, and adjacencyForKinds silent-drops the edge (link() bails at
+"if (!a || !b || a === b) return;", :630). Net effect: spiralExpand over
+.tmct/memory/graph.json today would build an EMPTY adjacency map regardless of the class-
+restriction/edge-kind fixes the doc does call out -- a 4th change the doc never names.
+Secondary, lower-stakes: 3 citation line-number drifts spot-checked against real files --
+codegraph.mjs class-restriction cited at :757,762 (actual :772,788); adapter-contract.md
+cited at :8-9 for the "consumes, never produces" line (actual :3); memory/core.mjs class
+list cited at :41-45 for Utterance/Fact/Session/Source/Rule (Rule is actually at :48).
+Substance of all three still holds -- only the line pointers are stale/off.
+By contrast, the createdAt-write-once, upsertEdge-no-timestamp, and buildEntities-never-
+called-in-production claims were all verified TRUE and precisely cited on direct re-read.
+RECOMMENDED ACTION: Before anyone implements PLAN_VIZ.md step (3) ("generalise
+spiralExpand's seed source, class restriction, and edge-kind set"), add a 4th named step:
+adjacencyForKinds/moduleIdOf need a caller-supplied endpoint-resolver (or an identity
+fallback for non-Module individuals), not just a class predicate. Also do a quick line-
+number refresh pass on the 3 stale citations above so a future reader trusting file:line
+pointers doesn't land on the wrong code.
+STATUS: OPEN
