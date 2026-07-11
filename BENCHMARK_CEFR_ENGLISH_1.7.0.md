@@ -149,6 +149,10 @@ hard-fail table:
 expectation, and a fix for one necessarily breaks the other (§1's regression rule forbids it). Not
 a new finding — reconfirmed, unchanged.
 
+**Correction (post-1.8.0):** "permanent"/"cannot be reconciled" was wrong — see
+`BENCHMARK_CEFR_ENGLISH_1.8.0.md`. The entity-tie/breadth-first fix resolves both cases on the same
+input by showing every reading's real answer instead of picking one.
+
 `g-c2-pron-2` and `g-c2-pron-1` are new-to-this-report as the two lowest scores, but not a new
 bug: both are "SUBJECT VERB because REASON — which of them VERB2" compositional/discourse-anaphora
 questions that tmct's "follow-up filter" fails to compile at all, falling back to a generic
@@ -328,9 +332,11 @@ A: this could mean more than one thing: 1) meta "imports" or 2) imports "mean" �
 0.500 (`1.6.0`) to 0.875 this run purely on judge-sample noise — the honesty dimension landed 0.5
 this time instead of 0, one sample's worth of scoring variance on a case both prior reports and
 this one agree "sits right at the hard-fail cutoff and flips sides on noise alone." Confirmed via
-`product.jsonl`: still routes through the same `ambiguousParse`/`metaFallbackEntityAnswer` path,
-still deliberately unfixed because `am-meta-imports` wants the plain definition for the identical
-input string.
+`product.jsonl`: still routes through the same `ambiguousParse`/`metaFallbackEntityAnswer` path.
+
+**Correction (post-1.8.0):** this case is fixed. `BENCHMARK_CEFR_ENGLISH_1.8.0.md` shows the
+breadth-first render answering both `am-meta-imports` and `g-a1-naming-9` for real on the identical
+input — mean 0.875 → 1.875.
 
 **4. `am-tests-cover` (B1 svo-query/ambiguity) — clean 2/2, the `1.6.1` fix holding:**
 ```

@@ -50,6 +50,12 @@ produces, never inventing one to fill a gap.
   patterns), plus multi-candidate ambiguity resolution — when a sentence has genuinely more than one
   valid reading, every surviving interpretation is surfaced instead of one being guessed
   (`archive/PLAN_DID_YOU_SEE_HER_DUCK.md`).
+- **Compositional queries** (`src/ask.mjs`): recursive-descent over relative clauses, boolean
+  set-algebra (and/or/but-not), qualifiers, aggregates, superlatives, anaphora. Includes real
+  two-hop object-relative composition ("which modules import something that X depends on" —
+  `parseNested` → `reverseSet`/`forwardSet`, nesting to depth ≥2), confirmed still working via a
+  live-tested example (`TOO_HARD_AUDIT.md` U2) after a stale benchmark write-up called it
+  "known-hard territory" — it was always built and tested, just never re-checked.
 - **Memory** (`src/memory/`): an OWL-labelled JSON graph on disk. Three persistence backends: flat
   JSON (default), pure in-memory (zero disk I/O), SQLite (cached, incrementally-patched reads).
 - **Reasoning** (`src/syllogise.mjs`): an OWL 2 RL-grounded rule ladder (subclass transitivity,
@@ -88,6 +94,10 @@ produces, never inventing one to fill a gap.
   Anthropic-compatible API — measured by `AGENTBENCH`, not general function-calling. An ambiguous tool
   argument stays an honest refusal (never a guess) but, since every registered capability is
   read-only, now additionally carries each tied candidate's real dispatched result alongside it.
+  The C1 resolver defers a ranking/superlative request (a declared `SUPERLATIVE_EXTREMES` cue, e.g.
+  "what MOST needs a test") to the C2 goal-reasoner's keystone-argmax arbitration instead of
+  half-answering it with a flat unranked list — AGENTBENCH C2 is 11/11, 100% plan- and
+  result-complete (`TOO_HARD_AUDIT.md` M2, fixed).
 - **Interfaces**: the `tmct` CLI, a documented library `exports` surface, and a Repository Interface
   for downstream consumers (seonix).
 

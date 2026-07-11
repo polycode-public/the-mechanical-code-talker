@@ -44,7 +44,7 @@ import {
   CONTEXT_PRONOUNS, META_MEANING_VERBS,
   WHERE_MARKERS, MENTION_MARKERS,
   RELATIVE_PRONOUNS, PLACEHOLDER_NOUNS, BOOLEAN_CONNECTIVES, QUALIFIERS,
-  AGGREGATE_TRIGGERS, LIST_TRIGGERS, SUPERLATIVE_EXTREMES, EDGE_NOUN_TO_METRIC, ANAPHORA_TRIGGERS,
+  AGGREGATE_TRIGGERS, LIST_TRIGGERS, SUPERLATIVE_EXTREMES, EDGE_NOUN_TO_METRIC, METRIC_IMPLIES_ENTITY, ANAPHORA_TRIGGERS,
   MEMBERSHIP_KINDS, CASCADE_NOISE, CASCADE_SYNONYMS, HELP_TRIGGERS,
 } from "./ask-vocab.mjs";
 // The interpretation layer (ROADMAP items 8/10/13) — the movable conversational
@@ -990,11 +990,9 @@ function parseSuperlative(w, lc, nlp) {
     if (SUPERLATIVE_EXTREMES[lc[i]]) { ext = SUPERLATIVE_EXTREMES[lc[i]]; extIdx = i; break; }
   }
   if (!ext) return null;
-  // entity noun anywhere (first match, deterministic)
-  let entityType; let entWord = null;
-  for (const x of lc) { const n = entityNoun(x); if (n && !n.placeholder) { entityType = n.entityType; entWord = x; break; } }
-  if (!entWord) return { node: "miss", reason: "a superlative needs an entity kind (module, class, function, …)" };
-  // edge noun after the extreme (imports/callers/methods/…)
+  // edge noun after the extreme (imports/callers/methods/…) — computed BEFORE
+  // the entity-noun check below, so a metric with a single implied entity class
+  // (METRIC_IMPLIES_ENTITY) can supply a default when no explicit noun is given.
   let metric = null; let metricNoun = null;
   for (let i = extIdx; i < lc.length; i += 1) {
     if (EDGE_NOUN_TO_METRIC[lc[i]]) { metric = EDGE_NOUN_TO_METRIC[lc[i]]; metricNoun = lc[i]; break; }
@@ -1013,10 +1011,18 @@ function parseSuperlative(w, lc, nlp) {
   }
   const connectivity = lc.includes("connected") || lc.slice(extIdx, extIdx + 2).join(" ") === "most connected"
     || ["largest", "biggest", "smallest"].includes(lc[extIdx]);
-  if (!metric) {
-    if (connectivity) { metric = EDGE_NOUN_TO_METRIC.connections; metricNoun = "connections"; }
-    else return { node: "miss", reason: "name what to rank by (imports, callers, methods, tests, or connections)" };
+  if (!metric && connectivity) { metric = EDGE_NOUN_TO_METRIC.connections; metricNoun = "connections"; }
+  // entity noun anywhere (first match, deterministic); else default from a
+  // metric that implies exactly one entity class ("test(s)" always ranks
+  // Modules, the one declared exception — see METRIC_IMPLIES_ENTITY — so "what
+  // most needs a test" resolves without also requiring the word "module").
+  let entityType; let entWord = null;
+  for (const x of lc) { const n = entityNoun(x); if (n && !n.placeholder) { entityType = n.entityType; entWord = x; break; } }
+  if (!entWord) {
+    entityType = metricNoun ? METRIC_IMPLIES_ENTITY[metricNoun] : undefined;
+    if (!entityType) return { node: "miss", reason: "a superlative needs an entity kind (module, class, function, …)" };
   }
+  if (!metric) return { node: "miss", reason: "name what to rank by (imports, callers, methods, tests, or connections)" };
   return { node: "superlative", entityType, metric, metricNoun, extreme: ext };
 }
 

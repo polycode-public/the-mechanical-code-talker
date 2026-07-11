@@ -830,6 +830,7 @@ export const EDGE_NOUN_TO_METRIC = Object.freeze({
   methods: { kind: "contains", dir: "out", filter: "Method" },
   members: { kind: "contains", dir: "out" },
   tests: { kind: "tests", dir: "in" },
+  test: { kind: "tests", dir: "in" }, // singular ("needs a test") — same edge as plural "tests"
   subclasses: { kind: "inherits", dir: "in" },
   connections: { kind: "*", dir: "both" },
   edges: { kind: "*", dir: "both" },
@@ -845,6 +846,18 @@ export const EDGE_NOUN_TO_METRIC = Object.freeze({
   depended: { kind: "imports", dir: "in" },
   used: { kind: "imports", dir: "in", sibling: "callsSymbol" },
   called: { kind: "calls", dir: "in", sibling: "callsSymbol" },
+});
+
+/** Metric nouns whose edge kind targets exactly ONE entity class in this graph's
+ *  ontology (only a Module is ever the object of a `tests` edge) — read by
+ *  ask.mjs's parseSuperlative to default `entityType` when a superlative names a
+ *  metric but no explicit entity noun ("what most needs a test", vs. the fully
+ *  explicit "which MODULE has the most tests"). Deliberately small: a metric like
+ *  "calls"/"connections" targets more than one class, so it is NOT listed here —
+ *  those keep requiring an explicit entity noun, same as before this table existed. */
+export const METRIC_IMPLIES_ENTITY = Object.freeze({
+  tests: "Module",
+  test: "Module",
 });
 
 /** Anaphora triggers over the PREVIOUS result set (ask()'s `prev` id array):

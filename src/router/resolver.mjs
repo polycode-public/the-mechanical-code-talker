@@ -41,10 +41,22 @@
 
 import { parseQuery } from "../ask.mjs";
 import { selectTool } from "../server-http.mjs";
+import { SUPERLATIVE_EXTREMES } from "../ask-vocab.mjs";
 import {
   capabilities, capabilityByName, preconditionsOf, effectsOf, PRECOND,
 } from "./registry.mjs";
 import { hallucinationsIn } from "./call-validator.mjs";
+
+// A ranking/superlative cue ("most", "biggest", …) in the request — the SAME
+// declared vocabulary ask.mjs's own superlative grammar reads (SUPERLATIVE_EXTREMES),
+// never a new keyword table. Used below to keep a flat imperative frame (a
+// single unranked capability call) from claiming a request that is actually
+// asking to be RANKED — that's the goal-reasoner's job (src/router/goal-reasoner.mjs's
+// keystone argmax over a declared priorityTopic), not a flat listing's.
+const SUPERLATIVE_RE = new RegExp(
+  `\\b(?:${Object.keys(SUPERLATIVE_EXTREMES).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+")).join("|")})\\b`,
+  "i",
+);
 
 // ---- the ask-kind -> epistemic-topic MAPPING (the Stage-1 core) --------------
 // Keyed `${shape}:${kind}` off parseQuery's simple-clause output. The VALUE is
@@ -101,7 +113,13 @@ export const NOT_NL_REACHABLE = Object.freeze({});
 // backward-chained to a capability just like an NL intent, so the frame table
 // adds PHRASINGS, never a new routing path. ----
 export const FRAMES = Object.freeze([
-  { re: /\buntested\b|\bwithout\s+(?:a\s+)?tests?\b|\bhas\s+no\s+tests?\b|\bneeds?\s+(?:a\s+)?tests?\b/i, topic: "untested", noArg: true },
+  // skipIfSuperlative: "untested" is a flat listing (which achieves it says
+  // nothing about RANK). A request carrying a superlative cue ("what MOST
+  // needs a test") is asking to be ranked — that's the goal-reasoner's
+  // keystone-argmax job (declared priorityTopic:"impact"), not this frame's.
+  // Skipping here lets the request fall through to an honest C1 refuse, which
+  // driver-goal.mjs escalates to the C2 meta-loop that already ranks.
+  { re: /\buntested\b|\bwithout\s+(?:a\s+)?tests?\b|\bhas\s+no\s+tests?\b|\bneeds?\s+(?:a\s+)?tests?\b/i, topic: "untested", noArg: true, skipIfSuperlative: true },
   { re: /\bblast\s*radius\b|\bimpacts?\b|\bimpacted\b|what\s+(?:a\s+)?change.*(?:reach|affect|touch)|what\s+(?:depends?\s+on|dependents?)\b/i, topic: "impact", arg: "module" },
   // tmct_calls (Stage 2 — the reachability win): the RAW call-edge dump, a grain
   // the relational "call" verb collides with (which routes callers/callees). This
@@ -203,6 +221,7 @@ export function mapParse(parse) {
 export function mapFrame(request) {
   for (const f of FRAMES) {
     if (!f.re.test(request)) continue;
+    if (f.skipIfSuperlative && SUPERLATIVE_RE.test(request)) continue;
     const cap = backwardChain(f.topic);
     if (!cap) continue;
     if (f.noArg) return { name: cap.name, noArg: true, topic: f.topic, source: "frame", why: [`imperative frame => goal (knows ${f.topic})`, `backward-chain => ${cap.name}`] };

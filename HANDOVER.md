@@ -10,12 +10,34 @@ Session handle (inbox): `tmct` (this session; earlier sessions used `mechanic`).
 
 ## Version state (2026-07-12)
 
-`package.json` is `1.8.0` locally, not yet pushed (bumped from `1.7.3` this session at the
-operator's explicit direction, to stamp `BENCHMARK_CEFR_ENGLISH_1.8.0.md` — a minor bump is
-warranted regardless: six additive tracks landed, no breaking change). What's live on npm is still
-`1.5.5` — several version bumps have accumulated locally without a push. Per this project's own
-version-bump discipline (`CLAUDE.md`), the next push should land whatever's actually ready as one
-release, not chase every intermediate bump — don't bump again until that push.
+`package.json` is `1.8.1` locally, not yet pushed (bumped from `1.7.3` → `1.8.0` for
+`BENCHMARK_CEFR_ENGLISH_1.8.0.md`, then → `1.8.1` for the `TOO_HARD_AUDIT.md` M2/U2 fixes, both at
+the operator's explicit direction). What's live on npm is still `1.5.5` — several version bumps
+have accumulated locally without a push. Per this project's own version-bump discipline
+(`CLAUDE.md`), the next push should land whatever's actually ready as one release, not chase every
+intermediate bump — don't bump again until that push.
+
+## `TOO_HARD_AUDIT.md` M2/U2 — fixed (2026-07-12)
+
+Every finding in `TOO_HARD_AUDIT.md`'s original pass is now resolved; see that file's compact
+"Status" section for the full list. The two fixed this session:
+
+- **M2** (AGENTBENCH `ab-c2-what-to-test`, "what most needs a test in this codebase"): the
+  goal-reasoner's keystone-argmax ranking already existed but never got dispatched into — a C1
+  imperative frame answered the request with a single unranked `tmct_untested` call first.
+  `src/router/resolver.mjs`'s `untested` frame now skips on a superlative cue
+  (`SUPERLATIVE_RE`, built from `ask.mjs`'s own declared `SUPERLATIVE_EXTREMES`), and
+  `src/ask.mjs`'s `parseSuperlative` defaults `entityType` from a metric that implies exactly one
+  class (`src/ask-vocab.mjs`'s new `METRIC_IMPLIES_ENTITY`: `tests -> Module`) so the phrasing
+  parses without also requiring the word "module". AGENTBENCH C2: 91%→100% plan-completion,
+  10/11→11/11 result-complete, ladder still 0% hallucination throughout.
+- **U2** (deep relative-clause two-hop composition): confirmed already working, not a real gap —
+  live-tested against `examples/mini-webapp`'s real graph. No code change; `test/ask-compositional.test.mjs`
+  already pins this mechanism (`parseNested` → `reverseSet`/`forwardSet`).
+
+`npm test` 1932/1932; two pinned tests updated to match the newly-correct behavior
+(`test/goal-reasoner.test.mjs`, `test/agentbench.test.mjs`) — same "update the pin, don't weaken
+it" discipline as every other fix this session.
 
 ## In progress — `PLAN_BREADTH_FIRST_NLU.md` (started 2026-07-11)
 

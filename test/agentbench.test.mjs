@@ -454,17 +454,22 @@ test("gradeCase: a case WITHOUT expect.result mirrors plan completion on the res
   assert.ok(v.resultCompleted);
 });
 
-test("agentbench e2e: the resolver EXECUTES + COMPOSES — result-completion is BELOW plan-completion (the honest gap), at 0% hallucination", async () => {
+test("agentbench e2e: the resolver EXECUTES + COMPOSES — result-completion tracks plan-completion exactly under C1 alone (0% hallucination)", async () => {
   const knownLabels = await loadFixtureLabels();
   const { cases } = parseCases(await readFile(CASES_FILE, "utf8"), { knownLabels });
   const { rows, rolled } = await runAgentbench(cases, { driver: resolverDriver, stamp: BENCH_VERSION, ctx: CTX });
   // the non-negotiable holds on BOTH axes
   assert.equal(rolled.overall.hallucinationRate, 0, "0% hallucination — the router's floor");
-  // the SPLIT: composing the answer is strictly harder than emitting the plan, so
-  // result-completion must be <= plan-completion, and strictly BELOW here (the C1
-  // reachability case + the C2 ranking case pass plan but fail result).
+  // UPDATE (TOO_HARD_AUDIT.md M2, fixed): this used to assert a real plan-vs-result
+  // GAP under the C1 resolver alone (ab-c2-what-to-test passed plan with a single
+  // unranked tmct_untested call, then failed result since nothing ranked it). Fixed
+  // by making the C1 "untested" frame skip on a superlative cue (resolver.mjs), so
+  // a ranking request no longer gets a half-answer from C1 at all — it now honestly
+  // REFUSES at this layer (see goal-reasoner.test.mjs for its full C2 resolution).
+  // Composing is still no easier than planning, but there is no longer any case
+  // where C1 alone completes a plan it can't also compose for real.
   assert.ok(rolled.overall.resultCompletion <= rolled.overall.completion);
-  assert.ok(rolled.overall.resultCompletion < rolled.overall.completion, "the honest plan-vs-result delta is real, not zero");
+  assert.equal(rolled.overall.resultCompletion, rolled.overall.completion, "under the C1 resolver alone, every completed plan also composes — no half-answers");
   // the intersection case is the positive proof result-grading WORKS: plan AND result
   const inImpact = rows.find((r) => r.caseId === "ab-c1-untested-in-impact");
   assert.ok(inImpact.verdict.completed && inImpact.verdict.resultCompleted, "untested-∩-impact composes to the true set");
@@ -483,10 +488,12 @@ test("agentbench e2e: the resolver EXECUTES + COMPOSES — result-completion is 
   const twin = rows.find((r) => r.caseId === "ab-c1-button-methods-calling");
   assert.ok(twin.verdict.completed && twin.verdict.resultCompleted, "the recipe generalizes to Button and composes an honest ∅");
   assert.deepEqual(twin.produced.composed, []);
-  // the honest FAIL that remains: the C2 ranking case passes plan, fails result
-  // under the C1 resolver (the goal-reasoner ranking is Stage 5's climb).
-  const relaxed = rows.find((r) => r.caseId === "ab-c2-what-to-test");
-  assert.ok(relaxed.verdict.completed && !relaxed.verdict.resultCompleted, "plan-correct, result-incomplete (the honest plan-vs-result gap)");
+  // ab-c2-what-to-test now honestly REFUSES under the C1 resolver alone (no plan,
+  // no result) — it needs the C2 goal-reasoner's keystone ranking, which
+  // goal-reasoner.test.mjs confirms it now gets in full via the escalating
+  // goalDriver. C1 no longer claims a case it can only half-answer.
+  const wtt = rows.find((r) => r.caseId === "ab-c2-what-to-test");
+  assert.ok(!wtt.verdict.completed && !wtt.verdict.resultCompleted && wtt.produced.calls.length === 0, "C1 alone honestly refuses rather than half-answering with an unranked list");
 });
 
 test("member-filter: memberIndividuals is the GRAIN FIX (full individuals, dotted labels) and membersReaching folds bounded reach", () => {

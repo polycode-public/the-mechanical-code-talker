@@ -312,18 +312,28 @@ test("goal driver e2e: Stage 5 moves C2 result-completion OFF the floor at 0% ha
   // the WIN: the goal-reasoner un-gates C2 and lifts its result-completion far off
   // the C1-only floor (goal-deduction is genuinely doing work). 0.8.2 counts: C2
   // is 11 cases (6 coverage-era + 3 cochange composes + 2 seam refusals); the goal
-  // driver composes/refuses 10 of 11 on the result axis (what-to-test stays the
-  // honest miss), so the floor is deliberately raised 0.8 -> 0.9 with the wave.
+  // driver composes/refuses all 11 on the result axis — 100%.
+  //
+  // UPDATE (TOO_HARD_AUDIT.md M2, fixed): what-to-test ("what most needs a test in
+  // this codebase") used to stay result-incomplete, and this test's own comment
+  // claimed ranking it "would need a request keyword we refuse to add" — that
+  // framing was wrong, not a real ceiling. Traced live: a C1 imperative frame
+  // (resolver.mjs's flat "untested" frame) short-circuited the request to a single
+  // unranked tmct_untested call before the C2 meta-loop — which already had the
+  // keystone-argmax ranking built (goal-reasoner.mjs:421-431) — ever ran; separately
+  // ask.mjs's superlative grammar required an explicit entity noun ("module") this
+  // phrasing never supplies. Both fixed with DECLARED tables, not a new request
+  // keyword: the frame now skips on a superlative cue (resolver.mjs's SUPERLATIVE_RE,
+  // built from ask.mjs's own SUPERLATIVE_EXTREMES) so the request escalates to C2,
+  // and parseSuperlative defaults entityType from a metric that implies exactly one
+  // class (ask-vocab.mjs's METRIC_IMPLIES_ENTITY: tests -> Module).
   assert.ok(goal.rolled.byRung.C2.completion > base.rolled.byRung.C2.completion, "C2 plan-completion climbs under Stage 5");
   assert.ok(goal.rolled.byRung.C2.resultCompletion > base.rolled.byRung.C2.resultCompletion, "C2 result-completion climbs under Stage 5");
-  assert.ok(goal.rolled.byRung.C2.resultCompletion >= 0.9, `C2 result-completion is high (${(goal.rolled.byRung.C2.resultCompletion * 100).toFixed(0)}%)`);
+  assert.equal(goal.rolled.byRung.C2.resultCompletion, 1, "C2 result-completion is 100% — every case, including what-to-test, now composes for real");
   assert.ok(goal.rolled.byRung.C2.gatePass, "C2 passes the honest gate under Stage 5");
 
-  // HONESTY: what-to-test stays result-incomplete (the resolver answers it relaxed;
-  // ranking a resolver-answered request would need a request keyword we refuse to
-  // add) — the boundary is kept red, not faked.
   const wtt = goal.rows.find((r) => r.caseId === "ab-c2-what-to-test");
-  assert.ok(wtt.verdict.completed && !wtt.verdict.resultCompleted, "what-to-test stays honestly result-incomplete");
+  assert.ok(wtt.verdict.completed && wtt.verdict.resultCompleted, "what-to-test is now genuinely result-complete — real keystone-argmax ranking, not a faked pass");
 
   // every produced call is well-formed against its declared set (belt-and-braces)
   for (const r of goal.rows) {
