@@ -71,6 +71,34 @@
       "bytes": 81430,
       "sha256": "040e6d1f6761a29a080f7825ff8aae60caf879125c1f7a1480340ef04129bcd5",
       "license": "MPL-2.0"
+    },
+    {
+      "id": "human-medium",
+      "kind": "domain",
+      "description": "The Medium tier of the default human-world persona (PLAN_SEED.md): incremental facts beyond Small only — activated alongside \"human\" via --persona-size medium, never active by default.",
+      "source": {
+        "kind": "curated",
+        "tool": "corpus/tier2/generate.mjs"
+      },
+      "file": "human-medium.jsonl",
+      "facts": 944,
+      "bytes": 110796,
+      "sha256": "63270a928f4d304489bd552c1e50704ff2d6f17841cf11a87a292418eaa572c0",
+      "license": "MPL-2.0"
+    },
+    {
+      "id": "human-large",
+      "kind": "domain",
+      "description": "The Large tier of the default human-world persona (PLAN_SEED.md): incremental facts beyond Medium only — activated alongside \"human\" via --persona-size large, never active by default.",
+      "source": {
+        "kind": "curated",
+        "tool": "corpus/tier2/generate.mjs"
+      },
+      "file": "human-large.jsonl",
+      "facts": 12001,
+      "bytes": 1464850,
+      "sha256": "754d9d4c046f92994a5f5fa0abde27af65a47ec546b3051bf972bfa76b642917",
+      "license": "MPL-2.0"
     }
   ]
 }

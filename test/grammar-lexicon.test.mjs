@@ -15,18 +15,23 @@ import { mergedLexiconExtra } from "../src/extensions.mjs";
 
 test("loadLexicon: the committed core is a real starter vocabulary (size floors), cached when unextended", () => {
   const lex = loadLexicon();
-  // PLAN_SEED.md's human-persona lexicon growth roughly doubled the core
-  // (180/63/33/15 software-only -> 464/92/58/22 software+human-world) — the
-  // floors below are raised to match; the ceiling is widened but still real
-  // (this pins "a starter vocabulary", not an unbounded dump — a future
-  // Medium/Large-tier lexicon growth pass would deliberately need to raise
-  // this again, not silently blow past it).
-  assert.ok(lex.nouns.size >= 400, `nouns: ${lex.nouns.size} >= 400`);
+  // PLAN_SEED.md's human-persona lexicon growth happened in two steps: Small
+  // tier roughly doubled the core (180/63/33/15 software-only ->
+  // 464/92/58/22 software+human-world); the Medium/Large tiers (§3) then
+  // added thousands more NOUNS specifically (WordNet's own real hypernym/
+  // meronym population, curated down per-clump — see
+  // scripts/build-persona-tiers.mjs), leaving verbs/adjectives/proper names
+  // untouched (Large's facts are all noun-noun IsA/HasA/MadeOf relations, no
+  // new predicate words needed). Floors/ceiling raised to match — this still
+  // pins "a real, bounded vocabulary", not an unbounded dump (a future
+  // change that pulls in WordNet's verb/adjective files too would
+  // deliberately need to raise this again, not silently blow past it).
+  assert.ok(lex.nouns.size >= 9000, `nouns: ${lex.nouns.size} >= 9000`);
   assert.ok(lex.verbs.size >= 80, `verbs: ${lex.verbs.size} >= 80`);
   assert.ok(lex.adjectives.size >= 50, `adjectives: ${lex.adjectives.size} >= 50`);
   assert.ok(lex.properNames.size >= 20, `proper names: ${lex.properNames.size} >= 20`);
   const total = lex.nouns.size + lex.verbs.size + lex.adjectives.size + lex.properNames.size;
-  assert.ok(total >= 150 && total <= 800, `starter lexicon stays a starter: ${total} entries`);
+  assert.ok(total >= 9000 && total <= 12000, `starter lexicon stays a bounded, curated vocabulary: ${total} entries`);
   assert.equal(loadLexicon(), lex, "no-extra load is cached (the JSON is immutable at runtime)");
 });
 

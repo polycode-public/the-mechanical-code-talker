@@ -1,0 +1,944 @@
+{"start":"/c/en/draw","rel":"/r/IsA","end":"/c/en/entertainer","weight":1,"surfaceText":"[[draw]] IsA [[entertainer]]"}
+{"start":"/c/en/set","rel":"/r/IsA","end":"/c/en/collection","weight":1,"surfaceText":"[[set]] IsA [[collection]]"}
+{"start":"/c/en/set","rel":"/r/HasA","end":"/c/en/volume","weight":1,"surfaceText":"[[set]] HasA [[volume]]"}
+{"start":"/c/en/heavy","rel":"/r/IsA","end":"/c/en/actor","weight":1,"surfaceText":"[[heavy]] IsA [[actor]]"}
+{"start":"/c/en/stand","rel":"/r/IsA","end":"/c/en/vegetation","weight":1,"surfaceText":"[[stand]] IsA [[vegetation]]"}
+{"start":"/c/en/free","rel":"/r/IsA","end":"/c/en/people","weight":1,"surfaceText":"[[free]] IsA [[people]]"}
+{"start":"/c/en/pack","rel":"/r/IsA","end":"/c/en/collection","weight":1,"surfaceText":"[[pack]] IsA [[collection]]"}
+{"start":"/c/en/dead","rel":"/r/IsA","end":"/c/en/people","weight":1,"surfaceText":"[[dead]] IsA [[people]]"}
+{"start":"/c/en/dead","rel":"/r/HasA","end":"/c/en/dead person","weight":1,"surfaceText":"[[dead]] HasA [[dead person]]"}
+{"start":"/c/en/pick","rel":"/r/IsA","end":"/c/en/elite","weight":1,"surfaceText":"[[pick]] IsA [[elite]]"}
+{"start":"/c/en/double","rel":"/r/IsA","end":"/c/en/actor","weight":1,"surfaceText":"[[double]] IsA [[actor]]"}
+{"start":"/c/en/straight","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[straight]] IsA [[person]]"}
+{"start":"/c/en/cast","rel":"/r/IsA","end":"/c/en/gathering","weight":1,"surfaceText":"[[cast]] IsA [[gathering]]"}
+{"start":"/c/en/dry","rel":"/r/IsA","end":"/c/en/reformer","weight":1,"surfaceText":"[[dry]] IsA [[reformer]]"}
+{"start":"/c/en/bank","rel":"/r/IsA","end":"/c/en/financial institution","weight":1,"surfaceText":"[[bank]] IsA [[financial institution]]"}
+{"start":"/c/en/stamp","rel":"/r/IsA","end":"/c/en/class","weight":1,"surfaceText":"[[stamp]] IsA [[class]]"}
+{"start":"/c/en/tender","rel":"/r/IsA","end":"/c/en/assistant","weight":1,"surfaceText":"[[tender]] IsA [[assistant]]"}
+{"start":"/c/en/fair","rel":"/r/IsA","end":"/c/en/exhibition","weight":1,"surfaceText":"[[fair]] IsA [[exhibition]]"}
+{"start":"/c/en/active","rel":"/r/IsA","end":"/c/en/actor","weight":1,"surfaceText":"[[active]] IsA [[actor]]"}
+{"start":"/c/en/regular","rel":"/r/IsA","end":"/c/en/patron","weight":1,"surfaceText":"[[regular]] IsA [[patron]]"}
+{"start":"/c/en/blue","rel":"/r/IsA","end":"/c/en/organization","weight":1,"surfaceText":"[[blue]] IsA [[organization]]"}
+{"start":"/c/en/hack","rel":"/r/IsA","end":"/c/en/unskilled person","weight":1,"surfaceText":"[[hack]] IsA [[unskilled person]]"}
+{"start":"/c/en/band","rel":"/r/IsA","end":"/c/en/social group","weight":1,"surfaceText":"[[band]] IsA [[social group]]"}
+{"start":"/c/en/brush","rel":"/r/IsA","end":"/c/en/vegetation","weight":1,"surfaceText":"[[brush]] IsA [[vegetation]]"}
+{"start":"/c/en/guard","rel":"/r/IsA","end":"/c/en/defender","weight":1,"surfaceText":"[[guard]] IsA [[defender]]"}
+{"start":"/c/en/master","rel":"/r/IsA","end":"/c/en/artist","weight":1,"surfaceText":"[[master]] IsA [[artist]]"}
+{"start":"/c/en/transfer","rel":"/r/IsA","end":"/c/en/actor","weight":1,"surfaceText":"[[transfer]] IsA [[actor]]"}
+{"start":"/c/en/firm","rel":"/r/IsA","end":"/c/en/business","weight":1,"surfaceText":"[[firm]] IsA [[business]]"}
+{"start":"/c/en/side","rel":"/r/IsA","end":"/c/en/unit","weight":1,"surfaceText":"[[side]] IsA [[unit]]"}
+{"start":"/c/en/bull","rel":"/r/IsA","end":"/c/en/man","weight":1,"surfaceText":"[[bull]] IsA [[man]]"}
+{"start":"/c/en/mate","rel":"/r/IsA","end":"/c/en/officer","weight":1,"surfaceText":"[[mate]] IsA [[officer]]"}
+{"start":"/c/en/rank","rel":"/r/IsA","end":"/c/en/force","weight":1,"surfaceText":"[[rank]] IsA [[force]]"}
+{"start":"/c/en/rank","rel":"/r/HasA","end":"/c/en/enlisted man","weight":1,"surfaceText":"[[rank]] HasA [[enlisted man]]"}
+{"start":"/c/en/board","rel":"/r/IsA","end":"/c/en/committee","weight":1,"surfaceText":"[[board]] IsA [[committee]]"}
+{"start":"/c/en/board","rel":"/r/HasA","end":"/c/en/director","weight":1,"surfaceText":"[[board]] HasA [[director]]"}
+{"start":"/c/en/brace","rel":"/r/IsA","end":"/c/en/set","weight":1,"surfaceText":"[[brace]] IsA [[set]]"}
+{"start":"/c/en/grade","rel":"/r/IsA","end":"/c/en/gathering","weight":1,"surfaceText":"[[grade]] IsA [[gathering]]"}
+{"start":"/c/en/better","rel":"/r/IsA","end":"/c/en/superior","weight":1,"surfaceText":"[[better]] IsA [[superior]]"}
+{"start":"/c/en/course","rel":"/r/IsA","end":"/c/en/series","weight":1,"surfaceText":"[[course]] IsA [[series]]"}
+{"start":"/c/en/natural","rel":"/r/IsA","end":"/c/en/achiever","weight":1,"surfaceText":"[[natural]] IsA [[achiever]]"}
+{"start":"/c/en/butt","rel":"/r/IsA","end":"/c/en/victim","weight":1,"surfaceText":"[[butt]] IsA [[victim]]"}
+{"start":"/c/en/camp","rel":"/r/IsA","end":"/c/en/gathering","weight":1,"surfaceText":"[[camp]] IsA [[gathering]]"}
+{"start":"/c/en/crop","rel":"/r/IsA","end":"/c/en/collection","weight":1,"surfaceText":"[[crop]] IsA [[collection]]"}
+{"start":"/c/en/date","rel":"/r/IsA","end":"/c/en/companion","weight":1,"surfaceText":"[[date]] IsA [[companion]]"}
+{"start":"/c/en/fold","rel":"/r/IsA","end":"/c/en/social group","weight":1,"surfaceText":"[[fold]] IsA [[social group]]"}
+{"start":"/c/en/help","rel":"/r/IsA","end":"/c/en/worker","weight":1,"surfaceText":"[[help]] IsA [[worker]]"}
+{"start":"/c/en/hunt","rel":"/r/IsA","end":"/c/en/club","weight":1,"surfaceText":"[[hunt]] IsA [[club]]"}
+{"start":"/c/en/count","rel":"/r/IsA","end":"/c/en/lord","weight":1,"surfaceText":"[[count]] IsA [[lord]]"}
+{"start":"/c/en/court","rel":"/r/IsA","end":"/c/en/government","weight":1,"surfaceText":"[[court]] IsA [[government]]"}
+{"start":"/c/en/crush","rel":"/r/IsA","end":"/c/en/crowd","weight":1,"surfaceText":"[[crush]] IsA [[crowd]]"}
+{"start":"/c/en/major","rel":"/r/IsA","end":"/c/en/commissioned military officer","weight":1,"surfaceText":"[[major]] IsA [[commissioned military officer]]"}
+{"start":"/c/en/march","rel":"/r/IsA","end":"/c/en/procession","weight":1,"surfaceText":"[[march]] IsA [[procession]]"}
+{"start":"/c/en/tease","rel":"/r/IsA","end":"/c/en/unwelcome person","weight":1,"surfaceText":"[[tease]] IsA [[unwelcome person]]"}
+{"start":"/c/en/tough","rel":"/r/IsA","end":"/c/en/attacker","weight":1,"surfaceText":"[[tough]] IsA [[attacker]]"}
+{"start":"/c/en/flight","rel":"/r/IsA","end":"/c/en/formation","weight":1,"surfaceText":"[[flight]] IsA [[formation]]"}
+{"start":"/c/en/forward","rel":"/r/IsA","end":"/c/en/basketball player","weight":1,"surfaceText":"[[forward]] IsA [[basketball player]]"}
+{"start":"/c/en/division","rel":"/r/IsA","end":"/c/en/army unit","weight":1,"surfaceText":"[[division]] IsA [[army unit]]"}
+{"start":"/c/en/division","rel":"/r/HasA","end":"/c/en/battle group","weight":1,"surfaceText":"[[division]] HasA [[battle group]]"}
+{"start":"/c/en/commission","rel":"/r/IsA","end":"/c/en/administrative unit","weight":1,"surfaceText":"[[commission]] IsA [[administrative unit]]"}
+{"start":"/c/en/commission","rel":"/r/HasA","end":"/c/en/commissioner","weight":1,"surfaceText":"[[commission]] HasA [[commissioner]]"}
+{"start":"/c/en/jam","rel":"/r/IsA","end":"/c/en/crowd","weight":1,"surfaceText":"[[jam]] IsA [[crowd]]"}
+{"start":"/c/en/rat","rel":"/r/IsA","end":"/c/en/unpleasant person","weight":1,"surfaceText":"[[rat]] IsA [[unpleasant person]]"}
+{"start":"/c/en/gray","rel":"/r/IsA","end":"/c/en/organization","weight":1,"surfaceText":"[[gray]] IsA [[organization]]"}
+{"start":"/c/en/hood","rel":"/r/IsA","end":"/c/en/criminal","weight":1,"surfaceText":"[[hood]] IsA [[criminal]]"}
+{"start":"/c/en/jerk","rel":"/r/IsA","end":"/c/en/misfit","weight":1,"surfaceText":"[[jerk]] IsA [[misfit]]"}
+{"start":"/c/en/miss","rel":"/r/IsA","end":"/c/en/female","weight":1,"surfaceText":"[[miss]] IsA [[female]]"}
+{"start":"/c/en/pile","rel":"/r/IsA","end":"/c/en/collection","weight":1,"surfaceText":"[[pile]] IsA [[collection]]"}
+{"start":"/c/en/pool","rel":"/r/IsA","end":"/c/en/organization","weight":1,"surfaceText":"[[pool]] IsA [[organization]]"}
+{"start":"/c/en/rear","rel":"/r/IsA","end":"/c/en/formation","weight":1,"surfaceText":"[[rear]] IsA [[formation]]"}
+{"start":"/c/en/whip","rel":"/r/IsA","end":"/c/en/legislator","weight":1,"surfaceText":"[[whip]] IsA [[legislator]]"}
+{"start":"/c/en/bench","rel":"/r/IsA","end":"/c/en/administration","weight":1,"surfaceText":"[[bench]] IsA [[administration]]"}
+{"start":"/c/en/chain","rel":"/r/IsA","end":"/c/en/series","weight":1,"surfaceText":"[[chain]] IsA [[series]]"}
+{"start":"/c/en/cycle","rel":"/r/IsA","end":"/c/en/series","weight":1,"surfaceText":"[[cycle]] IsA [[series]]"}
+{"start":"/c/en/grind","rel":"/r/IsA","end":"/c/en/learner","weight":1,"surfaceText":"[[grind]] IsA [[learner]]"}
+{"start":"/c/en/guide","rel":"/r/IsA","end":"/c/en/leader","weight":1,"surfaceText":"[[guide]] IsA [[leader]]"}
+{"start":"/c/en/stiff","rel":"/r/IsA","end":"/c/en/man","weight":1,"surfaceText":"[[stiff]] IsA [[man]]"}
+{"start":"/c/en/troll","rel":"/r/IsA","end":"/c/en/mythical monster","weight":1,"surfaceText":"[[troll]] IsA [[mythical monster]]"}
+{"start":"/c/en/union","rel":"/r/IsA","end":"/c/en/organization","weight":1,"surfaceText":"[[union]] IsA [[organization]]"}
+{"start":"/c/en/circle","rel":"/r/IsA","end":"/c/en/social group","weight":1,"surfaceText":"[[circle]] IsA [[social group]]"}
+{"start":"/c/en/carrier","rel":"/r/IsA","end":"/c/en/traveler","weight":1,"surfaceText":"[[carrier]] IsA [[traveler]]"}
+{"start":"/c/en/defence","rel":"/r/IsA","end":"/c/en/collection","weight":1,"surfaceText":"[[defence]] IsA [[collection]]"}
+{"start":"/c/en/defense","rel":"/r/IsA","end":"/c/en/team","weight":1,"surfaceText":"[[defense]] IsA [[team]]"}
+{"start":"/c/en/radical","rel":"/r/IsA","end":"/c/en/actor","weight":1,"surfaceText":"[[radical]] IsA [[actor]]"}
+{"start":"/c/en/reserve","rel":"/r/IsA","end":"/c/en/athlete","weight":1,"surfaceText":"[[reserve]] IsA [[athlete]]"}
+{"start":"/c/en/intimate","rel":"/r/IsA","end":"/c/en/friend","weight":1,"surfaceText":"[[intimate]] IsA [[friend]]"}
+{"start":"/c/en/opposite","rel":"/r/IsA","end":"/c/en/contestant","weight":1,"surfaceText":"[[opposite]] IsA [[contestant]]"}
+{"start":"/c/en/superior","rel":"/r/IsA","end":"/c/en/religious","weight":1,"surfaceText":"[[superior]] IsA [[religious]]"}
+{"start":"/c/en/grey","rel":"/r/IsA","end":"/c/en/organization","weight":1,"surfaceText":"[[grey]] IsA [[organization]]"}
+{"start":"/c/en/host","rel":"/r/IsA","end":"/c/en/actor","weight":1,"surfaceText":"[[host]] IsA [[actor]]"}
+{"start":"/c/en/knot","rel":"/r/IsA","end":"/c/en/bunch","weight":1,"surfaceText":"[[knot]] IsA [[bunch]]"}
+{"start":"/c/en/left","rel":"/r/IsA","end":"/c/en/faction","weight":1,"surfaceText":"[[left]] IsA [[faction]]"}
+{"start":"/c/en/lost","rel":"/r/IsA","end":"/c/en/people","weight":1,"surfaceText":"[[lost]] IsA [[people]]"}
+{"start":"/c/en/blind","rel":"/r/IsA","end":"/c/en/people","weight":1,"surfaceText":"[[blind]] IsA [[people]]"}
+{"start":"/c/en/blind","rel":"/r/HasA","end":"/c/en/blind person","weight":1,"surfaceText":"[[blind]] HasA [[blind person]]"}
+{"start":"/c/en/crank","rel":"/r/IsA","end":"/c/en/eccentric","weight":1,"surfaceText":"[[crank]] IsA [[eccentric]]"}
+{"start":"/c/en/panel","rel":"/r/IsA","end":"/c/en/body","weight":1,"surfaceText":"[[panel]] IsA [[body]]"}
+{"start":"/c/en/rally","rel":"/r/IsA","end":"/c/en/assembly","weight":1,"surfaceText":"[[rally]] IsA [[assembly]]"}
+{"start":"/c/en/state","rel":"/r/IsA","end":"/c/en/government","weight":1,"surfaceText":"[[state]] IsA [[government]]"}
+{"start":"/c/en/tramp","rel":"/r/IsA","end":"/c/en/pedestrian","weight":1,"surfaceText":"[[tramp]] IsA [[pedestrian]]"}
+{"start":"/c/en/waver","rel":"/r/IsA","end":"/c/en/communicator","weight":1,"surfaceText":"[[waver]] IsA [[communicator]]"}
+{"start":"/c/en/clutch","rel":"/r/IsA","end":"/c/en/brood","weight":1,"surfaceText":"[[clutch]] IsA [[brood]]"}
+{"start":"/c/en/living","rel":"/r/IsA","end":"/c/en/people","weight":1,"surfaceText":"[[living]] IsA [[people]]"}
+{"start":"/c/en/runner","rel":"/r/IsA","end":"/c/en/messenger","weight":1,"surfaceText":"[[runner]] IsA [[messenger]]"}
+{"start":"/c/en/steady","rel":"/r/IsA","end":"/c/en/lover","weight":1,"surfaceText":"[[steady]] IsA [[lover]]"}
+{"start":"/c/en/stream","rel":"/r/IsA","end":"/c/en/course","weight":1,"surfaceText":"[[stream]] IsA [[course]]"}
+{"start":"/c/en/combine","rel":"/r/IsA","end":"/c/en/consortium","weight":1,"surfaceText":"[[combine]] IsA [[consortium]]"}
+{"start":"/c/en/company","rel":"/r/IsA","end":"/c/en/institution","weight":1,"surfaceText":"[[company]] IsA [[institution]]"}
+{"start":"/c/en/convert","rel":"/r/IsA","end":"/c/en/actor","weight":1,"surfaceText":"[[convert]] IsA [[actor]]"}
+{"start":"/c/en/general","rel":"/r/IsA","end":"/c/en/general officer","weight":1,"surfaceText":"[[general]] IsA [[general officer]]"}
+{"start":"/c/en/moderate","rel":"/r/IsA","end":"/c/en/actor","weight":1,"surfaceText":"[[moderate]] IsA [[actor]]"}
+{"start":"/c/en/alternate","rel":"/r/IsA","end":"/c/en/stand-in","weight":1,"surfaceText":"[[alternate]] IsA [[stand-in]]"}
+{"start":"/c/en/ace","rel":"/r/IsA","end":"/c/en/expert","weight":1,"surfaceText":"[[ace]] IsA [[expert]]"}
+{"start":"/c/en/crab","rel":"/r/IsA","end":"/c/en/grouch","weight":1,"surfaceText":"[[crab]] IsA [[grouch]]"}
+{"start":"/c/en/flop","rel":"/r/IsA","end":"/c/en/failure","weight":1,"surfaceText":"[[flop]] IsA [[failure]]"}
+{"start":"/c/en/fund","rel":"/r/IsA","end":"/c/en/nondepository financial institution","weight":1,"surfaceText":"[[fund]] IsA [[nondepository financial institution]]"}
+{"start":"/c/en/pair","rel":"/r/IsA","end":"/c/en/gathering","weight":1,"surfaceText":"[[pair]] IsA [[gathering]]"}
+{"start":"/c/en/rake","rel":"/r/IsA","end":"/c/en/libertine","weight":1,"surfaceText":"[[rake]] IsA [[libertine]]"}
+{"start":"/c/en/rock","rel":"/r/IsA","end":"/c/en/good person","weight":1,"surfaceText":"[[rock]] IsA [[good person]]"}
+{"start":"/c/en/sick","rel":"/r/IsA","end":"/c/en/people","weight":1,"surfaceText":"[[sick]] IsA [[people]]"}
+{"start":"/c/en/blade","rel":"/r/IsA","end":"/c/en/young person","weight":1,"surfaceText":"[[blade]] IsA [[young person]]"}
+{"start":"/c/en/cheat","rel":"/r/IsA","end":"/c/en/wrongdoer","weight":1,"surfaceText":"[[cheat]] IsA [[wrongdoer]]"}
+{"start":"/c/en/sport","rel":"/r/IsA","end":"/c/en/vacationer","weight":1,"surfaceText":"[[sport]] IsA [[vacationer]]"}
+{"start":"/c/en/caller","rel":"/r/IsA","end":"/c/en/visitor","weight":1,"surfaceText":"[[caller]] IsA [[visitor]]"}
+{"start":"/c/en/column","rel":"/r/IsA","end":"/c/en/file","weight":1,"surfaceText":"[[column]] IsA [[file]]"}
+{"start":"/c/en/couple","rel":"/r/IsA","end":"/c/en/pair","weight":1,"surfaceText":"[[couple]] IsA [[pair]]"}
+{"start":"/c/en/divine","rel":"/r/IsA","end":"/c/en/reverend","weight":1,"surfaceText":"[[divine]] IsA [[reverend]]"}
+{"start":"/c/en/pledge","rel":"/r/IsA","end":"/c/en/member","weight":1,"surfaceText":"[[pledge]] IsA [[member]]"}
+{"start":"/c/en/simple","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[simple]] IsA [[person]]"}
+{"start":"/c/en/sponge","rel":"/r/IsA","end":"/c/en/learner","weight":1,"surfaceText":"[[sponge]] IsA [[learner]]"}
+{"start":"/c/en/system","rel":"/r/IsA","end":"/c/en/group","weight":1,"surfaceText":"[[system]] IsA [[group]]"}
+{"start":"/c/en/system","rel":"/r/HasA","end":"/c/en/hierarchy","weight":1,"surfaceText":"[[system]] HasA [[hierarchy]]"}
+{"start":"/c/en/wanton","rel":"/r/IsA","end":"/c/en/sensualist","weight":1,"surfaceText":"[[wanton]] IsA [[sensualist]]"}
+{"start":"/c/en/sleeper","rel":"/r/IsA","end":"/c/en/rester","weight":1,"surfaceText":"[[sleeper]] IsA [[rester]]"}
+{"start":"/c/en/business","rel":"/r/IsA","end":"/c/en/enterprise","weight":1,"surfaceText":"[[business]] IsA [[enterprise]]"}
+{"start":"/c/en/business","rel":"/r/HasA","end":"/c/en/division","weight":1,"surfaceText":"[[business]] HasA [[division]]"}
+{"start":"/c/en/associate","rel":"/r/IsA","end":"/c/en/peer","weight":1,"surfaceText":"[[associate]] IsA [[peer]]"}
+{"start":"/c/en/instrument","rel":"/r/IsA","end":"/c/en/assistant","weight":1,"surfaceText":"[[instrument]] IsA [[assistant]]"}
+{"start":"/c/en/substitute","rel":"/r/IsA","end":"/c/en/peer","weight":1,"surfaceText":"[[substitute]] IsA [[peer]]"}
+{"start":"/c/en/gun","rel":"/r/IsA","end":"/c/en/shot","weight":1,"surfaceText":"[[gun]] IsA [[shot]]"}
+{"start":"/c/en/sum","rel":"/r/IsA","end":"/c/en/collection","weight":1,"surfaceText":"[[sum]] IsA [[collection]]"}
+{"start":"/c/en/alto","rel":"/r/IsA","end":"/c/en/singer","weight":1,"surfaceText":"[[alto]] IsA [[singer]]"}
+{"start":"/c/en/best","rel":"/r/IsA","end":"/c/en/actor","weight":1,"surfaceText":"[[best]] IsA [[actor]]"}
+{"start":"/c/en/buff","rel":"/r/IsA","end":"/c/en/follower","weight":1,"surfaceText":"[[buff]] IsA [[follower]]"}
+{"start":"/c/en/dear","rel":"/r/IsA","end":"/c/en/lover","weight":1,"surfaceText":"[[dear]] IsA [[lover]]"}
+{"start":"/c/en/mass","rel":"/r/IsA","end":"/c/en/collection","weight":1,"surfaceText":"[[mass]] IsA [[collection]]"}
+{"start":"/c/en/cream","rel":"/r/IsA","end":"/c/en/elite","weight":1,"surfaceText":"[[cream]] IsA [[elite]]"}
+{"start":"/c/en/creep","rel":"/r/IsA","end":"/c/en/unpleasant person","weight":1,"surfaceText":"[[creep]] IsA [[unpleasant person]]"}
+{"start":"/c/en/giant","rel":"/r/IsA","end":"/c/en/enterprise","weight":1,"surfaceText":"[[giant]] IsA [[enterprise]]"}
+{"start":"/c/en/labor","rel":"/r/IsA","end":"/c/en/class","weight":1,"surfaceText":"[[labor]] IsA [[class]]"}
+{"start":"/c/en/labor","rel":"/r/HasA","end":"/c/en/proletarian","weight":1,"surfaceText":"[[labor]] HasA [[proletarian]]"}
+{"start":"/c/en/pilot","rel":"/r/IsA","end":"/c/en/aviator","weight":1,"surfaceText":"[[pilot]] IsA [[aviator]]"}
+{"start":"/c/en/sneak","rel":"/r/IsA","end":"/c/en/intruder","weight":1,"surfaceText":"[[sneak]] IsA [[intruder]]"}
+{"start":"/c/en/stack","rel":"/r/IsA","end":"/c/en/pile","weight":1,"surfaceText":"[[stack]] IsA [[pile]]"}
+{"start":"/c/en/staff","rel":"/r/IsA","end":"/c/en/body","weight":1,"surfaceText":"[[staff]] IsA [[body]]"}
+{"start":"/c/en/staff","rel":"/r/HasA","end":"/c/en/professor","weight":1,"surfaceText":"[[staff]] HasA [[professor]]"}
+{"start":"/c/en/world","rel":"/r/IsA","end":"/c/en/class","weight":1,"surfaceText":"[[world]] IsA [[class]]"}
+{"start":"/c/en/gutter","rel":"/r/IsA","end":"/c/en/worker","weight":1,"surfaceText":"[[gutter]] IsA [[worker]]"}
+{"start":"/c/en/jumper","rel":"/r/IsA","end":"/c/en/athlete","weight":1,"surfaceText":"[[jumper]] IsA [[athlete]]"}
+{"start":"/c/en/labour","rel":"/r/IsA","end":"/c/en/class","weight":1,"surfaceText":"[[labour]] IsA [[class]]"}
+{"start":"/c/en/labour","rel":"/r/HasA","end":"/c/en/proletarian","weight":1,"surfaceText":"[[labour]] HasA [[proletarian]]"}
+{"start":"/c/en/lather","rel":"/r/IsA","end":"/c/en/working person","weight":1,"surfaceText":"[[lather]] IsA [[working person]]"}
+{"start":"/c/en/picket","rel":"/r/IsA","end":"/c/en/demonstrator","weight":1,"surfaceText":"[[picket]] IsA [[demonstrator]]"}
+{"start":"/c/en/reader","rel":"/r/IsA","end":"/c/en/scholar","weight":1,"surfaceText":"[[reader]] IsA [[scholar]]"}
+{"start":"/c/en/savage","rel":"/r/IsA","end":"/c/en/attacker","weight":1,"surfaceText":"[[savage]] IsA [[attacker]]"}
+{"start":"/c/en/captain","rel":"/r/IsA","end":"/c/en/commissioned naval officer","weight":1,"surfaceText":"[[captain]] IsA [[commissioned naval officer]]"}
+{"start":"/c/en/culture","rel":"/r/IsA","end":"/c/en/society","weight":1,"surfaceText":"[[culture]] IsA [[society]]"}
+{"start":"/c/en/culture","rel":"/r/HasA","end":"/c/en/subculture","weight":1,"surfaceText":"[[culture]] HasA [[subculture]]"}
+{"start":"/c/en/monitor","rel":"/r/IsA","end":"/c/en/defender","weight":1,"surfaceText":"[[monitor]] IsA [[defender]]"}
+{"start":"/c/en/neutral","rel":"/r/IsA","end":"/c/en/actor","weight":1,"surfaceText":"[[neutral]] IsA [[actor]]"}
+{"start":"/c/en/unknown","rel":"/r/IsA","end":"/c/en/intruder","weight":1,"surfaceText":"[[unknown]] IsA [[intruder]]"}
+{"start":"/c/en/utility","rel":"/r/IsA","end":"/c/en/service","weight":1,"surfaceText":"[[utility]] IsA [[service]]"}
+{"start":"/c/en/inferior","rel":"/r/IsA","end":"/c/en/follower","weight":1,"surfaceText":"[[inferior]] IsA [[follower]]"}
+{"start":"/c/en/initiate","rel":"/r/IsA","end":"/c/en/scholar","weight":1,"surfaceText":"[[initiate]] IsA [[scholar]]"}
+{"start":"/c/en/innocent","rel":"/r/IsA","end":"/c/en/actor","weight":1,"surfaceText":"[[innocent]] IsA [[actor]]"}
+{"start":"/c/en/national","rel":"/r/IsA","end":"/c/en/actor","weight":1,"surfaceText":"[[national]] IsA [[actor]]"}
+{"start":"/c/en/transpose","rel":"/r/IsA","end":"/c/en/matrix","weight":1,"surfaceText":"[[transpose]] IsA [[matrix]]"}
+{"start":"/c/en/association","rel":"/r/IsA","end":"/c/en/organization","weight":1,"surfaceText":"[[association]] IsA [[organization]]"}
+{"start":"/c/en/association","rel":"/r/HasA","end":"/c/en/chapter","weight":1,"surfaceText":"[[association]] HasA [[chapter]]"}
+{"start":"/c/en/professional","rel":"/r/IsA","end":"/c/en/authority","weight":1,"surfaceText":"[[professional]] IsA [[authority]]"}
+{"start":"/c/en/bum","rel":"/r/IsA","end":"/c/en/vagrant","weight":1,"surfaceText":"[[bum]] IsA [[vagrant]]"}
+{"start":"/c/en/fan","rel":"/r/IsA","end":"/c/en/follower","weight":1,"surfaceText":"[[fan]] IsA [[follower]]"}
+{"start":"/c/en/law","rel":"/r/IsA","end":"/c/en/collection","weight":1,"surfaceText":"[[law]] IsA [[collection]]"}
+{"start":"/c/en/deck","rel":"/r/IsA","end":"/c/en/pack","weight":1,"surfaceText":"[[deck]] IsA [[pack]]"}
+{"start":"/c/en/deck","rel":"/r/HasA","end":"/c/en/playing card","weight":1,"surfaceText":"[[deck]] HasA [[playing card]]"}
+{"start":"/c/en/fool","rel":"/r/IsA","end":"/c/en/victim","weight":1,"surfaceText":"[[fool]] IsA [[victim]]"}
+{"start":"/c/en/join","rel":"/r/IsA","end":"/c/en/set","weight":1,"surfaceText":"[[join]] IsA [[set]]"}
+{"start":"/c/en/kink","rel":"/r/IsA","end":"/c/en/actor","weight":1,"surfaceText":"[[kink]] IsA [[actor]]"}
+{"start":"/c/en/page","rel":"/r/IsA","end":"/c/en/attendant","weight":1,"surfaceText":"[[page]] IsA [[attendant]]"}
+{"start":"/c/en/pink","rel":"/r/IsA","end":"/c/en/collectivist","weight":1,"surfaceText":"[[pink]] IsA [[collectivist]]"}
+{"start":"/c/en/stud","rel":"/r/IsA","end":"/c/en/man","weight":1,"surfaceText":"[[stud]] IsA [[man]]"}
+{"start":"/c/en/twin","rel":"/r/IsA","end":"/c/en/sibling","weight":1,"surfaceText":"[[twin]] IsA [[sibling]]"}
+{"start":"/c/en/clump","rel":"/r/IsA","end":"/c/en/agglomeration","weight":1,"surfaceText":"[[clump]] IsA [[agglomeration]]"}
+{"start":"/c/en/coach","rel":"/r/IsA","end":"/c/en/teacher","weight":1,"surfaceText":"[[coach]] IsA [[teacher]]"}
+{"start":"/c/en/dance","rel":"/r/IsA","end":"/c/en/party","weight":1,"surfaceText":"[[dance]] IsA [[party]]"}
+{"start":"/c/en/drone","rel":"/r/IsA","end":"/c/en/idler","weight":1,"surfaceText":"[[drone]] IsA [[idler]]"}
+{"start":"/c/en/extra","rel":"/r/IsA","end":"/c/en/actor","weight":1,"surfaceText":"[[extra]] IsA [[actor]]"}
+{"start":"/c/en/feast","rel":"/r/IsA","end":"/c/en/dinner","weight":1,"surfaceText":"[[feast]] IsA [[dinner]]"}
+{"start":"/c/en/fence","rel":"/r/IsA","end":"/c/en/trader","weight":1,"surfaceText":"[[fence]] IsA [[trader]]"}
+{"start":"/c/en/fleet","rel":"/r/IsA","end":"/c/en/steamship company","weight":1,"surfaceText":"[[fleet]] IsA [[steamship company]]"}
+{"start":"/c/en/fleet","rel":"/r/HasA","end":"/c/en/ship","weight":1,"surfaceText":"[[fleet]] HasA [[ship]]"}
+{"start":"/c/en/flock","rel":"/r/IsA","end":"/c/en/animal group","weight":1,"surfaceText":"[[flock]] IsA [[animal group]]"}
+{"start":"/c/en/flock","rel":"/r/HasA","end":"/c/en/bird","weight":1,"surfaceText":"[[flock]] HasA [[bird]]"}
+{"start":"/c/en/ghost","rel":"/r/IsA","end":"/c/en/soul","weight":1,"surfaceText":"[[ghost]] IsA [[soul]]"}
+{"start":"/c/en/clear","rel":"/r/IsA","end":"/c/en/area","weight":1,"surfaceText":"[[clear]] IsA [[area]]"}
+{"start":"/c/en/right","rel":"/r/IsA","end":"/c/en/position","weight":1,"surfaceText":"[[right]] IsA [[position]]"}
+{"start":"/c/en/open","rel":"/r/IsA","end":"/c/en/outside","weight":1,"surfaceText":"[[open]] IsA [[outside]]"}
+{"start":"/c/en/beat","rel":"/r/IsA","end":"/c/en/path","weight":1,"surfaceText":"[[beat]] IsA [[path]]"}
+{"start":"/c/en/back","rel":"/r/IsA","end":"/c/en/position","weight":1,"surfaceText":"[[back]] IsA [[position]]"}
+{"start":"/c/en/block","rel":"/r/IsA","end":"/c/en/area","weight":1,"surfaceText":"[[block]] IsA [[area]]"}
+{"start":"/c/en/see","rel":"/r/IsA","end":"/c/en/seat","weight":1,"surfaceText":"[[see]] IsA [[seat]]"}
+{"start":"/c/en/keep","rel":"/r/IsA","end":"/c/en/cell","weight":1,"surfaceText":"[[keep]] IsA [[cell]]"}
+{"start":"/c/en/square","rel":"/r/IsA","end":"/c/en/tract","weight":1,"surfaceText":"[[square]] IsA [[tract]]"}
+{"start":"/c/en/pitch","rel":"/r/IsA","end":"/c/en/position","weight":1,"surfaceText":"[[pitch]] IsA [[position]]"}
+{"start":"/c/en/center","rel":"/r/IsA","end":"/c/en/area","weight":1,"surfaceText":"[[center]] IsA [[area]]"}
+{"start":"/c/en/centre","rel":"/r/IsA","end":"/c/en/place","weight":1,"surfaceText":"[[centre]] IsA [[place]]"}
+{"start":"/c/en/top","rel":"/r/IsA","end":"/c/en/topographic point","weight":1,"surfaceText":"[[top]] IsA [[topographic point]]"}
+{"start":"/c/en/post","rel":"/r/IsA","end":"/c/en/position","weight":1,"surfaceText":"[[post]] IsA [[position]]"}
+{"start":"/c/en/field","rel":"/r/IsA","end":"/c/en/region","weight":1,"surfaceText":"[[field]] IsA [[region]]"}
+{"start":"/c/en/spot","rel":"/r/IsA","end":"/c/en/point","weight":1,"surfaceText":"[[spot]] IsA [[point]]"}
+{"start":"/c/en/bar","rel":"/r/IsA","end":"/c/en/room","weight":1,"surfaceText":"[[bar]] IsA [[room]]"}
+{"start":"/c/en/end","rel":"/r/IsA","end":"/c/en/extremity","weight":1,"surfaceText":"[[end]] IsA [[extremity]]"}
+{"start":"/c/en/frame","rel":"/r/IsA","end":"/c/en/framework","weight":1,"surfaceText":"[[frame]] IsA [[framework]]"}
+{"start":"/c/en/frame","rel":"/r/HasA","end":"/c/en/spectacles","weight":1,"surfaceText":"[[frame]] HasA [[spectacles]]"}
+{"start":"/c/en/rough","rel":"/r/IsA","end":"/c/en/site","weight":1,"surfaceText":"[[rough]] IsA [[site]]"}
+{"start":"/c/en/address","rel":"/r/IsA","end":"/c/en/geographic point","weight":1,"surfaceText":"[[address]] IsA [[geographic point]]"}
+{"start":"/c/en/quarter","rel":"/r/IsA","end":"/c/en/city district","weight":1,"surfaceText":"[[quarter]] IsA [[city district]]"}
+{"start":"/c/en/position","rel":"/r/IsA","end":"/c/en/point","weight":1,"surfaceText":"[[position]] IsA [[point]]"}
+{"start":"/c/en/land","rel":"/r/IsA","end":"/c/en/region","weight":1,"surfaceText":"[[land]] IsA [[region]]"}
+{"start":"/c/en/bound","rel":"/r/IsA","end":"/c/en/extremity","weight":1,"surfaceText":"[[bound]] IsA [[extremity]]"}
+{"start":"/c/en/range","rel":"/r/IsA","end":"/c/en/limit","weight":1,"surfaceText":"[[range]] IsA [[limit]]"}
+{"start":"/c/en/seat","rel":"/r/IsA","end":"/c/en/space","weight":1,"surfaceText":"[[seat]] IsA [[space]]"}
+{"start":"/c/en/dark","rel":"/r/IsA","end":"/c/en/scene","weight":1,"surfaceText":"[[dark]] IsA [[scene]]"}
+{"start":"/c/en/rail","rel":"/r/IsA","end":"/c/en/barrier","weight":1,"surfaceText":"[[rail]] IsA [[barrier]]"}
+{"start":"/c/en/rail","rel":"/r/HasA","end":"/c/en/ledger board","weight":1,"surfaceText":"[[rail]] HasA [[ledger board]]"}
+{"start":"/c/en/cross","rel":"/r/IsA","end":"/c/en/structure","weight":1,"surfaceText":"[[cross]] IsA [[structure]]"}
+{"start":"/c/en/section","rel":"/r/IsA","end":"/c/en/area","weight":1,"surfaceText":"[[section]] IsA [[area]]"}
+{"start":"/c/en/tip","rel":"/r/IsA","end":"/c/en/end","weight":1,"surfaceText":"[[tip]] IsA [[end]]"}
+{"start":"/c/en/plug","rel":"/r/IsA","end":"/c/en/blockage","weight":1,"surfaceText":"[[plug]] IsA [[blockage]]"}
+{"start":"/c/en/port","rel":"/r/IsA","end":"/c/en/geographic point","weight":1,"surfaceText":"[[port]] IsA [[geographic point]]"}
+{"start":"/c/en/stall","rel":"/r/IsA","end":"/c/en/booth","weight":1,"surfaceText":"[[stall]] IsA [[booth]]"}
+{"start":"/c/en/corner","rel":"/r/IsA","end":"/c/en/point","weight":1,"surfaceText":"[[corner]] IsA [[point]]"}
+{"start":"/c/en/outside","rel":"/r/IsA","end":"/c/en/surface","weight":1,"surfaceText":"[[outside]] IsA [[surface]]"}
+{"start":"/c/en/dig","rel":"/r/IsA","end":"/c/en/site","weight":1,"surfaceText":"[[dig]] IsA [[site]]"}
+{"start":"/c/en/way","rel":"/r/IsA","end":"/c/en/path","weight":1,"surfaceText":"[[way]] IsA [[path]]"}
+{"start":"/c/en/front","rel":"/r/IsA","end":"/c/en/side","weight":1,"surfaceText":"[[front]] IsA [[side]]"}
+{"start":"/c/en/joint","rel":"/r/IsA","end":"/c/en/spot","weight":1,"surfaceText":"[[joint]] IsA [[spot]]"}
+{"start":"/c/en/patch","rel":"/r/IsA","end":"/c/en/tract","weight":1,"surfaceText":"[[patch]] IsA [[tract]]"}
+{"start":"/c/en/reach","rel":"/r/IsA","end":"/c/en/limit","weight":1,"surfaceText":"[[reach]] IsA [[limit]]"}
+{"start":"/c/en/thick","rel":"/r/IsA","end":"/c/en/inside","weight":1,"surfaceText":"[[thick]] IsA [[inside]]"}
+{"start":"/c/en/medium","rel":"/r/IsA","end":"/c/en/environment","weight":1,"surfaceText":"[[medium]] IsA [[environment]]"}
+{"start":"/c/en/dock","rel":"/r/IsA","end":"/c/en/enclosure","weight":1,"surfaceText":"[[dock]] IsA [[enclosure]]"}
+{"start":"/c/en/ruin","rel":"/r/IsA","end":"/c/en/building","weight":1,"surfaceText":"[[ruin]] IsA [[building]]"}
+{"start":"/c/en/tack","rel":"/r/IsA","end":"/c/en/bearing","weight":1,"surfaceText":"[[tack]] IsA [[bearing]]"}
+{"start":"/c/en/floor","rel":"/r/IsA","end":"/c/en/structure","weight":1,"surfaceText":"[[floor]] IsA [[structure]]"}
+{"start":"/c/en/bottom","rel":"/r/IsA","end":"/c/en/side","weight":1,"surfaceText":"[[bottom]] IsA [[side]]"}
+{"start":"/c/en/puddle","rel":"/r/IsA","end":"/c/en/topographic point","weight":1,"surfaceText":"[[puddle]] IsA [[topographic point]]"}
+{"start":"/c/en/compound","rel":"/r/IsA","end":"/c/en/enclosure","weight":1,"surfaceText":"[[compound]] IsA [[enclosure]]"}
+{"start":"/c/en/retreat","rel":"/r/IsA","end":"/c/en/area","weight":1,"surfaceText":"[[retreat]] IsA [[area]]"}
+{"start":"/c/en/mat","rel":"/r/IsA","end":"/c/en/mounting","weight":1,"surfaceText":"[[mat]] IsA [[mounting]]"}
+{"start":"/c/en/belt","rel":"/r/IsA","end":"/c/en/region","weight":1,"surfaceText":"[[belt]] IsA [[region]]"}
+{"start":"/c/en/dump","rel":"/r/IsA","end":"/c/en/site","weight":1,"surfaceText":"[[dump]] IsA [[site]]"}
+{"start":"/c/en/scene","rel":"/r/IsA","end":"/c/en/area","weight":1,"surfaceText":"[[scene]] IsA [[area]]"}
+{"start":"/c/en/space","rel":"/r/IsA","end":"/c/en/area","weight":1,"surfaceText":"[[space]] IsA [[area]]"}
+{"start":"/c/en/border","rel":"/r/IsA","end":"/c/en/boundary","weight":1,"surfaceText":"[[border]] IsA [[boundary]]"}
+{"start":"/c/en/common","rel":"/r/IsA","end":"/c/en/tract","weight":1,"surfaceText":"[[common]] IsA [[tract]]"}
+{"start":"/c/en/cradle","rel":"/r/IsA","end":"/c/en/beginning","weight":1,"surfaceText":"[[cradle]] IsA [[beginning]]"}
+{"start":"/c/en/inside","rel":"/r/IsA","end":"/c/en/surface","weight":1,"surfaceText":"[[inside]] IsA [[surface]]"}
+{"start":"/c/en/surface","rel":"/r/IsA","end":"/c/en/boundary","weight":1,"surfaceText":"[[surface]] IsA [[boundary]]"}
+{"start":"/c/en/lie","rel":"/r/IsA","end":"/c/en/position","weight":1,"surfaceText":"[[lie]] IsA [[position]]"}
+{"start":"/c/en/boot","rel":"/r/IsA","end":"/c/en/compartment","weight":1,"surfaceText":"[[boot]] IsA [[compartment]]"}
+{"start":"/c/en/clog","rel":"/r/IsA","end":"/c/en/hindrance","weight":1,"surfaceText":"[[clog]] IsA [[hindrance]]"}
+{"start":"/c/en/coil","rel":"/r/IsA","end":"/c/en/structure","weight":1,"surfaceText":"[[coil]] IsA [[structure]]"}
+{"start":"/c/en/nest","rel":"/r/IsA","end":"/c/en/retreat","weight":1,"surfaceText":"[[nest]] IsA [[retreat]]"}
+{"start":"/c/en/wire","rel":"/r/IsA","end":"/c/en/finishing line","weight":1,"surfaceText":"[[wire]] IsA [[finishing line]]"}
+{"start":"/c/en/yard","rel":"/r/IsA","end":"/c/en/tract","weight":1,"surfaceText":"[[yard]] IsA [[tract]]"}
+{"start":"/c/en/forge","rel":"/r/IsA","end":"/c/en/furnace","weight":1,"surfaceText":"[[forge]] IsA [[furnace]]"}
+{"start":"/c/en/limit","rel":"/r/IsA","end":"/c/en/extremity","weight":1,"surfaceText":"[[limit]] IsA [[extremity]]"}
+{"start":"/c/en/lodge","rel":"/r/IsA","end":"/c/en/house","weight":1,"surfaceText":"[[lodge]] IsA [[house]]"}
+{"start":"/c/en/buffer","rel":"/r/IsA","end":"/c/en/zone","weight":1,"surfaceText":"[[buffer]] IsA [[zone]]"}
+{"start":"/c/en/middle","rel":"/r/IsA","end":"/c/en/area","weight":1,"surfaceText":"[[middle]] IsA [[area]]"}
+{"start":"/c/en/capital","rel":"/r/IsA","end":"/c/en/seat","weight":1,"surfaceText":"[[capital]] IsA [[seat]]"}
+{"start":"/c/en/overhead","rel":"/r/IsA","end":"/c/en/disk space","weight":1,"surfaceText":"[[overhead]] IsA [[disk space]]"}
+{"start":"/c/en/preserve","rel":"/r/IsA","end":"/c/en/reservation","weight":1,"surfaceText":"[[preserve]] IsA [[reservation]]"}
+{"start":"/c/en/terminal","rel":"/r/IsA","end":"/c/en/extremity","weight":1,"surfaceText":"[[terminal]] IsA [[extremity]]"}
+{"start":"/c/en/direction","rel":"/r/IsA","end":"/c/en/path","weight":1,"surfaceText":"[[direction]] IsA [[path]]"}
+{"start":"/c/en/hall","rel":"/r/IsA","end":"/c/en/room","weight":1,"surfaceText":"[[hall]] IsA [[room]]"}
+{"start":"/c/en/loft","rel":"/r/IsA","end":"/c/en/floor","weight":1,"surfaceText":"[[loft]] IsA [[floor]]"}
+{"start":"/c/en/plot","rel":"/r/IsA","end":"/c/en/tract","weight":1,"surfaceText":"[[plot]] IsA [[tract]]"}
+{"start":"/c/en/tape","rel":"/r/IsA","end":"/c/en/finishing line","weight":1,"surfaceText":"[[tape]] IsA [[finishing line]]"}
+{"start":"/c/en/grate","rel":"/r/IsA","end":"/c/en/framework","weight":1,"surfaceText":"[[grate]] IsA [[framework]]"}
+{"start":"/c/en/stoop","rel":"/r/IsA","end":"/c/en/porch","weight":1,"surfaceText":"[[stoop]] IsA [[porch]]"}
+{"start":"/c/en/fringe","rel":"/r/IsA","end":"/c/en/city district","weight":1,"surfaceText":"[[fringe]] IsA [[city district]]"}
+{"start":"/c/en/fringe","rel":"/r/HasA","end":"/c/en/suburb","weight":1,"surfaceText":"[[fringe]] HasA [[suburb]]"}
+{"start":"/c/en/circuit","rel":"/r/IsA","end":"/c/en/path","weight":1,"surfaceText":"[[circuit]] IsA [[path]]"}
+{"start":"/c/en/distance","rel":"/r/IsA","end":"/c/en/region","weight":1,"surfaceText":"[[distance]] IsA [[region]]"}
+{"start":"/c/en/derivation","rel":"/r/IsA","end":"/c/en/beginning","weight":1,"surfaceText":"[[derivation]] IsA [[beginning]]"}
+{"start":"/c/en/bent","rel":"/r/IsA","end":"/c/en/grassland","weight":1,"surfaceText":"[[bent]] IsA [[grassland]]"}
+{"start":"/c/en/gate","rel":"/r/IsA","end":"/c/en/movable barrier","weight":1,"surfaceText":"[[gate]] IsA [[movable barrier]]"}
+{"start":"/c/en/gate","rel":"/r/HasA","end":"/c/en/hinge","weight":1,"surfaceText":"[[gate]] HasA [[hinge]]"}
+{"start":"/c/en/mill","rel":"/r/IsA","end":"/c/en/plant","weight":1,"surfaceText":"[[mill]] IsA [[plant]]"}
+{"start":"/c/en/mill","rel":"/r/HasA","end":"/c/en/production line","weight":1,"surfaceText":"[[mill]] HasA [[production line]]"}
+{"start":"/c/en/safe","rel":"/r/IsA","end":"/c/en/cupboard","weight":1,"surfaceText":"[[safe]] IsA [[cupboard]]"}
+{"start":"/c/en/sail","rel":"/r/IsA","end":"/c/en/structure","weight":1,"surfaceText":"[[sail]] IsA [[structure]]"}
+{"start":"/c/en/hedge","rel":"/r/IsA","end":"/c/en/fence","weight":1,"surfaceText":"[[hedge]] IsA [[fence]]"}
+{"start":"/c/en/paint","rel":"/r/IsA","end":"/c/en/space","weight":1,"surfaceText":"[[paint]] IsA [[space]]"}
+{"start":"/c/en/paint","rel":"/r/HasA","end":"/c/en/foul line","weight":1,"surfaceText":"[[paint]] HasA [[foul line]]"}
+{"start":"/c/en/parcel","rel":"/r/IsA","end":"/c/en/geographical area","weight":1,"surfaceText":"[[parcel]] IsA [[geographical area]]"}
+{"start":"/c/en/sphere","rel":"/r/IsA","end":"/c/en/geographical area","weight":1,"surfaceText":"[[sphere]] IsA [[geographical area]]"}
+{"start":"/c/en/bearing","rel":"/r/IsA","end":"/c/en/direction","weight":1,"surfaceText":"[[bearing]] IsA [[direction]]"}
+{"start":"/c/en/profile","rel":"/r/IsA","end":"/c/en/outline","weight":1,"surfaceText":"[[profile]] IsA [[outline]]"}
+{"start":"/c/en/shelter","rel":"/r/IsA","end":"/c/en/structure","weight":1,"surfaceText":"[[shelter]] IsA [[structure]]"}
+{"start":"/c/en/crossing","rel":"/r/IsA","end":"/c/en/point","weight":1,"surfaceText":"[[crossing]] IsA [[point]]"}
+{"start":"/c/en/interior","rel":"/r/IsA","end":"/c/en/surface","weight":1,"surfaceText":"[[interior]] IsA [[surface]]"}
+{"start":"/c/en/reservation","rel":"/r/IsA","end":"/c/en/administrative district","weight":1,"surfaceText":"[[reservation]] IsA [[administrative district]]"}
+{"start":"/c/en/area","rel":"/r/IsA","end":"/c/en/region","weight":1,"surfaceText":"[[area]] IsA [[region]]"}
+{"start":"/c/en/bush","rel":"/r/IsA","end":"/c/en/wilderness","weight":1,"surfaceText":"[[bush]] IsA [[wilderness]]"}
+{"start":"/c/en/cork","rel":"/r/IsA","end":"/c/en/plug","weight":1,"surfaceText":"[[cork]] IsA [[plug]]"}
+{"start":"/c/en/dive","rel":"/r/IsA","end":"/c/en/cabaret","weight":1,"surfaceText":"[[dive]] IsA [[cabaret]]"}
+{"start":"/c/en/limb","rel":"/r/IsA","end":"/c/en/edge","weight":1,"surfaceText":"[[limb]] IsA [[edge]]"}
+{"start":"/c/en/raft","rel":"/r/IsA","end":"/c/en/foundation","weight":1,"surfaceText":"[[raft]] IsA [[foundation]]"}
+{"start":"/c/en/shed","rel":"/r/IsA","end":"/c/en/outbuilding","weight":1,"surfaceText":"[[shed]] IsA [[outbuilding]]"}
+{"start":"/c/en/zone","rel":"/r/IsA","end":"/c/en/region","weight":1,"surfaceText":"[[zone]] IsA [[region]]"}
+{"start":"/c/en/chase","rel":"/r/IsA","end":"/c/en/framework","weight":1,"surfaceText":"[[chase]] IsA [[framework]]"}
+{"start":"/c/en/cut","rel":"/r/IsA","end":"/c/en/furrow","weight":1,"surfaceText":"[[cut]] IsA [[furrow]]"}
+{"start":"/c/en/light","rel":"/r/IsA","end":"/c/en/source of illumination","weight":1,"surfaceText":"[[light]] IsA [[source of illumination]]"}
+{"start":"/c/en/charge","rel":"/r/IsA","end":"/c/en/cost","weight":1,"surfaceText":"[[charge]] IsA [[cost]]"}
+{"start":"/c/en/check","rel":"/r/IsA","end":"/c/en/draft","weight":1,"surfaceText":"[[check]] IsA [[draft]]"}
+{"start":"/c/en/work","rel":"/r/IsA","end":"/c/en/product","weight":1,"surfaceText":"[[work]] IsA [[product]]"}
+{"start":"/c/en/stock","rel":"/r/IsA","end":"/c/en/merchandise","weight":1,"surfaceText":"[[stock]] IsA [[merchandise]]"}
+{"start":"/c/en/stick","rel":"/r/IsA","end":"/c/en/implement","weight":1,"surfaceText":"[[stick]] IsA [[implement]]"}
+{"start":"/c/en/flat","rel":"/r/IsA","end":"/c/en/box","weight":1,"surfaceText":"[[flat]] IsA [[box]]"}
+{"start":"/c/en/crack","rel":"/r/IsA","end":"/c/en/opening","weight":1,"surfaceText":"[[crack]] IsA [[opening]]"}
+{"start":"/c/en/press","rel":"/r/IsA","end":"/c/en/machine","weight":1,"surfaceText":"[[press]] IsA [[machine]]"}
+{"start":"/c/en/press","rel":"/r/HasA","end":"/c/en/bed","weight":1,"surfaceText":"[[press]] HasA [[bed]]"}
+{"start":"/c/en/settle","rel":"/r/IsA","end":"/c/en/bench","weight":1,"surfaceText":"[[settle]] IsA [[bench]]"}
+{"start":"/c/en/spread","rel":"/r/IsA","end":"/c/en/farm","weight":1,"surfaceText":"[[spread]] IsA [[farm]]"}
+{"start":"/c/en/wash","rel":"/r/IsA","end":"/c/en/water-base paint","weight":1,"surfaceText":"[[wash]] IsA [[water-base paint]]"}
+{"start":"/c/en/well","rel":"/r/IsA","end":"/c/en/excavation","weight":1,"surfaceText":"[[well]] IsA [[excavation]]"}
+{"start":"/c/en/swing","rel":"/r/IsA","end":"/c/en/mechanical device","weight":1,"surfaceText":"[[swing]] IsA [[mechanical device]]"}
+{"start":"/c/en/fly","rel":"/r/IsA","end":"/c/en/opening","weight":1,"surfaceText":"[[fly]] IsA [[opening]]"}
+{"start":"/c/en/tap","rel":"/r/IsA","end":"/c/en/faucet","weight":1,"surfaceText":"[[tap]] IsA [[faucet]]"}
+{"start":"/c/en/stretch","rel":"/r/IsA","end":"/c/en/straightaway","weight":1,"surfaceText":"[[stretch]] IsA [[straightaway]]"}
+{"start":"/c/en/shot","rel":"/r/IsA","end":"/c/en/projectile","weight":1,"surfaceText":"[[shot]] IsA [[projectile]]"}
+{"start":"/c/en/black","rel":"/r/IsA","end":"/c/en/man","weight":1,"surfaceText":"[[black]] IsA [[man]]"}
+{"start":"/c/en/strip","rel":"/r/IsA","end":"/c/en/airfield","weight":1,"surfaceText":"[[strip]] IsA [[airfield]]"}
+{"start":"/c/en/strip","rel":"/r/HasA","end":"/c/en/runway","weight":1,"surfaceText":"[[strip]] HasA [[runway]]"}
+{"start":"/c/en/separate","rel":"/r/IsA","end":"/c/en/garment","weight":1,"surfaceText":"[[separate]] IsA [[garment]]"}
+{"start":"/c/en/tie","rel":"/r/IsA","end":"/c/en/neckwear","weight":1,"surfaceText":"[[tie]] IsA [[neckwear]]"}
+{"start":"/c/en/rack","rel":"/r/IsA","end":"/c/en/instrument of torture","weight":1,"surfaceText":"[[rack]] IsA [[instrument of torture]]"}
+{"start":"/c/en/match","rel":"/r/IsA","end":"/c/en/lighter","weight":1,"surfaceText":"[[match]] IsA [[lighter]]"}
+{"start":"/c/en/match","rel":"/r/HasA","end":"/c/en/matchstick","weight":1,"surfaceText":"[[match]] HasA [[matchstick]]"}
+{"start":"/c/en/piece","rel":"/r/IsA","end":"/c/en/part","weight":1,"surfaceText":"[[piece]] IsA [[part]]"}
+{"start":"/c/en/shell","rel":"/r/IsA","end":"/c/en/ammunition","weight":1,"surfaceText":"[[shell]] IsA [[ammunition]]"}
+{"start":"/c/en/still","rel":"/r/IsA","end":"/c/en/apparatus","weight":1,"surfaceText":"[[still]] IsA [[apparatus]]"}
+{"start":"/c/en/still","rel":"/r/HasA","end":"/c/en/condenser","weight":1,"surfaceText":"[[still]] HasA [[condenser]]"}
+{"start":"/c/en/present","rel":"/r/IsA","end":"/c/en/gift","weight":1,"surfaceText":"[[present]] IsA [[gift]]"}
+{"start":"/c/en/trim","rel":"/r/IsA","end":"/c/en/adornment","weight":1,"surfaceText":"[[trim]] IsA [[adornment]]"}
+{"start":"/c/en/spike","rel":"/r/IsA","end":"/c/en/sports equipment","weight":1,"surfaceText":"[[spike]] IsA [[sports equipment]]"}
+{"start":"/c/en/split","rel":"/r/IsA","end":"/c/en/share","weight":1,"surfaceText":"[[split]] IsA [[share]]"}
+{"start":"/c/en/white","rel":"/r/IsA","end":"/c/en/man","weight":1,"surfaceText":"[[white]] IsA [[man]]"}
+{"start":"/c/en/yield","rel":"/r/IsA","end":"/c/en/product","weight":1,"surfaceText":"[[yield]] IsA [[product]]"}
+{"start":"/c/en/squeeze","rel":"/r/IsA","end":"/c/en/loss","weight":1,"surfaceText":"[[squeeze]] IsA [[loss]]"}
+{"start":"/c/en/bolt","rel":"/r/IsA","end":"/c/en/bar","weight":1,"surfaceText":"[[bolt]] IsA [[bar]]"}
+{"start":"/c/en/fret","rel":"/r/IsA","end":"/c/en/architectural ornament","weight":1,"surfaceText":"[[fret]] IsA [[architectural ornament]]"}
+{"start":"/c/en/choke","rel":"/r/IsA","end":"/c/en/valve","weight":1,"surfaceText":"[[choke]] IsA [[valve]]"}
+{"start":"/c/en/float","rel":"/r/IsA","end":"/c/en/stock","weight":1,"surfaceText":"[[float]] IsA [[stock]]"}
+{"start":"/c/en/track","rel":"/r/IsA","end":"/c/en/artifact","weight":1,"surfaceText":"[[track]] IsA [[artifact]]"}
+{"start":"/c/en/low","rel":"/r/IsA","end":"/c/en/gear","weight":1,"surfaceText":"[[low]] IsA [[gear]]"}
+{"start":"/c/en/crown","rel":"/r/IsA","end":"/c/en/jewelled headdress","weight":1,"surfaceText":"[[crown]] IsA [[jewelled headdress]]"}
+{"start":"/c/en/screen","rel":"/r/IsA","end":"/c/en/protective covering","weight":1,"surfaceText":"[[screen]] IsA [[protective covering]]"}
+{"start":"/c/en/die","rel":"/r/IsA","end":"/c/en/cube","weight":1,"surfaceText":"[[die]] IsA [[cube]]"}
+{"start":"/c/en/pin","rel":"/r/IsA","end":"/c/en/jewelry","weight":1,"surfaceText":"[[pin]] IsA [[jewelry]]"}
+{"start":"/c/en/chip","rel":"/r/IsA","end":"/c/en/float","weight":1,"surfaceText":"[[chip]] IsA [[float]]"}
+{"start":"/c/en/mold","rel":"/r/IsA","end":"/c/en/container","weight":1,"surfaceText":"[[mold]] IsA [[container]]"}
+{"start":"/c/en/seal","rel":"/r/IsA","end":"/c/en/device","weight":1,"surfaceText":"[[seal]] IsA [[device]]"}
+{"start":"/c/en/draft","rel":"/r/IsA","end":"/c/en/sketch","weight":1,"surfaceText":"[[draft]] IsA [[sketch]]"}
+{"start":"/c/en/shade","rel":"/r/IsA","end":"/c/en/protective covering","weight":1,"surfaceText":"[[shade]] IsA [[protective covering]]"}
+{"start":"/c/en/shaft","rel":"/r/IsA","end":"/c/en/rod","weight":1,"surfaceText":"[[shaft]] IsA [[rod]]"}
+{"start":"/c/en/stuff","rel":"/r/IsA","end":"/c/en/object","weight":1,"surfaceText":"[[stuff]] IsA [[object]]"}
+{"start":"/c/en/switch","rel":"/r/IsA","end":"/c/en/control","weight":1,"surfaceText":"[[switch]] IsA [[control]]"}
+{"start":"/c/en/balance","rel":"/r/IsA","end":"/c/en/equality","weight":1,"surfaceText":"[[balance]] IsA [[equality]]"}
+{"start":"/c/en/reverse","rel":"/r/IsA","end":"/c/en/gear","weight":1,"surfaceText":"[[reverse]] IsA [[gear]]"}
+{"start":"/c/en/subject","rel":"/r/IsA","end":"/c/en/thing","weight":1,"surfaceText":"[[subject]] IsA [[thing]]"}
+{"start":"/c/en/approach","rel":"/r/IsA","end":"/c/en/way","weight":1,"surfaceText":"[[approach]] IsA [[way]]"}
+{"start":"/c/en/beam","rel":"/r/IsA","end":"/c/en/structural member","weight":1,"surfaceText":"[[beam]] IsA [[structural member]]"}
+{"start":"/c/en/beam","rel":"/r/MadeOf","end":"/c/en/wood","weight":1,"surfaceText":"[[beam]] MadeOf [[wood]]"}
+{"start":"/c/en/bill","rel":"/r/IsA","end":"/c/en/paper money","weight":1,"surfaceText":"[[bill]] IsA [[paper money]]"}
+{"start":"/c/en/card","rel":"/r/IsA","end":"/c/en/paper","weight":1,"surfaceText":"[[card]] IsA [[paper]]"}
+{"start":"/c/en/link","rel":"/r/IsA","end":"/c/en/fastener","weight":1,"surfaceText":"[[link]] IsA [[fastener]]"}
+{"start":"/c/en/sack","rel":"/r/IsA","end":"/c/en/bag","weight":1,"surfaceText":"[[sack]] IsA [[bag]]"}
+{"start":"/c/en/sink","rel":"/r/IsA","end":"/c/en/plumbing fixture","weight":1,"surfaceText":"[[sink]] IsA [[plumbing fixture]]"}
+{"start":"/c/en/sink","rel":"/r/HasA","end":"/c/en/drain basket","weight":1,"surfaceText":"[[sink]] HasA [[drain basket]]"}
+{"start":"/c/en/trap","rel":"/r/IsA","end":"/c/en/device","weight":1,"surfaceText":"[[trap]] IsA [[device]]"}
+{"start":"/c/en/trap","rel":"/r/HasA","end":"/c/en/bait","weight":1,"surfaceText":"[[trap]] HasA [[bait]]"}
+{"start":"/c/en/spare","rel":"/r/IsA","end":"/c/en/car wheel","weight":1,"surfaceText":"[[spare]] IsA [[car wheel]]"}
+{"start":"/c/en/credit","rel":"/r/IsA","end":"/c/en/assets","weight":1,"surfaceText":"[[credit]] IsA [[assets]]"}
+{"start":"/c/en/counter","rel":"/r/IsA","end":"/c/en/table","weight":1,"surfaceText":"[[counter]] IsA [[table]]"}
+{"start":"/c/en/counter","rel":"/r/HasA","end":"/c/en/countertop","weight":1,"surfaceText":"[[counter]] HasA [[countertop]]"}
+{"start":"/c/en/express","rel":"/r/IsA","end":"/c/en/public transport","weight":1,"surfaceText":"[[express]] IsA [[public transport]]"}
+{"start":"/c/en/positive","rel":"/r/IsA","end":"/c/en/film","weight":1,"surfaceText":"[[positive]] IsA [[film]]"}
+{"start":"/c/en/net","rel":"/r/IsA","end":"/c/en/computer network","weight":1,"surfaceText":"[[net]] IsA [[computer network]]"}
+{"start":"/c/en/pay","rel":"/r/IsA","end":"/c/en/regular payment","weight":1,"surfaceText":"[[pay]] IsA [[regular payment]]"}
+{"start":"/c/en/ball","rel":"/r/IsA","end":"/c/en/game equipment","weight":1,"surfaceText":"[[ball]] IsA [[game equipment]]"}
+{"start":"/c/en/bond","rel":"/r/IsA","end":"/c/en/debt instrument","weight":1,"surfaceText":"[[bond]] IsA [[debt instrument]]"}
+{"start":"/c/en/bowl","rel":"/r/IsA","end":"/c/en/dish","weight":1,"surfaceText":"[[bowl]] IsA [[dish]]"}
+{"start":"/c/en/horn","rel":"/r/IsA","end":"/c/en/noisemaker","weight":1,"surfaceText":"[[horn]] IsA [[noisemaker]]"}
+{"start":"/c/en/pole","rel":"/r/IsA","end":"/c/en/rod","weight":1,"surfaceText":"[[pole]] IsA [[rod]]"}
+{"start":"/c/en/wing","rel":"/r/IsA","end":"/c/en/airfoil","weight":1,"surfaceText":"[[wing]] IsA [[airfoil]]"}
+{"start":"/c/en/wing","rel":"/r/HasA","end":"/c/en/aileron","weight":1,"surfaceText":"[[wing]] HasA [[aileron]]"}
+{"start":"/c/en/glass","rel":"/r/IsA","end":"/c/en/container","weight":1,"surfaceText":"[[glass]] IsA [[container]]"}
+{"start":"/c/en/grant","rel":"/r/IsA","end":"/c/en/transferred property","weight":1,"surfaceText":"[[grant]] IsA [[transferred property]]"}
+{"start":"/c/en/smack","rel":"/r/IsA","end":"/c/en/sailing vessel","weight":1,"surfaceText":"[[smack]] IsA [[sailing vessel]]"}
+{"start":"/c/en/collar","rel":"/r/IsA","end":"/c/en/band","weight":1,"surfaceText":"[[collar]] IsA [[band]]"}
+{"start":"/c/en/collar","rel":"/r/HasA","end":"/c/en/facing","weight":1,"surfaceText":"[[collar]] HasA [[facing]]"}
+{"start":"/c/en/record","rel":"/r/IsA","end":"/c/en/sound recording","weight":1,"surfaceText":"[[record]] IsA [[sound recording]]"}
+{"start":"/c/en/record","rel":"/r/HasA","end":"/c/en/acetate disk","weight":1,"surfaceText":"[[record]] HasA [[acetate disk]]"}
+{"start":"/c/en/ruffle","rel":"/r/IsA","end":"/c/en/collar","weight":1,"surfaceText":"[[ruffle]] IsA [[collar]]"}
+{"start":"/c/en/silver","rel":"/r/IsA","end":"/c/en/precious metal","weight":1,"surfaceText":"[[silver]] IsA [[precious metal]]"}
+{"start":"/c/en/negative","rel":"/r/IsA","end":"/c/en/film","weight":1,"surfaceText":"[[negative]] IsA [[film]]"}
+{"start":"/c/en/cap","rel":"/r/IsA","end":"/c/en/headdress","weight":1,"surfaceText":"[[cap]] IsA [[headdress]]"}
+{"start":"/c/en/cap","rel":"/r/HasA","end":"/c/en/earflap","weight":1,"surfaceText":"[[cap]] HasA [[earflap]]"}
+{"start":"/c/en/lap","rel":"/r/IsA","end":"/c/en/cloth covering","weight":1,"surfaceText":"[[lap]] IsA [[cloth covering]]"}
+{"start":"/c/en/pad","rel":"/r/IsA","end":"/c/en/block","weight":1,"surfaceText":"[[pad]] IsA [[block]]"}
+{"start":"/c/en/rag","rel":"/r/IsA","end":"/c/en/piece of cloth","weight":1,"surfaceText":"[[rag]] IsA [[piece of cloth]]"}
+{"start":"/c/en/rig","rel":"/r/IsA","end":"/c/en/gear","weight":1,"surfaceText":"[[rig]] IsA [[gear]]"}
+{"start":"/c/en/bend","rel":"/r/IsA","end":"/c/en/section","weight":1,"surfaceText":"[[bend]] IsA [[section]]"}
+{"start":"/c/en/clip","rel":"/r/IsA","end":"/c/en/supply chamber","weight":1,"surfaceText":"[[clip]] IsA [[supply chamber]]"}
+{"start":"/c/en/fine","rel":"/r/IsA","end":"/c/en/penalty","weight":1,"surfaceText":"[[fine]] IsA [[penalty]]"}
+{"start":"/c/en/flap","rel":"/r/IsA","end":"/c/en/covering","weight":1,"surfaceText":"[[flap]] IsA [[covering]]"}
+{"start":"/c/en/heel","rel":"/r/IsA","end":"/c/en/bottom","weight":1,"surfaceText":"[[heel]] IsA [[bottom]]"}
+{"start":"/c/en/heel","rel":"/r/HasA","end":"/c/en/lift","weight":1,"surfaceText":"[[heel]] HasA [[lift]]"}
+{"start":"/c/en/pall","rel":"/r/IsA","end":"/c/en/burial garment","weight":1,"surfaceText":"[[pall]] IsA [[burial garment]]"}
+{"start":"/c/en/pump","rel":"/r/IsA","end":"/c/en/mechanical device","weight":1,"surfaceText":"[[pump]] IsA [[mechanical device]]"}
+{"start":"/c/en/pump","rel":"/r/HasA","end":"/c/en/cylinder","weight":1,"surfaceText":"[[pump]] HasA [[cylinder]]"}
+{"start":"/c/en/gauge","rel":"/r/IsA","end":"/c/en/measuring instrument","weight":1,"surfaceText":"[[gauge]] IsA [[measuring instrument]]"}
+{"start":"/c/en/image","rel":"/r/IsA","end":"/c/en/representation","weight":1,"surfaceText":"[[image]] IsA [[representation]]"}
+{"start":"/c/en/plain","rel":"/r/IsA","end":"/c/en/knitting stitch","weight":1,"surfaceText":"[[plain]] IsA [[knitting stitch]]"}
+{"start":"/c/en/print","rel":"/r/IsA","end":"/c/en/graphic art","weight":1,"surfaceText":"[[print]] IsA [[graphic art]]"}
+{"start":"/c/en/slick","rel":"/r/IsA","end":"/c/en/film","weight":1,"surfaceText":"[[slick]] IsA [[film]]"}
+{"start":"/c/en/spoil","rel":"/r/IsA","end":"/c/en/stolen property","weight":1,"surfaceText":"[[spoil]] IsA [[stolen property]]"}
+{"start":"/c/en/clinch","rel":"/r/IsA","end":"/c/en/fastener","weight":1,"surfaceText":"[[clinch]] IsA [[fastener]]"}
+{"start":"/c/en/gather","rel":"/r/IsA","end":"/c/en/sewing","weight":1,"surfaceText":"[[gather]] IsA [[sewing]]"}
+{"start":"/c/en/offset","rel":"/r/IsA","end":"/c/en/compensation","weight":1,"surfaceText":"[[offset]] IsA [[compensation]]"}
+{"start":"/c/en/pocket","rel":"/r/IsA","end":"/c/en/pouch","weight":1,"surfaceText":"[[pocket]] IsA [[pouch]]"}
+{"start":"/c/en/pocket","rel":"/r/HasA","end":"/c/en/pocket flap","weight":1,"surfaceText":"[[pocket]] HasA [[pocket flap]]"}
+{"start":"/c/en/relief","rel":"/r/IsA","end":"/c/en/damages","weight":1,"surfaceText":"[[relief]] IsA [[damages]]"}
+{"start":"/c/en/channel","rel":"/r/IsA","end":"/c/en/passage","weight":1,"surfaceText":"[[channel]] IsA [[passage]]"}
+{"start":"/c/en/whistle","rel":"/r/IsA","end":"/c/en/wind instrument","weight":1,"surfaceText":"[[whistle]] IsA [[wind instrument]]"}
+{"start":"/c/en/irregular","rel":"/r/IsA","end":"/c/en/merchandise","weight":1,"surfaceText":"[[irregular]] IsA [[merchandise]]"}
+{"start":"/c/en/transport","rel":"/r/IsA","end":"/c/en/instrumentality","weight":1,"surfaceText":"[[transport]] IsA [[instrumentality]]"}
+{"start":"/c/en/bat","rel":"/r/IsA","end":"/c/en/racket","weight":1,"surfaceText":"[[bat]] IsA [[racket]]"}
+{"start":"/c/en/ice","rel":"/r/IsA","end":"/c/en/diamond","weight":1,"surfaceText":"[[ice]] IsA [[diamond]]"}
+{"start":"/c/en/peg","rel":"/r/IsA","end":"/c/en/pin","weight":1,"surfaceText":"[[peg]] IsA [[pin]]"}
+{"start":"/c/en/pot","rel":"/r/IsA","end":"/c/en/cooking utensil","weight":1,"surfaceText":"[[pot]] IsA [[cooking utensil]]"}
+{"start":"/c/en/bust","rel":"/r/IsA","end":"/c/en/sculpture","weight":1,"surfaceText":"[[bust]] IsA [[sculpture]]"}
+{"start":"/c/en/grip","rel":"/r/IsA","end":"/c/en/baggage","weight":1,"surfaceText":"[[grip]] IsA [[baggage]]"}
+{"start":"/c/en/hole","rel":"/r/IsA","end":"/c/en/opening","weight":1,"surfaceText":"[[hole]] IsA [[opening]]"}
+{"start":"/c/en/nail","rel":"/r/IsA","end":"/c/en/fastener","weight":1,"surfaceText":"[[nail]] IsA [[fastener]]"}
+{"start":"/c/en/nail","rel":"/r/HasA","end":"/c/en/clinch","weight":1,"surfaceText":"[[nail]] HasA [[clinch]]"}
+{"start":"/c/en/poke","rel":"/r/IsA","end":"/c/en/bag","weight":1,"surfaceText":"[[poke]] IsA [[bag]]"}
+{"start":"/c/en/slug","rel":"/r/IsA","end":"/c/en/projectile","weight":1,"surfaceText":"[[slug]] IsA [[projectile]]"}
+{"start":"/c/en/spat","rel":"/r/IsA","end":"/c/en/legging","weight":1,"surfaceText":"[[spat]] IsA [[legging]]"}
+{"start":"/c/en/stem","rel":"/r/IsA","end":"/c/en/cylinder","weight":1,"surfaceText":"[[stem]] IsA [[cylinder]]"}
+{"start":"/c/en/suit","rel":"/r/IsA","end":"/c/en/garment","weight":1,"surfaceText":"[[suit]] IsA [[garment]]"}
+{"start":"/c/en/yoke","rel":"/r/IsA","end":"/c/en/fabric","weight":1,"surfaceText":"[[yoke]] IsA [[fabric]]"}
+{"start":"/c/en/flood","rel":"/r/IsA","end":"/c/en/light","weight":1,"surfaceText":"[[flood]] IsA [[light]]"}
+{"start":"/c/en/grand","rel":"/r/IsA","end":"/c/en/piano","weight":1,"surfaceText":"[[grand]] IsA [[piano]]"}
+{"start":"/c/en/grand","rel":"/r/HasA","end":"/c/en/leg","weight":1,"surfaceText":"[[grand]] HasA [[leg]]"}
+{"start":"/c/en/gross","rel":"/r/IsA","end":"/c/en/sum","weight":1,"surfaceText":"[[gross]] IsA [[sum]]"}
+{"start":"/c/en/perch","rel":"/r/IsA","end":"/c/en/support","weight":1,"surfaceText":"[[perch]] IsA [[support]]"}
+{"start":"/c/en/slip","rel":"/r/IsA","end":"/c/en/potter's clay","weight":1,"surfaceText":"[[slip]] IsA [[potter's clay]]"}
+{"start":"/c/en/down","rel":"/r/IsA","end":"/c/en/plume","weight":1,"surfaceText":"[[down]] IsA [[plume]]"}
+{"start":"/c/en/shoot","rel":"/r/IsA","end":"/c/en/sprout","weight":1,"surfaceText":"[[shoot]] IsA [[sprout]]"}
+{"start":"/c/en/ground","rel":"/r/IsA","end":"/c/en/material","weight":1,"surfaceText":"[[ground]] IsA [[material]]"}
+{"start":"/c/en/discharge","rel":"/r/IsA","end":"/c/en/material","weight":1,"surfaceText":"[[discharge]] IsA [[material]]"}
+{"start":"/c/en/solid","rel":"/r/IsA","end":"/c/en/matter","weight":1,"surfaceText":"[[solid]] IsA [[matter]]"}
+{"start":"/c/en/kill","rel":"/r/IsA","end":"/c/en/body","weight":1,"surfaceText":"[[kill]] IsA [[body]]"}
+{"start":"/c/en/slack","rel":"/r/IsA","end":"/c/en/debris","weight":1,"surfaceText":"[[slack]] IsA [[debris]]"}
+{"start":"/c/en/waste","rel":"/r/IsA","end":"/c/en/material","weight":1,"surfaceText":"[[waste]] IsA [[material]]"}
+{"start":"/c/en/rush","rel":"/r/IsA","end":"/c/en/marsh plant","weight":1,"surfaceText":"[[rush]] IsA [[marsh plant]]"}
+{"start":"/c/en/grain","rel":"/r/IsA","end":"/c/en/leather","weight":1,"surfaceText":"[[grain]] IsA [[leather]]"}
+{"start":"/c/en/shake","rel":"/r/IsA","end":"/c/en/building material","weight":1,"surfaceText":"[[shake]] IsA [[building material]]"}
+{"start":"/c/en/pit","rel":"/r/IsA","end":"/c/en/pericarp","weight":1,"surfaceText":"[[pit]] IsA [[pericarp]]"}
+{"start":"/c/en/mould","rel":"/r/IsA","end":"/c/en/soil","weight":1,"surfaceText":"[[mould]] IsA [[soil]]"}
+{"start":"/c/en/colour","rel":"/r/IsA","end":"/c/en/material","weight":1,"surfaceText":"[[colour]] IsA [[material]]"}
+{"start":"/c/en/render","rel":"/r/IsA","end":"/c/en/stucco","weight":1,"surfaceText":"[[render]] IsA [[stucco]]"}
+{"start":"/c/en/mount","rel":"/r/IsA","end":"/c/en/horse","weight":1,"surfaceText":"[[mount]] IsA [[horse]]"}
+{"start":"/c/en/cutting","rel":"/r/IsA","end":"/c/en/stalk","weight":1,"surfaceText":"[[cutting]] IsA [[stalk]]"}
+{"start":"/c/en/fill","rel":"/r/IsA","end":"/c/en/material","weight":1,"surfaceText":"[[fill]] IsA [[material]]"}
+{"start":"/c/en/flux","rel":"/r/IsA","end":"/c/en/chemical","weight":1,"surfaceText":"[[flux]] IsA [[chemical]]"}
+{"start":"/c/en/tail","rel":"/r/IsA","end":"/c/en/process","weight":1,"surfaceText":"[[tail]] IsA [[process]]"}
+{"start":"/c/en/tail","rel":"/r/HasA","end":"/c/en/dock","weight":1,"surfaceText":"[[tail]] HasA [[dock]]"}
+{"start":"/c/en/plaster","rel":"/r/IsA","end":"/c/en/mixture","weight":1,"surfaceText":"[[plaster]] IsA [[mixture]]"}
+{"start":"/c/en/swallow","rel":"/r/IsA","end":"/c/en/oscine","weight":1,"surfaceText":"[[swallow]] IsA [[oscine]]"}
+{"start":"/c/en/concentrate","rel":"/r/IsA","end":"/c/en/ore","weight":1,"surfaceText":"[[concentrate]] IsA [[ore]]"}
+{"start":"/c/en/bay","rel":"/r/IsA","end":"/c/en/laurel","weight":1,"surfaceText":"[[bay]] IsA [[laurel]]"}
+{"start":"/c/en/bay","rel":"/r/HasA","end":"/c/en/bay leaf","weight":1,"surfaceText":"[[bay]] HasA [[bay leaf]]"}
+{"start":"/c/en/gum","rel":"/r/IsA","end":"/c/en/exudate","weight":1,"surfaceText":"[[gum]] IsA [[exudate]]"}
+{"start":"/c/en/ray","rel":"/r/IsA","end":"/c/en/pedicel","weight":1,"surfaceText":"[[ray]] IsA [[pedicel]]"}
+{"start":"/c/en/slop","rel":"/r/IsA","end":"/c/en/waste","weight":1,"surfaceText":"[[slop]] IsA [[waste]]"}
+{"start":"/c/en/spur","rel":"/r/IsA","end":"/c/en/plant process","weight":1,"surfaceText":"[[spur]] IsA [[plant process]]"}
+{"start":"/c/en/extract","rel":"/r/IsA","end":"/c/en/solution","weight":1,"surfaceText":"[[extract]] IsA [[solution]]"}
+{"start":"/c/en/fat","rel":"/r/IsA","end":"/c/en/lipid","weight":1,"surfaceText":"[[fat]] IsA [[lipid]]"}
+{"start":"/c/en/fat","rel":"/r/HasA","end":"/c/en/glyceride","weight":1,"surfaceText":"[[fat]] HasA [[glyceride]]"}
+{"start":"/c/en/hop","rel":"/r/IsA","end":"/c/en/vine","weight":1,"surfaceText":"[[hop]] IsA [[vine]]"}
+{"start":"/c/en/corn","rel":"/r/IsA","end":"/c/en/cereal","weight":1,"surfaceText":"[[corn]] IsA [[cereal]]"}
+{"start":"/c/en/rust","rel":"/r/IsA","end":"/c/en/ferric oxide","weight":1,"surfaceText":"[[rust]] IsA [[ferric oxide]]"}
+{"start":"/c/en/rust","rel":"/r/MadeOf","end":"/c/en/goethite","weight":1,"surfaceText":"[[rust]] MadeOf [[goethite]]"}
+{"start":"/c/en/smut","rel":"/r/IsA","end":"/c/en/fungus","weight":1,"surfaceText":"[[smut]] IsA [[fungus]]"}
+{"start":"/c/en/label","rel":"/r/IsA","end":"/c/en/radioisotope","weight":1,"surfaceText":"[[label]] IsA [[radioisotope]]"}
+{"start":"/c/en/stain","rel":"/r/IsA","end":"/c/en/coloring material","weight":1,"surfaceText":"[[stain]] IsA [[coloring material]]"}
+{"start":"/c/en/composition","rel":"/r/IsA","end":"/c/en/mixture","weight":1,"surfaceText":"[[composition]] IsA [[mixture]]"}
+{"start":"/c/en/gas","rel":"/r/IsA","end":"/c/en/fluid","weight":1,"surfaceText":"[[gas]] IsA [[fluid]]"}
+{"start":"/c/en/pip","rel":"/r/IsA","end":"/c/en/seed","weight":1,"surfaceText":"[[pip]] IsA [[seed]]"}
+{"start":"/c/en/duck","rel":"/r/IsA","end":"/c/en/anseriform bird","weight":1,"surfaceText":"[[duck]] IsA [[anseriform bird]]"}
+{"start":"/c/en/duck","rel":"/r/HasA","end":"/c/en/duck down","weight":1,"surfaceText":"[[duck]] HasA [[duck down]]"}
+{"start":"/c/en/gall","rel":"/r/IsA","end":"/c/en/plant tissue","weight":1,"surfaceText":"[[gall]] IsA [[plant tissue]]"}
+{"start":"/c/en/lime","rel":"/r/IsA","end":"/c/en/adhesive material","weight":1,"surfaceText":"[[lime]] IsA [[adhesive material]]"}
+{"start":"/c/en/mint","rel":"/r/IsA","end":"/c/en/dicot","weight":1,"surfaceText":"[[mint]] IsA [[dicot]]"}
+{"start":"/c/en/tick","rel":"/r/IsA","end":"/c/en/acarine","weight":1,"surfaceText":"[[tick]] IsA [[acarine]]"}
+{"start":"/c/en/stalk","rel":"/r/IsA","end":"/c/en/plant organ","weight":1,"surfaceText":"[[stalk]] IsA [[plant organ]]"}
+{"start":"/c/en/stalk","rel":"/r/HasA","end":"/c/en/internode","weight":1,"surfaceText":"[[stalk]] HasA [[internode]]"}
+{"start":"/c/en/whiff","rel":"/r/IsA","end":"/c/en/lefteye flounder","weight":1,"surfaceText":"[[whiff]] IsA [[lefteye flounder]]"}
+{"start":"/c/en/cement","rel":"/r/IsA","end":"/c/en/adhesive material","weight":1,"surfaceText":"[[cement]] IsA [[adhesive material]]"}
+{"start":"/c/en/rubber","rel":"/r/IsA","end":"/c/en/latex","weight":1,"surfaceText":"[[rubber]] IsA [[latex]]"}
+{"start":"/c/en/conjugate","rel":"/r/IsA","end":"/c/en/solution","weight":1,"surfaceText":"[[conjugate]] IsA [[solution]]"}
+{"start":"/c/en/preparation","rel":"/r/IsA","end":"/c/en/compound","weight":1,"surfaceText":"[[preparation]] IsA [[compound]]"}
+{"start":"/c/en/dun","rel":"/r/IsA","end":"/c/en/saddle horse","weight":1,"surfaceText":"[[dun]] IsA [[saddle horse]]"}
+{"start":"/c/en/dust","rel":"/r/IsA","end":"/c/en/particulate","weight":1,"surfaceText":"[[dust]] IsA [[particulate]]"}
+{"start":"/c/en/jade","rel":"/r/IsA","end":"/c/en/opaque gem","weight":1,"surfaceText":"[[jade]] IsA [[opaque gem]]"}
+{"start":"/c/en/mire","rel":"/r/IsA","end":"/c/en/mud","weight":1,"surfaceText":"[[mire]] IsA [[mud]]"}
+{"start":"/c/en/pulp","rel":"/r/IsA","end":"/c/en/plant tissue","weight":1,"surfaceText":"[[pulp]] IsA [[plant tissue]]"}
+{"start":"/c/en/pulp","rel":"/r/MadeOf","end":"/c/en/parenchyma","weight":1,"surfaceText":"[[pulp]] MadeOf [[parenchyma]]"}
+{"start":"/c/en/snag","rel":"/r/IsA","end":"/c/en/tree","weight":1,"surfaceText":"[[snag]] IsA [[tree]]"}
+{"start":"/c/en/bloom","rel":"/r/IsA","end":"/c/en/reproductive structure","weight":1,"surfaceText":"[[bloom]] IsA [[reproductive structure]]"}
+{"start":"/c/en/bloom","rel":"/r/HasA","end":"/c/en/stamen","weight":1,"surfaceText":"[[bloom]] HasA [[stamen]]"}
+{"start":"/c/en/caper","rel":"/r/IsA","end":"/c/en/shrub","weight":1,"surfaceText":"[[caper]] IsA [[shrub]]"}
+{"start":"/c/en/crude","rel":"/r/IsA","end":"/c/en/oil","weight":1,"surfaceText":"[[crude]] IsA [[oil]]"}
+{"start":"/c/en/crude","rel":"/r/MadeOf","end":"/c/en/carbon","weight":1,"surfaceText":"[[crude]] MadeOf [[carbon]]"}
+{"start":"/c/en/fluid","rel":"/r/IsA","end":"/c/en/matter","weight":1,"surfaceText":"[[fluid]] IsA [[matter]]"}
+{"start":"/c/en/frost","rel":"/r/IsA","end":"/c/en/ice","weight":1,"surfaceText":"[[frost]] IsA [[ice]]"}
+{"start":"/c/en/paste","rel":"/r/IsA","end":"/c/en/adhesive material","weight":1,"surfaceText":"[[paste]] IsA [[adhesive material]]"}
+{"start":"/c/en/rinse","rel":"/r/IsA","end":"/c/en/hair dye","weight":1,"surfaceText":"[[rinse]] IsA [[hair dye]]"}
+{"start":"/c/en/steam","rel":"/r/IsA","end":"/c/en/vapor","weight":1,"surfaceText":"[[steam]] IsA [[vapor]]"}
+{"start":"/c/en/straw","rel":"/r/IsA","end":"/c/en/plant material","weight":1,"surfaceText":"[[straw]] IsA [[plant material]]"}
+{"start":"/c/en/corona","rel":"/r/IsA","end":"/c/en/plant part","weight":1,"surfaceText":"[[corona]] IsA [[plant part]]"}
+{"start":"/c/en/poison","rel":"/r/IsA","end":"/c/en/substance","weight":1,"surfaceText":"[[poison]] IsA [[substance]]"}
+{"start":"/c/en/refuse","rel":"/r/IsA","end":"/c/en/waste","weight":1,"surfaceText":"[[refuse]] IsA [[waste]]"}
+{"start":"/c/en/savory","rel":"/r/IsA","end":"/c/en/herb","weight":1,"surfaceText":"[[savory]] IsA [[herb]]"}
+{"start":"/c/en/feather","rel":"/r/IsA","end":"/c/en/animal material","weight":1,"surfaceText":"[[feather]] IsA [[animal material]]"}
+{"start":"/c/en/ferment","rel":"/r/IsA","end":"/c/en/substance","weight":1,"surfaceText":"[[ferment]] IsA [[substance]]"}
+{"start":"/c/en/organic","rel":"/r/IsA","end":"/c/en/fertilizer","weight":1,"surfaceText":"[[organic]] IsA [[fertilizer]]"}
+{"start":"/c/en/chestnut","rel":"/r/IsA","end":"/c/en/tree","weight":1,"surfaceText":"[[chestnut]] IsA [[tree]]"}
+{"start":"/c/en/mushroom","rel":"/r/IsA","end":"/c/en/basidiomycete","weight":1,"surfaceText":"[[mushroom]] IsA [[basidiomycete]]"}
+{"start":"/c/en/percolate","rel":"/r/IsA","end":"/c/en/filtrate","weight":1,"surfaceText":"[[percolate]] IsA [[filtrate]]"}
+{"start":"/c/en/sublimate","rel":"/r/IsA","end":"/c/en/gas","weight":1,"surfaceText":"[[sublimate]] IsA [[gas]]"}
+{"start":"/c/en/synthetic","rel":"/r/IsA","end":"/c/en/compound","weight":1,"surfaceText":"[[synthetic]] IsA [[compound]]"}
+{"start":"/c/en/suspension","rel":"/r/IsA","end":"/c/en/mixture","weight":1,"surfaceText":"[[suspension]] IsA [[mixture]]"}
+{"start":"/c/en/precipitate","rel":"/r/IsA","end":"/c/en/solid","weight":1,"surfaceText":"[[precipitate]] IsA [[solid]]"}
+{"start":"/c/en/cod","rel":"/r/IsA","end":"/c/en/gadoid","weight":1,"surfaceText":"[[cod]] IsA [[gadoid]]"}
+{"start":"/c/en/pet","rel":"/r/IsA","end":"/c/en/animal","weight":1,"surfaceText":"[[pet]] IsA [[animal]]"}
+{"start":"/c/en/rod","rel":"/r/IsA","end":"/c/en/bacteria","weight":1,"surfaceText":"[[rod]] IsA [[bacteria]]"}
+{"start":"/c/en/bunt","rel":"/r/IsA","end":"/c/en/smut","weight":1,"surfaceText":"[[bunt]] IsA [[smut]]"}
+{"start":"/c/en/crow","rel":"/r/IsA","end":"/c/en/corvine bird","weight":1,"surfaceText":"[[crow]] IsA [[corvine bird]]"}
+{"start":"/c/en/hide","rel":"/r/IsA","end":"/c/en/body covering","weight":1,"surfaceText":"[[hide]] IsA [[body covering]]"}
+{"start":"/c/en/punk","rel":"/r/IsA","end":"/c/en/igniter","weight":1,"surfaceText":"[[punk]] IsA [[igniter]]"}
+{"start":"/c/en/vein","rel":"/r/IsA","end":"/c/en/vascular bundle","weight":1,"surfaceText":"[[vein]] IsA [[vascular bundle]]"}
+{"start":"/c/en/assay","rel":"/r/IsA","end":"/c/en/substance","weight":1,"surfaceText":"[[assay]] IsA [[substance]]"}
+{"start":"/c/en/goose","rel":"/r/IsA","end":"/c/en/anseriform bird","weight":1,"surfaceText":"[[goose]] IsA [[anseriform bird]]"}
+{"start":"/c/en/goose","rel":"/r/HasA","end":"/c/en/goose down","weight":1,"surfaceText":"[[goose]] HasA [[goose down]]"}
+{"start":"/c/en/olive","rel":"/r/IsA","end":"/c/en/wood","weight":1,"surfaceText":"[[olive]] IsA [[wood]]"}
+{"start":"/c/en/stray","rel":"/r/IsA","end":"/c/en/domestic animal","weight":1,"surfaceText":"[[stray]] IsA [[domestic animal]]"}
+{"start":"/c/en/trash","rel":"/r/IsA","end":"/c/en/waste","weight":1,"surfaceText":"[[trash]] IsA [[waste]]"}
+{"start":"/c/en/ginger","rel":"/r/IsA","end":"/c/en/herb","weight":1,"surfaceText":"[[ginger]] IsA [[herb]]"}
+{"start":"/c/en/ginger","rel":"/r/MadeOf","end":"/c/en/gingerol","weight":1,"surfaceText":"[[ginger]] MadeOf [[gingerol]]"}
+{"start":"/c/en/pepper","rel":"/r/IsA","end":"/c/en/shrub","weight":1,"surfaceText":"[[pepper]] IsA [[shrub]]"}
+{"start":"/c/en/pepper","rel":"/r/MadeOf","end":"/c/en/capsaicin","weight":1,"surfaceText":"[[pepper]] MadeOf [[capsaicin]]"}
+{"start":"/c/en/permit","rel":"/r/IsA","end":"/c/en/pompano","weight":1,"surfaceText":"[[permit]] IsA [[pompano]]"}
+{"start":"/c/en/polish","rel":"/r/IsA","end":"/c/en/formulation","weight":1,"surfaceText":"[[polish]] IsA [[formulation]]"}
+{"start":"/c/en/sorrel","rel":"/r/IsA","end":"/c/en/herb","weight":1,"surfaceText":"[[sorrel]] IsA [[herb]]"}
+{"start":"/c/en/blister","rel":"/r/IsA","end":"/c/en/plant process","weight":1,"surfaceText":"[[blister]] IsA [[plant process]]"}
+{"start":"/c/en/bristle","rel":"/r/IsA","end":"/c/en/hair","weight":1,"surfaceText":"[[bristle]] IsA [[hair]]"}
+{"start":"/c/en/complex","rel":"/r/IsA","end":"/c/en/compound","weight":1,"surfaceText":"[[complex]] IsA [[compound]]"}
+{"start":"/c/en/filling","rel":"/r/IsA","end":"/c/en/material","weight":1,"surfaceText":"[[filling]] IsA [[material]]"}
+{"start":"/c/en/flicker","rel":"/r/IsA","end":"/c/en/woodpecker","weight":1,"surfaceText":"[[flicker]] IsA [[woodpecker]]"}
+{"start":"/c/en/harvest","rel":"/r/IsA","end":"/c/en/output","weight":1,"surfaceText":"[[harvest]] IsA [[output]]"}
+{"start":"/c/en/scollop","rel":"/r/IsA","end":"/c/en/bivalve","weight":1,"surfaceText":"[[scollop]] IsA [[bivalve]]"}
+{"start":"/c/en/scollop","rel":"/r/HasA","end":"/c/en/scallop","weight":1,"surfaceText":"[[scollop]] HasA [[scallop]]"}
+{"start":"/c/en/whiting","rel":"/r/IsA","end":"/c/en/percoid fish","weight":1,"surfaceText":"[[whiting]] IsA [[percoid fish]]"}
+{"start":"/c/en/anteater","rel":"/r/IsA","end":"/c/en/placental","weight":1,"surfaceText":"[[anteater]] IsA [[placental]]"}
+{"start":"/c/en/snowball","rel":"/r/IsA","end":"/c/en/sand verbena","weight":1,"surfaceText":"[[snowball]] IsA [[sand verbena]]"}
+{"start":"/c/en/tincture","rel":"/r/IsA","end":"/c/en/coloring material","weight":1,"surfaceText":"[[tincture]] IsA [[coloring material]]"}
+{"start":"/c/en/repellent","rel":"/r/IsA","end":"/c/en/compound","weight":1,"surfaceText":"[[repellent]] IsA [[compound]]"}
+{"start":"/c/en/ink","rel":"/r/IsA","end":"/c/en/liquid","weight":1,"surfaceText":"[[ink]] IsA [[liquid]]"}
+{"start":"/c/en/lip","rel":"/r/IsA","end":"/c/en/plant part","weight":1,"surfaceText":"[[lip]] IsA [[plant part]]"}
+{"start":"/c/en/nag","rel":"/r/IsA","end":"/c/en/horse","weight":1,"surfaceText":"[[nag]] IsA [[horse]]"}
+{"start":"/c/en/rue","rel":"/r/IsA","end":"/c/en/herb","weight":1,"surfaceText":"[[rue]] IsA [[herb]]"}
+{"start":"/c/en/wad","rel":"/r/IsA","end":"/c/en/material","weight":1,"surfaceText":"[[wad]] IsA [[material]]"}
+{"start":"/c/en/acid","rel":"/r/IsA","end":"/c/en/compound","weight":1,"surfaceText":"[[acid]] IsA [[compound]]"}
+{"start":"/c/en/beak","rel":"/r/IsA","end":"/c/en/mouth","weight":1,"surfaceText":"[[beak]] IsA [[mouth]]"}
+{"start":"/c/en/bean","rel":"/r/IsA","end":"/c/en/legume","weight":1,"surfaceText":"[[bean]] IsA [[legume]]"}
+{"start":"/c/en/coal","rel":"/r/IsA","end":"/c/en/fossil fuel","weight":1,"surfaceText":"[[coal]] IsA [[fossil fuel]]"}
+{"start":"/c/en/coal","rel":"/r/MadeOf","end":"/c/en/carbon","weight":1,"surfaceText":"[[coal]] MadeOf [[carbon]]"}
+{"start":"/c/en/dirt","rel":"/r/IsA","end":"/c/en/earth","weight":1,"surfaceText":"[[dirt]] IsA [[earth]]"}
+{"start":"/c/en/fawn","rel":"/r/IsA","end":"/c/en/deer","weight":1,"surfaceText":"[[fawn]] IsA [[deer]]"}
+{"start":"/c/en/fuel","rel":"/r/IsA","end":"/c/en/substance","weight":1,"surfaceText":"[[fuel]] IsA [[substance]]"}
+{"start":"/c/en/lark","rel":"/r/IsA","end":"/c/en/oscine","weight":1,"surfaceText":"[[lark]] IsA [[oscine]]"}
+{"start":"/c/en/ling","rel":"/r/IsA","end":"/c/en/gadoid","weight":1,"surfaceText":"[[ling]] IsA [[gadoid]]"}
+{"start":"/c/en/mash","rel":"/r/IsA","end":"/c/en/suspension","weight":1,"surfaceText":"[[mash]] IsA [[suspension]]"}
+{"start":"/c/en/palm","rel":"/r/IsA","end":"/c/en/tree","weight":1,"surfaceText":"[[palm]] IsA [[tree]]"}
+{"start":"/c/en/pelt","rel":"/r/IsA","end":"/c/en/body covering","weight":1,"surfaceText":"[[pelt]] IsA [[body covering]]"}
+{"start":"/c/en/plum","rel":"/r/IsA","end":"/c/en/fruit tree","weight":1,"surfaceText":"[[plum]] IsA [[fruit tree]]"}
+{"start":"/c/en/pony","rel":"/r/IsA","end":"/c/en/horse","weight":1,"surfaceText":"[[pony]] IsA [[horse]]"}
+{"start":"/c/en/pout","rel":"/r/IsA","end":"/c/en/bullhead","weight":1,"surfaceText":"[[pout]] IsA [[bullhead]]"}
+{"start":"/c/en/soil","rel":"/r/IsA","end":"/c/en/earth","weight":1,"surfaceText":"[[soil]] IsA [[earth]]"}
+{"start":"/c/en/stag","rel":"/r/IsA","end":"/c/en/buck","weight":1,"surfaceText":"[[stag]] IsA [[buck]]"}
+{"start":"/c/en/bream","rel":"/r/IsA","end":"/c/en/percoid fish","weight":1,"surfaceText":"[[bream]] IsA [[percoid fish]]"}
+{"start":"/c/en/brier","rel":"/r/IsA","end":"/c/en/vegetation","weight":1,"surfaceText":"[[brier]] IsA [[vegetation]]"}
+{"start":"/c/en/chalk","rel":"/r/IsA","end":"/c/en/calcite","weight":1,"surfaceText":"[[chalk]] IsA [[calcite]]"}
+{"start":"/c/en/chalk","rel":"/r/MadeOf","end":"/c/en/calcium carbonate","weight":1,"surfaceText":"[[chalk]] MadeOf [[calcium carbonate]]"}
+{"start":"/c/en/coral","rel":"/r/IsA","end":"/c/en/opaque gem","weight":1,"surfaceText":"[[coral]] IsA [[opaque gem]]"}
+{"start":"/c/en/fiber","rel":"/r/MadeOf","end":"/c/en/cellulose","weight":1,"surfaceText":"[[fiber]] MadeOf [[cellulose]]"}
+{"start":"/c/en/fall","rel":"/r/IsA","end":"/c/en/season","weight":1,"surfaceText":"[[fall]] IsA [[season]]"}
+{"start":"/c/en/fall","rel":"/r/HasA","end":"/c/en/indian summer","weight":1,"surfaceText":"[[fall]] HasA [[indian summer]]"}
+{"start":"/c/en/pass","rel":"/r/IsA","end":"/c/en/leave","weight":1,"surfaceText":"[[pass]] IsA [[leave]]"}
+{"start":"/c/en/lift","rel":"/r/IsA","end":"/c/en/rise","weight":1,"surfaceText":"[[lift]] IsA [[rise]]"}
+{"start":"/c/en/go","rel":"/r/IsA","end":"/c/en/shift","weight":1,"surfaceText":"[[go]] IsA [[shift]]"}
+{"start":"/c/en/roll","rel":"/r/IsA","end":"/c/en/wave","weight":1,"surfaceText":"[[roll]] IsA [[wave]]"}
+{"start":"/c/en/drop","rel":"/r/IsA","end":"/c/en/small indefinite quantity","weight":1,"surfaceText":"[[drop]] IsA [[small indefinite quantity]]"}
+{"start":"/c/en/blow","rel":"/r/IsA","end":"/c/en/impact","weight":1,"surfaceText":"[[blow]] IsA [[impact]]"}
+{"start":"/c/en/return","rel":"/r/IsA","end":"/c/en/turning","weight":1,"surfaceText":"[[return]] IsA [[turning]]"}
+{"start":"/c/en/strike","rel":"/r/IsA","end":"/c/en/blow","weight":1,"surfaceText":"[[strike]] IsA [[blow]]"}
+{"start":"/c/en/rise","rel":"/r/IsA","end":"/c/en/emergence","weight":1,"surfaceText":"[[rise]] IsA [[emergence]]"}
+{"start":"/c/en/snap","rel":"/r/IsA","end":"/c/en/while","weight":1,"surfaceText":"[[snap]] IsA [[while]]"}
+{"start":"/c/en/shift","rel":"/r/IsA","end":"/c/en/hours","weight":1,"surfaceText":"[[shift]] IsA [[hours]]"}
+{"start":"/c/en/twist","rel":"/r/IsA","end":"/c/en/development","weight":1,"surfaceText":"[[twist]] IsA [[development]]"}
+{"start":"/c/en/case","rel":"/r/IsA","end":"/c/en/happening","weight":1,"surfaceText":"[[case]] IsA [[happening]]"}
+{"start":"/c/en/deal","rel":"/r/IsA","end":"/c/en/large indefinite quantity","weight":1,"surfaceText":"[[deal]] IsA [[large indefinite quantity]]"}
+{"start":"/c/en/start","rel":"/r/IsA","end":"/c/en/beginning","weight":1,"surfaceText":"[[start]] IsA [[beginning]]"}
+{"start":"/c/en/deep","rel":"/r/IsA","end":"/c/en/middle","weight":1,"surfaceText":"[[deep]] IsA [[middle]]"}
+{"start":"/c/en/jump","rel":"/r/IsA","end":"/c/en/transition","weight":1,"surfaceText":"[[jump]] IsA [[transition]]"}
+{"start":"/c/en/step","rel":"/r/IsA","end":"/c/en/indefinite quantity","weight":1,"surfaceText":"[[step]] IsA [[indefinite quantity]]"}
+{"start":"/c/en/stop","rel":"/r/IsA","end":"/c/en/ending","weight":1,"surfaceText":"[[stop]] IsA [[ending]]"}
+{"start":"/c/en/pound","rel":"/r/IsA","end":"/c/en/british monetary unit","weight":1,"surfaceText":"[[pound]] IsA [[british monetary unit]]"}
+{"start":"/c/en/pound","rel":"/r/HasA","end":"/c/en/penny","weight":1,"surfaceText":"[[pound]] HasA [[penny]]"}
+{"start":"/c/en/advance","rel":"/r/IsA","end":"/c/en/change of location","weight":1,"surfaceText":"[[advance]] IsA [[change of location]]"}
+{"start":"/c/en/pop","rel":"/r/IsA","end":"/c/en/sound","weight":1,"surfaceText":"[[pop]] IsA [[sound]]"}
+{"start":"/c/en/flash","rel":"/r/IsA","end":"/c/en/experience","weight":1,"surfaceText":"[[flash]] IsA [[experience]]"}
+{"start":"/c/en/rest","rel":"/r/IsA","end":"/c/en/pause","weight":1,"surfaceText":"[[rest]] IsA [[pause]]"}
+{"start":"/c/en/crash","rel":"/r/IsA","end":"/c/en/accident","weight":1,"surfaceText":"[[crash]] IsA [[accident]]"}
+{"start":"/c/en/score","rel":"/r/IsA","end":"/c/en/number","weight":1,"surfaceText":"[[score]] IsA [[number]]"}
+{"start":"/c/en/score","rel":"/r/HasA","end":"/c/en/point","weight":1,"surfaceText":"[[score]] HasA [[point]]"}
+{"start":"/c/en/figure","rel":"/r/IsA","end":"/c/en/integer","weight":1,"surfaceText":"[[figure]] IsA [[integer]]"}
+{"start":"/c/en/leave","rel":"/r/IsA","end":"/c/en/time off","weight":1,"surfaceText":"[[leave]] IsA [[time off]]"}
+{"start":"/c/en/smash","rel":"/r/IsA","end":"/c/en/collision","weight":1,"surfaceText":"[[smash]] IsA [[collision]]"}
+{"start":"/c/en/stroke","rel":"/r/IsA","end":"/c/en/movement","weight":1,"surfaceText":"[[stroke]] IsA [[movement]]"}
+{"start":"/c/en/first","rel":"/r/IsA","end":"/c/en/ordinal number","weight":1,"surfaceText":"[[first]] IsA [[ordinal number]]"}
+{"start":"/c/en/sweep","rel":"/r/IsA","end":"/c/en/victory","weight":1,"surfaceText":"[[sweep]] IsA [[victory]]"}
+{"start":"/c/en/even","rel":"/r/IsA","end":"/c/en/day","weight":1,"surfaceText":"[[even]] IsA [[day]]"}
+{"start":"/c/en/even","rel":"/r/HasA","end":"/c/en/sunset","weight":1,"surfaceText":"[[even]] HasA [[sunset]]"}
+{"start":"/c/en/flow","rel":"/r/IsA","end":"/c/en/rate","weight":1,"surfaceText":"[[flow]] IsA [[rate]]"}
+{"start":"/c/en/kick","rel":"/r/IsA","end":"/c/en/movement","weight":1,"surfaceText":"[[kick]] IsA [[movement]]"}
+{"start":"/c/en/heave","rel":"/r/IsA","end":"/c/en/movement","weight":1,"surfaceText":"[[heave]] IsA [[movement]]"}
+{"start":"/c/en/trace","rel":"/r/IsA","end":"/c/en/small indefinite quantity","weight":1,"surfaceText":"[[trace]] IsA [[small indefinite quantity]]"}
+{"start":"/c/en/opening","rel":"/r/IsA","end":"/c/en/ceremony","weight":1,"surfaceText":"[[opening]] IsA [[ceremony]]"}
+{"start":"/c/en/full","rel":"/r/IsA","end":"/c/en/phase of the moon","weight":1,"surfaceText":"[[full]] IsA [[phase of the moon]]"}
+{"start":"/c/en/gain","rel":"/r/IsA","end":"/c/en/indefinite quantity","weight":1,"surfaceText":"[[gain]] IsA [[indefinite quantity]]"}
+{"start":"/c/en/jack","rel":"/r/IsA","end":"/c/en/small indefinite quantity","weight":1,"surfaceText":"[[jack]] IsA [[small indefinite quantity]]"}
+{"start":"/c/en/spin","rel":"/r/IsA","end":"/c/en/rotation","weight":1,"surfaceText":"[[spin]] IsA [[rotation]]"}
+{"start":"/c/en/wave","rel":"/r/IsA","end":"/c/en/movement","weight":1,"surfaceText":"[[wave]] IsA [[movement]]"}
+{"start":"/c/en/splash","rel":"/r/IsA","end":"/c/en/noise","weight":1,"surfaceText":"[[splash]] IsA [[noise]]"}
+{"start":"/c/en/bob","rel":"/r/IsA","end":"/c/en/british monetary unit","weight":1,"surfaceText":"[[bob]] IsA [[british monetary unit]]"}
+{"start":"/c/en/bob","rel":"/r/HasA","end":"/c/en/cent","weight":1,"surfaceText":"[[bob]] HasA [[cent]]"}
+{"start":"/c/en/bang","rel":"/r/IsA","end":"/c/en/noise","weight":1,"surfaceText":"[[bang]] IsA [[noise]]"}
+{"start":"/c/en/dash","rel":"/r/IsA","end":"/c/en/track event","weight":1,"surfaceText":"[[dash]] IsA [[track event]]"}
+{"start":"/c/en/flick","rel":"/r/IsA","end":"/c/en/contact","weight":1,"surfaceText":"[[flick]] IsA [[contact]]"}
+{"start":"/c/en/hitch","rel":"/r/IsA","end":"/c/en/time period","weight":1,"surfaceText":"[[hitch]] IsA [[time period]]"}
+{"start":"/c/en/prime","rel":"/r/IsA","end":"/c/en/canonical hour","weight":1,"surfaceText":"[[prime]] IsA [[canonical hour]]"}
+{"start":"/c/en/proof","rel":"/r/IsA","end":"/c/en/measure","weight":1,"surfaceText":"[[proof]] IsA [[measure]]"}
+{"start":"/c/en/passing","rel":"/r/IsA","end":"/c/en/movement","weight":1,"surfaceText":"[[passing]] IsA [[movement]]"}
+{"start":"/c/en/bit","rel":"/r/IsA","end":"/c/en/time","weight":1,"surfaceText":"[[bit]] IsA [[time]]"}
+{"start":"/c/en/click","rel":"/r/IsA","end":"/c/en/sound","weight":1,"surfaceText":"[[click]] IsA [[sound]]"}
+{"start":"/c/en/knock","rel":"/r/IsA","end":"/c/en/sound","weight":1,"surfaceText":"[[knock]] IsA [[sound]]"}
+{"start":"/c/en/swell","rel":"/r/IsA","end":"/c/en/wave","weight":1,"surfaceText":"[[swell]] IsA [[wave]]"}
+{"start":"/c/en/trouble","rel":"/r/IsA","end":"/c/en/happening","weight":1,"surfaceText":"[[trouble]] IsA [[happening]]"}
+{"start":"/c/en/collapse","rel":"/r/IsA","end":"/c/en/happening","weight":1,"surfaceText":"[[collapse]] IsA [[happening]]"}
+{"start":"/c/en/movement","rel":"/r/IsA","end":"/c/en/happening","weight":1,"surfaceText":"[[movement]] IsA [[happening]]"}
+{"start":"/c/en/standard","rel":"/r/IsA","end":"/c/en/volume unit","weight":1,"surfaceText":"[[standard]] IsA [[volume unit]]"}
+{"start":"/c/en/variation","rel":"/r/IsA","end":"/c/en/change","weight":1,"surfaceText":"[[variation]] IsA [[change]]"}
+{"start":"/c/en/rap","rel":"/r/IsA","end":"/c/en/sound","weight":1,"surfaceText":"[[rap]] IsA [[sound]]"}
+{"start":"/c/en/boom","rel":"/r/IsA","end":"/c/en/noise","weight":1,"surfaceText":"[[boom]] IsA [[noise]]"}
+{"start":"/c/en/bump","rel":"/r/IsA","end":"/c/en/impact","weight":1,"surfaceText":"[[bump]] IsA [[impact]]"}
+{"start":"/c/en/clap","rel":"/r/IsA","end":"/c/en/noise","weight":1,"surfaceText":"[[clap]] IsA [[noise]]"}
+{"start":"/c/en/pace","rel":"/r/IsA","end":"/c/en/rate","weight":1,"surfaceText":"[[pace]] IsA [[rate]]"}
+{"start":"/c/en/peck","rel":"/r/IsA","end":"/c/en/united states dry unit","weight":1,"surfaceText":"[[peck]] IsA [[united states dry unit]]"}
+{"start":"/c/en/peck","rel":"/r/HasA","end":"/c/en/quart","weight":1,"surfaceText":"[[peck]] HasA [[quart]]"}
+{"start":"/c/en/zero","rel":"/r/IsA","end":"/c/en/digit","weight":1,"surfaceText":"[[zero]] IsA [[digit]]"}
+{"start":"/c/en/blaze","rel":"/r/IsA","end":"/c/en/trouble","weight":1,"surfaceText":"[[blaze]] IsA [[trouble]]"}
+{"start":"/c/en/speed","rel":"/r/IsA","end":"/c/en/rate","weight":1,"surfaceText":"[[speed]] IsA [[rate]]"}
+{"start":"/c/en/spell","rel":"/r/IsA","end":"/c/en/time","weight":1,"surfaceText":"[[spell]] IsA [[time]]"}
+{"start":"/c/en/treat","rel":"/r/IsA","end":"/c/en/happening","weight":1,"surfaceText":"[[treat]] IsA [[happening]]"}
+{"start":"/c/en/bounce","rel":"/r/IsA","end":"/c/en/recoil","weight":1,"surfaceText":"[[bounce]] IsA [[recoil]]"}
+{"start":"/c/en/factor","rel":"/r/IsA","end":"/c/en/cause","weight":1,"surfaceText":"[[factor]] IsA [[cause]]"}
+{"start":"/c/en/little","rel":"/r/IsA","end":"/c/en/small indefinite quantity","weight":1,"surfaceText":"[[little]] IsA [[small indefinite quantity]]"}
+{"start":"/c/en/plunge","rel":"/r/IsA","end":"/c/en/drop","weight":1,"surfaceText":"[[plunge]] IsA [[drop]]"}
+{"start":"/c/en/scrape","rel":"/r/IsA","end":"/c/en/noise","weight":1,"surfaceText":"[[scrape]] IsA [[noise]]"}
+{"start":"/c/en/single","rel":"/r/IsA","end":"/c/en/digit","weight":1,"surfaceText":"[[single]] IsA [[digit]]"}
+{"start":"/c/en/ban","rel":"/r/IsA","end":"/c/en/romanian monetary unit","weight":1,"surfaceText":"[[ban]] IsA [[romanian monetary unit]]"}
+{"start":"/c/en/mix","rel":"/r/IsA","end":"/c/en/combining","weight":1,"surfaceText":"[[mix]] IsA [[combining]]"}
+{"start":"/c/en/one","rel":"/r/IsA","end":"/c/en/digit","weight":1,"surfaceText":"[[one]] IsA [[digit]]"}
+{"start":"/c/en/mesh","rel":"/r/IsA","end":"/c/en/contact","weight":1,"surfaceText":"[[mesh]] IsA [[contact]]"}
+{"start":"/c/en/roar","rel":"/r/IsA","end":"/c/en/noise","weight":1,"surfaceText":"[[roar]] IsA [[noise]]"}
+{"start":"/c/en/tilt","rel":"/r/IsA","end":"/c/en/struggle","weight":1,"surfaceText":"[[tilt]] IsA [[struggle]]"}
+{"start":"/c/en/climb","rel":"/r/IsA","end":"/c/en/rise","weight":1,"surfaceText":"[[climb]] IsA [[rise]]"}
+{"start":"/c/en/flip","rel":"/r/IsA","end":"/c/en/mixed drink","weight":1,"surfaceText":"[[flip]] IsA [[mixed drink]]"}
+{"start":"/c/en/puff","rel":"/r/IsA","end":"/c/en/pastry","weight":1,"surfaceText":"[[puff]] IsA [[pastry]]"}
+{"start":"/c/en/bite","rel":"/r/IsA","end":"/c/en/taste","weight":1,"surfaceText":"[[bite]] IsA [[taste]]"}
+{"start":"/c/en/feed","rel":"/r/IsA","end":"/c/en/food","weight":1,"surfaceText":"[[feed]] IsA [[food]]"}
+{"start":"/c/en/bitter","rel":"/r/IsA","end":"/c/en/ale","weight":1,"surfaceText":"[[bitter]] IsA [[ale]]"}
+{"start":"/c/en/chop","rel":"/r/IsA","end":"/c/en/jaw","weight":1,"surfaceText":"[[chop]] IsA [[jaw]]"}
+{"start":"/c/en/sour","rel":"/r/IsA","end":"/c/en/cocktail","weight":1,"surfaceText":"[[sour]] IsA [[cocktail]]"}
+{"start":"/c/en/special","rel":"/r/IsA","end":"/c/en/dish","weight":1,"surfaceText":"[[special]] IsA [[dish]]"}
+{"start":"/c/en/crisp","rel":"/r/IsA","end":"/c/en/snack food","weight":1,"surfaceText":"[[crisp]] IsA [[snack food]]"}
+{"start":"/c/en/tonic","rel":"/r/IsA","end":"/c/en/soft drink","weight":1,"surfaceText":"[[tonic]] IsA [[soft drink]]"}
+{"start":"/c/en/tonic","rel":"/r/MadeOf","end":"/c/en/soda water","weight":1,"surfaceText":"[[tonic]] MadeOf [[soda water]]"}
+{"start":"/c/en/scallop","rel":"/r/IsA","end":"/c/en/piece","weight":1,"surfaceText":"[[scallop]] IsA [[piece]]"}
+{"start":"/c/en/mess","rel":"/r/IsA","end":"/c/en/nutriment","weight":1,"surfaceText":"[[mess]] IsA [[nutriment]]"}
+{"start":"/c/en/quick","rel":"/r/IsA","end":"/c/en/area","weight":1,"surfaceText":"[[quick]] IsA [[area]]"}
+{"start":"/c/en/smear","rel":"/r/IsA","end":"/c/en/cytologic specimen","weight":1,"surfaceText":"[[smear]] IsA [[cytologic specimen]]"}
+{"start":"/c/en/fillet","rel":"/r/IsA","end":"/c/en/sensory nerve","weight":1,"surfaceText":"[[fillet]] IsA [[sensory nerve]]"}
+{"start":"/c/en/curl","rel":"/r/IsA","end":"/c/en/lock","weight":1,"surfaceText":"[[curl]] IsA [[lock]]"}
+{"start":"/c/en/malt","rel":"/r/IsA","end":"/c/en/grain","weight":1,"surfaceText":"[[malt]] IsA [[grain]]"}
+{"start":"/c/en/glaze","rel":"/r/IsA","end":"/c/en/topping","weight":1,"surfaceText":"[[glaze]] IsA [[topping]]"}
+{"start":"/c/en/souse","rel":"/r/IsA","end":"/c/en/sausage","weight":1,"surfaceText":"[[souse]] IsA [[sausage]]"}
+{"start":"/c/en/breast","rel":"/r/IsA","end":"/c/en/external body part","weight":1,"surfaceText":"[[breast]] IsA [[external body part]]"}
+{"start":"/c/en/humour","rel":"/r/IsA","end":"/c/en/body substance","weight":1,"surfaceText":"[[humour]] IsA [[body substance]]"}
+{"start":"/c/en/draught","rel":"/r/IsA","end":"/c/en/drink","weight":1,"surfaceText":"[[draught]] IsA [[drink]]"}
+{"start":"/c/en/delicacy","rel":"/r/IsA","end":"/c/en/nutriment","weight":1,"surfaceText":"[[delicacy]] IsA [[nutriment]]"}
+{"start":"/c/en/dressing","rel":"/r/IsA","end":"/c/en/concoction","weight":1,"surfaceText":"[[dressing]] IsA [[concoction]]"}
+{"start":"/c/en/transplant","rel":"/r/IsA","end":"/c/en/animal tissue","weight":1,"surfaceText":"[[transplant]] IsA [[animal tissue]]"}
+{"start":"/c/en/hip","rel":"/r/IsA","end":"/c/en/body part","weight":1,"surfaceText":"[[hip]] IsA [[body part]]"}
+{"start":"/c/en/hip","rel":"/r/HasA","end":"/c/en/gluteal artery","weight":1,"surfaceText":"[[hip]] HasA [[gluteal artery]]"}
+{"start":"/c/en/sop","rel":"/r/IsA","end":"/c/en/morsel","weight":1,"surfaceText":"[[sop]] IsA [[morsel]]"}
+{"start":"/c/en/kiss","rel":"/r/IsA","end":"/c/en/candy","weight":1,"surfaceText":"[[kiss]] IsA [[candy]]"}
+{"start":"/c/en/mush","rel":"/r/IsA","end":"/c/en/hot cereal","weight":1,"surfaceText":"[[mush]] IsA [[hot cereal]]"}
+{"start":"/c/en/mush","rel":"/r/MadeOf","end":"/c/en/cornmeal","weight":1,"surfaceText":"[[mush]] MadeOf [[cornmeal]]"}
+{"start":"/c/en/neck","rel":"/r/IsA","end":"/c/en/external body part","weight":1,"surfaceText":"[[neck]] IsA [[external body part]]"}
+{"start":"/c/en/neck","rel":"/r/HasA","end":"/c/en/dewlap","weight":1,"surfaceText":"[[neck]] HasA [[dewlap]]"}
+{"start":"/c/en/belly","rel":"/r/IsA","end":"/c/en/adipose tissue","weight":1,"surfaceText":"[[belly]] IsA [[adipose tissue]]"}
+{"start":"/c/en/frank","rel":"/r/IsA","end":"/c/en/sausage","weight":1,"surfaceText":"[[frank]] IsA [[sausage]]"}
+{"start":"/c/en/jumble","rel":"/r/IsA","end":"/c/en/cake","weight":1,"surfaceText":"[[jumble]] IsA [[cake]]"}
+{"start":"/c/en/junket","rel":"/r/IsA","end":"/c/en/dessert","weight":1,"surfaceText":"[[junket]] IsA [[dessert]]"}
+{"start":"/c/en/trifle","rel":"/r/IsA","end":"/c/en/pudding","weight":1,"surfaceText":"[[trifle]] IsA [[pudding]]"}
+{"start":"/c/en/stomach","rel":"/r/HasA","end":"/c/en/gastric artery","weight":1,"surfaceText":"[[stomach]] HasA [[gastric artery]]"}
+{"start":"/c/en/clot","rel":"/r/IsA","end":"/c/en/ball","weight":1,"surfaceText":"[[clot]] IsA [[ball]]"}
+{"start":"/c/en/shin","rel":"/r/IsA","end":"/c/en/body part","weight":1,"surfaceText":"[[shin]] IsA [[body part]]"}
+{"start":"/c/en/stew","rel":"/r/IsA","end":"/c/en/dish","weight":1,"surfaceText":"[[stew]] IsA [[dish]]"}
+{"start":"/c/en/tart","rel":"/r/IsA","end":"/c/en/pastry","weight":1,"surfaceText":"[[tart]] IsA [[pastry]]"}
+{"start":"/c/en/cheek","rel":"/r/IsA","end":"/c/en/body part","weight":1,"surfaceText":"[[cheek]] IsA [[body part]]"}
+{"start":"/c/en/cheek","rel":"/r/HasA","end":"/c/en/gluteus","weight":1,"surfaceText":"[[cheek]] HasA [[gluteus]]"}
+{"start":"/c/en/graft","rel":"/r/IsA","end":"/c/en/animal tissue","weight":1,"surfaceText":"[[graft]] IsA [[animal tissue]]"}
+{"start":"/c/en/molar","rel":"/r/IsA","end":"/c/en/tooth","weight":1,"surfaceText":"[[molar]] IsA [[tooth]]"}
+{"start":"/c/en/roast","rel":"/r/IsA","end":"/c/en/cut","weight":1,"surfaceText":"[[roast]] IsA [[cut]]"}
+{"start":"/c/en/spice","rel":"/r/IsA","end":"/c/en/flavorer","weight":1,"surfaceText":"[[spice]] IsA [[flavorer]]"}
+{"start":"/c/en/stout","rel":"/r/IsA","end":"/c/en/ale","weight":1,"surfaceText":"[[stout]] IsA [[ale]]"}
+{"start":"/c/en/sweat","rel":"/r/IsA","end":"/c/en/secretion","weight":1,"surfaceText":"[[sweat]] IsA [[secretion]]"}
+{"start":"/c/en/sweat","rel":"/r/MadeOf","end":"/c/en/water","weight":1,"surfaceText":"[[sweat]] MadeOf [[water]]"}
+{"start":"/c/en/groove","rel":"/r/IsA","end":"/c/en/body part","weight":1,"surfaceText":"[[groove]] IsA [[body part]]"}
+{"start":"/c/en/region","rel":"/r/IsA","end":"/c/en/body part","weight":1,"surfaceText":"[[region]] IsA [[body part]]"}
+{"start":"/c/en/savoury","rel":"/r/IsA","end":"/c/en/dainty","weight":1,"surfaceText":"[[savoury]] IsA [[dainty]]"}
+{"start":"/c/en/western","rel":"/r/IsA","end":"/c/en/sandwich","weight":1,"surfaceText":"[[western]] IsA [[sandwich]]"}
+{"start":"/c/en/backbone","rel":"/r/IsA","end":"/c/en/skeletal structure","weight":1,"surfaceText":"[[backbone]] IsA [[skeletal structure]]"}
+{"start":"/c/en/backbone","rel":"/r/HasA","end":"/c/en/spinal canal","weight":1,"surfaceText":"[[backbone]] HasA [[spinal canal]]"}
+{"start":"/c/en/conserve","rel":"/r/IsA","end":"/c/en/confiture","weight":1,"surfaceText":"[[conserve]] IsA [[confiture]]"}
+{"start":"/c/en/dominant","rel":"/r/IsA","end":"/c/en/allele","weight":1,"surfaceText":"[[dominant]] IsA [[allele]]"}
+{"start":"/c/en/macerate","rel":"/r/IsA","end":"/c/en/foodstuff","weight":1,"surfaceText":"[[macerate]] IsA [[foodstuff]]"}
+{"start":"/c/en/melancholy","rel":"/r/IsA","end":"/c/en/liquid body substance","weight":1,"surfaceText":"[[melancholy]] IsA [[liquid body substance]]"}
+{"start":"/c/en/cake","rel":"/r/IsA","end":"/c/en/baked goods","weight":1,"surfaceText":"[[cake]] IsA [[baked goods]]"}
+{"start":"/c/en/lens","rel":"/r/IsA","end":"/c/en/organ","weight":1,"surfaceText":"[[lens]] IsA [[organ]]"}
+{"start":"/c/en/lens","rel":"/r/HasA","end":"/c/en/lens cortex","weight":1,"surfaceText":"[[lens]] HasA [[lens cortex]]"}
+{"start":"/c/en/loaf","rel":"/r/IsA","end":"/c/en/solid food","weight":1,"surfaceText":"[[loaf]] IsA [[solid food]]"}
+{"start":"/c/en/menu","rel":"/r/IsA","end":"/c/en/fare","weight":1,"surfaceText":"[[menu]] IsA [[fare]]"}
+{"start":"/c/en/must","rel":"/r/IsA","end":"/c/en/grape juice","weight":1,"surfaceText":"[[must]] IsA [[grape juice]]"}
+{"start":"/c/en/peel","rel":"/r/IsA","end":"/c/en/rind","weight":1,"surfaceText":"[[peel]] IsA [[rind]]"}
+{"start":"/c/en/pore","rel":"/r/IsA","end":"/c/en/duct","weight":1,"surfaceText":"[[pore]] IsA [[duct]]"}
+{"start":"/c/en/suds","rel":"/r/IsA","end":"/c/en/beer","weight":1,"surfaceText":"[[suds]] IsA [[beer]]"}
+{"start":"/c/en/butch","rel":"/r/IsA","end":"/c/en/haircut","weight":1,"surfaceText":"[[butch]] IsA [[haircut]]"}
+{"start":"/c/en/cling","rel":"/r/IsA","end":"/c/en/edible fruit","weight":1,"surfaceText":"[[cling]] IsA [[edible fruit]]"}
+{"start":"/c/en/curry","rel":"/r/IsA","end":"/c/en/dish","weight":1,"surfaceText":"[[curry]] IsA [[dish]]"}
+{"start":"/c/en/drool","rel":"/r/IsA","end":"/c/en/saliva","weight":1,"surfaceText":"[[drool]] IsA [[saliva]]"}
+{"start":"/c/en/honey","rel":"/r/IsA","end":"/c/en/sweetening","weight":1,"surfaceText":"[[honey]] IsA [[sweetening]]"}
+{"start":"/c/en/jerky","rel":"/r/IsA","end":"/c/en/meat","weight":1,"surfaceText":"[[jerky]] IsA [[meat]]"}
+{"start":"/c/en/juice","rel":"/r/IsA","end":"/c/en/foodstuff","weight":1,"surfaceText":"[[juice]] IsA [[foodstuff]]"}
+{"start":"/c/en/mince","rel":"/r/IsA","end":"/c/en/nutriment","weight":1,"surfaceText":"[[mince]] IsA [[nutriment]]"}
+{"start":"/c/en/nasal","rel":"/r/IsA","end":"/c/en/bone","weight":1,"surfaceText":"[[nasal]] IsA [[bone]]"}
+{"start":"/c/en/nasal","rel":"/r/HasA","end":"/c/en/rhinion","weight":1,"surfaceText":"[[nasal]] HasA [[rhinion]]"}
+{"start":"/c/en/nerve","rel":"/r/IsA","end":"/c/en/fiber bundle","weight":1,"surfaceText":"[[nerve]] IsA [[fiber bundle]]"}
+{"start":"/c/en/nerve","rel":"/r/HasA","end":"/c/en/radicle","weight":1,"surfaceText":"[[nerve]] HasA [[radicle]]"}
+{"start":"/c/en/sauce","rel":"/r/IsA","end":"/c/en/condiment","weight":1,"surfaceText":"[[sauce]] IsA [[condiment]]"}
+{"start":"/c/en/tract","rel":"/r/IsA","end":"/c/en/system","weight":1,"surfaceText":"[[tract]] IsA [[system]]"}
+{"start":"/c/en/dainty","rel":"/r/IsA","end":"/c/en/nutriment","weight":1,"surfaceText":"[[dainty]] IsA [[nutriment]]"}
+{"start":"/c/en/entree","rel":"/r/IsA","end":"/c/en/course","weight":1,"surfaceText":"[[entree]] IsA [[course]]"}
+{"start":"/c/en/facial","rel":"/r/IsA","end":"/c/en/cranial nerve","weight":1,"surfaceText":"[[facial]] IsA [[cranial nerve]]"}
+{"start":"/c/en/relish","rel":"/r/IsA","end":"/c/en/condiment","weight":1,"surfaceText":"[[relish]] IsA [[condiment]]"}
+{"start":"/c/en/squash","rel":"/r/IsA","end":"/c/en/vegetable","weight":1,"surfaceText":"[[squash]] IsA [[vegetable]]"}
+{"start":"/c/en/brittle","rel":"/r/IsA","end":"/c/en/candy","weight":1,"surfaceText":"[[brittle]] IsA [[candy]]"}
+{"start":"/c/en/caramel","rel":"/r/IsA","end":"/c/en/sugar","weight":1,"surfaceText":"[[caramel]] IsA [[sugar]]"}
+{"start":"/c/en/cordial","rel":"/r/IsA","end":"/c/en/alcohol","weight":1,"surfaceText":"[[cordial]] IsA [[alcohol]]"}
+{"start":"/c/en/fissure","rel":"/r/IsA","end":"/c/en/groove","weight":1,"surfaceText":"[[fissure]] IsA [[groove]]"}
+{"start":"/c/en/oblique","rel":"/r/IsA","end":"/c/en/abdominal","weight":1,"surfaceText":"[[oblique]] IsA [[abdominal]]"}
+{"start":"/c/en/adhesion","rel":"/r/IsA","end":"/c/en/scar tissue","weight":1,"surfaceText":"[[adhesion]] IsA [[scar tissue]]"}
+{"start":"/c/en/turnover","rel":"/r/IsA","end":"/c/en/dish","weight":1,"surfaceText":"[[turnover]] IsA [[dish]]"}
+{"start":"/c/en/nonpareil","rel":"/r/IsA","end":"/c/en/chocolate candy","weight":1,"surfaceText":"[[nonpareil]] IsA [[chocolate candy]]"}
+{"start":"/c/en/posterior","rel":"/r/IsA","end":"/c/en/tooth","weight":1,"surfaceText":"[[posterior]] IsA [[tooth]]"}
+{"start":"/c/en/vegetation","rel":"/r/IsA","end":"/c/en/excrescence","weight":1,"surfaceText":"[[vegetation]] IsA [[excrescence]]"}
+{"start":"/c/en/ail","rel":"/r/IsA","end":"/c/en/flavorer","weight":1,"surfaceText":"[[ail]] IsA [[flavorer]]"}
+{"start":"/c/en/orb","rel":"/r/IsA","end":"/c/en/capsule","weight":1,"surfaceText":"[[orb]] IsA [[capsule]]"}
+{"start":"/c/en/pap","rel":"/r/IsA","end":"/c/en/diet","weight":1,"surfaceText":"[[pap]] IsA [[diet]]"}
+{"start":"/c/en/pap","rel":"/r/HasA","end":"/c/en/pablum","weight":1,"surfaceText":"[[pap]] HasA [[pablum]]"}
+{"start":"/c/en/rum","rel":"/r/IsA","end":"/c/en/liquor","weight":1,"surfaceText":"[[rum]] IsA [[liquor]]"}
+{"start":"/c/en/brew","rel":"/r/IsA","end":"/c/en/alcohol","weight":1,"surfaceText":"[[brew]] IsA [[alcohol]]"}
+{"start":"/c/en/chew","rel":"/r/IsA","end":"/c/en/morsel","weight":1,"surfaceText":"[[chew]] IsA [[morsel]]"}
+{"start":"/c/en/hash","rel":"/r/IsA","end":"/c/en/dish","weight":1,"surfaceText":"[[hash]] IsA [[dish]]"}
+{"start":"/c/en/lard","rel":"/r/IsA","end":"/c/en/edible fat","weight":1,"surfaceText":"[[lard]] IsA [[edible fat]]"}
+{"start":"/c/en/rump","rel":"/r/IsA","end":"/c/en/cut of beef","weight":1,"surfaceText":"[[rump]] IsA [[cut of beef]]"}
+{"start":"/c/en/rump","rel":"/r/HasA","end":"/c/en/rump steak","weight":1,"surfaceText":"[[rump]] HasA [[rump steak]]"}
+{"start":"/c/en/brine","rel":"/r/IsA","end":"/c/en/solution","weight":1,"surfaceText":"[[brine]] IsA [[solution]]"}
+{"start":"/c/en/dowdy","rel":"/r/IsA","end":"/c/en/pastry","weight":1,"surfaceText":"[[dowdy]] IsA [[pastry]]"}
+{"start":"/c/en/farce","rel":"/r/IsA","end":"/c/en/stuffing","weight":1,"surfaceText":"[[farce]] IsA [[stuffing]]"}
+{"start":"/c/en/flour","rel":"/r/IsA","end":"/c/en/foodstuff","weight":1,"surfaceText":"[[flour]] IsA [[foodstuff]]"}
+{"start":"/c/en/fudge","rel":"/r/IsA","end":"/c/en/candy","weight":1,"surfaceText":"[[fudge]] IsA [[candy]]"}
+{"start":"/c/en/halal","rel":"/r/IsA","end":"/c/en/meat","weight":1,"surfaceText":"[[halal]] IsA [[meat]]"}
+{"start":"/c/en/icing","rel":"/r/IsA","end":"/c/en/topping","weight":1,"surfaceText":"[[icing]] IsA [[topping]]"}
+{"start":"/c/en/lunch","rel":"/r/IsA","end":"/c/en/meal","weight":1,"surfaceText":"[[lunch]] IsA [[meal]]"}
+{"start":"/c/en/play","rel":"/r/IsA","end":"/c/en/dramatic composition","weight":1,"surfaceText":"[[play]] IsA [[dramatic composition]]"}
+{"start":"/c/en/play","rel":"/r/HasA","end":"/c/en/stage direction","weight":1,"surfaceText":"[[play]] HasA [[stage direction]]"}
+{"start":"/c/en/make","rel":"/r/IsA","end":"/c/en/kind","weight":1,"surfaceText":"[[make]] IsA [[kind]]"}
+{"start":"/c/en/hold","rel":"/r/IsA","end":"/c/en/understanding","weight":1,"surfaceText":"[[hold]] IsA [[understanding]]"}
+{"start":"/c/en/close","rel":"/r/IsA","end":"/c/en/section","weight":1,"surfaceText":"[[close]] IsA [[section]]"}
+{"start":"/c/en/mark","rel":"/r/IsA","end":"/c/en/reference point","weight":1,"surfaceText":"[[mark]] IsA [[reference point]]"}
+{"start":"/c/en/mark","rel":"/r/HasA","end":"/c/en/bull's eye","weight":1,"surfaceText":"[[mark]] HasA [[bull's eye]]"}
+{"start":"/c/en/form","rel":"/r/IsA","end":"/c/en/word","weight":1,"surfaceText":"[[form]] IsA [[word]]"}
+{"start":"/c/en/order","rel":"/r/IsA","end":"/c/en/command","weight":1,"surfaceText":"[[order]] IsA [[command]]"}
+{"start":"/c/en/support","rel":"/r/IsA","end":"/c/en/influence","weight":1,"surfaceText":"[[support]] IsA [[influence]]"}
+{"start":"/c/en/rule","rel":"/r/IsA","end":"/c/en/direction","weight":1,"surfaceText":"[[rule]] IsA [[direction]]"}
+{"start":"/c/en/sign","rel":"/r/IsA","end":"/c/en/clue","weight":1,"surfaceText":"[[sign]] IsA [[clue]]"}
+{"start":"/c/en/hang","rel":"/r/IsA","end":"/c/en/endowment","weight":1,"surfaceText":"[[hang]] IsA [[endowment]]"}
+{"start":"/c/en/drag","rel":"/r/IsA","end":"/c/en/hindrance","weight":1,"surfaceText":"[[drag]] IsA [[hindrance]]"}
+{"start":"/c/en/feel","rel":"/r/IsA","end":"/c/en/awareness","weight":1,"surfaceText":"[[feel]] IsA [[awareness]]"}
+{"start":"/c/en/find","rel":"/r/IsA","end":"/c/en/insight","weight":1,"surfaceText":"[[find]] IsA [[insight]]"}
+{"start":"/c/en/shock","rel":"/r/IsA","end":"/c/en/stupefaction","weight":1,"surfaceText":"[[shock]] IsA [[stupefaction]]"}
+{"start":"/c/en/mean","rel":"/r/IsA","end":"/c/en/average","weight":1,"surfaceText":"[[mean]] IsA [[average]]"}
+{"start":"/c/en/offer","rel":"/r/IsA","end":"/c/en/message","weight":1,"surfaceText":"[[offer]] IsA [[message]]"}
+{"start":"/c/en/study","rel":"/r/IsA","end":"/c/en/document","weight":1,"surfaceText":"[[study]] IsA [[document]]"}
+{"start":"/c/en/show","rel":"/r/IsA","end":"/c/en/demonstration","weight":1,"surfaceText":"[[show]] IsA [[demonstration]]"}
+{"start":"/c/en/tone","rel":"/r/IsA","end":"/c/en/manner of speaking","weight":1,"surfaceText":"[[tone]] IsA [[manner of speaking]]"}
+{"start":"/c/en/flare","rel":"/r/IsA","end":"/c/en/visual signal","weight":1,"surfaceText":"[[flare]] IsA [[visual signal]]"}
+{"start":"/c/en/attack","rel":"/r/IsA","end":"/c/en/criticism","weight":1,"surfaceText":"[[attack]] IsA [[criticism]]"}
+{"start":"/c/en/act","rel":"/r/IsA","end":"/c/en/legal document","weight":1,"surfaceText":"[[act]] IsA [[legal document]]"}
+{"start":"/c/en/life","rel":"/r/IsA","end":"/c/en/experience","weight":1,"surfaceText":"[[life]] IsA [[experience]]"}
+{"start":"/c/en/stay","rel":"/r/IsA","end":"/c/en/decree","weight":1,"surfaceText":"[[stay]] IsA [[decree]]"}
+{"start":"/c/en/think","rel":"/r/IsA","end":"/c/en/deliberation","weight":1,"surfaceText":"[[think]] IsA [[deliberation]]"}
+{"start":"/c/en/secret","rel":"/r/IsA","end":"/c/en/information","weight":1,"surfaceText":"[[secret]] IsA [[information]]"}
+{"start":"/c/en/account","rel":"/r/IsA","end":"/c/en/record","weight":1,"surfaceText":"[[account]] IsA [[record]]"}
+{"start":"/c/en/hurt","rel":"/r/IsA","end":"/c/en/pain","weight":1,"surfaceText":"[[hurt]] IsA [[pain]]"}
+{"start":"/c/en/note","rel":"/r/IsA","end":"/c/en/written record","weight":1,"surfaceText":"[[note]] IsA [[written record]]"}
+{"start":"/c/en/taste","rel":"/r/IsA","end":"/c/en/sensation","weight":1,"surfaceText":"[[taste]] IsA [[sensation]]"}
+{"start":"/c/en/report","rel":"/r/IsA","end":"/c/en/news","weight":1,"surfaceText":"[[report]] IsA [[news]]"}
+{"start":"/c/en/measure","rel":"/r/IsA","end":"/c/en/legal document","weight":1,"surfaceText":"[[measure]] IsA [[legal document]]"}
+{"start":"/c/en/measure","rel":"/r/HasA","end":"/c/en/rider","weight":1,"surfaceText":"[[measure]] HasA [[rider]]"}
+{"start":"/c/en/condition","rel":"/r/IsA","end":"/c/en/premise","weight":1,"surfaceText":"[[condition]] IsA [[premise]]"}
+{"start":"/c/en/cry","rel":"/r/IsA","end":"/c/en/utterance","weight":1,"surfaceText":"[[cry]] IsA [[utterance]]"}
+{"start":"/c/en/focus","rel":"/r/IsA","end":"/c/en/concentration","weight":1,"surfaceText":"[[focus]] IsA [[concentration]]"}
+{"start":"/c/en/style","rel":"/r/IsA","end":"/c/en/communication","weight":1,"surfaceText":"[[style]] IsA [[communication]]"}
+{"start":"/c/en/thing","rel":"/r/IsA","end":"/c/en/abstraction","weight":1,"surfaceText":"[[thing]] IsA [[abstraction]]"}
+{"start":"/c/en/title","rel":"/r/IsA","end":"/c/en/name","weight":1,"surfaceText":"[[title]] IsA [[name]]"}
+{"start":"/c/en/recall","rel":"/r/IsA","end":"/c/en/bugle call","weight":1,"surfaceText":"[[recall]] IsA [[bugle call]]"}
+{"start":"/c/en/average","rel":"/r/IsA","end":"/c/en/scale value","weight":1,"surfaceText":"[[average]] IsA [[scale value]]"}
+{"start":"/c/en/contract","rel":"/r/IsA","end":"/c/en/written agreement","weight":1,"surfaceText":"[[contract]] IsA [[written agreement]]"}
+{"start":"/c/en/contract","rel":"/r/HasA","end":"/c/en/arbitration clause","weight":1,"surfaceText":"[[contract]] HasA [[arbitration clause]]"}
+{"start":"/c/en/dissolve","rel":"/r/IsA","end":"/c/en/transition","weight":1,"surfaceText":"[[dissolve]] IsA [[transition]]"}
+{"start":"/c/en/so","rel":"/r/IsA","end":"/c/en/solfa syllable","weight":1,"surfaceText":"[[so]] IsA [[solfa syllable]]"}
+{"start":"/c/en/aim","rel":"/r/IsA","end":"/c/en/goal","weight":1,"surfaceText":"[[aim]] IsA [[goal]]"}
+{"start":"/c/en/bind","rel":"/r/IsA","end":"/c/en/hindrance","weight":1,"surfaceText":"[[bind]] IsA [[hindrance]]"}
+{"start":"/c/en/heat","rel":"/r/IsA","end":"/c/en/temperature","weight":1,"surfaceText":"[[heat]] IsA [[temperature]]"}
+{"start":"/c/en/know","rel":"/r/IsA","end":"/c/en/knowing","weight":1,"surfaceText":"[[know]] IsA [[knowing]]"}
+{"start":"/c/en/stir","rel":"/r/IsA","end":"/c/en/agitation","weight":1,"surfaceText":"[[stir]] IsA [[agitation]]"}
+{"start":"/c/en/claim","rel":"/r/IsA","end":"/c/en/assertion","weight":1,"surfaceText":"[[claim]] IsA [[assertion]]"}
+{"start":"/c/en/power","rel":"/r/IsA","end":"/c/en/cognition","weight":1,"surfaceText":"[[power]] IsA [[cognition]]"}
+{"start":"/c/en/demand","rel":"/r/IsA","end":"/c/en/request","weight":1,"surfaceText":"[[demand]] IsA [[request]]"}
+{"start":"/c/en/design","rel":"/r/IsA","end":"/c/en/arrangement","weight":1,"surfaceText":"[[design]] IsA [[arrangement]]"}
+{"start":"/c/en/notice","rel":"/r/IsA","end":"/c/en/announcement","weight":1,"surfaceText":"[[notice]] IsA [[announcement]]"}
+{"start":"/c/en/source","rel":"/r/IsA","end":"/c/en/document","weight":1,"surfaceText":"[[source]] IsA [[document]]"}
+{"start":"/c/en/upgrade","rel":"/r/IsA","end":"/c/en/software","weight":1,"surfaceText":"[[upgrade]] IsA [[software]]"}
+{"start":"/c/en/resolution","rel":"/r/IsA","end":"/c/en/document","weight":1,"surfaceText":"[[resolution]] IsA [[document]]"}
+{"start":"/c/en/bid","rel":"/r/IsA","end":"/c/en/offer","weight":1,"surfaceText":"[[bid]] IsA [[offer]]"}
+{"start":"/c/en/skim","rel":"/r/IsA","end":"/c/en/reading","weight":1,"surfaceText":"[[skim]] IsA [[reading]]"}
+{"start":"/c/en/brand","rel":"/r/IsA","end":"/c/en/marker","weight":1,"surfaceText":"[[brand]] IsA [[marker]]"}
+{"start":"/c/en/curve","rel":"/r/IsA","end":"/c/en/line","weight":1,"surfaceText":"[[curve]] IsA [[line]]"}
+{"start":"/c/en/sight","rel":"/r/IsA","end":"/c/en/display","weight":1,"surfaceText":"[[sight]] IsA [[display]]"}
+{"start":"/c/en/smoke","rel":"/r/IsA","end":"/c/en/indication","weight":1,"surfaceText":"[[smoke]] IsA [[indication]]"}
+{"start":"/c/en/digest","rel":"/r/IsA","end":"/c/en/collection","weight":1,"surfaceText":"[[digest]] IsA [[collection]]"}
+{"start":"/c/en/regard","rel":"/r/IsA","end":"/c/en/greeting","weight":1,"surfaceText":"[[regard]] IsA [[greeting]]"}
+{"start":"/c/en/passage","rel":"/r/IsA","end":"/c/en/section","weight":1,"surfaceText":"[[passage]] IsA [[section]]"}
+{"start":"/c/en/program","rel":"/r/IsA","end":"/c/en/show","weight":1,"surfaceText":"[[program]] IsA [[show]]"}
+{"start":"/c/en/exposure","rel":"/r/IsA","end":"/c/en/disclosure","weight":1,"surfaceText":"[[exposure]] IsA [[disclosure]]"}
+{"start":"/c/en/interest","rel":"/r/IsA","end":"/c/en/curiosity","weight":1,"surfaceText":"[[interest]] IsA [[curiosity]]"}
+{"start":"/c/en/character","rel":"/r/IsA","end":"/c/en/property","weight":1,"surfaceText":"[[character]] IsA [[property]]"}
+{"start":"/c/en/projection","rel":"/r/IsA","end":"/c/en/visual communication","weight":1,"surfaceText":"[[projection]] IsA [[visual communication]]"}
+{"start":"/c/en/lay","rel":"/r/IsA","end":"/c/en/poem","weight":1,"surfaceText":"[[lay]] IsA [[poem]]"}
+{"start":"/c/en/curse","rel":"/r/IsA","end":"/c/en/spell","weight":1,"surfaceText":"[[curse]] IsA [[spell]]"}
+{"start":"/c/en/favor","rel":"/r/IsA","end":"/c/en/inclination","weight":1,"surfaceText":"[[favor]] IsA [[inclination]]"}
+{"start":"/c/en/remit","rel":"/r/IsA","end":"/c/en/topic","weight":1,"surfaceText":"[[remit]] IsA [[topic]]"}
+{"start":"/c/en/sense","rel":"/r/IsA","end":"/c/en/meaning","weight":1,"surfaceText":"[[sense]] IsA [[meaning]]"}
+{"start":"/c/en/slash","rel":"/r/IsA","end":"/c/en/punctuation","weight":1,"surfaceText":"[[slash]] IsA [[punctuation]]"}
+{"start":"/c/en/wedge","rel":"/r/IsA","end":"/c/en/diacritical mark","weight":1,"surfaceText":"[[wedge]] IsA [[diacritical mark]]"}
+{"start":"/c/en/bubble","rel":"/r/IsA","end":"/c/en/illusion","weight":1,"surfaceText":"[[bubble]] IsA [[illusion]]"}
+{"start":"/c/en/excuse","rel":"/r/IsA","end":"/c/en/note","weight":1,"surfaceText":"[[excuse]] IsA [[note]]"}
+{"start":"/c/en/favour","rel":"/r/IsA","end":"/c/en/inclination","weight":1,"surfaceText":"[[favour]] IsA [[inclination]]"}
+{"start":"/c/en/invite","rel":"/r/IsA","end":"/c/en/invitation","weight":1,"surfaceText":"[[invite]] IsA [[invitation]]"}
+{"start":"/c/en/mantle","rel":"/r/IsA","end":"/c/en/symbol","weight":1,"surfaceText":"[[mantle]] IsA [[symbol]]"}
+{"start":"/c/en/salute","rel":"/r/IsA","end":"/c/en/greeting","weight":1,"surfaceText":"[[salute]] IsA [[greeting]]"}
+{"start":"/c/en/stress","rel":"/r/IsA","end":"/c/en/prosody","weight":1,"surfaceText":"[[stress]] IsA [[prosody]]"}
+{"start":"/c/en/survey","rel":"/r/IsA","end":"/c/en/summary","weight":1,"surfaceText":"[[survey]] IsA [[summary]]"}
+{"start":"/c/en/temper","rel":"/r/IsA","end":"/c/en/annoyance","weight":1,"surfaceText":"[[temper]] IsA [[annoyance]]"}
+{"start":"/c/en/comfort","rel":"/r/IsA","end":"/c/en/pleasure","weight":1,"surfaceText":"[[comfort]] IsA [[pleasure]]"}
+{"start":"/c/en/neglect","rel":"/r/IsA","end":"/c/en/inattention","weight":1,"surfaceText":"[[neglect]] IsA [[inattention]]"}
+{"start":"/c/en/resolve","rel":"/r/IsA","end":"/c/en/document","weight":1,"surfaceText":"[[resolve]] IsA [[document]]"}
+{"start":"/c/en/respect","rel":"/r/IsA","end":"/c/en/detail","weight":1,"surfaceText":"[[respect]] IsA [[detail]]"}
+{"start":"/c/en/torment","rel":"/r/IsA","end":"/c/en/suffering","weight":1,"surfaceText":"[[torment]] IsA [[suffering]]"}
+{"start":"/c/en/conflict","rel":"/r/IsA","end":"/c/en/ambivalence","weight":1,"surfaceText":"[[conflict]] IsA [[ambivalence]]"}
+{"start":"/c/en/dispatch","rel":"/r/IsA","end":"/c/en/report","weight":1,"surfaceText":"[[dispatch]] IsA [[report]]"}
+{"start":"/c/en/dispatch","rel":"/r/HasA","end":"/c/en/dateline","weight":1,"surfaceText":"[[dispatch]] HasA [[dateline]]"}
+{"start":"/c/en/standing","rel":"/r/IsA","end":"/c/en/list","weight":1,"surfaceText":"[[standing]] IsA [[list]]"}
+{"start":"/c/en/challenge","rel":"/r/IsA","end":"/c/en/questioning","weight":1,"surfaceText":"[[challenge]] IsA [[questioning]]"}
+{"start":"/c/en/programme","rel":"/r/IsA","end":"/c/en/show","weight":1,"surfaceText":"[[programme]] IsA [[show]]"}
+{"start":"/c/en/background","rel":"/r/IsA","end":"/c/en/information","weight":1,"surfaceText":"[[background]] IsA [[information]]"}
+{"start":"/c/en/conclusion","rel":"/r/IsA","end":"/c/en/assumption","weight":1,"surfaceText":"[[conclusion]] IsA [[assumption]]"}
+{"start":"/c/en/impression","rel":"/r/IsA","end":"/c/en/idea","weight":1,"surfaceText":"[[impression]] IsA [[idea]]"}
+{"start":"/c/en/particular","rel":"/r/IsA","end":"/c/en/proposition","weight":1,"surfaceText":"[[particular]] IsA [[proposition]]"}
+{"start":"/c/en/withdrawal","rel":"/r/IsA","end":"/c/en/retraction","weight":1,"surfaceText":"[[withdrawal]] IsA [[retraction]]"}
+{"start":"/c/en/cite","rel":"/r/IsA","end":"/c/en/note","weight":1,"surfaceText":"[[cite]] IsA [[note]]"}
+{"start":"/c/en/echo","rel":"/r/IsA","end":"/c/en/reply","weight":1,"surfaceText":"[[echo]] IsA [[reply]]"}
+{"start":"/c/en/hail","rel":"/r/IsA","end":"/c/en/greeting","weight":1,"surfaceText":"[[hail]] IsA [[greeting]]"}

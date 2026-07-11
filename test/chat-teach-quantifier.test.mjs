@@ -457,7 +457,7 @@ test("Bug 3: the Goal-line is correct and consistent for teach-success turns (ne
 // unknown OBJECT now mints the object as a brand-new class-level concept
 // (unknownObjectFallback, chat.mjs), gated on a genuine universal quantifier
 // ("every"/"each"/"all") so a bare "X is Y" (no determiner at all — e.g. the
-// pre-existing "module is banana" pinned regression) and a wrapped
+// pre-existing "module is zorblax" pinned regression) and a wrapped
 // "remember that X is <adjective>" property claim both keep declining/
 // routing exactly as before. A term minted by EITHER direction's fallback
 // grounds just as legitimately as a static lexicon word for a LATER sentence
@@ -532,14 +532,14 @@ test("Feature A mirror: known-subject/unknown-object mint compounds vocabulary t
 
 test("Feature A mirror regression guard: a KNOWN subject bare-paired with an unrecognized bare object (no determiner) is still never silently reified", async () => {
   // Pre-existing pinned behavior (wiring-facts.test.mjs): "module" is a real
-  // lexicon noun (known subject) and "banana" is neither a noun nor an
+  // lexicon noun (known subject) and "zorblax" is neither a noun nor an
   // adjective — a BARE "X is Y" (no "every"/"each"/"all" at all) must stay an
   // honest miss. unknownObjectFallback gates its mint on a genuine universal
   // quantifier for exactly this reason — minting a class is a general claim,
   // never implied by a bare/singular-entity phrasing.
   const dir = await mem("mirror-bare-guard");
   try {
-    const bare = await runTurn("module is banana", { config: CONFIG, memoryDir: dir, sessionId: "mb1" });
+    const bare = await runTurn("module is zorblax", { config: CONFIG, memoryDir: dir, sessionId: "mb1" });
     assert.doesNotMatch(bare.answer, /noted — remembered/i);
     assert.equal(bare.record.miss, true);
     assert.equal(readFactRows(await loadMemory(dir)).length, 0);
@@ -679,10 +679,10 @@ test("PLAN_TAUGHT_RELATIONS Item 5: a BARE Capitalized-name-shaped subject mints
   }
 });
 
-test("PLAN_TAUGHT_RELATIONS Item 5 regression guard: the pre-existing 'module is banana' pinned decline (a KNOWN bare subject, no article/capitalization/quantifier, an unrecognized bare object) stays a plain honest miss — unknownAdjectiveFallback does not reopen it", async () => {
-  const dir = await mem("adj-mint-module-banana");
+test("PLAN_TAUGHT_RELATIONS Item 5 regression guard: the pre-existing 'module is zorblax' pinned decline (a KNOWN bare subject, no article/capitalization/quantifier, an unrecognized bare object) stays a plain honest miss — unknownAdjectiveFallback does not reopen it", async () => {
+  const dir = await mem("adj-mint-module-zorblax");
   try {
-    const declined = await runTurn("module is banana", { config: CONFIG, memoryDir: dir, sessionId: "a3" });
+    const declined = await runTurn("module is zorblax", { config: CONFIG, memoryDir: dir, sessionId: "a3" });
     assert.doesNotMatch(declined.answer, /noted — remembered/i);
     assert.equal(declined.record.miss, true);
     assert.equal(readFactRows(await loadMemory(dir)).length, 0);
@@ -730,7 +730,7 @@ test("PLAN_TAUGHT_RELATIONS Item 5's own canonical illustration, 'mary is female
     // Note what actually stores it here: "mary" (lowercase, no article, no
     // prior fact) has no groundedness signal at all, so
     // unknownAdjectiveFallback itself correctly DECLINES (same discipline as
-    // the "module is banana" guard above) — this succeeds via the
+    // the "module is zorblax" guard above) — this succeeds via the
     // pre-existing, deliberately out-of-scope TEACH_PROPERTY_RE gap
     // (Verification finding 3), which this phase's own new fallback sits
     // upstream of without closing. The confirmation text still displays

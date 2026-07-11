@@ -135,14 +135,20 @@ test("#2 teach: 'every X is a Y' with the WRONG article (vowel-initial Y) now of
 test("#2 teach: unrecognized-word message distinguishes the vocabulary gap from a plain shape mismatch", async () => {
   const dir = await mem();
   try {
-    // "kangaroo"/"climb" are outside the closed ACE lexicon entirely (no
-    // noun/verb/adjective entry) — parseAce's residue still names them, same
-    // mechanism as monkey/animal. ("tree" was this test's own example before
-    // PLAN_SEED.md's human-persona lexicon growth declared it a real noun.)
-    const { answer } = await runTurn("every kangaroo is a climb", {
+    // "zorblax"/"fribwomp" are nonsense placeholders (same convention as
+    // ask-cascade.test.mjs's "frobnicate"), deliberately outside the closed
+    // ACE lexicon entirely (no noun/verb/adjective entry) and guaranteed to
+    // STAY that way — parseAce's residue still names them, same mechanism as
+    // monkey/animal. ("tree" was this test's own example before Small tier's
+    // human-persona lexicon growth declared it a real noun; "kangaroo"/
+    // "climb" were this test's SECOND example, until Medium/Large tier's own
+    // growth declared "climb" a real noun too — a real word pair will keep
+    // being at risk of this as the persona vocabulary grows further, so this
+    // test now uses words that can never legitimately become vocabulary.)
+    const { answer } = await runTurn("every zorblax is a fribwomp", {
       config: CONFIG, graph: await graph(), memoryDir: dir, sessionId: "t",
     });
-    assert.match(answer, /I don't recognize "kangaroo" and "climb" as words I know/);
+    assert.match(answer, /I don't recognize "zorblax" and "fribwomp" as words I know/);
     // HANDOVER.md 2026-07-10 item 3: the message used to falsely claim a
     // "code-vocabulary nouns only" restriction — the real constraint is
     // grounding (at least one side already known), not a vocabulary limit.
