@@ -909,7 +909,7 @@ const GREET = new Set([
   // US
   "hey y'all", "howdy there", "hiya there",
   // formal
-  "good day", "salutations", "good to meet you", "pleased to meet you",
+  "good day", "good day to you", "salutations", "good to meet you", "pleased to meet you",
   // slang
   "yo yo", "ayy", "wassup", "sup fam", "heya", "hiya!",
   // texting abbreviation
@@ -946,7 +946,19 @@ const THANKS = new Set([
 const BYE = new Set([
   "bye", "goodbye", "quit", "exit", "see ya", "see you", "cya", "later", "farewell",
   "peace", "peace out", "im off", "i'm off", "gtg", "gotta go", "catch you later",
-  "good day to you", "farewell then",
+  "farewell then",
+  // "good day to you" deliberately does NOT live here (SKILL_BENCHMARK_
+  // CONVERSATION.md persona-sweep, 2026-07-11, Priority 2 — severe, killed
+  // the whole session): it's the formal-register GREETING §2.2 itself names
+  // ("good day" — down to slang), not a farewell. It used to sit in this set
+  // and won the race against GREET (foldedBye is checked first in
+  // conversationalTurn), so a plain formal "good day to you" silently ended
+  // the session — every turn piped after it was dropped with no log entry, a
+  // worse outcome than any wall. Moved to GREET (above) instead; a genuine
+  // dismissive sign-off ("farewell then", bare "farewell") stays here
+  // unchanged — this is a narrowing of an over-broad match, not a new
+  // farewell phrasing (§5 "farewells stay out of scope" governs ADDING
+  // coverage, not fixing a phrase that was on the wrong list).
 ]);
 /** Elaboration asks → RE-RENDER the last answer verbosely (traversal + matches). */
 const WHY = new Set([
@@ -2444,8 +2456,29 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
   // a parent", which unknownSubjectFallback already stores as
   // father ⊑ parent today (finding 2: "parent" is already a lexicon noun).
   const stripKindOf = (s) => (s == null ? s : s.replace(/\b(is|are|was|were)\s+(?:an?\s+)?(?:kind|type)\s+of\s+/i, "$1 a "));
-  const raw = stripKindOf(stripYour(rawInput));
-  const wrapped = stripKindOf(stripYour(wrappedInput));
+  // "my <class-noun> <Name> is/are …" (SKILL_BENCHMARK_CONVERSATION.md persona-
+  // sweep, 2026-07-11, Priority 3) — a THIRD natural phrasing of the exact same
+  // "X is a Y" assertion this lane already teaches two other ways ("john is a
+  // man", a bare name; "every cat is an animal", a universal quantifier) — a
+  // possessive intro clause naming an instance by class + given name ("my cat
+  // whiskers", "my dog rex") ahead of the real copula clause. grammar/ace.mjs's
+  // resolveNP only ever fits a 1–2 token noun phrase (its own docblock: "0 or
+  // 3+ tokens: not a fragment NP") — "my cat whiskers" is three content tokens,
+  // so it never reached ANY existing recognizer (ACE, BARE_DECLARATIVE_RE,
+  // TEACH_RE all declined) and hit the plain grammar wall instead of teaching.
+  // Stripping the "my <noun> " lead-in down to the bare <Name> reduces it to
+  // the EXACT shape "john is a man" already teaches correctly — no new storage
+  // path, just one more surface recognized as equivalent to an existing one.
+  // Only a LEADING "my <word> <word> is/are" run is stripped (mirrors
+  // stripYour's own leading-only anchor just above), so this can't misfire on
+  // "my" appearing mid-sentence, and requires a genuine THIRD word before the
+  // copula (never "my cat is fluffy" — a bare possessive property claim, only
+  // two words before "is" — nor "my TaskController is broken", one word),
+  // keeping recognition exactly as closed as the shapes it's equivalent to.
+  const stripPossessiveNamedInstance = (s) =>
+    (s == null ? s : s.replace(/^my\s+[a-z][\w-]*\s+([\w'-]+\s+(?:is|are)\s+.+)$/i, "$1"));
+  const raw = stripKindOf(stripYour(stripPossessiveNamedInstance(rawInput)));
+  const wrapped = stripKindOf(stripYour(stripPossessiveNamedInstance(wrappedInput)));
 
   // PRONOUN-SUBJECT GUARD — tried against BOTH surfaces (bare and remember-
   // wrapped; trailing punctuation stripped the same way the OWNS/SOME_A_FEW

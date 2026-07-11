@@ -95,3 +95,53 @@ test("persona-sweep P1 regression: bare general-verb teaches ('grace mentors ala
   assert.match(turns[0].answer, /^noted — remembered: grace mentors alan today/);
   assert.match(turns[1].answer, /^noted — remembered: margo eats ribs/);
 });
+
+// ---- Priority 2 (severe — kills the whole session): "good day to you", a
+// plain formal greeting (§2.2 names "good day" itself under the FORMAL
+// register alongside "salutations"), was hardcoded into the BYE closed set —
+// foldedBye() is checked before GREET in conversationalTurn, so it won the
+// race and silently ended the session (`end:true`) with no error, dropping
+// every turn piped after it. Fixed by moving the phrase from BYE to GREET —
+// a narrowing of an over-broad farewell match (in scope per §5), not a new
+// farewell phrasing (out of scope per §5 — none added here).
+test("persona-sweep P2: 'good day to you' greets — it must never end the session", async () => {
+  const turns = await driveSession(["good day to you", "what is Task", "what calls createTask"]);
+  assert.equal(turns.length, 3, "all three turns must have been answered — the session must not have ended early");
+  assert.doesNotMatch(turns[0].answer, /^Bye/, "'good day to you' must not render the farewell template");
+  assert.match(turns[1].answer, /Task is a class/, "the turn AFTER the greeting must still be live and answered");
+});
+
+test("persona-sweep P2 regression: real farewells ('bye', 'goodbye', 'farewell then') still end the session", async () => {
+  for (const q of ["bye", "goodbye", "farewell then"]) {
+    const [turn] = await driveSession([q]);
+    assert.match(turn.answer, /^Bye/, `"${q}" must still render the farewell template`);
+    assert.equal(turn.end, true, `"${q}" must still set end:true`);
+  }
+});
+
+test("persona-sweep P2 regression: bare 'good day' still greets (unchanged — it was already in GREET)", async () => {
+  const [turn] = await driveSession(["good day"]);
+  assert.doesNotMatch(turn.answer, /^Bye/);
+  assert.match(turn.answer, /Hi\. Ask me about this codebase/);
+});
+
+// ---- Priority 3: "my cat whiskers is a cat" (a possessive-named-instance
+// teach — "my <class> <name> is a <class>") hit the plain grammar wall.
+// grammar/ace.mjs's resolveNP only fits a 1–2 token noun phrase, so the
+// three-token "my cat whiskers" subject reached no existing recognizer.
+// Stripping the "my <noun> " lead-in reduces it to the same shape "john is a
+// man" already teaches, in teachLane's stripPossessiveNamedInstance.
+test("persona-sweep P3: 'my cat whiskers is a cat' teaches instead of the plain grammar wall", async () => {
+  const turns = await driveSession(["my cat whiskers is a cat", "what is whiskers"]);
+  assert.doesNotMatch(turns[0].answer, WALL, `must not hit the grammar wall -> ${turns[0].answer}`);
+  assert.match(turns[0].answer, /^noted — remembered/);
+  assert.doesNotMatch(turns[1].answer, WALL, `readback must not hit the grammar wall -> ${turns[1].answer}`);
+  assert.match(turns[1].answer, /whisker is a kind of cat|you told me/i);
+});
+
+test("persona-sweep P3 regression: a genuine 'my X is <property>' (only 2 tokens before the copula) is unaffected", async () => {
+  // stripPossessiveNamedInstance requires a THIRD word before is/are — "my cat
+  // is fluffy" has only two ("cat" then "is") and must not be touched by it.
+  const [turn] = await driveSession(["my cat is fluffy"]);
+  assert.doesNotMatch(turn.answer, GARBLED_TEACH, "must not mis-teach the possessive-owner word itself as the subject");
+});
