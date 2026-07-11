@@ -222,6 +222,47 @@ function defaultNlp() {
  *  test); leaving it undefined picks the deterministic default (defaultNlp).
  *  Pure given (query, adapter) — the adapter itself is a fixed model, no
  *  sampling. */
+// SCHEMA-TERM / COMMON-WORD "WHAT DOES X MEAN" DISAMBIGUATION (CHATBENCH decision-log
+// item 1, g-a1-naming-8: "what does tests mean"). When the object term X is ITSELF a
+// real RELATIONS/VERB_TO_KIND keyword ("tests", "imports", …), keyword-spot
+// independently reads the sentence as a "reverse"-shaped query — kind:X, object:"mean"
+// — because "mean"/"means" (META_MEANING_VERBS, ask-vocab.mjs §7) is deliberately kept
+// OUT of the relation tables (see that table's own comment): keyword-spot has no idea
+// it just consumed the meta question's own verb as if it were an object noun. That
+// reading can never resolve to anything real ("mean" is never a graph entity) — it's a
+// spurious parse, not a genuine second reading — yet it collides with the grammar
+// strategy's own clean "meta" parse of the SAME sentence to manufacture the legacy
+// {ambiguousParse} surface ("this could mean more than one thing: 1) meta X or 2) X
+// 'mean' — try rephrasing"). Pruned here whenever the winning class's candidates are
+// EXACTLY [a meta-shape parse, a same-precedence parse whose object is a
+// META_MEANING_VERB] — collapsing back to the meta parse alone, so the term's own
+// schema-predicate definition answers directly instead of the unhelpful two-way punt.
+//
+// EXCEPT "imports": am-meta-imports (chatbench/graded-pool.jsonl) and
+// quickwins.test.mjs's "fix1: the frozen am-meta-imports ambiguity is NOT admitted"
+// both lock this EXACT ambiguity in as the intended, honest answer for that one term —
+// "what does imports mean" is byte-identical input to both am-meta-imports (which
+// requires the ambiguous answer) and g-a1-naming-9 (which wants the plain definition).
+// A deterministic function cannot satisfy both on the same input; widening the prune to
+// "imports" would silently flip am-meta-imports from passing to failing, a real
+// regression this project's own decision rule (SKILL_BENCHMARK_CEFR_ENGLISH.md §1)
+// forbids. So "imports" keeps its existing ambiguous answer — the same judgment call
+// chat.mjs's relationTermOf already makes for it (see that function's own docblock) —
+// while every OTHER relation term this collision can hit ("tests" included) is fixed
+// generally, not as a one-off patch.
+const FROZEN_META_AMBIGUOUS_TERMS = new Set(["imports"]);
+function pruneSpuriousMeaningAmbiguity(parsed) {
+  if (!parsed?.ambiguousParse || !Array.isArray(parsed.candidates) || parsed.candidates.length !== 2) return parsed;
+  const metaC = parsed.candidates.find((c) => c?.shape === "meta");
+  const other = parsed.candidates.find((c) => c !== metaC);
+  if (!metaC || !other) return parsed;
+  const term = String(metaC.object || "").trim().toLowerCase();
+  if (!term || FROZEN_META_AMBIGUOUS_TERMS.has(term)) return parsed;
+  const otherObject = String(other.object || "").trim().toLowerCase();
+  if (!wordsOf(META_MEANING_VERBS).includes(otherObject)) return parsed;
+  return metaC;
+}
+
 export function parseQuery(query, { nlp = undefined } = {}) {
   const adapter = nlp === undefined ? defaultNlp() : nlp;
   const raw = String(query || "").trim().replace(/\s+/g, " ");
@@ -239,7 +280,7 @@ export function parseQuery(query, { nlp = undefined } = {}) {
   const composite = parseComposite(text, adapter);
   if (composite) return composite;
   const merged = mergeStrategyResults(runStrategiesSync(text, { nlp: adapter, raw }));
-  return merged ? merged.parsed : null;
+  return merged ? pruneSpuriousMeaningAmbiguity(merged.parsed) : null;
 }
 
 // ============================================================================
@@ -3048,6 +3089,34 @@ export function traverse(graph, parsed, { contextId = null, prev = null } = {}) 
       objRes = { ...objRes, ambiguous: true, candidates: [altRes.match, ...(objRes.candidates || [])] };
     }
   }
+  // TEST-VARIANT COLLISION (CHATBENCH decision-log item 2, am-tests-cover: "which
+  // tests cover b.mjs"): a "tests"-kind query's object may also honestly name its
+  // OWN conventional test-variant sibling ("b.mjs" -> "b.test.mjs"/"b.spec.mjs"),
+  // a DIFFERENT real Module — app/lib/b.mjs and app/unit-tests/b.test.mjs both
+  // plausibly answer "b.mjs" when the question is specifically about test
+  // coverage. Deliberately scoped to kind==="tests" (never touches, imports,
+  // calls, …) — the SAME bare filename in an unrelated query ("has store.mjs
+  // been touched", chatflow-agents-debt-remeasure.test.mjs BUG-B's ground truth,
+  // examples/mini-webapp genuinely has the same store.mjs/store.test.mjs pair) has
+  // no such self-referential reading and must stay untouched. ALSO scoped to a
+  // BARE (unslashed) term — same convention as resolveObjectCore's own `dotted`
+  // tier just above resolveObject's call site: a query that already spells out
+  // the full path ("which functions test src/core/store.mjs",
+  // chatflow-tier4.test.mjs Batch 4/5; "app/lib/b.mjs", chatflow-tier2.test.mjs
+  // T18) is already unambiguous by construction and must stay untouched — only
+  // the bare basename is genuinely open to either reading. Same discipline as
+  // the altObject prune just above: only a CLEAN primary match plus a genuinely
+  // DIFFERENT real Module promotes to honest ambiguity, never a silent guess.
+  if (parsed.kind === "tests" && objRes.match && !objRes.ambiguous && !String(parsed.object || "").includes("/")) {
+    const stripTestInfix = (base) => base.replace(/\.(?:test|spec|tests)(?=\.[^.]+$)/, "");
+    const termBase = stripTestInfix(String(parsed.object || "").trim().toLowerCase());
+    const collision = (graph.individuals || []).find((i) => {
+      if (i.class !== "Module" || i.id === objRes.match.id) return false;
+      const base = String(i.label || "").toLowerCase().split("/").pop();
+      return base !== stripTestInfix(base) && stripTestInfix(base) === termBase;
+    });
+    if (collision) objRes = { ...objRes, ambiguous: true, candidates: [collision, ...(objRes.candidates || [])] };
+  }
   const { match: objMatch, candidates, ambiguous, unresolvedPronoun, matchedVia } = objRes;
   if (!objMatch) return { matches: [], objMatch: null, candidates, traversal: null, ambiguous: false, unresolvedPronoun };
 
@@ -3487,7 +3556,7 @@ function renderCore(parsed, result) {
     const shown = pool.slice(0, OVERFLOW_CAP).map((i) => i.label);
     const extra = pool.length > OVERFLOW_CAP ? `, …and ${pool.length - OVERFLOW_CAP} more` : "";
     return {
-      content: `"${parsed.object}" matches more than one ${noun} ambiguously — did you mean ${listJoin(shown)}${extra}? Try one of those.`,
+      content: `"${parsed.object}" matches more than one ${noun} ambiguously — did you mean ${listJoin(shown)}${extra}? Try one of those. If you're not sure, narrow it to one name.`,
       miss: false, ambiguous: true, candidates: pool.map((i) => i.label),
     };
   }
