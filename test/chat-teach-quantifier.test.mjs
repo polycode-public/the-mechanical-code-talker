@@ -576,6 +576,74 @@ test("Feature A mint refinement (operator, 2026-07-09): the 'both sides unground
   }
 });
 
+// ---- PLAN_CONVERSATION.md Finding 1 fix (this session): unknownObjectFallback
+// used to mint an unrecognized "every X is Y" complement as a NEW CLASS with no
+// check for whether it reads more like an adjective/verb than a noun — so it
+// always won the fallback race before unknownAdjectiveFallback (which would
+// mint the SAME word correctly as a property) ever got a turn. Fixed by asking
+// wink-nlp's POS tagger (objectReadsAsNonNoun, chat.mjs, the same nlpAdapter
+// subjectIsNounOrPropn already uses): a word tagged anything OTHER than
+// NOUN/PROPN now makes this fallback decline, falling through to
+// unknownAdjectiveFallback next. A genuinely novel noun ("store", "florble")
+// still tags NOUN under wink's own out-of-vocabulary default, so the
+// pre-existing class-mint vocabulary-growth behavior (Feature A mirror, above)
+// is unaffected. ----
+
+test("Finding 1 fix: 'every Record is persisted' now mints a PROPERTY (mgx:hasProperty), never a class — 'persisted' tags VERB, not a noun", async () => {
+  const dir = await mem("finding1-persisted");
+  try {
+    const taught = await runTurn("every Record is persisted", { config: CONFIG, memoryDir: dir, sessionId: "f1a" });
+    assert.match(taught.answer, /^noted — remembered: record is persisted/);
+    assert.equal(taught.record.miss, false);
+
+    const rows = readFactRows(await loadMemory(dir));
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].subject, "record");
+    assert.equal(rows[0].predicate, "mgx:hasProperty", "must mint a property, never rdfs:subClassOf");
+    assert.equal(rows[0].object, "persisted");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("Finding 1 fix regression guard: a genuinely novel NOUN object still mints a CLASS via unknownObjectFallback (wink's own out-of-vocabulary default tags it NOUN)", async () => {
+  const dir = await mem("finding1-novel-noun");
+  try {
+    const taught = await runTurn("every cache is a florble", { config: CONFIG, memoryDir: dir, sessionId: "f1b" });
+    assert.match(taught.answer, /^noted — remembered: cache is a kind of florble/);
+    assert.equal(taught.record.miss, false);
+
+    const rows = readFactRows(await loadMemory(dir));
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].subject, "cache");
+    assert.equal(rows[0].predicate, "rdfs:subClassOf", "a genuinely novel noun must still mint a class, not a property");
+    assert.equal(rows[0].object, "florble");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("Finding 1 fix regression guard: 'every controller is a handler' (both sides already known lexicon nouns) is UNAFFECTED — resolved directly by the ACE grammar, never reaches unknownObjectFallback at all", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-finding1-controller-"));
+  try {
+    const taught = await runTurn("every controller is a handler", { config: CONFIG, memoryDir: dir, sessionId: "f1c" });
+    // "noted — remembered N fact(s): ..." (with a count) is the ACE-grammar
+    // direct-success confirmation shape; teachLane's own fallback cascade
+    // confirms with "noted — remembered: ..." (no count) instead — see the
+    // 'every Record is persisted' test above for that second shape.
+    assert.match(taught.answer, /^noted — remembered 1 fact: controller rdfs:subClassOf handler/);
+    assert.equal(taught.record.miss, false);
+
+    const r = await runTurn("is a controller a handler", { config: CONFIG, memoryDir: dir });
+    assert.match(r.answer, /source: ace:chat:/, "the ACE grammar's own direct pattern-8 copula match, not the teachLane fallback cascade");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("Bug A: 'remember X had soup' (past tense) reads back 'has soup', never the malformed 'haves soup'", async () => {
   const dir = await mem("verb-hada");
   try {

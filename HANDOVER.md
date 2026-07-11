@@ -16,15 +16,6 @@ version again until the moment of actually pushing (see Discipline, below).
 
 ## Open items
 
-- **`PLAN_CONVERSATION.md`'s two findings are unresolved, no fix landed for either.** (1) An unknown
-  "every X is Y" always mints Y as a class, never a property, because `unknownObjectFallback`
-  (`src/chat.mjs:1959`) has no POS check before minting — fix sketch and regression-guard caveats
-  are written up in the doc. (2) `src/interpret/strategies/noise-strip.mjs`'s `stripNoise()` leans
-  on wink-nlp's generic stopword list, which arbitrarily flags some main verbs ("keep", "put") as
-  noise but not close synonyms ("store", "hold", "save") — causing real resolution collisions, not
-  just missed strips. Both are scoped as broader-mechanism work, deliberately out of the fast loop's
-  scope; read the doc before starting either.
-
 - **`PLAN_SYLLOGIST.md`'s one genuinely open research question**: retraction-aware consistency under
   a hard budget + trust tiers (§3). Speculative sketch only, nothing implemented — next up only if
   the operator wants to push the reasoning engine further, not a near-term default.

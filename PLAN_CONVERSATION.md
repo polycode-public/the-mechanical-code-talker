@@ -1,10 +1,10 @@
 # PLAN_CONVERSATION.md — findings that graduated out of the fast loop's safe-fix scope
 
-> **STATUS: Finding 1 is research/design notes, nothing implemented; Finding 2 is RESOLVED (commit
-> 85d46f0)** — see its own section below for what shipped. Not a build plan with a staged
-> implementation — this doc exists to hold findings precisely enough that a future session can
-> pick them up, the same role `PLAN_SYLLOGIST.md` plays for reasoning-engine research pulled
-> out of `PLAN_INFERENCE_TESTING.md`. Nothing here is scheduled, staffed, or blocking anything else.
+> **STATUS: Finding 1 and Finding 2 are RESOLVED** — see their own sections below for what shipped.
+> Not a build plan with a staged implementation — this doc exists to hold findings precisely enough
+> that a future session can pick them up, the same role `PLAN_SYLLOGIST.md` plays for
+> reasoning-engine research pulled out of `PLAN_INFERENCE_TESTING.md`. Nothing here is scheduled,
+> staffed, or blocking anything else.
 
 ## Why this doc exists
 
@@ -23,7 +23,17 @@ finding by the wrong mechanism; corrected here), not just transcribed from the r
 
 ---
 
-## Finding 1 — an unknown "every X is Y" always mints Y as a class, never a property, because the mint fallback has no POS check
+## Finding 1 — an unknown "every X is Y" always mints Y as a class, never a property, because the mint fallback has no POS check [RESOLVED]
+
+**RESOLVED.** Fixed via the POS-check this finding's own fix sketch called for (below): `chat.mjs`'s
+new `objectReadsAsNonNoun(word)` helper (sitting right above `unknownObjectFallback`) asks wink-nlp's
+POS tagger, through the SAME `nlpAdapter().posTags()` adapter `subjectIsNounOrPropn` already uses for
+this kind of disambiguation, whether a word reads as anything OTHER than `NOUN`/`PROPN`.
+`unknownObjectFallback` now calls it on the object before minting; a `true` (word tags `ADJ`, `VERB`,
+etc.) makes it decline (`return null`) instead of minting a class, letting the cascade fall through
+to `unknownAdjectiveFallback` next, which mints the SAME word correctly as a property. A `null` tag
+(no wink installed, or any tagging surprise) is treated as "no signal" and never blocks the
+pre-existing mint — matching every other optional-adapter path in this file.
 
 **Round 2's own framing was imprecise** — it named a "teach-routing race" between
 `BARE_DECLARATIVE_RE` and `TEACH_PROPERTY_RE` in `src/chat.mjs`. That's not quite where the decision
@@ -31,8 +41,7 @@ actually happens. Traced against the real code:
 
 1. `src/grammar/ace.mjs`'s `parseEvery` (line 260) already does the right thing when it can: for a
    single-word complement it tries `lookupAdjective(lexicon, rest[0])` FIRST (line 272-273) and only
-   falls through to resolving the complement as a noun/class if that lookup misses. So "every cache
-   is bespoke" works correctly today IF `"bespoke"` is a lexicon-declared adjective.
+   falls through to resolving the complement as a noun/class if that lookup misses.
 2. The bug is what happens when the complement is NOT a declared adjective at all — e.g. "every
    Record is persisted", where "persisted" is in neither the noun nor the adjective lexicon.
    `parseEvery` can't resolve it as a class term either (no matching noun), so `parseAce` returns a
@@ -51,25 +60,78 @@ actually happens. Traced against the real code:
    would have handled "every Record is persisted" correctly on its own if it ran first — the
    ordering, not either function's individual logic, is the bug.
 
-**Why this is out of the fast loop's scope**: fixing it means changing `unknownObjectFallback`'s own
-mint guard to defer to `unknownAdjectiveFallback` for likely-adjective objects — not a one-line
-routing tweak, because it touches the shared vocabulary-growth mechanism `PLAN_TAUGHT_RELATIONS.md`
-built (Item 5 and its sibling), and both fallbacks have extensively-documented pinned-regression
-guards in their own docblocks (`chat.mjs:1886-1958` for the object-mint asymmetry, `2011-2035` for
-the adjective-mint's subject-groundedness rules) that a change here risks disturbing.
+**A correction to the fix sketch's own worked example**: the sketch's canonical "already works"
+regression pin, "every cache is bespoke", turned out NOT to be an example of `parseEvery`'s
+adjective-first check succeeding — `"bespoke"` is not actually declared in `lexicon-core.json`'s
+adjectives list at all (checked directly: `lexicon.adjectives.bespoke === undefined`). The REAL
+pre-existing pinned test (`test/chat-teach-quantifier.test.mjs:645-656`) uses the WRAPPED phrasing
+"remember that the cache is bespoke", which reaches `unknownAdjectiveFallback` through a different
+gate (the leading "the" as its groundedness signal), never `parseEvery` at all. The literal BARE
+phrasing "every cache is bespoke" was, in fact, live proof of this exact bug before the fix (it
+minted `cache rdfs:subClassOf bespoke`) — after the fix it correctly declines end-to-end (neither
+`unknownObjectFallback`'s class-mint, now blocked by the POS check, nor `unknownAdjectiveFallback`'s
+property-mint, which requires an article/capitalization/prior-fact signal a bare "every cache" never
+carries), matching the SAME honest-miss discipline as the pre-existing "module is banana" pinned
+regression. This is a strictly safer outcome than the pre-fix behavior (an honest decline instead of
+a wrong class fact), not a new gap.
 
-**A concrete fix sketch, for whoever picks this up**: `chat.mjs` already has a reusable POS-check
-helper, `subjectIsNounOrPropn` (`chat.mjs:2213`), built on `nlpAdapter().posTags()`
-(`src/ask-nlp.mjs:60`, the wink-nlp adapter already used for exactly this kind of disambiguation
-elsewhere in the file). `unknownObjectFallback` could call an equivalent check on `objectRaw`
-before minting — if wink tags it `ADJ`, decline (`return null`) instead of minting a class, letting
-the cascade fall through to `unknownAdjectiveFallback` next. The risk to scope before building this:
-confirm wink's POS tagger is reliable enough on short out-of-context single words (the same adapter
-already degrades gracefully — see `ask-nlp.mjs`'s own "null on any surprise, never a throw"
-discipline) and add regression coverage for the canonical case each fallback's docblock already
-pins ("every controller is a handler" must still mint a class; "every cache is bespoke" must still
-mint a property) plus the new case ("every Record is persisted" should now mint a property, not a
-class).
+**Live verification** (`node bin/tmct.mjs chat`, default persona, no `--repo`, and the automated
+suite, `test/chat-teach-quantifier.test.mjs`): "every controller is a handler" still mints a class,
+unaffected (both words are already lexicon nouns, so this is resolved directly by the ACE grammar's
+own pattern-8 copula match — it never reaches `unknownObjectFallback` at all, confirmed via its
+`source: ace:chat:...` provenance on read-back, vs. the fallback cascade's own `source:
+teach:chat:...`). "Every cache is a florble" (a genuinely novel out-of-vocabulary noun) still mints a
+class — wink's own OOV default tags an unknown word `NOUN`, so the vocabulary-growth mint chain
+(`PLAN_TAUGHT_RELATIONS.md` Item 5's sibling) is unaffected. "Every Record is persisted" now mints
+`record mgx:hasProperty persisted` (confirmed directly against the stored fact row), not
+`rdfs:subClassOf`. `npm test`: 1882/1882 (3 new tests added for this fix; 0 failures, same 1879
+pre-existing tests all still pass).
+
+**"cheese is blue" — a separate, DIFFERENT root cause, confirmed NOT fixed by this change.** This
+fresh repro was flagged for verification against the fix. Traced precisely: "cheese is blue" never
+reaches `unknownObjectFallback`/`unknownAdjectiveFallback` at all. `"blue"` IS already declared in
+`lexicon-core.json`'s `nouns` object (`"blue": {}`) — but has **no entry at all** in the `adjectives`
+object (confirmed: `lexicon.adjectives.blue === undefined`), unlike its color-sibling `"green"`,
+which has both `nouns.green` absent and `adjectives.green: { type: "data" }` declared. Because
+`"cheese"` and `"blue"` are BOTH known static-lexicon nouns, `parseAce` (`ace.mjs:454-455`) routes
+straight to `parseCopula` (`ace.mjs:417-438`), which — for a single-word complement — tries
+`lookupAdjective(lexicon, "blue")` FIRST (`ace.mjs:422-423`, the exact same adjective-first order the
+original fix sketch described for `parseEvery`) but MISSES (no adjective entry exists at all), falls
+through to `resolveNP` on `"blue"` as a noun (`ace.mjs:425`), and mints `cheese rdfs:subClassOf blue`
+directly — a full, non-residue ACE grammar success, so `assertTurn` never falls through to the
+`teachLane` fallback cascade this fix touches. This is a **lexicon curation gap** (a missing
+adjective sense for one specific word), not the fallback-ordering bug Finding 1 fixes — the two look
+similar on the surface (both mis-mint an adjectival word as a class) but are structurally unrelated
+bugs in different files. Not fixed here: correcting it would mean editing `lexicon-core.json` (data
+only, a well-precedented single-line addition mirroring `"green"`'s existing entry) plus verifying
+the resulting `owl:DatatypeProperty` triple shape and its query-side behavior end-to-end — genuinely
+small in isolation, but bundled with the "what is blue" gap below, which needs its own investigation
+first; left for a future session with both threads in hand rather than a partial fix here.
+
+**The "what is blue" follow-up returned no content — a separate, DIFFERENT bug, now RESOLVED too
+(same session).** After "cheese is blue" mints (wrongly, per above) `cheese rdfs:subClassOf blue`,
+asking bare "what is blue" (no article) returned tmct's generic orientation card with zero mention of
+the fact that literally exists in the graph — even though "what is A blue" (WITH the article) found
+it correctly. First hypothesis (a known-lexicon-word vs. taught-term routing asymmetry) turned out to
+be a misread of truncated live output under fresh re-verification: BOTH "what is florble" (a purely
+taught term) and "what is blue" (a static lexicon word) failed identically for the bare, no-article
+phrasing, and both succeeded identically once the article was added — there was never a
+lexicon-vs-taught asymmetry at all, just a uniform bare-form bug. Traced to the real root cause:
+`factReadBack`'s part (c) (`chat.mjs:5451-5454`) exists SPECIFICALLY to catch the bare "what is X"
+shape that the grammar's own T5 template (`grammar.mjs:103-111`) declines to parse for any object
+that isn't a closed-set `ENTITY_TO_TYPE` code-graph kind word (`ask-vocab.mjs:352` — neither
+"blue" nor "florble" nor "component" qualify), leaving `envelope.parsed` null, this branch's own
+trigger condition (`!envelope?.parsed`). But its regex required a MANDATORY article
+(`/^what\s+(?:is|are)\s+an?\s+(.+?)[?.!\s]*$/i`) — the opposite of `BARE_WHATIS_RE`'s own
+already-established "article optional" convention (`chat.mjs:5777`, `(?:an?\s+)?`, used one function
+up in the SAME cascade for the subject-side lookup) — so this branch could never actually fire for
+the bare form it exists to catch, for ANY term. **Fixed**: added the same optional-article group
+(`(?:an?\s+)?`) to this regex, matching `BARE_WHATIS_RE` exactly. One character (`?`) was the entire
+defect. Live-verified: "what is florble" and "what is blue" (both bare, no article) now both answer
+"you told me: cache is a kind of florble" / "you told me: cheese is a kind of blue", identical in
+shape to their already-working "what is a X" counterparts. Regression coverage:
+`test/chat-readback.test.mjs`'s new "the BARE (no-article) 'what is Y' form..." test. `npm test`:
+1883/1883 (1 more test than the count above, 0 failures).
 
 ---
 
@@ -171,8 +233,5 @@ tracked work being duplicated here.
 
 ## What this doc is not
 
-Not a scoped build plan, not staffed, not blocking any other work. Finding 2 is now resolved (see
-its own section above for what shipped, commit 85d46f0). When a future session wants to close
-Finding 1, start here for the precise mechanism and the fix sketch's own caveats, then do the real
-design work (regression coverage for the POS-check gate) that sketch flags as still open — this doc
-intentionally stopped short of that design work for Finding 1, per its own stated role above.
+Not a scoped build plan, not staffed, not blocking any other work. Both findings are now resolved
+(see their own sections above for what shipped).
