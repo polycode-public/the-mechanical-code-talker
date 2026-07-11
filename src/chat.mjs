@@ -4365,6 +4365,31 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
   let normFactTerm;
   try { ({ normFactTerm } = await import("./memory/core.mjs")); } catch { return null; }
   const q = String(query).trim();
+  // DIRECT STRUCTURAL CHECK (playtest sprint round 2, this session): "is X a Y"
+  // naming a real code-graph inheritance edge needs NO taught fact at all — the
+  // graph's own `inherits` relation already proves it. Checked here, BEFORE the
+  // `rows.length` bail-out just below, because a pristine graph with ZERO taught
+  // facts returns null from that bail-out and never reaches ISA_ASK_RE's own
+  // taught-fact-only checks further down in this function at all. Found live:
+  // "is TaskController a Controller" (a direct one-hop inherits edge) and "is
+  // Task a Record" both hit the raw grammar wall on a freshly loaded graph with
+  // nothing taught yet — even in the wall's OWN suggested phrasing ("is a
+  // <thing> a <kind>"), and even though "what does Task inherit from" answers
+  // "Record" via the exact same relation. Cheapest and most certain check
+  // available: purely the graph's own relations, no memory/rows dependency,
+  // never a guess.
+  if (graph) {
+    const directIsaAsk = q.match(ISA_ASK_RE);
+    if (directIsaAsk) {
+      const ent = await resolveEntity(graph, directIsaAsk[1]);
+      if (ent) {
+        const directObjVariants = factTermVariants(normFactTerm, stripTrailingDiscourseTag(directIsaAsk[2]));
+        const directSup = inheritsChain(graph, ent.id)
+          .find((sup) => [...factTermVariants(normFactTerm, sup.label)].some((v) => directObjVariants.has(v)));
+        if (directSup) return { text: `yes — the code graph says ${ent.label} inherits ${directSup.label}.`, replace: true };
+      }
+    }
+  }
   // Tier-5 playtest fix (cycle 4), found live: "actually is the store module
   // fragile" WALLED — a leading hedge adverb ("actually"/"really"/"honestly",
   // optionally comma'd) put the sentence one word out of alignment with
