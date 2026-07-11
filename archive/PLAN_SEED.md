@@ -117,6 +117,15 @@
 > (`zorblax`, `fribwomp`) guaranteed to never become real vocabulary, the same fix pattern the
 > Small-tier build already established for `chat-ux.test.mjs`.
 >
+> **STATUS (2026-07-11): Backend C's read-side gap (§6) is now closed too — every item this doc
+> ever scoped is done.** `readSqlitePayload` now caches its payload on the handle after the first
+> real SELECT; `persistSqlitePayload`'s existing per-row write diff patches that cache in lockstep
+> instead of the read side re-querying everything on every call — verified with a query-count spy
+> (zero SQL queries on a cached read) and a round-trip test proving the patched cache matches a
+> fresh SQL rebuild byte for byte. `npm test`: 1866/1866. This doc is archived to
+> `archive/PLAN_SEED.md` as of this entry — see `HANDOVER.md`/`ROADMAP.md` for anything after this
+> point.
+>
 > **Still open**: nothing buildable from this repo — the seonix migration note below (§2) is a
 > cross-repo follow-up that can't be acted on from here.
 

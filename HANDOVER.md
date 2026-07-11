@@ -10,34 +10,41 @@ Session handle (inbox): `tmct` (this session; earlier sessions used `mechanic`).
 
 ## Where we are (2026-07-11)
 
-`v1.5.6` is the current version (not yet pushed — `v1.5.3` is what's live on npm). Since the last
-push: three ranked follow-ups closed (completions `graphService` wiring, the teachLane
-silent-failure, the stranger first-turn preamble), then a much larger batch — **the default
-human-world persona (all three size tiers), a unified CLI/config model, new memory persistence
-backends, and `scm-svf`/cardinality monotonicity all shipped**, built by 4 concurrent background
-sub-agents in isolated worktrees and merged one at a time (4 real conflicts resolved by hand where
-two agents touched the same file — see `PLAN_SEED.md`'s status header for the exact conflicts and
-resolutions). A follow-up batch then closed out every item that batch had left open: Medium (1,608
-facts) and Large (13,609 facts) persona tiers, the `createSession`→`initRepo` auto-init convergence,
-and the premise-derived trust hook for the three newest inference rules
-(`scm-svf1`/cardinality-monotonicity/`cax-maxc0`). `npm test` is green at **1864** (was 1740 at the
-last push). Full design and current build status for the persona batch lives in `PLAN_SEED.md` —
-read its status header first, not this file, for that narrative.
+`v1.5.7` is the current version, held locally (bumped, not yet pushed — `v1.5.6` is what's live on
+npm as of this writing, itself just published this session). Since the last push: three ranked
+follow-ups closed (completions `graphService` wiring, the teachLane silent-failure, the stranger
+first-turn preamble), then a much larger batch — **the default human-world persona (all three size
+tiers), a unified CLI/config model, new memory persistence backends, and `scm-svf`/cardinality
+monotonicity all shipped**, built by 4 concurrent background sub-agents in isolated worktrees and
+merged one at a time (4 real conflicts resolved by hand where two agents touched the same file —
+see `archive/PLAN_SEED.md`'s status header for the exact conflicts and resolutions). A follow-up
+batch then closed out every item that batch had left open: Medium (1,608 facts) and Large (13,609
+facts) persona tiers, the `createSession`→`initRepo` auto-init convergence, and the premise-derived
+trust hook for the three newest inference rules (`scm-svf1`/cardinality-monotonicity/`cax-maxc0`).
+The README/homepage refresh landed after that, and this session's final batch closed out the last
+two open items — see "Closed out this session" below. `npm test` is green at **1866** (was 1740 at
+the last push). Full design and build status for the persona batch now lives in
+`archive/PLAN_SEED.md` — every item it ever scoped, including Backend C's read-side fix, is done.
 
-**Two plans fully shipped and archived this session**: `archive/PLAN_INFERENCE_TESTING.md` (all 6
+**Three plans fully shipped and archived this session**: `archive/PLAN_INFERENCE_TESTING.md` (all 6
 stages done, its two stale status lines corrected with real numbers before archival, its still-open
 speculative research on RETE/incrementality and retraction-aware reasoning extracted into a new
-`PLAN_SYLLOGIST_HORIZON.md` so that research isn't lost) and `archive/PLAN_COMPLETIONS.md` (all 4
-staging rows done). Cross-references to both in living docs (`ROADMAP.md`, `PLAN_CODE.md`,
+`PLAN_SYLLOGIST_HORIZON.md` so that research isn't lost), `archive/PLAN_COMPLETIONS.md` (all 4
+staging rows done), and `archive/PLAN_SEED.md` (every item, including Backend C's read-side fix,
+now done). Cross-references to all three in living docs (`ROADMAP.md`, `PLAN_CODE.md`,
 `PLAN_AGENTS.md`, `SKILL_BENCHMARK_CONVERSATION.md`, `SKILL_BENCHMARK_INFERENCE.md`) now point at
 their `archive/` paths.
 
-**README.md/the GitLab Pages homepage refresh is in flight** — a background agent is updating both
-to document the default persona (`--persona-size` flags), the unified CLI (`tmct import`, the
-single-value-per-flag caveat, `npm run init:large`), and the completions pipeline (both the
-chat-triggered "detailed summary of how X works" phrasing and a verified JS/programmatic example),
-following `SKILL_AGENT_PLAIN_PROSE.md` §3's shop-window discipline. Not yet merged as of this
-writing — see "Open follow-ups" below for what happens once it lands.
+**Benchmark report naming aligned to the operator's own convention (2026-07-11)**: the operator
+renamed the four newest reports by hand (`AGENTBENCH`/`CEFR_ENGLISH` (formerly referenced in prose
+as `CHATBENCH`)/`CONVERSATIONBENCH`/`INFBENCH` → `BENCHMARK_AGENT`/`BENCHMARK_CEFR_ENGLISH`/
+`BENCHMARK_CONVERSATION`/`BENCHMARK_INFERENCE`, each still `_1.4.1.md`); all four
+`SKILL_BENCHMARK_*.md` docs' own naming-convention prose and every genuinely forward-looking
+cross-reference now match (`SKILL_BENCHMARK_CEFR_ENGLISH.md` also had a real pre-existing
+inconsistency fixed along the way — its prose still called its own artifact `CHATBENCH_<version>.md`
+in several spots despite every real file on disk already using the `CEFR_ENGLISH_` prefix).
+Historical citations of specific already-archived reports, and everything under `archive/`, were
+deliberately left untouched — those are correct history, not stale convention.
 
 **A real incident this session: the `ace-owl` extraction and its revert.** An earlier session
 (2026-07-10, commit `c57adbe`) extracted `src/grammar/ace.mjs`/`lexicon.mjs` into a new npm
@@ -51,36 +58,33 @@ install in an empty folder. See `ROADMAP.md`'s "Open-source the ACE-OWL parser" 
 
 ## Open follow-ups
 
-**The README.md/homepage refresh is DONE (2026-07-11, commits `92ec1a3`, `266d84d`, merged
-`72a52ae`).** Dispatched solo after the two content workstreams were already merged and verified —
-an earlier concurrent dispatch of this same agent was blocked by the auto-mode safety classifier
-(its denial reasoning described a different sibling agent's content-authoring scope, not this one's
-docs-only brief); rather than work around the block, the run was re-sequenced solo per operator
-instruction ("proceed that way"). Verified independently (worktree `git log`/`git status`, not just
-the agent's own report): both README.md and public/index.html now document the default persona,
-`--persona-size` tiers, memory backends, and the completions pipeline (a verified chat-triggered
-example and a verified JS example). Real gap found and honestly documented rather than papered
-over: `generateCompletion` isn't on the package's public `exports` map yet, so the JS example only
-works from a cloned checkout, not a plain npm install — see item 1 below. `npm test` 1864/1864 after
-merge, worktree/branch cleaned up.
+**Closed out this session (2026-07-11, three concurrent worktree-isolated sub-agents)**:
 
-1. **`generateCompletion` has no public package export.** `src/index.mjs` doesn't re-export it and
-   `package.json`'s `exports` map has no `./completions` entry — confirmed via a real `npm pack` +
-   scratch install, which throws `ERR_PACKAGE_PATH_NOT_EXPORTED` on the deep import. The README's JS
-   example documents this honestly (relative import from a cloned checkout only) rather than
-   inventing a working public path. Adding a `./completions` export (and re-exporting
-   `generateCompletion`/`createCompletionsGraphAdapter` from `src/index.mjs`) is a small, isolated
-   follow-up if the operator wants the JS example to work from a plain npm install too.
-2. **Backend C (SQLite)'s read side** does a full payload reconstruction per call (an explicitly
-   permitted shortcut in `PLAN_SEED.md` §6) — measured 8% slower than flat JSON at the Large tier's
-   scale, faster below it. Closing this needs real indexed query handles, not more diffing.
-3. **`PLAN_SYLLOGIST_HORIZON.md`'s one genuinely open research question** (retraction-aware
-   consistency under a hard budget + trust tiers) has a speculative sketch but no implementation —
-   next up only if the operator wants to push the reasoning engine further; not a near-term default.
+- **`generateCompletion` has a public package export now** (commit `be1cc68`, merged `0906997`).
+  `package.json`'s `exports` map gained `./generateCompletion`/`./createCompletionsGraphAdapter`
+  (named after the export, matching the existing `./dispatchTool`/`./fetchEntities` pattern),
+  `src/index.mjs` re-exports both. Verified with a real `npm pack` + fresh scratch install + deep
+  import of both new subpaths — no `ERR_PACKAGE_PATH_NOT_EXPORTED`. README's JS example now imports
+  from the public subpath instead of the relative-checkout workaround; the "only works from a cloned
+  checkout" caveat is gone since it's no longer true.
+- **Backend C (SQLite)'s read side no longer does a full payload reconstruction per call** (commit
+  `34ead93`, merged `f40f013`). `readSqlitePayload` now caches its payload on the handle after the
+  first real SELECT; `persistSqlitePayload`'s existing per-row write diff patches that cache in
+  lockstep instead of the read side re-querying everything. Verified with a query-count spy (zero
+  SQL queries on a cached read, not an inferred speedup from timing) and a round-trip test proving
+  the patched cache matches a fresh SQL rebuild byte for byte. `archive/PLAN_SEED.md` (this fix was
+  its last open item) is now fully archived.
+- **Benchmark report naming aligned** (see "Where we are" above for the full account).
+
+`npm test`: 1866/1866 after all three merges.
+
+**`PLAN_SYLLOGIST_HORIZON.md`'s one genuinely open research question** (retraction-aware consistency
+under a hard budget + trust tiers) has a speculative sketch but no implementation — next up only if
+the operator wants to push the reasoning engine further; not a near-term default.
 
 The persona batch itself (Small/Medium/Large tiers, the auto-init convergence, the trust-hook gap,
-both plan archivals) is now fully closed — see "The default human-world persona" below and
-`PLAN_SEED.md`'s status header for the full account, not this list.
+all three plan archivals) is now fully closed — see "The default human-world persona" below and
+`archive/PLAN_SEED.md`'s status header for the full account, not this list.
 
 **`scm-svf`/cardinality monotonicity — DONE this session** (commits `07b8035`, `1110488`, `304a16c`,
 merged clean, verified live by the coordinator, not just trusted from the agent's report). Built
@@ -147,7 +151,7 @@ parsing gaps, and the chat-surface debt re-measure) is DONE, committed, and conf
 by the post-merge full CHATBENCH/INFBENCH re-run above — see `git log --oneline` for the individual
 commits, each referencing its item number.**
 
-## The default human-world persona — SHIPPED, all three tiers, full detail in `PLAN_SEED.md`
+## The default human-world persona — SHIPPED, all three tiers, full detail in `archive/PLAN_SEED.md`
 
 What was a proposal earlier this session is now built and merged, all three size tiers: `tmct init`
 with no flags seeds a genuine everyday-knowledge persona by default (Small: 664 curated facts across
@@ -160,7 +164,7 @@ sentences) or Large (13,609 facts, genuine multi-hop hypernym chains up to 4 rea
 commonness proxy, not hand-typed. The `createSession`→full-`initRepo` auto-init convergence also
 landed: a programmatic `runChat()`/`createSession()` call on a bare directory now runs the same full
 `initRepo` path as CLI `tmct init`, leaving a real `tmct.toml` + `.tmct/init.json`, not just an
-in-memory seed marker. Read `PLAN_SEED.md` for the full design, the real numbers vs. targets, and
+in-memory seed marker. Read `archive/PLAN_SEED.md` for the full design, the real numbers vs. targets, and
 every conflict resolved during the merge — this file doesn't repeat that narrative, per its own
 discipline.
 

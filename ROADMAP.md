@@ -526,7 +526,7 @@ risk" → no, proven not guessed). INFBENCH chat arm 99% (216/219), kernel arm 1
 
 **Follow-up batch closed out (2026-07-11)**: Medium (1,608 facts total, 944 incremental over Small)
 and Large (13,609 facts, 12,001 incremental over Medium, with genuine multi-hop hypernym chains up
-to 4 real WordNet hops) tiers both built, matching `PLAN_SEED.md`'s targets almost exactly, selected
+to 4 real WordNet hops) tiers both built, matching `archive/PLAN_SEED.md`'s targets almost exactly, selected
 via `tmct init --persona-size medium|large`. Matching example-sentence tiers shipped alongside them
 (476/2,404 sentences). The `createSession`→`initRepo` auto-init convergence landed too: a
 programmatic `runChat()`/`createSession()` call on a bare directory now runs the same full `initRepo`
@@ -536,12 +536,15 @@ seed marker. The premise-derived trust hook (`min(premiseTrusts) × ruleConfiden
 `record.entailedTrust` for the two rules that stay live-chase-only (cardinality monotonicity,
 `cax-maxc0`), closing the one real gap the three newest inference rules had. The seonix migration
 note (SEON/ConceptNet need re-activating in seonix's own `tmct.toml` now that tmct's default has
-flipped) stays a documented, cross-repo-only item — nothing left to action from this repo. Both
-`PLAN_SEED.md` and `archive/PLAN_INFERENCE_TESTING.md` now show every item shipped; the latter was
-archived once its trust-hook gap closed (see "Later: deferred by design" above), and
-`archive/PLAN_COMPLETIONS.md` was archived separately the same day (all 4 staging rows shipped, see
-the 2026-07-10 uplift batch entry above). Full design and every real merge conflict's resolution:
-`PLAN_SEED.md`.
+flipped) stays a documented, cross-repo-only item — nothing left to action from this repo. Backend
+C (SQLite)'s read-side gap (§6) closed too, the same day: `readSqlitePayload` now caches its payload
+on the handle, patched incrementally by the existing write-side diff instead of re-querying
+everything on every call. `archive/PLAN_SEED.md` and `archive/PLAN_INFERENCE_TESTING.md` now show
+every item shipped; the latter was archived once its trust-hook gap closed (see "Later: deferred by
+design" above), `archive/PLAN_COMPLETIONS.md` was archived separately the same day (all 4 staging
+rows shipped, see the 2026-07-10 uplift batch entry above), and `archive/PLAN_SEED.md` itself was archived
+once Backend C's fix landed. Full design and every real merge conflict's resolution:
+`archive/PLAN_SEED.md`.
 
 ## The umbrella product definition (item 1)
 

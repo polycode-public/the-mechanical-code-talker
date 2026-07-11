@@ -309,7 +309,7 @@ the shipped `npm run example:*` demos) reads a graph but writes nothing back.
 The default persona also comes in three sizes: Small (~664 facts, the
 default), Medium (~1,608, `tmct init --persona-size medium`) and Large
 (~13,609, `--persona-size large`, deep enough to chain real multi-hop
-reasoning). Design detail and the full fact-count tables are in `PLAN_SEED.md`.
+reasoning). Design detail and the full fact-count tables are in `archive/PLAN_SEED.md`.
 
 ### Memory backends
 
