@@ -1,3 +1,7 @@
+**Archived, 2026-07-12** — harness + generator + first corpus batch shipped; growing coverage
+further and wiring the corpus into the live answer path remain real, undone follow-ons, tracked in
+`ROADMAP.md`'s "What's next".
+
 # PLAN_TEMPLATE_COVERAGE.md — ACE-grammar coverage harness and generated surface variants
 
 PLAN_BREADTH_FIRST_NLU.md §6, track 4. A coverage harness against real, human-written prose

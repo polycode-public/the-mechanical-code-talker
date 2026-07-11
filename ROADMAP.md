@@ -110,19 +110,26 @@ audit — always check the latest-dated one, not this file, for real numbers.
 - **`PLAN_BREADTH_FIRST_NLU.md`'s own remaining scope** — all six tracks shipped (entity-tie
   ambiguity, router candidate enrichment, `tmct viz` + its embedded chat panel, template-coverage
   harness, alternates-on-hits, canonical representation for the ask/teach lanes — all now in "Current
-  capability surface" above). What's left, not yet scoped as their own build: (a) canonical
-  representation for every OTHER chat lane (conversational, commands, recall) — ~78 return sites in
-  `chat.mjs`, bespoke per-lane logic, no single generalizable helper the way the query lane had; (b)
-  growing the ACE grammar's free-form coverage past its measured 0/2,949-sentence baseline against
-  real prose (`PLAN_TEMPLATE_COVERAGE.md`) — needs more grammar patterns or vocabulary, real work,
-  not a tooling pass; (c) the paraphrase-verified-via-`syllogise.mjs` piece of "Ambition" — not
-  started; (d) a real "list/count all X of class Y" query shape for memory-graph classes — live
-  testing during the viz chat panel's build confirmed no such shape exists via `ask.mjs` alone (only
+  capability surface" above). Two named items are satisfied and closed, per their own track's
+  original scope (an explicit operator decision, not a silent drop): (a) canonical representation
+  for every OTHER chat lane (conversational, commands, recall, ~78 `chat.mjs` return sites) —
+  Track 6's own deliverable was the `canonical` field present on every response (even `null` where
+  unpopulated), which is met; full population everywhere was always a bigger, separately-scoped
+  follow-on. (b) growing the ACE grammar's free-form coverage past its measured 0/2,949-sentence
+  baseline — §6's own stated non-goal was a harness + baseline + first generated batch, not closing
+  the gap itself, which is met; growing coverage further is `archive/PLAN_TEMPLATE_COVERAGE.md`'s
+  own remaining scope (needs more grammar patterns or vocabulary, not tooling). What's genuinely
+  still open: (c) the paraphrase-verified-via-`syllogise.mjs` piece of "Ambition" — not started;
+  (d) a real "list/count all X of class Y" query shape for memory-graph classes — live testing
+  during the viz chat panel's build confirmed no such shape exists via `ask.mjs` alone (only
   `chat.mjs`'s heavier `factAnswer` cascade has it, out of the browser bundle's scope), so the viz
   panel's class-badge click currently falls back to a real client-side filter + a "where is X
   mentioned" query rather than a true "list all" — a genuine, now-documented gap, not a silent one.
-- **`PLAN_TEMPLATE_COVERAGE.md`** — the coverage-harness/generation design from (b) above, including
-  the real baseline number and the first 17-row generated batch. Read it before picking up (b).
+- **`archive/PLAN_TEMPLATE_COVERAGE.md`** — archived; the coverage-harness/generation design from
+  (b) above, including the real baseline number and the first 17-row generated batch. Read it before
+  picking up (b). A second, separate follow-on also survives here: the generated corpus (the 17-row
+  batch and future ones) is raw material only — wiring it into `src/chat.mjs`/`src/ask.mjs`'s
+  response templates for output variety hasn't started.
 - **A fresh `CAPABILITIES_1.8.0.md` audit** — `CAPABILITIES_1.7.3.md` is pinned at commit `981c9b2`
   and doesn't cover any of `PLAN_BREADTH_FIRST_NLU.md`'s six tracks; this doc's "Current capability
   surface" above covers them narratively, but no full overlay audit has run since. Not done this
@@ -145,12 +152,13 @@ audit — always check the latest-dated one, not this file, for real numbers.
 - **`PLAN_AGENTS.md`** — the governing plan for tmct's broader multi-repo arc (marginalia, seonix,
   a pluggable LLM rung for Claude Code/Bedrock/Copilot). Check its own sequencing table for current
   phase status, not this file.
-- **`PLAN_VIZ.md`** — visualise the memory graph: a recency-seeded, hub-avoiding spiral walk
-  (`spiralExpand`, generalized to the memory graph and now returning per-node `hop`) rendered with a
-  pseudo-3D depth effect (older nodes deeper/darker, newer shallower/higher-contrast). Traversal and
-  timestamp groundwork (edge `createdAt`, derived `updatedAt`) is done; still design-only: the
-  rendering layer, situational-fact seeding (a pre-baked git-history corpus, target-repo `README.md`
-  ingestion, session/sessionless invocation metadata), and the code-graph timestamp-provider decision.
+- **`archive/PLAN_VIZ.md`** — archived; CLI-wiring and rendering (`tmct viz`, a recency-seeded,
+  hub-avoiding spiral walk with pseudo-3D depth rendering) shipped and are done. Three real items
+  remain, un-staffed: (1) the code-graph timestamp-provider architectural decision (provider-
+  populated vs. a new tmct-owned local-git mode); (2) the maintainer-side git-log-corpus generation
+  step, wiring seed-time `README.md` ingestion, and a new `Source` "seed" kind; (3) an eager
+  session/sessionless anchor individual with a `mode` field (deciding the two-Session-classes
+  question at the same time). See the archived doc's own "Next step" for the full detail.
 
 ## Research horizon
 

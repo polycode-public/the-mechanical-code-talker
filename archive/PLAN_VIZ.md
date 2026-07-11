@@ -1,3 +1,6 @@
+**Archived, 2026-07-12** — CLI/rendering (`tmct viz`) shipped; remaining scope tracked in
+`ROADMAP.md`'s "What's next".
+
 # PLAN_VIZ.md — graph visualisation: recency-seeded spiral walk, pseudo-3D depth rendering, node/property timestamps, and situational-fact seeding
 
 > **STATUS: traversal/timestamp groundwork IMPLEMENTED (commit `9510a43`) — `adjacencyForKinds`'s

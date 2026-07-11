@@ -8,6 +8,20 @@ commit `981c9b2`, v1.7.3. Implementation tracks are tracked live via the session
 file is the design record, not a live status board — update its own top-line status as tracks land,
 but don't turn it into a session diary (see `HANDOVER.md`'s standing discipline).
 
+## Status (2026-07-12)
+
+All six tracks shipped. Of the plan's own named remaining scope, two items are satisfied per their
+track's original stated scope and considered done: (a) canonical representation for the ~78 other
+`chat.mjs` return sites — Track 6's own deliverable was the `canonical` field present on every
+response (even `null` where unpopulated), which is met; full population everywhere was always a
+bigger, separately-scoped follow-on, not this plan's own unfinished business. (b) the ACE grammar
+coverage gap past the measured 0/2,949-sentence baseline — §6's own explicit non-goal was a harness
++ baseline + first generated batch, not closing the gap itself; growing coverage further is
+`archive/PLAN_TEMPLATE_COVERAGE.md`'s own remaining scope now. Two items are genuinely open, not yet
+started: (c) the paraphrase-verified-via-`syllogise.mjs` piece of "Ambition"; (d) a real "list/count
+all X of class Y" query shape for memory-graph classes via `ask.mjs` alone (§5b's documented gap).
+(c) and (d) are tracked live in `ROADMAP.md`'s "What's next".
+
 ## Context
 
 The operator overrode a prior recommendation ("Llama-3-comparable NL fluency is architecturally

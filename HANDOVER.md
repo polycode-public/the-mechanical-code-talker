@@ -70,7 +70,7 @@ let it go stale):
   click-to-inspect. `npm test` 1923/1923 in the worktree; manual end-to-end run against a real seeded
   `.tmct/memory/graph.json` produced valid non-trivial output, `--focus` override confirmed working.
 - **Track 4 — template generation + coverage harness** (new `corpus/`/harness files,
-  `PLAN_TEMPLATE_COVERAGE.md`): **landed, merged to `main`.** Real, disclosed numbers, no padding:
+  `archive/PLAN_TEMPLATE_COVERAGE.md`): **landed, merged to `main`.** Real, disclosed numbers, no padding:
   this repo's own docs corpus (41 files, 2,949 sentences) hits the ACE grammar 0/2,949 (60.4%
   shape-only residue) — the honest ceiling of an 8-pattern controlled grammar against free-form
   prose, named plainly as a real limit, not fixed here. 17 self-verified surface-variant rows
@@ -145,14 +145,11 @@ Full design, file targets, and verification steps in `PLAN_BREADTH_FIRST_NLU.md`
   (4) identity-question phrasing fragility — `"are you an AI? like chatgpt?"` fails where `"are you
   chatgpt"` works. Each is scoped for `SKILL_AGENT_FAST_LOOP.md`, not attempted yet.
 
-- **`PLAN_VIZ.md`** — the three scoped traversal/timestamp items (id-normalizer fix, edge
-  `createdAt`/derived `updatedAt`, `spiralExpand` generalization) are implemented. Still open:
-  the code-graph architectural decision (provider-populated timestamps vs. a new tmct-owned
-  local-git mode), the git-log-corpus/README-ingestion situational-fact seeding, the eager
-  session/sessionless anchor individual, and a rendering prototype spike. See the doc's own
-  "Next step" for the order. Not archived — this remaining scope is real, unbuilt feature work
-  (a rendering spike, situational-fact seeding), not a minor bug or a too-hard research question,
-  so it stays a live root-level plan per `CAPABILITIES_1.7.3.md` §4's own call.
+- **`PLAN_BREADTH_FIRST_NLU.md`'s two open items** — (c) the paraphrase-verified-via-`syllogise.mjs`
+  piece of "Ambition", not started; (d) a real "list/count all X of class Y" query shape for
+  memory-graph classes via `ask.mjs` alone, a confirmed gap found during the viz chat panel's build.
+  See `ROADMAP.md`'s "What's next" for detail. (`archive/PLAN_VIZ.md` and
+  `archive/PLAN_TEMPLATE_COVERAGE.md` are archived; their own remaining scope is listed there too.)
 
 - **`PLAN_SYLLOGIST.md`'s one genuinely open research question**: retraction-aware consistency under
   a hard budget + trust tiers (§3). Speculative sketch only, nothing implemented — next up only if
