@@ -23,6 +23,12 @@
 // `human-nature` clump, but stays shipped/selectable on its own for a caller
 // that wants that narrow slice without the rest of the human persona.
 //
+// `human-medium`/`human-large` (also shipped-but-INACTIVE) are SIZE TIERS of
+// the SAME `human` bundle, not separate personas (PLAN_SEED.md §3) — each
+// holds only the facts that size adds beyond the previous one. Activated
+// together via `tmct init --persona-size medium|large` (bin/tmct.mjs), which
+// resolves them through this same registry.
+//
 // A `tmct.toml` may carry a top-level `[extensions]` table-of-tables
 // (`[extensions.tier2-aws]`, …): a RECOGNIZED name (one of the builtins above)
 // may override `active`/paths/etc; an UNRECOGNIZED name declares a brand new
@@ -99,6 +105,30 @@ function builtinExtensions() {
       active: true,
       corpusPath: join(TIER2_DIR, "human.jsonl"),
       provenancePrefix: "corpus:human",
+    },
+    // NEW — Medium/Large SIZE tiers of the SAME `human` bundle (PLAN_SEED.md
+    // §3), not separate personas: each file holds ONLY the facts that size
+    // adds beyond the previous one (Medium beyond Small, Large beyond
+    // Medium), so activating them is purely ADDITIVE alongside `human`
+    // (never a replacement for it). Both ship INACTIVE — Small stays the
+    // unconditional default — and are activated together via `tmct init
+    // --persona-size medium|large` (bin/tmct.mjs), which resolves them
+    // through this SAME BUILTIN_EXTENSIONS lookup and the ordinary
+    // `--corpus <id>` activation seam (activatePluggableInput). "large"
+    // activates BOTH human-medium and human-large (Large's facts are
+    // Medium's plus its own — both bundles must be active to reach the
+    // full ~13,600-fact total).
+    "human-medium": {
+      kind: "corpus",
+      active: false,
+      corpusPath: join(TIER2_DIR, "human-medium.jsonl"),
+      provenancePrefix: "corpus:human-medium",
+    },
+    "human-large": {
+      kind: "corpus",
+      active: false,
+      corpusPath: join(TIER2_DIR, "human-large.jsonl"),
+      provenancePrefix: "corpus:human-large",
     },
     "tier2-aws": {
       kind: "corpus",

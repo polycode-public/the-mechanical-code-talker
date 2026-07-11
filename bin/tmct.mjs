@@ -60,6 +60,12 @@ Usage:
                                (pyproject.toml → python, pom.xml → java); never seeds unasked
        [--with-persona <name>] write an explicit [extensions]/[bias] preset into tmct.toml
                                ("code" — today's implicit default, made explicit)
+       [--persona-size <medium|large>]  grow the default "human" persona's fact count
+                               beyond Small (the default): "medium" activates
+                               human-medium.jsonl (~1,608 facts total), "large" also
+                               activates human-large.jsonl (~13,600 facts total,
+                               with genuine multi-hop hypernym chains) — additive
+                               size tiers of the SAME bundle, not separate personas
   tmct import [--repo <abs>]   activate+seed into an ALREADY-initialized repo (any
        [--corpus <id|path>]    combination of these flags in one call). --graph is a
        [--ontology <name|path>]  DIFFERENT operation from the others: it APPENDS to
@@ -564,6 +570,40 @@ async function main() {
       personaPreset = PERSONA_PRESETS[personaName];
     }
 
+    // `--persona-size <medium|large>` (PLAN_SEED.md §3): Small/Medium/Large are
+    // SIZES of the one `human` bundle, not separate corpus ids — human.jsonl
+    // (Small, the default) stays exactly as-is; human-medium.jsonl/
+    // human-large.jsonl hold ONLY the facts each size adds beyond the previous
+    // one (built by scripts/build-persona-tiers.mjs). "medium" activates just
+    // human-medium; "large" activates BOTH human-medium AND human-large (Large
+    // is Medium's facts plus its own — both incremental bundles must be active
+    // to reach the full ~13,600-fact total). Reuses the EXACT SAME
+    // resolvePluggableInput/activatePluggableInput seam `--corpus <id>` already
+    // uses (human-medium/human-large are ordinary `kind: "corpus"`
+    // BUILTIN_EXTENSIONS entries, recognized directly, no manifest needed) —
+    // this is sugar over "activate these specific corpus ids", not a new
+    // activation mechanism. Works whether the repo is fresh (this same
+    // `tmct init` call) or already initialized (a later re-run), exactly like
+    // `--corpus` does.
+    const PERSONA_SIZE_BUNDLES = { medium: ["human-medium"], large: ["human-medium", "human-large"] };
+    const personaSizeVal = strFlag(rest, ["--persona-size"]);
+    let personaSizeResolved = [];
+    if (personaSizeVal) {
+      if (!Object.prototype.hasOwnProperty.call(PERSONA_SIZE_BUNDLES, personaSizeVal)) {
+        const sizes = Object.keys(PERSONA_SIZE_BUNDLES).join(", ");
+        process.stderr.write(`tmct init: unknown --persona-size "${personaSizeVal}". Available sizes: ${sizes}.\n`);
+        process.exit(2);
+      }
+      try {
+        for (const id of PERSONA_SIZE_BUNDLES[personaSizeVal]) {
+          personaSizeResolved.push(await resolvePluggableInput("corpus", id, { repoRoot }));
+        }
+      } catch (e) {
+        process.stderr.write(`tmct init: ${e?.message || e}\n`);
+        process.exit(2);
+      }
+    }
+
     const res = await initRepo(repoRoot, { force: rest.includes("--force"), persona: personaPreset });
     process.stdout.write(res.message + "\n");
 
@@ -575,7 +615,7 @@ async function main() {
     // hyphenated "corpus:tier2-<id>" — a deliberate, low-risk rename predating
     // this batch; nothing in chat.mjs's runtime logic keys on the old string.)
     let anyActivation = false;
-    for (const resolved of [corpusResolved, ontologyResolved, lexiconResolved]) {
+    for (const resolved of [corpusResolved, ontologyResolved, lexiconResolved, ...personaSizeResolved]) {
       if (!resolved) continue;
       anyActivation = true;
       try {

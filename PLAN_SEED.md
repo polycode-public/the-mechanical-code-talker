@@ -40,16 +40,85 @@
 >    `a man has a hat` → stores; `what is a man` → cites the taught fact plus `man is a kind of
 >    person` / `man is male`, both sourced `corpus:human`.
 >
-> **Still open**: Medium/Large tier content (this doc's own §3 numbers are the target, not yet
-> built); the `createSession`→full-`initRepo` auto-init convergence (§2, deliberately deferred by
-> the persona-content agent to avoid a collision with the CLI/config agent's own `chat.mjs` work).
+> **Medium/Large tier content and the auto-init convergence are now also done — see the newer
+> STATUS entry below.**
 > `scm-svf`/cardinality monotonicity (tracked separately in `HANDOVER.md`/`archive/PLAN_INFERENCE_TESTING.md`)
 > is now also done and merged — all 4 of this batch's concurrent workstreams are complete.
 > Full-suite verification after all 4 merges (persistence backends + CLI/config + persona content +
 > `scm-svf`): **1852/1852 passing, 0 failures.** Also added `npm run init:large` (combines every
 > already-committed bundle — human persona + seon + conceptnet + aws/python/java — on the default
-> flat-JSON backend, ~7,380 facts), a convenience script distinct from this doc's own not-yet-built
-> Large tier (~13,600 facts, designed to pair with the SQLite backend).
+> flat-JSON backend, ~7,380 facts), a convenience script distinct from this section's own Medium/
+> Large tier (below).
+>
+> **STATUS (2026-07-11): Medium/Large tiers SHIPPED, and the `createSession`→`initRepo` auto-init
+> convergence is done — every item this doc's §3 table designed is now built.** Built by a single
+> background agent (isolated worktree), three separate commits.
+>
+> **Medium/Large fact tiers (§3)**: real counts vs. this doc's own targets — **Medium 1,608 facts**
+> (944 incremental beyond Small, target ~1,605-1,610 — spot on), **Large 13,609 facts** (12,001
+> incremental beyond Medium, target ~13,600-13,650 — spot on). Small's own `human.jsonl` is
+> byte-identical, untouched. Built by two new maintainer scripts (`scripts/build-persona-tiers.mjs`,
+> `scripts/apply-persona-tiers.mjs`) that walk the same locally-cloned WordNet source files as
+> Small's hand-curation, ranking candidate words by sense-count (a commonness proxy, §12) and
+> restricting each word to its OWN top senses (a word's globally-most-frequent sense is routinely a
+> different domain than the clump it was found in) rather than typing ~13,000 facts by hand — the
+> curation discipline moved from "hand-pick every fact" to "hand-tune the ranking/filter rules, then
+> review the output," a necessary adaptation once §3's own multiplier put Large two orders of
+> magnitude past Small. Large's facts include GENUINE multi-hop hypernym chains (up to 4 real
+> WordNet hops, stopping at an established root term) exactly as §3 designed — e.g. `tenor ⊑ singer
+> ⊑ musician ⊑ performer`, live-verified via `findIsaChain` (the same `scm-sco` machinery §8's bridge
+> test uses) with zero teaching required. Real bugs caught live during the build (worth recording,
+> both were content-quality regressions, not crashes): (1) a word's OWN most-common sense can be
+> completely unrelated to the domain it was discovered in ("run" turning up under `noun.group.yaml`
+> resolved, via a naive sense-1 lookup, to a baseball score) — fixed by resolving every fact from the
+> SPECIFIC synset a word was found under, using the sense-count signal only for ranking, never
+> resolution; (2) a word already declared as an ADJECTIVE ("male") got ALSO added as a new noun,
+> silently breaking several taught-relation filter-rule tests since ACE started reading "X is male"
+> as class membership instead of a property — fixed by excluding every existing noun/verb/adjective
+> from the candidate pool, not just nouns of the same part of speech. An explicit word denylist (plus
+> the existing definition-text blocklist) also had to grow past what Small's much smaller word count
+> ever exercised — real homographs whose dominant sense is inappropriate (a legitimate agricultural
+> "rape" plant sense, "asshole"/"pussy" vulgar senses living under an otherwise-clean synset,
+> pharmaceutical trade names like "flunitrazepam") needed catching by shape/keyword, not just the
+> blocklist's existing archaic/offensive/mythical tags.
+>
+> **Medium/Large example-sentence tiers (§9)**: **Medium 476 total sentences** (356 incremental,
+> target ~350-450 — a little over, real WordNet inline coverage came in higher than the rough
+> estimate), **Large 2,404 total sentences** (1,928 incremental: 1,446 WordNet inline + 482
+> SemCor-supplemented, target ~2,000-3,000 — within range). The SemCor supplement specifically
+> targets `human-nature` first (§9's own "under 1% inline coverage" flag), widening to
+> `popular_lore`/`skill_and_hobbies`/`learned` genres for that pass since the plainest genres
+> (`press_reportage`/`humor`) turned out to rarely mention specific plant/animal/mineral words at
+> all — a real finding, not assumed in advance. A second content-quality bug caught live: WordNet
+> occasionally stores an example as an attributed literary quote (`{source, text}`, not a plain
+> string) — none of Small's 665 words hit this shape, Medium/Large's much wider coverage did.
+>
+> **Tier-selection mechanism**: `human-medium.jsonl`/`human-large.jsonl` are NEW `BUILTIN_EXTENSIONS`
+> entries (`src/extensions.mjs`), shipped INACTIVE — Small stays the unconditional default,
+> byte-for-byte. `tmct init --persona-size medium|large` (`bin/tmct.mjs`) activates them, reusing the
+> exact same `--corpus <id>` activation seam (no new mechanism) — "large" activates BOTH
+> `human-medium` and `human-large` (Large's file holds only what Large adds beyond Medium, so both
+> must be active to reach the full total).
+>
+> **The `createSession`→`initRepo` auto-init convergence (§2)** is done: `chat.mjs`'s W3 bootstrap
+> (`seedBootstrapMemory`) now delegates to the FULL `initRepo(repo, {persona: PERSONA_PRESETS.human,
+> env})` instead of its own bespoke seed-only pair — verified live NOT to double-scaffold/double-seed
+> (idempotent whether it's the first call ever or a repeat after a prior CLI `tmct init`), and
+> verified live that a bare `createSession({repoPath})` on an empty directory now leaves a REAL
+> `tmct.toml` + `.tmct/init.json` on disk (not just the old in-memory seed marker), while the CLI's
+> own `tmct init` is completely unaffected (the persona-preset merge only ever applies to a
+> genuinely fresh write; an existing `tmct.toml` is read back untouched either way).
+>
+> Full-suite verification after this batch: **1852/1852 passing, 0 failures** (same count as before —
+> this batch only ADDS inactive-by-default content + a converged code path, no existing default
+> behavior changed). A handful of pre-existing tests needed their "definitely unrecognized word"
+> placeholder updated (`banana`, `kangaroo`/`climb`, a few code-fixture class names) since Medium/
+> Large's own vocabulary growth turned them into real words — replaced with nonsense placeholders
+> (`zorblax`, `fribwomp`) guaranteed to never become real vocabulary, the same fix pattern the
+> Small-tier build already established for `chat-ux.test.mjs`.
+>
+> **Still open**: nothing buildable from this repo — the seonix migration note below (§2) is a
+> cross-repo follow-up that can't be acted on from here.
 
 **Goal:** replace tmct's implicit code-domain default (SEON + a tech-filtered ConceptNet slice) with
 a genuinely general "human-world" persona, so a fresh `npx @polycode-projects/the-mechanical-code-talker
@@ -614,10 +683,12 @@ Verified via direct license-page reads and the two local clones (§5), not memor
    namespacing. Tracked in that work's own plan, not duplicated here.
 2. **`init:persona:empty`'s packaging-level limitation** (§7) — raw files still ship even when not
    seeded. Documented-only for now; no fix proposed in this batch.
-3. **Whether the frequency-informed cut for Large (§3) uses NGSL specifically, or a different signal**
-   — NGSL's own licensing status is unconfirmed (§10); worth a final check before committing to it as
-   the actual ranking source, versus a simpler heuristic (e.g. WordNet's own sense-count-per-lemma as
-   a rough frequency proxy, which needs no external list at all).
+3. ~~Whether the frequency-informed cut for Large (§3) uses NGSL specifically, or a different
+   signal~~ — **RESOLVED, Medium/Large build**: WordNet's own sense-count-per-lemma (no external list,
+   no licensing question at all) — `scripts/build-persona-tiers.mjs` ranks every candidate word by
+   its total sense count across every part of speech, restricted to the word's own TOP senses for the
+   specific clump it was found in (never a different domain's marginal sense of the same word — see
+   the "run"/`noun.group.yaml` bug this caught live, §3's own status note above).
 
 ## 13. Verification (once implementation starts)
 
@@ -630,3 +701,8 @@ Verified via direct license-page reads and the two local clones (§5), not memor
 - The cross-ontology bridge test (§8) passes, citing both sources in its provenance.
 - No CHATBENCH/INFBENCH full sprint re-run yet — explicitly deferred by operator instruction until
   this batch of work is further along.
+- Medium/Large tiers, live-verified (Medium/Large build, 2026-07-11): `tmct init --persona-size
+  medium` seeds 664+944=1,608 facts; a Medium-only word ("bite") resolves with `corpus:human-medium`
+  provenance. `tmct init --persona-size large` seeds 664+944+12,001=13,609 facts; `findIsaChain`
+  proves a genuine 3-hop chain (`tenor ⊑ singer ⊑ musician ⊑ performer`) from Large's facts alone,
+  zero teaching required. `npm test` stays 1852/1852 both before and after.
