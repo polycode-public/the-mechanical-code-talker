@@ -1,49 +1,33 @@
 # HANDOVER — current state & kickoff
 
 Living handover. Any session resumes from here. **Plan of record: `ROADMAP.md`** — read its
-"Where we are now" section for the full progress narrative. This file holds ONLY what to do
-next — no completed-work narrative (that lives in `ROADMAP.md`), per this project's own standing
-discipline.
+"Current capability surface" and "What's next" sections for the full feature-level picture. This
+file holds ONLY what to do next — no completed-work narrative (that lives in `ROADMAP.md`), per
+this project's own standing discipline.
 
 Session handle (inbox): `tmct` (this session; earlier sessions used `mechanic`). See
 `~/.claude/inboxes/tmct.md` and `~/.claude/inboxes/mechanic.md`, both still live.
 
 ## Version state (2026-07-11)
 
-`package.json` is `1.6.3`, held locally — `main` is several commits ahead of `origin/main` (the
-bump plus the work below). What's live on npm is `1.6.1`. Push/publish is gated on the operator;
-don't bump the version again until the moment of actually pushing (see Discipline, below).
+`package.json` is `1.6.5`, held locally, about to bump to `1.7.0` and push. What's live on npm is
+`1.6.1`. Push/publish is gated on the operator; don't bump the version again until the moment of
+actually pushing (see Discipline, below).
 
 ## Open items
 
-- **`PLAN_CONVERSATION.md` Finding 1 (adjective-taught-as-class) is resolved** (commit `32ea675`,
-  same fix sketch the doc already had) — `"cheese is blue"` now mints a property, not a class; a
-  related bare "what is X" no-article regex bug found during verification is fixed alongside it.
-  Findings 3-5 are new, written up but not implemented: (3) `ask.mjs`'s forward-shape query branch
-  drops its `entityType` filter (`"what modules does X have"` can answer with function names); (4)
-  an anaphoric "it uses which controller as its base" question misroutes into teach-a-fact — three
-  independent sub-problems, not a small fix; (5) no query shape exists for CapableOf/reverse-HasA
-  against the general-knowledge persona (`"can a dog bark"`, `"what has a tail"`) — small/additive
-  per the investigation, but real regression-scoped work, not landed yet — now also folded in with a
-  live-verified fresh confirmation that the same gap covers `inherits`/`subClassOf` reverse-queries
-  (a taught "X is a kind of Y" fact, e.g. `"shirehorse is a kind of horse"` then `"what inherits from
-  horse"`), a fourth predicate needing the same `WHAT_HAS_RE`-shaped fix. Read `PLAN_CONVERSATION.md`
-  before picking any of these up. The `"tail"` word-sense collision is not new work — cross-referenced
-  to `ROADMAP.md`'s existing cross-domain-ontology research gap instead.
+- **`PLAN_CONVERSATION.md` Finding 4** — an anaphoric "it uses which controller as its base"
+  question misroutes into teach-a-fact; three independent sub-problems (a discontiguous verb-frame
+  parser, a POS-aware mid-sentence interrogative detector, and a union-kind reverse-question gap),
+  no fix sketch, out of design-ability horizon for a single pass. Findings 1, 2, 3, and 5 are all
+  resolved. Read `PLAN_CONVERSATION.md` before picking this up.
 
-- **Fast loop's 2-round cap is done, both rounds clean.** Round 1 (mini-webapp fixture) found 2 real
-  dead-ends, now Findings 3/4 above. Round 2 (polyglot fixture, cross-language inheritance +
-  anaphora) found zero dead-ends — every turn answered correctly; one asymmetric-but-correct reply
-  template (forward vs. reverse inheritance phrasing) was investigated and deliberately left alone
-  (shared across 5 relation kinds, already regression-pinned, cosmetic not a bug).
-
-- **`PLAN_VIZ.md`** (new this session) — recency-seeded hub-avoiding spiral-walk graph
-  visualisation, node/property `updatedAt` timestamps, situational-fact seeding. Design-only. A
-  strategy-advisor adversarial re-check (2026-07-11 tick 3) caught a real gap the doc's "3 scoped
-  changes" framing understated: `adjacencyForKinds` (`src/codegraph.mjs`) silently builds an EMPTY
-  adjacency map over the memory graph today (routes every edge endpoint through a code-graph-only
-  `moduleIdOf`) — fixed in the doc as a 4th required change, with a fix sketch. Read the doc's
-  "What already exists" section before starting implementation.
+- **`PLAN_VIZ.md`** — the three scoped traversal/timestamp items (id-normalizer fix, edge
+  `createdAt`/derived `updatedAt`, `spiralExpand` generalization) are implemented. Still open:
+  the code-graph architectural decision (provider-populated timestamps vs. a new tmct-owned
+  local-git mode), the git-log-corpus/README-ingestion situational-fact seeding, the eager
+  session/sessionless anchor individual, and a rendering prototype spike. See the doc's own
+  "Next step" for the order.
 
 - **`PLAN_SYLLOGIST.md`'s one genuinely open research question**: retraction-aware consistency under
   a hard budget + trust tiers (§3). Speculative sketch only, nothing implemented — next up only if
@@ -52,6 +36,14 @@ don't bump the version again until the moment of actually pushing (see Disciplin
 - **`PLAN_ADVENTURE.md`** — a text-adventure architectural stretch (imperative command grammar,
   mutable turn-by-turn world/player state as graph nodes, an NPC turn scheduler). Design-only,
   nothing implemented yet.
+
+- **Cross-repo playtest backlog (from seonix, `~/.claude/inboxes/mechanic.md`)**: (1) a paraphrase-
+  coverage gap for describe-style queries — "what is X for" and "what does X do in Y" aren't
+  recognized shapes even when the underlying data resolves correctly via other phrasings (3 confirmed
+  instances); (2) a cross-language disambiguation-ranking false positive — "where is the main entry
+  point defined" sprays across unrelated Java/test-fixture `main` matches with no relevance ranking;
+  (3) a cosmetic label-spacing bug — a rendered type like `GlobalVariable` loses its word break. None
+  implemented yet; not in this session's scope.
 
 - **Standing cross-repo note, can never close from this repo**: if seonix's own chat surface goes
   through `runChat`/`createSession`, its `tmct.toml` needs to explicitly re-activate SEON/ConceptNet

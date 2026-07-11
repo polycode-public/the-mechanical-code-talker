@@ -25,7 +25,10 @@ user toward precision queries rather than guessing; every answer is grounded or 
   composition, recursive/reachability) — none of it hardcoded per domain.
 - **Default persona**: a general-knowledge "human-world" vocabulary seeded by default (three size
   tiers, `--persona-size small|medium|large`), sourced from Open English WordNet and Schema.org.
-  Code-domain vocabulary (SEON/ConceptNet) is opt-in (`--with-persona code`).
+  Code-domain vocabulary (SEON/ConceptNet) is opt-in (`--with-persona code`). Query coverage
+  includes forward/reverse CapableOf, reverse-HasA, and reverse-inherits/subClassOf shapes (`"can a
+  dog bark"`, `"what has a tail"`, `"what inherits from horse"`) against both corpus-seeded and
+  freshly-taught facts.
 - **Completions** (`src/completions/`): extractive, multi-sentence answers for broad "how does X
   work" questions, grounded and source-cited, never freely generated.
 - **Capability router** (`src/router/`): a deterministic, closed-toolset agentic router behind an
@@ -44,8 +47,10 @@ audit — always check the latest-dated one, not this file, for real numbers.
   and an NPC turn scheduler. Design-only.
 - **`PLAN_SYLLOGIST.md`** — retraction-aware consistency checking under a hard budget and trust
   tiers, the one open piece of the reasoning engine's research horizon. Design-only.
-- **`PLAN_CONVERSATION.md`** — teaching an "every X is Y" sentence as a property, not always a class,
-  when Y is genuinely an adjective. Design-only.
+- **`PLAN_CONVERSATION.md`** — Finding 4: an anaphoric "SUBJECT verb which N" inheritance question
+  misroutes into teach-a-fact; needs a discontiguous verb-frame parser, a POS-aware mid-sentence
+  interrogative detector, and a union-kind reverse-question fix. No fix sketch yet, out of
+  design-ability horizon for a single pass.
 - **`PLAN_GUESS_NUMBER.md` / `PLAN_HANOI.md`** — closed-loop and open-loop planning domains for the
   `findActionPath`/`findReachableSet` kernels, both already built and proven but not yet wired to
   either domain. Design-only.
@@ -55,11 +60,11 @@ audit — always check the latest-dated one, not this file, for real numbers.
   a pluggable LLM rung for Claude Code/Bedrock/Copilot). Check its own sequencing table for current
   phase status, not this file.
 - **`PLAN_VIZ.md`** — visualise the memory graph: a recency-seeded, hub-avoiding spiral walk
-  (reusing `spiralExpand`, already in `src/codegraph.mjs`) rendered with a pseudo-3D depth effect
-  (older nodes deeper/darker, newer shallower/higher-contrast). Also covers real node/property
-  `updatedAt` timestamps (currently write-once `createdAt` only) and situational-fact seeding (a
-  pre-baked git-history corpus, target-repo `README.md` ingestion, session/sessionless invocation
-  metadata). Design-only.
+  (`spiralExpand`, generalized to the memory graph and now returning per-node `hop`) rendered with a
+  pseudo-3D depth effect (older nodes deeper/darker, newer shallower/higher-contrast). Traversal and
+  timestamp groundwork (edge `createdAt`, derived `updatedAt`) is done; still design-only: the
+  rendering layer, situational-fact seeding (a pre-baked git-history corpus, target-repo `README.md`
+  ingestion, session/sessionless invocation metadata), and the code-graph timestamp-provider decision.
 
 ## Research horizon
 
