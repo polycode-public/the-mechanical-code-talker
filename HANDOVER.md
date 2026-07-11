@@ -10,24 +10,57 @@ Session handle (inbox): `tmct` (this session; earlier sessions used `mechanic`).
 
 ## Version state (2026-07-11)
 
-`package.json` is `1.7.0`, bumped and about to push. What's live on npm is `1.6.1` — will update to
-`1.7.0` once CI's publish-on-push runs. Don't bump the version again until the next release's push
-(see Discipline, below).
+`package.json` is `1.7.3` locally, not yet pushed. What's live on npm is still `1.5.5` — several
+version bumps (`1.6.0` through `1.7.3`) have accumulated locally without a push. Per this project's
+own version-bump discipline (`CLAUDE.md`), the next push should land whatever's actually ready as one
+release, not chase every intermediate bump — don't bump again until that push.
 
 ## Open items
 
-- **`PLAN_CONVERSATION.md` Finding 4** — an anaphoric "it uses which controller as its base"
+- **`archive/PLAN_CONVERSATION.md` Finding 4** — an anaphoric "it uses which controller as its base"
   question misroutes into teach-a-fact; three independent sub-problems (a discontiguous verb-frame
-  parser, a POS-aware mid-sentence interrogative detector, and a union-kind reverse-question gap),
-  no fix sketch, out of design-ability horizon for a single pass. Findings 1, 2, 3, and 5 are all
-  resolved. Read `PLAN_CONVERSATION.md` before picking this up.
+  parser, a POS-aware mid-sentence interrogative detector, and a union-kind reverse-question gap).
+  Bounded, not undesignable: `TOO_HARD_AUDIT.md`'s B1 entry traces a concrete first increment
+  (a POS-aware mid-sentence interrogative detector alone closes the pronoun-removed repro). Large,
+  three sub-problems, not attempted in a single pass — not "out of design-ability horizon." Findings
+  1, 2, 3, and 5 are all resolved; the plan itself is archived (`archive/PLAN_CONVERSATION.md`) since
+  Finding 4 is the only open item left. Two CEFR cases (`g-c2-pron-1`/`g-c2-pron-2`,
+  `BENCHMARK_CEFR_ENGLISH_1.7.0.md`) are plausibly the same "which of them VERB" compositional-anaphora
+  gap — worth checking as a side effect if this is picked up.
+
+- **AGENTBENCH `ab-c2-what-to-test`'s composing gap, diagnosis sharpened** (`TOO_HARD_AUDIT.md` M2,
+  refined 2026-07-11) — the keystone-ranking mechanism this case needs already exists and works
+  (`src/router/goal-reasoner.mjs:421-431`, a declared-priority argmax). The real gap, confirmed by
+  live-running the case: the request "what most needs a test in this codebase" never dispatches into
+  the rule that owns that composition step (only `tmct_untested` gets called, never `tmct_impact`) —
+  a request-to-rule routing gap, not a missing ranking mechanism. Next pickup: trace why this
+  request's goal classification doesn't expand into the per-module `impact` sub-goals
+  (`goal-reasoner.mjs:388-393`'s GDA expansion never fires for it).
+
+- **A rephrase-hint pass on honest "nothing matches"/"no X found" misses**
+  (`BENCHMARK_CEFR_ENGLISH_1.7.0.md`'s decision log, top pick) — 7+ cases across B1/C1 grades score
+  zero on the judge's rephrase dimension despite being correct, honest misses, because the miss
+  template offers no nudge toward a question that WOULD work. Scoped: a handful of history/touches-
+  family miss templates in `src/ask.mjs`. Concrete evidence: `g-c1-temp-8`'s "from touches to X"
+  wording also reads backwards and should be fixed in the same pass.
+
+- **Persona-sweep routed backlog** (`BENCHMARK_CONVERSATION_1.7.0.md`'s "Routed backlog" section,
+  not yet picked up by a fast-loop round): (1) ESL phrasing breaks recognition — `"what is X, please
+  explain"` (trailer folded into the term), `"please learn (this/also):"` prefix breaking teach
+  recognition; (2) a file-vs-symbol anaphora scoping miss — focus stays pinned to a method after a
+  "where is it defined" answer names the containing file; (3) fragment-typer typo-tolerance misses
+  (`"who touchd dat"`, `"wat about store.mjs"`, `"cochange w/ wat"`, `"inherits wat"`, `"tests 4 it"`);
+  (4) identity-question phrasing fragility — `"are you an AI? like chatgpt?"` fails where `"are you
+  chatgpt"` works. Each is scoped for `SKILL_AGENT_FAST_LOOP.md`, not attempted yet.
 
 - **`PLAN_VIZ.md`** — the three scoped traversal/timestamp items (id-normalizer fix, edge
   `createdAt`/derived `updatedAt`, `spiralExpand` generalization) are implemented. Still open:
   the code-graph architectural decision (provider-populated timestamps vs. a new tmct-owned
   local-git mode), the git-log-corpus/README-ingestion situational-fact seeding, the eager
   session/sessionless anchor individual, and a rendering prototype spike. See the doc's own
-  "Next step" for the order.
+  "Next step" for the order. Not archived — this remaining scope is real, unbuilt feature work
+  (a rendering spike, situational-fact seeding), not a minor bug or a too-hard research question,
+  so it stays a live root-level plan per `CAPABILITIES_1.7.3.md` §4's own call.
 
 - **`PLAN_SYLLOGIST.md`'s one genuinely open research question**: retraction-aware consistency under
   a hard budget + trust tiers (§3). Speculative sketch only, nothing implemented — next up only if

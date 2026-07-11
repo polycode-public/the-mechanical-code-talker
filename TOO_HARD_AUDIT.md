@@ -31,19 +31,24 @@ precisely, that guess does not hold." So the goal here is to do that tracing eve
 
 ## Summary counts
 
-Total flagged findings: 8.
+Total flagged findings: 8. **Update (2026-07-11 capability audit, pinned `981c9b2`/v1.7.3): M1 and
+U1 are now RESOLVED — re-checked directly against current code, not assumed.** M2's diagnosis is
+refined (the mechanism it named turned out to already be wired; the real remaining gap is narrower
+than the finding stated). B1's suggested wording fix is applied in this same pass, in `HANDOVER.md`
+and `ROADMAP.md`. See each entry below for the evidence.
 
 | Category | Count | Read first? |
 | --- | --: | --- |
-| MISLABELED test artifact | 2 | yes |
-| BACK-OFF / rationalization | 1 | yes |
-| UNVERIFIED | 2 | soon |
+| RESOLVED since this audit | 2 (M1, U1) | yes — confirms the hunt works |
+| MISLABELED test artifact, still open | 1 (M2, refined) | yes |
+| BACK-OFF / rationalization | 1 (B1, wording applied) | yes |
+| UNVERIFIED | 1 (U2) | soon |
 | GENUINE constraint | 2 (families) | reference |
 | LEGITIMATE scope decision | 1 (family) | reference |
 
-The two MISLABELED findings and the one BACK-OFF finding are the ones worth acting on. Everything
-below GENUINE is documented well and re-derives cleanly. It is listed so a reader knows it was
-checked, not skipped.
+M2 (refined) and B1 (wording now applied) are the two live action items. M1 and U1 confirm the
+audit's own premise: unstuck angles found here really do get unstuck. Everything below GENUINE is
+documented well and re-derives cleanly, listed so a reader knows it was checked, not skipped.
 
 A note on volume. "frozen" and "sacred" match about 136 lines across the repo. Nearly all are the
 legitimate regression-pin convention (a pinned test guards shipped behaviour). That convention is
@@ -53,9 +58,9 @@ statements.
 
 ---
 
-## MISLABELED — a real narrow constraint labelled as a broader "unfixable"
+## RESOLVED — findings confirmed unstuck since this audit was written
 
-### M1. The imports/mean "permanent, deliberate authoring conflict" cluster (flagship)
+### M1. The imports/mean "permanent, deliberate authoring conflict" cluster (flagship) — RESOLVED, commit `d955b25`
 
 This is the calibration case itself, and the stale framing is still written into the repo in
 several places.
@@ -86,7 +91,42 @@ poison. The regression rule only forbids flipping a passing case to failing. The
 flips neither case, so the rule does not forbid it. The rule was invoked to close the question, not
 because it applies.
 
-### M2. AGENTBENCH "the one honest red — kept deliberately"
+**Resolution, confirmed 2026-07-11 (capability audit, pinned `981c9b2`).** The exact fix this entry
+called for landed in commit `d955b25`, the same day this finding was written — `src/ask.mjs`'s
+`renderCore()` (line ~3523) now traverses and renders every `ambiguousParse` branch for real instead
+of only describing it; both `am-meta-imports` and `g-a1-naming-9` pass on the identical input, no
+compromise, no test weakened (`test/showcase.test.mjs`, updated in the same commit; `1917/1917` then,
+`1919/1919` now). `BENCHMARK_CEFR_ENGLISH_1.7.0.md`'s own top-of-file correction note independently
+confirms this. **Leftover stale citations, not yet swept**: `BENCHMARK_CEFR_ENGLISH_1.7.0.md:147,267`
+still repeat the retired "permanent, deliberate authoring conflict" framing in their per-case
+transcript prose (below that file's own correction note, in text written before the fix landed) —
+harmless (the correction note at the top of that file already supersedes them) but worth a wording
+pass next time that report is touched. `test/chat-cefr-1.6.1-decision-log.test.mjs`'s test NAME at
+line 96 ("frozen guard: … cannot be reconciled") is similarly stale text on a test that now asserts
+the resolved-not-described behavior — cosmetic, not a functional risk.
+
+### U1. broadSearch "deeper architectural limit" — RESOLVED, shipped before this finding was written
+
+**Resolution, confirmed 2026-07-11 (capability audit, pinned `981c9b2`).** This finding's own
+"researched unstuck angle" — "`broadSearch` could read the same sources `factAnswer` already reads:
+the live graph and the reified `Fact` individuals" — was already built by the time this finding was
+written, just not connected to it. `src/completions/graph-adapter.mjs`'s `createCompletionsGraphAdapter(graph,
+memory)` (commit `798a77f`, 2026-07-10, well before this finding) wires exactly that: `.search()`
+delegates to the real graph service, and `.ask()` builds real sentences and consults both the code
+graph and, when a `memory` store is passed, the Fact-half of `ask()` — confirmed directly in
+`src/completions/graph-adapter.mjs:16-38,73`. `broadSearch()` (`src/completions/search.mjs:51-83`)
+calls both `graphService.search()` and `graphService.ask()` when a service is supplied — not
+block-only, contrary to the finding's premise. This was already tracked as shipped, `CAPABILITIES_1.5.7.md`
+item #88 ("`graphService` adapter wired into the completions pipeline") — the gap this finding named
+closed a version before `CAPABILITIES_1.5.0.md`'s "architectural limit" framing was written, and the
+framing was simply never revisited until now. No code change needed; this entry documents the
+re-derivation this doc's own discipline calls for.
+
+---
+
+## MISLABELED — a real narrow constraint labelled as a broader "unfixable"
+
+### M2. AGENTBENCH "the one honest red — kept deliberately" — still open, diagnosis refined
 
 | File:line | Quoted text |
 | --- | --- |
@@ -106,11 +146,29 @@ step. So the honest status is "the ranking is declared but not yet composed into
 "declaring it would be forbidden overfitting". The discipline the note invokes does not actually
 block the fix.
 
+**Refined, confirmed 2026-07-11 (capability audit, pinned `981c9b2`) — the original diagnosis was
+half right.** Live-verified against real code, not just re-read: `src/router/goal-reasoner.mjs:421-431`
+already DOES compose an answer from the declared `priorityTopic`/`coverageTopic` pair — a keystone
+argmax over `|impact(m)|` for each violating `untested` module, exactly the mechanism this finding
+asked for. So "not wired into the composition step" is no longer accurate; that step exists and
+works (confirmed by direct code read of the `mode === "global"` branch). What's still broken, traced
+live by re-running the exact case (`node agentbench/run.mjs --driver goal --ladder`,
+`agentbench/cases.jsonl`'s `ab-c2-what-to-test`, request "what most needs a test in this codebase"):
+the request never reaches that composition branch at all. Its recorded trace shows only two proof
+steps ("imperative frame => goal (knows untested)", "backward-chain => tmct_untested") and calls only
+`tmct_untested`, never `tmct_impact` — the STEP-2 GDA expansion that would push per-module `impact`
+sub-goals onto the pending queue (`goal-reasoner.mjs:388-393`) never fires for this request, so the
+already-working keystone argmax at the bottom never gets data to rank. This is a **request-to-rule
+dispatch gap**, not a missing composition mechanism — a narrower, more precise diagnosis than either
+the original finding (which said "not composed") or the "genuinely a keyword-memorization problem"
+framing it was refuting. `BENCHMARK_AGENT_1.7.0.md` still reports this exact case
+plan-correct/result-incomplete, consistent with this trace. Still the top open item on this list.
+
 ---
 
 ## BACK-OFF / rationalization — language that talks a future reader out of continuing
 
-### B1. "out of design-ability horizon for a single pass"
+### B1. "out of design-ability horizon for a single pass" — wording applied, commit pending in this pass
 
 | File:line | Quoted text |
 | --- | --- |
@@ -136,26 +194,15 @@ increment. Suggested edit: soften the ROADMAP/HANDOVER wording to match the PLAN
 sub-problems, not attempted in a single pass"), so a future session does not read "undesignable" and
 skip it.
 
+**Applied, 2026-07-11 (capability audit, pinned `981c9b2`).** `HANDOVER.md` and `ROADMAP.md` both
+reworded in this same pass. `PLAN_CONVERSATION.md` itself (Findings 1, 2, 3, 5 resolved; Finding 4
+this one open item) is archived to `archive/PLAN_CONVERSATION.md` in this pass too — Finding 4 is
+real, bounded, scoped work, not an unfinished plan with open design questions, so it belongs as a
+`HANDOVER.md` open item pointing at the archived doc, not a live root-level `PLAN_*.md`.
+
 ---
 
 ## UNVERIFIED — impossibility asserted without a fresh re-derivation
-
-### U1. broadSearch "deeper architectural limit"
-
-| File:line | Quoted text |
-| --- | --- |
-| `CAPABILITIES_1.5.0.md:19` | "the sprint found a deeper architectural limit … `broadSearch` only ever searches memory **blocks** written via an explicit `saveBlock()` call, never the live graph or taught Facts directly … the practically-common case — a first-ever question about a subject — still declines." |
-
-Classification reasoning. The label "architectural limit" is stronger than the finding supports.
-The note itself describes a plain data-source gap: `broadSearch` reads only saved blocks, not the
-graph or reified Facts. That is a wiring gap, not an architectural wall. The same note names the
-fix direction in passing.
-
-Researched unstuck angle. `broadSearch` could read the same sources `factAnswer` already reads: the
-live graph and the reified `Fact` individuals. Seeding or falling back to those would answer a
-first-ever question about a subject. This is a superseded audit doc (current is `CAPABILITIES_1.6.0.md`),
-and 1.6.0 does not mention `broadSearch`, so the gap was likely never revisited. Worth a fresh look
-before anyone quotes "architectural limit" again.
 
 ### U2. deep relative-clause composition "plausibly a genuine ceiling"
 
@@ -213,8 +260,14 @@ several cases they name the fix direction too, which is the opposite of giving u
 
 ## Closing note
 
-The single highest-value action is M1. The "show every candidate's real answer" fix is described in
-this session's own framing but is not in `renderCore` at HEAD, and the stale "permanent" language
-still sits in two benchmark docs and a test. M2 is the next best, because the fix ingredient (the
-declared impact priority) already exists in `goal-reasoner.mjs` and only needs wiring. B1 is a
-cheap wording fix that stops a future session reading "undesignable" and skipping a bounded task.
+**Update (2026-07-11 capability audit, pinned `981c9b2`/v1.7.3).** M1 and U1, this doc's own top
+two "worth acting on" items at the time of writing, are now RESOLVED — re-derived directly against
+current code, not assumed from this doc's own prior wording. M1 shipped the same day this doc was
+written (commit `d955b25`); U1 turned out to have shipped a full day *before* this doc was written
+(commit `798a77f`), meaning the finding was stale at the moment of its own authoring — the sharpest
+possible confirmation that this doc's own hunt is worth repeating every cycle, not just written once.
+B1's wording fix is applied in this same pass. M2 is the one item still genuinely open, and its
+diagnosis is now sharper: the composition mechanism it asked for already exists
+(`goal-reasoner.mjs:421-431`); the real gap is that the one benchmarked request never dispatches into
+the rule that owns it. That's the next concrete, scoped pickup — not "wire the ranking," but "get
+`ab-c2-what-to-test`'s request routed to the rule that already ranks."

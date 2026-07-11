@@ -1,10 +1,13 @@
 # PLAN_CONVERSATION.md — findings that graduated out of the fast loop's safe-fix scope
 
-> **STATUS: Findings 1, 2, 3, and 5 are RESOLVED (commit `9510a43`); Finding 4 is open** — see each
-> one's own section below. Not a build plan with a staged implementation — this doc exists to hold
-> findings precisely enough that a future session can pick them up, the same role `PLAN_SYLLOGIST.md`
-> plays for reasoning-engine research pulled out of `PLAN_INFERENCE_TESTING.md`. Nothing here is
-> scheduled, staffed, or blocking anything else.
+> **STATUS: ARCHIVED, 2026-07-11 (capability audit, pinned `981c9b2`/v1.7.3).** Findings 1, 2, 3, and
+> 5 are RESOLVED (commit `9510a43`). Finding 4 is the one open item — real, bounded, scoped work
+> (three named sub-problems, a concrete first-increment fix sketch), not an unresolved design
+> question, per `TOO_HARD_AUDIT.md`'s B1 entry. Tracked going forward as a `HANDOVER.md` open item
+> pointing back at this archived doc's Finding 4 section, not as a live root-level plan. Moved to
+> `archive/` per this project's own convention for a plan whose remaining scope is small enough to
+> live in `HANDOVER.md` rather than warrant its own active root doc — see `CAPABILITIES_1.7.3.md` §4
+> for the audit that made this call.
 
 ## Why this doc exists
 

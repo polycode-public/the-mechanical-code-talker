@@ -1,5 +1,17 @@
 # BENCHMARK_CONVERSATION_1.7.0 — persona-sweep, 4 personas, 4 dead-ends fixed and shipped, 1 in progress
 
+**CORRECTION (capability audit, 2026-07-11, pinned `981c9b2`/v1.7.3):** two claims below were already
+stale at the moment this report was committed (`d362a4c`), not just stale now — a later commit in the
+same session superseded them before this file landed. (1) "In progress, not shipped" item 3
+(bare-known-entity-name → describe/focus) shipped in commit `76b0a0d`, ~23 seconds before this report
+was committed — confirmed live in `src/chat.mjs`'s `runAsk`. (2) The "2 test failures, not yet fixed"
+claim was already resolved by commit `d955b25` (which updated `test/showcase.test.mjs`'s assertion
+for the same ambiguity-render change this report itself describes), landing before this report was
+committed. Current `npm test`: 1919/1919 green, 0 failures. Leaving the narrative below unedited —
+it's what this session's own persona-sweep actually found — this note is the correction of record,
+per this project's own convention (see `BENCHMARK_CEFR_ENGLISH_1.7.0.md`'s own correction note for
+the same pattern).
+
 **Headline:** persona-sweep mode (§3.4), 6 personas dispatched in parallel, 2 dropped mid-run by
 operator instruction (deliberate breaker, skeptical boundary-tester — removed from both the results
 and `SKILL_BENCHMARK_CONVERSATION.md`'s persona list). 4 personas completed: total stranger, pure

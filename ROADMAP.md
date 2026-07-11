@@ -29,6 +29,14 @@ user toward precision queries rather than guessing; every answer is grounded or 
   includes forward/reverse CapableOf, reverse-HasA, and reverse-inherits/subClassOf shapes (`"can a
   dog bark"`, `"what has a tail"`, `"what inherits from horse"`) against both corpus-seeded and
   freshly-taught facts.
+- **Genuine multi-reading ambiguity resolves and answers, not just describes**: when a sentence has
+  two-plus valid readings, tmct now traverses and renders each one's real answer inline (not just a
+  one-line label), so the same input always reproduces the same full, useful answer.
+- **Graph traversal and provenance timestamps extend to the memory graph**: the hub-avoiding
+  `spiralExpand` walk (previously code-graph/Module-only) now generalizes to any graph via a
+  caller-supplied class predicate and id-normalizer; edges carry a `createdAt` stamp and nodes get a
+  derived `updatedAt` (max over own attributes and attached edges) — groundwork for the graph
+  visualisation in `PLAN_VIZ.md`, not yet exposed on the CLI.
 - **Completions** (`src/completions/`): extractive, multi-sentence answers for broad "how does X
   work" questions, grounded and source-cited, never freely generated.
 - **Capability router** (`src/router/`): a deterministic, closed-toolset agentic router behind an
@@ -47,10 +55,11 @@ audit — always check the latest-dated one, not this file, for real numbers.
   and an NPC turn scheduler. Design-only.
 - **`PLAN_SYLLOGIST.md`** — retraction-aware consistency checking under a hard budget and trust
   tiers, the one open piece of the reasoning engine's research horizon. Design-only.
-- **`PLAN_CONVERSATION.md`** — Finding 4: an anaphoric "SUBJECT verb which N" inheritance question
-  misroutes into teach-a-fact; needs a discontiguous verb-frame parser, a POS-aware mid-sentence
-  interrogative detector, and a union-kind reverse-question fix. No fix sketch yet, out of
-  design-ability horizon for a single pass.
+- **`archive/PLAN_CONVERSATION.md` Finding 4** — an anaphoric "SUBJECT verb which N" inheritance
+  question misroutes into teach-a-fact; needs a discontiguous verb-frame parser, a POS-aware
+  mid-sentence interrogative detector, and a union-kind reverse-question fix. Large, three
+  sub-problems, not attempted in a single pass — a concrete first-increment sketch exists
+  (`HANDOVER.md`), not an undesignable question.
 - **`PLAN_GUESS_NUMBER.md` / `PLAN_HANOI.md`** — closed-loop and open-loop planning domains for the
   `findActionPath`/`findReachableSet` kernels, both already built and proven but not yet wired to
   either domain. Design-only.
