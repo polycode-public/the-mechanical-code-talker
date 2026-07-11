@@ -827,17 +827,24 @@ async function main() {
     // resolveRuntimeConfig: --repo > git root > cwd.
     const rest = process.argv.slice(3);
     const { strFlag, resolveRuntimeConfig } = await import("../src/cli-args.mjs");
-    const { computeVizGraph, renderVizHtml } = await import("../src/viz.mjs");
+    const { computeVizGraph, renderVizHtml, readAskBundle } = await import("../src/viz.mjs");
     const { writeFile } = await import("node:fs/promises");
     const { resolve } = await import("node:path");
     const focus = strFlag(rest, ["--focus"]);
     const outPath = resolve(process.cwd(), strFlag(rest, ["--output", "--out"], "graph.html"));
     const { repo } = await resolveRuntimeConfig({ argv: rest });
     const vizGraph = await computeVizGraph(repo, focus ? { focus } : {});
-    const html = renderVizHtml(vizGraph);
+    // The embedded "Ask the graph" chat panel — the real ask.mjs engine,
+    // bundled for the browser (scripts/build-ask-bundle.mjs's checked-in
+    // output). readAskBundle() never throws; an empty string renders a
+    // graph-only page with an honest "chat unavailable" note instead of a
+    // broken one (e.g. a fresh checkout before the bundle's first build).
+    const askBundle = await readAskBundle();
+    const html = renderVizHtml({ ...vizGraph, askBundle });
     await writeFile(outPath, html, "utf8");
     process.stdout.write(
-      `tmct viz — wrote ${vizGraph.nodes.length} node(s), ${vizGraph.edges.length} edge(s) to ${outPath}\n`,
+      `tmct viz — wrote ${vizGraph.nodes.length} node(s), ${vizGraph.edges.length} edge(s) to ${outPath}`
+      + `${askBundle ? " (with the embedded ask-the-graph chat panel)" : " (no chat panel — run `npm run build:ask-bundle` first)"}\n`,
     );
     return;
   }

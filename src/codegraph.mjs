@@ -1305,6 +1305,42 @@ export function derivedUpdatedAt(graph, ind, { createdAtProp = CREATED_AT_PROP, 
   return best;
 }
 
+/** Turn a `spiralExpand` walk (`[{id, hop}]`) into the `{nodes, edges}` shape
+ *  `tmct viz` renders — pure, no I/O, shared verbatim between the CLI
+ *  (`src/viz.mjs`'s `computeVizGraph`) and the browser bundle's client-side
+ *  re-walk/recentre (PLAN_BREADTH_FIRST_NLU.md §5 follow-on, operator
+ *  directive 2026-07-11) so both paths render byte-identically from the same
+ *  logic, never two hand-maintained copies. `nodes` enrich each walked id with
+ *  its real label/class/timestamps (`derivedUpdatedAt`, above); `edges` are
+ *  every relation-group edge connecting two walked nodes (not just the kinds
+ *  the walk itself traversed through — an incidental edge between two reached
+ *  nodes still renders), de-duped on (subject, object, predicate) across
+ *  relation groups. */
+export function buildVizNodesAndEdges(graph, walked, { createdAtProp = CREATED_AT_PROP, updatedAtProp = UPDATED_AT_PROP } = {}) {
+  const nodeIds = new Set(walked.map((w) => w.id));
+  const nodes = walked.map(({ id, hop }) => {
+    const ind = graph.byId.get(id) || null;
+    const attrs = ind?.attributes || [];
+    const createdAt = attrs.find((a) => a?.prop === createdAtProp)?.value || "";
+    return {
+      id, hop, label: ind?.label || id, class: ind?.class || "", createdAt,
+      updatedAt: derivedUpdatedAt(graph, ind, { createdAtProp, updatedAtProp }),
+    };
+  });
+  const edges = [];
+  const seen = new Set();
+  for (const group of graph.relations || []) {
+    for (const e of group.edges || []) {
+      if (!nodeIds.has(e.subject) || !nodeIds.has(e.object)) continue;
+      const key = `${e.subject} ${e.object} ${group.predicate}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      edges.push({ source: e.subject, target: e.object, kind: group.predicate });
+    }
+  }
+  return { nodes, edges };
+}
+
 /** moduleIdOf by raw edge-endpoint id: resolves through byId when the individual exists,
  *  else falls back to parsing an `fn:<path>#name` id directly (callsSymbol objects may name
  *  symbols with no individual of their own). Null if it cannot be mapped. */

@@ -99,9 +99,11 @@
     "infbench": "node infbench/generate-cases.mjs && node infbench/run.mjs",
     "audit": "npm audit --audit-level=high",
     "audit:fix": "npm audit fix",
-    "demo:build": "node scripts/build-demo-site.mjs"
+    "demo:build": "node scripts/build-demo-site.mjs",
+    "build:ask-bundle": "node scripts/build-ask-bundle.mjs"
   },
   "devDependencies": {
+    "esbuild": "^0.28.1",
     "ink-testing-library": "^4.0.0"
   }
 }

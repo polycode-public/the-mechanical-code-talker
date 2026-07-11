@@ -12,11 +12,14 @@ import { join } from "node:path";
 import { computeVizGraph, renderVizHtml } from "../src/viz.mjs";
 import { appendUtterance, appendFact } from "../src/memory/core.mjs";
 
-test("computeVizGraph: empty/missing memory dir -> {nodes: [], edges: [], focus: null}, never throws", async () => {
+test("computeVizGraph: empty/missing memory dir -> {nodes: [], edges: [], focus: null, payload}, never throws", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-viz-empty-"));
   try {
     const result = await computeVizGraph(dir);
-    assert.deepEqual(result, { nodes: [], edges: [], focus: null });
+    assert.deepEqual(result.nodes, []);
+    assert.deepEqual(result.edges, []);
+    assert.equal(result.focus, null);
+    assert.ok(result.payload, "payload (the full raw graph, for the embedded chat panel) is always present, even empty");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -75,16 +78,18 @@ test("computeVizGraph: default seed is mostRecentIndividual; --focus overrides i
   }
 });
 
+const SAMPLE_GRAPH = {
+  nodes: [
+    { id: "utt:abc", hop: 0, label: "what colour is the sky?", class: "Utterance", createdAt: "2026-07-11T10:00:00.000Z", updatedAt: "2026-07-11T10:00:00.000Z" },
+    { id: "session:xyz", hop: 1, label: "session xyz", class: "Session", createdAt: "2026-07-11T09:00:00.000Z", updatedAt: "2026-07-11T09:00:00.000Z" },
+  ],
+  edges: [{ source: "utt:abc", target: "session:xyz", kind: "saidInSession" }],
+  focus: "utt:abc",
+  payload: { individuals: [], objectProperties: [] },
+};
+
 test("renderVizHtml: valid self-contained HTML, no external refs, graph JSON embedded verbatim", () => {
-  const graph = {
-    nodes: [
-      { id: "utt:abc", hop: 0, label: "what colour is the sky?", class: "Utterance", createdAt: "2026-07-11T10:00:00.000Z", updatedAt: "2026-07-11T10:00:00.000Z" },
-      { id: "session:xyz", hop: 1, label: "session xyz", class: "Session", createdAt: "2026-07-11T09:00:00.000Z", updatedAt: "2026-07-11T09:00:00.000Z" },
-    ],
-    edges: [{ source: "utt:abc", target: "session:xyz", kind: "saidInSession" }],
-    focus: "utt:abc",
-  };
-  const html = renderVizHtml(graph);
+  const html = renderVizHtml(SAMPLE_GRAPH);
 
   assert.match(html, /^<!doctype html>/i, "starts with a doctype");
   assert.match(html, /<html/i);
@@ -99,21 +104,44 @@ test("renderVizHtml: valid self-contained HTML, no external refs, graph JSON emb
 
   // The real graph data is embedded verbatim, not placeholder content.
   assert.match(html, /const GRAPH = /);
+  assert.match(html, /const PAYLOAD = /, "the full raw graph payload is embedded too, for the chat panel");
   assert.ok(html.includes("utt:abc"), "a known node id is embedded verbatim");
   assert.ok(html.includes("what colour is the sky?"), "a known node label is embedded verbatim");
   assert.ok(html.includes("saidInSession"), "edge kind data is embedded verbatim");
+
+  // The depth stepper + type-filter controls (operator directive) are present.
+  assert.match(html, /id="depthdown"/);
+  assert.match(html, /id="depthup"/);
+  assert.match(html, /id="typefilters"/);
+
+  // The "Ask the graph" chat panel is present, and honestly reports itself
+  // unavailable when no bundle was supplied (no askBundle key here) — never a
+  // silently broken input box.
+  assert.match(html, /Ask the graph/);
+  assert.match(html, /id="askq"[^>]*disabled/, "input is disabled when there's no engine bundle");
+  assert.match(html, /chat unavailable/);
 
   // A node's raw id/label containing "</script>" can't break out of the embedding script tag.
   const hostile = renderVizHtml({
     nodes: [{ id: "x", hop: 0, label: "</script><script>evil()</script>", class: "", createdAt: "", updatedAt: "" }],
     edges: [],
     focus: "x",
+    payload: { individuals: [], objectProperties: [] },
   });
   assert.doesNotMatch(hostile, /<\/script><script>evil\(\)/, "a hostile label cannot break out of the embedded <script> tag");
 });
 
+test("renderVizHtml: with a real askBundle, the chat panel is enabled and the bundle is inlined verbatim", () => {
+  const fakeBundle = "/* fake bundle */ globalThis.tmctViz = { marker: 'REAL_BUNDLE_CONTENT_12345' };";
+  const html = renderVizHtml({ ...SAMPLE_GRAPH, askBundle: fakeBundle });
+  assert.ok(html.includes(fakeBundle), "the bundle's own JS text is inlined verbatim, not re-encoded/escaped");
+  assert.doesNotMatch(html, /id="askq"[^>]*disabled/, "input is enabled once a bundle is supplied");
+  assert.doesNotMatch(html, /id="asksubmit"[^>]*disabled/);
+  assert.doesNotMatch(html, /chat unavailable/);
+});
+
 test("renderVizHtml: empty graph still renders valid self-contained HTML (no nodes to click, no throw)", () => {
-  const html = renderVizHtml({ nodes: [], edges: [], focus: null });
+  const html = renderVizHtml({ nodes: [], edges: [], focus: null, payload: { individuals: [], objectProperties: [] } });
   assert.match(html, /^<!doctype html>/i);
   assert.doesNotMatch(html, /<script[^>]+\bsrc=/i);
   assert.doesNotMatch(html, /https?:\/\//i);
