@@ -3926,6 +3926,42 @@ const KNOW_ABOUT_RE = /^(?:what\s+do\s+you\s+know\s+about|what(?:'s|s|\s+is)\s+i
 /** How many facts a single answer lists before the remainder is paged with "more". */
 const FACT_ANSWER_CAP = 32;
 
+/** Finding 5 (PLAN_CONVERSATION.md) — four sibling readers closing the gap left
+ *  by ISA_ASK_RE's own family: forward yes/no and reverse-by-object shapes for
+ *  `mgx:capableOf`, `mgx:hasA`, and the ISA-family predicates. None of these
+ *  four leads ("can"/"could", "what can … do", "what has", "what inherit(s)")
+ *  overlaps KNOW_ABOUT_RE's fixed leads above, or RELATION_FACT_YESNO_RE/
+ *  RELATION_WHO_ASK_RE's required leading "is/are/was/were" (those two live in
+ *  the separate factReadBack, only ever reached via `factAnswer(...) ??
+ *  factReadBack(...)` — never both). */
+const CAN_ASK_RE = /^(?:can|could)\s+(?:an?\s+)?([\w'-]+(?:\s+[\w'-]+)*?)\s+([a-z]+)[?.!\s]*$/i;
+const WHAT_CAN_DO_RE = /^what\s+can\s+(?:an?\s+)?(.+?)\s+do[?.!\s]*$/i;
+const WHAT_HAS_RE = /^what\s+has\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
+const WHAT_INHERITS_RE = /^what\s+inherits?\s+(?:from\s+)?(?:an?\s+)?(.+?)[?.!\s]*$/i;
+/** WHAT_HAS_RE guard: "what has changed (recently)" reads as a temporal/code
+ *  question, not a HasA lookup — checked against the captured phrase's FIRST
+ *  word only (a closed set, not a general heuristic). Verified live: nothing
+ *  today already answers this phrasing (it falls to an unrelated code-graph
+ *  miss), so this is a pure safety guard, not a behavior change. */
+const HAS_TEMPORAL_TAIL = new Set(["changed", "change", "changes", "updated", "modified", "happened", "occurred"]);
+
+/** Local reproduction of ask.mjs's private `uniqueById` dedup idiom (not
+ *  exported, so not importable across modules): collapse exact-repeat
+ *  (subject,predicate,object) triples while keeping every DISTINCT subject —
+ *  more than one subject can share the same object (e.g. car/bicycle/train
+ *  all `mgx:hasA` wheel). */
+function uniqueFacts(rows) {
+  const seen = new Set();
+  const out = [];
+  for (const f of rows) {
+    const key = `${f.subject}|${f.predicate}|${f.object}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(f);
+  }
+  return out;
+}
+
 /** W4 seam: answer (or extend) a vocabulary/definition question from the MEMORY
  *  graph's Facts. Returns { text, replace } — `replace:false` means the engine's
  *  own (schema-docs) answer stands and the fact lines are appended under it —
@@ -4002,6 +4038,74 @@ async function factAnswer(memoryDir, query, envelope, miss, biasByBundle = {}) {
     );
     if (hit) return { text: `yes — ${renderFactLine(hit)}`, replace: true };
     return null; // no remembered fact — the honest miss stands (never a guessed "no")
+  }
+
+  // (b2) "can a dog bark" — yes iff a remembered mgx:capableOf fact says so.
+  // Mirrors the ISA_ASK_RE block just above almost verbatim (same memoryFacts
+  // single-hit lookup, same "never a guessed no" discipline).
+  const can = q.match(CAN_ASK_RE);
+  if (can) {
+    const subj = factTermVariants(normFactTerm, can[1]);
+    const obj = factTermVariants(normFactTerm, can[2]);
+    const hit = (await memoryFacts(memoryDir)).find(
+      (f) => f.predicate === "mgx:capableOf" && subj.has(f.subject) && obj.has(f.object),
+    );
+    if (hit) return { text: `yes — ${renderFactLine(hit)}`, replace: true };
+    return null;
+  }
+
+  // (b3) "what can a dog do" — every remembered mgx:capableOf fact for the
+  // subject, open-list. Reuses the meta-lane's subject-hits/rank/render/
+  // paginate recipe (lane (a) above) verbatim, with the predicate hardcoded.
+  const canDo = q.match(WHAT_CAN_DO_RE);
+  if (canDo) {
+    const variants = factTermVariants(normFactTerm, canDo[1]);
+    const hits = (await factRows(memoryDir)).filter((f) => f.predicate === "mgx:capableOf" && variants.has(f.subject));
+    if (!hits.length) return null;
+    const ranked = rankByBiasThenTrust(uniqueFacts(hits), biasByBundle);
+    const lines = ranked.map(renderFactLine);
+    const shown = lines.slice(0, FACT_ANSWER_CAP);
+    const rest = lines.slice(FACT_ANSWER_CAP);
+    const extra = rest.length ? `\n…and ${rest.length} more — say 'more' to see them.` : "";
+    return { text: shown.join("\n") + extra, replace: true, ...(rest.length ? { pending: { items: rest, noun: "facts" } } : {}) };
+  }
+
+  // (b4) "what has a wheel" — the REVERSE-by-OBJECT mirror of every other
+  // reader in this cascade: filters factRows on mgx:hasA where the OBJECT
+  // (not subject) matches, so every subject sharing that object surfaces
+  // (e.g. car/bicycle/train all "have" a wheel). Guarded against shadowing
+  // "what has changed(recently)"-shaped inputs, which read as a temporal/
+  // code question, not a HasA lookup — see HAS_TEMPORAL_TAIL's own docblock.
+  const hasQ = q.match(WHAT_HAS_RE);
+  if (hasQ && !HAS_TEMPORAL_TAIL.has(hasQ[1].trim().split(/\s+/)[0]?.toLowerCase())) {
+    const variants = factTermVariants(normFactTerm, hasQ[1]);
+    const hits = (await factRows(memoryDir)).filter((f) => f.predicate === "mgx:hasA" && variants.has(f.object));
+    if (!hits.length) return null;
+    const ranked = rankByBiasThenTrust(uniqueFacts(hits), biasByBundle);
+    const lines = ranked.map(renderFactLine);
+    const shown = lines.slice(0, FACT_ANSWER_CAP);
+    const rest = lines.slice(FACT_ANSWER_CAP);
+    const extra = rest.length ? `\n…and ${rest.length} more — say 'more' to see them.` : "";
+    return { text: shown.join("\n") + extra, replace: true, ...(rest.length ? { pending: { items: rest, noun: "facts" } } : {}) };
+  }
+  // hasQ matched but shadowed a temporal-tail phrase ("what has changed…") —
+  // deliberately falls through to the next reader below (never returns here),
+  // leaving whatever already handles that phrasing today untouched.
+
+  // (b5) "what inherits from horse" — the reverse-by-object mirror of (b4),
+  // over the ISA-family predicates instead of mgx:hasA. No temporal-style
+  // guard needed: "inherits" has no competing common-English reading.
+  const inheritsQ = q.match(WHAT_INHERITS_RE);
+  if (inheritsQ) {
+    const variants = factTermVariants(normFactTerm, inheritsQ[1]);
+    const hits = (await factRows(memoryDir)).filter((f) => ISA_PREDICATES.has(f.predicate) && variants.has(f.object));
+    if (!hits.length) return null;
+    const ranked = rankByBiasThenTrust(uniqueFacts(hits), biasByBundle);
+    const lines = ranked.map(renderFactLine);
+    const shown = lines.slice(0, FACT_ANSWER_CAP);
+    const rest = lines.slice(FACT_ANSWER_CAP);
+    const extra = rest.length ? `\n…and ${rest.length} more — say 'more' to see them.` : "";
+    return { text: shown.join("\n") + extra, replace: true, ...(rest.length ? { pending: { items: rest, noun: "facts" } } : {}) };
   }
 
   // (c) "what do you know about caches" — everything remembered that MENTIONS the

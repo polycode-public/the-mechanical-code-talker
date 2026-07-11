@@ -98,18 +98,29 @@ test("appendUtterances: the tmct response pairs to the visitor request via inRep
     ];
     const { ids } = await appendUtterances(dir, turn);
     assert.deepEqual(ids, [visitorId, `utt:${SESSION}#${TS1}#tmct`]);
-    await appendUtterances(dir, turn); // per-turn re-append (sessions.mjs replays all turns)
+    await appendUtterances(dir, turn); // first re-append (sessions.mjs replays all turns)
 
     const m = await loadMemory(dir);
     assert.equal(m.individuals.filter((i) => i.class === UTTERANCE_CLASS).length, 2, "no duplicates");
     const reply = m.objectProperties.find((g) => g.prop === IN_REPLY_TO_PROP);
     assert.equal(reply.count, 1, "one Q/A pairing edge, not re-added");
-    assert.deepEqual(reply.examples[0], {
+    // upsertEdge now stamps createdAt (first-write-wins) — assert its shape/format separately
+    // rather than folding it into the strict shape deepEqual below (PLAN_VIZ.md §2).
+    const { createdAt, ...rest } = reply.examples[0];
+    assert.match(createdAt, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/, "edge createdAt is ISO-8601");
+    assert.deepEqual(rest, {
       subject: `utt:${SESSION}#${TS1}#tmct`, object: visitorId,
       subjectLabel: "helper is called by app/lib/b.mjs.", objectLabel: "who calls helper?",
     });
     const said = m.objectProperties.find((g) => g.prop === SAID_IN_SESSION_PROP);
     assert.equal(said.count, 2);
+
+    // re-append-preserves-createdAt: a THIRD append of the exact same turn must not reset the
+    // inReplyTo edge's createdAt to "now" — first-write-wins over the same (subject,object) pair.
+    await appendUtterances(dir, turn); // second re-append
+    const m2 = await loadMemory(dir);
+    const reply2 = m2.objectProperties.find((g) => g.prop === IN_REPLY_TO_PROP);
+    assert.equal(reply2.examples[0].createdAt, createdAt, "re-appending the same edge keeps its original createdAt");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -225,11 +236,32 @@ test("appendFacts: GOLDEN EQUIVALENCE — byte-identical to looping appendFact (
   // Sort the arrays whose ORDER legitimately differs between the two paths
   // (individuals / edge examples / class samples), but NEVER touch attribute
   // order or the provenance STRING — those must already be identical.
+  //
+  // Two fields are genuinely LIVE-CLOCK (real wall-clock "now", not the injected
+  // fixed CREATED above) and so legitimately differ by a millisecond or two between
+  // the two independently-timed seeds: mgx:updatedAt (recomputeFactTrust/
+  // recomputeSourceReliability re-stamp it every mutation, PLAN_VIZ.md §2) and an
+  // edge's own createdAt (upsertEdge stamps "now" when the caller passes none —
+  // syncFactSources's statedBy edges never thread the fact's own createdAt through,
+  // by design: an edge's creation moment is its own, not necessarily its subject's).
+  // Redact both to a placeholder before the structural comparison; still asserted
+  // present/well-formed further down.
+  const REDACT_TS = "<ts>";
   const norm = (g) => ({
     ...g,
-    individuals: [...g.individuals].sort((a, b) => a.id.localeCompare(b.id)),
+    individuals: [...g.individuals]
+      .map((i) => ({
+        ...i,
+        attributes: (i.attributes || []).map((a) => (a.prop === "mgx:updatedAt" ? { ...a, value: REDACT_TS } : a)),
+      }))
+      .sort((a, b) => a.id.localeCompare(b.id)),
     objectProperties: [...g.objectProperties]
-      .map((grp) => ({ ...grp, examples: [...grp.examples].sort((a, b) => `${a.subject}>${a.object}`.localeCompare(`${b.subject}>${b.object}`)) }))
+      .map((grp) => ({
+        ...grp,
+        examples: [...grp.examples]
+          .map((e) => (e.createdAt ? { ...e, createdAt: REDACT_TS } : e))
+          .sort((a, b) => `${a.subject}>${a.object}`.localeCompare(`${b.subject}>${b.object}`)),
+      }))
       .sort((a, b) => a.prop.localeCompare(b.prop)),
     classes: [...g.classes].map((c) => ({ ...c, sample: [...(c.sample || [])].sort() })).sort((a, b) => a.name.localeCompare(b.name)),
   });

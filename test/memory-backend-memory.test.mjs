@@ -77,11 +77,17 @@ test("appendFact/appendFacts/appendUtterance(s)/appendRule over a handle: same b
       .sort((a, b) => a.id.localeCompare(b.id));
     assert.deepEqual(stripSourceIds(readFactRows(memMemory)), stripSourceIds(readFactRows(fileMemory)));
 
-    // Same Rule lookup.
+    // Same Rule lookup. mgx:updatedAt (recomputeFactTrust re-stamps it — class-agnostic, so a
+    // Rule rides it too, PLAN_VIZ.md §2) is a genuine LIVE wall-clock value, not derived from the
+    // fixture's own fixed `createdAt`s — the two `ops()` runs above are sequential real-time
+    // calls, so it legitimately differs by a millisecond or two between the two backends. Redact
+    // it before the structural attribute comparison, same reasoning as memory-core.test.mjs's
+    // GOLDEN EQUIVALENCE test's `norm()`.
+    const redactUpdatedAt = (attrs) => attrs.map((a) => (a.prop === "mgx:updatedAt" ? { ...a, value: "<ts>" } : a));
     const memRule = findRuleByName(memMemory, "grandparent");
     const fileRule = findRuleByName(fileMemory, "grandparent");
     assert.equal(memRule.id, fileRule.id);
-    assert.deepEqual(memRule.attributes, fileRule.attributes);
+    assert.deepEqual(redactUpdatedAt(memRule.attributes), redactUpdatedAt(fileRule.attributes));
 
     // Same utterance/reply/session wiring.
     assert.equal(memMemory.individuals.filter((i) => i.class === UTTERANCE_CLASS).length,

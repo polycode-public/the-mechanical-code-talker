@@ -1204,3 +1204,29 @@ test("ask(): grain-aware resolution — tests/cochange up-refine a resolved fine
   assert.match(content, /y\/qux\.mjs/);
   assert.match(tmct_ask.traversal, /refined from createTask to its containing module/);
 });
+
+test("ask(): forward-shape grain check (PLAN_CONVERSATION.md Finding 3) — \"what modules does the questboard app have\" declines honestly instead of answering with function names", () => {
+  // Driven against the real, committed examples/mini-webapp graph (miniWebappGraph,
+  // declared above): its `defines` predicate never produces a Module-classed
+  // target (only Class/Attribute/Method/Function across every real edge), so
+  // asking for "modules" via `defines` ("have"/"has" is bucketed onto `defines`,
+  // see ask-vocab.mjs) can never be honestly answered by that relation — before
+  // this fix, the forward branch ignored entityType entirely and answered with
+  // the two real Function targets (createApp, start) as if they were modules.
+  const { content, tmct_ask } = ask(miniWebappGraph, "what modules does the questboard app have");
+  assert.equal(tmct_ask.miss, true);
+  assert.equal(tmct_ask.parsed.entityType, "Module");
+  assert.equal(tmct_ask.parsed.kind, "defines");
+  // never the wrong-grain function names this relation actually targets
+  assert.doesNotMatch(content, /createApp/);
+  assert.doesNotMatch(content, /\bstart\b/);
+  // names the resolved subject
+  assert.match(content, /src\/server\/app\.mjs/);
+  // names the real observed target classes — asserted per-class rather than as one
+  // exact-order string, since Set iteration order follows the fixture's own edge
+  // order, not a guaranteed sort.
+  assert.match(content, /\bclasses\b/);
+  assert.match(content, /\battributes\b/);
+  assert.match(content, /\bmethods\b/);
+  assert.match(content, /\bfunctions\b/);
+});

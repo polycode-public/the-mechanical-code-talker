@@ -1,5 +1,9 @@
 import { lookupByProseTokens, proseLayerHits } from "./prose.mjs";
 import { cosine } from "./embed.mjs";
+// Single-sourced predicate strings (memory/core.mjs owns these constants) — no
+// circular-import risk: core.mjs imports trust.mjs/shacl.mjs/planning.mjs, never
+// codegraph.mjs, in either direction.
+import { CREATED_AT_PROP, UPDATED_AT_PROP } from "./memory/core.mjs";
 
 // Pure (no-network, no-fs) query logic over the typed `entities` payload that the
 // deterministic indexer writes to <repo>/.tmct/graph.json (shape produced by
@@ -91,6 +95,13 @@ const PROP_KIND = {
   "mg:defines": "defines",
   "mg:tests": "tests",
   "mg:touches": "touches",
+  // memory-graph predicates (src/memory/core.mjs, src/sessions.mjs) — each maps to
+  // itself as its own kind name (no module-rollup abbreviation needed, unlike
+  // imports/calls) so adjacencyForKinds/edgesOfKind can walk the memory graph too.
+  "mgx:saidinsession": "saidInSession",
+  "mgx:inreplyto": "inReplyTo",
+  "mgx:statedby": "statedBy",
+  "mgx:canonicalisedfrom": "canonicalisedFrom",
 };
 
 export function relationKind(group) {
@@ -579,6 +590,12 @@ const SPIRAL_DEPTH_DEFAULT = 3;
 const SPIRAL_NODE_LIMIT_DEFAULT = 12;
 const SPIRAL_Q_DEFAULT = 0.9;                 // mild hub pruning (drop only the densest 10%) — the centre point
 const SPIRAL_EXPAND_KINDS = ["imports", "calls", "callsSymbol", "inherits"]; // cochange dropped
+// The memory graph's real edge-kind inventory (traced via every objectProperties.push/.find
+// site in src/memory/*.mjs and src/sessions.mjs) — the `kinds` a memory-graph spiralExpand call
+// passes so it walks Session/Fact/Source/Utterance individuals rather than code-graph Modules.
+// NOTE: mgx:asksAbout (src/sessions.mjs) is deliberately EXCLUDED — that predicate lives in the
+// CODE graph (Session ↔ code entities a chat turn resolved/answered), not the memory graph.
+export const MEMORY_SPIRAL_EXPAND_KINDS = ["saidInSession", "inReplyTo", "statedBy", "canonicalisedFrom"];
 const SPIRAL_EMIT_FRAC = 0.5;                 // a newly-surfaced node's base score = maxSeed × this …
 const SPIRAL_HOP_DECAY = 0.6;                 //  … decayed by this per hop from the seeds (bounded < maxSeed, so a walked-in node never dominates rank 1)
 const SPIRAL_PROX_FRAC = 0.2;                 // an ALREADY-matched module the spiral re-reaches gets a bounded nudge …
@@ -623,8 +640,13 @@ function identComponents(name) {
 /** For one edge-kind group, the depth-1 successor of `fromId` reachable via any edge in `kinds`,
  *  as a Map<moduleId, neighbourModuleId> adjacency (undirected — a module's neighbours via that
  *  kind, in either edge direction). Endpoints are mapped to their containing module first (call
- *  edges live at function granularity), matching the existing E1a call-adjacency convention. */
-function adjacencyForKinds(graph, kinds) {
+ *  edges live at function granularity), matching the existing E1a call-adjacency convention.
+ *  `idNormalizer` (default null) lets a caller fold edge endpoints some OTHER way — the memory
+ *  graph has no "containing module" concept, so a memory-graph caller passes `(id) => id` to walk
+ *  its raw individual ids unchanged. Defaulting to null (rather than `moduleIdOfId` directly)
+ *  keeps the sole existing caller (`adjacencyForKinds(graph, kinds)` in beamExpand) byte-identical. */
+export function adjacencyForKinds(graph, kinds, idNormalizer = null) {
+  const norm = idNormalizer || ((id) => moduleIdOfId(graph, id));
   const adj = new Map();
   const link = (a, b) => {
     if (!a || !b || a === b) return;
@@ -635,7 +657,7 @@ function adjacencyForKinds(graph, kinds) {
   };
   for (const kind of kinds) {
     for (const e of edgesOfKind(graph, kind)) {
-      link(moduleIdOfId(graph, e.subject), moduleIdOfId(graph, e.object));
+      link(norm(e.subject), norm(e.object));
     }
   }
   return adj;
@@ -707,24 +729,55 @@ function beamExpand(graph, scored, beamWidth) {
 }
 
 /** SPIRAL expansion (opt-in; see the SPIRAL_* constants' comment above for the full design).
- *  A deterministic bounded-radius ego walk from the lexical seeds (`scored`), popped
- *  fewest-arcs-first via a min-heap keyed (hop ASC, in-graph degree ASC, id ASC), with a
- *  degree-quantile hub gate at each expansion step. Emits up to `nodeLimit` newly-reached nodes
- *  in pop order, scoring each seed-relative and bounded so a hub can't dominate rank 1.
+ *  A deterministic bounded-radius ego walk from the lexical seeds (`scored`, or an explicit
+ *  `seeds` override — see below), popped fewest-arcs-first via a min-heap keyed (hop ASC,
+ *  in-graph degree ASC, id ASC), with a degree-quantile hub gate at each expansion step. Emits
+ *  up to `nodeLimit` newly-reached nodes in pop order, scoring each seed-relative and bounded so
+ *  a hub can't dominate rank 1.
  *  CRITICAL vs beamExpand: it deliberately OMITS the `if (!baseScore.has) continue` guard, so it
  *  MAY push modules that had NO lexical match into `scored` — the one path to breaking the lexical
- *  ceiling. Mutates `scored` (nudges re-reached matches in place; APPENDS newly-surfaced modules).
- *  Pure otherwise (no fs/network); deterministic total ordering throughout. */
-function spiralExpand(graph, scored, { depth = SPIRAL_DEPTH_DEFAULT, q = SPIRAL_Q_DEFAULT, nodeLimit = SPIRAL_NODE_LIMIT_DEFAULT } = {}) {
-  if (!scored.length) return;
+ *  ceiling. Mutates `scored` (nudges re-reached matches in place; APPENDS newly-surfaced modules)
+ *  when the score-nudge machinery is active. Pure otherwise (no fs/network); deterministic total
+ *  ordering throughout.
+ *
+ *  Generalised (2026-07-11) past its original code-graph-only, `scored`-only shape so a pure
+ *  graph-visualisation walk (no lexical match list at all) can reuse the exact same traversal:
+ *   - `scored` is now OPTIONAL (default `[]`) — a bare walk with no ranking machinery.
+ *   - `kinds` (default `SPIRAL_EXPAND_KINDS`) — the edge-kind set to walk; a memory-graph caller
+ *     passes `MEMORY_SPIRAL_EXPAND_KINDS`.
+ *   - `classPredicate` (default `(ind) => (ind.class || "") === "Module"`) — replaces the two
+ *     hardcoded `"Module"` checks below, so a memory-graph caller can pass `() => true` (every
+ *     class walkable) or any other individual filter.
+ *   - `idNormalizer` (default `null`) — threaded straight into the internal `adjacencyForKinds`
+ *     call; a memory-graph caller passes `(id) => id` (no module-folding).
+ *   - `seeds` (default derived from `scored`, as before) — an explicit id iterable, so a caller
+ *     with no `scored` list at all (e.g. `mostRecentIndividual`'s single seed) can still drive
+ *     the walk.
+ *  The score-nudge machinery (mutating `scored`/introducing newly-surfaced individuals into it)
+ *  is gated behind `scored.length > 0 && maxSeed > 0` — the exact condition the original early
+ *  return checked — so an empty `scored` degrades gracefully into a pure walk rather than erroring.
+ *  Returns `[{id, hop}]` for every node the walk actually pops (seeds included, at hop 0) — this
+ *  used to return `undefined`; safe, since the sole caller (`scoreModules`) already discards the
+ *  return value (confirmed by inspection, not assumed). */
+export function spiralExpand(graph, scored = [], {
+  depth = SPIRAL_DEPTH_DEFAULT,
+  q = SPIRAL_Q_DEFAULT,
+  nodeLimit = SPIRAL_NODE_LIMIT_DEFAULT,
+  kinds = SPIRAL_EXPAND_KINDS,
+  classPredicate = (ind) => (ind.class || "") === "Module",
+  idNormalizer = null,
+  seeds: seedsOpt = null,
+} = {}) {
   const byId = new Map(scored.map((s) => [s.ind.id, s]));
-  const seeds = new Set(byId.keys());
   let maxSeed = 0;
   for (const s of scored) maxSeed = Math.max(maxSeed, s.score);
-  if (!(maxSeed > 0)) return;
-  // Combined undirected adjacency over the expansion kinds (cochange dropped). In-graph degree =
-  // neighbour count over these kinds — the "arcs" the frontier orders and the quantile gate reads.
-  const adj = adjacencyForKinds(graph, SPIRAL_EXPAND_KINDS);
+  const nudgeActive = scored.length > 0 && maxSeed > 0; // the original "!(maxSeed > 0) → return" guard, now a gate rather than a bail-out
+  const seeds = new Set(seedsOpt != null ? seedsOpt : byId.keys());
+  if (!seeds.size) return [];
+  // Combined undirected adjacency over the expansion kinds (cochange dropped for the code-graph
+  // default). In-graph degree = neighbour count over these kinds — the "arcs" the frontier orders
+  // and the quantile gate reads.
+  const adj = adjacencyForKinds(graph, kinds, idNormalizer);
   const degree = (id) => (adj.get(id)?.size || 0);
   // Binary min-heap over the frontier, keyed (hop ASC, degree ASC, id ASC) — pop the closest,
   // least-connected node first, so expansion fans through the sparse surroundings and fizzles at
@@ -757,35 +810,41 @@ function spiralExpand(graph, scored, { depth = SPIRAL_DEPTH_DEFAULT, q = SPIRAL_
   };
   const visited = new Set(seeds);
   for (const id of seeds) push({ id, hop: 0, deg: degree(id) });
-  const defIdx = definesIndex(graph);
+  let defIdx = null; // lazy: only the nudge-active path (newly-surfaced individuals) needs this
   let emitted = 0;
+  const results = [];
   while (heap.length && emitted < nodeLimit) {
     const node = pop();
+    results.push({ id: node.id, hop: node.hop });
     if (!seeds.has(node.id)) {
-      // Slot this newly-reached node: seed-relative base, hop-decayed and bounded below maxSeed.
-      const emitScore = maxSeed * SPIRAL_EMIT_FRAC * Math.pow(SPIRAL_HOP_DECAY, node.hop - 1);
-      const existing = byId.get(node.id);
-      if (existing) { // already lexically matched (below-k) → bounded nudge, never a replacement
-        existing.score += Math.min(emitScore * SPIRAL_PROX_FRAC, existing.score * SPIRAL_PROX_CAP_FRAC);
-      } else { // lexically INVISIBLE → introduce it (the beam structurally cannot)
-        const ind = graph.byId?.get?.(node.id);
-        if (ind && (ind.class || "") === "Module") {
-          const defines = defIdx.get(ind.id) || [];
-          const entry = { ind, score: emitScore, defineCount: defines.length, matching: [], density: 0 };
-          scored.push(entry);
-          byId.set(node.id, entry);
+      if (nudgeActive) {
+        // Slot this newly-reached node: seed-relative base, hop-decayed and bounded below maxSeed.
+        const emitScore = maxSeed * SPIRAL_EMIT_FRAC * Math.pow(SPIRAL_HOP_DECAY, node.hop - 1);
+        const existing = byId.get(node.id);
+        if (existing) { // already lexically matched (below-k) → bounded nudge, never a replacement
+          existing.score += Math.min(emitScore * SPIRAL_PROX_FRAC, existing.score * SPIRAL_PROX_CAP_FRAC);
+        } else { // lexically INVISIBLE → introduce it (the beam structurally cannot)
+          const ind = graph.byId?.get?.(node.id);
+          if (ind && classPredicate(ind)) {
+            if (!defIdx) defIdx = definesIndex(graph);
+            const defines = defIdx.get(ind.id) || [];
+            const entry = { ind, score: emitScore, defineCount: defines.length, matching: [], density: 0 };
+            scored.push(entry);
+            byId.set(node.id, entry);
+          }
         }
       }
       emitted++;
     }
     if (node.hop >= depth) continue;
-    // This step's candidate set = the popped node's unvisited MODULE neighbours; quantile-gate by
-    // degree, keeping the lowest-degree ⌊q·n⌋ (drop the densest hubs), never fewer than one.
+    // This step's candidate set = the popped node's unvisited neighbours matching classPredicate;
+    // quantile-gate by degree, keeping the lowest-degree ⌊q·n⌋ (drop the densest hubs), never
+    // fewer than one.
     const cands = [];
     for (const nid of adj.get(node.id) || []) {
       if (visited.has(nid)) continue;
       const ind = graph.byId?.get?.(nid);
-      if (!ind || (ind.class || "") !== "Module") continue; // no phantom (fn-fallback) module ids
+      if (!ind || !classPredicate(ind)) continue; // no phantom (fn-fallback) ids
       cands.push({ id: nid, deg: degree(nid) });
     }
     if (!cands.length) continue;
@@ -797,6 +856,24 @@ function spiralExpand(graph, scored, { depth = SPIRAL_DEPTH_DEFAULT, q = SPIRAL_
       push({ id: c.id, hop: node.hop + 1, deg: c.deg });
     }
   }
+  return results;
+}
+
+/** The individual with the most recent `createdAtProp` attribute — item 1's ("Traversal") seed
+ *  default: "sort memory-graph individuals by mgx:createdAt descending, seed from the single most
+ *  recent." Deterministic tie-break by id (lowest id wins) when two individuals share the exact
+ *  same timestamp — same total-order convention `spiralExpand`'s own heap uses. Null when no
+ *  individual carries the attribute at all (empty graph, or a graph that predates timestamps).
+ *  ISO-8601 timestamps compare correctly as plain strings (same zero-padded width throughout this
+ *  codebase), so no Date parsing is needed. */
+export function mostRecentIndividual(graph, createdAtProp = CREATED_AT_PROP) {
+  let best = null; // { ind, v }
+  for (const ind of graph?.individuals || []) {
+    const v = (ind?.attributes || []).find((a) => a?.prop === createdAtProp)?.value;
+    if (!v) continue;
+    if (!best || v > best.v || (v === best.v && String(ind.id) < String(best.ind.id))) best = { ind, v };
+  }
+  return best ? best.ind : null;
 }
 
 /** The shared module-ranking core behind renderSearch (text) and searchModulesRanked (path+score).
@@ -1201,6 +1278,31 @@ export function edgesOfKind(graph, kind) {
   }
   byKind.set(kind, out);
   return out;
+}
+
+/** A node's "last touched" moment, DERIVED rather than stored (PLAN_VIZ.md §2): the node's own
+ *  `updatedAtProp`/`createdAtProp` attribute, or the max `createdAt` over every edge (in
+ *  `graph.relations`, ACROSS every kind, not just classified ones) touching it as either
+ *  subject or object — whichever is newer. `""` when nothing carries a timestamp at all. Compares
+ *  ISO-8601 strings directly (correct for same-width zero-padded timestamps, no Date parsing).
+ *  Tolerates edges with no `createdAt` field (pre-dating `upsertEdge`'s own stamp, or written by
+ *  a path that bypasses `upsertEdge` entirely) by simply skipping them, never throwing. Operates
+ *  on the shared parsed-graph shape (`graph.relations`/`graph.individuals`), not memory-specific —
+ *  same reasoning `edgesOfKind`/`moduleIdOf` already document. */
+export function derivedUpdatedAt(graph, ind, { createdAtProp = CREATED_AT_PROP, updatedAtProp = UPDATED_AT_PROP } = {}) {
+  if (!ind) return "";
+  const attrs = ind.attributes || [];
+  const own = attrs.find((a) => a?.prop === updatedAtProp)?.value || attrs.find((a) => a?.prop === createdAtProp)?.value || "";
+  let best = own || "";
+  for (const g of graph?.relations || []) {
+    for (const e of g.edges || []) {
+      if (!e || (e.subject !== ind.id && e.object !== ind.id)) continue;
+      const c = e.createdAt;
+      if (!c) continue; // no timestamp on this edge — skip, never throw
+      if (!best || c > best) best = c;
+    }
+  }
+  return best;
 }
 
 /** moduleIdOf by raw edge-endpoint id: resolves through byId when the individual exists,

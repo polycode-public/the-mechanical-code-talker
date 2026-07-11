@@ -516,7 +516,14 @@ test("tier6/conversation 5: ESL/self-correction typo variants + a typo'd count t
   // gives a receipted honest empty — never the raw grammar wall / vocab-miss /
   // short-wall this file's DEAD_END pattern catches.
   assertAllFlow(turns, queries);
-  assert.match(turns[0].answer, /^Task\./);
+  // PLAN_CONVERSATION.md Finding 3 (2026-07-11 fix): the forward branch now grain-
+  // filters its matches by the asked entityType ("functions"). saveStore's only
+  // `calls`/`callsSymbol` target here is fn:src/core/model.mjs#Task, classed
+  // "Class" (not "Function"/"Method", and Class has no FINE_CLASS_SIBLING partner),
+  // so the filter empties the traversal out and falls to the existing, unmodified
+  // forward zero-hit template — a second latent bug fixed alongside Finding 3's
+  // main repro (a Class was previously rendered as if it answered "which functions").
+  assert.match(turns[0].answer, /^saveStore has no calls edges in the index\./);
   // T9's sibling near-miss (SELF_CORRECTION_RE): an object-only restart with no
   // comma after "i mean" is a GENUINE ceiling (see SELF_CORRECTION_RE's own
   // docblock) — the ambiguity nudge's candidate list still names the CORRECT

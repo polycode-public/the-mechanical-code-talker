@@ -472,19 +472,28 @@ function parseForwardNegation(w, lc, nlp) {
   return { node: "forwardComplement", kind: vh.kind, subjectTerm };
 }
 
-/** The single OBJECT class a forward relation kind points at across the loaded graph
- *  (imports → Module), or null when its objects span more than one class (an ambiguous
- *  grain the complement's universe can't be pinned to). Ext: endpoints have no individual,
- *  so they don't muddy the class vote. Used by the forwardComplement evaluator to bound
- *  the universe it differences the positive forward set out of. */
-function kindObjectClass(graph, kind) {
+/** The full set of OBJECT classes observed across every edge of the given stored
+ *  kinds (already expanded past any query-side union — callers pass `kindsFor(kind)`
+ *  or an equivalent list). Ext: endpoints have no individual, so they don't muddy
+ *  the class vote. Shared by `kindObjectClass` (collapses to a single class or null)
+ *  and the forward branch's grain check (needs the full set, not the collapse). */
+function classesForKinds(graph, kinds) {
   const classes = new Set();
-  for (const k of kindsFor(kind)) {
+  for (const k of kinds) {
     for (const e of edgesOfKind(graph, k)) {
       const o = graph.byId.get(e.object);
       if (o && o.class) classes.add(o.class);
     }
   }
+  return classes;
+}
+
+/** The single OBJECT class a forward relation kind points at across the loaded graph
+ *  (imports → Module), or null when its objects span more than one class (an ambiguous
+ *  grain the complement's universe can't be pinned to). Used by the forwardComplement
+ *  evaluator to bound the universe it differences the positive forward set out of. */
+function kindObjectClass(graph, kind) {
+  const classes = classesForKinds(graph, kindsFor(kind));
   return classes.size === 1 ? [...classes][0] : null;
 }
 
@@ -3207,11 +3216,52 @@ export function traverse(graph, parsed, { contextId = null, prev = null } = {}) 
     const fwdSibling = SYMBOL_GRAIN_SIBLING[kind];
     const subjIsFineSymbol = !!(fwdSibling && objMatch.class && FINE_ENTITY_TYPES.has(objMatch.class));
     const fwdKinds = subjIsFineSymbol ? [...new Set([...kindsFor(kind), fwdSibling])] : kindsFor(kind);
+    // FORWARD GRAIN CHECK (PLAN_CONVERSATION.md Finding 3): entityType flows in from
+    // parseKeywordSpot for every forward query, but until now was consulted ONLY by
+    // the commit-as-subject flip above — every other forward query scanned blind,
+    // regardless of what class the kind's edges actually target. A kind whose real
+    // observed target classes never include the asked entityType (nor its
+    // FINE_CLASS_SIBLING family partner) can never honestly answer it — "what
+    // modules does X have" via `defines`, whose real targets are only
+    // {Class,Attribute,Method,Function}, never Module — so this is an honest decline,
+    // not a blind filter that would silently produce a false empty. "Change" is the
+    // touches-family wildcard pseudo-type (no individual is ever classed "Change"),
+    // exempted the same way the reverse branch exempts it (see its own comment above).
+    if (entityType && entityType !== "Change") {
+      const wantClasses = classesForKinds(graph, fwdKinds);
+      const siblingClass = FINE_CLASS_SIBLING[entityType];
+      if (!wantClasses.has(entityType) && !(siblingClass && wantClasses.has(siblingClass))) {
+        return {
+          matches: [], objMatch, candidates, ambiguous, matchedVia,
+          forwardGrainMiss: true, wantClasses: [...wantClasses],
+          traversal: `${fwdKinds.join("+")} edges where subject = ${objMatch.label} (grain mismatch: this "${kind}" relation never targets a ${entityType})`,
+        };
+      }
+    }
     const edges = fwdKinds.flatMap((k) => edgesOfKind(graph, k)).filter((e) => e.subject === objMatch.id);
     const targets = edges.map((e) => graph.byId.get(e.object)).filter(Boolean);
     // dedupe only on the widened scan — the coarse-only path keeps its exact shape.
-    const matches = subjIsFineSymbol ? uniqueById(targets) : targets;
-    return { matches, objMatch, candidates, traversal: `${fwdKinds.join("+")} edges where subject = ${objMatch.label}`, ambiguous, matchedVia };
+    const deduped = subjIsFineSymbol ? uniqueById(targets) : targets;
+    // PER-TRAVERSAL GRAIN FILTER (same Finding 3 fix): once grain passes above (or
+    // entityType is null/"Change"), still keep only the matches of the ASKED class —
+    // mirrors the reverse branch's own subjects.filter + sibling-widen-on-empty
+    // fallback just below, so a forward answer never leaks a wrong-class match once
+    // an entityType was actually asked for ("which functions does saveStore call"
+    // must not render a Class as if it were a function).
+    let matches = deduped;
+    let filterNote = "";
+    if (entityType && entityType !== "Change") {
+      matches = deduped.filter((m) => m.class === entityType);
+      const siblingClass = FINE_CLASS_SIBLING[entityType];
+      if (!matches.length && siblingClass) {
+        const widened = deduped.filter((m) => m.class === siblingClass);
+        if (widened.length) {
+          matches = widened;
+          filterNote = `, widened to ${siblingClass} subjects (no ${entityType} recorded)`;
+        }
+      }
+    }
+    return { matches, objMatch, candidates, traversal: `${fwdKinds.join("+")} edges where subject = ${objMatch.label}${filterNote}`, ambiguous, matchedVia };
   }
 
   // reverse + transitive (PLAN_MECHANICAL_CHAT.md P1): the gate above guarantees kind is
@@ -3483,6 +3533,19 @@ function renderCore(parsed, result) {
     const wantNoun = nounFor(result.wantClass, 1);
     return {
       content: `"${parsed.object}" resolved to the ${gotNoun} ${result.objMatch.label}, but this question needs a ${wantNoun} — no ${wantNoun} named "${parsed.object}" was found in the index.`,
+      miss: true, ambiguous: false,
+    };
+  }
+  // forward-shape honest miss (PLAN_CONVERSATION.md Finding 3): the resolved SUBJECT
+  // is real, but the asked entityType can never appear among this kind's own real
+  // target classes at all — distinct from wrongGrainMiss above (which is about the
+  // resolved OBJECT term's class on the reverse side) and from the plain forward
+  // zero-hit template below (which is a genuinely empty edge scan, not a class the
+  // relation can never produce).
+  if (result.forwardGrainMiss) {
+    const wantNouns = result.wantClasses.map((c) => nounFor(c, 2));
+    return {
+      content: `${result.objMatch.label}'s "${verbFor(parsed.kind)}" relation in this index never produces ${nounFor(parsed.entityType, 2)} — only ${listJoin(wantNouns)}.`,
       miss: true, ambiguous: false,
     };
   }

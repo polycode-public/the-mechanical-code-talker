@@ -13,7 +13,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { appendFact, loadMemory, readFactRows, SOURCE_CLASS, SOURCE_RELIABILITY_PROP } from "../src/memory/core.mjs";
+import { appendFact, loadMemory, readFactRows, SOURCE_CLASS, SOURCE_RELIABILITY_PROP, UPDATED_AT_PROP } from "../src/memory/core.mjs";
 import { sessionReliabilityFrom } from "../src/memory/trust.mjs";
 
 const tmpRepo = () => mkdtemp(join(tmpdir(), "tmct-mem-srcrel-"));
@@ -95,6 +95,46 @@ test("actor-level trust: a session with no facts at all mints no reliability att
     const m = await loadMemory(dir);
     const sessionScoped = m.individuals.filter((i) => i.class === SOURCE_CLASS && /^src:(operator|teach)-chat:/.test(i.id));
     assert.deepEqual(sessionScoped, [], "no session-scoped Source exists when nothing was taught/asserted in a session");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("PLAN_VIZ.md §2: a Fact's and a Source's mgx:updatedAt advance when recomputeFactTrust/recomputeSourceReliability re-stamp trust attributes on a later, unrelated mutation", async () => {
+  const dir = await tmpRepo();
+  try {
+    const SESSION = "0189ffff-0000-7000-8000-00000000cccc";
+    const teach = (subject, object) => appendFact(dir, {
+      subject, predicate: "mgx:hasProperty", object, provenance: `teach:chat:${SESSION}@2026-07-11T00:00:00.000Z`,
+    });
+
+    await teach("alpha", "red");
+    const m1 = await loadMemory(dir);
+    const sourceId = `src:teach-chat:${SESSION}`;
+    const source1 = m1.individuals.find((i) => i.class === SOURCE_CLASS && i.id === sourceId);
+    const fact1 = m1.individuals.find((i) => i.class === "Fact" && attr(i, "rdf:subject") === "alpha");
+    assert.ok(source1, "session's teach Source individual exists");
+    assert.ok(fact1, "the taught fact exists");
+    const sourceUpdated1 = attr(source1, UPDATED_AT_PROP);
+    const factUpdated1 = attr(fact1, UPDATED_AT_PROP);
+    assert.ok(sourceUpdated1, "recomputeSourceReliability stamped the Source's updatedAt");
+    assert.ok(factUpdated1, "recomputeFactTrust stamped the Fact's updatedAt");
+
+    await new Promise((r) => setTimeout(r, 5)); // force a distinct wall-clock millisecond
+    // A second, UNRELATED teach from the same session: recomputeSourceReliability re-stamps
+    // EVERY session-scoped Source it finds evidence for on every mutation (not just the source
+    // whose own fact count just changed), and re-materialises trust for every Fact that Source
+    // stated — so both "alpha"'s Fact and the session's Source get a fresh updatedAt here even
+    // though "alpha" itself was not re-taught.
+    await teach("beta", "red");
+    const m2 = await loadMemory(dir);
+    const source2 = m2.individuals.find((i) => i.class === SOURCE_CLASS && i.id === sourceId);
+    const fact2 = m2.individuals.find((i) => i.class === "Fact" && attr(i, "rdf:subject") === "alpha");
+    const sourceUpdated2 = attr(source2, UPDATED_AT_PROP);
+    const factUpdated2 = attr(fact2, UPDATED_AT_PROP);
+
+    assert.ok(sourceUpdated2 > sourceUpdated1, `Source updatedAt advances (${sourceUpdated1} -> ${sourceUpdated2})`);
+    assert.ok(factUpdated2 > factUpdated1, `Fact updatedAt advances (${factUpdated1} -> ${factUpdated2})`);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

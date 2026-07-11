@@ -25,7 +25,7 @@
 
 import { mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
-import { appendUtterances, CREATED_AT_PROP } from "./memory/core.mjs";
+import { appendUtterances, CREATED_AT_PROP, UPDATED_AT_PROP } from "./memory/core.mjs";
 
 export const SESSIONS_DIR_REL = join(".tmct", "sessions");
 
@@ -117,6 +117,10 @@ export function upsertSession(entities, record) {
     attributes: [
       // referenced via the imported constant (single-sourced from memory/core.mjs)
       { prop: CREATED_AT_PROP, key: "createdAt", value: priorCreatedAt || started || new Date().toISOString() },
+      // this IS a genuinely-mutated individual (re-written every chat turn, PLAN_VIZ.md §2's
+      // concrete "Session" case) — stamp updatedAt explicitly since the derived "max over edges"
+      // rule can't see an own-attribute rewrite that touches no edge.
+      { prop: UPDATED_AT_PROP, key: "updatedAt", value: new Date().toISOString() },
       { prop: "mgx:sessionStarted", key: "started", value: started },
       { prop: "mgx:sessionEnded", key: "ended", value: ended },
       { prop: "mgx:sessionTurns", key: "turns", value: String(turns.length) },

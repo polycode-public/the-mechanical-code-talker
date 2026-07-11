@@ -3,11 +3,19 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   parseEntities,
   resolveSymbol,
   relationKind,
+  adjacencyForKinds,
+  spiralExpand,
+  MEMORY_SPIRAL_EXPAND_KINDS,
+  derivedUpdatedAt,
+  mostRecentIndividual,
   impactClosure,
   renderDescribe,
   renderImpact,
@@ -40,6 +48,7 @@ import {
 } from "../src/codegraph.mjs";
 import { buildEntities } from "../src/graph-build.mjs";
 import { proseLayerHits } from "../src/prose.mjs";
+import { appendUtterance, appendFact, loadMemory, CREATED_AT_PROP, UPDATED_AT_PROP } from "../src/memory/core.mjs";
 
 const fixture = JSON.parse(
   readFileSync(fileURLToPath(new URL("./fixtures/entities.fixture.json", import.meta.url)), "utf8"),
@@ -89,6 +98,13 @@ test("relationKind matches the SEON/mgx prop token first, then the verb", () => 
   assert.equal(relationKind({ predicate: "contains entity" }), "contains");
   assert.equal(relationKind({ predicate: "subclass of" }), "inherits");
   assert.equal(relationKind({ predicate: "works at" }), null);
+});
+
+test("relationKind classifies the memory graph's real predicates (saidInSession/inReplyTo/statedBy/canonicalisedFrom) to themselves", () => {
+  assert.equal(relationKind({ prop: "mgx:saidInSession" }), "saidInSession");
+  assert.equal(relationKind({ prop: "mgx:inReplyTo" }), "inReplyTo");
+  assert.equal(relationKind({ prop: "mgx:statedBy" }), "statedBy");
+  assert.equal(relationKind({ prop: "mgx:canonicalisedFrom" }), "canonicalisedFrom");
 });
 
 test("resolveSymbol ranking: exact / path / basename / substring", () => {
@@ -1201,5 +1217,102 @@ test("beamSearch: an invalid beamWidth (0, negative, non-finite) falls back to t
   const q = "alpha beta gamma delta module";
   for (const bad of [0, -1, NaN, undefined]) {
     assert.doesNotThrow(() => searchModulesRanked(beamGraph, q, { beamSearch: true, beamWidth: bad }));
+  }
+});
+
+// ── PLAN_VIZ.md §2/§3: derivedUpdatedAt / mostRecentIndividual / spiralExpand generalization ──
+
+test("derivedUpdatedAt: own updatedAt/createdAt attribute, or the max edge createdAt touching the node, whichever is newer; tolerates missing timestamps; \"\" when nothing carries one", () => {
+  const g = parseEntities({
+    individuals: [
+      { id: "a", label: "a", class: "Thing", attributes: [{ prop: CREATED_AT_PROP, key: "createdAt", value: "2026-01-01T00:00:00.000Z" }] },
+      { id: "b", label: "b", class: "Thing", attributes: [
+        { prop: CREATED_AT_PROP, key: "createdAt", value: "2026-01-01T00:00:00.000Z" },
+        { prop: UPDATED_AT_PROP, key: "updatedAt", value: "2026-01-05T00:00:00.000Z" },
+      ] },
+      { id: "c", label: "c", class: "Thing", attributes: [] }, // no timestamp at all, no edges either
+      { id: "d", label: "d", class: "Thing", attributes: [{ prop: CREATED_AT_PROP, key: "createdAt", value: "2026-01-01T00:00:00.000Z" }] },
+    ],
+    objectProperties: [
+      // endpoints ("src:dummy"/"session:dummy") deliberately don't resolve to a real individual —
+      // derivedUpdatedAt only reads e.subject/e.object as plain ids, never dereferences them —
+      // and are each used by only ONE edge, so "b"'s own-attribute case stays uncontaminated by
+      // any edge (it carries zero edges of its own in this fixture).
+      { predicate: "statedBy", prop: "mgx:statedBy", count: 1, examples: [
+        { subject: "d", object: "src:dummy", createdAt: "2026-01-10T00:00:00.000Z" }, // newer than d's own createdAt
+      ] },
+      { predicate: "saidInSession", prop: "mgx:saidInSession", count: 1, examples: [
+        { subject: "a", object: "session:dummy" }, // NO createdAt field at all — must be tolerated, not thrown on
+      ] },
+    ],
+  });
+  const byId = (id) => g.individuals.find((i) => i.id === id);
+
+  assert.equal(derivedUpdatedAt(g, byId("c")), "", "no own timestamp and no edges at all -> \"\"");
+  assert.equal(derivedUpdatedAt(g, byId("b")), "2026-01-05T00:00:00.000Z", "own mgx:updatedAt wins when it's the newest signal");
+  assert.equal(derivedUpdatedAt(g, byId("d")), "2026-01-10T00:00:00.000Z", "a newer edge createdAt beats the node's own (older) createdAt");
+  assert.equal(derivedUpdatedAt(g, byId("a")), "2026-01-01T00:00:00.000Z", "an edge touching the node with NO createdAt field is skipped, never thrown on — falls back to its own createdAt");
+  assert.equal(derivedUpdatedAt(g, null), "", "null individual -> \"\"");
+});
+
+test("mostRecentIndividual: most recent createdAt wins; ties break by id (lowest wins); missing attribute never wins; empty graph -> null", () => {
+  const g = parseEntities({
+    individuals: [
+      { id: "z", label: "z", class: "Thing", attributes: [{ prop: CREATED_AT_PROP, key: "createdAt", value: "2026-01-01T00:00:00.000Z" }] },
+      { id: "b", label: "b", class: "Thing", attributes: [{ prop: CREATED_AT_PROP, key: "createdAt", value: "2026-01-05T00:00:00.000Z" }] },
+      { id: "a", label: "a", class: "Thing", attributes: [{ prop: CREATED_AT_PROP, key: "createdAt", value: "2026-01-05T00:00:00.000Z" }] }, // tied with b, id "a" < "b"
+      { id: "c", label: "c", class: "Thing", attributes: [] }, // no createdAt at all — never wins
+    ],
+    objectProperties: [],
+  });
+  assert.equal(mostRecentIndividual(g).id, "a", "the most recent createdAt wins, tie broken to the lower id (a < b)");
+  assert.equal(mostRecentIndividual(parseEntities({ individuals: [], objectProperties: [] })), null, "empty graph -> null");
+  const noTimestamps = parseEntities({ individuals: [{ id: "x", label: "x", class: "Thing", attributes: [] }], objectProperties: [] });
+  assert.equal(mostRecentIndividual(noTimestamps), null, "no individual carries the attribute -> null");
+});
+
+test("spiralExpand walks the MEMORY graph (kinds=MEMORY_SPIRAL_EXPAND_KINDS, idNormalizer=(id)=>id, classPredicate=()=>true): a single Utterance seed reaches its Session (saidInSession), its canonicalised Fact, and that Fact's Source (statedBy)", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-mem-spiral-"));
+  try {
+    const SESSION = "01890000-0000-7000-8000-0000000000ee";
+    const TS = "2026-07-11T10:00:00.000Z";
+    const { id: uttId } = await appendUtterance(dir, {
+      role: "visitor", text: "what colour is the sky?", ts: TS, sessionId: SESSION, sessionStarted: TS,
+    });
+    const { id: factId } = await appendFact(dir, {
+      subject: "sky", predicate: "mgx:hasProperty", object: "blue", provenance: "corpus:conceptnet /r/HasProperty",
+    });
+
+    const m = await loadMemory(dir);
+    const sourceInd = m.individuals.find((i) => i.class === "Source");
+    assert.ok(sourceInd, "fixture sanity: a Source individual was derived from the fact's provenance");
+    // Simulate memory/fold.mjs's addCanonicalisedFromEdges (Fact → Utterance) — out of this
+    // agent's assigned files (src/memory/fold.mjs), so injected directly here in the exact shape
+    // that function produces, rather than driving the whole session-fold pipeline just to prove
+    // spiralExpand's OWN traversal mechanics work over the real edge inventory.
+    m.objectProperties.push({
+      predicate: "canonicalisedFrom", prop: "mgx:canonicalisedFrom", count: 1,
+      examples: [{ subject: factId, object: uttId, subjectLabel: "sky mgx:hasProperty blue", objectLabel: "what colour is the sky?" }],
+    });
+
+    const g = parseEntities(m);
+    const sessId = `session:${SESSION}`;
+    assert.ok(g.byId.has(uttId) && g.byId.has(factId) && g.byId.has(sessId) && g.byId.has(sourceInd.id), "fixture sanity: every individual exists");
+
+    const results = spiralExpand(g, [], {
+      // q: 1 (no hub pruning) — the utterance's hop-1 frontier is only 2 wide (Session + Fact) in
+      // this tiny fixture, and the default SPIRAL_Q_DEFAULT (0.9) would quantile-gate one of them
+      // away (floor(0.9 * 2) === 1); this test is about reachability, not the hub gate.
+      kinds: MEMORY_SPIRAL_EXPAND_KINDS, idNormalizer: (id) => id, classPredicate: () => true,
+      seeds: [uttId], depth: 3, nodeLimit: 10, q: 1,
+    });
+    const byNodeId = new Map(results.map((r) => [r.id, r.hop]));
+
+    assert.equal(byNodeId.get(uttId), 0, "the seed itself is included, at hop 0");
+    assert.equal(byNodeId.get(sessId), 1, "the Session is reached one hop away via saidInSession");
+    assert.equal(byNodeId.get(factId), 1, "the Fact is reached one hop away via canonicalisedFrom");
+    assert.equal(byNodeId.get(sourceInd.id), 2, "the Source is reached two hops away via statedBy (Utterance -> Fact -> Source)");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
   }
 });

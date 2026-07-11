@@ -57,6 +57,12 @@ export const DERIVED_FROM_PROP = "mgx:derivedFrom";        // umbrella: Fact →
 export const STATED_BY_PROP = "mgx:statedBy";              // a Source directly asserts a Fact
 export const CANONICALISED_FROM_PROP = "mgx:canonicalisedFrom"; // a canonical Fact ← its raw form
 export const CREATED_AT_PROP = "mgx:createdAt";           // first-write-wins ISO-8601 on every individual
+// DERIVED at read/render time for most individuals (codegraph.mjs's derivedUpdatedAt: an
+// individual's own createdAt, or the max createdAt over every edge touching it) — this constant
+// exists for the handful of call sites that mutate an individual's OWN attributes in place
+// without necessarily touching an edge (upsertSession, recomputeFactTrust,
+// recomputeSourceReliability), where the derived rule alone can't see the change (PLAN_VIZ.md §2).
+export const UPDATED_AT_PROP = "mgx:updatedAt";
 export const SOURCE_RELIABILITY_PROP = "mgx:sourceReliability"; // actor-level (session-scoped) trust nudge on a Source, [0.5,1.5]
 
 // The bare (session-less) singleton Source ids — the fallback for an
@@ -98,6 +104,7 @@ const MEMORY_VOCABULARY = [
   { prop: "mgx:ruleBaseCase", note: "recursive only: the base-case relation name (hop zero)" },
   { prop: "mgx:ruleRecStep", note: "recursive only: the self-referential recursive-step relation name" },
   { prop: CREATED_AT_PROP, note: "when an individual was FIRST written, ISO-8601 (first-write-wins on upsert); the audit 'when', the recency input to trust, the novelty signal" },
+  { prop: UPDATED_AT_PROP, note: "when an individual's OWN attributes were last mutated in place (upsertSession, recomputeFactTrust, recomputeSourceReliability) — most individuals never carry this and instead derive 'updated' from codegraph.mjs's derivedUpdatedAt (max createdAt over their edges)" },
   { prop: DERIVED_FROM_PROP, predicate: "derivedFrom", note: "umbrella: a Fact derived from a Source (or another Fact). ext ref prov:wasDerivedFrom (UNVERIFIED-pending-web-check)" },
   { prop: STATED_BY_PROP, predicate: "statedBy", note: "subPropertyOf derivedFrom: a Source directly asserts this Fact (one edge per independent source — replaces the factProvenance union)" },
   { prop: CANONICALISED_FROM_PROP, predicate: "canonicalisedFrom", note: "subPropertyOf derivedFrom: a canonical Fact cleaned from a raw Block/Source, never replacing it" },
@@ -862,7 +869,9 @@ function statedByObjectsFor(payload, factId) {
  *  conclusion's trust premise-derived (`min(premiseTrusts) × ruleConfidence`)
  *  instead of riding the bare entailed prior. Absent (the default, `{}`), this
  *  is a no-op passthrough — every existing caller's score is byte-identical
- *  (PLAN_INFERENCE_TESTING.md §4 stage 2's exit criterion). */
+ *  (PLAN_INFERENCE_TESTING.md §4 stage 2's exit criterion). Also stamps
+ *  `mgx:updatedAt` (PLAN_VIZ.md §2) — this mutates the Fact's own attributes in place without
+ *  necessarily touching an edge, so the derived "max over edges" updatedAt rule can't see it. */
 function recomputeFactTrust(payload, fact, nowMs = Date.now(), trustOpts = {}) {
   const sourceIds = statedByObjectsFor(payload, fact.id);
   const createdAt = (fact.attributes || []).find((a) => a?.prop === CREATED_AT_PROP)?.value || "";
@@ -873,6 +882,7 @@ function recomputeFactTrust(payload, fact, nowMs = Date.now(), trustOpts = {}) {
   });
   setAttr(fact, TRUST_SCORE_PROP, "trustScore", String(score));
   setAttr(fact, TRUST_INPUTS_PROP, "trustInputs", JSON.stringify(inputs));
+  setAttr(fact, UPDATED_AT_PROP, "updatedAt", new Date(nowMs).toISOString());
 }
 
 /** Reconcile a Fact's Sources + statedBy edges with its (unchanged, compat)
@@ -977,6 +987,8 @@ function recomputeSourceReliability(payload) {
     const source = payload.individuals.find((i) => i?.id === sid);
     if (!source) continue;
     setAttr(source, SOURCE_RELIABILITY_PROP, "sourceReliability", String(sessionReliabilityFrom(counts)));
+    // Own-attribute mutation in place (PLAN_VIZ.md §2) — same reasoning as recomputeFactTrust.
+    setAttr(source, UPDATED_AT_PROP, "updatedAt", new Date().toISOString());
   }
 
   // Re-materialise trust for EVERY individual statedBy a recomputed session
@@ -997,17 +1009,26 @@ function upsertIndividual(payload, ind) {
   else payload.individuals.push(ind);
 }
 
-/** Upsert one edge into the named relation group (dedupe by subject>object). */
+/** Upsert one edge into the named relation group (dedupe by subject>object). Stamps `createdAt`
+ *  on the edge, first-write-wins over the same (subject,object) pair — mirrors
+ *  `firstWriteCreatedAt`'s discipline: a re-upserted edge keeps its original creation time
+ *  rather than resetting to "now" on every write. This is the only place in the codebase edges
+ *  get a timestamp at all — `codegraph.mjs`'s `derivedUpdatedAt` reads it back. */
 function upsertEdge(payload, { predicate, prop }, edge) {
   let group = payload.objectProperties.find((g) => g?.prop === prop);
   if (!group) {
     group = { predicate, prop, count: 0, examples: [] };
     payload.objectProperties.push(group);
   }
+  // Edges are flat ({subject, object, ...}), not attribute-bearing individuals, so this can't
+  // reuse firstWriteCreatedAt (which reads `.attributes`) directly — same discipline, edge shape:
+  // the prior edge's OWN createdAt wins if it has one, else the incoming candidate, else now.
+  const prior = (group.examples || []).find((e) => e?.subject === edge.subject && e?.object === edge.object);
+  const createdAt = prior?.createdAt || edge.createdAt || nowIso();
   group.examples = (group.examples || []).filter(
     (e) => !(e?.subject === edge.subject && e?.object === edge.object),
   );
-  group.examples.push(edge);
+  group.examples.push({ ...edge, createdAt });
   group.count = group.examples.length;
 }
 

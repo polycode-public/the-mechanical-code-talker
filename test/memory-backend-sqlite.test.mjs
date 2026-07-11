@@ -96,11 +96,18 @@ test("Backend C round trip: the SAME appendFact/appendFacts/appendUtterance(s)/a
       .sort((a, b) => a.id.localeCompare(b.id));
     assert.deepEqual(norm(readFactRows(sqliteMemory)), norm(readFactRows(fileMemory)));
 
+    // mgx:updatedAt (recomputeFactTrust re-stamps it — class-agnostic, so a Rule rides it too,
+    // PLAN_VIZ.md §2) is a genuine LIVE wall-clock value, not derived from the fixture's own fixed
+    // `createdAt`s — the two `ops()` runs above are sequential real-time calls, so it legitimately
+    // differs by a millisecond or two between the sqlite and file backends. Redact it before the
+    // structural attribute comparison, same reasoning as memory-core.test.mjs's GOLDEN EQUIVALENCE
+    // test's `norm()`.
+    const redactUpdatedAt = (attrs) => attrs.map((a) => (a.prop === "mgx:updatedAt" ? { ...a, value: "<ts>" } : a));
     for (const name of ["grandparent", "trusted-friend"]) {
       const sRule = findRuleByName(sqliteMemory, name);
       const fRule = findRuleByName(fileMemory, name);
       assert.equal(sRule.id, fRule.id, `${name} rule id matches`);
-      assert.deepEqual(sRule.attributes, fRule.attributes, `${name} rule attributes match`);
+      assert.deepEqual(redactUpdatedAt(sRule.attributes), redactUpdatedAt(fRule.attributes), `${name} rule attributes match`);
     }
 
     // Same class counts, same Source individuals, same utterance/edge wiring.

@@ -93,6 +93,28 @@ test("upsertSession: per-turn re-append REPLACES the prior copy — one individu
   assert.equal(e.classes.find((c) => c.name === SESSION_CLASS).count, 1);
 });
 
+test("upsertSession: updatedAt advances turn-over-turn while createdAt stays pinned (PLAN_VIZ.md §2)", async () => {
+  const e = freshEntities();
+  upsertSession(e, RECORD);
+  const sessAfterFirst = e.individuals.find((i) => i.class === SESSION_CLASS);
+  const attr = (ind, k) => ind.attributes.find((a) => a.key === k)?.value;
+  const createdAt1 = attr(sessAfterFirst, "createdAt");
+  const updatedAt1 = attr(sessAfterFirst, "updatedAt");
+  assert.ok(createdAt1, "createdAt stamped on first upsert");
+  assert.ok(updatedAt1, "updatedAt stamped on first upsert");
+
+  await new Promise((r) => setTimeout(r, 5)); // force a distinct wall-clock millisecond
+  const twoTurns = { ...RECORD, ended: "2026-07-02T10:06:00.000Z",
+    turns: [...RECORD.turns, { ts: "2026-07-02T10:06:00.000Z", query: "tell me a joke", resolvedIds: [], answeredIds: [], miss: true }] };
+  upsertSession(e, twoTurns);
+  const sessAfterSecond = e.individuals.find((i) => i.class === SESSION_CLASS);
+  const createdAt2 = attr(sessAfterSecond, "createdAt");
+  const updatedAt2 = attr(sessAfterSecond, "updatedAt");
+
+  assert.equal(createdAt2, createdAt1, "createdAt is first-write-wins — pinned across re-appends");
+  assert.ok(updatedAt2 > updatedAt1, `updatedAt advances turn-over-turn (${updatedAt1} -> ${updatedAt2})`);
+});
+
 test("upsertSession: unresolvable ref → edge dropped + counted; moved symbol re-resolves via unique label", () => {
   const e = freshEntities();
   const rec = { ...RECORD, turns: [{ ts: RECORD.turns[0].ts, query: "where is helper",
