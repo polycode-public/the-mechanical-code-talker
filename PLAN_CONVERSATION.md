@@ -1,7 +1,8 @@
 # PLAN_CONVERSATION.md — findings that graduated out of the fast loop's safe-fix scope
 
-> **STATUS: research/design notes, nothing implemented.** Not a build plan with a staged
-> implementation — this doc exists to hold two findings precisely enough that a future session can
+> **STATUS: Finding 1 is research/design notes, nothing implemented; Finding 2 is RESOLVED (commit
+> 85d46f0)** — see its own section below for what shipped. Not a build plan with a staged
+> implementation — this doc exists to hold findings precisely enough that a future session can
 > pick them up, the same role `PLAN_SYLLOGIST.md` plays for reasoning-engine research pulled
 > out of `PLAN_INFERENCE_TESTING.md`. Nothing here is scheduled, staffed, or blocking anything else.
 
@@ -72,7 +73,43 @@ class).
 
 ---
 
-## Finding 2 — noise-stripping's dependence on wink's generic stopword list is arbitrary, and can corrupt resolution rather than just fail to help
+## Finding 2 — noise-stripping's dependence on wink's generic stopword list is arbitrary, and can corrupt resolution rather than just fail to help [RESOLVED, commit 85d46f0]
+
+**RESOLVED.** Fixed via the "generate a candidate, prune it against the graph" architecture this
+finding's own fix sketch called for (below), not the curated verb list round 6 already ruled out.
+Re-traced against the real code first — this write-up's diagnosis held with one correction: "hold"
+turned out to already be registered `defines`-family vocabulary in `ask-vocab.mjs` (a container-verb
+synonym, unrelated to this gap), so it never reaches the bare-"where" branch at all; "save" (no
+curated entry anywhere) stood in as the fresh light-verb test case instead.
+
+`noise-strip.mjs`'s `stripNoise()` now also flags KEPT words wink's POS tagger tags `VERB`, reading
+the WHOLE original sentence for real grammatical context — an isolated "store router" fragment tags
+both words `NOUN` (confirmed live), so this signal only works read off the full sentence, before the
+object phrase is extracted. The same "store" in "where would i store a router" tags `VERB`; in "where
+does the store live" it tags `NOUN` — both confirmed live, so the general POS signal correctly
+resolves the exact case the fix sketch below worried a curated list couldn't. Scoped to exactly the
+bare "where"/"mentions" shape (confirmed, by tracing every `keywords.mjs` decomposition branch, as
+the one construction with no explicit relation verb gating its object) and attached to the parse as
+`altObject` rather than stripped outright — `noise-strip.mjs` still has no graph to check a
+resolution against (`interpret/pipeline.mjs`'s own documented boundary), so it proposes a second
+reading, it never decides between them.
+
+`ask.mjs`'s `traverse()` — where the graph actually lives — tries both readings at the shared
+object-resolution call site and prunes: the reading that misses or ties loses to the one that
+resolves cleanly (mirroring `resolveObject`'s own grain-word retry a few lines above it, and
+`grammar/ace.mjs`'s `parseAceAmbiguous` — "keep only complete, valid parses, dead ends pruned"); a
+genuine case where both readings resolve cleanly to DIFFERENT real entities surfaces as honest
+ambiguity through the SAME tier-tie UX `resolveObject` already renders — no third
+ambiguity-presentation surface was invented.
+
+Live verification (scratch copy of `examples/mini-webapp`, never the committed fixture): "where
+would i store a router" went from a 4/5-way ambiguous dump to a clean single answer identical to
+"where is router defined"'s; "where would i save a router" (the fresh, uncurated light verb) went
+from 2-way ambiguous to clean, confirming the fix generalizes rather than special-casing "store";
+"where is router defined", "where would i keep a router" (the already-fixed case this finding cites),
+and "i was wondering what calls addRoute" (a non-"where" noise-strip construction, keyword-spot's
+verb-decomposition path) all render byte-unchanged. `npm test`: 1872/1872, same count as before the
+fix, 0 failures.
 
 Rounds 3, 5, and 6 converged on the same root cause from different angles; round 6's investigation
 (which also disproved a plausible-but-wrong hypothesis — see below) is the most precise and is the
@@ -134,7 +171,8 @@ tracked work being duplicated here.
 
 ## What this doc is not
 
-Not a scoped build plan, not staffed, not blocking any other work. When a future session wants to
-close either gap, start here for the precise mechanism and the fix sketch's own caveats, then do
-the real design work (regression sweep, construction-scoping) that sketch flags as still open —
-this doc intentionally stops short of that design work, per its own stated role above.
+Not a scoped build plan, not staffed, not blocking any other work. Finding 2 is now resolved (see
+its own section above for what shipped, commit 85d46f0). When a future session wants to close
+Finding 1, start here for the precise mechanism and the fix sketch's own caveats, then do the real
+design work (regression coverage for the POS-check gate) that sketch flags as still open — this doc
+intentionally stopped short of that design work for Finding 1, per its own stated role above.

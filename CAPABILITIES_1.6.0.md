@@ -24,6 +24,14 @@ this session. The synthesis: the same fix that unblocked INFBENCH shipped a genu
 capability directly against `BENCHMARK_CEFR_ENGLISH_1.5.7.md`'s existing findings rather than assuming
 a connection.
 
+**Post-pin update**: commit `85d46f0` (`src/ask.mjs`, `src/interpret/strategies/noise-strip.mjs`)
+landed AFTER this audit's `b461ecd`/`96bfe4f` pin, closing the "still open" `noise-strip.mjs`
+extension this file originally flagged (§ "What's left, still open" below, and the
+`PLAN_DID_YOU_SEE_HER_DUCK.md`/`PLAN_CONVERSATION.md` per-plan ledger entries). Both those sections
+are updated in place to reflect it. The zero-product-drift claim above (the `96bfe4f..HEAD` diff
+check) held AT THE TIME this audit was written — it is no longer true of the current tree, and a
+future cycle re-running that check should expect `85d46f0`'s two-file diff, not an empty one.
+
 ---
 
 ## Comparative agent-capability table: tmct vs. named models, and a speculative TO-BE
@@ -124,11 +132,19 @@ What's left, still open, checked directly against current code (nothing below ha
   still not dispatched. The completions-rescue lane's garbled `Q:`/`A:` output needs a cleaner repro;
   the bare "what's ProperNoun" and "X and Y `<verb>`" conjunction-parsing gaps both need an operator
   scope decision first.
-- **`PLAN_DID_YOU_SEE_HER_DUCK.md`'s own named extension**: the same breadth-first, generate-
-  candidates-then-prune technique is explicitly NOT yet applied to `noise-strip.mjs`'s single-
-  criterion stopword stripping — confirmed still true, `git log 96bfe4f..HEAD -- src/interpret/
-  strategies/noise-strip.mjs` is empty. Landing it would extend the **safety/honesty calibration**
-  row's ambiguity-refusal discipline to a second pipeline stage.
+- ~~**`PLAN_DID_YOU_SEE_HER_DUCK.md`'s own named extension**: the same breadth-first, generate-
+  candidates-then-prune technique applied to `noise-strip.mjs`'s single-criterion stopword
+  stripping.~~ **CLOSED, commit `85d46f0`** (see `PLAN_CONVERSATION.md` Finding 2 for the full
+  trace). `noise-strip.mjs` now flags a KEPT word wink's POS tagger reads as a main VERB (full-
+  sentence context, not a curated synonym list) as a second, unresolved candidate (`altObject`);
+  `ask.mjs`'s `traverse()` — where the graph lives — tries both and prunes the one that misses or
+  ties in favor of the one that resolves cleanly, surfacing a genuine both-clean-but-different split
+  through the same tier-tie ambiguity UX `resolveObject` already renders. Live-verified: "where would
+  i store a router" went from a 4/5-way ambiguous dump to a clean answer; "where would i save a
+  router" (an uncurated light verb) confirms the fix generalizes rather than special-casing "store";
+  the already-fixed "keep" case and a non-"where" noise-strip construction render byte-unchanged.
+  `npm test` 1872/1872. This extends the **safety/honesty calibration** row's ambiguity-refusal
+  discipline to a second pipeline stage, as this item originally called for.
 - **`PLAN_SYLLOGIST.md`'s retraction-aware, incremental reasoning research** — explicitly "not a
   near-term default" per `HANDOVER.md`, unchanged, the one open research question on the reasoning
   engine's own horizon.
@@ -328,10 +344,12 @@ diff looked safe."
    1.5.7.md`'s own decision-log item 1 (the A1 naming-vocabulary collision) is the right lever for
    `g-a1-naming-9`, not any extension of item #92's work.
 4. **The `noise-strip.mjs` extension named in `PLAN_DID_YOU_SEE_HER_DUCK.md`'s own "What this doc is
-   not" section**, if it ever lands, is a more plausible future lever on the `ambiguity`-tagged CEFR
-   cell than anything already shipped — `PLAN_CONVERSATION.md`'s own Finding 2 (the "where would I
-   store a router" 4/5-way resolution tie) is closer in shape to `am-tests-cover` than item #92's
-   lexicon/parse-layer fix is.
+   not" section has now landed** (commit `85d46f0`, `PLAN_CONVERSATION.md` Finding 2 — the "where
+   would I store a router" 4/5-way resolution tie now resolves cleanly). It is a more plausible
+   future lever on the `ambiguity`-tagged CEFR cell than item #92's lexicon/parse-layer fix was,
+   closer in shape to `am-tests-cover` — but neither this audit nor the fix's own verification ran a
+   CEFR re-measurement (only the live-CLI transcripts + `npm test` cited in `PLAN_CONVERSATION.md`),
+   so a future cycle wanting the CEFR number to move on this still needs to run one.
 
 ---
 
@@ -427,8 +445,9 @@ doc's full-scope discipline, not abbreviated to a "see prior audit" pointer.
   (`842ffa1`). **New evidence this cycle**: `BENCHMARK_INFERENCE_1.6.0.md`'s clean 299/299 run is the
   first ladder-scale confirmation the fix holds beyond the one hand-built demonstration sentence.
 - **Doing**: none, the plan's own header states "Status: IMPLEMENTED."
-- **Todo**: unchanged — the same breadth-first technique not yet applied to `noise-strip.mjs`'s
-  stopword stripping; not generalized to the other 7 ACE patterns beyond pattern 3.
+- **Todo**: the breadth-first technique's `noise-strip.mjs` extension is now DONE (`85d46f0`, see
+  `PLAN_CONVERSATION.md` Finding 2) — remaining: not generalized to the other 7 ACE patterns beyond
+  pattern 3.
 
 ### `PLAN_GUESS_NUMBER.md` / `PLAN_HANOI.md`
 
@@ -452,11 +471,11 @@ doc's full-scope discipline, not abbreviated to a "see prior audit" pointer.
 
 **Pinned at `61cb7e6`.**
 
-- **Done**: none, explicitly "research/design notes, nothing implemented."
+- **Done**: Finding 2 (`noise-strip.mjs`'s dependence on wink's generic stopword list) — RESOLVED,
+  `85d46f0`, the breadth-first generate-candidates-then-prune technique `PLAN_DID_YOU_SEE_HER_DUCK.md`
+  names as its own natural next extension, now applied.
 - **Doing**: none.
-- **Todo**: Finding 1 (unknown "every X is Y" mints Y as a class, never a property); Finding 2
-  (`noise-strip.mjs`'s dependence on wink's generic stopword list), the same root shape
-  `PLAN_DID_YOU_SEE_HER_DUCK.md` names as its own natural next extension.
+- **Todo**: Finding 1 only (unknown "every X is Y" mints Y as a class, never a property).
 
 ### `PLAN_SYLLOGIST.md`
 
