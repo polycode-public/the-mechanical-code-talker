@@ -204,12 +204,26 @@ export function lookupNounCandidates(lexicon, word, opts = {}) {
 
 /** Verb lookup with 3sg folding; returns the entry ({lemma, prep?, predicate?}) or null. */
 export function lookupVerb(lexicon, word) {
+  return lookupVerbCandidates(lexicon, word)[0] ?? null;
+}
+
+/** Every verb entry `word` could plausibly resolve to via foldCandidates,
+ *  most-specific-fold-first (same order lookupVerb's single answer already
+ *  used) — additive sibling of lookupNounCandidates, for a caller that wants
+ *  to know about a genuine fold collision instead of only the first hit. In
+ *  practice a verb fold rarely collides (unlike nouns' irregular-plural
+ *  table), but the shape is symmetric with lookupNounCandidates on purpose —
+ *  ace.mjs's multi-candidate relation search (parseRelationHits) reads
+ *  whichever of the two a token's part of speech calls for. */
+export function lookupVerbCandidates(lexicon, word) {
   const w = String(word ?? "").toLowerCase();
+  const out = [];
+  const seen = new Set();
   for (const cand of foldCandidates(w)) {
     const hit = lexicon.verbs.get(cand);
-    if (hit) return hit;
+    if (hit && !seen.has(hit.lemma)) { seen.add(hit.lemma); out.push(hit); }
   }
-  return null;
+  return out;
 }
 
 /** Adjective lookup (exact lemma); returns {lemma, type, property?, value?} or null. */
