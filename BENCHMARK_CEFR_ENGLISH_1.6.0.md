@@ -232,25 +232,64 @@ land outside this pool's reach — see "What moved since 1.5.7" above.
 
 ## Decision log — ranked menu for the next cycle
 
-Unchanged from `1.5.7`'s own ranking — nothing this cycle found reason to reorder it, since no lever
-touched this pool:
+> **Update, `1.6.1` (commit `bf87c6c`) — items 1 and 2 both picked up this cycle, one resolved fully,
+> one resolved to the extent a deterministic system can.**
+>
+> - **Item 2 (`am-tests-cover`) — RESOLVED.** Before touching any code, this cycle first re-tested
+>   `am-tests-cover` against the real CLI to check whether `PLAN_CONVERSATION.md` Finding 2's
+>   generate-then-prune mechanism (merged just before this cycle, commits `85d46f0`/`48682d5`, merge
+>   `a4b2579`) had already fixed it as a side effect — it had not: "which tests cover b.mjs" still
+>   resolved confidently to `app/unit-tests/b.test.mjs` with no ambiguity flagged. Fixed by extending
+>   the SAME mechanism (not a new one) in `ask.mjs`'s `traverse()`, right next to the existing
+>   `altObject` prune: a "tests"-kind query's bare object term now also checks for a real Module whose
+>   basename is the query's own conventional test-variant sibling (`b.mjs` → `b.test.mjs`/`b.spec.mjs`),
+>   and promotes to honest ambiguity on a genuine collision. Scoped to `kind==="tests"` and to a bare
+>   (unslashed) term specifically because an early, broader version of this fix (scored directly in
+>   `resolveObjectCore`'s dotted-term tier, with no kind gate) broke `chatflow-agents-debt-remeasure
+>   .test.mjs`'s BUG-B ground truth, which hits the identical `store.mjs`/`store.test.mjs` collision in
+>   `examples/mini-webapp` for an unrelated "has X been touched" query — the kind/bare-term scoping is
+>   load-bearing, not incidental. `am-tests-cover` now passes tier-1 (`"b.mjs" matches more than one
+>   module ambiguously — did you mean app/lib/b.mjs and app/unit-tests/b.test.mjs? Try one of those. If
+>   you're not sure, narrow it to one name.`), and stays that way for the qualified-path/non-"tests"-kind
+>   guard cases now pinned in `test/chat-cefr-1.6.1-decision-log.test.mjs`.
+> - **Item 1 (`g-a1-naming-8/9`) — PARTIALLY RESOLVED, the remainder is a permanent structural
+>   conflict, not an unfixed bug.** `g-a1-naming-8` ("what does tests mean") now answers directly
+>   ("tests is a predicate (relation) in the graph's schema: …"): the root cause is that "tests" (and,
+>   discovered as a same-class bonus, "defines" — `g-a1-naming-1`) is itself a real
+>   RELATIONS/VERB_TO_KIND keyword, so keyword-spot independently misreads "what does tests mean" as a
+>   `reverse`-shaped query (`kind:"tests", object:"mean"`) — a spurious parse that can never resolve
+>   (`"mean"` is never a graph entity) — and that collides with the grammar strategy's own clean `meta`
+>   parse to manufacture the legacy `{ambiguousParse}` surface. Pruned generally in `ask.mjs`'s
+>   `parseQuery` (`pruneSpuriousMeaningAmbiguity`), not as a one-off patch for "tests" alone.
+>   `g-a1-naming-9` ("what does imports mean") is **deliberately left unfixed**: its input text is
+>   byte-identical to `am-meta-imports`'s own frozen expectation (`quickwins.test.mjs`, "fix1: the
+>   frozen am-meta-imports ambiguity is NOT admitted") — one graded-pool case wants the plain
+>   definition, the other wants the two-way ambiguity surround, for the *exact same input string*. A
+>   deterministic function cannot satisfy both; widening the prune to "imports" would flip
+>   `am-meta-imports` from passing to failing, which this skill's own decision rule (§1) forbids as a
+>   regression. This is a genuine authoring conflict between two cases in `graded-pool.jsonl`, not a
+>   gap in the fix's generality — confirmed by tracing both cases to the identical `runTurn` call with
+>   identical input and no session/context difference.
+>
+> Verified: `npm test` 1872/1872 before this cycle's fixes, 1879/1879 after (7 new regression tests in
+> `test/chat-cefr-1.6.1-decision-log.test.mjs`). `node chatbench/run.mjs --stamp 1.6.1 --sample 1
+> --single`: tier-1 109/109 (up from 108/109), `am-tests-cover` and `g-a1-naming-8` both flip to
+> passing, `g-a1-naming-9` remains the pool's sole tier-1/hard-fail frontier case exactly as predicted.
+> A stashed-vs-fixed product-run diff across all 109 cases confirms only 4 cases' answers moved at all
+> (the two targeted here, the `g-a1-naming-1` bonus, and `mr-asked-before`'s already-documented
+> per-run session-id text) — zero other case's answer changed.
 
-1. **A1 `naming-vocabulary`'s schema-term/common-word collision** (`g-a1-naming-8/9`: "what does
-   tests/imports mean") — still the most concrete, cheapest target on the board, and still this
-   cycle's sole hard fail. Same *class* of bug as the already-fixed A2 cell, one tier down; the A2
-   fix (`07f4805`) widened `ask.mjs`'s meta-fallback entity-class lookup, but these two bare-noun
-   "what does X mean" forms hit a different, still-untouched path. **Pick for next cycle.**
-2. **`am-tests-cover`'s ambiguity miss** — "which tests cover b.mjs" should flag the `b.mjs` name
-   collision between `app/lib/b.mjs` and `app/unit-tests/b.test.mjs` and ask the user to narrow;
-   instead it resolves confidently to one. Unchanged since `1.4.1` (three cycles now without
-   movement) — worth promoting if item 1 doesn't fully absorb next session's budget. Note per
-   `CAPABILITIES_1.6.0.md`'s own scoping: the closer fix shape for this specific case is
-   `PLAN_CONVERSATION.md`'s own Finding 2 (the `noise-strip.mjs` breadth-first extension), not
-   anything already shipped in `PLAN_DID_YOU_SEE_HER_DUCK.md`.
+Unchanged from `1.5.7`'s own ranking until this cycle — the two items below are now resolved as
+described above; 3 and 4 remain open:
+
+1. ~~**A1 `naming-vocabulary`'s schema-term/common-word collision**~~ — **RESOLVED for `tests`/`defines`,
+   permanently blocked for `imports`** (see the update above). `g-a1-naming-9` is not a future pick;
+   nothing further can move it without breaking `am-meta-imports`.
+2. ~~**`am-tests-cover`'s ambiguity miss**~~ — **RESOLVED**, commit `bf87c6c` (see the update above).
 3. **A dual-draw or full-pool run** before the next release — this cycle's ±0.1-magnitude per-cell
    wobble is exactly the noise dual-draw's parallel-forms check exists to separate from real signal;
    worth doing once a real lever is applied to this pool, so movement is attributable rather than
-   guessed-at from a single N=2 draw.
+   guessed-at from a single N=2 draw. **Pick for next cycle** now that items 1 and 2 are closed.
 4. **New CEFR case(s) modeled on `PLAN_DID_YOU_SEE_HER_DUCK.md`'s own worked example** ("senior duck
    mock module") — the only way to make this benchmark capable of scoring the new ambiguity
    capability at all, since the current pool structurally cannot reach it (confirmed this cycle). A
