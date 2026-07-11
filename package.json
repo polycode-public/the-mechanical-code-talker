@@ -56,7 +56,9 @@
     "./conformance": "./src/conformance.mjs",
     "./init": "./src/init.mjs",
     "./extensions": "./src/extensions.mjs",
-    "./toml-config": "./src/toml-config.mjs"
+    "./toml-config": "./src/toml-config.mjs",
+    "./generateCompletion": "./src/completions/complete.mjs",
+    "./createCompletionsGraphAdapter": "./src/completions/graph-adapter.mjs"
   },
   "files": [
     "bin/",

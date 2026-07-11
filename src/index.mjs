@@ -48,3 +48,8 @@ export { initRepo, defaultConfig, renderTomlConfig, PERSONA_PRESETS, CONFIG_FILE
 
 // tmct.toml loading (also reachable as the `./toml-config` subpath export).
 export { CONFIG_FILE as TOML_CONFIG_FILE } from "./toml-config.mjs";
+
+// The "detailed answer" completions pipeline (also reachable as the
+// `./generateCompletion` and `./createCompletionsGraphAdapter` subpath exports).
+export { generateCompletion } from "./completions/complete.mjs";
+export { createCompletionsGraphAdapter } from "./completions/graph-adapter.mjs";

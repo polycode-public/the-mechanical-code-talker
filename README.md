@@ -259,16 +259,14 @@ doc = In-memory record store. [seon:hasDoc]. Other matches: src/core/store.mjs
 ```
 
 Programmatically, the same pipeline is `generateCompletion()`
-(`src/completions/complete.mjs`). It isn't on the published package's
-`exports` map yet, so this only works from a cloned checkout today, not the
-installed npm package — worth knowing before you build against it:
+(`src/completions/complete.mjs`):
 
 ```js
 import { fetchEntities } from "./src/source.mjs";
 import { parseEntities } from "./src/codegraph.mjs";
 import { loadMemory } from "./src/memory/core.mjs";
-import { createCompletionsGraphAdapter } from "./src/completions/graph-adapter.mjs";
-import { generateCompletion } from "./src/completions/complete.mjs";
+import { createCompletionsGraphAdapter } from "@polycode-projects/the-mechanical-code-talker/createCompletionsGraphAdapter";
+import { generateCompletion } from "@polycode-projects/the-mechanical-code-talker/generateCompletion";
 
 const dir = "examples/mini-webapp";
 const graph = parseEntities(await fetchEntities({ graphFile: `${dir}/.tmct/graph.json` }));
