@@ -172,3 +172,59 @@ test("tier0/vocab-hint (TMCT_NO_SEED=1): the offered teach example ('every bug i
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("tier0/kind-of-X first-turn (seeded): 'what is a kind of animal' as the SESSION'S FIRST turn answers correctly, not the false 'unknown relation' miss", async () => {
+  // Live-caught 2026-07-11 follow-up to the ambiguousParse fix (commit 5c858bf):
+  // on a session's first turn, dispatchTool's loadGraph() throws its own
+  // documented empty-code-graph ToolError (self-corrects from turn 2 on),
+  // leaving `envelope` null for that turn — which used to let BARE_WHATIS_RE's
+  // catch-all in factAnswer's (a) block swallow "kind of animal" as a literal
+  // meta-term, falling through to RELATION_WHO_ASK_RE misreading "kind" as an
+  // unknown relation NAME ("I don't know a relation or rule called 'kind'
+  // yet" — false; inherits is well-known, there's just no fact needed here at
+  // all since real hits exist).
+  const { dir, turns } = await driveSession(undefined, ["what is a kind of animal"]);
+  try {
+    assert.doesNotMatch(turns[0].answer, /I don't know a relation or rule called/,
+      "must not misreport 'kind' as an unknown relation name on the session's first turn");
+    assert.match(turns[0].answer, /is a kind of animal/, "real corpus IsA facts answer directly");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("tier0/kind-of-X first-turn, zero hits (seeded): 'what is a kind of class' never claims 'kind' is an unknown relation", async () => {
+  // The zero-hit sibling of the case above: no rdfs:subClassOf fact targets
+  // "class" in the default corpus, so there's honestly nothing to answer —
+  // but the answer must still never be the false "unknown relation" claim.
+  const { dir, turns } = await driveSession(undefined, ["what is a kind of class"]);
+  try {
+    assert.doesNotMatch(turns[0].answer, /I don't know a relation or rule called/,
+      "'kind'/'subclass' are never treated as arbitrary unknown relation names");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("tier0/kind-of-X full repro (seeded): boney-is-a-dog -> what is boney -> what is a dog -> what is a kind of animal flows end to end", async () => {
+  const { dir, turns } = await driveSession(undefined, [
+    "boney is a dog",
+    "what is boney",
+    "what is a dog",
+    "what is a kind of animal",
+  ]);
+  try {
+    for (const [i, t] of turns.entries()) {
+      assert.doesNotMatch(t.answer, /I don't know a relation or rule called/, `turn ${i} must not hit the false unknown-relation miss`);
+    }
+    assert.match(turns[0].answer, /noted — remembered: boney is a kind of dog/);
+    assert.match(turns[1].answer, /you told me: boney is a kind of dog/);
+    assert.match(turns[2].answer, /dog is a kind of animal/);
+    assert.match(turns[3].answer, /dog is a kind of animal/, "the reverse-inherits query lists real corpus animals, including dog");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});

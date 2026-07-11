@@ -277,6 +277,26 @@ export function parseKeywordSpot(text, nlp = null) {
     return { shape: "ask", entityType: null, modifier: "direct", kind, subject, object };
   }
   if (afterText) return { shape: "reverse", entityType, modifier, kind, object: afterText };
+  // "what is a kind of class" / "what inherits from function" (live-caught 2026-07-11
+  // follow-up to the ambiguousParse fix, commit 5c858bf): entityHit above is found
+  // ANYWHERE in the sentence and marked consumed before afterText is computed, so
+  // when the "kind of X"/"inherits X" idiom's object IS ITSELF one of the four
+  // code-graph entity-type nouns (class/function/method/module — ENTITY_TO_TYPE's
+  // own keys), the entity match swallows the ENTIRE post-verb span as a (wrong, in
+  // this shape) grain qualifier, leaving afterText empty and no candidate at all —
+  // the query silently fails to parse rather than answering or declining honestly.
+  // Scoped narrowly to kind==="inherits" (the one relation whose object is routinely
+  // a bare vocabulary noun with no further qualifier) and only when the ENTIRE
+  // post-verb span was consumed by the entity match (nothing else remains to be an
+  // object): re-read that span as the literal OBJECT text instead, entityType null
+  // (it names the thing being asked about here, not a grain filter on some other
+  // object). Every other kind/shape is unaffected — this never fires unless
+  // afterText is otherwise empty AND the sole cause is an entity-consumed span
+  // immediately after the verb.
+  if (kind === "inherits" && !beforeText && entityHit && entityHit.start === verbHit.end) {
+    const entityText = canonWords.slice(entityHit.start, entityHit.end).join(" ");
+    if (entityText) return { shape: "reverse", entityType: null, modifier, kind, object: entityText };
+  }
   // forward keeps the spotted entityType ("which modules did commit <sha> touch" is a
   // forward decomposition — subject before the verb — whose asked grain would otherwise
   // be lost); traverse() only consults it for the commit-as-subject grain selection,

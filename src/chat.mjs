@@ -3900,6 +3900,21 @@ const RECURSIVE_LIST_ASK_RE = /^list\s+(?:the\s+|all\s+)?([a-z][\w-]*)\s+of\s+([
  *  doesn't parse; checked against the isa-family fact predicates only. */
 const ISA_ASK_RE = /^(?:is|are)\s+(?:an?\s+)?(.+?)\s+(?:a\s+kind\s+of|a\s+type\s+of|an?)\s+(.+?)[?.!\s]*$/i;
 const ISA_PREDICATES = new Set(["rdfs:subClassOf", "rdf:type"]);
+
+// Live-caught 2026-07-11 (follow-up to the "what is a kind of X" ambiguousParse
+// fix, commit 5c858bf): RELATION_FACT_YESNO_RE/RELATION_WHO_ASK_RE both capture a
+// middle "role" word and treat it as an arbitrary user-taught relation/rule NAME
+// ("is X the father of Y", "who is the capital of Y") — but "kind"/"sort"/"type"/
+// "subclass"/"superclass" are this file's OWN vocabulary for the ISA/inherits
+// relation, never a name a user could have taught a relation under. Left
+// unexcluded, "what is a kind of animal" (once envelope/parse issues that used to
+// mask this were fixed) reached RELATION_WHO_ASK_RE first and produced a false "I
+// don't know a relation or rule called 'kind' yet" — inherits IS known, there's
+// just no fact making anything a kind of that particular object (a case (b5)
+// above already handles correctly, or ELSE whatever answer already stands —
+// a code-graph-specific miss, a relation-force glossary explanation — should be
+// left alone, never overridden by this generic reader).
+const ISA_IDIOM_ROLE_WORDS = new Set(["kind", "sort", "type", "subclass", "superclass"]);
 /** "so john is a man now right?" / "john is a man, right?" — a DECLARATIVE
  *  statement wrapped in a confirmation-check tag ("now right?"/"right?"/
  *  "correct?"), found live (playtest sprint round 1, 2026-07-10) after a
@@ -3937,7 +3952,20 @@ const FACT_ANSWER_CAP = 32;
 const CAN_ASK_RE = /^(?:can|could)\s+(?:an?\s+)?([\w'-]+(?:\s+[\w'-]+)*?)\s+([a-z]+)[?.!\s]*$/i;
 const WHAT_CAN_DO_RE = /^what\s+can\s+(?:an?\s+)?(.+?)\s+do[?.!\s]*$/i;
 const WHAT_HAS_RE = /^what\s+has\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
-const WHAT_INHERITS_RE = /^what\s+inherits?\s+(?:from\s+)?(?:an?\s+)?(.+?)[?.!\s]*$/i;
+// Widened 2026-07-11 (live-caught follow-up to the ambiguousParse fix, commit
+// 5c858bf): on the FIRST turn of a graph-less session, dispatchTool's
+// loadGraph() throws its own documented "the graph is empty... this repo
+// starts with no graph" ToolError (src/server.mjs) — a pre-existing, by-design
+// bootstrap behavior (self-corrects from turn 2 on) — which leaves `envelope`
+// null for the rest of THIS turn's processing. The envelope.parsed branch just
+// below can't help on that turn, so this regex is the ONLY path available —
+// and it used to cover just "what inherits (from) X", never "what is a kind/
+// sort/type of X" or "what is a subclass of X", so those phrasings hit a wrong
+// "I don't know a relation or rule called 'kind'" answer (from a completely
+// different, unrelated reader downstream) specifically on a session's first
+// turn. Widened to match every phrasing ARTICLE_RELATION_CONTINUATIONS'
+// grammar-level fix already handles when envelope.parsed IS available.
+const WHAT_INHERITS_RE = /^what\s+(?:inherits?\s+(?:from\s+)?(?:an?\s+)?|is\s+(?:an?\s+)?(?:kind|sort|type)\s+of\s+|is\s+(?:an?\s+)?subclass\s+of\s+)(.+?)[?.!\s]*$/i;
 /** WHAT_HAS_RE guard: "what has changed (recently)" reads as a temporal/code
  *  question, not a HasA lookup — checked against the captured phrase's FIRST
  *  word only (a closed set, not a general heuristic). Verified live: nothing
@@ -3980,7 +4008,17 @@ async function factAnswer(memoryDir, query, envelope, miss, biasByBundle = {}) {
   // OPTIONAL — see that regex's docblock for why this is safe to loosen here
   // even though the structural grammar's T5 keeps the article mandatory).
   let metaTerm = envelope?.parsed?.shape === "meta" ? envelope.parsed.object : null;
-  if (!metaTerm && miss && !envelope?.parsed) {
+  // Exclude "what is a kind/sort/type of X" / "what is a subclass of X" from this
+  // bare catch-all: on the FIRST turn of a graph-less session, dispatchTool's
+  // loadGraph() throws its own documented empty-graph ToolError (a pre-existing,
+  // by-design bootstrap behavior — self-corrects from turn 2 on), which leaves
+  // `envelope` null for the rest of the turn, arming this `!envelope?.parsed`
+  // fallback. Without this guard it greedily swallows the WHOLE "kind of animal"
+  // tail as a literal meta-term to define (mirroring grammar.mjs T5's OWN
+  // ARTICLE_RELATION_CONTINUATIONS guard against the identical over-capture),
+  // returning early and never letting (b5) below — which already handles this
+  // exact shape via WHAT_INHERITS_RE, envelope or no envelope — get a chance.
+  if (!metaTerm && miss && !envelope?.parsed && !WHAT_INHERITS_RE.test(q)) {
     const m = q.match(BARE_WHATIS_RE)
       || q.match(/^what\s+(?:does|do)\s+(.+?)\s+means?[?.!\s]*$/i);
     // Seonix Batch 2 Fix 3: strip a curated trailing scope clause ("… in this
@@ -4117,6 +4155,19 @@ async function factAnswer(memoryDir, query, envelope, miss, biasByBundle = {}) {
   if (inheritsObj) {
     const variants = factTermVariants(normFactTerm, inheritsObj);
     const hits = (await factRows(memoryDir)).filter((f) => ISA_PREDICATES.has(f.predicate) && variants.has(f.object));
+    // Only diverts on a REAL hit — same discipline every other reader in this
+    // cascade follows (CAN_ASK_RE/WHAT_CAN_DO_RE/WHAT_HAS_RE above all `return
+    // null` on zero hits too). A zero-hit case here must NOT invent its own
+    // override text: whatever answer already stands (a code-graph-specific miss
+    // from ask.mjs's own traversal, a glossary/relation-force explanation, or the
+    // generic wall) is left alone. The real fix for the "I don't know a relation
+    // or rule called 'kind' yet" false claim (Live-caught 2026-07-11 follow-up to
+    // the "what is a kind of X" ambiguousParse fix, commit 5c858bf) lives at
+    // RELATION_WHO_ASK_RE's own handler in factReadBack, below — it excludes ISA-
+    // idiom words ("kind"/"sort"/"type"/"subclass"/"superclass") from being
+    // treated as arbitrary unknown relation NAMES, since they're not names a user
+    // could have taught a relation under; they're this file's own vocabulary for
+    // the inherits relation, always "known" by construction.
     if (!hits.length) return null;
     const ranked = rankByBiasThenTrust(uniqueFacts(hits), biasByBundle);
     const lines = ranked.map(renderFactLine);
@@ -4704,7 +4755,7 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
     const subject = IS_ADJECTIVE_PRONOUN_RE.test(rawSubject) ? (focusLabel || null) : rawSubject;
     const relationName = relAsk[2].trim().toLowerCase();
     const object = relAsk[3].trim();
-    if (subject) {
+    if (subject && !ISA_IDIOM_ROLE_WORDS.has(relationName)) {
       const isTaughtRow = (f) => !f.sourceTypes?.includes("corpus") && !f.sourceTypes?.includes("web");
       const aliasSubClassEdges = rows
         .filter((f) => f.predicate === SUBCLASS_PREDICATE && isTaughtRow(f))
@@ -4804,7 +4855,7 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
     const relationName = whoAsk[1].trim().toLowerCase();
     const rawObject = whoAsk[2].trim();
     const object = IS_ADJECTIVE_PRONOUN_RE.test(rawObject) ? (focusLabel || null) : rawObject;
-    if (object) {
+    if (object && !ISA_IDIOM_ROLE_WORDS.has(relationName)) {
       const isTaughtRow = (f) => !f.sourceTypes?.includes("corpus") && !f.sourceTypes?.includes("web");
       const aliasSubClassEdges = rows
         .filter((f) => f.predicate === SUBCLASS_PREDICATE && isTaughtRow(f))
