@@ -286,6 +286,36 @@ DOES fall within that set. Needs: (a) updating or explicitly re-scoping
 honest-decline case, and (c) a separate decision on whether "questboard app has modules" should
 instead route to `imports` — a kind-selection change in `ask-vocab.mjs`/`keywords.mjs`.
 
+### Concrete implementation (2026-07-11 session)
+
+Verified live against the real repo. `kindObjectClass` (`ask.mjs:475-489`) is refactored to share a
+new `classesForKinds(graph, kinds)` helper (returns the full class Set, not collapsed to `null` on
+&gt;1 class — `kindObjectClass` itself keeps its existing collapse-to-null behavior for its other
+callers, zero change there). The forward branch (`ask.mjs:3198-3215`) gets a grain check BEFORE the
+edge scan: if `entityType` is set (and isn't `"Change"`, the touches-family wildcard pseudo-type, same
+exemption the reverse branch already grants) and neither it nor its `FINE_CLASS_SIBLING` partner
+appears in `classesForKinds(graph, fwdKinds)`, return a new `forwardGrainMiss` result instead of
+scanning — new render block modeled directly on the existing `wrongGrainMiss` template (`ask.mjs:3481-
+3488`): `"${objMatch.label}'s "${kind}" relation in this index never produces ${entityType nouns} —
+only ${wantClasses nouns}."` When grain passes, a new per-traversal filter (mirroring the reverse
+branch's own `subjects.filter` + sibling-widen-on-empty, `ask.mjs:3253-3268`) keeps only matches whose
+class is `entityType` (or, if that's empty, its `FINE_CLASS_SIBLING`) — matches never leak the wrong
+class once grain passes.
+
+Verified consequences, live: `"what modules does the questboard app have"` (`defines`, observed classes
+`{Class,Attribute,Method,Function}`, entityType `Module`) → declines with the new message, fixing the
+repro. The pinned test `test/chatflow-tier6.test.mjs:519` (`"which functions does saveStore call"` →
+`/^Task\./`) changes: `saveStore`'s only target is `Task` (class `Class`, no `Function`/`Method`
+sibling match) → grain passes (`calls`+`callsSymbol` really do target `Function` elsewhere), but the
+per-traversal filter now empties `Task` out → falls to the **existing, unmodified** forward zero-hit
+template → `"saveStore has no calls edges in the index."` This is confirmed as fixing a second latent
+bug in the same branch (a `Class` was being rendered as an answer to a "which functions" question), not
+a side effect — update the pin to the new text. Every `entityType`-null forward query (the overwhelming
+majority) and `commitTouches` (returns before shape dispatch) are untouched. New regression test added
+to `test/ask.test.mjs` (next to the existing `wrongGrainMiss` test) for the "what modules...have"
+decline. The "route `has modules` to `imports` instead" question (c) above stays explicitly deferred,
+untouched by this fix.
+
 ---
 
 ## Finding 4 — an anaphoric "SUBJECT VERB which N" inheritance question misroutes into teach-a-fact, and the real gap is wider than the pronoun case alone
@@ -460,6 +490,46 @@ Note this also closes the loop on `"what is a kind of horse"`'s own genuine pars
 `ambiguousParse` surface between a `"meta"` reading and this `"inherits"` reading, `ask.mjs:3455-3461`)
 — rephrasing to `"what inherits from horse"` (or bare `"what inherits horse"`) correctly resolves that
 ambiguity today; it just then hits this separate, still-open dead end.
+
+### Concrete implementation (2026-07-11 session)
+
+Verified live against the real default-persona bootstrap. All four frames land in `src/chat.mjs`'s
+`factAnswer`, inserted as a contiguous block between the existing `ISA_ASK_RE` block (`:3996-4005`)
+and `KNOW_ABOUT_RE` (`:4007`) — confirmed no frame-ordering hazard: `KNOW_ABOUT_RE`'s fixed leads can't
+match any of the four new shapes, and `RELATION_FACT_YESNO_RE`/`RELATION_WHO_ASK_RE` (the separate
+`factReadBack`, only reached via `factAnswer(...) ?? factReadBack(...)`) require a leading "is/are/
+was/were" and never collide either. All four reuse existing helpers verbatim — `factTermVariants`,
+`factRows`, `rankByBiasThenTrust`, `renderFactLine`, `FACT_ANSWER_CAP` — no new abstractions; dedup
+uses a local `subject|predicate|object`-keyed Set filter (the same idiom as `ask.mjs`'s private
+`uniqueById`, reproduced locally since it isn't exported/importable).
+
+1. `CAN_ASK_RE = /^(?:can|could)\s+(?:an?\s+)?([\w'-]+(?:\s+[\w'-]+)*?)\s+([a-z]+)[?.!\s]*$/i` — yes/no
+   over `mgx:capableOf`, mirrors `ISA_ASK_RE`'s own block. Known, documented-not-fixed limitation: a
+   multi-word CapableOf object would mis-split (all planned tests use single-word objects).
+2. `WHAT_CAN_DO_RE = /^what\s+can\s+(?:an?\s+)?(.+?)\s+do[?.!\s]*$/i` — open-list over
+   `mgx:capableOf`, reuses the meta-lane's subject-hits/rank/render/paginate block verbatim.
+3. `WHAT_HAS_RE = /^what\s+has\s+(?:an?\s+)?(.+?)[?.!\s]*$/i` — reverse-by-object over `mgx:hasA`,
+   guarded by a small closed exclusion set (`HAS_TEMPORAL_TAIL = new Set(["changed","change","changes",
+   "updated","modified","happened","occurred"])`, checked on the captured phrase's first word only) so
+   "what has changed(recently)" isn't shadowed — verified live there is no existing dedicated feature
+   for that phrase today (it currently falls through to an unrelated code-graph miss), so this is a
+   pure safety guard, not a behavior change. Multi-subject dedup keeps every distinct subject (e.g.
+   `car`/`bicycle`/`train` all `mgx:hasA` `wheel` in the default corpus — a richer real test case than
+   the doc's own "tail" example, which only has one subject in the default bundle).
+4. `WHAT_INHERITS_RE = /^what\s+inherits?\s+(?:from\s+)?(?:an?\s+)?(.+?)[?.!\s]*$/i` — reverse-by-object
+   over `ISA_PREDICATES` (already defined, `chat.mjs:3902`) — no temporal-style guard needed ("inherits"
+   has no competing common-English reading the way "has" does).
+
+Noted caveat, not fixed here: teaching a fresh `"a cat has a tail"` through the live chat reaches ACE's
+grammar, which mints `tmct:has` (its generic verb-minting convention), not `mgx:hasA` — so `WHAT_HAS_RE`
+closes the corpus-fact gap the doc's transcript demonstrates but won't surface a freshly-taught bare
+"X has a Y" fact; a distinct predicate-representation split, flagged for a future session. `"X is a kind
+of Y"` and `"X can Y"` have no equivalent split (`inherits` reliably mints `rdfs:subClassOf`; `capableOf`
+teaching has no working path at all today, so no caveat needed there).
+
+New test file `test/wiring-facts-reverse.test.mjs` (using `createSession(...).turn()`, same pattern as
+`test/wiring-seed.test.mjs`): one case per frame, the multi-subject dedup case, and the "what has changed
+recently" non-shadow regression (asserting neither `source: corpus` nor `you told me` appears).
 
 ---
 

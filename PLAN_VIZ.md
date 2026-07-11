@@ -194,6 +194,62 @@ buried in ranking options.
   tmct-owned local-git provider mode) — no schema change needed either way, since `Commit`/
   `derived_from` already carry what's needed once something populates them.
 
+### Concrete implementation (2026-07-11 session — items 1-3 above)
+
+Verified live against the real repo (grep + fixture tracing), not assumed. Landing as three changes:
+
+**`adjacencyForKinds` id-normalizer + the `relationKind` gap it doesn't fix alone.** New signature:
+`adjacencyForKinds(graph, kinds, idNormalizer = null)` — `idNormalizer` defaults to `(id) =>
+moduleIdOf(graph, ind)` via the existing `moduleIdOfId`, so the sole existing caller
+(`adjacencyForKinds(graph, kinds)` in `beamExpand`, `:678`) is untouched. A memory-graph caller passes
+`(id) => id`. This alone is **not sufficient**: `edgesOfKind` (`:1189-1204`) gates on `relationKind`
+(`:96-114`), a closed classifier over a hardcoded `PROP_KIND` table (`:68-94`) plus regex fallbacks —
+none match the memory graph's real predicates (`saidInSession`, `inReplyTo`, `statedBy`,
+`canonicalisedFrom`), so `edgesOfKind(memoryGraph, anyKind)` returns `[]` today regardless of the
+id-normalizer fix. Add four lowercase entries to `PROP_KIND` mapping each predicate to itself as its
+own kind name (no module-rollup abbreviation needed, unlike `imports`/`calls`). Confirmed safe: `KINDS`
+(`:63`) is declared but never referenced elsewhere, and `relationKind`'s only other callers
+(`src/concept.mjs:387`, `src/ask.mjs:107`) only ever run it against code-graph relation groups.
+
+**`upsertEdge()` createdAt + derived `updatedAt`.** `upsertEdge()` (`src/memory/core.mjs:1000-1012`)
+stamps `createdAt` on each edge, first-write-wins over the same `(subject,object)` pair (mirrors
+`firstWriteCreatedAt`) — a re-upserted edge keeps its original creation time rather than resetting to
+"now" on every write. New pure function `derivedUpdatedAt(graph, ind, {createdAtProp, updatedAtProp})`
+in `src/codegraph.mjs` (next to `edgesOfKind`/`moduleIdOf` — it operates on the shared parsed-graph
+shape, not memory-specific) = the node's own `updatedAt`/`createdAt` attribute, or the max `createdAt`
+over every edge touching it, whichever is newer; `""` if nothing has a timestamp. New exported
+constant `UPDATED_AT_PROP = "mgx:updatedAt"` in `src/memory/core.mjs`, stamped explicitly (not
+derived) at the three sites that mutate attributes in place without necessarily touching an edge:
+`src/sessions.mjs`'s `upsertSession` (the **code-graph** Session class — confirmed `ensureSession`,
+the memory-graph Session, is actually write-once and does NOT need this), `recomputeFactTrust`, and
+`recomputeSourceReliability` (both `src/memory/core.mjs`). Known, deliberately out-of-scope gap: two
+edge writers bypass `upsertEdge()` entirely (`src/memory/fold.mjs`'s `addCanonicalisedFromEdges`,
+`src/sessions.mjs`'s own `asksAbout` edges) — their edges get no `createdAt` from this fix; noted, not
+closed, since `derivedUpdatedAt` already tolerates a missing `e.createdAt` by skipping it.
+
+**`spiralExpand` generalization.** New options, every one defaulting to today's exact behavior so the
+sole call site (`scoreModules`, `:1076-1080`) needs zero changes: `kinds` (default
+`SPIRAL_EXPAND_KINDS`), `classPredicate` (default `(ind) => (ind.class || "") === "Module"`, replacing
+the two hardcoded checks at `:772,788`), `idNormalizer` (default `null`, threaded into the internal
+`adjacencyForKinds` call), `seeds` (explicit id iterable; default derives from `scored` as today).
+`scored` itself becomes optional (`= []`) — a pure viz walk has no lexical-match list, so the existing
+score-nudge machinery is gated behind `scored.length > 0 && maxSeed > 0` rather than erroring on empty
+input. New constant `MEMORY_SPIRAL_EXPAND_KINDS = ["saidInSession", "inReplyTo", "statedBy",
+"canonicalisedFrom"]` — the real memory-graph edge-kind inventory (traced via every
+`objectProperties.push`/`.find` site in `src/memory/*.mjs` and `src/sessions.mjs`; corrects this doc's
+earlier list, which incorrectly included `mgx:asksAbout` — that's code-graph-only). Return value
+changes from `undefined` to `[{id, hop}]` (every node the walk actually pops, seeds at hop 0) — safe,
+since the sole caller discards the return value today. New helper `mostRecentIndividual(graph,
+createdAtProp)` resolves item 1's "most recent `mgx:createdAt`" seed default (deterministic tie-break
+by id) — the `--focus`/CLI wiring itself stays out of this pass's scope.
+
+Tests: extend `test/codegraph.test.mjs` (new `relationKind` entries, a `derivedUpdatedAt` unit test, a
+memory-graph fixture proving `spiralExpand` reaches Session/Fact/Source via the new kinds — the one
+test that would have caught both the `moduleIdOf` and `relationKind` blockers together), fix the
+now-fragile exact-shape assertion at `test/memory-core.test.mjs:107-110` (adding `createdAt` to
+`upsertEdge`'s output breaks its strict 4-key `deepEqual`), add a re-append-preserves-createdAt case,
+and an `upsertSession`/trust-recompute `updatedAt` test.
+
 ### 3. Situational-fact seeding
 
 **At persona/vocabulary seeding time** (`initRepo()`, `src/init.mjs:205-335`, step 3 at `:248-314` is
