@@ -73,11 +73,62 @@ const KEEP = new Set([
  *  carried here too so the strategy stands alone) + the cascade's noise list. */
 const CURATED_NOISE = new Set([...wordsOf(FILLER_WORDS), ...wordsOf(CASCADE_NOISE)]);
 
-/** Strip the strippable tokens (see the file doc). Returns {text, dropped}. */
+/** Words this pass keeps but flags as UNCERTAIN (PLAN_CONVERSATION.md Finding 2
+ *  — the "store"/"keep" gap): wink's `isStopWord` is a generic English
+ *  dictionary, not purpose-built for this codebase — it happens to flag
+ *  "keep"/"put"/"get" but not their close synonyms "store"/"hold"/"place"/
+ *  "save" sitting in the exact same no-relation-verb slot ("where would i
+ *  keep/store a router"), so a KEPT word surviving the pass above is not
+ *  necessarily real content. A curated synonym list was tried and rejected
+ *  (see the file doc / PLAN_CONVERSATION.md): "store"/"hold"/"save" are
+ *  exactly the words most likely to ALSO be a real identifier ("where does
+ *  the store live" must not lose its subject). The general, non-curated
+ *  signal that discriminates the two: wink's POS tagger, reading the WHOLE
+ *  ORIGINAL sentence for real grammatical context (an isolated 2-word
+ *  fragment like "store router" tags BOTH words NOUN — confirmed live; the
+ *  same "store" in "where would i store a router" tags VERB, and in "where
+ *  does the store live" tags NOUN — also confirmed live, so the isolated
+ *  object phrase alone can never carry this signal; it must be read here,
+ *  off the whole sentence, before the phrase is extracted).
+ *
+ *  A KEPT word wink tags VERB here is returned as `maybeNoise`, NOT stripped
+ *  outright — this function has no graph to check a resolution against
+ *  (interpret/pipeline.mjs's own documented boundary: "no graph access
+ *  here"). The caller below turns this into a second candidate reading;
+ *  ask.mjs's traverse() (where the graph lives) tries both and prunes the
+ *  one that misses/ties in favor of the one that resolves cleanly —
+ *  mirroring resolveObject's own grain-word retry (try a variant, keep it
+ *  only on an unambiguous hit) and grammar/ace.mjs's parseAceAmbiguous
+ *  ("keep only complete, valid parses"). Never guessed here; always pruned
+ *  where the evidence (the graph) actually is. */
+function maybeVerbNoiseWords(words, kept, nlp) {
+  if (!nlp || typeof nlp.posTags !== "function" || !kept.length) return [];
+  const keptSet = new Set(kept.map((w) => w.toLowerCase()));
+  let tags;
+  try {
+    tags = nlp.posTags(words);
+  } catch {
+    return [];
+  }
+  const out = [];
+  for (let i = 0; i < words.length; i += 1) {
+    const w = words[i];
+    const lc = w.toLowerCase();
+    if (!/^[a-z]+$/.test(w) || KEEP.has(lc) || !keptSet.has(lc)) continue;
+    if (tags[i] === "VERB") out.push(lc);
+  }
+  return out;
+}
+
+/** Strip the strippable tokens (see the file doc). Returns {text, dropped,
+ *  maybeNoise} — maybeNoise is the POS-flagged uncertain-word list above,
+ *  `[]` whenever no `nlp` adapter is available (same graceful-degradation
+ *  discipline as the rest of this file: never a curated guess, never a throw). */
 export function stripNoise(text, nlp = null) {
+  const words = splitWords(text);
   const kept = [];
   const dropped = [];
-  for (const w of splitWords(text)) {
+  for (const w of words) {
     const lc = w.toLowerCase();
     const strippable = /^[a-z]+$/.test(w) && !KEEP.has(lc)
       && (CURATED_NOISE.has(lc)
@@ -85,7 +136,8 @@ export function stripNoise(text, nlp = null) {
     if (strippable) dropped.push(w);
     else kept.push(w);
   }
-  return { text: kept.join(" "), dropped };
+  const maybeNoise = maybeVerbNoiseWords(words, kept, nlp);
+  return { text: kept.join(" "), dropped, maybeNoise };
 }
 
 /** Pipeline registration (interpret/pipeline.mjs). */
@@ -94,7 +146,7 @@ export const noiseStripStrategy = {
   class: "noise-stripped",
   run(text, ctx = {}) {
     if (parseAnchored(text)) return null; // the grammar owns the text as-given
-    const { text: stripped, dropped } = stripNoise(text, ctx.nlp || null);
+    const { text: stripped, dropped, maybeNoise } = stripNoise(text, ctx.nlp || null);
     if (!dropped.length || !stripped) return null;
     // tier 1: the anchored templates over the stripped text — the strictest
     // re-parse, tried first so a template shape is never displaced by a looser
@@ -105,6 +157,23 @@ export const noiseStripStrategy = {
     // (see the file doc for the discipline/cost argument).
     const parsed = parseAnchored(stripped) || parseKeywordSpot(stripped, ctx.nlp || null);
     if (!parsed) return null;
+    // Finding 2 extension (PLAN_CONVERSATION.md): a bare "where"/"mentions"
+    // question is the ONE shape with no explicit relation verb gating its
+    // object (every other decomposition in keywords.mjs requires a real
+    // VERB_TO_KIND match before it ever runs), so it's the only place an
+    // unlisted light verb ("store", "hold", …) can leak into the object
+    // phrase untouched. Scoped to exactly that shape — deliberately not a
+    // blanket change to stripNoise's shared criteria, per the file's own
+    // construction-scoping caveat. `altObject` rides along on the SAME
+    // single candidate (not a second strategy candidate — that would force
+    // mergeStrategyResults' pre-resolution ambiguousParse surface on every
+    // hit, before anyone has checked whether it's even real ambiguity);
+    // ask.mjs's traverse() is the one place both the alternate reading and
+    // the graph are available together to actually prune it.
+    if (maybeNoise.length && (parsed.shape === "where" || parsed.shape === "mentions") && parsed.object) {
+      const altObject = parsed.object.split(/\s+/).filter((w) => !maybeNoise.includes(w.toLowerCase())).join(" ").trim();
+      if (altObject && altObject !== parsed.object) parsed.altObject = altObject;
+    }
     return {
       strategyId: "noise-strip",
       class: "noise-stripped",
