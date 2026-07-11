@@ -16,7 +16,7 @@ user toward precision queries rather than guessing; every answer is grounded or 
 - **Grammar & parsing** (`src/grammar/`): an ACE-inspired controlled fragment (~8 sentence
   patterns), plus multi-candidate ambiguity resolution — when a sentence has genuinely more than one
   valid reading, every surviving interpretation is surfaced instead of one being guessed
-  (`PLAN_DID_YOU_SEE_HER_DUCK.md`).
+  (`archive/PLAN_DID_YOU_SEE_HER_DUCK.md`).
 - **Memory** (`src/memory/`): an OWL-labelled JSON graph on disk. Three persistence backends: flat
   JSON (default), pure in-memory (zero disk I/O), SQLite (cached, incrementally-patched reads).
 - **Reasoning** (`src/syllogise.mjs`): an OWL 2 RL-grounded rule ladder (subclass transitivity,

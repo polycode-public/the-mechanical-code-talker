@@ -1,7 +1,11 @@
 # PLAN_VIZ.md — graph visualisation: recency-seeded spiral walk, pseudo-3D depth rendering, node/property timestamps, and situational-fact seeding
 
-> **STATUS: design-only, nothing implemented.** Grounded directly against real code in both
-> repos (citations below), not a from-scratch idea. Not staffed, not scheduled.
+> **STATUS: the three scoped traversal/timestamp items are IMPLEMENTED (commit `9510a43`) —
+> `adjacencyForKinds`'s id-normalizer + `relationKind`/`PROP_KIND` fix, `upsertEdge()` createdAt +
+> derived `updatedAt`, and `spiralExpand`'s generalization. Everything else below (situational-fact
+> seeding, rendering, the code-graph architectural decision) is still design-only.** Grounded
+> directly against real code in both repos (citations below), not a from-scratch idea. Not staffed,
+> not scheduled.
 
 ## Origin
 
@@ -339,12 +343,11 @@ for v1. A true-3D option is named below as a considered alternative, not ruled o
 
 ## Next step
 
-Not staffed. When picked up, roughly in dependency order: (1) settle the code-graph architectural
-question (provider-populated vs. a new tmct-owned local-git mode); (2) add `createdAt` to
-`upsertEdge()` and stamp explicit update signals at the known in-place-mutation sites (Session, trust
-recompute); (3) generalise `spiralExpand`'s seed source, class restriction, and edge-kind set, and
-expose `hop` in its output shape; (4) build the maintainer-side git-log-corpus generation step and
-wire seed-time README ingestion + the new `Source` "seed" kind; (5) add the eager session/sessionless
-anchor individual with a `mode` field, deciding the two-Session-classes question at the same time;
-(6) spike the CSS-depth-effect renderer against a real `.tmct/memory/graph.json` from an active
-session, checking the "structurally less noisy than seonix's default" hypothesis for real.
+Traversal/timestamp groundwork (items 1-3) is done — see "Concrete implementation" above. Not
+staffed beyond that. When picked up, roughly in dependency order: (1) settle the code-graph
+architectural question (provider-populated vs. a new tmct-owned local-git mode); (2) build the
+maintainer-side git-log-corpus generation step and wire seed-time README ingestion + the new
+`Source` "seed" kind; (3) add the eager session/sessionless anchor individual with a `mode` field,
+deciding the two-Session-classes question at the same time; (4) spike the CSS-depth-effect renderer
+against a real `.tmct/memory/graph.json` from an active session, checking the "structurally less
+noisy than seonix's default" hypothesis for real.

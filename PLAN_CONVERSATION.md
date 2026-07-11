@@ -1,10 +1,10 @@
 # PLAN_CONVERSATION.md — findings that graduated out of the fast loop's safe-fix scope
 
-> **STATUS: Findings 1 and 2 are RESOLVED; Findings 3, 4, and 5 are open** — see each one's own
-> section below. Not a build plan with a staged implementation — this doc exists to hold findings
-> precisely enough that a future session can pick them up, the same role `PLAN_SYLLOGIST.md` plays for
-> reasoning-engine research pulled out of `PLAN_INFERENCE_TESTING.md`. Nothing here is scheduled,
-> staffed, or blocking anything else.
+> **STATUS: Findings 1, 2, 3, and 5 are RESOLVED (commit `9510a43`); Finding 4 is open** — see each
+> one's own section below. Not a build plan with a staged implementation — this doc exists to hold
+> findings precisely enough that a future session can pick them up, the same role `PLAN_SYLLOGIST.md`
+> plays for reasoning-engine research pulled out of `PLAN_INFERENCE_TESTING.md`. Nothing here is
+> scheduled, staffed, or blocking anything else.
 
 ## Why this doc exists
 
@@ -223,7 +223,7 @@ narrower criteria not changing underneath it.
 
 ---
 
-## Finding 3 — the forward-shape query branch computes `entityType` but never filters on it, so "what modules does X have" answers with function names instead
+## Finding 3 — the forward-shape query branch computes `entityType` but never filters on it, so "what modules does X have" answers with function names instead [RESOLVED, commit 9510a43]
 
 Found live this session, against a scratch copy of `examples/mini-webapp` (never the committed
 fixture): `"what modules does the questboard app have"` answers `"createApp and start."` — the two
@@ -388,7 +388,7 @@ two-line change; each touches shared mechanism with its own pinned-regression su
 
 ---
 
-## Finding 5 — no query-side shape for CapableOf, reverse-HasA, or reverse-inherits against the general-knowledge persona vocabulary
+## Finding 5 — no query-side shape for CapableOf, reverse-HasA, or reverse-inherits against the general-knowledge persona vocabulary [RESOLVED, commit 9510a43]
 
 Found live this session, default persona, no `--repo`: after `"what is a dog"` answers `dog is a
 kind of animal` / `dog has tail` / `dog can bark` (three real corpus:human facts), the natural
