@@ -16,31 +16,17 @@ version again until the moment of actually pushing (see Discipline, below).
 
 ## Open items
 
-- **`PLAN_CONVERSATION.md` Finding 1 (adjective-taught-as-class) is unresolved, but now has a fresh
-  canonical repro and a background fix agent in flight.** `"cheese is blue"` mints `blue` as a class
-  (`cheese rdfs:subClassOf blue`) instead of a datatype property, then `"what is blue"` gives no
-  useful answer at all — the mis-mint compounds into total silence, not just the wrong shape. Finding
-  2 is already resolved (commit `85d46f0`). A background agent is implementing Finding 1 per its own
-  documented fix sketch (POS-check gate in `unknownObjectFallback`, `src/chat.mjs:1959`) — check its
-  worktree/PLAN_CONVERSATION.md's STATUS line before starting this fresh.
-
-- **Fast-loop round 1 found 2 more real dead-ends, root-caused but correctly left unpatched** (both
-  now being written up as new `PLAN_CONVERSATION.md` findings by the same background agent): (a)
-  `ask.mjs`'s forward-shape query branch (~line 3198) computes the requested `entityType` but never
-  filters on it, so `"what modules does X have"` can return function names instead of modules; (b)
-  `TEACH_PRONOUN_RE` (`chat.mjs:2336`) has no question-lead guard and `RELATIONS.inherits`
-  (`ask-vocab.mjs:153`) has no "uses X as its base" phrasing, so an anaphoric inheritance question
-  like `"it uses which controller as its base"` gets misrouted into teach-a-fact.
-
-- **Live testing also surfaced a query-side gap for the general-knowledge persona vocabulary**: there
-  is no query shape for CapableOf (`"can a dog bark"`, `"what can a dog do"`) or reverse-HasA
-  (`"what has a tail"`) at all — `ask.mjs`'s `RELATIONS` verb table is entirely code-graph-shaped
-  (`has`/`have` is hardwired to the code `defines` relation), so these fall through to the generic
-  code-graph miss wall even with no repo loaded. Separately, `"what is a tail"` silently resolves to
-  ConceptNet's process/Unix-command sense only, dropping the animal-body-part sense the same session
-  just taught via `dog has tail` — a corpus word-sense collision, root cause not yet confirmed.
-  Under investigation by the same background agent; expect this to graduate into new
-  `PLAN_CONVERSATION.md` findings rather than a fast-loop-safe patch.
+- **`PLAN_CONVERSATION.md` Finding 1 (adjective-taught-as-class) is resolved** (commit `32ea675`,
+  same fix sketch the doc already had) — `"cheese is blue"` now mints a property, not a class; a
+  related bare "what is X" no-article regex bug found during verification is fixed alongside it.
+  Findings 3-5 are new, written up but not implemented: (3) `ask.mjs`'s forward-shape query branch
+  drops its `entityType` filter (`"what modules does X have"` can answer with function names); (4)
+  an anaphoric "it uses which controller as its base" question misroutes into teach-a-fact — three
+  independent sub-problems, not a small fix; (5) no query shape exists for CapableOf/reverse-HasA
+  against the general-knowledge persona (`"can a dog bark"`, `"what has a tail"`) — small/additive
+  per the investigation, but real regression-scoped work, not landed yet. Read `PLAN_CONVERSATION.md`
+  before picking any of these up. The `"tail"` word-sense collision is not new work — cross-referenced
+  to `ROADMAP.md`'s existing cross-domain-ontology research gap instead.
 
 - **`PLAN_SYLLOGIST.md`'s one genuinely open research question**: retraction-aware consistency under
   a hard budget + trust tiers (§3). Speculative sketch only, nothing implemented — next up only if

@@ -1977,6 +1977,34 @@ async function unknownSubjectFallback(payload, { memoryDir, sessionId, lexicon }
  *  or no genuine universal quantifier) falls through as a plain null,
  *  letting the ordinary teachLane cascade (property teach, then the generic
  *  honest-miss text) continue unaffected. */
+/** PLAN_CONVERSATION.md Finding 1 fix: before minting the object as a new
+ *  CLASS, ask wink's POS tagger (the SAME optional adapter subjectIsNounOrPropn,
+ *  above, already uses for this kind of disambiguation, via ask-nlp.mjs's
+ *  posTags) whether the word reads as anything OTHER than a NOUN/PROPN.
+ *  "every Record is persisted" tags "persisted" VERB (a past participle used
+ *  adjectivally); "every cache is bespoke" tags "bespoke" ADJ — both read as a
+ *  property claim about one word, not a brand-new class term, so this
+ *  fallback should decline and let the cascade fall through to
+ *  unknownAdjectiveFallback (below), which mints the SAME word correctly as a
+ *  property instead. A genuinely novel noun ("florble", "zorp") still tags
+ *  NOUN under wink's own out-of-vocabulary default (confirmed live), so this
+ *  never blocks the pre-existing mint-a-new-class behaviour the
+ *  vocabulary-growth feature needs. No wink installed, or any tagging
+ *  surprise, degrades to a null tag treated as "no signal" (never a decline)
+ *  — matching every other optional-adapter path in this file (ask-nlp.mjs's
+ *  own "null on any surprise, never a throw" discipline). */
+async function objectReadsAsNonNoun(word) {
+  try {
+    const { nlpAdapter } = await import("./ask-nlp.mjs");
+    const adapter = nlpAdapter();
+    if (!adapter) return false;
+    const [tag] = adapter.posTags([String(word || "")]);
+    if (!tag) return false; // no signal — never block the existing mint on a surprise
+    return tag !== "NOUN" && tag !== "PROPN";
+  } catch {
+    return false;
+  }
+}
 async function unknownObjectFallback(payload, { memoryDir, sessionId, lexicon }) {
   if (!memoryDir) return null;
   const m = String(payload).trim().match(UNKNOWN_SUBJECT_RE);
@@ -1989,6 +2017,7 @@ async function unknownObjectFallback(payload, { memoryDir, sessionId, lexicon })
   if (!subjectGrounded) return null; // ungrounded subject isn't this fallback's asymmetry — never a guessed mint
   const objectGrounded = await isGroundedTerm(objectRaw, lex, memoryDir);
   if (objectGrounded) return null; // object already known — nothing to mint
+  if (await objectReadsAsNonNoun(objectRaw)) return null; // reads like an adjective/verb, not a class noun — defer to unknownAdjectiveFallback
   const quantifier = /^every$/i.test((det || "").trim()) ? "every" : "";
   return teachFact(memoryDir, sessionId, {
     subject: subjectRaw, predicate: SUBCLASS_PREDICATE, object: objectRaw, quantifier,
@@ -5415,12 +5444,28 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
   // it as meta). "what is a Y" reports Y's MEMBERS (object-side); "what kind of
   // thing is an X" reports X's own TYPE (subject-side first), so both directions
   // of a single remembered "X is a kind of Y" are queryable.
+  //
+  // Bug found live this session (PLAN_CONVERSATION.md verification, Finding 1):
+  // this branch exists specifically to catch the bare, no-article "what is X"
+  // shape the grammar's own T5 template DECLINES to parse for a non-ENTITY_TO_TYPE
+  // term (grammar.mjs's own closed-set gate on the bare form) — envelope.parsed
+  // stays null for exactly this case, which is this branch's own trigger
+  // condition. But the regex required a MANDATORY article ("an?" with no "?"),
+  // the opposite of BARE_WHATIS_RE's own already-established "article optional"
+  // convention (chat.mjs:5777, used one function up in this same cascade) — so
+  // this branch could never actually fire for the bare form it exists to catch.
+  // "every cache is a florble" / "what is florble" (no article) and "cheese is
+  // blue" / "what is blue" (no article) both silently fell through to the
+  // generic orientation card as a result, even though "what is a florble"/
+  // "what is a blue" (WITH the article) correctly found the reverse fact.
+  // Matching BARE_WHATIS_RE's own optional-article group fixes this at the
+  // root, for every term alike (not a term/lexicon-specific asymmetry at all).
   let term = envelope?.parsed?.shape === "meta" ? envelope.parsed.object : null;
   let kindOf = false;
   const mk = q.match(KIND_OF_RE);
   if (mk) { term = mk[1]; kindOf = true; }
   else if (!term && !envelope?.parsed) {
-    const m = q.match(/^what\s+(?:is|are)\s+an?\s+(.+?)[?.!\s]*$/i);
+    const m = q.match(/^what\s+(?:is|are)\s+(?:an?\s+)?(.+?)[?.!\s]*$/i);
     if (m) term = m[1];
   }
   if (!term) return null;

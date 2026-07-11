@@ -201,3 +201,36 @@ test("read-back: an un-asserted superclass term still honestly misses (byte-iden
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+// PLAN_CONVERSATION.md Finding 1 verification (this session): factReadBack's
+// own no-parse-miss fallback regex (part (c), chat.mjs ~5452) required a
+// MANDATORY article ("what is an? X"), the opposite of BARE_WHATIS_RE's own
+// already-established "article optional" convention used one function up in
+// the same cascade (chat.mjs:5777) — so this branch could never actually fire
+// for the bare, no-article form it exists to catch (its own trigger condition
+// is `!envelope?.parsed`, which is exactly what the grammar's T5 template
+// leaves null for a bare "what is X" when X isn't an ENTITY_TO_TYPE code-graph
+// kind word). "component" isn't in ENTITY_TO_TYPE, so "what is component"
+// (bare) reaches this exact branch. Fixed by matching BARE_WHATIS_RE's own
+// optional-article group.
+test("read-back: the BARE (no-article) 'what is Y' form now finds the same remembered reverse fact 'what is a Y' already did — a one-character regex fix, not a term/lexicon-specific asymmetry", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-rb-bare-"));
+  try {
+    await runTurn("every function is a component", { config: CONFIG, memoryDir: dir, sessionId: "rb-bare" });
+
+    const withArticle = await runTurn("what is a component", { config: CONFIG, memoryDir: dir });
+    const bare = await runTurn("what is component", { config: CONFIG, memoryDir: dir });
+    assert.match(bare.answer, /^[Yy]ou told me: function is a kind of component \(source: ace:chat:rb-bare@/);
+    assert.equal(bare.record.via, "fact");
+    assert.equal(bare.record.miss, false);
+    // same fact, same rendering shape as the WITH-article form — article-optional,
+    // not a divergent answer (both start with the identical fact sentence).
+    assert.equal(
+      bare.answer.match(/^[Yy]ou told me: function is a kind of component/)?.[0],
+      withArticle.answer.match(/^[Yy]ou told me: function is a kind of component/)?.[0],
+    );
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
