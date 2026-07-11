@@ -33,27 +33,39 @@ This is the complement to `SKILL_BENCHMARK_CEFR_ENGLISH.md`, not a replacement:
 Use them together: this loop catches the dead-ends a mean can hide (a 1.4 mean can still leave a
 user stuck at turn 4); the benchmark confirms the fixes moved the aggregate and didn't regress it.
 
+**Re-scoped 2026-07-11 (operator instruction, after watching a capped-sprint "one run" pass take
+over an hour on a single round under concurrent load): this skill's job is the WIDER assessment —
+finding where a whole capability's limit sits, across genuinely different frames, so the operator
+can decide where an architectural uplift is worth paying for.** The narrower job — catching and
+fixing LOCAL traps a real visitor would actually hit, quickly, looping until some other work
+finishes — now belongs to `SKILL_AGENT_FAST_LOOP.md`, not this doc. The two are complementary, not
+overlapping: the fast loop finds and patches the small stuff continuously; this skill periodically
+asks the bigger question ("where does this capability actually stop working, and across how many
+different kinds of user"), and its findings graduate into a `PLAN_*.md` doc (see
+`PLAN_CONVERSATION.md` for the first real example, born from exactly this kind of finding) rather
+than a quick patch.
+
 This skill has **three modes**, sharing the same discipline (§1):
 
+- **Persona-sweep mode (§3.4) — the DEFAULT for a single "one run" pass.** Several background
+  sub-agents dispatched IN PARALLEL, each seeded with a genuinely different persona/frame (not a
+  different topic within the same frame). Genuinely parallel, not chained, so wall-clock stays close
+  to one round's cost regardless of how many frames run — and it's the mode that actually finds a
+  dead-end like "john is a man," which single-frame exploration structurally can't reach no matter
+  how much question-variety runs inside it. Use this whenever the operator asks for "one run" of
+  this benchmark, unless they explicitly ask for one of the other two.
+- **Capped sprint mode** (§3) — a bounded, small number of CHAINED rounds (default 3), each round's
+  chat delegated to a background sub-agent, each round building on the prior round's transcript for
+  depth/realism. Genuinely serial by construction (round 2 needs round 1's transcript), so its
+  wall-clock is strictly additive across rounds — reserve it for when the operator specifically wants
+  to WATCH a sprint happen turn by turn and values follow-up depth over speed, not as the default
+  measurement pass.
 - **Full ladder mode** (§2) — open-ended, run by the main agent inline, ratcheting a Tier 0–6
-  complexity ladder one tier at a time.
-- **Capped sprint mode** (§3) — a bounded, small number of rounds (default 3), each round's chat
-  delegated to a background sub-agent under the coordinator model, chained off the prior round's
-  transcript.
-- **Persona-sweep mode** (§3.4) — several background sub-agents dispatched IN PARALLEL, each seeded
-  with a genuinely different persona/frame (not a different topic within the same frame), each
-  generating its own conversation freely. This is the mode that actually finds a dead-end like
-  "john is a man" — capped-sprint chaining and full-ladder domain exploration both stay inside
-  whichever single frame the operator or the tier ladder started with.
+  complexity ladder one tier at a time. Pick this to deliberately push into new complexity territory.
 
-Pick full ladder mode to push into new complexity territory; pick capped sprint mode for a
-bounded, mostly-hands-off pass, or when the operator wants a clear stop and a recommendation at
-the end; pick persona-sweep mode when the goal is specifically to find dead-ends a single-frame
-exploration structurally can't reach.
-
-> **Invoke it:** *"Follow `SKILL_BENCHMARK_CONVERSATION.md` and run the dialogue-flow loop"*
-> (optionally: a starting graph, a complexity tier, "as a capped sprint" / a round cap for capped
-> sprint mode, or "as a persona sweep" for §3.4's parallel-diverse-frames mode).
+> **Invoke it:** *"Follow `SKILL_BENCHMARK_CONVERSATION.md` and run the dialogue-flow loop"* runs
+> persona-sweep mode by default. Ask explicitly for *"as a capped sprint"* (optionally a round cap)
+> or a complexity tier for full ladder mode to get the other two.
 
 ---
 
@@ -381,9 +393,10 @@ worth recording as a versioned artifact.
   reached, stop early (§3.1 Round-Step 5) — don't force a 3rd round's worth of manufactured fixes
   just to hit the number.
 
-### 3.4 Persona-sweep mode — parallel, genuinely different frames, not chained rounds
+### 3.4 Persona-sweep mode — parallel, genuinely different frames, not chained rounds — the default single-run mode
 
-**(2026-07-10, born directly from the "john is a man" miss.)** Capped sprint mode (§3) chains
+**(2026-07-10, born directly from the "john is a man" miss; promoted to this skill's default
+single-run mode 2026-07-11 — see the top of this doc.)** Capped sprint mode (§3) chains
 rounds for realism — each round follows naturally from the last, which is exactly right for
 depth, but it means every round in a sprint shares ONE frame (whatever the first round opened
 with). Full ladder mode's surface-variation axis (§2.2) varies wording, not the user's underlying
@@ -444,18 +457,22 @@ would itself become the thing exploration drifts toward):
 
 ## 4. The `BENCHMARK_CONVERSATION_<version>.md` report
 
-Every playtest run — a full-ladder tier completion (§2) or a capped sprint (§3) — writes ONE
-versioned report doc, matching the naming convention `SKILL_BENCHMARK_CEFR_ENGLISH.md` §1 and
-`SKILL_BENCHMARK_INFERENCE.md` already use: `BENCHMARK_CONVERSATION_<version>.md`, named after the
-`package.json` version the run measured. A re-run of the same version (no version bump between
-runs) appends `_00N`: `BENCHMARK_CONVERSATION_0.9.0_001.md`, `_002`, … This sits alongside, and does not
-replace, the existing frozen `test/chatflow-*.test.mjs` regression files — the write-up is the
-narrative record, the frozen tests are the enforcement.
+Every playtest run — a persona sweep (§3.4, the default), a full-ladder tier completion (§2), or a
+capped sprint (§3) — writes ONE versioned report doc, matching the naming convention
+`SKILL_BENCHMARK_CEFR_ENGLISH.md` §1 and `SKILL_BENCHMARK_INFERENCE.md` already use:
+`BENCHMARK_CONVERSATION_<version>.md`, named after the `package.json` version the run measured. A
+re-run of the same version (no version bump between runs) appends `_00N`:
+`BENCHMARK_CONVERSATION_0.9.0_001.md`, `_002`, … This sits alongside, and does not replace, the
+existing frozen `test/chatflow-*.test.mjs` regression files — the write-up is the narrative record,
+the frozen tests are the enforcement.
 
 Report structure:
-- **Headline** — which mode ran (full ladder or capped sprint), the tier reached or the round count,
-  the number of dead-ends found and fixed, and how many regression tests were frozen this run.
-- **Per-round or per-tier breakdown** — full ladder mode: one entry per tier played this run, entry
+- **Headline** — which mode ran (persona sweep, full ladder, or capped sprint), the persona count or
+  tier reached or the round count, the number of dead-ends found and fixed, and how many regression
+  tests were frozen this run.
+- **Per-persona, per-round, or per-tier breakdown** — persona-sweep mode: one entry per persona
+  (its frame, what it found, ranked by how many other personas independently hit the same dead-end
+  per §3.4's own ranking rule); full ladder mode: one entry per tier played this run, entry
   points tried, dead-ends found, fixes made; capped sprint mode: one entry per round (the same shape
   as §3.2's end-of-sprint report), what was tested, found, and shipped.
 - **Ladder position reached** — the Tier 0–6 position this run reaches or confirms clean (§2.1). This
@@ -491,8 +508,11 @@ Report structure:
   wording adds ambiguity about when the conversation actually ends. If a round turns up a genuine
   farewell dead-end, note it and move on rather than generalizing the matcher further (operator
   decision, 2026-07-10).
-- **Delegate long-running work under the coordinator model.** Capped sprint mode (§3) is the default
-  example of this — the CHAT step is a background sub-agent by design. In full ladder mode, a
+- **Delegate long-running work under the coordinator model.** Persona-sweep mode (§3.4) is the
+  clearest example of this — every persona's CHAT step is an independent, parallel background
+  sub-agent by design, which is also why it's the default single-run mode (§3's capped sprint is
+  serial by construction; parallel wins on wall-clock whenever chained realism isn't the point). In
+  full ladder mode, a
   substantial fix (§1 Step 3) that needs real implementation effort can equally be handed to a
   background sub-agent while the coordinator holds the appraisal/replay loop, per `CLAUDE.md`'s
   standing working model — the point in either mode is to keep the main chat free for judgment calls
@@ -502,15 +522,22 @@ Report structure:
 
 ## 6. One-paragraph TL;DR
 
+This skill is the WIDE assessment: where does a capability actually stop working, across genuinely
+different kinds of user, so the operator can decide whether an architectural uplift is worth it — the
+narrower job of catching and fixing local traps quickly now belongs to `SKILL_AGENT_FAST_LOOP.md`.
 Play a curious user against a loaded example graph: follow the product's own guided questions, drill
 down with natural phrasing, and mark every DEAD-END (wall / "isn't a term" / "unknown qualifier" /
 phrasing-miss / an invited follow-up the engine can't take). Fix the dead-ends by ROUTING natural
 phrasings to capabilities tmct already has (not by adding grammar rigidity), keep `npm test` +
 showcase + the bench green, then REPLAY the exact same conversations until they flow to a useful
-outcome with zero dead-ends — and freeze them as regression transcripts. Run this as **full ladder
-mode** (§2: ratchet the Tier 0–6 complexity ladder one tier at a time, open-ended, run inline) or
-**capped sprint mode** (§3: a bounded, default-3-round cadence with each round's chat delegated to a
-background sub-agent under the coordinator model, chained off the prior round, shipping confirmed
-fixes immediately). Either way, write up the run as `BENCHMARK_CONVERSATION_<version>.md` (§4) — headline,
-per-round/per-tier breakdown, ladder position reached, and a next-steps recommendation — alongside
-the frozen `test/chatflow-*.test.mjs` regression tests.
+outcome with zero dead-ends — and freeze them as regression transcripts. Run this as **persona-sweep
+mode** by default (§3.4: several genuinely different persona/frame sub-agents dispatched IN
+PARALLEL — fast, because it's parallel, and the only mode that reliably finds a dead-end outside
+whatever single frame a chained or ladder run happens to start in), or ask explicitly for **full
+ladder mode** (§2: ratchet the Tier 0–6 complexity ladder one tier at a time, open-ended, run inline)
+or **capped sprint mode** (§3: a bounded, default-3-round CHAINED cadence, serial by construction —
+reserve it for when the operator wants to watch a sprint's follow-up depth in real time, not as the
+default single-run pass). Whichever mode, write up the run as `BENCHMARK_CONVERSATION_<version>.md`
+(§4) — headline, per-persona/per-round/per-tier breakdown, ladder position reached, and a next-steps
+recommendation, feeding a `PLAN_*.md` doc when a finding turns out to be an architectural limit
+rather than a routing fix — alongside the frozen `test/chatflow-*.test.mjs` regression tests.
