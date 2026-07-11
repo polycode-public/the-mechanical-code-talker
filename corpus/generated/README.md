@@ -11,7 +11,7 @@ that doesn't re-parse is dropped, never committed.
 Regenerate: `node scripts/generate-template-variants.mjs`. Coverage
 measurement: `node scripts/template-coverage.mjs` (baseline) and
 `node scripts/template-coverage.mjs --rescue corpus/generated/ace-surface-variants.jsonl`
-(after). See `PLAN_TEMPLATE_COVERAGE.md` for the design and the real
+(after). See `archive/PLAN_TEMPLATE_COVERAGE.md` for the design and the real
 before/after numbers.
 
 ## Row shapes

@@ -96,3 +96,5 @@ RECOMMENDED ACTION: One-line fix to corpus/generated/README.md:14, change the ba
 STATUS: OPEN
 
 [2026-07-11 23:58Z] ✅ DONE — the docs-archive worker added the missing "wire the corpus into the live answer path" clause to ROADMAP.md before committing (0e6ed3e); verified directly (grep ROADMAP.md line 128-131) that both remaining-scope items now survive the archive.
+
+[2026-07-11 23:58Z] ✅ DONE — fixed the corpus/generated/README.md:14 stale pointer myself (main loop, not the worker) since it was a trivial one-line change; now points at archive/PLAN_TEMPLATE_COVERAGE.md.
