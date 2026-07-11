@@ -40,511 +40,206 @@ session is the COORDINATOR (plans, launches, integrates, answers the operator), 
   that doesn't exist yet" noise in practice and was reverted by operator instruction 2026-07-09.
   Between pushes, `package.json`'s version should always equal whatever's actually live on npm.
 
-## Where we are now (2026-07-10)
+## Recently shipped capabilities
 
-The full `SKILL_CHAT_PLAYTEST.md` dialogue-flow tier ladder is complete, tiers 0 through 6.
-Tiers 0, 1, 2, and 4 each closed in one pass. Tier 3 took 7 passes to track down a recurring
-`resolveObject` substring-match weakness. Tiers 5 and 6 each ran the full 5-cycle cap and each
-turned up one genuinely important correctness bug alongside a batch of routing fixes. Full
-per-cycle detail is in `HANDOVER.md`'s "The dialogue-flow playtest loop" section.
+Status legend: **DONE** = shipped and verified/measured; **PARTIAL** = shipped but with a known
+gap; **TODO** = not started. Each entry points at the plan doc, benchmark report, or test file
+that carries the full design/measurement detail rather than repeating it here. For the exact
+current published/pushed version, see `HANDOVER.md`'s version-state note.
 
-`npm test` is green at **1355** (up from 1258 at the start of this session). v1.0.7 is
-published (0.9.11 → 1.0.0 → 1.0.7 across an earlier session; the exact release chain and
-file:line detail are in `HANDOVER.md`). Nothing has pushed since, so the local version sits at
-1.0.9 per the bump-at-push-time policy.
+### Chat surface & dialogue flow
 
-Test count across the session's later stretch:
+- **Dialogue-flow playtest ladder — DONE, tiers 0-6** (`SKILL_BENCHMARK_CEFR_ENGLISH.md`'s
+  playtest section, `test/chatflow-tier*.test.mjs`). Bootstrap/identity through the messy
+  real-user tier all pass. The ladder's own hardening history is worth keeping: a recurring
+  `resolveObject` substring-match weakness (short connectives like "and"/"it" hijacking
+  conversational focus) took several passes to root-cause and fix; the later tiers also caught two
+  real correctness bugs (a word-overlap fallback with no exclusion for common code-noun suffixes
+  like "module"; an over-eager property-adjective matcher discarding an already-correct
+  graph-computed answer).
+- **First-run/onboarding experience — DONE** (extends Phase 10 below). Identity/capability-led
+  greeting before any caveat, an explicit "no LLM involved" answer for the identity/AI-ID family,
+  a `vocabExampleHint` that only offers terms confirmed to resolve in the session's actual seed
+  state, and broadened conversational recognition (dialect, register, slang, elongation, a
+  bounded-fuzzy typo layer) — all curated closed-set additions, per this project's standing
+  preference over general grammar rules.
+- **Compound-name / multi-word resolution — DONE**. `resolveObject` (`src/ask.mjs`) gained a
+  multi-word compound-term tier alongside its existing basename-exact/prefix-suffix and
+  derivational-stem tiers, so "the payment system" resolves `PaymentSystem`,
+  `payment-system`, compound paths, and interface-style names. `test/ask-compound-resolve.test.mjs`.
+  `/describe`'s own resolver doesn't share this tier yet — see Next steps below.
+- **Vocabulary growth via chat teaching — DONE**. New terms mint bidirectionally: a known-object
+  side (`redis is a cache`) and, via `unknownObjectFallback`, a known-subject/unknown-object side
+  too (`every cache is a store`), gated on a genuine universal quantifier so it can't reopen the
+  general lexicon bypass. Quantifier phrasings ("some/a few Xs are Ys", "your X is a Y") and
+  quantifier recall ("how many Xs are Ys" → "A few.") are supported. `test/chat-teach-quantifier.test.mjs`.
+- **General verb-to-predicate teaching — DONE**. Any verb, not just the closed is/has/are set, can
+  become a taught predicate through ordinary chat ("remember margo eats ribs" mints its own
+  predicate); the query side answers yes/no and "what does X verb" off the same store.
+- **Live in-browser chat demo — DONE**. The GitLab Pages homepage runs the real `src/ask.mjs`
+  query engine client-side (wink-nlp via `esm.sh`, an import-map shim for 3 Node-only static
+  imports); visitors get a genuine interactive input box computing real answers. No backend on
+  GitLab Pages — stated plainly rather than implied.
+- **Goal-inference line — DONE**. Every structural/vocabulary answer carries a short
+  "Goal (inferred): ..." line, distinct from the opt-in `/narrate` full-trace mode.
+- **Inherited-member disclosure — DONE**. A membership query against a class with no own matching
+  members (e.g. "public methods of TaskController") walks `ancestorsOf` nearest-first and
+  discloses the inherited source out loud, never presenting it as the class's own.
+- **Seonix dogfooding backlog — mostly DONE**. Seonix (a sibling project consuming tmct as a real
+  dependency) ran 17 rounds of dogfooding against a real 27,929-module production estate; the
+  backlog was triaged into 5 batches. Batches 1-3 (existence-query correctness, bare-noun/reverse
+  `inherits` parsing, purpose/identity phrasing, recent-commit rendering) are DONE. Batch 4/5's
+  cross-graph disambiguation-ranking fix is DONE (a new committed fixture graph,
+  `test/fixtures/large-scale/`, reproduces and regression-covers it); cochange phrasing variants
+  and one unverified "multi-root" substring case remain — see Next steps below.
 
-| Work | `npm test` |
-| --- | --- |
-| Playtest-freeze verification pass (Tiers 0/1/2/4 + operator bugs A-F, chat-tested live and frozen as regressions) | 1299 → 1303 |
-| `resolveObject` tier-3 derivational-stem bridge, closing the one dead-end the freeze pass found | 1303 → 1307 |
-| Tier 5 (teach + recall + reasoning in dialogue), 5 cycles | 1307 → 1328 |
-| Tier 6 (the messy real user), 5 cycles, run alongside a background test-suite health pass | 1328 → 1345 |
-| Compound-name resolution (multi-word queries to joined-token symbol names) | 1345 → 1352 |
-| Vocabulary-growth mirror fix — known-subject/unknown-object mint (`unknownObjectFallback`), so new terms compound turn over turn | 1352 → 1355 |
-| `findActionPath` (`src/planning.mjs`) — generic bounded on-demand-successor state-space search, `PLAN_HANOI.md`'s Phase 2 kernel, proven against a small toy graph; not wired into chat, Hanoi itself not started | 1355 → 1361 |
+### Teaching, memory & reasoning
 
-**INFBENCH re-measured against 1.2.0** (measurement-only dispatch, 2026-07-09): `INFBENCH_1.2.0.md`
-confirms chat/INF-A2 now closes to 100% (the cax-sco/proof-chase win the STATUS banner above already
-claimed) but also finds chat/INF-C1 has flipped from an honest ceiling to a genuine 93%-fabrication
-regression, traced to the new general-verb-to-predicate query lane answering "no" on an absent fact
-instead of declining — a real correctness bug, separate from and cheaper than the still-gating
-INF-B1 (`cax-dw`) work.
+- **Teaching new relations/rules via chat — DONE, all 6 items** (`PLAN_TAUGHT_RELATIONS.md`).
+  Relational fact teach + query readback ("ahab is the father of john"); relation alias/union
+  chase (a taught "father ⊑ parent" lets "is ahab a parent of john" resolve); adjective-mint for
+  new properties; fixed-hop `compose2` composition rules ("a grandparent is a parent of a
+  parent", hop-counted `findActionPath` search); property-filtered composition rules ("a
+  grandfather is a grandparent who is male", via a generic recursive `resolveRelationChase`); and
+  recursive/reachability rules ("a descendant is a parent, or a parent of a descendant",
+  enumerated via `findReachableSet`). The reverse query shape ("who is the grandparent of X") is
+  also wired. `test/chat-taught-relations.test.mjs` (26 cases, including a full family-tree
+  integration test) covers the whole scope end-to-end. See `PLAN_TAUGHT_RELATIONS.md` for the full
+  design.
+- **INFBENCH ladder — gated at INF-B1 (33% completion)**, unchanged across several
+  re-measurements since none of the taught-relations work touches that band; chat/INF-A2 is at
+  100%. A genuine INF-C1 fabrication regression (the general-verb-to-predicate query lane
+  answering a confident "no" on an absent fact instead of declining) was found and fixed, back to
+  its honest 93%-completion/0%-fabrication ceiling. Beyond Phase 9's initial OWL 2 RL build (below),
+  further inference rules have since landed and are chat-wired: disjointness (`cax-dw`),
+  someValuesFrom restriction membership (`cls-svf1`), a consistency checker that refuses to answer
+  from a subject whose own taught types contradict each other (INF-C2), and
+  `scm-svf1`/cardinality monotonicity/`cax-maxc0` (kernel arm 100%, chat arm 99%). See the dated
+  `INFBENCH_*.md` reports and `archive/PLAN_INFERENCE_TESTING.md` (fully shipped and archived) for
+  the measured history.
+- **Planning kernels — DONE at the kernel level, not yet wired into a domain**. `findActionPath`
+  (bounded on-demand-successor state-space search) and its sibling `findReachableSet` (open-ended
+  reachability enumeration, no fixed goal) both live in `src/planning.mjs`, proven against toy
+  graphs (`test/planning.test.mjs`). Neither Hanoi nor guess-the-number (the two domains these
+  kernels were built for) is wired up yet — both stay design-only, see `PLAN_HANOI.md` /
+  `PLAN_GUESS_NUMBER.md`.
+- **Completions (extractive multi-sentence answers) — DONE, Stages 0-3** (`archive/PLAN_COMPLETIONS.md`).
+  `src/completions/` runs a search → group → infer → prune → complete pipeline: connected-components
+  grouping over the memory block-similarity graph, a closed 4-relation cross-group inference
+  vocabulary (supports/contradicts/elaborates/exemplifies), PageRank+IDF extractive ranking, and an
+  auditable assembly/grammar pass — every output sentence traces to a source span. A
+  `graphService` adapter (`src/completions/graph-adapter.mjs`) grounds "give me a detailed summary
+  of X" in the graph/taught facts on a subject's first mention in a session.
 
-**INF-C1 fabrication FIXED (2026-07-09, follow-up dispatch)**: `GENERAL_VERB_YESNO_RE`'s no-hit
-branch (`src/chat.mjs`) now declines (`null`) instead of asserting a confident "no" when no taught
-fact matches the queried subject/predicate/object triple, falling through to the ordinary
-honest-miss cascade — same convention as `WHO_OWNS_RE`'s own no-hit branch. Re-ran `npm run
-infbench`: chat/INF-C1 is back to **93% completion / 0% fabrication**, its `0.8.2`-era honest
-ceiling, exactly as predicted (up from `1.2.0`'s 0% completion / 93% fabrication). Everything else
-in the ladder is unchanged — still gated at INF-B1 (33% completion), unaffected by this fix.
-`npm test` 1361 → 1362 (this fix's own contribution; see `HANDOVER.md` for the combined total
-alongside the concurrent Rule-storage dispatch).
+### Distribution, persona & memory backends
 
-**`PLAN_TAUGHT_RELATIONS.md`** (research/design, 2026-07-09, nothing implemented): scopes teaching
-tmct brand-new relations and rules through ordinary chat (a Prolog-style family tree — father,
-parent, grandparent, descendant — none of it hardcoded, all of it taught), reusing
-`findActionPath` for the hop-counted relation chase and a new sibling kernel, `findReachableSet`,
-for open-ended enumeration. Live-testing while designing it surfaced real, already-shipped gaps:
-the "is a kind of" teach phrasing isn't accepted anywhere today, a "parent" example in the original
-scoping conversation only worked by an accidental lexicon collision, and a wrapped property-teach
-shape (`TEACH_PROPERTY_RE`) has no groundedness check at all, unlike the newer subject/object
-mint-fallback pair's explicit discipline. See `HANDOVER.md` for the full finding list; this is
-next-session pickup material, not yet started.
+- **Default human-world persona — DONE, all three size tiers** (`archive/PLAN_SEED.md`). `tmct
+  init` with no flags seeds a genuine everyday-knowledge persona by default (Small: 664 facts,
+  650-word lexicon, 120 WordNet-sourced example sentences; Medium: 1,608 facts; Large: 13,609
+  facts with real multi-hop WordNet hypernym chains), with SEON/ConceptNet now opt-in rather than
+  default. A working cross-ontology bridge test proves `scm-sco` composes WordNet's and
+  Schema.org's independently-built taxonomies. Full design, exact numbers, and merge-conflict
+  detail: `archive/PLAN_SEED.md`.
+- **Unified CLI/config model — DONE**: a single `--repo`/`--graph`/`--config` flag model
+  (replacing four duplicated `configFor` implementations), multi-graph loading, a new `ontology`
+  extension kind, and a `tmct import` verb. The `createSession`→`initRepo` auto-init convergence
+  means a programmatic `runChat()`/`createSession()` call on a bare directory now runs the same
+  full init path as the CLI, leaving a real `tmct.toml` + `.tmct/init.json`.
+- **Memory persistence backends — DONE**: a pure in-memory store with zero disk I/O, and a SQLite
+  store (schema adapted from a working store in the sibling repo seonix, adjusted for tmct's
+  write-heavy per-turn accumulation pattern) whose read side caches its payload on the handle and
+  patches it incrementally instead of reconstructing it per call.
+- **Actor-level trust + memory-tree versioning — DONE**: full session-scoped actor trust (no
+  config flag, shipped unconditionally) and manual-trigger memory-tree versioning
+  (`snapshotMemory()`).
+- **Extension-pack seam — DONE**: `src/extensions.mjs`, `[extensions]`/`[bias]` in `tmct.toml`,
+  `tmct extend --validate`; bias-weighted fact ranking (`src/memory/bias.mjs`, verified to never
+  drop a fact, only reorder it).
+- **Repository Interface hardening — DONE**: ranked `search()`, a real graph-only `context()`
+  (`INTERFACE_VERSION` 1.1.0), depth-capped `impact()`, source-backed `snippet()`,
+  `edges()`/`search()` pagination, telemetry wiring, hub-dampened memory-fact ranking (on by
+  default). A path-traversal security fix (`src/source-slice.mjs`) was found and closed along the
+  way.
+- **Package export surface — DONE**: `generateCompletion`/`createCompletionsGraphAdapter` are
+  public `exports` subpaths now, verified with a real `npm pack` + fresh install + deep import.
+- **Doc consolidation**: `PLAN_AGENTS.md` is the governing plan for tmct's next major arc —
+  absorbed six sibling plan docs (now `archive/`) and sequences Phase 0 (foundations) through
+  Phase 4 (a pluggable LLM rung for Claude Code/Bedrock/Copilot) plus a tiered research horizon
+  (R1-R3). Benchmark/skill doc naming is unified project-wide
+  (`BENCHMARK_AGENT`/`BENCHMARK_CEFR_ENGLISH`/`BENCHMARK_CONVERSATION`/`BENCHMARK_INFERENCE`,
+  `SKILL_BENCHMARK_*.md`). `CAPABILITIES_AUDIT_2026-07-10.md` catalogs 83 distinct capabilities
+  against every doc claim and the actual code (57 implemented, 21 claimed-only, 3 partial) — the
+  reference to check before trusting any capability claim in this roadmap.
 
-**`PLAN_TAUGHT_RELATIONS.md` Phase 3 — DONE (2026-07-09)**: the Rule storage foundation landed in
-`src/memory/core.mjs` (`RULE_CLASS`, `appendRule`, `findRuleByName`) — pure plumbing, zero
-`chat.mjs` change, reusing the existing Source/trust pipeline unmodified. `npm test` 1361 → 1371.
-Phase 4 (compose2 query-side wiring) is next in that plan's build order.
+## Next: open follow-ups
 
-**`PLAN_TAUGHT_RELATIONS.md` Phase 1 — DONE (2026-07-09)**: Item 1 (relational fact teach,
-`RELATION_FACT_TEACH_RE` — "ahab is the father of john" mints an ordinary Fact via
-`generalVerbPredicate`, reused verbatim) and Item 5 (adjective-mint, `unknownAdjectiveFallback` —
-"the cache is bespoke" / "TaskController is bespoke" mint `mgx:hasProperty`) both landed in
-`src/chat.mjs`. Query-side readback for Item 1 needed zero new machinery ("what do you know about
-X" / "does X <role> Y" both already confirm it); Item 5's own groundedness guard needed tightening
-beyond the original design to avoid reopening the pinned "module is banana" regression — see
-`PLAN_TAUGHT_RELATIONS.md`'s "Phase 1 — DONE" note for the full adjustment, plus a sharper,
-live-confirmed restatement of that doc's Verification finding 4 (`isConversational`'s ≤3-word gate
-pre-empts the teach lane entirely for a short bare sentence, not just its decline text — flagged,
-not fixed, still out of scope). `npm test` 1371 → 1377.
+1. **Judged CHATBENCH re-run.** Several recent chat-surface changes touch answer text on judged
+   surfaces (onboarding/identity responses, teach-lane wording, new relation phrasings), so the
+   next judged pass needs to re-derive its stale set from answer-text diffs rather than assume
+   anything carries over from the last recorded baseline.
+2. **The reverse-`inherits` verb family's "the"-definite forms** ("is the superclass of") aren't
+   wired into `VERB_TO_KIND` yet — doing so leaked the bare word "the" into `ask.mjs`'s
+   CONTENT_VOCAB and broke the relaxation cascade's noise-strip tests, so a CONTENT_VOCAB fix is
+   needed first.
+3. **Seonix batch 4/5's remaining items**: cochange phrasing variants, and one unverified
+   "multi-root" substring over-match.
+4. **Extend compound-symbol matching to `/describe`'s own resolver.** `/describe`'s resolver
+   (`resolveSymbol` in `codegraph.mjs`) is separate from and stricter than `resolveObject`, so
+   "describe the payment system" doesn't yet benefit from the compound-name tier above. Not a
+   regression, just not covered yet.
 
-**`PLAN_TAUGHT_RELATIONS.md` Phase 6, KERNEL half — DONE (2026-07-09)**: `findReachableSet`
-(`src/planning.mjs`), a sibling of `findActionPath` with no `isGoal` at all — every state reachable
-from the start within `maxDepth` is a result, not just one goal. Shares only the frontier-seeding
-step with `findActionPath`; the expand loops stayed independent (halting/accumulation semantics
-differ enough to make a shared core more complex, not less). Proven against a toy graph with a real
-cycle and a same-length two-path convergence. `test/planning.test.mjs`, 5 new tests. The WIRING half
-(teach-shape recognizer + query-dispatcher branch, both in `chat.mjs`) is deliberately deferred,
-kernel-only per this task's own scoping — see `PLAN_TAUGHT_RELATIONS.md`/`HANDOVER.md` for detail.
-
-**`PLAN_TAUGHT_RELATIONS.md` Phase 2 — DONE (2026-07-09)**: closes Item 1's own live-found
-query-side gap ("is ahab the father of john" now resolves directly) and Item 2 (relation alias/union
-query-side chase — a taught "father ⊑ parent" alias lets "is ahab a parent of john" resolve off the
-father fact). One new recognizer (`RELATION_FACT_YESNO_RE`) and one new local helper
-(`relationFactsFor`) in `factReadBack`, tried BEFORE `ISA_ASK_RE` gets a chance at the overlapping
-shape. The teach-side "kind of"/"type of" fix (`stripKindOf`) is a genuine one-liner.
-`test/chat-taught-relations.test.mjs` (new file), 4 tests. `npm test` 1382 → 1386. Phase 4 (compose2
-rule, next in this plan's build order) reuses `relationFactsFor` as its own per-hop edge lookup.
-
-**`PLAN_TAUGHT_RELATIONS.md` Phase 4 — DONE (2026-07-09)**: Item 3 (fixed-hop `compose2` composition
-rule — "a grandparent is a parent of a parent" teaches a Rule, and "is ahab a grandparent of
-ishmael" resolves via a hop-counted `findActionPath` search over the taught father facts,
-alias-chased through "parent" via Phase 2's own `relationFactsFor`). The hop-counting discipline
-(`{ entity, hopsTaken }` state, `isGoal` requiring exactly 2 hops) is live-verified load-bearing: a
-1-hop and a 3-hop path through the SAME father/parent edges both correctly decline in the same store
-where the genuine 2-hop pair resolves yes. Full family-tree chain (two father facts + the alias + the
-compose2 rule) live-verified end-to-end via the piped CLI. `test/chat-taught-relations.test.mjs`
-extended with 5 more tests (9 total). `npm test` 1386 → 1391.
-
-**`PLAN_TAUGHT_RELATIONS.md` Phase 5 — DONE (2026-07-09)**: Item 4 (property-filtered composition
-rule — "a grandfather is a grandparent who is male" teaches a `filter`-kind Rule). Required
-refactoring Phase 2/4's `relAsk` dispatcher's three inline steps into one recursive closure,
-`resolveRelationChase`, so a filter rule's base resolves GENERICALLY — the function calling itself —
-whether the base is a plain taught relation or another Rule (e.g. compose2), never assuming which.
-A hit requires both the base chase to resolve AND the subject to carry the taught property
-(`mgx:hasProperty`); live-verified both failure modes separately (base fails outright vs. base holds
-but the property filter correctly excludes the candidate) plus a filter whose base is a plain
-relation (not a compose2 rule at all), proving the genericity. `test/chat-taught-relations.test.mjs`
-extended with 4 more tests (13 total). `npm test` 1391 → 1395.
-
-**`PLAN_TAUGHT_RELATIONS.md` Phase 6 — DONE (2026-07-09), WIRING half — the plan's build is now
-COMPLETE, all six items.** Item 6 (recursive/reachability rule — "a descendant is a parent, or a
-parent of a descendant" teaches a `recursive`-kind Rule; "list the descendants of ahab" enumerates
-the full reachability set via `findReachableSet`, the kernel half already shipped, reused unchanged).
-The query side is the one genuine kind-change among all six items (a reachability-SET enumeration,
-not a yes/no chase), landed as a sibling of Phase 5's `resolveRelationChase` rather than a fourth
-branch inside it — mirroring `findActionPath`/`findReachableSet`'s own sibling split at the kernel
-level. Cycle safety (two individuals mutually taught as each other's parent) and a malformed
-self-reference teach attempt (guarded for free by the teach regex's own backreference) both
-live-verified. `test/chat-taught-relations.test.mjs` extended with 5 more tests, including one
-comprehensive ALL-SIX-items integration test (18 total). `npm test` 1395 → 1400. **Nothing remains
-outstanding from `PLAN_TAUGHT_RELATIONS.md`'s original six-item scope.**
-
-**INFBENCH re-measured against 1.3.1** (measurement-only dispatch, 2026-07-09): `INFBENCH_1.3.1.md`
-finds the ladder unchanged, byte-for-byte, since `1.3.0` — the four `PLAN_TAUGHT_RELATIONS.md`
-phases that completed the plan (alias/union, `compose2`, property-filter, recursive/reachability
-wiring) don't touch any band, confirmed by a zero-diff row comparison of both runs' raw product
-files plus a direct check that no INFBENCH case's premises/query ever reach the new relational-teach
-phrasing. Still gated at INF-B1 (33% completion), unchanged for a fourth consecutive measured
-version — an honest, expected result given the new surface and the ladder measure different things.
-
-**`PLAN_TAUGHT_RELATIONS.md` live-testing follow-up — DONE (2026-07-09)**: the operator live-tested
-the full family-tree example end-to-end and found two real gaps, both fixed in `src/chat.mjs`. Gap 1:
-a recognized-but-unsatisfied relational query used to fall to the GENERIC structural wall instead of
-naming the relation — fixed by distinguishing "relation/rule name never taught" from "name known, this
-pair's chase came up short" right in the `(a0)` block, each with its own specific decline text. Gap 2:
-the REVERSE query shape ("who is the grandparent of john") didn't exist at all — new recognizer
-`RELATION_WHO_ASK_RE` + a new `(a0.2)` block in `factReadBack`, re-deriving `resolveRelationChase`'s
-same resolution logic (direct/alias/compose2/filter) walked backward from the object, reusing
-`findReachableSet` unmodified for the compose2 reverse hop-chase. Live-verified the operator's own
-repro exactly: "who is the grandparent of ishmael" → ahab (full 2-hop derivation cited); "who is the
-grandparent of john" → an honest empty (never a wrong guess). `test/chat-taught-relations.test.mjs`
-extended with 8 more tests (26 total). `npm test` 1400 → 1408, zero regressions. **Nothing remains
-outstanding from `PLAN_TAUGHT_RELATIONS.md`.**
-
-### Shipped this session
-
-- **Tier 5** found 12 routing/recognition fixes across teach and recall: article/head-word gaps
-  in "what do you know about X", an adverb mis-parsed as a verb in general-verb teach, passive
-  ownership phrasing, a quantified-property mis-teach, missing yes/no readers for taught facts, a
-  silently-null teach path, past-tense property support, a leading hedge-adverb gap. The final
-  cycle also caught a real correctness bug: "is the validate module deprecated" confidently
-  answered off an unrelated "logger module" fact, through a word-overlap fallback with no
-  exclusion for common code-noun suffixes like "module". New `test/chatflow-tier5.test.mjs` (21
-  cases).
-- **Tier 6**, the last rung of the ladder, found 23 routing/recognition fixes: a grain-word
-  resolution ambiguity ("the logger module" tying a Module against a same-stem Class); five new
-  closed preamble frames in `interpret/normalize.mjs` for topic-switch, self-interruption,
-  acknowledgement, hedge-adverb, and browsing discourse markers, chaining correctly when several
-  stack together; bare "inherits"/"inherit" alongside its sibling "extends"; a dozen more
-  vague-opener idioms; dialect and register gaps like "yeah nah", "howdy pardner", "aight", "no
-  worries". It also caught one important bug: "is the logger module tested" answered a
-  fabricated "I don't know that yet" even though the structural engine had already computed the
-  real, honest answer. An over-eager property-adjective matcher discarded it whenever a real
-  graph-computed parse already existed. New `test/chatflow-tier6.test.mjs` (17 cases).
-- **A test-suite health pass**, run in the background alongside Tier 6: batched `syllogise()`'s
-  per-fact writes via `appendFacts`; let two chatbench plumbing tests opt out of the corpus seed
-  (`TMCT_NO_SEED`); added a shared once-per-process seeded-fixture builder
-  (`test/helpers/seeded-fixture.mjs`) for tests that only consume seeded content; replaced a
-  hand-rolled copy of `WALL_MISS_RE` with the real export; and extracted a shared session-driver
-  helper (`test/helpers/session.mjs`), replacing 11 near-duplicate `drive()`/`driveSession()`
-  implementations. Full detail is in `HANDOVER.md`'s "Test-suite health pass" entry.
-- **Vocabulary-growth mirror fix.** New vocabulary used to grow one-directionally only: "redis is
-  a cache" could mint the unknown subject "redis" because the object "cache" was already a known
-  noun, but the reverse ("every cache is a store," subject known, object unknown) declined
-  outright. Added `unknownObjectFallback`, gated on a genuine universal quantifier ("every"/"each"/
-  "all") so it can't reopen the general lexicon bypass the existing bare/"a" shapes rely on. A term
-  minted by either direction now grounds a later sentence exactly like a lexicon word, using
-  taught-only groundedness checks that deliberately exclude the bulk ConceptNet corpus seed (the
-  corpus mentions ordinary English words constantly and must never silently count as "grounded").
-  When both sides are totally ungrounded, tmct still declines, but now with an actionable grounding
-  nudge instead of a bare "I couldn't store that." New coverage in
-  `test/chat-teach-quantifier.test.mjs`.
-- **Compound-name resolution**, from the operator's own worked example: "the payment system" now
-  finds `PaymentSystem`, `payment-system`, a compound path like
-  `westfield-payment-system/src/MyCode.cs`, and an interface-style name like
-  `IPaymentSystemImpl.cs`. `resolveObject` (`src/ask.mjs`) gained a multi-word compound-term
-  tier, the same shape as the existing single-word basename-exact/prefix-suffix (`9dde2b3`) and
-  derivational-stem (`6e2d96b`) tiers, gated to require an explicit separator in the candidate
-  label so a pure-camelCase identifier still falls to tier 4's prose fallback unaffected (this
-  protects a frozen "total price" → `calculateTotalPrice` test). New
-  `test/ask-compound-resolve.test.mjs` (7 cases). Full detail is in `HANDOVER.md`'s
-  "Compound-name resolution addendum" entry.
-- **The first-run chat experience, rewritten (1.0.0).** A brand-new `npm install` plus a bare
-  `tmct chat` used to lead with a "no code graph loaded" apology for any input, including plain
-  greetings, even though the seeded ontology/lexicon could already answer them. This was a
-  0.6.0-era design over-applying its own honest empty-graph orientation. The fix: identity/
-  capability-led responses ("I'm tmct — ..." before any caveat), a real self-description and a
-  distinct "no LLM involved" answer for the identity/AI-ID family, provably-correct "try this"
-  examples (a `vocabExampleHint` that only offers a term confirmed to resolve in the session's
-  actual seed state), and broadened conversational recognition (dialect, register, slang,
-  elongation, a bounded-fuzzy typo layer). All of it landed as curated closed-set additions, per
-  the project's standing preference over general grammar rules.
-- **The dialogue-flow playtest loop, tiers 0-4.** Tier 0 (bootstrap/identity), Tier 1 (single
-  touch plus one drill-down), Tier 2 (drill-down chains with anaphora), and Tier 4
-  (compositional and comparative) each closed in one pass. Tier 3 (cross-concept and relation
-  touches) took 7 passes: cycles 3-9 progressively found and fixed a recurring `resolveObject`
-  substring-match weakness, where a missing minimum-length floor let short staccato connectives
-  like "and"/"it" silently hijack the conversation's focus and produce confidently wrong answers
-  on a later turn while the triggering turn still looked honest. It took three point-by-point
-  patches before cycle 9 found and fixed the actual root cause in one place. The skill doc itself
-  gained two rules from real incidents this run: always `mktemp -d` plus exact-path cleanup for
-  scratch fixtures, and never `chat --repo` the committed example fixture directly.
-- **A live, client-side chat demo on the GitLab Pages homepage.** The real `src/ask.mjs` query
-  engine runs directly in the visitor's browser as a live demo, not a scripted replay. wink-nlp
-  loads from `esm.sh`, an import-map shim works around 3 leaf files' Node-only static imports, and
-  the engine itself needed no changes since it was already browser-clean pure JS. It boots with a
-  banner, replays a few real pre-verified Q&A turns as "history", asks one randomized (or
-  `?q=`-primed) question live, and gives the visitor a genuine interactive input box to type
-  their own questions and get real computed answers. `?compact=1` gives a minimal primed-link
-  view; `window.tmctAnswer`/`tmctAsk`/`tmctParseEntities` are exposed for headless/Playwright
-  consumers. There's no backend on GitLab Pages, so plain `curl`/`jq` never sees a computed
-  answer, which is stated plainly in the code rather than oversold.
-- **Operator-found bugs, fixed as they turned up in hand-testing the shipped CLI.** Relation-
-  specific vocabulary filtering (an ask like "what is a tree used for" was dumping every known
-  relation instead of filtering to UsedFor); a teach-lane "did you mean" suggestion that could
-  echo the user's own input byte-for-byte (a missing a/an agreement check); out-of-domain small
-  talk ("what time is it") hitting the raw grammar wall instead of an honest nudge; a
-  pronoun-subject teach-lane gap that could silently store a bogus fact ("he is a module"); a
-  closed-set existence-question recognizer misreporting a relationship check as a verified
-  existence negative; "what else is X" repeating the primary definition instead of surfacing
-  more; bare "what is X" (no article) having no fact-lookup route at all, including for a fact
-  the user had just taught; and general verb-to-predicate teaching ("remember margo eats ribs"
-  mints its own predicate now, not just the closed is/has/are set, and "has a" interoperates with
-  the existing ConceptNet-sourced `mgx:hasA` data).
-- **Six more operator-found bugs (A-F), from a later manual chat-testing pass.** A malformed
-  "haves soup" render for past-tense "had" (a lemma fix); a broken "count soup" message when no
-  code graph is loaded; "what is in your memory" (bare, and "... about X") falling to the
-  structural miss instead of the memory summary/fact-lookup lanes. The "about X" form now also
-  walks transitive subtypes of X over taught (never corpus-noise) isa facts; a closed-set
-  indirect-request wrapper ("I want you to search for Widget") that used to be swallowed whole by
-  the general-verb teach recognizer, now stripped centrally before dispatch, plus a "search for
-  X"/"tell me X" (no "about") phrasing fix; and a `GOAL_BY_COMMAND` table that gives every
-  slash-command dispatch its own honest "Goal (inferred): ..." line. Full detail per bug is in
-  `HANDOVER.md`'s "Operator-found bugs A-F" entry.
-- **General verb-to-predicate teaching's query-side follow-up.** A taught general-verb fact now
-  answers direct questions too: "does margo eat ribs" → yes, "did margo eat ribs" → yes, "does
-  margo eat cake" → an honest no, "what does margo eat" → lists ribs. It reuses the same has/have
-  predicate bridge the teach side already had.
-- **New-term teaching and quantifiers.** "redis is a cache" (a genuinely new term, not
-  previously in the closed ACE lexicon) is now teachable through a write-side-only fix; the read
-  path already worked generically over any subject string, including the existing 2-hop
-  transitive `IsA` proof chase. Plus four new phrasings ("some/a few Xs are Ys", "your X is a Y",
-  bare "X is Y" as a property assertion) and a stored-quantifier recall ("how many Xs are Ys" →
-  "A few.").
-- **An always-on, short "Goal (inferred): ..." line** on every real structural or vocabulary
-  answer, distinct from the pre-existing opt-in `/narrate` full-trace mode. Two correctness bugs
-  in the goal-deduction hook itself got fixed along the way: a confidently wrong goal shown on
-  failed teach attempts, and a missing goal on relation-force answers that resolve through a
-  different path than the normal parse.
-- **Seonix's 17-round dogfooding backlog, triaged and worked through.** Seonix, a sibling
-  project consuming tmct as a real dependency, ran extensive dogfooding against both a synthetic
-  self-index and a real 27,929-module production estate, and relayed the findings over the
-  inter-session inbox. The backlog was triaged into 5 priority batches (4 items were already
-  fixed by intervening work). **Batch 1** (existence-query correctness) shipped first. **Batch
-  2**: bare "what is Commit" now parses (article optional, restricted to `ENTITY_TO_TYPE`'s
-  closed vocabulary); a reverse `inherits` verb family ("is X a superclass/parent class of Y")
-  swaps subject and object at parse time to agree with the existing forward phrasing; a curated
-  trailing-scope-filler strip ("what is a Module in this graph" → "Module") works at both the
-  grammar and chat-fact-lookup layers. **Batch 3**: purpose/identity phrasing ("whats X for/
-  about") joins "what does X do"; bare "recent/latest/newest commits" render a real dated list
-  instead of a false find-miss, and "the last/latest/most recent commit" as a query subject
-  substitutes the actual newest Commit before parsing; onboarding/closing phrasings beyond the
-  original closed set get the orientation nudge; present-tense cochange phrasing ("changes with")
-  joins the past-tense form. **Batch 4/5**: the cross-graph disambiguation-ranking weakness never
-  reproduced on tmct's own tiny example fixtures, so a new committed fixture graph
-  (`test/fixtures/large-scale/`, vendored commander.js + express.js source) was built to
-  reproduce it. It surfaced an exact basename match losing to a same-directory sibling that only
-  shared a component; fixed in `resolveObject`'s tier-3 scoring, where a new exact/prefix/suffix
-  basename tier now outranks the length-normalized overlap fallback. Separately, "which functions
-  call X and test Y" (two different, both-recognized relation verbs joined by "and") used to fall
-  to the legacy `ambiguousParse` path; the marker gate now also opens when every later
-  "and"-branch names its own single-word recognized verb, composing a real set intersection,
-  narrowly scoped so the pre-existing "which classes extends Base and couples to logging" compat
-  case stays exactly as closed as before. Still open: cochange phrasing variants, and a single,
-  not independently reverified "multi-root" substring over-match.
-- **The Tier-4 "of X" membership gap, walked through inheritance.** "public methods of
-  TaskController" used to return a genuine-looking but incomplete empty when the class declared
-  no members of its own but inherited real ones from a superclass. `src/ask.mjs`'s membership
-  eval now tries the owner's own (qualifier-filtered) members first, and only walks
-  `ancestorsOf` nearest-first when that's empty and the class participates in `inherits`. An
-  inherited answer is disclosed out loud ("… has no own methods — inherited from Controller:
-  …"), never silently presented as the owner's own.
-- **The version-bump policy, set then revised.** The session first tried bumping immediately
-  after every push and holding the bump locally until the next batch shipped, to keep the
-  published npm version matching the last pushed commit. That produced confusing "referencing a
-  version that doesn't exist yet" noise, so it was reverted mid-session. Current policy, recorded
-  in `CLAUDE.md`: bump only at the moment of actually pushing, as part of that same push.
-
-### Next: the open follow-ups
-
-1. **Judged CHATBENCH re-run.** Not run this session. This session's changes touch answer text
-   on judged surfaces again (onboarding/identity responses, teach-lane wording, new relation
-   phrasings), so the next judged pass needs to re-derive its stale set from answer-text diffs,
-   not assume anything carries over from the 0.8.2-era baseline still on record.
-2. **The reverse-`inherits` verb family's "the"-definite forms** from Seonix Batch 2 ("is the
-   superclass of") aren't wired into `VERB_TO_KIND` yet. Doing so leaked the bare word "the"
-   into `ask.mjs`'s CONTENT_VOCAB and broke the relaxation cascade's noise-strip tests, so it
-   needs a CONTENT_VOCAB fix first.
-3. **Seonix Batch 4/5's remaining items**: cochange phrasing variants, and the single,
-   not-independently-reverified "multi-root" substring over-match noted above.
-4. **Extend compound-symbol matching to `/describe`'s own resolver.** The compound-name
-   resolution above only covers `resolveObject` (`src/ask.mjs`); `/describe`'s own resolver
-   (`resolveSymbol` in `codegraph.mjs`) is a separate, stricter, pre-existing resolver that
-   doesn't share `resolveObject`'s tiered scoring, so "describe the payment system" doesn't
-   benefit yet. Not a regression, just not yet covered.
-
-### Later: deferred by design, staged inside each plan
+## Later: deferred by design, staged inside each plan
 
 Each plan doc stages its own later phases; this list just points to them rather than repeating
 their tables.
 
-- **infbench stages 1-5 — all shipped** (`archive/PLAN_INFERENCE_TESTING.md` §4, archived
-  2026-07-11 once every stage's exit criterion was met). The disjointness proof rule (B1),
-  proof-chain materialization, cardinality entailment, and consistency checking all landed and are
-  chat-wired; the one remaining open research question (retraction-aware incremental reasoning)
-  moved to `PLAN_SYLLOGIST_HORIZON.md`. The repeatable measure/gate/advance cycle for this ladder
-  is still captured as an invokable skill, `SKILL_BENCHMARK_INFERENCE.md`.
-- **Advanced-grammar tracks b/d/e** (`PLAN_ADVANCED_GRAMMAR.md`). The constructions not landed
-  this wave: stacked modality/passive, implicit arguments, and the rest of the CEFR inventory
-  audit table.
+- **infbench stages 1-5 — all shipped** (`archive/PLAN_INFERENCE_TESTING.md` §4). The disjointness
+  proof rule (B1), proof-chain materialization, cardinality entailment, and consistency checking
+  all landed and are chat-wired; the one remaining open research question (retraction-aware
+  incremental reasoning) moved to `PLAN_SYLLOGIST_HORIZON.md`. The repeatable measure/gate/advance
+  cycle for this ladder is still captured as an invokable skill, `SKILL_BENCHMARK_INFERENCE.md`.
+- **Advanced-grammar tracks b/d/e** (`PLAN_ADVANCED_GRAMMAR.md`). Constructions not yet landed:
+  stacked modality/passive, implicit arguments, and the rest of the CEFR inventory audit table.
 - **Ontology stage 3+** (`PLAN_ontology-hierarchies.md`). Beyond the synonym-wiring and
-  disjointness growth landed this wave.
+  disjointness growth already shipped.
 - **`PLAN_CODE.md` tracks 2/3.** Small JS-function synthesis and HTML/CSS-fragment synthesis, both
   via a Playwright-sandboxed headless browser. Explicitly staged well behind Track 1, each gated
   on its own operator sign-off.
 
-### History — what shipped in earlier releases
+## Incidents & lessons
 
-**v0.9.12 → v1.0.7** (this session — the first-run UX rewrite + the 5-tier playtest sweep +
-the live browser demo): see "Where we are now" above for the full narrative; short form —
-1.0.0 shipped the identity/capability-led onboarding rewrite; 1.0.1-1.0.7 shipped, in order, the
-redis/new-term teaching + quantifier phrasings, the always-on Goal-inference line, a teach-lane
-pronoun-subject guard, three operator-found bugs (used-for filtering, teach-suggestion echo,
-out-of-domain small talk), Tier-0/1/2 playtest passes, Tier-3's 7-pass convergence (ending in a
-root-cause fix for the recurring substring-match focus-corruption bug), the diagnosed Tier-4
-compositional-fold fix, the live in-browser chat demo, Seonix Batch 1 (existence-query
-correctness), Tier 4's own playtest pass, and a final bundle ("what else is X", bare "what is X",
-general verb-to-predicate teaching). `npm test` 1055 → 1245 across the session, every commit
-green. Full commit-level detail in `HANDOVER.md`.
+- **The `ace-owl` extraction and revert (2026-07-10).** An earlier commit extracted the ACE-OWL
+  grammar parser (`src/grammar/ace.mjs`/`lexicon.mjs`) into a new, unpublished npm workspace and
+  pointed tmct's own `package.json` at it as a registry dependency — breaking `npm install` of
+  tmct for anyone outside that workspace for five days. Found and reverted the same day it was
+  found; the parser is back in `src/grammar/` as the real implementation, verified with a real
+  `npm pack` + fresh install. Full account: `HANDOVER.md`'s Discipline section,
+  `PLAN_OSS_ACE_PARSER.md`.
 
-**v0.8.2** (the chat-feel wave + rule-general C2): tier-1 CHATBENCH 334/334 (draw A) + 285/285
-(draw B), zero regressions; the cycle-1 hard-fail `gq-functions-call-fnalpha` flipped green.
-Landed recall hygiene, preamble/politeness frames, calls∪callsSymbol + grain/meta fallbacks, the
-author lane, wall kindness + honest capability nudges, teach-lane widening, receipt tails
-prose→detail, plus a live-found scale hotfix (`edgesOfKind` argument-spread overflow past ~100k
-edges). AGENTBENCH ladder grew 43→56 cases; goal driver 100% plan / 98% result / 0% hallucination,
-all rungs gate-PASS; resolver floor clean A0–C1 100/100; C2 became rule-general (two declared
-goal-rules, pure `applicableRules` selection). Full detail: `CEFR_ENGLISH_0.8.2.md`,
-`AGENTBENCH_0.8.2.md`.
+## Release history
 
-**v0.8.1** (published): AGENTBENCH grades the executed composed result, not just the call-plan.
-Resolver 97% plan / 91% result / 0% hallucination. Stage 5 (the C2 goal-reasoner, BDI + Goal-Driven
-Autonomy) lifted result-completion +10pp on a like-for-like driver swap. Stage 2 (imperative intent
-frames + ACE reach) shipped at 100% plan / 95% result / 0% hallucination, `tmct_calls` genuinely
-NL-reachable. Chat surface: quick wins + two frozen playtest transcripts, no tier-1 regression vs
-0.7.1. Full detail: `CEFR_ENGLISH_0.8.1.md`, `AGENTBENCH_0.8.1.md`.
-
-**v0.8.0** (published): all five Phase-11 tracks. The `/v1/messages` shim + Stage-0 registry +
-resolver/guardrail/planner (96% plan completion, 0% hallucination, closed-world C1); three chat
-levers; the `../bedrock-meter` $0 rung; the playtest; Stage-2/Stage-5 research notes. Full detail:
-`CEFR_ENGLISH_0.8.0.md`, `AGENTBENCH_0.8.0.md`.
-
-**Doc restructuring — `PLAN_AGENTS.md` (2026-07-10)**: `PLAN_TMCT_ECOSYSTEM_INTEGRATION.md` was
-rewritten and renamed to `PLAN_AGENTS.md`, absorbing six sibling docs (`PLAN_AGI_ARCHITECTURE.md`,
-`PLAN_CAPABILITY_ROUTER.md`, `PLAN_TAUGHT_RELATIONS.md`, `PLAN_OSS_ACE_PARSER.md`,
-`PLAN_ontology-hierarchies.md`, `PLAN_ADVANCED_GRAMMAR.md` — all now in `archive/`) and sequencing
-their durable content into Phase 0 (foundations) through Phase 4 (tmct as a pluggable LLM rung for
-Claude Code/Bedrock/Copilot), plus a tiered research horizon (R1–R3). Two fresh comparative audits
-of `../marginalia` and `../seonix` fed a new §2, "tmct uplift" — mechanisms those sibling repos
-already have that tmct lacks or does more crudely (memory-tree versioning, actor-level trust, a
-declarative SHACL-style ingest gate, real multi-language AST extraction, Chronograph-style temporal
-diffing, and several Repository-Interface wrapper gaps that just need to be pointed at logic already
-sitting in tmct's own `codegraph.mjs`). A new sibling doc, `PLAN_COMPLETIONS.md`, specs a second,
-competing "tmct produces an artifact" capability alongside `PLAN_CODE.md`'s program synthesis:
-mechanical, extractive text generation (broad search → group → infer between groups → summarize →
-prune → grammar/voice pass), never LLM-style free generation. Separately, the benchmark/skill doc
-landscape was unified: CHATBENCH stops splitting report+transcripts into two files going forward;
-`SKILL_CHAT_PLAYTEST.md` and `SKILL_PLAYTEST_SPRINT.md` merged into `SKILL_BENCHMARK_PLAYTEST.md`
-(with a new `CONVERSATIONBENCH_<version>.md` report convention); `SKILL_TUNING_CYCLE.md` and
-`SKILL_INFERENCE_TESTING.md` renamed to `SKILL_BENCHMARK_CEFR_ENGLISH.md`/`SKILL_BENCHMARK_INFERENCE.md`;
-a new `SKILL_BENCHMARK_AGENT.md` formalizes the previously-ad-hoc AGENTBENCH cycle;
-`SKILL_STRATEGY_ADVISOR.md`/`SKILL_PLAIN_PROSE.md` renamed to `SKILL_AGENT_STRATEGY_ADVISOR.md`/
-`SKILL_AGENT_PLAIN_PROSE.md`. A new shared reference doc, `docs/references/research-horizon.md`,
-consolidates three near-duplicate "research frontier" essays (the frame problem, word-sense
-disambiguation/ontology scale, Winograd-hard coreference) that had independently grown across the
-now-archived docs.
-
-**v1.4.0 — the first PLAN_AGENTS.md uplift batch (2026-07-11)**: built as four parallel,
-worktree-isolated background tracks, merged sequentially, watched throughout by a background
-strategy-advisor agent (full tick-by-tick record in `STRATEGY_ADVISOR.log`). 1543/1543 tests green
-at the final merge. Shipped: the Repository Interface wrapper fixes from the seonix audit (ranked
-`search()`, a real graph-only `context()` — `INTERFACE_VERSION` 1.0.0→1.1.0 — depth-capped
-`impact()`, source-backed `snippet()`, `edges()`/`search()` pagination, telemetry wiring), a
-path-traversal security fix found and closed along the way (`src/source-slice.mjs`), hub-dampened
-memory-fact ranking (on by default — the build found the original "modest degree, modest penalty"
-assumption was mathematically wrong and proved the real bound instead), memory-tree versioning
-(`snapshotMemory()`, manual trigger only), full session-scoped actor-level trust (shipped
-unconditionally, no config flag — operator decision, single consumer), the extension-pack seam
-(`src/extensions.mjs`, `[extensions]`/`[bias]` in `tmct.toml`, `tmct extend --validate`, and a
-deliberate bug fix — `tmct init` now seeds SEON as well as ConceptNet), bias-weighted fact ranking
-(`src/memory/bias.mjs`, verified by control-flow tracing to never drop a fact, only reorder it), and
-`tmct init --with-persona <name>`. One real merge conflict (Track A's `tel` param and Track D's
-`biasByBundle` param both threading through the same `chat.mjs` function signatures — resolved by
-keeping both). One bug the strategy advisor caught that the original brief missed: the
-path-traversal guard failed closed *incorrectly* under a relative `TMCT_GRAPH_FILE`, rejecting
-legitimate reads, not just traversal attempts — fixed at the source and defensively in the guard.
-One scope decision made mid-build: multi-language AST extraction stays in seonix permanently, not
-tmct's job — full detail in `PLAN_AGENTS.md` §13.
-
-**The 2026-07-10 uplift batch — largest single session to date, coordinator + ~20 concurrent
-background tracks.** `PLAN_CHAT_FEEL.md` fully archived (all 12 items shipped — item 6's
-remainder: 8 remaining temporal-composition red ids fixed via new `parseCommitFilter`/NP templates/
-a `PERFECT_AUX` carve-out; the presupposition regression turned out to be a stale test fixture, not
-a product bug; the garden-path regression is real, narrow, and documented open). `PLAN_COMPLETIONS.md`
-— a brand-new capability, operator-sign-off given this session — shipped end-to-end, Stages 0-3:
-`src/completions/` (`search.mjs`/`group.mjs`/`rank.mjs`/`infer.mjs`/`prune.mjs`/`complete.mjs`),
-connected-components grouping over `memory/blocks.mjs`'s block-similarity graph, a closed 4-relation
-cross-group inference vocabulary (supports/contradicts/elaborates/exemplifies, each with a named
-mechanical licensing test), PageRank+IDF extractive sentence ranking, and an auditable prune/assemble/
-grammar-pass pipeline — every output sentence traces to a source span, `finish.mjs` generalized from
-single-answer to genuinely multi-sentence output. `archive/PLAN_INFERENCE_TESTING.md` stages 3-5: the
-`cax-dw` disjointness rule (kernel + a live, read-only chat-query wiring closing a real gap where the
-rule existed but was never reachable from a chat turn — INF-B1's gate), `cls-svf1` (someValuesFrom
-restriction membership) plus a new positive infbench template needed to actually measure it, and a
-new consistency checker (`findConsistencyViolations`) that REFUSES to answer from a subject whose own
-taught types contradict each other, naming the clash — INF-C2. `resolveRelationChase`/
-`resolveRelationChaseReverse` extracted from `chat.mjs` closures into standalone exported functions in
-`memory/core.mjs` (PLAN_COMPLETIONS Stage 1's prerequisite). `PLAN_AGENTS.md` Phase 0 essentially
-closed out (cross-repo smoke test, `agentbench/envelope.json`, the `ace-owl` standalone MPL-2.0
-package extraction, ontology-hierarchies tracks a-d, advanced-grammar tracks a/d/f — several tracks
-found already-shipped from earlier sessions and verified/extended rather than redone) — only the
-chat-surface debt re-measure remains open. The SHACL-style declarative ingest gate shipped as a small
-hand-rolled validator (`src/memory/shacl.mjs`) after `shacl-engine` was tried and rejected as
-disproportionately heavy for tmct's minimal-deps floor. A fourth tier2 corpus bundle
-(`tier2-general`) and a context-preserving unknown-word ingestion module shipped, though the latter's
-one production call site doesn't activate it yet (`PLAN_AGENTS.md` §4). CHATBENCH restructured
-(case-set v3): the full 1,075-case CEFR pool preserved at `chatbench/graded-pool-max.jsonl`;
-`chatbench/graded-pool.jsonl` is now a 109-case go-to default (10/CEFR-grade + the former
-`cases.jsonl`'s 49 hand-authored capability cases, each assigned a real grade+construction cell) at
-N=2/single-draw by default. A full capability audit (`CAPABILITIES_AUDIT_2026-07-10.md`) cataloged
-83 distinct capabilities against every doc claim and the actual code — 57 implemented, 21
-claimed-only, 3 partial, its most notable finding being that `PLAN_AGENTS.md` itself (drafted the
-same session) already listed several now-shipped items as "not started," a same-session docs-lag
-issue, not months-old drift. See `HANDOVER.md` for the ranked next-steps this batch's four fresh
-benchmark runs (AGENTBENCH/INFBENCH/PLAYTEST/CHATBENCH) surfaced.
-
-**The `ace-owl` extraction and revert (2026-07-10, later same session)**: an earlier commit
-(`c57adbe`) had extracted `src/grammar/ace.mjs`/`lexicon.mjs` into a new npm workspace
-(`packages/ace-owl`) as a registry dependency, but the package was never published — breaking
-`npm install` of tmct for anyone outside this workspace for five days. Found and reverted the same
-day it was found: the parser is back in `src/grammar/` as the real implementation, verified with a
-real `npm pack` + fresh install in an empty folder. See `HANDOVER.md` for the full account.
-
-**The default human-world persona, unified CLI/config model, and new memory persistence backends —
-SHIPPED (2026-07-10/11), all three size tiers plus every follow-up now closed**: the largest batch
-of the session. `tmct init` with no flags now seeds a genuine everyday-knowledge persona by default
-(Small tier: 664 hand-curated facts across 9 source-tied clumps, a lexicon grown from 291 to 650
-words, 120 real WordNet-sourced example sentences, a working cross-ontology bridge test proving
-`scm-sco` composes WordNet's and Schema.org's independently-built taxonomies), with SEON/ConceptNet
-now opt-in rather than default. Alongside it: a unified `--repo`/`--graph`/`--config` flag model
-replacing four independently-duplicated `configFor` implementations, multi-graph loading, a new
-`ontology` extension kind, and a `tmct import` verb; plus two new memory persistence backends (a
-pure in-memory store with zero disk I/O, and a SQLite store whose schema was adapted from a real,
-working store already built in the sibling repo seonix — reused directly, but with its write model
-changed from seonix's rebuild-and-swap to real per-fact `INSERT`/`UPDATE`, since tmct's problem is
-write-heavy per-turn accumulation, not seonix's read-latency-on-a-static-artifact problem). Built by
-4 concurrent background sub-agents in isolated worktrees, merged one at a time with 4 real conflicts
-resolved by hand. `scm-svf`/cardinality monotonicity — the fourth concurrent agent — also shipped in
-this same batch: `scm-svf1`, cardinality monotonicity, and `cax-maxc0`, all wired into live chat,
-verified live by the coordinator directly ("every cat has exactly 4 legs" → "does every cat have at
-least 2 legs" → yes, entailment named; "every cache has at most 0 risks" → "does a cache have a
-risk" → no, proven not guessed). INFBENCH chat arm 99% (216/219), kernel arm 100%. `npm test`:
-1756 → 1852 across the whole batch.
-
-**Follow-up batch closed out (2026-07-11)**: Medium (1,608 facts total, 944 incremental over Small)
-and Large (13,609 facts, 12,001 incremental over Medium, with genuine multi-hop hypernym chains up
-to 4 real WordNet hops) tiers both built, matching `archive/PLAN_SEED.md`'s targets almost exactly, selected
-via `tmct init --persona-size medium|large`. Matching example-sentence tiers shipped alongside them
-(476/2,404 sentences). The `createSession`→`initRepo` auto-init convergence landed too: a
-programmatic `runChat()`/`createSession()` call on a bare directory now runs the same full `initRepo`
-path as CLI `tmct init`, leaving a real `tmct.toml` + `.tmct/init.json` instead of just an in-memory
-seed marker. The premise-derived trust hook (`min(premiseTrusts) × ruleConfidence`, replacing a flat
-0.3 entailed-fact floor) was wired into `scm-svf1`'s batch-pass materialization and surfaced as
-`record.entailedTrust` for the two rules that stay live-chase-only (cardinality monotonicity,
-`cax-maxc0`), closing the one real gap the three newest inference rules had. The seonix migration
-note (SEON/ConceptNet need re-activating in seonix's own `tmct.toml` now that tmct's default has
-flipped) stays a documented, cross-repo-only item — nothing left to action from this repo. Backend
-C (SQLite)'s read-side gap (§6) closed too, the same day: `readSqlitePayload` now caches its payload
-on the handle, patched incrementally by the existing write-side diff instead of re-querying
-everything on every call. `archive/PLAN_SEED.md` and `archive/PLAN_INFERENCE_TESTING.md` now show
-every item shipped; the latter was archived once its trust-hook gap closed (see "Later: deferred by
-design" above), `archive/PLAN_COMPLETIONS.md` was archived separately the same day (all 4 staging
-rows shipped, see the 2026-07-10 uplift batch entry above), and `archive/PLAN_SEED.md` itself was archived
-once Backend C's fix landed. Full design and every real merge conflict's resolution:
-`archive/PLAN_SEED.md`.
+- **v0.8.0**: capability router A0-C1 (96% plan completion, 0% hallucination, closed-world). The
+  `/v1/messages` shim + Stage-0 registry + resolver/guardrail/planner; three chat levers; the
+  `bedrock-meter` $0 rung. `CEFR_ENGLISH_0.8.0.md`, `AGENTBENCH_0.8.0.md`.
+- **v0.8.1**: AGENTBENCH grades the executed result, not just the call-plan (97% plan / 91% result
+  / 0% hallucination). Stage 5 goal-reasoner (+10pp result-completion); Stage 2 imperative intent
+  frames at 100%/95%/0%. `CEFR_ENGLISH_0.8.1.md`, `AGENTBENCH_0.8.1.md`.
+- **v0.8.2**: the chat-feel wave + rule-general C2. Tier-1 CHATBENCH 334/334 + 285/285, zero
+  regressions. Recall hygiene, preamble/politeness frames, author lane, wall kindness, teach-lane
+  widening. AGENTBENCH ladder grew 43→56 cases; goal driver 100%/98%/0%, all rungs gate-PASS.
+  `CEFR_ENGLISH_0.8.2.md`, `AGENTBENCH_0.8.2.md`.
+- **v1.0.0-1.0.7**: the first-run UX rewrite (identity-led onboarding), new-term teaching +
+  quantifier phrasings, the always-on Goal-inference line, the dialogue-flow playtest tiers 0-4,
+  the live in-browser chat demo, Seonix batch 1.
+- **v1.4.0**: the first `PLAN_AGENTS.md` uplift batch — Repository Interface hardening, a
+  path-traversal security fix, hub-dampened memory-fact ranking, memory-tree versioning,
+  session-scoped actor trust, the extension-pack seam, bias-weighted fact ranking, `tmct init
+  --with-persona`.
+- **Persona + memory-backend batch**: the default human-world persona (all 3 tiers), the unified
+  CLI/config model, the in-memory + SQLite memory backends, and the `scm-svf1`/cardinality
+  monotonicity/`cax-maxc0` inference rules. Full design: `archive/PLAN_SEED.md`.
+- **Doc consolidation**: `PLAN_AGENTS.md` absorbed six sibling plan docs; benchmark/skill doc
+  naming unified project-wide.
 
 ## The umbrella product definition (item 1)
 
@@ -1274,51 +969,48 @@ It supersedes the six phase/track pointers below that reference now-archived doc
 paragraph as the up-to-date entry point, and the items below as historical record of how those six
 docs' scope was reached before consolidation.
 
-### Future direction: a genuine planning/agentic loop (flagged 2026-07-09, research pass done, not implemented)
+### Future direction: a genuine planning/agentic loop
 
-The operator's own framing, explicitly out of scope for the routing-level `GOAL_BY_COMMAND`/
-Goal-inference generalization this session shipped (HANDOVER's Bug F point 5, which only labels
-an already-computed answer's intent — it never plans ahead of one): infer the goal, read the
+Out of scope for the routing-level `GOAL_BY_COMMAND`/Goal-inference line above, which only labels
+an already-computed answer's intent and never plans ahead of one: infer the goal, read the
 relevant subgraph, reason about candidate action-paths and their effects, pick the next step,
 execute, repeat.
 
-Two companion research docs (2026-07-09, design only, zero code shipped) scope this against
-minimal benchmark domains before anything domain-general is attempted:
-- `PLAN_HANOI.md` — the OPEN-LOOP case (a whole solution path is computable up front from the
-  start state). Recommends representing state as taught facts in the memory store (not the
+Three companion research docs scope this against minimal benchmark domains before anything
+domain-general is attempted; one of the three is now fully built, the other two remain design-only:
+- `PLAN_HANOI.md` — TODO, the OPEN-LOOP case (a whole solution path is computable up front from
+  the start state). Recommends representing state as taught facts in the memory store (not the
   read-only, provider-owned code graph), a new `restsOn` edge encoding stack order, and genuine
-  bounded state-space search — reusing `syllogise.mjs`'s `findIsaChain` (already, in shape, a
-  bounded rooted BFS path search) — over hard-coding Hanoi's known closed-form recursive solution,
-  so the result is an actual generalizable planner, not a Hanoi-shaped trick.
-- `PLAN_GUESS_NUMBER.md` — the CLOSED-LOOP case ("I am thinking of a number," both as guesser —
-  belief-interval bisection over repeated higher/lower observations — and as thinker — tmct holds
-  a secret and gives honest feedback, no search needed). Recommends a new parallel session-state
-  slot (`game`) threaded through `createSession`/`runTurn` exactly the way `focus` already is,
-  kept deliberately separate from the `pending` pagination field since a game must survive an
-  aside mid-play, unlike a listing remainder.
-- `PLAN_TAUGHT_RELATIONS.md` — teaching tmct brand-new relations and rules through ordinary chat
-  (a taught Prolog-style family tree, none of the kinship vocabulary hardcoded), the first of the
-  three to need a successor function SYNTHESIZED from data the user taught in an earlier turn,
-  rather than hand-written per domain the way Hanoi's `legalMoves` and guess-number's
-  interval-update rule are. Its own enumeration capability ("list the descendants of X," no fixed
-  goal) needs a genuine new sibling kernel, `findReachableSet`, since `findActionPath` only ever
-  searches toward one goal.
+  bounded state-space search over hard-coding Hanoi's known closed-form recursive solution, so the
+  result is an actual generalizable planner, not a Hanoi-shaped trick.
+- `PLAN_GUESS_NUMBER.md` — TODO, the CLOSED-LOOP case ("I am thinking of a number," both as
+  guesser — belief-interval bisection over repeated higher/lower observations — and as thinker —
+  tmct holds a secret and gives honest feedback, no search needed). Recommends a new parallel
+  session-state slot (`game`) threaded through `createSession`/`runTurn` exactly the way `focus`
+  already is, kept deliberately separate from the `pending` pagination field since a game must
+  survive an aside mid-play, unlike a listing remainder.
+- `PLAN_TAUGHT_RELATIONS.md` — **DONE**, see "Teaching, memory & reasoning" above. Teaching tmct
+  brand-new relations and rules through ordinary chat needed a successor function SYNTHESIZED from
+  data the user taught in an earlier turn, rather than hand-written per domain the way Hanoi's
+  `legalMoves` and guess-number's interval-update rule would be — plus a genuine new sibling
+  kernel, `findReachableSet`, for open-ended enumeration ("list the descendants of X," no fixed
+  goal) since `findActionPath` only ever searches toward one goal. Both kernels shipped and are
+  proven against toy graphs (`src/planning.mjs`).
 
-All three docs converged on the one genuinely new primitive none of them found already built
-anywhere in tmct: something that computes a SUCCESSOR STATE (apply a chosen action, produce the
-next graph/belief to reason over) — every existing traversal (`ancestorsOf`, `computeFind`,
-`findIsaChain` itself) is read-only. That primitive now exists (`findActionPath`, `src/planning.mjs`,
-shipped this session — see "Shipped this session" above), proven against a small toy graph but not
-wired into any of the three domains yet. The remaining next-session scope is that wiring, plus a
-still-open recognition question: how tmct notices "the user wants goal-directed action" at all, and
-whether multi-step execution needs confirmation before running.
+All three docs converged on one genuinely new primitive that didn't exist anywhere in tmct before:
+something that computes a SUCCESSOR STATE (apply a chosen action, produce the next graph/belief to
+reason over) — every prior traversal (`ancestorsOf`, `computeFind`, `findIsaChain` itself) was
+read-only. That primitive now exists (`findActionPath` + `findReachableSet`, `src/planning.mjs`)
+and is wired into the taught-relations domain; Hanoi and guess-the-number still need their own
+wiring. A still-open recognition question for both: how tmct notices "the user wants goal-directed
+action" at all, and whether multi-step execution needs confirmation before running.
 
 ### The design horizon
 
 **Before the horizon — known-how, not-yet-built, no research risk.** Sequencing or engineering
 debt: the technique exists (in tmct's own prior work or the wider literature), building it is a
-matter of scheduling and effort, not discovery. Everything shipped this session lives here, plus:
-tone-of-voice adaptation (below — deliberately dropped by design choice, not unsolved);
+matter of scheduling and effort, not discovery. Every DONE capability in "Recently shipped
+capabilities" above falls in this bucket, plus: tone-of-voice adaptation (below — deliberately dropped by design choice, not unsolved);
 tier-4 learn-on-miss (below — prerequisites not yet met, not research-blocked); `PLAN_CODE.md`
 Tracks 2–4 (mutation search/repair, JS/HTML/CSS synthesis — APR and CEGIS are established
 techniques); `PLAN_OSS_ACE_PARSER.md` (pure extraction/packaging); OWL 2 RL forward-chaining and
