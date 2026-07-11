@@ -8,6 +8,137 @@ attribution, `npm test`, and the four fresh benchmark reports measured this cycl
 `BENCHMARK_AGENT_1.5.7.md`, `BENCHMARK_CEFR_ENGLISH_1.5.7.md`, `BENCHMARK_CONVERSATION_1.5.7.md`,
 `BENCHMARK_INFERENCE_1.5.7.md` — cited as evidence, not re-run here.
 
+**A note on the four sections added below** (comparative table, per-benchmark and per-plan
+feature-support, non-benchmarked capabilities — `SKILL_CAPABILITIES_AUDIT.md` §3, added to that skill
+doc after this audit's own `d170196` pin): these were written and re-verified against a slightly later
+HEAD than the rest of this audit, commit `96bfe4f` ("merge: multi-candidate ambiguity resolution +
+PLAN_DID_YOU_SEE_HER_DUCK.md"), `package.json` `1.6.0` at time of writing. That range (`d170196..96bfe4f`)
+contains one substantive workstream — `PLAN_DID_YOU_SEE_HER_DUCK.md`'s lexicon/parse-level ambiguity
+resolution (commits `d5e962d`, `65a7752`, `c254871`, `842ffa1`) — captured as new item #92 below and
+folded into the sections that follow. Nothing in the §1 status table above was re-opened or re-numbered
+for this; it stays pinned at `d170196` as written.
+
+## Comparative agent-capability table: tmct vs. named models, and a speculative TO-BE
+
+**Read this framing before the table, not after.** tmct is not a general-purpose LLM and this is not
+an IQ-style "tmct is as smart as X" claim. tmct is a narrow, deterministic, zero-cost system — hand-built
+grammar + ontology + graph reasoning over a bounded domain — and it has never attempted open-ended
+generation, coding, creative writing, or general reasoning. Rows are a GENERAL agent-capability
+taxonomy (tool use, planning, reasoning, grounding, memory, instruction-following, generation, coding,
+safety/honesty, autonomy), not tmct's own internal benchmark names — the point is to place tmct on a
+scale someone would already recognize, not grade it against a rubric tmct itself designed. Columns are
+specific named MODELS, not umbrella brands or hosting surfaces, the same five `CAPABILITIES_1.4.1.md`
+used — re-confirmed here as still the right column set, not blindly copied forward:
+
+- **Llama 3.1 8B Instruct** (Meta, open-weight, laptop/single-GPU class — the small/local tier)
+- **Amazon Nova Pro** (AWS's own strongest general-purpose model, served on Bedrock)
+- **Claude Haiku 4.5**, **Claude Sonnet 5**, **Claude Opus 4.8** (Anthropic's small → mid → large tier)
+
+Each tmct cell is backed by a real number from this cycle's own reports — `BENCHMARK_AGENT_1.5.7.md`,
+`BENCHMARK_CEFR_ENGLISH_1.5.7.md`, `BENCHMARK_CONVERSATION_1.5.7.md` — translated into the general
+capability it evidences. `BENCHMARK_INFERENCE_1.5.7.md` was measurement-BLOCKED this cycle (a lexicon
+fixture crash, `infbench/generate-cases.mjs` exiting 1 on the `dice`/`die` collision) — its row below
+says so honestly instead of reusing `BENCHMARK_INFERENCE_1.4.1.md`'s older number. That crash is fixed
+as of commit `d5e962d` (confirmed directly in this worktree: `node infbench/generate-cases.mjs` now
+exits 0, 219 cases written) — a fresh full-ladder INFBENCH measurement is expected imminently/
+separately, not invented here. **Every model column is an informed estimate from general knowledge of
+these models' well-known public capability tiers, not a measured cross-benchmark result** — nobody has
+run any of these five models against tmct's exact task shapes; each was re-confirmed against current
+capability rather than blind-copied from `CAPABILITIES_1.4.1.md`, and none moved. Every model cell
+below opens with a plain verdict word (Weaker / Comparable / Comparable-to-stronger / Stronger,
+relative to tmct on that specific capability) followed by why.
+
+**Quick-reference (verdict only — see the full table below for the "why" per cell):**
+
+```
+┌─────────────────────────────┬────────────────────────┬──────────────┬───────────────┬───────────────┬───────────────┬───────────────┐
+│         Capability          │          tmct          │ Llama 3.1 8B │   Nova Pro    │   Haiku 4.5   │   Sonnet 5    │   Opus 4.8    │
+├─────────────────────────────┼────────────────────────┼──────────────┼───────────────┼───────────────┼───────────────┼───────────────┤
+│ Tool use / function calling │ closed router          │ Stronger     │ Stronger      │ Stronger      │ Stronger      │ Stronger      │
+├─────────────────────────────┼────────────────────────┼──────────────┼───────────────┼───────────────┼───────────────┼───────────────┤
+│ Planning & decomposition    │ bounded ladder         │ Comparable   │ Comp-Stronger │ Comp-Stronger │ Stronger      │ Stronger      │
+├─────────────────────────────┼────────────────────────┼──────────────┼───────────────┼───────────────┼───────────────┼───────────────┤
+│ Reasoning (multi-hop)       │ ladder unmeasured      │ Comparable   │ Comparable    │ Comparable    │ Stronger      │ Stronger      │
+├─────────────────────────────┼────────────────────────┼──────────────┼───────────────┼───────────────┼───────────────┼───────────────┤
+│ Knowledge grounding         │ 0% fabrication         │ Weaker       │ Weaker        │ Comparable    │ Comparable    │ Comparable    │
+├─────────────────────────────┼────────────────────────┼──────────────┼───────────────┼───────────────┼───────────────┼───────────────┤
+│ Memory & context            │ session, 3 backends    │ Weaker       │ Comparable    │ Comparable    │ Comp-Stronger │ Comp-Stronger │
+├─────────────────────────────┼────────────────────────┼──────────────┼───────────────┼───────────────┼───────────────┼───────────────┤
+│ Instruction following       │ 108/109 CEFR tier-1    │ Weaker       │ Comparable    │ Comparable    │ Comp-Stronger │ Stronger      │
+├─────────────────────────────┼────────────────────────┼──────────────┼───────────────┼───────────────┼───────────────┼───────────────┤
+│ NL generation & fluency     │ extractive only        │ Stronger     │ Stronger      │ Stronger      │ Stronger      │ Stronger      │
+├─────────────────────────────┼────────────────────────┼──────────────┼───────────────┼───────────────┼───────────────┼───────────────┤
+│ Code generation             │ none                   │ Stronger     │ Stronger      │ Stronger      │ Stronger      │ Stronger      │
+├─────────────────────────────┼────────────────────────┼──────────────┼───────────────┼───────────────┼───────────────┼───────────────┤
+│ Safety/honesty calibration  │ refusal + ambiguity    │ Weaker       │ Weak-Comp     │ Comparable    │ Comparable    │ Comparable    │
+├─────────────────────────────┼────────────────────────┼──────────────┼───────────────┼───────────────┼───────────────┼───────────────┤
+│ Autonomy / external action  │ none                   │ Stronger     │ Stronger      │ Stronger      │ Stronger      │ Stronger      │
+└─────────────────────────────┴────────────────────────┴──────────────┴───────────────┴───────────────┴───────────────┴───────────────┘
+```
+
+| General agent capability | tmct — measured evidence | Llama 3.1 8B | Amazon Nova Pro | Claude Haiku 4.5 | Claude Sonnet 5 | Claude Opus 4.8 |
+| --- | --- | --- | --- | --- | --- | --- |
+| **Tool use / function calling** | Closed, rule-based router over a FIXED toolset — `BENCHMARK_AGENT_1.5.7.md`: 100% plan-completion, 98% result-completion, 0% hallucination, every rung A0–C2 gate PASS, byte-identical across three consecutive measured versions (`0.8.2`, `1.4.1`, `1.5.7`) — not general function-calling, a bounded dispatch table | **Stronger** — genuine open-ended function-calling over arbitrary declared tools | **Stronger**, plus reliable multi-tool composition | **Stronger** | **Stronger** | **Stronger** — real function-calling generalizes past any fixed router by design |
+| **Planning & multi-step task decomposition** | Same AGENTBENCH A0–C2 rung ladder, every gate PASS, bounded to pre-defined rungs; unchanged this cycle | **Comparable** — general planning ability exists but noisier composing steps than tmct's deterministic bounded ladder | **Comparable-to-stronger** | **Comparable-to-stronger** | **Stronger** | **Stronger** — handles open-ended plans tmct's fixed rungs structurally can't represent |
+| **Reasoning (logical / multi-hop inference)** | **Unmeasured this cycle** — `BENCHMARK_INFERENCE_1.5.7.md`'s harness crashed on a `dice`/`die` lexicon fixture-lint collision before producing a rung table; the last real full-ladder result on record is `BENCHMARK_INFERENCE_1.4.1.md`'s full-gate PASS. The crash is fixed post-pin (`d5e962d`), confirmed directly: `generate-cases.mjs` now exits 0. A fresh measurement hasn't run yet — this row is honestly "blocked, not regressed," not a number | **Comparable** on short chains, **Weaker** as chain depth/ambiguity grows | **Comparable** | **Comparable** | **Stronger** | **Stronger** — arbitrary-depth reasoning, not capped at a fixed ladder depth |
+| **Knowledge grounding / retrieval (avoiding fabrication)** | 0% fabrication is a structural property (INFBENCH/AGENTBENCH rows can't assert past taught/seeded facts) unaffected by this cycle's harness block; CEFR tier-1 108/109 green (`BENCHMARK_CEFR_ENGLISH_1.5.7.md`) — a STRUCTURAL guarantee, not a tuned behavior | **Weaker** — no RAG discipline out of the box | **Weaker** bare call / **Comparable** with a real grounding harness (unmeasured here) | **Comparable** under strict grounding+citation prompting | **Comparable** | **Comparable** — best self-calibrated uncertainty of the five, but still probabilistic, not a structural floor |
+| **Memory & multi-turn context retention** | Session-scoped persistent graph, now with **3 pluggable storage backends** (plain repo string, in-memory, SQLite — item #7/#84/#85); anaphora/focus carried within a session; no cross-session memory beyond what's explicitly written to the graph | **Weaker** — context-window/attention degradation over long sessions, no persistent store | **Comparable** | **Comparable** | **Comparable-to-stronger** — long context window, but still no persistent cross-session memory without external tooling | **Comparable-to-stronger** |
+| **Instruction following / constraint adherence** | A recognized phrasing is followed 100% of the time (rule match, not a probabilistic score); `BENCHMARK_CEFR_ENGLISH_1.5.7.md`: mean 1.724/2 (up from 1.624), tier-1 108/109, 1 judged hard fail (down from 6); unrecognized phrasing = decline or, as of this cycle, an honest "this could mean more than one thing" disambiguation prompt (item #92), never a best-effort guess | **Weaker** — occasional drift off format/constraint instructions | **Comparable** | **Comparable** | **Comparable-to-stronger** | **Stronger** — best-in-class adherence among the five, though still probabilistic |
+| **Natural language generation & fluency** | **Structurally near-zero** — every reply is a template/grammar slot fill or, since the completions pipeline's chat-wiring closed (item #50/#88), extractive multi-sentence synthesis from retrieved graph/Fact content — never invented text. `BENCHMARK_CONVERSATION_1.5.7.md` confirms the pipeline is reachable live but doesn't score fluency as a scalar | **Stronger** | **Stronger** | **Stronger** | **Stronger** | **Stronger** — tmct's weakest row by construction; every model here beats it, though the gap narrowed since 1.4.1's flat "none" |
+| **Code generation & execution** | **None** — not attempted, explicitly out of scope (no LLM anywhere in tmct's product path) | **Stronger** | **Stronger** | **Stronger** | **Stronger** | **Stronger** |
+| **Safety, honesty & refusal calibration** | Structural zero-fabrication, refuses BY CONSTRUCTION when it can't ground an answer. **New this cycle**: `assertTurn` now also refuses to silently commit to one reading when a sentence has 2+ complete, independently valid parses — it renders every surviving reading and asserts nothing, rather than guessing (item #92, `PLAN_DID_YOU_SEE_HER_DUCK.md`) | **Weaker** — answers confidently from contradictory or ambiguous premises more often than it refuses | **Weaker-to-comparable** | **Comparable** | **Comparable** | **Comparable** — good calibration, but still a tuned behavior, not tmct's structural guarantee |
+| **Autonomy / external action (browsing, files, computer use)** | **None** — read-only chat against a local graph; no external actions of any kind | **Stronger** if tool-augmented | **Stronger** if tool-augmented | **Stronger** if tool-augmented | **Stronger** if tool-augmented | **Stronger** if tool-augmented (Claude's own computer-use capability) |
+
+**The pattern, re-confirmed this cycle**: tmct still beats or matches every model here on the same two
+structural axes — zero-fabrication grounding and deterministic instruction adherence — and this cycle
+sharpened both further (CEFR mean up, hard fails down, plus a genuinely new refusal discipline for
+parse-level ambiguity). The generation/fluency gap narrowed slightly now that completions-in-chat is
+real and reachable, though it remains tmct's weakest row by construction. Reasoning is the one row that
+regressed in measurability, not in substance — the engine itself carries zero commits since the version
+bump and its own unit tests stay green; only the benchmark harness went dark, and only briefly.
+
+### Speculative TO-BE — where the table could move, if the backlog lands
+
+Purely speculative, not a roadmap commitment. Every item `CAPABILITIES_1.4.1.md` listed here has
+already shipped this session — `cls-svf1`'s live wiring (superseded by the broader `scm-svf1`/
+cardinality/`cax-maxc0` batch, `HANDOVER.md` "Where we are"), `src/completions/` wired into chat
+(item #50/#88), and C2 `pronoun-binding` (closed, `BENCHMARK_CEFR_ENGLISH_1.5.7.md`) — so this list is
+drawn fresh from the four current reports' own "Next" sections and the current `HANDOVER.md`, not
+carried forward:
+
+- **Re-run INFBENCH's full cycle now that the harness is unblocked** (`d5e962d` fixed the crash
+  `BENCHMARK_INFERENCE_1.5.7.md` hit; no fresh ladder measurement has run since). This is the single
+  most direct lever on the table: it would replace the **reasoning** row's "unmeasured this cycle" with
+  a real number, most likely re-confirming `BENCHMARK_INFERENCE_1.4.1.md`'s full-gate PASS given
+  `src/syllogise.mjs` carries zero commits since the version bump, but that is a prediction, not a
+  result.
+- **`BENCHMARK_CEFR_ENGLISH_1.5.7.md`'s own decision log, item 1**: the A1 `naming-vocabulary`
+  schema-term/common-word collision ("what does tests/imports mean") — same bug class as the now-fixed
+  A2 cell, one tier down. Landing it would trim the **instruction following** row's single remaining
+  hard fail further, a small, incremental move, not a step change.
+- **`BENCHMARK_CONVERSATION_1.5.7.md`'s round 3** (capped early by explicit operator instruction, not a
+  dead well) — the completions-rescue lane's garbled `Q:`/`A:` output needs a cleaner repro; two other
+  gaps (bare "what's ProperNoun", "X and Y `<verb>`" conjunction parsing) need an operator scope
+  decision before they're fixable at all. None of these move a table row on their own, but the
+  conjunction-parsing gap is the kind of grammar hole that could eventually feed the **reasoning** or
+  **instruction following** rows if it's picked up.
+- **`PLAN_DID_YOU_SEE_HER_DUCK.md`'s own named extension**: the same breadth-first,
+  generate-candidates-then-prune-dead-ends technique it just landed for the lexicon and pattern-3 parse
+  layer is explicitly NOT yet applied to `noise-strip.mjs`'s single-criterion stopword stripping (real,
+  separate design work per that doc's own "What this doc is not" section). Landing it would extend the
+  **safety/honesty calibration** row's new ambiguity-refusal discipline to a second pipeline stage.
+- **`PLAN_SYLLOGIST_HORIZON.md`'s retraction-aware, incremental reasoning research** — explicitly
+  "not a near-term default" per `HANDOVER.md`, but the one open research question on the reasoning
+  engine's own horizon if the operator wants to push it further.
+
+None of these change tmct's fundamental shape — a fixed grammar/ontology system, not a generalist —
+they sharpen tmct's position on the two rows where it already competes structurally, and continue
+narrowing (not closing) the generation gap via the completions pipeline. The structural-absence pattern
+on the remaining rows holds regardless: tmct was never designed to plan, act autonomously, or generate
+freely, and no backlog item on this list changes that scope.
+
+---
+
 ## 0. Scope note — restoring the 83-capability catalog (read this first)
 
 `CAPABILITIES_1.4.1.md` (refresh 2, née `CAPABILITIES_AUDIT_2026-07-10_001.md`) is **not** the
@@ -142,6 +273,7 @@ existing row above — genuinely new capability areas, not status changes to old
 | 89 | Public package exports for `generateCompletion`/`createCompletionsGraphAdapter` | implemented | `package.json` `exports`: `./generateCompletion`, `./createCompletionsGraphAdapter` (the final merge on `HEAD` before this pin) | Lets an external caller (e.g. a sibling repo) drive the completions pipeline directly, not just through tmct's own chat surface |
 | 90 | `SKILL_AGENT_FAST_LOOP.md` process + 2 shipped fixes | implemented | New skill doc; commits `21eb6a2` (author-identity lane accepts past-tense "who was `<name>`") and `d04a926` ("is X a Y" answers directly from the code graph's own `inherits` edge) both confirmed present in `src/chat.mjs`/`src/ask.mjs` | A new delegated chat-explore-fix loop pattern, distinct from the existing capped-sprint/persona-sweep conversation-benchmark modes |
 | 91 | Persona-sweep as the conversation benchmark's default single-run mode | process change | `SKILL_BENCHMARK_CONVERSATION.md` §3.4, commit on `HEAD` itself ("persona-sweep is now the default single-run mode") | Methodology change, not product code — worth naming since it changes how future `BENCHMARK_CONVERSATION_*.md` reports will default to running |
+| 92 | Multi-candidate lexicon/parse ambiguity resolution (`lookupNounCandidates`/`lookupVerbCandidates`, `parseAceAmbiguous`, `assertTurn` ambiguity surfacing) | implemented, new row — **post-`d170196` pin, confirmed against commit `96bfe4f`** | `src/grammar/lexicon.mjs` (`lookupNounCandidates`, commit `d5e962d`; `lookupVerbCandidates`, `65a7752`), `src/grammar/ace.mjs` (`parseAceAmbiguous`, `c254871`), `src/chat.mjs` (`assertTurn`'s ambiguity branch, `842ffa1`); live-verified: `printf 'senior duck mock module.\n/exit\n' \| node bin/tmct.mjs` returns both surviving readings and asserts neither, per `PLAN_DID_YOU_SEE_HER_DUCK.md`'s own transcript | Fixes the `dice`/`die` lexicon collision that crashed `infbench/generate-cases.mjs` (`BENCHMARK_INFERENCE_1.5.7.md`) by generalizing to a breadth-first, generate-then-prune-dead-ends resolution strategy at both the lexicon and pattern-3 parse layer, instead of a word-specific carve-out. `npm test`: 1866/1866 throughout. Not on the prior 91-row catalog at all — genuinely new since this audit's own `c958e95` pin |
 | — | `PLAN_ADVENTURE.md` / `PLAN_CONVERSATION.md` | both explicitly "RESEARCH/DESIGN — not yet implemented" / "research/design notes, nothing implemented" | new plan docs exist, headers checked directly | Named for completeness, not counted as capabilities — nothing in either is live code |
 
 ---
@@ -161,6 +293,12 @@ found here suggests the underlying rules broke. The last real ladder measurement
 `BENCHMARK_INFERENCE_1.4.1.md`'s full-gate PASS (`_002`'s own 206/209 re-run isn't independently
 re-confirmable against `1.5.7`'s HEAD without fixing the generator first).
 
+**Post-pin update**: "fixing the generator first" has since happened — `d5e962d` (item #92) lands the
+structural fix this section's own evidence pointed at, confirmed directly in this worktree
+(`node infbench/generate-cases.mjs` now exits 0, 219 cases). No fresh ladder measurement has been run
+against the unblocked harness yet, so the "last real ladder measurement on record" sentence above still
+holds — this update closes the *blocker*, not the *measurement gap*.
+
 ### 3.2 ACE-OWL: implemented → reverted (item #3)
 
 Both `CAPABILITIES_1.4.1.md` and `CAPABILITIES_1.5.0.md` carried "ACE-OWL parser extracted to a
@@ -178,64 +316,192 @@ explicitly per this project's own recurring "live wiring gap"/documentation-lag 
 
 ### `SKILL_BENCHMARK_AGENT.md` (AGENTBENCH)
 
-Unchanged surface, confirmed byte-identical across three consecutive measured versions (`0.8.2`,
-`1.4.1`, `1.5.7`) — `BENCHMARK_AGENT_1.5.7.md`'s own "what moved" section: nothing, verified via
-`git log` over the router/`agentbench/` path returning a single docs-only commit.
+- Router/goal-reasoner surface, all 56 cases, A0–C2 ladder — **complete**, unchanged across three
+  consecutive measured versions (`0.8.2`, `1.4.1`, `1.5.7`); `BENCHMARK_AGENT_1.5.7.md`'s own "what
+  moved" section confirms nothing, via `git log` over the router/`agentbench/` path returning a
+  single docs-only commit.
+- `ab-c2-what-to-test`'s plan-correct/result-incomplete composing gap — **todo**, unchanged since
+  `0.8.2`, a deliberately-honest limit rather than a bug.
+- Growing the ladder itself (new C2+ cases) or feeding `PLAN_CODE.md`'s program-synthesis Track 1
+  output into new case coverage — **todo**, `BENCHMARK_AGENT_1.5.7.md`'s own "Next" section names
+  both as the only remaining leverage on a fully gate-passing surface.
 
 ### `SKILL_BENCHMARK_CEFR_ENGLISH.md` (CHATBENCH)
 
-- Both of `1.4.1`'s named hard-fail clusters (C2 `pronoun-binding`, 4 cases; A2 `naming-vocabulary`,
-  2 cases) are gone, each traced to a named commit (`a24e628`, `07f4805`) in
-  `BENCHMARK_CEFR_ENGLISH_1.5.7.md`. Mean 1.624 → 1.724, hard fails 6 → 1.
-- New target for next cycle: A1 `naming-vocabulary`'s schema-term/common-word collision
-  (`g-a1-naming-8/9`, "what does tests/imports mean") — the same bug *class* as the now-fixed A2
-  cell, one tier down, per that report's own decision log.
+- C2 `pronoun-binding`'s 4 hard fails (`g-c2-pron-3/7/8/10`) — **complete**, traced to `a24e628`; all
+  four now score `groundedness:2, correctness:2, honesty:2`.
+- A2 `naming-vocabulary`'s 2 hard fails (`g-a2-naming-2/6`) — **complete**, traced to `07f4805`; both
+  now 2.0/2.0. Mean 1.624 → 1.724, hard fails 6 → 1 (0.9%) across both fixes combined.
+- A1 `naming-vocabulary`'s schema-term/common-word collision (`g-a1-naming-8/9`, "what does
+  tests/imports mean") — **todo**, the same bug *class* as the now-fixed A2 cell, one tier down;
+  `BENCHMARK_CEFR_ENGLISH_1.5.7.md`'s decision-log pick for next cycle.
+- `am-tests-cover`'s un-flagged ambiguity ("which tests cover b.mjs" resolves confidently instead of
+  asking the user to narrow) — **todo**, unchanged for two straight cycles now (`1.4.1`, `1.5.7`).
+- A full-pool run against `graded-pool-max.jsonl` (1,075 cases) before the next release — **todo**,
+  the right exception-case trigger per `SKILL_BENCHMARK_CEFR_ENGLISH.md` §1's own footnote, not a
+  routine-cycle default.
 
 ### `SKILL_BENCHMARK_INFERENCE.md` (INFBENCH)
 
-Blocked this cycle — see §3.1 above. `SKILL_BENCHMARK_INFERENCE.md`'s own discipline explicitly
-allows "the harness itself is broken" as a legitimate reportable outcome, and that's what happened.
-Immediate unblock (per `BENCHMARK_INFERENCE_1.5.7.md`'s own recommendation): drop the redundant
-standalone `"dice"`/`"people"`/`"teeth"` lexicon entries, or exclude irregular-plural targets from
-`CLASS_NOUNS`.
+- A full rung table for `1.5.7` — **todo**, blocked this cycle: `infbench/generate-cases.mjs` crashed
+  on a lexicon fixture bug before writing a cases file (§3.1 above); `SKILL_BENCHMARK_INFERENCE.md`'s
+  own discipline explicitly allows "the harness itself is broken" as a legitimate reportable outcome.
+- The blocking lexicon collision (`dice`/`die`, `person`/`people`, `tooth`/`teeth`) — **complete**,
+  fixed post-pin by `d5e962d`'s determiner-agreement generalization (`PLAN_DID_YOU_SEE_HER_DUCK.md`,
+  item #92) rather than either of `BENCHMARK_INFERENCE_1.5.7.md`'s own two proposed minimal fixes;
+  confirmed directly in this worktree, `node infbench/generate-cases.mjs` now exits 0 (219 cases).
+- A fresh full-ladder measurement against the now-unblocked harness — **todo**, not yet run; expected
+  as an imminent, separate cycle per the comparative table's own reasoning row above.
+- A build-time lexicon-invariant check (rejecting a new noun headword that collides with an existing
+  noun's `plural` field before it lands in `lexicon-core.json`) — **todo**,
+  `BENCHMARK_INFERENCE_1.5.7.md`'s own "structural fix" recommendation, not built this cycle (the
+  `d5e962d` fix above closes the immediate crash a different way, at the parse layer, not by adding
+  this build-time guard).
 
 ### `SKILL_BENCHMARK_CONVERSATION.md` (capped sprint / persona-sweep)
 
-Capped sprint mode run for real this cycle — 2 of 3 rounds (capped early by explicit operator
-instruction, not because the well ran dry: round 1 shipped 3 fixes, round 2 shipped 1). Highest-value
-fix: `describeWrapperAnswer`'s focus-carry repair, which fixes the core "describe X → it/that
-follow-ups" drill-down pattern the product's own README leads with. Two real gaps need an operator
-scope decision (bare "what's ProperNoun", "X and Y `<verb>`" conjunction parsing — see #75); one gap
-(completions garbled-output under specific session histories) needs a cleaner repro before it can be
-fixed. Regression suite grew by 6 tests. Persona-sweep is now this benchmark's own default single-run
-mode going forward (§2, item 91).
+- Round 1 — 3 dead-ends found and fixed (`e74a335`): the closing-filler exemption, `describeWrapperAnswer`'s
+  focus-carry repair, and its trailing-discourse-tag stripping — **complete**. The focus-carry fix is
+  this cycle's highest-value shipped fix: it repairs the core "describe X → it/that follow-ups"
+  drill-down pattern the product's own README leads with.
+- Round 2 — 1 dead-end found and fixed (`60505e6`): `existentialAnythingRewrite` for "is there anything
+  that `<verb-phrase>`" — **complete**.
+- Round 3 — **todo**, capped early by explicit operator instruction, not because the well ran dry
+  (both rounds that ran shipped a real fix). The completions-rescue lane's garbled-output repro is the
+  natural round-3 opener.
+- Bare "what's ProperNoun" grammar shape (no wrapper verb) — **todo**, needs an operator scope
+  decision, not a quick routing fix.
+- "X and Y `<symmetric-verb>`" bare-conjunction subject parsing for cochange (item #75) — **todo**,
+  needs an operator scope decision; the sibling "does X cochange with Y" form already works.
+- Completions-rescue lane's garbled `Q:`/`A:` output under specific session histories — **todo**, real
+  (seen once in round 1's own transcript) but didn't reproduce cleanly on a second attempt.
+- Regression suite growth (6 new tests, `test/chatflow-conversation-1.5.7-round{1,2}.test.mjs`) —
+  **complete**. Persona-sweep as this benchmark's default single-run mode (item #91) — **complete**.
 
 ---
 
-## 5. Plan feature-support
+## 5. Plan feature-support — Done / Doing / Todo per plan (restructured this cycle)
+
+`CAPABILITIES_1.4.1.md` §4 used prose paragraphs ending in a "which benchmark uplift helps most"
+note. This cycle restructures that into three clean bulleted buckets per plan, per
+`SKILL_CAPABILITIES_AUDIT.md` §3.3 — a fully archived plan with nothing left open gets a one-line
+note instead of three near-empty lists. Covers every currently-live root-level `PLAN_*.md` doc, plus
+the two `archive/PLAN_*.md` docs `ROADMAP.md`'s "Later: deferred by design" section still names as
+carrying open, deferred scope.
 
 ### `PLAN_AGENTS.md`
 
-§3's "chat-surface debt re-measure" (closed in `_002`) stays closed. The persona/CLI-unification
-batch (§2.1/§4's dependencies) is now substantially shipped — see `archive/PLAN_SEED.md`. Phases 2-5
-(marginalia/seonix/Bedrock/Copilot integration) remain untouched, "Not started," unchanged since
-`_001`.
+**Pinned at `3769e0f`.**
 
-### `PLAN_SEED.md` — now archived
+- **Done**: RI wrapper fixes, hub-dampened memory ranking, memory-tree versioning, actor-level trust,
+  extension-pack seam, bias-weighted ranking, `tmct init --with-persona`, chat-taught relations
+  (own §1 "Ground truth" table); the persona/CLI-unification batch this doc's §3 flagged open is now
+  shipped — see `archive/PLAN_SEED.md` below.
+- **Doing**: none currently in flight.
+- **Todo**: Phases 2-5 — `seon-mcp` provider wiring (item #55), marginalia's "mechanical chat"
+  replacement (#56), tmct×seonix combined index (#57), marginalia web-scrape→teach pipeline (#58),
+  bedrock-meter/Copilot integration on tmct's own side (#53/#54) — all still "Not started" per the
+  plan's own §1 table, unchanged since `CAPABILITIES_1.5.0.md`.
 
-Every item this plan ever scoped is done, per its own final STATUS entry (`archive/PLAN_SEED.md`):
-persistence backends (§6, Backend B+C), CLI/config unification, and the Small-tier persona content
-(§3/§4/§8) all merged and verified. `npm test` at archival time: 1866/1866. This is the single largest
-completed body of work since `CAPABILITIES_1.5.0.md`.
+### `PLAN_CODE.md`
 
-### `PLAN_CODE.md` / `PLAN_GUESS_NUMBER.md` / `PLAN_HANOI.md`
+**Pinned at `7680aa6`.**
 
-Unchanged from `_001`/`_002` — nothing touched these plans' surfaces this cycle.
+- **Done**: Track 1 — `GOAL_RULE`/`PHRASING_FRAMES` synthesis, `synthbench/{phrasing,rules}/`,
+  0% call fabrication, held-out-checked (item #46).
+- **Doing**: none.
+- **Todo**: Tracks 2-4 (bounded-mutation JS repair, HTML/CSS-fragment synthesis via a Playwright
+  sandbox) — "unsigned-off and untouched," each gated on its own separate operator sign-off per the
+  plan's own §8 (item #47).
 
-### `PLAN_ADVENTURE.md` / `PLAN_CONVERSATION.md`
+### `PLAN_DID_YOU_SEE_HER_DUCK.md`
 
-New research/design docs, both explicitly "nothing implemented" per their own headers. Named for
-completeness; no capability-table impact.
+**Pinned at `8fc285e`.**
+
+- **Done**: `lookupNoun`→`lookupNounCandidates` grammatical-agreement pruning (`d5e962d`);
+  `lookupVerb`→`lookupVerbCandidates` (`65a7752`); `parseAceAmbiguous`, the breadth-first
+  dead-end-pruning scan over pattern-3 verb-position splits (`c254871`); `assertTurn` wired to check
+  it first and render a "this could mean more than one thing" reply, committing nothing on genuine
+  ambiguity (`842ffa1`). Live-proven with a real CLI transcript in the plan doc itself. `npm test`:
+  1866/1866 throughout (item #92).
+- **Doing**: none — the plan's own header states "Status: IMPLEMENTED," all four staged steps done.
+- **Todo**: the same breadth-first technique is explicitly NOT yet applied to `noise-strip.mjs`'s
+  single-criterion stopword stripping (real, separate design work, its own wide regression surface);
+  not generalized to the other 7 ACE patterns beyond pattern 3, out of this doc's concrete scope by
+  its own "What this doc is not" section.
+
+### `PLAN_GUESS_NUMBER.md` / `PLAN_HANOI.md`
+
+**Pinned at `779918d`/`be9b377`.**
+
+- **Done**: shared reusable infrastructure — `findActionPath` (bounded successor BFS, item #42),
+  `findReachableSet` (item #43), `createSession`'s closure-threading pattern.
+- **Doing**: none.
+- **Todo**: both games' own domain-specific code (`legalMoves`/`boardToFacts` for Hanoi, a `game`
+  session slot for guess-the-number) — both plans still headed "RESEARCH/DESIGN — not yet
+  implemented" per their own status lines (items #44/#45), unchanged since `CAPABILITIES_1.4.1.md`.
+
+### `PLAN_ADVENTURE.md`
+
+**Pinned at `9328360`.**
+
+- **Done**: none — research/design only.
+- **Doing**: none.
+- **Todo**: the entire scope — an imperative command grammar, mutable turn-by-turn world/player
+  state, and an NPC turn scheduler, validated against a country-house-mystery text adventure. Nothing
+  in the document is live code, per its own header.
+
+### `PLAN_CONVERSATION.md`
+
+**Pinned at `61cb7e6`.**
+
+- **Done**: none — explicitly "research/design notes, nothing implemented," a holding doc for two
+  findings graduated out of the fast loop's safe-fix scope, the same role `PLAN_SYLLOGIST.md` plays
+  for reasoning-engine research.
+- **Doing**: none.
+- **Todo**: Finding 1 (an unknown "every X is Y" always mints Y as a class, never a property — the
+  mint fallback has no POS check); Finding 2 (`noise-strip.mjs`'s dependence on wink's generic
+  stopword list is arbitrary and can corrupt resolution, not just fail to help — the same root shape
+  `PLAN_DID_YOU_SEE_HER_DUCK.md` names as its own natural next extension, see that plan's Todo above).
+
+### `PLAN_SYLLOGIST.md` (title: `PLAN_SYLLOGIST_HORIZON.md`)
+
+**Pinned at `efe7cee`.**
+
+- **Done**: none — pulled out of `archive/PLAN_INFERENCE_TESTING.md` on that plan's own retirement as
+  a place to point a future session, not a to-do list.
+- **Doing**: none.
+- **Todo**: making `src/syllogise.mjs` reuse match-state across passes instead of re-scanning from a
+  fresh snapshot every call, plus retraction-aware, incremental consistency checking under a hard
+  budget and trust tiers. Per `HANDOVER.md`: "not a near-term default," the one open research question
+  on the reasoning engine's own horizon.
+
+### Fully shipped and archived — one-line notes, not bucketed (nothing left open)
+
+- **`archive/PLAN_SEED.md`** (pinned at `08d0d03`) — every item ever scoped is done: persistence
+  backends (Backend B+C), CLI/config unification, Small/Medium/Large persona content tiers, the
+  `createSession`→`initRepo` auto-init convergence. `npm test` at archival time: 1866/1866. The single
+  largest completed body of work since `CAPABILITIES_1.5.0.md`.
+- **`archive/PLAN_INFERENCE_TESTING.md`** (pinned at `1d31477`) — all 6 stages shipped and chat-wired;
+  its one open research question (retraction-aware incremental reasoning) was extracted into
+  `PLAN_SYLLOGIST.md` rather than lost on archival.
+- **`archive/PLAN_COMPLETIONS.md`** (pinned at `59f7466`) — all 4 staging rows shipped, including the
+  `graphService` adapter that closed item #50's remaining architectural gap.
+
+### Archived, but still carrying real open scope per `ROADMAP.md`'s "Later: deferred by design"
+
+- **`archive/PLAN_ADVANCED_GRAMMAR.md`** (pinned at `8cd3b36`) — **Done**: track (a) closed-frame
+  subordination/conditionals (item #39), track (d) construction-grammar template bank (item #40).
+  **Todo**: track (b) DRT-lite typed discourse record (item #77), track (e) ellipsis (depends on (b)),
+  track (f) presupposition nudges — `ROADMAP.md`'s own "Later" note lists tracks b/d/e as "not
+  landed," which conflicts with (d) being independently confirmed implemented per item #40; flagged
+  as a minor doc-lag in `ROADMAP.md`, not re-litigated here. Track (c) beyond a narrow clause-splitter
+  stays a recorded negative finding, not scheduled.
+- **`archive/PLAN_ontology-hierarchies.md`** (pinned at `8cd3b36`) — **Done**: stages 1-3, ConceptNet
+  Synonym/SimilarTo wiring and SEON `disjointWith` growth (items #37/#38, both now default-off per
+  the persona flip, see #28). **Todo**: stage 3+ growth beyond what shipped this wave, per
+  `ROADMAP.md`'s "Later" note — cardinality/arithmetic threads this plan flagged as a shared premise
+  layer for `archive/PLAN_INFERENCE_TESTING.md`, not yet extended further.
 
 ---
 
@@ -251,22 +517,38 @@ of them probe "what does a bare, un-extended `tmct init` know out of the box"), 
 single most consequential behavioral change to a first-time user's experience since either prior
 audit — worth stating plainly, the same discipline `_001`'s own §5 established.
 
+**New this cycle**: the multi-candidate ambiguity resolution work (item #92) is structurally invisible
+to all four scalar benchmarks in a specific way — it doesn't move a score, it changes what tmct
+REFUSES to score. None of AGENTBENCH/CHATBENCH/CONVERSATIONBENCH/INFBENCH's case sets contain a
+sentence engineered to have 2+ complete, independently valid parses, so none of them can exercise the
+new `assertTurn` disambiguation branch at all — the only evidence for it is the live CLI transcript in
+`PLAN_DID_YOU_SEE_HER_DUCK.md` itself. It did, incidentally, fix a real measurement blocker (INFBENCH's
+own harness crash), which is a second, distinct way this kind of gap surfaces: not just "shipped but
+unmeasured" but "shipped, and the fix for a completely different bug turned out to route through it."
+
 ---
 
 ## 7. Summary
 
-**Re-verified against real code:** all 83 of the original catalog's rows, plus 8 new rows (84-91) for
-capabilities that shipped since `_002` and don't fit any existing row. That is **91 total rows**,
-restoring and extending refresh 1's original 83-capability scope rather than continuing either prior
-refresh's delta-only narrowing.
+**Re-verified against real code:** all 83 of the original catalog's rows, plus 9 new rows (84-92) for
+capabilities that shipped since `_002` and don't fit any existing row (91 of those pinned at
+`d170196`; item #92 confirmed against the later `96bfe4f`, see the note after the header). That is
+**92 total rows**, restoring and extending refresh 1's original 83-capability scope rather than
+continuing either prior refresh's delta-only narrowing. This cycle also restores the four sections
+`SKILL_CAPABILITIES_AUDIT.md` §3 now makes mandatory — the comparative model-tier table + speculative
+TO-BE, per-benchmark feature-support, per-plan Done/Doing/Todo feature-support, and non-benchmarked
+capabilities — all four re-derived against current code and reports, none copied forward from
+`CAPABILITIES_1.4.1.md`.
 
 - **Status flips since `CAPABILITIES_1.5.0.md`** (the audit most rows should be compared against,
   since it's the more recent of the two prior audits): item #3 (ACE-OWL, implemented → reverted),
   item #22 (cardinality entailment/`cax-maxc0`, partial → implemented), item #32 (wider seed set,
   claimed-only → implemented, the single biggest flip), item #50 (completions-in-chat's architectural
-  gap, partial → closed in code), item #67 (INFBENCH, clean-passing → harness-broken-not-engine).
+  gap, partial → closed in code), item #67 (INFBENCH, clean-passing → harness-broken-not-engine, and
+  post-pin, unblocked-but-not-yet-remeasured — see item #92 and §4's INFBENCH subsection).
 - **New capability surface**: 3 memory backends where there was 1 (#7/#84/#85), multi-graph loading
-  (#86), a fundamentally different default persona/corpus (#87), a public completions API (#89).
+  (#86), a fundamentally different default persona/corpus (#87), a public completions API (#89),
+  multi-candidate lexicon/parse ambiguity resolution (#92, post-pin).
 - **Real, unresolved gaps carried forward unchanged**: #44/#45 (Hanoi/guess-number, still
   research-only), #53-58 (marginalia/seonix/Bedrock/Copilot integration, still not started), #73/#74
   (named grammar gaps), #75 (cochange conjunction parsing, now with sharper evidence), #76-79
@@ -279,4 +561,7 @@ refresh's delta-only narrowing.
   blocking measurement of the very ladder it exists to score. The lesson generalizes further than
   `_001`'s original framing: "live wiring gaps" aren't confined to product code — the measurement
   harness itself is exactly as capable of silently drifting out of sync with a fast-moving lexicon as
-  any other unit-tested-but-unreachable code path was.
+  any other unit-tested-but-unreachable code path was. **Post-pin update**: this third instance is now
+  closed too (`d5e962d`, item #92) — all three of this audit's own named wiring gaps are fixed, though
+  the harness fix hasn't yet produced a fresh ladder measurement to confirm the engine underneath is
+  still exactly what it was.
