@@ -30,19 +30,40 @@
 import { capabilityByName, preconditionsOf, PRECOND } from "./registry.mjs";
 import { hallucinationsIn } from "./call-validator.mjs";
 
+/** PLAN_BREADTH_FIRST_NLU.md §4 — the same read-only breadth-first enrichment as
+ *  resolver.mjs's `dispatchEachCandidate`: every registered capability is
+ *  `readOnly:true` with an empty delete-list, so dispatching the SAME tool once
+ *  per tied candidate is safe. Returns `[{candidate, result}, ...]`, or
+ *  undefined when there is no dispatcher to run it with. */
+async function dispatchEachCandidate(pool, capName, arg, ctx) {
+  if (!ctx.dispatch) return undefined;
+  const results = [];
+  for (const c of pool) {
+    const res = await ctx.dispatch(capName, { [arg]: c.label });
+    results.push({ candidate: c.label, result: res });
+  }
+  return results;
+}
+
 /** Validate a proposed tool_use. Returns a glass-box verdict:
- *    { ok, tool, denied:[{reason,detail}], steps:[{pred,ok,...}], provenance }
+ *    { ok, tool, denied:[{reason,detail}], steps:[{pred,ok,...}], provenance, candidateResults? }
  *  - ok=false with a `default-deny`/`undeclared`/`unknown-arg`/`missing-arg`
  *    denial is a STRUCTURAL rejection (no graph needed).
  *  - ok=false with an `unresolved` step is a BINDING rejection (a `resolves`
- *    precondition whose term matched no entity, or matched ambiguously).
+ *    precondition whose term matched no entity, or matched ambiguously). An
+ *    ambiguous `resolves` term stays a denial (never a guess at which candidate
+ *    is "the" one) but, when `ctx.dispatch` is wired, ADDITIONALLY carries a
+ *    top-level `candidateResults`: the SAME tool dispatched once per tied
+ *    candidate (PLAN_BREADTH_FIRST_NLU.md §4 — mirrors resolver.mjs's
+ *    resolveOne on the exact same ambiguity shape).
  *  - ok=true means the call is RESOLVABLE + well-formed (NOT proven antecedent-
  *    correct — see the file header).
  *  `declaredNames` may be null to skip the declared-set check (validate against
  *  the registry alone); pass it to also enforce the case/session toolset.
  *  `ctx.resolve(term)` is the resolveObject oracle; omit it to skip binding proof
- *  (structural-only validation). */
-export function guard(toolUse, declaredNames = null, ctx = {}) {
+ *  (structural-only validation). Async only because an ambiguous `resolves` term
+ *  may dispatch each candidate via `ctx.dispatch`. */
+export async function guard(toolUse, declaredNames = null, ctx = {}) {
   const name = toolUse?.name;
   const input = toolUse && typeof toolUse.input === "object" && toolUse.input ? toolUse.input : {};
   const denied = [];
@@ -68,6 +89,7 @@ export function guard(toolUse, declaredNames = null, ctx = {}) {
   }
 
   // 2. PRECONDITION CHECK — the STRIPS safety gate, step by step (the proof).
+  let candidateResults;
   for (const pre of preconditionsOf(name)) {
     if (pre.pred === PRECOND.graphLoaded) {
       // graph presence is the harness's responsibility; if a resolver is wired we
@@ -106,15 +128,23 @@ export function guard(toolUse, declaredNames = null, ctx = {}) {
             ? `${name}.${pre.param}="${term}" is ambiguous (narrow it)`
             : `${name}.${pre.param}="${term}" resolves to no graph entity`,
         });
+        if (r && r.ambiguous) {
+          const pool = [r.match, ...(r.candidates || [])].slice(0, 4);
+          const dispatched = await dispatchEachCandidate(pool, name, pre.param, ctx);
+          if (dispatched) candidateResults = dispatched;
+        }
       }
     }
   }
 
   const ok = denied.length === 0;
-  return { ok, tool: name, denied, steps, provenance: ok ? "resolvable (NOT proven antecedent-correct)" : "denied" };
+  return {
+    ok, tool: name, denied, steps, provenance: ok ? "resolvable (NOT proven antecedent-correct)" : "denied",
+    ...(candidateResults ? { candidateResults } : {}),
+  };
 }
 
 /** Convenience boolean: does a proposed tool_use PASS the guardrail? */
-export function admits(toolUse, declaredNames = null, ctx = {}) {
-  return guard(toolUse, declaredNames, ctx).ok;
+export async function admits(toolUse, declaredNames = null, ctx = {}) {
+  return (await guard(toolUse, declaredNames, ctx)).ok;
 }

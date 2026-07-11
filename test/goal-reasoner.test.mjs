@@ -213,6 +213,48 @@ test("goal-reasoner e2e: SCOPED-ONLY + AMBIGUITY seams both refuse honestly", as
   assert.match(String(ambiguous.why), /ambiguous meta-goal.*coverage-invariant.*cochange-risk-invariant/);
 });
 
+// PLAN_BREADTH_FIRST_NLU.md §4 — an AMBIGUOUS focus term must never silently
+// collapse to a whole-graph "global" answer (that would silently answer a
+// DIFFERENT goal than the one the user actually named). It stays an honest
+// refuse, but — when the tied candidates share one goal-rule-scoped class and a
+// dispatcher is wired — the SAME meta-loop runs once per (pinned) candidate, so
+// a machine caller gets both the honest "still ambiguous" signal and every
+// candidate's real composed answer (mirrors resolveOne's candidateResults).
+test("goal-reasoner: an ambiguous FOCUS term stays refused but ADDITIONALLY carries candidateResults (never silently falls back to global)", async () => {
+  const { buildEntities } = await import("../src/graph-build.mjs");
+  const { parseEntities } = await import("../src/codegraph.mjs");
+  const { ingestSchemaDocs } = await import("../src/schema-docs.mjs");
+  const { resolveObject } = await import("../src/ask.mjs");
+
+  const entities = buildEntities([
+    { path: "old-payment-system.js", dotted: "oldPaymentSystem", imports: [], calls: [], defines: [] },
+    { path: "new-payment-system.js", dotted: "newPaymentSystem", imports: [], calls: [], defines: [] },
+  ], []);
+  ingestSchemaDocs(entities);
+  const graph = parseEntities(entities);
+  const resolve = (term) => resolveObject(graph, term);
+  const dispatch = async () => ({ ok: true, result: [] });
+  const ctx = { resolve, dispatch };
+
+  const r = await goalReason("what else should I double-check before shipping payment system", ["tmct_impact", "tmct_untested"], ctx);
+  assert.equal(r.refused, true, "still an honest refusal — never a silent global fallback");
+  assert.match(r.why, /focus ".*" is ambiguous/);
+  assert.deepEqual(r.calls, []);
+  assert.equal(r.candidateResults.length, 2, "one composed sub-answer per tied candidate");
+  const labels = r.candidateResults.map((c) => c.candidate).sort();
+  assert.deepEqual(labels, ["new-payment-system.js", "old-payment-system.js"]);
+  for (const { result } of r.candidateResults) {
+    assert.equal(result.refused, false, "each candidate's real composed goal-answer, not a placeholder");
+    assert.equal(result.driver, "goal-0.8.1");
+  }
+
+  // no dispatcher -> refused exactly as before, no candidateResults at all
+  // (additive only — the non-enriched shape stays untouched).
+  const structural = await goalReason("what else should I double-check before shipping payment system", ["tmct_impact", "tmct_untested"], { resolve });
+  assert.equal(structural.refused, true);
+  assert.equal(structural.candidateResults, undefined);
+});
+
 test("goal driver e2e: the C1 relative-filter over the cochange grain composes at C1 (not the goal-reasoner)", async () => {
   const r = await goalDriver("of the modules change-coupled with app/lib/a.mjs, which are untested", ["tmct_cochanges", "tmct_untested"], SHARED.ctx);
   assert.equal(r.driver, "resolver-0.8.0", "the planner's relative-filter frame carries it — C2 adds nothing");

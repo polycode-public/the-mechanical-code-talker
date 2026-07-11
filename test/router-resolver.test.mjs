@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 
 import { parseEntities } from "../src/codegraph.mjs";
 import { ingestSchemaDocs } from "../src/schema-docs.mjs";
+import { buildEntities } from "../src/graph-build.mjs";
 import { resolveObject } from "../src/ask.mjs";
 import { RELATIONS } from "../src/ask-vocab.mjs";
 import { COMMANDS } from "../src/chat.mjs";
@@ -44,6 +45,23 @@ async function graphCtx() {
     }
     return { ok: true, text: `[${name}] ok`, resolved: null };
   };
+  return { resolve, dispatch, graph };
+}
+
+// A genuinely AMBIGUOUS in-memory graph (same construction ask-compound-resolve.
+// test.mjs uses): two distinct Modules that tie on the SAME query term, so
+// resolveObject returns {match, candidates, ambiguous:true} for real — the exact
+// shape PLAN_BREADTH_FIRST_NLU.md §4's breadth-first enrichment (resolveOne /
+// guard's `candidateResults`) is built to run every candidate through.
+function ambiguousGraphCtx() {
+  const entities = buildEntities([
+    { path: "old-payment-system.js", dotted: "oldPaymentSystem", imports: [], calls: [], defines: [] },
+    { path: "new-payment-system.js", dotted: "newPaymentSystem", imports: [], calls: [], defines: [] },
+  ], []);
+  ingestSchemaDocs(entities);
+  const graph = parseEntities(entities);
+  const resolve = (term) => resolveObject(graph, term);
+  const dispatch = async (name, input) => ({ ok: true, text: `[${name}] ok for ${input.module ?? input.symbol ?? input.class ?? ""}`, resolved: null });
   return { resolve, dispatch, graph };
 }
 
@@ -207,6 +225,31 @@ test("resolver: HONEST REFUSE — unresolvable entity, out-of-set tool, and unma
   assert.match(imp.reason, /no importer/);
 });
 
+// PLAN_BREADTH_FIRST_NLU.md §4 — every registered capability is read-only (empty
+// delete-list), so an ambiguous-term refusal ADDITIONALLY dispatches the SAME
+// capability once per tied candidate: `refused:true` is preserved (never a
+// guessed winner) but a machine caller also gets each candidate's real answer.
+test("resolver: an ambiguous term stays refused:true but ADDITIONALLY carries candidateResults — real per-candidate answers, never a guess", async () => {
+  const ctx = ambiguousGraphCtx();
+  const r = await resolveOne("what does payment system export", ["tmct_exports"], ctx);
+  assert.equal(r.refused, true, "still an honest refusal — never a guessed winner");
+  assert.match(r.reason, /is ambiguous/);
+  assert.equal(r.selected, null);
+  assert.equal(r.candidateResults.length, 2, "one dispatched result per tied candidate");
+  const labels = r.candidateResults.map((c) => c.candidate).sort();
+  assert.deepEqual(labels, ["new-payment-system.js", "old-payment-system.js"]);
+  for (const { result } of r.candidateResults) assert.equal(result.ok, true, "each candidate's real dispatched answer, not a placeholder");
+
+  // no dispatcher / execute:false -> refused exactly as before, no candidateResults
+  // at all (additive only — the non-enriched shape stays untouched).
+  const structural = await resolveOne("what does payment system export", ["tmct_exports"], { resolve: ctx.resolve });
+  assert.equal(structural.refused, true);
+  assert.equal(structural.candidateResults, undefined);
+  const noExec = await resolveOne("what does payment system export", ["tmct_exports"], ctx, { execute: false });
+  assert.equal(noExec.refused, true);
+  assert.equal(noExec.candidateResults, undefined);
+});
+
 test("resolver: a bound call always self-passes the zero-hallucination gate (never emits an undeclared/unknown call)", async () => {
   const ctx = UNIT_CTX;
   // ask for a tool NOT in the declared set -> refuse, never reach outside it
@@ -217,20 +260,20 @@ test("resolver: a bound call always self-passes the zero-hallucination gate (nev
 
 // ---- 3. the GUARDRAIL (Stage 4) ---------------------------------------------
 
-test("guardrail: DEFAULT-DENY — an unregistered / invented tool is denied outright", () => {
-  assert.equal(admits({ name: "tmct_teleport", input: {} }), false);
-  assert.equal(guard({ name: "tmct_teleport", input: {} }).denied[0].reason, "default-deny");
+test("guardrail: DEFAULT-DENY — an unregistered / invented tool is denied outright", async () => {
+  assert.equal(await admits({ name: "tmct_teleport", input: {} }), false);
+  assert.equal((await guard({ name: "tmct_teleport", input: {} })).denied[0].reason, "default-deny");
   // the intentionally-unregistered unbounded tools are denied too (registry = the trust boundary)
-  assert.equal(admits({ name: "tmct_snippet", input: { symbol: "Widget" } }), false);
+  assert.equal(await admits({ name: "tmct_snippet", input: { symbol: "Widget" } }), false);
 });
 
 test("guardrail: a well-formed, resolvable call passes; an unresolvable one is denied on the resolves precondition", async () => {
   const ctx = UNIT_CTX;
-  const ok = guard({ name: "tmct_describe", input: { symbol: "Widget" } }, ["tmct_describe"], ctx);
+  const ok = await guard({ name: "tmct_describe", input: { symbol: "Widget" } }, ["tmct_describe"], ctx);
   assert.ok(ok.ok, JSON.stringify(ok.denied));
   assert.ok(ok.steps.some((s) => s.pred && s.pred.includes("resolves") && s.ok && s.boundTo === "Widget"));
 
-  const bad = guard({ name: "tmct_describe", input: { symbol: "zebra.mjs" } }, ["tmct_describe"], ctx);
+  const bad = await guard({ name: "tmct_describe", input: { symbol: "zebra.mjs" } }, ["tmct_describe"], ctx);
   assert.equal(bad.ok, false);
   assert.equal(bad.denied[0].reason, "unresolved");
 });
@@ -240,13 +283,36 @@ test("guardrail: proves RESOLVABILITY, not ANTECEDENT-CORRECTNESS — a mis-boun
   // "abc1234" is a Commit sha; describing it is semantically odd, but the symbol
   // RESOLVES to a real entity, so the guardrail admits it. Cross-turn binding
   // correctness is the chat lever's job, not the guardrail's (file header).
-  const g = guard({ name: "tmct_describe", input: { symbol: "abc1234" } }, ["tmct_describe"], ctx);
+  const g = await guard({ name: "tmct_describe", input: { symbol: "abc1234" } }, ["tmct_describe"], ctx);
   assert.ok(g.ok, "a resolvable-but-mis-bound symbol passes the guardrail (resolvability, not correctness)");
   assert.match(g.provenance, /NOT proven antecedent-correct/);
 });
 
-test("guardrail: an undeclared (but registered) tool is a policy denial when a declared set is given", () => {
-  const g = guard({ name: "tmct_callers", input: { symbol: "x" } }, ["tmct_describe"]);
+// PLAN_BREADTH_FIRST_NLU.md §4 — an ambiguous `resolves` term stays a DENIAL
+// (never a guess at which candidate is "the" one) but, with a dispatcher wired,
+// ADDITIONALLY carries `candidateResults`: the same tool dispatched once per
+// tied candidate, so a machine caller gets the honest "still ambiguous" verdict
+// AND every candidate's real answer.
+test("guardrail: an ambiguous resolves precondition stays a denial but ADDITIONALLY carries candidateResults (breadth-first, never a guess)", async () => {
+  const ctx = ambiguousGraphCtx();
+  const g = await guard({ name: "tmct_exports", input: { module: "payment system" } }, ["tmct_exports"], ctx);
+  assert.equal(g.ok, false, "still an honest denial — never a guessed winner");
+  assert.equal(g.denied[0].reason, "unresolved");
+  assert.ok(g.denied[0].detail.includes("ambiguous"));
+  assert.equal(g.candidateResults.length, 2, "one dispatched result per tied candidate");
+  const labels = g.candidateResults.map((c) => c.candidate).sort();
+  assert.deepEqual(labels, ["new-payment-system.js", "old-payment-system.js"]);
+  for (const { result } of g.candidateResults) assert.equal(result.ok, true, "each candidate's real dispatched answer, not a placeholder");
+
+  // no dispatcher wired -> denied exactly as before, no candidateResults at all
+  // (additive only — the non-enriched shape is untouched).
+  const structural = await guard({ name: "tmct_exports", input: { module: "payment system" } }, ["tmct_exports"], { resolve: ctx.resolve });
+  assert.equal(structural.ok, false);
+  assert.equal(structural.candidateResults, undefined);
+});
+
+test("guardrail: an undeclared (but registered) tool is a policy denial when a declared set is given", async () => {
+  const g = await guard({ name: "tmct_callers", input: { symbol: "x" } }, ["tmct_describe"]);
   assert.equal(g.ok, false);
   assert.ok(g.denied.some((d) => d.reason === "undeclared"));
 });

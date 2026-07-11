@@ -240,14 +240,37 @@ export function proofFor(name, input) {
   return steps;
 }
 
-const REFUSE = (why) => ({ selected: null, refused: true, reason: why });
+const REFUSE = (why, extra) => ({ selected: null, refused: true, reason: why, ...(extra || {}) });
+
+/** PLAN_BREADTH_FIRST_NLU.md §4 — breadth-first ambiguity, read-only capabilities
+ *  ONLY (every registered capability is `readOnly:true` with an empty delete-list,
+ *  so dispatching the SAME tool once per tied candidate carries no double-write
+ *  risk). Runs the bound call for each candidate in `pool` (capped, matching the
+ *  reason string's own display cap) and returns `[{candidate, result}, ...]`, or
+ *  undefined when there is no dispatcher to run it with (`execute:false` or no
+ *  `ctx.dispatch` — e.g. a structural-only / planning caller). Never throws: a
+ *  per-candidate dispatch failure is just an honest miss for that one candidate. */
+async function dispatchEachCandidate(pool, capName, arg, ctx, execute) {
+  if (!execute || !ctx.dispatch) return undefined;
+  const results = [];
+  for (const c of pool) {
+    const res = await ctx.dispatch(capName, { [arg]: c.label });
+    results.push({ candidate: c.label, result: res });
+  }
+  return results;
+}
 
 /** Select a capability for a request and BIND its arguments — the full resolver.
  *  Order: command register -> NL parse -> imperative frame. On a bound selection
  *  it delegates entity binding to ctx.resolve (resolveObject) and, unless
  *  `execute:false`, grounds it via ctx.dispatch. Returns
  *    { selected:{name,input}, proof, why, resolved, observed? }  — a grounded call
- *    { selected:null, refused:true, reason }                     — an honest refusal
+ *    { selected:null, refused:true, reason, candidateResults? }  — an honest refusal
+ *  An ambiguous-term refusal stays `refused:true` (never a guess at which
+ *  candidate is "the" one) but, when a dispatcher is available, ADDITIONALLY
+ *  carries `candidateResults`: the SAME capability dispatched once per tied
+ *  candidate, so a machine caller gets both the honest "still ambiguous" signal
+ *  and every candidate's real answer (PLAN_BREADTH_FIRST_NLU.md §4).
  *  NEVER emits an ungrounded / ambiguous / undeclared call. */
 export async function resolveOne(request, declaredNames, ctx, { execute = true } = {}) {
   const declared = new Set(declaredNames);
@@ -293,7 +316,11 @@ export async function resolveOne(request, declaredNames, ctx, { execute = true }
     // DELEGATE binding to resolveObject — the resolves(param,as) precondition.
     const r = ctx.resolve ? ctx.resolve(term) : { match: { label: term }, ambiguous: false };
     if (!r || !r.match) return REFUSE(`"${term}" does not resolve to any graph entity (honest miss)`);
-    if (r.ambiguous) return REFUSE(`"${term}" is ambiguous (${[r.match, ...(r.candidates || [])].slice(0, 4).map((m) => m.label).join(", ")}) — narrow it`);
+    if (r.ambiguous) {
+      const pool = [r.match, ...(r.candidates || [])].slice(0, 4);
+      const candidateResults = await dispatchEachCandidate(pool, pick.name, pick.arg, ctx, execute);
+      return REFUSE(`"${term}" is ambiguous (${pool.map((m) => m.label).join(", ")}) — narrow it`, candidateResults ? { candidateResults } : undefined);
+    }
     resolved = r.match;
     input = { [pick.arg]: r.match.label };
     why = [...why, `resolveObject: "${term}" => ${r.match.label} (${r.match.class || "?"}, tier ${r.tier})`];

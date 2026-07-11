@@ -61,7 +61,9 @@ Every cycle MUST satisfy:
   the floor leaks. `--ladder` runs the rungs ascending and applies this automatically.
 - **Refusal is a legitimate pass.** For an `expect.refuse` case, a clean refusal (no call, when no
   declared tool fits or the entity does not resolve) is a PASS at the honest-miss level — refusing
-  when unsure is the correct behavior, not a fallback.
+  when unsure is the correct behavior, not a fallback. On an ambiguous resolved term, that refusal
+  MAY also carry `candidateResults` (the same read-only tool dispatched once per tied candidate) —
+  still a refusal, still a PASS, and the preferred shape going forward (`PLAN_BREADTH_FIRST_NLU.md` §4).
 - **Reference bands stay illustrative, never run.** `agentbench/README.md`'s comparable-model bands
   (tiny-local, 8B-open, Nova-micro/lite, Haiku) are anchors for a future write-up, not scores this
   harness produces (no network, no LLM). Don't claim a number for them.
@@ -173,7 +175,9 @@ deterministic — no judge, no LLM anywhere in this loop) and read the per-rung 
 (plan-completion, result-completion, hallucination) against the honest gate: **0% hallucination at
 ≥50% plan-completion** passes a rung (`A0→C2`, strictly in order), the first rung that fails gates
 every rung above it skipped-with-a-receipt, and a clean refusal on an `expect.refuse` case is a PASS,
-not a fallback. `A0…C2` is a third distinct scale from CHATBENCH's CEFR and INFBENCH's `INF-A1…C2` —
+not a fallback — optionally carrying `candidateResults` (one real dispatched answer per tied
+candidate) when the term was ambiguous, still a refusal, still a PASS. `A0…C2` is a third distinct
+scale from CHATBENCH's CEFR and INFBENCH's `INF-A1…C2` —
 same letter-number shape, unrelated axes, never compared across benches. If every rung lands where
 expected, ship the re-measurement as-is; if you want to push the ladder further, implement the next
 router/planner capability that unlocks the gating rung, keep `npm test` green, and re-run to confirm
