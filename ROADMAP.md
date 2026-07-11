@@ -400,7 +400,7 @@ and finish `ontology/tmct-core.ttl` alongside the grammar work.
 ## Phase 3 — Chat tuning cycle (autonomous)
 
 The measurement loop that turns the above into a tunable product — specified
-in `SKILL_TUNING_CYCLE.md`:
+in `SKILL_BENCHMARK_CEFR_ENGLISH.md` (renamed from `SKILL_TUNING_CYCLE.md`):
 
 - a fixed, versioned **chatbench case set** (`chatbench/cases.jsonl`);
 - a **deterministic replay runner** over `runTurn` (the product is
@@ -525,7 +525,7 @@ and the block-index summary (blocks, tokens, top PageRank blocks). Same renderer
 > near-term actions, both shipped — see below).
 
 The immediate work: drive the graded benchmark up the CEFR ladder, one lever per cycle, per
-`SKILL_TUNING_CYCLE.md`. Cycle 3 (post-wiring-wave, CEFR_ENGLISH_003) gave the first full-spectrum
+`SKILL_BENCHMARK_CEFR_ENGLISH.md`. Cycle 3 (post-wiring-wave, CEFR_ENGLISH_003) gave the first full-spectrum
 reading — A1 1.72 / A2 1.70 / **B1 0.77 (the cliff)** / B2 0.97 / C1 1.07 / C2 0.69 — and two
 META-fixes gate everything:
 
@@ -827,7 +827,12 @@ full design and the note above for what went wrong the first attempt. Sibling pu
 (the bounded-Damerau fuzzy matcher, the PageRank+IDF block ranker) are lower priority than getting
 this one right before trying another.
 
-## Phase 10 — Conversational competence & onboarding — DONE
+## Phase 10 — Conversational competence & onboarding — this batch DONE, the capability itself is an ongoing target
+
+Conversational competence is never fully "done" by design — `SKILL_BENCHMARK_CONVERSATION.md`
+exists specifically to keep probing it, and it still has real open findings (see `HANDOVER.md`'s
+open items). The batch below shipped and stays shipped; treat it as a closed foundation, not a
+closed capability.
 
 *(Operator-directed, from live new-user testing.)* Once a graph is loaded the engine is strong;
 the weak surfaces were the FIRST RUN and the VAGUE question. This phase makes the miss graceful,
@@ -862,7 +867,8 @@ you toward precision" promise on the conversational surface.
   continuation still wins when there IS a prior answer). `tmct chat --ephemeral` (and the
   `npm run example:*` demos) reads a graph but writes nothing back, so a checked-in example is never
   dirtied by a demo run.
-- **The dialogue-flow loop — DONE** (`SKILL_CHAT_PLAYTEST.md`): a fast, qualitative tuning loop that
+- **The dialogue-flow loop — DONE, since evolved into `SKILL_BENCHMARK_CONVERSATION.md`** (renamed
+  from `SKILL_CHAT_PLAYTEST.md`): a fast, qualitative tuning loop that
   complements the LLM-judge benchmark — Claude plays a curious user, hunts *dead-ends* (walls,
   "unknown qualifier", phrasing-misses, invited follow-ups the engine can't take), fixes them by
   ROUTING to existing capabilities, replays the same conversations until they flow, freezes them as
@@ -943,7 +949,7 @@ model. So Phase A's shim is built **bedrock-meter-pluggable**, and AGENTBENCH is
 envelope the optimiser is allowed to trust. This is the concrete "near-free alternative" deployment.
 
 ### Track 3 — playtest alongside the build (`git worktree`)
-Run `SKILL_CHAT_PLAYTEST.md` **in a parallel `git worktree`** while the router is built — the
+Run `SKILL_BENCHMARK_CONVERSATION.md` **in a parallel `git worktree`** while the router is built — the
 dialogue-flow dead-end hunt keeps running without blocking the build, and its fixes **merge back**.
 (The worktree is auto-cleaned if unchanged; merge the frozen `test/chatflow-*` transcripts in.)
 
