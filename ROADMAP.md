@@ -54,6 +54,9 @@ audit — always check the latest-dated one, not this file, for real numbers.
 - **`PLAN_AGENTS.md`** — the governing plan for tmct's broader multi-repo arc (marginalia, seonix,
   a pluggable LLM rung for Claude Code/Bedrock/Copilot). Check its own sequencing table for current
   phase status, not this file.
+- **`PLAN_VIZ.md`** — visualise the memory graph: a recency-seeded, hub-avoiding spiral walk
+  (reusing `spiralExpand`, already in `src/codegraph.mjs`) rendered with a pseudo-3D depth effect
+  (older nodes deeper/darker, newer shallower/higher-contrast). Design-only.
 
 ## Research horizon
 
