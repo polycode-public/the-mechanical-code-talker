@@ -7238,18 +7238,58 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
   return mk(answer);
 }
 
+/** Render an ambiguous assertTurn's response — Step 3 of
+ *  PLAN_DID_YOU_SEE_HER_DUCK.md's "handle ambiguity all the way to the
+ *  response": restate the operator's ask as canonical, disambiguated prose
+ *  FIRST, then present EVERY surviving reading's would-be triples, each
+ *  labeled by which token that reading reads as the verb — reusing the same
+ *  "${subject} ${predicate} ${object}" shape assertTurn's own confirmation
+ *  line already uses (below), and the same "this could mean more than one
+ *  thing" wording ask.mjs's OWN disambiguation surface uses for query-side
+ *  ambiguity (renderCore, src/ask.mjs), so the two never disagree in tone.
+ *  Nothing is written to memory here — an ambiguous sentence, unlike a
+ *  resolved one, has no single fact tmct can honestly commit to. */
+function renderAmbiguousAssert(line, ambiguous, normFactTerm) {
+  const options = ambiguous.readings.map((r, idx) => {
+    const shown = r.triples
+      .map((t) => `${normFactTerm(t.subject)} ${t.predicate} ${normFactTerm(t.object)}`)
+      .join("; ");
+    return `${idx + 1}) reading "${r.verbLemma}" as the verb: ${shown}`;
+  });
+  return [
+    `You asked: "${line}" — this could mean more than one thing:`,
+    ...options,
+    "Nothing was remembered yet — reply with the reading you meant (or rephrase) and I'll note it.",
+  ].join("\n");
+}
+
 /** A declarative ACE-grammar sentence → assert into memory + confirm; null on
  *  any grammar miss / residue / import failure so the query engine keeps first
  *  refusal on everything else. Lazy imports + catch-all: the grammar layer can
- *  never crash a turn (chat.mjs ethos). Writes ONLY under memoryDir/.tmct/memory. */
+ *  never crash a turn (chat.mjs ethos). Writes ONLY under memoryDir/.tmct/memory.
+ *
+ *  AMBIGUITY (Step 3, PLAN_DID_YOU_SEE_HER_DUCK.md): checked FIRST, via the
+ *  additive parseAceAmbiguous (grammar/ace.mjs) — a separate, breadth-first
+ *  scan that survives every verb-position split rather than committing to the
+ *  first, pruning only genuine dead ends. It returns null for the
+ *  overwhelming majority of sentences (anything not relation-shaped, or
+ *  relation-shaped with 0-1 surviving readings), so this adds exactly one
+ *  cheap check ahead of the EXISTING, unchanged parseAce path below — every
+ *  single-reading sentence renders byte-identically to before. */
 async function assertTurn(line, { memoryDir, sessionId, focus, lexicon = null }) {
   try {
-    const { parseAce } = await import("./grammar/ace.mjs");
+    const { parseAce, parseAceAmbiguous } = await import("./grammar/ace.mjs");
     // A session handle carries its own loaded lexicon (createSession loads it once);
     // a bare runTurn (no handle) lazy-loads the cached core lexicon. The lexicon is
     // immutable, so sharing one reference across concurrent handles is re-entrant.
     let lex = lexicon;
     if (!lex) { const { loadLexicon } = await import("./grammar/lexicon.mjs"); lex = loadLexicon(); }
+    const ambiguous = parseAceAmbiguous(line, lex);
+    if (ambiguous) {
+      const { normFactTerm } = await import("./memory/core.mjs");
+      const answer = renderAmbiguousAssert(line, ambiguous, normFactTerm);
+      return plainTurn(line, answer, { command: "assert", via: "assert", focus });
+    }
     const parse = parseAce(line, lex);
     if (!parse || !parse.triples?.length || parse.residue?.length) return null;
     const { assertSentence } = await import("./grammar/assert.mjs");
