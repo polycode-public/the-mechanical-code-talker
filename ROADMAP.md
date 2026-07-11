@@ -22,9 +22,12 @@ getting silently traded away by inherited caution:
   variety, so an answer shape has many valid phrasings instead of one fixed slot-fill.
 - **Resolve ambiguity breadth-first, always.** Every genuinely valid reading gets its own real answer
   restated in full, never a bare "could mean X or Y — try rephrasing" punt, bounded only by existing
-  clipping/pagination limits. `renderCore`'s real-answer resolution (`CAPABILITIES_1.7.3.md` item 92)
-  is the first instance of this principle; the goal is to generalize it everywhere ambiguity still
-  gets a bare hedge instead of a full answer set.
+  clipping/pagination limits. Landed for both ambiguity shapes tmct has: parse-level ties
+  (`renderCore`'s real-answer resolution, `CAPABILITIES_1.7.3.md` item 92) and entity-level ties (one
+  term matching several real graph individuals — every fuzzy-match tie, every noise-strip alt-object
+  collision, `PLAN_BREADTH_FIRST_NLU.md` §1). A dedicated audit found the two generic top-level
+  bail-out hints (`rephraseHint`/`compositionalHint`) are provably unavoidable at their actual miss
+  sites, not unwired — nothing left to generalize there.
 - **Paraphrase alongside the original, verified, never instead of it.** A surface-realization variant
   sits next to the literal grounded answer, never replacing it, and its accuracy is checked, not
   assumed — by running tmct's own deterministic inference/consistency machinery (`src/syllogise.mjs`)
@@ -56,18 +59,31 @@ produces, never inventing one to fill a gap.
   dog bark"`, `"what has a tail"`, `"what inherits from horse"`) against both corpus-seeded and
   freshly-taught facts.
 - **Genuine multi-reading ambiguity resolves and answers, not just describes**: when a sentence has
-  two-plus valid readings, tmct now traverses and renders each one's real answer inline (not just a
-  one-line label), so the same input always reproduces the same full, useful answer.
-- **Graph traversal and provenance timestamps extend to the memory graph**: the hub-avoiding
-  `spiralExpand` walk (previously code-graph/Module-only) now generalizes to any graph via a
-  caller-supplied class predicate and id-normalizer; edges carry a `createdAt` stamp and nodes get a
-  derived `updatedAt` (max over own attributes and attached edges) — groundwork for the graph
-  visualisation in `PLAN_VIZ.md`, not yet exposed on the CLI.
+  two-plus valid readings — whether the ambiguity is in how the sentence PARSES or in which real graph
+  ENTITY a term names — tmct traverses and renders each one's real answer inline (not just a one-line
+  label), so the same input always reproduces the same full, useful answer.
+- **Every answer carries a canonical restatement of what was understood**: an English gloss in tmct's
+  own preferred phrasing plus the same fact in a compact, machine-parsable notation
+  (`shape(kind, args...)` for a query, `fact(subject, predicate, object)` for a taught fact) —
+  landed for the ask/query and teach/assert lanes; other chat lanes (conversational, commands) don't
+  have a real canonical form yet.
+- **Graph traversal and provenance timestamps extend to the memory graph, now with a real viewer AND
+  a live embedded chat**: the hub-avoiding `spiralExpand` walk (previously code-graph/Module-only)
+  generalizes to any graph via a caller-supplied class predicate and id-normalizer; edges carry a
+  `createdAt` stamp and nodes get a derived `updatedAt`. `tmct viz [--focus <id>] [--output graph.html]`
+  renders it as one self-contained, locally-navigable HTML file (pan/zoom, click-to-inspect, a depth
+  stepper, per-class visibility filters, no server, no external deps) — `npm run viz -- --output
+  graph.html && open graph.html`. The page embeds a real "Ask the graph" chat panel running tmct's
+  OWN `ask.mjs` engine client-side (bundled via esbuild, adapter-less — no wink model, ~220KB): a
+  query resolves against the full graph and re-centres the view on the answer (focus-follows-answer),
+  and a node's class/label are click-to-query affordances.
 - **Completions** (`src/completions/`): extractive, multi-sentence answers for broad "how does X
   work" questions, grounded and source-cited — never invents a fact beyond what's retrieved, though
   see "Ambition" above for growing the phrasing variety around what's retrieved.
 - **Capability router** (`src/router/`): a deterministic, closed-toolset agentic router behind an
-  Anthropic-compatible API — measured by `AGENTBENCH`, not general function-calling.
+  Anthropic-compatible API — measured by `AGENTBENCH`, not general function-calling. An ambiguous tool
+  argument stays an honest refusal (never a guess) but, since every registered capability is
+  read-only, now additionally carries each tied candidate's real dispatched result alongside it.
 - **Interfaces**: the `tmct` CLI, a documented library `exports` surface, and a Repository Interface
   for downstream consumers (seonix).
 
@@ -77,16 +93,22 @@ audit — always check the latest-dated one, not this file, for real numbers.
 
 ## What's next (feature-shaped — see `HANDOVER.md` for the current task-level list)
 
-- **`PLAN_BREADTH_FIRST_NLU.md` (in progress, 2026-07-11)** — five tracks executing now: (1) entity-tie
-  ambiguity resolves every candidate to a real answer, not a bare name list (generalizing the
-  `renderCore`/item-92 mechanism from parse-level ties to entity-level ties); (2) the capability router
-  tries every candidate on an ambiguous tool argument instead of bare-refusing, carrying real
-  per-candidate results alongside the honest refusal; (3) `tmct viz` — a new CLI verb producing one
-  self-contained, locally-navigable HTML file of the memory graph, no server, no external deps; (4) a
-  template-generation + coverage-testing pass sourced from `english-wordnet`'s synonym sets and the ACE
-  grammar's own patterns, measured against real open-source prose (the concrete first build of the
-  "Ambition" section's NL-fluency goal); (5) surfacing silently-discarded alternate readings on
-  already-successful answers. See the plan doc for full design and `HANDOVER.md` for live status.
+- **`PLAN_BREADTH_FIRST_NLU.md`'s own remaining scope** — all six tracks shipped (entity-tie
+  ambiguity, router candidate enrichment, `tmct viz` + its embedded chat panel, template-coverage
+  harness, alternates-on-hits, canonical representation for the ask/teach lanes — all now in "Current
+  capability surface" above). What's left, not yet scoped as their own build: (a) canonical
+  representation for every OTHER chat lane (conversational, commands, recall) — ~78 return sites in
+  `chat.mjs`, bespoke per-lane logic, no single generalizable helper the way the query lane had; (b)
+  growing the ACE grammar's free-form coverage past its measured 0/2,949-sentence baseline against
+  real prose (`PLAN_TEMPLATE_COVERAGE.md`) — needs more grammar patterns or vocabulary, real work,
+  not a tooling pass; (c) the paraphrase-verified-via-`syllogise.mjs` piece of "Ambition" — not
+  started; (d) a real "list/count all X of class Y" query shape for memory-graph classes — live
+  testing during the viz chat panel's build confirmed no such shape exists via `ask.mjs` alone (only
+  `chat.mjs`'s heavier `factAnswer` cascade has it, out of the browser bundle's scope), so the viz
+  panel's class-badge click currently falls back to a real client-side filter + a "where is X
+  mentioned" query rather than a true "list all" — a genuine, now-documented gap, not a silent one.
+- **`PLAN_TEMPLATE_COVERAGE.md`** — the coverage-harness/generation design from (b) above, including
+  the real baseline number and the first 17-row generated batch. Read it before picking up (b).
 - **`PLAN_ADVENTURE.md`** — a text-adventure architectural stretch: an imperative command grammar,
   mutable turn-by-turn world/player state as ordinary graph nodes (no special player-state store),
   and an NPC turn scheduler. Design-only.
