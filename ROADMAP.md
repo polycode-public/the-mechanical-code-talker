@@ -84,7 +84,9 @@ citations, not stop signs:
   achievable at scale but solves the cross-*lingual*, not cross-*domain*, axis, and carries a
   non-commercial licence. Speculative angle: mutual disambiguation from already-resolved neighbouring
   terms in tmct's own closed graph (a bounded reading of Gale/Church/Yarowsky's "one sense per
-  discourse" regularity) — not published anywhere found for this application.
+  discourse" regularity) — not published anywhere found for this application. Fresh live instance
+  (2026-07-11): `"tail"` (Unix process vs. animal body part) collides under `normFactTerm`'s
+  cross-corpus flattening, `src/memory/core.mjs:1109-1134`.
 
 **Tier-4: learn-on-miss acquisition** (a real planned capability, not just research). The strongest
 miss signal tmct can emit: lexicon term recognized, query built cleanly, zero matches anywhere — the
