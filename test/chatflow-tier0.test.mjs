@@ -101,6 +101,52 @@ test("tier0/vocab-hint (seeded): the offered 'what is a dog' example actually re
   }
 });
 
+test("tier0/kind-of follow-up (2026-07-11 live bug): 'dog is a kind of animal' -> the natural echo 'what is a kind of animal' answers for real, not a forced disambiguation wall", async () => {
+  // Full live repro, default persona, no --repo: teaching "boney is a dog" (normalizes
+  // to "boney is a kind of dog"), reading it back, reading the corpus-seeded "what is a
+  // dog" (which itself SAYS "dog is a kind of animal"), then echoing that exact phrase
+  // back as a question — a completely natural follow-up that used to hit
+  // "this could mean more than one thing: 1) meta 'kind of animal' or 2) inherits
+  // 'animal' — try rephrasing more specifically" instead of listing the animals.
+  const { dir, turns } = await driveSession(undefined, [
+    "boney is a dog",
+    "what is boney",
+    "what is a dog",
+    "what is a kind of animal",
+  ]);
+  try {
+    for (const [i, t] of turns.entries()) {
+      assert.doesNotMatch(t.answer, /could mean more than one thing/, `turn ${i} must not hit the ambiguity wall`);
+    }
+    assert.match(turns[0].answer, /boney is a kind of dog/);
+    assert.match(turns[1].answer, /you told me: boney is a kind of dog/);
+    assert.match(turns[2].answer, /dog is a kind of animal/);
+    // the natural follow-up: every corpus-seeded animal subclass answers, not a wall
+    assert.match(turns[3].answer, /dog is a kind of animal/);
+    assert.match(turns[3].answer, /horse is a kind of animal/);
+    assert.match(turns[3].answer, /cat is a kind of animal/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("tier0/kind-of follow-up: 'what is a kind of horse' resolves a FRESHLY TAUGHT subclass the same way (not just the corpus-seeded 'animal' case)", async () => {
+  const { dir, turns } = await driveSession(undefined, [
+    "shirehorse is a kind of horse",
+    "what is a kind of horse",
+  ]);
+  try {
+    for (const [i, t] of turns.entries()) {
+      assert.doesNotMatch(t.answer, /could mean more than one thing/, `turn ${i} must not hit the ambiguity wall`);
+    }
+    assert.match(turns[1].answer, /shirehorse is a kind of horse/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("tier0/vocab-hint (TMCT_NO_SEED=1): the offered teach example ('every bug is an issue') is concrete and actually resolves, taught then recalled", async () => {
   const { dir, turns, banner } = await driveSession({ TMCT_NO_SEED: "1" }, [
     "hi",

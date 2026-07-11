@@ -4095,9 +4095,27 @@ async function factAnswer(memoryDir, query, envelope, miss, biasByBundle = {}) {
   // (b5) "what inherits from horse" — the reverse-by-object mirror of (b4),
   // over the ISA-family predicates instead of mgx:hasA. No temporal-style
   // guard needed: "inherits" has no competing common-English reading.
+  //
+  // "what is a kind of X" / "what is a subclass of X" (2026-07-11 follow-up,
+  // live-repro: "boney is a dog" -> "what is a dog" -> "what is a kind of
+  // animal" hit a wrong "I don't know a relation or rule called 'kind'"
+  // answer). Fixing the parse-level {ambiguousParse} tie between this and a
+  // spurious "meta" reading (grammar.mjs T5, ARTICLE_RELATION_CONTINUATIONS)
+  // means `envelope.parsed` now cleanly carries {shape:"reverse",
+  // kind:"inherits", object:"animal"} for this phrasing too — but WHAT_INHERITS_RE
+  // is a FIXED regex ("what inherits (from) X") that never matched it, so this
+  // block used to fall through to null and let factReadBack's RELATION_WHO_ASK_RE
+  // misread "kind"/"subclass" as a relation NAME instead. Reading the ALREADY-
+  // PARSED envelope directly (any phrasing the grammar recognizes as this exact
+  // shape, not just WHAT_INHERITS_RE's one hardcoded surface form) fixes this
+  // generally; the regex match is kept as a fallback for a parse the envelope
+  // doesn't carry (e.g. no envelope at all).
   const inheritsQ = q.match(WHAT_INHERITS_RE);
-  if (inheritsQ) {
-    const variants = factTermVariants(normFactTerm, inheritsQ[1]);
+  const inheritsObj = (envelope?.parsed?.shape === "reverse" && envelope.parsed.kind === "inherits")
+    ? envelope.parsed.object
+    : inheritsQ?.[1];
+  if (inheritsObj) {
+    const variants = factTermVariants(normFactTerm, inheritsObj);
     const hits = (await factRows(memoryDir)).filter((f) => ISA_PREDICATES.has(f.predicate) && variants.has(f.object));
     if (!hits.length) return null;
     const ranked = rankByBiasThenTrust(uniqueFacts(hits), biasByBundle);

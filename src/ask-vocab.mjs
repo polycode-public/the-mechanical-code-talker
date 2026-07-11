@@ -349,6 +349,48 @@ export const VERB_TO_KIND = Object.freeze(
   ),
 );
 
+/** "what is a kind of X" / "what is a subclass of X" collision fix (2026-07-11,
+ *  live-repro: "boney is a dog" -> "what is a dog" -> "what is a kind of
+ *  animal" hit a forced disambiguation wall instead of answering). grammar.mjs's
+ *  T5 "meta-whatis" template reads "what is a/an <object>" as a literal
+ *  glossary/term-definition question ("what is a Commit"). But some registered
+ *  inherits verbs are THEMSELVES phrased "is a <continuation>" ("is a kind
+ *  of", "is a subclass of" — RELATIONS.inherits.verbs above) — when the object
+ *  T5 captures IS one of these continuations plus a real term ("kind of
+ *  animal"), the sentence isn't asking to define the noun phrase "kind of
+ *  animal"; it's the exact same question as "what inherits from animal", just
+ *  phrased with the verb's own "is a" lead instead of "inherits". keyword-spot
+ *  (keywords.mjs) already reads it that way, unambiguously — the meta reading
+ *  is the spurious one, and it collides with keyword-spot's correct reading to
+ *  manufacture a needless {ambiguousParse} tie (interpret/merge.mjs) over a
+ *  phrasing the engine itself just used a turn earlier. Derived from
+ *  VERB_TO_KIND (not hand-duplicated) so any future plain "is a/are a X of"
+ *  verb phrase added to RELATIONS is covered automatically, without touching
+ *  this file again.
+ *
+ *  Deliberately EXCLUDES every INHERITS_REVERSE_VERBS entry ("is a superclass
+ *  of", "is a parent class of") even though they match the same "is a
+ *  <continuation>" shape: those verbs' subject/object are semantically
+ *  SWAPPED relative to storage direction (see INHERITS_REVERSE_VERB_LIST's own
+ *  comment above) — "what is a superclass of X" asks a FORWARD question
+ *  (X's own supertype), not this reverse-by-object listing, and keyword-spot's
+ *  decomposition only applies that swap in the two-sided "ask" shape (verb
+ *  between a subject AND an object), not this "reverse"-only afterText-only
+ *  shape. Suppressing the meta reading for these too would trade one honest
+ *  {ambiguousParse} wall for a confusing WRONG answer (a reverse-by-object
+ *  lookup with the direction backwards) — a separate, pre-existing gap in
+ *  keywords.mjs, out of this fix's scope. */
+const NON_REVERSE_VERB = (v) => !INHERITS_REVERSE_VERBS.includes(v);
+export const ARTICLE_RELATION_CONTINUATIONS = Object.freeze([
+  ...new Set(
+    Object.keys(VERB_TO_KIND)
+      .filter(NON_REVERSE_VERB)
+      .map((v) => v.match(/^(?:is|are)\s+an?\s+(.+)$/i))
+      .filter(Boolean)
+      .map((m) => m[1].toLowerCase()),
+  ),
+]);
+
 export const ENTITY_TO_TYPE = Object.freeze({
   function: "Function", functions: "Function",
   method: "Method", methods: "Method",
