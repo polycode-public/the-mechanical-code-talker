@@ -25,17 +25,34 @@ const GRAPH_URL = new URL("./demo-graph.json", import.meta.url);
 let graphPromise = null;
 let winkStatus = "pending"; // "pending" | "loaded" | "unavailable"
 
+// Live-caught 2026-07-11: "never a silent hang" above was a claim, not a guarantee — a
+// REJECTED CDN import already degraded correctly (the catch block), but a dynamic
+// import() that neither resolves NOR rejects (a real, observed failure mode for a
+// cross-origin ESM import against an import-map-redirected specifier — some browsers
+// leave the promise permanently pending on a MIME-type mismatch or a stalled redirect,
+// rather than throwing) left `winkStatus` stuck at "pending" forever, and
+// refreshWinkStatus's own poll loop (demo-ui.mjs) faithfully kept showing "loading…"
+// with no ceiling. A bounded race against a timeout closes this for real: whichever
+// settles first wins, and the timeout path degrades exactly like a genuine load
+// failure — same status, same console note, same fallback to the adapter-less tiers.
+const WINK_LOAD_TIMEOUT_MS = 8000;
+function timeout(ms, reason) {
+  return new Promise((_, reject) => setTimeout(() => reject(new Error(reason)), ms));
+}
+
 /** Try to load wink-nlp + its English model from the CDN and register them with the
- *  engine's browser seam. On ANY failure (network hiccup, CDN hiccup, parse error) this
- *  degrades honestly: registerWinkModel is simply never called, and ask.mjs's own
- *  documented fallback (loadWinkModel() returns null) makes the engine run adapter-less
- *  — the curated + bounded-fuzzy tiers still answer correctly, lemma/POS matching is
- *  just off. Never a thrown error, never a silent hang. */
+ *  engine's browser seam. On ANY failure (network hiccup, CDN hiccup, parse error, OR
+ *  a load that never settles within WINK_LOAD_TIMEOUT_MS) this degrades honestly:
+ *  registerWinkModel is simply never called, and ask.mjs's own documented fallback
+ *  (loadWinkModel() returns null) makes the engine run adapter-less — the curated +
+ *  bounded-fuzzy tiers still answer correctly, lemma/POS matching is just off. Never a
+ *  thrown error, never a silent hang — the timeout race is what actually enforces the
+ *  second half of that claim now, not just the try/catch. */
 async function tryLoadWink() {
   try {
-    const [{ default: winkNLP }, { default: model }] = await Promise.all([
-      import("wink-nlp"),
-      import("wink-eng-lite-web-model"),
+    const [{ default: winkNLP }, { default: model }] = await Promise.race([
+      Promise.all([import("wink-nlp"), import("wink-eng-lite-web-model")]),
+      timeout(WINK_LOAD_TIMEOUT_MS, "wink-nlp CDN load timed out"),
     ]);
     registerWinkModel(() => ({ winkNLP, model }));
     winkStatus = "loaded";
