@@ -358,7 +358,7 @@ two-line change; each touches shared mechanism with its own pinned-regression su
 
 ---
 
-## Finding 5 — no query-side shape for CapableOf or reverse-HasA against the general-knowledge persona vocabulary
+## Finding 5 — no query-side shape for CapableOf, reverse-HasA, or reverse-inherits against the general-knowledge persona vocabulary
 
 Found live this session, default persona, no `--repo`: after `"what is a dog"` answers `dog is a
 kind of animal` / `dog has tail` / `dog can bark` (three real corpus:human facts), the natural
@@ -426,6 +426,40 @@ cascade, alongside the existing `ISA_ASK_RE` block, lines 3995-4005, and `KNOW_A
    `factRows` where `predicate === "mgx:hasA"` and the OBJECT (not subject) matches — the reverse of
    every other reader here; `RELATION_WHO_ASK_RE`/`factReadBack`'s own reverse chase
    (`chat.mjs:3859-3897`) is direct precedent for a reverse-by-object reader in this same file.
+
+**Fresh confirmation (2026-07-11, live-verified): the same gap also covers `inherits`/`subClassOf`
+reverse-queries — a taught "X is a kind of Y" fact, not just corpus-seeded HasA/CapableOf.** Exact
+transcript, default persona, no `--repo`:
+
+```
+tmct> shirehorse is a kind of horse
+noted — remembered: shirehorse is a kind of horse
+
+tmct> what inherits from horse
+no module matching "horse" found in the index.
+(this repo has no code graph — for structure, point me at a `.tmct/graph.json` with `--repo <path>`
+or run `npm run example:mini`; tmct doesn't index code itself.)
+
+Goal (inferred): Understand a class hierarchy/inheritance relationship.
+```
+
+`"is a kind of"` is a registered `inherits` verb phrase (`ask-vocab.mjs:169`), so `keywords.mjs`
+parses `"what inherits from horse"` cleanly and unambiguously (`{shape: "reverse", kind: "inherits",
+object: "horse"}` — confirmed by the correctly-inferred Goal line, no ambiguity punt). But the answer
+is the exact same code-graph-flavored miss as an unfixed `"what has a tail"` — the `inherits`
+reverse-query traversal only ever searches the code graph (verified separately: the identical phrasing
+against `examples/polyglot`'s real code graph, `"which classes inherit from IPaymentGateway"`, answers
+correctly — this is a real, working code path, just one that never reaches `.tmct/memory/graph.json`).
+The taught fact `shirehorse rdfs:subClassOf horse` is sitting right there in the memory graph and is
+never consulted. This is the same missing-fact-cascade-reader pattern as `WHAT_HAS_RE`/`CAN_ASK_RE`
+above, for a fourth predicate (`rdfs:subClassOf`, i.e. tmct's own `inherits`/"kind of" relation) —
+whoever picks up this Finding should treat it as a `WHAT_INHERITS_RE` sibling of the three sketched
+above, not a separate investigation.
+
+Note this also closes the loop on `"what is a kind of horse"`'s own genuine parse-level ambiguity (the
+`ambiguousParse` surface between a `"meta"` reading and this `"inherits"` reading, `ask.mjs:3455-3461`)
+— rephrasing to `"what inherits from horse"` (or bare `"what inherits horse"`) correctly resolves that
+ambiguity today; it just then hits this separate, still-open dead end.
 
 ---
 

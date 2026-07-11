@@ -24,14 +24,12 @@ don't bump the version again until the moment of actually pushing (see Disciplin
   an anaphoric "it uses which controller as its base" question misroutes into teach-a-fact — three
   independent sub-problems, not a small fix; (5) no query shape exists for CapableOf/reverse-HasA
   against the general-knowledge persona (`"can a dog bark"`, `"what has a tail"`) — small/additive
-  per the investigation, but real regression-scoped work, not landed yet. **Live-verified this session
-  that the same gap also covers `inherits` reverse-queries**: `"what inherits from horse"` correctly
-  disambiguates but then dead-ends with a code-graph-flavored miss, since the `inherits` reverse-query
-  path only ever searches the code graph, never the memory graph where a taught `"X is a kind of
-  Y"` fact actually lives — worth folding into Finding 5 as a fresh confirmation before whoever
-  picks it up starts. Read `PLAN_CONVERSATION.md` before picking any of these up. The `"tail"`
-  word-sense collision is not new work — cross-referenced to `ROADMAP.md`'s existing
-  cross-domain-ontology research gap instead.
+  per the investigation, but real regression-scoped work, not landed yet — now also folded in with a
+  live-verified fresh confirmation that the same gap covers `inherits`/`subClassOf` reverse-queries
+  (a taught "X is a kind of Y" fact, e.g. `"shirehorse is a kind of horse"` then `"what inherits from
+  horse"`), a fourth predicate needing the same `WHAT_HAS_RE`-shaped fix. Read `PLAN_CONVERSATION.md`
+  before picking any of these up. The `"tail"` word-sense collision is not new work — cross-referenced
+  to `ROADMAP.md`'s existing cross-domain-ontology research gap instead.
 
 - **Fast loop's 2-round cap is done, both rounds clean.** Round 1 (mini-webapp fixture) found 2 real
   dead-ends, now Findings 3/4 above. Round 2 (polyglot fixture, cross-language inheritance +
