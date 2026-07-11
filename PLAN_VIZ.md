@@ -38,14 +38,16 @@ node first — and at each step keeps only the lowest-degree `⌊q·n⌋` fracti
 (default `q=0.9`, drop the densest 10%), so expansion fans through sparse regions and fizzles at
 hubs rather than flooding through them. Bounded by `depth` (max hops) and `nodeLimit` (emit budget).
 
-Three things need to change for this feature, all scoped, none a rewrite:
+Four things need to change for this feature — three scoped, one a real gap the strategy advisor
+caught on an adversarial re-check of this doc (2026-07-11 tick 3, credited below) that an earlier
+draft understated as already-scoped:
 
 1. **Seed selection.** Today `spiralExpand` seeds from `scored` — the modules a lexical query already
    matched (`scoreModules`, `src/codegraph.mjs:1076`). This feature needs a different seed: the single
    individual with the most recent `mgx:createdAt` (or an operator-supplied `--focus <id>`).
 2. **Class restriction.** The walk currently only ever visits/emits `ind.class === "Module"` nodes
-   (`src/codegraph.mjs:757,762`) — a hardcoded code-graph assumption. The memory graph's classes are
-   `Utterance`/`Fact`/`Session`/`Source`/`Rule` (`src/memory/core.mjs:41-45`), not `Module`, so this
+   (`src/codegraph.mjs:772,788`) — a hardcoded code-graph assumption. The memory graph's classes are
+   `Utterance`/`Fact`/`Session`/`Source`/`Rule` (`src/memory/core.mjs:41-48`), not `Module`, so this
    restriction needs generalising (a caller-supplied class predicate, not a literal string) before the
    walk can run over `.tmct/memory/graph.json` at all.
 3. **Edge-kind allowlist.** Per the operator's explicit instruction, don't hand-curate — walk every
@@ -57,6 +59,18 @@ Three things need to change for this feature, all scoped, none a rewrite:
    all** — they're plain `attributes` on the `Fact` individual itself (`src/memory/core.mjs:1181-
    1184,1264-1267`), so there is nothing to walk there and no allowlist question to resolve for them.
    This corrects an earlier draft of this doc, which mis-described them as edges.
+4. **`adjacencyForKinds` itself silently produces an EMPTY adjacency map over the memory graph —
+   not just a class-restriction problem, a separate blocker.** `adjacencyForKinds` (`:627-640`) routes
+   every edge endpoint through `moduleIdOfId → moduleIdOf` (`:1209-1224`) before linking it —
+   `moduleIdOf` returns the node itself only when `class === "Module"`, else falls back to a
+   code-graph-specific `site` span or an `fn:<path>#name` id. No memory-graph individual (`utt:…`,
+   `fact:…`, etc.) matches any of those, so `moduleIdOf` returns `null` for every one, and `link()`'s
+   own guard (`if (!a || !b || …) return;`, `:630`) silently drops every edge. Point 2's class
+   restriction alone does NOT fix this — the walk would run over an empty adjacency map and go
+   nowhere. Fix sketch: give `adjacencyForKinds` a caller-supplied id-normalizer parameter, defaulting
+   to the existing `moduleIdOf` for code-graph callers; a memory-graph caller passes an identity
+   function (`(id) => id`) instead, since memory-graph edges already connect individuals directly —
+   there's no function-within-module rollup concept to replicate there.
 
 `node.hop` is already computed internally for the decay-scoring math — it just needs to be part of
 the function's *returned* shape (it currently isn't; `spiralExpand` mutates `scored` and returns
