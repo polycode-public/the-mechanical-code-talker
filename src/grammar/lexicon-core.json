@@ -9539,10 +9539,17 @@
     "take": {},
     "meet": {},
     "ride": {},
-    "speak": {}
+    "speak": {},
+    "duck": {}
   },
   "adjectives": {
     "legacy": {
+      "type": "subclass"
+    },
+    "mock": {
+      "type": "subclass"
+    },
+    "senior": {
       "type": "subclass"
     },
     "internal": {

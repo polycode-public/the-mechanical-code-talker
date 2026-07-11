@@ -39,6 +39,11 @@ import {
   predicateOf, numberOf, classify,
 } from "./lexicon.mjs";
 
+// "a"/"an" are the only ACE determiners that are grammatically SINGULAR-ONLY —
+// "the" and a bare/no determiner are number-neutral (see resolveNP's
+// singularOnly below, and lexicon.mjs's lookupNoun doc for what this prunes).
+const SINGULAR_ONLY_DET = new Set(["a", "an"]);
+
 export const PATTERN_SUB_CLASS_OF = "subClassOf";
 export const PATTERN_TYPE_ASSERTION = "typeAssertion";
 export const PATTERN_RELATION = "relation";
@@ -89,22 +94,29 @@ const stripDet = (tokens) =>
  *  Returns { term, individual, extras, unknown } — `term` null on a miss with
  *  the undeclared tokens in `unknown` (empty `unknown` = structurally
  *  unparseable phrase → the caller returns a hard null). `extras` carries the
- *  pattern-8 adjective triples (subclass axioms / hasValue restriction). */
+ *  pattern-8 adjective triples (subclass axioms / hasValue restriction).
+ *
+ *  `singularOnly` is grammatical-agreement pruning (see lexicon.mjs's
+ *  lookupNoun doc): true only when the ORIGINAL (pre-strip) phrase opened
+ *  with "a"/"an" — the one signal that a singular-plural-fold collision
+ *  (die/dice, person/people, tooth/teeth) can be resolved by, rather than
+ *  silently committing to whichever the lexicon happens to fold to first. */
 function resolveNP(lexicon, tokensIn) {
   const ns = lexicon.ns;
+  const singularOnly = tokensIn.length > 1 && SINGULAR_ONLY_DET.has(tokensIn[0].toLowerCase());
   const tokens = stripDet(tokensIn);
   if (tokens.length === 1) {
     const t = tokens[0];
     const proper = lookupProperName(lexicon, t);
     if (proper) return { term: `${ns}${proper}`, individual: true, extras: [], unknown: [] };
     if (CODE_REF.test(t)) return { term: `${ns}${t}`, individual: true, extras: [], unknown: [] };
-    const noun = lookupNoun(lexicon, t);
+    const noun = lookupNoun(lexicon, t, { singularOnly });
     if (noun) return { term: `${ns}${noun.lemma}`, individual: false, noun, extras: [], unknown: [] };
     return { term: null, individual: false, extras: [], unknown: [t] };
   }
   if (tokens.length === 2) {
     const adj = lookupAdjective(lexicon, tokens[0]);
-    const noun = lookupNoun(lexicon, tokens[1]);
+    const noun = lookupNoun(lexicon, tokens[1], { singularOnly });
     if (adj && noun) {
       const term = `${ns}${adj.lemma}-${noun.lemma}`;
       const extras = [
@@ -176,6 +188,76 @@ function parseRelation(lexicon, toks, lower) {
     if (np1.term != null && np2.term != null) return { pattern: PATTERN_RELATION, triples: [], residue: [content[1]] };
   }
   return null;
+}
+
+// ---- ambiguity: breadth-first candidate parses, dead ends pruned, survivors
+// surfaced rather than guessed (the operator's own framing — see
+// PLAN_DID_YOU_SEE_HER_DUCK.md's Origin section). parseRelation just above is
+// UNCHANGED — it is still the greedy, first-verb-position-wins fast path
+// every existing caller keeps using, so every single-reading sentence (the
+// overwhelming majority) is completely unaffected. parseRelationHits and
+// parseAceAmbiguous below are a separate, ADDITIVE scan that a caller opts
+// into only when it wants to know whether more than one reading survives. ----
+
+/** Pattern 3 — EVERY verb-position split, not just the first: for each token
+ *  index that lookupVerb recognizes, resolve both sides and keep it ONLY if
+ *  it is a complete, valid parse (a genuine hit — a missOrNull/null split is
+ *  a dead end, pruned here rather than surfaced as "ambiguity"). Duplicate
+ *  logic with parseRelation is deliberate: parseRelation must stay byte-for-
+ *  byte unchanged for every existing caller, so this is a standalone reader,
+ *  not a refactor of shared internals. */
+function parseRelationHits(lexicon, toks, lower) {
+  const hits = [];
+  for (let i = 1; i < toks.length - 1; i += 1) {
+    const verb = lookupVerb(lexicon, lower[i]);
+    if (!verb) continue;
+    let objStart = i + 1;
+    if (verb.prep) {
+      if (lower[objStart] !== verb.prep) continue;
+      objStart += 1;
+      if (objStart >= toks.length) continue;
+    }
+    const np1 = resolveNP(lexicon, toks.slice(0, i));
+    const np2 = resolveNP(lexicon, toks.slice(objStart));
+    if (np1.term == null || np2.term == null) continue; // dead end
+    hits.push({
+      i,
+      verbLemma: verb.lemma,
+      subject: np1.term,
+      object: np2.term,
+      result: hit(PATTERN_RELATION, [np1, np2], [
+        { subject: np1.term, predicate: predicateOf(verb, lexicon.ns), object: np2.term, kind: "owl:ObjectProperty" },
+      ]),
+    });
+  }
+  return hits;
+}
+
+/** Public ambiguity surface: parse `sentence` and, ONLY when more than one
+ *  independent, COMPLETE relation-pattern reading survives (parseRelationHits
+ *  above), return them all, each labeled by the token it read as the verb.
+ *  Returns null for the overwhelming majority of sentences: anything not
+ *  relation-shaped (mirrors parseAce's own dispatch gate exactly, so this
+ *  only ever fires on a sentence parseAce would ALSO route to parseRelation),
+ *  and any relation-shaped sentence with 0 or 1 surviving readings — the
+ *  ordinary parseAce path is authoritative and untouched either way. */
+export function parseAceAmbiguous(sentence, lexicon = loadLexicon()) {
+  const toks = tokenize(sentence);
+  if (toks.length < 4) return null; // 3 tokens: exactly one verb position is even possible
+  const lower = toks.map((t) => t.toLowerCase());
+  if (lower[0] === "every" || lower[0] === "no") return null;
+  if (/'s$/.test(lower[0]) && lower[0].length > 2) return null;
+  if (lower[0] === "the" && lower.includes("of") && lower.includes("is")) return null;
+  if (lower.indexOf("is") > 0) return null;
+  const hits = parseRelationHits(lexicon, toks, lower);
+  if (hits.length < 2) return null;
+  return {
+    pattern: PATTERN_RELATION,
+    sentence,
+    readings: hits.map(({ i, verbLemma, subject, object, result }) => ({
+      i, verbLemma, subject, object, ...result,
+    })),
+  };
 }
 
 /** Pattern 8 (copula arm) — "X is ADJ": data adjective → datatype-property
