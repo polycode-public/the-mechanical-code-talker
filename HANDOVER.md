@@ -10,20 +10,37 @@ Session handle (inbox): `tmct` (this session; earlier sessions used `mechanic`).
 
 ## Version state (2026-07-11)
 
-`package.json` is `1.6.0`, held locally — `main` is 34 commits ahead of `origin/main`, none of it
-pushed yet. What's live on npm is `1.5.5`. Push/publish is gated on the operator; don't bump the
+`package.json` is `1.6.2`, held locally — `main` is 1 commit ahead of `origin/main` (the bump
+itself). What's live on npm is `1.6.1`. Push/publish is gated on the operator; don't bump the
 version again until the moment of actually pushing (see Discipline, below).
 
 ## Open items
 
-- **`PLAN_CONVERSATION.md`'s two findings are unresolved, no fix landed for either.** (1) An unknown
-  "every X is Y" always mints Y as a class, never a property, because `unknownObjectFallback`
-  (`src/chat.mjs:1959`) has no POS check before minting — fix sketch and regression-guard caveats
-  are written up in the doc. (2) `src/interpret/strategies/noise-strip.mjs`'s `stripNoise()` leans
-  on wink-nlp's generic stopword list, which arbitrarily flags some main verbs ("keep", "put") as
-  noise but not close synonyms ("store", "hold", "save") — causing real resolution collisions, not
-  just missed strips. Both are scoped as broader-mechanism work, deliberately out of the fast loop's
-  scope; read the doc before starting either.
+- **`PLAN_CONVERSATION.md` Finding 1 (adjective-taught-as-class) is unresolved, but now has a fresh
+  canonical repro and a background fix agent in flight.** `"cheese is blue"` mints `blue` as a class
+  (`cheese rdfs:subClassOf blue`) instead of a datatype property, then `"what is blue"` gives no
+  useful answer at all — the mis-mint compounds into total silence, not just the wrong shape. Finding
+  2 is already resolved (commit `85d46f0`). A background agent is implementing Finding 1 per its own
+  documented fix sketch (POS-check gate in `unknownObjectFallback`, `src/chat.mjs:1959`) — check its
+  worktree/PLAN_CONVERSATION.md's STATUS line before starting this fresh.
+
+- **Fast-loop round 1 found 2 more real dead-ends, root-caused but correctly left unpatched** (both
+  now being written up as new `PLAN_CONVERSATION.md` findings by the same background agent): (a)
+  `ask.mjs`'s forward-shape query branch (~line 3198) computes the requested `entityType` but never
+  filters on it, so `"what modules does X have"` can return function names instead of modules; (b)
+  `TEACH_PRONOUN_RE` (`chat.mjs:2336`) has no question-lead guard and `RELATIONS.inherits`
+  (`ask-vocab.mjs:153`) has no "uses X as its base" phrasing, so an anaphoric inheritance question
+  like `"it uses which controller as its base"` gets misrouted into teach-a-fact.
+
+- **Live testing also surfaced a query-side gap for the general-knowledge persona vocabulary**: there
+  is no query shape for CapableOf (`"can a dog bark"`, `"what can a dog do"`) or reverse-HasA
+  (`"what has a tail"`) at all — `ask.mjs`'s `RELATIONS` verb table is entirely code-graph-shaped
+  (`has`/`have` is hardwired to the code `defines` relation), so these fall through to the generic
+  code-graph miss wall even with no repo loaded. Separately, `"what is a tail"` silently resolves to
+  ConceptNet's process/Unix-command sense only, dropping the animal-body-part sense the same session
+  just taught via `dog has tail` — a corpus word-sense collision, root cause not yet confirmed.
+  Under investigation by the same background agent; expect this to graduate into new
+  `PLAN_CONVERSATION.md` findings rather than a fast-loop-safe patch.
 
 - **`PLAN_SYLLOGIST.md`'s one genuinely open research question**: retraction-aware consistency under
   a hard budget + trust tiers (§3). Speculative sketch only, nothing implemented — next up only if
