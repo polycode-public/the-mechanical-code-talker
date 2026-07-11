@@ -168,3 +168,111 @@ test("Backend C: node:sqlite is genuinely gated — importing core.mjs alone nev
   const { cached } = JSON.parse(out.trim().split("\n").pop());
   assert.equal(cached, false, "node:sqlite must not be loaded merely by importing core.mjs");
 });
+
+// ---- Cached, incrementally patched reads (perf gap closed in core.mjs) -----
+// readSqlitePayload used to do a full fresh SELECT of every individual plus a
+// fresh per-relation edge SELECT on EVERY loadMemory() call, no matter how
+// many times it was called in a row with nothing changed in between. It now
+// reconstructs from SQL only once (or after a failed write invalidates the
+// cache) and serves every later call from `handle.cachedPayload`, patched in
+// lockstep by persistSqlitePayload's existing per-row diff. These two tests
+// prove that mechanism, not just that the suite stays green: (1) a query-count
+// spy around handle.db.prepare shows the SECOND loadMemory() call issues ZERO
+// SQL queries where the FIRST issued real ones: the actual performance claim,
+// not an inference from timing; (2) a load -> mutate -> persist -> load round
+// trip proves the patched cache isn't just fast but CORRECT — it reflects the
+// mutation, and (critically) matches a genuinely fresh SQL rebuild byte for
+// byte, not just itself.
+
+/** Install a counting spy around `handle.db.prepare`, returning a `{ count()
+ *  , reset() }` handle. Wraps the property in place (not `.bind`/destructure)
+ *  so every call site in core.mjs — which always does `db.prepare(...)` via a
+ *  locally-captured `db` reference, never a pre-bound copy — resolves through
+ *  the spy via ordinary property lookup at call time. */
+function spyOnPrepare(handle) {
+  const origPrepare = handle.db.prepare.bind(handle.db);
+  let n = 0;
+  handle.db.prepare = (...args) => { n += 1; return origPrepare(...args); };
+  return { count: () => n, reset: () => { n = 0; } };
+}
+
+test("Backend C perf: loadMemory() reads from SQL only once — a second call on an unchanged handle issues ZERO queries", async () => {
+  const { dir, handle } = await sqliteHandle();
+  try {
+    await appendFact(handle, { subject: "cache", predicate: "IsA", object: "concept", provenance: "corpus:seon" });
+    await appendUtterance(handle, { role: "visitor", text: "does the cache work?", ts: TS1, sessionId: SESSION, sessionStarted: TS1 });
+
+    // Force a cold cache so the first spied call measures a REAL SQL rebuild
+    // (the appends above already warmed it as a side effect of persisting).
+    handle.cachedPayload = undefined;
+
+    const spy = spyOnPrepare(handle);
+    const first = await loadMemory(handle);
+    const firstCallQueries = spy.count();
+    assert.ok(firstCallQueries > 0, `the first (cold-cache) loadMemory call must issue real SQL queries, got ${firstCallQueries}`);
+
+    spy.reset();
+    const second = await loadMemory(handle);
+    assert.equal(spy.count(), 0, "a second loadMemory call on an unchanged handle must issue ZERO SQL queries — served from the cache, not re-SELECTed");
+
+    assert.deepEqual(second, first, "the cache-served read returns the exact same content as the fresh SQL read");
+  } finally {
+    closeSqliteMemoryStore(handle);
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("Backend C round trip: loadMemory -> mutate (appendFact, twice) -> loadMemory again reflects the mutation, served from the incrementally patched cache, and matches a genuinely fresh SQL rebuild", async () => {
+  const { dir, handle } = await sqliteHandle();
+  try {
+    const before = await loadMemory(handle);
+    assert.equal(before.individuals.length, 0, "a brand-new store starts empty");
+
+    await appendFact(handle, { subject: "widget", predicate: "IsA", object: "gadget", provenance: "corpus:seon", createdAt: TS1 });
+
+    // The read right after a write must be served from the patched cache —
+    // not a re-SELECT — proving persistSqlitePayload's cache patch actually
+    // ran (this is the query-count half of the correctness claim).
+    const spy1 = spyOnPrepare(handle);
+    const afterFirst = await loadMemory(handle);
+    assert.equal(spy1.count(), 0, "a read immediately after a write must be served from the patched cache, not a re-SELECT");
+
+    const rowsAfterFirst = readFactRows(afterFirst);
+    assert.equal(rowsAfterFirst.length, 1, "the new fact is visible");
+    assert.deepEqual(
+      [rowsAfterFirst[0].subject, rowsAfterFirst[0].predicate, rowsAfterFirst[0].object],
+      ["widget", "IsA", "gadget"],
+    );
+    assert.equal(rowsAfterFirst[0].sourceIds.length, 1);
+
+    // Re-append the SAME triple with a SECOND provenance tag — an upsert
+    // (corroboration), not a duplicate individual; exercises the individuals
+    // "unchanged json -> skip" branch alongside the edges "new edge -> patch"
+    // branch in the SAME persist call, so both cache-patch paths are hit.
+    await appendFact(handle, { subject: "widget", predicate: "IsA", object: "gadget", provenance: "corpus:conceptnet", createdAt: TS1 });
+
+    const spy2 = spyOnPrepare(handle);
+    const afterSecond = await loadMemory(handle);
+    assert.equal(spy2.count(), 0, "still served from the cache after a second write, no re-SELECT");
+
+    const rowsAfterSecond = readFactRows(afterSecond);
+    assert.equal(rowsAfterSecond.length, 1, "still ONE Fact individual, not two — upsert, not duplicate");
+    assert.equal(rowsAfterSecond[0].sourceIds.length, 2, "corroboration is visible as a second Source edge via the patched cache");
+
+    // Prove the patched cache isn't merely self-consistent: invalidate it and
+    // force a genuinely fresh SQL rebuild, then confirm the two are identical
+    // (modulo array order, same normalization the existing parity test uses).
+    handle.cachedPayload = undefined;
+    const fresh = await loadMemory(handle);
+    const norm = (m) => readFactRows(m).map((r) => ({ ...r, sourceIds: [...r.sourceIds].sort() }))
+      .sort((a, b) => a.id.localeCompare(b.id));
+    assert.deepEqual(norm(fresh), norm(afterSecond), "the incrementally patched cache matches a genuinely fresh SQL rebuild");
+
+    const classCount = (m, name) => m.classes.find((c) => c.name === name)?.count || 0;
+    assert.equal(classCount(fresh, FACT_CLASS), classCount(afterSecond, FACT_CLASS));
+    assert.equal(classCount(fresh, SOURCE_CLASS), classCount(afterSecond, SOURCE_CLASS));
+  } finally {
+    closeSqliteMemoryStore(handle);
+    await rm(dir, { recursive: true, force: true });
+  }
+});

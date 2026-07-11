@@ -243,15 +243,25 @@ export function createInMemoryStore() {
 // equivalent), so they ride inside that individual's own JSON blob column —
 // no separate fact-triple columns needed.
 //
-// Honest shortcut (flagged, matching seonix's own C13-deferred note): the READ
-// side (readSqlitePayload) reconstructs the FULL in-memory payload shape on
-// every call, not a targeted/indexed query handle — acceptable for a first
-// pass per PLAN_SEED.md §6, real indexed query handles are future work. The
-// WRITE side (persistSqlitePayload) is NOT a shortcut: it diffs the incoming
-// payload against what is already in each row/edge-group and only issues a
-// real INSERT/REPLACE/DELETE for what actually changed, which is the actual
-// point of this backend (write cost proportional to what changed this turn,
-// not to the total store size).
+// Cached, incrementally patched reads (closes the PLAN_SEED.md §6 gap the
+// prior "honest shortcut" comment used to flag here): the READ side
+// (readSqlitePayload) reconstructs the FULL in-memory payload shape from real
+// SQL SELECTs only ONCE — the first call for a given handle, or the first
+// call after a failed/rolled-back write — and stashes the result on
+// `handle.cachedPayload`. Every later call returns a deep clone of that cache
+// directly, with ZERO SQL queries: no re-SELECT of individuals, no
+// per-relation edge SELECT. The WRITE side (persistSqlitePayload) was never a
+// shortcut: it already diffs the incoming payload against what is already in
+// each row/edge-group and only issues a real INSERT/REPLACE/DELETE for what
+// actually changed (write cost proportional to what changed this turn, not to
+// the total store size). It now ALSO applies that exact same diff to
+// `handle.cachedPayload` in lockstep — patching only the individuals/edges it
+// actually wrote to SQLite, in the same order SQLite itself would reorder
+// them (a changed row gets a fresh rowid and sorts last) — so the cache never
+// goes stale, and never needs a re-query to catch up either. If a write fails
+// mid-transaction (ROLLBACK), the partially-patched cache is not trusted: it
+// is invalidated so the NEXT read does an honest full rebuild instead of
+// risking a state that was never actually committed.
 
 const SQLITE_DDL = `
 CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT NOT NULL);
@@ -295,13 +305,34 @@ export function closeSqliteMemoryStore(handle) {
   if (isSqliteHandle(handle)) handle.db.close();
 }
 
-/** Reconstruct the full payload from a Backend C handle's tables — the
- *  loadMemory-equivalent read for this backend (see the "honest shortcut" note
- *  above: a full reconstruction, not a targeted/indexed query). A brand-new
- *  store (no meta rows written yet) reconstructs to the same shape
- *  emptyMemory() returns, so a fresh handle behaves like Backend A's
- *  ENOENT-bootstrap and Backend B's fresh createInMemoryStore(). */
+/** Deep-clone a JSON-safe value. Used two ways here: (1) readSqlitePayload
+ *  hands every CALLER a clone of the cache, never the live cached object
+ *  itself, so this backend keeps the same "fresh object every call" contract
+ *  Backend A's JSON.parse(readFile()) always had — nothing outside this
+ *  module can mutate handle.cachedPayload by mutating what loadMemory
+ *  returned; and (2) persistSqlitePayload clones a value INTO the cache so
+ *  the cache never ends up aliasing a piece of the caller's own payload
+ *  object (which mutateMemory's caller may go on to mutate further). */
+const cloneJson = (v) => (v === undefined ? v : structuredClone(v));
+
+/** The loadMemory-equivalent read for Backend C. First call for a handle (or
+ *  first call after a failed write invalidated the cache): a real, full
+ *  reconstruction from SQL SELECTs, same as before — then it is stashed on
+ *  `handle.cachedPayload`. Every later call, with no write in between, skips
+ *  SQL entirely and returns a clone of that cache (see the module-comment
+ *  above SQLITE_DDL for the full mechanism). A brand-new store (no meta rows
+ *  written yet) reconstructs to the same shape emptyMemory() returns, so a
+ *  fresh handle behaves like Backend A's ENOENT-bootstrap and Backend B's
+ *  fresh createInMemoryStore(). */
 function readSqlitePayload(handle) {
+  if (!handle.cachedPayload) handle.cachedPayload = buildSqlitePayloadFromRows(handle);
+  return cloneJson(handle.cachedPayload);
+}
+
+/** The actual SQL reconstruction — unchanged from the pre-cache implementation,
+ *  just extracted so readSqlitePayload can call it only when the cache is
+ *  cold. */
+function buildSqlitePayloadFromRows(handle) {
   const db = handle.db;
   const empty = emptyMemory();
   const getMeta = (k, fallback) => {
@@ -339,14 +370,94 @@ function readSqlitePayload(handle) {
   };
 }
 
+// ---- handle.cachedPayload mirrors --------------------------------------
+// Applied by persistSqlitePayload in LOCKSTEP with the SQL statement sitting
+// right beside each call — same condition (only when the SQL write actually
+// runs), same effect, so the cache always ends up holding exactly what a
+// fresh SQL reconstruction would now produce. `cache.individuals`/
+// `cache.objectProperties` are mutated in place; persistSqlitePayload is
+// responsible for invalidating the whole cache on a rolled-back write (these
+// helpers assume the surrounding transaction succeeds).
+
+/** Mirrors `INSERT OR REPLACE INTO individuals(...)`: an existing id is
+ *  replaced IN PLACE (same array position, matching how SQL keeps that row's
+ *  `ord` — and so its sort position — unchanged on an update); a new id is
+ *  appended (matching a fresh row getting the next `ord`). */
+function cacheUpsertIndividual(cache, ind) {
+  const clone = cloneJson(ind);
+  const i = cache.individuals.findIndex((x) => x?.id === ind.id);
+  if (i >= 0) cache.individuals[i] = clone;
+  else cache.individuals.push(clone);
+}
+
+/** Mirrors the individuals delete loop: drop any cached individual whose id
+ *  isn't in the just-persisted payload's full id set. */
+function cacheDropIndividualsExcept(cache, seenIds) {
+  cache.individuals = cache.individuals.filter((i) => seenIds.has(i?.id));
+}
+
+/** Find-or-create the cached edge group for `prop` — mirrors a relation row
+ *  being implicitly created the first time a group is written. */
+function cacheGroupFor(cache, prop) {
+  let g = cache.objectProperties.find((x) => x?.prop === prop);
+  if (!g) {
+    g = { predicate: null, prop, count: 0, examples: [] };
+    cache.objectProperties.push(g);
+  }
+  return g;
+}
+
+/** Mirrors `INSERT OR REPLACE INTO edges(...)`: SQLite deletes-then-reinserts
+ *  a changed/new row on conflict, so it gets a fresh (highest) rowid and sorts
+ *  LAST under readSqlitePayload's `ORDER BY rowid` — moving the entry to the
+ *  end of `examples` here (rather than replacing it in place) reproduces that
+ *  ordering exactly, without a re-SELECT. Rebuilds the cached edge shape the
+ *  same way buildSqlitePayloadFromRows does (subject/object/labels + any
+ *  extra keys), from the same `extraKeys` persistSqlitePayload already
+ *  computed for the SQL `extra` column, so it never re-derives them. Same
+ *  NUL-delimited (subject,object) key discipline as the SQL diff beside it
+ *  (a space could be forged by a term that contains one; NUL never occurs in
+ *  a normalized term). */
+function cacheUpsertEdge(group, edge, extraKeys) {
+  const key = `${edge.subject}\u0000${edge.object}`;
+  group.examples = group.examples.filter((e) => `${e.subject}\u0000${e.object}` !== key);
+  const cached = {
+    subject: edge.subject, object: edge.object,
+    subjectLabel: edge.subjectLabel ?? null, objectLabel: edge.objectLabel ?? null,
+  };
+  if (extraKeys.length) Object.assign(cached, cloneJson(Object.fromEntries(extraKeys.map((k) => [k, edge[k]]))));
+  group.examples.push(cached);
+}
+
+/** Mirrors the per-group edge delete loop: drop any cached edge in this group
+ *  whose (subject,object) key isn't in the just-persisted group's key set. */
+function cacheDropEdgesExcept(group, newKeys) {
+  group.examples = group.examples.filter((e) => newKeys.has(`${e.subject}\u0000${e.object}`));
+}
+
+/** Mirrors the relations delete loop: drop any cached edge group whose prop
+ *  wasn't in the just-persisted payload's `objectProperties`. */
+function cacheDropGroupsExcept(cache, seenProps) {
+  cache.objectProperties = cache.objectProperties.filter((g) => seenProps.has(g?.prop));
+}
+
 /** Persist a mutated payload into a Backend C handle: real per-row
  *  INSERT/REPLACE/DELETE, diffed against whatever is ALREADY in the table for
  *  that individual id / (prop,subject,object) edge key — not seonix's
  *  rebuild-and-swap. Every statement runs inside one transaction so a session
- *  never observes (or leaves on disk) a half-applied mutation. */
+ *  never observes (or leaves on disk) a half-applied mutation.
+ *
+ *  Also patches `handle.cachedPayload` (if one exists yet — it always will in
+ *  practice, since mutateMemory always calls loadMemory before this) in the
+ *  same lockstep as the SQL diff below, so a subsequent loadMemory() never has
+ *  to re-query SQLite to see this write (see the module comment above
+ *  SQLITE_DDL). On a rolled-back write, the cache is invalidated rather than
+ *  left holding a partially-applied patch — the next read does an honest
+ *  full rebuild instead. */
 function persistSqlitePayload(handle, payload) {
   const db = handle.db;
   const empty = emptyMemory();
+  const cache = handle.cachedPayload || null;
   db.exec("BEGIN IMMEDIATE");
   try {
     const setMeta = db.prepare("INSERT OR REPLACE INTO meta(k, v) VALUES (?, ?)");
@@ -356,6 +467,14 @@ function persistSqlitePayload(handle, payload) {
     setMeta.run("vocabulary", JSON.stringify(payload.vocabulary ?? empty.vocabulary));
     setMeta.run("classes", JSON.stringify(payload.classes ?? empty.classes));
     setMeta.run("proseIndex", JSON.stringify(payload.proseIndex ?? empty.proseIndex));
+    if (cache) {
+      cache.generated_at = cloneJson(payload.generated_at ?? empty.generated_at);
+      cache.memory = cloneJson(payload.memory ?? empty.memory);
+      cache.prefixes = cloneJson(payload.prefixes ?? empty.prefixes);
+      cache.vocabulary = cloneJson(payload.vocabulary ?? empty.vocabulary);
+      cache.classes = cloneJson(payload.classes ?? empty.classes);
+      cache.proseIndex = cloneJson(payload.proseIndex ?? empty.proseIndex);
+    }
 
     // individuals: a real per-row upsert, only for an id that is new or whose
     // JSON actually changed since the last persist — every other row is left
@@ -369,9 +488,10 @@ function persistSqlitePayload(handle, payload) {
       seenIds.add(ind.id);
       const json = JSON.stringify(ind);
       const existing = getInd.get(ind.id);
-      if (existing && existing.json === json) continue; // unchanged — skip the write entirely
+      if (existing && existing.json === json) continue; // unchanged — skip the write entirely (cache already matches)
       const ord = existing ? existing.ord : nextOrd++;
       upsertInd.run(ind.id, ord, ind.class ?? null, ind.label ?? null, json);
+      if (cache) cacheUpsertIndividual(cache, ind);
     }
     // Removal (no appendX function in this file ever removes an individual
     // today — dead code path in practice, kept for correctness): a cheap
@@ -380,6 +500,7 @@ function persistSqlitePayload(handle, payload) {
     for (const row of db.prepare("SELECT id FROM individuals").all()) {
       if (!seenIds.has(row.id)) deleteInd.run(row.id);
     }
+    if (cache) cacheDropIndividualsExcept(cache, seenIds);
 
     // objectProperties/edges: per-edge diff WITHIN each group, scoped to that
     // group's own rows (edges_by_prop) rather than the whole edges table — a
@@ -399,6 +520,7 @@ function persistSqlitePayload(handle, payload) {
       const existingRows = edgesForProp.all(group.prop);
       const existingByKey = new Map(existingRows.map((r) => [`${r.subject}\u0000${r.object}`, r]));
       const newKeys = new Set();
+      const cacheGroup = cache ? cacheGroupFor(cache, group.prop) : null;
       for (const e of group.examples || []) {
         const key = `${e.subject}\u0000${e.object}`;
         newKeys.add(key);
@@ -411,25 +533,34 @@ function persistSqlitePayload(handle, payload) {
           && (existing.extra ?? null) === (extra ?? null);
         if (unchanged) continue;
         upsertEdge.run(group.prop, e.subject, e.object, e.subjectLabel ?? null, e.objectLabel ?? null, extra);
+        if (cacheGroup) cacheUpsertEdge(cacheGroup, e, extraKeys);
       }
       for (const key of existingByKey.keys()) {
         if (newKeys.has(key)) continue;
         const [s, o] = key.split("\u0000");
         deleteEdge.run(group.prop, s, o);
       }
+      if (cacheGroup) cacheDropEdgesExcept(cacheGroup, newKeys);
+      const relCount = Number.isFinite(group.count) ? group.count : (group.examples || []).length;
       const relOrd = getRelOrd.get(group.prop)?.ord ?? nextRelOrd++;
-      upsertRel.run(group.prop, relOrd, group.predicate ?? null,
-        Number.isFinite(group.count) ? group.count : (group.examples || []).length);
+      upsertRel.run(group.prop, relOrd, group.predicate ?? null, relCount);
+      if (cacheGroup) { cacheGroup.predicate = group.predicate ?? null; cacheGroup.count = relCount; }
     }
     for (const row of db.prepare("SELECT prop FROM relations").all()) {
       if (seenProps.has(row.prop)) continue;
       db.prepare("DELETE FROM edges WHERE prop = ?").run(row.prop);
       db.prepare("DELETE FROM relations WHERE prop = ?").run(row.prop);
     }
+    if (cache) cacheDropGroupsExcept(cache, seenProps);
 
     db.exec("COMMIT");
   } catch (e) {
     db.exec("ROLLBACK");
+    // The cache may hold a partially-applied patch at this point (some of the
+    // loop bodies above already mutated it before the failure) that was never
+    // actually committed to SQLite — never trust it silently. Drop it so the
+    // next loadMemory() call does an honest full rebuild instead.
+    handle.cachedPayload = undefined;
     throw e;
   }
 }
