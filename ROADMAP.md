@@ -262,7 +262,7 @@ Every phase below serves this definition.
 
 ---
 
-## Phase 0 — Reshape (v0.2.0) — the current work
+## Phase 0 — Reshape — DONE (v0.2.0)
 
 One commit per step, `npm test` green at each.
 
@@ -827,26 +827,26 @@ full design and the note above for what went wrong the first attempt. Sibling pu
 (the bounded-Damerau fuzzy matcher, the PageRank+IDF block ranker) are lower priority than getting
 this one right before trying another.
 
-## Phase 10 — Conversational competence & onboarding (0.6.0 → 0.7.0)
+## Phase 10 — Conversational competence & onboarding — DONE
 
 *(Operator-directed, from live new-user testing.)* Once a graph is loaded the engine is strong;
 the weak surfaces were the FIRST RUN and the VAGUE question. This phase makes the miss graceful,
 the empty state honest, and the vague touch a guided answer — realising item 1's "tolerant, guides
 you toward precision" promise on the conversational surface.
 
-- **Onboarding UX (shipped 0.6.0):** the grammar wall moved behind `/help` (a short, tailored miss
+- **Onboarding UX — DONE:** the grammar wall moved behind `/help` (a short, tailored miss
   instead); intent lanes for memory/teach ("remember that X"), meta/self ("what is this codebase",
   "what do you know"), routed only when a graph query would miss; empty/degenerate-graph
   orientation that distinguishes CODE STRUCTURE (needs a `.tmct/graph.json` via a producer or
   `--repo`; tmct reads graphs, it does not index code) from VOCABULARY (`tmct init`/bootstrap seeds
   concepts); `TMCT_GRAPH_FILE` honoured by chat; slash-optional commands (`stats`≡`/stats`);
   `/memory` explore hooks; up/down-arrow prompt history in the TUI.
-- **Knowledge (shipped 0.6.0 → 0.7.0):** the curated `corpus/seon` ontology — a software-sense
+- **Knowledge — DONE:** the curated `corpus/seon` ontology — a software-sense
   definition for EVERY lexicon term, language-neutral (Java/C#/Python `class` → one concept); the
   ConceptNet slice quality-filtered (word-sense noise cut) and regrown to ~40k facts; tier-2
   specialised corpuses (aws/python/java) with `tmct init --corpus`; batched `appendFacts` (one
   write, 419s→2.5s) enabling **seed-all** so a fresh repo knows the whole curated vocabulary.
-- **The concept force (shipped 0.7.0):** a vague touch on a concept X, where tmct knows X and has instances,
+- **The concept force — DONE:** a vague touch on a concept X, where tmct knows X and has instances,
   answers in three bands — **the definition** (from `corpus/seon`), **the examples** (real code-graph
   + memory instances of X), and **a soft guided follow-up** ("Want to go deeper?" + 2–3 questions
   built from the real instances × the query shapes valid for that kind, each pre-validated to
@@ -856,13 +856,13 @@ you toward precision" promise on the conversational surface.
   de-anthropomorphised (no first-person "i learned:" over-claim — corpus facts read as data +
   provenance; `you told me` stays for operator-asserted facts); listings cap at 32 with a "say
   'more'" pagination that holds the remainder in session state.
-- **Dead-end routing + read-only demos (shipped 0.7.0):** natural drill-down phrasings are routed
+- **Dead-end routing + read-only demos — DONE:** natural drill-down phrasings are routed
   onto the canonical shapes they mean — `what functions are in X` → members-of-class, `what defined
   X` → where-is-X-defined, a no-context `what about X` → the concept/relation force (the discourse
   continuation still wins when there IS a prior answer). `tmct chat --ephemeral` (and the
   `npm run example:*` demos) reads a graph but writes nothing back, so a checked-in example is never
   dirtied by a demo run.
-- **The dialogue-flow loop (`SKILL_CHAT_PLAYTEST.md`, 0.7.0):** a fast, qualitative tuning loop that
+- **The dialogue-flow loop — DONE** (`SKILL_CHAT_PLAYTEST.md`): a fast, qualitative tuning loop that
   complements the LLM-judge benchmark — Claude plays a curious user, hunts *dead-ends* (walls,
   "unknown qualifier", phrasing-misses, invited follow-ups the engine can't take), fixes them by
   ROUTING to existing capabilities, replays the same conversations until they flow, freezes them as
@@ -872,7 +872,7 @@ you toward precision" promise on the conversational surface.
   with new graded cells for the miss / empty-graph / concept-touch surfaces so these become
   regression-protected levers, not one-off polish.
 
-## Phase 11 — The capability router & the agentic bench (0.8.0 shipped · 0.8.1 deepened · 0.8.2 feel + rule-general C2)
+## Phase 11 — The capability router & the agentic bench — DEMONSTRATED (closed-world C1, scope-capped)
 
 *(Operator-directed 2026-07-06; built the same day across five concurrent tracks.)* tmct as a **deterministic, no-LLM
 tool router** behind an Anthropic-compatible API — the workstream specified in
@@ -882,25 +882,25 @@ new axis** (driving a tool loop, not answering a chat turn), so it gets its **ow
 (`AGENTBENCH_<version>.md`, `_00N` for re-runs), but the levels are the **A0→C2 agentic rungs** and a
 **hallucinated tool call is an automatic fail**.
 
-**Status: DEMONSTRATED (with a stated scope caveat).** The router is built and measured:
-`AGENTBENCH_0.8.0_001` = **96% completion at 0% hallucination on every rung**, closed-world ladder
-cleared to **C1**. The gate the phase was staked on — a **0% hallucination rate on a real domain** (the
-graph-query toolset over the fixture) — **is met.** The honest scope line, held from the start:
-AGENTBENCH grades the correct **call-plan + causal-link proof, not the executed composed result**; the
-B1/B2/C1 rungs are **thin (2–3 cases)**; and the one C2 case is **refused** (the Stage-5 goal-reasoner
-is designed, not built). So "closed-world C1" means *the router provably selects and binds the right
-tool sequence*, not *end-to-end multi-step reasoning* — the demonstrated-vs-designed boundary is the
-real deliverable. The five tracks below are all built; the two research-agent stages (Track 4 below)
-remain designed-not-built by intent.
+**Status: DEMONSTRATED, with a stated scope caveat.** The router is built and measured, grading
+both the call-plan and the executed result (97% plan / 91% result / 0% hallucination,
+`AGENTBENCH_0.8.1.md`); the closed-world ladder is cleared to **C1**. The gate the phase was
+staked on — a **0% hallucination rate on a real domain** (the graph-query toolset over the
+fixture) — **is met.** The honest scope line, still true: the B1/B2/C1 rungs are **thin (2–3
+cases)**. So "closed-world C1" means *the router provably selects, binds, and executes the right
+tool sequence*, not *open-ended multi-step reasoning at scale* — that boundary, not a raw pass
+rate, is the real deliverable. All five tracks below, including Track 4's two research-agent
+stages, are built.
 
 ### Track 1 — chat-surface levers (next CHATBENCH; all three)
 
-> **STATUS (0.8.2):** the surrounding feel surface landed — PLAN_CHAT_FEEL items **1–5, 7, 8**
-> (recall hygiene, preamble frames, call-relation self-consistency, author lane, wall kindness,
-> teach-lane widening, honest nudges) shipped and gate-verified deterministically. **The trio
-> below is DEFERRED post-release with measured targets** (advisor tick-4): pronoun red set = 18
-> g-b1-pron ids; temporal = g-b1-temp ×5 + g-c1-temp ×9; discourse-count re-measure first — it
-> sampled 0/5 red and is likely already green. See HANDOVER follow-up #3.
+> **STATUS: PARTIAL.** The surrounding chat-feel surface (`PLAN_CHAT_FEEL.md` items **1–5, 7, 8**:
+> recall hygiene, preamble frames, call-relation self-consistency, author lane, wall kindness,
+> teach-lane widening, honest nudges) is DONE, gate-verified deterministically
+> (`CEFR_ENGLISH_0.8.2.md`). **The trio below is TODO**, deferred with measured targets (advisor
+> tick-4): pronoun red set = 18 g-b1-pron ids; temporal = g-b1-temp ×5 + g-c1-temp ×9;
+> discourse-count re-measure first — it sampled 0/5 red and is likely already green. See
+> HANDOVER follow-up #3.
 
 The three levers `CEFR_ENGLISH_0.7.1` measured + ranked — which **double as router prerequisites** (they
 gate the A2→B1→C1 rungs, per Phase B of the router plan):
@@ -912,17 +912,17 @@ Land all three (not just #1); they raise the chat floor *and* the router's floor
 
 ### Track 2 — the router build (the within-horizon slice, in order)
 
-> **STATUS (0.8.2):** the C1 composition gap closed — the **member-filter HTN method + per-member
+> **STATUS: DONE.** The C1 composition gap is closed: the **member-filter HTN method + per-member
 > callees hop** flips the standing C1 red in both drivers (resolver floor A0–C1 all 100/100); the
-> ladder grew 43→56 fixture-linted cases; the bench-import smell is inverted
+> ladder covers 56 fixture-linted cases; the bench-import smell is inverted
 > (`src/router/call-validator.mjs` + `set-algebra.mjs`).
 
-Buildable now with a frontier model as co-author (see PLAN §"solved vs unsolved"):
+Built with a frontier model as co-author (see PLAN §"solved vs unsolved"):
 - **Phase A — the shim.** An Anthropic Messages API endpoint (`/v1/messages`, `tool_use`/`tool_result`
   blocks). **Extended:** also present as a **`bedrock-meter`-compatible routing target** (see below).
-- **Phase B — measure today → `AGENTBENCH_0.7.2.md`.** Shim + a small graph-query toolset up the
-  A0→C2 ladder; the honest baseline (expected A0 solid, A1–A2 partial, per the CEFR_ENGLISH_0.7.1
-  inherited assets).
+- **Phase B — the measured baseline** (`AGENTBENCH_0.7.2.md`). Shim + a small graph-query toolset
+  up the A0→C2 ladder, against the honest starting point (A0 solid, A1–A2 partial, per the
+  CEFR_ENGLISH_0.7.1 inherited assets).
 - **Phase C — the grading ladder.** The AGENTBENCH benchmark itself (rungs as levels, comparable
   local/hosted models as reference bands, zero-hallucination gate).
 - **Stage 0 — capability registry** (`Capability`/`Parameter`/`Precondition`/`Effect` = STRIPS/PDDL
@@ -955,11 +955,12 @@ critical build path:
 - **Stage 5 — goal-reasoner, closed-world C2** — BDI + Goal-Driven Autonomy: deduce-goals (long-chain
   deduction) → plan-each (C1) → threat-aware, *persistent* first-step arbitration.
 
-> **STATUS (0.8.2):** both research stages are now BUILT and measured. Stage 2 landed in 0.8.1_002;
-> Stage 5's 0.8.1 "one thin rule" caveat is retired — **C2 is rule-general**: two declared
+> **STATUS: DONE.** Both research stages are built and measured. Stage 2 (imperative intent
+> frames) is live. Stage 5's goal-reasoner is **rule-general, not single-rule**: two declared
 > goal-rules (`coverage-invariant`, `cochange-risk-invariant`) selected by pure `applicableRules`
-> deduction with honest refusals at both failure modes (0 applicable = open-world, >1 = ambiguous),
+> deduction, with honest refusals at both failure modes (0 applicable = open-world, >1 = ambiguous),
 > zero request keywords. Goal driver: 100% plan / 98% result / 0% hallucination over 56 cases.
+> See `AGENTBENCH_0.8.1.md` / `AGENTBENCH_0.8.2.md`.
 
 ## Phase LATER — recognized, deferred, not now
 
