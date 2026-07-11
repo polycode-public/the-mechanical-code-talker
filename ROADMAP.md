@@ -25,9 +25,13 @@ getting silently traded away by inherited caution:
   clipping/pagination limits. Landed for both ambiguity shapes tmct has: parse-level ties
   (`renderCore`'s real-answer resolution, `CAPABILITIES_1.7.3.md` item 92) and entity-level ties (one
   term matching several real graph individuals — every fuzzy-match tie, every noise-strip alt-object
-  collision, `PLAN_BREADTH_FIRST_NLU.md` §1). A dedicated audit found the two generic top-level
-  bail-out hints (`rephraseHint`/`compositionalHint`) are provably unavoidable at their actual miss
-  sites, not unwired — nothing left to generalize there.
+  collision, `PLAN_BREADTH_FIRST_NLU.md` §1). CEFR-confirmed: `BENCHMARK_CEFR_ENGLISH_1.8.0.md`'s
+  `ambiguity`-tagged cell moved 1.438 → 1.875 (+0.437, the largest single-tag move on record), and
+  the fix resolved a case pair the `1.7.0` report called permanently unfixable (`am-meta-imports` vs
+  `g-a1-naming-9` — same input, previously-incompatible expectations; both now score well against
+  one breadth-first answer). A dedicated audit found the two generic top-level bail-out hints
+  (`rephraseHint`/`compositionalHint`) are provably unavoidable at their actual miss sites, not
+  unwired — nothing left to generalize there.
 - **Paraphrase alongside the original, verified, never instead of it.** A surface-realization variant
   sits next to the literal grounded answer, never replacing it, and its accuracy is checked, not
   assumed — by running tmct's own deterministic inference/consistency machinery (`src/syllogise.mjs`)
@@ -109,6 +113,10 @@ audit — always check the latest-dated one, not this file, for real numbers.
   mentioned" query rather than a true "list all" — a genuine, now-documented gap, not a silent one.
 - **`PLAN_TEMPLATE_COVERAGE.md`** — the coverage-harness/generation design from (b) above, including
   the real baseline number and the first 17-row generated batch. Read it before picking up (b).
+- **A fresh `CAPABILITIES_1.8.0.md` audit** — `CAPABILITIES_1.7.3.md` is pinned at commit `981c9b2`
+  and doesn't cover any of `PLAN_BREADTH_FIRST_NLU.md`'s six tracks; this doc's "Current capability
+  surface" above covers them narratively, but no full overlay audit has run since. Not done this
+  pass — `BENCHMARK_CEFR_ENGLISH_1.8.0.md` alone was in scope.
 - **`PLAN_ADVENTURE.md`** — a text-adventure architectural stretch: an imperative command grammar,
   mutable turn-by-turn world/player state as ordinary graph nodes (no special player-state store),
   and an NPC turn scheduler. Design-only.

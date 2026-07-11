@@ -8,11 +8,13 @@ this project's own standing discipline.
 Session handle (inbox): `tmct` (this session; earlier sessions used `mechanic`). See
 `~/.claude/inboxes/tmct.md` and `~/.claude/inboxes/mechanic.md`, both still live.
 
-## Version state (2026-07-11)
+## Version state (2026-07-12)
 
-`package.json` is `1.7.3` locally, not yet pushed. What's live on npm is still `1.5.5` — several
-version bumps (`1.6.0` through `1.7.3`) have accumulated locally without a push. Per this project's
-own version-bump discipline (`CLAUDE.md`), the next push should land whatever's actually ready as one
+`package.json` is `1.8.0` locally, not yet pushed (bumped from `1.7.3` this session at the
+operator's explicit direction, to stamp `BENCHMARK_CEFR_ENGLISH_1.8.0.md` — a minor bump is
+warranted regardless: six additive tracks landed, no breaking change). What's live on npm is still
+`1.5.5` — several version bumps have accumulated locally without a push. Per this project's own
+version-bump discipline (`CLAUDE.md`), the next push should land whatever's actually ready as one
 release, not chase every intermediate bump — don't bump again until that push.
 
 ## In progress — `PLAN_BREADTH_FIRST_NLU.md` (started 2026-07-11)
@@ -20,10 +22,14 @@ release, not chase every intermediate bump — don't bump again until that push.
 Six tracks (6th added mid-session, 2026-07-11), live status (update this block as each lands, don't
 let it go stale):
 
-- **Track 1 — entity-tie ambiguity fix** (`src/ask.mjs`): **landed, commit `d2c28f5`.**
-  `npm test` 1919/1919 green, no pins touched (design was additive by construction). CEFR
-  re-measurement in progress to confirm the `ambiguity`-tagged cell moves for real — update this line
-  with the real numbers once `chatbench/results/raw/run-1.7.3/` finishes judging.
+- **Track 1 — entity-tie ambiguity fix** (`src/ask.mjs`): **landed and CEFR-confirmed, commit
+  `d2c28f5`.** `npm test` 1932/1932 green, no pins touched. `BENCHMARK_CEFR_ENGLISH_1.8.0.md`:
+  overall mean 1.750 → 1.789 (+0.039), `ambiguity`-tagged cell 1.438 → 1.875 (+0.437, the largest
+  single-tag move on record for this project), 0 hard fails/voids, tier-1 109/109 throughout. The
+  fix also resolved a case pair `1.7.0`'s report called permanently unfixable (`am-meta-imports` vs
+  `g-a1-naming-9`, same identical input, previously-incompatible expectations) — breadth-first
+  rendering shows both readings' real answers in one response, so both cases now score well against
+  the same byte-identical answer.
 - **Track 2 — router try-every-candidate enrichment** (`src/router/*.mjs`,
   `SKILL_BENCHMARK_AGENT.md`): **landed, merged to `main`.** `resolveOne`/`guard`/`focusOf` all
   extended with `candidateResults` (each tied candidate's real dispatched output) while keeping
