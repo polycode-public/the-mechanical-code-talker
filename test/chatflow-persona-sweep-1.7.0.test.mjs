@@ -25,9 +25,13 @@
 // Priority 3 (deferred — see this file's own note below, or the fix commit if
 // it landed): "my cat whiskers is a cat" (possessive-named-instance teach).
 //
-// Priority 4 (deferred/fixed — see the fix commit): a bare known class/entity
-// name with no verb ("task", "usercontroller") getting no describe/focus
-// treatment.
+// Priority 4: a bare known class/entity name with no verb ("task",
+// "usercontroller") got no describe/focus treatment — isConversational()'s
+// <=3-word catch-all claimed it before bareWhatisShape/isAdjectiveShape ever
+// got a chance (the same race Bug 2 already fixed for "what is john", one
+// layer short of even a bare "what is"). Fixed in runAsk by reusing
+// metaFallbackEntityAnswer's SAME "divert only on a real, unique hit"
+// discipline directly against the bare query text.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createSession } from "../src/chat.mjs";
@@ -144,4 +148,16 @@ test("persona-sweep P3 regression: a genuine 'my X is <property>' (only 2 tokens
   // is fluffy" has only two ("cat" then "is") and must not be touched by it.
   const [turn] = await driveSession(["my cat is fluffy"]);
   assert.doesNotMatch(turn.answer, GARBLED_TEACH, "must not mis-teach the possessive-owner word itself as the subject");
+});
+
+// ---- Priority 4: a bare known class/entity name with no verb at all.
+test("persona-sweep P4: a bare known class name ('task', 'usercontroller') gets a real describe-style answer, not the generic blurb", async () => {
+  const turns = await driveSession(["task", "usercontroller"]);
+  assert.match(turns[0].answer, /Task is a class in this codebase/i, `bare "task" -> ${turns[0].answer}`);
+  assert.match(turns[1].answer, /UserController is a class in this codebase/i, `bare "usercontroller" -> ${turns[1].answer}`);
+});
+
+test("persona-sweep P4 regression: an ordinary greeting that doesn't collide with any real entity name is unaffected", async () => {
+  const [turn] = await driveSession(["hello there"]);
+  assert.doesNotMatch(turn.answer, /is a class in this codebase/i, "a non-entity greeting must never be diverted to describe");
 });

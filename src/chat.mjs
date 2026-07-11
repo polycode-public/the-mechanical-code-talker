@@ -7038,6 +7038,24 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       }
     }
   }
+  // (2c) BARE ENTITY NAME, NO VERB AT ALL (persona-sweep 2026-07-11, Priority
+  // 4): "task" / "usercontroller" — a bare, unadorned word naming a REAL
+  // class/function/method/global/attribute, with no "what is"/"describe"
+  // wrapper for bareWhatisShape/isAdjectiveShape (just above) to catch —
+  // isConversational()'s <=3-word catch-all claims it first, same race BUG 2
+  // fixed for "what is john" above, just one layer short of even a bare
+  // "what is". Reuses the SAME metaFallbackEntityAnswer lookup and the SAME
+  // "divert only on a REAL, UNIQUE hit" discipline: it only ever returns
+  // non-null for an EXACT case-insensitive Class/Function/Method/
+  // GlobalVariable/Attribute label match, so an ordinary greeting/small-talk
+  // word that doesn't happen to collide with a real graph entity name is
+  // completely unaffected — this can only ever ADD a real describe-style
+  // answer, never take one away or guess.
+  if (!bareMetaHit && isConversationalCandidate && graph) {
+    const { metaFallbackEntityAnswer } = await import("./ask.mjs");
+    const fallback = metaFallbackEntityAnswer(graph, String(query).trim());
+    if (fallback) bareMetaHit = { text: fallback.text, replace: true };
+  }
   if (bareMetaHit) {
     answer = bareMetaHit.replace ? bareMetaHit.text : `${answer}\n${bareMetaHit.text}`;
     via = "fact"; recordMiss = false; handled = true;
