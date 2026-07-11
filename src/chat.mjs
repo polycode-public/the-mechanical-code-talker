@@ -1042,6 +1042,25 @@ function foldedBye(clause) {
   const folded = clause.match(REPEATED_WORD_RE);
   return !!(folded && closedOrCollapsed(folded[1], BYE, BYE_COLLAPSED));
 }
+/** Closing-filler clauses — the CONTENT half of a farewell/thanks sentence
+ *  ("thanks, that's everything for now") that isn't itself gratitude or bye
+ *  wording, but is unambiguous session-closing small talk, not a real
+ *  question. farewellOrThanksSignal's ≤3-word gate below exists to keep a
+ *  genuine question ("cheers, what does X do") out of this lane; these
+ *  clauses need their own exemption because they naturally run 4-5 words and
+ *  the gate would otherwise reject them. Found live (2026-07-11 playtest
+ *  sprint round 1): "thanks, that's everything for now" hit the raw grammar
+ *  wall as a session's LAST turn, even though a frozen single-turn regression
+ *  test for the same phrase already existed — that test only pinned "doesn't
+ *  match the wall text", which the isolated-turn fallthrough miss happened
+ *  not to, while the SAME routing gap produced the literal wall once real
+ *  session history was involved. The gap was the ≤3-word gate, not the
+ *  closed set — this clause list is the fix, not a new one-off phrase pin. */
+const CLOSING_FILLER_CLAUSES = new Set([
+  "that's everything for now", "that's all for now",
+  "that's everything i needed", "that's all i needed",
+  "that's everything for today", "that's all for today",
+]);
 function farewellOrThanksSignal(raw, q) {
   const words = q.split(/\s+/).filter(Boolean);
   if (words.length < 2 || words.length > 8 || looksCodeish(raw, q)) return null;
@@ -1056,7 +1075,8 @@ function farewellOrThanksSignal(raw, q) {
   // specific (genuine gratitude words rarely lead into an unrelated question),
   // but still gated below: a THANKS-hit only counts when every OTHER clause is
   // itself small-talk-shaped (≤3 words, non-codeish) — the SAME bound
-  // isConversational's own catch-all uses — so "cheers, what does X do" is left
+  // isConversational's own catch-all uses — OR a curated closing-filler clause
+  // (CLOSING_FILLER_CLAUSES, above) — so "cheers, what does X do" is still left
   // to the existing THANKS_PREAMBLE_RE lane, never grabbed here.
   let thanksClauseIdx = -1;
   let byeHit = false;
@@ -1070,6 +1090,7 @@ function farewellOrThanksSignal(raw, q) {
   }
   if (byeHit) return "bye";
   const thanksHit = thanksClauseIdx >= 0 && clauses.every((c, i) => i === thanksClauseIdx
+    || CLOSING_FILLER_CLAUSES.has(c)
     || (c.split(/\s+/).filter(Boolean).length <= 3 && !looksCodeish(c, c.toLowerCase())));
   return thanksHit ? "thanks" : null;
 }
@@ -5623,6 +5644,29 @@ function superlativeRepeatRewrite(query, last) {
   return prevQ;
 }
 
+/** EXISTENTIAL "is there anything/something/anyone/anybody that/which/who
+ *  <verb-phrase>" -> "what <verb-phrase>". Round 2 playtest (2026-07-11):
+ *  parseExistence (ask.mjs) correctly DECLINES this shape — "anything" is a
+ *  placeholder, not a real entity-kind noun, so it rightly leaves a relative-
+ *  clause verb-phrase for the relation parsers below. But those parsers then
+ *  treat the ELIDED subject as an ANAPHORA continuation (reusing the standing
+ *  focus) instead of recognizing "anything that <verb> X" as the SAME open
+ *  reverse-lookup "is anything <verb-ing> X" already answers correctly
+ *  ("test/tasks.test.mjs."). Live finding: "is there anything that tests
+ *  Task", asked right after focus had landed on UserController, answered "No
+ *  — no tests edge found from UserController to Task" — a confidently WRONG
+ *  answer (worse than a miss), not the real answer. A closed textual rewrite
+ *  onto the ALREADY-CORRECT "what <verb> X" shape sidesteps the AST-shape
+ *  work entirely: no new capability, just aiming an existing one (the
+ *  reverse-relation lookup "what tests X"/"who calls X") at input that means
+ *  the same thing. Applied UNCONDITIONALLY (no `last` dependency, unlike
+ *  discourseRewrite) — this shape carries its own complete meaning. */
+const EXISTENTIAL_ANYTHING_RE = /^is\s+there\s+(?:anything|something|anyone|anybody)\s+(?:that|which|who)\s+(.+?)\s*\??$/i;
+function existentialAnythingRewrite(query) {
+  const m = EXISTENTIAL_ANYTHING_RE.exec(String(query || "").trim());
+  return m ? `what ${m[1].trim()}` : null;
+}
+
 // ---- curated SEON definitions (corpus/seon/definitions.jsonl) ----
 // A "what is a <term>" for a LEXICON term prefers the curated one-sentence
 // definition — the richer surface form of the same curated SEON knowledge that the
@@ -6041,6 +6085,14 @@ async function describeWrapperAnswer(query, { config, source, focus, graph, tel 
   // branches never leave this residue, so this can only ever help the doubled-
   // verb case, never change a correctly-captured term.
   term = term.replace(/^about\s+/i, "");
+  // Round 1 playtest fix (2026-07-11): a trailing bare discourse tag ("describe
+  // Record then", "tell me about Record then") glued onto the captured term,
+  // same class of bug HANDOVER.md 2026-07-10 item 8 already fixed for the
+  // meta-whatis vocab lane (stripTrailingDiscourseTag, ask-vocab.mjs) — this
+  // lane never got the same treatment, so "Record then" failed to resolve as
+  // any real symbol even though "Record" alone (a real entity just discussed)
+  // resolves cleanly.
+  term = stripTrailingDiscourseTag(term);
   if (DESCRIBE_PRONOUN_RE.test(term)) {
     if (!focus?.label) return null; // no standing focus to resolve against — honest decline
     term = focus.label;
@@ -6062,7 +6114,18 @@ async function describeWrapperAnswer(query, { config, source, focus, graph, tel 
   }
   try {
     const text = await dispatchTool("tmct_describe", { symbol: term }, { config, source, tel });
-    return text ? { text } : null;
+    if (!text) return null;
+    // Playtest sprint round 1 (2026-07-11): this rescue resolves and confidently
+    // describes a real entity ("tell me more about Task"), but until now returned
+    // only `text` — the resolved entity never reached the caller, so the session's
+    // focus was never updated. The VERY NEXT natural follow-up ("what calls it",
+    // "where's that defined") then dead-ended on "'it' needs a selected node to
+    // refer to" right after the engine had just named one — the exact anaphora
+    // this project's own playtest discipline requires to carry (SKILL_BENCHMARK_
+    // CONVERSATION.md §1b). Mirrors the object-resolution/superlative-winner focus
+    // updates already done for the ordinary ask() path just above this function.
+    const ent = await resolveEntity(graph, term);
+    return { text, ent };
   } catch {
     return null; // unresolvable term — decline, the ordinary wall stands unchanged
   }
@@ -6278,7 +6341,8 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // The query the ENGINE parses: a "what about X" continuation is rewritten to the
   // prior shape with X swapped in; everything else parses verbatim. The record and
   // transcript keep the user's ACTUAL words (`query`), only the parse target changes.
-  let askQuery = superlativeRepeatRewrite(query, last) ?? discourseRewrite(query, last) ?? query;
+  let askQuery = superlativeRepeatRewrite(query, last) ?? discourseRewrite(query, last)
+    ?? existentialAnythingRewrite(query) ?? query;
   // IMPLICIT ANAPHORIC COUNT (Tier-2 playtest, 5th pass): "how many are tested" /
   // "and how many are tested" drops the "of those/them" a fuller phrasing carries
   // — ask()'s own anaphora node (parseAnaphora) already understands "how many of
@@ -6924,6 +6988,15 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       answer = described.text; via = "describe"; recordMiss = false;
       note(trace, "lane: (4d) DESCRIBE-WRAPPER RESCUE — a polite wrapper around \"describe/tell me about <symbol>\" resolved via /describe, tried last after every other lane declined");
       note(trace, "goal: get a symbol's definition/kind/relations (phrased conversationally)");
+      // Round 1 playtest fix: carry the resolved entity forward as the new focus,
+      // same class-gated nextFocus() every other resolution path here already uses
+      // — otherwise "what calls it" right after this answer dead-ends on "'it'
+      // needs a selected node to refer to" despite one having just been named.
+      if (described.ent) {
+        resolvedIds = [described.ent.id];
+        newFocus = nextFocus(graph, newFocus, described.ent);
+        note(trace, `result: describe-wrapper resolved "${query}" -> ${described.ent.label} (${described.ent.id}) — becomes the new focus`);
+      }
     }
   }
   // (4e) COMPLETIONS RESCUE (HANDOVER.md 2026-07-10 item 7) — wires src/completions/'s
