@@ -3577,7 +3577,7 @@ function renderCore(parsed, result) {
         .map((b, i) => `${i + 1}) as ${describeParse(b.parsed)}: ${b.rendered.content}`)
         .join("\n");
       return {
-        content: `this could mean more than one thing:\n${options}\n(ask one of these directly to get just that reading)`,
+        content: `this could mean more than one thing:\n${options}\n(ask one of these directly, or rephrase more specifically, to get just that reading)`,
         miss: false, ambiguous: true, candidates: parsed.candidates.map(describeParse),
       };
     }
