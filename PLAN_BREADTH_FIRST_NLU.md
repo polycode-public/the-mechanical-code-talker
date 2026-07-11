@@ -269,6 +269,59 @@ from the embedded JSON, not placeholder content. New test file `test/viz.test.mj
 `computeVizGraph`'s empty-graph case, `--focus` override, and edge inclusion; `renderVizHtml`'s output
 is valid self-contained HTML (parseable, no external refs) with the graph JSON embedded verbatim.
 
+### §5b. Embedded "Ask the graph" chat panel (operator directive, added mid-session, landed)
+
+A real, live NL chat running tmct's own `ask.mjs` client-side inside `graph.html`, not a stub.
+Precedent found and reused: seonix's own `site/viz.mjs` + `scripts/build-ask-bundle.mjs`
+(`PLAN_CHAT_EXTRACTION.md` Stage 5) already proved this exact approach in production — esbuild + a
+Node-builtin-stub plugin bundles the real `ask()` into one browser IIFE. tmct's own GitLab Pages
+homepage (`public/`) independently proved a second, native-ESM approach (no bundler, real wink-nlp
+loaded from esm.sh) for the same underlying idea — checked too, but not reused here: `tmct viz`'s
+own "one self-contained file" requirement (an earlier operator decision, §5 above) rules out
+`public/`'s many-separate-files convention, so the single-artifact esbuild approach fits the actual
+constraint. Investigating `public/`'s implementation also surfaced a real, separate live bug (the
+homepage's own "wink-nlp: loading…" status could hang forever on a CDN import that neither resolves
+nor rejects) — fixed in the same session, `public/tmct-browser.mjs`, unrelated to this plan's own
+scope but reported and fixed since it was found along the way.
+
+**Landed**: `src/ask-browser-entry.mjs` (bundle entry, exposes `ask`/`parseQuery`/`parseEntities`/
+`spiralExpand`/`mostRecentIndividual`/`derivedUpdatedAt`/`MEMORY_SPIRAL_EXPAND_KINDS`/
+`buildVizNodesAndEdges` on `globalThis.tmctViz`), `scripts/build-ask-bundle.mjs` (esbuild, stubs
+`node:*` builtins plus the three optional-adapter imports the source already documents as
+strip-compatible — `ask-nlp.mjs`/wink, `strategies/ace.mjs`, `strategies/constructions.mjs`, each
+already guarded by a real `typeof X !== "undefined"` check), checked-in output
+`src/ask-browser.bundle.js` (~220KB, no wink model). `src/codegraph.mjs` gained
+`buildVizNodesAndEdges(graph, walked)` — the walk-to-`{nodes,edges}` logic extracted out of
+`computeVizGraph` into one pure, shared function, so the CLI and the browser bundle render
+byte-identically, never two hand-maintained copies. `computeVizGraph` now also returns the full raw
+graph `payload` (not just the walked subgraph) so the chat panel can query and re-walk from the whole
+graph. `renderVizHtml` gained a depth stepper + per-class visibility filter row and the chat panel
+itself: real `ask()` queries, focus-follows-answer via a real client-side `spiralExpand` re-walk (not
+a hand-rolled BFS), and a node-detail panel whose class badge isolates that class in the filters
+and fires a real `where is X mentioned` query, whose label fires the same query for that specific
+entity. New npm script `build:ask-bundle`.
+
+**A genuine, documented gap, not a silently-faked feature**: live-testing during this build confirmed
+there is no working `ask.mjs`-only query shape for "list/count all individuals of memory-graph class
+Y" (`"how many facts are there"`, `"list facts"`, `"what is a Fact"` all miss against a real memory
+graph) — that richer machinery (`CAN_ASK_RE`/`WHAT_CAN_DO_RE`/`WHAT_HAS_RE`/`WHAT_INHERITS_RE`) lives
+in `chat.mjs`'s `factAnswer` cascade, deliberately out of this bundle's `ask.mjs`-only scope (bundling
+`chat.mjs` would pull in the full turn-taking/persistence/teach machinery, not a small addition). The
+class-badge click was designed around what's ACTUALLY confirmed working (`where is X mentioned`, a
+real prose-index search) rather than a query shape that would silently miss — see `ROADMAP.md`'s
+"What's next" for this as an explicit, tracked gap.
+
+**Verification**: new `test/ask-browser-bundle.test.mjs` (mirroring seonix's own test) proves the
+checked-in bundle evaluates as a classic script (no live `import`/`require`/`import.meta`), exposes
+every `tmctViz` export, and answers a real query end-to-end against the real fixture graph — adapter-
+less, exactly the boundary `test/ask-nlp.test.mjs`'s own "viewer bundle without wink" test already
+proves for the underlying strip approach. `test/viz.test.mjs` extended for the new `renderVizHtml`
+signature (`payload`/`askBundle`) and the new controls. `npm test`: 1932/1932. Live-verified manually:
+a real ~1MB self-contained `graph.html` generated against a real seeded memory graph, with working
+chat, focus-follow, and click-to-query, confirmed via a `node:vm`-driven functional check of the
+bundle's core functions (`ask`, `spiralExpand`, `buildVizNodesAndEdges`) since no headless-browser
+tool was available in this session to drive the canvas/DOM interactions directly.
+
 ## §6. NL-fluency, made concrete — a real generation + coverage-testing phase, folded into this plan
 
 **Operator decision: in scope for this execution pass, not deferred.** The entity-tie fix (§1) and
