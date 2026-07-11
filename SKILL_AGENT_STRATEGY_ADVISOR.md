@@ -68,7 +68,7 @@ tail, the repo, and the brief.
   tail (`tail -c 120000 <transcript>`): the operator's recent messages plus the main agent's
   recent actions, not the whole file (it can be MBs).
 - **Other agents' outputs** live under the session's `tasks/<agentId>.output`.
-- **A distilled state file** the main agent keeps current (e.g. the latest `CEFR_ENGLISH_0NN.md`
+- **A distilled state file** the main agent keeps current (e.g. the latest `BENCHMARK_CEFR_ENGLISH_<version>.md`
   with its decision log, or `ROADMAP.md` phase status). Cheapest and most reliable signal; point
   the advisor here first.
 - **The repo itself**: worktree, git history, chatbench telemetry, raw judge outputs
@@ -247,7 +247,7 @@ watch-list is the drift alarm between operator check-ins. Priority order:
   recommend re-pinning the judge model + prompt version.
 - **Overfit-to-judge.** The mean going up while the transcripts read *worse* is the loop gaming
   its own grader. Spot-read the discriminating transcripts
-  (`CEFR_ENGLISH_0NN_TRANSCRIPTS.md`, top of file) each cycle and say whether the improvement is
+  (`BENCHMARK_CEFR_ENGLISH_<version>.md`'s "Evidence / transcripts" section, discriminating transcripts first) each cycle and say whether the improvement is
   real conversation quality or rubric-shaped noise.
 - **Regression watch.** Any previously-passing case failing is FAIL outright regardless of the
   mean (the hard decision rule) — flag it the moment per-case results show it, don't wait for

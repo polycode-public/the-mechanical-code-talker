@@ -25,9 +25,9 @@ this is a documentation-only disambiguation; nothing in `agentbench/` is renamed
 Every cycle MUST satisfy:
 
 - **Artifact naming — match the `package.json` version.** A cycle's write-up is named after the
-  tmct version it measures: `AGENTBENCH_<version>.md`, raw under
+  tmct version it measures: `BENCHMARK_AGENT_<version>.md`, raw under
   `agentbench/results/raw/run-<version>/`. A RE-RUN of the same version (a harness fix, a second
-  driver, a re-verify) appends `_00N`: `AGENTBENCH_0.8.2_001.md`, `_002`, … — the same convention
+  driver, a re-verify) appends `_00N`: `BENCHMARK_AGENT_0.8.2_001.md`, `_002`, … — the same convention
   `SKILL_BENCHMARK_CEFR_ENGLISH.md` §1 and `SKILL_BENCHMARK_INFERENCE.md` §1 already use.
 - **Fixed, versioned case set:** `agentbench/cases.jsonl` — one JSON object per line
   (`id`, `rung`, `request`, `tools`, `expect`). Append-only once the AGENTBENCH arc starts: new
@@ -72,7 +72,7 @@ Every cycle MUST satisfy:
 
 ## 2. The loop (one cycle; repeats until the ladder tops out or the operator stops)
 
-**Step 1 — READ.** Read the latest `AGENTBENCH_<version>.md` (its "one honest red kept" section, if
+**Step 1 — READ.** Read the latest `BENCHMARK_AGENT_<version>.md` (its "one honest red kept" section, if
 any, and its decision on frontiers), `ROADMAP.md`'s agent-axis items, and the current
 `agentbench/cases.jsonl` rung counts. Decide which driver to measure (`--driver stub|resolver|goal`,
 per `agentbench/README.md`'s pluggable-driver seam) and whether this cycle is a pure measurement or
@@ -97,7 +97,7 @@ coordinator model described below when it's one of several concurrent workstream
 > conversation on it.
 
 **Step 3 — READ the rung table.** For each rung, read plan-completion / result-completion /
-hallucination against the contract's gate (§1). Compare against the previous `AGENTBENCH_<version>.md`
+hallucination against the contract's gate (§1). Compare against the previous `BENCHMARK_AGENT_<version>.md`
 if this cycle re-measures a driver already on record — did any previously-clean rung's numbers move,
 and if so, is that move explained (a real behavior change, spot-verified) or unexplained (a
 regression to chase down before writing anything up)?
@@ -115,7 +115,7 @@ receipt for everything above it.
   and re-run this cycle from Step 2 to confirm the target rung's gate now passes before moving
   further up the ladder.
 
-**Step 6 — WRITE the cycle up.** `AGENTBENCH_<version>.md` (§1's naming convention), modeled on the
+**Step 6 — WRITE the cycle up.** `BENCHMARK_AGENT_<version>.md` (§1's naming convention), modeled on the
 shape prior cycles already use (see `AGENTBENCH_0.8.2.md` for the pattern): a headline naming the
 honest delta versus the last cycle; the metric-pair table per rung; a per-driver comparison when more
 than one driver is measured (e.g. the resolver floor vs. the goal-reasoner ceiling); what's new this
@@ -180,5 +180,5 @@ router/planner capability that unlocks the gating rung, keep `npm test` green, a
 the gate passes before moving on. Fan cycle work that decomposes into independent workstreams (a new
 HTN method, a new goal rule, new fixture-linted cases, the write-up) out to background sub-agents
 under the coordinator model per `CLAUDE.md`, keeping the main chat free; write up the cycle as
-`AGENTBENCH_<version>.md` (headline delta, metric-pair table, per-driver comparison, what's new, any
+`BENCHMARK_AGENT_<version>.md` (headline delta, metric-pair table, per-driver comparison, what's new, any
 deliberately-kept honest red, the discipline checklist, a decision).

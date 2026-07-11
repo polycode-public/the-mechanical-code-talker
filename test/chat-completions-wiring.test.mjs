@@ -1,5 +1,5 @@
 // chat-completions-wiring.test.mjs — HANDOVER.md 2026-07-10 item 7: "wire
-// src/completions/ into live chat dispatch". CONVERSATIONBENCH_1.4.1.md round 3's own
+// src/completions/ into live chat dispatch". BENCHMARK_CONVERSATION_1.4.1.md round 3's own
 // architecturally-confirmed gap: "can you give me a detailed summary of how the task
 // system works" hit the plain grammar wall with NO inferred goal at all, even though
 // src/completions/'s extractive multi-sentence pipeline (generateCompletion(),
@@ -53,7 +53,7 @@ async function seedWidgetRepo() {
   return dir;
 }
 
-test("COMPLETIONS RESCUE: \"give me a detailed summary of how X works\" (CONVERSATIONBENCH_1.4.1.md round 3's own probe) now answers with real, grounded multi-sentence prose instead of the grammar wall", async () => {
+test("COMPLETIONS RESCUE: \"give me a detailed summary of how X works\" (BENCHMARK_CONVERSATION_1.4.1.md round 3's own probe) now answers with real, grounded multi-sentence prose instead of the grammar wall", async () => {
   const dir = await seedWidgetRepo();
   try {
     const g = await graph();

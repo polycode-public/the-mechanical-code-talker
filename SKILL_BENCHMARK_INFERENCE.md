@@ -52,9 +52,9 @@ written, so **do not assume it exists without checking** (`grep infbench package
 future session finds it missing again, that is a real regression to fix before continuing, not an
 assumption to paper over.
 
-**Step 3 — READ.** Read the console rung table (or write it up as `INFBENCH_<version>.md` if this
+**Step 3 — READ.** Read the console rung table (or write it up as `BENCHMARK_INFERENCE_<version>.md` if this
 cycle is measuring a just-shipped version — same artifact-naming convention `SKILL_BENCHMARK_CEFR_ENGLISH.md`
-§1 uses for chatbench: `INFBENCH_<version>.md`, re-runs of the same version append `_00N`). For each
+§1 uses for chatbench: `BENCHMARK_INFERENCE_<version>.md`, re-runs of the same version append `_00N`). For each
 band, compare its measured completion/fabrication against `archive/PLAN_INFERENCE_TESTING.md` §1's
 "Reachable today?" column — is each band landing where the plan predicted, or did something drift?
 
@@ -102,7 +102,7 @@ is still open; the ladder rule (§2) means a later stage's rules can't be honest
 earlier gate clears anyway. As of this doc's writing, stages 0–2 are shipped (the `infbench/`
 harness itself; `cax-sco` type propagation in `src/syllogise.mjs`; a bounded live proof-chain chase
 in `src/chat.mjs`) and the ladder gates at **INF-B1** (disjointness/`cax-dw` — stage 3) — but
-**re-verify current stage status from the latest `INFBENCH_<version>.md` and the plan's own STATUS
+**re-verify current stage status from the latest `BENCHMARK_INFERENCE_<version>.md` and the plan's own STATUS
 banner before picking a stage; don't trust this snapshot as still-current.**
 
 1. **Implement the stage's engine work by hand.** This is real Node.js rule-engine code — `cax-dw`,
@@ -157,7 +157,7 @@ Run `node infbench/generate-cases.mjs --seed <n>` (or `npm run infbench` if pres
 assumed) to deterministically regenerate `infbench/cases.jsonl`, then `node infbench/run.mjs` to
 replay it through the kernel+chat drive points and grade it deterministically — no judge, no LLM,
 anywhere in this loop. Read the printed per-band rung table (or write it up as
-`INFBENCH_<version>.md`) and apply the ladder gate strictly in order INF-A1→INF-C2: 0% fabrication
+`BENCHMARK_INFERENCE_<version>.md`) and apply the ladder gate strictly in order INF-A1→INF-C2: 0% fabrication
 at ≥50% completion passes a band, the first band that fails gates every band above it
 skipped-with-a-receipt, and a clean 0% on a not-yet-built capability is a ceiling marker, not a
 failure — never force a fake pass. If every band lands where predicted, ship as-is; if you want to

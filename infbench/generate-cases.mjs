@@ -266,7 +266,7 @@ function a2ChainLen2(rng) {
   // taught-only: "every N1 is a N2", "every N2 is a N3" -> "is a N1 a N3".
   // KERNEL PASSES (deriveSubClassClosure chains it); CHAT is the honest gap
   // (§1: "cax-sco over two TAUGHT facts is NOT implemented" — verified live,
-  // see INFBENCH_<version>.md).
+  // see BENCHMARK_INFERENCE_<version>.md).
   for (let i = 0; i < 20; i += 1) {
     const { picked, next } = pickClean(shuffled, cursor, 3);
     cursor = next;

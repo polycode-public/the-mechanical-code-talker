@@ -1,4 +1,4 @@
-# AGENTBENCH_1.4.1 — unchanged since 0.8.2; a clean re-confirmation, not a null finding
+# BENCHMARK_AGENT_1.4.1 — unchanged since 0.8.2; a clean re-confirmation, not a null finding
 
 **Headline:** first AGENTBENCH re-run since `0.8.2`, against the current **1.4.1** codebase (per
 `package.json`). This session's work touched `src/completions/`, `src/syllogise.mjs`,
