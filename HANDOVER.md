@@ -10,9 +10,9 @@ Session handle (inbox): `tmct` (this session; earlier sessions used `mechanic`).
 
 ## Version state (2026-07-11)
 
-`package.json` is `1.6.2`, held locally — `main` is 1 commit ahead of `origin/main` (the bump
-itself). What's live on npm is `1.6.1`. Push/publish is gated on the operator; don't bump the
-version again until the moment of actually pushing (see Discipline, below).
+`package.json` is `1.6.3`, held locally — `main` is several commits ahead of `origin/main` (the
+bump plus the work below). What's live on npm is `1.6.1`. Push/publish is gated on the operator;
+don't bump the version again until the moment of actually pushing (see Discipline, below).
 
 ## Open items
 
@@ -24,9 +24,28 @@ version again until the moment of actually pushing (see Discipline, below).
   an anaphoric "it uses which controller as its base" question misroutes into teach-a-fact — three
   independent sub-problems, not a small fix; (5) no query shape exists for CapableOf/reverse-HasA
   against the general-knowledge persona (`"can a dog bark"`, `"what has a tail"`) — small/additive
-  per the investigation, but real regression-scoped work, not landed yet. Read `PLAN_CONVERSATION.md`
-  before picking any of these up. The `"tail"` word-sense collision is not new work — cross-referenced
-  to `ROADMAP.md`'s existing cross-domain-ontology research gap instead.
+  per the investigation, but real regression-scoped work, not landed yet. **Live-verified this session
+  that the same gap also covers `inherits` reverse-queries**: `"what inherits from horse"` correctly
+  disambiguates but then dead-ends with a code-graph-flavored miss, since the `inherits` reverse-query
+  path only ever searches the code graph, never the memory graph where a taught `"X is a kind of
+  Y"` fact actually lives — worth folding into Finding 5 as a fresh confirmation before whoever
+  picks it up starts. Read `PLAN_CONVERSATION.md` before picking any of these up. The `"tail"`
+  word-sense collision is not new work — cross-referenced to `ROADMAP.md`'s existing
+  cross-domain-ontology research gap instead.
+
+- **Fast loop's 2-round cap is done, both rounds clean.** Round 1 (mini-webapp fixture) found 2 real
+  dead-ends, now Findings 3/4 above. Round 2 (polyglot fixture, cross-language inheritance +
+  anaphora) found zero dead-ends — every turn answered correctly; one asymmetric-but-correct reply
+  template (forward vs. reverse inheritance phrasing) was investigated and deliberately left alone
+  (shared across 5 relation kinds, already regression-pinned, cosmetic not a bug).
+
+- **`PLAN_VIZ.md`** (new this session) — recency-seeded hub-avoiding spiral-walk graph
+  visualisation, node/property `updatedAt` timestamps, situational-fact seeding. Design-only. A
+  strategy-advisor adversarial re-check (2026-07-11 tick 3) caught a real gap the doc's "3 scoped
+  changes" framing understated: `adjacencyForKinds` (`src/codegraph.mjs`) silently builds an EMPTY
+  adjacency map over the memory graph today (routes every edge endpoint through a code-graph-only
+  `moduleIdOf`) — fixed in the doc as a 4th required change, with a fix sketch. Read the doc's
+  "What already exists" section before starting implementation.
 
 - **`PLAN_SYLLOGIST.md`'s one genuinely open research question**: retraction-aware consistency under
   a hard budget + trust tiers (§3). Speculative sketch only, nothing implemented — next up only if
