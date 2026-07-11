@@ -19,15 +19,27 @@ release, not chase every intermediate bump — don't bump again until that push.
 
 Five tracks, live status (update this block as each lands, don't let it go stale):
 
-- **Track 1 — entity-tie ambiguity fix** (`src/ask.mjs`): not started.
+- **Track 1 — entity-tie ambiguity fix** (`src/ask.mjs`): **landed, commit `d2c28f5`.**
+  `npm test` 1919/1919 green, no pins touched (design was additive by construction). CEFR
+  re-measurement in progress to confirm the `ambiguity`-tagged cell moves for real — update this line
+  with the real numbers once `chatbench/results/raw/run-1.7.3/` finishes judging.
 - **Track 2 — router try-every-candidate enrichment** (`src/router/*.mjs`,
-  `SKILL_BENCHMARK_AGENT.md`): not started.
-- **Track 3 — `tmct viz` CLI** (`src/viz.mjs`, `bin/tmct.mjs`, `README.md`, `package.json`): not
-  started.
+  `SKILL_BENCHMARK_AGENT.md`): dispatched as a background worktree agent, real diff present
+  (`resolveOne`/`guard`/`focusOf` all extended, `guard`/`admits` now async), sitting uncommitted in
+  its worktree — coordinator verifying before merge (see lesson #2, a stalled "waiting on the
+  monitor" report is not proof of completion).
+- **Track 3 — `tmct viz` CLI** (`src/viz.mjs`, `bin/tmct.mjs`, `README.md`, `package.json`):
+  dispatched as a background worktree agent, in progress.
 - **Track 4 — template generation + coverage harness** (new `corpus/`/harness files,
-  `PLAN_TEMPLATE_COVERAGE.md`): not started.
-- **Track 5 — surface alternates on hits** (`src/ask.mjs`, depends on Track 1 landing first): not
-  started.
+  `PLAN_TEMPLATE_COVERAGE.md`): dispatched as a background worktree agent, in progress.
+- **Track 5 — surface alternates on hits** (`src/ask.mjs`, depends on Track 1): **landed.** New
+  `parseQueryFull` sibling export; `ask()` surfaces a genuine cross-class alternate reading's REAL
+  answer, never `alternateLines`' bare "ask it that way" fallback (a first attempt using that fallback
+  broke `test/interpret.test.mjs`'s noise-strip parity pin — a lower-precedence strategy's "alternate"
+  is often pure misparse noise, e.g. keyword-spot reading a stripped filler phrase as the query's
+  subject; fixed by only ever appending a line for an alternate that resolves to a real, non-miss
+  answer). `npm test` 1919/1919 (one `tmct serve` timeout was a system-load flake under concurrent
+  background agents — confirmed clean, 17/17, in isolation).
 
 Full design, file targets, and verification steps in `PLAN_BREADTH_FIRST_NLU.md`.
 

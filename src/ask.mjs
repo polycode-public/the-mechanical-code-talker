@@ -56,7 +56,7 @@ import { editDistance, fuzzyBound } from "./interpret/fuzzy.mjs";
 import { parseAnchored } from "./interpret/strategies/grammar.mjs";
 import { parseKeywordSpot, findPhrase } from "./interpret/strategies/keywords.mjs";
 import { runStrategiesSync } from "./interpret/pipeline.mjs";
-import { mergeStrategyResults } from "./interpret/merge.mjs";
+import { mergeStrategyResults, alternateLines } from "./interpret/merge.mjs";
 import { lookupByProseTokens } from "./prose.mjs";
 
 // Normalization stays importable from its original site (tests + chat surface).
@@ -264,11 +264,24 @@ function pruneSpuriousMeaningAmbiguity(parsed) {
 }
 
 export function parseQuery(query, { nlp = undefined } = {}) {
+  return parseQueryFull(query, { nlp }).parsed;
+}
+
+/** Sibling of `parseQuery` that also surfaces what `parseQuery` has always
+ *  discarded: `merge.mjs`'s `class`/`alternates` (PLAN_BREADTH_FIRST_NLU.md §3)
+ *  — a genuine, distinct-class alternate reading a different strategy produced,
+ *  silently dropped on every hit until now. `parseQuery`'s own contract stays
+ *  byte-identical (it's defined in terms of this function's `.parsed` field,
+ *  above) — 142 existing call sites are untouched. Returns
+ *  `{parsed, alternates, class}`; `alternates`/`class` are `[]`/`null` on the
+ *  compositional-parse path (a structurally separate grammar layer that never
+ *  reaches `mergeStrategyResults`) or on a total miss. */
+export function parseQueryFull(query, { nlp = undefined } = {}) {
   const adapter = nlp === undefined ? defaultNlp() : nlp;
   const raw = String(query || "").trim().replace(/\s+/g, " ");
-  if (!raw) return null;
+  if (!raw) return { parsed: null, alternates: [], class: null };
   const text = applyPhrasingFrames(applyNegationFrames(normalizeQuery(raw)));
-  if (!text) return null;
+  if (!text) return { parsed: null, alternates: [], class: null };
   // COMPOSITIONAL PARSE PATH (PLAN §5.16 P3) — the new PRIMARY layer: a recursive
   // descent over CLAUSES for the compositional shapes (nested/relative, boolean,
   // qualifiers, aggregates, superlatives, anaphora). It fires ONLY when a
@@ -278,9 +291,14 @@ export function parseQuery(query, { nlp = undefined } = {}) {
   // the phrase cannot be compiled, it returns an honest {node:"miss"} rather than
   // letting keyword-spot guess at a composition it never expressed.
   const composite = parseComposite(text, adapter);
-  if (composite) return composite;
+  if (composite) return { parsed: composite, alternates: [], class: null };
   const merged = mergeStrategyResults(runStrategiesSync(text, { nlp: adapter, raw }));
-  return merged ? pruneSpuriousMeaningAmbiguity(merged.parsed) : null;
+  if (!merged) return { parsed: null, alternates: [], class: null };
+  return {
+    parsed: pruneSpuriousMeaningAmbiguity(merged.parsed),
+    alternates: merged.alternates || [],
+    class: merged.class || null,
+  };
 }
 
 // ============================================================================
@@ -4258,7 +4276,8 @@ export function ask(graph, query, { contextId = null, nlp = undefined, prev = nu
   // rest of the pipeline (direct parse, relaxation, resolveObject) never has to know
   // this phrase existed — see substituteLastCommitPhrase's own doc above.
   query = substituteLastCommitPhrase(graph, query);
-  const direct = parseQuery(query, { nlp });
+  const directFull = parseQueryFull(query, { nlp });
+  const direct = directFull.parsed;
   // The relaxation cascade fires ONLY when the DIRECT parse would miss (no parse, a
   // compositional {node:"miss"}, or an unresolved named term) — a clean hit, an
   // ambiguous parse, an unresolved-pronoun miss, and a real-but-empty answer all keep
@@ -4273,9 +4292,50 @@ export function ask(graph, query, { contextId = null, nlp = undefined, prev = nu
   const rendered = render(parsed, result);
   // If relaxation materially rewrote the query and produced a real answer, note it
   // lightly (terse, honest) so the reader knows how the question was read.
-  const content = (relaxed && !rendered.miss && relaxed.to !== relaxed.from)
+  let content = (relaxed && !rendered.miss && relaxed.to !== relaxed.from)
     ? `read as "${relaxed.to}" — ${rendered.content}`
     : rendered.content;
+  // ALTERNATES ON HITS (breadth-first, PLAN_BREADTH_FIRST_NLU.md §3): a genuine
+  // distinct-class alternate reading from a different strategy (merge.mjs's
+  // `alternates`) used to be silently discarded on every call, including a real
+  // hit — surface it now, answered for real via the same traverse()+render()
+  // idiom the ambiguousParse/entity-tie branches already use. Scoped tightly to
+  // the ONE case this is unambiguously safe: the direct parse (untouched by
+  // relaxation, itself not already an ambiguous/miss result) produced a genuine
+  // answer. Relaxation rewrote the query, so `directFull`'s alternates no
+  // longer describe the question actually answered — skipped rather than shown
+  // stale.
+  //
+  // REAL-ANSWER-ONLY, never the bare "ask it that way" pointer (live-caught,
+  // 2026-07-11): a lower-precedence strategy's "alternate" is often pure noise,
+  // not a genuine second reading — e.g. keyword-spot misreading a stripped
+  // filler phrase as the query's SUBJECT ("hey man which modules import X" ->
+  // an "ask" parse with subject:"hey man"). That never resolves to a real graph
+  // entity, so `alternateLines`'s default "if you mean X then ask it that way"
+  // fallback would surface exactly the low-value dead-end nudge this whole plan
+  // exists to eliminate — worse, it's non-deterministic across equivalent
+  // phrasings (test/interpret.test.mjs's own noise-strip parity check caught
+  // this: "hey man which modules import X" must answer byte-identically to the
+  // clean phrasing, and a garbage alternate broke that). So: compute each
+  // alternate's real answer directly (not via alternateLines' fallback-prone
+  // default) and only ever append lines for alternates that resolved to
+  // something real — an alternate that can't be answered is dropped silently,
+  // never padded with an unhelpful pointer.
+  if (!relaxed && !rendered.miss && !rendered.ambiguous && directFull.alternates.length) {
+    const answered = directFull.alternates
+      .map((a) => {
+        const altResult = traverse(graph, a.parsed, { contextId, prev });
+        const altRendered = render(a.parsed, altResult);
+        return altRendered.miss ? null : { a, text: altRendered.content };
+      })
+      .filter(Boolean);
+    if (answered.length) {
+      const lines = alternateLines(answered.map((x) => x.a), {
+        answerFor: (a) => answered.find((x) => x.a === a)?.text || null,
+      });
+      content = `${content}\n${lines.join("\n")}`;
+    }
+  }
   return {
     content,
     tmct_ask: {
