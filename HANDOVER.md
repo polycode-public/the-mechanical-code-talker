@@ -41,12 +41,6 @@ version again until the moment of actually pushing (see Discipline, below).
   mutable turn-by-turn world/player state as graph nodes, an NPC turn scheduler). Design-only,
   nothing implemented yet.
 
-- **Two stale worktree branches, still unmerged**: `worktree-agent-a162c165a7ce6bca6` (commit
-  `2b724fd`, CHATBENCH_0.8.0) and `worktree-agent-a3a54d6e7c5ef9172` (commit `3fdc983`,
-  CHATBENCH_0.8.1) — both confirmed still present in `git branch -a`, neither an ancestor of `main`.
-  Their worktree directories are gone, only the branches remain. Low urgency, but if those old
-  reports still matter, pull them from those branches before pruning.
-
 - **Standing cross-repo note, can never close from this repo**: if seonix's own chat surface goes
   through `runChat`/`createSession`, its `tmct.toml` needs to explicitly re-activate SEON/ConceptNet
   now that tmct's own default persona has flipped to opt-in for those sources. See `ROADMAP.md`
