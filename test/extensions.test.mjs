@@ -25,7 +25,7 @@ test("bare/no-toml dir: resolves to exactly today's implicit `human` default (se
     const { entries, biasByBundle } = await resolveExtensions(dir);
     assert.deepEqual(biasByBundle, {});
     // fixed order: seon, conceptnet, then the rest sorted
-    assert.deepEqual([...entries.keys()], ["seon", "conceptnet", "human", "tier2-aws", "tier2-general", "tier2-java", "tier2-python"]);
+    assert.deepEqual([...entries.keys()], ["seon", "conceptnet", "human", "human-large", "human-medium", "tier2-aws", "tier2-general", "tier2-java", "tier2-python"]);
     const seon = entries.get("seon");
     assert.equal(seon.kind, "corpus");
     assert.equal(seon.active, false, "seon ships inactive now — opt-in via --with-persona code");
@@ -47,13 +47,20 @@ test("bare/no-toml dir: resolves to exactly today's implicit `human` default (se
       assert.equal(entries.get(id).kind, "corpus");
       assert.equal(entries.get(id).active, false, `${id} ships inactive`);
     }
+    // human-medium/human-large (PLAN_SEED.md §3): SIZE tiers of the SAME
+    // `human` bundle, ship but stay inactive — Small is the default.
+    for (const id of ["human-medium", "human-large"]) {
+      assert.equal(entries.get(id).kind, "corpus");
+      assert.equal(entries.get(id).active, false, `${id} ships inactive`);
+      assert.equal(entries.get(id).corpusPath, join(TIER2_DIR, `${id === "human-medium" ? "human-medium" : "human-large"}.jsonl`));
+    }
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
 });
 
 test("BUILTIN_EXTENSIONS matches the resolved defaults' shape (kind/active for every shipped bundle)", () => {
-  assert.deepEqual(Object.keys(BUILTIN_EXTENSIONS).sort(), ["conceptnet", "human", "seon", "tier2-aws", "tier2-general", "tier2-java", "tier2-python"]);
+  assert.deepEqual(Object.keys(BUILTIN_EXTENSIONS).sort(), ["conceptnet", "human", "human-large", "human-medium", "seon", "tier2-aws", "tier2-general", "tier2-java", "tier2-python"]);
   assert.equal(BUILTIN_EXTENSIONS.seon.active, false);
   assert.equal(BUILTIN_EXTENSIONS.conceptnet.active, false);
   assert.equal(BUILTIN_EXTENSIONS.human.active, true);
@@ -87,7 +94,7 @@ test("a tmct.toml with an unrecognized-key host pack entry", async () => {
     assert.equal(e.corpusPath, join(dir, "corpus.jsonl"), "a relative path resolves against repoRoot");
     assert.equal(e.provenancePrefix, "corpus:seonix");
     // ordering: seon, conceptnet, then the rest (including the new one) sorted
-    assert.deepEqual([...entries.keys()], ["seon", "conceptnet", "human", "seonix", "tier2-aws", "tier2-general", "tier2-java", "tier2-python"]);
+    assert.deepEqual([...entries.keys()], ["seon", "conceptnet", "human", "human-large", "human-medium", "seonix", "tier2-aws", "tier2-general", "tier2-java", "tier2-python"]);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

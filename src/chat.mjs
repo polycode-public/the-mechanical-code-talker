@@ -52,7 +52,7 @@ import { uuidv7 } from "./uuid.mjs";
 import { createTelemetry } from "./telemetry.mjs";
 import * as defaultSource from "./source.mjs";
 import { loadTemplates, render as renderTemplate } from "./corpus/templates.mjs";
-import { resolveExtensions, seedActiveCorpusEntries, mergedLexiconExtra } from "./extensions.mjs";
+import { resolveExtensions, mergedLexiconExtra } from "./extensions.mjs";
 import { rankByBiasThenTrust } from "./memory/bias.mjs";
 import { finish, beginsWithVowelSound, grammarRules } from "./finish.mjs";
 import {
@@ -7427,45 +7427,44 @@ export const SEED_PREFER = ["rdfs:subClassOf", "rdf:type", "mgx:usedFor", "mgx:p
  *  corpus seed, so re-runs skip without even reading the slice. */
 export const SEED_MARKER_REL = join(".tmct", "memory", "corpus-seed.json");
 
-/** Seed the starter corpus into <repo>/.tmct/memory once — a loop over every
- *  ACTIVE `corpus`-kind extension entry (src/extensions.mjs's resolveExtensions,
- *  the SAME seam `tmct init`'s seed step and `tmct init --corpus <id>` now
- *  share), in the resolver's FIXED order: seon first, then conceptnet, then any
- *  other active bundle sorted by name. seon runs first so its curated facts win
- *  the content-hash idempotency race — a term the ConceptNet slice also carries
- *  keeps the seon provenance. Idempotent twice over (the marker short-circuits;
- *  seedMemory content-hashes fact ids) and failure-tolerated PER BUNDLE
- *  (seedActiveCorpusEntries): one bad third-party pack degrades to "not seeded"
- *  for that bundle alone (its error is recorded, not silently swallowed) while
- *  every other bundle still lands — never an error before the prompt. Returns
- *  { appended, skipped, total, seon, conceptnet, perBundle } on a fresh seed
- *  (the banner counts stay honest), null when skipped/failed outright. */
-async function seedBootstrapMemory(repo) {
-  const marker = join(repo, SEED_MARKER_REL);
+/** Bootstrap <repo> for tmct on a graph-less first run — PLAN_SEED.md §2's
+ *  `createSession`→`initRepo` auto-init CONVERGENCE: this used to run its own
+ *  bespoke seed-only pair (resolveExtensions + seedActiveCorpusEntries)
+ *  directly, writing ONLY the in-memory seed marker — a fresh `import {
+ *  runChat } from '...'; await runChat({repoPath})` on a bare directory got
+ *  seeded facts but no persisted, inspectable `tmct.toml`/`.tmct/init.json`,
+ *  unlike CLI `tmct init`. Now delegates to the FULL `initRepo(repo, {persona:
+ *  PERSONA_PRESETS.human, env})` — the exact same function `tmct init` calls
+ *  — so a library consumer gets the SAME "docker pull" first-run experience:
+ *  real `.tmct/` scaffold, a written `tmct.toml`, `.tmct/init.json`
+ *  provenance, not just a seed marker.
+ *
+ *  Verified NOT to double-scaffold or double-seed: `initRepo` only writes
+ *  `tmct.toml` when absent (or `force`), only writes the seed marker/reseeds
+ *  when the marker is absent, and its own provenance write is a plain
+ *  idempotent overwrite (never destructive) — every one of its own guards
+ *  fires correctly whether IT was the first call ever, or a repeat call after
+ *  a prior CLI `tmct init` (or a prior `createSession` bootstrap) already ran.
+ *  `persona: PERSONA_PRESETS.human` only has any effect on a genuinely FRESH
+ *  write (no existing tmct.toml) — on an already-initialized repo `initRepo`
+ *  reads the EXISTING file back untouched, so this can never override an
+ *  operator's own `--with-persona code`/custom `[extensions]` choice.
+ *
+ *  `entries`/`seedActiveCorpusEntries` are no longer called directly here —
+ *  `initRepo` calls them internally, in the SAME resolver's fixed order
+ *  (seon, conceptnet, then every other active bundle sorted by name).
+ *  Returns `initRepo`'s own `seedResult` ({ appended, skipped, total, seon,
+ *  conceptnet, perBundle }) on a fresh seed (the banner counts stay honest,
+ *  byte-identical shape to before), null when skipped/failed outright — the
+ *  CALLER's contract is unchanged even though the implementation now goes
+ *  through one shared code path instead of two. */
+async function seedBootstrapMemory(repo, env = process.env) {
   try {
-    await readFile(marker, "utf8");
-    return null; // already seeded — the marker is authoritative
-  } catch { /* no marker → first run */ }
-  try {
-    const { entries } = await resolveExtensions(repo);
-    const { appended, skipped, total, perBundle } = await seedActiveCorpusEntries(repo, entries);
-    const res = {
-      appended, skipped, total, perBundle,
-      // seon/conceptnet stay named fields (not just perBundle lookups) so the
-      // banner's default two-bundle rendering (below) — and any external
-      // reader keyed on `.seon`/`.conceptnet` — stays byte-identical.
-      seon: perBundle.seon?.appended || 0,
-      conceptnet: perBundle.conceptnet?.appended || 0,
-    };
-    await mkdir(dirname(marker), { recursive: true });
-    await writeFile(marker, JSON.stringify({
-      seededAt: new Date().toISOString(),
-      appended: res.appended, skipped: res.skipped, seon: res.seon, conceptnet: res.conceptnet,
-      perBundle,
-    }) + "\n");
-    return res;
+    const { initRepo, PERSONA_PRESETS } = await import("./init.mjs");
+    const result = await initRepo(repo, { persona: PERSONA_PRESETS.human, env });
+    return result.seeded ? result.seedResult : null;
   } catch {
-    return null; // corpus unavailable — bootstrap proceeds unseeded
+    return null; // repo/corpus unavailable — bootstrap proceeds unseeded
   }
 }
 
@@ -7787,7 +7786,7 @@ export async function createSession({
   //     conversational transcript mirror leaks onto disk, never the facts.
   let seeded = null;
   if (empty && backendChoice === "" && String(env.TMCT_NO_SEED || "") !== "1") {
-    seeded = await seedBootstrapMemory(repo);
+    seeded = await seedBootstrapMemory(repo, env);
   }
   // vocabHint: computed ONCE per session (not per-turn — see runTurn's own
   // per-call fallback for direct/library callers). `seeded` is only truthy when
