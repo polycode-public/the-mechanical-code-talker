@@ -17,21 +17,40 @@ release, not chase every intermediate bump — don't bump again until that push.
 
 ## In progress — `PLAN_BREADTH_FIRST_NLU.md` (started 2026-07-11)
 
-Five tracks, live status (update this block as each lands, don't let it go stale):
+Six tracks (6th added mid-session, 2026-07-11), live status (update this block as each lands, don't
+let it go stale):
 
 - **Track 1 — entity-tie ambiguity fix** (`src/ask.mjs`): **landed, commit `d2c28f5`.**
   `npm test` 1919/1919 green, no pins touched (design was additive by construction). CEFR
   re-measurement in progress to confirm the `ambiguity`-tagged cell moves for real — update this line
   with the real numbers once `chatbench/results/raw/run-1.7.3/` finishes judging.
 - **Track 2 — router try-every-candidate enrichment** (`src/router/*.mjs`,
-  `SKILL_BENCHMARK_AGENT.md`): dispatched as a background worktree agent, real diff present
-  (`resolveOne`/`guard`/`focusOf` all extended, `guard`/`admits` now async), sitting uncommitted in
-  its worktree — coordinator verifying before merge (see lesson #2, a stalled "waiting on the
-  monitor" report is not proof of completion).
+  `SKILL_BENCHMARK_AGENT.md`): **landed, merged to `main`.** `resolveOne`/`guard`/`focusOf` all
+  extended with `candidateResults` (each tied candidate's real dispatched output) while keeping
+  `refused: true`/`ok: false` unchanged — `guard`/`admits` are now `async` (their one other caller
+  updated). `goal-reasoner.mjs`'s `focusOf` had a real, previously-undocumented gap fixed as part of
+  this: an ambiguous focus term used to silently collapse to `null` and fall through to whole-graph
+  "global" mode, answering a different goal than the one named — now refuses honestly, with
+  candidate results when scopable. `npm test` 1922/1922 green in the worktree; AGENTBENCH ladder
+  byte-identical to `BENCHMARK_AGENT_1.7.0.md`'s recorded numbers (`refused: true` preserved on every
+  case). The agent's first "done" report was a stalled "waiting on the monitor" message with real
+  uncommitted work sitting in its worktree — verified and merged per lesson #2, not taken at face
+  value.
 - **Track 3 — `tmct viz` CLI** (`src/viz.mjs`, `bin/tmct.mjs`, `README.md`, `package.json`):
-  dispatched as a background worktree agent, in progress.
+  **landed, merged to `main`.** Self-contained HTML (graph JSON embedded inline, hand-rolled canvas
+  renderer, no new npm dependency) with concentric ring-by-hop layout, depth/age falloff, pan/zoom,
+  click-to-inspect. `npm test` 1923/1923 in the worktree; manual end-to-end run against a real seeded
+  `.tmct/memory/graph.json` produced valid non-trivial output, `--focus` override confirmed working.
 - **Track 4 — template generation + coverage harness** (new `corpus/`/harness files,
-  `PLAN_TEMPLATE_COVERAGE.md`): dispatched as a background worktree agent, in progress.
+  `PLAN_TEMPLATE_COVERAGE.md`): **landed, merged to `main`.** Real, disclosed numbers, no padding:
+  this repo's own docs corpus (41 files, 2,949 sentences) hits the ACE grammar 0/2,949 (60.4%
+  shape-only residue) — the honest ceiling of an 8-pattern controlled grammar against free-form
+  prose, named plainly as a real limit, not fixed here. 17 self-verified surface-variant rows
+  generated from real WordNet synonym data and the grammar's own possessive dual-form, committed to
+  `corpus/generated/`. Zero rescues of docs-corpus residue this run (a real zero-yield result, kept
+  separate from the generated-corpus count so neither number misrepresents the other). Maintainer-only
+  tooling, `npm test` unaffected. Same stalled-agent pattern as Track 2 — verified via the worktree's
+  real commit before merging, not the "waiting on the monitor" report alone.
 - **Track 5 — surface alternates on hits** (`src/ask.mjs`, depends on Track 1): **landed.** New
   `parseQueryFull` sibling export; `ask()` surfaces a genuine cross-class alternate reading's REAL
   answer, never `alternateLines`' bare "ask it that way" fallback (a first attempt using that fallback
@@ -40,6 +59,16 @@ Five tracks, live status (update this block as each lands, don't let it go stale
   subject; fixed by only ever appending a line for an alternate that resolves to a real, non-miss
   answer). `npm test` 1919/1919 (one `tmct serve` timeout was a system-load flake under concurrent
   background agents — confirmed clean, 17/17, in isolation).
+- **Track 6 — canonical query representation, every response** (operator directive, added
+  mid-session): every answer — not just an ambiguous one — should carry (a) the canonical English
+  restatement of what tmct understood the request to mean, in tmct's own preferred phrasing/lexicon,
+  and (b) the same thing in a machine-parsable, human-readable syntax. `describeParse`/`parsed`
+  already exist for the `ask()`/graph-query path (built for the ambiguity branches, generalizing
+  now); other `chat.mjs` lanes (teach/assert, fact-answer, conversational — ~78 distinct return
+  sites) need their own canonical-form logic, a materially bigger surface. In progress: `ask.mjs`'s
+  path first (self-contained, testable, highest-value, directly continues this session's own
+  ambiguity work); chat.mjs-wide coverage scoped honestly as a larger follow-on, not silently
+  half-done.
 
 Full design, file targets, and verification steps in `PLAN_BREADTH_FIRST_NLU.md`.
 

@@ -7429,6 +7429,12 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   const finalAnsweredIds = conceptInstances ? conceptInstances.map((i) => i.id) : answeredIds;
   const record = {
     type: "turn", ts, query, via, resolvedIds, answeredIds: finalAnsweredIds, miss: recordMiss,
+    // PLAN_BREADTH_FIRST_NLU.md §Track 6 (operator directive): the canonical
+    // restatement of what the request was understood to mean — English gloss +
+    // machine-parsable notation — straight off ask.mjs's own `tmct_ask.canonical`
+    // (canonicalOf(parsed), §1's same `parsed` this whole ask-lane already
+    // carries). `null` only when nothing parsed at all (an honest grammar miss).
+    canonical: envelope?.canonical ?? null,
     // premise-derived trust for a LIVE-CHASE-ONLY entailment answer (scm-svf1/
     // cardinality-monotonicity/cax-maxc0 — see the `entailedTrust` declaration
     // above); omitted entirely when this turn didn't answer via one of those,
@@ -7483,12 +7489,20 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
 
 /** A non-ask, non-dispatch chat turn (count answer, /stats) — the same
  *  { answer, logLines, record, focus } shape, recorded like any other turn. */
-function plainTurn(query, answer, { command, via = "composed", miss = false, focus = null } = {}) {
+function plainTurn(query, answer, { command, via = "composed", miss = false, focus = null, canonical = null } = {}) {
   const ts = new Date().toISOString();
   return {
     answer,
     logLines: [ts, `> ${query}`, answer, ""],
-    record: { type: "turn", ts, query, ...(command ? { command } : {}), via, resolvedIds: [], answeredIds: [], miss },
+    record: {
+      type: "turn", ts, query, ...(command ? { command } : {}), via, resolvedIds: [], answeredIds: [], miss,
+      // PLAN_BREADTH_FIRST_NLU.md §Track 6 (operator directive) — see runAsk's own
+      // `record.canonical` for the full doc; `null` here is the honest default for
+      // every non-ask/non-assert lane this shared helper serves (a bare command
+      // confirmation, an orientation card, a count) that hasn't been given a real
+      // structured form to restate yet.
+      canonical,
+    },
     focus,
   };
 }
@@ -7707,7 +7721,16 @@ async function assertTurn(line, { memoryDir, sessionId, focus, lexicon = null })
     if (ambiguous) {
       const { normFactTerm } = await import("./memory/core.mjs");
       const answer = renderAmbiguousAssert(line, ambiguous, normFactTerm);
-      return plainTurn(line, answer, { command: "assert", via: "assert", focus });
+      // Genuinely ambiguous — no single triple was committed, so the canonical
+      // form is every surviving reading's own would-be triple set, same idiom
+      // as ask.mjs's canonicalOf() for a parse-level tie.
+      const canonical = {
+        english: ambiguous.readings.map((r) => `reading "${r.verbLemma}" as the verb`).join(" — or — "),
+        machine: ambiguous.readings.map((r) => r.triples
+          .map((t) => `fact(${JSON.stringify(normFactTerm(t.subject))}, ${JSON.stringify(t.predicate)}, ${JSON.stringify(normFactTerm(t.object))})`)
+          .join(", ")).join(" | "),
+      };
+      return plainTurn(line, answer, { command: "assert", via: "assert", focus, canonical });
     }
     const parse = parseAce(line, lex);
     if (!parse || !parse.triples?.length || parse.residue?.length) return null;
@@ -7747,7 +7770,19 @@ async function assertTurn(line, { memoryDir, sessionId, focus, lexicon = null })
       .join("; ");
     const n = res.ids.length;
     const answer = `noted — remembered ${n} fact${n === 1 ? "" : "s"}: ${shown}`;
-    return plainTurn(line, answer, { command: "assert", via: "assert", focus });
+    // PLAN_BREADTH_FIRST_NLU.md §Track 6 (operator directive): the canonical
+    // restatement of what was committed — `english` reuses the SAME confirmation
+    // text just shown (already tmct's own preferred subject-predicate-object
+    // phrasing, per normFactTerm), `machine` is the same fact(s) in the compact
+    // notation ask.mjs's canonicalOf() uses for query-side parses, so both lanes
+    // share one consistent syntax.
+    const canonical = {
+      english: shown,
+      machine: res.triples
+        .map((t) => `fact(${JSON.stringify(normFactTerm(t.subject))}, ${JSON.stringify(t.predicate)}, ${JSON.stringify(normFactTerm(t.object))})`)
+        .join(", "),
+    };
+    return plainTurn(line, answer, { command: "assert", via: "assert", focus, canonical });
   } catch {
     return null; // grammar unavailable / write failed — fall through to the engine
   }

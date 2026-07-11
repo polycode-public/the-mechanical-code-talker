@@ -3549,6 +3549,57 @@ function describeParse(p) {
   return `${ent}${p.kind} "${obj}"`;
 }
 
+/** PLAN_BREADTH_FIRST_NLU.md §Track 6 (operator directive) — the canonical
+ *  restatement of what a query was understood to mean, in BOTH forms the
+ *  operator asked for: an English gloss in tmct's own preferred phrasing
+ *  (`english`) and a compact, machine-parsable notation of the same
+ *  structured fact (`machine`) — a simple `shape(kind, args...)` call form,
+ *  not raw JSON, so it stays human-readable at a glance too. Every clause is
+ *  a plain template read off `parsed`'s own already-compiled fields, never
+ *  generated — the same discipline as `describeParse`/`render()`. Returns
+ *  `null` when there's nothing to canonicalize (`parsed` itself is null).
+ *  Scoped to the flat query shapes `traverse()`/`render()` operate on; a
+ *  compositional AST (`parsed.node`) gets an honest, coarser fallback —
+ *  full per-node-type canonicalization is real future work, not silently
+ *  faked here. */
+function canonicalOf(parsed) {
+  if (!parsed) return null;
+  if (parsed.ambiguousParse) {
+    return {
+      english: `ambiguous: ${parsed.candidates.map(describeParse).join(" — or — ")}`,
+      machine: `ambiguousParse(${parsed.candidates.map((c) => canonicalOf(c)?.machine).join(", ")})`,
+    };
+  }
+  if (parsed.node) {
+    // Compositional AST — coarse, honest fallback (see docblock above).
+    return { english: `a compositional query (${parsed.node})`, machine: `composite(${parsed.node})` };
+  }
+  const q = (s) => JSON.stringify(String(s ?? ""));
+  const args = [];
+  if (parsed.kind) args.push(parsed.kind);
+  if (parsed.entityType) args.push(`entityType=${parsed.entityType}`);
+  if (parsed.modifier && parsed.modifier !== "direct") args.push(`modifier=${parsed.modifier}`);
+  if (parsed.subject != null) args.push(`subject=${q(parsed.subject)}`);
+  if (parsed.object != null) args.push(q(parsed.object));
+  const machine = `${parsed.shape}(${args.join(", ")})`;
+  let english;
+  if (parsed.shape === "ask") {
+    english = `does "${parsed.subject}" ${verbFor(parsed.kind)} "${parsed.object}"?`;
+  } else if (parsed.shape === "meta") {
+    english = `what does "${parsed.object}" mean, in this graph's own vocabulary?`;
+  } else if (parsed.shape === "mentions") {
+    english = `where is "${parsed.object}" mentioned?`;
+  } else if (parsed.shape === "where") {
+    english = `where is "${parsed.object}" defined?`;
+  } else {
+    const ent = parsed.entityType ? nounFor(parsed.entityType, 2) + " that " : "";
+    english = parsed.shape === "forward"
+      ? `what "${parsed.object}" itself ${verbFor(parsed.kind)}`
+      : `${ent}${verbFor(parsed.kind)} "${parsed.object}"`;
+  }
+  return { english, machine };
+}
+
 /** Render a compiled query result into {content, miss, ambiguous, matches?, candidates?}.
  *  Every branch is a template, not generation — §5's grouping/pluralization/overflow rules.
  *  A tier-5 fuzzy object resolution is ANNOUNCED, not silent: the answer is prefixed
@@ -4266,7 +4317,7 @@ export function ask(graph, query, { contextId = null, nlp = undefined, prev = nu
     return {
       content: rephraseHint(),
       tmct_ask: {
-        mechanical: true, parsed: null, matches: [], traversal: null,
+        mechanical: true, parsed: null, canonical: null, matches: [], traversal: null,
         miss: true, ambiguous: false, matchedVia: null, help: true, relaxed: null,
       },
     };
@@ -4341,6 +4392,14 @@ export function ask(graph, query, { contextId = null, nlp = undefined, prev = nu
     tmct_ask: {
       mechanical: true,
       parsed: (parsed && !parsed.ambiguousParse) ? parsed : null,
+      // PLAN_BREADTH_FIRST_NLU.md §Track 6 (operator directive): the canonical
+      // restatement of what the request was understood to mean, ALWAYS present
+      // when anything parsed at all — not gated on ambiguity/miss the way the
+      // ambiguity-branch labels are. `english` is the human-readable gloss in
+      // tmct's own phrasing; `machine` is the same fact in a compact,
+      // machine-parsable notation (a plain `shape(kind, args...)` call form).
+      // Both are read straight off `parsed` — never generated.
+      canonical: canonicalOf(parsed),
       matches: (result.matches || []).map((m) => ({
         id: m.id, label: m.label, type: m.class, module: m.class ? moduleLabelOf(m) : undefined,
       })),
