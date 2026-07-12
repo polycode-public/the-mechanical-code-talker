@@ -135,10 +135,19 @@ audit — always check the latest-dated one, not this file, for real numbers.
   60.1% residue — a few sentences correctly reclassified residue→miss once their vocabulary gap
   closed and a separate structural gap was exposed). Confirms the ceiling is structural, not a
   vocabulary backlog — closing it further needs real grammar-pattern work (a coordination/relative-
-  clause-capable parser), not more lexicon entries. A second, separate follow-on: wiring the
-  generated corpus into `src/chat.mjs`/`src/ask.mjs`'s response templates for output variety —
-  in progress 2026-07-12 (Track G, scoped in two parts: a dead-end-example correctness sweep tied
-  to `SKILL_AGENT_FAST_LOOP.md`'s rubric, then ~50 templates × 2 WordNet-sourced variants).
+  clause-capable parser), not more lexicon entries. **Second follow-on, wiring output variety into
+  the live answer path — done 2026-07-12, scoped down honestly.** Split in two: (1) a dead-end
+  example-correctness sweep (`SKILL_AGENT_FAST_LOOP.md`'s "an offered example that itself fails"
+  rubric) found and fixed 3 genuinely broken examples across `ask.mjs`/`chat.mjs` (a `touches`-verb
+  hint that could never resolve for any input, a count hint that never parses, an unseeded-session
+  vocab-hint that lied). (2) surface-variety wiring landed 7 phrasing pools / 14 variants across 8
+  template sites (`src/answer-variants.mjs`, deterministic per-key hash selection — never random),
+  scoped down from an original ~50-template/~100-variant target after inventory showed most
+  candidate templates either name a relation verb (off-limits — never vary `imports`/`calls`/
+  `tests`/etc.) or are miss/rephrase-hint templates (handled by (1) instead, also off-limits).
+  Deliberately left `ask.mjs`'s two "X is defined in Y" `whereShape` sites unvaried:
+  `chatbench/graded-pool-max.jsonl` pins that exact substring as ground truth for 11 cases (2 in
+  the always-run promoted subset), and that pool is append-only per its own governing skill doc.
 - **A fresh `CAPABILITIES_1.8.0.md` audit** — `CAPABILITIES_1.7.3.md` is pinned at commit `981c9b2`
   and doesn't cover any of `PLAN_BREADTH_FIRST_NLU.md`'s six tracks; this doc's "Current capability
   surface" above covers them narratively, but no full overlay audit has run since. Not done this

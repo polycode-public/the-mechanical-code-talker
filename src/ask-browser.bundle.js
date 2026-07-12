@@ -844,10 +844,16 @@
     `\\s+(?:${TRAILING_DISCOURSE_TAG.join("|")})\\s*[?.!]*$`,
     "i"
   );
+  var TRAILING_DISCOURSE_CLAUSE = Object.freeze(["please explain", "explain"]);
+  var TRAILING_DISCOURSE_CLAUSE_RE = new RegExp(
+    `,\\s*(?:${TRAILING_DISCOURSE_CLAUSE.join("|")})\\s*[?.!]*$`,
+    "i"
+  );
   function stripTrailingDiscourseTag(text) {
     let out = text;
     for (let pass = 0; pass < 2; pass += 1) {
-      const next = out.replace(TRAILING_DISCOURSE_TAG_RE, "").trim();
+      let next = out.replace(TRAILING_DISCOURSE_TAG_RE, "").trim();
+      next = next.replace(TRAILING_DISCOURSE_CLAUSE_RE, "").trim();
       if (next === out) break;
       out = next;
     }
@@ -1006,6 +1012,10 @@
     "touchs": "touches",
     "tuoches": "touches",
     "touhced": "touched",
+    // "touchd" (BENCHMARK_CONVERSATION_1.7.0.md routed backlog C3): the
+    // dropped-vowel slip of "touched" — distinct from "touhced" above
+    // (transposed letters), same curated-typo discipline.
+    "touchd": "touched",
     // WHERE_MARKERS typo (0.9.13 Tier-1 playtest): "defined" itself had no typo
     // entry, so "where is it defned" fell through to the bare-object search path
     // instead of the where-shape ("no module matching 'it defned' found").
@@ -1041,6 +1051,12 @@
     // literally named "wat.mjs" untouched, same residual trade as every entry.
     "waht": "what",
     "wat": "what",
+    // "dat" (BENCHMARK_CONVERSATION_1.7.0.md routed backlog C3): the internet-
+    // casual spelling of "that" — same register as "wat"/"waht" just above,
+    // curated rather than left to the generic fuzzy tier since "that" is a
+    // load-bearing anchor word throughout this grammar (TEACH_RE's own
+    // "remember that X", relative-clause objects, etc).
+    "dat": "that",
     "dose": "does",
     "doess": "does",
     "teh": "the",
@@ -2580,8 +2596,10 @@
   }
   function parseNested(w, lc, nlp, depth) {
     for (let r = 1; r < lc.length; r += 1) {
-      if (!RELATIVE_PRONOUNS.includes(lc[r])) continue;
-      if (r + 1 >= lc.length) continue;
+      const isPronoun = RELATIVE_PRONOUNS.includes(lc[r]);
+      const isGerundMarker = !isPronoun && isGerundVerb(lc[r]);
+      if (!isPronoun && !isGerundMarker) continue;
+      if (isPronoun && r + 1 >= lc.length) continue;
       const noun = entityNoun(lc[r - 1]);
       if (!noun) continue;
       const head = w.slice(0, r - 1);
@@ -2589,7 +2607,7 @@
       const outer = parseSimpleClause([...head, NEST_SENTINEL].join(" "), nlp);
       if (!outer || outer.shape !== "reverse" && outer.shape !== "forward") continue;
       if (outer.modifier && outer.modifier !== "direct") continue;
-      const innerText = `which ${lc[r - 1]} ${w.slice(r + 1).join(" ")}`;
+      const innerText = `which ${lc[r - 1]} ${w.slice(isPronoun ? r + 1 : r).join(" ")}`;
       const inner = parseSetPhrase(innerText, nlp, depth + 1);
       if (!inner || inner.node === "miss") return inner ? { node: "miss", reason: inner.reason || "inner clause didn't parse" } : { node: "miss", reason: "inner clause didn't parse" };
       return { node: outer.shape === "reverse" ? "reverseSet" : "forwardSet", kind: outer.kind, entityType: outer.entityType, inner };
@@ -3753,7 +3771,7 @@
     }
     if (result.compositeKind === "membership") {
       if (!result.matches.length) {
-        return { content: `nothing in the index matches that${result.entityType ? ` (${nounFor(result.entityType, 2)})` : ""}.`, miss: true, ambiguous: false, matches: [] };
+        return { content: `nothing in the index matches that${result.entityType ? ` (${nounFor(result.entityType, 2)})` : ""}. ${touchesRephraseHint()}`, miss: true, ambiguous: false, matches: [] };
       }
       if (result.inheritedNotOwn) {
         const kindPlural = nounFor(result.entityType, 2);
@@ -3843,10 +3861,10 @@
       const setNoun = result.entityType ? nounFor(result.entityType, n || 2) : n === 1 ? "entity" : "entities";
       const wasWere = n === 1 ? "was" : "were";
       if (!n) {
-        return { content: `nothing in the index matches the inner set, so there is no change history to date.`, miss: true, ambiguous: false, matches: [] };
+        return { content: `nothing in the index matches the inner set, so there is no change history to date. ${touchesRephraseHint()}`, miss: true, ambiguous: false, matches: [] };
       }
       if (!result.matches.length) {
-        return { content: `no recorded commit touched the ${n} ${setNoun} in that set in this index.`, miss: true, ambiguous: false, matches: [] };
+        return { content: `no recorded commit touched the ${n} ${setNoun} in that set in this index. ${touchesRephraseHint()}`, miss: true, ambiguous: false, matches: [] };
       }
       const newest = result.matches[0];
       const date = (newest.attributes || []).find((a) => a.key === "date")?.value || "";
@@ -3864,12 +3882,15 @@
       };
     }
     if (!result.matches.length) {
-      return { content: `nothing in the index matches that${result.entityType ? ` (${nounFor(result.entityType, 2)})` : ""}.`, miss: true, ambiguous: false, matches: [] };
+      return { content: `nothing in the index matches that${result.entityType ? ` (${nounFor(result.entityType, 2)})` : ""}. ${touchesRephraseHint()}`, miss: true, ambiguous: false, matches: [] };
     }
     return { content: `${compositeList(result.matches)}.`, miss: false, ambiguous: false, matches: result.matches };
   }
   function rephraseHint() {
-    return `"which <functions|classes|modules> <imports|calls|uses|inherits from|tests|touched> <name>" or "what does <name> <import|call|export>" or "what uses <name>" or "where is <name> defined" / "where is <name> mentioned" or "when did <name> change" or "which changes touch commit <sha>"/"what did commit <sha> touch" (a commit's own changes) or plainly "what calls this" (about a selected node) or "what does <term> mean"/"what is a <ClassName>" (about the graph's own vocabulary). ` + compositionalHint();
+    return `"which <functions|classes|modules> <imports|calls|uses|inherits from|tests> <name>" or "what does <name> <import|call|export>" or "what uses <name>" or "where is <name> defined" / "where is <name> mentioned" or "when did <name> change" or "which commits touched <name>" or "which changes touch commit <sha>"/"what did commit <sha> touch" (a commit's own changes) or plainly "what calls this" (about a selected node) or "what does <term> mean"/"what is a <ClassName>" (about the graph's own vocabulary). ` + compositionalHint();
+  }
+  function touchesRephraseHint() {
+    return `Try "who touched <a module that actually has commits>" or "/describe <module>" to see what's in the index.`;
   }
   function componentSet(s) {
     return new Set(String(s).toLowerCase().split(/[^a-z0-9]+/).filter(Boolean));
@@ -4606,7 +4627,7 @@ ${options2}
       const fallback = parsed.entityType && PLURAL_FORMS[parsed.entityType] ? nounFor(parsed.entityType, 1) : "module";
       const what = /^(?:commit[:\s])?[0-9a-f]{7,40}$/i.test(objText) ? "commit" : !objText.includes("/") && /^[\w$]+(\.[\w$]+)+$/.test(objText) ? "symbol" : fallback;
       return {
-        content: `no ${what} matching "${parsed.object}" found in the index.`,
+        content: `no ${what} matching "${parsed.object}" found in the index. ${touchesRephraseHint()}`,
         miss: true,
         ambiguous: false,
         candidates: []
@@ -4650,7 +4671,7 @@ ${result.branches.map((b, i) => `${i + 1}) ${b.candidate.label}: ${b.rendered.co
     if (result.whenShape) {
       const subject = result.objMatch.label;
       if (!result.matches.length) {
-        return { content: `no recorded commit touches ${subject} in this index.`, miss: true, ambiguous: false };
+        return { content: `no recorded commit touches ${subject} in this index. ${touchesRephraseHint()}`, miss: true, ambiguous: false };
       }
       const newest = result.matches[0];
       const date = (newest.attributes || []).find((a) => a.key === "date")?.value || "";
@@ -4677,7 +4698,7 @@ ${result.branches.map((b, i) => `${i + 1}) ${b.candidate.label}: ${b.rendered.co
     if (result.whoLastShape) {
       const subject = result.objMatch.label;
       if (!result.matches.length) {
-        return { content: `no recorded commit touches ${subject} in this index.`, miss: true, ambiguous: false };
+        return { content: `no recorded commit touches ${subject} in this index. ${touchesRephraseHint()}`, miss: true, ambiguous: false };
       }
       const newest = result.matches[0];
       const author = (newest.attributes || []).find((a) => a.key === "author")?.value;
@@ -4744,7 +4765,7 @@ ${result.branches.map((b, i) => `${i + 1}) ${b.candidate.label}: ${b.rendered.co
       }
       const entityWord = nounFor(parsed.entityType || "Module", 2);
       return {
-        content: `No ${entityWord} found whose module directly ${verbFor(parsed.kind)} ${parsed.object}.`,
+        content: `No ${entityWord} found whose module directly ${verbFor(parsed.kind)} ${parsed.object}. ${touchesRephraseHint()}`,
         miss: true,
         ambiguous: false
       };
