@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { RELATIONS, VERB_TO_KIND, ENTITY_TO_TYPE, MODIFIER_TO_KIND, MISSPELLINGS, WRONG_WORDS, AGGREGATE_TRIGGERS, LIST_TRIGGERS } from "../src/ask-vocab.mjs";
-import { parseQuery } from "../src/ask.mjs";
+import { parseQuery, normalizeQuery } from "../src/ask.mjs";
 
 // The aggregate/list TRIGGER words are grammar vocabulary too (parseAggregate/parseList
 // read them), so a correction may legitimately restore one ("manyn"→"many", "lst"→"list").
@@ -123,4 +123,78 @@ test("MISSPELLINGS: covers a plausible typo for every entity-noun family and the
   for (const canonical of ["function", "class", "module", "method", "commit", "variable", "attribute", "import", "inherits", "extends", "touches", "changed", "which", "what", "does"]) {
     assert.ok(values.has(canonical) || values.has(canonical + "s"), `no misspelling entry corrects to "${canonical}"`);
   }
+});
+
+// ---- "w/" -> "with" / leetspeak "4" -> "for" (HANDOVER.md 2026-07-12 deferred
+// typo sub-cases): neither can live in the MISSPELLINGS/WRONG_WORDS tables above
+// (see normalize.mjs's own docblock ahead of W_SLASH_RE/FOR_DIGIT_THANKS_RE/
+// FOR_DIGIT_EXAMPLE_RE for the two structural reasons), so they get their own
+// narrow regex pass inside normalizeQuery instead. These tests prove: the
+// corrections fire in realistic sentences, all the way through parseQuery (not
+// just normalizeQuery's own text output); and — critically — the digit-
+// protection invariant these regexes were built around is unmoved: a real
+// count/sha/line-number "4" is never touched. ----
+
+test('normalizeQuery: "w/" corrects to "with" in a realistic sentence', () => {
+  assert.equal(
+    normalizeQuery("what changes together w/ store.mjs"),
+    "what changes together with store.mjs",
+  );
+});
+
+test('parseQuery: "w/" correction reaches the real grammar (cochange relation)', () => {
+  const parsed = parseQuery("what changes together w/ store.mjs");
+  assert.ok(parsed, '"what changes together w/ store.mjs" failed to parse at all');
+  assert.equal(parsed.kind, "cochange");
+});
+
+test('normalizeQuery: "w/" is NOT rewritten inside a path fragment or "w/o"', () => {
+  assert.equal(normalizeQuery("src/w/foo.mjs uses auth"), "src/w/foo.mjs uses auth");
+  assert.equal(
+    normalizeQuery("which modules import w/o auth"),
+    "which modules import w/o auth",
+  );
+});
+
+test('normalizeQuery: leetspeak "4" corrects to "for" in its narrow trigger shapes', () => {
+  assert.equal(normalizeQuery("thx 4 the help"), "thx for the help");
+  assert.equal(normalizeQuery("cheers 4 that"), "cheers for that");
+  assert.equal(
+    normalizeQuery("what does auth do, 4 example"),
+    "what does auth do, for example",
+  );
+});
+
+test('parseQuery: leetspeak "4 example" correction reaches the real grammar', () => {
+  const parsed = parseQuery("which modules call helper 4 example");
+  assert.ok(parsed, '"which modules call helper 4 example" failed to parse at all');
+  assert.equal(parsed.kind, "calls");
+  assert.equal(parsed.object, "helper for example");
+});
+
+test('normalizeQuery: digit-protection invariant unmoved — a real count/sha/line-number "4" passes through untouched', () => {
+  assert.equal(normalizeQuery("top 4 results"), "top 4 results");
+  assert.equal(normalizeQuery("line 4"), "line 4");
+  assert.equal(
+    normalizeQuery("commit 4a2b1c3 touches store.mjs"),
+    "commit 4a2b1c3 touches store.mjs",
+  );
+  // "4 example modules" is a genuine COUNT of example modules, not the "for
+  // example" idiom — the trailing-word lookahead must refuse this one.
+  assert.equal(
+    normalizeQuery("show me the 4 example modules"),
+    "show me the 4 example modules",
+  );
+  // "wait"/"used" were deliberately left OUT of the thanks-anchor set because
+  // they collide with genuine counts ("wait 4 minutes" is a real duration) —
+  // the digit must survive even though "wait" itself is filler stripped
+  // elsewhere in the pipeline.
+  assert.match(normalizeQuery("wait 4 minutes"), /\b4\b/);
+  assert.doesNotMatch(normalizeQuery("wait 4 minutes"), /\bfor\b/);
+});
+
+test('parseQuery: digit-protection invariant unmoved through the full grammar ("top 4 modules" keeps its count)', () => {
+  const parsed = parseQuery("top 4 modules call helper");
+  assert.ok(parsed, '"top 4 modules call helper" failed to parse at all');
+  assert.equal(parsed.subject, "top 4");
 });
