@@ -86,8 +86,6 @@ several cases they name the fix direction too, which is the opposite of giving u
 - `archive/INFBENCH_1.3.0.md:59` "C1's raw numbers are back to being a genuine ceiling marker, not a
   fabrication". This is the project re-deriving a ceiling on purpose and saying so. Good practice,
   the model to copy.
-- `ROADMAP.md:117` "No MCP server, no LLM in the product path — permanent, not 'for now.'" A project
-  charter constraint, not an engineering give-up. Genuine by definition.
 - **`init:xxxl` (a literal 1000x scale-up of `init:large`'s seed corpus) is not reachable from data
   in this project's own repo or the 4 adjacent `globalwordnet` repos alone.** Checked with real
   numbers, re-derived twice in the same sitting after the first pass under-counted (see below —

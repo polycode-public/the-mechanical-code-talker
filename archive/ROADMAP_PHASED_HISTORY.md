@@ -1142,12 +1142,3 @@ tier-4's acquisition feed it), the provenance-trust policy (entailed facts must 
 mix with asserted ones — a wrong axiom poisons the closure, so entailments are retractable by
 provenance), and bench cells that measure inference specifically (premises in, conclusion
 asked, derivation shown).
-
-## Explicitly out of scope (for now)
-
-- No AWS, no benchmark rig — tmct is a published npm library + CLI with a
-  static GitLab Pages home page only.
-- No auto-publish: releasing a version is gated on a deliberate version-bump
-  commit plus a configured `NPM_TOKEN` in CI.
-- No MCP server, no LLM in the product path — permanently out of scope, not
-  just "for now".

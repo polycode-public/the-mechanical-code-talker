@@ -104,8 +104,6 @@ Three hard-won lessons, carried forward:
    — if it's gone, `TaskStop` that round and dispatch a fresh one instead, never `SendMessage` it
    back to life.
 
-No LLM in the product path, ever.
-
 *Prior sessions' detailed handover (phases 0-13, releases 0.2.0 → 1.4.0) lives in this file's git
 history plus the `CEFR_ENGLISH_*`/`AGENTBENCH_*`/`INFBENCH_*`/`CONVERSATIONBENCH_*`/`archive/PLAN_*`
 artifacts. `ROADMAP.md`'s "Where we are now" holds the fuller progress narrative for everything
