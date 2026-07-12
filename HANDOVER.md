@@ -8,15 +8,26 @@ this project's own standing discipline.
 Session handle (inbox): `tmct` (this session; earlier sessions used `mechanic`). See
 `~/.claude/inboxes/tmct.md` and `~/.claude/inboxes/mechanic.md`, both still live.
 
-## Version state (2026-07-12, v1.8.4 batch)
+## Version state (2026-07-12, fast-loop batch in progress)
 
-`package.json` is `1.8.4`, pushed to `main`. CI was red for 16 straight pipelines (#139-154) on a
-platform-dependent symlink bug in `bin/tmct.mjs`'s repo-relative path logic (macOS's `/tmp`→`/private`
-symlink masked it locally; Linux CI caught it) — fixed and verified against 3 of the failing
-pipelines. `publish:npm` had been silently no-op-ing because it needs the `unit` job to pass first;
-that's unblocked now.
+`main` is mid-way through a fixed 10-round `SKILL_AGENT_FAST_LOOP.md` batch (round 3/10 as of this
+edit), each round bumping+pushing regardless of outcome per explicit operator instruction. CI was red
+for 16 straight pipelines (#139-154) on a platform-dependent symlink bug in `bin/tmct.mjs`'s
+repo-relative path logic — fixed; `publish:npm` unblocked and confirmed live through 1.8.5 on npm.
 
 ## Open items
+
+- **Bare "what is X?" fails for CamelCase compound class names, 2026-07-12** (fast-loop round 3
+  finding). `describe TaskController` / `what is a TaskController` (indefinite article) /
+  `taskcontroller` (lowercased) all resolve correctly, but bare `what is TaskController?` hits the
+  plain grammar wall — `isConversational()`'s `looksCodeish()` gate (`src/chat.mjs` ~line 837-870,
+  regex `/[a-z][A-Z]|[_./]|\(\)/`) flags any CamelCase compound identifier as "code-ish" and excludes
+  it from the bare-meta-fact fallback lanes (2b/2c, `src/chat.mjs` ~line 7212-7290) — exactly the
+  lanes meant to answer bare "what is X" without an article. Two-word compound class names
+  (`TaskController`, `UserController` — common in real code) fall through a gap single-word names
+  don't. Separately, `what is the X` (definite article) fails universally for any entity. Not fixed —
+  `looksCodeish()`/`isConversational()` is shared machinery with several documented past regressions
+  from touching this exact gate; needs a `PLAN_*.md` writeup, not a fast-loop patch.
 
 - **`PLAN_BREADTH_FIRST_NLU.md`'s two open items** — (c) the paraphrase-verified-via-`syllogise.mjs`
   piece of "Ambition", not started; (d) a real "list/count all X of class Y" query shape for
