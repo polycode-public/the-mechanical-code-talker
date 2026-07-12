@@ -1162,6 +1162,18 @@ export function normFactTerm(t) {
 // every seeded fact — the golden-equivalence test pins the two paths together.
 const factIdFor = (s, p, o) => `fact:${fnv1aHex(`${s}\0${p}\0${o}`)}`;
 
+/** Content-address a fact's id from its (subject, predicate, object) WITHOUT
+ *  writing it — the SAME normalize+NUL-join+hash contract appendFact/
+ *  appendFacts use internally (factIdFor, above). Exposed so a caller that
+ *  needs to name a premise's or a not-yet-written conclusion's id (e.g.
+ *  syllogise.mjs's justification-tracking retraction machinery, PLAN_SYLLOGIST.md
+ *  §3) can compute it deterministically without an extra read — ids are
+ *  content-addressed, never sequence-assigned, so this is safe to call
+ *  before, instead of, or in place of an actual append. Pure, no I/O. */
+export function factIdForTriple(subject, predicate, object) {
+  return factIdFor(normFactTerm(subject), normText(predicate), normFactTerm(object));
+}
+
 /** Append one grammar-derived OWL triple, RDF-reified: a `Fact` individual
  *  carrying rdf:subject / rdf:predicate / rdf:object (+ provenance). The
  *  Phase-2 ACE parser's write point. Same (s,p,o) → same id → upsert, never a
@@ -1238,6 +1250,14 @@ export async function appendFact(dir, { subject, predicate, object, provenance =
  *  appendFact's own entailed-hook passthrough, batched: syllogise.mjs's
  *  materializing pass is this function's main caller, so this is the write
  *  path a rule's conclusion trust actually rides (recomputeFactTrust, above).
+ *  A fact may also carry `justification` (optional, array of premise fact
+ *  ids — PLAN_SYLLOGIST.md §3's persisted-justification step): stored
+ *  verbatim as `mgx:factJustification` (space-joined; fact ids never contain
+ *  a space), last-write-wins per id (a re-derivation via a DIFFERENT premise
+ *  pair, after the original was retracted and this fact re-earned its place
+ *  some other way, should overwrite the stale justification, not keep it) —
+ *  never written at all for a plain taught/asserted fact (`justification`
+ *  omitted), which stays byte-identical to before this field existed.
  *  Returns { ids, appended, skipped } — ids one per applied fact (in order),
  *  appended = ids.length, skipped = malformed count. */
 export async function appendFacts(dir, facts) {
@@ -1258,6 +1278,7 @@ export async function appendFacts(dir, facts) {
       quantifier: normText(f?.quantifier),
       premiseTrusts: Array.isArray(f?.premiseTrusts) ? f.premiseTrusts : undefined,
       ruleConfidence: typeof f?.ruleConfidence === "number" ? f.ruleConfidence : undefined,
+      justification: Array.isArray(f?.justification) ? f.justification.filter(Boolean) : undefined,
     });
   }
   const ids = [];
@@ -1290,6 +1311,7 @@ export async function appendFacts(dir, facts) {
           ...(provs.length ? [{ prop: "mgx:factProvenance", key: "provenance", value: provs.join(" | ") }] : []),
           ...(f.tokens.length ? [{ prop: "mgx:hasProseTokens", key: "prose_tokens", value: f.tokens.join(" ") }] : []),
           ...(qVal ? [{ prop: "mgx:factQuantifier", key: "quantifier", value: qVal }] : []),
+          ...(f.justification && f.justification.length ? [{ prop: "mgx:factJustification", key: "justification", value: f.justification.join(" ") }] : []),
         ],
       };
       // Upsert into BOTH the array (replace-in-place keeps order) and the index.
@@ -1664,6 +1686,7 @@ export function readFactRows(memory) {
     const sourceTypes = sourceIds
       .map((id) => (sourcesById.get(id)?.attributes || []).find((a) => a?.prop === "mgx:sourceType")?.value)
       .filter(Boolean);
+    const justificationRaw = get("justification");
     rows.push({
       id: ind.id,
       subject: get("subject"), predicate: get("predicate"), object: get("object"),
@@ -1671,9 +1694,49 @@ export function readFactRows(memory) {
       quantifier: get("quantifier"), // "" unless a plural class-membership teach set one (Feature A pt.3)
       sourceIds, sourceTypes,
       trust: Number((ind.attributes || []).find((a) => a?.prop === TRUST_SCORE_PROP)?.value) || 0,
+      // [] unless a rule persisted its premise fact ids (PLAN_SYLLOGIST.md §3's
+      // justification-tracking step — scm-sco only, today; see syllogise.mjs).
+      justification: justificationRaw ? justificationRaw.split(" ").filter(Boolean) : [],
     });
   }
   return rows;
+}
+
+/**
+ * Retract Fact individuals by id — a real DELETE, the mechanism `syllogise.mjs`'s
+ * own header comment has always PROMISED ("fully RETRACTABLE by provenance when
+ * the source graph moves") but that, until PLAN_SYLLOGIST.md §3's retraction
+ * build, nothing in this file actually implemented: un-believing something used
+ * to mean re-running the whole batch pass and hoping dedup naturally sorted it
+ * out, with no targeted removal at all. Drops each matching Fact individual and
+ * scrubs any edge group (`statedBy`, etc.) that referenced it as subject OR
+ * object, so no dangling edge survives the delete — then recounts classes once.
+ * A Source left with zero remaining statedBy edges is NOT itself deleted (an
+ * orphaned Source individual is harmless — it materialises nothing and costs
+ * nothing to leave — so this stays a pure, minimal retraction, not a GC pass).
+ * Ids that don't resolve to a live Fact are silently skipped (an idempotent,
+ * honest no-op — never an error: a caller may retry a retraction against a
+ * concurrently-mutated store). Returns { removed } — the ids ACTUALLY deleted,
+ * a possibly-smaller set than the input. */
+export async function removeFacts(dir, ids) {
+  const idSet = new Set((ids || []).filter(Boolean));
+  const removed = [];
+  if (!idSet.size) return { removed };
+  await mutateMemory(dir, (payload) => {
+    payload.individuals = (payload.individuals || []).filter((ind) => {
+      if (ind?.class === FACT_CLASS && idSet.has(ind.id)) { removed.push(ind.id); return false; }
+      return true;
+    });
+    if (!removed.length) return; // honest no-op — nothing matched, no write needed beyond this
+    const removedSet = new Set(removed);
+    for (const group of payload.objectProperties || []) {
+      const before = group.examples || [];
+      group.examples = before.filter((e) => !removedSet.has(e?.subject) && !removedSet.has(e?.object));
+      group.count = group.examples.length;
+    }
+    recountClasses(payload);
+  });
+  return { removed };
 }
 
 /** The trust floor a fact must clear before a differing object counts as a real

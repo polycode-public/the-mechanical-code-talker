@@ -21,6 +21,7 @@ import {
   proveCardinalityAtLeast, proveMaxCardinalityZeroDenial,
   ENTAILED_SCM_SVF_PROVENANCE, SCM_SVF_RULE, SCM_SVF_RULE_CONFIDENCE,
   CARDINALITY_RULE_CONFIDENCE, CAX_MAXC0_RULE_CONFIDENCE, entailedTrustFrom,
+  retractSubClassOf,
 } from "../src/syllogise.mjs";
 import { assertSentence } from "../src/grammar/assert.mjs";
 import { freshConceptNetRepo } from "./helpers/seeded-fixture.mjs";
@@ -1067,4 +1068,150 @@ test("findConsistencyViolations: focus excludes subjects outside the focus set",
   const clashes = findConsistencyViolations(typeEdges, [], disjointEdges, { focus: new Set(["e1"]) });
   assert.equal(clashes.length, 1);
   assert.equal(clashes[0].subject, "e1");
+});
+
+// ---- retractSubClassOf: PLAN_SYLLOGIST.md §3's first real retraction slice —
+// JTMS-style dependency-directed removal for scm-sco, VERIFIED (not assumed)
+// against the surviving graph each round, so a fact with a genuine second
+// derivation path or an independent direct teaching is never wrongly swept
+// up just because its stale, persisted justification broke. ----------------
+
+test("retractSubClassOf: retracting the target itself removes it, an honest no-op when it was never stored", async () => {
+  const dir = await mkRepo();
+  try {
+    const missing = await retractSubClassOf(dir, "ghost", "phantom");
+    assert.deepEqual(missing, { retracted: [], count: 0, budget: 50, depth: 32, truncated: false, found: false });
+
+    await appendFact(dir, { subject: "a", predicate: SUBCLASS_PREDICATE, object: "b", provenance: "corpus:x" });
+    const res = await retractSubClassOf(dir, "a", "b");
+    assert.equal(res.found, true);
+    assert.equal(res.count, 1);
+    const rows = readFactRows(await loadMemory(dir));
+    assert.ok(!hasEdge(rows, "a", "b"), "the retracted fact is gone");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("retractSubClassOf: cascades — retracting a premise removes the entailed conclusion it justified", async () => {
+  const dir = await mkRepo();
+  try {
+    const p1 = await appendFact(dir, { subject: "a", predicate: SUBCLASS_PREDICATE, object: "b", provenance: "corpus:x" });
+    await appendFact(dir, { subject: "b", predicate: SUBCLASS_PREDICATE, object: "c", provenance: "corpus:x" });
+    await syllogise(dir);
+    const before = readFactRows(await loadMemory(dir));
+    assert.ok(hasEdge(before, "a", "c"), "a⊑c is entailed before retraction");
+    const derivedId = subClassRows(before).find((r) => r.subject === "a" && r.object === "c").id;
+
+    const res = await retractSubClassOf(dir, "a", "b");
+    assert.equal(res.count, 2, "the premise itself + the ONE entailment it justified");
+    assert.deepEqual(new Set(res.retracted), new Set([p1.id, derivedId]));
+
+    const rows = readFactRows(await loadMemory(dir));
+    assert.ok(!hasEdge(rows, "a", "b"), "a⊑b gone");
+    assert.ok(!hasEdge(rows, "a", "c"), "a⊑c gone too — its only justification broke");
+    assert.ok(hasEdge(rows, "b", "c"), "b⊑c is untouched — never depended on a⊑b");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("retractSubClassOf: cascades transitively across a multi-hop chain (a⊑b⊑c⊑d⊑e)", async () => {
+  const dir = await mkRepo();
+  try {
+    await appendFact(dir, { subject: "a", predicate: SUBCLASS_PREDICATE, object: "b", provenance: "corpus:x" });
+    await appendFact(dir, { subject: "b", predicate: SUBCLASS_PREDICATE, object: "c", provenance: "corpus:x" });
+    await appendFact(dir, { subject: "c", predicate: SUBCLASS_PREDICATE, object: "d", provenance: "corpus:x" });
+    await appendFact(dir, { subject: "d", predicate: SUBCLASS_PREDICATE, object: "e", provenance: "corpus:x" });
+    await syllogise(dir, { depth: 32, budget: 50 });
+
+    const res = await retractSubClassOf(dir, "a", "b");
+    const rows = readFactRows(await loadMemory(dir));
+    assert.equal(subClassRows(rows).filter((r) => r.subject === "a").length, 0, "every a-rooted fact is gone");
+    // downstream chain (never rooted at a) is completely untouched
+    assert.ok(hasEdge(rows, "b", "c") && hasEdge(rows, "c", "d") && hasEdge(rows, "d", "e") && hasEdge(rows, "b", "e"));
+    assert.equal(res.truncated, false);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("retractSubClassOf: a fact with a SECOND, independent derivation path survives — the known JTMS "
+  + "over-retraction failure mode this slice's VERIFY step (not a bare justification walk) avoids", async () => {
+  const dir = await mkRepo();
+  try {
+    // a⊑b⊑d AND a⊑c⊑d — two independent routes to a⊑d
+    await appendFact(dir, { subject: "a", predicate: SUBCLASS_PREDICATE, object: "b", provenance: "corpus:x" });
+    await appendFact(dir, { subject: "b", predicate: SUBCLASS_PREDICATE, object: "d", provenance: "corpus:x" });
+    await appendFact(dir, { subject: "a", predicate: SUBCLASS_PREDICATE, object: "c", provenance: "corpus:x" });
+    await appendFact(dir, { subject: "c", predicate: SUBCLASS_PREDICATE, object: "d", provenance: "corpus:x" });
+    await syllogise(dir);
+    assert.ok(hasEdge(readFactRows(await loadMemory(dir)), "a", "d"), "a⊑d entailed before retraction");
+
+    const res = await retractSubClassOf(dir, "a", "b");
+    const rows = readFactRows(await loadMemory(dir));
+    assert.ok(!hasEdge(rows, "a", "b"), "the retracted premise is gone");
+    assert.ok(hasEdge(rows, "a", "d"), "a⊑d SURVIVES — still supported via a⊑c⊑d, an independent path");
+    assert.ok(res.retracted.length === 1, "only the target itself was removed, nothing wrongly cascaded");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("retractSubClassOf: a fact LATER independently taught survives even though its stale entailment "
+  + "justification broke — never touches a higher-trust taught-only derivation (PLAN_SYLLOGIST.md §3's own concern)", async () => {
+  const dir = await mkRepo();
+  try {
+    await appendFact(dir, { subject: "a", predicate: SUBCLASS_PREDICATE, object: "b", provenance: "corpus:x" });
+    await appendFact(dir, { subject: "b", predicate: SUBCLASS_PREDICATE, object: "c", provenance: "corpus:x" });
+    await syllogise(dir);
+    // a⊑c was entailed; now an operator directly teaches the SAME triple too
+    // (same (s,p,o) → same id → provenance union, appendFact's own contract).
+    await appendFact(dir, { subject: "a", predicate: SUBCLASS_PREDICATE, object: "c", provenance: "ace:operator" });
+
+    const res = await retractSubClassOf(dir, "a", "b");
+    const rows = readFactRows(await loadMemory(dir));
+    assert.ok(!hasEdge(rows, "a", "b"));
+    assert.ok(hasEdge(rows, "a", "c"), "a⊑c survives — it is no longer PURELY entailed, independently taught too");
+    assert.equal(res.retracted.length, 1, "only the target — the taught fact is never a candidate at all");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("retractSubClassOf: budget bounds the cascade and is honestly flagged truncated", async () => {
+  const dir = await mkRepo();
+  try {
+    await appendFact(dir, { subject: "a", predicate: SUBCLASS_PREDICATE, object: "b", provenance: "corpus:x" });
+    await appendFact(dir, { subject: "b", predicate: SUBCLASS_PREDICATE, object: "c", provenance: "corpus:x" });
+    await appendFact(dir, { subject: "c", predicate: SUBCLASS_PREDICATE, object: "d", provenance: "corpus:x" });
+    await syllogise(dir);
+
+    const res = await retractSubClassOf(dir, "a", "b", { budget: 1 });
+    assert.equal(res.truncated, true, "budget hit before the cascade reached a fixpoint");
+    assert.equal(res.count, 1, "only the target itself fit in the budget");
+    const rows = readFactRows(await loadMemory(dir));
+    assert.ok(!hasEdge(rows, "a", "b"), "the target is still removed");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("syllogise: scm-sco conclusions persist a walkable justification (the two premise fact ids), "
+  + "read back by readFactRows — PLAN_INFERENCE_TESTING.md's own header note this was missing until now", async () => {
+  const dir = await mkRepo();
+  try {
+    const p1 = await appendFact(dir, { subject: "a", predicate: SUBCLASS_PREDICATE, object: "b", provenance: "corpus:x" });
+    const p2 = await appendFact(dir, { subject: "b", predicate: SUBCLASS_PREDICATE, object: "c", provenance: "corpus:x" });
+    await syllogise(dir);
+    const rows = readFactRows(await loadMemory(dir));
+    const derived = subClassRows(rows).find((r) => r.subject === "a" && r.object === "c");
+    assert.ok(derived, "a⊑c is entailed");
+    assert.deepEqual(new Set(derived.justification), new Set([p1.id, p2.id]));
+    // a plain taught/stated fact carries NO justification at all
+    const stated = subClassRows(rows).find((r) => r.subject === "a" && r.object === "b");
+    assert.deepEqual(stated.justification, []);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
