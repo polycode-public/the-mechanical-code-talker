@@ -869,6 +869,29 @@ export function isConversational(query) {
   return q.split(/\s+/).filter(Boolean).length <= 3 && !codeish;
 }
 
+/** Scoped exemption for the bare-meta-fact lane (2b/2c, further down this file)
+ *  ONLY — never a change to looksCodeish()/isConversational() themselves, and
+ *  never used for the generic orientation-card fallback. HANDOVER.md 2026-07-12
+ *  finding: a bare "what is TaskController?" (CamelCase COMPOUND class name, no
+ *  article) hits looksCodeish()'s `/[a-z][A-Z]/` branch, so isConversational()
+ *  returns false and the whole isConversationalCandidate gate — including the
+ *  bare-meta-fact lookup that "what is a TaskController" (articled, via its own
+ *  T5 structural parse) already resolves through — never runs. Single-word/
+ *  lowercased names ("Widget", "taskcontroller") have no lowercase-to-uppercase
+ *  transition so they were never affected; only two-word-shaped compounds were.
+ *  This re-tests the SAME non-CamelCase codeish reasons (paths, dotted refs,
+ *  `()` calls, STRUCT_WORDS) looksCodeish already covers, so a genuine near-miss
+ *  structural question ("what is foo.bar()", "what is import") is UNCHANGED —
+ *  still excluded here, still falls through to its existing (better) miss
+ *  handling, never the friendly orientation card. */
+function isBareCamelCaseMetaQuestion(query) {
+  const raw = String(query).trim();
+  const q = raw.toLowerCase().replace(/[.!?]+$/, "").trim();
+  const nonCamelCodeish = /[_./]|\(\)/.test(raw) || q.split(/\s+/).some((w) => STRUCT_WORDS.has(w));
+  if (nonCamelCodeish || q.split(/\s+/).filter(Boolean).length > 3) return false;
+  return BARE_WHATIS_RE.test(raw) || IS_ADJECTIVE_YESNO_RE.test(raw);
+}
+
 // ---- the response-template library (W1: templates → render path) ----
 // The WORDING of the conversational/orientation surfaces lives in
 // data/templates/responses.jsonl (corpus/templates.mjs) — the template library is
@@ -7209,7 +7232,8 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       } catch { /* leave false — the ordinary path decides */ }
     }
   }
-  const isConversationalCandidate = !handled && miss && !envelope?.parsed && isConversational(query) && !isWhatAboutContinuation && !isDescribePronounContinuation && !isExplainTouch && !isStaccatoNegation && !isVagueRelationTouch && !isStaccatoComparative && !isStaccatoPronounNoFocus;
+  const conversationalCandidateBaseGate = !handled && miss && !envelope?.parsed && !isWhatAboutContinuation && !isDescribePronounContinuation && !isExplainTouch && !isStaccatoNegation && !isVagueRelationTouch && !isStaccatoComparative && !isStaccatoPronounNoFocus;
+  const isConversationalCandidate = conversationalCandidateBaseGate && isConversational(query);
   // BUG 2 fix (2026-07-09): "what is X" with NO article ("what is john") is BOTH
   // conversational-shaped (≤3 words, no code-ish token — isConversational() would
   // claim it) AND a legitimate bare meta/fact-lookup form (BARE_WHATIS_RE —
@@ -7240,8 +7264,20 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // chance to run before the orientation card claims the turn.
   const bareWhatisShape = BARE_WHATIS_RE.test(String(query).trim());
   const isAdjectiveShape = IS_ADJECTIVE_YESNO_RE.test(String(query).trim());
+  // HANDOVER.md 2026-07-12 CamelCase finding: `isBareCamelCaseMetaQuestion` (see
+  // its own docblock, above isConversational) OR's in alongside
+  // isConversationalCandidate for THIS lane only — a bare "what is TaskController"
+  // (CamelCase compound, no article) is otherwise excluded solely because
+  // isConversational()'s codeish check fires on the CamelCase transition, even
+  // though every other precondition (miss, no structural parse, no continuation
+  // in flight) already holds. Shares the SAME base gate as isConversationalCandidate
+  // (conversationalCandidateBaseGate) so it's never looser. Scoped to this `if`
+  // alone: the `else if (isConversationalCandidate)` orientation-card fallback
+  // further down is UNCHANGED, so a CamelCase term with no real hit still falls
+  // through to its existing miss handling, never the generic orientation card.
+  const isBareCamelCaseWhatisCandidate = conversationalCandidateBaseGate && isBareCamelCaseMetaQuestion(query);
   let bareMetaHit = null;
-  if (isConversationalCandidate && (bareWhatisShape || isAdjectiveShape)) {
+  if ((isConversationalCandidate || isBareCamelCaseWhatisCandidate) && (bareWhatisShape || isAdjectiveShape)) {
     if (memoryDir) {
       bareMetaHit = (await factAnswer(memoryDir, query, envelope, miss, biasByBundle))
         ?? (await factReadBack(memoryDir, query, envelope, miss, graph, newFocus?.label, biasByBundle));
