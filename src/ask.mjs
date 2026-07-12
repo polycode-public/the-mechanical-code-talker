@@ -3514,22 +3514,44 @@ export function traverse(graph, parsed, { contextId = null, prev = null, pinnedO
         widenNote = `, widened to ${siblingClass} subjects (no ${entityType} recorded)`;
       }
     }
-    // "touches" up-refine composability (HANDOVER 2026-07-12, Class-to-module
-    // up-refinement): an EMPTY touchesSymbol lookup on a resolved CLASS is not
-    // decisive the way it is for a Function/Method — a Class reads naturally as
-    // "the file/unit that holds it", so "who touched <Class>" with no recorded
-    // symbol-precise touch should still answer from the class's containing
-    // module's real touches, rather than a confident-looking-but-possibly-wrong
-    // "nothing touched it". Fall through to the grain-aware up-refine below
-    // ONLY for that Class case. Deliberately NOT widened to every
-    // FINE_ENTITY_TYPES member: "how many commits touched fnAlpha" (a Function)
-    // is pinned elsewhere (ask-combo.test.mjs's grain-aware COUNT lever) to stay
-    // an honest 0 rather than a module-grain false hit — symbol-level counting
-    // precision for functions/methods is a deliberate, separate guarantee this
-    // change must not erode. `calls` is untouched either way: an empty
-    // callsSymbol result stays decisive (call parsing isn't a best-effort
-    // heuristic the way commit-diff symbol attribution is).
-    if (matches.length || !(kind === "touches" && objMatch.class === "Class")) {
+    // "touches"/"calls" up-refine composability (HANDOVER 2026-07-12, Class-to-
+    // module up-refinement; extended to `calls` in the 2026-07-12 follow-up —
+    // "who calls Router" wrongly returned empty for a Class whose calls are only
+    // recorded at module-coarse grain): an EMPTY touchesSymbol/callsSymbol lookup
+    // on a resolved CLASS is not decisive the way it is for a Function/Method — a
+    // Class reads naturally as "the file/unit that holds it", so "who touched
+    // <Class>"/"who calls <Class>" with no recorded symbol-precise edge should
+    // still answer from the class's containing module's real touches/calls,
+    // rather than a confident-looking-but-possibly-wrong "nothing touched/calls
+    // it". Deliberately NOT widened to every FINE_ENTITY_TYPES member: "how many
+    // commits touched fnAlpha" (a Function) is pinned elsewhere (ask-combo.test.mjs's
+    // grain-aware COUNT lever) to stay an honest 0 rather than a module-grain
+    // false hit — symbol-level counting precision for functions/methods is a
+    // deliberate, separate guarantee this change must not erode.
+    //
+    // Up-refine eligibility is gated on the Class having NO recorded `contains`
+    // members: a class the extractor actually populated (Widget, Logger — both
+    // carry real `contains` edges) reads as a fully-modeled unit whose own empty
+    // symbol-grain scan IS the honest answer; a class with zero recorded members
+    // (Router, Button — the extractor only ever saw its declaration, never a
+    // body) is exactly the shape where the coarser module-level edge is the only
+    // real signal recorded at all.
+    //
+    // Even when eligible, only actually fall through to the shared grain-aware
+    // up-refine block below when a containing module can be resolved RIGHT NOW.
+    // That block's own "no containing module found" case renders a DIFFERENT,
+    // wrongGrainMiss-shaped honest miss ("'Button' resolved to the class Button,
+    // but this question needs a module…") than the plain zero-match miss this
+    // symbol-grain scan already renders ("No modules found whose module directly
+    // calls Button…"). A Class with no `contains` members AND no `defines` edge
+    // naming its module (the synthetic chatflow-tier2 fixture's Button, which the
+    // extractor recorded a bare declaration for but never wired into `defines`)
+    // must keep the latter, plain-miss wording — eligibility alone doesn't
+    // guarantee the up-refine can actually complete.
+    const upRefineEligible = (kind === "touches" || kind === "calls") && objMatch.class === "Class"
+      && !edgesOfKind(graph, "contains").some((e) => e.subject === objMatch.id);
+    const upRefineModule = upRefineEligible ? graph.byId.get(moduleIdOf(graph, objMatch) || "") : null;
+    if (matches.length || !(upRefineEligible && upRefineModule)) {
       return { matches, objMatch, candidates, traversal: `${symbolKind} edges where object = ${objMatch.label}${widenNote}`, ambiguous, matchedVia };
     }
   }
