@@ -252,6 +252,74 @@ test("answerCount: an unknown kind lists what it CAN count, and a non-count line
   assert.equal(answerCount(g, "which modules import a.mjs"), null, "not a count query → falls through to ask");
 });
 
+// ---- answerEdgeCount: bare "how many X" for EDGE-NOMINALIZED nouns
+// (tests/importers/callers/…, HANDOVER "bare 'how many X' fails for
+// edge-nominalized nouns", 2026-07-12 fix). COUNT_NOUNS only maps a noun to a
+// graph INDIVIDUAL CLASS; these nouns instead name an EDGE KIND
+// (ask-vocab.mjs's EDGE_NOUN_TO_METRIC, the same table the superlative lane
+// "which module has the most tests" already reads) — answerEdgeCount routes
+// them through the SAME per-entity degree computation (ask.mjs's exported
+// degreeMetric) rather than the header-count path. Fixture edges: mod-b,
+// mod-c, mod-e all import mod-a (3 importers); mod-g calls mod-a (1 caller);
+// test-b tests mod-b and mod-d (1 test covers each); cls-button inherits
+// cls-widget (1 subclass); cls-widget contains m-render + a-name (2 members).
+
+test("runTurn: 'how many tests cover X' answers via the edge-metric path, not 'I can't count'", async () => {
+  const g = await graph();
+  const { answer, record } = await runTurn("how many tests cover app/lib/b.mjs", { config: CONFIG, graph: g });
+  assert.equal(answer, "1 test.");
+  assert.equal(record.miss, false);
+});
+
+test("runTurn: 'how many importers does X have' answers via the edge-metric path", async () => {
+  const g = await graph();
+  const { answer, record } = await runTurn("how many importers does app/lib/a.mjs have", { config: CONFIG, graph: g });
+  assert.equal(answer, "3 importers.");
+  assert.equal(record.miss, false);
+});
+
+test("runTurn: 'how many callers does X have' answers via the edge-metric path", async () => {
+  const g = await graph();
+  const { answer } = await runTurn("how many callers does app/lib/a.mjs have", { config: CONFIG, graph: g });
+  assert.equal(answer, "1 caller.");
+});
+
+test("runTurn: other EDGE_NOUN_TO_METRIC nouns also resolve per-entity (subclasses, members)", async () => {
+  const g = await graph();
+  const subclasses = await runTurn("how many subclasses does Widget have", { config: CONFIG, graph: g });
+  assert.equal(subclasses.answer, "1 subclass.");
+  const members = await runTurn("how many members does Widget have", { config: CONFIG, graph: g });
+  assert.equal(members.answer, "2 members.");
+});
+
+test("runTurn: a bare edge-nominalized count with no resolvable entity still gets answerCount's honest 'I can't count' miss (scoped out, not silently wrong)", async () => {
+  const g = await graph();
+  const { answer } = await runTurn("how many tests are there", { config: CONFIG, graph: g });
+  assert.match(answer, /can't count "tests"/);
+  const noEntity = await runTurn("how many importers does nonexistent_module_xyz.mjs have", { config: CONFIG, graph: g });
+  assert.match(noEntity.answer, /can't count "importers"/);
+});
+
+test("runTurn: existing COUNT_NOUNS counts (a real graph class) are unaffected by the new edge-count lane", async () => {
+  const g = await graph();
+  assert.equal((await runTurn("how many classes are there", { config: CONFIG, graph: g })).answer, "3 classes.");
+  assert.equal((await runTurn("how many modules are there", { config: CONFIG, graph: g })).answer, "8 modules.");
+});
+
+test("runTurn: the differently-phrased equivalent ('how many modules test X', restrictor path via the ask engine) still works and agrees with the new edge-count lane", async () => {
+  const g = await graph();
+  const modules = await runTurn("how many modules test app/lib/b.mjs", { config: CONFIG, graph: g });
+  const tests = await runTurn("how many tests cover app/lib/b.mjs", { config: CONFIG, graph: g });
+  assert.ok(modules.answer.startsWith("1 module."), `expected to start with "1 module.", got: ${modules.answer}`);
+  assert.equal(tests.answer, "1 test.");
+});
+
+test("runTurn: the superlative lane ('which module has the most tests') is unaffected by the edge-count fix", async () => {
+  const g = await graph();
+  const { answer } = await runTurn("which module has the most tests", { config: CONFIG, graph: g });
+  assert.match(answer, /app\/lib\/b\.mjs|app\/functions\/d\/handler\.mjs/);
+});
+
 // Bug C (operator manual-chat find, this session): "count soup" with NO code
 // graph loaded rendered the grammatically-broken "I count: ." (a dangling
 // empty list) and then pointlessly suggested "how many classes are there",

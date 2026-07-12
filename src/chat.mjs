@@ -57,7 +57,7 @@ import { rankByBiasThenTrust } from "./memory/bias.mjs";
 import { finish, beginsWithVowelSound, grammarRules } from "./finish.mjs";
 import {
   VERB_TO_KIND, WHERE_MARKERS, MENTION_MARKERS, ENTITY_TO_TYPE, PASSIVE_PARTICIPLE_TO_KIND,
-  stripTrailingScopeFiller, stripTrailingDiscourseTag,
+  stripTrailingScopeFiller, stripTrailingDiscourseTag, EDGE_NOUN_TO_METRIC, RELATIONS,
 } from "./ask-vocab.mjs";
 import { COUNTERFACTUAL_RE, correctMisspellings, applyPreambleFrames, normalizeQuery, escapeRegex, kindNounAnaphoraHint } from "./interpret/normalize.mjs";
 import { fuzzyMatchInSet, fuzzyBound } from "./interpret/fuzzy.mjs";
@@ -562,6 +562,113 @@ export function answerCount(graph, query) {
   }
   const n = countClass(graph, cls);
   return `${n} ${classNoun(cls, n)}.`;
+}
+
+/** singular+plural display forms for the edge-nominalized nouns answerEdgeCount
+ *  (below) actually answers — a small subset of EDGE_NOUN_TO_METRIC's keys, the
+ *  ones that read as a real countable noun ("3 callers.") rather than a
+ *  participle only natural in a superlative ("most USED", not "how many used").
+ *  A key with no entry here echoes the user's own word unchanged (safe default,
+ *  same fallback CLASS_LABELS/classNoun use above). */
+const EDGE_NOUN_LABELS = {
+  test: ["test", "tests"], tests: ["test", "tests"],
+  importers: ["importer", "importers"], dependents: ["dependent", "dependents"],
+  callers: ["caller", "callers"], callees: ["callee", "callees"],
+  calls: ["call", "calls"], imports: ["import", "imports"],
+  dependencies: ["dependency", "dependencies"], members: ["member", "members"],
+  subclasses: ["subclass", "subclasses"], connections: ["connection", "connections"],
+  edges: ["edge", "edges"],
+};
+const edgeCountNoun = (noun, n) => {
+  const [s, p] = EDGE_NOUN_LABELS[noun] || [noun, noun];
+  return n === 1 ? s : p;
+};
+
+/** Pull the named entity out of a per-entity edge-count tail — the text after
+ *  "how many <edge-noun>" — recognising exactly the two closed shapes such a
+ *  tail actually takes:
+ *    - "<verb> <entity>" ("cover src/x.mjs", "import Widget") — verb drawn
+ *      from ask-vocab.mjs's RELATIONS[metric.kind].verbs (the SAME verb list
+ *      the relation clause grammar itself reads), longest-first so a
+ *      multi-word verb ("depends on") matches whole rather than a short
+ *      prefix stealing part of the entity name.
+ *    - "does/do/did <entity> have/has/had/got" ("does X have") — safe to
+ *      treat as unambiguous HERE even though answerCount's own
+ *      AMBIGUOUS_HAVE_VERBS guard deliberately excludes "have" elsewhere:
+ *      that guard exists because "have" maps to either defines/contains
+ *      depending on the SUBJECT's class, but an edge-nominalized noun's
+ *      metric.dir is fixed by the NOUN itself ("importers" is always dir
+ *      "in"), so there is no analogous ambiguity to worry about here.
+ *  Returns the trimmed entity term, or null (no recognizable shape — an
+ *  honest decline, not a guess) — the caller then leaves the existing "I
+ *  can't count" message from answerCount standing. */
+function extractEdgeCountEntity(tail, metric) {
+  const t = String(tail || "").trim().replace(/[?.!]+$/, "").trim();
+  if (!t) return null;
+  const haveM = t.match(/^(?:does|do|did)\s+(.+?)\s+(?:have|has|had|got)$/i);
+  if (haveM && haveM[1].trim()) return haveM[1].trim();
+  if (metric.kind !== "*" && RELATIONS[metric.kind]) {
+    const verbs = [...RELATIONS[metric.kind].verbs].sort((a, b) => b.length - a.length);
+    for (const v of verbs) {
+      const re = new RegExp(`^${v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s+(.+)$`, "i");
+      const m = t.match(re);
+      if (m && m[1].trim()) return m[1].trim();
+    }
+  }
+  return null;
+}
+
+/** Bare "how many <edge-noun> <verb> <entity>" / "how many <edge-noun> does
+ *  <entity> have" (HANDOVER "bare 'how many X' fails for edge-nominalized
+ *  nouns", 2026-07-12 fix) — "how many tests cover X", "how many importers
+ *  does X have", "how many callers does X have". answerCount's own COUNT_NOUNS
+ *  table only maps a counted noun to a graph INDIVIDUAL CLASS (Module/Class/…);
+ *  an edge-nominalized noun like "tests"/"importers"/"callers" names an EDGE
+ *  KIND instead — ask-vocab.mjs's EDGE_NOUN_TO_METRIC, the SAME table the
+ *  working superlative lane ("which module has the most tests") already reads
+ *  — so it was never in COUNT_NOUNS and answerCount short-circuited straight
+ *  to "I can't count 'tests'" without ever consulting that table. This reuses
+ *  the SAME per-entity degree computation the superlative lane's own
+ *  evalSuperlative uses to rank every entity of a class (ask.mjs's
+ *  degreeMetric, exported for exactly this) — just read for the ONE named
+ *  entity instead of sorting all of them.
+ *
+ *  Checked BEFORE answerCount in runTurn (same precedence pattern as
+ *  answerMemoryCount/answerQuantifierRecall above) so it gets first look;
+ *  declines (returns null, letting answerCount's existing message stand)
+ *  whenever:
+ *    - the noun isn't edge-nominalized at all (a COUNT_NOUNS class, or truly
+ *      unknown), or
+ *    - no entity term could be extracted from the tail
+ *      (extractEdgeCountEntity), or
+ *    - the extracted term doesn't resolve to exactly one graph entity.
+ *
+ *  SCOPED to the per-entity case only: a bare "how many tests are there" (no
+ *  named entity in the tail) has nothing for extractEdgeCountEntity to pull
+ *  out, so it declines here and keeps answerCount's existing "I can't count
+ *  'tests'" honest miss — what a GLOBAL edge count would even mean (every
+ *  test edge in the graph? distinct test modules? distinct tested modules?)
+ *  is a genuine, undecided design question, out of this fix's scope. */
+async function answerEdgeCount(graph, query) {
+  if (!graph) return null;
+  const q = String(query);
+  if (ANAPHORA_COUNT_RE.test(q) || IMPLICIT_ANAPHORA_COUNT_RE.test(q.trim())) return null;
+  const m = q.match(/\b(?:how many|number of|count(?:\s+the)?)\s+([a-z]+)\b/i);
+  if (!m) return null;
+  const noun = m[1].toLowerCase();
+  if (COUNT_NOUNS[noun]) return null; // a real graph class — answerCount owns it
+  const metric = EDGE_NOUN_TO_METRIC[noun];
+  if (!metric) return null; // not edge-nominalized either — answerCount's "I can't count" stands
+  const term = extractEdgeCountEntity(q.slice(m.index + m[0].length), metric);
+  if (!term) return null; // no per-entity phrasing recognized — scoped out (see docblock)
+  const entity = await resolveEntity(graph, term);
+  if (!entity) return null; // unresolved/ambiguous entity — honest decline, not a guess
+  const ind = graph.byId?.get?.(entity.id);
+  if (!ind) return null;
+  let degreeMetric;
+  try { ({ degreeMetric } = await import("./ask.mjs")); } catch { return null; }
+  const n = degreeMetric(graph, ind, metric);
+  return `${n} ${edgeCountNoun(noun, n)}.`;
 }
 
 /** ASSERTED-VOCABULARY count (CHATBENCH_006 lever 3): once "every class is a type"
@@ -8317,6 +8424,19 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
       note(trace, "lane: answerQuantifierRecall — matched HOW_MANY_ARE_RE with a subject tmct has facts about; literal recall, never real counting");
       return withLast(plainTurn(workingLine, quantifierRecall, { via: "fact", focus }), "recall a taught quantifier");
     }
+  }
+  // Edge-nominalized "how many X" counts ("how many tests cover Y", "how many
+  // callers does Y have") — checked BEFORE answerCount (same precedence
+  // pattern as answerQuantifierRecall/answerMemoryCount above): answerCount's
+  // own COUNT_NOUNS table doesn't know these nouns at all and would otherwise
+  // short-circuit straight to "I can't count 'tests'" before this lane ever
+  // got a turn. Declines (null) for anything answerCount should own, or a bare
+  // global count with no named entity — see answerEdgeCount's own docblock.
+  const edgeCount = await answerEdgeCount(graph, workingLine);
+  if (edgeCount != null) {
+    note(trace, 'goal: get a per-entity count of an edge-nominalized kind ("how many tests cover X", "how many callers does X have")');
+    note(trace, "lane: answerEdgeCount — matched an EDGE_NOUN_TO_METRIC noun with a resolvable named entity, answered via the same degreeMetric the superlative lane uses");
+    return withLast(plainTurn(workingLine, edgeCount, { via: "count", focus }), "get a per-entity edge count");
   }
   // Aggregate/count questions are answered mechanically off the loaded graph header,
   // BEFORE falling through to the ask engine (focus unchanged — a count names no entity).
