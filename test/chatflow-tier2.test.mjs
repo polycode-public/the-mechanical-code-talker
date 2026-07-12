@@ -838,7 +838,7 @@ test("tier2/T19 staccato swap continuation: 'and Widget?'/'and app/lib/f.mjs?' (
       assert.doesNotMatch(t.answer, WALL, `turn ${i} must not hit the grammar wall`);
     }
     assert.equal(turns[0].answer, "scripts/g.mjs.");
-    assert.equal(turns[1].answer, "No modules found whose module directly calls Widget.", "'and Widget?' re-asks 'what calls Widget' — an honest, specific empty, not a misparse");
+    assert.equal(turns[1].answer, "No modules found whose module directly calls Widget. Try \"who touched <a module that actually has commits>\" or \"/describe <module>\" to see what's in the index.", "'and Widget?' re-asks 'what calls Widget' — an honest, specific empty, not a misparse");
     assert.match(turns[2].answer, /I'm tmct — a deterministic/, "'so then' has no code-ish swap-in candidate — falls through to the ordinary (guiding) orientation path, not a bogus subject swap");
     assert.doesNotMatch(turns[3].answer, WALL);
     assert.equal(turns[4].answer, "app/lib/b.mjs and app/lib/c.mjs and app/lib/e.mjs.");
@@ -924,10 +924,10 @@ test("tier2/T22 multi-hop staccato SWAP chain, 3+ turns deep: 'what calls X' -> 
       assert.doesNotMatch(t.answer, WALL, `turn ${i} must not hit the grammar wall`);
     }
     assert.equal(turns[0].answer, "scripts/g.mjs.");
-    assert.equal(turns[1].answer, "No modules found whose module directly calls Widget.");
-    assert.equal(turns[2].answer, "No modules found whose module directly calls Button.",
+    assert.equal(turns[1].answer, "No modules found whose module directly calls Widget. Try \"who touched <a module that actually has commits>\" or \"/describe <module>\" to see what's in the index.");
+    assert.equal(turns[2].answer, "No modules found whose module directly calls Button. Try \"who touched <a module that actually has commits>\" or \"/describe <module>\" to see what's in the index.",
       "the 3rd staccato swap in a row still continues 'what calls <X>' — before this fix it corrupted into a nonsense re-ask of turn 2's OWN raw staccato text and hit the grammar wall");
-    assert.equal(turns[3].answer, "No modules found whose module directly calls app/lib/c.mjs.",
+    assert.equal(turns[3].answer, "No modules found whose module directly calls app/lib/c.mjs. Try \"who touched <a module that actually has commits>\" or \"/describe <module>\" to see what's in the index.",
       "a 4th staccato swap still continues correctly");
   } finally {
     clearCache();
@@ -1179,7 +1179,7 @@ test("tier2/T31 STACCATO CONNECTIVE LEAKAGE: a bare-connective relation-chain co
     }
     assert.equal(turns[0].answer, "app/lib/a.mjs.");
     assert.equal(turns[1].answer, CALLS_RELATION_TEXT);
-    assert.equal(turns[2].answer, "No modules found whose module directly calls it.",
+    assert.equal(turns[2].answer, "No modules found whose module directly calls it. Try \"who touched <a module that actually has commits>\" or \"/describe <module>\" to see what's in the index.",
       "an honest empty over the RIGHT entity (app/lib/b.mjs) — nothing in the fixture calls it — not a corrupted focus's own (also empty, but WRONG-reasoned) answer");
     assert.equal(
       turns[3].answer,
@@ -1209,7 +1209,7 @@ test("tier2/T32 discourseRewrite swaps into a PRONOUN-shaped prior query too: 'w
     }
     assert.equal(turns[0].answer, "scripts/g.mjs.");
     assert.equal(turns[1].answer, "scripts/g.mjs.", "'what calls it' re-asks the same query via the standing focus");
-    assert.equal(turns[2].answer, "No modules found whose module directly calls Widget.",
+    assert.equal(turns[2].answer, "No modules found whose module directly calls Widget. Try \"who touched <a module that actually has commits>\" or \"/describe <module>\" to see what's in the index.",
       "'and Widget?' correctly rewrote to 'what calls Widget' (swapping into the bare PRONOUN 'it', since 'what calls it' has no real name token) — an honest empty over the RIGHT new subject, not a parse failure");
   } finally {
     clearCache();
@@ -1220,7 +1220,7 @@ test("tier2/T32 discourseRewrite swaps into a PRONOUN-shaped prior query too: 'w
 test("tier2/T33 the reverse-object honest miss names the query's OWN entity type ('no class matching') instead of defaulting to 'module' when the searched term is neither sha- nor dotted-symbol-shaped", async () => {
   const { dir, turns } = await driveSession(["which classes inherit from Nonexistent"]);
   try {
-    assert.equal(turns[0].answer, 'no class matching "Nonexistent" found in the index.',
+    assert.equal(turns[0].answer, 'no class matching "Nonexistent" found in the index. Try "who touched <a module that actually has commits>" or "/describe <module>" to see what\'s in the index.',
       "entityType=Class was already on the parsed AST — the old hardcoded 'module' catch-all default ignored it");
   } finally {
     clearCache();
@@ -1236,7 +1236,7 @@ test("tier2/T33 the reverse-object honest miss names the query's OWN entity type
   // here instead to isolate the same shape-priority rule).
   const { dir: dir2, turns: turns2 } = await driveSession(["which modules import nonexistent.mjs"]);
   try {
-    assert.equal(turns2[0].answer, 'no symbol matching "nonexistent.mjs" found in the index.');
+    assert.equal(turns2[0].answer, 'no symbol matching "nonexistent.mjs" found in the index. Try "who touched <a module that actually has commits>" or "/describe <module>" to see what\'s in the index.');
   } finally {
     clearCache();
     await rm(dir2, { recursive: true, force: true });
@@ -1282,7 +1282,7 @@ test("tier2/T35 an UN-guarded connective ('or', never in the closed STACCATO_LEA
     }
     assert.equal(turns[0].answer, "app/lib/a.mjs.");
     assert.equal(turns[1].answer, CALLS_RELATION_TEXT);
-    assert.equal(turns[2].answer, 'no module matching "or" found in the index.',
+    assert.equal(turns[2].answer, 'no module matching "or" found in the index. Try "who touched <a module that actually has commits>" or "/describe <module>" to see what\'s in the index.',
       "an honest object-resolution miss — 'or' is a genuine accidental substring of a real label pre-fix, but the length floor keeps it an honest miss instead of a silent focus hijack");
     assert.equal(turns[3].answer, "app/unit-tests/b.test.mjs.",
       "the CORRECT answer — app/lib/b.mjs genuinely IS tested by app/unit-tests/b.test.mjs — proving the focus survived 'or calls?' untouched, exactly like T31 proved for 'and calls?'");
