@@ -50,8 +50,9 @@
 // seedBootstrapMemory already establishes (seon's curated facts should win the
 // content-hash idempotency race over general ConceptNet noise).
 
-import { isAbsolute, join, resolve } from "node:path";
+import { isAbsolute, join, resolve, dirname } from "node:path";
 import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import { loadTomlConfig } from "./toml-config.mjs";
 import {
   SEON_CONCEPTS_FILE,
@@ -63,6 +64,12 @@ import {
   loadMap,
   toFacts,
 } from "./corpus/conceptnet.mjs";
+
+// corpus/namenet/generate.mjs's output — same small-top-up shape as the
+// wordnet-xl/wordnet-full entries below, just a single bundle (not
+// worth PKG_ROOT-style plumbing through corpus/conceptnet.mjs for one
+// directory constant, so computed locally here instead).
+const NAMENET_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "corpus", "namenet");
 
 export const EXTENSION_KINDS = Object.freeze(["corpus", "lexicon", "templates", "pack", "ontology"]);
 
@@ -177,6 +184,18 @@ function builtinExtensions() {
       active: false,
       corpusPath: join(WORDNET_DIR, "wordnet-full.jsonl"),
       provenancePrefix: "corpus:wordnet-full",
+    },
+    // corpus/namenet/generate.mjs's output: species/common-name and
+    // Wikidata-label/WordNet-lemma synonym pairs, mechanically derived from
+    // three human-reviewed Open English Namenet linking tables. A small,
+    // explicitly OPTIONAL top-up bundle (not a primary corpus) — same
+    // BUILTIN_EXTENSIONS seam as wordnet-xl/wordnet-full above, so `tmct
+    // import --corpus namenet` resolves directly here. Shipped inactive.
+    namenet: {
+      kind: "corpus",
+      active: false,
+      corpusPath: join(NAMENET_DIR, "namenet.jsonl"),
+      provenancePrefix: "corpus:namenet",
     },
   };
 }

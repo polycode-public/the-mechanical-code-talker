@@ -10,6 +10,10 @@ Session handle (inbox): `tmct` (this session; earlier sessions used `mechanic`).
 
 ## Version state (2026-07-12, v1.8.19)
 
+`corpus/namenet/` (new, optional top-up — not wired into any init script; `init:xl`/`init:xxl`
+don't exist in `package.json` yet): 7,260 `/r/Synonym` facts from Open English Namenet's reviewed
+species/taxon/occupation linking tables. Standalone via `tmct import --corpus namenet`.
+
 All of `BENCHMARK_CONVERSATION_1.8.14.md`'s routed backlog is fixed and pushed: pronoun-subject
 misparse, the README's "all men are mortal" syllogism demo, taught-fact retraction, teach-vs-graph
 precedence, `calls` up-refinement, and the five smaller routed gaps. CI was red for 16 straight

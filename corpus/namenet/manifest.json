@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "generated": "by corpus/namenet/generate.mjs",
+  "corpuses": [
+    {
+      "id": "namenet",
+      "kind": "language",
+      "description": "Scientific-name/common-name and Wikidata-label/WordNet-lemma synonym pairs, mechanically derived from three human-reviewed Open English Namenet linking tables (species, taxon-to-common-name, occupations). A small top-up bundle, not a primary corpus.",
+      "source": {
+        "kind": "curated",
+        "tool": "corpus/namenet/generate.mjs"
+      },
+      "file": "namenet.jsonl",
+      "facts": 7260,
+      "bytes": 1103264,
+      "sha256": "609020845fd89c70b8fe8e598267de83fc752d103cc602a34d5d80663e001f9c",
+      "license": "CC-BY-4.0 (source repo declares no explicit license; see LICENSE-NOTICE)"
+    }
+  ]
+}

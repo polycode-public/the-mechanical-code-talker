@@ -25,7 +25,7 @@ test("bare/no-toml dir: resolves to exactly today's implicit `human` default (se
     const { entries, biasByBundle } = await resolveExtensions(dir);
     assert.deepEqual(biasByBundle, {});
     // fixed order: seon, conceptnet, then the rest sorted
-    assert.deepEqual([...entries.keys()], ["seon", "conceptnet", "human", "human-large", "human-medium", "tier2-aws", "tier2-general", "tier2-java", "tier2-python", "wordnet-full", "wordnet-xl"]);
+    assert.deepEqual([...entries.keys()], ["seon", "conceptnet", "human", "human-large", "human-medium", "namenet", "tier2-aws", "tier2-general", "tier2-java", "tier2-python", "wordnet-full", "wordnet-xl"]);
     const seon = entries.get("seon");
     assert.equal(seon.kind, "corpus");
     assert.equal(seon.active, false, "seon ships inactive now — opt-in via --with-persona code");
@@ -60,13 +60,14 @@ test("bare/no-toml dir: resolves to exactly today's implicit `human` default (se
 });
 
 test("BUILTIN_EXTENSIONS matches the resolved defaults' shape (kind/active for every shipped bundle)", () => {
-  assert.deepEqual(Object.keys(BUILTIN_EXTENSIONS).sort(), ["conceptnet", "human", "human-large", "human-medium", "seon", "tier2-aws", "tier2-general", "tier2-java", "tier2-python", "wordnet-full", "wordnet-xl"]);
+  assert.deepEqual(Object.keys(BUILTIN_EXTENSIONS).sort(), ["conceptnet", "human", "human-large", "human-medium", "namenet", "seon", "tier2-aws", "tier2-general", "tier2-java", "tier2-python", "wordnet-full", "wordnet-xl"]);
   assert.equal(BUILTIN_EXTENSIONS.seon.active, false);
   assert.equal(BUILTIN_EXTENSIONS.conceptnet.active, false);
   assert.equal(BUILTIN_EXTENSIONS.human.active, true);
   assert.equal(BUILTIN_EXTENSIONS["tier2-aws"].active, false);
   assert.equal(BUILTIN_EXTENSIONS["wordnet-xl"].active, false, "wordnet-xl ships inactive");
   assert.equal(BUILTIN_EXTENSIONS["wordnet-full"].active, false, "wordnet-full ships inactive");
+  assert.equal(BUILTIN_EXTENSIONS.namenet.active, false, "namenet ships inactive");
 });
 
 test("a tmct.toml flipping tier2-aws active — recognized-name override, path/provenance untouched", async () => {
@@ -96,7 +97,7 @@ test("a tmct.toml with an unrecognized-key host pack entry", async () => {
     assert.equal(e.corpusPath, join(dir, "corpus.jsonl"), "a relative path resolves against repoRoot");
     assert.equal(e.provenancePrefix, "corpus:seonix");
     // ordering: seon, conceptnet, then the rest (including the new one) sorted
-    assert.deepEqual([...entries.keys()], ["seon", "conceptnet", "human", "human-large", "human-medium", "seonix", "tier2-aws", "tier2-general", "tier2-java", "tier2-python", "wordnet-full", "wordnet-xl"]);
+    assert.deepEqual([...entries.keys()], ["seon", "conceptnet", "human", "human-large", "human-medium", "namenet", "seonix", "tier2-aws", "tier2-general", "tier2-java", "tier2-python", "wordnet-full", "wordnet-xl"]);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

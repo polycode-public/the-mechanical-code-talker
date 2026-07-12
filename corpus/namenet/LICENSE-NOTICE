@@ -1,0 +1,68 @@
+LICENSE NOTICE — corpus/namenet/namenet.jsonl
+================================================================================
+
+The file namenet.jsonl in this directory is a mechanical, ConceptNet-shape
+conversion of three human-reviewed linking tables (species, taxon-to-common-
+name, occupations) from the Open English Namenet project. It is licensed
+under the Creative Commons Attribution 4.0 International License
+(CC-BY-4.0), NOT under this repository's MPL-2.0.
+
+  https://creativecommons.org/licenses/by/4.0/
+
+License status of the source repository — read this before redistributing
+--------------------------------------------------------------------------
+
+The source repository, globalwordnet/english-namenet, declares NO explicit
+license of its own: no LICENSE file in the checkout, no license statement in
+its README.md, and GitHub's own repository metadata reports `license: null`
+(confirmed 2026-07-12). CC-BY-4.0 above is a CONSERVATIVE CHOICE by this
+repository, matching the license of the Open English WordNet data the source
+CSVs link against (see Attribution below) — it is not a license the
+globalwordnet/english-namenet maintainers have themselves stated. Anyone
+redistributing namenet.jsonl more widely than this repository should seek
+explicit confirmation from the GlobalWordNet team before relying on that
+label.
+
+Attribution
+-----------
+
+This work includes data derived from the Open English Namenet project (an
+extension of Open English WordNet with names drawn from Wikidata), and
+transitively from Open English WordNet itself (CC-BY-4.0) and Wikidata
+(structured data, CC0).
+
+  - Project: https://github.com/globalwordnet/english-namenet
+  - Open English WordNet: https://github.com/globalwordnet/english-wordnet
+  - Wikidata: https://www.wikidata.org/
+
+Source
+------
+
+- Dataset: three reviewed CSVs from a LOCAL, uncommitted checkout of
+  globalwordnet/english-namenet — never vendored into this repository:
+    - species_reviewed.csv (5,101 rows)
+    - taxon2common_reviewed.csv (2,368 rows)
+    - linked_occupations_reviewed.csv (2,193 rows)
+  Every accepted row in all three links a name/label to an Open English
+  WordNet synset or lemma set that a human reviewer confirmed denotes the
+  SAME real-world thing (a species, a folk-taxonomic category, an
+  occupation) — never a broader/narrower or capability relation. See
+  corpus/namenet/generate.mjs's own header comment for the full reasoning
+  behind mapping every row to /r/Synonym, and the exact accept/skip rules
+  per source file.
+- species_reviewed.csv also required cross-referencing a SECOND local
+  checkout, globalwordnet/english-wordnet's `src/yaml/` synset source (the
+  same one corpus/wordnet/generate.mjs reads), to resolve each row's SSID
+  into a representative lemma — that CSV alone carries no lemma text.
+- Conversion tool: corpus/namenet/generate.mjs (tmct code, MPL-2.0).
+
+Share-alike
+-----------
+
+CC-BY-4.0 does NOT require share-alike (unlike ConceptNet's CC-BY-SA 4.0 in
+corpus/conceptnet/) — a CC-BY-4.0 derivative may be relicensed, provided
+attribution is preserved. This repository chooses to keep redistributing
+namenet.jsonl itself under CC-BY-4.0 regardless, to stay unambiguous about
+its origin, subject to the license-status caveat above. The code in this
+directory (generate.mjs) is tmct code under the repository's MPL-2.0; only
+the data file (namenet.jsonl) carries the CC-BY-4.0 label.
