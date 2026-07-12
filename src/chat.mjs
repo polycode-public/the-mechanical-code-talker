@@ -3076,7 +3076,17 @@ async function memorySummary(memoryDir, graph) {
 // both already exist. CASE-PRESERVING: module paths/symbol names are
 // case-sensitive, so this reads the ORIGINAL query text, never metaLane's
 // lowercased `q` (authorLane's same discipline, just above/below).
-const MODULE_ORIENT_RE = /^what\s+does\s+(.+?)\s+do\??$/i;
+/** A trailing intensifier/filler adverb tacked onto "do"/"does" ("what does the
+ *  store module do exactly?", "...do exactly", "what X does really") — fast
+ *  loop round 8 (ESL/filler-phrasing angle): the closed-form anchor below used
+ *  to require "do"/"does" to be the LAST word before the optional "?", so this
+ *  one extra word past it hit the raw grammar wall even though the shared
+ *  FILLER_WORDS/normalizeQuery pass (used elsewhere in the file) never sees
+ *  this lane's case-preserving text at all. Mirrors MODULE_ORIENT_POLITENESS_RE
+ *  just below: closed, optional, single-lane blast radius — a bare "what does
+ *  X do" still matches with this suffix empty. */
+const TRAILING_ADVERB_RE = "(?:\\s+(?:exactly|really|actually|anyway))?";
+const MODULE_ORIENT_RE = new RegExp(`^what\\s+does\\s+(.+?)\\s+do${TRAILING_ADVERB_RE}\\??$`, "i");
 /** The SUBJECT-FIRST word order of the SAME question ("what saveStore does" vs
  *  "what does saveStore do") — Tier 6 playtest, §3b surface-variation axis: a
  *  perfectly natural alternate phrasing of an ALREADY-recognized intent that
@@ -3086,7 +3096,7 @@ const MODULE_ORIENT_RE = /^what\s+does\s+(.+?)\s+do\??$/i;
  *  UNIQUE graph entity or this lane declines) is what keeps this loose an
  *  ending safe — a syntactic match against a term that isn't a real entity
  *  simply falls through unchanged, same as every other lane in this file. */
-const MODULE_ORIENT_SVO_RE = /^what\s+(.+?)\s+does\??$/i;
+const MODULE_ORIENT_SVO_RE = new RegExp(`^what\\s+(.+?)\\s+does${TRAILING_ADVERB_RE}\\??$`, "i");
 // Seonix Batch 3 (3a) — purpose/identity phrasing: "whats X for"/"what's X
 // about"/"what is X for", the sibling of "what does X do" that asks for the
 // SAME module-grain overview. Deliberately does NOT claim the literal noun
