@@ -125,8 +125,7 @@ What's left, still open, checked directly against current code (nothing below ha
   tests mean", plus `g-a1-naming-1` "what does defines mean" as a same-bug-class bonus) now resolves
   directly via a general prune in `ask.mjs`'s `parseQuery`. `g-a1-naming-9` ("what does imports mean")
   stays unfixed BY DESIGN — its input is byte-identical to `am-meta-imports`'s own frozen expectation
-  (`quickwins.test.mjs`), so a deterministic function cannot satisfy both; this is a permanent,
-  structural conflict between two graded-pool cases, not a remaining gap in the fix.
+  (`quickwins.test.mjs`), so a deterministic function cannot satisfy both;
 - ~~**`am-tests-cover`'s un-flagged entity-name ambiguity** ("which tests cover b.mjs" resolves
   confidently instead of asking the user to narrow)~~ — **CLOSED, commit `bf87c6c`** (post-dates this
   audit's pin). Fixed by extending `PLAN_CONVERSATION.md` Finding 2's own generate-then-prune
@@ -350,7 +349,6 @@ diff looked safe."
 > claim — "`am-tests-cover` and `g-a1-naming-9` should not be expected to move… a future session
 > picking up decision-log item 1 is the right lever for `g-a1-naming-9`, not any extension of item
 > #92's work" — turned out to be half right: `g-a1-naming-9` indeed did not move (and, it turns out,
-> permanently cannot — see the closed TO-BE item above). But `am-tests-cover` DID move, and point 4's
 > own prediction is exactly what fixed it: the `noise-strip.mjs`/`PLAN_CONVERSATION.md` Finding 2
 > mechanism, extended (not replaced) to cover the `b.mjs`/`b.test.mjs` name-collision shape. Point 4's
 > closing line — "a future cycle wanting the CEFR number to move on this still needs to run one" — has
@@ -401,7 +399,6 @@ diff looked safe."
   measurement.
 - A1 `naming-vocabulary`'s schema-term/common-word collision (`g-a1-naming-8/9`) — **partially
   complete, commit `bf87c6c`** (post-dates this audit's pin). `g-a1-naming-8` fixed generally;
-  `g-a1-naming-9` stays open permanently by design — see the TO-BE section above for why.
 - `am-tests-cover`'s un-flagged ambiguity — **complete, commit `bf87c6c`** (post-dates this audit's
   pin) — fixed by extending `PLAN_CONVERSATION.md` Finding 2's mechanism, per the prediction in §2
   above.
@@ -585,8 +582,7 @@ capability this cycle (the only candidate, INFBENCH's fix, is already item #92 f
   (marginalia/seonix/Bedrock/Copilot integration), #73/#74 (named grammar gaps), #75 (cochange
   conjunction parsing), #76-79 (research-horizon items). Of this audit's two named CEFR weak spots,
   `am-tests-cover` and `g-a1-naming-8` are **no longer open** as of commit `bf87c6c` (post-dates this
-  audit's `b461ecd` pin — see the "What a future CEFR re-measurement should watch for" update above);
-  `g-a1-naming-9` alone remains, now confirmed permanently blocked rather than merely unpicked.
+  audit's `b461ecd`
 - **The single most consequential finding of this refresh**: `CAPABILITIES_1.5.7.md`'s own closing
   line predicted "the harness fix hasn't yet produced a fresh ladder measurement to confirm the engine
   underneath is still exactly what it was." That measurement has now run, and the prediction holds,

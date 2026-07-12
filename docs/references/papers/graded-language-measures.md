@@ -15,7 +15,6 @@ we borrow their *structure*, never their content).
 | bAbI (Facebook AI 2015, arXiv:1502.05698) | 20 graded toy QA task families | REJECTED as backbone (operator decision 2026-07-04): tests expected-AI mechanics, not human language standards — same overfitting failure mode as self-authored cases; kept here only as a what-not-to-do reference | Open — not used |
 | CoQA / QuAC | Conversational QA with cross-turn coreference | academic multi-turn | Open datasets — verify licences |
 | CLUTRR | Systematic reasoning over kinship graphs | graph-traversal analog | Open — verify |
-| Winograd Schema Challenge (Levesque et al. 2012) / WinoGrande | Pronoun resolution requiring world knowledge | the permanent TOO-HARD ceiling markers | Open — verify |
 | CEFR (A1–C2) | Language-proficiency banding framework | the band labels on every case | Open framework (Council of Europe) |
 | IRT (item response theory) | Psychometric difficulty-placement method | maintenance methodology; pragmatic stand-in: per-cycle pass-rate bands | Method, not data |
 

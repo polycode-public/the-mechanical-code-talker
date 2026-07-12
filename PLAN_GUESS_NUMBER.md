@@ -350,5 +350,4 @@ exist — consistent with Hanoi doc's own point 3 ("an explicit path to generali
 - Not an implementation — no code changes land from this doc alone.
 - Not a replacement for `PLAN_HANOI.md` — the two are deliberately complementary halves (open-loop
   vs. closed-loop) of validating ONE planning-loop design, not two separate features.
-- Not scoped to number-guessing permanently — like Hanoi, this is a validation harness for a
   general mechanism, not a one-off toy feature.

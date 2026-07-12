@@ -10,9 +10,7 @@
 //      the grammar strategy's own clean "meta" parse to manufacture the legacy
 //      {ambiguousParse} surface. Pruned generally in ask.mjs's parseQuery
 //      (pruneSpuriousMeaningAmbiguity), EXCEPT for "imports" — see test 3 below.
-//      UPDATE (2026-07-11): the sibling case g-a1-naming-9 was wrongly written
-//      up here as a permanent, structural non-fix on the theory that a
-//      deterministic function can't honor both am-meta-imports's and
+
 //      g-a1-naming-9's expectations on the identical input string. That's true
 //      only if the ambiguity render stays a bare "could mean X or Y" hedge —
 //      once ask.mjs's traverse()/renderCore() actually RESOLVES and shows every

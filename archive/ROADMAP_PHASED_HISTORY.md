@@ -426,8 +426,7 @@ in `SKILL_BENCHMARK_CEFR_ENGLISH.md` (renamed from `SKILL_TUNING_CYCLE.md`):
   **Ladder gating:** advanced grades are SKIPPED until every grade
   below passes reliably; when a grade reaches unit-test-level reliability its
   cases become ALWAYS-RUN deterministic tests (judge-free, promoted alongside
-  test/showcase.test.mjs). Winograd/WinoGrande items stay as permanent
-  ceiling markers; CHILDES as naturalistic easy-band input source. Licence
+  test/showcase.test.mjs); CHILDES as naturalistic easy-band input source. Licence
   rule: TROG/CELF are commercial — borrow the construction taxonomy and
   grading structure, author ORIGINAL items, never copy instrument content.
   A case at 0% is a ceiling marker, not a failure.

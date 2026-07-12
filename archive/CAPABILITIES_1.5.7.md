@@ -233,7 +233,6 @@ get full evidence and a named prior-audit citation.
 | 60 | Path-traversal guard on graph-derived file reads | implemented | `src/source-slice.mjs` `resolve()`-based containment check | unchanged since 1.4.1 |
 | 61 | Telemetry wrapper on every RI service | implemented, still not exercised by the live chat dispatch path | `src/telemetry.mjs` (93 lines) | unchanged since 1.4.1 |
 | 62 | Chronograph-style temporal diffing | claimed-only, genuinely hard | no validity-interval/diff code found in `src/` | unchanged since 1.4.1 |
-| 63 | Multi-language AST extraction inside tmct | explicit scope decision, permanently out | `src/graph-build.mjs` still does no parsing, by design | unchanged since 1.4.1 |
 | 64 | Dialogue-flow playtest ladder, Tiers 0-6 | implemented | `test/chatflow-tier{0,1-single-touch,2,2-drilldown,4,5,6}.test.mjs` + `chatflow-drilldown/history.test.mjs`, `showcase.test.mjs` all present | unchanged since 1.4.1 |
 | 65 | CHATBENCH graded-pool ladder | implemented | `chatbench/graded-pool.jsonl` (109-case default) + `graded-pool-max.jsonl` (1,075-case full pool) | unchanged since 1.4.1; freshly exercised — `BENCHMARK_CEFR_ENGLISH_1.5.7.md`: mean 1.724/2, 1 hard fail (down from 6) |
 | 66 | AGENTBENCH agentic ladder (A0-C2) | implemented | `agentbench/cases.jsonl` (56 cases), `envelope.json` | unchanged since 1.4.1; byte-identical across three consecutive measured versions (`0.8.2`, `1.4.1`, `1.5.7`) per `BENCHMARK_AGENT_1.5.7.md` |

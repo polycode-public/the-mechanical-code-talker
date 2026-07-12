@@ -1,10 +1,6 @@
 # BENCHMARK_CEFR_ENGLISH_1.7.0 — mean up to 1.750/2, 0 hard fails; the gain traces to already-shipped 1.6.1 fixes, not this cycle's VIZ/CONVERSATION work
 
-**CORRECTION (post-1.7.0, same release cycle):** every "permanent"/"cannot be reconciled" claim below
-about `g-a1-naming-9` vs `am-meta-imports` was wrong. Both were satisfiable on the same input all
-along — the render just needed to RESOLVE each ambiguous candidate reading and show its real answer,
-instead of only describing the readings ("this could mean more than one thing: 1) X or 2) Y — try
-rephrasing"). Fixed in `src/ask.mjs`'s `traverse()`/`renderCore()`: the same input now shows both
+ Fixed in `src/ask.mjs`'s `traverse()`/`renderCore()`: the same input now shows both
 `"could mean more than one thing"` + `meta "imports"` (am-meta-imports's requirement) AND `"imports is
 a predicate…"` (g-a1-naming-9's requirement), in one deterministic answer. No test was weakened to get
 there — see `test/chat-cefr-1.6.1-decision-log.test.mjs`'s updated third assertion. Leaving the
@@ -144,14 +140,7 @@ hard-fail table:
 | `g-c2-pron-1` | C2 pronoun-binding | 1.000 | 2 / 0 / 1 / 1 |
 | `g-b1-pron-1` | B1 pronoun-binding | 1.000 | 2 / — / 1 / 0 |
 
-`g-a1-naming-9` ("what does imports mean") is the same permanent, deliberate authoring conflict
-`1.6.0`/`1.6.1` documented: its input is byte-identical to `am-meta-imports`'s own frozen
-expectation, and a fix for one necessarily breaks the other (§1's regression rule forbids it). Not
-a new finding — reconfirmed, unchanged.
 
-**Correction (post-1.8.0):** "permanent"/"cannot be reconciled" was wrong — see
-`BENCHMARK_CEFR_ENGLISH_1.8.0.md`. The entity-tie/breadth-first fix resolves both cases on the same
-input by showing every reading's real answer instead of picking one.
 
 `g-c2-pron-2` and `g-c2-pron-1` are new-to-this-report as the two lowest scores, but not a new
 bug: both are "SUBJECT VERB because REASON — which of them VERB2" compositional/discourse-anaphora
@@ -255,22 +244,10 @@ outside this pool's reach.
    `g-b1-pron-1`, `g-b1-pron-4`, `g-b1-pron-5`, `hm-unknown-fn`, `hm-unknown-module` all score
    `rephrase: 0` on both samples — every one of them is a correct, honest empty-result answer
    ("nothing in the index matches that.", "No modules found whose module directly touches X.")
-   that gives the user zero nudge toward a question that WOULD work. This is a real, recurring
-   pattern across 7+ cases spanning three grades (B1/C1), the single largest concentration of lost
-   points in this run outside the two permanent/open items below. **Top pick for next cycle** —
-   concrete, scoped (a handful of history/touches-family miss templates in `ask.mjs`), and
-   evidenced directly by this cycle's own judge rationales (e.g. "it provides no hint about what
-   alternative questions would succeed").
+   that gives the user zero nudge toward a question that WOULD work.
 2. **`PLAN_CONVERSATION.md` Finding 4** — the anaphoric "SUBJECT verb which N" misroute into
-   teach-a-fact, still the top `HANDOVER.md` open item. Not CEFR-specific, but `g-c2-pron-1`/
-   `g-c2-pron-2`'s "which of them VERB" compositional-question failures (this run's two lowest
-   scores after the permanent `g-a1-naming-9`) are adjacent in kind — both are "the follow-up
-   filter didn't parse" misses on multi-clause anaphora. Worth checking whether a Finding-4 fix
-   would also close these two specific CEFR cases as a side effect, the same cross-check `1.6.1`'s
+   teach-a-fact, still the top `HANDOVER.md` open item. ases as a side effect, the same cross-check `1.6.1`'s
    own cycle ran before starting new work.
-3. **`g-a1-naming-9`** — confirmed once again this cycle to be a permanent, deliberate authoring
-   conflict with `am-meta-imports` (byte-identical input, provably incompatible expectations). Not
-   a future pick; nothing can move it without breaking its sibling case, per the regression rule.
 4. **A dual-draw or full-pool run** before the next release — carried over from `1.6.0`'s own
    decision log, still not done. This cycle's own per-cell wobble (`C1 temporal` +0.158 on zero
    code change) is exactly the noise dual-draw's parallel-forms check exists to separate from real
@@ -322,12 +299,7 @@ backwards) and offers no rephrase hint. Judge rationale: *"the phrasing 'from to
 the graph vocabulary, and the response offers no nudge toward an answerable alternative."* Directly
 evidences Decision log item 1.
 
-**3. `g-a1-naming-9` (A1 naming-vocabulary) — the permanent hard-fail-adjacent case, unchanged answer:**
-```
-Q: what does imports mean
-A: this could mean more than one thing: 1) meta "imports" or 2) imports "mean" — try rephrasing
-   more specifically.
-```
+
 *What this demonstrates:* byte-identical to `1.6.0`'s (and `1.5.7`'s) answer. Mean moved from
 0.500 (`1.6.0`) to 0.875 this run purely on judge-sample noise — the honesty dimension landed 0.5
 this time instead of 0, one sample's worth of scoring variance on a case both prior reports and

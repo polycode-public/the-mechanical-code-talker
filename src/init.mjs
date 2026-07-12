@@ -301,7 +301,6 @@ export async function initRepo(dir, { force = false, seed, env = process.env, pe
     // `config.memory.backend`. A `tmct init --memory-backend sqlite` repo ended
     // up with its corpus facts trapped in an inert .tmct/memory/graph.json that
     // a sqlite-backend chat session (createSession, which IS backend-aware)
-    // could never read: a permanently split-brain repo. Resolved the same way
     // createSession resolves it — src/memory/core.mjs's openMemoryBackend — so
     // the seed lands in whichever backend `config.memory.backend` actually
     // names. "memory" is skipped outright: it's an in-process-only store that

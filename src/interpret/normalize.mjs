@@ -119,9 +119,7 @@ const KIND_NOUN_ANAPHORA_RE = /\b(this|that)\s+(class|module|function|method|att
  *  "file"->"Module" convention every other lane in this grammar already
  *  uses)? Returns that class, or null when no such anaphora is present.
  *  Deliberately SEPARATE from normalizeQuery's own KIND_NOUN_ANAPHORA_RE
- *  replace just above (which permanently collapses "this file" to bare
- *  "this", discarding the kind-noun signal for good, by design — see that
- *  replace's own docblock): this never mutates its input and has no effect
+ *  replace just above (: this never mutates its input and has no effect
  *  on normalizeQuery's behavior, signature, or any of its many call sites.
  *  A caller that needs BOTH the collapsed pronoun AND the kind it stood for
  *  (chat.mjs's runAsk, at its pronoun-reuse site) calls this side-channel on

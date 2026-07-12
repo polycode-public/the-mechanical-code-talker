@@ -1,8 +1,6 @@
 // chatflow-canonical.test.mjs — SKILL_BENCHMARK_CONVERSATION.md Sec 0.1
 // regression transcripts: the single most canonical, "anyone would try this
 // first" textbook example for each of tmct's headline claims, frozen as a
-// PERMANENT, always-run npm-test gate — not something that depends on a
-// future playtest session remembering to check it.
 //
 // Born from a real miss (2026-07-10): a full 3-round playtest sprint
 // carefully explored examples/mini-webapp and found real dead-ends, but every

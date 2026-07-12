@@ -18,11 +18,6 @@ other tag either held flat or moved inside normal judge-sample noise (`typo-fuzz
 
 ## The finding worth stating plainly
 
-`am-meta-imports` and `g-a1-naming-9` ask the identical question ("what does imports mean") with
-deliberately incompatible expectations. `BENCHMARK_CEFR_ENGLISH_1.7.0.md` documented this as a
-**permanent, unfixable conflict** — "a fix for one necessarily breaks the other" — and left
-`g-a1-naming-9` sitting at 0.875, the second-lowest score in that report.
-
 Track 1's breadth-first render doesn't pick a side. It shows both readings' real answers in one
 response:
 

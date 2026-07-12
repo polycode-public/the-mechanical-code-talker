@@ -17,10 +17,7 @@ See §12, Provenance, for what each contributed.)*
 > ace-owl extraction, ontology-hierarchies tracks a–d, advanced-grammar tracks a/d/f, the debt
 > re-measure. Still open in Phase 1: the wider general-knowledge seed set itself (shipped-but-inactive
 > tier2 bundles are now activatable via the extension-pack seam, which is real progress, but nobody
-> has grown the corpus further) and context-preserving unknown-word ingestion (not built). **New
-> scope decision:** multi-language AST extraction (§2.2, §6) stays in seonix, permanently — "seonix
-> is the connection of the SEON ontology with software language," not tmct's job; tmct stays a pure
-> downstream graph consumer, per the operator's explicit instruction. See §13 for the full record.)*
+> has grown the corpus further) and context-preserving unknown-word ingestion (not built).
 
 ## 0. The architecture, in one picture
 
@@ -238,9 +235,7 @@ logic tmct already owned. Memory versioning and actor-level trust (originally "s
 backlog, not yet phase-assigned") were pulled forward and shipped in the same batch, actor-level
 trust in full rather than the narrower port originally scoped. **Update, 2026-07-10: the SHACL
 ingest gate also shipped** (§2.1's bullet, above) — all four of this backlog's original items are
-now closed except Chronograph-style temporal diffing. Multi-language AST extraction is no longer
-backlog at all — it's explicitly out of scope for tmct, permanently (§2.2). Chronograph-style
-temporal diffing remains genuinely hard, unstarted, no change.
+now closed except Chronograph-style temporal diffing.
 
 ## 3. Phase 0 — Foundations
 
@@ -445,10 +440,7 @@ tmct" rather than validate against synthetic benchmarks.
 - **Multi-language coverage stays seonix's job, not tmct's (scope decision, 2026-07-11 — see §2.2).**
   This phase originally proposed wiring seonix's Roslyn/JavaParser/TS-compiler extraction pipeline
   into tmct's own `graph-build.mjs`. Superseded: seonix is the connection point between the SEON
-  ontology and software language, permanently — tmct stays a pure downstream graph consumer. The
-  combined index still gets multi-language coverage, just by seonix handing tmct a multi-language
-  graph through the provider seam (already the proven integration pattern, §1.1), not by tmct
-  learning to parse anything itself.
+  ontology and software language, 
 - **RI wrapper fixes — already shipped (§3), worth re-verifying against the combined graph
   specifically once it exists.** Depth-capped impact, source-backed snippets, and pagination all
   landed in Phase 0/v1.4.0; this phase's job is confirming they hold up at the larger scale a
@@ -648,7 +640,5 @@ full tick-by-tick record in `STRATEGY_ADVISOR.log`). 1543/1543 tests green at th
   not just traversal attempts) when `TMCT_GRAPH_FILE` was a relative path, because nothing resolved
   it to absolute before the containment check. Fixed at the source (`src/config.mjs`) and
   defensively in the guard itself, with regression tests for both.
-- **Scope decision made mid-build, not pre-planned**: multi-language AST extraction (§2.2, originally
-  slated for Phase 3, §6) stays in seonix permanently — see the top-of-doc status banner and §6.
 
 Version: `1.3.2 → 1.4.0` (minor — real feature work). Full commit range: `0c31d79..b1b6a95`.

@@ -26,10 +26,7 @@ inline; findings will route to `SKILL_AGENT_FAST_LOOP.md` or a `PLAN_*.md` inste
 
 **Total stranger** (generic real-world facts, no code vocabulary) — tmpdir
 `tmp.B1bQ3eqRcF/mw`. Canonical "john is a man" → "what is john" flowed correctly (confirms commit
-`803c4ba`'s fix holds live). But the very next natural move — `"my cat whiskers is a cat"`
-(possessive-named-instance teach) — hit the grammar wall, cascading into 4 more dead-ends (whiskers
-stays permanently unknown, the teach-then-INFER test never gets a chance). `"do cats eat mice"` also
-hit a bare wall. 6 of 14 turns were dead-ends.
+`803c4ba`'s fix holds live). 
 
 **Pure small talk, no code intent** (Tier 0, both seeded and `TMCT_NO_SEED=1`) — no `--repo`. Found
 the most severe bug of the sweep: `"good day to you"` (a plain formal greeting) got misread as a

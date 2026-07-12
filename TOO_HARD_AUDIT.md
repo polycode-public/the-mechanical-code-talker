@@ -11,17 +11,6 @@ nobody re-derives it.
 
 ### The calibration example (imports/mean)
 
-`g-a1-naming-9` and `am-meta-imports` are two graded cases that both grade the literal input
-"what does imports mean". Several write-ups called this "a permanent, deliberate authoring
-conflict" and said "a deterministic function cannot honor both on the same input". That was true
-in a narrow sense. You cannot make one bare hedge string satisfy two different substring checks.
-It was false in the broad sense. A better answer shape sidesteps the conflict. If the ambiguous
-reply resolves each candidate reading and shows its real answer, the plain "imports is a
-predicate…" definition appears inside the ambiguity frame, so `am-meta-imports`'s check passes and
-`g-a1-naming-9` also gets a real answer. Both pass with no compromise. Multiple past sessions
-repeated the "permanent, unfixable" line without re-deriving it. That is the exact failure mode
-this audit hunts.
-
 The project already catches this failure mode when it looks. `PLAN_CONVERSATION.md` Finding 5
 says outright: "A first-pass guess going into this investigation was 'architectural' — traced
 precisely, that guess does not hold." So the goal here is to do that tracing everywhere the strong
@@ -34,9 +23,6 @@ precisely, that guess does not hold." So the goal here is to do that tracing eve
 Every flagged finding from this audit's original pass is now resolved — re-derived directly
 against current code, not assumed. None turned out to be a real, unfixable ceiling.
 
-- **M1** (imports/mean "permanent conflict") — fixed, commit `d955b25`; a second confirmation
-  landed in `BENCHMARK_CEFR_ENGLISH_1.8.0.md` (the `ambiguity` cell +0.437). Stale wording in
-  `BENCHMARK_CEFR_ENGLISH_1.7.0.md` swept with correction notes.
 - **U1** (`broadSearch` "architectural limit") — turned out to have already shipped a full day
   *before* the finding was written (`798a77f`) — the finding was stale at the moment of its own
   authoring.
