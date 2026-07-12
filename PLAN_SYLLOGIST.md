@@ -3,6 +3,15 @@
 > **STATUS: research/design notes — §3's own JTMS-shaped, VERIFY-backed slice (single justification
 > per scm-sco fact, dependency-directed removal, bounded) is now IMPLEMENTED and tested
 > (`retractSubClassOf`, `src/syllogise.mjs`; see §3 for scope). §1/§2/§4/§5 remain notes only.
+> **2026-07-12: both chat-layer findings routed here from `BENCHMARK_CONVERSATION_1.8.14.md` are now
+> CLOSED, not design questions** — (1) "X is not a Y"/"forget that X is a Y" now call
+> `retractSubClassOf` for real (`src/chat.mjs` teachLane, `RETRACT_NOT_A_RE`/`RETRACT_FORGET_RE`); (2)
+> teaching against a subject that's also a real code-graph symbol (e.g. "Task") now stores and
+> coexists with the graph fact — root cause was `src/ask.mjs`'s `relaxParse` DROP-UNMATCHED layer
+> silently re-reading a malformed declarative teach sentence as a different, valid elliptical
+> QUESTION (dropping the taught object entirely) before the miss-gated teach lane ever ran; fixed by
+> `runAsk`'s `relaxedTeachCollision` guard (`src/chat.mjs`), which restores the original graph answer
+> if the teach attempt itself declines. Regression tests: `test/chat-syllogist-teach-retract.test.mjs`.
 > Pulled out of `PLAN_INFERENCE_TESTING.md` on its own retirement, 2026-07-11. That file's own §4/§5
 > carried this material as a long aside inside an otherwise-shipped build plan; it has been moved
 > here, mostly verbatim (citations exactly as verified there), so it stands on its own instead of

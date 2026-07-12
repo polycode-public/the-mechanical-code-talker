@@ -1687,6 +1687,14 @@ const BARE_DECLARATIVE_RE = /^(?:every |each |all |a |an )?[\w-]+ (?:is|are) (?:
 /** Interrogative / auxiliary leads that make an "X is a Y"-shaped line a QUESTION
  *  ("what is a cache", "is a module a component"), never a teach declarative. */
 const QUESTION_LEAD_RE = /^(?:what|who|which|where|when|why|how|is|are|do|does|did|can|could|should|would|will|has|have)\b/i;
+/** A plain declarative "X is a kind of Y" / "X is a Y" shape (subject-first, no
+ *  question lead — paired with QUESTION_LEAD_RE at every call site), tolerating
+ *  an infix "kind of"/"type of" (teachLane's own stripKindOf handles this same
+ *  infix ahead of its narrower recognizers — this is a cheap TRIGGER check only,
+ *  not a storage decision). Used by runAsk's relaxedTeachCollision guard (below)
+ *  to recognize when a query the ask engine "answered" via relaxation was
+ *  actually a teach-shaped sentence, not a real question. */
+const DECLARATIVE_KIND_OF_RE = /^(?:every\s+|each\s+|all\s+|a\s+|an\s+)?[\w-]+(?:\s+[\w-]+)?\s+(?:is|are)\s+(?:an?\s+)?(?:(?:kind|type)\s+of\s+)?[\w-]+[.!]*$/i;
 /** A bare wh-word token, tested one word at a time against `hasMidSentenceInterrogative`'s
  *  own tokenization below — never re-anchored, so it matches at ANY word position. */
 const MID_SENTENCE_WH_RE = /^(?:which|who|what|where|when|why|how)$/i;
@@ -2698,6 +2706,24 @@ function teachSuggestion(payload) {
  *  way it already stood ahead of teachSuggestion/unknownSubjectFallback. */
 const TEACH_PRONOUN_RE = /^(?:every\s+|each\s+|all\s+|some\s+|a few\s+|a\s+|an\s+)?(you|i|it|they|he|she|we)\s+\S+/i;
 
+/** RETRACTION / NEGATION of an already-taught subClassOf fact (PLAN_SYLLOGIST.md
+ *  §3 finding 1 fix): "X is not a Y" (tolerating the same "kind/type of" infix
+ *  every other teach shape in this lane already tolerates — the "is/are"
+ *  variant, plus the "isn't"/"aren't" contractions). Deliberately narrow — the
+ *  SAFEST, most unambiguous negation phrasing only, matching a scoped 2-token
+ *  subject (mirrors UNKNOWN_SUBJECT_RE's own subject width), never a general
+ *  negation grammar. See the RETRACTION block's own comment in teachLane
+ *  (below) for why a regex match here is only a TRIGGER, never itself proof a
+ *  fact existed to retract — retractSubClassOf (src/syllogise.mjs) is the
+ *  actual authority. */
+const RETRACT_NOT_A_RE = /^(?:a\s+|an\s+)?([\w-]+(?:\s+[\w-]+)?)\s+(?:(?:is|are)\s+not|isn't|aren't)\s+(?:an?\s+)?(?:(?:kind|type)\s+of\s+)?([\w-]+)$/i;
+/** "forget (that) X is a Y" — the second closed retraction phrasing (PLAN_SYLLOGIST.md
+ *  §3 finding 1). Never wrapped by TEACH_RE ("forget" isn't one of its
+ *  recognized lead verbs — remember/note/keep in mind/…), so this is matched
+ *  against the RAW (unwrapped) sentence, unlike RETRACT_NOT_A_RE above which
+ *  is tried against the remember-wrapped surface too. */
+const RETRACT_FORGET_RE = /^forget\s+(?:that\s+)?(?:a\s+|an\s+)?([\w-]+(?:\s+[\w-]+)?)\s+(?:is|are)\s+(?:an?\s+)?(?:(?:kind|type)\s+of\s+)?([\w-]+)$/i;
+
 async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
   // Tier 6 playtest: this lane read the raw, un-normalized query, so a closed
   // discourse-marker preamble ahead of a teach sentence ("howdy pardner,
@@ -2782,6 +2808,61 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
         + "Type /memory to see what I already remember.",
       via: "teach-miss", miss: true,
     };
+  }
+
+  // RETRACTION — "X is not a Y" / "forget that X is a Y" (PLAN_SYLLOGIST.md §3
+  // finding 1 fix, 2026-07-12): the data-layer retraction primitive
+  // (retractSubClassOf, src/syllogise.mjs, PLAN_SYLLOGIST.md §3, commit
+  // f7b3644) shipped with no chat-level phrasing ever calling it — confirmed
+  // live, 5 attempts across 2 playtest personas, 0 successes
+  // (BENCHMARK_CONVERSATION_1.8.14.md). Tried here, right after the pronoun
+  // guard, so a pronoun subject ("it is not an animal") still falls to that
+  // guard's own decline first (TEACH_PRONOUN_RE matches ANY verb after the
+  // pronoun, including "is not"), never reaching this block.
+  //
+  // TRIGGER, never itself the authority: RETRACT_NOT_A_RE/RETRACT_FORGET_RE
+  // only recognize the SHAPE of a negation/retraction sentence — they say
+  // nothing about whether subject⊑object was ever actually taught.
+  // retractSubClassOf is asked for real and is the only thing that decides:
+  //   - found:true  → a real stored (or entailed) fact existed and was
+  //     retracted (with its dependency-directed cascade) — confirmed here.
+  //   - found:false → subject⊑object was never a stored fact. This is left
+  //     to FALL THROUGH to the rest of teachLane's ordinary cascade below,
+  //     deliberately NOT answered with a bespoke "nothing to forget" message
+  //     — RETRACT_NOT_A_RE's shape also incidentally matches a NEGATED
+  //     PROPERTY claim ("the logger is not deprecated" — never subClassOf-
+  //     shaped at all, a pinned "genuine ceiling" case elsewhere in this
+  //     codebase, test/chatflow-tier5.test.mjs, that must keep its own
+  //     "I couldn't store that —" decline verbatim), so a bare "nothing
+  //     found" here must never claim a specific, possibly-wrong reason —
+  //     falling through preserves whatever honest response that OTHER shape
+  //     already gets, byte-identical, while still fully closing the real gap
+  //     (an already-taught fact's retraction, which now always succeeds).
+  const retractSrc = (wrapped ?? raw).replace(/[.!?]+\s*$/, "");
+  const retractSrcMidQuestion = memoryDir && !QUESTION_LEAD_RE.test(retractSrc)
+    ? await hasMidSentenceInterrogative(retractSrc) : false;
+  const retractNotMatch = memoryDir && !QUESTION_LEAD_RE.test(retractSrc) && !retractSrcMidQuestion
+    ? retractSrc.match(RETRACT_NOT_A_RE) : null;
+  const forgetSrc = raw.replace(/[.!?]+\s*$/, "");
+  const retractForgetMatch = !retractNotMatch && memoryDir && !QUESTION_LEAD_RE.test(forgetSrc)
+    ? forgetSrc.match(RETRACT_FORGET_RE) : null;
+  const retractMatch = retractNotMatch || retractForgetMatch;
+  if (retractMatch) {
+    const retractSubject = retractMatch[1].trim();
+    const retractObject = retractMatch[2].trim();
+    const { retractSubClassOf } = await import("./syllogise.mjs");
+    const result = await retractSubClassOf(memoryDir, retractSubject, retractObject);
+    if (result.found) {
+      const extra = result.count - 1; // beyond the target fact itself
+      return {
+        text: `noted — forgotten: "${retractSubject} is a kind of ${retractObject}" is no longer stored`
+          + (extra > 0 ? ` (${extra} entailed fact${extra === 1 ? "" : "s"} that depended on it went too)` : "")
+          + (result.truncated ? " — this cascade may not be complete (a lot depended on it); ask again if something still looks stale" : "")
+          + ".",
+        via: "retract", miss: false,
+      };
+    }
+    // found:false — fall through to the rest of the cascade (see docblock above).
   }
 
   // OWNERSHIP — "<Name> owns/maintains <X>", bare or remember-wrapped. The bare
@@ -7391,7 +7472,41 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     }
   }
   const answeredIds = (envelope?.matches || []).map((m) => m?.id).filter(Boolean);
-  const miss = envelope ? !!envelope.miss : true;
+  const askMiss = envelope ? !!envelope.miss : true;
+  // GRAPH-FACT-VS-TAUGHT-FACT PRECEDENCE (PLAN_SYLLOGIST.md finding 2 fix,
+  // 2026-07-12): a plain declarative "X is a kind of Y" sentence whose SUBJECT
+  // already names a real graph entity could get silently "answered" by the ask
+  // engine's own relaxation cascade instead of ever reaching the teach lane.
+  // Root cause, verified live against examples/mini-webapp: relaxParse's
+  // DROP-UNMATCHED layer (src/ask.mjs "Layer 2") drops an unresolvable trailing
+  // content word ("animal" — not a graph entity) entirely, turning "a Task is a
+  // kind of animal" into the DIFFERENT, valid elliptical question "a Task is a
+  // kind of" (a forward "inherits" ask), which genuinely answers "Record" (Task
+  // really does inherit Record in the code graph) — envelope.miss comes back
+  // false, so the miss-gated TEACH lane (4) below never even ran. That graph
+  // answer must keep working as a QUESTION ("what is Task a kind of" must still
+  // say Record) — the actual bug is only that a DECLARATIVE sentence
+  // (subject-first, no question lead) with a genuine content word dropped by
+  // relaxation never got a chance to be taught at all. Detected narrowly (all
+  // three must hold): the ask engine's answer came via envelope.relaxed
+  // (something was dropped/repaired, not a clean direct hit), the raw query is
+  // NOT phrased as a question (QUESTION_LEAD_RE, no trailing "?"), and it
+  // independently fits the closed "X is a kind of Y" teach shape
+  // (DECLARATIVE_KIND_OF_RE). When all three hold, this turn is treated as a
+  // would-miss so the ordinary miss-gated cascade below (including the
+  // existing TEACH lane (4)) gets a real turn at it — a genuinely stored taught
+  // fact wins over a repaired-away graph reading, COEXISTING with it rather
+  // than replacing it: the graph fact itself is never touched and stays
+  // answerable through its own question phrasing. If nothing below actually
+  // stores it (recordMiss still true once the whole would-miss cascade has
+  // run), the ORIGINAL ask-engine answer is restored unchanged just before the
+  // record is built (see "COLLISION RESTORE" below) — never worse than today.
+  const trimmedQuery = String(query).trim();
+  const relaxedTeachCollision = !!(envelope?.relaxed?.dropped?.length) && !askMiss && memoryDir
+    && !QUESTION_LEAD_RE.test(trimmedQuery) && !/\?\s*$/.test(trimmedQuery)
+    && DECLARATIVE_KIND_OF_RE.test(trimmedQuery);
+  const preCollisionAnswer = relaxedTeachCollision ? answer : null;
+  const miss = askMiss || relaxedTeachCollision;
   // Answer provenance (W1): "composed" is the ask engine's productive band; the
   // orientation swap below is template wording, so those turns carry via:"template".
   let via = "composed";
@@ -7438,6 +7553,11 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // itself already uses for a normally-parsed relation query, so the two
   // never disagree on the cases where both would fire).
   let deduced = deduceGoalFromParsed(envelope?.parsed);
+  // Paired with preCollisionAnswer above: the goal line that matched the
+  // ORIGINAL ask-engine answer, restored alongside it (COLLISION RESTORE,
+  // below) if the would-miss cascade below never actually stores anything —
+  // so a restored graph answer never carries a stale "teach a new fact" goal.
+  const preCollisionDeduced = relaxedTeachCollision ? deduced : null;
   note(trace, `goal: ${deduced ?? "unclear — the phrasing didn't resolve to a known query shape"}`);
   // MISS handling. The intent lanes + short-miss are RECOGNIZER-gated on the query
   // text AND only consulted on a would-miss, so a real graph query — a hit, an honest
@@ -8032,6 +8152,23 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
         }
       }
     }
+  }
+  // COLLISION RESTORE (pairs with relaxedTeachCollision, above): the whole
+  // would-miss cascade above (TEACH lane included) has now had its turn. If
+  // nothing in it actually stored/answered anything (recordMiss is still
+  // true), fall back to the ORIGINAL ask-engine answer computed before this
+  // turn was forced into the would-miss cascade — a real graph answer beats
+  // any generic miss/wall text, and this is never worse than the turn would
+  // have rendered before this fix existed. If the TEACH lane (or any other
+  // lane) DID answer for real, recordMiss is already false here and this is a
+  // no-op — the taught fact's own confirmation stands, coexisting with the
+  // (untouched) graph fact.
+  if (relaxedTeachCollision && recordMiss) {
+    answer = preCollisionAnswer;
+    via = "composed";
+    recordMiss = false;
+    deduced = preCollisionDeduced;
+    note(trace, "lane: COLLISION RESTORE — the teach-shaped declarative wasn't storable after all; the original ask-engine (graph) answer stands, untouched");
   }
   // W5 (flag-gated, default OFF): an unknown-term miss may consult the LOCAL
   // committed corpus slice — a hit APPENDS a grounded, licence-cited aside under
