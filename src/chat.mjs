@@ -1513,6 +1513,56 @@ const BARE_DECLARATIVE_RE = /^(?:every |each |all |a |an )?[\w-]+ (?:is|are) (?:
 /** Interrogative / auxiliary leads that make an "X is a Y"-shaped line a QUESTION
  *  ("what is a cache", "is a module a component"), never a teach declarative. */
 const QUESTION_LEAD_RE = /^(?:what|who|which|where|when|why|how|is|are|do|does|did|can|could|should|would|will|has|have)\b/i;
+/** A bare wh-word token, tested one word at a time against `hasMidSentenceInterrogative`'s
+ *  own tokenization below — never re-anchored, so it matches at ANY word position. */
+const MID_SENTENCE_WH_RE = /^(?:which|who|what|where|when|why|how)$/i;
+/** PLAN_CONVERSATION.md Finding 4 fix: QUESTION_LEAD_RE (just above) is anchored
+ *  to the FIRST word, so a wh-word appearing LATER in the sentence ("it uses
+ *  WHICH controller as its base") slips past every teachLane guard that
+ *  reuses it — including TEACH_PRONOUN_RE's own check, which has no
+ *  interrogative guard at all. That let a mid-sentence question either mint a
+ *  GARBAGE fact (a bare sentence with a real subject: "TaskController uses
+ *  which controller as its base" got stored verbatim) or produce a confusing
+ *  pronoun-specific refusal that named the wrong problem (a pronoun subject:
+ *  "it uses which controller as its base" — "it" was never the real issue,
+ *  the mid-sentence question was).
+ *
+ *  Detects a genuine mid-sentence INTERROGATIVE use of a wh-word — never the
+ *  first word, QUESTION_LEAD_RE's own anchored check already owns that case —
+ *  via wink's POS tagger (the SAME optional adapter subjectIsNounOrPropn/
+ *  objectReadsAsNonNoun below already use, ask-nlp.mjs's nlpAdapter):
+ *  whichever wh-word tokens appear after the first word, check whether the
+ *  token immediately BEFORE each is tagged VERB or AUX. A wh-in-situ
+ *  interrogative object/adjunct ("uses WHICH controller", "is used by WHICH
+ *  module") always immediately follows the verb it's an argument of; a
+ *  RELATIVE pronoun introducing a restrictive clause ("the handler WHICH
+ *  processes requests", "a grandparent WHO is male" — see
+ *  test/chat-taught-relations.test.mjs's own "a grandfather is a grandparent
+ *  who is male" teach, confirmed unaffected) always immediately follows the
+ *  NOUN it modifies instead. Checking the preceding tag is a real, if
+ *  imperfect, way to tell the two apart — not meant to be perfect (a first
+ *  increment), just enough to stop teachLane storing or refusing on the wrong
+ *  grounds. No wink installed, or any tagging surprise, degrades to false —
+ *  no signal, never a false positive from a missing adapter — matching
+ *  subjectIsNounOrPropn/objectReadsAsNonNoun's own discipline exactly. */
+async function hasMidSentenceInterrogative(text) {
+  const words = String(text || "").trim().split(/\s+/).filter(Boolean);
+  if (words.length < 2) return false;
+  const whIdx = [];
+  for (let i = 1; i < words.length; i += 1) {
+    if (MID_SENTENCE_WH_RE.test(words[i].replace(/^[.,!?;:'"]+|[.,!?;:'"]+$/g, ""))) whIdx.push(i);
+  }
+  if (!whIdx.length) return false;
+  try {
+    const { nlpAdapter } = await import("./ask-nlp.mjs");
+    const adapter = nlpAdapter();
+    if (!adapter) return false; // no wink — no signal, never a false positive
+    const tags = adapter.posTags(words);
+    return whIdx.some((i) => tags[i - 1] === "VERB" || tags[i - 1] === "AUX");
+  } catch {
+    return false;
+  }
+}
 
 // The teach lane's fact predicates (rendered via FACT_PREDICATE_PHRASES).
 const OWNED_BY_PREDICATE = "mgx:ownedBy";
@@ -2488,7 +2538,18 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
   // docblock above for why.
   const pronounSrc = (wrapped ?? raw).replace(/[.!?]+\s*$/, "");
   const pronounMatch = pronounSrc.match(TEACH_PRONOUN_RE);
-  if (pronounMatch) {
+  // Finding 4 fix: a pronoun-led sentence that's ALSO a mid-sentence question
+  // ("it uses which controller as its base") isn't a pronoun-classification
+  // problem at all — "it" was never going to be storable either way, so
+  // naming the pronoun as the reason is misleading. Stand down here (no
+  // interrogative guard existed on this frame before) and let the rest of
+  // this function's cascade run: none of the other frames' shapes fit a
+  // pronoun subject with a non-copula verb, so this falls all the way
+  // through to teachLane's own honest `return null` (no wrapper, no `is`/
+  // `are` payload — see the payload-construction block below), which leaves
+  // whatever the structural grammar's own honest miss already said standing,
+  // rather than overwriting it with a wrong-reason refusal.
+  if (pronounMatch && !(await hasMidSentenceInterrogative(pronounSrc))) {
     const pronoun = pronounMatch[1];
     return {
       text: `I can't store a fact about "${pronoun}" as a class — pronouns aren't things I can classify. `
@@ -2508,8 +2569,14 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
   // is an obviously code-shaped proper name and just as strong a signal that
   // this isn't ordinary prose. Either side capitalized is now enough.
   const ownSrc = wrapped ?? raw.replace(/[.!?]+\s*$/, "");
+  // Finding 4 fix: computed ONCE and reused by every ownSrc-gated frame below
+  // (own/ownPassive/rel/hasMethod/compose2/filterRule/recursiveRule) — same
+  // source string, so one wink pass suffices; see hasMidSentenceInterrogative's
+  // own docblock (near QUESTION_LEAD_RE) for why this is additive alongside
+  // each existing anchored QUESTION_LEAD_RE check, never a replacement for it.
+  const ownSrcMidQuestion = await hasMidSentenceInterrogative(ownSrc);
   const own = ownSrc.match(OWNS_TEACH_RE);
-  if (own && memoryDir && !QUESTION_LEAD_RE.test(ownSrc)
+  if (own && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion
     && (wrapped || /^[A-Z]/.test(own[1]) || /^[A-Z]/.test(own[2]))) {
     const stored = await teachFact(memoryDir, sessionId, {
       subject: own[2], predicate: OWNED_BY_PREDICATE, object: own[1],
@@ -2522,7 +2589,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
   // (a genuine yes/no QUESTION, handled by factReadBack instead) never lands
   // a bogus fact here.
   const ownPassive = ownSrc.match(OWNS_PASSIVE_TEACH_RE);
-  if (ownPassive && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && (wrapped || /^[A-Z]/.test(ownPassive[2]))) {
+  if (ownPassive && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion && (wrapped || /^[A-Z]/.test(ownPassive[2]))) {
     const stored = await teachFact(memoryDir, sessionId, {
       subject: ownPassive[1], predicate: OWNED_BY_PREDICATE, object: ownPassive[2],
     });
@@ -2538,7 +2605,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
   // to part of speech, so a role noun like "father" mints mgx:father the same
   // way a general verb would; an ordinary Fact, no new storage shape.
   const rel = ownSrc.match(RELATION_FACT_TEACH_RE);
-  if (rel && memoryDir && !QUESTION_LEAD_RE.test(ownSrc)) {
+  if (rel && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion) {
     const stored = await teachFact(memoryDir, sessionId, {
       subject: rel[1], predicate: await generalVerbPredicate(rel[2]), object: rel[3],
     });
@@ -2558,7 +2625,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
   // a leading determiner — "every"/"a"/"an"/"the" — before a "has a … method"
   // claim).
   const hasMethod = ownSrc.match(TEACH_HAS_METHOD_RE);
-  if (hasMethod && memoryDir && !QUESTION_LEAD_RE.test(ownSrc)) {
+  if (hasMethod && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion) {
     const stored = await teachFact(memoryDir, sessionId, {
       subject: hasMethod[1], predicate: HAS_A_PREDICATE, object: `${hasMethod[2]} method`,
     });
@@ -2572,7 +2639,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
   // COMPOSE2_RULE_TEACH_RE's own docblock). The query-side hop-counted chase
   // lives in factReadBack's relational-query dispatcher.
   const compose2 = ownSrc.match(COMPOSE2_RULE_TEACH_RE);
-  if (compose2 && memoryDir && !QUESTION_LEAD_RE.test(ownSrc)) {
+  if (compose2 && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion) {
     try {
       const { appendRule, RULE_KIND_COMPOSE2 } = await import("./memory/core.mjs");
       const { id } = await appendRule(memoryDir, {
@@ -2598,7 +2665,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
   // The query-side generic base-then-property chase lives in factReadBack's
   // relational-query dispatcher (resolveRelation's own "filter" branch).
   const filterRule = ownSrc.match(FILTER_RULE_TEACH_RE);
-  if (filterRule && memoryDir && !QUESTION_LEAD_RE.test(ownSrc)) {
+  if (filterRule && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion) {
     try {
       const { appendRule, RULE_KIND_FILTER } = await import("./memory/core.mjs");
       const { id } = await appendRule(memoryDir, {
@@ -2627,7 +2694,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
   // rule kinds' single-target search) lives in factReadBack's own
   // RECURSIVE_LIST_ASK_RE dispatch, below.
   const recursiveRule = ownSrc.match(RECURSIVE_RULE_TEACH_RE);
-  if (recursiveRule && memoryDir && !QUESTION_LEAD_RE.test(ownSrc)) {
+  if (recursiveRule && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion) {
     try {
       const { appendRule, RULE_KIND_RECURSIVE } = await import("./memory/core.mjs");
       const { id } = await appendRule(memoryDir, {
@@ -2656,7 +2723,11 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
   // unknown object falls through to the generic honest-miss cascade at the
   // bottom of this function, same as every other unstorable teach.
   const someSrc = wrapped ?? raw.replace(/[.!?]+\s*$/, "");
-  const someMatch = memoryDir && !QUESTION_LEAD_RE.test(someSrc) ? someSrc.match(SOME_A_FEW_RE) : null;
+  // Finding 4 fix: additive alongside the existing anchored QUESTION_LEAD_RE
+  // check — same discipline as ownSrcMidQuestion above (hasMidSentenceInterrogative's
+  // own docblock, near QUESTION_LEAD_RE, has the full reasoning).
+  const someSrcMidQuestion = memoryDir && !QUESTION_LEAD_RE.test(someSrc) ? await hasMidSentenceInterrogative(someSrc) : false;
+  const someMatch = memoryDir && !QUESTION_LEAD_RE.test(someSrc) && !someSrcMidQuestion ? someSrc.match(SOME_A_FEW_RE) : null;
   if (someMatch) {
     const quantifier = someMatch[1].toLowerCase();
     const subject = singularizeSurface(someMatch[2]);
@@ -2708,13 +2779,14 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
   // miss text at all (the ORIGINAL bug: "remember tony has a hat" never even
   // reached this lane's own honest-miss cascade, landing on the structural
   // grammar's wrong-context wall instead).
-  if (wrapped && memoryDir && !QUESTION_LEAD_RE.test(wrapped)) {
+  if (wrapped && memoryDir && !QUESTION_LEAD_RE.test(wrapped) && !(await hasMidSentenceInterrogative(wrapped))) {
     const gv = await generalVerbTeach(wrapped);
     if (gv) {
       const stored = await teachFact(memoryDir, sessionId, gv);
       if (stored) return stored;
     }
-  } else if (!wrapped && memoryDir && !QUESTION_LEAD_RE.test(correctMisspellings(raw))) {
+  } else if (!wrapped && memoryDir && !QUESTION_LEAD_RE.test(correctMisspellings(raw))
+    && !(await hasMidSentenceInterrogative(correctMisspellings(raw)))) {
     // BARE path (HANDOVER.md 2026-07-10 item 2 fix): "grace mentors alan" — no
     // "remember"/"note" wrapper at all — used to silently reach neither this
     // frame NOR an honest miss, landing on the raw structural wall instead
@@ -2745,7 +2817,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
 
   let payload = null;
   if (wrapped && /\b(?:is|are)\b/i.test(wrapped)) payload = wrapped;
-  else if (BARE_DECLARATIVE_RE.test(raw) && !QUESTION_LEAD_RE.test(raw)) payload = raw;
+  else if (BARE_DECLARATIVE_RE.test(raw) && !QUESTION_LEAD_RE.test(raw) && !(await hasMidSentenceInterrogative(raw))) payload = raw;
   if (!payload) {
     // Tier-5 playtest fix (cycle 3), found live: "remember that every
     // controller needs review" — a QUANTIFIED subject ("every X", declined
