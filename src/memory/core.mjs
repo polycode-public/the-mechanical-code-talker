@@ -108,7 +108,7 @@ const MEMORY_VOCABULARY = [
   { prop: DERIVED_FROM_PROP, predicate: "derivedFrom", note: "umbrella: a Fact derived from a Source (or another Fact). ext ref prov:wasDerivedFrom (UNVERIFIED-pending-web-check)" },
   { prop: STATED_BY_PROP, predicate: "statedBy", note: "subPropertyOf derivedFrom: a Source directly asserts this Fact (one edge per independent source — replaces the factProvenance union)" },
   { prop: CANONICALISED_FROM_PROP, predicate: "canonicalisedFrom", note: "subPropertyOf derivedFrom: a canonical Fact cleaned from a raw Block/Source, never replacing it" },
-  { prop: "mgx:sourceType", note: "a Source's kind: operator | teach | provider | corpus | corpusWeak | web | entailed (the trust-prior key)" },
+  { prop: "mgx:sourceType", note: "a Source's kind: operator | teach | provider | corpus | corpusWeak | extracted | web | entailed (the trust-prior key)" },
   { prop: "mgx:sourceUrl", note: "a web Source's URL" },
   { prop: "mgx:sourceRule", note: "an entailed Source's rule id" },
   { prop: "mgx:sourceReliability", note: "actor-level (session-scoped) trust nudge in [0.5,1.5], neutral 1.0 when absent — materialised by recomputeSourceReliability from a session's asserted-vs-contradicted track record (memory/trust.mjs's sessionReliabilityFrom); folds into computeTrust's per-source prior" },
@@ -771,6 +771,11 @@ function sourceIdFor(desc) {
     case "teach": return { id: desc.sessionId ? `${TEACH_SOURCE_ID}:${desc.sessionId}` : TEACH_SOURCE_ID, type: "teach" };
     case "provider": return { id: `src:provider:${desc.name}`, type: "provider" };
     case "corpus": return { id: `src:corpus:${desc.name}`, type: "corpus" };
+    // One Source per source-file basename (the corpus precedent above), not per
+    // extraction run — re-running scripts/extract-facts-from-text.mjs over the
+    // SAME file collapses onto the same Source instead of minting a new one
+    // every time, matching corpus's "one Source per named dataset" idiom.
+    case "extracted": return { id: `src:extracted:${desc.name}`, type: "extracted" };
     case "web": return { id: `src:learned:web:${fnv1aHex(String(desc.url || ""))}`, type: "web", url: String(desc.url || "") };
     case "entailed": return { id: `src:entailed:${desc.rule}`, type: "entailed", rule: String(desc.rule || "") };
     default: return null;
@@ -825,6 +830,7 @@ function parseChatTagRest(rest) {
  *   ace:chat:<session>@<ts>    → { kind:"operator",  createdAt:<ts>, sessionId:<session> }
  *   teach:chat:<session>@<ts>  → { kind:"teach",     createdAt:<ts>, sessionId:<session> }
  *   web:<url> | url:<url>      → { kind:"web",       url:<url> }
+ *   extracted:<file-basename>  → { kind:"extracted", name:<file-basename> }
  *   entailed:<rule>            → { kind:"entailed",  rule:<rule> }
  * chat:/session: refs map to the operator; an unknown tag → null (no Source).
  * `corpus-weak:` is the SAME corpus provenance shape as `corpus:`, just naming
@@ -835,6 +841,11 @@ function parseChatTagRest(rest) {
  * The session-id segment (Part B: session-scoped actor-level trust) feeds
  * sourceIdFor, which mints a PER-SESSION Source id when present, instead of
  * collapsing every session onto one singleton operator/teach Source.
+ * `extracted:` is scripts/extract-facts-from-text.mjs's own audit tag, layered
+ * ADDITIVELY (via appendFact's provenance union) on top of whatever the
+ * runTurn recognizer already wrote (ace:/teach:) — see that script for why:
+ * it distinguishes "this document evidenced this fact" from ordinary chat
+ * speech, at its own trust-prior tier (memory/trust.mjs SOURCE_PRIOR.extracted).
  */
 export function provenanceTagToSource(tag) {
   const t = String(tag || "").trim();
@@ -849,6 +860,7 @@ export function provenanceTagToSource(tag) {
   }
   if (head.startsWith("web:")) return { kind: "web", url: head.slice("web:".length) };
   if (head.startsWith("url:")) return { kind: "web", url: head.slice("url:".length) };
+  if (head.startsWith("extracted:")) return { kind: "extracted", name: head.slice("extracted:".length) || "unknown" };
   if (head.startsWith("entailed:")) return { kind: "entailed", rule: head.slice("entailed:".length) };
   if (head.startsWith("chat:") || head.startsWith("session:") || head.startsWith("operator")) return { kind: "operator" };
   return null;

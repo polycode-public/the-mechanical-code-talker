@@ -4,7 +4,8 @@
 // Trust is a COMPUTED attribute of a Fact — never hand-set — a pure function of
 // its Source edges, those Sources' types, and its mgx:createdAt. Three inputs
 // combine:
-//   - a Source-TYPE PRIOR (operator > teach > provider > corpus > web > entailed);
+//   - a Source-TYPE PRIOR (operator > teach > provider > corpus > corpusWeak >
+//     extracted > web > entailed);
 //   - CORROBORATION over the fact's distinct Sources by noisy-OR
 //     (1 − Π(1 − wᵢ), capped at 1) — two independent web sources (0.4) reach
 //     0.64, a lone operator fact is already 1.0;
@@ -35,18 +36,29 @@ export const TRUST_SCORE_PROP = "mgx:trustScore";
 export const TRUST_INPUTS_PROP = "mgx:trustInputs";
 
 /** Source-type priors — the ordering operator > teach > provider-graph >
- *  curated-corpus > weak-corpus > web > unverified-entailment. `teach` is the
- *  chat teach lane's natural-frame writes ("remember that …", "<Name> owns
- *  <X>") — still operator speech, but through a looser recognizer than the
- *  ACE-parsed operator assert, so it sits just below the operator prior. The
- *  entailed value is a FLOOR before premise adjustment (see the entailed hook
- *  below). `corpusWeak` is for corpus-sourced facts whose underlying relation
- *  is real but low-precision (ConceptNet's /r/RelatedTo — ambiguous.
- *  undirected association, unlike the specific typed relations the plain
- *  `corpus` prior covers) — still a curated, committed dataset (above `web`),
- *  just not asserting the same strength of claim (below `corpus`). Computed
- *  from the Source's type exactly like every other tier — never hand-set on
- *  a Fact directly. */
+ *  curated-corpus > weak-corpus > extracted-document > web > unverified-
+ *  entailment. `teach` is the chat teach lane's natural-frame writes
+ *  ("remember that …", "<Name> owns <X>") — still operator speech, but
+ *  through a looser recognizer than the ACE-parsed operator assert, so it
+ *  sits just below the operator prior. The entailed value is a FLOOR before
+ *  premise adjustment (see the entailed hook below).
+ *
+ *  `corpusWeak` is for corpus-sourced facts whose underlying relation is real
+ *  but low-precision (ConceptNet's /r/RelatedTo — ambiguous, undirected
+ *  association, unlike the specific typed relations the plain `corpus` prior
+ *  covers) — still a curated, committed dataset (above `web`), just not
+ *  asserting the same strength of claim (below `corpus`).
+ *
+ *  `extracted` is scripts/extract-facts-from-text.mjs's batch reader: it runs
+ *  the SAME deterministic teach/assert recognizer as `teach`/`operator`, but
+ *  unattended over an arbitrary document nobody in-session vetted sentence by
+ *  sentence — the recognizer is exact/closed-set (no guessing), but the
+ *  SOURCE DOCUMENT is unreviewed, so it sits just above `web` (also an
+ *  unreviewed external source) and below `corpusWeak`/`corpus` (curated,
+ *  committed datasets) and `teach` (a human typing into the live chat).
+ *
+ *  Both are computed from the Source's type exactly like every other tier —
+ *  never hand-set on a Fact directly. */
 export const SOURCE_PRIOR = Object.freeze({
   operator: 1.0,
   teach: 0.95,
@@ -54,6 +66,7 @@ export const SOURCE_PRIOR = Object.freeze({
   corpus: 0.7,
   corpusWeak: 0.55,
   web: 0.4,
+  extracted: 0.45,
   entailed: 0.3,
 });
 

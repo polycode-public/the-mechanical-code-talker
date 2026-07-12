@@ -100,7 +100,8 @@
     "audit": "npm audit --audit-level=high",
     "audit:fix": "npm audit fix",
     "demo:build": "node scripts/build-demo-site.mjs",
-    "build:ask-bundle": "node scripts/build-ask-bundle.mjs"
+    "build:ask-bundle": "node scripts/build-ask-bundle.mjs",
+    "extract:facts": "node scripts/extract-facts-from-text.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.28.1",
