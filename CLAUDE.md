@@ -1,5 +1,18 @@
 # CLAUDE.md — project guidance for Claude Code sessions
 
+## Explicit versioning/commit/push instructions are not up for debate
+
+If the operator's prompt states explicitly when to bump the version, commit, or push
+(e.g. "roll the version every round", "commit and push each turn"), execute it exactly
+as stated. Do not pause to ask a clarifying question about cadence, do not weigh it
+against this document's general conventions (including the version-bump-timing
+paragraph below), and do not apply your own judgment to override it. The operator's
+explicit instruction in the prompt is authoritative over any general policy written
+here or anywhere else in this repo. Only stop if following the instruction would
+violate a hard safety rule (e.g. leaking a secret) — otherwise, just do it. Getting
+this wrong burns hours of the operator's time for nothing; see
+[[feedback_follow_explicit_versioning_instructions]] in memory.
+
 ## Working model: coordinator + background sub-agents
 
 Run big tasks in **concurrent background sub-agents** and keep the main chat free — the main

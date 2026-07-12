@@ -8,40 +8,15 @@ this project's own standing discipline.
 Session handle (inbox): `tmct` (this session; earlier sessions used `mechanic`). See
 `~/.claude/inboxes/tmct.md` and `~/.claude/inboxes/mechanic.md`, both still live.
 
-## Version state (2026-07-12, v1.8.3 batch complete)
+## Version state (2026-07-12, v1.8.4 batch)
 
-`package.json` is `1.8.3` locally, not yet pushed. What's live on npm is still `1.5.5` — several
-version bumps have accumulated locally without a push. Per this project's own version-bump
-discipline (`CLAUDE.md`), the next push should land whatever's actually ready as one release, not
-chase every intermediate bump — don't bump again until that push.
-
-Six tracks (Finding 4 safety fix, lexicon coverage growth, rephrase-hint pass, persona-sweep
-backlog, dead-end example-correctness sweep, answer-phrasing variety) all merged, verified
-(`npm test` 1936/1936, AGENTBENCH 56/56 100%/100% unaffected, browser ask-bundle rebuilds clean).
-Full build record in `ROADMAP.md`'s capability surface and `Open items` below for what's still
-genuinely unstarted.
+`package.json` is `1.8.4`, pushed to `main`. CI was red for 16 straight pipelines (#139-154) on a
+platform-dependent symlink bug in `bin/tmct.mjs`'s repo-relative path logic (macOS's `/tmp`→`/private`
+symlink masked it locally; Linux CI caught it) — fixed and verified against 3 of the failing
+pipelines. `publish:npm` had been silently no-op-ing because it needs the `unit` job to pass first;
+that's unblocked now.
 
 ## Open items
-
-- **`archive/PLAN_CONVERSATION.md` Finding 4 — safety half fixed, 2026-07-12.** The first-increment
-  fix (`hasMidSentenceInterrogative`, `src/chat.mjs`) landed: "it uses which controller as its base"
-  and "TaskController uses which controller as its base" no longer misroute into `teachLane` (no
-  garbage fact gets stored, no confusing pronoun-classification refusal) — both fall through to the
-  honest structural miss instead. **Still genuinely open**: this does NOT make the question
-  *answerable* — that needs the other two named sub-problems (a discontiguous verb-frame parser for
-  "uses X as its base"-shaped constructions; a union-kind reverse-question capability for relation
-  verbs like `uses`/`calls` that map to more than one stored predicate). Two CEFR cases
-  (`g-c2-pron-1`/`g-c2-pron-2`) were checked and confirmed a DIFFERENT mechanism (`ask.mjs`'s
-  compositional filter compiler, not `chat.mjs`'s teach routing) — not the same gap, don't expect
-  them to move if the remaining sub-problems are picked up.
-
-- **Two small typo-tolerance sub-cases, explicitly deferred, 2026-07-12** — `"w/"` → `"with"` and
-  `"4"` → `"for"` (from `BENCHMARK_CONVERSATION_1.7.0.md`'s "Routed backlog"; the other two backlog
-  items in that family, `"touchd"`/`"dat"` plus the `"wat about X"` routing gap, are fixed). Both
-  need a genuinely new mechanism: the shared `MISSPELLINGS` regex builder can't match a
-  `/`-terminated token (word-boundary requirement); digit tokens are deliberately protected
-  everywhere in this codebase (shas/line numbers/counts) — a real guard, not an oversight to patch
-  around.
 
 - **`PLAN_BREADTH_FIRST_NLU.md`'s two open items** — (c) the paraphrase-verified-via-`syllogise.mjs`
   piece of "Ambition", not started; (d) a real "list/count all X of class Y" query shape for
