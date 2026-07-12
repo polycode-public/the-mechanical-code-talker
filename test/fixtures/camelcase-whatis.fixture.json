@@ -1,0 +1,12 @@
+{
+  "generated_at": "2026-07-12T00:00:00.000Z",
+  "prefixes": { "seon": "http://se-on.org/ontologies/seon.owl#", "mgx": "urn:tmct:mgx#" },
+  "classes": [
+    { "name": "Class", "count": 2, "sample": ["TaskController", "Widget"] }
+  ],
+  "objectProperties": [],
+  "individuals": [
+    { "id": "cls-taskcontroller", "label": "TaskController", "class": "Class", "derived_from": [], "mentions": [], "attributes": [{ "prop": "seon:startsAt", "key": "site", "value": "app/handlers/tasks.mjs:1-40" }] },
+    { "id": "cls-widget", "label": "Widget", "class": "Class", "derived_from": [], "mentions": [], "attributes": [] }
+  ]
+}
