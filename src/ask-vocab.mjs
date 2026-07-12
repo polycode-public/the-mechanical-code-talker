@@ -932,6 +932,11 @@ export const CASCADE_NOISE = Object.freeze([
   // the aggregate/where parsers already tolerate a stray "the"/"a", so stripping is
   // belt-and-braces, not load-bearing)
   "the", "a", "an", "some",
+  // "what OTHER classes inherit from Controller" — "other" is a vague determiner
+  // like "some", not a qualifying adjective; without this it was misread as a
+  // fuzzy find TERM ("no classes found matching 'other'") instead of falling
+  // through to the ordinary reverse-inherits parse (fast-loop round 6 finding).
+  "other",
   // topic lead-in filler — "what about the modules", "how about classes": "about"
   // carries no graph meaning here, so stripping it lets the bare kind noun surface for
   // the cascade's bare-kind-noun terminal rule (ask.mjs). ("what"/"how" are structural
