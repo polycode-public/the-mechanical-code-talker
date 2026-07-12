@@ -4508,6 +4508,42 @@ const WHAT_HAS_RE = /^what\s+has\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
 // (object known, subject unknown), so it fell all the way through to the
 // code-graph miss cascade — actively misleading for a pure vocabulary query.
 const WHAT_USED_FOR_RE = /^what\s+(?:(?:can\s+be|is)\s+used\s+for|is\s+for)\s+(.+?)[?.!\s]*$/i;
+
+// Live-caught 2026-07-12 follow-up: the SAME gap as mgx:usedFor above turned
+// out to be systemic, not one-off — "what causes fire", "what is made of
+// wood", "what is found in a kitchen", "what wants food" all fell through to
+// the same misleading code-graph miss, for the same reason (no reverse-by-
+// object reader existed for these predicates either). Rather than hand-roll
+// one more one-off regex per predicate, this DERIVES a reverse-by-object
+// regex for every FACT_PREDICATE_PHRASES entry that's safe to reverse — the
+// same "derivation, not a curated subset" philosophy TRAILING_PREDICATE_MARKERS
+// already uses for the forward direction (see that const's own docblock).
+// Excluded, each for a specific reason:
+//   - rdfs:subClassOf, mgx:hasA, mgx:capableOf, mgx:usedFor — already have
+//     their own dedicated, richer reverse readers (WHAT_INHERITS_RE/
+//     WHAT_HAS_RE/WHAT_CAN_DO_RE/WHAT_USED_FOR_RE above).
+//   - mgx:ownedBy — already has its own dedicated "who owns X" reader
+//     (WHO_OWNS_RE) — a WHO question, not a WHAT question, so it would never
+//     collide, but is excluded anyway to keep exactly one reader per relation.
+//   - rdf:type ("is a") and mgx:hasProperty ("is") — too short/generic to
+//     safely anchor a reverse question: "what is X" already belongs to the
+//     meta lane's own vocabulary lookup, and reversing it here would mean
+//     guessing whether the user meant "define X" or "what has property X"
+//     from word order alone.
+//   - owl:disjointWith ("is not a") and mgx:receivesAction ("can be") — both
+//     broad enough that "what is not a X" / "what can be X" read as much more
+//     likely to be a different question shape than a genuine reverse lookup.
+const REVERSE_PREDICATE_EXCLUDE = new Set([
+  "rdfs:subClassOf", "rdf:type", "mgx:hasA", "mgx:capableOf", "mgx:usedFor",
+  "mgx:ownedBy", "owl:disjointWith", "mgx:hasProperty", "mgx:receivesAction",
+]);
+const REVERSE_PREDICATE_MARKERS = Object.entries(FACT_PREDICATE_PHRASES)
+  .filter(([predicate]) => !REVERSE_PREDICATE_EXCLUDE.has(predicate))
+  .map(([predicate, phrase]) => ({
+    predicate,
+    re: new RegExp(`^what\\s+${escapeRegex(phrase)}\\s+(.+?)[?.!\\s]*$`, "i"),
+  }))
+  .sort((a, b) => b.re.source.length - a.re.source.length); // longest phrase first
 // Widened 2026-07-11 (live-caught follow-up to the ambiguousParse fix, commit
 // 5c858bf): on the FIRST turn of a graph-less session, dispatchTool's
 // loadGraph() throws its own documented "the graph is empty... this repo
@@ -4579,6 +4615,26 @@ async function factAnswer(memoryDir, query, envelope, miss, biasByBundle = {}) {
       const extra = rest.length ? `\n…and ${rest.length} more — say 'more' to see them.` : "";
       return { text: shown.join("\n") + extra, replace: true, ...(rest.length ? { pending: { items: rest, noun: "facts" } } : {}) };
     }
+  }
+
+  // (a-pre2) The generic derived cascade for every other reversible predicate
+  // (REVERSE_PREDICATE_MARKERS, see its own docblock for the exclusion list
+  // and why). Same checked-before-the-meta-lane placement and same
+  // only-take-over-on-a-real-hit discipline as (a-pre) just above — a phrase
+  // like "is found in"/"is made of" also starts with "what is …", so it must
+  // run before (a) can greedily claim the whole tail as a literal term.
+  for (const { predicate, re } of REVERSE_PREDICATE_MARKERS) {
+    const m = q.match(re);
+    if (!m) continue;
+    const variants = factTermVariants(normFactTerm, m[1]);
+    const hits = (await factRows(memoryDir)).filter((f) => f.predicate === predicate && variants.has(f.object));
+    if (!hits.length) continue; // try the next candidate marker, don't give up yet
+    const ranked = rankByBiasThenTrust(uniqueFacts(hits), biasByBundle);
+    const lines = ranked.map(renderFactLine);
+    const shown = lines.slice(0, FACT_ANSWER_CAP);
+    const rest = lines.slice(FACT_ANSWER_CAP);
+    const extra = rest.length ? `\n…and ${rest.length} more — say 'more' to see them.` : "";
+    return { text: shown.join("\n") + extra, replace: true, ...(rest.length ? { pending: { items: rest, noun: "facts" } } : {}) };
   }
 
   // (a) meta-shaped questions ("what is a module", "what does cache mean") — the
@@ -7850,8 +7906,22 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // further down is UNCHANGED, so a CamelCase term with no real hit still falls
   // through to its existing miss handling, never the generic orientation card.
   const isBareCamelCaseWhatisCandidate = conversationalCandidateBaseGate && isBareCamelCaseMetaQuestion(gateQuery);
+  // 2026-07-12 follow-up to the used-for/reverse-predicate fix (factAnswer's
+  // WHAT_USED_FOR_RE/REVERSE_PREDICATE_MARKERS, above): the SAME race BUG 2/
+  // Tier-5/CamelCase already fixed above hits these too, and for the shortest
+  // members of the family it's actually MORE likely to fire — "what wants
+  // happiness" is exactly 3 words, none of them in STRUCT_WORDS, so
+  // isConversational() claims it before factAnswer ever gets a turn, even
+  // though a real mgx:desires fact answers it correctly once reached (proven:
+  // the longer "what can be used for riding" already worked, since 5 words
+  // clears isConversational's <=3-word gate outright — only the short
+  // members of this family were ever actually broken). Same discipline as
+  // every sibling exemption on this gate: matching the shape alone changes
+  // nothing by itself, factAnswer below still only diverts on a REAL hit.
+  const reversePredicateShape = WHAT_USED_FOR_RE.test(gateQuery)
+    || REVERSE_PREDICATE_MARKERS.some(({ re }) => re.test(gateQuery));
   let bareMetaHit = null;
-  if ((isConversationalCandidate || isBareCamelCaseWhatisCandidate) && (bareWhatisShape || isAdjectiveShape)) {
+  if ((isConversationalCandidate || isBareCamelCaseWhatisCandidate) && (bareWhatisShape || isAdjectiveShape || reversePredicateShape)) {
     if (memoryDir) {
       bareMetaHit = (await factAnswer(memoryDir, gateQuery, envelope, miss, biasByBundle))
         ?? (await factReadBack(memoryDir, gateQuery, envelope, miss, graph, newFocus?.label, biasByBundle));

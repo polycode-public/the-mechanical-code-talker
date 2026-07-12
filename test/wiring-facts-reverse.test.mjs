@@ -151,6 +151,117 @@ test("WHAT_USED_FOR_RE guard: an object with no mgx:usedFor fact at all falls th
   }
 });
 
+// Live-caught 2026-07-12, same session as WHAT_USED_FOR_RE above: the exact
+// same forward-only gap turned out to be systemic across most of
+// FACT_PREDICATE_PHRASES, not unique to mgx:usedFor — "what causes fire",
+// "what is made of wood", "what is found in a kitchen", "what wants
+// happiness" all fell through to the same misleading code-graph miss.
+// REVERSE_PREDICATE_MARKERS (src/chat.mjs) derives a reverse-by-object
+// regex+reader for every FACT_PREDICATE_PHRASES entry safe to reverse (see
+// its own docblock for the exclusion list and why). Corpus facts these tests
+// lean on (also grepped verbatim from corpus/tier2/human.jsonl):
+//   {"start":"/c/en/paper","rel":"/r/MadeOf","end":"/c/en/wood", …}
+//   {"start":"/c/en/cook","rel":"/r/AtLocation","end":"/c/en/kitchen", …}
+//   {"start":"/c/en/brother","rel":"/r/PartOf","end":"/c/en/family", …}
+//   {"start":"/c/en/person","rel":"/r/Desires","end":"/c/en/happiness", …}
+test("REVERSE_PREDICATE_MARKERS: 'what is made of wood' surfaces the corpus-seeded mgx:madeOf fact", async () => {
+  const dir = await mem();
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    const r = await s.turn("what is made of wood");
+    await s.close();
+    assert.match(r.answer, /paper is made of wood/);
+    const rec = await lastTurnRecord(s.sidecarFile);
+    assert.equal(rec.miss, false);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("REVERSE_PREDICATE_MARKERS: 'what is found in a kitchen' surfaces the corpus-seeded mgx:atLocation fact", async () => {
+  const dir = await mem();
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    const r = await s.turn("what is found in a kitchen");
+    await s.close();
+    assert.match(r.answer, /cook is found in kitchen/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("REVERSE_PREDICATE_MARKERS: 'what is part of family' lists every distinct subject", async () => {
+  const dir = await mem();
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    const r = await s.turn("what is part of family");
+    await s.close();
+    assert.match(r.answer, /brother is part of family/);
+    assert.match(r.answer, /sister is part of family/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// The trickiest member of this family: exactly 3 words, none in STRUCT_WORDS,
+// so isConversational()'s own <=3-word/no-codeish catch-all (same race as BUG
+// 2 / the Tier-5 fix / the CamelCase finding, all documented at
+// isConversationalCandidate's own call site) claimed it BEFORE factAnswer
+// ever ran — via:"template" (the generic orientation card), not via:"fact",
+// confirmed live before this fix. Proves the isConversationalCandidate
+// exemption (reversePredicateShape), not just the reader itself.
+test("REVERSE_PREDICATE_MARKERS: 'what wants happiness' (exactly 3 words) resolves via the fact reader, not the isConversational() short-input catch-all", async () => {
+  const dir = await mem();
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    const r = await s.turn("what wants happiness");
+    await s.close();
+    assert.match(r.answer, /person wants happiness/);
+    const rec = await lastTurnRecord(s.sidecarFile);
+    assert.equal(rec.via, "fact");
+    assert.equal(rec.miss, false);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("REVERSE_PREDICATE_MARKERS guard: a genuinely unanswerable reverse query (no fact for that predicate+object) stays an honest miss, not fabricated", async () => {
+  const dir = await mem();
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    const r = await s.turn("what causes zzznonexistentqqq");
+    await s.close();
+    assert.doesNotMatch(r.answer, /causes zzznonexistentqqq/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("REVERSE_PREDICATE_MARKERS non-shadow regression: ordinary short conversational turns still get the orientation card, not a spurious fact lookup", async () => {
+  const dir = await mem();
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    const r = await s.turn("what can you do");
+    await s.close();
+    const rec = await lastTurnRecord(s.sidecarFile);
+    assert.equal(rec.via, "template");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("WHAT_INHERITS_RE: 'what inherits from horse' surfaces a freshly taught subClassOf fact", async () => {
   const dir = await mem();
   try {
