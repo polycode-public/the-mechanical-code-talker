@@ -13,7 +13,7 @@
 
 import {
   CONTRACTIONS, MISSPELLINGS, WRONG_WORDS, G_DROP, FILLER_WORDS,
-  NEGATION_FRAMES, COMMIT_CONTENT_FRAMES, VERB_TO_KIND,
+  NEGATION_FRAMES, COMMIT_CONTENT_FRAMES, VERB_TO_KIND, ENTITY_TO_TYPE,
 } from "../ask-vocab.mjs";
 
 export function escapeRegex(s) {
@@ -63,6 +63,25 @@ const WRONG_WORD_RE = correctionRe(WRONG_WORDS);
  *  left alone); "one" is excluded ("that one" is already its own literal
  *  CONTEXT_PRONOUNS entry). */
 const KIND_NOUN_ANAPHORA_RE = /\b(this|that)\s+(class|module|function|method|attribute|variable|file|commit)\b/gi;
+
+/** Read-only PROBE (BENCHMARK_CONVERSATION_1.7.0.md routed backlog C2): does
+ *  `text` contain a KIND_NOUN_ANAPHORA_RE match, and if so, what ENTITY CLASS
+ *  does its kind noun name (ENTITY_TO_TYPE, ask-vocab.mjs — the same
+ *  "file"->"Module" convention every other lane in this grammar already
+ *  uses)? Returns that class, or null when no such anaphora is present.
+ *  Deliberately SEPARATE from normalizeQuery's own KIND_NOUN_ANAPHORA_RE
+ *  replace just above (which permanently collapses "this file" to bare
+ *  "this", discarding the kind-noun signal for good, by design — see that
+ *  replace's own docblock): this never mutates its input and has no effect
+ *  on normalizeQuery's behavior, signature, or any of its many call sites.
+ *  A caller that needs BOTH the collapsed pronoun AND the kind it stood for
+ *  (chat.mjs's runAsk, at its pronoun-reuse site) calls this side-channel on
+ *  the same raw text handed to normalizeQuery — order between the two calls
+ *  doesn't matter, since this one only ever reads. */
+export function kindNounAnaphoraHint(text) {
+  const m = new RegExp(KIND_NOUN_ANAPHORA_RE.source, "i").exec(String(text || ""));
+  return m ? (ENTITY_TO_TYPE[m[2].toLowerCase()] || null) : null;
+}
 
 // every relation verb phrase VERB_TO_KIND knows, as one alternation (longest-first
 // so a multi-word verb like "inherit from" wins over its own leading word "inherit"

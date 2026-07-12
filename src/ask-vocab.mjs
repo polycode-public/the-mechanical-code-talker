@@ -324,17 +324,37 @@ const TRAILING_DISCOURSE_TAG_RE = new RegExp(
   `\\s+(?:${TRAILING_DISCOURSE_TAG.join("|")})\\s*[?.!]*$`, "i",
 );
 
-/** Strip trailing bare discourse tags (TRAILING_DISCOURSE_TAG, above) off the
- *  end of a captured meta-whatis term — "what is a component then" resolves
- *  the same term as "what is a component". Applied up to twice (a stacked
- *  "too then"/"then too" is the only worked case that ever needs a second
- *  pass; no phrasing seen so far stacks a third), mirroring
- *  stripTrailingScopeFiller's own single-clause discipline for the common
- *  single-tag case while still covering the rarer double-tag one. */
+/** Trailing COMMA-delimited discourse clauses ("what is a class, please
+ *  explain") — a distinct shape from TRAILING_DISCOURSE_TAG above (a bare
+ *  space-led tag, no comma): an ESL follow-on clause tacked onto a
+ *  meta-whatis term after a comma, meaning "please explain [it]", not part of
+ *  the term itself (BENCHMARK_CONVERSATION_1.7.0.md routed backlog C1). Closed
+ *  and curated exactly like TRAILING_DISCOURSE_TAG — anchored on a LITERAL
+ *  comma immediately before the tag, so this can never fire mid-phrase and
+ *  can never touch a term that merely contains a comma for some other reason
+ *  (no real code identifier ends in ", please explain" or ", explain"). */
+export const TRAILING_DISCOURSE_CLAUSE = Object.freeze(["please explain", "explain"]);
+
+const TRAILING_DISCOURSE_CLAUSE_RE = new RegExp(
+  `,\\s*(?:${TRAILING_DISCOURSE_CLAUSE.join("|")})\\s*[?.!]*$`, "i",
+);
+
+/** Strip trailing bare discourse tags (TRAILING_DISCOURSE_TAG, above) AND
+ *  trailing comma-delimited discourse clauses (TRAILING_DISCOURSE_CLAUSE,
+ *  above) off the end of a captured meta-whatis term — "what is a component
+ *  then" resolves the same term as "what is a component", and "what is a
+ *  class, please explain" resolves the same term as "what is a class".
+ *  Applied up to twice (a stacked "too then"/"then too" is the only worked
+ *  case that ever needs a second pass; no phrasing seen so far stacks a
+ *  third), mirroring stripTrailingScopeFiller's own single-clause discipline
+ *  for the common single-tag case while still covering the rarer
+ *  double-tag one. The comma-clause strip runs each pass too, so "class,
+ *  please explain then" (an unworked but plausible stack) still resolves. */
 export function stripTrailingDiscourseTag(text) {
   let out = text;
   for (let pass = 0; pass < 2; pass += 1) {
-    const next = out.replace(TRAILING_DISCOURSE_TAG_RE, "").trim();
+    let next = out.replace(TRAILING_DISCOURSE_TAG_RE, "").trim();
+    next = next.replace(TRAILING_DISCOURSE_CLAUSE_RE, "").trim();
     if (next === out) break;
     out = next;
   }
@@ -512,6 +532,10 @@ export const MISSPELLINGS = Object.freeze({
   "extands": "extends", "extneds": "extends",
   "depnds": "depends",
   "touchs": "touches", "tuoches": "touches", "touhced": "touched",
+  // "touchd" (BENCHMARK_CONVERSATION_1.7.0.md routed backlog C3): the
+  // dropped-vowel slip of "touched" — distinct from "touhced" above
+  // (transposed letters), same curated-typo discipline.
+  "touchd": "touched",
   // WHERE_MARKERS typo (0.9.13 Tier-1 playtest): "defined" itself had no typo
   // entry, so "where is it defned" fell through to the bare-object search path
   // instead of the where-shape ("no module matching 'it defned' found").
@@ -540,6 +564,12 @@ export const MISSPELLINGS = Object.freeze({
   // anchor; the correction regex's dotted-extension guard keeps a module
   // literally named "wat.mjs" untouched, same residual trade as every entry.
   "waht": "what", "wat": "what",
+  // "dat" (BENCHMARK_CONVERSATION_1.7.0.md routed backlog C3): the internet-
+  // casual spelling of "that" — same register as "wat"/"waht" just above,
+  // curated rather than left to the generic fuzzy tier since "that" is a
+  // load-bearing anchor word throughout this grammar (TEACH_RE's own
+  // "remember that X", relative-clause objects, etc).
+  "dat": "that",
   "dose": "does", "doess": "does",
   "teh": "the",
   // aggregate/list TRIGGER words (2026-07-02, trigger-typo work) — a typo of a count

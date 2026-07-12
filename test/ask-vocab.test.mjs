@@ -101,7 +101,11 @@ test("MISSPELLINGS/WRONG_WORDS: every value is a canonical word the grammar actu
     ...Object.keys(ENTITY_TO_TYPE),
     ...Object.keys(MODIFIER_TO_KIND),
     ...TRIGGER_WORDS,
-    "which", "what", "does", "the", "where",
+    // "that" (C3, "dat"→"that"): a genuine grammar-owned anchor word
+    // elsewhere in this codebase — chat.mjs's CONTEXT_WORDS pronoun set,
+    // TEACH_RE's "remember that X" clause, DESCRIBE_PRONOUN_RE — this
+    // vocab-level canon set just never needed to list it until now.
+    "which", "what", "does", "the", "where", "that",
   ]);
   for (const [key, value] of [...Object.entries(MISSPELLINGS), ...Object.entries(WRONG_WORDS)]) {
     assert.ok(canonical.has(value), `"${key}" corrects to "${value}", which no grammar table owns`);
