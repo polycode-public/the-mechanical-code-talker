@@ -542,21 +542,36 @@ function parseSetPhrase(text, nlp, depth) {
  *  that call X", handled by parseRelationalOrQualified) by requiring a VERB before the
  *  relative noun (i.e. the noun is not the leading subject). Returns a reverse/forward
  *  Set node, an honest miss (marker present, uncompilable), or null (no object-relative
- *  marker → let another production try). */
+ *  marker → let another production try).
+ *
+ *  The marker is either an explicit relative pronoun ("the module THAT imports X") or a
+ *  REDUCED relative clause with the pronoun dropped ("the module IMPORTING X" — a gerund
+ *  verb right where the pronoun+verb would go means the same thing). Root-cause fix for
+ *  g-c1-temp-8 (2026-07-12): "who touched the module importing X" has no "that", so this
+ *  loop used to find no marker at all, return null, and let the query fall through to the
+ *  legacy (non-compositional) strategy pipeline — which then misread the leading verb
+ *  "touched" itself as the flat ASK shape's subject TERM ("does 'touched' import X"),
+ *  never resolving to a real entity. "the module THAT imports X" (explicit pronoun)
+ *  already routed correctly through this same function; the gerund form is the identical
+ *  nested-set shape and is now recognized the same way. */
 function parseNested(w, lc, nlp, depth) {
   for (let r = 1; r < lc.length; r += 1) {
-    if (!RELATIVE_PRONOUNS.includes(lc[r])) continue;
-    if (r + 1 >= lc.length) continue;               // nothing after "that"
+    const isPronoun = RELATIVE_PRONOUNS.includes(lc[r]);
+    const isGerundMarker = !isPronoun && isGerundVerb(lc[r]);
+    if (!isPronoun && !isGerundMarker) continue;
+    if (isPronoun && r + 1 >= lc.length) continue;  // nothing after "that"
     const noun = entityNoun(lc[r - 1]);
-    if (!noun) continue;                            // "that" not preceded by a noun
+    if (!noun) continue;                            // marker not preceded by a noun
     const head = w.slice(0, r - 1);                 // outer clause words, minus the placeholder noun
     if (!head.length) continue;                     // noun is the leading subject → subject-relative, not this shape
     const outer = parseSimpleClause([...head, NEST_SENTINEL].join(" "), nlp);
     if (!outer || (outer.shape !== "reverse" && outer.shape !== "forward")) continue;
     if (outer.modifier && outer.modifier !== "direct") continue; // no transitive-over-set closure primitive
     // build the inner sub-query: "which <placeholder-noun> <inner-text>" — recurses,
-    // so the inner may itself be nested/boolean/qualified (depth ≥2).
-    const innerText = `which ${lc[r - 1]} ${w.slice(r + 1).join(" ")}`;
+    // so the inner may itself be nested/boolean/qualified (depth ≥2). An explicit
+    // relative pronoun is consumed (skip past it, start at r+1); a gerund marker IS
+    // the predicate's own verb, so it stays in the inner text (start AT r).
+    const innerText = `which ${lc[r - 1]} ${w.slice(isPronoun ? r + 1 : r).join(" ")}`;
     const inner = parseSetPhrase(innerText, nlp, depth + 1);
     if (!inner || inner.node === "miss") return inner ? { node: "miss", reason: inner.reason || "inner clause didn't parse" } : { node: "miss", reason: "inner clause didn't parse" };
     return { node: outer.shape === "reverse" ? "reverseSet" : "forwardSet", kind: outer.kind, entityType: outer.entityType, inner };
@@ -2274,7 +2289,7 @@ function renderComposite(parsed, result) {
   // computeFind's "related, not exact" broad pass documents for predicate-find).
   if (result.compositeKind === "membership") {
     if (!result.matches.length) {
-      return { content: `nothing in the index matches that${result.entityType ? ` (${nounFor(result.entityType, 2)})` : ""}.`, miss: true, ambiguous: false, matches: [] };
+      return { content: `nothing in the index matches that${result.entityType ? ` (${nounFor(result.entityType, 2)})` : ""}. ${touchesRephraseHint()}`, miss: true, ambiguous: false, matches: [] };
     }
     if (result.inheritedNotOwn) {
       const kindPlural = nounFor(result.entityType, 2);
@@ -2367,10 +2382,10 @@ function renderComposite(parsed, result) {
     const setNoun = result.entityType ? nounFor(result.entityType, n || 2) : (n === 1 ? "entity" : "entities");
     const wasWere = n === 1 ? "was" : "were";
     if (!n) {
-      return { content: `nothing in the index matches the inner set, so there is no change history to date.`, miss: true, ambiguous: false, matches: [] };
+      return { content: `nothing in the index matches the inner set, so there is no change history to date. ${touchesRephraseHint()}`, miss: true, ambiguous: false, matches: [] };
     }
     if (!result.matches.length) {
-      return { content: `no recorded commit touched the ${n} ${setNoun} in that set in this index.`, miss: true, ambiguous: false, matches: [] };
+      return { content: `no recorded commit touched the ${n} ${setNoun} in that set in this index. ${touchesRephraseHint()}`, miss: true, ambiguous: false, matches: [] };
     }
     const newest = result.matches[0];
     const date = (newest.attributes || []).find((a) => a.key === "date")?.value || "";
@@ -2387,7 +2402,7 @@ function renderComposite(parsed, result) {
   }
   // set-producing
   if (!result.matches.length) {
-    return { content: `nothing in the index matches that${result.entityType ? ` (${nounFor(result.entityType, 2)})` : ""}.`, miss: true, ambiguous: false, matches: [] };
+    return { content: `nothing in the index matches that${result.entityType ? ` (${nounFor(result.entityType, 2)})` : ""}. ${touchesRephraseHint()}`, miss: true, ambiguous: false, matches: [] };
   }
   return { content: `${compositeList(result.matches)}.`, miss: false, ambiguous: false, matches: result.matches };
 }
@@ -2397,6 +2412,22 @@ function renderComposite(parsed, result) {
 export function rephraseHint() {
   return '"which <functions|classes|modules> <imports|calls|uses|inherits from|tests|touched> <name>" or "what does <name> <import|call|export>" or "what uses <name>" or "where is <name> defined" / "where is <name> mentioned" or "when did <name> change" or "which changes touch commit <sha>"/"what did commit <sha> touch" (a commit\'s own changes) or plainly "what calls this" (about a selected node) or "what does <term> mean"/"what is a <ClassName>" (about the graph\'s own vocabulary). '
     + compositionalHint();
+}
+
+/** A short, honest nudge for the touches/history-family of correct-but-unhelpful
+ *  honest misses (CEFR decision log, BENCHMARK_CEFR_ENGLISH_1.7.0.md item 1:
+ *  g-c1-temp-7, g-c1-temp-3, g-b1-pron-1/4/5, hm-unknown-fn, hm-unknown-module all
+ *  scored `rephrase: 0` despite being correct empty results — the miss said WHAT
+ *  wasn't found but gave no nudge toward a question that WOULD work). Points at the
+ *  same "who touched X" / "/describe X" shapes that produce a real answer elsewhere
+ *  in this file (see whenShape/whoLastShape's own success template, "X was last
+ *  touched by commit …", a few lines below) — never promises any PARTICULAR name
+ *  will resolve, since the whole point of the miss it's attached to is that this
+ *  one didn't. Sibling of rephraseHint() above: same purpose, narrower vocabulary,
+ *  reused verbatim by every touches/history-family miss template rather than each
+ *  one inventing its own wording. */
+export function touchesRephraseHint() {
+  return 'Try "who touched <a module that actually has commits>" or "/describe <module>" to see what\'s in the index.';
 }
 
 // ---- §4 object-term resolution — mechanical, no embeddings, tiered, stop at first hit ----
@@ -3739,7 +3770,7 @@ function renderCore(parsed, result) {
     const what = /^(?:commit[:\s])?[0-9a-f]{7,40}$/i.test(objText) ? "commit"
       : (!objText.includes("/") && /^[\w$]+(\.[\w$]+)+$/.test(objText) ? "symbol" : fallback);
     return {
-      content: `no ${what} matching "${parsed.object}" found in the index.`,
+      content: `no ${what} matching "${parsed.object}" found in the index. ${touchesRephraseHint()}`,
       miss: true, ambiguous: false, candidates: [],
     };
   }
@@ -3789,7 +3820,7 @@ function renderCore(parsed, result) {
   if (result.whenShape) {
     const subject = result.objMatch.label;
     if (!result.matches.length) {
-      return { content: `no recorded commit touches ${subject} in this index.`, miss: true, ambiguous: false };
+      return { content: `no recorded commit touches ${subject} in this index. ${touchesRephraseHint()}`, miss: true, ambiguous: false };
     }
     const newest = result.matches[0];
     const date = (newest.attributes || []).find((a) => a.key === "date")?.value || "";
@@ -3818,7 +3849,7 @@ function renderCore(parsed, result) {
   if (result.whoLastShape) {
     const subject = result.objMatch.label;
     if (!result.matches.length) {
-      return { content: `no recorded commit touches ${subject} in this index.`, miss: true, ambiguous: false };
+      return { content: `no recorded commit touches ${subject} in this index. ${touchesRephraseHint()}`, miss: true, ambiguous: false };
     }
     const newest = result.matches[0];
     const author = (newest.attributes || []).find((a) => a.key === "author")?.value;
@@ -3903,7 +3934,7 @@ function renderCore(parsed, result) {
     // append-only/sacred mid-arc, so the honest-miss phrasing stays as-is.
     const entityWord = nounFor(parsed.entityType || "Module", 2);
     return {
-      content: `No ${entityWord} found whose module directly ${verbFor(parsed.kind)} ${parsed.object}.`,
+      content: `No ${entityWord} found whose module directly ${verbFor(parsed.kind)} ${parsed.object}. ${touchesRephraseHint()}`,
       miss: true, ambiguous: false,
     };
   }
