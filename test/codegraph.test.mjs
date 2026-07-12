@@ -18,6 +18,7 @@ import {
   mostRecentIndividual,
   impactClosure,
   renderDescribe,
+  renderCompare,
   renderImpact,
   renderSearch,
   searchModulesRanked,
@@ -209,6 +210,29 @@ test("renderDescribe: edges both directions, commit attestation + provenance", (
   assert.match(text, /← calls \[mgx:callsCoarse\] \(1\) by scripts\/g\.mjs/);
   assert.match(text, /← touches \[mgx:touchedByCommit\] \(1\) by abc1234/);
   assert.match(text, /provenance: git:abc1234, git:def5678/);
+});
+
+test("renderCompare: two same-kind Classes — shared + differing edges, attribute diff", () => {
+  const text = renderCompare(graph, graph.byId.get("cls-widget"), graph.byId.get("cls-button"));
+  assert.match(text, /^Comparing Widget and Button \(both Class\):/);
+  // shared relation (both inherit — but from DIFFERENT supertypes, a real difference)
+  assert.match(text, /inherits \[seon:hasSuperType\]: Widget \(1\) -> Base; Button \(1\) -> Widget/);
+  // Widget-only edge (contains render/name); Button has none
+  assert.match(text, /contains \[seon:containsCodeEntity\]: Widget \(2\) -> render, name; Button \(0\) -> none/);
+  // attribute mismatch (different source sites)
+  assert.match(text, /attribute site: Widget = app\/lib\/b\.mjs:1-30; Button = app\/lib\/c\.mjs:1-10/);
+});
+
+test("renderCompare: two same-kind Modules — imports/tests/cochange asymmetry", () => {
+  const text = renderCompare(graph, graph.byId.get("mod-a"), graph.byId.get("mod-b"));
+  assert.match(text, /^Comparing app\/lib\/a\.mjs and app\/lib\/b\.mjs \(both Module\):/);
+  assert.match(text, /<- tests \[mgx:testsCoverage\]: app\/lib\/a\.mjs \(0\) -> none; app\/lib\/b\.mjs \(1\) -> app\/unit-tests\/b\.test\.mjs/);
+  assert.match(text, /cochange \[mgx:changeCoupledWith\]: app\/lib\/a\.mjs \(2\) -> app\/lib\/b\.mjs, app\/lib\/c\.mjs; app\/lib\/b\.mjs \(0\) -> none/);
+});
+
+test("renderCompare: refuses mismatched kinds and the same individual, honestly (null)", () => {
+  assert.equal(renderCompare(graph, graph.byId.get("cls-widget"), graph.byId.get("mod-a")), null);
+  assert.equal(renderCompare(graph, graph.byId.get("cls-widget"), graph.byId.get("cls-widget")), null);
 });
 
 test("renderImpact: depth groups, totals, no false truncation warning", () => {

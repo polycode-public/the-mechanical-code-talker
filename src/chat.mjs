@@ -43,10 +43,10 @@ import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { createInterface } from "node:readline/promises";
 import { spawnSync } from "node:child_process";
-import { dispatchTool } from "./server.mjs";
+import { dispatchTool, loadGraph } from "./server.mjs";
 import { loadConfig, DEFAULT_GRAPH_REL } from "./config.mjs";
 import { resolveRuntimeConfig } from "./cli-args.mjs";
-import { parseEntities, edgesOfKind, renderAuthorCard, renderAuthorTouches, renderCommitAuthor } from "./codegraph.mjs";
+import { parseEntities, edgesOfKind, renderAuthorCard, renderAuthorTouches, renderCommitAuthor, resolveSymbol, renderCompare } from "./codegraph.mjs";
 import { SESSIONS_DIR_REL, appendSessionToGraph } from "./sessions.mjs";
 import { uuidv7 } from "./uuid.mjs";
 import { createTelemetry } from "./telemetry.mjs";
@@ -6725,6 +6725,84 @@ async function describeWrapperAnswer(query, { config, source, focus, graph, tel 
   }
 }
 
+/** COMPARE (HANDOVER.md 2026-07-12 "no comparison capability" item) — a scoped
+ *  v1: "how is X different from Y", "how does X differ from Y", "compare X and
+ *  Y"/"compare X with/to Y", "what's the difference between X and Y". Five
+ *  closed patterns, same discipline as DESCRIBE_WRAPPER_RE/DETAILED_HOW_WORKS_RE
+ *  above — curated anchors, never a general "any two nouns" catch-all. Named
+ *  capture groups (a/b) so compareAnswer doesn't need to know which pattern
+ *  fired. Tried as a LAST-RESORT rescue (same call-site discipline as (4d)/(4e)
+ *  below) since neither ask.mjs's compositional grammar nor any existing lane
+ *  recognizes a two-entity comparison at all — there is nothing for this to
+ *  shadow. */
+const COMPARE_PATTERNS = [
+  /^how\s+(?:is|are)\s+(?<a>.+?)\s+different\s+from\s+(?<b>.+?)$/i,
+  /^how\s+do(?:es)?\s+(?<a>.+?)\s+differ\s+from\s+(?<b>.+?)$/i,
+  /^how\s+are\s+(?<a>.+?)\s+and\s+(?<b>.+?)\s+different$/i,
+  /^compare\s+(?<a>.+?)\s+(?:and|with|to)\s+(?<b>.+?)$/i,
+  /^(?:what(?:'s|\s+is)\s+the\s+difference\s+between|difference\s+between)\s+(?<a>.+?)\s+and\s+(?<b>.+?)$/i,
+];
+
+/** Strip a leading article — resolveSymbol (codegraph.mjs) has no article
+ *  tolerance of its own (same reasoning as describeGrainRescue's own strip,
+ *  above): "the TaskController" never resolves where "TaskController" does. */
+function stripCompareArticle(term) {
+  return String(term || "").trim().replace(/^(?:the|a|an)\s+/i, "").trim();
+}
+
+/** Resolves both named entities via resolveSymbol (the SAME resolver
+ *  dispatchTool("tmct_describe") uses — no new resolution machinery) and
+ *  renders their comparison via renderCompare (codegraph.mjs), which itself
+ *  reuses describe's own edgesFor/relLabel/capJoin. Returns null when the
+ *  query text doesn't match any COMPARE_PATTERNS shape at all (not this
+ *  lane's turn); otherwise always returns a real, honest answer — either the
+ *  comparison text or a stated reason it couldn't be done (a term didn't
+ *  resolve, or the two resolved to different kinds), never a guess. */
+// Loads its own graph via loadGraph (server.mjs) when runAsk's own `graph`
+// param is null (the common case — see runAsk's own `if (graph && …) … else
+// dispatchTool("tmct_ask", …)` split, above this lane's call site: most
+// turns never get a preloaded graph threaded in; only dispatchTool's OWN
+// tools load one, per call, from config). Declines (returns null) on load
+// failure — a genuinely graph-less repo — the same honest-decline-on-throw
+// pattern describeGrainRescue/describeWrapperAnswer already use.
+async function compareAnswer(query, { graph, config, source }) {
+  const q = String(query || "").trim().replace(/\?+$/, "").trim();
+  let m = null;
+  for (const re of COMPARE_PATTERNS) {
+    m = q.match(re);
+    if (m) break;
+  }
+  if (!m) return null;
+  const termA = stripCompareArticle(m.groups?.a);
+  const termB = stripCompareArticle(m.groups?.b);
+  if (!termA || !termB) return null;
+  let g = graph;
+  if (!g) {
+    try {
+      g = await loadGraph(config, source);
+    } catch {
+      return null; // no graph yet — decline, the ordinary wall stands unchanged
+    }
+  }
+  const { match: indA } = resolveSymbol(g, termA);
+  const { match: indB } = resolveSymbol(g, termB);
+  if (!indA || !indB) {
+    const missing = !indA && !indB ? `"${termA}" and "${termB}" don't` : (!indA ? `"${termA}" doesn't` : `"${termB}" doesn't`);
+    return { text: `I can't compare these — ${missing} resolve to anything in the current artifact.`, ents: [] };
+  }
+  if (indA.id === indB.id) {
+    return { text: `"${indA.label}" and "${indB.label}" resolve to the same entity — nothing to compare.`, ents: [indA] };
+  }
+  const cmp = renderCompare(g, indA, indB);
+  if (!cmp) {
+    return {
+      text: `I can only compare two entities of the SAME kind right now — "${indA.label}" is a ${indA.class || "Entity"} and "${indB.label}" is a ${indB.class || "Entity"}.`,
+      ents: [indA, indB],
+    };
+  }
+  return { text: cmp, ents: [indA, indB] };
+}
+
 /** DETAILED-SUMMARY / EXPLAIN-IN-DETAIL closed phrasings (HANDOVER.md 2026-07-10 item
  *  7) — "give me a detailed summary of how the task system works" / "explain in detail
  *  how X works" / "give me a detailed overview of X". PLAYTESTBENCH_1.4.1.md round 3
@@ -7739,6 +7817,32 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       note(trace, "lane: (4e) COMPLETIONS RESCUE — a \"detailed summary/overview of how X works\" phrasing matched, answered via src/completions/'s extractive multi-sentence pipeline (generateCompletion())");
       note(trace, "source: src/completions/complete.mjs generateCompletion() (broadSearch + groupHits + rankSentences + inferRelations + pruneCompletion + finish())");
       note(trace, "goal: produce a grounded, cited, multi-sentence account of the subject (not a single fact/definition)");
+    }
+  }
+  // (4f) COMPARE RESCUE (HANDOVER.md 2026-07-12 "no comparison capability" item) —
+  // "how is X different from Y" / "compare X and Y" / "what's the difference
+  // between X and Y": resolves BOTH named entities (resolveSymbol, the same
+  // resolver /describe uses) and renders their comparison (renderCompare,
+  // codegraph.mjs — reuses describe's own edgesFor/relLabel/capJoin, no new
+  // graph traversal). Tried ONLY here, after every other lane declined — same
+  // last-resort discipline as (4d)/(4e) above — since no earlier lane (nor
+  // ask.mjs's compositional grammar) recognizes a two-entity comparison at all,
+  // so there is nothing this could shadow. Always a real answer once its
+  // pattern matches: either the comparison, or an honest stated reason it
+  // couldn't be done (a term didn't resolve, or the two are different kinds) —
+  // never a guess, never a forced comparison across mismatched kinds.
+  if (miss && recordMiss && via === "composed") {
+    const compared = await compareAnswer(query, { graph, config, source });
+    if (compared) {
+      answer = compared.text; via = "compare"; recordMiss = false;
+      note(trace, "lane: (4f) COMPARE RESCUE — a \"how is X different from Y\"/\"compare X and Y\" shape matched, answered via renderCompare (codegraph.mjs)");
+      note(trace, "goal: surface the genuine differences between two named entities' facts/edges");
+      if (compared.ents.length) {
+        const last = compared.ents[compared.ents.length - 1];
+        resolvedIds = compared.ents.map((e) => e.id);
+        newFocus = nextFocus(graph, newFocus, last);
+        note(trace, `result: compare resolved "${query}" -> ${compared.ents.map((e) => e.label).join(" vs ")} — the last-named entity becomes the new focus`);
+      }
     }
   }
   // (5) #1 SHORT TAILORED MISS — replace ONLY the engine's full grammar cheat-sheet

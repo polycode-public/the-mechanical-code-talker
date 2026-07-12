@@ -277,6 +277,81 @@ function truncationNote(graph) {
   return `note: partial edge lists for: ${list}. Counts are complete; the lists are not.`;
 }
 
+// ---- compare (scoped v1, HANDOVER.md 2026-07-12 "no comparison capability" item) ----
+
+/** One side-by-side row for a single classified relation (predicate/prop pair),
+ *  in the given direction — reuses edgesFor/relLabel/capJoin verbatim (the SAME
+ *  classified relation groups and edge-cap discipline renderDescribe reads), just
+ *  paired up instead of listed independently per entity. `field` picks the
+ *  correct edge endpoint for the direction (`out` reads the OBJECT end,
+ *  `incoming` reads the SUBJECT end) — edgesFor's own out/incoming split. */
+function compareRow(prefix, key, aEdges, bEdges, labelA, labelB, field) {
+  const fmt = (edges) => (edges.length ? capJoin(edges.map((e) => e[`${field}Label`] || e[field]), DESCRIBE_EDGE_CAP) : "none");
+  return `  ${prefix}${key}: ${labelA} (${aEdges.length}) -> ${fmt(aEdges)}; ${labelB} (${bEdges.length}) -> ${fmt(bEdges)}`;
+}
+
+/** predicate-label -> {group, aEdges, bEdges}, built from BOTH sides' edge
+ *  groups for one direction (out or incoming) — a plain union-by-key merge, no
+ *  new graph query: every group/edges pair here is exactly what edgesFor already
+ *  returned for each individual separately. */
+function pairByPredicate(aGroups, bGroups) {
+  const byPred = new Map();
+  for (const { group, edges } of aGroups) byPred.set(relLabel(group), { group, aEdges: edges, bEdges: [] });
+  for (const { group, edges } of bGroups) {
+    const key = relLabel(group);
+    if (!byPred.has(key)) byPred.set(key, { group, aEdges: [], bEdges: [] });
+    byPred.get(key).bEdges = edges;
+  }
+  return byPred;
+}
+
+/** Compact, honest side-by-side comparison of two SAME-KIND individuals —
+ *  the scoped-down v1 comparison capability (HANDOVER.md 2026-07-12): reuses
+ *  the exact edgesFor/relLabel/capJoin machinery renderDescribe already reads
+ *  (same classified relation groups, same DESCRIBE_EDGE_CAP discipline), just
+ *  rendered as a paired diff instead of two independent one-entity reports —
+ *  no new graph traversal, only a new presentation over data describe already
+ *  surfaces. Deliberately refuses (returns null) rather than forcing a
+ *  comparison across mismatched kinds or the same individual twice — the
+ *  caller (chat.mjs's compare lane) renders its own honest message for those
+ *  cases instead of an empty/degenerate report. */
+export function renderCompare(graph, indA, indB) {
+  if (!indA || !indB || indA.id === indB.id) return null;
+  const klass = indA.class || "Entity";
+  if ((indB.class || "Entity") !== klass) return null;
+
+  const lines = [`Comparing ${indA.label} and ${indB.label} (both ${klass}):`];
+  const a = edgesFor(graph, indA.id);
+  const b = edgesFor(graph, indB.id);
+  const outByPred = pairByPredicate(a.out, b.out);
+  const inByPred = pairByPredicate(a.incoming, b.incoming);
+
+  if (!outByPred.size && !inByPred.size) {
+    lines.push("  edges: none recorded for either in the current artifact.");
+  } else {
+    for (const [key, { aEdges, bEdges }] of outByPred) {
+      lines.push(compareRow("", key, aEdges, bEdges, indA.label, indB.label, "object"));
+    }
+    for (const [key, { aEdges, bEdges }] of inByPred) {
+      lines.push(compareRow("<- ", key, aEdges, bEdges, indA.label, indB.label, "subject"));
+    }
+  }
+
+  // Attribute diff — same key-union approach, but only MISMATCHES are worth
+  // surfacing (a shared attribute value isn't a "difference").
+  const attrsA = new Map((indA.attributes || []).map((x) => [x.key, x.value]));
+  const attrsB = new Map((indB.attributes || []).map((x) => [x.key, x.value]));
+  const attrKeys = new Set([...attrsA.keys(), ...attrsB.keys()]);
+  for (const k of attrKeys) {
+    const va = attrsA.has(k) ? attrsA.get(k) : "(none)";
+    const vb = attrsB.has(k) ? attrsB.get(k) : "(none)";
+    if (va !== vb) lines.push(`  attribute ${k}: ${indA.label} = ${va}; ${indB.label} = ${vb}`);
+  }
+
+  if (graph.truncated.length) lines.push(truncationNote(graph));
+  return lines.join("\n");
+}
+
 // ---- impact (transitive reverse closure over imports/calls) ---------------------
 
 /**
