@@ -217,13 +217,21 @@ function seedRequested({ optSeed, configEnabled, env }) {
  *   only ever sees an already-resolved preset object (or nothing). Has no
  *   effect when tmct.toml already exists and `force` isn't set (the existing
  *   "preserve a user's tmct.toml" rule wins, same as `seed`/`corpus.tier`).
+ * @param {string}  [opts.memoryBackend]  "default" | "memory" | "sqlite" — merged
+ *   into the FRESH config's `[memory] backend` before it's written (same
+ *   "fresh write only" rule as `persona`, above; `tmct init --memory-backend
+ *   <...>` on an ALREADY-initialized repo is bin/tmct.mjs's own job, mirroring
+ *   how `--graph` amends an existing tmct.toml post-hoc). Also selects which
+ *   backend the corpus SEED below (step 3) writes into — src/memory/core.mjs's
+ *   `openMemoryBackend`, the same resolver chat.mjs's createSession uses, so a
+ *   seeded fact and a later chat-taught fact always land in the same store.
  * @returns {Promise<{
  *   created: string[], config: object, seeded: boolean,
  *   alreadyInitialized: boolean, seedResult: (object|null), message: string
  * }>} `created` lists the ABSOLUTE paths this call brought into being (empty on a
  *   benign no-op re-init). Never throws on a benign re-init or a corpus failure.
  */
-export async function initRepo(dir, { force = false, seed, env = process.env, persona = null } = {}) {
+export async function initRepo(dir, { force = false, seed, env = process.env, persona = null, memoryBackend = null } = {}) {
   const root = resolve(dir);
   const created = [];
   const paths = {
@@ -256,6 +264,7 @@ export async function initRepo(dir, { force = false, seed, env = process.env, pe
     if (persona.extensions && Object.keys(persona.extensions).length) config.extensions = persona.extensions;
     if (persona.bias && Object.keys(persona.bias).length) config.bias = persona.bias;
   }
+  if (memoryBackend) config.memory = { ...(config.memory || {}), backend: memoryBackend };
   const tomlPresent = await exists(paths.toml);
   if (!tomlPresent || force) {
     await writeFile(paths.toml, renderTomlConfig(config));
@@ -287,50 +296,71 @@ export async function initRepo(dir, { force = false, seed, env = process.env, pe
   } else if ((await exists(paths.marker)) && !force) {
     seedNote = "seed skipped (already seeded — marker present)";
   } else {
-    try {
-      const { resolveExtensions, seedActiveCorpusEntries } = await import("./extensions.mjs");
-      const { entries } = await resolveExtensions(root);
-      // `tmct.toml`'s `[seed] limit` knob is documented as capping the tier-1
-      // ConceptNet band specifically (the curated SEON ontology is small and
-      // always seeds whole) — so it overrides ONLY the resolved "conceptnet"
-      // entry's limit, exactly like the pre-fix single-corpus seed did.
-      if (config.seed?.limit != null && entries.has("conceptnet")) {
-        entries.set("conceptnet", { ...entries.get("conceptnet"), limit: Number(config.seed.limit) });
+    // BUG FIX (found in review): this step used to call seedActiveCorpusEntries
+    // with the plain `root` string ALWAYS — Backend A only — regardless of
+    // `config.memory.backend`. A `tmct init --memory-backend sqlite` repo ended
+    // up with its corpus facts trapped in an inert .tmct/memory/graph.json that
+    // a sqlite-backend chat session (createSession, which IS backend-aware)
+    // could never read: a permanently split-brain repo. Resolved the same way
+    // createSession resolves it — src/memory/core.mjs's openMemoryBackend — so
+    // the seed lands in whichever backend `config.memory.backend` actually
+    // names. "memory" is skipped outright: it's an in-process-only store that
+    // vanishes the moment this one-shot init process exits, so seeding it is
+    // pure wasted work — a later `tmct chat --memory-backend memory` opens a
+    // brand new, unrelated in-memory store anyway.
+    const backendChoice = String(config.memory?.backend || "").trim().toLowerCase();
+    if (backendChoice === "memory") {
+      seedNote = "seed skipped (memory backend is in-process only — nothing would persist past this command)";
+    } else {
+      const { openMemoryBackend } = await import("./memory/core.mjs");
+      const { dir: memoryDir, close: closeMemoryStore } = await openMemoryBackend(root, backendChoice);
+      try {
+        const { resolveExtensions, seedActiveCorpusEntries } = await import("./extensions.mjs");
+        const { entries } = await resolveExtensions(root);
+        // `tmct.toml`'s `[seed] limit` knob is documented as capping the tier-1
+        // ConceptNet band specifically (the curated SEON ontology is small and
+        // always seeds whole) — so it overrides ONLY the resolved "conceptnet"
+        // entry's limit, exactly like the pre-fix single-corpus seed did.
+        if (config.seed?.limit != null && entries.has("conceptnet")) {
+          entries.set("conceptnet", { ...entries.get("conceptnet"), limit: Number(config.seed.limit) });
+        }
+        const { appended, skipped, total, perBundle } = await seedActiveCorpusEntries(memoryDir, entries);
+        // seedActiveCorpusEntries is failure-tolerant PER BUNDLE (a bad third-party
+        // pack never aborts the others) — but initRepo's own "FAILURE-TOLERANT
+        // SEED" contract is about the SEED AS A WHOLE degrading honestly. If every
+        // active bundle failed (e.g. the memory graph file itself is unwritable —
+        // see test/init.test.mjs "seed failure degrades"), re-throw the first
+        // bundle's error so the SAME outer catch below reports the familiar "seed
+        // skipped (corpus unavailable: …)" note, rather than claiming success with
+        // zero facts actually written.
+        const bundleNames = Object.keys(perBundle);
+        const allFailed = bundleNames.length > 0 && bundleNames.every((n) => perBundle[n].error);
+        if (allFailed) throw new Error(perBundle[bundleNames[0]].error);
+        seedResult = {
+          appended, skipped, total, perBundle,
+          seon: perBundle.seon?.appended || 0,
+          conceptnet: perBundle.conceptnet?.appended || 0,
+        };
+        const markerNew = !(await exists(paths.marker));
+        await mkdir(dirname(paths.marker), { recursive: true });
+        await writeFile(
+          paths.marker,
+          JSON.stringify({
+            seededAt: new Date().toISOString(),
+            limit: config.seed?.limit != null ? Number(config.seed.limit) : SEED_LIMIT,
+            appended: seedResult.appended,
+            skipped: seedResult.skipped,
+            perBundle,
+          }) + "\n",
+        );
+        if (markerNew) created.push(paths.marker);
+        seeded = true;
+      } catch (err) {
+        // Corpus unavailable/broken → an initialised-but-unseeded repo, not a crash.
+        seedNote = `seed skipped (corpus unavailable: ${err && err.message ? err.message : err})`;
+      } finally {
+        await closeMemoryStore();
       }
-      const { appended, skipped, total, perBundle } = await seedActiveCorpusEntries(root, entries);
-      // seedActiveCorpusEntries is failure-tolerant PER BUNDLE (a bad third-party
-      // pack never aborts the others) — but initRepo's own "FAILURE-TOLERANT
-      // SEED" contract is about the SEED AS A WHOLE degrading honestly. If every
-      // active bundle failed (e.g. the memory graph file itself is unwritable —
-      // see test/init.test.mjs "seed failure degrades"), re-throw the first
-      // bundle's error so the SAME outer catch below reports the familiar "seed
-      // skipped (corpus unavailable: …)" note, rather than claiming success with
-      // zero facts actually written.
-      const bundleNames = Object.keys(perBundle);
-      const allFailed = bundleNames.length > 0 && bundleNames.every((n) => perBundle[n].error);
-      if (allFailed) throw new Error(perBundle[bundleNames[0]].error);
-      seedResult = {
-        appended, skipped, total, perBundle,
-        seon: perBundle.seon?.appended || 0,
-        conceptnet: perBundle.conceptnet?.appended || 0,
-      };
-      const markerNew = !(await exists(paths.marker));
-      await mkdir(dirname(paths.marker), { recursive: true });
-      await writeFile(
-        paths.marker,
-        JSON.stringify({
-          seededAt: new Date().toISOString(),
-          limit: config.seed?.limit != null ? Number(config.seed.limit) : SEED_LIMIT,
-          appended: seedResult.appended,
-          skipped: seedResult.skipped,
-          perBundle,
-        }) + "\n",
-      );
-      if (markerNew) created.push(paths.marker);
-      seeded = true;
-    } catch (err) {
-      // Corpus unavailable/broken → an initialised-but-unseeded repo, not a crash.
-      seedNote = `seed skipped (corpus unavailable: ${err && err.message ? err.message : err})`;
     }
   }
 

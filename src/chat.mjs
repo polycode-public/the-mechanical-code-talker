@@ -9442,19 +9442,14 @@ export async function createSession({
   // (src/toml-config.mjs). A toml value of "default" (or anything unrecognized)
   // falls through to Backend A below, same as an absent value always has.
   const backendChoice = String(memoryBackend || env.TMCT_MEMORY_BACKEND || toml?.memory?.backend || "").trim().toLowerCase();
-  let memoryDir = repo;
-  let closeMemoryStore = async () => {};
-  if (backendChoice === "memory") {
-    const { createInMemoryStore } = await import("./memory/core.mjs");
-    memoryDir = createInMemoryStore();
-  } else if (backendChoice === "sqlite") {
-    const { createSqliteMemoryStore, closeSqliteMemoryStore } = await import("./memory/core.mjs");
-    const dbPath = join(repo, ".tmct", "memory", "graph.sqlite");
-    await mkdir(dirname(dbPath), { recursive: true });
-    const handle = await createSqliteMemoryStore(dbPath);
-    memoryDir = handle;
-    closeMemoryStore = async () => closeSqliteMemoryStore(handle);
-  }
+  // openMemoryBackend (memory/core.mjs) is the ONE shared resolver for this
+  // seam — src/init.mjs's corpus seed and bin/tmct.mjs's --corpus/--ontology/
+  // --lexicon activation now call the exact same function, so a repo's
+  // seeded facts and its chat-taught facts always land in the same backend
+  // (a split-brain bug found in review: init used to always seed Backend A
+  // regardless of the configured backend).
+  const { openMemoryBackend } = await import("./memory/core.mjs");
+  const { dir: memoryDir, close: closeMemoryStore } = await openMemoryBackend(repo, backendChoice);
 
   const empty = graph.individuals.length === 0;
   // W3: FIRST RUN in a graph-less repo seeds a capped ConceptNet slice into

@@ -459,3 +459,127 @@ test("bin/tmct.mjs: `tmct import --memory-backend memory` on an already-initiali
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+// ---- REGRESSION (found in review): `initRepo`'s own corpus-seeding step used
+// to ALWAYS write into the flat-file backend (Backend A), even when
+// `--memory-backend sqlite` was configured — a split-brain repo where the
+// seeded corpus sat in an inert graph.json a sqlite-backend chat session could
+// never read. Fixed via src/memory/core.mjs's openMemoryBackend, the SAME
+// resolver chat.mjs's createSession uses. These tests reproduce the exact
+// failure the coordinator's review caught: seed, then verify the facts are
+// actually reachable from the CONFIGURED backend, not just that the flag got
+// written to tmct.toml. --------------------------------------------------
+
+test("initRepo({ memoryBackend: 'sqlite', seed: true }): seeded facts land in graph.sqlite, not graph.json", async () => {
+  const dir = await tmp();
+  try {
+    const res = await initRepo(dir, { seed: true, memoryBackend: "sqlite" });
+    assert.equal(res.seeded, true);
+    assert.ok(res.seedResult.appended > 0);
+    assert.equal(res.config.memory.backend, "sqlite");
+
+    const { openMemoryBackend } = await import("../src/memory/core.mjs");
+    const { dir: handle, close } = await openMemoryBackend(dir, "sqlite");
+    const mem = await loadMemory(handle);
+    await close();
+    const facts = (mem.individuals || []).filter((i) => i.class === "Fact");
+    assert.ok(facts.length > 0, "seeded facts are reachable from the sqlite backend directly");
+
+    // and NOT leaked into the flat-file backend
+    if (await exists(join(dir, ".tmct", "memory", "graph.json"))) {
+      const jsonMem = await loadMemory(dir);
+      const jsonFacts = (jsonMem.individuals || []).filter((i) => i.class === "Fact");
+      assert.equal(jsonFacts.length, 0, "no Fact ever leaked into the flat-file backend");
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("initRepo({ memoryBackend: 'memory', seed: true }): seed is honestly skipped — an in-process store can't persist past this one-shot call", async () => {
+  const dir = await tmp();
+  try {
+    const res = await initRepo(dir, { seed: true, memoryBackend: "memory" });
+    assert.equal(res.seeded, false);
+    assert.match(res.message, /memory backend is in-process only/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("bin/tmct.mjs REGRESSION: `tmct init --memory-backend sqlite` then a flagless `tmct chat` answers from the seeded corpus, not an empty session — the exact repro that caught the split-brain bug", async () => {
+  const { spawnSync } = await import("node:child_process");
+  const { fileURLToPath } = await import("node:url");
+  const BIN = fileURLToPath(new URL("../bin/tmct.mjs", import.meta.url));
+
+  const dir = await tmp();
+  try {
+    const init = spawnSync(process.execPath, [BIN, "init", "--memory-backend", "sqlite"], { encoding: "utf8", cwd: dir });
+    assert.equal(init.status, 0, init.stderr);
+    assert.match(init.stdout, /Seeded \d+ corpus facts/);
+
+    const chat = spawnSync(process.execPath, [BIN], { encoding: "utf8", cwd: dir, input: "what is a dog\n/exit\n" });
+    assert.equal(chat.status, 0, chat.stderr);
+    assert.doesNotMatch(chat.stdout, /I don't know "dog" yet/, "the seeded corpus must be reachable from the configured sqlite backend");
+    assert.match(chat.stdout, /dog/i);
+
+    const { openMemoryBackend } = await import("../src/memory/core.mjs");
+    const { dir: handle, close } = await openMemoryBackend(dir, "sqlite");
+    const mem = await loadMemory(handle);
+    await close();
+    assert.ok((mem.individuals || []).filter((i) => i.class === "Fact").length > 0);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("bin/tmct.mjs REGRESSION: `tmct init --corpus aws --memory-backend sqlite` (combined in one call) seeds BOTH the default corpus AND aws into sqlite — write-ordering fix", async () => {
+  const { spawnSync } = await import("node:child_process");
+  const { fileURLToPath } = await import("node:url");
+  const BIN = fileURLToPath(new URL("../bin/tmct.mjs", import.meta.url));
+
+  const dir = await tmp();
+  try {
+    const r = spawnSync(process.execPath, [BIN, "init", "--corpus", "aws", "--memory-backend", "sqlite"], { encoding: "utf8", cwd: dir });
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, /Seeded \d+ corpus facts/);
+    assert.match(r.stdout, /seeded tier-2 corpus "aws"/);
+
+    const { openMemoryBackend } = await import("../src/memory/core.mjs");
+    const { dir: handle, close } = await openMemoryBackend(dir, "sqlite");
+    const mem = await loadMemory(handle);
+    await close();
+    const facts = (mem.individuals || []).filter((i) => i.class === "Fact");
+    const awsFacts = facts.filter((f) => (f.attributes || []).some((a) => a.key === "provenance" && String(a.value).includes("corpus:tier2-aws")));
+    assert.ok(awsFacts.length > 0, "the --corpus flag's seed landed in sqlite too, even combined with --memory-backend in the same call");
+    assert.ok(facts.length > awsFacts.length, "the default corpus seed ALSO landed in sqlite, not just aws");
+    assert.equal(await exists(join(dir, ".tmct", "memory", "graph.json")), false, "the flat-file backend was never even created");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("bin/tmct.mjs REGRESSION: a later `tmct import --corpus <id>` (no --memory-backend flag) still seeds into the backend tmct.toml already names", async () => {
+  const { spawnSync } = await import("node:child_process");
+  const { fileURLToPath } = await import("node:url");
+  const BIN = fileURLToPath(new URL("../bin/tmct.mjs", import.meta.url));
+
+  const dir = await tmp();
+  try {
+    const init = spawnSync(process.execPath, [BIN, "init", "--memory-backend", "sqlite"], { encoding: "utf8", cwd: dir });
+    assert.equal(init.status, 0, init.stderr);
+    const imp = spawnSync(process.execPath, [BIN, "import", "--corpus", "aws"], { encoding: "utf8", cwd: dir });
+    assert.equal(imp.status, 0, imp.stderr);
+    assert.match(imp.stdout, /seeded tier-2 corpus "aws"/);
+
+    const { openMemoryBackend } = await import("../src/memory/core.mjs");
+    const { dir: handle, close } = await openMemoryBackend(dir, "sqlite");
+    const mem = await loadMemory(handle);
+    await close();
+    const facts = (mem.individuals || []).filter((i) => i.class === "Fact");
+    const awsFacts = facts.filter((f) => (f.attributes || []).some((a) => a.key === "provenance" && String(a.value).includes("corpus:tier2-aws")));
+    assert.ok(awsFacts.length > 0, "aws facts landed in the ALREADY-configured sqlite backend, not a stale flat-file default");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

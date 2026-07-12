@@ -474,7 +474,27 @@ async function activatePluggableInput(repoRoot, resolved) {
   if (!seedable) {
     return `activated "${name}" (${entry.kind}) in tmct.toml — no corpus facts to seed for this kind.\n`;
   }
-  const { perBundle } = await seedActiveCorpusEntries(repoRoot, new Map([[name, entry]]));
+  // Backend-aware seeding (same split-brain bug fix as src/init.mjs's own
+  // corpus seed, found in review): `cfg.memory.backend` already reflects
+  // tmct.toml as it stands RIGHT NOW (readConfigForRewrite, above) — which,
+  // for a `tmct init --corpus X --memory-backend sqlite` / `tmct import
+  // --corpus X --memory-backend sqlite` combined call, already carries the
+  // NEW backend (bin/tmct.mjs's init/import handlers write --memory-backend
+  // before running any activation). Resolved via the SAME openMemoryBackend
+  // createSession/initRepo use, so this bundle's facts land in the store a
+  // later `tmct chat` will actually read.
+  const { openMemoryBackend } = await import("../src/memory/core.mjs");
+  const backendChoice = String(cfg.memory?.backend || "").trim().toLowerCase();
+  if (backendChoice === "memory") {
+    return `activated "${name}" (${entry.kind}) in tmct.toml — seeding skipped (memory backend is in-process only, nothing would persist past this command).\n`;
+  }
+  const { dir: memoryDir, close: closeMemoryStore } = await openMemoryBackend(repoRoot, backendChoice);
+  let perBundle;
+  try {
+    ({ perBundle } = await seedActiveCorpusEntries(memoryDir, new Map([[name, entry]])));
+  } finally {
+    await closeMemoryStore();
+  }
   const seeded = perBundle[name];
   if (seeded.error) {
     throw new Error(`could not seed "${name}" — ${seeded.error}`);
@@ -692,7 +712,32 @@ async function main() {
       }
     }
 
-    const res = await initRepo(repoRoot, { force: rest.includes("--force"), persona: personaPreset });
+    // `--memory-backend <default|memory|sqlite>`: written EARLY, before
+    // initRepo/any --corpus/--ontology/--lexicon activation below, so every
+    // seed step (initRepo's own corpus seed, AND activatePluggableInput's,
+    // below) sees the FINAL backend choice. A split-brain bug found in
+    // review: writing this AFTER seeding meant corpus facts always landed in
+    // the OLD backend, regardless of this flag. Two cases:
+    //   - tmct.toml doesn't exist yet (the common case): threaded into
+    //     initRepo() as `memoryBackend`, below — written atomically as part
+    //     of the SAME fresh config write persona/corpus-limit already use.
+    //   - tmct.toml already exists and `--force` isn't set (initRepo's own
+    //     "preserve a user's tmct.toml" rule, same as persona): written HERE,
+    //     before initRepo/activation run, so this repo's re-seed (if any) and
+    //     any --corpus/--ontology/--lexicon activation below see it.
+    const forceFlag = rest.includes("--force");
+    if (memoryBackendVal) {
+      const { access } = await import("node:fs/promises");
+      const tomlPath = resolvePath(repoRoot, "tmct.toml");
+      const tomlAlreadyExists = await access(tomlPath).then(() => true, () => false);
+      if (tomlAlreadyExists && !forceFlag) {
+        const { cfg } = await readConfigForRewrite(repoRoot);
+        cfg.memory = { ...(cfg.memory || {}), backend: memoryBackendVal };
+        await writeConfig(repoRoot, cfg);
+      }
+    }
+
+    const res = await initRepo(repoRoot, { force: forceFlag, persona: personaPreset, memoryBackend: memoryBackendVal });
     process.stdout.write(res.message + "\n");
 
     // `--corpus`/`--ontology`/`--lexicon` now mean "activate this bundle and
@@ -731,14 +776,10 @@ async function main() {
       anyActivation = true;
     }
 
-    // `--memory-backend <default|memory|sqlite>`: SETS tmct.toml's `[memory]
-    // backend`, same read-merge-rewrite as `--graph` above (preserves every
-    // other already-written key). No seeding/scaffolding side effect — this is
-    // a pure config write, exactly like `--with-persona`'s [bias]/[extensions].
+    // `--memory-backend <default|memory|sqlite>`: already WRITTEN by now —
+    // either just above (pre-existing tmct.toml) or inside initRepo() itself
+    // (a fresh write, `memoryBackend` opt) — this just reports it.
     if (memoryBackendVal) {
-      const { cfg } = await readConfigForRewrite(repoRoot);
-      cfg.memory = { ...(cfg.memory || {}), backend: memoryBackendVal };
-      await writeConfig(repoRoot, cfg);
       process.stdout.write(`memory backend set in tmct.toml: ${memoryBackendVal}\n`);
       anyActivation = true;
     }
@@ -809,6 +850,19 @@ async function main() {
       process.exit(2);
     }
 
+    // `--memory-backend` is written FIRST, before any --corpus/--ontology/
+    // --lexicon activation below — the same split-brain bug fix as `tmct
+    // init`'s ordering: activatePluggableInput seeds into whichever backend
+    // tmct.toml names AT THE TIME it runs, so `tmct import --corpus aws
+    // --memory-backend sqlite` in one call must have the new backend on disk
+    // BEFORE the aws seed step, not after.
+    if (memoryBackendVal) {
+      const { cfg } = await readConfigForRewrite(repoRoot);
+      cfg.memory = { ...(cfg.memory || {}), backend: memoryBackendVal };
+      await writeConfig(repoRoot, cfg);
+      process.stdout.write(`memory backend set in tmct.toml: ${memoryBackendVal}\n`);
+    }
+
     for (const resolved of [corpusResolved, ontologyResolved, lexiconResolved]) {
       if (!resolved) continue;
       try {
@@ -827,13 +881,6 @@ async function main() {
         process.stderr.write(`tmct import: ${e?.message || e}\n`);
         process.exit(1);
       }
-    }
-
-    if (memoryBackendVal) {
-      const { cfg } = await readConfigForRewrite(repoRoot);
-      cfg.memory = { ...(cfg.memory || {}), backend: memoryBackendVal };
-      await writeConfig(repoRoot, cfg);
-      process.stdout.write(`memory backend set in tmct.toml: ${memoryBackendVal}\n`);
     }
     return;
   }

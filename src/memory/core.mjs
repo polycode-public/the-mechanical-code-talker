@@ -312,6 +312,43 @@ export function closeSqliteMemoryStore(handle) {
   if (isSqliteHandle(handle)) handle.db.close();
 }
 
+/**
+ * Resolve an already-lowercased/trimmed backend token ("memory" | "sqlite" |
+ * anything else, including "" or "default") into `{ dir, close }`: the exact
+ * `dir` value every dir-taking export in this module (loadMemory, appendFact,
+ * appendFacts, seedMemory via src/corpus/conceptnet.mjs, …) already accepts —
+ * a plain repo-path string for Backend A, or a live Backend B/C handle — plus
+ * an idempotent `close()` cleanup (a no-op for A/B; closes the sqlite
+ * connection for C).
+ *
+ * The ONE shared resolver for the storage-backend seam (PLAN_SEED.md §6):
+ * originally inlined only in chat.mjs's createSession, factored out here so
+ * `tmct init`'s corpus seed (src/init.mjs) and bin/tmct.mjs's
+ * `--corpus`/`--ontology`/`--lexicon` activation seed the SAME backend a
+ * later `tmct chat` in that repo will read — a caller resolving "sqlite"
+ * independently and picking a different db path (or a different in-memory
+ * store) would silently split a repo's memory across two places that can
+ * never see each other. `backendChoice` is a precedence result the CALLER
+ * already computed (CLI flag > env > tmct.toml > default, or whatever subset
+ * applies); this function does no precedence resolution of its own — it only
+ * maps the resolved token to a handle. `repoRoot` is used only for Backend C's
+ * db path (`<repoRoot>/.tmct/memory/graph.sqlite`); Backend A returns
+ * `repoRoot` itself unchanged, byte-identical to every existing plain-string
+ * caller.
+ */
+export async function openMemoryBackend(repoRoot, backendChoice) {
+  if (backendChoice === BACKEND_MEMORY) {
+    return { dir: createInMemoryStore(), close: async () => {} };
+  }
+  if (backendChoice === BACKEND_SQLITE) {
+    const dbPath = join(repoRoot, ".tmct", "memory", "graph.sqlite");
+    await mkdir(dirname(dbPath), { recursive: true });
+    const handle = await createSqliteMemoryStore(dbPath);
+    return { dir: handle, close: async () => closeSqliteMemoryStore(handle) };
+  }
+  return { dir: repoRoot, close: async () => {} };
+}
+
 /** Deep-clone a JSON-safe value. Used two ways here: (1) readSqlitePayload
  *  hands every CALLER a clone of the cache, never the live cached object
  *  itself, so this backend keeps the same "fresh object every call" contract
