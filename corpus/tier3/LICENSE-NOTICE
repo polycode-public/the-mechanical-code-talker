@@ -1,0 +1,49 @@
+LICENSE NOTICE — corpus/tier3/wordnet-xl.jsonl, corpus/tier3/wordnet-full.jsonl
+================================================================================
+
+The files wordnet-xl.jsonl and wordnet-full.jsonl in this directory are a
+mechanical, ConceptNet-shape conversion of structural relation data (hypernym,
+meronymy, causation, attribute, similarity, "also see", and member/synonym
+lists) from the Open English WordNet project, and are licensed under the
+Creative Commons Attribution 4.0 International License (CC-BY-4.0), NOT under
+this repository's MPL-2.0.
+
+  https://creativecommons.org/licenses/by/4.0/
+
+Attribution
+-----------
+
+This work includes data derived from the Open English WordNet, a fork and
+continuation of Princeton WordNet, made available under CC-BY-4.0 by the
+Globalwordnet / Open English Wordnet team.
+
+  - Project: https://github.com/globalwordnet/english-wordnet
+  - Princeton WordNet: https://wordnet.princeton.edu/
+  - See that project's own LICENSE.md for the full attribution statement.
+
+Source
+------
+
+- Dataset: Open English WordNet YAML source (`src/yaml/noun.*.yaml`,
+  `verb.*.yaml`, `adj.*.yaml`, `adv.*.yaml` — 107,526 synsets), read from a
+  LOCAL, uncommitted checkout — never vendored into this repository.
+- Conversion tool: corpus/wordnet/generate.mjs (tmct code, MPL-2.0) — reads
+  each synset's `hypernym`/`mero_part`/`mero_member`/`mero_substance`/
+  `causes`/`attribute`/`similar`/`also`/`members` fields (never `definition`/
+  `example` free prose) and emits one ConceptNet-shape row per relation edge
+  or synonym-chain pair. See that file's own header comment for the full
+  relation-mapping table and direction rules.
+- wordnet-xl.jsonl is a bounded ~24,000-fact PRIORITIZED SUBSET of
+  wordnet-full.jsonl (the hypernym backbone plus synonym chains for the most
+  commonly-referenced synsets); wordnet-full.jsonl is the complete conversion.
+
+Share-alike
+-----------
+
+CC-BY-4.0 does NOT require share-alike (unlike ConceptNet's CC-BY-SA 4.0 in
+corpus/conceptnet/) — a CC-BY-4.0 derivative may be relicensed, provided this
+attribution is preserved. This repository chooses to keep redistributing
+wordnet-xl.jsonl/wordnet-full.jsonl themselves under CC-BY-4.0 regardless, to
+stay unambiguous about their origin. The code in this directory and in
+corpus/wordnet/ (generate.mjs) is tmct code under the repository's MPL-2.0;
+only the two data files carry CC-BY-4.0.

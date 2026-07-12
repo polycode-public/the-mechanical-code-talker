@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "generated": "by corpus/wordnet/generate.mjs",
+  "corpuses": [
+    {
+      "id": "wordnet-xl",
+      "kind": "language",
+      "description": "A bounded ~24,000-fact slice of Princeton WordNet / Open English WordNet, prioritizing the hypernym (IsA) backbone and synonym chains for the most commonly-referenced synsets. Mechanically derived from Open English WordNet (CC-BY-4.0).",
+      "source": {
+        "kind": "curated",
+        "tool": "corpus/wordnet/generate.mjs"
+      },
+      "file": "wordnet-xl.jsonl",
+      "facts": 23805,
+      "bytes": 3035376,
+      "sha256": "4bbd7cdb0ccb7268a3e8ccfbefad3012cebb56ef3debb954eda6bf9e2006f541",
+      "license": "CC-BY-4.0"
+    },
+    {
+      "id": "wordnet-full",
+      "kind": "language",
+      "description": "The complete ConceptNet-shape conversion of Princeton WordNet / Open English WordNet's structural relations (hypernym, meronymy, causes, attribute, similar, also) plus member-synonym chains. Derived from Open English WordNet (CC-BY-4.0).",
+      "source": {
+        "kind": "curated",
+        "tool": "corpus/wordnet/generate.mjs"
+      },
+      "file": "wordnet-full.jsonl",
+      "facts": 192498,
+      "bytes": 25531520,
+      "sha256": "2ff54e666664087014a875cc1d91bdcc210ac6265820df94d65da54236c6e7fb",
+      "license": "CC-BY-4.0"
+    }
+  ]
+}

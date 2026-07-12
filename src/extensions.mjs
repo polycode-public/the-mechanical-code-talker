@@ -58,6 +58,7 @@ import {
   SLICE_FILE as CONCEPTNET_SLICE_FILE,
   MAP_FILE as CONCEPTNET_MAP_FILE,
   TIER2_DIR,
+  TIER3_DIR,
   loadSlice,
   loadMap,
   toFacts,
@@ -153,6 +154,26 @@ function builtinExtensions() {
       active: false,
       corpusPath: join(TIER2_DIR, "general.jsonl"),
       provenancePrefix: "corpus:tier2-general",
+    },
+    // tier-3 (corpus/wordnet/generate.mjs, corpus/tier3/): a mechanical
+    // ConceptNet-shape conversion of Open English WordNet's structural
+    // relations, not hand-curated like the tier-2 bundles above. Named
+    // directly "wordnet-xl"/"wordnet-full" (not "tier3-wordnet-…") so
+    // `tmct import --corpus wordnet-xl` resolves straight through this
+    // BUILTIN_EXTENSIONS lookup, the same seam every other recognized name
+    // already uses — no change needed to bin/tmct.mjs's tier-2-manifest-id
+    // resolution path. Shipped inactive, like every other opt-in bundle here.
+    "wordnet-xl": {
+      kind: "corpus",
+      active: false,
+      corpusPath: join(TIER3_DIR, "wordnet-xl.jsonl"),
+      provenancePrefix: "corpus:wordnet-xl",
+    },
+    "wordnet-full": {
+      kind: "corpus",
+      active: false,
+      corpusPath: join(TIER3_DIR, "wordnet-full.jsonl"),
+      provenancePrefix: "corpus:wordnet-full",
     },
   };
 }
