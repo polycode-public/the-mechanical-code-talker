@@ -88,6 +88,36 @@ several cases they name the fix direction too, which is the opposite of giving u
   the model to copy.
 - `ROADMAP.md:117` "No MCP server, no LLM in the product path — permanent, not 'for now.'" A project
   charter constraint, not an engineering give-up. Genuine by definition.
+- **`init:xxxl` (a literal 1000x scale-up of `init:large`'s seed corpus) is not reachable from data
+  in this project's own repo or the 4 adjacent `globalwordnet` repos alone.** Checked with real
+  numbers, re-derived twice in the same sitting after the first pass under-counted (see below —
+  exactly the self-correction this doc exists to force). `init:large` measures 7,386 facts today.
+  The full local ceiling — every structural relation in
+  `~/projects/globalwordnet/english-wordnet`'s 107,526 synsets (202,292 facts), namenet, both unused
+  `human-medium`/`human-large` tiers, and a widened `conceptnet-map.toml` (see the next bullet) —
+  tops out around 264,000 facts (~36x). Reaching further needs a one-time bulk download of
+  ConceptNet's full English assertion set (~5.9M rows, CC-BY-SA, not present in any of the 4 local
+  `globalwordnet` repos). Filtered through this project's fact-quality gate at its corrected ~81.5%
+  survival rate (see next bullet — the first-pass estimate used the OLD, wrongly-narrow map and got
+  ~17%), that yields roughly **4.8M facts — ~651x, still short of literal 1000x but far closer than
+  the first estimate claimed**. `init:xl` (10x) and `init:xxl` (~36x) are built from data in hand;
+  `init:xxxl` stays a documented, costed option (bulk download + re-measurement, ~651x is the honest
+  projected multiplier, confirm the real number once actually downloaded) rather than an implemented
+  script — the operator's call, not a technical ceiling this time either.
+- **`conceptnet-map.toml`'s `ace="none"` exclusions were mostly sound but one was not, caught by
+  asking "where exactly does the source say that" instead of accepting the summary.** `RelatedTo`
+  (29,016 of the 44,947 rows in the committed `corpus/conceptnet/slice.jsonl` — the single largest
+  relation in the file) carried the note "too vague for an axiom... never a fact"
+  (`src/corpus/conceptnet-map.toml:187-192`) despite already having a fully-authored `surface`
+  template sitting right next to the exclusion. That is a design call dressed as a technical one.
+  Un-excluded it (at a lower `trustScore` via the trust-tier mechanism already present on every
+  stored fact, rather than either full-strength or excluded) alongside `Synonym`/`Antonym`/
+  `SimilarTo`, which had no real justification for exclusion at all. `HasContext`/`DerivedFrom`/
+  `FormOf`/`EtymologicallyRelatedTo`/`EtymologicallyDerivedFrom`/`ExternalURL` stay excluded — those
+  really are a different kind of thing (domain tags, word morphology, link-outs), not the same
+  pattern as `RelatedTo`. Net effect: the committed slice's own emitted-fact yield goes from 6,247 to
+  36,654 (81.5% of the file, up from 13.9%) with zero new fetching — and the bulk-download multiplier
+  above got recalculated from ~167x to ~651x as a direct consequence of catching this.
 
 ---
 

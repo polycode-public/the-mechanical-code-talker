@@ -35,16 +35,24 @@ export const TRUST_SCORE_PROP = "mgx:trustScore";
 export const TRUST_INPUTS_PROP = "mgx:trustInputs";
 
 /** Source-type priors — the ordering operator > teach > provider-graph >
- *  curated-corpus > web > unverified-entailment. `teach` is the chat teach
- *  lane's natural-frame writes ("remember that …", "<Name> owns <X>") — still
- *  operator speech, but through a looser recognizer than the ACE-parsed
- *  operator assert, so it sits just below the operator prior. The entailed
- *  value is a FLOOR before premise adjustment (see the entailed hook below). */
+ *  curated-corpus > weak-corpus > web > unverified-entailment. `teach` is the
+ *  chat teach lane's natural-frame writes ("remember that …", "<Name> owns
+ *  <X>") — still operator speech, but through a looser recognizer than the
+ *  ACE-parsed operator assert, so it sits just below the operator prior. The
+ *  entailed value is a FLOOR before premise adjustment (see the entailed hook
+ *  below). `corpusWeak` is for corpus-sourced facts whose underlying relation
+ *  is real but low-precision (ConceptNet's /r/RelatedTo — ambiguous.
+ *  undirected association, unlike the specific typed relations the plain
+ *  `corpus` prior covers) — still a curated, committed dataset (above `web`),
+ *  just not asserting the same strength of claim (below `corpus`). Computed
+ *  from the Source's type exactly like every other tier — never hand-set on
+ *  a Fact directly. */
 export const SOURCE_PRIOR = Object.freeze({
   operator: 1.0,
   teach: 0.95,
   provider: 0.9,
   corpus: 0.7,
+  corpusWeak: 0.55,
   web: 0.4,
   entailed: 0.3,
 });

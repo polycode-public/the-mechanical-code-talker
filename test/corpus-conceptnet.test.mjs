@@ -58,7 +58,7 @@ test("toFacts: mapped relations become appendFact-shaped triples; none-rows skip
   const map = await loadMap();
   const facts = toFacts([
     { start: "/c/en/software_bug", rel: "/r/IsA", end: "/c/en/error", weight: 2 },
-    { start: "/c/en/software", rel: "/r/RelatedTo", end: "/c/en/computer", weight: 1 }, // ace=none
+    { start: "/c/en/computer", rel: "/r/DerivedFrom", end: "/c/en/compute", weight: 1 }, // ace=none
   ], map);
   assert.deepEqual(facts, [{
     subject: "software bug",
@@ -72,6 +72,33 @@ test("toFacts: mapped relations become appendFact-shaped triples; none-rows skip
   );
   assert.equal(termText("/c/en/source_code"), "source code");
   assert.equal(termText("not-a-concept"), null);
+});
+
+test("toFacts: /r/RelatedTo now emits (re-examined 2026-07-12, TOO_HARD_AUDIT.md) routed through the corpus-weak: provenance prefix, not the plain corpus: prefix other relations use", async () => {
+  const map = await loadMap();
+  const facts = toFacts([
+    { start: "/c/en/software", rel: "/r/RelatedTo", end: "/c/en/computer", weight: 1 },
+  ], map);
+  assert.deepEqual(facts, [{
+    subject: "software",
+    predicate: "mgx:relatedTo",
+    object: "computer",
+    provenance: "corpus-weak:conceptnet /r/RelatedTo",
+  }]);
+});
+
+test("toFacts: /r/Synonym, /r/Antonym, /r/SimilarTo emit real facts at full corpus trust (only RelatedTo is weak)", async () => {
+  const map = await loadMap();
+  const facts = toFacts([
+    { start: "/c/en/couch", rel: "/r/Synonym", end: "/c/en/sofa", weight: 1 },
+    { start: "/c/en/hot", rel: "/r/Antonym", end: "/c/en/cold", weight: 1 },
+    { start: "/c/en/creek", rel: "/r/SimilarTo", end: "/c/en/stream", weight: 1 },
+  ], map);
+  assert.deepEqual(facts, [
+    { subject: "couch", predicate: "mgx:synonym", object: "sofa", provenance: "corpus:conceptnet /r/Synonym" },
+    { subject: "hot", predicate: "mgx:antonym", object: "cold", provenance: "corpus:conceptnet /r/Antonym" },
+    { subject: "creek", predicate: "mgx:similarTo", object: "stream", provenance: "corpus:conceptnet /r/SimilarTo" },
+  ]);
 });
 
 test("fetch filter rules: bare en terms, canonical rels only, policy-filtered rels dropped", () => {

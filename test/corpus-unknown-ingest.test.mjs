@@ -55,9 +55,9 @@ test("ingestUnknownFromAssertions: an unknown term from a dropped (ace=none) row
     const assertions = [
       // ace != "none" — a real mapped fact, makes "gadget" a KNOWN term.
       { start: "/c/en/gadget", rel: "/r/IsA", end: "/c/en/device", weight: 1 },
-      // ace = "none" (RelatedTo) — silently dropped by toFacts(); "widget" and
+      // ace = "none" (DerivedFrom) — silently dropped by toFacts(); "widget" and
       // "sprocket" never get a reified Fact any other way in this batch.
-      { start: "/c/en/widget", rel: "/r/RelatedTo", end: "/c/en/sprocket", weight: 1, surfaceText: "[[widget]] is related to [[sprocket]]" },
+      { start: "/c/en/widget", rel: "/r/DerivedFrom", end: "/c/en/sprocket", weight: 1, surfaceText: "[[widget]] is derived from [[sprocket]]" },
     ];
     const mappedFacts = [{ subject: "gadget", predicate: "rdfs:subClassOf", object: "device" }];
 
@@ -71,8 +71,8 @@ test("ingestUnknownFromAssertions: an unknown term from a dropped (ace=none) row
 
     const widgetContext = rows.find((r) => r.subject === "widget" && r.predicate === CONTEXT_PASSAGE_PREDICATE);
     assert.ok(widgetContext, "widget got a context-passage fact");
-    assert.equal(widgetContext.object, "widget is related to sprocket", "the passage is stored verbatim (normalized)");
-    assert.match(widgetContext.provenance, /corpus:test-unknown \/r\/RelatedTo/);
+    assert.equal(widgetContext.object, "widget is derived from sprocket", "the passage is stored verbatim (normalized)");
+    assert.match(widgetContext.provenance, /corpus:test-unknown \/r\/DerivedFrom/);
 
     const sprocketContext = rows.find((r) => r.subject === "sprocket" && r.predicate === CONTEXT_PASSAGE_PREDICATE);
     assert.ok(sprocketContext, "sprocket got a context-passage fact too (both endpoints were unknown)");
@@ -100,7 +100,7 @@ test("ingestUnknownFromAssertions: a KNOWN term co-occurring in the passage also
     // triple's own two endpoints.
     const assertions = [
       { start: "/c/en/gadget", rel: "/r/IsA", end: "/c/en/device", weight: 1 },
-      { start: "/c/en/gremlin", rel: "/r/RelatedTo", end: "/c/en/mischief", weight: 1, surfaceText: "[[gremlin]] is a small device that causes mischief" },
+      { start: "/c/en/gremlin", rel: "/r/DerivedFrom", end: "/c/en/mischief", weight: 1, surfaceText: "[[gremlin]] is a small device that causes mischief" },
     ];
     const mappedFacts = [{ subject: "gadget", predicate: "rdfs:subClassOf", object: "device" }];
 
@@ -162,13 +162,13 @@ test("seedMemory: captureUnknownContext defaults false -> byte-identical to toda
   }
 });
 
-test("seedMemory: captureUnknownContext=true end-to-end, over a small fixture slice with a genuinely dropped RelatedTo row", async () => {
+test("seedMemory: captureUnknownContext=true end-to-end, over a small fixture slice with a genuinely dropped DerivedFrom row", async () => {
   const dir = await tmp();
   const slicePath = join(dir, "fixture-slice.jsonl");
   try {
     const rows = [
       { start: "/c/en/software_bug", rel: "/r/IsA", end: "/c/en/error", weight: 2 },
-      { start: "/c/en/frobnicator", rel: "/r/RelatedTo", end: "/c/en/widgetiser", weight: 1, surfaceText: "[[frobnicator]] is related to [[widgetiser]]" },
+      { start: "/c/en/frobnicator", rel: "/r/DerivedFrom", end: "/c/en/widgetiser", weight: 1, surfaceText: "[[frobnicator]] is derived from [[widgetiser]]" },
     ];
     await writeFile(slicePath, rows.map((r) => JSON.stringify(r)).join("\n") + "\n");
 
@@ -194,7 +194,7 @@ test("normFactTerm agreement: a captured unknown term's stored subject matches n
   const dir = await tmp();
   try {
     const map = await loadMap();
-    const assertions = [{ start: "/c/en/the_gronk", rel: "/r/RelatedTo", end: "/c/en/a_snerf", weight: 1, surfaceText: "[[the gronk]] is related to [[a snerf]]" }];
+    const assertions = [{ start: "/c/en/the_gronk", rel: "/r/DerivedFrom", end: "/c/en/a_snerf", weight: 1, surfaceText: "[[the gronk]] is derived from [[a snerf]]" }];
     await ingestUnknownFromAssertions(dir, { assertions, map, mappedFacts: [], provenancePrefix: "corpus:test-unknown" });
     const mem = await loadMemory(dir);
     const rows = factRows(mem);

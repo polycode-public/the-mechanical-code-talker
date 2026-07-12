@@ -108,7 +108,7 @@ const MEMORY_VOCABULARY = [
   { prop: DERIVED_FROM_PROP, predicate: "derivedFrom", note: "umbrella: a Fact derived from a Source (or another Fact). ext ref prov:wasDerivedFrom (UNVERIFIED-pending-web-check)" },
   { prop: STATED_BY_PROP, predicate: "statedBy", note: "subPropertyOf derivedFrom: a Source directly asserts this Fact (one edge per independent source — replaces the factProvenance union)" },
   { prop: CANONICALISED_FROM_PROP, predicate: "canonicalisedFrom", note: "subPropertyOf derivedFrom: a canonical Fact cleaned from a raw Block/Source, never replacing it" },
-  { prop: "mgx:sourceType", note: "a Source's kind: operator | teach | provider | corpus | web | entailed (the trust-prior key)" },
+  { prop: "mgx:sourceType", note: "a Source's kind: operator | teach | provider | corpus | corpusWeak | web | entailed (the trust-prior key)" },
   { prop: "mgx:sourceUrl", note: "a web Source's URL" },
   { prop: "mgx:sourceRule", note: "an entailed Source's rule id" },
   { prop: "mgx:sourceReliability", note: "actor-level (session-scoped) trust nudge in [0.5,1.5], neutral 1.0 when absent — materialised by recomputeSourceReliability from a session's asserted-vs-contradicted track record (memory/trust.mjs's sessionReliabilityFrom); folds into computeTrust's per-source prior" },
@@ -821,11 +821,17 @@ function parseChatTagRest(rest) {
  * set — the inverse the migration and the live write path both name Sources
  * through. The tag formats are exactly what the writers produce:
  *   corpus:conceptnet /r/IsA   → { kind:"corpus",   name:"conceptnet" }
+ *   corpus-weak:conceptnet /r/RelatedTo → { kind:"corpusWeak", name:"conceptnet" }
  *   ace:chat:<session>@<ts>    → { kind:"operator",  createdAt:<ts>, sessionId:<session> }
  *   teach:chat:<session>@<ts>  → { kind:"teach",     createdAt:<ts>, sessionId:<session> }
  *   web:<url> | url:<url>      → { kind:"web",       url:<url> }
  *   entailed:<rule>            → { kind:"entailed",  rule:<rule> }
  * chat:/session: refs map to the operator; an unknown tag → null (no Source).
+ * `corpus-weak:` is the SAME corpus provenance shape as `corpus:`, just naming
+ * a lower trust-prior kind (memory/trust.mjs SOURCE_PRIOR.corpusWeak) for
+ * facts whose underlying relation is real but low-precision (e.g. ConceptNet's
+ * undirected /r/RelatedTo) — trust stays computed from the Source's kind, never
+ * hand-set on the Fact.
  * The session-id segment (Part B: session-scoped actor-level trust) feeds
  * sourceIdFor, which mints a PER-SESSION Source id when present, instead of
  * collapsing every session onto one singleton operator/teach Source.
@@ -834,6 +840,7 @@ export function provenanceTagToSource(tag) {
   const t = String(tag || "").trim();
   if (!t) return null;
   const head = t.split(/\s+/)[0]; // drop trailing " /r/IsA" etc.
+  if (head.startsWith("corpus-weak:")) return { kind: "corpusWeak", name: head.slice("corpus-weak:".length) || "unknown" };
   if (head.startsWith("corpus:")) return { kind: "corpus", name: head.slice("corpus:".length) || "unknown" };
   if (head.startsWith("ace:")) return { kind: "operator", ...parseChatTagRest(head.slice("ace:".length)) };
   if (head.startsWith("teach:")) {

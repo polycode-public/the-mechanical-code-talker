@@ -187,32 +187,35 @@ note = "mutual exclusion; ACE pattern 6 ('no N1 is a N2')"
 [[relation]]
 rel = "/r/RelatedTo"
 surface = "{start} is related to {end}"
-ace = "none"
-note = "weakest, undirected association — too vague for an axiom; useful later as a fuzzy-match hint, never a fact"
+ace = "ObjectProperty"
+predicate = "mgx:relatedTo"
+note = "weakest, undirected association — re-examined 2026-07-12 (TOO_HARD_AUDIT.md): the surface template above was already fully authored, so the prior 'too vague for an axiom' exclusion was a design call dressed as a technical one, not a real blocker. Emitted at LOWER trust (src/corpus/conceptnet.mjs routes RelatedTo facts through the corpus-weak: provenance prefix -> SOURCE_PRIOR.corpusWeak, memory/trust.mjs) rather than either full-strength or excluded."
 
 [[relation]]
 rel = "/r/Synonym"
 surface = "{start} means the same as {end}"
-ace = "none"
-note = "lexical alias, not an axiom — feeds the grammar lexicon / phrasebook synonym families instead"
+ace = "ObjectProperty"
+predicate = "mgx:synonym"
+note = "lexical alias — re-examined 2026-07-12 (TOO_HARD_AUDIT.md): genuinely fact-shaped ('X means the same as Y' is a real, answerable claim), no real reason it was excluded"
 
 [[relation]]
 rel = "/r/Antonym"
 surface = "{start} is the opposite of {end}"
-ace = "none"
-note = "lexical opposition; OWL disjointness would over-claim (hot/cold are not disjoint classes) — DistinctFrom carries the real disjointness"
+ace = "ObjectProperty"
+predicate = "mgx:antonym"
+note = "lexical opposition — re-examined 2026-07-12 (TOO_HARD_AUDIT.md): OWL disjointness would over-claim (hot/cold are not disjoint classes), so this does NOT reuse DistinctFrom/owl:disjointWith, but a plain ObjectProperty edge ('X is the opposite of Y') is a real, fact-shaped claim, not an axiom"
 
 [[relation]]
 rel = "/r/FormOf"
 surface = "{start} is a form of the word {end}"
 ace = "none"
-note = "inflection → root; lexicon normalization, not knowledge"
+note = "inflection → root; lexicon normalization, not knowledge — genuinely a different kind of thing than RelatedTo/Synonym/Antonym/SimilarTo (morphology, not world-knowledge); stays excluded, re-confirmed 2026-07-12 (TOO_HARD_AUDIT.md)"
 
 [[relation]]
 rel = "/r/DerivedFrom"
 surface = "the word {start} is derived from {end}"
 ace = "none"
-note = "word derivation; lexicon material, not an axiom"
+note = "word derivation; lexicon material, not an axiom — genuinely a different kind of thing than RelatedTo/Synonym/Antonym/SimilarTo (morphology, not world-knowledge); stays excluded, re-confirmed 2026-07-12 (TOO_HARD_AUDIT.md)"
 
 [[relation]]
 rel = "/r/SymbolOf"
@@ -223,8 +226,9 @@ note = "symbolism — no OWL fit"
 [[relation]]
 rel = "/r/SimilarTo"
 surface = "{start} is similar to {end}"
-ace = "none"
-note = "graded similarity — no crisp OWL fit; potential fuzzy-match hint only"
+ace = "ObjectProperty"
+predicate = "mgx:similarTo"
+note = "graded similarity — re-examined 2026-07-12 (TOO_HARD_AUDIT.md): genuinely fact-shaped ('X is similar to Y'), no real reason it was excluded"
 
 [[relation]]
 rel = "/r/HasContext"

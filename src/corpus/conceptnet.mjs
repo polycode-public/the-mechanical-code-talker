@@ -121,11 +121,18 @@ export function toFacts(assertions, map, provenancePrefix = "corpus:conceptnet")
     const subject = termText(a.start);
     const object = termText(a.end);
     if (!subject || !object) continue; // non-en endpoint slipped in — filtered, not fatal
+    // mgx:relatedTo is real but low-precision (undirected, ambiguous) — routed
+    // through the corpus-weak: prefix so memory/trust.mjs's SOURCE_PRIOR.corpusWeak
+    // (below plain corpus, above web) applies, computed from the Source's kind
+    // like every other tier, never hand-set on the Fact.
+    const prefix = row.predicate === "mgx:relatedTo"
+      ? provenancePrefix.replace(/^corpus:/, "corpus-weak:")
+      : provenancePrefix;
     facts.push({
       subject,
       predicate: row.predicate,
       object,
-      provenance: `${provenancePrefix} ${a.rel}`,
+      provenance: `${prefix} ${a.rel}`,
     });
   }
   return facts;

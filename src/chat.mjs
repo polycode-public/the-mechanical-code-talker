@@ -4044,6 +4044,10 @@ const FACT_PREDICATE_PHRASES = {
   "mgx:hasLastSubevent": "ends with",
   "mgx:hasPrerequisite": "requires",
   "mgx:ownedBy": "is owned by", // the teach lane's ownership frame ("Priya owns tasks.mjs")
+  "mgx:synonym": "means the same as",
+  "mgx:antonym": "is the opposite of",
+  "mgx:similarTo": "is similar to",
+  "mgx:relatedTo": "is related to",
 };
 
 /** Bug 3 (2026-07-09) point 3b: the MECHANICAL fallback for a predicate this
@@ -4138,16 +4142,26 @@ function splitMetaPredicate(term) {
 
 /** One rendered fact line. An OPERATOR-asserted fact keeps the true first-person
  *  provenance ("you told me: …"). A CORPUS fact is presented as clean DATA with its
- *  source cited — NEVER "i learned: …", which over-claims and anthropomorphises
- *  (especially when the corpus row is noise); the relation and its provenance speak
- *  for themselves. Provenance stays VERBATIM either way. */
+ *  source cited, not "i learned: …" — that phrase over-claims and anthropomorphises
+ *  a first-person experience the bot never had; the relation and its provenance
+ *  speak for themselves. A WEAK-corpus fact (memory/trust.mjs SOURCE_PRIOR.corpusWeak
+ *  — real data, low-precision relation, e.g. ConceptNet's undirected /r/RelatedTo)
+ *  still isn't "i learned" (same anthropomorphism problem), but reads identically to
+ *  a solid corpus fact loses the only reader-visible signal that it's lower-
+ *  confidence — re-examined 2026-07-12 (TOO_HARD_AUDIT.md): the prior blanket "corpus
+ *  never hedges" rule predates corpus data having any confidence spread at all, so a
+ *  distinct, honest hedge ("possibly: …") applies here instead of either extreme.
+ *  Provenance stays VERBATIM in every case. */
 function renderFactLine(f) {
   const cite = f.provenance ? ` (source: ${f.provenance})` : "";
   // ace:chat = the ACE-parsed operator assert; teach:chat = the teach lane's
   // natural frames — both are things the operator SAID, so both read first-person.
   if (f.provenance.includes("ace:chat") || f.provenance.includes("teach:chat")) return `you told me: ${factPhrase(f)}${cite}`;
-  // CORPUS facts are background DATA — present the relation plainly, cited to its
-  // source, NEVER "i learned: …" (the footgun: a first-person claim over corpus noise).
+  // WEAK corpus facts (lower trust, e.g. RelatedTo) — real, cited, but hedged as
+  // uncertain rather than either flatly stated or falsely claimed as "learned".
+  if (f.provenance.includes("corpus-weak:")) return `possibly: ${factPhrase(f)}${cite}`;
+  // SOLID corpus facts are background DATA — present the relation plainly, cited
+  // to its source, never "i learned: …" (a first-person claim over corpus data).
   if (f.provenance.includes("corpus:")) return `${factPhrase(f)}${cite}`;
   return `i learned: ${factPhrase(f)}${cite}`;
 }
