@@ -244,7 +244,6 @@ Rows this cycle's real evidence (`BENCHMARK_INFERENCE_1.6.0.md`) directly touche
 | 60 | Path-traversal guard on graph-derived file reads | implemented | `src/source-slice.mjs` | unchanged since `CAPABILITIES_1.5.7.md` |
 | 61 | Telemetry wrapper on every RI service | implemented, not exercised live | `src/telemetry.mjs` | unchanged since `CAPABILITIES_1.5.7.md` |
 | 62 | Chronograph-style temporal diffing | claimed-only, genuinely hard | no such code found | unchanged since `CAPABILITIES_1.5.7.md` |
-| 63 | Multi-language AST extraction inside tmct | explicit scope decision | `src/graph-build.mjs` still does no parsing, by design | unchanged since `CAPABILITIES_1.5.7.md` |
 | 64 | Dialogue-flow playtest ladder, Tiers 0-6 | implemented | `test/chatflow-tier{0,1-single-touch,2,2-drilldown,4,5,6}.test.mjs` | unchanged since `CAPABILITIES_1.5.7.md` |
 | 65 | CHATBENCH graded-pool ladder | implemented | `chatbench/graded-pool.jsonl` (109), `graded-pool-max.jsonl` (1,075) | unchanged since `CAPABILITIES_1.5.7.md`; still last exercised at `BENCHMARK_CEFR_ENGLISH_1.5.7.md` |
 | 66 | AGENTBENCH agentic ladder (A0-C2) | implemented | `agentbench/cases.jsonl` (56 cases) | unchanged since `CAPABILITIES_1.5.7.md` |

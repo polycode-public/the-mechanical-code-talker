@@ -228,7 +228,6 @@ each re-checking cited evidence directly against the real code at this pin — n
 | 60 | Path-traversal guard on graph-derived file reads | implemented | `src/source-slice.mjs` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 61 | Telemetry wrapper on every RI service | implemented, not exercised live | `src/telemetry.mjs` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 62 | Chronograph-style temporal diffing | claimed-only, genuinely hard | no such code found | unchanged since `CAPABILITIES_1.6.0.md` |
-| 63 | Multi-language AST extraction inside tmct | explicit scope decision | `src/graph-build.mjs` still does no parsing, by design | unchanged since `CAPABILITIES_1.6.0.md` |
 | 64 | Dialogue-flow playtest ladder, Tiers 0-6 | implemented | `test/chatflow-tier{0,1-single-touch,2,2-drilldown,4,5,6}.test.mjs`; tier0+tier1 re-run directly, 17/17 pass | unchanged since `CAPABILITIES_1.6.0.md` |
 | 65 | CHATBENCH graded-pool ladder | implemented | `chatbench/graded-pool.jsonl` (109), `graded-pool-max.jsonl` (1,075); `BENCHMARK_CEFR_ENGLISH_1.7.0.md`: mean 1.750/2, 0 hard fails, tier-1 109/109 | **changed**: now measured by `_1.7.0.md` instead of `_1.5.7.md`; mean and hard-fail count both improved (see §2) |
 | 66 | AGENTBENCH agentic ladder (A0-C2) | implemented | `agentbench/cases.jsonl` (56); `BENCHMARK_AGENT_1.7.0.md`: rung-for-rung identical to `_1.5.7.md` | **changed**: now re-confirmed and cited via `_1.7.0.md`, numbers unchanged |

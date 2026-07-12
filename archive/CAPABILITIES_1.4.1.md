@@ -297,7 +297,6 @@ just the delta shown in §1.
 - **claimed-only**: **21** (unchanged count from refresh 1 — nothing in this bucket moved this
   session; the completions-in-chat row stays here, now with direct behavioral confirmation via
   playtest rather than an inferred grep)
-- **explicit scope decision**: **1** (unchanged — multi-language AST extraction)
 - **in-flight/uncommitted**: **0** (was 1 in refresh 1 — the construction-grammar bank fully landed)
 
 **The single most consequential finding of this refresh**: two of this session's biggest engineering

@@ -437,14 +437,9 @@ tmct" rather than validate against synthetic benchmarks.
   substantially longer and exhibited "probabilistic indexing incompleteness" — files silently
   skipped. This directly validates tmct's no-LLM philosophy applied to seonix's own graph-build step
   too, not just tmct's chat surface.
-- **Multi-language coverage stays seonix's job, not tmct's (scope decision, 2026-07-11 — see §2.2).**
-  This phase originally proposed wiring seonix's Roslyn/JavaParser/TS-compiler extraction pipeline
-  into tmct's own `graph-build.mjs`. Superseded: seonix is the connection point between the SEON
-  ontology and software language, 
 - **RI wrapper fixes — already shipped (§3), worth re-verifying against the combined graph
   specifically once it exists.** Depth-capped impact, source-backed snippets, and pagination all
-  landed in Phase 0/v1.4.0; this phase's job is confirming they hold up at the larger scale a
-  combined multi-language index implies, not building them again.
+  landed in Phase 0/v1.4.0.
 - **tmct becomes the NL surface over the combined index** — the same escalation discipline as
   everywhere else in this doc: answer what's provably in the combined graph/ontology, decline
   honestly outside it, never guess.
@@ -574,7 +569,7 @@ Explicit pruning record, so these aren't re-asked:
 | 0 | Foundations (§3): smoke test, envelope.json, extension-pack seam, ace-owl extraction, ontology tracks a–d, grammar tracks a/d/f, debt re-measure, RI wrapper fixes + hub-dampened memory ranking (§2) | **Nearly done — extension-pack seam ✅, RI wrapper fixes ✅, hub-dampening ✅ (v1.4.0); smoke test ✅, envelope.json ✅, ontology tracks a–d ✅, grammar tracks a/d/f ✅, chat-surface debt re-measure ✅ (all 2026-07-10). ace-owl extraction shipped 2026-07-10, reverted the same day (see above) — not tracked as done.** | Nothing (all build on shipped work) | tmct |
 | 1 | Bias-weighted ambiguity resolution & wider seed sets (§4): `tmct.toml` `[bias]` table, wider general-knowledge corpus, context-preserving unknown-word ingestion | **Partial — `[bias]` table + ranking + `--with-persona` ✅ (v1.4.0); a fourth tier2 bundle (`tier2-general`) added 2026-07-10 (◐, still opt-in); context-preserving ingestion built + unit-tested 2026-07-10 but its one production call site never activates it (◐, dormant — see §4)** | Phase 0's extension-pack seam | tmct |
 | 2 | tmct as marginalia's interpreter (§5): seon-mcp adapter, Formulate validation, mechanical-chat replacement | Not started | Phase 0's extension-pack seam | tmct, marginalia |
-| 3 | tmct × seonix combined index (§6): mount seonix's (multi-language) graph, re-verify RI depth at scale | Not started (multi-language extraction itself now out of scope — stays in seonix, §2.2) | Phase 0's extension-pack seam | tmct, seonix |
+| 3 | tmct × seonix combined index (§6): mount seonix's (multi-language) graph, re-verify RI depth at scale | Not started | Phase 0's extension-pack seam | tmct, seonix |
 | 4 | marginalia scrape→teach pipeline (§7) | Not started | PLAN_TAUGHT_RELATIONS (shipped); Phase 1 for context-preserving ingestion specifically | marginalia |
 | 5 | Pluggable LLM rung — Claude Code hardening, Bedrock integration test + assessor, Copilot shim (§8) | Not started | Phase 0's envelope.json (Bedrock); nothing new (Claude Code, Copilot) | tmct, bedrock-meter |
 | Backlog | Chronograph-style temporal diffing (§2) — memory versioning + actor-level trust shipped v1.4.0, SHACL ingest gate shipped 2026-07-10, no longer backlog | Partial — 3 of 4 original items shipped | None — independent tmct-quality work | tmct |
