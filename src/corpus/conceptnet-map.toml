@@ -220,8 +220,9 @@ note = "word derivation; lexicon material, not an axiom — genuinely a differen
 [[relation]]
 rel = "/r/SymbolOf"
 surface = "{start} is a symbol of {end}"
-ace = "none"
-note = "symbolism — no OWL fit"
+ace = "ObjectProperty"
+predicate = "mgx:symbolOf"
+note = "symbolism — re-examined 2026-07-12 (TOO_HARD_AUDIT.md): same stale shape as the RelatedTo/Synonym/Antonym/SimilarTo exclusions — a fully-authored surface template sitting right next to a 'no OWL fit' exclusion note. Genuinely fact-shaped and precise (more so than RelatedTo), so full corpus trust, not weak."
 
 [[relation]]
 rel = "/r/SimilarTo"

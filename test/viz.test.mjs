@@ -78,6 +78,49 @@ test("computeVizGraph: default seed is mostRecentIndividual; --focus overrides i
   }
 });
 
+test("computeVizGraph: depth (max hops) and nodeLimit (spiral length) are optional overrides on spiralExpand's own defaults", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-viz-spiral-"));
+  try {
+    const SESSION = "01890000-0000-7000-8000-0000000000aa";
+    const START = Date.parse("2026-07-11T10:00:00.000Z");
+    let prevId = null;
+    let seedId = null;
+    // A 20-long reply chain in one session — comfortably past the default
+    // nodeLimit (12) and default depth (3), so both knobs are observable.
+    for (let i = 0; i < 20; i += 1) {
+      const ts = new Date(START + i * 1000).toISOString();
+      const { id } = await appendUtterance(dir, {
+        role: i % 2 === 0 ? "visitor" : "tmct", text: `turn ${i}`, ts,
+        sessionId: SESSION, sessionStarted: "2026-07-11T10:00:00.000Z",
+        replyTo: prevId,
+      });
+      prevId = id;
+      seedId = id; // the LAST utterance (most recent) is the default seed
+    }
+
+    const byDefault = await computeVizGraph(dir);
+    assert.equal(byDefault.focus, seedId);
+    assert.ok(byDefault.nodes.length <= 12, `default nodeLimit caps the walk (got ${byDefault.nodes.length})`);
+    assert.ok(byDefault.nodes.every((n) => n.hop <= 3), "default depth caps every walked node's hop at 3");
+
+    // Isolate nodeLimit's effect: hold depth generously wide in both calls so
+    // depth is never the binding constraint, only nodeLimit varies.
+    const narrow = await computeVizGraph(dir, { depth: 10, nodeLimit: 5 });
+    const wider = await computeVizGraph(dir, { depth: 10, nodeLimit: 30 });
+    assert.ok(narrow.nodes.length <= 6, `nodeLimit caps the walk near the requested count (got ${narrow.nodes.length})`);
+    assert.ok(wider.nodes.length > narrow.nodes.length, "a larger nodeLimit reaches more of the same chain");
+
+    // Isolate depth's effect: hold nodeLimit generously wide in both calls so
+    // nodeLimit is never the binding constraint, only depth varies.
+    const shallow = await computeVizGraph(dir, { depth: 1, nodeLimit: 100 });
+    const deep = await computeVizGraph(dir, { depth: 5, nodeLimit: 100 });
+    assert.ok(shallow.nodes.every((n) => n.hop <= 1), "an explicit depth override caps the walk's max hop");
+    assert.ok(deep.nodes.length > shallow.nodes.length, "a deeper depth reaches more nodes than a shallow one");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 const SAMPLE_GRAPH = {
   nodes: [
     { id: "utt:abc", hop: 0, label: "what colour is the sky?", class: "Utterance", createdAt: "2026-07-11T10:00:00.000Z", updatedAt: "2026-07-11T10:00:00.000Z" },

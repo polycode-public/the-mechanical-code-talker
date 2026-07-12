@@ -38,7 +38,7 @@ import { dirname, join } from "node:path";
  *  loadMemory's own ENOENT fallback (emptyMemory()) already degrades to zero
  *  individuals, which this function turns into
  *  `{nodes: [], edges: [], focus: null, payload}`. */
-export async function computeVizGraph(repoDir, { focus } = {}) {
+export async function computeVizGraph(repoDir, { focus, depth, nodeLimit } = {}) {
   const payload = await loadMemory(repoDir);
   const graph = parseEntities(payload);
   if (!graph.individuals.length) return { nodes: [], edges: [], focus: null, payload };
@@ -51,6 +51,12 @@ export async function computeVizGraph(repoDir, { focus } = {}) {
     classPredicate: () => true,
     idNormalizer: (id) => id,
     seeds: [seedId],
+    // depth = max arcs (hops) from the focus node; nodeLimit = spiral length
+    // (total nodes walked) — both optional, spiralExpand's own defaults (3
+    // hops, 12 nodes) apply when omitted, byte-identical to before this was
+    // exposed as a CLI knob (`tmct viz --depth --limit`, bin/tmct.mjs).
+    ...(depth != null ? { depth } : {}),
+    ...(nodeLimit != null ? { nodeLimit } : {}),
   });
 
   const { nodes, edges } = buildVizNodesAndEdges(graph, walked);

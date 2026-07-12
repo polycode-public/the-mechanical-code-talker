@@ -80,8 +80,10 @@ Usage:
        [--config <path>]      bounded, low-trust, retractable entailed facts (never on the chat path)
   tmct viz [--repo <abs>]      write one self-contained, navigable HTML file rendering the
        [--focus <id>]         memory graph: pan/zoom, click a node for its label/class/
-       [--output <path>]      timestamps. Seeds from the most recently created individual
-       [--config <path>]      by default; --output defaults to graph.html in the cwd.
+       [--depth <n>]          timestamps. Seeds from the most recently created individual
+       [--limit <n>]          by default; --output defaults to graph.html in the cwd.
+       [--output <path>]      --depth = max arcs (hops) from the focus node (default 3);
+       [--config <path>]      --limit = spiral length, total nodes walked (default 12).
   tmct serve [--repo <abs>]    run the Anthropic Messages API-compatible endpoint
        [--host <h>] [--port <n>]  (POST /v1/messages) over the graph — a deterministic,
        [--graph <path>]        no-LLM "model" a tool-loop client can call; $0 usage.
@@ -866,10 +868,21 @@ async function main() {
     const { computeVizGraph, renderVizHtml, readAskBundle } = await import("../src/viz.mjs");
     const { writeFile } = await import("node:fs/promises");
     const { resolve } = await import("node:path");
+    const numFlag = (name) => {
+      const j = rest.indexOf(name);
+      const v = j !== -1 ? Number(rest[j + 1]) : NaN;
+      return Number.isFinite(v) ? v : undefined;
+    };
     const focus = strFlag(rest, ["--focus"]);
+    const depth = numFlag("--depth"); // max arcs (hops) from the focus node
+    const nodeLimit = numFlag("--limit"); // spiral length: total nodes walked
     const outPath = resolve(process.cwd(), strFlag(rest, ["--output", "--out"], "graph.html"));
     const { repo } = await resolveRuntimeConfig({ argv: rest });
-    const vizGraph = await computeVizGraph(repo, focus ? { focus } : {});
+    const vizGraph = await computeVizGraph(repo, {
+      ...(focus ? { focus } : {}),
+      ...(depth != null ? { depth } : {}),
+      ...(nodeLimit != null ? { nodeLimit } : {}),
+    });
     // The embedded "Ask the graph" chat panel — the real ask.mjs engine,
     // bundled for the browser (scripts/build-ask-bundle.mjs's checked-in
     // output). readAskBundle() never throws; an empty string renders a

@@ -4048,6 +4048,7 @@ const FACT_PREDICATE_PHRASES = {
   "mgx:antonym": "is the opposite of",
   "mgx:similarTo": "is similar to",
   "mgx:relatedTo": "is related to",
+  "mgx:symbolOf": "is a symbol of",
 };
 
 /** Bug 3 (2026-07-09) point 3b: the MECHANICAL fallback for a predicate this

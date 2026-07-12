@@ -101,6 +101,16 @@ test("toFacts: /r/Synonym, /r/Antonym, /r/SimilarTo emit real facts at full corp
   ]);
 });
 
+test("toFacts: /r/SymbolOf now emits (re-examined 2026-07-12, TOO_HARD_AUDIT.md — same stale shape as RelatedTo) at full corpus trust", async () => {
+  const map = await loadMap();
+  const facts = toFacts([
+    { start: "/c/en/dove", rel: "/r/SymbolOf", end: "/c/en/peace", weight: 1 },
+  ], map);
+  assert.deepEqual(facts, [
+    { subject: "dove", predicate: "mgx:symbolOf", object: "peace", provenance: "corpus:conceptnet /r/SymbolOf" },
+  ]);
+});
+
 test("fetch filter rules: bare en terms, canonical rels only, policy-filtered rels dropped", () => {
   assert.equal(bareEnTerm("/c/en/dog/n"), "/c/en/dog");
   assert.equal(bareEnTerm("/c/fr/chien"), null);
