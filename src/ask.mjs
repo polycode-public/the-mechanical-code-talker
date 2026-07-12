@@ -3426,7 +3426,24 @@ export function traverse(graph, parsed, { contextId = null, prev = null, pinnedO
         widenNote = `, widened to ${siblingClass} subjects (no ${entityType} recorded)`;
       }
     }
-    return { matches, objMatch, candidates, traversal: `${symbolKind} edges where object = ${objMatch.label}${widenNote}`, ambiguous, matchedVia };
+    // "touches" up-refine composability (HANDOVER 2026-07-12, Class-to-module
+    // up-refinement): an EMPTY touchesSymbol lookup on a resolved CLASS is not
+    // decisive the way it is for a Function/Method — a Class reads naturally as
+    // "the file/unit that holds it", so "who touched <Class>" with no recorded
+    // symbol-precise touch should still answer from the class's containing
+    // module's real touches, rather than a confident-looking-but-possibly-wrong
+    // "nothing touched it". Fall through to the grain-aware up-refine below
+    // ONLY for that Class case. Deliberately NOT widened to every
+    // FINE_ENTITY_TYPES member: "how many commits touched fnAlpha" (a Function)
+    // is pinned elsewhere (ask-combo.test.mjs's grain-aware COUNT lever) to stay
+    // an honest 0 rather than a module-grain false hit — symbol-level counting
+    // precision for functions/methods is a deliberate, separate guarantee this
+    // change must not erode. `calls` is untouched either way: an empty
+    // callsSymbol result stays decisive (call parsing isn't a best-effort
+    // heuristic the way commit-diff symbol attribution is).
+    if (matches.length || !(kind === "touches" && objMatch.class === "Class")) {
+      return { matches, objMatch, candidates, traversal: `${symbolKind} edges where object = ${objMatch.label}${widenNote}`, ambiguous, matchedVia };
+    }
   }
 
   // §grain-aware object resolution (Bug C+D, HANDOVER follow-up #2, checked BEFORE
@@ -3457,13 +3474,23 @@ export function traverse(graph, parsed, { contextId = null, prev = null, pinnedO
       gCandidates = retry.candidates;
       gAmbiguous = retry.ambiguous;
       gMatchedVia = retry.matchedVia;
-    } else if ((kind === "tests" || kind === "cochange") && gObjMatch.class !== "Module") {
-      // (2) tests/cochange are always Module->Module — no same-grain alternative
-      // exists (the retry above genuinely found nothing), but the resolved
-      // fine-grain entity (a Function, say) DOES live in a module, and that
-      // module is the real, honest subject of a tests/cochange question ("does
-      // createTask have tests" — fixes Bug D). Up-refine via the same moduleIdOf
-      // qualHolds's "tested" case already uses (see its divergence comment above).
+    } else if (wantClass === "Module") {
+      // (2) up-refine to the containing module — driven by kindObjectClass
+      // itself (any kind whose real object-class is ALWAYS Module: tests,
+      // cochange, imports, touches, …), not a hardcoded kind name list, so a
+      // kind newly recorded as Module->Module in the graph gets this for free.
+      // No same-grain alternative exists here (the retry above genuinely found
+      // nothing), but the resolved fine-grain entity (a Function/Class, say)
+      // DOES live in a module, and that module is the real, honest subject of
+      // the question ("does createTask have tests" — Bug D; "who touched Bar",
+      // "what modules import Bar" — the same up-refine extended past
+      // tests/cochange, HANDOVER 2026-07-12). `calls` computes to Module here
+      // too, but never actually reaches this branch with a wrong-grain object:
+      // the symbolKind branch above already intercepts every Class/Function/…
+      // object for `calls` unconditionally (its empty-result IS decisive, see
+      // that branch's own comment), so this is inert-but-correct for it. Up-
+      // refine via the same moduleIdOf qualHolds's "tested" case already uses
+      // (see its divergence comment above).
       const mid = moduleIdOf(graph, gObjMatch);
       const mod = mid && graph.byId.get(mid);
       if (mod) {

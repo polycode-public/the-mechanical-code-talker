@@ -1135,8 +1135,13 @@ function buildGrainCollisionGraph() {
     { id: "mod:x/foo.mjs", label: "x/foo.mjs", class: "Module", attributes: [] },
     { id: "mod:y/qux.mjs", label: "y/qux.mjs", class: "Module", attributes: [] },
     { id: "cls:Foo", label: "Foo", class: "Class", attributes: [] },
+    // Bar (2026-07-12, imports/touches up-refine extension): declared IN
+    // x/foo.mjs, same as createTask below — gives Bar a real containing
+    // module so moduleIdOf can up-refine it, mirroring how createTask already
+    // up-refines for tests/cochange.
     { id: "cls:Bar", label: "Bar", class: "Class", attributes: [] },
     { id: "fn:x/foo.mjs#createTask", label: "createTask", class: "Function", attributes: [] },
+    { id: "commit:c1", label: "c1", class: "Commit", attributes: [{ key: "author", value: "Ada" }] },
   ];
   return {
     individuals, byId: new Map(individuals.map((i) => [i.id, i])), proseIndex: {}, truncated: [],
@@ -1146,12 +1151,19 @@ function buildGrainCollisionGraph() {
         edges: [{ subject: "mod:y/qux.mjs", object: "mod:x/foo.mjs", subjectLabel: "y/qux.mjs", objectLabel: "x/foo.mjs" }],
       },
       {
-        predicate: "seon:declaresMethod", prop: "seon:declaresmethod", count: 1,
-        edges: [{ subject: "mod:x/foo.mjs", object: "fn:x/foo.mjs#createTask", subjectLabel: "x/foo.mjs", objectLabel: "createTask" }],
+        predicate: "seon:declaresMethod", prop: "seon:declaresmethod", count: 2,
+        edges: [
+          { subject: "mod:x/foo.mjs", object: "fn:x/foo.mjs#createTask", subjectLabel: "x/foo.mjs", objectLabel: "createTask" },
+          { subject: "mod:x/foo.mjs", object: "cls:Bar", subjectLabel: "x/foo.mjs", objectLabel: "Bar" },
+        ],
       },
       {
         predicate: "mgx:testsCoverage", prop: "mgx:testscoverage", count: 1,
         edges: [{ subject: "mod:y/qux.mjs", object: "mod:x/foo.mjs", subjectLabel: "y/qux.mjs", objectLabel: "x/foo.mjs" }],
+      },
+      {
+        predicate: "mgx:touchedByCommit", prop: "mgx:touchedbycommit", count: 1,
+        edges: [{ subject: "commit:c1", object: "mod:x/foo.mjs", subjectLabel: "c1", objectLabel: "x/foo.mjs" }],
       },
     ],
   };
@@ -1183,15 +1195,18 @@ test("ask(): grain-aware resolution — \"which modules import foo\" resolves th
   assert.match(tmct_ask.traversal, /object = x\/foo\.mjs/);
 });
 
-test("ask(): grain-aware resolution — a resolved wrong-grain term with NO same-grain alternative renders the new honest wrongGrainMiss (distinct from the plain unresolved miss)", () => {
+test("ask(): grain-aware resolution — \"imports\" now up-refines a resolved wrong-grain Class to its containing module too (HANDOVER 2026-07-12, extends Bug D past tests/cochange)", () => {
   const graph = buildGrainCollisionGraph();
   // "Bar" resolves (tier 1, exact) to the Class, but no Module anywhere has any
-  // trace of "bar" in its label — the retry scoped to Module genuinely fails, and
-  // "imports" is neither tests nor cochange, so there is no up-refine path either.
+  // trace of "bar" in its label, so the retry scoped to Module genuinely fails —
+  // same as before. What changed: "imports" now shares the up-refine mechanism
+  // with tests/cochange (driven by kindObjectClass === "Module", not a
+  // hardcoded kind list), and Bar IS declared inside x/foo.mjs (see the fixture
+  // above), so the honest answer is x/foo.mjs's importers, not a miss.
   const { content, tmct_ask } = ask(graph, "which modules import Bar");
-  assert.equal(tmct_ask.miss, true);
-  assert.match(content, /"Bar" resolved to the class Bar, but this question needs a module/);
-  assert.match(content, /no module named "Bar" was found in the index/);
+  assert.equal(tmct_ask.miss, false);
+  assert.match(content, /y\/qux\.mjs/);
+  assert.match(tmct_ask.traversal, /refined from Bar to its containing module/);
 });
 
 test("ask(): grain-aware resolution — tests/cochange up-refine a resolved fine-grain entity to its containing module (Bug D)", () => {
@@ -1203,6 +1218,41 @@ test("ask(): grain-aware resolution — tests/cochange up-refine a resolved fine
   assert.equal(tmct_ask.miss, false);
   assert.match(content, /y\/qux\.mjs/);
   assert.match(tmct_ask.traversal, /refined from createTask to its containing module/);
+});
+
+test("ask(): grain-aware resolution — \"touches\" up-refines a resolved Class to its containing module (\"who touched Bar\", HANDOVER 2026-07-12)", () => {
+  const graph = buildGrainCollisionGraph();
+  // Bar has no recorded touchesSymbol edge of its own (the extractor never got
+  // symbol-precise for it), so the touchesSymbol pre-check comes up empty and
+  // must fall through — rather than stop there and render a false "nothing
+  // touched it" — to the same up-refine path imports/tests/cochange use: Bar's
+  // containing module (x/foo.mjs) WAS touched by commit c1.
+  const { content, tmct_ask } = ask(graph, "who touched Bar");
+  assert.equal(tmct_ask.miss, false);
+  assert.match(content, /c1/);
+  assert.match(tmct_ask.traversal, /refined from Bar to its containing module/);
+});
+
+test("ask(): grain-aware resolution — \"who calls Bar\" is unaffected by the touches fallthrough (calls keeps its unconditional empty callsSymbol result, no up-refine)", () => {
+  const graph = buildGrainCollisionGraph();
+  // Bar has no callsSymbol edges either — "calls" deliberately keeps the old
+  // unconditional-return behavior in the symbolKind branch (an empty call-graph
+  // result is decisive), so this stays a plain empty, never up-refined to
+  // Bar's containing module the way "who touched Bar" now is.
+  const { content, tmct_ask } = ask(graph, "who calls Bar");
+  assert.match(content, /No modules found/);
+  assert.doesNotMatch(tmct_ask.traversal || "", /refined from Bar to its containing module/);
+});
+
+test("ask(): grain-aware resolution — a term that resolves to NOTHING at all (not even the wrong grain) still honest-misses, not up-refined to something unrelated", () => {
+  const graph = buildGrainCollisionGraph();
+  // "Zorpotron" matches no individual at any resolveObject tier (exact, scoped,
+  // substring) — this is the plain "unresolved" miss, distinct from the
+  // wrongGrainMiss/up-refine paths above, and must stay a miss regardless of
+  // the up-refine extension.
+  const { tmct_ask } = ask(graph, "which modules import Zorpotron");
+  assert.equal(tmct_ask.miss, true);
+  assert.equal(tmct_ask.matches.length, 0);
 });
 
 test("ask(): forward-shape grain check (PLAN_CONVERSATION.md Finding 3) — \"what modules does the questboard app have\" declines honestly instead of answering with function names", () => {
