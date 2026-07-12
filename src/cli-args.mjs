@@ -5,10 +5,14 @@
 // precedence chain — built on top of toml-config.mjs's already-tested
 // mergeEffective/normalizeConfig (arg > toml > default), not a rebuild of it.
 //
-// Three tiny flag helpers (pure, no I/O) plus the one async resolver:
+// Four tiny flag helpers (pure, no I/O) plus the one async resolver:
 //   strFlag(rest, names, dflt)   → single value, last flag occurrence wins
 //   repeatedFlag(rest, names)    → every value for a repeatable flag (e.g. --graph)
 //   boolFlag(rest, names)        → true if any of `names` appears at all
+//   enumFlag(rest, names, choices) → strFlag, validated against a closed set
+//     (throws a clear error naming the flag + the choices — the shared shape
+//     for a closed-choice option like `--memory-backend default|memory|sqlite`,
+//     matching `--with-persona`'s own "unknown name" error style)
 //   resolveRuntimeConfig({argv, cwd, env, gitRoot}) → the resolved repo/config
 //
 // Graph-path precedence (documented once, here — every subcommand shares it):
@@ -67,6 +71,21 @@ export function repeatedFlag(rest, names) {
 export function boolFlag(rest, names) {
   const list = asList(names);
   return rest.some((r) => list.includes(r));
+}
+
+/** Closed-choice single-value flag: `strFlag` plus validation against
+ *  `choices`. Returns `undefined` when absent (never a default — the caller
+ *  decides what "absent" means, same as an omitted `strFlag` call). Throws a
+ *  clear, user-facing error naming the flag and the valid choices when a
+ *  value IS given but isn't one of them — validate-before-any-disk-write,
+ *  the same discipline `tmct init --with-persona <unknown>` already uses. */
+export function enumFlag(rest, names, choices) {
+  const val = strFlag(rest, names, undefined);
+  if (val !== undefined && !choices.includes(val)) {
+    const flagName = asList(names)[0];
+    throw new Error(`invalid ${flagName} "${val}". Choices: ${choices.join(", ")}.`);
+  }
+  return val;
 }
 
 /**

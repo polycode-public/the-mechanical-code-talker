@@ -334,12 +334,23 @@ reasoning). Design detail and the full fact-count tables are in `archive/PLAN_SE
 ### Memory backends
 
 The default memory backend writes an OWL-labelled JSON file under `.tmct/`.
-Two more exist for a library caller who doesn't want that: `runChat({
-memoryBackend: "memory" })` keeps taught facts in the process only, nothing
-written to disk; `runChat({ memoryBackend: "sqlite" })` persists them to a
-local SQLite file instead. `TMCT_MEMORY_BACKEND=memory|sqlite` does the same
-from the environment. There's no CLI flag yet — this is a library-level
-option for now, newer and less exercised than the default backend.
+Two more exist: `memory` keeps taught facts in the process only, nothing
+written to disk; `sqlite` persists them to a local SQLite file instead
+(`.tmct/memory/graph.sqlite`).
+
+Pick one at init time and it sticks — `tmct init --memory-backend sqlite`
+writes the choice into `tmct.toml`, and every later `tmct chat` in that repo
+uses it with no flag needed:
+
+```bash
+tmct init --memory-backend sqlite     # writes [memory] backend = "sqlite" to tmct.toml
+tmct chat                             # picks it up automatically
+tmct chat --memory-backend memory     # override for just this session
+```
+
+Precedence is `--memory-backend` flag > `TMCT_MEMORY_BACKEND` env > tmct.toml's
+`[memory] backend` > the default. A library caller sets the same thing
+directly: `runChat({ memoryBackend: "sqlite" })`.
 
 Teaching isn't limited to the ACE grammar's fixed shapes. Tell tmct an
 arbitrary fact, like "margo really eats ribs", and it mints a fact you can
@@ -411,6 +422,10 @@ Inside the chat: `/help` lists commands, `/memory` inspects what tmct remembers
 (grouped by OWL class, with provenance and any contradictions), `/exit` leaves.
 `TMCT_GRAPH_FILE` overrides the graph location.
 
+`tmct --help` (or `npm run help` from a clone of this repo) is the full,
+up-to-date flag reference for every subcommand — a bare `npm run` only lists
+script names, so `npm run help` is the documented way in from there.
+
 `tmct init` is the onboarding surface for the repository interface below: it
 creates the `.tmct/` directory, writes the externalized `tmct.toml`
 configuration, seeds the default persona, and records provenance. A host
@@ -435,17 +450,23 @@ tmct init --lexicon <name|path>               # activate a lexicon bundle (never
 tmct init --graph <path> [--graph <path> …]   # set tmct.toml's graph_file/graph_files
 tmct init --config <path>                     # write to an alternate tmct.toml location
 tmct init --persona-size medium|large         # grow the default persona (Small is default)
+tmct init --memory-backend default|memory|sqlite  # write tmct.toml's [memory] backend —
+                                               # every later `tmct chat` here uses it
 
 tmct import --corpus <id|path>                # activate+seed into an ALREADY-initialized
 tmct import --ontology <name|path>            # repo — any combination of these flags in
 tmct import --lexicon <name|path>             # one call. --graph is a DIFFERENT, purely
 tmct import --graph <path>                    # additive op: it appends to graph_files,
                                                # never activates an extensions bundle.
+tmct import --memory-backend default|memory|sqlite  # same knob as `tmct init`, for a
+                                               # repo that's already initialized
 
 tmct chat --graph <path> [--graph <path> …]   # explicit graph file(s) — multiple merge
                                                # (ids that collide across graphs are
                                                # auto-prefixed; see src/graph-merge.mjs)
 tmct chat --config <path>                     # an alternate tmct.toml (a file or a dir)
+tmct chat --memory-backend default|memory|sqlite  # override tmct.toml's backend for
+                                               # just this session
 tmct serve --graph <path> --config <path>     # same two flags, for the HTTP endpoint
 ```
 

@@ -160,8 +160,18 @@ export async function normalizeConfig(raw, { configDir } = {}) {
   // from "set to the default" — the shipped default (5, memory/core.mjs's
   // DEFAULT_RETENTION) is applied where the value is actually CONSUMED
   // (snapshotMemory), not injected here.
+  //
+  // [memory] backend — the storage-backend seam (PLAN_SEED.md §6, createSession's
+  // `memoryBackend` option / TMCT_MEMORY_BACKEND env): "default" (the flat
+  // OWL-labelled JSON file under .tmct/memory/), "memory" (in-process only,
+  // nothing on disk), or "sqlite" (a local SQLite file). Written by `tmct init
+  // --memory-backend <...>`; read by chat.mjs's createSession at CLI-flag > env >
+  // tmct.toml > default precedence, same order as everything else in this file.
   const mem = src.memory || {};
-  if (mem.retention_versions !== undefined) cfg.memory = { retentionVersions: mem.retention_versions };
+  const memory = {};
+  if (mem.retention_versions !== undefined) memory.retentionVersions = mem.retention_versions;
+  if (mem.backend !== undefined) memory.backend = mem.backend;
+  if (Object.keys(memory).length) cfg.memory = memory;
 
   const unwired = [];
   for (const [a, b] of UNWIRED_KEYS) {

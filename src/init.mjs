@@ -148,6 +148,27 @@ enabled = ${seed.enabled ? "true" : "false"}
 # To cap it, uncomment and set a number (definitional band first):
 ${seed.limit != null ? `limit = ${Number(seed.limit)}` : "# limit = 500"}
 `;
+  // [memory] backend — ONLY emitted when a caller actually supplies it (an
+  // explicit `tmct init --memory-backend <...>`, or a manual override); the
+  // plain zero-flag `tmct init` output stays BYTE-IDENTICAL to before this
+  // knob existed, same discipline as the extras block below. "default" is
+  // written out explicitly rather than omitted, so `--memory-backend default`
+  // leaves a self-documenting trace of the choice (mirrors --with-persona's
+  // own "make the default explicit" behaviour).
+  let out = base;
+  if (config.memory && config.memory.backend !== undefined) {
+    out += `
+[memory]
+# Storage backend for taught facts + the memory graph (PLAN_SEED.md §6).
+# Precedence: --memory-backend flag > TMCT_MEMORY_BACKEND env > this file >
+# "default" (the built-in fallback).
+#   "default" — the flat OWL-labelled JSON file under .tmct/memory/. The default.
+#   "memory"  — in-process only; nothing written to disk (a library caller's option).
+#   "sqlite"  — a local SQLite file at .tmct/memory/graph.sqlite.
+backend = ${JSON.stringify(config.memory.backend)}
+`;
+  }
+
   // Extension-pack / bias sections (src/extensions.mjs) — ONLY emitted when a
   // caller actually supplies them (an explicit `--with-persona`, or a manual
   // override); the plain zero-flag `tmct init` output stays BYTE-IDENTICAL to
@@ -157,8 +178,8 @@ ${seed.limit != null ? `limit = ${Number(seed.limit)}` : "# limit = 500"}
   const extras = {};
   if (config.extensions !== undefined) extras.extensions = config.extensions;
   if (config.bias !== undefined) extras.bias = config.bias;
-  if (!Object.keys(extras).length) return base;
-  return `${base}
+  if (!Object.keys(extras).length) return out;
+  return `${out}
 # Extension packs + bias (src/extensions.mjs) — written by \`tmct init --with-persona\`
 # or a manual edit. Recognized names (human, seon, conceptnet, tier2-aws,
 # tier2-python, tier2-java, tier2-general) override the shipped defaults; any
@@ -356,6 +377,9 @@ async function readWrittenConfig(tomlPath, base) {
     // normalizeConfig).
     if (raw.extensions !== undefined) cfg.extensions = raw.extensions;
     if (raw.bias !== undefined) cfg.bias = raw.bias;
+    if (raw.memory && raw.memory.backend !== undefined) {
+      cfg.memory = { ...cfg.memory, backend: raw.memory.backend };
+    }
     return cfg;
   } catch {
     return base;

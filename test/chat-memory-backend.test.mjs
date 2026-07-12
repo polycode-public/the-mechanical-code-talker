@@ -9,7 +9,7 @@
 //
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createSession } from "../src/chat.mjs";
@@ -94,6 +94,76 @@ test("createSession({ memoryBackend: 'sqlite' }): env var TMCT_MEMORY_BACKEND=sq
   try {
     const s = await createSession({ repoPath: dir, env: { TMCT_NO_SEED: "1", TMCT_MEMORY_BACKEND: "sqlite" } });
     assert.equal(s.memoryDir?.backend, "sqlite");
+    await s.close();
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---- tmct.toml's [memory] backend (src/toml-config.mjs) + the full
+// precedence chain: bin/tmct.mjs's --memory-backend CLI flag (already the
+// resolved `memoryBackend` param by the time it reaches createSession) >
+// TMCT_MEMORY_BACKEND env > tmct.toml's `[memory] backend` > the built-in
+// default (Backend A). --------------------------------------------------
+
+test("createSession({ repoPath }): tmct.toml's [memory] backend alone (no option, no env) selects the backend", async () => {
+  clearCache();
+  const dir = await tmpRepo();
+  try {
+    await writeFile(join(dir, "tmct.toml"), '[memory]\nbackend = "sqlite"\n');
+    const s = await createSession({ repoPath: dir, env: { TMCT_NO_SEED: "1" } });
+    assert.equal(s.memoryDir?.backend, "sqlite", "tmct.toml's [memory] backend alone selected Backend C");
+    await s.turn("every module is a component");
+    const m = await loadMemory(s.memoryDir);
+    const rows = readFactRows(m);
+    assert.ok(rows.some((r) => r.subject === "module" && r.object === "component"), "taught fact recorded through the tmct.toml-selected backend");
+    await s.close();
+    const entries = await memoryEntries(dir);
+    assert.ok(entries.includes("graph.sqlite"), "Backend C wrote graph.sqlite, driven purely by tmct.toml — no flag, no env");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("createSession precedence: the explicit memoryBackend option (bin/tmct.mjs's --memory-backend) beats tmct.toml", async () => {
+  clearCache();
+  const dir = await tmpRepo();
+  try {
+    await writeFile(join(dir, "tmct.toml"), '[memory]\nbackend = "sqlite"\n');
+    const s = await createSession({ repoPath: dir, env: { TMCT_NO_SEED: "1" }, memoryBackend: "memory" });
+    assert.equal(s.memoryDir?.backend, "memory", "the explicit option wins over tmct.toml's sqlite");
+    await s.close();
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("createSession precedence: TMCT_MEMORY_BACKEND env beats tmct.toml, but loses to the explicit option — the full CLI-flag > env > tmct.toml > default chain", async () => {
+  clearCache();
+  const dir = await tmpRepo();
+  try {
+    await writeFile(join(dir, "tmct.toml"), '[memory]\nbackend = "sqlite"\n');
+    const envOnly = await createSession({ repoPath: dir, env: { TMCT_NO_SEED: "1", TMCT_MEMORY_BACKEND: "memory" } });
+    assert.equal(envOnly.memoryDir?.backend, "memory", "env wins over tmct.toml's sqlite");
+    await envOnly.close();
+
+    const optionWins = await createSession({
+      repoPath: dir, env: { TMCT_NO_SEED: "1", TMCT_MEMORY_BACKEND: "memory" }, memoryBackend: "sqlite",
+    });
+    assert.equal(optionWins.memoryDir?.backend, "sqlite", "the explicit option still wins over env");
+    await optionWins.close();
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("createSession: a tmct.toml [memory] backend of \"default\" (what `tmct init --memory-backend default` writes) falls through to Backend A, same as an absent value", async () => {
+  clearCache();
+  const dir = await tmpRepo();
+  try {
+    await writeFile(join(dir, "tmct.toml"), '[memory]\nbackend = "default"\n');
+    const s = await createSession({ repoPath: dir, env: { TMCT_NO_SEED: "1" } });
+    assert.equal(typeof s.memoryDir, "string", "\"default\" in tmct.toml behaves like no override — Backend A");
     await s.close();
   } finally {
     await rm(dir, { recursive: true, force: true });

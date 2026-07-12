@@ -44,6 +44,9 @@ Usage:
                                TMCT_NARRATE=1; toggle mid-session with /narrate on|off)
        [--plain]               force the plain readline shell (the default when
                                stdin/stdout is not a terminal)
+       [--memory-backend <default|memory|sqlite>]  storage backend for taught facts this
+                               session (CLI flag > TMCT_MEMORY_BACKEND env > tmct.toml's
+                               [memory] backend > "default", the flat .tmct/ JSON file)
   tmct memory [--repo <abs>]   what tmct remembers: facts, utterances, sessions,
        [--config <path>]       folded blocks (the /memory chat command, from the shell)
        [--verbose]
@@ -66,11 +69,15 @@ Usage:
                                activates human-large.jsonl (~13,600 facts total,
                                with genuine multi-hop hypernym chains) — additive
                                size tiers of the SAME bundle, not separate personas
+       [--memory-backend <default|memory|sqlite>]  write tmct.toml's [memory] backend
+                               (same flag name as \`tmct chat\`) — a later \`tmct chat\`
+                               in this repo picks it up with no flag needed
   tmct import [--repo <abs>]   activate+seed into an ALREADY-initialized repo (any
        [--corpus <id|path>]    combination of these flags in one call). --graph is a
        [--ontology <name|path>]  DIFFERENT operation from the others: it APPENDS to
        [--lexicon <name|path>]   tmct.toml's graph_files array (multi-graph growth),
        [--graph <path>]        never an extensions-bundle activation.
+       [--memory-backend <default|memory|sqlite>]  same knob as \`tmct init\`
        [--config <path>]
   tmct extend --validate <dir>  validate a third-party extension pack's declared
        [--config <path>]      resources (corpus/lexicon/templates) before activating
@@ -98,6 +105,11 @@ In chat: /help lists slash-commands; /exit leaves. Session log → <repo>/.tmct/
 Shared graph-path precedence (chat/serve; see src/cli-args.mjs): --graph flag(s) >
 TMCT_GRAPH_FILE env > tmct.toml graph_file/graph_files > --repo-derived
 <repo>/.tmct/graph.json > git-root/cwd default.
+
+Memory-backend precedence (chat; see src/chat.mjs createSession): --memory-backend
+flag > TMCT_MEMORY_BACKEND env > tmct.toml [memory] backend > "default" (the flat
+.tmct/ JSON file). Set it once with \`tmct init --memory-backend <...>\` and every
+later \`tmct chat\` in that repo picks it up with no flag needed.
 `;
 
 const argv = process.argv.slice(2);
@@ -332,6 +344,7 @@ async function readConfigForRewrite(repoRoot) {
   }
   if (raw?.extensions !== undefined) cfg.extensions = raw.extensions;
   if (raw?.bias !== undefined) cfg.bias = raw.bias;
+  if (raw?.memory?.backend !== undefined) cfg.memory = { ...cfg.memory, backend: raw.memory.backend };
   return { raw, cfg };
 }
 
@@ -528,12 +541,25 @@ async function main() {
     // TMCT_GRAPH_FILE — see chat.mjs's own docblock at createSession). Omitted from
     // the call entirely when absent, so a plain `tmct chat [--repo]` invocation is
     // byte-identical to before these flags existed.
-    const { repeatedFlag, strFlag } = await import("../src/cli-args.mjs");
+    const { repeatedFlag, strFlag, enumFlag } = await import("../src/cli-args.mjs");
     const graphPaths = repeatedFlag(rest, ["--graph"]);
     const configPath = strFlag(rest, ["--config"]);
+    // `--memory-backend <default|memory|sqlite>`: the CLI's top tier of
+    // createSession's memoryBackend precedence (CLI flag > TMCT_MEMORY_BACKEND
+    // env > tmct.toml's [memory] backend > built-in default — src/cli-args.mjs's
+    // shared precedence order, resolved inside createSession itself). Omitted
+    // when absent so the lower tiers still apply unchanged.
+    let memoryBackend;
+    try {
+      memoryBackend = enumFlag(rest, ["--memory-backend"], ["default", "memory", "sqlite"]);
+    } catch (e) {
+      process.stderr.write(`tmct: ${e?.message || e}\n`);
+      process.exit(2);
+    }
     const extra = {};
     if (graphPaths.length) extra.graphPaths = graphPaths;
     if (configPath) extra.configPath = configPath;
+    if (memoryBackend) extra.memoryBackend = memoryBackend;
     // The shell gate: a real terminal gets the full-screen Ink TUI; `--plain` or a
     // non-TTY stream (pipes, scripts, the test suite) gets the readline shell. Both
     // drive the same createSession sink — only the drawing differs.
@@ -579,7 +605,7 @@ async function main() {
     // subcommand without a --repo flag. It now takes one like every other
     // subcommand, defaulting to cwd exactly as before when absent.
     const rest = process.argv.slice(3);
-    const { strFlag, repeatedFlag } = await import("../src/cli-args.mjs");
+    const { strFlag, repeatedFlag, enumFlag } = await import("../src/cli-args.mjs");
     const { resolve: resolvePath } = await import("node:path");
     const { initRepo, PERSONA_PRESETS } = await import("../src/init.mjs");
 
@@ -590,6 +616,20 @@ async function main() {
     const ontologyVal = strFlag(rest, ["--ontology"]);
     const lexiconVal = strFlag(rest, ["--lexicon"]);
     const graphFlags = repeatedFlag(rest, ["--graph"]);
+
+    // `--memory-backend <default|memory|sqlite>` (PLAN_SEED.md §6's storage-backend
+    // seam, now reachable from `tmct init`): validated BEFORE touching disk, same
+    // discipline as every other pluggable input below. Written into tmct.toml's
+    // `[memory] backend` (src/init.mjs's renderTomlConfig); chat.mjs's
+    // createSession reads it back at CLI-flag > TMCT_MEMORY_BACKEND env >
+    // tmct.toml > default precedence (src/cli-args.mjs's shared precedence order).
+    let memoryBackendVal;
+    try {
+      memoryBackendVal = enumFlag(rest, ["--memory-backend"], ["default", "memory", "sqlite"]);
+    } catch (e) {
+      process.stderr.write(`tmct init: ${e?.message || e}\n`);
+      process.exit(2);
+    }
 
     // Resolve + validate EVERY pluggable input BEFORE touching disk — mirrors
     // `--with-persona`'s own "validate before scaffolding" discipline, and the
@@ -691,6 +731,18 @@ async function main() {
       anyActivation = true;
     }
 
+    // `--memory-backend <default|memory|sqlite>`: SETS tmct.toml's `[memory]
+    // backend`, same read-merge-rewrite as `--graph` above (preserves every
+    // other already-written key). No seeding/scaffolding side effect — this is
+    // a pure config write, exactly like `--with-persona`'s [bias]/[extensions].
+    if (memoryBackendVal) {
+      const { cfg } = await readConfigForRewrite(repoRoot);
+      cfg.memory = { ...(cfg.memory || {}), backend: memoryBackendVal };
+      await writeConfig(repoRoot, cfg);
+      process.stdout.write(`memory backend set in tmct.toml: ${memoryBackendVal}\n`);
+      anyActivation = true;
+    }
+
     if (anyActivation) return;
 
     if (rest.includes("--detect")) {
@@ -721,7 +773,7 @@ async function main() {
     // additive operation (appendGraphFiles) — it grows tmct.toml's graph_files
     // array, never activates an extensions bundle.
     const rest = process.argv.slice(3);
-    const { strFlag, repeatedFlag } = await import("../src/cli-args.mjs");
+    const { strFlag, repeatedFlag, enumFlag } = await import("../src/cli-args.mjs");
     const { resolve: resolvePath } = await import("node:path");
 
     const repoFlag = strFlag(rest, ["--repo"]);
@@ -731,9 +783,19 @@ async function main() {
     const ontologyVal = strFlag(rest, ["--ontology"]);
     const lexiconVal = strFlag(rest, ["--lexicon"]);
     const graphFlags = repeatedFlag(rest, ["--graph"]);
+    // `--memory-backend <default|memory|sqlite>`: same knob as `tmct init`'s
+    // (consistent name, same [memory] backend tmct.toml field) — lets an
+    // already-initialized repo change its storage backend without a re-init.
+    let memoryBackendVal;
+    try {
+      memoryBackendVal = enumFlag(rest, ["--memory-backend"], ["default", "memory", "sqlite"]);
+    } catch (e) {
+      process.stderr.write(`tmct import: ${e?.message || e}\n`);
+      process.exit(2);
+    }
 
-    if (!corpusVal && !ontologyVal && !lexiconVal && !graphFlags.length) {
-      process.stderr.write("tmct import: needs at least one of --corpus/--ontology/--lexicon/--graph\n");
+    if (!corpusVal && !ontologyVal && !lexiconVal && !graphFlags.length && !memoryBackendVal) {
+      process.stderr.write("tmct import: needs at least one of --corpus/--ontology/--lexicon/--graph/--memory-backend\n");
       process.exit(2);
     }
 
@@ -765,6 +827,13 @@ async function main() {
         process.stderr.write(`tmct import: ${e?.message || e}\n`);
         process.exit(1);
       }
+    }
+
+    if (memoryBackendVal) {
+      const { cfg } = await readConfigForRewrite(repoRoot);
+      cfg.memory = { ...(cfg.memory || {}), backend: memoryBackendVal };
+      await writeConfig(repoRoot, cfg);
+      process.stdout.write(`memory backend set in tmct.toml: ${memoryBackendVal}\n`);
     }
     return;
   }

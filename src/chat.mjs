@@ -9260,9 +9260,11 @@ export async function createSession({
   // module-global state). "sqlite" selects Backend C (createSqliteMemoryStore
   // — a live node:sqlite connection kept open for the session's lifetime,
   // lazily imported only when this is actually chosen). TMCT_MEMORY_BACKEND
-  // mirrors the TMCT_EPHEMERAL/TMCT_NARRATE on/off env convention. No CLI flag
-  // wires this yet (bin/tmct.mjs's flag parsing is out of this change's
-  // scope) — a library/test caller sets the option directly for now.
+  // mirrors the TMCT_EPHEMERAL/TMCT_NARRATE on/off env convention. This
+  // parameter IS `bin/tmct.mjs`'s `tmct chat --memory-backend <...>` CLI flag
+  // (a library/test caller can still set it directly) — the full precedence
+  // (this param > TMCT_MEMORY_BACKEND env > tmct.toml's `[memory] backend` >
+  // "default") is resolved below, once `toml` is known.
   memoryBackend = null,
 } = {}) {
   // EPHEMERAL mode (--ephemeral, or TMCT_EPHEMERAL=1): read the target graph but
@@ -9303,6 +9305,13 @@ export async function createSession({
   // instead of the whole repo.
   let repo;
   let config;
+  // tmct.toml's normalized knobs (src/toml-config.mjs), captured alongside
+  // `config` in whichever branch below resolves the graph path — used further
+  // down for the memory-backend precedence (`toml.memory.backend`), so that
+  // knob is honoured the same way regardless of which graph-resolution tier
+  // fired. `null` when no branch could read a tmct.toml (never fatal — the
+  // backend precedence below just skips this tier).
+  let toml = null;
   const explicitGraphs = (graphPaths || []).filter(Boolean);
   if (explicitGraphs.length) {
     repo = repoPath || gitRoot(cwd) || cwd;
@@ -9310,6 +9319,11 @@ export async function createSession({
     config = resolvedGraphs.length > 1
       ? { graphFile: resolvedGraphs[0], graphFiles: resolvedGraphs }
       : { graphFile: resolvedGraphs[0] };
+    try {
+      const argv = ["--repo", repo];
+      if (configPath) argv.push("--config", configPath);
+      ({ toml } = await resolveRuntimeConfig({ argv, cwd, env: {}, gitRoot }));
+    } catch { toml = null; }
   } else if (repoPath) {
     repo = repoPath;
     // env is deliberately withheld from resolveRuntimeConfig here (passed as
@@ -9320,17 +9334,22 @@ export async function createSession({
     // honored too.
     const argv = ["--repo", repoPath];
     if (configPath) argv.push("--config", configPath);
-    ({ config } = await resolveRuntimeConfig({ argv, cwd, env: {}, gitRoot }));
+    ({ config, toml } = await resolveRuntimeConfig({ argv, cwd, env: {}, gitRoot }));
   } else {
     const root = gitRoot(cwd);
     repo = root || cwd;
     const envGraph = env.TMCT_GRAPH_FILE && String(env.TMCT_GRAPH_FILE).trim();
     if (envGraph) {
       config = loadConfig(env, cwd);
+      try {
+        const argv = [];
+        if (configPath) argv.push("--config", configPath);
+        ({ toml } = await resolveRuntimeConfig({ argv, cwd, env: {}, gitRoot }));
+      } catch { toml = null; }
     } else {
       const argv = [];
       if (configPath) argv.push("--config", configPath);
-      ({ config } = await resolveRuntimeConfig({ argv, cwd, env, gitRoot }));
+      ({ config, toml } = await resolveRuntimeConfig({ argv, cwd, env, gitRoot }));
     }
   }
 
@@ -9415,7 +9434,14 @@ export async function createSession({
   // `closeMemoryStore` is a no-op unless Backend C actually opened a
   // connection (Backend C's node:sqlite import is lazy — it only happens if
   // this branch is actually taken).
-  const backendChoice = String(memoryBackend || env.TMCT_MEMORY_BACKEND || "").trim().toLowerCase();
+  //
+  // Precedence — CLI flag > env > tmct.toml > default — matches the graph-path
+  // precedence documented above: `memoryBackend` here is `tmct chat
+  // --memory-backend <...>`'s already-resolved value; TMCT_MEMORY_BACKEND is
+  // the env tier; `toml.memory.backend` is tmct.toml's `[memory] backend`
+  // (src/toml-config.mjs). A toml value of "default" (or anything unrecognized)
+  // falls through to Backend A below, same as an absent value always has.
+  const backendChoice = String(memoryBackend || env.TMCT_MEMORY_BACKEND || toml?.memory?.backend || "").trim().toLowerCase();
   let memoryDir = repo;
   let closeMemoryStore = async () => {};
   if (backendChoice === "memory") {

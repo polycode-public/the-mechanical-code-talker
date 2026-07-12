@@ -367,3 +367,95 @@ test("bin/tmct.mjs: `tmct init --with-persona code` writes the persona, `--with-
     await rm(badDir, { recursive: true, force: true });
   }
 });
+
+// ---- memory-backend CLI seam (PLAN_SEED.md §6): `tmct init --memory-backend
+// <default|memory|sqlite>` writes tmct.toml's `[memory] backend`, chat.mjs's
+// createSession reads it back at CLI-flag > env > tmct.toml > default
+// precedence (test/chat-memory-backend.test.mjs covers that resolution;
+// these tests cover the WRITE side: renderTomlConfig + the read-back path). --
+
+test("renderTomlConfig: config.memory.backend set — emits an explicit [memory] section", () => {
+  const text = renderTomlConfig({ ...defaultConfig(), memory: { backend: "sqlite" } });
+  assert.match(text, /\[memory\]/);
+  assert.match(text, /backend = "sqlite"/);
+});
+
+test("renderTomlConfig: no config.memory — no [memory] section (plain zero-flag path stays byte-identical, pinned by the test above)", () => {
+  const text = renderTomlConfig(defaultConfig());
+  assert.doesNotMatch(text, /\[memory\]/);
+});
+
+test("initRepo + re-init: a [memory] backend written to tmct.toml is read back into res.config on a plain re-init", async () => {
+  const dir = await tmp();
+  try {
+    await initRepo(dir, { seed: false });
+    const withBackend = renderTomlConfig({ ...defaultConfig(), memory: { backend: "sqlite" } });
+    await writeFile(join(dir, CONFIG_FILE), withBackend);
+    const res = await initRepo(dir, { seed: false }); // no force — preserves the on-disk file, reads it back
+    assert.equal(res.config.memory.backend, "sqlite");
+    const raw = await loadTomlConfig(dir);
+    const norm = await normalizeConfig(raw, { configDir: dir });
+    assert.equal(norm.memory.backend, "sqlite");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("bin/tmct.mjs: `tmct init --memory-backend sqlite` writes [memory] backend = \"sqlite\" into tmct.toml", async () => {
+  const { spawnSync } = await import("node:child_process");
+  const { fileURLToPath } = await import("node:url");
+  const BIN = fileURLToPath(new URL("../bin/tmct.mjs", import.meta.url));
+
+  const dir = await tmp();
+  try {
+    const r = spawnSync(process.execPath, [BIN, "init", "--memory-backend", "sqlite"], { encoding: "utf8", cwd: dir });
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, /memory backend set in tmct\.toml: sqlite/);
+    const text = await readFile(join(dir, CONFIG_FILE), "utf8");
+    assert.match(text, /\[memory\]/);
+    assert.match(text, /backend = "sqlite"/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("bin/tmct.mjs: `tmct init --memory-backend <unknown>` exits loudly, naming the valid choices, and touches nothing", async () => {
+  const { spawnSync } = await import("node:child_process");
+  const { fileURLToPath } = await import("node:url");
+  const BIN = fileURLToPath(new URL("../bin/tmct.mjs", import.meta.url));
+
+  const dir = await tmp();
+  try {
+    const r = spawnSync(process.execPath, [BIN, "init", "--memory-backend", "bogus"], { encoding: "utf8", cwd: dir });
+    assert.notEqual(r.status, 0);
+    assert.match(r.stderr, /invalid --memory-backend "bogus"/);
+    assert.match(r.stderr, /Choices: default, memory, sqlite/);
+    assert.equal(await exists(join(dir, ".tmct")), false, "an unknown --memory-backend value never scaffolds anything");
+    assert.equal(await exists(join(dir, CONFIG_FILE)), false);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("bin/tmct.mjs: `tmct import --memory-backend memory` on an already-initialized repo updates tmct.toml without a re-init", async () => {
+  const { spawnSync } = await import("node:child_process");
+  const { fileURLToPath } = await import("node:url");
+  const BIN = fileURLToPath(new URL("../bin/tmct.mjs", import.meta.url));
+
+  const dir = await tmp();
+  try {
+    const first = spawnSync(process.execPath, [BIN, "init"], { encoding: "utf8", cwd: dir });
+    assert.equal(first.status, 0, first.stderr);
+    const second = spawnSync(process.execPath, [BIN, "import", "--memory-backend", "memory"], { encoding: "utf8", cwd: dir });
+    assert.equal(second.status, 0, second.stderr);
+    assert.match(second.stdout, /memory backend set in tmct\.toml: memory/);
+    const text = await readFile(join(dir, CONFIG_FILE), "utf8");
+    assert.match(text, /\[memory\]/);
+    assert.match(text, /backend = "memory"/);
+    // every other already-written key survives the read-merge-rewrite
+    assert.match(text, /\[corpus\]/);
+    assert.match(text, /tier = "tier1"/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

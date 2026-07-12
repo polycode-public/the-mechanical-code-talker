@@ -80,6 +80,7 @@
     "wink-nlp": "^2.4.0"
   },
   "scripts": {
+    "help": "node bin/tmct.mjs --help",
     "test": "node --test \"test/**/*.test.mjs\"",
     "chat": "node bin/tmct.mjs",
     "chat:repo": "node bin/tmct.mjs chat --repo",

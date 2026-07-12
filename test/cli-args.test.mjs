@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
-import { strFlag, repeatedFlag, boolFlag, resolveRuntimeConfig } from "../src/cli-args.mjs";
+import { strFlag, repeatedFlag, boolFlag, enumFlag, resolveRuntimeConfig } from "../src/cli-args.mjs";
 import { DEFAULT_GRAPH_REL } from "../src/config.mjs";
 
 const tmp = () => mkdtemp(join(tmpdir(), "tmct-cliargs-"));
@@ -42,6 +42,21 @@ test("repeatedFlag: empty array when absent", () => {
 test("boolFlag: true when present, false when absent", () => {
   assert.equal(boolFlag(["--force"], ["--force"]), true);
   assert.equal(boolFlag([], ["--force"]), false);
+});
+
+test("enumFlag: undefined when absent (never a default)", () => {
+  assert.equal(enumFlag([], ["--memory-backend"], ["default", "memory", "sqlite"]), undefined);
+});
+
+test("enumFlag: returns the value when it's one of the choices", () => {
+  assert.equal(enumFlag(["--memory-backend", "sqlite"], ["--memory-backend"], ["default", "memory", "sqlite"]), "sqlite");
+});
+
+test("enumFlag: throws a clear error naming the flag + choices when the value isn't one of them", () => {
+  assert.throws(
+    () => enumFlag(["--memory-backend", "bogus"], ["--memory-backend"], ["default", "memory", "sqlite"]),
+    /invalid --memory-backend "bogus"\. Choices: default, memory, sqlite\./,
+  );
 });
 
 // ---- resolveRuntimeConfig -----------------------------------------------------
@@ -182,6 +197,19 @@ test("resolveRuntimeConfig: effective/sources carry non-graph toml knobs via mer
     const res = await resolveRuntimeConfig({ argv: [], cwd: dir, env: {}, gitRoot: noGitRoot });
     assert.equal(res.effective["tune.literalMention"], false);
     assert.equal(res.sources["tune.literalMention"], "tmct.toml");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("resolveRuntimeConfig: tmct.toml's [memory] backend surfaces on res.toml.memory.backend and via effective/sources (chat.mjs's createSession reads the former)", async () => {
+  const dir = await tmp();
+  try {
+    await writeFile(join(dir, "tmct.toml"), '[memory]\nbackend = "sqlite"\n');
+    const res = await resolveRuntimeConfig({ argv: [], cwd: dir, env: {}, gitRoot: noGitRoot });
+    assert.equal(res.toml.memory.backend, "sqlite");
+    assert.equal(res.effective["memory.backend"], "sqlite");
+    assert.equal(res.sources["memory.backend"], "tmct.toml");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
