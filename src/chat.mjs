@@ -1977,23 +1977,33 @@ function singularizeSurface(word) {
 const SOME_A_FEW_RE = /^(some|a few)\s+([\w-]+)\s+are\s+([\w-]+)$/i;
 
 /** "(every|each|all|a|an )?X is/are (a|an )?Y" — the shape the unknown-subject
- *  fallback recognizes (group 2 = X, group 3 = Y); group 1 (when present)
+ *  fallback recognizes (group 2 = X, group 4 = Y); group 1 (when present)
  *  names the determiner, so the caller can tell a genuine "every" universal
  *  apart from a singular/specific-entity "a"/bare reading (only "every" gets a
  *  recorded quantifier here — this function's OWN caller passes it through to
  *  teachFact; assertTurn, below, records the same "every" quantifier
- *  independently for the pre-existing ACE-success path). Y (the object) is a
- *  single token, same as parseAce's own copula fragments; X (the subject) is
- *  ONE OR TWO tokens (Tier-5 playtest fix: "vulcan gizmo is a tool"/"remember
- *  vulcan gizmo is a tool" fell straight to a "teach me" nudge that offered
- *  THIS EXACT phrasing as the fix, then itself failed when tried — a
- *  single-token-only subject was too narrow for a natural 2-word noun phrase,
- *  the same class of gap OWNS_TEACH_RE's own object had before its own
- *  Tier-5 widening, above). The greedy quantifier tries the longer 2-word
- *  subject first, backtracking to 1 word only if the tail doesn't then start
- *  with is/are — the "is/are" anchor immediately after the subject removes
- *  the ambiguity a fully free-form multi-word subject would otherwise have. */
-const UNKNOWN_SUBJECT_RE = /^(every\s+|each\s+|all\s+|a\s+|an\s+)?([\w-]+(?:\s+[\w-]+)?)\s+(?:is|are)\s+(?:an?\s+)?([\w-]+)$/i;
+ *  independently for the pre-existing ACE-success path). Group 3 is the
+ *  copula itself (is/are) — CAPTURED (not just matched) so a caller can tell
+ *  a genuinely PLURAL subject phrasing ("all men ARE mortal") apart from a
+ *  singular one ("redis IS a cache"): singularizing the subject before
+ *  storage is only ever correct for the former (see unknownSubjectFallback's
+ *  and unknownObjectFallback's own docblocks — this is the "men"->"man" fix's
+ *  own safety gate, added after singularizing unconditionally was found live
+ *  to corrupt the pre-existing "redis is a cache" pinned case: "redis", a
+ *  proper noun that happens to end in "s", naively strips to "redi" if
+ *  singularized on an "is" sentence, where no such fold was ever needed).
+ *  Y (the object) is a single token, same as parseAce's own copula fragments;
+ *  X (the subject) is ONE OR TWO tokens (Tier-5 playtest fix: "vulcan gizmo
+ *  is a tool"/"remember vulcan gizmo is a tool" fell straight to a "teach me"
+ *  nudge that offered THIS EXACT phrasing as the fix, then itself failed when
+ *  tried — a single-token-only subject was too narrow for a natural 2-word
+ *  noun phrase, the same class of gap OWNS_TEACH_RE's own object had before
+ *  its own Tier-5 widening, above). The greedy quantifier tries the longer
+ *  2-word subject first, backtracking to 1 word only if the tail doesn't then
+ *  start with is/are — the "is/are" anchor immediately after the subject
+ *  removes the ambiguity a fully free-form multi-word subject would
+ *  otherwise have. */
+const UNKNOWN_SUBJECT_RE = /^(every\s+|each\s+|all\s+|a\s+|an\s+)?([\w-]+(?:\s+[\w-]+)?)\s+(is|are)\s+(?:an?\s+)?([\w-]+)$/i;
 
 /** ISA-family predicates (mirrors the private ISA_PREDICATES set defined near
  *  memoryFacts, below, at module scope — both are simple top-level consts
@@ -2092,7 +2102,7 @@ async function ungroundedPairHint(payload, lexicon, memoryDir) {
   if (!memoryDir) return "";
   const m = String(payload).trim().match(UNKNOWN_SUBJECT_RE);
   if (!m) return "";
-  const [, , subjectRaw, objectRaw] = m;
+  const [, , subjectRaw, , objectRaw] = m;
   const { loadLexicon } = await import("./grammar/lexicon.mjs");
   const lex = lexicon || loadLexicon();
   if (await isGroundedTerm(subjectRaw, lex, memoryDir)) return "";
@@ -2144,12 +2154,29 @@ async function unknownSubjectFallback(payload, { memoryDir, sessionId, lexicon }
   if (!memoryDir) return null;
   const m = String(payload).trim().match(UNKNOWN_SUBJECT_RE);
   if (!m) return null;
-  const [, det, subjectRaw, objectRaw] = m;
+  const [, det, subjectRaw, verb, objectRaw] = m;
   const { loadLexicon, lookupNoun, lookupAdjective, classify } = await import("./grammar/lexicon.mjs");
   const lex = lexicon || loadLexicon();
   // A known X's own ACE miss is a real miss — never silently reinterpreted here.
   if (classify(subjectRaw, lex)) return null;
   const quantifier = /^every$/i.test((det || "").trim()) ? "every" : "";
+  // Singularize the SUBJECT before storage, but ONLY on a genuinely PLURAL
+  // phrasing ("all men ARE mortal", verb "are") — mirrors SOME_A_FEW_RE's own
+  // singularizeSurface() call (above), which is safe unconditionally there
+  // only because that shape's own regex requires "are" by construction. This
+  // shape (UNKNOWN_SUBJECT_RE) also matches singular "is" sentences ("redis
+  // is a cache"), where singularizing must NEVER run — "redis" naively folds
+  // to "redi" under the same naive -s-strip, a real regression caught live by
+  // the pinned "redis is a cache" tests when this fix first applied
+  // unconditionally. So "all men are mortal" stores under "man" (matching
+  // whatever "john is a man" already typed John as), not the raw plural
+  // "men", while "redis is a cache" stores "redis" untouched. Without this,
+  // findIsaChain's 2-hop proof (john->man, man->mortal) can never join, since
+  // the second fact was keyed on a different string ("men") than the first
+  // fact's object ("man"). classify(subjectRaw, lex) above already folds
+  // plurals for the "is this a real miss" check, so singularizing only the
+  // STORED value here is safe and doesn't change that check's behavior.
+  const subject = /^are$/i.test(verb) ? singularizeSurface(subjectRaw) : subjectRaw;
   // Point 2 (mint-extension): a PRIOR turn's minted term, or a
   // GENERIC_ANCHOR_NOUNS root, grounds Y just as legitimately as a static
   // lexicon noun — both are always treated as class-level (never property),
@@ -2157,14 +2184,14 @@ async function unknownSubjectFallback(payload, { memoryDir, sessionId, lexicon }
   if (lookupNoun(lex, objectRaw) || GENERIC_ANCHOR_NOUNS.has(String(objectRaw).toLowerCase())
     || (await isGroundedByFact(objectRaw, memoryDir))) {
     return teachFact(memoryDir, sessionId, {
-      subject: subjectRaw, predicate: SUBCLASS_PREDICATE, object: objectRaw, quantifier,
+      subject, predicate: SUBCLASS_PREDICATE, object: objectRaw, quantifier,
     });
   }
   if (lookupAdjective(lex, objectRaw)) {
     // property assertions are about ONE specific entity — never a quantifier,
     // even when phrased with "every" (point 3).
     return teachFact(memoryDir, sessionId, {
-      subject: subjectRaw, predicate: HAS_PROPERTY_PREDICATE, object: objectRaw,
+      subject, predicate: HAS_PROPERTY_PREDICATE, object: objectRaw,
     });
   }
   return null; // Y unknown too — decline honestly, never guess
@@ -2245,9 +2272,9 @@ async function unknownObjectFallback(payload, { memoryDir, sessionId, lexicon })
   if (!memoryDir) return null;
   const m = String(payload).trim().match(UNKNOWN_SUBJECT_RE);
   if (!m) return null;
-  const [, det, subjectRaw, objectRaw] = m;
+  const [, det, subjectRaw, verb, objectRaw] = m;
   if (!/^(?:every|each|all)$/i.test((det || "").trim())) return null; // class-level mint needs a real universal quantifier
-  const { loadLexicon } = await import("./grammar/lexicon.mjs");
+  const { loadLexicon, lookupNoun } = await import("./grammar/lexicon.mjs");
   const lex = lexicon || loadLexicon();
   const subjectGrounded = await isGroundedTerm(subjectRaw, lex, memoryDir);
   if (!subjectGrounded) return null; // ungrounded subject isn't this fallback's asymmetry — never a guessed mint
@@ -2255,8 +2282,32 @@ async function unknownObjectFallback(payload, { memoryDir, sessionId, lexicon })
   if (objectGrounded) return null; // object already known — nothing to mint
   if (await objectReadsAsNonNoun(objectRaw)) return null; // reads like an adjective/verb, not a class noun — defer to unknownAdjectiveFallback
   const quantifier = /^every$/i.test((det || "").trim()) ? "every" : "";
+  // Singularize the SUBJECT before storage, ONLY on a genuinely PLURAL
+  // phrasing (verb "are") — same bug class and same "is"-vs-"are" safety gate
+  // as unknownSubjectFallback, above (see UNKNOWN_SUBJECT_RE's own docblock).
+  // This is the fallback the canonical "all men are mortal" sentence
+  // ACTUALLY goes through: "men" is grounded here via classify's own
+  // IRREGULAR plural-fold (lexicon-core.json declares "man"/plural "men"), so
+  // unknownSubjectFallback itself already declines for it (its own
+  // classify(subjectRaw) check reads "men" as the known noun "man") and hands
+  // off to this mirror fallback instead. A naive suffix-strip
+  // (singularizeSurface — SOME_A_FEW_RE's own tool, reused as the fallback for
+  // a genuinely novel REGULAR plural not in the lexicon, e.g. "zorps") can't
+  // undo an IRREGULAR plural like "men" -> "man" — only the lexicon's own
+  // noun table (lookupNoun, already resolved by isGroundedTerm/classify to
+  // decide this subject counts as grounded in the first place) carries that
+  // mapping, so storage must consult the SAME source of truth: prefer the
+  // lexicon lemma, falling back to singularizeSurface for a subject grounded
+  // only via a PRIOR taught fact (isGroundedByFact) or a regular-plural
+  // lexicon fold. Gated on verb "are" for the identical reason
+  // unknownSubjectFallback gates it: an already-singular grounded subject
+  // that happens to end in "s" (e.g. a fact-grounded "gas") must never be
+  // naively stripped on an "is" sentence ("every gas is a chemical").
+  const subject = /^are$/i.test(verb)
+    ? (lookupNoun(lex, subjectRaw)?.lemma || singularizeSurface(subjectRaw))
+    : subjectRaw;
   return teachFact(memoryDir, sessionId, {
-    subject: subjectRaw, predicate: SUBCLASS_PREDICATE, object: objectRaw, quantifier,
+    subject, predicate: SUBCLASS_PREDICATE, object: objectRaw, quantifier,
   });
 }
 
@@ -2323,7 +2374,7 @@ async function unknownAdjectiveFallback(payload, { memoryDir, sessionId, lexicon
   if (!memoryDir) return null;
   const m = String(payload).trim().match(UNKNOWN_SUBJECT_RE);
   if (!m) return null;
-  const [, , subjectRaw, objectRaw] = m;
+  const [, , subjectRaw, , objectRaw] = m;
   const { loadLexicon, lookupNoun, classify } = await import("./grammar/lexicon.mjs");
   const lex = lexicon || loadLexicon();
   // Y already a known NOUN or a fact-grounded CLASS term — a genuine class-
@@ -5915,6 +5966,33 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
             : `yes — ${renderFactLine(hit)}`,
           replace: true,
         };
+      }
+      // No property hit — but a bare "is X Y" (no article) is exactly the
+      // same claim as "is X a Y" would have been had the user included the
+      // article (ISA_ASK_RE's own territory, above): SKILL_BENCHMARK_CONVERSATION.md's
+      // canonical syllogism ("john is a man" / "all men are mortal" / "is
+      // john mortal") is asked this bare way, and "mortal" was taught as a
+      // CLASS (rdfs:subClassOf), not a property — so it can only ever be
+      // found by the SAME 2-hop TAUGHT-only findIsaChain proof-chase isaAsk
+      // uses above, never by propertyMatch. Tried here as an ADDITIONAL
+      // attempt, never a replacement: on no chain either, this falls through
+      // to the ordinary property-miss handling just below, unchanged.
+      {
+        const { findIsaChain: chaseAdj, SUBCLASS_PREDICATE: SC_PREDICATE_ADJ, TYPE_PREDICATE: TYPE_PREDICATE_ADJ } = await import("./syllogise.mjs");
+        const isTaughtAdj = (f) => !f.sourceTypes?.includes("corpus") && !f.sourceTypes?.includes("web");
+        const chainSubClassRowsAdj = rows.filter((f) => f.predicate === SC_PREDICATE_ADJ && isTaughtAdj(f));
+        const chainTypeRowsAdj = rows.filter((f) => f.predicate === TYPE_PREDICATE_ADJ && isTaughtAdj(f));
+        const chainSubClassEdgesAdj = chainSubClassRowsAdj.map((f) => [f.subject, f.object]);
+        const chainTypeEdgesAdj = chainTypeRowsAdj.map((f) => [f.subject, f.object]);
+        const factForStepAdj = (step) => (step.predicate === SC_PREDICATE_ADJ ? chainSubClassRowsAdj : chainTypeRowsAdj)
+          .find((f) => f.subject === step.subject && f.object === step.object);
+        const adjObjVariants = factTermVariants(normFactTerm, adjective);
+        for (const subj of subjVariants) {
+          const chain = chaseAdj(subj, adjObjVariants, chainTypeEdgesAdj, chainSubClassEdgesAdj, { maxHops: 2 });
+          if (!chain) continue;
+          const premises = chain.map(factForStepAdj);
+          if (premises.every(Boolean)) return { text: `yes — ${renderIsaChain(premises)}`, replace: true };
+        }
       }
       // no hit on THIS property — never a guessed "no" (see
       // IS_ADJECTIVE_YESNO_RE's own docblock for why this stays silent on a

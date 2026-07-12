@@ -820,3 +820,135 @@ test("PLAN_TAUGHT_RELATIONS Item 5's own canonical illustration, 'mary is female
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+// ---- BENCHMARK_CONVERSATION_1.8.14.md regression (this session): the
+// canonical "john is a man" / "all men are mortal" syllogism — README's own
+// headline demo shape, §0.1's mandatory first test — broke again via a
+// singular/plural STORAGE mismatch: "all men are mortal" stored the raw
+// plural subject `men` verbatim instead of the singular `man`, so
+// findIsaChain's 2-hop proof (john->man, man->mortal) could never join (the
+// second fact was keyed on a different string than the first fact's object).
+// Root cause: "men" is a real lexicon-declared IRREGULAR plural
+// (lexicon-core.json: "man" -> plural "men"), so classify("men") already
+// reads it as the known noun "man" — unknownSubjectFallback's own
+// "classify(subjectRaw) truthy -> real miss, never reinterpreted" guard
+// therefore declines FIRST, handing the sentence to its mirror,
+// unknownObjectFallback (known subject "men" / unknown object "mortal"),
+// which is the fallback that actually stored the bug. Fixed by singularizing
+// the subject in BOTH fallbacks before storage — preferring the lexicon's own
+// noun lemma (lookupNoun, which already resolves the IRREGULAR fold) and
+// falling back to singularizeSurface (a naive suffix-strip) only for a
+// subject with no lexicon entry at all — gated on the copula actually being
+// "are" (a genuinely plural phrasing), never "is": see UNKNOWN_SUBJECT_RE's
+// own docblock for why the "is" gate is load-bearing (singularizing
+// unconditionally corrupts "redis is a cache" — "redis" naively strips to
+// "redi"). Also exercises the sibling query-side fix: a bare "is X Y" (no
+// article) question — the exact phrasing the benchmark run used — now also
+// consults the same TAUGHT-only 2-hop findIsaChain proof-chase the
+// article-form "is X a Y" question (ISA_ASK_RE) already used, since a
+// class-taught word like "mortal" can never be found by the property-only
+// (mgx:hasProperty) yes/no lane a bare adjective-shaped question hits. ----
+
+test("BENCHMARK regression: 'john is a man' + 'all men are mortal' stores the SINGULAR 'man' (not 'men'), so 'is john mortal' (bare) and 'is john a mortal' (article) both chain", async () => {
+  const dir = await mem("syllogism-john");
+  try {
+    const t1 = await runTurn("john is a man", { config: CONFIG, memoryDir: dir, sessionId: "syl1" });
+    assert.match(t1.answer, /^noted — remembered: john is a kind of man/);
+    assert.equal(t1.record.miss, false);
+
+    const t2 = await runTurn("all men are mortal", { config: CONFIG, memoryDir: dir, sessionId: "syl1" });
+    assert.match(t2.answer, /^noted — remembered: man is a kind of mortal/, "must store the SINGULAR 'man', never the raw plural 'men'");
+    assert.equal(t2.record.miss, false);
+
+    const rows = readFactRows(await loadMemory(dir));
+    assert.equal(rows.length, 2);
+    assert.equal(rows.find((f) => f.object === "mortal")?.subject, "man", "the mortal fact's subject must be lemmatized to 'man'");
+    assert.equal(rows.some((f) => f.subject === "men"), false, "the raw plural 'men' must never appear as a stored subject");
+
+    // article form — ISA_ASK_RE's own territory, matches README's "is X a Y" shape
+    const withArticle = await runTurn("is john a mortal", { config: CONFIG, memoryDir: dir });
+    assert.match(withArticle.answer, /^yes/i);
+    assert.match(withArticle.answer, /john is a kind of man/);
+    assert.match(withArticle.answer, /man is a kind of mortal/);
+    assert.match(withArticle.answer, /so john is a mortal/);
+
+    // bare form — the exact phrasing BENCHMARK_CONVERSATION_1.8.14.md used
+    // ("is john mortal"), routed through IS_ADJECTIVE_YESNO_RE, not ISA_ASK_RE
+    const bare = await runTurn("is john mortal", { config: CONFIG, memoryDir: dir });
+    assert.match(bare.answer, /^yes/i);
+    assert.match(bare.answer, /john is a kind of man/);
+    assert.match(bare.answer, /man is a kind of mortal/);
+    assert.match(bare.answer, /so john is a mortal/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("BENCHMARK regression: reproduced identically with 'socrates is a man' / 'is socrates mortal' (the benchmark's own second repro case)", async () => {
+  const dir = await mem("syllogism-socrates");
+  try {
+    await runTurn("socrates is a man", { config: CONFIG, memoryDir: dir, sessionId: "syl2" });
+    await runTurn("all men are mortal", { config: CONFIG, memoryDir: dir, sessionId: "syl2" });
+    const answer = await runTurn("is socrates mortal", { config: CONFIG, memoryDir: dir });
+    assert.match(answer.answer, /^yes/i);
+    assert.match(answer.answer, /so socrates is a mortal/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("BENCHMARK regression guard: the 'redis' pinned case (singular subject ending in 's') is UNAFFECTED — 'is' phrasing must never be singularized", async () => {
+  // Live-caught while building the fix above: applying singularizeSurface
+  // unconditionally (matching every UNKNOWN_SUBJECT_RE hit, not just
+  // genuinely plural "are" ones) naively stripped "redis" -> "redi", breaking
+  // this exact pinned case (and 7 others). The fix must gate singularization
+  // on the copula actually being "are".
+  const dir = await mem("redis-unaffected");
+  try {
+    const taught = await runTurn("redis is a cache", { config: CONFIG, memoryDir: dir, sessionId: "rg1" });
+    assert.match(taught.answer, /^noted — remembered: redis is a kind of cache/);
+    const rows = readFactRows(await loadMemory(dir));
+    assert.equal(rows[0].subject, "redis", "an 'is' sentence's subject must never be singularized, even if it naively LOOKS pluralizable");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("BENCHMARK regression guard: unknownObjectFallback's mirror mint is ALSO unaffected on an 'is' sentence — a fact-grounded subject ending in 's' stays untouched", async () => {
+  // Same "is"-vs-"are" gate, exercised specifically through unknownObjectFallback
+  // (known subject / unknown object) rather than unknownSubjectFallback — the
+  // grounded subject "gas" (fact-grounded via the first teach, not lexicon)
+  // ends in "s" and would naively fold to "ga" under an unconditional
+  // singularizeSurface, exactly the "redis" class of bug, but through the
+  // OTHER fallback function.
+  const dir = await mem("gas-unaffected");
+  try {
+    await runTurn("every gas is a thing", { config: CONFIG, memoryDir: dir, sessionId: "rg2" });
+    const taught = await runTurn("every gas is a chemical", { config: CONFIG, memoryDir: dir, sessionId: "rg2" });
+    assert.match(taught.answer, /^noted — remembered: gas is a kind of chemical/, "the fact-grounded 'gas' subject must never be singularized on an 'is' sentence");
+    const rows = readFactRows(await loadMemory(dir));
+    assert.equal(rows.some((f) => f.subject === "ga"), false, "must never naively strip 'gas' -> 'ga'");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("BENCHMARK regression guard: the SOME_A_FEW_RE plural path (the sibling this fix mirrors) is unaffected — still singularizes both subject and object exactly as before", async () => {
+  const dir = await mem("some-a-few-unaffected");
+  try {
+    const taught = await runTurn("some gizmos are components", { config: CONFIG, memoryDir: dir, sessionId: "rg3" });
+    assert.match(taught.answer, /^noted — remembered: gizmo is a kind of component/);
+    const rows = readFactRows(await loadMemory(dir));
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].subject, "gizmo");
+    assert.equal(rows[0].object, "component");
+    assert.equal(rows[0].quantifier, "some");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
