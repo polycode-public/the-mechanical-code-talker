@@ -62,6 +62,7 @@ const stubNodeBuiltins = {
         + "export const fileURLToPath = (u) => String(u);\n"
         + "export const pathToFileURL = (p) => new URL('file://' + p);\n"
         + "export const randomBytes = unavailable('randomBytes');\n"
+        + "export const createHash = unavailable('createHash');\n"
         + "export const createRequireFromPath = unavailable('createRequireFromPath');\n"
         + "export default {};\n",
       loader: "js",

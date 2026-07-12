@@ -436,7 +436,7 @@ test("#2 meta: bare 'what do you know' → a SHORT summary, never a raw fact dum
   try {
     await runTurn("every class is a component", { config: CONFIG, graph: await graph(), memoryDir: dir, sessionId: "m" });
     const { answer, record } = await runTurn("what do you know", { config: CONFIG, graph: await graph(), memoryDir: dir });
-    assert.match(answer, /I remember 1 fact across 1 relation type/);
+    assert.match(answer, /I remember 1 fact over 1 relation type/);
     assert.match(answer, /\/memory to explore/);
     assert.doesNotMatch(answer, /kind of component/, "it summarises, it does NOT list the facts");
     assert.equal(record.via, "meta");

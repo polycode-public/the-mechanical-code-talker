@@ -174,7 +174,7 @@ test("meta fallback: 'what is a Widget' answers with the code-graph Class one-li
   const r = runAsk("what is a Widget");
   assert.equal(r.tmct_ask.miss, false);
   assert.equal(r.content,
-    'Widget is a class in this codebase, defined in app/lib/b.mjs — try "describe Widget" or "which classes inherit from Widget".');
+    'Widget is a class in this codebase, located in app/lib/b.mjs — try "describe Widget" or "which classes inherit from Widget".');
 });
 
 test("meta fallback: the label match is exact case-insensitive ('what is a widget' hits Widget)", () => {

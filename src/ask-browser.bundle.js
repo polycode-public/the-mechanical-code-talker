@@ -55,6 +55,7 @@
   var copyFile = unavailable("copyFile");
   var readdir = unavailable("readdir");
   var randomBytes = unavailable("randomBytes");
+  var createHash = unavailable("createHash");
   var createRequireFromPath = unavailable("createRequireFromPath");
 
   // node-stub:node:path
@@ -76,7 +77,9 @@
   var copyFile2 = unavailable2("copyFile");
   var readdir2 = unavailable2("readdir");
   var join = (...a) => a.join("/");
+  var dirname = (p) => String(p).replace(/\/[^/]*$/, "");
   var randomBytes2 = unavailable2("randomBytes");
+  var createHash2 = unavailable2("createHash");
   var createRequireFromPath2 = unavailable2("createRequireFromPath");
 
   // node-stub:node:url
@@ -97,7 +100,9 @@
   var access3 = unavailable3("access");
   var copyFile3 = unavailable3("copyFile");
   var readdir3 = unavailable3("readdir");
+  var fileURLToPath = (u) => String(u);
   var randomBytes3 = unavailable3("randomBytes");
+  var createHash3 = unavailable3("createHash");
   var createRequireFromPath3 = unavailable3("createRequireFromPath");
 
   // node-stub:node:fs/promises
@@ -119,6 +124,7 @@
   var copyFile4 = unavailable4("copyFile");
   var readdir4 = unavailable4("readdir");
   var randomBytes4 = unavailable4("randomBytes");
+  var createHash4 = unavailable4("createHash");
   var createRequireFromPath4 = unavailable4("createRequireFromPath");
 
   // src/memory/trust.mjs
@@ -1268,6 +1274,8 @@
     methods: { kind: "contains", dir: "out", filter: "Method" },
     members: { kind: "contains", dir: "out" },
     tests: { kind: "tests", dir: "in" },
+    test: { kind: "tests", dir: "in" },
+    // singular ("needs a test") — same edge as plural "tests"
     subclasses: { kind: "inherits", dir: "in" },
     connections: { kind: "*", dir: "both" },
     edges: { kind: "*", dir: "both" },
@@ -1283,6 +1291,10 @@
     depended: { kind: "imports", dir: "in" },
     used: { kind: "imports", dir: "in", sibling: "callsSymbol" },
     called: { kind: "calls", dir: "in", sibling: "callsSymbol" }
+  });
+  var METRIC_IMPLIES_ENTITY = Object.freeze({
+    tests: "Module",
+    test: "Module"
   });
   var ANAPHORA_TRIGGERS = Object.freeze(["those", "them", "these"]);
   var MEMBERSHIP_KINDS = Object.freeze(["contains", "defines"]);
@@ -2336,6 +2348,52 @@
     return results;
   }
 
+  // node-stub:node:crypto
+  var unavailable5 = (name) => () => {
+    throw new Error(name + " unavailable in the browser ask bundle");
+  };
+  var createRequire5 = unavailable5("createRequire");
+  var readFileSync5 = unavailable5("readFileSync");
+  var writeFileSync5 = unavailable5("writeFileSync");
+  var readFile5 = unavailable5("readFile");
+  var writeFile5 = unavailable5("writeFile");
+  var appendFile5 = unavailable5("appendFile");
+  var mkdir5 = unavailable5("mkdir");
+  var rename5 = unavailable5("rename");
+  var unlink5 = unavailable5("unlink");
+  var rm5 = unavailable5("rm");
+  var stat5 = unavailable5("stat");
+  var access5 = unavailable5("access");
+  var copyFile5 = unavailable5("copyFile");
+  var readdir5 = unavailable5("readdir");
+  var randomBytes5 = unavailable5("randomBytes");
+  var createHash5 = unavailable5("createHash");
+  var createRequireFromPath5 = unavailable5("createRequireFromPath");
+
+  // src/answer-variants.mjs
+  var import_meta = {};
+  var DATA_FILE = join(dirname(fileURLToPath(import_meta.url)), "answer-variants.json");
+  var dataCache;
+  function loadData() {
+    if (dataCache !== void 0) return dataCache;
+    try {
+      dataCache = JSON.parse(readFileSync(DATA_FILE, "utf8"));
+    } catch {
+      dataCache = null;
+    }
+    return dataCache;
+  }
+  function pickPhrase(poolId, key, base) {
+    if (!key) return base;
+    const data = loadData();
+    const variants = data?.pools?.[poolId]?.variants;
+    if (!Array.isArray(variants) || !variants.length) return base;
+    const forms = [base, ...variants];
+    const digest = createHash5("sha256").update(`${poolId}:${String(key)}`).digest();
+    const idx = digest[0] % forms.length;
+    return forms[idx];
+  }
+
   // adapter-stub-ask-nlp.mjs:./ask-nlp.mjs
   var nlpAdapter2 = void 0;
 
@@ -2844,17 +2902,6 @@
       }
     }
     if (!ext) return null;
-    let entityType;
-    let entWord = null;
-    for (const x of lc) {
-      const n = entityNoun(x);
-      if (n && !n.placeholder) {
-        entityType = n.entityType;
-        entWord = x;
-        break;
-      }
-    }
-    if (!entWord) return { node: "miss", reason: "a superlative needs an entity kind (module, class, function, \u2026)" };
     let metric = null;
     let metricNoun = null;
     for (let i = extIdx; i < lc.length; i += 1) {
@@ -2874,12 +2921,25 @@
       }
     }
     const connectivity = lc.includes("connected") || lc.slice(extIdx, extIdx + 2).join(" ") === "most connected" || ["largest", "biggest", "smallest"].includes(lc[extIdx]);
-    if (!metric) {
-      if (connectivity) {
-        metric = EDGE_NOUN_TO_METRIC.connections;
-        metricNoun = "connections";
-      } else return { node: "miss", reason: "name what to rank by (imports, callers, methods, tests, or connections)" };
+    if (!metric && connectivity) {
+      metric = EDGE_NOUN_TO_METRIC.connections;
+      metricNoun = "connections";
     }
+    let entityType;
+    let entWord = null;
+    for (const x of lc) {
+      const n = entityNoun(x);
+      if (n && !n.placeholder) {
+        entityType = n.entityType;
+        entWord = x;
+        break;
+      }
+    }
+    if (!entWord) {
+      entityType = metricNoun ? METRIC_IMPLIES_ENTITY[metricNoun] : void 0;
+      if (!entityType) return { node: "miss", reason: "a superlative needs an entity kind (module, class, function, \u2026)" };
+    }
+    if (!metric) return { node: "miss", reason: "name what to rank by (imports, callers, methods, tests, or connections)" };
     return { node: "superlative", entityType, metric, metricNoun, extreme: ext };
   }
   var FIND_LINKERS = /* @__PURE__ */ new Set(["called", "named", "about", "like", "containing", "matching", "with"]);
@@ -3179,7 +3239,7 @@
     const modLabel = mid && graph.byId.get(mid)?.label || String((hit.attributes || []).find((a) => a.key === "site")?.value || "").split(":")[0] || null;
     const noun = nounFor(hit.class, 1);
     const article = noun === "attribute" ? "an" : "a";
-    const definedIn = modLabel ? `, defined in ${modLabel}` : "";
+    const definedIn = modLabel ? `, ${pickPhrase("defined-in", hit.id, "defined in")} ${modLabel}` : "";
     const followUp = hit.class === "Class" ? ` or "which classes inherit from ${hit.label}"` : "";
     return {
       text: `${hit.label} is ${article} ${noun} in this codebase${definedIn} \u2014 try "describe ${hit.label}"${followUp}.`,
@@ -3654,7 +3714,7 @@
         }
         const hit = result.matches[0];
         const modLabel = moduleLabelOf(hit);
-        const definedIn = hit.class === "Module" ? "" : modLabel && modLabel !== "(unknown module)" ? `, defined in ${modLabel}` : "";
+        const definedIn = hit.class === "Module" ? "" : modLabel && modLabel !== "(unknown module)" ? `, ${pickPhrase("defined-in", hit.id, "defined in")} ${modLabel}` : "";
         return { content: `Yes \u2014 ${hit.label} is a ${kindSingular}${definedIn}.`, miss: false, ambiguous: false, matches: result.matches };
       }
       if (!result.matches.length) {
@@ -4604,7 +4664,7 @@ ${result.branches.map((b, i) => `${i + 1}) ${b.candidate.label}: ${b.rendered.co
       const msg = (newest.attributes || []).find((a) => a.key === "message")?.value || "";
       const day = String(date).slice(0, 10);
       if (newest.id === result.objMatch.id) {
-        return { content: `commit ${newest.label} is dated ${day}${msg ? ` ("${msg}")` : ""}.`, miss: false, ambiguous: false, matches: result.matches };
+        return { content: `commit ${newest.label} ${pickPhrase("is-dated", newest.id, "is dated")} ${day}${msg ? ` ("${msg}")` : ""}.`, miss: false, ambiguous: false, matches: result.matches };
       }
       const more = result.matches.length - 1;
       return {

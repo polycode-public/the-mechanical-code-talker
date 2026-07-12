@@ -127,7 +127,7 @@ test("fix1 (0.8.2 WS1): a schema-vocabulary miss that IS a unique code-graph Cla
     const r = await runTurn("what is a widget", { config, graph });
     assert.equal(r.record.miss, false, "a unique Class-label hit is a real answer");
     assert.equal(noGoal(r.answer),
-      'Widget is a class in this codebase, defined in app/lib/b.mjs — try "describe Widget" or "which classes inherit from Widget".',
+      'Widget is a class in this codebase, located in app/lib/b.mjs — try "describe Widget" or "which classes inherit from Widget".',
       "the describe-style one-liner cites the defining module and offers next questions");
   } finally {
     clearCache();

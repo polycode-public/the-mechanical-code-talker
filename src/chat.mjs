@@ -61,6 +61,7 @@ import {
 } from "./ask-vocab.mjs";
 import { COUNTERFACTUAL_RE, correctMisspellings, applyPreambleFrames, normalizeQuery, escapeRegex, kindNounAnaphoraHint } from "./interpret/normalize.mjs";
 import { fuzzyMatchInSet, fuzzyBound } from "./interpret/fuzzy.mjs";
+import { pickPhrase } from "./answer-variants.mjs";
 
 // uuidv7 lives in ./uuid.mjs (shared with telemetry + the bench stamp); re-exported
 // here because callers/tests still import it from chat.mjs.
@@ -1427,9 +1428,11 @@ function orientationText(graph, templates, vocabHint) {
   for (const [cls, sing, plur] of [["Module", "module", "modules"], ["Class", "class", "classes"], ["Function", "function", "functions"]]) {
     const n = by(cls); if (n) parts.push(`${n} ${n === 1 ? sing : plur}`);
   }
-  return `This is a tmct code graph — ${(graph.individuals || []).length} entities`
+  const total = (graph.individuals || []).length;
+  const lead = pickPhrase("ask-about-lead", `${total}:${parts.join(",")}`, "Ask about");
+  return `This is a tmct code graph — ${total} entities`
     + `${parts.length ? ` (${parts.join(", ")})` : ""}. `
-    + 'Ask about imports, calls, definitions or history — e.g. "which modules import <name>", "what calls <name>". '
+    + `${lead} imports, calls, definitions or history — e.g. "which modules import <name>", "what calls <name>". `
     + "/stats for the full overview, /help for commands.";
 }
 
@@ -1461,8 +1464,9 @@ function moduleOverviewText(graph, ind) {
     ? `covered by ${testedBy.length} test module${testedBy.length === 1 ? "" : "s"}`
     : "no recorded tests");
   const cls = (ind.class || "entity").toLowerCase();
+  const pointer = pickPhrase("full-breakdown", ind.id, "for the full breakdown");
   return `${ind.label} is a ${cls} — ${parts.join("; ")}. `
-    + `/describe ${ind.label} for the full breakdown.`;
+    + `/describe ${ind.label} ${pointer}.`;
 }
 
 // #1 SHORT, TAILORED MISS — the engine's full grammar cheat-sheet (rephraseHint)
@@ -3058,7 +3062,8 @@ async function memorySummary(memoryDir, graph) {
   }
   const preds = new Set(rows.map((f) => f.predicate).filter(Boolean));
   const n = rows.length;
-  return `I remember ${n} fact${n === 1 ? "" : "s"} across ${preds.size} relation `
+  const span = pickPhrase("facts-across", `${n}:${preds.size}`, "across");
+  return `I remember ${n} fact${n === 1 ? "" : "s"} ${span} ${preds.size} relation `
     + `type${preds.size === 1 ? "" : "s"}. Ask "what do you know about <term>", or /memory to explore.`;
 }
 
@@ -4570,8 +4575,9 @@ async function whatElseAnswer(memoryDir, query, last) {
   try { ({ normFactTerm } = await import("./memory/core.mjs")); } catch { return null; }
   const variants = factTermVariants(normFactTerm, term);
   const hits = (await memoryFacts(memoryDir)).filter((f) => variants.has(f.subject));
+  const picture = pickPhrase("full-picture", term.toLowerCase(), "the full picture");
   const nothingMore = {
-    text: `That's everything I know about "${term}" — /memory to see the full picture.`,
+    text: `That's everything I know about "${term}" — /memory to see ${picture}.`,
     replace: true,
   };
   if (!hits.length) return nothingMore;
@@ -4581,8 +4587,9 @@ async function whatElseAnswer(memoryDir, query, last) {
   const shown = lines.slice(0, FACT_ANSWER_CAP);
   const rest = lines.slice(FACT_ANSWER_CAP);
   const extra = rest.length ? `\n…and ${rest.length} more — say 'more' to see them.` : "";
+  const lead = pickPhrase("beyond-that-lead", term.toLowerCase(), "Beyond that,");
   return {
-    text: `Beyond that, here's what else I know about "${term}":\n${shown.join("\n")}${extra}`,
+    text: `${lead} here's what else I know about "${term}":\n${shown.join("\n")}${extra}`,
     replace: true,
     ...(rest.length ? { pending: { items: rest, noun: "facts" } } : {}),
   };

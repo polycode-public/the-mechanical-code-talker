@@ -173,8 +173,8 @@ test("tier1/Seonix Batch 2+3 single-touch spot-check: bare 'what is Commit', pur
   const turns = await driveSession(queries);
   assertAllFlow(turns, queries);
   assert.match(turns[0].answer, /^A commit is a recorded snapshot/, "bare no-article 'what is Commit' direct-hits the meta definition");
-  assert.equal(turns[1].answer, "src/lib/logger.mjs is a module — defines 3 (Logger, Logger.info, createLogger); no recorded tests. /describe src/lib/logger.mjs for the full breakdown.");
-  assert.equal(turns[2].answer, "Task is a class — no recorded tests. /describe Task for the full breakdown.");
+  assert.equal(turns[1].answer, "src/lib/logger.mjs is a module — defines 3 (Logger, Logger.info, createLogger); no recorded tests. /describe src/lib/logger.mjs for the full details.");
+  assert.equal(turns[2].answer, "Task is a class — no recorded tests. /describe Task for more detail.");
   assert.match(turns[3].answer, /^Yes — inherits edge from Task to Record\.?/, "'is Record a superclass of Task' swaps subject/object and agrees with the direct form");
   assert.match(turns[4].answer, /^Yes — inherits edge from Task to Record\.?/, "'is Task a subclass of Record' agrees with the reverse phrasing above");
   assert.match(turns[5].answer, /^A module is a source file/, "the trailing 'in this graph' scope filler is trimmed, reaching the same meta definition as bare 'what is a Module'");
@@ -199,6 +199,6 @@ test("tier1/Seonix item 9 fix: bare 'whats logging for' resolves to the real src
   const queries = ["whats logging for"];
   const turns = await driveSession(queries);
   assertAllFlow(turns, queries);
-  assert.equal(turns[0].answer, "src/lib/logger.mjs is a module — defines 3 (Logger, Logger.info, createLogger); no recorded tests. /describe src/lib/logger.mjs for the full breakdown.");
+  assert.equal(turns[0].answer, "src/lib/logger.mjs is a module — defines 3 (Logger, Logger.info, createLogger); no recorded tests. /describe src/lib/logger.mjs for the full details.");
   assert.doesNotMatch(turns[0].answer, /is a commit/, "must never resolve to the commit whose message merely mentions the word");
 });

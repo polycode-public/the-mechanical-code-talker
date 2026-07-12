@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "curation": "Hand-curated. scripts/generate-answer-variants.mjs cross-checked each pool against real Open English WordNet synsets (scripts/lib/wordnet-synonyms.mjs) where a sense fit; most of these are domain-specific code-graph connector phrases WordNet's own sense-1 convention resolves to the wrong sense for -- e.g. 'locate' -> 'turn up', 'record' -> 'enter, put down', 'module' -> 'mental faculty' -- so every entry below was accepted or rejected by hand against the exact rendered sentence it replaces, never auto-accepted from a raw synset match. See src/answer-variants.mjs for how these are selected at render time.",
+  "pools": {
+    "defined-in": {
+      "base": "defined in",
+      "variants": ["located in", "found in"],
+      "usedBy": [
+        "ask.mjs renderComposite exists-hit (\"Yes - X is a Y, defined in Z.\")",
+        "ask.mjs metaFallbackEntityAnswer (\"X is a Y in this codebase, defined in Z ...\")"
+      ],
+      "deliberatelyNotUsedBy": [
+        "ask.mjs renderCore whereShape (\"X is defined in Y at line(s) Z\" / \"X is defined in Y (no line span...)\") -- chatbench/graded-pool-max.jsonl pins this exact substring as ground truth for 11 'where is X defined' cases (2 in the always-run promoted subset), and that pool is append-only/never-edited-mid-arc per SKILL_BENCHMARK_CEFR_ENGLISH.md."
+      ]
+    },
+    "is-dated": {
+      "base": "is dated",
+      "variants": ["was made on", "was recorded on"],
+      "usedBy": ["ask.mjs renderCore whenShape, the exact-subject hit (\"commit X is dated Y.\")"]
+    },
+    "full-breakdown": {
+      "base": "for the full breakdown",
+      "variants": ["for the full details", "for more detail"],
+      "usedBy": ["chat.mjs moduleOverviewText's /describe pointer"]
+    },
+    "ask-about-lead": {
+      "base": "Ask about",
+      "variants": ["Try asking about", "You can ask about"],
+      "usedBy": ["chat.mjs orientationText's capability sentence"]
+    },
+    "facts-across": {
+      "base": "across",
+      "variants": ["spanning", "over"],
+      "usedBy": ["chat.mjs memorySummary (\"I remember N facts across M relation types.\")"]
+    },
+    "full-picture": {
+      "base": "the full picture",
+      "variants": ["the whole picture", "the complete picture"],
+      "usedBy": ["chat.mjs whatElseAnswer's exhausted-facts pointer"]
+    },
+    "beyond-that-lead": {
+      "base": "Beyond that,",
+      "variants": ["Also,", "In addition,"],
+      "usedBy": ["chat.mjs whatElseAnswer's follow-on fact listing"]
+    }
+  }
+}
