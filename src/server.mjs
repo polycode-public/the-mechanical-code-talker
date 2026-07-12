@@ -162,7 +162,14 @@ export const TOOLS = [
   },
 ];
 
-async function loadGraph(config, source) {
+// Exported (was module-private) so chat.mjs's compare lane can load the SAME
+// graph dispatchTool's own tools load — no new loading path, just direct reuse
+// of the existing config -> source.fetchEntities -> parseEntities chain, for
+// the case where runAsk's own `graph` param is null (the common case; it's
+// only preloaded when a caller already has one in hand — see runAsk's own
+// `if (graph && ...)` / dispatchTool("tmct_ask", …) split just above the
+// compare lane's call site for the existing precedent).
+export async function loadGraph(config, source) {
   const payload = await source.fetchEntities(config);
   const graph = parseEntities(payload);
   if (!graph.individuals.length) {
