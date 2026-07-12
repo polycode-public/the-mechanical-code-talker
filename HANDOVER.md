@@ -29,6 +29,19 @@ repo-relative path logic — fixed; `publish:npm` unblocked and confirmed live t
   `looksCodeish()`/`isConversational()` is shared machinery with several documented past regressions
   from touching this exact gate; needs a `PLAN_*.md` writeup, not a fast-loop patch.
 
+- **Plural/ordinal anaphora unsupported; singular "that" unresolved as a reverse-relation object,
+  2026-07-12** (fast-loop round 4 finding). `src/chat.mjs`'s `CONTEXT_WORDS` (`it`/`this`/`that`/
+  `here`) is a closed singular set with no `those`/`them` (plural) or "the first one"/"the other one"
+  (ordinal) equivalents — "what classes inherit from Controller" then "what tests cover those" /
+  "who touched the first one" both fall straight to an honest miss, the raw pronoun substituted
+  literally into the template. Even within the singular set, resolution is shape-inconsistent:
+  subject-position `it` resolves correctly (`src/chat.mjs` ~line 7008), but `that` as the object of a
+  reverse-relation query never does — `ask.mjs`'s `resolveObject` (~line 2925) is purely mechanical
+  graph-label matching with no contextId/focus notion, so "what classes inherit from that" fails even
+  though "what classes inherit from Controller" (same query, named) works fine. Not fixed — touches
+  `ask.mjs`'s core relation-parsing grammar, same high-blast-radius shared machinery as the CamelCase
+  finding above; needs a `PLAN_*.md` writeup.
+
 - **`PLAN_BREADTH_FIRST_NLU.md`'s two open items** — (c) the paraphrase-verified-via-`syllogise.mjs`
   piece of "Ambition", not started; (d) a real "list/count all X of class Y" query shape for
   memory-graph classes via `ask.mjs` alone, a confirmed gap found during the viz chat panel's build.
