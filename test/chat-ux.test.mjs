@@ -572,10 +572,14 @@ test("#3 an empty-graph session orients: banner + greeting point at --repo/tmct 
 
 test("vocab-hint is never a lie: an unseeded session never offers a term-specific example, a seeded session's offered term actually resolves", async () => {
   clearCache();
-  // UNSEEDED (TMCT_NO_SEED=1): none of the 5 "try this" surfaces may claim "what
+  // UNSEEDED (TMCT_NO_SEED=1): none of the 6 "try this" surfaces may claim "what
   // is a dog" — the corpus was never seeded, so that example would fail if
   // followed. This is the exact bug found in research: every surface used to be
   // gated only on "no code graph", never on whether seeding actually happened.
+  // (6th surface added in the src/ask.mjs+chat.mjs correctness sweep, 2026-07-12:
+  // the out-of-domain personal-assistant nudge — nudgeAnswer's
+  // PERSONAL_ASSISTANT_NUDGE_RE branch — hardcoded "what is a dog" unconditionally,
+  // missing this same gate the other 5 surfaces already carried.)
   const dirA = await mkdtemp(join(tmpdir(), "tmct-ux-hintlie-"));
   try {
     const s = await createSession({ repoPath: dirA, env: { TMCT_NO_SEED: "1" } });
@@ -588,9 +592,11 @@ test("vocab-hint is never a lie: an unseeded session never offers a term-specifi
     assert.doesNotMatch(meta.answer, /what is a dog/, "meta/self lane (orientationText)");
     const know = await s.turn("what do you know");
     assert.doesNotMatch(know.answer, /what is a dog/, "memory summary");
+    const time = await s.turn("what time is it");
+    assert.doesNotMatch(time.answer, /what is a dog/, "out-of-domain personal-assistant nudge");
     // The unseeded state must still be ACTIONABLE (not just an absence) — every
     // surface above should point at how to actually get vocabulary.
-    for (const [label, r] of [["greeting", hi], ["capability", cap]]) {
+    for (const [label, r] of [["greeting", hi], ["capability", cap], ["personal-assistant nudge", time]]) {
       assert.match(r.answer, /tmct init/, `${label} points at how to actually seed vocabulary`);
     }
     await s.close();
@@ -607,6 +613,8 @@ test("vocab-hint is never a lie: an unseeded session never offers a term-specifi
     assert.match(s.bannerLines.join("\n"), /what is a dog/, "a seeded session's banner offers the term");
     const dog = await s.turn("what is a dog");
     assert.doesNotMatch(dog.answer, /couldn't parse|isn't a term in this graph/i, "the offered example actually resolves, end to end");
+    const time = await s.turn("what time is it");
+    assert.match(time.answer, /what is a dog/, "seeded personal-assistant nudge offers the term too");
     await s.close();
   } finally { clearCache(); await rm(dirB, { recursive: true, force: true }); }
 });

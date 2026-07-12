@@ -3207,11 +3207,20 @@ function nudgeName(captured, focus) {
  *  for the opinion gate: it must fire BEFORE the short-miss's "is a <thing> a
  *  <kind>" membership hint would (the caller runs this whole step before the
  *  short-miss rewrite). */
-function nudgeAnswer(query, focus) {
+function nudgeAnswer(query, focus, vocabHint = null) {
   const q = String(query).trim().replace(/[?.!]+$/, "").replace(/\s+/g, " ");
   if (PERSONAL_ASSISTANT_NUDGE_RE.test(q)) {
+    // "what is a dog" used to be hardcoded here regardless of session state — a lie
+    // in any UNSEEDED session (no `tmct init`/corpus load ever ran), the exact
+    // "offered example that itself fails" bug class the "vocab-hint is never a lie"
+    // discipline (test/chat-ux.test.mjs) already fixed on the other 5 vocabulary-hint
+    // surfaces (banner, greeting, capability orientation, meta/self, memory summary)
+    // — this out-of-domain nudge was simply never brought into that same discipline.
+    // vocabHint (threaded from runAsk/runTurn's own hasSeededVocabulary check) is
+    // ALREADY the correct session-gated clause: "what is a dog" when seeded, `tmct
+    // init` otherwise — reused verbatim instead of a second, ungated copy.
     return "I don't have access to that — I'm a deterministic code/vocabulary assistant, not a general assistant. "
-      + 'Ask me about code structure ("which modules import <name>") or try "what is a dog".';
+      + `Ask me about code structure ("which modules import <name>"). ${vocabHint || 'Run `tmct init` to seed a starter vocabulary.'}`;
   }
   if (OPINION_NUDGE_RE.test(q)) {
     const name = focus?.label || "<name>";
@@ -3248,7 +3257,12 @@ function nudgeAnswer(query, focus) {
     const name = focus?.label;
     return "I only name the single top (or bottom) match for a metric — no runner-up ranking, no comparing against a number. "
       + (name
-        ? `Ask about a specific module/class/function directly to compare it with ${name} (e.g. "how many imports does <name> have").`
+        // "how many imports does <name> have" used to sit here but never parses — the
+        // count grammar (ask.mjs's parseAggregate) requires a known entity-kind noun
+        // ("modules", "classes", …) right after "how many", and "imports" isn't one; a
+        // relation noun there is always an honest miss, for any <name>. "how many
+        // modules does <name> import" is the real working per-entity count shape.
+        ? `Ask about a specific module/class/function directly to compare it with ${name} (e.g. "how many modules does <name> import").`
         : `Ask a specific ranking directly, e.g. "which module has the most imports".`);
   }
   // A bare STACCATO PRONOUN continuation ("also that one?", "and it") with NO
@@ -3435,9 +3449,11 @@ export async function helpText() {
   let shapes;
   try { const { rephraseHint } = await import("./ask.mjs"); shapes = rephraseHint(); }
   catch {
-    shapes = '"which <functions|classes|modules> <import|call|use|test|touch> <name>", ' +
+    // "touch" dropped from this cross-product for the same reason rephraseHint() drops it
+    // (ask.mjs) — Module/Function/Class is never the subject of a touch edge, only Commit.
+    shapes = '"which <functions|classes|modules> <import|call|use|test> <name>", ' +
       '"what does <name> <import|export>", "what uses <name>", "where is <name> defined", ' +
-      '"when did <name> change"';
+      '"when did <name> change", "which commits touched <name>"';
   }
   return [
     "commands:", ...lines, "",
@@ -7281,7 +7297,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // must never become a recallable answer. The opinion gate fires HERE, before the
   // short-miss's "is a <thing> a <kind>" membership hint could claim the line.
   if (miss && recordMiss && via === "composed") {
-    const nudged = nudgeAnswer(query, newFocus);
+    const nudged = nudgeAnswer(query, newFocus, vocabHint);
     if (nudged) {
       answer = nudged; via = "miss";
       note(trace, "lane: (4c) CAPABILITY NUDGE — the question asked tmct to do something outside its scope (opinion/generation/risk-scoring)");

@@ -2395,7 +2395,16 @@ function renderComposite(parsed, result) {
 /** The rephrase hint shown on a grammar miss — generated from the SAME tables the parser
  *  uses, so it can never suggest a phrasing the grammar doesn't actually support (§6.3). */
 export function rephraseHint() {
-  return '"which <functions|classes|modules> <imports|calls|uses|inherits from|tests|touched> <name>" or "what does <name> <import|call|export>" or "what uses <name>" or "where is <name> defined" / "where is <name> mentioned" or "when did <name> change" or "which changes touch commit <sha>"/"what did commit <sha> touch" (a commit\'s own changes) or plainly "what calls this" (about a selected node) or "what does <term> mean"/"what is a <ClassName>" (about the graph\'s own vocabulary). '
+  // "touched" used to sit in the <imports|calls|uses|inherits from|tests> cross-product
+  // above, combined with <functions|classes|modules> — but `touches` is a Commit->Module/
+  // symbol edge (ask-vocab.mjs's RELATIONS.touches comment), so a Function/Class/Module is
+  // NEVER the subject of a touch: "which modules touched X" always misses, for every X, no
+  // matter the graph (verified against test/fixtures/entities.fixture.json — every reverse
+  // combination with "touched" and a functions/classes/modules subject returns zero
+  // matches). The real reverse subject for this edge is Commit — "which commits touched
+  // <name>" below, mirroring the working "who touched <name>" nudge used elsewhere
+  // (chat.mjs's nudgeAnswer).
+  return '"which <functions|classes|modules> <imports|calls|uses|inherits from|tests> <name>" or "what does <name> <import|call|export>" or "what uses <name>" or "where is <name> defined" / "where is <name> mentioned" or "when did <name> change" or "which commits touched <name>" or "which changes touch commit <sha>"/"what did commit <sha> touch" (a commit\'s own changes) or plainly "what calls this" (about a selected node) or "what does <term> mean"/"what is a <ClassName>" (about the graph\'s own vocabulary). '
     + compositionalHint();
 }
 
