@@ -79,6 +79,12 @@ the connecting sentence itself, citing both sources. The `source: ace:chat:…`
 part is a real provenance receipt. Every fact tmct stores records where it
 came from and when (more on that below).
 
+The first `tell()` call above replies too: `noted — remembered 1 fact:
+controller rdfs:subClassOf handler (controller is a type of handler)`. The
+part in parentheses is a paraphrase. tmct generates it and checks it against
+its own inference rules before showing it, so it never just guesses at
+prose.
+
 ```
 $ tmct
 tmct> what talks to the payment module?
@@ -188,6 +194,23 @@ exactly. It checks the type itself and its subclasses first. Only if nothing
 matches there does it widen to a related type, and when it does, it says so
 plainly rather than presenting the looser match as exact.
 
+**Comparing two things.** "compare TaskController and UserController" or "how
+is TaskController different from UserController" lines up both entities'
+shared and differing edges side by side: *"Comparing TaskController and
+UserController (both Class): inherits [seon:hasSuperType]: TaskController (1)
+-> Controller; UserController (1) -> Controller"*. Every row is a real edge
+or attribute from the graph, never a hand-written diff.
+
+**Up-refining to a containing module.** A class rarely has its own
+symbol-precise commit or import record. "who touched TaskController" answers
+from its containing module's real history instead of a confident-looking but
+wrong "nothing touched it".
+
+**Following a list.** tmct remembers the last list it gave you. After
+"which modules import src/core/model.mjs", "which of those are tested" or
+"how many of those" resolves "those"/"them" against that list, not a fresh,
+unresolved pronoun.
+
 **Synonyms and everyday phrasing.** tmct matches many of the words people
 actually use for the same idea, from a curated synonym list plus a filtered
 ConceptNet slice. A slightly different word for the same concept still
@@ -241,6 +264,11 @@ in detail how X works", or "...detailed overview/explanation of X") gets a
 longer, multi-sentence account instead of one line. Every sentence in it is
 lifted from a real graph edge, attribute, or taught fact — never generated
 free text.
+
+The wording varies a little too. A small, curated, deterministic pool swaps a
+handful of connector words, like "defined in", "located in", or "found in".
+The same fact doesn't read identically for every entity, but the same
+question against the same entity always renders the same way.
 
 ```
 $ node bin/tmct.mjs chat --repo examples/mini-webapp --ephemeral
@@ -314,8 +342,8 @@ from the environment. There's no CLI flag yet — this is a library-level
 option for now, newer and less exercised than the default backend.
 
 Teaching isn't limited to the ACE grammar's fixed shapes. Tell tmct an
-arbitrary fact, like "margo eats ribs", and it mints a fact you can later ask
-about directly: "what does margo eat", or "does margo eat ribs".
+arbitrary fact, like "margo really eats ribs", and it mints a fact you can
+later ask about directly: "what does margo eat", or "does margo eat ribs".
 
 New vocabulary compounds as you teach it. "redis is a cache" mints "redis" as
 a class-level concept even though it was never in the built-in lexicon, and a
@@ -325,6 +353,10 @@ mints a fact between two totally ungrounded terms; it declines and nudges you
 to ground one side first. Quantified teaching works too: "some functions are
 risky" stores the quantifier, and a later "how many functions are risky"
 answers "A few."
+
+Once you've taught a few facts, "how many facts are there" counts them back.
+That's the same count phrasing a code graph answers "how many classes are
+there" with, just now reading tmct's own memory.
 
 ### Provenance and trust
 

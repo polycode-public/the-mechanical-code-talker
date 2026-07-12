@@ -180,9 +180,9 @@
     was obsessed with the mafia. No model calls anywhere. Interpretation is
     <em>mechanical</em>, memory is an <em>OWL-labelled graph</em> on disk, and every
     answer is either grounded or an honest miss. It starts stocked with an everyday,
-    general-knowledge vocabulary by default — point it at a codebase and it reasons
-    over that too. It also holds a thread. Ask about something, then ask "what calls
-    it?" and tmct still knows what "it" means.
+    general-knowledge vocabulary by default. Point it at a codebase and it reasons
+    over that too. It also holds a thread: ask about something, then ask "what calls
+    it?", and tmct still knows what "it" means.
   </p>
 
   <div class="demo-wrap">
@@ -200,7 +200,7 @@
     <div class="demo-cli">
       This box asks a real question of a small fixture repo's code graph
       (<code>examples/mini-webapp</code>) using the exact same query engine the CLI
-      ships — computed live, client-side, nothing precomputed on a server (GitLab
+      ships. It runs live, client-side; nothing is precomputed on a server (GitLab
       Pages doesn't have one). The same question against a real repo, from a terminal:
       <pre class="term-cli"></pre>
     </div>
@@ -216,12 +216,14 @@ tmct&gt; what calls it?
 …
 tmct&gt; which modules do not import logger?
 …
+tmct&gt; how is the payment module different from the logger?
+…
 tmct&gt; give me a detailed overview of how the payment module works
 …
 tmct&gt; /memory        # inspect what tmct remembers, with provenance
 tmct&gt; /exit</code></pre>
   <p>Point it at a repo's graph with <code>tmct chat --repo /path/to/repo</code>, or start
-  with nothing — tmct bootstraps an empty memory and remembers what you tell it.</p>
+  with nothing. tmct bootstraps an empty memory and remembers what you tell it.</p>
   <pre><code>tmct init         # scaffold .tmct/, tmct.toml, seed the default persona + provenance
 tmct syllogise    # offline: pre-derive entailed facts (a maintenance job)</code></pre>
   <p>Full feature list, the detailed-answer pipeline, and a library API in the
