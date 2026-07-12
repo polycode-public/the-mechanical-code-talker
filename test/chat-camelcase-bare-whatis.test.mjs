@@ -74,3 +74,25 @@ test("guard: 'what is foo.bar()' (dotted call, not a plain CamelCase name) is un
   assert.equal(r.record.miss, true);
   assert.doesNotMatch(r.answer, /I'm tmct — a deterministic/);
 });
+
+// BENCHMARK_CONVERSATION_1.8.14.md item 11 (rushed-fragment-typer persona): the
+// 25185f0 CamelCase gate fix broke again behind a leading filler clause or a
+// no-apostrophe contraction — neither ever reached BARE_WHATIS_RE/
+// isBareCamelCaseMetaQuestion's own anchored gate, since that gate tested the
+// RAW query text. Fixed by testing normalizeQuery's output instead (chat.mjs's
+// `gateQuery`), composing the fix from normalizeQuery's own existing CONTRACTIONS
+// table ("whats" -> "what is") and stripFillerWords pass (widened to also strip
+// "quick q", ask-vocab.mjs's FILLER_WORDS).
+test("'hey quick q, what is TaskController' (leading filler clause) resolves the byte-identical answer as the clean bare form", async () => {
+  const clean = await runTurn("what is TaskController?", { config: CONFIG, graph: GRAPH });
+  const filler = await runTurn("hey quick q, what is TaskController", { config: CONFIG, graph: GRAPH });
+  assert.equal(filler.answer, clean.answer);
+  assert.equal(filler.record.miss, false);
+});
+
+test("'whats Widget' (no-apostrophe contraction) resolves the byte-identical answer as 'what is Widget'", async () => {
+  const clean = await runTurn("what is Widget?", { config: CONFIG, graph: GRAPH });
+  const contracted = await runTurn("whats Widget", { config: CONFIG, graph: GRAPH });
+  assert.equal(contracted.answer, clean.answer);
+  assert.equal(contracted.record.miss, false);
+});

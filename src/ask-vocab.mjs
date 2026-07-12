@@ -644,6 +644,15 @@ export const FILLER_WORDS = Object.freeze([
   "please", "could you", "can you", "would you", "tell me", "i wonder",
   "just wondering", "quickly", "real quick", "kinda", "sorta",
   "btw", "by the way", "you",
+  // "quick q" (BENCHMARK_CONVERSATION_1.8.14.md item 11): the casual abbreviated
+  // sibling of GREETING_PREAMBLE_RE's own "quick question" clause (normalize.mjs)
+  // — that frame requires a delimiter immediately after the greeting word
+  // ("hey, quick question - …"), so it never matches "hey quick q, …" (no
+  // delimiter between "hey" and "quick q"). Filler-stripping instead — this
+  // list is matched word-boundary-anywhere, not anchored — closes the gap
+  // without needing GREETING_PREAMBLE_RE's own stricter delimiter-position
+  // shape.
+  "quick q",
 ]);
 
 /** Deictic/pronoun terms that refer to a context entity rather than naming one

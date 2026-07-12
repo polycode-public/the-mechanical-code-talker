@@ -813,6 +813,13 @@ const CAPABILITY_PHRASES = [
   // and fall to the raw grammar wall instead of orientationAnswer — the same
   // question in every way that matters, just phrased with emphasis.
   /^(?:so,?\s+)?what can (?:you|u)(?:\s+(?:actually|really))? do\??$/i, /^(?:so,?\s+)?what do you(?:\s+(?:actually|really))? do\??$/i,
+  // BENCHMARK_CONVERSATION_1.8.14.md item 12 (pure-small-talk persona): "what
+  // can you actually help with" — the natural pivot from small talk into a
+  // capability question — used to miss every entry above, since none of them
+  // accept "help (me)? with" as a synonym tail for "do" (only bare "help" /
+  // "help me" without an object, the entry just below, was covered). Same
+  // "so,"/"actually"/"really" optional lead-in as the "do" pair above.
+  /^(?:so,?\s+)?what can (?:you|u)(?:\s+(?:actually|really))? help(?:\s+me)?\s+with\??$/i,
   /^help( me)?\??$/i, /^\?+$/,
   /^how do (i|you) work\??$/i, /^how does (this|it) work\??$/i,
   // unix-habit openers typed inside the REPL out of muscle memory — argv-only
@@ -938,6 +945,20 @@ const FEELINGS_PHRASES = [
   /^are you (?:sentient|conscious|self[- ]aware)\??$/i,
   /^can you feel(?:\s+(?:things|emotions|anything))?\??$/i,
   /^do you (?:feel|think|dream)\??$/i,
+  // BENCHMARK_CONVERSATION_1.8.14.md item 12 (pure-small-talk persona): direct
+  // personal questions ("how are you doing today", "what's your favorite
+  // color", "do you get bored") — the SAME family this closed set already
+  // exists for (a personal-life question about tmct, not a code-graph query)
+  // — mostly fell through to the bare grammar wall instead of this honest,
+  // on-brand decline, because none of them happened to match the four
+  // narrower entries above. Additive, same discipline as CAPABILITY_PHRASES'
+  // own "keeps growing as new natural phrasings surface" precedent.
+  /^how (?:are|r) (?:you|u) doing(?:\s+today)?\??$/i,
+  /^what(?:'s|s|\s+is) your (?:favou?rite\s+(?:colou?r|food|movie|book|band|song|number)|name)\??$/i,
+  /^do you (?:get|ever get) bored\??$/i,
+  /^what do you do for fun\??$/i,
+  /^can you (?:tell|make)\s+(?:me\s+)?(?:a\s+)?jokes?\??$/i,
+  /^do you (?:know|know anything|know much)\s+about\s+(?:movies?|sports?|music|tv|television)(?:\s+or\s+(?:movies?|sports?|music|tv|television))?\??$/i,
 ];
 /** The structural verbs/nouns that mark a near-miss code question (→ keep the
  *  precise grammar hint, not the friendly nudge). */
@@ -4266,6 +4287,37 @@ const RECURSIVE_LIST_ASK_RE = /^list\s+(?:the\s+|all\s+)?([a-z][\w-]*)\s+of\s+([
 const ISA_ASK_RE = /^(?:is|are)\s+(?:an?\s+)?(.+?)\s+(?:a\s+kind\s+of|a\s+type\s+of|an?)\s+(.+?)[?.!\s]*$/i;
 const ISA_PREDICATES = new Set(["rdfs:subClassOf", "rdf:type"]);
 
+/** "why is TaskController a handler" / "explain how you know TaskController is
+ *  a handler" — BENCHMARK_CONVERSATION_1.8.14.md item 9 (skeptical-power-user
+ *  persona): the syllogise-verified proof render (the isaAsk block below,
+ *  which cites the graph inherits-bridge / taught-fact chase / entailed
+ *  closure) only ever fired on the bare "is X a Y" yes/no form — a "why"/
+ *  "explain how you know" wrapper around the EXACT SAME question hit the bare
+ *  wall instead, even though the underlying answer is real and sourced.
+ *  Deliberately NOT a new answer path — a pure text rewrite back onto
+ *  ISA_ASK_RE's own "is X a Y" shape, mirroring CONFIRM_TAG_RE's own
+ *  "rewrite the wrapper away and re-try ISA_ASK_RE" approach just below (and
+ *  reused at both this file's ISA_ASK_RE match sites, the memory-only isa
+ *  check and the graph-grounded proof-chase). "why is X a Y" already leads
+ *  with "is"/"are" (ISA_ASK_RE's own anchor) — only the "why " lead needs
+ *  stripping; "explain how you know X is Y" leads with the SUBJECT in plain
+ *  declarative order, so it's reordered into "is X a Y" the same way
+ *  CONFIRM_TAG_RE reorders its own "X is Y, right?" tag. Returns ISA_ASK_RE's
+ *  own match array (or null) — a caller never needs to know which of the two
+ *  shapes fired, same discipline as `isaAsk` already applies to CONFIRM_TAG_RE. */
+const WHY_ISA_LEAD_RE = /^why\s+(?=(?:is|are)\b)/i;
+const EXPLAIN_HOW_YOU_KNOW_RE = /^explain\s+how\s+you\s+know\s+(?:that\s+)?(.+?)\s+(?:is|are)\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
+function matchWhyIsa(q) {
+  const stripped = String(q || "").replace(WHY_ISA_LEAD_RE, "");
+  if (stripped !== q) {
+    const m = stripped.match(ISA_ASK_RE);
+    if (m) return m;
+  }
+  const ehyk = String(q || "").match(EXPLAIN_HOW_YOU_KNOW_RE);
+  if (ehyk) return `is ${ehyk[1].trim()} a ${ehyk[2].trim()}`.match(ISA_ASK_RE);
+  return null;
+}
+
 // Live-caught 2026-07-11 (follow-up to the "what is a kind of X" ambiguousParse
 // fix, commit 5c858bf): RELATION_FACT_YESNO_RE/RELATION_WHO_ASK_RE both capture a
 // middle "role" word and treat it as an arbitrary user-taught relation/rule NAME
@@ -4432,7 +4484,8 @@ async function factAnswer(memoryDir, query, envelope, miss, biasByBundle = {}) {
   if (!miss) return null;
 
   // (b) "is a module a component" — yes iff a remembered isa-family fact says so.
-  const isa = q.match(ISA_ASK_RE);
+  // Also accepts "why is X a Y" / "explain how you know X is Y" — see matchWhyIsa.
+  const isa = q.match(ISA_ASK_RE) || matchWhyIsa(q);
   if (isa) {
     const subj = factTermVariants(normFactTerm, isa[1]);
     const obj = factTermVariants(normFactTerm, isa[2]);
@@ -5391,7 +5444,11 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
   // plain "is X a Y" form and re-tried when the raw query itself doesn't match —
   // see CONFIRM_TAG_RE's own docblock.
   const confirmTag = q.match(CONFIRM_TAG_RE);
-  const isaAsk = q.match(ISA_ASK_RE) || (confirmTag && `is ${confirmTag[1].trim()} a ${confirmTag[2].trim()}`.match(ISA_ASK_RE));
+  // "why is X a Y" / "explain how you know X is Y" (BENCHMARK_CONVERSATION_1.8.14.md
+  // item 9) reach the SAME sourced/verified proof chase below via matchWhyIsa's
+  // rewrite — see its own docblock.
+  const isaAsk = q.match(ISA_ASK_RE) || matchWhyIsa(q)
+    || (confirmTag && `is ${confirmTag[1].trim()} a ${confirmTag[2].trim()}`.match(ISA_ASK_RE));
   if (isaAsk) {
     // Playtest sprint round 1 (2026-07-10): "is TaskController a validator then"
     // — the same trailing bare discourse tag item 8 fixed for metaTermOf's bare
@@ -6727,20 +6784,33 @@ async function describeWrapperAnswer(query, { config, source, focus, graph, tel 
 
 /** COMPARE (HANDOVER.md 2026-07-12 "no comparison capability" item) — a scoped
  *  v1: "how is X different from Y", "how does X differ from Y", "compare X and
- *  Y"/"compare X with/to Y", "what's the difference between X and Y". Five
- *  closed patterns, same discipline as DESCRIBE_WRAPPER_RE/DETAILED_HOW_WORKS_RE
+ *  Y"/"compare X with/to Y", "what's the difference between X and Y". Closed
+ *  patterns, same discipline as DESCRIBE_WRAPPER_RE/DETAILED_HOW_WORKS_RE
  *  above — curated anchors, never a general "any two nouns" catch-all. Named
  *  capture groups (a/b) so compareAnswer doesn't need to know which pattern
  *  fired. Tried as a LAST-RESORT rescue (same call-site discipline as (4d)/(4e)
  *  below) since neither ask.mjs's compositional grammar nor any existing lane
  *  recognizes a two-entity comparison at all — there is nothing for this to
- *  shadow. */
+ *  shadow.
+ *
+ *  BENCHMARK_CONVERSATION_1.8.14.md item 8 (rushed-dev persona): "how is Task
+ *  diff from User" / "whats the diff between TaskController and
+ *  UserController" both hit the bare wall — "diff" is a common casual synonym
+ *  for "different"/"difference" this table never accepted. Folded in as an
+ *  additional alternation on the two patterns it naturally pairs with (never
+ *  a new standalone pattern — "diff" means exactly what "different"/
+ *  "difference" already mean here, so it rides the SAME two anchors). The
+ *  "what's the diff between" anchor also picks up the bare no-apostrophe
+ *  "whats" contraction spelling (`what(?:'s|s|\s+is)`) while here — the same
+ *  tolerance MODULE_ORIENT_RE/MODULE_PURPOSE_RE's own docblock already
+ *  documents elsewhere in this file — since the persona's own verbatim input
+ *  used exactly that spelling. */
 const COMPARE_PATTERNS = [
-  /^how\s+(?:is|are)\s+(?<a>.+?)\s+different\s+from\s+(?<b>.+?)$/i,
+  /^how\s+(?:is|are)\s+(?<a>.+?)\s+(?:different|diff)\s+from\s+(?<b>.+?)$/i,
   /^how\s+do(?:es)?\s+(?<a>.+?)\s+differ\s+from\s+(?<b>.+?)$/i,
   /^how\s+are\s+(?<a>.+?)\s+and\s+(?<b>.+?)\s+different$/i,
   /^compare\s+(?<a>.+?)\s+(?:and|with|to)\s+(?<b>.+?)$/i,
-  /^(?:what(?:'s|\s+is)\s+the\s+difference\s+between|difference\s+between)\s+(?<a>.+?)\s+and\s+(?<b>.+?)$/i,
+  /^(?:what(?:'s|s|\s+is)\s+the\s+(?:difference|diff)\s+between|(?:difference|diff)\s+between)\s+(?<a>.+?)\s+and\s+(?<b>.+?)$/i,
 ];
 
 /** Strip a leading article — resolveSymbol (codegraph.mjs) has no article
@@ -7469,8 +7539,25 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // factAnswer itself declines for this shape (no metaTerm), so the only
   // change in practice is that factReadBack's (a2c) property lane gets a
   // chance to run before the orientation card claims the turn.
-  const bareWhatisShape = BARE_WHATIS_RE.test(String(query).trim());
-  const isAdjectiveShape = IS_ADJECTIVE_YESNO_RE.test(String(query).trim());
+  // BENCHMARK_CONVERSATION_1.8.14.md item 11: "hey quick q, what is TaskController"
+  // (a leading filler clause) and "whats UserController" (a no-apostrophe
+  // contraction) both used to test the RAW `query` text against BARE_WHATIS_RE/
+  // IS_ADJECTIVE_YESNO_RE's own anchored `^what`/`^is` gate directly — so neither
+  // ever reached this lane at all, even though normalizeQuery (already imported
+  // here, same NO_FOCUS_WHATS_IN_HERE_RE precedent above in this file) already
+  // resolves both: its CONTRACTIONS table expands "whats" -> "what is", and its
+  // stripFillerWords pass (commit 282c010, now covering "quick q" too — see
+  // FILLER_WORDS' own docblock, ask-vocab.mjs) peels the leading "hey quick q,"
+  // clause. Composed from those two EXISTING mechanisms rather than a third:
+  // `gateQuery` is normalizeQuery's output, used for the shape gate AND the
+  // lookups it feeds (metaTermOf/factAnswer/factReadBack/curatedDefinitionAnswer)
+  // so a filler-wrapped/no-apostrophe query resolves to the SAME real answer its
+  // clean form already does — never a new answer path. Idempotent on already-
+  // clean text (normalizeQuery's own contract), so the ordinary case is
+  // byte-unchanged.
+  const gateQuery = normalizeQuery(String(query));
+  const bareWhatisShape = BARE_WHATIS_RE.test(gateQuery);
+  const isAdjectiveShape = IS_ADJECTIVE_YESNO_RE.test(gateQuery);
   // HANDOVER.md 2026-07-12 CamelCase finding: `isBareCamelCaseMetaQuestion` (see
   // its own docblock, above isConversational) OR's in alongside
   // isConversationalCandidate for THIS lane only — a bare "what is TaskController"
@@ -7482,12 +7569,12 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // alone: the `else if (isConversationalCandidate)` orientation-card fallback
   // further down is UNCHANGED, so a CamelCase term with no real hit still falls
   // through to its existing miss handling, never the generic orientation card.
-  const isBareCamelCaseWhatisCandidate = conversationalCandidateBaseGate && isBareCamelCaseMetaQuestion(query);
+  const isBareCamelCaseWhatisCandidate = conversationalCandidateBaseGate && isBareCamelCaseMetaQuestion(gateQuery);
   let bareMetaHit = null;
   if ((isConversationalCandidate || isBareCamelCaseWhatisCandidate) && (bareWhatisShape || isAdjectiveShape)) {
     if (memoryDir) {
-      bareMetaHit = (await factAnswer(memoryDir, query, envelope, miss, biasByBundle))
-        ?? (await factReadBack(memoryDir, query, envelope, miss, graph, newFocus?.label, biasByBundle));
+      bareMetaHit = (await factAnswer(memoryDir, gateQuery, envelope, miss, biasByBundle))
+        ?? (await factReadBack(memoryDir, gateQuery, envelope, miss, graph, newFocus?.label, biasByBundle));
       // HANDOVER.md 2026-07-10 item 10 (dropped-article gap): a bare "what is X"
       // with NO taught fact but a KNOWN curated corpus term ("what is cache", no
       // article) used to lose this exact same isConversationalCandidate race —
@@ -7497,7 +7584,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       // lane — an unknown bare term still falls through to the ordinary
       // orientation card, exactly as before.
       if (!bareMetaHit) {
-        const def = await curatedDefinitionAnswer(query, envelope, { memoryDir, lexicon });
+        const def = await curatedDefinitionAnswer(gateQuery, envelope, { memoryDir, lexicon });
         if (def) bareMetaHit = { text: def.text, replace: true };
       }
     }
@@ -7514,7 +7601,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     // graph but no memoryDir at all, so gating this on memoryDir too would
     // silently never fire in the one harness this fix specifically targets.
     if (!bareMetaHit && graph) {
-      const term = metaTermOf(query, envelope);
+      const term = metaTermOf(gateQuery, envelope);
       if (term) {
         const { metaFallbackEntityAnswer } = await import("./ask.mjs");
         const fallback = metaFallbackEntityAnswer(graph, term);

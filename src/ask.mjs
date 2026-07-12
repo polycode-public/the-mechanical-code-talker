@@ -3196,7 +3196,23 @@ export function traverse(graph, parsed, { contextId = null, prev = null, pinnedO
   if (shape === "ask") {
     const subj = resolveTermOrContext(graph, parsed.subject, contextId);
     const obj = resolveTermOrContext(graph, parsed.object, contextId);
-    if (!subj.match || !obj.match) {
+    // BENCHMARK_CONVERSATION_1.8.14.md item 7(b): a term that resolved only via a
+    // TIED, ambiguous fuzzy/prose match (e.g. a garbled object phrase like "handler
+    // I think" — trailing hedge noise a plain declarative leaked into the object
+    // slot) used to fall straight through as if `obj`/`subj` were a confident
+    // single match, so a randomly-first-picked TIED candidate (once, live, a raw
+    // Commit whose "label" IS its short hash, "c3d4e5f6a1b2") rode straight into
+    // the Yes/No render's "No — no <kind> edge found from A to B" sentence — an
+    // internal id leaking into user-facing text off the back of an unresolved tie,
+    // not a real resolution. Every OTHER shape in this file already declines
+    // rather than guessing on a tie (resolveObject's own "never a guess" contract,
+    // its docblock above); this shape is the one place that never checked the
+    // `ambiguous` flag its own resolver already computed. Declining here (leaving
+    // subjMatch unset, same as the `!subj.match || !obj.match` miss just below)
+    // reaches the SAME "couldn't resolve one of the terms in this question" honest
+    // miss render() already uses — never a confident wrong answer, and never a
+    // raw internal id surfacing off a coin-flip pick among tied candidates.
+    if (!subj.match || !obj.match || subj.ambiguous || obj.ambiguous) {
       return {
         matches: [], objMatch: obj.match, candidates: obj.candidates, traversal: null, ambiguous: false, answer: null,
         unresolvedPronoun: !!(subj.unresolvedPronoun || obj.unresolvedPronoun),

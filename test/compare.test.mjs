@@ -42,6 +42,20 @@ test("compare: two same-kind Classes (TaskController vs UserController) — real
   }
 });
 
+test("compare: 'diff' as a casual synonym for 'different'/'difference' (BENCHMARK_CONVERSATION_1.8.14.md item 8), including the no-apostrophe 'whats' contraction", async () => {
+  const rs = await drive([
+    "how is TaskController diff from UserController",
+    "whats the diff between TaskController and UserController",
+    "diff between TaskController and UserController",
+  ]);
+  for (const r of rs) {
+    assert.equal(r.record.miss, false, "a resolvable same-kind comparison must not miss");
+    assert.equal(r.record.via, "compare");
+    assert.doesNotMatch(r.answer, /couldn't parse this as a graph question/, "no grammar wall");
+    assert.match(r.answer, /^Comparing TaskController and UserController \(both Class\):/);
+  }
+});
+
 test("compare: carries the last-named entity forward as focus for a follow-up 'it'", async () => {
   const rs = await driveTurns(CONFIG, [
     "compare TaskController and UserController",
