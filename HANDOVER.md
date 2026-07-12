@@ -17,33 +17,12 @@ repo-relative path logic — fixed; `publish:npm` unblocked and confirmed live t
 
 ## Open items
 
-- **Plural/ordinal anaphora unsupported; singular "that" unresolved as a reverse-relation object,
-  2026-07-12** (fast-loop round 4 finding). `src/chat.mjs`'s `CONTEXT_WORDS` (`it`/`this`/`that`/
-  `here`) is a closed singular set with no `those`/`them` (plural) or "the first one"/"the other one"
-  (ordinal) equivalents — "what classes inherit from Controller" then "what tests cover those" /
-  "who touched the first one" both fall straight to an honest miss, the raw pronoun substituted
-  literally into the template. Even within the singular set, resolution is shape-inconsistent:
-  subject-position `it` resolves correctly (`src/chat.mjs` ~line 7008), but `that` as the object of a
-  reverse-relation query never does — `ask.mjs`'s `resolveObject` (~line 2925) is purely mechanical
-  graph-label matching with no contextId/focus notion, so "what classes inherit from that" fails even
-  though "what classes inherit from Controller" (same query, named) works fine.
-
-- **No "how is X different from Y" comparison capability, 2026-07-12** (fast-loop round 6 finding).
-  Hits the plain grammar wall — no parse shape recognizes a comparison question between two entities
-  at all, so it never reaches any answer path. Building one needs two real pieces: a new grammar
-  shape to recognize "how is X different from Y" / "compare X and Y" phrasing, and an answer
-  strategy that resolves both entities and surfaces the differences between their facts/edges (no
-  existing lane does this — `describe` renders one entity at a time).
-
-- **`PLAN_BREADTH_FIRST_NLU.md`'s two open items** — (c) the paraphrase-verified-via-`syllogise.mjs`
-  piece of "Ambition", not started; (d) a real "list/count all X of class Y" query shape for
-  memory-graph classes via `ask.mjs` alone, a confirmed gap found during the viz chat panel's build.
-  See `ROADMAP.md`'s "What's next" for detail. (`archive/PLAN_VIZ.md` and
-  `archive/PLAN_TEMPLATE_COVERAGE.md` are archived; their own remaining scope is listed there too.)
-
-- **`PLAN_SYLLOGIST.md`'s one genuinely open research question**: retraction-aware consistency under
-  a hard budget + trust tiers (§3). Speculative sketch only, nothing implemented — next up only if
-  the operator wants to push the reasoning engine further, not a near-term default.
+- **`PLAN_SYLLOGIST.md`'s remaining ATMS generalization**: the scm-sco (subClassOf) retraction slice
+  from §3 is now real and shipped (`retractSubClassOf`, `src/syllogise.mjs`) — a bounded, re-verified
+  local check, not full alternate-justification-set tracking. The other four entailment rules
+  (cax-sco/cax-dw/cls-svf1/scm-svf1) don't carry justification yet — mechanical extension, not done.
+  The full ATMS generalization (de Kleer 1986) is the one piece still genuinely open, cited in
+  `ROADMAP.md`'s research horizon, not attempted here.
 
 - **`PLAN_ADVENTURE.md`** — a text-adventure architectural stretch (imperative command grammar,
   mutable turn-by-turn world/player state as graph nodes, an NPC turn scheduler). Design-only,
