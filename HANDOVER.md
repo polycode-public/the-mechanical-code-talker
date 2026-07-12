@@ -54,6 +54,18 @@ repo-relative path logic — fixed; `publish:npm` unblocked and confirmed live t
   is a real design decision (what a bare "how many tests are there" means globally vs. per-entity)
   with regression risk to the existing superlative lane; needs a `PLAN_*.md` writeup.
 
+- **Class-to-module up-refinement only whitelists tests/cochange, 2026-07-12** (fast-loop round 6
+  finding). `who touched <class>` / `what modules import <class>` don't up-refine a class to its
+  containing module the way `tests`/`cochange` queries already do — `src/ask.mjs` ~line 3460 only
+  whitelists `kind === "tests" || kind === "cochange"` for up-refinement. Not fixed:
+  `test/ask.test.mjs:1186-1195` explicitly pins the current "imports" behavior as intentional, and
+  `touches` already routes through a separate `touchesSymbol` pre-check whose interaction with a new
+  up-refine path isn't confidently understood — a real design decision, candidate for a `PLAN_*.md`.
+
+- **No "how is X different from Y" comparison capability, 2026-07-12** (fast-loop round 6 finding).
+  Grammar wall, not a routing bug — no comparison capability exists at all. Capability-limit
+  question, out of fast-loop scope.
+
 - **`PLAN_BREADTH_FIRST_NLU.md`'s two open items** — (c) the paraphrase-verified-via-`syllogise.mjs`
   piece of "Ambition", not started; (d) a real "list/count all X of class Y" query shape for
   memory-graph classes via `ask.mjs` alone, a confirmed gap found during the viz chat panel's build.
