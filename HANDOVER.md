@@ -8,13 +8,24 @@ this project's own standing discipline.
 Session handle (inbox): `tmct` (this session; earlier sessions used `mechanic`). See
 `~/.claude/inboxes/tmct.md` and `~/.claude/inboxes/mechanic.md`, both still live.
 
-## Version state (2026-07-12, v1.8.18)
+## Version state (2026-07-12, v1.8.19)
 
 All of `BENCHMARK_CONVERSATION_1.8.14.md`'s routed backlog is fixed and pushed: pronoun-subject
 misparse, the README's "all men are mortal" syllogism demo, taught-fact retraction, teach-vs-graph
 precedence, `calls` up-refinement, and the five smaller routed gaps. CI was red for 16 straight
 pipelines (#139-154) on a platform-dependent symlink bug in `bin/tmct.mjs` — fixed; `publish:npm`
 unblocked and confirmed live through 1.8.5 on npm.
+
+**Operator-found, fixed same-day**: `npm run init:large` + `npm run chat` — "what is used for
+riding" / "what can be used for riding" / "what is for riding" all fell through to a misleading
+code-graph-flavored miss ("try 'which modules import <name>'") even though `corpus:human`'s own
+"horse UsedFor riding" fact was right there (surfaced correctly by "what is a horse"). Root cause:
+BUG 1 (`test/wiring-facts.test.mjs`) only ever fixed the FORWARD direction (subject known, "what is
+a horse used for") — nothing answered the REVERSE direction (object known, subject unknown), and
+the phrasing's leading "what is …" also matched the meta lane's `BARE_WHATIS_RE`, which greedily
+treated "used for riding" as one literal (unmatchable) term to define and returned early before any
+later reader got a turn. Fixed with `WHAT_USED_FOR_RE`, checked before the meta lane, mirroring the
+existing `WHAT_HAS_RE` reverse-by-object reader (`src/chat.mjs`).
 
 ## Open items
 

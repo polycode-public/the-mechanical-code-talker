@@ -80,6 +80,77 @@ test("WHAT_HAS_RE: 'what has a wheel' lists every distinct subject — car, bicy
   }
 });
 
+// Live-caught 2026-07-12 (operator repro against the real `npm run init:large`
+// bootstrap): "what is used for riding" / "what can be used for riding" /
+// "what is for riding" all fell through to the code-graph-flavored miss
+// cascade (misleadingly suggesting "which modules import <name>") even though
+// the answer — corpus:human's own "horse UsedFor riding" — was sitting right
+// there, surfaced correctly by "what is a horse". BUG 1 (test/wiring-facts.test.mjs)
+// only ever fixed the FORWARD direction (subject known: "what is a horse used
+// for"); nothing answered the reverse (object known, subject unknown) until
+// this fix (WHAT_USED_FOR_RE, checked BEFORE the meta lane's own BARE_WHATIS_RE
+// so "what is used for riding" doesn't get treated as one literal term to
+// define first).
+test("WHAT_USED_FOR_RE: 'what is used for riding' surfaces the corpus-seeded mgx:usedFor fact, reverse-by-object", async () => {
+  const dir = await mem();
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    const r = await s.turn("what is used for riding");
+    await s.close();
+    assert.match(r.answer, /horse is used for riding/);
+    const rec = await lastTurnRecord(s.sidecarFile);
+    assert.equal(rec.miss, false);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("WHAT_USED_FOR_RE: 'what can be used for riding' (passive modal phrasing) surfaces the same fact", async () => {
+  const dir = await mem();
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    const r = await s.turn("what can be used for riding");
+    await s.close();
+    assert.match(r.answer, /horse is used for riding/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("WHAT_USED_FOR_RE: 'what is for riding' (shortest phrasing, no 'used') surfaces the same fact", async () => {
+  const dir = await mem();
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    const r = await s.turn("what is for riding");
+    await s.close();
+    assert.match(r.answer, /horse is used for riding/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("WHAT_USED_FOR_RE guard: an object with no mgx:usedFor fact at all falls through to the ordinary miss, no fabricated answer", async () => {
+  const dir = await mem();
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    const r = await s.turn("what is used for zzznonexistentqqq");
+    await s.close();
+    assert.doesNotMatch(r.answer, /is used for zzznonexistentqqq/);
+    const rec = await lastTurnRecord(s.sidecarFile);
+    assert.equal(rec.miss, true);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("WHAT_INHERITS_RE: 'what inherits from horse' surfaces a freshly taught subClassOf fact", async () => {
   const dir = await mem();
   try {

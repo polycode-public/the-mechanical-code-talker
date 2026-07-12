@@ -4501,6 +4501,13 @@ const FACT_ANSWER_CAP = 32;
 const CAN_ASK_RE = /^(?:can|could)\s+(?:an?\s+)?([\w'-]+(?:\s+[\w'-]+)*?)\s+([a-z]+)[?.!\s]*$/i;
 const WHAT_CAN_DO_RE = /^what\s+can\s+(?:an?\s+)?(.+?)\s+do[?.!\s]*$/i;
 const WHAT_HAS_RE = /^what\s+has\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
+// "what is used for riding" / "what can be used for riding" / "what is for
+// riding" — the reverse-by-object mirror of BUG 1's forward reader ("what is
+// a tree used for"), missing until now: BUG 1 only ever filtered a KNOWN
+// subject's facts down to mgx:usedFor; nothing answered the reverse question
+// (object known, subject unknown), so it fell all the way through to the
+// code-graph miss cascade — actively misleading for a pure vocabulary query.
+const WHAT_USED_FOR_RE = /^what\s+(?:(?:can\s+be|is)\s+used\s+for|is\s+for)\s+(.+?)[?.!\s]*$/i;
 // Widened 2026-07-11 (live-caught follow-up to the ambiguousParse fix, commit
 // 5c858bf): on the FIRST turn of a graph-less session, dispatchTool's
 // loadGraph() throws its own documented "the graph is empty... this repo
@@ -4547,6 +4554,32 @@ async function factAnswer(memoryDir, query, envelope, miss, biasByBundle = {}) {
   let normFactTerm;
   try { ({ normFactTerm } = await import("./memory/core.mjs")); } catch { return null; }
   const q = String(query).trim();
+
+  // (a-pre) "what is used for riding" / "what can be used for riding" / "what
+  // is for riding" — the reverse-by-OBJECT mirror of BUG 1's forward reader
+  // ("what is a tree used for", the (a) block just below). Checked BEFORE (a)
+  // deliberately: this phrasing's leading "what is …" ALSO matches (a)'s own
+  // BARE_WHATIS_RE, which would otherwise greedily treat "used for riding" as
+  // one literal term to define — a guaranteed miss, since no vocabulary term
+  // is ever named "used for riding" — and (a) always returns (hit, honest
+  // per-relation "no", or null), never falling through to a later reader. Only
+  // takes over when it finds a REAL hit; a non-match or zero-hit case falls
+  // through unchanged to (a) and beyond, so ordinary miss messaging is
+  // untouched. mgx:usedFor instead of mgx:hasA; same filter/rank/render/
+  // paginate recipe as (b4)'s WHAT_HAS_RE below.
+  const usedForQ = q.match(WHAT_USED_FOR_RE);
+  if (usedForQ) {
+    const variants = factTermVariants(normFactTerm, usedForQ[1]);
+    const hits = (await factRows(memoryDir)).filter((f) => f.predicate === "mgx:usedFor" && variants.has(f.object));
+    if (hits.length) {
+      const ranked = rankByBiasThenTrust(uniqueFacts(hits), biasByBundle);
+      const lines = ranked.map(renderFactLine);
+      const shown = lines.slice(0, FACT_ANSWER_CAP);
+      const rest = lines.slice(FACT_ANSWER_CAP);
+      const extra = rest.length ? `\n…and ${rest.length} more — say 'more' to see them.` : "";
+      return { text: shown.join("\n") + extra, replace: true, ...(rest.length ? { pending: { items: rest, noun: "facts" } } : {}) };
+    }
+  }
 
   // (a) meta-shaped questions ("what is a module", "what does cache mean") — the
   // parsed object term, matched against fact SUBJECTS; consulted for hits (append
