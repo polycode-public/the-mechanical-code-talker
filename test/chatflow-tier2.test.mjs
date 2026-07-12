@@ -1151,7 +1151,11 @@ test("tier2/T30 staccato comparative ('more than that'/'which is bigger') gets a
       assert.equal(
         turns[1].answer,
         'I only name the single top (or bottom) match for a metric — no runner-up ranking, no comparing against a number. '
-          + 'Ask about a specific module/class/function directly to compare it with scripts/g.mjs (e.g. "how many imports does <name> have").',
+          // pin updated (correctness sweep, 2026-07-12): "how many imports does <name>
+          // have" never parsed (parseAggregate requires a known entity-kind noun right
+          // after "how many"; "imports" isn't one) — an offered example that itself
+          // failed. "how many modules does <name> import" is the real working shape.
+          + 'Ask about a specific module/class/function directly to compare it with scripts/g.mjs (e.g. "how many modules does <name> import").',
       );
     } finally {
       clearCache();
