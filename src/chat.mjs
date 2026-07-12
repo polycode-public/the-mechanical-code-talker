@@ -8082,6 +8082,78 @@ function morePage(query, { last, focus }) {
 // gain.
 const INDIRECT_REQUEST_RE = /^(?:i\s+(?:want|wanted)\s+you\s+to\s+|i(?:'d|\s+would)\s+like\s+you\s+to\s+)\s*(.+)$/i;
 
+/** PLAN_CONVERSATION.md Finding 4's remaining gap: a DISCONTIGUOUS verb frame,
+ *  "SUBJECT uses OBJECT as its/a base(class)" — "uses" is split from its own
+ *  qualifier ("as its base") around the object, so no CONTIGUOUS phrase table
+ *  entry (VERB_TO_KIND/findPhrase, both ask-vocab.mjs/keywords.mjs, only ever
+ *  match a contiguous run of words) could ever register it. "uses" itself is
+ *  ALSO already claimed by the query-side "uses" UNION (imports+calls+
+ *  callsSymbol, KIND_UNIONS in ask.mjs) — a bare "X uses Y" must keep meaning
+ *  that; only THIS "...as its base"-qualified shape means the single stored
+ *  `inherits` relation (RELATIONS.inherits, ask-vocab.mjs — "Class -> Class:
+ *  subject's declared base resolves to object", the exact same subclassOf
+ *  semantics "is a kind of"/"inherits from" already carry).
+ *
+ *  Fixed here by REWRITING the raw turn text, once, before any dispatch lane
+ *  sees it (same early-rewrite spot as INDIRECT_REQUEST_RE just above) — into
+ *  the equivalent ALREADY-WORKING "is a kind of" surface form, rather than
+ *  inventing a parallel teach/ask mechanism for a brand-new predicate
+ *  vocabulary entry. "is a kind of" is itself one of RELATIONS.inherits.verbs
+ *  (ask-vocab.mjs), and its teach (bare "X is a kind of Y" -> rdfs:subClassOf)
+ *  and ask readbacks (ISA_ASK_RE yes/no; BARE_WHATIS_RE + splitMetaPredicate's
+ *  "what is X a kind of" forward read) are existing, separately-tested
+ *  mechanisms — reusing them end to end means this fix needs no new predicate,
+ *  no new stored fact shape, and no changes to factAnswer's cascade at all.
+ *
+ *  Four shapes recognized (checked in this order — see each RE's own
+ *  anchoring for why order matters: the WH-object and aux-fronted forms must
+ *  win before the bare-declarative TEACH form gets a chance to misread an
+ *  aux-fronted question's leading "does"/"what" as part of the subject):
+ *    1. mid-sentence WH-object ask ("SUBJECT uses which controller as its
+ *       base" / "SUBJECT uses what as its base" — Finding 4's own repro
+ *       shape) -> "what is SUBJECT a kind of";
+ *    2. WH-fronted forward ask ("what does SUBJECT use as its base") ->
+ *       "what is SUBJECT a kind of";
+ *    3. aux-fronted yes/no ask ("does SUBJECT use OBJECT as its base") ->
+ *       "is SUBJECT a kind of OBJECT";
+ *    4. bare declarative teach ("SUBJECT uses OBJECT as its base", never
+ *       ending in "?" — mirrors generalVerbTeach's own question-mark decline
+ *       guard) -> "SUBJECT is a kind of OBJECT".
+ *
+ *  The "as ___" qualifier tolerates the reasonable surface variants named in
+ *  the operator's own worked examples: an optional "its"/"the"/"a"/"an"
+ *  determiner (or none at all), and "base"/"parent"/"base class"/"parent
+ *  class" as the qualifier noun. */
+const BASE_QUALIFIER_SRC = "as\\s+(?:its|the|an?)?\\s*(?:base\\s+class|parent\\s+class|base|parent)";
+const USES_AS_BASE_WH_ASK_RE = new RegExp(
+  `^(.+?)\\s+uses?\\s+(?:which\\s+[\\w'-]+|what)\\s+${BASE_QUALIFIER_SRC}\\s*\\??$`, "i");
+const USES_AS_BASE_WHAT_FRONT_RE = new RegExp(
+  `^what\\s+(?:does|do|did)\\s+(.+?)\\s+uses?\\s+${BASE_QUALIFIER_SRC}\\s*\\??$`, "i");
+const USES_AS_BASE_YESNO_RE = new RegExp(
+  `^(?:does|do|did)\\s+(.+?)\\s+uses?\\s+(.+?)\\s+${BASE_QUALIFIER_SRC}\\s*\\??$`, "i");
+const USES_AS_BASE_TEACH_RE = new RegExp(
+  `^(.+?)\\s+uses?\\s+(.+?)\\s+${BASE_QUALIFIER_SRC}\\s*[.!]*$`, "i");
+
+/** Recognize + rewrite one of the four shapes above, or return null (no
+ *  match — the caller leaves the text untouched, same "honest decline, never
+ *  a guess" discipline as every other frame in this file). Pure text in, text
+ *  out — no grounding/lexicon lookups here, matching every other early-rewrite
+ *  step (INDIRECT_REQUEST_RE, normalize.mjs's own preamble frames). */
+function rewriteUsesAsBaseFrame(text) {
+  const t = String(text || "").trim();
+  if (!t) return null;
+  let m = t.match(USES_AS_BASE_WH_ASK_RE);
+  if (m) return `what is ${m[1].trim()} a kind of`;
+  m = t.match(USES_AS_BASE_WHAT_FRONT_RE);
+  if (m) return `what is ${m[1].trim()} a kind of`;
+  m = t.match(USES_AS_BASE_YESNO_RE);
+  if (m) return `is ${m[1].trim()} a kind of ${m[2].trim()}`;
+  if (/\?\s*$/.test(t)) return null; // an unrecognized question shape — never guessed as a teach
+  m = t.match(USES_AS_BASE_TEACH_RE);
+  if (m) return `${m[1].trim()} is a kind of ${m[2].trim()}`;
+  return null;
+}
+
 export async function runTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, vocabHint = null, tel = null, biasByBundle = {} } = {}) {
   const line = String(input ?? "").trim();
   // The captured residue is used for RECOGNITION at every dispatch site below
@@ -8089,7 +8161,15 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // the ORIGINAL `line` survives untouched for record.query/logLines fidelity
   // — restored centrally inside withLast (below), once, for every dispatch path.
   const indirectMatch = line.match(INDIRECT_REQUEST_RE);
-  const workingLine = indirectMatch ? indirectMatch[1].trim() : line;
+  const preRewriteLine = indirectMatch ? indirectMatch[1].trim() : line;
+  // Finding 4's discontiguous-frame rewrite (rewriteUsesAsBaseFrame, above):
+  // applied here, once, before ANY dispatch lane (bareCmd/conversationalTurn/
+  // assertTurn/runAsk) sees the text — same reasoning as indirectMatch just
+  // above it. `baseFrameRewrite` is null (no-op) for every turn that doesn't
+  // match one of the four discontiguous shapes, so this can only ever ADD a
+  // recognized shape, never change behavior for anything else.
+  const baseFrameRewrite = rewriteUsesAsBaseFrame(preRewriteLine);
+  const workingLine = baseFrameRewrite || preRewriteLine;
   const templates = await chatTemplates(); // failure-tolerated: null degrades, never throws
   // narrate mode: allocate the mutable trace array ONLY when on (`null` when off,
   // matching every OTHER optional collaborator here — templates/memoryDir/lexicon
@@ -8117,10 +8197,11 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   const withLast = (result, fallbackGoal = "unclear — no goal signal for this turn type") => {
     const finished = finish(result, { graph });
     // Bug F point 3 fidelity: every dispatch path below built its own record off
-    // `workingLine` (the indirect-request wrapper stripped, above) — restore the
-    // ORIGINAL raw `line` into record.query and the logged "> …" transcript echo
-    // here, once, centrally, for every path (they all funnel through withLast).
-    if (indirectMatch) {
+    // `workingLine` (the indirect-request wrapper stripped, and/or Finding 4's
+    // discontiguous-frame rewrite applied, above) — restore the ORIGINAL raw
+    // `line` into record.query and the logged "> …" transcript echo here, once,
+    // centrally, for every path (they all funnel through withLast).
+    if (indirectMatch || baseFrameRewrite) {
       if (finished.record) finished.record.query = line;
       if (Array.isArray(finished.logLines) && finished.logLines.length > 1) finished.logLines[1] = `> ${line}`;
     }
