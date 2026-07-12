@@ -1508,7 +1508,15 @@ const WALL_MISS_ANYWHERE_RE = /couldn't parse this as a graph question\. Try:/;
 // automatically inherits the correct "teach/remember a new fact" goal line for
 // free (it flows through the SAME teach-lane goal revision, chat.mjs's runTurn
 // cascade — no extra wiring needed for this phrasing).
-const TEACH_RE = /^(?:please\s+)?(?:i\s+(?:want|wanted)\s+you\s+to\s+|i(?:'d|\s+would)\s+like\s+you\s+to\s+)?(?:remember|note|keep in mind|jot down|for the record|fyi)\b[:,]?\s*(?:that\s+)?(.+?)[.?!]*$/i;
+// BENCHMARK_CONVERSATION_1.7.0.md routed backlog C1 ("please learn this: John
+// is a man" / "please learn also: a man is having two legs"): "learn" joins
+// the verb list, and a new optional filler slot ("this"/"that"/"also")
+// tolerates a word between the verb and the colon/comma lead-in — the verb
+// list alone never covered that shape, so "remember this: X" (not just
+// "learn this: X") is now also recognized, matching the docblock above's own
+// worked "remember that X" case (the pre-existing `(?:that\s+)?` after the
+// lead-in punctuation still covers a lead-in-less "remember that X").
+const TEACH_RE = /^(?:please\s+)?(?:i\s+(?:want|wanted)\s+you\s+to\s+|i(?:'d|\s+would)\s+like\s+you\s+to\s+)?(?:remember|note|keep in mind|jot down|for the record|fyi|learn)\b(?:\s+(?:this|that|also))?[:,]?\s*(?:that\s+)?(.+?)[.?!]*$/i;
 const BARE_DECLARATIVE_RE = /^(?:every |each |all |a |an )?[\w-]+ (?:is|are) (?:a |an )?[\w-]+$/i;
 /** Interrogative / auxiliary leads that make an "X is a Y"-shaped line a QUESTION
  *  ("what is a cache", "is a module a component"), never a teach declarative. */
