@@ -312,7 +312,13 @@ export function parseQueryFull(query, { nlp = undefined } = {}) {
 //   {node:"allOfClass", entityType}              — every individual of a class
 //   {node:"reverseSet"|"forwardSet", kind, entityType, inner}  — nested/relative:
 //        the OBJECT (reverse) / SUBJECT (forward) of the outer edge is the id-set
-//        produced by evaluating `inner` (another AST) — two-stage traversal.
+//        produced by evaluating `inner` (another AST) — two-stage traversal. `inner`
+//        is usually a nested relative clause, but {node:"prevSet"} (below) is a
+//        second, discourse-shaped leaf composing with the same union logic.
+//   {node:"prevSet"}                              — the FULL id set of ask()'s own
+//        `prev` (the immediately-preceding list-shaped answer) — a plural pronoun's
+//        ("those"/"them") antecedent, only ever used as reverseSet/forwardSet's
+//        `inner` (see parsePluralAnaphoraObject).
 //   {node:"membership", entityType, term}        — "<entity> of/in <term>"
 //   {node:"qualifier", filters:[word…], inner}   — adjective post-filters on a set
 //   {node:"boolean", entityType, atoms:[{op,kind,ast|filters}…]}  — set algebra
@@ -391,6 +397,7 @@ function parseComposite(text, nlp) {
     || parseFind(w, lc, nlp, 0)
     || parseList(w, lc, nlp, 0)
     || parseNested(w, lc, nlp, 0)
+    || parsePluralAnaphoraObject(w, lc, nlp)
     || parseRelationalOrQualified(w, lc, nlp, 0);
 }
 
@@ -576,6 +583,43 @@ function parseNested(w, lc, nlp, depth) {
     const inner = parseSetPhrase(innerText, nlp, depth + 1);
     if (!inner || inner.node === "miss") return inner ? { node: "miss", reason: inner.reason || "inner clause didn't parse" } : { node: "miss", reason: "inner clause didn't parse" };
     return { node: outer.shape === "reverse" ? "reverseSet" : "forwardSet", kind: outer.kind, entityType: outer.entityType, inner };
+  }
+  return null;
+}
+
+// PLURAL ANAPHORA OBJECT (HANDOVER.md 2026-07-12 finding: CONTEXT_WORDS/resolveTermOrContext
+// only ever bound a SINGULAR pronoun to ask()'s contextId — "what tests cover those", after a
+// listing turn, fell to an honest miss with the literal word "those" treated as an unresolvable
+// module name). "those"/"them" standing as a BARE pronoun in an ordinary reverse/forward clause
+// ("what tests cover those" — trailing, the reverse OBJECT; "what do those import" — leading, the
+// forward SUBJECT) refer to the FULL id set of the immediately-preceding list-shaped answer —
+// exactly the id array ask()'s own `prev` already threads for parseAnaphora's "of those"/"count
+// them" shapes. Reuses reverseSet/forwardSet's existing multi-object UNION traversal (parseNested,
+// just above) verbatim: the only new thing is a second kind of `inner` leaf, {node:"prevSet"},
+// that reads `prev` instead of evaluating a nested clause.
+//
+// Two positions are recognized, both requiring the pronoun to stand ALONE (never a determiner —
+// "list those functions" is untouched): the sentence's FINAL word (mirrors parseAnaphora's own
+// "count them"/"list them" terminal pinning — the reverse-clause object trails its verb), or
+// immediately followed by a known relation verb (the forward-clause subject leads its verb: "those
+// IMPORT" is unambiguously a pronoun-then-verb, never "those <noun>"). An "of those"/"of them"
+// tail is parseAnaphora's own territory (checked earlier in parseComposite) and is skipped here.
+// After the substitution, `outer.object` is verified to BE the sentinel itself — guards against a
+// keyword-spot retry silently resolving the object to some other word in the sentence instead.
+const PLURAL_ANAPHORA_OBJECT = new Set(["those", "them"]);
+function parsePluralAnaphoraObject(w, lc, nlp) {
+  for (let i = 0; i < lc.length; i += 1) {
+    if (!PLURAL_ANAPHORA_OBJECT.has(lc[i])) continue;
+    if (lc[i - 1] === "of") continue; // "…of those/them" — parseAnaphora's own shape
+    const isTerminal = i === lc.length - 1;
+    const leadsAVerb = i + 1 < lc.length && !!VERB_TO_KIND[lc[i + 1]];
+    if (!isTerminal && !leadsAVerb) continue; // a determiner use ("those functions") — not a bare pronoun
+    const head = [...w.slice(0, i), NEST_SENTINEL, ...w.slice(i + 1)];
+    const outer = parseSimpleClause(head.join(" "), nlp);
+    if (!outer || (outer.shape !== "reverse" && outer.shape !== "forward")) continue;
+    if (outer.object !== NEST_SENTINEL) continue;
+    if (outer.modifier && outer.modifier !== "direct") continue; // no transitive-over-set closure primitive
+    return { node: outer.shape === "reverse" ? "reverseSet" : "forwardSet", kind: outer.kind, entityType: outer.entityType, inner: { node: "prevSet" } };
   }
   return null;
 }
@@ -1842,6 +1886,15 @@ function evalSet(graph, ast, opts) {
       const ids = new Set(evalSet(graph, ast.inner, opts).map((i) => i.id));
       return forwardOverSet(graph, ast.kind, ids);
     }
+    // the previous list-shaped answer's own id set (parsePluralAnaphoraObject's
+    // "those"/"them" leaf) — evalComposite's reverseSet/forwardSet dispatch already
+    // intercepts the genuinely-empty (no `prev` at all) case as an honest "needs a
+    // previous answer" miss, same as evalAnaphora's own no-prev branch; this is only
+    // reached with a real, non-empty `prev` in hand.
+    case "prevSet": {
+      const prev = opts && opts.prev;
+      return Array.isArray(prev) ? prev.map((id) => graph.byId.get(id)).filter(Boolean) : [];
+    }
     case "membership": {
       // DIRECTORY SCOPE ("modules in src/lib", "files in src/handlers"): a bare
       // path term with no exact node of its own is a DIRECTORY, not a single
@@ -2186,6 +2239,14 @@ export function evalComposite(graph, ast, opts = {}) {
       compositeKind: "find", entityType: ast.entityType, term: ast.term,
       matches: narrow.length ? narrow : broad, broad: !narrow.length && broad.length > 0,
     };
+  }
+  // plural-anaphora object (parsePluralAnaphoraObject): a genuinely EMPTY `prev` means
+  // "those"/"them" has no antecedent at all — the same honest "needs a previous answer"
+  // miss evalAnaphora's own no-prev branch gives "of those"/"count them", rather than
+  // evalSet's ordinary (and here misleading) empty-set "nothing in the index matches".
+  if ((ast.node === "reverseSet" || ast.node === "forwardSet") && ast.inner.node === "prevSet"
+    && !(Array.isArray(opts.prev) && opts.prev.length)) {
+    return { compositeMiss: true, reason: "no-prev", matches: [] };
   }
   return { compositeKind: "set", matches: evalSet(graph, ast, opts), entityType: ast.entityType || null };
 }
