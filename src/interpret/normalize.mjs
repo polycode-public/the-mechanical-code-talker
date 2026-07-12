@@ -44,6 +44,55 @@ const correctionRe = (table) => new RegExp(
 const MISSPELLING_RE = correctionRe(MISSPELLINGS);
 const WRONG_WORD_RE = correctionRe(WRONG_WORDS);
 
+// ---- two deferred typo sub-cases (HANDOVER.md 2026-07-12, routed from
+// BENCHMARK_CONVERSATION_1.7.0.md's "Routed backlog": "cochange w/ wat",
+// "tests 4 it") that structurally CANNOT live in the MISSPELLINGS/WRONG_WORDS
+// tables above, for two independent reasons:
+//   - correctionRe() builds `\b(...)\b` from a table's keys. A key of "w/"
+//     can never satisfy the trailing `\b`: both "/" and the whitespace that
+//     follows it are non-word characters, so no word-boundary transition
+//     ever happens there — no table entry, however spelled, can match.
+//   - "with" and "for" are not canonical grammar-owned words (not in
+//     VERB_TO_KIND/ENTITY_TO_TYPE/MODIFIER_TO_KIND/TRIGGER_WORDS), and
+//     test/ask-vocab.test.mjs enforces that every correction TABLE value is
+//     one of those — by design, so a table entry couldn't rewrite INTO a
+//     non-grammar word either.
+// Same species as chat.mjs's VAGUE_TOUCH_TEL_RE/VAGUE_TOUCH_ABUT_RE (a
+// dedicated, narrowly-scoped regex pass instead of a table entry), wired
+// here rather than in chat.mjs because "w/" and leetspeak "4" are GENERAL
+// shorthand a developer can use in any question, not one lane's own anchor
+// word. normalize.mjs's normalizeQuery is the single point both ask.mjs's
+// parseQuery and interpret/pipeline.mjs's normalizeInput funnel every query
+// through, so wiring it here reaches every caller once. ----
+
+/** "w/" -> "with". Lookbehind/lookahead require whitespace (or start/end of
+ *  string) on BOTH sides, so a real path fragment ("src/w/foo.mjs" — the "/"
+ *  right before "w" is not whitespace) and the DIFFERENT shorthand "w/o"
+ *  ("without" — a non-whitespace "o" right after the slash) never match. */
+const W_SLASH_RE = /(?<=^|\s)w\/(?=\s|$)/gi;
+
+/** "4" meaning the word "for" — deliberately NOT a context-free standalone-
+ *  digit substitution. fuzzy.mjs's eligibleForCanon() and several independent
+ *  `/^[a-z]+$/` guards in ask.mjs protect digit tokens everywhere in this
+ *  codebase (shas, line numbers, counts — "top 4 results", "line 4", "commit
+ *  4a2b…") on purpose; a blind "4" -> "for" token rule would corrupt every
+ *  one of those. Narrowed to two closed, well-justified trigger shapes —
+ *  chosen SMALLER than the plausible "wait 4 X" / "used 4 X" leetspeak
+ *  because both of those anchors collide with genuine counts in ordinary
+ *  English ("wait 4 minutes", "used 4 times"), which this rule must never
+ *  touch:
+ *   - a GRATITUDE interjection immediately before "4" (the same closed word
+ *     list THANKS_PREAMBLE_RE above already trusts as pure gratitude, never
+ *     a count-report opener) — "thx 4 the help", "cheers 4 that".
+ *   - the "4 example"/"4 instance" idiom, guarded to fire ONLY when nothing
+ *     else follows on the same clause (end of string or punctuation next) —
+ *     "…, 4 example" / "4 example?" is the parenthetical "for example" idiom,
+ *     but "the 4 example modules" names a genuine COUNT of four example
+ *     modules, and the trailing-word lookahead refuses to rewrite that.
+ */
+const FOR_DIGIT_THANKS_RE = /\b(thx|thanks|thank\s+you|many\s+thanks|ty|cheers)\s+4\b/gi;
+const FOR_DIGIT_EXAMPLE_RE = /\b4\s+(example|instance)\b(?!\s*[a-z])/gi;
+
 /** "that class"/"this module"/"that function" (a context pronoun immediately
  *  followed by the SINGULAR kind noun it's already standing in for) -> the bare
  *  pronoun alone (0.9.15 Tier-1 single-touch playtest). "which class contains
@@ -558,6 +607,12 @@ export function normalizeQuery(text) {
   q = q.replace(CONTRACTION_RE, (m) => CONTRACTIONS[m.toLowerCase()]);
   q = q.replace(MISSPELLING_RE, (m) => MISSPELLINGS[m.toLowerCase()]);
   q = q.replace(WRONG_WORD_RE, (m) => WRONG_WORDS[m.toLowerCase()]);
+  // "w/" -> "with", leetspeak "4" -> "for" (narrow trigger shapes only) — see
+  // the two tables' own docblocks just above for why neither can live in the
+  // MISSPELLINGS/WRONG_WORDS tables above this function.
+  q = q.replace(W_SLASH_RE, "with");
+  q = q.replace(FOR_DIGIT_THANKS_RE, (_, w) => `${w} for`);
+  q = q.replace(FOR_DIGIT_EXAMPLE_RE, (_, w) => `for ${w}`);
   q = q.replace(KIND_NOUN_ANAPHORA_RE, (_, pron) => pron);
   q = q.replace(G_DROP, "$1ing");
   // closed preamble frames (greeting lead-in, modal wrapper, show/give-me
