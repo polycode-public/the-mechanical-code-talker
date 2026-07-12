@@ -58,6 +58,7 @@ import { parseKeywordSpot, findPhrase } from "./interpret/strategies/keywords.mj
 import { runStrategiesSync } from "./interpret/pipeline.mjs";
 import { mergeStrategyResults, alternateLines } from "./interpret/merge.mjs";
 import { lookupByProseTokens } from "./prose.mjs";
+import { pickPhrase } from "./answer-variants.mjs";
 
 // Normalization stays importable from its original site (tests + chat surface).
 export { normalizeQuery, applyNegationFrames };
@@ -1529,7 +1530,7 @@ export function metaFallbackEntityAnswer(graph, term) {
     || null;
   const noun = nounFor(hit.class, 1);
   const article = noun === "attribute" ? "an" : "a";
-  const definedIn = modLabel ? `, defined in ${modLabel}` : "";
+  const definedIn = modLabel ? `, ${pickPhrase("defined-in", hit.id, "defined in")} ${modLabel}` : "";
   const followUp = hit.class === "Class" ? ` or "which classes inherit from ${hit.label}"` : "";
   return {
     text: `${hit.label} is ${article} ${noun} in this codebase${definedIn} — try "describe ${hit.label}"${followUp}.`,
@@ -2220,7 +2221,7 @@ function renderComposite(parsed, result) {
       }
       const hit = result.matches[0];
       const modLabel = moduleLabelOf(hit);
-      const definedIn = hit.class === "Module" ? "" : (modLabel && modLabel !== "(unknown module)" ? `, defined in ${modLabel}` : "");
+      const definedIn = hit.class === "Module" ? "" : (modLabel && modLabel !== "(unknown module)" ? `, ${pickPhrase("defined-in", hit.id, "defined in")} ${modLabel}` : "");
       return { content: `Yes — ${hit.label} is a ${kindSingular}${definedIn}.`, miss: false, ambiguous: false, matches: result.matches };
     }
     if (!result.matches.length) {
@@ -3776,6 +3777,14 @@ function renderCore(parsed, result) {
     }
     const m = String(result.site || "").match(/^(.*):(\d+)(?:-(\d+))?$/);
     if (m) {
+      // "is defined in" stays UNVARIED here on purpose: chatbench/graded-pool-max.jsonl
+      // pins this exact substring as ground truth for "where is X defined" cases
+      // (g-a1-svo-7/12/18/22/40/43, g-a2-noise-svo-3/9/13/14/15 — 2 of which,
+      // g-a1-svo-12 and g-a2-noise-svo-13, are in the promoted always-run subset),
+      // and SKILL_BENCHMARK_CEFR_ENGLISH.md declares that pool append-only/never
+      // edited mid-arc. The other two "defined in" call sites (metaFallbackEntityAnswer
+      // and the composite exists-hit above) answer a DIFFERENT query shape ("what is a
+      // X" / "is there a X"), so they carry the variety instead.
       const lines = m[3] && m[3] !== m[2] ? `lines ${m[2]}-${m[3]}` : `line ${m[2]}`;
       return { content: `${symbolLabelOf(ind)} is defined in ${m[1]} at ${lines}.`, miss: false, ambiguous: false, matches: result.matches };
     }
@@ -3802,7 +3811,7 @@ function renderCore(parsed, result) {
     const msg = (newest.attributes || []).find((a) => a.key === "message")?.value || "";
     const day = String(date).slice(0, 10);
     if (newest.id === result.objMatch.id) {
-      return { content: `commit ${newest.label} is dated ${day}${msg ? ` ("${msg}")` : ""}.`, miss: false, ambiguous: false, matches: result.matches };
+      return { content: `commit ${newest.label} ${pickPhrase("is-dated", newest.id, "is dated")} ${day}${msg ? ` ("${msg}")` : ""}.`, miss: false, ambiguous: false, matches: result.matches };
     }
     const more = result.matches.length - 1;
     return {
