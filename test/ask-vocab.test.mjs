@@ -165,6 +165,37 @@ test('normalizeQuery: leetspeak "4" corrects to "for" in its narrow trigger shap
   );
 });
 
+// ---- leading filler + dangling comma (fast-loop deferred finding, closed out
+// for real this round): stripping a filler word alone used to leave its
+// trailing comma behind as parse-corrupting debris — normalize.mjs's filler
+// strip now swallows a comma immediately trailing the matched filler word/
+// phrase (see stripFillerWords in interpret/normalize.mjs). ----
+test('normalizeQuery: a filler word\'s trailing comma is stripped along with the word, not left dangling', () => {
+  assert.equal(
+    normalizeQuery("so um, like, what does the store module do exactly?"),
+    "what does the store module do exactly?",
+  );
+  assert.equal(
+    normalizeQuery("so, what does the store module do?"),
+    "what does the store module do?",
+  );
+  assert.equal(
+    normalizeQuery("ok cool, what does the store module do?"),
+    "what does the store module do?",
+  );
+  // the plain (no-filler) form is byte-unchanged — the fix only ever removes
+  // filler-glued punctuation, it never touches an ordinary content comma.
+  assert.equal(
+    normalizeQuery("what does the store module do exactly?"),
+    "what does the store module do exactly?",
+  );
+});
+
+test("normalizeQuery: an ordinary content comma (not glued to a filler word) survives the filler strip untouched", () => {
+  assert.equal(normalizeQuery("please, tell me the modules, and the classes"), "the modules, and the classes");
+  assert.equal(normalizeQuery("the modules, and the classes"), "the modules, and the classes");
+});
+
 test('parseQuery: leetspeak "4 example" correction reaches the real grammar', () => {
   const parsed = parseQuery("which modules call helper 4 example");
   assert.ok(parsed, '"which modules call helper 4 example" failed to parse at all');

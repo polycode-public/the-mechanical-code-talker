@@ -866,6 +866,31 @@ test("Bug E MODULE_ORIENT_RE: a pronoun subject is left to isConversational/META
     "moduleOrientLane must decline a pronoun subject, not silently resolve it via focus");
 });
 
+test("Bug E MODULE_ORIENT_RE: leading conversational filler with a trailing comma no longer breaks the lane (fast-loop deferred finding, closed out)", async () => {
+  const g = await graph();
+  const plain = await runTurn("what does app/functions/d/handler.mjs do", { config: CONFIG, graph: g });
+  // "so um, like," — the comma-spliced multi-filler-word opener the finding cites
+  // verbatim: FILLER_WORDS strips "so"/"um"/"like" as bare words, but (before the
+  // fix) left the commas behind as parse-corrupting debris, AND moduleOrientLane
+  // never ran the filler strip at all, so this used to fall to the miss wall.
+  const chained = await runTurn("so um, like, what does app/functions/d/handler.mjs do", { config: CONFIG, graph: g });
+  assert.equal(chained.record.via, "meta", "routes to the meta/self lane, same as the plain form");
+  assert.equal(chained.record.miss, false);
+  assert.equal(chained.answer, plain.answer, "byte-identical to the plain form's overview");
+
+  // "so," — a SINGLE filler word glued directly to the comma (no space), the
+  // shape LEADING_CONNECTIVE_RE's own \s+ anchor can't catch either.
+  const soComma = await runTurn("so, what does app/functions/d/handler.mjs do", { config: CONFIG, graph: g });
+  assert.equal(soComma.record.via, "meta");
+  assert.equal(soComma.answer, plain.answer);
+
+  // "ok cool," already worked before this fix (ACK_PREAMBLE_RE handles it) —
+  // pinned here as the control case, confirming the fix didn't change it.
+  const okCool = await runTurn("ok cool, what does app/functions/d/handler.mjs do", { config: CONFIG, graph: g });
+  assert.equal(okCool.record.via, "meta");
+  assert.equal(okCool.answer, plain.answer);
+});
+
 test("Seonix Batch 3 (3a) MODULE_PURPOSE_RE: \"whats X for\"/\"what's X about\" resolve exactly like \"what does X do\"", async () => {
   const g = await graph();
   const doDoes = await runTurn("what does app/lib/b.mjs do", { config: CONFIG, graph: g });

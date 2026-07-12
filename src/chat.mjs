@@ -59,7 +59,7 @@ import {
   VERB_TO_KIND, WHERE_MARKERS, MENTION_MARKERS, ENTITY_TO_TYPE, PASSIVE_PARTICIPLE_TO_KIND,
   stripTrailingScopeFiller, stripTrailingDiscourseTag, EDGE_NOUN_TO_METRIC, RELATIONS,
 } from "./ask-vocab.mjs";
-import { COUNTERFACTUAL_RE, correctMisspellings, applyPreambleFrames, normalizeQuery, escapeRegex, kindNounAnaphoraHint } from "./interpret/normalize.mjs";
+import { COUNTERFACTUAL_RE, correctMisspellings, applyPreambleFrames, normalizeQuery, stripFillerWords, escapeRegex, kindNounAnaphoraHint } from "./interpret/normalize.mjs";
 import { fuzzyMatchInSet, fuzzyBound } from "./interpret/fuzzy.mjs";
 import { pickPhrase } from "./answer-variants.mjs";
 
@@ -3263,10 +3263,22 @@ async function moduleOrientLane(query, { graph }) {
   // do") — plus a lane-local politeness strip for "please explain X" (applyPreambleFrames's
   // own EXPLAIN_WRAPPER_RE requires the string to literally START with "explain",
   // so a LEADING "please"/"kindly" ahead of it defeats that frame; see
-  // MODULE_ORIENT_POLITENESS_RE's own docblock). All three are additive,
+  // MODULE_ORIENT_POLITENESS_RE's own docblock). All four are additive,
   // closed-set, and idempotent on an already-clean query, so applying them here
   // only ever WIDENS what resolves, never narrows it.
-  q = applyPreambleFrames(correctMisspellings(q)).replace(MODULE_ORIENT_POLITENESS_RE, "");
+  //
+  // stripFillerWords (normalize.mjs) joins the set here (deferred fast-loop
+  // finding, closed out for real): a leading discourse filler that applyPreambleFrames'
+  // own LEADING_CONNECTIVE_RE doesn't catch ("so um, like, what does the store
+  // module do exactly?" — the gate right after "so" requires an ALREADY-interrogative
+  // remainder, which "um, like, what does…" isn't) left MODULE_ORIENT_RE's own
+  // "^what does …" anchor unmatched, so this lane silently declined and the
+  // query fell all the way to the tailored-miss wall. Run AFTER applyPreambleFrames
+  // (same order normalizeQuery's own pipeline uses — preamble frames need their
+  // anchor words, like "so"/"please", intact) and BEFORE the politeness regex
+  // (stripFillerWords already eats "please"/"could you" as filler; the politeness
+  // regex only adds the "explain [to me]" wrapper on top).
+  q = stripFillerWords(applyPreambleFrames(correctMisspellings(q))).replace(MODULE_ORIENT_POLITENESS_RE, "");
   const m = q.match(MODULE_ORIENT_RE) || q.match(MODULE_PURPOSE_RE) || q.match(MODULE_ORIENT_SVO_RE);
   if (!m) return null;
   const term = m[1].trim();
