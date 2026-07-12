@@ -8175,7 +8175,34 @@ async function assertTurn(line, { memoryDir, sessionId, focus, lexicon = null })
       .map((t) => `${normFactTerm(t.subject)} ${t.predicate} ${normFactTerm(t.object)}`)
       .join("; ");
     const n = res.ids.length;
-    const answer = `noted — remembered ${n} fact${n === 1 ? "" : "s"}: ${shown}`;
+    // PLAN_BREADTH_FIRST_NLU.md (c) / ROADMAP.md "Ambition": a paraphrase of
+    // the confirmation sits NEXT TO the literal one, never instead of it, and
+    // only when its accuracy is checked via syllogise.mjs's own transitive-
+    // closure machinery (paraphrase.mjs's verifySubClassParaphrase) against
+    // the SAME pre-existing taught edges — never an unverified paraphrase.
+    // Scoped to the single-triple rdfs:subClassOf shape (the one predicate
+    // family syllogise.mjs's deriveSubClassClosure reasons over); any other
+    // shape (multi-triple sentences, other predicate families) shows only the
+    // original confirmation, unchanged.
+    let paraphraseSuffix = "";
+    if (res.triples.length === 1 && res.triples[0].predicate === SUBCLASS_PREDICATE) {
+      try {
+        const { paraphraseVerifiedSubClass } = await import("./paraphrase.mjs");
+        // Normalized (same normFactTerm cleanup `shown` above already applies)
+        // so the generated paraphrase text reads like "cache is a kind of
+        // component", never a raw lexicon-prefixed form like "tmct:cache".
+        const newSubj = normFactTerm(res.triples[0].subject);
+        const newObj = normFactTerm(res.triples[0].object);
+        const isTaughtRow = (f) => !f.sourceTypes?.includes("corpus") && !f.sourceTypes?.includes("web");
+        const priorEdges = (await factRows(memoryDir))
+          .filter((f) => f.predicate === SUBCLASS_PREDICATE && isTaughtRow(f)
+            && !(normFactTerm(f.subject) === newSubj && normFactTerm(f.object) === newObj))
+          .map((f) => [normFactTerm(f.subject), normFactTerm(f.object)]);
+        const para = paraphraseVerifiedSubClass(newSubj, newObj, priorEdges);
+        if (para) paraphraseSuffix = ` (${para})`;
+      } catch { /* best-effort — the literal confirmation above is already correct either way */ }
+    }
+    const answer = `noted — remembered ${n} fact${n === 1 ? "" : "s"}: ${shown}${paraphraseSuffix}`;
     // PLAN_BREADTH_FIRST_NLU.md §Track 6 (operator directive): the canonical
     // restatement of what was committed — `english` reuses the SAME confirmation
     // text just shown (already tmct's own preferred subject-predicate-object
