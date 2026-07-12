@@ -54,8 +54,7 @@ export async function readSpanSafe({ readFile, repoRoot, path, start, end, maxLi
   // Normalize repoRoot to absolute here too (defense in depth) — resolve(repoRoot, path)
   // is always absolute, so comparing it against a RELATIVE repoRoot would make this guard
   // reject every read, not just traversal attempts (the actual bug this normalization
-  // fixes; callers should already pass an absolute repoRoot via src/config.mjs, but this
-  // function is the real security boundary and must not depend on that).
+  // fixes; callers should already pass an absolute repoRoot via src/config.mjs.
   const root = resolve(repoRoot);
   const resolved = resolve(root, path);
   if (resolved !== root && !resolved.startsWith(root + sep)) {

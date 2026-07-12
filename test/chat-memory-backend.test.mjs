@@ -7,16 +7,6 @@
 // actually threads its OWN memoryDir handle through the live teach lane, not
 // just that the handle shape is correct in isolation.
 //
-// Known, documented scope boundary (see createSession's own comment above its
-// memoryBackend resolution): sessions.mjs's SEPARATE per-turn utterance
-// mirror (appendSessionToGraph -> recordSessionMemory -> appendUtterances)
-// derives its own repoDir from config.graphFile, independent of memoryDir,
-// and is not covered by this seam (it also needs a real directory for its own
-// session-log/sidecar file reads, not just for the memory write) — extending
-// it is out of this change's scope. So a Backend B/C session MAY still gain
-// an ordinary Backend-A .tmct/memory/graph.json holding ONLY Utterance/
-// Session individuals from that independent mirror — never a Fact/Rule
-// (those only ever go through runTurn's memoryDir, confirmed below).
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, readdir, rm } from "node:fs/promises";

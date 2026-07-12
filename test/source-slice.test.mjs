@@ -134,7 +134,6 @@ test("readSpanSafe: a path resolving to repoRoot itself is allowed (boundary cas
   const dir = await mkdtemp(join(tmpdir(), "tmct-slice-"));
   try {
     // repoRoot itself is a directory, not a file — readFile on it should fail with EISDIR,
-    // NOT with the traversal ToolError (the boundary check must accept resolved === repoRoot).
     await assert.rejects(
       readSpanSafe({ readFile, repoRoot: dir, path: ".", start: 1, end: 1 }),
       (e) => {

@@ -1,14 +1,5 @@
 // ask-nlp.mjs — the OPTIONAL wink-nlp adapter behind ask.mjs's lemma/POS tier.
 //
-// BOUNDARY (hard, do not move): this file is Node-only and is NEVER inlined into
-// the viewer bundle. viz.mjs's askSource() inlines codegraph.mjs + ask-vocab.mjs +
-// ask.mjs ONLY and strips their import lines, so the portable single-file HTML has
-// no wink, no model, and no `nlpAdapter` binding at all — ask.mjs reaches this
-// module exclusively through a `typeof nlpAdapter === "function"` guard and
-// degrades to adapter-less parsing (lemma/POS tiers off; the curated tables and
-// the bounded edit-distance tier still work, browser and Node alike). Keeping the
-// ~1MB CJS model out of the page is the point of the split.
-//
 // wink-nlp and wink-eng-lite-web-model are loaded through the shared leaf loader
 // src/wink-model.mjs (Node `createRequire` fallback + a browser registration seam),
 // so this file no longer carries its own Node-only load block. The load happens

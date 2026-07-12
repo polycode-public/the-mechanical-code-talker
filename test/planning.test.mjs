@@ -43,7 +43,6 @@ test("findActionPath: budget exhaustion — a real path exists but is longer tha
   // The only route to G is 3 hops (S->M1->M2->G); a budget of 2 must miss it
   // honestly, not return a partial/truncated path.
   assert.equal(findActionPath("S", isGoalG, applyGraphActions, { maxDepth: 2 }), null);
-  // And the boundary itself (exactly 3) must succeed — no off-by-one.
   const result = findActionPath("S", isGoalG, applyGraphActions, { maxDepth: 3 });
   assert.ok(result);
   assert.deepEqual(result.actions, ["S->M1", "M1->M2", "M2->G"]);

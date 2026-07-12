@@ -147,8 +147,6 @@ test("generateCompletion(): the grammar pass capitalises EVERY internal sentence
     assert.match(result.text, /^[A-Z]/, "the completion opens capitalised");
     // no doubled terminal punctuation anywhere (ruleTerminal's own generalised job)
     assert.doesNotMatch(result.text, /[.!?]{2,}/, "no run of doubled sentence stops survives the grammar pass");
-    // a genuinely multi-sentence completion — otherwise the boundary generalisation this
-    // dispatch adds would be untested by this fixture.
     assert.ok((result.text.match(/[.!?]/g) || []).length >= 2, "the assembled completion has at least two sentences");
   } finally {
     await rm(dir, { recursive: true, force: true });

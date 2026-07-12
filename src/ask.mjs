@@ -62,13 +62,6 @@ import { pickPhrase } from "./answer-variants.mjs";
 
 // Normalization stays importable from its original site (tests + chat surface).
 export { normalizeQuery, applyNegationFrames };
-// The OPTIONAL Node-only wink-nlp adapter (lemma/POS tier). BOUNDARY: the inlined
-// viewer bundle (viz.mjs askSource) strips this import line and never inlines
-// ask-nlp.mjs, so in the browser `nlpAdapter` is simply an undeclared identifier —
-// defaultNlp() below reads it through `typeof`, the one operator that touches an
-// undeclared name without throwing, and the portable single-file HTML degrades to
-// adapter-less parsing (curated tables + bounded fuzzy still on) instead of
-// shipping a ~1MB language model inside the page.
 import { nlpAdapter } from "./ask-nlp.mjs";
 
 /** Per-graph, per-kind memo for THIS file's own edgesOfKind copy — same WeakMap<graph,
@@ -87,15 +80,7 @@ const askEdgesOfKindCache = new WeakMap();
 
 /** All edges of a classified relation kind, flattened across relation groups —
  *  a local copy of codegraph.mjs's private edgesOfKind (kept local rather than
- *  exported+imported to avoid coupling this file's commit boundary to concurrent
- *  in-flight edits elsewhere in codegraph.mjs; both read the same relationKind
- *  classification, so they cannot drift in meaning). Memoized per (graph, kind) —
- *  perf lever, HANDOVER follow-up #8: this is the query engine's hottest path,
- *  called repeatedly on the same (graph, kind) pair across a single query's
- *  compositional evaluation, and at monorepo scale (tens of thousands of modules)
- *  the repeated O(relations) scan is a real latency/GC cost — not a correctness
- *  fix (the stack-overflow bug this file's twin comment references is already
- *  fixed and unrelated). */
+ *  exported+imported to avoid coupling this file's commit. */
 function edgesOfKind(graph, kind) {
   let byKind = askEdgesOfKindCache.get(graph);
   if (!byKind) { byKind = new Map(); askEdgesOfKindCache.set(graph, byKind); }
@@ -200,10 +185,7 @@ const LEADING_RELATION_VERB_RE = new RegExp(
 // keeps the winning parse only, byte-identical to the original two-way merge). ----
 
 /** The default lemma/POS adapter: wink-nlp when this is a Node process with the
- *  optional deps installed, null otherwise. BOUNDARY (see the import comment):
- *  the inlined viewer bundle strips the ask-nlp.mjs import, so `nlpAdapter` is
- *  an UNDECLARED identifier there — `typeof` reads it without throwing and the
- *  browser path degrades to no adapter, same parse pipeline otherwise. */
+ *  optional deps installed, null otherwise.. */
 function defaultNlp() {
   return typeof nlpAdapter === "function" ? nlpAdapter() : null;
 }

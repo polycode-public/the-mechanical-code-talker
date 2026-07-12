@@ -14,14 +14,6 @@
 // reuses the real spiralExpand instead, so the browser walk is byte-identical
 // to the CLI's).
 //
-// Bundled by scripts/build-ask-bundle.mjs into src/ask-browser.bundle.js (an
-// IIFE), which viz.mjs inlines verbatim into the viewer page's own <script>.
-// Runs adapter-less (no wink model in the browser — ask()'s lemma/POS tier
-// degrades to its curated + fuzzy tiers, exactly the boundary
-// test/ask-nlp.test.mjs's own "viewer bundle without wink" test proves stays
-// answerable) and grammar-lite (no ACE/construction-grammar strategies, both
-// fs-dependent — the plain grammar/keyword-spot/noise-strip strategies still
-// answer every shape tmct viz's own memory-graph queries need).
 import { ask, parseQuery } from "./ask.mjs";
 import {
   parseEntities, spiralExpand, mostRecentIndividual, derivedUpdatedAt, MEMORY_SPIRAL_EXPAND_KINDS,

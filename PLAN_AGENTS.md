@@ -152,19 +152,7 @@ bounded, (c) genuinely harder — and feed §2.3 below.
   tolerant recall path feeding the strict grammar as an additional front end, not instead of it.
 - **Declarative SHACL ingest gate (c) — ✅ shipped 2026-07-10.** Every marginalia memory node is
   validated against a shape contract (`app/ontology/shapes.ttl`, via `shacl-engine`) before it enters
-  the shared tree — a standards-based, declarative write-boundary contract. tmct's own version:
-  `shacl-engine`/`rdf-ext` were tried first (per this bullet's own original framing) but rejected —
-  they transitively pull in a full federated SPARQL engine (`@comunica/query-sparql-rdfjs-lite`,
-  ~560 packages), disproportionate to tmct's 5-runtime-dep minimal-deps floor. Replaced with a small
-  hand-rolled validator, `src/memory/shacl.mjs`, mirroring `src/conformance.mjs`'s own existing
-  imperative-assertion precedent (same idea as marginalia's gate — a declarative shape spec checked
-  before every write — different implementation weight). The shape contract itself lives at
-  `ontology/memory-shapes.ttl` (documentation/spec, kept in sync by hand, not machine-parsed) for
-  `Individual`/`Fact`/`Rule`; wired at exactly two write points, `appendFact` and `appendRule`
-  (`src/memory/core.mjs`) — deliberately not the batch `appendFacts`/chat-hot-path `appendUtterance`
-  call sites, matching the two explicit, structured write shapes this bullet named. Permissive
-  beyond core.mjs's own existing structural floor (provenance stays optional) so it doesn't reject
-  legitimate sparse re-teaches of pre-existing data.
+  the shared tree — a standards-based, declarative write-boundary contract. 
 - **Hub-dampening + thin-concept detection (a) — ✅ shipped v1.4.0, on by default.** tmct already
   implements exactly this pattern in `src/codegraph.mjs` (degree-quantile hub gating, min-heap
   frontier expansion) — for the **code** graph only. Ported into `src/memory/blocks.mjs`'s
@@ -218,13 +206,6 @@ algorithmic capability tmct would have to invent — the logic already sits in t
   truncation notices — and consolidating risked real regressions for low benefit), so this
   telemetry is real, tested infrastructure, currently exercised only by direct RI callers/tests, not
   by the live chat tool-dispatch path.
-- **Real multi-language AST extraction — scope decision (2026-07-11): stays in seonix,
-  permanently.** seonix parses Python/TypeScript/C#/Java via real compiler front ends; tmct's
-  `graph-build.mjs` does no parsing at all. Originally scoped here as "genuine engineering, tmct
-  could wire seonix's parsers into its own `graph-build.mjs`." The operator's explicit call:
-  seonix *is* the connection point between the SEON ontology and software language — that's its
-  job, not tmct's. tmct stays a pure downstream graph consumer permanently, by design, not by gap.
-  See §6 for how this reshapes Phase 3.
 - **Chronograph temporal diffing (c, genuinely hard).** seonix's `chronograph/lib/temporal.mjs`
   gives every node/edge a validity interval and computes real structural diffs between arbitrary
   commits (added/removed/changed, wired/unwired/rewired edges) plus deterministic prose narration
@@ -321,19 +302,6 @@ Near-term, mostly known-how, individually small. No item here requires research.
     found from Widget.render to fnAlpha" even though the immediately preceding turn just confirmed
     the call. Root cause pinned: `src/ask.mjs`'s `shape === "ask"` branch calls `kindsFor(kind)`,
     and `KIND_UNIONS` (~line 134) only defines a union for `kind: "uses"` — never for bare `"calls"`
-    — so the yes/no check scans only the module-coarse `calls` kind, unlike the `forward`/`reverse`
-    shapes (~line 3032 onward), which explicitly widen to the `callsSymbol` sibling via
-    `SYMBOL_GRAIN_SIBLING` when the resolved endpoint is a fine-grain Function/Method. This is a
-    **new, previously-undocumented, confidently-wrong bug** (not in the 0.7.1-era finding) — flagged
-    here rather than fixed, per this pass's read-only scope. Re-verifying the two other named
-    follow-up shapes refines rather than confirms the earlier read-only pass's wording: "who touched
-    it" after a calls-focused turn actually resolves "it" to fnAlpha correctly (fnAlpha genuinely has
-    zero `touchesSymbol` edges in the fixture, so the empty answer is honest) — the real bug is that
-    the honest-empty template prints the literal word "it" instead of substituting the resolved
-    label ("No modules found whose module directly touches it." should name "fnAlpha"). "was it
-    touched recently" fails for a different, unrelated reason: the decomposition strategy reads
-    "recently" itself as the ask-shape's comparison object (not a modifier to strip), so it honestly
-    fails to resolve "recently" as a graph entity — not a pronoun-resolution gap at all.
   - **Gap 2, discourse-count anaphora — mostly closed for relation filters, one confirmed gap
     remains.** "which modules import http.mjs" (→ base.mjs/router.mjs/tasks.mjs) → "how many of
     those also import logger.mjs" correctly answers "1 module" (router.mjs); "...are tested"
@@ -405,20 +373,7 @@ that isn't code at all.
   objects — deliberately zero code-domain framing), was added, same checksum/provenance/
   config-gated-off-by-default discipline as the existing three. Still ◐: this grows the *available*
   seed content, but stays opt-in/config-gated — not a default-on wider corpus.
-- ◐ **Context-preserving ingestion for unknown words — built and unit-tested, but DORMANT in
-  production.** `src/corpus/unknown-ingest.mjs` (new, 2026-07-10): an unrecognized term encountered
-  during seeding becomes a graph individual tagged with its source passage as `mgx:contextPassage`
-  provenance, with co-occurring known terms linked via `mgx:coOccursWith` — reusing
-  `appendFacts`/`normFactTerm` unmodified, wired into `seedMemory` as an opt-in
-  `captureUnknownContext` flag. Deliberately **not** distributional/embedding-style meaning
-  induction — that would cross into LLM-shaped territory; this buys traceable context, not automatic
-  sense disambiguation. **The gap found by `CAPABILITIES_1.4.1.md`'s review (item #33):**
-  the one production call site that could activate this (`src/extensions.mjs`'s
-  `seedActiveCorpusEntries`, shared by `chat.mjs`'s bootstrap and `tmct init`) never actually passes
-  `captureUnknownContext: true` — the mechanism is real and tested, but no real user's seed path
-  exercises it yet. Also still open, out of this session's scope: an analogous hook in the LIVE chat
-  teach/miss path (raw utterance text as the passage, no ConceptNet `surfaceText` to fall back on) —
-  needs a `chat.mjs` edit not attempted here.
+- ◐ **Context-preserving ingestion for unknown words — built and unit-tested, but DORMANT
 - ✅ **Config surface, concretely — shipped v1.4.0.** Each named extension/seed set gets an optional
   `bias` weight in `tmct.toml`'s `[bias]` table (a flat bundle-name → weight table, not nested under
   `[extensions.*]` — a deliberate simplification versus this doc's own illustrative sketch).
@@ -511,17 +466,9 @@ tmct" rather than validate against synthetic benchmarks.
   explicit-teaching half (marginalia's own capability audit already found "X is the Y of Z"-style
   explicit teaching moves cleanly to tmct + effort). This phase wires a new ingestion source to
   capability tmct already has.
-- **Also feeds §4's context-preserving unknown-word ingestion** once that lands — scraped prose is
-  exactly the source material that mechanism is meant for: unknown terms enter the graph tagged with
-  the scraped passage they came from, not dropped.
 - **Also a natural Stage-1 input source for `archive/PLAN_COMPLETIONS.md`'s mechanical text-generation
   pipeline** once that track is scoped — scraped web content is exactly the kind of broad-search
   material that pipeline's grouping/inference/summarization stages consume.
-- **Explicit honesty boundary, carried over from marginalia's own capability audit**: open-world
-  NER (finding named people/places in free prose) and implicit relation mining from arbitrary
-  scraped text both stay beyond horizon — tmct resolves an already-named term, it doesn't go find
-  one. This phase is strictly about wiring a new ingestion source to existing explicit-pattern
-  extraction, not new NLU capability. Don't scope-creep it into open-world extraction.
 
 ## 8. Phase 5 — tmct as a pluggable LLM rung
 
@@ -583,9 +530,7 @@ new shared reference doc, `docs/references/research-horizon.md`, cross-linked ra
   Closed-world planning (STRIPS/PDDL, HTN, POP) is solved and shipped; open-world relevance-bounding
   is argued by cited literature to be possibly algorithmically unsolvable, not just unbuilt.
 - **Winograd-hard coreference** — no symbolic/deterministic system has solved Winograd-class pronoun
-  ambiguity, and none is expected to. One speculative sub-angle worth a future PLAN, not scheduled
-  here: grounding pronoun disambiguation in tmct's own closed, complete graph rather than open
-  commonsense.
+  ambiguity, and none is expected to.
 - **A shared ~2M-word cross-domain ontology** — no one has published the combination this idea
   needs (general + technical vocabulary, merged, at this scale, under a no-LLM constraint). Unknown,
   unattempted — the actual open question, not a commitment to build. §4's bias-weighting mechanism is
@@ -620,8 +565,6 @@ Explicit pruning record, so these aren't re-asked:
   re-scoped inside `archive/PLAN_COMPLETIONS.md` §1.4, where it has a real job — see that doc, not this one.)
 - **Duplicate WordNet/SEthesaurus rejection rationale** — stated once (§9, R3), not repeated across
   every doc that touches ontology scale.
-- **Making marginalia or bedrock-meter no-LLM.** Never proposed, not proposed here. Both keep their
-  own LLM usage; tmct's contribution is the deterministic floor with an honest escalation boundary.
 - **PLAN_TAUGHT_RELATIONS' full build narrative.** The doc is fully shipped and archived as-is
   (§1.2 covers what's durable); its phase-by-phase session log is historical record, not active
   planning content.
@@ -654,9 +597,6 @@ What this doc absorbed from each archived source, and what was cut:
 - **`PLAN_AGI_ARCHITECTURE.md`** → §1.2 (five-part architecture verification, kept as one line: four
   of five parts already exist, just not unified), §9's LLM-decision-provenance gap and R3's Cyc/
   WordNet framing. Cut: the full five-part verification table narrative (condensed to §1).
-- **`PLAN_CAPABILITY_ROUTER.md`** → §1 (shipped-stage evidence), §8 (Claude Code/Bedrock hardening),
-  §9 R1/R3 (bounded goal recognition, open-world boundary). Cut: the "Open questions (for tonight)"
-  section (§10); the full open-world-boundary literature review moved to
   `docs/references/research-horizon.md`.
 - **`PLAN_TAUGHT_RELATIONS.md`** → §1.2 (the Stage 0/1 prototype insight) only. Archived as-is
   (operator decision) — its 70KB build narrative is historical record, not carried forward.

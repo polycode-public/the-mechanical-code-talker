@@ -102,15 +102,9 @@ test("determinism: two separate node processes produce byte-identical parse+answ
   assert.match(first, /b\.mjs/);
 });
 
-// ---- the BOUNDARY, proven: the inlined viewer bundle (same strip viz.mjs's
-// askSource applies) evaluates as a classic script with NO wink, NO node:module,
-// and still answers — misspelling corrections and the bounded fuzzy tier are
-// plain JS and ride along; only the lemma/POS tier degrades away. ----
-
 test("viewer bundle without wink: stripped codegraph+vocab+interpret+ask evaluates and answers (fuzzy + misspellings intact, lemma/POS honestly off)", async () => {
   // Bundle order mirrors the import graph: vocab feeds the interpret modules
   // (normalize -> fuzzy -> strategies, the item-13 split), which feed ask.mjs.
-  // ask-nlp.mjs stays OUT — that exclusion is the boundary this test proves.
   const sources = await Promise.all(
     ["codegraph.mjs", "ask-vocab.mjs",
       "interpret/normalize.mjs", "interpret/fuzzy.mjs",

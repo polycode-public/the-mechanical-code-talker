@@ -313,28 +313,7 @@ graph. `renderVizHtml` gained a depth stepper + per-class visibility filter row 
 itself: real `ask()` queries, focus-follows-answer via a real client-side `spiralExpand` re-walk (not
 a hand-rolled BFS), and a node-detail panel whose class badge isolates that class in the filters
 and fires a real `where is X mentioned` query, whose label fires the same query for that specific
-entity. New npm script `build:ask-bundle`.
-
-**A genuine, documented gap, not a silently-faked feature**: live-testing during this build confirmed
-there is no working `ask.mjs`-only query shape for "list/count all individuals of memory-graph class
-Y" (`"how many facts are there"`, `"list facts"`, `"what is a Fact"` all miss against a real memory
-graph) — that richer machinery (`CAN_ASK_RE`/`WHAT_CAN_DO_RE`/`WHAT_HAS_RE`/`WHAT_INHERITS_RE`) lives
-in `chat.mjs`'s `factAnswer` cascade, deliberately out of this bundle's `ask.mjs`-only scope (bundling
-`chat.mjs` would pull in the full turn-taking/persistence/teach machinery, not a small addition). The
-class-badge click was designed around what's ACTUALLY confirmed working (`where is X mentioned`, a
-real prose-index search) rather than a query shape that would silently miss — see `ROADMAP.md`'s
-"What's next" for this as an explicit, tracked gap.
-
-**Verification**: new `test/ask-browser-bundle.test.mjs` (mirroring seonix's own test) proves the
-checked-in bundle evaluates as a classic script (no live `import`/`require`/`import.meta`), exposes
-every `tmctViz` export, and answers a real query end-to-end against the real fixture graph — adapter-
-less, exactly the boundary `test/ask-nlp.test.mjs`'s own "viewer bundle without wink" test already
-proves for the underlying strip approach. `test/viz.test.mjs` extended for the new `renderVizHtml`
-signature (`payload`/`askBundle`) and the new controls. `npm test`: 1932/1932. Live-verified manually:
-a real ~1MB self-contained `graph.html` generated against a real seeded memory graph, with working
-chat, focus-follow, and click-to-query, confirmed via a `node:vm`-driven functional check of the
-bundle's core functions (`ask`, `spiralExpand`, `buildVizNodesAndEdges`) since no headless-browser
-tool was available in this session to drive the canvas/DOM interactions directly.
+entity. New npm script `build:ask-bundle
 
 ## §6. NL-fluency, made concrete — a real generation + coverage-testing phase, folded into this plan
 
@@ -392,9 +371,7 @@ static/mechanical by construction — closed-set grammar, closed-set synonym sub
 number you can check. That's deliberate, not a hedge: a coverage harness can tell you honestly what
 fraction of real prose is covered, but it cannot, by itself, close the remaining gap creatively the
 way open-ended generation would — closing it further means writing more grammar patterns or growing
-the synonym data, not a shortcut. This is the same honest-limits discipline `ROADMAP.md`'s "Research
-horizon" already applies to harder problems (Winograd coreference, the frame problem) — naming the
-boundary plainly instead of overclaiming past it.
+the synonym data, not a shortcut. 
 
 ## §7. Docs to update as part of this plan
 

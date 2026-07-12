@@ -69,12 +69,6 @@ the raw reduction misses: **intention persistence**. Without BDI's commitment, t
 act loop oscillates — goals flicker, the first-step choice churns, and the agent is *busy, not
 autonomous*. The commitment (and its three drop conditions) is what makes the loop converge.
 
-The honest boundary is identical to C1's, one level up. In a **closed** world, goals are a
-**deduction** from a declared goal model, so closed-world C2 is deterministically reachable. In an
-**open** world, novel situations imply goals *no rule declared* — GDA's discrepancy-driven
-goal-generation is where the open-ended judgement lives, and that is precisely where tmct escalates
-to an LLM rather than pretending its rules cover the unbounded case (the frame / relevance problem).
-
 ## Links
 
 - BDI (ICMAS-95): https://cdn.aaai.org/ICMAS/1995/ICMAS95-042.pdf

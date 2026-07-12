@@ -36,7 +36,7 @@
 # 1. Article selection — a/an by the following word's phonetic onset. The live
 #    defect this fixes: the assert echo "every module is a artifact" -> "an
 #    artifact". Reads the next word (whether in-span or the leading token of the
-#    following protected span); refuses at a boundary it cannot read safely.
+#    following protected span).
 [[rule]]
 id = "article-selection"
 kind = "article"

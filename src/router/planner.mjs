@@ -25,10 +25,6 @@
 //     chain. Bounded depth + a hard step counter GUARANTEE termination — no
 //     unbounded search can ever wedge the caller (the harness also caps us).
 //
-// THE OPEN-WORLD BOUNDARY, named honestly: novelty the declared methods + operators
-// do not cover (a sub-goal that resolves to nothing, a connective we do not model)
-// is REFUSED/ESCALATED, not guessed. Sound/complete is claimed only INSIDE the
-// declared world.
 
 import { resolveOne, extractEntity } from "./resolver.mjs";
 
