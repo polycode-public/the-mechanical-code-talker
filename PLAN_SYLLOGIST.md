@@ -1,12 +1,14 @@
 # PLAN_SYLLOGIST_HORIZON.md — beyond the shipped ladder: making the Syllogist itself smarter
 
-> **STATUS: research/design notes, nothing implemented — pulled out of `PLAN_INFERENCE_TESTING.md`
-> on its own retirement, 2026-07-11.** That file's own §4/§5 carried this material as a long aside
-> inside an otherwise-shipped build plan; it has been moved here, mostly verbatim (citations exactly
-> as verified there), so it stands on its own instead of getting archived alongside a finished plan.
-> Nothing in this file is scheduled, staffed, or blocking anything else — it is a place to point a
-> future session that wants to make `src/syllogise.mjs` (tmct's forward-chaining reasoning engine,
-> the growing "Syllogist") more sophisticated, not a to-do list.
+> **STATUS: research/design notes — §3's own JTMS-shaped, VERIFY-backed slice (single justification
+> per scm-sco fact, dependency-directed removal, bounded) is now IMPLEMENTED and tested
+> (`retractSubClassOf`, `src/syllogise.mjs`; see §3 for scope). §1/§2/§4/§5 remain notes only.
+> Pulled out of `PLAN_INFERENCE_TESTING.md` on its own retirement, 2026-07-11. That file's own §4/§5
+> carried this material as a long aside inside an otherwise-shipped build plan; it has been moved
+> here, mostly verbatim (citations exactly as verified there), so it stands on its own instead of
+> getting archived alongside a finished plan. Nothing else in this file is scheduled or staffed — it
+> is a place to point a future session that wants to make `src/syllogise.mjs` (tmct's forward-
+> chaining reasoning engine, the growing "Syllogist") more sophisticated, not a to-do list.
 
 ## What problem this solves, and why it matters
 
@@ -131,6 +133,24 @@ bounded — a capped environment-set size; low-trust/retractable — the whole p
 unbuilt, and honestly speculative: nobody has published this exact narrow combination as a working
 system, so there is no citation to verify here beyond the separately-real building blocks above —
 flagged as such rather than dressed up as prior art.
+
+**LANDED (this session): the single-justification JTMS step, scm-sco only.** The paragraph above's
+first sentence — "today every entailed fact carries only a flat provenance TAG... never persisted
+onto the fact itself, so there is no stored justification to walk at all" — is no longer true for
+scm-sco: `syllogise()` now persists each scm-sco conclusion's two premise fact ids as
+`mgx:factJustification` (`memory/core.mjs` `factIdForTriple`/`appendFacts`' `justification` param),
+and `retractSubClassOf` (`src/syllogise.mjs`) walks it — dependency-directed removal, bounded by
+`budget`/`depth`, cascading through multi-hop chains. It does NOT stop at a bare justification walk
+(the naive JTMS failure mode this file itself names, citing de Kleer): each candidate is re-VERIFIED
+against the surviving graph (`buildAncestorCloser`, reused) before being removed, so a fact with a
+genuine second derivation path, or one later independently taught, survives — see
+`test/syllogise.test.mjs`'s `retractSubClassOf` block for both cases as regression tests. Still open,
+exactly as scoped above and NOT attempted: the true ATMS generalization (persisting every
+alternate justification SET per fact, not just one — this slice's VERIFY step gets the same answer
+for scm-sco's small rule set by re-deriving locally instead, which is cheap here but does not
+generalize to a rule set where that local re-derivation itself gets expensive), and extending
+justification-tracking to the other four rules (cax-sco/cax-dw/cls-svf1/scm-svf1), which is
+mechanical but unbuilt.
 
 ## 4. Relevance under budget is the same open question wearing a different hat
 

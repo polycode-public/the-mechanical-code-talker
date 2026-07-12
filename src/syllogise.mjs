@@ -101,7 +101,7 @@
 //     exist, so a general "no" is provable without needing one
 //     (`proveMaxCardinalityZeroDenial`).
 
-import { loadMemory, appendFacts, readFactRows, normFactTerm } from "./memory/core.mjs";
+import { loadMemory, appendFacts, readFactRows, normFactTerm, factIdForTriple, removeFacts } from "./memory/core.mjs";
 
 /** scm-sco: the subClassOf-transitivity rule, and the provenance tag its
  *  conclusions carry. */
@@ -1035,6 +1035,18 @@ export async function syllogise(repoDir, { depth = 32, budget = 50, focus = null
     ...scmDerived.map((d) => ({
       subject: d.subject, predicate: SUBCLASS_PREDICATE, object: d.object,
       provenance: ENTAILED_PROVENANCE,
+      // PLAN_SYLLOGIST.md §3's persisted-justification step, scm-sco only: the
+      // two premise fact ids THIS conclusion actually rode (a⊑b, b⊑c) — ids
+      // are content-addressed (factIdForTriple/memory/core.mjs), so this works
+      // whether the premise is a stated fact or another entailment this SAME
+      // pass just derived a round earlier (its id is predictable before it's
+      // even written). Read back by retractSubClassOf (below) to find every
+      // entailment a retracted premise could have supported, without a
+      // whole-graph re-scan.
+      justification: [
+        factIdForTriple(d.subject, SUBCLASS_PREDICATE, d.via),
+        factIdForTriple(d.via, SUBCLASS_PREDICATE, d.object),
+      ],
     })),
     ...caxDerived.map((d) => ({
       subject: d.subject, predicate: TYPE_PREDICATE, object: d.object,
@@ -1135,6 +1147,153 @@ export async function syllogise(repoDir, { depth = 32, budget = 50, focus = null
     i += 1;
   }
   return { derived: written, count: written.length, budget, depth, truncated: written.length >= budget };
+}
+
+/** True when EVERY provenance tag on a fact's (possibly " | "-joined) union is
+ *  an `entailed:*` tag — i.e. the fact has never been independently stated or
+ *  taught, only ever derived. A fact first entailed, then LATER also directly
+ *  taught (same (s,p,o) → same id → provenance union, appendFact's own upsert
+ *  contract), is NOT purely entailed any more — `retractSubClassOf`'s cascade
+ *  must never delete it just because its now-stale justification broke; the
+ *  taught half is a real, independent reason to keep believing it (the trust-
+ *  tier concern PLAN_SYLLOGIST.md §3 names: "must never touch a higher-trust
+ *  taught-only derivation"). */
+function isPurelyEntailed(provenance) {
+  const tags = String(provenance || "").split(" | ").filter(Boolean);
+  return tags.length > 0 && tags.every((t) => t.startsWith("entailed:"));
+}
+
+/**
+ * PLAN_SYLLOGIST.md §3's first real, scoped retraction slice: JTMS-style
+ * dependency-directed removal, for scm-sco ONLY (subClassOf transitivity —
+ * this file's simplest rule, and §3's own worked example: "a premise later
+ * disappears, what else must be un-believed?"). Deliberately NOT the fuller
+ * ATMS §3 also sketches (tracking every alternate premise-SET per fact, "a
+ * further, NOT-currently-planned step") — this tracks exactly ONE
+ * justification per entailed fact (the premise pair it actually rode, set at
+ * write time — syllogise()'s own toWrite mapping, above): the JTMS-shaped
+ * step §3 names as missing today ("a JTMS-shaped single justification per
+ * fact in spirit, though not yet a persisted, walkable one").
+ *
+ * Retracting `subject ⊑ object` (a STATED or a previously-ENTAILED fact —
+ * either may be retracted) proceeds in bounded rounds:
+ *   1. Remove the named fact.
+ *   2. Scan stored entailed scm-sco facts (purely-entailed ones only —
+ *      `isPurelyEntailed`, above) for any whose persisted justification cites
+ *      an id removed so far — candidates.
+ *   3. VERIFY, never assume: a candidate is removed only if `subject ⊑
+ *      object` is NO LONGER reachable over the SURVIVING subClassOf edge set
+ *      (a full ⊑-ancestor walk, `buildAncestorCloser` — the SAME shared
+ *      machinery `deriveTypePropagation`/`deriveDisjointViolations` already
+ *      reuse, not reimplemented here). A fact with a SECOND, independent
+ *      derivation path survives — a real possibility scm-sco's transitive
+ *      closure allows (a⊑b⊑d AND a⊑c⊑d both license a⊑d) — exactly the
+ *      failure mode a bare "delete anything citing the retracted id" JTMS
+ *      walk gets wrong, and precisely why de Kleer's ATMS exists at all (§3's
+ *      own citation). This VERIFY step is this slice's cheap, bounded answer
+ *      to that known JTMS over-retraction limitation: one local graph walk
+ *      per candidate, never a full alternate-justification enumeration.
+ *   4. Repeat: a fact confirmed-removed this round becomes a new cascade
+ *      source for the next round (removing a mid-chain link can ripple).
+ *
+ * Bounded by `budget` (max facts examined+removed, default 50 — the SAME
+ * default every other rule in this file uses) and `depth` (max cascade
+ * rounds, default 32, mirroring `deriveSubClassClosure`'s own fixpoint cap).
+ * `truncated` flags the cascade may have been cut short before reaching a
+ * fixpoint (candidates still pending when budget/depth ran out) — the SAME
+ * honest-signal discipline `syllogise()`'s own `truncated` flag follows: a
+ * caller must not read a truncated cascade's survivors as "provably still
+ * consistent," only as "not yet shown inconsistent within budget."
+ *
+ * Known, DELIBERATE scope limit (not a bug): this only ever touches scm-sco's
+ * own entailed subClassOf facts. The other four rules (cax-sco/cax-dw/
+ * cls-svf1/scm-svf1) do not yet persist a justification (none call
+ * `factIdForTriple`/write `justification` — only `syllogise()`'s scmDerived
+ * mapping does, above), so a type/disjointWith/someValuesFrom conclusion that
+ * ALSO went stale when this same premise was retracted is not cascaded here.
+ * Extending justification-tracking to the other four rules is mechanical
+ * (each already computes a `via`/`viaX` pivot) but is a separate follow-up,
+ * not attempted in this slice.
+ *
+ * Returns { retracted, count, budget, depth, truncated, found } — `retracted`
+ * is every id actually removed (target first, then cascade order); `found`
+ * is false (nothing else meaningful) when `subject ⊑ object` was never a
+ * stored fact at all — an honest no-op, matching this module's "never guess"
+ * discipline. No I/O beyond the one `removeFacts` call (skipped entirely when
+ * `found` is false).
+ */
+export async function retractSubClassOf(repoDir, subject, object, { budget = 50, depth = 32 } = {}) {
+  const s = normFactTerm(subject);
+  const o = normFactTerm(object);
+  const targetId = factIdForTriple(s, SUBCLASS_PREDICATE, o);
+  const memory = await loadMemory(repoDir);
+  const rows = readFactRows(memory);
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  if (!byId.has(targetId)) return { retracted: [], count: 0, budget, depth, truncated: false, found: false };
+
+  // The FULL current subClassOf edge set (stated + every prior entailment) —
+  // the working graph this function's VERIFY step walks each round; a
+  // removed id's own edge is excluded from that round's walk onward.
+  const scRows = rows.filter((r) => isSubClassOf(r.predicate));
+  const edgeOf = new Map(scRows.map((r) => [r.id, [r.subject, r.object]]));
+  // Only a purely-entailed scm-sco fact ever carries a walkable justification
+  // (see syllogise()'s toWrite mapping + isPurelyEntailed, above) — every
+  // other row's justification is [] (or the fact is also independently
+  // taught, so it is EXCLUDED here even if it happens to carry a stale one),
+  // so this candidate pool is naturally, correctly scoped.
+  const entailedScRows = scRows.filter((r) => r.justification.length && isPurelyEntailed(r.provenance));
+
+  const removed = new Set([targetId]);
+  const order = [targetId]; // deterministic report order: target first, then removal order
+  let truncated = false;
+  let round = 0;
+  for (; round < depth; round += 1) {
+    const candidates = entailedScRows
+      .filter((r) => !removed.has(r.id) && r.justification.some((j) => removed.has(j)))
+      .sort((a, b) => a.subject.localeCompare(b.subject) || a.object.localeCompare(b.object));
+    if (!candidates.length) break; // fixpoint — nothing left to (re-)check
+
+    // The surviving edge set for THIS round's verify walk — DRed's own
+    // "delete a superset, then selectively rederive" discipline (§3's own
+    // citation, Gupta/Mumick/Subrahmanian 1993): every candidate's OWN edge
+    // is excluded too, alongside every OTHER candidate under suspicion this
+    // SAME round, not just `removed` — otherwise a candidate would trivially
+    // "reach itself" through its own not-yet-deleted edge (or lean on a
+    // sibling candidate that is itself only standing on the same broken
+    // premise), understating what actually still needs re-verifying. A
+    // candidate that reaches its target through some OTHER, untouched edge
+    // (a genuinely independent derivation path this fact's single persisted
+    // justification never recorded) correctly survives.
+    const candidateIds = new Set(candidates.map((c) => c.id));
+    const survivingEdges = [...edgeOf.entries()]
+      .filter(([id]) => !removed.has(id) && !candidateIds.has(id))
+      .map(([, e]) => e);
+    const ancestorsOf = buildAncestorCloser(survivingEdges);
+
+    let progressed = false;
+    let hitBudget = false;
+    for (const c of candidates) {
+      if (removed.size >= budget) { hitBudget = true; break; }
+      // does subject⊑object still hold WITHOUT the retracted premise, via ANY
+      // surviving path (not just the one this fact was originally derived
+      // through)? A survivor keeps its (now possibly re-groundable, still
+      // TRUE) fact and is never re-examined again this call.
+      if (ancestorsOf(c.subject).has(c.object)) continue; // a second, independent path still supports it — keep
+      removed.add(c.id);
+      order.push(c.id);
+      progressed = true;
+    }
+    if (hitBudget) { truncated = true; break; }
+    if (!progressed) break; // every candidate this round survived verification — fixpoint
+  }
+  if (!truncated && round >= depth) {
+    // depth exhausted, not a natural fixpoint — honestly flag it if a
+    // pending candidate would still have been checked next round.
+    truncated = entailedScRows.some((r) => !removed.has(r.id) && r.justification.some((j) => removed.has(j)));
+  }
+
+  const { removed: actuallyRemoved } = await removeFacts(repoDir, order);
+  return { retracted: actuallyRemoved, count: actuallyRemoved.length, budget, depth, truncated, found: true };
 }
 
 /**
