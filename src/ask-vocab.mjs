@@ -532,6 +532,10 @@ export const MISSPELLINGS = Object.freeze({
   "extands": "extends", "extneds": "extends",
   "depnds": "depends",
   "touchs": "touches", "tuoches": "touches", "touhced": "touched",
+  // "touchd" (BENCHMARK_CONVERSATION_1.7.0.md routed backlog C3): the
+  // dropped-vowel slip of "touched" — distinct from "touhced" above
+  // (transposed letters), same curated-typo discipline.
+  "touchd": "touched",
   // WHERE_MARKERS typo (0.9.13 Tier-1 playtest): "defined" itself had no typo
   // entry, so "where is it defned" fell through to the bare-object search path
   // instead of the where-shape ("no module matching 'it defned' found").
@@ -560,6 +564,12 @@ export const MISSPELLINGS = Object.freeze({
   // anchor; the correction regex's dotted-extension guard keeps a module
   // literally named "wat.mjs" untouched, same residual trade as every entry.
   "waht": "what", "wat": "what",
+  // "dat" (BENCHMARK_CONVERSATION_1.7.0.md routed backlog C3): the internet-
+  // casual spelling of "that" — same register as "wat"/"waht" just above,
+  // curated rather than left to the generic fuzzy tier since "that" is a
+  // load-bearing anchor word throughout this grammar (TEACH_RE's own
+  // "remember that X", relative-clause objects, etc).
+  "dat": "that",
   "dose": "does", "doess": "does",
   "teh": "the",
   // aggregate/list TRIGGER words (2026-07-02, trigger-typo work) — a typo of a count

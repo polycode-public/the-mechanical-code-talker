@@ -6379,7 +6379,16 @@ async function describeWrapperAnswer(query, { config, source, focus, graph, tel 
   // and broke DESCRIBE_WRAPPER_RE's own anchor. applyPreambleFrames is the same
   // general-purpose, closed, idempotent pass every other lane in this file
   // already runs first.
-  const q = applyPreambleFrames(String(query || "").trim());
+  // BENCHMARK_CONVERSATION_1.7.0.md routed backlog C3 ("wat about store.mjs"):
+  // this lane's own DESCRIBE_WRAPPER_RE anchors on a literal "what about"/
+  // "describe"/"tell me about" — a curated typo of one of those anchor words
+  // ("wat" for "what") never matched, so the whole lane silently declined even
+  // though "wat" is already a curated MISSPELLINGS entry everywhere else.
+  // correctMisspellings runs FIRST, same order chat.mjs's other normalization
+  // call sites use (e.g. the module-orient lane above), so the anchor match
+  // sees the corrected text; a genuinely uncurated typo still declines here,
+  // same honest-miss behavior as before.
+  const q = applyPreambleFrames(correctMisspellings(String(query || "").trim()));
   const m = DESCRIBE_WRAPPER_RE.exec(q) || STACCATO_PRONOUN_RE.exec(q);
   let term = m?.[1]?.trim();
   if (!term) return null;
