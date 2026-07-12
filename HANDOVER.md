@@ -29,21 +29,13 @@ chase every intermediate bump — don't bump again until that push.
   compositional filter compiler, not `chat.mjs`'s teach routing) — not the same gap, don't expect
   them to move if the remaining sub-problems are picked up.
 
-- **A rephrase-hint pass on honest "nothing matches"/"no X found" misses**
-  (`BENCHMARK_CEFR_ENGLISH_1.7.0.md`'s decision log, top pick) — 7+ cases across B1/C1 grades score
-  zero on the judge's rephrase dimension despite being correct, honest misses, because the miss
-  template offers no nudge toward a question that WOULD work. Scoped: a handful of history/touches-
-  family miss templates in `src/ask.mjs`. Concrete evidence: `g-c1-temp-8`'s "from touches to X"
-  wording also reads backwards and should be fixed in the same pass.
-
-- **Persona-sweep routed backlog** (`BENCHMARK_CONVERSATION_1.7.0.md`'s "Routed backlog" section,
-  not yet picked up by a fast-loop round): (1) ESL phrasing breaks recognition — `"what is X, please
-  explain"` (trailer folded into the term), `"please learn (this/also):"` prefix breaking teach
-  recognition; (2) a file-vs-symbol anaphora scoping miss — focus stays pinned to a method after a
-  "where is it defined" answer names the containing file; (3) fragment-typer typo-tolerance misses
-  (`"who touchd dat"`, `"wat about store.mjs"`, `"cochange w/ wat"`, `"inherits wat"`, `"tests 4 it"`);
-  (4) identity-question phrasing fragility — `"are you an AI? like chatgpt?"` fails where `"are you
-  chatgpt"` works. Each is scoped for `SKILL_AGENT_FAST_LOOP.md`, not attempted yet.
+- **Two small typo-tolerance sub-cases, explicitly deferred, 2026-07-12** — `"w/"` → `"with"` and
+  `"4"` → `"for"` (from `BENCHMARK_CONVERSATION_1.7.0.md`'s "Routed backlog"; the other two backlog
+  items in that family, `"touchd"`/`"dat"` plus the `"wat about X"` routing gap, are fixed). Both
+  need a genuinely new mechanism: the shared `MISSPELLINGS` regex builder can't match a
+  `/`-terminated token (word-boundary requirement); digit tokens are deliberately protected
+  everywhere in this codebase (shas/line numbers/counts) — a real guard, not an oversight to patch
+  around.
 
 - **`PLAN_BREADTH_FIRST_NLU.md`'s two open items** — (c) the paraphrase-verified-via-`syllogise.mjs`
   piece of "Ambition", not started; (d) a real "list/count all X of class Y" query shape for
