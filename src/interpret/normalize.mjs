@@ -152,6 +152,50 @@ export function correctMisspellings(text) {
   return String(text || "").replace(MISSPELLING_RE, (m) => MISSPELLINGS[m.toLowerCase()]);
 }
 
+/** FILLER_WORDS (ask-vocab.mjs), pre-built into one alternation once at module
+ *  load — same "build the regex from the table once, reuse it" discipline as
+ *  every other closed-vocabulary regex in this file (CONTRACTION_RE,
+ *  MISSPELLING_RE, …), rather than rebuilding it inside stripFillerWords on
+ *  every call. */
+const FILLER_RE = FILLER_WORDS.length
+  ? new RegExp(
+      "\\b(" + [...FILLER_WORDS].sort((a, b) => b.length - a.length).map(escapeRegex).join("|") + ")\\b\\s*,?",
+      "gi",
+    )
+  : null;
+
+/** Just the filler/politeness-word strip (ask-vocab.mjs's FILLER_WORDS),
+ *  standalone — the same "one piece of the pipeline, not the whole thing"
+ *  need correctMisspellings above exists for: a caller with its own
+ *  closed anchor regex (chat.mjs's moduleOrientLane matches "^what does …
+ *  do$" itself) wants leading/embedded filler cleared WITHOUT running
+ *  normalizeQuery's other, more invasive rewrites (contraction expansion,
+ *  preamble/subordination/conditional frame rewrites) that can restructure
+ *  the sentence in ways its own shape-matcher never expects — the exact
+ *  risk correctMisspellings' own docblock describes for the same reason.
+ *
+ *  A comma trailing the filler word/phrase itself (across any whitespace,
+ *  e.g. "um, like," or "quickly,") is swallowed WITH it — leading
+ *  conversational filler is routinely comma-spliced onto the real question
+ *  ("so um, like, what does X do exactly?"), and stripping only the word
+ *  leaves the comma stranded as parse-corrupting punctuation debris (a
+ *  leading "," defeats every `^`-anchored template downstream, both parse
+ *  strategies and lane-local regexes alike) — the same species of
+ *  leftover-debris bug the preamble frames elsewhere in this file
+ *  (GREETING_PREAMBLE_RE et al.) already avoid by consuming their own
+ *  delimiter. The trailing `,?` is safe to make unconditional (unlike the
+ *  preamble frames, no delimiter-required gate is needed): it only ever
+ *  fires immediately after a MATCHED filler word, so it can only ever eat a
+ *  comma that was already glued to filler, never a comma separating real
+ *  content ("the modules, and the classes" — that comma sits after the
+ *  content word "modules", not after any filler word). Pure, idempotent;
+ *  unmatched text passes through byte-unchanged. */
+export function stripFillerWords(text) {
+  let q = String(text || "");
+  if (FILLER_RE) q = q.replace(FILLER_RE, " ");
+  return q.replace(/\s+/g, " ").trim();
+}
+
 // ---- closed PREAMBLE frames (0.8.2 feel wave, PLAN_CHAT_FEEL item 2) — the
 // conversational wrapping a developer puts AROUND a real question: a greeting
 // lead-in with a delimiter ("hey there, quick question - …"), a thanks lead-in
@@ -634,13 +678,7 @@ export function normalizeQuery(text) {
   // leaving punctuation/clause debris that poisons the parse.
   q = applySubordinationFrames(q);
   q = applyConditionalFrames(q);
-  if (FILLER_WORDS.length) {
-    const fillerRe = new RegExp(
-      "\\b(" + [...FILLER_WORDS].sort((a, b) => b.length - a.length).map(escapeRegex).join("|") + ")\\b",
-      "gi",
-    );
-    q = q.replace(fillerRe, " ");
-  }
+  q = stripFillerWords(q);
   // emphatic trailing punctuation (item 10): a run of terminal "?" collapses to
   // one — the anchored templates consume exactly one optional trailing "?", so
   // "…walk.mjs??" otherwise leaks a stray "?" into the captured object term (the
