@@ -43,14 +43,20 @@ export const SEON_DEFINITIONS_FILE = join(PKG_ROOT, "corpus", "seon", "definitio
 export const TIER2_DIR = join(PKG_ROOT, "corpus", "tier2");
 export const TIER2_MANIFEST_FILE = join(TIER2_DIR, "manifest.json");
 
-// tier-3 (corpus/wordnet/generate.mjs's output): the Open English WordNet ->
+// corpus/wordnet/generate.mjs's output: the Open English WordNet ->
 // ConceptNet-shape conversion, same slice shape/loader path as tier-1/tier-2.
-// "wordnet-xl"/"wordnet-full" are wired as BUILTIN_EXTENSIONS corpus entries
-// in src/extensions.mjs, so `tmct import --corpus wordnet-xl` resolves
-// directly there rather than through TIER2_MANIFEST_FILE's id lookup — see
-// that module's own BUILTIN_EXTENSIONS comment.
-export const TIER3_DIR = join(PKG_ROOT, "corpus", "tier3");
-export const TIER3_MANIFEST_FILE = join(TIER3_DIR, "manifest.json");
+// Lives alongside its own generator (corpus/conceptnet/'s own precedent:
+// fetch-slice.mjs + slice.jsonl share one directory) rather than under a new
+// "tier-3" name — corpus/README.md's tiering policy already uses "tier-3" for
+// something else entirely (runtime-learned facts, NEVER committed), and this
+// bundle is curated + committed, the same shape as a tier-2 corpus, just too
+// large/mechanically-derived to hand-curate. "wordnet-xl"/"wordnet-full" are
+// wired as BUILTIN_EXTENSIONS corpus entries in src/extensions.mjs, so
+// `tmct import --corpus wordnet-xl` resolves directly there rather than
+// through TIER2_MANIFEST_FILE's id lookup — see that module's own
+// BUILTIN_EXTENSIONS comment.
+export const WORDNET_DIR = join(PKG_ROOT, "corpus", "wordnet");
+export const WORDNET_MANIFEST_FILE = join(WORDNET_DIR, "manifest.json");
 
 const ACE_PATTERNS = new Set(["subClassOf", "type", "ObjectProperty", "someValuesFrom", "disjointWith", "property", "none"]);
 

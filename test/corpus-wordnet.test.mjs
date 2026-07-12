@@ -33,23 +33,16 @@ test("RELATION_MAP: the closed set of eight structural WordNet relations this co
   assert.deepEqual([...SKIPPED_RELATIONS].sort(), ["entails", "exemplifies"]);
 });
 
-test("RELATION_MAP: every emitted rel has an ace != \"none\" row in conceptnet-map.toml (hypernym/mero_substance/causes/attribute — the pre-Phase-1 rows this converter can rely on today)", async () => {
+test("RELATION_MAP: every emitted rel has a real (ace != \"none\") row in conceptnet-map.toml", async () => {
   const map = await loadMap();
   for (const [wnRel, { rel }] of Object.entries(RELATION_MAP)) {
     assert.ok(map.has(rel), `${wnRel} -> ${rel}: no row in conceptnet-map.toml at all`);
-  }
-  // Only assert ace != "none" for the relations already mapped BEFORE this
-  // task's Phase-1 prerequisite (IsA/PartOf/MadeOf/Causes/HasProperty) — this
-  // converter is explicitly forbidden from touching conceptnet-map.toml
-  // itself (scope boundary), and Synonym/RelatedTo/SimilarTo are still
-  // ace="none" on main as of this commit (verified: no Phase-1 widening
-  // commit exists on this branch). Those three rows still emit VALID
-  // ConceptNet-shape JSONL — toFacts() will just silently skip them (its own
-  // documented "deliberate non-emission" contract) until conceptnet-map.toml
-  // is actually widened.
-  const preexistingAceRels = ["/r/IsA", "/r/PartOf", "/r/MadeOf", "/r/Causes", "/r/HasProperty"];
-  for (const rel of preexistingAceRels) {
-    assert.notEqual(map.get(rel).ace, "none", `${rel} row exists but ace="none" — regenerate the map`);
+    // Phase 1 (2026-07-12) widened conceptnet-map.toml so Synonym/RelatedTo/
+    // SimilarTo emit real facts too, not just IsA/PartOf/MadeOf/Causes/
+    // HasProperty — every relation this converter maps to should now be a
+    // live, emitting row. This converter itself never touches
+    // conceptnet-map.toml (scope boundary) — it only relies on what's there.
+    assert.notEqual(map.get(rel).ace, "none", `${wnRel} -> ${rel}: row exists but ace="none"`);
   }
 });
 

@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 // corpus/wordnet/generate.mjs — converts a LOCAL Open English WordNet (OEWN)
-// checkout into ConceptNet-shape fact rows (the "tier-3 WordNet bundle").
+// checkout into ConceptNet-shape fact rows. Curated + committed, tier-2-shaped
+// — NOT "tier-3" (corpus/README.md's tiering policy already uses that name
+// for something else, runtime-learned facts that are never committed); this
+// bundle is just too large to hand-author like the other tier-2 corpuses.
 // NOT part of the product path — a maintainer tool, run by hand, offline, $0;
-// its OUTPUT (corpus/tier3/wordnet-{xl,full}.jsonl + manifest.json) is what
+// its OUTPUT (corpus/wordnet/wordnet-{xl,full}.jsonl + manifest.json) is what
 // gets committed, never the source YAML itself.
 //
 //   node corpus/wordnet/generate.mjs [yamlDir]
@@ -37,7 +40,7 @@
 // Licence: Open English WordNet content is CC-BY-4.0 (Princeton WordNet +
 // Open English Wordnet team) — see LICENSE-NOTICE in this directory. The
 // code in this file is tmct code under the repository's MPL-2.0; only the
-// generated data (corpus/tier3/*.jsonl) carries CC-BY-4.0.
+// generated data (corpus/wordnet/*.jsonl) carries CC-BY-4.0.
 
 import { readFile, readdir, writeFile, mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -47,7 +50,7 @@ import { dirname, join } from "node:path";
 import { parseYaml } from "../../scripts/extract-persona-sources.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-export const TIER3_DIR = join(HERE, "..", "tier3");
+export const WORDNET_OUT_DIR = HERE;
 
 export const DEFAULT_YAML_DIR = join(homedir(), "projects", "globalwordnet", "english-wordnet", "src", "yaml");
 
@@ -287,11 +290,11 @@ async function main() {
   process.stderr.write(`  wordnet-full: ${full.length} facts\n`);
   process.stderr.write(`  wordnet-xl:   ${xl.length} facts\n`);
 
-  await mkdir(TIER3_DIR, { recursive: true });
+  await mkdir(WORDNET_OUT_DIR, { recursive: true });
   const fullText = toJsonl(full);
   const xlText = toJsonl(xl);
-  await writeFile(join(TIER3_DIR, "wordnet-full.jsonl"), fullText);
-  await writeFile(join(TIER3_DIR, "wordnet-xl.jsonl"), xlText);
+  await writeFile(join(WORDNET_OUT_DIR, "wordnet-full.jsonl"), fullText);
+  await writeFile(join(WORDNET_OUT_DIR, "wordnet-xl.jsonl"), xlText);
 
   const manifest = {
     version: 1,
@@ -322,8 +325,8 @@ async function main() {
     ],
   };
   const manifestText = JSON.stringify(manifest, null, 2) + "\n";
-  await writeFile(join(TIER3_DIR, "manifest.json"), manifestText);
-  process.stderr.write(`wrote corpus/tier3/manifest.json (${manifest.corpuses.length} corpuses)\n`);
+  await writeFile(join(WORDNET_OUT_DIR, "manifest.json"), manifestText);
+  process.stderr.write(`wrote corpus/wordnet/manifest.json (${manifest.corpuses.length} corpuses)\n`);
 }
 
 const isMain = process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href;
