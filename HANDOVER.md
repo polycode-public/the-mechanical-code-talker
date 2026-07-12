@@ -26,17 +26,14 @@ repo-relative path logic — fixed; `publish:npm` unblocked and confirmed live t
   subject-position `it` resolves correctly (`src/chat.mjs` ~line 7008), but `that` as the object of a
   reverse-relation query never does — `ask.mjs`'s `resolveObject` (~line 2925) is purely mechanical
   graph-label matching with no contextId/focus notion, so "what classes inherit from that" fails even
-  though "what classes inherit from Controller" (same query, named) works fine. Not fixed — touches
-  `ask.mjs`'s core relation-parsing grammar, high-blast-radius shared machinery; needs a `PLAN_*.md`
-  writeup.
+  though "what classes inherit from Controller" (same query, named) works fine.
 
 - **No "how is X different from Y" comparison capability, 2026-07-12** (fast-loop round 6 finding).
   Hits the plain grammar wall — no parse shape recognizes a comparison question between two entities
   at all, so it never reaches any answer path. Building one needs two real pieces: a new grammar
   shape to recognize "how is X different from Y" / "compare X and Y" phrasing, and an answer
   strategy that resolves both entities and surfaces the differences between their facts/edges (no
-  existing lane does this — `describe` renders one entity at a time). Genuinely unbuilt, not a small
-  fast-loop patch — a `PLAN_*.md` candidate.
+  existing lane does this — `describe` renders one entity at a time).
 
 - **`PLAN_BREADTH_FIRST_NLU.md`'s two open items** — (c) the paraphrase-verified-via-`syllogise.mjs`
   piece of "Ambition", not started; (d) a real "list/count all X of class Y" query shape for

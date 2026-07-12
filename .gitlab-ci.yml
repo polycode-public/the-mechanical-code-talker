@@ -29,9 +29,6 @@ variables:
   SAST_EXCLUDED_PATHS: "corpus, data, public, node_modules, .tmct"
   SECRET_DETECTION_EXCLUDED_PATHS: "corpus, data, public, node_modules, .tmct"
 
-# The scanner jobs default to the `test` stage, which would gate deploy on
-# scanner wall-clock. Run them in `verify` with needs:[] instead: they start
-# immediately, never delay publish/pages, and never fail the pipeline.
 semgrep-sast:
   stage: verify
   needs: []

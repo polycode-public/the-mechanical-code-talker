@@ -17,94 +17,18 @@ reading it finds in full, or is an honest miss when nothing grounds it at all.
 Declared, forward-looking goals — not yet achieved, stated here so they steer future work instead of
 getting silently traded away by inherited caution:
 
-- **Reach for Llama-3-level natural language fluency.** Not by putting an LLM in the product path
-  (tmct will never do that — see "What tmct will never do"). Instead, by growing rich
+- **Reach for Llama-3-level natural language fluency.** by growing rich
   template/surface-realization variety, so an answer shape has many valid phrasings instead of one
   fixed slot-fill.
 - **Resolve ambiguity breadth-first, always.** Every genuinely valid reading gets its own real answer
   restated in full, never a bare "could mean X or Y — try rephrasing" punt, bounded only by existing
-  clipping/pagination limits. Landed for both ambiguity shapes tmct has: parse-level ties
-  (`renderCore`'s real-answer resolution, `CAPABILITIES_1.7.3.md` item 92) and entity-level ties (one
-  term matching several real graph individuals — every fuzzy-match tie, every noise-strip alt-object
-  collision, `PLAN_BREADTH_FIRST_NLU.md` §1). CEFR-confirmed: `BENCHMARK_CEFR_ENGLISH_1.8.0.md`'s
-  `ambiguity`-tagged cell moved 1.438 → 1.875 (+0.437, the largest single-tag move on record), and
-  the fix resolved a case pair the `1.7.0` report called permanently unfixable (`am-meta-imports` vs
-  `g-a1-naming-9` — same input, previously-incompatible expectations; both now score well against
-  one breadth-first answer). A dedicated audit found the two generic top-level bail-out hints
-  (`rephraseHint`/`compositionalHint`) are provably unavoidable at their actual miss sites, not
-  unwired — nothing left to generalize there.
+  clipping/pagination limits. L
 - **Paraphrase alongside the original, verified, never instead of it.** A surface-realization variant
   sits next to the literal grounded answer, never replacing it, and its accuracy is checked, not
   assumed — by running tmct's own deterministic inference/consistency machinery (`src/syllogise.mjs`)
   against both the original and the paraphrase: they must entail the same conclusions, and neither may
-  contradict the other sentence-by-sentence. The paraphrase generator itself stays template/rule-based,
-  same as everything else in the product path — the novelty is verifying that variety costs nothing in
-  accuracy, not the generation mechanism itself.
+  contradict the other sentence-by-sentence..
 
-These sit alongside, not against, the zero-fabrication discipline: an answer with no grounding is
-still an honest miss, and breadth-first resolution means showing every real answer a genuine reading
-produces, never inventing one to fill a gap.
-
-## Current capability surface
-
-- **Grammar & parsing** (`src/grammar/`): an ACE-inspired controlled fragment (~8 sentence
-  patterns), plus multi-candidate ambiguity resolution — when a sentence has genuinely more than one
-  valid reading, every surviving interpretation is surfaced instead of one being guessed
-  (`archive/PLAN_DID_YOU_SEE_HER_DUCK.md`).
-- **Compositional queries** (`src/ask.mjs`): recursive-descent over relative clauses, boolean
-  set-algebra (and/or/but-not), qualifiers, aggregates, superlatives, anaphora. Includes real
-  two-hop object-relative composition ("which modules import something that X depends on" —
-  `parseNested` → `reverseSet`/`forwardSet`, nesting to depth ≥2), confirmed still working via a
-  live-tested example (`TOO_HARD_AUDIT.md` U2) after a stale benchmark write-up called it
-  "known-hard territory" — it was always built and tested, just never re-checked.
-- **Memory** (`src/memory/`): an OWL-labelled JSON graph on disk. Three persistence backends: flat
-  JSON (default), pure in-memory (zero disk I/O), SQLite (cached, incrementally-patched reads).
-- **Reasoning** (`src/syllogise.mjs`): an OWL 2 RL-grounded rule ladder (subclass transitivity,
-  disjointness, someValuesFrom subsumption, cardinality, consistency checking), plus taught-relation
-  rules learned through ordinary chat (alias/union, fixed-hop composition, property-filtered
-  composition, recursive/reachability) — none of it hardcoded per domain.
-- **Default persona**: a general-knowledge "human-world" vocabulary seeded by default (three size
-  tiers, `--persona-size small|medium|large`), sourced from Open English WordNet and Schema.org.
-  Code-domain vocabulary (SEON/ConceptNet) is opt-in (`--with-persona code`). Query coverage
-  includes forward/reverse CapableOf, reverse-HasA, and reverse-inherits/subClassOf shapes (`"can a
-  dog bark"`, `"what has a tail"`, `"what inherits from horse"`) against both corpus-seeded and
-  freshly-taught facts.
-- **Genuine multi-reading ambiguity resolves and answers, not just describes**: when a sentence has
-  two-plus valid readings — whether the ambiguity is in how the sentence PARSES or in which real graph
-  ENTITY a term names — tmct traverses and renders each one's real answer inline (not just a one-line
-  label), so the same input always reproduces the same full, useful answer.
-- **Every answer carries a canonical restatement of what was understood**: an English gloss in tmct's
-  own preferred phrasing plus the same fact in a compact, machine-parsable notation
-  (`shape(kind, args...)` for a query, `fact(subject, predicate, object)` for a taught fact) —
-  landed for the ask/query and teach/assert lanes; other chat lanes (conversational, commands) don't
-  have a real canonical form yet.
-- **Graph traversal and provenance timestamps extend to the memory graph, now with a real viewer AND
-  a live embedded chat**: the hub-avoiding `spiralExpand` walk (previously code-graph/Module-only)
-  generalizes to any graph via a caller-supplied class predicate and id-normalizer; edges carry a
-  `createdAt` stamp and nodes get a derived `updatedAt`. `tmct viz [--focus <id>] [--output graph.html]`
-  renders it as one self-contained, locally-navigable HTML file (pan/zoom, click-to-inspect, a depth
-  stepper, per-class visibility filters, no server, no external deps) — `npm run viz -- --output
-  graph.html && open graph.html`. The page embeds a real "Ask the graph" chat panel running tmct's
-  OWN `ask.mjs` engine client-side (bundled via esbuild, adapter-less — no wink model, ~220KB): a
-  query resolves against the full graph and re-centres the view on the answer (focus-follows-answer),
-  and a node's class/label are click-to-query affordances.
-- **Completions** (`src/completions/`): extractive, multi-sentence answers for broad "how does X
-  work" questions, grounded and source-cited — never invents a fact beyond what's retrieved, though
-  see "Ambition" above for growing the phrasing variety around what's retrieved.
-- **Capability router** (`src/router/`): a deterministic, closed-toolset agentic router behind an
-  Anthropic-compatible API — measured by `AGENTBENCH`, not general function-calling. An ambiguous tool
-  argument stays an honest refusal (never a guess) but, since every registered capability is
-  read-only, now additionally carries each tied candidate's real dispatched result alongside it.
-  The C1 resolver defers a ranking/superlative request (a declared `SUPERLATIVE_EXTREMES` cue, e.g.
-  "what MOST needs a test") to the C2 goal-reasoner's keystone-argmax arbitration instead of
-  half-answering it with a flat unranked list — AGENTBENCH C2 is 11/11, 100% plan- and
-  result-complete (`TOO_HARD_AUDIT.md` M2, fixed).
-- **Interfaces**: the `tmct` CLI, a documented library `exports` surface, and a Repository Interface
-  for downstream consumers (seonix).
-
-Measured state for all of the above: the four `BENCHMARK_<TYPE>_<version>.md` reports
-(`AGENT`/`CEFR_ENGLISH`/`CONVERSATION`/`INFERENCE`) and the periodic `CAPABILITIES_<version>.md`
-audit — always check the latest-dated one, not this file, for real numbers.
 
 ## What's next (feature-shaped — see `HANDOVER.md` for the current task-level list)
 
@@ -118,51 +42,12 @@ audit — always check the latest-dated one, not this file, for real numbers.
   unpopulated), which is met; full population everywhere was always a bigger, separately-scoped
   follow-on. (b) growing the ACE grammar's free-form coverage past its measured 0/2,949-sentence
   baseline — §6's own stated non-goal was a harness + baseline + first generated batch, not closing
-  the gap itself, which is met; growing coverage further is `archive/PLAN_TEMPLATE_COVERAGE.md`'s
-  own remaining scope (needs more grammar patterns or vocabulary, not tooling). What's genuinely
-  still open: (c) the paraphrase-verified-via-`syllogise.mjs` piece of "Ambition" — not started;
-  (d) a real "list/count all X of class Y" query shape for memory-graph classes — live testing
-  during the viz chat panel's build confirmed no such shape exists via `ask.mjs` alone (only
-  `chat.mjs`'s heavier `factAnswer` cascade has it, out of the browser bundle's scope), so the viz
-  panel's class-badge click currently falls back to a real client-side filter + a "where is X
-  mentioned" query rather than a true "list all" — a genuine, now-documented gap, not a silent one.
-- **`archive/PLAN_TEMPLATE_COVERAGE.md`** — archived; the coverage-harness/generation design from
-  (b) above, including the real baseline number and the first 17-row generated batch. **Coverage
-  growth attempted 2026-07-12**: a residue audit found only 19 words across 2,664 docs sentences
-  have pure content-word (vocabulary-only) residue — the rest is genuinely grammar-structure
-  residue (coordination/negation/relative clauses), unfixable by vocabulary alone. Added 9 real,
-  generalizable words (`danger`/`push`/`refusal`/`tooling`/`legitimate`/`ranked`/`related`/
-  `sacred`/`unaffected`) to `src/grammar/lexicon-core.json`; real, honest delta: 0→1 hit (60.2%→
-  60.1% residue — a few sentences correctly reclassified residue→miss once their vocabulary gap
-  closed and a separate structural gap was exposed). Confirms the ceiling is structural, not a
-  vocabulary backlog — closing it further needs real grammar-pattern work (a coordination/relative-
-  clause-capable parser), not more lexicon entries. **Second follow-on, wiring output variety into
-  the live answer path — done 2026-07-12, scoped down honestly.** Split in two: (1) a dead-end
-  example-correctness sweep (`SKILL_AGENT_FAST_LOOP.md`'s "an offered example that itself fails"
-  rubric) found and fixed 3 genuinely broken examples across `ask.mjs`/`chat.mjs` (a `touches`-verb
-  hint that could never resolve for any input, a count hint that never parses, an unseeded-session
-  vocab-hint that lied). (2) surface-variety wiring landed 7 phrasing pools / 14 variants across 8
-  template sites (`src/answer-variants.mjs`, deterministic per-key hash selection — never random),
-  scoped down from an original ~50-template/~100-variant target after inventory showed most
-  candidate templates either name a relation verb (off-limits — never vary `imports`/`calls`/
-  `tests`/etc.) or are miss/rephrase-hint templates (handled by (1) instead, also off-limits).
-  Deliberately left `ask.mjs`'s two "X is defined in Y" `whereShape` sites unvaried:
-  `chatbench/graded-pool-max.jsonl` pins that exact substring as ground truth for 11 cases (2 in
-  the always-run promoted subset), and that pool is append-only per its own governing skill doc.
-- **A fresh `CAPABILITIES_1.8.0.md` audit** — `CAPABILITIES_1.7.3.md` is pinned at commit `981c9b2`
-  and doesn't cover any of `PLAN_BREADTH_FIRST_NLU.md`'s six tracks; this doc's "Current capability
-  surface" above covers them narratively, but no full overlay audit has run since. Not done this
-  pass — `BENCHMARK_CEFR_ENGLISH_1.8.0.md` alone was in scope.
+  the gap itself, which is met.
 - **`PLAN_ADVENTURE.md`** — a text-adventure architectural stretch: an imperative command grammar,
   mutable turn-by-turn world/player state as ordinary graph nodes (no special player-state store),
   and an NPC turn scheduler. Design-only.
 - **`PLAN_SYLLOGIST.md`** — retraction-aware consistency checking under a hard budget and trust
   tiers, the one open piece of the reasoning engine's research horizon. Design-only.
-- **`archive/PLAN_CONVERSATION.md` Finding 4** — an anaphoric "SUBJECT verb which N" inheritance
-  question misroutes into teach-a-fact; needs a discontiguous verb-frame parser, a POS-aware
-  mid-sentence interrogative detector, and a union-kind reverse-question fix. Large, three
-  sub-problems, not attempted in a single pass — a concrete first-increment sketch exists
-  (`HANDOVER.md`), not an undesignable question.
 - **`PLAN_GUESS_NUMBER.md` / `PLAN_HANOI.md`** — closed-loop and open-loop planning domains for the
   `findActionPath`/`findReachableSet` kernels, both already built and proven but not yet wired to
   either domain. Design-only.
@@ -171,13 +56,7 @@ audit — always check the latest-dated one, not this file, for real numbers.
 - **`PLAN_AGENTS.md`** — the governing plan for tmct's broader multi-repo arc (marginalia, seonix,
   a pluggable LLM rung for Claude Code/Bedrock/Copilot). Check its own sequencing table for current
   phase status, not this file.
-- **`archive/PLAN_VIZ.md`** — archived; CLI-wiring and rendering (`tmct viz`, a recency-seeded,
-  hub-avoiding spiral walk with pseudo-3D depth rendering) shipped and are done. Three real items
-  remain, un-staffed: (1) the code-graph timestamp-provider architectural decision (provider-
-  populated vs. a new tmct-owned local-git mode); (2) the maintainer-side git-log-corpus generation
-  step, wiring seed-time `README.md` ingestion, and a new `Source` "seed" kind; (3) an eager
-  session/sessionless anchor individual with a `mode` field (deciding the two-Session-classes
-  question at the same time). See the archived doc's own "Next step" for the full detail.
+
 
 ## Research horizon
 
@@ -212,21 +91,13 @@ citations, not stop signs:
   (2026-07-11): `"tail"` (Unix process vs. animal body part) collides under `normFactTerm`'s
   cross-corpus flattening, `src/memory/core.mjs:1109-1134`.
 
-**Tier-4: learn-on-miss acquisition** (a real planned capability, not just research). The strongest
+**Tier-4: learn-on-miss acquisition**. The strongest
 miss signal tmct can emit: lexicon term recognized, query built cleanly, zero matches anywhere — the
 question was well-formed and the knowledge is simply absent. Web search on the resolved term → clean
 the fetched text into the ACE-OWL controlled grammar → store with source provenance → answer the
 original question, citing what was just learned. Strictly opt-in, offline default inviolable.
 Prerequisites: the provenance-trust policy must extend to `via:"learned:web"`, never silently
 blending web-sourced facts with graph/operator facts.
-
-## What tmct will never do
-
-- Run on AWS or maintain a benchmark rig — tmct is a published npm library + CLI with a static
-  GitLab Pages home page, nothing more.
-- Publish automatically — a version release always requires a deliberate version-bump commit.
-- Run an MCP server or put an LLM in the product path — a core identity decision, decided once,
-  not revisited.
 
 ## Design docs
 

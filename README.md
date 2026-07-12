@@ -157,11 +157,7 @@ about tmct as of this writing.
 
 Every message runs through **multiple concurrent interpretation strategies**:
 a grammar parse, keyword picking, noise-word removal, fuzzy matching. Their
-results are grouped by class:
-
-- results of the **same class merge** into one ranked answer;
-- results of **distinct classes** are surrounded with an explicit
-  *"if you mean X then …"* so ambiguity is shown, never silently resolved.
+results are grouped by class.
 
 One of the strategies is an **ACE-inspired controlled grammar**: when your
 text fits the controlled fragment, tmct emits OWL-labelled triples from it.
@@ -244,11 +240,7 @@ it gives you more: "give me a detailed summary of how X works" (or "explain
 in detail how X works", or "...detailed overview/explanation of X") gets a
 longer, multi-sentence account instead of one line. Every sentence in it is
 lifted from a real graph edge, attribute, or taught fact — never generated
-free text — and it declines outright rather than pad the gap when nothing
-clears its own relevance bar.
-
-From chat, a real run against the shipped `examples/mini-webapp` fixture
-(banner lines trimmed):
+free text.
 
 ```
 $ node bin/tmct.mjs chat --repo examples/mini-webapp --ephemeral
