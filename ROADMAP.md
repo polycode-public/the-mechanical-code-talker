@@ -18,8 +18,9 @@ Declared, forward-looking goals — not yet achieved, stated here so they steer 
 getting silently traded away by inherited caution:
 
 - **Reach for Llama-3-level natural language fluency.** Not by putting an LLM in the product path
-  (still permanent, see "Explicitly out of scope") — by growing rich template/surface-realization
-  variety, so an answer shape has many valid phrasings instead of one fixed slot-fill.
+  (tmct will never do that — see "What tmct will never do"). Instead, by growing rich
+  template/surface-realization variety, so an answer shape has many valid phrasings instead of one
+  fixed slot-fill.
 - **Resolve ambiguity breadth-first, always.** Every genuinely valid reading gets its own real answer
   restated in full, never a bare "could mean X or Y — try rephrasing" punt, bounded only by existing
   clipping/pagination limits. Landed for both ambiguity shapes tmct has: parse-level ties
@@ -219,11 +220,13 @@ original question, citing what was just learned. Strictly opt-in, offline defaul
 Prerequisites: the provenance-trust policy must extend to `via:"learned:web"`, never silently
 blending web-sourced facts with graph/operator facts.
 
-## Explicitly out of scope
+## What tmct will never do
 
-- No AWS, no benchmark rig — a published npm library + CLI with a static GitLab Pages home page only.
-- No auto-publish — a version release is gated on a deliberate version-bump commit.
-- No MCP server, no LLM in the product path — permanent, not "for now."
+- Run on AWS or maintain a benchmark rig — tmct is a published npm library + CLI with a static
+  GitLab Pages home page, nothing more.
+- Publish automatically — a version release always requires a deliberate version-bump commit.
+- Run an MCP server or put an LLM in the product path — a core identity decision, decided once,
+  not revisited.
 
 ## Design docs
 

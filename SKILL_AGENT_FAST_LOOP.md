@@ -112,7 +112,7 @@ shipped or "clean round"), and an overall tally of fixes vs. clean rounds.
 
 ---
 
-## 3.5 The scope boundary: local traps here, wider capability limits go to a `PLAN_*.md` doc
+## 3.5 Local traps here, wider capability limits go to a `PLAN_*.md` doc
 
 The operator's own framing, worth stating exactly: *"the fast loop should be exploring within edges
 to catch the traps human visitors are likely to fall in, then benchmarking is the way we explore the

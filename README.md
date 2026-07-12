@@ -360,8 +360,8 @@ on the chat's hot path.
 ## What tmct deliberately is NOT
 
 - **It is not an indexer.** tmct keeps no codebase index of its own. It
-  consumes a graph via a provider seam (`fetchEntities` and friends); producing
-  a code graph is out of scope. tmct's job is the *conversation*.
+  consumes a graph via a provider seam (`fetchEntities` and friends) — building
+  that graph is a different tool's job. tmct's job is the *conversation*.
 - **It is not a reasoning model.** Where it "reasons", it does so by
   *calculation* surfaced as prose ("there are a lot of tests for a codebase of
   that size"). It is deterministic, explainable, and cheap. Even its forward-chaining

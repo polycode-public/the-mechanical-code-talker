@@ -17,18 +17,6 @@ repo-relative path logic — fixed; `publish:npm` unblocked and confirmed live t
 
 ## Open items
 
-- **Bare "what is X?" fails for CamelCase compound class names, 2026-07-12** (fast-loop round 3
-  finding). `describe TaskController` / `what is a TaskController` (indefinite article) /
-  `taskcontroller` (lowercased) all resolve correctly, but bare `what is TaskController?` hits the
-  plain grammar wall — `isConversational()`'s `looksCodeish()` gate (`src/chat.mjs` ~line 837-870,
-  regex `/[a-z][A-Z]|[_./]|\(\)/`) flags any CamelCase compound identifier as "code-ish" and excludes
-  it from the bare-meta-fact fallback lanes (2b/2c, `src/chat.mjs` ~line 7212-7290) — exactly the
-  lanes meant to answer bare "what is X" without an article. Two-word compound class names
-  (`TaskController`, `UserController` — common in real code) fall through a gap single-word names
-  don't. Separately, `what is the X` (definite article) fails universally for any entity. Not fixed —
-  `looksCodeish()`/`isConversational()` is shared machinery with several documented past regressions
-  from touching this exact gate; needs a `PLAN_*.md` writeup, not a fast-loop patch.
-
 - **Plural/ordinal anaphora unsupported; singular "that" unresolved as a reverse-relation object,
   2026-07-12** (fast-loop round 4 finding). `src/chat.mjs`'s `CONTEXT_WORDS` (`it`/`this`/`that`/
   `here`) is a closed singular set with no `those`/`them` (plural) or "the first one"/"the other one"
@@ -39,32 +27,16 @@ repo-relative path logic — fixed; `publish:npm` unblocked and confirmed live t
   reverse-relation query never does — `ask.mjs`'s `resolveObject` (~line 2925) is purely mechanical
   graph-label matching with no contextId/focus notion, so "what classes inherit from that" fails even
   though "what classes inherit from Controller" (same query, named) works fine. Not fixed — touches
-  `ask.mjs`'s core relation-parsing grammar, same high-blast-radius shared machinery as the CamelCase
-  finding above; needs a `PLAN_*.md` writeup.
-
-- **Bare "how many X" fails for edge-nominalized nouns (tests/importers/callers/...), 2026-07-12**
-  (fast-loop round 5 finding). `answerCount`'s `COUNT_NOUNS` (`src/chat.mjs` ~line 431) only maps
-  nouns to graph individual classes (Module/Class/Function/etc.) — "how many tests cover X", "how
-  many importers does X have", "how many callers does X have" all answer "I can't count 'tests'" even
-  though `ask-vocab.mjs`'s `EDGE_NOUN_TO_METRIC` table (~line 855) already maps exactly these nouns
-  to edge kinds, and the differently-phrased equivalents work fine ("how many modules test X",
-  superlative "which module has the most tests"). Root cause: `answerCount`'s guard (`src/chat.mjs`
-  ~line 547) only defers to the ask engine for recognized class nouns, never checks
-  `EDGE_NOUN_TO_METRIC` for edge-nominalized ones. Not fixed — reconciling the two count vocabularies
-  is a real design decision (what a bare "how many tests are there" means globally vs. per-entity)
-  with regression risk to the existing superlative lane; needs a `PLAN_*.md` writeup.
-
-- **Class-to-module up-refinement only whitelists tests/cochange, 2026-07-12** (fast-loop round 6
-  finding). `who touched <class>` / `what modules import <class>` don't up-refine a class to its
-  containing module the way `tests`/`cochange` queries already do — `src/ask.mjs` ~line 3460 only
-  whitelists `kind === "tests" || kind === "cochange"` for up-refinement. Not fixed:
-  `test/ask.test.mjs:1186-1195` explicitly pins the current "imports" behavior as intentional, and
-  `touches` already routes through a separate `touchesSymbol` pre-check whose interaction with a new
-  up-refine path isn't confidently understood — a real design decision, candidate for a `PLAN_*.md`.
+  `ask.mjs`'s core relation-parsing grammar, high-blast-radius shared machinery; needs a `PLAN_*.md`
+  writeup.
 
 - **No "how is X different from Y" comparison capability, 2026-07-12** (fast-loop round 6 finding).
-  Grammar wall, not a routing bug — no comparison capability exists at all. Capability-limit
-  question, out of fast-loop scope.
+  Hits the plain grammar wall — no parse shape recognizes a comparison question between two entities
+  at all, so it never reaches any answer path. Building one needs two real pieces: a new grammar
+  shape to recognize "how is X different from Y" / "compare X and Y" phrasing, and an answer
+  strategy that resolves both entities and surfaces the differences between their facts/edges (no
+  existing lane does this — `describe` renders one entity at a time). Genuinely unbuilt, not a small
+  fast-loop patch — a `PLAN_*.md` candidate.
 
 - **`PLAN_BREADTH_FIRST_NLU.md`'s two open items** — (c) the paraphrase-verified-via-`syllogise.mjs`
   piece of "Ambition", not started; (d) a real "list/count all X of class Y" query shape for

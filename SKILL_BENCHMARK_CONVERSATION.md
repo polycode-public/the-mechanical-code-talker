@@ -517,7 +517,7 @@ Report structure:
 - **Verify every offered example, in-state.** If a turn's reply says `try "X"`, actually ask `X` in
   that same session/seed state before calling the turn FLOW. A suggestion that wasn't checked is a
   guess wearing a helpful voice — score it a dead-end if it would fail (§0).
-- **Farewells stay out of scope.** Don't add cases that test elaborate goodbye or thanks phrasing.
+- **Don't invent new farewell test cases.** Don't add cases that test elaborate goodbye or thanks phrasing.
   A short, clear close beats a clever one, and stretching the closing-phrase matcher to cover more
   wording adds ambiguity about when the conversation actually ends. If a round turns up a genuine
   farewell dead-end, note it and move on rather than generalizing the matcher further (operator
