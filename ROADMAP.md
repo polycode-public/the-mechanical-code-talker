@@ -126,10 +126,19 @@ audit — always check the latest-dated one, not this file, for real numbers.
   panel's class-badge click currently falls back to a real client-side filter + a "where is X
   mentioned" query rather than a true "list all" — a genuine, now-documented gap, not a silent one.
 - **`archive/PLAN_TEMPLATE_COVERAGE.md`** — archived; the coverage-harness/generation design from
-  (b) above, including the real baseline number and the first 17-row generated batch. Read it before
-  picking up (b). A second, separate follow-on also survives here: the generated corpus (the 17-row
-  batch and future ones) is raw material only — wiring it into `src/chat.mjs`/`src/ask.mjs`'s
-  response templates for output variety hasn't started.
+  (b) above, including the real baseline number and the first 17-row generated batch. **Coverage
+  growth attempted 2026-07-12**: a residue audit found only 19 words across 2,664 docs sentences
+  have pure content-word (vocabulary-only) residue — the rest is genuinely grammar-structure
+  residue (coordination/negation/relative clauses), unfixable by vocabulary alone. Added 9 real,
+  generalizable words (`danger`/`push`/`refusal`/`tooling`/`legitimate`/`ranked`/`related`/
+  `sacred`/`unaffected`) to `src/grammar/lexicon-core.json`; real, honest delta: 0→1 hit (60.2%→
+  60.1% residue — a few sentences correctly reclassified residue→miss once their vocabulary gap
+  closed and a separate structural gap was exposed). Confirms the ceiling is structural, not a
+  vocabulary backlog — closing it further needs real grammar-pattern work (a coordination/relative-
+  clause-capable parser), not more lexicon entries. A second, separate follow-on: wiring the
+  generated corpus into `src/chat.mjs`/`src/ask.mjs`'s response templates for output variety —
+  in progress 2026-07-12 (Track G, scoped in two parts: a dead-end-example correctness sweep tied
+  to `SKILL_AGENT_FAST_LOOP.md`'s rubric, then ~50 templates × 2 WordNet-sourced variants).
 - **A fresh `CAPABILITIES_1.8.0.md` audit** — `CAPABILITIES_1.7.3.md` is pinned at commit `981c9b2`
   and doesn't cover any of `PLAN_BREADTH_FIRST_NLU.md`'s six tracks; this doc's "Current capability
   surface" above covers them narratively, but no full overlay audit has run since. Not done this

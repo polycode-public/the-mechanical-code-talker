@@ -79,7 +79,7 @@ The two audits this doc supersedes (`PLAN_TMCT_ECOSYSTEM_INTEGRATION.md`,
 | `POST /v1/messages` HTTP shim (Anthropic-Messages-API-compatible) | **Shipped**, since 0.8.0 | `src/server-http.mjs`, `bin/tmct.mjs serve` |
 | Repository Interface v1.0.0 (15 services, closed `EDGE_KINDS`/`MISS_REASONS`) | **Shipped**, stable since 0.5.0 | `src/repository-interface.mjs`, `src/providers/graph-service.mjs`, `src/conformance.mjs` |
 | Capability router (STRIPS/PDDL registry, resolver, planner, guardrail, goal-reasoner) | **Shipped**, all 6 stages | `src/router/*`, measured on AGENTBENCH |
-| AGENTBENCH goal-reasoner (Stage 5, the C2 rung) | **Shipped and measured** | 56 cases: 100% plan / 98% result / 0% hallucination, one C2 case deliberately kept result-red (91%) |
+| AGENTBENCH goal-reasoner (Stage 5, the C2 rung) | **Shipped and measured** | 56 cases: 100% plan / 100% result / 0% hallucination across every rung (`TOO_HARD_AUDIT.md` M2, fixed 2026-07-12 — no case held back) |
 | seonix code→graph, driven by tmct | **Shipped, in production**, seonix 0.8.0→0.10.6 | `seonix/src/tmct-provider.mjs` — 37 lines, `createGraphService` reused directly |
 | bedrock-meter cost-ordered router with a tmct rank-0 ($0) rung | **Shipped and tested** | `router.mjs`/`router-ladder.mjs`/`routing-target.mjs`, 11 passing tests |
 | marginalia's `seon-mcp` self-hosted code graph | Built, **not yet wired to tmct** | near-zero-gap integration, same pattern as seonix (§1.1 below) |
@@ -239,11 +239,13 @@ algorithmic capability tmct would have to invent — the logic already sits in t
   conflicts with tmct's "honest ambiguity over guessing" principle — a judgment call, not a clear
   win. (§4 adds a different, complementary answer to the same question — a declared bias rather than
   a frequency heuristic.)
-- **Visualizers + repo-level incremental sync (b, optional).** seonix ships a standalone Cytoscape
-  ego-neighborhood viewer (`viz.mjs`, distinct from Chronograph) and multi-repo incremental re-index
-  (`manifest.mjs`, git-SHA + dirty-worktree fingerprinting); tmct has neither — no graph-rendering
-  capability at all, and no multi-repo shape. Relevant if/when tmct's own use case grows multi-repo
-  or needs visual output; not urgent today.
+- **Visualizers (b, optional) — ✅ graph-rendering gap closed 2026-07-11.** `tmct viz` (`src/viz.mjs`,
+  `bin/tmct.mjs`) ships a self-contained, navigable HTML memory-graph view (`npm run viz -- --output
+  graph.html`), including a live embedded "Ask the graph" chat panel running tmct's own `ask.mjs`
+  client-side. Not the same shape as seonix's standalone Cytoscape ego-neighborhood viewer
+  (`viz.mjs`, distinct from Chronograph) — no code-graph mode, no multi-repo incremental re-index
+  (`manifest.mjs`, git-SHA + dirty-worktree fingerprinting) — those remain distinct, unaddressed.
+  Relevant if/when tmct's own use case grows multi-repo; not urgent today.
 
 ### 2.3 What this changes in the phase sequence
 

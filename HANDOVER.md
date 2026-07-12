@@ -10,115 +10,24 @@ Session handle (inbox): `tmct` (this session; earlier sessions used `mechanic`).
 
 ## Version state (2026-07-12)
 
-`package.json` is `1.8.1` locally, not yet pushed (bumped from `1.7.3` → `1.8.0` for
-`BENCHMARK_CEFR_ENGLISH_1.8.0.md`, then → `1.8.1` for the `TOO_HARD_AUDIT.md` M2/U2 fixes, both at
-the operator's explicit direction). What's live on npm is still `1.5.5` — several version bumps
-have accumulated locally without a push. Per this project's own version-bump discipline
-(`CLAUDE.md`), the next push should land whatever's actually ready as one release, not chase every
-intermediate bump — don't bump again until that push.
-
-## `TOO_HARD_AUDIT.md` M2/U2 — fixed (2026-07-12)
-
-Every finding in `TOO_HARD_AUDIT.md`'s original pass is now resolved; see that file's compact
-"Status" section for the full list. The two fixed this session:
-
-- **M2** (AGENTBENCH `ab-c2-what-to-test`, "what most needs a test in this codebase"): the
-  goal-reasoner's keystone-argmax ranking already existed but never got dispatched into — a C1
-  imperative frame answered the request with a single unranked `tmct_untested` call first.
-  `src/router/resolver.mjs`'s `untested` frame now skips on a superlative cue
-  (`SUPERLATIVE_RE`, built from `ask.mjs`'s own declared `SUPERLATIVE_EXTREMES`), and
-  `src/ask.mjs`'s `parseSuperlative` defaults `entityType` from a metric that implies exactly one
-  class (`src/ask-vocab.mjs`'s new `METRIC_IMPLIES_ENTITY`: `tests -> Module`) so the phrasing
-  parses without also requiring the word "module". AGENTBENCH C2: 91%→100% plan-completion,
-  10/11→11/11 result-complete, ladder still 0% hallucination throughout.
-- **U2** (deep relative-clause two-hop composition): confirmed already working, not a real gap —
-  live-tested against `examples/mini-webapp`'s real graph. No code change; `test/ask-compositional.test.mjs`
-  already pins this mechanism (`parseNested` → `reverseSet`/`forwardSet`).
-
-`npm test` 1932/1932; two pinned tests updated to match the newly-correct behavior
-(`test/goal-reasoner.test.mjs`, `test/agentbench.test.mjs`) — same "update the pin, don't weaken
-it" discipline as every other fix this session.
-
-## In progress — `PLAN_BREADTH_FIRST_NLU.md` (started 2026-07-11)
-
-Six tracks (6th added mid-session, 2026-07-11), live status (update this block as each lands, don't
-let it go stale):
-
-- **Track 1 — entity-tie ambiguity fix** (`src/ask.mjs`): **landed and CEFR-confirmed, commit
-  `d2c28f5`.** `npm test` 1932/1932 green, no pins touched. `BENCHMARK_CEFR_ENGLISH_1.8.0.md`:
-  overall mean 1.750 → 1.789 (+0.039), `ambiguity`-tagged cell 1.438 → 1.875 (+0.437, the largest
-  single-tag move on record for this project), 0 hard fails/voids, tier-1 109/109 throughout. The
-  fix also resolved a case pair `1.7.0`'s report called permanently unfixable (`am-meta-imports` vs
-  `g-a1-naming-9`, same identical input, previously-incompatible expectations) — breadth-first
-  rendering shows both readings' real answers in one response, so both cases now score well against
-  the same byte-identical answer.
-- **Track 2 — router try-every-candidate enrichment** (`src/router/*.mjs`,
-  `SKILL_BENCHMARK_AGENT.md`): **landed, merged to `main`.** `resolveOne`/`guard`/`focusOf` all
-  extended with `candidateResults` (each tied candidate's real dispatched output) while keeping
-  `refused: true`/`ok: false` unchanged — `guard`/`admits` are now `async` (their one other caller
-  updated). `goal-reasoner.mjs`'s `focusOf` had a real, previously-undocumented gap fixed as part of
-  this: an ambiguous focus term used to silently collapse to `null` and fall through to whole-graph
-  "global" mode, answering a different goal than the one named — now refuses honestly, with
-  candidate results when scopable. `npm test` 1922/1922 green in the worktree; AGENTBENCH ladder
-  byte-identical to `BENCHMARK_AGENT_1.7.0.md`'s recorded numbers (`refused: true` preserved on every
-  case). The agent's first "done" report was a stalled "waiting on the monitor" message with real
-  uncommitted work sitting in its worktree — verified and merged per lesson #2, not taken at face
-  value.
-- **Track 3 — `tmct viz` CLI** (`src/viz.mjs`, `bin/tmct.mjs`, `README.md`, `package.json`):
-  **landed, merged to `main`.** Self-contained HTML (graph JSON embedded inline, hand-rolled canvas
-  renderer, no new npm dependency) with concentric ring-by-hop layout, depth/age falloff, pan/zoom,
-  click-to-inspect. `npm test` 1923/1923 in the worktree; manual end-to-end run against a real seeded
-  `.tmct/memory/graph.json` produced valid non-trivial output, `--focus` override confirmed working.
-- **Track 4 — template generation + coverage harness** (new `corpus/`/harness files,
-  `archive/PLAN_TEMPLATE_COVERAGE.md`): **landed, merged to `main`.** Real, disclosed numbers, no padding:
-  this repo's own docs corpus (41 files, 2,949 sentences) hits the ACE grammar 0/2,949 (60.4%
-  shape-only residue) — the honest ceiling of an 8-pattern controlled grammar against free-form
-  prose, named plainly as a real limit, not fixed here. 17 self-verified surface-variant rows
-  generated from real WordNet synonym data and the grammar's own possessive dual-form, committed to
-  `corpus/generated/`. Zero rescues of docs-corpus residue this run (a real zero-yield result, kept
-  separate from the generated-corpus count so neither number misrepresents the other). Maintainer-only
-  tooling, `npm test` unaffected. Same stalled-agent pattern as Track 2 — verified via the worktree's
-  real commit before merging, not the "waiting on the monitor" report alone.
-- **Track 5 — surface alternates on hits** (`src/ask.mjs`, depends on Track 1): **landed.** New
-  `parseQueryFull` sibling export; `ask()` surfaces a genuine cross-class alternate reading's REAL
-  answer, never `alternateLines`' bare "ask it that way" fallback (a first attempt using that fallback
-  broke `test/interpret.test.mjs`'s noise-strip parity pin — a lower-precedence strategy's "alternate"
-  is often pure misparse noise, e.g. keyword-spot reading a stripped filler phrase as the query's
-  subject; fixed by only ever appending a line for an alternate that resolves to a real, non-miss
-  answer). `npm test` 1919/1919 (one `tmct serve` timeout was a system-load flake under concurrent
-  background agents — confirmed clean, 17/17, in isolation).
-- **Track 6 — canonical query representation, every response** (operator directive, added
-  mid-session): **landed for the two highest-value lanes, commit `2010126`.** New `canonicalOf(parsed)`
-  in `ask.mjs` renders every flat query shape into `{english, machine}` — `english` a plain-language
-  gloss, `machine` a compact `shape(kind, args...)` notation (not raw JSON) — wired into
-  `ask()`'s `tmct_ask.canonical` unconditionally (every parse, not just ambiguous ones).
-  `chat.mjs`'s `runAsk` threads it into `record.canonical`; `assertTurn`'s two paths (resolved teach,
-  ambiguous teach) build their own from the real triple(s) already computed, reusing the exact
-  confirmation text already shown for `english` and a matching `fact(...)` form for `machine` — one
-  consistent notation across both lanes. `plainTurn` (every other lane's shared helper) now defaults
-  `canonical: null` explicitly, so the field is always PRESENT on every response, even where it isn't
-  populated yet. **Still open, real remaining scope, not silently done**: `chat.mjs` has ~78 distinct
-  return sites; only the ask/query and teach/assert lanes have a real canonical form today —
-  conversational replies, bare slash-commands, fact-recall/orientation lanes all still return
-  `canonical: null`. Filling those in for real is a materially bigger pass (bespoke per-lane logic,
-  not a generalization of one existing helper) — worth scoping as its own follow-on if full coverage
-  is wanted, not rushed alongside everything else already in flight this session. `npm test`
-  1926/1926, both lanes live-verified end-to-end.
-
-Full design, file targets, and verification steps in `PLAN_BREADTH_FIRST_NLU.md`.
+`package.json` is `1.8.2` locally, not yet pushed. What's live on npm is still `1.5.5` — several
+version bumps have accumulated locally without a push. Per this project's own version-bump
+discipline (`CLAUDE.md`), the next push should land whatever's actually ready as one release, not
+chase every intermediate bump — don't bump again until that push.
 
 ## Open items
 
-- **`archive/PLAN_CONVERSATION.md` Finding 4** — an anaphoric "it uses which controller as its base"
-  question misroutes into teach-a-fact; three independent sub-problems (a discontiguous verb-frame
-  parser, a POS-aware mid-sentence interrogative detector, and a union-kind reverse-question gap).
-  Bounded, not undesignable: `TOO_HARD_AUDIT.md`'s B1 entry traces a concrete first increment
-  (a POS-aware mid-sentence interrogative detector alone closes the pronoun-removed repro). Large,
-  three sub-problems, not attempted in a single pass — not "out of design-ability horizon." Findings
-  1, 2, 3, and 5 are all resolved; the plan itself is archived (`archive/PLAN_CONVERSATION.md`) since
-  Finding 4 is the only open item left. Two CEFR cases (`g-c2-pron-1`/`g-c2-pron-2`,
-  `BENCHMARK_CEFR_ENGLISH_1.7.0.md`) are plausibly the same "which of them VERB" compositional-anaphora
-  gap — worth checking as a side effect if this is picked up.
+- **`archive/PLAN_CONVERSATION.md` Finding 4 — safety half fixed, 2026-07-12.** The first-increment
+  fix (`hasMidSentenceInterrogative`, `src/chat.mjs`) landed: "it uses which controller as its base"
+  and "TaskController uses which controller as its base" no longer misroute into `teachLane` (no
+  garbage fact gets stored, no confusing pronoun-classification refusal) — both fall through to the
+  honest structural miss instead. **Still genuinely open**: this does NOT make the question
+  *answerable* — that needs the other two named sub-problems (a discontiguous verb-frame parser for
+  "uses X as its base"-shaped constructions; a union-kind reverse-question capability for relation
+  verbs like `uses`/`calls` that map to more than one stored predicate). Two CEFR cases
+  (`g-c2-pron-1`/`g-c2-pron-2`) were checked and confirmed a DIFFERENT mechanism (`ask.mjs`'s
+  compositional filter compiler, not `chat.mjs`'s teach routing) — not the same gap, don't expect
+  them to move if the remaining sub-problems are picked up.
 
 - **A rephrase-hint pass on honest "nothing matches"/"no X found" misses**
   (`BENCHMARK_CEFR_ENGLISH_1.7.0.md`'s decision log, top pick) — 7+ cases across B1/C1 grades score
