@@ -624,3 +624,16 @@ test("tier5/note-wrapper teach + circle back with different phrasing, unaffected
   assert.match(turns[2].answer, /you told me: taskcontroller is owned by margo/);
   assert.match(turns[3].answer, /1 remembered fact about taskcontroller:\n\s+you told me: taskcontroller is owned by margo/);
 });
+
+test("tier5/'who calls Router' up-refines to the real module-coarse caller instead of a false empty (HANDOVER 2026-07-12, BENCHMARK_CONVERSATION_1.8.14.md finding)", async () => {
+  // Router is a Class with no `contains` members recorded (the extractor only
+  // ever saw its declaration) and no callsSymbol edge of its own — its only
+  // recorded caller is the module-coarse "calls" edge src/server/app.mjs ->
+  // src/server/router.mjs. Before this fix the fine-grained callsSymbol scan's
+  // empty result was treated as decisive and the question fell to a false "No
+  // modules found" miss; it must now up-refine to Router's containing module
+  // the same way "who touched <Class>"/"which modules import <Class>" already do.
+  const turns = await driveSession(["who calls Router"]);
+  assertNeverBareWall(turns, ["who calls Router"]);
+  assert.match(turns[0].answer, /src\/server\/app\.mjs/);
+});

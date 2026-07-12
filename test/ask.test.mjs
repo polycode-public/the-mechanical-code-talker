@@ -1233,12 +1233,79 @@ test("ask(): grain-aware resolution — \"touches\" up-refines a resolved Class 
   assert.match(tmct_ask.traversal, /refined from Bar to its containing module/);
 });
 
-test("ask(): grain-aware resolution — \"who calls Bar\" is unaffected by the touches fallthrough (calls keeps its unconditional empty callsSymbol result, no up-refine)", () => {
+test("ask(): grain-aware resolution — \"who calls Bar\" stays an honest empty on THIS fixture (no \"calls\" edges recorded anywhere, so kindObjectClass has nothing to refine toward — see the next test for the positive up-refine case)", () => {
   const graph = buildGrainCollisionGraph();
-  // Bar has no callsSymbol edges either — "calls" deliberately keeps the old
-  // unconditional-return behavior in the symbolKind branch (an empty call-graph
-  // result is decisive), so this stays a plain empty, never up-refined to
-  // Bar's containing module the way "who touched Bar" now is.
+  // Bar has no callsSymbol edges, and buildGrainCollisionGraph records no
+  // module-coarse "calls" edges at all — kindObjectClass("calls") is null here
+  // (no edges of that kind exist to infer an object class from), so the
+  // wantClass-driven up-refine block never runs and gObjMatch stays Bar. Content
+  // is the same plain empty either way; this just confirms the up-refine
+  // extension (2026-07-12 follow-up, HANDOVER "who calls Router") doesn't
+  // fabricate a refinement when there's no calls data to refine against.
+  const { content, tmct_ask } = ask(graph, "who calls Bar");
+  assert.match(content, /No modules found/);
+  assert.doesNotMatch(tmct_ask.traversal || "", /refined from Bar to its containing module/);
+});
+
+test("ask(): grain-aware resolution — \"calls\" now up-refines a resolved Class with no recorded members to its containing module, same as \"touches\"/\"imports\"/\"tests\" (2026-07-12 follow-up, HANDOVER \"who calls Router\" real bug)", () => {
+  // Router (mini-webapp's real trigger): a Class the extractor only ever saw a
+  // bare declaration for (no `contains` members recorded), whose only recorded
+  // caller is a module-coarse "calls" edge into its containing module — the
+  // fine-grained callsSymbol scan is empty, and MUST fall through to the
+  // module-level answer rather than render a false "nothing calls it".
+  const individuals = [
+    { id: "mod:x/foo.mjs", label: "x/foo.mjs", class: "Module", attributes: [] },
+    { id: "mod:y/qux.mjs", label: "y/qux.mjs", class: "Module", attributes: [] },
+    { id: "cls:Bar", label: "Bar", class: "Class", attributes: [] },
+  ];
+  const graph = {
+    individuals, byId: new Map(individuals.map((i) => [i.id, i])), proseIndex: {}, truncated: [],
+    relations: [
+      {
+        predicate: "seon:declaresMethod", prop: "seon:declaresmethod", count: 1,
+        edges: [{ subject: "mod:x/foo.mjs", object: "cls:Bar", subjectLabel: "x/foo.mjs", objectLabel: "Bar" }],
+      },
+      {
+        predicate: "mgx:callsCoarse", prop: "mgx:callscoarse", count: 1,
+        edges: [{ subject: "mod:y/qux.mjs", object: "mod:x/foo.mjs", subjectLabel: "y/qux.mjs", objectLabel: "x/foo.mjs" }],
+      },
+    ],
+  };
+  const { content, tmct_ask } = ask(graph, "who calls Bar");
+  assert.equal(tmct_ask.miss, false);
+  assert.match(content, /y\/qux\.mjs/);
+  assert.match(tmct_ask.traversal, /refined from Bar to its containing module/);
+});
+
+test("ask(): grain-aware resolution — \"calls\" does NOT up-refine a Class that HAS recorded members (e.g. Logger, Widget): its own empty callsSymbol scan stays decisive", () => {
+  // Mirrors the real mini-webapp/tier2 pinned regressions (chatflow-tier5's
+  // "logger" tests, chatflow-tier2's Button test): a fully-modeled class (real
+  // `contains` members recorded) reads as a genuine unit whose own empty
+  // symbol-grain result IS the honest answer — up-refining it would surface a
+  // module-level caller that never actually called the class's own code.
+  const individuals = [
+    { id: "mod:x/foo.mjs", label: "x/foo.mjs", class: "Module", attributes: [] },
+    { id: "mod:y/qux.mjs", label: "y/qux.mjs", class: "Module", attributes: [] },
+    { id: "cls:Bar", label: "Bar", class: "Class", attributes: [] },
+    { id: "fn:x/foo.mjs#Bar.run", label: "run", class: "Method", attributes: [] },
+  ];
+  const graph = {
+    individuals, byId: new Map(individuals.map((i) => [i.id, i])), proseIndex: {}, truncated: [],
+    relations: [
+      {
+        predicate: "seon:declaresMethod", prop: "seon:declaresmethod", count: 1,
+        edges: [{ subject: "mod:x/foo.mjs", object: "cls:Bar", subjectLabel: "x/foo.mjs", objectLabel: "Bar" }],
+      },
+      {
+        predicate: "seon:containsCodeEntity", prop: "seon:containscodeentity", count: 1,
+        edges: [{ subject: "cls:Bar", object: "fn:x/foo.mjs#Bar.run", subjectLabel: "Bar", objectLabel: "run" }],
+      },
+      {
+        predicate: "mgx:callsCoarse", prop: "mgx:callscoarse", count: 1,
+        edges: [{ subject: "mod:y/qux.mjs", object: "mod:x/foo.mjs", subjectLabel: "y/qux.mjs", objectLabel: "x/foo.mjs" }],
+      },
+    ],
+  };
   const { content, tmct_ask } = ask(graph, "who calls Bar");
   assert.match(content, /No modules found/);
   assert.doesNotMatch(tmct_ask.traversal || "", /refined from Bar to its containing module/);
