@@ -428,6 +428,50 @@ test("tier5/T8's empty-memory special-case never pre-empts a DIFFERENT, more spe
   assert.doesNotMatch(turns[0].answer, /teach me directly/);
 });
 
+test("tier5/pronoun-subject identity questions never misparse as a teach-fact about the literal pronoun (BENCHMARK_CONVERSATION_1.8.14.md persona-sweep fix)", async () => {
+  // Zero facts in memory (T8's own empty-rows path) is exactly the shape that
+  // used to hit unknownAdjectiveOffer with a pronoun subject — "are you
+  // happy"/"are you like chatgpt"/"are you secretly ChatGPT or GPT-4" all
+  // backtrack a pronoun-led subject into IS_ADJECTIVE_YESNO_RE's capture
+  // ("you", "you like", "you secretly chatgpt or"), so none of these may ever
+  // produce a "remember that you ... is ..." teach-offer or a "noted —"
+  // mis-teach — the exact regressions verbatim from the persona-sweep report.
+  const pronounQueries = [
+    "are you happy",
+    "are you like chatgpt",
+    "are you secretly ChatGPT or GPT-4",
+    "are we ready",
+    "is he ready",
+    "is she happy",
+    "are they ready",
+  ];
+  const turns = await driveSession(pronounQueries);
+  for (const [i, t] of turns.entries()) {
+    assert.doesNotMatch(
+      t.answer,
+      /teach me directly/,
+      `turn ${i} "${pronounQueries[i]}" wrongly offered to teach a fact about the pronoun: ${t.answer}`,
+    );
+    assert.doesNotMatch(
+      t.answer,
+      /^noted —/,
+      `turn ${i} "${pronounQueries[i]}" wrongly stored a fact about the pronoun: ${t.answer}`,
+    );
+    // never the "I don't know anything about '<pronoun...>' yet" teach-offer shape at all
+    assert.doesNotMatch(t.answer, /^I don't know anything about "(?:you|i|we|he|she|they)\b/i);
+  }
+});
+
+test("tier5/non-pronoun 'is X <adjective>' yes/no questions are unaffected by the pronoun-subject guard (compat guard)", async () => {
+  // "is Task complete" / "is the code good" name ordinary, non-pronoun subjects
+  // and must keep exactly the existing T8 empty-memory teach-offer behavior —
+  // the pronoun-subject guard only ever excludes a LEADING you/i/they/he/she/we,
+  // never a real noun subject.
+  const turns = await driveSession(["is Task complete", "is the code good"]);
+  assert.match(turns[0].answer, /^I don't know anything about "Task" yet — teach me directly, e\.g\. "remember that task is complete"\./);
+  assert.match(turns[1].answer, /^I don't know anything about "the code" yet — teach me directly, e\.g\. "remember that the code is good"\./);
+});
+
 // ---- CYCLE 3 ----
 
 test("tier5/two facts about the same subject list together; 'what else' honestly says there's nothing more (compat, already flowed)", async () => {

@@ -4879,6 +4879,34 @@ const HAS_METHOD_OPEN_RE = /^what\s+methods\s+does\s+([\w'-]+)\s+have[?.!\s]*$/i
  *  cascade/orientation nudge that already handles it. */
 const IS_ADJECTIVE_YESNO_RE = /^(?:is|are|was|were)\s+(.+?)\s+([A-Za-z][\w-]*)[?.!\s]*$/i;
 const IS_ADJECTIVE_PRONOUN_RE = /^(?:it|this|that)$/i;
+/** BENCHMARK_CONVERSATION_1.8.14.md persona-sweep (2026-07-12), highest cross-
+ *  persona signal in the run (4 independent personas): IS_ADJECTIVE_YESNO_RE's
+ *  subject capture is unbounded/unrestricted (see its own docblock above), so
+ *  a pronoun-subject IDENTITY question ("are you happy", "are you like
+ *  chatgpt", "are you secretly ChatGPT or GPT-4") backtracks the pronoun
+ *  itself (plus any trailing filler word up to the last token) into the
+ *  SUBJECT capture — factReadBack then treats "you"/"you like"/"you secretly
+ *  chatgpt or" as a literal fact subject and offers to teach a fact ABOUT the
+ *  pronoun ("remember that you is happy"), exactly the grammatical category
+ *  error TEACH_PRONOUN_RE (above, chat.mjs:2648) was already built to reject
+ *  on the teach-lane side. Same pronoun set (you|i|they|he|she|we) reused
+ *  here, checked at the START of the subject capture only (not anchored to
+ *  the whole capture — a pronoun subject can carry trailing words, "you
+ *  like"/"you secretly … or", the same way TEACH_PRONOUN_RE's own `\s+\S+`
+ *  tail allows). "it" is deliberately EXCLUDED from this set, unlike
+ *  TEACH_PRONOUN_RE — IS_ADJECTIVE_PRONOUN_RE (just above) already gives "it"
+ *  its own correct, wanted behavior (anaphoric resolution against the
+ *  session's current FOCUS, "is it deprecated" → resolves off focusLabel),
+ *  which this guard must not shadow. Every call site below is expected to
+ *  test rawSubject (post-trim, pre-lowercasing) against this BEFORE treating
+ *  the match as a fact-subject candidate, and to fall through (never offer
+ *  unknownAdjectiveOffer, never attempt a fact lookup) on a hit — the same
+ *  "decline, don't misroute" discipline the rest of this reader already
+ *  follows for an honest miss, letting the query continue to whatever
+ *  handles identity/small-talk questions (isConversational's IDENTITY_PHRASES/
+ *  AI_IDENTITY_PHRASES/FEELINGS_PHRASES closed sets, or its own ≤3-word
+ *  catch-all) instead. */
+const IS_ADJECTIVE_YESNO_PRONOUN_SUBJECT_RE = /^(?:you|i|they|he|she|we)\b/i;
 /** The TEACH-OFFER for a subject IS_ADJECTIVE_YESNO_RE resolved but has no
  *  fact about at all (Tier-5 playtest, cycle 2) — the offered "remember that
  *  X is Y" phrasing is verified in-state: TEACH_PROPERTY_RE's own subject
@@ -5050,7 +5078,17 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
         // already stood; "is the checkout flow deprecated" (this branch's own
         // ORIGINAL T8 target — "deprecated" has no structural meaning at all)
         // has no envelope.parsed to defer to, so it is untouched.
-        if (subject && !/^there\b/i.test(subject) && !envelope?.parsed) {
+        // Pronoun-subject guard (BENCHMARK_CONVERSATION_1.8.14.md persona-sweep,
+        // 2026-07-12) — see IS_ADJECTIVE_YESNO_PRONOUN_SUBJECT_RE's own docblock
+        // above IS_ADJECTIVE_YESNO_RE: "are you happy"/"are you like chatgpt"
+        // backtrack a pronoun subject in here exactly like any other adjective
+        // subject, so without this check unknownAdjectiveOffer would wrongly
+        // offer to teach a fact about the literal pronoun. Checked on rawSubject
+        // (before the IS_ADJECTIVE_PRONOUN_RE focus-resolution swap above, which
+        // only ever fires for "it"/"this"/"that" — never a personal pronoun like
+        // "you", so `subject` itself would already carry the pronoun verbatim).
+        if (subject && !/^there\b/i.test(subject) && !envelope?.parsed
+          && !IS_ADJECTIVE_YESNO_PRONOUN_SUBJECT_RE.test(rawSubject)) {
           return unknownAdjectiveOffer(subject, emptyIsAdj[2].trim().toLowerCase());
         }
       }
@@ -5816,7 +5854,18 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
   const isAdj = qHedge.match(IS_ADJECTIVE_YESNO_RE);
   if (isAdj) {
     const rawSubject = isAdj[1].trim();
-    const subject = IS_ADJECTIVE_PRONOUN_RE.test(rawSubject) ? (focusLabel || null) : rawSubject;
+    // Pronoun-subject guard (BENCHMARK_CONVERSATION_1.8.14.md persona-sweep,
+    // 2026-07-12) — see IS_ADJECTIVE_YESNO_PRONOUN_SUBJECT_RE's own docblock
+    // above IS_ADJECTIVE_YESNO_RE: "are you happy"/"are you like chatgpt"/
+    // "are you secretly ChatGPT or GPT-4" backtrack a personal-pronoun
+    // subject in here just like any other adjective subject. Forcing
+    // `subject` to null (the SAME "nothing to resolve" shape a bare "it"/
+    // "this"/"that" with no standing focus already produces just below) lets
+    // this whole reader decline HONESTLY — no fact lookup, no teach-offer —
+    // and fall through to whatever handles identity/small-talk questions
+    // instead, rather than special-casing a return here.
+    const subject = IS_ADJECTIVE_YESNO_PRONOUN_SUBJECT_RE.test(rawSubject) ? null
+      : IS_ADJECTIVE_PRONOUN_RE.test(rawSubject) ? (focusLabel || null) : rawSubject;
     const adjective = isAdj[2].trim().toLowerCase();
     if (subject) {
       const subjVariants = factTermVariants(normFactTerm, subject);
