@@ -63,7 +63,7 @@ Every cycle MUST satisfy:
   declared tool fits or the entity does not resolve) is a PASS at the honest-miss level — refusing
   when unsure is the correct behavior, not a fallback. On an ambiguous resolved term, that refusal
   MAY also carry `candidateResults` (the same read-only tool dispatched once per tied candidate) —
-  still a refusal, still a PASS, and the preferred shape going forward (`PLAN_BREADTH_FIRST_NLU.md` §4).
+  still a refusal, still a PASS, and the preferred shape going forward (`archive/PLAN_BREADTH_FIRST_NLU.md` §4).
 - **Reference bands stay illustrative, never run.** `agentbench/README.md`'s comparable-model bands
   (tiny-local, 8B-open, Nova-micro/lite, Haiku) are anchors for a future write-up, not scores this
   harness produces (no network, no LLM). Don't claim a number for them.

@@ -13,8 +13,8 @@ verbatim (`ROADMAP.md:26-30`):
 > against both the original and the paraphrase: they must entail the same conclusions, and neither may
 > contradict the other sentence-by-sentence.
 
-`PLAN_BREADTH_FIRST_NLU.md`'s own "Status" section, after listing everything shipped, names two items
-as genuinely open (`PLAN_BREADTH_FIRST_NLU.md:20-21`):
+`archive/PLAN_BREADTH_FIRST_NLU.md`'s own "Status" section, after listing everything shipped, names two items
+as genuinely open (`archive/PLAN_BREADTH_FIRST_NLU.md:20-21`):
 
 > Two items are genuinely open, not yet started: (c) the paraphrase-verified-via-`syllogise.mjs` piece
 > of "Ambition"; (d) a real "list/count all X of class Y" query shape for memory-graph classes via
@@ -90,7 +90,7 @@ necessary step — Part 3.
 
 ## Part 2 — where paraphrase candidates come from today
 
-`PLAN_BREADTH_FIRST_NLU.md` §6a scoped exactly this generation problem (`PLAN_BREADTH_FIRST_NLU.md:
+`archive/PLAN_BREADTH_FIRST_NLU.md` §6a scoped exactly this generation problem (`archive/PLAN_BREADTH_FIRST_NLU.md:
 327-341`): a combinatorial surface-variant expansion using the ACE grammar's 8 patterns
 (`src/grammar/ace.mjs`), the existing lexicon, and real WordNet synset data, self-verified before
 being committed. It shipped, partially, and was archived (`archive/PLAN_TEMPLATE_COVERAGE.md:1`):

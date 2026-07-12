@@ -1,3 +1,8 @@
+**Archived, 2026-07-13** — all six tracks shipped. Of the two items its own Status section left
+genuinely open, paraphrase verification now has its own doc, `PLAN_PARAPHRASE_VERIFICATION.md`; the
+list/count-all-X-of-class-Y query shape is still pending its own doc. Both tracked in `ROADMAP.md`'s
+"What's next".
+
 # Breadth-first ambiguity, honest bail-outs, and NL-fluency groundwork
 
 **Status: FINAL, approved 2026-07-11.** Copied verbatim from the approved plan-mode plan

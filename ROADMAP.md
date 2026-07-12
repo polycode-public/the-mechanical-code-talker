@@ -32,7 +32,7 @@ getting silently traded away by inherited caution:
 
 ## What's next (feature-shaped — see `HANDOVER.md` for the current task-level list)
 
-- **`PLAN_BREADTH_FIRST_NLU.md`'s own remaining scope** — all six tracks shipped (entity-tie
+- **`archive/PLAN_BREADTH_FIRST_NLU.md`'s own remaining scope** — all six tracks shipped (entity-tie
   ambiguity, router candidate enrichment, `tmct viz` + its embedded chat panel, template-coverage
   harness, alternates-on-hits, canonical representation for the ask/teach lanes — all now in "Current
   capability surface" above). Two named items are satisfied and closed, per their own track's

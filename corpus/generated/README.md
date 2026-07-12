@@ -1,6 +1,6 @@
 # corpus/generated/ — mechanically-generated ACE surface variants
 
-`ace-surface-variants.jsonl` — PLAN_BREADTH_FIRST_NLU.md §6a's raw material for
+`ace-surface-variants.jsonl` — archive/PLAN_BREADTH_FIRST_NLU.md §6a's raw material for
 tmct's "richer template/surface-realization variety" goal. Never an LLM, never
 invented text: every row is a real seed sentence with one word swapped for a
 real WordNet synset sibling, or a real sentence's alternate ACE-grammar-
@@ -29,7 +29,7 @@ Every row also carries `provenance` (`wordnet:<synsetId>` or
 
 This corpus is not loaded by `src/chat.mjs`/`src/ask.mjs` or any other
 product code — it is committed raw material, verified by
-`scripts/template-coverage.mjs`, per PLAN_BREADTH_FIRST_NLU.md §6's explicit
+`scripts/template-coverage.mjs`, per archive/PLAN_BREADTH_FIRST_NLU.md §6's explicit
 non-goal. Wiring it into live answer rendering is a separate, future phase.
 
 ## Licence
