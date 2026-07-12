@@ -9435,7 +9435,11 @@
     "scowl": {},
     "shrug": {},
     "skill": {},
-    "smirk": {}
+    "smirk": {},
+    "danger": {},
+    "push": {},
+    "refusal": {},
+    "tooling": {}
   },
   "verbs": {
     "import": {},
@@ -9721,6 +9725,21 @@
       "type": "data"
     },
     "colorful": {
+      "type": "data"
+    },
+    "legitimate": {
+      "type": "data"
+    },
+    "ranked": {
+      "type": "data"
+    },
+    "related": {
+      "type": "data"
+    },
+    "sacred": {
+      "type": "data"
+    },
+    "unaffected": {
       "type": "data"
     }
   },
