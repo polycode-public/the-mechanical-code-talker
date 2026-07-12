@@ -1,217 +1,229 @@
-# PLAN_MUD.md — a persistent, shared, anonymous-SSH tmct instance on Fargate
+# PLAN_MUD.md — persistent, shared tmct worlds over a `server:` memory backend
 
 Status: RESEARCH / DESIGN — not yet implemented. Nothing in this document is live code.
 
 ## Origin
 
-2026-07-12 session. The operator's own framing, verbatim: "How can I expose an ssh server that
-people can ssh into anonymously run just the `npx ... chat` command and nothing else so the ssh
-session quits if the program quits and the logged in user only has execute permissions for that node
-command and that node command runs a shared sqlite graph on fargate instance and it periodically
-writes and export to s3, and reads the latest export on task re-load so that real users could
-interact with a persistent agent in a sandbox safe enough to have trivial ssh credentials?"
+2026-07-12 session, evolved across four rounds of the operator's own framing (kept verbatim, in
+order, since each round revised the design and the reasoning for the revision matters):
 
-Named `PLAN_MUD.md` (not `PLAN_DEPLOY.md`) deliberately: a single persistent world-state every
-connecting user shares and mutates is the same shape as a classic multi-user dungeon (MUD) —
-`PLAN_ADVENTURE.md`'s single-player text-adventure stretch already built imperative-command
-groundwork; this document is the multi-user, persistent-world deployment question, a different axis
-entirely (infrastructure, not grammar).
+1. "How can I expose an ssh server that people can ssh into anonymously run just the `npx ... chat`
+   command and nothing else so the ssh session quits if the program quits and the logged in user
+   only has execute permissions for that node command and that node command runs a shared sqlite
+   graph on fargate instance and it periodically writes and export to s3, and reads the latest export
+   on task re-load so that real users could interact with a persistent agent in a sandbox safe enough
+   to have trivial ssh credentials?" — the original SSH/Fargate/S3 design (superseded, see below).
+2. "I am an advocate of serverless and scale to zero, is there an sqlite look-a-like in AWS in a
+   serverless model, and can we have a sessionless ssh so actually each call opens a new ssh
+   connection, does what it needs to and exits and then use a lambda as an ssh server?" — the pivot
+   away from a persistent listener.
+3. "Actually, I think the route is better without ssh, we expose an API which is called if we run
+   `npm run chat --server <server-name>` which then uses an API which access a namespaced storage
+   backend matching server-name, ideally we would do almost nothing to host this, just expose
+   whatever is the easiest AWS storage engine that exposes an API for free, then we have a new
+   storage backend so it's actually not `--server` but the `--memory-backend` (or whatever) with the
+   value being `server:<server-name>`" — dropping SSH entirely: no shared host to log into at all,
+   every user runs tmct locally against a shared remote backend. Confirmed as the direction.
+4. "Yes use this new design and can we have the server name actually being a dynamodb table name
+   with the tmct package published use a package.json picking a specific anonymous guest server, and
+   this also be trivially extensible to create a new table, with a specific set of cognito accounts
+   that can access it and these people would somehow auth via their socials to access a shared
+   private server?" — the confirmed, current design this document now describes.
 
-This pattern — anonymous SSH into a locked-down forced command — is proven and public: `ssh
-sshtron.zachlatta.com`, `ssh mapscii.me`, `telehack.com`'s SSH mode all run exactly this shape (a
-shared or published key/no-real-auth, `ForceCommand` locking the session to one program, the SSH
-session dying when that program exits). Nothing here is a novel security mechanism; it's assembling
-well-understood pieces around tmct's own already-existing sqlite backend.
+Still named `PLAN_MUD.md`: a persistent, shared world-state multiple users mutate together is still
+the governing shape (`PLAN_ADVENTURE.md`'s single-player groundwork is a different axis — grammar,
+not multi-user persistence). What changed across the four rounds is entirely *how a client reaches
+that shared state* — SSH-into-a-shared-host, then Lambda-as-SSH-server (rejected, Lambda has no raw
+TCP listener), then a remote storage backend reached directly over AWS's own SDK, no custom server at
+all. The last one is what ships.
 
 ## Confirmed baseline (tmct's own code, verified this session)
 
-- tmct already has a real sqlite backend: `src/memory/core.mjs:288-303` opens a resident
-  `node:sqlite` `DatabaseSync` connection (lazily imported, Node's built-in sqlite — no native
-  dependency to compile/ship), sets `PRAGMA journal_mode = WAL` and `PRAGMA synchronous = NORMAL`
-  (`core.mjs:302-303`), and stores at `<repo>/.tmct/memory/graph.sqlite`
-  (`src/chat.mjs:9426`).
-- Selecting it today: `TMCT_MEMORY_BACKEND=sqlite` env var, or (landing today, same session — see
-  `HANDOVER.md`) a new `--memory-backend sqlite` CLI flag on `tmct init`/`import`/`chat`, written
-  into `tmct.toml`'s `[memory] backend` field so a plain flagless `tmct chat` afterward picks it up
-  automatically. **This deployment should use `--memory-backend sqlite` at image-build/first-boot
-  time** (bake it into the shipped `tmct.toml`, or pass the env var) rather than requiring every
-  connecting user to type a flag they'll never see anyway (the forced command controls the exact
-  invocation).
-- **WAL mode's consequence for backup**: a live WAL-mode sqlite database is split across THREE files
-  (`graph.sqlite`, `graph.sqlite-wal`, `graph.sqlite-shm`) while open. A plain `cp` of just the main
-  file mid-session can capture an inconsistent, torn snapshot. Any export step MUST either (a) run
-  `sqlite3 graph.sqlite ".backup /path/snapshot.sqlite"` (sqlite's own online backup API, safe against
-  concurrent writers, single consistent output file) or (b) run `PRAGMA wal_checkpoint(TRUNCATE)`
-  first to fold the WAL back into the main file, then copy just that one file. Prefer (a) — it's
-  correct even if a checkpoint can't fully drain (an active reader can block a TRUNCATE checkpoint).
+- tmct now has a real, working multi-backend memory seam, landed this same session
+  (`src/memory/core.mjs`): **Backend A** (the flat OWL-labelled JSON file, the default, unchanged),
+  **Backend B** (`createInMemoryStore`, pure in-process, `core.mjs:199-220`), **Backend C**
+  (`createSqliteMemoryStore`, a resident `node:sqlite` connection, WAL mode, `core.mjs:221-308`).
+  Selected via `openMemoryBackend(repoRoot, backendChoice)` (`core.mjs:339`), the ONE shared resolver
+  both `tmct init`'s corpus seeding and `chat.mjs`'s `createSession` now call — closing a real bug
+  found and fixed this same session where seeding didn't respect the configured backend.
+- Selection precedence, already real and tested: `--memory-backend <value>` CLI flag (on
+  `init`/`import`/`chat`) > `TMCT_MEMORY_BACKEND` env > `tmct.toml`'s `[memory] backend` field >
+  `"default"` (`src/chat.mjs:9444`). A flag on `init` writes straight into `tmct.toml`
+  (`src/init.mjs`), so a later flagless `tmct chat` in that repo picks it up automatically — the
+  exact mechanism this document's `server:<name>` value plugs into as a fourth backend, "Backend D."
+- **The closed-set validator needs one small, precise extension.** `enumFlag` (`src/cli-args.mjs:82`)
+  currently validates `--memory-backend` against an exact-match closed list
+  (`["default","memory","sqlite"]`). `server:<name>` isn't a member of a closed set — it's a
+  parameterized value, the same *shape* (not reusing the same function) as this codebase's own
+  well-established `scheme:value` provenance-tag convention (`corpus:`, `corpus-weak:`, `web:`,
+  `ace:chat:`, `extracted:` — all parsed by prefix in `src/memory/core.mjs`'s
+  `provenanceTagToSource`). The validator needs a second branch: accept the closed set OR a value
+  matching `/^server:[a-z0-9-]{1,64}$/` (name-length-bounded, since it becomes part of a real AWS
+  resource name below). `openMemoryBackend` gets a matching new branch dispatching to this document's
+  new Backend D module.
 
-## Layer 1 — the SSH front door: forced command, no shell, session dies with the program
+## Backend D — a DynamoDB table per named server, reached directly over the AWS SDK
 
-Standard OpenSSH (`sshd`), one dedicated unprivileged system account (e.g. `tmctguest`), locked down
-in `sshd_config`:
+**No server to write, host, or operate.** DynamoDB's own SigV4-signed HTTP API *is* the API — this
+was the operator's own explicit ask ("whatever is the easiest AWS storage engine that exposes an API
+for free"). tmct's Backend D module calls `@aws-sdk/client-dynamodb` directly; there is no Lambda, no
+API Gateway, no custom backend service anywhere in this design. DynamoDB on-demand billing is
+pay-per-request with a real always-free tier, and an idle table (no requests) costs nothing beyond a
+small storage fee — the "one table per server" shape the operator specified (not one shared table
+with a partition-key prefix) costs effectively $0 per additional idle server, which is what makes
+"trivially extensible to create a new table" cheap to actually offer.
 
-```
-Match User tmctguest
-    ForceCommand /usr/local/bin/tmct-ssh-entry
-    X11Forwarding no
-    AllowTcpForwarding no
-    AllowAgentForwarding no
-    PermitTunnel no
-    GatewayPorts no
-    PermitTTY yes
-```
+**Table shape**: one item per Fact/Source/Utterance/Session individual (the same individual shape
+`loadMemory`/`appendFacts` already produce for Backend A/C — Backend D's job is translating that
+shape to/from DynamoDB `PutItem`/`Query`/`BatchWriteItem` calls, not inventing a new data model).
+Partition key = individual `id` (already globally unique per graph, content-hashed for Facts); no
+sort key needed for the basic shape, though a `class` attribute with a Global Secondary Index lets a
+future `/memory`-style listing query "every Fact" without a full table scan.
 
-`ForceCommand` overrides whatever command the connecting client actually requested — an anonymous
-user typing `ssh -i shared_key tmctguest@host anything-they-want` always runs
-`/usr/local/bin/tmct-ssh-entry` regardless. `PermitTTY yes` is kept (the chat UI is an interactive
-terminal app, unlike the usual forced-command git-shell-style lockdown that disables PTY entirely).
-Everything else that could turn the SSH connection into a general-purpose network tool
-(port-forwarding, X11, agent-forwarding, tunnelling) is disabled — the operator only gets a terminal
-talking to one program, nothing else.
+**`server:<name>` resolves to table name `tmct-server-<name>`** (the `tmct-server-` prefix avoids
+collision with anything else in the same AWS account, and keeps the mapping from CLI value to AWS
+resource name mechanical and auditable). Region is a second, separately-resolved setting (env var or
+a `[memory] server_region` `tmct.toml` field, default to a single fixed region for the shipped guest
+server specifically, see below) — DynamoDB table names are only unique per account+region, so the
+region has to be pinned somewhere, not inferred from the table name alone.
 
-`/usr/local/bin/tmct-ssh-entry` is a one-line wrapper that **execs, never forks**:
+## Tier 1 — the anonymous guest server, shipped in the npm package, zero setup
 
-```sh
-#!/bin/sh
-exec node /opt/tmct/bin/tmct.mjs chat
-```
+The operator's ask: "the tmct package published use a package.json picking a specific anonymous
+guest server." Concretely:
 
-`exec` replaces the wrapper's own process with the node process — there is no parent shell left
-running once `chat` starts. When the chat program exits (the user types `/exit`, hits EOF/Ctrl-D, or
-the process crashes), there is nothing left to return control to, so `sshd` closes the channel and
-the SSH session ends on its own. This is the entire mechanism behind "the ssh session quits if the
-program quits" — no extra supervision code needed, it falls out of `exec` semantics.
+- One AWS account (the tmct maintainer's) owns a single DynamoDB table, `tmct-server-guest`, in one
+  fixed region.
+- One **Cognito Identity Pool** with unauthenticated (guest) identities enabled, its attached IAM role
+  scoped to exactly `dynamodb:GetItem`/`PutItem`/`Query`/`BatchWriteItem` on ONLY that one table's ARN
+  — no `CreateTable`, no `DeleteTable`, no access to any other resource. This is the direct
+  replacement for the original design's "trivial ssh credentials": a Cognito Identity Pool ID is
+  *meant* to be public and embedded in client apps (that's the whole point of unauthenticated
+  identities — see AWS's own guidance on this exact pattern) — leaking it changes nothing, since the
+  attached IAM role is the real, narrow security boundary, precisely mirroring how the original SSH
+  design's shared key was safe because `ForceCommand` (not the key) was the boundary.
+- The Identity Pool ID (and the fixed region) ship as a small, plain default-config object — either a
+  new field the operator's own instruction named, e.g. `package.json`'s own custom field
+  (`"tmct": {"guestServer": {"identityPoolId": "...", "region": "...", "table": "tmct-server-guest"}}`,
+  following the precedent of other tools that stash tool-specific config under a namespaced
+  `package.json` key), or a small shipped `src/memory/backend-server-defaults.mjs` constant — either
+  is fine, the requirement is just that it ships IN the published package, not fetched at runtime, so
+  `server:guest` (or `--memory-backend server:guest`, or possibly a bare `server` defaulting to
+  `guest`) works the moment someone runs `npx @polycode-projects/the-mechanical-code-talker chat
+  --memory-backend server:guest` with zero prior setup — no account, no AWS credentials of their own,
+  nothing to configure.
+- Client-side credential flow at connect time: exchange the (public) Identity Pool ID for temporary,
+  narrowly-scoped AWS credentials via Cognito's `GetId`/`GetCredentialsForIdentity` unauthenticated
+  flow (a standard two-call AWS SDK sequence, no custom code beyond calling it) — those temporary
+  credentials are what Backend D's DynamoDB calls actually use. Nothing long-lived is ever stored on
+  the connecting user's machine.
 
-"The logged-in user only has execute permission for that node command": enforced at two independent
-layers, so a bug in one doesn't undermine the other —
-1. **SSH layer**: `ForceCommand` means no other command can ever run over this SSH connection, full
-   stop, regardless of what filesystem permissions would otherwise allow.
-2. **Filesystem layer** (defense in depth, in case Layer 1 is ever misconfigured or bypassed via a
-   non-SSH path): `tmctguest` owns nothing on the container's filesystem. Its home directory doesn't
-   exist or is empty and unwritable. `/opt/tmct` (the installed tmct package) is owned by `root`,
-   world-readable+executable, not writable by `tmctguest`. The ONLY path `tmctguest` can write to is
-   a narrow, explicitly-granted scratch location for its own session log
-   (`.tmct/sessions/<session-id>.log`, tmct's own existing per-session log convention) if that's
-   wanted at all — the shared `graph.sqlite` itself should be owned by a SEPARATE service account the
-   `chat` process runs as via a `setuid`-style wrapper or a privilege-separated launcher, not directly
-   writable by the raw `tmctguest` login identity, so a contained escape from the chat program still
-   can't touch the database file directly, only through the program's own API.
-3. Also set `tmctguest`'s real login shell to `/usr/sbin/nologin` in `/etc/passwd` — pure defense in
-   depth for any non-SSH login path (there shouldn't be one, but cheap to close).
+## Tier 2 — self-service private table creation
 
-"Trivial ssh credentials" — a single shared keypair, publicly documented (e.g. "run `curl
-.../shared_key -o key && chmod 600 key && ssh -i key tmctguest@host` to connect"), never rotated,
-never treated as a secret. This is safe PRECISELY BECAUSE Layers 1-2 above bound what that credential
-can do to "start exactly one already-locked-down program" — leaking it changes nothing, which is the
-whole design goal. (A real per-user credential system, rate-limiting by identity, or ban lists are
-explicitly NOT this document's scope — see Non-goals.)
+The operator's ask: "trivially extensible to create a new table." A new CLI command,
+`tmct server create <name>`, using the OPERATOR-RUNNING-THE-COMMAND'S OWN real AWS credentials
+(standard AWS SDK credential resolution — `~/.aws/credentials`, env vars, an assumed role, whatever
+they already have configured; nothing new to build for this half) to:
 
-## Layer 2 — the Fargate task: one writer, sqlite in WAL mode, container hardening
+1. Call `CreateTable` directly for `tmct-server-<name>` (on-demand billing mode, so no capacity
+   planning) — one SDK call, no CloudFormation/CDK stack required for the basic case.
+2. Write `[memory] backend = "server:<name>"` (and the resolved region) into the local `tmct.toml` —
+   reusing the EXACT "a CLI action writes into tmct.toml so a later flagless command picks it up"
+   mechanism `--with-persona`/`--memory-backend` already established this session, not a new pattern.
 
-**Single task, not auto-scaled.** A shared sqlite graph is a single-file, single-host database — this
-deployment wants an ECS Service with `desiredCount = 1`, not horizontal scaling. Concurrent SSH
-sessions on the SAME task are fine (WAL mode allows concurrent readers with one writer, and
-`node:sqlite`'s `DatabaseSync` serializes writes within the one Node process anyway since every
-`chat` invocation on this host is a separate process opening the SAME db file — WAL's file-level
-locking handles the cross-process coordination). Multiple TASKS each independently opening the same
-local ephemeral file don't apply here since Fargate task storage isn't shared across tasks by
-default — this design deliberately keeps it that way rather than reaching for EFS (sqlite-over-NFS
-locking is fragile and explicitly discouraged upstream). If real multi-task horizontal scale is ever
-needed, that's a backend swap (Postgres/DynamoDB), not a bigger version of this design — named as a
-scaling escape hatch, not built here.
+This alone (no Cognito, no auth) gives a self-hoster a private, no-anonymous-access world: only
+someone with the creator's own AWS credentials (or credentials the creator explicitly grants IAM
+access to, via ordinary AWS IAM — nothing tmct-specific) can reach it. That's a real, useful, MUCH
+simpler middle tier between "fully public guest world" and Tier 3's social-login-gated sharing below —
+worth shipping and using on its own before Tier 3 exists.
 
-**Container hardening** (independent of the SSH-layer lockdown — defense against the chat program
-itself being abused, not just against shell access):
-- Read-only root filesystem, with exactly one writable, explicitly-mounted path for
-  `.tmct/memory/graph.sqlite` (+ its `-wal`/`-shm` siblings) and session logs.
-- `--cap-drop=ALL`, run the container as a non-root UID.
-- No outbound network egress except to S3 (a VPC endpoint for S3 + a security group denying
-  everything else outbound) — the chat program has no legitimate reason to reach anywhere else, and
-  this closes off using a compromised session as a network pivot.
-- A per-connection resource/session cap at the `sshd`/security-group level (max session duration, a
-  connection-rate limit per source IP) so one abusive or runaway session can't monopolize the single
-  writer or degrade the shared experience for everyone else.
+## Tier 3 — private, named-account servers with social login
 
-**Networking**: SSH is raw TCP, not HTTP — use a Network Load Balancer (NLB), not an ALB, in front of
-the Fargate service, forwarding port 22 (or a nonstandard port to dodge casual internet-wide port-22
-scanning noise, e.g. 2222, cosmetic only — not a real security control on its own).
+The operator's ask: "a specific set of cognito accounts that can access it and these people would
+somehow auth via their socials to access a shared private server." This is the largest, most involved
+piece — real, well-precedented AWS mechanisms, but genuine implementation work, not a config toggle.
 
-## Layer 3 — persistence: S3 export/import around ephemeral Fargate storage
+**AWS shape**: ONE shared Cognito **User Pool** (not one per private server — a User Pool has real
+per-pool setup overhead; reusing one across every private server this design ever creates is the
+standard AWS pattern for "many resources, one identity provider"), federated with social identity
+providers (Google, Facebook, Sign in with Apple, etc. — Cognito supports this natively via Hosted UI
+or direct OIDC/OAuth federation, no custom auth code). Access control per private server uses Cognito
+**Groups**: `tmct server create <name> --private` creates a Cognito Group named to match the table
+(`server-<name>`), and the Identity Pool's role-mapping (Cognito's "choose role from token" feature,
+keyed on group membership) grants the IAM role scoped to `tmct-server-<name>` ONLY to users in that
+group — a standard, documented AWS access-control shape, not a novel mechanism.
 
-**On task start, before `sshd` accepts connections**: fetch the latest snapshot from a well-known S3
-key (`s3://<bucket>/tmct-graph/latest.sqlite`) to the local path `graph.sqlite` will live at. If the
-key doesn't exist yet (first-ever boot), start with an empty/freshly-`tmct-init`'d graph. Only then
-start `sshd` — a user should never be able to connect to a task that hasn't finished loading the
-shared world state.
+**Granting access**: `tmct server invite <name> <email>` (a thin wrapper over Cognito's
+`AdminAddUserToGroup` — the inviter needs Cognito admin rights over the shared User Pool, which is a
+smaller, more targeted permission than the raw DynamoDB access Tier 2 already assumes the creator
+has). The invited person still authenticates via their own social identity — the operator never
+handles or stores a password or a social platform credential directly; Cognito's federation does that
+handshake.
 
-**Periodic export, while running**: a background loop in the same task (a small sidecar
-process/thread, not a separate Fargate task — it needs to reach the SAME task's local ephemeral
-filesystem, which isn't shared across tasks) that every N minutes: runs `sqlite3 graph.sqlite
-".backup /tmp/snapshot.sqlite"` (the WAL-safe online backup, see Confirmed Baseline above), then `aws
-s3 cp /tmp/snapshot.sqlite s3://<bucket>/tmct-graph/latest.sqlite`. A rolling few generations
-(`latest.sqlite`, `latest-1.sqlite`, ...) rather than one single overwritten key gives a cheap
-rollback path if a bad export or a vandalism incident (see Non-goals — anonymous write access to a
-persistent shared graph) needs undoing.
-
-**On graceful shutdown** (ECS sending `SIGTERM` before a deploy/scale-down, with a configured
-`stopTimeout` grace window): trigger one FINAL export synchronously before the process actually
-exits, so the periodic loop's interval doesn't become a window of guaranteed data loss on every
-routine deploy. The periodic loop is the safety net for ungraceful crashes (which skip the `SIGTERM`
-handler entirely); the shutdown export is the primary consistency mechanism for planned restarts.
-
-**Deployment strategy — avoid a two-writer window.** ECS's default rolling deployment starts the NEW
-task and waits for it healthy BEFORE stopping the OLD one — for a normal stateless service that's
-correct, but here it creates a real risk: the new task boots, imports whatever was in S3 at THAT
-moment (possibly stale relative to the old task's most recent, not-yet-exported writes), starts
-accepting connections and taking new writes, and then the old task's own shutdown export could
-overwrite the new task's fresher state with older data. Fix: set this specific service's deployment
-configuration to `minimumHealthyPercent = 0, maximumPercent = 100` (stop-then-start, not
-start-then-stop) — trading a brief connection-refused gap during every deploy for a guarantee that
-only one task is ever alive (and thus ever writing) at a time. For a single shared toy-world state
-store, that tradeoff is clearly correct; it would NOT be for a real production HA service, which is
-exactly why this is named as a deliberate, scoped choice.
-
-## Open design question — does anonymous write access need its own trust tier?
-
-Not infrastructure, but load-bearing for what this deployment actually produces: every connecting
-anonymous user can `teach` the shared graph new facts (tmct's existing teach lane, unrelated to this
-document). Unlike this session's `corpusWeak`/`extracted` trust tiers (`memory/trust.mjs`
-`SOURCE_PRIOR`, landed earlier today) — which grade CURATED or MECHANICALLY-EXTRACTED data — an
-anonymous SSH teach is genuinely unreviewed, unauthenticated, and adversarial-by-default (anyone with
-the published shared key can type anything). Two real options, not decided here:
-1. Extend `SOURCE_PRIOR` with a new `anonSsh` tier, trusted below `web` — the facts land in the SHARED
-   graph (so "the world remembers what visitors taught it" stays true, matching the MUD framing) but
-   rank low enough that they never crowd out corpus/operator facts in an answer.
-   2. Keep anonymous teaches SESSION-SCOPED ONLY (read from the shared graph, but a connecting user's
-   own `remember X` writes stay in an ephemeral per-session overlay, discarded when they disconnect)
-   — the shared world is read-only to visitors, only an operator-run maintenance path can grow it.
-Option 1 is more in the spirit of "a persistent agent real users interact with" (a MUD's world
-genuinely changes from player action); option 2 is safer against vandalism/prompt-injection-style
-abuse of a public write surface. Flagging this as a real decision for whoever implements this, not
-defaulting either way here.
+**Client-side login flow** — the genuinely new implementation work, well-precedented but not trivial:
+a local, browser-based OAuth flow the same shape as `gh auth login`/`aws sso login`/`gcloud auth
+login` already use — the CLI opens a temporary local HTTP listener on an ephemeral port, opens the
+user's default browser to Cognito's Hosted UI URL (which itself federates out to whichever social
+provider the user picks), captures the returned authorization code on the local callback when the
+browser redirects back, exchanges it server-side (still local — "server-side" here just means "not
+in the browser") for Cognito tokens, then calls the SAME `GetCredentialsForIdentity` Cognito flow
+Tier 1 uses (now with an authenticated identity, not the guest one) to get temporary, group-scoped AWS
+credentials. Cache the refresh token locally (e.g. alongside `tmct.toml`, gitignored) so this is a
+one-time login per machine, not a login-every-session experience, with silent refresh on subsequent
+connects.
 
 ## Phasing
 
-1. sqlite backend + `--memory-backend sqlite` (landing today, separately from this document).
-2. Container image: tmct + sshd + the `tmct-ssh-entry` wrapper + hardening (read-only rootfs,
-   dropped caps, non-root UID), built and runnable locally first (`docker run` + `ssh -p 2222
-   localhost`) before any AWS involvement — cheapest place to catch a `ForceCommand`/permission
-   mistake.
-3. S3 export/import scripts (`.backup`-based, tested for WAL-safety) + the SIGTERM shutdown hook,
-   still local (a mounted local dir standing in for the S3 bucket) before wiring real AWS calls.
-4. Fargate task definition + ECS service (`desiredCount=1`, `minimumHealthyPercent=0/maximumPercent=
-   100`) + NLB, real S3 bucket, VPC egress locked to the S3 endpoint only.
-5. Resolve the anonymous-write trust-tier question (above) before any real public announcement of the
-   shared key — this is a product decision, not incidental plumbing, and should not default silently
-   by omission.
-6. A published, throwaway shared keypair + a short public instructions page.
+1. Backend D itself: the DynamoDB-backed store implementing the same individual read/write shape
+   Backend A/B/C already share, `server:<name>` value parsing in `enumFlag`/`openMemoryBackend`, unit
+   tested against a local DynamoDB-compatible test double (e.g. `amazon/dynamodb-local` in Docker for
+   CI, matching how `node:sqlite` needed no such double since it's fully local — this is the one
+   backend that genuinely needs network-call mocking in tests).
+2. Tier 1: provision the real guest table + Identity Pool by hand once (documented as an ops runbook,
+   not automated — it's a one-time setup, not something every install repeats), ship its public config
+   in the published package, verify the full anonymous round trip (`npx ... chat --memory-backend
+   server:guest`, teach a fact, confirm it's readable from a second independent process).
+3. Tier 2: `tmct server create <name>` — table creation + `tmct.toml` write-back. No Cognito yet;
+   this tier is deliberately usable and shippable before Tier 3 exists.
+4. The anonymous-write trust-tier question (below) resolved before Tier 1's guest server is ever
+   publicly announced — same open item the original SSH design carried, unchanged by the redesign.
+5. Tier 3: the shared Cognito User Pool + social IdP federation setup (ops runbook, one-time), the
+   Group-per-private-server + role-mapping mechanism, `tmct server invite`, and the local
+   browser-based OAuth login flow — the largest single phase, sequenced last since Tiers 1-2 are
+   independently useful without it.
+
+## Open design question — does anonymous write access need its own trust tier?
+
+Unchanged from the original design, still unresolved, still load-bearing: every connecting guest-tier
+user can `teach` the shared graph new facts. This session's `corpusWeak`/`extracted` trust tiers
+(`memory/trust.mjs` `SOURCE_PRIOR`) grade CURATED or MECHANICALLY-EXTRACTED data — an anonymous guest
+teach is genuinely unreviewed and adversarial-by-default (anyone can call `server:guest` with no
+credential of their own beyond the public Identity Pool ID). Two options, not decided here:
+1. A new `anonGuest` `SOURCE_PRIOR` tier, trusted below `web` — the facts land in the shared graph
+   (matching "the world remembers what visitors taught it") but rank low enough to never crowd out
+   corpus/operator facts in an answer.
+2. Keep guest-tier teaches SESSION-SCOPED ONLY (read the shared graph, but a guest's own `remember X`
+   writes stay in a local ephemeral overlay, never actually reaching the DynamoDB table) — the guest
+   world is read-only to anonymous visitors; only Tier 2/3's identified servers accept real writes.
+Tier 2/3 servers (a self-hoster's own table, or an invited/authenticated user) don't need this
+question resolved the same way — an operator's own table, or an invited named account, is a
+meaningfully different trust situation than a fully anonymous guest identity, and could reasonably
+default to full trust (`operator`/`teach`-tier) instead. Flagging both halves as real decisions, not
+defaulting either way here.
 
 ## Non-goals
 
-- Per-user identity, rate-limiting by identity, ban lists, or any real authentication — "trivial ssh
-  credentials" is the explicit design goal, not a gap to close later.
-- Horizontal scale-out of the shared graph across multiple concurrent Fargate tasks — named as a
-  backend-swap escape hatch (Layer 2), not designed here.
-- Any change to tmct's own product-path architecture (still fully deterministic, no LLM, no new
-  attack surface inside `chat.mjs` itself) — this document is purely about how an existing, unchanged
-  `tmct chat` gets exposed to anonymous network users safely, not about changing what it does.
+- No Lambda-as-SSH-server, no raw TCP listener anywhere in this design — explicitly ruled out this
+  session (Lambda has no mechanism to accept an inbound SSH/TCP connection directly).
+- No SSH at all. The pivot from round 1→3 (Origin, above) is complete: nobody logs into a shared host;
+  every user runs tmct on their own machine against a remote backend.
+- Horizontal multi-writer scale-out beyond DynamoDB's own native handling — DynamoDB already handles
+  concurrent writers correctly (unlike the original sqlite-on-shared-storage design, which needed an
+  explicit single-writer deployment strategy to avoid corruption); this document doesn't need an
+  equivalent "avoid two writers" section because the storage engine itself removes that problem.
+- A from-scratch identity system. Tier 3 is entirely built from Cognito's own existing federation and
+  group-role-mapping features — no custom account/password/session system anywhere in this design.
+- Any change to tmct's own product-path architecture — still fully deterministic, no LLM, no new
+  attack surface inside `chat.mjs`/`runTurn` itself. This document is entirely about which storage
+  backend a chat session's facts land in and how a client authenticates to reach it, not about
+  changing what tmct does once connected.
