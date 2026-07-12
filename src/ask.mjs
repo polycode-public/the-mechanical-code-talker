@@ -145,6 +145,12 @@ const PLURAL_FORMS = {
   // "Change" is ask-vocab.mjs's pseudo-type (a wildcard over the touch traversal's
   // results, never a node class) — it still needs noun forms for zero-hit templates.
   Change: ["change", "changes"],
+  // Memory-graph classes (memory/core.mjs) — real noun forms for the dynamic
+  // class count/list fallback (PLAN_BREADTH_FIRST_NLU.md (d), see
+  // dynamicClassQuery below) so "2 facts." reads naturally instead of falling
+  // back to the generic "2 results.".
+  Fact: ["fact", "facts"], Utterance: ["utterance", "utterances"],
+  Session: ["session", "sessions"], Source: ["source", "sources"], Rule: ["rule", "rules"],
 };
 function nounFor(entityType, n) {
   const [s, p] = PLURAL_FORMS[entityType] || ["result", "results"];
@@ -2276,7 +2282,10 @@ function renderComposite(parsed, result) {
     // an unscoped list that overflowed the cap gets a light hint to narrow by module —
     // but only for kinds that live IN a module (a "modules in <module>" or "commits in
     // <module>" scope is meaningless); the scoped forms are already narrow, no hint.
-    const scopeable = !["Module", "Commit"].includes(result.entityType);
+    // Memory-graph classes (Fact/Utterance/Session/Source/Rule, dynamicClassQuery
+    // above) never support a module scope either — there's no such parse for them —
+    // so they're excluded here too rather than hinting at an unsupported shape.
+    const scopeable = !["Module", "Commit", "Fact", "Utterance", "Session", "Source", "Rule"].includes(result.entityType);
     const hint = (!result.scoped && scopeable && result.matches.length > OVERFLOW_CAP)
       ? ` — narrow with "${nounFor(result.entityType, 2)} in <module>"`
       : "";
@@ -4365,6 +4374,72 @@ function substituteLastCommitPhrase(graph, query) {
   return BARE_WHEN_COMMIT_RE.test(bareTrimmed) ? `${bareTrimmed} touched` : out;
 }
 
+// ---- dynamic memory-graph class count/list (PLAN_BREADTH_FIRST_NLU.md (d),
+// ROADMAP.md "What's next" (d)): a real "list/count all X of class Y" shape for
+// MEMORY-graph classes (Fact/Utterance/Session/Source/Rule, or any class a taught
+// individual actually carries), reachable via ask.mjs alone — the gap live-testing
+// during the viz chat panel's build confirmed ("how many facts are there"/"list
+// facts"/"what is a Fact" all missed against a real memory graph, since the only
+// working machinery for this shape lived in chat.mjs's heavier factAnswer cascade,
+// out of the browser bundle's ask.mjs-only scope).
+//
+// ENTITY_TO_TYPE (ask-vocab.mjs) is a CLOSED table of code-graph nouns only
+// (module/function/class/…) — memory-graph classes are open-ended (taught, not a
+// fixed vocabulary), so they can't be added to that table the same way. Instead,
+// this resolves the noun against whatever classes ACTUALLY have at least one
+// individual in THIS graph right now (never guesses a class exists with zero
+// evidence — same zero-fabrication discipline as everything else here) and
+// reuses the exact SAME count/list AST + traverse()+render() path every
+// code-graph count/list query already runs through (evalComposite's
+// "allOfClass"/"count"/"list" nodes, already generic over any `individual.class`
+// string — see `evalSet`'s "allOfClass" case and renderComposite's "count"/"list"
+// branches above) — no new render logic, no new miss/hit wording invented.
+//
+// Fires ONLY as a fallback in ask() after the normal cascade already produced an
+// honest miss, and is skipped entirely for any noun ENTITY_TO_TYPE already owns
+// (so a real code-graph "list modules"/"how many classes" answer, including its
+// own honest empty-graph miss wording, is never intercepted or changed).
+function singularCandidates(word) {
+  const w = String(word || "").toLowerCase();
+  const c = new Set([w]);
+  if (w.endsWith("ies")) c.add(`${w.slice(0, -3)}y`);
+  if (w.endsWith("ses")) c.add(w.slice(0, -2));
+  else if (w.endsWith("es")) c.add(w.slice(0, -2));
+  if (w.endsWith("s") && w.length > 1) c.add(w.slice(0, -1));
+  return [...c];
+}
+function resolveDynamicClass(graph, word) {
+  const cands = singularCandidates(word);
+  for (const ind of graph?.individuals || []) {
+    if (ind?.class && cands.includes(String(ind.class).toLowerCase())) return ind.class;
+  }
+  return null;
+}
+const DYNAMIC_LIST_TRIGGER_RE = /^(?:list|show(?:\s+me)?)\s+(?:all\s+|the\s+)?([a-z][a-z'-]*)\s*(.*)$/i;
+const DYNAMIC_COUNT_TRIGGER_RE = /^(?:how\s+many|number\s+of|count(?:\s+the)?)\s+([a-z][a-z'-]*)\s*(.*)$/i;
+// A closed set of harmless trailing fillers ("are there", "do you know", …) — an
+// empty tail is the plain "list facts"/"how many facts" shape; anything else
+// (a real restrictor like "that mention X") is NOT this shape and is left alone
+// so it stays whatever honest miss the normal cascade already produced.
+const DYNAMIC_TAIL_OK_RE = /^(?:are there(?:\s+in\s+total)?|is there|do you know(?:\s+about)?|do you have|exist(?:s)?|are known|in (?:the |a )?(?:graph|memory)|you know(?:\s+about)?)?[?.!\s]*$/i;
+
+/** Compile "list/how many <memory-class-noun>" into the same count/list AST every
+ *  code-graph count/list query already builds, or null when this isn't that shape
+ *  (wrong trigger, a real restrictor tail, ENTITY_TO_TYPE already owns the noun, or
+ *  no individual in THIS graph actually carries that class). */
+function dynamicClassQuery(graph, query) {
+  const q = String(query || "").trim();
+  const listM = q.match(DYNAMIC_LIST_TRIGGER_RE);
+  const countM = !listM ? q.match(DYNAMIC_COUNT_TRIGGER_RE) : null;
+  const m = listM || countM;
+  if (!m || !DYNAMIC_TAIL_OK_RE.test(m[2] || "")) return null;
+  if (ENTITY_TO_TYPE[m[1].toLowerCase()]) return null;
+  const entityType = resolveDynamicClass(graph, m[1]);
+  if (!entityType) return null;
+  const base = { node: "allOfClass", entityType };
+  return listM ? { node: "list", entityType, base, scoped: false } : { node: "count", entityType, base };
+}
+
 export function ask(graph, query, { contextId = null, nlp = undefined, prev = null } = {}) {
   // Explicit help/orientation request → the rephrase hint directly (the honest bottom
   // of the cascade, reached on demand), never a pretend answer or a relaxation attempt.
@@ -4394,8 +4469,21 @@ export function ask(graph, query, { contextId = null, nlp = undefined, prev = nu
     const r = relaxParse(graph, query, { nlp, contextId, prev });
     if (r) { parsed = r.parsed; relaxed = { from: r.from, to: r.to, dropped: r.dropped, steps: r.steps }; }
   }
-  const result = traverse(graph, parsed, { contextId, prev });
-  const rendered = render(parsed, result);
+  let result = traverse(graph, parsed, { contextId, prev });
+  let rendered = render(parsed, result);
+  // Dynamic memory-graph class count/list fallback (PLAN_BREADTH_FIRST_NLU.md (d))
+  // — fires ONLY once everything above already produced an honest miss, and only
+  // replaces it when the fallback itself produces a real (non-miss) answer, so a
+  // genuine "no X in this index" miss for an ENTITY_TO_TYPE-owned noun is never
+  // touched (dynamicClassQuery declines those itself — see its own doc above).
+  if (rendered.miss && !rendered.ambiguous) {
+    const dyn = dynamicClassQuery(graph, query);
+    if (dyn) {
+      const dynResult = traverse(graph, dyn, { contextId, prev });
+      const dynRendered = render(dyn, dynResult);
+      if (!dynRendered.miss) { parsed = dyn; result = dynResult; rendered = dynRendered; relaxed = null; }
+    }
+  }
   // If relaxation materially rewrote the query and produced a real answer, note it
   // lightly (terse, honest) so the reader knows how the question was read.
   let content = (relaxed && !rendered.miss && relaxed.to !== relaxed.from)

@@ -1322,6 +1322,11 @@
     "a",
     "an",
     "some",
+    // "what OTHER classes inherit from Controller" — "other" is a vague determiner
+    // like "some", not a qualifying adjective; without this it was misread as a
+    // fuzzy find TERM ("no classes found matching 'other'") instead of falling
+    // through to the ordinary reverse-inherits parse (fast-loop round 6 finding).
+    "other",
     // topic lead-in filler — "what about the modules", "how about classes": "about"
     // carries no graph meaning here, so stripping it lets the bare kind noun surface for
     // the cascade's bare-kind-noun terminal rule (ask.mjs). ("what"/"how" are structural
@@ -1427,6 +1432,9 @@
   );
   var MISSPELLING_RE = correctionRe(MISSPELLINGS);
   var WRONG_WORD_RE = correctionRe(WRONG_WORDS);
+  var W_SLASH_RE = /(?<=^|\s)w\/(?=\s|$)/gi;
+  var FOR_DIGIT_THANKS_RE = /\b(thx|thanks|thank\s+you|many\s+thanks|ty|cheers)\s+4\b/gi;
+  var FOR_DIGIT_EXAMPLE_RE = /\b4\s+(example|instance)\b(?!\s*[a-z])/gi;
   var KIND_NOUN_ANAPHORA_RE = /\b(this|that)\s+(class|module|function|method|attribute|variable|file|commit)\b/gi;
   var VERB_ALTERNATION = Object.keys(VERB_TO_KIND).sort((a, b) => b.length - a.length).map(escapeRegex).join("|");
   var RELATION_VERB_RE = new RegExp(
@@ -1574,6 +1582,9 @@
     q = q.replace(CONTRACTION_RE, (m) => CONTRACTIONS[m.toLowerCase()]);
     q = q.replace(MISSPELLING_RE, (m) => MISSPELLINGS[m.toLowerCase()]);
     q = q.replace(WRONG_WORD_RE, (m) => WRONG_WORDS[m.toLowerCase()]);
+    q = q.replace(W_SLASH_RE, "with");
+    q = q.replace(FOR_DIGIT_THANKS_RE, (_, w) => `${w} for`);
+    q = q.replace(FOR_DIGIT_EXAMPLE_RE, (_, w) => `for ${w}`);
     q = q.replace(KIND_NOUN_ANAPHORA_RE, (_, pron) => pron);
     q = q.replace(G_DROP, "$1ing");
     q = applyPreambleFrames(q);
@@ -2447,7 +2458,16 @@
     Commit: ["commit", "commits"],
     // "Change" is ask-vocab.mjs's pseudo-type (a wildcard over the touch traversal's
     // results, never a node class) — it still needs noun forms for zero-hit templates.
-    Change: ["change", "changes"]
+    Change: ["change", "changes"],
+    // Memory-graph classes (memory/core.mjs) — real noun forms for the dynamic
+    // class count/list fallback (PLAN_BREADTH_FIRST_NLU.md (d), see
+    // dynamicClassQuery below) so "2 facts." reads naturally instead of falling
+    // back to the generic "2 results.".
+    Fact: ["fact", "facts"],
+    Utterance: ["utterance", "utterances"],
+    Session: ["session", "sessions"],
+    Source: ["source", "sources"],
+    Rule: ["rule", "rules"]
   };
   function nounFor(entityType, n) {
     const [s, p] = PLURAL_FORMS[entityType] || ["result", "results"];
@@ -3765,7 +3785,7 @@
       if (!result.matches.length) {
         return { content: `no ${nounFor(result.entityType, 2)} in this index.`, miss: true, ambiguous: false, matches: [] };
       }
-      const scopeable = !["Module", "Commit"].includes(result.entityType);
+      const scopeable = !["Module", "Commit", "Fact", "Utterance", "Session", "Source", "Rule"].includes(result.entityType);
       const hint = !result.scoped && scopeable && result.matches.length > OVERFLOW_CAP ? ` \u2014 narrow with "${nounFor(result.entityType, 2)} in <module>"` : "";
       return { content: `${compositeList(result.matches)}${hint}.`, miss: false, ambiguous: false, matches: result.matches };
     }
@@ -4996,6 +5016,37 @@ ${result.branches.map((b, i) => `${i + 1}) ${b.candidate.label}: ${b.rendered.co
     const bareTrimmed = out.trim().replace(/[?.!]+$/, "");
     return BARE_WHEN_COMMIT_RE.test(bareTrimmed) ? `${bareTrimmed} touched` : out;
   }
+  function singularCandidates(word) {
+    const w = String(word || "").toLowerCase();
+    const c = /* @__PURE__ */ new Set([w]);
+    if (w.endsWith("ies")) c.add(`${w.slice(0, -3)}y`);
+    if (w.endsWith("ses")) c.add(w.slice(0, -2));
+    else if (w.endsWith("es")) c.add(w.slice(0, -2));
+    if (w.endsWith("s") && w.length > 1) c.add(w.slice(0, -1));
+    return [...c];
+  }
+  function resolveDynamicClass(graph, word) {
+    const cands = singularCandidates(word);
+    for (const ind of graph?.individuals || []) {
+      if (ind?.class && cands.includes(String(ind.class).toLowerCase())) return ind.class;
+    }
+    return null;
+  }
+  var DYNAMIC_LIST_TRIGGER_RE = /^(?:list|show(?:\s+me)?)\s+(?:all\s+|the\s+)?([a-z][a-z'-]*)\s*(.*)$/i;
+  var DYNAMIC_COUNT_TRIGGER_RE = /^(?:how\s+many|number\s+of|count(?:\s+the)?)\s+([a-z][a-z'-]*)\s*(.*)$/i;
+  var DYNAMIC_TAIL_OK_RE = /^(?:are there(?:\s+in\s+total)?|is there|do you know(?:\s+about)?|do you have|exist(?:s)?|are known|in (?:the |a )?(?:graph|memory)|you know(?:\s+about)?)?[?.!\s]*$/i;
+  function dynamicClassQuery(graph, query) {
+    const q = String(query || "").trim();
+    const listM = q.match(DYNAMIC_LIST_TRIGGER_RE);
+    const countM = !listM ? q.match(DYNAMIC_COUNT_TRIGGER_RE) : null;
+    const m = listM || countM;
+    if (!m || !DYNAMIC_TAIL_OK_RE.test(m[2] || "")) return null;
+    if (ENTITY_TO_TYPE[m[1].toLowerCase()]) return null;
+    const entityType = resolveDynamicClass(graph, m[1]);
+    if (!entityType) return null;
+    const base = { node: "allOfClass", entityType };
+    return listM ? { node: "list", entityType, base, scoped: false } : { node: "count", entityType, base };
+  }
   function ask(graph, query, { contextId = null, nlp = void 0, prev = null } = {}) {
     if (isHelpRequest(query)) {
       return {
@@ -5026,8 +5077,21 @@ ${result.branches.map((b, i) => `${i + 1}) ${b.candidate.label}: ${b.rendered.co
         relaxed = { from: r.from, to: r.to, dropped: r.dropped, steps: r.steps };
       }
     }
-    const result = traverse(graph, parsed, { contextId, prev });
-    const rendered = render(parsed, result);
+    let result = traverse(graph, parsed, { contextId, prev });
+    let rendered = render(parsed, result);
+    if (rendered.miss && !rendered.ambiguous) {
+      const dyn = dynamicClassQuery(graph, query);
+      if (dyn) {
+        const dynResult = traverse(graph, dyn, { contextId, prev });
+        const dynRendered = render(dyn, dynResult);
+        if (!dynRendered.miss) {
+          parsed = dyn;
+          result = dynResult;
+          rendered = dynRendered;
+          relaxed = null;
+        }
+      }
+    }
     let content = relaxed && !rendered.miss && relaxed.to !== relaxed.from ? `read as "${relaxed.to}" \u2014 ${rendered.content}` : rendered.content;
     if (!relaxed && !rendered.miss && !rendered.ambiguous && directFull.alternates.length) {
       const answered = directFull.alternates.map((a) => {
