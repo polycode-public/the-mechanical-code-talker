@@ -252,10 +252,6 @@ watch-list is the drift alarm between operator check-ins. Priority order:
 - **Regression watch.** Any previously-passing case failing is FAIL outright regardless of the
   mean (the hard decision rule) — flag it the moment per-case results show it, don't wait for
   the write-up.
-- **Interpretation telemetry.** The strategy-win distribution collapsing to a single strategy
-  (the multi-strategy pipeline degenerating into one path); the miss rate; the
-  ambiguity-surround rate ("if you mean X then …" firing too often or never); fuzzy tier-3
-  matches over-winning — which masks vocabulary gaps the lexicon should be fixing.
 - **Under-parallelized work.** Flag any long-running work executing serially that could fan
   out: judge runs below the default concurrency, independent workstreams executing one-after-
   another instead of as parallel subagents, a benchmark blocking the main chat instead of
