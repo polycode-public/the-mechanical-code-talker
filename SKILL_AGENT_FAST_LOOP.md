@@ -61,7 +61,11 @@ elsewhere.
    cause is structural (would need a real design decision, risks regressing an existing pinned case,
    or isn't confidently understood), report it honestly as a finding and move on — do not force a
    patch. This bias exists because this loop runs many independent rounds with no live human judgment
-   between them; a bad fix in round 2 compounds into round 3's exploration silently.
+   between them; a bad fix in round 2 compounds into round 3's exploration silently. If a dead-end
+   turns out to be routing correctly but answering with awkward or repetitive phrasing (not a wrong
+   answer, just a stilted one), prefer extending `src/answer-variants.mjs`/`answer-variants.json`
+   (the deterministic hit-template phrasing-variety system) over a routing hack — that keeps the fix
+   scoped to wording, not behavior.
 4. **VERIFY.** If a fix was made: run `npm test` **in the foreground and wait for the real count** —
    never end the round's turn by saying you're waiting for a background result. There is no external
    notification coming to a round's sub-agent; it must observe completion itself. Then re-run the

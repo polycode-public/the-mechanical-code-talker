@@ -357,7 +357,10 @@ Step 3's diagnosis discipline) or a genuine ceiling (name it as one, don't force
 1. Write Step 3's diagnosis (what the fix would likely be, which module it'd touch) — do not
    implement it here.
 2. Route it per §1 Step 4: a small local gap goes to `SKILL_AGENT_FAST_LOOP.md`, anything
-   architectural to a `PLAN_*.md`. Note in the round's own log which one it went to.
+   architectural to a `PLAN_*.md`. If the routing/answer logic is actually correct and the dead-end
+   is really awkward or repetitive phrasing, route it toward extending
+   `src/answer-variants.mjs`/`answer-variants.json` (the deterministic hit-template phrasing-variety
+   system) instead of a routing fix. Note in the round's own log which one it went to.
 3. If Round-Step 3 found nothing worth routing (a clean round, or only genuine ceilings), say so
    plainly and move to the next round anyway (a clean round is a good outcome, not a failure, and
    still gets chained into the next round's opener).
