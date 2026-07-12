@@ -59,7 +59,7 @@ import {
   VERB_TO_KIND, WHERE_MARKERS, MENTION_MARKERS, ENTITY_TO_TYPE, PASSIVE_PARTICIPLE_TO_KIND,
   stripTrailingScopeFiller, stripTrailingDiscourseTag,
 } from "./ask-vocab.mjs";
-import { COUNTERFACTUAL_RE, correctMisspellings, applyPreambleFrames, normalizeQuery, escapeRegex } from "./interpret/normalize.mjs";
+import { COUNTERFACTUAL_RE, correctMisspellings, applyPreambleFrames, normalizeQuery, escapeRegex, kindNounAnaphoraHint } from "./interpret/normalize.mjs";
 import { fuzzyMatchInSet, fuzzyBound } from "./interpret/fuzzy.mjs";
 
 // uuidv7 lives in ./uuid.mjs (shared with telemetry + the bench stamp); re-exported
@@ -6666,6 +6666,41 @@ async function conceptForceAnswer(query, envelope, { graph, config, source, memo
   return { text, instances: composed.instances, allIds: composed.allInstanceIds, pending };
 }
 
+/** C2 rescue (BENCHMARK_CONVERSATION_1.7.0.md routed backlog): a matching-kind
+ *  individual explicitly NAMED in `answerText` — the SAME code-ish name tokens
+ *  discourseRewrite already trusts (NAME_TOKEN_RE: a path, a Capitalized
+ *  symbol, or lowerCamelCase), each tried in turn, resolved CLASS-FILTERED
+ *  (resolveObject's own `expectedClass` option — describeGrainRescue, above,
+ *  uses the same convention) so only a genuine same-kind hit counts, never a
+ *  same-text-different-kind coincidence. First unambiguous hit wins; null when
+ *  nothing of that class is named anywhere in the text (graph-less, empty
+ *  text, or no match all decline the same honest way). Used ONLY by runAsk's
+ *  pronoun-resolution kind-mismatch guard, below — never a general "search
+ *  the last answer" utility. */
+async function entityOfKindInText(graph, expectedClass, answerText) {
+  if (!graph || !expectedClass || !answerText) return null;
+  // "g" ONLY, never "gi" — NAME_TOKEN_RE's own case-SENSITIVITY is exactly
+  // what makes it a safe code-ish-token signal (a Capitalized symbol / a
+  // mid-word capital never occurs in plain English, per its own docblock
+  // above); adding "i" here would let ordinary lowercase prose words
+  // ("function", "is", "defined") spuriously match too (found live testing
+  // this fix — a bare lowercase word matched the lowerCamelCase branch under
+  // case-insensitivity, since [A-Z] there also accepts lowercase under /i).
+  const tokens = String(answerText).match(new RegExp(NAME_TOKEN_RE.source, "g")) || [];
+  const seen = new Set();
+  for (const tok of tokens) {
+    const key = tok.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    try {
+      const { resolveObject } = await import("./ask.mjs");
+      const r = resolveObject(graph, tok, { expectedClass });
+      if (r?.match?.id && !r.ambiguous) return { id: r.match.id, label: r.match.label };
+    } catch { /* tolerated — falls through to the next token */ }
+  }
+  return null;
+}
+
 /** A bare question → tmct_ask. When a focus is set AND the graph is in hand we
  *  call ask() directly to thread the focus as contextId (so a pronoun like "it"
  *  resolves to the focus) — building the SAME delimited string dispatchTool emits;
@@ -6723,6 +6758,54 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       via: "recall", miss: !summary, focus,
     });
   }
+  // C2 fix (BENCHMARK_CONVERSATION_1.7.0.md routed backlog): an explicit
+  // "this file"/"that module" kind-noun scope signal is collapsed to a bare
+  // pronoun by normalize.mjs's KIND_NOUN_ANAPHORA_RE before ask() ever parses
+  // askQuery — so ask()'s own contextId-based pronoun resolution (just below)
+  // would otherwise silently bind "this"/"that" to the STANDING focus even
+  // when that focus is a narrower, different kind of thing than what was
+  // explicitly named. Repro: "where is it defined" resolves to a FILE and
+  // names it in the answer text; if the standing focus is still a Method,
+  // "what this file is importing" must mean the file just named, not the
+  // Method. Detected here via kindNounAnaphoraHint (a read-only probe of the
+  // SAME askQuery text — normalizeQuery's own collapse inside ask() is
+  // completely untouched) and rescued by swapping the CONTEXTID itself to a
+  // matching-kind individual the immediately PRECEDING turn's own answer
+  // already named — so the traversal ask() computes (not just the focus
+  // carried to the NEXT turn, below) reflects the explicit scope. Only
+  // diverts when the hint actively DISAGREES with the standing focus's real
+  // class; falls back to today's untouched behavior (the stale focus stands,
+  // or an honest miss) when nothing of the expected kind is named in the
+  // preceding answer, so an ordinary "it"/"this" with no kind noun at all is
+  // byte-identical to before this fix.
+  //
+  // Scoped tightly to expectedClass === "Module" ("this file"/"that file"/
+  // "this module"/"that module") ON PURPOSE, not every KIND_NOUN_ANAPHORA_RE
+  // kind: test/chatflow-tier1-single-touch.test.mjs's own T3 case ("which
+  // class contains Task.complete" -> "what else is in that class") pins the
+  // OPPOSITE behavior for "that class" — the standing Method focus (Task.
+  // complete) is deliberately reused there, by design, even though "class"
+  // names a different kind than Method too. "class"/"method"/"function"/
+  // "attribute"/"variable"/"commit" are all colloquially used to mean "the
+  // thing we were just discussing", which may genuinely BE the narrower
+  // standing focus (T3's own case). "file"/"module" is the one kind noun in
+  // this set that's never plausibly the SAME individual as a Method/
+  // Function/Class/Attribute/GlobalVariable focus — it's strictly a
+  // CONTAINER of them — so it alone is safe to treat as an unambiguous
+  // kind-mismatch signal without breaking that pinned case. Widening this
+  // beyond Module would need a real redesign (disambiguating "reuse the
+  // narrower focus" from "switch to the just-named container" in general);
+  // out of scope here — see the routed-backlog report for this session.
+  let effectiveContextId = focus?.id ?? null;
+  let kindRescueEnt = null;
+  if (graph && focus?.id) {
+    const expectedClass = kindNounAnaphoraHint(askQuery);
+    const focusClass = graph?.byId?.get(focus.id)?.class;
+    if (expectedClass === "Module" && focusClass && focusClass !== expectedClass) {
+      kindRescueEnt = await entityOfKindInText(graph, expectedClass, last?.answer);
+      if (kindRescueEnt?.id) effectiveContextId = kindRescueEnt.id;
+    }
+  }
   let answer;
   let envelope = null;
   try {
@@ -6733,7 +6816,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       // `prev` for the anaphora node). Builds the SAME delimited envelope dispatchTool
       // emits, so the parse below is identical either way.
       const { ask } = await import("./ask.mjs");
-      const r = ask(graph, askQuery, { contextId: focus?.id ?? null, prev });
+      const r = ask(graph, askQuery, { contextId: effectiveContextId, prev });
       text = `${r.content}${ASK_ENVELOPE_DELIM}${JSON.stringify(r.tmct_ask, null, 2)}`;
     } else {
       text = await dispatchTool("tmct_ask", { query: askQuery }, { config, source, tel });
@@ -6813,7 +6896,21 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     // this case (contextId was null); silently adopting a bogus focus as a side
     // effect here would corrupt the NEXT turn's pronoun into a confidently WRONG
     // (not just empty) answer, exactly as the connective leak did.
-    const ent = isPronoun(obj) ? (focus?.id ? focus : null) : await resolveEntity(graph, obj);
+    //
+    // C2 fix (BENCHMARK_CONVERSATION_1.7.0.md routed backlog): the blind
+    // focus-reuse above is exactly right when the pronoun carries no extra
+    // scope signal ("what does it import") — but "this file"/"that module"
+    // EXPLICITLY names a kind, and normalize.mjs's KIND_NOUN_ANAPHORA_RE
+    // already collapses it to the bare pronoun before either parse strategy
+    // ever sees it, discarding that signal. `kindRescueEnt` (computed ABOVE,
+    // before ask() ran, off the SAME askQuery text — see its own docblock)
+    // already carries the matching-kind individual the preceding turn's
+    // answer named, when the hint disagreed with the standing focus's class;
+    // reusing it here (rather than recomputing) keeps the focus this turn
+    // hands to the NEXT turn consistent with the traversal ask() actually
+    // ran. Null when there was no disagreement, or nothing rescuable was
+    // named — today's untouched behavior (reuse the focus / honest miss).
+    const ent = isPronoun(obj) ? (kindRescueEnt || (focus?.id ? focus : null)) : await resolveEntity(graph, obj);
     if (ent) {
       resolvedIds = [ent.id];
       // Class-gate the focus update: a Commit/Session/schema object never displaces a
