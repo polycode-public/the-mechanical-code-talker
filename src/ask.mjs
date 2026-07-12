@@ -1571,9 +1571,23 @@ function membershipOwnSet(graph, id, entityType) {
  *  path prefix with no exact node of its own — see directoryScopeModules's own
  *  doc) or a single container individual, exactly like the "membership" case's own
  *  pre-item-6 resolution — extracted unchanged so evalSet's plain path and the
- *  composite/disclosure path (evalMembershipComposite) can never drift. */
-function resolveMembershipOwner(graph, term) {
-  const r = resolveObject(graph, term);
+ *  composite/disclosure path (evalMembershipComposite) can never drift.
+ *
+ *  `contextId` (HANDOVER.md 2026-07-12 finding, fast-loop round 4): this used to
+ *  call bare `resolveObject(graph, term)` with no context-pronoun notion at all —
+ *  "methods of that"/"attributes of it" reached resolveObjectCore's ordinary
+ *  mechanical tiers with the raw pronoun string, an honest miss at best and, at
+ *  worst, a false-positive substring hit (a 2-4 letter pronoun is a near-certain
+ *  accidental substring of SOME real label — the exact
+ *  STACCATO_LEAKED_CONNECTIVES trap chat.mjs documents for "it"/"and"). Routed
+ *  through resolveTermOrContext instead — the SAME contextId-aware resolution
+ *  evalQualCheck and traverse()'s reverse/forward shapes already use for
+ *  subject-/object-position pronouns — so a pronoun binds to the standing focus
+ *  and a non-pronoun term resolves byte-identically to before (resolveTermOrContext
+ *  falls through to the same bare `resolveObject` call for anything that isn't a
+ *  CONTEXT_PRONOUNS member). */
+function resolveMembershipOwner(graph, term, contextId = null) {
+  const r = resolveTermOrContext(graph, term, contextId);
   if (!(r.match && r.tier === 1)) {
     const dirMods = directoryScopeModules(graph, term);
     if (dirMods.length) return { kind: "dir", mods: dirMods };
@@ -1854,7 +1868,7 @@ function evalSet(graph, ast, opts) {
       // node match (tier 1 — a real file/symbol named that) still wins outright
       // (unchanged single-container-node behavior, e.g. "methods in widget.mjs");
       // only when there is no exact match do we try directory-prefix scope first.
-      const owner = resolveMembershipOwner(graph, ast.term);
+      const owner = resolveMembershipOwner(graph, ast.term, opts && opts.contextId);
       if (owner.kind === "dir") {
         if (!ast.entityType || ast.entityType === "Module") return owner.mods;
         const ids = new Set(owner.mods.map((m) => m.id));
@@ -2094,7 +2108,7 @@ function evalMembershipComposite(graph, ast, opts) {
   const filterFn = qualNode
     ? (ind) => qualNode.filters.every((f) => qualHolds(graph, ind, QUALIFIERS[f]))
     : null;
-  const owner = resolveMembershipOwner(graph, memNode.term);
+  const owner = resolveMembershipOwner(graph, memNode.term, opts && opts.contextId);
   if (owner.kind === "dir") {
     let objs;
     if (!entityType || entityType === "Module") objs = owner.mods;
