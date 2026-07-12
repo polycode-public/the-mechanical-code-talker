@@ -120,15 +120,6 @@ Full design, file targets, and verification steps in `PLAN_BREADTH_FIRST_NLU.md`
   `BENCHMARK_CEFR_ENGLISH_1.7.0.md`) are plausibly the same "which of them VERB" compositional-anaphora
   gap — worth checking as a side effect if this is picked up.
 
-- **AGENTBENCH `ab-c2-what-to-test`'s composing gap, diagnosis sharpened** (`TOO_HARD_AUDIT.md` M2,
-  refined 2026-07-11) — the keystone-ranking mechanism this case needs already exists and works
-  (`src/router/goal-reasoner.mjs:421-431`, a declared-priority argmax). The real gap, confirmed by
-  live-running the case: the request "what most needs a test in this codebase" never dispatches into
-  the rule that owns that composition step (only `tmct_untested` gets called, never `tmct_impact`) —
-  a request-to-rule routing gap, not a missing ranking mechanism. Next pickup: trace why this
-  request's goal classification doesn't expand into the per-module `impact` sub-goals
-  (`goal-reasoner.mjs:388-393`'s GDA expansion never fires for it).
-
 - **A rephrase-hint pass on honest "nothing matches"/"no X found" misses**
   (`BENCHMARK_CEFR_ENGLISH_1.7.0.md`'s decision log, top pick) — 7+ cases across B1/C1 grades score
   zero on the judge's rephrase dimension despite being correct, honest misses, because the miss
