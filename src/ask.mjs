@@ -1977,8 +1977,14 @@ function evalAnaphora(graph, ast, opts) {
 // commit-history kinds are excluded so "connections" reads as the code-structure
 // degree a developer means, not every recorded touch.
 const DEGREE_KINDS = ["imports", "calls", "callsSymbol", "inherits", "contains", "tests"];
-/** Degree of an individual under a superlative metric ({kind, dir, sibling?, filter?}). */
-function degreeMetric(graph, ind, metric) {
+/** Degree of an individual under a superlative metric ({kind, dir, sibling?, filter?}).
+ *  Exported (2026-07-12, HANDOVER "bare 'how many X' fails for edge-nominalized
+ *  nouns" fix) so chat.mjs's answerEdgeCount can compute the SAME per-entity
+ *  degree for a single named entity ("how many callers does X have") that this
+ *  file's own evalSuperlative already uses to rank every entity of a class
+ *  ("which module has the most callers") — one metric definition
+ *  (EDGE_NOUN_TO_METRIC), one degree computation, two call sites. */
+export function degreeMetric(graph, ind, metric) {
   const kinds = metric.kind === "*" ? DEGREE_KINDS : [metric.kind, ...(metric.sibling ? [metric.sibling] : [])];
   let n = 0;
   for (const k of kinds) for (const e of edgesOfKind(graph, k)) {
