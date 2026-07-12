@@ -15,6 +15,24 @@ version bumps have accumulated locally without a push. Per this project's own ve
 discipline (`CLAUDE.md`), the next push should land whatever's actually ready as one release, not
 chase every intermediate bump — don't bump again until that push.
 
+## In progress — v1.8.3 batch (started 2026-07-12)
+
+Six tracks, run under the coordinator model (one dispatch at a time on `src/chat.mjs`/`src/ask.mjs`,
+verified via direct `git log`/`git status`/independent `npm test` before every merge — never trusted
+on self-report alone). Merged to `main` so far: **A** (Finding 4 safety fix), **F** (lexicon coverage
+growth, honest small delta), **B** (rephrase-hint pass on 5 miss templates + `g-c1-temp-8` root
+cause), **C** (persona-sweep backlog, all 4 sub-items), **G1** (dead-end example-correctness sweep —
+3 genuinely broken examples found and fixed: a `touches`-verb hint that could never resolve, a count
+hint that never parses, and an unseeded-session vocab-hint lie). Combined `npm test`: 1936/1936 green
+through G1 (pending G1's own merge-time re-verification).
+
+**Still queued**: **G2** (surface variety at scale — ~50 safe templates × 2 WordNet-sourced variants,
+maintainer-time generation, deterministic per-entity selection). Once G2 lands: final combined
+`npm test` + `node agentbench/run.mjs --driver goal --ladder`, bump `package.json` to `1.8.3`, commit,
+do NOT push without explicit instruction. Full track detail in
+`/Users/antony/.claude/plans/please-apply-the-modification-crystalline-stardust.md` if resuming this
+mid-batch.
+
 ## Open items
 
 - **`archive/PLAN_CONVERSATION.md` Finding 4 — safety half fixed, 2026-07-12.** The first-increment
