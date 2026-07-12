@@ -786,6 +786,38 @@ const AI_IDENTITY_PHRASES = [
   /^do you use ai\??$/i, /^what language model are you( using)?\??$/i,
   /^am i (talking|speaking|chatting) (to|with) a (real )?(person|human|bot|ai)\??$/i,
 ];
+
+/** Split raw turn text into candidate single-sentence clauses on sentence-
+ *  ending punctuation ("?"/"!"/"."), trimmed, empties dropped. BENCHMARK_
+ *  CONVERSATION_1.7.0.md routed backlog C4: AI_IDENTITY_PHRASES' own entries
+ *  are anchored (^...$) against a SINGLE clause, so a two-sentence turn like
+ *  "are you an AI? like chatgpt?" could never match the whole raw string even
+ *  though its first clause alone is an exact "are you an AI" hit. Used ONLY
+ *  by aiIdentityMatch below — every OTHER closed-set match in this file stays
+ *  whole-string, on purpose (this is deliberately narrow to the one family
+ *  that's shown up broken this way, not a general multi-clause rewrite of
+ *  isConversational's whole match cascade). */
+function splitClauses(text) {
+  return String(text).split(/[?!.]+\s*/).map((c) => c.trim()).filter(Boolean);
+}
+
+/** AI_IDENTITY_PHRASES matched against the whole raw turn OR, failing that,
+ *  against any one of its sentence-split clauses (splitClauses, above) — so
+ *  "are you an AI? like chatgpt?" matches on its first clause alone, the same
+ *  way a single-sentence "are you an AI" already did. The whole-string check
+ *  runs first (the common case, no split needed); the clause fallback only
+ *  ever ADDS a match a single-clause turn already had no chance to win to,
+ *  since every phrase is itself a complete anchored sentence — a genuinely
+ *  unrelated longer sentence that merely CONTAINS identity-phrase-shaped
+ *  words won't split into a clause that's ONLY those words, so this can't
+ *  false-positive on it (e.g. "well are you an AI expert on this" has no
+ *  clause boundary carving out "are you an AI" alone). */
+function aiIdentityMatch(raw) {
+  const text = String(raw);
+  if (AI_IDENTITY_PHRASES.some((re) => re.test(text))) return true;
+  return splitClauses(text).some((clause) => AI_IDENTITY_PHRASES.some((re) => re.test(clause)));
+}
+
 /** "Do you have feelings/emotions" — HANDOVER.md 2026-07-10 item 10 (small-talk
  *  persona finding): with no closed-set match, this used to misfire into a
  *  literal module-name lookup for the bare noun ("no module matching 'feelings'
@@ -831,7 +863,7 @@ export function isConversational(query) {
   if (GREET.has(q) || THANKS.has(q) || OK_ACK.has(q)) return true;
   if (CAPABILITY_PHRASES.some((re) => re.test(raw))) return true;
   if (IDENTITY_PHRASES.some((re) => re.test(raw))) return true;
-  if (AI_IDENTITY_PHRASES.some((re) => re.test(raw))) return true;
+  if (aiIdentityMatch(raw)) return true;
   const codeish = looksCodeish(raw, q);
   return q.split(/\s+/).filter(Boolean).length <= 3 && !codeish;
 }
@@ -1261,7 +1293,7 @@ function conversationalTurn(line, ctx) {
       return mk(t(T_THANKS));
     }
   }
-  if (AI_IDENTITY_PHRASES.some((re) => re.test(raw))) {
+  if (aiIdentityMatch(raw)) {
     note(ctx.trace, "goal: identity — is tmct an AI/LLM (a very likely first question)");
     note(ctx.trace, "lane: conversational — identity/AI (AI_IDENTITY_PHRASES closed set)");
     return mk(t(T_IDENTITY_NOT_LLM));
