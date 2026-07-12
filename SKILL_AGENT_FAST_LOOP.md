@@ -61,19 +61,7 @@ elsewhere.
    cause is structural (would need a real design decision, risks regressing an existing pinned case,
    or isn't confidently understood), report it honestly as a finding and move on — do not force a
    patch. This bias exists because this loop runs many independent rounds with no live human judgment
-   between them; a bad fix in round 2 compounds into round 3's exploration silently.
-
-   **One named exception, confirmed a real recurring pattern across rounds 3-5 (2026-07-12) and
-   explicitly NOT covered by the bias above**: a dead-end caused by a closed-set gate (a regex
-   charclass, a literal word `Set`, a noun-lookup map) sitting in front of an answer path that
-   already works correctly for sibling input variants — the gate is excluding a variant it has no
-   principled reason to exclude, not making a judgment call. Fix these directly: broaden the gate to
-   accept the excluded variant, reusing the sibling logic that already produces the right answer for
-   other variants of the same shape, then verify the existing pinned cases the gate also guards still
-   pass. This is narrow and mechanical (add a case, not redesign a lane) even though the surrounding
-   machinery is shared/heavily-commented — the risk that made rounds 3-5 defer was "will this regress
-   something," not "is the fix itself unclear," and closing the excluded variant is unambiguous once
-   you've found the sibling path that already handles it correctly. If a dead-end
+   between them; a bad fix in round 2 compounds into round 3's exploration silently. If a dead-end
    turns out to be routing correctly but answering with awkward or repetitive phrasing (not a wrong
    answer, just a stilted one), prefer extending `src/answer-variants.mjs`/`answer-variants.json`
    (the deterministic hit-template phrasing-variety system) over a routing hack — that keeps the fix
