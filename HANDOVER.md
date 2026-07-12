@@ -42,6 +42,18 @@ repo-relative path logic — fixed; `publish:npm` unblocked and confirmed live t
   `ask.mjs`'s core relation-parsing grammar, same high-blast-radius shared machinery as the CamelCase
   finding above; needs a `PLAN_*.md` writeup.
 
+- **Bare "how many X" fails for edge-nominalized nouns (tests/importers/callers/...), 2026-07-12**
+  (fast-loop round 5 finding). `answerCount`'s `COUNT_NOUNS` (`src/chat.mjs` ~line 431) only maps
+  nouns to graph individual classes (Module/Class/Function/etc.) — "how many tests cover X", "how
+  many importers does X have", "how many callers does X have" all answer "I can't count 'tests'" even
+  though `ask-vocab.mjs`'s `EDGE_NOUN_TO_METRIC` table (~line 855) already maps exactly these nouns
+  to edge kinds, and the differently-phrased equivalents work fine ("how many modules test X",
+  superlative "which module has the most tests"). Root cause: `answerCount`'s guard (`src/chat.mjs`
+  ~line 547) only defers to the ask engine for recognized class nouns, never checks
+  `EDGE_NOUN_TO_METRIC` for edge-nominalized ones. Not fixed — reconciling the two count vocabularies
+  is a real design decision (what a bare "how many tests are there" means globally vs. per-entity)
+  with regression risk to the existing superlative lane; needs a `PLAN_*.md` writeup.
+
 - **`PLAN_BREADTH_FIRST_NLU.md`'s two open items** — (c) the paraphrase-verified-via-`syllogise.mjs`
   piece of "Ambition", not started; (d) a real "list/count all X of class Y" query shape for
   memory-graph classes via `ask.mjs` alone, a confirmed gap found during the viz chat panel's build.
