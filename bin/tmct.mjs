@@ -340,6 +340,53 @@ async function writeConfig(repoRoot, cfg) {
   await writeFile(joinPath(repoRoot, CONFIG_FILE), renderTomlConfig(cfg));
 }
 
+/** realpathSync `absPath`, tolerating that it (or some trailing segment of
+ *  it) may not exist yet: walks up to the longest EXISTING ancestor,
+ *  realpath's THAT, then rejoins the non-existent remainder untouched.
+ *  Equivalent to `fs.realpathSync(absPath)` when `absPath` already exists.
+ *  Needed because `--graph <path>` etc. deliberately name not-yet-written
+ *  files (a fresh graph a future indexer will create) — so we can't just
+ *  realpathSync() the candidate path outright. */
+function realpathTolerant(absPath, { realpathSync, dirname, basename, join: joinPath }) {
+  let dir = absPath;
+  const remainder = [];
+  while (true) {
+    try {
+      const real = realpathSync(dir);
+      return remainder.length ? joinPath(real, ...remainder) : real;
+    } catch {
+      const parent = dirname(dir);
+      if (parent === dir) return absPath; // hit the filesystem root; nothing on this path exists — give up as-is
+      remainder.unshift(basename(dir));
+      dir = parent;
+    }
+  }
+}
+
+/** Render `p` (resolved against `repoRoot` if not already absolute) as a
+ *  path relative to `repoRoot` for tmct.toml — whose own header documents
+ *  paths as "relative to this file" — falling back to the absolute form
+ *  when `p` lands outside `repoRoot`. Both sides are realpath'd (tolerantly
+ *  — `p` need not exist yet) before computing relative(), so the
+ *  inside/outside-repoRoot decision doesn't depend on whether the OS
+ *  happens to route a path through a symlink: macOS's os.tmpdir() resolves
+ *  under /var/folders/..., and /var is itself a symlink to /private/var, so
+ *  a spawned child's process.cwd() (kernel-realpath'd) and a test's raw
+ *  mkdtemp() string (unresolved) can name the same real directory while
+ *  disagreeing textually — Linux's /tmp has no such symlink, which is why
+ *  this only showed up on CI. Comparing realpath'd forms on both sides
+ *  makes the decision symlink-invariant on every platform. */
+async function repoRelative(repoRoot, p) {
+  const { resolve: resolvePath, relative, dirname, basename, join: joinPath, isAbsolute } = await import("node:path");
+  const { realpathSync } = await import("node:fs");
+  const abs = isAbsolute(p) ? p : resolvePath(repoRoot, p);
+  const helpers = { realpathSync, dirname, basename, join: joinPath };
+  const repoReal = realpathTolerant(repoRoot, helpers);
+  const absReal = realpathTolerant(abs, helpers);
+  const rel = relative(repoReal, absReal);
+  return rel && !rel.startsWith("..") ? rel : abs;
+}
+
 /** Resolve a `--corpus`/`--ontology`/`--lexicon` value to something
  *  activatePluggableInput can act on: either a RECOGNIZED name (a
  *  BUILTIN_EXTENSIONS entry of the matching kind; for `--corpus` specifically,
@@ -400,9 +447,7 @@ async function activatePluggableInput(repoRoot, resolved) {
       : resolved.kind === "lexicon" ? "lexicon_path"
         : resolved.kind === "templates" ? "templates_path"
           : "corpus_path";
-    const { relative } = await import("node:path");
-    const rel = relative(repoRoot, resolved.path);
-    newEntry[pathKey] = rel && !rel.startsWith("..") ? rel : resolved.path;
+    newEntry[pathKey] = await repoRelative(repoRoot, resolved.path);
   }
   cfg.extensions = { ...(cfg.extensions || {}), [name]: newEntry };
   await writeConfig(repoRoot, cfg);
@@ -439,7 +484,7 @@ async function activatePluggableInput(repoRoot, resolved) {
  *  named graph is expected to genuinely exist. */
 async function appendGraphFiles(repoRoot, graphPaths) {
   const { readFile } = await import("node:fs/promises");
-  const { resolve: resolvePath, relative } = await import("node:path");
+  const { resolve: resolvePath } = await import("node:path");
   for (const p of graphPaths) {
     const abs = resolvePath(repoRoot, p);
     let text;
@@ -453,11 +498,8 @@ async function appendGraphFiles(repoRoot, graphPaths) {
     }
   }
   const { cfg } = await readConfigForRewrite(repoRoot);
-  const additions = graphPaths.map((p) => {
-    const abs = resolvePath(repoRoot, p);
-    const rel = relative(repoRoot, abs);
-    return rel && !rel.startsWith("..") ? rel : abs;
-  });
+  const additions = [];
+  for (const p of graphPaths) additions.push(await repoRelative(repoRoot, p));
   cfg.graphFiles = [...(cfg.graphFiles || []), ...additions];
   await writeConfig(repoRoot, cfg);
 }
@@ -635,18 +677,12 @@ async function main() {
     // init's own default graph_file, this just names where a future indexer
     // will write, and a brand new repo's graph typically doesn't exist yet.
     if (graphFlags.length) {
-      const { relative } = await import("node:path");
       const { cfg } = await readConfigForRewrite(repoRoot);
-      const rel = (p) => {
-        const abs = resolvePath(repoRoot, p);
-        const r = relative(repoRoot, abs);
-        return r && !r.startsWith("..") ? r : abs;
-      };
       if (graphFlags.length === 1) {
-        cfg.graphFile = rel(graphFlags[0]);
+        cfg.graphFile = await repoRelative(repoRoot, graphFlags[0]);
         delete cfg.graphFiles;
       } else {
-        cfg.graphFiles = graphFlags.map(rel);
+        cfg.graphFiles = await Promise.all(graphFlags.map((p) => repoRelative(repoRoot, p)));
       }
       await writeConfig(repoRoot, cfg);
       process.stdout.write(`graph path${graphFlags.length > 1 ? "s" : ""} set in tmct.toml: ${graphFlags.join(", ")}\n`);

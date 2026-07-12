@@ -92,7 +92,10 @@ test("`tmct init --graph <path>` (single) sets tmct.toml's graph_file, no existe
     const r = runCli(["init", "--graph", graphPath], { cwd: dir });
     assert.equal(r.status, 0, r.stderr);
     const toml = await readFile(join(dir, "tmct.toml"), "utf8");
-    assert.match(toml, new RegExp(`graph_file = "${graphPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`));
+    // repoRoot is `dir` itself here (cwd: dir, no --repo), so the recorded
+    // path is relative to tmct.toml per its own "relative to this file"
+    // contract — not the absolute graphPath.
+    assert.match(toml, /graph_file = "custom\/graph\.json"/);
     assert.doesNotMatch(toml, /graph_files/);
   } finally {
     await rm(dir, { recursive: true, force: true });
