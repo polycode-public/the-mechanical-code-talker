@@ -677,7 +677,7 @@ async function answerEdgeCount(graph, query) {
  *  Consulted only when answerCount can't map the noun to a graph class (an unknown
  *  kind) AND a session's memory is in hand. Returns the count string or null (no
  *  such fact → the honest "I can't count …" from answerCount stands). */
-async function countFromFacts(graph, memoryDir, query, biasByBundle = {}) {
+async function countFromFacts(graph, memoryDir, query, biasByBundle = {}, cache = null) {
   if (!graph || !memoryDir) return null;
   const m = String(query).match(/\b(?:how many|number of|count(?:\s+the)?)\s+([a-z]+)\b/i);
   if (!m) return null;
@@ -686,7 +686,7 @@ async function countFromFacts(graph, memoryDir, query, biasByBundle = {}) {
   let normFactTerm;
   try { ({ normFactTerm } = await import("./memory/core.mjs")); } catch { return null; }
   const objVariants = factTermVariants(normFactTerm, asked);
-  const isa = (await factRows(memoryDir))
+  const isa = (await factRows(memoryDir, cache))
     .filter((f) => ISA_PREDICATES.has(f.predicate) && objVariants.has(f.object));
   // pick the highest-bias, then highest-trust asserted subject that maps to a
   // countable graph class (rankByBiasThenTrust: bias-tied/unconfigured degrades
@@ -721,7 +721,7 @@ async function countFromFacts(graph, memoryDir, query, biasByBundle = {}) {
 // graph-cardinality count untouched — same honest-decline discipline as
 // every other lane here).
 const HOW_MANY_ARE_RE = /^how\s+many\s+([\w-]+)\s+(?:are|is)\s+(.+?)[?.!\s]*$/i;
-async function answerQuantifierRecall(memoryDir, query, biasByBundle = {}) {
+async function answerQuantifierRecall(memoryDir, query, biasByBundle = {}, cache = null) {
   if (!memoryDir) return null;
   const m = String(query).trim().match(HOW_MANY_ARE_RE);
   if (!m) return null;
@@ -730,7 +730,7 @@ async function answerQuantifierRecall(memoryDir, query, biasByBundle = {}) {
   let normFactTerm;
   try { ({ normFactTerm } = await import("./memory/core.mjs")); } catch { return null; }
   const subjVariants = factTermVariants(normFactTerm, asked);
-  const rows = (await factRows(memoryDir)).filter((f) => ISA_PREDICATES.has(f.predicate) && subjVariants.has(f.subject));
+  const rows = (await factRows(memoryDir, cache)).filter((f) => ISA_PREDICATES.has(f.predicate) && subjVariants.has(f.subject));
   if (!rows.length) return null; // never heard of this subject at all — let answerCount own the shape
   const objVariants = factTermVariants(normFactTerm, m[2]);
   const hit = rankByBiasThenTrust(rows.filter((f) => objVariants.has(f.object)), biasByBundle)[0];
@@ -2067,7 +2067,7 @@ const GENERIC_ANCHOR_NOUNS = new Set(["thing", "concept", "object", "entity"]);
  *  fact-grounded term matches under the EXACT spelling teachFact itself stored
  *  it under. Failure-tolerated: no memory dir / no match → false, never a
  *  guessed "yes". */
-async function isGroundedByFact(term, memoryDir) {
+async function isGroundedByFact(term, memoryDir, cache = null) {
   if (!memoryDir) return false;
   const raw = String(term ?? "").trim();
   if (!raw) return false;
@@ -2083,7 +2083,7 @@ async function isGroundedByFact(term, memoryDir) {
   // OPERATOR actually taught (or a prior `tmct syllogise` entailment) anchors
   // a term here. factRows (not memoryFacts) is used specifically because it's
   // the one read path that carries sourceTypes for this filter.
-  const rows = await factRows(memoryDir);
+  const rows = await factRows(memoryDir, cache);
   const isTaught = (f) => !f.sourceTypes?.includes("corpus") && !f.sourceTypes?.includes("web");
   return rows.some((f) => MINT_ISA_PREDICATES.has(f.predicate) && isTaught(f) && (f.subject === t || f.object === t));
 }
@@ -2098,13 +2098,13 @@ async function isGroundedByFact(term, memoryDir) {
  *  narrower and NOUN-specific — see its own comment — so an object that's
  *  merely a known ADJECTIVE doesn't get misrouted into the class/subClassOf
  *  branch instead of the property branch.) */
-async function isGroundedTerm(term, lex, memoryDir) {
+async function isGroundedTerm(term, lex, memoryDir, cache = null) {
   const raw = String(term ?? "").trim();
   if (!raw) return false;
   if (GENERIC_ANCHOR_NOUNS.has(raw.toLowerCase())) return true;
   const { classify } = await import("./grammar/lexicon.mjs");
   if (classify(raw, lex)) return true;
-  return isGroundedByFact(raw, memoryDir);
+  return isGroundedByFact(raw, memoryDir, cache);
 }
 
 /** The "both sides ungrounded" grounding NUDGE (operator refinement,
@@ -2127,15 +2127,15 @@ async function isGroundedTerm(term, lex, memoryDir) {
  *  unchanged) whenever the payload doesn't fit the shape, or at least one
  *  side IS already grounded — a DIFFERENT, more specific reason it declined,
  *  where this nudge would be actively unhelpful noise. */
-async function ungroundedPairHint(payload, lexicon, memoryDir) {
+async function ungroundedPairHint(payload, lexicon, memoryDir, cache = null) {
   if (!memoryDir) return "";
   const m = String(payload).trim().match(UNKNOWN_SUBJECT_RE);
   if (!m) return "";
   const [, , subjectRaw, , objectRaw] = m;
   const { loadLexicon } = await import("./grammar/lexicon.mjs");
   const lex = lexicon || loadLexicon();
-  if (await isGroundedTerm(subjectRaw, lex, memoryDir)) return "";
-  if (await isGroundedTerm(objectRaw, lex, memoryDir)) return "";
+  if (await isGroundedTerm(subjectRaw, lex, memoryDir, cache)) return "";
+  if (await isGroundedTerm(objectRaw, lex, memoryDir, cache)) return "";
   // 2026-07-10 (found live via SKILL_BENCHMARK_CONVERSATION.md playtest, a
   // classic first-thing-a-user-tries example: "john is a man"): the original
   // suggestion chained the second term UNDER the first's now-grounded proper
@@ -2179,7 +2179,7 @@ async function ungroundedPairHint(payload, lexicon, memoryDir) {
  *  the SUBJECT, not about the "remember that" wrapper). Only the "every"
  *  determiner records a quantifier (point 3: "a"/bare/"your" read as one
  *  specific entity, not a class-level generalization). */
-async function unknownSubjectFallback(payload, { memoryDir, sessionId, lexicon }) {
+async function unknownSubjectFallback(payload, { memoryDir, sessionId, lexicon }, cache = null) {
   if (!memoryDir) return null;
   const m = String(payload).trim().match(UNKNOWN_SUBJECT_RE);
   if (!m) return null;
@@ -2211,7 +2211,7 @@ async function unknownSubjectFallback(payload, { memoryDir, sessionId, lexicon }
   // lexicon noun — both are always treated as class-level (never property),
   // consistent with unknownObjectFallback (below) always minting a CLASS.
   if (lookupNoun(lex, objectRaw) || GENERIC_ANCHOR_NOUNS.has(String(objectRaw).toLowerCase())
-    || (await isGroundedByFact(objectRaw, memoryDir))) {
+    || (await isGroundedByFact(objectRaw, memoryDir, cache))) {
     return teachFact(memoryDir, sessionId, {
       subject, predicate: SUBCLASS_PREDICATE, object: objectRaw, quantifier,
     });
@@ -2297,7 +2297,7 @@ async function objectReadsAsNonNoun(word) {
     return false;
   }
 }
-async function unknownObjectFallback(payload, { memoryDir, sessionId, lexicon }) {
+async function unknownObjectFallback(payload, { memoryDir, sessionId, lexicon }, cache = null) {
   if (!memoryDir) return null;
   const m = String(payload).trim().match(UNKNOWN_SUBJECT_RE);
   if (!m) return null;
@@ -2305,9 +2305,9 @@ async function unknownObjectFallback(payload, { memoryDir, sessionId, lexicon })
   if (!/^(?:every|each|all)$/i.test((det || "").trim())) return null; // class-level mint needs a real universal quantifier
   const { loadLexicon, lookupNoun } = await import("./grammar/lexicon.mjs");
   const lex = lexicon || loadLexicon();
-  const subjectGrounded = await isGroundedTerm(subjectRaw, lex, memoryDir);
+  const subjectGrounded = await isGroundedTerm(subjectRaw, lex, memoryDir, cache);
   if (!subjectGrounded) return null; // ungrounded subject isn't this fallback's asymmetry — never a guessed mint
-  const objectGrounded = await isGroundedTerm(objectRaw, lex, memoryDir);
+  const objectGrounded = await isGroundedTerm(objectRaw, lex, memoryDir, cache);
   if (objectGrounded) return null; // object already known — nothing to mint
   if (await objectReadsAsNonNoun(objectRaw)) return null; // reads like an adjective/verb, not a class noun — defer to unknownAdjectiveFallback
   const quantifier = /^every$/i.test((det || "").trim()) ? "every" : "";
@@ -2399,7 +2399,7 @@ async function unknownObjectFallback(payload, { memoryDir, sessionId, lexicon })
  *  otherwise provide. "the cache is bespoke" and "Mary is female" both carry
  *  one of those signals (the leading "the", and capitalization,
  *  respectively); "module is banana" carries none. */
-async function unknownAdjectiveFallback(payload, { memoryDir, sessionId, lexicon }) {
+async function unknownAdjectiveFallback(payload, { memoryDir, sessionId, lexicon }, cache = null) {
   if (!memoryDir) return null;
   const m = String(payload).trim().match(UNKNOWN_SUBJECT_RE);
   if (!m) return null;
@@ -2410,7 +2410,7 @@ async function unknownAdjectiveFallback(payload, { memoryDir, sessionId, lexicon
   // membership sentence, unknownSubjectFallback/unknownObjectFallback's own
   // territory (already had first refusal on it) — never misread as a property.
   if (lookupNoun(lex, objectRaw) || GENERIC_ANCHOR_NOUNS.has(String(objectRaw).toLowerCase())
-    || (await isGroundedByFact(objectRaw, memoryDir))) return null;
+    || (await isGroundedByFact(objectRaw, memoryDir, cache))) return null;
   // Subject-side groundedness — strip a leading "the"/"a"/"an" first
   // (normFactTerm's own article-strip, mirrored here) so "the cache" checks
   // groundedness under its real head noun "cache", the same spelling
@@ -2418,7 +2418,7 @@ async function unknownAdjectiveFallback(payload, { memoryDir, sessionId, lexicon
   const bareSubject = subjectRaw.replace(/^(?:the|an?)\s+/i, "").trim() || subjectRaw;
   const hadArticle = bareSubject !== subjectRaw;
   const capitalized = /^[A-Z]/.test(bareSubject);
-  const factGrounded = await isGroundedByFact(bareSubject, memoryDir);
+  const factGrounded = await isGroundedByFact(bareSubject, memoryDir, cache);
   const genericAnchor = GENERIC_ANCHOR_NOUNS.has(bareSubject.toLowerCase());
   // A bare (no article, no capitalization) subject grounded ONLY via the
   // static lexicon is exactly the pinned "module is banana" shape — see this
@@ -2745,7 +2745,7 @@ const RETRACT_NOT_A_RE = /^(?:a\s+|an\s+)?([\w-]+(?:\s+[\w-]+)?)\s+(?:(?:is|are)
  *  is tried against the remember-wrapped surface too. */
 const RETRACT_FORGET_RE = /^forget\s+(?:that\s+)?(?:a\s+|an\s+)?([\w-]+(?:\s+[\w-]+)?)\s+(?:is|are)\s+(?:an?\s+)?(?:(?:kind|type)\s+of\s+)?([\w-]+)$/i;
 
-async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
+async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cache = null }) {
   // Tier 6 playtest: this lane read the raw, un-normalized query, so a closed
   // discourse-marker preamble ahead of a teach sentence ("howdy pardner,
   // remember that TaskController is fragile") corrupted TEACH_RE's own match —
@@ -3174,7 +3174,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
       // assertTurn ITSELF records the "every" quantifier (point 3) on a plain
       // universal success, so every caller (this loop AND the top-level
       // declarative-sentence dispatch in runTurn) gets it uniformly.
-      const stored = await assertTurn(cand, { memoryDir, sessionId, focus: null, lexicon });
+      const stored = await assertTurn(cand, { memoryDir, sessionId, focus: null, lexicon, cache });
       if (stored) return { text: stored.answer, via: "assert", miss: false };
     }
     // BUG "redis" fix (Feature A point 1): the real ACE grammar just declined
@@ -3183,7 +3183,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
     // Covers BOTH the bare and the wrapped surface (payload is already
     // unwrapped either way) — see unknownSubjectFallback's own docblock for
     // the exact narrowing rules (object must still be known, etc.).
-    const fallback = await unknownSubjectFallback(payload, { memoryDir, sessionId, lexicon });
+    const fallback = await unknownSubjectFallback(payload, { memoryDir, sessionId, lexicon }, cache);
     if (fallback) return fallback;
     // MIRROR mint fallback (Feature A, 2026-07-09 operator-authorized vocabulary-
     // growth extension): the known-subject/unknown-object asymmetry — tried
@@ -3191,7 +3191,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
     // lexicon (or a prior taught fact) already grounds can mint a brand-new
     // object term. See unknownObjectFallback's own docblock for the exact
     // narrowing rules (the "both sides ungrounded" safety guard, etc.).
-    const objectFallback = await unknownObjectFallback(payload, { memoryDir, sessionId, lexicon });
+    const objectFallback = await unknownObjectFallback(payload, { memoryDir, sessionId, lexicon }, cache);
     if (objectFallback) return objectFallback;
     // ADJECTIVE-MINT fallback (PLAN_TAUGHT_RELATIONS.md Item 5, Phase 1): tried
     // right after unknownObjectFallback declines, so a grounded subject (static
@@ -3200,7 +3200,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
     // docblock for the exact narrowing rules (the "both sides ungrounded"
     // safety guard, and why this must be a standalone function rather than
     // nested inside unknownSubjectFallback).
-    const adjectiveFallback = await unknownAdjectiveFallback(payload, { memoryDir, sessionId, lexicon });
+    const adjectiveFallback = await unknownAdjectiveFallback(payload, { memoryDir, sessionId, lexicon }, cache);
     if (adjectiveFallback) return adjectiveFallback;
     // PROPERTY teach — "remember/note that <X> is <adjective>": wrapper-REQUIRED
     // (a bare "X is deprecated" is never silently reified), and only after the
@@ -3271,7 +3271,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null }) {
   // replacement, exactly like "did" above — see ungroundedPairHint's own
   // docblock for why this is scoped to the "both sides ungrounded, fits the
   // X is/are Y shape" case only.
-  const groundingHint = await ungroundedPairHint(payload, lexicon, memoryDir);
+  const groundingHint = await ungroundedPairHint(payload, lexicon, memoryDir, cache);
   return {
     text: `I couldn't store that —${why} I remember facts in the shape "every X is a Y", where X and Y are `
       + `words I know.${did}${groundingHint} Type /memory to see what I already remember.`,
@@ -4205,11 +4205,27 @@ async function memoryFacts(memoryDir) {
 /** Load memory once and resolve every reified Fact into a TRUST-BEARING row
  *  ({subject,predicate,object,provenance,trust,sourceTypes,…}) via core's
  *  readFactRows — the seam the answer layer ranks + cites without re-walking the
- *  graph shape (Wave-A memory/core.mjs). Lazy + failure-tolerated: no memory → []. */
-async function factRows(memoryDir) {
+ *  graph shape (Wave-A memory/core.mjs). Lazy + failure-tolerated: no memory → [].
+ *
+ *  `cache` (PLAN_GRAPH_SCAN.md "Query side: memoize the per-turn reload"): an
+ *  optional, caller-owned plain object (`{ rows: null }`, e.g. one runTurn call's
+ *  own `factRowsCache`) — when `cache.rows` is already populated, it's returned
+ *  directly, skipping loadMemory/readFactRows entirely; otherwise the result is
+ *  computed as before and stashed onto `cache.rows` for the next caller sharing
+ *  the same cache this turn. Absent/null (the default) reproduces today's
+ *  behavior exactly — a fresh, uncached reload every call — so every caller that
+ *  doesn't pass one is byte-for-byte unaffected. Never shared across turns or
+ *  with mutateMemory (see the plan doc for why a global cache was rejected).
+ *  `cache.reloads` is bumped once per REAL loadMemory/readFactRows call (never on
+ *  a cache hit) purely so a test can assert "computed once per turn" by call
+ *  count instead of wall-clock — see test/chat-factrows-cache.test.mjs. */
+async function factRows(memoryDir, cache = null) {
+  if (cache?.rows) return cache.rows;
   try {
     const { loadMemory, readFactRows } = await import("./memory/core.mjs");
-    return readFactRows(await loadMemory(memoryDir));
+    const rows = readFactRows(await loadMemory(memoryDir));
+    if (cache) { cache.rows = rows; cache.reloads = (cache.reloads || 0) + 1; }
+    return rows;
   } catch {
     return [];
   }
@@ -4612,7 +4628,7 @@ function uniqueFacts(rows) {
  *  returns the handle's `payload` directly with ZERO fs calls — so a caller
  *  that hands this a handle already carrying the embedded page's full graph
  *  gets a pure, disk-free traversal, no bundle-time module shimming needed. */
-export async function factAnswer(memoryDir, query, envelope, miss, biasByBundle = {}) {
+export async function factAnswer(memoryDir, query, envelope, miss, biasByBundle = {}, cache = null) {
   let normFactTerm;
   try { ({ normFactTerm } = await import("./memory/core.mjs")); } catch { return null; }
   const q = String(query).trim();
@@ -4632,7 +4648,7 @@ export async function factAnswer(memoryDir, query, envelope, miss, biasByBundle 
   const usedForQ = q.match(WHAT_USED_FOR_RE);
   if (usedForQ) {
     const variants = factTermVariants(normFactTerm, usedForQ[1]);
-    const hits = (await factRows(memoryDir)).filter((f) => f.predicate === "mgx:usedFor" && variants.has(f.object));
+    const hits = (await factRows(memoryDir, cache)).filter((f) => f.predicate === "mgx:usedFor" && variants.has(f.object));
     if (hits.length) {
       const ranked = rankByBiasThenTrust(uniqueFacts(hits), biasByBundle);
       const lines = ranked.map(renderFactLine);
@@ -4653,7 +4669,7 @@ export async function factAnswer(memoryDir, query, envelope, miss, biasByBundle 
     const m = q.match(re);
     if (!m) continue;
     const variants = factTermVariants(normFactTerm, m[1]);
-    const hits = (await factRows(memoryDir)).filter((f) => f.predicate === predicate && variants.has(f.object));
+    const hits = (await factRows(memoryDir, cache)).filter((f) => f.predicate === predicate && variants.has(f.object));
     if (!hits.length) continue; // try the next candidate marker, don't give up yet
     const ranked = rankByBiasThenTrust(uniqueFacts(hits), biasByBundle);
     const lines = ranked.map(renderFactLine);
@@ -4703,7 +4719,7 @@ export async function factAnswer(memoryDir, query, envelope, miss, biasByBundle 
     // factRows (trust+sourceIds-bearing), not the plain memoryFacts shape — the
     // bias-weighted ranking below needs each hit's sourceIds to resolve which
     // bundle it came from (memory/bias.mjs's biasForRow).
-    const subjectHits = (await factRows(memoryDir)).filter((f) => variants.has(f.subject));
+    const subjectHits = (await factRows(memoryDir, cache)).filter((f) => variants.has(f.subject));
     let hits = predicate ? subjectHits.filter((f) => f.predicate === predicate) : subjectHits;
     if (!hits.length) {
       // The subject itself is known, but not under this specific relation —
@@ -4763,7 +4779,7 @@ export async function factAnswer(memoryDir, query, envelope, miss, biasByBundle 
   const canDo = q.match(WHAT_CAN_DO_RE);
   if (canDo) {
     const variants = factTermVariants(normFactTerm, canDo[1]);
-    const hits = (await factRows(memoryDir)).filter((f) => f.predicate === "mgx:capableOf" && variants.has(f.subject));
+    const hits = (await factRows(memoryDir, cache)).filter((f) => f.predicate === "mgx:capableOf" && variants.has(f.subject));
     if (!hits.length) return null;
     const ranked = rankByBiasThenTrust(uniqueFacts(hits), biasByBundle);
     const lines = ranked.map(renderFactLine);
@@ -4782,7 +4798,7 @@ export async function factAnswer(memoryDir, query, envelope, miss, biasByBundle 
   const hasQ = q.match(WHAT_HAS_RE);
   if (hasQ && !HAS_TEMPORAL_TAIL.has(hasQ[1].trim().split(/\s+/)[0]?.toLowerCase())) {
     const variants = factTermVariants(normFactTerm, hasQ[1]);
-    const hits = (await factRows(memoryDir)).filter((f) => f.predicate === "mgx:hasA" && variants.has(f.object));
+    const hits = (await factRows(memoryDir, cache)).filter((f) => f.predicate === "mgx:hasA" && variants.has(f.object));
     if (!hits.length) return null;
     const ranked = rankByBiasThenTrust(uniqueFacts(hits), biasByBundle);
     const lines = ranked.map(renderFactLine);
@@ -4819,7 +4835,7 @@ export async function factAnswer(memoryDir, query, envelope, miss, biasByBundle 
     : inheritsQ?.[1];
   if (inheritsObj) {
     const variants = factTermVariants(normFactTerm, inheritsObj);
-    const hits = (await factRows(memoryDir)).filter((f) => ISA_PREDICATES.has(f.predicate) && variants.has(f.object));
+    const hits = (await factRows(memoryDir, cache)).filter((f) => ISA_PREDICATES.has(f.predicate) && variants.has(f.object));
     // Only diverts on a REAL hit — same discipline every other reader in this
     // cascade follows (CAN_ASK_RE/WHAT_CAN_DO_RE/WHAT_HAS_RE above all `return
     // null` on zero hits too). A zero-hit case here must NOT invent its own
@@ -4847,7 +4863,7 @@ export async function factAnswer(memoryDir, query, envelope, miss, biasByBundle 
   const know = q.match(KNOW_ABOUT_RE);
   if (know) {
     const variants = factTermVariants(normFactTerm, know[1]);
-    const rows = await factRows(memoryDir);
+    const rows = await factRows(memoryDir, cache);
     // Bug E subtype walk (operator follow-up request, this session): a
     // cycle-safe BFS DOWNWARD over isa-family facts from the term's own
     // variants — every fact whose OBJECT is in the current frontier
@@ -5283,7 +5299,7 @@ function inheritsChain(graph, startId) {
  *        "what kind of thing is an X" reports X's own type (subject-side first).
  *  Miss-only and run AFTER factAnswer returns null, so it never shadows the
  *  subject-side answer or a schema hit. Returns { text, replace:true } or null. */
-async function factReadBack(memoryDir, query, envelope, miss, graph = null, focusLabel = null, biasByBundle = {}) {
+async function factReadBack(memoryDir, query, envelope, miss, graph = null, focusLabel = null, biasByBundle = {}, cache = null) {
   if (!miss) return null;
   let normFactTerm;
   try { ({ normFactTerm } = await import("./memory/core.mjs")); } catch { return null; }
@@ -5330,7 +5346,7 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
   // fragile" is the SAME one-word-out-of-alignment problem the hedge adverbs
   // above were fixed for, just a dialect opener instead of a hedge adverb.
   const qHedge = q.replace(/^(?:actually|really|honestly|yeah\s+nah)\s*,?\s+/i, "");
-  const rows = await factRows(memoryDir);
+  const rows = await factRows(memoryDir, cache);
   if (!rows.length) {
     // Tier-5 playtest fix (cycle 2), found live: with TRULY zero facts
     // remembered yet (a fresh session, nothing taught at all), the early
@@ -6411,10 +6427,10 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
  *  only (a `/describe` names ONE code entity as the subject of its own facts,
  *  not every fact that merely mentions it in passing) — null when memory holds
  *  nothing about this subject. */
-async function describedFacts(memoryDir, label, biasByBundle = {}) {
+async function describedFacts(memoryDir, label, biasByBundle = {}, cache = null) {
   let normFactTerm;
   try { ({ normFactTerm } = await import("./memory/core.mjs")); } catch { return null; }
-  const rows = await factRows(memoryDir);
+  const rows = await factRows(memoryDir, cache);
   if (!rows.length) return null;
   const variants = factTermVariants(normFactTerm, label);
   const hits = rankByBiasThenTrust(rows.filter((f) => variants.has(f.subject)), biasByBundle);
@@ -7349,7 +7365,7 @@ async function relationForceAnswer(query, envelope, { graph, config, source, tem
  *  shipped corpus/seon file (seonDefinitions), so it works without per-repo memory
  *  seeding; the memory fact rows only ADD remembered "A is a X" examples when present.
  *  Lazy + failure-tolerated throughout (chat.mjs ethos). Returns { text, instances }. */
-async function conceptForceAnswer(query, envelope, { graph, config, source, memoryDir, templates }) {
+async function conceptForceAnswer(query, envelope, { graph, config, source, memoryDir, templates, cache = null }) {
   const rawTerm = conceptTermOf(query, envelope);
   if (!rawTerm) return null;
   let normFactTerm; let composeConcept; let CONCEPT_CLASS;
@@ -7369,7 +7385,7 @@ async function conceptForceAnswer(query, envelope, { graph, config, source, memo
     try { g = parseEntities(await source.fetchEntities(config)); } catch { g = null; }
   }
   if (!g) return null;
-  const rows = memoryDir ? await factRows(memoryDir) : [];
+  const rows = memoryDir ? await factRows(memoryDir, cache) : [];
   let composed;
   try { composed = composeConcept(g, term, { definition, factRows: rows }); }
   catch { return null; }
@@ -7425,7 +7441,7 @@ async function entityOfKindInText(graph, expectedClass, answerText) {
  *  otherwise the unchanged dispatchTool path (which also yields the no-graph error).
  *  A hit updates the focus to the resolved object. Grammar miss / ToolError → a
  *  normal answer, never a crash. */
-async function runAsk(query, { config, source, graph, focus, last, templates, memoryDir, sessionId = "", lexicon = null, env, trace, vocabHint = null, tel = null, biasByBundle = {} }) {
+async function runAsk(query, { config, source, graph, focus, last, templates, memoryDir, sessionId = "", lexicon = null, env, trace, vocabHint = null, tel = null, biasByBundle = {}, cache = null }) {
   const ts = new Date().toISOString();
   // DISCOURSE ANAPHORA (CHATBENCH_006 levers 1+2): a follow-up like "which of those
   // are tested" / "how many of those" / "count them" filters or counts the PREVIOUS
@@ -7949,8 +7965,8 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   let bareMetaHit = null;
   if ((isConversationalCandidate || isBareCamelCaseWhatisCandidate) && (bareWhatisShape || isAdjectiveShape || reversePredicateShape)) {
     if (memoryDir) {
-      bareMetaHit = (await factAnswer(memoryDir, gateQuery, envelope, miss, biasByBundle))
-        ?? (await factReadBack(memoryDir, gateQuery, envelope, miss, graph, newFocus?.label, biasByBundle));
+      bareMetaHit = (await factAnswer(memoryDir, gateQuery, envelope, miss, biasByBundle, cache))
+        ?? (await factReadBack(memoryDir, gateQuery, envelope, miss, graph, newFocus?.label, biasByBundle, cache));
       // HANDOVER.md 2026-07-10 item 10 (dropped-article gap): a bare "what is X"
       // with NO taught fact but a KNOWN curated corpus term ("what is cache", no
       // article) used to lose this exact same isConversationalCandidate race —
@@ -8042,8 +8058,8 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     // reified fact is stronger evidence than a transcript echo. Subject-side facts
     // first (factAnswer), then the reverse-membership read-back (factReadBack) so an
     // asserted "every X is a Y" answers "what is a Y" too.
-    const fact = (await factAnswer(memoryDir, query, envelope, miss, biasByBundle))
-      ?? (await factReadBack(memoryDir, query, envelope, miss, graph, newFocus?.label, biasByBundle));
+    const fact = (await factAnswer(memoryDir, query, envelope, miss, biasByBundle, cache))
+      ?? (await factReadBack(memoryDir, query, envelope, miss, graph, newFocus?.label, biasByBundle, cache));
     if (fact) {
       answer = fact.replace ? fact.text : `${answer}\n${fact.text}`;
       via = "fact";
@@ -8117,7 +8133,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   let conceptAllIds = null;
   let conceptPending = null;
   if (via === "composed" || via === "corpus/seon") {
-    const concept = await conceptForceAnswer(query, envelope, { graph, config, source, memoryDir, templates });
+    const concept = await conceptForceAnswer(query, envelope, { graph, config, source, memoryDir, templates, cache });
     if (concept) {
       answer = concept.text; via = "corpus/seon"; recordMiss = false;
       conceptInstances = concept.instances;
@@ -8174,7 +8190,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // (4) #2 TEACH lane — a teach-shaped would-miss nothing above answered: route to
   // memory, or say what CAN be remembered (LOUD), never the wall / a silent drop.
   if (miss && recordMiss && via === "composed") {
-    const taught = await teachLane(query, { memoryDir, sessionId, lexicon });
+    const taught = await teachLane(query, { memoryDir, sessionId, lexicon, cache });
     if (taught) {
       answer = taught.text; via = taught.via; recordMiss = taught.miss;
       note(trace, `lane: (4) TEACH — TEACH_RE/OWNS_TEACH_RE/BARE_DECLARATIVE_RE matched, ${taught.miss ? "but the payload could not be stored" : "reified into .tmct/memory"}`);
@@ -8540,7 +8556,7 @@ const GOAL_BY_COMMAND = {
  *  field now (Bug F point 5) — mirrors runAsk's own `goal` field so
  *  withGoalLine's short "Goal (inferred): …" line fires for command
  *  dispatches too, not just ask()-parsed queries. */
-async function runCommand(line, { config, source, graph, focus, memoryDir, trace, narrate = false, tel = null, biasByBundle = {} }) {
+async function runCommand(line, { config, source, graph, focus, memoryDir, trace, narrate = false, tel = null, biasByBundle = {}, cache = null }) {
   const ts = new Date().toISOString();
   const sp = line.indexOf(" ");
   const name = (sp === -1 ? line.slice(1) : line.slice(1, sp)).toLowerCase();
@@ -8651,7 +8667,7 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
       // matching taught facts (subject === the resolved entity, trust-ranked)
       // under the code-map answer, mirroring the ask-path's fact-append pattern.
       if (name === "describe" && memoryDir) {
-        const facts = await describedFacts(memoryDir, ent.label, biasByBundle);
+        const facts = await describedFacts(memoryDir, ent.label, biasByBundle, cache);
         if (facts) { answer = `${answer}\n${facts}`; note(trace, "source: memory facts (describedFacts) appended to the code-map answer"); }
       }
       return mk(answer, { resolvedIds: [ent.id], newFocus: nextFocus(graph, focus, ent) });
@@ -8699,7 +8715,7 @@ function renderAmbiguousAssert(line, ambiguous, normFactTerm) {
  *  relation-shaped with 0-1 surviving readings), so this adds exactly one
  *  cheap check ahead of the EXISTING, unchanged parseAce path below — every
  *  single-reading sentence renders byte-identically to before. */
-async function assertTurn(line, { memoryDir, sessionId, focus, lexicon = null }) {
+async function assertTurn(line, { memoryDir, sessionId, focus, lexicon = null, cache = null }) {
   try {
     const { parseAce, parseAceAmbiguous } = await import("./grammar/ace.mjs");
     // A session handle carries its own loaded lexicon (createSession loads it once);
@@ -8778,7 +8794,7 @@ async function assertTurn(line, { memoryDir, sessionId, focus, lexicon = null })
         const newSubj = normFactTerm(res.triples[0].subject);
         const newObj = normFactTerm(res.triples[0].object);
         const isTaughtRow = (f) => !f.sourceTypes?.includes("corpus") && !f.sourceTypes?.includes("web");
-        const priorEdges = (await factRows(memoryDir))
+        const priorEdges = (await factRows(memoryDir, cache))
           .filter((f) => f.predicate === SUBCLASS_PREDICATE && isTaughtRow(f)
             && !(normFactTerm(f.subject) === newSubj && normFactTerm(f.object) === newObj))
           .map((f) => [normFactTerm(f.subject), normFactTerm(f.object)]);
@@ -8930,8 +8946,22 @@ function rewriteUsesAsBaseFrame(text) {
   return null;
 }
 
-export async function runTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, vocabHint = null, tel = null, biasByBundle = {} } = {}) {
+export async function runTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, vocabHint = null, tel = null, biasByBundle = {}, factRowsCache: injectedFactRowsCache = null } = {}) {
   const line = String(input ?? "").trim();
+  // PLAN_GRAPH_SCAN.md "Query side: memoize the per-turn reload": ONE fresh,
+  // empty cache for this turn only — every factRows() reader reached from this
+  // call (factAnswer, factReadBack, describedFacts, countFromFacts,
+  // answerQuantifierRecall, assertTurn, teachLane's grounding fallbacks,
+  // conceptForceAnswer, …) shares it via `ctx`/an explicit trailing arg, so the
+  // first reader to run computes loadMemory+readFactRows once and every later
+  // reader THIS TURN reuses that same result instead of reloading from disk.
+  // Never persisted, never shared across turns or with mutateMemory (a global
+  // cache was explicitly rejected — see the plan doc's own reasoning: a reader
+  // could observe a mutator's half-written object). `injectedFactRowsCache` is a
+  // TEST-ONLY escape hatch (default null, so every real caller gets a fresh one
+  // exactly as before) — passing one in lets a test observe `.reloads` after the
+  // call to assert the real load path ran exactly once this turn.
+  const factRowsCache = injectedFactRowsCache ?? { rows: null };
   // The captured residue is used for RECOGNITION at every dispatch site below
   // (asBareCommand, conversationalTurn, assertTurn, the count lanes, runAsk);
   // the ORIGINAL `line` survives untouched for record.query/logLines fidelity
@@ -8959,7 +8989,7 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // pass one gets it computed here instead, so "try this vocabulary example" is
   // never wrong regardless of caller.
   const resolvedVocabHint = vocabHint ?? vocabExampleHint(await hasSeededVocabulary(memoryDir));
-  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates, env, lexicon, trace, narrate, vocabHint: resolvedVocabHint, tel, biasByBundle };
+  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates, env, lexicon, trace, narrate, vocabHint: resolvedVocabHint, tel, biasByBundle, cache: factRowsCache };
   // A DISPATCHED turn (count / slash-command / ask) becomes the new "last answer"
   // that why/say-more re-renders; a conversational turn does not (it preserves it).
   // FINISH SEAM (PLAN_RESPONSE_FINISHING §"Where it lives"): every dispatched turn's
@@ -9051,7 +9081,7 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // authority gate declines (returns null) for anything answerCount should own,
   // so ordinary structural counts fall through completely unaffected.
   if (memoryDir) {
-    const quantifierRecall = await answerQuantifierRecall(memoryDir, workingLine, biasByBundle);
+    const quantifierRecall = await answerQuantifierRecall(memoryDir, workingLine, biasByBundle, factRowsCache);
     if (quantifierRecall != null) {
       note(trace, 'goal: recall a taught quantifier for a class-membership pair ("how many Xs are Ys")');
       note(trace, "lane: answerQuantifierRecall — matched HOW_MANY_ARE_RE with a subject tmct has facts about; literal recall, never real counting");
@@ -9079,7 +9109,7 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
     // ASSERTED vocabulary fact ("every class is a type" → "how many types" = the
     // class count). countFromFacts declines on a real graph kind, so ordinary
     // counts are unaffected; it only speaks for a remembered object noun.
-    const viaFact = memoryDir ? await countFromFacts(graph, memoryDir, workingLine, biasByBundle) : null;
+    const viaFact = memoryDir ? await countFromFacts(graph, memoryDir, workingLine, biasByBundle, factRowsCache) : null;
     if (viaFact != null) {
       note(trace, 'goal: get a count of an asserted-vocabulary kind ("every X is a Y" inherited cardinality)');
       note(trace, "lane: countFromFacts — the counted noun matched a remembered isa-fact's SUBJECT, whose class IS countable");
