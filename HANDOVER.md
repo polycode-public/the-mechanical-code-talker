@@ -16,23 +16,25 @@ provenance), a second bundled ask-engine answers Fact/definition questions in th
 the legend auto-picks its split dimension by entropy, and the page ships hub-hide/beam-prune/
 label-mode/search/edge-kind controls plus `--hub-degree`/`--term` CLI flags.
 
-`npm run init:xl`/`init:xxl` (new, `package.json`): real measured fact counts, `rm -rf tmct.toml
+`npm run init:xl`/`init:xxl` (`package.json`): real measured fact counts, `rm -rf tmct.toml
 .tmct && npm run init:<size>` — `init:large` 37,797; `init:xl` (`init:large`'s chain + `--persona-size
-large` + `wordnet-xl`) 72,075 facts, ~8m25s wall-clock, CLI-smoke-tested ("what is a horse" answers
-correctly from `corpus:human`/`human-large`/`wordnet-xl`, ~13min for that one query — see the perf
-note below). `init:xxl` (same base, `wordnet-full` swapped in for `wordnet-xl`, plus `namenet`): real
-total is a FOLLOW-UP measurement — the seed was still running past 70 minutes (dominated by
-`wordnet-full`'s 192,498-row conversion) when this landed; next session should finish that
-`npm run init:xxl` run and record the real count here. `init:xxxl` stays undocumented-as-code per
+large` + `wordnet-xl`) 72,075 facts. `init:xxl` (same base, `wordnet-full` swapped in for
+`wordnet-xl`, plus `namenet`): real total is still a FOLLOW-UP measurement — next session should run
+`npm run init:xxl` and record the real count here. `init:xxxl` stays undocumented-as-code per
 `TOO_HARD_AUDIT.md` (bulk ConceptNet download, not reachable from data in hand).
 
-**Perf finding (this batch, not fixed — out of scope)**: corpus seeding AND chat queries are both
-roughly quadratic in total individuals. `syncFactSources`'s per-fact `payload.individuals.find` scan
-and `recomputeFactTrust`'s per-fact `sourcesByIdMap` full-array rebuild (`src/memory/core.mjs`) each
-do an O(total individuals) pass per newly-seeded fact; a single chat query against `init:xl`'s 72,075
-facts took ~13 minutes. This makes `init:xl`/`init:xxl`-scale repos slow to seed AND slow to query —
-worth a real fix (batch the Source/trust reconciliation instead of per-fact) before this corpus tier
-sees real use.
+**Seed/query perf fix, landed (`PLAN_GRAPH_SCAN.md`, both phases merged)**: the prior session's
+~8m25s `init:xl` seed and ~13-minute single query were real O(n²) bugs, now fixed. Seed side:
+`syncFactSources`'s six per-fact linear scans over `payload.individuals`/the `statedBy` edge list
+(`src/memory/core.mjs`) replaced with a `mutateMemory`-scoped index (`individualsById`/`sourcesById`/
+`statedByBySubject`, Symbol-keyed, never serialized). Query side: `runTurn` now threads one
+turn-scoped cache through every `factRows` reader (14+ call sites in `src/chat.mjs`) instead of
+reloading the whole graph on each one. Re-measured for real on this same machine: `init:xl`'s
+72,075-fact seed is now **16.6s wall-clock** (was ~8m25s), same exact fact count as before (fix
+changes speed, not content); the original "what is a horse" query against that same real store now
+answers within a full CLI session's **~7.1s total** (startup + prompt + query + exit) — nowhere near
+the reported 13 minutes. Regression tests: `test/memory-seed-perf.test.mjs` (min-of-5-trials wall-
+clock ratio, noise-resistant), `test/chat-factrows-cache.test.mjs` (deterministic call-count assert).
 
 All of `BENCHMARK_CONVERSATION_1.8.14.md`'s routed backlog is fixed and pushed: pronoun-subject
 misparse, the README's "all men are mortal" syllogism demo, taught-fact retraction, teach-vs-graph
