@@ -2886,8 +2886,7 @@ function resolveObjectCore(graph, term, { expectedClass = null } = {}) {
   // "src/nope.mjs" — a nonexistent module — no longer false-matches tier 3
   // (the AND-across-components fix just above), but fell through to THIS
   // prose tier and ambiguously "matched" real modules anyway, because
-  // lookupByProseTokens scores by ANY-token overlap (sum-scored, by design,
-  // for genuine prose ranking) and "src"/"mjs" are near-universal path/
+  // lookupByProseTokens scores by ANY-token overlap  and "src"/"mjs" are near-universal path/
   // extension tokens shared by every module in the pool — the identical
   // accidental-match disease, just one tier further down. A slash-shaped term
   // names a literal path exactly like a dotted term names a literal symbol;

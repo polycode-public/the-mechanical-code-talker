@@ -174,7 +174,7 @@ with the honest-empty regression guard green first. Keep `npm test` and the two 
 (graph-less + fixture-graph) green at each step; snapshot raw judge output to
 `chatbench/results/raw-004/` before re-running.
 
-Genuinely open questions (last, by design):
+Genuinely open questions (last, ):
 - **Does set-complement need a bounded universe to stay honest on big graphs?** On the fixture the
   kind's universe is tiny; on a real estate "which modules do not import X" could return thousands.
   The complement must have a defined, bounded universe (the queried kind within the loaded graph) and

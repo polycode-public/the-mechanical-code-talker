@@ -783,11 +783,7 @@ test("PLAN_TAUGHT_RELATIONS Item 5's own canonical illustration, 'mary is female
     // documented: the risk isn't only that a DECLINE's own honest text gets
     // swallowed by the generic orientation card — the teach lane (success or
     // failure) is never attempted at all for a short, non-code-ish bare
-    // sentence. Pre-existing, cross-cutting `isConversational` routing —
-    // named in the plan's own "Open risks" as explicitly out of scope for
-    // this phase (widening it is "a change to already-shipped routing") — so
-    // this is asserted here as a live-confirmed, documented characteristic,
-    // not something this phase fixes.
+    // sentence.
     const bare = await runTurn("mary is female", { config: CONFIG, memoryDir: dir, sessionId: "m1" });
     assert.equal(bare.record.miss, true);
     assert.doesNotMatch(bare.answer, /noted — remembered/);

@@ -319,7 +319,7 @@ exist — consistent with Hanoi doc's own point 3 ("an explicit path to generali
 
 ### Open risks / questions (refined)
 
-- **No cross-process persistence for game state**, by design parity with `focus`/`last` — a killed
+- **No cross-process persistence for game state**,  parity with `focus`/`last` — a killed
   or resumed chat session loses an in-progress game exactly as it loses focus today. Not solved
   here; if it matters later, `sessions.mjs`'s JSONL-sidecar shape is the closest existing precedent
   for what a persisted-game record could look like, but that is new plumbing this doc does not

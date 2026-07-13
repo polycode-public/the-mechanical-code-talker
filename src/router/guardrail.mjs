@@ -13,9 +13,7 @@
 //
 //   It does NOT prove ANTECEDENT-CORRECTNESS. A cross-turn mis-binding — "it" ->
 //   the wrong Commit, say — produces a call whose symbol STILL resolves to a real
-//   entity, so it PASSES the guardrail. That is by design: binding-confidence
-//   across turns is the CHAT LEVER's job (pronoun/focus binding), not the
-//   guardrail's. A gate that leaned on Stage 4 for antecedent correctness would be
+//   entity, so it PASSES the guardrail. T. A gate that leaned on Stage 4 for antecedent correctness would be
 //   trusting the wrong layer. The guardrail's contract is narrow and honest:
 //   "this symbol denotes SOMETHING real and the call is well-formed", never "this
 //   is the RIGHT something".

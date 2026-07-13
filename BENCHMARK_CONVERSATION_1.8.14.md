@@ -48,7 +48,7 @@ being real and shipped underneath.
 
 ## Ladder position
 
-This run sweeps personas/frames, not the Tier 0–6 ladder (§2.1) — it's orthogonal by design (§3.4).
+This run sweeps personas/frames, not the Tier 0–6 ladder (§2.1).
 For reference, the turns played span roughly Tier 0 (greetings/identity), Tier 1–3 (single-touch,
 drill-down, cross-concept), and Tier 5 (teach/recall/reasoning) territory; no tier is being formally
 ratcheted by this run.

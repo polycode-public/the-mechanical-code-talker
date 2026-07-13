@@ -123,7 +123,7 @@ What's left, still open, checked directly against current code (nothing below ha
   `BENCHMARK_CEFR_ENGLISH_1.6.0.md`'s decision log for the full account). `g-a1-naming-8` ("what does
   tests mean", plus `g-a1-naming-1` "what does defines mean" as a same-bug-class bonus) now resolves
   directly via a general prune in `ask.mjs`'s `parseQuery`. `g-a1-naming-9` ("what does imports mean")
-  stays unfixed BY DESIGN — its input is byte-identical to `am-meta-imports`'s own frozen expectation
+  stays unfixed  — its input is byte-identical to `am-meta-imports`'s own frozen expectation
   (`quickwins.test.mjs`), so a deterministic function cannot satisfy both;
 - ~~**`am-tests-cover`'s un-flagged entity-name ambiguity** ("which tests cover b.mjs" resolves
   confidently instead of asking the user to narrow)~~ — **CLOSED, commit `bf87c6c`** (post-dates this

@@ -27,7 +27,7 @@ own ground rule, not tmct's, and this doc is explicit about the seam between the
 |---|---|---|
 | Human world quantized as OWL/RDF + domain lexicons | **Real, split by domain** | tmct's OWL-labelled graph + SEON/ConceptNet corpus (software domain); marginalia's `app/ontology/ontology.ttl` (Person/Organisation/Place/Event/Concept — general-knowledge domain) |
 | An inference engine | **Real, narrow, in two places independently** | tmct's `src/syllogise.mjs` (2 rules: scm-sco, cax-sco — OWL 2 RL subset, bounded/trust-tiered/retractable); marginalia's `app/lib/inference.mjs` (isA-transitive, tagged `derived_by_inference`/`mg:derivedByInference`) |
-| LLM decisions, remembered | **Real in marginalia, absent in tmct (by design)** | marginalia's typed-edge extraction pipeline (§2 below) — confirmed via direct code read, not assumed |
+| LLM decisions, remembered | **Real in marginalia, absent in tmct ()** | marginalia's typed-edge extraction pipeline (§2 below) — confirmed via direct code read, not assumed |
 | LLM classification/parsing | **Real, at the escalation boundary** | marginalia's own LLM-driven chat; the shared "NL front end is what LLMs are for" boundary already named in `PLAN_CAPABILITY_ROUTER.md` |
 | Managing front of house and loops | **Real, split across orchestration layers** | bedrock-meter's cost-ordered router (`packages/runtime/src/optimiser/router.mjs`, already ships a tmct rank-0 rung); Claude Code's own coordinator model driving this session |
 

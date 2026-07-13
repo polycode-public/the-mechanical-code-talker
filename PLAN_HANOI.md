@@ -53,7 +53,7 @@ proseIndex}`, `codegraph.mjs`'s `parseEntities`, `src/codegraph.mjs:27-59`):
   turn**, through `appendFact`/`appendUtterance` (`core.mjs:448-488`, `402-409`): fresh-read →
   mutate → atomic write, one call per turn.
 
-The code graph is architecturally **provider-owned and read-only by design** — "tmct never
+The code graph is architecturally **provider-owned and read-only ** — "tmct never
 writes a provider's graph" (`memory/core.mjs:6-7`'s own docblock) — and several read paths cache
 against the ASSUMPTION that a loaded graph object never changes mid-session
 (`inheritsApplicableCache`/`EMB_CACHE`, both `WeakMap`s keyed on graph identity,
@@ -138,7 +138,7 @@ that calls it repeatedly instead of reading a precomputed relation.
 `appendFact` (`memory/core.mjs:448-488`) is **content-addressed and additive**: a fact's id hashes
 its full `(subject, predicate, object)` triple, so re-asserting the SAME triple upserts in place,
 but asserting a DIFFERENT object for the same `(subject, predicate)` produces a SECOND,
-independent Fact individual that coexists with the first — by design, this is exactly what
+independent Fact individual that coexists with the first — , this is exactly what
 `findContradictions` (`memory/core.mjs:622-637`) is built to surface ("two high-trust sources
 disagree → show both, never silently pick", per `ROADMAP.md`'s provenance section). There is
 **no retraction primitive anywhere in the codebase** (`grep -rn retract src/` returns nothing) —
@@ -283,9 +283,7 @@ committable/testable, `npm test` green throughout, nothing here implemented yet.
   mid-cascade-revision pattern the relation-force and teach-lane fixes already use
   (`chat.mjs:4174-4177`, `4216-4217`) — `withGoalLine` itself needs no changes (§4).
 - Explicit non-goal for this phase: no general natural-language goal INFERENCE beyond a closed
-  recognizer for the one "solve Hanoi"-shaped ask. Open-ended goal recognition from arbitrary
-  phrasing is out of scope here (see risk list below) — this phase proves the composition, not
-  the recognizer's generality.
+  recognizer for the one "solve Hanoi"-shaped ask.
 - Exit criterion: a full `tmct chat` session can be driven, turn by turn, through a small Hanoi
   solve, each turn's answer carrying an honest, correct, per-step "Goal (inferred): …" line, and
   the final turn confirming the goal state (all disks on the target peg) against the actual
@@ -393,13 +391,10 @@ untouched by this landing):
 - Phase 1: the actual Hanoi state representation as memory-store facts (the `restsOn` edge
   convention sketched in §1, `boardToFacts`/`factsToBoard`, the snapshot-per-step write path
   from §3) — none of that exists yet; `findActionPath` itself has no notion of Hanoi, disks,
-  pegs, or facts at all, by design (it is domain-agnostic, proven only against the toy graph
+  pegs, or facts at all,  (it is domain-agnostic, proven only against the toy graph
   above).
 - Hanoi's own `legalMoves`/`isGoal` functions (the genuinely-new "successor state generator"
   piece §2 called out) — not written. `applyActions` in this landing's tests is a toy 5-node
   adjacency list, not a disk/peg legality check.
-- Phase 3's chat-turn wiring (a "plan" lane in `runAsk`'s miss-cascade, the per-step goal-line
-  composition) — explicitly out of scope for this landing and not started; nothing in
-  `chat.mjs` calls `findActionPath`, so this has zero effect on any existing chat behavior.
 - Phase 4's domain-general extraction/second-domain plug-in and the `PLAN_GUESS_NUMBER.md`
   convergence point — not started.

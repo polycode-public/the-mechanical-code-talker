@@ -243,7 +243,7 @@ test("appendFacts: GOLDEN EQUIVALENCE — byte-identical to looping appendFact (
   // recomputeSourceReliability re-stamp it every mutation, PLAN_VIZ.md §2) and an
   // edge's own createdAt (upsertEdge stamps "now" when the caller passes none —
   // syncFactSources's statedBy edges never thread the fact's own createdAt through,
-  // by design: an edge's creation moment is its own, not necessarily its subject's).
+  // an edge's creation moment is its own, not necessarily its subject's).
   // Redact both to a placeholder before the structural comparison; still asserted
   // present/well-formed further down.
   const REDACT_TS = "<ts>";

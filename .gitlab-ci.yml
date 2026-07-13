@@ -42,7 +42,7 @@ secret_detection:
 # ---- nightly dependency scanning (free-tier substitute for Ultimate DS) ----
 # Runs ONLY from a scheduled pipeline. The operator creates the schedule once
 # in the GitLab UI: Settings → CI/CD → Pipeline schedules → e.g. "0 3 * * *"
-# on main (CI files cannot create schedules). BLOCKING by design — it has NO
+# on main (CI files cannot create schedules). BLOCKING  — it has NO
 # allow_failure: `npm audit --audit-level=high` fails the job on any high or
 # critical advisory. `npm outdated` is visibility-only. OSV-Scanner is pinned
 # to a specific release (never `releases/latest`) and cross-checks the npm

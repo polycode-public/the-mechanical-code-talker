@@ -45,7 +45,6 @@
 //     OWL 2 RL Table 9's scm-svf1 — confirmed, against the real downloaded
 //     spec, a DISTINCT rule from scm-svf2, which needs `rdfs:subPropertyOf`
 //     instead; tmct's ACE grammar has no way to teach property subsumption at
-//     all, so scm-svf2 is out of scope for a real reason, not laziness). Joined
 //     the batch pass in a follow-up build (this session): originally deferred
 //     (INFBENCH's two drive points never touched the batch pass, so nothing
 //     was lost by deferring), closed once a positive INFBENCH fixture case

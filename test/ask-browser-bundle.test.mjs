@@ -101,7 +101,7 @@ test("e2e: the bundled engine answers a real query against a real fixture graph,
   const typo = vm.runInContext('tmctViz.ask(__graph, "whcih moduels import a.mjs")', ctx);
   assert.equal(typo.tmct_ask.miss, false);
 
-  // Lemma tier is honestly OFF (no wink in this bundle by design — a ~4MB model
+  // Lemma tier is honestly OFF (no wink in this bundle — a ~4MB model
   // deliberately kept out of a self-contained viz.html): an inflected form that
   // only the lemma tier resolves stays a grammar miss, exactly like
   // test/ask-nlp.test.mjs's own proven boundary.

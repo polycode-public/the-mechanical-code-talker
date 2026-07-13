@@ -219,10 +219,7 @@ const BY_NAME = Object.freeze(
 // The following dispatch tools are INTENTIONALLY UNREGISTERED — they emit
 // UNBOUNDED raw output (a source snippet / a whole edit-context bundle), which
 // is the most hallucination-prone surface and NOT a clean STRIPS query with a
-// bounded epistemic effect. Registering them would require modelling
-// output-size + file-read preconditions we have not committed to; until then,
-// default-deny keeps them OUT of the router's provable envelope by design (not
-// by omission). Recorded here so the exclusion is a decision, not an accident:
+// bounded epistemic effect. :
 export const EXCLUDED_FROM_REGISTRY = Object.freeze({
   tmct_context: "unbounded edit-context bundle (multi-file); needs a size/budget precondition",
   tmct_context_more: "unbounded context continuation; same as tmct_context",

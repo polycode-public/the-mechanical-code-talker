@@ -127,8 +127,7 @@ bounded, (c) genuinely harder — and feed §2.3 below.
   monotonically-versioned snapshots with a tiny manifest pointer to the current version; tmct's
   `.tmct/memory/graph.json` used to overwrite in place. Shipped as `snapshotMemory(dir)` in
   `src/memory/core.mjs` — `graph.v{N}.json` + `manifest.json`, `[memory] retention_versions` in
-  `tmct.toml` (default 5). Manual trigger only, by design — not wired to any automatic call site;
-  an operator or maintenance job snapshots explicitly before a risky bulk operation.
+  `tmct.toml` (default 5).
 - **Actor-level, behavior-driven trust (b) — ✅ shipped v1.4.0, further than originally scoped.**
   `app/lib/trust.mjs` tracks a persistent, evolving per-actor score from behavioral signals; tmct's
   `SOURCE_PRIOR` was fact-level/source-type-level only. Shipped: session-scoped Source IDs for
@@ -144,8 +143,7 @@ bounded, (c) genuinely harder — and feed §2.3 below.
 - **Gazetteer-based entity/predicate recognition (b).** `app/lib/mechanical/matcher.mjs` builds a
   wink-nlp gazetteer straight from the graph's own entity labels/aliases plus lemma/stem-tolerant
   verb-phrase tables, so new vocabulary flows through with zero new grammar code. tmct's ACE grammar
-  (`src/grammar/ace.mjs`) is deliberately strict — a sentence fits one of 8 declared patterns whole
-  or falls through by design (a documented ground rule, not an oversight). Not a replacement: a more
+  (`src/grammar/ace.mjs`) is deliberately strict. Not a replacement: a more
   tolerant recall path feeding the strict grammar as an additional front end, not instead of it.
 - **Declarative SHACL ingest gate (c) — ✅ shipped 2026-07-10.** Every marginalia memory node is
   validated against a shape contract (`app/ontology/shapes.ttl`, via `shacl-engine`) before it enters

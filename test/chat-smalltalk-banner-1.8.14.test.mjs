@@ -19,7 +19,6 @@
 // preamble stripper (GREETING_PREAMBLE_RE/ACK_PREAMBLE_RE/MODAL_WRAPPER_RE,
 // normalize.mjs) covers an arbitrary multi-word declarative lead like "ok well I
 // guess X,", and inventing one would be an open-ended general clause parser, not a
-// closed-set widening — out of scope for this pass.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";

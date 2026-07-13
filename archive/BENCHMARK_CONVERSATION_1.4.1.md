@@ -20,7 +20,7 @@ frozen this run** — see "Next," below.
 | round 1 dispatched (approx.) | 2026-07-10 ~11:55 BST | — |
 | round 1 fix committed (`e2b6f57`) | 2026-07-10 12:22:53 BST | — |
 | round 3 fix committed (`bc1b441`, last sprint action) | 2026-07-10 12:39:31 BST | **~44m** (round-1-start → round-3-fix-committed) |
-| concurrency | 3 sequential background sub-agents (one per round, chained), not run in parallel — each round's questions depend on the prior round's transcript by design | |
+| concurrency | 3 sequential background sub-agents (one per round, chained), not run in parallel — each round's questions depend on the prior round's transcript  | |
 
 (Round dispatch time is approximate — reconstructed from this session's own message log, not a
 separately kept timestamp file; both commit timestamps above are exact, from `git log`.)

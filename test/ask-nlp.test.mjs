@@ -59,7 +59,6 @@ test("exact curated match always wins: an already-exact query parses IDENTICALLY
 // ---- consumer 2: the POS signal, used ONLY inside the det+NOUN+"of" frame it
 // provably fixes. The wink probe showed "import" is tagged NOUN even in genuine
 // verb use ("which modules import walk.mjs"), so a general POS veto would break
-// correct parses — the reshape below is the whole POS surface, by design. ----
 
 test("POS tier: \"the imports of myFile\" is a NOUN usage — reshaped to the forward query the words mean; without the adapter it stays the documented reverse mis-parse", () => {
   const withPos = parseQuery("the imports of myFile");

@@ -41,7 +41,7 @@
 // import cycle" discipline extensions.mjs's seedActiveCorpusEntries already
 // uses for conceptnet.mjs itself).
 //
-// NOT covered here (out of scope for this module, see the caller's report):
+// NOT covered here:
 // the LIVE chat teach/miss path (src/chat.mjs) has its own, separate
 // unknown-word moment — a visitor's utterance mentioning a term the grammar
 // can't classify — which has no "assertion batch" or ConceptNet-shaped

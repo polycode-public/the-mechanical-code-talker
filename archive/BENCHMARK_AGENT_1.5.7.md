@@ -52,7 +52,7 @@ Gated at C2 completion 36% < 50% for the resolver-only floor — the same 7 case
 reason as `0.8.2` and `1.4.1`: `ab-c2-safe-to-change`, `-goal-touch-f`, `-goal-worry-c`,
 `-goal-keystone`, `-cochange-ship-a`, `-cochange-precheck-a`, `-cochange-regress-a` — every one of
 them a case that genuinely needs goal deduction (the resolver alone can't reach a proof chain for
-them, by design; the goal driver's rule-general `applicableRules` selection is what closes the gap).
+them, ; the goal driver's rule-general `applicableRules` selection is what closes the gap).
 
 ## What moved since 1.4.1 — checked directly, not assumed from matching headline numbers
 

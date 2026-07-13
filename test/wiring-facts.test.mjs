@@ -140,18 +140,6 @@ test("teach: 'remember that <X> is <adjective>' reifies mgx:hasProperty with tea
 });
 
 test("teach: a BARE 'X is <unrecognized word>' with a KNOWN subject (no remember/note wrapper) is still never silently reified", async () => {
-  // 'module' IS a declared lexicon noun (so it never reaches the unknown-SUBJECT
-  // free pass, Feature A point 2's bare-property extension) and 'zorblax' is
-  // neither a declared noun nor a declared adjective (a nonsense placeholder,
-  // same convention as ask-cascade.test.mjs's "frobnicate" — deliberately NOT
-  // a real English word, so PLAN_SEED.md's persona vocabulary growth can never
-  // collide with it the way a real word like the old placeholder "banana"
-  // eventually did) — the ACE grammar itself declines too, so this stays an
-  // honest miss exactly as before this feature.
-  // (NOTE: a known subject bare-paired with a KNOWN adjective, e.g. "module is
-  // deprecated", already stores via the ACE grammar's OWN bare adjective-copula
-  // pattern — pattern 8's copula arm, grammar/ace.mjs — which is pre-existing,
-  // unrelated to Feature A, and out of scope here.)
   const dir = await mkdtemp(join(tmpdir(), "tmct-teach-bare-"));
   try {
     const bare = await runTurn("module is zorblax", { config: CONFIG, memoryDir: dir, sessionId: "t-bare" });

@@ -26,8 +26,6 @@
 // "does X have a Y method" shape FIRST (VERB_TO_KIND maps has/have to the
 // code-graph "defines" relation, separately ambiguous there with a QUALIFIER
 // reading of "a <word> method"), resolving with its own disambiguation choice
-// (miss:false) before this reader ever gets a turn — a pre-existing,
-// unrelated structural-grammar behavior, out of scope for this item. The
 // TEACH side and the open-list query reader are NOT affected by that
 // collision (both reach an honest miss:true from ask.mjs even with a real
 // graph loaded), so this file also exercises those two against the real

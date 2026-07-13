@@ -356,7 +356,7 @@ test("list HIT (interrogative, directory-scoped): a copula-less tail ('what modu
   assert.equal(ask(graph, "what modules in test").content, ask(graph, "list modules in test").content);
 });
 
-test("list routing-parity (interrogative, 'inside'/'under'): routed to the SAME shape the imperative form already resolves to, warts included — the exception is scoped to routing, not to fixing the unrelated fact that parseRelationalOrQualified's own membership-atom builder only recognizes 'in'/'of' as a preposition (a separate, pre-existing gap, out of scope here)", () => {
+test("list routing-parity (interrogative, 'inside'/'under'): routed to the SAME shape the imperative form already resolves to, warts included — the exception is scoped to routing, not to fixing the unrelated fact that parseRelationalOrQualified's own membership-atom builder only recognizes 'in'/'of' as a preposition", () => {
   assert.equal(ask(graph, "what modules are inside test").content, ask(graph, "list modules inside test").content);
   assert.equal(ask(graph, "what modules are under test").content, ask(graph, "list modules under test").content);
 });

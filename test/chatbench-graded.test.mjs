@@ -145,7 +145,7 @@ test("dualDraws: distinct seeds, no within-cell overlap for non-promoted cells, 
   const { a, b } = dualDraws(pool, { fraction: 0.1, seedA: 7, seedB: 8 });
   const aIds = new Set(a.map((c) => c.id));
   // a census cell (CELL_SAMPLE ≥ pool size) is fully drawn in BOTH draws, so it
-  // overlaps by design (that is what makes it always agree); every other
+  // overlaps ; every other
   // non-promoted cell has pool ≥ 2× quota so draw B shares nothing with A.
   const censusCell = (c) => (CELL_SAMPLE[cellKey(c)] ?? 0) >= (GRADED_MATRIX.find((m) => cellKey(m) === cellKey(c))?.size ?? Infinity);
   for (const c of b) {

@@ -13,8 +13,7 @@
 // broadSearch() hands it (one node per whole retrieveBlocks hit, or one node per whole
 // graph-search/ask result). PLAN_COMPLETIONS.md's own prose loosely says "spans"; that is
 // resolved explicitly here rather than silently assumed: no sub-block span segmentation is
-// attempted in this build. A finer-grained span-level increment, if the pipeline ever needs
-// it, is future work, out of scope for Stage 0.
+// attempted in this build. A finer-grained span-level increment
 //
 // Algorithm: CONNECTED COMPONENTS over the block-similarity graph (shared-token-overlap
 // edges), reusing memory/blocks.mjs's buildNeighbours()/OVERLAP_MIN — the exact adjacency

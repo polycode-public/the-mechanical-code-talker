@@ -35,8 +35,6 @@
 //
 // Never does: passive voice (no ACE pattern supports it — see ace.mjs's
 // pattern table, PLAN_BREADTH_FIRST_NLU.md §6a's own scoping), NomLex
-// nominalization (explicitly out of scope, no real data present locally),
-// or any substitution crossing a WordNet synset boundary.
 //
 //   node scripts/generate-template-variants.mjs [--out <path>] [--limit <n>]
 

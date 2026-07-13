@@ -177,10 +177,6 @@ export async function appendSessionToGraph(graphFile, record, { memory = true, r
   }
   const res = upsertSession(entities, record);
   await atomicWriteJson(graphFile, entities);
-  // ALSO record the turn(s) into tmct's OWN memory graph (.tmct/memory/ — item 9),
-  // and fold the transcript into the text-block corpus once the session has ended.
-  // Best-effort by design: memory must never degrade the graph append that already
-  // succeeded, so every failure here is swallowed (mirrors chat.mjs's own stance).
   if (memory) {
     try { await recordSessionMemory(graphFile, record, repoDir); } catch { /* best-effort */ }
   }
@@ -298,9 +294,7 @@ export const turnKey = (ts, query) => `${ts} ${query}`;
  * Parse a human-readable session transcript (.tmct/session-<id>.log) into a
  * Map of turnKey(ts, query) → answer text. The transcript is the ONLY session
  * artifact that carries the answer PROSE (the structured sidecar records ids,
- * not text), so the memory write-path recovers response text from here.
- * Tolerant by design: a block is `ts` line + "> query" line + answer lines
- * until the next block; header/footer and torn tails just don't match.
+ * not text),
  */
 export function parseSessionLog(text) {
   const lines = String(text ?? "").split("\n");

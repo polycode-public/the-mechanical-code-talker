@@ -188,7 +188,7 @@ current published/pushed version, see `HANDOVER.md`'s version-state note.
    "describe the payment system" doesn't yet benefit from the compound-name tier above. Not a
    regression, just not covered yet.
 
-## Later: deferred by design, staged inside each plan
+## Later: deferred , staged inside each plan
 
 Each plan doc stages its own later phases; this list just points to them rather than repeating
 their tables.
@@ -828,7 +828,7 @@ this one right before trying another.
 
 ## Phase 10 — Conversational competence & onboarding — this batch DONE, the capability itself is an ongoing target
 
-Conversational competence is never fully "done" by design — `SKILL_BENCHMARK_CONVERSATION.md`
+Conversational competence is never fully "done"  — `SKILL_BENCHMARK_CONVERSATION.md`
 exists specifically to keep probing it, and it still has real open findings (see `HANDOVER.md`'s
 open items). The batch below shipped and stays shipped; treat it as a closed foundation, not a
 closed capability.
@@ -1020,7 +1020,7 @@ action" at all, and whether multi-step execution needs confirmation before runni
 **Before the horizon — known-how, not-yet-built, no research risk.** Sequencing or engineering
 debt: the technique exists (in tmct's own prior work or the wider literature), building it is a
 matter of scheduling and effort, not discovery. Every DONE capability in "Recently shipped
-capabilities" above falls in this bucket, plus: tone-of-voice adaptation (below — deliberately dropped by design choice, not unsolved);
+capabilities" above falls in this bucket, plus: tone-of-voice adaptation (below — deliberately dropped  choice, not unsolved);
 tier-4 learn-on-miss (below — prerequisites not yet met, not research-blocked); `PLAN_CODE.md`
 Tracks 2–4 (mutation search/repair, JS/HTML/CSS synthesis — APR and CEGIS are established
 techniques); `PLAN_OSS_ACE_PARSER.md` (pure extraction/packaging); OWL 2 RL forward-chaining and

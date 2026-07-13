@@ -133,7 +133,7 @@ git-history modelling than an earlier draft of this doc credited:
 **The real gap**: nothing in tmct's own codebase ever calls `buildEntities()` in production — the
 only callers are test fixtures. `docs/adapter-contract.md:8-9` states the actual architecture
 directly: *"tmct consumes a code graph; it never produces or mutates one"* — gathering `git log`
-data for the code graph is a provider's job (seonix, a CI indexer, a hand-written file), by design,
+data for the code graph is a provider's job (seonix, a CI indexer, a hand-written file), ,
 not tmct's. `bin/tmct.mjs`'s `init`/`import` modes only scaffold a config pointing at a graph-file
 path (`src/init.mjs:53,125-132`) — they never build a graph.
 

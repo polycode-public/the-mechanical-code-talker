@@ -12,7 +12,7 @@ import { clearCache } from "../../src/source.mjs";
  *  routing/wall-avoidance regression suites strip it right where turns are
  *  collected, rather than teaching every exact-text assertion a new
  *  goal-line-shaped tail. `last`/`last.answer` (the why/say-more re-render
- *  source) is already goal-line-free by design, so only `.answer`/`.logLines`
+ *  source) is already goal-line-free, so only `.answer`/`.logLines`
  *  need it here. */
 export const GOAL_LINE_RE = /\n\nGoal \(inferred\):[^\n]*$/;
 export const stripGoalLine = (t) => (t && typeof t.answer === "string"

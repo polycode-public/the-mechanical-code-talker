@@ -105,9 +105,7 @@ test("persona-sweep P1 regression: bare general-verb teaches ('grace mentors ala
 // register alongside "salutations"), was hardcoded into the BYE closed set —
 // foldedBye() is checked before GREET in conversationalTurn, so it won the
 // race and silently ended the session (`end:true`) with no error, dropping
-// every turn piped after it. Fixed by moving the phrase from BYE to GREET —
-// a narrowing of an over-broad farewell match (in scope per §5), not a new
-// farewell phrasing (out of scope per §5 — none added here).
+// every turn piped after it.
 test("persona-sweep P2: 'good day to you' greets — it must never end the session", async () => {
   const turns = await driveSession(["good day to you", "what is Task", "what calls createTask"]);
   assert.equal(turns.length, 3, "all three turns must have been answered — the session must not have ended early");

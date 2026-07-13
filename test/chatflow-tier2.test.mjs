@@ -308,8 +308,7 @@ const FIXTURE = new URL("./fixtures/entities.fixture.json", import.meta.url).pat
 // not that feature, so it's stripped right where turns are collected
 // (driveSession/driveSessionOverGraph, below) rather than teaching every one of
 // this file's exact-text assertions a new goal-line-shaped tail. `last.answer`
-// (the why/say-more re-render source) is already goal-line-free by design
-// (chat.mjs's withGoalLine docblock), so only `.answer`/`.logLines` need it here.
+// (the why/say-more re-render source) is already goal-line-free , so only `.answer`/`.logLines` need it here.
 
 async function repoWithFixture() {
   const dir = await mkdtemp(join(tmpdir(), "tmct-tier2-"));
@@ -664,7 +663,7 @@ test("tier2/T14 'which ones' anaphora: re-lists a prior LIST-shape answer, and g
     assert.equal(
       turns[3].answer,
       "\"those\"/\"them\" needs a previous answer to refer to — ask a listing question first, then follow up.",
-      "a prior COUNT never carries a match set (by design) — the honest anaphora-miss nudge, not a wall",
+      "a prior COUNT never carries a match set  — the honest anaphora-miss nudge, not a wall",
     );
   } finally {
     clearCache();
@@ -1017,7 +1016,7 @@ test("tier2/T24 implicit anaphoric count with NO explicit 'of them/those': 'and 
     assert.equal(
       turns2[1].answer,
       `"those"/"them" needs a previous answer to refer to — ask a listing question first, then follow up.`,
-      "a prior COUNT never carries a match set (by design, T14) — the same honest anaphora-miss nudge 'which ones' already gets, never a wall or a bogus object search",
+      "a prior COUNT never carries a match set — the same honest anaphora-miss nudge 'which ones' already gets, never a wall or a bogus object search",
     );
   } finally {
     clearCache();

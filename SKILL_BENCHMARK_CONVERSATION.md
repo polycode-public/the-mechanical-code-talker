@@ -525,7 +525,7 @@ Report structure:
   a real bug where a non-farewell gets MISREAD as one — that's an ordinary dead-end, route it normally.
 - **Delegate long-running work under the coordinator model.** Persona-sweep mode (§3.4) is the
   clearest example of this — every persona's CHAT step is an independent, parallel background
-  sub-agent by design, which is also why it's the default single-run mode (§3's capped sprint is
+  sub-agent , which is also why it's the default single-run mode (§3's capped sprint is
   serial by construction; parallel wins on wall-clock whenever chained realism isn't the point). The
   point in either mode is to keep the main chat free for judgment calls and the operator, not to
   hand-run every long step inline by default.

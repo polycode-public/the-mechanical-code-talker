@@ -11,7 +11,7 @@
     sampling noise on unchanged answers**, not engine improvement — do NOT read v1 as "better."
   - **graded line (150 frontier CEFR cases): mean 1.140, 37 hard fails** — a **NEW first-ever
     full-spectrum reading**, not a regression. The C1/C2 ceiling markers and B1/B2 combination cells
-    **fail by design**; this cycle is the first time they have ever been scored.
+    **fail **; this cycle is the first time they have ever been scored.
 - Judge pin: **claude-haiku-4-5-20251001**, prompt **judge-prompt-v1**, 3 samples/case. Run stamp:
   `cycle-003`. Dual-draw tier-1; **agreement 27/30 cells (90%)**, 3 cells under-covered (excluded).
 - Tier-1 (deterministic): **198/198 pass**; 69 cases carry documented baselineFail turns; **6 baseline

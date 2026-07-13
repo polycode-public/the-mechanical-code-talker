@@ -420,7 +420,7 @@ export function grammarRules() {
 
 /** Apply the grammar rules to a segment list, in file order, transforming ONLY
  *  prose spans. Asserts fact-invariance at the end (the protected multiset must
- *  be identical) and returns the transformed segments. Idempotent by design:
+ *  be identical) and returns the transformed segments. Idempotent:
  *  applyGrammar(applyGrammar(x)) yields the same flattened text as applyGrammar(x). */
 export function applyGrammar(segments, rules = grammarRules()) {
   let cur = segments;

@@ -55,8 +55,7 @@ const WRONG_WORD_RE = correctionRe(WRONG_WORDS);
 //   - "with" and "for" are not canonical grammar-owned words (not in
 //     VERB_TO_KIND/ENTITY_TO_TYPE/MODIFIER_TO_KIND/TRIGGER_WORDS), and
 //     test/ask-vocab.test.mjs enforces that every correction TABLE value is
-//     one of those — by design, so a table entry couldn't rewrite INTO a
-//     non-grammar word either.
+//     one of those.
 // Same species as chat.mjs's VAGUE_TOUCH_TEL_RE/VAGUE_TOUCH_ABUT_RE (a
 // dedicated, narrowly-scoped regex pass instead of a table entry), wired
 // here rather than in chat.mjs because "w/" and leetspeak "4" are GENERAL
@@ -730,8 +729,7 @@ export const PHRASING_FRAMES = Object.freeze([
   //   (neither recognizes the bare "is in" idiom once "else" sits in front of it).
   //   The only rescue was the relaxation cascade's drop-unmatched layer — but that
   //   layer refuses to accept a relaxed reading that still renders an honest EMPTY
-  //   (by design: relaxation must turn a miss into a real answer, never into
-  //   another kind of miss), so a genuinely empty class ("what else is in
+  //   , so a genuinely empty class ("what else is in
   //   Task.complete" — a method, no members) bottomed out at the bare grammar
   //   wall instead of the specific "no contains edges" receipt. Routing this
   //   frame onto the SAME direct "what does X contain" path the plain "what is

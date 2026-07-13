@@ -113,7 +113,7 @@ so plainly (see §2) rather than reporting stale feature bullets as if nothing c
 
 One subsection per currently-live `PLAN_*.md` doc — survey the actual root-level `PLAN_*.md` files plus
 any `archive/PLAN_*.md` still actively referenced as open/deferred scope (check `ROADMAP.md`'s
-"deferred by design" or equivalent section for the current live set; a plan that's fully shipped and
+"deferred " or equivalent section for the current live set; a plan that's fully shipped and
 archived with nothing left open doesn't need its own bucketed subsection, a one-line "fully done,
 archived, see `archive/PLAN_X.md`'s own STATUS block" is enough).
 

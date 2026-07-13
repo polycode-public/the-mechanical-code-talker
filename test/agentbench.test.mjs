@@ -1,7 +1,6 @@
 // agentbench + router-registry tests — the Stage-0 capability substrate and the
 // AGENTBENCH harness (Phase 11, PLAN_CAPABILITY_ROUTER.md). Like chatbench's
 // tests these cover the HARNESS + the substrate deterministically; there is no
-// judge here at all — AGENTBENCH grading is fully deterministic by design.
 //
 // Three groups:
 //   1. registry shape — the STRIPS/PDDL capability model (Deliverable 1);

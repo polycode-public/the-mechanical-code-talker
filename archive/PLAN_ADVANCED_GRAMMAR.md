@@ -26,7 +26,7 @@ C2: pron 25, rel 25; † = census cell):
 | 3-branch coordination, precedence | C1 | YES — g-c1-coord (precedence-agnostic items only admitted) | yes |
 | Temporal composition over relatives | C1 | YES — g-c1-temp (census, 50; 9 reds are trio targets) | yes |
 | Cross-session assert+recall | C1 | YES — g-c1-assert (also a stale judged tag, CHATBENCH_0.8.2 deferral) | yes |
-| Winograd-class coreference | C2 | YES — g-c2-pron, by design permanent ceiling | markers only (§2g) |
+| Winograd-class coreference | C2 | YES — g-c2-pron,  permanent ceiling | markers only (§2g) |
 | Complex subordination (because/although/while/whereas) | C1 | **NO** | yes — causal/concessive framing of real queries |
 | Conditionals, incl. counterfactual ("if X were deleted, what breaks") | C1 | **NO** | yes — reads naturally as hypothetical graph queries |
 | Ellipsis / gapping ("and b.mjs?", "same for tests") | C1 | **NO** | yes — high-frequency developer register |
@@ -55,7 +55,7 @@ Summary table; detail below. Effort S/M/L; feasibility = deterministic-no-LLM fe
 | d | Construction-grammar template banks | per-construction closed coverage at data-not-code cost | HIGH | data/templates/grammar-rules.toml + responses.jsonl; Phase-6 formulaic competence (dual banding already separates template-carried passes) | M | performance-band inflation; must stay template-lane-tagged |
 | e | Ellipsis/gapping resolution | C1 ellipsis cell; huge feel win ("and the tests?") | MED-HIGH, **after (b)** | discourse-count anaphora (trio); merge.mjs same-class dedupe | M | wrong-antecedent = confident-wrong (worse than wall) |
 | f | Presupposition as honest-nudge renders | C1/C2 presupposition cells, honesty dimension | HIGH | 0.8.2 wall-kindness nudges (riskiest/opinion/why-untested); honest-empty receipts | S | thin reward if cells stay unjudged; kill-criterion applies |
-| g | Winograd / world knowledge | nothing — by design | N/A (frame problem) | ROADMAP.md:590; graded-language-measures.md:18 | 0 | only risk is forgetting they're markers |
+| g | Winograd / world knowledge | nothing —  | N/A (frame problem) | ROADMAP.md:590; graded-language-measures.md:18 | 0 | only risk is forgetting they're markers |
 
 **(a) Scale the closed-frame method to subordination + conditionals.** The 0.8.2 evidence is that
 delimiter/phrase-anchored frames rewriting onto canonical shapes clears whole cells without
@@ -258,7 +258,7 @@ sentences with no accompanying structured world model the reasoner is presumed t
 completely; grounding pronoun disambiguation in a closed, complete, already-available relational
 graph — rather than either statistical priors or a hand-authored general commonsense KB — is a real
 "no vehicle yet" idea specific to structured-domain chatbots. It would not touch the g-c2-pron
-ceiling markers (those are deliberately open-world-flavored fixture items, by design unsolvable
+ceiling markers (those are deliberately open-world-flavored fixture items,  unsolvable
 this way) but could, as a DISTINCT and separately-named mechanism, extend track (b)'s DRT-lite
 discourse record (typed entities/sets/times/propositions) with a class-constraint disambiguation
 pass for the narrower "which graph-typed antecedent is relation-plausible" cases — worth a future

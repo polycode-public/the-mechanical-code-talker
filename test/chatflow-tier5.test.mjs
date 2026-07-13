@@ -126,7 +126,7 @@
 //
 //   T9  "remember that every controller needs review" (a QUANTIFIED subject
 //       + a non-copula verb) fit NONE of the teach recognizers — generalVerbTeach
-//       declines by design on a quantified subject (ambiguity risk, see its
+//       declines on a quantified subject (ambiguity risk, see its
 //       own docblock), and no is/are/owns/maintains shape matches "needs"
 //       either — so `payload` stayed null and teachLane returned null
 //       SILENTLY, falling through to the raw structural wall (the exact

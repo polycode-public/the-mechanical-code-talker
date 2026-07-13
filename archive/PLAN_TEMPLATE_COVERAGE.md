@@ -54,7 +54,7 @@ node scripts/template-coverage.mjs --rescue corpus/generated/ace-surface-variant
 (Measured before this doc existed. Once committed, this file becomes the corpus's 42nd file —
 re-running shifts the totals by the sentences in this doc itself, moving the percentages by well
 under half a point. Every future `*.md` at repo root does the same; the harness measures whatever
-the docs tree currently holds, by design.)
+the docs tree currently holds, .)
 
 Zero hits. This is the honest number, and it's the expected one: the ACE grammar
 (`docs/references/schemas/ace-owl-fragment.md`) is a controlled-English sub-fragment with 8 rigid

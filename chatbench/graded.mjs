@@ -317,8 +317,7 @@ export function stratifiedSample(cases, { fraction = 0.1, seed = 1, minPerCell =
 /** The DUAL DRAW (parallel-forms reliability): two independent stratified
  *  draws with distinct seeds; within each cell draw B samples WITHOUT
  *  REPLACEMENT against draw A where the pool is deep enough (a cell of ≥ 2×
- *  quota shares no item between draws). Promoted-grade cells are the same
- *  fixed subset in both draws by design (they are the instrument's anchor). */
+ *  quota shares no item between draws).*/
 export function dualDraws(cases, { fraction = 0.1, seedA = 1, seedB = 2, minPerCell = MIN_PER_CELL, promotedGrades = PROMOTED_GRADES, sampleOverrides = CELL_SAMPLE } = {}) {
   const a = stratifiedSample(cases, { fraction, seed: seedA, minPerCell, promotedGrades, sampleOverrides });
   const promoted = new Set(a.filter((c) => promotedGrades.includes(c.grade)).map((c) => c.id));

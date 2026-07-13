@@ -1138,11 +1138,7 @@ const BYE = new Set([
   // and won the race against GREET (foldedBye is checked first in
   // conversationalTurn), so a plain formal "good day to you" silently ended
   // the session — every turn piped after it was dropped with no log entry, a
-  // worse outcome than any wall. Moved to GREET (above) instead; a genuine
-  // dismissive sign-off ("farewell then", bare "farewell") stays here
-  // unchanged — this is a narrowing of an over-broad match, not a new
-  // farewell phrasing (§5 "farewells stay out of scope" governs ADDING
-  // coverage, not fixing a phrase that was on the wrong list).
+  // worse outcome than any wall. Moved to GREET (above)
 ]);
 /** Elaboration asks → RE-RENDER the last answer verbosely (traversal + matches). */
 const WHY = new Set([
@@ -1838,9 +1834,7 @@ const RELATION_FACT_TEACH_RE =
  *  are the ROLE of", never "has a ROLE method"; GENERAL_VERB_TEACH_RE (below)
  *  maps "has"/"have" onto the same HAS_A_PREDICATE this pattern uses, but only
  *  for a BARE, wrapper-required, single-token subject with NO leading
- *  determiner (GENERAL_VERB_DETERMINER_RE explicitly declines "every"/"a"/
- *  "the" as a subject, by design — see its own docblock) — so a determiner-led
- *  subject (the operator's own canonical example, "every Component…") fell
+ *  determiner  fell
  *  all the way through teachLane, landing on ask.mjs's own structural
  *  "defines" grammar instead (VERB_TO_KIND maps "has"/"have" to the code-graph
  *  "defines" relation), which can't resolve "Component"/"render" as real
@@ -3068,8 +3062,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
       // Tier-5 playtest fix (cycle 2), found live: "remember that some
       // functions are risky" — Y ("risky") is not a lexicon NOUN, so the
       // subclass path just above correctly declines it (SOME_A_FEW_RE is
-      // subclass-only, by design — "risky" isn't even in the closed
-      // lexicon at all, as either noun or adjective, so gating this decline
+      // subclass-only,, so gating this decline
       // on "is Y a known adjective" missed the actual case entirely on the
       // first attempt at this fix). Without this guard, the sentence fell
       // through to unknownSubjectFallback/TEACH_PROPERTY_RE below, which DO
@@ -3144,14 +3137,6 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   if (wrapped && /\b(?:is|are)\b/i.test(wrapped)) payload = wrapped;
   else if (BARE_DECLARATIVE_RE.test(raw) && !QUESTION_LEAD_RE.test(raw) && !(await hasMidSentenceInterrogative(raw))) payload = raw;
   if (!payload) {
-    // Tier-5 playtest fix (cycle 3), found live: "remember that every
-    // controller needs review" — a QUANTIFIED subject ("every X", declined
-    // by generalVerbTeach's own GENERAL_VERB_DETERMINER_RE, by design — see
-    // its docblock on the ambiguity risk of a free-form multi-word subject)
-    // combined with a non-copula verb ("needs", not is/are/owns/maintains)
-    // fits NONE of the recognizers above, so `payload` stays null and this
-    // used to return null SILENTLY — the exact "wrong-context wall" bug
-    // class Bug 3's generalVerbTeach mechanism was built to close for
     // "remember margo eats ribs", re-escaping here through a combination
     // that mechanism's own deliberate subject-shape restriction doesn't
     // cover. An explicit "remember/note/…"-wrapped sentence is an
@@ -4051,11 +4036,7 @@ const FACT_PREDICATE_PHRASES = {
 
 /** Bug 3 (2026-07-09) point 3b: the MECHANICAL fallback for a predicate this
  *  table has no curated entry for — specifically generalVerbTeach's minted
- *  "mgx:<lemma>" predicates ("mgx:eat", "mgx:drive", …), which by design have
- *  no per-verb table row (that would be the anti-pattern the operator's
- *  dispatch explicitly called out to avoid). Reconstructs the naive third-
- *  person-singular surface form so "margo mgx:eat ribs" still renders as the
- *  natural "margo eats ribs" — the mechanical INVERSE of singularizeSurface's
+ *  "mgx:<lemma>" predicates ("mgx:eat", "mgx:drive", …), — the mechanical INVERSE of singularizeSurface's
  *  own naive -s/-es/-ies fold used elsewhere in this file, same accepted-
  *  limitation trade (no real morphology; a handful of doubly-irregular verbs
  *  render slightly off but never wrong-MEANING). "has"/"have" never reach
@@ -7516,8 +7497,6 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // kind: test/chatflow-tier1-single-touch.test.mjs's own T3 case ("which
   // class contains Task.complete" -> "what else is in that class") pins the
   // OPPOSITE behavior for "that class" — the standing Method focus (Task.
-  // complete) is deliberately reused there, by design, even though "class"
-  // names a different kind than Method too. "class"/"method"/"function"/
   // "attribute"/"variable"/"commit" are all colloquially used to mean "the
   // thing we were just discussing", which may genuinely BE the narrower
   // standing focus (T3's own case). "file"/"module" is the one kind noun in
@@ -7527,7 +7506,6 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // kind-mismatch signal without breaking that pinned case. Widening this
   // beyond Module would need a real redesign (disambiguating "reuse the
   // narrower focus" from "switch to the just-named container" in general);
-  // out of scope here — see the routed-backlog report for this session.
   let effectiveContextId = focus?.id ?? null;
   let kindRescueEnt = null;
   if (graph && focus?.id) {
@@ -9455,7 +9433,7 @@ export async function createSession({
 
   // Read-time graph upsert (sessions.mjs): after every turn, the session becomes /
   // stays a first-class Session individual in graph.json (crash-safe: turn n is in
-  // the graph before turn n+1 runs). Best-effort by design — a re-index or vanished
+  // the graph before turn n+1 runs). Best-effort — a re-index or vanished
   // artifact mid-session must degrade the recording, never kill the chat.
   const turnRecords = [];
   const upsertGraph = async (ended) => {

@@ -464,7 +464,6 @@ function b2Svf1(rng) {
 // cax-sco too — out of this stage's scope, see `src/syllogise.mjs`'s header
 // comment). The query asks about the restriction node's own readable term
 // directly ("is IND1 a some-imports-test"), which is not a lexicon noun, so
-// `chat.mjs` (out of scope for this dispatch, and not equipped to answer a
 // query about a synthetic restriction-node term today regardless) is never
 // going to parse it as an ISA question — this template therefore declares
 // `arms: ["kernel"]` ONLY, checked directly against `src/syllogise.mjs`'s
@@ -500,7 +499,7 @@ function b2Svf1Apply(rng) {
       band: "INF-B2", template: "b2Svf1Apply", variant: "positive",
       arms: ["kernel"], checkType: "isa",
       premises, query, expect: { verdict: "yes", entailed, proof: true },
-      note: "cls-svf1's actual positive conclusion (PLAN_INFERENCE_TESTING.md §4 stage 4): the restriction CLASS itself, not the further owl:intersectionOf step to N3 — a deliberately narrower, honestly-scoped claim than the original worked example's 'is chat.mjs a suite'. kernel-arm only: the query names a synthetic restriction node term, which chat.mjs was never taught to answer (and is out of scope for this dispatch either way).",
+      note: "cls-svf1's actual positive conclusion (PLAN_INFERENCE_TESTING.md §4 stage 4): the restriction CLASS itself, not the further owl:intersectionOf step to N3 — a deliberately narrower, honestly-scoped claim than the original worked example's 'is chat.mjs a suite'. kernel-arm only: the query names a synthetic restriction node term, which chat.mjs was never taught to answer",
     }));
   }
   return cases;
@@ -579,9 +578,6 @@ function c1Cardinality(rng) {
 // "every N1 that VERBs a N2 is a N3" (declares ∃VERB.N2), a taught "every N2
 // is a N2b" (N2 ⊑ N2b), r2 via "every N4 that VERBs a N2b is a N5" (declares
 // ∃VERB.N2b) — entail the restriction NODES themselves are ⊑-related (r1 ⊑
-// r2), NOT r1's further N1⊓∃VERB.N2 intersection step (out of scope per the
-// same header comment, mirroring b2Svf1Apply's own deliberately narrower
-// claim). Query asks about the two restriction nodes directly
 // ("is a some-VERB-N2 a some-VERB-N2b"), a plain "is X a Y" surface both the
 // kernel arm's QUERY_RE and chat.mjs's ISA_ASK_RE already parse — unlike
 // b2Svf1Apply's restriction-node QUERY (kernel-only), this one names NO

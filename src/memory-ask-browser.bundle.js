@@ -2630,7 +2630,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
         //   (neither recognizes the bare "is in" idiom once "else" sits in front of it).
         //   The only rescue was the relaxation cascade's drop-unmatched layer — but that
         //   layer refuses to accept a relaxed reading that still renders an honest EMPTY
-        //   (by design: relaxation must turn a miss into a real answer, never into
+        //   (: relaxation must turn a miss into a real answer, never into
         //   another kind of miss), so a genuinely empty class ("what else is in
         //   Task.complete" — a method, no members) bottomed out at the bare grammar
         //   wall instead of the specific "no contains edges" receipt. Routing this

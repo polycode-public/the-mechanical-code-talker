@@ -15,7 +15,6 @@
 // unit memory/blocks.mjs's index actually stores. PLAN_COMPLETIONS.md's own prose loosely
 // says "spans"; this module does NOT invent sub-block span segmentation. Every hit this
 // module returns is whole-block (or a whole graph-search/ask result) granularity. Finer-grain
-// spans, if the pipeline ever needs them, are a real future increment, out of scope here.
 //
 // Determinism: retrieveBlocks is already deterministic (stable sort with an id tiebreak);
 // the graph service's search()/ask() are pure functions over a fixed graph. Given the same

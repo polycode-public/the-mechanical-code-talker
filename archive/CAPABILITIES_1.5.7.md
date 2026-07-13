@@ -78,7 +78,7 @@ relative to tmct on that specific capability) followed by why.
 
 | General agent capability | tmct — measured evidence | Llama 3.1 8B | Amazon Nova Pro | Claude Haiku 4.5 | Claude Sonnet 5 | Claude Opus 4.8 |
 | --- | --- | --- | --- | --- | --- | --- |
-| **Tool use / function calling** | Closed, rule-based router over a FIXED toolset — `BENCHMARK_AGENT_1.5.7.md`: 100% plan-completion, 98% result-completion, 0% hallucination, every rung A0–C2 gate PASS, byte-identical across three consecutive measured versions (`0.8.2`, `1.4.1`, `1.5.7`) — not general function-calling, a bounded dispatch table | **Stronger** — genuine open-ended function-calling over arbitrary declared tools | **Stronger**, plus reliable multi-tool composition | **Stronger** | **Stronger** | **Stronger** — real function-calling generalizes past any fixed router by design |
+| **Tool use / function calling** | Closed, rule-based router over a FIXED toolset — `BENCHMARK_AGENT_1.5.7.md`: 100% plan-completion, 98% result-completion, 0% hallucination, every rung A0–C2 gate PASS, byte-identical across three consecutive measured versions (`0.8.2`, `1.4.1`, `1.5.7`) — not general function-calling, a bounded dispatch table | **Stronger** — genuine open-ended function-calling over arbitrary declared tools | **Stronger**, plus reliable multi-tool composition | **Stronger** | **Stronger** | **Stronger** — real function-calling generalizes past any fixed router  |
 | **Planning & multi-step task decomposition** | Same AGENTBENCH A0–C2 rung ladder, every gate PASS, bounded to pre-defined rungs; unchanged this cycle | **Comparable** — general planning ability exists but noisier composing steps than tmct's deterministic bounded ladder | **Comparable-to-stronger** | **Comparable-to-stronger** | **Stronger** | **Stronger** — handles open-ended plans tmct's fixed rungs structurally can't represent |
 | **Reasoning (logical / multi-hop inference)** | **Unmeasured this cycle** — `BENCHMARK_INFERENCE_1.5.7.md`'s harness crashed on a `dice`/`die` lexicon fixture-lint collision before producing a rung table; the last real full-ladder result on record is `BENCHMARK_INFERENCE_1.4.1.md`'s full-gate PASS. The crash is fixed post-pin (`d5e962d`), confirmed directly: `generate-cases.mjs` now exits 0. A fresh measurement hasn't run yet — this row is honestly "blocked, not regressed," not a number | **Comparable** on short chains, **Weaker** as chain depth/ambiguity grows | **Comparable** | **Comparable** | **Stronger** | **Stronger** — arbitrary-depth reasoning, not capped at a fixed ladder depth |
 | **Knowledge grounding / retrieval (avoiding fabrication)** | 0% fabrication is a structural property (INFBENCH/AGENTBENCH rows can't assert past taught/seeded facts) unaffected by this cycle's harness block; CEFR tier-1 108/109 green (`BENCHMARK_CEFR_ENGLISH_1.5.7.md`) — a STRUCTURAL guarantee, not a tuned behavior | **Weaker** — no RAG discipline out of the box | **Weaker** bare call / **Comparable** with a real grounding harness (unmeasured here) | **Comparable** under strict grounding+citation prompting | **Comparable** | **Comparable** — best self-calibrated uncertainty of the five, but still probabilistic, not a structural floor |
@@ -383,9 +383,7 @@ explicitly per this project's own recurring "live wiring gap"/documentation-lag 
 `CAPABILITIES_1.4.1.md` §4 used prose paragraphs ending in a "which benchmark uplift helps most"
 note. This cycle restructures that into three clean bulleted buckets per plan, per
 `SKILL_CAPABILITIES_AUDIT.md` §3.3 — a fully archived plan with nothing left open gets a one-line
-note instead of three near-empty lists. Covers every currently-live root-level `PLAN_*.md` doc, plus
-the two `archive/PLAN_*.md` docs `ROADMAP.md`'s "Later: deferred by design" section still names as
-carrying open, deferred scope.
+note instead of three near-empty lists. Covers every currently-live root-level `PLAN_*.md` doc,
 
 ### `PLAN_AGENTS.md`
 
@@ -486,7 +484,7 @@ carrying open, deferred scope.
 - **`archive/PLAN_COMPLETIONS.md`** (pinned at `59f7466`) — all 4 staging rows shipped, including the
   `graphService` adapter that closed item #50's remaining architectural gap.
 
-### Archived, but still carrying real open scope per `ROADMAP.md`'s "Later: deferred by design"
+### Archived, but still carrying real open scope per `ROADMAP.md`'s "Later: deferred "
 
 - **`archive/PLAN_ADVANCED_GRAMMAR.md`** (pinned at `8cd3b36`) — **Done**: track (a) closed-frame
   subordination/conditionals (item #39), track (d) construction-grammar template bank (item #40).

@@ -85,7 +85,7 @@ live and unaffected by this work.
    fixture lint caught this immediately (a loud generation-time throw, exactly as designed). Fixed
    by excluding any noun lemma that collides with a declared properName from the generator's
    class-noun pool (one line, `PROPER_NAME_LEMMAS`). Not a bug in `ace.mjs` — the lexicon is
-   ambiguous by design (declared words win in position, not globally) — but a real trap for any
+   ambiguous  (declared words win in position, not globally) — but a real trap for any
    future generator that mints "every X is a NOUN" sentences from the raw noun list.
 3. **A C1 query-layer quirk, not a grading bug.** Two of 30 C1 cardinality rows
    (`inf-c1-card-max0-009`, `-014`, e.g. "does a framework have a file") were graded `observed:

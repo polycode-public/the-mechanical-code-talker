@@ -643,8 +643,7 @@ const resolveManifestFile = (dir) => join(dir, MEMORY_MANIFEST_REL);
  *  live file every mutator (mutateMemory / fold.mjs's writeMemoryGraph) reads
  *  and writes; only a COPY of its pre-snapshot content becomes the new
  *  numbered version. NOT called from mutateMemory, writeMemoryGraph, or
- *  anywhere else in this codebase — it has zero callers today by design; a
- *  future CLI command or maintenance hook calls it explicitly.
+ *  anywhere else in this codebase.
  *
  *  Manifest bootstrap (no manifest.json yet): `{ version: 0, retentionVersions:
  *  opts.retentionVersions ?? DEFAULT_RETENTION }` — the optional

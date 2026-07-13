@@ -49,7 +49,7 @@ to an answer) — the same deliberately-honest composing gap `0.8.2` reported, n
 Gated at C2 completion 36% < 50% for the resolver-only floor — the same 7 case ids fail for the
 same reason as `0.8.2`: `ab-c2-safe-to-change`, `-goal-touch-f`, `-goal-worry-c`, `-goal-keystone`,
 `-cochange-ship-a`, `-cochange-precheck-a`, `-cochange-regress-a` — every one of them a case that
-genuinely needs goal deduction (the resolver alone can't reach a proof chain for them, by design;
+genuinely needs goal deduction (the resolver alone can't reach a proof chain for them, ;
 the goal driver's rule-general `applicableRules` selection is what closes the gap).
 
 ## What moved since 0.8.2 — checked directly, not assumed from matching headline numbers

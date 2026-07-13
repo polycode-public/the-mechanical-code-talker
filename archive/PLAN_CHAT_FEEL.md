@@ -17,7 +17,7 @@
 > `miss:true` expectation for a refuted presupposition was authored (case-set v2, `d984d58`,
 > 2026-07-07 20:20) ~40 minutes *before* `presuppositionNudge` existed (`db60099`, 21:02) and was
 > never re-measured against it; the feature's own docstring says a refutation is "still an
-> honest, confident correction, not a miss" (`recordMiss:false` in both branches, by design).
+> honest, confident correction, not a miss" (`recordMiss:false` in both branches, ).
 > `chatbench/generate-graded.mjs`'s expectation was corrected to match (now 25/25, no product
 > code touched — nothing was broken). `C2:garden-path` **is** a real, narrow regression (18/25,
 > down from the 20/25 the stale committed pool showed — 2 of the 25 sampled items): the family-A
@@ -25,7 +25,7 @@
 > returns a wrong single-entity guess instead of the previous honest miss, on cases where the
 > true intersection is empty — traced to `resolveObject`'s tier-3 fuzzy/substring matching (a
 > later, unrelated hardening) now resolving an entity out of a longer un-consumed relative-clause
-> span that the general composition path was never taught to intersect. Left **open**, by design
+> span that the general composition path was never taught to intersect. Left **open**, 
 > (per this item's own framing: garden-path has no dedicated handler, and the general
 > relative-clause composition path in `src/ask.mjs`/keyword-spot is a large, heavily-tuned
 > shared surface — a real fix belongs in its own dispatch, not a drive-by here). Original text

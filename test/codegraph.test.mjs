@@ -804,7 +804,7 @@ test("B016 E1a callAdjacency: the called-into twin overtakes its lexically-tied 
   // OFF: identical base scores → shorter label wins the tie-break.
   assert.ok(pos(off, "lib/helpers.js") < pos(off, "util/helpers.js"));
   // ON: util/helpers.js rides the call edge from the strongly-matched lib/widget.js and flips.
-  // (The bounded nudge may also reorder other near-ties — by design, like import-proximity —
+  // (The bounded nudge may also reorder other near-ties, like import-proximity —
   // so the only pinned behaviour is the twin flip itself.)
   assert.ok(pos(on, "util/helpers.js") < pos(on, "lib/helpers.js"));
 });
