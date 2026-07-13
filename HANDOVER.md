@@ -14,13 +14,25 @@ Session handle (inbox): `tmct` (this session; earlier sessions used `mechanic`).
 checklist for specifics): `tmct viz`'s walk now follows real concept-relation edges (not just
 provenance), a second bundled ask-engine answers Fact/definition questions in the embedded panel,
 the legend auto-picks its split dimension by entropy, and the page ships hub-hide/beam-prune/
-label-mode/search/edge-kind controls plus `--hub-degree`/`--term` CLI flags. `init:xl`/`init:xxl`
-still don't exist in `package.json` — the `hubDegree`/`nodeLimit` defaults were tuned against a
-real ~37,700-fact `seon`+`conceptnet` seed instead.
+label-mode/search/edge-kind controls plus `--hub-degree`/`--term` CLI flags.
 
-`corpus/namenet/` (new, optional top-up — not wired into any init script; `init:xl`/`init:xxl`
-don't exist in `package.json` yet): 7,260 `/r/Synonym` facts from Open English Namenet's reviewed
-species/taxon/occupation linking tables. Standalone via `tmct import --corpus namenet`.
+`npm run init:xl`/`init:xxl` (new, `package.json`): real measured fact counts, `rm -rf tmct.toml
+.tmct && npm run init:<size>` — `init:large` 37,797; `init:xl` (`init:large`'s chain + `--persona-size
+large` + `wordnet-xl`) 72,075 facts, ~8m25s wall-clock, CLI-smoke-tested ("what is a horse" answers
+correctly from `corpus:human`/`human-large`/`wordnet-xl`, ~13min for that one query — see the perf
+note below). `init:xxl` (same base, `wordnet-full` swapped in for `wordnet-xl`, plus `namenet`): real
+total is a FOLLOW-UP measurement — the seed was still running past 70 minutes (dominated by
+`wordnet-full`'s 192,498-row conversion) when this landed; next session should finish that
+`npm run init:xxl` run and record the real count here. `init:xxxl` stays undocumented-as-code per
+`TOO_HARD_AUDIT.md` (bulk ConceptNet download, not reachable from data in hand).
+
+**Perf finding (this batch, not fixed — out of scope)**: corpus seeding AND chat queries are both
+roughly quadratic in total individuals. `syncFactSources`'s per-fact `payload.individuals.find` scan
+and `recomputeFactTrust`'s per-fact `sourcesByIdMap` full-array rebuild (`src/memory/core.mjs`) each
+do an O(total individuals) pass per newly-seeded fact; a single chat query against `init:xl`'s 72,075
+facts took ~13 minutes. This makes `init:xl`/`init:xxl`-scale repos slow to seed AND slow to query —
+worth a real fix (batch the Source/trust reconciliation instead of per-fact) before this corpus tier
+sees real use.
 
 All of `BENCHMARK_CONVERSATION_1.8.14.md`'s routed backlog is fixed and pushed: pronoun-subject
 misparse, the README's "all men are mortal" syllogism demo, taught-fact retraction, teach-vs-graph

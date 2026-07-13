@@ -88,6 +88,8 @@
     "init:persona:human": "node bin/tmct.mjs init --with-persona human",
     "init:persona:empty": "node bin/tmct.mjs init --with-persona empty",
     "init:large": "node bin/tmct.mjs init && node bin/tmct.mjs import --corpus seon && node bin/tmct.mjs import --corpus conceptnet && node bin/tmct.mjs import --corpus aws && node bin/tmct.mjs import --corpus python && node bin/tmct.mjs import --corpus java",
+    "init:xl": "node bin/tmct.mjs init --persona-size large && node bin/tmct.mjs import --corpus seon && node bin/tmct.mjs import --corpus conceptnet && node bin/tmct.mjs import --corpus aws && node bin/tmct.mjs import --corpus python && node bin/tmct.mjs import --corpus java && node bin/tmct.mjs import --corpus wordnet-xl",
+    "init:xxl": "node bin/tmct.mjs init --persona-size large && node bin/tmct.mjs import --corpus seon && node bin/tmct.mjs import --corpus conceptnet && node bin/tmct.mjs import --corpus aws && node bin/tmct.mjs import --corpus python && node bin/tmct.mjs import --corpus java && node bin/tmct.mjs import --corpus wordnet-full && node bin/tmct.mjs import --corpus namenet",
     "memory": "node bin/tmct.mjs memory",
     "syllogise": "node bin/tmct.mjs syllogise",
     "viz": "node bin/tmct.mjs viz",

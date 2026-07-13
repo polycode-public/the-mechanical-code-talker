@@ -17,7 +17,8 @@ import {
   CONFIG_FILE, PROVENANCE_REL, SEED_MARKER_REL, PERSONA_PRESETS,
 } from "../src/init.mjs";
 import { loadTomlConfig, normalizeConfig } from "../src/toml-config.mjs";
-import { loadMemory } from "../src/memory/core.mjs";
+import { loadMemory, openMemoryBackend } from "../src/memory/core.mjs";
+import { resolveExtensions, seedActiveCorpusEntries } from "../src/extensions.mjs";
 
 async function tmp() {
   return mkdtemp(join(tmpdir(), "tmct-init-"));
@@ -579,6 +580,132 @@ test("bin/tmct.mjs REGRESSION: a later `tmct import --corpus <id>` (no --memory-
     const facts = (mem.individuals || []).filter((i) => i.class === "Fact");
     const awsFacts = facts.filter((f) => (f.attributes || []).some((a) => a.key === "provenance" && String(a.value).includes("corpus:tier2-aws")));
     assert.ok(awsFacts.length > 0, "aws facts landed in the ALREADY-configured sqlite backend, not a stale flat-file default");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---- `npm run init:xl` / `npm run init:xxl` (package.json's corpus-scale-up
+// top tiers) — each is a fixed set of BUILTIN_EXTENSIONS bundles, activated in
+// one shot. Driven here via the SAME resolveExtensions/seedActiveCorpusEntries
+// loop `tmct init`/`tmct import` use underneath, not by shelling out to
+// `npm run init:xl` itself (slow, and couples the test to the npm script
+// string rather than the underlying mechanism). The "memory" backend keeps
+// everything in-process (no disk churn between bundles); seeded CONTENT is
+// backend-independent, so the resulting fact count matches a real disk-backed
+// `npm run init:xl`/`init:xxl` run exactly. Real measured totals (2026-07-13,
+// via the actual npm scripts, `git log`-adjacent to this batch): init:xl =
+// 72,075 facts (~8m25s wall-clock, `human` + persona-size large's human-
+// medium/human-large + seon + conceptnet + aws/python/java + wordnet-xl);
+// init:xxl = same base with wordnet-full swapping in for wordnet-xl, plus
+// namenet. ±10% tolerance below — corpora drift slightly as they evolve; an
+// exact pin would bit-rot on the next refresh.
+const INIT_XL_BUNDLES = {
+  "human-medium": { active: true },
+  "human-large": { active: true },
+  seon: { active: true },
+  conceptnet: { active: true },
+  "tier2-aws": { active: true },
+  "tier2-python": { active: true },
+  "tier2-java": { active: true },
+  "wordnet-xl": { active: true },
+};
+
+const INIT_XXL_BUNDLES = {
+  "human-medium": { active: true },
+  "human-large": { active: true },
+  seon: { active: true },
+  conceptnet: { active: true },
+  "tier2-aws": { active: true },
+  "tier2-python": { active: true },
+  "tier2-java": { active: true },
+  "wordnet-full": { active: true },
+  namenet: { active: true },
+};
+
+/** Seed one bundle-set into a fresh scratch dir via the real
+ *  resolveExtensions/seedActiveCorpusEntries loop, in-process (no disk churn
+ *  between bundles), and return the resulting Fact count. `human` rides along
+ *  implicitly — it ships active:true by default, same as a plain `tmct init`. */
+async function seedBundleSet(extensions) {
+  const dir = await tmp();
+  try {
+    const toml = renderTomlConfig({ ...defaultConfig(), extensions });
+    await writeFile(join(dir, "tmct.toml"), toml);
+    const { entries } = await resolveExtensions(dir);
+    const { dir: memHandle } = await openMemoryBackend(dir, "memory");
+    await seedActiveCorpusEntries(memHandle, entries);
+    const mem = await loadMemory(memHandle);
+    return (mem.individuals || []).filter((i) => i.class === "Fact").length;
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
+test("npm run init:xl's exact bundle set seeds within ±10% of the real measured total (72,075 facts, measured via the actual npm script)", async () => {
+  const count = await seedBundleSet(INIT_XL_BUNDLES);
+  const EXPECTED = 72075;
+  assert.ok(
+    count >= EXPECTED * 0.9 && count <= EXPECTED * 1.1,
+    `init:xl's bundle set seeded ${count} facts, expected ~${EXPECTED} (±10%)`,
+  );
+});
+
+// init:xxl's own real, full-scale total (wordnet-full's 192,498-row conversion
+// dominates) is a FOLLOW-UP measurement — a live `npm run init:xxl` run against
+// this same worktree showed corpus seeding is roughly quadratic in total
+// individuals (`syncFactSources`'s per-fact linear scans in
+// src/memory/core.mjs, out of this batch's scope to fix), so a literal
+// full-scale reseed here would cost this suite something on the order of an
+// hour, every `npm test` run, forever — not a proportionate regression guard.
+// This test instead does two REAL, bounded things: (1) confirms every bundle
+// `init:xxl` activates is a recognized, activatable BUILTIN_EXTENSIONS entry
+// (the actual wiring check — instant), and (2) seeds a `limit`-capped slice of
+// wordnet-full plus the full (small, ~7,260-fact) namenet bundle, so the real
+// corpus/map conversion pipeline is exercised end to end for both of
+// `init:xxl`'s NEW bundles over `init:xl`, without paying the full-scale cost.
+// HANDOVER.md's "Version state" carries the real, honestly-measured
+// `init:xxl` total once that follow-up run completes.
+test("npm run init:xxl's bundle set: every named bundle is a recognized, activatable BUILTIN_EXTENSIONS entry", async () => {
+  const dir = await tmp();
+  try {
+    const toml = renderTomlConfig({ ...defaultConfig(), extensions: INIT_XXL_BUNDLES });
+    await writeFile(join(dir, "tmct.toml"), toml);
+    const { entries } = await resolveExtensions(dir);
+    for (const name of Object.keys(INIT_XXL_BUNDLES)) {
+      assert.ok(entries.has(name), `init:xxl names "${name}" but it's not a recognized extension entry`);
+      assert.equal(entries.get(name).active, true, `"${name}" should resolve active given tmct.toml's override`);
+    }
+    assert.ok(entries.has("human") && entries.get("human").active, "human rides along implicitly (shipped active by default)");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("npm run init:xxl's NEW bundles over init:xl (wordnet-full, namenet) really seed real facts via the same seedActiveCorpusEntries mechanism, at a bounded scale", async () => {
+  const dir = await tmp();
+  try {
+    const toml = renderTomlConfig({
+      ...defaultConfig(),
+      extensions: { "wordnet-full": { active: true }, namenet: { active: true } },
+    });
+    await writeFile(join(dir, "tmct.toml"), toml);
+    const { entries } = await resolveExtensions(dir);
+    // A small, deterministic cap on wordnet-full only — namenet (7,260 rows)
+    // stays uncapped, cheap at its real size.
+    entries.get("wordnet-full").limit = 2000;
+    const { dir: memHandle } = await openMemoryBackend(dir, "memory");
+    const { perBundle } = await seedActiveCorpusEntries(memHandle, entries);
+    assert.ok(perBundle["wordnet-full"]?.appended > 0, "the capped wordnet-full slice seeded real facts");
+    assert.ok(perBundle["wordnet-full"].appended <= 2000, "the limit was honoured");
+    assert.ok(perBundle.namenet?.appended > 0, "namenet seeded real facts");
+    // namenet's real, full-scale total (2026-07-13, via `tmct import --corpus
+    // namenet` standalone): 7,260 facts — no dedup overlap expected against an
+    // otherwise-empty dir's wordnet-full slice.
+    assert.ok(
+      perBundle.namenet.appended >= 7260 * 0.9 && perBundle.namenet.appended <= 7260 * 1.1,
+      `namenet seeded ${perBundle.namenet.appended} facts, expected ~7,260 (±10%)`,
+    );
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
