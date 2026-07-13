@@ -1486,10 +1486,15 @@ export async function appendFacts(dir, facts) {
           ...(f.justification && f.justification.length ? [{ prop: "mgx:factJustification", key: "justification", value: f.justification.join(" ") }] : []),
         ],
       };
-      // Upsert into BOTH the array (replace-in-place keeps order) and the index.
-      if (prior) payload.individuals[payload.individuals.indexOf(prior)] = ind;
-      else payload.individuals.push(ind);
-      byId.set(f.id, ind);
+      // Upsert via the shared helper — O(1) via the index (Object.assign in
+      // place when `prior` exists, push+index when it's new), same as every
+      // other upsert path now. Previously this did its own inline
+      // `payload.individuals.indexOf(prior)` array scan on a re-assert within
+      // the same batch — an O(n) fallback that could still blow up a batch
+      // heavy with within-file duplicate triples; upsertIndividual has no
+      // such case left.
+      const stored = upsertIndividual(payload, ind);
+      byId.set(f.id, stored);
       ids.push(f.id);
       if (!seen.has(f.id)) { seen.add(f.id); touched.push(f.id); }
       // Last-prepared-row-wins per id for the trust hook opts (mirrors the
