@@ -347,7 +347,20 @@ test("bin/tmct.mjs: `tmct init --with-persona code` writes the persona, `--with-
 
   const dir = await tmp();
   try {
-    const r = spawnSync(process.execPath, [BIN, "init", "--with-persona", "code"], { encoding: "utf8", cwd: dir });
+    // Pattern 2 (test-perf pass): this assertion is about the CLI boundary +
+    // tmct.toml WRITE (does `--with-persona code` land the right
+    // [bias]/[extensions] text), never about seed CONTENT — but the `code`
+    // persona activates seon+conceptnet, and conceptnet's committed slice is
+    // tens of thousands of lines (src/corpus/conceptnet-map.toml's widened
+    // emit). Left to the default seed:true, this single spawnSync blew past
+    // two minutes. TMCT_NO_SEED=1 skips that seed entirely (initRepo still
+    // scaffolds + writes tmct.toml exactly the same either way — the seed
+    // step is orthogonal to what's asserted below), so this stays a REAL
+    // CLI-process test, just without paying for a full corpus seed it never
+    // checks.
+    const r = spawnSync(process.execPath, [BIN, "init", "--with-persona", "code"], {
+      encoding: "utf8", cwd: dir, env: { ...process.env, TMCT_NO_SEED: "1" },
+    });
     assert.equal(r.status, 0, r.stderr);
     const text = await readFile(join(dir, CONFIG_FILE), "utf8");
     assert.match(text, /\[bias\]/);
@@ -358,6 +371,9 @@ test("bin/tmct.mjs: `tmct init --with-persona code` writes the persona, `--with-
 
   const badDir = await tmp();
   try {
+    // Unknown --with-persona is validated and rejected BEFORE initRepo/seed
+    // ever runs (bin/tmct.mjs), so this spawn was never the slow one — no
+    // TMCT_NO_SEED needed here, nothing gets seeded on this path regardless.
     const r = spawnSync(process.execPath, [BIN, "init", "--with-persona", "bogus"], { encoding: "utf8", cwd: badDir });
     assert.notEqual(r.status, 0);
     assert.match(r.stderr, /unknown --with-persona "bogus"/);
@@ -409,7 +425,12 @@ test("bin/tmct.mjs: `tmct init --memory-backend sqlite` writes [memory] backend 
 
   const dir = await tmp();
   try {
-    const r = spawnSync(process.execPath, [BIN, "init", "--memory-backend", "sqlite"], { encoding: "utf8", cwd: dir });
+    // This test is purely about the tmct.toml [memory] WRITE, not seed
+    // content — TMCT_NO_SEED=1 skips the (small but nonzero) default corpus
+    // seed, same reasoning as the --with-persona code test above.
+    const r = spawnSync(process.execPath, [BIN, "init", "--memory-backend", "sqlite"], {
+      encoding: "utf8", cwd: dir, env: { ...process.env, TMCT_NO_SEED: "1" },
+    });
     assert.equal(r.status, 0, r.stderr);
     assert.match(r.stdout, /memory backend set in tmct\.toml: sqlite/);
     const text = await readFile(join(dir, CONFIG_FILE), "utf8");
@@ -445,7 +466,12 @@ test("bin/tmct.mjs: `tmct import --memory-backend memory` on an already-initiali
 
   const dir = await tmp();
   try {
-    const first = spawnSync(process.execPath, [BIN, "init"], { encoding: "utf8", cwd: dir });
+    // Neither assertion below depends on what got seeded (only on tmct.toml's
+    // [memory]/[corpus] sections surviving the read-merge-rewrite), so the
+    // first call skips the default corpus seed entirely via TMCT_NO_SEED.
+    const first = spawnSync(process.execPath, [BIN, "init"], {
+      encoding: "utf8", cwd: dir, env: { ...process.env, TMCT_NO_SEED: "1" },
+    });
     assert.equal(first.status, 0, first.stderr);
     const second = spawnSync(process.execPath, [BIN, "import", "--memory-backend", "memory"], { encoding: "utf8", cwd: dir });
     assert.equal(second.status, 0, second.stderr);
@@ -515,6 +541,12 @@ test("bin/tmct.mjs REGRESSION: `tmct init --memory-backend sqlite` then a flagle
 
   const dir = await tmp();
   try {
+    // Kept a real seed on purpose (not TMCT_NO_SEED) — the whole point of
+    // this repro is a SECOND real process (the flagless `tmct chat` below)
+    // actually finding "dog" in the seeded sqlite backend, so there has to
+    // be real seeded material to find. Already cheap: the default bundle is
+    // `human` (corpus/tier2/human.jsonl, ~660 facts) since the persona flip,
+    // not the old seon+conceptnet default.
     const init = spawnSync(process.execPath, [BIN, "init", "--memory-backend", "sqlite"], { encoding: "utf8", cwd: dir });
     assert.equal(init.status, 0, init.stderr);
     assert.match(init.stdout, /Seeded \d+ corpus facts/);
@@ -541,6 +573,12 @@ test("bin/tmct.mjs REGRESSION: `tmct init --corpus aws --memory-backend sqlite` 
 
   const dir = await tmp();
   try {
+    // Kept a real seed on purpose (not TMCT_NO_SEED) — this test's own
+    // assertions are ABOUT seed content (fact counts, aws provenance tags
+    // landing in sqlite). Not shrunk further: since the persona flip, the
+    // default bundle here is `human` (corpus/tier2/human.jsonl, ~660 facts)
+    // plus aws (corpus/tier2/aws.jsonl, ~39 facts) — already small, unlike
+    // the seon+conceptnet band the --with-persona code test above avoids.
     const r = spawnSync(process.execPath, [BIN, "init", "--corpus", "aws", "--memory-backend", "sqlite"], { encoding: "utf8", cwd: dir });
     assert.equal(r.status, 0, r.stderr);
     assert.match(r.stdout, /Seeded \d+ corpus facts/);
@@ -567,7 +605,13 @@ test("bin/tmct.mjs REGRESSION: a later `tmct import --corpus <id>` (no --memory-
 
   const dir = await tmp();
   try {
-    const init = spawnSync(process.execPath, [BIN, "init", "--memory-backend", "sqlite"], { encoding: "utf8", cwd: dir });
+    // The init call's own seed content is never checked below (only status),
+    // so it skips the default corpus seed via TMCT_NO_SEED. The `import
+    // --corpus aws` call keeps a real seed — its aws-provenance assertion
+    // below is exactly what this regression is about.
+    const init = spawnSync(process.execPath, [BIN, "init", "--memory-backend", "sqlite"], {
+      encoding: "utf8", cwd: dir, env: { ...process.env, TMCT_NO_SEED: "1" },
+    });
     assert.equal(init.status, 0, init.stderr);
     const imp = spawnSync(process.execPath, [BIN, "import", "--corpus", "aws"], { encoding: "utf8", cwd: dir });
     assert.equal(imp.status, 0, imp.stderr);
