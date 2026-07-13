@@ -364,3 +364,42 @@ test("renderVizHtml: the Controls port (hub-hide, beam-prune, label mode, search
   assert.ok(html.includes('"primary":"predicate"'), "the real legend payload is embedded, not a placeholder");
   assert.ok(html.includes('"hubDegree":40'));
 });
+
+test("renderVizHtml: the ask panel spans almost the full page height, the legend is pinned bottom-left (not floating/centred), and a reset-view control exists", () => {
+  const html = renderVizHtml(SAMPLE_GRAPH);
+
+  // #ask: full-height right rail — both top AND bottom set (not just bottom),
+  // so it stretches instead of sitting as a short box in the corner.
+  const askCss = html.match(/#ask \{[^}]*\}/)[0];
+  assert.match(askCss, /top:\s*12px/);
+  assert.match(askCss, /bottom:\s*12px/);
+  assert.match(askCss, /display:\s*flex/);
+  assert.match(askCss, /flex-direction:\s*column/);
+  // #askresult grows to fill the remaining height rather than being capped
+  // to a fraction of the viewport.
+  const askResultCss = html.match(/#askresult \{[^}]*\}/)[0];
+  assert.match(askResultCss, /flex:\s*1/);
+  assert.doesNotMatch(askResultCss, /max-height/);
+
+  // #legend: bottom-left, not the old top-centre floating position.
+  const legendCss = html.match(/#legend \{[^}]*\}/)[0];
+  assert.match(legendCss, /bottom:\s*12px/);
+  assert.match(legendCss, /left:\s*12px/);
+  assert.doesNotMatch(legendCss, /transform:\s*translateX/);
+
+  // #panel (node detail) is shifted clear of the now-full-height ask rail,
+  // not still overlapping it at the same top-right corner.
+  const panelCss = html.match(/#panel \{[^}]*\}/)[0];
+  assert.match(panelCss, /right:\s*404px/);
+
+  // A reset-view control exists and is wired (pointer-events re-enabled
+  // inside the otherwise click-through #hud box).
+  assert.match(html, /id="resetview"/);
+  assert.match(html, /getElementById\("resetview"\)\.addEventListener\("click"/);
+
+  // The multi-node query-result highlight machinery is present: a distinct
+  // ring style for highlightIds, and the frame/fit functions that populate it.
+  assert.match(html, /highlightIds/);
+  assert.match(html, /function frameQueryResult/);
+  assert.match(html, /function fitToIds/);
+});

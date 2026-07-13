@@ -207,9 +207,11 @@ export function renderVizHtml({ nodes, edges, focus, payload, askBundle, memoryA
   #wrap { position: relative; width: 100vw; height: 100vh; overflow: hidden; }
   canvas { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
   canvas.grabbing { cursor: grabbing; }
-  #hud { position: absolute; top: 12px; left: 12px; max-width: 42ch; background: rgba(20,22,30,0.82); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; padding: 10px 12px; font-size: 12.5px; line-height: 1.45; pointer-events: none; }
+  #hud { position: absolute; top: 12px; left: 12px; max-width: 34ch; background: rgba(20,22,30,0.82); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; padding: 10px 12px; font-size: 12.5px; line-height: 1.45; pointer-events: none; }
   #hud b { color: #fff; }
-  #hud .muted { color: #9aa1b0; }
+  #hud .muted { color: #9aa1b0; display: block; margin: 4px 0 8px; }
+  #hud button { pointer-events: auto; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.2); color: #e7e9ee; border-radius: 5px; padding: 3px 9px; font-size: 12px; cursor: pointer; }
+  #hud button:hover { background: rgba(255,255,255,0.18); }
   #controls { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; align-items: center; background: rgba(20,22,30,0.88); border: 1px solid rgba(255,255,255,0.14); border-radius: 8px; padding: 7px 12px; font-size: 12.5px; flex-wrap: wrap; max-width: min(86vw, 900px); }
   #controls .grp { display: flex; align-items: center; gap: 5px; }
   #controls button { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.2); color: #e7e9ee; border-radius: 5px; width: 22px; height: 22px; line-height: 1; cursor: pointer; font-size: 13px; }
@@ -223,14 +225,14 @@ export function renderVizHtml({ nodes, edges, focus, payload, askBundle, memoryA
   #controls input[type="number"] { width: 3.6em; }
   #controls input[type="text"].search { width: 9em; }
   #controls .sep { width: 1px; align-self: stretch; background: rgba(255,255,255,0.14); margin: 0 2px; }
-  #legend { position: absolute; top: 58px; left: 50%; transform: translateX(-50%); display: none; flex-wrap: wrap; gap: 6px; align-items: center; background: rgba(20,22,30,0.88); border: 1px solid rgba(255,255,255,0.14); border-radius: 8px; padding: 6px 10px; font-size: 11.5px; max-width: min(86vw, 900px); }
+  #legend { position: absolute; bottom: 12px; left: 12px; display: none; flex-wrap: wrap; gap: 6px; align-items: center; background: rgba(20,22,30,0.88); border: 1px solid rgba(255,255,255,0.14); border-radius: 8px; padding: 6px 10px; font-size: 11.5px; max-width: min(60vw, 640px); }
   #legend.show { display: flex; }
   #legend select { background: #14161e; color: #e7e9ee; border: 1px solid #2a2e42; border-radius: 5px; padding: 1px 4px; font: inherit; font-size: 11px; }
   #legend .chip { display: flex; align-items: center; gap: 4px; cursor: pointer; padding: 2px 6px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.16); }
   #legend .chip.off { opacity: 0.4; }
   #legend .chip .swatch { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
   #legend .chip .n { color: #9aa1b0; }
-  #panel { position: absolute; top: 12px; right: 12px; width: 280px; max-width: calc(100vw - 24px); background: rgba(20,22,30,0.92); border: 1px solid rgba(255,255,255,0.14); border-radius: 8px; padding: 12px 14px; font-size: 13px; line-height: 1.5; display: none; }
+  #panel { position: absolute; top: 12px; right: 404px; width: 280px; max-width: calc(100vw - 428px); background: rgba(20,22,30,0.92); border: 1px solid rgba(255,255,255,0.14); border-radius: 8px; padding: 12px 14px; font-size: 13px; line-height: 1.5; display: none; }
   #panel.show { display: block; }
   #panel h2 { margin: 0 0 6px; font-size: 14px; word-break: break-word; }
   #panel dl { margin: 8px 0 0; }
@@ -245,26 +247,26 @@ export function renderVizHtml({ nodes, edges, focus, payload, askBundle, memoryA
   #empty.show { display: flex; }
   #empty div { max-width: 46ch; color: #9aa1b0; }
   #empty b { color: #e7e9ee; }
-  #ask { position: absolute; bottom: 12px; right: 12px; width: 340px; max-width: calc(100vw - 24px); background: rgba(20,22,30,0.92); border: 1px solid rgba(255,255,255,0.14); border-radius: 8px; padding: 10px 12px; font-size: 12.5px; }
-  #ask h3 { margin: 0 0 6px; font-size: 12.5px; color: #9aa1b0; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
-  #ask .row { display: flex; gap: 6px; }
+  #ask { position: absolute; top: 12px; bottom: 12px; right: 12px; width: 380px; max-width: calc(100vw - 24px); background: rgba(20,22,30,0.92); border: 1px solid rgba(255,255,255,0.14); border-radius: 8px; padding: 10px 12px; font-size: 12.5px; display: flex; flex-direction: column; }
+  #ask h3 { margin: 0 0 6px; font-size: 12.5px; color: #9aa1b0; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; flex: 0 0 auto; }
+  #ask .row { display: flex; gap: 6px; flex: 0 0 auto; }
   #askq { flex: 1; min-width: 0; background: #14161e; color: #e7e9ee; border: 1px solid #2a2e42; border-radius: 5px; padding: 6px 9px; font: inherit; font-size: 12.5px; }
   #askq:focus { outline: none; border-color: #7aa2f7; }
   #askq:disabled { opacity: 0.6; }
   #asksubmit { background: rgba(122,162,247,0.18); border: 1px solid #7aa2f7; color: #cfe0ff; border-radius: 5px; padding: 6px 12px; font-size: 12.5px; cursor: pointer; }
   #asksubmit:hover { background: rgba(122,162,247,0.3); }
-  #askresult { margin-top: 8px; max-height: 32vh; overflow: auto; line-height: 1.55; color: #c0caf5; white-space: pre-wrap; }
+  #askresult { margin-top: 8px; flex: 1 1 auto; min-height: 0; overflow: auto; line-height: 1.55; color: #c0caf5; white-space: pre-wrap; }
   #askresult .q { color: #565f89; font-style: normal; margin-bottom: 3px; }
   #askresult.miss { color: #a9b1d6; font-style: italic; }
   #askresult .canon { margin-top: 6px; color: #6b7189; font-size: 11px; font-style: normal; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 5px; }
   #askresult .src { margin-top: 4px; color: #565f89; font-size: 10.5px; }
-  #ask .hint { color: #6b7189; font-size: 11px; }
+  #ask .hint { color: #6b7189; font-size: 11px; flex: 0 0 auto; }
 </style>
 </head>
 <body>
 <div id="wrap">
   <canvas id="c"></canvas>
-  <div id="hud"><b>tmct viz</b><br><span class="muted">drag to pan &middot; scroll to zoom &middot; click a node for details &middot; double-click to re-centre</span></div>
+  <div id="hud"><b>tmct viz</b><span class="muted">drag to pan &middot; scroll to zoom &middot; click a node for details &middot; double-click to re-centre</span><button id="resetview" title="reset pan/zoom to fit the current view">reset view</button></div>
   <div id="controls">
     <span class="grp"><span class="muted">depth</span><button id="depthdown" title="shallower">&minus;</button><b class="depthval" id="depthval"></b><button id="depthup" title="deeper">+</button></span>
     <span class="grp" id="typefilters"></span>
@@ -579,6 +581,10 @@ ${hasMemChat ? `<script>\n${memoryAskBundle}\n</script>` : ""}
   var dpr = window.devicePixelRatio || 1;
   var view = { scale: 1, x: 0, y: 0 };
   var selectedId = null;
+  // The full set of node ids a query answer actually resolved to (not just
+  // the single "primary" selectedId) — draw() rings every one of them so a
+  // multi-fact answer shows ALL the nodes it came from, not just one.
+  var highlightIds = new Set();
 
   function resize() {
     canvas.width = Math.floor(canvas.clientWidth * dpr);
@@ -667,6 +673,14 @@ ${hasMemChat ? `<script>\n${memoryAskBundle}\n</script>` : ""}
         ctx.lineWidth = Math.max(1.5, 2 * dpr); ctx.strokeStyle = "#e0af68";
         ctx.beginPath(); ctx.arc(sp.x, sp.y, Math.max(1.5, r) + 5 * dpr, 0, Math.PI * 2); ctx.stroke();
       }
+      // Every node the last "ask the graph" answer actually resolved to
+      // (frameQueryResult below) — a distinct green ring so a multi-fact
+      // answer's whole result set reads as one highlighted group, not just
+      // the single primary node selectedId/focus already mark.
+      if (highlightIds.has(n.id) && n.id !== selectedId) {
+        ctx.lineWidth = Math.max(1.5, 2 * dpr); ctx.strokeStyle = "#9ece6a";
+        ctx.beginPath(); ctx.arc(sp.x, sp.y, Math.max(1.5, r) + 4 * dpr, 0, Math.PI * 2); ctx.stroke();
+      }
       var showLabel = view.scale > 0.55 && labelMode !== "none" && (
         labelMode !== "smart"
         || n.id === selectedId || n.id === GRAPH.focus || n.id === hoverId
@@ -710,15 +724,28 @@ ${hasMemChat ? `<script>\n${memoryAskBundle}\n</script>` : ""}
     draw();
   }, { passive: false });
 
-  function fitToVisible() {
-    var vis = Array.from(visibleNodeIds()).map(function (id) { return pos.get(id); }).filter(Boolean);
-    if (!vis.length) return;
-    var minX = Math.min.apply(null, vis.map(function (p) { return p.x; })), maxX = Math.max.apply(null, vis.map(function (p) { return p.x; }));
-    var minY = Math.min.apply(null, vis.map(function (p) { return p.y; })), maxY = Math.max.apply(null, vis.map(function (p) { return p.y; }));
+  // Shared bounding-box fit — pan/zoom so every position in "points" is framed
+  // with padding. fitToVisible/fitToIds are both thin wrappers naming WHICH
+  // positions to fit; the math itself lives here once.
+  function fitToPositions(points) {
+    if (!points.length) return;
+    var minX = Math.min.apply(null, points.map(function (p) { return p.x; })), maxX = Math.max.apply(null, points.map(function (p) { return p.x; }));
+    var minY = Math.min.apply(null, points.map(function (p) { return p.y; })), maxY = Math.max.apply(null, points.map(function (p) { return p.y; }));
     var w = Math.max(1, maxX - minX), h = Math.max(1, maxY - minY);
     view.scale = Math.min(4, Math.max(0.1, Math.min(canvas.width / dpr / (w + 160), canvas.height / dpr / (h + 160))));
     view.x = -(minX + maxX) / 2 * view.scale; view.y = -(minY + maxY) / 2 * view.scale;
   }
+  function fitToVisible() {
+    fitToPositions(Array.from(visibleNodeIds()).map(function (id) { return pos.get(id); }).filter(Boolean));
+  }
+  // Fit specifically to a query answer's own result set (not just "whatever
+  // recentre's re-walk happened to make visible") — a multi-fact answer's
+  // nodes can be spread wider than the default depth/nodeLimit view, so this
+  // is the precision framing step frameQueryResult calls after recentre.
+  function fitToIds(ids) {
+    fitToPositions(ids.map(function (id) { return pos.get(id); }).filter(Boolean));
+  }
+  document.getElementById("resetview").addEventListener("click", function () { fitToVisible(); draw(); });
 
   // ---- recentre: RE-WALK the FULL graph (via TERM_GRAPH — Bug 2's augmented
   // view, so a recentre reaches real concept-relation edges the same way
@@ -748,6 +775,24 @@ ${hasMemChat ? `<script>\n${memoryAskBundle}\n</script>` : ""}
     legendEnabled = null; // re-derive "all on" for the new node set's own buckets
     renderLegend();
     fitToVisible();
+    return true;
+  }
+
+  // Focus the graph on a QUERY ANSWER's own result set — every node it
+  // actually resolved to, not just one. Re-walks from the first valid id
+  // (recentre's existing mechanism, which already reaches most/all closely
+  // related result nodes), then fitToIds() precisely frames the full
+  // requested set — any id recentre's walk didn't reach simply has no
+  // position and drops out of the fit, an honest degrade, never a guess.
+  // Sets highlightIds so draw() rings every result node, not just the
+  // primary one selectedId/GRAPH.focus already mark.
+  function frameQueryResult(ids) {
+    var real = (ids || []).filter(function (id) { return walkGraph().byId.has(id); });
+    if (!real.length) return false;
+    if (!recentre(real[0])) return false;
+    fitToIds(real);
+    highlightIds = new Set(real);
+    selectedId = real[0];
     return true;
   }
   document.getElementById("edgekind").addEventListener("change", function (ev) {
@@ -866,22 +911,38 @@ ${hasMemChat ? `<script>\n${memoryAskBundle}\n</script>` : ""}
   var memHandle = hasMemEngine ? tmctMemoryAsk.createInMemoryStore() : null;
   if (memHandle) memHandle.payload = PAYLOAD;
 
-  // Light, best-effort focus-follow for a memory-engine hit: factAnswer
-  // returns rendered TEXT, not a resolved entity id (unlike ask.mjs's
-  // envelope/matches) — strip a leading question-word crust and try the
-  // remainder as a term id. An honest "don't recentre" on no match, never a
-  // wrong guess.
-  function guessTermIdFromQuery(query) {
-    if (!hasEngine || !hasMemEngine) return null;
+  // Best-effort focus-follow for a memory-engine hit: factAnswer returns
+  // rendered TEXT, not a list of resolved entity ids (unlike ask.mjs's
+  // envelope/matches). Two passes, both real-graph-checked, never a guessed
+  // id that doesn't exist:
+  //  1. every term node whose label appears in the ANSWER text — this is
+  //     "the nodes that come back," e.g. "dog is a kind of animal" surfaces
+  //     BOTH term:dog and term:animal, not just the one the question asked
+  //     about, so a multi-fact answer highlights its whole result set.
+  //  2. if that finds nothing (e.g. a phrasing that doesn't echo a bare term
+  //     label), fall back to stripping the QUESTION's own crust and trying
+  //     the remainder as a single term id — the previous behaviour, kept as
+  //     a fallback rather than replaced.
+  function findAnsweredTermIds(query, answerText) {
+    if (!hasEngine || !hasMemEngine) return [];
+    var hay = " " + String(answerText).toLowerCase() + " ";
+    var found = [];
+    walkGraph().byId.forEach(function (ind, id) {
+      if (id.indexOf("term:") !== 0) return;
+      var label = String(ind.label || "").toLowerCase();
+      if (label.length < 3) return; // skip too-short/noisy labels (dedupe/precision, not a real cap)
+      if (hay.indexOf(" " + label) !== -1 || hay.indexOf(label + " ") !== -1) found.push(id);
+    });
+    if (found.length) return found;
     var stripped = String(query).toLowerCase()
       .replace(/^(what|where|who|which|does|do|is|are)\b/, "")
       .replace(/\b(is|are|used for|do|does|mean|means|a|an|the)\b/g, " ")
       .replace(/[?.!]+$/, "")
       .replace(/\s+/g, " ")
       .trim();
-    if (!stripped) return null;
+    if (!stripped) return [];
     var id = "term:" + tmctMemoryAsk.normFactTerm(stripped);
-    return walkGraph().byId.has(id) ? id : null;
+    return walkGraph().byId.has(id) ? [id] : [];
   }
 
   function runAsk(query) {
@@ -893,8 +954,7 @@ ${hasMemChat ? `<script>\n${memoryAskBundle}\n</script>` : ""}
         if (fact && fact.text) {
           askOut.innerHTML = '<div class="q">&quot;' + esc(query) + '&quot;</div>' + esc(fact.text)
             + '<div class="src">answered from the full embedded memory graph (not just what\\'s currently drawn)</div>';
-          var termId = guessTermIdFromQuery(query);
-          if (termId && recentre(termId)) selectedId = termId;
+          frameQueryResult(findAnsweredTermIds(query, fact.text));
           draw();
           return;
         }
@@ -911,13 +971,13 @@ ${hasMemChat ? `<script>\n${memoryAskBundle}\n</script>` : ""}
         ? '<div class="canon">read as: ' + esc(envelope.canonical.english) + "</div>"
         : "";
       askOut.innerHTML = '<div class="q">&quot;' + esc(query) + '&quot;</div>' + esc(t.content) + canon;
-      // Focus-follows-answer: prefer the resolved objMatch (the term the
-      // question was actually ABOUT), else the first real match — either way,
-      // only if it's a genuine individual in the graph, never a guess.
-      var targetId = (envelope.parsed && envelope.parsed.object && (envelope.matches || [])[0] && envelope.matches[0].id)
-        || (envelope.matches && envelope.matches[0] && envelope.matches[0].id)
-        || null;
-      if (targetId && recentre(targetId)) { selectedId = targetId; }
+      // Focus-follows-answer: frame EVERY real match this answer resolved to
+      // (envelope.matches is already the full candidate list ask.mjs itself
+      // ranked — previously only matches[0] recentred, silently dropping the
+      // rest of a multi-match answer's own result set), never a guess beyond
+      // what the engine itself actually returned.
+      var targetIds = (envelope.matches || []).map(function (m) { return m.id; }).filter(Boolean);
+      frameQueryResult(targetIds);
       draw();
     })();
   }
