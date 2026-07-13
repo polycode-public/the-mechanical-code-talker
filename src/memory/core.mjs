@@ -762,8 +762,56 @@ async function persistMemory(dir, payload) {
  *  reached). `await fn(payload)` is a documented no-op for every existing
  *  SYNC caller (appendUtterance(s), appendFacts) — awaiting a non-Promise
  *  value just resolves to it, byte-identical behaviour to calling it plain. */
+// ---- mutateMemory-scoped lookup index (PLAN_GRAPH_SCAN.md Phase 1) ----------
+// syncFactSources's per-fact bookkeeping (upsertSource, upsertIndividual,
+// upsertEdge's statedBy path, statedByObjectsFor, sourcesByIdMap) used to each
+// re-scan payload.individuals or the statedBy edge list from scratch, turning
+// one appendFacts batch of n facts into O(n^2) work. mutateMemory now builds
+// three lookup Maps once per call (one O(n) pass) and attaches them to payload
+// under a Symbol key — JSON.stringify skips Symbol-keyed properties
+// automatically, so persistMemory's graph.json write is byte-identical to
+// before. Every helper below checks for the Symbol slot: present → O(1) Map
+// lookup; absent (a bare payload object built outside mutateMemory, e.g. a
+// test fixture) → today's exact linear-scan fallback, so nothing outside
+// mutateMemory's own call chain can observe a behaviour change. The index is
+// discarded when mutateMemory returns — it never survives across calls, so
+// there is no invalidation logic to get wrong.
+const MEMORY_INDEX = Symbol("mutateMemory lookup index");
+
+/** Build the three lookup Maps from the just-loaded payload and attach them
+ *  under MEMORY_INDEX. Any code that pushes a new individual into
+ *  payload.individuals, or a new statedBy edge, must also write the matching
+ *  index entry in that same statement (see upsertIndividual/upsertSource/
+ *  upsertEdge/appendFacts below) — the same discipline appendFacts's own
+ *  local `byId` Map already used for the Fact upsert, generalised here. */
+function buildMemoryIndex(payload) {
+  const individualsById = new Map();
+  const sourcesById = new Map();
+  const statedByBySubject = new Map();
+  for (const ind of payload.individuals || []) {
+    if (!ind?.id) continue;
+    individualsById.set(ind.id, ind);
+    if (ind.class === SOURCE_CLASS) sourcesById.set(ind.id, ind);
+  }
+  const statedGroup = (payload.objectProperties || []).find((g) => g?.prop === STATED_BY_PROP);
+  for (const e of statedGroup?.examples || []) {
+    if (!e?.subject) continue;
+    const list = statedByBySubject.get(e.subject);
+    if (list) list.push(e.object);
+    else statedByBySubject.set(e.subject, [e.object]);
+  }
+  payload[MEMORY_INDEX] = { individualsById, sourcesById, statedByBySubject };
+  return payload[MEMORY_INDEX];
+}
+
+/** The active lookup index for this payload, or null when this payload wasn't
+ *  built by mutateMemory (a bare test fixture) — callers fall back to a
+ *  linear scan in that case. */
+const memoryIndexOf = (payload) => payload?.[MEMORY_INDEX] || null;
+
 async function mutateMemory(dir, fn) {
   const payload = await loadMemory(dir);
+  buildMemoryIndex(payload);
   const out = (await fn(payload)) ?? payload;
   migrateLegacyProvenance(out);
   recomputeSourceReliability(out);
@@ -827,9 +875,10 @@ const sourceLabel = (id) => String(id).replace(/^src:/, "");
 function upsertSource(payload, desc, createdAtCandidate) {
   const info = sourceIdFor(desc);
   if (!info) return null;
-  const prior = payload.individuals.find((i) => i?.id === info.id);
+  const idx = memoryIndexOf(payload);
+  const prior = idx ? idx.individualsById.get(info.id) : payload.individuals.find((i) => i?.id === info.id);
   const created = firstWriteCreatedAt(prior, desc?.createdAt || createdAtCandidate);
-  upsertIndividual(payload, {
+  const ind = {
     id: info.id, label: sourceLabel(info.id), class: SOURCE_CLASS,
     derived_from: [], mentions: [],
     attributes: [
@@ -839,7 +888,9 @@ function upsertSource(payload, desc, createdAtCandidate) {
       ...(info.url ? [{ prop: "mgx:sourceUrl", key: "sourceUrl", value: info.url }] : []),
       ...(info.rule ? [{ prop: "mgx:sourceRule", key: "sourceRule", value: info.rule }] : []),
     ],
-  });
+  };
+  const stored = upsertIndividual(payload, ind);
+  if (idx) idx.sourcesById.set(info.id, stored);
   return info.id;
 }
 
@@ -906,13 +957,23 @@ export function provenanceTagToSource(tag) {
 /** Map a payload's Source individuals into the { id: Source } shape computeTrust
  *  resolves against. */
 function sourcesByIdMap(payload) {
+  const idx = memoryIndexOf(payload);
   const m = {};
+  if (idx) {
+    // idx.sourcesById is kept incrementally correct by upsertSource, so this
+    // is O(distinct Sources) — a handful, roughly one per corpus/provider —
+    // never O(all individuals), unlike the fallback rebuild below.
+    for (const [id, ind] of idx.sourcesById) m[id] = ind;
+    return m;
+  }
   for (const i of payload.individuals) if (i?.class === SOURCE_CLASS) m[i.id] = i;
   return m;
 }
 
 /** The Source ids a Fact is statedBy, read off the edge group. */
 function statedByObjectsFor(payload, factId) {
+  const idx = memoryIndexOf(payload);
+  if (idx) return (idx.statedByBySubject.get(factId) || []).slice();
   const g = payload.objectProperties.find((x) => x?.prop === STATED_BY_PROP);
   return (g?.examples || []).filter((e) => e?.subject === factId).map((e) => e.object);
 }
@@ -1039,8 +1100,9 @@ function recomputeSourceReliability(payload) {
   }
   if (!bySource.size) return;
 
+  const idx = memoryIndexOf(payload);
   for (const [sid, counts] of bySource) {
-    const source = payload.individuals.find((i) => i?.id === sid);
+    const source = idx ? idx.individualsById.get(sid) : payload.individuals.find((i) => i?.id === sid);
     if (!source) continue;
     setAttr(source, SOURCE_RELIABILITY_PROP, "sourceReliability", String(sessionReliabilityFrom(counts)));
     // Own-attribute mutation in place (PLAN_VIZ.md §2) — same reasoning as recomputeFactTrust.
@@ -1053,16 +1115,38 @@ function recomputeSourceReliability(payload) {
   const affected = new Set();
   for (const e of statedGroup?.examples || []) if (bySource.has(e?.object)) affected.add(e.subject);
   for (const id of affected) {
-    const ind = payload.individuals.find((i) => i?.id === id);
+    const ind = idx ? idx.individualsById.get(id) : payload.individuals.find((i) => i?.id === id);
     if (ind) recomputeFactTrust(payload, ind);
   }
 }
 
-/** Upsert an individual by id (replace-in-place keeps ordering stable). */
+/** Upsert an individual by id (replace-in-place keeps ordering stable).
+ *  Returns the individual object actually stored in payload.individuals — the
+ *  caller (e.g. upsertSource) should index THAT reference, not `ind` itself,
+ *  since the indexed path below merges into the prior object in place rather
+ *  than replacing the array slot. When a lookup index is present (built by
+ *  mutateMemory), an existing individual is updated via Object.assign — same
+ *  array position AND same object identity as before, so it stays trivially
+ *  in sync with individualsById without a second Map write, and a brand-new
+ *  individual is pushed + indexed in the same statement. Absent an index
+ *  (a bare payload built outside mutateMemory), this is EXACTLY the original
+ *  findIndex + replace-or-push code. */
 function upsertIndividual(payload, ind) {
+  const idx = memoryIndexOf(payload);
+  if (idx) {
+    const prior = idx.individualsById.get(ind.id);
+    if (prior) {
+      Object.assign(prior, ind);
+      return prior;
+    }
+    payload.individuals.push(ind);
+    idx.individualsById.set(ind.id, ind);
+    return ind;
+  }
   const i = payload.individuals.findIndex((x) => x?.id === ind.id);
-  if (i >= 0) payload.individuals[i] = ind;
-  else payload.individuals.push(ind);
+  if (i >= 0) { payload.individuals[i] = ind; return ind; }
+  payload.individuals.push(ind);
+  return ind;
 }
 
 /** Upsert one edge into the named relation group (dedupe by subject>object). Stamps `createdAt`
@@ -1076,6 +1160,27 @@ function upsertEdge(payload, { predicate, prop }, edge) {
     group = { predicate, prop, count: 0, examples: [] };
     payload.objectProperties.push(group);
   }
+  // statedBy-only fast path (PLAN_GRAPH_SCAN.md Phase 1): statedByBySubject
+  // tracks, per fact, the small list of Source ids already stated it (almost
+  // always 0-1 during a seed), so the overwhelmingly common case — a brand
+  // new (subject,object) statedBy pair — can append directly without the
+  // find+filter scan of the WHOLE statedBy edge list below. Every other
+  // predicate (saidInSession, inReplyTo, ...) is untouched and always takes
+  // the original path.
+  const idx = prop === STATED_BY_PROP ? memoryIndexOf(payload) : null;
+  if (idx) {
+    const existing = idx.statedByBySubject.get(edge.subject);
+    if (!existing || !existing.includes(edge.object)) {
+      group.examples.push({ ...edge, createdAt: edge.createdAt || nowIso() });
+      group.count = group.examples.length;
+      if (existing) existing.push(edge.object);
+      else idx.statedByBySubject.set(edge.subject, [edge.object]);
+      return;
+    }
+    // Rare re-assert of the exact same (subject,object) pair — fall through
+    // to the exact original find+filter dance so first-write-wins createdAt
+    // is preserved; the index is kept accurate below too.
+  }
   // Edges are flat ({subject, object, ...}), not attribute-bearing individuals, so this can't
   // reuse firstWriteCreatedAt (which reads `.attributes`) directly — same discipline, edge shape:
   // the prior edge's OWN createdAt wins if it has one, else the incoming candidate, else now.
@@ -1086,6 +1191,11 @@ function upsertEdge(payload, { predicate, prop }, edge) {
   );
   group.examples.push({ ...edge, createdAt });
   group.count = group.examples.length;
+  if (idx) {
+    const list = idx.statedByBySubject.get(edge.subject) || [];
+    if (!list.includes(edge.object)) list.push(edge.object);
+    idx.statedByBySubject.set(edge.subject, list);
+  }
 }
 
 /** Recount `classes[]` from the individuals — every memory class stays counted
@@ -1341,7 +1451,13 @@ export async function appendFacts(dir, facts) {
   if (!prepared.length) return { ids, appended: 0, skipped };
   await mutateMemory(dir, (payload) => {
     // id → individual index for O(1) upsert (the array grows to thousands).
-    const byId = new Map(payload.individuals.map((i) => [i?.id, i]));
+    // When mutateMemory already built the Symbol-keyed lookup index, reuse
+    // THAT Map directly (same object) instead of rescanning payload.individuals
+    // a second time — every `byId.set` below then also keeps
+    // idx.individualsById correct for upsertSource/recomputeSourceReliability's
+    // later lookups in this same mutation, with no extra write.
+    const idx = memoryIndexOf(payload);
+    const byId = idx ? idx.individualsById : new Map(payload.individuals.map((i) => [i?.id, i]));
     const touched = [];
     const seen = new Set();
     const trustOptsById = new Map();
