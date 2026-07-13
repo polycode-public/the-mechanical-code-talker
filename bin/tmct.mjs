@@ -87,10 +87,18 @@ Usage:
        [--config <path>]      bounded, low-trust, retractable entailed facts (never on the chat path)
   tmct viz [--repo <abs>]      write one self-contained, navigable HTML file rendering the
        [--focus <id>]         memory graph: pan/zoom, click a node for its label/class/
-       [--depth <n>]          timestamps. Seeds from the most recently created individual
-       [--limit <n>]          by default; --output defaults to graph.html in the cwd.
-       [--output <path>]      --depth = max arcs (hops) from the focus node (default 3);
-       [--config <path>]      --limit = spiral length, total nodes walked (default 12).
+       [--term <word>]        timestamps. Seeds from the most recently created individual
+       [--depth <n>]          by default (--focus <id> or --term <word> override it);
+       [--limit <n>]          --output defaults to graph.html in the cwd.
+       [--hub-degree <n>]     --depth = max arcs (hops) from the focus node (default 3);
+       [--edge-kind <mode>]   --limit = spiral length, total nodes walked (default 300);
+       [--output <path>]      --hub-degree = stop expanding THROUGH a node above N
+       [--config <path>]      connections, still shows it (default 40); --edge-kind =
+                               meta|relation|both (default both) — which edge kinds the
+                               walk follows (provenance-only, concept-relations-only, or
+                               both — see the page's own edge-kind toggle to change this
+                               live); --term <word> resolves to the Fact(s) whose subject/
+                               object normalizes to that word and seeds from there.
   tmct serve [--repo <abs>]    run the Anthropic Messages API-compatible endpoint
        [--host <h>] [--port <n>]  (POST /v1/messages) over the graph — a deterministic,
        [--graph <path>]        no-LLM "model" a tool-loop client can call; $0 usage.
@@ -981,7 +989,7 @@ async function main() {
     // resolveRuntimeConfig: --repo > git root > cwd.
     const rest = process.argv.slice(3);
     const { strFlag, resolveRuntimeConfig } = await import("../src/cli-args.mjs");
-    const { computeVizGraph, renderVizHtml, readAskBundle } = await import("../src/viz.mjs");
+    const { computeVizGraph, renderVizHtml, readAskBundle, readMemoryAskBundle } = await import("../src/viz.mjs");
     const { writeFile } = await import("node:fs/promises");
     const { resolve } = await import("node:path");
     const numFlag = (name) => {
@@ -990,26 +998,36 @@ async function main() {
       return Number.isFinite(v) ? v : undefined;
     };
     const focus = strFlag(rest, ["--focus"]);
+    const term = strFlag(rest, ["--term"]); // PLAN_VIZ_MEMORY.md: seed via normFactTerm-matched Fact(s), alongside --focus
     const depth = numFlag("--depth"); // max arcs (hops) from the focus node
     const nodeLimit = numFlag("--limit"); // spiral length: total nodes walked
+    const hubDegree = numFlag("--hub-degree"); // stop expanding THROUGH a node above N connections
+    const edgeKindModeRaw = strFlag(rest, ["--edge-kind"]);
+    const edgeKindMode = ["meta", "relation", "both"].includes(edgeKindModeRaw) ? edgeKindModeRaw : undefined;
     const outPath = resolve(process.cwd(), strFlag(rest, ["--output", "--out"], "graph.html"));
     const { repo } = await resolveRuntimeConfig({ argv: rest });
     const vizGraph = await computeVizGraph(repo, {
       ...(focus ? { focus } : {}),
+      ...(!focus && term ? { term } : {}), // --focus takes precedence when both are given
       ...(depth != null ? { depth } : {}),
       ...(nodeLimit != null ? { nodeLimit } : {}),
+      ...(hubDegree != null ? { hubDegree } : {}),
+      ...(edgeKindMode ? { edgeKindMode } : {}),
     });
-    // The embedded "Ask the graph" chat panel — the real ask.mjs engine,
-    // bundled for the browser (scripts/build-ask-bundle.mjs's checked-in
-    // output). readAskBundle() never throws; an empty string renders a
-    // graph-only page with an honest "chat unavailable" note instead of a
-    // broken one (e.g. a fresh checkout before the bundle's first build).
-    const askBundle = await readAskBundle();
-    const html = renderVizHtml({ ...vizGraph, askBundle });
+    // The embedded "Ask the graph" chat panels — TWO real engines, bundled for
+    // the browser (scripts/build-ask-bundle.mjs's checked-in output): the
+    // code-graph ask.mjs engine, and (PLAN_VIZ_MEMORY.md Bug 1 fix) the
+    // memory-graph factAnswer engine. Neither read*AskBundle() ever throws; an
+    // empty string degrades that ONE engine gracefully rather than breaking
+    // the page (e.g. a fresh checkout before the bundles' first build).
+    const [askBundle, memoryAskBundle] = await Promise.all([readAskBundle(), readMemoryAskBundle()]);
+    const html = renderVizHtml({ ...vizGraph, askBundle, memoryAskBundle });
     await writeFile(outPath, html, "utf8");
+    const chatNote = askBundle || memoryAskBundle
+      ? ` (with the embedded ask-the-graph chat panel${askBundle && memoryAskBundle ? "s" : ""})`
+      : " (no chat panel — run `npm run build:ask-bundle` first)";
     process.stdout.write(
-      `tmct viz — wrote ${vizGraph.nodes.length} node(s), ${vizGraph.edges.length} edge(s) to ${outPath}`
-      + `${askBundle ? " (with the embedded ask-the-graph chat panel)" : " (no chat panel — run `npm run build:ask-bundle` first)"}\n`,
+      `tmct viz — wrote ${vizGraph.nodes.length} node(s), ${vizGraph.edges.length} edge(s) to ${outPath}${chatNote}\n`,
     );
     return;
   }

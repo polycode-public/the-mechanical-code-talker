@@ -9,7 +9,10 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { computeVizGraph, renderVizHtml } from "../src/viz.mjs";
+import {
+  computeVizGraph, renderVizHtml, edgeKindsFor,
+  VIZ_NODE_LIMIT_DEFAULT, VIZ_HUB_DEGREE_DEFAULT, VIZ_DEPTH_DEFAULT,
+} from "../src/viz.mjs";
 import { appendUtterance, appendFact } from "../src/memory/core.mjs";
 
 test("computeVizGraph: empty/missing memory dir -> {nodes: [], edges: [], focus: null, payload}, never throws", async () => {
@@ -85,8 +88,9 @@ test("computeVizGraph: depth (max hops) and nodeLimit (spiral length) are option
     const START = Date.parse("2026-07-11T10:00:00.000Z");
     let prevId = null;
     let seedId = null;
-    // A 20-long reply chain in one session — comfortably past the default
-    // nodeLimit (12) and default depth (3), so both knobs are observable.
+    // A 20-long reply chain in one session — comfortably past default depth (3),
+    // so depth's own cap is observable regardless of nodeLimit's (much larger,
+    // VIZ_NODE_LIMIT_DEFAULT) value.
     for (let i = 0; i < 20; i += 1) {
       const ts = new Date(START + i * 1000).toISOString();
       const { id } = await appendUtterance(dir, {
@@ -100,7 +104,7 @@ test("computeVizGraph: depth (max hops) and nodeLimit (spiral length) are option
 
     const byDefault = await computeVizGraph(dir);
     assert.equal(byDefault.focus, seedId);
-    assert.ok(byDefault.nodes.length <= 12, `default nodeLimit caps the walk (got ${byDefault.nodes.length})`);
+    assert.ok(byDefault.nodes.length <= 21, `never reaches more than every node that exists (got ${byDefault.nodes.length})`);
     assert.ok(byDefault.nodes.every((n) => n.hop <= 3), "default depth caps every walked node's hop at 3");
 
     // Isolate nodeLimit's effect: hold depth generously wide in both calls so
@@ -189,4 +193,174 @@ test("renderVizHtml: empty graph still renders valid self-contained HTML (no nod
   assert.doesNotMatch(html, /<script[^>]+\bsrc=/i);
   assert.doesNotMatch(html, /https?:\/\//i);
   assert.match(html, /const GRAPH = /);
+});
+
+// ── PLAN_VIZ_MEMORY.md: Bug 2 (dual walk-kind), hubDegree/nodeLimit defaults, --term seeding ──
+
+test("edgeKindsFor: meta/relation/both — meta is byte-identical to MEMORY_SPIRAL_EXPAND_KINDS alone; relation is the dynamic per-graph predicate list + the two fixed link kinds; both is the union", () => {
+  const rel = ["mgx:hasA", "rdfs:subClassOf"];
+  assert.deepEqual(edgeKindsFor("meta", rel), ["saidInSession", "inReplyTo", "statedBy", "canonicalisedFrom"]);
+  assert.deepEqual(edgeKindsFor("relation", rel), ["mgx:hasA", "rdfs:subClassOf", "factSubjectTerm", "factObjectTerm"]);
+  assert.deepEqual(edgeKindsFor("both", rel), [
+    "saidInSession", "inReplyTo", "statedBy", "canonicalisedFrom",
+    "mgx:hasA", "rdfs:subClassOf", "factSubjectTerm", "factObjectTerm",
+  ]);
+  assert.deepEqual(edgeKindsFor(undefined, rel), edgeKindsFor("both", rel), "an unrecognized/absent mode defaults to \"both\"");
+});
+
+test("computeVizGraph Bug 2 fix: seeded on a freshly-taught Fact, the default (both) walk reaches its own concept neighbourhood — the operator's original \"what is a dog\" complaint, reproduced and fixed", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-viz-bug2-"));
+  try {
+    const TS = "2026-07-11T10:00:00.000Z";
+    const { id: factId } = await appendFact(dir, { subject: "dog", predicate: "rdfs:subClassOf", object: "animal", provenance: "corpus:human", createdAt: TS });
+    await appendFact(dir, { subject: "dog", predicate: "mgx:hasA", object: "tail", provenance: "corpus:conceptnet /r/HasA", createdAt: TS });
+    await appendFact(dir, { subject: "dog", predicate: "mgx:capableOf", object: "bark", provenance: "corpus:conceptnet /r/CapableOf", createdAt: TS });
+
+    const result = await computeVizGraph(dir, { focus: factId, depth: 4, nodeLimit: 50 });
+    const labels = result.nodes.map((n) => n.label);
+    assert.ok(labels.includes("animal"), "reaches \"animal\" — structurally invisible before Bug 2's fix");
+    assert.ok(labels.includes("tail"), "reaches \"tail\" (a DIFFERENT fact, only connected via the shared \"dog\" term)");
+    assert.ok(labels.includes("bark"), "reaches \"bark\" too — the whole concept neighbourhood, not just the seed fact's own two terms");
+
+    // meta-only reproduces today's exact (pre-fix) behavior: only the provenance
+    // chain (here, the Fact's own statedBy Source) — never the concept terms.
+    const metaOnly = await computeVizGraph(dir, { focus: factId, depth: 4, nodeLimit: 50, edgeKindMode: "meta" });
+    const metaLabels = metaOnly.nodes.map((n) => n.label);
+    assert.ok(!metaLabels.includes("animal") && !metaLabels.includes("tail") && !metaLabels.includes("bark"),
+      "the meta-only toggle still reproduces the pre-Bug-2 provenance-only walk — no concept terms reachable, only provenance (e.g. the Fact's own statedBy Source)");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("computeVizGraph: the raised nodeLimit default (VIZ_NODE_LIMIT_DEFAULT, not spiralExpand's own code-graph default of 12) actually applies", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-viz-limit-"));
+  try {
+    assert.equal(VIZ_NODE_LIMIT_DEFAULT, 300);
+    assert.equal(VIZ_HUB_DEGREE_DEFAULT, 40);
+    assert.equal(VIZ_DEPTH_DEFAULT, 3);
+    const TS = "2026-07-11T10:00:00.000Z";
+    // 20 distinct one-hop facts off the SAME subject — comfortably past the OLD
+    // 12-node default, well under the new 300 one, and each object is
+    // one-hop-reachable (no hub-quantile pruning surprises like the reply-chain
+    // fixture above), so the raised default is directly observable here.
+    let seedId = null;
+    for (let i = 0; i < 20; i++) {
+      const { id } = await appendFact(dir, { subject: "dog", predicate: "mgx:relatedTo", object: `thing${i}`, provenance: "corpus:human", createdAt: TS });
+      seedId = id;
+    }
+    const result = await computeVizGraph(dir, { focus: seedId });
+    assert.ok(result.nodes.length > 12, `default nodeLimit reaches more than the OLD 12-node default (got ${result.nodes.length})`);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("computeVizGraph: hubDegree caps expansion THROUGH a common hypernym without hiding it, and is CLI/opt overridable", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-viz-hubdegree-"));
+  try {
+    const TS = "2026-07-11T10:00:00.000Z";
+    // "thing" is subClassOf-related from 50 distinct subjects — a common hypernym hub.
+    for (let i = 0; i < 50; i++) {
+      await appendFact(dir, { subject: `s${i}`, predicate: "rdfs:subClassOf", object: "thing", provenance: "corpus:human", createdAt: TS });
+    }
+    const { id: seedId } = await appendFact(dir, { subject: "dog", predicate: "rdfs:subClassOf", object: "thing", provenance: "corpus:human", createdAt: TS });
+
+    const uncapped = await computeVizGraph(dir, { focus: seedId, depth: 4, nodeLimit: 500, hubDegree: 1000 });
+    const capped = await computeVizGraph(dir, { focus: seedId, depth: 4, nodeLimit: 500, hubDegree: 5 });
+    assert.ok(uncapped.nodes.length > capped.nodes.length, "a low hubDegree cap reaches far fewer nodes than an effectively uncapped one");
+    assert.ok(capped.nodes.some((n) => n.label === "thing"), "the hub itself (\"thing\") is still shown even when capped");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("computeVizGraph --term: resolves via normFactTerm to the synthetic term node and seeds from there, reaching the SAME concept neighbourhood as a Fact-based seed; a non-matching term falls back to the default seed rather than a phantom node", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-viz-term-"));
+  try {
+    const TS = "2026-07-11T10:00:00.000Z";
+    await appendFact(dir, { subject: "Dog", predicate: "rdfs:subClassOf", object: "animal", provenance: "corpus:human", createdAt: TS }); // capitalized — normFactTerm lowercases
+    await appendFact(dir, { subject: "dog", predicate: "mgx:hasA", object: "tail", provenance: "corpus:conceptnet /r/HasA", createdAt: TS });
+
+    const byTerm = await computeVizGraph(dir, { term: "dog", depth: 3, nodeLimit: 50 });
+    assert.equal(byTerm.focus, "term:dog", "seeds directly on the synthetic term node");
+    const labels = byTerm.nodes.map((n) => n.label);
+    assert.ok(labels.includes("animal") && labels.includes("tail"), "reaches the whole concept neighbourhood from the term seed");
+
+    // --focus takes precedence when both are given (bin/tmct.mjs's own precedence, re-verified at
+    // the computeVizGraph level too): a --term that would resolve to something else is ignored.
+    const withBothGiven = await computeVizGraph(dir, { focus: "term:dog", term: "nonexistent-word-xyz" });
+    assert.equal(withBothGiven.focus, "term:dog");
+
+    // an unmatched --term falls through to the default seed (mostRecentIndividual), never a
+    // lone phantom node for a word that names no Fact.
+    const missTerm = await computeVizGraph(dir, { term: "nonexistent-word-xyz" });
+    assert.notEqual(missTerm.focus, "term:nonexistent-word-xyz");
+    assert.ok(missTerm.nodes.length > 0, "falls back to a real default seed, not an empty/phantom result");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("computeVizGraph: legend is pickLegendDimension's real output over the walked node set, and walkOpts carries the resolved depth/nodeLimit/hubDegree/edgeKindMode (even on an empty graph, for renderVizHtml's client-side re-walk to embed)", async () => {
+  const empty = await mkdtemp(join(tmpdir(), "tmct-viz-legend-empty-"));
+  try {
+    const emptyResult = await computeVizGraph(empty);
+    assert.equal(emptyResult.legend, null);
+    assert.deepEqual(emptyResult.walkOpts, { depth: VIZ_DEPTH_DEFAULT, nodeLimit: VIZ_NODE_LIMIT_DEFAULT, hubDegree: VIZ_HUB_DEGREE_DEFAULT, edgeKindMode: "both" });
+  } finally {
+    await rm(empty, { recursive: true, force: true });
+  }
+
+  const dir = await mkdtemp(join(tmpdir(), "tmct-viz-legend-"));
+  try {
+    const TS = "2026-07-11T10:00:00.000Z";
+    const { id: seedId } = await appendFact(dir, { subject: "dog", predicate: "rdfs:subClassOf", object: "animal", provenance: "corpus:human", createdAt: TS });
+    await appendFact(dir, { subject: "dog", predicate: "mgx:hasA", object: "tail", provenance: "corpus:conceptnet /r/HasA", createdAt: TS });
+    const result = await computeVizGraph(dir, { focus: seedId, depth: 3, nodeLimit: 50, hubDegree: 7, edgeKindMode: "relation" });
+    assert.ok(result.legend, "a non-empty walk always carries a computed legend");
+    assert.ok(["class", "predicate", "provenance"].includes(result.legend.primary));
+    assert.deepEqual(result.walkOpts, { depth: 3, nodeLimit: 50, hubDegree: 7, edgeKindMode: "relation" });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ── PLAN_VIZ_MEMORY.md Controls port + Bug 1's dual ask-engine bundling ──
+
+test("renderVizHtml: BOTH ask-engine bundles inline verbatim and independently gate their own half of the panel's availability", () => {
+  const askBundle = "/* code-graph engine */ globalThis.tmctViz = { marker: 'ASK_MARKER_1' };";
+  const memoryAskBundle = "/* memory engine */ globalThis.tmctMemoryAsk = { marker: 'MEM_MARKER_2' };";
+
+  const both = renderVizHtml({ ...SAMPLE_GRAPH, askBundle, memoryAskBundle });
+  assert.ok(both.includes(askBundle) && both.includes(memoryAskBundle), "both bundles are inlined verbatim");
+  assert.doesNotMatch(both, /id="askq"[^>]*disabled/, "the panel is enabled when EITHER engine is present");
+
+  const memOnly = renderVizHtml({ ...SAMPLE_GRAPH, memoryAskBundle });
+  assert.ok(!memOnly.includes("ASK_MARKER_1") && memOnly.includes("MEM_MARKER_2"));
+  assert.doesNotMatch(memOnly, /id="askq"[^>]*disabled/, "the panel is enabled with ONLY the memory engine present");
+
+  const neither = renderVizHtml({ ...SAMPLE_GRAPH });
+  assert.match(neither, /id="askq"[^>]*disabled/, "disabled only when NEITHER engine is present");
+  assert.match(neither, /chat unavailable/);
+});
+
+test("renderVizHtml: the Controls port (hub-hide, beam-prune, label mode, search, edge-kind toggle) and the legend-as-filter row are present in the markup, and LEGEND/WALK_OPTS are embedded", () => {
+  const legend = { primary: "predicate", dimensions: { class: { score: 0.1, qualifies: true, buckets: [{ value: "Fact", count: 2 }] }, predicate: { score: 1, qualifies: true, buckets: [{ value: "mgx:hasA", count: 1 }, { value: "rdfs:subClassOf", count: 1 }] }, provenance: { score: 0, qualifies: false, buckets: [] } } };
+  const walkOpts = { depth: 3, nodeLimit: 300, hubDegree: 40, edgeKindMode: "both" };
+  const html = renderVizHtml({ ...SAMPLE_GRAPH, legend, walkOpts });
+
+  assert.match(html, /id="hubhideon"/);
+  assert.match(html, /id="hubhideval"/);
+  assert.match(html, /id="beamon"/);
+  assert.match(html, /id="beamval"/);
+  assert.match(html, /id="labelmode"/);
+  assert.match(html, /id="search"/);
+  assert.match(html, /id="edgekind"/);
+  assert.match(html, /id="legend"/);
+  assert.match(html, /id="legenddim"/);
+  assert.match(html, /const LEGEND = /);
+  assert.match(html, /const WALK_OPTS = /);
+  assert.ok(html.includes('"primary":"predicate"'), "the real legend payload is embedded, not a placeholder");
+  assert.ok(html.includes('"hubDegree":40'));
 });

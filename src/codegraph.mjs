@@ -3,7 +3,7 @@ import { cosine } from "./embed.mjs";
 // Single-sourced predicate strings (memory/core.mjs owns these constants) — no
 // circular-import risk: core.mjs imports trust.mjs/shacl.mjs/planning.mjs, never
 // codegraph.mjs, in either direction.
-import { CREATED_AT_PROP, UPDATED_AT_PROP } from "./memory/core.mjs";
+import { CREATED_AT_PROP, UPDATED_AT_PROP, provenanceTagToSource } from "./memory/core.mjs";
 
 // Pure (no-network, no-fs) query logic over the typed `entities` payload that the
 // deterministic indexer writes to <repo>/.tmct/graph.json (shape produced by
@@ -102,11 +102,29 @@ const PROP_KIND = {
   "mgx:inreplyto": "inReplyTo",
   "mgx:statedby": "statedBy",
   "mgx:canonicalisedfrom": "canonicalisedFrom",
+  // PLAN_VIZ_MEMORY.md Bug 2 fix: the two FIXED structural link kinds
+  // deriveFactTermGraph (below) synthesizes on every Fact — Fact -> its own
+  // subject/object Term individual. Without these a walk seeded on a Fact (the
+  // default mostRecentIndividual seed right after a teach turn) could never
+  // reach the term graph at all. Distinct from the per-predicate kinds below
+  // (an open-ended, DYNAMIC set — see relationKind's "factrel:" branch), these
+  // two are fixed and few, so a plain PROP_KIND row is the simplest fit.
+  "mgx:factsubjectterm": "factSubjectTerm",
+  "mgx:factobjectterm": "factObjectTerm",
 };
 
 export function relationKind(group) {
   const prop = String(group?.prop || "").toLowerCase();
   if (PROP_KIND[prop]) return PROP_KIND[prop];
+  // PLAN_VIZ_MEMORY.md Bug 2 fix: deriveFactTermGraph's per-predicate relation
+  // groups (Term -> Term, one group per DISTINCT fact predicate actually
+  // present in the data — there is no fixed vocabulary to enumerate here: a
+  // freshly taught "mgx:<verb>" predicate (generalVerbTeach) must classify
+  // automatically, never requiring a PROP_KIND edit per predicate). Those
+  // groups self-namespace their `prop` as `factrel:<predicate>` specifically
+  // so they can self-classify here, verbatim, with zero collision risk against
+  // any real code-graph or memory-graph prop token (none use this prefix).
+  if (prop.startsWith("factrel:")) return group.predicate || null;
   const pred = String(group?.predicate || "").toLowerCase();
   // symbol-granular fallbacks first, so a near-miss token name still classifies to the
   // fine-grained kind rather than collapsing to module-coarse calls/touches.
@@ -828,6 +846,18 @@ function beamExpand(graph, scored, beamWidth) {
  *   - `seeds` (default derived from `scored`, as before) — an explicit id iterable, so a caller
  *     with no `scored` list at all (e.g. `mostRecentIndividual`'s single seed) can still drive
  *     the walk.
+ *   - `hubDegree` (default `Infinity`, PLAN_VIZ_MEMORY.md's page-size strategy — seonix's own
+ *     third cap, default 40 there): stop expanding THROUGH a node with MORE than this many
+ *     in-graph neighbours over `kinds` — the node itself is still popped/emitted normally (still
+ *     shown), it just contributes no candidates for the NEXT hop. Distinct from `q` (a relative,
+ *     per-step quantile gate that always keeps at least one candidate) and from `nodeLimit` (a
+ *     total emit budget): `hubDegree` is an absolute per-node gate that can drop a hub's entire
+ *     fan-out to zero, so an ultra-common hypernym ("thing", "entity" — reachable from thousands
+ *     of IsA facts) can't swallow the whole node budget in one hop. `Infinity` (no gate) keeps
+ *     every existing caller byte-identical. EXEMPTS the seed(s) (hop 0) themselves — a walk
+ *     started directly ON a hub (e.g. `tmct viz --term tree` where "tree" is a 1,972-fact
+ *     ConceptNet hub, measured live this session) still shows that hub's own immediate
+ *     neighbourhood; only a hub reached MID-walk (hop > 0) has its own further fan-out gated.
  *  The score-nudge machinery (mutating `scored`/introducing newly-surfaced individuals into it)
  *  is gated behind `scored.length > 0 && maxSeed > 0` — the exact condition the original early
  *  return checked — so an empty `scored` degrades gracefully into a pure walk rather than erroring.
@@ -842,6 +872,7 @@ export function spiralExpand(graph, scored = [], {
   classPredicate = (ind) => (ind.class || "") === "Module",
   idNormalizer = null,
   seeds: seedsOpt = null,
+  hubDegree = Infinity,
 } = {}) {
   const byId = new Map(scored.map((s) => [s.ind.id, s]));
   let maxSeed = 0;
@@ -912,6 +943,16 @@ export function spiralExpand(graph, scored = [], {
       emitted++;
     }
     if (node.hop >= depth) continue;
+    // hubDegree gate: a node above the cap is still shown (already emitted above) but never
+    // expanded THROUGH — its own neighbours contribute nothing to the next hop. EXEMPTS hop 0
+    // (a seed) deliberately: measured live against a real init:xl-scale corpus this session,
+    // `tmct viz --term tree` (a 1,972-fact hub term) with the gate applied unconditionally
+    // returned a single, useless lone node — seeding directly ON a term the user explicitly
+    // asked to centre on must always show ITS OWN immediate neighbourhood, or the whole
+    // `--term`/click-to-recentre feature is pointless on exactly the popular, interesting terms
+    // it exists for. A hub only reached mid-walk (hop > 0) still gates normally — this only
+    // changes the walk's own STARTING point(s), not general hub suppression elsewhere.
+    if (node.hop > 0 && degree(node.id) > hubDegree) continue;
     // This step's candidate set = the popped node's unvisited neighbours matching classPredicate;
     // quantile-gate by degree, keeping the lowest-degree ⌊q·n⌋ (drop the densest hubs), never
     // fewer than one.
@@ -1414,6 +1455,270 @@ export function buildVizNodesAndEdges(graph, walked, { createdAtProp = CREATED_A
     }
   }
   return { nodes, edges };
+}
+
+// PLAN_VIZ_MEMORY.md Bug 2 fix: the FACT_CLASS string, mirrored here rather than
+// imported (memory/core.mjs's own FACT_CLASS export is a plain "Fact" literal —
+// importing one more binding across this already-imported module isn't worth
+// it for a single string every reader of this file can eyeball is exactly what
+// memory/core.mjs's own appendFact writes).
+const MEMORY_FACT_CLASS = "Fact";
+const MEMORY_TERM_CLASS = "Term";
+
+/** Derive a TERM-relation VIEW of a memory graph's reified Facts (Bug 2 fix,
+ *  PLAN_VIZ_MEMORY.md) — never mutates `graph`, never persisted, viz-only.
+ *
+ *  A Fact individual stores its subject/predicate/object as plain normalized
+ *  STRING attributes (`rdf:subject`/`rdf:predicate`/`rdf:object`,
+ *  memory/core.mjs's appendFact) — there is no individual node for "dog" at
+ *  all. So the real subject->predicate->object concept structure is
+ *  structurally invisible to any walk over `graph.relations` as it stands:
+ *  every edge there connects two INDIVIDUAL ids (Utterance/Session/Fact/
+ *  Source), never a concept term. This function materializes the missing
+ *  structure as a NEW, derived graph:
+ *   - one synthetic `Term` individual per distinct normalized subject/object
+ *     string (id `term:<t>`, label `t`);
+ *   - one synthetic relation group per DISTINCT fact predicate actually
+ *     present in the data (Term -> Term, `subject`/`object` = the two terms'
+ *     ids) — no hardcoded predicate vocabulary: a freshly taught "mgx:<verb>"
+ *     predicate (generalVerbTeach) becomes walkable automatically, the same
+ *     turn it's asserted;
+ *   - two FIXED structural link groups, `factSubjectTerm`/`factObjectTerm`
+ *     (Fact -> its own subject/object Term) — without these a walk seeded on
+ *     a Fact (the default `mostRecentIndividual` seed right after a teach
+ *     turn) could never reach the term graph in the first place; a `--term`
+ *     seed reaches the SAME facts via the same links, in reverse.
+ *  Returns `{ graph: <augmented graph>, factRelationKinds: [<predicate>, …] }`
+ *  — `factRelationKinds` is exactly the dynamic `kinds` list a caller passes
+ *  to `spiralExpand` for the "concept relation" walk (see MEMORY_SPIRAL_EXPAND_KINDS
+ *  for the sibling "provenance/meta" kinds list). A graph with no Fact
+ *  individuals (or a code graph passed in by mistake) is a safe no-op:
+ *  `{ graph, factRelationKinds: [] }`, the SAME graph object, unchanged.
+ *  Pure; deterministic (Map iteration order = insertion order = first-seen
+ *  order over `graph.individuals`, so re-running on the same input is
+ *  byte-identical). */
+export function deriveFactTermGraph(graph) {
+  const termById = new Map(); // term:<t> -> individual
+  const groupByPredicate = new Map(); // predicate -> relation group
+  const subjectLinks = []; // Fact -> its subject Term
+  const objectLinks = [];  // Fact -> its object Term
+  const termId = (t) => `term:${t}`;
+  const ensureTerm = (t) => {
+    const id = termId(t);
+    if (!termById.has(id)) termById.set(id, { id, label: t, class: MEMORY_TERM_CLASS, attributes: [] });
+    return id;
+  };
+
+  for (const ind of graph?.individuals || []) {
+    if ((ind?.class || "") !== MEMORY_FACT_CLASS) continue;
+    const attrs = ind.attributes || [];
+    const s = attrs.find((a) => a?.prop === "rdf:subject")?.value;
+    const p = attrs.find((a) => a?.prop === "rdf:predicate")?.value;
+    const o = attrs.find((a) => a?.prop === "rdf:object")?.value;
+    if (!s || !p || !o) continue; // a malformed/legacy Fact — skip, never throw
+    const subjectTermId = ensureTerm(s);
+    const objectTermId = ensureTerm(o);
+    let group = groupByPredicate.get(p);
+    if (!group) {
+      // `factrel:` namespace: relationKind's own dedicated branch self-classifies
+      // any group with this prefix to its raw predicate, verbatim — see that
+      // function's comment for why (an open-ended, dynamically-discovered kind
+      // set with no PROP_KIND row to add per predicate).
+      group = { predicate: p, prop: `factrel:${p}`, count: 0, edges: [] };
+      groupByPredicate.set(p, group);
+    }
+    group.edges.push({ subject: subjectTermId, object: objectTermId, subjectLabel: s, objectLabel: o });
+    group.count = group.edges.length;
+    subjectLinks.push({ subject: ind.id, object: subjectTermId, subjectLabel: ind.label, objectLabel: s });
+    objectLinks.push({ subject: ind.id, object: objectTermId, subjectLabel: ind.label, objectLabel: o });
+  }
+
+  if (!termById.size) return { graph, factRelationKinds: [] };
+
+  const individuals = [...(graph.individuals || []), ...termById.values()];
+  const byId = new Map(graph.byId);
+  for (const term of termById.values()) byId.set(term.id, term);
+  const relations = [
+    ...(graph.relations || []),
+    ...groupByPredicate.values(),
+    { predicate: "factSubjectTerm", prop: "mgx:factSubjectTerm", count: subjectLinks.length, edges: subjectLinks },
+    { predicate: "factObjectTerm", prop: "mgx:factObjectTerm", count: objectLinks.length, edges: objectLinks },
+  ];
+
+  return {
+    graph: { ...graph, individuals, byId, relations },
+    factRelationKinds: [...groupByPredicate.keys()],
+  };
+}
+
+/** The two FIXED structural link kinds `deriveFactTermGraph` always emits
+ *  (Fact -> its own subject/object Term) — see that function's own doc for
+ *  why they're needed at all. Bundled into the "relation" (concept) walk, not
+ *  the "meta" (provenance) one: a user who toggles to meta-only still gets
+ *  today's exact byte-identical provenance-only view (see viz.mjs's edge-kind
+ *  toggle). */
+export const MEMORY_FACT_LINK_KINDS = ["factSubjectTerm", "factObjectTerm"];
+
+/** Bug 2 fix: the combined kinds list a memory-graph walk actually uses, for a
+ *  given edge-kind MODE — "meta" (today's exact provenance-only walk, kept as
+ *  a filterable toggle, never deleted), "relation" (the NEW concept view —
+ *  Bug 2's fix), or "both" (the default: meta AND relation kinds together, so
+ *  a click on a recently-taught Fact reaches its own concept neighbourhood the
+ *  same turn). `factRelationKinds` is the dynamic per-predicate list
+ *  `deriveFactTermGraph` discovered in THIS graph — there is no fixed
+ *  vocabulary, a freshly taught predicate is walkable the same turn it's
+ *  asserted. Lives here (not viz.mjs) and is re-exported through
+ *  ask-browser-entry.mjs specifically so BOTH the CLI's own generation-time
+ *  walk (viz.mjs's computeVizGraph) AND the browser bundle's client-side
+ *  re-walk (a recentre or an edge-kind-toggle change) combine kinds via the
+ *  SAME function — viz.mjs itself can't be bundled for the browser (it does
+ *  real fs I/O), so this had to live in the shared, browser-safe module. */
+export function edgeKindsFor(mode, factRelationKinds) {
+  const relationKinds = [...factRelationKinds, ...MEMORY_FACT_LINK_KINDS];
+  if (mode === "meta") return [...MEMORY_SPIRAL_EXPAND_KINDS];
+  if (mode === "relation") return relationKinds;
+  return [...MEMORY_SPIRAL_EXPAND_KINDS, ...relationKinds]; // "both" (default)
+}
+
+const LEGEND_MAX_BUCKETS = 20; // seonix precedent, PLAN_VIZ_MEMORY.md: too many chips to be usable
+const LEGEND_MIN_BUCKETS = 2;  // nothing to filter with only one bucket
+const LEGEND_COLLAPSE_TOP_N = 15; // "top 15 by count, rest grouped as Other" — stays under the max
+
+/** Normalized Shannon entropy (`H / log2(k)`, `k` = bucket count) of a
+ *  {value, count} bucket list — 1.0 for a perfectly even split, ~0 for one
+ *  dominant bucket swallowing everything, undefined (returns 0) for k<2. */
+function normalizedEntropy(buckets) {
+  const k = buckets.length;
+  if (k < 2) return 0;
+  const total = buckets.reduce((sum, b) => sum + b.count, 0);
+  if (!total) return 0;
+  let h = 0;
+  for (const b of buckets) {
+    if (!b.count) continue;
+    const p = b.count / total;
+    h -= p * Math.log2(p);
+  }
+  return h / Math.log2(k);
+}
+
+/** Collapse a raw {value,count} bucket list down to at most LEGEND_MAX_BUCKETS
+ *  entries: keep the top LEGEND_COLLAPSE_TOP_N by count, fold the rest into a
+ *  single "Other" bucket — the plan's own "may need a top-15-by-count, rest
+ *  grouped as Other" escape hatch, applied generically (not predicate-only) so
+ *  any dimension that happens to be high-cardinality degrades the same way.
+ *  A no-op (returns `buckets` unchanged, same array) when already <= the cap.
+ *  Exported (not just used internally by pickLegendDimension) so the browser
+ *  bundle's client-side legend (live per-view recomputation, viz.mjs's own
+ *  computeLegendBuckets) collapses high-cardinality dimensions the SAME way,
+ *  never a second hand-rolled copy that could drift. */
+export function collapseToTopN(buckets) {
+  if (buckets.length <= LEGEND_MAX_BUCKETS) return buckets;
+  const sorted = [...buckets].sort((a, b) => b.count - a.count || (a.value < b.value ? -1 : 1));
+  const kept = sorted.slice(0, LEGEND_COLLAPSE_TOP_N);
+  const restCount = sorted.slice(LEGEND_COLLAPSE_TOP_N).reduce((sum, b) => sum + b.count, 0);
+  return restCount ? [...kept, { value: "Other", count: restCount }] : kept;
+}
+
+function bucketCounts(values) {
+  const counts = new Map();
+  for (const v of values) {
+    if (v == null || v === "") continue;
+    counts.set(v, (counts.get(v) || 0) + 1);
+  }
+  return [...counts.entries()].map(([value, count]) => ({ value, count }));
+}
+
+/** The normalized provenance-prefix label for a Fact's FIRST recorded
+ *  provenance tag (a Fact may carry a " | "-joined union of several; the
+ *  legend buckets on the primary/first-recorded one, not a multiset) —
+ *  reuses memory/core.mjs's own provenanceTagToSource parser (the SAME
+ *  collapse-the-session-id/timestamp-suffix, keep-the-corpus/source-name
+ *  logic the trust layer already relies on) rather than re-deriving it.
+ *  Null when the Fact carries no provenance tag at all (a legacy/malformed
+ *  row) or the tag doesn't parse to a known Source kind. */
+function provenanceBucketLabel(rawTag) {
+  const tag = String(rawTag || "").split(" | ")[0].trim();
+  if (!tag) return null;
+  const src = provenanceTagToSource(tag);
+  if (!src) return null;
+  if (src.kind === "corpus" || src.kind === "corpusWeak") {
+    return `${src.kind === "corpusWeak" ? "corpus-weak" : "corpus"}:${src.name || "unknown"}`;
+  }
+  if (src.kind === "extracted") return `extracted:${src.name || "unknown"}`;
+  if (src.kind === "entailed") return `entailed:${src.rule || "unknown"}`;
+  if (src.kind === "operator") return "ace:chat";
+  if (src.kind === "teach") return "teach:chat";
+  if (src.kind === "web") return "web";
+  return src.kind;
+}
+
+/** A single walked NODE's bucket value under one legend dimension — the
+ *  per-node counterpart to `pickLegendDimension`'s aggregate bucket counts,
+ *  exported so both the CLI's own legend computation AND the browser bundle's
+ *  client-side dimension-switcher (a user flipping from "split by predicate"
+ *  to "split by trust source" without regenerating the page,
+ *  PLAN_VIZ_MEMORY.md's Controls section) filter/color by the SAME derivation,
+ *  never a second hand-rolled copy. `"class"` reads every node; `"predicate"`/
+ *  `"provenance"` only ever return non-null for a Fact-class node (any other
+ *  class simply has no predicate/provenance of its own to bucket on). */
+export function legendValueFor(graph, node, dimension) {
+  if (dimension === "class") return node?.class || "(none)";
+  if (!node || node.class !== MEMORY_FACT_CLASS) return null;
+  const attrs = graph?.byId?.get?.(node.id)?.attributes || [];
+  if (dimension === "predicate") return attrs.find((a) => a?.prop === "rdf:predicate")?.value || null;
+  if (dimension === "provenance") return provenanceBucketLabel(attrs.find((a) => a?.prop === "mgx:factProvenance")?.value);
+  return null;
+}
+
+/** Auto-pick the filter/legend dimension at generation time (PLAN_VIZ_MEMORY.md
+ *  "Auto-picking the filter/legend dimension" section — full algorithm/
+ *  rationale there). seonix hardcodes its legend dimension (a small, near-
+ *  uniform set of code-graph classes) — tmct's memory graph does NOT have that
+ *  property: `class` is `{Fact, Session, Source, Utterance, Term}` and once
+ *  real data is seeded, Fact dominates so heavily that a class-based legend
+ *  filters almost nothing. This scores three candidate dimensions by
+ *  normalized Shannon entropy over their bucket-size distribution (rewards an
+ *  even-ish split, penalizes one dominant bucket) and picks the best-scoring
+ *  QUALIFYING one (`LEGEND_MIN_BUCKETS <= k <= LEGEND_MAX_BUCKETS`, after a
+ *  top-15+Other collapse for anything over the cap) as the PRIMARY legend:
+ *   1. `class` — every walked node's own `.class`.
+ *   2. `predicate` — every walked Fact node's `rdf:predicate` attribute (a
+ *      relation-shaped split: "show me only IsA facts").
+ *   3. `provenance` — every walked Fact node's provenance prefix, collapsed
+ *      (see provenanceBucketLabel) — a TRUST-shaped split.
+ *  Pure, one pass over the already-walked `nodes` (no new graph traversal) —
+ *  computed ONCE at generation time and embedded into the page's JSON, never
+ *  recomputed client-side. `graph` supplies the per-Fact attribute lookups
+ *  `nodes` itself doesn't carry (predicate/provenance are Fact ATTRIBUTES,
+ *  not part of the {id,hop,label,class,createdAt,updatedAt} viz node shape).
+ *  Returns `{ primary, dimensions: { class, predicate, provenance } }`, each
+ *  entry `{ score, qualifies, buckets: [{value, count}] }`. When nothing
+ *  qualifies (e.g. a tiny 1-2-node walk), `primary` falls back to `"class"` —
+ *  today's behavior — so the legend is never simply empty. */
+export function pickLegendDimension(graph, nodes) {
+  const classBuckets = bucketCounts((nodes || []).map((n) => legendValueFor(graph, n, "class")));
+  const predicateBuckets = bucketCounts((nodes || []).map((n) => legendValueFor(graph, n, "predicate")));
+  const provenanceBuckets = bucketCounts((nodes || []).map((n) => legendValueFor(graph, n, "provenance")));
+
+  const score = (rawBuckets) => {
+    const buckets = collapseToTopN(rawBuckets);
+    const qualifies = buckets.length >= LEGEND_MIN_BUCKETS && buckets.length <= LEGEND_MAX_BUCKETS;
+    return { score: normalizedEntropy(buckets), qualifies, buckets };
+  };
+
+  const dimensions = {
+    class: score(classBuckets),
+    predicate: score(predicateBuckets),
+    provenance: score(provenanceBuckets),
+  };
+
+  let primary = "class";
+  let bestScore = -1;
+  for (const [name, d] of Object.entries(dimensions)) {
+    if (!d.qualifies) continue;
+    if (d.score > bestScore) { bestScore = d.score; primary = name; }
+  }
+  return { primary, dimensions };
 }
 
 /** moduleIdOf by raw edge-endpoint id: resolves through byId when the individual exists,

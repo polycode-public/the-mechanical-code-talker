@@ -1,14 +1,25 @@
-// build-ask-bundle.mjs — bundle tmct's own ask engine for `tmct viz`'s embedded
-// "Ask the graph" panel (PLAN_BREADTH_FIRST_NLU.md §5 follow-on).
+// build-ask-bundle.mjs — bundle tmct's own ask engines for `tmct viz`'s
+// embedded "Ask the graph" panel (PLAN_BREADTH_FIRST_NLU.md §5 follow-on;
+// PLAN_VIZ_MEMORY.md Bug 1 fix adds the SECOND bundle below).
 //
-// esbuild bundles src/ask-browser-entry.mjs into a single IIFE at
-// src/ask-browser.bundle.js, which viz.mjs inlines verbatim into the viewer
-// page. Regenerate after touching src/ask.mjs/src/codegraph.mjs and their
-// dependents: `npm run build:ask-bundle`.
+// Builds TWO independent IIFE bundles from the SAME shared stub plugins:
+//   - src/ask-browser-entry.mjs -> src/ask-browser.bundle.js — tmct's
+//     CODE-GRAPH query engine (ask.mjs): "which modules import X", generic
+//     "where is X mentioned" navigation. Unchanged from before this session.
+//   - src/memory-ask-browser-entry.mjs -> src/memory-ask-browser.bundle.js —
+//     tmct's MEMORY-graph answer engine (chat.mjs's factAnswer, the same one
+//     `npm run chat` uses): "what is a dog", "what is a horse used for". Bug 1
+//     fix — the code-graph engine above has no concept of Facts/corpus data at
+//     all, so a memory-graph question always missed even though the page's
+//     own embedded payload had the answer.
+// Both are inlined verbatim into the viewer page by viz.mjs's renderVizHtml;
+// the page queries whichever one actually answers (see viz.mjs's client JS).
+// Regenerate after touching src/ask.mjs/src/chat.mjs/src/codegraph.mjs and
+// their dependents: `npm run build:ask-bundle`.
 //
 // Adapted directly from seonix's own scripts/build-ask-bundle.mjs (proven in
 // production for its "Ask the graph" website panel) — same Node-builtin-stub
-// approach, extended with tmct-specific stubs for the THREE optional-adapter
+// approach, extended with tmct-specific stubs for the optional-adapter
 // imports the source itself already documents as strip-compatible (see each
 // file's own "inlined viewer bundle" comments): ask-nlp.mjs (wink — a ~4MB
 // model tmct's own architecture deliberately keeps out of any browser bundle),
@@ -18,25 +29,37 @@
 // `typeof X !== "undefined"` check for exactly this degradation, so a stub
 // exporting the binding as `undefined` reproduces the intended graceful
 // fallback, not a crash or a silent behavior change.
+//
+// The memory-ask bundle pulls in nearly all of chat.mjs's own transitive
+// import graph (it's a monolith — factAnswer shares the module with every
+// other lane) — none of that extra code ever RUNS (factAnswer's only real I/O
+// is loadMemory(memoryDir), and the panel always hands it an in-memory
+// Backend-B handle already carrying the page's payload — see
+// src/memory-ask-browser-entry.mjs's own doc comment), it just has to
+// LINK. The node-builtin stub set below is broad enough to satisfy every
+// named import reachable from either entry point; page weight is not a
+// constraint here (operator directive, PLAN_VIZ_MEMORY.md's page-size
+// strategy — this is a local file:// artifact, not something downloaded).
 import { build } from "esbuild";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const ENTRY = join(here, "..", "src", "ask-browser-entry.mjs");
-const OUT = join(here, "..", "src", "ask-browser.bundle.js");
+const srcDir = join(here, "..", "src");
 
 const stubNodeBuiltins = {
   name: "stub-node-builtins",
   setup(b) {
     b.onResolve({ filter: /^node:/ }, (args) => ({ path: args.path, namespace: "node-stub" }));
     b.onLoad({ filter: /.*/, namespace: "node-stub" }, () => ({
-      // A broad, generic set — every fs/promises/path/url/crypto binding any
-      // guarded/lazy path in tmct's import graph might reference at LINK time.
-      // Each throws only if actually CALLED, which no path this bundle's real
-      // entry point (ask-browser-entry.mjs) exercises ever does (persistence,
-      // source-file reads, and the optional adapters are all guarded or
-      // stubbed separately — see stubOptionalAdapters below).
+      // A broad, generic set — every fs/promises/path/url/crypto/os/child_process/
+      // readline/sqlite binding any guarded/lazy path in tmct's import graph might
+      // reference at LINK time (both entry points' full transitive import graphs,
+      // not just what each one's OWN code calls). Each throws only if actually
+      // CALLED, which no path either entry point's real, exercised call chain
+      // ever does (persistence, source-file reads, the optional adapters, and
+      // node:sqlite's opt-in Backend C are all guarded, lazy, or stubbed
+      // separately — see stubOptionalAdapters below).
       contents:
         "const unavailable = (name) => () => { throw new Error(name + ' unavailable in the browser ask bundle'); };\n"
         + "export const createRequire = unavailable('createRequire');\n"
@@ -46,6 +69,7 @@ const stubNodeBuiltins = {
         + "export const writeFile = unavailable('writeFile');\n"
         + "export const appendFile = unavailable('appendFile');\n"
         + "export const mkdir = unavailable('mkdir');\n"
+        + "export const mkdtemp = unavailable('mkdtemp');\n"
         + "export const rename = unavailable('rename');\n"
         + "export const unlink = unavailable('unlink');\n"
         + "export const rm = unavailable('rm');\n"
@@ -53,24 +77,32 @@ const stubNodeBuiltins = {
         + "export const access = unavailable('access');\n"
         + "export const copyFile = unavailable('copyFile');\n"
         + "export const readdir = unavailable('readdir');\n"
+        + "export const createReadStream = unavailable('createReadStream');\n"
+        + "export const createWriteStream = unavailable('createWriteStream');\n"
         + "export const existsSync = () => false;\n"
         + "export const join = (...a) => a.join('/');\n"
         + "export const dirname = (p) => String(p).replace(/\\/[^/]*$/, '');\n"
         + "export const resolve = (...a) => a.join('/');\n"
+        + "export const isAbsolute = (p) => String(p).startsWith('/');\n"
         + "export const basename = (p) => String(p).split('/').pop();\n"
         + "export const extname = (p) => { const m = /\\.[^./]+$/.exec(String(p)); return m ? m[0] : ''; };\n"
+        + "export const sep = '/';\n"
         + "export const fileURLToPath = (u) => String(u);\n"
         + "export const pathToFileURL = (p) => new URL('file://' + p);\n"
         + "export const randomBytes = unavailable('randomBytes');\n"
         + "export const createHash = unavailable('createHash');\n"
         + "export const createRequireFromPath = unavailable('createRequireFromPath');\n"
+        + "export const spawnSync = unavailable('spawnSync');\n"
+        + "export const createInterface = unavailable('createInterface');\n"
+        + "export const tmpdir = () => '/tmp';\n"
+        + "export const DatabaseSync = unavailable('DatabaseSync');\n"
         + "export default {};\n",
       loader: "js",
     }));
   },
 };
 
-// The three optional-adapter modules tmct's own source already documents as
+// Optional-adapter modules tmct's own source already documents as
 // strip-compatible (see each real import site's "inlined viewer bundle"
 // comment in src/ask.mjs / src/interpret/pipeline.mjs). Stubbed as an explicit
 // `undefined` export, not an empty module — the calling code's own
@@ -94,21 +126,25 @@ const stubOptionalAdapters = {
   },
 };
 
-const result = await build({
-  entryPoints: [ENTRY],
-  bundle: true,
-  format: "iife",
-  platform: "browser",
-  target: "es2022",
-  outfile: OUT,
-  legalComments: "none",
-  logLevel: "info",
-  plugins: [stubOptionalAdapters, stubNodeBuiltins],
-  define: { "process.env.NODE_ENV": '"production"' },
-});
-
-if (result.errors.length) {
-  console.error(result.errors);
-  process.exit(1);
+async function buildOne(entryFile, outFile) {
+  const result = await build({
+    entryPoints: [join(srcDir, entryFile)],
+    bundle: true,
+    format: "iife",
+    platform: "browser",
+    target: "es2022",
+    outfile: join(srcDir, outFile),
+    legalComments: "none",
+    logLevel: "info",
+    plugins: [stubOptionalAdapters, stubNodeBuiltins],
+    define: { "process.env.NODE_ENV": '"production"' },
+  });
+  if (result.errors.length) {
+    console.error(result.errors);
+    process.exit(1);
+  }
+  console.log(`built ${join(srcDir, outFile)}`);
 }
-console.log(`built ${OUT}`);
+
+await buildOne("ask-browser-entry.mjs", "ask-browser.bundle.js");
+await buildOne("memory-ask-browser-entry.mjs", "memory-ask-browser.bundle.js");

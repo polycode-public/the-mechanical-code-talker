@@ -18,49 +18,108 @@
 //     reads the checked-in build artifact (scripts/build-ask-bundle.mjs's
 //     output). bin/tmct.mjs's `viz` mode wires all three together.
 
-import { loadMemory, CREATED_AT_PROP } from "./memory/core.mjs";
-import { parseEntities, spiralExpand, mostRecentIndividual, MEMORY_SPIRAL_EXPAND_KINDS, buildVizNodesAndEdges } from "./codegraph.mjs";
+import { loadMemory, CREATED_AT_PROP, normFactTerm } from "./memory/core.mjs";
+import {
+  parseEntities, spiralExpand, mostRecentIndividual, MEMORY_SPIRAL_EXPAND_KINDS, MEMORY_FACT_LINK_KINDS,
+  buildVizNodesAndEdges, deriveFactTermGraph, pickLegendDimension, edgeKindsFor,
+} from "./codegraph.mjs";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
-/** Load the memory graph under `repoDir`, walk it from a seed (an explicit
- *  `--focus <id>` override, or the most-recently-created individual by
- *  default) via spiralExpand over the real memory-graph edge-kind inventory,
- *  and enrich each walked node with the real label/class/timestamp data a
- *  renderer needs. Returns `{nodes, edges, focus, payload}` — `focus` is the
- *  seed id actually used (null when the graph is empty and no seed could be
- *  picked); `payload` is the FULL raw graph (every individual, not just the
- *  walked subset) — the embedded "Ask the graph" panel queries the whole
- *  graph and can re-walk from a new focus, never just the initially rendered
- *  subgraph, mirroring seonix's own "never the depth-limited display
- *  sub-graph" precedent. Never throws on a missing/empty memory dir:
- *  loadMemory's own ENOENT fallback (emptyMemory()) already degrades to zero
- *  individuals, which this function turns into
- *  `{nodes: [], edges: [], focus: null, payload}`. */
-export async function computeVizGraph(repoDir, { focus, depth, nodeLimit } = {}) {
+// PLAN_VIZ_MEMORY.md's page-size strategy: seonix's own three-cap default (200)
+// is the starting point, raised from the code-graph-only SPIRAL_NODE_LIMIT_DEFAULT
+// (12 — a MID-tier digest breadth, not a graph-viewer breadth) now that Bug 2's
+// fix makes real concept-relation edges walkable, and re-tuned against a real
+// `init:large`-seeded repo this session (see HANDOVER.md for the measured numbers).
+export const VIZ_NODE_LIMIT_DEFAULT = 300;
+export const VIZ_HUB_DEGREE_DEFAULT = 40; // seonix's own default, ported verbatim (PLAN_VIZ_MEMORY.md)
+export const VIZ_DEPTH_DEFAULT = 3; // mirrors spiralExpand's own SPIRAL_DEPTH_DEFAULT — named here so client-side re-walks embed/reuse the SAME resolved value, never spiralExpand's smaller code-graph defaults
+
+// edgeKindsFor now lives in codegraph.mjs (re-exported here for existing
+// importers) — it moved so the browser bundle's client-side re-walk (which
+// can't import viz.mjs itself, a real-fs-I/O module) can share the SAME
+// kind-combination logic instead of a second hand-rolled copy. See
+// codegraph.mjs's own doc comment on edgeKindsFor for the full reasoning.
+export { edgeKindsFor };
+
+/** Load the memory graph under `repoDir`, walk it from a seed, and enrich each
+ *  walked node with the real label/class/timestamp data a renderer needs.
+ *  Seed precedence: an explicit `--focus <id>`, then `--term <word>` (Bug 2's
+ *  companion seed strategy — resolves via `normFactTerm` to the synthetic
+ *  `term:<word>` node deriveFactTermGraph materializes, so `tmct viz --term
+ *  dog` reaches "dog"'s WHOLE concept neighbourhood — every Fact mentioning
+ *  it, and everything THOSE facts connect to — without hunting for a raw
+ *  `fact:<hash>` id first; a term that matches no Fact falls through to the
+ *  default below rather than seeding a lone phantom node), then
+ *  `mostRecentIndividual` by default.
+ *
+ *  Bug 2 fix: the walk runs over BOTH the existing meta/provenance kinds
+ *  (`MEMORY_SPIRAL_EXPAND_KINDS`) AND the real concept-relation kinds
+ *  (`deriveFactTermGraph`'s per-predicate + link kinds) together by default
+ *  (`edgeKindMode: "both"`) — a click on "dog" now reaches "animal"/"tail"/
+ *  "bark" the same way asking about it in chat would surface those same
+ *  facts, not just its provenance chain. `edgeKindMode: "meta"` reproduces
+ *  today's exact byte-identical provenance-only walk (never deleted, just no
+ *  longer the only option); `"relation"` isolates the concept view alone.
+ *
+ *  `hubDegree` (seonix's third cap, PLAN_VIZ_MEMORY.md): stop expanding
+ *  THROUGH a node with more than this many connections (still shows the hub
+ *  itself) — without it a common hypernym could swallow the whole node
+ *  budget in one hop. `VIZ_HUB_DEGREE_DEFAULT` applies when omitted.
+ *
+ *  Returns `{nodes, edges, focus, payload, legend}` — `focus` is the seed id
+ *  actually used (null when the graph is empty and no seed could be picked);
+ *  `payload` is the FULL raw graph (every individual, not just the walked
+ *  subset) — the embedded "Ask the graph" panel queries the whole graph and
+ *  can re-walk from a new focus, never just the initially rendered subgraph,
+ *  mirroring seonix's own "never the depth-limited display sub-graph"
+ *  precedent; `legend` is `pickLegendDimension`'s precomputed output over the
+ *  walked node set. Never throws on a missing/empty memory dir: loadMemory's
+ *  own ENOENT fallback (emptyMemory()) already degrades to zero individuals,
+ *  which this function turns into `{nodes: [], edges: [], focus: null,
+ *  payload, legend: null}`. */
+export async function computeVizGraph(repoDir, { focus, term, depth, nodeLimit, hubDegree, edgeKindMode = "both" } = {}) {
   const payload = await loadMemory(repoDir);
   const graph = parseEntities(payload);
-  if (!graph.individuals.length) return { nodes: [], edges: [], focus: null, payload };
+  // walkOpts: the RESOLVED options actually used (defaults filled in) — always
+  // present, even on an empty/seedless graph, so renderVizHtml can embed them
+  // for the client-side re-walk (recentre/edge-kind toggle) to stay consistent
+  // with whatever this page was generated with, rather than silently falling
+  // back to spiralExpand's own much-smaller code-graph defaults (nodeLimit 12).
+  const walkOpts = {
+    depth: depth != null ? depth : VIZ_DEPTH_DEFAULT,
+    nodeLimit: nodeLimit != null ? nodeLimit : VIZ_NODE_LIMIT_DEFAULT,
+    hubDegree: hubDegree != null ? hubDegree : VIZ_HUB_DEGREE_DEFAULT,
+    edgeKindMode,
+  };
+  if (!graph.individuals.length) return { nodes: [], edges: [], focus: null, payload, legend: null, walkOpts };
 
-  const seedId = focus || mostRecentIndividual(graph, CREATED_AT_PROP)?.id || null;
-  if (!seedId) return { nodes: [], edges: [], focus: null, payload };
+  const { graph: augmented, factRelationKinds } = deriveFactTermGraph(graph);
 
-  const walked = spiralExpand(graph, [], {
-    kinds: MEMORY_SPIRAL_EXPAND_KINDS,
+  let seedId = focus || null;
+  if (!seedId && term) {
+    const termId = `term:${normFactTerm(term)}`;
+    if (augmented.byId.has(termId)) seedId = termId;
+    // no match: falls through to the default seed below, exactly as if
+    // --term had never been given — an honest miss never seeds a phantom node.
+  }
+  if (!seedId) seedId = mostRecentIndividual(graph, CREATED_AT_PROP)?.id || null;
+  if (!seedId) return { nodes: [], edges: [], focus: null, payload, legend: null, walkOpts };
+
+  const walked = spiralExpand(augmented, [], {
+    kinds: edgeKindsFor(edgeKindMode, factRelationKinds),
     classPredicate: () => true,
     idNormalizer: (id) => id,
     seeds: [seedId],
-    // depth = max arcs (hops) from the focus node; nodeLimit = spiral length
-    // (total nodes walked) — both optional, spiralExpand's own defaults (3
-    // hops, 12 nodes) apply when omitted, byte-identical to before this was
-    // exposed as a CLI knob (`tmct viz --depth --limit`, bin/tmct.mjs).
-    ...(depth != null ? { depth } : {}),
-    ...(nodeLimit != null ? { nodeLimit } : {}),
+    depth: walkOpts.depth,
+    nodeLimit: walkOpts.nodeLimit,
+    hubDegree: walkOpts.hubDegree,
   });
 
-  const { nodes, edges } = buildVizNodesAndEdges(graph, walked);
-  return { nodes, edges, focus: seedId, payload };
+  const { nodes, edges } = buildVizNodesAndEdges(augmented, walked);
+  const legend = pickLegendDimension(augmented, nodes);
+  return { nodes, edges, focus: seedId, payload, legend, walkOpts };
 }
 
 /** Read the checked-in browser ask-engine bundle (scripts/build-ask-bundle.mjs's
@@ -73,6 +132,22 @@ export async function readAskBundle() {
   try {
     const here = dirname(fileURLToPath(import.meta.url));
     return await readFile(join(here, "ask-browser.bundle.js"), "utf8");
+  } catch {
+    return "";
+  }
+}
+
+/** Read the checked-in browser MEMORY-ask-engine bundle
+ *  (scripts/build-ask-bundle.mjs's second output,
+ *  `src/memory-ask-browser.bundle.js`) — Bug 1 fix's real memory-graph answer
+ *  engine (chat.mjs's factAnswer), alongside the pre-existing code-graph
+ *  ask.mjs bundle readAskBundle() already reads. Same never-throws contract:
+ *  `""` when the bundle hasn't been built yet, so renderVizHtml degrades to
+ *  whichever engine (if any) IS present rather than a broken page. */
+export async function readMemoryAskBundle() {
+  try {
+    const here = dirname(fileURLToPath(import.meta.url));
+    return await readFile(join(here, "memory-ask-browser.bundle.js"), "utf8");
   } catch {
     return "";
   }
@@ -110,11 +185,15 @@ function embedJson(value) {
  *  class/label in the detail panel are click-to-query affordances. Pure
  *  string building — no fs/network, no external <script src>, no CDN, no
  *  fonts. */
-export function renderVizHtml({ nodes, edges, focus, payload, askBundle }) {
+export function renderVizHtml({ nodes, edges, focus, payload, askBundle, memoryAskBundle, legend, walkOpts }) {
   const graphJson = embedJson({ nodes, edges, focus });
   const payloadJson = embedJson(payload || { individuals: [], objectProperties: [] });
+  const legendJson = embedJson(legend || null);
+  const walkOptsJson = embedJson(walkOpts || { depth: VIZ_DEPTH_DEFAULT, nodeLimit: VIZ_NODE_LIMIT_DEFAULT, hubDegree: VIZ_HUB_DEGREE_DEFAULT, edgeKindMode: "both" });
   const title = `tmct viz — ${nodes.length} node${nodes.length === 1 ? "" : "s"}${focus ? ` (seed: ${escapeHtml(focus)})` : ""}`;
   const hasChat = Boolean(askBundle);
+  const hasMemChat = Boolean(memoryAskBundle);
+  const hasAnyChat = hasChat || hasMemChat;
 
   return `<!doctype html>
 <html lang="en">
@@ -131,7 +210,7 @@ export function renderVizHtml({ nodes, edges, focus, payload, askBundle }) {
   #hud { position: absolute; top: 12px; left: 12px; max-width: 42ch; background: rgba(20,22,30,0.82); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; padding: 10px 12px; font-size: 12.5px; line-height: 1.45; pointer-events: none; }
   #hud b { color: #fff; }
   #hud .muted { color: #9aa1b0; }
-  #controls { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; align-items: center; background: rgba(20,22,30,0.88); border: 1px solid rgba(255,255,255,0.14); border-radius: 8px; padding: 7px 12px; font-size: 12.5px; flex-wrap: wrap; max-width: min(70vw, 640px); }
+  #controls { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; align-items: center; background: rgba(20,22,30,0.88); border: 1px solid rgba(255,255,255,0.14); border-radius: 8px; padding: 7px 12px; font-size: 12.5px; flex-wrap: wrap; max-width: min(86vw, 900px); }
   #controls .grp { display: flex; align-items: center; gap: 5px; }
   #controls button { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.2); color: #e7e9ee; border-radius: 5px; width: 22px; height: 22px; line-height: 1; cursor: pointer; font-size: 13px; }
   #controls button:hover:not(:disabled) { background: rgba(255,255,255,0.18); }
@@ -140,6 +219,17 @@ export function renderVizHtml({ nodes, edges, focus, payload, askBundle }) {
   #controls label.typechk { display: flex; align-items: center; gap: 4px; cursor: pointer; padding: 2px 6px; border-radius: 4px; }
   #controls label.typechk:hover { background: rgba(255,255,255,0.08); }
   #controls .swatch { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  #controls select, #controls input[type="number"], #controls input[type="text"].search { background: #14161e; color: #e7e9ee; border: 1px solid #2a2e42; border-radius: 5px; padding: 2px 5px; font: inherit; font-size: 12px; }
+  #controls input[type="number"] { width: 3.6em; }
+  #controls input[type="text"].search { width: 9em; }
+  #controls .sep { width: 1px; align-self: stretch; background: rgba(255,255,255,0.14); margin: 0 2px; }
+  #legend { position: absolute; top: 58px; left: 50%; transform: translateX(-50%); display: none; flex-wrap: wrap; gap: 6px; align-items: center; background: rgba(20,22,30,0.88); border: 1px solid rgba(255,255,255,0.14); border-radius: 8px; padding: 6px 10px; font-size: 11.5px; max-width: min(86vw, 900px); }
+  #legend.show { display: flex; }
+  #legend select { background: #14161e; color: #e7e9ee; border: 1px solid #2a2e42; border-radius: 5px; padding: 1px 4px; font: inherit; font-size: 11px; }
+  #legend .chip { display: flex; align-items: center; gap: 4px; cursor: pointer; padding: 2px 6px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.16); }
+  #legend .chip.off { opacity: 0.4; }
+  #legend .chip .swatch { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+  #legend .chip .n { color: #9aa1b0; }
   #panel { position: absolute; top: 12px; right: 12px; width: 280px; max-width: calc(100vw - 24px); background: rgba(20,22,30,0.92); border: 1px solid rgba(255,255,255,0.14); border-radius: 8px; padding: 12px 14px; font-size: 13px; line-height: 1.5; display: none; }
   #panel.show { display: block; }
   #panel h2 { margin: 0 0 6px; font-size: 14px; word-break: break-word; }
@@ -167,6 +257,7 @@ export function renderVizHtml({ nodes, edges, focus, payload, askBundle }) {
   #askresult .q { color: #565f89; font-style: normal; margin-bottom: 3px; }
   #askresult.miss { color: #a9b1d6; font-style: italic; }
   #askresult .canon { margin-top: 6px; color: #6b7189; font-size: 11px; font-style: normal; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 5px; }
+  #askresult .src { margin-top: 4px; color: #565f89; font-size: 10.5px; }
   #ask .hint { color: #6b7189; font-size: 11px; }
 </style>
 </head>
@@ -177,22 +268,42 @@ export function renderVizHtml({ nodes, edges, focus, payload, askBundle }) {
   <div id="controls">
     <span class="grp"><span class="muted">depth</span><button id="depthdown" title="shallower">&minus;</button><b class="depthval" id="depthval"></b><button id="depthup" title="deeper">+</button></span>
     <span class="grp" id="typefilters"></span>
+    <span class="sep"></span>
+    <span class="grp"><span class="muted">edges</span><select id="edgekind" title="which kinds of edge the walk follows">
+      <option value="both">both (default)</option>
+      <option value="relation">concept relations</option>
+      <option value="meta">provenance only</option>
+    </select></span>
+    <span class="grp"><label title="hide nodes above N connections outright"><input type="checkbox" id="hubhideon"> hub-hide &gt;</label><input type="number" id="hubhideval" min="1"></span>
+    <span class="grp"><label title="keep only the top-N neighbours by degree per hop"><input type="checkbox" id="beamon"> beam-prune</label><input type="number" id="beamval" min="1"></span>
+    <span class="grp"><span class="muted">labels</span><select id="labelmode">
+      <option value="smart">smart</option>
+      <option value="all">all names</option>
+      <option value="name-source">name + source</option>
+      <option value="none">none</option>
+    </select></span>
+    <span class="sep"></span>
+    <span class="grp"><input type="text" class="search" id="search" placeholder="search labels&hellip;" autocomplete="off"><b id="searchcount" class="muted"></b></span>
   </div>
+  <div id="legend"><span class="muted">legend</span><select id="legenddim"></select><span id="legendchips"></span></div>
   <div id="panel"></div>
-  <div id="empty"><div><b>No graph data.</b><br>This repo has no <code>.tmct/memory/graph.json</code> yet (or the requested <code>--focus</code> id wasn't found). Run <code>tmct chat</code> in that repo first, then re-run <code>tmct viz</code>.</div></div>
+  <div id="empty"><div><b>No graph data.</b><br>This repo has no <code>.tmct/memory/graph.json</code> yet (or the requested <code>--focus</code>/<code>--term</code> wasn't found). Run <code>tmct chat</code> in that repo first, then re-run <code>tmct viz</code>.</div></div>
   <div id="ask">
     <h3>Ask the graph</h3>
-    <div class="row"><input id="askq" type="text" autocomplete="off" placeholder='ask e.g. "where is X mentioned"'${hasChat ? "" : " disabled"}><button id="asksubmit"${hasChat ? "" : " disabled"}>ask</button></div>
-    <div id="askresult">${hasChat
-      ? '<span class="hint">running the real tmct engine, client-side, right here &mdash; try &quot;where is &lt;label&gt; mentioned&quot;. Answers re-centre the graph on what they resolve.</span>'
+    <div class="row"><input id="askq" type="text" autocomplete="off" placeholder='ask e.g. "what is a dog"'${hasAnyChat ? "" : " disabled"}><button id="asksubmit"${hasAnyChat ? "" : " disabled"}>ask</button></div>
+    <div id="askresult">${hasAnyChat
+      ? '<span class="hint">running the real tmct engine(s), client-side, right here &mdash; try &quot;what is X&quot; or &quot;where is X mentioned&quot;. Answers re-centre the graph on what they resolve.</span>'
       : '<span class="hint">chat unavailable &mdash; run <code>npm run build:ask-bundle</code> and re-generate this page.</span>'}</div>
   </div>
 </div>
 <script>
 const GRAPH = ${graphJson};
 const PAYLOAD = ${payloadJson};
+const LEGEND = ${legendJson};
+const WALK_OPTS = ${walkOptsJson};
 </script>
 ${hasChat ? `<script>\n${askBundle}\n</script>` : ""}
+${hasMemChat ? `<script>\n${memoryAskBundle}\n</script>` : ""}
 <script>
 (function () {
   "use strict";
@@ -201,10 +312,24 @@ ${hasChat ? `<script>\n${askBundle}\n</script>` : ""}
   if (!GRAPH.nodes.length) { emptyEl.classList.add("show"); return; }
 
   var hasEngine = typeof tmctViz !== "undefined";
+  var hasMemEngine = typeof tmctMemoryAsk !== "undefined";
   var FULL_GRAPH = hasEngine ? tmctViz.parseEntities(PAYLOAD) : null;
+  // The term-relation view (Bug 2 fix) over the FULL graph, computed once —
+  // recentre()/edge-kind-toggle re-walks reuse it rather than re-deriving it
+  // per click. hasEngine-gated: the walk/legend exports only exist in the
+  // ask-browser bundle, not the memory-ask one.
+  var TERM_GRAPH = hasEngine ? tmctViz.deriveFactTermGraph(FULL_GRAPH) : null;
+  // kindsForMode reuses the bundled tmctViz.edgeKindsFor — the SAME function
+  // the CLI's own computeVizGraph calls server-side — rather than a second
+  // hand-rolled copy of the meta/relation/both combination logic.
+  function kindsForMode(mode) {
+    return tmctViz.edgeKindsFor(mode, TERM_GRAPH ? TERM_GRAPH.factRelationKinds : []);
+  }
+  var edgeKindMode = WALK_OPTS.edgeKindMode || "both";
+  document.getElementById("edgekind").value = edgeKindMode;
 
   // ---- palette: one hue per class, stable across recentres --------------
-  var PALETTE = ["#7aa2f7", "#bb9af7", "#7dcfff", "#9ece6a", "#e0af68", "#f7768e", "#73daca"];
+  var PALETTE = ["#7aa2f7", "#bb9af7", "#7dcfff", "#9ece6a", "#e0af68", "#f7768e", "#73daca", "#c0caf5"];
   var classColor = new Map();
   function colorFor(cls) {
     if (!classColor.has(cls)) classColor.set(cls, PALETTE[classColor.size % PALETTE.length]);
@@ -242,11 +367,128 @@ ${hasChat ? `<script>\n${askBundle}\n</script>` : ""}
   }
   renderTypeFilters();
 
+  // ---- legend-as-filter (PLAN_VIZ_MEMORY.md "Auto-picking the filter/legend
+  // dimension"): LEGEND.primary names the server's auto-picked dimension
+  // (class/predicate/provenance, scored by normalized Shannon entropy over
+  // the INITIAL walk); the dropdown lets a user switch dimension without
+  // regenerating the page. Bucket COUNTS are always recomputed live over the
+  // CURRENTLY visible walk (never the stale initial-generation counts) via
+  // the same legendValueFor derivation the CLI's own pickLegendDimension
+  // uses — one shared source of truth, never a second hand-rolled copy. ----
+  var legendEl = document.getElementById("legend");
+  var legendDimEl = document.getElementById("legenddim");
+  var legendChipsEl = document.getElementById("legendchips");
+  var legendDim = (LEGEND && LEGEND.primary) || "class";
+  var legendEnabled = null; // null = no legend filter active (every value passes)
+  // collapseBuckets reuses the bundled tmctViz.collapseToTopN (same top-15 +
+  // "Other" rule pickLegendDimension uses server-side) rather than a second
+  // hand-rolled copy; a tiny inline fallback covers the (untested-in-practice)
+  // no-engine case so the legend never hard-crashes if the bundle is absent.
+  function collapseBuckets(buckets) {
+    if (hasEngine) return tmctViz.collapseToTopN(buckets);
+    if (buckets.length <= 20) return buckets;
+    var sorted = buckets.slice().sort(function (a, b) { return b.count - a.count; });
+    var kept = sorted.slice(0, 15);
+    var restCount = sorted.slice(15).reduce(function (s, b) { return s + b.count; }, 0);
+    return restCount ? kept.concat([{ value: "Other", count: restCount }]) : kept;
+  }
+  function legendValueOf(node, dim) {
+    if (!hasEngine) return dim === "class" ? (node.class || "(none)") : null;
+    return tmctViz.legendValueFor(FULL_GRAPH, node, dim);
+  }
+  function computeLegendBuckets(dim) {
+    var counts = new Map();
+    GRAPH.nodes.forEach(function (n) {
+      var v = legendValueOf(n, dim);
+      if (v == null || v === "") return;
+      counts.set(v, (counts.get(v) || 0) + 1);
+    });
+    var buckets = Array.from(counts.entries()).map(function (e) { return { value: e[0], count: e[1] }; });
+    buckets.sort(function (a, b) { return b.count - a.count; });
+    return collapseBuckets(buckets);
+  }
+  function renderLegend() {
+    if (!LEGEND) { legendEl.classList.remove("show"); return; }
+    var dims = Object.keys(LEGEND.dimensions || { class: 1 });
+    legendDimEl.innerHTML = dims.map(function (d) {
+      var info = LEGEND.dimensions[d];
+      var tag = info && info.qualifies ? "" : " (low signal)";
+      return '<option value="' + d + '"' + (d === legendDim ? " selected" : "") + '>' + d + tag + '</option>';
+    }).join("");
+    var buckets = computeLegendBuckets(legendDim);
+    if (!legendEnabled) legendEnabled = new Set(buckets.map(function (b) { return b.value; }));
+    legendEl.classList.toggle("show", buckets.length > 0);
+    legendChipsEl.innerHTML = buckets.map(function (b) {
+      var on = legendEnabled.has(b.value);
+      return '<span class="chip' + (on ? "" : " off") + '" data-v="' + esc(b.value) + '" title="click to toggle">'
+        + '<span class="swatch" style="background:' + colorFor(legendDim === "class" ? b.value : "__" + legendDim) + '"></span>'
+        + esc(b.value) + '<span class="n">' + b.count + '</span></span>';
+    }).join("");
+    legendChipsEl.querySelectorAll(".chip").forEach(function (chip) {
+      chip.addEventListener("click", function () {
+        var v = chip.dataset.v;
+        if (legendEnabled.has(v)) legendEnabled.delete(v); else legendEnabled.add(v);
+        renderLegend();
+        applyFilters();
+      });
+    });
+  }
+  legendDimEl.addEventListener("change", function () {
+    legendDim = legendDimEl.value;
+    legendEnabled = null; // fresh "all on" set for the newly selected dimension
+    renderLegend();
+    applyFilters();
+  });
+  renderLegend();
+
+  // ---- hub-hide / beam-prune / search state --------------------------------
+  var hubHideOn = false, hubHideVal = WALK_OPTS.hubDegree || 40;
+  var beamOn = false, beamVal = 8;
+  var labelMode = "smart";
+  var searchTerm = "";
+  var hubHideOnEl = document.getElementById("hubhideon");
+  var hubHideValEl = document.getElementById("hubhideval");
+  var beamOnEl = document.getElementById("beamon");
+  var beamValEl = document.getElementById("beamval");
+  var labelModeEl = document.getElementById("labelmode");
+  var searchEl = document.getElementById("search");
+  var searchCountEl = document.getElementById("searchcount");
+  hubHideValEl.value = hubHideVal;
+  beamValEl.value = beamVal;
+  hubHideOnEl.addEventListener("change", function () { hubHideOn = hubHideOnEl.checked; applyFilters(); });
+  hubHideValEl.addEventListener("change", function () { hubHideVal = Number(hubHideValEl.value) || hubHideVal; applyFilters(); });
+  beamOnEl.addEventListener("change", function () { beamOn = beamOnEl.checked; applyFilters(); });
+  beamValEl.addEventListener("change", function () { beamVal = Number(beamValEl.value) || beamVal; applyFilters(); });
+  labelModeEl.addEventListener("change", function () { labelMode = labelModeEl.value; draw(); });
+  searchEl.addEventListener("input", function () { searchTerm = searchEl.value.trim().toLowerCase(); applyFilters(); });
+
+  // degree over the CURRENTLY displayed edge set (hub-hide/beam-prune are
+  // display-time filters, distinct from the generation-time hubDegree cap
+  // which only stops the WALK expanding through a hub — both useful, see
+  // PLAN_VIZ_MEMORY.md's Controls section). Memoized: draw() runs on every
+  // pan/zoom/hover mousemove, and both draw() and visibleNodeIds() (which
+  // draw() itself calls) each need it — recomputing an O(edges) map twice per
+  // frame during a drag is real, avoidable per-frame cost. Invalidated by
+  // relayout() (the ONLY place GRAPH.nodes/edges are mutated, on init and on
+  // every recentre()), so a stale cache can never survive a graph change.
+  var degCache = null;
+  function currentDegrees() {
+    if (!degCache) {
+      degCache = new Map();
+      GRAPH.edges.forEach(function (e) {
+        degCache.set(e.source, (degCache.get(e.source) || 0) + 1);
+        degCache.set(e.target, (degCache.get(e.target) || 0) + 1);
+      });
+    }
+    return degCache;
+  }
+
   // ---- layout: concentric rings keyed on hop, seed at the centre, RE-runnable on recentre ----
   var RING_GAP = 110;
   var pos = new Map();
   var byHopMax = 0;
   function relayout() {
+    degCache = null; // GRAPH.nodes/edges just changed (initial load or recentre()) — invalidate
     pos = new Map();
     var byHop = new Map();
     GRAPH.nodes.forEach(function (n) {
@@ -276,10 +518,47 @@ ${hasChat ? `<script>\n${askBundle}\n</script>` : ""}
     document.getElementById("depthup").disabled = depthVal >= byHopMax;
   }
   function visibleNodeIds() {
+    var deg = (hubHideOn || beamOn) ? currentDegrees() : null;
     var vis = new Set();
     GRAPH.nodes.forEach(function (n) {
-      if (n.hop <= depthVal && enabledTypes.has(n.class)) vis.add(n.id);
+      if (n.hop > depthVal || !enabledTypes.has(n.class)) return;
+      if (legendEnabled) {
+        var v = legendValueOf(n, legendDim);
+        if (v != null && v !== "" && !legendEnabled.has(v)) return;
+      }
+      if (hubHideOn && deg && (deg.get(n.id) || 0) > hubHideVal) return;
+      vis.add(n.id);
     });
+    // beam-prune: BFS-order pruning — per hop (> 0), keep only the top-N
+    // (by CURRENT degree) neighbours; hop 0 (the seed(s)) is always kept.
+    if (beamOn && deg) {
+      var byHop = new Map();
+      vis.forEach(function (id) {
+        var n = GRAPH.nodes.find(function (x) { return x.id === id; });
+        if (!n || n.hop === 0) return;
+        if (!byHop.has(n.hop)) byHop.set(n.hop, []);
+        byHop.get(n.hop).push(n);
+      });
+      byHop.forEach(function (list) {
+        list.sort(function (a, b) { return (deg.get(b.id) || 0) - (deg.get(a.id) || 0); });
+        list.slice(beamVal).forEach(function (n) { vis.delete(n.id); });
+      });
+    }
+    if (searchTerm) {
+      var hits = new Set();
+      GRAPH.nodes.forEach(function (n) { if (vis.has(n.id) && String(n.label).toLowerCase().indexOf(searchTerm) !== -1) hits.add(n.id); });
+      searchCountEl.textContent = hits.size ? (hits.size + " match" + (hits.size === 1 ? "" : "es")) : "no match";
+      // search NARROWS visibility to matches + their direct neighbours, so the
+      // hit's own context stays legible instead of collapsing to lone dots.
+      var withNeighbours = new Set(hits);
+      GRAPH.edges.forEach(function (e) {
+        if (hits.has(e.source) && vis.has(e.target)) withNeighbours.add(e.target);
+        if (hits.has(e.target) && vis.has(e.source)) withNeighbours.add(e.source);
+      });
+      vis = new Set(Array.from(vis).filter(function (id) { return withNeighbours.has(id); }));
+    } else {
+      searchCountEl.textContent = "";
+    }
     return vis;
   }
   function applyFilters() { syncDepthUi(); draw(); }
@@ -317,10 +596,47 @@ ${hasChat ? `<script>\n${askBundle}\n</script>` : ""}
     return { x: (sx * dpr - cx) / (view.scale * dpr), y: (sy * dpr - cy) / (view.scale * dpr) };
   }
 
+  // Label-density modes (PLAN_VIZ_MEMORY.md Controls): "smart" (seonix's own
+  // default) draws a label only for the focus/selection/direct-neighbours/
+  // top-20-by-degree; everything else labels on hover only. "all"/"name-source"
+  // always draw (name-source appends the Fact's own provenance prefix — trust
+  // tier is a first-class concept here unlike seonix's code graph, so this
+  // variant has no seonix equivalent). "none" draws no labels at all.
+  var hoverId = null;
+  canvas.addEventListener("mousemove", function (ev) {
+    if (labelMode !== "smart" || dragging) return;
+    var rect = canvas.getBoundingClientRect();
+    var w = screenToWorld(ev.clientX - rect.left, ev.clientY - rect.top);
+    var best = null, bestDist = Infinity;
+    GRAPH.nodes.forEach(function (n) {
+      var p = pos.get(n.id);
+      if (!p) return;
+      var dx = p.x - w.x, dy = p.y - w.y, d = Math.sqrt(dx * dx + dy * dy);
+      if (d < bestDist) { best = n.id; bestDist = d; }
+    });
+    var next = bestDist < 24 / view.scale ? best : null;
+    if (next !== hoverId) { hoverId = next; draw(); }
+  });
+  function topDegreeIds(vis, deg, n) {
+    var ranked = Array.from(vis).sort(function (a, b) { return (deg.get(b) || 0) - (deg.get(a) || 0); });
+    return new Set(ranked.slice(0, n));
+  }
+  function labelFor(n) {
+    var text = String(n.label).slice(0, 40);
+    if (labelMode !== "name-source") return text;
+    var prov = hasEngine ? tmctViz.legendValueFor(FULL_GRAPH, n, "provenance") : null;
+    return prov ? text + "  [" + prov + "]" : text;
+  }
+
   function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.lineWidth = Math.max(1, 1 * dpr);
     var vis = visibleNodeIds();
+    var deg = currentDegrees();
+    var smartLabelIds = labelMode === "smart" ? topDegreeIds(vis, deg, 20) : null;
+    var searchHits = searchTerm
+      ? new Set(GRAPH.nodes.filter(function (n) { return vis.has(n.id) && String(n.label).toLowerCase().indexOf(searchTerm) !== -1; }).map(function (n) { return n.id; }))
+      : null;
     ctx.strokeStyle = "rgba(255,255,255,0.14)";
     GRAPH.edges.forEach(function (e) {
       if (!vis.has(e.source) || !vis.has(e.target)) return;
@@ -347,11 +663,20 @@ ${hasChat ? `<script>\n${askBundle}\n</script>` : ""}
         ctx.lineWidth = Math.max(1.5, 2.5 * dpr); ctx.strokeStyle = "rgba(255,255,255,0.6)";
         ctx.beginPath(); ctx.arc(sp.x, sp.y, Math.max(1.5, r) + 3 * dpr, 0, Math.PI * 2); ctx.stroke();
       }
-      if (view.scale > 0.55) {
+      if (searchHits && searchHits.has(n.id)) {
+        ctx.lineWidth = Math.max(1.5, 2 * dpr); ctx.strokeStyle = "#e0af68";
+        ctx.beginPath(); ctx.arc(sp.x, sp.y, Math.max(1.5, r) + 5 * dpr, 0, Math.PI * 2); ctx.stroke();
+      }
+      var showLabel = view.scale > 0.55 && labelMode !== "none" && (
+        labelMode !== "smart"
+        || n.id === selectedId || n.id === GRAPH.focus || n.id === hoverId
+        || (smartLabelIds && smartLabelIds.has(n.id))
+      );
+      if (showLabel) {
         ctx.font = (11 * dpr) + "px -apple-system, sans-serif";
         ctx.fillStyle = "rgba(231,233,238," + Math.min(1, 0.55 + view.scale * 0.3) + ")";
         ctx.textBaseline = "middle";
-        ctx.fillText(String(n.label).slice(0, 40), sp.x + Math.max(6, r + 4), sp.y);
+        ctx.fillText(labelFor(n), sp.x + Math.max(6, r + 4), sp.y);
       }
     });
   }
@@ -395,25 +720,42 @@ ${hasChat ? `<script>\n${askBundle}\n</script>` : ""}
     view.x = -(minX + maxX) / 2 * view.scale; view.y = -(minY + maxY) / 2 * view.scale;
   }
 
-  // ---- recentre: RE-WALK the FULL graph from a new seed via the real,
+  // ---- recentre: RE-WALK the FULL graph (via TERM_GRAPH — Bug 2's augmented
+  // view, so a recentre reaches real concept-relation edges the same way
+  // generation-time computeVizGraph does) from a new seed via the real,
   // bundled spiralExpand (byte-identical to the CLI's own walk — never a
   // hand-rolled client-side BFS) and rebuild via the real buildVizNodesAndEdges.
-  // Used for double-click-to-recentre AND focus-follows-chat-answer. -------
+  // Used for double-click-to-recentre, focus-follows-chat-answer, AND the
+  // edge-kind toggle (re-walks the SAME seed under a new kind set). Reuses
+  // WALK_OPTS (this page's own generation-time depth/nodeLimit/hubDegree) so a
+  // client-side re-walk never silently falls back to spiralExpand's smaller
+  // code-graph defaults. -------------------------------------------------
+  function walkGraph() { return TERM_GRAPH ? TERM_GRAPH.graph : FULL_GRAPH; }
   function recentre(id) {
-    if (!hasEngine || !FULL_GRAPH || !FULL_GRAPH.byId.has(id)) return false;
-    var walked = tmctViz.spiralExpand(FULL_GRAPH, [], {
+    if (!hasEngine || !FULL_GRAPH || !walkGraph().byId.has(id)) return false;
+    var walked = tmctViz.spiralExpand(walkGraph(), [], {
+      kinds: kindsForMode(edgeKindMode),
       classPredicate: function () { return true; }, idNormalizer: function (i) { return i; }, seeds: [id],
+      depth: WALK_OPTS.depth, nodeLimit: WALK_OPTS.nodeLimit, hubDegree: WALK_OPTS.hubDegree,
     });
-    var built = tmctViz.buildVizNodesAndEdges(FULL_GRAPH, walked);
+    var built = tmctViz.buildVizNodesAndEdges(walkGraph(), walked);
     GRAPH.nodes = built.nodes; GRAPH.edges = built.edges; GRAPH.focus = id;
     // classes newly reached that weren't in the initial palette still resolve
     // via colorFor()'s own on-demand assignment; the checkbox row itself was
     // already seeded from the FULL graph's classes above, so no rebuild needed.
     relayout();
     depthVal = byHopMax;
+    legendEnabled = null; // re-derive "all on" for the new node set's own buckets
+    renderLegend();
     fitToVisible();
     return true;
   }
+  document.getElementById("edgekind").addEventListener("change", function (ev) {
+    edgeKindMode = ev.target.value;
+    var seed = GRAPH.focus;
+    if (seed) recentre(seed);
+    draw();
+  });
 
   // ---- click-to-inspect ------------------------------------------------------
   var panel = document.getElementById("panel");
@@ -501,37 +843,89 @@ ${hasChat ? `<script>\n${askBundle}\n</script>` : ""}
     if (best && recentre(best.id)) { selectedId = best.id; showPanel(GRAPH.nodes.filter(function (n) { return n.id === best.id; })[0]); }
   });
 
-  // ---- Ask the graph: a real ask()-powered chat panel over the FULL graph,
-  // never just the currently-displayed subgraph. A resolved answer's own
-  // objMatch/matches re-centre the view — focus follows the answer. ---------
+  // ---- Ask the graph: TWO real engines over the FULL graph, never just the
+  // currently-displayed subgraph (Bug 1 fix, PLAN_VIZ_MEMORY.md) — tried in
+  // order per query:
+  //  1. tmctMemoryAsk.factAnswer (src/chat.mjs's REAL memory-graph answer
+  //     engine, the same one 'npm run chat' uses) — a Fact/definition-shaped
+  //     question ("what is a dog", "what is a horse used for") answers HERE,
+  //     which the code-graph engine below always missed on (Bug 1's whole
+  //     point). Given an in-memory Backend-B handle carrying the page's own
+  //     embedded PAYLOAD — ZERO fs I/O (see memory-ask-browser-entry.mjs's own
+  //     doc comment) — and envelope:null/miss:true, the exact documented
+  //     "no parse pipeline available" bootstrap path that arms factAnswer's
+  //     own bare-question regex fallbacks.
+  //  2. tmctViz.ask (tmct's code-graph query engine) — generic "where is X
+  //     mentioned" navigation and code-graph queries, unchanged from before
+  //     this session. Only reached when (1) is unavailable or didn't hit.
+  // A resolved answer's own target re-centres the view — focus follows the
+  // answer — for EITHER engine. --------------------------------------------
   var askInput = document.getElementById("askq");
   var askBtn = document.getElementById("asksubmit");
   var askOut = document.getElementById("askresult");
+  var memHandle = hasMemEngine ? tmctMemoryAsk.createInMemoryStore() : null;
+  if (memHandle) memHandle.payload = PAYLOAD;
+
+  // Light, best-effort focus-follow for a memory-engine hit: factAnswer
+  // returns rendered TEXT, not a resolved entity id (unlike ask.mjs's
+  // envelope/matches) — strip a leading question-word crust and try the
+  // remainder as a term id. An honest "don't recentre" on no match, never a
+  // wrong guess.
+  function guessTermIdFromQuery(query) {
+    if (!hasEngine || !hasMemEngine) return null;
+    var stripped = String(query).toLowerCase()
+      .replace(/^(what|where|who|which|does|do|is|are)\b/, "")
+      .replace(/\b(is|are|used for|do|does|mean|means|a|an|the)\b/g, " ")
+      .replace(/[?.!]+$/, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!stripped) return null;
+    var id = "term:" + tmctMemoryAsk.normFactTerm(stripped);
+    return walkGraph().byId.has(id) ? id : null;
+  }
 
   function runAsk(query) {
-    if (!hasEngine) return;
     askOut.classList.remove("miss");
-    var t = tmctViz.ask(FULL_GRAPH, query, { contextId: selectedId });
-    var envelope = t.tmct_ask || {};
-    askOut.classList.toggle("miss", !!envelope.miss);
-    var canon = envelope.canonical
-      ? '<div class="canon">read as: ' + esc(envelope.canonical.english) + "</div>"
-      : "";
-    askOut.innerHTML = '<div class="q">&quot;' + esc(query) + '&quot;</div>' + esc(t.content) + canon;
-    // Focus-follows-answer: prefer the resolved objMatch (the term the
-    // question was actually ABOUT), else the first real match — either way,
-    // only if it's a genuine individual in the graph, never a guess.
-    var targetId = (envelope.parsed && envelope.parsed.object && (envelope.matches || [])[0] && envelope.matches[0].id)
-      || (envelope.matches && envelope.matches[0] && envelope.matches[0].id)
-      || null;
-    if (targetId && recentre(targetId)) { selectedId = targetId; }
-    draw();
+    (async function () {
+      if (memHandle) {
+        var fact = null;
+        try { fact = await tmctMemoryAsk.factAnswer(memHandle, query, null, true, {}); } catch { fact = null; }
+        if (fact && fact.text) {
+          askOut.innerHTML = '<div class="q">&quot;' + esc(query) + '&quot;</div>' + esc(fact.text)
+            + '<div class="src">answered from the full embedded memory graph (not just what\\'s currently drawn)</div>';
+          var termId = guessTermIdFromQuery(query);
+          if (termId && recentre(termId)) selectedId = termId;
+          draw();
+          return;
+        }
+      }
+      if (!hasEngine) {
+        askOut.classList.add("miss");
+        askOut.innerHTML = '<div class="q">&quot;' + esc(query) + '&quot;</div>no answer engine available.';
+        return;
+      }
+      var t = tmctViz.ask(FULL_GRAPH, query, { contextId: selectedId });
+      var envelope = t.tmct_ask || {};
+      askOut.classList.toggle("miss", !!envelope.miss);
+      var canon = envelope.canonical
+        ? '<div class="canon">read as: ' + esc(envelope.canonical.english) + "</div>"
+        : "";
+      askOut.innerHTML = '<div class="q">&quot;' + esc(query) + '&quot;</div>' + esc(t.content) + canon;
+      // Focus-follows-answer: prefer the resolved objMatch (the term the
+      // question was actually ABOUT), else the first real match — either way,
+      // only if it's a genuine individual in the graph, never a guess.
+      var targetId = (envelope.parsed && envelope.parsed.object && (envelope.matches || [])[0] && envelope.matches[0].id)
+        || (envelope.matches && envelope.matches[0] && envelope.matches[0].id)
+        || null;
+      if (targetId && recentre(targetId)) { selectedId = targetId; }
+      draw();
+    })();
   }
   function askAndPopulate(query) {
     askInput.value = query;
     runAsk(query);
   }
-  if (hasEngine) {
+  if (hasEngine || hasMemEngine) {
     askBtn.addEventListener("click", function () { var q = askInput.value.trim(); if (q) runAsk(q); });
     askInput.addEventListener("keydown", function (ev) { if (ev.key === "Enter") { var q = askInput.value.trim(); if (q) runAsk(q); } });
   }

@@ -8,7 +8,15 @@ this project's own standing discipline.
 Session handle (inbox): `tmct` (this session; earlier sessions used `mechanic`). See
 `~/.claude/inboxes/tmct.md` and `~/.claude/inboxes/mechanic.md`, both still live.
 
-## Version state (2026-07-12, v1.8.19)
+## Version state (2026-07-13, v1.9.0)
+
+`PLAN_VIZ_MEMORY.md` fully implemented (see that doc's own "IMPLEMENTED" status line + Phasing
+checklist for specifics): `tmct viz`'s walk now follows real concept-relation edges (not just
+provenance), a second bundled ask-engine answers Fact/definition questions in the embedded panel,
+the legend auto-picks its split dimension by entropy, and the page ships hub-hide/beam-prune/
+label-mode/search/edge-kind controls plus `--hub-degree`/`--term` CLI flags. `init:xl`/`init:xxl`
+still don't exist in `package.json` — the `hubDegree`/`nodeLimit` defaults were tuned against a
+real ~37,700-fact `seon`+`conceptnet` seed instead.
 
 `corpus/namenet/` (new, optional top-up — not wired into any init script; `init:xl`/`init:xxl`
 don't exist in `package.json` yet): 7,260 `/r/Synonym` facts from Open English Namenet's reviewed

@@ -4600,8 +4600,19 @@ function uniqueFacts(rows) {
 /** W4 seam: answer (or extend) a vocabulary/definition question from the MEMORY
  *  graph's Facts. Returns { text, replace } — `replace:false` means the engine's
  *  own (schema-docs) answer stands and the fact lines are appended under it —
- *  or null when memory holds nothing relevant (misses stay unchanged). */
-async function factAnswer(memoryDir, query, envelope, miss, biasByBundle = {}) {
+ *  or null when memory holds nothing relevant (misses stay unchanged).
+ *  Exported (PLAN_VIZ_MEMORY.md Bug 1 fix) so src/memory-ask-browser-entry.mjs
+ *  can re-export it for `tmct viz`'s embedded "Ask the graph" panel — the ONLY
+ *  reason this is `export` rather than module-private; the function's own
+ *  behavior is unchanged (same signature, same logic, answers identically in
+ *  the CLI and the browser bundle). `memoryDir` may be memory/core.mjs's
+ *  Backend-B in-memory handle (`createInMemoryStore()`) as well as a real repo
+ *  path — every I/O this function does routes through `loadMemory(memoryDir)`
+ *  (via factRows/memoryFacts below), and loadMemory's own Backend-B branch
+ *  returns the handle's `payload` directly with ZERO fs calls — so a caller
+ *  that hands this a handle already carrying the embedded page's full graph
+ *  gets a pure, disk-free traversal, no bundle-time module shimming needed. */
+export async function factAnswer(memoryDir, query, envelope, miss, biasByBundle = {}) {
   let normFactTerm;
   try { ({ normFactTerm } = await import("./memory/core.mjs")); } catch { return null; }
   const q = String(query).trim();

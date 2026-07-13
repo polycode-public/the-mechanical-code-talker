@@ -37,13 +37,50 @@ test("the bundle evaluates as a classic script with no live import/require/impor
   assert.equal(typeof vm.runInContext("tmctViz", ctx), "object", "globalThis.tmctViz is exposed");
 });
 
-test("tmctViz exposes ask, parseQuery, parseEntities, spiralExpand, mostRecentIndividual, derivedUpdatedAt, MEMORY_SPIRAL_EXPAND_KINDS, buildVizNodesAndEdges", async () => {
+test("tmctViz exposes ask, parseQuery, parseEntities, spiralExpand, mostRecentIndividual, derivedUpdatedAt, MEMORY_SPIRAL_EXPAND_KINDS, MEMORY_FACT_LINK_KINDS, buildVizNodesAndEdges, deriveFactTermGraph, pickLegendDimension, legendValueFor", async () => {
   const ctx = await loadBundleContext();
   const keys = vm.runInContext("Object.keys(tmctViz)", ctx);
-  for (const name of ["ask", "parseQuery", "parseEntities", "spiralExpand", "mostRecentIndividual", "derivedUpdatedAt", "MEMORY_SPIRAL_EXPAND_KINDS", "buildVizNodesAndEdges"]) {
+  for (const name of [
+    "ask", "parseQuery", "parseEntities", "spiralExpand", "mostRecentIndividual", "derivedUpdatedAt",
+    "MEMORY_SPIRAL_EXPAND_KINDS", "MEMORY_FACT_LINK_KINDS", "buildVizNodesAndEdges",
+    // PLAN_VIZ_MEMORY.md additions: Bug 2's term-graph derivation + the legend
+    // dimension-scoring/per-node lookup + the shared kind-combination/bucket-
+    // collapse helpers — the client-side recentre/edge-kind-toggle/dimension-
+    // switcher controls need these bundled too, not just the CLI's own copy.
+    "deriveFactTermGraph", "pickLegendDimension", "legendValueFor", "edgeKindsFor", "collapseToTopN",
+  ]) {
     assert.ok(keys.includes(name), `tmctViz.${name} is exposed`);
     assert.notEqual(vm.runInContext(`typeof tmctViz.${name}`, ctx), "undefined");
   }
+});
+
+test("e2e (Bug 2 fix): deriveFactTermGraph + spiralExpand inside the bundle reach a real concept-relation edge, not just provenance", async () => {
+  const ctx = await loadBundleContext();
+  const payload = {
+    individuals: [
+      {
+        id: "fact:1", label: "dog is a kind of animal", class: "Fact",
+        attributes: [
+          { prop: "rdf:subject", value: "dog" }, { prop: "rdf:predicate", value: "rdfs:subClassOf" }, { prop: "rdf:object", value: "animal" },
+        ],
+      },
+    ],
+    objectProperties: [],
+  };
+  ctx.__raw = payload;
+  vm.runInContext("globalThis.__graph = tmctViz.parseEntities(__raw); globalThis.__term = tmctViz.deriveFactTermGraph(__graph);", ctx);
+  const kinds = vm.runInContext("__term.factRelationKinds", ctx);
+  // Array.from: a vm-context array is a DIFFERENT realm's Array (assert/strict's
+  // deepEqual is reference-strict on constructor identity) — marshal to a
+  // same-realm array first, same discipline any cross-vm-boundary array
+  // comparison in this file needs.
+  assert.deepEqual(Array.from(kinds), ["rdfs:subClassOf"]);
+  const walked = vm.runInContext(
+    "tmctViz.spiralExpand(__term.graph, [], {kinds: __term.factRelationKinds.concat(tmctViz.MEMORY_FACT_LINK_KINDS), classPredicate: () => true, idNormalizer: (id) => id, seeds: ['fact:1'], depth: 3, nodeLimit: 20})",
+    ctx,
+  );
+  const ids = walked.map((w) => w.id);
+  assert.ok(ids.includes("term:dog") && ids.includes("term:animal"), "reaches both concept terms via the bundled deriveFactTermGraph + spiralExpand");
 });
 
 test("e2e: the bundled engine answers a real query against a real fixture graph, adapter-less (no wink)", async () => {

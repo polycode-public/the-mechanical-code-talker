@@ -17,10 +17,21 @@
 import { ask, parseQuery } from "./ask.mjs";
 import {
   parseEntities, spiralExpand, mostRecentIndividual, derivedUpdatedAt, MEMORY_SPIRAL_EXPAND_KINDS,
-  buildVizNodesAndEdges,
+  MEMORY_FACT_LINK_KINDS, buildVizNodesAndEdges, deriveFactTermGraph, pickLegendDimension, legendValueFor,
+  edgeKindsFor, collapseToTopN,
 } from "./codegraph.mjs";
 
+// PLAN_VIZ_MEMORY.md Bug 2 fix + Controls port: deriveFactTermGraph/
+// pickLegendDimension/legendValueFor/MEMORY_FACT_LINK_KINDS/edgeKindsFor/
+// collapseToTopN are exported here (alongside the pre-existing traversal
+// exports) so the viewer page's client-side recentre/edge-kind-toggle/
+// dimension-switcher (a user double-clicking a node, changing which edge
+// kinds the walk follows, or flipping the legend from "split by predicate"
+// to "split by trust source") re-derives the SAME term graph, kind set, and
+// legend the CLI's own generation-time computeVizGraph used — never a second
+// hand-rolled copy that could drift.
 globalThis.tmctViz = {
   ask, parseQuery, parseEntities, spiralExpand, mostRecentIndividual, derivedUpdatedAt,
-  MEMORY_SPIRAL_EXPAND_KINDS, buildVizNodesAndEdges,
+  MEMORY_SPIRAL_EXPAND_KINDS, MEMORY_FACT_LINK_KINDS, buildVizNodesAndEdges,
+  deriveFactTermGraph, pickLegendDimension, legendValueFor, edgeKindsFor, collapseToTopN,
 };

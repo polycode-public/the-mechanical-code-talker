@@ -47,6 +47,7 @@
   var writeFile = unavailable("writeFile");
   var appendFile = unavailable("appendFile");
   var mkdir = unavailable("mkdir");
+  var mkdtemp = unavailable("mkdtemp");
   var rename = unavailable("rename");
   var unlink = unavailable("unlink");
   var rm = unavailable("rm");
@@ -54,9 +55,14 @@
   var access = unavailable("access");
   var copyFile = unavailable("copyFile");
   var readdir = unavailable("readdir");
+  var createReadStream = unavailable("createReadStream");
+  var createWriteStream = unavailable("createWriteStream");
   var randomBytes = unavailable("randomBytes");
   var createHash = unavailable("createHash");
   var createRequireFromPath = unavailable("createRequireFromPath");
+  var spawnSync = unavailable("spawnSync");
+  var createInterface = unavailable("createInterface");
+  var DatabaseSync = unavailable("DatabaseSync");
 
   // node-stub:node:path
   var unavailable2 = (name) => () => {
@@ -69,6 +75,7 @@
   var writeFile2 = unavailable2("writeFile");
   var appendFile2 = unavailable2("appendFile");
   var mkdir2 = unavailable2("mkdir");
+  var mkdtemp2 = unavailable2("mkdtemp");
   var rename2 = unavailable2("rename");
   var unlink2 = unavailable2("unlink");
   var rm2 = unavailable2("rm");
@@ -76,11 +83,16 @@
   var access2 = unavailable2("access");
   var copyFile2 = unavailable2("copyFile");
   var readdir2 = unavailable2("readdir");
+  var createReadStream2 = unavailable2("createReadStream");
+  var createWriteStream2 = unavailable2("createWriteStream");
   var join = (...a) => a.join("/");
   var dirname = (p) => String(p).replace(/\/[^/]*$/, "");
   var randomBytes2 = unavailable2("randomBytes");
   var createHash2 = unavailable2("createHash");
   var createRequireFromPath2 = unavailable2("createRequireFromPath");
+  var spawnSync2 = unavailable2("spawnSync");
+  var createInterface2 = unavailable2("createInterface");
+  var DatabaseSync2 = unavailable2("DatabaseSync");
 
   // node-stub:node:url
   var unavailable3 = (name) => () => {
@@ -93,6 +105,7 @@
   var writeFile3 = unavailable3("writeFile");
   var appendFile3 = unavailable3("appendFile");
   var mkdir3 = unavailable3("mkdir");
+  var mkdtemp3 = unavailable3("mkdtemp");
   var rename3 = unavailable3("rename");
   var unlink3 = unavailable3("unlink");
   var rm3 = unavailable3("rm");
@@ -100,10 +113,15 @@
   var access3 = unavailable3("access");
   var copyFile3 = unavailable3("copyFile");
   var readdir3 = unavailable3("readdir");
+  var createReadStream3 = unavailable3("createReadStream");
+  var createWriteStream3 = unavailable3("createWriteStream");
   var fileURLToPath = (u) => String(u);
   var randomBytes3 = unavailable3("randomBytes");
   var createHash3 = unavailable3("createHash");
   var createRequireFromPath3 = unavailable3("createRequireFromPath");
+  var spawnSync3 = unavailable3("spawnSync");
+  var createInterface3 = unavailable3("createInterface");
+  var DatabaseSync3 = unavailable3("DatabaseSync");
 
   // node-stub:node:fs/promises
   var unavailable4 = (name) => () => {
@@ -116,6 +134,7 @@
   var writeFile4 = unavailable4("writeFile");
   var appendFile4 = unavailable4("appendFile");
   var mkdir4 = unavailable4("mkdir");
+  var mkdtemp4 = unavailable4("mkdtemp");
   var rename4 = unavailable4("rename");
   var unlink4 = unavailable4("unlink");
   var rm4 = unavailable4("rm");
@@ -123,9 +142,14 @@
   var access4 = unavailable4("access");
   var copyFile4 = unavailable4("copyFile");
   var readdir4 = unavailable4("readdir");
+  var createReadStream4 = unavailable4("createReadStream");
+  var createWriteStream4 = unavailable4("createWriteStream");
   var randomBytes4 = unavailable4("randomBytes");
   var createHash4 = unavailable4("createHash");
   var createRequireFromPath4 = unavailable4("createRequireFromPath");
+  var spawnSync4 = unavailable4("spawnSync");
+  var createInterface4 = unavailable4("createInterface");
+  var DatabaseSync4 = unavailable4("DatabaseSync");
 
   // src/memory/trust.mjs
   var SOURCE_PRIOR = Object.freeze({
@@ -133,7 +157,9 @@
     teach: 0.95,
     provider: 0.9,
     corpus: 0.7,
+    corpusWeak: 0.55,
     web: 0.4,
+    extracted: 0.45,
     entailed: 0.3
   });
   var RECENCY_HALF_LIFE_MS = 30 * 24 * 60 * 60 * 1e3;
@@ -144,6 +170,31 @@
   var CREATED_AT_PROP = "mgx:createdAt";
   var UPDATED_AT_PROP = "mgx:updatedAt";
   var MEMORY_MANIFEST_REL = join(MEMORY_DIR_REL, "manifest.json");
+  function parseChatTagRest(rest) {
+    const at = rest.indexOf("@");
+    const beforeAt = at >= 0 ? rest.slice(0, at) : rest;
+    const createdAt = at >= 0 ? rest.slice(at + 1) : "";
+    const colon = beforeAt.indexOf(":");
+    const sessionId = colon >= 0 ? beforeAt.slice(colon + 1) : "";
+    return { createdAt, ...sessionId ? { sessionId } : {} };
+  }
+  function provenanceTagToSource(tag) {
+    const t = String(tag || "").trim();
+    if (!t) return null;
+    const head = t.split(/\s+/)[0];
+    if (head.startsWith("corpus-weak:")) return { kind: "corpusWeak", name: head.slice("corpus-weak:".length) || "unknown" };
+    if (head.startsWith("corpus:")) return { kind: "corpus", name: head.slice("corpus:".length) || "unknown" };
+    if (head.startsWith("ace:")) return { kind: "operator", ...parseChatTagRest(head.slice("ace:".length)) };
+    if (head.startsWith("teach:")) {
+      return { kind: "teach", ...parseChatTagRest(head.slice("teach:".length)) };
+    }
+    if (head.startsWith("web:")) return { kind: "web", url: head.slice("web:".length) };
+    if (head.startsWith("url:")) return { kind: "web", url: head.slice("url:".length) };
+    if (head.startsWith("extracted:")) return { kind: "extracted", name: head.slice("extracted:".length) || "unknown" };
+    if (head.startsWith("entailed:")) return { kind: "entailed", rule: head.slice("entailed:".length) };
+    if (head.startsWith("chat:") || head.startsWith("session:") || head.startsWith("operator")) return { kind: "operator" };
+    return null;
+  }
   var RULE_KIND_COMPOSE2 = "compose2";
   var RULE_KIND_FILTER = "filter";
   var RULE_KIND_RECURSIVE = "recursive";
@@ -216,11 +267,21 @@
     "mgx:saidinsession": "saidInSession",
     "mgx:inreplyto": "inReplyTo",
     "mgx:statedby": "statedBy",
-    "mgx:canonicalisedfrom": "canonicalisedFrom"
+    "mgx:canonicalisedfrom": "canonicalisedFrom",
+    // PLAN_VIZ_MEMORY.md Bug 2 fix: the two FIXED structural link kinds
+    // deriveFactTermGraph (below) synthesizes on every Fact — Fact -> its own
+    // subject/object Term individual. Without these a walk seeded on a Fact (the
+    // default mostRecentIndividual seed right after a teach turn) could never
+    // reach the term graph at all. Distinct from the per-predicate kinds below
+    // (an open-ended, DYNAMIC set — see relationKind's "factrel:" branch), these
+    // two are fixed and few, so a plain PROP_KIND row is the simplest fit.
+    "mgx:factsubjectterm": "factSubjectTerm",
+    "mgx:factobjectterm": "factObjectTerm"
   };
   function relationKind(group) {
     const prop = String(group?.prop || "").toLowerCase();
     if (PROP_KIND[prop]) return PROP_KIND[prop];
+    if (prop.startsWith("factrel:")) return group.predicate || null;
     const pred = String(group?.predicate || "").toLowerCase();
     if (/symbol/.test(pred)) {
       if (/\b(call|invoke)/.test(pred)) return "callsSymbol";
@@ -338,7 +399,8 @@
     kinds = SPIRAL_EXPAND_KINDS,
     classPredicate = (ind) => (ind.class || "") === "Module",
     idNormalizer = null,
-    seeds: seedsOpt = null
+    seeds: seedsOpt = null,
+    hubDegree = Infinity
   } = {}) {
     const byId = new Map(scored.map((s) => [s.ind.id, s]));
     let maxSeed = 0;
@@ -412,6 +474,7 @@
         emitted++;
       }
       if (node.hop >= depth) continue;
+      if (node.hop > 0 && degree(node.id) > hubDegree) continue;
       const cands = [];
       for (const nid of adj.get(node.id) || []) {
         if (visited.has(nid)) continue;
@@ -498,6 +561,139 @@
       }
     }
     return { nodes, edges };
+  }
+  var MEMORY_FACT_CLASS = "Fact";
+  var MEMORY_TERM_CLASS = "Term";
+  function deriveFactTermGraph(graph) {
+    const termById = /* @__PURE__ */ new Map();
+    const groupByPredicate = /* @__PURE__ */ new Map();
+    const subjectLinks = [];
+    const objectLinks = [];
+    const termId = (t) => `term:${t}`;
+    const ensureTerm = (t) => {
+      const id = termId(t);
+      if (!termById.has(id)) termById.set(id, { id, label: t, class: MEMORY_TERM_CLASS, attributes: [] });
+      return id;
+    };
+    for (const ind of graph?.individuals || []) {
+      if ((ind?.class || "") !== MEMORY_FACT_CLASS) continue;
+      const attrs = ind.attributes || [];
+      const s = attrs.find((a) => a?.prop === "rdf:subject")?.value;
+      const p = attrs.find((a) => a?.prop === "rdf:predicate")?.value;
+      const o = attrs.find((a) => a?.prop === "rdf:object")?.value;
+      if (!s || !p || !o) continue;
+      const subjectTermId = ensureTerm(s);
+      const objectTermId = ensureTerm(o);
+      let group = groupByPredicate.get(p);
+      if (!group) {
+        group = { predicate: p, prop: `factrel:${p}`, count: 0, edges: [] };
+        groupByPredicate.set(p, group);
+      }
+      group.edges.push({ subject: subjectTermId, object: objectTermId, subjectLabel: s, objectLabel: o });
+      group.count = group.edges.length;
+      subjectLinks.push({ subject: ind.id, object: subjectTermId, subjectLabel: ind.label, objectLabel: s });
+      objectLinks.push({ subject: ind.id, object: objectTermId, subjectLabel: ind.label, objectLabel: o });
+    }
+    if (!termById.size) return { graph, factRelationKinds: [] };
+    const individuals = [...graph.individuals || [], ...termById.values()];
+    const byId = new Map(graph.byId);
+    for (const term of termById.values()) byId.set(term.id, term);
+    const relations = [
+      ...graph.relations || [],
+      ...groupByPredicate.values(),
+      { predicate: "factSubjectTerm", prop: "mgx:factSubjectTerm", count: subjectLinks.length, edges: subjectLinks },
+      { predicate: "factObjectTerm", prop: "mgx:factObjectTerm", count: objectLinks.length, edges: objectLinks }
+    ];
+    return {
+      graph: { ...graph, individuals, byId, relations },
+      factRelationKinds: [...groupByPredicate.keys()]
+    };
+  }
+  var MEMORY_FACT_LINK_KINDS = ["factSubjectTerm", "factObjectTerm"];
+  function edgeKindsFor(mode, factRelationKinds) {
+    const relationKinds = [...factRelationKinds, ...MEMORY_FACT_LINK_KINDS];
+    if (mode === "meta") return [...MEMORY_SPIRAL_EXPAND_KINDS];
+    if (mode === "relation") return relationKinds;
+    return [...MEMORY_SPIRAL_EXPAND_KINDS, ...relationKinds];
+  }
+  var LEGEND_MAX_BUCKETS = 20;
+  var LEGEND_MIN_BUCKETS = 2;
+  var LEGEND_COLLAPSE_TOP_N = 15;
+  function normalizedEntropy(buckets) {
+    const k = buckets.length;
+    if (k < 2) return 0;
+    const total = buckets.reduce((sum, b) => sum + b.count, 0);
+    if (!total) return 0;
+    let h = 0;
+    for (const b of buckets) {
+      if (!b.count) continue;
+      const p = b.count / total;
+      h -= p * Math.log2(p);
+    }
+    return h / Math.log2(k);
+  }
+  function collapseToTopN(buckets) {
+    if (buckets.length <= LEGEND_MAX_BUCKETS) return buckets;
+    const sorted = [...buckets].sort((a, b) => b.count - a.count || (a.value < b.value ? -1 : 1));
+    const kept = sorted.slice(0, LEGEND_COLLAPSE_TOP_N);
+    const restCount = sorted.slice(LEGEND_COLLAPSE_TOP_N).reduce((sum, b) => sum + b.count, 0);
+    return restCount ? [...kept, { value: "Other", count: restCount }] : kept;
+  }
+  function bucketCounts(values) {
+    const counts = /* @__PURE__ */ new Map();
+    for (const v of values) {
+      if (v == null || v === "") continue;
+      counts.set(v, (counts.get(v) || 0) + 1);
+    }
+    return [...counts.entries()].map(([value, count]) => ({ value, count }));
+  }
+  function provenanceBucketLabel(rawTag) {
+    const tag = String(rawTag || "").split(" | ")[0].trim();
+    if (!tag) return null;
+    const src = provenanceTagToSource(tag);
+    if (!src) return null;
+    if (src.kind === "corpus" || src.kind === "corpusWeak") {
+      return `${src.kind === "corpusWeak" ? "corpus-weak" : "corpus"}:${src.name || "unknown"}`;
+    }
+    if (src.kind === "extracted") return `extracted:${src.name || "unknown"}`;
+    if (src.kind === "entailed") return `entailed:${src.rule || "unknown"}`;
+    if (src.kind === "operator") return "ace:chat";
+    if (src.kind === "teach") return "teach:chat";
+    if (src.kind === "web") return "web";
+    return src.kind;
+  }
+  function legendValueFor(graph, node, dimension) {
+    if (dimension === "class") return node?.class || "(none)";
+    if (!node || node.class !== MEMORY_FACT_CLASS) return null;
+    const attrs = graph?.byId?.get?.(node.id)?.attributes || [];
+    if (dimension === "predicate") return attrs.find((a) => a?.prop === "rdf:predicate")?.value || null;
+    if (dimension === "provenance") return provenanceBucketLabel(attrs.find((a) => a?.prop === "mgx:factProvenance")?.value);
+    return null;
+  }
+  function pickLegendDimension(graph, nodes) {
+    const classBuckets = bucketCounts((nodes || []).map((n) => legendValueFor(graph, n, "class")));
+    const predicateBuckets = bucketCounts((nodes || []).map((n) => legendValueFor(graph, n, "predicate")));
+    const provenanceBuckets = bucketCounts((nodes || []).map((n) => legendValueFor(graph, n, "provenance")));
+    const score = (rawBuckets) => {
+      const buckets = collapseToTopN(rawBuckets);
+      const qualifies = buckets.length >= LEGEND_MIN_BUCKETS && buckets.length <= LEGEND_MAX_BUCKETS;
+      return { score: normalizedEntropy(buckets), qualifies, buckets };
+    };
+    const dimensions = {
+      class: score(classBuckets),
+      predicate: score(predicateBuckets),
+      provenance: score(provenanceBuckets)
+    };
+    let primary = "class";
+    let bestScore = -1;
+    for (const [name, d] of Object.entries(dimensions)) {
+      if (!d.qualifies) continue;
+      if (d.score > bestScore) {
+        bestScore = d.score;
+        primary = name;
+      }
+    }
+    return { primary, dimensions };
   }
   function moduleIdOfId(graph, id) {
     const ind = graph.byId?.get?.(id);
@@ -1141,7 +1337,16 @@
     "sorta",
     "btw",
     "by the way",
-    "you"
+    "you",
+    // "quick q" (BENCHMARK_CONVERSATION_1.8.14.md item 11): the casual abbreviated
+    // sibling of GREETING_PREAMBLE_RE's own "quick question" clause (normalize.mjs)
+    // — that frame requires a delimiter immediately after the greeting word
+    // ("hey, quick question - …"), so it never matches "hey quick q, …" (no
+    // delimiter between "hey" and "quick q"). Filler-stripping instead — this
+    // list is matched word-boundary-anywhere, not anchored — closes the gap
+    // without needing GREETING_PREAMBLE_RE's own stricter delimiter-position
+    // shape.
+    "quick q"
   ]);
   var CONTEXT_PRONOUNS = Object.freeze(["this", "it", "that", "here", "this one", "that one"]);
   var NEGATION_FRAMES = Object.freeze([
@@ -1437,6 +1642,15 @@
   var FOR_DIGIT_EXAMPLE_RE = /\b4\s+(example|instance)\b(?!\s*[a-z])/gi;
   var KIND_NOUN_ANAPHORA_RE = /\b(this|that)\s+(class|module|function|method|attribute|variable|file|commit)\b/gi;
   var VERB_ALTERNATION = Object.keys(VERB_TO_KIND).sort((a, b) => b.length - a.length).map(escapeRegex).join("|");
+  var FILLER_RE = FILLER_WORDS.length ? new RegExp(
+    "\\b(" + [...FILLER_WORDS].sort((a, b) => b.length - a.length).map(escapeRegex).join("|") + ")\\b\\s*,?",
+    "gi"
+  ) : null;
+  function stripFillerWords(text) {
+    let q = String(text || "");
+    if (FILLER_RE) q = q.replace(FILLER_RE, " ");
+    return q.replace(/\s+/g, " ").trim();
+  }
   var RELATION_VERB_RE = new RegExp(
     "\\b(?:" + Object.keys(VERB_TO_KIND).sort((a, b) => b.length - a.length).map(escapeRegex).join("|") + ")\\b",
     "i"
@@ -1591,13 +1805,7 @@
     q = applySelfCorrectionFrames(q);
     q = applySubordinationFrames(q);
     q = applyConditionalFrames(q);
-    if (FILLER_WORDS.length) {
-      const fillerRe = new RegExp(
-        "\\b(" + [...FILLER_WORDS].sort((a, b) => b.length - a.length).map(escapeRegex).join("|") + ")\\b",
-        "gi"
-      );
-      q = q.replace(fillerRe, " ");
-    }
+    q = stripFillerWords(q);
     q = q.replace(/\?{2,}\s*$/, "?");
     return q.replace(/\s+/g, " ").trim();
   }
@@ -2386,6 +2594,7 @@
   var writeFile5 = unavailable5("writeFile");
   var appendFile5 = unavailable5("appendFile");
   var mkdir5 = unavailable5("mkdir");
+  var mkdtemp5 = unavailable5("mkdtemp");
   var rename5 = unavailable5("rename");
   var unlink5 = unavailable5("unlink");
   var rm5 = unavailable5("rm");
@@ -2393,9 +2602,14 @@
   var access5 = unavailable5("access");
   var copyFile5 = unavailable5("copyFile");
   var readdir5 = unavailable5("readdir");
+  var createReadStream5 = unavailable5("createReadStream");
+  var createWriteStream5 = unavailable5("createWriteStream");
   var randomBytes5 = unavailable5("randomBytes");
   var createHash5 = unavailable5("createHash");
   var createRequireFromPath5 = unavailable5("createRequireFromPath");
+  var spawnSync5 = unavailable5("spawnSync");
+  var createInterface5 = unavailable5("createInterface");
+  var DatabaseSync5 = unavailable5("DatabaseSync");
 
   // src/answer-variants.mjs
   var import_meta = {};
@@ -2531,7 +2745,7 @@
   function parseComposite(text, nlp) {
     const w = splitWords(text);
     const lc = w.map((x) => x.toLowerCase());
-    return parseExistence(w, lc) || parseQualifierCheck(w, lc) || parseNegation(text, nlp, 0) || parseForwardNegation(w, lc, nlp) || parseTemporal(w, lc, nlp, 0) || parseCommitFilter(w, lc) || parseAnaphora(w, lc, nlp) || parseAggregate(w, lc, nlp) || parseSuperlative(w, lc, nlp) || parseFind(w, lc, nlp, 0) || parseList(w, lc, nlp, 0) || parseNested(w, lc, nlp, 0) || parseRelationalOrQualified(w, lc, nlp, 0);
+    return parseExistence(w, lc) || parseQualifierCheck(w, lc) || parseNegation(text, nlp, 0) || parseForwardNegation(w, lc, nlp) || parseTemporal(w, lc, nlp, 0) || parseCommitFilter(w, lc) || parseAnaphora(w, lc, nlp) || parseAggregate(w, lc, nlp) || parseSuperlative(w, lc, nlp) || parseFind(w, lc, nlp, 0) || parseList(w, lc, nlp, 0) || parseNested(w, lc, nlp, 0) || parsePluralAnaphoraObject(w, lc, nlp) || parseRelationalOrQualified(w, lc, nlp, 0);
   }
   function complementAst(entityType, diffAtom) {
     return {
@@ -2631,6 +2845,23 @@
       const inner = parseSetPhrase(innerText, nlp, depth + 1);
       if (!inner || inner.node === "miss") return inner ? { node: "miss", reason: inner.reason || "inner clause didn't parse" } : { node: "miss", reason: "inner clause didn't parse" };
       return { node: outer.shape === "reverse" ? "reverseSet" : "forwardSet", kind: outer.kind, entityType: outer.entityType, inner };
+    }
+    return null;
+  }
+  var PLURAL_ANAPHORA_OBJECT = /* @__PURE__ */ new Set(["those", "them"]);
+  function parsePluralAnaphoraObject(w, lc, nlp) {
+    for (let i = 0; i < lc.length; i += 1) {
+      if (!PLURAL_ANAPHORA_OBJECT.has(lc[i])) continue;
+      if (lc[i - 1] === "of") continue;
+      const isTerminal = i === lc.length - 1;
+      const leadsAVerb = i + 1 < lc.length && !!VERB_TO_KIND[lc[i + 1]];
+      if (!isTerminal && !leadsAVerb) continue;
+      const head = [...w.slice(0, i), NEST_SENTINEL, ...w.slice(i + 1)];
+      const outer = parseSimpleClause(head.join(" "), nlp);
+      if (!outer || outer.shape !== "reverse" && outer.shape !== "forward") continue;
+      if (outer.object !== NEST_SENTINEL) continue;
+      if (outer.modifier && outer.modifier !== "direct") continue;
+      return { node: outer.shape === "reverse" ? "reverseSet" : "forwardSet", kind: outer.kind, entityType: outer.entityType, inner: { node: "prevSet" } };
     }
     return null;
   }
@@ -3289,8 +3520,8 @@
     const objs = uniqueById(MEMBERSHIP_KINDS.flatMap((k) => forwardOverSet(graph, k, /* @__PURE__ */ new Set([id]))));
     return entityType ? objs.filter((o) => o.class === entityType) : objs;
   }
-  function resolveMembershipOwner(graph, term) {
-    const r = resolveObject(graph, term);
+  function resolveMembershipOwner(graph, term, contextId = null) {
+    const r = resolveTermOrContext(graph, term, contextId);
     if (!(r.match && r.tier === 1)) {
       const dirMods = directoryScopeModules(graph, term);
       if (dirMods.length) return { kind: "dir", mods: dirMods };
@@ -3479,8 +3710,17 @@
         const ids = new Set(evalSet(graph, ast.inner, opts).map((i) => i.id));
         return forwardOverSet(graph, ast.kind, ids);
       }
+      // the previous list-shaped answer's own id set (parsePluralAnaphoraObject's
+      // "those"/"them" leaf) — evalComposite's reverseSet/forwardSet dispatch already
+      // intercepts the genuinely-empty (no `prev` at all) case as an honest "needs a
+      // previous answer" miss, same as evalAnaphora's own no-prev branch; this is only
+      // reached with a real, non-empty `prev` in hand.
+      case "prevSet": {
+        const prev = opts && opts.prev;
+        return Array.isArray(prev) ? prev.map((id) => graph.byId.get(id)).filter(Boolean) : [];
+      }
       case "membership": {
-        const owner = resolveMembershipOwner(graph, ast.term);
+        const owner = resolveMembershipOwner(graph, ast.term, opts && opts.contextId);
         if (owner.kind === "dir") {
           if (!ast.entityType || ast.entityType === "Module") return owner.mods;
           const ids = new Set(owner.mods.map((m) => m.id));
@@ -3640,7 +3880,7 @@
     const memNode = qualNode ? qualNode.inner : ast;
     const entityType = memNode.entityType;
     const filterFn = qualNode ? (ind) => qualNode.filters.every((f) => qualHolds(graph, ind, QUALIFIERS[f])) : null;
-    const owner = resolveMembershipOwner(graph, memNode.term);
+    const owner = resolveMembershipOwner(graph, memNode.term, opts && opts.contextId);
     if (owner.kind === "dir") {
       let objs;
       if (!entityType || entityType === "Module") objs = owner.mods;
@@ -3719,6 +3959,9 @@
         matches: narrow.length ? narrow : broad,
         broad: !narrow.length && broad.length > 0
       };
+    }
+    if ((ast.node === "reverseSet" || ast.node === "forwardSet") && ast.inner.node === "prevSet" && !(Array.isArray(opts.prev) && opts.prev.length)) {
+      return { compositeMiss: true, reason: "no-prev", matches: [] };
     }
     return { compositeKind: "set", matches: evalSet(graph, ast, opts), entityType: ast.entityType || null };
   }
@@ -4204,7 +4447,7 @@
     if (shape === "ask") {
       const subj = resolveTermOrContext(graph, parsed.subject, contextId);
       const obj = resolveTermOrContext(graph, parsed.object, contextId);
-      if (!subj.match || !obj.match) {
+      if (!subj.match || !obj.match || subj.ambiguous || obj.ambiguous) {
         return {
           matches: [],
           objMatch: obj.match,
@@ -4398,7 +4641,11 @@
           widenNote = `, widened to ${siblingClass} subjects (no ${entityType} recorded)`;
         }
       }
-      return { matches: matches2, objMatch, candidates, traversal: `${symbolKind} edges where object = ${objMatch.label}${widenNote}`, ambiguous, matchedVia };
+      const upRefineEligible = (kind === "touches" || kind === "calls") && objMatch.class === "Class" && !edgesOfKind2(graph, "contains").some((e) => e.subject === objMatch.id);
+      const upRefineModule = upRefineEligible ? graph.byId.get(moduleIdOf2(graph, objMatch) || "") : null;
+      if (matches2.length || !(upRefineEligible && upRefineModule)) {
+        return { matches: matches2, objMatch, candidates, traversal: `${symbolKind} edges where object = ${objMatch.label}${widenNote}`, ambiguous, matchedVia };
+      }
     }
     let gObjMatch = objMatch;
     let gCandidates = candidates;
@@ -4413,7 +4660,7 @@
         gCandidates = retry.candidates;
         gAmbiguous = retry.ambiguous;
         gMatchedVia = retry.matchedVia;
-      } else if ((kind === "tests" || kind === "cochange") && gObjMatch.class !== "Module") {
+      } else if (wantClass === "Module") {
         const mid = moduleIdOf2(graph, gObjMatch);
         const mod = mid && graph.byId.get(mid);
         if (mod) {
@@ -5154,6 +5401,12 @@ ${lines.join("\n")}`;
     mostRecentIndividual,
     derivedUpdatedAt,
     MEMORY_SPIRAL_EXPAND_KINDS,
-    buildVizNodesAndEdges
+    MEMORY_FACT_LINK_KINDS,
+    buildVizNodesAndEdges,
+    deriveFactTermGraph,
+    pickLegendDimension,
+    legendValueFor,
+    edgeKindsFor,
+    collapseToTopN
   };
 })();

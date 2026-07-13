@@ -46,6 +46,11 @@ import {
   renderContextMore,
   renderFileHistory,
   renderMethodHistory,
+  buildVizNodesAndEdges,
+  deriveFactTermGraph,
+  MEMORY_FACT_LINK_KINDS,
+  pickLegendDimension,
+  legendValueFor,
 } from "../src/codegraph.mjs";
 import { buildEntities } from "../src/graph-build.mjs";
 import { proseLayerHits } from "../src/prose.mjs";
@@ -1339,4 +1344,250 @@ test("spiralExpand walks the MEMORY graph (kinds=MEMORY_SPIRAL_EXPAND_KINDS, idN
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+// ── PLAN_VIZ_MEMORY.md Bug 2 fix: deriveFactTermGraph + the dual walk-kind behavior ──
+
+/** A reified Fact individual, exactly memory/core.mjs's appendFact shape —
+ *  built by hand (no memory dir / fs) so these are pure, synchronous tests. */
+function factInd(id, subject, predicate, object, provenance) {
+  return {
+    id, label: `${subject} ${predicate} ${object}`, class: "Fact",
+    attributes: [
+      { prop: "rdf:type", key: "type", value: "rdf:Statement" },
+      { prop: "rdf:subject", key: "subject", value: subject },
+      { prop: "rdf:predicate", key: "predicate", value: predicate },
+      { prop: "rdf:object", key: "object", value: object },
+      ...(provenance ? [{ prop: "mgx:factProvenance", key: "provenance", value: provenance }] : []),
+    ],
+  };
+}
+
+test("deriveFactTermGraph: materializes one Term individual per distinct subject/object and one relation group per distinct predicate — no fixed vocabulary, any predicate classifies", () => {
+  const g = parseEntities({
+    individuals: [
+      factInd("fact:1", "dog", "rdfs:subClassOf", "animal", "corpus:human"),
+      factInd("fact:2", "dog", "mgx:hasA", "tail", "corpus:conceptnet /r/HasA"),
+      factInd("fact:3", "dog", "mgx:capableOf", "bark", "corpus:conceptnet /r/CapableOf"),
+      { id: "sess:1", label: "session", class: "Session", attributes: [] }, // a non-Fact individual: untouched
+    ],
+    objectProperties: [],
+  });
+
+  const { graph: augmented, factRelationKinds } = deriveFactTermGraph(g);
+  assert.deepEqual(factRelationKinds.sort(), ["mgx:capableOf", "mgx:hasA", "rdfs:subClassOf"].sort(),
+    "one kind per DISTINCT predicate actually present — dynamically discovered, no hardcoded vocabulary");
+
+  const termIds = augmented.individuals.filter((i) => i.class === "Term").map((i) => i.id).sort();
+  assert.deepEqual(termIds, ["term:animal", "term:bark", "term:dog", "term:tail"].sort(),
+    "one Term per distinct normalized subject/object string, deduped (dog appears in all 3 facts, one Term)");
+  assert.ok(augmented.byId.has("term:dog") && augmented.byId.get("term:dog").label === "dog");
+  assert.ok(augmented.byId.has("sess:1"), "the original graph's own individuals are preserved unchanged");
+
+  // The synthetic relation groups: Term -> Term (the real concept edge) plus the
+  // two FIXED structural links (Fact -> its own subject/object Term) that make a
+  // Fact-seeded walk able to reach the term graph at all.
+  const bySubClass = augmented.relations.find((r) => r.predicate === "rdfs:subClassOf");
+  assert.deepEqual(bySubClass.edges, [{ subject: "term:dog", object: "term:animal", subjectLabel: "dog", objectLabel: "animal" }]);
+  const subjLinks = augmented.relations.find((r) => r.predicate === "factSubjectTerm");
+  assert.equal(subjLinks.edges.length, 3, "one factSubjectTerm link per Fact");
+  assert.ok(subjLinks.edges.some((e) => e.subject === "fact:1" && e.object === "term:dog"));
+  const objLinks = augmented.relations.find((r) => r.predicate === "factObjectTerm");
+  assert.ok(objLinks.edges.some((e) => e.subject === "fact:1" && e.object === "term:animal"));
+
+  // relationKind's new "factrel:" branch self-classifies each synthetic group
+  // to its raw predicate — the SAME string spiralExpand's `kinds` list uses.
+  assert.equal(relationKind(bySubClass), "rdfs:subClassOf");
+  assert.equal(relationKind(subjLinks), "factSubjectTerm");
+  assert.equal(relationKind(objLinks), "factObjectTerm");
+  assert.deepEqual(MEMORY_FACT_LINK_KINDS, ["factSubjectTerm", "factObjectTerm"]);
+
+  // A no-op on a graph with no Fact individuals at all (safe on a code graph too).
+  const codeGraph = parseEntities({ individuals: [{ id: "mod:a", label: "a.mjs", class: "Module", attributes: [] }], objectProperties: [] });
+  const noop = deriveFactTermGraph(codeGraph);
+  assert.equal(noop.graph, codeGraph, "same graph object back, unchanged");
+  assert.deepEqual(noop.factRelationKinds, []);
+});
+
+test("Bug 2 fix: a walk over BOTH kind sets (meta + relation, the default) reaches a real concept-relation edge a meta-only walk cannot; the meta-only toggle still reproduces today's exact provenance-only view", () => {
+  const g = parseEntities({
+    individuals: [
+      factInd("fact:1", "dog", "rdfs:subClassOf", "animal"),
+      factInd("fact:2", "dog", "mgx:hasA", "tail"),
+    ],
+    objectProperties: [],
+  });
+  const { graph: augmented, factRelationKinds } = deriveFactTermGraph(g);
+
+  // meta-only (MEMORY_SPIRAL_EXPAND_KINDS alone, unchanged from before this fix):
+  // seeded on the Fact itself, the walk can reach NOTHING ELSE at all — a Fact
+  // has zero saidInSession/inReplyTo/statedBy/canonicalisedFrom edges of its own
+  // in this fixture, so it stays alone; today's exact byte-identical behavior.
+  const metaOnly = spiralExpand(augmented, [], {
+    kinds: MEMORY_SPIRAL_EXPAND_KINDS, idNormalizer: (id) => id, classPredicate: () => true,
+    seeds: ["fact:1"], depth: 3, nodeLimit: 50,
+  });
+  assert.deepEqual(metaOnly.map((r) => r.id), ["fact:1"], "meta-only walk from a Fact reaches nothing — the pre-Bug-2 gap");
+
+  // both (the new default): the SAME seed now reaches its own subject/object
+  // Terms (via the factSubjectTerm/factObjectTerm links) AND, from "dog", the
+  // OTHER fact's relation too — a real concept-relation edge, structurally
+  // invisible before this fix.
+  const both = spiralExpand(augmented, [], {
+    kinds: [...MEMORY_SPIRAL_EXPAND_KINDS, ...factRelationKinds, ...MEMORY_FACT_LINK_KINDS],
+    idNormalizer: (id) => id, classPredicate: () => true,
+    seeds: ["fact:1"], depth: 3, nodeLimit: 50, q: 1,
+  });
+  const reached = new Set(both.map((r) => r.id));
+  assert.ok(reached.has("term:dog"), "reaches the Fact's own subject Term");
+  assert.ok(reached.has("term:animal"), "reaches the Fact's own object Term");
+  assert.ok(reached.has("fact:2"), "reaches the OTHER fact via the shared \"dog\" term — a real concept-relation edge");
+  assert.ok(reached.has("term:tail"), "reaches that other fact's object Term too — the concept neighbourhood, not just one fact");
+
+  // relation-only isolates the concept view: the Fact -> Term links are relation
+  // kinds too (needed for reachability at all), so the seed Fact and its own
+  // terms are still reached, but nothing PROVENANCE-shaped would be (none exists
+  // in this fixture to begin with, so this mirrors the "both" reachable set here
+  // — the meaningful contrast already lives in the meta-only case above).
+  const relationOnly = spiralExpand(augmented, [], {
+    kinds: [...factRelationKinds, ...MEMORY_FACT_LINK_KINDS],
+    idNormalizer: (id) => id, classPredicate: () => true,
+    seeds: ["fact:1"], depth: 3, nodeLimit: 50, q: 1,
+  });
+  assert.ok(new Set(relationOnly.map((r) => r.id)).has("fact:2"), "relation-only walk also reaches the concept neighbourhood");
+});
+
+test("spiralExpand hubDegree: a node above the cap is still emitted (shown) but never expanded THROUGH; Infinity (default) is byte-identical to before this option existed", () => {
+  // A star: hub connected to 5 leaves, each leaf also connected to its own tail node.
+  // Seeded on a LEAF (not the hub) so the test isolates "the hub is reached, shown,
+  // but its own fan-out is gated" from "a seed ON a hub can't expand at all" (the
+  // separate, simpler case the next test covers).
+  const edges = [];
+  for (let i = 0; i < 5; i++) {
+    edges.push({ subject: "hub", object: `leaf${i}`, subjectLabel: "hub", objectLabel: `leaf${i}` });
+    edges.push({ subject: `leaf${i}`, object: `tail${i}`, subjectLabel: `leaf${i}`, objectLabel: `tail${i}` });
+  }
+  const individuals = [{ id: "hub", label: "hub", class: "Thing", attributes: [] }];
+  for (let i = 0; i < 5; i++) {
+    individuals.push({ id: `leaf${i}`, label: `leaf${i}`, class: "Thing", attributes: [] });
+    individuals.push({ id: `tail${i}`, label: `tail${i}`, class: "Thing", attributes: [] });
+  }
+  // prop namespaced "factrel:" so relationKind's own dedicated branch self-classifies
+  // this fixture's edges to kind "rel" — the SAME mechanism deriveFactTermGraph's
+  // real synthetic groups use, exercised here on a plain synthetic graph.
+  const g = parseEntities({
+    individuals,
+    objectProperties: [{ predicate: "rel", prop: "factrel:rel", count: edges.length, examples: edges }],
+  });
+  const opts = { kinds: ["rel"], idNormalizer: (id) => id, classPredicate: () => true, seeds: ["leaf0"], depth: 5, nodeLimit: 50, q: 1 };
+
+  const uncapped = spiralExpand(g, [], opts);
+  assert.equal(uncapped.length, 11, "no hub gate (default Infinity): reaches leaf0 + tail0 + hub + the other 4 leaves + their 4 tails");
+
+  const capped = spiralExpand(g, [], { ...opts, hubDegree: 4 }); // hub has degree 5, above the cap
+  const reachedIds = capped.map((r) => r.id);
+  assert.deepEqual(reachedIds, ["leaf0", "tail0", "hub"],
+    "the hub is still reached and shown (leaf0's own hop-1 neighbour, under leaf0's degree-2 cap-check, not the hub's) — but nothing beyond it: the hub's OWN fan-out to the other 4 leaves is gated, so they (and their tails) are never reached");
+});
+
+test("spiralExpand hubDegree: EXEMPTS the seed itself (hop 0) — a walk started directly on a hub still shows that hub's own immediate neighbourhood — but a hub reached MID-walk (hop > 0) still gates normally", () => {
+  // seeded ON hub0 (degree 5, above the cap): its own 5 immediate neighbours
+  // (leafA..E) ARE reached (the seed-exemption). leafA is ALSO a hub (10 more
+  // "sub" neighbours, degree 11) — reached at hop 1 > 0, so ITS fan-out IS
+  // gated: none of leafA's own "sub" nodes are reached.
+  const edges = [];
+  ["leafA", "leafB", "leafC", "leafD", "leafE"].forEach((l) => edges.push({ subject: "hub0", object: l, subjectLabel: "hub0", objectLabel: l }));
+  for (let i = 0; i < 10; i++) edges.push({ subject: "leafA", object: `sub${i}`, subjectLabel: "leafA", objectLabel: `sub${i}` });
+  const individuals = [{ id: "hub0", label: "hub0", class: "Thing", attributes: [] }];
+  ["leafA", "leafB", "leafC", "leafD", "leafE"].forEach((l) => individuals.push({ id: l, label: l, class: "Thing", attributes: [] }));
+  for (let i = 0; i < 10; i++) individuals.push({ id: `sub${i}`, label: `sub${i}`, class: "Thing", attributes: [] });
+  const g = parseEntities({
+    individuals,
+    objectProperties: [{ predicate: "rel", prop: "factrel:rel", count: edges.length, examples: edges }],
+  });
+  const capped = spiralExpand(g, [], {
+    kinds: ["rel"], idNormalizer: (id) => id, classPredicate: () => true,
+    seeds: ["hub0"], depth: 5, nodeLimit: 50, q: 1, hubDegree: 4, // hub0's degree (5) and leafA's (11) both exceed the cap
+  });
+  const reachedIds = new Set(capped.map((r) => r.id));
+  assert.deepEqual(reachedIds, new Set(["hub0", "leafA", "leafB", "leafC", "leafD", "leafE"]),
+    "the seed's own immediate neighbours are all reached (seed exemption), but none of leafA's OWN neighbours are — leafA is a hub reached at hop > 0, so its fan-out is still gated");
+  for (let i = 0; i < 10; i++) assert.ok(!reachedIds.has(`sub${i}`), `sub${i} unreachable — gated by leafA's own hub cap`);
+});
+
+// ── PLAN_VIZ_MEMORY.md "Auto-picking the filter/legend dimension at generation time" ──
+
+test("legendValueFor: class reads every node; predicate/provenance only ever return non-null for a Fact node", () => {
+  const g = parseEntities({
+    individuals: [factInd("fact:1", "dog", "mgx:hasA", "tail", "corpus:conceptnet /r/HasA")],
+    objectProperties: [],
+  });
+  const factNode = { id: "fact:1", class: "Fact" };
+  const sessNode = { id: "sess:1", class: "Session" };
+  assert.equal(legendValueFor(g, factNode, "class"), "Fact");
+  assert.equal(legendValueFor(g, sessNode, "class"), "Session");
+  assert.equal(legendValueFor(g, factNode, "predicate"), "mgx:hasA");
+  assert.equal(legendValueFor(g, sessNode, "predicate"), null, "a non-Fact node has no predicate of its own to bucket on");
+  assert.equal(legendValueFor(g, factNode, "provenance"), "corpus:conceptnet", "the session-id/timestamp suffix is collapsed, corpus name kept");
+  assert.equal(legendValueFor(g, sessNode, "provenance"), null);
+});
+
+test("pickLegendDimension: a hand-verifiable synthetic node set where `class` is 90% one bucket (disqualified as primary) and `predicate` splits evenly (wins)", () => {
+  // 9 Facts, 3 each of 3 distinct predicates (perfectly even -> entropy 1.0), plus
+  // 1 Session — class bucket = {Fact: 9, Session: 1} (90/10, entropy << 1).
+  const facts = [];
+  const predicates = ["rdfs:subClassOf", "mgx:hasA", "mgx:capableOf"];
+  for (let i = 0; i < 9; i++) facts.push(factInd(`fact:${i}`, `s${i}`, predicates[i % 3], `o${i}`, "corpus:human"));
+  const g = parseEntities({
+    individuals: [...facts, { id: "sess:1", label: "session", class: "Session", attributes: [] }],
+    objectProperties: [],
+  });
+  const nodes = [
+    ...facts.map((f) => ({ id: f.id, class: "Fact" })),
+    { id: "sess:1", class: "Session" },
+  ];
+  const result = pickLegendDimension(g, nodes);
+
+  assert.equal(result.dimensions.class.buckets.length, 2);
+  assert.ok(result.dimensions.class.score < 0.5, `class split should score low (one dominant bucket) — got ${result.dimensions.class.score}`);
+
+  assert.equal(result.dimensions.predicate.buckets.length, 3);
+  assert.equal(result.dimensions.predicate.score, 1, "a perfectly even 3/3/3 split scores maximum normalized entropy");
+
+  // provenance: all 9 facts share ONE provenance ("corpus:human") -> k=1 -> disqualified (k < 2).
+  assert.equal(result.dimensions.provenance.buckets.length, 1);
+  assert.equal(result.dimensions.provenance.qualifies, false, "a single-bucket dimension never qualifies (k < 2)");
+
+  assert.equal(result.primary, "predicate", "predicate's perfect-entropy split beats class's 90/10 skew as the auto-picked PRIMARY legend");
+});
+
+test("pickLegendDimension: a dimension with > 20 buckets collapses to top-15 + \"Other\" before scoring, never simply disqualifies on cardinality alone", () => {
+  const facts = [];
+  for (let i = 0; i < 25; i++) facts.push(factInd(`fact:${i}`, `s${i}`, `mgx:pred${i}`, `o${i}`)); // 25 distinct predicates
+  const g = parseEntities({ individuals: facts, objectProperties: [] });
+  const nodes = facts.map((f) => ({ id: f.id, class: "Fact" }));
+  const result = pickLegendDimension(g, nodes);
+  assert.ok(result.dimensions.predicate.buckets.length <= 20, "collapsed to at most 20 buckets (top 15 + Other)");
+  assert.ok(result.dimensions.predicate.buckets.some((b) => b.value === "Other"), "the collapsed remainder is labeled Other");
+  assert.equal(result.dimensions.predicate.qualifies, true, "post-collapse bucket count (<=20) qualifies");
+});
+
+test("pickLegendDimension: falls back to \"class\" when nothing qualifies (a tiny 1-node walk), never an empty/undefined primary", () => {
+  const g = parseEntities({ individuals: [factInd("fact:1", "a", "mgx:hasA", "b")], objectProperties: [] });
+  const result = pickLegendDimension(g, [{ id: "fact:1", class: "Fact" }]);
+  assert.equal(result.primary, "class", "a single node's class bucket (k=1) is itself disqualified, but the fallback is still class, never left undefined");
+});
+
+test("buildVizNodesAndEdges renders deriveFactTermGraph's synthetic edges byte-identically to any other relation group (no special-casing needed — plan's own claim, re-verified)", () => {
+  const g = parseEntities({
+    individuals: [factInd("fact:1", "dog", "rdfs:subClassOf", "animal")],
+    objectProperties: [],
+  });
+  const { graph: augmented } = deriveFactTermGraph(g);
+  const walked = [{ id: "fact:1", hop: 0 }, { id: "term:dog", hop: 1 }, { id: "term:animal", hop: 1 }];
+  const { nodes, edges } = buildVizNodesAndEdges(augmented, walked);
+  assert.equal(nodes.length, 3);
+  assert.ok(nodes.find((n) => n.id === "term:dog" && n.class === "Term" && n.label === "dog"));
+  assert.ok(edges.find((e) => e.source === "term:dog" && e.target === "term:animal" && e.kind === "rdfs:subClassOf"));
+  assert.ok(edges.find((e) => e.source === "fact:1" && e.target === "term:dog" && e.kind === "factSubjectTerm"));
 });

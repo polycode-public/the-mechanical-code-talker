@@ -1,6 +1,11 @@
 # PLAN_VIZ_MEMORY.md — make `tmct viz` show (and answer from) as much of the real memory graph as `npm run chat` does
 
-Status: RESEARCH / DESIGN — not yet implemented. Nothing in this document is live code.
+Status: IMPLEMENTED (2026-07-13, all 6 phases). See HANDOVER.md for the session's own before/after
+numbers (legend-dimension entropy, real `init:large`-scale timings) and the Cytoscape.js decision.
+The design sections below are kept as the record of WHY each piece is shaped the way it is; the
+Phasing checklist marks what actually shipped, and where the real implementation deviated from
+this doc's own original mechanism (two real cases, both because the actual data model / an
+existing seam turned out simpler or riskier than assumed here — noted inline at each spot).
 
 ## Origin
 
@@ -42,13 +47,16 @@ embeds the full memory payload inline as a page-level constant (`payloadJson`, v
 `embedJson({...payload})` call) — the data the ask panel needs is already sitting in the page,
 unused by the current bundle. The precedent (`ask-browser-entry.mjs`'s narrow 7-export re-export,
 not the whole `ask.mjs` file) is: build a second narrow browser entry point,
-`src/memory-ask-browser-entry.mjs`, that re-exports just `factAnswer` (and whatever `chat.mjs`
-helpers it calls internally that also do `fs` I/O), with `src/memory/core.mjs`'s `loadMemory`
-shimmed at bundle time (the same Node-builtin-stub esbuild plugin `build-ask-bundle.mjs` already
-uses for `fs`/`path`, extended to special-case `loadMemory` specifically) to return the page's
-already-embedded `PAYLOAD` constant instead of doing real file I/O. Everything downstream of
-`loadMemory` inside `factAnswer` is pure graph traversal over the returned payload shape — no
-further I/O to stub.
+`src/memory-ask-browser-entry.mjs`, that re-exports just `factAnswer`.
+
+**IMPLEMENTED, one deviation from this section's own mechanism:** no `loadMemory` bundle-time shim
+was built. `memory/core.mjs` already has a Backend-B in-memory-store seam (`createInMemoryStore()`,
+predating this doc) — `loadMemory` already returns `handle.payload` directly with ZERO fs I/O when
+handed one. So the browser entry re-exports `createInMemoryStore` alongside `factAnswer`, and the
+page's client JS just does `var h = tmctMemoryAsk.createInMemoryStore(); h.payload = PAYLOAD;` before
+calling `factAnswer(h, query, null, true, {})`. Same outcome (pure, disk-free traversal over the
+full embedded payload) via an existing, already-tested real code path instead of new bundle-time
+module-interception machinery — simpler and less likely to drift from the CLI's own behavior.
 
 **Answer scope, matching seonix's proven precedent:** seonix's ask panel deliberately queries a
 SEPARATE, full (not depth-limited) graph channel — its own comment states plainly: "querying only
@@ -83,6 +91,22 @@ default (meta edges for the "how did this fact get here" provenance view, relati
 same way asking about it in chat would surface those same facts. Keep the existing meta-only walk
 available as a filterable EDGE-KIND toggle (see Controls below), not deleted — provenance navigation
 is still a real, useful view, just not the only one.
+
+**IMPLEMENTED — bigger than "add a kind list" turned out to be.** Re-verifying this section against
+the actual data model (not assumed): a Fact's subject/predicate/object are plain normalized STRING
+attributes on the Fact individual (`rdf:subject`/`rdf:predicate`/`rdf:object`) — there is NO
+individual node for "dog" in `graph.relations`/`graph.individuals` at all, and no existing
+subject-term↔object-term edge to walk. This section's own "`buildVizNodesAndEdges` draws EDGES
+correctly from `graph.relations` (real subject/object pairs)" claim was true only of the FOUR meta
+edges, not of any real concept relation — those simply don't exist as graph edges anywhere yet. The
+actual fix (`deriveFactTermGraph`, `src/codegraph.mjs`) materializes them: one synthetic `Term`
+individual per distinct subject/object string, one synthetic relation group per DISTINCT predicate
+actually present (no hardcoded `FACT_PREDICATE_PHRASES` vocabulary needed — dynamically discovered,
+so a freshly taught predicate is walkable the same turn), plus two fixed structural links
+(`factSubjectTerm`/`factObjectTerm`, Fact → its own subject/object Term) so a walk seeded on a Fact
+can reach the term graph at all. `relationKind` gained one small, additive `"factrel:"`-prefixed
+self-classifying branch to let these dynamically-named kinds classify without a PROP_KIND row per
+predicate. `buildVizNodesAndEdges` itself needed NO changes — this section's claim about it held.
 
 ## Page-size strategy (local-only viewing, download weight is not a constraint)
 
@@ -217,30 +241,42 @@ set about to be rendered — embedded into the page's JSON as a precomputed `{di
   in `computeVizGraph` or a new `pickLegendDimension(nodes)` pure function alongside it, unit-testable
   the same way `buildVizNodesAndEdges` already is.
 
-## Open question — stay canvas, or adopt Cytoscape.js like seonix?
+## Open question — stay canvas, or adopt Cytoscape.js like seonix? — RESOLVED: stayed on canvas
 
-seonix's much larger control surface (hub-hide, beam-prune, multiple layouts, a size-gated large-
-graph split) leans on Cytoscape.js doing the actual rendering/layout/interaction work; tmct's viz is
-hand-rolled canvas with a fixed concentric-ring layout. Porting every seonix control by hand onto raw
-canvas is real, avoidable effort — Cytoscape.js is already a proven dependency choice in this exact
-codebase family (seonix), and tmct's own "no external CDN, fully self-contained" constraint is
-satisfiable the same way seonix satisfies it (the library ships inlined, not `<script src>`'d).
-**Recommendation for the implementation phase (not decided here): evaluate bundling Cytoscape.js
-inline before hand-rolling beam-prune/hub-hide/multi-layout on canvas** — the effort comparison
-should be made with real numbers (inlined library size, since download weight doesn't matter locally
-per the operator's own framing) before committing to either path.
+**Decision: stayed on the existing hand-rolled canvas renderer, did not bundle Cytoscape.js.**
+Every required control (hub-hide, beam-prune, label-density modes, search, edge-kind toggle) is a
+FILTERING operation over an already-positioned node/edge set, not a layout/physics/rendering need —
+the existing `visibleNodeIds()`/`applyFilters()`/`draw()` pattern already established for the depth
+stepper and class filters extends cleanly to every one of them (confirmed by actually building all
+five this session, not estimated). The plan's own scope explicitly deferred force-directed layout
+("lowest priority... only build if concentric-by-hop reads poorly on real xl-scale data") — the one
+piece that would have been Cytoscape.js's real advantage. Inlining a general graph-visualization
+library to gain layout/physics machinery this phase doesn't need, at the cost of a real
+fetch-minify-verify-inline side quest and a first external viz dependency in a codebase whose only
+current dependencies are `ink`/`react`/`smol-toml`/wink, wasn't worth it for pure filtering logic.
+Revisit if/when force-directed layout is actually needed.
 
 ## Phasing (implementation, not this document)
 
-1. Bug 2 fix (walk-kind gap) — foundational; nothing else in this doc matters if the walk still can't
-   reach real concept edges. Smallest, most isolated change (`MEMORY_SPIRAL_EXPAND_KINDS` addition +
-   `buildVizNodesAndEdges` — likely already correct, re-verify against a relation-inclusive walk).
-2. `hubDegree` cap + raised `nodeLimit` default, tuned against real `init:xl` data once that lands.
-3. `pickLegendDimension` + the provenance/predicate legend, replacing the class-only legend.
-4. Bug 1 fix (ask panel engine) — the narrow browser entry point + `loadMemory` shim.
-5. Controls port (hub-hide, beam-prune, search, label modes, edge-kind toggle) — the Cytoscape.js
-   question should be resolved before this phase, since it changes the shape of the work
-   substantially.
+All 6 shipped 2026-07-13:
+1. Bug 2 fix (walk-kind gap) — DONE, via `deriveFactTermGraph` (bigger than a kind-list addition;
+   see that section's own "IMPLEMENTED" note above for why).
+2. `hubDegree` cap + raised `nodeLimit` default — DONE. Tuned against a real ~37,700-fact corpus
+   this session (`seon` + `conceptnet` imports; `init:xl`/`init:xxl` still don't exist in
+   `package.json`) rather than the not-yet-landed `init:xl`. `hubDegree` default 40 (seonix's own),
+   `nodeLimit` default raised to 300 (seonix's own default is 200; tmct's dual Fact+Term node model
+   roughly doubles effective node count per concept vs seonix's one-node-per-class model, so 300 was
+   chosen as a deliberately modest step up, not a blind copy). Also found and fixed a real gap while
+   testing against a dense real hub ("tree", 1,972 ConceptNet facts): `hubDegree` originally gated
+   the WALK'S OWN SEED too, so `tmct viz --term tree` returned one useless lone node — fixed by
+   exempting hop 0 from the gate (a walk seeded ON a hub must still show that hub's own immediate
+   neighbourhood; only a hub reached mid-walk still gates).
+3. `pickLegendDimension` — DONE, plus its per-node sibling `legendValueFor` (needed for live legend
+   filtering, both server- and client-side).
+4. Bug 1 fix (ask panel engine) — DONE, via the in-memory-store seam rather than a `loadMemory`
+   shim (see that section's own "IMPLEMENTED" note above).
+5. Controls port — DONE, hand-rolled on canvas (see the resolved Cytoscape.js question above).
+6. `--term` seed flag — DONE.
 6. `--term` seed flag.
 
 ## Non-goals
