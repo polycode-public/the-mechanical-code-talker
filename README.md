@@ -392,21 +392,6 @@ once automatically after seeding and on demand; the entailed facts are
 **low-trust and retractable** (never outranking a stated fact) and this never runs
 on the chat's hot path.
 
-## What tmct deliberately is NOT
-
-- **It is not an indexer.** tmct keeps no codebase index of its own. It
-  consumes a graph via a provider seam (`fetchEntities` and friends) — building
-  that graph is a different tool's job. tmct's job is the *conversation*.
-- **It is not a reasoning model.** Where it "reasons", it does so by
-  *calculation* surfaced as prose ("there are a lot of tests for a codebase of
-  that size"). It is deterministic, explainable, and cheap. Even its forward-chaining
-  entailment (`tmct syllogise`) is mechanical OWL rule materialization applied
-  offline, rule-by-rule and retractable, not an LLM. There is **no LLM anywhere
-  in the product**. (An LLM-as-judge exists only in the offline eval harness
-  that tunes tmct, see `SKILL_BENCHMARK_CEFR_ENGLISH.md`, never in the product path.)
-- **It never guesses silently.** When it cannot resolve your question it says
-  so and nudges you toward a query it *can* answer.
-
 ## Install & use
 
 ```bash
