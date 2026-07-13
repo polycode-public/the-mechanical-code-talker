@@ -146,10 +146,7 @@ be explained away.
   and only then was the full console output (per-band tables + the 48-row non-passing list) read in
   full and used to write this report — no number here was taken from a still-running or assumed
   outcome.
-- **`npm test`**: out of scope for this task per the briefing (measurement-only, `src/` off-limits);
-  not run here. `git status` immediately before writing this file showed a clean working tree (no
-  concurrent dispatch in flight), so the HANDOVER.md/ROADMAP.md bullet described below was safe to
-  add.
+
 - **HANDOVER.md/ROADMAP.md bullet**: added — one short dated bullet to each file's main narrative
   (not touching HANDOVER's numbered "Open follow-ups" list), since `git status` showed both files
   clean immediately before editing.

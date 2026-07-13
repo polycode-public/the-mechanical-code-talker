@@ -322,13 +322,6 @@ entity. New npm script `build:ask-bundle
 
 ## §6. NL-fluency, made concrete — a real generation + coverage-testing phase, folded into this plan
 
-**Operator decision: in scope for this execution pass, not deferred.** The entity-tie fix (§1) and
-alternates-on-hits (§3) are themselves the first real increment — multiple genuine, real answers
-shown together already reads more like a fluent conversational reply than one terse template line,
-and neither needed new template content. This phase builds the actual raw material the Ambition's
-"richer template/surface-realization variety" goal calls for, mechanically, from real local
-resources — not invented, not an LLM.
-
 **6a. Generate — combinatorial surface-variant expansion, "Legends but for English."** tmct already
 has every ingredient needed, found this session: the ACE grammar's 8 sentence patterns
 (`src/grammar/ace.mjs`), the existing lexicon and template bank (`data/templates/`), and

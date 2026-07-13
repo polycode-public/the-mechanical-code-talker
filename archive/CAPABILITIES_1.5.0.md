@@ -186,11 +186,6 @@ Unchanged from `_001` — nothing touched these plans' surfaces this session.
 
 ### `PLAN_TAUGHT_RELATIONS.md`
 
-**One new row**: the has-a-method teach shape (item 9, this session) is a genuinely NEW seventh ACE
-pattern, explicitly NOT one of this plan's original six (per the operator's own scope decision this
-session — build it as a new pattern, not fold it into the existing six or declare it out of scope).
-Worth a note in the plan itself next time it's touched, so the "six capabilities" framing doesn't
-read as stale.
 
 ---
 

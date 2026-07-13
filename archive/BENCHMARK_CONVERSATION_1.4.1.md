@@ -122,9 +122,7 @@ reasonable full-ladder starting point for a future run.
   session's own temporal-composition work (`PLAN_CHAT_FEEL.md` item 6), well-scoped, real user value.
 - **The filler-word gap** ("so what is a component then") — likely a small, quick fix (extend
   whatever filler-stripping frame currently doesn't cover trailing "then").
-- **The has-a-method teach shape** needs an operator scope decision before any implementation:
-  build it as a new ACE pattern, or declare it out of scope (mirroring how `PLAN_TAUGHT_RELATIONS.md`
-  drew similar lines around which teach shapes to support).
+
 - **Wiring `src/completions/` into live chat dispatch** is the clear, large next step if broad
   "summarize/explain" questions are meant to be answerable in conversation — currently confirmed
   unreachable from any chat turn.

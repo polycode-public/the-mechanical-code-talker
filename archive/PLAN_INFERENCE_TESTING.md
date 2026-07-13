@@ -344,15 +344,6 @@ citations. What's left here is the one item that's a separate, much smaller topi
     differentiable relaxation of forward-chaining, explicitly to gain robustness to noisy training
     data that "traditional ILP systems... cannot cope with" (Evans, R. & Grefenstette, E., "Learning
     Explanatory Rules from Noisy Data," *Journal of Artificial Intelligence Research* 61:1-64, 2018
-    — verified), and Cropper & Muggleton's own later work (Metagol / Meta-Interpretive Learning,
-    2014-2018 — verified via Cropper & Muggleton, "Learning efficient logic programs," *Machine
-    Learning*, Springer, 2018) moved ILP itself toward predicate invention and recursion rather than
-    Progol's original flat inverse-entailment search. Same pattern already named for the parsing
-    frontier elsewhere in this repo's docs: the mainstream research trend augments rather than
-    replaces the classical technique. tmct's ground rules (no-LLM, permanently) mean this trend is
-    NOT a lever tmct can pull — named here only so it isn't rediscovered later as if unknown, and so
-    the honest state is on record: the neuro-symbolic branch is real and active, and out of scope by
-    tmct's own house rule, not by ignorance of it.
 
 **Unlocks:** chat "why" answers rendered from proof chains (the ROADMAP L790 chain-of-thought-in-
 words); AGENTBENCH C2 goal deduction over taught rules (the router deducing a plan from axioms —

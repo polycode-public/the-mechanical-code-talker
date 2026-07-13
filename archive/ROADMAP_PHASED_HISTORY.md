@@ -985,10 +985,6 @@ docs' scope was reached before consolidation.
 
 ### Future direction: a genuine planning/agentic loop
 
-Out of scope for the routing-level `GOAL_BY_COMMAND`/Goal-inference line above, which only labels
-an already-computed answer's intent and never plans ahead of one: infer the goal, read the
-relevant subgraph, reason about candidate action-paths and their effects, pick the next step,
-execute, repeat.
 
 Three companion research docs scope this against minimal benchmark domains before anything
 domain-general is attempted; one of the three is now fully built, the other two remain design-only:

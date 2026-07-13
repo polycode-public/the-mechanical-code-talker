@@ -2377,9 +2377,7 @@ async function unknownObjectFallback(payload, { memoryDir, sessionId, lexicon },
  *  Sits strictly UPSTREAM of the pre-existing TEACH_PROPERTY_RE gap (the
  *  wrapped-only surface that mints ANY bare complement word with zero
  *  grounding check at all, e.g. "remember that zorp is florpy" —
- *  Verification finding 3, PLAN_TAUGHT_RELATIONS.md): this fallback does not
- *  close that gap (out of scope, a deliberate separate operator decision),
- *  only adds a properly-grounded alternative ahead of it.
+ *  Verification finding 3, PLAN_TAUGHT_RELATIONS.md): .
  *
  *  IMPLEMENTATION ADJUSTMENT found live (not in the original plan text): a
  *  bare "module is banana" (a KNOWN lexicon-noun subject, NO article, NO

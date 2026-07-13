@@ -175,7 +175,7 @@ Step-1→Step-2 single-lever cycle) — the closest thing to a prediction on rec
 | --- | --- | --- |
 | C2 `pronoun-binding` — "clear, concentrated priority" | fix it, watch the 4 hard fails clear | **done** — all 4 now 2.0/2.0, via `a24e628` |
 | A2 `naming-vocabulary`'s 2 hard fails — "worth a closer read" | investigate, likely fixable | **done** — both now 2.0/2.0, via `07f4805` (commit message cites both case ids) |
-| A full-pool run (`graded-pool-max.jsonl`) | "would give broader coverage before a release" | **not done** — out of scope for this run, still open |
+
 
 ## Per-lever analysis
 

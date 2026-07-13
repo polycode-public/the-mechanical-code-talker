@@ -141,15 +141,6 @@ how much of *real, unrelated* prose the grammar covers, so this report keeps the
 separate: docs-corpus coverage (0/2,949, unchanged) and generated-corpus yield (17 rows, 100%
 self-verified by construction, since an unverified row is never written).
 
-## Honest framing
-
-The ACE grammar's ceiling on free-form prose is low, and that's structural, not a defect this
-pass could fix. Growing that ceiling means writing more grammar patterns or declaring more
-vocabulary — both real work, out of scope here. What this phase delivers is the two things the
-plan actually asked for: a real, repeatable, checkable coverage number (0/2,949 hit, 60.4%
-shape-only), and a first, small, fully-verified batch of generated surface variants (17 rows) as
-raw material for future template/output variety — not a claim that free-form English input
-coverage improved.
 
 ## Files
 

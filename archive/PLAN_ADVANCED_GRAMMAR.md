@@ -10,15 +10,6 @@ as term reach; [[archive/PLAN_PREDICATE_QUERIES.md]] — a distinct product feat
 sequenced alongside this one's Phase-1 items, see `ROADMAP.md`'s near-term section for the live
 cross-plan picture.)*
 
-**Ground rules, restated because everything below is tempted to violate them.** The product is
-no-LLM, permanently (ROADMAP "out of scope"); every mechanism must be deterministic, explainable,
-and closed — the 0.8.2 method (closed frames, first-match-wins, unmatched text passes through
-byte-unchanged, `src/interpret/normalize.mjs:110-128`) is the licensed pattern. The ladder rule
-governs spend: **B1 reliable before judging C-grades** (ROADMAP.md:361-364; GRADED.md "Ladder
-gating" — B1 exit = grade mean ≥ ~1.5, all B1 cells dual-draw-agreeing, no v1/promoted
-regression). The operator's lever board ranks **C2 ceiling LAST** (ROADMAP.md:366-375). Honest
-framing: this is a plan to *earn the right to climb*, mostly by widening what C1 measures and
-making B-grade machinery compose — not a plan to "pass C2".
 
 ## 1 — Ground truth: what C1/C2 mean here, and what the pool actually measures
 

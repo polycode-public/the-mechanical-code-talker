@@ -98,7 +98,6 @@ async function main() {
   console.log("closed goal-rules climb reliably. Request 4 is the honest refusal working");
   console.log("as designed. Request 5 USED TO be a gap: an unrelated request silently got");
   console.log("a real, confident, differently-phrased answer instead of being recognized as");
-  console.log("out of scope (Bug 8, src/router/goal-reasoner.mjs). It is now FIXED with a");
   console.log("global-mode DOMAIN GATE — reusing ask.mjs's own NL grammar (parseQuery) to");
   console.log("require the request itself, not just the declared toolset, to be about the");
   console.log("deduced goal's domain — so it refuses honestly like request 4, zero request");

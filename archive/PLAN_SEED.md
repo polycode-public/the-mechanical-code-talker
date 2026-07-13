@@ -559,11 +559,7 @@ JSON file per turn" with "rebuild the whole SQLite file per turn" — no real im
 actual correct match for "many small writes across a session's lifetime," which is exactly what
 SQLite is built for.
 
-**Cross-repo follow-up (explicit, later, out of scope for this batch — can't touch seonix's repo
-from here)**: once tmct's adapted SQLite backend exists, rework seonix's own `src/store.mjs` to
-import tmct's shared version instead of maintaining its own fork — the same duplication pattern
-already noted elsewhere for `codegraph.mjs` ("seonix's own `src/codegraph.mjs` is a near-verbatim
-fork of tmct's, 2109 vs. 2123 lines").
+
 
 ---
 

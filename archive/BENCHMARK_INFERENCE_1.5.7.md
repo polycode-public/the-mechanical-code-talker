@@ -129,9 +129,7 @@ Step 1 of `SKILL_BENCHMARK_INFERENCE.md`'s cycle (REGENERATE) cannot complete, s
 
 This was a measurement-only run (`SKILL_BENCHMARK_INFERENCE.md` Step 1-4). Fixing the underlying
 `die`/`dice` (and `person`/`people`, `tooth`/`teeth`) lexicon collision — and deciding the right fix
-shape (drop the standalone entries, exclude irregular-plural targets from `CLASS_NOUNS`, or teach the
-fixture lint to skip nouns it knows will fold) — is real engine/lexicon work, out of scope for this
-dispatch. Flagged here as the concrete next step before any further INFBENCH cycle can run:
+shape (drop the standalone entries, exclude irregular-plural targets from `CLASS_NOUNS`
 
 - **Immediate unblock (minimal fix):** remove the standalone `"dice": {}`, `"people": {}`, and
   `"teeth": {}` entries from `src/grammar/lexicon-core.json`'s noun list — they are redundant with

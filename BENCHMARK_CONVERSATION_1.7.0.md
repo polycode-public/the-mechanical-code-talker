@@ -43,7 +43,7 @@ itself) and `"please learn this: John is a man"` / `"please learn also: a man is
 (the prefix broke teach recognition entirely — this persona never got to test teach-then-INFER because
 both teach attempts died upstream). A file-vs-symbol anaphora scoping miss: after "where is it
 defined" resolved to a file, "what this file is importing" stayed pinned to the method, not the file.
-6 of 13 turns were dead-ends; one more (the closing "bye bye") is a farewell miss, out of scope per §5.
+6 of 13 turns were dead-ends;
 
 **Rushed fragment-typer** (terse, typo-heavy) — tmpdir `tmp.iJuOC1XOtn/mw`. Confirmed the SAME
 garbled-teach-absorb bug the small-talk persona found, independently, twice: `"impact if i change
@@ -98,8 +98,7 @@ to match the new, better behavior, don't revert the fix.
   w/ wat"`, `"inherits wat"`, `"tests 4 it"`. → route to `SKILL_AGENT_FAST_LOOP.md`.
 - **Identity-question phrasing fragility**: `"are you an AI? like chatgpt?"` fails where `"are you
   chatgpt"` works. → route to `SKILL_AGENT_FAST_LOOP.md`.
-- **Closing-turn farewell misses** (non-native persona's "bye bye"): explicitly out of scope per §5 —
-  noted, not routed.
+
 
 ## Ladder position
 

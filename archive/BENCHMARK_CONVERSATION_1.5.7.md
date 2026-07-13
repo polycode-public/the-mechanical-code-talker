@@ -86,8 +86,7 @@ question, a typo'd class lookup, commit-touch history, a cochange query, and a c
 - **A 3-clause elaborate closing remark** ("thanks, this was really helpful, that's all for now")
   still hit the wall even after fix #1 above, because its middle editorializing clause ("this was
   really helpful") is neither a thanks/bye phrase nor a curated closing filler. Per this project's own
-  standing operator decision (`SKILL_BENCHMARK_CONVERSATION.md` §5, "Farewells stay out of scope"),
-  elaborate goodbye/thanks phrasing is *deliberately* not chased further — noted, not fixed.
+  standing operator decision (`SKILL_BENCHMARK_CONVERSATION.md` §5, 
 
 ### Round 2 — continuing naturally from round 1, chained by a background sub-agent
 
@@ -135,9 +134,7 @@ Across both rounds, what flowed without a dead-end spans Tier 1–3 territory (s
 anaphora-carrying drill-down chains — now genuinely fixed, not just apparently passing — cross-concept
 touches, existential/reverse-relation queries) plus a working teach-then-recall round-trip at Tier 5.
 Real edges were hit at: a new (unimplemented) bare-"what's X" grammar shape, compound-conditional
-teach sentences, symmetric-relation conjunction phrasing ("X and Y cochange"), elaborate multi-clause
-farewells (deliberately out of scope), and the completions-rescue lane's handling of non-literal
-subject phrases under specific session histories.
+teach sentences, symmetric-relation conjunction phrasing ("X and Y cochange"), 
 
 ## Next
 

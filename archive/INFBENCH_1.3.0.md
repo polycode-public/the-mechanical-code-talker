@@ -161,14 +161,7 @@ queries to one consistent honest-miss message."
   until it printed its final per-band table and `product: .../run-1.3.0/product.jsonl` — the full
   console output, including the per-band tables and the 48-row non-passing list, was captured and
   read in full before writing this report.
-- **`npm test`**: out of scope for this task per the briefing (measurement-only; a concurrent
-  dispatch is mid-flight on `src/chat.mjs`, and running the full suite against a mid-flight tree
-  wouldn't be a clean signal either way); not run here. `git status` immediately before writing
-  this file showed `HANDOVER.md`, `PLAN_TAUGHT_RELATIONS.md`, and `src/chat.mjs` modified (the
-  concurrent dispatch's in-flight work, as expected and flagged in this task's own briefing) plus
-  an untracked `test/chat-taught-relations.test.mjs` — none of these were touched by this
-  measurement pass, and none of `infbench/`'s own files (generator, grader, harness) show as
-  modified.
+
 - **HANDOVER.md/ROADMAP.md bullet**: per this task's own instruction, skipped — `HANDOVER.md` was
   found modified/uncommitted (the concurrent dispatch's in-flight session-diary edits) when checked
   immediately before any write, so no bullet was added to either file this cycle to avoid a

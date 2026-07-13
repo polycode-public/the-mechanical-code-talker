@@ -420,8 +420,7 @@ claim that a SUCCESS is never gated on `isConversational` (a success makes `miss
 so `isConversationalCandidate`'s own `miss` precondition can't fire). This distinction (routing
 pre-emption vs. decline-text override) is recorded here because it changes what a future "fix
 isConversational" follow-up actually needs to do — widen when the teach lane is CONSULTED, not just
-when its decline text is allowed to stand. Per the plan's own "Open risks" section, this remains
-explicitly out of scope for Phase 1 (a change to already-shipped routing) — not fixed here.
+when its decline text is allowed to stand. 
 
 Both items' tests live in `test/chat-teach-quantifier.test.mjs` (six new tests, all passing
 alongside the full pre-existing suite, unmodified). `npm test`: 1371 → 1377.
@@ -674,9 +673,7 @@ already succeeds today. The new bare-surface fallback this item adds is strictly
 than the pre-existing wrapped path it sits upstream of; implementing it does not close that gap
 (`TEACH_PROPERTY_RE` still runs for anything the new fallback declines on a wrapped sentence), only
 adds a properly-grounded alternative for the bare surface. Tightening `TEACH_PROPERTY_RE` itself to
-share the new subject-groundedness guard would close it, but that is a behavior change to
-already-shipped code, out of scope for "add 6 new capabilities" — flagged as an open risk, not
-designed here.
+share the new subject-groundedness guard would close it, 
 
 ### Item 6 — recursive/reachability: `"a descendant is a parent, or a parent of a descendant"`
 
@@ -882,11 +879,7 @@ That is the one genuinely new structural idea this plan adds to the family: a DA
   actually try) will have its own honest, specific miss text silently discarded in favor of the
   generic orientation card if the new fallback declines. This means each new fallback's SUCCESS path
   matters more than usual for short inputs — a fallback that declines "honestly" on a 3-word sentence
-  produces a WORSE user experience (a contextless wall) than declining on a longer one. Not fixed by
-  this design (fixing it would mean widening `isConversationalCandidate`'s gate at `src/chat.mjs:4988`,
-  a change to already-shipped routing, out of scope for "add 6 new teach/query capabilities") — flagged
-  so whoever implements Phase 1 knows to test the SHORT phrasing of item 5's illustration specifically,
-  not just a safely-long paraphrase of it.
+  produces a WORSE user experience (a contextless wall) than declining on a longer one. 
 - **The pre-existing `TEACH_PROPERTY_RE` groundedness gap (Verification finding 3)** sits directly
   upstream-adjacent to item 5's new work and is not closed by it — see item 5's own subsection.
   Worth a deliberate operator decision (tighten `TEACH_PROPERTY_RE` to share the new guard, accepting

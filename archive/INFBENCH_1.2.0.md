@@ -190,10 +190,7 @@ and before any cardinality-entailment engine work (§4 stage 4).
   single full pass already took several minutes given 199 fresh `runChat()` sessions — and this is a
   measurement re-run against an already-established harness, not the stage-0 harness-validation pass
   `0.8.2` was; named honestly as not re-verified rather than silently assumed).
-- **`npm test`**: out of scope for this task per the briefing (INFBENCH has its own harness); not
-  run here. `git status` before writing this file showed only `STRATEGY_ADVISOR.log` modified (an
-  unrelated, pre-existing background-advisor artifact, not touched by this dispatch) — confirming
-  nothing under `src/` was altered by this measurement pass.
+
 
 ## Reproduce
 

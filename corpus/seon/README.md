@@ -111,8 +111,7 @@ This directory is **data only**; wiring it into seeding is the coordinator's
    the seon tier the ordering only affects the ConceptNet tail.
 3. **Provenance caveat:** `toFacts` currently hard-codes the provenance string
    `corpus:conceptnet <rel>`. If the coordinator wants seon facts tagged as their own
-   source (`corpus:seon`), that is a one-line parametrisation of `toFacts` /
-   `seedMemory` — out of scope for this data-only directory.
+   source (`corpus:seon`), that is a one-line parametrisation of `toFacts`
 
 ## Regenerating / extending
 
