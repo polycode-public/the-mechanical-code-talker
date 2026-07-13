@@ -20,9 +20,27 @@ and what tips it over the edge to a preventable failure.
 It's only worth doing a couple of examples (max 3) of each sentence structure
 once an issue is found because the grammar rules are seperate from the lexicon.
 
-You can also go here https://gitlab.com/polycode-projects/the-mechanical-code-talker clone the code locally have have cluade code
-code help you write queries and even suggest fixes. If interested sign up
-for https://gitlab.com and create a 'fork' to play around in your own copy.
+You can also go here https://gitlab.com/polycode-projects/the-mechanical-code-talker clone the code locally have have
+Cluade code code help you write queries and even suggest fixes. If interested sign up for https://gitlab.com and create
+a 'fork' to play around in your own copy.
+
+Claude said:
+```txt
+The weak link is "quantized in every examinable direction." Mature tooling (2,300-year-old propositional logic, 
+centuries of linguistics) proves the instruments for classifying and reasoning about language are solid — it doesn't 
+prove the world has actually been fully classified by them. Huge swaths of human experience resist clean categories: 
+ambiguity, context-dependence, contradiction, vagueness. Notably, your own playtest methodology assumes this — the whole 
+point is hunting for "the edges where tmct tips over into a preventable failure," and if the world really were quantized 
+everywhere, there'd be no edges left to find.
+
+The weaker version of the theory holds up fine, though, and it's the one that actually matters: for the large subset of 
+the world that is well-classified — taxonomies, code structure, kinship, basic commonsense IsA/HasA/CapableOf facts — 
+logic applied to that structure gives genuine, auditable reasoning, and that subset is bigger than skeptics assume. 
+Today's bug is a good miniature of the real tension: isTaughtRow assumed a clean binary (taught vs. corpus-known), and 
+the actual world handed it a fact that was legitimately both. The theory's right that quantization goes a long way; it's 
+wrong that it goes all the way, and the interesting work — yours and tmct's — is mapping exactly where it stops.
+```
+
 
 
 Installation
