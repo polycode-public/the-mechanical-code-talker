@@ -306,7 +306,6 @@ test("keyword-spot: a redundant same-kind verb right after the relation-noun tri
     { shape: "reverse", entityType: null, modifier: "direct", kind: "tests", object: "src/core/model.mjs" });
   assert.deepEqual(parseQuery("which tests test src/core/model.mjs"),
     { shape: "reverse", entityType: null, modifier: "direct", kind: "tests", object: "src/core/model.mjs" });
-  // the pre-existing, already-working phrasings this fix must not disturb
   assert.deepEqual(parseQuery("what covers src/core/model.mjs"),
     { shape: "reverse", entityType: null, modifier: "direct", kind: "tests", object: "src/core/model.mjs" });
   assert.deepEqual(parseQuery("which modules cover src/core/model.mjs"),

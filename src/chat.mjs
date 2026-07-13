@@ -485,8 +485,7 @@ const IMPLICIT_ANAPHORA_COUNT_RE = /^(?:(?:and|so|then|also)\s+)?how many (?:are
  *  resolves the two surface forms of the SAME query ("what methods does Widget
  *  have" vs "which methods does Widget have") to DIFFERENT, inconsistent kinds (one
  *  correctly reaches "contains", the other wrongly reaches "defines" and returns an
- *  honest-but-wrong zero) — a genuine, pre-existing ambiguity in the core clause
- *  grammar, orthogonal to dialogue flow/routing and out of this cycle's scope.
+ *  honest-but-wrong zero) — a genuine.
  *  Deferring a "have" tail to the ask engine here would just trade one wrong-answer
  *  risk for another rather than fixing anything, so it stays on the existing
  *  bare-count path (unchanged behavior, no new regression) until a dedicated fix

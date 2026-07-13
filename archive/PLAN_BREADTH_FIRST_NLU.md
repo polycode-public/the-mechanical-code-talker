@@ -120,13 +120,6 @@ guard isn't a general safety guarantee for non-Module labels). Pinning makes `am
 **structurally, provably false** on every recursive call — no "shouldn't happen but defend anyway"
 guard needed, because the code path that could set it is never reached.
 
-One narrow, pre-existing behavior corner is intentionally accepted, documented with a one-line
-comment at the intercept rather than special-cased (special-casing it would reintroduce the large,
-risky refactor this design avoids): a *general reverse-case* query that ties at `objRes` and whose
-grain-refine retry (`3350-3395`) would previously have silently recovered to a different class-correct
-match now short-circuits to the branches path instead. Confirmed this combination isn't exercised by
-any pinned test or bench case today.
-
 **Interception point** — exactly one, immediately after the existing `objRes` destructure and
 `!objMatch` guard (`ask.mjs:3145-3147`, before the `where`-shape branch at `3148`):
 ```js

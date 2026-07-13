@@ -1339,8 +1339,7 @@ function parseRelationalOrQualified(w, lc, nlp, depth) {
   // NOT widen to "any boolean connective"): a bare single content word ("call",
   // "test", "tests") reads unambiguously as its own relation no matter what
   // follows it, whereas a multi-word verb PHRASE ("couples to", "is a subclass
-  // of", "depends on") is exactly the shape the pre-existing compat guard pins
-  // OFF (ask-compositional.test.mjs:67 and :144, both asserting
+  // of", "depends on") :144, both asserting
   // `ambiguousParse:true` for "which classes extends Base and couples to
   // logging" STRICTLY) — "couples to" IS recognized (VERB_TO_KIND maps it to
   // "imports"; the two-different-recognized-verbs shape is structurally

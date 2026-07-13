@@ -31,8 +31,7 @@ import * as source from "../src/source.mjs";
 
 // Same committed fixture graph test/chat-completions-wiring.test.mjs uses: Widget is a real
 // Class (defined in app/lib/b.mjs, contains a render method + a name attribute, inherits from
-// Base, Widget.render calls fnAlpha) — real, pre-existing graph facts, never taught/seeded in
-// any of these tests' own sessions.
+// Base, Widget.render calls fnAlpha)
 const FIXTURE = fileURLToPath(new URL("./fixtures/entities.fixture.json", import.meta.url));
 const CONFIG = { graphFile: FIXTURE };
 let GRAPH;

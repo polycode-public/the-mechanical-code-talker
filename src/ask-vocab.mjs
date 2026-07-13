@@ -398,8 +398,7 @@ export const VERB_TO_KIND = Object.freeze(
  *  between a subject AND an object), not this "reverse"-only afterText-only
  *  shape. Suppressing the meta reading for these too would trade one honest
  *  {ambiguousParse} wall for a confusing WRONG answer (a reverse-by-object
- *  lookup with the direction backwards) — a separate, pre-existing gap in
- *  keywords.mjs, out of this fix's scope. */
+ *  lookup with the direction backwards). */
 const NON_REVERSE_VERB = (v) => !INHERITS_REVERSE_VERBS.includes(v);
 export const ARTICLE_RELATION_CONTINUATIONS = Object.freeze([
   ...new Set(

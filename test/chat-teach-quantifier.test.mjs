@@ -50,8 +50,6 @@ test("redis fix: the 2-hop transitive chase composes a taught-new-term hop with 
   const dir = await mem("redis-chain");
   try {
     await runTurn("redis is a cache", { config: CONFIG, memoryDir: dir, sessionId: "s2" });
-    // both 'cache' and 'component' are real lexicon nouns — this hop stores via
-    // the PRE-EXISTING ACE grammar (pattern 2's bare copula), untouched by this feature.
     const secondHop = await runTurn("cache is a component", { config: CONFIG, memoryDir: dir, sessionId: "s2" });
     assert.match(secondHop.answer, /remembered 1 fact: cache rdfs:subClassOf component/);
 
@@ -457,7 +455,6 @@ test("Bug 3: the Goal-line is correct and consistent for teach-success turns (ne
 // unknown OBJECT now mints the object as a brand-new class-level concept
 // (unknownObjectFallback, chat.mjs), gated on a genuine universal quantifier
 // ("every"/"each"/"all") so a bare "X is Y" (no determiner at all — e.g. the
-// pre-existing "module is zorblax" pinned regression) and a wrapped
 // "remember that X is <adjective>" property claim both keep declining/
 // routing exactly as before. A term minted by EITHER direction's fallback
 // grounds just as legitimately as a static lexicon word for a LATER sentence
