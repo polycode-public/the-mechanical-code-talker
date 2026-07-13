@@ -911,6 +911,21 @@ ${hasMemChat ? `<script>\n${memoryAskBundle}\n</script>` : ""}
   var memHandle = hasMemEngine ? tmctMemoryAsk.createInMemoryStore() : null;
   if (memHandle) memHandle.payload = PAYLOAD;
 
+  // Placeholder is a real term from THIS graph, picked once per page load, so
+  // the hint stays honest ("what is X" where X actually resolves here) instead
+  // of a static example that may not exist in a given repo's graph. Native
+  // <input placeholder> behaviour (disappears on focus/typing, reappears when
+  // blank) is untouched — this only changes what text it starts with.
+  if (hasEngine && FULL_GRAPH) {
+    var termLabels = [];
+    walkGraph().byId.forEach(function (ind, id) {
+      if (id.indexOf("term:") === 0 && ind.label) termLabels.push(ind.label);
+    });
+    if (termLabels.length) {
+      askInput.placeholder = 'what is ' + termLabels[Math.floor(Math.random() * termLabels.length)];
+    }
+  }
+
   // Best-effort focus-follow for a memory-engine hit: factAnswer returns
   // rendered TEXT, not a list of resolved entity ids (unlike ask.mjs's
   // envelope/matches). Two passes, both real-graph-checked, never a guessed

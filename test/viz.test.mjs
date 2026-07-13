@@ -403,3 +403,17 @@ test("renderVizHtml: the ask panel spans almost the full page height, the legend
   assert.match(html, /function frameQueryResult/);
   assert.match(html, /function fitToIds/);
 });
+
+test("renderVizHtml: the ask input's placeholder is set from a real term in the loaded graph on page load, not left as the static example", () => {
+  const html = renderVizHtml(SAMPLE_GRAPH);
+
+  // The static markup keeps a plain fallback example (used when no ask engine
+  // is bundled at all) — the dynamic pick only overrides it client-side.
+  assert.match(html, /placeholder='ask e\.g\. "what is a dog"'/);
+
+  // Client-side JS replaces it with a real term drawn from walkGraph().byId,
+  // scoped to term: individuals, only when an ask engine actually loaded.
+  assert.match(html, /if \(hasEngine && FULL_GRAPH\)/);
+  assert.match(html, /id\.indexOf\("term:"\) === 0 && ind\.label/);
+  assert.match(html, /askInput\.placeholder = 'what is ' \+ termLabels\[/);
+});
