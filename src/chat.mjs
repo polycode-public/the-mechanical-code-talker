@@ -81,7 +81,7 @@ function note(trace, text) { if (trace) trace.push(text); }
 
 /** relation `kind` (ask-vocab.mjs RELATIONS) -> a short, deterministic
  *  statement of what a person asking that KIND of question is probably after.
- *  Deliberately a small, honest bucket lookup over the query SHAPE the engine
+ *  A small bucket lookup over the query SHAPE the engine
  *  already computed — tmct is no-LLM, so goal deduction is table-driven, never
  *  free-text generation. A kind/shape this table doesn't recognise falls
  *  through to a generic line in deduceGoalFromParsed, never a fabricated guess. */
@@ -417,8 +417,7 @@ const ANAPHORA_COUNT_RE = /\b(?:how many|how much|count|number of)\s+(?:of\s+)?(
  *  filter on) is untouched. */
 const IMPLICIT_ANAPHORA_COUNT_RE = /^(?:(?:and|so|then|also)\s+)?how many (?:are|is|were|was)\s+(?!there\b)(\S.*)$/i;
 
-/** "have"/"has"/"holds"/"hold" are excluded from RESTRICTOR_VERB_RE below —
- *  deliberately treated as non-restrictor cues, not a bug fix skipped.
+/** "have"/"has"/"holds"/"hold" are excluded from RESTRICTOR_VERB_RE below.
  *  Ask-vocab's VERB_TO_KIND maps them to "defines" unconditionally, but the
  *  graph's actual "have" semantics are subject-type-dependent (a Module "has"
  *  things it defines; a Class "has" things it contains) — ask.mjs's own
@@ -797,8 +796,8 @@ const AI_IDENTITY_PHRASES = [
  *  two-sentence turn like "are you an AI? like chatgpt?" could never match
  *  the whole raw string even though its first clause alone is an exact "are
  *  you an AI" hit. Used ONLY by aiIdentityMatch below — every OTHER
- *  closed-set match in this file stays whole-string, on purpose (deliberately
- *  narrow to the one family that's shown up broken this way). */
+ *  closed-set match in this file stays whole-string (scoped to the one
+ *  family that's shown up broken this way). */
 function splitClauses(text) {
   return String(text).split(/[?!.]+\s*/).map((c) => c.trim()).filter(Boolean);
 }
@@ -1848,11 +1847,10 @@ const UNKNOWN_SUBJECT_RE = /^(every\s+|each\s+|all\s+|a\s+|an\s+)?([\w-]+(?:\s+[
 const MINT_ISA_PREDICATES = new Set(["rdfs:subClassOf", "rdf:type"]);
 
 /** Small CLOSED set of generic English root nouns that count as always-
- *  grounded anchor terms for the mint-fallbacks below (operator refinement,
- *  2026-07-09) — deliberately NOT added to lexicon-core.json itself (that
- *  file stays the curated ~180-word CODE vocabulary; these are ordinary-
- *  English root nouns with no code meaning at all, confirmed absent from it
- *  today). Their only job is to give a user who hits the "both sides
+ *  grounded anchor terms for the mint-fallbacks below — not in
+ *  lexicon-core.json (these are ordinary-English root nouns with no code
+ *  meaning, absent from that code vocabulary). Their only job is to give a
+ *  user who hits the "both sides
  *  ungrounded" decline (groundingSuggestionMiss, below) an honest, guessable
  *  way in: ground one brand-new term via one of THESE words first ("every
  *  zorp is a thing"), then chain the other new term off the now-grounded one. */

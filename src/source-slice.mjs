@@ -1,7 +1,7 @@
 // Shared, safe source-span slicing for the tool layer (src/server.mjs) and the
 // source-capable Repository Interface provider (src/providers/graph-service.mjs).
 //
-// Two halves, deliberately split:
+// Two halves:
 //   - sliceSpan   — PURE. Given an in-memory `lines` array, extracts + line-numbers
 //                   one span. No fs, no path logic.
 //   - readSpanSafe — the fs-touching half. Resolves `join(repoRoot, path)` with Node's

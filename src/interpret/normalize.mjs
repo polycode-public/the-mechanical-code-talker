@@ -239,7 +239,7 @@ export function applySubordinationFrames(text) {
  *  delimiter are both required — an ordinary em-dash aside is common prose,
  *  not a restart, and treating every dash as a delimiter would be a guess.
  *  The trailing delimiter also means an object-only restart with no comma
- *  after "i mean" isn't rescued here; that's a narrower, accepted ceiling. */
+ *  after "i mean" isn't rescued here. */
 const SELF_CORRECTION_RE =
   /^.+?(?:\s*(?:--|—|-)\s*)?\b(?:sorry|i\s+mean)\b\s*(?:--|—|-|,|:)\s*(.+)$/i;
 

@@ -2,7 +2,7 @@
 // within a group.mjs group. Reuses memory/blocks.mjs's rankBlocks() (PageRank) and degreeOf()
 // (hub dampening) verbatim at sentence granularity, combined with group-scoped IDF the same
 // way retrieveBlocks() fuses relevance/centrality/hub-dampening into one score.
-// splitSentences() is a simple regex splitter — deliberately not an NLP dependency.
+// splitSentences() is a simple regex splitter.
 
 import { degreeOf, rankBlocks, tokenizeBlock, OVERLAP_MIN } from "../memory/blocks.mjs";
 import { STOPWORDS } from "../prose.mjs";
@@ -15,8 +15,8 @@ function contentTokens(text) {
   return tokenizeBlock(text).filter(isContentToken);
 }
 
-// Sentence boundary: a run of [.!?] followed by whitespace and an uppercase letter or digit —
-// deliberately simple (no abbreviation dictionary, no NLP dependency).
+// Sentence boundary: a run of [.!?] followed by whitespace and an uppercase letter or digit
+// (no abbreviation dictionary).
 const SENTENCE_SPLIT_RE = /(?<=[.!?])\s+(?=[A-Z0-9])/;
 
 /**

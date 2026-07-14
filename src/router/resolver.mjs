@@ -45,7 +45,7 @@ export const NL_INTENTS = Object.freeze({
   "reverse:cochange": { topic: "cochanges", arg: "symbol" },
 });
 
-// ---- ask-vocab RELATION kinds with NO capability — the HONEST ceiling --------
+// ---- ask-vocab RELATION kinds with NO capability ------------------------------
 // Every ask-vocab.mjs RELATIONS key must be either mapped (above) or listed here with a
 // reason (the conformance test enforces the partition). Refuse rather than mis-route.
 export const UNMAPPED_KINDS = Object.freeze({

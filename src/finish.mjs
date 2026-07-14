@@ -251,7 +251,7 @@ function ruleArticle(segments, rule) {
   return out;
 }
 
-// Rule 2 — subject–verb agreement. STRUCTURE-DRIVEN and deliberately narrow:
+// Rule 2 — subject–verb agreement. STRUCTURE-DRIVEN:
 // (i) an existential "there is/are/was/were" agrees with the FOLLOWING number
 //     span's value (the number is genuinely the subject there);
 // (ii) any listed copula agrees with a following span that carries an explicit

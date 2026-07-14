@@ -14,7 +14,7 @@
 // Namespace: every lexicon carries a `.ns` field (the CURIE prefix ace.mjs
 // stamps onto every term it mints) — always "tmct:" here (DEFAULT_NS).
 //
-// Morphology is deliberately tiny and deterministic (no NLP dependency): a
+// Morphology is deterministic (no NLP dependency): a
 // suffix-fold for plurals/3rd-person-singular ("repositories"→repository,
 // "relies"→rely, "classes"→class, "uses"→use) plus an optional declared
 // irregular `plural` ("indices"). Anything the fold can't reach is simply not

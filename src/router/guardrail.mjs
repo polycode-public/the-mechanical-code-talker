@@ -1,6 +1,5 @@
 // src/router/guardrail.mjs — the guardrail. Validate an
-// EXTERNALLY-proposed `tool_use` against the registry's declared preconditions, and
-// DEFAULT-DENY anything outside the declared, registered envelope.
+// EXTERNALLY-proposed `tool_use` against the registry's declared preconditions.
 //
 // Proves RESOLVABILITY (the tool is registered/declared, args are well-formed, every
 // `resolves(param, as)` precondition binds to a real graph entity) — NOT antecedent
@@ -14,8 +13,8 @@ import { capabilityByName, preconditionsOf, PRECOND } from "./registry.mjs";
 import { hallucinationsIn } from "./call-validator.mjs";
 
 /** The same read-only breadth-first enrichment as resolver.mjs's `dispatchEachCandidate`:
- *  every registered capability is `readOnly:true` with an empty delete-list, so dispatching
- *  the SAME tool once per tied candidate is safe. Returns `[{candidate, result}, ...]`, or
+ *  dispatching the SAME tool once per tied candidate is safe for `readOnly` capabilities
+ *  (dispatch performs no writes). Returns `[{candidate, result}, ...]`, or
  *  undefined when there is no dispatcher to run it with. */
 async function dispatchEachCandidate(pool, capName, arg, ctx) {
   if (!ctx.dispatch) return undefined;

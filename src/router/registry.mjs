@@ -2,11 +2,10 @@
 //
 // Each tmct tool is modelled as a STRIPS/PDDL operator declared as DATA: a `Capability` with
 // typed `Parameter`s, `Precondition`s, and `Effect`s (add-list/delete-list). Preconditions are
-// the safety gate guardrail.mjs checks before a call fires; effects are epistemic
-// (a read-only query "knows" a topic, never mutates) — resolver.mjs backward-chains
-// from a goal `(knows <topic> ?x)` to the capability whose add-list achieves it.
+// the safety gate guardrail.mjs checks before a call fires; resolver.mjs backward-chains from
+// a goal to a capability whose add-list achieves it.
 //
-// Pure: plain frozen data + pure accessors, no I/O. Tool names + parameter arg keys are the
+// Plain data + pure accessors, no I/O. Tool names + parameter arg keys are the
 // exact ones src/server.mjs `dispatchTool` reads, so a bound call this registry validates is
 // directly dispatchable.
 
@@ -45,7 +44,7 @@ export const PRECOND = Object.freeze({
 
 // ---- capability builder (returns PLAIN FROZEN data) -------------------------
 
-/** A parameter slot. `arg` is the EXACT dispatchTool key (never invented). */
+/** A parameter slot. `arg` is the exact key src/server.mjs `dispatchTool` reads. */
 const param = (name, kind, { arg = name, required = true, note = "" } = {}) =>
   Object.freeze({ type: VOCAB.Parameter, name, kind, arg, required, note });
 
@@ -58,31 +57,29 @@ const resolves = (paramName, as) =>
 const anyPresent = (params) =>
   Object.freeze({ type: VOCAB.Precondition, pred: PRECOND.anyPresent, params: Object.freeze([...params]) });
 
-/** An epistemic add-effect: after the call the agent KNOWS `topic` about `?of`. */
+/** Add-effect: after the call the agent knows `topic` about `?of`. */
 const knows = (topic, ofParam = null) =>
   Object.freeze({ type: VOCAB.Effect, pred: "cap:knows", topic, of: ofParam ? `?${ofParam}` : null });
 
-/** Declare one capability as frozen STRIPS data. Read-only query tools pass an
- *  empty delete-list (`del: []`) — the closed-world "queries mutate nothing". */
+/** Declare one capability as STRIPS data. */
 function capability({ name, label, question, params = [], preconditions = [], add = [], del = [] }) {
   return Object.freeze({
     type: VOCAB.Capability,
     name, // the dispatchTool tool name — directly callable
     label, // human label (the slash-command verb)
     question, // one-line "what question does this answer"
-    readOnly: true, // every capability here is query-only
+    readOnly: true, // dispatching this capability performs no writes
     parameters: Object.freeze(params),
     preconditions: Object.freeze(preconditions),
     effects: Object.freeze({ add: Object.freeze(add), del: Object.freeze(del) }),
   });
 }
 
-// ---- the registry — the read-only graph-query tools as operators ------------
-// Enumerated from src/server.mjs `dispatchTool` (the query-only, bounded-output
-// slice). Arg keys verified against the switch: describe/callers/callees/tests/
-// history/… take `symbol`; impact/exports take `module`; members/subclasses take
-// `class`; search takes `query` (+ optional kind/name/decorator); architecture
-// takes an optional `package`; untested takes nothing.
+// ---- the declared capabilities -----------------------------------------------
+// Arg keys verified against src/server.mjs `dispatchTool`'s switch: describe/callers/
+// callees/tests/history/… take `symbol`; impact/exports take `module`; members/
+// subclasses take `class`; search takes `query` (+ optional kind/name/decorator);
+// architecture takes an optional `package`; untested takes nothing.
 
 const CAPABILITIES = Object.freeze([
   capability({
@@ -187,12 +184,8 @@ const BY_NAME = Object.freeze(
   CAPABILITIES.reduce((m, c) => { m[c.name] = c; return m; }, Object.create(null)),
 );
 
-// ---- closed-world / DEFAULT-DENY --------------------------------------------
-// The registry is a strict subset of src/server.mjs's `dispatchTool` switch: a tool name
-// not registered here is treated as unknown/hallucinated, never dispatchable.
-//
-// The following dispatch tools are INTENTIONALLY UNREGISTERED — they emit unbounded raw
-// output, the most hallucination-prone surface, not a clean bounded-epistemic-effect query.
+// ---- unregistered dispatch tools ---------------------------------------------
+// Dispatch tools not yet registered; each names the precondition work it needs first.
 export const EXCLUDED_FROM_REGISTRY = Object.freeze({
   tmct_context: "unbounded edit-context bundle (multi-file); needs a size/budget precondition",
   tmct_context_more: "unbounded context continuation; same as tmct_context",

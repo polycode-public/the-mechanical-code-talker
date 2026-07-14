@@ -19,7 +19,7 @@ function contentTokens(text) {
 }
 
 /** Plain union-find (path halving, union-by-index) — small N here (a single broad search's
- *  hit count), so this is deliberately the simplest correct structure, not a fancy one. */
+ *  hit count). */
 function unionFind(n) {
   const parent = Array.from({ length: n }, (_, i) => i);
   function find(x) {

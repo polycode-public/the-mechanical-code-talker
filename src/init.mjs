@@ -47,8 +47,7 @@ export function defaultConfig() {
 /** `tmct init --with-persona <name>` presets: a named bundle of `extensions`/`bias`
  *  overrides written into tmct.toml. `human` makes the implicit default explicit; `code`
  *  re-activates the software-domain `seon`+`conceptnet` bundles; `empty` deactivates
- *  `human`, leaving a repo genuinely empty of corpus facts. Kept minimal on purpose —
- *  the persona seam, not a curated library of presets. */
+ *  `human`, leaving a repo genuinely empty of corpus facts. */
 export const PERSONA_PRESETS = Object.freeze({
   human: { extensions: {}, bias: { human: 1.0 } },
   code: { extensions: { seon: { active: true }, conceptnet: { active: true } }, bias: { seon: 1.0, conceptnet: 1.0 } },

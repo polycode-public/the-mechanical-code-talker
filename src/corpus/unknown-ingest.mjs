@@ -9,7 +9,7 @@
 // `mgx:contextPassage` fact (the passage it was found in — ConceptNet's own surfaceText,
 // or the map's `surface` template) and `mgx:coOccursWith` links to its row's other
 // endpoint plus any already-known terms recognizable in the same passage (bounded) —
-// deliberately closed-vocabulary co-occurrence, not distributional/embedding inference.
+// closed-vocabulary co-occurrence.
 //
 // Wired as an opt-in `captureUnknownContext: true` on seedMemory (conceptnet.mjs),
 // dynamically imported to avoid a load-time cycle with conceptnet.mjs.
