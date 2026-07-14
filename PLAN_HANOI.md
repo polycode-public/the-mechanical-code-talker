@@ -17,7 +17,9 @@ directly: `tmct plan "<request>"`, chat's `/plan`, or the `./plan` library expor
 impacted by X, which are untested" — a genuinely different domain (querying an existing, static
 code graph) from this document's (searching a MUTABLE Hanoi board state via `legalMoves`/`applyMove`).
 Worth knowing about since it's the router the router doc terminology below (STRIPS, backward
-chaining, closed-world) also describes — don't confuse the two when reading either document.
+chaining, closed-world) also describes — don't confuse the two when reading either document. The
+2026-07-15 section below plans their convergence at the operator-model level (a registry
+registration seam); the two search engines stay distinct.
 
 ## Origin
 
@@ -70,18 +72,18 @@ proseIndex}`, `codegraph.mjs`'s `parseEntities`, `src/codegraph.mjs:27-59`):
   turn**, through `appendFact`/`appendUtterance` (`core.mjs:448-488`, `402-409`): fresh-read →
   mutate → atomic write, one call per turn.
 
-The code graph is architecturally **provider-owned and read-only ** — "tmct never
-writes a provider's graph" (`memory/core.mjs:6-7`'s own docblock) — and several read paths cache
-against the ASSUMPTION that a loaded graph object never changes mid-session
+tmct has no write path for a code graph (`parseEntities` and every consumer of it only read;
+provider files are written by the providers that own them), and several read paths cache against
+the assumption that a loaded graph object never changes mid-session
 (`inheritsApplicableCache`/`EMB_CACHE`, both `WeakMap`s keyed on graph identity,
-`src/ask.mjs:1382`, `src/codegraph.mjs:528`). The memory store is the opposite: it is tmct's OWN,
+`src/ask.mjs:1382`, `src/codegraph.mjs:528`). The memory store is tmct's OWN,
 session-local, designed-to-be-written graph.
 
 Hanoi's state changes every turn (a move mutates which peg a disk is on). That single fact
 settles the question: **Hanoi state belongs in the memory store, represented as taught facts
 (subject/predicate/object triples through `appendFact`), not as an ad-hoc individual set loaded
 the way a code graph is.** The code-graph shape is the right SCHEMA to imitate (individuals +
-typed edges), but the code graph itself is the wrong PLACE — it is architecturally static.
+typed edges); the memory store is where the write machinery already exists.
 
 **Concrete sketch** — one Hanoi state as facts (`normFactTerm`/`appendFact`'s own vocabulary,
 `memory/core.mjs:428-434`, `448-488`):
@@ -104,10 +106,9 @@ graph check with no extra bookkeeping: X has no incoming `restsOn` edge (nothing
 is topmost), and Y (a peg, or another disk) either is a peg with no disk on it, or is a disk with
 no incoming `restsOn` edge AND is textually/numerically larger than X. This is the SAME shape as
 `inheritsApplicable` (`ask.mjs:1382-1393`) checking "does this edge kind connect same-class
-individuals" — a new, closed-set relation kind (`restsOn`) sitting next to `inherits` in spirit,
-not in the code graph's `PROP_KIND` table (that table is code-graph-specific and closed on
-purpose) but in the memory store's own, separately-declared vocabulary
-(`MEMORY_VOCABULARY`, `core.mjs:65-89`).
+individuals" — a new relation kind (`restsOn`) sitting next to `inherits` in spirit. It needs no
+declaration anywhere: `appendFact` stores any predicate verbatim, and `MEMORY_VOCABULARY`
+(`core.mjs:65-89`) is a documentation table a new predicate can be noted in, not a gate.
 
 ### 2. What's reusable for reasoning about action effects — a moderate extension, not a new subsystem, plus one real gap
 
@@ -157,10 +158,11 @@ its full `(subject, predicate, object)` triple, so re-asserting the SAME triple 
 but asserting a DIFFERENT object for the same `(subject, predicate)` produces a SECOND,
 independent Fact individual that coexists with the first — , this is exactly what
 `findContradictions` (`memory/core.mjs:622-637`) is built to surface ("two high-trust sources
-disagree → show both, never silently pick", per `ROADMAP.md`'s provenance section). There is
-**no retraction primitive anywhere in the codebase** (`grep -rn retract src/` returns nothing) —
-the "fully RETRACTABLE by provenance" language in `syllogise.mjs`'s own comment (line 38) describes
-an aspiration for entailed facts, not a shipped mechanism.
+disagree → show both, never silently pick", per `ROADMAP.md`'s provenance section). (2026-07-15
+update: when this section was written, no retraction existed anywhere in the codebase. A scoped
+slice has shipped since — `retractSubClassOf`, `src/syllogise.mjs:860`, driven by chat's "forget
+that X is a Y" phrasing — but it is subClassOf-specific; there is still no general retraction for
+an arbitrary `(subject, predicate)` fact.)
 
 That is a genuine mismatch for "move disk 1 from A to C": naively re-asserting `disk-1 restsOn
 peg-c` after previously asserting `disk-1 restsOn peg-a` does NOT retract the old fact — both
@@ -339,11 +341,12 @@ committable/testable, `npm test` green throughout, nothing here implemented yet.
   computed, execute unattended turn by turn? An honest open question; Hanoi's own zero real-world
   side effects (it's a toy graph, not a live codebase) make it a low-stakes place to prototype
   either answer before Phase 4's real-graph domain has to actually decide.
-- **No retraction primitive exists in `memory/core.mjs` today** (verified: `grep -rn retract src/`
-  finds nothing shipped, only aspirational comment language in `syllogise.mjs:38`). §3's
-  recommended snapshot-per-step design avoids needing one for Phase 1-3, but any FUTURE domain
-  that wants to mutate a fact in place (rather than append a new snapshot) will need this built
-  first — flagging it now so it isn't rediscovered as a surprise later.
+- **No general fact-retraction primitive exists in `memory/core.mjs`** (2026-07-15 re-check:
+  `retractSubClassOf`, `src/syllogise.mjs:860`, shipped after this bullet was first written, with
+  chat's "forget that X is a Y" phrasing driving it — but it is subClassOf-specific). §3's
+  recommended snapshot-per-step design avoids needing one for Phases 1-3; a future domain that
+  wants in-place fact mutation now has the shipped slice as a precedent to generalize rather than
+  a blank page.
 - **Per-graph-identity caches assume an immutable graph object.** `inheritsApplicableCache` and
   `EMB_CACHE` (`ask.mjs:1382`, `codegraph.mjs:528`) are `WeakMap`s keyed on graph object identity,
   implicitly assuming a loaded graph never changes shape mid-session. The snapshot-per-step design
@@ -449,13 +452,26 @@ definition file is the PDDL **domain**: types, predicates, operators. The single
 reference note anticipates. The closed-world assumption holds by construction, because the taught
 facts ARE the whole world.
 
-One placement decision to record explicitly. `src/router`'s registry is the WRONG home for taught
-operators, despite being the repo's other STRIPS surface. `CAPABILITIES`/`REGISTRY` are
-`Object.freeze`d compile-time literals with a closed precondition vocabulary and epistemic
-(`knows`) effects; there is no runtime loader, and anything not registered is treated as
-hallucinated and never dispatched (`src/router/registry.mjs`). Taught game actions are the
-opposite on both axes: user-defined at runtime, and world-mutating. They belong in the memory
-store's Rule machinery.
+One placement decision to record explicitly, in two layers. The DURABLE home of a taught action
+is the memory store's Rule machinery: a definition is a teaching about the world, and it deserves
+provenance, trust, and recall like any other taught thing. The RUNTIME operator model is a
+separate question, and `src/router`'s registry is the natural convergence target rather than a
+separate world. Its capability records are already the right shape — plain STRIPS data,
+`{parameters, preconditions, effects: {add, del}}` (`src/router/registry.mjs`) — and the declared
+set is today populated at module load with the read-only graph-query tools, whose effects are
+`knows` add-lists. Give the registry a registration seam (a `registerCapability()` the session
+calls after loading taught action Rules) and taught actions become capability records beside the
+query tools: their effect slots carry world triples instead of `knows` topics, the guardrail's
+precondition checking covers game moves with no new gate code, and a later plan can mix query
+steps and world actions in one proof chain. The seam is Phase 5R convergence work, not a Phase 1R
+dependency; the interpreter consumes the same record shape either way. What does NOT move is the
+search engine. The resolver backward-chains each goal to a single achieving capability and never
+tracks interacting subgoals, so mutable-state domains (Hanoi is the canonical interacting-subgoal
+case) still search forward through `findActionPath`. That split is a property of the two engines,
+not of where the operators live. One invariant to respect when the seam lands: parts of the
+router assume registered capabilities are read-only (e.g. `guardrail.mjs`'s re-dispatch-per-
+candidate enrichment is only safe because dispatch has no side effects), so registered
+world-mutating actions must be planned over, never dispatched through that path.
 
 That machinery is already live and already planner-shaped. The grandfather playtest
 (`EXAMPLE_PLAYTEST_LOG.md`) teaches compose2/filter Rules through chat and answers "who is the
@@ -527,8 +543,8 @@ moving a disk onto a target makes the disk rest on the target.
 Effect semantics: the effect template REPLACES the subject's existing `(subject, predicate)` edge
 in the successor snapshot. This is the STRIPS delete-list, handled structurally by §3's
 snapshot-per-step recommendation. Each successor state is a fresh set of `restsOn` rows; nothing
-is retracted in place, so the missing retraction primitive (§3, still true of current code) stays
-un-needed.
+is retracted in place, so no general fact-retraction primitive is needed (§3's dated note tracks
+what has shipped there).
 
 ### State + goal in one prompt
 
@@ -666,9 +682,11 @@ This supersedes Phases 1, 3, and 4 above. Phase 2 shipped (`src/planning.mjs`) a
 - **Phase 5R — a second domain from data only.** Candidate: a river-crossing puzzle (same
   move-onto shape, different legality), or Ashcombe Hall's opening moves through the shared
   `RULE_KIND_ACTION`. Exit criterion: the second domain works with ZERO interpreter changes. This
-  phase also owns the two standing convergence points: the shared action-Rule kind with
-  `PLAN_ADVENTURE.md`, and `PLAN_GUESS_NUMBER.md`'s replan-after-observation seam (the interpreter
-  must stay callable per-state, never assuming the whole plan precomputes).
+  phase also owns the three standing convergence points: the shared action-Rule kind with
+  `PLAN_ADVENTURE.md`, `PLAN_GUESS_NUMBER.md`'s replan-after-observation seam (the interpreter
+  must stay callable per-state, never assuming the whole plan precomputes), and the router
+  registration seam (`registerCapability()`, the placement paragraph above) that puts taught
+  actions beside the query tools in one operator model.
 
 ### Worked example
 

@@ -337,9 +337,7 @@ must stay in seonix. Nothing in this document changes that division.
 - **No change to tmct's no-LLM-in-product charter.** The ported parsers (stdlib `ast`, the TypeScript
   compiler API, Roslyn, JavaParser, tree-sitter) are exactly as deterministic and model-free as
   `ask.mjs`/`codegraph.mjs` already are — zero model calls anywhere in seonix's own extraction path
-  today (`seonix/src/extract.mjs:4`), and this plan changes nothing about that. `ROADMAP.md:117`'s
-  "no MCP server, no LLM in the product path — permanent, not 'for now'" stays exactly as true after
-  this plan as before it.
+  today (`seonix/src/extract.mjs:4`), and this plan changes nothing about that.
 - **No MCP server revival in tmct.** tmct deliberately dropped its MCP surface
   (`f7c0ab0`, Part 1 above); LLM tool-calling exposure stays seonix's job, unchanged by this plan.
 - **No consolidation of the two divergent `codegraph.mjs` forks** (Part 2 above) — a real, named,
