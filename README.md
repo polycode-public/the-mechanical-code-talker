@@ -21,70 +21,86 @@ derive by rule from both. Every answer is either grounded or an honest miss.
 ## Teach it, then ask it to reason
 
 This is real, runnable output. No cherry-picking, no model anywhere in the
-loop. Copy it into a file and run it:
+loop. The script lives at `examples/teach-and-infer.mjs` in this repo; run it
+yourself with `node examples/teach-and-infer.mjs`, or copy the source below:
 
 ```js
 import { runChat } from "@polycode-projects/the-mechanical-code-talker";
 import { Readable, PassThrough } from "node:stream";
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-// A graph producer feeds tmct a code graph like this one (see "The repository
-// interface" below). This is a 4-node slice: two modules, a base class, and a
-// class that inherits it.
-const graph = {
-  individuals: [
-    { id: "mod:src/handlers/base.mjs", label: "src/handlers/base.mjs", class: "Module" },
-    { id: "mod:src/handlers/tasks.mjs", label: "src/handlers/tasks.mjs", class: "Module" },
-    { id: "fn:src/handlers/base.mjs#Controller", label: "Controller", class: "Class" },
-    { id: "fn:src/handlers/tasks.mjs#TaskController", label: "TaskController", class: "Class" },
-  ],
-  objectProperties: [{
-    predicate: "inherits", prop: "seon:hasSuperType", count: 1,
-    examples: [{ subject: "fn:src/handlers/tasks.mjs#TaskController", object: "fn:src/handlers/base.mjs#Controller",
-                 subjectLabel: "TaskController", objectLabel: "Controller" }],
-  }],
-};
+const TEACH = [
+  "ahab is the father of john",
+  "john is the father of ishmael",
+  "a father is a kind of parent",
+  "remember that ahab is male",
+  "a grandparent is a parent of a parent",
+  "a grandfather is a grandparent who is male",
+];
+const ASK = "is ahab the grandfather of ishmael";
 
-const repoPath = await mkdtemp(join(tmpdir(), "tmct-demo-"));
-await mkdir(join(repoPath, ".tmct"), { recursive: true });
-await writeFile(join(repoPath, ".tmct", "graph.json"), JSON.stringify(graph));
-
-// tmct has one API surface for both teaching and asking: a chat turn, in
-// English. Each call below is a short session over the same repo, so what
-// gets taught in the first call is still remembered in the second.
-async function tell(line) {
-  const out = new PassThrough();
-  let transcript = "";
-  out.on("data", (chunk) => { transcript += chunk; });
-  await runChat({ repoPath, input: Readable.from([line + "\n", "/exit\n"]), output: out });
-  return transcript.split("\n").find((l) => l.startsWith("tmct> "));
-}
-
-await tell("a controller is a kind of handler");         // Learn
-console.log(await tell("is TaskController a handler"));  // Infer from learnings
+// memoryBackend: "memory" keeps this whole session in the live handle only —
+// no repo, no graph file, no disk write.
+const repoPath = await mkdtemp(join(tmpdir(), "tmct-example-"));
+const output = new PassThrough();
+let transcript = "";
+output.on("data", (chunk) => { transcript += chunk; });
+const lines = [...TEACH, ASK].map((line) => line + "\n");
+await runChat({ repoPath, memoryBackend: "memory", input: Readable.from([...lines, "/exit\n"]), output });
 ```
+
+(`examples/teach-and-infer.mjs` adds the parsing that turns `transcript` into
+the answers below, plus cleanup — see the file for the full script.)
 
 Output, captured from an actual run:
 
 ```
-tmct> yes — the code graph says TaskController inherits Controller, and you
-told me: controller is a kind of handler (source: ace:chat:<session-id>@<timestamp>)
+tmct> ahab is the father of john
+noted — remembered: ahab fathers john
+
+Goal (inferred): Teach/remember a new fact.
+
+tmct> john is the father of ishmael
+noted — remembered: john fathers ishmael
+
+Goal (inferred): Teach/remember a new fact.
+
+tmct> a father is a kind of parent
+noted — remembered 1 fact: father rdfs:subClassOf parent (father is a type of parent)
+
+Goal (inferred): Teach/remember a new fact.
+
+Canonical: does "father" inherits "parent"? — ask(inherits, subject="father", "parent")
+
+tmct> remember that ahab is male
+noted — remembered: ahab is male
+
+Goal (inferred): Teach/remember a new fact.
+
+tmct> a grandparent is a parent of a parent
+noted — remembered: a grandparent is a parent of a parent
+
+Goal (inferred): Teach/remember a new fact.
+
+tmct> a grandfather is a grandparent who is male
+noted — remembered: a grandfather is a grandparent who is male
+
+Goal (inferred): Teach/remember a new fact.
+
+tmct> is ahab the grandfather of ishmael
+yes — you told me: ahab fathers john (source: teach:chat:<session-id>@<timestamp>); father is a kind of parent (source: ace:chat:<session-id>@<timestamp>); you told me: john fathers ishmael (source: teach:chat:<session-id>@<timestamp>); you told me: ahab is male (source: teach:chat:<session-id>@<timestamp>)
 ```
 
-Nothing here was told that "handler" and "Controller" relate. tmct combined a
-fact already in the graph (`TaskController inherits Controller`) with a fact
-you just taught it in English (`controller is a kind of handler`) and wrote
-the connecting sentence itself, citing both sources. The `source: ace:chat:…`
-part is a real provenance receipt. Every fact tmct stores records where it
+Nobody told tmct that ahab is ishmael's grandfather. It combined four facts
+taught across six turns: the two father facts, the father-is-a-kind-of-parent
+alias, and the ahab-is-male property, then cited all four. The `source: …`
+parts are real provenance receipts. Every fact tmct stores records where it
 came from and when (more on that below).
 
-The first `tell()` call above replies too: `noted — remembered 1 fact:
-controller rdfs:subClassOf handler (controller is a type of handler)`. The
-part in parentheses is a paraphrase. tmct generates it and checks it against
-its own inference rules before showing it, so it never just guesses at
-prose.
+`test/examples-teach-and-infer.test.mjs` pins this exact output. If the
+underlying chat behavior ever drifts, that test fails and says so.
 
 ```
 $ tmct
