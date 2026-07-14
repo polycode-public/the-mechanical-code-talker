@@ -61,25 +61,20 @@ test("edgesOfKind cache correctness: two DISTINCT graph objects never share a ca
   assert.equal(edgesOfKind(g1, "imports"), r1);
 });
 
-test("edgesOfKind perf-sanity: a 2nd call over a ~200k-edge group is dramatically faster than the 1st (cache hit vs. full scan)", () => {
+test("edgesOfKind cache at scale: a 2nd call over a ~200k-edge group never rescans — a source mutation after the 1st call is not reflected", () => {
   const N = 200_000;
   const edges = new Array(N);
   for (let i = 0; i < N; i++) edges[i] = { s: `mod:src/a${i}.mjs`, o: `mod:src/b${i}.mjs` };
   const graph = { relations: [{ prop: "mgx:importsNamespace", predicate: "imports namespace", edges }] };
 
-  const t0 = performance.now();
   const first = edgesOfKind(graph, "imports");
-  const firstMs = performance.now() - t0;
+  assert.equal(first.length, N);
 
-  const t1 = performance.now();
+  // A recompute would rescan graph.relations and pick this up; a cache hit
+  // cannot. Deterministic proof of "no rescan" — a wall-clock ratio is too
+  // noisy to assert on a shared CI runner.
+  edges.push({ s: "mod:src/added-after.mjs", o: "mod:src/never-seen.mjs" });
   const second = edgesOfKind(graph, "imports");
-  const secondMs = performance.now() - t1;
-
   assert.equal(first, second, "the 2nd call is a cache hit, not a recompute");
   assert.equal(second.length, N);
-  // the cache hit is an O(1) Map.get vs. the 1st call's O(relations) scan — assert it's
-  // at least an order of magnitude faster (generous margin against CI/machine noise; a
-  // real recompute of 200k edges is never this cheap on any machine this suite runs on).
-  assert.ok(secondMs < firstMs / 5 || secondMs < 1,
-    `2nd (cached) call should be far faster than the 1st (scan): 1st=${firstMs.toFixed(3)}ms 2nd=${secondMs.toFixed(3)}ms`);
 });
