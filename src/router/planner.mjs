@@ -1,6 +1,6 @@
-// src/router/planner.mjs — Stage 3 of the capability router: THE PLANNER. Compose a bounded,
-// ordered plan of tool calls for a multi-step request, over the SAME operators Stage 1
-// resolves single-shot. HTN decomposition into leaf sub-goals (each resolved by Stage 1),
+// src/router/planner.mjs — the planner. Compose a bounded, ordered plan of tool calls for
+// a multi-step request, over the SAME operators resolver.mjs resolves single-shot. HTN
+// decomposition into leaf sub-goals (each resolved by resolver.mjs),
 // with a POP causal-link proof chain (a threaded step's producer is the prior step; an
 // independent step's is the grounded graph). Monitored: a failed sub-goal stops the plan
 // honestly rather than pressing on. Bounded by MAX_STEPS. Deterministic, no-LLM, glass-box.

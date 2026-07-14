@@ -1,4 +1,4 @@
-// src/router/resolver.mjs — Stage 1 of the capability router: THE RESOLVER. Turn a request
+// src/router/resolver.mjs — the resolver. Turn a request
 // into a SELECTED registry capability with bound arguments, by backward chaining over
 // capabilities-as-facts. Deterministic, no-LLM, glass-box: every choice is provable.
 //

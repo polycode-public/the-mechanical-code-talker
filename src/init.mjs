@@ -121,7 +121,7 @@ ${seed.limit != null ? `limit = ${Number(seed.limit)}` : "# limit = 500"}
   if (config.memory && config.memory.backend !== undefined) {
     out += `
 [memory]
-# Storage backend for taught facts + the memory graph (PLAN_SEED.md §6).
+# Storage backend for taught facts + the memory graph.
 # Precedence: --memory-backend flag > TMCT_MEMORY_BACKEND env > this file >
 # "default" (the built-in fallback).
 #   "default" — the flat OWL-labelled JSON file under .tmct/memory/. The default.

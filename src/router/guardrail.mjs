@@ -1,4 +1,4 @@
-// src/router/guardrail.mjs — Stage 4 of the capability router: THE GUARDRAIL. Validate an
+// src/router/guardrail.mjs — the guardrail. Validate an
 // EXTERNALLY-proposed `tool_use` against the registry's declared preconditions, and
 // DEFAULT-DENY anything outside the declared, registered envelope.
 //

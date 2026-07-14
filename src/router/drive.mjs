@@ -1,21 +1,20 @@
-// src/router/drive.mjs — the product-facing DRIVE of the capability router: the
-// piece that actually turns a real English request into a real, executed answer
-// over a real repo graph. Stages 0-5 (registry/resolver/planner/guardrail/
-// goal-reasoner/call-validator) are all pure, deterministic decision machinery —
-// this module is the thin, stateful shell around them that a CLI or chat surface
-// calls: build a { dispatch, resolve, graph } context against the repo's actual
-// code graph, then run a request through resolver -> planner -> goal-reasoner,
-// same order agentbench's own driver-resolver.mjs/driver-goal.mjs run in.
+// src/router/drive.mjs — the product-facing drive of the capability router: the
+// piece that turns a real English request into a real, executed answer over a
+// real repo graph. registry/resolver/planner/guardrail/goal-reasoner/
+// call-validator are all pure, deterministic decision machinery — this module
+// is the thin, stateful shell around them that a CLI or chat surface calls:
+// build a { dispatch, resolve, graph } context against the repo's actual code
+// graph, then run a request through resolver -> planner -> goal-reasoner.
 //
-// Single-shot -> the resolver (Stage 1). A compound "... then ..."/"if ..."/
-// "of the ..., which are ..." request -> the planner (Stage 3), HTN-decomposed
-// into an ordered call sequence with a POP causal-link proof chain, then folded
-// into ONE composed answer via the SAME set-algebra the router's HTN method
-// names (relative-filter -> intersect; conditional -> fallback/guard). A request
-// neither stage can ground escalates to the closed-world goal-reasoner (Stage 5)
-// — a maintenance-invariant deduction (coverage-gap / cochange-risk), never a
-// keyword guess. Anything none of the three grounds is an HONEST REFUSE, the
-// same "grounded or an honest miss" contract as every other tmct answer path.
+// Single-shot -> the resolver. A compound "... then ..."/"if ..."/"of the ...,
+// which are ..." request -> the planner, HTN-decomposed into an ordered call
+// sequence with a POP causal-link proof chain, then folded into ONE composed
+// answer via the same set-algebra the HTN method names (relative-filter ->
+// intersect; conditional -> fallback/guard). A request neither stage can
+// ground escalates to the closed-world goal-reasoner — a maintenance-invariant
+// deduction (coverage-gap / cochange-risk), never a keyword guess. Anything
+// none of the three grounds is an honest refuse, the same "grounded or an
+// honest miss" contract as every other tmct answer path.
 
 import { resolveOne } from "./resolver.mjs";
 import { plan, isMultiStep, decompose, MAX_STEPS } from "./planner.mjs";
@@ -115,9 +114,9 @@ async function composeResult(request, calls, ctx) {
   return /\binstead\b/i.test(request) ? fallbackIfEmpty(sets[0], sets[1]) : guardIfEmpty(sets[0], sets[1]);
 }
 
-/** Stage 1 + Stage 3: single-shot via the resolver, compound via the planner
- *  (+ result composition). Never escalates to the goal-reasoner on its own —
- *  see runCapabilityPlan for the full C1 -> C2 composition. */
+/** Single-shot via the resolver, compound via the planner (+ result
+ *  composition). Never escalates to the goal-reasoner on its own — see
+ *  runCapabilityPlan for the full resolver/planner -> goal-reasoner chain. */
 export async function runResolverPlan(request, tools, ctx) {
   const d = decompose(request);
   if (d.method === "member-filter") return memberFilterDrive(request, tools, ctx, d.segments);
@@ -139,17 +138,18 @@ export async function runResolverPlan(request, tools, ctx) {
   };
 }
 
-/** THE FULL DRIVE: C1 (resolver/planner) first; a C1 refusal escalates to the
- *  closed-world C2 goal-reasoner (Stage 5). Mirrors agentbench's
- *  driver-resolver.mjs + driver-goal.mjs composition, with no agentbench/
- *  dependency (agentbench/ is dev-only, never shipped). Returns a loopResult:
+/** The full drive: resolver/planner first; a refusal there escalates to the
+ *  closed-world goal-reasoner. Mirrors agentbench's driver-resolver.mjs +
+ *  driver-goal.mjs composition, with no agentbench/ dependency (agentbench/
+ *  is dev-only, never shipped). Returns a loopResult:
  *  `{ calls, refused, terminated, proof, why, driver, composed?, observed? }`. */
 export async function runCapabilityPlan(request, tools, ctx) {
   const c1 = await runResolverPlan(request, tools, ctx);
   if (!c1.refused) return c1;
   const c2 = await goalReason(request, tools, ctx, { driver: GOAL_DRIVER });
-  // Both stages refused: carry C1's own reason alongside C2's so a caller can
-  // show why the direct route AND the maintenance-goal route both declined,
+  // Both stages refused: carry the resolver/planner's own reason alongside the
+  // goal-reasoner's so a caller can show why the direct route AND the
+  // maintenance-goal route both declined,
   // rather than only the last (often less specific) of the two.
   return c2.refused ? { ...c2, c1Why: c1.why } : c2;
 }

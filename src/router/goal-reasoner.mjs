@@ -1,7 +1,7 @@
-// src/router/goal-reasoner.mjs — Stage 5 of the capability router: THE CLOSED-WORLD C2
-// GOAL-REASONER. A canned, hard-bounded meta-loop (BDI x goal-driven autonomy):
+// src/router/goal-reasoner.mjs — the closed-world goal-reasoner: a canned,
+// hard-bounded meta-loop (BDI x goal-driven autonomy):
 //
-//     deduce current goals -> plan each goal (C1: the Stage-3 planner/resolver)
+//     deduce current goals -> plan each goal (resolver.mjs's backward chain)
 //   -> arbitrate the first steps, threat-aware -> persist the committed intention
 //   -> execute ONE, observe, repeat
 //

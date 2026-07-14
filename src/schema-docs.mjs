@@ -94,9 +94,8 @@ export const PREDICATE_DOCS = Object.freeze([
   { prop: "mgx:hasProseTokens", kind: "prose", description:
     "Individual → word tokens (an attribute, not a between-individuals edge). The " +
     "decomposed word sequence extracted from an identifier's name (camelCase/snake_case " +
-    "split) and any doc-comment prose, used by the second-pass prose-to-symbol " +
-    "cross-reference index (PLAN_PROSE_INDEX.md) to resolve free-text object terms that " +
-    "don't exact-match an identifier." },
+    "split) and any doc-comment prose, used by the prose-to-symbol cross-reference index " +
+    "to resolve free-text object terms that don't exact-match an identifier." },
 
   // ---- attributes (individual-scoped facts, not edges) ----
   { prop: "seon:startsAt", kind: "attribute", description:

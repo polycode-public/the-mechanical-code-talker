@@ -1,9 +1,9 @@
-// src/router/registry.mjs — Stage 0 of the capability router.
+// src/router/registry.mjs — the capability registry.
 //
 // Each tmct tool is modelled as a STRIPS/PDDL operator declared as DATA: a `Capability` with
 // typed `Parameter`s, `Precondition`s, and `Effect`s (add-list/delete-list). Preconditions are
-// the safety gate the guardrail (Stage 4) checks before a call fires; effects are epistemic
-// (a read-only query "knows" a topic, never mutates) — the resolver (Stage 1) backward-chains
+// the safety gate guardrail.mjs checks before a call fires; effects are epistemic
+// (a read-only query "knows" a topic, never mutates) — resolver.mjs backward-chains
 // from a goal `(knows <topic> ?x)` to the capability whose add-list achieves it.
 //
 // Pure: plain frozen data + pure accessors, no I/O. Tool names + parameter arg keys are the
