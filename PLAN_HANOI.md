@@ -3,7 +3,10 @@
 Status: RESEARCH / DESIGN — not yet implemented. Nothing in this document is live code. Phase 2's
 search kernel (`findActionPath`, `src/planning.mjs`) shipped as a standalone proof-of-mechanism —
 see the dated entry at the end of this document — but Hanoi's own state/legal-moves/goal (Phases
-1/3/4) are still unbuilt.
+1/3/4) are still unbuilt. The 2026-07-15 proposal at the end of this document supersedes Phases
+1/3/4 with a revised phasing (1R-5R): the game domain is defined in chat sentences (or a text file
+via `tmct import --file`), a generic interpreter replaces the hard-coded Hanoi module, and the plan
+renders as an animated, self-contained HTML page.
 
 **A different, already-live planning capability, for contrast.** `src/router/*` is a SEPARATE
 STRIPS/PDDL planner — not this document's design, and not built from it — that composes and
@@ -412,3 +415,314 @@ untouched by this landing):
   adjacency list, not a disk/peg legality check.
 - Phase 4's domain-general extraction/second-domain plug-in and the `PLAN_GUESS_NUMBER.md`
   convergence point — not started.
+
+## 2026-07-15 — proposal: chat-defined game domains, a plan lane, and an animated HTML render surface
+
+### The ask
+
+Operator, 2026-07-15, paraphrased faithfully. Define a game's constructs — its pieces, places,
+ordering, and legal actions — entirely in chat sentences, the same way the grandfather chain in
+`EXAMPLE_PLAYTEST_LOG.md` teaches kinship. tmct remembers them as ordinary taught facts and Rules.
+The same sentences can arrive from a text file through the CLI instead of being typed. A later
+single prompt states a start state and a goal in one message. A closed set of plan-requiring
+phrasings invokes the planning engine on that prompt. Three surfaces must exist:
+
+1. the JS library (a session turn that returns the plan as data),
+2. `npx tmct import --file <game-definition.txt>` (batch-teach the definition),
+3. `npx tmct chat --prompt '<state and goal>' --render blocks --output plan.html`.
+
+`plan.html` is a self-contained page. It renders the sub-graph the plan touches, using render
+templates keyed to ontology classes, and animates each plan step as the state changes.
+
+### What this changes in the existing phased sketch
+
+Phase 2's kernel is untouched. `findActionPath(startState, isGoal, applyActions, { maxDepth,
+stateKey })` (`src/planning.mjs:30`; sibling `findReachableSet`, `:63`) already ships and is
+domain-agnostic. What changes is Phase 1: the hard-coded Hanoi `legalMoves`/`applyMove` module it
+scoped is dropped. In its place, a data-driven action interpreter reads taught action Rules and
+generates successors for ANY domain defined this way. Hanoi ships as a game-definition text file;
+the code ships a generic interpreter. Phases 3 and 4 are superseded by the revised phasing below.
+
+The mapping to the reference set is direct (`docs/references/planning/STRIPS_PDDL.md`). The
+definition file is the PDDL **domain**: types, predicates, operators. The single prompt is the
+**problem**: objects, initial state, goal. tmct's teach pipeline is the NL-to-domain compiler that
+reference note anticipates. The closed-world assumption holds by construction, because the taught
+facts ARE the whole world.
+
+One placement decision to record explicitly. `src/router`'s registry is the WRONG home for taught
+operators, despite being the repo's other STRIPS surface. `CAPABILITIES`/`REGISTRY` are
+`Object.freeze`d compile-time literals with a closed precondition vocabulary and epistemic
+(`knows`) effects; there is no runtime loader, and anything not registered is treated as
+hallucinated and never dispatched (`src/router/registry.mjs`). Taught game actions are the
+opposite on both axes: user-defined at runtime, and world-mutating. They belong in the memory
+store's Rule machinery.
+
+That machinery is already live and already planner-shaped. The grandfather playtest
+(`EXAMPLE_PLAYTEST_LOG.md`) teaches compose2/filter Rules through chat and answers "who is the
+grandfather of ishmael" with full provenance. At ask time those Rules resolve through the planning
+kernel itself: `resolveRelationChase` runs `findActionPath` with a hop-counted goal
+(`src/memory/core.mjs:1267`, call at `:1302`), and `resolveRelationChaseReverse` runs
+`findReachableSet` (`:1343`, call at `:1389`). The teach → Rule → lazy-chase mechanism this
+proposal extends is proven in production, on kinship. Games add a fourth Rule kind and an
+interpreter, on the same rails.
+
+### Teaching the domain — what exists, what's missing
+
+Classes and instances need nothing new. "a disk is a kind of game piece" and "peg-a is a peg" go
+through the ACE patterns (`parseCopula`/`parseEvery`, `src/grammar/ace.mjs`) exactly as the
+playtest's "a father is a kind of parent" does. Taught facts mint predicates freely:
+`generalVerbPredicate` produces `mgx:<lemma>` for any verb (`src/chat.mjs:2314`), and
+`MEMORY_VOCABULARY` is a documentation table, never an allow-list (`appendFact` stores the
+predicate verbatim, `src/memory/core.mjs:1021`).
+
+Two real grammar gaps block the state sentences, both verified against current code:
+
+- `GENERAL_VERB_TEACH_RE` (`src/chat.mjs:2236`) requires a single bare-token subject. "the small
+  disk rests on the middle disk" is declined outright (determiner-led, multi-word).
+- Prepositions never fold into the predicate. "remember that disk-1 rests on peg-a" WOULD match,
+  but stores predicate `mgx:rest` with the literal object "on peg-a". The peg is unreachable as a
+  graph node.
+
+Fix: one closed **prepositional-verb teach frame** — "X rests on Y" (and the small family: "sits
+on", "is on", "stands on") parses to a single predicate (`mgx:restsOn`) with Y as a clean object
+term. This is new Phase-1R work, a sibling of the existing teach recognizers, and it is what makes
+the §1 `restsOn` sketch teachable rather than hand-seeded.
+
+A second small frame covers ordering: "disk-1 is smaller than disk-2" → `mgx:smallerThan`. Move
+legality needs this total order; three facts define it for a 3-disk game. (Deriving transitivity
+through the existing entailment machinery is a nice-to-have, and explicitly out of scope; the
+definition file can state all pairs.)
+
+**Actions adopt `PLAN_ADVENTURE.md` Gap 3's `RULE_KIND_ACTION`**. That doc already designs
+actions as graph-resident Rule data with precondition and effect slots, stored via `appendRule`
+(`src/memory/core.mjs:1194`) next to the three shipped kinds (`RULE_KINDS`, `:1169`;
+`RULE_SLOT_SPEC`, `:1180-1184`) and looked up via `findRuleByName` (`:1240`). This proposal
+converges the two docs on ONE fourth kind. The adventure doc's slot design gets extended here, in
+two ways it did not need for Ashcombe Hall, rather than duplicated:
+
+1. **Typed parameters.** Hanoi's move is parameterised: move ?disk onto ?target, where ?disk
+   ranges over class `disk` and ?target over `peg` or `disk`. An action Rule therefore declares
+   its variables with their classes, and the interpreter grounds them over the individuals of
+   those classes at expansion time. Ashcombe Hall's verbs bind their nouns from the parsed
+   command; a planner has no command to bind from, so the declaration must carry the types.
+2. **A closed precondition vocabulary of exactly three shapes**: a triple pattern that must hold;
+   a triple pattern that must NOT hold (this expresses "nothing rests on the disk", i.e. clear);
+   and one comparator against a taught ordering predicate ("?disk smallerThan ?target"). No
+   conjunction syntax is needed, because an action simply carries several precondition slots and
+   ALL must pass.
+
+Each taught sentence contributes one precondition or one effect, keyed to the action name, so
+every sentence stays one-triple-shaped — the same granularity every existing teach frame has. The
+closed sentence frames:
+
+```
+you can move a disk onto a peg.                       // declares the action + typed parameters
+you can move a disk onto a disk.                      // second signature, same action name
+to move a disk onto a target, nothing may rest on the disk.
+to move a disk onto a target, nothing may rest on the target.
+to move a disk onto a disk, the disk must be smaller than the target.
+moving a disk onto a target makes the disk rest on the target.
+```
+
+Effect semantics: the effect template REPLACES the subject's existing `(subject, predicate)` edge
+in the successor snapshot. This is the STRIPS delete-list, handled structurally by §3's
+snapshot-per-step recommendation. Each successor state is a fresh set of `restsOn` rows; nothing
+is retracted in place, so the missing retraction primitive (§3, still true of current code) stays
+un-needed.
+
+### State + goal in one prompt
+
+The state half of the prompt is plain teach sentences ("disk-1 rests on disk-2. disk-2 rests on
+disk-3. disk-3 rests on peg-a.") written as the step-0 snapshot through `appendFact`, exactly the
+§1 shape. The goal is one closed frame: "the goal is that every disk rests on peg-c" (variants:
+"the goal is that X rests on Y"). The universal form compiles to a per-individual conjunction over
+the taught members of the class, checked against a state's fact rows by a pure `isGoal`.
+
+Where each piece lives, answering this doc's own "where does plan state live" open question:
+
+- **The definition and the step-0 state are durable facts/Rules** in the memory store. They are
+  teachings about the world and deserve provenance, trust, and recall like any other.
+- **The in-progress plan (computed move list, step cursor, goal) rides a session slot**, following
+  `PLAN_GUESS_NUMBER.md` §1's `game`-slot threading design verbatim (a closure variable in
+  `createSession`, threaded through `runTurn` like `focus`/`last`). A half-executed plan is
+  conversation state, best lost on restart, and must survive an unrelated aside mid-game — the
+  exact clearing-rule argument that doc already makes. Adopting its slot (or a sibling `plan`
+  slot) closes the open question for both docs at once.
+
+Plan triggering is a closed recognizer set, per this doc's Phase-3 non-goal on open goal
+inference: "solve it", "plan the moves", "how do I get from here to the goal", and the
+one-message combined form (state sentences + goal frame + trigger). It lands as a new plan lane in
+`runAsk`'s miss-cascade, exactly as §4 sketches, and reuses the goal-line mechanism unchanged.
+Per-step execution ("next") revises `deduced` mid-cascade; whole-plan playback in one turn reuses
+the narrate-block SHAPE for a one-line-per-move trace, both exactly as §4 already recommends.
+
+### The generic interpreter — the genuinely new code
+
+One new pure module (working name `src/domain.mjs`), the piece §2 called the successor-state
+generator, now domain-general instead of Hanoi-specific:
+
+```
+movesFromRules(state, actionRules, facts) -> [ { action, nextState } ]
+```
+
+- Ground each action Rule's typed variables over the individuals of their declared classes
+  (classes and members read from the same taught facts).
+- Check every precondition slot against the state's rows: must-hold and must-not-hold by direct
+  row lookup, the comparator by lookup in the taught ordering facts.
+- For each grounding that passes, apply the effect template: copy the state, replace the moved
+  subject's `(subject, predicate)` row, and emit the successor.
+- Pure, I/O-free, bounded, and deterministically sorted (groundings walked in sorted individual
+  order), matching `syllogise.mjs`'s budget/determinism discipline the way §2 prescribes.
+
+This plugs into `findActionPath` as its `applyActions`, with `stateKey` a canonical sorted
+serialization of the state's rows. `isGoal` compiles from the goal frame the same way. The 2^n − 1
+oracle test survives intact, and gets stronger: it now runs end to end from the definition TEXT
+(sentences → facts/Rules → interpreter → search), with the closed-form recursion still used only
+as the test oracle, per §5.
+
+### CLI and JS surfaces
+
+**`tmct import --file <path>`.** The batch-teach tool already exists as a script:
+`scripts/extract-facts-from-text.mjs` (`npm run extract:facts`, `package.json:109`) sentence-splits
+a file with wink (`splitSentences`, `:58`) and runs each sentence through `runTurn` exactly as if
+typed. Promote that flow into the existing `import` subcommand (`bin/tmct.mjs:842`) as a `--file`
+mode next to `--corpus`/`--ontology`/`--lexicon`/`--graph`. One behavior requirement, stated now
+because it is a correctness matter: the import must report per-sentence results loudly, echoing
+every sentence the recognizer declined and its lane's decline reason. A silently dropped
+precondition sentence produces a planner that finds an ILLEGAL "solution"; a silently dropped
+action sentence produces "no plan found" with no visible cause. The script's existing
+kept/declined split (`record.via === "assert" && !record.miss`) already computes this; the CLI
+must print it, and should exit non-zero if any sentence was declined.
+
+**`tmct chat --prompt '<text>' [--render <archetype>] [--output <path>]`.** Chat today has no
+one-shot mode; stdin piping is the only non-interactive path, and it stays as the fallback. The
+new flag: create a session (`createSession`, `src/chat.mjs:8169`), sentence-split the prompt with
+the same `splitSentences`, run each sentence as a turn, print the final turn's answer, exit. Flag
+parsing follows viz's conventions (`strFlag` with an `--output`/`--out` alias and a default
+filename, `resolveRuntimeConfig` for `--repo`; `bin/tmct.mjs:1024-1032`). `--render`/`--output`
+are only meaningful when the final turn produced a plan; otherwise the command says so and exits
+non-zero rather than writing an empty page.
+
+**JS library.** The plan lane attaches the structured result to the turn it answered:
+`result.plan = { actions, states, goal, domain }`, the same `{ actions, states }` shape
+`findActionPath` returns plus the goal and the touched individuals. Library consumers, the CLI
+renderer, and tests all consume this one shape; the prose answer stays a rendering of it, never
+the other way round.
+
+### The render surface
+
+A new `src/plan-viz.mjs`, a sibling of `src/viz.mjs` with the same three-way factoring: an I/O
+compute step, a pure HTML string builder, a never-throw artifact read. It inherits viz's
+self-containment rules wholesale — no external requests, inline `<style>`, canvas 2D, JSON
+embedded via the same script-breakout-safe escaping (`embedJson`, `src/viz.mjs:123`;
+`renderVizHtml`'s inline `const GRAPH = ...` pattern, `:137` and the embedded-payload block).
+
+**Render templates key to ontology classes**, the same dimension viz already colors by (one
+stable hue per `class`, `src/viz.mjs:283-288`). The binding is itself taught: `mgx:rendersAs`
+facts ("a disk renders as a block", "a peg renders as a slot") map each class to a render
+archetype, and the `mgx:smallerThan` order derives relative block widths. `--render blocks` names
+the first built-in archetype: places drawn as fixed baselines, movables as rectangles stacked by
+their `restsOn` chains. The archetype set is closed and small (`blocks` first, later perhaps
+`tokens` for board positions), matching the templates-over-general-rules house preference. A class
+with no `rendersAs` fact falls back to a labeled circle, so an incomplete definition still renders
+honestly.
+
+**Animation.** `findActionPath` already returns the full `states` list. The page embeds every
+snapshot as JSON. Consecutive snapshots differ by exactly one moved individual (one effect per
+action, by construction), so the in-page player diffs neighbours, finds the moved piece, and
+animates it between its two computed positions with `requestAnimationFrame`, with play/pause/step
+controls and a move-list sidebar showing the plan's own per-step goal strings. Nothing time-driven
+exists anywhere in the repo today (verified by grep across `src/` and the generated page), so this
+player is new code, but it is page-local and small.
+
+One discovered fact worth recording: the planning kernel already ships in the browser.
+`src/memory-ask-browser.bundle.js` carries `findActionPath`/`findReachableSet` (`:394`, `:416`)
+because `chat.mjs`'s dynamic import gets inlined by esbuild. A later interactive page (re-plan
+after the user drags a disk) is therefore one bundle-entry export away. Scoped out here: the CLI
+computes the plan once; the page only replays it.
+
+### Revised phasing
+
+This supersedes Phases 1, 3, and 4 above. Phase 2 shipped (`src/planning.mjs`) and stands.
+
+- **Phase 1R — domain-definition vocabulary.** The prepositional-verb frame, the comparative
+  frame, `RULE_KIND_ACTION` with typed parameters and the three precondition shapes, and the
+  action/precondition/effect teach frames. Unit tests round-trip a hand-authored Hanoi definition
+  through `appendRule`/`appendFact`/`readFactRows` (`src/memory/core.mjs:1194`, `:1021`, `:1445`)
+  and back into the same structures. Exit criterion: every sentence of the worked example below
+  teaches successfully, and the stored Rules/facts match a hand-written expected shape exactly.
+- **Phase 2R — the interpreter.** `movesFromRules`, the goal compiler, `findActionPath`
+  integration. Exit criterion: the 2^n − 1 oracle passes for n = 1..8, driven purely from the
+  definition text; the interpreter module contains nothing Hanoi-specific (no "disk", "peg", or
+  "restsOn" literal anywhere in it).
+- **Phase 3R — chat and CLI surfaces.** Multi-sentence turns, the plan lane with its goal-line and
+  narrate-shaped trace, `tmct import --file` with loud per-sentence reporting, `tmct chat
+  --prompt` one-shot. Exit criterion: a fresh repo can be taught the whole game via `import
+  --file`, then solve it from one `chat --prompt` invocation, with the CLI smoke test and full
+  suite green.
+- **Phase 4R — render.** `src/plan-viz.mjs`, the `blocks` archetype, the animation player,
+  `--render`/`--output` wiring. Exit criterion: the worked example's `plan.html` opens offline,
+  replays all 7 moves correctly, and the page's final drawn state matches the goal.
+- **Phase 5R — a second domain from data only.** Candidate: a river-crossing puzzle (same
+  move-onto shape, different legality), or Ashcombe Hall's opening moves through the shared
+  `RULE_KIND_ACTION`. Exit criterion: the second domain works with ZERO interpreter changes. This
+  phase also owns the two standing convergence points: the shared action-Rule kind with
+  `PLAN_ADVENTURE.md`, and `PLAN_GUESS_NUMBER.md`'s replan-after-observation seam (the interpreter
+  must stay callable per-state, never assuming the whole plan precomputes).
+
+### Worked example
+
+`hanoi-3.txt`, complete, in the closed frames:
+
+```
+a disk is a kind of game piece.
+a peg is a kind of place.
+disk-1 is a disk. disk-2 is a disk. disk-3 is a disk.
+peg-a is a peg. peg-b is a peg. peg-c is a peg.
+disk-1 is smaller than disk-2. disk-1 is smaller than disk-3.
+disk-2 is smaller than disk-3.
+you can move a disk onto a peg.
+you can move a disk onto a disk.
+to move a disk onto a target, nothing may rest on the disk.
+to move a disk onto a target, nothing may rest on the target.
+to move a disk onto a disk, the disk must be smaller than the target.
+moving a disk onto a target makes the disk rest on the target.
+a disk renders as a block. a peg renders as a slot.
+```
+
+Then:
+
+```
+npx tmct import --file hanoi-3.txt
+npx tmct chat --prompt 'disk-1 rests on disk-2. disk-2 rests on disk-3. disk-3 rests on peg-a.
+  the goal is that every disk rests on peg-c. solve it.' --render blocks --output plan.html
+```
+
+The chat answer lists the 7 moves with a goal line per step and cites the taught action Rule as
+provenance, the same way the grandfather answer cites its taught premises. `plan.html` opens
+offline, draws three slots with a 3-block tower on the left, and plays the 7 moves as sliding
+blocks, with step controls and the move list alongside.
+
+### Open risks/questions (this proposal's own, appended to the standing list above)
+
+- **The controlled-English ceiling of action frames.** A definition file is controlled English,
+  the ACE tradition this project already builds on, never free text. The frames above cover
+  move-onto games. A domain needing arithmetic effects, multi-subject effects, or disjunctive
+  preconditions does not fit and must be declined honestly at teach time. Growing the frame set is
+  by-need, one closed frame at a time.
+- **Variable-grounding blow-up.** Groundings scale with the product of the parameter classes'
+  sizes. Hanoi's is trivial (n disks × n+2 targets). The interpreter still needs a hard grounding
+  budget in the `syllogise.mjs` style, declined loudly when exceeded, before any larger domain is
+  attempted.
+- **Import must fail loud, per sentence.** Named above as a requirement; recorded here as the
+  risk it guards against — a definition that half-teaches produces wrong plans or missing plans
+  with no visible cause. The exit-nonzero-on-any-decline rule is the mitigation.
+- **The goal recognizer stays closed.** Same posture as the standing "goal recognition from
+  free-form natural language" risk above; this proposal adds the one-message state+goal+trigger
+  form and nothing more open than that.
+- **Render archetype generality.** `blocks` fits stacking games. Whether two or three archetypes
+  cover the interesting closed-world puzzle space, or whether the archetype itself needs to be
+  data, is deliberately unresolved until Phase 5R's second domain forces the question.
+- **Where the in-progress plan lives is now decided** (session slot for the plan, durable facts
+  for definition and state), resolving the standing open question above for this design; the
+  guess-number doc's clearing rules apply verbatim.
