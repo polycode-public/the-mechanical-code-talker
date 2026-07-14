@@ -334,3 +334,53 @@ test("non-shadow regression: 'what has changed recently' stays a code-graph-flav
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("isa honest miss: 'is a dog a cat' answers a specific can't-confirm citing a known fact, and the turn still records a miss", async () => {
+  const dir = await mem();
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    const r = await s.turn("is a dog a cat");
+    await s.close();
+    assert.match(r.answer, /I can't confirm that — nothing I remember says dog is a cat/);
+    assert.match(r.answer, /dog is a kind of animal/);
+    assert.doesNotMatch(r.answer, /couldn't parse/);
+    const rec = await lastTurnRecord(s.sidecarFile);
+    assert.equal(rec.miss, true);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("isa honest miss: an entirely unknown subject ('is a fizzbuzz an animal') gets a can't-confirm + teach hint, never the parse wall", async () => {
+  const dir = await mem();
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    const r = await s.turn("is a fizzbuzz an animal");
+    await s.close();
+    assert.match(r.answer, /I don't know "fizzbuzz" at all yet/);
+    assert.doesNotMatch(r.answer, /couldn't parse/);
+    const rec = await lastTurnRecord(s.sidecarFile);
+    assert.equal(rec.miss, true);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("isa honest miss: the teach hint's own suggested phrasing round-trips — teach it, re-ask, get yes", async () => {
+  const dir = await mem();
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    await s.turn("dog is a kind of cat");
+    const r = await s.turn("is a dog a cat");
+    await s.close();
+    assert.match(r.answer, /^yes — /);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});

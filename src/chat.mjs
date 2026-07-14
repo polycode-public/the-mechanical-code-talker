@@ -5503,7 +5503,42 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
         }
       }
     }
-    return null; // no remembered fact — the honest miss stands (never a guessed "no")
+    // Every yes-chase and the disjoint "no" above missed. The old
+    // unconditional decline here fell through to the structural "couldn't
+    // parse this as a graph question" wall — actively misleading for a KNOWN
+    // subject, twice over: the question DID parse, and the wall's hint
+    // suggests the exact shape the user just typed. When the subject has
+    // remembered isa-family facts, answer with an honest, specific miss that
+    // cites what IS remembered instead. An unknown subject still declines to
+    // the standing wall/teach-hint path — and this never guesses a "no".
+    // The SUBJECT'S OWN variants only — subjCandidates was augmented above
+    // with the graph entity's class noun (the CLASS↔INSTANCE bridge), and
+    // filtering on it here would cite facts about that noun ("class ⊑
+    // component") as if they were facts about the asked subject ("Widget").
+    const directSubjVariants = factTermVariants(normFactTerm, isaAsk[1]);
+    const knownSubjectIsa = isa.filter((f) => directSubjVariants.has(f.subject)).sort(byTrust);
+    const subjectWord = isaAsk[1].trim();
+    const kindWord = stripTrailingDiscourseTag(isaAsk[2]).trim();
+    if (knownSubjectIsa.length) {
+      const shown = knownSubjectIsa.slice(0, 3).map(renderFactLine).join("; ");
+      return {
+        text: `I can't confirm that — nothing I remember says ${subjectWord} is a ${kindWord}. I do know: ${shown}. If it's true, teach me: "${subjectWord} is a kind of ${kindWord}".`,
+        replace: true,
+        miss: true, // still a MISS in the turn record — honest wording, not an answer
+      };
+    }
+    // Subject with NO isa facts: only divert when it's mentioned NOWHERE at
+    // all (no fact row on either side, no code entity by id OR class noun) —
+    // a subject known via OTHER predicates ("ahab is male") or the code graph
+    // keeps the old decline, so nothing downstream is ever shadowed.
+    if (!ent && !noun && !rows.some((f) => subjCandidates.has(f.subject) || subjCandidates.has(f.object))) {
+      return {
+        text: `I can't confirm that — I don't know "${subjectWord}" at all yet. If it's true, teach me: "${subjectWord} is a kind of ${kindWord}".`,
+        replace: true,
+        miss: true,
+      };
+    }
+    return null; // the honest miss stands (never a guessed "no")
   }
 
   // (a1c-i) CARDINALITY MONOTONICITY — "does every X have at least N Y" over
@@ -7105,6 +7140,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     if (memoryDir) {
       bareMetaHit = (await factAnswer(memoryDir, gateQuery, envelope, miss, biasByBundle, cache))
         ?? (await factReadBack(memoryDir, gateQuery, envelope, miss, graph, newFocus?.label, biasByBundle, cache));
+      if (bareMetaHit?.miss) bareMetaHit = null; // an honest-miss return never diverts the gate
       // A bare "what is X" with NO taught fact but a KNOWN curated corpus term
       // ("what is cache", no article) needs the same "only diverts on a REAL
       // hit" treatment — curatedDefinitionAnswer otherwise only ever runs once
@@ -7175,8 +7211,14 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       ?? (await factReadBack(memoryDir, query, envelope, miss, graph, newFocus?.label, biasByBundle, cache));
     if (fact) {
       answer = fact.replace ? fact.text : `${answer}\n${fact.text}`;
-      via = "fact";
-      recordMiss = false;
+      // A fact-lane return flagged `miss` is an HONEST MISS in better words
+      // (the isa ladder's "I can't confirm that" closers) — the turn record
+      // keeps miss=true and via stays untouched, so miss-rate metrics and
+      // recall's own miss-gated lanes see it exactly like the wall it replaced.
+      if (!fact.miss) {
+        via = "fact";
+        recordMiss = false;
+      }
       if (fact.pending) factPending = fact.pending; // a truncated fact list → paginable remainder
       if (typeof fact.trust === "number") entailedTrust = fact.trust; // live-chase trust (see the `entailedTrust` declaration above)
       note(trace, `lane: (3) memory facts — factAnswer/factReadBack matched (memoryDir=${memoryDir})`);
