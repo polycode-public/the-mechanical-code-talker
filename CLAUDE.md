@@ -2,15 +2,11 @@
 
 ## Explicit versioning/commit/push instructions are not up for debate
 
-If the operator's prompt states explicitly when to bump the version, commit, or push
-(e.g. "roll the version every round", "commit and push each turn"), execute it exactly
-as stated. Do not pause to ask a clarifying question about cadence, do not weigh it
-against this document's general conventions, and do not apply your own judgment to
-override it. The operator's
-explicit instruction in the prompt is authoritative over any general policy written
-here or anywhere else in this repo. Only stop if following the instruction would
-violate a hard safety rule (e.g. leaking a secret) — otherwise, just do it. Getting
-this wrong burns hours of the operator's time for nothing; see
+If the operator's prompt states when to bump the version, commit, or push (e.g. "roll
+the version every round", "commit and push each turn"), execute it exactly as stated.
+It overrides any general policy written here or anywhere else in this repo; don't ask
+clarifying questions about cadence. Only stop if following it would violate a hard
+safety rule (e.g. leaking a secret). See
 [[feedback_follow_explicit_versioning_instructions]] in memory.
 
 ## Working model: coordinator + background sub-agents
@@ -22,10 +18,9 @@ session is the COORDINATOR (plans, launches, integrates, answers the operator), 
   files (one agent owns `package.json`, `src/`, `bin/`, `test/` sequences; docs/site tracks
   run in parallel).
 - **Keep the chat for chat**: anything long-running (benchmarks, judge passes, builds, test
-  sweeps) executes as a BACKGROUND task at maximum safe concurrency (the chatbench judge
-  defaults to `--concurrency 12`); the main session launches it, keeps coordinating and
-  conversing, and collects results on the completion notification. Never block the
-  conversation on a run.
+  sweeps) executes as a BACKGROUND task at maximum safe concurrency; the main session
+  launches it, keeps coordinating and conversing, and collects results on the completion
+  notification.
 - Commit per completed step with the repo-local identity (`antony@polycode.co.uk` /
   `Antony at Polycode`); keep `npm test` green at every commit.
 - Push/publish is gated on the operator (CI publishes on version bump on `main`).
@@ -37,10 +32,6 @@ everything before the last N lines for good. If the summary you need sits earlie
 it's gone, and the whole command has to run again. Always tee it to a file first:
 `cmd 2>&1 | tee /tmp/some-file.log | tail -20`. You still get the quick glance, and the full
 output stays on disk if you need more of it later.
-
-**Why:** this happened directly on 2026-07-14. `npm test 2>&1 | tail -20` on a large suite cut off
-before the pass/fail summary printed. The only way to see the real failure count was to re-run the
-entire suite from scratch.
 
 ## Name it, don't comment it
 
@@ -68,8 +59,7 @@ Test names must describe the behavior or outcome under test on their own terms. 
 whose only distinguishing feature is which historical item motivated it, not what it actually
 checks, is a candidate for deletion, not a rename.
 
-A full repo-wide purge of pre-existing drift happened 2026-07-14. Don't assume it needs repeating
-wholesale; check for new drift before running another full sweep.
+Check for new drift before running a full repo-wide sweep; don't assume one is needed.
 
 ## Don't narrow scope on your own judgment
 
