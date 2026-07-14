@@ -486,3 +486,67 @@ test("negative capability teach: 'penguin cannot fly' never stores a fact whose 
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("derived forward yes/no: 'is a horse used for riding' answers yes from the corpus mgx:usedFor fact", async () => {
+  const dir = await mem();
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    const r = await s.turn("is a horse used for riding");
+    await s.close();
+    assert.match(r.answer, /^yes — horse is used for riding/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("derived forward yes/no: a wrong object gets an honest miss citing the subject's same-relation facts, recorded as a miss", async () => {
+  const dir = await mem();
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    const r = await s.turn("is a wheel part of a car");
+    await s.close();
+    assert.match(r.answer, /I can't confirm that — nothing I remember says wheel is part of car/);
+    assert.match(r.answer, /wheel is part of vehicle/);
+    assert.doesNotMatch(r.answer, /couldn't parse/);
+    const rec = await lastTurnRecord(s.sidecarFile);
+    assert.equal(rec.miss, true);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("derived forward yes/no: 'is a pen made of plastic' answers yes from the corpus mgx:madeOf fact", async () => {
+  const dir = await mem();
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    const r = await s.turn("is a pen made of plastic");
+    await s.close();
+    assert.match(r.answer, /^yes — pen is made of plastic/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("derived forward yes/no never intercepts a dedicated reader: isa, capability, hasA, and ownership shapes keep their own answers", async () => {
+  const dir = await mem();
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    const isa = await s.turn("is a dog an animal");
+    const can = await s.turn("can a dog bark");
+    const have = await s.turn("does a dog have a tail");
+    await s.close();
+    assert.match(isa.answer, /^yes — dog is a kind of animal/);
+    assert.match(can.answer, /^yes — dog can bark/);
+    assert.match(have.answer, /^yes — dog has tail/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});

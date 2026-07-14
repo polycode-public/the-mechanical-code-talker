@@ -4166,6 +4166,42 @@ const REVERSE_PREDICATE_MARKERS = Object.entries(FACT_PREDICATE_PHRASES)
     re: new RegExp(`^what\\s+${escapeRegex(phrase)}\\s+(.+?)[?.!\\s]*$`, "i"),
   }))
   .sort((a, b) => b.re.source.length - a.re.source.length); // longest phrase first
+
+// The FORWARD yes/no mirror of REVERSE_PREDICATE_MARKERS: one derived
+// "is/are X <phrase> Y" (copula phrases), "can X be Y" (receivesAction), or
+// "does/do X <base-verb> Y" (verb phrases, naive de-3sg fold) reader per
+// FACT_PREDICATE_PHRASES entry — so every relation the table can RENDER can
+// also be ASKED as a forward yes/no, instead of each one needing its own
+// hand-written lane. Excluded: the isa family and hasProperty (ISA_ASK_RE /
+// IS_ADJECTIVE_YESNO_RE territory), hasA and capableOf (their dedicated
+// readers above carry teach hints these derived ones deliberately don't —
+// no derived hint is emitted because no teach phrasing for these relations
+// is verified to round-trip).
+const FORWARD_YESNO_EXCLUDE = new Set([
+  "rdfs:subClassOf", "rdf:type", "owl:disjointWith", "mgx:hasProperty",
+  "mgx:hasA", "mgx:capableOf",
+  // ownership's dedicated reader (OWNS_YESNO_RE) answers a confident
+  // closed-world "no" — a stronger contract than the derived "can't
+  // confirm", so the derived reader must never intercept it.
+  "mgx:ownedBy",
+]);
+const FORWARD_YESNO_MARKERS = Object.entries(FACT_PREDICATE_PHRASES)
+  .filter(([predicate]) => !FORWARD_YESNO_EXCLUDE.has(predicate))
+  .map(([predicate, phrase]) => {
+    let re;
+    if (phrase === "can be") {
+      re = new RegExp("^can\\s+(?:an?\\s+|the\\s+)?(.+?)\\s+be\\s+(.+?)[?.!\\s]*$", "i");
+    } else if (phrase.startsWith("is ")) {
+      const rest = escapeRegex(phrase.slice(3));
+      re = new RegExp(`^(?:is|are)\\s+(?:an?\\s+|the\\s+)?(.+?)\\s+${rest}\\s+(?:an?\\s+|the\\s+)?(.+?)[?.!\\s]*$`, "i");
+    } else {
+      const [head, ...tail] = phrase.split(" ");
+      const base = [head.replace(/s$/, ""), ...tail].map(escapeRegex).join("\\s+");
+      re = new RegExp(`^(?:does|do)\\s+(?:an?\\s+|the\\s+)?(.+?)\\s+${base}\\s+(?:an?\\s+|the\\s+)?(.+?)[?.!\\s]*$`, "i");
+    }
+    return { predicate, phrase, re };
+  })
+  .sort((a, b) => b.re.source.length - a.re.source.length); // longest phrase first
 // On the FIRST turn of a graph-less session, `envelope` stays null for the
 // whole turn (dispatchTool's loadGraph() throws its own documented empty-graph
 // ToolError, self-correcting from turn 2 on), so this regex is the ONLY path
@@ -4329,6 +4365,42 @@ export async function factAnswer(memoryDir, query, envelope, miss, biasByBundle 
     return { text: shown.join("\n") + extra, replace: miss, ...(rest.length ? { pending: { items: rest, noun: "facts" } } : {}) };
   }
   if (!miss) return null;
+
+  // (b0) Derived forward yes/no readers — FORWARD_YESNO_MARKERS, one per
+  // renderable relation. Runs BEFORE the isa lane because ISA_ASK_RE's lazy
+  // subject otherwise swallows these shapes whole ("is a wheel part of a
+  // car" reads as subject "wheel part of") and ends the cascade. A real fact
+  // answers yes; a subject known under the SAME relation gets an honest miss
+  // citing those facts; a subject known at all (with no structural parse
+  // standing) gets a bare honest miss; anything else leaves the standing
+  // miss text alone — so a code-shaped query with a real parse is never
+  // hijacked.
+  for (const { predicate, phrase, re } of FORWARD_YESNO_MARKERS) {
+    const m = q.match(re);
+    if (!m) continue;
+    const facts = await memoryFacts(memoryDir);
+    const subj = factTermVariants(normFactTerm, m[1]);
+    const obj = factTermVariants(normFactTerm, m[2]);
+    const hit = facts.find((f) => f.predicate === predicate && subj.has(f.subject) && obj.has(f.object));
+    if (hit) return { text: `yes — ${renderFactLine(hit)}`, replace: true };
+    const sameRelation = facts.filter((f) => f.predicate === predicate && subj.has(f.subject));
+    if (sameRelation.length) {
+      const shown = sameRelation.slice(0, 3).map(renderFactLine).join("; ");
+      return {
+        text: `I can't confirm that — nothing I remember says ${m[1]} ${phrase} ${m[2]}. I do know: ${shown}.`,
+        replace: true,
+        miss: true,
+      };
+    }
+    if (!envelope?.parsed && facts.some((f) => subj.has(f.subject))) {
+      return {
+        text: `I can't confirm that — nothing I remember says ${m[1]} ${phrase} ${m[2]}.`,
+        replace: true,
+        miss: true,
+      };
+    }
+    break; // shape matched, nothing honest to add — the standing miss stands
+  }
 
   // (b) "is a module a component" — yes iff a remembered isa-family fact says so.
   // Also accepts "why is X a Y" / "explain how you know X is Y" — see matchWhyIsa.
