@@ -4121,15 +4121,16 @@ const KNOW_ABOUT_RE = /^(?:what\s+do\s+you\s+know\s+about|what(?:'s|s|\s+is)\s+i
 /** How many facts a single answer lists before the remainder is paged with "more". */
 const FACT_ANSWER_CAP = 32;
 
-/** Four sibling readers closing the gap left
+/** Five sibling readers closing the gap left
  *  by ISA_ASK_RE's own family: forward yes/no and reverse-by-object shapes for
  *  `mgx:capableOf`, `mgx:hasA`, and the ISA-family predicates. None of these
- *  four leads ("can"/"could", "what can … do", "what has", "what inherit(s)")
+ *  five leads ("can"/"could", "does/do … have", "what can … do", "what has", "what inherit(s)")
  *  overlaps KNOW_ABOUT_RE's fixed leads above, or RELATION_FACT_YESNO_RE/
  *  RELATION_WHO_ASK_RE's required leading "is/are/was/were" (those two live in
  *  the separate factReadBack, only ever reached via `factAnswer(...) ??
  *  factReadBack(...)` — never both). */
 const CAN_ASK_RE = /^(?:can|could)\s+(?:an?\s+)?([\w'-]+(?:\s+[\w'-]+)*?)\s+([a-z]+)[?.!\s]*$/i;
+const DOES_HAVE_ASK_RE = /^(?:does|do)\s+(?:an?\s+|the\s+)?(.+?)\s+have\s+(?:an?\s+|the\s+)?(.+?)[?.!\s]*$/i;
 const WHAT_CAN_DO_RE = /^what\s+can\s+(?:an?\s+)?(.+?)\s+do[?.!\s]*$/i;
 const WHAT_HAS_RE = /^what\s+has\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
 // "what is used for riding" / "what can be used for riding" / "what is for
@@ -4344,6 +4345,22 @@ export async function factAnswer(memoryDir, query, envelope, miss, biasByBundle 
     const obj = factTermVariants(normFactTerm, can[2]);
     const hit = (await memoryFacts(memoryDir)).find(
       (f) => f.predicate === "mgx:capableOf" && subj.has(f.subject) && obj.has(f.object),
+    );
+    if (hit) return { text: `yes — ${renderFactLine(hit)}`, replace: true };
+    return null;
+  }
+
+  // (b2b) "does a dog have a tail" — yes iff a remembered mgx:hasA fact says
+  // so: the forward yes/no mirror of WHAT_HAS_RE below, with the same
+  // single-hit lookup and "never a guessed no" discipline as CAN_ASK_RE
+  // above. Only diverts on a REAL hit, so a code-shaped "does app.mjs have
+  // tests" (no hasA fact) keeps whatever miss text already stands.
+  const doesHave = q.match(DOES_HAVE_ASK_RE);
+  if (doesHave) {
+    const subj = factTermVariants(normFactTerm, doesHave[1]);
+    const obj = factTermVariants(normFactTerm, doesHave[2]);
+    const hit = (await memoryFacts(memoryDir)).find(
+      (f) => f.predicate === "mgx:hasA" && subj.has(f.subject) && obj.has(f.object),
     );
     if (hit) return { text: `yes — ${renderFactLine(hit)}`, replace: true };
     return null;

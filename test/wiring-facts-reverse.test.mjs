@@ -50,6 +50,48 @@ test("CAN_ASK_RE: 'can a dog bark' answers yes from the corpus-seeded mgx:capabl
   }
 });
 
+test("DOES_HAVE_ASK_RE: 'does a dog have a tail' answers yes from the corpus-seeded mgx:hasA fact", async () => {
+  const dir = await mem();
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    const r = await s.turn("does a dog have a tail");
+    await s.close();
+    assert.match(r.answer, /yes — dog has tail/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("DOES_HAVE_ASK_RE: the plural form 'do dogs have tails' answers yes off the same singular fact", async () => {
+  const dir = await mem();
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    const r = await s.turn("do dogs have tails");
+    await s.close();
+    assert.match(r.answer, /yes — dog has tail/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("DOES_HAVE_ASK_RE: a code-shaped 'does app.mjs have tests' (no hasA fact) never diverts — the standing miss text is kept", async () => {
+  const dir = await mem();
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    const r = await s.turn("does app.mjs have tests");
+    await s.close();
+    assert.doesNotMatch(r.answer, /^yes/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("WHAT_CAN_DO_RE: 'what can a dog do' lists the corpus-seeded mgx:capableOf fact", async () => {
   const dir = await mem();
   try {
