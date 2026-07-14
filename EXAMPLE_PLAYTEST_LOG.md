@@ -58,6 +58,7 @@ npx tmct init --memory-backend sqlite
 npx tmct --help
 npx tmct chat
 ```
+Also see: https://www.npmjs.com/package/@polycode-projects/the-mechanical-code-talker
 
 Exmples
 -------
@@ -73,7 +74,7 @@ Goal (inferred): Understand a vocabulary/definition term ("dog").
 exit
 ```
 
-Then chat at the `tmct>` prompt (teaching):
+Then chat at the `tmct>` prompt (with teaching):
 ```txt
 ahab is the father of john
 john is the father of ishmael
@@ -83,10 +84,50 @@ a grandparent is a parent of a parent
 a grandfather is a grandparent who is male
 ```
 
-Now ask the inference questions:
+Now ask the questions (using inferences):
 ```txt
 is ahab a grandparent of ishmael
 is ahab the grandfather of ishmael
+who is the grandfather of ishmael
+```
+
+And capture the session log:
+```txt
+tmct> is ahab a grandparent of ishmael
+
+yes — you told me: ahab fathers john
+
+(source: teach:chat:019f5df6-5766-7e82-9549-85e4e67d1b5a@2026-07-14T00:10:57.402Z | te
+ach:chat:019f5e0a-61e4-7f59-9d0a-b2a475e3442b@2026-07-14T00:32:55.318Z); father is a kind of parent (source: corpus:human /
+r/IsA | ace:chat:019f5df6-5766-7e82-9549-85e4e67d1b5a@2026-07-14T00:11:30.521Z | ace:chat:019f5e0a-61e4-7f59-9d0a-b2a475e34
+42b@2026-07-14T00:33:19.676Z); you told me: john fathers ishmael (source: teach:chat:019f5df6-5766-7e82-9549-85e4e67d1b5a@2
+026-07-14T00:11:16.882Z | teach:chat:019f5e0a-61e4-7f59-9d0a-b2a475e3442b@2026-07-14T00:33:07.560Z)
+
+tmct> is ahab the grandfather of ishmael
+
+yes — you told me: ahab fathers john
+
+(source: teach:chat:019f5df6-5766-7e82-9549-85e4e67d1b5a@2026-07-14T00:10:57.402Z | te
+ach:chat:019f5e0a-61e4-7f59-9d0a-b2a475e3442b@2026-07-14T00:32:55.318Z); father is a kind of parent (source: corpus:human /
+r/IsA | ace:chat:019f5df6-5766-7e82-9549-85e4e67d1b5a@2026-07-14T00:11:30.521Z | ace:chat:019f5e0a-61e4-7f59-9d0a-b2a475e34
+42b@2026-07-14T00:33:19.676Z); you told me: john fathers ishmael (source: teach:chat:019f5df6-5766-7e82-9549-85e4e67d1b5a@2
+026-07-14T00:11:16.882Z | teach:chat:019f5e0a-61e4-7f59-9d0a-b2a475e3442b@2026-07-14T00:33:07.560Z); you told me: ahab is m
+ale (source: teach:chat:019f5df6-5766-7e82-9549-85e4e67d1b5a@2026-07-14T00:11:43.718Z | teach:chat:019f5e0a-61e4-7f59-9d0a-
+b2a475e3442b@2026-07-14T00:33:32.932Z)
+
+tmct> who is the grandfather of ishmael
+
+ahab — you told me: ahab fathers john
+
+(source: teach:chat:019f5df6-5766-7e82-9549-85e4e67d1b5a@2026-07-14T00:10:57.402Z | t
+each:chat:019f5e0a-61e4-7f59-9d0a-b2a475e3442b@2026-07-14T00:32:55.318Z); father is a kind of parent (source: corpus:human
+/r/IsA | ace:chat:019f5df6-5766-7e82-9549-85e4e67d1b5a@2026-07-14T00:11:30.521Z | ace:chat:019f5e0a-61e4-7f59-9d0a-b2a475e3
+442b@2026-07-14T00:33:19.676Z); you told me: john fathers ishmael (source: teach:chat:019f5df6-5766-7e82-9549-85e4e67d1b5a@
+2026-07-14T00:11:16.882Z | teach:chat:019f5e0a-61e4-7f59-9d0a-b2a475e3442b@2026-07-14T00:33:07.560Z); you told me: ahab is
+male (source: teach:chat:019f5df6-5766-7e82-9549-85e4e67d1b5a@2026-07-14T00:11:43.718Z | teach:chat:019f5e0a-61e4-7f59-9d0a
+-b2a475e3442b@2026-07-14T00:33:32.932Z)
+
+tmct>  
 ```
 
 Visualisations
