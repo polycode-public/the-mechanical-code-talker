@@ -58,7 +58,8 @@
     "./extensions": "./src/extensions.mjs",
     "./toml-config": "./src/toml-config.mjs",
     "./generateCompletion": "./src/completions/complete.mjs",
-    "./createCompletionsGraphAdapter": "./src/completions/graph-adapter.mjs"
+    "./createCompletionsGraphAdapter": "./src/completions/graph-adapter.mjs",
+    "./plan": "./src/router/drive.mjs"
   },
   "files": [
     "bin/",

@@ -1,6 +1,20 @@
 # PLAN_HANOI.md — a goal-directed planning loop for tmct, validated against Towers of Hanoi
 
-Status: RESEARCH / DESIGN — not yet implemented. Nothing in this document is live code.
+Status: RESEARCH / DESIGN — not yet implemented. Nothing in this document is live code. Phase 2's
+search kernel (`findActionPath`, `src/planning.mjs`) shipped as a standalone proof-of-mechanism —
+see the dated entry at the end of this document — but Hanoi's own state/legal-moves/goal (Phases
+1/3/4) are still unbuilt.
+
+**A different, already-live planning capability, for contrast.** `src/router/*` is a SEPARATE
+STRIPS/PDDL planner — not this document's design, and not built from it — that composes and
+executes read-only graph-query tool calls (search/describe/impact/members/…) for a compound or
+maintenance-goal request over a repo's code graph. It shipped separately and is now invokable
+directly: `tmct plan "<request>"`, chat's `/plan`, or the `./plan` library export (see
+`CAPABILITIES_1.7.3.md` row 99, `PLAN_AGENTS.md` §1.3). It answers questions like "of the modules
+impacted by X, which are untested" — a genuinely different domain (querying an existing, static
+code graph) from this document's (searching a MUTABLE Hanoi board state via `legalMoves`/`applyMove`).
+Worth knowing about since it's the router the router doc terminology below (STRIPS, backward
+chaining, closed-world) also describes — don't confuse the two when reading either document.
 
 ## Origin
 

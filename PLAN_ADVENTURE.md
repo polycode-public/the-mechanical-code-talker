@@ -2,6 +2,17 @@
 
 Status: RESEARCH / DESIGN — not yet implemented. Nothing in this document is live code.
 
+**A different, already-live planning capability, for contrast.** This document's four gaps (an
+imperative command grammar, snapshot-per-step player/world state, actions-as-graph-data via a new
+`RULE_KIND_ACTION`, an NPC turn scheduler) are all unbuilt, exactly as below. Separately,
+`src/router/*` — a STRIPS/PDDL planner over read-only graph-QUERY tools, not world-mutating
+actions — is now invokable directly: `tmct plan "<request>"`, chat's `/plan`, or the `./plan`
+library export (`CAPABILITIES_1.7.3.md` row 99). It composes/executes compound or maintenance-goal
+requests against a static code graph ("of the modules impacted by X, which are untested") — it
+does not read or write Ashcombe Hall's world state, has no notion of an imperative verb, and cannot
+run Gap 4's NPC scheduler. Named here only so a reader who knows the router shipped doesn't assume
+this document's own game did too.
+
 ## Origin
 
 2026-07-11 session. The operator asked how close tmct is to something like the 1982 game The

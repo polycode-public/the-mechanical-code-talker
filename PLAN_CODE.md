@@ -12,6 +12,17 @@
 > re-verified working together. **Tracks 2–4 remain unsigned-off and untouched** — each still
 > requires its own separate operator sign-off per §8's gate before any implementation begins.
 
+> **Separately (not this doc's own build): the substrate Track 1 synthesizes into is now
+> invokable.** `src/router/*` — the registry/resolver/planner/goal-reasoner Track 1's own oracle
+> runs candidates through (§1.4's `goalReason`/`applicableRules`) — was real and tested but
+> unreachable outside `agentbench/`/the test suite until this cycle. It now has a real invocation
+> surface: `tmct plan "<request>"`, chat's `/plan`, and a `./plan` library export (see
+> `CAPABILITIES_1.7.3.md` row 99, `PLAN_AGENTS.md` §1.3). This changes nothing about Track 1's own
+> synthesis PROCESS (still `synthbench/`, still hand-reviewed before a synthesized `GOAL_RULE`
+> joins the frozen `GOAL_RULES` array) — but once a synthesized rule IS merged, `tmct plan` reaches
+> it the same way it reaches every hand-written rule, with no extra wiring. Tracks 2-4 (executable
+> JS/HTML/CSS synthesis) are unaffected — they are still sign-off-gated and untouched.
+
 *(Drafted 2026-07-07. Status: RESEARCH PLAN, not a build order — see §8, explicit operator sign-off
 required before any implementation. Origin: operator's conversational prompt — "I wonder if you
 could implement program synthesis, only not with a 1957 tech stack" — resolved to

@@ -3844,6 +3844,7 @@ export async function helpText() {
     ["/stats", "a one-screen overview: entity counts, relationship counts, packages"],
     ["/memory [verbose]", "what tmct remembers: facts, utterances, sessions, folded blocks"],
     ["/focus <symbol>", "set the current focus (reused by 'it'/'this' and no-arg entity commands)"],
+    ["/plan <request>", "the capability router: plan+execute a compound or maintenance-goal request (\"of the modules impacted by X, which are untested\", \"what most needs a test\")"],
     ["/narrate on|off", "verbose developer/debug mode: decision points, matched pattern, results+sources, goal per turn"],
     ["/help", "this list"],
     ["/exit", "leave the session (also Ctrl+C / Ctrl+D)"],
@@ -8586,6 +8587,35 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
     if (!ent) return mk(`could not resolve "${argText}" to a single entity — focus unchanged${focus ? ` (still ${focus.label})` : ""}.`, { miss: true });
     note(trace, `result: resolved "${argText}" -> ${ent.label} (${ent.id})`);
     return mk(`focus set to ${ent.label}.`, { resolvedIds: [ent.id], newFocus: ent });
+  }
+
+  // /plan <request> — the capability router (src/router/*): plan+execute a
+  // compound ("of the modules impacted by X, which are untested", "assess X
+  // and then check Y") or maintenance-goal ("what most needs a test") request
+  // over the SAME read-only graph-query tools the other commands dispatch.
+  // Reuses this turn's already-loaded `graph`/`config`/`source` — no reload.
+  if (name === "plan") {
+    note(trace, "goal: plan/execute a compound or maintenance-goal request over the graph (the capability router)");
+    if (!argText) return mk("/plan needs a request, e.g. `/plan of the modules impacted by X, which are untested`.", { miss: true });
+    if (!graph) return mk("no graph loaded — /plan needs a code graph to plan over.", { miss: true });
+    const { buildCapabilityPlanCtx, runCapabilityPlan, declaredCapabilityNames } = await import("./router/drive.mjs");
+    const planCtx = await buildCapabilityPlanCtx({ config, source, tel, graph });
+    const result = await runCapabilityPlan(argText, declaredCapabilityNames(), planCtx);
+    if (result.refused) {
+      const why = Array.isArray(result.why) ? result.why.join("; ") : result.why;
+      const c1Why = result.c1Why && (Array.isArray(result.c1Why) ? result.c1Why.join("; ") : result.c1Why);
+      note(trace, `result: no plan found — ${why}`);
+      return mk(`no plan found — ${why}${c1Why ? ` (the direct router also declined: ${c1Why})` : ""}`, { miss: true });
+    }
+    note(trace, `result: ${result.driver} — ${result.calls.length} step(s)`);
+    const lines = [`driver: ${result.driver}`, "", "steps:"];
+    result.calls.forEach((c, i) => lines.push(`  ${i + 1}. ${c.name} ${JSON.stringify(c.input || {})}`));
+    if (result.composed !== undefined && result.composed !== null) {
+      lines.push("", `composed answer (${result.composed.length}): ${result.composed.length ? result.composed.join(", ") : "(empty set)"}`);
+    } else if (result.observed) {
+      lines.push("", result.observed);
+    }
+    return mk(lines.join("\n"));
   }
 
   const spec = COMMANDS[name];
