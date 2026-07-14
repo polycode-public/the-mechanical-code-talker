@@ -142,9 +142,6 @@ What's left, still open, checked directly against current code:
 - **`PLAN_SYLLOGIST.md`'s retraction-aware, incremental reasoning research** — unchanged, "not a
   near-term default" per `HANDOVER.md`.
 
-None of these change tmct's fundamental shape. A fixed grammar/ontology system was never designed to
-plan, act autonomously, or generate freely, and no backlog item on this list changes that scope.
-
 ---
 
 ## 0. Scope note (carried forward)
