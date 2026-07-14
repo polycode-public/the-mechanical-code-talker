@@ -5,8 +5,8 @@
 If the operator's prompt states explicitly when to bump the version, commit, or push
 (e.g. "roll the version every round", "commit and push each turn"), execute it exactly
 as stated. Do not pause to ask a clarifying question about cadence, do not weigh it
-against this document's general conventions (including the version-bump-timing
-paragraph below), and do not apply your own judgment to override it. The operator's
+against this document's general conventions, and do not apply your own judgment to
+override it. The operator's
 explicit instruction in the prompt is authoritative over any general policy written
 here or anywhere else in this repo. Only stop if following the instruction would
 violate a hard safety rule (e.g. leaking a secret) — otherwise, just do it. Getting
@@ -29,13 +29,6 @@ session is the COORDINATOR (plans, launches, integrates, answers the operator), 
 - Commit per completed step with the repo-local identity (`antony@polycode.co.uk` /
   `Antony at Polycode`); keep `npm test` green at every commit.
 - Push/publish is gated on the operator (CI publishes on version bump on `main`).
-- **Version bump timing:** only bump the version (`package.json` + `package-lock.json`) at the
-  moment of actually pushing a release — the bump commit is part of that same push, not a
-  separate step staged in advance. Default to a patch bump unless the batch is clearly
-  feature-level (minor) or breaking (major). Do NOT pre-stage a future version number and leave
-  it sitting unpushed in git between releases — that produced confusing "linking to a version
-  that doesn't exist yet" noise in practice and was reverted by operator instruction 2026-07-09.
-  Between pushes, `package.json`'s version should always equal whatever's actually live on npm.
 
 ## Never pipe a long-running command straight into `tail`
 
