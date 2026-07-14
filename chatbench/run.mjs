@@ -280,7 +280,7 @@ export async function runTurnsCase(caseDef, deps) {
     const r = await runTurn(turn.say, { config, graph, focus, last });
     focus = r.focus ?? null;
     last = r.last ?? last;
-    const answer = String(r.answer ?? "").replace(GOAL_LINE_TRAILER, "");
+    const answer = stripPresentationTrailers(r.answer);
     const outcome = {
       answer,
       miss: r.record?.miss ?? null,
@@ -331,8 +331,13 @@ const VOLATILE_PROVENANCE = /ace:chat:[0-9a-f-]{36}@\d{4}-\d{2}-\d{2}T[0-9:.]+Z/
  *  volatile provenance scrub above). Every graded-pool `answerMatch` fixture
  *  was written against the SUBSTANTIVE answer text; scrubbed here (both
  *  runTurnsCase and runSessionCase, below) so those fixtures never need to
- *  grow a goal-line-shaped tail on top of their own ground truth. */
+ *  grow a goal-line-shaped tail on top of their own ground truth. withCanonicalLine
+ *  appends a further "Canonical: …" trailer AFTER the goal line when a real
+ *  one was computed — scrubbed first (below) so the now-inner goal line still
+ *  matches its own end-anchored regex. */
 const GOAL_LINE_TRAILER = /\n\nGoal \(inferred\):[^\n]*$/;
+const CANONICAL_LINE_TRAILER = /\n\nCanonical:[^\n]*$/;
+const stripPresentationTrailers = (s) => String(s ?? "").replace(CANONICAL_LINE_TRAILER, "").replace(GOAL_LINE_TRAILER, "");
 
 /** Run a session-mode case through the FULL runChat in a fresh temp dir:
  *  graph "fixture" seeds .tmct/graph.json from the committed fixture; "empty"
@@ -400,10 +405,11 @@ export async function runSessionCase(caseDef, deps) {
         // instrument's discourse-count / assert-recall nondeterminism source. Fold it
         // to the SAME <session>@<ts> placeholder the case-set's `observed` fields use.
         const answer = matched
-          ? (answers.get(turnKey(record.ts, record.query)) ?? "")
-              .replaceAll(dir, "<repo>")
-              .replace(VOLATILE_PROVENANCE, "ace:chat:<session>@<ts>")
-              .replace(GOAL_LINE_TRAILER, "")
+          ? stripPresentationTrailers(
+              (answers.get(turnKey(record.ts, record.query)) ?? "")
+                .replaceAll(dir, "<repo>")
+                .replace(VOLATILE_PROVENANCE, "ace:chat:<session>@<ts>"),
+            )
           : "";
         const outcome = matched
           ? { answer, miss: record.miss, resolvedIds: record.resolvedIds, answeredIds: record.answeredIds }

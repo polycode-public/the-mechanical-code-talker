@@ -275,6 +275,23 @@ function withGoalLine(result) {
   return { ...result, answer, logLines };
 }
 
+/** Same append-onto-`answer` mechanism as withGoalLine, for `record.canonical`
+ *  (set only by runAsk's ask-engine parse and assertTurn's teach lane — every
+ *  other plainTurn call defaults `canonical` to null, so this is a no-op
+ *  there by construction, not a special-cased suppression list here). Placed
+ *  after withGoalLine in the pipeline so a turn with both fields shows the
+ *  goal line first, then this one. */
+function withCanonicalLine(result) {
+  const canonical = result?.record?.canonical;
+  if (!canonical) return result;
+  const suffix = `Canonical: ${canonical.english} — ${canonical.machine}`;
+  const answer = `${result.answer}\n\n${suffix}`;
+  const logLines = Array.isArray(result.logLines)
+    ? result.logLines.map((l) => (l === result.answer ? answer : l))
+    : result.logLines;
+  return { ...result, answer, logLines };
+}
+
 /** Slash-command → (dispatchTool name, arg key). Arg keys are the EXACT ones the
  *  server.mjs dispatchTool switch reads (members/subclasses take `class`;
  *  impact/exports take `module`; architecture takes `package`; search takes
@@ -7729,6 +7746,14 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // itself already uses for a normally-parsed relation query, so the two
   // never disagree on the cases where both would fire).
   let deduced = deduceGoalFromParsed(envelope?.parsed);
+  // Same staleness risk as `deduced` above, for the OTHER piece of turn metadata
+  // read straight off the pre-force `envelope`: a raw parse the relation force
+  // below goes on to override (a keyword-misread subject, e.g. "and" in a
+  // staccato "and inherits?" continuation) is not a genuine structural query —
+  // canonicalOf's restatement of THAT parse would misdescribe the real answer.
+  // Revised (to null, honestly — the relation force answers no single resolved
+  // subject) at the same relation-force call site below.
+  let canonical = envelope?.canonical ?? null;
   // Paired with preCollisionAnswer above: the goal line that matched the
   // ORIGINAL ask-engine answer, restored alongside it (COLLISION RESTORE,
   // below) if the would-miss cascade below never actually stores anything —
@@ -8144,6 +8169,10 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
           deduced = GOAL_BY_KIND[relation.kind];
           note(trace, `goal: ${deduced} (revised — the relation concept force answered where the raw parse never stood)`);
         }
+        // The pre-force `envelope.canonical` (if any) restates a parse this force
+        // just overrode — never a genuine restatement of the answer actually
+        // given, so it's dropped rather than shown misleadingly.
+        canonical = null;
       }
     }
   }
@@ -8410,12 +8439,12 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   const finalAnsweredIds = conceptInstances ? conceptInstances.map((i) => i.id) : answeredIds;
   const record = {
     type: "turn", ts, query, via, resolvedIds, answeredIds: finalAnsweredIds, miss: recordMiss,
-    // PLAN_BREADTH_FIRST_NLU.md §Track 6 (operator directive): the canonical
-    // restatement of what the request was understood to mean — English gloss +
-    // machine-parsable notation — straight off ask.mjs's own `tmct_ask.canonical`
-    // (canonicalOf(parsed), §1's same `parsed` this whole ask-lane already
-    // carries). `null` only when nothing parsed at all (an honest grammar miss).
-    canonical: envelope?.canonical ?? null,
+    // The canonical restatement of what the request was understood to mean —
+    // English gloss + machine-parsable notation — straight off ask.mjs's own
+    // `tmct_ask.canonical` (canonicalOf(parsed)), revised to null above when
+    // the relation force answered over a parse it overrode. `null` otherwise
+    // only when nothing parsed at all (an honest grammar miss).
+    canonical,
     // premise-derived trust for a LIVE-CHASE-ONLY entailment answer (scm-svf1/
     // cardinality-monotonicity/cax-maxc0 — see the `entailedTrust` declaration
     // above); omitted entirely when this turn didn't answer via one of those,
@@ -8998,7 +9027,7 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
     // from, so (like narrate) it never contaminates what why/say-more or
     // repeat-detection compare against. Composes with narrate (below): a
     // narrated turn gets the short line up top AND the full trace block after.
-    return { ...withNarration(withGoalLine(finished), trace, fallbackGoal), last: nextLast };
+    return { ...withNarration(withCanonicalLine(withGoalLine(finished)), trace, fallbackGoal), last: nextLast };
   };
 
   // Slash-optional system commands: a bare leading command word ("stats",

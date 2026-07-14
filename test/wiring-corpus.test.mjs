@@ -15,11 +15,14 @@ const CONFIG = { graphFile: FIXTURE };
 // FEATURE B (0.9.x): every runAsk-composed answer now carries an ALWAYS-ON
 // trailing "\n\nGoal (inferred): …" line (chat.mjs's withGoalLine), including
 // on a meta-shaped MISS (deduceGoalFromParsed reads envelope.parsed, which
-// stands — shape:"meta" — even when the term itself misses) — orthogonal to
-// this suite's own corpus-aside licence citation, so it's stripped before the
-// end-anchored assertions below.
+// stands — shape:"meta" — even when the term itself misses), optionally
+// followed by a "\n\nCanonical: …" line (withCanonicalLine, also set for a
+// meta-shaped miss) — orthogonal to this suite's own corpus-aside licence
+// citation, so both are stripped (Canonical first, since it trails Goal when
+// both are present) before the end-anchored assertions below.
 const GOAL_LINE_RE = /\n\nGoal \(inferred\):[^\n]*$/;
-const noGoal = (s) => String(s).replace(GOAL_LINE_RE, "");
+const CANONICAL_LINE_RE = /\n\nCanonical:[^\n]*$/;
+const noGoal = (s) => String(s).replace(CANONICAL_LINE_RE, "").replace(GOAL_LINE_RE, "");
 
 test("W5: flag OFF (default) — the miss is byte-unchanged, no corpus consulted", async () => {
   const off = await runTurn("what is a cache", { config: CONFIG, env: {} });

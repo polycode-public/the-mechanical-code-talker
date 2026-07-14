@@ -31,11 +31,14 @@ const FIXTURE_PAYLOAD = JSON.parse(await readFile(FIXTURE, "utf8"));
 const graph = parseEntities(ingestSchemaDocs(structuredClone(FIXTURE_PAYLOAD)));
 
 // FEATURE B (0.9.x): every runAsk-composed answer now carries an ALWAYS-ON
-// trailing "\n\nGoal (inferred): …" line (chat.mjs's withGoalLine) — this
-// suite pins quickwins' OWN routing/composition, orthogonal to that feature,
-// so it's stripped before the byte-exact / cross-phrasing comparisons below.
+// trailing "\n\nGoal (inferred): …" line (chat.mjs's withGoalLine), optionally
+// followed by a "\n\nCanonical: …" line (withCanonicalLine) — this suite pins
+// quickwins' OWN routing/composition, orthogonal to both, so they're stripped
+// (Canonical first, since it trails Goal when both are present) before the
+// byte-exact / cross-phrasing comparisons below.
 const GOAL_LINE_RE = /\n\nGoal \(inferred\):[^\n]*$/;
-const noGoal = (s) => String(s).replace(GOAL_LINE_RE, "");
+const CANONICAL_LINE_RE = /\n\nCanonical:[^\n]*$/;
+const noGoal = (s) => String(s).replace(CANONICAL_LINE_RE, "").replace(GOAL_LINE_RE, "");
 
 /** A temp repo whose .tmct/graph.json IS the writer-ingested fixture (a producer runs
  *  ingestSchemaDocs before writing; the product loader — server.mjs — does not), so

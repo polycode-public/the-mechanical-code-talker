@@ -9,6 +9,8 @@ import { join } from "node:path";
 import { Readable, PassThrough } from "node:stream";
 import { runTurn, runChat } from "../src/chat.mjs";
 import { loadMemory, FACT_CLASS } from "../src/memory/core.mjs";
+import { parseEntities } from "../src/codegraph.mjs";
+import * as source from "../src/source.mjs";
 
 const FIXTURE = new URL("./fixtures/entities.fixture.json", import.meta.url).pathname;
 
@@ -45,6 +47,40 @@ test("assertTurn: bare runTurn without memoryDir stays pure — declaratives fal
   const { answer, record } = await runTurn("every module is a component", { config: { graphFile: FIXTURE } });
   assert.doesNotMatch(answer, /noted — remembered/, "no assert without a session shell");
   assert.equal(record.command, undefined);
+});
+
+test("assertTurn: a teach-lane turn's answer carries a 'Canonical: …' line matching record.canonical", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-assert-"));
+  try {
+    const r = await runTurn("every module is a component", { memoryDir: dir, sessionId: "s1" });
+    assert.ok(r.record.canonical, "assertTurn must set record.canonical");
+    const { english, machine } = r.record.canonical;
+    const expected = `Canonical: ${english} — ${machine}`;
+    assert.ok(r.answer.includes(expected), `answer must include "${expected}", got: ${r.answer}`);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("runAsk: a query-lane turn's answer carries a 'Canonical: …' line matching record.canonical", async () => {
+  const graph = parseEntities(await source.fetchEntities({ graphFile: FIXTURE }));
+  const r = await runTurn("which modules import a.mjs", { config: { graphFile: FIXTURE }, graph });
+  assert.ok(r.record.canonical, "runAsk must set record.canonical");
+  const { english, machine } = r.record.canonical;
+  const expected = `Canonical: ${english} — ${machine}`;
+  assert.ok(r.answer.includes(expected), `answer must include "${expected}", got: ${r.answer}`);
+  assert.match(r.answer, /Goal \(inferred\):.*\n\nCanonical:/, "the Canonical line sits right after the Goal line");
+});
+
+test("a plain conversational turn (record.canonical: null) never grows a spurious 'Canonical:' line", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-assert-"));
+  try {
+    const r = await runTurn("hi", { memoryDir: dir, sessionId: "s1" });
+    assert.ok(!r.record.canonical, "a conversational turn carries no real canonical");
+    assert.doesNotMatch(r.answer, /Canonical:/, "no Canonical line without a real record.canonical");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 
 test("assertTurn: questions and unknown-word declaratives never assert in a session", async () => {

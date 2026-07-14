@@ -8,18 +8,22 @@ import { runTurn, createSession } from "../../src/chat.mjs";
 import { clearCache } from "../../src/source.mjs";
 
 /** FEATURE B (0.9.x): every runAsk-composed answer carries an ALWAYS-ON
- *  trailing "\n\nGoal (inferred): …" line (chat.mjs's withGoalLine) — several
- *  routing/wall-avoidance regression suites strip it right where turns are
+ *  trailing "\n\nGoal (inferred): …" line (chat.mjs's withGoalLine), optionally
+ *  followed by a "\n\nCanonical: …" line (withCanonicalLine) — several
+ *  routing/wall-avoidance regression suites strip both right where turns are
  *  collected, rather than teaching every exact-text assertion a new
- *  goal-line-shaped tail. `last`/`last.answer` (the why/say-more re-render
- *  source) is already goal-line-free, so only `.answer`/`.logLines`
- *  need it here. */
+ *  trailer-shaped tail. Canonical is stripped first (it trails Goal when both
+ *  are present), so the end-anchored GOAL_LINE_RE still matches. `last`/
+ *  `last.answer` (the why/say-more re-render source) is already trailer-free,
+ *  so only `.answer`/`.logLines` need it here. */
 export const GOAL_LINE_RE = /\n\nGoal \(inferred\):[^\n]*$/;
+export const CANONICAL_LINE_RE = /\n\nCanonical:[^\n]*$/;
+const stripTrailers = (s) => s.replace(CANONICAL_LINE_RE, "").replace(GOAL_LINE_RE, "");
 export const stripGoalLine = (t) => (t && typeof t.answer === "string"
   ? {
       ...t,
-      answer: t.answer.replace(GOAL_LINE_RE, ""),
-      logLines: Array.isArray(t.logLines) ? t.logLines.map((l) => (l === t.answer ? l.replace(GOAL_LINE_RE, "") : l)) : t.logLines,
+      answer: stripTrailers(t.answer),
+      logLines: Array.isArray(t.logLines) ? t.logLines.map((l) => (l === t.answer ? stripTrailers(l) : l)) : t.logLines,
     }
   : t);
 

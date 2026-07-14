@@ -18,8 +18,10 @@ async function graph() { return (GRAPH ||= parseEntities(await source.fetchEntit
 
 test("goal line: a structural query gets an always-on 'Goal (inferred): …' line, appended after the answer", async () => {
   const r = await runTurn("what calls fnAlpha", { config: CONFIG, graph: await graph() });
-  assert.match(r.answer, /\n\nGoal \(inferred\): .+\.$/);
-  assert.match(r.answer, /Goal \(inferred\): Understand a call relationship\.$/);
+  // a real record.canonical trails the goal line here (Feature: "Canonical: …"),
+  // so the goal line itself is no longer the string's own end — matched mid-string.
+  assert.match(r.answer, /\n\nGoal \(inferred\): .+\.\n\nCanonical:/);
+  assert.match(r.answer, /Goal \(inferred\): Understand a call relationship\.\n\nCanonical:/);
   // the substantive answer still LEADS, byte-identical to the non-goal-line text
   assert.match(r.answer, /^in app\/lib\/b\.mjs there is function Widget\.render\(\)\./);
 });
@@ -27,8 +29,10 @@ test("goal line: a structural query gets an always-on 'Goal (inferred): …' lin
 test("goal line: NEVER touches last.answer — why/say-more and repeat-detection see the same text a goal-line-off run would", async () => {
   const r = await runTurn("what calls fnAlpha", { config: CONFIG, graph: await graph() });
   assert.doesNotMatch(r.last.answer, /Goal \(inferred\)/, "last.answer stays clean");
-  const withoutGoalLine = r.answer.replace(/\n\nGoal \(inferred\):[^\n]*$/, "");
-  assert.equal(r.last.answer, withoutGoalLine, "last.answer is exactly the pre-goal-line answer");
+  const withoutTrailers = r.answer
+    .replace(/\n\nCanonical:[^\n]*$/, "")
+    .replace(/\n\nGoal \(inferred\):[^\n]*$/, "");
+  assert.equal(r.last.answer, withoutTrailers, "last.answer is exactly the pre-goal-line, pre-canonical-line answer");
 });
 
 test("goal line: suppressed for conversational turns (greetings, thanks, farewells)", async () => {
@@ -69,10 +73,10 @@ test("goal line: a STACCATO relation-chain continuation whose leading connective
     "the relation force answered correctly even on the first pass — only the goal line went missing, since 'and inherits?' itself never parses");
 });
 
-test("goal line: --narrate mode is COMPLETELY UNAFFECTED — still shows the full trace block, now ALSO gets the short line just before it (additive, not a replacement)", async () => {
+test("goal line: --narrate mode is COMPLETELY UNAFFECTED — still shows the full trace block, now ALSO gets the short line (and the canonical line) just before it (additive, not a replacement)", async () => {
   const r = await runTurn("what calls fnAlpha", { config: CONFIG, graph: await graph(), narrate: true });
   assert.match(r.answer, /^in app\/lib\/b\.mjs there is function Widget\.render\(\)\./, "the substantive answer still leads");
-  assert.match(r.answer, /Goal \(inferred\): Understand a call relationship\.\n\n--- narrate ---/, "the short line sits right before the full trace block");
+  assert.match(r.answer, /Goal \(inferred\): Understand a call relationship\.\n\nCanonical: .+\n\n--- narrate ---/, "the goal line, then the canonical line, sit right before the full trace block");
   assert.ok(r.answer.includes(NARRATE_MARKER), "the full narrate block still appears");
   assert.match(r.answer, /goal: understand a call relationship/, "the trace's own goal: line is untouched (lowercase, no period — a separate mechanism)");
 });
