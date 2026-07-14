@@ -13,6 +13,7 @@ examples/**/.tmct/session-*.log
 examples/**/.tmct/memory/
 examples/**/.tmct/sessions/
 graph.html
+**/.DS_Store
 
 # ...and the large-scale test fixture's own pre-built graph (test/ask-resolve-ranking.test.mjs
 # et al load it directly, same reasoning as the examples above — a realistic multi-file graph
