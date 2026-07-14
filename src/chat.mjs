@@ -1581,6 +1581,42 @@ const SUBCLASS_PREDICATE = "rdfs:subClassOf";
 // read side, rather than minting a redundant mgx:has.
 const HAS_A_PREDICATE = "mgx:hasA";
 
+// mgx:sourceType's own closed kind set (memory/core.mjs) splits "the operator
+// said it" across two tags depending which lane wrote it (ace: -> "operator",
+// teach: -> "teach"), plus "entailed" for a prior tmct-syllogise derivation —
+// none of those are corpus/web noise, so all three count as taught here,
+// regardless of whether the SAME fact ALSO merged in a corpus/web source for
+// the same (subject, predicate, object) triple (appendFact's duplicate-fact
+// upsert unions sources rather than duplicating the fact).
+const TAUGHT_SOURCE_TYPES = new Set(["operator", "teach", "entailed"]);
+const isOperatorTaught = (f) => !!f.sourceTypes?.some((t) => TAUGHT_SOURCE_TYPES.has(t));
+
+/** Two subClassOf edge sets for the relation-alias chase: `strictEdges` (only
+ *  operator-taught) and `broadEdges` (every edge, corpus included). A fact
+ *  merged from both corpus and operator sources carries an operator source
+ *  too, so it resolves via the strict tree exactly like a purely-taught fact
+ *  — the broad tree exists only to ALSO reach a hop that was never taught at
+ *  all, framed as general knowledge rather than "you told me". */
+function buildAliasSubClassTrees(rows, predicate = SUBCLASS_PREDICATE) {
+  const strictEdges = [];
+  const broadEdges = [];
+  for (const f of rows) {
+    if (f.predicate !== predicate) continue;
+    broadEdges.push([f.subject, f.object]);
+    if (isOperatorTaught(f)) strictEdges.push([f.subject, f.object]);
+  }
+  return { strictEdges, broadEdges };
+}
+
+/** Chase `role` toward `targetSet` over the strict (taught-only) tree first,
+ *  falling back to the broad tree only when the strict chase comes up empty
+ *  — the strict attempt is tried first specifically so a hop resolvable
+ *  either way still cites via the (fuller-provenance) taught path. */
+function chaseAliasEitherTree(chaseFn, role, targetSet, trees, opts) {
+  return chaseFn(role, targetSet, [], trees.strictEdges, opts)
+    || chaseFn(role, targetSet, [], trees.broadEdges, opts);
+}
+
 /** "<Name> owns/maintains <X>" — the ownership teach declarative. <Name> is one
  *  or two name tokens; <X> is a code-ish token (a path, a file, a symbol) OR a
  *  short natural noun phrase ("the tasks handler"). generalVerbTeach stands
@@ -1836,8 +1872,7 @@ async function isGroundedByFact(term, memoryDir, cache = null) {
   // a term here. factRows (not memoryFacts) is used specifically because it's
   // the one read path that carries sourceTypes for this filter.
   const rows = await factRows(memoryDir, cache);
-  const isTaught = (f) => !f.sourceTypes?.includes("corpus") && !f.sourceTypes?.includes("web");
-  return rows.some((f) => MINT_ISA_PREDICATES.has(f.predicate) && isTaught(f) && (f.subject === t || f.object === t));
+  return rows.some((f) => MINT_ISA_PREDICATES.has(f.predicate) && isOperatorTaught(f) && (f.subject === t || f.object === t));
 }
 
 /** Shared "is this term grounded in ANY sense" aggregate — a static lexicon
@@ -4962,17 +4997,15 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
     const relationName = relAsk[2].trim().toLowerCase();
     const object = relAsk[3].trim();
     if (subject && !ISA_IDIOM_ROLE_WORDS.has(relationName)) {
-      const isTaughtRow = (f) => !f.sourceTypes?.includes("corpus") && !f.sourceTypes?.includes("web");
-      const aliasSubClassEdges = rows
-        .filter((f) => f.predicate === SUBCLASS_PREDICATE && isTaughtRow(f))
-        .map((f) => [f.subject, f.object]);
+      const aliasTrees = buildAliasSubClassTrees(rows);
       const { findIsaChain: chaseAlias } = await import("./syllogise.mjs");
       // Shared alias-chase substrate (item 2): every stored Fact whose
-      // predicate resolves — directly, or via a TAUGHT rdfs:subClassOf chain
-      // over relation-NAME strings, never corpus noise — to `name`. Reused for
-      // BOTH the direct/alias yes-no readback just below AND the compose2
-      // hop-search's per-hop edge lookup further down, so the two never
-      // disagree on what "a fact under relation X" means.
+      // predicate resolves — directly, or via a taught (or, failing that,
+      // general-knowledge) rdfs:subClassOf chain over relation-NAME strings
+      // — to `name`. Reused for BOTH the direct/alias yes-no readback just
+      // below AND the compose2 hop-search's per-hop edge lookup further
+      // down, so the two never disagree on what "a fact under relation X"
+      // means.
       const relationFactsFor = (name) => {
         const target = String(name || "").trim().toLowerCase();
         const out = [];
@@ -4980,7 +5013,7 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
           const role = relationRoleWord(f.predicate);
           if (!role) continue;
           if (role === target) { out.push({ fact: f, aliasFacts: [] }); continue; }
-          const chain = chaseAlias(role, new Set([target]), [], aliasSubClassEdges, { maxHops: 2 });
+          const chain = chaseAliasEitherTree(chaseAlias, role, new Set([target]), aliasTrees, { maxHops: 2 });
           if (!chain) continue;
           const aliasFacts = chain.map((step) => rows.find(
             (r) => r.predicate === SUBCLASS_PREDICATE && r.subject === step.subject && r.object === step.object,
@@ -5056,14 +5089,12 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
     const rawObject = whoAsk[2].trim();
     const object = IS_ADJECTIVE_PRONOUN_RE.test(rawObject) ? (focusLabel || null) : rawObject;
     if (object && !ISA_IDIOM_ROLE_WORDS.has(relationName)) {
-      const isTaughtRow = (f) => !f.sourceTypes?.includes("corpus") && !f.sourceTypes?.includes("web");
-      const aliasSubClassEdges = rows
-        .filter((f) => f.predicate === SUBCLASS_PREDICATE && isTaughtRow(f))
-        .map((f) => [f.subject, f.object]);
+      const aliasTreesWho = buildAliasSubClassTrees(rows);
       const { findIsaChain: chaseAliasWho } = await import("./syllogise.mjs");
       // Same candidate-list shape as (a0)'s own relationFactsFor — every
-      // stored Fact whose predicate resolves, directly or via a TAUGHT
-      // rdfs:subClassOf chain over relation-NAME strings, to `name`.
+      // stored Fact whose predicate resolves, directly or via a taught (or
+      // general-knowledge) rdfs:subClassOf chain over relation-NAME
+      // strings, to `name`.
       const relationFactsForWho = (name) => {
         const target = String(name || "").trim().toLowerCase();
         const out = [];
@@ -5071,7 +5102,7 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
           const role = relationRoleWord(f.predicate);
           if (!role) continue;
           if (role === target) { out.push({ fact: f, aliasFacts: [] }); continue; }
-          const chain = chaseAliasWho(role, new Set([target]), [], aliasSubClassEdges, { maxHops: 2 });
+          const chain = chaseAliasEitherTree(chaseAliasWho, role, new Set([target]), aliasTreesWho, { maxHops: 2 });
           if (!chain) continue;
           const aliasFacts = chain.map((step) => rows.find(
             (r) => r.predicate === SUBCLASS_PREDICATE && r.subject === step.subject && r.object === step.object,
@@ -5148,10 +5179,7 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
         const recStep = rule.attributes.find((a) => a.prop === "mgx:ruleRecStep")?.value;
         const startEntity = normFactTerm(subject);
         if (baseCase && recStep && startEntity) {
-          const isTaughtRow = (f) => !f.sourceTypes?.includes("corpus") && !f.sourceTypes?.includes("web");
-          const aliasSubClassEdges = rows
-            .filter((f) => f.predicate === SUBCLASS_PREDICATE && isTaughtRow(f))
-            .map((f) => [f.subject, f.object]);
+          const aliasTreesList = buildAliasSubClassTrees(rows);
           const { findIsaChain: chaseAlias } = await import("./syllogise.mjs");
           // Same alias-chase substrate the yes/no dispatcher's own
           // relationFactsFor uses (re-derived here rather than shared across
@@ -5164,7 +5192,7 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
               const role = relationRoleWord(f.predicate);
               if (!role) continue;
               if (role === target) { out.push({ fact: f, aliasFacts: [] }); continue; }
-              const chain = chaseAlias(role, new Set([target]), [], aliasSubClassEdges, { maxHops: 2 });
+              const chain = chaseAliasEitherTree(chaseAlias, role, new Set([target]), aliasTreesList, { maxHops: 2 });
               if (!chain) continue;
               const aliasFacts = chain.map((step) => rows.find(
                 (r) => r.predicate === SUBCLASS_PREDICATE && r.subject === step.subject && r.object === step.object,
@@ -5282,7 +5310,7 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
     //     what the OPERATOR taught; only operator/teach/entailed-sourced isa
     //     facts are chased, matching "TAUGHT" in the gap's own name.
     const { findIsaChain, SUBCLASS_PREDICATE: SC_PREDICATE, TYPE_PREDICATE: RDF_TYPE_PREDICATE } = await import("./syllogise.mjs");
-    const isTaught = (f) => !f.sourceTypes?.includes("corpus") && !f.sourceTypes?.includes("web");
+    const isTaught = isOperatorTaught;
     const chainSubClassRows = isa.filter((f) => f.predicate === SC_PREDICATE && isTaught(f));
     const chainTypeRows = isa.filter((f) => f.predicate === RDF_TYPE_PREDICATE && isTaught(f));
     const chainSubClassEdges = chainSubClassRows.map((f) => [f.subject, f.object]);
@@ -5455,7 +5483,7 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
       SUBCLASS_PREDICATE: CARD_SC_PREDICATE, ON_PROPERTY_PREDICATE: CARD_ON_PROPERTY_PREDICATE,
       buildCardinalityRestrictions, proveCardinalityAtLeast, CARDINALITY_RULE_CONFIDENCE, entailedTrustFrom,
     } = await import("./syllogise.mjs");
-    const isTaughtCard = (f) => !f.sourceTypes?.includes("corpus") && !f.sourceTypes?.includes("web");
+    const isTaughtCard = isOperatorTaught;
     const cardSubClassEdges = isa.filter((f) => f.predicate === CARD_SC_PREDICATE && isTaughtCard(f)).map((f) => [f.subject, f.object]);
     const cardRows = rows.filter((f) => (f.predicate === CARD_ON_PROPERTY_PREDICATE || CARDINALITY_ROW_PREDICATES.has(f.predicate)) && isTaughtCard(f));
     const cardinalityRestrictionEdges = buildCardinalityRestrictions(cardRows);
@@ -5505,7 +5533,7 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
       SUBCLASS_PREDICATE: CARD_SC_PREDICATE, ON_PROPERTY_PREDICATE: CARD_ON_PROPERTY_PREDICATE,
       buildCardinalityRestrictions, proveMaxCardinalityZeroDenial, CAX_MAXC0_RULE_CONFIDENCE, entailedTrustFrom,
     } = await import("./syllogise.mjs");
-    const isTaughtCard = (f) => !f.sourceTypes?.includes("corpus") && !f.sourceTypes?.includes("web");
+    const isTaughtCard = isOperatorTaught;
     const cardSubClassEdges = isa.filter((f) => f.predicate === CARD_SC_PREDICATE && isTaughtCard(f)).map((f) => [f.subject, f.object]);
     const cardRows = rows.filter((f) => (f.predicate === CARD_ON_PROPERTY_PREDICATE || CARDINALITY_ROW_PREDICATES.has(f.predicate)) && isTaughtCard(f));
     const cardinalityRestrictionEdges = buildCardinalityRestrictions(cardRows);
@@ -5716,7 +5744,7 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
       // to the ordinary property-miss handling just below, unchanged.
       {
         const { findIsaChain: chaseAdj, SUBCLASS_PREDICATE: SC_PREDICATE_ADJ, TYPE_PREDICATE: TYPE_PREDICATE_ADJ } = await import("./syllogise.mjs");
-        const isTaughtAdj = (f) => !f.sourceTypes?.includes("corpus") && !f.sourceTypes?.includes("web");
+        const isTaughtAdj = isOperatorTaught;
         const chainSubClassRowsAdj = rows.filter((f) => f.predicate === SC_PREDICATE_ADJ && isTaughtAdj(f));
         const chainTypeRowsAdj = rows.filter((f) => f.predicate === TYPE_PREDICATE_ADJ && isTaughtAdj(f));
         const chainSubClassEdgesAdj = chainSubClassRowsAdj.map((f) => [f.subject, f.object]);
@@ -7720,12 +7748,12 @@ async function assertTurn(line, { memoryDir, sessionId, focus, lexicon = null, c
         // component", never a raw lexicon-prefixed form like "tmct:cache".
         const newSubj = normFactTerm(res.triples[0].subject);
         const newObj = normFactTerm(res.triples[0].object);
-        const isTaughtRow = (f) => !f.sourceTypes?.includes("corpus") && !f.sourceTypes?.includes("web");
-        const priorEdges = (await factRows(memoryDir, cache))
-          .filter((f) => f.predicate === SUBCLASS_PREDICATE && isTaughtRow(f)
-            && !(normFactTerm(f.subject) === newSubj && normFactTerm(f.object) === newObj))
-          .map((f) => [normFactTerm(f.subject), normFactTerm(f.object)]);
-        const para = paraphraseVerifiedSubClass(newSubj, newObj, priorEdges);
+        const priorRows = (await factRows(memoryDir, cache))
+          .filter((f) => !(normFactTerm(f.subject) === newSubj && normFactTerm(f.object) === newObj));
+        const priorTrees = buildAliasSubClassTrees(priorRows);
+        const normEdges = (edges) => edges.map(([s, o]) => [normFactTerm(s), normFactTerm(o)]);
+        const para = paraphraseVerifiedSubClass(newSubj, newObj, normEdges(priorTrees.strictEdges))
+          || paraphraseVerifiedSubClass(newSubj, newObj, normEdges(priorTrees.broadEdges));
         if (para) paraphraseSuffix = ` (${para})`;
       } catch { /* best-effort — the literal confirmation above is already correct either way */ }
     }
