@@ -1,70 +1,29 @@
-// corpus/unknown-ingest.mjs — context-preserving ingestion for unknown terms
-// (PLAN_AGENTS.md §4 Phase 1, the "still not built at all" bullet).
+// corpus/unknown-ingest.mjs — context-preserving ingestion for unknown terms.
 //
-// The problem this closes: `toFacts()` (conceptnet.mjs) only emits a Fact for
-// a relation the ACE-OWL map marks axiom-worthy (`ace != "none"`) — a row
-// whose relation is RelatedTo/Synonym/FormOf/SimilarTo/HasContext/etc is
-// SILENTLY skipped (`if (row.ace === "none") continue;`), on purpose, because
-// the relation itself doesn't fit a clean OWL axiom. That is the right call
-// for the AXIOM graph, but it means a term that ONLY ever shows up in one of
-// those dropped rows — never as the endpoint of a relation tmct actually
-// reifies — has NO anchor in memory at all. A wider seed set (a broader
-// ConceptNet slice, a tier-2 bundle, Phase 4's scraped web content) makes
-// this common: real terms, genuinely mentioned, quietly vanishing.
+// `toFacts()` (conceptnet.mjs) skips a row whose relation isn't axiom-worthy
+// (`ace === "none"`, e.g. RelatedTo/Synonym/HasContext), which is right for the axiom
+// graph but leaves a term that only ever appears in such a row with no anchor in memory
+// at all. This module captures those terms as a separate, honestly-labelled kind of
+// individual: a term is "unknown" if it's never been the subject/object of any reified
+// Fact (in memory already, or in this same seeding batch). Each captured term gets a
+// `mgx:contextPassage` fact (the passage it was found in — ConceptNet's own surfaceText,
+// or the map's `surface` template) and `mgx:coOccursWith` links to its row's other
+// endpoint plus any already-known terms recognizable in the same passage (bounded) —
+// deliberately closed-vocabulary co-occurrence, not distributional/embedding inference.
 //
-// This module does NOT change what counts as an axiom. It adds a SEPARATE,
-// honestly-labelled kind of individual for exactly the terms that would
-// otherwise vanish: a term is "unknown" here if it has never been the
-// subject/object of any reified Fact — not in memory already, and not in the
-// mapped facts this same seeding batch is about to write. For each dropped
-// (ace="none") row that touches an unknown term, the term becomes a Fact
-// tagged with the PASSAGE it was found in (ConceptNet's own `surfaceText`
-// when present, else the map's own `surface` template filled with the row's
-// two endpoints — both are committed, closed-vocabulary text; nothing here
-// ever generates free text), via a dedicated `mgx:contextPassage` predicate.
-// The row's OTHER endpoint (always) plus any already-known term recognizable
-// by exact word/bigram match in the passage (bounded to a handful) are linked
-// to the unknown term via one plain, closed-vocabulary co-occurrence
-// predicate, `mgx:coOccursWith` — deliberately NOT distributional/embedding
-// meaning induction (PLAN_AGENTS.md's own scoping): this buys traceable
-// context, never automatic sense disambiguation.
-//
-// Reuses src/memory/core.mjs's existing appendFacts/loadMemory/normFactTerm
-// machinery unmodified — a captured term is a completely ordinary Fact
-// individual (same trust/provenance/Source pipeline every other fact gets),
-// just carrying two new-but-closed predicates instead of an ACE-OWL one.
-//
-// Wiring: `seedMemory` (conceptnet.mjs) accepts an opt-in
-// `captureUnknownContext: true` (default false — every existing seed call
-// stays byte-identical) that calls `ingestUnknownFromAssertions` after the
-// mapped facts are computed, dynamically imported (the same "avoid a static
-// import cycle" discipline extensions.mjs's seedActiveCorpusEntries already
-// uses for conceptnet.mjs itself).
-//
-// NOT covered here:
-// the LIVE chat teach/miss path (src/chat.mjs) has its own, separate
-// unknown-word moment — a visitor's utterance mentioning a term the grammar
-// can't classify — which has no "assertion batch" or ConceptNet-shaped
-// surfaceText to draw a passage from at all. That needs its own hook (the
-// raw utterance text IS the passage there); this module only ever consumes
-// {start, rel, end, surfaceText?} shaped rows, so it cannot be reused as-is
-// for that path without a chat.mjs-side adapter. See the report for the
-// exact shape that hook would need — deliberately not built here.
+// Wired as an opt-in `captureUnknownContext: true` on seedMemory (conceptnet.mjs),
+// dynamically imported to avoid a load-time cycle with conceptnet.mjs.
 
 import { appendFacts, loadMemory, normFactTerm, FACT_CLASS } from "../memory/core.mjs";
 import { termText } from "./conceptnet.mjs";
 
-/** unknown term -> the passage it was captured from (object = the passage
- *  text itself, capped by normFactTerm's own TEXT_CAP like any fact term). */
+/** unknown term -> the passage it was captured from. */
 export const CONTEXT_PASSAGE_PREDICATE = "mgx:contextPassage";
-/** plain, undirected-in-spirit co-occurrence edge: term -> another term seen
- *  in the SAME passage. Deliberately the ONE relation this module ever
- *  emits for "these two showed up together" — no relation-type inference. */
+/** term -> another term seen in the SAME passage — no relation-type inference. */
 export const CO_OCCURS_PREDICATE = "mgx:coOccursWith";
 
-// Function words filtered out of passage word/bigram scanning — never
-// candidates for a co-occurrence link (a "the"<->term edge would be noise,
-// not context). Closed, small, hand-curated — not a general stopword list.
+// Function words filtered out of passage word/bigram scanning (a "the"<->term edge
+// would be noise, not context). Closed, small, hand-curated.
 const STOPWORDS = new Set([
   "a", "an", "the", "is", "are", "was", "were", "be", "being", "been",
   "to", "of", "for", "in", "on", "at", "with", "by", "as", "and", "or",
@@ -73,11 +32,8 @@ const STOPWORDS = new Set([
 
 const MAX_EXTRA_LINKS_PER_PASSAGE = 3; // bounded — not an open-ended sweep
 
-/** The set of terms tmct already "recognizes": every subject/object across
- *  every reified Fact currently in memory, union every term the mapped facts
- *  THIS batch is about to write introduce. A term with a real Fact anywhere
- *  already has structured knowledge — only a term that never gets one is a
- *  candidate for context-only capture. Pure; does not mutate `memory`. */
+/** The set of terms tmct already "recognizes": every subject/object across every
+ *  reified Fact in memory, union every term this batch's mapped facts introduce. Pure. */
 export function knownTermsFrom(memory, mappedFacts) {
   const known = new Set();
   for (const ind of memory?.individuals || []) {
@@ -95,11 +51,9 @@ export function knownTermsFrom(memory, mappedFacts) {
   return known;
 }
 
-/** The human-readable context passage for one DROPPED assertion — ConceptNet's
- *  own `surfaceText` (bracket-stripped) when present, else the mapping row's
- *  own `surface` template filled with the two endpoint terms. Both sources
- *  are committed, closed-vocabulary text — this never generates free text.
- *  Returns null when neither source is available (never fatal). */
+/** The human-readable context passage for one dropped assertion — ConceptNet's own
+ *  `surfaceText` (bracket-stripped) when present, else the map's `surface` template
+ *  filled with the two endpoint terms. Returns null when neither is available. */
 export function passageFor(assertion, row) {
   const raw = assertion?.surfaceText;
   if (typeof raw === "string" && raw.trim()) {
@@ -113,11 +67,8 @@ export function passageFor(assertion, row) {
   return null;
 }
 
-/** Single words + adjacent bigrams in `passage` that are already-known terms
- *  (present in `known`), excluding anything in `exclude` (the row's own two
- *  endpoints — already linked directly). Bounded to
- *  MAX_EXTRA_LINKS_PER_PASSAGE hits; independent of `known`'s size (a Set
- *  lookup per token/bigram, never a substring sweep over every known term). */
+/** Single words + adjacent bigrams in `passage` that are already-known terms, excluding
+ *  `exclude` (the row's own two endpoints). Bounded to MAX_EXTRA_LINKS_PER_PASSAGE hits. */
 function knownMentionsIn(passage, known, exclude) {
   const tokens = String(passage || "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(Boolean);
   const hits = [];
@@ -138,27 +89,15 @@ function knownMentionsIn(passage, known, exclude) {
 }
 
 /**
- * Capture unknown terms out of the assertions a corpus-seeding batch is
- * about to (or just did) write. Scans only rows whose relation maps to
- * `ace = "none"` (the genuinely-dropped rows) — a mapped (ace != "none") row
- * always gets a real reified Fact via toFacts()/appendFacts() already, so it
- * is never a "silently dropped" case this module needs to rescue.
+ * Capture unknown terms out of the assertions a corpus-seeding batch is about to (or
+ * just did) write. Scans only rows whose relation maps to `ace = "none"`.
  *
- * { assertions, map, mappedFacts, memory?, provenancePrefix?, limit? }:
- *   - assertions/map: the SAME loadSlice()/loadMap() results seedMemory has.
- *   - mappedFacts: the toFacts() output for this same batch (feeds
- *     knownTermsFrom so a term this batch itself just defined isn't
- *     re-captured as "unknown").
- *   - memory: a pre-loaded payload (seedMemory already has one) — loaded
- *     fresh via loadMemory(dir) when omitted.
- *   - provenancePrefix: tags the captured facts, default "corpus:unknown".
- *   - limit: caps how many DISTINCT unknown terms get captured in one call
- *     (default 500) — a wide slice's RelatedTo rows alone number in the tens
- *     of thousands; this keeps one run bounded, not a flood.
+ * { assertions, map, mappedFacts, memory?, provenancePrefix?, limit? }: assertions/map are
+ * the same loadSlice()/loadMap() results seedMemory has; mappedFacts is this batch's
+ * toFacts() output; memory defaults to loadMemory(dir); limit (default 500) caps distinct
+ * unknown terms captured per call.
  *
- * Returns { captured, linked, appended, skipped } — `captured` = distinct
- * unknown terms newly given a contextPassage fact, `linked` = co-occurrence
- * edges written (the direct pair plus any bounded extra known-term hits).
+ * Returns { captured, linked, appended, skipped }.
  */
 export async function ingestUnknownFromAssertions(dir, {
   assertions, map, mappedFacts = [], memory, provenancePrefix = "corpus:unknown", limit = 500,

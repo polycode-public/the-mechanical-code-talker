@@ -1,21 +1,8 @@
 // prose-nlp.mjs — the OPTIONAL wink-nlp lemma loader behind prose.mjs's LEMMA layer.
-//
-// Kept SEPARATE from ask-nlp.mjs (its own `proseLemma` export shape) rather than an
-// import of that ask-engine surface — but both now share the neutral leaf loader
-// src/wink-model.mjs, so the wink model is resolved in ONE place. The former ~20
-// duplicated createRequire lines are gone; the coupling this file avoids is to
-// ask-nlp.mjs's export shape, not to a leaf model loader.
-//
-// BOUNDARY (same as ask-nlp.mjs, hard): Node-only path, never inlined into the
-// viewer bundle. prose.mjs is itself never inlined by viz.mjs's askSource(), so
-// nothing browser-side can reach this module. The wink pair is loaded lazily (Node
-// createRequire fallback, or the browser registration seam), failure cached as null:
-// a checkout without the optional deps simply builds no lemma layer (honestly
-// absent), it never throws.
-//
-// Determinism: wink's lemmatiser is a fixed trained model with no sampling — the
-// same token always yields the same lemma across runs and processes, which is what
-// lets the lemma layer meet the "byte-identical proseIndex across builds" contract.
+// Node-only, never inlined into the viewer bundle; loaded lazily and cached, so a
+// checkout without the optional deps builds no lemma layer (honestly absent),
+// never throws. Wink's lemmatiser is deterministic (no sampling), which is what
+// keeps the built proseIndex byte-identical across builds.
 
 import { winkInstance } from "./wink-model.mjs";
 

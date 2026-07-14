@@ -658,6 +658,22 @@ async function main() {
       process.stderr.write(`tmct init: ${e?.message || e}\n`);
       process.exit(2);
     }
+    // `init` takes no positional argument at all, so a bare "sqlite"/"memory"/
+    // "default" here almost always means `npm run init --memory-backend X`
+    // was typed without the `--` separator npm needs — npm silently drops its
+    // own unrecognized flag and forwards only the bare word.
+    if (!memoryBackendVal) {
+      const strayBackendWord = rest.find((a) => ["default", "memory", "sqlite"].includes(a));
+      if (strayBackendWord) {
+        process.stderr.write(
+          `tmct init: read a bare "${strayBackendWord}" as --memory-backend ${strayBackendWord} — ` +
+          `npm likely dropped your --memory-backend flag because "npm run init --memory-backend ${strayBackendWord}" ` +
+          `needs a "--" before it: npm run init -- --memory-backend ${strayBackendWord} (or npm run init:sqlite, ` +
+          `or npx tmct init --memory-backend ${strayBackendWord} directly).\n`,
+        );
+        memoryBackendVal = strayBackendWord;
+      }
+    }
 
     // Resolve + validate EVERY pluggable input BEFORE touching disk — mirrors
     // `--with-persona`'s own "validate before scaffolding" discipline, and the

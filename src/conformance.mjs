@@ -1,15 +1,11 @@
 // conformance.mjs — the Repository-Interface CONTRACT TEST SUITE as a reusable kit.
 //
-// archive/PLAN_REPOSITORY_INTERFACE.md deliverable 3: an implementation is CONFORMANT iff it
-// passes `runConformance(name, makeProvider)`. tmct's own fixture + bootstrap providers
-// pass it in `npm test`; an EXTERNAL producer (seonix) imports this kit from the
-// published package and runs the SAME suite against its native provider to claim
-// conformance — conformance is the suite, not prose. It is provider-agnostic: it
-// asserts the SHAPE + the error contract; data-bearing truth is asserted by the caller
-// where its provider carries data.
+// An implementation is CONFORMANT iff it passes `runConformance(name, makeProvider)`.
+// Provider-agnostic: it asserts the shape + error contract; data-bearing truth is
+// asserted by the caller where its provider carries data.
 //
-// Public surface (exported here + via the package "./conformance" subpath):
-//   runConformance(name, makeProvider), assertResult, assertIndividual, assertEdge.
+// Public surface: runConformance(name, makeProvider), assertResult, assertIndividual,
+// assertEdge.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -114,8 +110,8 @@ export function runConformance(name, makeProvider) {
     assert.throws(() => svc.edges("no:such:id", "not-a-real-kind"), TypeError);
   });
 
-  // snippet: UNCHANGED by INTERFACE_VERSION 1.1.0 — it has nothing useful without fs, so it
-  // still honestly misses NO_SOURCE (or UNRESOLVED_TERM on an empty graph) with no working tree.
+  // snippet has nothing useful without fs, so it honestly misses NO_SOURCE (or
+  // UNRESOLVED_TERM on an empty graph) with no working tree.
   test(`[${name}] snippet answers NO_SOURCE (not a throw) when no working tree`, async () => {
     const svc = makeProvider();
     if (svc.sourceAccess) return; // covered by the source-capable branch below instead
@@ -129,10 +125,10 @@ export function runConformance(name, makeProvider) {
     );
   });
 
-  // context: NARROWED by INTERFACE_VERSION 1.1.0 — contextPlan/sizeBundle/renderGraphOnlyBundle
-  // are pure graph queries, so a graph-only provider (no working tree) now returns a REAL HIT
-  // for any resolvable symbol; only an unresolvable symbol still misses (UNRESOLVED_TERM). See
-  // repository-interface.mjs's context service entry for the full rationale.
+  // context: contextPlan/sizeBundle/renderGraphOnlyBundle are pure graph queries, so a
+  // graph-only provider (no working tree) returns a REAL HIT for any resolvable symbol;
+  // only an unresolvable symbol still misses (UNRESOLVED_TERM). See repository-interface.mjs's
+  // context service entry for the full rationale.
   test(`[${name}] context returns a graph-only HIT for a resolvable symbol, even with no working tree`, async () => {
     const svc = makeProvider();
     if (svc.sourceAccess) return; // covered by the source-capable branch below instead

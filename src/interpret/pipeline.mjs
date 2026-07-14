@@ -1,75 +1,32 @@
-// interpret/pipeline.mjs — the multi-strategy interpretation pipeline (ROADMAP
-// item 8): run the request through ALL the classes of thing it could be, parse it
-// with each class's own strategy, then merge same-class results and surround
+// interpret/pipeline.mjs — the multi-strategy interpretation pipeline: run
+// the request through every strategy, merge same-class results, and surround
 // distinct-class results with "if you mean X then …" (interpret/merge.mjs).
 //
-// A STRATEGY is a plain object:
-//   { id, class, run(text, ctx) -> {strategyId, class, candidates:[{parsed,
-//     confidence?, note?, via?}]} | null }
-// `via` marks an APPROXIMATE reading ("fuzzy"/"lemma"/"spell"): the merge
-// discards approximate candidates whenever anything parsed exactly (the tier
-// discipline — exact curated match always wins — held across strategies).
-// `run` may be sync or async (Promise-returning); a strategy that THROWS or
-// rejects is dropped for that request — one broken strategy never takes the
-// pipeline down. Strategies are registered in the STRATEGIES array below in
-// PRECEDENCE order (earlier wins same-class dedupe ties and confidence ties) —
-// a new strategy (e.g. the Phase-2 ACE grammar, interpret/strategies/ace.mjs)
-// joins by pushing an entry here, not by editing the pipeline.
-//
-// NORMALIZATION PRE-PASS (ROADMAP item 10): interpret() normalizes the input
-// once (normalizeInput below — the same §3.5 pipeline + rhetorical frames
-// ask.mjs always ran) and hands every strategy the normalized text; the raw
-// text rides along in ctx.raw, and the returned record says whether
-// normalization changed the input (`normalizationChanged`), so a repaired
-// spelling/contraction is on the record, never silent.
+// A STRATEGY is { id, class, run(text, ctx) -> {strategyId, class,
+// candidates:[{parsed, confidence?, note?, via?}]} | null }. `via` marks an
+// APPROXIMATE reading ("fuzzy"/"lemma"/"spell"), discarded whenever anything
+// parsed exactly. `run` may be sync or async; a throwing/rejecting strategy
+// is dropped rather than taking the pipeline down. Registered in STRATEGIES
+// below, in precedence order.
 
 import { normalizeQuery, applyNegationFrames, applyPhrasingFrames } from "./normalize.mjs";
 import { grammarStrategy } from "./strategies/grammar.mjs";
 import { keywordSpotStrategy } from "./strategies/keywords.mjs";
 import { noiseStripStrategy } from "./strategies/noise-strip.mjs";
-// Optional Node-flavored ACE strategy — same viewer-bundle boundary as the
-// ask-nlp adapter below: the ACE grammar reaches grammar/ace.mjs -> lexicon.mjs,
-// which reads its committed JSON via Node fs, so an inlining viewer bundle strips
-// this import; the `typeof` guard where STRATEGIES is built then degrades to an
-// ace-less registry instead of throwing over an undeclared identifier. (ACE is
-// async-only anyway, so the sync parseQuery path the viewer uses never ran it.)
+// The next three are Node-only (fs/path-reading tooling); an inlining viewer
+// bundle strips them, and the `typeof` guards below degrade to a leaner
+// registry instead of throwing on an undeclared identifier.
 import { aceStrategy } from "./strategies/ace.mjs";
-// Optional Node-only construction-grammar bank (PLAN_ADVANCED_GRAMMAR.md track
-// (d)) — same viewer-bundle boundary as ACE and the wink adapter: the loader
-// reads its committed TOML data via Node fs/path (interpret/strategies/
-// constructions.mjs), so an inlining viewer bundle strips this import too; the
-// same `typeof` guard below degrades to a constructions-less registry instead
-// of throwing over an undeclared identifier (test/ask-nlp.test.mjs's "viewer
-// bundle without wink" test proves the boundary — its bundled file list never
-// includes this strategy file, matching ace.mjs's own exclusion there).
 import { constructionsStrategy } from "./strategies/constructions.mjs";
 import { mergeStrategyResults } from "./merge.mjs";
-// Optional Node-only wink adapter — same viewer-bundle boundary as ask.mjs: an
-// inlining bundle strips this import and the `typeof` read below degrades to
-// adapter-less parsing instead of throwing over an undeclared identifier.
 import { nlpAdapter } from "../ask-nlp.mjs";
 
-/** The registered strategies, in precedence order. grammar + keyword-spot are
- *  the two legacy parsers (one shared class, "graph-query" — their merge is
- *  byte-identical to the original two-way agree/disagree behavior); noise-strip
- *  is the item-10 tolerant fallback (its own class; it only fires when the
- *  anchored grammar missed the text as-given, so it can never displace an
- *  existing template parse). interpret/strategies/ace.mjs (Phase 2 / Stage 2) is
- *  the ACE-OWL controlled-fragment grammar, registered here as an ADDITIVE, own-
- *  class ("ace-fact") strategy. It is ASYNC on purpose: runStrategiesSync (the
- *  parseQuery / CHATBENCH-facing path) SKIPS Promise-returning strategies, so ACE
- *  adds declarative-fragment reach to interpret() while leaving the sync spine
- *  byte-stable (see strategies/ace.mjs for the full rationale). The `typeof` guard
- *  mirrors the nlpAdapter degradation: a stripped ACE import (viewer bundle) leaves
- *  the identifier undeclared, so the registry is ace-less there instead of a crash.
- *  interpret/strategies/constructions.mjs (PLAN_ADVANCED_GRAMMAR.md track (d)) is
- *  the construction-grammar template bank — data-driven (data/templates/
- *  constructions/*.toml), registered as its own additive, own-class
- *  ("construction") strategy at grammar-level confidence (0.9) so it outranks a
- *  same-text keyword-spot guess outright instead of colliding with it (see that
- *  file's header for why: keyword-spot mis-parses the genitive/compound surface
- *  forms this bank exists to fix). Sync (unlike ACE), so it participates on the
- *  parseQuery path too, not just interpret(). */
+/** Registered strategies, in precedence order: grammar + keyword-spot (shared
+ *  "graph-query" class), noise-strip (fires only when the anchored grammar
+ *  misses), then the optional ACE and construction-grammar strategies, each
+ *  in its own class so it surfaces as an alternate rather than colliding with
+ *  a graph-query guess. ACE is async-only, so it participates via interpret()
+ *  only, not the sync parseQuery path. */
 // eslint-disable-next-line no-undef
 const OPTIONAL_STRATEGIES = [
   ...(typeof aceStrategy !== "undefined" ? [aceStrategy] : []),
@@ -78,9 +35,8 @@ const OPTIONAL_STRATEGIES = [
 ];
 export const STRATEGIES = [grammarStrategy, keywordSpotStrategy, noiseStripStrategy, ...OPTIONAL_STRATEGIES];
 
-/** The documented normalization pre-pass: whitespace-collapse + the §3.5
- *  normalization pipeline + the closed rhetorical-frame rewrites, applied ONCE
- *  before any strategy runs. Returns {raw, text, changed}. */
+/** Whitespace-collapse + normalization pipeline + rhetorical-frame rewrites,
+ *  applied once before any strategy runs. Returns {raw, text, changed}. */
 export function normalizeInput(input) {
   const raw = String(input || "").trim().replace(/\s+/g, " ");
   const text = raw ? applyPhrasingFrames(applyNegationFrames(normalizeQuery(raw))) : "";
@@ -91,10 +47,8 @@ function defaultNlp() {
   return typeof nlpAdapter === "function" ? nlpAdapter() : null;
 }
 
-/** Synchronous strategy run — the path ask.mjs's parseQuery routes through (its
- *  callers are synchronous). Skips a strategy that returns a Promise (an async
- *  strategy can only participate via interpret()); a throwing strategy is
- *  dropped, never a crash. Returns the strategy results in precedence order. */
+/** Synchronous strategy run (ask.mjs's parseQuery path). Skips a Promise-
+ *  returning strategy and drops a throwing one; returns results in precedence order. */
 export function runStrategiesSync(text, ctx = {}, strategies = STRATEGIES) {
   const results = [];
   for (const s of strategies) {
@@ -117,10 +71,8 @@ export function runStrategiesSync(text, ctx = {}, strategies = STRATEGIES) {
  *                                  //   {ambiguousParse, candidates} tie), or null
  *      alternates }                // distinct-class runners-up for the
  *                                  //   "if you mean X then …" surround
- *  `ctx.strategies` overrides the registry (tests, embedders); `ctx.nlp`
- *  overrides the lemma/POS adapter exactly as ask()'s own option does. Pure
- *  given (text, strategies, adapter) — no graph access here: resolving terms
- *  against a graph stays ask.mjs's job downstream. */
+ *  `ctx.strategies`/`ctx.nlp` override the registry/lemma adapter. No graph
+ *  access here — resolving terms against a graph is ask.mjs's job. */
 export async function interpret(text, ctx = {}) {
   const strategies = ctx.strategies || STRATEGIES;
   const { raw, text: normalized, changed } = normalizeInput(text);

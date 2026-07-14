@@ -1,27 +1,18 @@
 // server-http.mjs — `tmct serve`: an Anthropic Messages API-compatible HTTP
 // endpoint (POST /v1/messages) over tmct's existing zero-model engine.
 //
-// This is Phase A of the capability-router plan (PLAN_CAPABILITY_ROUTER.md): the
-// COMMON INTERFACE a tool-loop client (Claude Code) already speaks. It is a
-// deterministic serialization/HTTP shim — NO model, ever. A request carries
-// { model, messages[], tools[], max_tokens, system? }; a response is a message
-// with `content` blocks (text and/or tool_use) and a `stop_reason`:
+// A deterministic serialization/HTTP shim — no model, ever. A request carries
+// { model, messages[], tools[], max_tokens, system? }; a response is a message with
+// `content` blocks and a `stop_reason`: "end_turn" runs the latest user text through
+// runTurn (chat.mjs) for a cited read-only answer; "tool_use" emits a
+// { type:"tool_use", id, name, input } block backed by dispatchTool (server.mjs) when
+// the request maps to a declared graph-query tool.
 //
-//   - TEXT ANSWER (stop_reason "end_turn"): the latest user text is run through
-//     runTurn (src/chat.mjs) over the configured graph — the same cited,
-//     read-only answer the chat surface gives. Emitted when no tools are
-//     declared, or when nothing maps to a declared graph-query tool.
-//   - TOOL_USE (stop_reason "tool_use"): when tools[] are declared and the
-//     request maps to a declared graph-query tool, a { type:"tool_use", id,
-//     name, input } block is emitted — `name`+`input` are backed by dispatchTool
-//     (src/server.mjs). The caller executes it and returns a tool_result block;
-//     the next request closes the loop with an end_turn text answer.
+// Every response's `usage` is { input_tokens: 0, output_tokens: 0 } — tmct is the $0
+// floor, priced as free by the meter.
 //
-// bedrock-meter-pluggable: every response's `usage` is { input_tokens: 0,
-// output_tokens: 0 } — tmct is the $0 floor, priced as free by the meter.
-//
-// NOTE: src/server.mjs is the TOOL-DISPATCH layer (dispatchTool), NOT an HTTP
-// server; this module is the HTTP surface and imports that layer's exports.
+// src/server.mjs is the tool-dispatch layer, not an HTTP server; this module is the
+// HTTP surface.
 
 import { createServer } from "node:http";
 import { runTurn, COMMANDS, asBareCommand, isConversational } from "./chat.mjs";

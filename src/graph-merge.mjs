@@ -1,5 +1,4 @@
-// graph-merge.mjs — multi-graph payload merging (the CLI/config unification
-// batch's multi-graph support). Used ONLY by source.mjs's fetchEntities when a
+// graph-merge.mjs — multi-graph payload merging. Used ONLY by source.mjs's fetchEntities when a
 // config carries more than one graph file (`config.graphFiles.length > 1`);
 // the single-graph path never calls this — that byte-identical guarantee
 // lives in source.mjs, not here.
@@ -8,7 +7,7 @@
 // ids as `mod:${relativePath}` (repo-relative), so two graphs describing
 // similarly-structured repos can collide. mergeEntityPayloads concatenates the
 // straightforward arrays (classes/vocabulary/objectProperties/individuals),
-// unions proseIndex (merging the id-array per word key), and — Option A, only
+// unions proseIndex (merging the id-array per word key), and — only
 // on an ACTUAL collision — prefixes the specific colliding ids (and every
 // in-payload reference to them: derived_from entries, mentions, edge subject/
 // object, proseIndex entries) with `<graphName>/`. Ids that never collide pass

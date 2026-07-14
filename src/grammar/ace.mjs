@@ -1,5 +1,5 @@
-// grammar/ace.mjs — tmct's deterministic ACE-OWL sub-fragment parser (ROADMAP
-// Phase 2, item 2). Implements the 8 controlled-English sentence patterns of
+// grammar/ace.mjs — tmct's deterministic ACE-OWL sub-fragment parser.
+// Implements the 8 controlled-English sentence patterns of
 // docs/references/schemas/ace-owl-fragment.md and nothing more: fitting the
 // grammar is a strong signal, missing it is a FEATURE — parseAce returns null
 // (or an empty-triples result carrying the unknown words as `residue`) and the
@@ -18,21 +18,13 @@
 //            empty — feeds the pipeline's "if you mean X…" surround).
 //   null     the sentence does not fit the fragment at all.
 //
-// Term style: classes/individuals are `tmct:<lexeme>` CURIEs (lexicon lemma
-// for nouns, canonical spelling for proper names, the literal token for
-// code-shaped references like chat.mjs); predicates are the OWL/RDF(S)
-// vocabulary terms or the lexicon verb's tmct:<3sg> predicate
-// (lexicon.mjs's predicateOf). Restriction and intersection class
-// expressions get READABLE deterministic node names (tmct:some-imports-test,
-// tmct:module-that-imports-test) instead of blank nodes, so the same
-// sentence always re-emits the same triples and appendFact stays idempotent.
-// An intersection is flattened to repeated owl:intersectionOf triples (one
-// per member) — the flat-JSON stand-in for an RDF list, documented in
-// ontology/tmct-core.ttl. `lexicon.ns` is always "tmct:" here (lexicon.mjs's
-// DEFAULT_NS) — every term this module mints is namespaced off `lexicon.ns`
-// rather than a hardcoded literal purely so a caller can supply its own
-// already-namespaced lexicon (extensions.mjs's mergedLexiconExtra); tmct
-// itself only ever runs one namespace.
+// Term style: classes/individuals are `tmct:<lexeme>` CURIEs; predicates are
+// OWL/RDF(S) vocabulary terms or the lexicon verb's tmct:<3sg> predicate
+// (lexicon.mjs's predicateOf). Restriction/intersection nodes get READABLE
+// deterministic names (tmct:some-imports-test) instead of blank nodes, so the
+// same sentence always re-emits the same triples and appendFact stays
+// idempotent; an intersection flattens to repeated owl:intersectionOf triples
+// (documented in ontology/tmct-core.ttl).
 
 import {
   loadLexicon, lookupNoun, lookupVerb, lookupAdjective, lookupProperName,
@@ -190,22 +182,11 @@ function parseRelation(lexicon, toks, lower) {
   return null;
 }
 
-// ---- ambiguity: breadth-first candidate parses, dead ends pruned, survivors
-// surfaced rather than guessed (the operator's own framing — see
-// PLAN_DID_YOU_SEE_HER_DUCK.md's Origin section). parseRelation just above is
-// UNCHANGED — it is still the greedy, first-verb-position-wins fast path
-// every existing caller keeps using, so every single-reading sentence (the
-// overwhelming majority) is completely unaffected. parseRelationHits and
-// parseAceAmbiguous below are a separate, ADDITIVE scan that a caller opts
-// into only when it wants to know whether more than one reading survives. ----
+// ---- ambiguity: an additive scan a caller opts into to see every surviving
+// reading, never displacing parseRelation's own greedy first-match path. ----
 
-/** Pattern 3 — EVERY verb-position split, not just the first: for each token
- *  index that lookupVerb recognizes, resolve both sides and keep it ONLY if
- *  it is a complete, valid parse (a genuine hit — a missOrNull/null split is
- *  a dead end, pruned here rather than surfaced as "ambiguity"). Duplicate
- *  logic with parseRelation is deliberate: parseRelation must stay byte-for-
- *  byte unchanged for every existing caller, so this is a standalone reader,
- *  not a refactor of shared internals. */
+/** Pattern 3 — every verb-position split (not just the first), keeping only
+ *  complete, valid parses; a dead-end split is pruned, not surfaced. */
 function parseRelationHits(lexicon, toks, lower) {
   const hits = [];
   for (let i = 1; i < toks.length - 1; i += 1) {
@@ -233,14 +214,9 @@ function parseRelationHits(lexicon, toks, lower) {
   return hits;
 }
 
-/** Public ambiguity surface: parse `sentence` and, ONLY when more than one
- *  independent, COMPLETE relation-pattern reading survives (parseRelationHits
- *  above), return them all, each labeled by the token it read as the verb.
- *  Returns null for the overwhelming majority of sentences: anything not
- *  relation-shaped (mirrors parseAce's own dispatch gate exactly, so this
- *  only ever fires on a sentence parseAce would ALSO route to parseRelation),
- *  and any relation-shaped sentence with 0 or 1 surviving readings — the
- *  ordinary parseAce path is authoritative and untouched either way. */
+/** Public ambiguity surface: null unless 2+ independent, complete
+ *  relation-pattern readings survive, in which case all are returned, each
+ *  labeled by the token read as its verb. */
 export function parseAceAmbiguous(sentence, lexicon = loadLexicon()) {
   const toks = tokenize(sentence);
   if (toks.length < 4) return null; // 3 tokens: exactly one verb position is even possible

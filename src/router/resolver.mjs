@@ -1,43 +1,17 @@
-// src/router/resolver.mjs — Stage 1 of the capability router (PLAN_CAPABILITY_ROUTER.md):
-// THE RESOLVER. Turn a request into a SELECTED registry capability with bound
-// arguments, by unification + backward chaining over capabilities-as-facts
-// (a mini-Datalog/SLD step, exactly the "open-condition satisfaction" the plan
-// names). Deterministic, no-LLM, glass-box: every choice is provable.
+// src/router/resolver.mjs — Stage 1 of the capability router: THE RESOLVER. Turn a request
+// into a SELECTED registry capability with bound arguments, by backward chaining over
+// capabilities-as-facts. Deterministic, no-LLM, glass-box: every choice is provable.
 //
-// THE CORE is the ask-kind -> capability MAPPING. A request becomes an epistemic
-// GOAL `(knows <topic> ?of)`; each capability's add-effect declares which topic
-// it achieves (registry.mjs `knows(topic, of)`); backward chaining finds the
-// capability whose add-list unifies with the goal and binds ?of to the request's
-// object term. Three fact sources feed the SAME backward-chaining step:
+// A request becomes an epistemic GOAL `(knows <topic> ?of)`; backward chaining finds the
+// capability whose add-effect achieves it and binds `?of` to the request's object term.
+// Three fact sources feed the same backward-chaining step, tried in order: the command
+// register (server-http.mjs's terse verbs, ground truth, tried first since a terse command
+// can mis-parse through the NL grammar), the NL parse (ask.mjs's relational grammar, via
+// NL_INTENTS), and imperative intent FRAMES (curated phrasings the relational grammar
+// doesn't carry, and a rescue path when the NL parse selects an out-of-set capability).
 //
-//   1. THE COMMAND REGISTER (server-http.mjs `selectTool`, the terse verbs
-//      "describe X" / "callers X" / "untested") — exact + unambiguous, tried
-//      FIRST because a terse command mis-parses through the NL grammar (e.g.
-//      "callees Widget.render" keyword-spots to shape:reverse/kind:calls, which
-//      would wrongly route to callers). A literal command verb is ground truth.
-//   2. THE NL PARSE (ask.mjs `parseQuery` -> {shape, kind, entityType, object}) —
-//      the relational grammar ("which functions call X", "what does X export").
-//      NL_INTENTS maps a {shape,kind} to the epistemic TOPIC; backwardChain maps
-//      the topic to the capability. This is the Stage-1 deliverable proper.
-//   3. IMPERATIVE INTENT FRAMES (Stage 2, this module's FRAMES table) — curated
-//      phrasings the relational grammar does not carry ("blast radius of X",
-//      "who calls X", "search for X", "the call edges of X", "explain X"): a
-//      regex -> {topic, arg}. Same backward chaining (topic -> capability), same
-//      resolveObject binding. This is the surface that lifts NL reach above the
-//      command register: it reaches tmct_calls (the raw call-edge dump — a grain
-//      the relational "call" verb collides with) via an EXPLICIT edge-dump frame,
-//      and it rescues a request whose NL parse selected an OUT-OF-SET capability
-//      by re-selecting a DECLARED one (resolveOne falls through to the frame).
-//
-// ENTITY BINDING is DELEGATED to `resolveObject` (ask.mjs — the tiered lemma/
-// fuzzy binding oracle with honest ambiguity). This module NEVER re-implements
-// resolution: the registry's `resolves(param, as)` precondition maps exactly to
-// a resolveObject call, and an ambiguous / no-match term is an HONEST REFUSE,
-// never a guess. On any no-fit -> refuse.
-//
-// Pure-ish: mapParse/mapFrame/backwardChain/commandCapability are pure; resolveOne
-// is async only because it consults ctx.resolve (the graph binding oracle) and
-// ctx.dispatch (executes the grounded call). No network, no Date.now.
+// Entity binding is delegated to `resolveObject` (ask.mjs); an ambiguous or no-match term
+// is an honest refuse, never a guess.
 
 import { parseQuery } from "../ask.mjs";
 import { selectTool } from "../server-http.mjs";
@@ -47,23 +21,17 @@ import {
 } from "./registry.mjs";
 import { hallucinationsIn } from "./call-validator.mjs";
 
-// A ranking/superlative cue ("most", "biggest", …) in the request — the SAME
-// declared vocabulary ask.mjs's own superlative grammar reads (SUPERLATIVE_EXTREMES),
-// never a new keyword table. Used below to keep a flat imperative frame (a
-// single unranked capability call) from claiming a request that is actually
-// asking to be RANKED — that's the goal-reasoner's job (src/router/goal-reasoner.mjs's
-// keystone argmax over a declared priorityTopic), not a flat listing's.
+// A ranking/superlative cue ("most", "biggest", …), reusing ask.mjs's own vocabulary
+// (SUPERLATIVE_EXTREMES). Used below to keep a flat imperative frame from claiming a
+// request that's actually asking to be ranked — that's the goal-reasoner's job.
 const SUPERLATIVE_RE = new RegExp(
   `\\b(?:${Object.keys(SUPERLATIVE_EXTREMES).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+")).join("|")})\\b`,
   "i",
 );
 
 // ---- the ask-kind -> epistemic-topic MAPPING (the Stage-1 core) --------------
-// Keyed `${shape}:${kind}` off parseQuery's simple-clause output. The VALUE is
-// the epistemic TOPIC a capability's add-effect must achieve; backwardChain then
-// unifies that topic with the registry (capabilities-as-facts). Every entry's
-// topic MUST be achievable by exactly one registered capability (the bidirectional
-// conformance test proves it). `arg` is the parameter grain the object binds to.
+// Keyed `${shape}:${kind}` off parseQuery's output. Every topic must be achievable by
+// exactly one registered capability (the bidirectional conformance test proves it).
 export const NL_INTENTS = Object.freeze({
   "reverse:calls": { topic: "callers", arg: "symbol" }, // "which fns call X" -> callers of X
   "forward:calls": { topic: "callees", arg: "symbol" }, // "what does X call"  -> callees of X
@@ -78,11 +46,8 @@ export const NL_INTENTS = Object.freeze({
 });
 
 // ---- ask-vocab RELATION kinds with NO capability — the HONEST ceiling --------
-// Every ask-vocab.mjs RELATIONS key must be either mapped (above) or listed here
-// with a reason (the bidirectional conformance test enforces the partition — no
-// silent gap). These are relations tmct's grammar SPEAKS but the read-only
-// graph-query registry has no operator for: routing them anywhere would be a
-// mis-route, so the resolver REFUSES (never a guess).
+// Every ask-vocab.mjs RELATIONS key must be either mapped (above) or listed here with a
+// reason (the conformance test enforces the partition). Refuse rather than mis-route.
 export const UNMAPPED_KINDS = Object.freeze({
   imports: "no importer/imports query tool in the registry (there is no tmct_imports); refusing beats mis-routing to calls",
   uses: "a query-side UNION (imports+calls+callsSymbol) with no single capability; a router that must emit ONE call cannot honour it — refuse",
@@ -90,43 +55,20 @@ export const UNMAPPED_KINDS = Object.freeze({
 });
 
 // ---- capabilities the NL surface cannot reach today (named, not accidental) ---
-// A declared capability with no NL/command/frame path is a ROUTING GAP. The
-// conformance test FAILS on an untagged gap; a genuinely-unreachable cap must be
-// tagged HERE with the Stage it needs, so the ceiling is honest rather than a
-// silent low-completion refuse. (Coordinator reinforcement 2.)
-//
-// EMPTY as of Stage 2. tmct_calls — the raw call-edge dump that USED to sit here —
-// is now reached by a DEDICATED imperative frame keyed on the "call edges / call
-// graph / outgoing calls of X" phrasings the relational grammar does NOT carry
-// (see FRAMES below). The collision the old tag named is real, so the frame does
-// NOT touch the relational "call" verb (that still routes callers/callees); it
-// opens a SECOND, distinct surface that names the edge-dump grain explicitly. With
-// it every declared capability is NL/command/frame-reachable — the ceiling is
-// genuinely empty, not a silenced gap. (The conformance test enforces both
-// directions: an over-claimed tag would now fail, since tmct_calls IS reachable.)
+// A declared capability with no NL/command/frame path is a routing gap and must be tagged
+// here with the reason. Every capability is currently reachable, so this is empty.
 export const NOT_NL_REACHABLE = Object.freeze({});
 
-// ---- imperative intent FRAMES (Stage 2 — fills what the relational grammar and
-// the command register both miss). regex -> { topic, arg | noArg }. `arg` names
-// the parameter grain; the entity is pulled by extractEntity (or, for search, the
-// residual query text). Ordered: first match wins. Every frame's topic is
-// backward-chained to a capability just like an NL intent, so the frame table
-// adds PHRASINGS, never a new routing path. ----
+// ---- imperative intent FRAMES (fills what the relational grammar and command register
+// both miss). regex -> { topic, arg | noArg }. Ordered: first match wins.
 export const FRAMES = Object.freeze([
-  // skipIfSuperlative: "untested" is a flat listing (which achieves it says
-  // nothing about RANK). A request carrying a superlative cue ("what MOST
-  // needs a test") is asking to be ranked — that's the goal-reasoner's
-  // keystone-argmax job (declared priorityTopic:"impact"), not this frame's.
-  // Skipping here lets the request fall through to an honest C1 refuse, which
-  // driver-goal.mjs escalates to the C2 meta-loop that already ranks.
+  // skipIfSuperlative: a request carrying a superlative cue ("what MOST needs a test") is
+  // asking to be ranked — the goal-reasoner's job, not this flat listing's.
   { re: /\buntested\b|\bwithout\s+(?:a\s+)?tests?\b|\bhas\s+no\s+tests?\b|\bneeds?\s+(?:a\s+)?tests?\b/i, topic: "untested", noArg: true, skipIfSuperlative: true },
   { re: /\bblast\s*radius\b|\bimpacts?\b|\bimpacted\b|what\s+(?:a\s+)?change.*(?:reach|affect|touch)|what\s+(?:depends?\s+on|dependents?)\b/i, topic: "impact", arg: "module" },
-  // tmct_calls (Stage 2 — the reachability win): the RAW call-edge dump, a grain
-  // the relational "call" verb collides with (which routes callers/callees). This
-  // frame does NOT use the bare verb — it keys on the EXPLICIT edge-dump nouns
-  // ("call edges", "call graph", "outgoing calls of X") the relational grammar
-  // never emits, so it opens a distinct surface without touching callers/callees.
-  // FIRST so its explicit phrasing wins before the callees/callers verb frames.
+  // tmct_calls: the RAW call-edge dump, a grain the relational "call" verb collides with.
+  // Keys on explicit edge-dump nouns ("call edges", "call graph") so it opens a distinct
+  // surface without touching callers/callees. FIRST so it wins before the verb frames below.
   { re: /\bcall[\s-]*edges?\b|\bcall[\s-]*graph\b|\boutgoing\s+calls?\b|\bcall[\s-]*sites?\s+(?:of|in|out|from)\b/i, topic: "calls", arg: "symbol" },
   { re: /\bcallees?\b|wh(?:at|o)\s+does\s+\S+\s+call\b/i, topic: "callees", arg: "symbol" },
   { re: /\bcallers?\b|who\s+calls\b|what\s+calls\b/i, topic: "callers", arg: "symbol" },
@@ -144,9 +86,7 @@ export const FRAMES = Object.freeze([
 // ---- backward chaining (the SLD/Datalog step) --------------------------------
 
 /** Backward-chain a goal `(knows <topic> ?of)` to the registered capability whose
- *  add-effect ACHIEVES it. Pure over the registry; returns the capability or null.
- *  This is the whole selection primitive — a capability is chosen ONLY because its
- *  declared effect unifies with the request's epistemic goal, never by name. */
+ *  add-effect achieves it. Pure over the registry; returns the capability or null. */
 export function backwardChain(topic) {
   for (const cap of capabilities()) {
     if (effectsOf(cap.name).add.some((e) => e.topic === topic)) return cap;
@@ -154,9 +94,8 @@ export function backwardChain(topic) {
   return null;
 }
 
-// The stopword set for the imperative-frame entity extractor (Stage-2 slot
-// filling). Deliberately generous: a wrong pick is caught by the resolveObject
-// miss -> honest refuse, never emitted.
+// Stopwords for the imperative-frame entity extractor. Deliberately generous: a wrong
+// pick is caught by the resolveObject miss -> honest refuse, never emitted.
 const STOP = new Set([
   "what", "whats", "which", "who", "whom", "does", "do", "did", "is", "are", "the", "a", "an",
   "of", "for", "to", "in", "on", "by", "me", "us", "tell", "about", "show", "list", "give", "get",
@@ -167,8 +106,6 @@ const STOP = new Set([
   "export", "exports", "history", "commit", "commits", "signature", "search", "find", "look",
   "module", "modules", "class", "classes", "function", "functions", "symbol", "symbols",
   "untested", "blast", "radius", "change", "changes", "changing", "reach", "reaches", "affect", "affects",
-  // Stage-2 edge-dump + imperative-verb tokens (tmct_calls frame + explain/outgoing
-  // phrasings): none names an entity, so keep them out of the slot-filler's pool.
   "explain", "edge", "edges", "graph", "outgoing", "site", "sites", "invoke", "invokes", "run", "runs", "execute", "executes",
 ]);
 
@@ -245,9 +182,8 @@ export function commandCapability(request, declaredNames) {
 
 // ---- the full single-call resolver (async — binds + grounds) -----------------
 
-/** Build the glass-box proof chain for a grounded single call: its preconditions
- *  (graphLoaded + resolves(param) with the BOUND value + any-present) then the
- *  epistemic add-effect. Dispatch has SUCCEEDED, so `resolves` steps are ok. */
+/** Build the glass-box proof chain for a grounded single call: its preconditions then the
+ *  epistemic add-effect. Dispatch has succeeded, so `resolves` steps are ok. */
 export function proofFor(name, input) {
   const steps = [];
   for (const pre of preconditionsOf(name)) {
@@ -261,14 +197,9 @@ export function proofFor(name, input) {
 
 const REFUSE = (why, extra) => ({ selected: null, refused: true, reason: why, ...(extra || {}) });
 
-/** PLAN_BREADTH_FIRST_NLU.md §4 — breadth-first ambiguity, read-only capabilities
- *  ONLY (every registered capability is `readOnly:true` with an empty delete-list,
- *  so dispatching the SAME tool once per tied candidate carries no double-write
- *  risk). Runs the bound call for each candidate in `pool` (capped, matching the
- *  reason string's own display cap) and returns `[{candidate, result}, ...]`, or
- *  undefined when there is no dispatcher to run it with (`execute:false` or no
- *  `ctx.dispatch` — e.g. a structural-only / planning caller). Never throws: a
- *  per-candidate dispatch failure is just an honest miss for that one candidate. */
+/** Breadth-first ambiguity: dispatches the SAME tool once per tied candidate (safe since
+ *  every registered capability is read-only). Returns `[{candidate, result}, ...]`, or
+ *  undefined when there is no dispatcher to run it with. */
 async function dispatchEachCandidate(pool, capName, arg, ctx, execute) {
   if (!execute || !ctx.dispatch) return undefined;
   const results = [];
@@ -280,38 +211,25 @@ async function dispatchEachCandidate(pool, capName, arg, ctx, execute) {
 }
 
 /** Select a capability for a request and BIND its arguments — the full resolver.
- *  Order: command register -> NL parse -> imperative frame. On a bound selection
- *  it delegates entity binding to ctx.resolve (resolveObject) and, unless
- *  `execute:false`, grounds it via ctx.dispatch. Returns
+ *  Order: command register -> NL parse -> imperative frame. Delegates entity binding to
+ *  ctx.resolve and, unless `execute:false`, grounds it via ctx.dispatch. Returns
  *    { selected:{name,input}, proof, why, resolved, observed? }  — a grounded call
  *    { selected:null, refused:true, reason, candidateResults? }  — an honest refusal
- *  An ambiguous-term refusal stays `refused:true` (never a guess at which
- *  candidate is "the" one) but, when a dispatcher is available, ADDITIONALLY
- *  carries `candidateResults`: the SAME capability dispatched once per tied
- *  candidate, so a machine caller gets both the honest "still ambiguous" signal
- *  and every candidate's real answer (PLAN_BREADTH_FIRST_NLU.md §4).
- *  NEVER emits an ungrounded / ambiguous / undeclared call. */
+ *  Never emits an ungrounded / ambiguous / undeclared call. */
 export async function resolveOne(request, declaredNames, ctx, { execute = true } = {}) {
   const declared = new Set(declaredNames);
 
-  // 1. command register (exact) 2. NL parse 3. imperative frame. An NL-parse
-  //    REFUSAL is NOT terminal: a shape with no relational operator ("what is the
-  //    impact of X", "list what covers X") can still be an imperative FRAME hit,
-  //    so we fall through and only surface the NL reason if the frame misses too.
+  // An NL-parse refusal is not terminal: an imperative FRAME may still hit, so we fall
+  // through and only surface the NL reason if the frame misses too.
   let pick = commandCapability(request, declared);
   let nlRefuse = null;
   let nlUndeclared = null;
   if (!pick) {
     const mapped = mapParse(parseQuery(request));
     if (mapped && !mapped.refuse) {
-      // An NL parse that selects a DECLARED capability is the Stage-1 answer. One
-      // that selects an OUT-OF-SET capability is NOT terminal (Stage-2 widening):
-      // an imperative FRAME may still reach a DECLARED capability for the SAME
-      // request (e.g. keyword-spot mis-routes "outgoing calls of X" toward an
-      // out-of-set callers/callees, but the calls-frame reaches the declared
-      // tmct_calls). Hold the out-of-set name and fall through; surface it only if
-      // the frame misses too. This can only turn a refuse into a grounded DECLARED
-      // call — the declared/hallucination gates below still apply, never a guess.
+      // An out-of-set NL selection isn't terminal: an imperative FRAME may still reach a
+      // declared capability for the same request (e.g. the calls-frame reaches tmct_calls
+      // where keyword-spotting mis-routes toward out-of-set callers/callees).
       if (declared.has(mapped.name)) pick = mapped;
       else nlUndeclared = mapped.name;
     } else if (mapped && mapped.refuse) nlRefuse = mapped.reason;
@@ -325,14 +243,13 @@ export async function resolveOne(request, declaredNames, ctx, { execute = true }
   let why = pick.why ?? [];
   if (!declared.has(pick.name)) return REFUSE(`selected ${pick.name} but it is not in the declared toolset`);
 
-  // build the bound input. A command pick already carries a bound input; an NL /
-  // frame pick carries a raw term that we BIND via resolveObject (the oracle).
+  // A command pick already carries a bound input; an NL/frame pick carries a raw term
+  // we bind via resolveObject.
   let input = pick.input ? { ...pick.input } : {};
   let resolved = null;
   if (!pick.input && !pick.noArg) {
     const term = String(pick.term || "").trim();
     if (!term) return REFUSE(`the ${pick.topic} intent named no entity to bind`);
-    // DELEGATE binding to resolveObject — the resolves(param,as) precondition.
     const r = ctx.resolve ? ctx.resolve(term) : { match: { label: term }, ambiguous: false };
     if (!r || !r.match) return REFUSE(`"${term}" does not resolve to any graph entity (honest miss)`);
     if (r.ambiguous) {
@@ -346,11 +263,9 @@ export async function resolveOne(request, declaredNames, ctx, { execute = true }
   }
 
   const call = { name: pick.name, input };
-  // the same zero-hallucination gate the grader enforces — self-check before emit.
   const problems = hallucinationsIn(call, [...declared]);
   if (problems.length) return REFUSE(`bound call did not validate: ${problems.map((p) => p.reason).join(",")}`);
 
-  // ground it: a ToolError (unresolvable entity) is an honest miss -> refuse.
   if (execute && ctx.dispatch) {
     const res = await ctx.dispatch(pick.name, input);
     if (!res.ok) return REFUSE(`unresolvable at dispatch: ${res.error}`);

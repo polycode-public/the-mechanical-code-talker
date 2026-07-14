@@ -18,21 +18,9 @@ const MODIFIER_ALT = Object.keys(MODIFIER_TO_KIND).sort((a, b) => b.length - a.l
 const META_ALT = META_MEANING_VERBS.slice().sort((a, b) => b.length - a.length).map(escapeRegex).join("|");
 
 const TEMPLATES = [
-  // T1 ASK: "does X import Y" / "is X a subclass of Y" -> Yes/No. Tried FIRST: it starts with
-  // does/is/do/did, which the reverse/forward templates below never match (those start with
-  // which/what), so precedence between T1 and the rest is structural, not a tie-break guess.
-  // "did" joins does/do for the past-tense commit forms ("did commit <sha> touch X").
-  // REVERSE VERB SWAP (Seonix Batch 2 Fix 2): this template fixes subject/object by regex
-  // capture POSITION, not by the verb's semantic direction — fine for every forward verb
-  // ("subclass of", "imports", …), but "is X a superclass of Y" MEANS the reverse of "is X
-  // a subclass of Y" (Y inherits from X, not X from Y). INHERITS_REVERSE_VERBS (ask-vocab.mjs)
-  // is the closed set of such reverse phrasings; when the matched verb is one of them,
-  // subject/object are swapped here, once, at parse time — so downstream evaluation (ask.mjs)
-  // sees "is Y a subclass of X" and needs zero changes of its own. (In practice this exact
-  // regex only ever matches a does/do/did lead, so "is …" phrasings actually reach the "ask"
-  // shape via keywords.mjs's decomposition strategy instead — that strategy applies the same
-  // swap for the same reason; this branch is kept for any does/do/did-led phrasing that names
-  // a reverse verb, and for structural symmetry with that sibling strategy.)
+  // T1 ASK: "does X import Y" -> Yes/No. REVERSE VERB SWAP: a semantically-reverse
+  // verb ("superclass of") means the opposite of its forward counterpart, so
+  // INHERITS_REVERSE_VERBS (ask-vocab.mjs) swaps subject/object here at parse time.
   {
     name: "ask",
     re: new RegExp(`^(?:does|do|did)\\s+(.+?)\\s+(${VERB_ALT})\\s+(.+?)\\??$`, "i"),
@@ -45,7 +33,7 @@ const TEMPLATES = [
       return { shape: "ask", entityType: null, modifier: "direct", kind, subject, object };
     },
   },
-  // T2 reverse: "which <entity> [<modifier>] <verb> <object>" — the operator's own example shape.
+  // T2 reverse: "which <entity> [<modifier>] <verb> <object>".
   {
     name: "reverse",
     re: new RegExp(`^which\\s+(${ENTITY_ALT})\\s+(?:(${MODIFIER_ALT})\\s+)?(${VERB_ALT})\\s+(.+?)\\??$`, "i"),
@@ -67,51 +55,24 @@ const TEMPLATES = [
       kind: VERB_TO_KIND[m[2].toLowerCase()], object: m[1].trim(),
     }),
   },
-  // T4 meta: "what does <term> mean" — a question about the GRAPH'S OWN VOCABULARY
-  // (a SchemaClass/SchemaPredicate label, e.g. "cochange", or a raw prop token, e.g.
-  // "mgx:callsSymbol"), not a graph traversal over code edges. Tried after T3: T3 also
-  // starts "what does/do", but T3 only fires when the tail is a relation VERB_ALT
-  // phrase ("import"/"calls"/…), which "mean"/"means"/etc never are (disjoint tables —
-  // ask-vocab.mjs's file comment explains why they're kept separate), so the two never
-  // actually compete for the same input.
+  // T4 meta: "what does <term> mean" — a question about the graph's own vocabulary,
+  // not a graph traversal. VERB_ALT and META_ALT are disjoint tables, so this never
+  // competes with T3 for the same input.
   {
     name: "meta-mean",
     re: new RegExp(`^what\\s+(?:does|do|is|are)\\s+(.+?)\\s+(?:${META_ALT})\\??$`, "i"),
     build: (m) => ({ shape: "meta", entityType: null, modifier: "direct", kind: "meta", object: m[1].trim() }),
   },
-  // T5 meta: "what is a/an <term>" — the OTHER worked phrasing ("what is a Commit").
-  // Seonix Batch 2 Fix 1: the indefinite article is now OPTIONAL, but the BARE
-  // (no-article) form is restricted to the CLOSED vocabulary ENTITY_TO_TYPE already
-  // imported above (function/method/class/module/attribute/variable/change/commit,
-  // singular and plural) — build() returns null (same "this template didn't actually
-  // match, keep scanning" contract T8/"when" below already relies on — see
-  // parseAnchored's own docblock) when the bare form's object isn't one of those
-  // closed terms, so the scan falls through exactly as if this template had not
-  // matched at all. This keeps "what is a doohickey"/"widget"/"gizmo" (still routed
-  // here via the WITH-article, fully unrestricted `(.+?)` path — pinned to resolve as
-  // an honest meta miss downstream, ask-combo.test.mjs/chat-readback.test.mjs) working
-  // unmodified, while ALSO keeping the two pinned bare-form honest misses intact:
-  // "what is the meaning of this codebase" (ask.test.mjs/ask-dual-strategy.test.mjs)
-  // and "what is exposed" (ask.test.mjs:840) both have bare objects absent from
-  // ENTITY_TO_TYPE, so build() still rejects them and they still fall through to null.
-  // Fix 3: stripTrailingScopeFiller (ask-vocab.mjs) trims a curated trailing clause
-  // ("what is a Module in this graph" -> "Module") off the object before it's
-  // returned, so a scoping tail never corrupts the lookup term either the bare-form
-  // check above or downstream resolution/rendering perform. HANDOVER.md 2026-07-10
-  // item 8: stripTrailingDiscourseTag trims a bare trailing "then"/"though" the
-  // same way ("what is a component then" -> "component") — applied first, since a
-  // discourse tag sits outermost when both happen to stack.
+  // T5 meta: "what is a/an <term>" — the bare (no-article) form is restricted to
+  // the closed ENTITY_TO_TYPE vocabulary (build() -> null otherwise, falling
+  // through); the WITH-article form is unrestricted.
   {
     name: "meta-whatis",
     re: new RegExp(`^what\\s+(?:is|are)\\s+(?:(an?)\\s+)?(.+?)\\??$`, "i"),
     build: (m) => {
       const object = stripTrailingDiscourseTag(m[2].trim());
       if (!m[1] && !ENTITY_TO_TYPE[object.toLowerCase()]) return null; // bare form: closed-set only
-      // "what is a kind of X" / "what is a subclass of X" (ARTICLE_RELATION_CONTINUATIONS,
-      // ask-vocab.mjs): the captured object is itself the tail of a registered inherits
-      // verb's own "is a .../are a ..." phrasing, not a term to define — reject so this
-      // template yields no candidate at all and only keyword-spot's (unambiguous) reverse-
-      // inherits reading survives, instead of a spurious meta/inherits {ambiguousParse} tie.
+      // "what is a kind/subclass of X" is an inherits phrasing, not a term to define.
       const objLower = object.toLowerCase();
       if (m[1] && ARTICLE_RELATION_CONTINUATIONS.some(
         (c) => objLower === c || objLower.startsWith(`${c} `),
@@ -119,8 +80,8 @@ const TEMPLATES = [
       return { shape: "meta", entityType: null, modifier: "direct", kind: "meta", object: stripTrailingScopeFiller(object) };
     },
   },
-  // T6 mention: "where is <term> mentioned/referenced" — the prose/mentions surface
-  // (2026-07-02 query families). Tried BEFORE T7: T7's trailing marker is optional,
+  // T6 mention: "where is <term> mentioned/referenced" — the prose/mentions surface.
+  // Tried BEFORE T7: T7's trailing marker is optional,
   // so without this ordering it would swallow the mention question and lose the
   // marker that distinguishes "locate the definition" from "list the prose mentions".
   {
@@ -148,19 +109,19 @@ const TEMPLATES = [
       ? { shape: "when", entityType: null, modifier: "direct", kind: "touches", object: m[1].trim() }
       : null),
   },
-  // T9 commit-history NP (PLAN_CHAT_FEEL item 6 remainder): "the commit history of
-  // X" / "commit history for X" — an NP form of T8's SAME "when did X change"
-  // intent; reuses shape="when" verbatim so evaluation/rendering are byte-
-  // identical, only the recognizer surface differs.
+  // T9 commit-history NP: "the commit history of X" / "commit history for X" —
+  // an NP form of T8's SAME "when did X change" intent; reuses shape="when"
+  // verbatim so evaluation/rendering are byte-identical, only the recognizer
+  // surface differs.
   {
     name: "commit-history",
     re: /^(?:the\s+)?commit\s+history\s+(?:of|for)\s+(.+?)\??$/i,
     build: (m) => ({ shape: "when", entityType: null, modifier: "direct", kind: "touches", object: m[1].trim() }),
   },
-  // T10 cochange-partners NP (PLAN_CHAT_FEEL item 6 remainder): "cochange partners
-  // of X" — an NP form of the existing "which modules cochange with X" verb-phrase
-  // shape (ask-vocab.mjs's cochange verb table); reuses shape="reverse"/
-  // kind="cochange" so evaluation is byte-identical.
+  // T10 cochange-partners NP: "cochange partners of X" — an NP form of the
+  // existing "which modules cochange with X" verb-phrase shape (ask-vocab.mjs's
+  // cochange verb table); reuses shape="reverse"/kind="cochange" so evaluation
+  // is byte-identical.
   {
     name: "cochange-partners",
     re: /^co-?change\s+partners\s+(?:of|for|with)\s+(.+?)\??$/i,

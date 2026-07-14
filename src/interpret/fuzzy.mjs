@@ -1,22 +1,12 @@
-// interpret/fuzzy.mjs — the bounded-edit-distance fuzzy tier (two-level fuzzy,
-// 2026-07-02), extracted MOVE-only from ask.mjs (item 13). A reusable SERVICE the
-// strategies call, not a strategy itself: the keyword-spotting strategy's tier-3
-// vocabulary rewrite and resolveObject's tier-5 label pass both read editDistance/
-// fuzzyBound from here, and the "assuming you meant …" announcement discipline
-// (a unique within-bound hit is announced, a tie is refused or surfaced as
-// ambiguity, never a silently-broken guess) is enforced by the callers off these
-// primitives. Deliberately coupled to the curated vocab tables via explicit
-// imports — the fuzzy TARGETS are a closed, curated set, same ethos as the
-// tables themselves. Pure JS, no deps.
+// interpret/fuzzy.mjs — the bounded-edit-distance fuzzy tier, shared by the
+// keyword-spotting and object-resolution strategies. A distance tie is always
+// refused or surfaced as ambiguity, never broken by a guess.
 
 import { VERB_TO_KIND, ENTITY_TO_TYPE, MODIFIER_TO_KIND } from "../ask-vocab.mjs";
 import { STOPWORDS } from "./normalize.mjs";
 
-// ---- bounded edit distance — hand-rolled Damerau-Levenshtein (optimal string
-// alignment: substitution/insertion/deletion + adjacent transposition), bounded
-// with an early row-minimum exit. Fires only after every exact/curated tier
-// missed, and a distance TIE is refused (keyword) or surfaced as ambiguity
-// (object), never broken by a guess. ----
+// ---- bounded edit distance — hand-rolled Damerau-Levenshtein, bounded with an
+// early row-minimum exit ----
 
 /** Distance between a and b, or max+1 as soon as it provably exceeds `max`. */
 export function editDistance(a, b, max) {
@@ -52,13 +42,9 @@ export const VOCAB_WORDS = new Set(
     .flatMap((p) => p.split(" ")),
 );
 
-/** Fuzzy-correction TARGETS: verb-phrase and modifier constituents only, length ≥4.
- *  Entity nouns are deliberately excluded — real identifiers collide with them at
- *  distance ≤2 far too easily ("myfile" is 2 edits from "file", "caller" 2 from
- *  "calls"-family words), and entity-noun typos are already owned by the curated
- *  MISSPELLINGS table where such calls are made deliberately. Short constituents
- *  ("of", "to", "in", "on") are excluded for the same reason: at bound 1 half of
- *  English is adjacent to them. */
+/** Fuzzy-correction TARGETS: verb-phrase and modifier constituents only,
+ *  length ≥4. Entity nouns and short words are excluded — real identifiers
+ *  collide with them too easily at this distance bound. */
 const FUZZY_TARGET_WORDS = [...new Set(
   [...Object.keys(VERB_TO_KIND), ...Object.keys(MODIFIER_TO_KIND)]
     .flatMap((p) => p.split(" "))
@@ -79,13 +65,8 @@ export function fuzzyVocabWord(w) {
   return fuzzyMatchInSet(w, FUZZY_TARGET_WORDS, fuzzyBound(w));
 }
 
-/** GENERIC unique-within-bound fuzzy match of `w` against an arbitrary candidate
- *  list, or null — same discipline as fuzzyVocabWord/resolveObject's tier-5 pass
- *  (a distance tie between two distinct candidates is refused, never guessed),
- *  factored out so callers outside the ask/keyword pipeline (e.g. chat.mjs's
- *  conversational recognizers) can reuse the primitive without a bespoke
- *  target-list wrapper. `bound` defaults to fuzzyBound(w) but callers may pass a
- *  tighter budget (e.g. to keep short conversational tokens conservative). */
+/** Generic unique-within-bound fuzzy match of `w` against an arbitrary
+ *  candidate list, or null on a tie — never guessed. */
 export function fuzzyMatchInSet(w, candidates, bound = fuzzyBound(w)) {
   let best = bound + 1;
   let hit = null;

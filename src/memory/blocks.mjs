@@ -1,39 +1,16 @@
-// memory/blocks.mjs — text blocks + the relevance index (ROADMAP item 9).
-//
-// The memory graph (core.mjs) holds STRUCTURE; this module holds TEXT: cleaned
-// session transcripts (fold.mjs writes one block per session) and, later,
-// corpus documents. Storage under <repo>/.tmct/memory/blocks/:
-//   <block-id>.txt   — the plain block text
-//   index.json       — per-block prose tokens (prose.mjs tokenizer) + a static rank
-//
-// Ranking is two signals, combined at query time:
-//   1. STATIC rank — a genuine iterative PageRank over the block-similarity
-//      graph (an undirected edge wherever two blocks share ≥ OVERLAP_MIN
-//      tokens; damping 0.85, 20 iterations — cheap at this scale). A block that
-//      shares vocabulary with many other blocks is "well-connected": it covers
-//      ground the corpus keeps returning to, so it wins ties.
-//   2. QUERY-time IDF match — each query token is weighted by rarity across
-//      blocks (idf = log(1 + N/(1+df)), the codegraph.mjs locate discipline),
-//      so a whole-question query is not dominated by its ubiquitous words.
-// retrieveBlocks() scores idf-sum × (1 + rank) ÷ sqrt(1 + degree): the IDF
-// match decides topic, the static rank breaks ties toward well-connected
-// blocks, and the degree divisor (hub dampening, ported from codegraph.mjs's
-// spiralExpand degree-quantile gate; on by default here) stops a block that
-// merely shares vocabulary with disproportionately many others — a generic
-// "boilerplate" hub — from winning on inflated rank alone.
-//
-// All writes are temp+rename atomic; saveBlock is an upsert (same id replaces —
-// what makes fold.mjs's re-fold idempotent).
+// memory/blocks.mjs — text blocks + the relevance index. core.mjs holds
+// STRUCTURE; this holds TEXT (cleaned session transcripts, corpus docs) under
+// .tmct/memory/blocks/. retrieveBlocks scores idf-sum × (1 + PageRank) ÷
+// sqrt(1 + degree) — a hub-dampened IDF match. Writes are atomic; saveBlock
+// upserts by id (fold.mjs's re-fold idempotency rests on this).
 
 import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { splitIdentifierWords, tokenizeProse } from "../prose.mjs";
 import { SOURCE_PRIOR } from "./trust.mjs";
 
-// A block inherits the trust of the Source it was folded from: a session block
-// is operator-chat (1.0), a corpus block its corpus Source (0.7). Retrieval
-// weights relevance × trust via a BOUNDED factor (≈ 0.5 + trust → ~[0.5, 1.5]),
-// a capped nudge so a weakly-trusted but perfectly-relevant block still surfaces.
+// A block inherits its Source's trust (operator 1.0, corpus 0.7); retrieval
+// weights relevance × trust via a bounded factor (0.5 + trust, ~[0.5, 1.5]).
 const DEFAULT_BLOCK_SOURCE_TYPE = "operator";
 const blockTrust = (sourceType) => SOURCE_PRIOR[sourceType] ?? SOURCE_PRIOR.operator;
 const trustFactorOf = (trust) => 0.5 + (typeof trust === "number" ? trust : SOURCE_PRIOR.operator);
@@ -82,17 +59,8 @@ export async function loadBlockIndex(dir) {
   }
 }
 
-/**
- * Build the block-similarity adjacency shared by rankBlocks and degreeOf:
- * `tokensById` is a plain { id: tokens[] } map; an undirected edge joins two
- * blocks sharing at least `overlapMin` tokens. Returns { ids, neighbours }
- * (neighbours[i] is an array of adjacent indices into ids).
- *
- * Exported (as of Stage 0 of PLAN_COMPLETIONS.md) so src/completions/group.mjs can build
- * connected components over the same similarity graph rankBlocks/degreeOf already use,
- * rather than re-deriving the shared-token-overlap logic — this IS the clustering
- * primitive this graph was missing; grouping is layered on top of it, not duplicated.
- */
+/** The block-similarity adjacency shared by rankBlocks/degreeOf: an edge
+ *  joins two blocks sharing >= `overlapMin` tokens. Returns { ids, neighbours }. */
 export function buildNeighbours(tokensById, overlapMin) {
   const ids = Object.keys(tokensById || {});
   const N = ids.length;
@@ -114,13 +82,8 @@ export function buildNeighbours(tokensById, overlapMin) {
   return { ids, neighbours };
 }
 
-/**
- * Each block's degree (neighbour count) in the same block-similarity graph
- * rankBlocks runs PageRank over. Pure — returns { id: degree }. Used to
- * dampen retrieveBlocks' hub bias (a block linked to many others shouldn't
- * win purely by being well-connected — codegraph.mjs's spiralExpand applies
- * the same degree-quantile idea to module search).
- */
+/** Each block's degree (neighbour count) in the similarity graph — used to
+ *  dampen hub bias in retrieveBlocks. Pure — returns { id: degree }. */
 export function degreeOf(tokensById, { overlapMin = OVERLAP_MIN } = {}) {
   const { ids, neighbours } = buildNeighbours(tokensById, overlapMin);
   const out = {};
@@ -128,12 +91,8 @@ export function degreeOf(tokensById, { overlapMin = OVERLAP_MIN } = {}) {
   return out;
 }
 
-/**
- * Iterative PageRank over the block-similarity graph. `tokensById` is a plain
- * { id: tokens[] } map; an undirected edge joins two blocks sharing at least
- * `overlapMin` tokens. Standard damped iteration (d=0.85, 20 rounds), dangling
- * mass redistributed evenly, ranks summing to ~1. Pure — returns { id: rank }.
- */
+/** Iterative PageRank over the block-similarity graph (damped, dangling mass
+ *  redistributed evenly). Pure — returns { id: rank }. */
 export function rankBlocks(tokensById, {
   damping = PAGERANK_DAMPING, iterations = PAGERANK_ITERATIONS, overlapMin = OVERLAP_MIN,
 } = {}) {
@@ -190,7 +149,7 @@ export async function saveBlock(dir, { id, text, sourceType = DEFAULT_BLOCK_SOUR
   const prior = index.blocks[id];
   index.blocks[id] = {
     file, tokens: tokenizeBlock(text),
-    // first-write-wins createdAt (step (a)) + the block's inherited source trust (step (d)).
+    // first-write-wins createdAt + the block's inherited source trust.
     createdAt: prior?.createdAt || createdAt || new Date().toISOString(),
     sourceType, trust: blockTrust(sourceType),
   };
@@ -211,14 +170,9 @@ export async function removeBlock(dir, id) {
   return true;
 }
 
-/**
- * The top-k blocks a question "touches": IDF-weighted token match (rarity-
- * weighted, so common words can't dominate) combined with the static PageRank
- * (score × (1 + rank), divided by sqrt(1 + degree) to dampen hubs — a block
- * that shares vocabulary with disproportionately many others doesn't win on
- * inflated rank alone). Returns [{ id, score, rank, file, text }], best
- * first; [] when nothing matches (never a guessed block).
- */
+/** Top-k blocks matching `query`: IDF-weighted token overlap combined with
+ *  PageRank, hub-dampened. Returns [{ id, score, rank, file, text }], best
+ *  first; [] when nothing matches. */
 export async function retrieveBlocks(dir, query, k = 3) {
   const index = await loadBlockIndex(dir);
   const entries = Object.entries(index.blocks);
@@ -243,12 +197,7 @@ export async function retrieveBlocks(dir, query, k = 3) {
     if (idfSum <= 0) continue;
     const rank = b.rank ?? 0;
     const degree = b.degree ?? 0;
-    // relevance × connectivity × TRUST — a bounded trustFactor (~[0.5, 1.5]) so a
-    // corroborated/operator block outranks a lone low-trust one on a relevance tie,
-    // yet a weakly-trusted but perfectly-relevant block still surfaces. Divided by
-    // sqrt(1 + degree) — hub dampening (the codegraph.mjs spiralExpand idea, ported
-    // here): a block that shares vocabulary with disproportionately many others
-    // shouldn't win purely by being well-connected.
+    // relevance × connectivity × trust, hub-dampened by sqrt(1 + degree).
     const trust = typeof b.trust === "number" ? b.trust : blockTrust(b.sourceType);
     const trustFactor = trustFactorOf(trust);
     scored.push({

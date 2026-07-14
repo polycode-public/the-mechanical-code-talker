@@ -1,25 +1,11 @@
-// schema-docs.mjs — the single source of truth for tmct's own ontology documentation.
+// schema-docs.mjs — the single source of truth for tmct's own ontology documentation:
+// every entity class and predicate tmct's typed graph (src/graph-build.mjs's
+// buildEntities) actually emits, verified against real `prop:`/`class:` literals.
+// `ingestSchemaDocs()` merges it into a graph build so "what does cochange mean" or
+// "what is a Commit" is answerable by querying the graph like any other question.
 //
-// tmct's typed graph (src/graph-build.mjs's buildEntities, queried by codegraph.mjs)
-// has had its schema documented since day one, but only in scattered code comments
-// (graph-build.mjs's header, the `note` fields on some — not all — of the `vocabulary`
-// array entries it emits) — readable by a human editing the source, invisible to anything
-// that only sees graph.json. This file completes that documentation (every entity class,
-// every predicate actually emitted — verified against real `prop:`/`class:` literals in
-// graph-build.mjs, not just what the existing vocabulary array already claimed) and
-// `ingestSchemaDocs()` (called by a graph writer after buildEntities) merges it
-// into a graph build so a question like "what does cochange mean" or "what is a
-// Commit" is answerable by querying the SAME graph the same way any other question is —
-// not via separate hardcoded documentation logic.
-//
-// GLOBAL, NOT PER-REPO: this documentation does not vary by repository — "Module" means
-// the same thing indexing Django or a JS library — so it is static, committed data
-// (this file), never recomputed at index time. Ingesting it is a fixed-size merge, not a
-// computation (see the ~0ms measured delta in schema-docs.test.mjs).
-//
-// Mirrors the pattern in marginalia's app/lib/vocab.mjs (a `comment`/description per
-// schema term, single-sourced) minus the RDF/OWL external-alignment machinery, which
-// doesn't apply here — tmct's schema is code-relationship-specific, not general-domain.
+// GLOBAL, NOT PER-REPO: this documentation doesn't vary by repository, so it's static,
+// committed data, never recomputed at index time.
 
 // ---- entity classes (7 — verified against every `class: "X"` individual literal in
 // graph-build.mjs) -----------------------------------------------------------------------
@@ -58,9 +44,7 @@ export const CLASS_DOCS = Object.freeze([
 ]);
 
 // ---- predicates / attributes (every `prop:` token actually emitted by buildEntities,
-// verified by grep against graph-build.mjs — not just what the pre-existing `vocabulary`
-// array already documented; three real gaps found this way: seon:startsAt, mgx:value,
-// mgx:dotted, plus the prose second-pass's mgx:hasProseTokens) ------------------------
+// verified against graph-build.mjs) ----------------------------------------------------
 export const PREDICATE_DOCS = Object.freeze([
   // ---- object properties (edges between individuals) ----
   { prop: "mgx:importsNamespace", kind: "imports", description:

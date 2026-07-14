@@ -1,6 +1,6 @@
 // grammar/assert.mjs — the grammar→memory bridge: parseAce a sentence and land
 // every emitted triple in tmct's OWN memory graph via memory/core.mjs's
-// appendFact (ROADMAP Phase 2 item 2 meeting Phase 1 item 9).
+// appendFact.
 //
 // appendFact normalizes each triple's subject/object through normFactTerm
 // (tmct:Legacy-module → "legacy-module"; the predicate keeps its vocabulary

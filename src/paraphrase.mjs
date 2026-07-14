@@ -1,48 +1,23 @@
-// paraphrase.mjs — PLAN_BREADTH_FIRST_NLU.md (c) / ROADMAP.md "Ambition":
-// "Paraphrase alongside the original, verified, never instead of it." A
-// surface-realization variant of an isa-family (`rdfs:subClassOf`) teach
-// confirmation, shown NEXT TO the original literal confirmation, never
-// replacing it — and never shown at all unless its accuracy is checked by
-// running tmct's OWN deterministic inference machinery (`src/syllogise.mjs`)
-// against both the original and the paraphrase.
+// paraphrase.mjs — a surface-realization variant of an isa-family
+// (`rdfs:subClassOf`) teach confirmation, shown alongside the original, never
+// replacing it, and only when verified against tmct's own inference engine
+// (src/syllogise.mjs). Scoped to isa-family facts only — the one predicate
+// family deriveSubClassClosure reasons over.
 //
-// Scope, deliberately narrow: isa-family (`rdfs:subClassOf`) facts only — the
-// one predicate family `syllogise.mjs`'s `deriveSubClassClosure` actually
-// reasons over. tmct's other taught predicate families (someValuesFrom,
-// disjointWith, cardinality) have their own entailment rules in syllogise.mjs
-// too, but this pass covers the single most common teach shape ("X is a kind
-// of Y") the plan's own worked example (ROADMAP.md's Ambition section, the
-// `PLAN_BREADTH_FIRST_NLU.md` §8 canonical example) already anchors on;
-// widening to the other predicate families is a natural, separately-scoped
-// follow-on once this shape is proven live.
-//
-// The generator and the recognizer are a MATCHED PAIR by construction — every
-// template `paraphraseSubClass` can produce has a corresponding branch in
-// `recoverSubClassTriple` that parses it back to exactly the same
-// {subject, object} pair. This is a CLOSED set (never open-ended NLP), so
-// recognition is exact, not fuzzy. "Verified" means: re-derive the
-// `rdfs:subClassOf` transitive closure (the real conclusions this fact would
-// license, via `deriveSubClassClosure`) once seeded with the ORIGINAL triple
-// and once seeded with the triple RECOVERED FROM the paraphrase, over the
-// SAME existing taught edges — the two closures must be identical (both
-// derived edge SETS byte-for-byte equal). A generator bug that silently
-// swapped subject/object (a real risk for a passive-voice template) would be
-// caught here even in a graph with no other taught facts at all, because a
-// swapped pair changes the closure's own subject/object roles the moment any
-// OTHER edge touches either term — exactly the "must entail the same
-// conclusions, neither may contradict the other" check the Ambition asks for,
-// not a shallower string-equality stand-in for it.
+// Verification: re-derive the rdfs:subClassOf closure once from the original
+// triple and once from the triple recovered by parsing the paraphrase back —
+// over the same existing taught edges, the two closures must be identical.
+// This catches a generator bug that silently swapped subject/object, since a
+// swap changes the closure's roles as soon as any other edge touches either
+// term.
 
 import { deriveSubClassClosure } from "./syllogise.mjs";
 import { normFactTerm } from "./memory/core.mjs";
 import { fnv1aHex } from "./hash.mjs";
 
 // Every template reads "SUBJECT ⊑ OBJECT" left to right — no passive/reordered
-// form is offered, since a reordered form is exactly the shape most likely to
-// invert subject/object under a naive regex recognizer; keeping the pair's
-// left-to-right order fixed across every template keeps the recognizer trivial
-// AND correct by construction, rather than needing the closure check to catch
-// a bug the generator could have avoided entirely.
+// form, since that's the shape most likely to invert subject/object under a
+// naive regex recognizer.
 const articleFor = (word) => (/^[aeiou]/i.test(String(word || "")) ? "an" : "a");
 const SUBCLASS_TEMPLATES = [
   (s, o) => `${s} is a kind of ${o}`,
@@ -51,10 +26,8 @@ const SUBCLASS_TEMPLATES = [
   (s, o) => `${s} counts as ${articleFor(o)} ${o}`,
 ];
 
-// One regex per template above, in the SAME order — deliberately paired by
-// index rather than derived/inverted from the generator, so a change to one
-// side can never silently desync from the other without a test catching it
-// (see paraphrase.test.mjs's own round-trip check over every template).
+// One regex per template above, in the SAME order (paired by index, not
+// derived from the generator).
 const SUBCLASS_RECOGNIZERS = [
   /^(.+?)\s+is\s+a\s+kind\s+of\s+(.+)$/i,
   /^(.+?)\s+is\s+a\s+type\s+of\s+(.+)$/i,
@@ -92,17 +65,11 @@ export function recoverSubClassTriple(text) {
   return null;
 }
 
-/** The actual verification step: does re-deriving the rdfs:subClassOf closure
- *  from the paraphrase's own recovered triple produce the SAME entailed edge
- *  set as deriving it from the original triple, over the same pre-existing
- *  taught edges? `existingEdges` is `[[a,b], …]` — the SAME already-normalized
- *  pair-list shape `deriveSubClassClosure` itself takes (subClassEdges read
- *  straight off taught Fact rows elsewhere in this codebase). Returns
- *  `{verified, closure}` — `closure` is the original triple's own derived
- *  conclusions (handed back so a caller can show/log them), `verified` is
- *  false when the paraphrase's recovered triple doesn't reparse, doesn't match
- *  the original's normalized (subject, object), or derives a different
- *  closure — any one of those means the paraphrase must NOT be shown. */
+/** Verify: re-derive the rdfs:subClassOf closure from the original triple and
+ *  from the paraphrase's recovered triple, over the same existing taught
+ *  edges. Returns `{verified, closure}` — `verified` is false if the
+ *  paraphrase doesn't reparse, doesn't match the original (subject, object),
+ *  or derives a different closure. */
 export function verifySubClassParaphrase(subject, object, paraphraseText, existingEdges = []) {
   const origSubj = normFactTerm(subject);
   const origObj = normFactTerm(object);

@@ -85,6 +85,7 @@
     "chat": "node bin/tmct.mjs",
     "chat:repo": "node bin/tmct.mjs chat --repo",
     "init": "node bin/tmct.mjs init",
+    "init:sqlite": "node --disable-warning=ExperimentalWarning bin/tmct.mjs init --memory-backend sqlite",
     "init:persona:human": "node bin/tmct.mjs init --with-persona human",
     "init:persona:empty": "node bin/tmct.mjs init --with-persona empty",
     "init:large": "node bin/tmct.mjs init && node bin/tmct.mjs import --corpus seon && node bin/tmct.mjs import --corpus conceptnet && node bin/tmct.mjs import --corpus aws && node bin/tmct.mjs import --corpus python && node bin/tmct.mjs import --corpus java",

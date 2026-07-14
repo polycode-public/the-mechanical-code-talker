@@ -3,7 +3,7 @@
 // stub it); in production it reads the JSON artifact the deterministic indexer
 // wrote to config.graphFile. No network, no model calls.
 //
-// This module is the PROVIDER SEAM (ROADMAP item 14, docs/adapter-contract.md):
+// This module is the PROVIDER SEAM (docs/adapter-contract.md):
 // any graph producer can feed tmct either by writing the entities-payload JSON
 // where config.graphFile points, or by registering a custom loader with
 // registerProvider() — no indexer is ever imported here. tmct only READS
@@ -53,10 +53,9 @@ export function emptyEntities() {
   };
 }
 
-/** Read + parse ONE graph artifact file — the same per-file tolerance the
- *  single-graph path below has always had: a MISSING file (ENOENT) is not an
- *  error, it's the bootstrap payload; any other read/parse failure is a clean
- *  ToolError naming the file. Shared by the single- and multi-graph paths. */
+/** Read + parse ONE graph artifact file: a MISSING file (ENOENT) is not an error, it's
+ *  the bootstrap payload; any other read/parse failure is a clean ToolError naming the
+ *  file. Shared by the single- and multi-graph paths. */
 async function readOneGraphFile(file) {
   let text;
   try {
@@ -93,21 +92,12 @@ async function fetchMergedEntities(config) {
   return merged;
 }
 
-/** Fetch the entities payload through the provider seam. With a registered
- *  provider, its result is returned as-is (uncached — a live provider owns its
- *  own caching/refresh policy); a non-object result is a clean ToolError.
- *  Default: read + parse the local graph artifact, cached per file for the
- *  process. A MISSING artifact (ENOENT) is not an error: the chat surface
- *  starts from an empty graph and the first session fold-in creates the file —
- *  so we return the bootstrap payload (uncached, so the freshly written file is
- *  picked up next fetch). Every other failure still throws a clean ToolError.
- *
- *  MULTI-GRAPH: when `config.graphFiles` names more than one file, this
- *  delegates to fetchMergedEntities (src/graph-merge.mjs) instead — a
- *  SEPARATE code path from the block below. The single-graph case (one
- *  `config.graphFile`, or a one-element `config.graphFiles`) always falls
- *  through to the unchanged block below — byte-identical to before multi-graph
- *  support existed. */
+/** Fetch the entities payload through the provider seam. With a registered provider, its
+ *  result is returned as-is (uncached); a non-object result is a clean ToolError. Default:
+ *  read + parse the local graph artifact, cached per file. A missing artifact (ENOENT)
+ *  returns the bootstrap payload, uncached, so a freshly written file is picked up next
+ *  fetch. When `config.graphFiles` names more than one file, delegates to
+ *  fetchMergedEntities instead. */
 export async function fetchEntities(config) {
   if (provider) {
     let payload;

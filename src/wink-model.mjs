@@ -1,27 +1,13 @@
-// wink-model.mjs — the ONE place tmct loads the wink-nlp engine + model.
+// wink-model.mjs — the ONE place tmct loads the wink-nlp engine + model, shared by
+// ask-nlp.mjs and prose-nlp.mjs.
 //
-// Two adapters sit on top of this leaf loader: ask-nlp.mjs (lemma/POS tier for the
-// ask engine) and prose-nlp.mjs (lemma layer for the prose index). They used to
-// each carry their own `createRequire(import.meta.url)` block — the same ~six lines
-// twice, and both Node-only. That duplication is single-sourced here, and the
-// Node-only limitation is lifted with a browser seam, WITHOUT eagerly bundling the
-// ~1 MB model into anything.
+// A static `import "wink-nlp"` would drag the ~1 MB model into the base/viewer bundle.
+// Instead, `registerWinkModel` lets a browser/bundler entry hand in an already-imported
+// `{ winkNLP, model }` pair once; Node instead resolves lazily via `createRequire`.
 //
-// Why a registration seam instead of a static `import "wink-nlp"`:
-//   - The whole architecture keeps the model OUT of the base/viewer bundle; a static
-//     import would drag it in. `wink-eng-lite-web-model` is already the *browser*
-//     build, so the model can run in the page — what was missing is a load path a
-//     bundler can satisfy without a Node `require`. That path is `registerWinkModel`:
-//     a browser/bundler entry imports wink with its own `import` and hands the pair
-//     in ONCE, before any lemma/POS use. Node needs nothing — it falls back to
-//     `createRequire`. This is the Phase-8 browser-mode unblocker the dependency
-//     audit called for (a wiring fix; the model was always browser-capable).
-//
-// The loader stays SYNCHRONOUS (the adapters and their callers are sync): the
-// browser host registers up front; Node resolves lazily via createRequire. Failure
-// is cached as null — a checkout without the optional deps, or a page that never
-// registered a model, simply runs adapter-less (lemma/POS tiers honestly off), it
-// never throws.
+// The loader stays synchronous. Failure is cached as null — a checkout without the
+// optional deps, or a page that never registered a model, runs adapter-less rather
+// than throwing.
 
 import { createRequire } from "node:module";
 
@@ -50,8 +36,8 @@ export function loadWinkModel() {
   return cached;
 }
 
-/** Node fallback: resolve wink through the module system (never a guessed path),
- *  exactly as the two adapters did inline before. CJS deps, so `createRequire`. */
+/** Node fallback: resolve wink through the module system (never a guessed path).
+ *  CJS deps, so `createRequire`. */
 function nodeRequireWink() {
   const require = createRequire(import.meta.url);
   return {

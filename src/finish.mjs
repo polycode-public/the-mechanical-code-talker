@@ -1,25 +1,11 @@
-// finish.mjs — Phase 7 response finishing: the segmentation IR seam.
-// (archive/PLAN_RESPONSE_FINISHING.md, "The segmentation IR (lever 1)".)
+// finish.mjs — response finishing: the segmentation IR seam.
 //
-// The governing principle is fact-invariance BY CONSTRUCTION. An answer is a
-// list of typed spans, [{ type, text }, …], carried alongside the flat string
-// (never replacing it). Every type except `prose` is PROTECTED: entities,
-// paths, numbers, code, provenance and receipts are byte-copied through
-// finishing untouched, and only prose spans are ever handed to a (future)
-// grammar-rule engine. Segmentation makes "turn app/lib/a.mjs into an.mjs"
-// UNREPRESENTABLE — the protected spans are not in the rule engine's input.
-//
-// This module is the FOUNDATION step: pure structure, ZERO behaviour change.
-// It provides:
-//   - the segment type vocabulary + the protected/prose split,
-//   - maskSegments(answer, { graph }) — a conservative masker for the composed
-//     (non-template) path (the templated path segments in corpus/templates.mjs),
-//   - an INVARIANCE CHECKER (the protected-span multiset must survive any
-//     prose-only transform), the property future grammar rules are gated on,
-//   - a NO-OP finish(result, ctx) — the seam a later wave wires into chat.mjs.
-//
-// Byte-exact reconstruction is the whole contract here: flatten(segments) ===
-// answer for every producer, and finish() returns its input byte-for-byte.
+// Fact-invariance by construction: an answer is a list of typed spans,
+// [{ type, text }, …], carried alongside the flat string. Every type except
+// `prose` is PROTECTED — byte-copied through finishing untouched — so only
+// prose spans ever reach the grammar-rule engine; a rule can't touch a fact
+// because a fact is never in its input. Byte-exact reconstruction is the
+// whole contract: flatten(segments) === answer for every producer.
 
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -31,7 +17,7 @@ import { flatten } from "./corpus/templates.mjs";
 export { flatten };
 
 const GRAMMAR_DIR = dirname(fileURLToPath(import.meta.url));
-/** The data-driven grammar-rule table (Phase 7, lever 2). */
+/** The data-driven grammar-rule table. */
 export const GRAMMAR_RULES_FILE = join(GRAMMAR_DIR, "..", "data", "templates", "grammar-rules.toml");
 
 /** The segment type vocabulary. `prose` is the only unprotected type. */
@@ -49,15 +35,10 @@ export function isProtected(type) {
   return type !== "prose";
 }
 
-// --- Conservative masker for the composed path ------------------------------
-// The templated path gets segments almost for free (corpus/templates.mjs
-// renderSegments). The composed path (ask engine, plain/conversational turns)
-// hands finishing a hand-built flat string; maskSegments walks it and marks
-// PROTECTED anything matching one of the patterns below, leaving everything
-// else prose. Policy: CONSERVATIVE — when unsure, protect. An un-adopted render
-// site simply presents its whole answer as a single prose span (pass no graph
-// and match nothing → one prose segment), and the invariance checker still
-// guards it. flatten(maskSegments(answer, ctx)) === answer, always.
+// --- Conservative masker for the composed (non-template) path ---------------
+// Walks a hand-built flat answer string and marks PROTECTED anything matching
+// one of the patterns below; everything else is prose. Conservative: when
+// unsure, protect. flatten(maskSegments(answer, ctx)) === answer, always.
 
 // Parenthesized receipts: "(traversal: calls edges where object = fnAlpha)" and
 // the repair receipt 'read as "which modules import a.mjs"'.
@@ -195,16 +176,11 @@ export function assertInvariance(before, after) {
   return after;
 }
 
-// --- The grammar-rule engine (lever 2) --------------------------------------
-// applyGrammar transforms ONLY the prose spans of a segment list. It NEVER
-// regexes the flat answer string and NEVER touches a protected span — the
-// invariance checker is treated as NECESSARY-BUT-NOT-SUFFICIENT (a token the
-// masker failed to protect would sit in a prose span, and a corrupting rule that
-// mangled it would pass the multiset check because prose is unchecked). So the
-// only defence is that a rule literally cannot receive a protected span: every
-// handler below filters `type === "prose"` and byte-copies the rest. Each rule's
-// NEUTRAL behaviour is byte-stable; the only byte changes are GENUINE fixes to
-// defects tmct itself generates. Rules are chosen to commute → idempotent.
+// --- The grammar-rule engine -------------------------------------------------
+// applyGrammar transforms ONLY the prose spans; every handler below filters
+// `type === "prose"` and byte-copies the rest, since the invariance checker
+// alone can't catch a rule that corrupts a span the masker mis-protected
+// (prose is unchecked). Rules are chosen to commute → idempotent.
 
 const escapeRe2 = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -247,8 +223,8 @@ function pluralityOf(seg) {
 
 // Rule 1 — article selection (a/an). Reads the following word: in-span when the
 // whole "a word" pair is inside one prose span; across the boundary when the
-// prose ends in "a"/"an" and the next span supplies the word (guard #3: it only
-// fires when it can read the real next token, else it leaves the article alone).
+// prose ends in "a"/"an" and the next span supplies the word (only fires when
+// it can read the real next token, else it leaves the article alone).
 function ruleArticle(segments, rule) {
   const out = segments.map((s) => ({ ...s }));
   for (let i = 0; i < out.length; i += 1) {
@@ -312,20 +288,10 @@ function ruleAgreement(segments, rule) {
   return out;
 }
 
-// Rule 3 — sentence capitalisation. Capitalises (a) the very first character
-// when the answer OPENS on a prose span (the ORIGINAL single-answer scope,
-// unchanged), (b) every INTERNAL sentence boundary inside a single prose span
-// — a run of terminal punctuation + whitespace followed by a lowercase letter
-// — and (c) a sentence boundary that CROSSES a span boundary: a prose span
-// ends in terminal punctuation (+ optional trailing whitespace) and the next
-// real-content span is itself prose starting lowercase (any purely-whitespace
-// prose spans in between are skipped over). (b) and (c) are the
-// PLAN_COMPLETIONS.md Stage 6 generalisation — a genuinely multi-sentence
-// completion needs every internal boundary capitalised, not just the whole-
-// answer opener. A boundary that lands on a PROTECTED span (path/entity/…) is
-// left exactly as grounded — a protected span's casing is never
-// rule-transformed, the same guard (a) always applied to an answer that opens
-// on one.
+// Rule 3 — sentence capitalisation: (a) the answer-initial letter, (b) every
+// internal sentence boundary within one prose span, (c) a boundary that
+// crosses a span boundary (skipping purely-whitespace spans in between). A
+// boundary landing on a protected span is left alone — never rule-transformed.
 function ruleCapitalise(segments) {
   if (!segments.length) return segments;
   const out = segments.map((s) => ({ ...s }));
@@ -380,12 +346,10 @@ function ruleList(segments, rule) {
 
 // Rule 5 — terminal punctuation. Collapses ANY run of 2+ sentence stops within
 // a prose span to a single stop ("done.." → "done."; "Sentence one.. Sentence
-// two!!" → "Sentence one. Sentence two!") — generalised (PLAN_COMPLETIONS.md
-// Stage 6) from the original single-answer scope (only the LAST prose span,
-// only a run anchored at the very end of the answer) to every internal
-// sentence boundary a multi-sentence completion can carry. A legitimate
-// fragment/list answer that ends without a stop is unaffected — there is
-// nothing to collapse.
+// two!!" → "Sentence one. Sentence two!"), across every internal sentence
+// boundary a multi-sentence completion can carry, not just the answer's end.
+// A legitimate fragment/list answer that ends without a stop is unaffected —
+// there is nothing to collapse.
 function ruleTerminal(segments, rule) {
   const stops = (rule.stops && rule.stops.length ? rule.stops : [".", "!", "?"]).map(escapeRe2).join("");
   const re = new RegExp(`([${stops}])(?:\\s*[${stops}])+(\\s*)`, "g");
@@ -435,37 +399,17 @@ export function applyGrammar(segments, rules = grammarRules()) {
 }
 
 // --- The finish() seam ------------------------------------------------------
-// finish() is the LAST transform in a turn:
-//   1. take the result's `segments` (attached by a producer) or mask its
-//      `answer` via maskSegments(result.answer, ctx),
-//   2. map ONLY the prose spans through the grammar-rule engine (applyGrammar),
-//   3. re-flatten, ASSERTING the invariance checker holds (guard #4: this runs
-//      in production, not just in tests — a corruption throws, never ships),
-//   4. rewrite result.answer (and thus logLines); `via` is unchanged.
+// The last transform in a turn: mask (or reuse existing) segments, run
+// applyGrammar over the prose spans, re-flatten, and assert invariance before
+// rewriting result.answer/logLines. Byte-stable when neutral: finish() returns
+// its argument by REFERENCE when no rule fired. Idempotent by construction.
 //
-// NEUTRAL finishing is BYTE-STABLE: when no rule fires, the flattened answer is
-// byte-identical to the input and finish() returns its argument by REFERENCE, so
-// every byte-exact assertion (test/showcase.test.mjs) stays green untouched. A
-// genuine fix (e.g. "a artifact" → "an artifact") rebuilds the result with the
-// corrected answer. Idempotent by construction: finish(finish(x)) === finish(x).
-//
-// INTENDED chat.mjs SEAM (a sibling/later wave wires this, foreign file): in
-// runTurn, at the `withLast` seam, `result = finish(result, { graph })` so every
-// producer passes through once. Until then finish() is exercised by its unit +
-// golden tests; wiring it changes no fact, only fixes our own generated defects.
-//
-// ctx.rules (optional, additive): a caller-supplied rule table overriding the
-// cached grammarRules() for this call only — e.g. completions/complete.mjs's
-// Stage 6 pass force-enables the sentence-capitalisation rule (PARKED in the
-// live chat table per grammar-rules.toml's own cycle-006 note) because a
-// genuinely multi-sentence extractive completion needs every internal sentence
-// boundary capitalised to read as one voice, without touching the chat
-// pipeline's default live/parked flags. Every EXISTING call site omits
-// ctx.rules and is therefore byte-identical to before this option existed.
+// ctx.rules (optional): a caller-supplied rule table overriding the cached
+// grammarRules() for this call only. Every existing call site omits it.
 
 /** Finish a turn result: grammar-correct its prose spans, preserving every fact.
  *  Byte-stable when neutral (returns its argument unchanged); rebuilds only on a
- *  genuine fix. Throws if finishing would move any protected span (guard #4).
+ *  genuine fix. Throws if finishing would move any protected span.
  *  @param {{rules?: object[]}} [ctx.rules] optional rule-table override (see above) */
 export function finish(result, ctx = {}) {
   if (!result || typeof result.answer !== "string") return result;

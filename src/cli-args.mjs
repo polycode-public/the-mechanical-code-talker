@@ -1,28 +1,21 @@
-// cli-args.mjs — the ONE shared argv/config resolver for bin/tmct.mjs's
-// subcommands. Replaces four independently hand-rolled `configFor` copies
-// (bin/tmct.mjs's cli-mode and serve-mode ones, chat.mjs's own, and the richer
-// 4-tier version inlined in chat.mjs's createSession) with a single, tested
-// precedence chain — built on top of toml-config.mjs's already-tested
-// mergeEffective/normalizeConfig (arg > toml > default), not a rebuild of it.
+// cli-args.mjs — the ONE shared argv/config resolver for bin/tmct.mjs's subcommands: a
+// single, tested precedence chain built on toml-config.mjs's mergeEffective/
+// normalizeConfig (arg > toml > default).
 //
 // Four tiny flag helpers (pure, no I/O) plus the one async resolver:
 //   strFlag(rest, names, dflt)   → single value, last flag occurrence wins
 //   repeatedFlag(rest, names)    → every value for a repeatable flag (e.g. --graph)
 //   boolFlag(rest, names)        → true if any of `names` appears at all
 //   enumFlag(rest, names, choices) → strFlag, validated against a closed set
-//     (throws a clear error naming the flag + the choices — the shared shape
-//     for a closed-choice option like `--memory-backend default|memory|sqlite`,
-//     matching `--with-persona`'s own "unknown name" error style)
 //   resolveRuntimeConfig({argv, cwd, env, gitRoot}) → the resolved repo/config
 //
-// Graph-path precedence (documented once, here — every subcommand shares it):
+// Graph-path precedence (every subcommand shares it):
 //   1. --graph <path>   (repeatable; --graph wins outright, even over env)
 //   2. TMCT_GRAPH_FILE  (env)
 //   3. tmct.toml's `graph_file` / `graph_files`
 //   4. <repo>/.tmct/graph.json, where repo is --repo, else git root, else cwd
 //
-// Deliberately does NOT import chat.mjs (that would be circular once chat.mjs
-// itself is rewired to call resolveRuntimeConfig) — the git-root lookup below
+// Deliberately does NOT import chat.mjs (would be circular) — the git-root lookup below
 // is a small, self-contained copy of chat.mjs's own gitToplevel().
 
 import { spawnSync } from "node:child_process";
@@ -73,12 +66,9 @@ export function boolFlag(rest, names) {
   return rest.some((r) => list.includes(r));
 }
 
-/** Closed-choice single-value flag: `strFlag` plus validation against
- *  `choices`. Returns `undefined` when absent (never a default — the caller
- *  decides what "absent" means, same as an omitted `strFlag` call). Throws a
- *  clear, user-facing error naming the flag and the valid choices when a
- *  value IS given but isn't one of them — validate-before-any-disk-write,
- *  the same discipline `tmct init --with-persona <unknown>` already uses. */
+/** Closed-choice single-value flag: `strFlag` plus validation against `choices`.
+ *  Returns `undefined` when absent. Throws a clear, user-facing error naming the flag
+ *  and the valid choices when a value is given but isn't one of them. */
 export function enumFlag(rest, names, choices) {
   const val = strFlag(rest, names, undefined);
   if (val !== undefined && !choices.includes(val)) {
@@ -89,20 +79,16 @@ export function enumFlag(rest, names, choices) {
 }
 
 /**
- * Resolve one subcommand invocation's repo root, tmct.toml, and graph
- * path(s) — the shared precedence chain every subcommand (chat/memory/init/
- * import/syllogise/serve) now funnels through instead of re-deriving it.
+ * Resolve one subcommand invocation's repo root, tmct.toml, and graph path(s) — the
+ * shared precedence chain every subcommand funnels through.
  *
  * @param {object} opts
- * @param {string[]} [opts.argv]   the subcommand's own argv tail (already past
- *   `tmct <mode>` — the same slice each subcommand hand-parses today).
+ * @param {string[]} [opts.argv]   the subcommand's own argv tail (already past `tmct <mode>`)
  * @param {string}   [opts.cwd]
  * @param {object}   [opts.env]
- * @param {(cwd:string)=>string|null} [opts.gitRoot]  injectable for tests,
- *   mirrors createSession's own `gitRoot` param.
- * @param {object}   [opts.args]  extra already-parsed args to fold into
- *   mergeEffective's "arg" tier (e.g. a subcommand's own flags) — optional,
- *   defaults to {}.
+ * @param {(cwd:string)=>string|null} [opts.gitRoot]  injectable for tests
+ * @param {object}   [opts.args]  extra already-parsed args folded into mergeEffective's
+ *   "arg" tier; defaults to {}
  * @returns {Promise<{
  *   repo: string, configPath: string, toml: object,
  *   config: {graphFile: string, graphFiles: string[]},

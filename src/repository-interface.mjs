@@ -1,6 +1,6 @@
 // The Repository Interface — tmct's OWNED, versioned contract between "interpret
 // the query" (tmct, the brittle side) and "ask the graph for truth" (a provider,
-// the stable side). archive/PLAN_REPOSITORY_INTERFACE.md.
+// the stable side).
 //
 // tmct defines and versions this shape; a provider (seonix, a fixture, a browser
 // page) IMPLEMENTS it over its native graph. Both sides already agree on the
@@ -17,7 +17,7 @@
 
 /** SemVer of the interface. Additive-by-default: new services / optional args are
  *  minor bumps; the suite for version N stays green under N+1. A breaking change
- *  is a new MAJOR with its own suite (see the versioning policy in the plan). */
+ *  is a new MAJOR with its own suite. */
 export const INTERFACE_VERSION = "1.1.0";
 
 /** The OWL vocabulary the types are grounded in. */
@@ -275,15 +275,13 @@ export const REPOSITORY_INTERFACE = Object.freeze({
     context: {
       group: "source", args: { symbol: "string", depth: "min|auto|full?" },
       result: "{ text: string, tier: string } (a sized edit bundle) — Promise<Result>",
-      // INTERFACE_VERSION 1.1.0 (2026-07): NARROWED miss contract — context() used to
-      // unconditionally miss(NO_SOURCE) (its whole edit bundle was implemented as fs-only).
       // contextPlan/sizeBundle/renderGraphOnlyBundle are pure graph queries, so a graph-only
-      // provider (sourceAccess:false) now returns a REAL HIT for any resolvable symbol —
+      // provider (sourceAccess:false) returns a REAL HIT for any resolvable symbol —
       // siblings, registration, class members, __all__/re-exports, insertion region, covering
       // tests, co-change — everything except anchor/exemplar/inlined-callee BODY TEXT, which
-      // still needs a source-capable provider. NO_SOURCE is consequently no longer a miss
-      // reason context() can return (dropped from the list below) — the only remaining miss is
-      // an unresolvable symbol.
+      // still needs a source-capable provider. NO_SOURCE is therefore not a miss reason
+      // context() can return (not in the list below) — the only remaining miss is an
+      // unresolvable symbol.
       misses: ["UNRESOLVED_TERM"], concurrency: CONCURRENT_SAFE,
       purpose: "The composed edit bundle (exemplar, siblings, registration, insertion region). A graph-only provider returns the graph-only sections as a real hit; a source-capable provider (sourceAccess:true, repoRoot, readFile) additionally includes the anchor/exemplar/inlined-callee body text.",
       note: "ASYNC (returns Promise<Result>) — see snippet's note; source-capable rendering is fs I/O.",

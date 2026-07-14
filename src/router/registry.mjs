@@ -1,34 +1,14 @@
-// src/router/registry.mjs — Stage 0 of the capability router (PLAN_CAPABILITY_ROUTER.md).
+// src/router/registry.mjs — Stage 0 of the capability router.
 //
-// Each tmct tool is modelled as a STRIPS/PDDL operator declared as DATA:
-// a `Capability` with typed `Parameter`s, `Precondition`s, and `Effect`s
-// (an add-list / delete-list). This is the direct mapping the reference note
-// docs/references/planning/STRIPS_PDDL.md calls "the most direct in the whole
-// set": a capability IS a STRIPS operator expressed in tmct's OWL vocabulary.
+// Each tmct tool is modelled as a STRIPS/PDDL operator declared as DATA: a `Capability` with
+// typed `Parameter`s, `Precondition`s, and `Effect`s (add-list/delete-list). Preconditions are
+// the safety gate the guardrail (Stage 4) checks before a call fires; effects are epistemic
+// (a read-only query "knows" a topic, never mutates) — the resolver (Stage 1) backward-chains
+// from a goal `(knows <topic> ?x)` to the capability whose add-list achieves it.
 //
-//   - Preconditions are the SAFETY GATE — a capability will not fire unless its
-//     preconditions are provably satisfied (Stage 4, the guardrail, reads these).
-//     This is why the router REFUSES rather than emitting an unsafe call, the
-//     same discipline as tmct's honest miss.
-//   - Effects are the PROOF CHAIN — for a read-only query tool the effect is
-//     EPISTEMIC (it makes a fact KNOWN to the agent), never a world mutation, so
-//     every graph-query capability has an EMPTY delete-list (the STRIPS closed-
-//     world assumption: what is not deleted is unchanged, and a query changes
-//     nothing in the world). Stage 1 (the resolver) backward-chains from a goal
-//     `(knows <topic> ?x)` to the capability whose add-list achieves it.
-//
-// This module is PURE: plain frozen data + pure accessor functions, NO I/O. The
-// tool NAMES + parameter ARG KEYS are the exact ones src/server.mjs `dispatchTool`
-// reads (verified against its switch), so a bound call this registry validates is
-// directly dispatchable. Stage 1 (resolver) and Stage 4 (guardrail) consume this
-// substrate; nothing here imports the graph or the network.
-
-// ---- OWL-labelled vocabulary (tmct's style: urn:tmct:… prefixes) ------------
-// The registry declares its OWN vocabulary the way every tmct graph artifact
-// does (see the fixture's `prefixes` block + the schema-doc individuals). A
-// capability is a `cap:Capability` individual; its parts are `cap:Parameter`,
-// `cap:Precondition`, `cap:Effect`. Parameter TYPES range over the same seon/mgx
-// entity classes the code graph already speaks (Module, Class, Function, …).
+// Pure: plain frozen data + pure accessors, no I/O. Tool names + parameter arg keys are the
+// exact ones src/server.mjs `dispatchTool` reads, so a bound call this registry validates is
+// directly dispatchable.
 
 export const PREFIXES = Object.freeze({
   cap: "urn:tmct:cap#", // the capability/operator vocabulary (this module)
@@ -208,18 +188,11 @@ const BY_NAME = Object.freeze(
 );
 
 // ---- closed-world / DEFAULT-DENY --------------------------------------------
-// The registry is a deliberate, DOCUMENTED STRICT SUBSET of the src/server.mjs
-// `dispatchTool` switch. The model is CLOSED-WORLD default-deny: a tool name
-// that is NOT a registered capability is treated as UNKNOWN — the guardrail /
-// AGENTBENCH grader rejects it as a hallucination (`hallucinationsIn` →
-// "unknown-tool"), so a planner/shim that emits an UNREGISTERED tool is an
-// AUTOMATIC FAIL, exactly as if it invented a tool that does not exist. This is
-// the safety posture: only what is declared (with real preconditions) may fire.
+// The registry is a strict subset of src/server.mjs's `dispatchTool` switch: a tool name
+// not registered here is treated as unknown/hallucinated, never dispatchable.
 //
-// The following dispatch tools are INTENTIONALLY UNREGISTERED — they emit
-// UNBOUNDED raw output (a source snippet / a whole edit-context bundle), which
-// is the most hallucination-prone surface and NOT a clean STRIPS query with a
-// bounded epistemic effect. :
+// The following dispatch tools are INTENTIONALLY UNREGISTERED — they emit unbounded raw
+// output, the most hallucination-prone surface, not a clean bounded-epistemic-effect query.
 export const EXCLUDED_FROM_REGISTRY = Object.freeze({
   tmct_context: "unbounded edit-context bundle (multi-file); needs a size/budget precondition",
   tmct_context_more: "unbounded context continuation; same as tmct_context",

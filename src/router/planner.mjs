@@ -1,36 +1,13 @@
-// src/router/planner.mjs — Stage 3 of the capability router
-// (PLAN_CAPABILITY_ROUTER.md): THE PLANNER. Compose a bounded, ordered plan of
-// tool calls for a multi-step request, over the SAME operators Stage 1 resolves
-// single-shot. Pure-JS POP/HTN + a Steel & Ho monitor-and-replan loop under a
-// HARD budget — sound/complete INSIDE the declared operator model, honest-refuse
-// (escalate) for novelty outside it. Deterministic, no-LLM, glass-box.
-//
-// THE MODEL, mapped to the literature:
-//   - HTN decomposition (NONLIN/SHOP2): a compound request is decomposed into an
-//     ORDERED list of sub-goals by declared METHODS — the sequencing connectives
-//     ("... then ...", "... and then ...") and the two closed recipes we author:
-//     the CONDITIONAL method ("if <check>, <action> [instead]") and the
-//     RELATIVE-FILTER method ("of the <set> <rel> X, which are <Y>"). Each leaf
-//     sub-goal is resolved by Stage 1 (resolveOne) — the primitive operator.
-//   - POP causal links (partial-order planning): each step's proof records the
-//     PRODUCER -> CONDITION -> CONSUMER link. An independent step's producer is
-//     the grounded graph (graph-loaded); a THREADED step (one whose entity came
-//     from a prior step via anaphora — "its subclasses", "describe it") records
-//     the prior STEP as its producer. That link IS the proof chain (grade.mjs's
-//     connectedness check reads it), never a flat ok-list. Least commitment: we
-//     only order what the connectives actually order.
-//   - Steel & Ho monitor-and-replan: after each call we read the tool_result;
-//     a failed sub-goal (an unresolvable entity / an operator that errors) forces
-//     an honest STOP (refuse/escalate) rather than pressing on with a broken
-//     chain. Bounded depth + a hard step counter GUARANTEE termination — no
-//     unbounded search can ever wedge the caller (the harness also caps us).
-//
+// src/router/planner.mjs — Stage 3 of the capability router: THE PLANNER. Compose a bounded,
+// ordered plan of tool calls for a multi-step request, over the SAME operators Stage 1
+// resolves single-shot. HTN decomposition into leaf sub-goals (each resolved by Stage 1),
+// with a POP causal-link proof chain (a threaded step's producer is the prior step; an
+// independent step's is the grounded graph). Monitored: a failed sub-goal stops the plan
+// honestly rather than pressing on. Bounded by MAX_STEPS. Deterministic, no-LLM, glass-box.
 
 import { resolveOne, extractEntity } from "./resolver.mjs";
 
-// Hard budget — the planner may emit at most this many steps; a request that
-// decomposes to more is REFUSED (escalate) rather than searched. Guarantees
-// termination independent of the harness backstop.
+// Hard budget — a request decomposing to more steps is refused rather than searched.
 export const MAX_STEPS = 8;
 
 const PRONOUN_RE = /\b(?:it|its|them|those|these|that|their)\b/i;
@@ -70,14 +47,10 @@ export function decompose(request) {
     };
   }
 
-  // METHOD 3 — the MEMBER-FILTER recipe: "which/what methods|members of X …
-  // (end up|eventually)? calling/reaching Y". A C1 surface-syntax recipe like the
-  // conditional and relative-filter methods above (the C1 discipline: a closed,
-  // authored shape — NOT the C2 goal-reasoner's deduction). Decomposes to
-  // [enumerate members(X), filter by bounded transitive call-reach of Y]. The
-  // second segment is the filter TARGET, role "member-filter": the DRIVER owns
-  // the per-member callees hop + the reachability fold (driver-resolver.mjs) —
-  // segment 2 is not a resolvable leaf sub-goal on its own.
+  // METHOD 3 — the MEMBER-FILTER recipe: "which/what methods|members of X … calling/
+  // reaching Y". Decomposes to [enumerate members(X), filter by transitive call-reach of Y];
+  // segment 2 (role "member-filter") is not a resolvable leaf on its own — the driver owns
+  // the per-member callees hop + reachability fold.
   const mem = raw.match(
     /^(?:which|what)\s+(?:methods?|members?)\s+of\s+(.+?)\s+(?:(?:end\s+up|eventually)\s+)?(?:calls?|calling|reach(?:es|ing)?|invokes?|invoking)\s+(.+?)\s*\??$/i,
   );
@@ -129,9 +102,8 @@ const refuse = (why, driver) => ({ calls: [], refused: true, terminated: true, p
 
 /** Plan + execute a multi-step request. Returns a loopResult
  *    { calls, refused, terminated, proof, why, driver, observed }
- *  with a POP causal-link proof chain. Steel & Ho: each step is monitored; a
- *  failed sub-goal STOPS the plan honestly (refuse/escalate). Bounded by
- *  MAX_STEPS + a hard step counter. `driver` labels the row.
+ *  with a POP causal-link proof chain. Each step is monitored; a failed sub-goal stops the
+ *  plan honestly. Bounded by MAX_STEPS.
  *
  *  ctx: { dispatch(name,input)->{ok,text,resolved?}, resolve(term)->resolveObject } */
 export async function plan(request, declaredNames, ctx, { driver = "resolver-0.8.0" } = {}) {
@@ -155,15 +127,12 @@ export async function plan(request, declaredNames, ctx, { driver = "resolver-0.8
 
     const r = await resolveOne(text, declaredNames, ctx, { execute: true });
     if (r.refused) {
-      // Steel & Ho: an unresolvable sub-goal breaks the causal chain — STOP
-      // honestly (escalate), never emit a partial/guessed plan.
       return refuse(`sub-goal ${i + 1} ("${text}") did not resolve: ${r.reason}`, driver);
     }
 
     calls.push(r.selected);
-    // POP causal link: the producer is the prior step when this step THREADED an
-    // anaphor from it; otherwise the grounded graph. Its condition is the arg the
-    // step needed. This is the "why step i" edge, not a flat ok.
+    // Causal link: producer is the prior step when this step threaded an anaphor from it,
+    // otherwise the grounded graph.
     const producer = seg.thread && i > 0 ? `step-${i}` : "graph";
     const boundLabel = r.resolved?.label ?? Object.values(r.selected.input || {})[0] ?? null;
     proof.push({ step: "causal-link", producer, condition: boundLabel, consumer: `step-${i + 1}:${r.selected.name}`, role: seg.role, ok: true });

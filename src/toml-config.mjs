@@ -88,14 +88,14 @@ export async function normalizeConfig(raw, { configDir } = {}) {
     cfg.outRoot = resolve(dir, String(src.out_root));
   }
 
-  // `tmct init` onboarding keys (ROADMAP Phase 8). Sparse like the rest: only a
+  // `tmct init` onboarding keys. Sparse like the rest: only a
   // key actually present appears, so "unset" stays distinguishable from "set to
   // the default". `graph_file` is resolved against configDir to match outRoot.
   if (src.graph_file !== undefined) {
     cfg.graphFile = resolve(dir, String(src.graph_file));
   }
-  // `graph_files` (array, multi-graph — the CLI/config unification batch):
-  // sits ALONGSIDE `graph_file`, never replaces it. A single-element array is
+  // `graph_files` (array, multi-graph): sits ALONGSIDE `graph_file`, never
+  // replaces it. A single-element array is
   // legal but `graph_file` stays the byte-identical single-graph path most
   // repos use; `graph_files` only matters once it names more than one file.
   if (src.graph_files !== undefined) {
@@ -161,7 +161,7 @@ export async function normalizeConfig(raw, { configDir } = {}) {
   // DEFAULT_RETENTION) is applied where the value is actually CONSUMED
   // (snapshotMemory), not injected here.
   //
-  // [memory] backend — the storage-backend seam (PLAN_SEED.md §6, createSession's
+  // [memory] backend — the storage-backend seam (createSession's
   // `memoryBackend` option / TMCT_MEMORY_BACKEND env): "default" (the flat
   // OWL-labelled JSON file under .tmct/memory/), "memory" (in-process only,
   // nothing on disk), or "sqlite" (a local SQLite file). Written by `tmct init

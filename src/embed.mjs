@@ -1,27 +1,15 @@
-// embed.mjs — deterministic static-embedding lookup (model2vec potion-base-8M).
-// PLAN_SEON_TUNING.md §7.6(5b), 2026-07-02 library-leverage review.
+// embed.mjs — deterministic static-embedding lookup (model2vec potion-base-8M,
+// 29,528 WordPiece subwords × 256 fp32 dims). Pure table lookup + float
+// arithmetic, no ONNX runtime, no network after the one-time fetch — the same
+// text always embeds to the same vector.
 //
-// The honest "near-LLM" locate lever: a STATIC per-token embedding table (model2vec's
-// potion-base-8M, MIT — 29,528 WordPiece subwords × 256 fp32 dims, ~30 MB) read straight
-// from its safetensors export, mean-pooled and L2-normalised. No ONNX runtime, no model
-// calls, no network after the one-time fetch — pure table lookup + float arithmetic, so
-// the same text always embeds to the same vector ($0, deterministic, offline).
+// The safetensors reader and WordPiece tokenizer below are hand-rolled: both
+// formats are simple enough to parse directly, avoiding an ONNX/HF tokenizer
+// dependency for it.
 //
-// Dependency choice (documented per the review): the safetensors format is an 8-byte LE
-// header length + JSON header + raw little-endian tensor bytes, and the tokenizer is a
-// plain Bert-style WordPiece (tokenizer.json: BertNormalizer lowercase + BertPreTokenizer
-// + greedy longest-match with "##" continuations) — both are small enough to hand-roll
-// with node built-ins, so neither the @yarflam/potion-base-8m fallback package nor an HF
-// tokenizer dependency is taken. Numerical intent follows model2vec's own encode (subword
-// ids WITHOUT the [CLS]/[SEP] template, mean pool, normalize per config.json) — exact
-// float parity with the Python lib is not claimed; determinism and rank usefulness are.
-//
-// The weights are NEVER committed and NEVER in the npm package: they live in the
-// gitignored vendor/ tree (fetched by scripts/fetch-embeddings.mjs, `npm run
-// refs:embeddings`, SHA-256-pinned like the repo's other binary artefacts). Everything
-// here degrades gracefully — loadEmbedder() returns null when the weights dir is absent,
-// and callers (codegraph.mjs's opt-in embedRank, scripts/rank-gate.mjs) no-op with a
-// clear note instead of failing, so CI/tests never require the 30 MB download.
+// Weights are gitignored (vendor/, fetched by scripts/fetch-embeddings.mjs)
+// and never in the npm package; loadEmbedder() returns null when absent so
+// CI/tests never require the download.
 
 import { readFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";

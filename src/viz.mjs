@@ -1,15 +1,12 @@
 // viz.mjs — `tmct viz`: a real, navigable, self-contained HTML graph view over
-// the memory graph (PLAN_BREADTH_FIRST_NLU.md §5, design per PLAN_VIZ.md), now
-// with a real "Ask the graph" chat panel running tmct's OWN engine client-side
-// (§5 follow-on, operator directive 2026-07-11 — precedent: seonix's own
-// site/viz.mjs + scripts/build-ask-bundle.mjs, adapted here to bundle tmct's
-// ask.mjs directly rather than an external package import).
+// the memory graph, with a real "Ask the graph" chat panel running tmct's OWN
+// engine client-side (adapted to bundle tmct's ask.mjs directly rather than
+// an external package import).
 //
 // Three pure/impure-separated pieces, mirroring src/syllogise.mjs's shape:
 //   - computeVizGraph(repoDir, {focus}) — I/O (loadMemory) + graph traversal,
 //     reusing spiralExpand/mostRecentIndividual/MEMORY_SPIRAL_EXPAND_KINDS/
-//     buildVizNodesAndEdges exactly as PLAN_VIZ.md's own traversal work
-//     already generalized them for this. No new traversal logic here.
+//     buildVizNodesAndEdges. No new traversal logic here.
 //   - renderVizHtml({nodes, edges, focus, payload, askBundle}) — a pure
 //     string-builder: one complete <!doctype html> document, graph data
 //     JSON-embedded inline, the real ask-engine bundle inlined verbatim, no
@@ -27,66 +24,35 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
-// PLAN_VIZ_MEMORY.md's page-size strategy: seonix's own three-cap default (200)
-// is the starting point, raised from the code-graph-only SPIRAL_NODE_LIMIT_DEFAULT
-// (12 — a MID-tier digest breadth, not a graph-viewer breadth) now that Bug 2's
-// fix makes real concept-relation edges walkable, and re-tuned against a real
-// `init:large`-seeded repo this session (see HANDOVER.md for the measured numbers).
+// The page-size strategy: a three-cap default (200 base, tuned up to 300 here),
+// raised from the code-graph-only SPIRAL_NODE_LIMIT_DEFAULT (12 — a MID-tier
+// digest breadth, not a graph-viewer breadth) now that real concept-relation
+// edges are walkable.
 export const VIZ_NODE_LIMIT_DEFAULT = 300;
-export const VIZ_HUB_DEGREE_DEFAULT = 40; // seonix's own default, ported verbatim (PLAN_VIZ_MEMORY.md)
-export const VIZ_DEPTH_DEFAULT = 3; // mirrors spiralExpand's own SPIRAL_DEPTH_DEFAULT — named here so client-side re-walks embed/reuse the SAME resolved value, never spiralExpand's smaller code-graph defaults
+export const VIZ_HUB_DEGREE_DEFAULT = 40;
+export const VIZ_DEPTH_DEFAULT = 3; // mirrors spiralExpand's own SPIRAL_DEPTH_DEFAULT
 
-// edgeKindsFor now lives in codegraph.mjs (re-exported here for existing
-// importers) — it moved so the browser bundle's client-side re-walk (which
-// can't import viz.mjs itself, a real-fs-I/O module) can share the SAME
-// kind-combination logic instead of a second hand-rolled copy. See
-// codegraph.mjs's own doc comment on edgeKindsFor for the full reasoning.
+// edgeKindsFor lives in codegraph.mjs; re-exported here so the browser bundle's
+// client-side re-walk (which can't import this fs-touching module) can share it.
 export { edgeKindsFor };
 
-/** Load the memory graph under `repoDir`, walk it from a seed, and enrich each
- *  walked node with the real label/class/timestamp data a renderer needs.
- *  Seed precedence: an explicit `--focus <id>`, then `--term <word>` (Bug 2's
- *  companion seed strategy — resolves via `normFactTerm` to the synthetic
- *  `term:<word>` node deriveFactTermGraph materializes, so `tmct viz --term
- *  dog` reaches "dog"'s WHOLE concept neighbourhood — every Fact mentioning
- *  it, and everything THOSE facts connect to — without hunting for a raw
- *  `fact:<hash>` id first; a term that matches no Fact falls through to the
- *  default below rather than seeding a lone phantom node), then
- *  `mostRecentIndividual` by default.
- *
- *  Bug 2 fix: the walk runs over BOTH the existing meta/provenance kinds
- *  (`MEMORY_SPIRAL_EXPAND_KINDS`) AND the real concept-relation kinds
- *  (`deriveFactTermGraph`'s per-predicate + link kinds) together by default
- *  (`edgeKindMode: "both"`) — a click on "dog" now reaches "animal"/"tail"/
- *  "bark" the same way asking about it in chat would surface those same
- *  facts, not just its provenance chain. `edgeKindMode: "meta"` reproduces
- *  today's exact byte-identical provenance-only walk (never deleted, just no
- *  longer the only option); `"relation"` isolates the concept view alone.
- *
- *  `hubDegree` (seonix's third cap, PLAN_VIZ_MEMORY.md): stop expanding
- *  THROUGH a node with more than this many connections (still shows the hub
- *  itself) — without it a common hypernym could swallow the whole node
- *  budget in one hop. `VIZ_HUB_DEGREE_DEFAULT` applies when omitted.
- *
- *  Returns `{nodes, edges, focus, payload, legend}` — `focus` is the seed id
- *  actually used (null when the graph is empty and no seed could be picked);
- *  `payload` is the FULL raw graph (every individual, not just the walked
- *  subset) — the embedded "Ask the graph" panel queries the whole graph and
- *  can re-walk from a new focus, never just the initially rendered subgraph,
- *  mirroring seonix's own "never the depth-limited display sub-graph"
- *  precedent; `legend` is `pickLegendDimension`'s precomputed output over the
- *  walked node set. Never throws on a missing/empty memory dir: loadMemory's
- *  own ENOENT fallback (emptyMemory()) already degrades to zero individuals,
- *  which this function turns into `{nodes: [], edges: [], focus: null,
- *  payload, legend: null}`. */
+/** Load the memory graph under `repoDir`, walk it from a seed, and enrich each walked node
+ *  with the real label/class/timestamp data a renderer needs.
+ *  Seed precedence: `--focus <id>`, then `--term <word>` (via deriveFactTermGraph's
+ *  synthetic `term:<word>` node, reaching the term's whole concept neighbourhood), then
+ *  `mostRecentIndividual`.
+ *  `edgeKindMode`: "both" (default) walks meta/provenance kinds AND real concept-relation
+ *  kinds together; "meta" is provenance-only; "relation" isolates the concept view.
+ *  `hubDegree`: stop expanding THROUGH a node with more connections than this (still shows
+ *  the hub itself), so a common hypernym can't swallow the whole node budget in one hop.
+ *  Returns `{nodes, edges, focus, payload, legend}` — `payload` is the FULL raw graph (the
+ *  "Ask the graph" panel can re-walk from a new focus over it). Never throws on a
+ *  missing/empty memory dir. */
 export async function computeVizGraph(repoDir, { focus, term, depth, nodeLimit, hubDegree, edgeKindMode = "both" } = {}) {
   const payload = await loadMemory(repoDir);
   const graph = parseEntities(payload);
-  // walkOpts: the RESOLVED options actually used (defaults filled in) — always
-  // present, even on an empty/seedless graph, so renderVizHtml can embed them
-  // for the client-side re-walk (recentre/edge-kind toggle) to stay consistent
-  // with whatever this page was generated with, rather than silently falling
-  // back to spiralExpand's own much-smaller code-graph defaults (nodeLimit 12).
+  // Always resolved (defaults filled in), so renderVizHtml can embed it for a
+  // client-side re-walk to stay consistent with how this page was generated.
   const walkOpts = {
     depth: depth != null ? depth : VIZ_DEPTH_DEFAULT,
     nodeLimit: nodeLimit != null ? nodeLimit : VIZ_NODE_LIMIT_DEFAULT,
@@ -122,12 +88,9 @@ export async function computeVizGraph(repoDir, { focus, term, depth, nodeLimit, 
   return { nodes, edges, focus: seedId, payload, legend, walkOpts };
 }
 
-/** Read the checked-in browser ask-engine bundle (scripts/build-ask-bundle.mjs's
- *  output, `src/ask-browser.bundle.js`) — the one I/O `renderVizHtml` itself
- *  stays free of, keeping it a pure string-builder. Returns `""` (never
- *  throws) if the bundle hasn't been built yet — `renderVizHtml` renders a
- *  graph-only page with an honest "chat unavailable" note in that case,
- *  rather than a broken page. */
+/** Read the checked-in browser ask-engine bundle (`src/ask-browser.bundle.js`). Returns
+ *  `""`, never throws, if the bundle hasn't been built — renderVizHtml then renders a
+ *  graph-only page with an honest "chat unavailable" note. */
 export async function readAskBundle() {
   try {
     const here = dirname(fileURLToPath(import.meta.url));
@@ -137,13 +100,9 @@ export async function readAskBundle() {
   }
 }
 
-/** Read the checked-in browser MEMORY-ask-engine bundle
- *  (scripts/build-ask-bundle.mjs's second output,
- *  `src/memory-ask-browser.bundle.js`) — Bug 1 fix's real memory-graph answer
- *  engine (chat.mjs's factAnswer), alongside the pre-existing code-graph
- *  ask.mjs bundle readAskBundle() already reads. Same never-throws contract:
- *  `""` when the bundle hasn't been built yet, so renderVizHtml degrades to
- *  whichever engine (if any) IS present rather than a broken page. */
+/** Read the checked-in browser memory-ask-engine bundle (`src/memory-ask-browser.bundle.js`)
+ *  — the real memory-graph answer engine (chat.mjs's factAnswer). Same never-throws
+ *  contract as readAskBundle(). */
 export async function readMemoryAskBundle() {
   try {
     const here = dirname(fileURLToPath(import.meta.url));
@@ -169,22 +128,12 @@ function embedJson(value) {
 }
 
 /** Render one complete, self-contained `<!doctype html>` document for
- *  `{nodes, edges, focus, payload, askBundle}` (computeVizGraph's return
- *  shape, plus the ask-engine bundle text from readAskBundle()): the graph
- *  data JSON-embedded inline, the real ask.mjs engine inlined verbatim
- *  (`askBundle`, adapter-less — no wink model, ~220KB, still answers via the
- *  curated + bounded-fuzzy tiers, exactly test/ask-nlp.test.mjs's own proven
- *  "viewer bundle without wink" boundary), inline <style>, inline vanilla-JS
- *  implementing a concentric ring layout keyed on hop (PLAN_VIZ.md §4 —
- *  seed/newest at the centre, each ring one hop further out), paint-order-by-
- *  hop with a lightness/opacity falloff for the depth read, pan (drag) + zoom
- *  (wheel), click-a-node for details, a depth stepper + per-class visibility
- *  filters (operator directive, seonix precedent), and a real "Ask the graph"
- *  chat panel — a query resolves via the SAME ask() the CLI ships, re-walks
- *  the graph from the resolved entity (focus-follows-answer), and a node's
- *  class/label in the detail panel are click-to-query affordances. Pure
- *  string building — no fs/network, no external <script src>, no CDN, no
- *  fonts. */
+ *  `{nodes, edges, focus, payload, askBundle}` (computeVizGraph's return shape, plus the
+ *  ask-engine bundle text from readAskBundle()): graph data JSON-embedded inline, the real
+ *  ask.mjs engine inlined verbatim, inline <style>, inline vanilla-JS implementing a
+ *  concentric ring layout keyed on hop, pan/zoom, click-a-node details, visibility filters,
+ *  and a real "Ask the graph" chat panel (focus-follows-answer). Pure string building — no
+ *  fs/network, no external <script src>, no CDN, no fonts. */
 export function renderVizHtml({ nodes, edges, focus, payload, askBundle, memoryAskBundle, legend, walkOpts }) {
   const graphJson = embedJson({ nodes, edges, focus });
   const payloadJson = embedJson(payload || { individuals: [], objectProperties: [] });
@@ -316,7 +265,7 @@ ${hasMemChat ? `<script>\n${memoryAskBundle}\n</script>` : ""}
   var hasEngine = typeof tmctViz !== "undefined";
   var hasMemEngine = typeof tmctMemoryAsk !== "undefined";
   var FULL_GRAPH = hasEngine ? tmctViz.parseEntities(PAYLOAD) : null;
-  // The term-relation view (Bug 2 fix) over the FULL graph, computed once —
+  // The term-relation view over the FULL graph, computed once —
   // recentre()/edge-kind-toggle re-walks reuse it rather than re-deriving it
   // per click. hasEngine-gated: the walk/legend exports only exist in the
   // ask-browser bundle, not the memory-ask one.
@@ -369,8 +318,7 @@ ${hasMemChat ? `<script>\n${memoryAskBundle}\n</script>` : ""}
   }
   renderTypeFilters();
 
-  // ---- legend-as-filter (PLAN_VIZ_MEMORY.md "Auto-picking the filter/legend
-  // dimension"): LEGEND.primary names the server's auto-picked dimension
+  // ---- legend-as-filter: LEGEND.primary names the server's auto-picked dimension
   // (class/predicate/provenance, scored by normalized Shannon entropy over
   // the INITIAL walk); the dropdown lets a user switch dimension without
   // regenerating the page. Bucket COUNTS are always recomputed live over the
@@ -466,8 +414,8 @@ ${hasMemChat ? `<script>\n${memoryAskBundle}\n</script>` : ""}
 
   // degree over the CURRENTLY displayed edge set (hub-hide/beam-prune are
   // display-time filters, distinct from the generation-time hubDegree cap
-  // which only stops the WALK expanding through a hub — both useful, see
-  // PLAN_VIZ_MEMORY.md's Controls section). Memoized: draw() runs on every
+  // which only stops the WALK expanding through a hub — both useful).
+  // Memoized: draw() runs on every
   // pan/zoom/hover mousemove, and both draw() and visibleNodeIds() (which
   // draw() itself calls) each need it — recomputing an O(edges) map twice per
   // frame during a drag is real, avoidable per-frame cost. Invalidated by
@@ -602,12 +550,11 @@ ${hasMemChat ? `<script>\n${memoryAskBundle}\n</script>` : ""}
     return { x: (sx * dpr - cx) / (view.scale * dpr), y: (sy * dpr - cy) / (view.scale * dpr) };
   }
 
-  // Label-density modes (PLAN_VIZ_MEMORY.md Controls): "smart" (seonix's own
-  // default) draws a label only for the focus/selection/direct-neighbours/
-  // top-20-by-degree; everything else labels on hover only. "all"/"name-source"
-  // always draw (name-source appends the Fact's own provenance prefix — trust
-  // tier is a first-class concept here unlike seonix's code graph, so this
-  // variant has no seonix equivalent). "none" draws no labels at all.
+  // Label-density modes: "smart" (the default) draws a label only for the
+  // focus/selection/direct-neighbours/top-20-by-degree; everything else
+  // labels on hover only. "all"/"name-source" always draw (name-source
+  // appends the Fact's own provenance prefix — trust tier is a first-class
+  // concept here). "none" draws no labels at all.
   var hoverId = null;
   canvas.addEventListener("mousemove", function (ev) {
     if (labelMode !== "smart" || dragging) return;
@@ -747,7 +694,7 @@ ${hasMemChat ? `<script>\n${memoryAskBundle}\n</script>` : ""}
   }
   document.getElementById("resetview").addEventListener("click", function () { fitToVisible(); draw(); });
 
-  // ---- recentre: RE-WALK the FULL graph (via TERM_GRAPH — Bug 2's augmented
+  // ---- recentre: RE-WALK the FULL graph (via TERM_GRAPH — the augmented
   // view, so a recentre reaches real concept-relation edges the same way
   // generation-time computeVizGraph does) from a new seed via the real,
   // bundled spiralExpand (byte-identical to the CLI's own walk — never a
@@ -832,14 +779,13 @@ ${hasMemChat ? `<script>\n${memoryAskBundle}\n</script>` : ""}
     document.getElementById("panelClose").addEventListener("click", function () {
       panel.classList.remove("show"); selectedId = null; draw();
     });
-    // Class badge: a click-to-query affordance (operator directive) — isolate
-    // this class in the type-filter row (a REAL "show all of that kind
-    // currently in view" action; ask.mjs has no generic "list all X of class
-    // Y" shape for memory-graph classes — that richer machinery lives in
-    // chat.mjs's factAnswer cascade, out of this bundle's ask.mjs-only scope,
-    // see PLAN_BREADTH_FIRST_NLU.md §5's own build notes) AND fire a real
-    // "where is X mentioned" query on the class name — an honest attempt,
-    // may miss, never faked.
+    // Class badge: a click-to-query affordance — isolate this class in the
+    // type-filter row (a REAL "show all of that kind currently in view"
+    // action; ask.mjs has no generic "list all X of class Y" shape for
+    // memory-graph classes — that richer machinery lives in chat.mjs's
+    // factAnswer cascade, out of this bundle's ask.mjs-only scope) AND fire a
+    // real "where is X mentioned" query on the class name — an honest
+    // attempt, may miss, never faked.
     var classLink = document.getElementById("classLink");
     if (classLink) classLink.addEventListener("click", function () {
       typeFiltersEl.querySelectorAll("label.typechk").forEach(function (lbl) {
@@ -889,20 +835,19 @@ ${hasMemChat ? `<script>\n${memoryAskBundle}\n</script>` : ""}
   });
 
   // ---- Ask the graph: TWO real engines over the FULL graph, never just the
-  // currently-displayed subgraph (Bug 1 fix, PLAN_VIZ_MEMORY.md) — tried in
-  // order per query:
+  // currently-displayed subgraph — tried in order per query:
   //  1. tmctMemoryAsk.factAnswer (src/chat.mjs's REAL memory-graph answer
   //     engine, the same one 'npm run chat' uses) — a Fact/definition-shaped
   //     question ("what is a dog", "what is a horse used for") answers HERE,
-  //     which the code-graph engine below always missed on (Bug 1's whole
-  //     point). Given an in-memory Backend-B handle carrying the page's own
-  //     embedded PAYLOAD — ZERO fs I/O (see memory-ask-browser-entry.mjs's own
-  //     doc comment) — and envelope:null/miss:true, the exact documented
-  //     "no parse pipeline available" bootstrap path that arms factAnswer's
-  //     own bare-question regex fallbacks.
+  //     which the code-graph engine below cannot. Given an in-memory
+  //     Backend-B handle carrying the page's own embedded PAYLOAD — ZERO fs
+  //     I/O (see memory-ask-browser-entry.mjs's own doc comment) — and
+  //     envelope:null/miss:true, the exact documented "no parse pipeline
+  //     available" bootstrap path that arms factAnswer's own bare-question
+  //     regex fallbacks.
   //  2. tmctViz.ask (tmct's code-graph query engine) — generic "where is X
-  //     mentioned" navigation and code-graph queries, unchanged from before
-  //     this session. Only reached when (1) is unavailable or didn't hit.
+  //     mentioned" navigation and code-graph queries. Only reached when (1)
+  //     is unavailable or didn't hit.
   // A resolved answer's own target re-centres the view — focus follows the
   // answer — for EITHER engine. --------------------------------------------
   var askInput = document.getElementById("askq");
@@ -988,9 +933,7 @@ ${hasMemChat ? `<script>\n${memoryAskBundle}\n</script>` : ""}
       askOut.innerHTML = '<div class="q">&quot;' + esc(query) + '&quot;</div>' + esc(t.content) + canon;
       // Focus-follows-answer: frame EVERY real match this answer resolved to
       // (envelope.matches is already the full candidate list ask.mjs itself
-      // ranked — previously only matches[0] recentred, silently dropping the
-      // rest of a multi-match answer's own result set), never a guess beyond
-      // what the engine itself actually returned.
+      // ranked), never a guess beyond what the engine itself actually returned.
       var targetIds = (envelope.matches || []).map(function (m) { return m.id; }).filter(Boolean);
       frameQueryResult(targetIds);
       draw();

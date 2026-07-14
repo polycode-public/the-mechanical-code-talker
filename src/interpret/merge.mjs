@@ -1,33 +1,15 @@
-// interpret/merge.mjs — class-grouped merging of strategy results (ROADMAP item 8).
-// Grown from ask.mjs's original two-way merge ("one strategy hit -> use it; both
-// hit and agree -> use it; both hit and DISAGREE -> a genuine parse-level
-// ambiguity; neither hits -> the honest grammar miss") into a general rule over N
-// strategies and N result CLASSES:
-//
-//   · SAME-class candidates merge and rank — identical parses (sameParse) dedupe
-//     onto the highest-precedence strategy's candidate, exactly as the legacy
-//     merge returned "either" result on agreement; multiple DISTINCT parses
-//     surviving in the winning class are the legacy {ambiguousParse, candidates}
-//     surface, rendered by ask.mjs as "this could mean more than one thing: …".
-//   · DISTINCT-class groups produce the ambiguity SURROUND: the winning class
-//     answers, and each other class's best candidate is listed as an
-//     "if you mean X then …" line (alternateLines below) — the generalization of
-//     the engine's existing announced-correction shapes ("assuming you meant …").
-//
-// Winner selection is deterministic: the class holding the highest-confidence
-// candidate wins; a confidence tie goes to the earlier-registered strategy. The
-// two legacy strategies share one class ("graph-query"), so their merge reduces
-// exactly to the original behavior by construction.
+// interpret/merge.mjs — class-grouped merging of strategy results: same-class
+// candidates merge/rank (identical parses dedupe onto the highest-precedence
+// one; distinct ones surface as an honest {ambiguousParse} tie); distinct-class
+// groups surface each other's best candidate as an "if you mean X then …"
+// alternate. Winner = highest-confidence class, ties go to the
+// earlier-registered strategy.
 
 const DEFAULT_CONFIDENCE = 0.5;
 
-// "commit abc1234" and bare "abc1234" are the SAME term once resolveObject's
-// commit-sha tier strips the noun — the anchored strategy captures the noun inside
-// its object span while keyword-spot consumes it as the entity keyword, so without
-// this the two strategies would "disagree" over a word that names no different thing.
-// A leading DETERMINER is the same kind of non-difference (0.8.2 feel wave): the
-// anchored grammar captures "the logger" while keyword-spot captures "logger", and
-// the resulting "ambiguity" asked the user to choose between identical readings.
+// Term equality ignores a leading "commit " on a bare SHA and a leading
+// determiner ("the logger" == "logger") — surface differences the two
+// strategies otherwise disagree over despite meaning the same thing.
 const cmpTerm = (s) => String(s || "").trim().toLowerCase().replace(/\s+/g, " ")
   .replace(/^(?:the|a|an)\s+/, "")
   .replace(/^commit\s+(?=[0-9a-f]{7,40}$)/, "");

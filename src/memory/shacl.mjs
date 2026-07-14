@@ -1,37 +1,9 @@
-// memory/shacl.mjs — the declarative SHACL-STYLE ingest gate for tmct's own
-// memory graph (PLAN_AGENTS.md §2.1 "Declarative SHACL ingest gate (c)").
-//
-// ontology/memory-shapes.ttl is the canonical, standards-based (SHACL/
-// Turtle) declarative SPEC for these three shapes — written first, kept as
-// the human-readable/auditable contract, modelled on marginalia's own
-// app/ontology/shapes.ttl. This file is a small, HAND-ROLLED validator that
-// implements exactly what that spec describes, in plain JS, against
-// memory/core.mjs's own {id, label, class, attributes} individual shape.
-//
-// Deliberately NOT wired to a real SHACL/RDF-JS engine. `shacl-engine` +
-// `rdf-ext` were tried first (the plan's named tooling, matching
-// marginalia's own choice) and rejected on measurement: shacl-engine
-// transitively pulls in `@comunica/query-sparql-rdfjs-lite` — a full
-// federated SPARQL query engine — across 560+ packages (~7700 added
-// package-lock.json lines), wildly disproportionate to tmct's "pure-JS,
-// minimal-deps" floor (5 runtime deps before this) and to what three closed,
-// bounded shapes actually need. `src/conformance.mjs` already proves this
-// project is comfortable with imperative shape assertions instead of a
-// general engine (a Repository-Interface contract-test suite, not a memory
-// gate — a DIFFERENT thing from this file, see its own header); this module
-// is the same discipline applied to memory-write validation. Keep
-// ontology/memory-shapes.ttl and this file in sync BY HAND when either shape
-// changes — the .ttl is documentation here, not machine-read.
-//
-// Every shape below is PERMISSIVE beyond memory/core.mjs's own existing
-// structural floor (appendFact/appendRule already throw before ever reaching
-// mutateMemory if subject/predicate/object or name/kind/slots are missing —
-// this gate mirrors, not tightens, that floor) and treats every OPTIONAL
-// attribute (provenance chief among them — appendFact's own signature
-// defaults `provenance` to `""`, and real call sites/tests legitimately omit
-// it, e.g. re-writing createdAt without re-asserting provenance) as OPTIONAL
-// here too: a violation only fires on genuine structural malformation, never
-// on a legitimately sparse-but-valid write or upsert of existing data.
+// memory/shacl.mjs — SHACL-style ingest gate for tmct's own memory graph.
+// Hand-rolled validator mirroring ontology/memory-shapes.ttl (kept in sync by
+// hand) against memory/core.mjs's {id, label, class, attributes} shape — not
+// wired to a real SHACL/RDF-JS engine (disproportionate deps for three closed
+// shapes). Permissive beyond core.mjs's own structural floor: a violation
+// only fires on genuine malformation, never a sparse-but-valid write.
 
 const MEMORY_CLASSES = new Set(["Utterance", "Fact", "Session", "Source", "Rule"]);
 const RULE_KINDS = new Set(["compose2", "filter", "recursive"]);
@@ -62,8 +34,8 @@ function checkIndividual(ind, violations) {
 
 /** FactShape (mgx:FactShape): the reified subject/predicate/object, each
  *  present and non-empty; mgx:factProvenance, WHEN PRESENT, must be
- *  non-empty (optional at this gate — see file header on why: appendFact's
- *  own API allows an empty/omitted provenance). */
+ *  non-empty (optional at this gate — appendFact's own API allows an
+ *  empty/omitted provenance). */
 function checkFact(ind, violations) {
   for (const prop of ["rdf:subject", "rdf:predicate", "rdf:object"]) {
     if (!nonEmpty(attrValue(ind, prop))) violations.push(`a Fact needs a non-empty ${prop}`);
@@ -101,9 +73,8 @@ export function validateIndividual(ind) {
 
 /** The ingest gate: throw a clear, aggregated error if `ind` violates the
  *  shape contract, so a malformed Fact/Rule never reaches mutateMemory's
- *  write. Synchronous (no engine/file I/O) — safe to `await` regardless (a
- *  synchronous throw inside an async caller's body still rejects that
- *  caller's promise correctly; a non-throwing sync return awaits to itself). */
+ *  write. Synchronous, but safe to `await` — a sync throw inside an async
+ *  caller still rejects its promise correctly. */
 export function assertIndividualValid(ind) {
   const r = validateIndividual(ind);
   if (!r.ok) {

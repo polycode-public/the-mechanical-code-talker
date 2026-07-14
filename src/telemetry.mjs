@@ -1,4 +1,4 @@
-// telemetry.mjs — OPT-IN, fire-and-forget query telemetry (PLAN_TMCT_TELEMETRY.md).
+// telemetry.mjs — OPT-IN, fire-and-forget query telemetry.
 //
 // The measurement contract is absolute: telemetry is OFF by default and the OFF path
 // must be BYTE-IDENTICAL — no file, no stdout/stderr change, ~zero cost. createTelemetry
@@ -16,8 +16,8 @@ import { uuidv7 } from "./uuid.mjs";
 
 /** Field names whose VALUES are (or embed) raw source and must never be logged. `body` is
  *  the Repository Interface's own field name for real source text (snippet()/context()'s
- *  source-capable body sections, PLAN item 2/3) — without it, raw source read via the
- *  now-source-capable createGraphService could leak straight into a telemetry log. */
+ *  source-capable body sections) — without it, raw source read via a source-capable
+ *  createGraphService could leak straight into a telemetry log. */
 const DROP_KEYS = new Set(["text", "content", "snippet", "body"]);
 /** String fields longer than this are truncated — except query.raw (the user's own
  *  question, which is the correlation key and is not file content). */

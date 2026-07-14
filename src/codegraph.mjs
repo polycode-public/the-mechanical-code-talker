@@ -1,8 +1,5 @@
 import { lookupByProseTokens, proseLayerHits } from "./prose.mjs";
 import { cosine } from "./embed.mjs";
-// Single-sourced predicate strings (memory/core.mjs owns these constants) — no
-// circular-import risk: core.mjs imports trust.mjs/shacl.mjs/planning.mjs, never
-// codegraph.mjs, in either direction.
 import { CREATED_AT_PROP, UPDATED_AT_PROP, provenanceTagToSource } from "./memory/core.mjs";
 
 // Pure (no-network, no-fs) query logic over the typed `entities` payload that the
@@ -16,15 +13,6 @@ import { CREATED_AT_PROP, UPDATED_AT_PROP, provenanceTagToSource } from "./memor
 //     individuals: [{id, label, class, derived_from: [ref], mentions: [{id, count}],
 //                    attributes?: [{prop, key, value}]}],
 //   }
-//
-// Ported ≈verbatim from marginalia seon-mcp/src/codegraph.mjs (the shipped,
-// tested typed-edge query layer). The only edits: provenance/attestation wording
-// is code-graph-generic (git:<sha> / file:line refs, not memory-node prose), and
-// a renderSearch() is added for the local, deterministic tmct_search.
-//
-// Edge inventory is read DYNAMICALLY from the payload (predicate verb + the closed
-// `prop` token like "mg:imports"); only the kind-classifier for the impact closure
-// hardcodes the relation set.
 
 // ---- payload parsing ---------------------------------------------------------
 
@@ -54,10 +42,7 @@ export function parseEntities(payload) {
     relations,
     truncated,
     generatedAt: payload?.generated_at || null,
-    // Second pass (PLAN_PROSE_INDEX.md): word -> [individual ids], passed through
-    // byte-identical from the payload so ask.mjs's resolveObject can consult it as a
-    // fallback tier without reaching back into the raw payload itself. {} when the
-    // build had prose disabled or the payload predates this field.
+    // word -> [individual ids]; {} when prose was disabled at build time
     proseIndex: payload?.proseIndex || {},
   };
 }
@@ -80,9 +65,7 @@ const PROP_KIND = {
   "seon:hassupertype": "inherits",
   "mgx:changecoupledwith": "cochange",
   "mgx:reexports": "reexports",
-  // fine-grained symbol-level edges (Commit→symbol history, fn→fn in-repo calls).
-  // These stay SEPARATE kinds from the module-coarse "touches"/"calls" so the impact
-  // closure (module-coarse) is unchanged.
+  // symbol-level edges stay separate kinds so the module-coarse impact closure is unchanged
   "mgx:touchessymbol": "touchesSymbol",
   "mgx:callssymbol": "callsSymbol",
   // legacy tokens (pre-realign graphs) — kept so a stale artifact still classifies
@@ -95,20 +78,12 @@ const PROP_KIND = {
   "mg:defines": "defines",
   "mg:tests": "tests",
   "mg:touches": "touches",
-  // memory-graph predicates (src/memory/core.mjs, src/sessions.mjs) — each maps to
-  // itself as its own kind name (no module-rollup abbreviation needed, unlike
-  // imports/calls) so adjacencyForKinds/edgesOfKind can walk the memory graph too.
+  // memory-graph predicates map to themselves so adjacencyForKinds/edgesOfKind can walk them too
   "mgx:saidinsession": "saidInSession",
   "mgx:inreplyto": "inReplyTo",
   "mgx:statedby": "statedBy",
   "mgx:canonicalisedfrom": "canonicalisedFrom",
-  // PLAN_VIZ_MEMORY.md Bug 2 fix: the two FIXED structural link kinds
-  // deriveFactTermGraph (below) synthesizes on every Fact — Fact -> its own
-  // subject/object Term individual. Without these a walk seeded on a Fact (the
-  // default mostRecentIndividual seed right after a teach turn) could never
-  // reach the term graph at all. Distinct from the per-predicate kinds below
-  // (an open-ended, DYNAMIC set — see relationKind's "factrel:" branch), these
-  // two are fixed and few, so a plain PROP_KIND row is the simplest fit.
+  // structural links deriveFactTermGraph synthesizes on every Fact (Fact -> its own subject/object Term)
   "mgx:factsubjectterm": "factSubjectTerm",
   "mgx:factobjectterm": "factObjectTerm",
 };
@@ -116,18 +91,10 @@ const PROP_KIND = {
 export function relationKind(group) {
   const prop = String(group?.prop || "").toLowerCase();
   if (PROP_KIND[prop]) return PROP_KIND[prop];
-  // PLAN_VIZ_MEMORY.md Bug 2 fix: deriveFactTermGraph's per-predicate relation
-  // groups (Term -> Term, one group per DISTINCT fact predicate actually
-  // present in the data — there is no fixed vocabulary to enumerate here: a
-  // freshly taught "mgx:<verb>" predicate (generalVerbTeach) must classify
-  // automatically, never requiring a PROP_KIND edit per predicate). Those
-  // groups self-namespace their `prop` as `factrel:<predicate>` specifically
-  // so they can self-classify here, verbatim, with zero collision risk against
-  // any real code-graph or memory-graph prop token (none use this prefix).
+  // deriveFactTermGraph namespaces taught predicates as "factrel:<predicate>"
   if (prop.startsWith("factrel:")) return group.predicate || null;
   const pred = String(group?.predicate || "").toLowerCase();
-  // symbol-granular fallbacks first, so a near-miss token name still classifies to the
-  // fine-grained kind rather than collapsing to module-coarse calls/touches.
+  // symbol-granular fallbacks first, so a near-miss still classifies fine-grained
   if (/symbol/.test(pred)) {
     if (/\b(call|invoke)/.test(pred)) return "callsSymbol";
     if (/(touch|chang|modif)/.test(pred)) return "touchesSymbol";
@@ -157,9 +124,6 @@ function basename(p) {
   return parts[parts.length - 1];
 }
 
-// Attestation: a ref prefixed `git:` (a commit that touched the entity) counts as
-// one mention, so better-attested (more-churned) entities rank/render ahead of
-// untouched ones even before per-node mention counts exist.
 const isProvRef = (r) => /^(git|turn):/.test(String(r || ""));
 
 export function turnRefCount(ind) {
@@ -240,9 +204,7 @@ function relLabel(g) {
   return g.prop ? `${g.predicate} [${g.prop}]` : g.predicate;
 }
 
-// Bounded list rendering — token efficiency is the whole point of the graph, so
-// hub entities must never dump hundreds of edges. Show the first `n`, then a
-// "+K more" tail with the true count.
+// Show the first `n` items, then a "+K more" tail with the true count.
 function capJoin(items, n, sep = ", ") {
   if (items.length <= n) return items.join(sep);
   return items.slice(0, n).join(sep) + `, +${items.length - n} more`;
@@ -295,23 +257,17 @@ function truncationNote(graph) {
   return `note: partial edge lists for: ${list}. Counts are complete; the lists are not.`;
 }
 
-// ---- compare (scoped v1, HANDOVER.md 2026-07-12 "no comparison capability" item) ----
+// ---- compare ----
 
-/** One side-by-side row for a single classified relation (predicate/prop pair),
- *  in the given direction — reuses edgesFor/relLabel/capJoin verbatim (the SAME
- *  classified relation groups and edge-cap discipline renderDescribe reads), just
- *  paired up instead of listed independently per entity. `field` picks the
- *  correct edge endpoint for the direction (`out` reads the OBJECT end,
- *  `incoming` reads the SUBJECT end) — edgesFor's own out/incoming split. */
+/** One side-by-side row for a classified relation. `field` picks the edge
+ *  endpoint for the direction ("out" reads object, "incoming" reads subject). */
 function compareRow(prefix, key, aEdges, bEdges, labelA, labelB, field) {
   const fmt = (edges) => (edges.length ? capJoin(edges.map((e) => e[`${field}Label`] || e[field]), DESCRIBE_EDGE_CAP) : "none");
   return `  ${prefix}${key}: ${labelA} (${aEdges.length}) -> ${fmt(aEdges)}; ${labelB} (${bEdges.length}) -> ${fmt(bEdges)}`;
 }
 
-/** predicate-label -> {group, aEdges, bEdges}, built from BOTH sides' edge
- *  groups for one direction (out or incoming) — a plain union-by-key merge, no
- *  new graph query: every group/edges pair here is exactly what edgesFor already
- *  returned for each individual separately. */
+/** predicate-label -> {group, aEdges, bEdges}, a union-by-key merge of both
+ *  sides' edge groups for one direction. */
 function pairByPredicate(aGroups, bGroups) {
   const byPred = new Map();
   for (const { group, edges } of aGroups) byPred.set(relLabel(group), { group, aEdges: edges, bEdges: [] });
@@ -323,16 +279,8 @@ function pairByPredicate(aGroups, bGroups) {
   return byPred;
 }
 
-/** Compact, honest side-by-side comparison of two SAME-KIND individuals —
- *  the scoped-down v1 comparison capability (HANDOVER.md 2026-07-12): reuses
- *  the exact edgesFor/relLabel/capJoin machinery renderDescribe already reads
- *  (same classified relation groups, same DESCRIBE_EDGE_CAP discipline), just
- *  rendered as a paired diff instead of two independent one-entity reports —
- *  no new graph traversal, only a new presentation over data describe already
- *  surfaces. Deliberately refuses (returns null) rather than forcing a
- *  comparison across mismatched kinds or the same individual twice — the
- *  caller (chat.mjs's compare lane) renders its own honest message for those
- *  cases instead of an empty/degenerate report. */
+/** Side-by-side comparison of two same-kind individuals. Returns null for
+ *  mismatched kinds or comparing an individual to itself. */
 export function renderCompare(graph, indA, indB) {
   if (!indA || !indB || indA.id === indB.id) return null;
   const klass = indA.class || "Entity";
@@ -355,8 +303,7 @@ export function renderCompare(graph, indA, indB) {
     }
   }
 
-  // Attribute diff — same key-union approach, but only MISMATCHES are worth
-  // surfacing (a shared attribute value isn't a "difference").
+  // only mismatches are worth surfacing as a "difference"
   const attrsA = new Map((indA.attributes || []).map((x) => [x.key, x.value]));
   const attrsB = new Map((indB.attributes || []).map((x) => [x.key, x.value]));
   const attrKeys = new Set([...attrsA.keys(), ...attrsB.keys()]);
@@ -372,31 +319,16 @@ export function renderCompare(graph, indA, indB) {
 
 // ---- impact (transitive reverse closure over imports/calls) ---------------------
 
-/**
- * BFS the REVERSE of imports/calls edges from `ind` — "what would break".
- * Diamonds collapse (a node appears once, at its shortest depth); cycles
- * terminate via the visited set. Each dependent carries the via-predicate and
- * the test modules covering it (subjects of tests-kind edges pointing at it).
- *
- * Module-coarse "calls" (`mgx:callsCoarse`, graph-build.mjs) is deliberately
- * conservative — it only fires when the callee's module is ALREADY in the
- * caller's import list ("coarse, import-backed calls", graph-build.mjs's own
- * comment), so by construction every "calls" edge is a strict subset of an
- * "imports" edge between the same pair — it never independently extends this
- * closure's reach beyond what "imports" alone already gives it. `callsSymbol`
- * (fn/method-granular, no import-backing requirement — same-module calls,
- * ambiguous-name calls the coarse pass drops) is the richer signal; this
- * closure also folds it in, coarsened to module level on read (never stored),
- * mirroring the technique `adjacencyForKinds`/`BEAM_EDGE_GROUPS` already use
- * for the same reason.
- */
+/** BFS the reverse of imports/calls edges from `ind` — "what would break".
+ *  Diamonds collapse to shortest depth; cycles terminate via the visited set.
+ *  `callsSymbol` is folded in too, coarsened to module level on read: it has
+ *  no import-backing requirement, so it can reach dependents "calls" alone would miss. */
 export function impactClosure(graph, ind, { maxDepth = 8 } = {}) {
   const dependents = new Map();
   const coveredBy = new Map(); // moduleId → [test labels]
   const addDependent = (objectId, subjectId, subjectLabel, via) => {
-    // Self-loop guard: callsSymbol coarsens to module level, so two symbols in
-    // the SAME module calling each other must not produce a module pointing at
-    // itself (imports/calls edges are already module-to-module and can't self-loop).
+    // callsSymbol coarsens to module level, so two symbols in the same module
+    // calling each other must not produce a module pointing at itself
     if (!objectId || !subjectId || objectId === subjectId) return;
     if (!dependents.has(objectId)) dependents.set(objectId, []);
     dependents.get(objectId).push({ id: subjectId, label: subjectLabel, via });
@@ -513,190 +445,94 @@ function definesIndex(graph) {
  */
 export const SEARCH_LIMIT = 10;
 const SEARCH_SYMBOLS_SHOWN = 8;
-// Locate scoring — IDF-weighted, component-aware. The rig queries with the WHOLE problem
-// statement, so ubiquitous tokens (template/filter/value/text) would swamp the score; weight each
-// token by rarity across modules (inverse module-frequency) so the distinctive term decides. Match
-// identifier COMPONENTS (boundary-aware) so "text" hits utils/text.py but NOT "ci<text>". An EXACT
-// defined-symbol-name hit is the strongest "the code lives here" signal. Deterministic; no models.
-const PATH_W = 3;          // token == a path component (django/utils/<text>.py)
+// Locate scoring is IDF-weighted and component-aware: weight each token by
+// rarity across modules so a distinctive term decides over ubiquitous ones,
+// and match identifier components (boundary-aware) so "text" hits
+// utils/text.py but not "ci<text>". Deterministic; no models.
+const PATH_W = 3;          // token == a path component
 const SYM_W = 2;           // token == a component of a defined symbol name
-const EXACT_W = 5;         // token == a whole defined symbol name (strongest locate signal)
-const SYM_MATCH_CAP = 4;   // only the top-K highest-IDF symbol-COMPONENT hits count, so a giant
-                           // bag-of-symbols module (e.g. db/backends features) can't accrete noise
-const PROX_FRAC = 0.2;     // import-adjacency bonus = this × the strongest matched neighbour …
-const PROX_CAP_FRAC = 0.35; //  … capped at this × the module's own score (a nudge — hubs can't run away)
+const EXACT_W = 5;         // token == a whole defined symbol name
+const SYM_MATCH_CAP = 4;   // only the top-K highest-IDF symbol-component hits count
+const PROX_FRAC = 0.2;     // import-adjacency bonus = this × the strongest matched neighbour
+const PROX_CAP_FRAC = 0.35; // capped at this × the module's own score
 const isTestLabel = (s) => /(^|\/)tests?\//.test(s) || /(^|\/)test_[^/]*\.py$/.test(s) || /\.tests(\.|$)/.test(s);
-// B016 R1a (opt-in via demoteNonProd): non-production paths — examples, fixtures, sample/demo
-// apps, and test-* harness packages — share path/symbol vocabulary with the production module
-// and shadow it in locate (B015: js-express injected examples/route-middleware/index.js at
-// rank 1; java-gson's TOP2 slot 2 was a test-shrinker fixture). DEMOTED, not excluded: none of
-// the B015 truths live under these paths (checked corpus/instances-*/…/spec.json 2026-07-02),
-// but a future task whose truth IS a test/example file must stay reachable.
+// opt-in via demoteNonProd: demote (not exclude) example/fixture/sample/demo/test-*
+// paths, which share vocabulary with production modules and would otherwise shadow them
 const NONPROD_DEMOTE = 0.15;
 const isNonProdLabel = (s) => /(^|\/)(examples?|fixtures?|samples?|demos?|benchmarks?|test-[^/]+)(\/|$)/.test(s);
-// B016 E1a (opt-in via callAdjacency): resolved-call adjacency, same bounded-nudge shape as the
-// import-proximity bonus. Python graphs carry call edges (django: 993 calls / 23,596 callsSymbol);
-// the syntax-level C#/Java extractors emit ~none today, so this flag is Python-value only.
+// opt-in via callAdjacency: same bounded-nudge shape as import-proximity, Python-value
+// only today (C#/Java extractors emit ~no call edges)
 const CALL_PROX_FRAC = 0.2;
 const CALL_PROX_CAP_FRAC = 0.35;
-// B016 E1b (opt-in via implOfInterface): boost a module that implements an interface DEFINED
-// in a strongly-matched module (C# IBasketService→BasketService, the rank-4 case). PLAN_B016
-// §6.1 specified an `isAbstract` guard, but that field is never populated by any extractor —
-// verified empirically 2026-07-02 against django/eshoponweb/java-gson .tmct/graph.json: 0
-// individuals carry `isAbstract` in all three. The only real distinguishing signal in the data
-// is C#'s naming convention (interfaces prefixed `I<Uppercase>`, e.g. IBasketService) — and C#'s
-// `inherits` edges point at an UNRESOLVED `ext:<Name>` id rather than the interface's own
-// individual, so the object must be resolved by an exact label match against internal
-// Class-labeled individuals. SCOPED to `.cs` implementer modules only: without that scope, 11 of
-// django's 7,014 inherits edges superficially match `I[A-Z]` (IOBase, IExact, IContains, …ordinary
-// Python class names, not interfaces) and would reintroduce the over-injection E1a already showed
-// on class-heavy Python graphs. Java's `inherits` predicate resolves cleanly to real individuals
-// but carries no tag or naming convention distinguishing interface implementation from concrete
-// inheritance (TypeAdapterFactory IS an interface in Gson, no "I" prefix) — a Java-safe guard does
-// not exist without an extractor change (E1c, deferred). E1b is C#-only until then.
+// opt-in via implOfInterface: boost a module implementing an interface in a strongly-
+// matched module. C#-only: interfaces are detected by the `I<Uppercase>` naming
+// convention against unresolved `ext:<Name>` inherits targets; Java's inherits edges
+// carry no equivalent signal to distinguish interface implementation from inheritance.
 const IMPL_PROX_FRAC = 0.2;
 const IMPL_PROX_CAP_FRAC = 0.35;
 const isCsModuleLabel = (s) => /\.cs$/i.test(s);
 const looksLikeCsInterface = (label) => /^I[A-Z]/.test(String(label || ""));
 
-// PLAN_PROSE_INDEX.md §6 (opt-in via proseBoost, 2026-07-02): a matched module whose lexical
-// score comes only from its path/symbol NAMES misses the case where the query's vocabulary
-// only overlaps a decomposed identifier or a doc-comment elsewhere in that module (e.g. "billing
-// calculation" never appears in `calculateTotalPrice`'s own path, only in its prose tokens).
-// Same bounded-nudge shape/magnitude as the other proximity families — a nudge onto modules that
-// ALREADY matched lexically (never a new zero-match candidate), never a replacement for the
-// lexical score. NOT wired into any bench arm and NOT a shipped default — an available lever
-// only, exactly like §5.15 beam search before it, pending its own gate/benchmark evidence.
+// opt-in via proseBoost: bounded nudge for modules whose match comes from a
+// decomposed identifier or doc-comment elsewhere in the module, not its path/symbol names
 const PROSE_PROX_FRAC = 0.2;
 const PROSE_PROX_CAP_FRAC = 0.35;
-const PROSE_LOOKUP_LIMIT = 50; // bounds lookupByProseTokens' scan; the CAP_FRAC bounds the nudge regardless
+const PROSE_LOOKUP_LIMIT = 50;
 
-// Layered prose normalisation (opt-in via proseLayers, 2026-07-02): the prose index now carries
-// NORMALISED layers (spell-corrected / canonical-schema-term / stem / lemma) under
-// proseIndex["tmct:layers"] (built by the prose pre-pass; consumed read-only via prose.mjs's
-// proseLayerHits). Today the locate scorer matches query tokens against a module's path/symbol
-// text VERBATIM, so a task-text word that only reaches a module via its stem/lemma/canonical form
-// scores nothing. With the flag on, a query token that does NOT already match a module lexically,
-// but DOES resolve to one of that module's individuals through a normalised layer, contributes a
-// bounded, DISCOUNTED signal — weaker evidence than a verbatim match by construction (halved, then
-// the shared FRAC/CAP nudge), and, like every proximity family, it only re-ranks modules ALREADY
-// in `scored` — it never invents a zero-match candidate and never overrides an exact hit. NOT a
-// shipped default and NOT wired into any bench arm — an available lever pending its own gate
-// evidence, exactly like proseBoost/beamSearch before it.
-const PROSE_LAYER_FRAC = 0.2;      // bounded nudge — same shape/magnitude as the other proximity families …
-const PROSE_LAYER_CAP_FRAC = 0.35; //  … capped at this × the module's own base score (a nudge; hubs can't run away)
-const PROSE_LAYER_DISCOUNT = 0.5;  // a normalised-layer hit is WEAKER evidence than an exact/component token
-                                   // match — halved before the FRAC/CAP nudge, so a layer hit can never rival
-                                   // a verbatim lexical match (the "a miss beats a guess" discipline).
+// opt-in via proseLayers: lets a query token that only matches via a normalised
+// layer (stem/lemma/spell-corrected/canonical) still contribute, discounted (halved)
+// relative to a verbatim match, via prose.mjs's proseLayerHits
+const PROSE_LAYER_FRAC = 0.2;
+const PROSE_LAYER_CAP_FRAC = 0.35;
+const PROSE_LAYER_DISCOUNT = 0.5;
 
-// PLAN_SEON_TUNING.md §7.5 finding 1 / §7.6(5a) (opt-in via literalMention, 2026-07-02): the query
-// tokenizer split(/[^a-z0-9_]+/) DESTROYS a literal dotted module reference present verbatim in
-// task text — "django.utils.http" scatters into {django,utils,http}, tokens so common across
-// 2,931 modules that utils/http.py ranked 41 on B016's domain-filter — while every Module
-// individual carries an unread `dotted` attribute. The lever scans the RAW query (threaded through
-// as opts.rawQuery by searchModulesRanked) for whole, boundary-checked occurrences of each
-// module's `dotted` name and repo-relative path (label). Boundary rule: a match flanked by an
-// identifier/dotted/path continuation char ([a-z0-9_./]) does not count — which is also
-// longest-match-wins for free: a package __init__'s dotted prefix ("django.utils" inside
-// "django.utils.http") is followed by ".", so only the full module's own name fires (the two
-// __init__.py prefix artifacts the 2026-07-02 review flagged). Specificity floor: a candidate
-// with fewer than LIT_MIN_COMPONENTS dot/slash components never fires (a bare "utils" — or
-// "django.utils" — must not). A hit adds a bounded BASE-score component weighted like the
-// exact-symbol channel (LIT_W = EXACT_W per component IDF, top-LIT_COMP_CAP components like
-// SYM_MATCH_CAP), then capped at LIT_CAP_FRAC × the strongest base score — the FRAC/CAP shape of
-// the proximity families, anchored to the query's own best lexical evidence: a verbatim mention
-// can lift a module INTO the top ranks but can never become an unbounded override. Applied
-// BEFORE the proximity families so a mentioned module also donates adjacency like any other
-// strong match. Only modules that already matched lexically are eligible (a mentioned module
-// always is — its path components are query tokens by construction), preserving the levers'
-// shared no-new-candidates safety scope.
-const LIT_W = EXACT_W;         // per-component weight — a verbatim module mention is the strongest locate signal
-const LIT_MIN_COMPONENTS = 3;  // "django.utils.http" fires; "django.utils"/"utils" never do
-const LIT_COMP_CAP = 4;        // like SYM_MATCH_CAP: only the top-K highest-IDF components accrue
-const LIT_FRAC = 1.0;          // bonus = min(litWeight × this, maxBase × LIT_CAP_FRAC)
-const LIT_CAP_FRAC = 0.9;      //  … so a mention approaches — never dwarfs — the best lexical score
+// opt-in via literalMention: recovers a literal dotted module reference the query
+// tokenizer would otherwise scatter ("django.utils.http" -> {django,utils,http}),
+// by scanning the raw query for whole, boundary-checked module dotted-name/path hits
+const LIT_W = EXACT_W;
+const LIT_MIN_COMPONENTS = 3;  // "django.utils.http" fires; "utils" alone never does
+const LIT_COMP_CAP = 4;
+const LIT_FRAC = 1.0;
+const LIT_CAP_FRAC = 0.9;
 
-// PLAN_SEON_TUNING.md §7.6(5b) (opt-in via embedRank + an injected embedder, 2026-07-02): static-
-// embedding re-rank — the deterministic "near-LLM" lever. The caller loads embed.mjs's
-// potion-base-8M table (loadEmbedder(); null when the one-time-fetch weights are absent) and
-// passes it as opts.embedder, keeping this module pure (no fs here; the flag no-ops with a
-// one-time stderr note when the embedder is missing, so CI never needs the 30 MB artifact).
-// Per-module text = path components + defined symbol names + doc first-lines — all read from the
-// graph, never from source — embedded lazily and cached per process (EMB_CACHE, WeakMap-keyed on
-// the graph). Cosine(query, module) becomes the same bounded FRAC/CAP nudge as the proximity
-// families: only re-ranks modules that ALREADY matched lexically, never introduces a candidate.
+// opt-in via embedRank + an injected embedder: static-embedding re-rank over
+// path/symbol/doc text read from the graph (never source), cached per-process in EMB_CACHE
 const EMB_FRAC = 0.2;
 const EMB_CAP_FRAC = 0.35;
-const EMB_TEXT_SYMBOL_CAP = 64; // bound the per-module text: top defines …
-const EMB_TEXT_DOC_CAP = 12;    //  … and doc first-lines (a giant module can't grow an unbounded text)
+const EMB_TEXT_SYMBOL_CAP = 64;
+const EMB_TEXT_DOC_CAP = 12;
 const EMB_CACHE = new WeakMap(); // graph -> { embedder, texts, vecs: Map<moduleId, Float32Array> }
 let embedWarned = false;
 
-// PLAN_SEON_TUNING.md §5.15 "discriminative multi-hop expansion" (opt-in via beamSearch):
-// generalizes the R1a/E1a/E1b family's single fixed-type, single-hop nudge into an adaptive,
-// multi-PLY expansion. Terminology follows Wikipedia's "Beam search" and Lowerre & Reddy, "The
-// Harpy Speech Understanding System" (Carnegie-Mellon, the paper that coined "beam search" — no
-// University of Essex 1980s/90s beam-search paper exists; searched 2026-07-02, none found, this
-// is the honest substitute). One hop of expansion = a PLY; the surviving candidate set at a ply =
-// the BEAM; beamWidth (β) caps how many survive; discarding non-survivors = PRUNING.
-//
-// Harpy's own beamwidth was a MARGIN/THRESHOLD relative to the ply's best score ("candidates
-// that fall below a threshold of acceptability are pruned"), not a fixed count — this is a
-// threshold+cap HYBRID (keep everyone within BEAM_MARGIN_FRAC of the ply's best, THEN cap at β),
-// not naive top-k. A fixed-count beam would prematurely discard exactly the kind of weak-then-
-// strong candidate E1b's own motivating case demonstrated: BasketService.cs sat at lexical rank 4
-// and was only promoted by considering impl-of-interface structure beyond the first pass — a
-// hard top-k cut at ply 0 could drop such a candidate before any later ply had a chance to
-// recover it (Russell & Norvig's "local beam search... quickly becomes concentrated in a small
-// region" failure mode, which Wikipedia's article cites for exactly this risk).
-//
-// Successors are generated PER EDGE KIND separately (not pooled then pruned once), so a dense
-// edge type (imports) cannot crowd out a sparse-but-discriminative one (inherits) — each kind's
-// survivors are computed independently, then MERGED (Harpy's own "candidate merging": two states
-// reaching the same successor collapse to one path, keeping the better score). A short overflow
-// list of near-miss pruned candidates is kept as a safety valve: if a ply's beam runs dry, the
-// overflow is reconsidered rather than the walk simply stopping.
-//
-// SAFETY SCOPE: like every proximity family above, this only re-ranks modules that ALREADY
-// matched lexically (present in `scored`) — it never introduces a zero-match candidate, so it
-// cannot regress precision/over-injection the way an unbounded multi-hop walk could.
-const BEAM_MARGIN_FRAC = 0.5;    // keep ply candidates scoring >= (ply-best * this), before the cap
-const BEAM_PROX_FRAC = 0.2;      // bounded nudge — same shape/magnitude as the other proximity families
+// opt-in via beamSearch: multi-ply adaptive expansion of the proximity nudge above.
+// Beam width is a margin relative to each ply's best score (not a fixed count), so a
+// weak-then-strong candidate isn't prematurely discarded. Successors are generated
+// and pruned per edge kind independently so a dense kind (imports) can't crowd out a
+// sparse one (inherits). Only re-ranks modules already present in `scored`.
+const BEAM_MARGIN_FRAC = 0.5;
+const BEAM_PROX_FRAC = 0.2;
 const BEAM_PROX_CAP_FRAC = 0.35;
 const BEAM_OVERFLOW_CAP = 4;     // near-miss safety valve size
-const BEAM_PLIES = 2;            // hops of expansion
+const BEAM_PLIES = 2;
 const BEAM_EDGE_GROUPS = [["imports"], ["calls", "callsSymbol"], ["inherits"], ["cochange"]];
 
-// ---- SPIRAL expansion (opt-in, default off; BEAM_RESEARCH.md's "fix #2/#3" made concrete) ------
-// Deterministic bounded-radius ego walk from the lexical seeds, ordered fewest-arcs-first, with a
-// degree-quantile hub gate. UNLIKE beamExpand it MAY introduce modules that had no lexical match
-// (it walks the graph from the seeds), so it can in principle lift a lexically-invisible truth into
-// top-k — the whole point. cochange is dropped (temporal-coupling noise; see the research synthesis).
-//   • spiralDepth          — max hop radius from the seeds (bounded ego expansion). Default 3.
-//   • mostDistinctiveBeams — degree-quantile gate q∈(0,1]: at each expansion step keep only the
-//                            lowest-degree ⌊q·n⌋ candidates (drop the top (1−q) hubs); q=1.0 keeps
-//                            all. Never empties the frontier (keeps ≥1 — the least-connected).
-//   • spiralNodeLimit      — emit budget: how many newly-reached nodes the spiral surfaces. Held at
-//                            12 (MID-tier digest breadth, a KNOWN-DOABLE token budget) — a fixed
-//                            budget, NOT a recall dial.
+// ---- spiral expansion (opt-in, default off): a deterministic bounded-radius ego
+// walk from the lexical seeds, ordered fewest-arcs-first with a degree-quantile hub
+// gate. Unlike beamExpand it may introduce modules with no lexical match at all. ----
 const SPIRAL_DEPTH_DEFAULT = 3;
 const SPIRAL_NODE_LIMIT_DEFAULT = 12;
-const SPIRAL_Q_DEFAULT = 0.9;                 // mild hub pruning (drop only the densest 10%) — the centre point
+const SPIRAL_Q_DEFAULT = 0.9; // keep only the least-connected 90% at each step
 const SPIRAL_EXPAND_KINDS = ["imports", "calls", "callsSymbol", "inherits"]; // cochange dropped
-// The memory graph's real edge-kind inventory (traced via every objectProperties.push/.find
-// site in src/memory/*.mjs and src/sessions.mjs) — the `kinds` a memory-graph spiralExpand call
-// passes so it walks Session/Fact/Source/Utterance individuals rather than code-graph Modules.
-// NOTE: mgx:asksAbout (src/sessions.mjs) is deliberately EXCLUDED — that predicate lives in the
-// CODE graph (Session ↔ code entities a chat turn resolved/answered), not the memory graph.
+// The memory graph's edge-kind inventory a memory-graph spiralExpand call walks
+// instead of code-graph Modules. mgx:asksAbout is excluded — it lives in the code graph.
 export const MEMORY_SPIRAL_EXPAND_KINDS = ["saidInSession", "inReplyTo", "statedBy", "canonicalisedFrom"];
-const SPIRAL_EMIT_FRAC = 0.5;                 // a newly-surfaced node's base score = maxSeed × this …
-const SPIRAL_HOP_DECAY = 0.6;                 //  … decayed by this per hop from the seeds (bounded < maxSeed, so a walked-in node never dominates rank 1)
-const SPIRAL_PROX_FRAC = 0.2;                 // an ALREADY-matched module the spiral re-reaches gets a bounded nudge …
-const SPIRAL_PROX_CAP_FRAC = 0.35;            //  … capped at this × its own score (same shape as every other proximity family)
+const SPIRAL_EMIT_FRAC = 0.5;
+const SPIRAL_HOP_DECAY = 0.6;
+const SPIRAL_PROX_FRAC = 0.2;
+const SPIRAL_PROX_CAP_FRAC = 0.35;
 
-/** embedRank: per-module embeddable text — path components + defined symbol names + doc
- *  first-lines, ALL already in the graph (never re-reads source), bounded by the EMB_TEXT_*
- *  caps. Built once per graph and cached alongside the vectors in EMB_CACHE. */
+/** embedRank: per-module embeddable text from path components + defined symbol
+ *  names + doc first-lines, cached alongside the vectors in EMB_CACHE. */
 function moduleEmbedTexts(graph) {
   const texts = new Map(); // moduleId -> text
   const defIdx = definesIndex(graph);
@@ -730,14 +566,9 @@ function identComponents(name) {
   return new Set(String(name).replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase().split(/[^a-z0-9]+/).filter(Boolean));
 }
 
-/** For one edge-kind group, the depth-1 successor of `fromId` reachable via any edge in `kinds`,
- *  as a Map<moduleId, neighbourModuleId> adjacency (undirected — a module's neighbours via that
- *  kind, in either edge direction). Endpoints are mapped to their containing module first (call
- *  edges live at function granularity), matching the existing E1a call-adjacency convention.
- *  `idNormalizer` (default null) lets a caller fold edge endpoints some OTHER way — the memory
- *  graph has no "containing module" concept, so a memory-graph caller passes `(id) => id` to walk
- *  its raw individual ids unchanged. Defaulting to null (rather than `moduleIdOfId` directly)
- *  keeps the sole existing caller (`adjacencyForKinds(graph, kinds)` in beamExpand) byte-identical. */
+/** Undirected adjacency (Map<id, Set<id>>) over any edge in `kinds`. Endpoints
+ *  are folded to their containing module by default; `idNormalizer` lets a
+ *  caller (e.g. the memory graph, which has no "module" concept) walk raw ids instead. */
 export function adjacencyForKinds(graph, kinds, idNormalizer = null) {
   const norm = idNormalizer || ((id) => moduleIdOfId(graph, id));
   const adj = new Map();
@@ -756,16 +587,14 @@ export function adjacencyForKinds(graph, kinds, idNormalizer = null) {
   return adj;
 }
 
-/** Beam-search-style multi-PLY expansion (PLAN_SEON_TUNING.md §5.15; see the BEAM_* constants'
- *  comment above for the full design rationale). Mutates `s.score` in place on `scored` entries
- *  it boosts — same bounded-nudge shape as the single-hop proximity families, just reachable over
- *  more than one hop when a ply's beam survives that far. Pure otherwise (no fs/network). */
+/** Beam-search-style multi-ply expansion (see BEAM_* constants above). Mutates
+ *  `s.score` in place on boosted `scored` entries. */
 function beamExpand(graph, scored, beamWidth) {
   if (scored.length < 2) return;
   const byId = new Map(scored.map((s) => [s.ind.id, s]));
   const baseScore = new Map(scored.map((s) => [s.ind.id, s.score]));
 
-  // Margin+cap prune a candidate-score Map down to this ply's beam, returning [survivors, overflow].
+  // Margin+cap prune a candidate-score Map down to this ply's beam, returning [survivors, overflow]
   const pruneToBeam = (candidates) => {
     if (!candidates.size) return [[], []];
     let best = 0;
@@ -780,13 +609,12 @@ function beamExpand(graph, scored, beamWidth) {
     return [survivors, overflow];
   };
 
-  // Ply 0 beam = the current top-scoring already-matched modules (margin+cap over the whole set).
+  // Ply 0 beam = the current top-scoring already-matched modules
   let [beam, overflow] = pruneToBeam(new Map(scored.map((s) => [s.ind.id, s.score])));
   const boosted = new Set(beam.map(([id]) => id));
 
   for (let ply = 0; ply < BEAM_PLIES && beam.length; ply++) {
-    // Per-edge-kind successor generation, scored, pruned INDEPENDENTLY per kind (so a dense kind
-    // like imports can't crowd out a sparse-but-discriminative one like inherits), then merged.
+    // per-edge-kind successor generation, scored/pruned independently, then merged
     const merged = new Map(); // successorId -> best propagated score across all kinds this ply
     const plyOverflow = [];
     for (const kinds of BEAM_EDGE_GROUPS) {
@@ -803,8 +631,6 @@ function beamExpand(graph, scored, beamWidth) {
       plyOverflow.push(...kindOverflow);
     }
     overflow.push(...plyOverflow);
-    // Apply the bounded nudge once per module (first ply it's reached), same shape as the other
-    // proximity families — a nudge, never a replacement.
     for (const [id, propagated] of merged) {
       if (boosted.has(id)) continue;
       const s = byId.get(id);
@@ -813,57 +639,21 @@ function beamExpand(graph, scored, beamWidth) {
       boosted.add(id);
     }
     beam = [...merged.entries()];
-    // Safety valve: if this ply's beam ran dry, reconsider the near-miss overflow instead of
-    // just stopping — cheap insurance against a total pruning failure.
+    // if this ply's beam ran dry, reconsider the near-miss overflow instead of stopping
     if (!beam.length && overflow.length) {
       beam = overflow.splice(0, BEAM_OVERFLOW_CAP).filter(([id]) => !boosted.has(id));
     }
   }
 }
 
-/** SPIRAL expansion (opt-in; see the SPIRAL_* constants' comment above for the full design).
- *  A deterministic bounded-radius ego walk from the lexical seeds (`scored`, or an explicit
- *  `seeds` override — see below), popped fewest-arcs-first via a min-heap keyed (hop ASC,
- *  in-graph degree ASC, id ASC), with a degree-quantile hub gate at each expansion step. Emits
- *  up to `nodeLimit` newly-reached nodes in pop order, scoring each seed-relative and bounded so
- *  a hub can't dominate rank 1.
- *  CRITICAL vs beamExpand: it deliberately OMITS the `if (!baseScore.has) continue` guard, so it
- *  MAY push modules that had NO lexical match into `scored` — the one path to breaking the lexical
- *  ceiling. Mutates `scored` (nudges re-reached matches in place; APPENDS newly-surfaced modules)
- *  when the score-nudge machinery is active. Pure otherwise (no fs/network); deterministic total
- *  ordering throughout.
- *
- *  Generalised (2026-07-11) past its original code-graph-only, `scored`-only shape so a pure
- *  graph-visualisation walk (no lexical match list at all) can reuse the exact same traversal:
- *   - `scored` is now OPTIONAL (default `[]`) — a bare walk with no ranking machinery.
- *   - `kinds` (default `SPIRAL_EXPAND_KINDS`) — the edge-kind set to walk; a memory-graph caller
- *     passes `MEMORY_SPIRAL_EXPAND_KINDS`.
- *   - `classPredicate` (default `(ind) => (ind.class || "") === "Module"`) — replaces the two
- *     hardcoded `"Module"` checks below, so a memory-graph caller can pass `() => true` (every
- *     class walkable) or any other individual filter.
- *   - `idNormalizer` (default `null`) — threaded straight into the internal `adjacencyForKinds`
- *     call; a memory-graph caller passes `(id) => id` (no module-folding).
- *   - `seeds` (default derived from `scored`, as before) — an explicit id iterable, so a caller
- *     with no `scored` list at all (e.g. `mostRecentIndividual`'s single seed) can still drive
- *     the walk.
- *   - `hubDegree` (default `Infinity`, PLAN_VIZ_MEMORY.md's page-size strategy — seonix's own
- *     third cap, default 40 there): stop expanding THROUGH a node with MORE than this many
- *     in-graph neighbours over `kinds` — the node itself is still popped/emitted normally (still
- *     shown), it just contributes no candidates for the NEXT hop. Distinct from `q` (a relative,
- *     per-step quantile gate that always keeps at least one candidate) and from `nodeLimit` (a
- *     total emit budget): `hubDegree` is an absolute per-node gate that can drop a hub's entire
- *     fan-out to zero, so an ultra-common hypernym ("thing", "entity" — reachable from thousands
- *     of IsA facts) can't swallow the whole node budget in one hop. `Infinity` (no gate) keeps
- *     every existing caller byte-identical. EXEMPTS the seed(s) (hop 0) themselves — a walk
- *     started directly ON a hub (e.g. `tmct viz --term tree` where "tree" is a 1,972-fact
- *     ConceptNet hub, measured live this session) still shows that hub's own immediate
- *     neighbourhood; only a hub reached MID-walk (hop > 0) has its own further fan-out gated.
- *  The score-nudge machinery (mutating `scored`/introducing newly-surfaced individuals into it)
- *  is gated behind `scored.length > 0 && maxSeed > 0` — the exact condition the original early
- *  return checked — so an empty `scored` degrades gracefully into a pure walk rather than erroring.
- *  Returns `[{id, hop}]` for every node the walk actually pops (seeds included, at hop 0) — this
- *  used to return `undefined`; safe, since the sole caller (`scoreModules`) already discards the
- *  return value (confirmed by inspection, not assumed). */
+/** Deterministic bounded-radius ego walk from the lexical seeds (`scored`, or
+ *  an explicit `seeds` override), popped fewest-arcs-first with a degree-
+ *  quantile hub gate. Unlike beamExpand, it may push modules with no lexical
+ *  match into `scored`. `kinds`/`classPredicate`/`idNormalizer` let a
+ *  memory-graph caller reuse the same walk over its own individuals/edges;
+ *  `hubDegree` (default Infinity) caps a node's own fan-out so a hypernym hub
+ *  can't swallow the whole emit budget, but never blocks a walk started
+ *  directly on that hub. Returns `[{id, hop}]` for every popped node. */
 export function spiralExpand(graph, scored = [], {
   depth = SPIRAL_DEPTH_DEFAULT,
   q = SPIRAL_Q_DEFAULT,
@@ -943,19 +733,10 @@ export function spiralExpand(graph, scored = [], {
       emitted++;
     }
     if (node.hop >= depth) continue;
-    // hubDegree gate: a node above the cap is still shown (already emitted above) but never
-    // expanded THROUGH — its own neighbours contribute nothing to the next hop. EXEMPTS hop 0
-    // (a seed) deliberately: measured live against a real init:xl-scale corpus this session,
-    // `tmct viz --term tree` (a 1,972-fact hub term) with the gate applied unconditionally
-    // returned a single, useless lone node — seeding directly ON a term the user explicitly
-    // asked to centre on must always show ITS OWN immediate neighbourhood, or the whole
-    // `--term`/click-to-recentre feature is pointless on exactly the popular, interesting terms
-    // it exists for. A hub only reached mid-walk (hop > 0) still gates normally — this only
-    // changes the walk's own STARTING point(s), not general hub suppression elsewhere.
+    // exempts hop 0: seeding directly on a hub term must still show its own
+    // immediate neighbourhood, or --term/click-to-recentre is pointless on exactly
+    // the popular terms it exists for
     if (node.hop > 0 && degree(node.id) > hubDegree) continue;
-    // This step's candidate set = the popped node's unvisited neighbours matching classPredicate;
-    // quantile-gate by degree, keeping the lowest-degree ⌊q·n⌋ (drop the densest hubs), never
-    // fewer than one.
     const cands = [];
     for (const nid of adj.get(node.id) || []) {
       if (visited.has(nid)) continue;
@@ -975,13 +756,9 @@ export function spiralExpand(graph, scored = [], {
   return results;
 }
 
-/** The individual with the most recent `createdAtProp` attribute — item 1's ("Traversal") seed
- *  default: "sort memory-graph individuals by mgx:createdAt descending, seed from the single most
- *  recent." Deterministic tie-break by id (lowest id wins) when two individuals share the exact
- *  same timestamp — same total-order convention `spiralExpand`'s own heap uses. Null when no
- *  individual carries the attribute at all (empty graph, or a graph that predates timestamps).
- *  ISO-8601 timestamps compare correctly as plain strings (same zero-padded width throughout this
- *  codebase), so no Date parsing is needed. */
+/** The individual with the most recent `createdAtProp` attribute (ties break
+ *  on lowest id); null if none carry the attribute. ISO-8601 timestamps
+ *  compare correctly as plain strings, so no Date parsing is needed. */
 export function mostRecentIndividual(graph, createdAtProp = CREATED_AT_PROP) {
   let best = null; // { ind, v }
   for (const ind of graph?.individuals || []) {
@@ -992,11 +769,9 @@ export function mostRecentIndividual(graph, createdAtProp = CREATED_AT_PROP) {
   return best ? best.ind : null;
 }
 
-/** The shared module-ranking core behind renderSearch (text) and searchModulesRanked (path+score).
- *  IDF-weights each query token by rarity across modules (so a whole-problem-statement query is not
- *  swamped by ubiquitous words like template/filter/value), scores path-component + symbol-component
- *  + EXACT-symbol matches, re-ranks with a bounded import-proximity bonus, and breaks ties by
- *  matched-symbol DENSITY (a concrete signal — never ground truth). Pure; deterministic. */
+/** Shared module-ranking core behind renderSearch and searchModulesRanked.
+ *  IDF-weights each query token, scores path/symbol/exact-symbol matches, and
+ *  re-ranks with a bounded import-proximity bonus. Pure; deterministic. */
 function scoreModules(graph, tokens, opts = {}) {
   const { demoteNonProd = false, callAdjacency = false, implOfInterface = false, beamSearch = false, spiral = false, proseBoost = false, proseLayers = false, literalMention = false, embedRank = false, rawQuery = "" } = opts;
   const beamWidth = Number.isFinite(opts.beamWidth) && opts.beamWidth > 0 ? opts.beamWidth : 8;
@@ -1011,19 +786,13 @@ function scoreModules(graph, tokens, opts = {}) {
     const symSet = new Set(defines.map((d) => d.toLowerCase())); // exact symbol names
     const symComps = new Set();
     for (const d of defines) for (const c of identComponents(d)) symComps.add(c);
-    // literalMention only: the Module's `dotted` attribute (mgx:dotted) — the verbatim form a
-    // task statement uses ("django.utils.http"); "" when absent. Gated so OFF does zero work.
     const dotted = literalMention
       ? String((ind.attributes || []).find((a) => a.key === "dotted")?.value || "").toLowerCase()
       : "";
     modules.push({ ind, label, labelLc, defines, symSet, symComps, dotted });
   }
   const N = modules.length || 1;
-  // Inverse module-frequency: a token in many modules carries little locating signal; a rare one
-  // decides. df = modules where the token appears in the path (substring — keeps "filter" matching
-  // "defaultfilters"), as a symbol component, or as an exact symbol name. A loose path substring like
-  // "text" that hits many modules therefore earns a low weight, so "ci<text>" can't beat utils/text.py.
-  // idf = log(1 + N/(1+df)) → ~0 for ubiquitous tokens, large for rare ones.
+  // idf = log(1 + N/(1+df)): near-zero for ubiquitous tokens, large for rare ones
   const idf = new Map();
   for (const t of tokens) {
     if (idf.has(t)) continue;
@@ -1047,28 +816,22 @@ function scoreModules(graph, tokens, opts = {}) {
     for (let i = 0; i < Math.min(compWeights.length, SYM_MATCH_CAP); i++) symScore += compWeights[i] * SYM_W;
     let score = exactScore + pathScore + symScore;
     if (!score) continue;
-    if (demoteNonProd && (isTestLabel(m.labelLc) || isNonProdLabel(m.labelLc))) score *= NONPROD_DEMOTE; // B016 R1a
+    if (demoteNonProd && (isTestLabel(m.labelLc) || isNonProdLabel(m.labelLc))) score *= NONPROD_DEMOTE;
     else if (isTestLabel(m.labelLc)) score *= 0.4; // source first; tests still discoverable
     const matching = m.defines.filter((d) => { const dl = d.toLowerCase(); const cs = identComponents(d); return tokens.some((t) => dl === t || cs.has(t)); });
     const density = m.defines.length ? matchCount / m.defines.length : 0;
     scored.push({ ind: m.ind, score, defineCount: m.defines.length, matching, density });
   }
-  // §7.5/§7.6(5a) literalMention (opt-in): verbatim dotted-name/path mentions in the RAW query —
-  // see the LIT_* constants' comment above for the full design. Runs before the proximity
-  // families so a mentioned module donates adjacency like any other strong match.
+  // literalMention: runs before the proximity families so a mentioned module donates adjacency too
   if (literalMention && rawQuery && scored.length) {
     const rawLc = String(rawQuery).toLowerCase();
     const continues = (ch) => ch != null && /[a-z0-9_./]/.test(ch);
-    // Whole, boundary-checked occurrence of `cand` in the raw query (see boundary rule above).
     const mentioned = (cand) => {
       for (let i = rawLc.indexOf(cand); i !== -1; i = rawLc.indexOf(cand, i + 1)) {
         if (!continues(rawLc[i - 1]) && !continues(rawLc[i + cand.length])) return true;
       }
       return false;
     };
-    // IDF for a candidate's components: normally already in the map (they are query tokens by
-    // construction when tokens came from this same raw query); computed-and-cached otherwise
-    // (a caller passing mismatched tokens/rawQuery must not crash or skew).
     const idfOf = (t) => {
       if (!idf.has(t)) {
         let df = 0;
@@ -1086,9 +849,8 @@ function scoreModules(graph, tokens, opts = {}) {
       let litWeight = 0; // best single matched candidate (dotted vs path share components anyway)
       for (const cand of new Set([m.dotted, m.labelLc])) {
         if (!cand) continue;
-        if (cand.split(/[./]+/).filter(Boolean).length < LIT_MIN_COMPONENTS) continue; // specificity floor
+        if (cand.split(/[./]+/).filter(Boolean).length < LIT_MIN_COMPONENTS) continue;
         if (!mentioned(cand)) continue;
-        // IDF-weight the candidate's tokens (same tokenizer as the query), highest first.
         const weights = [...new Set(cand.split(/[^a-z0-9_]+/).filter(Boolean))].map(idfOf).sort((a, b) => b - a);
         let w = 0;
         for (let i = 0; i < Math.min(weights.length, LIT_COMP_CAP); i++) w += weights[i] * LIT_W;
@@ -1097,9 +859,7 @@ function scoreModules(graph, tokens, opts = {}) {
       if (litWeight) s.score += Math.min(litWeight * LIT_FRAC, maxBase * LIT_CAP_FRAC);
     }
   }
-  // Import-graph proximity (rescaled): a matched module that imports / is imported by a
-  // STRONGER-matching module gets a bonus proportional to that neighbour, so a genuine 2nd module
-  // (truncatelines' text.py) rises with its sibling. Only re-ranks modules that ALREADY matched.
+  // import-graph proximity: a matched module importing/imported-by a stronger match rises with it
   if (scored.length > 1) {
     const baseById = new Map(scored.map((s) => [s.ind.id, s.score]));
     const adj = new Map();
@@ -1116,11 +876,7 @@ function scoreModules(graph, tokens, opts = {}) {
       s.score += Math.min(bestNeighbor * PROX_FRAC, s.score * PROX_CAP_FRAC);
     }
   }
-  // B016 E1a (opt-in): resolved-call adjacency — a matched module CALLED BY (or calling) a
-  // stronger-matching module rises with it (initials-filter: defaultfilters.py calls into
-  // utils/text.py, whose lexical rank was 8). Call edges live at function level, so endpoints
-  // map to their containing modules first. Same bounded-nudge formula as import-proximity;
-  // only re-ranks modules that already matched.
+  // callAdjacency: same formula as import-proximity, over resolved call edges (folded to modules)
   if (callAdjacency && scored.length > 1) {
     const baseById = new Map(scored.map((s) => [s.ind.id, s.score]));
     const adj = new Map();
@@ -1142,12 +898,7 @@ function scoreModules(graph, tokens, opts = {}) {
       s.score += Math.min(bestNeighbor * CALL_PROX_FRAC, s.score * CALL_PROX_CAP_FRAC);
     }
   }
-  // B016 E1b (opt-in): impl-of-interface — a C# module implementing an interface DEFINED in a
-  // stronger-matching module rises with it (eshoponweb: IBasketService.cs rank 1, BasketService.cs
-  // rank 4). `inherits` edges point the OBJECT at an unresolved `ext:<Name>` id for C#, so resolve
-  // by exact label match against internal Class individuals. Only re-ranks modules that already
-  // matched, and only when both the implementer module is `.cs` and the base name looks like a C#
-  // interface (see the const block above for why — isAbstract does not exist in the data).
+  // implOfInterface: a C# module implementing an interface rises with the interface's own match
   if (implOfInterface && scored.length > 1) {
     const baseById = new Map(scored.map((s) => [s.ind.id, s.score]));
     const classByLabel = new Map();
@@ -1171,13 +922,7 @@ function scoreModules(graph, tokens, opts = {}) {
       s.score += Math.min(bestNeighbor * IMPL_PROX_FRAC, s.score * IMPL_PROX_CAP_FRAC);
     }
   }
-  // PLAN_PROSE_INDEX.md §6 (opt-in): lexical boost from decomposed-identifier/doc-comment
-  // prose tokens — see the PROSE_PROX_* comment above for the full rationale. One
-  // lookupByProseTokens call for the whole query (not per-module), then aggregated into a
-  // per-module signal via moduleIdOfId, same as the call-adjacency/impl-of-interface families.
-  // Unlike the proximity families above, this signal is absolute per-module (prose-token
-  // overlap), not relative to a stronger NEIGHBOUR in `scored` — so it applies even when
-  // only one module matched lexically (no ">1" gate needed).
+  // proseBoost: absolute per-module prose-token overlap, so it applies with only one match too
   if (proseBoost && scored.length && graph.proseIndex) {
     const proseHits = lookupByProseTokens(graph.proseIndex, tokens.join(" "), { limit: PROSE_LOOKUP_LIMIT });
     if (proseHits.length) {
@@ -1194,15 +939,8 @@ function scoreModules(graph, tokens, opts = {}) {
       }
     }
   }
-  // Layered prose normalisation (opt-in): a query token that did NOT match a module lexically but
-  // resolves to one of its individuals through a NORMALISED prose layer (stem/lemma/canonical/spell)
-  // adds a bounded, discounted signal — see the PROSE_LAYER_* comment above. One proseLayerHits call
-  // per DISTINCT query token, ids folded to their containing module via moduleIdOfId (same as the
-  // proseBoost/call-adjacency families). Only tokens NOT already matching a module lexically count
-  // for that module (a layer hit is purely ADDITIVE evidence for otherwise-missed words — never
-  // double-counting a token the base score already saw), weighted by the token's own IDF (so a
-  // ubiquitous word contributes almost nothing) and halved (PROSE_LAYER_DISCOUNT: weaker than a
-  // verbatim match), then the shared FRAC/CAP nudge. Only re-ranks modules already in `scored`.
+  // proseLayers: a token that only matches via a normalised layer adds discounted, additive
+  // evidence — never double-counted against a token the base score already saw
   if (proseLayers && scored.length && graph.proseIndex) {
     const scoredById = new Map(scored.map((s) => [s.ind.id, s]));
     const modById = new Map(modules.map((m) => [m.ind.id, m]));
@@ -1217,9 +955,9 @@ function scoreModules(graph, tokens, opts = {}) {
         const modId = moduleIdOfId(graph, id);
         if (!modId || hitMods.has(modId)) continue;
         hitMods.add(modId);
-        if (!scoredById.has(modId)) continue;              // never a new zero-match candidate
+        if (!scoredById.has(modId)) continue; // never a new zero-match candidate
         const m = modById.get(modId);
-        if (m && (m.symSet.has(t) || m.symComps.has(t) || m.labelLc.includes(t))) continue; // already matched lexically → not additive
+        if (m && (m.symSet.has(t) || m.symComps.has(t) || m.labelLc.includes(t))) continue; // already matched lexically
         layerSignal.set(modId, (layerSignal.get(modId) || 0) + w * PROSE_LAYER_DISCOUNT);
       }
     }
@@ -1229,10 +967,8 @@ function scoreModules(graph, tokens, opts = {}) {
       s.score += Math.min(signal * PROSE_LAYER_FRAC, s.score * PROSE_LAYER_CAP_FRAC);
     }
   }
-  // §7.6(5b) embedRank (opt-in): static-embedding cosine re-rank — see the EMB_* constants'
-  // comment above. The embedder is INJECTED (opts.embedder, from embed.mjs's loadEmbedder) so
-  // this module stays fs-free; absent embedder → no-op with a one-time stderr note, never a
-  // failure (the 30 MB weights are a local opt-in fetch, not a test/CI dependency).
+  // embedRank: the embedder is injected so this module stays fs-free; absent -> a one-time
+  // stderr note, never a failure
   if (embedRank) {
     if (!opts.embedder) {
       if (!embedWarned) {
@@ -1261,9 +997,9 @@ function scoreModules(graph, tokens, opts = {}) {
       }
     }
   }
-  // §5.15 beam search (opt-in): multi-ply generalization of the single-hop families above.
+  // beamSearch (opt-in): multi-ply generalization of the single-hop families above.
   if (beamSearch && scored.length > 1) beamExpand(graph, scored, beamWidth);
-  // SPIRAL (opt-in): bounded-radius ego walk that MAY introduce lexically-invisible modules — runs
+  // SPIRAL (opt-in): bounded-radius ego walk that may introduce lexically-invisible modules — runs
   // last (after every family has finalised the seed scores) so its seed-relative emit scores and
   // hub gate read the settled ranking, and before the sort so surfaced nodes slot into it.
   if (spiral && scored.length) spiralExpand(graph, scored, {
@@ -1276,12 +1012,12 @@ function scoreModules(graph, tokens, opts = {}) {
   return scored;
 }
 
-/** TUNING #3: the ranked module list as plain `{path, score}` (highest-first), using the SAME
+/** The ranked module list as plain `{path, score}` (highest-first), using the same
  *  ranking renderSearch uses (path + symbol + exact-symbol + import-proximity). Lets the rig
- *  read the score GAP between rank-1 and rank-2 (which the text renderer hides) so it can keep
+ *  read the score gap between rank-1 and rank-2 (which the text renderer hides) so it can keep
  *  rank-2 only when it is close. Pure; deterministic.
- *  NOTE: scoreModules still RANKS (locate always returns modules), but the score-gap top-1
- *  SELECTION that consumes this gap is OFF by default in run.mjs/selectModules — it over-injected
+ *  Note: scoreModules still ranks (locate always returns modules), but the score-gap top-1
+ *  selection that consumes this gap is off by default in run.mjs/selectModules — it over-injected
  *  on some tasks. The shipped default takes the top-2 instead. */
 export function searchModulesRanked(graph, query, opts = {}) {
   const raw = String(query || "");
@@ -1294,28 +1030,15 @@ export function searchModulesRanked(graph, query, opts = {}) {
   return scoreModules(graph, tokens, effOpts).map((s) => ({ path: String(s.ind.label), score: s.score }));
 }
 
-// B016 R1b, promoted to the shipped default (2026-07-02): positive in every measured cell across
-// B016's P1 (tuning task + a genuinely held-out task) and P2 (both eshoponweb tasks; clears the
-// ≥50%-vs-otb bar outright on order-service-total). See PLAN_B016.md §6.9. 0.6 is the exact ratio
-// tested throughout — do not drift it from bench/arms.mjs's arm values or scripts/rank-gate.mjs's
-// --gap default; all three should read this constant.
+// 0.6 is the exact ratio tested throughout — do not drift it from bench/arms.mjs's arm values
+// or scripts/rank-gate.mjs's --gap default; all three should read this constant.
 export const DEFAULT_SCORE_GAP = 0.6;
 
-/** Score-gap-driven module selection: take the top_k ranked hits, then extend the selection to
- *  include ranks (top_k)..2 whose score sits within `scoreGapK` of rank 1 — the near-tie case
- *  where a second (or third) module is genuinely as relevant as the top hit, not filler. Never
- *  resurrects a suppressed (empty) selection: a top_k of 0 stays empty regardless of scoreGapK.
- *  Pure — the single source of truth for gap-extension, shared by the CLI product surface
- *  (cli.mjs's query-based `digest`) and the bench rig (bench/run.mjs's selectModules).
- *
- *  DELIBERATELY NEUTRAL BY DEFAULT: `scoreGapK` defaults to `null` (gap-extension OFF, plain
- *  top-`top_k`) here — the SHIPPED default of `DEFAULT_SCORE_GAP` is a product-surface policy
- *  decision, applied explicitly by the caller (cli.mjs's digest query-mode), not baked into this
- *  primitive. A library default of "on" would make every future caller who forgets to pass
- *  `scoreGapK` silently inherit gap-extension — including future bench arms, breaking the
- *  paired-arm "byte-identical when off" comparability this repo's whole measurement methodology
- *  depends on. See test/selectRankedModules.test.mjs's "absent scoreGapK is byte-identical to
- *  plain top-k" case. */
+/** Take the top_k ranked hits, then extend to ranks (top_k)..2 whose score
+ *  sits within `scoreGapK` of rank 1 — the near-tie case where another module
+ *  is genuinely as relevant as the top hit. `scoreGapK` defaults to null
+ *  (off): the shipped `DEFAULT_SCORE_GAP` is a caller-applied policy, not a
+ *  library default, so bench arms stay byte-identical when the flag is off. */
 export function selectRankedModules(ranked, { top_k = 2, scoreGapK = null } = {}) {
   if (!ranked.length || top_k <= 0) return [];
   const picked = ranked.slice(0, top_k).map((r) => r.path);
@@ -1355,39 +1078,24 @@ export function renderSearch(graph, query, { limit = SEARCH_LIMIT, kind = "", de
   return lines.join("\n");
 }
 
-// ---- §9 read-replacing tools (members / inheritance / architecture / coverage /
+// ---- read-replacing tools (members / inheritance / architecture / coverage /
 //      history / call neighbours). Each answers ONE question in one compact call so
 //      the agent need not Read/Grep. All keep the bounded-output discipline. -------
 
-/** Per-graph, per-kind memo for edgesOfKind's own flattened scan — WeakMap<graph,
- *  Map<kind, edge[]>>, mirroring qualCache's (ask.mjs) established per-graph-object
- *  caching convention: a loaded graph's `relations` are never mutated in place after
- *  parseEntities builds it (every refresh constructs a NEW graph object), so caching
- *  keyed on graph object identity is correctness-safe for a graph's whole lifetime —
- *  same invariant qualCache already relies on in production. edgesOfKind is called
- *  repeatedly on the SAME (graph, kind) pair across a single query's traversal
- *  (evalSet/traverse/adjacencyForKinds/renderArchitecture/… all re-derive it), and at
- *  monorepo scale (tens of thousands of modules) that repeated O(relations) scan is a
- *  real latency/GC cost — this collapses every call after the first to an O(1) lookup. */
+// Per-graph, per-kind memo: a loaded graph's `relations` are never mutated in
+// place (a refresh builds a new graph object), so caching on graph identity
+// is correctness-safe and collapses repeated O(relations) scans to O(1).
 const edgesOfKindCache = new WeakMap();
 
-/** All edges whose relation classifies to `kind`, flattened across relation groups. */
-/** All edges of a classified relation kind (imports/calls/defines/tests/touches/inherits/
- *  cochange/reexports/callsSymbol/touchesSymbol/contains — see relationKind/PROP_KIND above),
- *  flattened across every raw relation group that classifies to it. Exported for ask.mjs's
- *  mechanical NL-query engine (PLAN_MECHANICAL_CHAT.md) to orchestrate rather than duplicate.
- *  Memoized per (graph, kind) — see edgesOfKindCache's own doc above (perf lever, HANDOVER
- *  follow-up #8: latency/GC on monorepo-scale graphs, not a correctness fix — the earlier
- *  stack-overflow bug below is already fixed and unrelated). */
+/** All edges of a classified relation kind, flattened across every raw
+ *  relation group that classifies to it. Memoized per (graph, kind). */
 export function edgesOfKind(graph, kind) {
   let byKind = edgesOfKindCache.get(graph);
   if (!byKind) { byKind = new Map(); edgesOfKindCache.set(graph, byKind); }
   const cached = byKind.get(kind);
   if (cached) return cached;
   const out = [];
-  // Plain-loop append, NOT out.push(...g.edges): argument spread materialises every
-  // element as a call argument and overflows the stack past ~100k edges (live report:
-  // 27,770-module repo, "list modules in <dir>" → "Maximum call stack size exceeded").
+  // plain-loop append, not spread: argument spread overflows the stack past ~100k edges
   for (const g of graph.relations) {
     if (relationKind(g) !== kind) continue;
     for (const e of g.edges) out.push(e);
@@ -1396,15 +1104,9 @@ export function edgesOfKind(graph, kind) {
   return out;
 }
 
-/** A node's "last touched" moment, DERIVED rather than stored (PLAN_VIZ.md §2): the node's own
- *  `updatedAtProp`/`createdAtProp` attribute, or the max `createdAt` over every edge (in
- *  `graph.relations`, ACROSS every kind, not just classified ones) touching it as either
- *  subject or object — whichever is newer. `""` when nothing carries a timestamp at all. Compares
- *  ISO-8601 strings directly (correct for same-width zero-padded timestamps, no Date parsing).
- *  Tolerates edges with no `createdAt` field (pre-dating `upsertEdge`'s own stamp, or written by
- *  a path that bypasses `upsertEdge` entirely) by simply skipping them, never throwing. Operates
- *  on the shared parsed-graph shape (`graph.relations`/`graph.individuals`), not memory-specific —
- *  same reasoning `edgesOfKind`/`moduleIdOf` already document. */
+/** A node's "last touched" moment: its own updatedAt/createdAt attribute, or
+ *  the max `createdAt` over every edge touching it, whichever is newer. ""
+ *  when nothing carries a timestamp. Skips edges with no `createdAt` rather than throwing. */
 export function derivedUpdatedAt(graph, ind, { createdAtProp = CREATED_AT_PROP, updatedAtProp = UPDATED_AT_PROP } = {}) {
   if (!ind) return "";
   const attrs = ind.attributes || [];
@@ -1421,17 +1123,10 @@ export function derivedUpdatedAt(graph, ind, { createdAtProp = CREATED_AT_PROP, 
   return best;
 }
 
-/** Turn a `spiralExpand` walk (`[{id, hop}]`) into the `{nodes, edges}` shape
- *  `tmct viz` renders — pure, no I/O, shared verbatim between the CLI
- *  (`src/viz.mjs`'s `computeVizGraph`) and the browser bundle's client-side
- *  re-walk/recentre (PLAN_BREADTH_FIRST_NLU.md §5 follow-on, operator
- *  directive 2026-07-11) so both paths render byte-identically from the same
- *  logic, never two hand-maintained copies. `nodes` enrich each walked id with
- *  its real label/class/timestamps (`derivedUpdatedAt`, above); `edges` are
- *  every relation-group edge connecting two walked nodes (not just the kinds
- *  the walk itself traversed through — an incidental edge between two reached
- *  nodes still renders), de-duped on (subject, object, predicate) across
- *  relation groups. */
+/** Turn a `spiralExpand` walk into the `{nodes, edges}` shape `tmct viz`
+ *  renders, shared between the CLI and the browser bundle's client-side
+ *  re-walk. `edges` includes any relation-group edge connecting two walked
+ *  nodes, not just kinds the walk itself traversed, de-duped on (subject, object, predicate). */
 export function buildVizNodesAndEdges(graph, walked, { createdAtProp = CREATED_AT_PROP, updatedAtProp = UPDATED_AT_PROP } = {}) {
   const nodeIds = new Set(walked.map((w) => w.id));
   const nodes = walked.map(({ id, hop }) => {
@@ -1457,46 +1152,17 @@ export function buildVizNodesAndEdges(graph, walked, { createdAtProp = CREATED_A
   return { nodes, edges };
 }
 
-// PLAN_VIZ_MEMORY.md Bug 2 fix: the FACT_CLASS string, mirrored here rather than
-// imported (memory/core.mjs's own FACT_CLASS export is a plain "Fact" literal —
-// importing one more binding across this already-imported module isn't worth
-// it for a single string every reader of this file can eyeball is exactly what
-// memory/core.mjs's own appendFact writes).
 const MEMORY_FACT_CLASS = "Fact";
 const MEMORY_TERM_CLASS = "Term";
 
-/** Derive a TERM-relation VIEW of a memory graph's reified Facts (Bug 2 fix,
- *  PLAN_VIZ_MEMORY.md) — never mutates `graph`, never persisted, viz-only.
- *
- *  A Fact individual stores its subject/predicate/object as plain normalized
- *  STRING attributes (`rdf:subject`/`rdf:predicate`/`rdf:object`,
- *  memory/core.mjs's appendFact) — there is no individual node for "dog" at
- *  all. So the real subject->predicate->object concept structure is
- *  structurally invisible to any walk over `graph.relations` as it stands:
- *  every edge there connects two INDIVIDUAL ids (Utterance/Session/Fact/
- *  Source), never a concept term. This function materializes the missing
- *  structure as a NEW, derived graph:
- *   - one synthetic `Term` individual per distinct normalized subject/object
- *     string (id `term:<t>`, label `t`);
- *   - one synthetic relation group per DISTINCT fact predicate actually
- *     present in the data (Term -> Term, `subject`/`object` = the two terms'
- *     ids) — no hardcoded predicate vocabulary: a freshly taught "mgx:<verb>"
- *     predicate (generalVerbTeach) becomes walkable automatically, the same
- *     turn it's asserted;
- *   - two FIXED structural link groups, `factSubjectTerm`/`factObjectTerm`
- *     (Fact -> its own subject/object Term) — without these a walk seeded on
- *     a Fact (the default `mostRecentIndividual` seed right after a teach
- *     turn) could never reach the term graph in the first place; a `--term`
- *     seed reaches the SAME facts via the same links, in reverse.
- *  Returns `{ graph: <augmented graph>, factRelationKinds: [<predicate>, …] }`
- *  — `factRelationKinds` is exactly the dynamic `kinds` list a caller passes
- *  to `spiralExpand` for the "concept relation" walk (see MEMORY_SPIRAL_EXPAND_KINDS
- *  for the sibling "provenance/meta" kinds list). A graph with no Fact
- *  individuals (or a code graph passed in by mistake) is a safe no-op:
- *  `{ graph, factRelationKinds: [] }`, the SAME graph object, unchanged.
- *  Pure; deterministic (Map iteration order = insertion order = first-seen
- *  order over `graph.individuals`, so re-running on the same input is
- *  byte-identical). */
+/** Derive a term-relation view of a memory graph's reified Facts (never
+ *  mutates `graph`, viz-only). A Fact stores subject/predicate/object as
+ *  plain string attributes, so the concept structure is invisible to a walk
+ *  over `graph.relations` as-is; this synthesizes one Term individual per
+ *  distinct subject/object string, one relation group per distinct fact
+ *  predicate, and two fixed Fact->Term link groups so a walk seeded on a Fact
+ *  can reach the term graph at all. Returns `{ graph: <augmented graph>,
+ *  factRelationKinds: [<predicate>, …] }`; a graph with no Facts is a no-op. */
 export function deriveFactTermGraph(graph) {
   const termById = new Map(); // term:<t> -> individual
   const groupByPredicate = new Map(); // predicate -> relation group
@@ -1520,10 +1186,6 @@ export function deriveFactTermGraph(graph) {
     const objectTermId = ensureTerm(o);
     let group = groupByPredicate.get(p);
     if (!group) {
-      // `factrel:` namespace: relationKind's own dedicated branch self-classifies
-      // any group with this prefix to its raw predicate, verbatim — see that
-      // function's comment for why (an open-ended, dynamically-discovered kind
-      // set with no PROP_KIND row to add per predicate).
       group = { predicate: p, prop: `factrel:${p}`, count: 0, edges: [] };
       groupByPredicate.set(p, group);
     }
@@ -1551,28 +1213,16 @@ export function deriveFactTermGraph(graph) {
   };
 }
 
-/** The two FIXED structural link kinds `deriveFactTermGraph` always emits
- *  (Fact -> its own subject/object Term) — see that function's own doc for
- *  why they're needed at all. Bundled into the "relation" (concept) walk, not
- *  the "meta" (provenance) one: a user who toggles to meta-only still gets
- *  today's exact byte-identical provenance-only view (see viz.mjs's edge-kind
- *  toggle). */
+/** The two fixed structural link kinds `deriveFactTermGraph` always emits.
+ *  Bundled into the "relation" (concept) walk, not "meta" (provenance), so a
+ *  user toggling to meta-only still gets the provenance-only view. */
 export const MEMORY_FACT_LINK_KINDS = ["factSubjectTerm", "factObjectTerm"];
 
-/** Bug 2 fix: the combined kinds list a memory-graph walk actually uses, for a
- *  given edge-kind MODE — "meta" (today's exact provenance-only walk, kept as
- *  a filterable toggle, never deleted), "relation" (the NEW concept view —
- *  Bug 2's fix), or "both" (the default: meta AND relation kinds together, so
- *  a click on a recently-taught Fact reaches its own concept neighbourhood the
- *  same turn). `factRelationKinds` is the dynamic per-predicate list
- *  `deriveFactTermGraph` discovered in THIS graph — there is no fixed
- *  vocabulary, a freshly taught predicate is walkable the same turn it's
- *  asserted. Lives here (not viz.mjs) and is re-exported through
- *  ask-browser-entry.mjs specifically so BOTH the CLI's own generation-time
- *  walk (viz.mjs's computeVizGraph) AND the browser bundle's client-side
- *  re-walk (a recentre or an edge-kind-toggle change) combine kinds via the
- *  SAME function — viz.mjs itself can't be bundled for the browser (it does
- *  real fs I/O), so this had to live in the shared, browser-safe module. */
+/** The combined kinds list a memory-graph walk uses for a given edge-kind
+ *  mode: "meta" (provenance-only), "relation" (concept view), or "both"
+ *  (default). Lives here, not viz.mjs, so the CLI and the browser bundle's
+ *  client-side re-walk share the same function (viz.mjs does real fs I/O and
+ *  can't be bundled for the browser). */
 export function edgeKindsFor(mode, factRelationKinds) {
   const relationKinds = [...factRelationKinds, ...MEMORY_FACT_LINK_KINDS];
   if (mode === "meta") return [...MEMORY_SPIRAL_EXPAND_KINDS];
@@ -1580,7 +1230,7 @@ export function edgeKindsFor(mode, factRelationKinds) {
   return [...MEMORY_SPIRAL_EXPAND_KINDS, ...relationKinds]; // "both" (default)
 }
 
-const LEGEND_MAX_BUCKETS = 20; // seonix precedent, PLAN_VIZ_MEMORY.md: too many chips to be usable
+const LEGEND_MAX_BUCKETS = 20; // too many chips to be usable
 const LEGEND_MIN_BUCKETS = 2;  // nothing to filter with only one bucket
 const LEGEND_COLLAPSE_TOP_N = 15; // "top 15 by count, rest grouped as Other" — stays under the max
 
@@ -1603,8 +1253,7 @@ function normalizedEntropy(buckets) {
 
 /** Collapse a raw {value,count} bucket list down to at most LEGEND_MAX_BUCKETS
  *  entries: keep the top LEGEND_COLLAPSE_TOP_N by count, fold the rest into a
- *  single "Other" bucket — the plan's own "may need a top-15-by-count, rest
- *  grouped as Other" escape hatch, applied generically (not predicate-only) so
+ *  single "Other" bucket, applied generically (not predicate-only) so
  *  any dimension that happens to be high-cardinality degrades the same way.
  *  A no-op (returns `buckets` unchanged, same array) when already <= the cap.
  *  Exported (not just used internally by pickLegendDimension) so the browser
@@ -1652,15 +1301,9 @@ function provenanceBucketLabel(rawTag) {
   return src.kind;
 }
 
-/** A single walked NODE's bucket value under one legend dimension — the
- *  per-node counterpart to `pickLegendDimension`'s aggregate bucket counts,
- *  exported so both the CLI's own legend computation AND the browser bundle's
- *  client-side dimension-switcher (a user flipping from "split by predicate"
- *  to "split by trust source" without regenerating the page,
- *  PLAN_VIZ_MEMORY.md's Controls section) filter/color by the SAME derivation,
- *  never a second hand-rolled copy. `"class"` reads every node; `"predicate"`/
- *  `"provenance"` only ever return non-null for a Fact-class node (any other
- *  class simply has no predicate/provenance of its own to bucket on). */
+/** A single walked node's bucket value under one legend dimension. `"class"`
+ *  reads every node; `"predicate"`/`"provenance"` only return non-null for a
+ *  Fact-class node. */
 export function legendValueFor(graph, node, dimension) {
   if (dimension === "class") return node?.class || "(none)";
   if (!node || node.class !== MEMORY_FACT_CLASS) return null;
@@ -1670,31 +1313,12 @@ export function legendValueFor(graph, node, dimension) {
   return null;
 }
 
-/** Auto-pick the filter/legend dimension at generation time (PLAN_VIZ_MEMORY.md
- *  "Auto-picking the filter/legend dimension" section — full algorithm/
- *  rationale there). seonix hardcodes its legend dimension (a small, near-
- *  uniform set of code-graph classes) — tmct's memory graph does NOT have that
- *  property: `class` is `{Fact, Session, Source, Utterance, Term}` and once
- *  real data is seeded, Fact dominates so heavily that a class-based legend
- *  filters almost nothing. This scores three candidate dimensions by
- *  normalized Shannon entropy over their bucket-size distribution (rewards an
- *  even-ish split, penalizes one dominant bucket) and picks the best-scoring
- *  QUALIFYING one (`LEGEND_MIN_BUCKETS <= k <= LEGEND_MAX_BUCKETS`, after a
- *  top-15+Other collapse for anything over the cap) as the PRIMARY legend:
- *   1. `class` — every walked node's own `.class`.
- *   2. `predicate` — every walked Fact node's `rdf:predicate` attribute (a
- *      relation-shaped split: "show me only IsA facts").
- *   3. `provenance` — every walked Fact node's provenance prefix, collapsed
- *      (see provenanceBucketLabel) — a TRUST-shaped split.
- *  Pure, one pass over the already-walked `nodes` (no new graph traversal) —
- *  computed ONCE at generation time and embedded into the page's JSON, never
- *  recomputed client-side. `graph` supplies the per-Fact attribute lookups
- *  `nodes` itself doesn't carry (predicate/provenance are Fact ATTRIBUTES,
- *  not part of the {id,hop,label,class,createdAt,updatedAt} viz node shape).
- *  Returns `{ primary, dimensions: { class, predicate, provenance } }`, each
- *  entry `{ score, qualifies, buckets: [{value, count}] }`. When nothing
- *  qualifies (e.g. a tiny 1-2-node walk), `primary` falls back to `"class"` —
- *  today's behavior — so the legend is never simply empty. */
+/** Auto-pick the filter/legend dimension: since Fact dominates class-based
+ *  legends once real memory-graph data is seeded, this scores class/predicate/
+ *  provenance by normalized Shannon entropy over their bucket distribution
+ *  and picks the best-scoring qualifying one (LEGEND_MIN_BUCKETS..MAX_BUCKETS).
+ *  Falls back to "class" when nothing qualifies. Returns `{ primary,
+ *  dimensions: { class, predicate, provenance } }`. */
 export function pickLegendDimension(graph, nodes) {
   const classBuckets = bucketCounts((nodes || []).map((n) => legendValueFor(graph, n, "class")));
   const predicateBuckets = bucketCounts((nodes || []).map((n) => legendValueFor(graph, n, "predicate")));
@@ -1940,11 +1564,7 @@ export function renderHistory(graph, ind) {
 }
 
 /** Modules that call into the target's module (one hop over `calls`). */
-// Symbol-grain classes whose call graph lives on the fn/method-precise `callsSymbol`
-// edge, not the module-coarse `calls`. When the resolved target IS one of these, callers/
-// callees must read the SYMBOL node's own edges — mapping it to its enclosing module (the
-// old behaviour) both mislabels the answer with `mod:<path>` and scans the wrong edge set,
-// so "Widget.render --callsSymbol--> fnAlpha" was reported as "no recorded callers".
+// classes whose call graph lives on the fn/method-precise callsSymbol edge, not module-coarse calls
 const CALL_SYMBOL_CLASSES = new Set(["Function", "Method"]);
 
 export function renderCallers(graph, ind) {
@@ -2061,11 +1681,10 @@ export function renderClassHistory(graph, ind) {
   return renderSymbolHistory(graph, ind);
 }
 
-// ---- author identity (0.8.2 WS4): the Commit "author" attribute answered as a
-//      person — "who is <Name>", "what did <Name> touch". Author is an ATTRIBUTE
-//      (key "author"/mgx:commitAuthor), never an individual, so these read the
-//      attribute off every Commit and aggregate. All renderers return null on an
-//      unknown name — the chat lane falls through to the ordinary honest miss. ----
+// ---- author identity: the Commit "author" attribute answered as a person
+// ("who is <Name>", "what did <Name> touch"). Author is an attribute, never
+// an individual, so these renderers read it off every Commit and aggregate.
+// All return null on an unknown name; the chat lane falls through to an honest miss. ----
 
 const AUTHOR_TOUCH_CAP = 15;
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -2167,13 +1786,9 @@ export function renderCommitAuthor(graph, sha) {
 
 const SYMBOL_CLASSES = { function: "Function", class: "Class", method: "Method", attribute: "Attribute" };
 
-/** The structured scorer behind searchSymbols (kind=function/class/method/attribute, with
- *  name/decorator filters): filters graph individuals to `kind`'s class, scores by token
- *  substring hits (or 1 for an empty query, matching everything of that kind), and sorts
- *  score desc, tie-broken by SHORTER label first (matches searchSymbols's original inline
- *  sort exactly). An unrecognised `kind` yields an empty ranked list — callers that need to
- *  distinguish "unknown kind" from "kind valid, nothing matched" check SYMBOL_CLASSES
- *  themselves (see searchSymbols below). Pure; deterministic.
+/** The structured scorer behind searchSymbols: filters to `kind`'s class,
+ *  scores by token substring hits, sorts score desc then shorter label first.
+ *  An unrecognised `kind` yields an empty ranked list.
  *  @returns {Array<{ind: object, score: number}>} */
 export function scoreSymbolsRanked(graph, tokens, { kind, decFilter = "", nameRe = null } = {}) {
   const targetClass = SYMBOL_CLASSES[kind];
@@ -2205,24 +1820,22 @@ function searchSymbols(graph, tokens, { limit = SEARCH_LIMIT, kind, decFilter, n
   return lines.join("\n");
 }
 
-// ---- tmct_context: a one-shot "edit bundle" plan (pure; the server adds the file
-//      reads). Returns everything needed to add-a-sibling to a module in ONE call,
-//      so the agent need not search→describe→snippet→read×N (RepoGraph ego-network
-//      idea; LocAgent: structured, replacement-shaped output drives tool adoption).
+// ---- tmct_context: a one-shot "edit bundle" plan (pure; the server adds the
+// file reads). Returns everything needed to add a sibling to a module in one
+// call, so the agent need not search->describe->snippet->read x N. ----
 
-const CONTEXT_SIBLING_CAP = 8; // Lever 1: the bundle is re-billed every turn — keep a few most-relevant siblings, not all.
-const CLASS_MEMBER_CAP = 16;   // Class-internal members shown when the anchor is a class/method.
-const COCHANGE_MID_CAP = 4;    // #13: trim the MID bundle's co-change tail (was 8) — re-billed every turn.
-const CONTEXT_TESTS_CAP = 6;   // #13: cap the covering-tests list in the bundle.
-const INSERTION_REGION_CAP = 40; // #2: contiguous tail lines shown as the "write your new sibling here" region.
-// #6 task-size thresholds (named, next to the caps above). B1/B6: widened so the COMMON
-// "add a small sibling util / register a filter" task lands at the lean TINY default (a 1-2
-// param helper with a short body), and only genuinely bigger edits top up to MID/LARGE.
-const TINY_MAX_LOC = 12;       // TINY: exemplar/anchor body ≤ this many lines …
-const TINY_MAX_ARITY = 2;      //   … AND ≤ this many params (value, arg) …
-const LARGE_CLASS_MEMBERS = 8; // LARGE: anchor is a method of a class with ≥ this many members ("big class").
-const INLINE_CALLEE_CAP = 3;   // LARGE: inline at most this many depth-1 in-repo callee bodies …
-const INLINE_CALLEE_LOC = 120; //   … up to this many total lines.
+const CONTEXT_SIBLING_CAP = 8; // the bundle is re-billed every turn — keep a few most-relevant siblings, not all
+const CLASS_MEMBER_CAP = 16;   // class-internal members shown when the anchor is a class/method
+const COCHANGE_MID_CAP = 4;
+const CONTEXT_TESTS_CAP = 6;
+const INSERTION_REGION_CAP = 40; // contiguous tail lines shown as the "write your new sibling here" region
+// task-size thresholds, widened so a common "add a small sibling util" task
+// lands at the lean TINY default and only genuinely bigger edits top up
+const TINY_MAX_LOC = 12;
+const TINY_MAX_ARITY = 2;
+const LARGE_CLASS_MEMBERS = 8;
+const INLINE_CALLEE_CAP = 3;
+const INLINE_CALLEE_LOC = 120;
 
 const splitDecs = (s) => String(s || "").split(",").map((x) => x.trim()).filter(Boolean);
 const tokenize = (s) =>
@@ -2276,10 +1889,9 @@ function structuralScore(s, target) {
   return score + Math.min(shared, 4) * 2;
 }
 
-/** Lever 1: rank siblings by relevance to the anchor so the lean bundle shows the ones
- *  worth copying — shared decorator (the module's registration pattern, e.g.
- *  @register.filter) > name-affinity (shared tokens) > nearest source position. Pure;
- *  mutates a transient `_score` only. */
+/** Rank siblings by relevance to the anchor: shared decorator (the module's
+ *  registration pattern) > name-affinity (shared tokens) > nearest source
+ *  position. Mutates a transient `_score` only. */
 function rankSiblings(siblings, { decorators: anchorDecorators = "", label: anchorLabel = "", site: anchorSite = null } = {}, structuralTarget = null) {
   const decCount = new Map();
   for (const s of siblings) for (const d of splitDecs(s.decorators)) decCount.set(d, (decCount.get(d) || 0) + 1);
@@ -2293,9 +1905,7 @@ function rankSiblings(siblings, { decorators: anchorDecorators = "", label: anch
   for (const s of siblings) {
     const decMatch = splitDecs(s.decorators).some((d) => targetDecs.has(d)) ? 1 : 0;
     const nameAff = tokenize(s.label).filter((t) => anchorTokens.has(t)).length;
-    // #3: structural affinity (param-count / has-returns / has-raises / shared in-repo
-    // callees) sits BELOW name-affinity (max 16 < 50) — a tiebreaker within a name tier.
-    const struct = structuralScore(s, structuralTarget);
+    const struct = structuralScore(s, structuralTarget); // tiebreaker within a name tier
     const pos = anchorStart != null && s.site ? 1 / (1 + Math.abs(s.site.start - anchorStart)) : 0;
     s._score = decMatch * 1000 + nameAff * 50 + struct + pos;
   }
@@ -2310,8 +1920,7 @@ export function contextPlan(graph, ind) {
   const modId = moduleIdOf(graph, ind);
   const moduleLabel = graph.byId.get(modId)?.label || String(modId || "").replace(/^mod:/, "");
   const defEdges = edgesOfKind(graph, "defines").filter((e) => e.subject === modId);
-  // #3: index fn→fn in-repo callees once, so siblings/anchor carry their callee set for
-  // structural ranking and the sizeBundle cross-module-call check.
+  // index fn→fn in-repo callees once, so siblings/anchor carry their callee set
   const calleeMap = new Map();
   for (const e of edgesOfKind(graph, "callsSymbol")) {
     if (!calleeMap.has(e.subject)) calleeMap.set(e.subject, new Set());
@@ -2329,9 +1938,8 @@ export function contextPlan(graph, ind) {
       globals.push({ label: mem.label, value: (mem.attributes || []).find((a) => a.key === "value")?.value || "", site });
       if (site) insertion = Math.max(insertion, site.end);
     } else if (cls === "Function" || cls === "Class") {
-      // Carry each sibling's `raises` + one-line doc so a validator-style task sees the
-      // error-contract without reading the body. #3 adds params/returns/callees for
-      // structural-similarity ranking.
+      // raises + one-line doc so a validator-style task sees the error-contract
+      // without reading the body; params/returns/callees feed structural-similarity ranking
       siblings.push({
         id: mem.id, label: mem.label, class: cls, site, decorators: decoratorOf(mem),
         raises: attrVal(mem, "raises"), doc: attrVal(mem, "doc"),
@@ -2350,13 +1958,12 @@ export function contextPlan(graph, ind) {
       }
     : null;
   const totalSiblings = siblings.length;
-  // #3: the structural target the exemplar should resemble — the anchor's own shape when
-  // there is one, else the dominant pattern across siblings (module anchor case).
+  // the structural target the exemplar should resemble: the anchor's own
+  // shape, or the dominant pattern across siblings for a module anchor
   const structuralTarget = anchor ? profileOf(anchor) : dominantProfile(siblings);
   siblings = rankSiblings(siblings, anchor || { label: ind.label }, structuralTarget);
-  // Lever 2: when the anchor is a module (no anchor body shown), surface the single
-  // closest sibling's FULL body as the copy-this exemplar; signatures alone made the
-  // agent fall back to Read. With a function/class anchor its own body suffices.
+  // when the anchor is a module, surface the closest sibling's full body as
+  // the copy-this exemplar — signatures alone made the agent fall back to Read
   const exemplar = !anchor ? siblings.find((s) => s.site && s.label !== ind.label) || null : null;
   const tests = [...new Set(edgesOfKind(graph, "tests").filter((e) => e.object === modId).map((e) => e.subjectLabel || e.subject))].slice(0, CONTEXT_TESTS_CAP);
   const cochange = cochangeNeighbours(graph, modId).slice(0, COCHANGE_MID_CAP);
@@ -2388,16 +1995,15 @@ export function contextPlan(graph, ind) {
     }).slice(0, CLASS_MEMBER_CAP);
     classMembers = { className: owner?.label || String(classOwnerId).replace(/^fn:.*#/, ""), members, total: contains.filter((e) => e.subject === classOwnerId).length };
   }
-  // #2: contiguous insertion region — from the LAST top-level definition (sibling/global,
-  // or the exemplar, which is a sibling) through end-of-module. We give the start line here;
-  // the server extends `end` to the real end-of-file (capped) using the lines it reads.
+  // contiguous insertion region from the last top-level definition through
+  // end-of-module; the server extends `end` to the real end-of-file
   let lastTop = null;
   for (const s of [...siblings, ...globals]) {
     if (s.site && (!lastTop || s.site.start > lastTop.start)) lastTop = s.site;
   }
   const insertionRegion = lastTop ? { start: lastTop.start, end: lastTop.end } : null;
-  // #6: the focal symbol (anchor when present, else the module's exemplar) drives both the
-  // call hint and the LARGE-tier inlined-callee bodies.
+  // the focal symbol (anchor, else the module's exemplar) drives the call
+  // hint and the LARGE-tier inlined-callee bodies
   const focal = anchor || exemplar;
   const focalInd = focal?.id ? graph.byId.get(focal.id) : null;
   const callHintStr = focalInd ? callHint(graph, focalInd) : "";
@@ -2417,7 +2023,7 @@ export function contextPlan(graph, ind) {
   };
 }
 
-// ---- #6 task-size-adaptive bundle (TINY / MID / LARGE) ---------------------------
+// ---- task-size-adaptive bundle (TINY / MID / LARGE) ------------------------------
 
 /** Which bundle sections a tier emits. TINY is genuinely minimal (header + one short
  *  exemplar body + registration + insertion region + __all__); MID is the full bundle;
@@ -2432,10 +2038,8 @@ export function bundleMask(tier) {
   return all; // MID
 }
 
-/** B2: a TRIMMED mask for SECONDARY (related-but-not-primary) digest modules — keep the cheap,
- *  cache-stable signal (registration globals, ranked sibling SIGNATURES, the insertion region,
- *  __all__) but drop the expensive bodies (anchor/exemplar/inlined callees) and the variable
- *  tails (tests/cochange/re-exports/class members). Pure. */
+/** A trimmed mask for secondary (related-but-not-primary) digest modules: keep
+ *  the cheap, cache-stable signal but drop expensive bodies and variable tails. */
 export function trimBundleMask(mask) {
   return {
     ...mask,
@@ -2445,11 +2049,10 @@ export function trimBundleMask(mask) {
   };
 }
 
-/** Classify a context plan by task size and return {tier, mask, topup}. B1/B6: lean by
- *  default — START at TINY and escalate ("top-up") one tier ONLY when the lean bundle would
- *  omit something the edit demonstrably needs (no exemplar body, a class/method edit, or a
- *  large/complex target → MID; a cross-module call or a big-class method → LARGE). `topup`
- *  records whether auto-sizing escalated above TINY (surfaced in the digest header). Pure. */
+/** Classify a context plan by task size, {tier, mask, topup}. Lean by default:
+ *  start at TINY and escalate one tier only when the lean bundle would omit
+ *  something the edit demonstrably needs. `topup` records whether auto-sizing
+ *  escalated above TINY. */
 export function sizeBundle(plan, graph, { untuned = false } = {}) {
   const focal = plan.anchor || plan.exemplar;
   let tier = "TINY";
@@ -2462,17 +2065,11 @@ export function sizeBundle(plan, graph, { untuned = false } = {}) {
     // (c) a large/complex target (long body, many params, or it raises) → MID.
     const loc = focal.site ? focal.site.end - focal.site.start + 1 : Infinity;
     const arity = countParams(focal.params);
-    // (c) a long/complex focal escalates TINY→MID. Escalation fires on any long focal: gating it on
-    // an explicit symbol anchor (so a long-exemplar MODULE digest stayed TINY) regressed results,
-    // because the trimmed sibling/test tail was load-bearing scaffolding. The `untuned` param is now
-    // a no-op for sizing (kept so the tmct-b010 control arm's flag still resolves).
+    // `untuned` is a no-op for sizing now (kept so a legacy control-arm flag still resolves)
     if (loc > TINY_MAX_LOC || arity > TINY_MAX_ARITY || Boolean(focal.raises)) tier = "MID";
-    // (d) LARGE — only for an EXPLICIT symbol focus (plan.anchor), where inlining the
-    // depth-1 callee bodies / the class shape is worth the tokens: a cross-module call from
-    // the anchor, OR an anchor that is a method of a big class. When the focal is merely a
-    // module-EXEMPLAR (the digest/module-anchor case), a cross-module call does NOT force
-    // LARGE — the exemplar body already shows the call, and MID's signatures suffice; this
-    // keeps the common "register a filter" module bundle lean.
+    // LARGE only for an explicit symbol focus: a cross-module call from the
+    // anchor, or an anchor that's a method of a big class. A module-exemplar
+    // focal never forces LARGE — MID's signatures suffice and keeps it lean.
     let crossModule = false;
     if (plan.anchor) {
       for (const cid of focal.callees || []) {
@@ -2490,10 +2087,9 @@ export function sizeBundle(plan, graph, { untuned = false } = {}) {
   return { tier, mask: bundleMask(tier), topup: tier !== "TINY" };
 }
 
-/** B2: order SECONDARY digest modules by relevance to the PRIMARY (first) module — import
- *  adjacency (either direction, incl. coarse calls) outranks change-coupling weight; ties keep
- *  the caller's input order (stable, deterministic). Returns the candidate labels reordered.
- *  Pure — no fs. Falls back to the input order when the primary can't be mapped to a module. */
+/** Order secondary digest modules by relevance to the primary module: import
+ *  adjacency outranks change-coupling weight; ties keep input order. Falls
+ *  back to input order when the primary can't be mapped to a module. */
 export function rankModulesByProximity(graph, primaryLabel, candidateLabels) {
   const moduleIdFor = (label) => {
     const { match } = resolveSymbol(graph, label);
@@ -2523,7 +2119,7 @@ export function rankModulesByProximity(graph, primaryLabel, candidateLabels) {
     .map((s) => s.label);
 }
 
-// ---- #7 tmct_context_more: only the sections a TINY/MID bundle omits ------------
+// ---- tmct_context_more: only the sections a TINY/MID bundle omits ---------------
 
 /** Render ONLY the bundle sections a lean bundle omits (sibling list / class members /
  *  re-exports / __all__ / tests / cochange) for a symbol's module. Pure (no fs). */
@@ -2560,14 +2156,10 @@ export function renderContextMore(plan) {
 
 // ---- Repository Interface: graph-only context() bundle (no fs) -----------------
 
-/** Render a graph-only edit bundle for `plan` — every contextPlan section EXCEPT the
- *  fs-dependent anchor/exemplar/inlined-callee body text (registration globals, class
- *  members, ranked siblings, __all__, re-exports, the insertion point, covering tests,
- *  co-change neighbours), gated by `mask` (see bundleMask/sizeBundle). Pure — no fs.
- *  Used by graph-service.mjs's context() service so a graph-only provider (no working
- *  tree) can still return a real HIT instead of an NO_SOURCE miss — see PLAN item 2d /
- *  INTERFACE_VERSION 1.1.0. A source-capable provider layers the body sections on top
- *  (it has fs access this module deliberately does not). */
+/** Render a graph-only edit bundle: every contextPlan section except the
+ *  fs-dependent body text, gated by `mask`. Lets a graph-only provider (no
+ *  working tree) return a real hit instead of a NO_SOURCE miss; a
+ *  source-capable provider layers the body sections on top. */
 export function renderGraphOnlyBundle(plan, mask) {
   const out = [
     `Edit context for ${plan.moduleLabel} (graph-only bundle — siblings/registration/tests are real graph truth; ` +
@@ -2612,7 +2204,7 @@ export function renderGraphOnlyBundle(plan, mask) {
   return out.join("\n");
 }
 
-// ---- #7 cold-tool catalog (written to <repo>/.tmct/TOOLS.md by the index step) --
+// ---- cold-tool catalog (written to <repo>/.tmct/TOOLS.md by the index step) -----
 
 /** Markdown catalog of the COLD tools (everything except the hot catalog tools): each
  *  with a one-line purpose and the exact Bash invocation via the CLI `cli <tool>` route.

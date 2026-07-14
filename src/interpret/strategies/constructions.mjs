@@ -1,30 +1,12 @@
-// interpret/strategies/constructions.mjs — strategy N+1: construction-grammar
-// template banks (PLAN_ADVANCED_GRAMMAR.md track (d)). Per-construction closed
-// template families loaded as DATA from data/templates/constructions/*.toml
-// (pattern -> AST skeleton, slot types validated against the closed RELATIONS/
-// ENTITY_TO_TYPE vocabulary ask-vocab.mjs already owns), registered here as its
-// OWN additive class ("construction") — the same "own-class strategy" pattern
-// interpret/strategies/ace.mjs and noise-strip.mjs already use, so a construction
-// match outranks a same-text keyword-spot GUESS outright (interpret/merge.mjs
-// picks the highest-confidence CLASS; within-class disagreement is the honest
-// {ambiguousParse} tie, which this strategy deliberately avoids triggering
-// against keyword-spot by living in its own class) rather than colliding with it.
+// interpret/strategies/constructions.mjs — construction-grammar template
+// banks, loaded as DATA from data/templates/constructions/*.toml (pattern ->
+// AST skeleton, slot types validated against RELATIONS/ENTITY_TO_TYPE),
+// registered as its own additive class ("construction") so a match outranks
+// a same-text keyword-spot guess rather than colliding with it.
 //
-// The point (mirrors grammar.mjs's own file-header precedent, "same shape, new
-// grammatical coverage, not a new mechanism"): grammar GROWTH as committed data,
-// not more normalize.mjs/grammar.mjs code — data/templates/grammar-rules.toml
-// and data/templates/responses.jsonl already work this way. Continues
-// grammar.mjs's T1-T10 numbering (T11+, see the TOML file's own [[construction]]
-// `id` fields) without renumbering anything grammar.mjs already owns.
-//
-// Loader discipline (mirrors src/finish.mjs's loadGrammarRules/grammarRules
-// pattern exactly): synchronous (the pipeline is sync-capable), cached once per
-// process, and DEFENSIVE — a missing directory, unparseable TOML, or an entry
-// that fails validation (an unrecognized `kind`/`entityType`, a malformed
-// pattern) is silently DROPPED, never thrown and never guessed into the nearest
-// match. "One broken strategy/entry never takes the pipeline down"
-// (interpret/pipeline.mjs's own file-header discipline) extends here to one
-// broken DATA ROW never taking the strategy down.
+// Loader is synchronous, cached once per process, and defensive: a missing
+// directory, unparseable TOML, or invalid entry is silently dropped, never
+// thrown.
 
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -72,8 +54,7 @@ export function readConstructionFiles(dir = CONSTRUCTIONS_DIR) {
 }
 
 /** Validate + index the raw [[relation]] rows into noun -> {kind, entityType}.
- *  Closed-vocabulary validation (the whole point of track (d)'s "slot types
- *  validated against ENTITY_TO_TYPE/VERB_TO_KIND" deliverable): `kind` MUST be
+ *  Closed-vocabulary validation: `kind` MUST be
  *  one of RELATIONS' own keys and `entityType` (when present) MUST be one of
  *  ENTITY_TO_TYPE's canonical class names — an entry failing either check is
  *  dropped, never coerced to the nearest-looking valid value. First occurrence
@@ -92,13 +73,8 @@ export function buildAgentNounTable(relations) {
   return table;
 }
 
-/** Compile one pattern string ("<AGENT> of <TERM>") against the closed agent-
- *  noun alternation into {re, agentIndex, termIndex}, or null when the pattern
- *  doesn't carry exactly one <AGENT> and one <TERM> token (a malformed pattern
- *  — dropped, not guessed at). Literal text is escaped and whitespace-
- *  normalized (\s+), matching every other anchored-template regex in this
- *  codebase (grammar.mjs's own TEMPLATES). Case-insensitive; tolerates one
- *  optional trailing "?", same as grammar.mjs's own templates. */
+/** Compile one pattern string ("<AGENT> of <TERM>") into {re, agentIndex,
+ *  termIndex}, or null when it doesn't carry exactly one of each token. */
 function compilePattern(pattern, agentNouns) {
   if (typeof pattern !== "string" || !pattern.trim() || !agentNouns.length) return null;
   const agentAlt = agentNouns.slice().sort((a, b) => b.length - a.length).map(escapeRegex).join("|");
@@ -189,12 +165,9 @@ export function parseConstruction(text, bank = constructionBank()) {
   return null;
 }
 
-/** Pipeline registration (interpret/pipeline.mjs): construction-grammar
- *  templates as their OWN class ("construction"), confidence 0.9 — the same
- *  evidentiary weight as grammar.mjs's anchored T1-T10 (an anchored, closed
- *  pattern match), so it outright outranks a same-text "graph-query"-class
- *  keyword-spot guess (0.7) instead of triggering a same-class {ambiguousParse}
- *  tie against it (see this file's header). */
+/** Pipeline registration: own class ("construction"), confidence 0.9 — same
+ *  weight as grammar.mjs's anchored templates, so it outranks a same-text
+ *  keyword-spot guess (0.7) rather than tying against it. */
 export const constructionsStrategy = {
   id: "constructions",
   class: "construction",

@@ -1,54 +1,21 @@
-// extensions.mjs — the extension-pack seam: one place a host repo (or a
-// third-party package such as seonix/marginalia) declares which corpus/
-// lexicon/templates bundles feed tmct, and how much each bundle's facts are
-// trusted relative to the others.
+// extensions.mjs — the extension-pack seam: one place a host repo (or a third-party
+// package) declares which corpus/lexicon/templates bundles feed tmct, and how much each
+// bundle's facts are trusted relative to the others.
 //
 //   resolveExtensions(repoRoot) → { entries: Map<name, ResolvedEntry>, biasByBundle }
 //
-// BUILTIN_EXTENSIONS' DEFAULT ACTIVE BUNDLE IS `human` (PLAN_SEED.md, the
-// persona flip): a fresh repo now seeds an everyday-world vocabulary (people,
-// places, objects, nature, time/events, body/food, mind — hand-curated from
-// Open English WordNet + Schema.org) rather than the old implicit code-domain
-// default. `seon` and `conceptnet` are SHIPPED but now INACTIVE — both are
-// equally code/tech-domain-biased (conceptnet's committed slice was filtered
-// via a tech-domain seed-term match, PLAN_SEED.md §2), so BOTH flip together,
-// not just seon — a repo that wants the old behavior asks for it explicitly
-// (`tmct init --with-persona code`, or `[extensions.seon]`/`[extensions.
-// conceptnet]` `active = true`). Four more shipped-but-INACTIVE tier-2 bundles
-// (`tier2-aws` / `tier2-python` / `tier2-java` / `tier2-general`) round out the
-// catalog. Activating any of these is a config-only edit (`tmct init --corpus
-// aws`, or a `[extensions.tier2-aws] active = true` in tmct.toml) — zero code
-// change. `tier2-general`'s own 49-fact animal/weather set (PLAN_AGENTS.md
-// Phase 1) is superseded IN DEFAULT ROLE by `human`'s much larger
-// `human-nature` clump, but stays shipped/selectable on its own for a caller
-// that wants that narrow slice without the rest of the human persona.
+// `human` is the default active bundle (everyday-world vocabulary); `seon`/`conceptnet`
+// (code/tech-domain) and four tier-2 bundles ship inactive, activated via `tmct init
+// --with-persona`/`--corpus <id>` or a `[extensions.<name>] active = true` override.
+// `human-medium`/`human-large` are additive SIZE TIERS of `human`, not separate personas.
 //
-// `human-medium`/`human-large` (also shipped-but-INACTIVE) are SIZE TIERS of
-// the SAME `human` bundle, not separate personas (PLAN_SEED.md §3) — each
-// holds only the facts that size adds beyond the previous one. Activated
-// together via `tmct init --persona-size medium|large` (bin/tmct.mjs), which
-// resolves them through this same registry.
+// A `tmct.toml` `[extensions]` table-of-tables may override a recognized builtin, or
+// declare a new host entry with its own `kind` (corpus | lexicon | templates | pack |
+// ontology). A separate flat `[bias]` table (bundle-name → number) feeds
+// src/memory/bias.mjs's ranking.
 //
-// A `tmct.toml` may carry a top-level `[extensions]` table-of-tables
-// (`[extensions.tier2-aws]`, …): a RECOGNIZED name (one of the builtins above)
-// may override `active`/paths/etc; an UNRECOGNIZED name declares a brand new
-// host entry and MUST carry a `kind` (corpus | lexicon | templates | pack |
-// ontology) — a `pack` entry may combine any of corpus_path/lexicon_path/
-// templates_path/phrasebook_path under one `active` flag and one provenance
-// name, the shape a third-party vocabulary package hands tmct. `ontology` is a
-// DISTINCT, nameable kind for an ontology bundle (as opposed to a plain
-// `corpus` bundle) — its `ontology_path` key is just an alias populating the
-// SAME internal `corpusPath` field a corpus entry uses, so every downstream
-// seeder/loader needs zero branching by kind name.
-//
-// A SEPARATE top-level `[bias]` table (flat: bundle-name → number) feeds
-// src/memory/bias.mjs's ranking — never nested under `[extensions.*]`.
-//
-// Entries are returned in a FIXED, deterministic order — `seon` first, then
-// `conceptnet`, then every other entry sorted by name — mirroring the
-// seon-before-conceptnet idempotency-ordering precedent chat.mjs's
-// seedBootstrapMemory already establishes (seon's curated facts should win the
-// content-hash idempotency race over general ConceptNet noise).
+// Entries are returned in a fixed order: `seon` first, then `conceptnet`, then the rest
+// sorted by name (so seon's curated facts win idempotency races over ConceptNet noise).
 
 import { isAbsolute, join, resolve, dirname } from "node:path";
 import { readFile } from "node:fs/promises";
@@ -65,67 +32,45 @@ import {
   toFacts,
 } from "./corpus/conceptnet.mjs";
 
-// corpus/namenet/generate.mjs's output — same small-top-up shape as the
-// wordnet-xl/wordnet-full entries below, just a single bundle (not
-// worth PKG_ROOT-style plumbing through corpus/conceptnet.mjs for one
-// directory constant, so computed locally here instead).
+// corpus/namenet/generate.mjs's output — a single small top-up bundle.
 const NAMENET_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "corpus", "namenet");
 
 export const EXTENSION_KINDS = Object.freeze(["corpus", "lexicon", "templates", "pack", "ontology"]);
 
-// The definitional-band-first predicate order chat.mjs's bootstrap has always
-// passed for the ConceptNet seed (SEED_PREFER) — re-declared here (not
-// imported from chat.mjs) to keep this module off chat.mjs's heavy graph, the
-// same "re-declare, don't import" discipline init.mjs's own SEED_PREFER uses.
+// The definitional-band-first predicate order for the ConceptNet seed (re-declared,
+// not imported, to keep this module off chat.mjs's heavy graph).
 const CONCEPTNET_PREFER = ["rdfs:subClassOf", "rdf:type", "mgx:usedFor", "mgx:partOf", "mgx:capableOf"];
 
 /** The shipped defaults — a FRESH object per call, so a caller can never
  *  accidentally mutate a module-level singleton. */
 function builtinExtensions() {
   return {
-    // WAS active:true (the implicit code-domain default) — now opt-in.
-    // PLAN_SEED.md §2: re-activate explicitly (`tmct init --with-persona
-    // code`, or `[extensions.seon] active = true`) for the old behavior.
+    // Opt-in code-domain bundle.
     seon: {
       kind: "corpus",
       active: false,
       corpusPath: SEON_CONCEPTS_FILE,
       provenancePrefix: "corpus:seon",
     },
-    // WAS active:true — now opt-in too, not just seon (PLAN_SEED.md §2: the
-    // committed slice is itself tech-domain-filtered, equally biased).
+    // Opt-in too: the committed slice is tech-domain-filtered, equally biased.
     conceptnet: {
       kind: "corpus",
       active: false,
       corpusPath: CONCEPTNET_SLICE_FILE,
       provenancePrefix: "corpus:conceptnet",
-      // matches chat.mjs's seedBootstrapMemory exactly: uncapped, definitional
-      // band first.
       limit: undefined,
       prefer: CONCEPTNET_PREFER,
     },
-    // NEW — the default active bundle (PLAN_SEED.md). Everyday-world
-    // vocabulary: people, places, objects, nature, time/events, body/food,
-    // mind, plus the human-base/human-bridge scaffolding connecting WordNet's
-    // and Schema.org's independently-built taxonomies (PLAN_SEED.md §3, §8).
+    // The default active bundle: everyday-world vocabulary plus the scaffolding
+    // connecting WordNet's and Schema.org's independently-built taxonomies.
     human: {
       kind: "corpus",
       active: true,
       corpusPath: join(TIER2_DIR, "human.jsonl"),
       provenancePrefix: "corpus:human",
     },
-    // NEW — Medium/Large SIZE tiers of the SAME `human` bundle (PLAN_SEED.md
-    // §3), not separate personas: each file holds ONLY the facts that size
-    // adds beyond the previous one (Medium beyond Small, Large beyond
-    // Medium), so activating them is purely ADDITIVE alongside `human`
-    // (never a replacement for it). Both ship INACTIVE — Small stays the
-    // unconditional default — and are activated together via `tmct init
-    // --persona-size medium|large` (bin/tmct.mjs), which resolves them
-    // through this SAME BUILTIN_EXTENSIONS lookup and the ordinary
-    // `--corpus <id>` activation seam (activatePluggableInput). "large"
-    // activates BOTH human-medium and human-large (Large's facts are
-    // Medium's plus its own — both bundles must be active to reach the
-    // full ~13,600-fact total).
+    // Medium/Large SIZE tiers of `human` (additive, not separate personas): each file
+    // holds only the facts that size adds beyond the previous one.
     "human-medium": {
       kind: "corpus",
       active: false,
@@ -162,17 +107,8 @@ function builtinExtensions() {
       corpusPath: join(TIER2_DIR, "general.jsonl"),
       provenancePrefix: "corpus:tier2-general",
     },
-    // corpus/wordnet/generate.mjs's output: a mechanical ConceptNet-shape
-    // conversion of Open English WordNet's structural relations, not
-    // hand-curated like the tier-2 bundles above (NOT called "tier-3" —
-    // corpus/README.md's tiering policy already uses that name for something
-    // else, runtime-learned facts that are never committed; this bundle is
-    // curated + committed, tier-2-shaped, just too large to hand-author).
-    // Named directly "wordnet-xl"/"wordnet-full" so `tmct import --corpus
-    // wordnet-xl` resolves straight through this BUILTIN_EXTENSIONS lookup,
-    // the same seam every other recognized name already uses — no change
-    // needed to bin/tmct.mjs's tier-2-manifest-id resolution path. Shipped
-    // inactive, like every other opt-in bundle here.
+    // corpus/wordnet/generate.mjs's output: a mechanical ConceptNet-shape conversion of
+    // Open English WordNet, too large to hand-curate like the tier-2 bundles above.
     "wordnet-xl": {
       kind: "corpus",
       active: false,
@@ -185,12 +121,8 @@ function builtinExtensions() {
       corpusPath: join(WORDNET_DIR, "wordnet-full.jsonl"),
       provenancePrefix: "corpus:wordnet-full",
     },
-    // corpus/namenet/generate.mjs's output: species/common-name and
-    // Wikidata-label/WordNet-lemma synonym pairs, mechanically derived from
-    // three human-reviewed Open English Namenet linking tables. A small,
-    // explicitly OPTIONAL top-up bundle (not a primary corpus) — same
-    // BUILTIN_EXTENSIONS seam as wordnet-xl/wordnet-full above, so `tmct
-    // import --corpus namenet` resolves directly here. Shipped inactive.
+    // corpus/namenet/generate.mjs's output: species/common-name and Wikidata/WordNet
+    // synonym pairs. A small, optional top-up bundle, not a primary corpus.
     namenet: {
       kind: "corpus",
       active: false,
@@ -202,9 +134,8 @@ function builtinExtensions() {
 
 export const BUILTIN_EXTENSIONS = Object.freeze(builtinExtensions());
 
-/** Validate one RESOLVED extension entry — throws a clear, specific error
- *  naming the offending key. Shared by resolveExtensions (every entry, always
- *  on) and Part 4's validateExtensionPack (a candidate pack directory). */
+/** Validate one RESOLVED extension entry — throws a clear, specific error naming the
+ *  offending key. Shared by resolveExtensions and validateExtensionPack. */
 export function validateExtensionEntry(name, entry) {
   if (!entry || typeof entry !== "object") {
     throw new Error(`extension "${name}": entry must be an object`);
@@ -278,20 +209,14 @@ function mergeExtensionEntry(name, builtin, override, repoRoot) {
 }
 
 /**
- * Resolve every extension entry a repo carries — the shipped builtins plus
- * whatever `tmct.toml`'s `[extensions]`/`[bias]` tables add or override.
- * Returns `{ entries, biasByBundle }`:
- *   - `entries`: Map<name, ResolvedEntry> in FIXED order (seon, conceptnet,
- *     then the rest sorted by name). EVERY entry is present (active or not) —
- *     callers filter by `.active` themselves (Part 2's corpus loader loop).
- *   - `biasByBundle`: { bundleName: number } from the flat top-level `[bias]`
- *     table (default {} — every bundle then ranks at bias 1, see bias.mjs).
- * No `tmct.toml` (or one with no `[extensions]`/`[bias]` tables) resolves to
- * exactly today's implicit seon+conceptnet default, byte-identical.
+ * Resolve every extension entry a repo carries — the shipped builtins plus whatever
+ * `tmct.toml`'s `[extensions]`/`[bias]` tables add or override. Returns
+ * `{ entries, biasByBundle }`: `entries` is Map<name, ResolvedEntry> in fixed order (every
+ * entry present, active or not — callers filter by `.active`); `biasByBundle` is
+ * { bundleName: number } from the flat `[bias]` table (default {}).
  *
- * `configFile` (optional): an explicit tmct.toml path override — `tmct extend
- * --validate <dir> --config <path>` — read INSTEAD of `<repoRoot>/tmct.toml`;
- * `repoRoot` still anchors every resource path (unchanged).
+ * `configFile` (optional): an explicit tmct.toml path read instead of
+ * `<repoRoot>/tmct.toml`; `repoRoot` still anchors every resource path.
  */
 export async function resolveExtensions(repoRoot, { configFile } = {}) {
   const raw = repoRoot ? await loadTomlConfig(repoRoot, configFile ? { file: configFile } : {}) : null;
@@ -324,25 +249,14 @@ export async function resolveExtensions(repoRoot, { configFile } = {}) {
 
 // ---- Part 2: the unified corpus loader loop ---------------------------------
 
-/** Seed every ACTIVE `corpus`/`ontology`-kind entry, plus any ACTIVE `pack`-kind
- *  entry that declares a `corpusPath` (in the Map's own fixed order — seon,
- *  conceptnet, then the rest sorted by name) into `repo`'s memory, ONE
- *  seedMemory() call per bundle. Shared by chat.mjs's first-run bootstrap,
- *  `tmct init`'s seed step and `tmct init --corpus <id>` — so all three read
- *  the SAME loop instead of three independent hardcoded call sites.
+/** Seed every ACTIVE `corpus`/`ontology`-kind entry, plus any ACTIVE `pack`-kind entry
+ *  that declares a `corpusPath`, into `repo`'s memory, one seedMemory() call per bundle.
+ *  Shared by chat.mjs's first-run bootstrap, `tmct init`'s seed step, and
+ *  `tmct init --corpus <id>`.
  *
- *  BUGFIX (this batch): a `pack`-kind entry's `corpusPath` used to be silently
- *  skipped here despite this module's own docblock claiming pack entries
- *  combine corpus_path/lexicon_path/etc — a pack's corpus facts never made it
- *  into memory. Fixed by seeding any active pack entry that declares a
- *  corpusPath, alongside corpus/ontology entries.
- *
- *  FAILURE-TOLERANT per bundle (init.mjs's own doctrine: a missing/broken
- *  corpus degrades to "not seeded", never a crash): one bad third-party pack's
- *  seedMemory throw is CAUGHT and recorded as `perBundle[name].error` — logged
- *  in the structured result rather than silently swallowed — while every
- *  OTHER bundle still seeds normally. Returns
- *  `{ appended, skipped, total, perBundle: { name: {appended,skipped,total,error?} } }`. */
+ *  FAILURE-TOLERANT per bundle: one bad third-party pack's seedMemory throw is caught and
+ *  recorded as `perBundle[name].error` while every other bundle still seeds normally.
+ *  Returns `{ appended, skipped, total, perBundle: { name: {appended,skipped,total,error?} } }`. */
 export async function seedActiveCorpusEntries(repo, entries) {
   const { seedMemory } = await import("./corpus/conceptnet.mjs");
   const perBundle = {};
@@ -350,13 +264,6 @@ export async function seedActiveCorpusEntries(repo, entries) {
   let skipped = 0;
   let total = 0;
   for (const [name, entry] of entries instanceof Map ? entries : new Map()) {
-    // PLAN_SEED.md §2 bug fix: a "pack"-kind entry with its own corpusPath
-    // combines corpus/lexicon/templates under one active flag (this module's
-    // own docblock says so) but was previously never actually seeded here —
-    // only bare `kind: "corpus"` entries were. Broadened, not narrowed: every
-    // existing `kind: "corpus"`/`kind: "ontology"` entry (seon/conceptnet/
-    // human/tier2-*) behaves identically to before; only a pack entry that
-    // DOES carry a corpusPath newly qualifies.
     if (!entry.active) continue;
     const seedable = entry.kind === "corpus" || entry.kind === "ontology" || (entry.kind === "pack" && entry.corpusPath);
     if (!seedable) continue;
@@ -373,8 +280,6 @@ export async function seedActiveCorpusEntries(repo, entries) {
       skipped += res.skipped;
       total += res.total;
     } catch (err) {
-      // Logged (in the structured result), never silently swallowed — but this
-      // ONE bundle's failure never aborts the others.
       perBundle[name] = { appended: 0, skipped: 0, total: 0, error: err && err.message ? err.message : String(err) };
     }
   }
@@ -384,16 +289,10 @@ export async function seedActiveCorpusEntries(repo, entries) {
 // ---- Part 3: lexicon-bundle merge -------------------------------------------
 
 /** Merge every ACTIVE `lexicon`/`pack` entry's declared lexicon file into one
- *  `{nouns, verbs, adjectives, properNames}` object — the exact shape
- *  grammar/lexicon.mjs's `loadLexicon(extra)` already accepts. Bundles merge
- *  in ASCENDING bias order (lowest first) so `loadLexicon`'s existing "extra
- *  entries win on conflict" last-write-wins semantics resolve a same-lemma
- *  collision by BIAS, deterministically, rather than by arbitrary load order —
- *  a higher-bias bundle's entry always wins. Ties (equal/absent bias) keep the
- *  entries' `entries` Map iteration order (itself the fixed seon/conceptnet/
- *  sorted-rest order). Entries with no lexiconPath are skipped. Returns `null`
- *  when nothing merges (so a caller can pass `undefined` through to
- *  `loadLexicon` unchanged — the byte-identical no-extension default). */
+ *  `{nouns, verbs, adjectives, properNames}` object (grammar/lexicon.mjs's `loadLexicon`
+ *  shape). Bundles merge in ascending bias order so a same-lemma collision resolves by
+ *  bias, deterministically — a higher-bias bundle's entry always wins. Returns `null`
+ *  when nothing merges. */
 export async function mergedLexiconExtra(entries, biasByBundle = {}) {
   const candidates = [];
   for (const [name, entry] of entries instanceof Map ? entries : new Map()) {
@@ -425,13 +324,10 @@ export async function mergedLexiconExtra(entries, biasByBundle = {}) {
 
 // ---- Part 4: `tmct extend --validate <dir>` ---------------------------------
 
-/** Validate one CANDIDATE extension pack entry against a directory — reuses
- *  the existing throw-loudly primitives (loadSlice/loadMap/toFacts,
- *  loadLexicon, loadTemplates) rather than inventing new shape-checking logic.
- *  `candidate` is a resolved-shape entry (see mergeExtensionEntry) whose paths
- *  are absolute or resolved against `dir`. Returns
- *  `{ ok, results: [{kind, path, ok, error?, counts?}] }` — never throws;
- *  every failure is CAUGHT and reported as one `results[]` row. */
+/** Validate one CANDIDATE extension pack entry against a directory, reusing the existing
+ *  throw-loudly primitives (loadSlice/loadMap/toFacts, loadLexicon, loadTemplates).
+ *  `candidate` is a resolved-shape entry whose paths are absolute or resolved against
+ *  `dir`. Returns `{ ok, results: [{kind, path, ok, error?, counts?}] }`; never throws. */
 export async function validateExtensionPack(dir, candidate) {
   const results = [];
   const abs = (p) => (p ? (isAbsolute(p) ? p : resolve(dir, p)) : p);

@@ -1,5 +1,5 @@
-// corpus/templates.mjs — the response-template library + SE phrase book loaders
-// (ROADMAP Phase 2, items 4+7). Plain diffable data in, strict renderers out:
+// corpus/templates.mjs — the response-template library + SE phrase book loaders.
+// Plain diffable data in, strict renderers out:
 //
 //   data/templates/responses.jsonl   {id, class, template, register} rows
 //   data/phrasebook/software-phrases.txt  one phrase pattern per line
@@ -8,8 +8,8 @@
 // loadTemplates() validates the whole file (parse, required fields, unique
 // ids) and caches; render(id, slots) is then synchronous and STRICT — an
 // unknown id or a missing slot throws, it never emits a half-filled sentence.
-// The response surface (Phase 1 pipeline) fills templates from grounded data
-// only, so a thrown slot is a programming error, not a user-facing miss.
+// The response surface fills templates from grounded data only, so a thrown
+// slot is a programming error, not a user-facing miss.
 
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -19,20 +19,14 @@ const PKG_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 export const TEMPLATES_FILE = join(PKG_ROOT, "data", "templates", "responses.jsonl");
 export const PHRASEBOOK_FILE = join(PKG_ROOT, "data", "phrasebook", "software-phrases.txt");
 
-// Registers (Phase 6, archive/PLAN_FORMULAIC_COMPETENCE.md): `terse|friendly` are the
-// conversational bands; `technical` is the C1 / technical-paper band whose
-// templates render item-5 mechanical conclusions (count / comparison /
-// superlative + the provenance we already compute) as advanced prose. A
-// technical template is FORMULAIC COMPETENCE: it renders via:"template", so the
-// dual banding counts it in the PERFORMANCE band only, never the productive one.
+// Registers: `terse|friendly` are the conversational bands; `technical` is the C1
+// technical-paper band, rendering mechanical conclusions (count/comparison/superlative
+// + provenance) as advanced prose.
 const REGISTERS = new Set(["terse", "friendly", "technical"]);
 const SLOT_RE = /\{([A-Za-z][A-Za-z0-9]*)\}/g;
 
-// Slot-lint for the technical band: a technical template may ONLY fill from the
-// mechanical values tmct actually computes (counts, comparisons, superlatives,
-// scopes, provenance) — no free-text slot can smuggle unattributable prose into
-// the C1 register. Every technical row must also carry a {provenance} fill (the
-// item-5 "+ provenance" contract: an advanced claim always shows its source).
+// Slot-lint for the technical band: only mechanical values, no free-text slot — and
+// every technical row must carry a {provenance} fill.
 export const TECHNICAL_SLOTS = Object.freeze(new Set([
   "subject", "count", "noun", "scope", "comparison", "metric", "unit",
   "superlative", "provenance",
@@ -47,18 +41,12 @@ export function slotsOf(template) {
   return out;
 }
 
-// --- Segmentation IR (Phase 7, lever 1) -------------------------------------
+// --- Segmentation IR ---------------------------------------------------------
 // A rendered answer is ALSO a list of typed spans: [{ type, text }, …] with
-// type ∈ prose | entity | path | number | code | provenance | receipt. The
-// invariant law is byte-exact reconstruction: flatten(segments) === render().
-// Everything except `prose` is PROTECTED — finishing (a later wave) may only
-// transform prose spans, so a grammar rule can never touch a fact.
-//
-// Slot kinds map a template hole to its protected span type. A slot fill is
-// ALWAYS protected (never prose): it is grounded data, not our wording. The
-// specific type is derived from the slot name; unknown slots fall back to the
-// conservative `entity` (protect-when-unsure). Bytes never depend on the type,
-// only on the fill, so the type is metadata layered over an exact split.
+// type ∈ prose | entity | path | number | code | provenance | receipt, satisfying
+// flatten(segments) === render(). Everything except `prose` is PROTECTED — a grammar
+// rule may only transform prose spans, never touch a fact. A slot fill is always
+// protected; unknown slot names fall back to the conservative `entity`.
 const SLOT_KIND = {
   count: "number",
   when: "number",
@@ -152,22 +140,11 @@ export async function loadTemplates(path = TEMPLATES_FILE) {
   return byId;
 }
 
-/** Load + merge several EXTENSION-PACK template files (each independently
- *  validated by loadTemplates() — same loud-on-malformed-row guarantee) into
- *  one Map<id,row>. Every extension-pack template id MUST be namespaced
- *  "<packname>:<id>" — enforced here as a validation rule (also the check
- *  Part 4's validateExtensionPack runs on a single candidate file), rather
- *  than inventing a same-id collision-precedence policy: a bare, unnamespaced
- *  id, or the SAME id appearing under two different paths, both throw loudly
- *  naming the offending path/id.
- *
- *  loadTemplates(path) mutates the module's own render()-serving `cache` as a
- *  side effect; this function restores it to whatever it was before the merge
- *  ran, so calling loadTemplatesMerged() never clobbers the "current" default
- *  templates map for an unrelated caller (e.g. a concurrent render() call
- *  elsewhere in the same process). The returned map is NOT installed as the
- *  render() default — a caller that wants render() to serve the merged set
- *  passes it explicitly: render(id, slots, mergedMap). */
+/** Load + merge several EXTENSION-PACK template files into one Map<id,row>. Every
+ *  extension-pack template id must be namespaced "<packname>:<id>" (a bare or duplicate
+ *  id throws, naming the offending path/id). Restores the module's `cache` to its
+ *  pre-call state afterward — the returned map is not installed as the render() default;
+ *  a caller passes it explicitly: render(id, slots, mergedMap). */
 export async function loadTemplatesMerged(paths = []) {
   const savedCache = cache;
   const merged = new Map();
@@ -196,9 +173,6 @@ export async function loadTemplatesMerged(paths = []) {
  *  `templates` explicitly to bypass the module cache, e.g. in tests). */
 export function render(id, slots = {}, templates = cache) {
   if (!templates) throw new Error("render() before loadTemplates() — load the template library first");
-  // render() IS the flattened segmentation, by construction: the byte output is
-  // provably identical to the old `.replace(SLOT_RE, …)` (test/segments.test.mjs
-  // renders every responses.jsonl row both ways and asserts equality).
   return flatten(renderSegments(id, slots, templates));
 }
 

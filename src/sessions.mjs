@@ -7,21 +7,14 @@
 //     {"type":"turn", ts, query, via, resolvedIds, answeredIds, miss}  (one per turn, flushed)
 //     {"type":"end", ts}                                          (clean close marker)
 //
-// From the sidecar the session enters the typed graph twice:
-//   - READ TIME (chat.mjs, per turn): appendSessionToGraph() upserts one `Session`
-//     individual (`session:<uuidv7>`) + `mgx:asksAbout` edges into graph.json —
-//     atomically (temp + rename), re-reading the file first so a re-index that
-//     happened mid-session is tolerated: edges whose targets vanished are dropped,
-//     never left dangling (honest degradation).
-//   - REBUILD (any future graph writer): readSessionRecords() + foldInSessions()
-//     re-attach every recorded session to a FRESH graph, re-resolving each recorded
-//     entity id (by id first, then by unique label derived from the id shape);
-//     unresolvable references are dropped and counted on the session node
-//     (mgx:sessionDroppedEdges) — never a guessed edge.
+// From the sidecar the session enters the typed graph twice: at READ TIME (chat.mjs, per
+// turn) appendSessionToGraph() upserts one `Session` individual + `mgx:asksAbout` edges,
+// atomically, dropping edges whose targets vanished; at REBUILD, readSessionRecords() +
+// foldInSessions() re-attach every recorded session to a fresh graph, re-resolving each
+// entity id and dropping unresolvable references rather than guessing.
 //
-// Sessions are runtime observations, not source derivations: they record what a human
-// asked the graph about and which entities answered, so re-indexing re-attaches them
-// rather than re-deriving them from source.
+// Sessions are runtime observations, not source derivations, so re-indexing re-attaches
+// them rather than re-deriving them from source.
 
 import { mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
@@ -193,15 +186,13 @@ function repoDirFromGraphFile(graphFile) {
   return basename(tmctDir) === ".tmct" ? dirname(tmctDir) : null;
 }
 
-/** The memory side-write for one session append (item 9's chat wiring, placed
- *  HERE so chat.mjs needs no change — it already calls appendSessionToGraph
- *  every turn). Each recorded turn becomes an a-visitor-said Utterance; the
- *  response prose is recovered from the human transcript (the only artifact
- *  that carries answer TEXT — the sidecar records ids) and recorded alongside
- *  as a tmct Utterance replying to it. Deterministic utterance ids make the
- *  per-turn replay idempotent. Once the sidecar carries its end marker (chat
- *  writes it before the final graph upsert), the session is folded into the
- *  text-block corpus (memory/fold.mjs). */
+/** The memory side-write for one session append, placed here so chat.mjs needs no
+ *  change — it already calls appendSessionToGraph every turn. Each recorded turn becomes
+ *  an a-visitor-said Utterance; the response prose is recovered from the human transcript
+ *  (the sidecar only records ids) and recorded alongside as a tmct Utterance replying to
+ *  it. Deterministic utterance ids make the per-turn replay idempotent. Once the sidecar
+ *  carries its end marker, the session is folded into the text-block corpus
+ *  (memory/fold.mjs). */
 async function recordSessionMemory(graphFile, record, repoDirOverride = null) {
   const repoDir = repoDirOverride ?? repoDirFromGraphFile(graphFile);
   if (!repoDir || !record?.id) return;

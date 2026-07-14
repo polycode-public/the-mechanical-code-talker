@@ -1,26 +1,16 @@
-// tui/app.mjs — the Ink full-screen chat shell (the default on a TTY).
+// tui/app.mjs — the Ink full-screen chat shell (the default on a TTY): an
+// alternate-screen layout with a scrolling transcript pane, a bottom input line, and a
+// status bar (repo, module count, session id).
 //
-// The claude-code feel: an alternate-screen, full-height layout with a scrolling
-// transcript pane (each visitor line echoed under the prompt it was typed at,
-// the answer below it), a bottom input line carrying the live `tmct> ` /
-// `tmct(label)> ` focus prompt, and a thin status bar (repo · module count ·
-// session id · an honest "no graph — starting empty" when bootstrapping).
+// Every turn goes through the SAME createSession sink (src/chat.mjs) the plain readline
+// shell uses — transcript log, sidecar, graph upsert, and memory side-write are
+// byte-identical to `--plain`; only the screen drawing differs.
 //
-// EVERY turn goes through the SAME createSession sink (src/chat.mjs) the plain
-// readline shell uses — the transcript log, structured sidecar, per-turn graph
-// upsert and memory side-write are byte-identical to `--plain`; only the
-// screen drawing differs. Slash-commands work unchanged (they're session.turn's
-// job); `/exit` and a conversational "bye" end the session; Ctrl+C exits
-// cleanly through the same close() (Ink's exitOnCtrlC → waitUntilExit → close).
-//
-// Library decision (ROADMAP Phase 1 shell work): Ink 7 + React 19 — plain Node
-// ESM, no JSX/build step (React.createElement throughout). OpenTUI was ruled
-// out for now: @opentui/core depends on Bun FFI (bun-ffi-structs / a native Zig
-// renderer), so it doesn't run under plain Node; revisit when it does.
+// Library decision: Ink 7 + React 19, no JSX/build step. OpenTUI was ruled out:
+// @opentui/core depends on Bun FFI, so it doesn't run under plain Node.
 //
 // The view-model is PURE and exported (statusText, appendTurn, transcriptLines,
-// wrapLines) so node:test exercises it without a terminal; the component tree
-// is thin glue over it.
+// wrapLines) so node:test exercises it without a terminal.
 
 import React, { useEffect, useState } from "react";
 import { render, Box, Text, useApp, useInput, useStdout } from "ink";

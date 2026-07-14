@@ -3,13 +3,11 @@
 //
 // Two halves, deliberately split:
 //   - sliceSpan   — PURE. Given an in-memory `lines` array, extracts + line-numbers
-//                   one span. No fs, no path logic. Lifted byte-identical from the
-//                   slicing logic that used to live inline in server.mjs (buildContextBundle's
-//                   `sliceBody` closure and the tmct_snippet dispatch branch).
+//                   one span. No fs, no path logic.
 //   - readSpanSafe — the fs-touching half. Resolves `join(repoRoot, path)` with Node's
 //                   `resolve()` and REFUSES to read anything that resolves outside
-//                   `repoRoot` before ever calling the injected `readFile`. This is the
-//                   fix for a real path-traversal gap: graph.json's `site.path` values are
+//                   `repoRoot` before ever calling the injected `readFile`. Guards against
+//                   a real path-traversal gap: graph.json's `site.path` values are
 //                   data (parsed from a JSON artifact on disk), not trusted input — a
 //                   crafted or corrupted graph with a `../../etc/passwd`-shaped path must
 //                   never reach an unguarded readFile.
@@ -53,8 +51,8 @@ export function sliceSpan(lines, start, end, maxLines) {
 export async function readSpanSafe({ readFile, repoRoot, path, start, end, maxLines }) {
   // Normalize repoRoot to absolute here too (defense in depth) — resolve(repoRoot, path)
   // is always absolute, so comparing it against a RELATIVE repoRoot would make this guard
-  // reject every read, not just traversal attempts (the actual bug this normalization
-  // fixes; callers should already pass an absolute repoRoot via src/config.mjs.
+  // reject every read, not just traversal attempts. Callers should already pass an
+  // absolute repoRoot via src/config.mjs.
   const root = resolve(repoRoot);
   const resolved = resolve(root, path);
   if (resolved !== root && !resolved.startsWith(root + sep)) {

@@ -1,56 +1,19 @@
-// completions/infer.mjs — Stage 3 ("inference between groups") of PLAN_COMPLETIONS.md's
-// six-stage mechanical-text-generation pipeline. §4's staging table: "cross-group inference
-// wired to the existing entailment/rule-chase machinery, closed inference-relation
-// vocabulary... Reuses syllogise.mjs/resolveRelationChase, no new engine... Every asserted
-// inference cites a concrete licensing test, zero fabricated relationships on a hand-labeled
-// set" — this file, plus test/completions-infer.test.mjs's hand-labeled fixture, is that exit
-// criterion made concrete.
+// completions/infer.mjs — Stage 3 ("inference between groups"): applies resolveRelationChase
+// (src/memory/core.mjs) to relationships BETWEEN retrieved text groups, not just graph facts.
+// Four relations (supports/contradicts/elaborates/exemplifies), each with its own named
+// licensing test — see the four test*() functions below. A relation is asserted only when its
+// test concretely licenses it, never from prose similarity.
 //
-// "Apply tmct's existing entailment machinery... not just to graph facts, but to
-// relationships BETWEEN retrieved text groups... a closed, small inference-relation
-// vocabulary, deliberately mirroring marginalia's own TYPED_EDGES closed set... A relationship
-// between two groups is only asserted when a concrete, named test licenses it... never
-// inferred by prose similarity alone" (PLAN_COMPLETIONS.md §1.3). Four relations, each with
-// its own mechanical, named licensing test — see the four test*() functions below, one per
-// relation, each documented at its own definition:
-//
-//   supports    — resolveRelationChase (src/memory/core.mjs, PLAN_COMPLETIONS.md Stage 1's
-//                 own prerequisite extraction) confirms a taught relation fact between two
-//                 entities both groups' text share.
-//   contradicts — the two groups' text carry OPPOSITE negation polarity around the SAME
-//                 shared graph-known entity + shared content token (token-level, closed
-//                 negation-marker set — no graph fact required).
-//   elaborates  — one group's graph-known entity set is a PROPER SUBSET of the other's (the
-//                 wider group elaborates the narrower one).
-//   exemplifies — one group names a class-level term (something else is taught
-//                 rdfs:subClassOf/rdf:type it — checkable via the SAME memory/core.mjs-loaded
-//                 fact rows), and the other group names a taught INSTANCE of that class.
-//
-// "Entity" grounding: a group's raw content tokens (tokenizeBlock, the same tokenizer
-// group.mjs/rank.mjs use, filtered the same isContentToken way those two files already
-// establish) are narrowed to GRAPH-KNOWN terms only — tokens that normFactTerm-match some
-// fact's subject or object in the loaded memory. This is the concrete grounding that keeps
-// "group A and group B share an entity" a checkable graph fact, not a prose-similarity guess:
-// two groups merely using the same English word never licenses anything on its own unless
-// that word is itself a taught term.
-//
-// Determinism: no randomness anywhere. Groups are processed in a fixed (id-sorted) pairwise
-// order; every internal token/entity set is turned into a sorted array before use; every
-// per-relation test returns at most one hit per (group pair, relation), picked by that fixed
-// order — never "first of an unordered Set/Map iteration". See
-// test/completions-infer.test.mjs's own double-run diff test, the same discipline
-// test/completions-stage0.test.mjs and test/completions-stage2.test.mjs already apply to
-// search+group and to sentence ranking.
+// Entities are a group's content tokens narrowed to graph-known terms (normFactTerm-matched
+// against loaded facts) — sharing an English word alone never licenses a relation.
 
 import { normFactTerm, readFactRows, resolveRelationChase } from "../memory/core.mjs";
 import { tokenizeBlock } from "../memory/blocks.mjs";
 import { splitSentences } from "./rank.mjs";
 import { STOPWORDS } from "../prose.mjs";
 
-// Same content-token filter group.mjs/rank.mjs each apply to their own adjacency/ranking (not
-// exported from either, so replicated here rather than reached across files — see either
-// file's own header for why raw tokenizeBlock output, which re-admits stopword-shaped filler,
-// is unsuitable for unweighted set operations like the ones this file runs).
+// Same content-token filter group.mjs/rank.mjs apply to their own adjacency/ranking; not
+// exported from either, so replicated here rather than reached across files.
 const isContentToken = (t) => /^[a-z0-9]+$/.test(t) && !STOPWORDS.has(t);
 
 /** tokenizeBlock(text), narrowed to real content tokens — see isContentToken above. */
@@ -58,25 +21,15 @@ function contentTokens(text) {
   return tokenizeBlock(text).filter(isContentToken);
 }
 
-// This file's own local copy of chat.mjs's private HAS_PROPERTY_PREDICATE constant (same
-// literal string, "mgx:hasProperty") — not exported from memory/core.mjs or chat.mjs, so
-// resolveRelationChase's own unit tests (test/memory-core.test.mjs) establish the precedent of
-// a caller supplying its own minimal, self-contained copy in its `helpers` bag rather than
-// reaching into chat.mjs (out of scope for this dispatch) for the shared constant.
+// Local copy of chat.mjs's private HAS_PROPERTY_PREDICATE constant — not exported, so callers
+// supply their own copy in the `helpers` bag resolveRelationChase expects.
 const HAS_PROPERTY_PREDICATE = "mgx:hasProperty";
 
-// The taught ISA-family predicates (chat.mjs's own MINT_ISA_PREDICATES/ISA_PREDICATES sets
-// this same pair, elsewhere) — the exemplifies test's "checkable via the taught IsA/subClassOf
-// graph" per PLAN_COMPLETIONS.md §1.3, read directly off readFactRows() rows rather than via
-// syllogise.mjs's fuller OWL 2 RL machinery (out of scope for this dispatch; this file only
-// needs the STORED isa edges, not their transitive closure).
+// The taught ISA-family predicates (stored edges only, not their transitive closure).
 const ISA_PREDICATES = new Set(["rdfs:subClassOf", "rdf:type"]);
 
-// The contradicts test's closed negation-marker vocabulary (PLAN_COMPLETIONS.md §1.3's own
-// suggestion: "a simpler token-level polarity check... a small closed negation-word set").
-// Deliberately checked against the RAW sentence text, not contentTokens()'s output — prose.mjs's
-// STOPWORDS (which isContentToken filters through) already strips "not"/"no" as filler for
-// clustering/ranking purposes, which would silently erase the exact signal this test needs.
+// The contradicts test's closed negation-marker vocabulary, checked against RAW sentence
+// text (contentTokens() strips "not"/"no" as stopword filler, which would erase this signal).
 const NEGATION_MARKERS = new Set([
   "not", "no", "never", "cannot", "none", "nobody", "nothing", "neither", "nor", "without",
 ]);
@@ -127,30 +80,21 @@ function buildGraphTerms(rows) {
   return set;
 }
 
-/** A group's GRAPH-GROUNDED entities: its own content-token vocabulary, narrowed to tokens
- *  that are themselves graph-known terms (buildGraphTerms' universe) — sorted for determinism.
- *  This is the concrete grounding test/completions-infer.test.mjs's fixture exercises: two
- *  groups merely sharing an English word (e.g. both saying "abstraction") never counts unless
- *  that word is itself a taught fact term. */
+/** A group's GRAPH-GROUNDED entities: content tokens narrowed to graph-known terms, sorted. */
 function entitiesOf(group, graphTerms) {
   return [...groupContentTokenSet(group)].filter((t) => graphTerms.has(t)).sort();
 }
 
-/** A minimal, self-contained relationFactsFor(name) — direct-predicate match only
- *  (`mgx:${name}`), no alias/subClassOf-over-relation-names chase. Mirrors
- *  test/memory-core.test.mjs's own testRelationFactsFor precedent exactly: resolveRelationChase
- *  never calls the alias substrate itself, that lives entirely inside whatever relationFactsFor
- *  the caller supplies, and a direct-only implementation is an honest, valid, simpler one — no
- *  alias-chase claim is made or needed for the supports test's own licensing standard. */
+/** A minimal relationFactsFor(name): direct-predicate match only (`mgx:${name}`), no
+ *  alias/subClassOf chase — sufficient for this test's licensing standard. */
 function makeRelationFactsFor(rows) {
   return (name) => rows
     .filter((f) => f.predicate === `mgx:${name}`)
     .map((f) => ({ fact: f, aliasFacts: [] }));
 }
 
-/** The resolveRelationChase/resolveRelationChaseReverse `helpers` bag this file supplies —
- *  same shape test/memory-core.test.mjs's own direct unit tests use, built once per
- *  inferRelations() call over the loaded memory's fact rows. */
+/** The resolveRelationChase/resolveRelationChaseReverse `helpers` bag this file supplies,
+ *  built once per inferRelations() call over the loaded memory's fact rows. */
 function makeHelpers(rows) {
   return {
     relationFactsFor: makeRelationFactsFor(rows),
@@ -163,10 +107,8 @@ function makeHelpers(rows) {
   };
 }
 
-/** Every distinct relation NAME resolveRelationChase can plausibly be asked about: every
- *  `mgx:<name>` predicate actually present among the loaded facts, minus HAS_PROPERTY_PREDICATE
- *  (a property-literal marker, not a relation name) — a closed, corpus-derived candidate list,
- *  never an open-ended guess at what "a relation" might be named. Sorted for determinism. */
+/** Every distinct relation NAME present among the loaded facts (`mgx:<name>` predicates,
+ *  minus HAS_PROPERTY_PREDICATE, a property marker not a relation name). Sorted. */
 function relationNameCandidates(rows) {
   const names = new Set();
   for (const r of rows) {
@@ -177,15 +119,9 @@ function relationNameCandidates(rows) {
   return [...names].sort();
 }
 
-/**
- * SUPPORTS — group A and group B share at least two graph-grounded entities, AND a taught
- * relation fact (resolveRelationChase, src/memory/core.mjs — this file's direct tie-in to
- * PLAN_COMPLETIONS.md Stage 1's own prerequisite extraction) confirms a claim connecting two of
- * those shared entities. Tries every (subject, object) ordered pair drawn from the shared
- * entity set, against every candidate relation name, in fixed sorted order; the first hit
- * (deterministic given fixed inputs) is the one asserted. Returns
- * `{ licensingTest, evidence }` or null.
- */
+/** SUPPORTS — groups A/B share >=2 graph-grounded entities AND a taught relation fact
+ *  connects two of them. Tries every (subject, object) pair against every candidate relation
+ *  name in fixed sorted order; first hit wins. Returns `{ licensingTest, evidence }` or null. */
 async function testSupports(a, b, memory, helpers, relationNames, graphTerms) {
   const entitiesA = entitiesOf(a, graphTerms);
   const entitiesB = entitiesOf(b, graphTerms);
@@ -209,14 +145,9 @@ async function testSupports(a, b, memory, helpers, relationNames, graphTerms) {
   return null;
 }
 
-/**
- * CONTRADICTS — group A and group B both mention the SAME graph-grounded entity, plus a
- * second shared content token ("predicate"/aspect) that co-occurs with the entity in at least
- * one sentence on each side — and one side's co-occurring sentence carries a closed-set
- * negation marker while the other side's does not (opposite polarity about the same claim,
- * PLAN_COMPLETIONS.md §1.3's own "simpler token-level polarity check"). Returns
- * `{ licensingTest, evidence }` or null.
- */
+/** CONTRADICTS — groups A/B share a graph-grounded entity plus a second co-occurring token
+ *  ("aspect"), and one side's matching sentence is negated while the other's isn't. Returns
+ *  `{ licensingTest, evidence }` or null. */
 function testContradicts(a, b, graphTerms) {
   const entitiesA = entitiesOf(a, graphTerms);
   const entitiesB = entitiesOf(b, graphTerms);
@@ -271,14 +202,9 @@ function isProperSubset(small, big) {
   return small.size > 0 && small.size < big.size && [...small].every((t) => big.has(t));
 }
 
-/**
- * ELABORATES — one group's graph-grounded entity set is a PROPER SUBSET of the other's: the
- * WIDER group (the superset) elaborates the NARROWER one (the subset) — it covers everything
- * the narrower group's entities do, plus more. Equal entity sets never count (neither is a
- * *proper* subset of the other) — two groups about exactly the same entities are not in an
- * elaboration relationship by this test. Returns `{ wider: "a"|"b", licensingTest, evidence }`
- * or null.
- */
+/** ELABORATES — one group's graph-grounded entity set is a PROPER SUBSET of the other's; the
+ *  wider group elaborates the narrower one. Equal sets never count. Returns
+ *  `{ wider: "a"|"b", licensingTest, evidence }` or null. */
 function testElaborates(a, b, graphTerms) {
   const entitiesA = new Set(entitiesOf(a, graphTerms));
   const entitiesB = new Set(entitiesOf(b, graphTerms));
@@ -300,15 +226,10 @@ function testElaborates(a, b, graphTerms) {
   return null;
 }
 
-/**
- * EXEMPLIFIES — `general` names a class-level term (some taught fact has it as the OBJECT of
- * an ISA_PREDICATES edge — i.e. something else is taught to BE one of it), and `instance`
- * names a graph-grounded entity taught to BE one, directly (ISA_PREDICATES edge: instance ->
- * general). Asymmetric and directional by construction: `instance`'s group exemplifies
- * `general`'s group, never the reverse in the same call — callers probe both directions by
- * calling this twice with the groups swapped (see inferRelations below). Returns
- * `{ licensingTest, evidence }` or null.
- */
+/** EXEMPLIFIES — `general` names a class-level term (object of an ISA_PREDICATES edge), and
+ *  `instance` names an entity taught to BE one directly. Asymmetric: callers probe both
+ *  directions by calling this twice with groups swapped (see inferRelations below). Returns
+ *  `{ licensingTest, evidence }` or null. */
 function testExemplifies(general, instance, rows, graphTerms) {
   const generalEntities = entitiesOf(general, graphTerms);
   const instanceEntities = entitiesOf(instance, graphTerms);
@@ -332,22 +253,14 @@ function testExemplifies(general, instance, rows, graphTerms) {
 }
 
 /**
- * Stage 3 — cross-group inference. For every unordered pair of groups (group.mjs's groupHits()
- * output, or any `{ id, members: [{id, text}] }` array), tests each of the four closed
- * relations (supports/contradicts/elaborates/exemplifies) via its own concrete, named,
- * mechanical licensing test — never prose similarity. A relation only appears in the output
- * when its own test function returns a hit; every hit carries `licensingTest` (a human-
- * readable description of exactly what fired) and `evidence` (the concrete facts/tokens cited)
- * — PLAN_COMPLETIONS.md §2's auditability bar ("every cross-group claim must cite the
- * two-or-more groups and the inference kind that licensed it").
+ * Stage 3 — cross-group inference. For every unordered pair of groups, tests each of the four
+ * closed relations and includes a hit only when its test function fires.
  *
  * @param {Array<{id:string, members:Array<{id:string,text:string}>}>} groups
  * @param {object} memory  an already-loaded memory/core.mjs loadMemory() payload
  * @param {object} [opts]  reserved for future tuning; unused today
  * @returns {Promise<Array<{from:string, to:string, relation:"supports"|"contradicts"|"elaborates"|"exemplifies", licensingTest:string, evidence:object}>>}
- *   deterministic: groups are processed in id-sorted pairwise order, and the final list is
- *   additionally stable-sorted by (from, to, relation) so output order never depends on
- *   incidental iteration order anywhere upstream.
+ *   deterministic: id-sorted pairwise order, stable-sorted by (from, to, relation).
  */
 // eslint-disable-next-line no-unused-vars -- opts reserved, see docblock
 export async function inferRelations(groups, memory, opts = {}) {
@@ -381,8 +294,7 @@ export async function inferRelations(groups, memory, opts = {}) {
         out.push({ from, to, relation: "elaborates", licensingTest: ela.licensingTest, evidence: ela.evidence });
       }
 
-      // Both directions probed independently — "A exemplifies B" and "B exemplifies A" are
-      // genuinely different claims, each licensed (or not) by its own class/instance test.
+      // Both directions probed independently — different claims, each its own test.
       const bExemplifiesA = testExemplifies(A, B, rows, graphTerms);
       if (bExemplifiesA) out.push({ from: B.id, to: A.id, relation: "exemplifies", licensingTest: bExemplifiesA.licensingTest, evidence: bExemplifiesA.evidence });
       const aExemplifiesB = testExemplifies(B, A, rows, graphTerms);

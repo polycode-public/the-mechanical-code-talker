@@ -1,24 +1,14 @@
-// corpus/conceptnet.mjs — the ConceptNet slice loader + memory seeder
-// (ROADMAP Phase 2, "ConceptNet corpus slice").
+// corpus/conceptnet.mjs — the ConceptNet slice loader + memory seeder.
 //
 //   loadSlice(path?)        stream corpus/conceptnet/slice.jsonl → assertions
 //   loadMap(path?)          src/corpus/conceptnet-map.toml → Map(rel → row)
 //   toFacts(assertions,map) assertions → appendFact-shaped triples
-//   seedMemory(dir, opts)   write them into <dir>/.tmct/memory via appendFacts (one batched write)
+//   seedMemory(dir, opts)   write them into <dir>/.tmct/memory via appendFacts
 //
-// The slice is committed data (one JSON object per line: {start, rel, end,
-// surfaceText?, weight}; en→en only; CC-BY-SA 4.0 for ConceptNet-derived rows
-// — see corpus/conceptnet/LICENSE-NOTICE). The mapping table decides which
-// relations become memory facts and under which predicate URI; rows marked
-// ace = "none" are deliberate non-emissions. A slice relation MISSING from
-// the table is a drift error — loud, never guessed around.
-//
-// Seeding goes through src/memory/core.mjs appendFacts() (memory is import-only
-// here): fact ids are content-hashed from (s,p,o), so re-seeding is idempotent by
-// construction. seedMemory pre-loads the store once and skips triples already
-// present, then hands the survivors to appendFacts as ONE batched read-modify-
-// write — so seeding the whole slice is O(N), not the O(N²) a per-fact appendFact
-// loop would incur (the 6 k-fact slice: ~7 min → a couple of seconds).
+// The slice is committed data (en→en only; CC-BY-SA 4.0 — see
+// corpus/conceptnet/LICENSE-NOTICE). The mapping table decides which relations become
+// memory facts and under which predicate; a slice relation missing from the table is a
+// drift error, loud, never guessed around.
 
 import { createReadStream } from "node:fs";
 import { readFile } from "node:fs/promises";
@@ -32,29 +22,18 @@ const PKG_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 export const SLICE_FILE = join(PKG_ROOT, "corpus", "conceptnet", "slice.jsonl");
 export const MAP_FILE = join(PKG_ROOT, "src", "corpus", "conceptnet-map.toml");
 
-// The tier-1 curated Software-Engineering ontology (SEON). concepts.jsonl is in
-// the SAME slice shape as ConceptNet ({start, rel, end, weight}), so it loads +
-// maps through the identical loadSlice/loadMap/toFacts path — just with a
-// "corpus:seon" provenance prefix. definitions.jsonl is a separate {term,
-// definition, sense} list the chat answer layer prefers for a lexicon term's
-// "what is a <term>". tier-2 corpuses (aws/python/java) share the slice shape too.
+// The tier-1 curated Software-Engineering ontology (SEON): concepts.jsonl shares
+// ConceptNet's slice shape and loads through the same loadSlice/loadMap/toFacts path.
+// definitions.jsonl is a separate {term, definition, sense} list for lexicon lookups.
+// Tier-2 corpuses (aws/python/java) share the slice shape too.
 export const SEON_CONCEPTS_FILE = join(PKG_ROOT, "corpus", "seon", "concepts.jsonl");
 export const SEON_DEFINITIONS_FILE = join(PKG_ROOT, "corpus", "seon", "definitions.jsonl");
 export const TIER2_DIR = join(PKG_ROOT, "corpus", "tier2");
 export const TIER2_MANIFEST_FILE = join(TIER2_DIR, "manifest.json");
 
-// corpus/wordnet/generate.mjs's output: the Open English WordNet ->
-// ConceptNet-shape conversion, same slice shape/loader path as tier-1/tier-2.
-// Lives alongside its own generator (corpus/conceptnet/'s own precedent:
-// fetch-slice.mjs + slice.jsonl share one directory) rather than under a new
-// "tier-3" name — corpus/README.md's tiering policy already uses "tier-3" for
-// something else entirely (runtime-learned facts, NEVER committed), and this
-// bundle is curated + committed, the same shape as a tier-2 corpus, just too
-// large/mechanically-derived to hand-curate. "wordnet-xl"/"wordnet-full" are
-// wired as BUILTIN_EXTENSIONS corpus entries in src/extensions.mjs, so
-// `tmct import --corpus wordnet-xl` resolves directly there rather than
-// through TIER2_MANIFEST_FILE's id lookup — see that module's own
-// BUILTIN_EXTENSIONS comment.
+// corpus/wordnet/generate.mjs's output: the Open English WordNet -> ConceptNet-shape
+// conversion, same slice shape/loader path as tier-1/tier-2. "wordnet-xl"/"wordnet-full"
+// are wired as BUILTIN_EXTENSIONS corpus entries in src/extensions.mjs.
 export const WORDNET_DIR = join(PKG_ROOT, "corpus", "wordnet");
 export const WORDNET_MANIFEST_FILE = join(WORDNET_DIR, "manifest.json");
 
@@ -114,17 +93,10 @@ export const termText = (uri) => {
   return m ? m[1].replace(/_/g, " ") : null;
 };
 
-/** Map slice assertions → appendFact-shaped triples:
- *    { subject, predicate, object, provenance }
- *  (provenance is a STRING — exactly what src/memory/core.mjs appendFact
- *  takes; it names the corpus and the originating ConceptNet relation).
- *  Rows whose relation maps ace="none" are skipped — deliberate non-emission.
- *  A relation with NO row in the map throws: that is table drift, not data.
- *
- *  `provenancePrefix` names the corpus half of the provenance string; it defaults
- *  to "corpus:conceptnet" so the ConceptNet seed stays BYTE-IDENTICAL to before.
- *  The seon / tier-2 corpuses reuse the same slice shape, tagged "corpus:seon" or
- *  "corpus:tier2:<id>" so a reader can tell a curated SE fact from ConceptNet noise. */
+/** Map slice assertions → appendFact-shaped triples { subject, predicate, object,
+ *  provenance }. Rows whose relation maps ace="none" are skipped; a relation with no row
+ *  in the map throws (table drift, not data). `provenancePrefix` tags the corpus half of
+ *  provenance, e.g. "corpus:seon" / "corpus:tier2:<id>" for non-ConceptNet callers. */
 export function toFacts(assertions, map, provenancePrefix = "corpus:conceptnet") {
   const facts = [];
   for (const a of assertions) {
@@ -136,10 +108,8 @@ export function toFacts(assertions, map, provenancePrefix = "corpus:conceptnet")
     const subject = termText(a.start);
     const object = termText(a.end);
     if (!subject || !object) continue; // non-en endpoint slipped in — filtered, not fatal
-    // mgx:relatedTo is real but low-precision (undirected, ambiguous) — routed
-    // through the corpus-weak: prefix so memory/trust.mjs's SOURCE_PRIOR.corpusWeak
-    // (below plain corpus, above web) applies, computed from the Source's kind
-    // like every other tier, never hand-set on the Fact.
+    // mgx:relatedTo is low-precision (undirected, ambiguous) — routed through the
+    // corpus-weak: prefix so memory/trust.mjs's SOURCE_PRIOR.corpusWeak applies.
     const prefix = row.predicate === "mgx:relatedTo"
       ? provenancePrefix.replace(/^corpus:/, "corpus-weak:")
       : provenancePrefix;
@@ -153,39 +123,18 @@ export function toFacts(assertions, map, provenancePrefix = "corpus:conceptnet")
   return facts;
 }
 
-/** Seed a repo's memory graph (<dir>/.tmct/memory/graph.json) from the
- *  committed slice. Options: limit (cap the facts written — handy for tests
- *  and fast bootstraps), slicePath/mapPath overrides, and `prefer` — an array
- *  of predicate URIs that STABLE-partitions the facts before the limit is
- *  applied (facts whose predicate appears earlier in `prefer` come first;
- *  everything else keeps slice order after them). A capped bootstrap seed
- *  wants the DEFINITIONAL band ("a cache is a kind of buffer") ahead of the
- *  location trivia the slice happens to open with; without `prefer` the
- *  behavior is byte-identical to before.
+/** Seed a repo's memory graph (<dir>/.tmct/memory/graph.json) from the committed slice.
+ *  `limit` caps the facts written; `prefer` stable-partitions facts by predicate (so a
+ *  capped seed favors the definitional band over whatever trivia the slice opens with).
+ *  Idempotent: pre-reads the store to skip triples already there, then writes survivors
+ *  in one batched appendFacts call. Returns { appended, skipped, total }.
+ *  `provenancePrefix` tags facts (default "corpus:conceptnet").
  *
- *  Idempotent twice over: appendFacts' content-hashed ids make a blind
- *  re-append an upsert, and we pre-read the store once to skip triples that
- *  are already there (so re-seeding costs one read, not N rewrites). The
- *  survivors are written in ONE batched appendFacts call, not a per-fact loop.
- *  Returns { appended, skipped, total }. `provenancePrefix` is threaded through to
- *  toFacts (default "corpus:conceptnet" → byte-identical seed) so a seon/tier-2
- *  corpus can tag its facts "corpus:seon" / "corpus:tier2:<id>".
- *
- *  `captureUnknownContext` (default false — every existing call stays
- *  byte-identical): when true, also runs corpus/unknown-ingest.mjs's
- *  `ingestUnknownFromAssertions` over this same assertions/map pair — the
- *  PLAN_AGENTS.md §4 "context-preserving ingestion for unknown words"
- *  mechanism — so a term that ONLY ever appears in a row `toFacts` silently
- *  drops (an `ace = "none"` relation like RelatedTo/HasContext) still lands
- *  in memory, tagged with the passage it was found in, instead of vanishing.
- *  `unknownContextLimit` bounds how many distinct unknown terms one call
- *  captures (default 500 — see that module's own doc comment for why an
- *  unbounded sweep over a wide slice would not be "bounded, not padding").
- *  The result's `unknown` key is present only when the flag is set. Loaded
- *  dynamically (not a static import) to avoid a load-time import cycle with
- *  unknown-ingest.mjs, which itself statically imports `termText` from here —
- *  the same "avoid the cycle" discipline extensions.mjs's
- *  seedActiveCorpusEntries already uses for this very module. */
+ *  `captureUnknownContext` (default false): also runs unknown-ingest.mjs's
+ *  ingestUnknownFromAssertions so a term that only appears in an `ace="none"` row (never
+ *  reified as a Fact) still lands in memory, tagged with the passage it was found in.
+ *  `unknownContextLimit` bounds how many distinct terms one call captures (default 500).
+ *  Loaded dynamically to avoid a load-time import cycle with unknown-ingest.mjs. */
 export async function seedMemory(dir, {
   limit, slicePath = SLICE_FILE, mapPath = MAP_FILE, prefer, provenancePrefix,
   captureUnknownContext = false, unknownContextLimit,
@@ -194,15 +143,11 @@ export async function seedMemory(dir, {
   let facts = toFacts(assertions, map, provenancePrefix);
   if (Array.isArray(prefer) && prefer.length) {
     const rank = new Map(prefer.map((p, i) => [p, i]));
-    // stable partition: Array.prototype.sort is stable in Node, so equal-rank
-    // facts keep their slice order — deterministic across runs by construction.
     facts = facts.slice().sort((a, b) => (rank.get(a.predicate) ?? prefer.length) - (rank.get(b.predicate) ?? prefer.length));
   }
   if (limit !== undefined) facts = facts.slice(0, limit);
 
-  // One read up front: what does the store already reify? Keys are built with
-  // memory's own normFactTerm so they match the normalized read-back exactly
-  // (appendFact converges /c/en/foo_bar, tmct:Foo and "Foo bar" to one term).
+  // Keyed with normFactTerm so it matches the store's own normalized read-back.
   const factKey = (s, p, o) => `${normFactTerm(s)} ${p} ${normFactTerm(o)}`;
   const existing = new Set();
   const memory = await loadMemory(dir);
@@ -223,9 +168,6 @@ export async function seedMemory(dir, {
     existing.add(key);
     toWrite.push(fact);
   }
-  // ONE read-modify-write for the whole seed (was one per fact — O(N²) I/O, ~7 min
-  // for the 6 k-fact slice). appendFacts also skips any malformed row rather than
-  // throwing, so its skipped count folds into the dedup skips here.
   const res = await appendFacts(dir, toWrite);
 
   let unknown;

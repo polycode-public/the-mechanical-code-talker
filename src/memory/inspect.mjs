@@ -1,19 +1,7 @@
-// memory/inspect.mjs — seeing into the memory as TEXT (ROADMAP Phase 4,
-// "Memory inspection"). One renderer serves both surfaces — the `/memory` chat
-// command and the `tmct memory` CLI — in a terse (default) and a verbose form:
-//
-//   - the memory graph grouped by OWL superclass (Fact / Utterance / Session,
-//     plus any other class present), counts with BALANCED samples scaled
-//     log-wise to class size (a 10,000-fact class shows ~8 exemplars, a
-//     3-session class shows all 3);
-//   - top facts ranked by PROVENANCE BREADTH (a fact the corpus AND the chat
-//     both asserted outranks a single-writer fact), provenance verbatim;
-//   - recent Q→A utterance pairs (read off the mgx:inReplyTo edges);
-//   - the block-index summary (blocks, indexed tokens, top PageRank blocks).
-//
-// Pure renderers over loaded payloads + one thin I/O wrapper (inspectMemory).
-// Everything degrades honestly: an empty memory renders as the empty story,
-// never an error.
+// memory/inspect.mjs — seeing into the memory as TEXT: one renderer serves
+// both the `/memory` chat command and the `tmct memory` CLI, terse or
+// verbose. Pure renderers + one thin I/O wrapper (inspectMemory); an empty
+// memory renders as the empty story, never an error.
 
 import { loadMemory, UTTERANCE_CLASS, IN_REPLY_TO_PROP, readFactRows, findContradictions } from "./core.mjs";
 import { loadBlockIndex } from "./blocks.mjs";
@@ -67,10 +55,7 @@ export function renderMemory({ memory, blocks }, { verbose = false } = {}) {
       for (const ind of balancedSample(of, k)) lines.push(`  ${truncate(ind.label, textCap)}`);
     }
 
-    // ---- top facts by COMPUTED TRUST (upgraded from raw provenance breadth) ----
-    // Trust folds source-type prior + corroboration + recency, so a corroborated
-    // operator-stated fact outranks a lone web scrape by construction; provenance
-    // rides along (verbatim in verbose) for the audit trail.
+    // ---- top facts by computed trust (source prior + corroboration + recency) ----
     const ranked = readFactRows(memory)
       .filter((r) => r.sourceIds.length || r.provenance)
       .sort((a, b) => b.trust - a.trust
@@ -128,14 +113,11 @@ export function renderMemory({ memory, blocks }, { verbose = false } = {}) {
     lines.push("", "blocks — none folded yet (a session folds when it ends).");
   }
 
-  // ---- explore hooks: real, runnable example queries built from what's actually
-  //      stored, so /memory is a springboard for drilling in, not just a dump ----
+  // ---- explore hooks: runnable example queries built from what's stored ----
   if (individuals.length) {
     const clean = (t) => typeof t === "string" && /^[a-z][a-z0-9]+(?: [a-z0-9]{2,}){0,2}$/.test(t) && t.length <= 22 && !/^\d+$/.test(t);
     const facts = readFactRows(memory);
-    // Rank candidate "what is a X" terms by CATEGORY SIZE (how many facts point at
-    // them) so the hooks land on rich, recognisable categories (function, class, …),
-    // not a lone ConceptNet oddity.
+    // Rank "what is a X" candidates by category size (how many facts point at them).
     const freq = new Map();
     for (const f of facts) if (clean(f.object)) freq.set(f.object, (freq.get(f.object) || 0) + 1);
     const terms = [...freq.entries()]

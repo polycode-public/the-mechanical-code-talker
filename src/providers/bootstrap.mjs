@@ -1,6 +1,5 @@
 // The BOOTSTRAP reference provider — the empty/degenerate graph a fresh repo
-// "contains" before anything is indexed. archive/PLAN_REPOSITORY_INTERFACE.md deliverable
-// 2: "bootstrap returns honest empties".
+// "contains" before anything is indexed.
 //
 // It implements every Repository-Interface service over the empty bootstrap
 // payload (src/source.mjs emptyEntities): every id-taking service returns

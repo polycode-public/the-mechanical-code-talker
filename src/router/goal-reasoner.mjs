@@ -1,65 +1,21 @@
-// src/router/goal-reasoner.mjs — Stage 5 of the capability router
-// (PLAN_CAPABILITY_ROUTER.md / STAGE_5_GOAL_REASONER.md): THE CLOSED-WORLD C2
-// GOAL-REASONER. "Self-directed" is not magic — it is a canned, HARD-BOUNDED
-// meta-loop (Rao & Georgeff BDI × Aha/Molineaux/Cox GDA × continual planning):
+// src/router/goal-reasoner.mjs — Stage 5 of the capability router: THE CLOSED-WORLD C2
+// GOAL-REASONER. A canned, hard-bounded meta-loop (BDI x goal-driven autonomy):
 //
-//     deduce current goals            (step 1 — the only genuinely new part)
-//   → plan for each goal              (step 2 — C1: the Stage-3 planner/resolver)
-//   → arbitrate the first steps       (step 3a — keystone, threat-aware)
-//   → PERSIST the committed intention  (step 3b — BDI drop conditions)
-//   → execute ONE, observe, repeat    (step 5 — Steel & Ho monitor / GDA replan)
+//     deduce current goals -> plan each goal (C1: the Stage-3 planner/resolver)
+//   -> arbitrate the first steps, threat-aware -> persist the committed intention
+//   -> execute ONE, observe, repeat
 //
-// The elegance (RFC): C2 collapses into C1 + a goal-deduction step + an
-// action-selection rule. Everything except goal-deduction is solved machinery.
-// This module supplies the goal-deduction as a DEDUCTION over a DECLARED goal
-// model (never a judgement over the request string) and REFUSES at the
-// open-world goal-generation seam rather than inventing a goal — the C2 analogue
-// of the resolver's "never emit a call it cannot prove".
+// Goal-deduction is a DEDUCTION over a DECLARED goal model (GOAL_RULES), never a judgement
+// over the request string: the only thing read off the request is a FOCUS entity (via the
+// resolver's extractEntity + binding oracle). REFUSES at the open-world goal-generation seam
+// rather than inventing a goal.
 //
-// DEDUCTION, NOT KEYWORD-MATCH. The current goals fall out of the KB via a
-// declared goal model (GOAL_RULES), exactly as syllogise chains a declared rule
-// over the graph under mechanical guards. The ONLY thing this reads off the
-// request is a FOCUS entity (delegated to the resolver's extractEntity + the
-// binding oracle — entity resolution, never intent keywords). Whether a goal is
-// active is then deduced from the graph (is the focus module untested? what does
-// its change reach?), so no request-string literal steers the routing.
-//
-// MECHANICAL TERMINATION (not a convergence argument). Two independent bounds:
-//   (1) a hard OUTER-tick budget MAX_TICKS (mirrors the planner's MAX_STEPS), and
-//   (2) a MONOTONE-PROGRESS invariant — every tick ACHIEVES exactly one intention
-//       (removes it from the pending set); the only growth is a SINGLE, bounded
-//       GDA expansion (impact-of-each over the finite untested set), gated by a
-//       one-shot flag. So the pending set strictly shrinks to the empty set in
-//       <= (initial + |untested|) ticks, and MAX_TICKS caps it absolutely. A tick
-//       that makes no progress HALTS (honest refuse). Termination is proven
-//       mechanically, not argued from BDI convergence.
-//
-// THREAT-AWARENESS (POP threats lifted to the meta-level). A first step that
-// clobbers another live goal's precondition is a threat. Here it is PROVABLY
-// absent: every registry capability is read-only with an EMPTY delete-list
-// (queries mutate nothing — the STRIPS closed world), so no step can delete a
-// condition another goal depends on. We compute this from the registry rather
-// than assume it (threatsAmong), so the guarantee is grounded, not asserted.
-//
-// THE GLOBAL-MODE DOMAIN GATE (Bug 8 fix). In SCOPED mode, relevance is already
-// proven structurally: the focus is a REAL bound graph entity (resolveObject
-// found it), so the request is provably about something in the graph. In GLOBAL
-// mode there is no focus to bind, and `applicableRules` alone only screens the
-// CALLER'S DECLARED TOOLSET — a caller-constant fact that says nothing about
-// whether THIS request has any connection to the deduced goal (a caller who
-// declares tmct_untested/tmct_impact once per session would ground
-// coverage-invariant for every off-topic turn). The fix reuses ask.mjs's OWN
-// compositional NL grammar (parseQuery — the SAME primitive the C1 resolver
-// already parses every request with, see resolver.mjs mapParse) as a structural
-// relevance check, never a new keyword table: does the request even COMPILE to a
-// recognized graph-query shape naming a known entity kind, and does that kind
-// match the rule's declared focusClass? A request parseQuery cannot place at all
-// (null — "write a haiku about pizza") or places without landing on any
-// recognized entity kind (a miss with no entity kind — "how many pizzas are
-// there") is an honest "not about this graph" signal; a request parseQuery
-// resolves to a real AST naming the rule's focus class ("which module is the
-// biggest testing risk" -> {node:"superlative", entityType:"Module", ...})
-// stays exactly as reachable as before. Zero request keywords added.
+// Termination: MAX_TICKS caps the loop; each tick achieves exactly one intention (monotone
+// progress), with one bounded GDA expansion allowed. Threat safety: every registry capability
+// is read-only (empty delete-list), so no step can clobber another goal's precondition —
+// derived from the registry, not assumed (threatsAmong). In GLOBAL mode (no bound focus),
+// relevance is additionally screened by parsing the request through ask.mjs's own NL grammar,
+// since the declared toolset alone doesn't prove the request is about this graph.
 
 import { backwardChain, extractEntity } from "./resolver.mjs";
 import { capabilityByName, effectsOf } from "./registry.mjs";
@@ -67,50 +23,27 @@ import { hallucinationsIn } from "./call-validator.mjs";
 import { intersect } from "./set-algebra.mjs";
 import { parseQuery } from "../ask.mjs";
 
-// Hard OUTER-tick budget — the meta-loop runs at most this many ticks, then
-// REFUSES (escalate). Independent of BDI convergence and of the monotone
-// invariant: a belt-and-braces mechanical stop, the meta-level twin of the
-// planner's MAX_STEPS. A deduce->plan->observe cycle can never wedge the caller.
+// Hard outer-tick budget — the meta-loop runs at most this many ticks, then refuses.
 export const MAX_TICKS = 16;
 
-// ---- the DECLARED goal model (data, mirroring registry.mjs's STRIPS operators)
-// A goal-rule is a maintenance INVARIANT over the graph, plus the epistemic
-// sub-goals whose facts decide whether it is violated and the DECLARED priority
-// that settles ties in first-step arbitration. Growing this set is the "long-chain
-// deduction library" the RFC flags — same discipline as syllogise's rule set.
-//
-// Each rule declares (pure frozen data, no code):
-//   focusClass — the entity class the scoped reading binds its focus to.
-//   modes      — which deduced scopes the rule covers ("scoped" = a bound focus;
-//                "global" = whole-graph keystone arbitration). A rule whose
-//                sub-goals are all entity-scoped has no global reading.
-//   subGoals   — the epistemic facts to gather, IN DECLARED ORDER (each
-//                backward-chains to a capability, exactly like an NL intent).
-//   compose    — the declarative fold of the gathered facts into the scoped
-//                answer: intersect(a, b), each side naming a gathered topic,
-//                optionally bound to the focus (`of:"focus"`), optionally with
-//                the focus itself unioned in (`withFocus` — the change footprint).
-//   priorityTopic / coverageTopic — the global keystone arbitration keys
-//                (argmax |priority(m)| over the coverage-violating set).
-//   achieves   — the meta-goal topic the composed answer achieves.
+// ---- the DECLARED goal model (data, mirroring registry.mjs's STRIPS operators). Each rule:
+//   focusClass  — the entity class a scoped reading binds its focus to.
+//   modes       — "scoped" (bound focus) and/or "global" (whole-graph keystone arbitration).
+//   subGoals    — epistemic facts to gather, in declared order (each backward-chains to a
+//                 capability).
+//   compose     — intersect(a, b) over two gathered topics, optionally focus-bound/unioned.
+//   priorityTopic/coverageTopic — the global keystone arbitration keys.
+//   achieves    — the meta-goal topic the composed answer achieves.
 export const GOAL_RULES = Object.freeze([
   Object.freeze({
     id: "coverage-invariant",
     kind: "maintenance",
-    // INVARIANT: a Module whose change reaches other modules (non-empty impact
-    // closure) MUST have direct test coverage. A Module that is untested AND
-    // impactful VIOLATES it — an active goal to close the coverage gap.
     invariant: "an impactful module must be tested",
     focusClass: "Module",
     modes: Object.freeze(["scoped", "global"]),
     subGoals: Object.freeze(["impact", "untested"]),
-    // the DECLARED priority key for first-step arbitration: a violation's
-    // priority is its blast radius |impact(module)| — the wider the reach, the
-    // higher the goal (keystone = the widest-reach untested module).
     priorityTopic: "impact",
-    // the coverage predicate the invariant screens on.
     coverageTopic: "untested",
-    // scoped fold: untested ∩ ({focus} ∪ impact(focus)) — the change footprint.
     compose: Object.freeze({
       op: "intersect",
       a: Object.freeze({ topic: "untested" }),
@@ -118,24 +51,17 @@ export const GOAL_RULES = Object.freeze([
       names: "the change's untested footprint",
       empty: "no coverage gap",
     }),
-    // the meta-goal topic the composed answer achieves (backward-chained below).
     achieves: "coverage-gap",
   }),
   Object.freeze({
     id: "cochange-risk-invariant",
     kind: "maintenance",
-    // INVARIANT: a module CHANGE-COUPLED with the focus (they historically land
-    // in the same commits) MUST have direct test coverage. A coupled module that
-    // is untested VIOLATES it — an active goal over the focus's coupling set.
     invariant: "a module change-coupled with the focus must be tested",
     focusClass: "Module",
-    // scoped ONLY: both sub-goals are read relative to a bound focus; there is
-    // no whole-graph keystone reading declared for change-coupling.
     modes: Object.freeze(["scoped"]),
     subGoals: Object.freeze(["cochanges", "untested"]),
     priorityTopic: "cochanges",
     coverageTopic: "untested",
-    // scoped fold: cochanges(focus) ∩ untested — the coupled-but-untested set.
     compose: Object.freeze({
       op: "intersect",
       a: Object.freeze({ topic: "cochanges", of: "focus" }),
@@ -147,30 +73,16 @@ export const GOAL_RULES = Object.freeze([
   }),
 ]);
 
-/** Backward-chain a meta-goal topic to the declared goal-rule that achieves it —
- *  the goal-level twin of resolver.backwardChain (capability selection). Pure. */
+/** Backward-chain a meta-goal topic to the declared goal-rule that achieves it. Pure. */
 export function backwardChainGoal(topic) {
   return GOAL_RULES.find((r) => r.achieves === topic) || null;
 }
 
-/** THE RULE-SELECTION DEDUCTION (replaces the old single-rule hard-wiring): a
- *  declared goal-rule APPLIES to a request iff
- *    (1) every one of its epistemic sub-goal topics backward-chains to a
- *        capability IN the declared toolset (the closed-world groundability
- *        screen — the meta-level twin of "never select an out-of-set call"),
- *    (2) the deduced mode is one of the rule's declared modes, and
- *    (3) a scoped reading's bound focus is of the rule's declared focusClass.
- *  Pure over the goal model + registry: nothing here reads the request string.
- *  The caller REFUSES on zero matches (the open-world goal-generation seam) and
- *  on more than one (an ambiguous meta-goal — arbitration between meta-goals is
- *  undeclared, so guessing one would be an invented goal). */
-// `ruleSet` defaults to the real, shipped GOAL_RULES — every existing caller
-// (driver-goal.mjs, this module's own goalReason, every test) is unaffected.
-// The override exists ONLY for PLAN_CODE.md Track 1 (§1.4): the synthesis
-// oracle clones a CANDIDATE rule into its own array and runs it through this
-// SAME trusted function — never a re-derivation — to check it decides
-// applicability exactly like a hand-written rule would. synthbench/ is the
-// only caller that ever passes a non-default ruleSet.
+/** A declared goal-rule APPLIES to a request iff (1) every sub-goal topic backward-chains
+ *  to a capability in the declared toolset, (2) the deduced mode is one of the rule's
+ *  declared modes, and (3) a scoped focus is of the rule's declared focusClass. The caller
+ *  refuses on zero matches or more than one (ambiguous meta-goal). `ruleSet` defaults to
+ *  GOAL_RULES; the synthesis-oracle test harness is the only caller that overrides it. */
 export function applicableRules(declaredTools, focus, mode, ruleSet = GOAL_RULES) {
   const declared = Array.isArray(declaredTools) ? declaredTools : [];
   return ruleSet.filter((rule) =>
@@ -184,26 +96,19 @@ export function applicableRules(declaredTools, focus, mode, ruleSet = GOAL_RULES
 
 const refuse = (why, driver) => ({ calls: [], refused: true, terminated: true, proof: [], composed: null, driver, why });
 
-/** THREATS lifted to the meta-level: any pending intention whose needed condition
- *  a candidate step's DELETE-effects would clobber (POP threats over the
- *  conjunction of active goals). Computed from the registry's delete-lists. In
- *  this read-only registry every capability's delete-list is empty, so this is
- *  provably [] — but we DERIVE it rather than assume it, so the guarantee holds
- *  the day a mutating capability is ever registered. Pure over the registry. */
+/** Threats: whether a candidate step's DELETE-effects would clobber another pending
+ *  intention. Computed from the registry's delete-lists (always [] today, since every
+ *  capability is read-only) rather than assumed, so the guarantee holds if that changes. */
 export function threatsAmong(candidateName, _pending) {
   const cap = capabilityByName(candidateName);
   const del = cap ? effectsOf(cap.name).del : [];
   return del.length ? [{ name: candidateName, deletes: del }] : [];
 }
 
-/** Resolve the FOCUS the request scopes the goal model to — an entity binding
- *  (extractEntity + the graph oracle), NOT an intent keyword. Returns
- *  `{match, ambiguous, candidates}`: `match` is the bound individual or null (no
- *  bindable focus => a whole-graph / global goal); `ambiguous`+`candidates` let
- *  the caller distinguish "genuinely no focus" from "a focus term that TIED"
- *  (PLAN_BREADTH_FIRST_NLU.md §4 — the latter must never silently fall back to
- *  a global answer, since that would silently answer a DIFFERENT goal than the
- *  one the user actually named). */
+/** Resolve the FOCUS the request scopes the goal model to (entity binding, not a keyword).
+ *  `match` is the bound individual or null (no focus => a global goal); `ambiguous` lets the
+ *  caller distinguish "no focus" from "a focus term that tied" (never silently falls back
+ *  to global on a tie). */
 function focusOf(request, ctx) {
   const term = extractEntity(String(request || ""));
   if (!term || !ctx || !ctx.resolve) return { match: null, ambiguous: false, candidates: [] };
@@ -213,16 +118,9 @@ function focusOf(request, ctx) {
   return { match: null, ambiguous: false, candidates: [] };
 }
 
-/** The GLOBAL-MODE DOMAIN GATE's primitive: what entity CLASS (if any) did
- *  ask.mjs's own compositional NL grammar recognize in the request? Walks
- *  parseQuery's AST (the same shapes resolver.mjs's mapParse/mapFrame already
- *  consume) for its declared `entityType` field, unwrapping the wrapper nodes
- *  (`clause`, `inner`, `base`) that carry no entityType of their own. Returns the
- *  class name, or null when the grammar placed nothing (an outright non-parse) or
- *  placed a MISS with no recognized entity kind at all ("how many pizzas are
- *  there" -> {node:"miss", reason:"count needs a known entity kind..."} carries no
- *  entityType, same as a flat null). Pure; no request-string keyword table — it
- *  reads a field ask.mjs's grammar already computes for every request. */
+/** What entity CLASS (if any) did ask.mjs's NL grammar recognize in the request? Walks
+ *  parseQuery's AST for its `entityType` field, unwrapping wrapper nodes (`clause`, `inner`,
+ *  `base`). Returns null on a non-parse or an entity-less miss. */
 function parsedEntityType(node) {
   if (!node || typeof node !== "object") return null;
   if (typeof node.entityType === "string") return node.entityType;
@@ -232,16 +130,12 @@ function parsedEntityType(node) {
   return null;
 }
 
-/** Ground ONE epistemic sub-goal (a topic + optional bound entity) into a
- *  grounded, EXECUTED call, or null when it is not groundable in the declared
- *  toolset (=> the meta-loop escalates). Backward-chains topic->capability, binds
- *  the entity, self-checks the same zero-hallucination gate the grader enforces,
- *  then dispatches. Mirrors the resolver/planner's honest-miss discipline. */
+/** Ground ONE epistemic sub-goal into an executed call, or null when not groundable in the
+ *  declared toolset (=> the meta-loop escalates). Backward-chains topic->capability, binds
+ *  the entity, self-checks the zero-hallucination gate, then dispatches. */
 async function groundSubGoal(topic, entityLabel, tools, ctx) {
   const cap = backwardChain(topic);
   if (!cap || !tools.includes(cap.name)) return null; // no declared capability => escalate
-  // the arg grain: a no-arg coverage scan (untested) binds nothing; an entity
-  // topic binds the focus label to the capability's single slot.
   const param = cap.parameters.find((p) => p.required);
   if (param && !entityLabel) return null; // an entity topic with nothing to bind
   const input = param && entityLabel ? { [param.arg]: entityLabel } : {};
@@ -252,54 +146,30 @@ async function groundSubGoal(topic, entityLabel, tools, ctx) {
   return { call, result: Array.isArray(res.result) ? res.result : [] };
 }
 
-/** BDI DROP CONDITIONS (Rao & Georgeff): an intention persists until it is
- *  achieved / impossible / its goal lapses. `focusClass` is the SELECTED rule's
- *  declared focus class (never a literal here — the rule is the authority).
- *  Returns the reason string, or null to KEEP committing to it. Pure. */
+/** An intention persists until achieved or its goal lapses. Returns the reason string, or
+ *  null to keep committing to it. Pure. */
 export function dropCondition(intention, observed, mode, focus, focusClass) {
   if (observed.has(intention.key)) return "achieved";       // fact now gathered
   if (mode === "scoped" && (!focus || focus.class !== focusClass)) return "lapsed"; // focus moved
   return null;                                               // else keep the commitment
 }
 
-/** THE META-LOOP. deduce current goals -> plan-each (C1) -> threat-aware
- *  persistent first-step arbitration -> execute one -> observe -> repeat,
- *  HARD-BOUNDED. Returns a loopResult { calls, refused, terminated, proof, why,
- *  composed, driver } — a composed answer (the coverage-gap set for a focus, or
- *  the keystone module globally) or an HONEST REFUSE at the open-world
- *  goal-generation seam.
+/** THE META-LOOP: deduce -> plan (C1) -> threat-aware arbitration -> execute -> observe ->
+ *  repeat, hard-bounded. Returns a loopResult { calls, refused, terminated, proof, why,
+ *  composed, driver } or an honest refuse.
  *
  *  ctx: { dispatch(name,input)->{ok,result}, resolve(term)->{match,ambiguous} }.
- *
- *  `ruleSet` defaults to the real, shipped GOAL_RULES (every product call site
- *  omits it). PLAN_CODE.md Track 1's synthesis oracle (synthbench/rules/
- *  oracle.mjs) is the one caller that overrides it, with a CLONED array
- *  holding a candidate rule — the candidate then runs through this exact same
- *  meta-loop a hand-written rule does, never a parallel re-implementation.
- *
- *  `pinnedFocus` (internal — PLAN_BREADTH_FIRST_NLU.md §4's breadth-first
- *  ambiguity fix) skips `focusOf` entirely and scopes straight to the given
- *  individual: the mechanism the ambiguous-focus branch below uses to run this
- *  SAME meta-loop once per tied candidate, "pin, don't re-resolve" (the same
- *  idiom PLAN_BREADTH_FIRST_NLU.md §1 uses for ask.mjs's entity ties). No
- *  product call site ever passes it. */
+ *  `ruleSet` defaults to GOAL_RULES; only the synthesis-oracle test harness overrides it.
+ *  `pinnedFocus` (internal) skips `focusOf` and scopes straight to the given individual —
+ *  used to run this loop once per tied candidate on an ambiguous focus. */
 export async function goalReason(request, tools, ctx, { driver = "goal-0.8.1", ruleSet = GOAL_RULES, pinnedFocus = null } = {}) {
   const declared = Array.isArray(tools) ? tools : [];
 
-  // STEP 1 — deduce the goal scope from the DECLARED model + a bound focus,
-  // then SELECT the goal-rule by pure applicability (no request keyword ever):
-  // a bound focus reads scoped, no focus reads global (keystone arbitration).
   const focusRes = pinnedFocus ? { match: pinnedFocus, ambiguous: false, candidates: [] } : focusOf(request, ctx);
   const focus = focusRes.match;
 
-  // An AMBIGUOUS focus term must never silently collapse to "global" — that
-  // would silently answer a DIFFERENT goal (whole-graph keystone arbitration)
-  // than the one the user actually named. Refuse honestly, the same "never a
-  // guess" discipline resolver.mjs/guardrail.mjs apply to an ambiguous resolved
-  // term — and, when the tied candidates share ONE class a declared goal-rule
-  // scopes and a dispatcher is wired, ADDITIONALLY run this SAME meta-loop once
-  // per (pinned) candidate, so a machine caller gets both the honest "still
-  // ambiguous" signal and every candidate's real composed answer.
+  // An ambiguous focus must never silently collapse to "global". When the tied candidates
+  // share one class a goal-rule scopes, additionally run this loop once per candidate.
   if (!pinnedFocus && focusRes.ambiguous) {
     const term = extractEntity(String(request || ""));
     const pool = focusRes.candidates.slice(0, 4);
@@ -312,26 +182,16 @@ export async function goalReason(request, tools, ctx, { driver = "goal-0.8.1", r
   }
   const mode = focus ? "scoped" : "global";
 
-  // The open-world goal-generation seam, named honestly: a resolved focus whose
-  // class NO declared goal-rule scopes is REFUSED, never given an invented goal.
+  // A resolved focus whose class no declared goal-rule scopes is refused, never invented.
   if (focus && !ruleSet.some((r) => r.focusClass === focus.class)) {
     const covered = [...new Set(ruleSet.map((r) => r.focusClass))].join("/");
     return refuse(`open-world: no declared goal-rule covers a ${focus.class} focus (the declared goal-rules are ${covered}-scoped) — escalate`, driver);
   }
 
-  // Rule selection is a DEDUCTION over the goal model + the declared toolset:
-  // 0 applicable rules => the same open-world seam (nothing declared grounds the
-  // request's scope in this toolset); >1 => an AMBIGUOUS meta-goal (arbitration
-  // between meta-goals is undeclared) — both are honest refusals, never a guess.
   const applicable = applicableRules(declared, focus, mode, ruleSet);
 
-  // THE GLOBAL-MODE DOMAIN GATE (Bug 8 fix, see the module header). SCOPED mode
-  // already proved relevance via a bound graph entity; GLOBAL mode has not, so
-  // `applicable` alone (a pure function of the caller's DECLARED TOOLSET) is not
-  // enough — it says nothing about whether THIS request is even about the graph.
-  // Screen it against ask.mjs's own NL grammar: the request must parse to a shape
-  // naming the candidate rule's declared focusClass, or it is refused as honestly
-  // off-domain rather than answered with someone else's goal.
+  // GLOBAL mode has no bound focus to prove relevance, so also screen the request against
+  // ask.mjs's NL grammar: it must parse to a shape naming the candidate rule's focusClass.
   let domainRelevant = applicable;
   if (mode === "global" && applicable.length) {
     const requestClass = parsedEntityType(parseQuery(request));
@@ -350,8 +210,6 @@ export async function goalReason(request, tools, ctx, { driver = "goal-0.8.1", r
   }
   const rule = domainRelevant[0];
 
-  // the glass-box WHY, citing the declared goal-rule by backward-chain (the C2
-  // twin of resolver.mjs's "backward-chain => <capability>" provenance).
   const why = [
     `goal-deduction: backward-chain (achieves ${rule.achieves}) => goal-rule "${rule.id}" (${rule.invariant})`,
     `mode: ${mode}${focus ? ` (focus ${focus.label} [${focus.class}])` : " (whole-graph / keystone arbitration)"}`,
@@ -361,13 +219,8 @@ export async function goalReason(request, tools, ctx, { driver = "goal-0.8.1", r
   const calls = [];
   const observed = new Map();     // intention.key -> gathered result set
 
-  // STEP 2/3 — the pending INTENTIONS: the rule's epistemic sub-goals IN
-  // DECLARED ORDER (arbitration is least-commitment: min order first, the
-  // keystone selection over the gathered facts happens at compose). A topic
-  // binds the focus iff its capability declares a REQUIRED parameter (read from
-  // the registry, never special-cased by topic name); in global mode there is
-  // no focus to bind, so entity-scoped topics are deferred to the GDA expansion
-  // (gather the coverage scan first, then EXPAND to priority-of-each violator).
+  // The pending intentions: the rule's sub-goals in declared order. In global mode,
+  // entity-scoped topics are deferred to the GDA expansion (no focus to bind yet).
   const bindsEntity = (topic) => {
     const cap = backwardChain(topic);
     return Boolean(cap && cap.parameters.some((p) => p.required));
@@ -383,41 +236,32 @@ export async function goalReason(request, tools, ctx, { driver = "goal-0.8.1", r
   let ticks = 0;
 
   while (pending.length) {
-    // (1) HARD OUTER BOUND — mechanical, independent of the monotone invariant.
     if (ticks >= MAX_TICKS) return refuse(`meta-loop tick budget exhausted (${MAX_TICKS}) — escalate`, driver);
     ticks += 1;
 
-    // (3b) PERSISTENCE — keep the committed intention unless a BDI drop condition
-    //      fires; only THEN re-arbitrate. This is the "commitment, not recomputed
-    //      preference" that stops the loop thrashing.
+    // Keep the committed intention unless a drop condition fires; only then re-arbitrate.
     if (committed && dropCondition(committed, observed, mode, focus, rule.focusClass)) committed = null;
     if (!committed || !pending.includes(committed)) {
-      // (3a) FIRST-STEP ARBITRATION — least-commitment: the lowest declared order
-      //      among pending. Threat-aware: skip a step that would clobber another
-      //      live goal (provably never, read-only) before committing.
+      // Least-commitment: lowest declared order among pending, skipping threatened steps.
       const admissible = pending.filter((i) => threatsAmong(backwardChain(i.topic)?.name, pending).length === 0);
       if (!admissible.length) return refuse("all first steps are threatened (would clobber a live goal) — escalate", driver);
       committed = admissible.slice().sort((a, b) => a.order - b.order)[0];
     }
 
-    // (5) EXECUTE ONE, then OBSERVE (Steel & Ho monitor).
     const grounded = await groundSubGoal(committed.topic, committed.of, declared, ctx);
     if (!grounded) return refuse(`sub-goal (knows ${committed.topic}${committed.of ? ` ${committed.of}` : ""}) not groundable in the declared toolset — escalate`, driver);
     calls.push(grounded.call);
     observed.set(committed.key, grounded.result);
     proof.push({ step: "causal-link", producer: "graph", condition: committed.of ?? committed.topic, consumer: `${committed.topic}:${grounded.call.name}`, ok: true });
 
-    // MONOTONE PROGRESS — this tick ACHIEVED exactly one intention: drop it.
+    // This tick achieved exactly one intention: drop it (monotone progress).
     const before = pending.length;
     const achievedTopic = committed.topic;
     pending.splice(pending.indexOf(committed), 1);
     committed = null;
 
-    // GDA EXPANSION (monitor -> replan), ONCE: on observing the coverage set in
-    // global mode (guarded on the rule DECLARING a global reading), expand to
-    // the priority sub-goal for each violating module, so arbitration can rank
-    // them. Bounded by the finite coverage set and fired at most once (the
-    // `expanded` guard) => the pending set still converges.
+    // GDA expansion, once: on observing the coverage set in global mode, expand to the
+    // priority sub-goal for each violating module so arbitration can rank them.
     let expandedThisTick = false;
     if (mode === "global" && rule.modes.includes("global") && achievedTopic === rule.coverageTopic && !expanded) {
       expanded = true;
@@ -426,21 +270,15 @@ export async function goalReason(request, tools, ctx, { driver = "goal-0.8.1", r
       violating.forEach((m, i) => pending.push({ topic: rule.priorityTopic, of: m, key: `${rule.priorityTopic}:${m}`, order: 100 + i }));
     }
 
-    // the invariant, enforced mechanically: the pending set shrank by one this
-    // tick (progress) OR grew ONLY by the one-shot bounded expansion. Anything
-    // else is non-progress => HALT honestly rather than risk a livelock.
+    // Anything other than shrink-by-one or the one-shot expansion is non-progress: halt.
     if (pending.length > before - 1 && !expandedThisTick) {
       return refuse("meta-loop made no monotone progress — halting", driver);
     }
   }
 
-  // STEP 3a (the answer) — COMPOSE + arbitrate the keystone from the gathered
-  // facts (all INSIDE the driver's timeout guard; no unbounded post-work).
+  // Compose the answer: intersect two gathered sides (scoped), or keystone-arbitrate (global).
   let composed;
   if (mode === "scoped") {
-    // interpret the rule's DECLARATIVE compose spec: intersect two gathered
-    // sides, each a topic (optionally focus-bound, optionally with the focus
-    // itself unioned in — the change-footprint shape). ∅ is a real answer.
     const sideSet = (side) => {
       const key = side.of === "focus" ? `${side.topic}:${focus.label}` : side.topic;
       const set = observed.get(key) || [];
@@ -453,10 +291,7 @@ export async function goalReason(request, tools, ctx, { driver = "goal-0.8.1", r
     composed = intersect(sideSet(spec.a), sideSet(spec.b));
     why.push(`compose: ${sideDesc(spec.a)} ∩ ${sideDesc(spec.b)} = ${spec.names} (${composed.length ? composed.join(", ") : `∅ — ${spec.empty}`})`);
   } else {
-    // KEYSTONE arbitration: among the coverage violations, pick the highest
-    // declared priority — the widest |priority(m)| set — tie broken by label
-    // order. The single most-worth-covering module. Only a rule declaring a
-    // global mode ever reaches here (applicability screened on rule.modes).
+    // Keystone: among the coverage violations, pick the highest priority, tie by label.
     const violating = observed.get(rule.coverageTopic) || [];
     const ranked = violating
       .map((m) => ({ m, weight: (observed.get(`${rule.priorityTopic}:${m}`) || []).length }))

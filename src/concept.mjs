@@ -1,30 +1,15 @@
-// concept.mjs — "the concept force": compose a THREE-BAND answer to a vague
-// "what is a X" touch, when tmct KNOWS the concept X (a curated definition) AND
-// HAS instances of it (individuals in the code graph and/or remembered isa facts).
-//
-//   1. THE FACT   — the definition of X (lead clause of the corpus/seon entry).
-//   2. THE EXAMPLES — real instances of X: code-graph individuals whose class maps
-//      to X (capped ~3, stable graph order, each a real node), plus any remembered
-//      "A is a X" facts.
-//   3. THE GUIDED FOLLOW-UP — 2-3 concrete, RUNNABLE next questions built from the
-//      real instances × the query shapes valid for that kind, EACH PRE-CHECKED by
-//      actually running it through ask() so a suggestion can never miss.
-//
-// PURE given (graph, term, {definition, factRows}) — the follow-up validator calls
-// ask() (deterministic, no model), so the whole composition is reproducible. The
-// caller (chat.mjs) owns the async edges: loading corpus/seon/definitions.jsonl and
-// the memory fact rows, and rendering through the response template. This module
-// never fabricates: every example is a real individual/fact and every follow-up is
-// validated against the same graph before it is offered.
+// concept.mjs — "the concept force": compose a three-band answer (fact,
+// examples, guided follow-up) to a vague "what is a X" touch when X is a
+// known, instantiated concept. Pure given (graph, term, {definition,
+// factRows}); never fabricates — every example is a real individual/fact and
+// every follow-up is pre-validated by actually running it through ask().
 
 import { ask } from "./ask.mjs";
 import { relationKind } from "./codegraph.mjs";
 
-/** A vague concept term (normalized, singular — normFactTerm's output) → the graph
- *  individual `class` it enumerates. The closed set of code-structure concepts the
- *  seon lexicon + the graph both understand; anything outside it is not a "concept
- *  force" touch (a general-vocabulary term like "cache" has a definition but no
- *  enumerable graph class, so it falls back to the ordinary definition surface). */
+/** A vague concept term (normalized, singular) → the graph individual `class`
+ *  it enumerates. Outside this closed set (e.g. "cache"), the term falls back
+ *  to the ordinary definition surface instead. */
 export const CONCEPT_CLASS = Object.freeze({
   class: "Class",
   module: "Module",
@@ -52,11 +37,8 @@ const CLASS_NOUN = Object.freeze({
  *  instance, so it never contributes an example. */
 const ISA_INSTANCE_PREDICATES = new Set(["rdf:type"]);
 
-/** Per graph-class, the candidate follow-up shapes in priority order. Each builder
- *  takes ONE real instance label and returns a query string; the builder is offered
- *  only after the query VALIDATES against the live graph, so a shape that can't
- *  resolve for any instance is silently dropped. Shapes are curated to be exactly
- *  the ones ask.mjs's grammar answers for that kind. */
+/** Per graph-class, the candidate follow-up shapes in priority order — each
+ *  offered only once its query validates against the live graph. */
 const FOLLOWUP_SHAPES = Object.freeze({
   Class: [
     (x) => `which classes inherit from ${x}`,
@@ -125,11 +107,8 @@ function resolves(graph, query) {
   }
 }
 
-/** Build up to MAX_FOLLOWUPS validated follow-ups for a class's instances. For each
- *  shape in priority order, find the instances whose query resolves and offer it for
- *  the first such instance NOT already used by an earlier follow-up (so the set
- *  showcases DIFFERENT real nodes where possible); a shape no instance satisfies is
- *  dropped entirely. Deterministic (graph order in, first-fit out). */
+/** Up to MAX_FOLLOWUPS validated follow-ups: first-fit over shapes in
+ *  priority order, preferring an instance not already used. */
 function buildFollowups(graph, cls, instanceLabels) {
   const shapes = FOLLOWUP_SHAPES[cls] || [];
   const used = new Set();
@@ -145,14 +124,8 @@ function buildFollowups(graph, cls, instanceLabels) {
   return out;
 }
 
-/** Compose the three bands for a concept term, or null when it is NOT a concept-force
- *  case — the term is not a known enumerable concept, has no curated definition, or
- *  has NO instances anywhere (code graph and memory both empty). Returns the pieces as
- *  strings so the caller can render them through a data template:
- *    { definition, examples, followups, instances:[{id,label,type,module}] }
- *  `examples` is always non-empty when non-null (we only fire with real instances);
- *  `followups` is "" when no validated next-question exists, else a "\nWant to go
- *  deeper? Try:\n  • …" block. */
+/** Compose the three bands for a concept term, or null when it's not a known
+ *  enumerable concept, has no curated definition, or has no instances anywhere. */
 export function composeConcept(graph, term, { definition = null, factRows = [] } = {}) {
   const cls = CONCEPT_CLASS[term];
   if (!cls || !definition) return null;
@@ -225,20 +198,12 @@ export function composeConcept(graph, term, { definition = null, factRows = [] }
   };
 }
 
-// ============================================================================
-// THE RELATION CONCEPT FORCE — the same three-band shape (definition + real
-// example EDGES + validated follow-ups) for a vague touch on a RELATION/edge kind
-// ("what about imports", "what are the calls", "tell me about contains"). Where
-// composeConcept enumerates INDIVIDUALS of a class, composeRelation enumerates the
-// EDGES of a relation kind, and seeds its follow-ups from real edge endpoints.
-// PURE given (graph, relTerm, {definition}); every example is a real edge and every
-// follow-up is validated via resolves() before it is offered. Never fabricates.
-// ============================================================================
+// ---- THE RELATION CONCEPT FORCE — same three bands, but for a vague touch on
+// a RELATION/edge kind ("what about imports"): composeConcept enumerates
+// INDIVIDUALS, composeRelation enumerates EDGES. ----
 
-/** A vague relation term (lower-cased) → the internal concept key it enumerates.
- *  The closed set of edge-kind concepts the seon relation table + the graph both
- *  understand; a term outside it is not a relation-force touch. Nouns, gerunds and
- *  a couple of synonyms all collapse to one key. */
+/** A vague relation term (lower-cased) → the internal concept key it
+ *  enumerates. Nouns, gerunds and synonyms all collapse to one key. */
 export const RELATION_TERM = Object.freeze({
   import: "imports", imports: "imports", importing: "imports", imported: "imports",
   call: "calls", calls: "calls", calling: "calls", called: "calls", invoke: "calls", invokes: "calls", invoking: "calls",
@@ -249,11 +214,8 @@ export const RELATION_TERM = Object.freeze({
   define: "defines", defines: "defines", defining: "defines", defined: "defines", definition: "defines", definitions: "defines", declaration: "defines",
   touch: "touches", touches: "touches", touching: "touches", touched: "touches",
   cochange: "cochange", "co-change": "cochange", "change-coupling": "cochange", coupled: "cochange",
-  // "export"/"exports" is ALSO a curated seon lexicon noun (corpus/seon/definitions.jsonl
-  // "export"), same shape as "imports" — but that meta reading only owns the "what
-  // does export mean"/"what is an export" shape; vagueTouchTermOf/relationTermOf are
-  // deliberately scoped to the NON-meta "what about X"/"tell me about X" touch (see
-  // relationTermOf's own docblock, frozen case am-meta-imports), so no conflict here.
+  // "export"/"exports" is also a curated seon lexicon noun, but that meta reading
+  // only owns "what does export mean" — no conflict with this vague-touch table.
   export: "reexports", exports: "reexports", exporting: "reexports", exported: "reexports",
   reexport: "reexports", reexports: "reexports", reexporting: "reexports",
   "re-export": "reexports", "re-exports": "reexports", "re-exporting": "reexports",
@@ -288,11 +250,9 @@ const RELATION_RENDER = Object.freeze({
   reexports: { verb: "re-exports", edgeNoun: "re-export" },
 });
 
-/** Per concept key, the candidate follow-up shapes in priority order. Each shape
- *  draws a real endpoint from one SIDE of the edges (subject or object) and builds a
- *  query; a shape is offered only once the query VALIDATES against the live graph
- *  (resolves()), so a shape no endpoint satisfies is silently dropped. Curated to be
- *  exactly the shapes ask.mjs answers for that kind. */
+/** Per concept key, the candidate follow-up shapes in priority order — each
+ *  draws an endpoint from one side of the edges and is offered only once its
+ *  query validates against the live graph. */
 const RELATION_FOLLOWUP_SHAPES = Object.freeze({
   imports: [
     { side: "obj", make: (x) => `which modules import ${x}` },
@@ -340,10 +300,8 @@ const MAX_EDGE_EXAMPLES = 3;
 const edgeSubjectLabel = (e) => String(e.subjectLabel || e.subject);
 const edgeObjectLabel = (e) => String(e.objectLabel || e.object);
 
-/** Build up to MAX_FOLLOWUPS validated follow-ups for a relation's edges. Same
- *  first-fit discipline as buildFollowups: for each shape in priority order, find the
- *  endpoints (of that shape's side) whose query resolves and offer it for the first
- *  such endpoint not already used, so the set showcases DIFFERENT real nodes. */
+/** Up to MAX_FOLLOWUPS validated follow-ups for a relation's edges — same
+ *  first-fit discipline as buildFollowups. */
 function buildRelationFollowups(graph, key, subjLabels, objLabels) {
   const shapes = RELATION_FOLLOWUP_SHAPES[key] || [];
   const used = new Set();
@@ -360,25 +318,11 @@ function buildRelationFollowups(graph, key, subjLabels, objLabels) {
   return out;
 }
 
-/** Compose the three bands for a RELATION concept term, or null when it is NOT a
- *  relation-force case at all — the term is not a known enumerable relation, or has no
- *  curated definition. Returns the same string-band shape composeConcept does:
- *    { definition, examples, followups, followupQueries, remainder, noun }
- *  `examples` is always non-empty when non-null; `followups` is "" when no validated
- *  next-question exists.
- *
- *  A known relation whose graph has ZERO edges of that kind is NOT null — it degrades
- *  to a two-band answer (the definition + an explicit "this codebase has no X edges"
- *  line, `examples`-shaped so the caller renders it identically). Found live (an
- *  advisor tick on the 0.9.14 Tier-2 playtest cycle): returning null here for the
- *  zero-edge case let the caller's OWN raw grammar attempt at the vague-touch text
- *  ("what about exports", "tell me about reexports") stand instead — but that text was
- *  never meant to be parsed as an object search, so on a graph with no reexports edges
- *  (the realistic case for most repos, e.g. examples/mini-webapp) it fell through to a
- *  garbled `no module matching "about"/"exports" found`, not an honest miss. A relation
- *  kind the graph has NEVER SEEN AT ALL (relationKind returns nothing in RELATION_KINDS
- *  for this graph's shape) still degrades the same way — the definition is always
- *  worth stating; only the fabricated edge is refused. */
+/** Compose the three bands for a RELATION concept term, or null when it's not
+ *  a known enumerable relation or has no curated definition. A known relation
+ *  with ZERO edges is NOT null — it degrades to a two-band "no X edges"
+ *  answer, since returning null here would fall through to a garbled raw
+ *  grammar miss instead of an honest one. */
 export function composeRelation(graph, relTerm, { definition = null } = {}) {
   const key = RELATION_TERM[String(relTerm || "").toLowerCase()];
   if (!key || !definition) return null;

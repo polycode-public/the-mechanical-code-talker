@@ -1,32 +1,9 @@
-// memory/core.mjs — tmct's OWN conversational memory graph (ROADMAP item 9).
-//
-// A dedicated OWL-labelled store at <repo>/.tmct/memory/graph.json — raw JSON in
-// the exact `entities` shape buildEntities produces, so codegraph.mjs's
-// parseEntities() loads it unchanged ({ individuals, byId, relations, proseIndex }).
-// It is DISTINCT from any provider-supplied code graph: tmct never writes a
-// provider's graph (docs/adapter-contract.md); memory writes land ONLY here.
-//
-// What goes in:
-//   - every parsed inbound request becomes an "a-visitor-said" individual
-//     (class `Utterance`, role=visitor) and every response an "a-tmct-said"
-//     individual (role=tmct), each carrying text/ts/role attributes, an
-//     `mgx:saidInSession` edge to its Session anchor, and — for a response —
-//     an `mgx:inReplyTo` edge to the visitor utterance it answers;
-//   - grammar-derived OWL triples via appendFact() (subject/predicate/object +
-//     provenance), reified RDF-style (rdf:subject / rdf:predicate / rdf:object
-//     on a `Fact` individual) — the Phase-2 ACE parser's write point.
-//
-// OWL labelling: individuals are rdf-ish typed twice — the payload-level `class`
-// field (Utterance / Fact / Session, counted in `classes[]` like every other
-// graph class) AND an `rdf:type` attribute naming the OWL term
-// (owl:NamedIndividual for utterances, rdf:Statement for reified facts), with
-// the owl/rdf/rdfs prefixes declared in the payload's `prefixes` block —
-// consistent with graph-build.mjs's JSON-label-only vocabulary style.
-//
-// Every append is crash-safe (fresh read → mutate → temp-file + rename, the
-// sessions.mjs discipline) and IDEMPOTENT: utterance ids are deterministic
-// (utt:<session>#<ts>#<role>) and fact ids hash the triple, so the per-turn
-// re-append sessions.mjs performs replaces rather than duplicates.
+// memory/core.mjs — tmct's OWN conversational memory graph: a dedicated
+// OWL-labelled store at <repo>/.tmct/memory/graph.json, distinct from any
+// provider-supplied code graph. Utterances, Facts (reified RDF triples via
+// appendFact), and Sessions are all typed twice — payload `class` and an
+// `rdf:type` attribute. Every append is crash-safe and idempotent (utterance
+// ids are deterministic, fact ids hash the triple).
 
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
@@ -43,37 +20,29 @@ export const UTTERANCE_CLASS = "Utterance";
 export const FACT_CLASS = "Fact";
 export const MEMORY_SESSION_CLASS = "Session";
 export const SOURCE_CLASS = "Source";
-// PLAN_TAUGHT_RELATIONS.md Phase 3: a taught RULE (a composed/filtered/
-// recursive relation-shape) — a sibling of Fact, never a taught concept itself.
+// A taught RULE (a composed/filtered/recursive relation-shape) — a sibling
+// of Fact, never a taught concept itself.
 export const RULE_CLASS = "Rule";
 
 export const SAID_IN_SESSION_PROP = "mgx:saidInSession";
 export const IN_REPLY_TO_PROP = "mgx:inReplyTo";
 
-// The provenance-link predicate family (PLAN_PROVENANCE_TRUST step (b)): one
-// umbrella object property with two workhorse subproperties, minted in the owned
-// mgx: namespace to match tmct-core.ttl's object-property style.
+// The provenance-link predicate family: one umbrella object property with two
+// workhorse subproperties, minted in the owned mgx: namespace to match
+// tmct-core.ttl's object-property style.
 export const DERIVED_FROM_PROP = "mgx:derivedFrom";        // umbrella: Fact → Source|Fact
 export const STATED_BY_PROP = "mgx:statedBy";              // a Source directly asserts a Fact
 export const CANONICALISED_FROM_PROP = "mgx:canonicalisedFrom"; // a canonical Fact ← its raw form
 export const CREATED_AT_PROP = "mgx:createdAt";           // first-write-wins ISO-8601 on every individual
-// DERIVED at read/render time for most individuals (codegraph.mjs's derivedUpdatedAt: an
-// individual's own createdAt, or the max createdAt over every edge touching it) — this constant
-// exists for the handful of call sites that mutate an individual's OWN attributes in place
-// without necessarily touching an edge (upsertSession, recomputeFactTrust,
-// recomputeSourceReliability), where the derived rule alone can't see the change (PLAN_VIZ.md §2).
+// For call sites that mutate an individual's own attributes without touching
+// an edge (upsertSession, recomputeFactTrust, recomputeSourceReliability),
+// where codegraph.mjs's derived-updatedAt rule alone can't see the change.
 export const UPDATED_AT_PROP = "mgx:updatedAt";
 export const SOURCE_RELIABILITY_PROP = "mgx:sourceReliability"; // actor-level (session-scoped) trust nudge on a Source, [0.5,1.5]
 
-// The bare (session-less) singleton Source ids — the fallback for an
-// operator/teach provenance tag that carries no session-id segment (e.g. a
-// hand-authored "chat:"/"session:"/"operator" tag, or a direct API caller
-// that never threaded a session id through). Once a provenance tag DOES carry
-// a session-id segment (every real chat/teach write does — see
-// grammar/assert.mjs's provenanceTag / chat.mjs's teachProvenanceTag), each
-// session mints its OWN Source individual instead: `${ID}:<sessionId>`
-// (sourceIdFor below) — actor-level (session-scoped) trust, unconditional,
-// no config flag (PLAN_PROVENANCE_TRUST Part B).
+// Bare (session-less) singleton Source ids — fallback for a provenance tag
+// with no session-id segment. A tag that does carry one mints its own
+// per-session Source instead (`${ID}:<sessionId>`, sourceIdFor below).
 export const OPERATOR_SOURCE_ID = "src:operator-chat";
 export const TEACH_SOURCE_ID = "src:teach-chat";
 
@@ -139,14 +108,9 @@ export function emptyMemory() {
   };
 }
 
-/** Resolve the on-disk path of a memory graph file for `dir`. `version === null`
- *  (the default) is the LIVE graph (`graph.json`) — the one path every mutator
- *  funnels through (mutateMemory here, writeMemoryGraph in fold.mjs). A numeric
- *  `version` resolves a SNAPSHOT copy (`graph.v{version}.json`, see
- *  snapshotMemory below) — never the live file. The single source of truth for
- *  "where does the memory graph live on disk", closing the desync risk of two
- *  independent path-resolution copies (core.mjs's mutateMemory and fold.mjs's
- *  writeMemoryGraph used to compute this path separately). */
+/** Resolve the on-disk path of a memory graph file for `dir`. `version` null
+ *  (default) is the live graph; a numeric version resolves a snapshot copy
+ *  (see snapshotMemory below). The single source of truth for this path. */
 export function resolveMemoryGraphFile(dir, version = null) {
   if (isMemoryHandle(dir) || isSqliteHandle(dir)) {
     throw new Error("resolveMemoryGraphFile: dir is a memory/sqlite handle, not a file path (Backend A only)");
@@ -157,30 +121,11 @@ export function resolveMemoryGraphFile(dir, version = null) {
 
 const memoryGraphFile = (dir) => resolveMemoryGraphFile(dir);
 
-// ---- Storage-backend seam (PLAN_SEED.md §6) ---------------------------------
-//
-// Every dir-taking export in this file historically assumed `dir` was a plain
-// string repo path that resolveMemoryGraphFile joins into an on-disk file
-// (Backend A, unchanged below — still the exact byte-identical default for
-// every existing caller that never opts into anything else).
-//
-// `dir` may now ALSO be a memory HANDLE: a small tagged object created by
-// createInMemoryStore() (Backend B, pure in-memory, zero disk I/O) or
-// createSqliteMemoryStore() (Backend C, a live node:sqlite connection kept
-// open for the session's lifetime). loadMemory/mutateMemory below recognize
-// both and dispatch the LOAD/PERSIST steps only; every other function in this
-// file (appendFact, appendFacts, appendUtterance(s), appendRule,
-// readFactRows, findRuleByName, resolveRelationChase(Reverse),
-// findContradictions) takes `memory`/`dir` exactly as before and never
-// branches on backend — they operate on the plain JS payload object
-// mutateMemory hands them, regardless of where it came from or where it goes
-// next. That is the whole point of the seam: id hashing, provenance/trust
-// computation, migrateLegacyProvenance, recomputeSourceReliability and
-// buildProseIndex are backend-agnostic logic, unchanged either way.
-//
-// snapshotMemory (manifest-versioned snapshots) and resolveMemoryGraphFile
-// stay Backend-A-only (a handle has no on-disk file to snapshot) — both throw
-// a clear error if given a handle rather than silently doing the wrong thing.
+// ---- Storage-backend seam --------------------------------------------------
+// `dir` is either a plain repo-path string (Backend A, file-backed) or a
+// handle from createInMemoryStore() (Backend B) or createSqliteMemoryStore()
+// (Backend C). Only loadMemory/mutateMemory dispatch on backend; every other
+// function operates on the plain payload object they hand back.
 
 const BACKEND_MEMORY = "memory";
 const BACKEND_SQLITE = "sqlite";
@@ -195,80 +140,18 @@ function isMemoryOrSqliteHandle(dir) {
   return isMemoryHandle(dir) || isSqliteHandle(dir);
 }
 
-/**
- * Backend B — pure in-memory store (new). A plain JS object held by the
- * CALLER (never module-global state, which would break multiple concurrent
- * sessions in one process): `{ backend: "memory", payload }`. loadMemory
- * returns `payload` directly (the live reference, not a fresh parse — there
- * is nothing to parse); mutateMemory's persist step is a no-op assignment
- * (`handle.payload = out` — already the same object in every real caller,
- * since none of appendFact/appendFacts/appendUtterance(s)/appendRule ever
- * return a NEW object from their mutateMemory callback, they all mutate the
- * payload in place). ZERO readFile/writeFile/JSON.parse/JSON.stringify calls
- * ever happen for this backend — verified directly by this module's own
- * dispatch (no fs import is even reachable from this path) and by
- * test/memory-backend-memory.test.mjs's fs-spy assertions.
- *
- * Distinct from `--ephemeral` (createSession): ephemeral mode still does real
- * readFile/JSON.parse/writeFile round-trips against a throwaway mkdtemp temp
- * dir every turn — "disposable disk," not "no disk." Backend B is genuinely
- * disk-free.
- */
+/** Backend B — pure in-memory store: `{ backend: "memory", payload }` held by
+ *  the caller (never module-global). Zero file I/O; distinct from
+ *  `--ephemeral`, which still round-trips a throwaway temp dir. */
 export function createInMemoryStore() {
   return { backend: BACKEND_MEMORY, payload: emptyMemory() };
 }
 
-// ---- Backend C — SQLite (new; schema shape adapted from seonix's src/store.mjs,
-// write model is NOT) ----------------------------------------------------------
-//
-// seonix (a sibling repo consuming tmct as a library) already has a working,
-// opt-in node:sqlite store (SEONIX_STORE=sqlite, node:sqlite lazily imported,
-// zero external dependency): an `ids`/`nodes`/`relations`/`edges`/`meta` table
-// set. Its WRITE MODEL is a full rebuild-and-atomic-swap on every write — correct
-// for seonix's problem (read-latency on a relatively static, rebuild-on-change
-// code graph), wrong for tmct's (write-heavy, one-fact-at-a-time accumulation
-// across a session's lifetime): lifting it as-is would just replace "rewrite the
-// whole JSON file per turn" with "rebuild the whole SQLite file per turn."
-//
-// tmct's Backend C reuses the SHAPE, not the write model: real per-row
-// INSERT/REPLACE/DELETE against a LIVE, OPEN connection kept for the session's
-// lifetime (see createSqliteMemoryStore/closeSqliteMemoryStore below),
-// diffed against whatever is already on that row so only touched
-// individuals/edges are ever written — not seonix's rebuild-and-swap.
-//
-// Schema, adapted (not ported) to tmct's actual payload shape (emptyMemory(),
-// above — { generated_at, memory, prefixes, vocabulary, classes,
-// objectProperties, individuals, proseIndex }, distinct from seonix's code-graph
-// `entities` shape): seonix's separate integer-interning `ids` table exists to
-// cover edge endpoints that AREN'T always node ids (e.g. an `inherits` edge's
-// `ext:<Base>` target). tmct's own edge groups (saidInSession, inReplyTo,
-// statedBy, canonicalisedFrom) only ever link two individuals-table ids, so
-// that interning table is dropped here — individuals/edges reference each
-// other by their natural TEXT id directly, a deliberate simplification over a
-// literal port. A Fact's reified rdf:subject/rdf:predicate/rdf:object live as
-// ATTRIBUTES on the individual (tmct's own reification style, no seonix
-// equivalent), so they ride inside that individual's own JSON blob column —
-// no separate fact-triple columns needed.
-//
-// Cached, incrementally patched reads (closes the PLAN_SEED.md §6 gap the
-// prior "honest shortcut" comment used to flag here): the READ side
-// (readSqlitePayload) reconstructs the FULL in-memory payload shape from real
-// SQL SELECTs only ONCE — the first call for a given handle, or the first
-// call after a failed/rolled-back write — and stashes the result on
-// `handle.cachedPayload`. Every later call returns a deep clone of that cache
-// directly, with ZERO SQL queries: no re-SELECT of individuals, no
-// per-relation edge SELECT. The WRITE side (persistSqlitePayload) was never a
-// shortcut: it already diffs the incoming payload against what is already in
-// each row/edge-group and only issues a real INSERT/REPLACE/DELETE for what
-// actually changed (write cost proportional to what changed this turn, not to
-// the total store size). It now ALSO applies that exact same diff to
-// `handle.cachedPayload` in lockstep — patching only the individuals/edges it
-// actually wrote to SQLite, in the same order SQLite itself would reorder
-// them (a changed row gets a fresh rowid and sorts last) — so the cache never
-// goes stale, and never needs a re-query to catch up either. If a write fails
-// mid-transaction (ROLLBACK), the partially-patched cache is not trusted: it
-// is invalidated so the NEXT read does an honest full rebuild instead of
-// risking a state that was never actually committed.
+// ---- Backend C — SQLite: a live node:sqlite connection, per-row
+// INSERT/REPLACE/DELETE diffed against what's already stored (write cost
+// proportional to what changed, not total store size). Reads are cached on
+// `handle.cachedPayload` and incrementally patched in lockstep with writes;
+// a failed write invalidates the cache so the next read rebuilds honestly.
 
 const SQLITE_DDL = `
 CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT NOT NULL);
@@ -278,24 +161,13 @@ CREATE TABLE IF NOT EXISTS edges (prop TEXT NOT NULL, subject TEXT NOT NULL, obj
 CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
 `;
 
-// Edge keys with dedicated columns; any other key on an edge example object
-// (none exist in core.mjs's own edge groups today, but a future/external
-// writer might add one) round-trips via the `extra` JSON column, same
-// discipline as seonix's own STD_EDGE_KEYS.
+// Edge keys with dedicated columns; any other key round-trips via `extra`.
 const STD_EDGE_KEYS = new Set(["subject", "object", "subjectLabel", "objectLabel"]);
 
-/**
- * Open (creating if absent) a resident node:sqlite connection for `dbPath` and
- * return a Backend C handle: `{ backend: "sqlite", db, dbPath }`. `node:sqlite`
- * is imported LAZILY here — calling this function is the ONLY way it is ever
- * loaded, so a caller that never opts into this backend never even imports it
- * (matching seonix's own SEONIX_STORE=sqlite gating discipline, and tmct's
- * minimal-deps philosophy: zero external dependency either way).
- *
- * The connection is meant to be opened ONCE per session and kept open for the
- * session's lifetime (not re-opened per call) — close it via
- * closeSqliteMemoryStore when the session ends.
- */
+/** Open (creating if absent) a resident node:sqlite connection: a Backend C
+ *  handle `{ backend: "sqlite", db, dbPath }`. `node:sqlite` is imported
+ *  lazily — only opting into this backend ever loads it. Meant to be opened
+ *  once per session; close via closeSqliteMemoryStore at session end. */
 export async function createSqliteMemoryStore(dbPath) {
   const { DatabaseSync } = await import("node:sqlite");
   const db = new DatabaseSync(dbPath);
@@ -312,30 +184,10 @@ export function closeSqliteMemoryStore(handle) {
   if (isSqliteHandle(handle)) handle.db.close();
 }
 
-/**
- * Resolve an already-lowercased/trimmed backend token ("memory" | "sqlite" |
- * anything else, including "" or "default") into `{ dir, close }`: the exact
- * `dir` value every dir-taking export in this module (loadMemory, appendFact,
- * appendFacts, seedMemory via src/corpus/conceptnet.mjs, …) already accepts —
- * a plain repo-path string for Backend A, or a live Backend B/C handle — plus
- * an idempotent `close()` cleanup (a no-op for A/B; closes the sqlite
- * connection for C).
- *
- * The ONE shared resolver for the storage-backend seam (PLAN_SEED.md §6):
- * originally inlined only in chat.mjs's createSession, factored out here so
- * `tmct init`'s corpus seed (src/init.mjs) and bin/tmct.mjs's
- * `--corpus`/`--ontology`/`--lexicon` activation seed the SAME backend a
- * later `tmct chat` in that repo will read — a caller resolving "sqlite"
- * independently and picking a different db path (or a different in-memory
- * store) would silently split a repo's memory across two places that can
- * never see each other. `backendChoice` is a precedence result the CALLER
- * already computed (CLI flag > env > tmct.toml > default, or whatever subset
- * applies); this function does no precedence resolution of its own — it only
- * maps the resolved token to a handle. `repoRoot` is used only for Backend C's
- * db path (`<repoRoot>/.tmct/memory/graph.sqlite`); Backend A returns
- * `repoRoot` itself unchanged, byte-identical to every existing plain-string
- * caller.
- */
+/** Resolve a backend token ("memory" | "sqlite" | anything else) into
+ *  `{ dir, close }` — the ONE shared resolver, so every entry point (init's
+ *  corpus seed, bin/tmct.mjs, chat) picks the same backend for a repo rather
+ *  than silently splitting its memory across two stores. */
 export async function openMemoryBackend(repoRoot, backendChoice) {
   if (backendChoice === BACKEND_MEMORY) {
     return { dir: createInMemoryStore(), close: async () => {} };
@@ -349,25 +201,13 @@ export async function openMemoryBackend(repoRoot, backendChoice) {
   return { dir: repoRoot, close: async () => {} };
 }
 
-/** Deep-clone a JSON-safe value. Used two ways here: (1) readSqlitePayload
- *  hands every CALLER a clone of the cache, never the live cached object
- *  itself, so this backend keeps the same "fresh object every call" contract
- *  Backend A's JSON.parse(readFile()) always had — nothing outside this
- *  module can mutate handle.cachedPayload by mutating what loadMemory
- *  returned; and (2) persistSqlitePayload clones a value INTO the cache so
- *  the cache never ends up aliasing a piece of the caller's own payload
- *  object (which mutateMemory's caller may go on to mutate further). */
+/** Deep-clone a JSON-safe value — keeps every cache read/write from aliasing
+ *  the caller's own payload object. */
 const cloneJson = (v) => (v === undefined ? v : structuredClone(v));
 
-/** The loadMemory-equivalent read for Backend C. First call for a handle (or
- *  first call after a failed write invalidated the cache): a real, full
- *  reconstruction from SQL SELECTs, same as before — then it is stashed on
- *  `handle.cachedPayload`. Every later call, with no write in between, skips
- *  SQL entirely and returns a clone of that cache (see the module-comment
- *  above SQLITE_DDL for the full mechanism). A brand-new store (no meta rows
- *  written yet) reconstructs to the same shape emptyMemory() returns, so a
- *  fresh handle behaves like Backend A's ENOENT-bootstrap and Backend B's
- *  fresh createInMemoryStore(). */
+/** The loadMemory-equivalent read for Backend C: reconstructs from SQL once
+ *  per handle (or after a failed write invalidates the cache), then returns a
+ *  clone of `handle.cachedPayload` with zero SQL. */
 function readSqlitePayload(handle) {
   if (!handle.cachedPayload) handle.cachedPayload = buildSqlitePayloadFromRows(handle);
   return cloneJson(handle.cachedPayload);
@@ -414,14 +254,8 @@ function buildSqlitePayloadFromRows(handle) {
   };
 }
 
-// ---- handle.cachedPayload mirrors --------------------------------------
-// Applied by persistSqlitePayload in LOCKSTEP with the SQL statement sitting
-// right beside each call — same condition (only when the SQL write actually
-// runs), same effect, so the cache always ends up holding exactly what a
-// fresh SQL reconstruction would now produce. `cache.individuals`/
-// `cache.objectProperties` are mutated in place; persistSqlitePayload is
-// responsible for invalidating the whole cache on a rolled-back write (these
-// helpers assume the surrounding transaction succeeds).
+// ---- handle.cachedPayload mirrors: applied in lockstep with each SQL write
+// so the cache always matches a fresh SQL reconstruction. ----------------
 
 /** Mirrors `INSERT OR REPLACE INTO individuals(...)`: an existing id is
  *  replaced IN PLACE (same array position, matching how SQL keeps that row's
@@ -451,17 +285,10 @@ function cacheGroupFor(cache, prop) {
   return g;
 }
 
-/** Mirrors `INSERT OR REPLACE INTO edges(...)`: SQLite deletes-then-reinserts
- *  a changed/new row on conflict, so it gets a fresh (highest) rowid and sorts
- *  LAST under readSqlitePayload's `ORDER BY rowid` — moving the entry to the
- *  end of `examples` here (rather than replacing it in place) reproduces that
- *  ordering exactly, without a re-SELECT. Rebuilds the cached edge shape the
- *  same way buildSqlitePayloadFromRows does (subject/object/labels + any
- *  extra keys), from the same `extraKeys` persistSqlitePayload already
- *  computed for the SQL `extra` column, so it never re-derives them. Same
- *  NUL-delimited (subject,object) key discipline as the SQL diff beside it
- *  (a space could be forged by a term that contains one; NUL never occurs in
- *  a normalized term). */
+/** Mirrors `INSERT OR REPLACE INTO edges(...)`: a changed/new row sorts LAST
+ *  under `ORDER BY rowid`, so this moves the entry to the end of `examples`
+ *  rather than replacing it in place. NUL-delimited (subject,object) key,
+ *  matching the SQL diff beside it — collision-proof, unlike a space. */
 function cacheUpsertEdge(group, edge, extraKeys) {
   const key = `${edge.subject}\u0000${edge.object}`;
   group.examples = group.examples.filter((e) => `${e.subject}\u0000${e.object}` !== key);
@@ -485,19 +312,10 @@ function cacheDropGroupsExcept(cache, seenProps) {
   cache.objectProperties = cache.objectProperties.filter((g) => seenProps.has(g?.prop));
 }
 
-/** Persist a mutated payload into a Backend C handle: real per-row
- *  INSERT/REPLACE/DELETE, diffed against whatever is ALREADY in the table for
- *  that individual id / (prop,subject,object) edge key — not seonix's
- *  rebuild-and-swap. Every statement runs inside one transaction so a session
- *  never observes (or leaves on disk) a half-applied mutation.
- *
- *  Also patches `handle.cachedPayload` (if one exists yet — it always will in
- *  practice, since mutateMemory always calls loadMemory before this) in the
- *  same lockstep as the SQL diff below, so a subsequent loadMemory() never has
- *  to re-query SQLite to see this write (see the module comment above
- *  SQLITE_DDL). On a rolled-back write, the cache is invalidated rather than
- *  left holding a partially-applied patch — the next read does an honest
- *  full rebuild instead. */
+/** Persist a mutated payload into a Backend C handle: per-row
+ *  INSERT/REPLACE/DELETE diffed against what's already stored, in one
+ *  transaction. Patches `handle.cachedPayload` in lockstep; a rolled-back
+ *  write invalidates the cache instead of leaving a partial patch. */
 function persistSqlitePayload(handle, payload) {
   const db = handle.db;
   const empty = emptyMemory();
@@ -634,41 +452,12 @@ export const DEFAULT_RETENTION = 5;
 
 const resolveManifestFile = (dir) => join(dir, MEMORY_MANIFEST_REL);
 
-/** Snapshot the CURRENT live graph.json into a numbered `graph.v{N}.json`
- *  (N = the manifest's version BEFORE this call increments it), then advance
- *  the manifest and best-effort prune the oldest snapshot that falls outside
- *  the retention window.
- *
- *  `graph.json` itself is NEVER touched or renamed here — it stays the one
- *  live file every mutator (mutateMemory / fold.mjs's writeMemoryGraph) reads
- *  and writes; only a COPY of its pre-snapshot content becomes the new
- *  numbered version. NOT called from mutateMemory, writeMemoryGraph, or
- *  anywhere else in this codebase.
- *
- *  Manifest bootstrap (no manifest.json yet): `{ version: 0, retentionVersions:
- *  opts.retentionVersions ?? DEFAULT_RETENTION }` — the optional
- *  `retentionVersions` lets a caller that already loaded tmct.toml's
- *  `[memory] retention_versions` seed the bootstrap default without this
- *  module doing its own config I/O (core.mjs has no toml-loading precedent;
- *  toml-config.mjs stays the one place that reads tmct.toml). Once a
- *  manifest.json exists on disk, ITS retentionVersions is authoritative and a
- *  later opts.retentionVersions is ignored (the persisted setting wins over a
- *  possibly-stale caller default).
- *
- *  "No graph.json exists yet" is handled as a clean no-op: `{ skipped: true,
- *  version: null }` — nothing to snapshot is not an error, it is the honest
- *  bootstrap state (a brand-new repo that has never written a memory graph).
- *
- *  Retention: after writing `graph.v{N}.json` and bumping the manifest to
- *  N+1, the snapshot at `graph.v{N - retentionVersions}.json` (if it exists)
- *  is deleted (best-effort — ENOENT is swallowed). Using N (the version just
- *  written), not N+1, for the prune target keeps a clean sliding window of
- *  exactly `retentionVersions` files on disk at all times, with no orphaned
- *  v0 ever left behind once the window starts sliding.
- *
- *  Returns `{ skipped, version, prunedVersion }` — `version` is the number of
- *  the snapshot just written (or null if skipped); `prunedVersion` is the
- *  number pruned, or null if nothing was in range to prune yet. */
+/** Snapshot the current live graph.json into a numbered `graph.v{N}.json`,
+ *  advance the manifest, and best-effort prune the snapshot that falls
+ *  outside the retention window. graph.json itself is never touched — only a
+ *  copy becomes the new version. No graph.json yet -> `{ skipped: true }`.
+ *  Once a manifest exists, its retentionVersions is authoritative over
+ *  `opts.retentionVersions`. Returns `{ skipped, version, prunedVersion }`. */
 export async function snapshotMemory(dir, { retentionVersions } = {}) {
   if (isMemoryOrSqliteHandle(dir)) {
     throw new Error("snapshotMemory only supports the flat-JSON backend (Backend A) — a memory/sqlite handle has no on-disk graph.json to snapshot");
@@ -733,12 +522,9 @@ export async function loadMemory(dir) {
   return JSON.parse(text);
 }
 
-/** Persist a mutated payload back to `dir` — the seam's other half. Backend A
- *  (unchanged): atomic write of the whole file. Backend B: the payload IS the
- *  handle's live object already (every real caller mutates in place); this
- *  assignment is a documented no-op safety net, never I/O. Backend C: a real,
- *  diffed per-row INSERT/UPDATE/DELETE against the live connection — see
- *  persistSqlitePayload. */
+/** Persist a mutated payload back to `dir`: an atomic file write (Backend A),
+ *  a no-op assignment (Backend B, already the live object), or a diffed
+ *  per-row SQL write (Backend C, persistSqlitePayload). */
 async function persistMemory(dir, payload) {
   if (isMemoryHandle(dir)) { dir.payload = payload; return; }
   if (isSqliteHandle(dir)) { persistSqlitePayload(dir, payload); return; }
@@ -746,43 +532,18 @@ async function persistMemory(dir, payload) {
   await atomicWriteJson(memoryGraphFile(dir), payload);
 }
 
-/** Fresh read → mutate → atomic write. Serialized per call; every public append
- *  goes through here so a concurrent reader never sees a torn store. The lazy,
- *  idempotent legacy-provenance migration rides this same cycle (step (b)): any
- *  Fact still carrying only the old mgx:factProvenance string gets its Sources +
- *  statedBy edges + trust materialised on the next write of any kind. Part B3's
- *  actor-level (session-scoped) Source reliability rides the SAME cycle, after
- *  migration (so it sees every Fact's Sources, migrated or not).
- *
- *  `fn` may be async (PLAN_AGENTS.md §2.1's SHACL ingest gate: appendFact/
- *  appendRule build their candidate individual, `await assertIndividualValid`
- *  it, and only then upsert — all inside `fn`, so a rejection throws before
- *  ANY mutation of `payload` happens and this function's write is never
- *  reached). `await fn(payload)` is a documented no-op for every existing
- *  SYNC caller (appendUtterance(s), appendFacts) — awaiting a non-Promise
- *  value just resolves to it, byte-identical behaviour to calling it plain. */
-// ---- mutateMemory-scoped lookup index (PLAN_GRAPH_SCAN.md Phase 1) ----------
-// syncFactSources's per-fact bookkeeping (upsertSource, upsertIndividual,
-// upsertEdge's statedBy path, statedByObjectsFor, sourcesByIdMap) used to each
-// re-scan payload.individuals or the statedBy edge list from scratch, turning
-// one appendFacts batch of n facts into O(n^2) work. mutateMemory now builds
-// three lookup Maps once per call (one O(n) pass) and attaches them to payload
-// under a Symbol key — JSON.stringify skips Symbol-keyed properties
-// automatically, so persistMemory's graph.json write is byte-identical to
-// before. Every helper below checks for the Symbol slot: present → O(1) Map
-// lookup; absent (a bare payload object built outside mutateMemory, e.g. a
-// test fixture) → today's exact linear-scan fallback, so nothing outside
-// mutateMemory's own call chain can observe a behaviour change. The index is
-// discarded when mutateMemory returns — it never survives across calls, so
-// there is no invalidation logic to get wrong.
+/** Fresh read -> mutate -> atomic write. Serialized per call; every public
+ *  append goes through here, including the lazy legacy-provenance migration
+ *  and actor-level Source reliability recompute. `fn` may be async (the
+ *  SHACL ingest gate awaits validation before ever mutating `payload`). */
+// Per-call lookup index (individualsById/sourcesById/statedByBySubject),
+// attached to payload under a Symbol key (skipped by JSON.stringify) so
+// upsertIndividual/upsertSource/upsertEdge/appendFacts get O(1) lookups
+// instead of re-scanning; discarded when mutateMemory returns.
 const MEMORY_INDEX = Symbol("mutateMemory lookup index");
 
 /** Build the three lookup Maps from the just-loaded payload and attach them
- *  under MEMORY_INDEX. Any code that pushes a new individual into
- *  payload.individuals, or a new statedBy edge, must also write the matching
- *  index entry in that same statement (see upsertIndividual/upsertSource/
- *  upsertEdge/appendFacts below) — the same discipline appendFacts's own
- *  local `byId` Map already used for the Fact upsert, generalised here. */
+ *  under MEMORY_INDEX. */
 function buildMemoryIndex(payload) {
   const individualsById = new Map();
   const sourcesById = new Map();
@@ -838,27 +599,17 @@ function setAttr(ind, prop, key, value) {
 
 // ---- Sources (step (b)): first-class provenance individuals -----------------
 
-/** Deterministic Source id + type over the closed kind set. Returns null for an
- *  unknown kind (an unmappable provenance tag → no Source, honestly).
- *
- *  operator/teach kinds are SESSION-SCOPED when `desc.sessionId` is present
- *  (unconditional — every real chat/teach provenance tag carries one; see
- *  provenanceTagToSource): `${OPERATOR_SOURCE_ID}:<sessionId>` /
- *  `${TEACH_SOURCE_ID}:<sessionId>` instead of the bare singleton, so each
- *  session's operator/teach facts attach to their OWN Source individual
- *  rather than every session ever collapsing onto one. Session ids are
- *  uuidv7s (hex + hyphens only — see uuid.mjs), so `:`/`@` never collide with
- *  this id scheme's own delimiters. */
+/** Deterministic Source id + type over the closed kind set; null for an
+ *  unknown kind. operator/teach are session-scoped when `desc.sessionId` is
+ *  present, so each session gets its own Source rather than collapsing onto
+ *  one singleton. */
 function sourceIdFor(desc) {
   switch (desc?.kind) {
     case "operator": return { id: desc.sessionId ? `${OPERATOR_SOURCE_ID}:${desc.sessionId}` : OPERATOR_SOURCE_ID, type: "operator" };
     case "teach": return { id: desc.sessionId ? `${TEACH_SOURCE_ID}:${desc.sessionId}` : TEACH_SOURCE_ID, type: "teach" };
     case "provider": return { id: `src:provider:${desc.name}`, type: "provider" };
     case "corpus": return { id: `src:corpus:${desc.name}`, type: "corpus" };
-    // One Source per source-file basename (the corpus precedent above), not per
-    // extraction run — re-running scripts/extract-facts-from-text.mjs over the
-    // SAME file collapses onto the same Source instead of minting a new one
-    // every time, matching corpus's "one Source per named dataset" idiom.
+    // One Source per source-file basename, not per extraction run.
     case "extracted": return { id: `src:extracted:${desc.name}`, type: "extracted" };
     case "web": return { id: `src:learned:web:${fnv1aHex(String(desc.url || ""))}`, type: "web", url: String(desc.url || "") };
     case "entailed": return { id: `src:entailed:${desc.rule}`, type: "entailed", rule: String(desc.rule || "") };
@@ -893,12 +644,8 @@ function upsertSource(payload, desc, createdAtCandidate) {
   return info.id;
 }
 
-/** Parse the "chat" shape both provenanceTag (grammar/assert.mjs) and
- *  teachProvenanceTag (chat.mjs) emit — `<source>[:<sessionId>][@<ts>]` after
- *  their kind prefix has already been stripped — into { createdAt, sessionId? }.
- *  `sessionId` is present only when the tag actually carried one (every real
- *  chat/teach write does; a hand-authored/legacy tag without one degrades to
- *  the bare singleton Source, honestly — see sourceIdFor). */
+/** Parse the "chat" shape both provenanceTag and teachProvenanceTag emit —
+ *  `<source>[:<sessionId>][@<ts>]` — into { createdAt, sessionId? }. */
 function parseChatTagRest(rest) {
   const at = rest.indexOf("@");
   const beforeAt = at >= 0 ? rest.slice(0, at) : rest;
@@ -909,30 +656,16 @@ function parseChatTagRest(rest) {
 }
 
 /**
- * Parse one legacy provenance TAG into a Source descriptor over the closed kind
- * set — the inverse the migration and the live write path both name Sources
- * through. The tag formats are exactly what the writers produce:
- *   corpus:conceptnet /r/IsA   → { kind:"corpus",   name:"conceptnet" }
- *   corpus-weak:conceptnet /r/RelatedTo → { kind:"corpusWeak", name:"conceptnet" }
- *   ace:chat:<session>@<ts>    → { kind:"operator",  createdAt:<ts>, sessionId:<session> }
- *   teach:chat:<session>@<ts>  → { kind:"teach",     createdAt:<ts>, sessionId:<session> }
- *   web:<url> | url:<url>      → { kind:"web",       url:<url> }
- *   extracted:<file-basename>  → { kind:"extracted", name:<file-basename> }
- *   entailed:<rule>            → { kind:"entailed",  rule:<rule> }
- * chat:/session: refs map to the operator; an unknown tag → null (no Source).
- * `corpus-weak:` is the SAME corpus provenance shape as `corpus:`, just naming
- * a lower trust-prior kind (memory/trust.mjs SOURCE_PRIOR.corpusWeak) for
- * facts whose underlying relation is real but low-precision (e.g. ConceptNet's
- * undirected /r/RelatedTo) — trust stays computed from the Source's kind, never
- * hand-set on the Fact.
- * The session-id segment (Part B: session-scoped actor-level trust) feeds
- * sourceIdFor, which mints a PER-SESSION Source id when present, instead of
- * collapsing every session onto one singleton operator/teach Source.
- * `extracted:` is scripts/extract-facts-from-text.mjs's own audit tag, layered
- * ADDITIVELY (via appendFact's provenance union) on top of whatever the
- * runTurn recognizer already wrote (ace:/teach:) — see that script for why:
- * it distinguishes "this document evidenced this fact" from ordinary chat
- * speech, at its own trust-prior tier (memory/trust.mjs SOURCE_PRIOR.extracted).
+ * Parse one legacy provenance TAG into a Source descriptor over the closed
+ * kind set:
+ *   corpus:conceptnet /r/IsA   -> { kind:"corpus",   name:"conceptnet" }
+ *   corpus-weak:conceptnet /r/RelatedTo -> { kind:"corpusWeak", name:"conceptnet" }
+ *   ace:chat:<session>@<ts>    -> { kind:"operator",  createdAt:<ts>, sessionId:<session> }
+ *   teach:chat:<session>@<ts>  -> { kind:"teach",     createdAt:<ts>, sessionId:<session> }
+ *   web:<url> | url:<url>      -> { kind:"web",       url:<url> }
+ *   extracted:<file-basename>  -> { kind:"extracted", name:<file-basename> }
+ *   entailed:<rule>            -> { kind:"entailed",  rule:<rule> }
+ * chat:/session: refs map to the operator; an unknown tag -> null (no Source).
  */
 export function provenanceTagToSource(tag) {
   const t = String(tag || "").trim();
@@ -977,17 +710,9 @@ function statedByObjectsFor(payload, factId) {
   return (g?.examples || []).filter((e) => e?.subject === factId).map((e) => e.object);
 }
 
-/** Recompute + materialise a Fact's trust cache (mgx:trustScore + the auditable
- *  mgx:trustInputs). Called exactly where a statedBy edge could have changed.
- *  `trustOpts` (optional) is the entailed hook (trust.mjs `computeTrust`'s
- *  `premiseTrusts`/`ruleConfidence`) — threaded through from appendFact/
- *  appendFacts's own opts so a rule (e.g. syllogise.mjs's cax-dw) can make its
- *  conclusion's trust premise-derived (`min(premiseTrusts) × ruleConfidence`)
- *  instead of riding the bare entailed prior. Absent (the default, `{}`), this
- *  is a no-op passthrough — every existing caller's score is byte-identical
- *  (PLAN_INFERENCE_TESTING.md §4 stage 2's exit criterion). Also stamps
- *  `mgx:updatedAt` (PLAN_VIZ.md §2) — this mutates the Fact's own attributes in place without
- *  necessarily touching an edge, so the derived "max over edges" updatedAt rule can't see it. */
+/** Recompute + materialise a Fact's trust cache (mgx:trustScore/mgx:trustInputs)
+ *  and stamp mgx:updatedAt. `trustOpts` optionally threads the entailed hook's
+ *  premiseTrusts/ruleConfidence through from appendFact/appendFacts. */
 function recomputeFactTrust(payload, fact, nowMs = Date.now(), trustOpts = {}) {
   const sourceIds = statedByObjectsFor(payload, fact.id);
   const createdAt = (fact.attributes || []).find((a) => a?.prop === CREATED_AT_PROP)?.value || "";
@@ -1053,33 +778,11 @@ const isSessionScopedSourceId = (id) =>
 
 /**
  * Recompute + materialise mgx:sourceReliability on every session-scoped
- * operator/teach Source (Part B3): for each such Source, count the facts it
- * stated (`factsAsserted`) and how many of those are part of a live
- * contradiction (`factsContradicted`, via findContradictions — its own
- * detection logic is untouched, this only READS its result), run
- * sessionReliabilityFrom, and write the bounded result onto the Source.
- *
- * Contradiction membership is evaluated against the CURRENT trust scores at
- * the point this runs (already materialised by this same mutation's
- * syncFactSources/migrateLegacyProvenance calls) — it does NOT recursively
- * re-evaluate contradictions after reliability changes shift trust scores
- * (no fixed-point iteration; one pass is enough for a monotonic, self-
- * correcting signal that only ever gets more accurate on the NEXT write).
- *
- * Every individual (Fact OR RULE) touched by a recomputed Source then has its
- * OWN trust re-materialised (recomputeFactTrust — class-agnostic, same as
- * syncFactSources: neither ever checks `.class`) so mgx:trustScore reflects
- * the fresh reliability within THIS SAME mutation cycle — a session's
- * reliability shift is visible immediately, not just on some future
- * unrelated re-write. This refresh is scanned off the statedBy edge group
- * DIRECTLY (every individual it names, any class), not off readFactRows
- * (Fact-only) — a Rule can never be "contradicted" (findContradictions is a
- * Fact-shape concept, so contradiction ACCOUNTING stays Fact-scoped above),
- * but it rides the identical Source-derivation + trust pipeline a Fact does
- * (appendRule's own doc comment), so it must not go stale here either.
- *
- * Called from mutateMemory itself (below), riding every mutation's existing
- * bookkeeping cycle — not a separate write path.
+ * operator/teach Source: count facts stated vs. contradicted
+ * (findContradictions), run sessionReliabilityFrom, write the bounded result.
+ * One pass, no fixed-point iteration. Every individual (Fact or Rule) a
+ * recomputed Source touches then gets its own trust re-materialised
+ * (recomputeFactTrust) so the shift is visible within this same mutation.
  */
 function recomputeSourceReliability(payload) {
   if (!Array.isArray(payload?.individuals) || !Array.isArray(payload?.objectProperties)) return;
@@ -1104,7 +807,7 @@ function recomputeSourceReliability(payload) {
     const source = idx ? idx.individualsById.get(sid) : payload.individuals.find((i) => i?.id === sid);
     if (!source) continue;
     setAttr(source, SOURCE_RELIABILITY_PROP, "sourceReliability", String(sessionReliabilityFrom(counts)));
-    // Own-attribute mutation in place (PLAN_VIZ.md §2) — same reasoning as recomputeFactTrust.
+    // Own-attribute mutation in place — same reasoning as recomputeFactTrust.
     setAttr(source, UPDATED_AT_PROP, "updatedAt", new Date().toISOString());
   }
 
@@ -1120,16 +823,7 @@ function recomputeSourceReliability(payload) {
 }
 
 /** Upsert an individual by id (replace-in-place keeps ordering stable).
- *  Returns the individual object actually stored in payload.individuals — the
- *  caller (e.g. upsertSource) should index THAT reference, not `ind` itself,
- *  since the indexed path below merges into the prior object in place rather
- *  than replacing the array slot. When a lookup index is present (built by
- *  mutateMemory), an existing individual is updated via Object.assign — same
- *  array position AND same object identity as before, so it stays trivially
- *  in sync with individualsById without a second Map write, and a brand-new
- *  individual is pushed + indexed in the same statement. Absent an index
- *  (a bare payload built outside mutateMemory), this is EXACTLY the original
- *  findIndex + replace-or-push code. */
+ *  Returns the stored reference — callers should index THAT, not `ind`. */
 function upsertIndividual(payload, ind) {
   const idx = memoryIndexOf(payload);
   if (idx) {
@@ -1159,8 +853,8 @@ function upsertEdge(payload, { predicate, prop }, edge) {
     group = { predicate, prop, count: 0, examples: [] };
     payload.objectProperties.push(group);
   }
-  // statedBy-only fast path (PLAN_GRAPH_SCAN.md Phase 1): statedByBySubject
-  // tracks, per fact, the small list of Source ids already stated it (almost
+  // statedBy-only fast path: statedByBySubject tracks, per fact, the small
+  // list of Source ids already stated it (almost
   // always 0-1 during a seed), so the overwhelmingly common case — a brand
   // new (subject,object) statedBy pair — can append directly without the
   // find+filter scan of the WHOLE statedBy edge list below. Every other
@@ -1293,23 +987,10 @@ export async function appendUtterances(dir, utterances) {
 }
 
 /** Normalize a fact TERM (subject/object) so every writer converges on one
- *  spelling and the graph stays queryable: ConceptNet's /c/en/foo_bar, a
- *  grammar's tmct:Foo_bar and a bare "Foo bar" all become "foo bar". The
- *  PREDICATE is deliberately NOT normalized this way - it is a controlled
- *  vocabulary term (rdfs:subClassOf) whose casing is meaningful.
- *
- *  Tier-5 playtest fix (2026-07-09): also strips a leading "the"/"a"/"an" —
- *  found live via "remember that THE logger module is deprecated" (teach-side
- *  already stripped it before this ran, so storage was unaffected) followed by
- *  "what do you know about THE logger module" / "who maintains THE tasks
- *  handler" (recall-side queries, which do NOT pre-strip their own captured
- *  term before calling this) genuinely missing the just-taught fact — every
- *  recall regex in chat.mjs (KNOW_ABOUT_RE, WHO_OWNS_RE, ISA_ASK_RE, …) calls
- *  factTermVariants -> normFactTerm on the raw captured term, so fixing it
- *  ONCE here closes the gap for all of them instead of patching each site.
- *  Safe for storage too (idempotent — an already-stripped subject is
- *  unaffected); the article is a determiner, never semantically distinguishing
- *  for a code-entity or common-noun term in this domain. */
+ *  spelling: ConceptNet's /c/en/foo_bar, tmct:Foo_bar, and bare "Foo bar" all
+ *  become "foo bar". Also strips a leading "the"/"a"/"an" (idempotent — safe
+ *  for storage too). The predicate is never normalized this way — its casing
+ *  is meaningful controlled vocabulary. */
 export function normFactTerm(t) {
   let s = normText(t);
   s = s.replace(/^\/c\/[a-z]{2,3}\//i, "");
@@ -1319,39 +1000,24 @@ export function normFactTerm(t) {
   return s.toLowerCase();
 }
 
-// The fact-id contract: a Fact is content-addressed by its NUL-DELIMITED
-// (s, p, o). NUL never occurs in a normalized term or a predicate URI, so it is
-// a collision-proof separator (a space could be forged by a term that contains
-// one). appendFact hashes the SAME `${s}\0${p}\0${o}` inline; appendFacts routes
-// through here so the batch path can never drift to a space and silently re-key
-// every seeded fact — the golden-equivalence test pins the two paths together.
+// A Fact is content-addressed by its NUL-delimited (s, p, o) — NUL never
+// occurs in a normalized term/predicate, so it's collision-proof unlike a
+// space. appendFact hashes the same `${s}\0${p}\0${o}` inline; keep both in sync.
 const factIdFor = (s, p, o) => `fact:${fnv1aHex(`${s}\0${p}\0${o}`)}`;
 
-/** Content-address a fact's id from its (subject, predicate, object) WITHOUT
- *  writing it — the SAME normalize+NUL-join+hash contract appendFact/
- *  appendFacts use internally (factIdFor, above). Exposed so a caller that
- *  needs to name a premise's or a not-yet-written conclusion's id (e.g.
- *  syllogise.mjs's justification-tracking retraction machinery, PLAN_SYLLOGIST.md
- *  §3) can compute it deterministically without an extra read — ids are
- *  content-addressed, never sequence-assigned, so this is safe to call
- *  before, instead of, or in place of an actual append. Pure, no I/O. */
+/** Content-address a fact's id from (subject, predicate, object) without
+ *  writing it — same contract as factIdFor. Lets a caller (e.g.
+ *  syllogise.mjs's retraction machinery) name a not-yet-written fact's id
+ *  deterministically, without an extra read. Pure, no I/O. */
 export function factIdForTriple(subject, predicate, object) {
   return factIdFor(normFactTerm(subject), normText(predicate), normFactTerm(object));
 }
 
-/** Append one grammar-derived OWL triple, RDF-reified: a `Fact` individual
- *  carrying rdf:subject / rdf:predicate / rdf:object (+ provenance). The
- *  Phase-2 ACE parser's write point. Same (s,p,o) → same id → upsert, never a
- *  duplicate. `premiseTrusts`/`ruleConfidence` (optional) engage trust.mjs's
- *  entailed hook — see recomputeFactTrust; a rule-derived write (e.g.
- *  syllogise.mjs) passes these, a plain taught/asserted write omits them and
- *  is byte-identical to before.
- *
- *  PLAN_AGENTS.md 2.1's SHACL ingest gate: the candidate Fact individual is
- *  validated against ontology/memory-shapes.ttl (memory/shacl.mjs) BEFORE
- *  upsertIndividual runs -- a violation throws here, inside mutateMemory's
- *  `fn`, so the write never happens (mutateMemory's atomic write is never
- *  reached; the on-disk graph is untouched). Returns { id }. */
+/** Append one grammar-derived OWL triple, RDF-reified as a `Fact` individual.
+ *  Same (s,p,o) -> same id -> upsert, never a duplicate. `premiseTrusts`/
+ *  `ruleConfidence` optionally engage trust.mjs's entailed hook. Validated
+ *  against ontology/memory-shapes.ttl (memory/shacl.mjs) before the write.
+ *  Returns { id }. */
 export async function appendFact(dir, { subject, predicate, object, provenance = "", createdAt = "", quantifier = "", premiseTrusts, ruleConfidence } = {}) {
   const s = normFactTerm(subject);
   const p = normText(predicate);
@@ -1396,35 +1062,13 @@ export async function appendFact(dir, { subject, predicate, object, provenance =
   return { id };
 }
 
-/** Batch append of grammar/corpus-derived triples — ONE read-modify-write for a
- *  whole seed (the appendUtterances precedent, for facts). The per-fact
- *  appendFact does a full read → mutate → prose-reindex → atomic-write PER FACT,
- *  so seeding N facts is O(N²) I/O (6 k facts ≈ 7 min); this collapses it to a
- *  single mutate.
- *
- *  Every fact is normalized + prose-tokenized OUTSIDE the mutate, then a SINGLE
- *  mutateMemory upserts each Fact through an id→individual Map (O(1) upsert, so
- *  the growing individuals array is never rescanned per fact), reconciles each
- *  touched fact's Sources + trust via the SAME syncFactSources appendFact uses,
- *  and recountClasses ONCE at the end. The result is deep-equal (modulo array
- *  order) to looping appendFact: same fact ids, same mgx:factProvenance union,
- *  same statedBy Source edges, same mgx:trustScore, same first-write-wins
- *  createdAt. Malformed facts (missing subject/predicate/object) are SKIPPED (a
- *  bad row never aborts a 6 k-fact seed), not thrown as appendFact does.
- *  Each fact may also carry `premiseTrusts`/`ruleConfidence` (optional) —
- *  appendFact's own entailed-hook passthrough, batched: syllogise.mjs's
- *  materializing pass is this function's main caller, so this is the write
- *  path a rule's conclusion trust actually rides (recomputeFactTrust, above).
- *  A fact may also carry `justification` (optional, array of premise fact
- *  ids — PLAN_SYLLOGIST.md §3's persisted-justification step): stored
- *  verbatim as `mgx:factJustification` (space-joined; fact ids never contain
- *  a space), last-write-wins per id (a re-derivation via a DIFFERENT premise
- *  pair, after the original was retracted and this fact re-earned its place
- *  some other way, should overwrite the stale justification, not keep it) —
- *  never written at all for a plain taught/asserted fact (`justification`
- *  omitted), which stays byte-identical to before this field existed.
- *  Returns { ids, appended, skipped } — ids one per applied fact (in order),
- *  appended = ids.length, skipped = malformed count. */
+/** Batch append of grammar/corpus-derived triples — ONE read-modify-write for
+ *  a whole seed, collapsing looping appendFact's O(N²) I/O to a single
+ *  mutate (same resulting ids/provenance/trust). Malformed facts are skipped,
+ *  not thrown. Optional per-fact `premiseTrusts`/`ruleConfidence` (batched
+ *  entailed-hook passthrough) and `justification` (premise fact ids, stored
+ *  as mgx:factJustification, last-write-wins). Returns
+ *  { ids, appended, skipped }. */
 export async function appendFacts(dir, facts) {
   const prepared = [];
   let skipped = 0;
@@ -1514,7 +1158,7 @@ export async function appendFacts(dir, facts) {
   return { ids, appended: ids.length, skipped };
 }
 
-// ---- Rules (PLAN_TAUGHT_RELATIONS.md Phase 3: storage foundation) -----------
+// ---- Rules ------------------------------------------------------------------
 // A taught RULE — a composed/filtered/recursive relation SHAPE, distinct from a
 // plain Fact triple. Same convention as a Fact's subject/predicate/object: every
 // slot is a plain string ATTRIBUTE, never an edge to a per-term individual.
@@ -1528,50 +1172,25 @@ export const RULE_NAME_PROP = "mgx:ruleName";
 export const RULE_KIND_PROP = "mgx:ruleKind";
 
 // Per-kind slot contract: JS slot key -> the mgx: attribute it's written under.
-// filter's "base" slot deliberately reuses ruleBase1 (not a fresh "ruleBase") —
-// §3's own query-dispatcher design chases a filter rule's candidate set via
-// "ruleBase1's candidate set (step (a) or (b) again)", the exact same attribute
-// name compose2's first hop already uses, since both play the identical "base
-// relation this rule builds on" role. Order within each array is the (slot1,
-// slot2) order the content-address hash below uses — fixed and load-bearing.
+// filter's "base" slot deliberately reuses ruleBase1 (not a fresh "ruleBase")
+// — the same attribute name compose2's first hop already uses, since both
+// play the identical "base relation this rule builds on" role. Order within
+// each array is the (slot1, slot2) order the content-address hash below
+// uses — fixed and load-bearing.
 const RULE_SLOT_SPEC = {
   [RULE_KIND_COMPOSE2]: [["base1", "mgx:ruleBase1"], ["base2", "mgx:ruleBase2"]],
   [RULE_KIND_FILTER]: [["base", "mgx:ruleBase1"], ["property", "mgx:ruleFilterProperty"]],
   [RULE_KIND_RECURSIVE]: [["baseCase", "mgx:ruleBaseCase"], ["recStep", "mgx:ruleRecStep"]],
 };
 
-// The rule-id contract, mirroring factIdFor's (:456) NUL-delimited discipline
-// exactly: content-addressed over (kind, name, slot1, slot2), so re-teaching an
-// IDENTICAL rule (same kind + name + slots) upserts, never duplicates; teaching
-// a DIFFERENT rule under the SAME name (different slots) hashes to a distinct
-// id — both individuals exist side by side, the same way two different Facts
-// sharing a subject are two distinct Fact individuals, never a silent overwrite.
+// Content-addressed over (kind, name, slot1, slot2), mirroring factIdFor's
+// NUL-delimited discipline: identical rules upsert, different ones coexist.
 const ruleIdFor = (kind, name, slot1, slot2) => `rule:${fnv1aHex(`${kind}\0${name}\0${slot1}\0${slot2}`)}`;
 
 /** Append one taught RULE (compose2 | filter | recursive) — a sibling of
- *  appendFact (:462) for the relation-composition shapes PLAN_TAUGHT_RELATIONS.md
- *  items 3/4/6 need, storing a `Rule` individual instead of a `Fact`. Same
- *  load→mutate→write discipline via mutateMemory, same content-addressed-id
- *  upsert convention as appendFact.
- *
- *  { name, kind, slots, provenance = "", createdAt = "" }: `kind` is the ONE
- *  closed vocabulary this store needs to know — compose2 | filter | recursive,
- *  three STRUCTURAL tags describing the SHAPE of what was taught (never a
- *  domain word, the same way "Fact"/"Rule" describe the store's own shape, not
- *  what's stored in it). `slots` is the matching per-kind object (RULE_SLOT_SPEC
- *  above). `name` and every slot value are normFactTerm-normalized, exactly like
- *  a Fact's subject/object.
- *
- *  Provenance/trust ride the EXACT SAME syncFactSources/recomputeFactTrust
- *  pipeline appendFact uses, unmodified — neither function ever checks
- *  `individual.class`, so a Rule carrying the same mgx:factProvenance compat
- *  attribute + CREATED_AT_PROP gets the same Source-derivation + trust score an
- *  ordinary Fact would.
- *
- *  PLAN_AGENTS.md 2.1's SHACL ingest gate: the candidate Rule individual is
- *  validated against ontology/memory-shapes.ttl (memory/shacl.mjs) BEFORE
- *  upsertIndividual runs, same discipline as appendFact -- a violation
- *  throws before mutateMemory's write is ever reached. Returns { id }. */
+ *  appendFact storing a `Rule` individual, same upsert/provenance/trust/SHACL
+ *  discipline (neither pipeline ever checks `individual.class`). `slots` is
+ *  the matching per-kind object (RULE_SLOT_SPEC above). Returns { id }. */
 export async function appendRule(dir, { name, kind, slots, provenance = "", createdAt = "" } = {}) {
   const spec = RULE_SLOT_SPEC[kind];
   if (!spec) throw new Error(`a rule kind must be one of ${RULE_KINDS.join(", ")}, got ${JSON.stringify(kind)}`);
@@ -1613,13 +1232,11 @@ export async function appendRule(dir, { name, kind, slots, provenance = "", crea
   return { id };
 }
 
-/** Genericity lookup for the future query-dispatcher (PLAN_TAUGHT_RELATIONS.md
- *  §2's closing paragraph / §3 step (b)): "what kind of thing is name X" — scan
- *  for the Rule individual whose mgx:ruleName matches, the SAME lookup serving
- *  every taught rule name uniformly (no per-rule-name branch). This phase only
- *  proves the stored shape supports the lookup correctly; Phase 4/5/6 build the
- *  actual kind-dispatch (compose2/filter/recursive branching) on top of this.
- *  Returns the raw individual, or undefined if no Rule has that name. */
+/** Genericity lookup for the query-dispatcher: "what kind of thing is name X"
+ *  — scan for the Rule individual whose mgx:ruleName matches, the SAME
+ *  lookup serving every taught rule name uniformly (no per-rule-name
+ *  branch). Returns the raw individual, or undefined if no Rule has that
+ *  name. */
 export function findRuleByName(memory, name) {
   const n = normFactTerm(name);
   return (memory?.individuals || []).find(
@@ -1627,41 +1244,25 @@ export function findRuleByName(memory, name) {
   );
 }
 
-// ---- Relation chase (extracted from chat.mjs's (a0)/(a0.2) blocks,
-// PLAN_TAUGHT_RELATIONS.md Phase 2/4/5; PLAN_COMPLETIONS.md Stage 1
-// prerequisite) --------------------------------------------------------------
+// ---- Relation chase ---------------------------------------------------------
 //
-// `resolveRelationChase` and `resolveRelationChaseReverse` were originally
-// unexported closures inside chat.mjs's factReadBack, coupled to its own
-// local `rows`/`memoryDir`/`byTrust`/`renderFactLine`/`factPhrase`/
-// `factTermVariants` variables. Moved here — findRuleByName's natural
-// sibling, since this file already owns Rule storage/lookup — as plain,
-// standalone, importable functions so Stage 1's cross-group inference can
-// reuse the SAME resolution logic outside chat.mjs's dispatch context. The
-// closures they used to capture are now explicit parameters: `memory` (an
-// already-loaded loadMemory() payload — callers load it once, not per
-// recursive call) and a `helpers` bag carrying every chat.mjs-local piece
-// they relied on (`relationFactsFor`, `renderFactLine`, `factPhrase`,
-// `factTermVariants`, `byTrust`, the trust-bearing `rows` array, and
-// `HAS_PROPERTY_PREDICATE`). No other chat.mjs coupling remains — dynamic
-// imports of this file's own findRuleByName/RULE_KIND_* and of
-// planning.mjs's findActionPath/findReachableSet are now direct references/
-// static imports, since both now live alongside or are reachable from here
-// without a cycle (planning.mjs imports nothing).
+// `resolveRelationChase` and `resolveRelationChaseReverse` are standalone,
+// importable functions taking an already-loaded `memory` (a loadMemory()
+// payload — callers load it once, not per recursive call) and a `helpers`
+// bag (`relationFactsFor`, `renderFactLine`, `factPhrase`, `factTermVariants`,
+// `byTrust`, the trust-bearing `rows` array, and `HAS_PROPERTY_PREDICATE`),
+// so callers outside chat.mjs's own dispatch context can reuse the same
+// resolution logic.
 //
-// Behavior is unchanged from the original closures: same dispatch order
-// (direct/alias fact hit → compose2 rule chase → filter rule chase → honest
-// miss), same OWA discipline (null / [] on a miss, never a guessed "no").
+// Dispatch order: direct/alias fact hit → compose2 rule chase → filter rule
+// chase → honest miss (OWA discipline: null / [] on a miss, never a guessed
+// "no").
 
 /**
- * RELATION CHASE (chat.mjs's (a0) block) — given a relation/rule NAME and a
- * fixed (subject, object) pair, resolve whether it holds: (i) a direct taught
- * fact, (ii) the same pair reached via an alias-chased predicate (rdfs:subClassOf
- * over relation-name strings, folded into `relationFactsFor`'s own candidate
- * list), (iii) a hop-counted compose2 Rule chase (exactly 2 hops: base1 then
- * base2), or (iv) a filter Rule chase (recursively resolve the base, then
- * require the subject also carry the taught property). Returns
- * `{ citation: string[] }` on a genuine hit, or null on an honest miss.
+ * RELATION CHASE — given a relation/rule NAME and a fixed (subject, object)
+ * pair, resolve whether it holds via (i) a direct taught fact, (ii) an
+ * alias-chased predicate, (iii) a 2-hop compose2 Rule chase, or (iv) a filter
+ * Rule chase. Returns `{ citation: string[] }` on a hit, null on an honest miss.
  */
 export async function resolveRelationChase(memory, name, subjectTerm, objectTerm, helpers) {
   const { relationFactsFor, renderFactLine, factPhrase, factTermVariants, byTrust, rows, HAS_PROPERTY_PREDICATE } = helpers;
@@ -1735,13 +1336,9 @@ export async function resolveRelationChase(memory, name, subjectTerm, objectTerm
 }
 
 /**
- * RELATION "WHO" REVERSE CHASE (chat.mjs's (a0.2) block) — the mirror image of
- * resolveRelationChase: given a relation/rule name and a FIXED OBJECT, return
- * every `{ subject, citation }` pair that satisfies it, instead of a single
- * yes/no for a fixed (subject, object) pair. Recursion is bounded the SAME way
- * resolveRelationChase's own filter chase is: a filter rule's base is always
- * either a plain relation (terminal) or another rule (one level deeper), never
- * itself.
+ * RELATION "WHO" REVERSE CHASE — the mirror image of resolveRelationChase:
+ * given a relation/rule name and a fixed OBJECT, return every
+ * `{ subject, citation }` pair that satisfies it, instead of one yes/no.
  */
 export async function resolveRelationChaseReverse(memory, name, objectTerm, helpers) {
   const { relationFactsFor, renderFactLine, factPhrase, factTermVariants, byTrust, rows, HAS_PROPERTY_PREDICATE } = helpers;
@@ -1867,33 +1464,21 @@ export function readFactRows(memory) {
       id: ind.id,
       subject: get("subject"), predicate: get("predicate"), object: get("object"),
       provenance: get("provenance"), // legacy compat string, verbatim
-      quantifier: get("quantifier"), // "" unless a plural class-membership teach set one (Feature A pt.3)
+      quantifier: get("quantifier"), // "" unless a plural class-membership teach set one
       sourceIds, sourceTypes,
       trust: Number((ind.attributes || []).find((a) => a?.prop === TRUST_SCORE_PROP)?.value) || 0,
-      // [] unless a rule persisted its premise fact ids (PLAN_SYLLOGIST.md §3's
-      // justification-tracking step — scm-sco only, today; see syllogise.mjs).
+      // [] unless a rule persisted its premise fact ids (justification-tracking,
+      // scm-sco only today; see syllogise.mjs).
       justification: justificationRaw ? justificationRaw.split(" ").filter(Boolean) : [],
     });
   }
   return rows;
 }
 
-/**
- * Retract Fact individuals by id — a real DELETE, the mechanism `syllogise.mjs`'s
- * own header comment has always PROMISED ("fully RETRACTABLE by provenance when
- * the source graph moves") but that, until PLAN_SYLLOGIST.md §3's retraction
- * build, nothing in this file actually implemented: un-believing something used
- * to mean re-running the whole batch pass and hoping dedup naturally sorted it
- * out, with no targeted removal at all. Drops each matching Fact individual and
- * scrubs any edge group (`statedBy`, etc.) that referenced it as subject OR
- * object, so no dangling edge survives the delete — then recounts classes once.
- * A Source left with zero remaining statedBy edges is NOT itself deleted (an
- * orphaned Source individual is harmless — it materialises nothing and costs
- * nothing to leave — so this stays a pure, minimal retraction, not a GC pass).
- * Ids that don't resolve to a live Fact are silently skipped (an idempotent,
- * honest no-op — never an error: a caller may retry a retraction against a
- * concurrently-mutated store). Returns { removed } — the ids ACTUALLY deleted,
- * a possibly-smaller set than the input. */
+/** Retract Fact individuals by id — a real DELETE (syllogise.mjs's
+ *  retractability mechanism). Scrubs any edge referencing the id as subject
+ *  or object; an orphaned Source is left in place (not a GC pass). Unknown
+ *  ids are silently skipped. Returns { removed } (may be smaller than input). */
 export async function removeFacts(dir, ids) {
   const idSet = new Set((ids || []).filter(Boolean));
   const removed = [];
@@ -1919,13 +1504,9 @@ export async function removeFacts(dir, ids) {
  *  contradiction (below it the fact is too weak to contradict anything). */
 export const CONTRADICTION_TRUST_FLOOR = 0.5;
 
-/**
- * Facts that CONTRADICT: same (subject, predicate), DIFFERENT object, each above
- * the trust floor. Returns groups (each a [rows] sorted by trust desc) so the
- * answer/inspection layer surfaces BOTH with their provenance and NEVER silently
- * picks the higher-trust one. Same (s,p,o) from two writers is corroboration,
- * not contradiction — one Fact id, N statedBy edges — so it never appears here.
- */
+/** Facts that CONTRADICT: same (subject, predicate), different object, each
+ *  above the trust floor. Returns groups (trust-desc) so callers surface both,
+ *  never silently pick one. Same (s,p,o) is corroboration, not contradiction. */
 export function findContradictions(memory, { floor = CONTRADICTION_TRUST_FLOOR } = {}) {
   const rows = readFactRows(memory).filter((r) => r.trust >= floor);
   const byKey = new Map();

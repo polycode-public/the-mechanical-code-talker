@@ -5,7 +5,7 @@
 // the chat surface and the `cli <tool>` route call into.
 //
 // Tools (all query-only, bounded output): tmct_search, tmct_describe, tmct_snippet,
-// tmct_impact, plus the §9 read-replacing tools tmct_members, tmct_subclasses,
+// tmct_impact, plus the read-replacing tools tmct_members, tmct_subclasses,
 // tmct_architecture, tmct_tests_for, tmct_untested, tmct_history, tmct_callers,
 // tmct_callees. Each answers one question in ONE compact call so the caller need not
 // Read/Grep. Errors reach the caller as clean tool errors — message only, never a stack.
@@ -50,11 +50,9 @@ import {
 } from "./codegraph.mjs";
 import { ask } from "./ask.mjs";
 import { createGraphService } from "./providers/graph-service.mjs";
-// Read-ONLY consumers of the conversational-memory graph (src/memory/core.mjs) — the 500
-// corpus facts live there, NOT in the code-map graph.json every tool below loads. Used by
-// the FALL-THROUGH bridge (below): when the code-map resolves NOTHING for a concept query
-// (/subclasses /describe /members /find), answer from the reified isa-family facts instead
-// of a flat "no entity". Never written here; memory writes stay owned by memory/*.
+// Read-only consumers of the conversational-memory graph (corpus facts, separate from
+// the code-map graph.json). Used by the fall-through bridge below: when the code-map
+// resolves nothing for a concept query, answer from the reified isa-family facts instead.
 import { loadMemory, readFactRows, normFactTerm } from "./memory/core.mjs";
 
 const SNIPPET_MAX_LINES = 200;
@@ -162,13 +160,12 @@ export const TOOLS = [
   },
 ];
 
-// Exported (was module-private) so chat.mjs's compare lane can load the SAME
-// graph dispatchTool's own tools load — no new loading path, just direct reuse
-// of the existing config -> source.fetchEntities -> parseEntities chain, for
-// the case where runAsk's own `graph` param is null (the common case; it's
-// only preloaded when a caller already has one in hand — see runAsk's own
-// `if (graph && ...)` / dispatchTool("tmct_ask", …) split just above the
-// compare lane's call site for the existing precedent).
+// Exported so chat.mjs's compare lane can load the SAME graph dispatchTool's
+// own tools load — no new loading path, just direct reuse of the existing
+// config -> source.fetchEntities -> parseEntities chain, for the case where
+// runAsk's own `graph` param is null (the common case; it's only preloaded
+// when a caller already has one in hand — see runAsk's own `if (graph && ...)`
+// / dispatchTool("tmct_ask", …) split just above).
 export async function loadGraph(config, source) {
   const payload = await source.fetchEntities(config);
   const graph = parseEntities(payload);
@@ -183,11 +180,8 @@ export async function loadGraph(config, source) {
   return graph;
 }
 
-// Resolution + the miss→ToolError bridge, threaded through the typed service
-// object (createGraphService). The service is the named seam; tmct's own
-// presentation (render*) reads its raw graph (svc.graph) and formats. A clean
-// miss on the interface becomes the instructive ToolError the CLI/chat expect —
-// message-only, never a stack, no fabricated entity names (generic placeholder).
+// A clean miss on the interface becomes the instructive ToolError the CLI/chat expect —
+// message-only, never a stack, no fabricated entity names.
 function resolveOrThrow(svc, symbol, what) {
   const { match, candidates } = resolveSymbol(svc.graph, symbol);
   if (!match) {
@@ -201,14 +195,14 @@ function resolveOrThrow(svc, symbol, what) {
 
 /**
  * Build the tmct_context "edit bundle" for a symbol and return { text, tier, topup }.
- * Shared by the tmct_context tool AND the `cli digest` arm (cli.mjs), so both
- * benefit from the size-adaptive sizing for free. `trim:true` (B2) renders a SECONDARY,
- * signatures-only bundle (no bodies/tails) for related-but-not-primary digest modules.
+ * Shared by the tmct_context tool AND the `cli digest` arm (cli.mjs). `trim:true` renders
+ * a SECONDARY, signatures-only bundle (no bodies/tails) for related-but-not-primary
+ * digest modules.
  *
- * Section ORDER is cache-stable (B7): the content that is identical across runs (anchor /
- * registration / exemplar / siblings / __all__ / insertion region) comes FIRST; the more
- * variable, history-derived tails (covering tests, co-change) come LAST, so a stable prefix
- * maximises prompt-cache reuse.
+ * Section order is cache-stable: content identical across runs (anchor/registration/
+ * exemplar/siblings/__all__/insertion region) comes first; more variable, history-derived
+ * tails (covering tests, co-change) come last, so a stable prefix maximises prompt-cache
+ * reuse.
  */
 export async function buildContextBundle(args, { config, source = defaultSource, trim = false, tel = null } = {}) {
   const symbol = String(args?.symbol || "").trim();
@@ -257,7 +251,7 @@ export async function buildContextBundle(args, { config, source = defaultSource,
     `Edit context for ${plan.moduleLabel} [${tier}${trim ? " secondary" : ""}] — assembled from the typed graph + that file. ` +
       "You do NOT need to Read it; write the new code directly after reviewing this.",
   ];
-  // ---- cache-stable prefix (B7): identical across runs ----
+  // ---- cache-stable prefix: identical across runs ----
   if (mask.anchor && plan.anchor?.site && lines) {
     const { start, end } = plan.anchor.site;
     out.push(`\n## anchor: ${plan.anchor.label} (${plan.anchor.class}) @ ${plan.moduleLabel}:${start}-${end}`);
@@ -327,7 +321,7 @@ export async function buildContextBundle(args, { config, source = defaultSource,
   } else if (plan.insertion) {
     out.push(`\n## insert the new sibling after line ~${plan.insertion} (end of the last top-level definition).`);
   }
-  // ---- variable tail (B7): history-derived, kept LAST so the prefix stays cache-stable ----
+  // ---- variable tail: history-derived, kept LAST so the prefix stays cache-stable ----
   if (mask.tests && plan.tests.length) out.push(`\n## covering tests: ${plan.tests.join(", ")}`);
   if (mask.cochange && plan.cochange && plan.cochange.length) {
     out.push(`\n## usually changed together (consider editing these too): ${plan.cochange.map((c) => `${c.label} (×${c.weight})`).join(", ")}`);
@@ -481,7 +475,7 @@ export async function dispatchTool(name, args, { config, source = defaultSource,
     const { content, tmct_ask } = ask(graph, query);
     // Every dispatchTool caller (the chat surface, the CLI fallback) expects a plain string —
     // append the structured envelope as a delimited, machine-parseable block rather than
-    // changing that shared contract for one tool. PLAN_MECHANICAL_CHAT.md §6.2.
+    // changing that shared contract for one tool.
     return `${content}\n\n---tmct_ask---\n${JSON.stringify(tmct_ask, null, 2)}`;
   }
   if (

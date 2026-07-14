@@ -1,5 +1,5 @@
 // grammar/lexicon.mjs — the declared lexicon behind tmct's ACE-OWL
-// sub-fragment parser (ROADMAP Phase 2, item 2; see ace.mjs). The lexicon is
+// sub-fragment parser (see ace.mjs). The lexicon is
 // LOAD-BEARING: the grammar is only deterministic because every noun, verb
 // (with any preposition), adjective (with its declared type) and proper name
 // is DECLARED — the parser never guesses a word's category. Undeclared words
@@ -13,9 +13,6 @@
 //
 // Namespace: every lexicon carries a `.ns` field (the CURIE prefix ace.mjs
 // stamps onto every term it mints) — always "tmct:" here (DEFAULT_NS).
-// ace.mjs and predicateOf() read it off the lexicon rather than hardcoding
-// the prefix inline, purely so a caller can supply its own already-namespaced
-// lexicon; tmct itself only ever runs the one namespace.
 //
 // Morphology is deliberately tiny and deterministic (no NLP dependency): a
 // suffix-fold for plurals/3rd-person-singular ("repositories"→repository,
@@ -154,26 +151,17 @@ export function loadLexicon(extra, ns = DEFAULT_NS) {
   return lex;
 }
 
-/** Noun lookup with plural folding; returns the entry ({lemma, property?}) or null.
- *  `opts.singularOnly` (set by ace.mjs's resolveNP for an "a"/"an" determiner —
- *  the only ACE determiners that are grammatically singular-ONLY) prunes the
- *  irregular-plural fold when the SAME surface word is ALSO declared as its own
- *  standalone noun (die/dice, person/people, tooth/teeth): a singular-only
- *  determiner is incompatible with the plural-fold reading but fully compatible
- *  with the standalone-singular reading, so that's the one grammar agreement
- *  allows. A general rule keyed on determiner agreement, not a per-word carve-out
- *  — see lookupNounCandidates below for the multi-candidate form this wraps. */
+/** Noun lookup with plural folding; returns the entry ({lemma, property?}) or
+ *  null. `opts.singularOnly` (an "a"/"an" determiner) prunes the irregular-
+ *  plural fold in favor of a standalone-singular entry when both exist for
+ *  the same surface word (die/dice, person/people). */
 export function lookupNoun(lexicon, word, opts = {}) {
   return lookupNounCandidates(lexicon, word, opts)[0] ?? null;
 }
 
-/** Every lexicon entry `word` could plausibly resolve to, ranked with the SAME
- *  top choice lookupNoun would return (opts.singularOnly applies identically)
- *  but without discarding a genuine alternate — e.g. the die/dice collision
- *  returns BOTH the `dice` and `die` entries (order depends on
- *  opts.singularOnly), a regular -s fold with both forms independently
- *  declared returns both. Additive: existing callers that only want the single
- *  best answer keep using lookupNoun untouched. */
+/** Every lexicon entry `word` could plausibly resolve to, ranked the same as
+ *  lookupNoun's top choice but without discarding a genuine alternate (e.g.
+ *  die/dice returns both entries). */
 export function lookupNounCandidates(lexicon, word, opts = {}) {
   const w = String(word ?? "").toLowerCase();
   const standalone = lexicon.nouns.get(w);
@@ -208,13 +196,7 @@ export function lookupVerb(lexicon, word) {
 }
 
 /** Every verb entry `word` could plausibly resolve to via foldCandidates,
- *  most-specific-fold-first (same order lookupVerb's single answer already
- *  used) — additive sibling of lookupNounCandidates, for a caller that wants
- *  to know about a genuine fold collision instead of only the first hit. In
- *  practice a verb fold rarely collides (unlike nouns' irregular-plural
- *  table), but the shape is symmetric with lookupNounCandidates on purpose —
- *  ace.mjs's multi-candidate relation search (parseRelationHits) reads
- *  whichever of the two a token's part of speech calls for. */
+ *  most-specific-fold-first — the verb sibling of lookupNounCandidates. */
 export function lookupVerbCandidates(lexicon, word) {
   const w = String(word ?? "").toLowerCase();
   const out = [];

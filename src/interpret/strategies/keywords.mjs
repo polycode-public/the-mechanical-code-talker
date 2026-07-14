@@ -1,7 +1,7 @@
-// interpret/strategies/keywords.mjs — strategy 2: keyword-spotting/decomposition,
-// extracted MOVE-only from ask.mjs (item 13). ELIZA's own mechanism: find the
-// keyword(s) anywhere in the text, decompose around them, tolerate reordering and
-// casual phrasing. Position-independent (no `^...$` anchor), so it tolerates
+// interpret/strategies/keywords.mjs — strategy 2: keyword-spotting/decomposition.
+// ELIZA's own mechanism: find the keyword(s) anywhere in the text, decompose
+// around them, tolerate reordering and casual phrasing. Position-independent
+// (no `^...$` anchor), so it tolerates
 // "what calls this" / "who invokes this" / "something executes this, where from"
 // — real phrasings the anchored grammar's fixed shapes don't cover.
 
@@ -13,11 +13,9 @@ import {
 import { STOPWORDS } from "../normalize.mjs";
 import { VOCAB_WORDS, eligibleForCanon, fuzzyVocabWord } from "../fuzzy.mjs";
 
-// Reversible-passive detection (Cycle 6, archive/PLAN_CYCLE_4.md): the passive auxiliaries that,
-// together with an agent-marking "by", flip the active reading, and the wh-words that
-// mark a QUESTIONED agent ("by which classes" / stranded "who is X tested by"). Bare
-// "do/does/did" are deliberately EXCLUDED — "which X do not <verb> Y" is a NEGATION, not
-// a passive, and must be left for the compositional complement frame.
+// Passive auxiliaries (with an agent-marking "by") that flip the active reading,
+// and the wh-words marking a questioned agent. Bare do/does/did are excluded —
+// that shape is a negation, not a passive.
 const PASSIVE_AUX = new Set(["is", "are", "was", "were", "be", "been", "being", "get", "gets", "got"]);
 const WH_WORDS = new Set(["which", "what", "who", "whom", "whose"]);
 const PLACEHOLDER_SET = new Set(PLACEHOLDER_NOUNS.map((w) => w.toLowerCase()));
@@ -42,38 +40,13 @@ export function findPhrase(lcWords, table, consumed = null) {
   return null;
 }
 
-/** Strategy 2: scan (already-normalized) text for a verb keyword anywhere,
- *  plus optional entity/modifier keywords anywhere, then split whatever's
- *  left (after removing the matched spans + stopwords) into the words BEFORE
- *  and AFTER the verb. Which side(s) are non-empty decides the shape —
- *  mirrors the three anchored shapes but by decomposition instead of a fixed
- *  template, so it tolerates reordering/casual phrasing the anchored regexes
- *  don't: text on BOTH sides ("does X import Y") -> ask{subject:before,
- *  object:after}; only AFTER the verb ("what calls this") -> reverse{object:
- *  after}; only BEFORE it ("what does X import") -> forward{object:before}.
- *  A lone context pronoun ("this"/"it"/"that"/"here") ending up as a resolved
- *  term is left as plain text — resolveTermOrContext (traverse-time)
- *  recognizes it against an optional contextId, so no separate flag is
- *  needed here. A misparse here costs nothing beyond an honest object-miss
- *  downstream (resolveObject never guesses).
- *
- *  Keyword matching is TIERED (two-level fuzzy work, 2026-07-02) — each lower
- *  tier fires ONLY when every tier above found no verb phrase at all, so an
- *  exact curated match can never be displaced:
- *    1. exact — the words as typed (post-normalization, which already applied
- *       the curated CONTRACTIONS/MISSPELLINGS/WRONG_WORDS corrections);
- *    2. lemma (only with the optional Node-side `nlp` adapter) — each eligible
- *       word is replaced by its wink lemma IF that lemma is itself a vocab word
- *       ("imported"/"importing" -> "import"), so inflections hit the curated
- *       phrases without enumerating them. Every verb family already stores its
- *       lemma form ("import", "call", "touch", "use", …), so a direct
- *       lemma-in-vocab check is the whole lookup — no reverse index needed;
- *    3. fuzzy (adapter-free; works in the inlined viewer too) — a word ≥4 chars
- *       matching nothing exactly may rewrite to a UNIQUE verb/modifier
- *       constituent within the bounded edit distance (see fuzzyVocabWord; ties
- *       are refused, entity nouns are never fuzzy targets).
- *  The canonicalized words drive PHRASE FINDING only — sideText always reads the
- *  ORIGINAL words, so a correction can never corrupt an object/subject term. */
+/** Strategy 2: find a verb keyword anywhere in the text, plus optional
+ *  entity/modifier keywords, then split what's left into words BEFORE and
+ *  AFTER the verb — both sides -> ask, after only -> reverse, before only ->
+ *  forward. Keyword matching is tiered (exact, then lemma, then fuzzy edit-
+ *  distance), each tier firing only when every tier above found nothing, so
+ *  an exact curated match can never be displaced. Canonicalized words drive
+ *  phrase finding only; sideText always reads the original words. */
 export function parseKeywordSpot(text, nlp = null) {
   // Strip a trailing "?" (mirrors the anchored templates' own `\??$`) and turn commas into
   // pauses/spaces — but NEVER strip a mid-word ".": object terms are routinely dotted file/module
@@ -81,12 +54,8 @@ export function parseKeywordSpot(text, nlp = null) {
   // must too or the two strategies would "disagree" over a period that was never part of the intent.
   const words = text.replace(/\?+\s*$/, "").replace(/,/g, " ").split(/\s+/).filter(Boolean);
   const lcWords = words.map((w) => w.toLowerCase());
-  // where/mentions shapes (2026-07-02 query families): "where is X [defined]" and
-  // "where is X mentioned" carry NO relation verb, so the verb-driven decomposition
-  // below can never reach them. Routed here by the "where" question word + marker —
-  // but ONLY when no relation verb exists anywhere in the sentence: "something
-  // executes this, where from" (an existing worked phrasing) has a verb, and its
-  // "where" is decorative, not a location question.
+  // where/mentions carry no relation verb, so only routed here when the sentence
+  // has no relation verb anywhere (otherwise "where" is merely decorative).
   if (lcWords.includes("where") && !findPhrase(lcWords, VERB_TO_KIND)) {
     const mention = lcWords.some((w) => MENTION_MARKERS.includes(w));
     const markers = new Set([...WHERE_MARKERS, ...MENTION_MARKERS]);
@@ -96,17 +65,10 @@ export function parseKeywordSpot(text, nlp = null) {
       return { shape: kind, entityType: null, modifier: "direct", kind, object: objText };
     }
   }
-  // has/have/had-changed carve-out (PLAN_CHAT_FEEL item 6 remainder): "has X
-  // changed" / "have X touched" / "had X ever been updated" — the present/past-
-  // perfect yes/no frame over the SAME touches-family verb the "when" branch below
-  // already answers ("when did X change"). Routed BEFORE the general verb-priority
-  // scan: "has"/"have"/"had" is ALSO a curated `defines` verb ("this module HAS
-  // three functions") and, sitting first in the sentence, would otherwise win that
-  // scan outright, misreading "has X changed" as a `defines` reverse-query over
-  // the object "X changed" — a confidently-wrong grain, not an honest miss. Gated
-  // on the sentence's OWN final word being a genuine touches verb (never a guess
-  // at which verb the sentence "really" means) — an ordinary defines question
-  // ("has app.mjs three functions") never ends in one, so this can't shadow it.
+  // has/have/had-changed carve-out ("has X changed"): routed before the general
+  // verb scan because has/have/had is ALSO the `defines` verb and would otherwise
+  // misread this as a defines query; gated on the sentence's own final word being
+  // a genuine touches verb.
   const PERFECT_AUX = new Set(["has", "have", "had"]);
   if (PERFECT_AUX.has(lcWords[0])) {
     let end = lcWords.length;
@@ -139,25 +101,17 @@ export function parseKeywordSpot(text, nlp = null) {
     if (verbHit) canonWords = fuzzyWords;
   }
   if (!verbHit && lcWords.includes("by")) {
-    // passive-participle rescue (Cycle 6): a participle whose kind is NOT a standalone
-    // active verb here ("defined" belongs to "is defined in"; bare "inherited" has no
-    // active key) still marks a passive when a passive auxiliary and an agent "by" are
-    // present. Consulted ONLY on this exact gate (aux + by), so the active grammar and
-    // the where-marker routing ("where is X defined") are never disturbed.
+    // A participle with no active verb entry still marks a passive when a passive
+    // auxiliary and an agent "by" are both present.
     for (let i = 0; i < lcWords.length; i += 1) {
       const k = PASSIVE_PARTICIPLE_TO_KIND[lcWords[i]];
       if (k && lcWords.slice(0, i).some((w) => PASSIVE_AUX.has(w))) { verbHit = { kind: k, start: i, end: i + 1 }; break; }
     }
   }
   if (!verbHit) return null;
-  // POS consumer (wink adapter, Node-side only): rescue the ONE decomposition this
-  // strategy provably mis-parses — a relation word used as a NOUN in a "the
-  // <imports> of <term>" nominal ("show the imports of walk.mjs" otherwise
-  // decomposes to ask{subject:"show"}; bare "the imports of walk.mjs" to the
-  // reverse shape, both wrong). The wink probe showed "import" is tagged NOUN even
-  // in genuine verb use ("which modules import walk.mjs"), so the POS signal is
-  // deliberately NOT a general verb veto — it only fires inside this exact
-  // det+NOUN+"of" frame, where the nominal reading is grammatically forced.
+  // POS rescue (Node-side only): a relation word used as a NOUN in a "the
+  // <imports> of <term>" frame would otherwise misparse; only fires inside this
+  // exact det+NOUN+"of" shape, since the same word tags NOUN in genuine verb use too.
   if (nlp && verbHit.end - verbHit.start === 1) {
     const i = verbHit.start;
     const det = lcWords[i - 1];
@@ -172,15 +126,8 @@ export function parseKeywordSpot(text, nlp = null) {
   const consumed = new Set();
   const mark = (hit) => { if (hit) for (let i = hit.start; i < hit.end; i += 1) consumed.add(i); };
   mark(verbHit);
-  // A redundant SAME-KIND verb immediately after the matched one ("what TESTS
-  // cover X" — "tests" is read as the relation trigger, but "cover" — also a
-  // `tests` verb, ask-vocab.mjs's own synonym list — is the word the sentence
-  // actually intends as the verb) would otherwise fall into afterText raw and
-  // corrupt the object ("cover src/core/model.mjs" instead of the module alone).
-  // Anchored to the exact position right after verbHit (never a general re-scan),
-  // and gated on matching the SAME kind, so this can only strip a genuine
-  // restatement, never eat a real object term. Found live: "what tests cover X",
-  // "which tests test X" both misparsed this way before this fix.
+  // A redundant same-kind verb restating the first ("what TESTS cover X") would
+  // otherwise corrupt the object; strip it, anchored right after verbHit.
   for (const [phrase, kind] of Object.entries(VERB_TO_KIND)) {
     if (kind !== verbHit.kind) continue;
     const pWords = phrase.split(" ");
@@ -204,39 +151,24 @@ export function parseKeywordSpot(text, nlp = null) {
   const entityType = entityHit ? ENTITY_TO_TYPE[canonWords.slice(entityHit.start, entityHit.end).join(" ")] : null;
   const modifier = modifierHit ? MODIFIER_TO_KIND[canonWords.slice(modifierHit.start, modifierHit.end).join(" ")] : "direct";
 
-  // when shape (2026-07-02 query families): "when did X change" / "when was X last
-  // touched" — the "when" question word turns a touches decomposition temporal.
-  // Only touches carries commit dates to answer with; a "when" next to any other
-  // relation verb falls through to the ordinary shapes (and their honest answers).
+  // "when" turns a touches decomposition temporal; other verbs fall through.
   if (kind === "touches" && lcWords.includes("when")) {
     const objText = beforeText || afterText;
     if (objText) return { shape: "when", entityType: null, modifier: "direct", kind: "touches", object: objText };
   }
 
-  // who-last shape (HANDOVER.md 2026-07-10 item 5): "who last touched X" / "who
-  // touched X last" used to fall into the ordinary reverse-list shape below and
-  // list EVERY touching commit's author, ignoring "last" entirely — the mirror
-  // gap of the "when" shape just above, which already answers a single newest
-  // commit. "who"/"last" are both STOPWORDS (normalize.mjs), so they never
-  // survive into beforeText/afterText either way — checked here, before they're
-  // stripped, the same way the "when" check above reads `lcWords` directly
-  // rather than the post-strip text.
+  // "who last touched X" would otherwise list every touching commit's author,
+  // ignoring "last" — checked directly against lcWords since both words are
+  // stopwords and wouldn't survive into beforeText/afterText.
   if (kind === "touches" && lcWords.includes("who") && lcWords.includes("last")) {
     const objText = beforeText || afterText;
     if (objText) return { shape: "whoLast", entityType: null, modifier: "direct", kind: "touches", object: objText };
   }
 
-  // reversible passive (Cycle 6, archive/PLAN_CYCLE_4.md): "PATIENT is VERBed BY AGENT" — an
-  // agent-marking "by" plus a passive auxiliary flips the active reading, so the AGENT
-  // (after "by") is the edge SUBJECT and the PATIENT the edge OBJECT. Object-first
-  // phrasing is otherwise read subject-first and the edge traversed backwards. Fires
-  // ONLY on a genuine agent "by": a passive auxiliary before the verb AND a standalone
-  // "by" NOT already swallowed into a multi-word verb phrase ("touched by"/"modified
-  // by" are single touches verbs, so their "by" is consumed and never triggers this) —
-  // an active query whose object merely contains a "by" token is untouched (the
-  // regression guard). The single NAMED role term becomes the object; whether the AGENT
-  // is named ("by b.test.mjs" → forward from the agent) or QUESTIONED ("by which
-  // classes" / a stranded "…tested by" → reverse over the patient) picks the direction.
+  // Reversible passive ("PATIENT is VERBed BY AGENT"): a passive auxiliary plus a
+  // standalone agent-marking "by" (not already swallowed into a multi-word verb
+  // phrase) flips subject/object; whether the agent is named or questioned picks
+  // forward vs. reverse.
   const byIdx = lcWords.indexOf("by");
   const hasPassiveAux = lcWords.slice(0, verbHit.start).some((w) => PASSIVE_AUX.has(w));
   if (byIdx >= 0 && !consumed.has(byIdx) && hasPassiveAux) {
@@ -263,13 +195,8 @@ export function parseKeywordSpot(text, nlp = null) {
   }
 
   if (beforeText && afterText) {
-    // REVERSE VERB SWAP (Seonix Batch 2 Fix 2): this decomposition assigns subject/
-    // object by POSITION (before the verb / after it), not by the verb's semantic
-    // direction — the same structural fact grammar.mjs's T1 "ask" template comment
-    // explains. "is X a superclass of Y" (or its bare "superclass" stem — see
-    // INHERITS_REVERSE_VERBS's own comment in ask-vocab.mjs) means the REVERSE of
-    // "is X a subclass of Y": swap once, here, at parse time, so evaluation always
-    // sees the equivalent forward-phrased question.
+    // A semantically-reverse verb ("superclass of") swaps subject/object, same as
+    // grammar.mjs's T1.
     const verbPhrase = canonWords.slice(verbHit.start, verbHit.end).join(" ");
     let subject = beforeText;
     let object = afterText;
@@ -277,31 +204,15 @@ export function parseKeywordSpot(text, nlp = null) {
     return { shape: "ask", entityType: null, modifier: "direct", kind, subject, object };
   }
   if (afterText) return { shape: "reverse", entityType, modifier, kind, object: afterText };
-  // "what is a kind of class" / "what inherits from function" (live-caught 2026-07-11
-  // follow-up to the ambiguousParse fix, commit 5c858bf): entityHit above is found
-  // ANYWHERE in the sentence and marked consumed before afterText is computed, so
-  // when the "kind of X"/"inherits X" idiom's object IS ITSELF one of the four
-  // code-graph entity-type nouns (class/function/method/module — ENTITY_TO_TYPE's
-  // own keys), the entity match swallows the ENTIRE post-verb span as a (wrong, in
-  // this shape) grain qualifier, leaving afterText empty and no candidate at all —
-  // the query silently fails to parse rather than answering or declining honestly.
-  // Scoped narrowly to kind==="inherits" (the one relation whose object is routinely
-  // a bare vocabulary noun with no further qualifier) and only when the ENTIRE
-  // post-verb span was consumed by the entity match (nothing else remains to be an
-  // object): re-read that span as the literal OBJECT text instead, entityType null
-  // (it names the thing being asked about here, not a grain filter on some other
-  // object). Every other kind/shape is unaffected — this never fires unless
-  // afterText is otherwise empty AND the sole cause is an entity-consumed span
-  // immediately after the verb.
+  // "what is a kind of class": when the object is itself an entity-type noun, the
+  // entity match swallows the whole post-verb span as a grain qualifier, leaving
+  // afterText empty — re-read that span as the object instead.
   if (kind === "inherits" && !beforeText && entityHit && entityHit.start === verbHit.end) {
     const entityText = canonWords.slice(entityHit.start, entityHit.end).join(" ");
     if (entityText) return { shape: "reverse", entityType: null, modifier, kind, object: entityText };
   }
-  // forward keeps the spotted entityType ("which modules did commit <sha> touch" is a
-  // forward decomposition — subject before the verb — whose asked grain would otherwise
-  // be lost); traverse() only consults it for the commit-as-subject grain selection,
-  // so plain forwards behave exactly as before. Modifier stays hardcoded: no forward
-  // closure traversal exists (see ask.mjs's modifierIsWired).
+  // forward keeps the spotted entityType (traverse()'s commit-as-subject grain
+  // selection); modifier stays hardcoded since no forward closure traversal exists.
   if (beforeText) return { shape: "forward", entityType, modifier: "direct", kind, object: beforeText };
   return null;
 }
