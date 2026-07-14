@@ -21,11 +21,14 @@ import { clearCache } from "../src/source.mjs";
 const FIXTURE = new URL("./fixtures/entities.fixture.json", import.meta.url).pathname;
 
 // FEATURE B (0.9.x): every runAsk-composed answer now carries an ALWAYS-ON
-// trailing "\n\nGoal (inferred): …" line (chat.mjs's withGoalLine) — this
-// suite pins the concept force's OWN byte-exact composition, orthogonal to
-// that feature, so it's stripped before the byte-exact comparisons below.
+// trailing "\n\nGoal (inferred): …" line (chat.mjs's withGoalLine), optionally
+// followed by a "\n\nCanonical: …" line (withCanonicalLine) — this suite pins
+// the concept force's OWN byte-exact composition, orthogonal to both, so
+// they're stripped (Canonical first, since it trails Goal when both are
+// present) before the byte-exact comparisons below.
 const GOAL_LINE_RE = /\n\nGoal \(inferred\):[^\n]*$/;
-const noGoal = (s) => String(s).replace(GOAL_LINE_RE, "");
+const CANONICAL_LINE_RE = /\n\nCanonical:[^\n]*$/;
+const noGoal = (s) => String(s).replace(CANONICAL_LINE_RE, "").replace(GOAL_LINE_RE, "");
 
 /** The fixture graph, run through the same writer pipeline a producer uses
  *  (ingestSchemaDocs before parse), as an ask-ready graph object. */

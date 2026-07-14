@@ -19,6 +19,7 @@ import {
 import { dispatchTool } from "../src/server.mjs";
 import { parseEntities } from "../src/codegraph.mjs";
 import * as source from "../src/source.mjs";
+import { CANONICAL_LINE_RE } from "./helpers/session.mjs";
 
 // bin/tmct.mjs: a spawned child has non-TTY stdio, so `chat` takes the --plain
 // readline path — the exact same contract the deleted bin/cli.mjs served.
@@ -195,7 +196,12 @@ test("runTurn: a bare 'it' resolves to the focus (threaded to ask as contextId)"
   const focus = { id: "mod-a", label: "app/lib/a.mjs" };
   const withFocus = await runTurn("which modules import it", { config: CONFIG, graph: g, focus });
   assert.match(withFocus.answer, /app\/lib\/b\.mjs/, "'it' resolved to the focus module");
-  assert.equal(withFocus.answer, await runTurn("which modules import a.mjs", { config: CONFIG, graph: g }).then((r) => r.answer));
+  // canonicalOf reads parsed.object as typed ("it"), never contextId-resolved — so the
+  // trailing Canonical line legitimately differs between the two phrasings even though
+  // the substantive answer (and Goal line) match byte-for-byte; excluded from this
+  // equality check for that reason.
+  const literalAnswer = await runTurn("which modules import a.mjs", { config: CONFIG, graph: g }).then((r) => r.answer);
+  assert.equal(withFocus.answer.replace(CANONICAL_LINE_RE, ""), literalAnswer.replace(CANONICAL_LINE_RE, ""));
   // with NO focus the pronoun is an honest miss, not a guess — proving the contextId did the work
   const noFocus = await runTurn("which modules import it", { config: CONFIG, graph: g, focus: null });
   assert.doesNotMatch(noFocus.answer, /app\/lib\/b\.mjs/);
