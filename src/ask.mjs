@@ -4566,6 +4566,10 @@ function dynamicClassQuery(graph, query) {
   return listM ? { node: "list", entityType, base, scoped: false } : { node: "count", entityType, base };
 }
 
+// Matches T5's own bare-object capture (grammar.mjs meta-whatis), reused below to
+// extract the term for the article-insertion fallback rather than duplicating it.
+const BARE_META_WHATIS_RE = /^what\s+(?:is|are)\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
+
 export function ask(graph, query, { contextId = null, nlp = undefined, prev = null } = {}) {
   // Explicit help/orientation request → the rephrase hint directly (the honest bottom
   // of the cascade, reached on demand), never a pretend answer or a relaxation attempt.
@@ -4608,6 +4612,37 @@ export function ask(graph, query, { contextId = null, nlp = undefined, prev = nu
       const dynResult = traverse(graph, dyn, { contextId, prev });
       const dynRendered = render(dyn, dynResult);
       if (!dynRendered.miss) { parsed = dyn; result = dynResult; rendered = dynRendered; relaxed = null; }
+    }
+  }
+  // Bare "what is X" meta fallback (no article). grammar.mjs's T5 deliberately
+  // requires the article for any object outside the closed ENTITY_TO_TYPE set
+  // (test/ask.test.mjs pins parseQuery("what is exposed") === null for exactly
+  // that reason) — so this stays a narrow, ask()-only reading, not a grammar
+  // change, and fires ONLY once nothing at all parsed the line (`parsed` is
+  // still null here). Re-parsing "what is a <term>" lands on the SAME meta
+  // resolution the articled form gets — a real term's schema/code-entity
+  // answer, or the specific vocabulary decline — instead of the generic
+  // grammar-wall fallback below. Deliberately updates `result`/`rendered` only,
+  // NEVER the outer `parsed` (chat.mjs's own bare-form fix leaves envelope.parsed
+  // null for the identical reason — its docblock calls out T5 staying untouched):
+  // chat.mjs's conversational-orientation gate and its goal-line deduction both
+  // key off `!envelope.parsed`/deduceGoalFromParsed(envelope.parsed), and populating
+  // it here — even on a miss — would silently steal turns from those lanes
+  // (e.g. "what is X for", a module-purpose question chat.mjs's own moduleOrientLane
+  // owns) or grow a stray "Goal (inferred)" line chat.mjs never asked for.
+  if (parsed === null && rendered.miss && !rendered.ambiguous) {
+    const bareM = String(query || "").trim().match(BARE_META_WHATIS_RE);
+    const bareTerm = bareM?.[1]?.trim();
+    // "what is X for"/"what is X about" is a DIFFERENT, already-owned question shape
+    // (a module-purpose touch, chat.mjs's own MODULE_PURPOSE_RE) — never a vocabulary
+    // lookup for the literal term "X for"/"X about", so this fallback stays out of it
+    // entirely rather than capturing the trailing preposition into the looked-up term.
+    if (bareTerm && !/\s+(?:for|about)$/i.test(bareTerm)) {
+      const bareParsed = parseQuery(`what is a ${bareTerm}`, { nlp });
+      if (bareParsed?.shape === "meta") {
+        result = traverse(graph, bareParsed, { contextId, prev });
+        rendered = render(bareParsed, result);
+      }
     }
   }
   // If relaxation materially rewrote the query and produced a real answer, note it
