@@ -3487,6 +3487,10 @@ function dynamicClassQuery(graph, query) {
   return listM ? { node: "list", entityType, base, scoped: false } : { node: "count", entityType, base };
 }
 
+// Matches T5's own bare-object capture (grammar.mjs meta-whatis), reused below to
+// extract the term for the article-insertion fallback rather than duplicating it.
+const BARE_META_WHATIS_RE = /^what\s+(?:is|are)\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
+
 export function ask(graph, query, { contextId = null, nlp = undefined, prev = null } = {}) {
   if (isHelpRequest(query)) {
     return {
@@ -3519,6 +3523,21 @@ export function ask(graph, query, { contextId = null, nlp = undefined, prev = nu
       const dynResult = traverse(graph, dyn, { contextId, prev });
       const dynRendered = render(dyn, dynResult);
       if (!dynRendered.miss) { parsed = dyn; result = dynResult; rendered = dynRendered; relaxed = null; }
+    }
+  }
+  // Bare "what is X" (no article) meta fallback, narrow to ask() and never
+  // touching the outer `parsed` even on a miss — chat.mjs's own gates key off
+  // `!envelope.parsed`, so populating it here would steal turns from lanes
+  // like moduleOrientLane ("what is X for"). Fires only once nothing else parsed.
+  if (parsed === null && rendered.miss && !rendered.ambiguous) {
+    const bareM = String(query || "").trim().match(BARE_META_WHATIS_RE);
+    const bareTerm = bareM?.[1]?.trim();
+    if (bareTerm && !/\s+(?:for|about)$/i.test(bareTerm)) {
+      const bareParsed = parseQuery(`what is a ${bareTerm}`, { nlp });
+      if (bareParsed?.shape === "meta") {
+        result = traverse(graph, bareParsed, { contextId, prev });
+        rendered = render(bareParsed, result);
+      }
     }
   }
   // If relaxation materially rewrote the query and produced a real answer,

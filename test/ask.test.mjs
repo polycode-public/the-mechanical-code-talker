@@ -1347,3 +1347,18 @@ test("ask(): forward-shape grain check (PLAN_CONVERSATION.md Finding 3) — \"wh
   assert.match(content, /\bmethods\b/);
   assert.match(content, /\bfunctions\b/);
 });
+
+test("ask(): bare \"what is User\" (no article) answers exactly like \"what is a User\" — the real class hit, not the generic grammar-wall fallback", () => {
+  const bare = ask(miniWebappGraph, "what is User");
+  const articled = ask(miniWebappGraph, "what is a User");
+  assert.equal(bare.tmct_ask.miss, false);
+  assert.equal(bare.content, articled.content);
+  assert.match(bare.content, /User is a class in this codebase/);
+});
+
+test("ask(): bare \"what is zzznotreal\" (no article, unknown term) gets the specific vocabulary decline, not the generic \"couldn't parse this as a graph question\" dump", () => {
+  const { content, tmct_ask } = ask(miniWebappGraph, "what is zzznotreal");
+  assert.equal(tmct_ask.miss, true);
+  assert.match(content, /"zzznotreal" isn't a term in this graph's own vocabulary/);
+  assert.doesNotMatch(content, /couldn't parse this as a graph question/);
+});
