@@ -2312,6 +2312,11 @@ const GENERAL_VERB_NOT_A_VERB_RE = new RegExp(
 async function generalVerbPredicate(verb) {
   const v = String(verb || "").toLowerCase();
   if (v === "has" || v === "have") return HAS_A_PREDICATE;
+  // The modal maps onto the corpus's own capability predicate — "dog can
+  // swim" is a capability claim, not a transitive "to can" — so a taught
+  // capability reads back interoperably with /r/CapableOf data and the
+  // "can a X <verb>" reader finds it (same reasoning as HAS_A above).
+  if (v === "can") return "mgx:capableOf";
   try {
     const { proseLemma } = await import("./prose-nlp.mjs");
     const lemma = proseLemma();
@@ -2343,6 +2348,10 @@ async function generalVerbTeach(payload) {
   const verb = verbRaw.toLowerCase();
   if (GENERAL_VERB_EXCLUDE_RE.test(verb)) return null; // owned by a more specific frame above
   if (GENERAL_VERB_NOT_A_VERB_RE.test(verb)) return null; // a closed-class word can never be the real verb
+  // "cannot" would mint a nonsense mgx:cannot fact whose read-back silently
+  // INVERTS the taught meaning — the vocabulary has no negative-capability
+  // predicate, so an honest decline is the only correct move.
+  if (verb === "cannot") return null;
   if (GENERAL_VERB_DETERMINER_RE.test(subjectRaw)) return null; // not a bare-name subject
   const subject = subjectRaw.trim();
   const object = objectRaw.replace(/^an?\s+/i, "").trim();
@@ -4339,12 +4348,27 @@ export async function factAnswer(memoryDir, query, envelope, miss, biasByBundle 
   // single-hit lookup, same "never a guessed no" discipline).
   const can = q.match(CAN_ASK_RE);
   if (can) {
+    const facts = await memoryFacts(memoryDir);
     const subj = factTermVariants(normFactTerm, can[1]);
     const obj = factTermVariants(normFactTerm, can[2]);
-    const hit = (await memoryFacts(memoryDir)).find(
+    const hit = facts.find(
       (f) => f.predicate === "mgx:capableOf" && subj.has(f.subject) && obj.has(f.object),
     );
     if (hit) return { text: `yes — ${renderFactLine(hit)}`, replace: true };
+    // A KNOWN subject with capability facts, none matching: an honest,
+    // specific miss citing what it CAN do — the same closer the is-a ladder
+    // answers with, instead of the misleading structural parse wall. An
+    // unknown subject still declines. Never a guessed "no": absence of a
+    // capableOf fact proves nothing.
+    const knownCan = facts.filter((f) => f.predicate === "mgx:capableOf" && subj.has(f.subject));
+    if (knownCan.length) {
+      const shown = knownCan.slice(0, 3).map(renderFactLine).join("; ");
+      return {
+        text: `I can't confirm that — nothing I remember says ${can[1]} can ${can[2]}. I do know: ${shown}. If it's true, teach me: "a ${can[1]} can ${can[2]}".`,
+        replace: true,
+        miss: true,
+      };
+    }
     return null;
   }
 
@@ -5368,7 +5392,45 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
     // to the honest miss below, never a guessed "no".
     const { deriveDisjointViolations, DISJOINT_PREDICATE } = await import("./syllogise.mjs");
     const disjointRows = rows.filter((f) => f.predicate === DISJOINT_PREDICATE && isTaught(f));
+    // NEGATED membership — "is a dog not a cat". ISA_ASK_RE captures the
+    // subject as "dog not" (the "not" glues onto the subject because the
+    // article anchors the kind), so without this the negated question walks
+    // the positive ladder with a garbage subject and lands on a nonsense
+    // teach hint. Strip the "not", then answer INVERTED: a positive isa fact
+    // refutes it ("no — dog is a kind of cat"), a taught disjointness
+    // confirms it ("yes — dog is not a cat"), anything else is an honest
+    // can't-confirm pointing at the already-supported "no X is a Y" teach
+    // shape. Deliberately shallow — no chain chases on the negated side; a
+    // negative proved through a multi-hop positive chain stays an honest
+    // miss rather than a guess.
+    const negSubject = isaAsk[1].match(/^(.*\S)\s+not$/i);
+    if (negSubject) {
+      const negSubjVariants = factTermVariants(normFactTerm, negSubject[1]);
+      const negObjVariants = objVariants;
+      const posHit = isa
+        .filter((f) => negSubjVariants.has(f.subject) && negObjVariants.has(f.object))
+        .sort(byTrust)[0];
+      if (posHit) return { text: `no — ${renderFactLine(posHit)}`, replace: true };
+      const negDisjoint = disjointRows.find((f) => (negSubjVariants.has(f.subject) && negObjVariants.has(f.object))
+        || (negSubjVariants.has(f.object) && negObjVariants.has(f.subject)));
+      if (negDisjoint) return { text: `yes — ${renderFactLine(negDisjoint)}`, replace: true };
+      const negSubjectWord = negSubject[1].trim();
+      const negKindWord = stripTrailingDiscourseTag(isaAsk[2]).trim();
+      return {
+        text: `I can't confirm that either way — nothing I remember links ${negSubjectWord} and ${negKindWord}. If no ${negSubjectWord} is a ${negKindWord}, teach me: "no ${negSubjectWord} is a ${negKindWord}".`,
+        replace: true,
+        miss: true,
+      };
+    }
     if (disjointRows.length) {
+      // A DIRECT taught disjointness between the asked subject and kind is a
+      // provable "no" on its own — deriveDisjointViolations only ever fires
+      // through a taught rdf:type premise, so without this check "no dog is
+      // a cat" followed by "is a dog a cat" fell through to the can't-confirm
+      // closer instead of the honest no.
+      const directDisjoint = disjointRows.find((f) => (subjCandidates.has(f.subject) && objVariants.has(f.object))
+        || (subjCandidates.has(f.object) && objVariants.has(f.subject)));
+      if (directDisjoint) return { text: `no — ${renderFactLine(directDisjoint)}`, replace: true };
       const disjointEdges = disjointRows.map((f) => [f.subject, f.object]);
       const violations = deriveDisjointViolations(chainTypeEdges, chainSubClassEdges, disjointEdges, { budget: 10 });
       for (const subj of subjCandidates) {

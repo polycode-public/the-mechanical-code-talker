@@ -384,3 +384,105 @@ test("isa honest miss: the teach hint's own suggested phrasing round-trips — t
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("negated is-a: a taught disjointness answers 'is a dog a cat' no and 'is a dog not a cat' yes, citing the fact", async () => {
+  const dir = await mem();
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    await s.turn("no dog is a cat");
+    const pos = await s.turn("is a dog a cat");
+    const neg = await s.turn("is a dog not a cat");
+    await s.close();
+    assert.match(pos.answer, /^no — .*dog is not a cat/);
+    assert.match(neg.answer, /^yes — .*dog is not a cat/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("negated is-a: a positive fact refutes the negative question — 'is a dog not an animal' answers no with the isa fact", async () => {
+  const dir = await mem();
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    const r = await s.turn("is a dog not an animal");
+    await s.close();
+    assert.match(r.answer, /^no — dog is a kind of animal/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("negated is-a: nothing known either way stays an honest can't-confirm pointing at the 'no X is a Y' teach shape", async () => {
+  const dir = await mem();
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    const r = await s.turn("is a dog not a cat");
+    await s.close();
+    assert.match(r.answer, /I can't confirm that either way/);
+    assert.match(r.answer, /teach me: "no dog is a cat"/);
+    const rec = await lastTurnRecord(s.sidecarFile);
+    assert.equal(rec.miss, true);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("can-lane honest miss: 'can a dog fly' cites what the subject CAN do instead of the parse wall, and still records a miss", async () => {
+  const dir = await mem();
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    const r = await s.turn("can a dog fly");
+    await s.close();
+    assert.match(r.answer, /I can't confirm that — nothing I remember says dog can fly/);
+    assert.match(r.answer, /dog can bark/);
+    assert.doesNotMatch(r.answer, /couldn't parse/);
+    const rec = await lastTurnRecord(s.sidecarFile);
+    assert.equal(rec.miss, true);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("capability teach round trip: 'a dog can swim' (ACE) and 'remember dog can juggle' (general-verb) both satisfy the can-question", async () => {
+  const dir = await mem();
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    await s.turn("a dog can swim");
+    await s.turn("remember dog can juggle");
+    const swim = await s.turn("can a dog swim");
+    const juggle = await s.turn("can a dog juggle");
+    await s.close();
+    assert.match(swim.answer, /^yes — .*dog can swim/);
+    assert.match(juggle.answer, /^yes — .*dog can juggle/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("negative capability teach: 'penguin cannot fly' never stores a fact whose read-back inverts the meaning", async () => {
+  const dir = await mem();
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    const r = await s.turn("penguin cannot fly");
+    await s.close();
+    assert.doesNotMatch(r.answer, /remembered/);
+    const check = await createSession({ repoPath: dir, env: {} });
+    const q = await check.turn("can a penguin fly");
+    await check.close();
+    assert.doesNotMatch(q.answer, /^yes/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});

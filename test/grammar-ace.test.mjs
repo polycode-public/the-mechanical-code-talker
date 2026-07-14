@@ -1,4 +1,4 @@
-// grammar/ace.mjs tests — the 8-pattern ACE-OWL sub-fragment round-trips
+// grammar/ace.mjs tests — the 9-pattern ACE-OWL sub-fragment round-trips
 // (sentence → expected OWL-labelled triples), the null-is-a-feature misses
 // (generalized quantifiers, questions, undeclared verbs), residue naming
 // unknown tokens, and case/whitespace tolerance. Pattern numbers refer to
@@ -201,4 +201,17 @@ test("parseAce honors a caller-extended lexicon (loadLexicon(extra) round-trip)"
     { subject: "tmct:Seonix", predicate: "rdf:type", object: "tmct:widget", kind: "rdf:type" },
   ]);
   assert.deepEqual(parseAce("Seonix is a widget").residue, ["Seonix", "widget"], "…and the core lexicon alone still declines");
+});
+
+test("pattern 9: 'N can VERB' → mgx:capableOf; a noun 'can' or multi-word tail falls through, 'cannot' never parses", () => {
+  const r = parseAce("a module can bark");
+  assert.equal(r.pattern, "capability");
+  assert.deepEqual(r.triples, [
+    { subject: "tmct:module", predicate: "mgx:capableOf", object: "tmct:bark", kind: "mgx:capableOf" },
+  ]);
+  // multi-word tail: not the closed "N can V" shape — no capability parse
+  const multi = parseAce("a module can bark loudly");
+  assert.notEqual(multi?.pattern, "capability");
+  // negative modal: one token, never reaches the capability split
+  assert.notEqual(parseAce("a module cannot bark")?.pattern, "capability");
 });

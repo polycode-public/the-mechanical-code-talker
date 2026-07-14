@@ -1,6 +1,6 @@
 # tmct's ACE-OWL sub-fragment — the controlled-grammar pattern table
 
-Hand-authored stub defining the ~8 controlled-English sentence patterns tmct's
+Hand-authored stub defining the ~9 controlled-English sentence patterns tmct's
 grammar (Phase 2, `src/grammar/ace.mjs`) maps to OWL axioms. The fragment is
 **inspired by** Attempto Controlled English (ACE) and the OWL output of its APE
 parser — it is a deliberately small sub-fragment, not an ACE implementation.
@@ -38,6 +38,7 @@ declines to emit.
 | 6 | *no N1 is a N2* | `N1 owl:disjointWith N2` |
 | 7 | possessives — *N1's N2 is …* / *the N2 of N1 is …* | data or object property assertion, **per the lexicon's declaration** of that property (datatype vs object) |
 | 8 | adjectives — *every ADJ N1 is …* / *N1 is ADJ* | subclass-with-restriction or `owl:DatatypeProperty` value, **per the declared adjective type** in the lexicon |
+| 9 | *N can VERB* | `N mgx:capableOf VERB` — capability assertion, interoperable with ConceptNet `/r/CapableOf` |
 
 ## Design notes
 
@@ -50,7 +51,7 @@ declines to emit.
   the axiom-shaped declarative core above; growth beyond it is a Phase 2+
   decision driven by chatbench evidence.
 - The planned ConceptNet mapping (`src/corpus/conceptnet-map.toml`) targets
-  **these same 8 patterns** — each ConceptNet relation is expressed as one of
+  **these same 9 patterns** — each ConceptNet relation is expressed as one of
   the surface templates above so corpus assertions and user assertions land in
   the graph identically. See `conceptnet-relations.md`.
 

@@ -1,5 +1,5 @@
 // grammar/ace.mjs — tmct's deterministic ACE-OWL sub-fragment parser.
-// Implements the 8 controlled-English sentence patterns of
+// Implements the 9 controlled-English sentence patterns of
 // docs/references/schemas/ace-owl-fragment.md and nothing more: fitting the
 // grammar is a strong signal, missing it is a FEATURE — parseAce returns null
 // (or an empty-triples result carrying the unknown words as `residue`) and the
@@ -44,11 +44,13 @@ export const PATTERN_CARDINALITY = "cardinality";
 export const PATTERN_DISJOINT_WITH = "disjointWith";
 export const PATTERN_POSSESSIVE = "possessive";
 export const PATTERN_ADJECTIVE = "adjective";
+export const PATTERN_CAPABILITY = "capability";
 
 /** The pattern field's full domain, in the README's table order. */
 export const PATTERNS = Object.freeze([
   PATTERN_SUB_CLASS_OF, PATTERN_TYPE_ASSERTION, PATTERN_RELATION, PATTERN_SOME_VALUES_FROM,
   PATTERN_CARDINALITY, PATTERN_DISJOINT_WITH, PATTERN_POSSESSIVE, PATTERN_ADJECTIVE,
+  PATTERN_CAPABILITY,
 ]);
 
 const DET = new Set(["a", "an", "the"]);
@@ -413,7 +415,7 @@ function parseCopula(lexicon, toks, lower, isIdx) {
   ]);
 }
 
-/** Parse one sentence against the 8-pattern ACE-OWL sub-fragment. See the file
+/** Parse one sentence against the 9-pattern ACE-OWL sub-fragment. See the file
  *  header for the result contract; `lexicon` defaults to the committed core
  *  under the library's own neutral DEFAULT_NS ("ex:") when the caller doesn't
  *  supply one. */
@@ -429,5 +431,32 @@ export function parseAce(sentence, lexicon = loadLexicon()) {
   }
   const isIdx = lower.indexOf("is");
   if (isIdx > 0) return parseCopula(lexicon, toks, lower, isIdx);
+  const canIdx = lower.indexOf("can");
+  if (canIdx > 0 && canIdx < toks.length - 1) {
+    const cap = parseCapability(lexicon, toks, canIdx);
+    if (cap) return cap;
+  }
   return parseRelation(lexicon, toks, lower);
+}
+
+/** Pattern 9 — "N can VERB" → mgx:capableOf. The modal is not a relation
+ *  verb: without this, parseRelation reads "can" through lookupVerb and
+ *  asserts a generic object property ("dog cans swim") that no capability
+ *  reader ever finds. Returns null (never a miss record) unless BOTH sides
+ *  resolve, so a noun "can" ("trash can holds garbage") still falls through
+ *  to parseRelation. "cannot"/"can't" stays unparsed — the fact vocabulary
+ *  has no negative-capability predicate, and a silently dropped negation
+ *  would invert the taught meaning. */
+function parseCapability(lexicon, toks, canIdx) {
+  const np1 = resolveNP(lexicon, toks.slice(0, canIdx));
+  if (np1.term == null) return null;
+  // The capability's object is a VERB ("swim"), not a lexicon noun, so
+  // resolveNP is the wrong resolver for it: accept exactly one bare word,
+  // stored as a plain term — the same grain the corpus's own CapableOf
+  // objects ("bark", "run") already use.
+  const rest = toks.slice(canIdx + 1);
+  if (rest.length !== 1 || !/^[a-z][a-z-]*$/i.test(rest[0])) return null;
+  return hit(PATTERN_CAPABILITY, [np1], [
+    { subject: np1.term, predicate: "mgx:capableOf", object: `${lexicon.ns}${rest[0].toLowerCase()}`, kind: "mgx:capableOf" },
+  ]);
 }
