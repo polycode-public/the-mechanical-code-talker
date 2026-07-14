@@ -245,6 +245,73 @@ doc = In-memory record store. [seon:hasDoc]. Other matches: src/core/store.mjs
 
 Full pipeline design in `archive/PLAN_COMPLETIONS.md`.
 
+## Planning across the graph
+
+Some questions need more than one lookup. `tmct plan` is a small STRIPS/PDDL-style
+planner over the same read-only graph-query tools chat/serve use
+(`src/router/*`): it decomposes a compound request, resolves and executes each
+step in order with a provable causal-link proof chain, and folds the results
+into one answer. A request neither the planner nor a single lookup can ground
+escalates to a closed-world goal-reasoner, which deduces maintenance goals
+(coverage gaps, change-coupling risk) straight from the graph — never from
+keywords in your question. Anything none of that grounds is an honest "no plan
+found", the same "grounded or an honest miss" rule as everywhere else in tmct.
+
+```
+$ node bin/tmct.mjs plan "of the modules impacted by src/lib/http.mjs, which are untested" --repo examples/mini-webapp
+tmct plan: "of the modules impacted by src/lib/http.mjs, which are untested"
+driver: resolver-0.8.0
+
+steps:
+  1. tmct_impact {"module":"src/lib/http.mjs"}
+     Impact of changing src/lib/http.mjs (reverse closure over imports/calls edges, module- and function-level):
+     total: 5 dependent(s) across 2 depth level(s) (lists capped for brevity).
+     depth 1 (3 direct dependents):
+       - src/handlers/base.mjs (imports it) — tests: none recorded
+       - src/handlers/tasks.mjs (imports it) — tests: test/tasks.test.mjs
+       - src/server/router.mjs (imports it) — tests: none recorded
+     depth 2 (2):
+       - src/handlers/users.mjs (imports it) — tests: none recorded
+       - src/server/app.mjs (imports it) — tests: none recorded
+  2. tmct_untested {}
+     7 source module(s) with no covering test module:
+       src/core/validate.mjs
+       src/handlers/base.mjs
+       src/handlers/users.mjs
+       src/lib/http.mjs
+       src/lib/logger.mjs
+       src/server/app.mjs
+       src/server/router.mjs
+
+composed answer (4): src/handlers/base.mjs, src/handlers/users.mjs, src/server/app.mjs, src/server/router.mjs
+```
+
+tmct planned two calls (`tmct_impact` then `tmct_untested`), ran both against the
+real graph, and intersected the results itself — you get the four modules that
+are both downstream of the change AND missing coverage, not two separate lists
+you'd have to cross-reference by hand.
+
+Leave the entity out and ask a maintenance question instead, and the goal-reasoner
+picks up where the planner refuses:
+
+```
+$ node bin/tmct.mjs plan "what most needs a test in this codebase" --repo examples/mini-webapp
+tmct plan: "what most needs a test in this codebase"
+driver: goal-0.8.1
+...
+composed answer (1): src/lib/http.mjs
+```
+
+It deduced the goal ("an impactful module must be tested"), gathered every
+untested module, ranked each by blast radius, and named the one worth testing
+first — `src/lib/http.mjs`, the module with the widest reach.
+
+`--tools tmct_impact,tmct_untested` restricts which capabilities the planner is
+allowed to use; `--json` prints the full machine-readable loop result (calls,
+proof chain, composed answer) for a caller that wants to consume this
+programmatically rather than read the report. `tmct plan --help` has the full
+flag reference.
+
 ## How it remembers
 
 tmct's memory has two layers, both fed by every parsed request and response and
@@ -658,6 +725,16 @@ read-only query primitives over an already-loaded graph, for a caller that
 wants to query without a chat session. The `exports` map and the chat
 primitives (`ask`, `resolveObject`, `relationKind`, `impactClosure`,
 `dispatchTool`, `fetchEntities`) are the extension surface.
+
+```js
+import { buildCapabilityPlanCtx, runCapabilityPlan, declaredCapabilityNames } from "@polycode-projects/the-mechanical-code-talker/plan";
+```
+
+The same planner `tmct plan` runs, callable directly: `buildCapabilityPlanCtx`
+loads a repo's graph into a `{ dispatch, resolve, graph }` context,
+`runCapabilityPlan(request, tools, ctx)` runs a request through it, and
+`declaredCapabilityNames()` lists every capability a caller can declare. See
+"Planning across the graph" above.
 
 ## The repository interface
 

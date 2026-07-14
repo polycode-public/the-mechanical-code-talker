@@ -103,6 +103,14 @@ Usage:
        [--host <h>] [--port <n>]  (POST /v1/messages) over the graph — a deterministic,
        [--graph <path>]        no-LLM "model" a tool-loop client can call; $0 usage.
        [--config <path>]       Defaults: host 127.0.0.1, port 8787. Ctrl+C to stop.
+  tmct plan "<request>"        the capability router: compose/execute read-only graph-
+       [--repo <abs>]          query tool calls for a compound or maintenance-goal
+       [--graph <path>]        request ("of the modules impacted by X, which are
+       [--config <path>]       untested", "what most needs a test") — a real STRIPS/
+       [--tools <a,b,...>]     PDDL planner (src/router/*), never a guessed call.
+       [--json]                Prints the grounded step sequence + composed answer,
+                               or an honest "no plan found". --tools restricts the
+                               declared toolset; --json prints the full loop result.
   tmct cli <tool> '{…}'        invoke a graph tool directly (carry-over, de-emphasized)
   tmct cli digest '{…}'        architecture map + per-module context bundles
   tmct --help                  show this help
@@ -1095,6 +1103,107 @@ async function main() {
     return; // the listening server keeps the event loop alive
   }
 
+  if (mode === "plan") {
+    // `tmct plan "<request>"` — the capability router (src/router/*), surfaced
+    // for real: a STRIPS/PDDL-style planner over the SAME read-only graph-query
+    // tools chat/serve dispatch. A single-shot request ("who calls X") resolves
+    // directly; a compound request ("of the modules impacted by X, which are
+    // untested", "assess Y and then check Z") decomposes into an ordered call
+    // sequence with a causal-link proof, then folds the executed results into one
+    // composed answer; a request neither stage grounds escalates to the
+    // closed-world goal-reasoner (a maintenance-invariant deduction — coverage
+    // gaps, change-coupling risk — never a keyword guess). Anything none of the
+    // three grounds is an HONEST "no plan found", never a guessed call — same
+    // "grounded or an honest miss" contract as every other tmct answer path.
+    const rest = process.argv.slice(3);
+    if (rest.includes("--help") || rest.includes("-h")) {
+      process.stdout.write(
+        "tmct plan \"<request>\" — the capability router: compose/execute read-only\n" +
+        "graph-query tool calls for a compound or maintenance-goal request.\n\n" +
+        "Usage:\n" +
+        "  tmct plan \"<request>\" [--repo <abs>] [--graph <path>] [--config <path>]\n" +
+        "       [--tools <name,name,...>] [--json]\n\n" +
+        "  --repo <abs>     target a repo's graph (<abs>/.tmct/graph.json); default: git root/cwd\n" +
+        "  --graph <path>   explicit graph file (repeatable — multiple graphs merge)\n" +
+        "  --config <path>  an alternate tmct.toml location (a file or a directory)\n" +
+        "  --tools <list>   restrict the declared toolset (comma-separated capability\n" +
+        "                   names, e.g. tmct_impact,tmct_untested); default: every\n" +
+        "                   registered capability\n" +
+        "  --json           print the full machine-readable loop result instead of\n" +
+        "                   the human-readable report (a non-zero exit still means\n" +
+        "                   an honest refusal, not a crash)\n\n" +
+        "Examples:\n" +
+        "  tmct plan \"of the modules impacted by src/lib/http.mjs, which are untested\"\n" +
+        "  tmct plan \"what most needs a test in this codebase\"\n" +
+        "  tmct plan \"who calls createApp\"\n",
+      );
+      return;
+    }
+    const { strFlag, resolveRuntimeConfig } = await import("../src/cli-args.mjs");
+    const toolsFlag = strFlag(rest, ["--tools"]);
+    const jsonFlag = rest.includes("--json");
+    // The request is every argv token that isn't a recognized flag or its value,
+    // rejoined with single spaces — so both `tmct plan "quoted request"` and a
+    // bare `tmct plan unquoted request words` work.
+    const FLAG_WITH_VALUE = new Set(["--repo", "--graph", "--config", "--tools"]);
+    const requestParts = [];
+    for (let i = 0; i < rest.length; i += 1) {
+      const a = rest[i];
+      if (FLAG_WITH_VALUE.has(a)) { i += 1; continue; }
+      if (a === "--json") continue;
+      requestParts.push(a);
+    }
+    const request = requestParts.join(" ").trim();
+    if (!request) {
+      process.stderr.write("tmct plan: needs a request, e.g. `tmct plan \"of the modules impacted by X, which are untested\"`\n");
+      process.exit(2);
+    }
+    const { config } = await resolveRuntimeConfig({ argv: rest });
+    const { buildCapabilityPlanCtx, runCapabilityPlan, declaredCapabilityNames } = await import("../src/router/drive.mjs");
+    const declared = declaredCapabilityNames();
+    let tools = declared;
+    if (toolsFlag) {
+      tools = toolsFlag.split(",").map((s) => s.trim()).filter(Boolean);
+      const unknown = tools.filter((t) => !declared.includes(t));
+      if (unknown.length) {
+        process.stderr.write(`tmct plan: unknown --tools name(s): ${unknown.join(", ")}. Registered capabilities: ${declared.join(", ")}.\n`);
+        process.exit(2);
+      }
+    }
+    let ctx;
+    try {
+      ctx = await buildCapabilityPlanCtx({ config });
+    } catch (e) {
+      process.stderr.write(`tmct plan: could not load the graph — ${e?.message || e}\n`);
+      process.exit(1);
+    }
+    const result = await runCapabilityPlan(request, tools, ctx);
+    if (jsonFlag) {
+      process.stdout.write(JSON.stringify({ request, ...result }, null, 2) + "\n");
+      process.exit(result.refused ? 1 : 0);
+    }
+    process.stdout.write(`tmct plan: "${request}"\n`);
+    if (result.refused) {
+      process.stdout.write(`no plan found — ${Array.isArray(result.why) ? result.why.join("; ") : result.why}\n`);
+      if (result.c1Why) {
+        process.stdout.write(`(the direct router also declined: ${Array.isArray(result.c1Why) ? result.c1Why.join("; ") : result.c1Why})\n`);
+      }
+      process.exit(1);
+    }
+    process.stdout.write(`driver: ${result.driver}\n\nsteps:\n`);
+    for (let i = 0; i < result.calls.length; i += 1) {
+      const c = result.calls[i];
+      let text = "";
+      try { text = await ctx.dispatch(c.name, c.input || {}).then((r) => (r.ok ? r.text : `(unresolved: ${r.error})`)); }
+      catch (e) { text = `(error: ${e?.message || e})`; }
+      process.stdout.write(`  ${i + 1}. ${c.name} ${JSON.stringify(c.input || {})}\n     ${String(text).split("\n").join("\n     ")}\n`);
+    }
+    if (result.composed !== undefined && result.composed !== null) {
+      process.stdout.write(`\ncomposed answer (${result.composed.length}): ${result.composed.length ? result.composed.join(", ") : "(empty set)"}\n`);
+    }
+    return;
+  }
+
   if (mode === "cli") {
     await runCliMode();
     return;
@@ -1103,7 +1212,7 @@ async function main() {
   // An unknown mode gets the instructive usage line and exit 2. (A bare invocation
   // never lands here — the argv splice above rewrote it to `chat`.)
   process.stderr.write(`tmct: unknown invocation "${process.argv.slice(2).join(" ")}". ` +
-    "Use `chat`, `memory`, `init`, `import`, `extend --validate`, `syllogise`, `serve`, `cli digest …`, or `cli <tool> …`.\n");
+    "Use `chat`, `memory`, `init`, `import`, `extend --validate`, `syllogise`, `serve`, `plan`, `cli digest …`, or `cli <tool> …`.\n");
   process.exit(2);
 }
 
