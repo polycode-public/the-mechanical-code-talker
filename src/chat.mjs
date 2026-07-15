@@ -8148,8 +8148,22 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     // reified fact is stronger evidence than a transcript echo. Subject-side facts
     // first (factAnswer), then the reverse-membership read-back (factReadBack) so an
     // asserted "every X is a Y" answers "what is a Y" too.
+    // Raw query first (the long-standing contract), then ONE retry with the
+    // normalized form — gated to the no-envelope bootstrap ONLY: on the FIRST
+    // turn of a graph-less session the ask engine throws before its own
+    // normalize pass runs, so a politeness-wrapped vocabulary question
+    // ("could you tell me what a dog is") reaches this lane still wearing the
+    // wrapper no reader matches. From turn 2 on (envelope present) the
+    // pipeline unwraps it upstream, and an unrestricted retry would let
+    // normalization-mangled text reach readers whose guards were written for
+    // the raw surface (the pronoun-subject identity family).
+    const normalizedForFacts = envelope ? null : normalizeQuery(String(query));
     const fact = (await factAnswer(memoryDir, query, envelope, miss, biasByBundle, cache))
-      ?? (await factReadBack(memoryDir, query, envelope, miss, graph, newFocus?.label, biasByBundle, cache));
+      ?? (await factReadBack(memoryDir, query, envelope, miss, graph, newFocus?.label, biasByBundle, cache))
+      ?? (normalizedForFacts && normalizedForFacts !== String(query).trim()
+        ? (await factAnswer(memoryDir, normalizedForFacts, envelope, miss, biasByBundle, cache))
+          ?? (await factReadBack(memoryDir, normalizedForFacts, envelope, miss, graph, newFocus?.label, biasByBundle, cache))
+        : null);
     if (fact) {
       answer = fact.replace ? fact.text : `${answer}\n${fact.text}`;
       // A fact-lane return flagged `miss` is an HONEST MISS in better words

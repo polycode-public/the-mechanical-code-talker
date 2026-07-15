@@ -146,6 +146,21 @@ const EXPLAIN_WRAPPER_RE = /^explain\s+(?:to\s+me\s+|please\s+)*(.+?)\??$/i;
 /** "tell me <Q>" (bare, no "about") -> "<Q>"; "tell me about X" is a
  *  different, untouched territory (chat.mjs's vagueTouchTermOf). */
 const TELL_ME_WRAPPER_RE = /^tell\s+me\s+(.+?)\??$/i;
+/** "do you know <Q>" -> "<Q>", gated on an interrogative remainder — so
+ *  "do you know anything about movies" (small-talk, no embedded question)
+ *  passes through untouched. */
+const KNOW_WRAPPER_RE = /^do\s+you\s+know\s+(.+?)\??$/i;
+/** "i'd like to know <Q>" / "i want to know <Q>" -> "<Q>", same
+ *  interrogative-remainder gate as KNOW_WRAPPER_RE. */
+const WANT_KNOW_WRAPPER_RE = /^i(?:'d|\s+would)?\s+(?:like|want|need)\s+to\s+know\s+(.+?)\??$/i;
+/** EMBEDDED-QUESTION DE-INVERSION: the wrappers above unwrap "could you
+ *  tell me what a dog is" down to the embedded clause "what a dog is",
+ *  which keeps declarative word order — nothing downstream parses it. Fold
+ *  it back to the direct question the meta lane already owns. Deliberately
+ *  closed to a short (≤3-word) subject so an ordinary relative clause
+ *  ("what the parser does with X …") is never re-inverted. */
+const EMBEDDED_WHATIS_RE = /^what\s+((?:an?\s+|the\s+)?[\w'-]+(?:\s+[\w'-]+){0,2})\s+(is|are)\??$/i;
+const EMBEDDED_MEANS_RE = /^what\s+((?:an?\s+|the\s+)?[\w'-]+(?:\s+[\w'-]+){0,2})\s+means\??$/i;
 /** show/give-me presentation bridge: a kind-listing remainder is left
  *  untouched, a relation/interrogative remainder unwraps to itself, anything
  *  else bridges to "describe <thing>". */
@@ -194,6 +209,14 @@ export function applyPreambleFrames(text) {
     if (m && INTERROGATIVE_LEAD_RE.test(m[1].trim())) q = m[1].trim();
     m = q.match(TELL_ME_WRAPPER_RE);
     if (m && INTERROGATIVE_LEAD_RE.test(m[1].trim())) q = m[1].trim();
+    m = q.match(KNOW_WRAPPER_RE);
+    if (m && INTERROGATIVE_LEAD_RE.test(m[1].trim())) q = m[1].trim();
+    m = q.match(WANT_KNOW_WRAPPER_RE);
+    if (m && INTERROGATIVE_LEAD_RE.test(m[1].trim())) q = m[1].trim();
+    m = q.match(EMBEDDED_WHATIS_RE);
+    if (m) q = `what ${m[2].toLowerCase()} ${m[1].trim()}`;
+    m = q.match(EMBEDDED_MEANS_RE);
+    if (m) q = `what does ${m[1].trim()} mean`;
     m = q.match(SHOW_GIVE_ME_RE);
     if (m) {
       const rest = m[1].trim();

@@ -690,3 +690,28 @@ test("conditional: an unrecognized kind/verb/qualifier is left UNMATCHED — an 
   // a plain non-conditional question is untouched
   assert.equal(applyConditionalFrames("which modules import X"), "which modules import X");
 });
+
+test("politeness wrappers with an embedded question unwrap AND de-invert: 'could you tell me what a dog is' -> 'what is a dog'", () => {
+  assert.equal(applyPreambleFrames("could you tell me what a dog is"), "what is a dog");
+  assert.equal(applyPreambleFrames("tell me what a dog is"), "what is a dog");
+  assert.equal(applyPreambleFrames("do you know what a dog is"), "what is a dog");
+  assert.equal(applyPreambleFrames("i'd like to know what a dog is"), "what is a dog");
+  assert.equal(applyPreambleFrames("i want to know what a guinea pig is"), "what is a guinea pig");
+});
+
+test("embedded-question de-inversion stands alone too: 'what a dog is' -> 'what is a dog', 'what dog means' -> 'what does dog mean'", () => {
+  assert.equal(applyPreambleFrames("what a dog is"), "what is a dog");
+  assert.equal(applyPreambleFrames("do you know what dog means"), "what does dog mean");
+});
+
+test("the know/want wrappers never unwrap a non-interrogative remainder, and long relative clauses are never re-inverted", () => {
+  // small-talk stays small-talk
+  assert.equal(applyPreambleFrames("do you know anything about movies"), "do you know anything about movies");
+  // a >3-word subject is out of the closed de-inversion shape
+  assert.equal(
+    applyPreambleFrames("what the parser in the old branch is"),
+    "what the parser in the old branch is",
+  );
+  // the direct question passes through unchanged (no rewrite loop)
+  assert.equal(applyPreambleFrames("what is a dog"), "what is a dog");
+});

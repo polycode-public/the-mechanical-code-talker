@@ -749,3 +749,19 @@ test("mixed-source isa chain: a chain of ONLY corpus edges never answers — no 
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("turn-1 bootstrap: a politeness-wrapped vocabulary question ('could you tell me what a dog is') answers on the very first graph-less turn", async () => {
+  const dir = await mem();
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    const r = await s.turn("could you tell me what a dog is");
+    await s.close();
+    assert.match(r.answer, /dog is a kind of animal/);
+    const rec = await lastTurnRecord(s.sidecarFile);
+    assert.equal(rec.miss, false);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
