@@ -4745,6 +4745,17 @@ export async function factAnswer(memoryDir, query, envelope, miss, biasByBundle 
     // tail, verbatim.
     if (m) metaTerm = stripTrailingScopeFiller(m[1]);
   }
+  // An ambiguous parse tie ({ambiguousParse}) reaches this lane with
+  // envelope.parsed nulled and miss=false, so NEITHER branch above arms —
+  // but when one tied reading is META and memory holds facts for its term
+  // ("what is a test drive": meta "test drive" vs tests "drive"), those
+  // facts belong under the disambiguation. Without this, the meta branch's
+  // graph-only "isn't a term in this graph's own vocabulary" line is the
+  // last word on a term the user has explicitly taught.
+  if (!metaTerm && envelope?.ambiguous && Array.isArray(envelope.candidateParses)) {
+    const metaCand = envelope.candidateParses.find((c) => c?.shape === "meta" && c.object);
+    if (metaCand) metaTerm = stripTrailingScopeFiller(String(metaCand.object));
+  }
   if (metaTerm) {
     // "what is a tree used for" parses (grammar.mjs T5) to the
     // WHOLE tail "tree used for" as one literal term — split off a trailing

@@ -2883,6 +2883,7 @@ function renderCore(parsed, result) {
       return {
         content: `this could mean more than one thing:\n${options}\n(ask one of these directly, or try rephrasing more specifically, to get just that reading)`,
         miss: false, ambiguous: true, candidates: parsed.candidates.map(describeParse),
+        candidateParses: parsed.candidates,
       };
     }
     // Fallback (no `result.branches` — e.g. a caller invoking render() directly
@@ -2891,6 +2892,7 @@ function renderCore(parsed, result) {
     return {
       content: `this could mean more than one thing: ${options} — try rephrasing more specifically.`,
       miss: false, ambiguous: true, candidates: parsed.candidates.map(describeParse),
+      candidateParses: parsed.candidates,
     };
   }
   if (result.unresolvedPronoun) {
@@ -3586,7 +3588,7 @@ export function ask(graph, query, { contextId = null, nlp = undefined, prev = nu
       // edit-distance, announced in the content as "assuming you meant …");
       // null for every literal-identifier tier.
       matchedVia: result.matchedVia || null,
-      ...(rendered.ambiguous ? { candidates: rendered.candidates } : {}),
+      ...(rendered.ambiguous ? { candidates: rendered.candidates, candidateParses: rendered.candidateParses } : {}),
     },
   };
 }

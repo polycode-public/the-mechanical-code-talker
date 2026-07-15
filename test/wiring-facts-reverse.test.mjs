@@ -765,3 +765,19 @@ test("turn-1 bootstrap: a politeness-wrapped vocabulary question ('could you tel
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("ambiguous-parse tie with a taught meta term: 'what is a test drive' surfaces the taught facts under the disambiguation", async () => {
+  const dir = await mem();
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    await s.turn("every test drive is a thing");
+    const r = await s.turn("what is a test drive");
+    await s.close();
+    assert.match(r.answer, /this could mean more than one thing/);
+    assert.match(r.answer, /test drive is a kind of thing/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
