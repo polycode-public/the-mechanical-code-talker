@@ -1691,6 +1691,34 @@ const GENITIVE_RELATION_TEACH_RE =
 const GENITIVE_RELATION_TEACH_REV_RE =
   /^([\w-]+(?:\s+[A-Z][\w-]*)?)'s\s+([a-z][\w-]*)\s+(?:is|was)\s+([\w-]+(?:\s+[A-Z][\w-]*)?)[.!?]*$/i;
 
+/** The VERB-INFLECTED surface of the same relational fact — "ahab fathered
+ *  john" states what "ahab is the father of john" states, so it stores
+ *  through the identical generalVerbPredicate mint. Same 1-2-token name
+ *  captures as RELATION_FACT_TEACH_RE on both sides; the verb slot requires
+ *  a literal "-ed" tail, so a present-tense "john likes mary" never matches
+ *  (that bare shape stays wrapper-required — see the nudge in runAsk). The
+ *  regex is only the SHAPE trigger: matchRelationalVerbTeach (below) adds
+ *  the determiner/closed-class/POS guards that keep "the build failed
+ *  yesterday" and "john failed spectacularly" out. */
+const RELATION_VERB_TEACH_RE =
+  /^([\w'-]+(?:\s+[A-Z][\w'-]*)?)\s+([a-z][\w-]*ed)\s+([\w'-]+(?:\s+[A-Z][\w'-]*)?)[.!?]*$/i;
+
+/** Closed past-tense strip: "<base>ed" (fathered → father), the doubled-
+ *  consonant form (hopped → hop), and the -ied fold (carried → carry).
+ *  Returns null when the word doesn't carry a strippable "-ed" tail at all.
+ *  Deliberately naive (same accepted trade as singularizeSurface) — callers
+ *  prefer wink's lemma when it's available and only lean on this strip as
+ *  the shape check / fallback. */
+function pastVerbBase(verb) {
+  const v = String(verb || "").toLowerCase();
+  const m = v.match(/^([a-z][a-z-]*)ed$/);
+  if (!m || m[1].length < 2) return null;
+  const stem = m[1];
+  if (/([b-df-hj-np-tv-z])\1$/.test(stem)) return stem.slice(0, -1);
+  if (/[^aeiou]i$/.test(stem)) return `${stem.slice(0, -1)}y`;
+  return stem;
+}
+
 /** "every/a/an/the <N1> has a/an <N2> method" — the HAS-A-METHOD teach
  *  declarative: a possession-of-capability claim about a class/entity's
  *  method ("every Component has a render method", "a Widget has a render
@@ -2488,6 +2516,93 @@ async function subjectIsNounOrPropn(word) {
   }
 }
 
+/** Recognize "<Name> <verb>ed <Name>" ("ahab fathered john") as a relational
+ *  teach, or null. RELATION_VERB_TEACH_RE gives the shape; this adds the
+ *  guards that keep non-relational pasts out:
+ *    - neither side may lead with a determiner ("the build failed yesterday")
+ *      or a closed-class word;
+ *    - the verb may not be a closed-class or structural word;
+ *    - both name heads must POS-tag NOUN/PROPN (the same wink adapter
+ *      subjectIsNounOrPropn uses — "john failed spectacularly" tags its tail
+ *      ADV and declines). No wink → no signal, never a store;
+ *    - wink's lemma must actually DIFFER from the typed verb — a base-form
+ *      "-eed" word ("breed", "exceed") is not an inflected past at all, and
+ *      lemma-vs-strip disagreement resolves toward the lemma so the minted
+ *      predicate matches what the wrapped "remember that ahab fathered john"
+ *      path (generalVerbTeach) would mint.
+ *  Returns { subject, verb, base, object }; `base` is what the caller mints
+ *  through generalVerbPredicate. */
+async function matchRelationalVerbTeach(text) {
+  const line = String(text || "").trim();
+  const m = line.match(RELATION_VERB_TEACH_RE);
+  if (!m) return null;
+  const [, subjectRaw, verbRaw, objectRaw] = m;
+  const verb = verbRaw.toLowerCase();
+  const strip = pastVerbBase(verb);
+  if (!strip) return null;
+  if (GENERAL_VERB_NOT_A_VERB_RE.test(verb) || STRUCT_WORDS.has(verb)) return null;
+  const subjWords = subjectRaw.split(/\s+/);
+  const objWords = objectRaw.split(/\s+/);
+  for (const head of [subjWords[0], objWords[0]]) {
+    if (GENERAL_VERB_DETERMINER_RE.test(head) || GENERAL_VERB_NOT_A_VERB_RE.test(head)) return null;
+  }
+  try {
+    const { nlpAdapter } = await import("./ask-nlp.mjs");
+    const adapter = nlpAdapter();
+    if (!adapter) return null;
+    const tags = adapter.posTags([...subjWords, verbRaw, ...objWords]);
+    const nameTag = (t) => t === "NOUN" || t === "PROPN";
+    if (!nameTag(tags[0]) || !nameTag(tags[subjWords.length + 1])) return null;
+  } catch {
+    return null;
+  }
+  let base = strip;
+  try {
+    const { proseLemma } = await import("./prose-nlp.mjs");
+    const lemma = proseLemma();
+    if (lemma) {
+      const l = lemma(verb);
+      if (l === verb) return null; // wink says this is already a base form, not a past
+      if (l) base = l;
+    }
+  } catch { /* no lemmatizer — the closed strip stands */ }
+  return { subject: subjectRaw.trim(), verb, base, object: objectRaw.trim() };
+}
+
+/** The bare "<name> <verb>s <name>" nudge text ("john likes mary"), or null.
+ *  The bare form stays wrapper-required — the imperative-lookalike problem in
+ *  subjectIsNounOrPropn's docblock is only half the story at exactly three
+ *  words, where the conversational catch-all otherwise answers with the
+ *  orientation card. This recognizes the shape ONLY well enough to point at
+ *  the wrapped form that does store; it never stores anything itself. Closed
+ *  the same way matchRelationalVerbTeach is: no determiner/closed-class
+ *  heads, no structural/discourse verb, subject POS-tags NOUN/PROPN, object
+ *  tags NOUN/PROPN/ADJ (wink tags bare lowercase names like "mary" ADJ;
+ *  a genuine adverb tail — "dog barks loudly" — still declines). */
+async function bareTeachWrapperNudgeText(text) {
+  const line = String(text || "").trim().replace(/[.!?]+\s*$/, "");
+  const m = line.match(/^([\w'-]+)\s+([a-z][\w-]*s)\s+([\w'-]+)$/i);
+  if (!m) return null;
+  const [, subj, verbRaw, obj] = m;
+  const verb = verbRaw.toLowerCase();
+  if (/^(?:is|was|does)$/.test(verb)) return null;
+  if (GENERAL_VERB_NOT_A_VERB_RE.test(verb) || STRUCT_WORDS.has(verb) || HABITUAL_VERB_EXCLUDE.has(verb)) return null;
+  for (const head of [subj, obj]) {
+    if (GENERAL_VERB_DETERMINER_RE.test(head) || GENERAL_VERB_NOT_A_VERB_RE.test(head)) return null;
+  }
+  try {
+    const { nlpAdapter } = await import("./ask-nlp.mjs");
+    const adapter = nlpAdapter();
+    if (!adapter) return null;
+    const tags = adapter.posTags([subj, verbRaw, obj]);
+    if (tags[0] !== "NOUN" && tags[0] !== "PROPN") return null;
+    if (tags[2] !== "NOUN" && tags[2] !== "PROPN" && tags[2] !== "ADJ") return null;
+  } catch {
+    return null;
+  }
+  return `I don't store a bare "${line}" on its own — to store that, say: "remember that ${line}".`;
+}
+
 // ---- General verb-to-predicate DIRECT-QUESTION retrieval: "does margo eat
 // ribs" / "what does margo eat" against a fact taught via generalVerbTeach.
 // Wired into factReadBack, gated on an already-true `miss` so a real graph
@@ -2549,8 +2664,9 @@ function assertCandidates(payload) {
   // surfaces of the capability teach the lane already owns as "a dog can
   // bark" (the same reading the seed corpus itself uses: dog /r/CapableOf
   // bark). Same safety story as the plural rewrite above — the candidate
-  // still has to ground through the ordinary teach path, so an unknown
-  // subject ("penguins swim") stays an honest decline.
+  // still has to ground through the teach path (this rewrite, or teachLane's
+  // grounded-subject direct write), so a subject grounded nowhere
+  // ("penguins swim" with no prior grounding) stays an honest decline.
   const habitual = matchBareHabitualTeach(p);
   if (habitual) {
     const articleRule = grammarRules().find((r) => r.kind === "article");
@@ -2590,6 +2706,24 @@ function matchBareHabitualTeach(text) {
   }
   return null;
 }
+/** The EXPLICIT capability surface — "a wren can sing" / "penguins can swim":
+ *  the same {subject, verb} reading matchBareHabitualTeach folds its two
+ *  habitual surfaces onto, for the sentence that says "can" outright. The ACE
+ *  grammar already owns this shape for closed-lexicon words; recognizing it
+ *  here lets the teach lane's grounded-subject direct write catch a subject
+ *  grounded only by a prior taught fact. Same closed verb-slot exclusions as
+ *  the habitual shapes; a question lead ("can a wren sing") never reaches
+ *  this — every call site is already QUESTION_LEAD-gated. */
+function matchBareCanTeach(text) {
+  const m = String(text || "").trim().match(/^(?:an?\s+|every\s+|all\s+)?([\w-]+)\s+can\s+([a-z][\w-]*)[.!?]*$/i);
+  if (!m) return null;
+  const subject = m[1].toLowerCase();
+  const verb = m[2].toLowerCase();
+  if (STRUCT_WORDS.has(verb) || HABITUAL_VERB_EXCLUDE.has(verb) || GENERAL_VERB_NOT_A_VERB_RE.test(verb)) return null;
+  if (GENERAL_VERB_DETERMINER_RE.test(subject) || GENERAL_VERB_NOT_A_VERB_RE.test(subject)) return null;
+  return { subject, verb };
+}
+
 /** The "every X is a Y" rewrite of a declarative, for the "did you mean …"
  *  hint. Real a/an agreement (never a hardcoded "a", which is ungrammatical
  *  for a vowel-initial Y — "every monkey is a animal") reuses finish.mjs's
@@ -2604,6 +2738,21 @@ function teachSuggestion(payload) {
   const articleRule = grammarRules().find((r) => r.kind === "article");
   const article = articleRule && beginsWithVowelSound(object, articleRule) ? "an" : "a";
   return `every ${subject} is ${article} ${object}`;
+}
+
+/** The honest decline for a bare habitual teach ("penguins swim") whose
+ *  subject is grounded nowhere — neither the static lexicon nor a prior
+ *  taught fact. Mirrors ungroundedPairHint's "name the gap, hand over a
+ *  phrasing that actually works, never guess" discipline for the capability
+ *  shape, which has no is/are payload for that hint to match. The suggested
+ *  grounding sentence uses the same GENERIC_ANCHOR_NOUNS root that hint
+ *  suggests, so it round-trips through the ordinary teach cascade as-is. */
+function habitualGroundingHintText(line, habitual) {
+  const articleRule = grammarRules().find((r) => r.kind === "article");
+  const article = articleRule && beginsWithVowelSound(habitual.subject, articleRule) ? "an" : "a";
+  return `I don't know "${habitual.subject}" yet, so I can't store "${line}" as a capability fact. `
+    + `Ground it first — say "every ${habitual.subject} is a thing" — then say "${line}" again `
+    + `and I'll remember that ${article} ${habitual.subject} can ${habitual.verb}.`;
 }
 
 /** PRONOUN-SUBJECT GUARD: "remember you are a womble" and the literal "every
@@ -2709,6 +2858,70 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     (s == null ? s : s.replace(/^my\s+[a-z][\w-]*\s+([\w'-]+\s+(?:is|are)\s+.+)$/i, "$1"));
   const raw = stripKindOf(stripYour(stripPossessiveNamedInstance(rawInput)));
   const wrapped = stripKindOf(stripYour(stripPossessiveNamedInstance(wrappedInput)));
+
+  // CONJUNCTION PRE-PASS — "ahab is male and is the father of john": two
+  // facts about ONE subject stated in one sentence. Split at the top-level
+  // " and <is|are|has|have|can>" seam, re-attach the shared subject to the
+  // second half, and run each half through this same lane in order — two
+  // ordinary teach payloads, no new storage shape. A second clause that
+  // names its OWN subject ("… and the weather is nice") is not a shared-
+  // subject conjunction: the first half still stores, and the reply names
+  // the clause it left alone — never a silent partial store either way.
+  const conjSrc = (wrapped ?? raw).replace(/[.!?]+\s*$/, "");
+  if (memoryDir && !QUESTION_LEAD_RE.test(conjSrc) && /\s+and\s+/i.test(conjSrc)
+    && !(await hasMidSentenceInterrogative(conjSrc))) {
+    const rewrap = (half) => (wrapped != null ? `remember that ${half}` : half);
+    const recurse = (half) => teachLane(rewrap(half), { memoryDir, sessionId, lexicon, cache });
+    const stripNoted = (t) => String(t).replace(/^noted — remembered(?:\s+\d+\s+facts?)?:\s*/i, "").trim();
+    const shared = conjSrc.match(/^(.+?)\s+and\s+((?:is|are|has|have|can)\b.+)$/i);
+    const sharedSubject = shared ? shared[1].match(/^(.+?)\s+(?:is|are|has|have|can)\b/i)?.[1]?.trim() : null;
+    if (shared && sharedSubject) {
+      const firstHalf = shared[1].trim();
+      const secondHalf = `${sharedSubject} ${shared[2].trim()}`;
+      const first = await recurse(firstHalf);
+      const second = await recurse(secondHalf);
+      const firstOk = !!first && !first.miss;
+      const secondOk = !!second && !second.miss;
+      if (firstOk && secondOk) {
+        return {
+          text: `noted — remembered both: ${stripNoted(first.text)}; and ${stripNoted(second.text)}`,
+          via: "assert", miss: false,
+        };
+      }
+      if (firstOk || secondOk) {
+        const ok = firstOk ? first : second;
+        const badHalf = firstOk ? secondHalf : firstHalf;
+        const bad = firstOk ? second : first;
+        return {
+          text: `noted — remembered: ${stripNoted(ok.text)}. The other half ("${badHalf}") I couldn't store`
+            + `${bad ? ` — ${stripNoted(bad.text)}` : ", it isn't a fact shape I recognize."}`,
+          via: "assert", miss: false,
+        };
+      }
+      if (first || second) {
+        return {
+          text: `I couldn't store either half of that. "${firstHalf}": ${first ? stripNoted(first.text) : "not a fact shape I recognize."} `
+            + `"${secondHalf}": ${second ? stripNoted(second.text) : "not a fact shape I recognize."}`,
+          via: "teach-miss", miss: true,
+        };
+      }
+      // neither half even recognized — fall through to the ordinary cascade
+    } else if (!shared) {
+      const ownSubject = conjSrc.match(
+        /^(.+?\s+(?:is|are|has|have|can)\s+.+?)\s+and\s+((?:(?:the|a|an|every|each|all|some|my|your|their|his|her|its)\s+)?[\w'-]+(?:\s+[\w'-]+)?\s+(?:is|are|has|have|can)\b.+)$/i,
+      );
+      if (ownSubject) {
+        const first = await recurse(ownSubject[1].trim());
+        if (first && !first.miss) {
+          return {
+            text: `${first.text} — the second part ("${ownSubject[2].trim()}") names its own subject, so I didn't store it; teach it as its own sentence if you meant it.`,
+            via: "assert", miss: false,
+          };
+        }
+        // the first half didn't store — fall through to the ordinary cascade
+      }
+    }
+  }
 
   // PRONOUN-SUBJECT GUARD — tried against BOTH surfaces (bare and remember-
   // wrapped; trailing punctuation stripped the same way the OWNS/SOME_A_FEW
@@ -2861,6 +3074,21 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   if (genitiveRev && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion) {
     const stored = await teachFact(memoryDir, sessionId, {
       subject: genitiveRev[3], predicate: await generalVerbPredicate(genitiveRev[2]), object: genitiveRev[1],
+    });
+    if (stored) return stored;
+  }
+
+  // VERB-INFLECTED RELATIONAL FACT — "ahab fathered john": the past-tense
+  // verb surface of the relational fact above, minted through the SAME
+  // generalVerbPredicate so "who is the father of john" reads every phrasing
+  // back identically. matchRelationalVerbTeach carries the closed guards
+  // (name-shaped sides, POS-confirmed nouns, a lemma-confirmed inflected
+  // past) that keep "the build failed" an honest non-match.
+  const relVerb = memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion
+    ? await matchRelationalVerbTeach(ownSrc) : null;
+  if (relVerb) {
+    const stored = await teachFact(memoryDir, sessionId, {
+      subject: relVerb.subject, predicate: await generalVerbPredicate(relVerb.base), object: relVerb.object,
     });
     if (stored) return stored;
   }
@@ -3214,6 +3442,24 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     // the structural grammar's own typo-tolerant retry to answer for real.
     const subjectWord = raw.match(/^([\w'-]+)/)?.[1];
     if (subjectWord && (await subjectIsNounOrPropn(subjectWord))) {
+      // A PLURAL explicit-capability surface ("wrens can hum") whose
+      // SINGULAR is a grounded term stores under the singular first — the
+      // spelling the grounding fact and every query-side variant fold use —
+      // instead of letting the general-verb mint below reify the plural
+      // verbatim (a fact "can a wren hum" could never read back). An
+      // ungrounded singular falls through unchanged.
+      const canShape = matchBareCanTeach(raw);
+      const canSingular = canShape ? singularizeSurface(canShape.subject) : null;
+      if (canShape && canSingular !== canShape.subject) {
+        let canLex = lexicon;
+        if (!canLex) { const { loadLexicon } = await import("./grammar/lexicon.mjs"); canLex = loadLexicon(); }
+        if (await isGroundedTerm(canSingular, canLex, memoryDir, cache)) {
+          const stored = await teachFact(memoryDir, sessionId, {
+            subject: canSingular, predicate: await generalVerbPredicate("can"), object: canShape.verb,
+          });
+          if (stored) return stored;
+        }
+      }
       const gv = await generalVerbTeach(raw);
       if (gv) {
         const stored = await teachFact(memoryDir, sessionId, gv);
@@ -3224,7 +3470,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
 
   let payload = null;
   if (wrapped && /\b(?:is|are)\b/i.test(wrapped)) payload = wrapped;
-  else if ((BARE_DECLARATIVE_RE.test(raw) || COMPARATIVE_TEACH_RE.test(raw) || matchBareHabitualTeach(raw)) && !QUESTION_LEAD_RE.test(raw) && !(await hasMidSentenceInterrogative(raw))) payload = raw;
+  else if ((BARE_DECLARATIVE_RE.test(raw) || COMPARATIVE_TEACH_RE.test(raw) || matchBareHabitualTeach(raw) || matchBareCanTeach(raw)) && !QUESTION_LEAD_RE.test(raw) && !(await hasMidSentenceInterrogative(raw))) payload = raw;
   if (!payload) {
     // "remember margo eats ribs", re-escaping here through a combination
     // that mechanism's own deliberate subject-shape restriction doesn't
@@ -3262,6 +3508,31 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
       // declarative-sentence dispatch in runTurn) gets it uniformly.
       const stored = await assertTurn(cand, { memoryDir, sessionId, focus: null, lexicon, cache });
       if (stored) return { text: stored.answer, via: "assert", miss: false };
+    }
+    // CAPABILITY over a GROUNDED subject — "penguins swim" (habitual) or "a
+    // penguin can swim" (explicit) after "every penguin is a thing". The ACE
+    // candidates above only parse closed-lexicon words, so a subject grounded
+    // by a PRIOR taught fact (or an anchor root) still fell through to the
+    // generic decline. Same closed shapes, same capability predicate the ACE
+    // path itself stores. The subject's naive singular is tried too, so the
+    // explicit plural surface ("penguins can swim") reaches the same stored
+    // spelling the grounding fact used.
+    const habitualTeach = matchBareHabitualTeach(payload) || matchBareCanTeach(payload);
+    if (habitualTeach) {
+      let habLex = lexicon;
+      if (!habLex) { const { loadLexicon } = await import("./grammar/lexicon.mjs"); habLex = loadLexicon(); }
+      // The singular is preferred so an explicit plural surface ("penguins
+      // can swim") stores under the same spelling the grounding fact (and
+      // every query-side variant fold) uses; a proper noun that only looks
+      // plural ("redis") falls back to its own spelling.
+      for (const subj of new Set([singularizeSurface(habitualTeach.subject), habitualTeach.subject])) {
+        if (await isGroundedTerm(subj, habLex, memoryDir, cache)) {
+          const stored = await teachFact(memoryDir, sessionId, {
+            subject: subj, predicate: await generalVerbPredicate("can"), object: habitualTeach.verb,
+          });
+          if (stored) return stored;
+        }
+      }
     }
     // The real ACE grammar just declined (unknown words / not the membership
     // shape) — try the narrow unknown-SUBJECT direct-write fallback before
@@ -4566,6 +4837,34 @@ const DO_VERB_ASK_RE = /^(?:do|does)\s+(all\s+|every\s+)?(?:an?\s+|the\s+)?([\w'
 const WHAT_CAN_VERB_RE = /^what\s+can\s+(?!be\s)(.+?)[?.!\s]*$/i;
 const WHICH_KIND_CAN_RE = /^(?:which|what)\s+([\w'-]+(?:\s+[\w'-]+)*?)\s+can\s+(.+?)[?.!\s]*$/i;
 
+/** SUPERLATIVE over TAUGHT COMPARATIVES — "which disk is smallest" / "what is
+ *  the smallest disk" answered from the mgx:<comparative>-than facts the
+ *  comparative teach frame mints ("disk-1 is smaller than disk-2"). The
+ *  superlative slot is closed by SHAPE, the same discipline as
+ *  COMPARATIVE_SRC: an -est word, best/worst, or a most/least + adjective
+ *  pair — never a hand-list of adjectives. Entirely fact-side: the
+ *  code-graph superlative lane (parseSuperlative's entity-kind metrics) is a
+ *  different question over different data and is untouched — this reader
+ *  only ever answers when taught comparative pairs for the named kind exist. */
+const SUPERLATIVE_WORD_SRC = "(?:most|least)\\s+[a-z][\\w-]*|[a-z][\\w-]*est|best|worst";
+const WHICH_KIND_SUPERLATIVE_RE = new RegExp(`^which\\s+([\\w'-]+)\\s+(?:is|are)\\s+(?:the\\s+)?(${SUPERLATIVE_WORD_SRC})[?.!\\s]*$`, "i");
+const WHAT_IS_SUPERLATIVE_KIND_RE = new RegExp(`^what(?:'s|s|\\s+is)\\s+the\\s+(${SUPERLATIVE_WORD_SRC})\\s+([\\w'-]+)[?.!\\s]*$`, "i");
+
+/** Map a superlative surface onto the comparative base its taught facts were
+ *  minted under: <adj>est → <adj>er (the shared stem keeps a doubled
+ *  consonant intact: biggest → bigger), best → better, worst → worse,
+ *  "most X" → "more X", "least X" → "less X". Returns null for a word that
+ *  only LOOKS superlative ("honest" maps to no comparative anyone teaches —
+ *  the resulting predicate simply never has facts). */
+function comparativeOfSuperlative(superlative) {
+  const s = String(superlative || "").toLowerCase().trim().replace(/\s+/g, " ");
+  if (s === "best") return "better";
+  if (s === "worst") return "worse";
+  const graded = s.match(/^(most|least)\s+([a-z][\w-]*)$/);
+  if (graded) return `${graded[1] === "most" ? "more" : "less"} ${graded[2]}`;
+  return /[a-z]est$/.test(s) && s.length > 4 ? `${s.slice(0, -3)}er` : null;
+}
+
 // The SAME gap as mgx:usedFor above is systemic — "what causes fire", "what is
 // made of wood" would otherwise fall through to the same misleading
 // code-graph miss. DERIVES a reverse-by-object regex for every
@@ -4715,6 +5014,76 @@ export async function factAnswer(memoryDir, query, envelope, miss, biasByBundle 
     const rest = lines.slice(FACT_ANSWER_CAP);
     const extra = rest.length ? `\n…and ${rest.length} more — say 'more' to see them.` : "";
     return { text: shown.join("\n") + extra, replace: true, ...(rest.length ? { pending: { items: rest, noun: "facts" } } : {}) };
+  }
+
+  // (a-pre3) SUPERLATIVE over TAUGHT COMPARATIVES — "which disk is smallest" /
+  // "what is the smallest disk" resolved from mgx:<comparative>-than facts.
+  // Checked BEFORE (a) for the same reason as (a-pre)/(a-pre2): the "what is
+  // the …" surface would otherwise be swallowed as one literal meta term.
+  // Answers ONLY when the taught pairs for the named kind form a single
+  // unambiguous total chain; a partial order (two heads nothing compares) or
+  // a contradiction loop is an honest can't-order decline that names the gap.
+  // No taught pairs at all → falls through untouched, so the code-graph
+  // superlative lane and the ordinary miss messaging keep their turns.
+  const whichSup = q.match(WHICH_KIND_SUPERLATIVE_RE);
+  const whatSup = whichSup ? null : q.match(WHAT_IS_SUPERLATIVE_KIND_RE);
+  const supKindRaw = whichSup ? whichSup[1] : whatSup?.[2];
+  const supWord = whichSup ? whichSup[2] : whatSup?.[1];
+  const supCompBase = supKindRaw && supWord ? comparativeOfSuperlative(supWord) : null;
+  if (supCompBase) {
+    const supPredicate = `mgx:${supCompBase.replace(/\s+/g, "-")}-than`;
+    const rows = await factRows(memoryDir, cache);
+    const kindVariants = factTermVariants(normFactTerm, supKindRaw);
+    const kindSingular = [...kindVariants].sort((a, b) => a.length - b.length)[0];
+    const memberOfKind = (node) => kindVariants.has(node)
+      || node.startsWith(`${kindSingular}-`) || node.startsWith(`${kindSingular} `)
+      || rows.some((g) => ISA_PREDICATES.has(g.predicate) && g.subject === node && kindVariants.has(g.object));
+    const pairs = uniqueFacts(rows.filter((f) => f.predicate === supPredicate && isOperatorTaught(f)))
+      .filter((f) => f.subject !== f.object && memberOfKind(f.subject) && memberOfKind(f.object));
+    if (pairs.length) {
+      const nodes = new Set();
+      const inDeg = new Map();
+      for (const f of pairs) {
+        nodes.add(f.subject); nodes.add(f.object);
+        inDeg.set(f.object, (inDeg.get(f.object) || 0) + 1);
+        if (!inDeg.has(f.subject)) inDeg.set(f.subject, inDeg.get(f.subject) || 0);
+      }
+      // A unique topological order IS the single unambiguous total chain:
+      // exactly one zero-in-degree node must exist at every step, and each
+      // step's winner is then directly compared to the next (a unique order
+      // forces the consecutive edge). Two candidates at any step = a pair
+      // nothing compares; no candidate = the taught facts loop.
+      const remaining = new Map(inDeg);
+      const order = [];
+      let declined = null;
+      while (remaining.size) {
+        const sources = [...remaining.keys()].filter((n) => remaining.get(n) === 0);
+        if (sources.length !== 1) {
+          declined = sources.length === 0
+            ? {
+              text: `I can't order the ${kindSingular}s — the "${supCompBase} than" facts I have loop back on themselves, so no ${supWord} exists. /memory to inspect them.`,
+              replace: true, miss: true,
+            }
+            : {
+              text: `I can't pick the ${supWord} ${kindSingular} from what I know — nothing compares ${sources[0]} and ${sources[1]}. Teach me, e.g. "${sources[0]} is ${supCompBase} than ${sources[1]}".`,
+              replace: true, miss: true,
+            };
+          break;
+        }
+        const head = sources[0];
+        order.push(head);
+        remaining.delete(head);
+        for (const f of pairs) {
+          if (f.subject === head && remaining.has(f.object)) remaining.set(f.object, remaining.get(f.object) - 1);
+        }
+      }
+      if (declined) return declined;
+      const steps = order.slice(0, -1).map((n, i) => pairs.find((f) => f.subject === n && f.object === order[i + 1]));
+      if (steps.every(Boolean)) {
+        const cite = steps.map((g) => `${factPhrase(g)}${g.provenance ? ` (source: ${g.provenance})` : ""}`).join("; ");
+        return { text: `${order[0]} — ${cite}; so ${order[0]} is the ${supWord} ${kindSingular}`, replace: true };
+      }
+    }
   }
 
   // (a) meta-shaped questions ("what is a module", "what does cache mean") — the
@@ -4969,12 +5338,16 @@ export async function factAnswer(memoryDir, query, envelope, miss, biasByBundle 
   }
 
   // (b3b) "which animals can fly" — reverse-by-verb over mgx:capableOf,
-  // restricted to subjects a direct isa-family fact ties to the named kind.
-  // When capable subjects exist but NONE provably belongs to the kind, the
-  // answer says so and still lists them — honest about the missing link
-  // instead of a silent empty. Only takes over on real capability hits;
-  // otherwise falls through (never returns null: "which X can Y" phrasings
-  // this reader doesn't own must keep their turn).
+  // restricted to subjects an isa-family chain ties to the named kind within
+  // a bounded hop budget (findIsaChain, the same rooted proof search the
+  // is-a ladder's live chase uses; maxHops matches its enlarged-tree budget),
+  // so "every sparrow is a bird" + "bird is a kind of animal" surfaces
+  // sparrow under "which animals…". A chain longer than one hop is cited on
+  // the answer line. When capable subjects exist but NONE provably belongs
+  // to the kind, the answer says so and still lists them — honest about the
+  // missing link instead of a silent empty. Only takes over on real
+  // capability hits; otherwise falls through (never returns null: "which X
+  // can Y" phrasings this reader doesn't own must keep their turn).
   const whichCan = q.match(WHICH_KIND_CAN_RE);
   if (whichCan) {
     const kindVariants = factTermVariants(normFactTerm, whichCan[1]);
@@ -4982,11 +5355,30 @@ export async function factAnswer(memoryDir, query, envelope, miss, biasByBundle 
     const facts = await factRows(memoryDir, cache);
     const capable = uniqueFacts(facts.filter((f) => f.predicate === "mgx:capableOf" && verbVariants.has(f.object)));
     if (capable.length) {
-      const inKind = capable.filter((f) =>
-        kindVariants.has(f.subject)
-        || facts.some((g) => ISA_PREDICATES.has(g.predicate) && g.subject === f.subject && kindVariants.has(g.object)));
+      const { findIsaChain, SUBCLASS_PREDICATE: SC_PRED, TYPE_PREDICATE: TYPE_PRED } = await import("./syllogise.mjs");
+      const subClassRows = facts.filter((f) => f.predicate === SC_PRED);
+      const typeRows = facts.filter((f) => f.predicate === TYPE_PRED);
+      const subClassEdges = subClassRows.map((f) => [f.subject, f.object]);
+      const typeEdges = typeRows.map((f) => [f.subject, f.object]);
+      const rowForStep = (step) => (step.predicate === SC_PRED ? subClassRows : typeRows)
+        .find((g) => g.subject === step.subject && g.object === step.object);
+      const chainBySubject = new Map();
+      const inKind = capable.filter((f) => {
+        if (kindVariants.has(f.subject)) return true;
+        if (!chainBySubject.has(f.subject)) {
+          chainBySubject.set(f.subject, findIsaChain(f.subject, kindVariants, typeEdges, subClassEdges, { maxHops: 3 }));
+        }
+        return !!chainBySubject.get(f.subject);
+      });
       const ranked = rankByBiasThenTrust(inKind.length ? inKind : capable, biasByBundle);
-      const lines = ranked.map(renderFactLine);
+      const lines = ranked.map((f) => {
+        const chain = inKind.length ? chainBySubject.get(f.subject) : null;
+        if (!chain || chain.length < 2) return renderFactLine(f);
+        const steps = chain.map(rowForStep);
+        if (!steps.every(Boolean)) return renderFactLine(f);
+        const cite = steps.map((g) => `${factPhrase(g)}${g.provenance ? ` (source: ${g.provenance})` : ""}`).join("; ");
+        return `${renderFactLine(f)} — via: ${cite}`;
+      });
       const shown = lines.slice(0, FACT_ANSWER_CAP);
       const rest = lines.slice(FACT_ANSWER_CAP);
       const extra = rest.length ? `\n…and ${rest.length} more — say 'more' to see them.` : "";
@@ -8040,9 +8432,23 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // sides singularizing to KNOWN lexicon nouns, so real chatter ("these are
   // yours") stays with the orientation card.
   let isPluralMembershipTeach = false;
+  // A bare habitual naming a subject grounded NOWHERE ("penguins swim", no
+  // prior grounding) gets an honest grounding hint instead of the
+  // orientation card — computed here, rendered inside the conversational
+  // branch below so a turn something real answers never shows it.
+  let habitualGroundingHint = null;
+  // "ahab fathered john" — a bare verb-inflected relational teach (exactly
+  // the shape teachLane's own frame stores) needs the SAME deferral, or the
+  // ≤3-word catch-all claims it first. "john likes mary" (present tense)
+  // stays wrapper-required BY DESIGN — it gets a nudge at the wrapped form,
+  // never a store.
+  let isBareRelationalVerbTeach = false;
+  let bareTeachWrapperNudge = null;
   {
-    const pm = String(query).trim().match(/^([\w-]+)\s+are\s+([\w-]+)[.!?]*$/i);
-    const habitual = pm ? null : matchBareHabitualTeach(String(query).trim());
+    const bareLine = String(query).trim();
+    const pm = bareLine.match(/^([\w-]+)\s+are\s+([\w-]+)[.!?]*$/i);
+    const habitual = pm || QUESTION_LEAD_RE.test(bareLine)
+      ? null : (matchBareHabitualTeach(bareLine) || matchBareCanTeach(bareLine));
     if (pm || habitual) {
       try {
         const { loadLexicon, lookupNoun } = await import("./grammar/lexicon.mjs");
@@ -8052,11 +8458,33 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
           const o = singularizeSurface(pm[2].toLowerCase());
           isPluralMembershipTeach = s !== pm[1].toLowerCase() && !!lookupNoun(lex, s) && !!lookupNoun(lex, o);
         } else {
-          // The bare habitual sibling ("dogs bark", "a dog barks") — same
-          // deferral, same known-subject gate, so real chatter never diverts.
-          isPluralMembershipTeach = !!lookupNoun(lex, habitual.subject);
+          // The bare habitual/capability siblings ("dogs bark", "a dog
+          // barks", "wrens can sing") — same deferral, same known-subject
+          // gate, so real chatter never diverts. The naive singular is tried
+          // too: matchBareCanTeach keeps the surface plural ("wrens"), but
+          // the grounding fact was stored under the singular.
+          const subjects = [...new Set([habitual.subject, singularizeSurface(habitual.subject)])];
+          isPluralMembershipTeach = subjects.some((s) => !!lookupNoun(lex, s));
+          if (!isPluralMembershipTeach && memoryDir) {
+            let grounded = false;
+            for (const s of subjects) grounded = grounded || (await isGroundedByFact(s, memoryDir, cache));
+            if (grounded) {
+              // Grounded by a prior taught fact — defer the same way; the
+              // teach lane's grounded-subject direct write stores it.
+              isPluralMembershipTeach = true;
+            } else {
+              habitualGroundingHint = habitualGroundingHintText(
+                bareLine.replace(/[.!?]+\s*$/, ""),
+                { subject: subjects[subjects.length - 1], verb: habitual.verb },
+              );
+            }
+          }
         }
       } catch { /* lexicon unavailable — leave false, the ordinary path decides */ }
+    } else if (memoryDir && !QUESTION_LEAD_RE.test(bareLine)
+      && bareLine.replace(/[.!?]+\s*$/, "").split(/\s+/).filter(Boolean).length <= 3) {
+      if (await matchRelationalVerbTeach(bareLine)) isBareRelationalVerbTeach = true;
+      else bareTeachWrapperNudge = await bareTeachWrapperNudgeText(bareLine);
     }
   }
   // A vague relation touch ("what about cochange", "tell me about cochange",
@@ -8086,7 +8514,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       } catch { /* leave false — the ordinary path decides */ }
     }
   }
-  const conversationalCandidateBaseGate = !handled && miss && !envelope?.parsed && !isWhatAboutContinuation && !isDescribePronounContinuation && !isExplainTouch && !isStaccatoNegation && !isVagueRelationTouch && !isStaccatoComparative && !isStaccatoPronounNoFocus && !isPluralMembershipTeach;
+  const conversationalCandidateBaseGate = !handled && miss && !envelope?.parsed && !isWhatAboutContinuation && !isDescribePronounContinuation && !isExplainTouch && !isStaccatoNegation && !isVagueRelationTouch && !isStaccatoComparative && !isStaccatoPronounNoFocus && !isPluralMembershipTeach && !isBareRelationalVerbTeach;
   // A turn whose pronoun was bound to a vocabulary antecedent is PROVABLY a
   // fact question ("can it bark" → "can dog bark") — never conversational,
   // however short. Without this, the substituted 3-worder still trips
@@ -8183,6 +8611,22 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     if (bareMetaHit.pending) factPending = bareMetaHit.pending;
     note(trace, "lane: (2b) BARE META FACT — \"what is X\" (no article) / \"is X <adjective>\" resolved to a remembered fact before the conversational catch-all could claim it");
     note(trace, "source: .tmct/memory Facts (see /memory for provenance per line)");
+  } else if (isConversationalCandidate && habitualGroundingHint) {
+    // A bare habitual teach ("penguins swim") naming a subject grounded
+    // nowhere: an honest, actionable grounding hint beats the orientation
+    // card — the card answers a question the user never asked.
+    answer = habitualGroundingHint;
+    via = "teach-miss"; handled = true;
+    note(trace, "lane: (2) HABITUAL GROUNDING HINT — a bare habitual teach named an ungrounded subject; pointed at the grounding phrase instead of the orientation card");
+    note(trace, "goal: teach/remember a new capability fact (subject not yet grounded)");
+  } else if (isConversationalCandidate && bareTeachWrapperNudge) {
+    // A bare name-verb-name declarative ("john likes mary"): stays
+    // wrapper-required, so nothing stores — but pointing at the wrapped form
+    // that DOES store beats the orientation card for the same reason.
+    answer = bareTeachWrapperNudge;
+    via = "teach-miss"; handled = true;
+    note(trace, "lane: (2) BARE TEACH NUDGE — a bare name-verb-name declarative stays wrapper-required; suggested the remember-that form");
+    note(trace, "goal: teach/remember a new fact (wrapper required for the bare form)");
   } else if (isConversationalCandidate) {
     // A conversational miss (a greeting, "what can you do", a very short non-code
     // line) gets the friendly orientation (module-aware: empty → --repo/tmct init).
