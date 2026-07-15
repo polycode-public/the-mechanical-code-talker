@@ -619,3 +619,33 @@ test("multi-word teach round trip: ground 'guinea pig', teach the membership, as
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("mixed-source isa chain: a taught anchor onto a corpus class answers up the corpus hierarchy, both premises cited", async () => {
+  const dir = await mem();
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    await s.turn("every poodle is a dog");
+    const r = await s.turn("is a poodle an animal");
+    await s.close();
+    assert.match(r.answer, /^yes — poodle is a kind of dog .*dog is a kind of animal \(source: corpus:human \/r\/IsA\); so poodle is an animal/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("mixed-source isa chain: a chain of ONLY corpus edges never answers — no taught premise, no yes", async () => {
+  const dir = await mem();
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    await s.turn("every poodle is a dog");
+    const r = await s.turn("is a poodle a plant");
+    await s.close();
+    assert.doesNotMatch(r.answer, /^yes/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});

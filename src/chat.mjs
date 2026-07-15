@@ -5452,6 +5452,31 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
       const premises = chain.map(factForStep);
       if (premises.every(Boolean)) return { text: `yes — ${renderIsaChain(premises)}`, replace: true };
     }
+    // MIXED-SOURCE EXTENSION of the chase above. The taught-only filter
+    // exists to stop PURE-ConceptNet coincidence chains, but it also blocked
+    // the everyday case where the operator anchors a term onto a corpus
+    // class ("every poodle is a dog") and asks up through the corpus's own
+    // hierarchy ("is a poodle an animal"). Corpus isa facts already answer
+    // the 1-hop direct question on their own, so letting them JOIN a chain
+    // that contains AT LEAST ONE operator-taught premise adds no fabrication
+    // surface — a chain of ONLY corpus edges still never answers here, and
+    // every premise is cited with its own source, corpus ones included. The
+    // shared taught-only rows above stay untouched: the disjoint and
+    // someValuesFrom chases keep their original, narrower discipline.
+    const mixedSubClassRows = isa.filter((f) => f.predicate === SC_PREDICATE);
+    const mixedTypeRows = isa.filter((f) => f.predicate === RDF_TYPE_PREDICATE);
+    const mixedFactForStep = (step) => (step.predicate === SC_PREDICATE ? mixedSubClassRows : mixedTypeRows)
+      .find((f) => f.subject === step.subject && f.object === step.object);
+    const mixedTypeEdges = mixedTypeRows.map((f) => [f.subject, f.object]);
+    const mixedSubClassEdges = mixedSubClassRows.map((f) => [f.subject, f.object]);
+    for (const subj of subjCandidates) {
+      const chain = findIsaChain(subj, objVariants, mixedTypeEdges, mixedSubClassEdges, { maxHops: 2 });
+      if (!chain) continue;
+      const premises = chain.map(mixedFactForStep);
+      if (premises.every(Boolean) && premises.some(isTaught)) {
+        return { text: `yes — ${renderIsaChain(premises)}`, replace: true };
+      }
+    }
     // LIVE cax-dw PROOF CHASE: every "yes" strategy above missed — check whether X's taught type
     // (lifted through its FULL ⊑-ancestor closure) is disjointWith the
     // queried class, via syllogise.mjs's deriveDisjointViolations, LIVE and
