@@ -51,19 +51,16 @@ getting silently traded away by inherited caution:
   and an NPC turn scheduler. Design-only.
 - **`PLAN_SYLLOGIST.md`** — retraction-aware consistency checking under a hard budget and trust
   tiers, the one open piece of the reasoning engine's research horizon. Design-only.
-- **`PLAN_HANOI.md` follow-ups** — the plan itself shipped (taught game domains, the chat plan
-  lane, `tmct import --file` + the `.tmct/imports/` scaffold, the animated plan page; see its
-  implementation addendum). Remaining: river-crossing's two missing frames plus the multi-effect
-  interpreter extension, and planner-side consumption of the `taught:` capability records the
-  registry bridge now registers.
+- **`PLAN_HANOI.md`** — shipped in full, including the follow-ups: river-crossing (co-travel
+  effects, the forbidden-together constraint frame, 7-crossing oracle) and planner-side
+  consumption of `taught:` capability records (`/plan` in chat and bin). See its dated addenda.
 - **`PLAN_GUESS_NUMBER.md`** — the closed-loop (observe-and-replan) planning domain for the same
   kernels. Design-only.
-- **`PLAN_VIZ_LEDGER.md` follow-ups** — phases 1-4 shipped (the ledger explorer, its chat dock,
-  the Pages hero, this README pass). Remaining: whether the ledger becomes the default viz
-  surface; a `goal` field on `factAnswer`'s returns so the dock can carry the chat's goal line
-  (needs operator sign-off — it touches the ask engine); a predicate-cardinality question for
-  `findContradictions` (multi-valued `has`/`can` facts group under the same contract as genuine
-  disagreements); bundle weight if the ledger page outgrows its measured ~533 KB.
+- **`PLAN_VIZ_LEDGER.md`** — shipped in full, including the follow-ups, all resolved by
+  operator decision 2026-07-15: the ledger IS the `tmct viz` surface (node-link page removed),
+  `factAnswer`/`factReadBack` carry the additive `goal` field the dock renders, multi-valued
+  has/can facts are exempt from `findContradictions`, and page weight is budgeted (~561 KB
+  after this batch; revisit only if outgrown). See its dated addendum.
 - **`PLAN_CODE.md`** — small JS-function and HTML/CSS-fragment synthesis via a sandboxed headless
   browser (Track 1, program synthesis, already shipped). Blocked on a sandbox dependency decision.
 - **`PLAN_AGENTS.md`** — the governing plan for tmct's broader multi-repo arc (marginalia, seonix,

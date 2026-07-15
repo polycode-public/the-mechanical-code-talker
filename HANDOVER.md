@@ -9,92 +9,57 @@ Session handles (inboxes): `tmct` (the edge-hunt/playtest session) and `tmct-han
 PLAN_HANOI/PLAN_VIZ_LEDGER session). See `~/.claude/inboxes/tmct.md` and
 `~/.claude/inboxes/tmct-hanoi.md`; `mechanic.md` is retired.
 
-## Version state (2026-07-15, v1.11.0)
+## Version state (2026-07-15)
 
-v1.11.0 ships PLAN_HANOI.md (all phases: taught game domains, the plan lane, `tmct import
---file` with the `.tmct/imports/` scaffold, `chat --prompt --render blocks`, the crates second
-domain, the router registration seam) and PLAN_VIZ_LEDGER.md (all phases: `tmct viz --ledger`,
-the in-page chat dock, the Pages ledger hero, the README pass). Both plan docs carry dated
-implementation addenda; `ROADMAP.md` holds the feature narrative. Historical notes follow.
+v1.11.5 plus the full `archive/PLAN_OPEN_BACKLOG.md` delivery (workstreams A–F: the six
+deferred playtest edges, the three seonix ask-engine items, river-crossing + router
+consumption of taught records, justification for all five entailment rules, the ledger as THE
+`tmct viz` surface, the goal field, the cardinality exemption) and playtests 015–017.
 
-`PLAN_VIZ_MEMORY.md` fully implemented (see that doc's own "IMPLEMENTED" status line + Phasing
-checklist for specifics): that node-link page was retired on 2026-07-15 — the ledger explorer is
-now THE `tmct viz` surface (PLAN_VIZ_LEDGER.md's addendum records the decision).
-
-`npm run init:xl`/`init:xxl` (`package.json`): real measured fact counts, `rm -rf tmct.toml
-.tmct && npm run init:<size>` — `init:large` 37,797; `init:xl` (`init:large`'s chain + `--persona-size
-large` + `wordnet-xl`) 72,075 facts. `init:xxl` (same base, `wordnet-full` swapped in for
-`wordnet-xl`, plus `namenet`): real total is still a FOLLOW-UP measurement — next session should run
-`npm run init:xxl` and record the real count here. `init:xxxl` stays undocumented-as-code per
+Measured init sizes (fresh store, this machine): `init:large` 37,797 facts; `init:xl` 72,075
+(16.6s); `init:xxl` 238,866 (38.5s). `init:xxxl` stays undocumented-as-code per
 `TOO_HARD_AUDIT.md` (bulk ConceptNet download, not reachable from data in hand).
-
-**Seed/query perf fix, landed (`PLAN_GRAPH_SCAN.md`, both phases merged)**: the prior session's
-~8m25s `init:xl` seed and ~13-minute single query were real O(n²) bugs, now fixed. Seed side:
-`syncFactSources`'s six per-fact linear scans over `payload.individuals`/the `statedBy` edge list
-(`src/memory/core.mjs`) replaced with a `mutateMemory`-scoped index (`individualsById`/`sourcesById`/
-`statedByBySubject`, Symbol-keyed, never serialized). Query side: `runTurn` now threads one
-turn-scoped cache through every `factRows` reader (14+ call sites in `src/chat.mjs`) instead of
-reloading the whole graph on each one. Re-measured for real on this same machine: `init:xl`'s
-72,075-fact seed is now **16.6s wall-clock** (was ~8m25s), same exact fact count as before (fix
-changes speed, not content); the original "what is a horse" query against that same real store now
-answers within a full CLI session's **~7.1s total** (startup + prompt + query + exit) — nowhere near
-the reported 13 minutes. Regression tests: `test/memory-seed-perf.test.mjs` (min-of-5-trials wall-
-clock ratio, noise-resistant), `test/chat-factrows-cache.test.mjs` (deterministic call-count assert).
-
-All of `BENCHMARK_CONVERSATION_1.8.14.md`'s routed backlog is fixed and pushed: pronoun-subject
-misparse, the README's "all men are mortal" syllogism demo, taught-fact retraction, teach-vs-graph
-precedence, `calls` up-refinement, and the five smaller routed gaps. CI was red for 16 straight
-pipelines (#139-154) on a platform-dependent symlink bug in `bin/tmct.mjs` — fixed; `publish:npm`
-unblocked and confirmed live through 1.8.5 on npm.
-
-**Operator-found, fixed same-day**: `npm run init:large` + `npm run chat` — "what is used for
-riding" / "what can be used for riding" / "what is for riding" all fell through to a misleading
-code-graph-flavored miss ("try 'which modules import <name>'") even though `corpus:human`'s own
-"horse UsedFor riding" fact was right there (surfaced correctly by "what is a horse"). Root cause:
-BUG 1 (`test/wiring-facts.test.mjs`) only ever fixed the FORWARD direction (subject known, "what is
-a horse used for") — nothing answered the REVERSE direction (object known, subject unknown), and
-the phrasing's leading "what is …" also matched the meta lane's `BARE_WHATIS_RE`, which greedily
-treated "used for riding" as one literal (unmatchable) term to define and returned early before any
-later reader got a turn. Fixed with `WHAT_USED_FOR_RE`, checked before the meta lane, mirroring the
-existing `WHAT_HAS_RE` reverse-by-object reader (`src/chat.mjs`).
 
 ## Open items
 
-- **Playtest sweep: instance names through the code-graph ask lanes.** The Phase-1R
-  boundary menu is otherwise closed: seeds 1-2 shipped pre-batch (1.10.13/1.10.14), and the
-  rule-teach frames and goal sentences shipped as real features in 1.11.0 (probe them as
-  features now, not boundaries). What never got its sweep: hyphenated/numbered instance
-  names (disk-1, peg-a) through the code-graph ask/resolve lanes. Kickoff: "Follow
-  SKILL_PLAYTEST_EDGE_HUNT.md, sweep instance-name shapes through the ask lanes."
+- **Capability read-back over taught Rule rows.** "can you move a disk onto a peg?" is still a
+  graph-question miss even when that exact signature was taught — a closed ask-lane reader over
+  action-signature rules. Named in `playtests/PLAYTEST_LOG_016.md`.
 
-- **1.11.0 follow-ups (named in `ROADMAP.md`)**: river-crossing's two missing frames plus the
-  multi-effect interpreter extension; planner-side consumption of `taught:` capability
-  records; the factAnswer goal-field question (ledger dock, needs operator sign-off); the
-  findContradictions cardinality question; ledger bundle weight (~533 KB measured).
+- **Verbless want-goal.** "i want every disk on peg-b" (no infinitive verb) still gets the
+  teach lane's pronoun decline; recognizing it means inferring the location verb — a
+  desire-frame family of its own. Named in `playtests/PLAYTEST_LOG_017.md`. The verbed forms
+  ("i want every disk to rest on peg-b") work.
 
-- **`PLAN_SYLLOGIST.md`'s remaining ATMS generalization**: the scm-sco (subClassOf) retraction slice
-  from §3 is now real and shipped (`retractSubClassOf`, `src/syllogise.mjs`) — a bounded, re-verified
-  local check, not full alternate-justification-set tracking. The other four entailment rules
-  (cax-sco/cax-dw/cls-svf1/scm-svf1) don't carry justification yet — mechanical extension, not done.
-  The full ATMS generalization (de Kleer 1986) is the one piece still genuinely open, cited in
-  `ROADMAP.md`'s research horizon, not attempted here.
+- **Where-lane goal-line cosmetic.** "where is disk-1 now" answers correctly but the Goal line
+  echoes the object as "disk-1 now". Named in `playtests/PLAYTEST_LOG_015.md`.
+
+- **codegraph.mjs post-viz-removal prune.** `buildVizNodesAndEdges`, `deriveFactTermGraph`,
+  `pickLegendDimension`, `edgeKindsFor`, `mostRecentIndividual`, `MEMORY_SPIRAL_EXPAND_KINDS`,
+  `legendValueFor` now have no consumers outside their own tests — prune together with those
+  tests.
+
+- **plan-viz animation vs co-travel.** The plan page's recorded assumption that consecutive
+  snapshots differ by one moved piece is broken by river-crossing's two-piece ferry moves —
+  validate or extend the animation for multi-effect steps (risk named in `PLAN_HANOI.md`'s
+  addendum).
+
+- **Untouched playtest axes** (for the next edge-hunt dispatch): contractions and cleft rungs
+  of the paraphrase ladder; passive↔active beyond UsedFor and the rule signature.
+
+- **`PLAN_SYLLOGIST.md` research horizon**: the full ATMS generalization (de Kleer 1986). The
+  four-rule justification slice shipped; the one inherited limit (a surviving conclusion keeps
+  its stale single justification, so a later retraction of its other path won't re-examine it)
+  is recorded in that doc's 2026-07-15 addendum.
 
 - **`PLAN_ADVENTURE.md`** — a text-adventure architectural stretch (imperative command grammar,
   mutable turn-by-turn world/player state as graph nodes, an NPC turn scheduler). Design-only,
   nothing implemented yet.
 
-- **Cross-repo playtest backlog (from seonix, `~/.claude/inboxes/mechanic.md`)**: (1) a paraphrase-
-  coverage gap for describe-style queries — "what is X for" and "what does X do in Y" aren't
-  recognized shapes even when the underlying data resolves correctly via other phrasings (3 confirmed
-  instances); (2) a cross-language disambiguation-ranking false positive — "where is the main entry
-  point defined" sprays across unrelated Java/test-fixture `main` matches with no relevance ranking;
-  (3) a cosmetic label-spacing bug — a rendered type like `GlobalVariable` loses its word break. None
-  implemented yet; not in this session's scope.
-
-- **Standing cross-repo note, can never close from this repo**: if seonix's own chat surface goes
-  through `runChat`/`createSession`, its `tmct.toml` needs to explicitly re-activate SEON/ConceptNet
-  now that tmct's own default persona has flipped to opt-in for those sources. See `ROADMAP.md`
-  around the persona-batch entry for the full context.
+- **Standing cross-repo note (not closeable from this repo)**: if seonix's own chat surface goes
+  through `runChat`/`createSession`, its `tmct.toml` needs to explicitly re-activate
+  SEON/ConceptNet now that tmct's default persona has flipped to opt-in for those sources. See
+  `ROADMAP.md` around the persona-batch entry.
 
 ## Discipline (unchanged)
 
@@ -124,7 +89,9 @@ Three hard-won lessons, carried forward:
    Also: the harness's permission system blocks `git commit` for *background* sub-agents entirely
    in some configurations (no live user to approve a permission-gated action) — the coordinator does
    the committing itself in the foreground when this happens, verifying `git status` immediately
-   before every stage to avoid sweeping in another track's pre-staged files.
+   before every stage to avoid sweeping in another track's pre-staged files. (Re-proven 2026-07-15:
+   a `git add -A` swept another session's untracked design doc into a commit — caught and amended
+   out. List paths explicitly, or review `git status` line by line first.)
 
 2. A background sub-agent's own final "completed" notification is not reliable proof it actually
    finished — an agent reporting a vague "I'll wait for the Monitor notification" as its terminal
