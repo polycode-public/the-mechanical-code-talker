@@ -138,3 +138,31 @@ dog is a kind of animal (source: corpus:human /r/IsA)
 
 Full suite: 2281 pass, 0 fail (including the 4 new regression cases). CLI
 smoke: greets and exits 0.
+
+
+## Supplemental retest — 2026-07-15, v1.12.0 working tree (uber run 018)
+
+Result: Pass (drift: each unwrapped answer now carries the meta goal/canonical receipt — display-only; every wrapper, including "tell me what a dog is", still answers the full definition)
+
+```txt
+tmct> could you tell me what a dog is
+dog is a kind of animal (source: corpus:human /r/IsA)
+dog has tail (source: corpus:human /r/HasA)
+dog can bark (source: corpus:human /r/CapableOf)
+
+tmct> do you know what a dog is
+dog is a kind of animal (source: corpus:human /r/IsA)
+…
+
+tmct> i'd like to know what a dog is
+dog is a kind of animal (source: corpus:human /r/IsA)
+…
+
+tmct> what a dog is
+dog is a kind of animal (source: corpus:human /r/IsA)
+…
+
+tmct> do you know what dog means
+dog is a kind of animal (source: corpus:human /r/IsA)
+…
+```

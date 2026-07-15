@@ -139,3 +139,21 @@ multi-hop kind filtering in "which animals can fly", bare proper-name
 general-verb teaches ("john likes mary" stays wrapper-required by
 design), and the Phase-1R seeds still unprobed (rule-teach frames, goal
 sentences, the instance-name ask sweep).
+
+
+## Supplemental retest — 2026-07-15, v1.12.0 working tree (uber run 018)
+
+Result: Pass
+
+```txt
+tmct> a test drive is an activity
+noted — remembered: test drive is a kind of activity
+
+tmct> what is a test drive
+this could mean more than one thing:
+1) as meta "test drive": "test drive" isn't a term in this graph's own vocabulary (no matching class or predicate).
+2) as tests "drive": no module matching "drive" found in the index. …
+(ask one of these directly, or try rephrasing more specifically, to get just that reading)
+you told me: test drive is a kind of thing (source: teach:chat:…)
+you told me: test drive is a kind of activity (source: teach:chat:…)
+```

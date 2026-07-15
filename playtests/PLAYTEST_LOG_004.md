@@ -145,3 +145,34 @@ yes — dog has tail (source: corpus:human /r/HasA)
 ```
 
 Full suite: green (see commit). CLI smoke: greets and exits 0.
+
+
+## Supplemental retest — 2026-07-15, v1.12.0 working tree (uber run 018)
+
+Result: Pass (drift: the final HasA yes still carries the stale "defines" goal/canonical receipt — same cosmetic remainder as playtest 001)
+
+```txt
+tmct> is a horse used for riding
+yes — horse is used for riding (source: corpus:human /r/UsedFor)
+
+tmct> is a horse used for racing
+I can't confirm that — nothing I remember says horse is used for racing. I do know: horse is used for riding (source: corpus:human /r/UsedFor).
+
+tmct> is a wheel part of a car
+I can't confirm that — nothing I remember says wheel is part of car. I do know: wheel is part of vehicle (source: corpus:human /r/PartOf).
+
+tmct> is a pen made of plastic
+yes — pen is made of plastic (source: corpus:human /r/MadeOf)
+
+tmct> is a house made of brick
+I can't confirm that — nothing I remember says house is made of brick.
+
+tmct> is a dog an animal
+yes — dog is a kind of animal (source: corpus:human /r/IsA)
+
+tmct> can a dog bark
+yes — dog can bark (source: corpus:human /r/CapableOf)
+
+tmct> does a dog have a tail
+yes — dog has tail (source: corpus:human /r/HasA)
+```

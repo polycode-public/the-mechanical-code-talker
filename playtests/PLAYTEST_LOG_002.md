@@ -139,3 +139,25 @@ yes — you told me: dog is a kind of cat (source: ace:chat:…)
 ```
 
 Full suite: 2175 pass, 0 fail. CLI smoke: greets and exits 0.
+
+
+## Supplemental retest — 2026-07-15, v1.12.0 working tree (uber run 018)
+
+Result: Pass (drift: the teach turn now prints a Goal/Canonical receipt under its confirmation; all answers unchanged)
+
+```txt
+tmct> is a dog a cat
+I can't confirm that — nothing I remember says dog is a cat. I do know: dog is a kind of animal (source: corpus:human /r/IsA). If it's true, teach me: "dog is a kind of cat".
+
+tmct> is a fizzbuzz an animal
+I can't confirm that — I don't know "fizzbuzz" at all yet. If it's true, teach me: "fizzbuzz is a kind of animal".
+
+tmct> is a dog an animal
+yes — dog is a kind of animal (source: corpus:human /r/IsA)
+
+tmct> dog is a kind of cat
+noted — remembered 1 fact: dog rdfs:subClassOf cat (dog is a type of cat)
+
+tmct> is a dog a cat
+yes — you told me: dog is a kind of cat (source: ace:chat:…)
+```

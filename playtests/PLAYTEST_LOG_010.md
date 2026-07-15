@@ -160,3 +160,34 @@ yes — you told me: bird can swim (source: ace:chat:…)
 
 Full suite: 2271 pass, 0 fail (including the 6 new regression cases). CLI
 smoke: greets and exits 0.
+
+
+## Supplemental retest — 2026-07-15, v1.12.0 working tree (uber run 018)
+
+Result: Pass
+
+```txt
+tmct> do birds fly
+yes — bird can fly (source: corpus:human /r/CapableOf)
+
+tmct> what can bark
+dog can bark (source: corpus:human /r/CapableOf)
+
+tmct> what can fly
+bird can fly (source: corpus:human /r/CapableOf)
+
+tmct> which animals can fly
+bird can fly (source: corpus:human /r/CapableOf)
+
+tmct> do all birds fly
+I can't speak for all birds — what I remember is generic, not universal. I do know: bird can fly (source: corpus:human /r/CapableOf).
+
+tmct> do birds swim
+I can't confirm that — nothing I remember says birds can swim. I do know: bird can fly (source: corpus:human /r/CapableOf). If it's true, teach me: "a bird can swim".
+
+tmct> a bird can swim
+noted — remembered 1 fact: bird mgx:capableOf swim
+
+tmct> can birds swim
+yes — you told me: bird can swim (source: ace:chat:…)
+```

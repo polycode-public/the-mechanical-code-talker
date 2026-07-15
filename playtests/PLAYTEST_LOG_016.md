@@ -94,3 +94,18 @@ noted — remembered: stacking a crate onto a crate makes the crate rest on the 
 
 Pass. Full suite green (one unrelated serve-startup timeout, green in isolation);
 CLI smoke green.
+
+## Supplemental retest — 2026-07-15, v1.12.0 working tree (uber run 018)
+
+Result: Pass
+
+```txt
+tmct> you may move a disk onto a peg.
+noted — remembered: you can move a disk onto a peg
+
+tmct> a crate can be stacked onto a crate.
+noted — remembered: you can stack a crate onto a crate
+
+tmct> stacking a crate onto a crate makes it rest on the target.
+noted — remembered: stacking a crate onto a crate makes the crate rest on the target
+```

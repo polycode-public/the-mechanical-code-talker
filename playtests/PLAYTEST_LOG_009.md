@@ -133,3 +133,28 @@ yes — you told me: north tower is taller than gate (source: teach:chat:…)
 
 Full suite: 2197 pass, 0 fail (including the 3 new regression cases). CLI
 smoke: greets and exits 0.
+
+
+## Supplemental retest — 2026-07-15, v1.12.0 working tree (uber run 018)
+
+Result: Pass (drift: the "is disk-1 bigger than disk-2" miss now carries a stale "calls" goal/canonical receipt — display-only; the answer itself is the same honest miss)
+
+```txt
+tmct> disk-1 is smaller than disk-2
+noted — remembered: disk-1 is smaller than disk-2
+
+tmct> is disk-1 smaller than disk-2
+yes — you told me: disk-1 is smaller than disk-2 (source: teach:chat:…)
+
+tmct> is disk-2 smaller than disk-1
+I can't confirm that — nothing I remember compares them that way. I do know: you told me: disk-1 is smaller than disk-2 (source: teach:chat:…). If it's true, teach me: "disk-2 is smaller than disk-1".
+
+tmct> is disk-1 bigger than disk-2
+I can't confirm that — nothing I remember compares them that way. If it's true, teach me: "disk-1 is bigger than disk-2".
+
+tmct> remember that the north tower is taller than the gate
+noted — remembered: north tower is taller than gate
+
+tmct> is the north tower taller than the gate
+yes — you told me: north tower is taller than gate (source: teach:chat:…)
+```

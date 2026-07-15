@@ -143,3 +143,31 @@ yes — you told me: john likes mary (source: teach:chat:…)
 
 Full suite: 2285 pass, 0 fail (including the 4 new regression cases). CLI
 smoke: greets and exits 0.
+
+
+## Supplemental retest — 2026-07-15, v1.12.0 working tree (uber run 018)
+
+Result: Pass (drift: the "can a dog sing" yes carries a stale "uses" goal/canonical receipt — display-only)
+
+```txt
+tmct> dogs bark
+noted — remembered 1 fact: dog mgx:capableOf bark
+
+tmct> a dog barks
+noted — remembered 1 fact: dog mgx:capableOf bark
+
+tmct> can a dog bark
+yes — you told me: dog can bark (source: corpus:human /r/CapableOf | ace:chat:… | ace:chat:…)
+
+tmct> dogs sing
+noted — remembered 1 fact: dog mgx:capableOf sing
+
+tmct> can a dog sing
+yes — you told me: dog can sing (source: ace:chat:…)
+
+tmct> remember that john likes mary
+noted — remembered: john likes mary
+
+tmct> does john like mary
+yes — you told me: john likes mary (source: teach:chat:…)
+```

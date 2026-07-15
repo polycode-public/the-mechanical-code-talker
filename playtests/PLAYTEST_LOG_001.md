@@ -127,3 +127,20 @@ yes — dog has tail (source: corpus:human /r/HasA)
 ```
 
 Full suite: 2172 pass, 0 fail. CLI smoke: greets and exits 0.
+
+
+## Supplemental retest — 2026-07-15, v1.12.0 working tree (uber run 018)
+
+Result: Pass (drift: the article-less plural form still prints the stale "defines" goal/canonical receipt under the correct yes — the cosmetic remainder already noted above)
+
+```txt
+tmct> does a dog have a tail
+yes — dog has tail (source: corpus:human /r/HasA)
+
+tmct> do dogs have tails
+yes — dog has tail (source: corpus:human /r/HasA)
+
+Goal (inferred): Locate what a module/class defines.
+
+Canonical: does "dogs" defines "tails"? — ask(defines, subject="dogs", "tails")
+```

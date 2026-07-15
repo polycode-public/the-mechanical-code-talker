@@ -142,3 +142,25 @@ yes — you told me: guinea pig can squeak (source: ace:chat:…)
 
 Full suite: 2189 pass, 0 fail (plus 3 new regression cases). CLI smoke:
 greets and exits 0.
+
+
+## Supplemental retest — 2026-07-15, v1.12.0 working tree (uber run 018)
+
+Result: Pass (drift: teach turns now print Canonical fact receipts under their confirmations)
+
+```txt
+tmct> every guinea pig is a thing
+noted — remembered 1 fact: guinea pig rdfs:subClassOf thing (guinea pig is a kind of thing)
+
+tmct> every guinea pig is a rodent
+noted — remembered: guinea pig is a kind of rodent
+
+tmct> is a guinea pig a rodent
+yes — you told me: guinea pig is a kind of rodent (source: teach:chat:…)
+
+tmct> a guinea pig can squeak
+noted — remembered 1 fact: guinea pig mgx:capableOf squeak
+
+tmct> can a guinea pig squeak
+yes — you told me: guinea pig can squeak (source: ace:chat:…)
+```

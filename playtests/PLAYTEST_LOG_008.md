@@ -152,3 +152,29 @@ tmct> /memory (excerpt)
 
 Full suite: 2194 pass, 0 fail (plus 3 new regression cases). CLI smoke:
 greets and exits 0.
+
+
+## Supplemental retest — 2026-07-15, v1.12.0 working tree (uber run 018)
+
+Result: Pass (drift: the ask turns now print the fuzzy "rests"→"tests" goal/canonical receipt under their correct answers — display-only; storage and /memory stay clean, no "peg-an" anywhere)
+
+```txt
+tmct> disk-1 rests on peg-a
+noted — remembered: disk-1 rests on peg-a
+
+tmct> does disk-1 rest on peg-a
+yes — you told me: disk-1 rests on peg-a (source: teach:chat:…)
+
+Canonical: does "disk-1" tests "peg-a"? — ask(tests, subject="disk-1", "peg-a")
+
+tmct> what does disk-1 rest on
+you told me: disk-1 rests on peg-a (source: teach:chat:…)
+
+tmct> what rests on peg-a
+you told me: disk-1 rests on peg-a (source: teach:chat:…)
+you told me: disk-2 rests on peg-a (source: teach:chat:…)
+
+tmct> /memory (excerpt)
+  disk-1 mgx:rest-on peg-a — trust 1.00, 1 source: teach:chat:…
+  disk-2 mgx:rest-on peg-a — trust 1.00, 1 source: teach:chat:…
+```

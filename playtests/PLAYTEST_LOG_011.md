@@ -158,3 +158,31 @@ yes — you told me: cat is a kind of animal (source: corpus:human /r/IsA | ace:
 
 Full suite: 2277 pass, 0 fail (including the 6 new regression cases). CLI
 smoke: greets and exits 0.
+
+
+## Supplemental retest — 2026-07-15, v1.12.0 working tree (uber run 018)
+
+Result: Pass
+
+```txt
+tmct> ahab is john's father
+noted — remembered: ahab fathers john
+
+tmct> who is john's father
+ahab — you told me: ahab fathers john (source: teach:chat:…)
+
+tmct> mary's mother is june
+noted — remembered: june mothers mary
+
+tmct> who is mary's mother
+june — you told me: june mothers mary (source: teach:chat:…)
+
+tmct> dogs are animals
+noted — remembered 1 fact: dog rdfs:subClassOf animal (dog counts as an animal)
+
+tmct> cats are animals too
+noted — remembered 1 fact: cat rdfs:subClassOf animal (cat is a type of animal)
+
+tmct> is a cat an animal
+yes — you told me: cat is a kind of animal (source: corpus:human /r/IsA | ace:chat:…)
+```

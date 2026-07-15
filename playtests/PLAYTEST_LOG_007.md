@@ -131,3 +131,30 @@ I can't confirm that — nothing I remember says poodle is a plant. I do know: y
 
 Full suite: 2192 pass, 0 fail (plus 2 new regression cases). CLI smoke:
 greets and exits 0.
+
+
+## Supplemental retest — 2026-07-15, v1.12.0 working tree (uber run 018)
+
+Result: Pass (the mixed-source chain and the syllogise recovery both still hold)
+
+```txt
+tmct> every poodle is a dog
+noted — remembered: poodle is a kind of dog
+
+tmct> is a poodle an animal
+yes — poodle is a kind of dog (source: teach:chat:…); dog is a kind of animal (source: corpus:human /r/IsA); so poodle is an animal
+
+tmct> is a poodle a plant
+I can't confirm that — nothing I remember says poodle is a plant. I do know: you told me: poodle is a kind of dog (source: teach:chat:…). If it's true, teach me: "poodle is a kind of plant".
+```
+
+The 3+ hop recovery replayed too (fresh repo, dachshund→hound→dog taught, then
+the CLI):
+
+```txt
+$ node bin/tmct.mjs syllogise --repo "$S"
+tmct syllogise — derived 50 entailed fact(s) (subClassOf closure, depth 32, budget 50) — budget reached, more available
+
+tmct> is a dachshund an animal
+yes — dachshund is a kind of dog (source: entailed:subClassOf); dog is a kind of animal (source: corpus:human /r/IsA); so dachshund is an animal
+```

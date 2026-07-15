@@ -98,3 +98,22 @@ noted — remembered: disk-1 rests on peg-a
 ### Retest result
 
 Pass. Full suite green; CLI smoke green.
+
+## Supplemental retest — 2026-07-15, v1.12.0 working tree (uber run 018)
+
+Result: Pass (drift: the where answers now carry a "Locate where something is defined" goal/canonical receipt; the "disk-1 now" goal-line remainder noted above is unchanged)
+
+```txt
+tmct> where is disk-1
+you told me: disk-1 rests on peg-a (source: teach:chat:…)
+
+tmct> where is disk-1 now
+you told me: disk-1 rests on peg-a (source: teach:chat:…)
+
+tmct> where is nonexistent-9
+no module matching "nonexistent-9" found in the index. …
+
+tmct> disk-1 rests on peg-a.
+noted — remembered: disk-1 rests on peg-a
+(no Canonical line — only "Goal (inferred): Teach/remember a new fact.")
+```

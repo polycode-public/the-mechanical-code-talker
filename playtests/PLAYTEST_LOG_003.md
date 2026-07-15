@@ -155,3 +155,31 @@ I can't confirm that — nothing I remember says dog can fly. I do know: dog can
 
 Full suite: 2175 pass, 0 fail (plus 7 new regression cases). CLI smoke:
 greets and exits 0.
+
+
+## Supplemental retest — 2026-07-15, v1.12.0 working tree (uber run 018)
+
+Result: Pass (drift: teach turns now print Canonical fact receipts under their confirmations; all answers unchanged)
+
+```txt
+tmct> is a dog not a cat
+I can't confirm that either way — nothing I remember links dog and cat. If no dog is a cat, teach me: "no dog is a cat".
+
+tmct> no dog is a cat
+noted — remembered 1 fact: dog owl:disjointWith cat
+
+tmct> is a dog a cat
+no — you told me: dog is not a cat (source: ace:chat:…)
+
+tmct> is a dog not a cat
+yes — you told me: dog is not a cat (source: ace:chat:…)
+
+tmct> is a dog not an animal
+no — dog is a kind of animal (source: corpus:human /r/IsA)
+
+tmct> can a dog swim          (after teaching "a dog can swim")
+yes — you told me: dog can swim (source: ace:chat:…)
+
+tmct> can a dog fly
+I can't confirm that — nothing I remember says dog can fly. I do know: dog can bark (source: corpus:human /r/CapableOf); you told me: dog can swim (source: ace:chat:…). If it's true, teach me: "a dog can fly".
+```

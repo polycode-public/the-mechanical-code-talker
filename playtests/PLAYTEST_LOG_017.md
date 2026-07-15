@@ -83,3 +83,28 @@ Goal turns (all forms) carry no Canonical line.
 ### Retest result
 
 Pass. Full suite green (2374/2374); CLI smoke green.
+
+## Supplemental retest — 2026-07-15, v1.12.0 working tree (uber run 018)
+
+Result: Pass (drift: restating the same goal in another voicing appends a duplicate — "(2 goals held)", "(3 goals held)" — instead of folding into one; the plan still solves in 1 move)
+
+```txt
+tmct> the goal is that every disk rests on peg-b.
+noted — the goal is that every disk rests on peg-b. Say "solve it" when the state is taught.
+
+tmct> the goal is for every disk to rest on peg-b.
+noted — the goal is that every disk rests on peg-b. (2 goals held) Say "solve it" when the state is taught.
+
+tmct> i want every disk to rest on peg-b.
+noted — the goal is that every disk rests on peg-b. (3 goals held) Say "solve it" when the state is taught.
+
+tmct> i want every disk on peg-b.
+I can't store a fact about "i" as a class — pronouns aren't things I can classify. …
+
+tmct> solve it
+plan found — 1 move (shortest):
+  1. move disk-1 onto peg-b
+```
+
+Goal turns still carry no Canonical line; the verbless want form keeps its
+documented pronoun decline and records no goal.

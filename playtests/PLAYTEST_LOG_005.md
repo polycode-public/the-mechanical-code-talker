@@ -158,3 +158,35 @@ horse is used for riding (source: corpus:human /r/UsedFor)
 ```
 
 Full suite: green (see commit). CLI smoke: greets and exits 0.
+
+
+## Supplemental retest — 2026-07-15, v1.12.0 working tree (uber run 018)
+
+Result: Pass (drift: goal/canonical receipt lines now print under two of the answers — the stale "defines" one and a meta receipt under "what is a horse"; every binding unchanged)
+
+```txt
+tmct> what is a dog
+dog is a kind of animal (source: corpus:human /r/IsA)
+dog has tail (source: corpus:human /r/HasA)
+dog can bark (source: corpus:human /r/CapableOf)
+
+tmct> can it bark
+yes — dog can bark (source: corpus:human /r/CapableOf)
+
+tmct> does it have a tail
+yes — dog has tail (source: corpus:human /r/HasA)
+
+tmct> is it an animal
+yes — dog is a kind of animal (source: corpus:human /r/IsA)
+
+tmct> can it fly
+I can't confirm that — nothing I remember says dog can fly. I do know: dog can bark (source: corpus:human /r/CapableOf). If it's true, teach me: "a dog can fly".
+
+tmct> what is a horse
+horse is a kind of animal (source: corpus:human /r/IsA)
+horse can run (source: corpus:human /r/CapableOf)
+horse is used for riding (source: corpus:human /r/UsedFor)
+
+tmct> what is it used for
+horse is used for riding (source: corpus:human /r/UsedFor)
+```

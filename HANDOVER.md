@@ -51,6 +51,16 @@ Measured init sizes (fresh store, this machine): `init:large` 37,797 facts; `ini
   (`bin/tmct.mjs`). Doable and unclaimed: a listing surface (or a `--tools` re-validation
   after registration), plus a test that a taught family shows up in it.
 
+- **Misparse-receipt leakage on ask turns.** Fuzzy/stale Goal+Canonical receipts print under
+  correct fact answers on ask turns ("rests"→"tests", "bigger"→"calls", "defines"): the
+  playtest-015 `fuzzyVerb` drop covers teach and goal turns only. One coherent edge: extend
+  the drop to fact-reader-answered ask turns. Found by the 018 uber retest
+  (`playtests/PLAYTEST_LOG_018.md`).
+
+- **Identical goals accumulate instead of folding.** The same goal restated in another
+  voicing appends "(N goals held)" duplicates; fold a deep-equal incoming goal spec and say
+  so. Found by the 018 uber retest.
+
 - **Untouched playtest axes** (for the next edge-hunt dispatch): contractions and cleft rungs
   of the paraphrase ladder; passive↔active beyond UsedFor and the rule signature.
 
