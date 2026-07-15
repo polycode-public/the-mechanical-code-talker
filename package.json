@@ -83,6 +83,7 @@
   "scripts": {
     "help": "node bin/tmct.mjs --help",
     "test": "node --test \"test/**/*.test.mjs\"",
+    "test:e2e": "node --test \"e2e/**/*.test.mjs\"",
     "chat": "node bin/tmct.mjs",
     "chat:repo": "node bin/tmct.mjs chat --repo",
     "init": "node bin/tmct.mjs init",

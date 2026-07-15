@@ -28,6 +28,9 @@ test/fixtures/large-scale/.tmct/sessions/
 # Claude Code's transient agent worktrees (git-internal checkouts, never committed)
 .claude/worktrees/
 
+# local lcov output from coverage runs
+.coverage/
+
 # npm
 *.log
 npm-debug.log*
