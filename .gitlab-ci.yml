@@ -62,6 +62,26 @@ dep:audit:
     - osv-scanner scan source -L package-lock.json
         || osv-scanner --lockfile=package-lock.json
 
+# ---- dependency cooldown (Renovate) ----------------------------------------
+# Self-hosted Renovate run. renovate.json holds the policy: minimumReleaseAge
+# 14 days, so a hijacked or wormed release has two weeks to be reported and
+# yanked before an update MR can pull it in. Runs ONLY from a scheduled
+# pipeline (reuse the nightly schedule, or a dedicated one) and ONLY when
+# RENOVATE_TOKEN is configured (a project access token with api + write_repository
+# scope) — a missing token fails closed, the same shape as publish:npm's
+# NPM_TOKEN gate.
+renovate:
+  stage: test
+  image: renovate/renovate:43.264.2
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule" && $RENOVATE_TOKEN'
+  variables:
+    RENOVATE_PLATFORM: gitlab
+    RENOVATE_ENDPOINT: $CI_API_V4_URL
+    RENOVATE_ONBOARDING: "false"
+  script:
+    - renovate $CI_PROJECT_PATH
+
 unit:
   stage: test
   script:
