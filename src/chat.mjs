@@ -1785,7 +1785,7 @@ const RENDERS_AS_TEACH_RE = /^an?\s+([a-z][\w-]*)\s+renders\s+as\s+an?\s+([a-z][
 // (disk-1, peg-a) — see bareTaxonomyTeach's reasoning.
 const INSTANCE_TYPE_TEACH_RE = /^([a-z][\w]*(?:-[\w]+)+)\s+is\s+an?\s+([a-z][\w-]+)[.!?]*$/i;
 // Bare article-led kind-of taxonomy: "a disk is a kind of game piece".
-const BARE_KINDOF_TEACH_RE = /^an?\s+([a-z][\w-]+)\s+is\s+a\s+kind\s+of\s+(?:an?\s+)?([a-z][\w-]+(?:\s+[a-z][\w-]+)?)[.!?]*$/i;
+const BARE_KINDOF_TEACH_RE = /^an?\s+([a-z][\w-]+)\s+is\s+a\s+kind\s+of\s+(?:an?\s+)?([a-z][\w-]+(?:\s+[a-z][\w-]+)?)([.!?]*)$/i;
 
 /** Verb → lemma via the prose adapter, degrading to the word itself. */
 async function verbLemma(word) {
@@ -1805,8 +1805,9 @@ async function verbLemma(word) {
  *    hyphenated/numbered coinages are unambiguous individual names, so this
  *    stays clear of the plain-word bare "X is a Y" declines the tier-5
  *    fabrication fixes deliberately preserve;
- *  - article-led "is a kind of" taxonomy — the infix is unambiguous
- *    taxonomy-teach intent, so both terms may be new coinages here. */
+ *  - article-led "is a kind of" taxonomy with a multi-word object — the
+ *    infix is unambiguous taxonomy-teach intent and the ACE path can't parse
+ *    the two-word object; single-word objects stay with the ACE path. */
 async function bareTaxonomyTeach(line, { memoryDir, sessionId }) {
   if (!memoryDir || QUESTION_LEAD_RE.test(line)) return null;
   const inst = line.match(INSTANCE_TYPE_TEACH_RE);
@@ -1817,6 +1818,14 @@ async function bareTaxonomyTeach(line, { memoryDir, sessionId }) {
   }
   const kindOf = line.match(BARE_KINDOF_TEACH_RE);
   if (kindOf) {
+    // Defer to the ACE assert path exactly where it succeeds: a single-word
+    // object with no trailing punctuation ("a father is a kind of parent" —
+    // the pinned README transcript's shape, with its richer receipt). The ACE
+    // path dies on multi-word objects and on trailing punctuation (the
+    // period rides into term resolution), so those store here.
+    const singleWordObject = !/\s/.test(kindOf[2]);
+    const noTrailingPunct = kindOf[3] === "";
+    if (singleWordObject && noTrailingPunct) return null;
     return teachFact(memoryDir, sessionId, {
       subject: kindOf[1], predicate: "rdfs:subClassOf", object: kindOf[2],
     });
