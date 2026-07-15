@@ -509,6 +509,16 @@ legality needs this total order; three facts define it for a 3-disk game. (Deriv
 through the existing entailment machinery is a nice-to-have, and explicitly out of scope; the
 definition file can state all pairs.)
 
+(2026-07-15, later same day: both frames shipped ahead of this plan, from the edge-hunt loop
+probing this document's own seed list. v1.10.13 folds prepositional verbs into single predicates
+— `mgx:rest-on`, clean object, all three read-back directions — and fixes the `finish()` article
+rule that rewrote hyphenated names like peg-a in display. v1.10.14 adds the closed comparative
+frame: `mgx:<comparative>-than`, teach and ask, reverse direction never guessed. Where this
+document sketches `restsOn`/`smallerThan`, the shipped predicates are `mgx:rest-on`/
+`mgx:smaller-than`. Phase 1R's remaining teach-frame scope is the action frames, the goal frame,
+and an instance-name sweep through the ask lanes — recorded as HANDOVER.md's first open item,
+with baselines in `playtests/PLAYTEST_LOG_008.md`/`009`.)
+
 **Actions adopt `PLAN_ADVENTURE.md` Gap 3's `RULE_KIND_ACTION`**. That doc already designs
 actions as graph-resident Rule data with precondition and effect slots, stored via `appendRule`
 (`src/memory/core.mjs:1194`) next to the three shipped kinds (`RULE_KINDS`, `:1169`;
