@@ -40,6 +40,9 @@ Usage:
        [--ephemeral]           read the graph but write nothing back (demo/read-only)
        [--prompt "<text>"]     one-shot: run the prompt's sentences as turns and print
                                the final answer (teach state first, trigger last)
+       [--render blocks]       with --prompt: when the final turn produced a plan,
+                               write it as a self-contained animated page
+       [--output <path>]       the rendered page's path (default plan.html)
        [--narrate]             start with narrate mode on — a verbose, developer-facing
                                trace of decision points/matched pattern/results/goal per
                                turn, appended under a "--- narrate ---" marker (also
@@ -608,20 +611,58 @@ async function main() {
     // FINAL turn's answer prints to stdout, and the process exits. Piped stdin
     // stays the interactive fallback.
     const prompt = strFlag(rest, ["--prompt"]);
+    // `--render <archetype> [--output <path>]` — after a one-shot --prompt whose
+    // final turn produced a plan, write the self-contained animated plan page
+    // (src/plan-viz.mjs). Requires --prompt: interactive chat has no single
+    // final turn to render.
+    let renderArchetype;
+    try {
+      renderArchetype = enumFlag(rest, ["--render"], ["blocks"]);
+    } catch (e) {
+      process.stderr.write(`tmct: ${e?.message || e}\n`);
+      process.exit(2);
+    }
+    if (renderArchetype && !prompt) {
+      process.stderr.write("tmct: --render needs --prompt (a one-shot turn whose plan it renders)\n");
+      process.exit(1);
+    }
     if (prompt) {
       const { createSession } = await import("../src/chat.mjs");
       const { splitSentences } = await import("../src/sentences.mjs");
       const session = await createSession({ repoPath, ephemeral, narrate, ...extra });
       let finalAnswer = "";
+      let finalPlan = null;
       let parts;
       try { parts = splitSentences(prompt); } catch { parts = null; }
       const sentences = parts && parts.length ? parts : [prompt];
       for (const s of sentences) {
         const t = await session.turn(s);
         finalAnswer = t?.answer ?? "";
+        finalPlan = t?.plan ?? null;
       }
       await session.close();
       process.stdout.write(finalAnswer + "\n");
+      if (renderArchetype) {
+        if (!finalPlan) {
+          process.stderr.write("the final turn produced no plan — nothing to render\n");
+          process.exitCode = 1;
+          return;
+        }
+        const { renderPlanHtml } = await import("../src/plan-viz.mjs");
+        const { writeFile } = await import("node:fs/promises");
+        const { resolve: resolvePath } = await import("node:path");
+        const outPath = resolvePath(process.cwd(), strFlag(rest, ["--output", "--out"], "plan.html"));
+        const rendersAs = finalPlan.domain?.renderHints ?? {};
+        const sizeOrder = (finalPlan.domain?.ordering ?? [])
+          .filter((row) => /-than$/.test(String(row.predicate || "")))
+          .map((row) => [row.subject, row.object]);
+        const html = renderPlanHtml({
+          plan: finalPlan, rendersAs, sizeOrder,
+          title: finalPlan.goal?.text || "tmct plan",
+        });
+        await writeFile(outPath, html, "utf8");
+        process.stdout.write(`wrote ${outPath} (${finalPlan.actions.length} moves, ${finalPlan.states.length} snapshots)\n`);
+      }
       return;
     }
     // The shell gate: a real terminal gets the full-screen Ink TUI; `--plain` or a

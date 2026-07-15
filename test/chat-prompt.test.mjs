@@ -6,7 +6,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -33,6 +33,56 @@ test("--prompt: state + goal + 'solve it' answers the 7 optimal moves and exits 
     assert.match(solve.stdout, /1\. move disk-1 onto peg-c/);
     assert.match(solve.stdout, /7\. move disk-1 onto disk-2/);
     assert.match(solve.stdout, /Goal \(inferred\):/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+function embeddedJson(html, name) {
+  const m = new RegExp(`const ${name} = (.*);`).exec(html);
+  assert.ok(m, `const ${name} = ...; not found in the rendered page`);
+  return JSON.parse(m[1]);
+}
+
+test("--render blocks: the one-shot solve writes plan.html with 8 snapshots, 7 actions, 7 stepGoals", async () => {
+  const dir = await repoWithHanoi();
+  try {
+    const out = join(dir, "plan.html");
+    const solve = runCli(dir, "chat", "--plain", "--prompt",
+      "disk-1 rests on disk-2. disk-2 rests on disk-3. disk-3 rests on peg-a. the goal is that every disk rests on peg-c. solve it.",
+      "--render", "blocks", "--output", out);
+    assert.equal(solve.status, 0, solve.stderr + solve.stdout);
+    assert.match(solve.stdout, /wrote .*plan\.html \(7 moves, 8 snapshots\)/);
+    const html = await readFile(out, "utf8");
+    const plan = embeddedJson(html, "PLAN");
+    assert.equal(plan.layouts.length, 8, "one positioned layout per snapshot");
+    assert.equal(plan.actions.length, 7);
+    assert.equal(plan.stepGoals.length, 7);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("--render blocks: a no-plan final turn exits 1 with the honest message and writes nothing", async () => {
+  const dir = await repoWithHanoi();
+  try {
+    const out = join(dir, "plan.html");
+    const miss = runCli(dir, "chat", "--plain", "--prompt", "what is a dog",
+      "--render", "blocks", "--output", out);
+    assert.equal(miss.status, 1);
+    assert.match(miss.stderr, /the final turn produced no plan — nothing to render/);
+    await assert.rejects(readFile(out, "utf8"), "no page written on a no-plan turn");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("--render without --prompt exits 1 with the honest note", async () => {
+  const dir = await repoWithHanoi();
+  try {
+    const bad = runCli(dir, "chat", "--plain", "--render", "blocks");
+    assert.equal(bad.status, 1);
+    assert.match(bad.stderr, /--render needs --prompt/);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
