@@ -1891,6 +1891,12 @@ async function bareTaxonomyTeach(line, { memoryDir, sessionId }) {
 // not a Rule — goals accumulate on the session's planState slot.
 const GOAL_TEACH_RE = new RegExp(
   `^the\\s+goal\\s+is\\s+that\\s+(?:(every|each|all)\\s+)?([\\w-]+)\\s+([a-z]+s)\\s+(${PREP_SRC})\\s+([\\w-]+)[.!?]*$`, "i");
+// The infinitive-complement voicings of the same goal ("the goal is for every
+// disk to rest on peg-b", "i want every disk to rest on peg-b") — same
+// captures, verb already in base form. The confirmation restates the that-form
+// so the normalization is disclosed.
+const GOAL_TEACH_INFINITIVE_RE = new RegExp(
+  `^(?:the\\s+goal\\s+is\\s+for|i\\s+want)\\s+(?:(every|each|all)\\s+)?([\\w-]+)\\s+to\\s+([a-z]+)\\s+(${PREP_SRC})\\s+([\\w-]+)[.!?]*$`, "i");
 const PLAN_SOLVE_RE = /^(?:solve\s+it|plan\s+the\s+moves|how\s+do\s+i\s+get(?:\s+from\s+here)?\s+to\s+the\s+goal)[?.!\s]*$/i;
 const LEGAL_MOVES_RE = /^what\s+moves\s+are\s+legal(?:\s+now)?[?.!\s]*$/i;
 const PLAN_NEXT_RE = /^(?:next|next\s+move|go\s+on|continue)[.!?\s]*$/i;
@@ -8075,7 +8081,8 @@ function actionLabel(name, subject, target) {
 async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", }) {
   const q = String(query).trim();
 
-  const goalMatch = q.match(GOAL_TEACH_RE);
+  const thatGoal = q.match(GOAL_TEACH_RE);
+  const goalMatch = thatGoal || q.match(GOAL_TEACH_INFINITIVE_RE);
   if (goalMatch) {
     const { normFactTerm } = await import("./memory/core.mjs");
     const verb = await verbLemma(goalMatch[3]);
@@ -8091,7 +8098,11 @@ async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", })
       predicate: `${verb}-${goalMatch[4].toLowerCase()}`,
       object: normFactTerm(goalMatch[5]),
     };
-    const tail = q.replace(/^the\s+goal\s+is\s+that\s+/i, "").replace(/[.!?]+$/, "");
+    const tail = thatGoal
+      ? q.replace(/^the\s+goal\s+is\s+that\s+/i, "").replace(/[.!?]+$/, "")
+      // The infinitive voicing restates as the that-form, so the goal check's
+      // own "done — …" line and the confirmation read identically either way.
+      : `${goalMatch[1] ? `${goalMatch[1].toLowerCase()} ` : ""}${goalMatch[2].toLowerCase()} ${verb}s ${goalMatch[4].toLowerCase()} ${goalMatch[5].toLowerCase()}`;
     const prev = planHolder.state && Array.isArray(planHolder.state.goals) && !planHolder.state.done ? planHolder.state : null;
     planHolder.state = {
       goals: [...(prev?.goals ?? []), spec],
@@ -8514,6 +8525,11 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
         deduced = planLane.deduced;
         note(trace, `goal: ${deduced} (revised — the plan lane answered)`);
       }
+      // Same rule as the teach lane below: a canonical whose verb only
+      // matched through the fuzzy repair tier ("rests" read as "tests")
+      // misdescribes a plan-lane turn, so it's dropped; an exact parse keeps
+      // its receipt.
+      if (envelope?.parsed?.fuzzyVerb) canonical = null;
       note(trace, `lane: (1p) PLAN — ${planLane.note}`);
     }
   }
@@ -9710,7 +9726,7 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
     const sentences = splitSentences(workingLine);
     if (sentences.length > 1) {
       const lastSentence = sentences[sentences.length - 1];
-      if (PLAN_SOLVE_RE.test(lastSentence) || GOAL_TEACH_RE.test(lastSentence) || LEGAL_MOVES_RE.test(lastSentence)) {
+      if (PLAN_SOLVE_RE.test(lastSentence) || GOAL_TEACH_RE.test(lastSentence) || GOAL_TEACH_INFINITIVE_RE.test(lastSentence) || LEGAL_MOVES_RE.test(lastSentence)) {
         let f = focus; let l = last; let ps = planHolder.state;
         const receipts = [];
         let finalRec = null;
