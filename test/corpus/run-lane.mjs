@@ -29,7 +29,7 @@ export async function lanePredicates(laneName) {
   return { ...predicates, ...laneModule };
 }
 
-export const EXPECT_MODES = ["exact", "regex", "predicate"];
+export const EXPECT_MODES = ["exact", "regex", "predicate", "same-as-turn"];
 export const MEMORY_BACKENDS = ["file", "memory", "sqlite"];
 
 /** Parse a lane's JSONL into row objects, with the offending line number in
@@ -111,6 +111,10 @@ export function validateRow(row, predicateNames = Object.keys(predicates)) {
       if (exp.mode === "predicate") {
         const name = typeof exp.value === "string" ? exp.value : exp.value?.name;
         if (!predicateKnown(name)) flag(`${at}.value: must name an export of predicates.mjs, got ${JSON.stringify(name)}`);
+      } else if (exp.mode === "same-as-turn") {
+        if (!Number.isInteger(exp.value) || exp.value < 0 || (Array.isArray(row.turns) && exp.value >= row.turns.length)) {
+          flag(`${at}.value: must be an index into turns`);
+        }
       } else if (!isNonEmptyString(exp.value)) {
         flag(`${at}.value: required non-empty string`);
       }
@@ -134,6 +138,7 @@ export function validateRow(row, predicateNames = Object.keys(predicates)) {
       if (s.memoryBackend !== undefined && !MEMORY_BACKENDS.includes(s.memoryBackend)) {
         flag(`setup.memoryBackend: must be one of ${MEMORY_BACKENDS.join("|")}`);
       }
+      if (s.seed !== undefined && typeof s.seed !== "boolean") flag("setup.seed: must be a boolean");
     }
   }
   return problems;
@@ -145,11 +150,15 @@ function fixturePath(fixture) {
   return path.resolve(REPO_ROOT, "test", "fixtures", fixture);
 }
 
-function assertExpectation(exp, turn, rowId, preds = predicates) {
+function assertExpectation(exp, turn, rowId, preds = predicates, allTurns = []) {
   assert.ok(turn, `row ${rowId}: no turn at index ${exp.turn}`);
   const answer = String(turn.answer ?? "");
   if (exp.mode === "exact") {
     assert.equal(answer, exp.value);
+  } else if (exp.mode === "same-as-turn") {
+    const other = allTurns[exp.value];
+    assert.ok(other, `row ${rowId}: no turn at index ${exp.value}`);
+    assert.equal(answer, String(other.answer ?? ""), `row ${rowId}: turn ${exp.turn} answer differs from turn ${exp.value}`);
   } else if (exp.mode === "regex") {
     assert.match(answer, new RegExp(exp.value));
   } else {
@@ -159,10 +168,12 @@ function assertExpectation(exp, turn, rowId, preds = predicates) {
     assert.ok(fn(turn, arg), `row ${rowId}: predicate ${name} rejected turn ${exp.turn}: ${answer}`);
   }
   if (exp.template !== undefined) {
-    assert.equal(turn.template ?? turn.templateId, exp.template, `row ${rowId}: template of turn ${exp.turn}`);
+    const template = turn.template ?? turn.templateId ?? turn.record?.template ?? turn.record?.templateId ?? turn.record?.via;
+    assert.equal(template, exp.template, `row ${rowId}: template of turn ${exp.turn}`);
   }
   if (exp.justification !== undefined) {
-    const j = typeof turn.justification === "string" ? turn.justification : JSON.stringify(turn.justification ?? "");
+    const raw = turn.justification ?? turn.record?.justification;
+    const j = typeof raw === "string" ? raw : JSON.stringify(raw ?? "");
     assert.match(j, new RegExp(exp.justification), `row ${rowId}: justification of turn ${exp.turn}`);
   }
 }
@@ -173,7 +184,7 @@ async function runChatRow(row, preds = predicates) {
   try {
     const sessionOpts = {
       repoPath: setup.fixture ? fixturePath(setup.fixture) : scratchDir,
-      env: { TMCT_NO_SEED: "1" },
+      env: setup.seed ? {} : { TMCT_NO_SEED: "1" },
       ...(setup.fixture ? { ephemeral: true } : {}),
       ...(setup.memoryBackend ? { memoryBackend: setup.memoryBackend } : {}),
     };
@@ -186,7 +197,7 @@ async function runChatRow(row, preds = predicates) {
     const teach = setup.teach ?? [];
     const turns = await driveSessionTurns(sessionOpts, [...teach, ...row.turns]);
     const scripted = turns.slice(teach.length);
-    for (const exp of row.expect) assertExpectation(exp, scripted[exp.turn], row.id, preds);
+    for (const exp of row.expect) assertExpectation(exp, scripted[exp.turn], row.id, preds, scripted);
   } finally {
     await rm(scratchDir, { recursive: true, force: true });
   }

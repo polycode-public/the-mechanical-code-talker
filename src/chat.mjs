@@ -10237,7 +10237,8 @@ export async function createSession({
     promptFor: () => promptFor(focus),
 
     /** One dispatched turn through the FULL sink sequencing (writeLog → writeSidecar
-     *  → telemetry → upsertGraph, in that exact order). Returns { answer, end, prompt }.
+     *  → telemetry → upsertGraph, in that exact order). Returns { answer, end, prompt,
+     *  plan, record } — record is the same sidecar turn record the session persists.
      *  A throwing runTurn must never abort the session: a piped/non-interactive
      *  driver has no other chance to see this turn's answer. */
     async turn(line) {
@@ -10273,7 +10274,7 @@ export async function createSession({
       });
       await upsertGraph(record.ts);
       turns += 1;
-      return { answer, end: Boolean(end), prompt: promptFor(focus), plan: result.plan ?? null };
+      return { answer, end: Boolean(end), prompt: promptFor(focus), plan: result.plan ?? null, record };
     },
 
     /** End-of-session close: end lines in both artifacts, the final graph upsert
