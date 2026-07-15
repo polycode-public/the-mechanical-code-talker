@@ -170,3 +170,52 @@ test("prepositional fold: a wrong object never gets a fabricated answer — 'doe
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("comparative frame: 'disk-1 is smaller than disk-2' teaches mgx:smaller-than and the yes/no reader confirms it", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-comp-"));
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    const t = await s.turn("disk-1 is smaller than disk-2");
+    const yn = await s.turn("is disk-1 smaller than disk-2");
+    await s.close();
+    assert.match(t.answer, /noted — remembered: disk-1 is smaller than disk-2/);
+    assert.match(yn.answer, /^yes — .*disk-1 is smaller than disk-2/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("comparative frame: the reverse direction is never a guessed answer — 'is disk-2 smaller than disk-1' stays a can't-confirm citing the taught fact", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-comp2-"));
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    await s.turn("disk-1 is smaller than disk-2");
+    const r = await s.turn("is disk-2 smaller than disk-1");
+    await s.close();
+    assert.match(r.answer, /I can't confirm that — nothing I remember compares them that way/);
+    assert.match(r.answer, /disk-1 is smaller than disk-2/);
+    assert.doesNotMatch(r.answer, /^yes/);
+    assert.doesNotMatch(r.answer, /^no/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("comparative frame: the miss hint's own phrasing round-trips — wrapped article-led subjects included", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-comp3-"));
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    await s.turn("remember that the north tower is taller than the gate");
+    const r = await s.turn("is the north tower taller than the gate");
+    await s.close();
+    assert.match(r.answer, /^yes — .*north tower is taller than .*gate/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});

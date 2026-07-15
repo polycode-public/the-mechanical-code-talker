@@ -1533,6 +1533,12 @@ const WALL_MISS_ANYWHERE_RE = /couldn't parse this as a graph question\. Try:/;
 // instead of the grammar wall or a silent data loss.
 const TEACH_RE = /^(?:please\s+)?(?:i\s+(?:want|wanted)\s+you\s+to\s+|i(?:'d|\s+would)\s+like\s+you\s+to\s+)?(?:remember|note|keep in mind|jot down|for the record|fyi|learn)\b(?:\s+(?:this|that|also))?[:,]?\s*(?:that\s+)?(.+?)[.?!]*$/i;
 const BARE_DECLARATIVE_RE = /^(?:every |each |all |a |an )?[\w-]+(?: [\w-]+)? (?:is|are) (?:a |an )?[\w-]+$/i;
+/** "X is <comparative> than Y" — the comparative teach/ask surface. The
+ *  comparative slot is closed by SHAPE (-er word, better/worse, or a
+ *  more/less + adjective pair), never a hand-list of adjectives. */
+const COMPARATIVE_SRC = "(?:[a-z]+er|better|worse|(?:more|less)\\s+[a-z]+)";
+const COMPARATIVE_TEACH_RE = new RegExp(`^(?:the\\s+|an?\\s+)?([\\w'-]+(?:\\s+[\\w'-]+)?)\\s+(?:is|are)\\s+(${COMPARATIVE_SRC})\\s+than\\s+(.+)$`, "i");
+const COMPARATIVE_ASK_RE = new RegExp(`^(?:is|are)\\s+(.+?)\\s+(${COMPARATIVE_SRC})\\s+than\\s+(.+?)[?.!\\s]*$`, "i");
 /** Interrogative / auxiliary leads that make an "X is a Y"-shaped line a QUESTION
  *  ("what is a cache", "is a module a component"), never a teach declarative. */
 const QUESTION_LEAD_RE = /^(?:what|who|which|where|when|why|how|is|are|do|does|did|can|could|should|would|will|has|have)\b/i;
@@ -2879,7 +2885,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
 
   let payload = null;
   if (wrapped && /\b(?:is|are)\b/i.test(wrapped)) payload = wrapped;
-  else if (BARE_DECLARATIVE_RE.test(raw) && !QUESTION_LEAD_RE.test(raw) && !(await hasMidSentenceInterrogative(raw))) payload = raw;
+  else if ((BARE_DECLARATIVE_RE.test(raw) || COMPARATIVE_TEACH_RE.test(raw)) && !QUESTION_LEAD_RE.test(raw) && !(await hasMidSentenceInterrogative(raw))) payload = raw;
   if (!payload) {
     // "remember margo eats ribs", re-escaping here through a combination
     // that mechanism's own deliberate subject-shape restriction doesn't
@@ -2897,6 +2903,19 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   // Try to store it (a live session provides the write target). assertTurn returns
   // the "noted — remembered …" confirmation or null (grammar miss / unknown words).
   if (memoryDir) {
+    // COMPARATIVE frame — "disk-1 is smaller than disk-2" → mgx:smaller-than.
+    // Checked ahead of the ACE candidates: the copula plus "than" is not in
+    // the ACE fragment at all, and letting it fall through produced the
+    // both-sides-ungrounded decline (honest but unactionable — no phrasing
+    // it could suggest would have stored a comparison).
+    const comp = String(payload).trim().match(COMPARATIVE_TEACH_RE);
+    if (comp) {
+      const compPredicate = `mgx:${comp[2].toLowerCase().replace(/\s+/g, "-")}-than`;
+      const stored = await teachFact(memoryDir, sessionId, {
+        subject: comp[1].trim(), predicate: compPredicate, object: comp[3].trim(),
+      });
+      if (stored) return stored;
+    }
     for (const cand of assertCandidates(payload)) {
       // assertTurn ITSELF records the "every" quantifier (point 3) on a plain
       // universal success, so every caller (this loop AND the top-level
@@ -3746,7 +3765,12 @@ function thirdPersonSingularSurface(lemma) {
 }
 function predicatePhrase(predicate) {
   if (FACT_PREDICATE_PHRASES[predicate]) return FACT_PREDICATE_PHRASES[predicate];
-  const m = /^mgx:([a-z]+)(?:-([a-z]+))?$/i.exec(String(predicate || ""));
+  const p = String(predicate || "");
+  // a comparative renders as its copula surface: mgx:smaller-than ->
+  // "is smaller than" (never a 3sg fold — "smallers" isn't a word)
+  const comp = /^mgx:([a-z]+(?:-[a-z]+)*)-than$/i.exec(p);
+  if (comp) return `is ${comp[1].replace(/-/g, " ")} than`;
+  const m = /^mgx:([a-z]+)(?:-([a-z]+))?$/i.exec(p);
   if (!m) return predicate;
   // a folded preposition renders back naturally: mgx:rest-on -> "rests on"
   return `${thirdPersonSingularSurface(m[1])}${m[2] ? ` ${m[2]}` : ""}`;
@@ -4384,6 +4408,30 @@ export async function factAnswer(memoryDir, query, envelope, miss, biasByBundle 
     return { text: shown.join("\n") + extra, replace: miss, ...(rest.length ? { pending: { items: rest, noun: "facts" } } : {}) };
   }
   if (!miss) return null;
+
+  // (b0-comp) "is disk-1 smaller than disk-2" — yes iff the exact taught
+  // comparative fact exists; otherwise an honest, specific miss whose teach
+  // hint is the EXACT phrasing the comparative teach frame accepts. Never an
+  // inverted guess: "disk-1 is smaller than disk-2" proves nothing here
+  // about "is disk-2 smaller than disk-1" (the frame stores no
+  // antisymmetry), so the reverse question stays a can't-confirm.
+  const compAsk = q.match(COMPARATIVE_ASK_RE);
+  if (compAsk) {
+    const compWord = compAsk[2].toLowerCase().replace(/\s+/g, "-");
+    const compPredicate = `mgx:${compWord}-than`;
+    const facts = await memoryFacts(memoryDir);
+    const subj = factTermVariants(normFactTerm, compAsk[1].replace(/^(?:an?|the)\s+/i, "").trim());
+    const obj = factTermVariants(normFactTerm, compAsk[3].replace(/^(?:an?|the)\s+/i, "").trim());
+    const hit = facts.find((f) => f.predicate === compPredicate && subj.has(f.subject) && obj.has(f.object));
+    if (hit) return { text: `yes — ${renderFactLine(hit)}`, replace: true };
+    const known = facts.filter((f) => f.predicate === compPredicate && (subj.has(f.subject) || subj.has(f.object)));
+    const shown = known.length ? ` I do know: ${known.slice(0, 3).map(renderFactLine).join("; ")}.` : "";
+    return {
+      text: `I can't confirm that — nothing I remember compares them that way.${shown} If it's true, teach me: "${compAsk[1].trim()} is ${compAsk[2].toLowerCase()} than ${compAsk[3].trim()}".`,
+      replace: true,
+      miss: true,
+    };
+  }
 
   // (b0) Derived forward yes/no readers — FORWARD_YESNO_MARKERS, one per
   // renderable relation. Runs BEFORE the isa lane because ISA_ASK_RE's lazy
