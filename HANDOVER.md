@@ -55,6 +55,22 @@ existing `WHAT_HAS_RE` reverse-by-object reader (`src/chat.mjs`).
 
 ## Open items
 
+- **Unprobed Phase-1R playtest seeds (`SKILL_PLAYTEST_EDGE_HUNT.md` dispatch, stopped by
+  operator 2026-07-15 after seed 2 of 5)**: the edge-hunt loop mapped seeds 1-2 of the
+  `PLAN_HANOI.md` Phase-1R boundary menu (prepositional-verb facts, comparatives — see
+  `playtests/PLAYTEST_LOG_008.md`/`009` for the fixes and the stated remainders). Three seeds
+  are still unprobed and are the next dispatch's starting point:
+  1. **Rule-teach frames** — "you can move a disk onto a peg", "to move a disk onto a target,
+     nothing may rest on the disk". Expect declines; what matters is WHERE each lane declines
+     and that nothing mis-teaches silently (silent garble is the poison case, honest decline
+     is fine).
+  2. **Goal sentences** — "the goal is that every disk rests on peg-c", plus the universal
+     read-back "does every disk rest on peg-c".
+  3. **Hyphenated/numbered instance names through the ASK lanes** — disk-1/peg-a round-trip
+     the teach and fact lanes cleanly since 1.10.13, but the code-graph ask/resolve lanes
+     haven't had their own sweep.
+  Kickoff: "Follow SKILL_PLAYTEST_EDGE_HUNT.md, continue the Phase-1R dispatch, rounds 3-5."
+
 - **`PLAN_SYLLOGIST.md`'s remaining ATMS generalization**: the scm-sco (subClassOf) retraction slice
   from §3 is now real and shipped (`retractSubClassOf`, `src/syllogise.mjs`) — a bounded, re-verified
   local check, not full alternate-justification-set tracking. The other four entailment rules
@@ -88,12 +104,10 @@ integrates, answers the operator), not the worker. Decompose into workstreams wi
 file-ownership boundaries; serialize on shared files (one agent owns `package.json`, `src/`, `bin/`,
 `test/` sequences; docs/site tracks run in parallel). Keep the chat for chat: anything long-running
 (benchmarks, judge passes, builds, test sweeps) executes as a BACKGROUND task at maximum safe
-concurrency (the chatbench judge defaults to `--concurrency 12`); the main session launches it,
-keeps coordinating and conversing, and collects results on the completion notification — never block
-the conversation on a run. Push/publish is gated on the operator (CI publishes on version bump on
-`main`). Version bump timing: only bump the version at the moment of actually pushing a release,
-never pre-staged and left sitting unpushed between releases — `package.json`'s version should always
-equal whatever's actually live on npm between pushes.
+concurrency; the main session launches it, keeps coordinating and conversing, and collects results
+on the completion notification — never block the conversation on a run. Push/publish is gated on
+the operator (CI publishes on version bump on `main`); versioning/commit/push cadence follows the
+operator's explicit prompt instructions (see `CLAUDE.md`'s first section).
 
 Repo-local identity (`antony@polycode.co.uk` / `Antony at Polycode`). `npm test` green at every
 commit. Coordinator plus background sub-agents, disjoint file-ownership where possible, serialized
