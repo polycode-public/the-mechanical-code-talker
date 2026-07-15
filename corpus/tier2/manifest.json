@@ -100,5 +100,49 @@
       "sha256": "754d9d4c046f92994a5f5fa0abde27af65a47ec546b3051bf972bfa76b642917",
       "license": "MPL-2.0"
     }
+  ],
+  "examples": [
+    {
+      "id": "human-examples",
+      "kind": "examples",
+      "description": "Example sentences for the Small human persona: Open English WordNet's own inline example sentences, reproduced verbatim.",
+      "source": {
+        "kind": "curated",
+        "tool": "scripts/build-persona-examples.mjs"
+      },
+      "file": "human-examples.jsonl",
+      "rows": 120,
+      "bytes": 11168,
+      "sha256": "592b3525248379b03b5818237a8b76c83060a704a585ee91a13996b22252a7a9",
+      "license": "CC-BY-4.0 (verbatim Open English WordNet / SemCor example sentences — see corpus/README.md and corpus/LICENSES.json)"
+    },
+    {
+      "id": "human-examples-medium",
+      "kind": "examples",
+      "description": "Example sentences added by the Medium persona tier: Open English WordNet inline examples, reproduced verbatim.",
+      "source": {
+        "kind": "curated",
+        "tool": "scripts/build-persona-examples.mjs"
+      },
+      "file": "human-examples-medium.jsonl",
+      "rows": 356,
+      "bytes": 43269,
+      "sha256": "40313cbf63d49fb4af08f0cb27d92c55877d3dbe7eb0bc791bd63e56c183418e",
+      "license": "CC-BY-4.0 (verbatim Open English WordNet / SemCor example sentences — see corpus/README.md and corpus/LICENSES.json)"
+    },
+    {
+      "id": "human-examples-large",
+      "kind": "examples",
+      "description": "Example sentences added by the Large persona tier: Open English WordNet inline examples plus a SemCor-filtered supplement (Brown Corpus text re-tagged to modern OEWN senses).",
+      "source": {
+        "kind": "curated",
+        "tool": "scripts/build-persona-examples.mjs"
+      },
+      "file": "human-examples-large.jsonl",
+      "rows": 1928,
+      "bytes": 257180,
+      "sha256": "fa5646f45451f948156686882f46c522939bbe43158ee42a7628fccf74d8966f",
+      "license": "CC-BY-4.0 (verbatim Open English WordNet / SemCor example sentences — see corpus/README.md and corpus/LICENSES.json)"
+    }
   ]
 }

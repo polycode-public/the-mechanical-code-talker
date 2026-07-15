@@ -1,0 +1,118 @@
+{
+  "version": 1,
+  "description": "Machine-readable licence rollup for the committed corpus and data files. One entry per corpus family; `notice` names the human-readable attribution file. Guarded by test/estate/corpus-licences.test.mjs.",
+  "entries": [
+    {
+      "path": "corpus/conceptnet/slice.jsonl",
+      "upstream": "ConceptNet 5.7.0 assertions dump (conceptnet.io, Commonsense Computing Initiative)",
+      "license": "CC-BY-SA-4.0",
+      "shareAlike": true,
+      "notice": "corpus/conceptnet/LICENSE-NOTICE"
+    },
+    {
+      "path": "corpus/seon/",
+      "upstream": "first-party (hand-authored for tmct; named in homage to SEON, no SEON content copied)",
+      "license": "MPL-2.0",
+      "shareAlike": false,
+      "notice": "corpus/seon/LICENSE-NOTICE"
+    },
+    {
+      "path": "corpus/wordnet/",
+      "upstream": "Open English WordNet (globalwordnet/english-wordnet, a continuation of Princeton WordNet)",
+      "license": "CC-BY-4.0",
+      "shareAlike": false,
+      "notice": "corpus/wordnet/LICENSE-NOTICE"
+    },
+    {
+      "path": "corpus/namenet/namenet.jsonl",
+      "upstream": "Open English Namenet (globalwordnet/english-namenet; declares no explicit licence of its own — CC-BY-4.0 is this repository's conservative label, see the notice)",
+      "license": "CC-BY-4.0",
+      "shareAlike": false,
+      "notice": "corpus/namenet/LICENSE-NOTICE"
+    },
+    {
+      "path": "corpus/tier2/aws.jsonl",
+      "upstream": "first-party (curated in corpus/tier2/generate.mjs)",
+      "license": "MPL-2.0",
+      "shareAlike": false,
+      "notice": "corpus/tier2/manifest.json"
+    },
+    {
+      "path": "corpus/tier2/python.jsonl",
+      "upstream": "first-party (curated in corpus/tier2/generate.mjs)",
+      "license": "MPL-2.0",
+      "shareAlike": false,
+      "notice": "corpus/tier2/manifest.json"
+    },
+    {
+      "path": "corpus/tier2/java.jsonl",
+      "upstream": "first-party (curated in corpus/tier2/generate.mjs)",
+      "license": "MPL-2.0",
+      "shareAlike": false,
+      "notice": "corpus/tier2/manifest.json"
+    },
+    {
+      "path": "corpus/tier2/general.jsonl",
+      "upstream": "first-party (curated in corpus/tier2/generate.mjs)",
+      "license": "MPL-2.0",
+      "shareAlike": false,
+      "notice": "corpus/tier2/manifest.json"
+    },
+    {
+      "path": "corpus/tier2/human.jsonl",
+      "upstream": "first-party fact set (hand-curated; vocabulary informed by Open English WordNet and Schema.org, not a verbatim excerpt)",
+      "license": "MPL-2.0",
+      "shareAlike": false,
+      "notice": "corpus/tier2/manifest.json"
+    },
+    {
+      "path": "corpus/tier2/human-medium.jsonl",
+      "upstream": "first-party fact set (automatically curated from the same Open English WordNet source as human.jsonl)",
+      "license": "MPL-2.0",
+      "shareAlike": false,
+      "notice": "corpus/tier2/manifest.json"
+    },
+    {
+      "path": "corpus/tier2/human-large.jsonl",
+      "upstream": "first-party fact set (automatically curated from the same Open English WordNet source as human.jsonl)",
+      "license": "MPL-2.0",
+      "shareAlike": false,
+      "notice": "corpus/tier2/manifest.json"
+    },
+    {
+      "path": "corpus/tier2/human-examples.jsonl",
+      "upstream": "Open English WordNet inline example sentences, reproduced verbatim",
+      "license": "CC-BY-4.0",
+      "shareAlike": false,
+      "notice": "corpus/tier2/manifest.json"
+    },
+    {
+      "path": "corpus/tier2/human-examples-medium.jsonl",
+      "upstream": "Open English WordNet inline example sentences, reproduced verbatim",
+      "license": "CC-BY-4.0",
+      "shareAlike": false,
+      "notice": "corpus/tier2/manifest.json"
+    },
+    {
+      "path": "corpus/tier2/human-examples-large.jsonl",
+      "upstream": "Open English WordNet inline examples plus a SemCor-derived supplement (Brown Corpus text re-tagged to modern OEWN senses)",
+      "license": "CC-BY-4.0",
+      "shareAlike": false,
+      "notice": "corpus/tier2/manifest.json"
+    },
+    {
+      "path": "corpus/generated/ace-surface-variants.jsonl",
+      "upstream": "mechanically generated from Open English WordNet / SemCor example sentences and this repository's own docs prose",
+      "license": "CC-BY-4.0",
+      "shareAlike": false,
+      "notice": "corpus/generated/manifest.json"
+    },
+    {
+      "path": "data/",
+      "upstream": "first-party (tmct response templates, phrasebook and game data)",
+      "license": "MPL-2.0",
+      "shareAlike": false,
+      "notice": "LICENSE"
+    }
+  ]
+}

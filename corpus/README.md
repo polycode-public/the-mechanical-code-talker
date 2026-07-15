@@ -29,6 +29,10 @@ loudly instead of seeding garbage.
 
 ## What's here
 
+`LICENSES.json` in this directory is the machine-readable rollup of the table
+below — one entry per corpus family ({path, upstream, license, shareAlike,
+notice}), guarded by `test/estate/corpus-licences.test.mjs`.
+
 | Path | What | Size | Licence |
 |---|---|---|---|
 | `conceptnet/slice.jsonl` | tier-1: filtered English/tech-domain ConceptNet 5.7 slice, quality-filtered (one assertion per line) | ~1.35 MB | **CC-BY-SA 4.0** (see `conceptnet/LICENSE-NOTICE`) |

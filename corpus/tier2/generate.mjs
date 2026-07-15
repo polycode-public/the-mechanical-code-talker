@@ -14945,9 +14945,56 @@ async function verifyLexiconAlignment(id, spec) {
   console.error(`  verify ${id}: lexicon sub-key (${declared.length} words: ${nouns.length} nouns, ${verbs.length} verbs, ${adjectives.length} adjectives, ${properNames.length} proper names) is aligned both ways`);
 }
 
+// The human-examples bundles are real example SENTENCES (Open English WordNet
+// inline examples; the large tier also SemCor text), not fact triples: they are
+// built by scripts/build-persona-examples.mjs, never seed through
+// loadSlice()/toFacts(), and carry the source text's CC-BY-4.0 licence rather
+// than the curated fact bundles' MPL-2.0. They are indexed under a separate
+// `examples` key (NOT `corpuses`, which `tmct init --corpus` treats as
+// seedable fact sets) so the licence record and checksums stay machine-readable
+// without making the sentence files look importable.
+const EXAMPLE_BUNDLES = [
+  {
+    id: "human-examples",
+    file: "human-examples.jsonl",
+    description: "Example sentences for the Small human persona: Open English WordNet's own inline example sentences, reproduced verbatim.",
+  },
+  {
+    id: "human-examples-medium",
+    file: "human-examples-medium.jsonl",
+    description: "Example sentences added by the Medium persona tier: Open English WordNet inline examples, reproduced verbatim.",
+  },
+  {
+    id: "human-examples-large",
+    file: "human-examples-large.jsonl",
+    description: "Example sentences added by the Large persona tier: Open English WordNet inline examples plus a SemCor-filtered supplement (Brown Corpus text re-tagged to modern OEWN senses).",
+  },
+];
+
+const EXAMPLES_LICENSE = "CC-BY-4.0 (verbatim Open English WordNet / SemCor example sentences — see corpus/README.md and corpus/LICENSES.json)";
+
+async function exampleBundleManifestEntries() {
+  const entries = [];
+  for (const { id, file, description } of EXAMPLE_BUNDLES) {
+    const text = await readFile(join(HERE, file), "utf8");
+    entries.push({
+      id,
+      kind: "examples",
+      description,
+      source: { kind: "curated", tool: "scripts/build-persona-examples.mjs" },
+      file,
+      rows: text.split("\n").filter(Boolean).length,
+      bytes: Buffer.byteLength(text),
+      sha256: sha256(text),
+      license: EXAMPLES_LICENSE,
+    });
+  }
+  return entries;
+}
+
 async function main() {
   const verify = process.argv.includes("--verify");
-  const manifest = { version: 1, generated: "by corpus/tier2/generate.mjs", corpuses: [] };
+  const manifest = { version: 1, generated: "by corpus/tier2/generate.mjs", corpuses: [], examples: [] };
 
   for (const [id, spec] of Object.entries(CORPUSES)) {
     const text = corpusJsonl(id);
@@ -14966,9 +15013,11 @@ async function main() {
     console.error(`  ${id}: ${spec.facts.length} facts, ${Buffer.byteLength(text)} bytes`);
   }
 
+  manifest.examples = await exampleBundleManifestEntries();
+
   const manifestText = JSON.stringify(manifest, null, 2) + "\n";
   await writeFile(join(HERE, "manifest.json"), manifestText);
-  console.error(`wrote manifest.json (${manifest.corpuses.length} corpuses)`);
+  console.error(`wrote manifest.json (${manifest.corpuses.length} corpuses, ${manifest.examples.length} example bundles)`);
 
   if (verify) {
     const { loadSlice, loadMap, toFacts } = await import("../../src/corpus/conceptnet.mjs");
