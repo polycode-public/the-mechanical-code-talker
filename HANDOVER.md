@@ -9,22 +9,13 @@ Session handles (inboxes): `tmct` (the edge-hunt/playtest session) and `tmct-han
 PLAN_HANOI/PLAN_VIZ_LEDGER session). See `~/.claude/inboxes/tmct.md` and
 `~/.claude/inboxes/tmct-hanoi.md`; `mechanic.md` is retired.
 
-## Doing now (2026-07-15, v1.10.14 → 1.11.0 in flight)
+## Version state (2026-07-15, v1.11.0)
 
-The operator approved implementing ALL of `PLAN_HANOI.md` (phases 1R-5R) and
-`PLAN_VIZ_LEDGER.md` (phases 1-4), releasing as v1.11.0 (the bump is the batch's final commit).
-Owner: the `tmct-hanoi` session, which holds `src/chat.mjs`/`src/memory/core.mjs` exclusively
-for the batch — coordinate via its inbox before touching either. Track E: action Rule family →
-teach frames → `src/domain.mjs` interpreter → plan lane/planState → `import --file` +
-`.tmct/imports/` scaffold + `chat --prompt`. Track L: `viz --ledger` + chat dock →
-`plan-viz.mjs` → `--render` wiring → Pages rebuild → README/ROADMAP → 5R (registry seam +
-crates domain). Progress: E1-E3 + L1-L3 shipped and pushed (action Rule family, teach frames, the
-domain interpreter with its 2^n-1 oracle, viz --ledger, the chat dock with factReadBack
-on the bundle surface, plan-viz renderer). In flight: E4 (plan lane). Remaining: E5 CLI,
---render wiring, Pages rebuild, README/ROADMAP, 5R, the 1.11.0 bump.
-This section is updated as steps land and is deleted when the batch ships.
-
-## Version state (2026-07-13, v1.9.0 — superseded above; historical notes follow)
+v1.11.0 ships PLAN_HANOI.md (all phases: taught game domains, the plan lane, `tmct import
+--file` with the `.tmct/imports/` scaffold, `chat --prompt --render blocks`, the crates second
+domain, the router registration seam) and PLAN_VIZ_LEDGER.md (all phases: `tmct viz --ledger`,
+the in-page chat dock, the Pages ledger hero, the README pass). Both plan docs carry dated
+implementation addenda; `ROADMAP.md` holds the feature narrative. Historical notes follow.
 
 `PLAN_VIZ_MEMORY.md` fully implemented (see that doc's own "IMPLEMENTED" status line + Phasing
 checklist for specifics): `tmct viz`'s walk now follows real concept-relation edges (not just
@@ -71,21 +62,17 @@ existing `WHAT_HAS_RE` reverse-by-object reader (`src/chat.mjs`).
 
 ## Open items
 
-- **Unprobed Phase-1R playtest seeds (`SKILL_PLAYTEST_EDGE_HUNT.md` dispatch, stopped by
-  operator 2026-07-15 after seed 2 of 5)**: the edge-hunt loop mapped seeds 1-2 of the
-  `PLAN_HANOI.md` Phase-1R boundary menu (prepositional-verb facts, comparatives — see
-  `playtests/PLAYTEST_LOG_008.md`/`009` for the fixes and the stated remainders). Three seeds
-  are still unprobed and are the next dispatch's starting point:
-  1. **Rule-teach frames** — "you can move a disk onto a peg", "to move a disk onto a target,
-     nothing may rest on the disk". Expect declines; what matters is WHERE each lane declines
-     and that nothing mis-teaches silently (silent garble is the poison case, honest decline
-     is fine).
-  2. **Goal sentences** — "the goal is that every disk rests on peg-c", plus the universal
-     read-back "does every disk rest on peg-c".
-  3. **Hyphenated/numbered instance names through the ASK lanes** — disk-1/peg-a round-trip
-     the teach and fact lanes cleanly since 1.10.13, but the code-graph ask/resolve lanes
-     haven't had their own sweep.
-  Kickoff: "Follow SKILL_PLAYTEST_EDGE_HUNT.md, continue the Phase-1R dispatch, rounds 3-5."
+- **Playtest sweep: instance names through the code-graph ask lanes.** The Phase-1R
+  boundary menu is otherwise closed: seeds 1-2 shipped pre-batch (1.10.13/1.10.14), and the
+  rule-teach frames and goal sentences shipped as real features in 1.11.0 (probe them as
+  features now, not boundaries). What never got its sweep: hyphenated/numbered instance
+  names (disk-1, peg-a) through the code-graph ask/resolve lanes. Kickoff: "Follow
+  SKILL_PLAYTEST_EDGE_HUNT.md, sweep instance-name shapes through the ask lanes."
+
+- **1.11.0 follow-ups (named in `ROADMAP.md`)**: river-crossing's two missing frames plus the
+  multi-effect interpreter extension; planner-side consumption of `taught:` capability
+  records; the factAnswer goal-field question (ledger dock, needs operator sign-off); the
+  findContradictions cardinality question; ledger bundle weight (~533 KB measured).
 
 - **`PLAN_SYLLOGIST.md`'s remaining ATMS generalization**: the scm-sco (subClassOf) retraction slice
   from §3 is now real and shipped (`retractSubClassOf`, `src/syllogise.mjs`) — a bounded, re-verified
