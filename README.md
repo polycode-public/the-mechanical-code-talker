@@ -397,6 +397,15 @@ Precedence is `--memory-backend` flag > `TMCT_MEMORY_BACKEND` env >
 tmct.toml's `[memory] backend` > the default. A library caller sets the same
 thing directly: `runChat({ memoryBackend: "sqlite" })`.
 
+Three init presets in `package.json` wrap the common setups. What each one
+runs (`--force` re-initializes the same directory):
+
+```bash
+npx tmct init --memory-backend sqlite        # npm run init:sqlite
+npx tmct init --force --with-persona human   # npm run init:persona:human — the default persona, made explicit
+npx tmct init --force --with-persona empty   # npm run init:persona:empty — no seeded vocabulary at all
+```
+
 Teaching isn't limited to the ACE grammar's fixed shapes. Tell tmct an
 arbitrary fact, like "margo really eats ribs", and it mints a fact you can
 ask about directly: "what does margo eat". New vocabulary compounds as you
@@ -640,7 +649,20 @@ later `tmct chat` in that repo picks it up with no flag needed.
 `npm run init:large` in `package.json` chains one `init` and five `import --corpus`
 calls to combine every shipped bundle (human persona + seon + conceptnet +
 aws/python/java) into ~7,380 facts on the default flat-JSON backend, a working
-example to copy from.
+example to copy from. `init:xl` starts from the large persona tier and adds
+the wordnet-xl corpus (~72,000 facts); `init:xxl` swaps wordnet-xl for the
+full WordNet slice plus namenet (~239,000 facts, the biggest committed
+vocabulary — expect its imports to take a minute). The xl chain, spelled out:
+
+```bash e2e
+npx tmct init --persona-size large   # npm run init:xl runs this whole chain from a clone
+npx tmct import --corpus seon
+npx tmct import --corpus conceptnet
+npx tmct import --corpus aws
+npx tmct import --corpus python
+npx tmct import --corpus java
+npx tmct import --corpus wordnet-xl  # init:xxl instead ends with wordnet-full and namenet
+```
 
 ### tmct.toml reference
 
