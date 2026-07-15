@@ -1023,7 +1023,7 @@ export async function appendFact(dir, { subject, predicate, object, provenance =
   const p = normText(predicate);
   const o = normFactTerm(object);
   if (!s || !p || !o) throw new Error("a fact needs subject, predicate and object");
-  const id = `fact:${fnv1aHex(`${s} ${p} ${o}`)}`;
+  const id = `fact:${fnv1aHex(`${s}\0${p}\0${o}`)}`;
   const text = `${s} ${p} ${o}`;
   const tokens = proseTokensFor({ doc: text });
   const q = normText(quantifier);

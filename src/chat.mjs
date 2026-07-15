@@ -1539,6 +1539,10 @@ const BARE_DECLARATIVE_RE = /^(?:every |each |all |a |an )?[\w-]+(?: [\w-]+)? (?
 const COMPARATIVE_SRC = "(?:[a-z]+er|better|worse|(?:more|less)\\s+[a-z]+)";
 const COMPARATIVE_TEACH_RE = new RegExp(`^(?:the\\s+|an?\\s+)?([\\w'-]+(?:\\s+[\\w'-]+)?)\\s+(?:is|are)\\s+(${COMPARATIVE_SRC})\\s+than\\s+(.+)$`, "i");
 const COMPARATIVE_ASK_RE = new RegExp(`^(?:is|are)\\s+(.+?)\\s+(${COMPARATIVE_SRC})\\s+than\\s+(.+?)[?.!\\s]*$`, "i");
+/** The one closed preposition set shared by every frame that folds a
+ *  preposition into a minted predicate (the general-verb teach/query lanes
+ *  and the action-rule frames) — a single source so the set never forks. */
+const PREP_SRC = "on|in|at|onto|upon|under|over|beside|near|behind|above|below|inside|outside";
 /** Interrogative / auxiliary leads that make an "X is a Y"-shaped line a QUESTION
  *  ("what is a cache", "is a module a component"), never a teach declarative. */
 const QUESTION_LEAD_RE = /^(?:what|who|which|where|when|why|how|is|are|do|does|did|can|could|should|would|will|has|have)\b/i;
@@ -1754,6 +1758,28 @@ const FILTER_RULE_TEACH_RE =
  *  RECURSIVE_LIST_ASK_RE query recognizer, below. */
 const RECURSIVE_RULE_TEACH_RE =
   /^an?\s+([a-z][\w-]*)\s+(?:is|are)\s+an?\s+([a-z][\w-]*),?\s+or\s+an?\s+([a-z][\w-]*)\s+of\s+an?\s+\1[.!?]*$/i;
+
+/** ACTION-RULE TEACH FRAMES — a world-mutating action taught one sentence at
+ *  a time, each sentence its own Rule individual (kind action-signature /
+ *  action-precond / action-effect) sharing one rule name ("<verb> <prep>",
+ *  e.g. "move onto"). src/domain.mjs collects the family by name
+ *  (findRulesByName) and grounds it over class members at plan time; nothing
+ *  in the teach lane executes an action. Predicate slot values are stored
+ *  BARE ("rest-on") because normFactTerm strips a mgx: prefix from slot
+ *  values; readers re-attach it. The class/role words are single tokens, the
+ *  preposition set is PREP_SRC, the comparative slot is COMPARATIVE_SRC. */
+const ACTION_SIGNATURE_TEACH_RE = new RegExp(
+  `^you\\s+can\\s+([a-z]+)\\s+an?\\s+([a-z][\\w-]*)\\s+(${PREP_SRC})\\s+an?\\s+([a-z][\\w-]*)[.!?]*$`, "i");
+const ACTION_PRECOND_NOTHING_RE = new RegExp(
+  `^to\\s+([a-z]+)\\s+an?\\s+([a-z][\\w-]*)\\s+(${PREP_SRC})\\s+an?\\s+([a-z][\\w-]*)\\s*,?\\s*nothing\\s+may\\s+([a-z]+)\\s+(${PREP_SRC})\\s+the\\s+([a-z][\\w-]*)[.!?]*$`, "i");
+const ACTION_PRECOND_COMPARATIVE_RE = new RegExp(
+  `^to\\s+([a-z]+)\\s+an?\\s+([a-z][\\w-]*)\\s+(${PREP_SRC})\\s+an?\\s+([a-z][\\w-]*)\\s*,?\\s*the\\s+([a-z][\\w-]*)\\s+must\\s+be\\s+(${COMPARATIVE_SRC})\\s+than\\s+the\\s+([a-z][\\w-]*)[.!?]*$`, "i");
+const ACTION_EFFECT_TEACH_RE = new RegExp(
+  `^([a-z]+ing)\\s+an?\\s+([a-z][\\w-]*)\\s+(${PREP_SRC})\\s+an?\\s+([a-z][\\w-]*)\\s+makes\\s+the\\s+([a-z][\\w-]*)\\s+([a-z]+)\\s+(${PREP_SRC})\\s+the\\s+([a-z][\\w-]*)[.!?]*$`, "i");
+/** "a disk renders as a block" — the render-template binding, an ordinary
+ *  Fact on the curated mgx:rendersAs predicate (camelCase, so the
+ *  general-verb preposition fold can never suffix it). */
+const RENDERS_AS_TEACH_RE = /^an?\s+([a-z][\w-]*)\s+renders\s+as\s+an?\s+([a-z][\w-]*)[.!?]*$/i;
 
 /** "<X> is <adjective>" — the property teach payload (wrapper-REQUIRED): a lazy
  *  subject and a single bare complement word. Never matches the "is a <noun>"
@@ -2397,7 +2423,7 @@ async function subjectIsNounOrPropn(word) {
 // query is never shadowed. Reuses generalVerbTeach's own exclude guards and
 // generalVerbPredicate, plus the SAME adverb-skip, so the two never disagree. ----
 const GENERAL_VERB_YESNO_RE = new RegExp(`^(?:does|did)\\s+([\\w'-]+)\\s+${TEACH_ADVERB_SKIP_SRC}([a-z]+)\\s+(.+?)[?.!\\s]*$`, "i");
-const GENERAL_VERB_OPEN_RE = new RegExp(`^what\\s+(?:does|did)\\s+([\\w'-]+)\\s+${TEACH_ADVERB_SKIP_SRC}([a-z]+(?:\\s+(?:on|in|at|onto|upon|under|over|beside|near|behind|above|below|inside|outside))?)[?.!\\s]*$`, "i");
+const GENERAL_VERB_OPEN_RE = new RegExp(`^what\\s+(?:does|did)\\s+([\\w'-]+)\\s+${TEACH_ADVERB_SKIP_SRC}([a-z]+(?:\\s+(?:${PREP_SRC}))?)[?.!\\s]*$`, "i");
 /** GENERAL_VERB_EXCLUDE_RE was written for generalVerbTeach's fully-conjugated
  *  declarative verb ("X OWNS Y", "X MAINTAINS Y") — but "does/did X <verb> Y"
  *  captures the BARE INFINITIVE after do-support ("does X OWN Y", never "does X
@@ -2413,7 +2439,7 @@ const GENERAL_VERB_QUERY_EXCLUDE_RE = /^(?:be|own|maintain)$/i;
  *  minted predicate: "disk-1 rests on peg-a" stores mgx:rest-on with object
  *  "peg-a", never mgx:rest with the meaning-bearing "on" buried inside the
  *  object where no read-back can match it. */
-const GENERAL_VERB_PREP_RE = /^(on|in|at|onto|upon|under|over|beside|near|behind|above|below|inside|outside)\s+(.+)$/i;
+const GENERAL_VERB_PREP_RE = new RegExp(`^(${PREP_SRC})\\s+(.+)$`, "i");
 /** Fold a leading preposition from `objectRaw` into a minted mgx:<lemma>
  *  predicate. Curated predicates (mgx:hasA, mgx:capableOf — anything not the
  *  plain lowercase mint shape) are never suffixed. Returns {predicate,
@@ -2573,7 +2599,11 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   // `are` payload — see the payload-construction block below), which leaves
   // whatever the structural grammar's own honest miss already said standing,
   // rather than overwriting it with a wrong-reason refusal.
-  if (pronounMatch && !(await hasMidSentenceInterrogative(pronounSrc))) {
+  // The action-signature frame is the ONE pronoun-led teach shape ("you can
+  // move a disk onto a peg") — the full-shape test keeps "you can fly"
+  // declining right here.
+  if (pronounMatch && !ACTION_SIGNATURE_TEACH_RE.test(pronounSrc)
+    && !(await hasMidSentenceInterrogative(pronounSrc))) {
     const pronoun = pronounMatch[1];
     return {
       text: `I can't store a fact about "${pronoun}" as a class — pronouns aren't things I can classify. `
@@ -2784,6 +2814,174 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
         };
       }
     } catch { /* malformed slots — fall through to the ordinary honest-miss cascade */ }
+  }
+
+  // ACTION-RULE TEACH — the four action frames plus the render binding (see
+  // the ACTION_*_TEACH_RE docblock). Each sentence stores its own Rule
+  // individual under a shared "<verb> <prep>" name. A role word that names
+  // neither the taught subject class nor the literal "target" is an honest
+  // decline that RETURNS here — falling through would hand these shapes to
+  // the general-verb lane below, which would mint a garbage predicate from
+  // them (the silent-garble case this lane exists to prevent).
+  const actionLemma = async (word) => {
+    const w = String(word || "").toLowerCase();
+    try {
+      const { proseLemma } = await import("./prose-nlp.mjs");
+      const lemma = proseLemma();
+      return lemma ? lemma(w) : w;
+    } catch { return w; }
+  };
+  const actionRoleFor = (word, subjectClass) => {
+    const w = String(word || "").toLowerCase();
+    if (w === "target") return "target";
+    if (w === String(subjectClass || "").toLowerCase()) return "subject";
+    return null;
+  };
+
+  const actionSig = ownSrc.match(ACTION_SIGNATURE_TEACH_RE);
+  if (actionSig && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion) {
+    try {
+      const verb = await actionLemma(actionSig[1]);
+      const prep = actionSig[3].toLowerCase();
+      const { appendRule, RULE_KIND_ACTION_SIGNATURE } = await import("./memory/core.mjs");
+      const { id } = await appendRule(memoryDir, {
+        name: `${verb} ${prep}`,
+        kind: RULE_KIND_ACTION_SIGNATURE,
+        slots: { subjectClass: actionSig[2], targetClass: actionSig[4] },
+        provenance: teachProvenanceTag(sessionId, new Date().toISOString()),
+      });
+      if (id) {
+        return {
+          text: `noted — remembered: you can ${verb} a ${actionSig[2].toLowerCase()} ${prep} a ${actionSig[4].toLowerCase()}`,
+          via: "assert", miss: false,
+        };
+      }
+    } catch { /* malformed slots — fall through to the ordinary honest-miss cascade */ }
+  }
+
+  const precondNothing = ownSrc.match(ACTION_PRECOND_NOTHING_RE);
+  if (precondNothing && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion) {
+    const role = actionRoleFor(precondNothing[7], precondNothing[2]);
+    if (!role) {
+      return {
+        text: `I can't place "${precondNothing[7]}" in that rule — the last word must be "target" or the ${precondNothing[2]} itself (e.g. "nothing may ${precondNothing[5].toLowerCase()} ${precondNothing[6].toLowerCase()} the ${precondNothing[2]}").`,
+        via: "teach-miss", miss: true,
+      };
+    }
+    try {
+      const verb = await actionLemma(precondNothing[1]);
+      const prep = precondNothing[3].toLowerCase();
+      const innerVerb = await actionLemma(precondNothing[5]);
+      const scopeWord = precondNothing[4].toLowerCase();
+      const { appendRule, RULE_KIND_ACTION_PRECOND } = await import("./memory/core.mjs");
+      const { id } = await appendRule(memoryDir, {
+        name: `${verb} ${prep}`,
+        kind: RULE_KIND_ACTION_PRECOND,
+        slots: {
+          shape: "no-incoming",
+          predicate: `${innerVerb}-${precondNothing[6].toLowerCase()}`,
+          role,
+          scope: scopeWord === "target" ? "any" : scopeWord,
+        },
+        provenance: teachProvenanceTag(sessionId, new Date().toISOString()),
+      });
+      if (id) {
+        return {
+          text: `noted — remembered: to ${verb} ${prep}, nothing may ${precondNothing[5].toLowerCase()} ${precondNothing[6].toLowerCase()} the ${role === "target" ? "target" : precondNothing[2].toLowerCase()}`,
+          via: "assert", miss: false,
+        };
+      }
+    } catch { /* malformed slots — fall through to the ordinary honest-miss cascade */ }
+  }
+
+  const precondComp = ownSrc.match(ACTION_PRECOND_COMPARATIVE_RE);
+  if (precondComp && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion) {
+    const role = actionRoleFor(precondComp[5], precondComp[2]);
+    const rightWord = precondComp[7].toLowerCase();
+    const otherOk = role === "subject"
+      ? (rightWord === "target" || rightWord === precondComp[4].toLowerCase())
+      : (role === "target" && rightWord === precondComp[2].toLowerCase());
+    if (!role || !otherOk) {
+      return {
+        text: `I can't place "${!role ? precondComp[5] : precondComp[7]}" in that rule — the compared words must be the ${precondComp[2]} and the target (e.g. "the ${precondComp[2]} must be smaller than the target").`,
+        via: "teach-miss", miss: true,
+      };
+    }
+    try {
+      const verb = await actionLemma(precondComp[1]);
+      const prep = precondComp[3].toLowerCase();
+      const scopeWord = precondComp[4].toLowerCase();
+      const { appendRule, RULE_KIND_ACTION_PRECOND } = await import("./memory/core.mjs");
+      const { id } = await appendRule(memoryDir, {
+        name: `${verb} ${prep}`,
+        kind: RULE_KIND_ACTION_PRECOND,
+        slots: {
+          shape: "comparator",
+          predicate: `${precondComp[6].toLowerCase().replace(/\s+/g, "-")}-than`,
+          role,
+          scope: scopeWord === "target" ? "any" : scopeWord,
+        },
+        provenance: teachProvenanceTag(sessionId, new Date().toISOString()),
+      });
+      if (id) {
+        return {
+          text: `noted — remembered: to ${verb} ${prep}, the ${precondComp[5].toLowerCase()} must be ${precondComp[6].toLowerCase()} than the ${rightWord}`,
+          via: "assert", miss: false,
+        };
+      }
+    } catch { /* malformed slots — fall through to the ordinary honest-miss cascade */ }
+  }
+
+  const actionEffect = ownSrc.match(ACTION_EFFECT_TEACH_RE);
+  if (actionEffect && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion) {
+    const gerund = actionEffect[1].toLowerCase();
+    const verb = await actionLemma(gerund);
+    // An unreduced -ing form would mint a name ("moving onto") that can never
+    // match the signature's ("move onto") — decline rather than store a rule
+    // the interpreter can't collect.
+    if (verb === gerund || !gerund.startsWith(verb.slice(0, Math.min(3, verb.length)))) {
+      return {
+        text: `I can't reduce "${actionEffect[1]}" to its verb right now — the lemmatizer isn't available. Retry later, or teach the other rule sentences first.`,
+        via: "teach-miss", miss: true,
+      };
+    }
+    const subjectRole = actionRoleFor(actionEffect[5], actionEffect[2]);
+    const objectRole = actionRoleFor(actionEffect[8], actionEffect[2]);
+    if (!subjectRole || !objectRole || subjectRole === objectRole) {
+      return {
+        text: `I can't place "${!subjectRole ? actionEffect[5] : actionEffect[8]}" in that rule — the effect must relate the ${actionEffect[2]} and the target, once each (e.g. "makes the ${actionEffect[2]} rest on the target").`,
+        via: "teach-miss", miss: true,
+      };
+    }
+    try {
+      const prep = actionEffect[3].toLowerCase();
+      const effVerb = await actionLemma(actionEffect[6]);
+      const { appendRule, RULE_KIND_ACTION_EFFECT } = await import("./memory/core.mjs");
+      const { id } = await appendRule(memoryDir, {
+        name: `${verb} ${prep}`,
+        kind: RULE_KIND_ACTION_EFFECT,
+        slots: {
+          predicate: `${effVerb}-${actionEffect[7].toLowerCase()}`,
+          subjectRole,
+          objectRole,
+        },
+        provenance: teachProvenanceTag(sessionId, new Date().toISOString()),
+      });
+      if (id) {
+        return {
+          text: `noted — remembered: ${gerund} a ${actionEffect[2].toLowerCase()} ${prep} a ${actionEffect[4].toLowerCase()} makes the ${actionEffect[5].toLowerCase()} ${actionEffect[6].toLowerCase()} ${actionEffect[7].toLowerCase()} the ${actionEffect[8].toLowerCase()}`,
+          via: "assert", miss: false,
+        };
+      }
+    } catch { /* malformed slots — fall through to the ordinary honest-miss cascade */ }
+  }
+
+  const rendersAs = ownSrc.match(RENDERS_AS_TEACH_RE);
+  if (rendersAs && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion) {
+    const stored = await teachFact(memoryDir, sessionId, {
+      subject: rendersAs[1], predicate: "mgx:rendersAs", object: rendersAs[2],
+    });
+    if (stored) return stored;
   }
 
   // "some Xs are Ys" / "a few Xs are Ys" — the plural class-
@@ -3733,6 +3931,7 @@ const FACT_PREDICATE_PHRASES = {
   "mgx:hasLastSubevent": "ends with",
   "mgx:hasPrerequisite": "requires",
   "mgx:ownedBy": "is owned by", // the teach lane's ownership frame ("Priya owns tasks.mjs")
+  "mgx:rendersAs": "renders as", // the render-template binding ("a disk renders as a block")
   "mgx:synonym": "means the same as",
   "mgx:antonym": "is the opposite of",
   "mgx:similarTo": "is similar to",
