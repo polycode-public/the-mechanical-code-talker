@@ -6,8 +6,10 @@
 // already-embedded payload with zero fs I/O. Called with `envelope: null,
 // miss: true` to arm factAnswer's bare-question regex fallbacks directly,
 // bypassing the structural-graph parse pipeline this panel has no use for.
-import { factAnswer } from "./chat.mjs";
+import { factAnswer, factReadBack } from "./chat.mjs";
 import { createInMemoryStore, normFactTerm } from "./memory/core.mjs";
 
 // normFactTerm is re-exported too, for viz.mjs's client-side term normalization.
-globalThis.tmctMemoryAsk = { factAnswer, createInMemoryStore, normFactTerm };
+// factReadBack carries the taught-relation chases (grandfather-style questions)
+// that factAnswer's own lanes don't reach.
+globalThis.tmctMemoryAsk = { factAnswer, factReadBack, createInMemoryStore, normFactTerm };

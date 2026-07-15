@@ -62,6 +62,7 @@
   var createRequireFromPath = unavailable("createRequireFromPath");
   var spawnSync = unavailable("spawnSync");
   var createInterface = unavailable("createInterface");
+  var createServer = unavailable("createServer");
   var DatabaseSync = unavailable("DatabaseSync");
 
   // node-stub:node:path
@@ -92,6 +93,7 @@
   var createRequireFromPath2 = unavailable2("createRequireFromPath");
   var spawnSync2 = unavailable2("spawnSync");
   var createInterface2 = unavailable2("createInterface");
+  var createServer2 = unavailable2("createServer");
   var DatabaseSync2 = unavailable2("DatabaseSync");
 
   // node-stub:node:url
@@ -121,6 +123,7 @@
   var createRequireFromPath3 = unavailable3("createRequireFromPath");
   var spawnSync3 = unavailable3("spawnSync");
   var createInterface3 = unavailable3("createInterface");
+  var createServer3 = unavailable3("createServer");
   var DatabaseSync3 = unavailable3("DatabaseSync");
 
   // node-stub:node:fs/promises
@@ -149,6 +152,7 @@
   var createRequireFromPath4 = unavailable4("createRequireFromPath");
   var spawnSync4 = unavailable4("spawnSync");
   var createInterface4 = unavailable4("createInterface");
+  var createServer4 = unavailable4("createServer");
   var DatabaseSync4 = unavailable4("DatabaseSync");
 
   // src/memory/trust.mjs
@@ -198,11 +202,36 @@
   var RULE_KIND_COMPOSE2 = "compose2";
   var RULE_KIND_FILTER = "filter";
   var RULE_KIND_RECURSIVE = "recursive";
-  var RULE_KINDS = Object.freeze([RULE_KIND_COMPOSE2, RULE_KIND_FILTER, RULE_KIND_RECURSIVE]);
+  var RULE_KIND_ACTION_SIGNATURE = "action-signature";
+  var RULE_KIND_ACTION_PRECOND = "action-precond";
+  var RULE_KIND_ACTION_EFFECT = "action-effect";
+  var RULE_KINDS = Object.freeze([
+    RULE_KIND_COMPOSE2,
+    RULE_KIND_FILTER,
+    RULE_KIND_RECURSIVE,
+    RULE_KIND_ACTION_SIGNATURE,
+    RULE_KIND_ACTION_PRECOND,
+    RULE_KIND_ACTION_EFFECT
+  ]);
   var RULE_SLOT_SPEC = {
     [RULE_KIND_COMPOSE2]: [["base1", "mgx:ruleBase1"], ["base2", "mgx:ruleBase2"]],
     [RULE_KIND_FILTER]: [["base", "mgx:ruleBase1"], ["property", "mgx:ruleFilterProperty"]],
-    [RULE_KIND_RECURSIVE]: [["baseCase", "mgx:ruleBaseCase"], ["recStep", "mgx:ruleRecStep"]]
+    [RULE_KIND_RECURSIVE]: [["baseCase", "mgx:ruleBaseCase"], ["recStep", "mgx:ruleRecStep"]],
+    [RULE_KIND_ACTION_SIGNATURE]: [
+      ["subjectClass", "mgx:ruleActionSubjectClass"],
+      ["targetClass", "mgx:ruleActionTargetClass"]
+    ],
+    [RULE_KIND_ACTION_PRECOND]: [
+      ["shape", "mgx:ruleActionPrecondShape"],
+      ["predicate", "mgx:ruleActionPrecondPredicate"],
+      ["role", "mgx:ruleActionPrecondRole"],
+      ["scope", "mgx:ruleActionPrecondScope"]
+    ],
+    [RULE_KIND_ACTION_EFFECT]: [
+      ["predicate", "mgx:ruleActionEffectPredicate"],
+      ["subjectRole", "mgx:ruleActionEffectSubject"],
+      ["objectRole", "mgx:ruleActionEffectObject"]
+    ]
   };
 
   // src/codegraph.mjs
@@ -228,10 +257,7 @@
       relations,
       truncated,
       generatedAt: payload?.generated_at || null,
-      // Second pass (PLAN_PROSE_INDEX.md): word -> [individual ids], passed through
-      // byte-identical from the payload so ask.mjs's resolveObject can consult it as a
-      // fallback tier without reaching back into the raw payload itself. {} when the
-      // build had prose disabled or the payload predates this field.
+      // word -> [individual ids]; {} when prose was disabled at build time
       proseIndex: payload?.proseIndex || {}
     };
   }
@@ -246,9 +272,7 @@
     "seon:hassupertype": "inherits",
     "mgx:changecoupledwith": "cochange",
     "mgx:reexports": "reexports",
-    // fine-grained symbol-level edges (Commit→symbol history, fn→fn in-repo calls).
-    // These stay SEPARATE kinds from the module-coarse "touches"/"calls" so the impact
-    // closure (module-coarse) is unchanged.
+    // symbol-level edges stay separate kinds so the module-coarse impact closure is unchanged
     "mgx:touchessymbol": "touchesSymbol",
     "mgx:callssymbol": "callsSymbol",
     // legacy tokens (pre-realign graphs) — kept so a stale artifact still classifies
@@ -261,20 +285,12 @@
     "mg:defines": "defines",
     "mg:tests": "tests",
     "mg:touches": "touches",
-    // memory-graph predicates (src/memory/core.mjs, src/sessions.mjs) — each maps to
-    // itself as its own kind name (no module-rollup abbreviation needed, unlike
-    // imports/calls) so adjacencyForKinds/edgesOfKind can walk the memory graph too.
+    // memory-graph predicates map to themselves so adjacencyForKinds/edgesOfKind can walk them too
     "mgx:saidinsession": "saidInSession",
     "mgx:inreplyto": "inReplyTo",
     "mgx:statedby": "statedBy",
     "mgx:canonicalisedfrom": "canonicalisedFrom",
-    // PLAN_VIZ_MEMORY.md Bug 2 fix: the two FIXED structural link kinds
-    // deriveFactTermGraph (below) synthesizes on every Fact — Fact -> its own
-    // subject/object Term individual. Without these a walk seeded on a Fact (the
-    // default mostRecentIndividual seed right after a teach turn) could never
-    // reach the term graph at all. Distinct from the per-predicate kinds below
-    // (an open-ended, DYNAMIC set — see relationKind's "factrel:" branch), these
-    // two are fixed and few, so a plain PROP_KIND row is the simplest fit.
+    // structural links deriveFactTermGraph synthesizes on every Fact (Fact -> its own subject/object Term)
     "mgx:factsubjectterm": "factSubjectTerm",
     "mgx:factobjectterm": "factObjectTerm"
   };
@@ -723,8 +739,8 @@
     imports: {
       comment: "Module -> Module: subject's import graph references object (usesComplexType).",
       verbs: [
-        // formal/neutral ("uses"/"use" moved to the `uses` union family, 2026-07-02 —
-        // "uses code from" stays here: its phrasing is specifically import-flavored)
+        // formal/neutral ("uses code from" stays here: its phrasing is
+        // specifically import-flavored)
         "couples to",
         "couple to",
         "depends on",
@@ -753,17 +769,12 @@
         "are wired to",
         "is hooked up to",
         "are hooked up to",
-        // gerund (g-drop normalization turns dialectal "importin'" into this — §3.5)
+        // gerund (g-drop normalization turns dialectal "importin'" into this)
         "importing"
       ]
     },
-    // "uses" is a QUERY-side union family, not a stored predicate (2026-07-02 query
-    // families): "what uses X" honestly means BOTH the import graph and the call
-    // graph, so ask.mjs traverses it as imports + calls + callsSymbol together
-    // (KIND_UNIONS there). The verbs moved here FROM imports — "which modules use X"
-    // still answers with the importing modules (the asked Module grain filters the
-    // union down to module-grain subjects), and "what uses <function>" now also
-    // reaches the symbol-grain callers instead of silently ignoring them.
+    // query-side union, not a stored predicate: ask.mjs traverses "uses" as
+    // imports + calls + callsSymbol together (KIND_UNIONS).
     uses: {
       comment: "query-side union: imports (Module->Module) + calls (Module->Module) + callsSymbol (fn->fn).",
       verbs: [
@@ -772,7 +783,7 @@
         "used by",
         "makes use of",
         "make use of",
-        // gerund (g-drop normalization — §3.5)
+        // gerund (g-drop normalization)
         "using"
       ]
     },
@@ -798,7 +809,7 @@
         "fire",
         "kicks off",
         "kick off",
-        // gerund (g-drop normalization turns dialectal "callin'" into this — §3.5)
+        // gerund (g-drop normalization turns dialectal "callin'" into this)
         "calling"
       ]
     },
@@ -813,7 +824,7 @@
         "have",
         "holds",
         "hold",
-        // gerund (g-drop normalization — §3.5)
+        // gerund (g-drop normalization)
         "defining"
       ]
     },
@@ -832,7 +843,7 @@
         "sit in",
         "sits inside",
         "sit inside",
-        // gerund (g-drop normalization — §3.5)
+        // gerund (g-drop normalization)
         "containing"
       ]
     },
@@ -851,7 +862,7 @@
         "check",
         "makes sure of",
         "make sure of",
-        // gerund (g-drop normalization — §3.5)
+        // gerund (g-drop normalization)
         "testing"
       ]
     },
@@ -860,15 +871,6 @@
       verbs: [
         "inherits from",
         "inherit from",
-        // bare "inherits"/"inherit" (Tier 6 playtest, §3b surface-variation axis):
-        // this list's own SIBLING verb "extends"/"extend" already works bare, with
-        // no "from" required, but "inherits"/"inherit" — arguably the MORE common
-        // everyday phrasing of the two ("TaskController inherits Controller",
-        // "does TaskController inherit Controller") — had no bare form at all,
-        // only the "... from" variant. VERB_ALT's longest-first sort (already
-        // relied on elsewhere in this file for the same reason) means "inherits
-        // from"/"inherit from" still win whenever "from" actually follows, so
-        // this is purely additive.
         "inherits",
         "inherit",
         "extends",
@@ -885,22 +887,13 @@
         "are built off",
         "is built on top of",
         "are built on top of",
-        // gerund (g-drop normalization — §3.5, and the compositional grammar's
-        // gerund-led boolean gate: "classes inheriting from Base but not tested").
-        // Both the two-word "inheriting from" (so "from" is consumed into the verb
-        // phrase, not the object term) and the bare "inheriting" (the single token
-        // the gerund-lead check reads) are listed; longest-match-first prefers the
-        // two-word form when "from" follows.
+        // gerund, incl. compositional grammar's gerund-led boolean gate
+        // ("classes inheriting from Base but not tested")
         "extending",
         "inheriting from",
         "inheriting",
         "subclassing",
         "extends from",
-        // REVERSE phrasings (Seonix Batch 2 Fix 2, see INHERITS_REVERSE_VERB_LIST's own
-        // comment above): "is/are a|the superclass/parent class of" — folded in here so
-        // VERB_TO_KIND maps them to "inherits" like every other verb in this list; the
-        // subject/object SWAP their direction requires is handled at parse time by the
-        // strategies that build the "ask" shape, not here.
         ...INHERITS_REVERSE_VERB_LIST
       ]
     },
@@ -923,13 +916,8 @@
         "were tweaked in",
         "got changed in",
         "got edited in",
-        // commit-question forms (2026-07-02, viewer commit-chat fix): the same touch
-        // relation asked from the commit's side — "which changes touch commit <sha>",
-        // "what did commit <sha> touch", "which functions changed in <sha>", "which
-        // changes landed in commit <sha>", "what was touched by commit <sha>". Bare
-        // "touch" completes the touched/touches pair for the "did … touch" auxiliary
-        // form; the "by"/"in" phrases are the passive/locative counterparts of forms
-        // already above (curated per register spread, not a thesaurus dump).
+        // the same touch relation asked from the commit's side ("what did
+        // commit <sha> touch")
         "touch",
         "touched by",
         "modified by",
@@ -937,23 +925,15 @@
         "changed in",
         "landed in",
         "land in",
-        // contents-of-a-commit forms (2026-07-02, operator screenshot: "what was in
-        // commit <sha>" missed on the live site). "was in"/"went into" only read as
-        // touch questions when the object is a commit — the sha-shaped object keeps
-        // them from firing on structural questions ("is X in the graph" has no verb
-        // match anyway). Judgment call: "is in" omitted — too generic without the
-        // past-tense anchor and risks matching containment phrasings.
+        // "was in"/"went into" only read as touch questions against a
+        // sha-shaped object
         "was in",
         "were in",
         "went into",
         "included in",
-        // when-question forms (2026-07-02 query families): "when was X last
-        // updated/edited" — bare past participles that only read naturally in the
-        // temporal shape; the when template routes them, but they are ordinary
-        // touches verbs so "which modules were updated ..." keeps working too.
         "updated",
         "edited",
-        // gerund (g-drop normalization — §3.5)
+        // gerund (g-drop normalization)
         "touching"
       ]
     },
@@ -971,19 +951,9 @@
         "tend to change together with",
         "moves together with",
         "move together with",
-        // Track-1 trio (temporal lever): the bare "changed/change together with" form
-        // (no "tends to"/"tend to" prefix) was missing outright — "which modules
-        // changed together with X" fell through to the "touch(ed)" verb instead (a
-        // Commit->Module kind, structurally unable to match a Module subject), always
-        // producing a confidently-empty answer regardless of real cochange data.
         "changed together with",
         "change together with",
         "changes together with",
-        // Present-tense bare form (Seonix Batch 4/5 follow-up): only the past tense
-        // "changed with" existed above — "what changes with X"/"what usually changes
-        // with X" fell through entirely (ENTITY_TO_TYPE's own "changes"->"Change"
-        // pseudo-type noun risked consuming the word first; see parseRelationalOrQualified's
-        // guard against exactly that in ask.mjs).
         "changes with",
         "change with",
         "tends to change with",
@@ -1000,13 +970,9 @@
         "re-export",
         "passes through",
         "pass through",
-        // API-surface phrasing (2026-07-02 query families): "what does <module>
-        // expose". Bare "exposed" is NOT listed — the lemma tier maps it here when
-        // an adapter is present, and "how does the API get exposed" has no
-        // traversal either way (pinned as an honest miss in the tests).
         "exposes",
         "expose",
-        // gerund (g-drop normalization — §3.5)
+        // gerund (g-drop normalization)
         "exporting"
       ]
     }
@@ -1073,10 +1039,6 @@
     methods: "Method",
     class: "Class",
     classes: "Class",
-    // "mod"/"mods" (HANDOVER.md 2026-07-10 item 10): a rushed-dev abbreviation
-    // prefix ("mod store.mjs imports") used to land in disambiguation instead of
-    // resolving cleanly, since nothing recognized "mod" as this same Module noun
-    // — same alias-of-Module trade "file"/"files" already make just above.
     module: "Module",
     modules: "Module",
     mod: "Module",
@@ -1091,17 +1053,10 @@
     variables: "GlobalVariable",
     global: "GlobalVariable",
     globals: "GlobalVariable",
-    // "changes" in a touch question ("which changes touch commit <sha>") means the
-    // code entities on the other end of the touch edges, at WHATEVER grain the graph
-    // recorded — module (touches) and symbol (touchesSymbol) together when the commit
-    // is the given side, and the touching commits themselves when a module/symbol is
-    // the given side. Mapped to the pseudo-type "Change" (not a node class): ask.mjs's
-    // traverse() reads it as a wildcard over the touch traversal's results rather than
-    // aliasing it to ONE real class and silently dropping the other grain of the
-    // answer. Listed BEFORE commit/commits: findPhrase (ask.mjs) takes the first
-    // same-length phrase in table order, so in "which changes touch commit <sha>" the
-    // entity slot must consume "changes" and leave "commit <sha>" intact as the
-    // object term.
+    // "Change" is a pseudo-type, not a node class: ask.mjs's traverse() reads it
+    // as a wildcard over touch-traversal results (module or symbol grain).
+    // Listed before commit/commits since findPhrase takes the first
+    // same-length match in table order.
     change: "Change",
     changes: "Change",
     commit: "Commit",
@@ -1208,13 +1163,7 @@
     "touchs": "touches",
     "tuoches": "touches",
     "touhced": "touched",
-    // "touchd" (BENCHMARK_CONVERSATION_1.7.0.md routed backlog C3): the
-    // dropped-vowel slip of "touched" — distinct from "touhced" above
-    // (transposed letters), same curated-typo discipline.
     "touchd": "touched",
-    // WHERE_MARKERS typo (0.9.13 Tier-1 playtest): "defined" itself had no typo
-    // entry, so "where is it defned" fell through to the bare-object search path
-    // instead of the where-shape ("no module matching 'it defned' found").
     "defned": "defined",
     "chagned": "changed",
     "chnaged": "changed",
@@ -1228,50 +1177,20 @@
     "whcih": "which",
     "wich": "which",
     "whihc": "which",
-    // "wehre"/"whre" (0.9.13 Tier-1 playtest, "where is it defined" drill-down):
-    // the WHERE-DEFINED shape's own anchor word had NO typo tolerance at all
-    // (unlike which/what/does/the above), so a plain dropped/transposed letter
-    // fell straight through resolveObject and hit either the grammar wall or a
-    // bogus "no module matching 'it defined'" search. "were" (the missing-h
-    // homophone slip) is NOT curated here — it's a real word already load-bearing
-    // as the TEMPORAL_AUX auxiliary ("when were the modules last touched"), so
-    // that one typo is handled by its own anchored phrasing frame instead
-    // (normalize.mjs PHRASING_FRAMES) to avoid clobbering the legitimate reading.
+    // "were" (the missing-h homophone slip of "where") is NOT curated here —
+    // it's a load-bearing TEMPORAL_AUX word ("when were the modules touched").
     "wehre": "where",
     "whre": "where",
-    // "wat" (chatbench cycle 2, tf-wat-calls): the internet-casual spelling of
-    // "what" — neither curated noise nor a restorable trigger typo, so "wat calls
-    // fnAlpha" used to die as "couldn't resolve one of the terms". Restored here
-    // so BOTH parse strategies and the relaxation cascade see the canonical
-    // anchor; the correction regex's dotted-extension guard keeps a module
-    // literally named "wat.mjs" untouched, same residual trade as every entry.
     "waht": "what",
     "wat": "what",
-    // "dat" (BENCHMARK_CONVERSATION_1.7.0.md routed backlog C3): the internet-
-    // casual spelling of "that" — same register as "wat"/"waht" just above,
-    // curated rather than left to the generic fuzzy tier since "that" is a
-    // load-bearing anchor word throughout this grammar (TEACH_RE's own
-    // "remember that X", relative-clause objects, etc).
     "dat": "that",
     "dose": "does",
     "doess": "does",
     "teh": "the",
-    // aggregate/list TRIGGER words (2026-07-02, trigger-typo work) — a typo of a count
-    // or list trigger used to be DROPPED as unmatched by the relaxation cascade, losing
-    // the aggregate/list INTENT entirely ("how manyn classes" → the count was lost);
-    // curated here so the intended trigger is restored BEFORE parsing (the general
-    // bounded fuzzy path in ask.mjs's cascade is the backstop for uncurated typos).
     "manyn": "many",
     "mnay": "many",
     "amny": "many",
     "mnany": "many",
-    // "hwo" (Tier 6 playtest, §3b typo axis): a transposed-letter typo of "how" —
-    // "hwo many classes are there" used to lose the aggregate/list trigger
-    // outright ("how many" only reads as a count trigger when both words are
-    // exact), same failure class as "manyn"/"mnay" just above, one word to the
-    // left of it. "how" is grammar-owned via AGGREGATE_TRIGGERS' own "how many"/
-    // "how much" entries (test/ask-vocab.test.mjs's canonical-value check
-    // splits those multi-word triggers into individual words).
     "hwo": "how",
     "coutn": "count",
     "conut": "count",
@@ -1338,14 +1257,6 @@
     "btw",
     "by the way",
     "you",
-    // "quick q" (BENCHMARK_CONVERSATION_1.8.14.md item 11): the casual abbreviated
-    // sibling of GREETING_PREAMBLE_RE's own "quick question" clause (normalize.mjs)
-    // — that frame requires a delimiter immediately after the greeting word
-    // ("hey, quick question - …"), so it never matches "hey quick q, …" (no
-    // delimiter between "hey" and "quick q"). Filler-stripping instead — this
-    // list is matched word-boundary-anywhere, not anchored — closes the gap
-    // without needing GREETING_PREAMBLE_RE's own stricter delimiter-position
-    // shape.
     "quick q"
   ]);
   var CONTEXT_PRONOUNS = Object.freeze(["this", "it", "that", "here", "this one", "that one"]);
@@ -1394,8 +1305,6 @@
     "node",
     "stuff",
     "code",
-    // "symbol(s)" is a grain-agnostic stand-in for any code entity — "exported
-    // symbols of X" means whatever X defines, at any grain, filtered by the qualifier.
     "symbol",
     "symbols"
   ]);
@@ -1423,33 +1332,22 @@
     uncovered: { via: "tested", value: false }
   });
   var AGGREGATE_TRIGGERS = Object.freeze([
-    // formal ("the number of classes" reaches "number of" once the cascade strips the
-    // leading article — keeping the trigger list clear of "the" so it never enters
-    // CONTENT_VOCAB and blocks the article's own noise-strip)
     "how many",
     "how much",
     "how many of",
     "number of",
     "total number of",
     "quantity of",
-    // "<measure> of <kind>" cardinality forms (widened net, cycle W2P): count = sum = total
-    // = tally = number of. The bare single words (sum/total/tally) stay CASCADE_SYNONYMS-
-    // mapped to "count" (identifier-fragment risk without the "of" anchor — see that table's
-    // note); the multi-word "of" forms are safe to promote to direct triggers because the
-    // trailing "of <kind>" pins them to a cardinality question, not a stray identifier.
     "tally of",
     "sum of",
     "total of",
     "amount of",
-    // neutral / imperative (bare "tally"/"sum"/"total" stay CASCADE_SYNONYMS-mapped so the
-    // "tally the classes" relaxation path — pinned by a cascade test — is preserved).
     "count",
     "count up",
     "count of",
     "tot up"
   ]);
   var LIST_TRIGGERS = Object.freeze([
-    // imperative — "<verb> [me/us] [the] <kind>"
     "list",
     "show",
     "show me",
@@ -1467,7 +1365,6 @@
     "run down",
     "run through",
     "ls",
-    // interrogative — "what/which are [the] <kind>"
     "what are",
     "which are"
   ]);
@@ -1501,12 +1398,7 @@
     connections: { kind: "*", dir: "both" },
     edges: { kind: "*", dir: "both" },
     connected: { kind: "*", dir: "both" },
-    // participle degree-nouns (widened net, cycle W2P): "the most imported / most
-    // depended-on / most used <module>" ranks by IN-degree — how many things import/depend
-    // on/use it — the ARGMAX-by-degree intent a developer expresses with a passive
-    // participle rather than the noun ("importers"). "depended" catches "depended-on" /
-    // "depended on" (both tokenize to a bare "depended"); "used" folds the symbol-grain
-    // callsSymbol callers in alongside importers so "most used" reads as most-relied-upon.
+    // participle degree-nouns rank by in-degree, same intent as "importers" etc
     imported: { kind: "imports", dir: "in" },
     "depended-on": { kind: "imports", dir: "in" },
     depended: { kind: "imports", dir: "in" },
@@ -1520,27 +1412,12 @@
   var ANAPHORA_TRIGGERS = Object.freeze(["those", "them", "these"]);
   var MEMBERSHIP_KINDS = Object.freeze(["contains", "defines"]);
   var CASCADE_NOISE = Object.freeze([
-    // articles / vague determiners (kept OUT of content vocab so they're strippable;
-    // the aggregate/where parsers already tolerate a stray "the"/"a", so stripping is
-    // belt-and-braces, not load-bearing)
     "the",
     "a",
     "an",
     "some",
-    // "what OTHER classes inherit from Controller" — "other" is a vague determiner
-    // like "some", not a qualifying adjective; without this it was misread as a
-    // fuzzy find TERM ("no classes found matching 'other'") instead of falling
-    // through to the ordinary reverse-inherits parse (fast-loop round 6 finding).
     "other",
-    // topic lead-in filler — "what about the modules", "how about classes": "about"
-    // carries no graph meaning here, so stripping it lets the bare kind noun surface for
-    // the cascade's bare-kind-noun terminal rule (ask.mjs). ("what"/"how" are structural
-    // question words the drop-pass keeps; only the "about" between them and the kind is
-    // noise.) A module literally named "about" is safe-listed by relaxParse's resolvesExact
-    // guard, same as every other noise token.
     "about",
-    // politeness / hedges (single-token; multi-word "could you"/"please" etc. are
-    // FILLER_WORDS, stripped earlier during normalization)
     "please",
     "pls",
     "plz",
@@ -1553,8 +1430,6 @@
     "thank",
     "ta",
     "cheers",
-    // greetings a question sometimes opens with (chat.mjs owns standalone greetings;
-    // here they're only stripped when embedded in an otherwise-real question)
     "hi",
     "hello",
     "hey",
@@ -1563,7 +1438,6 @@
     "howdy",
     "ok",
     "okay",
-    // vocatives / terms of address (the "matey" of the worked example, and its kin)
     "matey",
     "mate",
     "buddy",
@@ -1580,18 +1454,7 @@
     "guys",
     "everyone",
     "dear",
-    // the product's OWN name used as an address (chatbench cycle 2, ns-hey-tmct:
-    // "hey tmct, what calls fnAlpha thanks") — a vocative like "matey", stripped
-    // by the same rules: relaxParse's resolvesExact guard still protects a module
-    // literally named "tmct", and noise-strip's template/keyword-spot acceptance
-    // bounds the cost of a mid-question strip to an honest object-miss.
     "tmct",
-    // presentation frames — the keyword-spotting strategy's blind spot: the
-    // compositional grammar skips these as FRAME_WORDS, but "show me what imports X"
-    // otherwise decomposes (via keyword-spot) to ask{subject:"show me"}. Stripping
-    // them on a miss recovers the underlying reverse/forward question. ("count" is NOT
-    // here — it is an aggregate trigger; "find"/"search" are here as presentation
-    // verbs, not the tmct_search tool, which ask.mjs never dispatches.)
     "show",
     "tell",
     "give",
@@ -1818,40 +1681,21 @@
   }
   var PHRASING_FRAMES = Object.freeze([
     // MEMBERS-of-class → "what does X contain".
-    //   "what functions are in Task", "what methods are inside X", "what attributes are in X"
     { re: /^what\s+(?:functions?|methods?|members?|attributes?|fields?|properties)\s+(?:are|is)\s+(?:in|inside|within)\s+(?:the\s+)?(.+?)\??$/i, to: (m) => `what does ${m[1]} contain` },
-    //   "what functions does Task have", "what methods does X have"
     { re: /^what\s+(?:functions?|methods?|members?|attributes?|fields?|properties)\s+(?:does|do)\s+(.+?)\s+have\??$/i, to: (m) => `what does ${m[1]} contain` },
-    //   "what are the members of X", "what are the methods in X"
     { re: /^what\s+are\s+(?:the\s+)?(?:functions?|methods?|members?|attributes?|fields?|properties)\s+(?:of|in|inside|within)\s+(?:the\s+)?(.+?)\??$/i, to: (m) => `what does ${m[1]} contain` },
-    //   "members of X", "methods of X", "contents of X"
     { re: /^(?:the\s+)?(?:members?|methods?|attributes?|contents)\s+of\s+(?:the\s+)?(.+?)\??$/i, to: (m) => `what does ${m[1]} contain` },
-    //   "what's in X" / "what is in X" (contraction already expanded; sha handled above)
     { re: /^what\s+is\s+(?:in|inside)\s+(?:the\s+)?(.+?)\??$/i, to: (m) => `what does ${m[1]} contain` },
-    //   "what else is in X" (0.9.15 Tier-1 single-touch playtest) — the natural
-    //   "besides what I already know" drill-down after a members-of-class answer.
-    //   Distinct from the "what else does X <verb>" family (which the compositional
-    //   grammar already tolerates, dropping "else" as noise on its own): the "is
-    //   in" idiom is NOT a compositional marker, so parseComposite never sees it and
-    //   "what else is in X" fell through to the strategies with NO candidate at all
-    //   (neither recognizes the bare "is in" idiom once "else" sits in front of it).
-    //   The only rescue was the relaxation cascade's drop-unmatched layer — but that
-    //   layer refuses to accept a relaxed reading that still renders an honest EMPTY
-    //   , so a genuinely empty class ("what else is in
-    //   Task.complete" — a method, no members) bottomed out at the bare grammar
-    //   wall instead of the specific "no contains edges" receipt. Routing this
-    //   frame onto the SAME direct "what does X contain" path the plain "what is
-    //   in X" frame above already uses sidesteps the cascade's conservative gate
-    //   entirely, so a real empty is reported honestly instead of walled.
+    // "what else is in X" drill-down after a members-of-class answer.
     { re: /^what\s+else\s+is\s+(?:in|inside)\s+(?:the\s+)?(.+?)\??$/i, to: (m) => `what does ${m[1]} contain` },
     // WHERE-DEFINED → "where is X defined". PAST TENSE ONLY ("what defined X", "what
     // declared X"): the PRESENT "what defines X" already parses as a reverse-defines
-    // query (the module defining symbol X — test/ask.test.mjs pins that), so rewriting
-    // it would change that receipt. The past-tense form is the one that hit the wall.
+    // query (the module defining symbol X), so rewriting it would change that
+    // receipt. The past-tense form is the one that hit the wall.
     { re: /^what\s+(?:defined|declared)\s+(?:the\s+)?(?:function\s+|method\s+|class\s+|module\s+|variable\s+|constant\s+)?(.+?)\??$/i, to: (m) => `where is ${m[1]} defined` },
     //   "where's X defined" (the "where's" contraction is not in the contraction table)
     { re: /^where'?s\s+(?:the\s+)?(.+?)\s+(defined|declared|located|implemented)\??$/i, to: (m) => `where is ${m[1]} ${m[2]}` },
-    //   "were is X defined" (0.9.13 Tier-1 playtest: the missing-h typo of "where").
+    //   "were is X defined" (the missing-h typo of "where").
     //   NOT curated as a blanket MISSPELLINGS entry — "were" is a real word already
     //   load-bearing as the TEMPORAL_AUX auxiliary ("when were the modules last
     //   touched"), so a global word-boundary rewrite would clobber that reading.
@@ -1860,33 +1704,15 @@
     //   temporal query produces ("were" as an auxiliary never leads directly into
     //   a bare "is").
     { re: /^were\s+is\s+(?:the\s+)?(.+?)\s+(defined|declared|located|implemented)\??$/i, to: (m) => `where is ${m[1]} ${m[2]}` },
-    // PREDICATIVE QUALIFIER → the ATTRIBUTIVE form the grammar already answers. The
-    // adjective-qualifier post-filters (ask-vocab.mjs QUALIFIERS: tested/untested,
-    // public/private, exported, static/abstract/constant, …) parse in the ATTRIBUTIVE
-    // slot — "untested modules", "public methods" — but a developer just as naturally
-    // asks the PREDICATIVE "which modules are untested" / "what functions are tested",
-    // which hit the grammar wall (and, worse, the wall's own hint SUGGESTED "which
-    // functions are tested" — a shape it could not then answer). Rewriting the
-    // predicative "<which|what> <kind> are <QUALIFIER>" to "<QUALIFIER> <kind>" routes
-    // it onto the working attributive filter. Closed to the known qualifier adjectives
-    // (not a general "… are X" catch), and the QUALIFIER must sit immediately after
-    // are/is, so "which modules are NOT tested" never matches here — that keeps its own
-    // set-complement handler (matchNegationSet, downstream in ask.mjs's parseNegation).
+    // PREDICATIVE QUALIFIER ("which modules are untested") → the ATTRIBUTIVE form
+    // ("untested modules") the grammar already answers. The QUALIFIER must sit
+    // immediately after are/is, so "…are NOT tested" keeps its own set-complement handler.
     {
       re: /^(?:which|what)\s+(?:the\s+|all\s+)?([a-z][a-z-]*?)\s+(?:are|is)\s+(public|private|protected|static|abstract|constant|exported|re-?exported|tested|covered|untested|uncovered)\??$/i,
       to: (m) => `${m[2].toLowerCase()} ${m[1].toLowerCase()}`
     },
-    // BARE COVERAGE SURVEY (no entity kind) → the attributive "<qualifier> modules"
-    // the grammar already answers. Once "what is a test" opens the topic, a developer
-    // asks the survey the plainest way — "what is untested", "what's not tested",
-    // "what isn't covered", "what is covered" — with NO entity noun at all, so the
-    // predicative-qualifier frame above (which needs a KIND between what/which and
-    // are/is) can't catch it, and it fell through to a soft wall ("no module matching
-    // 'not'…" / the "I answer questions…" orientation). Default the surveyed kind to
-    // modules (the same set "which modules are not tested" / "untested modules" return)
-    // and fold the negation into the qualifier (not tested → untested, not covered →
-    // uncovered). Anchored with no object, so "what tests cover X" / "what is a test"
-    // never match here.
+    // BARE COVERAGE SURVEY, no entity kind ("what is untested") → defaults the
+    // surveyed kind to modules and folds the negation into the qualifier.
     {
       re: /^what\s+(?:is|are)\s+(not\s+)?(tested|untested|covered|uncovered)\??$/i,
       to: (m) => {
@@ -1895,61 +1721,23 @@
         return `${flipped} modules`;
       }
     },
-    // CO-CHANGE → the "co-changes with" canonical the RELATIONS table answers. The
-    // cochange verb synonyms (ask-vocab.mjs) include "co-changes with" / "moves
-    // together with" / "tends to change together with", but NOT the plainest form a
-    // developer types — the one the README itself prints and the relation renders as:
-    // "what does X change together with" / "what changes together with X". Both hit a
-    // dead-end ("couldn't resolve one of the terms" / the grammar wall); rewriting them
-    // onto "what co-changes with X" routes them to the working change-coupling query.
+    // CO-CHANGE → "what co-changes with X" (the plainest phrasing a developer types).
     { re: /^what\s+does\s+(.+?)\s+changes?\s+together\s+with\??$/i, to: (m) => `what co-changes with ${m[1]}` },
     { re: /^what\s+changes?\s+together\s+with\s+(.+?)\??$/i, to: (m) => `what co-changes with ${m[1]}` },
-    // AUTHORSHIP → the "who touched X" churn query. "who touched X" now names the
-    // commit author beside the sha (the 0.8.1 commit-ref quick-win), which invites the
-    // synonyms a developer reaches for next — "who wrote X", "who authored X", "who is
-    // the author of X" — and every one of them hit the grammar wall. tmct has no
-    // separate authorship edge; "touched" IS the authorship signal (the churn commits
-    // carry the author), so these are true synonyms of "who touched X", not a new
-    // capability. Anaphora rides through untouched ("who wrote it" → "who touched it").
-    // SHA GUARD (0.8.2 feel wave): a COMMIT object is NOT a synonym — "who is the
-    // author of abc1234" rewritten to "who touched abc1234" dumps the commit's
-    // touch-SET instead of naming its author. The negative lookahead refuses the
-    // rewrite when the object is a bare (optionally "commit "-prefixed) 7-40 char
-    // hex sha, leaving the un-rewritten form for the author lane to consume;
-    // file/symbol objects (anything non-sha, e.g. "deadbeef.mjs") keep the rewrite.
+    // AUTHORSHIP → "who touched X" (tmct's touch edge IS the authorship signal).
+    // A commit sha object is excluded — that dumps the commit's touch-set, not its author.
     { re: /^who\s+(?:wrote|authored)\s+(?:the\s+)?(?!(?:commit\s+)?[0-9a-f]{7,40}\??$)(.+?)\??$/i, to: (m) => `who touched ${m[1]}` },
     { re: /^who\s+is\s+the\s+authors?\s+of\s+(?:the\s+)?(?!(?:commit\s+)?[0-9a-f]{7,40}\??$)(.+?)\??$/i, to: (m) => `who touched ${m[1]}` },
-    // HAS-TESTS → the coverage question the RELATIONS table answers. "does X have
-    // tests" parses "have" as a defines-verb (VERB_TO_KIND), producing the garbled
-    // "No — no defines edge found from X to <whatever resolves>" receipt; "is X
-    // tested" traverses tests edges from the WRONG side (subject = X). Both mean
-    // the coverage question "what tests X" — rewrite onto it. Closed to a
-    // tests/coverage object ("does X have methods/members" stays the members
-    // family) and refuses any "not" in the subject span, so the set-complement
-    // negations ("is X not tested") keep their own handler downstream.
+    // HAS-TESTS → "what tests X" (the coverage question). Refuses "not" in the
+    // subject so set-complement negations keep their own downstream handler.
     { re: /^(?:does|do)\s+(?!.*\bnot\b)(.+?)\s+have\s+(?:any\s+)?(?:tests?|test\s+coverage|coverage)\??$/i, to: (m) => `what tests ${m[1]}` },
     { re: /^(?:is|are)\s+(?!.*\bnot\b)(.+?)\s+tested\??$/i, to: (m) => `what tests ${m[1]}` },
-    // NEEDS-TESTS → the untested-module survey. "what needs tests" / "what needs
-    // testing" is the plainest way to ask which modules are uncovered, and it hit the
-    // grammar wall ("no module matching 'needs'…"). Route it onto the same attributive
-    // survey the bare "what is untested" frame lands on. Closed to the tests/coverage
-    // object, so it can't swallow a general "what needs X".
+    // NEEDS-TESTS → the untested-module survey.
     { re: /^what\s+needs\s+(?:to\s+be\s+)?(?:a\s+)?(?:tested|tests?|testing|coverage|covering)\??$/i, to: () => "untested modules" },
-    // DOES-X-VERB-ANYTHING-ELSE → the plain forward "what does X <verb>" listing
-    // (0.9.15 Tier-1 single-touch playtest). A very natural drill-down follow-up
-    // after a relation answer — "does listTasks call anything else", "does
-    // src/handlers/tasks.mjs import something else" — used to dead-end: "anything"/
-    // "something" [else] is a placeholder standing in for "the rest of the list",
-    // not a real object term, but the two parse strategies disagreed on the SPAN
-    // (grammar kept "anything else" whole as the object, keyword-spot dropped
-    // "anything" and kept only "else"), landing on the {ambiguousParse} surface —
-    // two nonsense readings offered as if one might be right. "what does X <verb>"
-    // is the exact working canonical shape (see the MEMBERS-of-class frames above),
-    // so rewriting the whole closed pattern onto it sidesteps the disagreement
-    // instead of teaching either strategy's tokenizer to special-case "else".
-    // Anchored to the closed VERB_TO_KIND vocabulary so it can never swallow a
-    // genuine named object that happens to start with "any"/"some" (only the bare
-    // placeholder nouns "anything"/"something", optionally trailed by "else", match).
+    // DOES-X-VERB-ANYTHING-ELSE → "what does X <verb>" (drops the placeholder
+    // "anything/something else" object, which otherwise made the two parse
+    // strategies disagree on the span). Anchored to VERB_TO_KIND so it can't
+    // swallow a real object that happens to start with "any"/"some".
     {
       re: new RegExp(`^(?:do|does)\\s+(.+?)\\s+(${VERB_ALTERNATION})\\s+(?:anything|something)(?:\\s+else)?\\??$`, "i"),
       to: (m) => `what does ${m[1]} ${m[2]}`
@@ -1964,7 +1752,6 @@
   }
   var NEGATION_SET_RE = new RegExp(
     "^(?:which|what|who|list|show(?:\\s+me)?|find|give\\s+me)?\\s*(?:the\\s+|all\\s+)?([a-z][a-z-]*)\\s+(?:(?:that|which|who)\\s+)?(?:(?:do|does|did|are|is|was|were|have|has)\\s+)?not\\s+(.+)$",
-    // the negation marker + (2) the predicate
     "i"
   );
   function matchNegationSet(text) {
@@ -2005,15 +1792,8 @@
     "nothing",
     "one",
     "any",
-    // temporal filler in when-questions ("when was X last touched") — a symbol
-    // literally named "last" would be the accepted residual cost, same trade as
-    // every other stopword.
     "last",
-    // frequency-adverb filler ("what does X usually change together with", "what does
-    // X typically call") — found live: "usually" glued onto the object term instead of
-    // being stripped, corrupting resolution ("src/core/store.mjs usually" instead of
-    // the module alone). Same trade as every other stopword: a symbol literally named
-    // "usually" would be the accepted residual cost.
+    // temporal filler ("when was X last touched")
     "usually",
     "typically",
     "generally",
@@ -2021,12 +1801,7 @@
     "often",
     "commonly",
     "mostly",
-    // modal auxiliaries ("what SHOULD i look at first") — found live: with no modal in
-    // this set, "should" reached the cascade's bounded fuzzy-correction step and landed
-    // within edit distance of the unrelated closed-vocab word "hold" ("defines" synonym,
-    // ask-vocab.mjs), corrupting the whole query into "what hold i at". Same trade as
-    // every other stopword: a symbol literally named "should" would be the accepted
-    // residual cost.
+    // frequency-adverb filler
     "should",
     "would",
     "could",
@@ -2035,6 +1810,7 @@
     "shall",
     "might",
     "must"
+    // modal auxiliaries
   ]);
   var splitWords = (text) => String(text).replace(/\?+\s*$/, "").replace(/,/g, " ").split(/\s+/).filter(Boolean);
   var wordsOf = (arr) => arr.flatMap((p) => String(p).toLowerCase().split(" "));
@@ -2095,21 +1871,9 @@
   var MODIFIER_ALT = Object.keys(MODIFIER_TO_KIND).sort((a, b) => b.length - a.length).map(escapeRegex).join("|");
   var META_ALT = META_MEANING_VERBS.slice().sort((a, b) => b.length - a.length).map(escapeRegex).join("|");
   var TEMPLATES = [
-    // T1 ASK: "does X import Y" / "is X a subclass of Y" -> Yes/No. Tried FIRST: it starts with
-    // does/is/do/did, which the reverse/forward templates below never match (those start with
-    // which/what), so precedence between T1 and the rest is structural, not a tie-break guess.
-    // "did" joins does/do for the past-tense commit forms ("did commit <sha> touch X").
-    // REVERSE VERB SWAP (Seonix Batch 2 Fix 2): this template fixes subject/object by regex
-    // capture POSITION, not by the verb's semantic direction — fine for every forward verb
-    // ("subclass of", "imports", …), but "is X a superclass of Y" MEANS the reverse of "is X
-    // a subclass of Y" (Y inherits from X, not X from Y). INHERITS_REVERSE_VERBS (ask-vocab.mjs)
-    // is the closed set of such reverse phrasings; when the matched verb is one of them,
-    // subject/object are swapped here, once, at parse time — so downstream evaluation (ask.mjs)
-    // sees "is Y a subclass of X" and needs zero changes of its own. (In practice this exact
-    // regex only ever matches a does/do/did lead, so "is …" phrasings actually reach the "ask"
-    // shape via keywords.mjs's decomposition strategy instead — that strategy applies the same
-    // swap for the same reason; this branch is kept for any does/do/did-led phrasing that names
-    // a reverse verb, and for structural symmetry with that sibling strategy.)
+    // T1 ASK: "does X import Y" -> Yes/No. REVERSE VERB SWAP: a semantically-reverse
+    // verb ("superclass of") means the opposite of its forward counterpart, so
+    // INHERITS_REVERSE_VERBS (ask-vocab.mjs) swaps subject/object here at parse time.
     {
       name: "ask",
       re: new RegExp(`^(?:does|do|did)\\s+(.+?)\\s+(${VERB_ALT})\\s+(.+?)\\??$`, "i"),
@@ -2122,7 +1886,7 @@
         return { shape: "ask", entityType: null, modifier: "direct", kind, subject, object };
       }
     },
-    // T2 reverse: "which <entity> [<modifier>] <verb> <object>" — the operator's own example shape.
+    // T2 reverse: "which <entity> [<modifier>] <verb> <object>".
     {
       name: "reverse",
       re: new RegExp(`^which\\s+(${ENTITY_ALT})\\s+(?:(${MODIFIER_ALT})\\s+)?(${VERB_ALT})\\s+(.+?)\\??$`, "i"),
@@ -2147,40 +1911,17 @@
         object: m[1].trim()
       })
     },
-    // T4 meta: "what does <term> mean" — a question about the GRAPH'S OWN VOCABULARY
-    // (a SchemaClass/SchemaPredicate label, e.g. "cochange", or a raw prop token, e.g.
-    // "mgx:callsSymbol"), not a graph traversal over code edges. Tried after T3: T3 also
-    // starts "what does/do", but T3 only fires when the tail is a relation VERB_ALT
-    // phrase ("import"/"calls"/…), which "mean"/"means"/etc never are (disjoint tables —
-    // ask-vocab.mjs's file comment explains why they're kept separate), so the two never
-    // actually compete for the same input.
+    // T4 meta: "what does <term> mean" — a question about the graph's own vocabulary,
+    // not a graph traversal. VERB_ALT and META_ALT are disjoint tables, so this never
+    // competes with T3 for the same input.
     {
       name: "meta-mean",
       re: new RegExp(`^what\\s+(?:does|do|is|are)\\s+(.+?)\\s+(?:${META_ALT})\\??$`, "i"),
       build: (m) => ({ shape: "meta", entityType: null, modifier: "direct", kind: "meta", object: m[1].trim() })
     },
-    // T5 meta: "what is a/an <term>" — the OTHER worked phrasing ("what is a Commit").
-    // Seonix Batch 2 Fix 1: the indefinite article is now OPTIONAL, but the BARE
-    // (no-article) form is restricted to the CLOSED vocabulary ENTITY_TO_TYPE already
-    // imported above (function/method/class/module/attribute/variable/change/commit,
-    // singular and plural) — build() returns null (same "this template didn't actually
-    // match, keep scanning" contract T8/"when" below already relies on — see
-    // parseAnchored's own docblock) when the bare form's object isn't one of those
-    // closed terms, so the scan falls through exactly as if this template had not
-    // matched at all. This keeps "what is a doohickey"/"widget"/"gizmo" (still routed
-    // here via the WITH-article, fully unrestricted `(.+?)` path — pinned to resolve as
-    // an honest meta miss downstream, ask-combo.test.mjs/chat-readback.test.mjs) working
-    // unmodified, while ALSO keeping the two pinned bare-form honest misses intact:
-    // "what is the meaning of this codebase" (ask.test.mjs/ask-dual-strategy.test.mjs)
-    // and "what is exposed" (ask.test.mjs:840) both have bare objects absent from
-    // ENTITY_TO_TYPE, so build() still rejects them and they still fall through to null.
-    // Fix 3: stripTrailingScopeFiller (ask-vocab.mjs) trims a curated trailing clause
-    // ("what is a Module in this graph" -> "Module") off the object before it's
-    // returned, so a scoping tail never corrupts the lookup term either the bare-form
-    // check above or downstream resolution/rendering perform. HANDOVER.md 2026-07-10
-    // item 8: stripTrailingDiscourseTag trims a bare trailing "then"/"though" the
-    // same way ("what is a component then" -> "component") — applied first, since a
-    // discourse tag sits outermost when both happen to stack.
+    // T5 meta: "what is a/an <term>" — the bare (no-article) form is restricted to
+    // the closed ENTITY_TO_TYPE vocabulary (build() -> null otherwise, falling
+    // through); the WITH-article form is unrestricted.
     {
       name: "meta-whatis",
       re: new RegExp(`^what\\s+(?:is|are)\\s+(?:(an?)\\s+)?(.+?)\\??$`, "i"),
@@ -2194,8 +1935,8 @@
         return { shape: "meta", entityType: null, modifier: "direct", kind: "meta", object: stripTrailingScopeFiller(object) };
       }
     },
-    // T6 mention: "where is <term> mentioned/referenced" — the prose/mentions surface
-    // (2026-07-02 query families). Tried BEFORE T7: T7's trailing marker is optional,
+    // T6 mention: "where is <term> mentioned/referenced" — the prose/mentions surface.
+    // Tried BEFORE T7: T7's trailing marker is optional,
     // so without this ordering it would swallow the mention question and lose the
     // marker that distinguishes "locate the definition" from "list the prose mentions".
     {
@@ -2221,19 +1962,19 @@
       re: new RegExp(`^when\\s+(?:did|does|do|was|were|is)\\s+(.+?)\\s+(?:last\\s+)?(${VERB_ALT})\\??$`, "i"),
       build: (m) => VERB_TO_KIND[m[2].toLowerCase()] === "touches" ? { shape: "when", entityType: null, modifier: "direct", kind: "touches", object: m[1].trim() } : null
     },
-    // T9 commit-history NP (PLAN_CHAT_FEEL item 6 remainder): "the commit history of
-    // X" / "commit history for X" — an NP form of T8's SAME "when did X change"
-    // intent; reuses shape="when" verbatim so evaluation/rendering are byte-
-    // identical, only the recognizer surface differs.
+    // T9 commit-history NP: "the commit history of X" / "commit history for X" —
+    // an NP form of T8's SAME "when did X change" intent; reuses shape="when"
+    // verbatim so evaluation/rendering are byte-identical, only the recognizer
+    // surface differs.
     {
       name: "commit-history",
       re: /^(?:the\s+)?commit\s+history\s+(?:of|for)\s+(.+?)\??$/i,
       build: (m) => ({ shape: "when", entityType: null, modifier: "direct", kind: "touches", object: m[1].trim() })
     },
-    // T10 cochange-partners NP (PLAN_CHAT_FEEL item 6 remainder): "cochange partners
-    // of X" — an NP form of the existing "which modules cochange with X" verb-phrase
-    // shape (ask-vocab.mjs's cochange verb table); reuses shape="reverse"/
-    // kind="cochange" so evaluation is byte-identical.
+    // T10 cochange-partners NP: "cochange partners of X" — an NP form of the
+    // existing "which modules cochange with X" verb-phrase shape (ask-vocab.mjs's
+    // cochange verb table); reuses shape="reverse"/kind="cochange" so evaluation
+    // is byte-identical.
     {
       name: "cochange-partners",
       re: /^co-?change\s+partners\s+(?:of|for|with)\s+(.+?)\??$/i,
@@ -2608,6 +2349,7 @@
   var createRequireFromPath5 = unavailable5("createRequireFromPath");
   var spawnSync5 = unavailable5("spawnSync");
   var createInterface5 = unavailable5("createInterface");
+  var createServer5 = unavailable5("createServer");
   var DatabaseSync5 = unavailable5("DatabaseSync");
 
   // src/answer-variants.mjs
@@ -2669,13 +2411,7 @@
     Attribute: ["attribute", "attributes"],
     GlobalVariable: ["variable", "variables"],
     Commit: ["commit", "commits"],
-    // "Change" is ask-vocab.mjs's pseudo-type (a wildcard over the touch traversal's
-    // results, never a node class) — it still needs noun forms for zero-hit templates.
     Change: ["change", "changes"],
-    // Memory-graph classes (memory/core.mjs) — real noun forms for the dynamic
-    // class count/list fallback (PLAN_BREADTH_FIRST_NLU.md (d), see
-    // dynamicClassQuery below) so "2 facts." reads naturally instead of falling
-    // back to the generic "2 results.".
     Fact: ["fact", "facts"],
     Utterance: ["utterance", "utterances"],
     Session: ["session", "sessions"],
@@ -3675,24 +3411,20 @@
         return traverse(graph, ast.clause, opts).matches || [];
       case "allOfClass":
         return graph.individuals.filter((i) => i.class === ast.entityType);
-      // predicate-find (Workstream 2), embedded as a set atom (§6 generalization —
-      // a find-seed inside a boolean/qualifier fold): the narrow-then-broaden
-      // cascade's result, transparently flattened (the "related, not exact" framing
-      // is a top-level RENDER concern — evalComposite's dedicated "find" handling
-      // below, not this generic embedding).
+      // Predicate-find as a set atom: the narrow-then-broaden cascade's result,
+      // transparently flattened ("related, not exact" is a render concern).
       case "find": {
         const { narrow, broad } = computeFind(graph, ast.entityType, ast.term);
         return narrow.length ? narrow : broad;
       }
-      // the SUBJECTS that have ANY edge of a kind (the existential "modules that import
-      // anything") — the positive set an existential negation ("do not import anything")
-      // differences off allOfClass to yield "modules that import nothing".
+      // Subjects with any edge of a kind; an existential negation differences
+      // this off allOfClass to yield "modules that import nothing".
       case "existsEdge": {
         const subs = new Set(kindsFor(ast.kind).flatMap((k) => edgesOfKind2(graph, k)).map((e) => e.subject));
         return graph.individuals.filter((i) => subs.has(i.id) && (!ast.entityType || i.class === ast.entityType));
       }
-      // forward complement: the verb's object-grain universe MINUS what the (late-resolved,
-      // focus-bindable) subject reaches via that verb — "what doesn't it import".
+      // Forward complement: the verb's object-grain universe minus what the
+      // subject reaches via that verb ("what doesn't it import").
       case "forwardComplement": {
         const r = resolveTermOrContext(graph, ast.subjectTerm, opts && opts.contextId);
         if (!r.match) return [];
@@ -3709,11 +3441,9 @@
         const ids = new Set(evalSet(graph, ast.inner, opts).map((i) => i.id));
         return forwardOverSet(graph, ast.kind, ids);
       }
-      // the previous list-shaped answer's own id set (parsePluralAnaphoraObject's
-      // "those"/"them" leaf) — evalComposite's reverseSet/forwardSet dispatch already
-      // intercepts the genuinely-empty (no `prev` at all) case as an honest "needs a
-      // previous answer" miss, same as evalAnaphora's own no-prev branch; this is only
-      // reached with a real, non-empty `prev` in hand.
+      // The previous list-shaped answer's own id set. Only reached with a real,
+      // non-empty `prev` — the no-`prev` case is intercepted earlier as an
+      // honest "needs a previous answer" miss.
       case "prevSet": {
         const prev = opts && opts.prev;
         return Array.isArray(prev) ? prev.map((id) => graph.byId.get(id)).filter(Boolean) : [];
@@ -5293,6 +5023,7 @@ ${result.branches.map((b, i) => `${i + 1}) ${b.candidate.label}: ${b.rendered.co
     const base = { node: "allOfClass", entityType };
     return listM ? { node: "list", entityType, base, scoped: false } : { node: "count", entityType, base };
   }
+  var BARE_META_WHATIS_RE = /^what\s+(?:is|are)\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
   function ask(graph, query, { contextId = null, nlp = void 0, prev = null } = {}) {
     if (isHelpRequest(query)) {
       return {
@@ -5338,6 +5069,17 @@ ${result.branches.map((b, i) => `${i + 1}) ${b.candidate.label}: ${b.rendered.co
         }
       }
     }
+    if (parsed === null && rendered.miss && !rendered.ambiguous) {
+      const bareM = String(query || "").trim().match(BARE_META_WHATIS_RE);
+      const bareTerm = bareM?.[1]?.trim();
+      if (bareTerm && !/\s+(?:for|about)$/i.test(bareTerm)) {
+        const bareParsed = parseQuery(`what is a ${bareTerm}`, { nlp });
+        if (bareParsed?.shape === "meta") {
+          result = traverse(graph, bareParsed, { contextId, prev });
+          rendered = render(bareParsed, result);
+        }
+      }
+    }
     let content = relaxed && !rendered.miss && relaxed.to !== relaxed.from ? `read as "${relaxed.to}" \u2014 ${rendered.content}` : rendered.content;
     if (!relaxed && !rendered.miss && !rendered.ambiguous && directFull.alternates.length) {
       const answered = directFull.alternates.map((a) => {
@@ -5358,13 +5100,6 @@ ${lines.join("\n")}`;
       tmct_ask: {
         mechanical: true,
         parsed: parsed && !parsed.ambiguousParse ? parsed : null,
-        // PLAN_BREADTH_FIRST_NLU.md §Track 6 (operator directive): the canonical
-        // restatement of what the request was understood to mean, ALWAYS present
-        // when anything parsed at all — not gated on ambiguity/miss the way the
-        // ambiguity-branch labels are. `english` is the human-readable gloss in
-        // tmct's own phrasing; `machine` is the same fact in a compact,
-        // machine-parsable notation (a plain `shape(kind, args...)` call form).
-        // Both are read straight off `parsed` — never generated.
         canonical: canonicalOf(parsed),
         matches: (result.matches || []).map((m) => ({
           id: m.id,
@@ -5375,16 +5110,12 @@ ${lines.join("\n")}`;
         traversal: result.traversal || null,
         miss: !!rendered.miss,
         ambiguous: !!rendered.ambiguous,
-        // The relaxation trace: null when the direct parse was used as-is (a clean hit or
-        // an honest miss the cascade couldn't/shouldn't rescue), else what the cascade
-        // dropped/normalised to reach an answer. A caller can assert relaxed===null to
-        // prove the cascade never touched a direct hit.
+        // null when the direct parse was used as-is; a caller can assert
+        // relaxed===null to prove the cascade never touched a direct hit.
         relaxed,
-        // Confidence provenance: "prose" when resolveObject fell through to the tier-4
-        // prose-index fallback (PLAN_PROSE_INDEX.md §6 — matched what the symbol talks
-        // about, not its name); "fuzzy" when the tier-5 bounded-edit-distance pass
-        // resolved a typo'd term (the rendered content also announces it: "assuming you
-        // meant <label>"); null for every literal-identifier tier.
+        // "prose" (tier-4 prose-index fallback) or "fuzzy" (tier-5 bounded
+        // edit-distance, announced in the content as "assuming you meant …");
+        // null for every literal-identifier tier.
         matchedVia: result.matchedVia || null,
         ...rendered.ambiguous ? { candidates: rendered.candidates } : {}
       }

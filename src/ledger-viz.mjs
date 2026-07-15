@@ -177,15 +177,62 @@ export async function computeLedgerData(repoDir, opts = {}) {
   return computeLedgerDataFromPayload(payload, opts);
 }
 
+/** The chat dock's answer-to-focus resolver (viz.mjs's findAnsweredTermIds,
+ *  retargeted at the ledger term index). Pass 1: earliest term label (≥3
+ *  chars, space-boundary) appearing in the ANSWER text. Pass 2: strip the
+ *  QUESTION's crust and try the remainder as one normalized term. Returns a
+ *  term string or null. Self-contained on purpose: its source is injected
+ *  into the rendered page verbatim, so it must close over nothing. */
+export function resolveAnsweredTerm(answerText, questionText, terms, normFn) {
+  const hay = " " + String(answerText || "").toLowerCase() + " ";
+  let best = null;
+  for (const t of terms || []) {
+    const label = String((t && t.term) || "").toLowerCase();
+    if (label.length < 3) continue;
+    const a = hay.indexOf(" " + label);
+    const b = hay.indexOf(label + " ");
+    const idx = a !== -1 ? a : b;
+    if (idx === -1) continue;
+    if (!best || idx < best.idx) best = { term: t.term, idx };
+  }
+  if (best) return best.term;
+  const stripped = String(questionText || "").toLowerCase()
+    .replace(/^(what|where|who|which|does|do|is|are)\b/, "")
+    .replace(/\b(is|are|used for|do|does|mean|means|a|an|the)\b/g, " ")
+    .replace(/[?.!]+$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!stripped || typeof normFn !== "function") return null;
+  const norm = normFn(stripped);
+  return (terms || []).some((t) => t && t.term === norm) ? norm : null;
+}
+
 /** One complete, self-contained document: the ledger, segment rail,
- *  worth-a-look panel, breadcrumb/search, and two-hop minimap, all over the
- *  embedded LEDGER/PAYLOAD data. `memoryAskBundle` is accepted for the phase-2
- *  chat dock; this renderer does not use it yet. */
+ *  worth-a-look panel, breadcrumb/search, two-hop minimap, and (when the
+ *  memory-ask bundle is present) the ask-the-graph chat dock, all over the
+ *  embedded LEDGER/PAYLOAD data. */
 export function renderLedgerHtml({ rows, terms, edges, focus, contradictions, worthALook, payload, meta, memoryAskBundle } = {}) {
   const ledgerJson = embedJson({ rows: rows || [], terms: terms || [], edges: edges || [], focus: focus || null, contradictions: contradictions || [], worthALook: worthALook || null, meta: meta || { shown: 0, total: 0, truncated: false } });
   const payloadJson = embedJson(payload || { individuals: [], objectProperties: [] });
   const shown = meta?.shown ?? (rows || []).length;
   const title = `tmct ledger — ${shown} fact${shown === 1 ? "" : "s"}${focus ? ` (focus: ${escapeHtml(focus)})` : ""}`;
+  const bundleStr = typeof memoryAskBundle === "string" ? memoryAskBundle : "";
+  const hasMemChat = bundleStr.length > 0;
+  // The placeholder is honest: the canonical exchange only when its terms are
+  // really in this payload, otherwise a real term from this graph.
+  const termSet = new Set((terms || []).map((t) => t.term));
+  const placeholder = termSet.has("ishmael")
+    ? "who is the grandfather of ishmael"
+    : (terms && terms.length ? `ask the graph… e.g. what is ${terms[0].term}` : "ask the graph…");
+  const dockHtml = hasMemChat
+    ? `<div class="chat">
+        <div class="chatlog" id="chatlog" aria-live="polite"></div>
+        <form class="chatask" id="chatform">
+          <span class="prompt mono">tmct&gt;</span>
+          <input id="chatq" type="text" placeholder="${escapeHtml(placeholder)}" aria-label="Ask the graph">
+        </form>
+      </div>`
+    : `<div class="chat chat-off"><p class="chatnote">chat unavailable — run <span class="mono">npm run build:ask-bundle</span> to enable the in-page ask engine.</p></div>`;
 
   return `<!doctype html>
 <html lang="en">
@@ -255,6 +302,18 @@ ${THEME_TOKENS_CSS}
   .mapwrap { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: .45rem; margin-top: .45rem; }
   .mapwrap canvas { display: block; width: 100%; height: 160px; cursor: pointer; }
   .mapnote { font-family: ${MONO_STACK}; font-size: .62rem; color: var(--muted); margin: .3rem .2rem 0; }
+  .chat { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: .65rem .85rem; margin-bottom: 1rem; }
+  .chatlog { display: flex; flex-direction: column; gap: .45rem; max-height: 220px; overflow-y: auto; }
+  .chatlog:empty { display: none; }
+  .chatlog .u { font-family: ${MONO_STACK}; font-size: .76rem; color: var(--muted); }
+  .chatlog .u::before { content: "tmct> "; color: var(--taught); }
+  .chatlog .a { font-size: .9rem; line-height: 1.45; }
+  .chatlog .a.miss { color: var(--muted); }
+  .chatask { display: flex; align-items: center; gap: .5rem; }
+  .chatlog:not(:empty) + .chatask { border-top: 1px solid var(--line); margin-top: .55rem; padding-top: .55rem; }
+  .chatask .prompt { color: var(--taught); font-size: .78rem; }
+  .chatask input { flex: 1; font-family: ${MONO_STACK}; font-size: .78rem; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: .32rem .6rem; min-width: 0; }
+  .chatnote { font-family: ${MONO_STACK}; font-size: .72rem; color: var(--muted); margin: 0; }
   @media (prefers-reduced-motion: no-preference) { .seg, .chip, .look { transition: border-color .12s ease, background-color .12s ease; } }
 </style>
 </head>
@@ -275,7 +334,10 @@ ${THEME_TOKENS_CSS}
       <h2>kind of fact</h2><div class="segs" id="segFam"></div>
       <h2>when learned</h2><div class="segs" id="segRec"></div>
     </aside>
-    <section class="ledger" id="ledger" aria-live="polite"></section>
+    <section class="ledger">
+      ${dockHtml}
+      <div id="ledger" aria-live="polite"></div>
+    </section>
     <aside class="aside" aria-label="Highlights and minimap">
       <h2>worth a look</h2><div class="looks" id="looks"></div>
       <h2>two hops out</h2>
@@ -290,6 +352,7 @@ ${THEME_TOKENS_CSS}
 const LEDGER = ${ledgerJson};
 const PAYLOAD = ${payloadJson};
 </script>
+${hasMemChat ? `<script>\n${bundleStr}\n</script>` : ""}
 <script>
 (function () {
   "use strict";
@@ -307,7 +370,7 @@ const PAYLOAD = ${payloadJson};
   LEDGER.contradictions.forEach((ids, gi) => ids.forEach((id) => contraById.set(id, gi)));
 
   let focus = LEDGER.focus;
-  let trail = focus ? [focus] : [];
+  let trail = focus ? [{ term: focus, label: null }] : [];
   const sel = { prov: new Set(), fam: new Set(), rec: new Set() };
 
   const recOf = (r) => {
@@ -468,20 +531,22 @@ const PAYLOAD = ${payloadJson};
 
   function renderCrumbs() {
     const box = el("crumbs"); box.innerHTML = "";
-    trail.forEach((t, i) => {
+    trail.forEach((c, i) => {
       if (i) { const s = document.createElement("span"); s.className = "sep"; s.textContent = "\\u203a"; box.appendChild(s); }
       const b = document.createElement("button");
-      b.className = "crumb"; b.textContent = t;
+      b.className = "crumb"; b.textContent = c.label || c.term;
+      b.title = c.term;
       if (i === trail.length - 1) b.setAttribute("aria-current", "true");
-      b.addEventListener("click", () => { trail = trail.slice(0, i + 1); focus = t; render(); });
+      b.addEventListener("click", () => { trail = trail.slice(0, i + 1); focus = c.term; render(); });
       box.appendChild(b);
     });
   }
-  function refocus(term) {
+  function refocusWithLabel(term, label) {
     if (!term || !termIndex.has(term)) return;
-    if (term !== focus) { focus = term; trail.push(term); }
+    if (term !== focus) { focus = term; trail.push({ term, label: label || null }); }
     render();
   }
+  function refocus(term) { refocusWithLabel(term, null); }
   el("q").addEventListener("keydown", (e) => {
     if (e.key !== "Enter") return;
     const want = e.target.value.trim().toLowerCase();
@@ -489,6 +554,47 @@ const PAYLOAD = ${payloadJson};
     if (hit) { el("qmiss").textContent = ""; e.target.value = ""; refocus(hit); }
     else el("qmiss").textContent = "no such term";
   });
+
+  // ---- the chat dock: the SAME engine + payload the CLI answers from ------
+  const resolveAnsweredTerm = ${resolveAnsweredTerm.toString()};
+  const chatForm = el("chatform");
+  if (chatForm && typeof tmctMemoryAsk !== "undefined") {
+    const memHandle = tmctMemoryAsk.createInMemoryStore();
+    memHandle.payload = PAYLOAD;
+    const log = el("chatlog");
+    const addLine = (cls, html) => {
+      const d = document.createElement("div");
+      d.className = cls; d.innerHTML = html;
+      log.appendChild(d); log.scrollTop = log.scrollHeight;
+    };
+    chatForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const input = el("chatq");
+      const q = input.value.trim();
+      if (!q) return;
+      input.value = "";
+      addLine("u", esc(q));
+      (async () => {
+        let fact = null;
+        try { fact = await tmctMemoryAsk.factAnswer(memHandle, q, null, true, {}); } catch { fact = null; }
+        // runAsk's own cascade is factAnswer ?? factReadBack; chain the same
+        // way when the bundle exposes the second reader (relation chases —
+        // "who is the grandfather of ishmael" — live there, not in factAnswer).
+        if (!(fact && fact.text) && typeof tmctMemoryAsk.factReadBack === "function") {
+          try { fact = await tmctMemoryAsk.factReadBack(memHandle, q, null, true, null); } catch { fact = null; }
+        }
+        if (fact && fact.text) {
+          addLine("a", esc(fact.text).replace(/\\n/g, "<br>"));
+          const hit = resolveAnsweredTerm(fact.text, q, LEDGER.terms, tmctMemoryAsk.normFactTerm);
+          if (hit) refocusWithLabel(hit, q);
+        } else {
+          const tips = LEDGER.terms.filter((t) => t.term.length >= 3).slice(0, 2)
+            .map((t) => '"what is ' + esc(t.term) + '"').join(" \\u00b7 ");
+          addLine("a miss", "I can't ground that in this graph" + (tips ? " \\u2014 try: " + tips : "") + ".");
+        }
+      })();
+    });
+  }
 
   function renderCounts() {
     const m = LEDGER.meta;

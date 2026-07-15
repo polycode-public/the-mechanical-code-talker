@@ -85,3 +85,18 @@ test("tmct viz --ledger --limit caps the embedded rows and prints the truncation
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("the generated page inlines the checked-in memory-ask bundle and renders the enabled chat dock", async () => {
+  const dir = await seededRepo();
+  try {
+    const out = join(dir, "chat.html");
+    const res = runCli(dir, dir, "--output", out);
+    assert.equal(res.status, 0, res.stderr);
+    const html = await readFile(out, "utf8");
+    assert.match(html, /tmctMemoryAsk/, "the memory-ask bundle is inlined");
+    assert.match(html, /id="chatform"/, "the dock form renders");
+    assert.doesNotMatch(html, /chat unavailable/, "the disabled note is absent when the bundle is present");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

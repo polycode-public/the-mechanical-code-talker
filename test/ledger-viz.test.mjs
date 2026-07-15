@@ -167,3 +167,96 @@ test("renderLedgerHtml: self-contained page with parseable LEDGER/PAYLOAD, both 
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+// ---- phase 2: the chat dock ------------------------------------------------
+
+import { resolveAnsweredTerm } from "../src/ledger-viz.mjs";
+import { normFactTerm } from "../src/memory/core.mjs";
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import vm from "node:vm";
+import { runTurn } from "../src/chat.mjs";
+import { clearCache } from "../src/source.mjs";
+
+test("resolveAnsweredTerm: the earliest term label in the answer text wins", () => {
+  const terms = [{ term: "john" }, { term: "ahab" }, { term: "ishmael" }];
+  const hit = resolveAnsweredTerm("ahab — you told me: ahab fathers john", "who is the grandfather of ishmael", terms, normFactTerm);
+  assert.equal(hit, "ahab");
+});
+
+test("resolveAnsweredTerm: falls back to stripping the question's crust and normalizing", () => {
+  const hit = resolveAnsweredTerm("yes", "what is a dog?", [{ term: "dog" }], normFactTerm);
+  assert.equal(hit, "dog");
+});
+
+test("resolveAnsweredTerm: no term resolves -> null (the answer renders without refocusing)", () => {
+  const hit = resolveAnsweredTerm("no idea", "gibberish question", [{ term: "dog" }], normFactTerm);
+  assert.equal(hit, null);
+});
+
+test("renderLedgerHtml: a non-empty bundle is inlined and the dock renders enabled; an empty one renders the honest disabled note", async () => {
+  const dir = await seededRepo();
+  try {
+    const data = await computeLedgerData(dir);
+    const fake = "/* fake-bundle-marker */ globalThis.tmctMemoryAsk = {};";
+    const on = renderLedgerHtml({ ...data, memoryAskBundle: fake });
+    assert.ok(on.includes(fake), "the bundle string is embedded verbatim");
+    assert.match(on, /id="chatform"/);
+    assert.match(on, /resolveAnsweredTerm/, "the answer-to-focus helper ships in the page");
+    assert.doesNotMatch(on, /chat unavailable/);
+    const off = renderLedgerHtml({ ...data, memoryAskBundle: "" });
+    assert.match(off, /chat unavailable/);
+    assert.match(off, /npm run build:ask-bundle/);
+    assert.doesNotMatch(off, /id="chatform"/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("phase-2 dock chain: a store taught via runTurn answers through the real bundle in a vm; the canonical exchange upgrades when factReadBack ships on the bundle surface", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-ledger-dock-"));
+  const FIXTURE = fileURLToPath(new URL("./fixtures/entities.fixture.json", import.meta.url));
+  try {
+    const TEACH = [
+      "ahab is the father of john",
+      "john is the father of ishmael",
+      "a father is a kind of parent",
+      "remember that ahab is male",
+      "a grandparent is a parent of a parent",
+      "a grandfather is a grandparent who is male",
+    ];
+    for (const line of TEACH) {
+      const r = await runTurn(line, { config: { graphFile: FIXTURE }, memoryDir: dir, sessionId: "dock" });
+      assert.equal(r.record.miss, false, `"${line}" should teach (got: ${r.answer})`);
+    }
+    const payload = await loadMemory(dir);
+    const bundle = await readFile(fileURLToPath(new URL("../src/memory-ask-browser.bundle.js", import.meta.url)), "utf8");
+    const ctx = vm.createContext({ console });
+    vm.runInContext(bundle, ctx);
+    ctx.__payload = payload;
+    vm.runInContext("globalThis.__handle = tmctMemoryAsk.createInMemoryStore(); __handle.payload = __payload;", ctx);
+
+    // factAnswer's own surface answers the definition shape from this store.
+    const def = await vm.runInContext('tmctMemoryAsk.factAnswer(__handle, "what is a father", null, true, {})', ctx);
+    assert.ok(def && def.text, "factAnswer answers a definition question from the taught store");
+    assert.match(def.text, /father is a kind of parent/);
+
+    // The canonical exchange is a relation chase, which lives in factReadBack
+    // (runAsk's cascade is factAnswer ?? factReadBack). The dock chains both.
+    const hasReadBack = vm.runInContext('typeof tmctMemoryAsk.factReadBack === "function"', ctx);
+    const fact = hasReadBack
+      ? await vm.runInContext('tmctMemoryAsk.factAnswer(__handle, "who is the grandfather of ishmael", null, true, {}).then((f) => f && f.text ? f : tmctMemoryAsk.factReadBack(__handle, "who is the grandfather of ishmael", null, true, null))', ctx)
+      : await vm.runInContext('tmctMemoryAsk.factAnswer(__handle, "who is the grandfather of ishmael", null, true, {})', ctx);
+    if (hasReadBack) {
+      assert.ok(fact && fact.text, "the chained engines answer the canonical exchange");
+      assert.match(fact.text, /ahab/);
+      const term = resolveAnsweredTerm(fact.text, "who is the grandfather of ishmael", [{ term: "ahab" }, { term: "john" }, { term: "ishmael" }], normFactTerm);
+      assert.equal(term, "ahab", "answer-to-focus lands on the answering term");
+    } else {
+      assert.equal(fact, null, "without factReadBack on the bundle surface, factAnswer alone misses honestly — never fabricates");
+    }
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});

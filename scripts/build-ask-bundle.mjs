@@ -94,6 +94,7 @@ const stubNodeBuiltins = {
         + "export const createRequireFromPath = unavailable('createRequireFromPath');\n"
         + "export const spawnSync = unavailable('spawnSync');\n"
         + "export const createInterface = unavailable('createInterface');\n"
+        + "export const createServer = unavailable('createServer');\n"
         + "export const tmpdir = () => '/tmp';\n"
         + "export const DatabaseSync = unavailable('DatabaseSync');\n"
         + "export default {};\n",

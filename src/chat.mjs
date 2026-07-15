@@ -5228,7 +5228,7 @@ function inheritsChain(graph, startId) {
  *        "what kind of thing is an X" reports X's own type (subject-side first).
  *  Miss-only and run AFTER factAnswer returns null, so it never shadows the
  *  subject-side answer or a schema hit. Returns { text, replace:true } or null. */
-async function factReadBack(memoryDir, query, envelope, miss, graph = null, focusLabel = null, biasByBundle = {}, cache = null) {
+export async function factReadBack(memoryDir, query, envelope, miss, graph = null, focusLabel = null, biasByBundle = {}, cache = null) {
   if (!miss) return null;
   let normFactTerm;
   try { ({ normFactTerm } = await import("./memory/core.mjs")); } catch { return null; }
