@@ -120,9 +120,9 @@ drill by clicking the terms inside them, and an in-page chat whose answers
 focus the ledger.
 
 From a clone, two build scripts regenerate that demo so you can check it
-offline before it deploys — the example graph, the ledger page, and the
-engine copy land in `public/`, and the in-page chat's query bundle is
-rebuilt from the same `src/` the CLI runs:
+offline before it deploys. The example graph, the ledger page, and the
+engine copy land in `public/`. The in-page chat's query bundle is rebuilt
+from the same `src/` the CLI runs:
 
 ```bash e2e cwd=repo
 npm run demo:build        # public/: demo graph, memory, ledger page, engine copy
