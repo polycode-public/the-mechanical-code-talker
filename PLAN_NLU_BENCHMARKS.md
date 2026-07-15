@@ -224,9 +224,16 @@ not a planned lever anymore.
   paper's classical baselines sit near 90% raw and BERT-class models near 97%, so we do
   not compete on that axis and the write-up should not pretend to. The claim shape: "X%
   OOS recall at Y% in-scope accuracy, no model, no training, no cloud, deterministic."
-- **HWU64, tier 1:** intent F1 0.55–0.75 against Rasa's published 0.863. The honest frame
-  is value-per-footprint, not victory. Entity F1 0.35–0.60; beating Watson's published
-  0.488 is plausible and would be the strongest single headline available.
+- **HWU64, tier 1:** spike-measured (same 2026-07-15 scratchpad spike, their real
+  autoGeneFromRealAnno 10-fold splits, intent classification only): unigram 15-NN
+  **micro-F1 0.792**, centroid unigram 0.791, char 15-NN 0.791 — all three arms converge
+  on ~0.79, so surface matching plateaus there and char n-grams buy nothing without an
+  OOS axis. That is ~7 points behind Rasa's published 0.863 and ~6.5 behind LUIS's
+  last-place 0.855. The honest frame is value-per-footprint, not victory; post-lever
+  ceiling ~0.81–0.83 (ethos-clean), embedding arm maybe 0.83–0.85. The harness must
+  rescore with the upstream toolkit's own metric before any number is cited. Entity F1
+  still estimate-only at 0.35–0.60; beating Watson's published 0.488 is plausible and
+  would be the strongest single headline available.
 - **Biggest estimate risk:** short utterances. Both datasets are heavy with 2–4 word
   queries where token overlap is thin, which drags tier-1 accuracy toward the bottom of
   the ranges and makes the threshold choice the dominant variable.
