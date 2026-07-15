@@ -75,8 +75,8 @@ test("compare: mismatched kinds (Class vs Module) refuse honestly rather than fo
   const rs = await drive(["compare TaskController and src/core/model.mjs"]);
   assert.equal(rs[0].record.via, "compare");
   assert.match(rs[0].answer, /I can only compare two entities of the SAME kind/);
-  assert.match(rs[0].answer, /"TaskController" is a Class/);
-  assert.match(rs[0].answer, /"src\/core\/model\.mjs" is a Module/);
+  assert.match(rs[0].answer, /"TaskController" is a class/);
+  assert.match(rs[0].answer, /"src\/core\/model\.mjs" is a module/);
 });
 
 test("compare: the same entity named twice has nothing to compare", async () => {

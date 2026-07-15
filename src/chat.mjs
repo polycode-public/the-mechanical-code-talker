@@ -11,8 +11,9 @@
 // structured sidecar (.tmct/sessions/session-<uuidv7>.jsonl, sessions.mjs) and
 // a `Session` individual upserted into graph.json per turn.
 //
-// runTurn(input, …) is a PURE function so tests exercise it directly; every
-// ask.mjs import is LAZY and failure-tolerated, so a turn never crashes.
+// runTurn(input, …) is a PURE function so tests exercise it directly; the ask
+// ENGINE is imported lazily and failure-tolerated, so a turn never crashes
+// (the one static ask.mjs import, classDisplayName, is a pure formatter).
 // createSession(…) is the SESSION SINK every shell shares (runChat's readline
 // loop, src/tui/app.mjs's Ink shell).
 
@@ -26,6 +27,7 @@ import { dispatchTool, loadGraph } from "./server.mjs";
 import { loadConfig, DEFAULT_GRAPH_REL } from "./config.mjs";
 import { resolveRuntimeConfig } from "./cli-args.mjs";
 import { parseEntities, edgesOfKind, renderAuthorCard, renderAuthorTouches, renderCommitAuthor, resolveSymbol, renderCompare } from "./codegraph.mjs";
+import { classDisplayName } from "./ask.mjs";
 import { SESSIONS_DIR_REL, appendSessionToGraph } from "./sessions.mjs";
 import { uuidv7 } from "./uuid.mjs";
 import { createTelemetry } from "./telemetry.mjs";
@@ -33,6 +35,7 @@ import * as defaultSource from "./source.mjs";
 import { loadTemplates, render as renderTemplate } from "./corpus/templates.mjs";
 import { resolveExtensions, mergedLexiconExtra } from "./extensions.mjs";
 import { rankByBiasThenTrust } from "./memory/bias.mjs";
+import { HAS_A_PREDICATE } from "./memory/core.mjs";
 import { finish, beginsWithVowelSound, grammarRules } from "./finish.mjs";
 import { splitSentences } from "./sentences.mjs";
 import {
@@ -1464,7 +1467,7 @@ function moduleOverviewText(graph, ind) {
   parts.push(testedBy.length
     ? `covered by ${testedBy.length} test module${testedBy.length === 1 ? "" : "s"}`
     : "no recorded tests");
-  const cls = (ind.class || "entity").toLowerCase();
+  const cls = classDisplayName(ind.class || "entity");
   const pointer = pickPhrase("full-breakdown", ind.id, "for the full breakdown");
   return `${ind.label} is a ${cls} — ${parts.join("; ")}. `
     + `/describe ${ind.label} ${pointer}.`;
@@ -1601,12 +1604,9 @@ const HAS_PROPERTY_PREDICATE = "mgx:hasProperty";
 // "some/a few Xs are Ys" shape) stay obviously in that same family rather than
 // re-typing the CURIE string at each call site.
 const SUBCLASS_PREDICATE = "rdfs:subClassOf";
-// Bug 3 (2026-07-09): the SAME "has a" predicate ConceptNet's own /r/HasA
-// facts already use (FACT_PREDICATE_PHRASES, conceptnet-map.toml) — named
-// here too so generalVerbTeach's "has"/"have" special case (below) stays
-// obviously in that same family, interoperable with corpus HasA data on the
-// read side, rather than minting a redundant mgx:has.
-const HAS_A_PREDICATE = "mgx:hasA";
+// HAS_A_PREDICATE (imported from memory/core.mjs, the canonical home) keeps
+// generalVerbTeach's "has"/"have" special case in the same family ConceptNet's
+// /r/HasA corpus facts already use, rather than minting a redundant mgx:has.
 
 // mgx:sourceType's own closed kind set (memory/core.mjs) splits "the operator
 // said it" across two tags depending which lane wrote it (ace: -> "operator",
@@ -1802,7 +1802,7 @@ const RECURSIVE_RULE_TEACH_RE =
 
 /** ACTION-RULE TEACH FRAMES — a world-mutating action taught one sentence at
  *  a time, each sentence its own Rule individual (kind action-signature /
- *  action-precond / action-effect) sharing one rule name ("<verb> <prep>",
+ *  action-precond / action-effect / action-constraint) sharing one rule name ("<verb> <prep>",
  *  e.g. "move onto"). src/domain.mjs collects the family by name
  *  (findRulesByName) and grounds it over class members at plan time; nothing
  *  in the teach lane executes an action. Predicate slot values are stored
@@ -1817,6 +1817,16 @@ const ACTION_PRECOND_COMPARATIVE_RE = new RegExp(
   `^to\\s+([a-z]+)\\s+an?\\s+([a-z][\\w-]*)\\s+(${PREP_SRC})\\s+an?\\s+([a-z][\\w-]*)\\s*,?\\s*the\\s+([a-z][\\w-]*)\\s+must\\s+be\\s+(${COMPARATIVE_SRC})\\s+than\\s+the\\s+([a-z][\\w-]*)[.!?]*$`, "i");
 const ACTION_EFFECT_TEACH_RE = new RegExp(
   `^([a-z]+ing)\\s+an?\\s+([a-z][\\w-]*)\\s+(${PREP_SRC})\\s+an?\\s+([a-z][\\w-]*)\\s+makes\\s+the\\s+([a-z][\\w-]*)\\s+([a-z]+)\\s+(${PREP_SRC})\\s+the\\s+([a-z][\\w-]*)[.!?]*$`, "i");
+/** "to ferry a passenger onto a bank, the wolf may not be with the goat
+ *  without the farmer" — the co-location CONSTRAINT sentence (kind
+ *  action-constraint): after a move, <left> and <right> may not share a
+ *  position unless <guard> is there too. All three trailing words name a
+ *  class whose sole member src/domain.mjs binds at plan time. Disjoint from
+ *  the two precondition frames above by anchor phrase alone ("may not be
+ *  with … without", never "nothing may" or "must be … than") — PREP_SRC has
+ *  no "without", so the preposition captures can't collide either. */
+const ACTION_CONSTRAINT_TEACH_RE = new RegExp(
+  `^to\\s+([a-z]+)\\s+an?\\s+([a-z][\\w-]*)\\s+(${PREP_SRC})\\s+an?\\s+([a-z][\\w-]*)\\s*,?\\s*the\\s+([a-z][\\w-]*)\\s+may\\s+not\\s+be\\s+with\\s+the\\s+([a-z][\\w-]*)\\s+without\\s+the\\s+([a-z][\\w-]*)[.!?]*$`, "i");
 /** "a disk renders as a block" — the render-template binding, an ordinary
  *  Fact on the curated mgx:rendersAs predicate (camelCase, so the
  *  general-verb preposition fold can never suffix it). */
@@ -3192,7 +3202,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     } catch { /* malformed slots — fall through to the ordinary honest-miss cascade */ }
   }
 
-  // ACTION-RULE TEACH — the four action frames plus the render binding (see
+  // ACTION-RULE TEACH — the five action frames plus the render binding (see
   // the ACTION_*_TEACH_RE docblock). Each sentence stores its own Rule
   // individual under a shared "<verb> <prep>" name. A role word that names
   // neither the taught subject class nor the literal "target" is an honest
@@ -3301,6 +3311,31 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     } catch { /* malformed slots — fall through to the ordinary honest-miss cascade */ }
   }
 
+  const actionConstraint = ownSrc.match(ACTION_CONSTRAINT_TEACH_RE);
+  if (actionConstraint && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion) {
+    try {
+      const verb = await actionLemma(actionConstraint[1]);
+      const prep = actionConstraint[3].toLowerCase();
+      const { appendRule, RULE_KIND_ACTION_CONSTRAINT } = await import("./memory/core.mjs");
+      const { id } = await appendRule(memoryDir, {
+        name: `${verb} ${prep}`,
+        kind: RULE_KIND_ACTION_CONSTRAINT,
+        slots: {
+          left: actionConstraint[5].toLowerCase(),
+          right: actionConstraint[6].toLowerCase(),
+          guard: actionConstraint[7].toLowerCase(),
+        },
+        provenance: teachProvenanceTag(sessionId, new Date().toISOString()),
+      });
+      if (id) {
+        return {
+          text: `noted — remembered: to ${verb} ${prep}, the ${actionConstraint[5].toLowerCase()} may not be with the ${actionConstraint[6].toLowerCase()} without the ${actionConstraint[7].toLowerCase()}`,
+          via: "assert", miss: false,
+        };
+      }
+    } catch { /* malformed slots — fall through to the ordinary honest-miss cascade */ }
+  }
+
   const actionEffect = ownSrc.match(ACTION_EFFECT_TEACH_RE);
   if (actionEffect && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion) {
     const gerund = actionEffect[1].toLowerCase();
@@ -3314,11 +3349,18 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
         via: "teach-miss", miss: true,
       };
     }
-    const subjectRole = actionRoleFor(actionEffect[5], actionEffect[2]);
+    const namedSubjectRole = actionRoleFor(actionEffect[5], actionEffect[2]);
+    // A subject word naming neither the subject class nor "target" is
+    // CLASS-BOUND: a companion that travels with every move ("ferrying a
+    // passenger onto a bank makes the FARMER stand on the target"). Stored as
+    // the bare class word; compileDomain (src/domain.mjs) requires the class
+    // to have exactly one member at plan time, so a typo'd word fails loudly
+    // there rather than silently minting a role here.
+    const subjectRole = namedSubjectRole ?? actionEffect[5].toLowerCase();
     const objectRole = actionRoleFor(actionEffect[8], actionEffect[2]);
-    if (!subjectRole || !objectRole || subjectRole === objectRole) {
+    if (!objectRole || subjectRole === objectRole) {
       return {
-        text: `I can't place "${!subjectRole ? actionEffect[5] : actionEffect[8]}" in that rule — the effect must relate the ${actionEffect[2]} and the target, once each (e.g. "makes the ${actionEffect[2]} rest on the target").`,
+        text: `I can't place "${actionEffect[8]}" in that rule — the effect must end at the ${actionEffect[2]} or the target (e.g. "makes the ${actionEffect[2]} rest on the target").`,
         via: "teach-miss", miss: true,
       };
     }
@@ -3338,7 +3380,8 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
       });
       if (id) {
         return {
-          text: `noted — remembered: ${gerund} a ${actionEffect[2].toLowerCase()} ${prep} a ${actionEffect[4].toLowerCase()} makes the ${actionEffect[5].toLowerCase()} ${actionEffect[6].toLowerCase()} ${actionEffect[7].toLowerCase()} the ${actionEffect[8].toLowerCase()}`,
+          text: `noted — remembered: ${gerund} a ${actionEffect[2].toLowerCase()} ${prep} a ${actionEffect[4].toLowerCase()} makes the ${actionEffect[5].toLowerCase()} ${actionEffect[6].toLowerCase()} ${actionEffect[7].toLowerCase()} the ${actionEffect[8].toLowerCase()}`
+            + (namedSubjectRole ? "" : ` (the ${subjectRole} rides along on every ${verb} move — its class must have exactly one member when we plan)`),
           via: "assert", miss: false,
         };
       }
@@ -7756,7 +7799,7 @@ async function compareAnswer(query, { graph, config, source }) {
   const cmp = renderCompare(g, indA, indB);
   if (!cmp) {
     return {
-      text: `I can only compare two entities of the SAME kind right now — "${indA.label}" is a ${indA.class || "Entity"} and "${indB.label}" is a ${indB.class || "Entity"}.`,
+      text: `I can only compare two entities of the SAME kind right now — "${indA.label}" is a ${classDisplayName(indA.class || "Entity")} and "${indB.label}" is a ${classDisplayName(indB.class || "Entity")}.`,
       ents: [indA, indB],
     };
   }
@@ -8225,8 +8268,19 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     answer = content;
     if (envJson) { try { envelope = JSON.parse(envJson); } catch { envelope = null; } }
   } catch (e) {
-    answer = String(e?.message || e);
-    note(trace, `intermediate: the ask engine threw — ${answer}`);
+    const thrown = String(e?.message || e);
+    // A graph-less session's ask dispatch fails reading the never-configured
+    // graph artifact — an internal error string, not an answer. Swap in an
+    // honest wall; the teach/fact lanes below still get their turn and
+    // replace it whenever they can store or answer instead. A missing config
+    // gets the same wall: with no config at all, no dispatch could ever have
+    // loaded a graph, whatever the internal error spelled.
+    answer = !graph && (!config || /^cannot read graph artifact\b/.test(thrown))
+      ? "I can't answer that as a code question — no code graph is loaded in this session. "
+        + "I can still remember and answer taught facts (try \"every disk is a game piece\"), "
+        + "or run `tmct init` in a repo to index one."
+      : thrown;
+    note(trace, `intermediate: the ask engine threw — ${thrown}`);
   }
   // NARRATE: the direct parse/traversal receipt, straight off ask()'s own
   // envelope, with zero extra instrumentation of ask.mjs: `parsed` is the
@@ -9148,23 +9202,29 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
     if (!argText) return mk("/plan needs a request, e.g. `/plan of the modules impacted by X, which are untested`.", { miss: true });
     if (!graph) return mk("no graph loaded — /plan needs a code graph to plan over.", { miss: true });
     const { buildCapabilityPlanCtx, runCapabilityPlan, declaredCapabilityNames } = await import("./router/drive.mjs");
-    const planCtx = await buildCapabilityPlanCtx({ config, source, tel, graph });
-    const result = await runCapabilityPlan(argText, declaredCapabilityNames(), planCtx);
-    if (result.refused) {
-      const why = Array.isArray(result.why) ? result.why.join("; ") : result.why;
-      const c1Why = result.c1Why && (Array.isArray(result.c1Why) ? result.c1Why.join("; ") : result.c1Why);
-      note(trace, `result: no plan found — ${why}`);
-      return mk(`no plan found — ${why}${c1Why ? ` (the direct router also declined: ${c1Why})` : ""}`, { miss: true });
+    const planCtx = await buildCapabilityPlanCtx({ config, source, tel, graph, memoryDir });
+    try {
+      const result = await runCapabilityPlan(argText, declaredCapabilityNames(), planCtx);
+      if (result.refused) {
+        const why = Array.isArray(result.why) ? result.why.join("; ") : result.why;
+        const c1Why = result.c1Why && (Array.isArray(result.c1Why) ? result.c1Why.join("; ") : result.c1Why);
+        note(trace, `result: no plan found — ${why}`);
+        return mk(`no plan found — ${why}${c1Why ? ` (the direct router also declined: ${c1Why})` : ""}`, { miss: true });
+      }
+      note(trace, `result: ${result.driver} — ${result.calls.length} step(s)`);
+      const lines = [`driver: ${result.driver}`, "", "steps:"];
+      result.calls.forEach((c, i) => lines.push(`  ${i + 1}. ${c.name} ${JSON.stringify(c.input || {})}`));
+      if (result.composed !== undefined && result.composed !== null) {
+        lines.push("", `composed answer (${result.composed.length}): ${result.composed.length ? result.composed.join(", ") : "(empty set)"}`);
+      } else if (result.observed) {
+        lines.push("", result.observed);
+      }
+      return mk(lines.join("\n"));
+    } finally {
+      // The taught registrations are per-ctx; unregister so the next /plan
+      // turn re-reads the store instead of meeting a stale name collision.
+      for (const dispose of planCtx.disposers || []) dispose();
     }
-    note(trace, `result: ${result.driver} — ${result.calls.length} step(s)`);
-    const lines = [`driver: ${result.driver}`, "", "steps:"];
-    result.calls.forEach((c, i) => lines.push(`  ${i + 1}. ${c.name} ${JSON.stringify(c.input || {})}`));
-    if (result.composed !== undefined && result.composed !== null) {
-      lines.push("", `composed answer (${result.composed.length}): ${result.composed.length ? result.composed.join(", ") : "(empty set)"}`);
-    } else if (result.observed) {
-      lines.push("", result.observed);
-    }
-    return mk(lines.join("\n"));
   }
 
   const spec = COMMANDS[name];

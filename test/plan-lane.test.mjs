@@ -171,6 +171,61 @@ test("plan lane: the combined one-message form (state + goal + solve) answers wi
   }
 });
 
+const RIVER_DOMAIN_SENTENCES = [
+  "a passenger is a kind of game piece.",
+  "a bank is a kind of place.",
+  "wolf-1 is a wolf.", "wolf-1 is a passenger.",
+  "goat-1 is a goat.", "goat-1 is a passenger.",
+  "cabbage-1 is a cabbage.", "cabbage-1 is a passenger.",
+  "farmer-1 is a farmer.",
+  "bank-east is a bank.", "bank-west is a bank.",
+  "you can ferry a passenger onto a bank.",
+  "you can ferry a farmer onto a bank.",
+  "ferrying a passenger onto a bank makes the passenger stand on the target.",
+  "ferrying a passenger onto a bank makes the farmer stand on the target.",
+  "to ferry a passenger onto a bank, the wolf may not be with the goat without the farmer.",
+  "to ferry a passenger onto a bank, the goat may not be with the cabbage without the farmer.",
+];
+const RIVER_STATE_SENTENCES = [
+  "wolf-1 stands on bank-east.", "goat-1 stands on bank-east.",
+  "cabbage-1 stands on bank-east.", "farmer-1 stands on bank-east.",
+];
+
+test("plan lane: a co-travel effect plus taught constraints solve the river crossing — next x7 ferries everyone across", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "plan-river-"));
+  try {
+    const s = makeSession(dir);
+    await teachAll(s, [...RIVER_DOMAIN_SENTENCES, ...RIVER_STATE_SENTENCES]);
+    // Constraint pruning is visible one ply deep: only the goat may cross first.
+    const legal = await s.turn("what moves are legal now?");
+    assert.match(String(legal.answer), /^1 legal move from here:/);
+    assert.match(String(legal.answer), /1\. ferry goat-1 onto bank-west/);
+    await s.turn("the goal is that every passenger stands on bank-west.");
+    const solve = await s.turn("solve it");
+    assert.match(String(solve.answer), /^plan found — 7 moves \(shortest\):/);
+    assert.match(String(solve.answer), /1\. ferry goat-1 onto bank-west/);
+    for (let i = 1; i <= 6; i += 1) {
+      const r = await s.turn("next");
+      assert.match(String(r.answer), new RegExp(`^moved — .* \\(step ${i} of 7\\)`));
+      assert.match(String(r.answer), new RegExp(`board@step${i}:`));
+    }
+    const final = await s.turn("next");
+    assert.match(String(final.answer), /step 7 of 7/);
+    assert.match(String(final.answer), /done — every passenger stands on bank-west \(checked against board@step7's written facts, not assumed\)\./);
+    assert.equal(s.planState.done, true);
+    // The co-travel effect wrote real rows: the farmer crossed with the goat
+    // on step 1, without ever being the moved subject.
+    const rows = readFactRows(await loadMemory(dir));
+    const step1 = rows.filter((r) => r.subject.endsWith("@step1") && r.predicate === "mgx:stand-on");
+    assert.equal(step1.find((r) => r.subject === "farmer-1@step1")?.object, "bank-west");
+    assert.equal(step1.find((r) => r.subject === "goat-1@step1")?.object, "bank-west");
+    assert.equal(step1.find((r) => r.subject === "wolf-1@step1")?.object, "bank-east");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("teach fixes: comparative objects store without trailing punctuation; bare taxonomy frames", async () => {
   const dir = await mkdtemp(join(tmpdir(), "plan-teach-"));
   try {

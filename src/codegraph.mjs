@@ -1,4 +1,4 @@
-import { lookupByProseTokens, proseLayerHits } from "./prose.mjs";
+import { lookupByProseTokens, proseLayerHits, splitIdentifierWords } from "./prose.mjs";
 import { cosine } from "./embed.mjs";
 import { CREATED_AT_PROP, UPDATED_AT_PROP, provenanceTagToSource } from "./memory/core.mjs";
 
@@ -204,6 +204,19 @@ function relLabel(g) {
   return g.prop ? `${g.predicate} [${g.prop}]` : g.predicate;
 }
 
+/** A class enum in a rendered heading: a multi-word enum reads as words
+ *  ("GlobalVariable" -> "Global Variable"); a single-word enum stays verbatim,
+ *  keeping the long-standing Module/Function/Entity headings byte-identical.
+ *  Title-cased (unlike ask.mjs's lowercase classDisplayName) because these
+ *  sites use the enum as a heading label, not mid-sentence prose — and ask.mjs
+ *  already imports this module, so reusing its formatter here would be a cycle. */
+function classHeading(cls) {
+  const c = cls || "Entity";
+  const words = splitIdentifierWords(c);
+  if (words.length < 2) return c;
+  return words.map((w) => w[0].toUpperCase() + w.slice(1)).join(" ");
+}
+
 // Show the first `n` items, then a "+K more" tail with the true count.
 function capJoin(items, n, sep = ", ") {
   if (items.length <= n) return items.join(sep);
@@ -216,7 +229,7 @@ const PROV_CAP = 8;
 /** Compact plain-text description of one individual — for an agent consumer. */
 export function renderDescribe(graph, ind, { candidates = [] } = {}) {
   const lines = [];
-  lines.push(`${ind.label} — ${ind.class || "Entity"} (id: ${ind.id})`);
+  lines.push(`${ind.label} — ${classHeading(ind.class)} (id: ${ind.id})`);
 
   const refs = (ind.derived_from || []).filter(isProvRef);
   if (refs.length) lines.push(`attestation: touched by ${refs.length} commit(s)`);
@@ -244,7 +257,7 @@ export function renderDescribe(graph, ind, { candidates = [] } = {}) {
   }
 
   if (candidates.length) {
-    lines.push(`other matches: ${candidates.map((c) => `${c.label} (${c.class})`).join(", ")}`);
+    lines.push(`other matches: ${candidates.map((c) => `${c.label} (${classHeading(c.class)})`).join(", ")}`);
   }
   if (graph.truncated.length) {
     lines.push(truncationNote(graph));
@@ -286,7 +299,7 @@ export function renderCompare(graph, indA, indB) {
   const klass = indA.class || "Entity";
   if ((indB.class || "Entity") !== klass) return null;
 
-  const lines = [`Comparing ${indA.label} and ${indB.label} (both ${klass}):`];
+  const lines = [`Comparing ${indA.label} and ${indB.label} (both ${classHeading(klass)}):`];
   const a = edgesFor(graph, indA.id);
   const b = edgesFor(graph, indB.id);
   const outByPred = pairByPredicate(a.out, b.out);
@@ -1382,7 +1395,7 @@ const CALL_CAP = 30;
 /** A class's methods + attributes (with sites/decorators) in one slice — replaces
  *  reading the class body. Uses the `contains` (seon:containsCodeEntity) relation. */
 export function renderMembers(graph, ind) {
-  const lines = [`${ind.label} — ${ind.class || "Entity"} (id: ${ind.id})`];
+  const lines = [`${ind.label} — ${classHeading(ind.class)} (id: ${ind.id})`];
   const contains = edgesOfKind(graph, "contains").filter((e) => e.subject === ind.id);
   if (!contains.length) {
     lines.push("members: none recorded (empty class, or members not in the extracted graph). Use tmct_describe for its edges.");
@@ -1411,7 +1424,7 @@ const attrVal = (ind, key) => (ind?.attributes || []).find((a) => a.key === key)
  *  (kept OUT of tmct_context's lean bundle; this is the targeted tool for them). */
 export function renderSignature(graph, ind) {
   const site = siteOf(ind);
-  const lines = [`${ind.label} — ${ind.class || "Entity"}${spanTag(site)}`];
+  const lines = [`${ind.label} — ${classHeading(ind.class)}${spanTag(site)}`];
   const params = attrVal(ind, "params");
   const returns = attrVal(ind, "returns");
   if (params || returns || (ind.class || "") === "Method" || (ind.class || "") === "Function") {
@@ -1451,7 +1464,7 @@ export function renderSubclasses(graph, ind) {
     if (!childrenOf.has(e.object)) childrenOf.set(e.object, []);
     childrenOf.get(e.object).push({ id: e.subject, label: e.subjectLabel || e.subject });
   }
-  const lines = [`${ind.label} — ${ind.class || "Entity"} (id: ${ind.id})`];
+  const lines = [`${ind.label} — ${classHeading(ind.class)} (id: ${ind.id})`];
   lines.push(bases.length ? `extends: ${capJoin(bases, SUBCLASS_CAP)}` : "extends: (no internal/recorded base classes)");
   const visited = new Set([ind.id]);
   const levels = [];
@@ -1625,10 +1638,10 @@ export function callHint(graph, ind) {
 export function renderCalls(graph, ind) {
   const calls = edgesOfKind(graph, "callsSymbol").filter((e) => e.subject === ind.id);
   if (!calls.length) {
-    return `${ind.label} — ${ind.class || "Entity"}: no in-repo calls recorded (calls only stdlib/external, or fine-grained call edges are not in the extracted graph).`;
+    return `${ind.label} — ${classHeading(ind.class)}: no in-repo calls recorded (calls only stdlib/external, or fine-grained call edges are not in the extracted graph).`;
   }
   const items = calls.map((e) => calleeRef(graph, e));
-  return `${ind.label} — ${ind.class || "Entity"} calls ${calls.length} in-repo symbol(s):\n  ${capJoin(items, CALL_CAP, "\n  ")}`;
+  return `${ind.label} — ${classHeading(ind.class)} calls ${calls.length} in-repo symbol(s):\n  ${capJoin(items, CALL_CAP, "\n  ")}`;
 }
 
 // ---- commit history with author/date/subject (Commit attributes) ----------------
@@ -1664,11 +1677,11 @@ export function renderFileHistory(graph, ind) {
 function renderSymbolHistory(graph, ind) {
   const commits = edgesOfKind(graph, "touchesSymbol").filter((e) => e.object === ind.id);
   if (!commits.length) {
-    return `${ind.label} — ${ind.class || "Entity"}: no symbol-level commit history recorded (outside the git-log window, or fine-grained history is not in the extracted graph).`;
+    return `${ind.label} — ${classHeading(ind.class)}: no symbol-level commit history recorded (outside the git-log window, or fine-grained history is not in the extracted graph).`;
   }
   const shown = commits.slice(0, HISTORY_CAP).map((e) => `  ${commitLine(graph, e.subject, e.subjectLabel)}`);
   const tail = commits.length > HISTORY_CAP ? `\n  …+${commits.length - HISTORY_CAP} more` : "";
-  return `${ind.label} — ${ind.class || "Entity"}: touched by ${commits.length} commit(s):\n${shown.join("\n")}${tail}`;
+  return `${ind.label} — ${classHeading(ind.class)}: touched by ${commits.length} commit(s):\n${shown.join("\n")}${tail}`;
 }
 
 /** Method history — commits touching a specific method symbol (`touchesSymbol`). */

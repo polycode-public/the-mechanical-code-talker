@@ -1264,7 +1264,7 @@ async function main() {
       process.stderr.write("tmct plan: needs a request, e.g. `tmct plan \"of the modules impacted by X, which are untested\"`\n");
       process.exit(2);
     }
-    const { config } = await resolveRuntimeConfig({ argv: rest });
+    const { repo, config } = await resolveRuntimeConfig({ argv: rest });
     const { buildCapabilityPlanCtx, runCapabilityPlan, declaredCapabilityNames } = await import("../src/router/drive.mjs");
     const declared = declaredCapabilityNames();
     let tools = declared;
@@ -1278,34 +1278,49 @@ async function main() {
     }
     let ctx;
     try {
-      ctx = await buildCapabilityPlanCtx({ config });
+      ctx = await buildCapabilityPlanCtx({ config, memoryDir: repo });
     } catch (e) {
       process.stderr.write(`tmct plan: could not load the graph — ${e?.message || e}\n`);
       process.exit(1);
     }
-    const result = await runCapabilityPlan(request, tools, ctx);
-    if (jsonFlag) {
-      process.stdout.write(JSON.stringify({ request, ...result }, null, 2) + "\n");
-      process.exit(result.refused ? 1 : 0);
-    }
-    process.stdout.write(`tmct plan: "${request}"\n`);
-    if (result.refused) {
-      process.stdout.write(`no plan found — ${Array.isArray(result.why) ? result.why.join("; ") : result.why}\n`);
-      if (result.c1Why) {
-        process.stdout.write(`(the direct router also declined: ${Array.isArray(result.c1Why) ? result.c1Why.join("; ") : result.c1Why})\n`);
+    // The default (no --tools) toolset is re-read AFTER the ctx build: the
+    // memory store's taught: capability records only register there, and a
+    // world goal refuses when its taught record is outside the toolset.
+    if (!toolsFlag) tools = declaredCapabilityNames();
+    try {
+      const result = await runCapabilityPlan(request, tools, ctx);
+      if (jsonFlag) {
+        process.stdout.write(JSON.stringify({ request, ...result }, null, 2) + "\n");
+        process.exit(result.refused ? 1 : 0);
       }
-      process.exit(1);
-    }
-    process.stdout.write(`driver: ${result.driver}\n\nsteps:\n`);
-    for (let i = 0; i < result.calls.length; i += 1) {
-      const c = result.calls[i];
-      let text = "";
-      try { text = await ctx.dispatch(c.name, c.input || {}).then((r) => (r.ok ? r.text : `(unresolved: ${r.error})`)); }
-      catch (e) { text = `(error: ${e?.message || e})`; }
-      process.stdout.write(`  ${i + 1}. ${c.name} ${JSON.stringify(c.input || {})}\n     ${String(text).split("\n").join("\n     ")}\n`);
-    }
-    if (result.composed !== undefined && result.composed !== null) {
-      process.stdout.write(`\ncomposed answer (${result.composed.length}): ${result.composed.length ? result.composed.join(", ") : "(empty set)"}\n`);
+      process.stdout.write(`tmct plan: "${request}"\n`);
+      if (result.refused) {
+        process.stdout.write(`no plan found — ${Array.isArray(result.why) ? result.why.join("; ") : result.why}\n`);
+        if (result.c1Why) {
+          process.stdout.write(`(the direct router also declined: ${Array.isArray(result.c1Why) ? result.c1Why.join("; ") : result.c1Why})\n`);
+        }
+        process.exit(1);
+      }
+      process.stdout.write(`driver: ${result.driver}\n\nsteps:\n`);
+      for (let i = 0; i < result.calls.length; i += 1) {
+        const c = result.calls[i];
+        let text = "";
+        // taught: records are simulated, never dispatchable — dispatching one
+        // would print a misleading "unknown tool" under an honest plan step.
+        if (c.name.startsWith("taught:")) text = "(simulated over the taught rules — execute it in chat with \"next\")";
+        else {
+          try { text = await ctx.dispatch(c.name, c.input || {}).then((r) => (r.ok ? r.text : `(unresolved: ${r.error})`)); }
+          catch (e) { text = `(error: ${e?.message || e})`; }
+        }
+        process.stdout.write(`  ${i + 1}. ${c.name} ${JSON.stringify(c.input || {})}\n     ${String(text).split("\n").join("\n     ")}\n`);
+      }
+      if (result.composed !== undefined && result.composed !== null) {
+        process.stdout.write(`\ncomposed answer (${result.composed.length}): ${result.composed.length ? result.composed.join(", ") : "(empty set)"}\n`);
+      } else if (result.observed) {
+        process.stdout.write(`\n${result.observed}\n`);
+      }
+    } finally {
+      for (const dispose of ctx.disposers || []) dispose();
     }
     return;
   }

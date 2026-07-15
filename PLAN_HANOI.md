@@ -856,3 +856,39 @@ Deviations from the design as written, each made for a reason that binds:
   every later call returns null — found as a warm-session sentence-split failure, fixed en route.
 - **The renders-as predicate is `mgx:rendersAs`** (curated camelCase like `mgx:hasA`), so the
   preposition fold never suffixes it.
+
+## 2026-07-15 — addendum: river-crossing shipped, and the router consumes taught records
+
+The 5R deviation above ("crates, not river-crossing") is closed. The two missing pieces now
+exist, and the wolf/goat/cabbage crossing is the third taught domain
+(`data/games/river.txt`, scaffolded into `.tmct/imports/games/` by `tmct init`;
+`test/domain-river.test.mjs`, plus a `runTurn` session in `test/plan-lane.test.mjs`):
+
+- **Co-travel effects.** An effect sentence whose subject word names neither the moved class
+  nor "target" is class-bound: "ferrying a passenger onto a bank makes the FARMER stand on
+  the target" stores `subjectRole: farmer`, and `compileDomain` (`src/domain.mjs`) binds it to
+  that class's sole member at plan time (0 or 2+ members fail loudly). The interpreter derives
+  the matching co-location precondition itself — the companion must stand where the subject
+  stands, or applying the effect would teleport it.
+- **The constraint frame.** "to ferry a passenger onto a bank, the wolf may not be with the
+  goat without the farmer" is the sixth action teach frame (kind `action-constraint`, slots
+  left/right/guard, `src/chat.mjs`). Successor states that put left and right together without
+  the guard are pruned in `movesFromRules`.
+- **The oracle.** From the pinned opening, exactly 1 move is legal (ferry the goat), and the
+  solve is the classic 7 crossings, shortest, confirmed from written `@stepK` facts by
+  "next" ×7.
+
+**Router-side taught-record consumption also shipped.** `buildCapabilityPlanCtx(memoryDir)`
+(`src/router/drive.mjs`) registers the store's action families as `taught:` capability records
+and `runTaughtPlan` grounds a world goal ("make every passenger stand on bank-west") against
+them by pure simulation — never dispatched. Both callers now pass the memory dir: chat's
+`/plan` (per-turn, disposers run after each turn) and `tmct plan` (per-request). The 5R bridge
+is no longer registration-only.
+
+**Open risk: plan-viz animation under co-travel.** `src/plan-viz.mjs`'s blocks renderer was
+designed against hanoi/crates, where exactly one piece changes position per snapshot; a river
+step moves two (the passenger and the farmer). The state diffing renders whatever changed, but
+the one-piece-at-a-time animation/beat assumptions have not been re-validated against a
+two-piece step, and river pieces carry no taught `renders as` bindings yet. No render tier is
+designed for co-travel yet; until one is, `--render blocks` output for river plans should be
+treated as unreviewed rather than wrong — validating or extending it is a follow-on.

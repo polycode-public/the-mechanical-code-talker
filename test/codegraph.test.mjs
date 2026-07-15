@@ -217,6 +217,20 @@ test("renderDescribe: edges both directions, commit attestation + provenance", (
   assert.match(text, /provenance: git:abc1234, git:def5678/);
 });
 
+test("renderDescribe/renderCalls: a multi-word class enum renders as words; single-word enums stay verbatim", () => {
+  const payload = {
+    individuals: [{ id: "gv-max", label: "MAX_RETRIES", class: "GlobalVariable", derived_from: [] }],
+    objectProperties: [],
+  };
+  const g = parseEntities(payload);
+  const described = renderDescribe(g, g.byId.get("gv-max"));
+  assert.match(described, /^MAX_RETRIES — Global Variable \(id: gv-max\)/);
+  assert.doesNotMatch(described, /GlobalVariable/);
+  assert.match(renderCalls(g, g.byId.get("gv-max")), /^MAX_RETRIES — Global Variable: no in-repo calls recorded/);
+  // The Module heading is untouched (tier-6 pins this exact shape).
+  assert.match(renderDescribe(graph, graph.byId.get("mod-a")), /^app\/lib\/a\.mjs — Module \(id: mod-a\)/);
+});
+
 test("renderCompare: two same-kind Classes — shared + differing edges, attribute diff", () => {
   const text = renderCompare(graph, graph.byId.get("cls-widget"), graph.byId.get("cls-button"));
   assert.match(text, /^Comparing Widget and Button \(both Class\):/);
