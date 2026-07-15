@@ -13,7 +13,7 @@
 // write the same `.tmct/memory/corpus-seed.json`, so whichever runs first wins. Re-declared
 // here rather than imported, to keep init off chat.mjs's heavy module graph.
 
-import { mkdir, readFile, writeFile, stat } from "node:fs/promises";
+import { copyFile, mkdir, readFile, readdir, writeFile, stat } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { stringify as stringifyToml } from "smol-toml";
@@ -194,6 +194,51 @@ export async function initRepo(dir, { force = false, seed, env = process.env, pe
     if (!(await exists(d))) {
       await mkdir(d, { recursive: true });
       created.push(d);
+    }
+  }
+
+  // ---- 1b. Importable starters (.tmct/imports) — game definition files a
+  // fresh repo can discover by listing a directory, plus a README naming the
+  // corpus bundle ids `tmct import` accepts. Game files are copied (import
+  // --file consumes them directly); corpus bundles are listed by id, not
+  // copied — the wordnet-scale ones are far too large to scaffold into every
+  // repo, and `tmct import --corpus <id>` resolves ids without a local copy.
+  {
+    const importsDir = join(paths.tmct, "imports");
+    const gamesDir = join(importsDir, "games");
+    const shippedGames = join(dirname(fileURLToPath(import.meta.url)), "..", "data", "games");
+    if (!(await exists(gamesDir))) {
+      await mkdir(gamesDir, { recursive: true });
+      created.push(gamesDir);
+    }
+    try {
+      for (const f of await readdir(shippedGames)) {
+        if (!f.endsWith(".txt")) continue;
+        const dest = join(gamesDir, f);
+        if (!(await exists(dest))) {
+          await copyFile(join(shippedGames, f), dest);
+          created.push(dest);
+        }
+      }
+    } catch { /* no shipped games directory — scaffold stays empty */ }
+    const readmePath = join(importsDir, "README.txt");
+    if (!(await exists(readmePath))) {
+      await writeFile(readmePath, [
+        "Importable starters for this repo.",
+        "",
+        "Game definitions (plain controlled-English sentences; # lines are comments):",
+        "  tmct import --file .tmct/imports/games/hanoi-3.txt",
+        "",
+        "Corpus bundles (activate by id — no local copy needed):",
+        "  tmct import --corpus human | human-medium | human-large",
+        "  tmct import --corpus seon | conceptnet | aws | python | java | general",
+        "  tmct import --corpus wordnet-xl | wordnet-full | namenet   (large: tens of thousands of facts)",
+        "",
+        "Ontology / lexicon resources are file paths declared as extension entries:",
+        "  tmct import --ontology <path> | --lexicon <path>",
+        "",
+      ].join("\n"));
+      created.push(readmePath);
     }
   }
 

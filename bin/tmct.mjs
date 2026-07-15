@@ -38,6 +38,8 @@ Usage:
                                see src/graph-merge.mjs); wins over --repo/TMCT_GRAPH_FILE/tmct.toml
        [--config <path>]       an alternate tmct.toml location (a file or a directory)
        [--ephemeral]           read the graph but write nothing back (demo/read-only)
+       [--prompt "<text>"]     one-shot: run the prompt's sentences as turns and print
+                               the final answer (teach state first, trigger last)
        [--narrate]             start with narrate mode on — a verbose, developer-facing
                                trace of decision points/matched pattern/results/goal per
                                turn, appended under a "--- narrate ---" marker (also
@@ -77,6 +79,9 @@ Usage:
        [--ontology <name|path>]  DIFFERENT operation from the others: it APPENDS to
        [--lexicon <name|path>]   tmct.toml's graph_files array (multi-graph growth),
        [--graph <path>]        never an extensions-bundle activation.
+       [--file <definition.txt>]  teach a plain-text definition file sentence by
+                               sentence (# lines are comments); any declined
+                               sentence exits non-zero with the sentence named
        [--memory-backend <default|memory|sqlite>]  same knob as \`tmct init\`
        [--config <path>]
   tmct extend --validate <dir>  validate a third-party extension pack's declared
@@ -598,6 +603,27 @@ async function main() {
     if (graphPaths.length) extra.graphPaths = graphPaths;
     if (configPath) extra.configPath = configPath;
     if (memoryBackend) extra.memoryBackend = memoryBackend;
+    // `--prompt "<text>"` — one-shot mode: each sentence of the prompt runs as
+    // its own turn (state teaches first, the goal/solve trigger last), the
+    // FINAL turn's answer prints to stdout, and the process exits. Piped stdin
+    // stays the interactive fallback.
+    const prompt = strFlag(rest, ["--prompt"]);
+    if (prompt) {
+      const { createSession } = await import("../src/chat.mjs");
+      const { splitSentences } = await import("../src/sentences.mjs");
+      const session = await createSession({ repoPath, ephemeral, narrate, ...extra });
+      let finalAnswer = "";
+      let parts;
+      try { parts = splitSentences(prompt); } catch { parts = null; }
+      const sentences = parts && parts.length ? parts : [prompt];
+      for (const s of sentences) {
+        const t = await session.turn(s);
+        finalAnswer = t?.answer ?? "";
+      }
+      await session.close();
+      process.stdout.write(finalAnswer + "\n");
+      return;
+    }
     // The shell gate: a real terminal gets the full-screen Ink TUI; `--plain` or a
     // non-TTY stream (pipes, scripts, the test suite) gets the readline shell. Both
     // drive the same createSession sink — only the drawing differs.
@@ -869,8 +895,9 @@ async function main() {
       process.exit(2);
     }
 
-    if (!corpusVal && !ontologyVal && !lexiconVal && !graphFlags.length && !memoryBackendVal) {
-      process.stderr.write("tmct import: needs at least one of --corpus/--ontology/--lexicon/--graph/--memory-backend\n");
+    const fileVal = strFlag(rest, ["--file"]);
+    if (!corpusVal && !ontologyVal && !lexiconVal && !graphFlags.length && !memoryBackendVal && !fileVal) {
+      process.stderr.write("tmct import: needs at least one of --corpus/--ontology/--lexicon/--graph/--memory-backend/--file\n");
       process.exit(2);
     }
 
@@ -911,6 +938,22 @@ async function main() {
       try {
         await appendGraphFiles(repoRoot, graphFlags);
         process.stdout.write(`added ${graphFlags.length} graph file(s) to tmct.toml's graph_files: ${graphFlags.join(", ")}\n`);
+      } catch (e) {
+        process.stderr.write(`tmct import: ${e?.message || e}\n`);
+        process.exit(1);
+      }
+    }
+
+    // `--file <definition.txt>` — teach a plain-text definition file, one
+    // sentence per turn, through the same recognizers the live chat uses.
+    // Any declined sentence exits non-zero: a half-taught game plans wrongly
+    // or not at all with no visible cause otherwise.
+    if (fileVal) {
+      const { importDefinitionFile } = await import("../src/import-file.mjs");
+      try {
+        const result = await importDefinitionFile(repoRoot, fileVal);
+        process.stdout.write(result.report + "\n");
+        if (result.declined.length > 0) process.exit(1);
       } catch (e) {
         process.stderr.write(`tmct import: ${e?.message || e}\n`);
         process.exit(1);

@@ -1,0 +1,30 @@
+# hanoi-3 — a taught game definition. Lines starting with # are skipped by import.
+# After `tmct import --file hanoi-3.txt`, try this in `tmct chat` (or via --prompt):
+#
+#   disk-1 rests on disk-2. disk-2 rests on disk-3. disk-3 rests on peg-a.
+#   the goal is that every disk rests on peg-c. solve it.
+#
+# Variations, each stretching a different direction:
+#   scale      — first teach: "disk-4 is a disk. disk-3 is smaller than disk-4."
+#                start all four on peg-a, same goal. 15 moves (2^4 - 1).
+#   any start  — disk-1 rests on peg-b. disk-2 rests on peg-c. disk-3 rests on peg-a.
+#                the goal is that every disk rests on peg-c. solve it.
+#   other goal — same start, "the goal is that every disk rests on peg-b. solve it."
+#   partial    — "the goal is that disk-3 rests on peg-c. solve it."
+#                (a one-fact goal; exercises the non-universal goal frame)
+#   legality   — "what moves are legal now?"  (findReachableSet, one ply, no plan)
+#   read-back  — "what rests on disk-2?" / "is disk-1 clear?"  (plain fact questions,
+#                no planning involved)
+a disk is a kind of game piece.
+a peg is a kind of place.
+disk-1 is a disk. disk-2 is a disk. disk-3 is a disk.
+peg-a is a peg. peg-b is a peg. peg-c is a peg.
+disk-1 is smaller than disk-2. disk-1 is smaller than disk-3.
+disk-2 is smaller than disk-3.
+you can move a disk onto a peg.
+you can move a disk onto a disk.
+to move a disk onto a target, nothing may rest on the disk.
+to move a disk onto a target, nothing may rest on the target.
+to move a disk onto a disk, the disk must be smaller than the target.
+moving a disk onto a target makes the disk rest on the target.
+a disk renders as a block. a peg renders as a slot.
