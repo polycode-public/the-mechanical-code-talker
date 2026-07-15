@@ -34,6 +34,7 @@ import { loadTemplates, render as renderTemplate } from "./corpus/templates.mjs"
 import { resolveExtensions, mergedLexiconExtra } from "./extensions.mjs";
 import { rankByBiasThenTrust } from "./memory/bias.mjs";
 import { finish, beginsWithVowelSound, grammarRules } from "./finish.mjs";
+import { splitSentences } from "./sentences.mjs";
 import {
   VERB_TO_KIND, WHERE_MARKERS, MENTION_MARKERS, ENTITY_TO_TYPE, PASSIVE_PARTICIPLE_TO_KIND,
   stripTrailingScopeFiller, stripTrailingDiscourseTag, EDGE_NOUN_TO_METRIC, RELATIONS,
@@ -1780,6 +1781,55 @@ const ACTION_EFFECT_TEACH_RE = new RegExp(
  *  Fact on the curated mgx:rendersAs predicate (camelCase, so the
  *  general-verb preposition fold can never suffix it). */
 const RENDERS_AS_TEACH_RE = /^an?\s+([a-z][\w-]*)\s+renders\s+as\s+an?\s+([a-z][\w-]*)[.!?]*$/i;
+// Bare-copula instance membership: the subject MUST contain a hyphen
+// (disk-1, peg-a) — see bareTaxonomyTeach's reasoning.
+const INSTANCE_TYPE_TEACH_RE = /^([a-z][\w]*(?:-[\w]+)+)\s+is\s+an?\s+([a-z][\w-]+)[.!?]*$/i;
+// Bare article-led kind-of taxonomy: "a disk is a kind of game piece".
+const BARE_KINDOF_TEACH_RE = /^an?\s+([a-z][\w-]+)\s+is\s+a\s+kind\s+of\s+(?:an?\s+)?([a-z][\w-]+(?:\s+[a-z][\w-]+)?)[.!?]*$/i;
+
+/** Verb → lemma via the prose adapter, degrading to the word itself. */
+async function verbLemma(word) {
+  const w = String(word || "").toLowerCase();
+  try {
+    const { proseLemma } = await import("./prose-nlp.mjs");
+    const lemma = proseLemma();
+    return lemma ? lemma(w) : w;
+  } catch { return w; }
+}
+
+/** Pre-ask declarative taxonomy teaches. Checked BEFORE the ask engine: "a
+ *  disk is a kind of game piece." otherwise parses as an inherits QUESTION
+ *  and dies on term resolution, even though an article-led declarative with
+ *  no question lead is a statement. Two closed shapes only:
+ *  - instance membership with a HYPHENATED subject ("disk-1 is a disk") —
+ *    hyphenated/numbered coinages are unambiguous individual names, so this
+ *    stays clear of the plain-word bare "X is a Y" declines the tier-5
+ *    fabrication fixes deliberately preserve;
+ *  - article-led "is a kind of" taxonomy — the infix is unambiguous
+ *    taxonomy-teach intent, so both terms may be new coinages here. */
+async function bareTaxonomyTeach(line, { memoryDir, sessionId }) {
+  if (!memoryDir || QUESTION_LEAD_RE.test(line)) return null;
+  const inst = line.match(INSTANCE_TYPE_TEACH_RE);
+  if (inst) {
+    return teachFact(memoryDir, sessionId, {
+      subject: inst[1], predicate: "rdfs:subClassOf", object: inst[2],
+    });
+  }
+  const kindOf = line.match(BARE_KINDOF_TEACH_RE);
+  if (kindOf) {
+    return teachFact(memoryDir, sessionId, {
+      subject: kindOf[1], predicate: "rdfs:subClassOf", object: kindOf[2],
+    });
+  }
+  return null;
+}
+// The plan lane's closed recognizer set. The goal frame is plan-lane state,
+// not a Rule — goals accumulate on the session's planState slot.
+const GOAL_TEACH_RE = new RegExp(
+  `^the\\s+goal\\s+is\\s+that\\s+(?:(every|each|all)\\s+)?([\\w-]+)\\s+([a-z]+s)\\s+(${PREP_SRC})\\s+([\\w-]+)[.!?]*$`, "i");
+const PLAN_SOLVE_RE = /^(?:solve\s+it|plan\s+the\s+moves|how\s+do\s+i\s+get(?:\s+from\s+here)?\s+to\s+the\s+goal)[?.!\s]*$/i;
+const LEGAL_MOVES_RE = /^what\s+moves\s+are\s+legal(?:\s+now)?[?.!\s]*$/i;
+const PLAN_NEXT_RE = /^(?:next|next\s+move|go\s+on|continue)[.!?\s]*$/i;
 
 /** "<X> is <adjective>" — the property teach payload (wrapper-REQUIRED): a lazy
  *  subject and a single bare complement word. Never matches the "is a <noun>"
@@ -2823,14 +2873,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   // decline that RETURNS here — falling through would hand these shapes to
   // the general-verb lane below, which would mint a garbage predicate from
   // them (the silent-garble case this lane exists to prevent).
-  const actionLemma = async (word) => {
-    const w = String(word || "").toLowerCase();
-    try {
-      const { proseLemma } = await import("./prose-nlp.mjs");
-      const lemma = proseLemma();
-      return lemma ? lemma(w) : w;
-    } catch { return w; }
-  };
+  const actionLemma = verbLemma;
   const actionRoleFor = (word, subjectClass) => {
     const w = String(word || "").toLowerCase();
     if (w === "target") return "target";
@@ -3110,7 +3153,8 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     if (comp) {
       const compPredicate = `mgx:${comp[2].toLowerCase().replace(/\s+/g, "-")}-than`;
       const stored = await teachFact(memoryDir, sessionId, {
-        subject: comp[1].trim(), predicate: compPredicate, object: comp[3].trim(),
+        subject: comp[1].trim(), predicate: compPredicate,
+        object: comp[3].trim().replace(/[.!?]+$/, ""),
       });
       if (stored) return stored;
     }
@@ -7270,7 +7314,222 @@ async function entityOfKindInText(graph, expectedClass, answerText) {
  *  otherwise the unchanged dispatchTool path (which also yields the no-graph error).
  *  A hit updates the focus to the resolved object. Grammar miss / ToolError → a
  *  normal answer, never a crash. */
-async function runAsk(query, { config, source, graph, focus, last, templates, memoryDir, sessionId = "", lexicon = null, env, trace, vocabHint = null, tel = null, biasByBundle = {}, cache = null, vocabAntecedent = null }) {
+/** Load the taught domain for the plan lane: fact rows + rule rows compiled
+ *  through src/domain.mjs. Fresh-loads memory (never the turn cache) because
+ *  the caller may have just written snapshot rows this same turn. */
+async function loadPlanContext(memoryDir) {
+  const { loadMemory, readFactRows, readRuleRows } = await import("./memory/core.mjs");
+  const { compileDomain, stateFromFacts } = await import("./domain.mjs");
+  const payload = await loadMemory(memoryDir);
+  const factRows = readFactRows(payload);
+  const ruleRows = readRuleRows(payload);
+  const domain = compileDomain(factRows, ruleRows);
+  const state = stateFromFacts(factRows, domain);
+  return { factRows, ruleRows, domain, state };
+}
+
+/** Human label for a grounded action: name "move onto" + disk-1 + peg-c →
+ *  "move disk-1 onto peg-c". */
+function actionLabel(name, subject, target) {
+  const sp = String(name).split(/\s+/);
+  const verb = sp[0] || "move";
+  const prep = sp.slice(1).join(" ") || "onto";
+  return `${verb} ${subject} ${prep} ${target}`;
+}
+
+/** THE PLAN LANE — the closed goal/solve/legal-moves recognizers over the
+ *  taught action rules (PLAN_HANOI's chat surface). Returns
+ *  { text, via, deduced, note, plan? } or null when the query is none of the
+ *  three shapes. Mutates planHolder.state (the session's plan slot). */
+async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", }) {
+  const q = String(query).trim();
+
+  const goalMatch = q.match(GOAL_TEACH_RE);
+  if (goalMatch) {
+    const { normFactTerm } = await import("./memory/core.mjs");
+    const verb = await verbLemma(goalMatch[3]);
+    if (!verb) {
+      return {
+        text: `I can't reduce "${goalMatch[3]}" to a verb for that goal — try the plain form (e.g. "rests").`,
+        via: "plan", deduced: "record the goal state for a later plan", note: "GOAL frame — verb lemma unavailable, honest decline",
+      };
+    }
+    const spec = {
+      universal: !!goalMatch[1],
+      term: normFactTerm(goalMatch[2]),
+      predicate: `${verb}-${goalMatch[4].toLowerCase()}`,
+      object: normFactTerm(goalMatch[5]),
+    };
+    const tail = q.replace(/^the\s+goal\s+is\s+that\s+/i, "").replace(/[.!?]+$/, "");
+    const prev = planHolder.state && Array.isArray(planHolder.state.goals) && !planHolder.state.done ? planHolder.state : null;
+    planHolder.state = {
+      goals: [...(prev?.goals ?? []), spec],
+      goalTexts: [...(prev?.goalTexts ?? []), tail],
+      actions: null, states: null, stepGoals: null, cursor: 0, done: false,
+    };
+    const n = planHolder.state.goals.length;
+    return {
+      text: `noted — the goal is that ${tail}.${n > 1 ? ` (${n} goals held)` : ""} Say "solve it" when the state is taught.`,
+      via: "plan", deduced: "record the goal state for a later plan",
+      note: "GOAL frame — goal spec accumulated on the session plan slot",
+    };
+  }
+
+  const wantsSolve = PLAN_SOLVE_RE.test(q);
+  const wantsLegal = LEGAL_MOVES_RE.test(q);
+  if (!wantsSolve && !wantsLegal) return null;
+
+  let ctx;
+  try {
+    ctx = await loadPlanContext(memoryDir);
+  } catch (err) {
+    return { text: `I can't read the taught domain: ${err?.message ?? err}`, via: "plan", deduced: "plan a move sequence", note: "plan lane — domain load failed" };
+  }
+  const { domain, state, factRows } = ctx;
+  if (!domain.actions.length) {
+    return {
+      text: `no action rules taught yet — teach the game first (e.g. "you can move a disk onto a peg").`,
+      via: "plan", deduced: "plan a move sequence (no action rules yet)", note: "plan lane — honest decline: no action rules",
+    };
+  }
+  if (!state.length) {
+    return {
+      text: `no current state taught yet — state the board first (e.g. "disk-1 rests on peg-a").`,
+      via: "plan", deduced: "plan a move sequence (no state yet)", note: "plan lane — honest decline: empty state",
+    };
+  }
+  const { movesFromRules, stateKeyFor, compileGoal, PlanBudgetError } = await import("./domain.mjs");
+
+  if (wantsLegal) {
+    let moves;
+    try {
+      moves = movesFromRules(state, domain);
+    } catch (err) {
+      if (err instanceof PlanBudgetError) {
+        return { text: `too many possible moves to enumerate here (${err.message}) — narrow the classes involved.`, via: "plan", deduced: "list the legal moves (budget exceeded)", note: "plan lane — budget decline" };
+      }
+      throw err;
+    }
+    if (!moves.length) {
+      return { text: "no legal moves from the current state.", via: "plan", deduced: "list the legal moves (none)", note: "plan lane — legal moves: none" };
+    }
+    const lines = moves.map((m, i) => `  ${i + 1}. ${actionLabel(m.action.name, m.action.subject, m.action.target)}`);
+    return {
+      text: `${moves.length} legal move${moves.length === 1 ? "" : "s"} from here:\n${lines.join("\n")}`,
+      via: "plan", deduced: "list the legal moves from the current state",
+      note: "plan lane — movesFromRules over the current snapshot, one ply, no search",
+    };
+  }
+
+  // "solve it" — the full search.
+  if (!planHolder.state?.goals?.length) {
+    return {
+      text: `no goal set yet — teach one first (e.g. "the goal is that every disk rests on peg-c").`,
+      via: "plan", deduced: "plan a move sequence (no goal yet)", note: "plan lane — honest decline: no goal",
+    };
+  }
+  const goals = planHolder.state.goals;
+  const goalText = planHolder.state.goalTexts.join("; ");
+  let isGoal;
+  try {
+    isGoal = compileGoal(goals, domain);
+  } catch (err) {
+    return { text: `I can't compile that goal: ${err?.message ?? err}`, via: "plan", deduced: "plan a move sequence (uncompilable goal)", note: "plan lane — goal compile decline" };
+  }
+  const { findActionPath } = await import("./planning.mjs");
+  let found;
+  try {
+    found = findActionPath(state, isGoal, (s) => movesFromRules(s, domain), { maxDepth: 300, stateKey: stateKeyFor });
+  } catch (err) {
+    if (err instanceof PlanBudgetError) {
+      return { text: `the search space is too large (${err.message}) — narrow the classes involved.`, via: "plan", deduced: "plan a move sequence (budget exceeded)", note: "plan lane — budget decline" };
+    }
+    throw err;
+  }
+  if (!found) {
+    return {
+      text: `no plan found within 300 moves from the current state to: ${goalText}.`,
+      via: "plan", deduced: "plan a move sequence (no path)", note: "plan lane — honest miss: findActionPath returned null",
+    };
+  }
+  const n = found.actions.length;
+  const actions = found.actions.map((a) => ({
+    name: a.name, subject: a.subject, target: a.target,
+    label: actionLabel(a.name, a.subject, a.target),
+  }));
+  const stepGoals = actions.map((a, i) =>
+    `${a.label} (step ${i + 1} of ${n}, working toward: ${goalText})`);
+  const renderHints = {};
+  const ordering = [];
+  for (const r of factRows) {
+    if (r.predicate === "mgx:rendersAs") renderHints[r.subject] = r.object;
+    else if (/-than$/.test(r.predicate)) ordering.push({ subject: r.subject, predicate: r.predicate, object: r.object });
+  }
+  const plan = {
+    actions, states: found.states, stepGoals,
+    goal: { text: goalText, specs: goals },
+    domain: { classMembers: domain.classMembers, ordering, renderHints },
+  };
+  planHolder.state = {
+    ...planHolder.state, actions, states: found.states, stepGoals, cursor: 0, done: false, goalText,
+  };
+  const ruleNames = [...new Set(domain.actions.map((a) => a.name))].join('", "');
+  const moveLines = actions.map((a, i) => `  ${i + 1}. ${a.label}`);
+  const text = n === 0
+    ? `the goal already holds — nothing to do.`
+    : `plan found — ${n} move${n === 1 ? "" : "s"} (shortest):\n${moveLines.join("\n")}\n\n` +
+      `because — you taught me the "${ruleNames}" rule${domain.actions.length === 1 ? "" : "s"}` +
+      `${ordering.length ? ` and ${ordering.length} ordering fact${ordering.length === 1 ? "" : "s"}` : ""}. ` +
+      `Say "next" to make move 1, or ask "what moves are legal now".`;
+  return {
+    text, via: "plan",
+    deduced: `plan a move sequence from the current state to the goal (${n} move${n === 1 ? "" : "s"})`,
+    note: "plan lane — compileDomain + findActionPath over the taught rules; plan held on the session slot",
+    plan,
+  };
+}
+
+/** Execute the active plan's next move: append the successor snapshot's rows
+ *  as @stepK facts, advance the cursor, and on the final step re-read the
+ *  store and confirm the goal from the WRITTEN facts (never assumed). */
+async function executePlanStep(planHolder, { memoryDir, sessionId = "" }) {
+  const ps = planHolder.state;
+  const k = ps.cursor + 1;
+  const action = ps.actions[ps.cursor];
+  const rows = ps.states[k];
+  const { appendFact, loadMemory, readFactRows } = await import("./memory/core.mjs");
+  for (const row of rows) {
+    await appendFact(memoryDir, {
+      subject: `${row.subject}@step${k}`, predicate: row.predicate, object: row.object,
+      provenance: `plan:${sessionId || "chat"}:step${k}`,
+    });
+  }
+  planHolder.state = { ...ps, cursor: k };
+  const boardLine = rows.map((r) => `${r.subject} ${predicatePhrase(r.predicate)} ${r.object}`).join("; ");
+  if (k < ps.actions.length) {
+    return {
+      text: `moved — ${action.label} (step ${k} of ${ps.actions.length}). board@step${k}: ${boardLine}`,
+      deduced: ps.stepGoals[k] ? ps.stepGoals[k] : `continue the plan (step ${k + 1} of ${ps.actions.length})`,
+    };
+  }
+  // Final step: confirm the goal against the store, from the written facts.
+  const { compileDomain, stateFromFacts, compileGoal } = await import("./domain.mjs");
+  const { readRuleRows } = await import("./memory/core.mjs");
+  const payload = await loadMemory(memoryDir);
+  const factRows = readFactRows(payload);
+  const domain = compileDomain(factRows, readRuleRows(payload));
+  const finalState = stateFromFacts(factRows, domain);
+  const holds = compileGoal(ps.goals, domain)(finalState);
+  planHolder.state = { ...planHolder.state, done: true };
+  return {
+    text: holds
+      ? `moved — ${action.label} (step ${k} of ${ps.actions.length}). board@step${k}: ${boardLine}\n\ndone — ${ps.goalText} (checked against board@step${k}'s written facts, not assumed).`
+      : `moved — ${action.label} (step ${k} of ${ps.actions.length}). board@step${k}: ${boardLine}\n\nBUT the goal does NOT hold against the written facts — the plan or the state drifted; re-teach the state and solve again.`,
+    deduced: holds ? `goal reached — ${ps.goalText} (${k} of ${k} steps)` : "plan finished but the goal check failed",
+  };
+}
+
+async function runAsk(query, { config, source, graph, focus, last, templates, memoryDir, sessionId = "", lexicon = null, env, trace, vocabHint = null, tel = null, biasByBundle = {}, cache = null, vocabAntecedent = null, planHolder = null }) {
   const ts = new Date().toISOString();
   // DISCOURSE ANAPHORA: a follow-up like "which of those are tested" / "count
   // them" filters or counts the PREVIOUS answer's entity set, threaded as
@@ -7497,6 +7756,23 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     if (meta) {
       answer = meta.text; via = meta.via; recordMiss = false; handled = true;
       note(trace, `lane: (1) META/SELF — bare self/session question recognized, answered via="${meta.via}"`);
+    }
+  }
+  // (1p) PLAN — the goal/solve/legal-moves recognizers over taught action
+  // rules. Sits ABOVE the conversational catch-all: "solve it" is three
+  // short words and isConversational() would otherwise claim it into the
+  // orientation card before this lane ever ran.
+  let planResult = null;
+  if (!handled && miss && memoryDir && planHolder) {
+    const planLane = await planLaneAnswer(query, { memoryDir, planHolder, sessionId });
+    if (planLane) {
+      answer = planLane.text; via = planLane.via; recordMiss = false; handled = true;
+      if (planLane.plan) planResult = planLane.plan;
+      if (planLane.deduced) {
+        deduced = planLane.deduced;
+        note(trace, `goal: ${deduced} (revised — the plan lane answered)`);
+      }
+      note(trace, `lane: (1p) PLAN — ${planLane.note}`);
     }
   }
   // "what about X" with a genuine PRIOR turn to continue is exempt from the
@@ -8032,7 +8308,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // `goal`: the SAME deduced string the debug trace's own "goal:" line
   // carries. Only runAsk ever sets this field, so the always-on goal line is
   // scoped to real ask-engine turns by construction.
-  return { answer, logLines, record, focus: newFocus, detail, effectiveQuery, goal: deduced };
+  return { answer, logLines, record, focus: newFocus, detail, effectiveQuery, goal: deduced, ...(planResult ? { plan: planResult } : {}) };
 }
 
 /** A non-ask, non-dispatch chat turn (count answer, /stats) — the same
@@ -8454,7 +8730,7 @@ function vocabAntecedentFrom(last) {
   return m ? m[1] : null;
 }
 
-export async function runTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, vocabHint = null, tel = null, biasByBundle = {}, factRowsCache: injectedFactRowsCache = null } = {}) {
+export async function runTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, vocabHint = null, tel = null, biasByBundle = {}, factRowsCache: injectedFactRowsCache = null, planState = null, _noSplit = false } = {}) {
   const line = String(input ?? "").trim();
   // ONE fresh, empty cache for this turn only — every factRows() reader
   // reached from this call shares it, so the first reader computes
@@ -8496,7 +8772,11 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // vocabHint: createSession computes this ONCE per session; a direct
   // runTurn() caller that doesn't pass one gets it computed here instead.
   const resolvedVocabHint = vocabHint ?? vocabExampleHint(await hasSeededVocabulary(memoryDir));
-  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates, env, lexicon, trace, narrate, vocabHint: resolvedVocabHint, tel, biasByBundle, cache: factRowsCache, vocabAntecedent };
+  // The session's in-progress plan rides a mutable holder: the plan lane and
+  // the PLAN NEXT block below write planHolder.state; every other path leaves
+  // it untouched, and the caller re-threads whatever comes back.
+  const planHolder = { state: planState };
+  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates, env, lexicon, trace, narrate, vocabHint: resolvedVocabHint, tel, biasByBundle, cache: factRowsCache, vocabAntecedent, planHolder };
   // A DISPATCHED turn (count / slash-command / ask) becomes the new "last
   // answer" that why/say-more re-renders; a conversational turn does not.
   // Every dispatched turn's result passes through finish() here — the LAST
@@ -8537,6 +8817,21 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   const convo = vocabAntecedent ? null : conversationalTurn(workingLine, ctx);
   if (convo) return withNarration(convo, trace, "casual/social — no graph intent");
 
+  // PLAN NEXT — "next"/"continue" with an ACTIVE plan executes the plan's
+  // next move as a snapshot write. Checked BEFORE the MORE_RE pager because
+  // MORE_RE owns the same words; with no active plan this block never fires
+  // and paging behaves exactly as before.
+  if (memoryDir && PLAN_NEXT_RE.test(workingLine)
+      && planHolder.state && !planHolder.state.done
+      && Array.isArray(planHolder.state.actions) && planHolder.state.cursor < planHolder.state.actions.length) {
+    const step = await executePlanStep(planHolder, { memoryDir, sessionId });
+    note(trace, `goal: ${step.deduced}`);
+    note(trace, "lane: PLAN NEXT — executed the active plan's next move as an @stepK snapshot write");
+    const rec = withLast(plainTurn(workingLine, step.text, { via: "plan", focus }), step.deduced);
+    rec.planState = planHolder.state;
+    return rec;
+  }
+
   // "more" — page the remainder of a previous long listing, if one is held. Gated on
   // an actual pending remainder so a bare "more" with nothing to continue falls through
   // to the ordinary path (an honest miss), never a pretend page.
@@ -8544,6 +8839,39 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
     note(trace, "goal: continue viewing a previous long listing (pagination)");
     note(trace, "lane: MORE_RE matched a held pending remainder from the previous turn's detail.pending");
     return withLast(morePage(workingLine, ctx), "continue viewing a previous long listing");
+  }
+
+  // Multi-sentence PLAN pre-split — one message carrying state sentences plus
+  // a goal/trigger ("disk-1 rests on disk-2. … the goal is that …. solve it.")
+  // runs each sentence as its own nested turn, threading focus/last/planState
+  // through, and answers with the final turn's result behind brief receipts.
+  if (!_noSplit && memoryDir) {
+    const sentences = splitSentences(workingLine);
+    if (sentences.length > 1) {
+      const lastSentence = sentences[sentences.length - 1];
+      if (PLAN_SOLVE_RE.test(lastSentence) || GOAL_TEACH_RE.test(lastSentence) || LEGAL_MOVES_RE.test(lastSentence)) {
+        let f = focus; let l = last; let ps = planHolder.state;
+        const receipts = [];
+        let finalRec = null;
+        for (const sentence of sentences) {
+          const r = await runTurn(sentence, {
+            config, source, graph, focus: f, last: l, memoryDir, sessionId, env, lexicon,
+            narrate: false, vocabHint, tel, biasByBundle, planState: ps, _noSplit: true,
+          });
+          f = r.focus ?? f;
+          l = r.last ?? l;
+          if ("planState" in r) ps = r.planState;
+          finalRec = r;
+          receipts.push(String(r.answer ?? "").split("\n")[0]);
+        }
+        const receiptLines = receipts.slice(0, -1).map((t) => `• ${t}`).join("\n");
+        const combined = { ...finalRec, answer: receiptLines ? `${receiptLines}\n\n${finalRec.answer}` : finalRec.answer };
+        combined.planState = ps;
+        combined.focus = f;
+        combined.last = l;
+        return combined;
+      }
+    }
   }
 
   if (workingLine.startsWith("/")) return withLast(await runCommand(workingLine, ctx), "use a specific tool/command directly");
@@ -8557,6 +8885,15 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
       note(trace, "goal: teach/remember a new fact (declarative ACE sentence)");
       note(trace, "lane: assertTurn — grammar/ace.mjs parseAce matched a full triple with no residue");
       return withLast(asserted, "teach/remember a new fact");
+    }
+    // Bare declarative taxonomy (hyphenated-instance membership, article-led
+    // kind-of) — see bareTaxonomyTeach. Checked here because the ask engine
+    // would otherwise parse these statements as inherits QUESTIONS.
+    const taxonomy = await bareTaxonomyTeach(workingLine, ctx);
+    if (taxonomy) {
+      note(trace, "goal: teach/remember a new fact (bare declarative taxonomy)");
+      note(trace, "lane: bareTaxonomyTeach — hyphenated-instance or article-led kind-of declarative, stored before the ask engine could parse it as a question");
+      return withLast(plainTurn(workingLine, taxonomy.text, { via: taxonomy.via, miss: taxonomy.miss, focus }), "teach/remember a new fact");
     }
   }
   // MEMORY-STORE counts first ("how many facts / utterances do you know") — the
@@ -8614,7 +8951,11 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
     note(trace, "lane: answerCount — a header-count aggregate question, answered mechanically off the graph header, never dispatched to the ask engine");
     return withLast(plainTurn(workingLine, count, { via: "count", focus }), "get a count of a graph kind");
   }
-  return withLast(await runAsk(workingLine, ctx), "unclear — no goal signal computed by the ask engine");
+  {
+    const rec = withLast(await runAsk(workingLine, ctx), "unclear — no goal signal computed by the ask engine");
+    rec.planState = planHolder.state;
+    return rec;
+  }
 }
 
 // ---- W3: seedMemory → bootstrap (first run in a graph-less repo) ----
@@ -8927,6 +9268,7 @@ export async function createSession({
   let turns = 0;
   let focus = null; // the current focus entity ({id,label}) — threaded turn to turn
   let last = null;  // the last dispatched answer ({query,answer,detail}) — why/say-more re-renders it
+  let planState = null; // the in-progress plan (goals/moves/cursor) — cleared by completion or a fresh goal, never by an aside
   let closed = false;
 
   return {
@@ -8936,6 +9278,7 @@ export async function createSession({
     // prompt/expand-hint without reaching into runTurn's threading.
     get focus() { return focus; },
     get lastAnswer() { return last; },
+    get planState() { return planState; },
     get turns() { return turns; },
     get narrate() { return narrateOn; },
     promptFor: () => promptFor(focus),
@@ -8947,7 +9290,7 @@ export async function createSession({
     async turn(line) {
       let result;
       try {
-        result = await runTurn(line, { config, source, graph, focus, last, memoryDir, sessionId, env, lexicon, narrate: narrateOn, vocabHint, tel, biasByBundle });
+        result = await runTurn(line, { config, source, graph, focus, last, memoryDir, sessionId, env, lexicon, narrate: narrateOn, vocabHint, tel, biasByBundle, planState });
       } catch (e) {
         const ts = new Date().toISOString();
         const message = e instanceof Error ? e.message : String(e);
@@ -8961,6 +9304,7 @@ export async function createSession({
       const { answer, logLines, record, focus: nextFocus, last: nextLast, end, narrate: nextNarrate } = result;
       focus = nextFocus;
       last = nextLast;
+      if ("planState" in result) planState = result.planState;
       // /narrate on|off (runCommand) rides the turn RESULT the same way a focus
       // update does — apply it to this handle's session-scoped state.
       if (typeof nextNarrate === "boolean") narrateOn = nextNarrate;
@@ -8976,7 +9320,7 @@ export async function createSession({
       });
       await upsertGraph(record.ts);
       turns += 1;
-      return { answer, end: Boolean(end), prompt: promptFor(focus) };
+      return { answer, end: Boolean(end), prompt: promptFor(focus), plan: result.plan ?? null };
     },
 
     /** End-of-session close: end lines in both artifacts, the final graph upsert

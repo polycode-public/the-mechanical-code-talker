@@ -47,22 +47,9 @@ import { basename, join, resolve } from "node:path";
 import { runTurn, uuidv7 } from "../src/chat.mjs";
 import { loadMemory, readFactRows, appendFact } from "../src/memory/core.mjs";
 import { loadConfig } from "../src/config.mjs";
-import { winkInstance } from "../src/wink-model.mjs";
+import { splitSentences } from "../src/sentences.mjs";
 
-/** Split text into trimmed, non-empty sentences via wink-nlp's own
- *  sentence-boundary detection — never a naive regex split, matching the
- *  ONE way every other adapter in this repo reaches wink (wink-model.mjs).
- *  Returns [] (never throws) when wink isn't available or the text is
- *  blank — the same honest-degrade idiom every wink-model.mjs consumer
- *  already uses. */
-export function splitSentences(text) {
-  const nlp = winkInstance();
-  if (!nlp) return [];
-  const raw = String(text ?? "");
-  if (!raw.trim()) return [];
-  const doc = nlp.readDoc(raw);
-  return doc.sentences().out().map((s) => s.trim()).filter(Boolean);
-}
+export { splitSentences };
 
 function parseArgs(argv) {
   const args = { file: null, repo: null, out: null };

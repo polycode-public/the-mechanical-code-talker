@@ -21,6 +21,7 @@ let cached; // undefined = not tried yet; null = unavailable (tried once, honest
 export function registerWinkModel(factory) {
   injected = factory;
   cached = undefined;
+  instance = undefined;
 }
 
 /** Load `{ winkNLP, model }` once, or null when wink isn't available. Prefers a
@@ -46,15 +47,20 @@ function nodeRequireWink() {
   };
 }
 
-/** Convenience: the constructed `nlp` instance (`winkNLP(model)`) or null. Both
- *  adapters want exactly this. Not cached here — the adapters cache their own
- *  higher-level object; constructing `nlp` is cheap next to loading the model. */
+let instance; // undefined = not built yet; null = construction failed once
+
+/** Convenience: the constructed `nlp` instance (`winkNLP(model)`) or null.
+ *  Cached: repeated `winkNLP(model)` construction accumulates module-level
+ *  state inside the model package until V8 throws "Invalid string length",
+ *  after which every later construction fails for the life of the process. */
 export function winkInstance() {
+  if (instance !== undefined) return instance;
   const loaded = loadWinkModel();
-  if (!loaded) return null;
+  if (!loaded) { instance = null; return null; }
   try {
-    return loaded.winkNLP(loaded.model);
+    instance = loaded.winkNLP(loaded.model);
   } catch {
-    return null;
+    instance = null;
   }
+  return instance;
 }
