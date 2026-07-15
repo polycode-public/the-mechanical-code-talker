@@ -1,11 +1,13 @@
 # PLAN_VIZ_LEDGER.md — a ledger-first memory-graph explorer with an in-browser chat dock
 
-Status: IMPLEMENTED (2026-07-15) — phases 1-4 all shipped: `tmct viz --ledger`
+Status: IMPLEMENTED (2026-07-15) — phases 1-4 all shipped: the ledger explorer
 (`src/ledger-viz.mjs` + `src/viz-theme.mjs`), the chat dock (with `factReadBack` exported onto the
 bundle surface so taught-relation questions answer in-page), the Pages homepage hero
-(`scripts/build-demo-memory.mjs` + the `public/index.html` iframe), and the README pass. The body
-below is the design record; the risk list at the end carries the two implementation deviations
-(F1, F2) and the measured page weight. The design was settled by two clickable mocks built and
+(`scripts/build-demo-memory.mjs` + the `public/index.html` iframe), and the README pass. Later the
+same day the ledger was promoted to THE `tmct viz` surface and the node-link page removed — see
+"Addendum (2026-07-15, same-day follow-up)" at the end. The body
+below is the design record; the risk list at the end carries the implementation deviations
+(F1, F2 — both since resolved, see the addendum) and the measured page weight. The design was settled by two clickable mocks built and
 operator-reviewed on 2026-07-15 (session artifacts; their decisions are recorded here and in
 `PLAN_HANOI.md`'s render section — this document is the system of record, the artifacts are not
 linked because artifact URLs rot).
@@ -50,9 +52,9 @@ Zero-count segments grey out. Multi-select within a group.
 
 **"Worth a look" answers relevance before the user asks.** Three computed entries, each a real
 refocus link: the newest taught fact, contradictions, and the biggest hub (highest-degree term).
-A contradiction renders as two rows inside a rust bracket labeled "two sources disagree — shown,
-never merged", the same contract `findContradictions` (`src/memory/core.mjs`) already enforces
-in chat.
+A contradiction renders as two rows inside a rust bracket labeled "more than one answer on
+record — shown, never merged", the same contract `findContradictions` (`src/memory/core.mjs`)
+already enforces in chat.
 
 **The chat dock: chat and graph are one surface.** An ask-the-graph input sits at the top of the
 ledger column. Answers cite their facts with sources, carry the same "Goal (inferred): …" line
@@ -140,20 +142,21 @@ Verified against code this session:
 ## Open risks / questions
 
 - **Bundle weight.** The memory-ask bundle links most of `chat.mjs`'s transitive graph
-  (`scripts/build-ask-bundle.mjs`'s own note); the current viz page is ~645 KB. Measured at
-  implementation: the Pages `ledger.html` is ~533 KB (the bundle grew 253→434 KB when
-  `factReadBack` pulled the router into its link graph). Revisit a slimmer entry only if the
+  (`scripts/build-ask-bundle.mjs`'s own note). Budgeted at implementation: the Pages
+  `ledger.html` measured ~533 KB (the bundle grew 253→434 KB when `factReadBack` pulled the
+  router into its link graph); after the addendum batch (cardinality exemption + the goal
+  field) it measures ~561 KB (bundle ~462 KB). Same band. Revisit a slimmer entry only if the
   page outgrows this.
-- **F1 — the dock carries no "Goal (inferred)" line** (deviation from the recorded design).
-  `factAnswer`/`factReadBack` return no goal field, and this plan's own non-goal forbids
-  changing the ask engine, so the dock omits the line honestly rather than synthesizing one.
-  Adding an additive `goal` field to those returns is a chat.mjs change that needs operator
-  sign-off against the non-goal.
-- **F2 — the contradiction bracket speaks the engine's real semantics.** `findContradictions`
-  groups ANY subject/predicate pair with two or more trusted objects, so multi-valued `has`/
-  `can` facts group under the same contract as genuine disagreements. The bracket copy is
-  "more than one answer on record — shown, never merged" for exactly this reason. A
-  predicate-cardinality exemption is an engine-level question, tracked in ROADMAP's follow-ups.
+- **F1 — the dock's "Goal (inferred)" line. RESOLVED (2026-07-15 addendum):** at
+  implementation the dock omitted the line because `factAnswer`/`factReadBack` returned no goal
+  field and the original non-goal forbade chat.mjs changes. The operator signed off on the
+  additive change: both readers now return a `goal` field (chat.mjs's `withDeducedGoal` — the
+  same table-driven deduction runAsk uses, no new phrasing) and the dock renders it.
+- **F2 — the contradiction bracket. RESOLVED (2026-07-15, cardinality exemption shipped):**
+  `findContradictions` now exempts multi-valued predicates by cardinality, so multi-valued
+  `has`/`can` facts no longer group under the same bracket as genuine disagreements. The
+  bracket copy stays "more than one answer on record — shown, never merged": still the honest
+  description of what a group is.
 - **Payload size on large stores.** `init:xl` stores hold 72k+ facts. Options: bound the
   embedded payload to the focus neighborhood plus a term index, or accept full payload up to a
   size cap. Undecided; Phase 1 can ship with a cap and a printed warning.
@@ -165,14 +168,38 @@ Verified against code this session:
   precomputed rgba tints in `src/viz-theme.mjs`; no `color-mix()` anywhere.
 - **Contradiction detection.** Resolved at implementation: the page reads `findContradictions`'
   real grouped output (see F2 above for what that contract means for the copy).
-- **Where the ledger surface ultimately lives.** It enters as `tmct viz --ledger`. Whether it
-  becomes the default viz surface is the operator's call after Phase 2, with both pages in hand.
+- **Where the ledger surface ultimately lives.** Decided — see the addendum: the operator
+  promoted it to THE `tmct viz` surface.
 
-## Non-goals
+## Non-goals (as originally planned — two were reversed by the operator, see the addendum)
 
 - No LLM anywhere. The chat dock is the deterministic bundled engine, the same one the viz page
   ships today.
-- The existing node-link renderer stays. Code-graph structure work (hubs, import fans,
-  impact spread) is a different job over different data, and the hairball serves it.
+- ~~The existing node-link renderer stays.~~ Reversed at the 2026-07-15 plan review (addendum).
 - The mock's toy chat matcher never ships; Phase 2 wires the real `factAnswer` or nothing.
-- No changes to `chat.mjs` or the ask engine. This plan renders what they already produce.
+- ~~No changes to `chat.mjs` or the ask engine.~~ Relaxed for exactly one additive change: the
+  `goal` field on `factAnswer`/`factReadBack` returns (addendum; F1 above).
+
+## Addendum (2026-07-15, same-day follow-up)
+
+The operator reviewed the shipped pages and reversed the plan's original "the existing
+node-link renderer stays" non-goal — stated at plan review ("Please just drop the node link
+page") and reconfirmed when asked directly. Decisions recorded:
+
+- **The ledger explorer is THE `tmct viz` surface.** `tmct viz` (no flags) writes `ledger.html`;
+  `--ledger` is accepted as a no-op (it now names the default). The node-link `graph.html`
+  renderer is removed: `src/viz.mjs`, its code-graph ask bundle
+  (`src/ask-browser-entry.mjs` + `src/ask-browser.bundle.js`), and the node-link-only flags
+  (`--depth`, `--hub-degree`, `--edge-kind`) are gone; passing a removed flag exits non-zero
+  with a hint naming the ledger's real flags (`--focus`, `--term`, `--limit`, `--output`).
+  `scripts/build-ask-bundle.mjs` builds one bundle. The shared page helpers
+  (`escapeHtml`/`embedJson`) moved to `src/viz-theme.mjs`; `readMemoryAskBundle` moved to
+  `src/ledger-viz.mjs`.
+- **The dock's Goal line shipped** (F1 above): the operator signed off on the additive `goal`
+  field, populated by the same deduction runAsk's own goal line uses.
+- **Page weight** is budgeted at the measured size (~561 KB `public/ledger.html`, ~462 KB
+  bundle — the ~533 KB implementation measurement plus the exemption + goal-field batch).
+  Revisit a slimmer entry only if the page outgrows this band.
+- Code-graph structure work (hubs, import fans, impact spread) is still a different job over
+  different data; when a structure surface is wanted again it gets designed on its own terms
+  rather than resurrecting the hairball.

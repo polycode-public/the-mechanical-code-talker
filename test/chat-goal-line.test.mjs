@@ -80,3 +80,45 @@ test("goal line: --narrate mode is COMPLETELY UNAFFECTED — still shows the ful
   assert.ok(r.answer.includes(NARRATE_MARKER), "the full narrate block still appears");
   assert.match(r.answer, /goal: understand a call relationship/, "the trace's own goal: line is untouched (lowercase, no period — a separate mechanism)");
 });
+
+// ---- the fact readers' own additive `goal` field ---------------------------
+// factAnswer/factReadBack returns carry `goal` when a goal is deducible, so an
+// envelope-less consumer (the ledger page's chat dock) can render the same
+// "Goal (inferred)" line chat prints. Every other consumer reads named fields
+// and ignores it.
+import { factAnswer, factReadBack } from "../src/chat.mjs";
+import { createInMemoryStore, appendFact } from "../src/memory/core.mjs";
+
+async function taughtStore() {
+  const h = createInMemoryStore();
+  await appendFact(h, { subject: "dog", predicate: "rdfs:subClassOf", object: "animal", provenance: "corpus:human /r/IsA" });
+  await appendFact(h, { subject: "dog", predicate: "mgx:capableOf", object: "bark", provenance: "corpus:human /r/CapableOf" });
+  await appendFact(h, { subject: "ahab", predicate: "mgx:father", object: "john", provenance: "teach:chat" });
+  return h;
+}
+
+test("goal field: an envelope-less 'what is X' factAnswer hit carries the vocabulary-goal wording chat's own parse would deduce", async () => {
+  const h = await taughtStore();
+  const hit = await factAnswer(h, "what is a dog", null, true, {});
+  assert.ok(hit && hit.text, "the definition answers");
+  assert.equal(hit.goal, 'understand a vocabulary/definition term ("dog")');
+});
+
+test("goal field: an envelope-less relation chase through factReadBack carries the taught-fact-lookup goal", async () => {
+  const h = await taughtStore();
+  const hit = (await factAnswer(h, "who is the father of john", null, true, {}))
+    ?? (await factReadBack(h, "who is the father of john", null, true, null));
+  assert.ok(hit && hit.text, "the relation query answers");
+  assert.match(hit.text, /ahab/);
+  assert.equal(hit.goal, "look up a taught fact about a subject/verb/object");
+});
+
+test("goal field: absent (undefined) on a hit whose shape maps to no goal, and never fabricated on a miss", async () => {
+  const h = await taughtStore();
+  const canHit = (await factAnswer(h, "can a dog bark", null, true, {}))
+    ?? (await factReadBack(h, "can a dog bark", null, true, null));
+  assert.ok(canHit && canHit.text, "the capability yes/no answers");
+  assert.equal(canHit.goal, undefined, "no goal wording exists for this shape — the field stays absent, the dock renders no line");
+  const miss = await factAnswer(h, "zzz unparseable zzz", null, true, {});
+  assert.equal(miss, null, "a miss stays a plain null — no goal-bearing wrapper object");
+});

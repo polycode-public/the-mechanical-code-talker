@@ -1,21 +1,14 @@
-// build-ask-bundle.mjs — bundle tmct's own ask engines for `tmct viz`'s
-// embedded "Ask the graph" panel (PLAN_BREADTH_FIRST_NLU.md §5 follow-on;
-// PLAN_VIZ_MEMORY.md Bug 1 fix adds the SECOND bundle below).
+// build-ask-bundle.mjs — bundle tmct's memory-graph answer engine for the
+// ledger page's in-browser chat dock (PLAN_VIZ_LEDGER.md).
 //
-// Builds TWO independent IIFE bundles from the SAME shared stub plugins:
-//   - src/ask-browser-entry.mjs -> src/ask-browser.bundle.js — tmct's
-//     CODE-GRAPH query engine (ask.mjs): "which modules import X", generic
-//     "where is X mentioned" navigation. Unchanged from before this session.
+// Builds ONE IIFE bundle:
 //   - src/memory-ask-browser-entry.mjs -> src/memory-ask-browser.bundle.js —
-//     tmct's MEMORY-graph answer engine (chat.mjs's factAnswer, the same one
-//     `npm run chat` uses): "what is a dog", "what is a horse used for". Bug 1
-//     fix — the code-graph engine above has no concept of Facts/corpus data at
-//     all, so a memory-graph question always missed even though the page's
-//     own embedded payload had the answer.
-// Both are inlined verbatim into the viewer page by viz.mjs's renderVizHtml;
-// the page queries whichever one actually answers (see viz.mjs's client JS).
-// Regenerate after touching src/ask.mjs/src/chat.mjs/src/codegraph.mjs and
-// their dependents: `npm run build:ask-bundle`.
+//     tmct's MEMORY-graph answer engine (chat.mjs's factAnswer/factReadBack,
+//     the same ones `npm run chat` uses): "what is a dog", "who is the
+//     grandfather of ishmael".
+// It's inlined verbatim into the page by ledger-viz.mjs's renderLedgerHtml.
+// Regenerate after touching src/chat.mjs and its dependents:
+// `npm run build:ask-bundle`.
 //
 // Adapted directly from seonix's own scripts/build-ask-bundle.mjs (proven in
 // production for its "Ask the graph" website panel) — same Node-builtin-stub
@@ -33,13 +26,11 @@
 // The memory-ask bundle pulls in nearly all of chat.mjs's own transitive
 // import graph (it's a monolith — factAnswer shares the module with every
 // other lane) — none of that extra code ever RUNS (factAnswer's only real I/O
-// is loadMemory(memoryDir), and the panel always hands it an in-memory
+// is loadMemory(memoryDir), and the dock always hands it an in-memory
 // Backend-B handle already carrying the page's payload — see
 // src/memory-ask-browser-entry.mjs's own doc comment), it just has to
 // LINK. The node-builtin stub set below is broad enough to satisfy every
-// named import reachable from either entry point; page weight is not a
-// constraint here (operator directive, PLAN_VIZ_MEMORY.md's page-size
-// strategy — this is a local file:// artifact, not something downloaded).
+// named import reachable from the entry point.
 import { build } from "esbuild";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -54,9 +45,9 @@ const stubNodeBuiltins = {
     b.onLoad({ filter: /.*/, namespace: "node-stub" }, () => ({
       // A broad, generic set — every fs/promises/path/url/crypto/os/child_process/
       // readline/sqlite binding any guarded/lazy path in tmct's import graph might
-      // reference at LINK time (both entry points' full transitive import graphs,
-      // not just what each one's OWN code calls). Each throws only if actually
-      // CALLED, which no path either entry point's real, exercised call chain
+      // reference at LINK time (the entry point's full transitive import graph,
+      // not just what its OWN code calls). Each throws only if actually
+      // CALLED, which no path in the entry point's real, exercised call chain
       // ever does (persistence, source-file reads, the optional adapters, and
       // node:sqlite's opt-in Backend C are all guarded, lazy, or stubbed
       // separately — see stubOptionalAdapters below).
@@ -147,5 +138,4 @@ async function buildOne(entryFile, outFile) {
   console.log(`built ${join(srcDir, outFile)}`);
 }
 
-await buildOne("ask-browser-entry.mjs", "ask-browser.bundle.js");
 await buildOne("memory-ask-browser-entry.mjs", "memory-ask-browser.bundle.js");

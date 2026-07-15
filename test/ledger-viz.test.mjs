@@ -1,7 +1,6 @@
-// ledger-viz.test.mjs — unit coverage of computeLedgerData/renderLedgerHtml
-// (PLAN_VIZ_LEDGER.md phase 1), mirroring test/viz.test.mjs's split: this file
-// owns the data derivation + rendered-page contracts; the CLI flag surface
-// lives in test/ledger-viz-cli.test.mjs.
+// ledger-viz.test.mjs — unit coverage of computeLedgerData/renderLedgerHtml:
+// this file owns the data derivation + rendered-page contracts; the CLI flag
+// surface lives in test/ledger-viz-cli.test.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -203,6 +202,7 @@ test("renderLedgerHtml: a non-empty bundle is inlined and the dock renders enabl
     assert.ok(on.includes(fake), "the bundle string is embedded verbatim");
     assert.match(on, /id="chatform"/);
     assert.match(on, /resolveAnsweredTerm/, "the answer-to-focus helper ships in the page");
+    assert.match(on, /Goal \(inferred\): /, "the dock renders the engine's goal field as chat's own goal line");
     assert.doesNotMatch(on, /chat unavailable/);
     const off = renderLedgerHtml({ ...data, memoryAskBundle: "" });
     assert.match(off, /chat unavailable/);
@@ -250,6 +250,7 @@ test("phase-2 dock chain: a store taught via runTurn answers through the real bu
     if (hasReadBack) {
       assert.ok(fact && fact.text, "the chained engines answer the canonical exchange");
       assert.match(fact.text, /ahab/);
+      assert.equal(fact.goal, "look up a taught fact about a subject/verb/object", "the relation chase carries the additive goal field for the dock's goal line");
       const term = resolveAnsweredTerm(fact.text, "who is the grandfather of ishmael", [{ term: "ahab" }, { term: "john" }, { term: "ishmael" }], normFactTerm);
       assert.equal(term, "ahab", "answer-to-focus lands on the answering term");
     } else {

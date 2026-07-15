@@ -1,13 +1,12 @@
 // plan-viz.mjs — renders a computed plan (result.plan from the chat plan lane)
 // as a self-contained, animated HTML page: the "blocks" archetype.
 //
-// Same factoring as viz.mjs: a pure layout step (computeBlocksLayout) and a
-// pure string builder (renderPlanHtml). No I/O here — callers pass the plan,
-// the class→archetype map (rendersAs), and the size-order pairs; both derive
-// from fact rows at wiring time.
+// A pure layout step (computeBlocksLayout) and a pure string builder
+// (renderPlanHtml). No I/O here — callers pass the plan, the class→archetype
+// map (rendersAs), and the size-order pairs; both derive from fact rows at
+// wiring time.
 
-import { escapeHtml, embedJson } from "./viz.mjs";
-import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK } from "./viz-theme.mjs";
+import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson } from "./viz-theme.mjs";
 
 const BOARD_W = 640;
 const BOARD_H = 260;

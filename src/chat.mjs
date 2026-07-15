@@ -105,6 +105,10 @@ const GOAL_BY_KIND = {
 };
 const goalNoun = (entityType) => (entityType ? `${String(entityType).toLowerCase()}(s)` : "entities");
 
+/** The goal wording for a taught subject/verb/object lookup — shared by
+ *  runAsk's fact-lane goal revision and withDeducedGoal's fact-reader field. */
+const TAUGHT_FACT_LOOKUP_GOAL = "look up a taught fact about a subject/verb/object";
+
 /** Deduce a one-line goal statement from the ask engine's parsed AST — either
  *  the plain-clause form ({shape,kind,entityType,object[,subject]}) or the
  *  compositional form ({node:...}, ask.mjs's §compositional grammar). Returns
@@ -5059,8 +5063,41 @@ function uniqueFacts(rows) {
  *  (via factRows/memoryFacts below), and loadMemory's own Backend-B branch
  *  returns the handle's `payload` directly with ZERO fs calls — so a caller
  *  that hands this a handle already carrying the embedded page's full graph
- *  gets a pure, disk-free traversal, no bundle-time module shimming needed. */
+ *  gets a pure, disk-free traversal, no bundle-time module shimming needed.
+ *  Every return additionally carries the additive `goal` field when one is
+ *  deducible (withDeducedGoal, below) — the ledger page's chat dock renders
+ *  it as its own "Goal (inferred)" line; every other consumer reads named
+ *  fields and is unaffected. */
 export async function factAnswer(memoryDir, query, envelope, miss, biasByBundle = {}, cache = null) {
+  return withDeducedGoal(await factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle, cache), envelope, query);
+}
+
+/** Attach the additive `goal` field to a fact reader's return: the same
+ *  table-driven deduction runAsk applies (deduceGoalFromParsed over the parsed
+ *  AST, plus the general-verb revision), extended to the bare-question shapes
+ *  the readers recognize with no envelope at all — the ledger page's chat dock
+ *  calls them with `envelope: null`, so there is no AST to deduce from.
+ *  Existing phrasing only, never free text; a goal-less shape passes through
+ *  without the field, so the dock (like chat) renders no line for it. */
+function withDeducedGoal(res, envelope, query) {
+  if (!res || res.goal !== undefined) return res;
+  const q = String(query || "").trim();
+  let goal = deduceGoalFromParsed(envelope?.parsed);
+  if (!goal && res.generalVerbQuery) goal = TAUGHT_FACT_LOOKUP_GOAL;
+  if (!goal) {
+    const yesNo = q.match(RELATION_FACT_YESNO_RE);
+    const whoAsk = yesNo ? null : (q.match(RELATION_WHO_ASK_RE) || matchGenitiveWhoAsk(q));
+    const role = yesNo ? yesNo[2] : whoAsk ? whoAsk[1] : null;
+    if (role && !ISA_IDIOM_ROLE_WORDS.has(role.toLowerCase())) goal = TAUGHT_FACT_LOOKUP_GOAL;
+  }
+  if (!goal) {
+    const whatIs = q.match(BARE_WHATIS_RE);
+    if (whatIs) goal = deduceGoalFromParsed({ shape: "meta", object: whatIs[1] });
+  }
+  return goal ? { ...res, goal } : res;
+}
+
+async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle = {}, cache = null) {
   let normFactTerm;
   try { ({ normFactTerm } = await import("./memory/core.mjs")); } catch { return null; }
   const q = String(query).trim();
@@ -6008,8 +6045,14 @@ function inheritsChain(graph, startId) {
  *    (c) REVERSE membership — "what is a Y" reports Y's members (object-side), and
  *        "what kind of thing is an X" reports X's own type (subject-side first).
  *  Miss-only and run AFTER factAnswer returns null, so it never shadows the
- *  subject-side answer or a schema hit. Returns { text, replace:true } or null. */
+ *  subject-side answer or a schema hit. Returns { text, replace:true } or null,
+ *  plus factAnswer's same additive `goal` field when one is deducible
+ *  (withDeducedGoal). */
 export async function factReadBack(memoryDir, query, envelope, miss, graph = null, focusLabel = null, biasByBundle = {}, cache = null) {
+  return withDeducedGoal(await factReadBackReaders(memoryDir, query, envelope, miss, graph, focusLabel, biasByBundle, cache), envelope, query);
+}
+
+async function factReadBackReaders(memoryDir, query, envelope, miss, graph = null, focusLabel = null, biasByBundle = {}, cache = null) {
   if (!miss) return null;
   let normFactTerm;
   try { ({ normFactTerm } = await import("./memory/core.mjs")); } catch { return null; }
@@ -8826,7 +8869,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       // question ("does margo eat ribs") never parses as a structural graph
       // query at all.
       if (fact.generalVerbQuery) {
-        deduced = "look up a taught fact about a subject/verb/object";
+        deduced = TAUGHT_FACT_LOOKUP_GOAL;
         note(trace, `goal: ${deduced} (revised — a general-verb direct-question fact lookup answered this turn)`);
       }
     } else if (miss) {

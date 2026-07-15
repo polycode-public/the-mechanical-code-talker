@@ -507,7 +507,8 @@
         "recursive",
         "action-signature",
         "action-precond",
-        "action-effect"
+        "action-effect",
+        "action-constraint"
       ]);
       RULE_SLOT_PROPS = {
         compose2: ["mgx:ruleBase1", "mgx:ruleBase2"],
@@ -524,6 +525,11 @@
           "mgx:ruleActionEffectPredicate",
           "mgx:ruleActionEffectSubject",
           "mgx:ruleActionEffectObject"
+        ],
+        "action-constraint": [
+          "mgx:ruleActionConstraintLeft",
+          "mgx:ruleActionConstraintRight",
+          "mgx:ruleActionConstraintGuard"
         ]
       };
       nonEmpty = (v) => typeof v === "string" && v.trim().length > 0;
@@ -688,19 +694,23 @@
   var core_exports = {};
   __export(core_exports, {
     CANONICALISED_FROM_PROP: () => CANONICALISED_FROM_PROP,
+    CAPABLE_OF_PREDICATE: () => CAPABLE_OF_PREDICATE,
     CONTRADICTION_TRUST_FLOOR: () => CONTRADICTION_TRUST_FLOOR,
     CREATED_AT_PROP: () => CREATED_AT_PROP,
     DEFAULT_RETENTION: () => DEFAULT_RETENTION,
     DERIVED_FROM_PROP: () => DERIVED_FROM_PROP,
     FACT_CLASS: () => FACT_CLASS,
+    HAS_A_PREDICATE: () => HAS_A_PREDICATE,
     IN_REPLY_TO_PROP: () => IN_REPLY_TO_PROP,
     MEMORY_DIR_REL: () => MEMORY_DIR_REL,
     MEMORY_GRAPH_REL: () => MEMORY_GRAPH_REL,
     MEMORY_MANIFEST_REL: () => MEMORY_MANIFEST_REL,
     MEMORY_SESSION_CLASS: () => MEMORY_SESSION_CLASS,
+    MULTI_VALUED_PREDICATES: () => MULTI_VALUED_PREDICATES,
     OPERATOR_SOURCE_ID: () => OPERATOR_SOURCE_ID,
     RULE_CLASS: () => RULE_CLASS,
     RULE_KINDS: () => RULE_KINDS2,
+    RULE_KIND_ACTION_CONSTRAINT: () => RULE_KIND_ACTION_CONSTRAINT,
     RULE_KIND_ACTION_EFFECT: () => RULE_KIND_ACTION_EFFECT,
     RULE_KIND_ACTION_PRECOND: () => RULE_KIND_ACTION_PRECOND,
     RULE_KIND_ACTION_SIGNATURE: () => RULE_KIND_ACTION_SIGNATURE,
@@ -1765,6 +1775,7 @@
     const rows = readFactRows(memory).filter((r) => r.trust >= floor);
     const byKey = /* @__PURE__ */ new Map();
     for (const r of rows) {
+      if (MULTI_VALUED_PREDICATES.has(r.predicate)) continue;
       const key = `${r.subject} ${r.predicate}`;
       if (!byKey.has(key)) byKey.set(key, []);
       byKey.get(key).push(r);
@@ -1777,7 +1788,7 @@
     }
     return out.sort((a, b) => `${a[0].subject} ${a[0].predicate}`.localeCompare(`${b[0].subject} ${b[0].predicate}`));
   }
-  var MEMORY_DIR_REL, MEMORY_GRAPH_REL, UTTERANCE_CLASS, FACT_CLASS, MEMORY_SESSION_CLASS, SOURCE_CLASS, RULE_CLASS, SAID_IN_SESSION_PROP, IN_REPLY_TO_PROP, DERIVED_FROM_PROP, STATED_BY_PROP, CANONICALISED_FROM_PROP, CREATED_AT_PROP, UPDATED_AT_PROP, SOURCE_RELIABILITY_PROP, OPERATOR_SOURCE_ID, TEACH_SOURCE_ID, ROLES, LABEL_CAP, TEXT_CAP, MEMORY_VOCABULARY, memoryGraphFile, BACKEND_MEMORY, BACKEND_SQLITE, SQLITE_DDL, STD_EDGE_KEYS, cloneJson, MEMORY_MANIFEST_REL, DEFAULT_RETENTION, resolveManifestFile, MEMORY_INDEX, memoryIndexOf, normText, labelOf, nowIso, sourceLabel, isSessionScopedSourceId, factIdFor, RULE_KIND_COMPOSE2, RULE_KIND_FILTER, RULE_KIND_RECURSIVE, RULE_KIND_ACTION_SIGNATURE, RULE_KIND_ACTION_PRECOND, RULE_KIND_ACTION_EFFECT, RULE_KINDS2, RULE_NAME_PROP, RULE_KIND_PROP, RULE_SLOT_SPEC, ruleIdFor, CONTRADICTION_TRUST_FLOOR;
+  var MEMORY_DIR_REL, MEMORY_GRAPH_REL, UTTERANCE_CLASS, FACT_CLASS, MEMORY_SESSION_CLASS, SOURCE_CLASS, RULE_CLASS, SAID_IN_SESSION_PROP, IN_REPLY_TO_PROP, DERIVED_FROM_PROP, STATED_BY_PROP, CANONICALISED_FROM_PROP, CREATED_AT_PROP, UPDATED_AT_PROP, SOURCE_RELIABILITY_PROP, OPERATOR_SOURCE_ID, TEACH_SOURCE_ID, ROLES, LABEL_CAP, TEXT_CAP, MEMORY_VOCABULARY, memoryGraphFile, BACKEND_MEMORY, BACKEND_SQLITE, SQLITE_DDL, STD_EDGE_KEYS, cloneJson, MEMORY_MANIFEST_REL, DEFAULT_RETENTION, resolveManifestFile, MEMORY_INDEX, memoryIndexOf, normText, labelOf, nowIso, sourceLabel, isSessionScopedSourceId, factIdFor, RULE_KIND_COMPOSE2, RULE_KIND_FILTER, RULE_KIND_RECURSIVE, RULE_KIND_ACTION_SIGNATURE, RULE_KIND_ACTION_PRECOND, RULE_KIND_ACTION_EFFECT, RULE_KIND_ACTION_CONSTRAINT, RULE_KINDS2, RULE_NAME_PROP, RULE_KIND_PROP, RULE_SLOT_SPEC, ruleIdFor, CONTRADICTION_TRUST_FLOOR, HAS_A_PREDICATE, CAPABLE_OF_PREDICATE, MULTI_VALUED_PREDICATES;
   var init_core = __esm({
     "src/memory/core.mjs"() {
       init_promises();
@@ -1870,13 +1881,15 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
       RULE_KIND_ACTION_SIGNATURE = "action-signature";
       RULE_KIND_ACTION_PRECOND = "action-precond";
       RULE_KIND_ACTION_EFFECT = "action-effect";
+      RULE_KIND_ACTION_CONSTRAINT = "action-constraint";
       RULE_KINDS2 = Object.freeze([
         RULE_KIND_COMPOSE2,
         RULE_KIND_FILTER,
         RULE_KIND_RECURSIVE,
         RULE_KIND_ACTION_SIGNATURE,
         RULE_KIND_ACTION_PRECOND,
-        RULE_KIND_ACTION_EFFECT
+        RULE_KIND_ACTION_EFFECT,
+        RULE_KIND_ACTION_CONSTRAINT
       ]);
       RULE_NAME_PROP = "mgx:ruleName";
       RULE_KIND_PROP = "mgx:ruleKind";
@@ -1898,10 +1911,20 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
           ["predicate", "mgx:ruleActionEffectPredicate"],
           ["subjectRole", "mgx:ruleActionEffectSubject"],
           ["objectRole", "mgx:ruleActionEffectObject"]
+        ],
+        // "the <left> may not be with the <right> without the <guard>" — each slot
+        // names a class whose sole member src/domain.mjs resolves at compile time.
+        [RULE_KIND_ACTION_CONSTRAINT]: [
+          ["left", "mgx:ruleActionConstraintLeft"],
+          ["right", "mgx:ruleActionConstraintRight"],
+          ["guard", "mgx:ruleActionConstraintGuard"]
         ]
       };
       ruleIdFor = (kind, name, slotValues) => `rule:${fnv1aHex([kind, name, ...slotValues].join("\0"))}`;
       CONTRADICTION_TRUST_FLOOR = 0.5;
+      HAS_A_PREDICATE = "mgx:hasA";
+      CAPABLE_OF_PREDICATE = "mgx:capableOf";
+      MULTI_VALUED_PREDICATES = /* @__PURE__ */ new Set([HAS_A_PREDICATE, CAPABLE_OF_PREDICATE]);
     }
   });
 
@@ -2835,6 +2858,14 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
       if (m && INTERROGATIVE_LEAD_RE.test(m[1].trim())) q = m[1].trim();
       m = q.match(TELL_ME_WRAPPER_RE);
       if (m && INTERROGATIVE_LEAD_RE.test(m[1].trim())) q = m[1].trim();
+      m = q.match(KNOW_WRAPPER_RE);
+      if (m && INTERROGATIVE_LEAD_RE.test(m[1].trim())) q = m[1].trim();
+      m = q.match(WANT_KNOW_WRAPPER_RE);
+      if (m && INTERROGATIVE_LEAD_RE.test(m[1].trim())) q = m[1].trim();
+      m = q.match(EMBEDDED_WHATIS_RE);
+      if (m) q = `what ${m[2].toLowerCase()} ${m[1].trim()}`;
+      m = q.match(EMBEDDED_MEANS_RE);
+      if (m) q = `what does ${m[1].trim()} mean`;
       m = q.match(SHOW_GIVE_ME_RE);
       if (m) {
         const rest = m[1].trim();
@@ -2923,7 +2954,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     if (!predicate) return null;
     return { entWord, predicate };
   }
-  var tableRe, CONTRACTION_RE, correctionRe, MISSPELLING_RE, WRONG_WORD_RE, W_SLASH_RE, FOR_DIGIT_THANKS_RE, FOR_DIGIT_EXAMPLE_RE, KIND_NOUN_ANAPHORA_RE, VERB_ALTERNATION, FILLER_RE, RELATION_VERB_RE, INTERROGATIVE_LEAD_RE, LISTING_TAIL_KINDS, BARE_KIND_RE, isListingRemainder, GREETING_PREAMBLE_RE, THANKS_PREAMBLE_RE, ACK_PREAMBLE_RE, BROWSING_PREAMBLE_RE, HEDGE_ADVERB_PREAMBLE_RE, TROUBLE_ASIDE_RE, MODAL_WRAPPER_RE, EXPLAIN_WRAPPER_RE, TELL_ME_WRAPPER_RE, SHOW_GIVE_ME_RE, LEADING_CONNECTIVE_RE, QUESTION_AUX_LEAD_RE, TOPIC_SWITCH_PREAMBLE_RE, SUBORDINATION_FRAMES_RE, SELF_CORRECTION_RE, CONDITIONAL_VERB_GERUND, CONDITIONAL_KIND_PLURAL, CONDITIONAL_QUALIFIER_SRC, CONDITIONAL_QUALIFIER_RE, COUNTERFACTUAL_RE, PHRASING_FRAMES, NEGATION_SET_RE, STOPWORDS2, splitWords, wordsOf;
+  var tableRe, CONTRACTION_RE, correctionRe, MISSPELLING_RE, WRONG_WORD_RE, W_SLASH_RE, FOR_DIGIT_THANKS_RE, FOR_DIGIT_EXAMPLE_RE, KIND_NOUN_ANAPHORA_RE, VERB_ALTERNATION, FILLER_RE, RELATION_VERB_RE, INTERROGATIVE_LEAD_RE, LISTING_TAIL_KINDS, BARE_KIND_RE, isListingRemainder, GREETING_PREAMBLE_RE, THANKS_PREAMBLE_RE, ACK_PREAMBLE_RE, BROWSING_PREAMBLE_RE, HEDGE_ADVERB_PREAMBLE_RE, TROUBLE_ASIDE_RE, MODAL_WRAPPER_RE, EXPLAIN_WRAPPER_RE, TELL_ME_WRAPPER_RE, KNOW_WRAPPER_RE, WANT_KNOW_WRAPPER_RE, EMBEDDED_WHATIS_RE, EMBEDDED_MEANS_RE, SHOW_GIVE_ME_RE, LEADING_CONNECTIVE_RE, QUESTION_AUX_LEAD_RE, TOPIC_SWITCH_PREAMBLE_RE, SUBORDINATION_FRAMES_RE, SELF_CORRECTION_RE, CONDITIONAL_VERB_GERUND, CONDITIONAL_KIND_PLURAL, CONDITIONAL_QUALIFIER_SRC, CONDITIONAL_QUALIFIER_RE, COUNTERFACTUAL_RE, PHRASING_FRAMES, NEGATION_SET_RE, STOPWORDS2, splitWords, wordsOf;
   var init_normalize = __esm({
     "src/interpret/normalize.mjs"() {
       init_ask_vocab();
@@ -2983,6 +3014,10 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
       MODAL_WRAPPER_RE = /^(?:can|could|would|will)\s+you\s+(?:please\s+)?(.+?)(?:[,\s]+please)?\??$/i;
       EXPLAIN_WRAPPER_RE = /^explain\s+(?:to\s+me\s+|please\s+)*(.+?)\??$/i;
       TELL_ME_WRAPPER_RE = /^tell\s+me\s+(.+?)\??$/i;
+      KNOW_WRAPPER_RE = /^do\s+you\s+know\s+(.+?)\??$/i;
+      WANT_KNOW_WRAPPER_RE = /^i(?:'d|\s+would)?\s+(?:like|want|need)\s+to\s+know\s+(.+?)\??$/i;
+      EMBEDDED_WHATIS_RE = /^what\s+((?:an?\s+|the\s+)?[\w'-]+(?:\s+[\w'-]+){0,2})\s+(is|are)\??$/i;
+      EMBEDDED_MEANS_RE = /^what\s+((?:an?\s+|the\s+)?[\w'-]+(?:\s+[\w'-]+){0,2})\s+means\??$/i;
       SHOW_GIVE_ME_RE = /^(?:show|give)\s+me\s+(?:the\s+)?(.+?)\??$/i;
       LEADING_CONNECTIVE_RE = /^(?:and|also|so|then|now|but)\s+(.+)$/i;
       QUESTION_AUX_LEAD_RE = /^(?:does|do|did|is|are|was|were|has|have|had|can|could|will|would|should)\b/i;
@@ -3041,6 +3076,27 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
         //   temporal query produces ("were" as an auxiliary never leads directly into
         //   a bare "is").
         { re: /^were\s+is\s+(?:the\s+)?(.+?)\s+(defined|declared|located|implemented)\??$/i, to: (m) => `where is ${m[1]} ${m[2]}` },
+        // DESCRIBE PARAPHRASES ("what is the purpose of X", "what does X do in
+        // this codebase") → the meta/whatis shape ("what is a <term>"), which
+        // already answers a unique code entity via metaFallbackEntityAnswer. The
+        // term slot refuses an a/an article or a pronoun lead so the vocabulary
+        // phrasings ("what is the purpose of a horse", "what does it do here")
+        // pass through untouched to their own memory-facts and context readers,
+        // which read the raw text and must keep their turn. A leading "the" is
+        // entity-term noise (mirrors resolveObject's own article strip). The
+        // sibling "what is X for" paraphrase is deliberately NOT a frame: chat's
+        // module-overview lane owns that phrasing and gates on an ask() miss, so
+        // it lives as ask()'s own miss-gated fallback (WHATIS_FOR_FALLBACK_RE)
+        // instead, adopted only when the meta reading actually answers.
+        { re: /^what\s+is\s+the\s+purpose\s+of\s+(?:the\s+)?(?!(?:an?|it|this|that|these|those)\s)(.+?)\??$/i, to: (m) => `what is a ${m[1]}` },
+        // Scoped form only: bare "what does X do" stays unrewritten — the chat
+        // surface's module-grain overview lane owns it and only gets its turn when
+        // ask() misses, so claiming it here would swap that richer answer for the
+        // one-line meta fallback.
+        {
+          re: new RegExp(`^what\\s+does\\s+(?:the\\s+)?(?!(?:an?|it|this|that|these|those)\\s)(.+?)\\s+do\\s+(?:${TRAILING_SCOPE_FILLER.map(escapeRegex).join("|")})\\??$`, "i"),
+          to: (m) => `what is a ${m[1]}`
+        },
         // PREDICATIVE QUALIFIER ("which modules are untested") → the ATTRIBUTIVE form
         // ("untested modules") the grammar already answers. The QUALIFIER must sit
         // immediately after are/is, so "…are NOT tested" keeps its own set-complement handler.
@@ -3383,10 +3439,14 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
       verbHit = findPhrase(lemmaWords, VERB_TO_KIND);
       if (verbHit) canonWords = lemmaWords;
     }
+    let fuzzyVerb = false;
     if (!verbHit) {
       const fuzzyWords = lcWords.map((w) => w.length >= 4 && eligibleForCanon(w) ? fuzzyVocabWord(w) || w : w);
       verbHit = findPhrase(fuzzyWords, VERB_TO_KIND);
-      if (verbHit) canonWords = fuzzyWords;
+      if (verbHit) {
+        canonWords = fuzzyWords;
+        fuzzyVerb = true;
+      }
     }
     if (!verbHit && lcWords.includes("by")) {
       for (let i = 0; i < lcWords.length; i += 1) {
@@ -3398,6 +3458,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
       }
     }
     if (!verbHit) return null;
+    const stamp = (ast) => fuzzyVerb ? { ...ast, fuzzyVerb: true } : ast;
     if (nlp && verbHit.end - verbHit.start === 1) {
       const i = verbHit.start;
       const det = lcWords[i - 1];
@@ -3405,7 +3466,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
         const tags = nlp.posTags(words);
         if (tags[i] === "NOUN") {
           const objText = words.slice(i + 2).filter((w, j) => !STOPWORDS2.has(lcWords[i + 2 + j])).join(" ").trim();
-          if (objText) return { shape: "forward", entityType: null, modifier: "direct", kind: verbHit.kind, object: objText };
+          if (objText) return stamp({ shape: "forward", entityType: null, modifier: "direct", kind: verbHit.kind, object: objText });
         }
       }
     }
@@ -3435,11 +3496,11 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     const modifier = modifierHit ? MODIFIER_TO_KIND[canonWords.slice(modifierHit.start, modifierHit.end).join(" ")] : "direct";
     if (kind === "touches" && lcWords.includes("when")) {
       const objText = beforeText || afterText;
-      if (objText) return { shape: "when", entityType: null, modifier: "direct", kind: "touches", object: objText };
+      if (objText) return stamp({ shape: "when", entityType: null, modifier: "direct", kind: "touches", object: objText });
     }
     if (kind === "touches" && lcWords.includes("who") && lcWords.includes("last")) {
       const objText = beforeText || afterText;
-      if (objText) return { shape: "whoLast", entityType: null, modifier: "direct", kind: "touches", object: objText };
+      if (objText) return stamp({ shape: "whoLast", entityType: null, modifier: "direct", kind: "touches", object: objText });
     }
     const byIdx = lcWords.indexOf("by");
     const hasPassiveAux = lcWords.slice(0, verbHit.start).some((w) => PASSIVE_AUX.has(w));
@@ -3459,7 +3520,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
           break;
         }
         const agentNamed = nextAfterBy != null && !WH_WORDS.has(nextAfterBy) && !ENTITY_TO_TYPE[nextAfterBy];
-        return { shape: agentNamed ? "forward" : "reverse", entityType, modifier, kind, object };
+        return stamp({ shape: agentNamed ? "forward" : "reverse", entityType, modifier, kind, object });
       }
     }
     if (beforeText && afterText) {
@@ -3467,14 +3528,14 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
       let subject = beforeText;
       let object = afterText;
       if (INHERITS_REVERSE_VERBS.includes(verbPhrase)) [subject, object] = [object, subject];
-      return { shape: "ask", entityType: null, modifier: "direct", kind, subject, object };
+      return stamp({ shape: "ask", entityType: null, modifier: "direct", kind, subject, object });
     }
-    if (afterText) return { shape: "reverse", entityType, modifier, kind, object: afterText };
+    if (afterText) return stamp({ shape: "reverse", entityType, modifier, kind, object: afterText });
     if (kind === "inherits" && !beforeText && entityHit && entityHit.start === verbHit.end) {
       const entityText = canonWords.slice(entityHit.start, entityHit.end).join(" ");
-      if (entityText) return { shape: "reverse", entityType: null, modifier, kind, object: entityText };
+      if (entityText) return stamp({ shape: "reverse", entityType: null, modifier, kind, object: entityText });
     }
-    if (beforeText) return { shape: "forward", entityType, modifier: "direct", kind, object: beforeText };
+    if (beforeText) return stamp({ shape: "forward", entityType, modifier: "direct", kind, object: beforeText });
     return null;
   }
   var PASSIVE_AUX, WH_WORDS, PLACEHOLDER_SET, keywordSpotStrategy;
@@ -3791,6 +3852,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   __export(ask_exports, {
     applyNegationFrames: () => applyNegationFrames,
     ask: () => ask,
+    classDisplayName: () => classDisplayName,
     compositionalHint: () => compositionalHint,
     degreeMetric: () => degreeMetric,
     evalComposite: () => evalComposite,
@@ -3824,6 +3886,14 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   function nounFor(entityType, n) {
     const [s, p] = PLURAL_FORMS[entityType] || ["result", "results"];
     return n === 1 ? s : p;
+  }
+  function classDisplayName(cls) {
+    const s = String(cls || "");
+    if (typeof splitIdentifierWords === "function") {
+      const words = splitIdentifierWords(s).join(" ");
+      if (words) return words;
+    }
+    return s.replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase();
   }
   function verbFor(kind) {
     return REVERSE_MISS_VERB[kind] || kind;
@@ -5434,6 +5504,15 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
       ...extra
     };
   }
+  function rankEntryPointModules(graph, term) {
+    const queryWords = new Set(String(term || "").toLowerCase().split(/[\s-]+/).filter(Boolean));
+    return (graph.individuals || []).filter((i) => i.class === "Module" && ENTRY_POINT_BASENAMES.has(moduleStemOf(i.label))).map((ind) => ({
+      ind,
+      named: queryWords.has(moduleStemOf(ind.label)) ? 1 : 0,
+      depth: String(ind.label).split("/").length,
+      fixture: isTestFixturePath(ind.label) ? 1 : 0
+    })).sort((a, b) => b.named - a.named || a.depth - b.depth || a.fixture - b.fixture || String(a.ind.label).localeCompare(String(b.ind.label))).map((x) => x.ind);
+  }
   function modifierIsWired(shape, kind, entityType) {
     return shape === "reverse" && (kind === "imports" || kind === "calls") && (!entityType || entityType === "Module");
   }
@@ -5491,6 +5570,17 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
         ambiguous: false,
         mentionsShape: true,
         traversal: `proseIndex word lookup for "${term}"`
+      };
+    }
+    if (shape === "where" && ENTRY_POINT_QUERY_RE.test(String(parsed.object || "").trim())) {
+      const ranked = rankEntryPointModules(graph, parsed.object);
+      return {
+        matches: ranked,
+        objMatch: ranked[0] || null,
+        candidates: ranked.slice(1, 5),
+        ambiguous: false,
+        entryPointShape: true,
+        traversal: `Module individuals with an entry-point basename (${[...ENTRY_POINT_BASENAMES].join("/")}), ranked query-named basename first, then shallower path, then non-test path`
       };
     }
     if (parsed.modifier && parsed.modifier !== "direct" && !modifierIsWired(shape, kind, entityType)) {
@@ -5651,7 +5741,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
             matchedVia,
             forwardGrainMiss: true,
             wantClasses: [...wantClasses],
-            traversal: `${fwdKinds.join("+")} edges where subject = ${objMatch.label} (grain mismatch: this "${kind}" relation never targets a ${entityType})`
+            traversal: `${fwdKinds.join("+")} edges where subject = ${objMatch.label} (grain mismatch: this "${kind}" relation never targets a ${classDisplayName(entityType)})`
           };
         }
       }
@@ -5734,7 +5824,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
             matchedVia: gMatchedVia,
             wrongGrainMiss: true,
             wantClass,
-            traversal: `"${parsed.object}" resolved to ${gObjMatch.class} ${gObjMatch.label} (grain mismatch: this "${kind}" question needs a ${wantClass}, and no containing module could be found to refine to)`
+            traversal: `"${parsed.object}" resolved to ${classDisplayName(gObjMatch.class)} ${gObjMatch.label} (grain mismatch: this "${kind}" question needs a ${classDisplayName(wantClass)}, and no containing module could be found to refine to)`
           };
         }
       } else {
@@ -5746,7 +5836,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
           matchedVia: gMatchedVia,
           wrongGrainMiss: true,
           wantClass,
-          traversal: `"${parsed.object}" resolved to ${gObjMatch.class} ${gObjMatch.label} (grain mismatch: this "${kind}" question needs a ${wantClass})`
+          traversal: `"${parsed.object}" resolved to ${classDisplayName(gObjMatch.class)} ${gObjMatch.label} (grain mismatch: this "${kind}" question needs a ${classDisplayName(wantClass)})`
         };
       }
     }
@@ -5781,7 +5871,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
       } else if (entityType !== "Module" && subjects.some((s) => s.class === "Module")) {
         const moduleIds = new Set(subjects.filter((s) => s.class === "Module").map((s) => s.id));
         matches = refineToEntities(graph, moduleIds, entityType);
-        grainNote = `, then ${entityType} defined in the matched module(s)`;
+        grainNote = `, then ${classDisplayName(entityType)} defined in the matched module(s)`;
       } else {
         matches = [];
       }
@@ -5874,7 +5964,8 @@ ${options2}
 (ask one of these directly, or try rephrasing more specifically, to get just that reading)`,
           miss: false,
           ambiguous: true,
-          candidates: parsed.candidates.map(describeParse)
+          candidates: parsed.candidates.map(describeParse),
+          candidateParses: parsed.candidates
         };
       }
       const options = parsed.candidates.map((p, i) => `${i + 1}) ${describeParse(p)}`).join(" or ");
@@ -5882,7 +5973,8 @@ ${options2}
         content: `this could mean more than one thing: ${options} \u2014 try rephrasing more specifically.`,
         miss: false,
         ambiguous: true,
-        candidates: parsed.candidates.map(describeParse)
+        candidates: parsed.candidates.map(describeParse),
+        candidateParses: parsed.candidates
       };
     }
     if (result.unresolvedPronoun) {
@@ -5943,6 +6035,26 @@ ${options2}
       const extra2 = result.matches.length > OVERFLOW_CAP ? `, \u2026and ${result.matches.length - OVERFLOW_CAP} more` : "";
       return {
         content: `"${parsed.object}" is mentioned in the prose tokens of ${listJoin(shown)}${extra2}.`,
+        miss: false,
+        ambiguous: false,
+        matches: result.matches
+      };
+    }
+    if (result.entryPointShape) {
+      if (!result.matches.length) {
+        return {
+          content: `no entry-point module found in the index \u2014 no module basename matches ${listJoin([...ENTRY_POINT_BASENAMES])}.`,
+          miss: true,
+          ambiguous: false,
+          candidates: []
+        };
+      }
+      const [top, ...rest] = result.matches;
+      const shownRest = rest.slice(0, OVERFLOW_CAP).map((i) => i.label);
+      const extra2 = rest.length > OVERFLOW_CAP ? `, \u2026and ${rest.length - OVERFLOW_CAP} more` : "";
+      const also = rest.length ? ` \u2014 also matched: ${listJoin(shownRest)}${extra2}` : "";
+      return {
+        content: `ranked ${result.matches.length} entry-point match${result.matches.length === 1 ? "" : "es"}; top: ${top.label}${also}.`,
         miss: false,
         ambiguous: false,
         matches: result.matches
@@ -6364,6 +6476,21 @@ ${result.branches.map((b, i) => `${i + 1}) ${b.candidate.label}: ${b.rendered.co
         }
       }
     }
+    if (parsed === null && rendered.miss && !rendered.ambiguous) {
+      const forM = normalizeQuery(String(query || "")).match(WHATIS_FOR_FALLBACK_RE);
+      const forTerm = forM?.[1]?.trim();
+      if (forTerm) {
+        const forParsed = parseQuery(`what is a ${forTerm}`, { nlp });
+        if (forParsed?.shape === "meta") {
+          const forResult = traverse(graph, forParsed, { contextId, prev });
+          const forRendered = render(forParsed, forResult);
+          if (!forRendered.miss && !forRendered.ambiguous) {
+            result = forResult;
+            rendered = forRendered;
+          }
+        }
+      }
+    }
     let content = relaxed && !rendered.miss && relaxed.to !== relaxed.from ? `read as "${relaxed.to}" \u2014 ${rendered.content}` : rendered.content;
     if (!relaxed && !rendered.miss && !rendered.ambiguous && directFull.alternates.length) {
       const answered = directFull.alternates.map((a) => {
@@ -6401,11 +6528,11 @@ ${lines.join("\n")}`;
         // edit-distance, announced in the content as "assuming you meant …");
         // null for every literal-identifier tier.
         matchedVia: result.matchedVia || null,
-        ...rendered.ambiguous ? { candidates: rendered.candidates } : {}
+        ...rendered.ambiguous ? { candidates: rendered.candidates, candidateParses: rendered.candidateParses } : {}
       }
     };
   }
-  var askEdgesOfKindCache, SYMBOL_GRAIN_SIBLING, FINE_ENTITY_TYPES, FINE_CLASS_SIBLING, KIND_UNIONS, kindsFor, OVERFLOW_CAP, PLURAL_FORMS, REVERSE_MISS_VERB, LEADING_RELATION_VERB_RE, FROZEN_META_AMBIGUOUS_TERMS, MAX_COMPOSE_DEPTH, NEST_SENTINEL, PRED_LEAD_SKIP, FRAME_WORDS, COPULA_WORDS, entityNoun, isGerundVerb, FWD_NEG_FRAME, PLURAL_ANAPHORA_OBJECT, TEMPORAL_AUX, TEMPORAL_TAIL, TEMPORAL_TRAIL_FILLER, TEMPORAL_DET, COMMIT_FILTER_OPS, ANAPHORA_NAME_TOKEN_RE, AGG_TAIL_FILLER, LIST_SKIP, LIST_TRIGGERS_SORTED, LISTABLE_KINDS, SCOPE_PREPOSITIONS, FIND_LINKERS, RECENT_COMMIT_LEAD, qualCache, META_FALLBACK_CLASSES, inheritsApplicableCache, FIND_TIER, DEGREE_KINDS, COMMIT_FILTER_DATE_RE, compositeList, LEADING_ARTICLE_RE, TRAILING_GRAIN_WORD_RE, TRANSITIVE_MAX_DEPTH, CONTENT_VOCAB, STRUCTURAL_WORDS, CASCADE_NOISE_SET, NOISE_OR_SCAFFOLD, TRIGGER_FUZZY_WORDS, CASCADE_FUZZY_TARGETS, LAST_COMMIT_PHRASE_RE, BARE_WHEN_COMMIT_RE, DYNAMIC_LIST_TRIGGER_RE, DYNAMIC_COUNT_TRIGGER_RE, DYNAMIC_TAIL_OK_RE, BARE_META_WHATIS_RE;
+  var askEdgesOfKindCache, SYMBOL_GRAIN_SIBLING, FINE_ENTITY_TYPES, FINE_CLASS_SIBLING, KIND_UNIONS, kindsFor, OVERFLOW_CAP, PLURAL_FORMS, REVERSE_MISS_VERB, LEADING_RELATION_VERB_RE, FROZEN_META_AMBIGUOUS_TERMS, MAX_COMPOSE_DEPTH, NEST_SENTINEL, PRED_LEAD_SKIP, FRAME_WORDS, COPULA_WORDS, entityNoun, isGerundVerb, FWD_NEG_FRAME, PLURAL_ANAPHORA_OBJECT, TEMPORAL_AUX, TEMPORAL_TAIL, TEMPORAL_TRAIL_FILLER, TEMPORAL_DET, COMMIT_FILTER_OPS, ANAPHORA_NAME_TOKEN_RE, AGG_TAIL_FILLER, LIST_SKIP, LIST_TRIGGERS_SORTED, LISTABLE_KINDS, SCOPE_PREPOSITIONS, FIND_LINKERS, RECENT_COMMIT_LEAD, qualCache, META_FALLBACK_CLASSES, inheritsApplicableCache, FIND_TIER, DEGREE_KINDS, COMMIT_FILTER_DATE_RE, compositeList, LEADING_ARTICLE_RE, TRAILING_GRAIN_WORD_RE, ENTRY_POINT_QUERY_RE, ENTRY_POINT_BASENAMES, TEST_FIXTURE_PATH_SEGMENTS, moduleStemOf, isTestFixturePath, TRANSITIVE_MAX_DEPTH, CONTENT_VOCAB, STRUCTURAL_WORDS, CASCADE_NOISE_SET, NOISE_OR_SCAFFOLD, TRIGGER_FUZZY_WORDS, CASCADE_FUZZY_TARGETS, LAST_COMMIT_PHRASE_RE, BARE_WHEN_COMMIT_RE, DYNAMIC_LIST_TRIGGER_RE, DYNAMIC_COUNT_TRIGGER_RE, DYNAMIC_TAIL_OK_RE, BARE_META_WHATIS_RE, WHATIS_FOR_FALLBACK_RE;
   var init_ask = __esm({
     "src/ask.mjs"() {
       init_codegraph();
@@ -6513,6 +6640,11 @@ ${lines.join("\n")}`;
       compositeList = (matches) => listJoin(matches.slice(0, OVERFLOW_CAP).map((m) => ["Function", "Method"].includes(m.class) ? `${m.label}()` : m.label)) + (matches.length > OVERFLOW_CAP ? `, \u2026and ${matches.length - OVERFLOW_CAP} more` : "");
       LEADING_ARTICLE_RE = /^(?:the|a|an)\s+/i;
       TRAILING_GRAIN_WORD_RE = new RegExp(`\\s+(${Object.keys(ENTITY_TO_TYPE).join("|")})$`, "i");
+      ENTRY_POINT_QUERY_RE = /^(?:the\s+)?(?:main\s+|primary\s+)?entry[\s-]?points?(?:\s+(?:of|to|for)\s+(?:this|the)\s+(?:codebase|code|repo|repository|project|app))?$/i;
+      ENTRY_POINT_BASENAMES = /* @__PURE__ */ new Set(["index", "main", "app", "server", "cli", "__main__"]);
+      TEST_FIXTURE_PATH_SEGMENTS = /* @__PURE__ */ new Set(["test", "tests", "__tests__", "fixture", "fixtures", "spec", "specs", "testdata"]);
+      moduleStemOf = (label) => String(label).toLowerCase().split("/").pop().replace(/\.[a-z0-9]+$/, "");
+      isTestFixturePath = (label) => String(label).toLowerCase().split("/").slice(0, -1).some((seg) => TEST_FIXTURE_PATH_SEGMENTS.has(seg));
       TRANSITIVE_MAX_DEPTH = 8;
       CONTENT_VOCAB = /* @__PURE__ */ new Set([
         ...wordsOf(Object.keys(VERB_TO_KIND)),
@@ -6560,6 +6692,7 @@ ${lines.join("\n")}`;
       DYNAMIC_COUNT_TRIGGER_RE = /^(?:how\s+many|number\s+of|count(?:\s+the)?)\s+([a-z][a-z'-]*)\s*(.*)$/i;
       DYNAMIC_TAIL_OK_RE = /^(?:are there(?:\s+in\s+total)?|is there|do you know(?:\s+about)?|do you have|exist(?:s)?|are known|in (?:the |a )?(?:graph|memory)|you know(?:\s+about)?)?[?.!\s]*$/i;
       BARE_META_WHATIS_RE = /^what\s+(?:is|are)\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
+      WHATIS_FOR_FALLBACK_RE = /^what\s+is\s+(?:the\s+)?(?!(?:an?|it|this|that|these|those)\s)(.+?)\s+(?:used\s+)?for[?.!\s]*$/i;
     }
   });
 
@@ -7226,19 +7359,31 @@ ${lines.join("\n")}`;
     };
   }
   function winkInstance() {
+    if (instance !== void 0) return instance;
     const loaded = loadWinkModel();
-    if (!loaded) return null;
-    try {
-      return loaded.winkNLP(loaded.model);
-    } catch {
+    if (!loaded) {
+      instance = null;
       return null;
     }
+    try {
+      instance = loaded.winkNLP(loaded.model);
+    } catch {
+      instance = null;
+    }
+    return instance;
   }
-  var import_meta6, injected, cached;
+  var import_meta6, injected, cached, instance;
   var init_wink_model = __esm({
     "src/wink-model.mjs"() {
       init_node_module();
       import_meta6 = {};
+    }
+  });
+
+  // src/sentences.mjs
+  var init_sentences = __esm({
+    "src/sentences.mjs"() {
+      init_wink_model();
     }
   });
 
@@ -7727,6 +7872,7 @@ ${lines.join("\n")}`;
     const trustByTriple = /* @__PURE__ */ new Map();
     for (const r of rows) trustByTriple.set(`${r.subject}${SEP}${r.predicate}${SEP}${r.object}`, r.trust);
     const premiseTrust = (s, p, o) => trustByTriple.get(`${s}${SEP}${p}${SEP}${o}`);
+    const hasTriple = (s, p, o) => trustByTriple.has(`${s}${SEP}${p}${SEP}${o}`);
     const numericOnly = (arr) => arr.filter((t) => typeof t === "number");
     const scmDerived = deriveSubClassClosure(subClassEdges, { depth, budget, focus: normalizedFocus });
     const enlargedSubClassEdges = subClassEdges.concat(scmDerived.map((d) => [d.subject, d.object]));
@@ -7745,11 +7891,12 @@ ${lines.join("\n")}`;
         predicate: SUBCLASS_PREDICATE,
         object: d.object,
         provenance: ENTAILED_PROVENANCE,
-        // Persisted justification, scm-sco only: the two premise fact ids this
-        // conclusion rode (a⊑b, b⊑c) — content-addressed ids work even when a
-        // premise is itself an entailment this same pass just derived. Read
-        // back by retractSubClassOf (below) to find every entailment a
-        // retracted premise could have supported.
+        // Persisted justification: the premise fact ids this conclusion rode
+        // (a⊑b, b⊑c) — content-addressed ids work even when a premise is
+        // itself an entailment this same pass just derived. Read back by
+        // retractSubClassOf (below) to find every entailment a retracted
+        // premise could have supported. All five rules persist one, each
+        // citing its own premise shape.
         justification: [
           factIdForTriple(d.subject, SUBCLASS_PREDICATE, d.via),
           factIdForTriple(d.via, SUBCLASS_PREDICATE, d.object)
@@ -7759,13 +7906,22 @@ ${lines.join("\n")}`;
         subject: d.subject,
         predicate: TYPE_PREDICATE,
         object: d.object,
-        provenance: ENTAILED_TYPE_PROVENANCE
+        provenance: ENTAILED_TYPE_PROVENANCE,
+        // The ⊑ premise is cited as the DIRECT via⊑object edge even when the
+        // taught chain is multi-hop: scm-sco materializes that edge (this same
+        // pass or an earlier one), and retraction re-VERIFIES every candidate
+        // anyway, so a citation left dangling by budget truncation is inert.
+        justification: [
+          factIdForTriple(d.subject, TYPE_PREDICATE, d.via),
+          factIdForTriple(d.via, SUBCLASS_PREDICATE, d.object)
+        ]
       })),
       ...dwDerived.map((d) => {
-        const dwTrust = premiseTrust(d.viaClass, DISJOINT_PREDICATE, d.object) ?? premiseTrust(d.object, DISJOINT_PREDICATE, d.viaClass);
+        const dwStoredForward = hasTriple(d.viaClass, DISJOINT_PREDICATE, d.object);
+        const [dwS, dwO] = dwStoredForward ? [d.viaClass, d.object] : [d.object, d.viaClass];
         const premiseTrusts = numericOnly([
           premiseTrust(d.subject, TYPE_PREDICATE, d.viaType),
-          dwTrust,
+          premiseTrust(dwS, DISJOINT_PREDICATE, dwO),
           // the ⊑-lift premise only exists when this IS a lift (viaClass !==
           // viaType) — a direct hit has no extra subClassOf premise to price in.
           ...d.viaClass !== d.viaType ? [premiseTrust(d.viaType, SUBCLASS_PREDICATE, d.viaClass)] : []
@@ -7775,6 +7931,11 @@ ${lines.join("\n")}`;
           predicate: DISJOINT_PREDICATE,
           object: d.object,
           provenance: ENTAILED_DISJOINT_PROVENANCE,
+          justification: [
+            factIdForTriple(d.subject, TYPE_PREDICATE, d.viaType),
+            factIdForTriple(dwS, DISJOINT_PREDICATE, dwO),
+            ...d.viaClass !== d.viaType ? [factIdForTriple(d.viaType, SUBCLASS_PREDICATE, d.viaClass)] : []
+          ],
           ...premiseTrusts.length ? { premiseTrusts, ruleConfidence: CAX_DW_RULE_CONFIDENCE } : {}
         };
       }),
@@ -7793,6 +7954,13 @@ ${lines.join("\n")}`;
           predicate: TYPE_PREDICATE,
           object: d.object,
           provenance: ENTAILED_SVF1_PROVENANCE,
+          justification: [
+            factIdForTriple(d.subject, d.viaProperty, d.viaValue),
+            factIdForTriple(d.viaValue, TYPE_PREDICATE, d.viaType),
+            factIdForTriple(d.object, ON_PROPERTY_PREDICATE, d.viaPropertyKey),
+            factIdForTriple(d.object, SOME_VALUES_FROM_PREDICATE, d.viaTarget),
+            ...d.viaType !== d.viaTarget ? [factIdForTriple(d.viaType, SUBCLASS_PREDICATE, d.viaTarget)] : []
+          ],
           // same sub-1 discount as cax-dw, same reason (see CAX_DW_RULE_CONFIDENCE).
           ...premiseTrusts.length ? { premiseTrusts, ruleConfidence: CLS_SVF1_RULE_CONFIDENCE } : {}
         };
@@ -7812,6 +7980,13 @@ ${lines.join("\n")}`;
           predicate: SUBCLASS_PREDICATE,
           object: d.object,
           provenance: ENTAILED_SCM_SVF_PROVENANCE,
+          justification: [
+            ...r1 ? [factIdForTriple(d.subject, ON_PROPERTY_PREDICATE, r1.property)] : [],
+            factIdForTriple(d.subject, SOME_VALUES_FROM_PREDICATE, d.viaY1),
+            ...r2 ? [factIdForTriple(d.object, ON_PROPERTY_PREDICATE, r2.property)] : [],
+            factIdForTriple(d.object, SOME_VALUES_FROM_PREDICATE, d.viaY2),
+            factIdForTriple(d.viaY1, SUBCLASS_PREDICATE, d.viaY2)
+          ],
           // same sub-1 discount as cax-dw/cls-svf1, same reason (see CAX_DW_RULE_CONFIDENCE).
           ...premiseTrusts.length ? { premiseTrusts, ruleConfidence: SCM_SVF_RULE_CONFIDENCE } : {}
         };
@@ -7846,6 +8021,71 @@ ${lines.join("\n")}`;
     const tags = String(provenance || "").split(" | ").filter(Boolean);
     return tags.length > 0 && tags.every((t) => t.startsWith("entailed:"));
   }
+  function buildSurvivorDerivabilityCheck(rows) {
+    const subClassEdges = [];
+    const typesOf = /* @__PURE__ */ new Map();
+    const disjointOf = /* @__PURE__ */ new Map();
+    const onPropertyOf = /* @__PURE__ */ new Map();
+    const someValuesFromOf = /* @__PURE__ */ new Map();
+    const propertyEdgesOf = /* @__PURE__ */ new Map();
+    for (const r of rows) {
+      const pLower = String(r.predicate || "").trim().toLowerCase();
+      if (isSubClassOf(r.predicate)) subClassEdges.push([r.subject, r.object]);
+      else if (isType(r.predicate)) {
+        if (!typesOf.has(r.subject)) typesOf.set(r.subject, /* @__PURE__ */ new Set());
+        typesOf.get(r.subject).add(r.object);
+      } else if (isDisjoint(r.predicate)) {
+        if (!disjointOf.has(r.subject)) disjointOf.set(r.subject, /* @__PURE__ */ new Set());
+        disjointOf.get(r.subject).add(r.object);
+        if (!disjointOf.has(r.object)) disjointOf.set(r.object, /* @__PURE__ */ new Set());
+        disjointOf.get(r.object).add(r.subject);
+      } else if (isOnProperty(r.predicate)) onPropertyOf.set(r.subject, r.object);
+      else if (isSomeValuesFrom(r.predicate)) someValuesFromOf.set(r.subject, r.object);
+      else if (!RESERVED_PREDICATES.has(pLower)) {
+        if (!propertyEdgesOf.has(r.subject)) propertyEdgesOf.set(r.subject, []);
+        propertyEdgesOf.get(r.subject).push([normFactTerm(r.predicate), r.object]);
+      }
+    }
+    const ancestorsOf2 = buildAncestorCloser(subClassEdges);
+    const reaches = (a, b) => a !== b && ancestorsOf2(a).has(b);
+    const restrictionOf = (node) => {
+      const property = onPropertyOf.get(node);
+      const target = someValuesFromOf.get(node);
+      return property && target ? { property: normFactTerm(property), target } : null;
+    };
+    return (row) => {
+      if (isSubClassOf(row.predicate)) {
+        if (reaches(row.subject, row.object)) return true;
+        const r1 = restrictionOf(row.subject);
+        const r2 = restrictionOf(row.object);
+        return Boolean(r1 && r2 && r1.property === r2.property && reaches(r1.target, r2.target));
+      }
+      if (isType(row.predicate)) {
+        for (const c of typesOf.get(row.subject) || []) {
+          if (reaches(c, row.object)) return true;
+        }
+        const rec = restrictionOf(row.object);
+        if (rec) {
+          for (const [pKey, y] of propertyEdgesOf.get(row.subject) || []) {
+            if (pKey !== rec.property) continue;
+            for (const c of typesOf.get(y) || []) {
+              if (c === rec.target || reaches(c, rec.target)) return true;
+            }
+          }
+        }
+        return false;
+      }
+      if (isDisjoint(row.predicate)) {
+        for (const c of typesOf.get(row.subject) || []) {
+          for (const d of [c, ...ancestorsOf2(c)]) {
+            if (disjointOf.get(d)?.has(row.object)) return true;
+          }
+        }
+        return false;
+      }
+      return true;
+    };
+  }
   async function retractSubClassOf(repoDir, subject, object, { budget = 50, depth = 32 } = {}) {
     const s = normFactTerm(subject);
     const o = normFactTerm(object);
@@ -7854,19 +8094,18 @@ ${lines.join("\n")}`;
     const rows = readFactRows(memory);
     const byId = new Map(rows.map((r) => [r.id, r]));
     if (!byId.has(targetId)) return { retracted: [], count: 0, budget, depth, truncated: false, found: false };
-    const scRows = rows.filter((r) => isSubClassOf(r.predicate));
-    const edgeOf = new Map(scRows.map((r) => [r.id, [r.subject, r.object]]));
-    const entailedScRows = scRows.filter((r) => r.justification.length && isPurelyEntailed(r.provenance));
+    const entailedRows = rows.filter((r) => r.justification.length && isPurelyEntailed(r.provenance));
     const removed = /* @__PURE__ */ new Set([targetId]);
     const order = [targetId];
     let truncated = false;
     let round2 = 0;
     for (; round2 < depth; round2 += 1) {
-      const candidates = entailedScRows.filter((r) => !removed.has(r.id) && r.justification.some((j) => removed.has(j))).sort((a, b) => a.subject.localeCompare(b.subject) || a.object.localeCompare(b.object));
+      const candidates = entailedRows.filter((r) => !removed.has(r.id) && r.justification.some((j) => removed.has(j))).sort((a, b) => a.subject.localeCompare(b.subject) || a.predicate.localeCompare(b.predicate) || a.object.localeCompare(b.object));
       if (!candidates.length) break;
       const candidateIds = new Set(candidates.map((c) => c.id));
-      const survivingEdges = [...edgeOf.entries()].filter(([id]) => !removed.has(id) && !candidateIds.has(id)).map(([, e]) => e);
-      const ancestorsOf2 = buildAncestorCloser(survivingEdges);
+      const stillDerivable = buildSurvivorDerivabilityCheck(
+        rows.filter((r) => !removed.has(r.id) && !candidateIds.has(r.id))
+      );
       let progressed = false;
       let hitBudget = false;
       for (const c of candidates) {
@@ -7874,7 +8113,7 @@ ${lines.join("\n")}`;
           hitBudget = true;
           break;
         }
-        if (ancestorsOf2(c.subject).has(c.object)) continue;
+        if (stillDerivable(c)) continue;
         removed.add(c.id);
         order.push(c.id);
         progressed = true;
@@ -7886,7 +8125,7 @@ ${lines.join("\n")}`;
       if (!progressed) break;
     }
     if (!truncated && round2 >= depth) {
-      truncated = entailedScRows.some((r) => !removed.has(r.id) && r.justification.some((j) => removed.has(j)));
+      truncated = entailedRows.some((r) => !removed.has(r.id) && r.justification.some((j) => removed.has(j)));
     }
     const { removed: actuallyRemoved } = await removeFacts(repoDir, order);
     return { retracted: actuallyRemoved, count: actuallyRemoved.length, budget, depth, truncated, found: true };
@@ -7971,6 +8210,30 @@ ${lines.join("\n")}`;
   });
 
   // src/chat.mjs
+  function deduceGoalFromParsed(parsed) {
+    if (!parsed) return null;
+    const { node, shape, kind } = parsed;
+    if (node === "find") return `locate a specific named entity ("${parsed.term}")`;
+    if (node === "count") return `get a count of ${goalNoun(parsed.entityType)}`;
+    if (node === "list") return `list/enumerate ${goalNoun(parsed.entityType)} matching a condition`;
+    if (node === "superlative") return `rank/compare ${goalNoun(parsed.entityType)} by ${parsed.metricNoun || parsed.metric || "a metric"}`;
+    if (node === "anaphora") return "follow up on the previous answer's result set (discourse anaphora)";
+    if (node === "membership") return `understand "${parsed.term || "an entity"}"'s membership/relationship`;
+    if (node === "clause") return deduceGoalFromParsed(parsed.clause);
+    if (node === "miss") return null;
+    if (node === "boolean" || node === "qualifier" || node === "reverseSet" || node === "forwardSet" || node === "allOfClass" || node === "temporal") {
+      const k = kind || parsed.inner?.kind;
+      return k && GOAL_BY_KIND[k] ? GOAL_BY_KIND[k] : `filter/traverse ${goalNoun(parsed.entityType)} by a relationship`;
+    }
+    if (shape === "meta") return `understand a vocabulary/definition term ("${parsed.object}")`;
+    if (shape === "where") return `locate where something is defined ("${parsed.object}")`;
+    if (shape === "when") return "understand when something last changed (history)";
+    if (shape === "whoLast") return "find who most recently touched something (history)";
+    if (shape === "mentions") return `find where something is mentioned in prose ("${parsed.object}")`;
+    if (shape === "ask") return kind && GOAL_BY_KIND[kind] || "check a specific subject/object relationship";
+    if ((shape === "reverse" || shape === "forward") && kind) return GOAL_BY_KIND[kind] || `understand a "${kind}" relationship`;
+    return "understand a graph relationship";
+  }
   function collapsedIndex(set) {
     const idx = /* @__PURE__ */ new Map();
     for (const phrase of set) if (!idx.has(collapseRuns(phrase))) idx.set(collapseRuns(phrase), phrase);
@@ -8117,6 +8380,10 @@ ${lines.join("\n")}`;
     }
     return null;
   }
+  function matchGenitiveWhoAsk(q) {
+    const g = String(q).match(GENITIVE_WHO_ASK_RE);
+    return g ? [g[0], g[2], g[1]] : null;
+  }
   function matchWhyIsa(q) {
     const stripped = String(q || "").replace(WHY_ISA_LEAD_RE, "");
     if (stripped !== q) {
@@ -8126,6 +8393,14 @@ ${lines.join("\n")}`;
     const ehyk = String(q || "").match(EXPLAIN_HOW_YOU_KNOW_RE);
     if (ehyk) return `is ${ehyk[1].trim()} a ${ehyk[2].trim()}`.match(ISA_ASK_RE);
     return null;
+  }
+  function comparativeOfSuperlative(superlative) {
+    const s = String(superlative || "").toLowerCase().trim().replace(/\s+/g, " ");
+    if (s === "best") return "better";
+    if (s === "worst") return "worse";
+    const graded = s.match(/^(most|least)\s+([a-z][\w-]*)$/);
+    if (graded) return `${graded[1] === "most" ? "more" : "less"} ${graded[2]}`;
+    return /[a-z]est$/.test(s) && s.length > 4 ? `${s.slice(0, -3)}er` : null;
   }
   function uniqueFacts(rows) {
     const seen = /* @__PURE__ */ new Set();
@@ -8139,6 +8414,26 @@ ${lines.join("\n")}`;
     return out;
   }
   async function factAnswer(memoryDir, query, envelope, miss2, biasByBundle = {}, cache = null) {
+    return withDeducedGoal(await factAnswerReaders(memoryDir, query, envelope, miss2, biasByBundle, cache), envelope, query);
+  }
+  function withDeducedGoal(res, envelope, query) {
+    if (!res || res.goal !== void 0) return res;
+    const q = String(query || "").trim();
+    let goal = deduceGoalFromParsed(envelope?.parsed);
+    if (!goal && res.generalVerbQuery) goal = TAUGHT_FACT_LOOKUP_GOAL;
+    if (!goal) {
+      const yesNo = q.match(RELATION_FACT_YESNO_RE);
+      const whoAsk = yesNo ? null : q.match(RELATION_WHO_ASK_RE) || matchGenitiveWhoAsk(q);
+      const role = yesNo ? yesNo[2] : whoAsk ? whoAsk[1] : null;
+      if (role && !ISA_IDIOM_ROLE_WORDS.has(role.toLowerCase())) goal = TAUGHT_FACT_LOOKUP_GOAL;
+    }
+    if (!goal) {
+      const whatIs = q.match(BARE_WHATIS_RE);
+      if (whatIs) goal = deduceGoalFromParsed({ shape: "meta", object: whatIs[1] });
+    }
+    return goal ? { ...res, goal } : res;
+  }
+  async function factAnswerReaders(memoryDir, query, envelope, miss2, biasByBundle = {}, cache = null) {
     let normFactTerm2;
     try {
       ({ normFactTerm: normFactTerm2 } = await Promise.resolve().then(() => (init_core(), core_exports)));
@@ -8174,10 +8469,81 @@ ${lines.join("\n")}`;
 \u2026and ${rest.length} more \u2014 say 'more' to see them.` : "";
       return { text: shown.join("\n") + extra, replace: true, ...rest.length ? { pending: { items: rest, noun: "facts" } } : {} };
     }
+    const whichSup = q.match(WHICH_KIND_SUPERLATIVE_RE);
+    const whatSup = whichSup ? null : q.match(WHAT_IS_SUPERLATIVE_KIND_RE);
+    const supKindRaw = whichSup ? whichSup[1] : whatSup?.[2];
+    const supWord = whichSup ? whichSup[2] : whatSup?.[1];
+    const supCompBase = supKindRaw && supWord ? comparativeOfSuperlative(supWord) : null;
+    if (supCompBase) {
+      const supPredicate = `mgx:${supCompBase.replace(/\s+/g, "-")}-than`;
+      const rows = await factRows(memoryDir, cache);
+      const kindVariants = factTermVariants(normFactTerm2, supKindRaw);
+      const kindSingular = [...kindVariants].sort((a, b) => a.length - b.length)[0];
+      const memberOfKind = (node) => kindVariants.has(node) || node.startsWith(`${kindSingular}-`) || node.startsWith(`${kindSingular} `) || rows.some((g) => ISA_PREDICATES.has(g.predicate) && g.subject === node && kindVariants.has(g.object));
+      const pairs = uniqueFacts(rows.filter((f) => f.predicate === supPredicate && isOperatorTaught(f))).filter((f) => f.subject !== f.object && memberOfKind(f.subject) && memberOfKind(f.object));
+      if (pairs.length) {
+        const nodes = /* @__PURE__ */ new Set();
+        const inDeg = /* @__PURE__ */ new Map();
+        for (const f of pairs) {
+          nodes.add(f.subject);
+          nodes.add(f.object);
+          inDeg.set(f.object, (inDeg.get(f.object) || 0) + 1);
+          if (!inDeg.has(f.subject)) inDeg.set(f.subject, inDeg.get(f.subject) || 0);
+        }
+        const remaining = new Map(inDeg);
+        const order = [];
+        let declined = null;
+        while (remaining.size) {
+          const sources = [...remaining.keys()].filter((n) => remaining.get(n) === 0);
+          if (sources.length !== 1) {
+            declined = sources.length === 0 ? {
+              text: `I can't order the ${kindSingular}s \u2014 the "${supCompBase} than" facts I have loop back on themselves, so no ${supWord} exists. /memory to inspect them.`,
+              replace: true,
+              miss: true
+            } : {
+              text: `I can't pick the ${supWord} ${kindSingular} from what I know \u2014 nothing compares ${sources[0]} and ${sources[1]}. Teach me, e.g. "${sources[0]} is ${supCompBase} than ${sources[1]}".`,
+              replace: true,
+              miss: true
+            };
+            break;
+          }
+          const head = sources[0];
+          order.push(head);
+          remaining.delete(head);
+          for (const f of pairs) {
+            if (f.subject === head && remaining.has(f.object)) remaining.set(f.object, remaining.get(f.object) - 1);
+          }
+        }
+        if (declined) return declined;
+        const steps = order.slice(0, -1).map((n, i) => pairs.find((f) => f.subject === n && f.object === order[i + 1]));
+        if (steps.every(Boolean)) {
+          const cite = steps.map((g) => `${factPhrase(g)}${g.provenance ? ` (source: ${g.provenance})` : ""}`).join("; ");
+          return { text: `${order[0]} \u2014 ${cite}; so ${order[0]} is the ${supWord} ${kindSingular}`, replace: true };
+        }
+      }
+    }
+    const whereQ = miss2 ? q.match(WHERE_IS_FACT_RE) : null;
+    if (whereQ) {
+      const variants = factTermVariants(normFactTerm2, whereQ[1]);
+      const hits = (await factRows(memoryDir, cache)).filter((f) => LOCATIVE_FACT_PREDICATE_RE.test(f.predicate) && variants.has(f.subject));
+      if (hits.length) {
+        const ranked = rankByBiasThenTrust(uniqueFacts(hits), biasByBundle);
+        const lines = ranked.map(renderFactLine);
+        const shown = lines.slice(0, FACT_ANSWER_CAP);
+        const rest = lines.slice(FACT_ANSWER_CAP);
+        const extra = rest.length ? `
+\u2026and ${rest.length} more \u2014 say 'more' to see them.` : "";
+        return { text: shown.join("\n") + extra, replace: true, ...rest.length ? { pending: { items: rest, noun: "facts" } } : {} };
+      }
+    }
     let metaTerm = envelope?.parsed?.shape === "meta" ? envelope.parsed.object : null;
     if (!metaTerm && miss2 && !envelope?.parsed && !WHAT_INHERITS_RE.test(q)) {
       const m = q.match(BARE_WHATIS_RE) || q.match(/^what\s+(?:does|do)\s+(.+?)\s+means?[?.!\s]*$/i);
       if (m) metaTerm = stripTrailingScopeFiller(m[1]);
+    }
+    if (!metaTerm && envelope?.ambiguous && Array.isArray(envelope.candidateParses)) {
+      const metaCand = envelope.candidateParses.find((c) => c?.shape === "meta" && c.object);
+      if (metaCand) metaTerm = stripTrailingScopeFiller(String(metaCand.object));
     }
     if (metaTerm) {
       const { subject, predicate } = splitMetaPredicate(metaTerm);
@@ -8268,7 +8634,7 @@ ${lines.join("\n")}`;
       if (knownCan.length) {
         const shown = knownCan.slice(0, 3).map(renderFactLine).join("; ");
         return {
-          text: `I can't confirm that \u2014 nothing I remember says ${can[1]} can ${can[2]}. I do know: ${shown}. If it's true, teach me: "a ${can[1]} can ${can[2]}".`,
+          text: `I can't confirm that \u2014 nothing I remember says ${can[1]} can ${can[2]}. I do know: ${shown}. If it's true, teach me: "a ${knownCan[0].subject} can ${can[2]}".`,
           replace: true,
           miss: true
         };
@@ -8285,6 +8651,34 @@ ${lines.join("\n")}`;
       if (hit2) return { text: `yes \u2014 ${renderFactLine(hit2)}`, replace: true };
       return null;
     }
+    const doAsk = q.match(DO_VERB_ASK_RE);
+    if (doAsk) {
+      const facts = await memoryFacts(memoryDir);
+      const universal = !!doAsk[1];
+      const subj = factTermVariants(normFactTerm2, doAsk[2]);
+      const obj = factTermVariants(normFactTerm2, doAsk[3]);
+      const hit2 = facts.find(
+        (f) => f.predicate === "mgx:capableOf" && subj.has(f.subject) && obj.has(f.object)
+      );
+      if (hit2 && universal) {
+        return {
+          text: `I can't speak for all ${doAsk[2]} \u2014 what I remember is generic, not universal. I do know: ${renderFactLine(hit2)}.`,
+          replace: true
+        };
+      }
+      if (hit2) return { text: `yes \u2014 ${renderFactLine(hit2)}`, replace: true };
+      if (miss2) {
+        const knownCan = facts.filter((f) => f.predicate === "mgx:capableOf" && subj.has(f.subject));
+        if (knownCan.length) {
+          const shown = knownCan.slice(0, 3).map(renderFactLine).join("; ");
+          return {
+            text: `I can't confirm that \u2014 nothing I remember says ${doAsk[2]} can ${doAsk[3]}. I do know: ${shown}. If it's true, teach me: "a ${knownCan[0].subject} can ${doAsk[3]}".`,
+            replace: true,
+            miss: true
+          };
+        }
+      }
+    }
     const canDo = q.match(WHAT_CAN_DO_RE);
     if (canDo) {
       const variants = factTermVariants(normFactTerm2, canDo[1]);
@@ -8297,6 +8691,59 @@ ${lines.join("\n")}`;
       const extra = rest.length ? `
 \u2026and ${rest.length} more \u2014 say 'more' to see them.` : "";
       return { text: shown.join("\n") + extra, replace: true, ...rest.length ? { pending: { items: rest, noun: "facts" } } : {} };
+    }
+    const whichCan = q.match(WHICH_KIND_CAN_RE);
+    if (whichCan) {
+      const kindVariants = factTermVariants(normFactTerm2, whichCan[1]);
+      const verbVariants = factTermVariants(normFactTerm2, whichCan[2]);
+      const facts = await factRows(memoryDir, cache);
+      const capable = uniqueFacts(facts.filter((f) => f.predicate === "mgx:capableOf" && verbVariants.has(f.object)));
+      if (capable.length) {
+        const { findIsaChain: findIsaChain2, SUBCLASS_PREDICATE: SC_PRED, TYPE_PREDICATE: TYPE_PRED } = await Promise.resolve().then(() => (init_syllogise(), syllogise_exports));
+        const subClassRows = facts.filter((f) => f.predicate === SC_PRED);
+        const typeRows = facts.filter((f) => f.predicate === TYPE_PRED);
+        const subClassEdges = subClassRows.map((f) => [f.subject, f.object]);
+        const typeEdges = typeRows.map((f) => [f.subject, f.object]);
+        const rowForStep = (step) => (step.predicate === SC_PRED ? subClassRows : typeRows).find((g) => g.subject === step.subject && g.object === step.object);
+        const chainBySubject = /* @__PURE__ */ new Map();
+        const inKind = capable.filter((f) => {
+          if (kindVariants.has(f.subject)) return true;
+          if (!chainBySubject.has(f.subject)) {
+            chainBySubject.set(f.subject, findIsaChain2(f.subject, kindVariants, typeEdges, subClassEdges, { maxHops: 3 }));
+          }
+          return !!chainBySubject.get(f.subject);
+        });
+        const ranked = rankByBiasThenTrust(inKind.length ? inKind : capable, biasByBundle);
+        const lines = ranked.map((f) => {
+          const chain = inKind.length ? chainBySubject.get(f.subject) : null;
+          if (!chain || chain.length < 2) return renderFactLine(f);
+          const steps = chain.map(rowForStep);
+          if (!steps.every(Boolean)) return renderFactLine(f);
+          const cite = steps.map((g) => `${factPhrase(g)}${g.provenance ? ` (source: ${g.provenance})` : ""}`).join("; ");
+          return `${renderFactLine(f)} \u2014 via: ${cite}`;
+        });
+        const shown = lines.slice(0, FACT_ANSWER_CAP);
+        const rest = lines.slice(FACT_ANSWER_CAP);
+        const extra = rest.length ? `
+\u2026and ${rest.length} more \u2014 say 'more' to see them.` : "";
+        const preamble = inKind.length ? "" : `nothing I remember ties these to "${whichCan[1]}", but:
+`;
+        return { text: preamble + shown.join("\n") + extra, replace: true, ...rest.length ? { pending: { items: rest, noun: "facts" } } : {} };
+      }
+    }
+    const canVerb = q.match(WHAT_CAN_VERB_RE);
+    if (canVerb && canVerb[1].trim().split(/\s+/).at(-1)?.toLowerCase() !== "do") {
+      const verbVariants = factTermVariants(normFactTerm2, canVerb[1]);
+      const hits = (await factRows(memoryDir, cache)).filter((f) => f.predicate === "mgx:capableOf" && verbVariants.has(f.object));
+      if (hits.length) {
+        const ranked = rankByBiasThenTrust(uniqueFacts(hits), biasByBundle);
+        const lines = ranked.map(renderFactLine);
+        const shown = lines.slice(0, FACT_ANSWER_CAP);
+        const rest = lines.slice(FACT_ANSWER_CAP);
+        const extra = rest.length ? `
+\u2026and ${rest.length} more \u2014 say 'more' to see them.` : "";
+        return { text: shown.join("\n") + extra, replace: true, ...rest.length ? { pending: { items: rest, noun: "facts" } } : {} };
+      }
     }
     const hasQ = q.match(WHAT_HAS_RE);
     if (hasQ && !HAS_TEMPORAL_TAIL.has(hasQ[1].trim().split(/\s+/)[0]?.toLowerCase())) {
@@ -8413,6 +8860,9 @@ ${shown.join("\n")}${extra}`, replace: true, ...rest.length ? { pending: { items
     return out;
   }
   async function factReadBack(memoryDir, query, envelope, miss2, graph = null, focusLabel = null, biasByBundle = {}, cache = null) {
+    return withDeducedGoal(await factReadBackReaders(memoryDir, query, envelope, miss2, graph, focusLabel, biasByBundle, cache), envelope, query);
+  }
+  async function factReadBackReaders(memoryDir, query, envelope, miss2, graph = null, focusLabel = null, biasByBundle = {}, cache = null) {
     if (!miss2) return null;
     let normFactTerm2;
     try {
@@ -8505,7 +8955,7 @@ ${shown.join("\n")}${extra}`, replace: true, ...rest.length ? { pending: { items
         };
       }
     }
-    const whoAsk = qHedge.match(RELATION_WHO_ASK_RE);
+    const whoAsk = qHedge.match(RELATION_WHO_ASK_RE) || matchGenitiveWhoAsk(qHedge);
     if (whoAsk) {
       const relationName = whoAsk[1].trim().toLowerCase();
       const rawObject = whoAsk[2].trim();
@@ -9050,7 +9500,7 @@ ${shown.join("\n")}${extra}`, replace: true, ...rest.length ? { pending: { items
     if (!hits.length) return null;
     return renderMany(hits);
   }
-  var CONTEXT_WORDS, isPronoun, GOAL_BY_KIND, COMMANDS, COMMAND_WORDS, CLASS_LABELS, AMBIGUOUS_HAVE_VERBS, RESTRICTOR_VERB_RE, GREET, THANKS, BYE, OK_ACK, collapseRuns, GREET_COLLAPSED, THANKS_COLLAPSED, BYE_COLLAPSED, ACK_LEAD_RE, CONVERSATIONAL_PHRASES, COMPARATIVE_SRC, COMPARATIVE_TEACH_RE, COMPARATIVE_ASK_RE, PREP_SRC, OWNED_BY_PREDICATE, HAS_PROPERTY_PREDICATE, SUBCLASS_PREDICATE2, HAS_A_PREDICATE, TAUGHT_SOURCE_TYPES, isOperatorTaught, ACTION_SIGNATURE_TEACH_RE, ACTION_PRECOND_NOTHING_RE, ACTION_PRECOND_COMPARATIVE_RE, ACTION_EFFECT_TEACH_RE, TEACH_ADVERB_SKIP_SRC, GENERAL_VERB_TEACH_RE, GENERAL_VERB_EXCLUDE_RE, GENERAL_VERB_ANYWHERE_EXCLUDE_RE, GENERAL_VERB_NOT_A_VERB_RE, GENERAL_VERB_YESNO_RE, GENERAL_VERB_OPEN_RE, GENERAL_VERB_QUERY_EXCLUDE_RE, GENERAL_VERB_PREP_RE, TRAILING_ADVERB_RE, MODULE_ORIENT_RE, MODULE_ORIENT_SVO_RE, AUTHOR_NAME_SRC, AUTHOR_WHO_IS_RE, AUTHOR_TOUCHED_RE, OPINION_ADJ_SRC, OPINION_NUDGE_RE, PERSONAL_ASSISTANT_NUDGE_RE, PREDICATE_WORDS, FACT_PREDICATE_PHRASES, factPhrase, TRAILING_PREDICATE_MARKERS, GENERIC_ENTITY_WORDS, SYNONYM_DENYLIST, RELATION_FACT_YESNO_RE, RELATION_WHO_ASK_RE, RECURSIVE_LIST_ASK_RE, ISA_ASK_RE, ISA_PREDICATES, WHY_ISA_LEAD_RE, EXPLAIN_HOW_YOU_KNOW_RE, ISA_IDIOM_ROLE_WORDS, CONFIRM_TAG_RE, KNOW_ABOUT_RE, FACT_ANSWER_CAP, CAN_ASK_RE, DOES_HAVE_ASK_RE, WHAT_CAN_DO_RE, WHAT_HAS_RE, WHAT_USED_FOR_RE, REVERSE_PREDICATE_EXCLUDE, REVERSE_PREDICATE_MARKERS, FORWARD_YESNO_EXCLUDE, FORWARD_YESNO_MARKERS, WHAT_INHERITS_RE, HAS_TEMPORAL_TAIL, TOLD_ABOUT_RE, KIND_OF_RE, CARD_AT_LEAST_ASK_RE, CARD_EXISTENCE_ASK_RE, CARDINALITY_ROW_PREDICATES, WHO_OWNS_RE, OWNS_YESNO_RE, OWNS_PASSIVE_YESNO_RE, HAS_METHOD_YESNO_RE, HAS_METHOD_OPEN_RE, IS_ADJECTIVE_YESNO_RE, IS_ADJECTIVE_PRONOUN_RE, IS_ADJECTIVE_YESNO_PRONOUN_SUBJECT_RE, unknownAdjectiveOffer, WHOLE_RECALL_RE, INHERITS_GROUP_RE, INHERITS_MAX_HOPS, PRONOUN_IN_QUERY_RE, BARE_WHATIS_RE, DESCRIBE_GRAIN_WORD_RE, GOAL_BY_COMMAND, BASE_QUALIFIER_SRC, USES_AS_BASE_WH_ASK_RE, USES_AS_BASE_WHAT_FRONT_RE, USES_AS_BASE_YESNO_RE, USES_AS_BASE_TEACH_RE, SEED_MARKER_REL;
+  var CONTEXT_WORDS, isPronoun, GOAL_BY_KIND, goalNoun, TAUGHT_FACT_LOOKUP_GOAL, COMMANDS, COMMAND_WORDS, CLASS_LABELS, AMBIGUOUS_HAVE_VERBS, RESTRICTOR_VERB_RE, GREET, THANKS, BYE, OK_ACK, collapseRuns, GREET_COLLAPSED, THANKS_COLLAPSED, BYE_COLLAPSED, ACK_LEAD_RE, CONVERSATIONAL_PHRASES, COMPARATIVE_SRC, COMPARATIVE_TEACH_RE, COMPARATIVE_ASK_RE, PREP_SRC, OWNED_BY_PREDICATE, HAS_PROPERTY_PREDICATE, SUBCLASS_PREDICATE2, TAUGHT_SOURCE_TYPES, isOperatorTaught, ACTION_SIGNATURE_TEACH_RE, ACTION_SIGNATURE_PASSIVE_RE, ACTION_PRECOND_NOTHING_RE, ACTION_PRECOND_COMPARATIVE_RE, ACTION_EFFECT_TEACH_RE, ACTION_CONSTRAINT_TEACH_RE, GOAL_TEACH_RE, GOAL_TEACH_INFINITIVE_RE, TEACH_ADVERB_SKIP_SRC, GENERAL_VERB_TEACH_RE, GENERAL_VERB_EXCLUDE_RE, GENERAL_VERB_ANYWHERE_EXCLUDE_RE, GENERAL_VERB_NOT_A_VERB_RE, GENERAL_VERB_YESNO_RE, GENERAL_VERB_OPEN_RE, GENERAL_VERB_QUERY_EXCLUDE_RE, GENERAL_VERB_PREP_RE, TRAILING_ADVERB_RE, MODULE_ORIENT_RE, MODULE_ORIENT_SVO_RE, AUTHOR_NAME_SRC, AUTHOR_WHO_IS_RE, AUTHOR_TOUCHED_RE, OPINION_ADJ_SRC, OPINION_NUDGE_RE, PERSONAL_ASSISTANT_NUDGE_RE, PREDICATE_WORDS, FACT_PREDICATE_PHRASES, factPhrase, TRAILING_PREDICATE_MARKERS, GENERIC_ENTITY_WORDS, SYNONYM_DENYLIST, RELATION_FACT_YESNO_RE, RELATION_WHO_ASK_RE, GENITIVE_WHO_ASK_RE, RECURSIVE_LIST_ASK_RE, ISA_ASK_RE, ISA_PREDICATES, WHY_ISA_LEAD_RE, EXPLAIN_HOW_YOU_KNOW_RE, ISA_IDIOM_ROLE_WORDS, CONFIRM_TAG_RE, KNOW_ABOUT_RE, FACT_ANSWER_CAP, CAN_ASK_RE, DOES_HAVE_ASK_RE, WHAT_CAN_DO_RE, WHAT_HAS_RE, WHAT_USED_FOR_RE, WHERE_IS_FACT_RE, LOCATIVE_FACT_PREDICATE_RE, DO_VERB_ASK_RE, WHAT_CAN_VERB_RE, WHICH_KIND_CAN_RE, SUPERLATIVE_WORD_SRC, WHICH_KIND_SUPERLATIVE_RE, WHAT_IS_SUPERLATIVE_KIND_RE, REVERSE_PREDICATE_EXCLUDE, REVERSE_PREDICATE_MARKERS, FORWARD_YESNO_EXCLUDE, FORWARD_YESNO_MARKERS, WHAT_INHERITS_RE, HAS_TEMPORAL_TAIL, TOLD_ABOUT_RE, KIND_OF_RE, CARD_AT_LEAST_ASK_RE, CARD_EXISTENCE_ASK_RE, CARDINALITY_ROW_PREDICATES, WHO_OWNS_RE, OWNS_YESNO_RE, OWNS_PASSIVE_YESNO_RE, HAS_METHOD_YESNO_RE, HAS_METHOD_OPEN_RE, IS_ADJECTIVE_YESNO_RE, IS_ADJECTIVE_PRONOUN_RE, IS_ADJECTIVE_YESNO_PRONOUN_SUBJECT_RE, unknownAdjectiveOffer, WHOLE_RECALL_RE, INHERITS_GROUP_RE, INHERITS_MAX_HOPS, PRONOUN_IN_QUERY_RE, BARE_WHATIS_RE, DESCRIBE_GRAIN_WORD_RE, GOAL_BY_COMMAND, BASE_QUALIFIER_SRC, USES_AS_BASE_WH_ASK_RE, USES_AS_BASE_WHAT_FRONT_RE, USES_AS_BASE_YESNO_RE, USES_AS_BASE_TEACH_RE, SEED_MARKER_REL;
   var init_chat = __esm({
     "src/chat.mjs"() {
       init_node_path();
@@ -9063,6 +9513,7 @@ ${shown.join("\n")}${extra}`, replace: true, ...rest.length ? { pending: { items
       init_config();
       init_cli_args();
       init_codegraph();
+      init_ask();
       init_sessions();
       init_uuid();
       init_telemetry();
@@ -9070,7 +9521,9 @@ ${shown.join("\n")}${extra}`, replace: true, ...rest.length ? { pending: { items
       init_templates();
       init_extensions();
       init_bias();
+      init_core();
       init_finish();
+      init_sentences();
       init_ask_vocab();
       init_normalize();
       init_fuzzy();
@@ -9091,6 +9544,8 @@ ${shown.join("\n")}${extra}`, replace: true, ...rest.length ? { pending: { items
         cochange: "understand change-coupling between modules",
         reexports: "understand a module's public exports/API surface"
       };
+      goalNoun = (entityType) => entityType ? `${String(entityType).toLowerCase()}(s)` : "entities";
+      TAUGHT_FACT_LOOKUP_GOAL = "look up a taught fact about a subject/verb/object";
       COMMANDS = {
         find: { tool: "tmct_search", arg: "query", help: "lexical search across the graph" },
         search: { tool: "tmct_search", arg: "query", help: "alias of /find" },
@@ -9263,11 +9718,14 @@ ${shown.join("\n")}${extra}`, replace: true, ...rest.length ? { pending: { items
       OWNED_BY_PREDICATE = "mgx:ownedBy";
       HAS_PROPERTY_PREDICATE = "mgx:hasProperty";
       SUBCLASS_PREDICATE2 = "rdfs:subClassOf";
-      HAS_A_PREDICATE = "mgx:hasA";
       TAUGHT_SOURCE_TYPES = /* @__PURE__ */ new Set(["operator", "teach", "entailed"]);
       isOperatorTaught = (f) => !!f.sourceTypes?.some((t) => TAUGHT_SOURCE_TYPES.has(t));
       ACTION_SIGNATURE_TEACH_RE = new RegExp(
-        `^you\\s+can\\s+([a-z]+)\\s+an?\\s+([a-z][\\w-]*)\\s+(${PREP_SRC})\\s+an?\\s+([a-z][\\w-]*)[.!?]*$`,
+        `^you\\s+(?:can|may)\\s+([a-z]+)\\s+an?\\s+([a-z][\\w-]*)\\s+(${PREP_SRC})\\s+an?\\s+([a-z][\\w-]*)[.!?]*$`,
+        "i"
+      );
+      ACTION_SIGNATURE_PASSIVE_RE = new RegExp(
+        `^an?\\s+([a-z][\\w-]*)\\s+(?:can|may)\\s+be\\s+([a-z]+)\\s+(${PREP_SRC})\\s+an?\\s+([a-z][\\w-]*)[.!?]*$`,
         "i"
       );
       ACTION_PRECOND_NOTHING_RE = new RegExp(
@@ -9279,7 +9737,19 @@ ${shown.join("\n")}${extra}`, replace: true, ...rest.length ? { pending: { items
         "i"
       );
       ACTION_EFFECT_TEACH_RE = new RegExp(
-        `^([a-z]+ing)\\s+an?\\s+([a-z][\\w-]*)\\s+(${PREP_SRC})\\s+an?\\s+([a-z][\\w-]*)\\s+makes\\s+the\\s+([a-z][\\w-]*)\\s+([a-z]+)\\s+(${PREP_SRC})\\s+the\\s+([a-z][\\w-]*)[.!?]*$`,
+        `^([a-z]+ing)\\s+an?\\s+([a-z][\\w-]*)\\s+(${PREP_SRC})\\s+an?\\s+([a-z][\\w-]*)\\s+makes\\s+(?:it|the\\s+([a-z][\\w-]*))\\s+([a-z]+)\\s+(${PREP_SRC})\\s+the\\s+([a-z][\\w-]*)[.!?]*$`,
+        "i"
+      );
+      ACTION_CONSTRAINT_TEACH_RE = new RegExp(
+        `^to\\s+([a-z]+)\\s+an?\\s+([a-z][\\w-]*)\\s+(${PREP_SRC})\\s+an?\\s+([a-z][\\w-]*)\\s*,?\\s*the\\s+([a-z][\\w-]*)\\s+may\\s+not\\s+be\\s+with\\s+the\\s+([a-z][\\w-]*)\\s+without\\s+the\\s+([a-z][\\w-]*)[.!?]*$`,
+        "i"
+      );
+      GOAL_TEACH_RE = new RegExp(
+        `^the\\s+goal\\s+is\\s+that\\s+(?:(every|each|all)\\s+)?([\\w-]+)\\s+([a-z]+s)\\s+(${PREP_SRC})\\s+([\\w-]+)[.!?]*$`,
+        "i"
+      );
+      GOAL_TEACH_INFINITIVE_RE = new RegExp(
+        `^(?:the\\s+goal\\s+is\\s+for|i\\s+want)\\s+(?:(every|each|all)\\s+)?([\\w-]+)\\s+to\\s+([a-z]+)\\s+(${PREP_SRC})\\s+([\\w-]+)[.!?]*$`,
         "i"
       );
       TEACH_ADVERB_SKIP_SRC = "(?:(?:usually|often|sometimes|rarely|never|always|typically|generally|occasionally|frequently|normally|regularly|commonly|mostly|currently|still|also|really|actually)\\s+)?";
@@ -9407,6 +9877,7 @@ ${shown.join("\n")}${extra}`, replace: true, ...rest.length ? { pending: { items
       ].map(([a, b]) => [a, b].sort().join("|")));
       RELATION_FACT_YESNO_RE = /^(?:is|are|was|were)\s+([\w'-]+(?:\s+[A-Z][\w'-]*)?)\s+(?:the|an?)\s+([a-z][\w-]*)\s+of\s+([\w'-]+(?:\s+[A-Z][\w'-]*)?)[?.!\s]*$/i;
       RELATION_WHO_ASK_RE = /^(?:who|what)\s+(?:is|are)\s+(?:the|an?)\s+([a-z][\w-]*)\s+of\s+([\w'-]+(?:\s+[A-Z][\w'-]*)?)[?.!\s]*$/i;
+      GENITIVE_WHO_ASK_RE = /^(?:who|what)\s+(?:is|are|was|were)\s+([\w-]+(?:\s+[A-Z][\w-]*)?)'s\s+([a-z][\w-]*)[?.!\s]*$/i;
       RECURSIVE_LIST_ASK_RE = /^list\s+(?:the\s+|all\s+)?([a-z][\w-]*)\s+of\s+([\w'-]+(?:\s+[A-Z][\w'-]*)?)[?.!\s]*$/i;
       ISA_ASK_RE = /^(?:is|are)\s+(?:an?\s+)?(.+?)\s+(?:a\s+kind\s+of|a\s+type\s+of|an?)\s+(.+?)[?.!\s]*$/i;
       ISA_PREDICATES = /* @__PURE__ */ new Set(["rdfs:subClassOf", "rdf:type"]);
@@ -9421,6 +9892,14 @@ ${shown.join("\n")}${extra}`, replace: true, ...rest.length ? { pending: { items
       WHAT_CAN_DO_RE = /^what\s+can\s+(?:an?\s+)?(.+?)\s+do[?.!\s]*$/i;
       WHAT_HAS_RE = /^what\s+has\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
       WHAT_USED_FOR_RE = /^what\s+(?:(?:can\s+be|is)\s+used\s+for|is\s+for)\s+(.+?)[?.!\s]*$/i;
+      WHERE_IS_FACT_RE = /^where(?:'s|\s+is|\s+are)\s+(.+?)(?:\s+now)?\s*[?.!]*$/i;
+      LOCATIVE_FACT_PREDICATE_RE = /^mgx:[a-z]+-(?:on|in|at|inside|under|below|above|near|beside|behind|by)$/;
+      DO_VERB_ASK_RE = /^(?:do|does)\s+(all\s+|every\s+)?(?:an?\s+|the\s+)?([\w'-]+(?:\s+[\w'-]+)*?)\s+([a-z-]+)[?.!\s]*$/i;
+      WHAT_CAN_VERB_RE = /^what\s+can\s+(?!be\s)(.+?)[?.!\s]*$/i;
+      WHICH_KIND_CAN_RE = /^(?:which|what)\s+([\w'-]+(?:\s+[\w'-]+)*?)\s+can\s+(.+?)[?.!\s]*$/i;
+      SUPERLATIVE_WORD_SRC = "(?:most|least)\\s+[a-z][\\w-]*|[a-z][\\w-]*est|best|worst";
+      WHICH_KIND_SUPERLATIVE_RE = new RegExp(`^which\\s+([\\w'-]+)\\s+(?:is|are)\\s+(?:the\\s+)?(${SUPERLATIVE_WORD_SRC})[?.!\\s]*$`, "i");
+      WHAT_IS_SUPERLATIVE_KIND_RE = new RegExp(`^what(?:'s|s|\\s+is)\\s+the\\s+(${SUPERLATIVE_WORD_SRC})\\s+([\\w'-]+)[?.!\\s]*$`, "i");
       REVERSE_PREDICATE_EXCLUDE = /* @__PURE__ */ new Set([
         "rdfs:subClassOf",
         "rdf:type",

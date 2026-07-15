@@ -11,7 +11,7 @@ A tolerant, ELIZA/PARRY-style chat surface over a codebase, obsessed with softwa
 obsessed with the mafia — deterministic, zero-cost, **no LLM anywhere in the product path**. Guides a
 user toward precision queries rather than guessing; every answer is grounded, restates every genuine
 reading it finds in full, or is an honest miss when nothing grounds it at all. Its visual surfaces —
-the ledger explorer with its in-browser chat (`tmct viz --ledger`), the animated plan page
+the ledger explorer with its in-browser chat (`tmct viz`), the animated plan page
 (`chat --prompt … --render blocks`), and the Pages homepage hero — are the same graph read out loud:
 same engine, same provenance, no LLM.
 

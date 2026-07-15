@@ -93,22 +93,14 @@ Usage:
   tmct syllogise [--repo <abs>] speculative inference (offline maintenance job): forward-
        [--depth <n>] [--budget <n>]  chain the memory's rdfs:subClassOf closure, materialising
        [--config <path>]      bounded, low-trust, retractable entailed facts (never on the chat path)
-  tmct viz [--repo <abs>]      write one self-contained, navigable HTML file rendering the
-       [--ledger]             memory graph: pan/zoom, click a node for its label/class/
-       [--focus <id>]         timestamps. Seeds from the most recently created individual
-       [--term <word>]        by default (--focus <id> or --term <word> override it);
-       [--depth <n>]          --output defaults to graph.html in the cwd. With --ledger,
-       [--limit <n>]          a readable fact ledger around one focus term instead
-                               (writes ledger.html; --limit caps the embedded fact rows).
-       [--hub-degree <n>]     --depth = max arcs (hops) from the focus node (default 3);
-       [--edge-kind <mode>]   --limit = spiral length, total nodes walked (default 300);
-       [--output <path>]      --hub-degree = stop expanding THROUGH a node above N
-       [--config <path>]      connections, still shows it (default 40); --edge-kind =
-                               meta|relation|both (default both) — which edge kinds the
-                               walk follows (provenance-only, concept-relations-only, or
-                               both — see the page's own edge-kind toggle to change this
-                               live); --term <word> resolves to the Fact(s) whose subject/
-                               object normalizes to that word and seeds from there.
+  tmct viz [--repo <abs>]      write one self-contained HTML page: the memory graph as a
+       [--focus <term>]       readable ledger of fact-sentences around one focus term,
+       [--term <word>]        with segments, a two-hop minimap, and an in-page chat dock
+       [--limit <n>]          that answers from the embedded graph. Focuses on the newest
+       [--output <path>]      taught fact's subject by default (--focus <term> or
+       [--config <path>]      --term <word> override it); --output defaults to
+                               ledger.html in the cwd; --limit caps the embedded fact
+                               rows; --term resolves via the same normalization chat uses.
   tmct serve [--repo <abs>]    run the Anthropic Messages API-compatible endpoint
        [--host <h>] [--port <n>]  (POST /v1/messages) over the graph — a deterministic,
        [--graph <path>]        no-LLM "model" a tool-loop client can call; $0 usage.
@@ -1092,73 +1084,50 @@ async function main() {
   }
 
   if (mode === "viz") {
-    // `tmct viz` — one self-contained, navigable HTML file rendering the
-    // memory graph (PLAN_BREADTH_FIRST_NLU.md §5, PLAN_VIZ.md's design):
-    // pan/zoom, click-a-node, a concentric ring layout keyed on hop with a
-    // depth/age falloff. Same repo resolution as `memory`/`syllogise` —
-    // resolveRuntimeConfig: --repo > git root > cwd.
+    // `tmct viz` — the ledger explorer: one self-contained HTML page rendering
+    // the memory graph as readable fact-sentences around a focus term, with
+    // the in-browser chat dock (PLAN_VIZ_LEDGER.md). Same repo resolution as
+    // `memory`/`syllogise` — resolveRuntimeConfig: --repo > git root > cwd.
+    // `--ledger` is accepted as a no-op: the ledger IS the viz surface now.
     const rest = process.argv.slice(3);
-    const { strFlag, boolFlag, resolveRuntimeConfig } = await import("../src/cli-args.mjs");
-    const { computeVizGraph, renderVizHtml, readAskBundle, readMemoryAskBundle } = await import("../src/viz.mjs");
-    const { writeFile } = await import("node:fs/promises");
-    const { resolve } = await import("node:path");
-    const numFlag = (name) => {
-      const j = rest.indexOf(name);
-      const v = j !== -1 ? Number(rest[j + 1]) : NaN;
-      return Number.isFinite(v) ? v : undefined;
-    };
-    const ledger = boolFlag(rest, ["--ledger"]);
-    const focus = strFlag(rest, ["--focus"]);
-    const term = strFlag(rest, ["--term"]); // PLAN_VIZ_MEMORY.md: seed via normFactTerm-matched Fact(s), alongside --focus
-    const depth = numFlag("--depth"); // max arcs (hops) from the focus node
-    const nodeLimit = numFlag("--limit"); // spiral length: total nodes walked (ledger mode: fact-row cap)
-    const hubDegree = numFlag("--hub-degree"); // stop expanding THROUGH a node above N connections
-    const edgeKindModeRaw = strFlag(rest, ["--edge-kind"]);
-    const edgeKindMode = ["meta", "relation", "both"].includes(edgeKindModeRaw) ? edgeKindModeRaw : undefined;
-    const outPath = resolve(process.cwd(), strFlag(rest, ["--output", "--out"], ledger ? "ledger.html" : "graph.html"));
-    const { repo } = await resolveRuntimeConfig({ argv: rest });
-    if (ledger) {
-      const { computeLedgerData, renderLedgerHtml } = await import("../src/ledger-viz.mjs");
-      const data = await computeLedgerData(repo, {
-        ...(focus ? { focus } : {}),
-        ...(!focus && term ? { term } : {}),
-        ...(nodeLimit != null ? { rowLimit: nodeLimit } : {}),
-      });
-      const memoryAskBundle = await readMemoryAskBundle();
-      await writeFile(outPath, renderLedgerHtml({ ...data, memoryAskBundle }), "utf8");
-      process.stdout.write(
-        `tmct viz --ledger — wrote ${data.meta.shown} fact row(s) around ${data.focus ? `'${data.focus}'` : "no focus"} to ${outPath}\n`,
+    const retiredFlags = ["--depth", "--hub-degree", "--edge-kind"].filter((f) => rest.includes(f));
+    if (retiredFlags.length) {
+      process.stderr.write(
+        `tmct viz: ${retiredFlags.join(", ")} belonged to the retired node-link graph page and no longer exist${retiredFlags.length === 1 ? "s" : ""}.\n`
+        + "The ledger view takes: --repo <abs>, --focus <term>, --term <word>, --limit <n>, --output <path>.\n",
       );
-      if (data.meta.truncated) {
-        process.stdout.write(
-          `showing ${data.meta.shown} of ${data.meta.total} rows — narrow with --focus <term> or raise --limit\n`,
-        );
-      }
+      process.exitCode = 1;
       return;
     }
-    const vizGraph = await computeVizGraph(repo, {
+    const { strFlag, resolveRuntimeConfig } = await import("../src/cli-args.mjs");
+    const { computeLedgerData, renderLedgerHtml, readMemoryAskBundle } = await import("../src/ledger-viz.mjs");
+    const { writeFile } = await import("node:fs/promises");
+    const { resolve } = await import("node:path");
+    const limitIdx = rest.indexOf("--limit");
+    const limitRaw = limitIdx !== -1 ? Number(rest[limitIdx + 1]) : NaN;
+    const rowLimit = Number.isFinite(limitRaw) ? limitRaw : undefined;
+    const focus = strFlag(rest, ["--focus"]);
+    const term = strFlag(rest, ["--term"]); // seeds via normFactTerm; --focus wins when both are given
+    const outPath = resolve(process.cwd(), strFlag(rest, ["--output", "--out"], "ledger.html"));
+    const { repo } = await resolveRuntimeConfig({ argv: rest });
+    const data = await computeLedgerData(repo, {
       ...(focus ? { focus } : {}),
-      ...(!focus && term ? { term } : {}), // --focus takes precedence when both are given
-      ...(depth != null ? { depth } : {}),
-      ...(nodeLimit != null ? { nodeLimit } : {}),
-      ...(hubDegree != null ? { hubDegree } : {}),
-      ...(edgeKindMode ? { edgeKindMode } : {}),
+      ...(!focus && term ? { term } : {}),
+      ...(rowLimit != null ? { rowLimit } : {}),
     });
-    // The embedded "Ask the graph" chat panels — TWO real engines, bundled for
-    // the browser (scripts/build-ask-bundle.mjs's checked-in output): the
-    // code-graph ask.mjs engine, and (PLAN_VIZ_MEMORY.md Bug 1 fix) the
-    // memory-graph factAnswer engine. Neither read*AskBundle() ever throws; an
-    // empty string degrades that ONE engine gracefully rather than breaking
-    // the page (e.g. a fresh checkout before the bundles' first build).
-    const [askBundle, memoryAskBundle] = await Promise.all([readAskBundle(), readMemoryAskBundle()]);
-    const html = renderVizHtml({ ...vizGraph, askBundle, memoryAskBundle });
-    await writeFile(outPath, html, "utf8");
-    const chatNote = askBundle || memoryAskBundle
-      ? ` (with the embedded ask-the-graph chat panel${askBundle && memoryAskBundle ? "s" : ""})`
-      : " (no chat panel — run `npm run build:ask-bundle` first)";
+    // readMemoryAskBundle never throws; an empty string renders the page with
+    // an honest "chat unavailable" note instead of the dock (e.g. a fresh
+    // checkout before the bundle's first build).
+    const memoryAskBundle = await readMemoryAskBundle();
+    await writeFile(outPath, renderLedgerHtml({ ...data, memoryAskBundle }), "utf8");
     process.stdout.write(
-      `tmct viz — wrote ${vizGraph.nodes.length} node(s), ${vizGraph.edges.length} edge(s) to ${outPath}${chatNote}\n`,
+      `tmct viz — wrote ${data.meta.shown} fact row(s) around ${data.focus ? `'${data.focus}'` : "no focus"} to ${outPath}\n`,
     );
+    if (data.meta.truncated) {
+      process.stdout.write(
+        `showing ${data.meta.shown} of ${data.meta.total} rows — narrow with --focus <term> or raise --limit\n`,
+      );
+    }
     return;
   }
 

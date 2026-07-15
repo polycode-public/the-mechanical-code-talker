@@ -221,7 +221,7 @@ invent a third:
 - **Not `PLAN_VIZ_MEMORY.md`'s Bug 1** (the viz browser ask panel's `loadMemory` shim). That is a
   separate, already-designed, still-unbuilt piece of wiring for a different surface (the generated
   HTML file, not `npm run chat`). This document's §A lane is chat-CLI-specific and does not touch
-  `src/viz.mjs`, `scripts/build-ask-bundle.mjs`, or any browser-bundle entry point.
+  `src/ledger-viz.mjs`, `scripts/build-ask-bundle.mjs`, or any browser-bundle entry point.
 - **Not a new ontology mechanism.** Taught classes stay exactly what they are today — the object side
   of an `rdfs:subClassOf`/`rdf:type` fact, discovered dynamically, never a new schema table or a
   registered "class" concept distinct from an ordinary taught fact.

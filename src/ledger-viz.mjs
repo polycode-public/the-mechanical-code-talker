@@ -1,17 +1,36 @@
-// ledger-viz.mjs — `tmct viz --ledger`: the memory graph as a readable ledger
-// of fact-sentences around one focus term (PLAN_VIZ_LEDGER.md phase 1).
+// ledger-viz.mjs — `tmct viz`: the memory graph as a readable ledger of
+// fact-sentences around one focus term, with the in-page chat dock
+// (PLAN_VIZ_LEDGER.md).
 //
-// Same three-piece factoring as viz.mjs:
+// Three pure/impure-separated pieces:
 //   - computeLedgerData(repoDir, opts)      — I/O (loadMemory) + derivation
 //   - computeLedgerDataFromPayload(payload) — the pure derivation half
 //   - renderLedgerHtml(data)                — pure string builder, one
 //     self-contained document, no external requests.
+// readMemoryAskBundle() is the one extra bit of I/O renderLedgerHtml itself
+// doesn't do: it reads the checked-in chat-dock engine bundle.
 
 import { loadMemory, readFactRows, findContradictions, normFactTerm } from "./memory/core.mjs";
-import { escapeHtml, embedJson } from "./viz.mjs";
-import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK } from "./viz-theme.mjs";
+import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson } from "./viz-theme.mjs";
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 
 export const LEDGER_ROW_LIMIT_DEFAULT = 20000;
+
+/** Read the checked-in browser memory-ask-engine bundle
+ *  (`src/memory-ask-browser.bundle.js`) — the real memory-graph answer engine
+ *  (chat.mjs's factAnswer/factReadBack) the chat dock runs on. Returns `""`,
+ *  never throws, if the bundle hasn't been built — the page then renders with
+ *  an honest "chat unavailable" note instead of a dock. */
+export async function readMemoryAskBundle() {
+  try {
+    const here = dirname(fileURLToPath(import.meta.url));
+    return await readFile(join(here, "memory-ask-browser.bundle.js"), "utf8");
+  } catch {
+    return "";
+  }
+}
 
 // Predicate rendering + family grouping. A closed table with a verbatim
 // fallback: an unknown predicate still reads as itself, never breaks the page.
@@ -122,7 +141,7 @@ export function computeLedgerDataFromPayload(payload, { focus, term, rowLimit = 
 
   // Focus: the asked term when it resolves; otherwise the newest taught
   // row's subject, then the highest-degree term. A miss never seeds a
-  // phantom term (viz.mjs's own --term rule).
+  // phantom term.
   let focusTerm = null;
   const asked = focus || term;
   if (asked) {
@@ -177,8 +196,7 @@ export async function computeLedgerData(repoDir, opts = {}) {
   return computeLedgerDataFromPayload(payload, opts);
 }
 
-/** The chat dock's answer-to-focus resolver (viz.mjs's findAnsweredTermIds,
- *  retargeted at the ledger term index). Pass 1: earliest term label (≥3
+/** The chat dock's answer-to-focus resolver. Pass 1: earliest term label (≥3
  *  chars, space-boundary) appearing in the ANSWER text. Pass 2: strip the
  *  QUESTION's crust and try the remainder as one normalized term. Returns a
  *  term string or null. Self-contained on purpose: its source is injected
@@ -309,6 +327,7 @@ ${THEME_TOKENS_CSS}
   .chatlog .u::before { content: "tmct> "; color: var(--taught); }
   .chatlog .a { font-size: .9rem; line-height: 1.45; }
   .chatlog .a.miss { color: var(--muted); }
+  .chatlog .a.goal { font-family: ${MONO_STACK}; font-size: .72rem; color: var(--muted); }
   .chatask { display: flex; align-items: center; gap: .5rem; }
   .chatlog:not(:empty) + .chatask { border-top: 1px solid var(--line); margin-top: .55rem; padding-top: .55rem; }
   .chatask .prompt { color: var(--taught); font-size: .78rem; }
@@ -424,7 +443,7 @@ ${hasMemChat ? `<script>\n${bundleStr}\n</script>` : ""}
   }
   function renderLedger() {
     const box = el("ledger");
-    if (!focus) { box.innerHTML = '<div class="empty">Nothing in memory yet. Teach a fact in chat, then re-run tmct viz --ledger.</div>'; return; }
+    if (!focus) { box.innerHTML = '<div class="empty">Nothing in memory yet. Teach a fact in chat, then re-run tmct viz.</div>'; return; }
     const all = LEDGER.rows.filter((r) => touches(r, focus));
     const mine = all.filter((r) => passes(r, null));
     const srcs = new Set(all.map((r) => r.src.split(" | ")[0]));
@@ -585,6 +604,9 @@ ${hasMemChat ? `<script>\n${bundleStr}\n</script>` : ""}
         }
         if (fact && fact.text) {
           addLine("a", esc(fact.text).replace(/\\n/g, "<br>"));
+          // Same formatting contract as chat's withGoalLine: capitalized,
+          // full-stop-terminated, rendered only when the engine deduced one.
+          if (fact.goal) addLine("a goal", "Goal (inferred): " + esc(fact.goal.charAt(0).toUpperCase() + fact.goal.slice(1)) + ".");
           const hit = resolveAnsweredTerm(fact.text, q, LEDGER.terms, tmctMemoryAsk.normFactTerm);
           if (hit) refocusWithLabel(hit, q);
         } else {

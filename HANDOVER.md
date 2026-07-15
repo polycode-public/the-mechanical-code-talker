@@ -18,10 +18,8 @@ the in-page chat dock, the Pages ledger hero, the README pass). Both plan docs c
 implementation addenda; `ROADMAP.md` holds the feature narrative. Historical notes follow.
 
 `PLAN_VIZ_MEMORY.md` fully implemented (see that doc's own "IMPLEMENTED" status line + Phasing
-checklist for specifics): `tmct viz`'s walk now follows real concept-relation edges (not just
-provenance), a second bundled ask-engine answers Fact/definition questions in the embedded panel,
-the legend auto-picks its split dimension by entropy, and the page ships hub-hide/beam-prune/
-label-mode/search/edge-kind controls plus `--hub-degree`/`--term` CLI flags.
+checklist for specifics): that node-link page was retired on 2026-07-15 — the ledger explorer is
+now THE `tmct viz` surface (PLAN_VIZ_LEDGER.md's addendum records the decision).
 
 `npm run init:xl`/`init:xxl` (`package.json`): real measured fact counts, `rm -rf tmct.toml
 .tmct && npm run init:<size>` — `init:large` 37,797; `init:xl` (`init:large`'s chain + `--persona-size

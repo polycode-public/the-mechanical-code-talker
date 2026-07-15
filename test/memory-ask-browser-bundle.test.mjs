@@ -1,12 +1,10 @@
 // memory-ask-browser-bundle.test.mjs — proves the checked-in browser
-// MEMORY-graph ask-engine bundle (scripts/build-ask-bundle.mjs's SECOND
-// output, src/memory-ask-browser.bundle.js, inlined by `tmct viz`'s "Ask the
-// graph" panel — PLAN_VIZ_MEMORY.md Bug 1 fix) actually evaluates as a
-// classic script and answers a real memory-graph question, end to end, given
-// an in-memory Backend-B handle carrying an embedded payload (the SAME
-// mechanism the real page uses, ZERO fs I/O) — mirroring
-// test/ask-browser-bundle.test.mjs's own established pattern for the
-// sibling code-graph bundle.
+// MEMORY-graph ask-engine bundle (scripts/build-ask-bundle.mjs's output,
+// src/memory-ask-browser.bundle.js, inlined by `tmct viz`'s ledger-page chat
+// dock) actually evaluates as a classic script and answers a real
+// memory-graph question, end to end, given an in-memory Backend-B handle
+// carrying an embedded payload (the SAME mechanism the real page uses,
+// ZERO fs I/O).
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -53,7 +51,7 @@ test("the bundle evaluates as a classic script with no live import/require and e
   }
 });
 
-test("e2e: factAnswer answers a real memory-graph question from an in-memory (Backend-B) payload handle — ZERO fs I/O, the SAME mechanism the real viz page uses", async () => {
+test("e2e: factAnswer answers a real memory-graph question from an in-memory (Backend-B) payload handle — ZERO fs I/O, the SAME mechanism the real ledger page uses", async () => {
   const ctx = await loadBundleContext();
   const payload = {
     individuals: [
@@ -74,6 +72,17 @@ test("e2e: factAnswer answers a real memory-graph question from an in-memory (Ba
   const missPromise = vm.runInContext('tmctMemoryAsk.factAnswer(__handle, "what is a nonexistent_term_xyz", null, true, {})', ctx);
   const miss = await missPromise;
   assert.equal(miss, null, "an honest null for a term the graph has no facts about — never a fabricated answer");
+});
+
+test("e2e: a bundled factAnswer hit carries the additive goal field the dock renders as its goal line, with chat's own deduced wording", async () => {
+  const ctx = await loadBundleContext();
+  ctx.__payload = {
+    individuals: [factIndividual("fact:1", "dog", "rdfs:subClassOf", "animal", "corpus:human")],
+    objectProperties: [],
+  };
+  vm.runInContext("globalThis.__handle = tmctMemoryAsk.createInMemoryStore(); __handle.payload = __payload;", ctx);
+  const hit = await vm.runInContext('tmctMemoryAsk.factAnswer(__handle, "what is a dog", null, true, {})', ctx);
+  assert.equal(hit.goal, 'understand a vocabulary/definition term ("dog")');
 });
 
 test("e2e: normFactTerm inside the bundle normalizes the same way memory/core.mjs's real export does (case-fold, article-strip) — the client-side focus-follows-answer heuristic depends on this matching exactly", async () => {

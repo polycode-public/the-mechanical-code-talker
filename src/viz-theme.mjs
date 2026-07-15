@@ -1,12 +1,28 @@
-// viz-theme.mjs — the shared visual tokens for tmct's generated HTML pages
-// (the ledger explorer and the plan player draw from this one table; the
-// values are PLAN_VIZ_LEDGER.md's reference token table).
+// viz-theme.mjs — the shared assets for tmct's generated HTML pages
+// (the ledger explorer and the plan player): the visual token table
+// (PLAN_VIZ_LEDGER.md's reference values) plus the escaping helpers every
+// page builder needs.
 //
 // Trust tiers are precomputed rgba() values per provenance color so pages
 // render identically on browsers without color-mix() support.
 
 export const SERIF_STACK = `"Charter", "Bitstream Charter", Georgia, "Times New Roman", serif`;
 export const MONO_STACK = `ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace`;
+
+/** Escape untrusted text for safe placement inside HTML content/attributes. */
+export function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+/** JSON-embed page data into a `<script>` tag safely — escape `</` so a
+ *  label/id containing "</script>" can't break out of the tag, and escape
+ *  U+2028/U+2029 (valid in JSON strings, invalid unescaped in JS source). */
+export function embedJson(value) {
+  return JSON.stringify(value)
+    .replace(/</g, "\\u003c")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+}
 
 /** hex "#RRGGBB" -> "rgba(r, g, b, a)" */
 function rgba(hex, alpha) {
