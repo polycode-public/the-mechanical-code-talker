@@ -5663,7 +5663,8 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
     // all (no fact row on either side, no code entity by id OR class noun) —
     // a subject known via OTHER predicates ("ahab is male") or the code graph
     // keeps the old decline, so nothing downstream is ever shadowed.
-    if (!ent && !noun && !rows.some((f) => subjCandidates.has(f.subject) || subjCandidates.has(f.object))) {
+    if (!ent && !noun && !isPronoun(subjectWord)
+      && !rows.some((f) => subjCandidates.has(f.subject) || subjCandidates.has(f.object))) {
       return {
         text: `I can't confirm that — I don't know "${subjectWord}" at all yet. If it's true, teach me: "${subjectWord} is a kind of ${kindWord}".`,
         replace: true,
@@ -6950,7 +6951,7 @@ async function entityOfKindInText(graph, expectedClass, answerText) {
  *  otherwise the unchanged dispatchTool path (which also yields the no-graph error).
  *  A hit updates the focus to the resolved object. Grammar miss / ToolError → a
  *  normal answer, never a crash. */
-async function runAsk(query, { config, source, graph, focus, last, templates, memoryDir, sessionId = "", lexicon = null, env, trace, vocabHint = null, tel = null, biasByBundle = {}, cache = null }) {
+async function runAsk(query, { config, source, graph, focus, last, templates, memoryDir, sessionId = "", lexicon = null, env, trace, vocabHint = null, tel = null, biasByBundle = {}, cache = null, vocabAntecedent = null }) {
   const ts = new Date().toISOString();
   // DISCOURSE ANAPHORA: a follow-up like "which of those are tested" / "count
   // them" filters or counts the PREVIOUS answer's entity set, threaded as
@@ -7238,7 +7239,13 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     }
   }
   const conversationalCandidateBaseGate = !handled && miss && !envelope?.parsed && !isWhatAboutContinuation && !isDescribePronounContinuation && !isExplainTouch && !isStaccatoNegation && !isVagueRelationTouch && !isStaccatoComparative && !isStaccatoPronounNoFocus;
-  const isConversationalCandidate = conversationalCandidateBaseGate && isConversational(query);
+  // A turn whose pronoun was bound to a vocabulary antecedent is PROVABLY a
+  // fact question ("can it bark" → "can dog bark") — never conversational,
+  // however short. Without this, the substituted 3-worder still trips
+  // isConversational's word-count catch-all into the orientation blurb, and
+  // that blurb (a dispatched turn) then becomes `last`, wiping the very
+  // antecedent the next pronoun turn needs.
+  const isConversationalCandidate = conversationalCandidateBaseGate && !vocabAntecedent && isConversational(query);
   // "what is X" with NO article ("what is john") is BOTH conversational-shaped
   // (isConversational() would claim it) AND a legitimate bare meta/fact-lookup
   // form (BARE_WHATIS_RE). Diverts ONLY when a REAL fact actually resolves for
@@ -8113,6 +8120,21 @@ function rewriteUsesAsBaseFrame(text) {
   return null;
 }
 
+/** The subject of the LAST turn's first fact line, for vocabulary pronoun
+ *  binding ("what is a dog" → "can it bark"). Fact answers render rigidly —
+ *  "<subject> <phrase> <object> (source: …)", optionally behind a "yes — "/
+ *  "no — "/"you told me: " prefix — so a 1–2 word leading subject followed
+ *  by a phrase-table verb is extractable without any NLP. Anything else
+ *  (code answers, walls, conversational text) returns null and no
+ *  substitution happens. */
+function vocabAntecedentFrom(last) {
+  const first = String(last?.answer || "").split("\n")[0]
+    .replace(/^(?:yes|no) — /i, "")
+    .replace(/^you told me: /i, "");
+  const m = first.match(/^([a-z][\w'-]*(?:\s+[a-z][\w'-]*)?)\s+(?:is|are|has|can|causes|wants|requires|involves|means|begins|ends)\b/i);
+  return m ? m[1] : null;
+}
+
 export async function runTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, vocabHint = null, tel = null, biasByBundle = {}, factRowsCache: injectedFactRowsCache = null } = {}) {
   const line = String(input ?? "").trim();
   // ONE fresh, empty cache for this turn only — every factRows() reader
@@ -8130,13 +8152,28 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // before ANY dispatch lane sees the text. Null (no-op) for every turn that
   // doesn't match one of the four discontiguous shapes.
   const baseFrameRewrite = rewriteUsesAsBaseFrame(preRewriteLine);
-  const workingLine = baseFrameRewrite || preRewriteLine;
+  const frameLine = baseFrameRewrite || preRewriteLine;
+  // VOCABULARY pronoun antecedent — "what is a dog" then "can it bark". The
+  // code-graph focus mechanism only ever binds {id,label} GRAPH entities, so
+  // in a vocabulary conversation "it" resolved to nothing and the question
+  // fell to the conversational gate or a garbage-subject fact lookup.
+  // Substituted here, once, before any dispatch lane sees the text — and
+  // ONLY when no code focus is standing (a graph session's own pronoun
+  // resolution is untouched), the turn looks like a fact question, and the
+  // LAST answer's own first fact line names a subject to bind to.
+  const vocabAntecedent = (!focus?.id && memoryDir
+    && /^(?:is|are|can|could|does|do|what)\b/i.test(frameLine)
+    && /\b(?:it|they)\b/i.test(frameLine))
+    ? vocabAntecedentFrom(last) : null;
+  const workingLine = vocabAntecedent
+    ? frameLine.replace(/\bit\b/gi, vocabAntecedent).replace(/\bthey\b/gi, vocabAntecedent)
+    : frameLine;
   const templates = await chatTemplates(); // failure-tolerated: null degrades, never throws
   const trace = narrate ? [] : null;
   // vocabHint: createSession computes this ONCE per session; a direct
   // runTurn() caller that doesn't pass one gets it computed here instead.
   const resolvedVocabHint = vocabHint ?? vocabExampleHint(await hasSeededVocabulary(memoryDir));
-  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates, env, lexicon, trace, narrate, vocabHint: resolvedVocabHint, tel, biasByBundle, cache: factRowsCache };
+  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates, env, lexicon, trace, narrate, vocabHint: resolvedVocabHint, tel, biasByBundle, cache: factRowsCache, vocabAntecedent };
   // A DISPATCHED turn (count / slash-command / ask) becomes the new "last
   // answer" that why/say-more re-renders; a conversational turn does not.
   // Every dispatched turn's result passes through finish() here — the LAST
@@ -8149,7 +8186,7 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
     // indirect-request wrapper stripped and/or the discontiguous-frame
     // rewrite applied) — restore the ORIGINAL raw `line` into record.query
     // and the logged transcript echo here, once, centrally.
-    if (indirectMatch || baseFrameRewrite) {
+    if (indirectMatch || baseFrameRewrite || vocabAntecedent) {
       if (finished.record) finished.record.query = line;
       if (Array.isArray(finished.logLines) && finished.logLines.length > 1) finished.logLines[1] = `> ${line}`;
     }
@@ -8174,7 +8211,7 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // resolve no entity and carry their own preserved `last`. Bypasses withLast (a
   // conversational turn is never finish()'d / never becomes a new `last`), so the
   // narrate block is applied directly here instead.
-  const convo = conversationalTurn(workingLine, ctx);
+  const convo = vocabAntecedent ? null : conversationalTurn(workingLine, ctx);
   if (convo) return withNarration(convo, trace, "casual/social — no graph intent");
 
   // "more" — page the remainder of a previous long listing, if one is held. Gated on

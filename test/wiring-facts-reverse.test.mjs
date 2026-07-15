@@ -550,3 +550,53 @@ test("derived forward yes/no never intercepts a dedicated reader: isa, capabilit
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("vocabulary pronoun binding: 'what is a dog' then 'can it bark' / 'does it have a tail' / 'is it an animal' all answer off dog", async () => {
+  const dir = await mem();
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    await s.turn("what is a dog");
+    const bark = await s.turn("can it bark");
+    const tail = await s.turn("does it have a tail");
+    const animal = await s.turn("is it an animal");
+    await s.close();
+    assert.match(bark.answer, /^yes — dog can bark/);
+    assert.match(tail.answer, /^yes — dog has tail/);
+    assert.match(animal.answer, /^yes — dog is a kind of animal/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("vocabulary pronoun binding: the antecedent moves with the conversation — after 'what is a horse', 'what is it used for' answers off horse", async () => {
+  const dir = await mem();
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    await s.turn("what is a dog");
+    await s.turn("what is a horse");
+    const r = await s.turn("what is it used for");
+    await s.close();
+    assert.match(r.answer, /horse is used for riding/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("vocabulary pronoun binding: a pronoun with no antecedent is never claimed — 'is it an animal' cold gets no fabricated subject", async () => {
+  const dir = await mem();
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    const r = await s.turn("is it an animal");
+    await s.close();
+    assert.doesNotMatch(r.answer, /^yes/);
+    assert.doesNotMatch(r.answer, /I don't know "it" at all yet/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
