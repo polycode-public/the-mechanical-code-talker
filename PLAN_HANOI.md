@@ -625,6 +625,17 @@ non-zero rather than writing an empty page.
 renderer, and tests all consume this one shape; the prose answer stays a rendering of it, never
 the other way round.
 
+**Starter imports scaffold, and a comment frame for definition files.** `tmct init` (and so
+`npm run init`) additionally writes `.tmct/imports/` — ready-to-import copies of the available
+lexicon and ontology bundles plus `games/hanoi-3.txt` — so a fresh repo can discover
+`tmct import --file` by listing a directory instead of hunting docs. `.tmct/` stays uncommitted
+as ever; these are generated, regenerable scaffold files. Definition files get one piece of
+syntax: lines starting with `#` are comments, skipped by import's sentence splitter and counted
+as "skipped" (never "declined") in the loud per-sentence report. The shipped `hanoi-3.txt`
+carries its own example prompts as comments — the canonical solve plus variations that each
+stretch a different direction (scale, arbitrary start, alternate goal, partial goal, a legality
+query, plain read-back) — so the file teaches the game AND how to play with it.
+
 ### The render surface
 
 A new `src/plan-viz.mjs`, a sibling of `src/viz.mjs` with the same three-way factoring: an I/O
@@ -657,6 +668,30 @@ because `chat.mjs`'s dynamic import gets inlined by esbuild. A later interactive
 after the user drags a disk) is therefore one bundle-entry export away. Scoped out here: the CLI
 computes the plan once; the page only replays it.
 
+**Render decisions settled by the 2026-07-15 clickable mock.** A working mock of this page was
+built and operator-reviewed on 2026-07-15. Decisions it settled, now part of this design:
+
+- Move animation is three-phase (lift, traverse, drop), so a moving block never passes through a
+  stacked one. Roughly 0.65s per move, with a short rest between autoplay moves.
+- `prefers-reduced-motion` replaces animation with an instant jump to the next snapshot.
+- Stepping back never reverse-animates; it redraws the earlier snapshot instantly. Backwards is
+  not a plan step, so it gets no motion.
+- The move list doubles as a scrubber: clicking move N jumps to snapshot N. Entries carry
+  done/current/pending states, with the current move highlighted in the goal accent.
+- The page shows the plan lane's own per-step "Goal (inferred): …" string under the board — one
+  string per snapshot, embedded with the states, so page and chat narrate identically.
+- The current snapshot's fact rows (`board@stepN — disk-1 restsOn peg-c · …`) render as visible
+  text beside the board, with a provenance chip. The page shows the facts it draws, keeping the
+  glass-box discipline on the visual surface too.
+- Block sizes are ordinal: width derives from the individual's rank in the taught `smallerThan`
+  order — no numeric size attribute exists to read. Within-class shading also follows that rank
+  (darker = larger), while the class itself picks the hue, matching viz's one-hue-per-class rule.
+- Pegs and disks are labeled with their individual labels; controls carry keyboard focus states
+  and aria-labels; the layout is two-column (board and facts beside the move list), stacking on
+  narrow screens; the page is theme-aware (light/dark via CSS tokens). Theme-awareness goes
+  beyond `viz.mjs`'s current single style — adopt it as a shared convention when `plan-viz.mjs`
+  lands rather than a plan-viz oddity.
+
 ### Revised phasing
 
 This supersedes Phases 1, 3, and 4 above. Phase 2 shipped (`src/planning.mjs`) and stands.
@@ -672,10 +707,11 @@ This supersedes Phases 1, 3, and 4 above. Phase 2 shipped (`src/planning.mjs`) a
   definition text; the interpreter module contains nothing Hanoi-specific (no "disk", "peg", or
   "restsOn" literal anywhere in it).
 - **Phase 3R — chat and CLI surfaces.** Multi-sentence turns, the plan lane with its goal-line and
-  narrate-shaped trace, `tmct import --file` with loud per-sentence reporting, `tmct chat
-  --prompt` one-shot. Exit criterion: a fresh repo can be taught the whole game via `import
-  --file`, then solve it from one `chat --prompt` invocation, with the CLI smoke test and full
-  suite green.
+  narrate-shaped trace, `tmct import --file` with loud per-sentence reporting and `#`-comment
+  skipping, the `.tmct/imports/` starter scaffold written by `tmct init` (lexicon/ontology bundles
+  plus `games/hanoi-3.txt`), `tmct chat --prompt` one-shot. Exit criterion: a fresh repo can init,
+  import its own scaffold's `games/hanoi-3.txt`, then solve it from one `chat --prompt`
+  invocation, with the CLI smoke test and full suite green.
 - **Phase 4R — render.** `src/plan-viz.mjs`, the `blocks` archetype, the animation player,
   `--render`/`--output` wiring. Exit criterion: the worked example's `plan.html` opens offline,
   replays all 7 moves correctly, and the page's final drawn state matches the goal.
@@ -690,9 +726,28 @@ This supersedes Phases 1, 3, and 4 above. Phase 2 shipped (`src/planning.mjs`) a
 
 ### Worked example
 
-`hanoi-3.txt`, complete, in the closed frames:
+`hanoi-3.txt`, complete, in the closed frames — exactly the file `tmct init` scaffolds into
+`.tmct/imports/games/`. `#` lines are comments: import skips them, and they carry the example
+prompts, so the file teaches the game and how to play with it:
 
 ```
+# hanoi-3 — a taught game definition. Lines starting with # are skipped by import.
+# After `tmct import --file hanoi-3.txt`, try this in `tmct chat` (or via --prompt):
+#
+#   disk-1 rests on disk-2. disk-2 rests on disk-3. disk-3 rests on peg-a.
+#   the goal is that every disk rests on peg-c. solve it.
+#
+# Variations, each stretching a different direction:
+#   scale      — first teach: "disk-4 is a disk. disk-3 is smaller than disk-4."
+#                start all four on peg-a, same goal. 15 moves (2^4 - 1).
+#   any start  — disk-1 rests on peg-b. disk-2 rests on peg-c. disk-3 rests on peg-a.
+#                the goal is that every disk rests on peg-c. solve it.
+#   other goal — same start, "the goal is that every disk rests on peg-b. solve it."
+#   partial    — "the goal is that disk-3 rests on peg-c. solve it."
+#                (a one-fact goal; exercises the non-universal goal frame)
+#   legality   — "what moves are legal now?"  (findReachableSet, one ply, no plan)
+#   read-back  — "what rests on disk-2?" / "is disk-1 clear?"  (plain fact questions,
+#                no planning involved)
 a disk is a kind of game piece.
 a peg is a kind of place.
 disk-1 is a disk. disk-2 is a disk. disk-3 is a disk.
