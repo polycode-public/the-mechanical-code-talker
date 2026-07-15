@@ -125,7 +125,10 @@ than one driver is measured (e.g. the resolver floor vs. the goal-reasoner ceili
 cycle, one item per change with the commit it landed in; any deliberately-kept honest red (a case
 that plans/executes correctly but doesn't compose the expected result, named as a frontier, not
 patched around); the discipline checklist (zero hallucination held, byte-identity verified, no
-overfit/leakage, boundary refusals still sharp, determinism); and a decision line.
+overfit/leakage, boundary refusals still sharp, determinism); and a decision line. **Mirror every
+issue the cycle leaves open** (the kept honest red, an unexplained rung move) **into `HANDOVER.md`**
+as a one-line open item pointing at this write-up — `HANDOVER.md` is the next-session pickup list;
+`ROADMAP.md` is not (it doesn't track tuning).
 
 **Step 7 — CONTINUE.** If the operator wants the ladder pushed further, go to Step 1 of the next
 cycle with the next gated rung as the target. There is no autonomous no-pause loop here the way
@@ -188,4 +191,5 @@ the gate passes before moving on. Fan cycle work that decomposes into independen
 HTN method, a new goal rule, new fixture-linted cases, the write-up) out to background sub-agents
 under the coordinator model per `CLAUDE.md`, keeping the main chat free; write up the cycle as
 `BENCHMARK_AGENT_<version>.md` (headline delta, metric-pair table, per-driver comparison, what's new, any
-deliberately-kept honest red, the discipline checklist, a decision).
+deliberately-kept honest red, the discipline checklist, a decision), mirroring anything left open
+into `HANDOVER.md` as one-line pickup items.
