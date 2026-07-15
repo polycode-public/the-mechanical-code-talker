@@ -18,7 +18,11 @@ for the batch — coordinate via its inbox before touching either. Track E: acti
 teach frames → `src/domain.mjs` interpreter → plan lane/planState → `import --file` +
 `.tmct/imports/` scaffold + `chat --prompt`. Track L: `viz --ledger` + chat dock →
 `plan-viz.mjs` → `--render` wiring → Pages rebuild → README/ROADMAP → 5R (registry seam +
-crates domain). This section is updated as steps land and is deleted when the batch ships.
+crates domain). Progress: E1-E3 + L1-L3 shipped and pushed (action Rule family, teach frames, the
+domain interpreter with its 2^n-1 oracle, viz --ledger, the chat dock with factReadBack
+on the bundle surface, plan-viz renderer). In flight: E4 (plan lane). Remaining: E5 CLI,
+--render wiring, Pages rebuild, README/ROADMAP, 5R, the 1.11.0 bump.
+This section is updated as steps land and is deleted when the batch ships.
 
 ## Version state (2026-07-13, v1.9.0 — superseded above; historical notes follow)
 
