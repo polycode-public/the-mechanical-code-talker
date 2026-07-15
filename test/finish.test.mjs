@@ -279,3 +279,9 @@ test("finish(): the invariance guard runs in production — a fact never moves t
   assert.match(out.answer, /app\/lib\/a\.mjs/, "the path is untouched");
   assert.match(out.answer, /\(traversal: calls edges where object = fnAlpha\)/, "the receipt is untouched");
 });
+
+test("article rule: the 'a' inside a hyphenated name is never rewritten — 'peg-a' before a vowel-initial word stays 'peg-a'", () => {
+  const out = finish({ answer: "disk-1 rests on peg-a\nUtterance follows" }, {});
+  assert.match(out.answer, /peg-a\n/);
+  assert.doesNotMatch(out.answer, /peg-an/);
+});

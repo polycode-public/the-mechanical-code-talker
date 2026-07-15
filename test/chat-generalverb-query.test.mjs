@@ -12,7 +12,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runTurn } from "../src/chat.mjs";
+import { runTurn, createSession } from "../src/chat.mjs";
 import { loadMemory, readFactRows } from "../src/memory/core.mjs";
 import { clearCache } from "../src/source.mjs";
 
@@ -129,6 +129,42 @@ test("general-verb query guard: is/are/owns/maintains verbs stay the OTHER frame
     // mint would misrepresent. Whatever the actual routing, it must not claim
     // a false negative against a real ownership fact.
     assert.doesNotMatch(r.answer, /^no — no remembered fact says/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("prepositional fold: 'disk-1 rests on peg-a' stores mgx:rest-on with a clean object, and all three read-backs answer", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-gvq-prep-"));
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    await s.turn("disk-1 rests on peg-a");
+    await s.turn("disk-2 rests on peg-a");
+    const yn = await s.turn("does disk-1 rest on peg-a");
+    const open = await s.turn("what does disk-1 rest on");
+    const rev = await s.turn("what rests on peg-a");
+    await s.close();
+    assert.match(yn.answer, /^yes — .*disk-1 rests on peg-a/);
+    assert.match(open.answer, /disk-1 rests on peg-a/);
+    assert.match(rev.answer, /disk-1 rests on peg-a/);
+    assert.match(rev.answer, /disk-2 rests on peg-a/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("prepositional fold: a wrong object never gets a fabricated answer — 'does disk-1 rest on peg-b' is not a yes", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-gvq-prep2-"));
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    await s.turn("disk-1 rests on peg-a");
+    const r = await s.turn("does disk-1 rest on peg-b");
+    await s.close();
+    assert.doesNotMatch(r.answer, /^yes/);
   } finally {
     clearCache();
     await rm(dir, { recursive: true, force: true });

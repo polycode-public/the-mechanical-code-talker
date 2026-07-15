@@ -230,14 +230,18 @@ function ruleArticle(segments, rule) {
   for (let i = 0; i < out.length; i += 1) {
     const seg = out[i];
     if (seg.type !== "prose") continue;
-    // (a) in-span "a artifact" / "an module" (case-insensitive; case preserved)
-    seg.text = seg.text.replace(/\b(a|an)(\s+)([A-Za-z][\w-]*)/gi, (m, art, sp, word) => {
+    // (a) in-span "a artifact" / "an module" (case-insensitive; case preserved).
+    // A hyphen before the candidate article means it's the tail of a
+    // hyphenated NAME ("peg-a", "option-a"), not an article — rewriting it
+    // corrupts user-quoted data ("peg-a\nUtterance" read as "a Utterance").
+    seg.text = seg.text.replace(/(^|[^\w-])(a|an)(\s+)([A-Za-z][\w-]*)/gi, (m, pre, art, sp, word) => {
       const vowel = beginsWithVowelSound(word, rule);
       if (vowel === null) return m;
-      return matchCase(art, vowel ? "an" : "a") + sp + word;
+      return pre + matchCase(art, vowel ? "an" : "a") + sp + word;
     });
     // (b) boundary: prose ends "…a " / "…an ", next span carries the word
-    const bm = seg.text.match(/(^|[^\w])(a|an)(\s+)$/i);
+    // (same hyphenated-name guard as (a))
+    const bm = seg.text.match(/(^|[^\w-])(a|an)(\s+)$/i);
     if (bm) {
       const next = out[i + 1];
       const word = next && typeof next.text === "string" ? leadingWord(next.text) : "";

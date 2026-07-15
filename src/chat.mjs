@@ -2354,10 +2354,10 @@ async function generalVerbTeach(payload) {
   if (verb === "cannot") return null;
   if (GENERAL_VERB_DETERMINER_RE.test(subjectRaw)) return null; // not a bare-name subject
   const subject = subjectRaw.trim();
-  const object = objectRaw.replace(/^an?\s+/i, "").trim();
+  const folded = foldPrepositionIntoPredicate(await generalVerbPredicate(verb), objectRaw);
+  const object = folded.object.replace(/^an?\s+/i, "").trim();
   if (!subject || !object) return null; // no well-formed triple — honest decline (point 6)
-  const predicate = await generalVerbPredicate(verb);
-  return { subject, predicate, object };
+  return { subject, predicate: folded.predicate, object };
 }
 
 /** Is `word` a genuine NOUN/PROPN, per wink-nlp's optional POS tagger
@@ -2391,7 +2391,7 @@ async function subjectIsNounOrPropn(word) {
 // query is never shadowed. Reuses generalVerbTeach's own exclude guards and
 // generalVerbPredicate, plus the SAME adverb-skip, so the two never disagree. ----
 const GENERAL_VERB_YESNO_RE = new RegExp(`^(?:does|did)\\s+([\\w'-]+)\\s+${TEACH_ADVERB_SKIP_SRC}([a-z]+)\\s+(.+?)[?.!\\s]*$`, "i");
-const GENERAL_VERB_OPEN_RE = new RegExp(`^what\\s+(?:does|did)\\s+([\\w'-]+)\\s+${TEACH_ADVERB_SKIP_SRC}([a-z]+)[?.!\\s]*$`, "i");
+const GENERAL_VERB_OPEN_RE = new RegExp(`^what\\s+(?:does|did)\\s+([\\w'-]+)\\s+${TEACH_ADVERB_SKIP_SRC}([a-z]+(?:\\s+(?:on|in|at|onto|upon|under|over|beside|near|behind|above|below|inside|outside))?)[?.!\\s]*$`, "i");
 /** GENERAL_VERB_EXCLUDE_RE was written for generalVerbTeach's fully-conjugated
  *  declarative verb ("X OWNS Y", "X MAINTAINS Y") — but "does/did X <verb> Y"
  *  captures the BARE INFINITIVE after do-support ("does X OWN Y", never "does X
@@ -2402,6 +2402,23 @@ const GENERAL_VERB_OPEN_RE = new RegExp(`^what\\s+(?:does|did)\\s+([\\w'-]+)\\s+
  *  predicate — mgx:own — than the ownership frame's own OWNED_BY_PREDICATE.
  *  The query-side guard needs the bare-infinitive counterpart too. */
 const GENERAL_VERB_QUERY_EXCLUDE_RE = /^(?:be|own|maintain)$/i;
+
+/** Closed prepositions the general-verb teach/query lanes FOLD INTO the
+ *  minted predicate: "disk-1 rests on peg-a" stores mgx:rest-on with object
+ *  "peg-a", never mgx:rest with the meaning-bearing "on" buried inside the
+ *  object where no read-back can match it. */
+const GENERAL_VERB_PREP_RE = /^(on|in|at|onto|upon|under|over|beside|near|behind|above|below|inside|outside)\s+(.+)$/i;
+/** Fold a leading preposition from `objectRaw` into a minted mgx:<lemma>
+ *  predicate. Curated predicates (mgx:hasA, mgx:capableOf — anything not the
+ *  plain lowercase mint shape) are never suffixed. Returns {predicate,
+ *  object} either way. */
+function foldPrepositionIntoPredicate(predicate, objectRaw) {
+  const prepM = String(objectRaw || "").match(GENERAL_VERB_PREP_RE);
+  if (prepM && /^mgx:[a-z]+$/.test(predicate)) {
+    return { predicate: `${predicate}-${prepM[1].toLowerCase()}`, object: prepM[2].trim() };
+  }
+  return { predicate, object: String(objectRaw || "").trim() };
+}
 
 /** Sentence forms to try asserting for a teach payload: the payload as-is, and
  *  (if it carries no determiner) its "every …" universal — the ACE-OWL shape the
@@ -3729,8 +3746,10 @@ function thirdPersonSingularSurface(lemma) {
 }
 function predicatePhrase(predicate) {
   if (FACT_PREDICATE_PHRASES[predicate]) return FACT_PREDICATE_PHRASES[predicate];
-  const m = /^mgx:([a-z]+)$/i.exec(String(predicate || ""));
-  return m ? thirdPersonSingularSurface(m[1]) : predicate;
+  const m = /^mgx:([a-z]+)(?:-([a-z]+))?$/i.exec(String(predicate || ""));
+  if (!m) return predicate;
+  // a folded preposition renders back naturally: mgx:rest-on -> "rests on"
+  return `${thirdPersonSingularSurface(m[1])}${m[2] ? ` ${m[2]}` : ""}`;
 }
 const factPhrase = (f) => `${f.subject} ${predicatePhrase(f.predicate)} ${f.object}`;
 
@@ -6054,9 +6073,13 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
     const verb = verbRaw.toLowerCase();
     if (!GENERAL_VERB_EXCLUDE_RE.test(verb) && !GENERAL_VERB_QUERY_EXCLUDE_RE.test(verb)) {
       const subject = subjectRaw.trim();
-      const object = objectRaw.replace(/^an?\s+/i, "").trim();
+      // the SAME preposition fold the teach side applies, so "does disk-1
+      // rest on peg-a" looks up mgx:rest-on/"peg-a", matching what
+      // generalVerbTeach actually stored
+      const folded = foldPrepositionIntoPredicate(await generalVerbPredicate(verb), objectRaw);
+      const object = folded.object.replace(/^an?\s+/i, "").trim();
       if (subject && object) {
-        const predicate = await generalVerbPredicate(verb);
+        const predicate = folded.predicate;
         const subjVariants = factTermVariants(normFactTerm, subject);
         const objVariants = factTermVariants(normFactTerm, object);
         const hit = rows
@@ -6070,15 +6093,39 @@ async function factReadBack(memoryDir, query, envelope, miss, graph = null, focu
   const genOpen = q.match(GENERAL_VERB_OPEN_RE);
   if (genOpen && !GENERAL_VERB_ANYWHERE_EXCLUDE_RE.test(q)) {
     const [, subjectRaw, verbRaw] = genOpen;
-    const verb = verbRaw.toLowerCase();
+    // "what does disk-1 rest on" captures "rest on" — split the folded
+    // preposition back off and suffix the minted predicate, mirroring the
+    // teach side's foldPrepositionIntoPredicate
+    const [verb, verbPrep] = verbRaw.toLowerCase().split(/\s+/);
     if (!GENERAL_VERB_EXCLUDE_RE.test(verb) && !GENERAL_VERB_QUERY_EXCLUDE_RE.test(verb)) {
       const subject = subjectRaw.trim();
       if (subject) {
-        const predicate = await generalVerbPredicate(verb);
+        let predicate = await generalVerbPredicate(verb);
+        if (verbPrep && /^mgx:[a-z]+$/.test(predicate)) predicate = `${predicate}-${verbPrep}`;
         const subjVariants = factTermVariants(normFactTerm, subject);
         const hits = rankByBiasThenTrust(rows.filter((f) => f.predicate === predicate && subjVariants.has(f.subject)), biasByBundle);
         if (hits.length) return { ...renderMany(hits), generalVerbQuery: true };
       }
+    }
+  }
+
+  // "what rests on peg-a" / "who sits on the chair" — the reverse-by-OBJECT
+  // mirror of the two general-verb readers above, for taught prepositional
+  // facts. Only ever diverts on a REAL stored hit (the predicate is minted
+  // from the surface verb + folded preposition, so a code question like
+  // "what calls chat.mjs" — no such taught fact — falls through untouched;
+  // this also outranks the spell-corrector's "rests"→"tests" misread, which
+  // otherwise walls this exact phrasing).
+  const genReverse = q.match(/^(?:what|who)\s+([a-z]+)\s+(on|in|at|onto|upon|under|over|beside|near|behind|above|below|inside|outside)\s+(.+?)[?.!\s]*$/i);
+  if (genReverse && !GENERAL_VERB_ANYWHERE_EXCLUDE_RE.test(q)) {
+    const [, verbSurface, prep, objectRaw] = genReverse;
+    const verb = verbSurface.toLowerCase();
+    if (!GENERAL_VERB_EXCLUDE_RE.test(verb) && !GENERAL_VERB_QUERY_EXCLUDE_RE.test(verb) && !GENERAL_VERB_NOT_A_VERB_RE.test(verb)) {
+      let predicate = await generalVerbPredicate(verb);
+      if (/^mgx:[a-z]+$/.test(predicate)) predicate = `${predicate}-${prep.toLowerCase()}`;
+      const objVariants = factTermVariants(normFactTerm, objectRaw.replace(/^(?:an?|the)\s+/i, "").trim());
+      const hits = rankByBiasThenTrust(rows.filter((f) => f.predicate === predicate && objVariants.has(f.object)), biasByBundle);
+      if (hits.length) return { ...renderMany(hits), generalVerbQuery: true };
     }
   }
 
