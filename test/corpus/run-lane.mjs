@@ -1,0 +1,197 @@
+// Lane runner for the corpus estate: each lane is a JSONL file in this
+// directory, and runLane(laneName) emits one node:test subtest per row.
+// Chat rows drive their turns through test/helpers/session.mjs (the same
+// createSession path the shell uses); bench-smoke rows spawn a benchmark
+// script and hand the finished process to a named predicate.
+import test from "node:test";
+import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { stringify as stringifyToml } from "smol-toml";
+import { driveSessionTurns } from "../helpers/session.mjs";
+import * as predicates from "./predicates.mjs";
+
+const CORPUS_DIR = path.dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = path.resolve(CORPUS_DIR, "..", "..");
+
+export const EXPECT_MODES = ["exact", "regex", "predicate"];
+export const MEMORY_BACKENDS = ["file", "memory", "sqlite"];
+
+/** Parse a lane's JSONL into row objects, with the offending line number in
+ *  any parse error. */
+export function readLaneRows(laneName) {
+  const file = path.join(CORPUS_DIR, `${laneName}.jsonl`);
+  const lines = readFileSync(file, "utf8").split("\n");
+  const rows = [];
+  for (const [i, line] of lines.entries()) {
+    if (line.trim() === "") continue;
+    try {
+      rows.push(JSON.parse(line));
+    } catch (e) {
+      throw new Error(`${laneName}.jsonl line ${i + 1}: ${e.message}`);
+    }
+  }
+  return rows;
+}
+
+const isNonEmptyString = (v) => typeof v === "string" && v.trim() !== "";
+
+/** Validate one corpus row. Returns a list of problems, empty when the row is
+ *  well formed. `predicateNames` defaults to the exports of predicates.mjs. */
+export function validateRow(row, predicateNames = Object.keys(predicates)) {
+  const problems = [];
+  const flag = (msg) => problems.push(msg);
+  if (typeof row !== "object" || row === null || Array.isArray(row)) return ["row is not an object"];
+  if (!isNonEmptyString(row.id)) flag("id: required non-empty string");
+  if (!isNonEmptyString(row.key)) flag("key: required non-empty string");
+  if (row.note !== undefined && typeof row.note !== "string") flag("note: must be a string");
+  if (row.skip !== undefined && typeof row.skip !== "boolean" && typeof row.skip !== "string") {
+    flag("skip: must be a boolean or a reason string");
+  }
+
+  const predicateKnown = (name) => {
+    if (!isNonEmptyString(name)) return false;
+    return predicateNames.includes(name);
+  };
+
+  if (row.run !== undefined) {
+    if (row.turns !== undefined || row.expect !== undefined) flag("run: mutually exclusive with turns/expect");
+    if (typeof row.run !== "object" || row.run === null) return [...problems, "run: must be an object"];
+    if (!isNonEmptyString(row.run.script)) flag("run.script: required non-empty string");
+    if (row.run.args !== undefined && (!Array.isArray(row.run.args) || !row.run.args.every((a) => typeof a === "string"))) {
+      flag("run.args: must be an array of strings");
+    }
+    if (!predicateKnown(row.run.predicate)) flag(`run.predicate: must name an export of predicates.mjs, got ${JSON.stringify(row.run.predicate)}`);
+    return problems;
+  }
+
+  if (!Array.isArray(row.turns) || row.turns.length === 0 || !row.turns.every(isNonEmptyString)) {
+    flag("turns: required non-empty array of non-empty strings");
+  }
+  if (!Array.isArray(row.expect) || row.expect.length === 0) {
+    flag("expect: required non-empty array");
+  } else {
+    for (const [i, exp] of row.expect.entries()) {
+      const at = `expect[${i}]`;
+      if (typeof exp !== "object" || exp === null) { flag(`${at}: must be an object`); continue; }
+      if (!Number.isInteger(exp.turn) || exp.turn < 0 || (Array.isArray(row.turns) && exp.turn >= row.turns.length)) {
+        flag(`${at}.turn: must be an index into turns`);
+      }
+      if (!EXPECT_MODES.includes(exp.mode)) flag(`${at}.mode: must be one of ${EXPECT_MODES.join("|")}`);
+      if (exp.mode === "predicate") {
+        const name = typeof exp.value === "string" ? exp.value : exp.value?.name;
+        if (!predicateKnown(name)) flag(`${at}.value: must name an export of predicates.mjs, got ${JSON.stringify(name)}`);
+      } else if (!isNonEmptyString(exp.value)) {
+        flag(`${at}.value: required non-empty string`);
+      }
+      if (exp.template !== undefined && !isNonEmptyString(exp.template)) flag(`${at}.template: must be a non-empty string`);
+      if (exp.justification !== undefined && !isNonEmptyString(exp.justification)) flag(`${at}.justification: must be a non-empty string`);
+    }
+  }
+
+  if (row.setup !== undefined) {
+    const s = row.setup;
+    if (typeof s !== "object" || s === null) {
+      flag("setup: must be an object");
+    } else {
+      if (s.fixture !== undefined && !isNonEmptyString(s.fixture)) flag("setup.fixture: must be a non-empty string");
+      if (s.teach !== undefined && (!Array.isArray(s.teach) || !s.teach.every(isNonEmptyString))) {
+        flag("setup.teach: must be an array of non-empty strings");
+      }
+      if (s.config !== undefined && typeof s.config !== "string" && (typeof s.config !== "object" || s.config === null)) {
+        flag("setup.config: must be a TOML string or a plain object");
+      }
+      if (s.memoryBackend !== undefined && !MEMORY_BACKENDS.includes(s.memoryBackend)) {
+        flag(`setup.memoryBackend: must be one of ${MEMORY_BACKENDS.join("|")}`);
+      }
+    }
+  }
+  return problems;
+}
+
+function fixturePath(fixture) {
+  const asGiven = path.resolve(REPO_ROOT, fixture);
+  if (existsSync(asGiven)) return asGiven;
+  return path.resolve(REPO_ROOT, "test", "fixtures", fixture);
+}
+
+function assertExpectation(exp, turn, rowId) {
+  assert.ok(turn, `row ${rowId}: no turn at index ${exp.turn}`);
+  const answer = String(turn.answer ?? "");
+  if (exp.mode === "exact") {
+    assert.equal(answer, exp.value);
+  } else if (exp.mode === "regex") {
+    assert.match(answer, new RegExp(exp.value));
+  } else {
+    const { name, arg } = typeof exp.value === "string" ? { name: exp.value, arg: undefined } : exp.value;
+    const fn = predicates[name];
+    assert.equal(typeof fn, "function", `row ${rowId}: unknown predicate ${name}`);
+    assert.ok(fn(turn, arg), `row ${rowId}: predicate ${name} rejected turn ${exp.turn}: ${answer}`);
+  }
+  if (exp.template !== undefined) {
+    assert.equal(turn.template ?? turn.templateId, exp.template, `row ${rowId}: template of turn ${exp.turn}`);
+  }
+  if (exp.justification !== undefined) {
+    const j = typeof turn.justification === "string" ? turn.justification : JSON.stringify(turn.justification ?? "");
+    assert.match(j, new RegExp(exp.justification), `row ${rowId}: justification of turn ${exp.turn}`);
+  }
+}
+
+async function runChatRow(row) {
+  const setup = row.setup ?? {};
+  const scratchDir = await mkdtemp(path.join(tmpdir(), "tmct-corpus-"));
+  try {
+    const sessionOpts = {
+      repoPath: setup.fixture ? fixturePath(setup.fixture) : scratchDir,
+      env: { TMCT_NO_SEED: "1" },
+      ...(setup.fixture ? { ephemeral: true } : {}),
+      ...(setup.memoryBackend ? { memoryBackend: setup.memoryBackend } : {}),
+    };
+    if (setup.config !== undefined) {
+      const toml = typeof setup.config === "string" ? setup.config : stringifyToml(setup.config);
+      const configPath = path.join(scratchDir, "tmct.toml");
+      await writeFile(configPath, toml);
+      sessionOpts.configPath = configPath;
+    }
+    const teach = setup.teach ?? [];
+    const turns = await driveSessionTurns(sessionOpts, [...teach, ...row.turns]);
+    const scripted = turns.slice(teach.length);
+    for (const exp of row.expect) assertExpectation(exp, scripted[exp.turn], row.id);
+  } finally {
+    await rm(scratchDir, { recursive: true, force: true });
+  }
+}
+
+async function runBenchRow(row) {
+  const { script, args = [], predicate, arg } = row.run;
+  const fn = predicates[predicate];
+  assert.equal(typeof fn, "function", `row ${row.id}: unknown predicate ${predicate}`);
+  const result = await new Promise((resolveRun) => {
+    execFile(
+      process.execPath,
+      [path.resolve(REPO_ROOT, script), ...args],
+      { cwd: REPO_ROOT, encoding: "utf8" },
+      (error, stdout, stderr) => resolveRun({ code: error ? (error.code ?? 1) : 0, stdout, stderr }),
+    );
+  });
+  assert.ok(fn(result, arg), `row ${row.id}: predicate ${predicate} rejected ${script} (exit ${result.code})\n${result.stderr}`);
+}
+
+/** Register one node:test per lane, with a subtest per row named by row id. */
+export function runLane(laneName) {
+  const rows = readLaneRows(laneName);
+  test(`corpus lane ${laneName}`, async (t) => {
+    for (const [i, row] of rows.entries()) {
+      await t.test(row.id ?? `row ${i + 1}`, { skip: row.skip ?? false }, async () => {
+        const problems = validateRow(row);
+        assert.deepEqual(problems, [], `row schema problems:\n${problems.join("\n")}`);
+        if (row.run) await runBenchRow(row);
+        else await runChatRow(row);
+      });
+    }
+  });
+}
