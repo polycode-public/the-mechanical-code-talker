@@ -7,12 +7,12 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable, PassThrough } from "node:stream";
-import { runTurn, runChat } from "../src/chat.mjs";
-import { loadMemory, FACT_CLASS } from "../src/memory/core.mjs";
-import { parseEntities } from "../src/codegraph.mjs";
-import * as source from "../src/source.mjs";
+import { runTurn, runChat } from "../../src/chat.mjs";
+import { loadMemory, FACT_CLASS } from "../../src/memory/core.mjs";
+import { parseEntities } from "../../src/codegraph.mjs";
+import * as source from "../../src/source.mjs";
 
-const FIXTURE = new URL("./fixtures/entities.fixture.json", import.meta.url).pathname;
+const FIXTURE = new URL("../fixtures/entities.fixture.json", import.meta.url).pathname;
 
 function sink() {
   const out = new PassThrough();

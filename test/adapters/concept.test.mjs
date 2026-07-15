@@ -11,14 +11,14 @@ import assert from "node:assert/strict";
 import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { parseEntities } from "../src/codegraph.mjs";
-import { ingestSchemaDocs } from "../src/schema-docs.mjs";
-import { ask } from "../src/ask.mjs";
-import { composeConcept, composeRelation, CONCEPT_CLASS, RELATION_TERM } from "../src/concept.mjs";
-import { runTurn } from "../src/chat.mjs";
-import { clearCache } from "../src/source.mjs";
+import { parseEntities } from "../../src/codegraph.mjs";
+import { ingestSchemaDocs } from "../../src/schema-docs.mjs";
+import { ask } from "../../src/ask.mjs";
+import { composeConcept, composeRelation, CONCEPT_CLASS, RELATION_TERM } from "../../src/concept.mjs";
+import { runTurn } from "../../src/chat.mjs";
+import { clearCache } from "../../src/source.mjs";
 
-const FIXTURE = new URL("./fixtures/entities.fixture.json", import.meta.url).pathname;
+const FIXTURE = new URL("../fixtures/entities.fixture.json", import.meta.url).pathname;
 
 // FEATURE B (0.9.x): every runAsk-composed answer now carries an ALWAYS-ON
 // trailing "\n\nGoal (inferred): …" line (chat.mjs's withGoalLine), optionally

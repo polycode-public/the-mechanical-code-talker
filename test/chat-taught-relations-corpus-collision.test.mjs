@@ -1,5 +1,5 @@
 // Regression for a real-world repro against a `tmct init`-seeded repo (not the
-// plain empty tmpdir chat-taught-relations.test.mjs uses): the default
+// plain empty store the inference corpus lane's relation rows use): the default
 // human-persona corpus already carries the ConceptNet `father rdfs:subClassOf
 // parent` IsA fact, so teaching "a father is a kind of parent" MERGES into
 // that pre-existing corpus fact (appendFact's duplicate-fact upsert) instead

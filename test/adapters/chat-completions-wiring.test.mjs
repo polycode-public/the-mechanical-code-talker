@@ -23,13 +23,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { runTurn } from "../src/chat.mjs";
-import { saveBlock } from "../src/memory/blocks.mjs";
-import { parseEntities } from "../src/codegraph.mjs";
-import { clearCache } from "../src/source.mjs";
-import * as source from "../src/source.mjs";
+import { runTurn } from "../../src/chat.mjs";
+import { saveBlock } from "../../src/memory/blocks.mjs";
+import { parseEntities } from "../../src/codegraph.mjs";
+import { clearCache } from "../../src/source.mjs";
+import * as source from "../../src/source.mjs";
 
-const FIXTURE = fileURLToPath(new URL("./fixtures/entities.fixture.json", import.meta.url));
+const FIXTURE = fileURLToPath(new URL("../fixtures/entities.fixture.json", import.meta.url));
 const CONFIG = { graphFile: FIXTURE };
 let GRAPH;
 async function graph() { return (GRAPH ||= parseEntities(await source.fetchEntities(CONFIG))); }
@@ -53,7 +53,7 @@ async function seedWidgetRepo() {
   return dir;
 }
 
-test("COMPLETIONS RESCUE: \"give me a detailed summary of how X works\" (BENCHMARK_CONVERSATION_1.4.1.md round 3's own probe) now answers with real, grounded multi-sentence prose instead of the grammar wall", async () => {
+test("COMPLETIONS RESCUE: \"give me a detailed summary of how X works\" now answers with real, grounded multi-sentence prose instead of the grammar wall", async () => {
   const dir = await seedWidgetRepo();
   try {
     const g = await graph();

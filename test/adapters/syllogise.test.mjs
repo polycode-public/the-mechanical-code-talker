@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { appendFact, loadMemory, readFactRows } from "../src/memory/core.mjs";
+import { appendFact, loadMemory, readFactRows } from "../../src/memory/core.mjs";
 import {
   deriveSubClassClosure, deriveTypePropagation, deriveDisjointViolations,
   deriveSomeValuesFromApplication, findConsistencyViolations, findIsaChain, syllogise,
@@ -22,9 +22,9 @@ import {
   ENTAILED_SCM_SVF_PROVENANCE, SCM_SVF_RULE, SCM_SVF_RULE_CONFIDENCE,
   CARDINALITY_RULE_CONFIDENCE, CAX_MAXC0_RULE_CONFIDENCE, entailedTrustFrom,
   retractSubClassOf,
-} from "../src/syllogise.mjs";
-import { assertSentence } from "../src/grammar/assert.mjs";
-import { freshConceptNetRepo } from "./helpers/seeded-fixture.mjs";
+} from "../../src/syllogise.mjs";
+import { assertSentence } from "../../src/grammar/assert.mjs";
+import { freshConceptNetRepo } from "../helpers/seeded-fixture.mjs";
 
 const mkRepo = () => mkdtemp(join(tmpdir(), "tmct-syllog-"));
 const subClassRows = (rows) => rows.filter((r) => r.predicate === SUBCLASS_PREDICATE);
@@ -144,8 +144,7 @@ test("deriveDisjointViolations: disjointWith is symmetric — the taught directi
   assert.deepEqual(d, [{ subject: "redis.mjs", object: "queue", viaType: "cache", viaClass: "cache" }]);
 });
 
-test("deriveDisjointViolations: the ⊑-lift — x∈mock, mock⊑fixture, fixture disjointWith test ⊨ x∉test "
-  + "(PLAN_INFERENCE_TESTING.md §1 footnote², B1's hardest cell)", () => {
+test("deriveDisjointViolations: the ⊑-lift — x∈mock, mock⊑fixture, fixture disjointWith test ⊨ x∉test", () => {
   const d = deriveDisjointViolations(
     [["e01.mjs", "mock"]],
     [["mock", "fixture"]],
@@ -654,8 +653,7 @@ test("syllogise: materializes cax-sco (x:C) too, in the SAME pass as scm-sco, se
 
 // ---- cax-dw: syllogise() materializes disjointness violations, a provable "no" -
 
-test("syllogise: cax-dw materializes a direct disjoint-type violation as a provable 'no' Fact "
-  + "(PLAN_INFERENCE_TESTING.md INF-B1)", async () => {
+test("syllogise: cax-dw materializes a direct disjoint-type violation as a provable 'no' Fact", async () => {
   const dir = await mkRepo();
   try {
     await appendFact(dir, { subject: "cache", predicate: DISJOINT_PREDICATE, object: "queue", provenance: "ace:chat:s1" });
@@ -681,8 +679,7 @@ test("syllogise: cax-dw materializes a direct disjoint-type violation as a prova
 });
 
 test("syllogise: cax-dw materializes the ⊑-LIFTED case — x∈mock, mock⊑fixture, fixture disjointWith test "
-  + "(PLAN_INFERENCE_TESTING.md §1 footnote², B1's hardest cell — reuses deriveSubClassClosure's/"
-  + "deriveTypePropagation's ancestor-closure machinery, not a reimplementation)", async () => {
+  + "(reuses deriveSubClassClosure's/deriveTypePropagation's ancestor-closure machinery, not a reimplementation)", async () => {
   const dir = await mkRepo();
   try {
     await appendFact(dir, { subject: "fixture", predicate: DISJOINT_PREDICATE, object: "test", provenance: "ace:chat:s1" });
@@ -720,7 +717,7 @@ test("syllogise: cax-dw NEVER asserts a 'no' for an unrelated pair — silence, 
 });
 
 test("syllogise: cax-dw's entailed trust is PREMISE-DERIVED (min(premiseTrusts) × ruleConfidence), "
-  + "not the bare 0.3 floor — PLAN_INFERENCE_TESTING.md §4 stage 2's exit criterion, closed here for cax-dw", async () => {
+  + "not the bare 0.3 floor", async () => {
   const dir = await mkRepo();
   try {
     // Two DIFFERENT trust tiers so min() is meaningfully picking the weaker
@@ -786,7 +783,7 @@ test("syllogise: cls-svf1 materializes someValuesFrom restriction membership fro
 });
 
 test("syllogise: cls-svf1's ⊑-lift — y's type is a SUBCLASS of the restriction's declared target class "
-  + "(mirrors cax-dw's own footnote2 lift, PLAN_INFERENCE_TESTING.md §1 footnote²)", async () => {
+  + "(mirrors cax-dw's own lift)", async () => {
   const dir = await mkRepo();
   try {
     await assertSentence(dir, "every module that uses a fixture is a suite", { provenance: { source: "chat" } });
@@ -1166,7 +1163,7 @@ test("retractSubClassOf: a fact with a SECOND, independent derivation path survi
 });
 
 test("retractSubClassOf: a fact LATER independently taught survives even though its stale entailment "
-  + "justification broke — never touches a higher-trust taught-only derivation (PLAN_SYLLOGIST.md §3's own concern)", async () => {
+  + "justification broke — never touches a higher-trust taught-only derivation", async () => {
   const dir = await mkRepo();
   try {
     await appendFact(dir, { subject: "a", predicate: SUBCLASS_PREDICATE, object: "b", provenance: "corpus:x" });
@@ -1205,7 +1202,7 @@ test("retractSubClassOf: budget bounds the cascade and is honestly flagged trunc
 });
 
 test("syllogise: scm-sco conclusions persist a walkable justification (the two premise fact ids), "
-  + "read back by readFactRows — PLAN_INFERENCE_TESTING.md's own header note this was missing until now", async () => {
+  + "read back by readFactRows", async () => {
   const dir = await mkRepo();
   try {
     const p1 = await appendFact(dir, { subject: "a", predicate: SUBCLASS_PREDICATE, object: "b", provenance: "corpus:x" });

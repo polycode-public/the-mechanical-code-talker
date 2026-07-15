@@ -19,11 +19,11 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { runTurn } from "../src/chat.mjs";
-import { parseEntities } from "../src/codegraph.mjs";
-import { clearCache } from "../src/source.mjs";
+import { runTurn } from "../../src/chat.mjs";
+import { parseEntities } from "../../src/codegraph.mjs";
+import { clearCache } from "../../src/source.mjs";
 
-const FIXTURE = fileURLToPath(new URL("./fixtures/entities.fixture.json", import.meta.url));
+const FIXTURE = fileURLToPath(new URL("../fixtures/entities.fixture.json", import.meta.url));
 const CONFIG = { graphFile: FIXTURE };
 // answerCount (and therefore countFromFacts, one of the two lanes this test
 // exercises) declines outright with no graph loaded — pass it explicitly,

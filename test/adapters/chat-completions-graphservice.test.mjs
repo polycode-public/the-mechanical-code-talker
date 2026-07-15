@@ -23,16 +23,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { runTurn } from "../src/chat.mjs";
-import { appendFact } from "../src/memory/core.mjs";
-import { parseEntities } from "../src/codegraph.mjs";
-import { clearCache } from "../src/source.mjs";
-import * as source from "../src/source.mjs";
+import { runTurn } from "../../src/chat.mjs";
+import { appendFact } from "../../src/memory/core.mjs";
+import { parseEntities } from "../../src/codegraph.mjs";
+import { clearCache } from "../../src/source.mjs";
+import * as source from "../../src/source.mjs";
 
 // Same committed fixture graph test/chat-completions-wiring.test.mjs uses: Widget is a real
 // Class (defined in app/lib/b.mjs, contains a render method + a name attribute, inherits from
 // Base, Widget.render calls fnAlpha)
-const FIXTURE = fileURLToPath(new URL("./fixtures/entities.fixture.json", import.meta.url));
+const FIXTURE = fileURLToPath(new URL("../fixtures/entities.fixture.json", import.meta.url));
 const CONFIG = { graphFile: FIXTURE };
 let GRAPH;
 async function graph() { return (GRAPH ||= parseEntities(await source.fetchEntities(CONFIG))); }

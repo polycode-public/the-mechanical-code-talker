@@ -8,8 +8,8 @@ import { mkdtemp, rm, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { splitSentences, main } from "../scripts/extract-facts-from-text.mjs";
-import { loadMemory, readFactRows } from "../src/memory/core.mjs";
+import { splitSentences, main } from "../../scripts/extract-facts-from-text.mjs";
+import { loadMemory, readFactRows } from "../../src/memory/core.mjs";
 
 const FIXTURE_TEXT = [
   "Every module is a component.", // recognized: universal class-membership

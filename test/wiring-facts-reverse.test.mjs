@@ -127,8 +127,8 @@ test("WHAT_HAS_RE: 'what has a wheel' lists every distinct subject — car, bicy
 // "what is for riding" all fell through to the code-graph-flavored miss
 // cascade (misleadingly suggesting "which modules import <name>") even though
 // the answer — corpus:human's own "horse UsedFor riding" — was sitting right
-// there, surfaced correctly by "what is a horse". BUG 1 (test/wiring-facts.test.mjs)
-// only ever fixed the FORWARD direction (subject known: "what is a horse used
+// there, surfaced correctly by "what is a horse". The predicate-filter fix
+// only ever covered the FORWARD direction (subject known: "what is a horse used
 // for"); nothing answered the reverse (object known, subject unknown) until
 // this fix (WHAT_USED_FOR_RE, checked BEFORE the meta lane's own BARE_WHATIS_RE
 // so "what is used for riding" doesn't get treated as one literal term to

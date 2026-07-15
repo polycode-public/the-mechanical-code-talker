@@ -6,10 +6,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
-import { runTurn, CORPUS_LOOKUP_FLAG } from "../src/chat.mjs";
-import { clearCache } from "../src/source.mjs";
+import { runTurn, CORPUS_LOOKUP_FLAG } from "../../src/chat.mjs";
+import { clearCache } from "../../src/source.mjs";
 
-const FIXTURE = fileURLToPath(new URL("./fixtures/entities.fixture.json", import.meta.url));
+const FIXTURE = fileURLToPath(new URL("../fixtures/entities.fixture.json", import.meta.url));
 const CONFIG = { graphFile: FIXTURE };
 
 // FEATURE B (0.9.x): every runAsk-composed answer now carries an ALWAYS-ON
@@ -24,7 +24,7 @@ const GOAL_LINE_RE = /\n\nGoal \(inferred\):[^\n]*$/;
 const CANONICAL_LINE_RE = /\n\nCanonical:[^\n]*$/;
 const noGoal = (s) => String(s).replace(CANONICAL_LINE_RE, "").replace(GOAL_LINE_RE, "");
 
-test("W5: flag OFF (default) — the miss is byte-unchanged, no corpus consulted", async () => {
+test("corpus lookup: flag OFF (default) — the miss is byte-unchanged, no corpus consulted", async () => {
   const off = await runTurn("what is a cache", { config: CONFIG, env: {} });
   const bare = await runTurn("what is a cache", { config: CONFIG });
   assert.equal(off.answer.includes("the corpus knows"), false);
@@ -35,7 +35,7 @@ test("W5: flag OFF (default) — the miss is byte-unchanged, no corpus consulted
   clearCache();
 });
 
-test("W5: flag ON — an unknown-term miss appends the grounded aside, licence cited", async () => {
+test("corpus lookup: flag ON — an unknown-term miss appends the grounded aside, licence cited", async () => {
   const { answer, record } = await runTurn("what is a cache", {
     config: CONFIG, env: { [CORPUS_LOOKUP_FLAG]: "1" },
   });
@@ -48,7 +48,7 @@ test("W5: flag ON — an unknown-term miss appends the grounded aside, licence c
   clearCache();
 });
 
-test("W5: flag ON — a term unknown everywhere stays the plain honest miss", async () => {
+test("corpus lookup: flag ON — a term unknown everywhere stays the plain honest miss", async () => {
   const on = await runTurn("what is a flurbnix", { config: CONFIG, env: { [CORPUS_LOOKUP_FLAG]: "1" } });
   const off = await runTurn("what is a flurbnix", { config: CONFIG, env: {} });
   assert.equal(on.answer, off.answer, "no corpus hit → byte-identical honest miss");
@@ -57,7 +57,7 @@ test("W5: flag ON — a term unknown everywhere stays the plain honest miss", as
   clearCache();
 });
 
-test("W5: flag ON — a RESOLVED answer never grows an aside (misses only)", async () => {
+test("corpus lookup: flag ON — a RESOLVED answer never grows an aside (misses only)", async () => {
   const { answer, record } = await runTurn("which modules import a.mjs", {
     config: CONFIG, env: { [CORPUS_LOOKUP_FLAG]: "1" },
   });

@@ -12,12 +12,12 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { runTurn } from "../src/chat.mjs";
-import { loadMemory, readRuleRows, findRulesByName, readFactRows } from "../src/memory/core.mjs";
-import { parseEntities } from "../src/codegraph.mjs";
-import { clearCache } from "../src/source.mjs";
+import { runTurn } from "../../src/chat.mjs";
+import { loadMemory, readRuleRows, findRulesByName, readFactRows } from "../../src/memory/core.mjs";
+import { parseEntities } from "../../src/codegraph.mjs";
+import { clearCache } from "../../src/source.mjs";
 
-const FIXTURE = fileURLToPath(new URL("./fixtures/entities.fixture.json", import.meta.url));
+const FIXTURE = fileURLToPath(new URL("../fixtures/entities.fixture.json", import.meta.url));
 const CONFIG = { graphFile: FIXTURE };
 
 const ACTION_SENTENCES = [
@@ -29,7 +29,7 @@ const ACTION_SENTENCES = [
   "moving a disk onto a target makes the disk rest on the target.",
 ];
 
-test("1R: the worked example's action sentences all teach, and the stored family matches exactly", async () => {
+test("action rules: the worked example's action sentences all teach, and the stored family matches exactly", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-action-teach-"));
   try {
     for (const sentence of ACTION_SENTENCES) {
@@ -58,7 +58,7 @@ test("1R: the worked example's action sentences all teach, and the stored family
   }
 });
 
-test("1R: renders-as teaches an ordinary Fact on mgx:rendersAs", async () => {
+test("action rules: renders-as teaches an ordinary Fact on mgx:rendersAs", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-action-renders-"));
   try {
     const r = await runTurn("a disk renders as a block.", { config: CONFIG, memoryDir: dir, sessionId: "act" });
@@ -75,7 +75,7 @@ test("1R: renders-as teaches an ordinary Fact on mgx:rendersAs", async () => {
   }
 });
 
-test("1R: two same-name preconditions coexist; re-teaching is idempotent", async () => {
+test("action rules: two same-name preconditions coexist; re-teaching is idempotent", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-action-idem-"));
   try {
     await runTurn("to move a disk onto a target, nothing may rest on the disk.", { config: CONFIG, memoryDir: dir });
@@ -91,7 +91,7 @@ test("1R: two same-name preconditions coexist; re-teaching is idempotent", async
   }
 });
 
-test("1R: question leads and plain pronoun sentences still decline", async () => {
+test("action rules: question leads and plain pronoun sentences still decline", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-action-guards-"));
   try {
     const q = await runTurn("can you move a disk onto a peg?", { config: CONFIG, memoryDir: dir });
@@ -113,7 +113,7 @@ test("1R: question leads and plain pronoun sentences still decline", async () =>
   }
 });
 
-test("1R: a role word naming neither the subject class nor 'target' declines honestly, storing nothing", async () => {
+test("action rules: a role word naming neither the subject class nor 'target' declines honestly, storing nothing", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-action-role-"));
   try {
     const r = await runTurn("to move a disk onto a target, nothing may rest on the table.", { config: CONFIG, memoryDir: dir });
