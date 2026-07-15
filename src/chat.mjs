@@ -1532,7 +1532,7 @@ const WALL_MISS_ANYWHERE_RE = /couldn't parse this as a graph question\. Try:/;
 // assert/memory path; when it can't be stored, say what CAN be remembered
 // instead of the grammar wall or a silent data loss.
 const TEACH_RE = /^(?:please\s+)?(?:i\s+(?:want|wanted)\s+you\s+to\s+|i(?:'d|\s+would)\s+like\s+you\s+to\s+)?(?:remember|note|keep in mind|jot down|for the record|fyi|learn)\b(?:\s+(?:this|that|also))?[:,]?\s*(?:that\s+)?(.+?)[.?!]*$/i;
-const BARE_DECLARATIVE_RE = /^(?:every |each |all |a |an )?[\w-]+ (?:is|are) (?:a |an )?[\w-]+$/i;
+const BARE_DECLARATIVE_RE = /^(?:every |each |all |a |an )?[\w-]+(?: [\w-]+)? (?:is|are) (?:a |an )?[\w-]+$/i;
 /** Interrogative / auxiliary leads that make an "X is a Y"-shaped line a QUESTION
  *  ("what is a cache", "is a module a component"), never a teach declarative. */
 const QUESTION_LEAD_RE = /^(?:what|who|which|where|when|why|how|is|are|do|does|did|can|could|should|would|will|has|have)\b/i;

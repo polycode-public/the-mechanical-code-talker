@@ -600,3 +600,22 @@ test("vocabulary pronoun binding: a pronoun with no antecedent is never claimed 
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("multi-word teach round trip: ground 'guinea pig', teach the membership, ask it back — and capability teaches directly", async () => {
+  const dir = await mem();
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    await s.turn("every guinea pig is a thing");
+    await s.turn("every guinea pig is a rodent");
+    const isa = await s.turn("is a guinea pig a rodent");
+    await s.turn("a guinea pig can squeak");
+    const can = await s.turn("can a guinea pig squeak");
+    await s.close();
+    assert.match(isa.answer, /^yes — .*guinea pig is a kind of rodent/);
+    assert.match(can.answer, /^yes — .*guinea pig can squeak/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});

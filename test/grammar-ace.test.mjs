@@ -215,3 +215,21 @@ test("pattern 9: 'N can VERB' → mgx:capableOf; a noun 'can' or multi-word tail
   // negative modal: one token, never reaches the capability split
   assert.notEqual(parseAce("a module cannot bark")?.pattern, "capability");
 });
+
+test("compound noun (opt-in): 'a guinea pig can squeak' and 'every guinea pig is a rodent' resolve the two-noun subject as one space-joined term", () => {
+  const cap = parseAce("a guinea pig can squeak");
+  assert.equal(cap.pattern, "capability");
+  assert.deepEqual(cap.triples, [
+    { subject: "tmct:guinea pig", predicate: "mgx:capableOf", object: "tmct:squeak", kind: "mgx:capableOf" },
+  ]);
+  const every = parseAce("every guinea pig is a thing");
+  assert.equal(every.pattern, "subClassOf");
+  assert.deepEqual(every.triples, [
+    { subject: "tmct:guinea pig", predicate: "rdfs:subClassOf", object: "tmct:thing", kind: "rdfs:subClassOf" },
+  ]);
+});
+
+test("compound noun never fires where it isn't requested: a question lead ('does dog have a tail') is not an ACE teach", () => {
+  const r = parseAce("does dog have a tail");
+  assert.ok(!r || !r.triples?.length, "a question must never parse as a stored assertion");
+});

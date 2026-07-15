@@ -95,7 +95,7 @@ const stripDet = (tokens) =>
  *  with "a"/"an" — the one signal that a singular-plural-fold collision
  *  (die/dice, person/people, tooth/teeth) can be resolved by, rather than
  *  silently committing to whichever the lexicon happens to fold to first. */
-function resolveNP(lexicon, tokensIn) {
+function resolveNP(lexicon, tokensIn, { allowCompound = false } = {}) {
   const ns = lexicon.ns;
   const singularOnly = tokensIn.length > 1 && SINGULAR_ONLY_DET.has(tokensIn[0].toLowerCase());
   const tokens = stripDet(tokensIn);
@@ -130,6 +130,26 @@ function resolveNP(lexicon, tokensIn) {
         );
       }
       return { term, individual: false, noun, extras, unknown: [] };
+    }
+    // Two plain NOUNS in a row are ONE compound noun ("guinea pig", "sports
+    // car"), space-joined to match the corpus's own multi-word concepts
+    // ("schema person"), so the taught fact and the query side unify.
+    // STRICTLY OPT-IN per call site (allowCompound): only the patterns where
+    // a compound subject is safe request it — capability, quantified
+    // membership, disjointness, and the articled-complement copula. The
+    // generic relation walk and the bare-adjective copula never do, so a
+    // question lead ("does dog have…") or a property sentence ("checkout
+    // flow is deprecated") can never silently become an ACE teach. A
+    // DECLARED proper name in either slot ("GitLab pipeline") keeps the
+    // structural miss below — a name in the wrong slot, not a compound.
+    if (allowCompound
+      && !lookupProperName(lexicon, tokens[0]) && !lookupProperName(lexicon, tokens[1])
+      && /^[a-z][a-z'-]*$/i.test(tokens[0]) && /^[a-z][a-z'-]*$/i.test(tokens[1])) {
+      const n0 = lookupNoun(lexicon, tokens[0], { singularOnly: false });
+      const n1 = lookupNoun(lexicon, tokens[1], { singularOnly });
+      if (n0 && n1) {
+        return { term: `${ns}${tokens[0].toLowerCase()} ${tokens[1].toLowerCase()}`, individual: false, noun: n1, extras: [], unknown: [] };
+      }
     }
     // only genuinely undeclared words are residue — a declared word in the
     // wrong slot ("GitLab pipeline") is a structural miss, not an unknown
@@ -326,13 +346,11 @@ function parseEvery(lexicon, toks, lower) {
   }
   const isIdx = lower.indexOf("is");
   if (isIdx <= 1 || isIdx === toks.length - 1) return null;
-  const np1 = resolveNP(lexicon, toks.slice(1, isIdx));
   const rest = toks.slice(isIdx + 1);
-  if (rest.length === 1) {
-    const adj = lookupAdjective(lexicon, rest[0]);
-    if (adj) return adjectiveCopula(lexicon, PATTERN_ADJECTIVE, np1, adj);
-  }
-  const np2 = resolveNP(lexicon, rest);
+  const everyAdjOnly = rest.length === 1 ? lookupAdjective(lexicon, rest[0]) : null;
+  const np1 = resolveNP(lexicon, toks.slice(1, isIdx), { allowCompound: !everyAdjOnly });
+  if (everyAdjOnly) return adjectiveCopula(lexicon, PATTERN_ADJECTIVE, np1, everyAdjOnly);
+  const np2 = resolveNP(lexicon, rest, { allowCompound: true });
   if (np1.term == null || np2.term == null) return missOrNull(PATTERN_SUB_CLASS_OF, [np1, np2]);
   if (np1.individual || np2.individual) return null; // "every X is chat.mjs" — not the fragment
   return hit(PATTERN_SUB_CLASS_OF, [np1, np2], [
@@ -344,8 +362,8 @@ function parseEvery(lexicon, toks, lower) {
 function parseDisjoint(lexicon, toks, lower) {
   const isIdx = lower.indexOf("is");
   if (isIdx <= 1 || isIdx === toks.length - 1) return null;
-  const np1 = resolveNP(lexicon, toks.slice(1, isIdx));
-  const np2 = resolveNP(lexicon, toks.slice(isIdx + 1));
+  const np1 = resolveNP(lexicon, toks.slice(1, isIdx), { allowCompound: true });
+  const np2 = resolveNP(lexicon, toks.slice(isIdx + 1), { allowCompound: true });
   if (np1.term == null || np2.term == null) return missOrNull(PATTERN_DISJOINT_WITH, [np1, np2]);
   if (np1.individual || np2.individual) return null;
   return hit(PATTERN_DISJOINT_WITH, [np1, np2], [
@@ -393,14 +411,14 @@ function parseOfForm(lexicon, toks, lower) {
 
 /** Patterns 2 (class assertion), 1's bare-copula variant, and 8's copula arm. */
 function parseCopula(lexicon, toks, lower, isIdx) {
-  const np1 = resolveNP(lexicon, toks.slice(0, isIdx));
   const rest = toks.slice(isIdx + 1);
   if (!rest.length) return null;
+  const np1 = resolveNP(lexicon, toks.slice(0, isIdx), { allowCompound: rest.length > 1 });
   if (rest.length === 1) {
     const adj = lookupAdjective(lexicon, rest[0]);
     if (adj) return adjectiveCopula(lexicon, PATTERN_ADJECTIVE, np1, adj);
   }
-  const np2 = resolveNP(lexicon, rest);
+  const np2 = resolveNP(lexicon, rest, { allowCompound: true });
   if (np1.term == null || np2.term == null) {
     return missOrNull(np1.individual ? PATTERN_TYPE_ASSERTION : PATTERN_SUB_CLASS_OF, [np1, np2]);
   }
@@ -448,7 +466,7 @@ export function parseAce(sentence, lexicon = loadLexicon()) {
  *  has no negative-capability predicate, and a silently dropped negation
  *  would invert the taught meaning. */
 function parseCapability(lexicon, toks, canIdx) {
-  const np1 = resolveNP(lexicon, toks.slice(0, canIdx));
+  const np1 = resolveNP(lexicon, toks.slice(0, canIdx), { allowCompound: true });
   if (np1.term == null) return null;
   // The capability's object is a VERB ("swim"), not a lexicon noun, so
   // resolveNP is the wrong resolver for it: accept exactly one bare word,
