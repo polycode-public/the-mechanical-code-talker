@@ -65,6 +65,32 @@ them at scale if we score the raw chat surface:
 - **Silent wrong-lane writes.** PLAYTEST_LOG_011: "remember that dogs are animals" stored a
   garbled fact with no miss signal. The benchmark runs must be read-only.
 
+### What the shipped corpus tiers do and don't cover
+
+The importable corpus bundles (`tmct import --corpus human | human-medium | human-large |
+conceptnet | wordnet-xl | wordnet-full | namenet`, resolved from `corpus/`) do carry the
+everyday-domain **vocabulary**. `corpus/wordnet/wordnet-full.jsonl` (the largest tier) has
+real coverage of the CLINC/HWU domain nouns (bank 124 rows, travel 210, music 208,
+calendar 184, weather 82, alarm 32, restaurant 23), `wordnet-xl` and the ConceptNet slice
+thinner, `human-large` thinner still. Coverage is uneven exactly where CLINC150 lives:
+modern-device/app terms are near-absent (recipe 2 rows, playlist 2, timer 16).
+
+What none of them carry is **intent knowledge**. Every row is an ontological fact about a
+word (alarm HasProperty alarming; bank IsA financial-institution chains), so loading
+`wordnet-full` improves term resolution, never utterance-to-label mapping. It cannot
+substitute for the matcher. It matters in three places:
+
+- **A second as-is arm (step 1):** run the baseline bare AND with `wordnet-full` loaded.
+  More resolvable terms means more fact-lane firings on benchmark utterances, so the
+  loaded arm likely trades some of the trivial ~100% OOS recall for false accepts. That
+  measured delta is itself a useful result (what world knowledge without intent knowledge
+  buys, and costs).
+- **A tier-1 accuracy lever (step 2):** deterministic synonym/hypernym expansion of query
+  tokens from the WordNet corpus rows before IDF scoring — ethos-clean, and directly
+  attacks the short-utterance thin-overlap risk.
+- **The HWU64 gazetteer (step 2):** real hypernym chains help entity typing (jazz → music
+  genre), supplementing the training-fold lexicons for the 54 entity types.
+
 ## Design: a benchmark adapter, not a product rewrite
 
 New top-level `nlubench/` directory, sibling to `chatbench/`, holding data plumbing, the
@@ -146,6 +172,29 @@ product-path domain via `registerCapability` is a separate decision, out of scop
      does and does not support" section.
    - Fold the confirmed failure families back into the lever board as candidate levers,
      e.g. "short-utterance sink" if the ≤3-word catch-all shape reappears in adapter form.
+
+## Minimum success bar: non-degenerate scores
+
+The as-is table (0% / ~100% / ~0) is not yet a comparison; its numbers are artifacts of
+having no label space and refusing everything, and both endpoints are reachable by
+strategies that understand nothing. The plan's hard requirement is an uplift that puts
+every reported metric strictly inside the interval:
+
+- **CLINC150:** in-scope accuracy > 0 and OOS recall < 100 at the same frozen operating
+  point, and that point must strictly dominate the all-reject strategy (any in-scope
+  accuracy above 0 while holding OOS recall above the paper's ML baselines). The
+  threshold sweep (step 2) produces the full accuracy/OOS-recall trade-off curve on
+  validation; the write-up publishes the curve plus one frozen point, so nobody can
+  accuse the headline pair of being a cherry-picked corner.
+- **HWU64:** intent F1 and entity F1 both materially above zero under their protocol.
+  The sanity floor is the majority-class/random-label strategy computed from their own
+  splits (report it in the same table); tmct's F1 must clear it by a wide margin for the
+  run to count as a measurement rather than a stunt.
+
+If tier 1 cannot clear this bar (e.g. short utterances leave token overlap too thin), the
+fallback order is: corpus-backed synonym expansion, then character n-gram features, then
+the tier-2 embedding arm — each still deterministic and offline, each a separately
+labelled row so the claim stays honest about which machinery earned which number.
 
 ## Estimated outcomes with the adapter (priors to be tested, not claims)
 
