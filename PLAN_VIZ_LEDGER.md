@@ -1,9 +1,14 @@
 # PLAN_VIZ_LEDGER.md — a ledger-first memory-graph explorer with an in-browser chat dock
 
-Status: RESEARCH / DESIGN — not yet implemented. Nothing in this document is live code. The design
-itself is settled: two clickable mocks were built and operator-reviewed on 2026-07-15 (session
-artifacts; their decisions are recorded here and in `PLAN_HANOI.md`'s render section — this
-document is the system of record, the artifacts are not linked because artifact URLs rot).
+Status: IMPLEMENTED (2026-07-15) — phases 1-4 all shipped: `tmct viz --ledger`
+(`src/ledger-viz.mjs` + `src/viz-theme.mjs`), the chat dock (with `factReadBack` exported onto the
+bundle surface so taught-relation questions answer in-page), the Pages homepage hero
+(`scripts/build-demo-memory.mjs` + the `public/index.html` iframe), and the README pass. The body
+below is the design record; the risk list at the end carries the two implementation deviations
+(F1, F2) and the measured page weight. The design was settled by two clickable mocks built and
+operator-reviewed on 2026-07-15 (session artifacts; their decisions are recorded here and in
+`PLAN_HANOI.md`'s render section — this document is the system of record, the artifacts are not
+linked because artifact URLs rot).
 
 ## Origin
 
@@ -135,8 +140,20 @@ Verified against code this session:
 ## Open risks / questions
 
 - **Bundle weight.** The memory-ask bundle links most of `chat.mjs`'s transitive graph
-  (`scripts/build-ask-bundle.mjs`'s own note); the current viz page is ~645 KB. Measure before
-  shipping the ledger page to Pages; decide then whether a slimmer entry is worth building.
+  (`scripts/build-ask-bundle.mjs`'s own note); the current viz page is ~645 KB. Measured at
+  implementation: the Pages `ledger.html` is ~533 KB (the bundle grew 253→434 KB when
+  `factReadBack` pulled the router into its link graph). Revisit a slimmer entry only if the
+  page outgrows this.
+- **F1 — the dock carries no "Goal (inferred)" line** (deviation from the recorded design).
+  `factAnswer`/`factReadBack` return no goal field, and this plan's own non-goal forbids
+  changing the ask engine, so the dock omits the line honestly rather than synthesizing one.
+  Adding an additive `goal` field to those returns is a chat.mjs change that needs operator
+  sign-off against the non-goal.
+- **F2 — the contradiction bracket speaks the engine's real semantics.** `findContradictions`
+  groups ANY subject/predicate pair with two or more trusted objects, so multi-valued `has`/
+  `can` facts group under the same contract as genuine disagreements. The bracket copy is
+  "more than one answer on record — shown, never merged" for exactly this reason. A
+  predicate-cardinality exemption is an engine-level question, tracked in ROADMAP's follow-ups.
 - **Payload size on large stores.** `init:xl` stores hold 72k+ facts. Options: bound the
   embedded payload to the focus neighborhood plus a term index, or accept full payload up to a
   size cap. Undecided; Phase 1 can ship with a cap and a printed warning.
@@ -144,10 +161,10 @@ Verified against code this session:
   It must stay that: a second NL parser in the page would drift from the engine's own parse.
 - **Facet-count cost.** Counts are computed over the focus neighborhood only, never the whole
   store. That keeps the math cheap; confirm it also stays correct when the payload is bounded.
-- **`color-mix()` browser floor.** The trust borders use `color-mix()`. Acceptable for modern
-  browsers; pick a fallback (pre-computed tints) if Pages analytics say otherwise.
-- **Contradiction detection.** The mock used a same-subject/same-predicate placeholder. The real
-  page must read `findContradictions`' actual output, whatever shape that takes at build time.
+- **`color-mix()` browser floor.** Resolved at implementation: the trust borders ship as
+  precomputed rgba tints in `src/viz-theme.mjs`; no `color-mix()` anywhere.
+- **Contradiction detection.** Resolved at implementation: the page reads `findContradictions`'
+  real grouped output (see F2 above for what that contract means for the copy).
 - **Where the ledger surface ultimately lives.** It enters as `tmct viz --ledger`. Whether it
   becomes the default viz surface is the operator's call after Phase 2, with both pages in hand.
 

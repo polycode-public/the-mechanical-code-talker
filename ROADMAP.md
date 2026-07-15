@@ -10,7 +10,10 @@ open items, session-scoped), see `HANDOVER.md` instead — this file doesn't dup
 A tolerant, ELIZA/PARRY-style chat surface over a codebase, obsessed with software the way PARRY was
 obsessed with the mafia — deterministic, zero-cost, **no LLM anywhere in the product path**. Guides a
 user toward precision queries rather than guessing; every answer is grounded, restates every genuine
-reading it finds in full, or is an honest miss when nothing grounds it at all.
+reading it finds in full, or is an honest miss when nothing grounds it at all. Its visual surfaces —
+the ledger explorer with its in-browser chat (`tmct viz --ledger`), the animated plan page
+(`chat --prompt … --render blocks`), and the Pages homepage hero — are the same graph read out loud:
+same engine, same provenance, no LLM.
 
 ## Ambition
 
@@ -48,9 +51,19 @@ getting silently traded away by inherited caution:
   and an NPC turn scheduler. Design-only.
 - **`PLAN_SYLLOGIST.md`** — retraction-aware consistency checking under a hard budget and trust
   tiers, the one open piece of the reasoning engine's research horizon. Design-only.
-- **`PLAN_GUESS_NUMBER.md` / `PLAN_HANOI.md`** — closed-loop and open-loop planning domains for the
-  `findActionPath`/`findReachableSet` kernels, both already built and proven but not yet wired to
-  either domain. Design-only.
+- **`PLAN_HANOI.md` follow-ups** — the plan itself shipped (taught game domains, the chat plan
+  lane, `tmct import --file` + the `.tmct/imports/` scaffold, the animated plan page; see its
+  implementation addendum). Remaining: river-crossing's two missing frames plus the multi-effect
+  interpreter extension, and planner-side consumption of the `taught:` capability records the
+  registry bridge now registers.
+- **`PLAN_GUESS_NUMBER.md`** — the closed-loop (observe-and-replan) planning domain for the same
+  kernels. Design-only.
+- **`PLAN_VIZ_LEDGER.md` follow-ups** — phases 1-4 shipped (the ledger explorer, its chat dock,
+  the Pages hero, this README pass). Remaining: whether the ledger becomes the default viz
+  surface; a `goal` field on `factAnswer`'s returns so the dock can carry the chat's goal line
+  (needs operator sign-off — it touches the ask engine); a predicate-cardinality question for
+  `findContradictions` (multi-valued `has`/`can` facts group under the same contract as genuine
+  disagreements); bundle weight if the ledger page outgrows its measured ~533 KB.
 - **`PLAN_CODE.md`** — small JS-function and HTML/CSS-fragment synthesis via a sandboxed headless
   browser (Track 1, program synthesis, already shipped). Blocked on a sandbox dependency decision.
 - **`PLAN_AGENTS.md`** — the governing plan for tmct's broader multi-repo arc (marginalia, seonix,
