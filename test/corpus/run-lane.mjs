@@ -10,13 +10,24 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { stringify as stringifyToml } from "smol-toml";
 import { driveSessionTurns } from "../helpers/session.mjs";
 import * as predicates from "./predicates.mjs";
 
 const CORPUS_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(CORPUS_DIR, "..", "..");
+
+/** A lane's predicate registry: the shared predicates.mjs exports, plus the
+ *  lane's own predicates-<lane>.mjs when one exists (sharded lanes like
+ *  games/openers share the lane family's module). */
+export async function lanePredicates(laneName) {
+  const family = laneName.split("/")[0];
+  const laneFile = path.join(CORPUS_DIR, `predicates-${family}.mjs`);
+  if (!existsSync(laneFile)) return { ...predicates };
+  const laneModule = await import(pathToFileURL(laneFile).href);
+  return { ...predicates, ...laneModule };
+}
 
 export const EXPECT_MODES = ["exact", "regex", "predicate"];
 export const MEMORY_BACKENDS = ["file", "memory", "sqlite"];
@@ -134,7 +145,7 @@ function fixturePath(fixture) {
   return path.resolve(REPO_ROOT, "test", "fixtures", fixture);
 }
 
-function assertExpectation(exp, turn, rowId) {
+function assertExpectation(exp, turn, rowId, preds = predicates) {
   assert.ok(turn, `row ${rowId}: no turn at index ${exp.turn}`);
   const answer = String(turn.answer ?? "");
   if (exp.mode === "exact") {
@@ -143,7 +154,7 @@ function assertExpectation(exp, turn, rowId) {
     assert.match(answer, new RegExp(exp.value));
   } else {
     const { name, arg } = typeof exp.value === "string" ? { name: exp.value, arg: undefined } : exp.value;
-    const fn = predicates[name];
+    const fn = preds[name];
     assert.equal(typeof fn, "function", `row ${rowId}: unknown predicate ${name}`);
     assert.ok(fn(turn, arg), `row ${rowId}: predicate ${name} rejected turn ${exp.turn}: ${answer}`);
   }
@@ -156,7 +167,7 @@ function assertExpectation(exp, turn, rowId) {
   }
 }
 
-async function runChatRow(row) {
+async function runChatRow(row, preds = predicates) {
   const setup = row.setup ?? {};
   const scratchDir = await mkdtemp(path.join(tmpdir(), "tmct-corpus-"));
   try {
@@ -175,7 +186,7 @@ async function runChatRow(row) {
     const teach = setup.teach ?? [];
     const turns = await driveSessionTurns(sessionOpts, [...teach, ...row.turns]);
     const scripted = turns.slice(teach.length);
-    for (const exp of row.expect) assertExpectation(exp, scripted[exp.turn], row.id);
+    for (const exp of row.expect) assertExpectation(exp, scripted[exp.turn], row.id, preds);
   } finally {
     await rm(scratchDir, { recursive: true, force: true });
   }
@@ -184,9 +195,9 @@ async function runChatRow(row) {
 // Bench rows get a per-row scratch directory; "{SCRATCH}" in any argument
 // expands to it, so a row can direct a benchmark's --out (and any generated
 // inputs) away from the repo. The predicate sees it as result.scratchDir.
-async function runBenchRow(row) {
+async function runBenchRow(row, preds = predicates) {
   const { script, args = [], prep = [], predicate, arg } = row.run;
-  const fn = predicates[predicate];
+  const fn = preds[predicate];
   assert.equal(typeof fn, "function", `row ${row.id}: unknown predicate ${predicate}`);
   const scratchDir = await mkdtemp(path.join(tmpdir(), "tmct-bench-"));
   const fill = (a) => a.replaceAll("{SCRATCH}", scratchDir);
@@ -215,12 +226,13 @@ async function runBenchRow(row) {
 export function runLane(laneName) {
   const rows = readLaneRows(laneName);
   test(`corpus lane ${laneName}`, async (t) => {
+    const preds = await lanePredicates(laneName);
     for (const [i, row] of rows.entries()) {
       await t.test(row.id ?? `row ${i + 1}`, { skip: row.skip ?? false }, async () => {
-        const problems = validateRow(row);
+        const problems = validateRow(row, Object.keys(preds));
         assert.deepEqual(problems, [], `row schema problems:\n${problems.join("\n")}`);
-        if (row.run) await runBenchRow(row);
-        else await runChatRow(row);
+        if (row.run) await runBenchRow(row, preds);
+        else await runChatRow(row, preds);
       });
     }
   });

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { readLaneRows, validateRow } from "../corpus/run-lane.mjs";
+import { lanePredicates, readLaneRows, validateRow } from "../corpus/run-lane.mjs";
 
 const CORPUS_DIR = path.resolve(fileURLToPath(import.meta.url), "..", "..", "corpus");
 
@@ -13,11 +13,12 @@ const laneNames = fs
   .map((name) => name.slice(0, -".jsonl".length))
   .sort();
 
-test("every row of every corpus lane conforms to the row schema", () => {
+test("every row of every corpus lane conforms to the row schema", async () => {
   const problems = [];
   for (const lane of laneNames) {
+    const predicateNames = Object.keys(await lanePredicates(lane));
     for (const [i, row] of readLaneRows(lane).entries()) {
-      for (const problem of validateRow(row)) {
+      for (const problem of validateRow(row, predicateNames)) {
         problems.push(`${lane}.jsonl row ${i + 1} (${row?.id ?? "no id"}): ${problem}`);
       }
     }
