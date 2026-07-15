@@ -26,7 +26,7 @@ Every cycle MUST satisfy:
 
 - **Artifact naming — match the `package.json` version.** A cycle's write-up is named after the
   tmct version it measures: `BENCHMARK_AGENT_<version>.md`, raw under
-  `agentbench/results/raw/run-<version>/`. A RE-RUN of the same version (a harness fix, a second
+  `agentbench/results/raw/run-<version>[_00N]/`. A RE-RUN of the same version (a harness fix, a second
   driver, a re-verify) appends `_00N`: `BENCHMARK_AGENT_0.8.2_001.md`, `_002`, … — the same convention
   `SKILL_BENCHMARK_CEFR_ENGLISH.md` §1 and `SKILL_BENCHMARK_INFERENCE.md` §1 already use.
 - **Fixed, versioned case set:** `agentbench/cases.jsonl` — one JSON object per line
@@ -118,7 +118,8 @@ receipt for everything above it.
   further up the ladder.
 
 **Step 6 — WRITE the cycle up.** `BENCHMARK_AGENT_<version>.md` (§1's naming convention), modeled on the
-shape prior cycles already use (see `AGENTBENCH_0.8.2.md` for the pattern): a headline naming the
+shape prior cycles already use (see the latest `BENCHMARK_AGENT_<version>.md` on record for the
+pattern): a headline naming the
 honest delta versus the last cycle; the metric-pair table per rung; a per-driver comparison when more
 than one driver is measured (e.g. the resolver floor vs. the goal-reasoner ceiling); what's new this
 cycle, one item per change with the commit it landed in; any deliberately-kept honest red (a case
@@ -149,8 +150,10 @@ operator check-in rather than an automatic re-arm.
 
 - **The case set is sacred.** Append-only between cycles; never edit or delete an existing case
   mid-arc; record every addition in the write-up, and fixture-lint every new `expect.result` literal
-  (verify the truth by running it, never hand-author a guess) — the discipline `AGENTBENCH_0.8.2.md`
-  already documents for its +13 result-composition cases.
+  (verify the truth by running it, never hand-author a guess).
+- **Snapshot before overwrite.** The raw dir is keyed on `--stamp`, so a same-version re-run stamps
+  `_00N` (`run-<version>_001`) rather than clobbering the prior run's raw output — a skipped
+  snapshot is a process slip, the same rule chatbench holds.
 - **Zero hallucination is non-negotiable.** No cycle ships a driver change that trades hallucination
   for completion. If a change makes the driver reckless on any rung, it is reverted or gated off,
   not shipped with a caveat.

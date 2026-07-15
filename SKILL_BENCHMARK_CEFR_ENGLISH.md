@@ -93,7 +93,7 @@ Every cycle MUST satisfy:
   checked directly against the prior cycle's row for the same case id; **cell-level means** (grade
   × construction, single-area vs combination cells reported separately) stay the comparable
   cross-cycle statistic. **When running against the full `graded-pool-max.jsonl` footnote profile**
-  (above), v2's stratified-sampling behavior still applies as documented in `GRADED.md` — that file
+  (above), v2's stratified-sampling behavior still applies as documented in `chatbench/GRADED.md` — that file
   is large enough to need it; the go-to 109-case profile is not.
 - **Dual-draw agreement (parallel-forms reliability) — optional, off by default in the go-to
   profile.** The go-to profile runs **single-draw** (`--single`, no `--dual`) since its whole point

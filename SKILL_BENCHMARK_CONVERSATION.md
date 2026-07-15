@@ -8,9 +8,9 @@ closing that doesn't end on a wall; (2) whether tmct can **accept taught knowled
 USE it to make a further inference**, not just recall it verbatim on the next turn (teach-then-INFER,
 not just teach-then-recall); and (3) whether a broad, open-ended question gets a **detailed
 completions-style response** via `src/completions/`'s hub-avoiding crawl (the degree-dampened
-`broadSearch`/`groupHits`/`rankSentences` pipeline in `archive/PLAN_COMPLETIONS.md`) rather than the plain
-grammar wall. `CAPABILITIES_1.4.1.md` §5 names exactly this gap: two of this session's
-biggest capabilities — taught-relation inference and the completions pipeline — are real, shipped,
+`broadSearch`/`groupHits`/`rankSentences` pipeline in `src/completions/complete.mjs`) rather than
+the plain grammar wall. Two of the product's biggest capabilities — taught-relation inference and
+the completions pipeline — are real, shipped,
 and invisible to AGENTBENCH/INFBENCH/CHATBENCH alike. This skill is where they get tested.)*
 
 A fast, qualitative improvement loop for the CHAT SURFACE. Claude plays a curious user, holds
@@ -41,8 +41,7 @@ fixing LOCAL traps a real visitor would actually hit, quickly, looping until som
 finishes — now belongs to `SKILL_AGENT_FAST_LOOP.md`, not this doc. The two are complementary, not
 overlapping: the fast loop finds and patches the small stuff continuously; this skill periodically
 asks the bigger question ("where does this capability actually stop working, and across how many
-different kinds of user"), and its findings graduate into a `PLAN_*.md` doc (see
-`PLAN_CONVERSATION.md` for the first real example, born from exactly this kind of finding) rather
+different kinds of user"), and its findings graduate into a `PLAN_*.md` doc rather
 than a quick patch.
 
 This skill has **three modes**, sharing the same discipline (§1):
@@ -93,10 +92,9 @@ conversation stops. A dead-end is any turn whose reply is one of:
   passing while teach-then-INFER fails is exactly the gap this addition targets.
 - **(2026-07-10) a broad, open-ended question that should route to `src/completions/`'s pipeline**
   ("give me a detailed summary of how X works", "walk me through what happens when Y") hitting the
-  plain grammar wall with no inferred goal at all. Confirmed live, not hypothetical:
-  `BENCHMARK_CONVERSATION_1.4.1.md` round 3 found exactly this — the pipeline is real, shipped, and currently
-  unreachable from any chat turn. Until it's wired in, this is a NAMED, expected ceiling (say so
-  plainly, per the discipline below), not silently treated as a routing bug to fix on the spot.
+  plain grammar wall with no inferred goal at all. The pipeline is now wired into live chat
+  dispatch (the completions rescue in `src/chat.mjs`), so a broad question that still hits the
+  plain wall is an ordinary dead-end to diagnose and route, not a named ceiling.
 
 The bar: **every turn either answers, or gives a guiding nudge toward a precise query** (the "if you
 mean X then…" surround, a "did you mean" repair, a short tailored hint). A turn that does neither is
@@ -127,9 +125,11 @@ the highest-impact dead-end, since it's the one every future stranger session wi
 
 ## 1. The shared discipline: chat, find dead-ends, document, hand off
 
-**(Re-scoped 2026-07-11, operator instruction: this skill MEASURES and DOCUMENTS only, matching
-`SKILL_BENCHMARK_AGENT.md`/`SKILL_BENCHMARK_CEFR_ENGLISH.md`/`SKILL_BENCHMARK_INFERENCE.md` — none of
-those three fix anything inline, they measure and write a ranked "what to do next" list. This skill
+**(Re-scoped 2026-07-11, operator instruction: this skill MEASURES and DOCUMENTS only. The other
+three benchmark skills (`SKILL_BENCHMARK_AGENT.md`/`SKILL_BENCHMARK_CEFR_ENGLISH.md`/
+`SKILL_BENCHMARK_INFERENCE.md`) do build within their cycles — a lever, an engine capability, a
+router capability — but each keeps the measurement pass itself untouched and re-measures after;
+this skill goes further and has no build leg at all. It
 used to fix, freeze, and ship inline too, which made its own runtime unpredictable (an open-ended
 implementation-and-test cycle bolted onto what should be a bounded measurement pass) and duplicated
 `SKILL_AGENT_FAST_LOOP.md`'s actual job. Fixing dead-ends now happens ONLY in `SKILL_AGENT_FAST_LOOP.md`
@@ -161,16 +161,17 @@ this rule exists to prevent). Rules that make the play realistic:
 - **Open AND close like a real session, not just a query stream.** Include a genuine greeting turn
   and a genuine closing/thanks turn — not just structural questions in the middle. A conversation
   that flows perfectly in the middle but hits a wall on "cheers, that's everything, thanks" still
-  fails the fluid-conversation bar (found live, 2026-07-10 — see `BENCHMARK_CONVERSATION_1.4.1.md` round 3).
+  fails the fluid-conversation bar (found live in a 2026-07-10 playtest round).
 - **Test teach-then-INFER, not just teach-then-recall.** After teaching a fact, don't just ask for it
   back verbatim — ask a FOLLOW-UP question that requires COMBINING the taught fact with something
   else the graph or a prior taught fact already holds. A round-trip recall passing tells you almost
   nothing about whether the fact is actually usable in reasoning.
 - **Try at least one broad, open-ended "detail" question per session** ("give me a detailed summary
-  of how X works", "explain what happens when Y") — this is `archive/PLAN_COMPLETIONS.md`'s own territory
+  of how X works", "explain what happens when Y") — this is the completions pipeline's own territory
   (the hub-avoiding crawl: `broadSearch` → `groupHits` → `rankSentences`/`inferRelations` →
-  `prune`/voice pass, `src/completions/complete.mjs`). Until it's wired into chat dispatch, expect
-  and NAME the wall as a known ceiling (§0) rather than treating it as a fresh routing bug each time.
+  `prune`/voice pass, `src/completions/complete.mjs`, wired into live chat dispatch via the
+  completions rescue in `src/chat.mjs`). A broad question that hits the plain wall is an ordinary
+  dead-end to diagnose and route (§0).
 - Capture the transcript VERBATIM (pipe the turns: `printf 'q1\nq2\n…\n/exit\n' | node bin/tmct.mjs
   chat --repo <graph>`). In full ladder mode, run 3–6 short conversations per tier from different
   entry points (§2); in capped sprint mode, one conversation per round, chained off the prior round
@@ -263,8 +264,9 @@ to flow.
 Each tier is only unlocked when the tier below flows dead-end-free across several fresh
 conversations. A tier that is a genuine ceiling (a capability tmct deliberately does not have) is
 marked as such — the bar there is an **honest, guiding** dead-non-end, not a wall. This ladder is a
-qualitative flow ladder, purpose-built for this loop — it is not the CEFR bands `SKILL_BENCHMARK_
-CHAT.md` uses or the `INF-A1…C2` bands `SKILL_BENCHMARK_INFERENCE.md` uses. Don't relabel it.
+qualitative flow ladder, purpose-built for this loop — it is not the CEFR bands
+`SKILL_BENCHMARK_CEFR_ENGLISH.md` uses or the `INF-A1…C2` bands `SKILL_BENCHMARK_INFERENCE.md` uses.
+Don't relabel it.
 
 ### 2.2 The surface-variation axis (orthogonal to the ladder)
 
@@ -535,8 +537,9 @@ Report structure:
 ## 6. One-paragraph TL;DR
 
 This skill is the WIDE assessment: where does a capability actually stop working, across genuinely
-different kinds of user, so the operator can decide whether an architectural uplift is worth it. Like
-`SKILL_BENCHMARK_AGENT.md`/`SKILL_BENCHMARK_CEFR_ENGLISH.md`/`SKILL_BENCHMARK_INFERENCE.md`, it
+different kinds of user, so the operator can decide whether an architectural uplift is worth it.
+Unlike `SKILL_BENCHMARK_AGENT.md`/`SKILL_BENCHMARK_CEFR_ENGLISH.md`/`SKILL_BENCHMARK_INFERENCE.md`,
+which build within their own cycles, this skill has no build leg: it
 MEASURES AND DOCUMENTS ONLY — it never edits `src/` or `test/` itself. Play a curious user against a
 loaded example graph: follow the product's own guided questions, drill down with natural phrasing,
 and mark every DEAD-END (wall / "isn't a term" / "unknown qualifier" / phrasing-miss / an invited
