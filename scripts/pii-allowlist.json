@@ -1,0 +1,40 @@
+{
+  "description": "Findings scripts/pii-lint.mjs must not flag. Every entry names the exact string and the reason it is a legitimate public identity or technical artefact, not leaked PII.",
+  "entries": [
+    {
+      "match": "antony@polycode.co.uk",
+      "kind": "email",
+      "reason": "the intended public author/maintainer contact for this repository (package.json author, SECURITY.md contact)"
+    },
+    {
+      "match": "noreply@anthropic.com",
+      "kind": "email",
+      "reason": "the Co-Authored-By commit-trailer address this repository's contribution policy requires"
+    },
+    {
+      "match": "tj@vision-media.ca",
+      "kind": "email",
+      "reason": "upstream maintainer address inside the verbatim MIT licence texts vendored as test fixtures (test/fixtures/large-scale/js-express/LICENSE, js-commander/LICENSE)"
+    },
+    {
+      "match": "shtylman+expressjs@gmail.com",
+      "kind": "email",
+      "reason": "upstream maintainer address inside the verbatim MIT licence text vendored as a test fixture (test/fixtures/large-scale/js-express/LICENSE)"
+    },
+    {
+      "match": "doug@somethingdoug.com",
+      "kind": "email",
+      "reason": "upstream maintainer address inside the verbatim MIT licence text vendored as a test fixture (test/fixtures/large-scale/js-express/LICENSE)"
+    },
+    {
+      "match": "Antony at Polycode",
+      "kind": "name",
+      "reason": "the intended public author identity (the repository's git committer name)"
+    },
+    {
+      "match": "Polycode Limited",
+      "kind": "name",
+      "reason": "the publishing company, a public identity, not a private individual"
+    }
+  ]
+}

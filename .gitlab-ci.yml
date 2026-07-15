@@ -35,6 +35,15 @@ semgrep-sast:
   needs: []
   allow_failure: true
 
+# Tracked text files must stay free of home-directory paths, unallowlisted
+# email addresses and personal names — see scripts/pii-lint.mjs (and its
+# allowlist, scripts/pii-allowlist.json). Dependency-free, so no npm ci.
+pii:lint:
+  stage: verify
+  needs: []
+  script:
+    - node scripts/pii-lint.mjs
+
 secret_detection:
   stage: verify
   needs: []
