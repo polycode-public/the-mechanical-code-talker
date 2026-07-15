@@ -635,6 +635,106 @@ test("mixed-source isa chain: a taught anchor onto a corpus class answers up the
   }
 });
 
+test("do-support yes/no: 'do birds fly' (exactly 3 words) answers yes via the fact reader, not the isConversational() short-input catch-all", async () => {
+  const dir = await mem();
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    const r = await s.turn("do birds fly");
+    await s.close();
+    assert.match(r.answer, /^yes — bird can fly/);
+    const rec = await lastTurnRecord(s.sidecarFile);
+    assert.equal(rec.via, "fact");
+    assert.equal(rec.miss, false);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("do-support quantified: 'do all birds fly' answers generically and says so — never a bare universal yes", async () => {
+  const dir = await mem();
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    const r = await s.turn("do all birds fly");
+    await s.close();
+    assert.doesNotMatch(r.answer, /^yes/);
+    assert.match(r.answer, /can't speak for all birds/);
+    assert.match(r.answer, /bird can fly/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("reverse-by-verb: 'what can fly' (exactly 3 words) surfaces the capableOf fact by its object", async () => {
+  const dir = await mem();
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    const r = await s.turn("what can fly");
+    await s.close();
+    assert.match(r.answer, /bird can fly/);
+    const rec = await lastTurnRecord(s.sidecarFile);
+    assert.equal(rec.via, "fact");
+    assert.equal(rec.miss, false);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("kind-restricted reverse-by-verb: 'which animals can fly' resolves through the isa link to the kind", async () => {
+  const dir = await mem();
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    const r = await s.turn("which animals can fly");
+    await s.close();
+    assert.match(r.answer, /bird can fly/);
+    const rec = await lastTurnRecord(s.sidecarFile);
+    assert.equal(rec.miss, false);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("capability can't-confirm beats the orientation card: 'do birds swim' cites what birds CAN do with a round-trip teach hint, miss stays true", async () => {
+  const dir = await mem();
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    const r = await s.turn("do birds swim");
+    await s.close();
+    assert.match(r.answer, /I can't confirm that — nothing I remember says birds can swim/);
+    assert.match(r.answer, /bird can fly/);
+    assert.match(r.answer, /teach me: "a bird can swim"/);
+    assert.doesNotMatch(r.answer, /I'm tmct/);
+    const rec = await lastTurnRecord(s.sidecarFile);
+    assert.equal(rec.miss, true);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("can-lane hint honesty: a plural subject's teach hint names the singular the graph stores — 'a bird can swim', never 'a birds can swim'", async () => {
+  const dir = await mem();
+  try {
+    clearCache();
+    const s = await createSession({ repoPath: dir, env: {} });
+    const r = await s.turn("can birds swim");
+    await s.close();
+    assert.match(r.answer, /teach me: "a bird can swim"/);
+    assert.doesNotMatch(r.answer, /a birds can/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("mixed-source isa chain: a chain of ONLY corpus edges never answers — no taught premise, no yes", async () => {
   const dir = await mem();
   try {

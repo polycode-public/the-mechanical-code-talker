@@ -30,23 +30,28 @@ version, and pushes. Then the next iteration starts.
 
 Repeat until a stop condition (§7) fires:
 
-1. **Start the log.** Copy `EXAMPLE_PLAYTEST_LOG.md` to `playtests/PLAYTEST_LOG_<NNN>.md`
+1. **Check prior coverage first.** Before anything else, survey the existing
+   `playtests/PLAYTEST_LOG_*.md` files — each log's header records its Area and which axes are
+   exhausted vs untouched (`grep -h -i -E 'area|axes' playtests/PLAYTEST_LOG_*.md` is enough).
+   Pick this run's areas from the untouched list; don't re-plough ground a prior log already
+   proved passing.
+2. **Start the log.** Copy `EXAMPLE_PLAYTEST_LOG.md` to `playtests/PLAYTEST_LOG_<NNN>.md`
    (`NNN` = highest existing number + 1, zero-padded; `mkdir -p playtests` on first run). Adapt
    the copy (§2).
-2. **Pick one area** of conversation to explore (§4) — one area per iteration, recorded at the
+3. **Pick one area** of conversation to explore (§4) — one area per iteration, recorded at the
    top of the log with the tmct version under test.
-3. **Probe** with short piped sessions (§3) until you hit an edge. Max 3 examples per sentence
+4. **Probe** with short piped sessions (§3) until you hit an edge. Max 3 examples per sentence
    structure: the grammar rules are separate from the lexicon, so a third lexical variant of a
    failing shape proves nothing new.
-4. **Minimize the edge.** Strip the failing request word by word until it parses; keep the
+5. **Minimize the edge.** Strip the failing request word by word until it parses; keep the
    closest passing form and the minimal failing form as a pair. That pair defines the edge
    precisely and becomes the regression test.
-5. **Capture** in the log: the Given/When/Expected/Actual block, the verdict, and the verbatim
+6. **Capture** in the log: the Given/When/Expected/Actual block, the verdict, and the verbatim
    session log (§6). Succinct — a couple of discriminating examples, not every probe you ran.
-6. **Diagnose and fix** (§5), rerun the exact failing probes plus `npm test` until passing. If a
+7. **Diagnose and fix** (§5), rerun the exact failing probes plus `npm test` until passing. If a
    fix can't be made to pass without collateral damage, mark the log's result
    `Fail (unable to pass)` with one paragraph on why, revert the attempt, and still ship the log.
-7. **Ship.** Commit the fix + its regression test + the playtest log (repo-local identity),
+8. **Ship.** Commit the fix + its regression test + the playtest log (repo-local identity),
    bump the patch version, push. Then go to 1.
 
 ## 2. Adapting the copied log
@@ -159,7 +164,7 @@ load time against the closed relation/entity vocabularies. This is the same laye
 
 Every fix ships with a regression test named for the behavior it checks ("resolves 'X's
 importers' as a reverse imports query"), never for the playtest that found it. The minimal pair
-from §1 step 4 is the test's input.
+from §1 step 5 is the test's input.
 
 ## 6. What "captured succinctly" means
 

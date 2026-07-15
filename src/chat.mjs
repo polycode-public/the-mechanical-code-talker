@@ -4443,6 +4443,27 @@ const WHAT_HAS_RE = /^what\s+has\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
 // — actively misleading for a pure vocabulary query.
 const WHAT_USED_FOR_RE = /^what\s+(?:(?:can\s+be|is)\s+used\s+for|is\s+for)\s+(.+?)[?.!\s]*$/i;
 
+// CAN_ASK_RE's remaining paraphrase-ladder siblings, all over the same
+// mgx:capableOf facts:
+//  - DO_VERB_ASK_RE: the do-support yes/no ("do birds fly", "does a dog
+//    bark") plus its quantified form ("do all birds fly" — answered
+//    generically, never universally: the facts are generic, and claiming
+//    "all" from them would overclaim). Requires a SINGLE trailing verb
+//    word, so it stays disjoint from DOES_HAVE_ASK_RE (" have " in the
+//    middle) and the derived FORWARD_YESNO_MARKERS readers (verb phrase
+//    + object after it).
+//  - WHAT_CAN_VERB_RE: the reverse-by-verb open list ("what can fly") —
+//    the capability mirror of WHAT_USED_FOR_RE just above. "be …" tails
+//    are excluded (WHAT_USED_FOR_RE's own "what can be used for" lead);
+//    "… do" tails belong to WHAT_CAN_DO_RE and are guarded at the call
+//    site.
+//  - WHICH_KIND_CAN_RE: the kind-restricted form ("which animals can
+//    fly") — reverse-by-verb filtered to subjects the memory can tie to
+//    the named kind via a direct isa-family fact.
+const DO_VERB_ASK_RE = /^(?:do|does)\s+(all\s+|every\s+)?(?:an?\s+|the\s+)?([\w'-]+(?:\s+[\w'-]+)*?)\s+([a-z-]+)[?.!\s]*$/i;
+const WHAT_CAN_VERB_RE = /^what\s+can\s+(?!be\s)(.+?)[?.!\s]*$/i;
+const WHICH_KIND_CAN_RE = /^(?:which|what)\s+([\w'-]+(?:\s+[\w'-]+)*?)\s+can\s+(.+?)[?.!\s]*$/i;
+
 // The SAME gap as mgx:usedFor above is systemic — "what causes fire", "what is
 // made of wood" would otherwise fall through to the same misleading
 // code-graph miss. DERIVES a reverse-by-object regex for every
@@ -4754,8 +4775,11 @@ export async function factAnswer(memoryDir, query, envelope, miss, biasByBundle 
     const knownCan = facts.filter((f) => f.predicate === "mgx:capableOf" && subj.has(f.subject));
     if (knownCan.length) {
       const shown = knownCan.slice(0, 3).map(renderFactLine).join("; ");
+      // The teach hint names the subject as the GRAPH stores it (singular),
+      // not as the user typed it — 'teach me: "a birds can swim"' is a
+      // garbled hint that can't round-trip.
       return {
-        text: `I can't confirm that — nothing I remember says ${can[1]} can ${can[2]}. I do know: ${shown}. If it's true, teach me: "a ${can[1]} can ${can[2]}".`,
+        text: `I can't confirm that — nothing I remember says ${can[1]} can ${can[2]}. I do know: ${shown}. If it's true, teach me: "a ${knownCan[0].subject} can ${can[2]}".`,
         replace: true,
         miss: true,
       };
@@ -4779,6 +4803,42 @@ export async function factAnswer(memoryDir, query, envelope, miss, biasByBundle 
     return null;
   }
 
+  // (b2c) "do birds fly" — the do-support surface of (b2), same capableOf
+  // lookup. The quantified form ("do all birds fly") is answered generically
+  // and says so: the stored facts are generic, and a bare "yes" would claim
+  // universality the memory can't support. NEVER returns null on a non-match
+  // (falls through instead): the shape is looser than (b2)'s, so a do-lead
+  // question some later reader owns must keep its turn. The can't-confirm
+  // branch is additionally miss-gated for the same reason.
+  const doAsk = q.match(DO_VERB_ASK_RE);
+  if (doAsk) {
+    const facts = await memoryFacts(memoryDir);
+    const universal = !!doAsk[1];
+    const subj = factTermVariants(normFactTerm, doAsk[2]);
+    const obj = factTermVariants(normFactTerm, doAsk[3]);
+    const hit = facts.find(
+      (f) => f.predicate === "mgx:capableOf" && subj.has(f.subject) && obj.has(f.object),
+    );
+    if (hit && universal) {
+      return {
+        text: `I can't speak for all ${doAsk[2]} — what I remember is generic, not universal. I do know: ${renderFactLine(hit)}.`,
+        replace: true,
+      };
+    }
+    if (hit) return { text: `yes — ${renderFactLine(hit)}`, replace: true };
+    if (miss) {
+      const knownCan = facts.filter((f) => f.predicate === "mgx:capableOf" && subj.has(f.subject));
+      if (knownCan.length) {
+        const shown = knownCan.slice(0, 3).map(renderFactLine).join("; ");
+        return {
+          text: `I can't confirm that — nothing I remember says ${doAsk[2]} can ${doAsk[3]}. I do know: ${shown}. If it's true, teach me: "a ${knownCan[0].subject} can ${doAsk[3]}".`,
+          replace: true,
+          miss: true,
+        };
+      }
+    }
+  }
+
   // (b3) "what can a dog do" — every remembered mgx:capableOf fact for the
   // subject, open-list. Reuses the meta-lane's subject-hits/rank/render/
   // paginate recipe (lane (a) above) verbatim, with the predicate hardcoded.
@@ -4793,6 +4853,52 @@ export async function factAnswer(memoryDir, query, envelope, miss, biasByBundle 
     const rest = lines.slice(FACT_ANSWER_CAP);
     const extra = rest.length ? `\n…and ${rest.length} more — say 'more' to see them.` : "";
     return { text: shown.join("\n") + extra, replace: true, ...(rest.length ? { pending: { items: rest, noun: "facts" } } : {}) };
+  }
+
+  // (b3b) "which animals can fly" — reverse-by-verb over mgx:capableOf,
+  // restricted to subjects a direct isa-family fact ties to the named kind.
+  // When capable subjects exist but NONE provably belongs to the kind, the
+  // answer says so and still lists them — honest about the missing link
+  // instead of a silent empty. Only takes over on real capability hits;
+  // otherwise falls through (never returns null: "which X can Y" phrasings
+  // this reader doesn't own must keep their turn).
+  const whichCan = q.match(WHICH_KIND_CAN_RE);
+  if (whichCan) {
+    const kindVariants = factTermVariants(normFactTerm, whichCan[1]);
+    const verbVariants = factTermVariants(normFactTerm, whichCan[2]);
+    const facts = await factRows(memoryDir, cache);
+    const capable = uniqueFacts(facts.filter((f) => f.predicate === "mgx:capableOf" && verbVariants.has(f.object)));
+    if (capable.length) {
+      const inKind = capable.filter((f) =>
+        kindVariants.has(f.subject)
+        || facts.some((g) => ISA_PREDICATES.has(g.predicate) && g.subject === f.subject && kindVariants.has(g.object)));
+      const ranked = rankByBiasThenTrust(inKind.length ? inKind : capable, biasByBundle);
+      const lines = ranked.map(renderFactLine);
+      const shown = lines.slice(0, FACT_ANSWER_CAP);
+      const rest = lines.slice(FACT_ANSWER_CAP);
+      const extra = rest.length ? `\n…and ${rest.length} more — say 'more' to see them.` : "";
+      const preamble = inKind.length ? "" : `nothing I remember ties these to "${whichCan[1]}", but:\n`;
+      return { text: preamble + shown.join("\n") + extra, replace: true, ...(rest.length ? { pending: { items: rest, noun: "facts" } } : {}) };
+    }
+  }
+
+  // (b3c) "what can fly" — the unrestricted reverse-by-verb sibling of (b3b):
+  // every capableOf fact whose OBJECT matches. The "… do" tail is (b3)'s
+  // shape, guarded out so a zero-hit "what can a cat do" never gets misread
+  // here as a hunt for the capability "a cat do". Same fall-through
+  // discipline as (b3b).
+  const canVerb = q.match(WHAT_CAN_VERB_RE);
+  if (canVerb && canVerb[1].trim().split(/\s+/).at(-1)?.toLowerCase() !== "do") {
+    const verbVariants = factTermVariants(normFactTerm, canVerb[1]);
+    const hits = (await factRows(memoryDir, cache)).filter((f) => f.predicate === "mgx:capableOf" && verbVariants.has(f.object));
+    if (hits.length) {
+      const ranked = rankByBiasThenTrust(uniqueFacts(hits), biasByBundle);
+      const lines = ranked.map(renderFactLine);
+      const shown = lines.slice(0, FACT_ANSWER_CAP);
+      const rest = lines.slice(FACT_ANSWER_CAP);
+      const extra = rest.length ? `\n…and ${rest.length} more — say 'more' to see them.` : "";
+      return { text: shown.join("\n") + extra, replace: true, ...(rest.length ? { pending: { items: rest, noun: "facts" } } : {}) };
+    }
   }
 
   // (b4) "what has a wheel" — the REVERSE-by-OBJECT mirror of every other
@@ -7878,12 +7984,23 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // gets a turn.
   const reversePredicateShape = WHAT_USED_FOR_RE.test(gateQuery)
     || REVERSE_PREDICATE_MARKERS.some(({ re }) => re.test(gateQuery));
+  // The capability family's SHORTEST members ("can birds fly", "do birds
+  // fly", "what can bark" — all three words) trip isConversational()'s
+  // word-count catch-all before factAnswer's capability readers ever run;
+  // same divert-only-on-a-real-hit treatment as the reverse predicates
+  // above.
+  const capabilityAskShape = CAN_ASK_RE.test(gateQuery) || WHAT_CAN_DO_RE.test(gateQuery)
+    || DO_VERB_ASK_RE.test(gateQuery) || WHICH_KIND_CAN_RE.test(gateQuery) || WHAT_CAN_VERB_RE.test(gateQuery);
   let bareMetaHit = null;
-  if ((isConversationalCandidate || isBareCamelCaseWhatisCandidate) && (bareWhatisShape || isAdjectiveShape || reversePredicateShape)) {
+  if ((isConversationalCandidate || isBareCamelCaseWhatisCandidate) && (bareWhatisShape || isAdjectiveShape || reversePredicateShape || capabilityAskShape)) {
     if (memoryDir) {
       bareMetaHit = (await factAnswer(memoryDir, gateQuery, envelope, miss, biasByBundle, cache))
         ?? (await factReadBack(memoryDir, gateQuery, envelope, miss, graph, newFocus?.label, biasByBundle, cache));
-      if (bareMetaHit?.miss) bareMetaHit = null; // an honest-miss return never diverts the gate
+      // An honest-miss return never diverts the gate — EXCEPT the capability
+      // family's can't-confirm, which names the subject's real capabilities
+      // and a round-trip teach hint: strictly more useful than the
+      // orientation card this gate would otherwise fall to.
+      if (bareMetaHit?.miss && !capabilityAskShape) bareMetaHit = null;
       // A bare "what is X" with NO taught fact but a KNOWN curated corpus term
       // ("what is cache", no article) needs the same "only diverts on a REAL
       // hit" treatment — curatedDefinitionAnswer otherwise only ever runs once
@@ -7920,7 +8037,11 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   }
   if (bareMetaHit) {
     answer = bareMetaHit.replace ? bareMetaHit.text : `${answer}\n${bareMetaHit.text}`;
-    via = "fact"; recordMiss = false; handled = true;
+    // Same discipline as lane (3): a fact-lane return flagged `miss` is an
+    // honest miss in better words — the turn record keeps miss=true and via
+    // stays untouched.
+    if (!bareMetaHit.miss) { via = "fact"; recordMiss = false; }
+    handled = true;
     if (bareMetaHit.pending) factPending = bareMetaHit.pending;
     note(trace, "lane: (2b) BARE META FACT — \"what is X\" (no article) / \"is X <adjective>\" resolved to a remembered fact before the conversational catch-all could claim it");
     note(trace, "source: .tmct/memory Facts (see /memory for provenance per line)");
