@@ -226,7 +226,12 @@ test("keyword-spot only: \"which changes landed in commit ef74e44e25c8\" and the
 
 test("fuzzy keyword: \"which modules impotr walk.mjs\" (transposition, not in MISSPELLINGS) parses via the bounded-edit-distance tier", () => {
   const p = parseQuery("which modules impotr walk.mjs", { nlp: null });
-  assert.deepEqual(p, { shape: "reverse", entityType: "Module", modifier: "direct", kind: "imports", object: "walk.mjs" });
+  assert.deepEqual(p, {
+    shape: "reverse", entityType: "Module", modifier: "direct", kind: "imports", object: "walk.mjs",
+    // the repair is disclosed on the AST so consumers can tell a fuzzy-tier
+    // reading from an exact-vocabulary one
+    fuzzyVerb: true,
+  });
 });
 
 test("fuzzy keyword: a distance TIE between two vocab words is refused — the query stays an honest grammar miss", () => {

@@ -92,13 +92,14 @@ export function parseKeywordSpot(text, nlp = null) {
     verbHit = findPhrase(lemmaWords, VERB_TO_KIND);
     if (verbHit) canonWords = lemmaWords;
   }
+  let fuzzyVerb = false;
   if (!verbHit) {
     // tier 3: bounded-edit-distance rewrite toward verb/modifier keywords only
     // ("impotr" -> "import"); ≥4-char words only — below that the bound covers
     // half of English (and "and" is 1 edit from the "land in" constituent).
     const fuzzyWords = lcWords.map((w) => (w.length >= 4 && eligibleForCanon(w) ? fuzzyVocabWord(w) || w : w));
     verbHit = findPhrase(fuzzyWords, VERB_TO_KIND);
-    if (verbHit) canonWords = fuzzyWords;
+    if (verbHit) { canonWords = fuzzyWords; fuzzyVerb = true; }
   }
   if (!verbHit && lcWords.includes("by")) {
     // A participle with no active verb entry still marks a passive when a passive
@@ -109,6 +110,9 @@ export function parseKeywordSpot(text, nlp = null) {
     }
   }
   if (!verbHit) return null;
+  // A tier-3 verb is a REPAIR, not a reading — downstream consumers (the teach
+  // lane's canonical receipt) need to know the difference, so it rides the AST.
+  const stamp = (ast) => (fuzzyVerb ? { ...ast, fuzzyVerb: true } : ast);
   // POS rescue (Node-side only): a relation word used as a NOUN in a "the
   // <imports> of <term>" frame would otherwise misparse; only fires inside this
   // exact det+NOUN+"of" shape, since the same word tags NOUN in genuine verb use too.
@@ -119,7 +123,7 @@ export function parseKeywordSpot(text, nlp = null) {
       const tags = nlp.posTags(words);
       if (tags[i] === "NOUN") {
         const objText = words.slice(i + 2).filter((w, j) => !STOPWORDS.has(lcWords[i + 2 + j])).join(" ").trim();
-        if (objText) return { shape: "forward", entityType: null, modifier: "direct", kind: verbHit.kind, object: objText };
+        if (objText) return stamp({ shape: "forward", entityType: null, modifier: "direct", kind: verbHit.kind, object: objText });
       }
     }
   }
@@ -154,7 +158,7 @@ export function parseKeywordSpot(text, nlp = null) {
   // "when" turns a touches decomposition temporal; other verbs fall through.
   if (kind === "touches" && lcWords.includes("when")) {
     const objText = beforeText || afterText;
-    if (objText) return { shape: "when", entityType: null, modifier: "direct", kind: "touches", object: objText };
+    if (objText) return stamp({ shape: "when", entityType: null, modifier: "direct", kind: "touches", object: objText });
   }
 
   // "who last touched X" would otherwise list every touching commit's author,
@@ -162,7 +166,7 @@ export function parseKeywordSpot(text, nlp = null) {
   // stopwords and wouldn't survive into beforeText/afterText.
   if (kind === "touches" && lcWords.includes("who") && lcWords.includes("last")) {
     const objText = beforeText || afterText;
-    if (objText) return { shape: "whoLast", entityType: null, modifier: "direct", kind: "touches", object: objText };
+    if (objText) return stamp({ shape: "whoLast", entityType: null, modifier: "direct", kind: "touches", object: objText });
   }
 
   // Reversible passive ("PATIENT is VERBed BY AGENT"): a passive auxiliary plus a
@@ -190,7 +194,7 @@ export function parseKeywordSpot(text, nlp = null) {
         nextAfterBy = lcWords[i]; break;
       }
       const agentNamed = nextAfterBy != null && !WH_WORDS.has(nextAfterBy) && !ENTITY_TO_TYPE[nextAfterBy];
-      return { shape: agentNamed ? "forward" : "reverse", entityType, modifier, kind, object };
+      return stamp({ shape: agentNamed ? "forward" : "reverse", entityType, modifier, kind, object });
     }
   }
 
@@ -201,19 +205,19 @@ export function parseKeywordSpot(text, nlp = null) {
     let subject = beforeText;
     let object = afterText;
     if (INHERITS_REVERSE_VERBS.includes(verbPhrase)) [subject, object] = [object, subject];
-    return { shape: "ask", entityType: null, modifier: "direct", kind, subject, object };
+    return stamp({ shape: "ask", entityType: null, modifier: "direct", kind, subject, object });
   }
-  if (afterText) return { shape: "reverse", entityType, modifier, kind, object: afterText };
+  if (afterText) return stamp({ shape: "reverse", entityType, modifier, kind, object: afterText });
   // "what is a kind of class": when the object is itself an entity-type noun, the
   // entity match swallows the whole post-verb span as a grain qualifier, leaving
   // afterText empty — re-read that span as the object instead.
   if (kind === "inherits" && !beforeText && entityHit && entityHit.start === verbHit.end) {
     const entityText = canonWords.slice(entityHit.start, entityHit.end).join(" ");
-    if (entityText) return { shape: "reverse", entityType: null, modifier, kind, object: entityText };
+    if (entityText) return stamp({ shape: "reverse", entityType: null, modifier, kind, object: entityText });
   }
   // forward keeps the spotted entityType (traverse()'s commit-as-subject grain
   // selection); modifier stays hardcoded since no forward closure traversal exists.
-  if (beforeText) return { shape: "forward", entityType, modifier: "direct", kind, object: beforeText };
+  if (beforeText) return stamp({ shape: "forward", entityType, modifier: "direct", kind, object: beforeText });
   return null;
 }
 

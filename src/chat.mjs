@@ -4859,6 +4859,17 @@ const WHAT_HAS_RE = /^what\s+has\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
 // — actively misleading for a pure vocabulary query.
 const WHAT_USED_FOR_RE = /^what\s+(?:(?:can\s+be|is)\s+used\s+for|is\s+for)\s+(.+?)[?.!\s]*$/i;
 
+/** "where is disk-1[ now]" — the bare where question about a TAUGHT individual.
+ *  The term capture is lazy so an optional trailing "now" stays out of it; any
+ *  other tail ("where is X defined") lands in the capture, finds no locative
+ *  fact subject named that, and falls through to the code-graph where lane
+ *  unchanged. Consumed by factAnswer's (a-pre4) reader. */
+const WHERE_IS_FACT_RE = /^where(?:'s|\s+is|\s+are)\s+(.+?)(?:\s+now)?\s*[?.!]*$/i;
+/** The closed locative tail of a folded prepositional-verb predicate
+ *  (mgx:rest-on, mgx:stand-on, mgx:sit-in, …) — what makes a taught fact a
+ *  LOCATION answer rather than any arbitrary relation. */
+const LOCATIVE_FACT_PREDICATE_RE = /^mgx:[a-z]+-(?:on|in|at|inside|under|below|above|near|beside|behind|by)$/;
+
 // CAN_ASK_RE's remaining paraphrase-ladder siblings, all over the same
 // mgx:capableOf facts:
 //  - DO_VERB_ASK_RE: the do-support yes/no ("do birds fly", "does a dog
@@ -5126,6 +5137,28 @@ export async function factAnswer(memoryDir, query, envelope, miss, biasByBundle 
         const cite = steps.map((g) => `${factPhrase(g)}${g.provenance ? ` (source: ${g.provenance})` : ""}`).join("; ");
         return { text: `${order[0]} — ${cite}; so ${order[0]} is the ${supWord} ${kindSingular}`, replace: true };
       }
+    }
+  }
+
+  // (a-pre4) "where is disk-1" over TAUGHT LOCATIVE FACTS — the where shape
+  // belongs to the code graph (shape=where, "where is X defined"), so a taught
+  // individual with a location fact ("disk-1 rests on peg-a") otherwise dies on
+  // the "no module matching" miss. Miss-gated AND hit-gated: consulted only
+  // after the code lane already missed, and takes over only when a locative
+  // fact row for that exact subject exists — a real module answer, and every
+  // no-fact miss, is untouched.
+  const whereQ = miss ? q.match(WHERE_IS_FACT_RE) : null;
+  if (whereQ) {
+    const variants = factTermVariants(normFactTerm, whereQ[1]);
+    const hits = (await factRows(memoryDir, cache))
+      .filter((f) => LOCATIVE_FACT_PREDICATE_RE.test(f.predicate) && variants.has(f.subject));
+    if (hits.length) {
+      const ranked = rankByBiasThenTrust(uniqueFacts(hits), biasByBundle);
+      const lines = ranked.map(renderFactLine);
+      const shown = lines.slice(0, FACT_ANSWER_CAP);
+      const rest = lines.slice(FACT_ANSWER_CAP);
+      const extra = rest.length ? `\n…and ${rest.length} more — say 'more' to see them.` : "";
+      return { text: shown.join("\n") + extra, replace: true, ...(rest.length ? { pending: { items: rest, noun: "facts" } } : {}) };
     }
   }
 
@@ -8863,6 +8896,13 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       // line instead.
       deduced = "teach/remember a new fact";
       note(trace, `goal: ${deduced} (revised — the teach lane recognized this shape where the raw structural parse never should have)`);
+      // A canonical whose verb only matched through the fuzzy edit-distance
+      // tier ("disk-1 rests on peg-a." read as an ask about "tests") restates
+      // a repair, not the sentence — under a teach confirmation that's
+      // misleading, so it's dropped. An exact-vocabulary parse ("father is a
+      // kind of parent" as inherits) keeps its canonical: it genuinely
+      // restates the relation the teach stored.
+      if (envelope?.parsed?.fuzzyVerb) canonical = null;
     }
   }
   // (4b) #4 AUTHOR lane — "who is <Name>", "what did <Name> touch",
