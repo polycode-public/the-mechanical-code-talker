@@ -238,6 +238,55 @@ not a planned lever anymore.
   queries where token overlap is thin, which drags tier-1 accuracy toward the bottom of
   the ranges and makes the threshold choice the dominant variable.
 
+## Score-raising measures: the lever ladder
+
+Ordered by expected points-per-effort. Discipline is the chatbench contract's: **one lever
+per measured run**, results in the version-named write-up, so every movement is
+attributable. Deltas are against the spike bases (CLINC150 68.2%/89.7%, HWU64 0.792).
+
+- **L1 — pool evidence per intent (k-NN vote or class centroid), adopt as the harness
+  default.** Measured: +5.5 raw points on CLINC150 over the plan's literal 1-NN baseline;
+  on HWU64 all pooled arms already converge at 0.79. Zero risk, do it unconditionally.
+- **L2 — char 3–5-grams on the CLINC150 OOS axis.** Measured: +11.5 OOS recall at equal
+  accuracy. Slow index; CLINC-only (measured no gain on HWU64's closed-set task).
+- **L3 — wink-nlp lemma/token normalization in the matcher tokenizer.** Est. +1–2 on both
+  scales; also the first lever that makes the adapter genuinely tmct-flavoured rather
+  than generic IR.
+- **L4 — WordNet synonym/hypernym expansion from `corpus/wordnet/wordnet-full.jsonl`.**
+  Deterministic query-token expansion (synset siblings at a fixed weight discount)
+  before IDF scoring. Est. +2–4 where token overlap is thinnest (short imperative
+  utterances). Post-L3/L4 targets: CLINC150 ~71–73% in-scope at ~90% OOS recall; HWU64
+  intent F1 ~0.81–0.83 — knocking on LUIS's 0.855, unlikely to pass any of the four.
+- **L5 — the static-embedding arm (`src/embed.mjs` model2vec), separately labelled row.**
+  Est. the largest single jump: CLINC150 raw toward 87–90%; HWU64 toward 0.81–0.85,
+  i.e. within ~5 points of Rasa's 0.863. Never the headline row; the pure-IR claim
+  stays L1–L4 only.
+- **L6 — precision-first entity extraction (HWU64 entity F1).** Longest-match gazetteer
+  from training folds + hypernym typing from the WordNet corpus. This lever alone
+  decides the beat-Watson-0.488 coin-flip, the strongest single headline in the plan.
+- **L7 — inference uplift: complete OWL 2 RL property reasoning** (transitive / inverse /
+  symmetric / functional properties, subPropertyOf, property chains, sameAs,
+  allValuesFrom, hasValue, intersection completion — the ~70 unshipped RL rules; today
+  `src/syllogise.mjs` ships 7 kernels, all class-level). Honest annotation: this does
+  NOT move intent F1 — its benchmark surface is L6 (richer hypernym/role chains behind
+  entity typing) plus chatbench groundedness; its main value is product capability
+  (kinship, part-whole, role reasoning). Product-path work, delivered under the
+  Syllogist track (`PLAN_SYLLOGIST.md` carries the survey of this territory), recorded
+  here so the scoreboard linkage stays explicit.
+- **L8 — inference uplift: generalize the 1.11.0 rule-teach frames to full Horn rules.**
+  What shipped (compose-2 / filter / recursive frames, query-side hop-counted chase in
+  `src/chat.mjs`) is a closed set of rule templates. The uplift is arbitrary
+  conjunctive-body Horn rules ("every X that lives in water is aquatic"), forward-
+  chained by `syllogise()` under the same budget/focus/trust guards — Datalog over
+  binary predicates, still polynomial and deterministic. Same honest annotation as L7:
+  no direct intent-F1 effect; moves teach/ask capability and chatbench, and feeds L6's
+  typing. Stratified negation-as-failure stays out unless separately designed — it must
+  not erode the open-world honesty behavior that wins the CLINC OOS axis.
+
+Beyond L8, the reasoning ladder leaves this plan's scope entirely: OWL 2 EL
+classification and DL tableau reasoning are a rebuild, not a lever — designed separately
+in `PLAN_SYLLOGIST_EL_DL.md`.
+
 ## Risks and decision points
 
 - **Ethos boundary.** Tier 1 is classical deterministic IR and stays inside the no-LLM,
@@ -254,7 +303,9 @@ not a planned lever anymore.
 ## Non-goals
 
 - No product-path changes in this plan. The matcher is harness-only; promoting it to a
-  chat capability is a separate, later decision.
+  chat capability is a separate, later decision. Levers L7/L8 are the exception in
+  listing only: they are product-path work owned by the Syllogist track and appear in
+  the ladder solely so their (indirect) benchmark effect is measured here when they land.
 - No hand-authored FRAMES/lanes for benchmark domains. The playtests already show that
   approach grows one phrasing family at a time; it cannot reach 150 intents honestly.
 - No leaderboard chasing on in-scope accuracy against transformer models. The claims this
