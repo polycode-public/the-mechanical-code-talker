@@ -8161,12 +8161,16 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // ONLY when no code focus is standing (a graph session's own pronoun
   // resolution is untouched), the turn looks like a fact question, and the
   // LAST answer's own first fact line names a subject to bind to.
-  const vocabAntecedent = (!focus?.id && memoryDir
-    && /^(?:is|are|can|could|does|do|what)\b/i.test(frameLine)
-    && /\b(?:it|they)\b/i.test(frameLine))
+  // Anchored to SUBJECT position only: the pronoun must directly follow the
+  // opening auxiliary ("can it bark") or "what is/are" WITH a continuation
+  // ("what is it used for") — so idioms carrying a trailing dummy pronoun
+  // ("what time is it") and the bare "what is it" are never rewritten.
+  const pronounLead = frameLine.match(/^((?:is|are|can|could|does|do)\s+|what\s+(?:is|are)\s+)(?:it|they)\b(\s+\S.*)?$/i);
+  const vocabAntecedent = (!focus?.id && memoryDir && pronounLead
+    && !(/^what/i.test(pronounLead[1]) && !pronounLead[2]))
     ? vocabAntecedentFrom(last) : null;
   const workingLine = vocabAntecedent
-    ? frameLine.replace(/\bit\b/gi, vocabAntecedent).replace(/\bthey\b/gi, vocabAntecedent)
+    ? `${pronounLead[1]}${vocabAntecedent}${pronounLead[2] || ""}`
     : frameLine;
   const templates = await chatTemplates(); // failure-tolerated: null degrades, never throws
   const trace = narrate ? [] : null;

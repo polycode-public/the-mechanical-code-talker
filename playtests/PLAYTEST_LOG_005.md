@@ -96,12 +96,21 @@ Fix
 3. **Pronoun guard** on playtest 002's unknown-subject closer: it must never
    claim `I don't know "it"` — a pronoun is not a term.
 
+Hotfix folded in after the first full-suite run: the original gate rewrote
+ANY leading fact-question containing "it", which mangled the idiom "what
+time is it" (caught by the vocab-hint honesty pin). The binding is now
+anchored to SUBJECT position — the pronoun must directly follow the opening
+auxiliary ("can it bark") or "what is/are" with a continuation ("what is it
+used for") — so trailing dummy pronouns and the bare "what is it" are never
+rewritten.
+
 Known remainders (stated): "what about cats" (topic-shift ellipsis) is a
 different mechanism (discourseRewrite territory) — untouched this round. A
 cold pronoun with no antecedent still falls to the generic wall, honest if
-unhelpful. Bare 3-word fact questions WITHOUT a pronoun ("can dog bark",
-typed directly) still deflect to the conversational layer — pre-existing,
-out of this round's seam.
+unhelpful. The antecedent is one turn deep — an intervening non-fact turn
+(a deflection, a wall) decays it. Bare 3-word fact questions WITHOUT a
+pronoun ("can dog bark", typed directly) still deflect to the conversational
+layer — pre-existing, out of this round's seam.
 
 Regression tests: three new cases in `test/wiring-facts-reverse.test.mjs`
 (three-relation binding chain, antecedent movement across subjects, no
