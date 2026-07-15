@@ -157,9 +157,9 @@ genuine second derivation path, or one later independently taught, survives — 
 exactly as scoped above and NOT attempted: the true ATMS generalization (persisting every
 alternate justification SET per fact, not just one — this slice's VERIFY step gets the same answer
 for scm-sco's small rule set by re-deriving locally instead, which is cheap here but does not
-generalize to a rule set where that local re-derivation itself gets expensive), and extending
-justification-tracking to the other four rules (cax-sco/cax-dw/cls-svf1/scm-svf1), which is
-mechanical but unbuilt.
+generalize to a rule set where that local re-derivation itself gets expensive). Justification
+tracking for the other four rules (cax-sco/cax-dw/cls-svf1/scm-svf1) landed 2026-07-15 — see the
+addendum at the end of this file.
 
 ## 4. Relevance under budget is the same open question wearing a different hat
 
@@ -184,3 +184,37 @@ already-well-scoped-elsewhere topic — ROADMAP Item 11 covers Progol-style Indu
 Programming and Track 1's related-but-distinct CEGIS rule synthesis (`src/router/goal-reasoner.mjs`,
 `synthbench/`) in full. It stays a separate far spike from everything above; nothing in this document
 depends on it or blocks on it.
+
+---
+
+## Addendum, 2026-07-15 — justification landed for all five rules; the retraction cascade follows
+
+The four rules that carried no persisted justification (cax-sco, cax-dw, cls-svf1, scm-svf1) now
+persist one, the same way scm-sco already did: `syllogise()` writes each conclusion's premise fact
+ids (content-addressed via `factIdForTriple`) as `mgx:factJustification`. Each rule cites its own
+premise shape: cax-sco the type premise plus the direct ⊑ edge; cax-dw the type premise, the
+disjointWith premise (orientation-resolved, since the symmetric relation is stored one way) and the
+⊑-lift when there is one; cls-svf1 the property edge, the filler's type, the restriction's two
+scaffolding rows and the ⊑-lift; scm-svf1 the two restrictions' four scaffolding rows plus the
+filler ⊑ premise. A multi-hop ⊑ premise is cited as its direct edge, which scm-sco materializes in
+the same pass; a citation left dangling by budget truncation is inert, because retraction
+re-verifies every candidate rather than trusting the citation.
+
+`retractSubClassOf`'s cascade now covers all five rules' conclusions, keeping the same bounded,
+re-verified local check: per round it collects purely-entailed facts whose justification cites a
+removed id, then re-derives each candidate against the surviving facts using the rule family that
+owns its predicate (`buildSurvivorDerivabilityCheck` in `src/syllogise.mjs`). A conclusion still
+independently derivable survives. The entry point stays subClassOf-rooted, because chat's
+recognized retraction phrasings ("X is not a Y", "forget that X is a kind of Y") retract ⊑ facts;
+from there the cascade reaches propagated types, disjointness violations, and restriction
+membership/subsumption. Tests: one per rule in `test/syllogise.test.mjs`, each with a retracting
+half and a surviving (independently derivable) half; the pre-existing scm-sco retraction tests run
+unchanged.
+
+Still on the horizon, unchanged from §3: the ATMS generalization (tracking every alternate
+justification set per fact, de Kleer 1986). One concrete symptom this slice inherits from single
+justifications: a survivor keeps its now-stale justification, so a later retraction of its OTHER
+supporting path will not re-examine it, and the fact lingers until a fresh `syllogise` pass or an
+ATMS-shaped re-grounding step is designed. Until such a tier exists, retraction stays a bounded
+local check, and a lingering fact remains low-trust and retractable by provenance like every other
+entailment.

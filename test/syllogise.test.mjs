@@ -813,7 +813,9 @@ test("syllogise: cls-svf1 NEVER asserts membership for an unmatched property/typ
   try {
     await assertSentence(dir, "every module that imports a test is a suite", { provenance: { source: "chat" } });
     await assertSentence(dir, "chat.mjs imports widget.mjs", { provenance: { source: "chat" } });
-    await assertSentence(dir, "widget.mjs is a widget", { provenance: { source: "chat" } });
+    await assertSentence(dir, "widget.mjs is a template", { provenance: { source: "chat" } });
+    // the mismatch must be real, not vacuous: the value's type actually stored
+    assert.ok(hasType(readFactRows(await loadMemory(dir)), "widget.mjs", "template"));
 
     const res = await syllogise(dir);
     assert.ok(!res.derived.some((d) => d.rule === CLS_SVF1_RULE), "widget.mjs is not a test — cax-svf1 derives nothing for it");
@@ -885,8 +887,13 @@ test("syllogise: scm-svf1 NEVER asserts subsumption for unrelated fillers — si
   const dir = await mkRepo();
   try {
     await assertSentence(dir, "every module that imports a method is a formatter", { provenance: { source: "chat" } });
-    await assertSentence(dir, "every module that imports a widget is a suite", { provenance: { source: "chat" } });
-    // no ⊑ relation taught between "method" and "widget" at all
+    await assertSentence(dir, "every module that imports a template is a suite", { provenance: { source: "chat" } });
+    // no ⊑ relation taught between "method" and "template" at all — and BOTH
+    // restrictions must really be stored, or the "nothing derives" assertion
+    // below is vacuous (scm-svf1 needs two restrictions to compare at all)
+    const stored = readFactRows(await loadMemory(dir));
+    assert.ok(stored.some((r) => r.subject === "some-imports-method" && r.predicate === SOME_VALUES_FROM_PREDICATE));
+    assert.ok(stored.some((r) => r.subject === "some-imports-template" && r.predicate === SOME_VALUES_FROM_PREDICATE));
 
     const res = await syllogise(dir);
     assert.ok(!res.derived.some((d) => d.rule === SCM_SVF_RULE), "unrelated fillers — scm-svf1 derives nothing");
@@ -1211,6 +1218,135 @@ test("syllogise: scm-sco conclusions persist a walkable justification (the two p
     // a plain taught/stated fact carries NO justification at all
     const stated = subClassRows(rows).find((r) => r.subject === "a" && r.object === "b");
     assert.deepEqual(stated.justification, []);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---- the retraction cascade beyond scm-sco: all four remaining rules persist
+// a justification now, and retractSubClassOf's VERIFY step re-derives each
+// candidate with the rule family that owns its predicate. -------------------
+
+test("retractSubClassOf: retracting the ⊑ premise retracts the propagated rdf:type it justified, "
+  + "while a propagation with a second independent ⊑ route survives the same retraction", async () => {
+  const dir = await mkRepo();
+  try {
+    // store is reachable only through cache; archive through cache AND mirror
+    await appendFact(dir, { subject: "redis.mjs", predicate: TYPE_PREDICATE, object: "cache", provenance: "ace:chat:s1" });
+    await appendFact(dir, { subject: "redis.mjs", predicate: TYPE_PREDICATE, object: "mirror", provenance: "ace:chat:s1" });
+    await appendFact(dir, { subject: "cache", predicate: SUBCLASS_PREDICATE, object: "store", provenance: "ace:chat:s1" });
+    await appendFact(dir, { subject: "store", predicate: SUBCLASS_PREDICATE, object: "archive", provenance: "ace:chat:s1" });
+    await appendFact(dir, { subject: "mirror", predicate: SUBCLASS_PREDICATE, object: "archive", provenance: "ace:chat:s1" });
+    await syllogise(dir);
+    const before = readFactRows(await loadMemory(dir));
+    assert.ok(hasType(before, "redis.mjs", "store") && hasType(before, "redis.mjs", "archive"), "both types propagate before retraction");
+    const propagated = typeRows(before).find((r) => r.subject === "redis.mjs" && r.object === "store");
+    assert.ok(propagated.justification.length, "the propagated type persists a walkable justification");
+
+    await retractSubClassOf(dir, "cache", "store");
+    const rows = readFactRows(await loadMemory(dir));
+    assert.ok(!hasType(rows, "redis.mjs", "store"), "redis.mjs:store retracts — its only ⊑ route broke");
+    assert.ok(hasType(rows, "redis.mjs", "archive"), "redis.mjs:archive SURVIVES — still supported via mirror⊑archive");
+    assert.ok(hasType(rows, "redis.mjs", "cache") && hasType(rows, "redis.mjs", "mirror"), "the stated types are untouched");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("retractSubClassOf: retracting the ⊑-lift premise retracts the derived disjointWith 'no', "
+  + "while a violation still reachable through a second type route survives", async () => {
+  const dir = await mkRepo();
+  try {
+    await appendFact(dir, { subject: "e01.mjs", predicate: TYPE_PREDICATE, object: "cache", provenance: "ace:chat:s1" });
+    await appendFact(dir, { subject: "e01.mjs", predicate: TYPE_PREDICATE, object: "mirror", provenance: "ace:chat:s1" });
+    await appendFact(dir, { subject: "cache", predicate: SUBCLASS_PREDICATE, object: "volatile", provenance: "ace:chat:s1" });
+    await appendFact(dir, { subject: "mirror", predicate: SUBCLASS_PREDICATE, object: "volatile", provenance: "ace:chat:s1" });
+    await appendFact(dir, { subject: "cache", predicate: SUBCLASS_PREDICATE, object: "fleeting", provenance: "ace:chat:s1" });
+    await appendFact(dir, { subject: "volatile", predicate: DISJOINT_PREDICATE, object: "persistent", provenance: "ace:chat:s1" });
+    await appendFact(dir, { subject: "fleeting", predicate: DISJOINT_PREDICATE, object: "durable", provenance: "ace:chat:s1" });
+    await syllogise(dir);
+    const before = readFactRows(await loadMemory(dir));
+    assert.ok(hasDisjoint(before, "e01.mjs", "persistent") && hasDisjoint(before, "e01.mjs", "durable"), "both violations derive before retraction");
+    const violation = disjointRows(before).find((r) => r.subject === "e01.mjs" && r.object === "durable");
+    assert.ok(violation.justification.length, "the derived violation persists a walkable justification");
+
+    // durable is reachable only through cache⊑fleeting — the violation retracts
+    await retractSubClassOf(dir, "cache", "fleeting");
+    const afterFirst = readFactRows(await loadMemory(dir));
+    assert.ok(!hasDisjoint(afterFirst, "e01.mjs", "durable"), "e01.mjs's 'not a durable' retracts — its only lift broke");
+    assert.ok(hasDisjoint(afterFirst, "e01.mjs", "persistent"), "the unrelated violation is untouched");
+
+    // persistent stays reachable through mirror⊑volatile — the violation survives
+    await retractSubClassOf(dir, "cache", "volatile");
+    const afterSecond = readFactRows(await loadMemory(dir));
+    assert.ok(hasDisjoint(afterSecond, "e01.mjs", "persistent"), "e01.mjs's 'not a persistent' SURVIVES — mirror⊑volatile still supports it");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("retractSubClassOf: retracting the filler-type's ⊑-lift premise retracts the someValuesFrom "
+  + "restriction membership, while a membership whose filler keeps a second ⊑ route survives", async () => {
+  const dir = await mkRepo();
+  try {
+    await assertSentence(dir, "every module that uses a fixture is a suite", { provenance: { source: "chat" } });
+    await assertSentence(dir, "every module that uses a helper is a formatter", { provenance: { source: "chat" } });
+    await appendFact(dir, { subject: "e01.mjs", predicate: "tmct:uses", object: "e02.mjs", provenance: "ace:chat:s1" });
+    await appendFact(dir, { subject: "e02.mjs", predicate: TYPE_PREDICATE, object: "mock", provenance: "ace:chat:s1" });
+    await appendFact(dir, { subject: "e02.mjs", predicate: TYPE_PREDICATE, object: "stub", provenance: "ace:chat:s1" });
+    await appendFact(dir, { subject: "mock", predicate: SUBCLASS_PREDICATE, object: "fixture", provenance: "ace:chat:s1" });
+    await appendFact(dir, { subject: "stub", predicate: SUBCLASS_PREDICATE, object: "fixture", provenance: "ace:chat:s1" });
+    await appendFact(dir, { subject: "mock", predicate: SUBCLASS_PREDICATE, object: "helper", provenance: "ace:chat:s1" });
+    await syllogise(dir);
+    const before = readFactRows(await loadMemory(dir));
+    assert.ok(hasType(before, "e01.mjs", "some-uses-fixture") && hasType(before, "e01.mjs", "some-uses-helper"), "both memberships derive before retraction");
+    const membership = typeRows(before).find((r) => r.subject === "e01.mjs" && r.object === "some-uses-helper");
+    assert.ok(membership.justification.length, "the derived membership persists a walkable justification");
+
+    // helper is reachable from e02.mjs's types only through mock⊑helper
+    await retractSubClassOf(dir, "mock", "helper");
+    const afterFirst = readFactRows(await loadMemory(dir));
+    assert.ok(!hasType(afterFirst, "e01.mjs", "some-uses-helper"), "the membership retracts — its only lift broke");
+    assert.ok(hasType(afterFirst, "e01.mjs", "some-uses-fixture"), "the unrelated membership is untouched");
+
+    // fixture stays reachable through stub⊑fixture — the membership survives
+    await retractSubClassOf(dir, "mock", "fixture");
+    const afterSecond = readFactRows(await loadMemory(dir));
+    assert.ok(hasType(afterSecond, "e01.mjs", "some-uses-fixture"), "the membership SURVIVES — e02.mjs is still a stub, and stub⊑fixture holds");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("retractSubClassOf: retracting the filler ⊑ premise retracts the restriction-to-restriction "
+  + "subsumption, while one whose fillers stay ⊑-connected through a surviving chain survives", async () => {
+  const dir = await mkRepo();
+  try {
+    await assertSentence(dir, "every module that imports a method is a formatter", { provenance: { source: "chat" } });
+    await assertSentence(dir, "every module that imports a fixture is a suite", { provenance: { source: "chat" } });
+    await assertSentence(dir, "every module that imports a helper is a suite", { provenance: { source: "chat" } });
+    await appendFact(dir, { subject: "method", predicate: SUBCLASS_PREDICATE, object: "helper", provenance: "ace:chat:s1" });
+    await appendFact(dir, { subject: "method", predicate: SUBCLASS_PREDICATE, object: "fixture", provenance: "ace:chat:s1" });
+    // a second, chained route keeps method⊑fixture true after the direct fact goes
+    await appendFact(dir, { subject: "method", predicate: SUBCLASS_PREDICATE, object: "test", provenance: "ace:chat:s1" });
+    await appendFact(dir, { subject: "test", predicate: SUBCLASS_PREDICATE, object: "fixture", provenance: "ace:chat:s1" });
+    await syllogise(dir);
+    const before = readFactRows(await loadMemory(dir));
+    assert.ok(hasEdge(before, "some-imports-method", "some-imports-helper"), "the helper subsumption derives before retraction");
+    assert.ok(hasEdge(before, "some-imports-method", "some-imports-fixture"), "the fixture subsumption derives before retraction");
+    const subsumption = subClassRows(before).find((r) => r.subject === "some-imports-method" && r.object === "some-imports-helper");
+    assert.ok(subsumption.justification.length, "the derived subsumption persists a walkable justification");
+
+    // method⊑helper is the ONLY filler relation behind the helper subsumption
+    await retractSubClassOf(dir, "method", "helper");
+    const afterFirst = readFactRows(await loadMemory(dir));
+    assert.ok(!hasEdge(afterFirst, "some-imports-method", "some-imports-helper"), "the subsumption retracts — its filler ⊑ premise broke");
+    assert.ok(hasEdge(afterFirst, "some-imports-method", "some-imports-fixture"), "the unrelated subsumption is untouched");
+
+    // method⊑fixture still holds via method⊑test⊑fixture — the subsumption survives
+    await retractSubClassOf(dir, "method", "fixture");
+    const afterSecond = readFactRows(await loadMemory(dir));
+    assert.ok(hasEdge(afterSecond, "some-imports-method", "some-imports-fixture"), "the subsumption SURVIVES — the fillers stay ⊑-connected through test");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

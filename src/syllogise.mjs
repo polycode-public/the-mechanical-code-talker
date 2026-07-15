@@ -694,6 +694,7 @@ export async function syllogise(repoDir, { depth = 32, budget = 50, focus = null
   const trustByTriple = new Map();
   for (const r of rows) trustByTriple.set(`${r.subject}${SEP}${r.predicate}${SEP}${r.object}`, r.trust);
   const premiseTrust = (s, p, o) => trustByTriple.get(`${s}${SEP}${p}${SEP}${o}`);
+  const hasTriple = (s, p, o) => trustByTriple.has(`${s}${SEP}${p}${SEP}${o}`);
   const numericOnly = (arr) => arr.filter((t) => typeof t === "number");
 
   const scmDerived = deriveSubClassClosure(subClassEdges, { depth, budget, focus: normalizedFocus });
@@ -732,11 +733,12 @@ export async function syllogise(repoDir, { depth = 32, budget = 50, focus = null
     ...scmDerived.map((d) => ({
       subject: d.subject, predicate: SUBCLASS_PREDICATE, object: d.object,
       provenance: ENTAILED_PROVENANCE,
-      // Persisted justification, scm-sco only: the two premise fact ids this
-      // conclusion rode (a⊑b, b⊑c) — content-addressed ids work even when a
-      // premise is itself an entailment this same pass just derived. Read
-      // back by retractSubClassOf (below) to find every entailment a
-      // retracted premise could have supported.
+      // Persisted justification: the premise fact ids this conclusion rode
+      // (a⊑b, b⊑c) — content-addressed ids work even when a premise is
+      // itself an entailment this same pass just derived. Read back by
+      // retractSubClassOf (below) to find every entailment a retracted
+      // premise could have supported. All five rules persist one, each
+      // citing its own premise shape.
       justification: [
         factIdForTriple(d.subject, SUBCLASS_PREDICATE, d.via),
         factIdForTriple(d.via, SUBCLASS_PREDICATE, d.object),
@@ -745,15 +747,24 @@ export async function syllogise(repoDir, { depth = 32, budget = 50, focus = null
     ...caxDerived.map((d) => ({
       subject: d.subject, predicate: TYPE_PREDICATE, object: d.object,
       provenance: ENTAILED_TYPE_PROVENANCE,
+      // The ⊑ premise is cited as the DIRECT via⊑object edge even when the
+      // taught chain is multi-hop: scm-sco materializes that edge (this same
+      // pass or an earlier one), and retraction re-VERIFIES every candidate
+      // anyway, so a citation left dangling by budget truncation is inert.
+      justification: [
+        factIdForTriple(d.subject, TYPE_PREDICATE, d.via),
+        factIdForTriple(d.via, SUBCLASS_PREDICATE, d.object),
+      ],
     })),
     ...dwDerived.map((d) => {
       // disjointWith is symmetric, taught as ONE direction — the premise row
-      // could be stored either (viaClass, disjointWith, object) or its mirror.
-      const dwTrust = premiseTrust(d.viaClass, DISJOINT_PREDICATE, d.object)
-        ?? premiseTrust(d.object, DISJOINT_PREDICATE, d.viaClass);
+      // could be stored either (viaClass, disjointWith, object) or its
+      // mirror; resolve which, so the justification cites a real stored id.
+      const dwStoredForward = hasTriple(d.viaClass, DISJOINT_PREDICATE, d.object);
+      const [dwS, dwO] = dwStoredForward ? [d.viaClass, d.object] : [d.object, d.viaClass];
       const premiseTrusts = numericOnly([
         premiseTrust(d.subject, TYPE_PREDICATE, d.viaType),
-        dwTrust,
+        premiseTrust(dwS, DISJOINT_PREDICATE, dwO),
         // the ⊑-lift premise only exists when this IS a lift (viaClass !==
         // viaType) — a direct hit has no extra subClassOf premise to price in.
         ...(d.viaClass !== d.viaType ? [premiseTrust(d.viaType, SUBCLASS_PREDICATE, d.viaClass)] : []),
@@ -761,6 +772,11 @@ export async function syllogise(repoDir, { depth = 32, budget = 50, focus = null
       return {
         subject: d.subject, predicate: DISJOINT_PREDICATE, object: d.object,
         provenance: ENTAILED_DISJOINT_PROVENANCE,
+        justification: [
+          factIdForTriple(d.subject, TYPE_PREDICATE, d.viaType),
+          factIdForTriple(dwS, DISJOINT_PREDICATE, dwO),
+          ...(d.viaClass !== d.viaType ? [factIdForTriple(d.viaType, SUBCLASS_PREDICATE, d.viaClass)] : []),
+        ],
         ...(premiseTrusts.length ? { premiseTrusts, ruleConfidence: CAX_DW_RULE_CONFIDENCE } : {}),
       };
     }),
@@ -777,6 +793,13 @@ export async function syllogise(repoDir, { depth = 32, budget = 50, focus = null
       return {
         subject: d.subject, predicate: TYPE_PREDICATE, object: d.object,
         provenance: ENTAILED_SVF1_PROVENANCE,
+        justification: [
+          factIdForTriple(d.subject, d.viaProperty, d.viaValue),
+          factIdForTriple(d.viaValue, TYPE_PREDICATE, d.viaType),
+          factIdForTriple(d.object, ON_PROPERTY_PREDICATE, d.viaPropertyKey),
+          factIdForTriple(d.object, SOME_VALUES_FROM_PREDICATE, d.viaTarget),
+          ...(d.viaType !== d.viaTarget ? [factIdForTriple(d.viaType, SUBCLASS_PREDICATE, d.viaTarget)] : []),
+        ],
         // same sub-1 discount as cax-dw, same reason (see CAX_DW_RULE_CONFIDENCE).
         ...(premiseTrusts.length ? { premiseTrusts, ruleConfidence: CLS_SVF1_RULE_CONFIDENCE } : {}),
       };
@@ -794,6 +817,13 @@ export async function syllogise(repoDir, { depth = 32, budget = 50, focus = null
       return {
         subject: d.subject, predicate: SUBCLASS_PREDICATE, object: d.object,
         provenance: ENTAILED_SCM_SVF_PROVENANCE,
+        justification: [
+          ...(r1 ? [factIdForTriple(d.subject, ON_PROPERTY_PREDICATE, r1.property)] : []),
+          factIdForTriple(d.subject, SOME_VALUES_FROM_PREDICATE, d.viaY1),
+          ...(r2 ? [factIdForTriple(d.object, ON_PROPERTY_PREDICATE, r2.property)] : []),
+          factIdForTriple(d.object, SOME_VALUES_FROM_PREDICATE, d.viaY2),
+          factIdForTriple(d.viaY1, SUBCLASS_PREDICATE, d.viaY2),
+        ],
         // same sub-1 discount as cax-dw/cls-svf1, same reason (see CAX_DW_RULE_CONFIDENCE).
         ...(premiseTrusts.length ? { premiseTrusts, ruleConfidence: SCM_SVF_RULE_CONFIDENCE } : {}),
       };
@@ -838,21 +868,112 @@ function isPurelyEntailed(provenance) {
   return tags.length > 0 && tags.every((t) => t.startsWith("entailed:"));
 }
 
+/** Builds the per-round VERIFY oracle for retraction: given ONLY the
+ *  surviving fact rows, returns `stillDerivable(row)` — true when the row's
+ *  (s,p,o) conclusion is re-derivable from survivors by the rule family that
+ *  owns its predicate (scm-sco/scm-svf1 for subClassOf, cax-sco/cls-svf1 for
+ *  rdf:type, cax-dw for disjointWith). One shared ancestor closure plus small
+ *  indexes per round, joining exactly what each derive kernel joins. Pure,
+ *  no I/O. */
+function buildSurvivorDerivabilityCheck(rows) {
+  const subClassEdges = [];
+  const typesOf = new Map();          // x -> Set(surviving direct type classes)
+  const disjointOf = new Map();       // term -> Set(disjoint partners), symmetric
+  const onPropertyOf = new Map();     // restriction -> owl:onProperty's object
+  const someValuesFromOf = new Map(); // restriction -> owl:someValuesFrom's object
+  const propertyEdgesOf = new Map();  // x -> [[normalized predicate, y], …]
+  for (const r of rows) {
+    const pLower = String(r.predicate || "").trim().toLowerCase();
+    if (isSubClassOf(r.predicate)) subClassEdges.push([r.subject, r.object]);
+    else if (isType(r.predicate)) {
+      if (!typesOf.has(r.subject)) typesOf.set(r.subject, new Set());
+      typesOf.get(r.subject).add(r.object);
+    } else if (isDisjoint(r.predicate)) {
+      if (!disjointOf.has(r.subject)) disjointOf.set(r.subject, new Set());
+      disjointOf.get(r.subject).add(r.object);
+      if (!disjointOf.has(r.object)) disjointOf.set(r.object, new Set());
+      disjointOf.get(r.object).add(r.subject);
+    } else if (isOnProperty(r.predicate)) onPropertyOf.set(r.subject, r.object);
+    else if (isSomeValuesFrom(r.predicate)) someValuesFromOf.set(r.subject, r.object);
+    else if (!RESERVED_PREDICATES.has(pLower)) {
+      if (!propertyEdgesOf.has(r.subject)) propertyEdgesOf.set(r.subject, []);
+      propertyEdgesOf.get(r.subject).push([normFactTerm(r.predicate), r.object]);
+    }
+  }
+  const ancestorsOf = buildAncestorCloser(subClassEdges);
+  const reaches = (a, b) => a !== b && ancestorsOf(a).has(b);
+  const restrictionOf = (node) => {
+    const property = onPropertyOf.get(node);
+    const target = someValuesFromOf.get(node);
+    return property && target ? { property: normFactTerm(property), target } : null;
+  };
+
+  return (row) => {
+    if (isSubClassOf(row.predicate)) {
+      // scm-sco: some surviving ⊑-path still connects subject to object.
+      if (reaches(row.subject, row.object)) return true;
+      // scm-svf1: both ends still declared restrictions over the SAME
+      // property, with strictly ⊑-related fillers (kernel-faithful).
+      const r1 = restrictionOf(row.subject);
+      const r2 = restrictionOf(row.object);
+      return Boolean(r1 && r2 && r1.property === r2.property && reaches(r1.target, r2.target));
+    }
+    if (isType(row.predicate)) {
+      // cax-sco: a surviving direct type whose ⊑-closure reaches the class.
+      for (const c of typesOf.get(row.subject) || []) {
+        if (reaches(c, row.object)) return true;
+      }
+      // cls-svf1: the class is a still-declared restriction node — a
+      // surviving property edge whose value's type (⊑-lifted) satisfies it.
+      const rec = restrictionOf(row.object);
+      if (rec) {
+        for (const [pKey, y] of propertyEdgesOf.get(row.subject) || []) {
+          if (pKey !== rec.property) continue;
+          for (const c of typesOf.get(y) || []) {
+            if (c === rec.target || reaches(c, rec.target)) return true;
+          }
+        }
+      }
+      return false;
+    }
+    if (isDisjoint(row.predicate)) {
+      // cax-dw: a surviving type whose ⊑-closure meets a surviving
+      // disjointWith partner equal to the conclusion's object.
+      for (const c of typesOf.get(row.subject) || []) {
+        for (const d of [c, ...ancestorsOf(c)]) {
+          if (disjointOf.get(d)?.has(row.object)) return true;
+        }
+      }
+      return false;
+    }
+    // An entailed predicate no rule family here owns: nothing can re-check
+    // it, so it is never removed on a stale citation alone.
+    return true;
+  };
+}
+
 /**
- * A scoped retraction slice: JTMS-style dependency-directed removal, for
- * scm-sco ONLY. Retracting `subject ⊑ object` removes the fact, then cascades
- * to any purely-entailed scm-sco fact whose persisted justification cites a
- * removed id — but each candidate is VERIFIED (re-derivable over the
- * surviving subClassOf edge set, not just "cited a removed id") before it is
+ * A scoped retraction slice: JTMS-style dependency-directed removal.
+ * Retracting `subject ⊑ object` removes the fact, then cascades to any
+ * purely-entailed fact — across all five rules' conclusions — whose persisted
+ * justification cites a removed id. Each candidate is VERIFIED (re-derivable
+ * from the surviving facts, not just "cited a removed id") before it is
  * actually removed, since a fact can have a second, independent derivation
  * path (a⊑b⊑d AND a⊑c⊑d both license a⊑d) that a bare delete-by-justification
  * walk would wrongly discard. Repeats in rounds — a removed mid-chain link
  * can ripple — bounded by `budget` (max facts examined+removed) and `depth`
  * (max cascade rounds).
  *
- * Scope limit: only scm-sco persists a justification today, so a
- * type/disjointWith/someValuesFrom conclusion that also went stale is not
- * cascaded here (mechanical to extend, not attempted in this slice).
+ * The entry point stays subClassOf-rooted because chat's recognized
+ * retraction phrasings ("X is not a Y", "forget that X is a kind of Y",
+ * chat.mjs's teach lane) retract subClassOf facts; the cascade itself follows
+ * justifications into every rule's conclusions (transitive ⊑, propagated
+ * types, disjointness violations, restriction membership and subsumption).
+ *
+ * A survivor keeps its stale, still-single justification as-is; a later
+ * retraction of its OTHER supporting path therefore won't re-examine it.
+ * Re-grounding survivors — or tracking every alternate justification set —
+ * is the ATMS horizon (PLAN_SYLLOGIST.md §3), not this bounded slice.
  *
  * Returns { retracted, count, budget, depth, truncated, found } — `found` is
  * false when `subject ⊑ object` was never a stored fact.
@@ -866,43 +987,38 @@ export async function retractSubClassOf(repoDir, subject, object, { budget = 50,
   const byId = new Map(rows.map((r) => [r.id, r]));
   if (!byId.has(targetId)) return { retracted: [], count: 0, budget, depth, truncated: false, found: false };
 
-  // The FULL current subClassOf edge set (stated + every prior entailment) —
-  // the working graph this function's VERIFY step walks each round; a
-  // removed id's own edge is excluded from that round's walk onward.
-  const scRows = rows.filter((r) => isSubClassOf(r.predicate));
-  const edgeOf = new Map(scRows.map((r) => [r.id, [r.subject, r.object]]));
-  // Only a purely-entailed scm-sco fact ever carries a walkable justification.
-  const entailedScRows = scRows.filter((r) => r.justification.length && isPurelyEntailed(r.provenance));
+  // Only a purely-entailed fact ever carries a walkable justification —
+  // a fact later independently taught is never a cascade candidate at all.
+  const entailedRows = rows.filter((r) => r.justification.length && isPurelyEntailed(r.provenance));
 
   const removed = new Set([targetId]);
   const order = [targetId]; // deterministic report order: target first, then removal order
   let truncated = false;
   let round = 0;
   for (; round < depth; round += 1) {
-    const candidates = entailedScRows
+    const candidates = entailedRows
       .filter((r) => !removed.has(r.id) && r.justification.some((j) => removed.has(j)))
-      .sort((a, b) => a.subject.localeCompare(b.subject) || a.object.localeCompare(b.object));
+      .sort((a, b) => a.subject.localeCompare(b.subject) || a.predicate.localeCompare(b.predicate) || a.object.localeCompare(b.object));
     if (!candidates.length) break; // fixpoint — nothing left to (re-)check
 
-    // The surviving edge set for THIS round's verify walk excludes every
-    // candidate's own edge too, not just `removed` — otherwise a candidate
+    // The surviving fact set for THIS round's verify walk excludes every
+    // candidate's own row too, not just `removed` — otherwise a candidate
     // could trivially "reach itself" through its own not-yet-deleted edge, or
     // lean on a sibling candidate standing on the same broken premise.
     const candidateIds = new Set(candidates.map((c) => c.id));
-    const survivingEdges = [...edgeOf.entries()]
-      .filter(([id]) => !removed.has(id) && !candidateIds.has(id))
-      .map(([, e]) => e);
-    const ancestorsOf = buildAncestorCloser(survivingEdges);
+    const stillDerivable = buildSurvivorDerivabilityCheck(
+      rows.filter((r) => !removed.has(r.id) && !candidateIds.has(r.id)),
+    );
 
     let progressed = false;
     let hitBudget = false;
     for (const c of candidates) {
       if (removed.size >= budget) { hitBudget = true; break; }
-      // does subject⊑object still hold WITHOUT the retracted premise, via ANY
-      // surviving path (not just the one this fact was originally derived
-      // through)? A survivor keeps its (now possibly re-groundable, still
-      // TRUE) fact and is never re-examined again this call.
-      if (ancestorsOf(c.subject).has(c.object)) continue; // a second, independent path still supports it — keep
+      // does the conclusion still hold WITHOUT the retracted premise, via ANY
+      // surviving derivation (not just the one this fact was originally
+      // derived through)? A survivor keeps its (now possibly re-groundable,
+      // still TRUE) fact and is never re-examined again this call.
+      if (stillDerivable(c)) continue; // a second, independent derivation still supports it — keep
       removed.add(c.id);
       order.push(c.id);
       progressed = true;
@@ -913,7 +1029,7 @@ export async function retractSubClassOf(repoDir, subject, object, { budget = 50,
   if (!truncated && round >= depth) {
     // depth exhausted, not a natural fixpoint — honestly flag it if a
     // pending candidate would still have been checked next round.
-    truncated = entailedScRows.some((r) => !removed.has(r.id) && r.justification.some((j) => removed.has(j)));
+    truncated = entailedRows.some((r) => !removed.has(r.id) && r.justification.some((j) => removed.has(j)));
   }
 
   const { removed: actuallyRemoved } = await removeFacts(repoDir, order);
