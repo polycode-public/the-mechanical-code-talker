@@ -117,7 +117,7 @@ mgx:FactShape a sh:NodeShape ;
 # Targeted by mgx:ruleKind (only a Rule individual ever carries it).
 mgx:RuleShape a sh:NodeShape ;
     sh:targetSubjectsOf mgx:ruleKind ;
-    rdfs:comment "A taught Rule: one non-empty name, one kind from the closed compose2|filter|recursive vocabulary, and the matching pair of slots for that kind (RULE_SLOT_SPEC in src/memory/core.mjs — the single source of truth this shape mirrors)." ;
+    rdfs:comment "A taught Rule: one non-empty name, one kind from the closed vocabulary, and the matching slots for that kind (RULE_SLOT_SPEC in src/memory/core.mjs — the single source of truth this shape mirrors). The action-* kinds are a family: one taught sentence = one Rule individual, siblings sharing one mgx:ruleName." ;
     sh:property [
         sh:path mgx:ruleName ;
         sh:datatype xsd:string ;
@@ -128,10 +128,10 @@ mgx:RuleShape a sh:NodeShape ;
     ] ;
     sh:property [
         sh:path mgx:ruleKind ;
-        sh:in ( "compose2" "filter" "recursive" ) ;
+        sh:in ( "compose2" "filter" "recursive" "action-signature" "action-precond" "action-effect" ) ;
         sh:minCount 1 ;
         sh:maxCount 1 ;
-        sh:message "A Rule's kind must be exactly one of compose2 | filter | recursive." ;
+        sh:message "A Rule's kind must be exactly one of compose2 | filter | recursive | action-signature | action-precond | action-effect." ;
     ] ;
     sh:xone (
         [
@@ -149,5 +149,23 @@ mgx:RuleShape a sh:NodeShape ;
             sh:property [ sh:path mgx:ruleBaseCase ; sh:minCount 1 ; sh:minLength 1 ] ;
             sh:property [ sh:path mgx:ruleRecStep ; sh:minCount 1 ; sh:minLength 1 ] ;
         ]
+        [
+            sh:property [ sh:path mgx:ruleKind ; sh:hasValue "action-signature" ] ;
+            sh:property [ sh:path mgx:ruleActionSubjectClass ; sh:minCount 1 ; sh:minLength 1 ] ;
+            sh:property [ sh:path mgx:ruleActionTargetClass ; sh:minCount 1 ; sh:minLength 1 ] ;
+        ]
+        [
+            sh:property [ sh:path mgx:ruleKind ; sh:hasValue "action-precond" ] ;
+            sh:property [ sh:path mgx:ruleActionPrecondShape ; sh:minCount 1 ; sh:minLength 1 ] ;
+            sh:property [ sh:path mgx:ruleActionPrecondPredicate ; sh:minCount 1 ; sh:minLength 1 ] ;
+            sh:property [ sh:path mgx:ruleActionPrecondRole ; sh:minCount 1 ; sh:minLength 1 ] ;
+            sh:property [ sh:path mgx:ruleActionPrecondScope ; sh:minCount 1 ; sh:minLength 1 ] ;
+        ]
+        [
+            sh:property [ sh:path mgx:ruleKind ; sh:hasValue "action-effect" ] ;
+            sh:property [ sh:path mgx:ruleActionEffectPredicate ; sh:minCount 1 ; sh:minLength 1 ] ;
+            sh:property [ sh:path mgx:ruleActionEffectSubject ; sh:minCount 1 ; sh:minLength 1 ] ;
+            sh:property [ sh:path mgx:ruleActionEffectObject ; sh:minCount 1 ; sh:minLength 1 ] ;
+        ]
     ) ;
-    sh:message "A Rule's slots must exactly match its declared kind: compose2 needs ruleBase1+ruleBase2, filter needs ruleBase1+ruleFilterProperty, recursive needs ruleBaseCase+ruleRecStep." .
+    sh:message "A Rule's slots must exactly match its declared kind: compose2 needs ruleBase1+ruleBase2, filter needs ruleBase1+ruleFilterProperty, recursive needs ruleBaseCase+ruleRecStep, action-signature needs ruleActionSubjectClass+ruleActionTargetClass, action-precond needs ruleActionPrecondShape+Predicate+Role+Scope, action-effect needs ruleActionEffectPredicate+Subject+Object." .

@@ -6,15 +6,26 @@
 // only fires on genuine malformation, never a sparse-but-valid write.
 
 const MEMORY_CLASSES = new Set(["Utterance", "Fact", "Session", "Source", "Rule"]);
-const RULE_KINDS = new Set(["compose2", "filter", "recursive"]);
+const RULE_KINDS = new Set([
+  "compose2", "filter", "recursive",
+  "action-signature", "action-precond", "action-effect",
+]);
 
 // Mirrors core.mjs's own (unexported) RULE_SLOT_SPEC exactly — the single
-// source of truth for the closed compose2/filter/recursive shapes; kept in
-// sync by hand (both describe the SAME three rule kinds' slot pairs).
+// source of truth for the closed rule-kind shapes; kept in sync by hand
+// (both describe the same kinds' slots).
 const RULE_SLOT_PROPS = {
   compose2: ["mgx:ruleBase1", "mgx:ruleBase2"],
   filter: ["mgx:ruleBase1", "mgx:ruleFilterProperty"],
   recursive: ["mgx:ruleBaseCase", "mgx:ruleRecStep"],
+  "action-signature": ["mgx:ruleActionSubjectClass", "mgx:ruleActionTargetClass"],
+  "action-precond": [
+    "mgx:ruleActionPrecondShape", "mgx:ruleActionPrecondPredicate",
+    "mgx:ruleActionPrecondRole", "mgx:ruleActionPrecondScope",
+  ],
+  "action-effect": [
+    "mgx:ruleActionEffectPredicate", "mgx:ruleActionEffectSubject", "mgx:ruleActionEffectObject",
+  ],
 };
 
 function attrValue(ind, prop) {
@@ -45,14 +56,13 @@ function checkFact(ind, violations) {
 }
 
 /** RuleShape (mgx:RuleShape): a non-empty name; a kind from the closed
- *  compose2 | filter | recursive vocabulary; and the matching pair of slots
- *  for that declared kind, each present and non-empty (RULE_SLOT_PROPS
- *  above). */
+ *  vocabulary; and the matching slots for that declared kind, each present
+ *  and non-empty (RULE_SLOT_PROPS above). */
 function checkRule(ind, violations) {
   if (!nonEmpty(attrValue(ind, "mgx:ruleName"))) violations.push("a Rule needs a non-empty mgx:ruleName");
   const kind = attrValue(ind, "mgx:ruleKind");
   if (!kind || !RULE_KINDS.has(kind)) {
-    violations.push(`a Rule's mgx:ruleKind must be one of compose2 | filter | recursive (got ${JSON.stringify(kind)})`);
+    violations.push(`a Rule's mgx:ruleKind must be one of ${[...RULE_KINDS].join(" | ")} (got ${JSON.stringify(kind)})`);
     return; // no declared kind to check slots against
   }
   for (const prop of RULE_SLOT_PROPS[kind]) {

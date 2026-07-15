@@ -1166,31 +1166,56 @@ export async function appendFacts(dir, facts) {
 export const RULE_KIND_COMPOSE2 = "compose2";
 export const RULE_KIND_FILTER = "filter";
 export const RULE_KIND_RECURSIVE = "recursive";
-export const RULE_KINDS = Object.freeze([RULE_KIND_COMPOSE2, RULE_KIND_FILTER, RULE_KIND_RECURSIVE]);
+// The action family: one taught sentence = one Rule individual, the family
+// sharing one mgx:ruleName. A single flat kind can't hold several
+// preconditions under content addressing (one value per slot), so signature,
+// precondition and effect are sibling kinds collected by name at plan time.
+export const RULE_KIND_ACTION_SIGNATURE = "action-signature";
+export const RULE_KIND_ACTION_PRECOND = "action-precond";
+export const RULE_KIND_ACTION_EFFECT = "action-effect";
+export const RULE_KINDS = Object.freeze([
+  RULE_KIND_COMPOSE2, RULE_KIND_FILTER, RULE_KIND_RECURSIVE,
+  RULE_KIND_ACTION_SIGNATURE, RULE_KIND_ACTION_PRECOND, RULE_KIND_ACTION_EFFECT,
+]);
 
 export const RULE_NAME_PROP = "mgx:ruleName";
 export const RULE_KIND_PROP = "mgx:ruleKind";
 
 // Per-kind slot contract: JS slot key -> the mgx: attribute it's written under.
-// filter's "base" slot deliberately reuses ruleBase1 (not a fresh "ruleBase")
-// — the same attribute name compose2's first hop already uses, since both
-// play the identical "base relation this rule builds on" role. Order within
-// each array is the (slot1, slot2) order the content-address hash below
-// uses — fixed and load-bearing.
+// filter's "base" slot reuses ruleBase1 — the same attribute name compose2's
+// first hop already uses, since both play the identical "base relation this
+// rule builds on" role. Order within each array is the content-address hash
+// order below — fixed and load-bearing. Predicate slots store BARE values
+// ("rest-on", "smaller-than"): normFactTerm strips a leading CURIE prefix, so
+// an mgx:-prefixed value could never round-trip; readers re-attach mgx:.
 const RULE_SLOT_SPEC = {
   [RULE_KIND_COMPOSE2]: [["base1", "mgx:ruleBase1"], ["base2", "mgx:ruleBase2"]],
   [RULE_KIND_FILTER]: [["base", "mgx:ruleBase1"], ["property", "mgx:ruleFilterProperty"]],
   [RULE_KIND_RECURSIVE]: [["baseCase", "mgx:ruleBaseCase"], ["recStep", "mgx:ruleRecStep"]],
+  [RULE_KIND_ACTION_SIGNATURE]: [
+    ["subjectClass", "mgx:ruleActionSubjectClass"], ["targetClass", "mgx:ruleActionTargetClass"],
+  ],
+  [RULE_KIND_ACTION_PRECOND]: [
+    ["shape", "mgx:ruleActionPrecondShape"], ["predicate", "mgx:ruleActionPrecondPredicate"],
+    ["role", "mgx:ruleActionPrecondRole"], ["scope", "mgx:ruleActionPrecondScope"],
+  ],
+  [RULE_KIND_ACTION_EFFECT]: [
+    ["predicate", "mgx:ruleActionEffectPredicate"], ["subjectRole", "mgx:ruleActionEffectSubject"],
+    ["objectRole", "mgx:ruleActionEffectObject"],
+  ],
 };
 
-// Content-addressed over (kind, name, slot1, slot2), mirroring factIdFor's
-// NUL-delimited discipline: identical rules upsert, different ones coexist.
-const ruleIdFor = (kind, name, slot1, slot2) => `rule:${fnv1aHex(`${kind}\0${name}\0${slot1}\0${slot2}`)}`;
+// Content-addressed over (kind, name, ...slots in RULE_SLOT_SPEC order),
+// mirroring factIdFor's NUL-delimited discipline: identical rules upsert,
+// different ones coexist. For 2-slot kinds the joined string is byte-identical
+// to the historical (kind, name, slot1, slot2) template, so pre-existing rule
+// ids never change (pinned by test/memory-rules-action.test.mjs).
+const ruleIdFor = (kind, name, slotValues) => `rule:${fnv1aHex([kind, name, ...slotValues].join("\0"))}`;
 
-/** Append one taught RULE (compose2 | filter | recursive) — a sibling of
- *  appendFact storing a `Rule` individual, same upsert/provenance/trust/SHACL
- *  discipline (neither pipeline ever checks `individual.class`). `slots` is
- *  the matching per-kind object (RULE_SLOT_SPEC above). Returns { id }. */
+/** Append one taught RULE — a sibling of appendFact storing a `Rule`
+ *  individual, same upsert/provenance/trust/SHACL discipline (neither
+ *  pipeline ever checks `individual.class`). `slots` is the matching
+ *  per-kind object (RULE_SLOT_SPEC above). Returns { id }. */
 export async function appendRule(dir, { name, kind, slots, provenance = "", createdAt = "" } = {}) {
   const spec = RULE_SLOT_SPEC[kind];
   if (!spec) throw new Error(`a rule kind must be one of ${RULE_KINDS.join(", ")}, got ${JSON.stringify(kind)}`);
@@ -1200,7 +1225,7 @@ export async function appendRule(dir, { name, kind, slots, provenance = "", crea
   if (slotValues.some((v) => !v)) {
     throw new Error(`a ${kind} rule needs ${spec.map(([slotKey]) => slotKey).join(" + ")}`);
   }
-  const id = ruleIdFor(kind, n, slotValues[0], slotValues[1]);
+  const id = ruleIdFor(kind, n, slotValues);
   const label = labelOf(`${n} = ${kind}(${slotValues.join(", ")})`);
   await mutateMemory(dir, async (payload) => {
     const prior = payload.individuals.find((x) => x?.id === id);
@@ -1242,6 +1267,45 @@ export function findRuleByName(memory, name) {
   return (memory?.individuals || []).find(
     (i) => i?.class === RULE_CLASS && (i.attributes || []).find((a) => a?.prop === RULE_NAME_PROP)?.value === n,
   );
+}
+
+/** Every Rule individual sharing `name` — an action family's members live as
+ *  sibling individuals (one per taught sentence), so consumers collect them
+ *  all. Sorted by kind then id for deterministic iteration. */
+export function findRulesByName(memory, name) {
+  const n = normFactTerm(name);
+  const kindOf = (i) => (i.attributes || []).find((a) => a?.prop === RULE_KIND_PROP)?.value || "";
+  return (memory?.individuals || [])
+    .filter((i) => i?.class === RULE_CLASS
+      && (i.attributes || []).find((a) => a?.prop === RULE_NAME_PROP)?.value === n)
+    .sort((a, b) => kindOf(a).localeCompare(kindOf(b)) || String(a.id).localeCompare(String(b.id)));
+}
+
+/** Every taught Rule as a plain row {id, name, kind, slots, provenance} —
+ *  the sibling of readFactRows, so consumers (src/domain.mjs) never touch
+ *  raw individuals. Rules whose kind has no RULE_SLOT_SPEC entry are
+ *  skipped (unreadable without a slot contract). Sorted by name, kind, id. */
+export function readRuleRows(memory) {
+  const rows = [];
+  for (const ind of memory?.individuals || []) {
+    if (ind?.class !== RULE_CLASS) continue;
+    const attr = (prop) => (ind.attributes || []).find((a) => a?.prop === prop)?.value;
+    const kind = attr(RULE_KIND_PROP);
+    const spec = RULE_SLOT_SPEC[kind];
+    if (!spec) continue;
+    const slots = {};
+    for (const [slotKey, prop] of spec) slots[slotKey] = attr(prop) ?? "";
+    rows.push({
+      id: ind.id,
+      name: attr(RULE_NAME_PROP) || "",
+      kind,
+      slots,
+      provenance: attr("mgx:factProvenance") || "",
+    });
+  }
+  rows.sort((a, b) => a.name.localeCompare(b.name)
+    || a.kind.localeCompare(b.kind) || String(a.id).localeCompare(String(b.id)));
+  return rows;
 }
 
 // ---- Relation chase ---------------------------------------------------------
