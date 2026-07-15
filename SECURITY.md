@@ -54,3 +54,17 @@ Security scanning runs in GitLab CI (`.gitlab-ci.yml`):
 - **Not applicable (pure-JS package):**
   - **Container Scanning** — N/A, tmct ships no container image.
   - **IaC / KICS scanning** — N/A, tmct contains no infrastructure-as-code.
+
+## Full-history secret scan
+
+The stock CI secret detection scans new commits only, so the whole history was
+scanned once before publicising the repository:
+
+- **Tool:** gitleaks 8.30.1 (`gitleaks git .`, default rules), run 2026-07-16.
+- **Scope:** all branches, 856 commits, ~72.4 MB of history.
+- **Result:** no leaks found.
+- `.env` is gitignored and `git log --all -- .env` confirms it has never been
+  committed on any branch.
+
+A future finding means rotating the exposed secret first; whether to rewrite
+history is a separate operator decision.

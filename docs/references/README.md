@@ -76,7 +76,7 @@ Empty pending Phase 2: ACE/APE papers and the ELIZA/PARRY lineage
 (Weizenbaum 1966; Colby et al. 1971). Only redistributable licences get
 committed; the rest are link+excerpt stubs.
 
-## 5. Classical planning & KR — [`planning/`](planning/README.md)
+## 5. Classical planning & KR — [`planning/`](planning/)
 
 The 40-plus-year body of **deterministic, no-LLM, goal-directed planning** —
 partial-order planning, HTN/NONLIN, STRIPS/PDDL, Steel & Ho — behind the
@@ -85,8 +85,8 @@ LLM-only capability*. Within a declared operator model, a planner does
 goal-directed multi-step decomposition deterministically, so the agentic
 ladder's C1 ceiling is **open-world**, not planning itself. Primary papers are
 link-only (publisher copyright / scanned reports). **Consumer:**
-[`PLAN_CAPABILITY_ROUTER.md`](../../PLAN_CAPABILITY_ROUTER.md) — Stage 1 (the
-resolver = open-condition satisfaction) and Stage 5 (the planner).
+[`archive/PLAN_CAPABILITY_ROUTER.md`](../../archive/PLAN_CAPABILITY_ROUTER.md) — Stage 1
+(the resolver = open-condition satisfaction) and Stage 5 (the planner).
 
 ## Deepen-next index
 

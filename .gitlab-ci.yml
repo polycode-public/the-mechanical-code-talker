@@ -44,6 +44,14 @@ pii:lint:
   script:
     - node scripts/pii-lint.mjs
 
+# Every relative markdown link must resolve to a real repo file — see
+# scripts/check-links.mjs. Dependency-free, so no npm ci.
+links:check:
+  stage: verify
+  needs: []
+  script:
+    - node scripts/check-links.mjs
+
 secret_detection:
   stage: verify
   needs: []
