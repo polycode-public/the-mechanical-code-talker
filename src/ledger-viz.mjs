@@ -225,6 +225,38 @@ export function resolveAnsweredTerm(answerText, questionText, terms, normFn) {
   return (terms || []).some((t) => t && t.term === norm) ? norm : null;
 }
 
+/** Per-segment facet counts for the rows touching `focus`: each group's count
+ *  is computed against the OTHER groups' active filters (its own group's
+ *  selection is skipped), so a selected family narrows the provenance and
+ *  recency counts but never its own rail. `sel` holds the active multi-select
+ *  Sets ({prov, fam, rec}); `now` anchors the recency buckets. Self-contained
+ *  on purpose: its source is injected into the rendered page verbatim, so it
+ *  must close over nothing. */
+export function facetCounts(rows, focus, sel, now) {
+  const DAY = 86400000;
+  const recencyOf = (r) => {
+    const t = Date.parse(r.createdAt);
+    if (!Number.isFinite(t)) return "older";
+    const age = now - t;
+    return age < DAY ? "today" : age < 7 * DAY ? "this week" : "older";
+  };
+  const passes = (r, skip) =>
+    (skip === "prov" || !sel.prov.size || sel.prov.has(r.prov)) &&
+    (skip === "fam" || !sel.fam.size || sel.fam.has(r.family)) &&
+    (skip === "rec" || !sel.rec.size || sel.rec.has(recencyOf(r)));
+  const counts = { prov: {}, fam: {}, rec: {} };
+  for (const r of rows || []) {
+    if (!focus || (r.s !== focus && r.o !== focus)) continue;
+    if (passes(r, "prov")) counts.prov[r.prov] = (counts.prov[r.prov] || 0) + 1;
+    if (passes(r, "fam")) counts.fam[r.family] = (counts.fam[r.family] || 0) + 1;
+    if (passes(r, "rec")) {
+      const k = recencyOf(r);
+      counts.rec[k] = (counts.rec[k] || 0) + 1;
+    }
+  }
+  return counts;
+}
+
 /** One complete, self-contained document: the ledger, segment rail,
  *  worth-a-look panel, breadcrumb/search, two-hop minimap, and (when the
  *  memory-ask bundle is present) the ask-the-graph chat dock, all over the
@@ -376,6 +408,7 @@ ${hasMemChat ? `<script>\n${bundleStr}\n</script>` : ""}
 (function () {
   "use strict";
   const DAY = 86400000;
+  const facetCounts = ${facetCounts.toString()};
   const el = (id) => document.getElementById(id);
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const FAMS = ["is-a", "has", "can", "used-for", "rests-on", "role", "other"];
@@ -418,13 +451,11 @@ ${hasMemChat ? `<script>\n${bundleStr}\n</script>` : ""}
     return b;
   }
   function renderSegs() {
-    const mine = LEDGER.rows.filter((r) => focus && touches(r, focus));
+    const counts = facetCounts(LEDGER.rows, focus, sel, Date.now());
     const put = (id, group, values, labelOf, clsOf) => {
       const box = el(id); box.innerHTML = "";
       for (const v of values) {
-        const count = mine.filter((r) => passes(r, group) &&
-          (group === "prov" ? r.prov === v : group === "fam" ? r.family === v : recOf(r) === v)).length;
-        box.appendChild(segButton(group, v, labelOf(v), count, clsOf ? clsOf(v) : null));
+        box.appendChild(segButton(group, v, labelOf(v), counts[group][v] || 0, clsOf ? clsOf(v) : null));
       }
     };
     put("segProv", "prov", PROVS.map((p) => p[0]), (v) => PROVS.find((p) => p[0] === v)[1], (v) => "c-" + provKey(v));

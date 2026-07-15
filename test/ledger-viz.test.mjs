@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { appendFact, loadMemory, readFactRows, findContradictions } from "../src/memory/core.mjs";
 import {
   computeLedgerData, computeLedgerDataFromPayload, renderLedgerHtml,
-  provBucketFor, phraseFor, familyFor,
+  provBucketFor, phraseFor, familyFor, facetCounts,
 } from "../src/ledger-viz.mjs";
 
 const T_OLD = "2026-06-01T10:00:00.000Z";
@@ -258,6 +258,66 @@ test("phase-2 dock chain: a store taught via runTurn answers through the real bu
     }
   } finally {
     clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---- the segment rail's cross-filter facet counts ---------------------------
+
+const FACET_NOW = Date.parse("2026-07-15T12:00:00.000Z");
+const hoursAgo = (h) => new Date(FACET_NOW - h * 3600000).toISOString();
+const FACET_ROWS = [
+  { s: "logger", o: "module", prov: "taught", family: "is-a", createdAt: hoursAgo(2) },
+  { s: "logger", o: "output", prov: "taught", family: "has", createdAt: hoursAgo(3 * 24) },
+  { s: "logger", o: "log", prov: "corpus", family: "can", createdAt: hoursAgo(30 * 24) },
+  { s: "console", o: "logger", prov: "entail", family: "rests-on", createdAt: hoursAgo(1) },
+  { s: "dog", o: "animal", prov: "corpus", family: "is-a", createdAt: hoursAgo(1) },
+];
+const emptySel = () => ({ prov: new Set(), fam: new Set(), rec: new Set() });
+
+test("facetCounts: an empty selection counts every row touching the focus, subject or object side", () => {
+  const counts = facetCounts(FACET_ROWS, "logger", emptySel(), FACET_NOW);
+  assert.deepEqual(counts.prov, { taught: 2, corpus: 1, entail: 1 });
+  assert.deepEqual(counts.fam, { "is-a": 1, has: 1, can: 1, "rests-on": 1 });
+  assert.deepEqual(counts.rec, { today: 2, "this week": 1, older: 1 });
+});
+
+test("facetCounts: a selected family narrows the other rails but never its own", () => {
+  const sel = emptySel();
+  sel.fam.add("has");
+  const counts = facetCounts(FACET_ROWS, "logger", sel, FACET_NOW);
+  const open = facetCounts(FACET_ROWS, "logger", emptySel(), FACET_NOW);
+  assert.deepEqual(counts.fam, open.fam, "the family rail ignores its own selection");
+  assert.deepEqual(counts.prov, { taught: 1 });
+  assert.deepEqual(counts.rec, { "this week": 1 });
+});
+
+test("facetCounts: multi-select unions within a group; two active groups both narrow the third", () => {
+  const sel = emptySel();
+  sel.prov.add("taught").add("entail");
+  const unioned = facetCounts(FACET_ROWS, "logger", sel, FACET_NOW);
+  assert.deepEqual(unioned.fam, { "is-a": 1, has: 1, "rests-on": 1 });
+  sel.rec.add("today");
+  const doubled = facetCounts(FACET_ROWS, "logger", sel, FACET_NOW);
+  assert.deepEqual(doubled.fam, { "is-a": 1, "rests-on": 1 });
+});
+
+test("facetCounts: an unparseable createdAt buckets as older; no focus counts nothing", () => {
+  const rows = [{ s: "logger", o: "x", prov: "taught", family: "has", createdAt: "not-a-date" }];
+  const counts = facetCounts(rows, "logger", emptySel(), FACET_NOW);
+  assert.deepEqual(counts.rec, { older: 1 });
+  const unfocused = facetCounts(FACET_ROWS, null, emptySel(), FACET_NOW);
+  assert.deepEqual(unfocused, { prov: {}, fam: {}, rec: {} });
+});
+
+test("renderLedgerHtml: the page inlines facetCounts verbatim and the segment rail consumes it", async () => {
+  const dir = await seededRepo();
+  try {
+    const data = await computeLedgerData(dir);
+    const html = renderLedgerHtml({ ...data, memoryAskBundle: "" });
+    assert.match(html, /const facetCounts = function facetCounts\(/);
+    assert.match(html, /facetCounts\(LEDGER\.rows, focus, sel, Date\.now\(\)\)/);
+  } finally {
     await rm(dir, { recursive: true, force: true });
   }
 });
