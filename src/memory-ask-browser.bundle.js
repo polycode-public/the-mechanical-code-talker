@@ -9985,7 +9985,8 @@ ${shown.join("\n")}${extra}`, replace: true, ...rest.length ? { pending: { items
         untested: GOAL_BY_KIND.tests,
         history: GOAL_BY_KIND.touches,
         exports: GOAL_BY_KIND.reexports,
-        arch: "understand the overall architecture (package/module boundaries)"
+        arch: "understand the overall architecture (package/module boundaries)",
+        capabilities: "see what /plan can plan over \u2014 built-in query tools and taught actions"
       };
       BASE_QUALIFIER_SRC = "as\\s+(?:its|the|an?)?\\s*(?:base\\s+class|parent\\s+class|base|parent)";
       USES_AS_BASE_WH_ASK_RE = new RegExp(
