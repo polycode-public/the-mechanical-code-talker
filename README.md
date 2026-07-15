@@ -613,6 +613,18 @@ so a tool-loop client can call tmct like a model, at $0:
        [--config <path>]       Defaults: host 127.0.0.1, port 8787. Ctrl+C to stop.
 ```
 
+A tool-loop client talks to it like any Messages endpoint. One round trip
+against the example graph, end to end:
+
+```bash e2e cwd=repo
+node bin/tmct.mjs serve --repo examples/mini-webapp --port 8791 &
+SERVE_PID=$!
+until curl -s -o /dev/null http://127.0.0.1:8791/v1/messages; do sleep 0.2; done
+curl -s http://127.0.0.1:8791/v1/messages -H 'content-type: application/json' \
+  -d '{"model":"tmct","max_tokens":256,"messages":[{"role":"user","content":"which modules import src/core/model.mjs?"}]}'
+kill $SERVE_PID
+```
+
 `tmct plan` is the capability router described under "Planning across the graph" above:
 
 ```output:help:plan
@@ -837,6 +849,40 @@ conformance. Passing the suite is what conformance means here. This inverts the
 original relationship: tmct was lifted out of seonix, and seonix now reorients
 as a *user* that imports the tmct library and exposes its graph to tmct as a
 service. The LLM agent stays outside tmct, as the no-LLM ethos requires.
+
+## Measuring it
+
+Three offline benchmark rigs live in a clone (they are not in the npm
+package). Each replays a committed case set through the real product and
+writes graded rows you can diff between runs:
+
+- `npm run chatbench:run` measures chat quality against CEFR-graded English
+  cases with deterministic tier-1 checks (the full tuning loop is in
+  `SKILL_BENCHMARK_CEFR_ENGLISH.md`);
+- `npm run infbench` generates inference cases, then runs each through both
+  drive points, the reasoning kernel and the chat surface;
+- `npm run agentbench:run` measures the tool-loop behaviour, and every
+  verdict carries a hallucination axis.
+
+The smallest real slice of each, the same invocations the test suite's
+bench-smoke lane replays:
+
+```bash cwd=repo
+node chatbench/run.mjs --stamp smoke --only g-a1-naming-1 --out /tmp/chatbench-smoke
+node infbench/generate-cases.mjs --out /tmp/infbench-cases.jsonl
+node infbench/run.mjs --cases /tmp/infbench-cases.jsonl --only inf-a1-lookup-subClassOf-001 --stamp smoke --out /tmp/infbench-smoke
+node agentbench/run.mjs --stamp smoke --driver stub --only ab-a0-describe-widget --out /tmp/agentbench-smoke
+```
+
+Grading beyond tier 1 uses an LLM as judge. The offline eval harness is the
+one place an LLM is allowed, never the product:
+
+```bash skip=offline-eval-only
+npm run chatbench:judge -- --product /tmp/chatbench-smoke/product.jsonl
+```
+
+The headline numbers and their conditions live in the `BENCHMARK_*.md`
+write-ups.
 
 ## Security and supply chain
 

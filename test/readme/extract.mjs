@@ -23,7 +23,8 @@
 // Attributes after the tag refine treatment:
 //   e2e                heavy; runs from e2e/readme-examples.test.mjs, not the
 //                      fast tier
-//   skip=network       never run (would touch the network)
+//   skip=<reason>      never run (network: would touch the network;
+//                      offline-eval-only: needs an LLM judge)
 //   cwd=repo           run from a clone's root instead of a temp dir
 //   cmd="..."          the command a session or output block reproduces
 //   setup="..."        shell run in the block's cwd before its command
