@@ -118,7 +118,7 @@ utterances; that is the layer tmct lacks today.
   entity F1, which low-precision hurt; a conservative extractor competes on precision.
 
 The matcher lives in the harness only, like the LLM judge does. Whether it later becomes a
-product-path domain via `registerCapability` is a separate decision, out of scope here.
+product-path domain via `registerCapability` is a separate, later decision.
 
 ### Scoring integration
 
@@ -230,7 +230,7 @@ not a planned lever anymore.
   on ~0.79, so surface matching plateaus there and char n-grams buy nothing without an
   OOS axis. That is ~7 points behind Rasa's published 0.863 and ~6.5 behind LUIS's
   last-place 0.855. The honest frame is value-per-footprint, not victory; post-lever
-  ceiling ~0.81–0.83 (ethos-clean), embedding arm maybe 0.83–0.85. The harness must
+  estimate ~0.81–0.83 (ethos-clean), embedding arm maybe 0.83–0.85. The harness must
   rescore with the upstream toolkit's own metric before any number is cited. Entity F1
   still estimate-only at 0.35–0.60; beating Watson's published 0.488 is plausible and
   would be the strongest single headline available.
@@ -280,8 +280,8 @@ attributable. Deltas are against the spike bases (CLINC150 68.2%/89.7%, HWU64 0.
   chained by `syllogise()` under the same budget/focus/trust guards — Datalog over
   binary predicates, still polynomial and deterministic. Same honest annotation as L7:
   no direct intent-F1 effect; moves teach/ask capability and chatbench, and feeds L6's
-  typing. Stratified negation-as-failure stays out unless separately designed — it must
-  not erode the open-world honesty behavior that wins the CLINC OOS axis.
+  typing. Stratified negation-as-failure needs its own design pass before it lands — it
+  must not erode the open-world honesty behavior that wins the CLINC OOS axis.
 
 Beyond L8, the reasoning ladder leaves this plan's scope entirely: OWL 2 EL
 classification and DL tableau reasoning are a rebuild, not a lever — designed separately
@@ -321,8 +321,7 @@ honesty-on-miss rubric dimensions get transcript-visible premises to score), and
 surfaces feed the benchmark write-ups' "claims this supports" section — the difference
 between asserting determinism and showing the derivation.
 
-Ceiling, worked so the claim never overreaches — "why did the American Civil War
-start?":
+The far end of the why-spectrum, worked — "why did the American Civil War start?":
 
 - **Teach:** "secession caused the civil war", "the slavery dispute caused secession",
   "the cotton economy caused the slavery dispute". Causal edges are already first-class:
@@ -337,12 +336,14 @@ start?":
   source and trust, the far end arriving visibly weaker (three hops of
   `min × ruleConfidence` attenuation). tmct answers exactly as well as the causal graph
   it was taught, and shows precisely which taught claims the answer rests on.
-- **Permanently out:** everything that makes the question actually hard — weighing
-  contested historiography, defaults, counterfactuals, competing narratives. tmct never
-  synthesizes an account; it renders one, with provenance. `PLAN_SYLLOGIST_EL_DL.md`
-  places this beyond even the post-DL edge, alongside defaults and arithmetic. The
-  honest demo line: for "why is John Italian" the proof IS the answer; for the civil
-  war, the proof is an inventory of what tmct was told, clearly labelled as such.
+- **Research horizon past that:** weighing contested historiography, defaults,
+  counterfactuals, competing narratives — problems with no generally accepted
+  deterministic engineering to adopt today (candidate literatures exist: defeasible
+  logic, argumentation frameworks). Until a tier is designed for them, tmct renders an
+  account rather than synthesizing one, with provenance — and that gap is
+  benchmark-observable, not something this document needs to legislate. The demo line:
+  for "why is John Italian" the proof IS the answer; for the civil war, the proof is an
+  inventory of what tmct was told, clearly labelled as such.
 
 ## Risks and decision points
 
@@ -357,13 +358,14 @@ start?":
   construction must be replicated exactly; a near-miss protocol produces a number that
   looks comparable and is not.
 
-## Non-goals
+## Not in this plan
 
-- No product-path changes in this plan. The matcher is harness-only; promoting it to a
-  chat capability is a separate, later decision. Levers L7/L8 are the exception in
-  listing only: they are product-path work owned by the Syllogist track and appear in
-  the ladder solely so their (indirect) benchmark effect is measured here when they land.
-- No hand-authored FRAMES/lanes for benchmark domains. The playtests already show that
-  approach grows one phrasing family at a time; it cannot reach 150 intents honestly.
-- No leaderboard chasing on in-scope accuracy against transformer models. The claims this
+- Product-path changes. The matcher is harness-only here; promoting it to a chat
+  capability is a separate, later decision. Levers L7/L8 are the exception in listing
+  only: they are product-path work owned by the Syllogist track and appear in the ladder
+  solely so their (indirect) benchmark effect is measured here when they land.
+- Hand-authored FRAMES/lanes for benchmark domains. The playtest evidence says that
+  approach grows one phrasing family at a time — the wrong tool for 150 intents; the
+  trainable matcher is the right one.
+- Leaderboard chasing on in-scope accuracy against transformer models. The claims this
   plan targets are the OOS/honesty axis, the entity-precision axis and value-per-footprint.

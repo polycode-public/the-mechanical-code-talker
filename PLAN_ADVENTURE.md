@@ -140,10 +140,10 @@ instead of the player) against current state, and fires the first one whose prec
 and whose own scheduling fact (e.g. `housekeeper actsOnTurn 3`) matches the current turn count. This
 is honestly a **scripted-by-data, not emergent**, form of autonomy — closer to The Hobbit's own
 reality (its "Inference Engine" was itself a fixed rule table over NPC moods, not free simulation)
-than to a general planner. The plan is explicit that this is the ceiling for this design, not a
-placeholder for something smarter: real emergent NPC behaviour (an NPC that *plans* its own actions
-via `findActionPath`, `src/planning.mjs:94`, the same kernel `PLAN_HANOI.md` built) is named as an
-explicit non-goal below, not attempted.
+than to a general planner. That is what this design delivers; real emergent NPC behaviour (an NPC
+that *plans* its own actions via `findActionPath`, `src/planning.mjs:94`, the same kernel
+`PLAN_HANOI.md` built) is a further tier this document doesn't design — the kernel it would build
+on already exists.
 
 ## The world: Ashcombe Hall
 
@@ -295,10 +295,10 @@ loop" abstraction is warranted — same explicit deferral `PLAN_HANOI.md` Phase 
 
 ## Open risks / questions
 
-- **Precondition-expression ceiling.** The closed (subject-slot, predicate, object-slot, polarity)
-  shape covers Ashcombe Hall's six actions but is genuinely limited — no conjunctions/disjunctions
-  of multiple conditions, no "N of M" style checks. Whether that ceiling is a real product limit or
-  just this validation's own small scope is unresolved; not designed further here.
+- **Precondition-expression coverage.** The closed (subject-slot, predicate, object-slot, polarity)
+  shape covers Ashcombe Hall's six actions; conjunctions/disjunctions of multiple conditions and
+  "N of M" style checks are a further tier, not designed here — whether this validation's scope or
+  real usage forces that tier first is an open question the next game world answers.
 - **Snapshot volume.** `PLAN_HANOI.md` §3 already flagged snapshot-per-step's cost profile as fine at
   toy scale, expensive at larger ones. A full playthrough of Ashcombe Hall's worked example is ~12
   turns — trivial — but a much longer game would revisit this exactly as Hanoi's own doc already

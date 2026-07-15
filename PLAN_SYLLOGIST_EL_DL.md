@@ -78,8 +78,8 @@ named.
 **E6 — enumerated classes / nominals (falls to DL).**
 Teach: *"the primary colours are exactly red, yellow and blue"*. Ask: *"is teal a primary
 colour?"* Today: `oneOf` is unrepresentable → miss. After DL: a provable no — closing a
-class by enumeration is the one honest way tmct can ever say "no, and I know the complete
-list", which today it cannot do for any class.
+class by enumeration is the honest route to "no, and I know the complete list", an answer
+shape tmct doesn't have for any class today.
 
 ## Where the failure edge shifts after delivery
 
@@ -88,17 +88,24 @@ questions must land on the SAME honest miss wall the chat surface already has �
 timeout is a miss, never a guess. Post-delivery, the edge sits at:
 
 - **Arithmetic and datatypes.** *"does the bicycle have more wheels than seats?"* —
-  comparing two derived counts is out (DL cardinality reasons about one restriction at a
-  time, not arithmetic across them). Stays a miss.
+  comparing two derived counts needs a counting/arithmetic tier neither stage here
+  designs; until one exists these land on the honest miss wall. (Concrete engineering
+  does exist to adopt when wanted — SWRL built-ins, Datalog with aggregation.)
 - **N-ary events and time.** *"alice gave bob a book yesterday; who had the book last
-  week?"* — n-ary relations, fluents, temporal ordering. Stays a miss.
+  week?"* — n-ary relations, fluents, temporal ordering. A further tier with known
+  candidate literatures (reification, event calculus); lands on the miss wall until
+  designed.
 - **Defaults and exceptions.** *"birds fly; penguins are birds; penguins don't fly"* —
   non-monotonic. DL makes this a reportable *contradiction* (an improvement over silent
-  coexistence) but never resolves it by preferring the specific rule.
+  coexistence) without resolving it by preferring the specific rule; defeasible
+  reasoning is its own tier (default logic, answer-set programming are the candidate
+  literatures, none yet settled into an obvious deterministic fit).
 - **Budget-exhausted proofs.** Any query whose tableau exceeds its step budget returns
   "can't prove or disprove within budget" — surfaced as an honest miss with a distinct
   marker so chatbench can count them separately from parse misses.
-- **Full FOL, probability, induction.** Out permanently.
+- **Full FOL, probability, induction.** Open research horizons with no generally
+  accepted engineering to adopt today; nothing in this plan depends on them, and their
+  absence is benchmark-observable rather than something to legislate here.
 
 ## Design
 
@@ -113,9 +120,10 @@ as ordinary lookups — no query-time changes at all.
 
 **Stage DL — a bounded tableau prover (`src/tableau.mjs`).**
 ALC first (⊓ ⊔ ¬ ∃ ∀), extending toward SHOIQ (transitive roles, role hierarchies,
-nominals, qualified cardinality) in separately-tested increments. Query-time only, never
-materialized — a case-split conclusion depends on every branch of its proof, which makes
-batch provenance/retraction a research problem this plan does not take on. Determinism:
+nominals, qualified cardinality) in separately-tested increments. Query-time only, not
+materialized in this plan's stages — a case-split conclusion depends on every branch of
+its proof, and batch provenance/retraction for that shape is an open design problem a
+later tier can take on with the JTMS groundwork as its starting point. Determinism:
 fixed expansion-rule priority, lexicographic branch ordering, no randomization. Every
 call returns a tri-state: proved (with the premise set, for trust and for a plain-English
 proof rendering), disproved, or budget-exhausted (→ the honest miss above). Wired behind
@@ -164,10 +172,12 @@ stages.
   every example above gets a chatbench case tagged with the tier that should first solve
   it, so a cheaper tier landing early is visible and this plan shrinks accordingly.
 
-## Non-goals
+## Not in this plan
 
-- FOL, arithmetic, temporal/event reasoning, defaults, probabilistic weighting.
+- FOL, arithmetic, temporal/event reasoning, defaults, probabilistic weighting — each a
+  further tier past DL; the "where the edge shifts" section above names the candidate
+  literatures for whichever gets designed next.
 - Incremental/RETE materialization and retraction algorithms (`PLAN_SYLLOGIST.md` owns
   that horizon).
-- Any LLM involvement, including for proof rendering — proofs render through the same
-  template machinery as every other answer.
+- LLM involvement, including for proof rendering — proofs render through the same
+  template machinery as every other answer, per the project's no-LLM product path.

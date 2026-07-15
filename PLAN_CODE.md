@@ -337,8 +337,8 @@ assertions flaky rather than deterministic — directly against the repo's own d
 (`archive/PLAN_INFERENCE_TESTING.md:126-128`'s "byte-identical replay… run twice and byte-compare" is the
 standard every other bench in this repo holds itself to). Track 4's exit criterion is therefore
 scoped to structural presence + a bounded, spec-declared set of computed-style equalities only;
-screenshot/visual-regression diffing is named here as an explicit **non-goal**, not a deferred
-stretch quietly assumed to arrive later.
+screenshot/visual-regression diffing needs a determinism answer of its own before any track
+adopts it, so no track here assumes it.
 
 ---
 

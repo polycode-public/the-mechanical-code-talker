@@ -69,6 +69,37 @@ by default, even if it's on a different code path or looks technically separable
 separate, large body of work, and say so explicitly so the operator can object rather than making
 that call silently. Getting this wrong means real bugs sit unfixed while looking handled.
 
+## Never write capability walls — state the horizon, not the wall
+
+Prose in a live doc that declares a feature or extension permanently beyond reach is poison.
+What the system can't do today is observable from benchmarks and playtests, so writing it down
+adds no information — but it actively resists the next uplift, because every future session
+(human or Claude) reads it as a settled decision and argues against the change instead of making
+it. The earth is not flat: a problem with no generally accepted engineering today is a research
+horizon, not a wall. Write it that way ("no settled deterministic engineering exists yet for X;
+candidate literatures: A, B; until a tier is designed these land on the honest miss wall") or
+write nothing.
+
+Purge vocabulary — when any of these describe a capability or design extension in a live doc,
+delete or reframe to horizon language: permanently, forever, never, out permanently, stays out,
+out for good, out of reach, beyond reach, impossible, unreachable, off the table, ruled out,
+closed door, dead end, hard wall, hard limit, ceiling (as design limit), frozen (as scope), set
+in stone, immutable (as scope), no path to, will never, can never, cannot ever, won't ever, not
+even in principle, fundamentally/inherently/structurally/architecturally impossible, "I wouldn't
+go there", "not a placeholder for something smarter", "not a deferred stretch".
+
+NOT covered by this rule, because they are different things: the project constitution (no LLM in
+the product path), safety/security decisions, behavioral invariants that protect honesty ("a
+timeout is a miss, never a guess"), plain plan scoping ("not in this plan", with the sequencing
+stated), historical logs (archive/, playtests/, BENCHMARK_* record what a version couldn't do —
+that's measurement, not design), and present-tense descriptions of current behavior.
+
+Why this keeps happening (so the next session recognizes the pull): bounded claims feel like
+rigor, and a declared limit makes a doc sound decisive for free. It converts present absence
+(cheap, observable, temporary) into declared essence (expensive, sticky, wrong). Same family as
+"contraction, not expansion" and the no-scope-echo-comments rule: limiting prose generated as
+caution, paid for at every future change.
+
 ## Writing style
 
 Follow `SKILL_AGENT_PLAIN_PROSE.md` for every human-facing surface this project touches: docs,
