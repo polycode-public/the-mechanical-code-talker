@@ -51,3 +51,5 @@ scripts/persona-examples-candidates.json
 # Never commit them — `npm run demo:build` regenerates both locally for testing.
 public/engine/
 public/demo-graph.json
+public/demo-memory.json
+public/ledger.html

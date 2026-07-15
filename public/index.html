@@ -27,35 +27,37 @@
 }
 </script>
 <style>
+  /* Token values mirror src/viz-theme.mjs (the source of truth shared with the
+     ledger and plan pages) — update there first, then here. */
   :root {
-    --bg: #fdfcf9;
-    --fg: #23211c;
-    --muted: #6b6559;
-    --accent: #8a4b12;
-    --card: #f3efe7;
-    --border: #ddd6c8;
-    --code-bg: #2b2822;
-    --code-fg: #e8e2d4;
+    --bg: #F7F6F2;
+    --fg: #23272B;
+    --muted: #6E7168;
+    --accent: #2E7D4F;
+    --card: #FFFFFF;
+    --border: #DDD9D0;
+    --code-bg: #1B1F24;
+    --code-fg: #D6DAD1;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #191713;
-      --fg: #e8e2d4;
-      --muted: #a39b8a;
-      --accent: #e0a465;
-      --card: #221f1a;
-      --border: #3a352c;
-      --code-bg: #11100d;
-      --code-fg: #d8d2c4;
+      --bg: #15181C;
+      --fg: #E7E5DF;
+      --muted: #9A9E95;
+      --accent: #5FBE8B;
+      --card: #1C2126;
+      --border: #2B3036;
+      --code-bg: #101418;
+      --code-fg: #CFD5CB;
     }
   }
   :root[data-theme="dark"] {
-    --bg: #191713; --fg: #e8e2d4; --muted: #a39b8a; --accent: #e0a465;
-    --card: #221f1a; --border: #3a352c; --code-bg: #11100d; --code-fg: #d8d2c4;
+    --bg: #15181C; --fg: #E7E5DF; --muted: #9A9E95; --accent: #5FBE8B;
+    --card: #1C2126; --border: #2B3036; --code-bg: #101418; --code-fg: #CFD5CB;
   }
   :root[data-theme="light"] {
-    --bg: #fdfcf9; --fg: #23211c; --muted: #6b6559; --accent: #8a4b12;
-    --card: #f3efe7; --border: #ddd6c8; --code-bg: #2b2822; --code-fg: #e8e2d4;
+    --bg: #F7F6F2; --fg: #23272B; --muted: #6E7168; --accent: #2E7D4F;
+    --card: #FFFFFF; --border: #DDD9D0; --code-bg: #1B1F24; --code-fg: #D6DAD1;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
@@ -167,6 +169,17 @@
     margin: 0.3rem 0 0;
     font-size: 0.78rem;
   }
+
+  /* ---- ledger hero ----------------------------------------------------------------- */
+  .ledger-hero { margin: 1.4rem 0 0.4rem; }
+  .ledger-hero .hero-row {
+    display: flex; justify-content: space-between; align-items: baseline;
+    flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.4rem;
+  }
+  .ledger-hero iframe {
+    width: 100%; height: 640px; border: 1px solid var(--border);
+    border-radius: 8px; background: var(--card);
+  }
 </style>
 </head>
 <body>
@@ -176,8 +189,22 @@
   </h1>
 
   <p class="lede">
+    tmct's memory is sentences about things — so read it. Ask the graph a question
+    below, click any term inside a fact to drill in, and every answer is grounded
+    or an honest miss. No model calls anywhere.
+  </p>
+
+  <div class="ledger-hero">
+    <div class="hero-row">
+      <span class="demo-label">The memory ledger — the real engine and a real taught store, in your browser</span>
+      <a href="./ledger.html">open full-screen &rarr;</a>
+    </div>
+    <iframe src="./ledger.html" title="tmct memory ledger — explore the taught graph and ask it questions"></iframe>
+  </div>
+
+  <p>
     A chatbot in the <em>ELIZA/PARRY lineage</em>, obsessed with software the way PARRY
-    was obsessed with the mafia. No model calls anywhere. Interpretation is
+    was obsessed with the mafia. Interpretation is
     <em>mechanical</em>, memory is an <em>OWL-labelled graph</em> on disk, and every
     answer is either grounded or an honest miss. It starts stocked with an everyday,
     general-knowledge vocabulary by default. Point it at a codebase and it reasons

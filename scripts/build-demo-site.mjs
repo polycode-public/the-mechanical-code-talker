@@ -38,3 +38,18 @@ for (const f of GRAMMAR_FILES) cpSync(join(SRC, "grammar", f), join(OUT, "gramma
 console.log(`copied ${FLAT_FILES.length + INTERPRET_FILES.length + STRATEGY_FILES.length + GRAMMAR_FILES.length} engine source files into ${OUT}`);
 
 execFileSync(process.execPath, [join(here, "build-demo-graph.mjs")], { stdio: "inherit" });
+
+// The ledger hero: build the memory payload through the real teach paths, then
+// render public/ledger.html (self-contained, memory-ask bundle inlined) —
+// the same page `tmct viz --ledger` writes, so the site can't drift from it.
+const { main: buildDemoMemory } = await import(join(here, "build-demo-memory.mjs"));
+const { outPath: memoryPath } = await buildDemoMemory();
+const { readFile: readF, writeFile: writeF } = await import("node:fs/promises");
+const { computeLedgerDataFromPayload, renderLedgerHtml } = await import(join(ROOT, "src", "ledger-viz.mjs"));
+const { readMemoryAskBundle } = await import(join(ROOT, "src", "viz.mjs"));
+const payload = JSON.parse(await readF(memoryPath, "utf8"));
+const ledgerData = computeLedgerDataFromPayload(payload, {});
+const memoryAskBundle = await readMemoryAskBundle();
+const ledgerPath = join(ROOT, "public", "ledger.html");
+await writeF(ledgerPath, renderLedgerHtml({ ...ledgerData, memoryAskBundle }));
+console.log(`wrote ${ledgerPath} (${memoryAskBundle ? "chat dock enabled" : "no bundle — dock disabled"})`);
