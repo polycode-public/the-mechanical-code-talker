@@ -321,12 +321,28 @@ honesty-on-miss rubric dimensions get transcript-visible premises to score), and
 surfaces feed the benchmark write-ups' "claims this supports" section — the difference
 between asserting determinism and showing the derivation.
 
-Ceiling, stated so the claim never overreaches: this machinery renders taught/derived
-chains with graded confidence. A why-question whose true answer needs weighing contested
-narratives ("why did the American Civil War start") is answerable only as faithfully as
-a taught causal graph, and the synthesis of competing accounts stays out permanently —
-`PLAN_SYLLOGIST_EL_DL.md` places it beyond the post-delivery edge alongside defaults and
-arithmetic.
+Ceiling, worked so the claim never overreaches — "why did the American Civil War
+start?":
+
+- **Teach:** "secession caused the civil war", "the slavery dispute caused secession",
+  "the cotton economy caused the slavery dispute". Causal edges are already first-class:
+  `mgx:causes` is a corpus predicate with a display phrase (`src/chat.mjs:4060`), taught
+  cause facts store today (the taught `mgx:cause` vs corpus `mgx:causes` predicate
+  unification is a known deferred item that W1 would force closed).
+- **Ask "why did the civil war start?" today:** at best a single-hop read-back of one
+  taught edge; no multi-hop cause chase exists, and "why" only re-renders the previous
+  answer. Effectively a miss.
+- **After W1:** the same graded chain rendering as any other proof — "the cotton economy
+  → the slavery dispute → secession → the civil war", each hop a taught fact with its
+  source and trust, the far end arriving visibly weaker (three hops of
+  `min × ruleConfidence` attenuation). tmct answers exactly as well as the causal graph
+  it was taught, and shows precisely which taught claims the answer rests on.
+- **Permanently out:** everything that makes the question actually hard — weighing
+  contested historiography, defaults, counterfactuals, competing narratives. tmct never
+  synthesizes an account; it renders one, with provenance. `PLAN_SYLLOGIST_EL_DL.md`
+  places this beyond even the post-DL edge, alongside defaults and arithmetic. The
+  honest demo line: for "why is John Italian" the proof IS the answer; for the civil
+  war, the proof is an inventory of what tmct was told, clearly labelled as such.
 
 ## Risks and decision points
 
