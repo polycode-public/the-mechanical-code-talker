@@ -1576,13 +1576,24 @@ export async function removeFacts(dir, ids) {
  *  contradiction (below it the fact is too weak to contradict anything). */
 export const CONTRADICTION_TRUST_FLOOR = 0.5;
 
+export const HAS_A_PREDICATE = "mgx:hasA";
+export const CAPABLE_OF_PREDICATE = "mgx:capableOf";
+
+/** Predicates whose real-world semantics allow many objects at once ("a dog
+ *  has legs" AND "a dog has a tail"; "a bird can fly" AND "a bird can sing"),
+ *  so a second object is a second fact, never a disagreement. A closed list:
+ *  every predicate outside it keeps the full contradiction contract. */
+export const MULTI_VALUED_PREDICATES = new Set([HAS_A_PREDICATE, CAPABLE_OF_PREDICATE]);
+
 /** Facts that CONTRADICT: same (subject, predicate), different object, each
  *  above the trust floor. Returns groups (trust-desc) so callers surface both,
- *  never silently pick one. Same (s,p,o) is corroboration, not contradiction. */
+ *  never silently pick one. Same (s,p,o) is corroboration, not contradiction,
+ *  and a MULTI_VALUED_PREDICATES predicate never contradicts on object count. */
 export function findContradictions(memory, { floor = CONTRADICTION_TRUST_FLOOR } = {}) {
   const rows = readFactRows(memory).filter((r) => r.trust >= floor);
   const byKey = new Map();
   for (const r of rows) {
+    if (MULTI_VALUED_PREDICATES.has(r.predicate)) continue;
     const key = `${r.subject} ${r.predicate}`;
     if (!byKey.has(key)) byKey.set(key, []);
     byKey.get(key).push(r);
