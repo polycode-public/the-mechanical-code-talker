@@ -99,8 +99,9 @@ alias, and the ahab-is-male property, then cited all four. The `source: …`
 parts are real provenance receipts. Every fact tmct stores records where it
 came from and when (more on that below).
 
-`test/examples-teach-and-infer.test.mjs` pins this exact output. If the
-underlying chat behavior ever drifts, that test fails and says so.
+The test suite replays every runnable example in this README against the
+live product, this transcript included. If the chat behavior ever drifts
+from the output above, the suite fails and says so.
 
 ```session
 $ tmct
