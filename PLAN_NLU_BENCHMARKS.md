@@ -1,0 +1,185 @@
+# PLAN_NLU_BENCHMARKS.md — scoring tmct on CLINC150 and HWU64
+
+Status: RESEARCH / DESIGN — not yet implemented. Nothing in this document is live code.
+
+## Goal
+
+Adapt tmct so it can be scored by two pre-existing, third-party NLU scoring systems, then
+extract the successes and failures honestly:
+
+1. **CLINC150** (Larson et al., EMNLP 2019, `github.com/clinc/oos-eval`) — 150 in-scope
+   intents across 10 everyday domains plus a 1,000-query out-of-scope (OOS) test set.
+   Metrics: **in-scope accuracy** and **OOS recall**.
+2. **HWU64** (Liu et al., IWSDS 2019, `github.com/xliuhw/NLU-Evaluation-Data`) — 25,716
+   utterances, 64 intents, 54 entity types, 21 domains. Metrics: **intent F1** and
+   **entity F1**, under their 10-fold cross-validation protocol. Published numbers already
+   exist on this scale for Watson (intent 0.882 / entity 0.488), Dialogflow (0.864 / 0.743),
+   Rasa (0.863 / 0.768) and LUIS (0.855 / 0.777).
+
+The point of borrowing these scales is credibility: any claim we make must be reproducible
+by an outsider running our harness against the pinned upstream data with the upstream
+protocol. Anything that weakens that (tuning on test, cherry-picked metrics, unpinned data)
+defeats the purpose.
+
+## Where tmct stands today (the as-is estimate)
+
+tmct's capability universe is: 15 read-only code-graph capabilities
+(`src/router/registry.mjs`), a commonsense fact/teach surface in `src/chat.mjs`
+(IsA/HasA/CapableOf over a small animal-flavoured seed corpus), and runtime-taught game
+actions. None of the CLINC150/HWU64 domains (banking, travel, weather, alarms, music,
+cooking, ...) exist anywhere in the product, and a sweep of all 13 playtest logs confirms
+no probe has ever touched them.
+
+Both benchmarks require the system to emit one label from a fixed vocabulary (150 or 64
+intents). tmct has no mapping to either vocabulary, so every in-scope query scores wrong
+by construction. Its refusal machinery is real and machine-readable (`miss: true`,
+`WALL_MISS_RE` in `src/chat.mjs`), so every OOS query maps to a correct "oos" prediction.
+
+Estimated as-is scores:
+
+| Scale | Metric | Estimate | Why |
+| --- | --- | --- | --- |
+| CLINC150 | in-scope accuracy | ~0% | no shared label vocabulary; nothing to emit |
+| CLINC150 | OOS recall | ~100% | everything that is not a graph answer maps to "oos" |
+| HWU64 | intent F1 | ~0 | as above; HWU64 has no OOS track to fall back on |
+| HWU64 | entity F1 | ~0 | no slot extraction for the 54 entity types |
+
+The ~100% OOS recall is the **degenerate refuser** score. It is exactly the cheap claim the
+CLINC150 paper warns against and it carries no leverage. Every point of value in this plan
+comes from lifting in-scope accuracy / intent F1 off the floor while keeping OOS recall
+high, then reporting the pair together.
+
+The playtests also say the closed-set-regex route to coverage does not scale to this task.
+Each log adds one hand-written lane to fix one phrasing family. Covering 150 intents with
+~100 training phrasings each by hand-authored FRAMES is the same patchwork times a thousand.
+Three playtest failure modes matter directly here because the benchmarks will re-trigger
+them at scale if we score the raw chat surface:
+
+- **Cross-domain false accept.** PLAYTEST_LOG_001: "does a dog have a tail" parsed as the
+  code-graph `defines` relation. Many CLINC/HWU utterances share surface shapes with graph
+  queries and would mis-route the same way.
+- **The ≤3-word conversational catch-all.** PLAYTEST_LOG_010/011/013: short declaratives
+  ("dogs bark", "penguins swim") get the self-introduction card, which is not flagged as a
+  miss. Benchmark utterances are often short; scored raw, these are neither a clean reject
+  nor a label.
+- **Silent wrong-lane writes.** PLAYTEST_LOG_011: "remember that dogs are animals" stored a
+  garbled fact with no miss signal. The benchmark runs must be read-only.
+
+## Design: a benchmark adapter, not a product rewrite
+
+New top-level `nlubench/` directory, sibling to `chatbench/`, holding data plumbing, the
+matcher, the runners and the reports. The matcher trains from the benchmarks' example
+utterances; that is the layer tmct lacks today.
+
+### The matcher (deterministic, trainable from examples)
+
+- **Tier 1 (default, ethos-clean): IDF-weighted token-overlap nearest neighbour.** Reuse
+  the scoring shape of `retrieveBlocks` (`src/memory/blocks.mjs`): index every training
+  utterance under its intent label, score a test utterance against all of them with
+  wink-nlp token/lemma normalisation, take the top-scoring label. Classical IR, no model
+  weights, byte-identical output on repeated runs.
+- **Rejection threshold → "oos".** Below-threshold top score emits the OOS label
+  (CLINC150) or an abstention (HWU64, recorded but scored as wrong under their protocol).
+  The threshold is tuned **only on the validation split** (CLINC150 provides one; for
+  HWU64 hold out from training folds). Never on test.
+- **Tier 2 (optional, flagged arm): dense cosine via `src/embed.mjs`** (static model2vec
+  embeddings, offline, deterministic). This is ML-trained weights, so it sits outside the
+  ethos-clean tier; run it as a separately-labelled arm so both numbers exist and the claim
+  can cite the pure-IR one.
+- **Entity extraction for HWU64:** deterministic gazetteer + pattern extractor built from
+  the training folds' annotated spans (exact-match lexicon per entity type, wink-nlp
+  tokenisation, longest-match-wins), no sequence model. Target is Watson's published 0.488
+  entity F1, which low-precision hurt; a conservative extractor competes on precision.
+
+The matcher lives in the harness only, like the LLM judge does. Whether it later becomes a
+product-path domain via `registerCapability` is a separate decision, out of scope here.
+
+### Scoring integration
+
+- Runners follow `chatbench/run.mjs` conventions: `--stamp` from the CLI, no `Date.now`,
+  byte-identical result rows, JSONL per-case output under `nlubench/results/raw/run-<version>/`.
+- Write-ups follow the chatbench measurement contract: `BENCHMARK_CLINC150_<version>.md`
+  and `BENCHMARK_HWU64_<version>.md`, named for the `package.json` version they measure,
+  `_00N` suffix for re-runs of the same version.
+- HWU64 is scored with the upstream toolkit's own scripts where runnable, so the F1 we
+  report is computed by their code, not ours. If their tooling won't run, we reimplement
+  their metric exactly and prove parity on their published example outputs.
+
+## Steps
+
+**0. Pin the ground truth.**
+   - Vendor-or-fetch decision per dataset after checking licenses (record them in
+     `nlubench/README.md`). Either way, pin upstream commit hashes; a fetch script fails
+     loudly on hash mismatch.
+   - Transcribe the exact baseline tables from both papers into `nlubench/README.md`
+     (CLINC150 per-variant in-scope accuracy and OOS recall; HWU64 per-platform intent and
+     entity F1). Estimates in this plan cite ranges; claims cite transcribed numbers only.
+
+**1. As-is baseline row.**
+   - Run both test sets through the real chat surface (`runTurn`, read-only fixture graph,
+     the chatbench turns-mode pattern) with an outcome mapper: miss wall → "oos" /
+     abstain; orientation card, fact-lane answers and graph answers → recorded verbatim,
+     scored as non-label. This turns the table above from an estimate into a measured row
+     and produces the false-accept inventory (how many benchmark utterances leak into
+     fact/graph lanes, PLAYTEST_LOG_001-style).
+
+**2. Matcher v1 (tier 1) + threshold sweep.**
+   - Build the IDF-NN matcher and gazetteer extractor. Sweep the rejection threshold on
+     validation only; freeze it before touching test. Unit tests under `test/` per repo
+     convention; `npm test` stays green.
+
+**3. CLINC150 run.**
+   - The paper's data variants (at minimum `data_full`; add `imbalanced`/`oos+` variants
+     if cheap once the runner exists). Report in-scope accuracy and OOS recall together,
+     per-domain breakdown, plus the tier-2 arm if enabled.
+
+**4. HWU64 run.**
+   - Their 10-fold CV protocol on the same subcorpus construction they used, intent F1 and
+     entity F1 via their scoring path. One row per fold plus the aggregate, so variance is
+     visible.
+
+**5. Extract successes and failures.**
+   - Per-benchmark write-up with: the headline pair (never OOS recall alone), the published
+     rival numbers alongside (labelled "as published in Liu et al. 2019" / "Larson et al.
+     2019"), a failure taxonomy (wrong-label vs false-accept vs over-refusal, with counts
+     and discriminating examples first, chatbench style), and an explicit "claims this
+     does and does not support" section.
+   - Fold the confirmed failure families back into the lever board as candidate levers,
+     e.g. "short-utterance sink" if the ≤3-word catch-all shape reappears in adapter form.
+
+## Estimated outcomes with the adapter (priors to be tested, not claims)
+
+- **CLINC150, tier 1:** in-scope accuracy 65–85%. The paper's classical baselines sit near
+  90% and BERT-class models near 97%, so we do not expect to compete on this axis and the
+  write-up should not pretend to. OOS recall 60–90% depending on the frozen threshold; the
+  paper's core finding is that ML baselines score poorly here, so this is the winnable
+  axis. The claim shape: "X% OOS recall at Y% in-scope accuracy, no model, no training, no
+  cloud, deterministic."
+- **HWU64, tier 1:** intent F1 0.55–0.75 against Rasa's published 0.863. The honest frame
+  is value-per-footprint, not victory. Entity F1 0.35–0.60; beating Watson's published
+  0.488 is plausible and would be the strongest single headline available.
+- **Biggest estimate risk:** short utterances. Both datasets are heavy with 2–4 word
+  queries where token overlap is thin, which drags tier-1 accuracy toward the bottom of
+  the ranges and makes the threshold choice the dominant variable.
+
+## Risks and decision points
+
+- **Ethos boundary.** Tier 1 is classical deterministic IR and stays inside the no-LLM,
+  no-neural-training rule. Tier 2 (static embeddings) is a judgement call; keeping it a
+  separately-labelled optional arm keeps the headline claim clean either way.
+- **Dataset licensing** decides vendoring vs fetch-script (step 0). `.tmct/` stays
+  uncommitted as ever; benchmark runs are read-only and never touch user memory.
+- **Comparability drift.** The rival numbers are 2019 platform versions. Every citation of
+  them must say so, or the claim is attackable.
+- **Protocol fidelity on HWU64.** The 10-fold CV and their 190-per-intent subcorpus
+  construction must be replicated exactly; a near-miss protocol produces a number that
+  looks comparable and is not.
+
+## Non-goals
+
+- No product-path changes in this plan. The matcher is harness-only; promoting it to a
+  chat capability is a separate, later decision.
+- No hand-authored FRAMES/lanes for benchmark domains. The playtests already show that
+  approach grows one phrasing family at a time; it cannot reach 150 intents honestly.
+- No leaderboard chasing on in-scope accuracy against transformer models. The claims this
+  plan targets are the OOS/honesty axis, the entity-precision axis and value-per-footprint.
