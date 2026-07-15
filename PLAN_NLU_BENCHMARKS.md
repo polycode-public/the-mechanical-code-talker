@@ -287,6 +287,47 @@ Beyond L8, the reasoning ladder leaves this plan's scope entirely: OWL 2 EL
 classification and DL tableau reasoning are a rebuild, not a lever — designed separately
 in `PLAN_SYLLOGIST_EL_DL.md`.
 
+## Visible thinking: rendering the proof and the plan
+
+An LLM's chain-of-thought is narration sampled from the same model — tokens about the
+computation, not the computation. tmct's equivalents are the proof object and the plan
+object, which ARE the computation, rendered afterwards; the display cannot diverge from
+what happened. Two surfaces make that visible, and both belong in the claims story this
+plan builds (the "deterministic, grounded, no model" claim gets its demo), even though
+neither moves a leaderboard number directly — same honest annotation as L7/L8.
+
+- **W1 — a real `/why` proof-rendering lane (days-scale).** Today chat's "why" lane
+  (`src/chat.mjs:1011`) only re-renders the previous answer more fully. The feature: on
+  "why" after an answered fact, re-run the bounded live chase in proof-recording mode
+  (the kernels already return `via`/premises; `scm-sco` facts already persist a
+  two-premise justification; trust already grades by hop count via
+  `min(premiseTrusts) × ruleConfidence`) and render each premise as a plain sentence
+  with its source tag and grade: "dog ⊑ mammal (taught, 0.9) + mammal ⊑ animal (corpus,
+  1.0) ⊨ dog ⊑ animal (entailed, 0.86)". Everything it needs exists; only the lane and
+  the template rendering are new. Scope grows with the ladder: taxonomic answers first,
+  rule-frame applications when L8 lands ("john bornIn italy" + "people born in italy
+  are italian" ⊨ "john is italian"), case-split proofs via `PLAN_SYLLOGIST_EL_DL.md`'s
+  `/prove`.
+- **W2 — planner consumption of `taught:` capability records ("how can I build X?",
+  days-to-weeks).** `src/router/planner.mjs` already does HTN decomposition with a POP
+  causal-link chain, monitored execution, and an internal `why` trace; goal sentences
+  and taught actions shipped in 1.11.0; `tmct plan` + the plan-viz page already render
+  goal and steps. The named gap (a 1.11.0 follow-up in `HANDOVER.md`) is the planner
+  consuming `taught:` records, so "how can I build X" plans over a world model the user
+  taught in sentences — with the plan page as the visible-thinking display.
+
+Measurement hooks: W1's rendered proofs become chatbench evidence (the groundedness and
+honesty-on-miss rubric dimensions get transcript-visible premises to score), and both
+surfaces feed the benchmark write-ups' "claims this supports" section — the difference
+between asserting determinism and showing the derivation.
+
+Ceiling, stated so the claim never overreaches: this machinery renders taught/derived
+chains with graded confidence. A why-question whose true answer needs weighing contested
+narratives ("why did the American Civil War start") is answerable only as faithfully as
+a taught causal graph, and the synthesis of competing accounts stays out permanently —
+`PLAN_SYLLOGIST_EL_DL.md` places it beyond the post-delivery edge alongside defaults and
+arithmetic.
+
 ## Risks and decision points
 
 - **Ethos boundary.** Tier 1 is classical deterministic IR and stays inside the no-LLM,
