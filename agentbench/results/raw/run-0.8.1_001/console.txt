@@ -18,4 +18,4 @@ plan-correct but RESULT-incomplete (2) — the honest composing gap:
 ladder (rungs ascend; first un-gated rung gates the rest):
   order: A0 → A1 → A2 → B1 → B2 → C1 → C2  — all rungs pass the gate
 
-product: /Users/antony/projects/polycode-projects/the-mechanical-code-talker/.claude/worktrees/agent-a0fbfb3072893d4b7/agentbench/results/raw/run-0.8.1_001/product.jsonl
+product: <repo-checkout>/.claude/worktrees/agent-a0fbfb3072893d4b7/agentbench/results/raw/run-0.8.1_001/product.jsonl

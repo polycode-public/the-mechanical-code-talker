@@ -6,7 +6,7 @@ list/count-all-X-of-class-Y query shape is still pending its own doc. Both track
 # Breadth-first ambiguity, honest bail-outs, and NL-fluency groundwork
 
 **Status: FINAL, approved 2026-07-11.** Copied verbatim from the approved plan-mode plan
-(`/Users/antony/.claude/plans/please-apply-the-modification-crystalline-stardust.md`) into the repo
+(a local plan file outside the repo) into the repo
 root so it survives a crash/session loss. Synthesized from three Explore agents + two Plan agents
 (entity-tie fix design, bail-out audit), all read-only investigations against the real code at
 commit `981c9b2`, v1.7.3. Implementation tracks are tracked live via the session's task list; this
@@ -318,7 +318,7 @@ entity. New npm script `build:ask-bundle
 **6a. Generate — combinatorial surface-variant expansion, "Legends but for English."** tmct already
 has every ingredient needed, found this session: the ACE grammar's 8 sentence patterns
 (`src/grammar/ace.mjs`), the existing lexicon and template bank (`data/templates/`), and
-`/Users/antony/projects/globalwordnet/english-wordnet`'s real synset data (~120K+ synsets, each
+a local uncommitted checkout of `globalwordnet/english-wordnet`'s real synset data (~120K+ synsets, each
 carrying a `members` list — a same-meaning substitution set safe by definition, since same-synset
 words are interchangeable, and 0-2 real `example` usage sentences per synset). Build a generation
 script that, for each ACE pattern/relation the grammar already declares, produces every safe surface

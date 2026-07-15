@@ -110,7 +110,7 @@ this document proposes porting.
 
 ## Part 2 — what seonix has that tmct doesn't (the parsing side)
 
-Read directly from `/Users/antony/projects/polycode-projects/seonix` (a full sibling repo):
+Read directly from `<sibling-checkout>/seonix` (a full sibling repo):
 
 - **Five language backends**, dispatched by a registry (`src/extract_lang.mjs:19-23`, `REGISTRY`)
   and unioned by `src/extract.mjs`:

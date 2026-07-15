@@ -230,9 +230,9 @@ Retest session log
 
 tmct — starting…
 
-tmct chat — /Users/antony/projects/polycode-projects/the-mechanical-code-talker — no code graph loaded — graph has no code ent
-ities; the conversation is remembered to .tmct/graph.json — log /Users/antony/projects/polycode-projects/the-mechanical-code-t
-alker/.tmct/session-019f5714-8433-73c4-bd48-9240311cec6f.log
+tmct chat — <repo-checkout> — no code graph loaded — graph has no code ent
+ities; the conversation is remembered to .tmct/graph.json — log <repo-checkout>/
+.tmct/session-019f5714-8433-73c4-bd48-9240311cec6f.log
 for code structure, point me at a .tmct/graph.json with --repo <path> or try `npm run example:mini` (tmct reads graphs, it doe
 sn't index code). Try "what is a dog" for general vocabulary.
 pass --repo <path> to target a different repo

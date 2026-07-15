@@ -490,13 +490,13 @@ three-language expansion plus the repair track are reasons to be *more* delibera
 sign-off gate, not less.
 
 ### Critical Files for Implementation
-- /Users/antony/projects/polycode-projects/the-mechanical-code-talker/src/router/registry.mjs
-- /Users/antony/projects/polycode-projects/the-mechanical-code-talker/src/router/goal-reasoner.mjs
-- /Users/antony/projects/polycode-projects/the-mechanical-code-talker/src/router/planner.mjs
-- /Users/antony/projects/polycode-projects/the-mechanical-code-talker/src/router/resolver.mjs
-- /Users/antony/projects/polycode-projects/the-mechanical-code-talker/src/router/set-algebra.mjs
-- /Users/antony/projects/polycode-projects/the-mechanical-code-talker/src/interpret/normalize.mjs
-- /Users/antony/projects/polycode-projects/the-mechanical-code-talker/agentbench/cases.jsonl
-- /Users/antony/projects/polycode-projects/the-mechanical-code-talker/agentbench/grade.mjs
-- /Users/antony/projects/polycode-projects/the-mechanical-code-talker/agentbench/driver-goal.mjs
-- /Users/antony/projects/polycode-projects/the-mechanical-code-talker/package.json
+- <repo-checkout>/src/router/registry.mjs
+- <repo-checkout>/src/router/goal-reasoner.mjs
+- <repo-checkout>/src/router/planner.mjs
+- <repo-checkout>/src/router/resolver.mjs
+- <repo-checkout>/src/router/set-algebra.mjs
+- <repo-checkout>/src/interpret/normalize.mjs
+- <repo-checkout>/agentbench/cases.jsonl
+- <repo-checkout>/agentbench/grade.mjs
+- <repo-checkout>/agentbench/driver-goal.mjs
+- <repo-checkout>/package.json
