@@ -623,3 +623,37 @@ test("PLAN_TAUGHT_RELATIONS.md ALL SIX items, end-to-end: relational facts, alia
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("genitive relational teach: 'ahab is john's father' stores the same fact as 'ahab is the father of john' and reads back either surface", async () => {
+  const dir = await mem("genitive-teach");
+  try {
+    const taught = await runTurn("ahab is john's father", { config: CONFIG, memoryDir: dir, sessionId: "g1" });
+    assert.equal(taught.record.miss, false);
+    const canonical = await runTurn("who is the father of john", { config: CONFIG, memoryDir: dir });
+    assert.match(canonical.answer, /ahab/);
+    const genitive = await runTurn("who is john's father", { config: CONFIG, memoryDir: dir });
+    assert.match(genitive.answer, /ahab/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("genitive relational teach, reversed surface: \"mary's mother is june\" stores subject=june, object=mary — never the inverted fact", async () => {
+  const dir = await mem("genitive-rev");
+  try {
+    const taught = await runTurn("mary's mother is june", { config: CONFIG, memoryDir: dir, sessionId: "g2" });
+    assert.equal(taught.record.miss, false);
+    const mem2 = await loadMemory(dir);
+    const rows = readFactRows(mem2);
+    const hit = rows.find((f) => f.predicate === "mgx:mother");
+    assert.ok(hit, "a mother fact stored");
+    assert.equal(hit.subject, "june");
+    assert.equal(hit.object, "mary");
+    const who = await runTurn("who is mary's mother", { config: CONFIG, memoryDir: dir });
+    assert.match(who.answer, /june/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});

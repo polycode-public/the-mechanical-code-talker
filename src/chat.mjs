@@ -1533,7 +1533,7 @@ const WALL_MISS_ANYWHERE_RE = /couldn't parse this as a graph question\. Try:/;
 // assert/memory path; when it can't be stored, say what CAN be remembered
 // instead of the grammar wall or a silent data loss.
 const TEACH_RE = /^(?:please\s+)?(?:i\s+(?:want|wanted)\s+you\s+to\s+|i(?:'d|\s+would)\s+like\s+you\s+to\s+)?(?:remember|note|keep in mind|jot down|for the record|fyi|learn)\b(?:\s+(?:this|that|also))?[:,]?\s*(?:that\s+)?(.+?)[.?!]*$/i;
-const BARE_DECLARATIVE_RE = /^(?:every |each |all |a |an )?[\w-]+(?: [\w-]+)? (?:is|are) (?:a |an )?[\w-]+$/i;
+const BARE_DECLARATIVE_RE = /^(?:every |each |all |a |an )?[\w-]+(?: [\w-]+)? (?:is|are) (?:a |an )?[\w-]+(?: too)?$/i;
 /** "X is <comparative> than Y" — the comparative teach/ask surface. The
  *  comparative slot is closed by SHAPE (-er word, better/worse, or a
  *  more/less + adjective pair), never a hand-list of adjectives. */
@@ -1678,6 +1678,18 @@ const OWNS_PASSIVE_TEACH_RE = /^(.+?)\s+(?:is|are|was|were)\s+owned\s+by\s+([A-Z
  *  own subject/owner already use. */
 const RELATION_FACT_TEACH_RE =
   /^([\w'-]+(?:\s+[A-Z][\w'-]*)?)\s+(?:is|are|was|were)\s+the\s+([a-z][\w-]*)\s+of\s+([\w'-]+(?:\s+[A-Z][\w'-]*)?)[.!?]*$/i;
+
+/** The GENITIVE surfaces of the same relational fact — "ahab is john's
+ *  father" and "john's father is ahab" both state exactly what "ahab is the
+ *  father of john" states, so both store through the identical
+ *  generalVerbPredicate mint (subject=ahab, relation=father, object=john).
+ *  Same 1-2-token name captures as RELATION_FACT_TEACH_RE; the role slot is
+ *  the same lowercase bare noun. The possessive's own token deliberately
+ *  excludes apostrophes ([\w-]+, not [\w'-]+) so the 's split is unambiguous. */
+const GENITIVE_RELATION_TEACH_RE =
+  /^([\w-]+(?:\s+[A-Z][\w-]*)?)\s+(?:is|was)\s+([\w-]+(?:\s+[A-Z][\w-]*)?)'s\s+([a-z][\w-]*)[.!?]*$/i;
+const GENITIVE_RELATION_TEACH_REV_RE =
+  /^([\w-]+(?:\s+[A-Z][\w-]*)?)'s\s+([a-z][\w-]*)\s+(?:is|was)\s+([\w-]+(?:\s+[A-Z][\w-]*)?)[.!?]*$/i;
 
 /** "every/a/an/the <N1> has a/an <N2> method" — the HAS-A-METHOD teach
  *  declarative: a possession-of-capability claim about a class/entity's
@@ -2518,6 +2530,21 @@ function assertCandidates(payload) {
   const p = String(payload).trim();
   const out = [p];
   if (!/^(?:every|each|all|a|an)\b/i.test(p)) out.push(`every ${p}`);
+  // "dogs are animals" — the bare-plural surface of the membership shape the
+  // grammar already owns as "every dog is an animal". Purely additive and
+  // inherently safe: the rewritten candidate still has to parse against the
+  // closed lexicon, so a false singular ("redis" → "redi") never stores. A
+  // trailing "too" is tolerated — it adds discourse flavor, not content.
+  const plural = p.match(/^(?:all\s+|every\s+|each\s+)?([\w-]+)\s+are\s+([\w-]+?)(?:\s+too)?[.!?]*$/i);
+  if (plural) {
+    const subject = singularizeSurface(plural[1].toLowerCase());
+    const object = singularizeSurface(plural[2].toLowerCase());
+    if (subject !== plural[1].toLowerCase() || object !== plural[2].toLowerCase()) {
+      const articleRule = grammarRules().find((r) => r.kind === "article");
+      const article = articleRule && beginsWithVowelSound(object, articleRule) ? "an" : "a";
+      out.push(`every ${subject} is ${article} ${object}`);
+    }
+  }
   return [...new Set(out)];
 }
 /** The "every X is a Y" rewrite of a declarative, for the "did you mean …"
@@ -2772,6 +2799,25 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   if (rel && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion) {
     const stored = await teachFact(memoryDir, sessionId, {
       subject: rel[1], predicate: await generalVerbPredicate(rel[2]), object: rel[3],
+    });
+    if (stored) return stored;
+  }
+
+  // GENITIVE RELATIONAL FACT — "ahab is john's father" / "john's father is
+  // ahab": the two possessive surfaces of the relational fact just above,
+  // stored through the SAME predicate mint so every read-back ("who is the
+  // father of john") answers all three phrasings identically. Same gating.
+  const genitive = ownSrc.match(GENITIVE_RELATION_TEACH_RE);
+  if (genitive && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion) {
+    const stored = await teachFact(memoryDir, sessionId, {
+      subject: genitive[1], predicate: await generalVerbPredicate(genitive[3]), object: genitive[2],
+    });
+    if (stored) return stored;
+  }
+  const genitiveRev = ownSrc.match(GENITIVE_RELATION_TEACH_REV_RE);
+  if (genitiveRev && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion) {
+    const stored = await teachFact(memoryDir, sessionId, {
+      subject: genitiveRev[3], predicate: await generalVerbPredicate(genitiveRev[2]), object: genitiveRev[1],
     });
     if (stored) return stored;
   }
@@ -4347,6 +4393,19 @@ const RELATION_FACT_YESNO_RE =
 const RELATION_WHO_ASK_RE =
   /^(?:who|what)\s+(?:is|are)\s+(?:the|an?)\s+([a-z][\w-]*)\s+of\s+([\w'-]+(?:\s+[A-Z][\w'-]*)?)[?.!\s]*$/i;
 
+/** "who is john's father" — the GENITIVE surface of RELATION_WHO_ASK_RE.
+ *  A pure rewrite onto that shape (the matchWhyIsa approach): returns a
+ *  match-shaped array with the same slot order RELATION_WHO_ASK_RE produces
+ *  ([1]=relation, [2]=object), so the dispatch block below serves both
+ *  surfaces with no second lane. The possessive token excludes apostrophes
+ *  ([\w-]+) so the 's split is unambiguous. */
+const GENITIVE_WHO_ASK_RE =
+  /^(?:who|what)\s+(?:is|are|was|were)\s+([\w-]+(?:\s+[A-Z][\w-]*)?)'s\s+([a-z][\w-]*)[?.!\s]*$/i;
+function matchGenitiveWhoAsk(q) {
+  const g = String(q).match(GENITIVE_WHO_ASK_RE);
+  return g ? [g[0], g[2], g[1]] : null;
+}
+
 /** "list the descendants of ahab" — the REACHABILITY-SET list query: a
  *  genuine KIND-CHANGE from RELATION_FACT_YESNO_RE just above — every entity
  *  reachable from the named start entity through a taught `recursive` Rule,
@@ -5637,7 +5696,7 @@ export async function factReadBack(memoryDir, query, envelope, miss, graph = nul
   // sharing it with (a0): RELATION_WHO_ASK_RE and RELATION_FACT_YESNO_RE never
   // both match the same query (one starts with "who", the other with
   // "is/are/was/were"), so the two blocks never run in the same call.
-  const whoAsk = qHedge.match(RELATION_WHO_ASK_RE);
+  const whoAsk = qHedge.match(RELATION_WHO_ASK_RE) || matchGenitiveWhoAsk(qHedge);
   if (whoAsk) {
     const relationName = whoAsk[1].trim().toLowerCase();
     const rawObject = whoAsk[2].trim();
@@ -7921,6 +7980,24 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // STACCATO_PRONOUN_RE-no-focus branch ALWAYS returns a tailored nudge for
   // this exact shape, never null.
   const isStaccatoPronounNoFocus = STACCATO_PRONOUN_RE.test(String(query).trim()) && !focus?.label;
+  // A bare plural-membership declarative ("dogs are animals" — exactly 3
+  // words) needs the SAME deferral: it's an unambiguous TEACH shape (lane 4),
+  // but isConversational's ≤3-word catch-all claims it first. Gated on BOTH
+  // sides singularizing to KNOWN lexicon nouns, so real chatter ("these are
+  // yours") stays with the orientation card.
+  let isPluralMembershipTeach = false;
+  {
+    const pm = String(query).trim().match(/^([\w-]+)\s+are\s+([\w-]+)[.!?]*$/i);
+    if (pm) {
+      try {
+        const { loadLexicon, lookupNoun } = await import("./grammar/lexicon.mjs");
+        const lex = loadLexicon();
+        const s = singularizeSurface(pm[1].toLowerCase());
+        const o = singularizeSurface(pm[2].toLowerCase());
+        isPluralMembershipTeach = s !== pm[1].toLowerCase() && !!lookupNoun(lex, s) && !!lookupNoun(lex, o);
+      } catch { /* lexicon unavailable — leave false, the ordinary path decides */ }
+    }
+  }
   // A vague relation touch ("what about cochange", "tell me about cochange",
   // the staccato chain continuation "and cochange?") whose relation word has NO
   // bare single-word VERB_TO_KIND form of its own needs the SAME deferral as
@@ -7948,7 +8025,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       } catch { /* leave false — the ordinary path decides */ }
     }
   }
-  const conversationalCandidateBaseGate = !handled && miss && !envelope?.parsed && !isWhatAboutContinuation && !isDescribePronounContinuation && !isExplainTouch && !isStaccatoNegation && !isVagueRelationTouch && !isStaccatoComparative && !isStaccatoPronounNoFocus;
+  const conversationalCandidateBaseGate = !handled && miss && !envelope?.parsed && !isWhatAboutContinuation && !isDescribePronounContinuation && !isExplainTouch && !isStaccatoNegation && !isVagueRelationTouch && !isStaccatoComparative && !isStaccatoPronounNoFocus && !isPluralMembershipTeach;
   // A turn whose pronoun was bound to a vocabulary antecedent is PROVABLY a
   // fact question ("can it bark" → "can dog bark") — never conversational,
   // however short. Without this, the substituted 3-worder still trips

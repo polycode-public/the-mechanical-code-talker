@@ -945,3 +945,61 @@ test("BENCHMARK regression guard: the SOME_A_FEW_RE plural path (the sibling thi
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("bare plural membership: 'dogs are animals' (exactly 3 words) stores rdfs:subClassOf singular, never the orientation card or a property fact", async () => {
+  const dir = await mem("plural-bare");
+  try {
+    const taught = await runTurn("dogs are animals", { config: CONFIG, memoryDir: dir, sessionId: "p1" });
+    assert.match(taught.answer, /noted — remembered/);
+    const mem2 = await loadMemory(dir);
+    const rows = readFactRows(mem2);
+    const hit = rows.find((f) => f.subject === "dog" && f.predicate === "rdfs:subClassOf" && f.object === "animal");
+    assert.ok(hit, "stored as dog rdfs:subClassOf animal (singular, class membership)");
+    assert.ok(!rows.some((f) => f.predicate === "mgx:hasProperty"), "never a property fact");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("wrapped plural membership: 'remember that dogs are animals' stores the same singular subClassOf fact, not 'dogs mgx:hasProperty animals'", async () => {
+  const dir = await mem("plural-wrapped");
+  try {
+    const taught = await runTurn("remember that dogs are animals", { config: CONFIG, memoryDir: dir, sessionId: "p2" });
+    assert.match(taught.answer, /noted — remembered/);
+    const mem2 = await loadMemory(dir);
+    const rows = readFactRows(mem2);
+    assert.ok(rows.find((f) => f.subject === "dog" && f.predicate === "rdfs:subClassOf" && f.object === "animal"));
+    assert.ok(!rows.some((f) => f.subject === "dogs"), "the plural surface never becomes a stored term");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("plural membership with a trailing 'too': 'cats are animals too' stores cat rdfs:subClassOf animal", async () => {
+  const dir = await mem("plural-too");
+  try {
+    const taught = await runTurn("cats are animals too", { config: CONFIG, memoryDir: dir, sessionId: "p3" });
+    assert.match(taught.answer, /noted — remembered/);
+    const mem2 = await loadMemory(dir);
+    const rows = readFactRows(mem2);
+    assert.ok(rows.find((f) => f.subject === "cat" && f.predicate === "rdfs:subClassOf" && f.object === "animal"));
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("plural-membership exemption never claims real chatter: 'these are yours' still gets the conversational reply, no stored fact", async () => {
+  const dir = await mem("plural-chatter");
+  try {
+    const r = await runTurn("these are yours", { config: CONFIG, memoryDir: dir, sessionId: "p4" });
+    assert.doesNotMatch(r.answer, /noted — remembered/);
+    const mem2 = await loadMemory(dir);
+    assert.ok(!readFactRows(mem2).length, "nothing stored");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
