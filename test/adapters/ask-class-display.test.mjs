@@ -6,10 +6,10 @@
 // real buildEntities/parseEntities graph.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildEntities } from "../src/graph-build.mjs";
-import { parseEntities } from "../src/codegraph.mjs";
-import { ingestSchemaDocs } from "../src/schema-docs.mjs";
-import { ask, classDisplayName } from "../src/ask.mjs";
+import { buildEntities } from "../../src/graph-build.mjs";
+import { parseEntities } from "../../src/codegraph.mjs";
+import { ingestSchemaDocs } from "../../src/schema-docs.mjs";
+import { ask, classDisplayName } from "../../src/ask.mjs";
 
 test("classDisplayName splits a camel-case enum into lowercase words, byte-exact", () => {
   assert.equal(classDisplayName("GlobalVariable"), "global variable");

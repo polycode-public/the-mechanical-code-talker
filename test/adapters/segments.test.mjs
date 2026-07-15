@@ -1,4 +1,4 @@
-// segments.test.mjs — the segmentation IR byte-parity proof (Phase 7, lever 1).
+// The segmentation IR byte-parity proof.
 // render() is now flatten(renderSegments()); this file proves that refactor is
 // BYTE-IDENTICAL over the entire committed template library, and that the split
 // is well-formed (prose spans are literal wording, slot fills are protected).
@@ -6,8 +6,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   TEMPLATES_FILE, loadTemplates, render, renderSegments, flatten, slotKind,
-} from "../src/corpus/templates.mjs";
-import { isProtected } from "../src/finish.mjs";
+} from "../../src/corpus/templates.mjs";
+import { isProtected } from "../../src/finish.mjs";
 
 const SLOT_G = /\{([A-Za-z][A-Za-z0-9]*)\}/g;
 

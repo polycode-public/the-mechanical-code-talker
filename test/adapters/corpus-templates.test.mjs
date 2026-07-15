@@ -1,5 +1,5 @@
-// corpus/templates.mjs tests — the response-template library + SE phrase book
-// (Phase 2 items 4+7): strict rendering, and the lint guarantee that every
+// corpus/templates.mjs tests — the response-template library + SE phrase book:
+// strict rendering, and the lint guarantee that every
 // committed data row parses, is unique, and stays within its declared shape.
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -10,7 +10,7 @@ import {
   TEMPLATES_FILE, PHRASEBOOK_FILE,
   loadTemplates, render, slotsOf, loadPhrasebook, TECHNICAL_SLOTS,
   loadTemplatesMerged,
-} from "../src/corpus/templates.mjs";
+} from "../../src/corpus/templates.mjs";
 
 test("lint: every responses.jsonl row parses, ids are unique, registers valid, every template has a class", async () => {
   const templates = await loadTemplates(TEMPLATES_FILE); // loud on any bad row
@@ -24,10 +24,10 @@ test("lint: every responses.jsonl row parses, ids are unique, registers valid, e
   }
   const registers = new Set([...templates.values()].map((t) => t.register));
   assert.ok(registers.has("terse") && registers.has("friendly"), "both conversational registers present");
-  assert.ok(registers.has("technical"), "the C1 technical register is present (Phase 6)");
+  assert.ok(registers.has("technical"), "the C1 technical register is present");
 });
 
-test("technical register (Phase 6): C1 templates over item-5 mechanical conclusions, provenance mandatory", async () => {
+test("technical register: C1 templates over mechanical conclusions, provenance mandatory", async () => {
   const templates = await loadTemplates(TEMPLATES_FILE);
   const technical = [...templates.values()].filter((t) => t.register === "technical");
   assert.ok(technical.length >= 3 && technical.length <= 5, `3–5 technical templates (got ${technical.length})`);

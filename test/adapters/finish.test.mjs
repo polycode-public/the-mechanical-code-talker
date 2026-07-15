@@ -1,5 +1,5 @@
-// finish.test.mjs — the composed-path masker, the invariance checker and the
-// no-op finish() seam (Phase 7, lever 1 foundation). Contract: byte-exact
+// The composed-path masker, the invariance checker and the
+// no-op finish() seam. Contract: byte-exact
 // reconstruction, protect-when-unsure, and a strictly neutral finish().
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -8,7 +8,7 @@ import {
   maskSegments, flatten,
   protectedSpans, protectedMultiset, invariantHolds, assertInvariance,
   finish, applyGrammar, loadGrammarRules,
-} from "../src/finish.mjs";
+} from "../../src/finish.mjs";
 
 const GRAPH = {
   individuals: [
@@ -125,7 +125,7 @@ test("finish() is idempotent on neutral input: finish(finish(x)) === finish(x)",
   assert.deepEqual(finish(finish(x)), finish(x));
 });
 
-// --- The grammar-rule engine (Phase 7, lever 2) -----------------------------
+// --- The grammar-rule engine ------------------------------------------------
 // applyGrammar transforms ONLY prose spans; the invariance checker is a hard
 // gate on top. Golden per rule (input segments → finished flat output), plus
 // the two properties every rule must hold: fact-invariance and idempotence.

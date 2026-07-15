@@ -1,11 +1,11 @@
-// paraphrase.test.mjs — PLAN_BREADTH_FIRST_NLU.md (c): a real, verified
-// paraphrase of an isa-family (rdfs:subClassOf) teach confirmation, checked
+// A real, verified paraphrase of an isa-family (rdfs:subClassOf) teach
+// confirmation, checked
 // via syllogise.mjs's own deriveSubClassClosure rather than string equality.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   paraphraseSubClass, recoverSubClassTriple, verifySubClassParaphrase, paraphraseVerifiedSubClass,
-} from "../src/paraphrase.mjs";
+} from "../../src/paraphrase.mjs";
 
 test("paraphraseSubClass: deterministic — same (subject, object) always produces the same text", () => {
   assert.equal(paraphraseSubClass("cache", "component"), paraphraseSubClass("cache", "component"));

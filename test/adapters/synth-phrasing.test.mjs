@@ -1,17 +1,14 @@
-// test/synth-phrasing.test.mjs — PLAN_CODE.md Track 1, Stage 0: the
-// PHRASING_FRAMES warm-up synthesizer (synthbench/phrasing/synthesize.mjs).
-// Proves the stage-0 exit bar (PLAN_CODE.md §6): synthesizing >=1 of the 6
-// existing frame families byte-identically from its own hand-written
-// examples, PLUS the cross-cutting requirement this whole track is built
-// under (PLAN_CODE.md, operator directive): the synthesis process itself is
-// deterministic — same input, same output, no randomness.
+// The PHRASING_FRAMES warm-up synthesizer (synthbench/phrasing/synthesize.mjs):
+// synthesizes the existing frame families byte-identically from their own
+// hand-written examples, and the synthesis process itself is deterministic —
+// same input, same output, no randomness.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { synthesizeFrame, applyFrame } from "../synthbench/phrasing/synthesize.mjs";
-import { FAMILIES } from "../synthbench/phrasing/examples.mjs";
-import { applyPhrasingFrames } from "../src/interpret/normalize.mjs";
+import { synthesizeFrame, applyFrame } from "../../synthbench/phrasing/synthesize.mjs";
+import { FAMILIES } from "../../synthbench/phrasing/examples.mjs";
+import { applyPhrasingFrames } from "../../src/interpret/normalize.mjs";
 
 // ---- determinism -------------------------------------------------------------
 

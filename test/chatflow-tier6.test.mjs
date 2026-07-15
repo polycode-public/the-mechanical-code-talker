@@ -51,7 +51,7 @@
 //       "explain", so a leading "please " defeats it.
 //   T3  "what abut imports" (a one-letter-dropped typo of "about" — a real
 //       English word on its own, so it can't live in the shared MISSPELLINGS
-//       table per test/ask-vocab.test.mjs's own "every value must be grammar-
+//       table per test/adapters/ask-vocab.test.mjs's own "every value must be grammar-
 //       owned" invariant) searched for a module literally named "abut"
 //       instead of reading as the relation concept force's own "what about
 //       imports" vague touch. Fixed the same way VAGUE_TOUCH_TEL_RE already

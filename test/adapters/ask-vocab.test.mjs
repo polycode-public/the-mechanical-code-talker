@@ -3,8 +3,8 @@
 // grammar, not just exist in the table.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { RELATIONS, VERB_TO_KIND, ENTITY_TO_TYPE, MODIFIER_TO_KIND, MISSPELLINGS, WRONG_WORDS, AGGREGATE_TRIGGERS, LIST_TRIGGERS } from "../src/ask-vocab.mjs";
-import { parseQuery, normalizeQuery } from "../src/ask.mjs";
+import { RELATIONS, VERB_TO_KIND, ENTITY_TO_TYPE, MODIFIER_TO_KIND, MISSPELLINGS, WRONG_WORDS, AGGREGATE_TRIGGERS, LIST_TRIGGERS } from "../../src/ask-vocab.mjs";
+import { parseQuery, normalizeQuery } from "../../src/ask.mjs";
 
 // The aggregate/list TRIGGER words are grammar vocabulary too (parseAggregate/parseList
 // read them), so a correction may legitimately restore one ("manyn"→"many", "lst"→"list").
@@ -125,8 +125,8 @@ test("MISSPELLINGS: covers a plausible typo for every entity-noun family and the
   }
 });
 
-// ---- "w/" -> "with" / leetspeak "4" -> "for" (HANDOVER.md 2026-07-12 deferred
-// typo sub-cases): neither can live in the MISSPELLINGS/WRONG_WORDS tables above
+// ---- "w/" -> "with" / leetspeak "4" -> "for": neither can live in the
+// MISSPELLINGS/WRONG_WORDS tables above
 // (see normalize.mjs's own docblock ahead of W_SLASH_RE/FOR_DIGIT_THANKS_RE/
 // FOR_DIGIT_EXAMPLE_RE for the two structural reasons), so they get their own
 // narrow regex pass inside normalizeQuery instead. These tests prove: the

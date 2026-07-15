@@ -1,10 +1,10 @@
-// prose.test.mjs — the second-pass prose extraction + cross-reference index (PLAN_PROSE_INDEX.md).
+// The second-pass prose extraction + cross-reference index.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   splitIdentifierWords, tokenizeProse, proseTokensFor,
   attachProseTokens, buildProseIndex, lookupByProseTokens,
-} from "../src/prose.mjs";
+} from "../../src/prose.mjs";
 
 test("splitIdentifierWords: camelCase, sentence-fragment names", () => {
   assert.deepEqual(

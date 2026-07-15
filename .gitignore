@@ -25,6 +25,15 @@ test/fixtures/large-scale/.tmct/session-*.log
 test/fixtures/large-scale/.tmct/memory/
 test/fixtures/large-scale/.tmct/sessions/
 
+# the corpus lanes' repo-shaped twin of entities.fixture.json (same entities,
+# written the way a real graph producer writes them — ingestSchemaDocs applied
+# — so a corpus row's setup.fixture can point a whole session at it).
+!test/fixtures/entities-repo/.tmct/
+!test/fixtures/entities-repo/.tmct/graph.json
+test/fixtures/entities-repo/.tmct/session-*.log
+test/fixtures/entities-repo/.tmct/memory/
+test/fixtures/entities-repo/.tmct/sessions/
+
 # Claude Code's transient agent worktrees (git-internal checkouts, never committed)
 .claude/worktrees/
 

@@ -10,11 +10,11 @@
 // a HIT plus an honest-miss control, end-to-end through ask().
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildEntities } from "../src/graph-build.mjs";
-import { parseEntities } from "../src/codegraph.mjs";
-import { ingestSchemaDocs } from "../src/schema-docs.mjs";
-import { parseQuery, ask } from "../src/ask.mjs";
-import { applyPhrasingFrames } from "../src/interpret/normalize.mjs";
+import { buildEntities } from "../../src/graph-build.mjs";
+import { parseEntities } from "../../src/codegraph.mjs";
+import { ingestSchemaDocs } from "../../src/schema-docs.mjs";
+import { parseQuery, ask } from "../../src/ask.mjs";
+import { applyPhrasingFrames } from "../../src/interpret/normalize.mjs";
 
 const MODULES = [
   { path: "src/payment.mjs", dotted: "src.payment", imports: [], calls: [],
