@@ -44,13 +44,6 @@ Measured init sizes (fresh store, this machine): `init:large` 37,797 facts; `ini
   validate or extend the animation for multi-effect steps (risk named in `archive/PLAN_HANOI.md`'s
   addendum).
 
-- **Taught capability records have no listing surface.** They register and dispose inside a
-  single `/plan` (or `tmct plan`) request, so a user can never see which taught actions the
-  planner knows: chat has no `/capabilities` command, and `tmct plan --tools taught:...`
-  rejects the name because `--tools` validates against the pre-registration set
-  (`bin/tmct.mjs`). Doable and unclaimed: a listing surface (or a `--tools` re-validation
-  after registration), plus a test that a taught family shows up in it.
-
 - **Misparse-receipt leakage on ask turns.** Fuzzy/stale Goal+Canonical receipts print under
   correct fact answers on ask turns ("rests"→"tests", "bigger"→"calls", "defines"): the
   playtest-015 `fuzzyVerb` drop covers teach and goal turns only. One coherent edge: extend

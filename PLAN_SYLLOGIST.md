@@ -1,4 +1,4 @@
-# PLAN_SYLLOGIST_HORIZON.md — beyond the shipped ladder: making the Syllogist itself smarter
+# PLAN_SYLLOGIST.md — beyond the shipped ladder: making the Syllogist itself smarter
 
 > **STATUS: research/design notes — §3's own JTMS-shaped, VERIFY-backed slice (single justification
 > per scm-sco fact, dependency-directed removal, bounded) is now IMPLEMENTED and tested
@@ -126,7 +126,8 @@ class `via` that produced it is computed and returned in the pass's report but n
 the fact itself, so there is no stored justification to walk at all today. `PLAN_INFERENCE_TESTING.md`
 §4 stage 2 already closed part of this: derivations now carry the premise trust figures needed for
 `min(premiseTrusts) × ruleConfidence` (this session's own trust-hook fix extended that to scm-svf1,
-cardinality monotonicity, and cax-maxc0 too — see `archive/PLAN_INFERENCE_TESTING.md`), which is a
+cardinality monotonicity, and cax-maxc0 too — `PLAN_INFERENCE_TESTING.md` itself was pruned from
+`archive/` in the 2026-07-14 doc cleanup, so it now lives only in git history), which is a
 JTMS-shaped single justification per fact in spirit, though not yet a persisted, walkable one. A
 further, NOT-currently-planned step toward the ATMS proper would track the small SET of alternate
 premise-sets per derived fact rather than just one — cheap for tmct specifically because the rule

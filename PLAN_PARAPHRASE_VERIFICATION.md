@@ -1,6 +1,10 @@
 # PLAN_PARAPHRASE_VERIFICATION.md — verifying a paraphrase against the graph before showing it
 
-Status: RESEARCH / DESIGN — not yet implemented. Nothing in this document is live code.
+Status: RESEARCH / DESIGN — the general verifier this document designs is not yet implemented.
+One narrow slice of the same ROADMAP goal already shipped separately and predates this doc:
+`src/paraphrase.mjs` (`verifySubClassParaphrase`, isa-family only, closure-backed, with
+`test/paraphrase.test.mjs`). The multi-technique `verifyParaphrase(originalFactRow,
+candidateText, technique)` below remains unbuilt and does not reuse that slice yet.
 
 ## Origin
 
