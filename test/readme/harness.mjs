@@ -59,7 +59,8 @@ function inTempDir(block, run) {
 }
 
 function sh(command, { cwd, input = "" }) {
-  return execFileSync("bash", ["-euo", "pipefail", "-c", command], {
+  // Merge stderr into stdout: README transcripts show what a terminal shows.
+  return execFileSync("bash", ["-euo", "pipefail", "-c", `exec 2>&1\n${command}`], {
     cwd,
     input,
     env: shimEnv(),
