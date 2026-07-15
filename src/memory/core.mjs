@@ -1173,9 +1173,11 @@ export const RULE_KIND_RECURSIVE = "recursive";
 export const RULE_KIND_ACTION_SIGNATURE = "action-signature";
 export const RULE_KIND_ACTION_PRECOND = "action-precond";
 export const RULE_KIND_ACTION_EFFECT = "action-effect";
+export const RULE_KIND_ACTION_CONSTRAINT = "action-constraint";
 export const RULE_KINDS = Object.freeze([
   RULE_KIND_COMPOSE2, RULE_KIND_FILTER, RULE_KIND_RECURSIVE,
   RULE_KIND_ACTION_SIGNATURE, RULE_KIND_ACTION_PRECOND, RULE_KIND_ACTION_EFFECT,
+  RULE_KIND_ACTION_CONSTRAINT,
 ]);
 
 export const RULE_NAME_PROP = "mgx:ruleName";
@@ -1202,6 +1204,12 @@ const RULE_SLOT_SPEC = {
   [RULE_KIND_ACTION_EFFECT]: [
     ["predicate", "mgx:ruleActionEffectPredicate"], ["subjectRole", "mgx:ruleActionEffectSubject"],
     ["objectRole", "mgx:ruleActionEffectObject"],
+  ],
+  // "the <left> may not be with the <right> without the <guard>" — each slot
+  // names a class whose sole member src/domain.mjs resolves at compile time.
+  [RULE_KIND_ACTION_CONSTRAINT]: [
+    ["left", "mgx:ruleActionConstraintLeft"], ["right", "mgx:ruleActionConstraintRight"],
+    ["guard", "mgx:ruleActionConstraintGuard"],
   ],
 };
 

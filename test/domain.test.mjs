@@ -4,6 +4,8 @@
 //   - movesFromRules is deterministic, honors every precondition shape and
 //     the grounding budget;
 //   - compileGoal walks support chains transitively;
+//   - class-bound companion effects move two individuals per action, gated by
+//     derived co-location; action constraints prune violating successors;
 //   - the interpreter source carries zero domain vocabulary;
 //   - the oracle: for n = 1..8 disks taught purely as sentences, the search
 //     finds exactly 2^n - 1 moves.
@@ -146,9 +148,113 @@ test("compileGoal walks the support chain transitively", () => {
     /no known members/);
 });
 
+// ---- companions and constraints ----------------------------------------------
+// A second neutral fixture: three exclusive cargo pieces (a1/b1/c1, one per
+// marker class), a sole escort k1 whose class appears as a class-bound effect
+// role, and two zones. Structurally the river-crossing shape, in neutral words.
+const ESCORT_RULES = [
+  { id: "h1", name: "haul onto", kind: "action-signature", slots: { subjectClass: "cargo", targetClass: "zone" } },
+  { id: "h2", name: "haul onto", kind: "action-signature", slots: { subjectClass: "escort", targetClass: "zone" } },
+  { id: "h3", name: "haul onto", kind: "action-effect", slots: { predicate: "sit-at", subjectRole: "subject", objectRole: "target" } },
+  { id: "h4", name: "haul onto", kind: "action-effect", slots: { predicate: "sit-at", subjectRole: "escort", objectRole: "target" } },
+  { id: "h5", name: "haul onto", kind: "action-constraint", slots: { left: "alpha", right: "beta", guard: "escort" } },
+  { id: "h6", name: "haul onto", kind: "action-constraint", slots: { left: "beta", right: "gamma", guard: "escort" } },
+];
+const ESCORT_FACTS = [
+  { subject: "a1", predicate: "rdfs:subClassOf", object: "alpha" },
+  { subject: "a1", predicate: "rdfs:subClassOf", object: "cargo" },
+  { subject: "b1", predicate: "rdfs:subClassOf", object: "beta" },
+  { subject: "b1", predicate: "rdfs:subClassOf", object: "cargo" },
+  { subject: "c1", predicate: "rdfs:subClassOf", object: "gamma" },
+  { subject: "c1", predicate: "rdfs:subClassOf", object: "cargo" },
+  { subject: "k1", predicate: "rdfs:subClassOf", object: "escort" },
+  { subject: "z1", predicate: "rdfs:subClassOf", object: "zone" },
+  { subject: "z2", predicate: "rdfs:subClassOf", object: "zone" },
+  { subject: "a1", predicate: "mgx:sit-at", object: "z1" },
+  { subject: "b1", predicate: "mgx:sit-at", object: "z1" },
+  { subject: "c1", predicate: "mgx:sit-at", object: "z1" },
+  { subject: "k1", predicate: "mgx:sit-at", object: "z1" },
+];
+
+test("a class-bound effect role moves the subject and its companion in one action", () => {
+  const domain = compileDomain(ESCORT_FACTS, ESCORT_RULES);
+  const start = stateFromFacts(ESCORT_FACTS, domain);
+  const moves = movesFromRules(start, domain);
+  const crossing = moves.find((m) => m.action.label === "haul b1 onto z2");
+  assert.ok(crossing, "the guarded crossing is legal");
+  assert.ok(crossing.nextState.some((r) => r.subject === "b1" && r.predicate === "mgx:sit-at" && r.object === "z2"));
+  assert.ok(crossing.nextState.some((r) => r.subject === "k1" && r.predicate === "mgx:sit-at" && r.object === "z2"),
+    "the companion crossed in the same action");
+});
+
+test("a grounding whose companion is not co-located with the subject is pruned", () => {
+  const domain = compileDomain(ESCORT_FACTS, ESCORT_RULES);
+  const apart = [
+    { subject: "a1", predicate: "mgx:sit-at", object: "z1" },
+    { subject: "b1", predicate: "mgx:sit-at", object: "z1" },
+    { subject: "c1", predicate: "mgx:sit-at", object: "z1" },
+    { subject: "k1", predicate: "mgx:sit-at", object: "z2" },
+  ];
+  const labels = movesFromRules(apart, domain).map((m) => m.action.label);
+  assert.ok(!labels.some((l) => /^haul [abc]1\b/.test(l)), "no cargo moves while the escort is on the far zone");
+  assert.deepEqual(labels, ["haul k1 onto z1"], "the escort returning alone is its own trivially co-located companion");
+});
+
+test("a constraint prunes exactly the successors where left and right share a place the guard lacks", () => {
+  const rules = [
+    { id: "s1", name: "shift onto", kind: "action-signature", slots: { subjectClass: "piece", targetClass: "zone" } },
+    { id: "s2", name: "shift onto", kind: "action-effect", slots: { predicate: "sit-at", subjectRole: "subject", objectRole: "target" } },
+    { id: "s3", name: "shift onto", kind: "action-constraint", slots: { left: "red", right: "blue", guard: "keeper" } },
+  ];
+  const facts = [
+    { subject: "p1", predicate: "rdfs:subClassOf", object: "red" },
+    { subject: "p1", predicate: "rdfs:subClassOf", object: "piece" },
+    { subject: "p2", predicate: "rdfs:subClassOf", object: "blue" },
+    { subject: "p2", predicate: "rdfs:subClassOf", object: "piece" },
+    { subject: "g1", predicate: "rdfs:subClassOf", object: "keeper" },
+    { subject: "g1", predicate: "rdfs:subClassOf", object: "piece" },
+    { subject: "z1", predicate: "rdfs:subClassOf", object: "zone" },
+    { subject: "z2", predicate: "rdfs:subClassOf", object: "zone" },
+  ];
+  const domain = compileDomain(facts, rules);
+  const state = [
+    { subject: "g1", predicate: "mgx:sit-at", object: "z2" },
+    { subject: "p1", predicate: "mgx:sit-at", object: "z1" },
+    { subject: "p2", predicate: "mgx:sit-at", object: "z2" },
+  ];
+  const labels = movesFromRules(state, domain).map((m) => m.action.label);
+  // p2 -> z1 would put red+blue on z1 while the keeper stays on z2: pruned.
+  // p1 -> z2 puts red+blue+keeper together: allowed. g1 -> z1 splits them: allowed.
+  assert.deepEqual(labels, ["shift g1 onto z1", "shift p1 onto z2"]);
+});
+
+test("compileDomain throws when a class-bound role or constraint word has zero or several members", () => {
+  const ghostRole = ESCORT_RULES.map((r) =>
+    (r.id === "h4" ? { ...r, slots: { ...r.slots, subjectRole: "phantom" } } : r));
+  assert.throws(() => compileDomain(ESCORT_FACTS, ghostRole), /"phantom".*exactly one member.*0/);
+
+  const twoEscorts = [...ESCORT_FACTS, { subject: "k2", predicate: "rdfs:subClassOf", object: "escort" }];
+  assert.throws(() => compileDomain(twoEscorts, ESCORT_RULES), /"escort".*exactly one member.*2/);
+
+  const ghostGuard = ESCORT_RULES.map((r) =>
+    (r.id === "h5" ? { ...r, slots: { ...r.slots, guard: "phantom" } } : r));
+  assert.throws(() => compileDomain(ESCORT_FACTS, ghostGuard), /constraint term.*"phantom"/);
+});
+
+test("the escort domain opens with exactly one legal move and crosses in 7", () => {
+  const domain = compileDomain(ESCORT_FACTS, ESCORT_RULES);
+  const start = stateFromFacts(ESCORT_FACTS, domain);
+  assert.equal(movesFromRules(start, domain).length, 1, "only the guarded crossing is legal at the start");
+  const isGoal = compileGoal([{ universal: true, term: "cargo", predicate: "sit-at", object: "z2" }], domain);
+  const result = findActionPath(start, isGoal, (s) => movesFromRules(s, domain), { maxDepth: 50, stateKey: stateKeyFor });
+  assert.ok(result, "a crossing plan exists");
+  assert.equal(result.actions.length, 7, "the classic optimum");
+});
+
 test("the interpreter source carries zero domain vocabulary", () => {
   const src = readFileSync(DOMAIN_SRC, "utf8");
   assert.doesNotMatch(src, /disk|peg|rest-on|hanoi/i);
+  assert.doesNotMatch(src, /wolf|goat|cabbage|farmer|ferry|passenger|\briver\b|\bbank\b/i);
 });
 
 // ---- the oracle -------------------------------------------------------------

@@ -10,7 +10,7 @@
 import { readRuleRows } from "../memory/core.mjs";
 import { capabilityByName, registerCapability } from "./registry.mjs";
 
-const ACTION_KINDS = new Set(["action-signature", "action-precond", "action-effect"]);
+const ACTION_KINDS = new Set(["action-signature", "action-precond", "action-effect", "action-constraint"]);
 
 /** Group a memory payload's action-family rule rows by rule name. */
 export function actionFamilies(memory) {
@@ -28,6 +28,7 @@ export function capabilityFromActionRules(name, family) {
   const signatures = family.filter((r) => r.kind === "action-signature");
   const preconds = family.filter((r) => r.kind === "action-precond");
   const effects = family.filter((r) => r.kind === "action-effect");
+  const constraints = family.filter((r) => r.kind === "action-constraint");
   return {
     name: `taught:${name}`,
     label: name,
@@ -37,13 +38,23 @@ export function capabilityFromActionRules(name, family) {
       { name: "subject", classes: [...new Set(signatures.map((s) => s.slots.subjectClass))].sort() },
       { name: "target", classes: [...new Set(signatures.map((s) => s.slots.targetClass))].sort() },
     ],
-    preconditions: preconds.map((p) => ({
-      pred: "taught:world-precond",
-      shape: p.slots.shape,
-      predicate: p.slots.predicate,
-      role: p.slots.role,
-      scope: p.slots.scope,
-    })),
+    preconditions: [
+      ...preconds.map((p) => ({
+        pred: "taught:world-precond",
+        shape: p.slots.shape,
+        predicate: p.slots.predicate,
+        role: p.slots.role,
+        scope: p.slots.scope,
+      })),
+      // A constraint is a precondition on the SUCCESSOR state; it rides the
+      // record's precondition list so a bridged family stays complete.
+      ...constraints.map((c) => ({
+        pred: "taught:world-constraint",
+        left: c.slots.left,
+        right: c.slots.right,
+        guard: c.slots.guard,
+      })),
+    ],
     effects: {
       add: effects.map((e) => ({
         pred: "taught:world-effect",

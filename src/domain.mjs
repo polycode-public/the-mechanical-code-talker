@@ -46,7 +46,7 @@ export function compileDomain(factRows, ruleRows) {
   for (const rule of ruleRows || []) {
     if (!String(rule.kind || "").startsWith("action-")) continue;
     const name = normTerm(rule.name);
-    if (!byName.has(name)) byName.set(name, { name, signatures: [], preconds: [], effects: [] });
+    if (!byName.has(name)) byName.set(name, { name, signatures: [], preconds: [], effects: [], constraints: [] });
     const family = byName.get(name);
     const slots = rule.slots || {};
     if (rule.kind === "action-signature") {
@@ -67,6 +67,12 @@ export function compileDomain(factRows, ruleRows) {
         subjectRole: normTerm(slots.subjectRole),
         objectRole: normTerm(slots.objectRole),
       });
+    } else if (rule.kind === "action-constraint") {
+      family.constraints.push({
+        left: normTerm(slots.left),
+        right: normTerm(slots.right),
+        guard: normTerm(slots.guard),
+      });
     }
   }
   const actions = [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
@@ -75,6 +81,7 @@ export function compileDomain(factRows, ruleRows) {
       a.subjectClass.localeCompare(b.subjectClass) || a.targetClass.localeCompare(b.targetClass));
     action.preconds.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
     action.effects.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+    action.constraints.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
   }
 
   // Class membership from typing edges. A member is a subject with a typing
@@ -90,6 +97,29 @@ export function compileDomain(factRows, ruleRows) {
     members.sort();
     // de-dup while keeping order
     for (let i = members.length - 1; i > 0; i -= 1) if (members[i] === members[i - 1]) members.splice(i, 1);
+  }
+
+  // A class-bound word (an effect role or constraint term that is neither
+  // "subject" nor "target") is substituted by its class's sole member at
+  // grounding time. With 0 or 2+ members that substitution would be a silent
+  // guess, so an ill-bound family fails loudly here instead.
+  const requireSoleMember = (word, where) => {
+    const count = (classMembers[word] || []).length;
+    if (count !== 1) {
+      throw new Error(`${where} names "${word}", which must be a class with exactly one member (it has ${count})`);
+    }
+  };
+  for (const action of actions) {
+    for (const effect of action.effects) {
+      for (const role of [effect.subjectRole, effect.objectRole]) {
+        if (role !== "subject" && role !== "target") requireSoleMember(role, `an effect role of "${action.name}"`);
+      }
+    }
+    for (const constraint of action.constraints) {
+      for (const word of [constraint.left, constraint.right, constraint.guard]) {
+        requireSoleMember(word, `a constraint term of "${action.name}"`);
+      }
+    }
   }
 
   const dynamicPredicates = new Set();
@@ -171,13 +201,24 @@ function precondHolds(precond, subject, target, state, domain) {
   return false;
 }
 
-function applyEffects(effects, subject, target, state) {
-  const roleTerm = (role) => (role === "target" ? target : subject);
+/** Ground an effect/constraint role word: "subject"/"target" bind the
+ *  grounding pair; any other word is class-bound and binds the class's sole
+ *  member — its companion semantics (compileDomain guarantees exactly one). */
+const roleBinding = (role, subject, target, domain) => {
+  if (role === "subject") return subject;
+  if (role === "target") return target;
+  return (domain.classMembers[role] || [])[0];
+};
+
+const positionIn = (rows, term, predicate) =>
+  rows.find((r) => r.subject === term && r.predicate === predicate)?.object;
+
+function applyEffects(effects, subject, target, state, domain) {
   let rows = state;
   let changed = false;
   for (const effect of effects) {
-    const effSubject = roleTerm(effect.subjectRole);
-    const effObject = roleTerm(effect.objectRole);
+    const effSubject = roleBinding(effect.subjectRole, subject, target, domain);
+    const effObject = roleBinding(effect.objectRole, subject, target, domain);
     const already = rows.some((r) =>
       r.subject === effSubject && r.predicate === effect.predicate && r.object === effObject);
     if (already) continue;
@@ -187,6 +228,42 @@ function applyEffects(effects, subject, target, state) {
   }
   if (!changed) return null;
   return [...rows].sort(rowSort);
+}
+
+/** True when `state` still permits every companion (class-bound effect
+ *  subject) to move WITH the grounded subject. Co-location is a derived
+ *  precondition, not a taught one: the taught effect says the companion ends
+ *  up at the target, and applying that from a state where the companion
+ *  stands elsewhere would teleport it instead of carrying it. Trivially true
+ *  when the subject is its own companion. */
+function companionsCoLocated(action, subject, target, state, domain) {
+  for (const effect of action.effects) {
+    if (effect.subjectRole === "subject" || effect.subjectRole === "target") continue;
+    const companion = roleBinding(effect.subjectRole, subject, target, domain);
+    if (companion === subject) continue;
+    const subjectAt = positionIn(state, subject, effect.predicate);
+    if (!subjectAt || positionIn(state, companion, effect.predicate) !== subjectAt) return false;
+  }
+  return true;
+}
+
+/** True when a successor state breaks one of the action's constraints: the
+ *  left and right members sharing a position under one of the action's
+ *  effect predicates while the guard member stands elsewhere. */
+function constraintViolated(action, nextState, domain) {
+  if (!action.constraints.length) return false;
+  const predicates = [...new Set(action.effects.map((e) => e.predicate))];
+  for (const constraint of action.constraints) {
+    const left = (domain.classMembers[constraint.left] || [])[0];
+    const right = (domain.classMembers[constraint.right] || [])[0];
+    const guard = (domain.classMembers[constraint.guard] || [])[0];
+    for (const predicate of predicates) {
+      const leftAt = positionIn(nextState, left, predicate);
+      if (!leftAt || positionIn(nextState, right, predicate) !== leftAt) continue;
+      if (positionIn(nextState, guard, predicate) !== leftAt) return true;
+    }
+  }
+  return false;
 }
 
 /** Every legal grounded action from `state`, with its successor.
@@ -214,8 +291,10 @@ export function movesFromRules(state, domain, { budget = 5000 } = {}) {
             if (!precondHolds(precond, subject, target, state, domain)) { ok = false; break; }
           }
           if (!ok) continue;
-          const nextState = applyEffects(action.effects, subject, target, state);
+          if (!companionsCoLocated(action, subject, target, state, domain)) continue;
+          const nextState = applyEffects(action.effects, subject, target, state, domain);
           if (!nextState) continue;
+          if (constraintViolated(action, nextState, domain)) continue;
           out.push({
             action: {
               name: action.name,

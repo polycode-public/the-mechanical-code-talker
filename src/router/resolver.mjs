@@ -94,6 +94,19 @@ export function backwardChain(topic) {
   return null;
 }
 
+/** Backward-chain a WORLD goal — a state predicate like "rest-on" that a
+ *  taught action's effect establishes — to the registered record whose
+ *  add-list carries the matching taught:world-effect (the bridge
+ *  src/router/taught.mjs registers). Pure over the registry; null when no
+ *  taught record achieves the predicate. The sibling of backwardChain above,
+ *  which only ever matches epistemic `knows` effects. */
+export function backwardChainWorld(predicate) {
+  for (const cap of capabilities()) {
+    if (effectsOf(cap.name).add.some((e) => e.pred === "taught:world-effect" && e.predicate === predicate)) return cap;
+  }
+  return null;
+}
+
 // Stopwords for the imperative-frame entity extractor. Deliberately generous: a wrong
 // pick is caught by the resolveObject miss -> honest refuse, never emitted.
 const STOP = new Set([

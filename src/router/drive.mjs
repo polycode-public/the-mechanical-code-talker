@@ -10,25 +10,35 @@
 // which are ..." request -> the planner, HTN-decomposed into an ordered call
 // sequence with a POP causal-link proof chain, then folded into ONE composed
 // answer via the same set-algebra the HTN method names (relative-filter ->
-// intersect; conditional -> fallback/guard). A request neither stage can
-// ground escalates to the closed-world goal-reasoner — a maintenance-invariant
-// deduction (coverage-gap / cochange-risk), never a keyword guess. Anything
-// none of the three grounds is an honest refuse, the same "grounded or an
-// honest miss" contract as every other tmct answer path.
+// intersect; conditional -> fallback/guard). A refused WORLD goal ("make every
+// disk rest on peg-c") is tried against the taught capability records next
+// (runTaughtPlan — selected by backward chaining, grounded by pure simulation,
+// never dispatched). A request none of those ground escalates to the
+// closed-world goal-reasoner — a maintenance-invariant deduction
+// (coverage-gap / cochange-risk), never a keyword guess. Anything no stage
+// grounds is an honest refuse, the same "grounded or an honest miss" contract
+// as every other tmct answer path.
 
-import { resolveOne } from "./resolver.mjs";
+import { resolveOne, backwardChainWorld } from "./resolver.mjs";
 import { plan, isMultiStep, decompose, MAX_STEPS } from "./planner.mjs";
 import { goalReason } from "./goal-reasoner.mjs";
 import { capabilities } from "./registry.mjs";
+import { registerTaughtActions } from "./taught.mjs";
 import { intersect, fallbackIfEmpty, guardIfEmpty, memberIndividuals, membersReaching, resultSetOf } from "./results.mjs";
 import { resolveObject } from "../ask.mjs";
 import { parseEntities } from "../codegraph.mjs";
 import { dispatchTool } from "../server.mjs";
 import { ToolError } from "../config.mjs";
+import { loadMemory, readFactRows, readRuleRows } from "../memory/core.mjs";
+import {
+  compileDomain, stateFromFacts, stateKeyFor, movesFromRules, compileGoal, PlanBudgetError,
+} from "../domain.mjs";
+import { findActionPath } from "../planning.mjs";
 import * as defaultSource from "../source.mjs";
 
 export const ROUTER_DRIVER = "resolver-0.8.0";
 export const GOAL_DRIVER = "goal-0.8.1";
+export const TAUGHT_DRIVER = "taught-0.1.0";
 
 /** Every registered capability's name — the default declared toolset for a
  *  caller that doesn't want to hand-pick a subset. */
@@ -138,14 +148,102 @@ export async function runResolverPlan(request, tools, ctx) {
   };
 }
 
-/** The full drive: resolver/planner first; a refusal there escalates to the
- *  closed-world goal-reasoner. Mirrors agentbench's driver-resolver.mjs +
- *  driver-goal.mjs composition, with no agentbench/ dependency (agentbench/
- *  is dev-only, never shipped). Returns a loopResult:
+// ---- the taught world-goal lane -----------------------------------------------
+
+// The one closed world-goal recognizer: "make/get (every|each|all)? <term>
+// <verb>s? <prep> <object>". The preposition set mirrors chat.mjs's PREP_SRC
+// but stays LOCAL and closed — this lane must never widen because a chat
+// frame did, or the two surfaces drift apart silently instead of loudly.
+const WORLD_PREP_SRC = "on|in|at|onto|upon|under|over|beside|near|behind|above|below|inside|outside";
+const WORLD_GOAL_RE = new RegExp(
+  `^(?:make|get)\\s+(?:(every|each|all)\\s+)?([\\w-]+)\\s+([a-z]+?)s?\\s+(${WORLD_PREP_SRC})\\s+([\\w-]+)[.!?\\s]*$`,
+  "i",
+);
+
+/** The taught world-goal lane: recognize "make every disk rest on peg-c",
+ *  backward-chain the goal predicate to a REGISTERED taught capability record
+ *  (the record src/router/taught.mjs bridged in is the thing consumed), then
+ *  ground the move sequence by pure simulation over the taught rules
+ *  (compileDomain + stateFromFacts + compileGoal + findActionPath — all
+ *  read-only). Returned calls are NEVER dispatched: taught records carry
+ *  readOnly:false / dispatchable:false, so the plan is simulated and chat's
+ *  "next" executes move 1. Returns a loopResult, or null when the request is
+ *  not a world-goal shape (the caller falls through to the goal-reasoner). */
+export async function runTaughtPlan(request, tools, ctx) {
+  const m = WORLD_GOAL_RE.exec(String(request || "").trim());
+  if (!m) return null;
+  const universal = Boolean(m[1]);
+  const term = m[2].toLowerCase();
+  const predicate = `${m[3].toLowerCase()}-${m[4].toLowerCase()}`;
+  const object = m[5].toLowerCase();
+
+  const cap = backwardChainWorld(predicate);
+  if (!cap) {
+    return refuse(`the world goal needs a taught action whose effect achieves "${predicate}", and no taught: record with that world-effect is registered — teach the action rules first (honest miss)`, TAUGHT_DRIVER);
+  }
+  if (!tools.includes(cap.name)) {
+    return refuse(`selected ${cap.name} but it is not in the declared toolset`, TAUGHT_DRIVER);
+  }
+  if (!ctx.memoryDir) {
+    return refuse(`${cap.name} plans over a taught memory store, and this context carries none`, TAUGHT_DRIVER);
+  }
+
+  let domain;
+  let state;
+  let isGoal;
+  try {
+    const memory = await loadMemory(ctx.memoryDir);
+    const factRows = readFactRows(memory);
+    domain = compileDomain(factRows, readRuleRows(memory));
+    state = stateFromFacts(factRows, domain);
+    isGoal = compileGoal([{ universal, term, predicate, object }], domain);
+  } catch (e) {
+    return refuse(`the taught domain does not ground this goal: ${e?.message ?? e}`, TAUGHT_DRIVER);
+  }
+  if (!state.length) {
+    return refuse(`no current world state is taught yet — state the board first (e.g. "disk-1 rests on peg-a"), then re-ask`, TAUGHT_DRIVER);
+  }
+  let found;
+  try {
+    found = findActionPath(state, isGoal, (s) => movesFromRules(s, domain), { maxDepth: 300, stateKey: stateKeyFor });
+  } catch (e) {
+    if (e instanceof PlanBudgetError) return refuse(`the taught search space is too large (${e.message}) — narrow the classes involved`, TAUGHT_DRIVER);
+    throw e;
+  }
+  if (!found) {
+    return refuse(`no move sequence within 300 steps reaches the goal from the taught state (honest miss)`, TAUGHT_DRIVER);
+  }
+
+  const calls = found.actions.map((a) => ({ name: `taught:${a.name}`, input: { subject: a.subject, target: a.target } }));
+  for (const c of calls) {
+    if (!tools.includes(c.name)) return refuse(`the plan needs ${c.name}, which is not in the declared toolset`, TAUGHT_DRIVER);
+  }
+  const proof = [
+    { step: "backward-chain", pred: "taught:world-effect", predicate, capability: cap.name, ok: true },
+    ...calls.map((c, i) => ({ step: "effect", pred: "taught:world-effect", predicate, consumer: `step-${i + 1}:${c.name}`, ok: true })),
+  ];
+  const why = [
+    `world goal (${universal ? "every " : ""}${term} ${predicate} ${object}) => backward-chain over taught:world-effect => ${cap.name}`,
+    `grounded by simulation: compileDomain + findActionPath over the taught rules (${calls.length} move${calls.length === 1 ? "" : "s"}, shortest)`,
+  ];
+  return {
+    calls, refused: false, terminated: true, proof, driver: TAUGHT_DRIVER, why,
+    observed: `plan(taught): ${calls.length} move${calls.length === 1 ? "" : "s"} simulated over the taught rules — taught: calls are never dispatched; in chat, "next" executes move 1`,
+  };
+}
+
+/** The full drive: resolver/planner first; a refusal there falls through to
+ *  the taught world-goal lane (runTaughtPlan, above), and only a request that
+ *  is not a world goal escalates to the closed-world goal-reasoner. Mirrors
+ *  agentbench's driver-resolver.mjs + driver-goal.mjs composition, with no
+ *  agentbench/ dependency (agentbench/ is dev-only, never shipped). Returns a
+ *  loopResult:
  *  `{ calls, refused, terminated, proof, why, driver, composed?, observed? }`. */
 export async function runCapabilityPlan(request, tools, ctx) {
   const c1 = await runResolverPlan(request, tools, ctx);
   if (!c1.refused) return c1;
+  const taught = await runTaughtPlan(request, tools, ctx);
+  if (taught) return taught.refused ? { ...taught, c1Why: c1.why } : taught;
   const c2 = await goalReason(request, tools, ctx, { driver: GOAL_DRIVER });
   // Both stages refused: carry the resolver/planner's own reason alongside the
   // goal-reasoner's so a caller can show why the direct route AND the
@@ -163,8 +261,14 @@ export async function runCapabilityPlan(request, tools, ctx) {
  *  Pass an already-parsed `graph` (e.g. a chat session's own) to skip reloading
  *  it — mirrors the config -> source.fetchEntities -> parseEntities chain
  *  dispatchTool runs internally, so a passed-in graph must come from that same
- *  chain to stay consistent. */
-export async function buildCapabilityPlanCtx({ config, source = defaultSource, tel = null, graph = null } = {}) {
+ *  chain to stay consistent.
+ *
+ *  Pass a `memoryDir` to open the taught world-goal lane: the memory store's
+ *  action families are registered as taught: capability records (idempotent —
+ *  an already-registered name is skipped) and runTaughtPlan simulates over the
+ *  same store. The new registrations' unregister disposers ride the ctx as
+ *  `ctx.disposers`; the caller runs them when the ctx is done. */
+export async function buildCapabilityPlanCtx({ config, source = defaultSource, tel = null, graph = null, memoryDir = null } = {}) {
   const g = graph || parseEntities(await source.fetchEntities(config));
   const resolve = (term) => resolveObject(g, term);
   const dispatch = async (name, input) => {
@@ -179,5 +283,10 @@ export async function buildCapabilityPlanCtx({ config, source = defaultSource, t
       throw e;
     }
   };
-  return { dispatch, resolve, graph: g, config };
+  const ctx = { dispatch, resolve, graph: g, config };
+  if (memoryDir) {
+    ctx.memoryDir = memoryDir;
+    ctx.disposers = registerTaughtActions(await loadMemory(memoryDir));
+  }
+  return ctx;
 }

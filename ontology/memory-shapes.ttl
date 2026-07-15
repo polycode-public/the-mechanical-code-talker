@@ -128,10 +128,10 @@ mgx:RuleShape a sh:NodeShape ;
     ] ;
     sh:property [
         sh:path mgx:ruleKind ;
-        sh:in ( "compose2" "filter" "recursive" "action-signature" "action-precond" "action-effect" ) ;
+        sh:in ( "compose2" "filter" "recursive" "action-signature" "action-precond" "action-effect" "action-constraint" ) ;
         sh:minCount 1 ;
         sh:maxCount 1 ;
-        sh:message "A Rule's kind must be exactly one of compose2 | filter | recursive | action-signature | action-precond | action-effect." ;
+        sh:message "A Rule's kind must be exactly one of compose2 | filter | recursive | action-signature | action-precond | action-effect | action-constraint." ;
     ] ;
     sh:xone (
         [
@@ -167,5 +167,11 @@ mgx:RuleShape a sh:NodeShape ;
             sh:property [ sh:path mgx:ruleActionEffectSubject ; sh:minCount 1 ; sh:minLength 1 ] ;
             sh:property [ sh:path mgx:ruleActionEffectObject ; sh:minCount 1 ; sh:minLength 1 ] ;
         ]
+        [
+            sh:property [ sh:path mgx:ruleKind ; sh:hasValue "action-constraint" ] ;
+            sh:property [ sh:path mgx:ruleActionConstraintLeft ; sh:minCount 1 ; sh:minLength 1 ] ;
+            sh:property [ sh:path mgx:ruleActionConstraintRight ; sh:minCount 1 ; sh:minLength 1 ] ;
+            sh:property [ sh:path mgx:ruleActionConstraintGuard ; sh:minCount 1 ; sh:minLength 1 ] ;
+        ]
     ) ;
-    sh:message "A Rule's slots must exactly match its declared kind: compose2 needs ruleBase1+ruleBase2, filter needs ruleBase1+ruleFilterProperty, recursive needs ruleBaseCase+ruleRecStep, action-signature needs ruleActionSubjectClass+ruleActionTargetClass, action-precond needs ruleActionPrecondShape+Predicate+Role+Scope, action-effect needs ruleActionEffectPredicate+Subject+Object." .
+    sh:message "A Rule's slots must exactly match its declared kind: compose2 needs ruleBase1+ruleBase2, filter needs ruleBase1+ruleFilterProperty, recursive needs ruleBaseCase+ruleRecStep, action-signature needs ruleActionSubjectClass+ruleActionTargetClass, action-precond needs ruleActionPrecondShape+Predicate+Role+Scope, action-effect needs ruleActionEffectPredicate+Subject+Object, action-constraint needs ruleActionConstraintLeft+Right+Guard." .

@@ -1,0 +1,33 @@
+# river — the wolf/goat/cabbage crossing, taught with the same closed frames
+# as hanoi-3 plus two new families: a co-travel effect (the farmer rides every
+# crossing) and the "may not be with ... without ..." constraint.
+# Lines starting with # are skipped by import.
+#
+# After `tmct import --file river.txt`, try this in `tmct chat` (or via --prompt):
+#
+#   wolf-1 stands on bank-east. goat-1 stands on bank-east.
+#   cabbage-1 stands on bank-east. farmer-1 stands on bank-east.
+#   the goal is that every passenger stands on bank-west. solve it.
+#
+# The classic optimum is 7 crossings: goat over, farmer back, wolf over, goat
+# back, cabbage over, farmer back, goat over. From the opening position exactly
+# 1 move is legal (ferry the goat) — every other crossing leaves the wolf with
+# the goat, or the goat with the cabbage, without the farmer.
+#
+# Other things to try:
+#   legality  — "what moves are legal now?"  (one ply, no plan; shows the
+#               constraint pruning: 1 legal move at the start)
+#   read-back — "what stands on bank-east?"  (plain fact question, no planning)
+a passenger is a kind of game piece.
+a bank is a kind of place.
+wolf-1 is a wolf. wolf-1 is a passenger.
+goat-1 is a goat. goat-1 is a passenger.
+cabbage-1 is a cabbage. cabbage-1 is a passenger.
+farmer-1 is a farmer.
+bank-east is a bank. bank-west is a bank.
+you can ferry a passenger onto a bank.
+you can ferry a farmer onto a bank.
+ferrying a passenger onto a bank makes the passenger stand on the target.
+ferrying a passenger onto a bank makes the farmer stand on the target.
+to ferry a passenger onto a bank, the wolf may not be with the goat without the farmer.
+to ferry a passenger onto a bank, the goat may not be with the cabbage without the farmer.

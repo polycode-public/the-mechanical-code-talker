@@ -8,7 +8,7 @@
 const MEMORY_CLASSES = new Set(["Utterance", "Fact", "Session", "Source", "Rule"]);
 const RULE_KINDS = new Set([
   "compose2", "filter", "recursive",
-  "action-signature", "action-precond", "action-effect",
+  "action-signature", "action-precond", "action-effect", "action-constraint",
 ]);
 
 // Mirrors core.mjs's own (unexported) RULE_SLOT_SPEC exactly — the single
@@ -25,6 +25,9 @@ const RULE_SLOT_PROPS = {
   ],
   "action-effect": [
     "mgx:ruleActionEffectPredicate", "mgx:ruleActionEffectSubject", "mgx:ruleActionEffectObject",
+  ],
+  "action-constraint": [
+    "mgx:ruleActionConstraintLeft", "mgx:ruleActionConstraintRight", "mgx:ruleActionConstraintGuard",
   ],
 };
 
