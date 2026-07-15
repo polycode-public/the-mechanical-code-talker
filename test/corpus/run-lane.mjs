@@ -65,6 +65,21 @@ export function validateRow(row, predicateNames = Object.keys(predicates)) {
     if (row.run.args !== undefined && (!Array.isArray(row.run.args) || !row.run.args.every((a) => typeof a === "string"))) {
       flag("run.args: must be an array of strings");
     }
+    if (row.run.prep !== undefined) {
+      if (!Array.isArray(row.run.prep)) {
+        flag("run.prep: must be an array of {script, args} steps");
+      } else {
+        for (const [i, step] of row.run.prep.entries()) {
+          if (typeof step !== "object" || step === null || !isNonEmptyString(step.script)) {
+            flag(`run.prep[${i}].script: required non-empty string`);
+            continue;
+          }
+          if (step.args !== undefined && (!Array.isArray(step.args) || !step.args.every((a) => typeof a === "string"))) {
+            flag(`run.prep[${i}].args: must be an array of strings`);
+          }
+        }
+      }
+    }
     if (!predicateKnown(row.run.predicate)) flag(`run.predicate: must name an export of predicates.mjs, got ${JSON.stringify(row.run.predicate)}`);
     return problems;
   }
@@ -166,19 +181,34 @@ async function runChatRow(row) {
   }
 }
 
+// Bench rows get a per-row scratch directory; "{SCRATCH}" in any argument
+// expands to it, so a row can direct a benchmark's --out (and any generated
+// inputs) away from the repo. The predicate sees it as result.scratchDir.
 async function runBenchRow(row) {
-  const { script, args = [], predicate, arg } = row.run;
+  const { script, args = [], prep = [], predicate, arg } = row.run;
   const fn = predicates[predicate];
   assert.equal(typeof fn, "function", `row ${row.id}: unknown predicate ${predicate}`);
-  const result = await new Promise((resolveRun) => {
+  const scratchDir = await mkdtemp(path.join(tmpdir(), "tmct-bench-"));
+  const fill = (a) => a.replaceAll("{SCRATCH}", scratchDir);
+  const runScript = (scriptPath, scriptArgs) => new Promise((resolveRun) => {
     execFile(
       process.execPath,
-      [path.resolve(REPO_ROOT, script), ...args],
+      [path.resolve(REPO_ROOT, scriptPath), ...scriptArgs.map(fill)],
       { cwd: REPO_ROOT, encoding: "utf8" },
       (error, stdout, stderr) => resolveRun({ code: error ? (error.code ?? 1) : 0, stdout, stderr }),
     );
   });
-  assert.ok(fn(result, arg), `row ${row.id}: predicate ${predicate} rejected ${script} (exit ${result.code})\n${result.stderr}`);
+  try {
+    for (const step of prep) {
+      const r = await runScript(step.script, step.args ?? []);
+      assert.equal(r.code, 0, `row ${row.id}: prep step ${step.script} exited ${r.code}\n${r.stderr}`);
+    }
+    const result = await runScript(script, args);
+    result.scratchDir = scratchDir;
+    assert.ok(fn(result, arg), `row ${row.id}: predicate ${predicate} rejected ${script} (exit ${result.code})\n${result.stderr}`);
+  } finally {
+    await rm(scratchDir, { recursive: true, force: true });
+  }
 }
 
 /** Register one node:test per lane, with a subtest per row named by row id. */
