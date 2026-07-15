@@ -1,3 +1,10 @@
+**Archived, 2026-07-15** — phases 1R-5R shipped, plus the follow-ups the addenda record:
+river-crossing (co-travel effects, the forbidden-together constraint frame, the 7-crossing
+oracle) and router consumption of `taught:` capability records through chat's `/plan` and
+`tmct plan`, with the chat-level surface test (`test/chat-plan-taught.test.mjs`) added at archive
+time. The one named follow-on — validating the plan page's animation under co-travel's two-piece
+moves — is tracked in `HANDOVER.md`'s open items.
+
 # PLAN_HANOI.md — a goal-directed planning loop for tmct, validated against Towers of Hanoi
 
 Status: IMPLEMENTED (2026-07-15) — phases 1R-5R all shipped; see the implementation addendum at

@@ -51,12 +51,12 @@ getting silently traded away by inherited caution:
   and an NPC turn scheduler. Design-only.
 - **`PLAN_SYLLOGIST.md`** — retraction-aware consistency checking under a hard budget and trust
   tiers, the one open piece of the reasoning engine's research horizon. Design-only.
-- **`PLAN_HANOI.md`** — shipped in full, including the follow-ups: river-crossing (co-travel
+- **`archive/PLAN_HANOI.md`** — shipped in full, including the follow-ups: river-crossing (co-travel
   effects, the forbidden-together constraint frame, 7-crossing oracle) and planner-side
   consumption of `taught:` capability records (`/plan` in chat and bin). See its dated addenda.
 - **`PLAN_GUESS_NUMBER.md`** — the closed-loop (observe-and-replan) planning domain for the same
   kernels. Design-only.
-- **`PLAN_VIZ_LEDGER.md`** — shipped in full, including the follow-ups, all resolved by
+- **`archive/PLAN_VIZ_LEDGER.md`** — shipped in full, including the follow-ups, all resolved by
   operator decision 2026-07-15: the ledger IS the `tmct viz` surface (node-link page removed),
   `factAnswer`/`factReadBack` carry the additive `goal` field the dock renders, multi-valued
   has/can facts are exempt from `findContradictions`, and page weight is budgeted (~561 KB

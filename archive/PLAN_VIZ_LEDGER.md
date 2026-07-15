@@ -1,3 +1,10 @@
+**Archived, 2026-07-15** — phases 1-4 shipped, then the same-day follow-ups closed them out: the
+ledger became THE `tmct viz` surface (node-link page removed), the dock renders the `goal` field,
+and the three remaining test gaps (facet cross-filter counts via the exported `facetCounts`, the
+`scripts/build-demo-site.mjs` render step, the homepage hero wiring) got tests at archive time.
+Live follow-up questions (page-weight budget and friends) are tracked in `ROADMAP.md`'s
+"What's next" entry for this doc.
+
 # PLAN_VIZ_LEDGER.md — a ledger-first memory-graph explorer with an in-browser chat dock
 
 Status: IMPLEMENTED (2026-07-15) — phases 1-4 all shipped: the ledger explorer

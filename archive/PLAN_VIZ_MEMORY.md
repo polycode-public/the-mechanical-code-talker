@@ -1,3 +1,11 @@
+**Archived, 2026-07-15** — all 6 phases shipped 2026-07-13 (this doc's own IMPLEMENTED status and
+per-phase deviations below). The node-link page it upgraded was itself replaced on 2026-07-15 by
+the ledger explorer as THE `tmct viz` surface (operator decision; see `ROADMAP.md` and
+`archive/PLAN_VIZ_LEDGER.md`), so the surviving value is the memory-derivation groundwork and this
+record of why each piece was shaped as it was. Its two condition-gated residuals (a layout
+selector; a DOM harness for the in-page controls) were reviewed at archive time and dropped with
+the page. The orphaned codegraph helpers are tracked in `HANDOVER.md`'s prune item.
+
 # PLAN_VIZ_MEMORY.md — make `tmct viz` show (and answer from) as much of the real memory graph as `npm run chat` does
 
 Status: IMPLEMENTED (2026-07-13, all 6 phases). See HANDOVER.md for the session's own before/after

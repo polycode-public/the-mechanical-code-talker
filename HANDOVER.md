@@ -41,8 +41,15 @@ Measured init sizes (fresh store, this machine): `init:large` 37,797 facts; `ini
 
 - **plan-viz animation vs co-travel.** The plan page's recorded assumption that consecutive
   snapshots differ by one moved piece is broken by river-crossing's two-piece ferry moves —
-  validate or extend the animation for multi-effect steps (risk named in `PLAN_HANOI.md`'s
+  validate or extend the animation for multi-effect steps (risk named in `archive/PLAN_HANOI.md`'s
   addendum).
+
+- **Taught capability records have no listing surface.** They register and dispose inside a
+  single `/plan` (or `tmct plan`) request, so a user can never see which taught actions the
+  planner knows: chat has no `/capabilities` command, and `tmct plan --tools taught:...`
+  rejects the name because `--tools` validates against the pre-registration set
+  (`bin/tmct.mjs`). Doable and unclaimed: a listing surface (or a `--tools` re-validation
+  after registration), plus a test that a taught family shows up in it.
 
 - **Untouched playtest axes** (for the next edge-hunt dispatch): contractions and cleft rungs
   of the paraphrase ladder; passive↔active beyond UsedFor and the rule signature.

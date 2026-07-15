@@ -21,7 +21,7 @@ between the player's turns. The honest answer at the time: tmct already has the 
 taught, queryable fact graph, deterministic parsing, and — from this session's persona work — real
 place/object/person vocabulary), but three things are missing: an imperative command grammar, a
 mutable turn-by-turn world/player state, and an NPC turn scheduler. The operator then asked for a
-plan doc in the spirit of `PLAN_HANOI.md`/`PLAN_GUESS_NUMBER.md` — a genuine architectural stretch
+plan doc in the spirit of `archive/PLAN_HANOI.md`/`PLAN_GUESS_NUMBER.md` — a genuine architectural stretch
 with a concrete, measurable success criterion, not an open-ended feature wishlist — with two hard
 constraints carried over verbatim from the operator's own framing:
 
@@ -31,7 +31,7 @@ constraints carried over verbatim from the operator's own framing:
 > just a property and so on ... a completion digest [for the player's current state] using the
 > completions work we did. So no special player state store.
 
-This document is the third in the "architectural stretch" family, alongside `PLAN_HANOI.md`
+This document is the third in the "architectural stretch" family, alongside `archive/PLAN_HANOI.md`
 (open-loop planning) and `PLAN_GUESS_NUMBER.md` (closed-loop, observation-driven planning). All
 three validate a piece of "be an agent" — Hanoi validates *executing a precomputed plan*, the
 number-guessing game validates *sensing and replanning*, and this document validates *the world
@@ -80,9 +80,9 @@ one.
 Confirmed directly: `src/memory/core.mjs`'s `appendFact(dir, {subject, predicate, object, ...})`
 (line 1157) is **content-addressed and additive** — re-asserting the same triple upserts in place,
 but a DIFFERENT object for the same `(subject, predicate)` produces a second, coexisting Fact
-individual (`PLAN_HANOI.md` §3 already established this precisely, for the same reason: no
+individual (`archive/PLAN_HANOI.md` §3 already established this precisely, for the same reason: no
 retraction primitive exists anywhere in the codebase, confirmed again this session with
-`grep -rn retract src/` — still nothing). `PLAN_HANOI.md` solved this for board state via
+`grep -rn retract src/` — still nothing). `archive/PLAN_HANOI.md` solved this for board state via
 snapshot-per-step (never mutate, always append a fresh timestamped fact). This document reuses that
 exact convention for player/world state: `player currentlyIn library@turn7` rather than mutating a
 `player currentlyIn library` fact in place. The operator's own framing — "a node in the graph maps
@@ -119,7 +119,7 @@ mechanism itself is not closed to exactly those six.
 precondition is itself expressed as an ordinary fact/relation check against the CURRENT graph state
 (does `key carriedBy player` hold, or does `door isLockedBy key` fail to hold), evaluated through the
 same fact-lookup machinery `factReadBack`'s existing `(a0)` block already uses. `src/syllogise.mjs`'s
-budget/focus/deterministic-order discipline (the same convention `PLAN_HANOI.md` §2 already
+budget/focus/deterministic-order discipline (the same convention `archive/PLAN_HANOI.md` §2 already
 identified as reusable-by-analogy) governs how far a precondition check is allowed to chase before
 giving an honest "you can't do that yet" rather than hanging or guessing.
 
@@ -142,7 +142,7 @@ is honestly a **scripted-by-data, not emergent**, form of autonomy — closer to
 reality (its "Inference Engine" was itself a fixed rule table over NPC moods, not free simulation)
 than to a general planner. That is what this design delivers; real emergent NPC behaviour (an NPC
 that *plans* its own actions via `findActionPath`, `src/planning.mjs:94`, the same kernel
-`PLAN_HANOI.md` built) is a further tier this document doesn't design — the kernel it would build
+`archive/PLAN_HANOI.md` built) is a further tier this document doesn't design — the kernel it would build
 on already exists.
 
 ## The world: Ashcombe Hall
@@ -259,7 +259,7 @@ throughout.
 
 ## Staged build plan
 
-*(Mirrors `PLAN_HANOI.md`/`PLAN_GUESS_NUMBER.md`'s own phase-writing convention: numbered,
+*(Mirrors `archive/PLAN_HANOI.md`/`PLAN_GUESS_NUMBER.md`'s own phase-writing convention: numbered,
 independently testable, `npm test` green throughout, nothing here implemented yet.)*
 
 **Phase 1 — World corpus + missing lexicon.** Add `butler`/`housekeeper`/`gardener`/`lamp`/`portrait`/
@@ -290,7 +290,7 @@ whether or not the player was present to see it.
 **Phase 5 — Generalization spike (deferred, explicitly not this document's scope).** Once this and
 both prior planning docs have independently validated their own piece (open-loop execution, closed-
 loop replanning, world-mutation-with-autonomous-actors), revisit whether a single unifying "agent
-loop" abstraction is warranted — same explicit deferral `PLAN_HANOI.md` Phase 4 and
+loop" abstraction is warranted — same explicit deferral `archive/PLAN_HANOI.md` Phase 4 and
 `PLAN_GUESS_NUMBER.md` Phase 4 both already stage for their own convergence point.
 
 ## Open risks / questions
@@ -299,7 +299,7 @@ loop" abstraction is warranted — same explicit deferral `PLAN_HANOI.md` Phase 
   shape covers Ashcombe Hall's six actions; conjunctions/disjunctions of multiple conditions and
   "N of M" style checks are a further tier, not designed here — whether this validation's scope or
   real usage forces that tier first is an open question the next game world answers.
-- **Snapshot volume.** `PLAN_HANOI.md` §3 already flagged snapshot-per-step's cost profile as fine at
+- **Snapshot volume.** `archive/PLAN_HANOI.md` §3 already flagged snapshot-per-step's cost profile as fine at
   toy scale, expensive at larger ones. A full playthrough of Ashcombe Hall's worked example is ~12
   turns — trivial — but a much longer game would revisit this exactly as Hanoi's own doc already
   anticipated (recommendation there: revisit a real retraction primitive only if volume becomes a
@@ -311,7 +311,7 @@ loop" abstraction is warranted — same explicit deferral `PLAN_HANOI.md` Phase 
   but says nothing about how this would hold up with many NPCs each carrying many turn-gated Rules —
   named as an explicit non-goal for this document, consistent with Hanoi's own "search-space blow-up
   beyond toy scale" deferral.
-- **Confirmation-before-executing.** `PLAN_HANOI.md`'s own open question (should a move require
+- **Confirmation-before-executing.** `archive/PLAN_HANOI.md`'s own open question (should a move require
   confirmation) applies here too, and this document's answer leans the same direction that doc's
   `teachFact` precedent suggests (act, then state plainly what happened) — but a MISTAKEN action here
   (e.g. "give the letter to the housekeeper" before you've even found it) has no real-world stakes in
@@ -326,7 +326,7 @@ loop" abstraction is warranted — same explicit deferral `PLAN_HANOI.md` Phase 
 - Not emergent/planning NPC behaviour — Gap 4's scheduler is explicitly scripted-by-data (a fixed
   Rule table per NPC), not an NPC that plans its own path via `findActionPath`. A genuinely planning
   NPC is a real, much larger follow-on, not attempted here.
-- Not a replacement for `PLAN_HANOI.md`/`PLAN_GUESS_NUMBER.md` — a third, complementary validation of
+- Not a replacement for `archive/PLAN_HANOI.md`/`PLAN_GUESS_NUMBER.md` — a third, complementary validation of
   the same underlying "read state, reason about actions' effects, act, repeat" capability, from the
   angle neither of the other two covers (a world that changes for reasons other than the agent's own
   choices).

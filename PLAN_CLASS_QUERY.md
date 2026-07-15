@@ -62,10 +62,10 @@ below with a live reproduction against the actual CLI, not assumed.
 
 ### Reconciling the "does `ask.mjs` know about Facts at all" question
 
-`PLAN_VIZ_MEMORY.md`'s Bug 1 states `ask.mjs` "has no concept of Facts or corpus data at all." That
+`archive/PLAN_VIZ_MEMORY.md`'s Bug 1 states `ask.mjs` "has no concept of Facts or corpus data at all." That
 claim is about **data reaching the engine**, not about the engine's own mechanism — which, per the
 above, does understand Fact/Utterance/Session/Source/Rule (and any other taught class) once it is
-handed a graph object whose `individuals` actually contain them. `PLAN_VIZ_MEMORY.md` was scoped to
+handed a graph object whose `individuals` actually contain them. `archive/PLAN_VIZ_MEMORY.md` was scoped to
 the viz browser panel specifically; its own fix (a `loadMemory` shim pointing at the page's embedded
 payload) is a different, still-unbuilt piece of wiring (no `src/memory-ask-browser-entry.mjs` exists
 yet — checked directly) and out of this document's scope. This document's own finding, below, is the
@@ -218,7 +218,7 @@ invent a third:
 
 ## Non-goals
 
-- **Not `PLAN_VIZ_MEMORY.md`'s Bug 1** (the viz browser ask panel's `loadMemory` shim). That is a
+- **Not `archive/PLAN_VIZ_MEMORY.md`'s Bug 1** (the viz browser ask panel's `loadMemory` shim). That is a
   separate, already-designed, still-unbuilt piece of wiring for a different surface (the generated
   HTML file, not `npm run chat`). This document's §A lane is chat-CLI-specific and does not touch
   `src/ledger-viz.mjs`, `scripts/build-ask-bundle.mjs`, or any browser-bundle entry point.

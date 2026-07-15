@@ -4,7 +4,7 @@ Status: RESEARCH / DESIGN — not yet implemented. Nothing in this document is l
 
 ## Origin
 
-2026-07-09 session, companion document to `PLAN_HANOI.md` — both are validation harnesses for the
+2026-07-09 session, companion document to `archive/PLAN_HANOI.md` — both are validation harnesses for the
 SAME underlying ask (the operator's own framing, verbatim, carried over from that doc): infer the
 goal, read the relevant sub-graph of the current state, infer the paths to the goal by reasoning
 about the effect of actions on the sub-graph, given the goal/state/possible paths pick the next
@@ -12,7 +12,7 @@ step, execute, repeat — be an agent.
 
 ## Why "I am thinking of a number", as the SECOND (not redundant) validation target
 
-`PLAN_HANOI.md` validates OPEN-LOOP planning: Towers of Hanoi's entire optimal move sequence can
+`archive/PLAN_HANOI.md` validates OPEN-LOOP planning: Towers of Hanoi's entire optimal move sequence can
 be computed up front from the start state alone — no new information arrives mid-execution, so
 "repeat" there just means "execute the next precomputed step."
 
@@ -169,7 +169,7 @@ observation so far (initialized to `{ lo: 1, hi: n }`).
 
 **Worst-case guess count**: `⌈log2(hi − lo + 1)⌉` guesses for the current interval — for the full
 range `[1, N]` that's the textbook `⌈log2 N⌉` (e.g. N=100 → 7 guesses worst case), the same
-unambiguous closed-form correctness check `PLAN_HANOI.md`'s `2^n − 1` gives for Hanoi, ported to the
+unambiguous closed-form correctness check `archive/PLAN_HANOI.md`'s `2^n − 1` gives for Hanoi, ported to the
 closed-loop case exactly as the Origin section anticipated.
 
 **The degenerate/dishonest-input case, precisely**: after applying an update, if `lo > hi` the
@@ -255,7 +255,7 @@ Both are table-driven from `game`'s own fields (never free-text generation), con
 discipline (chat.mjs:113-116) — just keyed on live game state instead of a static parse-shape
 table.
 
-### 6. Shared vs. divergent with `PLAN_HANOI.md`
+### 6. Shared vs. divergent with `archive/PLAN_HANOI.md`
 
 **Genuinely shared:**
 - Both need a **state** representation, a **goal**-check, and a notion of **legal action** — the
@@ -312,7 +312,7 @@ generator (§5), composing with existing `withGoalLine` rendering untouched. Bot
 strings, table-driven off `game` fields.
 
 **Phase 4 — Generalization spike (deferred, not this doc's scope).** Once BOTH this doc and
-`PLAN_HANOI.md` have independently validated their halves of the loop, revisit §6's "shared
+`archive/PLAN_HANOI.md` have independently validated their halves of the loop, revisit §6's "shared
 vocabulary, divergent mechanism" finding to decide whether a genuinely general planning-loop
 abstraction is warranted yet, or whether two validated special cases are still all that should
 exist — consistent with Hanoi doc's own point 3 ("an explicit path to generalizing... afterward").
@@ -348,6 +348,6 @@ exist — consistent with Hanoi doc's own point 3 ("an explicit path to generali
 ## Non-goals for this document
 
 - Not an implementation — no code changes land from this doc alone.
-- Not a replacement for `PLAN_HANOI.md` — the two are deliberately complementary halves (open-loop
+- Not a replacement for `archive/PLAN_HANOI.md` — the two are deliberately complementary halves (open-loop
   vs. closed-loop) of validating ONE planning-loop design, not two separate features.
   general mechanism, not a one-off toy feature.
