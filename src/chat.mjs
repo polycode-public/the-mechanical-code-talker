@@ -1810,13 +1810,18 @@ const RECURSIVE_RULE_TEACH_RE =
  *  values; readers re-attach it. The class/role words are single tokens, the
  *  preposition set is PREP_SRC, the comparative slot is COMPARATIVE_SRC. */
 const ACTION_SIGNATURE_TEACH_RE = new RegExp(
-  `^you\\s+can\\s+([a-z]+)\\s+an?\\s+([a-z][\\w-]*)\\s+(${PREP_SRC})\\s+an?\\s+([a-z][\\w-]*)[.!?]*$`, "i");
+  `^you\\s+(?:can|may)\\s+([a-z]+)\\s+an?\\s+([a-z][\\w-]*)\\s+(${PREP_SRC})\\s+an?\\s+([a-z][\\w-]*)[.!?]*$`, "i");
+// The passive voicing of the same signature ("a disk can be moved onto a
+// peg"): class first, participle verb. Minted through the same actionLemma
+// authority so both voicings land on one rule name.
+const ACTION_SIGNATURE_PASSIVE_RE = new RegExp(
+  `^an?\\s+([a-z][\\w-]*)\\s+(?:can|may)\\s+be\\s+([a-z]+)\\s+(${PREP_SRC})\\s+an?\\s+([a-z][\\w-]*)[.!?]*$`, "i");
 const ACTION_PRECOND_NOTHING_RE = new RegExp(
   `^to\\s+([a-z]+)\\s+an?\\s+([a-z][\\w-]*)\\s+(${PREP_SRC})\\s+an?\\s+([a-z][\\w-]*)\\s*,?\\s*nothing\\s+may\\s+([a-z]+)\\s+(${PREP_SRC})\\s+the\\s+([a-z][\\w-]*)[.!?]*$`, "i");
 const ACTION_PRECOND_COMPARATIVE_RE = new RegExp(
   `^to\\s+([a-z]+)\\s+an?\\s+([a-z][\\w-]*)\\s+(${PREP_SRC})\\s+an?\\s+([a-z][\\w-]*)\\s*,?\\s*the\\s+([a-z][\\w-]*)\\s+must\\s+be\\s+(${COMPARATIVE_SRC})\\s+than\\s+the\\s+([a-z][\\w-]*)[.!?]*$`, "i");
 const ACTION_EFFECT_TEACH_RE = new RegExp(
-  `^([a-z]+ing)\\s+an?\\s+([a-z][\\w-]*)\\s+(${PREP_SRC})\\s+an?\\s+([a-z][\\w-]*)\\s+makes\\s+the\\s+([a-z][\\w-]*)\\s+([a-z]+)\\s+(${PREP_SRC})\\s+the\\s+([a-z][\\w-]*)[.!?]*$`, "i");
+  `^([a-z]+ing)\\s+an?\\s+([a-z][\\w-]*)\\s+(${PREP_SRC})\\s+an?\\s+([a-z][\\w-]*)\\s+makes\\s+(?:it|the\\s+([a-z][\\w-]*))\\s+([a-z]+)\\s+(${PREP_SRC})\\s+the\\s+([a-z][\\w-]*)[.!?]*$`, "i");
 /** "to ferry a passenger onto a bank, the wolf may not be with the goat
  *  without the farmer" — the co-location CONSTRAINT sentence (kind
  *  action-constraint): after a move, <left> and <right> may not share a
@@ -3238,6 +3243,32 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     } catch { /* malformed slots — fall through to the ordinary honest-miss cascade */ }
   }
 
+  const actionSigPassive = ownSrc.match(ACTION_SIGNATURE_PASSIVE_RE);
+  if (actionSigPassive && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion) {
+    const participle = actionSigPassive[2].toLowerCase();
+    const verb = await actionLemma(participle);
+    // Same honesty rule as the effect frame's gerund: an unreduced participle
+    // would mint a name no other rule sentence can share.
+    if (verb !== participle && participle.startsWith(verb.slice(0, Math.min(3, verb.length)))) {
+      try {
+        const prep = actionSigPassive[3].toLowerCase();
+        const { appendRule, RULE_KIND_ACTION_SIGNATURE } = await import("./memory/core.mjs");
+        const { id } = await appendRule(memoryDir, {
+          name: `${verb} ${prep}`,
+          kind: RULE_KIND_ACTION_SIGNATURE,
+          slots: { subjectClass: actionSigPassive[1], targetClass: actionSigPassive[4] },
+          provenance: teachProvenanceTag(sessionId, new Date().toISOString()),
+        });
+        if (id) {
+          return {
+            text: `noted — remembered: you can ${verb} a ${actionSigPassive[1].toLowerCase()} ${prep} a ${actionSigPassive[4].toLowerCase()}`,
+            via: "assert", miss: false,
+          };
+        }
+      } catch { /* malformed slots — fall through to the ordinary honest-miss cascade */ }
+    }
+  }
+
   const precondNothing = ownSrc.match(ACTION_PRECOND_NOTHING_RE);
   if (precondNothing && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion) {
     const role = actionRoleFor(precondNothing[7], precondNothing[2]);
@@ -3349,14 +3380,18 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
         via: "teach-miss", miss: true,
       };
     }
-    const namedSubjectRole = actionRoleFor(actionEffect[5], actionEffect[2]);
+    // "makes IT rest on the target" leaves the role capture empty — the
+    // pronoun can only mean the thing being moved, so it reads as the
+    // subject-class word.
+    const subjectWord = actionEffect[5] ?? actionEffect[2];
+    const namedSubjectRole = actionRoleFor(subjectWord, actionEffect[2]);
     // A subject word naming neither the subject class nor "target" is
     // CLASS-BOUND: a companion that travels with every move ("ferrying a
     // passenger onto a bank makes the FARMER stand on the target"). Stored as
     // the bare class word; compileDomain (src/domain.mjs) requires the class
     // to have exactly one member at plan time, so a typo'd word fails loudly
     // there rather than silently minting a role here.
-    const subjectRole = namedSubjectRole ?? actionEffect[5].toLowerCase();
+    const subjectRole = namedSubjectRole ?? subjectWord.toLowerCase();
     const objectRole = actionRoleFor(actionEffect[8], actionEffect[2]);
     if (!objectRole || subjectRole === objectRole) {
       return {
@@ -3380,7 +3415,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
       });
       if (id) {
         return {
-          text: `noted — remembered: ${gerund} a ${actionEffect[2].toLowerCase()} ${prep} a ${actionEffect[4].toLowerCase()} makes the ${actionEffect[5].toLowerCase()} ${actionEffect[6].toLowerCase()} ${actionEffect[7].toLowerCase()} the ${actionEffect[8].toLowerCase()}`
+          text: `noted — remembered: ${gerund} a ${actionEffect[2].toLowerCase()} ${prep} a ${actionEffect[4].toLowerCase()} makes the ${subjectWord.toLowerCase()} ${actionEffect[6].toLowerCase()} ${actionEffect[7].toLowerCase()} the ${actionEffect[8].toLowerCase()}`
             + (namedSubjectRole ? "" : ` (the ${subjectRole} rides along on every ${verb} move — its class must have exactly one member when we plan)`),
           via: "assert", miss: false,
         };
