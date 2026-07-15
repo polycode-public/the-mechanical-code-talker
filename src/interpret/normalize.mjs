@@ -8,6 +8,7 @@
 import {
   CONTRACTIONS, MISSPELLINGS, WRONG_WORDS, G_DROP, FILLER_WORDS,
   NEGATION_FRAMES, COMMIT_CONTENT_FRAMES, VERB_TO_KIND, ENTITY_TO_TYPE,
+  TRAILING_SCOPE_FILLER,
 } from "../ask-vocab.mjs";
 
 export function escapeRegex(s) {
@@ -409,6 +410,28 @@ export const PHRASING_FRAMES = Object.freeze([
   //   temporal query produces ("were" as an auxiliary never leads directly into
   //   a bare "is").
   { re: /^were\s+is\s+(?:the\s+)?(.+?)\s+(defined|declared|located|implemented)\??$/i, to: (m) => `where is ${m[1]} ${m[2]}` },
+
+  // DESCRIBE PARAPHRASES ("what is the purpose of X", "what does X do in
+  // this codebase") → the meta/whatis shape ("what is a <term>"), which
+  // already answers a unique code entity via metaFallbackEntityAnswer. The
+  // term slot refuses an a/an article or a pronoun lead so the vocabulary
+  // phrasings ("what is the purpose of a horse", "what does it do here")
+  // pass through untouched to their own memory-facts and context readers,
+  // which read the raw text and must keep their turn. A leading "the" is
+  // entity-term noise (mirrors resolveObject's own article strip). The
+  // sibling "what is X for" paraphrase is deliberately NOT a frame: chat's
+  // module-overview lane owns that phrasing and gates on an ask() miss, so
+  // it lives as ask()'s own miss-gated fallback (WHATIS_FOR_FALLBACK_RE)
+  // instead, adopted only when the meta reading actually answers.
+  { re: /^what\s+is\s+the\s+purpose\s+of\s+(?:the\s+)?(?!(?:an?|it|this|that|these|those)\s)(.+?)\??$/i, to: (m) => `what is a ${m[1]}` },
+  // Scoped form only: bare "what does X do" stays unrewritten — the chat
+  // surface's module-grain overview lane owns it and only gets its turn when
+  // ask() misses, so claiming it here would swap that richer answer for the
+  // one-line meta fallback.
+  {
+    re: new RegExp(`^what\\s+does\\s+(?:the\\s+)?(?!(?:an?|it|this|that|these|those)\\s)(.+?)\\s+do\\s+(?:${TRAILING_SCOPE_FILLER.map(escapeRegex).join("|")})\\??$`, "i"),
+    to: (m) => `what is a ${m[1]}`,
+  },
 
   // PREDICATIVE QUALIFIER ("which modules are untested") → the ATTRIBUTIVE form
   // ("untested modules") the grammar already answers. The QUALIFIER must sit

@@ -205,13 +205,15 @@
   var RULE_KIND_ACTION_SIGNATURE = "action-signature";
   var RULE_KIND_ACTION_PRECOND = "action-precond";
   var RULE_KIND_ACTION_EFFECT = "action-effect";
+  var RULE_KIND_ACTION_CONSTRAINT = "action-constraint";
   var RULE_KINDS = Object.freeze([
     RULE_KIND_COMPOSE2,
     RULE_KIND_FILTER,
     RULE_KIND_RECURSIVE,
     RULE_KIND_ACTION_SIGNATURE,
     RULE_KIND_ACTION_PRECOND,
-    RULE_KIND_ACTION_EFFECT
+    RULE_KIND_ACTION_EFFECT,
+    RULE_KIND_ACTION_CONSTRAINT
   ]);
   var RULE_SLOT_SPEC = {
     [RULE_KIND_COMPOSE2]: [["base1", "mgx:ruleBase1"], ["base2", "mgx:ruleBase2"]],
@@ -231,6 +233,13 @@
       ["predicate", "mgx:ruleActionEffectPredicate"],
       ["subjectRole", "mgx:ruleActionEffectSubject"],
       ["objectRole", "mgx:ruleActionEffectObject"]
+    ],
+    // "the <left> may not be with the <right> without the <guard>" — each slot
+    // names a class whose sole member src/domain.mjs resolves at compile time.
+    [RULE_KIND_ACTION_CONSTRAINT]: [
+      ["left", "mgx:ruleActionConstraintLeft"],
+      ["right", "mgx:ruleActionConstraintRight"],
+      ["guard", "mgx:ruleActionConstraintGuard"]
     ]
   };
 
@@ -1550,6 +1559,10 @@
   var MODAL_WRAPPER_RE = /^(?:can|could|would|will)\s+you\s+(?:please\s+)?(.+?)(?:[,\s]+please)?\??$/i;
   var EXPLAIN_WRAPPER_RE = /^explain\s+(?:to\s+me\s+|please\s+)*(.+?)\??$/i;
   var TELL_ME_WRAPPER_RE = /^tell\s+me\s+(.+?)\??$/i;
+  var KNOW_WRAPPER_RE = /^do\s+you\s+know\s+(.+?)\??$/i;
+  var WANT_KNOW_WRAPPER_RE = /^i(?:'d|\s+would)?\s+(?:like|want|need)\s+to\s+know\s+(.+?)\??$/i;
+  var EMBEDDED_WHATIS_RE = /^what\s+((?:an?\s+|the\s+)?[\w'-]+(?:\s+[\w'-]+){0,2})\s+(is|are)\??$/i;
+  var EMBEDDED_MEANS_RE = /^what\s+((?:an?\s+|the\s+)?[\w'-]+(?:\s+[\w'-]+){0,2})\s+means\??$/i;
   var SHOW_GIVE_ME_RE = /^(?:show|give)\s+me\s+(?:the\s+)?(.+?)\??$/i;
   var LEADING_CONNECTIVE_RE = /^(?:and|also|so|then|now|but)\s+(.+)$/i;
   var QUESTION_AUX_LEAD_RE = /^(?:does|do|did|is|are|was|were|has|have|had|can|could|will|would|should)\b/i;
@@ -1577,6 +1590,14 @@
       if (m && INTERROGATIVE_LEAD_RE.test(m[1].trim())) q = m[1].trim();
       m = q.match(TELL_ME_WRAPPER_RE);
       if (m && INTERROGATIVE_LEAD_RE.test(m[1].trim())) q = m[1].trim();
+      m = q.match(KNOW_WRAPPER_RE);
+      if (m && INTERROGATIVE_LEAD_RE.test(m[1].trim())) q = m[1].trim();
+      m = q.match(WANT_KNOW_WRAPPER_RE);
+      if (m && INTERROGATIVE_LEAD_RE.test(m[1].trim())) q = m[1].trim();
+      m = q.match(EMBEDDED_WHATIS_RE);
+      if (m) q = `what ${m[2].toLowerCase()} ${m[1].trim()}`;
+      m = q.match(EMBEDDED_MEANS_RE);
+      if (m) q = `what does ${m[1].trim()} mean`;
       m = q.match(SHOW_GIVE_ME_RE);
       if (m) {
         const rest = m[1].trim();
@@ -1704,6 +1725,27 @@
     //   temporal query produces ("were" as an auxiliary never leads directly into
     //   a bare "is").
     { re: /^were\s+is\s+(?:the\s+)?(.+?)\s+(defined|declared|located|implemented)\??$/i, to: (m) => `where is ${m[1]} ${m[2]}` },
+    // DESCRIBE PARAPHRASES ("what is the purpose of X", "what does X do in
+    // this codebase") → the meta/whatis shape ("what is a <term>"), which
+    // already answers a unique code entity via metaFallbackEntityAnswer. The
+    // term slot refuses an a/an article or a pronoun lead so the vocabulary
+    // phrasings ("what is the purpose of a horse", "what does it do here")
+    // pass through untouched to their own memory-facts and context readers,
+    // which read the raw text and must keep their turn. A leading "the" is
+    // entity-term noise (mirrors resolveObject's own article strip). The
+    // sibling "what is X for" paraphrase is deliberately NOT a frame: chat's
+    // module-overview lane owns that phrasing and gates on an ask() miss, so
+    // it lives as ask()'s own miss-gated fallback (WHATIS_FOR_FALLBACK_RE)
+    // instead, adopted only when the meta reading actually answers.
+    { re: /^what\s+is\s+the\s+purpose\s+of\s+(?:the\s+)?(?!(?:an?|it|this|that|these|those)\s)(.+?)\??$/i, to: (m) => `what is a ${m[1]}` },
+    // Scoped form only: bare "what does X do" stays unrewritten — the chat
+    // surface's module-grain overview lane owns it and only gets its turn when
+    // ask() misses, so claiming it here would swap that richer answer for the
+    // one-line meta fallback.
+    {
+      re: new RegExp(`^what\\s+does\\s+(?:the\\s+)?(?!(?:an?|it|this|that|these|those)\\s)(.+?)\\s+do\\s+(?:${TRAILING_SCOPE_FILLER.map(escapeRegex).join("|")})\\??$`, "i"),
+      to: (m) => `what is a ${m[1]}`
+    },
     // PREDICATIVE QUALIFIER ("which modules are untested") → the ATTRIBUTIVE form
     // ("untested modules") the grammar already answers. The QUALIFIER must sit
     // immediately after are/is, so "…are NOT tested" keeps its own set-complement handler.
@@ -2421,6 +2463,14 @@
   function nounFor(entityType, n) {
     const [s, p] = PLURAL_FORMS[entityType] || ["result", "results"];
     return n === 1 ? s : p;
+  }
+  function classDisplayName(cls) {
+    const s = String(cls || "");
+    if (typeof splitIdentifierWords === "function") {
+      const words = splitIdentifierWords(s).join(" ");
+      if (words) return words;
+    }
+    return s.replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase();
   }
   var REVERSE_MISS_VERB = { cochange: "cochanges", reexports: "export" };
   function verbFor(kind) {
@@ -4103,6 +4153,20 @@
       ...extra
     };
   }
+  var ENTRY_POINT_QUERY_RE = /^(?:the\s+)?(?:main\s+|primary\s+)?entry[\s-]?points?(?:\s+(?:of|to|for)\s+(?:this|the)\s+(?:codebase|code|repo|repository|project|app))?$/i;
+  var ENTRY_POINT_BASENAMES = /* @__PURE__ */ new Set(["index", "main", "app", "server", "cli", "__main__"]);
+  var TEST_FIXTURE_PATH_SEGMENTS = /* @__PURE__ */ new Set(["test", "tests", "__tests__", "fixture", "fixtures", "spec", "specs", "testdata"]);
+  var moduleStemOf = (label) => String(label).toLowerCase().split("/").pop().replace(/\.[a-z0-9]+$/, "");
+  var isTestFixturePath = (label) => String(label).toLowerCase().split("/").slice(0, -1).some((seg) => TEST_FIXTURE_PATH_SEGMENTS.has(seg));
+  function rankEntryPointModules(graph, term) {
+    const queryWords = new Set(String(term || "").toLowerCase().split(/[\s-]+/).filter(Boolean));
+    return (graph.individuals || []).filter((i) => i.class === "Module" && ENTRY_POINT_BASENAMES.has(moduleStemOf(i.label))).map((ind) => ({
+      ind,
+      named: queryWords.has(moduleStemOf(ind.label)) ? 1 : 0,
+      depth: String(ind.label).split("/").length,
+      fixture: isTestFixturePath(ind.label) ? 1 : 0
+    })).sort((a, b) => b.named - a.named || a.depth - b.depth || a.fixture - b.fixture || String(a.ind.label).localeCompare(String(b.ind.label))).map((x) => x.ind);
+  }
   function modifierIsWired(shape, kind, entityType) {
     return shape === "reverse" && (kind === "imports" || kind === "calls") && (!entityType || entityType === "Module");
   }
@@ -4161,6 +4225,17 @@
         ambiguous: false,
         mentionsShape: true,
         traversal: `proseIndex word lookup for "${term}"`
+      };
+    }
+    if (shape === "where" && ENTRY_POINT_QUERY_RE.test(String(parsed.object || "").trim())) {
+      const ranked = rankEntryPointModules(graph, parsed.object);
+      return {
+        matches: ranked,
+        objMatch: ranked[0] || null,
+        candidates: ranked.slice(1, 5),
+        ambiguous: false,
+        entryPointShape: true,
+        traversal: `Module individuals with an entry-point basename (${[...ENTRY_POINT_BASENAMES].join("/")}), ranked query-named basename first, then shallower path, then non-test path`
       };
     }
     if (parsed.modifier && parsed.modifier !== "direct" && !modifierIsWired(shape, kind, entityType)) {
@@ -4321,7 +4396,7 @@
             matchedVia,
             forwardGrainMiss: true,
             wantClasses: [...wantClasses],
-            traversal: `${fwdKinds.join("+")} edges where subject = ${objMatch.label} (grain mismatch: this "${kind}" relation never targets a ${entityType})`
+            traversal: `${fwdKinds.join("+")} edges where subject = ${objMatch.label} (grain mismatch: this "${kind}" relation never targets a ${classDisplayName(entityType)})`
           };
         }
       }
@@ -4404,7 +4479,7 @@
             matchedVia: gMatchedVia,
             wrongGrainMiss: true,
             wantClass,
-            traversal: `"${parsed.object}" resolved to ${gObjMatch.class} ${gObjMatch.label} (grain mismatch: this "${kind}" question needs a ${wantClass}, and no containing module could be found to refine to)`
+            traversal: `"${parsed.object}" resolved to ${classDisplayName(gObjMatch.class)} ${gObjMatch.label} (grain mismatch: this "${kind}" question needs a ${classDisplayName(wantClass)}, and no containing module could be found to refine to)`
           };
         }
       } else {
@@ -4416,7 +4491,7 @@
           matchedVia: gMatchedVia,
           wrongGrainMiss: true,
           wantClass,
-          traversal: `"${parsed.object}" resolved to ${gObjMatch.class} ${gObjMatch.label} (grain mismatch: this "${kind}" question needs a ${wantClass})`
+          traversal: `"${parsed.object}" resolved to ${classDisplayName(gObjMatch.class)} ${gObjMatch.label} (grain mismatch: this "${kind}" question needs a ${classDisplayName(wantClass)})`
         };
       }
     }
@@ -4451,7 +4526,7 @@
       } else if (entityType !== "Module" && subjects.some((s) => s.class === "Module")) {
         const moduleIds = new Set(subjects.filter((s) => s.class === "Module").map((s) => s.id));
         matches = refineToEntities(graph, moduleIds, entityType);
-        grainNote = `, then ${entityType} defined in the matched module(s)`;
+        grainNote = `, then ${classDisplayName(entityType)} defined in the matched module(s)`;
       } else {
         matches = [];
       }
@@ -4544,7 +4619,8 @@ ${options2}
 (ask one of these directly, or try rephrasing more specifically, to get just that reading)`,
           miss: false,
           ambiguous: true,
-          candidates: parsed.candidates.map(describeParse)
+          candidates: parsed.candidates.map(describeParse),
+          candidateParses: parsed.candidates
         };
       }
       const options = parsed.candidates.map((p, i) => `${i + 1}) ${describeParse(p)}`).join(" or ");
@@ -4552,7 +4628,8 @@ ${options2}
         content: `this could mean more than one thing: ${options} \u2014 try rephrasing more specifically.`,
         miss: false,
         ambiguous: true,
-        candidates: parsed.candidates.map(describeParse)
+        candidates: parsed.candidates.map(describeParse),
+        candidateParses: parsed.candidates
       };
     }
     if (result.unresolvedPronoun) {
@@ -4613,6 +4690,26 @@ ${options2}
       const extra2 = result.matches.length > OVERFLOW_CAP ? `, \u2026and ${result.matches.length - OVERFLOW_CAP} more` : "";
       return {
         content: `"${parsed.object}" is mentioned in the prose tokens of ${listJoin(shown)}${extra2}.`,
+        miss: false,
+        ambiguous: false,
+        matches: result.matches
+      };
+    }
+    if (result.entryPointShape) {
+      if (!result.matches.length) {
+        return {
+          content: `no entry-point module found in the index \u2014 no module basename matches ${listJoin([...ENTRY_POINT_BASENAMES])}.`,
+          miss: true,
+          ambiguous: false,
+          candidates: []
+        };
+      }
+      const [top, ...rest] = result.matches;
+      const shownRest = rest.slice(0, OVERFLOW_CAP).map((i) => i.label);
+      const extra2 = rest.length > OVERFLOW_CAP ? `, \u2026and ${rest.length - OVERFLOW_CAP} more` : "";
+      const also = rest.length ? ` \u2014 also matched: ${listJoin(shownRest)}${extra2}` : "";
+      return {
+        content: `ranked ${result.matches.length} entry-point match${result.matches.length === 1 ? "" : "es"}; top: ${top.label}${also}.`,
         miss: false,
         ambiguous: false,
         matches: result.matches
@@ -5024,6 +5121,7 @@ ${result.branches.map((b, i) => `${i + 1}) ${b.candidate.label}: ${b.rendered.co
     return listM ? { node: "list", entityType, base, scoped: false } : { node: "count", entityType, base };
   }
   var BARE_META_WHATIS_RE = /^what\s+(?:is|are)\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
+  var WHATIS_FOR_FALLBACK_RE = /^what\s+is\s+(?:the\s+)?(?!(?:an?|it|this|that|these|those)\s)(.+?)\s+(?:used\s+)?for[?.!\s]*$/i;
   function ask(graph, query, { contextId = null, nlp = void 0, prev = null } = {}) {
     if (isHelpRequest(query)) {
       return {
@@ -5080,6 +5178,21 @@ ${result.branches.map((b, i) => `${i + 1}) ${b.candidate.label}: ${b.rendered.co
         }
       }
     }
+    if (parsed === null && rendered.miss && !rendered.ambiguous) {
+      const forM = normalizeQuery(String(query || "")).match(WHATIS_FOR_FALLBACK_RE);
+      const forTerm = forM?.[1]?.trim();
+      if (forTerm) {
+        const forParsed = parseQuery(`what is a ${forTerm}`, { nlp });
+        if (forParsed?.shape === "meta") {
+          const forResult = traverse(graph, forParsed, { contextId, prev });
+          const forRendered = render(forParsed, forResult);
+          if (!forRendered.miss && !forRendered.ambiguous) {
+            result = forResult;
+            rendered = forRendered;
+          }
+        }
+      }
+    }
     let content = relaxed && !rendered.miss && relaxed.to !== relaxed.from ? `read as "${relaxed.to}" \u2014 ${rendered.content}` : rendered.content;
     if (!relaxed && !rendered.miss && !rendered.ambiguous && directFull.alternates.length) {
       const answered = directFull.alternates.map((a) => {
@@ -5117,7 +5230,7 @@ ${lines.join("\n")}`;
         // edit-distance, announced in the content as "assuming you meant …");
         // null for every literal-identifier tier.
         matchedVia: result.matchedVia || null,
-        ...rendered.ambiguous ? { candidates: rendered.candidates } : {}
+        ...rendered.ambiguous ? { candidates: rendered.candidates, candidateParses: rendered.candidateParses } : {}
       }
     };
   }

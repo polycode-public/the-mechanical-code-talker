@@ -19,7 +19,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { parseEntities } from "../src/codegraph.mjs";
-import { resolveObject } from "../src/ask.mjs";
+import { buildEntities } from "../src/graph-build.mjs";
+import { ingestSchemaDocs } from "../src/schema-docs.mjs";
+import { resolveObject, ask } from "../src/ask.mjs";
 
 const FIXTURE = fileURLToPath(new URL("./fixtures/large-scale/.tmct/graph.json", import.meta.url));
 const graph = parseEntities(JSON.parse(readFileSync(FIXTURE, "utf8")));
@@ -86,6 +88,81 @@ test("cross-'repo' case: an exact basename match in js-commander ('argument') is
 // pins that resolveObjectCore still REFUSES on a genuine tie (the "index" case
 // above) with zero bias-related behaviour change — cheap insurance against
 // future scope creep into this resolver.
+// ---- entry-point disambiguation ranking ("where is the main entry point
+// defined"): the object names a ROLE, not a label, so resolveObject can only
+// miss it. A closed basename vocabulary (index/main/app/server/cli/__main__)
+// stands in for the role, ranked query-named basename > root proximity >
+// non-fixture path, with the ranking disclosed — never one silent winner. ----
+
+test("entry-point ranking on the large-scale graph: both vendored index.js roots surface, ranked and disclosed", () => {
+  const r = ask(graph, "where is the main entry point defined");
+  assert.equal(r.tmct_ask.miss, false);
+  assert.equal(
+    r.content,
+    "ranked 2 entry-point matches; top: js-commander/index.js — also matched: js-express/index.js.",
+  );
+  assert.deepEqual(r.tmct_ask.matches.map((m) => m.label),
+    ["js-commander/index.js", "js-express/index.js"]);
+});
+
+test("entry-point ranking: 'where is the entry point defined' (no 'main' word) ranks identically here", () => {
+  const r = ask(graph, "where is the entry point defined");
+  assert.equal(r.tmct_ask.miss, false);
+  assert.match(r.content, /^ranked 2 entry-point matches; top: js-commander\/index\.js/);
+});
+
+const RANK_MODULES = [
+  { path: "index.mjs", dotted: "index", imports: [], calls: [], defines: [] },
+  { path: "src/main.mjs", dotted: "src.main", imports: [], calls: [], defines: [] },
+  { path: "src/deep/nested/app.mjs", dotted: "src.deep.nested.app", imports: [], calls: [], defines: [] },
+  { path: "test/fixtures/main.mjs", dotted: "test.fixtures.main", imports: [], calls: [], defines: [] },
+  { path: "src/handlers/tasks.mjs", dotted: "src.handlers.tasks", imports: [], calls: [],
+    defines: [{ name: "TaskController", kind: "class", lineno: 1, decorators: [] }] },
+];
+
+function rankGraph(modules) {
+  const entities = buildEntities(modules, [], {});
+  ingestSchemaDocs(entities);
+  return parseEntities(entities);
+}
+
+test("entry-point ranking order: a query-named basename ('main') beats root proximity, which beats a test-fixture path", () => {
+  const g = rankGraph(RANK_MODULES);
+  const r = ask(g, "where is the main entry point defined");
+  assert.equal(r.tmct_ask.miss, false);
+  // "main" is named in the query, so src/main.mjs outranks the shallower
+  // index.mjs; the test/fixtures sibling ranks below the non-fixture main.
+  assert.deepEqual(r.tmct_ask.matches.map((m) => m.label), [
+    "src/main.mjs", "test/fixtures/main.mjs", "index.mjs", "src/deep/nested/app.mjs",
+  ]);
+  assert.match(r.content, /^ranked 4 entry-point matches; top: src\/main\.mjs — also matched: /);
+});
+
+test("entry-point ranking order: with no query-named basename, root proximity leads and every match is still disclosed", () => {
+  const g = rankGraph(RANK_MODULES);
+  const r = ask(g, "where is the entry point defined");
+  assert.deepEqual(r.tmct_ask.matches.map((m) => m.label), [
+    "index.mjs", "src/main.mjs", "test/fixtures/main.mjs", "src/deep/nested/app.mjs",
+  ]);
+  assert.equal(
+    r.content,
+    "ranked 4 entry-point matches; top: index.mjs — also matched: src/main.mjs, test/fixtures/main.mjs and src/deep/nested/app.mjs.",
+  );
+});
+
+test("entry-point honest-miss control: a graph with no entry-point basenames declines and names the closed set", () => {
+  const g = rankGraph([RANK_MODULES[4]]);
+  const r = ask(g, "where is the main entry point defined");
+  assert.equal(r.tmct_ask.miss, true);
+  assert.match(r.content, /^no entry-point module found in the index — no module basename matches index, main, app, server, cli and __main__\./);
+});
+
+test("entry-point recognizer stays closed: 'where is main defined' (no 'entry point') keeps ordinary resolution", () => {
+  const g = rankGraph(RANK_MODULES);
+  const r = ask(g, "where is main defined");
+  assert.doesNotMatch(r.content, /^ranked /, "a bare 'main' is an ordinary term, not the entry-point role");
+});
+
 test("Part 6 regression: resolveObjectCore is UNTOUCHED by bias-weighted ranking — a genuine tie still refuses (ambiguous:true), no bias import anywhere in ask.mjs", async () => {
   const r = resolveObject(graph, "index", { expectedClass: "Module" });
   assert.equal(r.ambiguous, true, "the genuine tie still refuses to silently pick a winner");

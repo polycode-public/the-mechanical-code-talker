@@ -31,7 +31,7 @@ import { parseAnchored } from "./interpret/strategies/grammar.mjs";
 import { parseKeywordSpot, findPhrase } from "./interpret/strategies/keywords.mjs";
 import { runStrategiesSync } from "./interpret/pipeline.mjs";
 import { mergeStrategyResults, alternateLines } from "./interpret/merge.mjs";
-import { lookupByProseTokens } from "./prose.mjs";
+import { lookupByProseTokens, splitIdentifierWords } from "./prose.mjs";
 import { pickPhrase } from "./answer-variants.mjs";
 
 // Normalization stays importable from its original site (tests + chat surface).
@@ -86,6 +86,20 @@ const PLURAL_FORMS = {
 function nounFor(entityType, n) {
   const [s, p] = PLURAL_FORMS[entityType] || ["result", "results"];
   return n === 1 ? s : p;
+}
+
+/** A class enum rendered as prose words ("GlobalVariable" -> "global
+ *  variable"), lowercase to match nounFor's own convention. For the render
+ *  sites that must name the enum itself rather than a curated PLURAL_FORMS
+ *  noun. The typeof guard is the same viewer-bundle boundary the tier-4 prose
+ *  fallback documents: viz.mjs's askSource strips the prose.mjs import. */
+export function classDisplayName(cls) {
+  const s = String(cls || "");
+  if (typeof splitIdentifierWords === "function") {
+    const words = splitIdentifierWords(s).join(" ");
+    if (words) return words;
+  }
+  return s.replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase();
 }
 
 // Every relation kind is already the correct 3rd-person-singular verb form
@@ -2342,6 +2356,43 @@ function commitTouches(graph, commit, entityType, extra = {}) {
   };
 }
 
+// ---- entry-point survey for the where-defined shape: "where is the (main)
+// entry point defined" names a ROLE, not a label, so resolveObject can only
+// miss it (or accidentally substring-match something unrelated). A closed
+// basename vocabulary stands in for the role; every candidate is ranked
+// deterministically and the ranking is disclosed in the answer, never a
+// silently picked single winner. ----
+
+/** The where-defined object phrasings that ask for the entry-point role. */
+const ENTRY_POINT_QUERY_RE = /^(?:the\s+)?(?:main\s+|primary\s+)?entry[\s-]?points?(?:\s+(?:of|to|for)\s+(?:this|the)\s+(?:codebase|code|repo|repository|project|app))?$/i;
+/** Module basenames conventionally used as a program's entry point. */
+const ENTRY_POINT_BASENAMES = new Set(["index", "main", "app", "server", "cli", "__main__"]);
+/** Directory segments marking test/fixture territory — ranked below real code. */
+const TEST_FIXTURE_PATH_SEGMENTS = new Set(["test", "tests", "__tests__", "fixture", "fixtures", "spec", "specs", "testdata"]);
+
+const moduleStemOf = (label) => String(label).toLowerCase().split("/").pop().replace(/\.[a-z0-9]+$/, "");
+const isTestFixturePath = (label) => String(label).toLowerCase().split("/").slice(0, -1)
+  .some((seg) => TEST_FIXTURE_PATH_SEGMENTS.has(seg));
+
+/** All entry-point-basename Modules, best first: a basename the query itself
+ *  names ("MAIN entry point" -> main.mjs) beats root proximity (fewer path
+ *  segments), which beats a non-test path over a test/fixture one; a full tie
+ *  falls back to label order so the ranking is stable. */
+function rankEntryPointModules(graph, term) {
+  const queryWords = new Set(String(term || "").toLowerCase().split(/[\s-]+/).filter(Boolean));
+  return (graph.individuals || [])
+    .filter((i) => i.class === "Module" && ENTRY_POINT_BASENAMES.has(moduleStemOf(i.label)))
+    .map((ind) => ({
+      ind,
+      named: queryWords.has(moduleStemOf(ind.label)) ? 1 : 0,
+      depth: String(ind.label).split("/").length,
+      fixture: isTestFixturePath(ind.label) ? 1 : 0,
+    }))
+    .sort((a, b) => (b.named - a.named) || (a.depth - b.depth) || (a.fixture - b.fixture)
+      || String(a.ind.label).localeCompare(String(b.ind.label)))
+    .map((x) => x.ind);
+}
+
 /** Safety net: a {shape, kind, entityType} combination must be explicitly
  *  listed here to receive real non-"direct" modifier behavior; anything else
  *  gets an honest "not supported yet" response, never a silent fallback to
@@ -2411,6 +2462,18 @@ export function traverse(graph, parsed, { contextId = null, prev = null, pinnedO
     return {
       matches, objMatch: null, candidates: [], ambiguous: false, mentionsShape: true,
       traversal: `proseIndex word lookup for "${term}"`,
+    };
+  }
+
+  // where + an entry-point ROLE phrasing: checked before object resolution,
+  // which could only miss the role term or accidentally land on an unrelated
+  // partial match.
+  if (shape === "where" && ENTRY_POINT_QUERY_RE.test(String(parsed.object || "").trim())) {
+    const ranked = rankEntryPointModules(graph, parsed.object);
+    return {
+      matches: ranked, objMatch: ranked[0] || null, candidates: ranked.slice(1, 5),
+      ambiguous: false, entryPointShape: true,
+      traversal: `Module individuals with an entry-point basename (${[...ENTRY_POINT_BASENAMES].join("/")}), ranked query-named basename first, then shallower path, then non-test path`,
     };
   }
 
@@ -2598,7 +2661,7 @@ export function traverse(graph, parsed, { contextId = null, prev = null, pinnedO
         return {
           matches: [], objMatch, candidates, ambiguous, matchedVia,
           forwardGrainMiss: true, wantClasses: [...wantClasses],
-          traversal: `${fwdKinds.join("+")} edges where subject = ${objMatch.label} (grain mismatch: this "${kind}" relation never targets a ${entityType})`,
+          traversal: `${fwdKinds.join("+")} edges where subject = ${objMatch.label} (grain mismatch: this "${kind}" relation never targets a ${classDisplayName(entityType)})`,
         };
       }
     }
@@ -2705,7 +2768,7 @@ export function traverse(graph, parsed, { contextId = null, prev = null, pinnedO
         return {
           matches: [], objMatch: gObjMatch, candidates: gCandidates, ambiguous: gAmbiguous, matchedVia: gMatchedVia,
           wrongGrainMiss: true, wantClass,
-          traversal: `"${parsed.object}" resolved to ${gObjMatch.class} ${gObjMatch.label} (grain mismatch: this "${kind}" question needs a ${wantClass}, and no containing module could be found to refine to)`,
+          traversal: `"${parsed.object}" resolved to ${classDisplayName(gObjMatch.class)} ${gObjMatch.label} (grain mismatch: this "${kind}" question needs a ${classDisplayName(wantClass)}, and no containing module could be found to refine to)`,
         };
       }
     } else {
@@ -2714,7 +2777,7 @@ export function traverse(graph, parsed, { contextId = null, prev = null, pinnedO
       return {
         matches: [], objMatch: gObjMatch, candidates: gCandidates, ambiguous: gAmbiguous, matchedVia: gMatchedVia,
         wrongGrainMiss: true, wantClass,
-        traversal: `"${parsed.object}" resolved to ${gObjMatch.class} ${gObjMatch.label} (grain mismatch: this "${kind}" question needs a ${wantClass})`,
+        traversal: `"${parsed.object}" resolved to ${classDisplayName(gObjMatch.class)} ${gObjMatch.label} (grain mismatch: this "${kind}" question needs a ${classDisplayName(wantClass)})`,
       };
     }
   }
@@ -2764,7 +2827,7 @@ export function traverse(graph, parsed, { contextId = null, prev = null, pinnedO
     } else if (entityType !== "Module" && subjects.some((s) => s.class === "Module")) {
       const moduleIds = new Set(subjects.filter((s) => s.class === "Module").map((s) => s.id));
       matches = refineToEntities(graph, moduleIds, entityType);
-      grainNote = `, then ${entityType} defined in the matched module(s)`;
+      grainNote = `, then ${classDisplayName(entityType)} defined in the matched module(s)`;
     } else {
       matches = [];
     }
@@ -2966,6 +3029,25 @@ function renderCore(parsed, result) {
     const extra = result.matches.length > OVERFLOW_CAP ? `, …and ${result.matches.length - OVERFLOW_CAP} more` : "";
     return {
       content: `"${parsed.object}" is mentioned in the prose tokens of ${listJoin(shown)}${extra}.`,
+      miss: false, ambiguous: false, matches: result.matches,
+    };
+  }
+  // entry-point survey: every candidate is disclosed with the rank order,
+  // never a silently picked single winner; zero candidates is an honest miss
+  // naming the closed basename vocabulary that was searched.
+  if (result.entryPointShape) {
+    if (!result.matches.length) {
+      return {
+        content: `no entry-point module found in the index — no module basename matches ${listJoin([...ENTRY_POINT_BASENAMES])}.`,
+        miss: true, ambiguous: false, candidates: [],
+      };
+    }
+    const [top, ...rest] = result.matches;
+    const shownRest = rest.slice(0, OVERFLOW_CAP).map((i) => i.label);
+    const extra = rest.length > OVERFLOW_CAP ? `, …and ${rest.length - OVERFLOW_CAP} more` : "";
+    const also = rest.length ? ` — also matched: ${listJoin(shownRest)}${extra}` : "";
+    return {
+      content: `ranked ${result.matches.length} entry-point match${result.matches.length === 1 ? "" : "es"}; top: ${top.label}${also}.`,
       miss: false, ambiguous: false, matches: result.matches,
     };
   }
@@ -3493,6 +3575,12 @@ function dynamicClassQuery(graph, query) {
 // extract the term for the article-insertion fallback rather than duplicating it.
 const BARE_META_WHATIS_RE = /^what\s+(?:is|are)\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
 
+// "what is X for" / "what is X used for" with a bare entity term — the lead
+// refuses a/an articles and pronouns so the vocabulary phrasings ("what is a
+// horse for", "what is it for") never read as an entity term; a leading "the"
+// is entity-term noise (resolveObject's own article strip) and is dropped.
+const WHATIS_FOR_FALLBACK_RE = /^what\s+is\s+(?:the\s+)?(?!(?:an?|it|this|that|these|those)\s)(.+?)\s+(?:used\s+)?for[?.!\s]*$/i;
+
 export function ask(graph, query, { contextId = null, nlp = undefined, prev = null } = {}) {
   if (isHelpRequest(query)) {
     return {
@@ -3539,6 +3627,29 @@ export function ask(graph, query, { contextId = null, nlp = undefined, prev = nu
       if (bareParsed?.shape === "meta") {
         result = traverse(graph, bareParsed, { contextId, prev });
         rendered = render(bareParsed, result);
+      }
+    }
+  }
+  // "what is X for" — the purpose paraphrase of the same bare-whatis intent,
+  // excluded from the block above (and from the phrasing frames) because
+  // chat.mjs's module-overview lane owns this phrasing and gates on an ask()
+  // miss. The meta reading is adopted ONLY when it actually answers (a unique
+  // metaFallback entity); on a miss, every byte — parsed, canonical, the miss
+  // text — stays exactly as the lane cascade expects. Article/pronoun-led
+  // terms ("what is a horse for") belong to the memory-facts readers and are
+  // never claimed.
+  if (parsed === null && rendered.miss && !rendered.ambiguous) {
+    const forM = normalizeQuery(String(query || "")).match(WHATIS_FOR_FALLBACK_RE);
+    const forTerm = forM?.[1]?.trim();
+    if (forTerm) {
+      const forParsed = parseQuery(`what is a ${forTerm}`, { nlp });
+      if (forParsed?.shape === "meta") {
+        const forResult = traverse(graph, forParsed, { contextId, prev });
+        const forRendered = render(forParsed, forResult);
+        if (!forRendered.miss && !forRendered.ambiguous) {
+          result = forResult;
+          rendered = forRendered;
+        }
       }
     }
   }
