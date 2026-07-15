@@ -4252,6 +4252,7 @@ export async function helpText() {
     ["/memory [verbose]", "what tmct remembers: facts, utterances, sessions, folded blocks"],
     ["/focus <symbol>", "set the current focus (reused by 'it'/'this' and no-arg entity commands)"],
     ["/plan <request>", "the capability router: plan+execute a compound or maintenance-goal request (\"of the modules impacted by X, which are untested\", \"what most needs a test\")"],
+    ["/capabilities", "what /plan can plan over: the built-in graph tools plus your taught actions"],
     ["/narrate on|off", "verbose developer/debug mode: decision points, matched pattern, results+sources, goal per turn"],
     ["/help", "this list"],
     ["/exit", "leave the session (also Ctrl+C / Ctrl+D)"],
@@ -9263,6 +9264,7 @@ const GOAL_BY_COMMAND = {
   history: GOAL_BY_KIND.touches,
   exports: GOAL_BY_KIND.reexports,
   arch: "understand the overall architecture (package/module boundaries)",
+  capabilities: "see what /plan can plan over — built-in query tools and taught actions",
 };
 
 /** A slash-command → the mapped tool (or the /help, /focus, /narrate, unknown
@@ -9324,6 +9326,37 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
     if (!ent) return mk(`could not resolve "${argText}" to a single entity — focus unchanged${focus ? ` (still ${focus.label})` : ""}.`, { miss: true });
     note(trace, `result: resolved "${argText}" -> ${ent.label} (${ent.id})`);
     return mk(`focus set to ${ent.label}.`, { resolvedIds: [ent.id], newFocus: ent });
+  }
+
+  // /capabilities — everything a /plan request can plan over: the built-in
+  // read-only graph-query tools, plus the taught action families read straight
+  // from this store (they only live in the registry inside a /plan request,
+  // so listing them means reading the rules, not the registry).
+  if (name === "capabilities") {
+    note(trace, "goal: see what /plan can plan over — built-in query tools and taught actions");
+    const { declaredCapabilityNames } = await import("./router/drive.mjs");
+    const { actionFamilies, capabilityFromActionRules } = await import("./router/taught.mjs");
+    const lines = [`read-only graph tools: ${declaredCapabilityNames().join(", ")}`];
+    let families = new Map();
+    if (memoryDir) {
+      try {
+        const { loadMemory } = await import("./memory/core.mjs");
+        families = actionFamilies(await loadMemory(memoryDir));
+      } catch { /* an unreadable store lists like an empty one */ }
+    }
+    if (!families.size) {
+      lines.push('taught actions: none yet — teach one ("you can move a disk onto a peg.") and /plan can use it.');
+    } else {
+      lines.push("taught actions (planned over, never dispatched):");
+      for (const [familyName, family] of [...families.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+        const cap = capabilityFromActionRules(familyName, family);
+        const sig = cap.parameters
+          .map((p) => `${p.name}: ${p.classes.filter(Boolean).join("|") || "?"}`)
+          .join(", ");
+        lines.push(`  taught:${familyName} — ${sig}`);
+      }
+    }
+    return mk(lines.join("\n"));
   }
 
   // /plan <request> — the capability router (src/router/*): plan+execute a

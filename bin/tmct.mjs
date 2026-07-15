@@ -1235,6 +1235,17 @@ async function main() {
     }
     const { repo, config } = await resolveRuntimeConfig({ argv: rest });
     const { buildCapabilityPlanCtx, runCapabilityPlan, declaredCapabilityNames } = await import("../src/router/drive.mjs");
+    let ctx;
+    try {
+      ctx = await buildCapabilityPlanCtx({ config, memoryDir: repo });
+    } catch (e) {
+      process.stderr.write(`tmct plan: could not load the graph — ${e?.message || e}\n`);
+      process.exit(1);
+    }
+    // The toolset is read AFTER the ctx build: the memory store's taught:
+    // capability records only register there, so both the default toolset and
+    // an explicit --tools list (e.g. --tools "taught:move onto") see them —
+    // and a world goal refuses when its taught record is outside the toolset.
     const declared = declaredCapabilityNames();
     let tools = declared;
     if (toolsFlag) {
@@ -1245,17 +1256,6 @@ async function main() {
         process.exit(2);
       }
     }
-    let ctx;
-    try {
-      ctx = await buildCapabilityPlanCtx({ config, memoryDir: repo });
-    } catch (e) {
-      process.stderr.write(`tmct plan: could not load the graph — ${e?.message || e}\n`);
-      process.exit(1);
-    }
-    // The default (no --tools) toolset is re-read AFTER the ctx build: the
-    // memory store's taught: capability records only register there, and a
-    // world goal refuses when its taught record is outside the toolset.
-    if (!toolsFlag) tools = declaredCapabilityNames();
     try {
       const result = await runCapabilityPlan(request, tools, ctx);
       if (jsonFlag) {

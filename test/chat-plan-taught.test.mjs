@@ -6,6 +6,7 @@
 // chat user actually invokes.
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { mkdtemp, mkdir, rm, writeFile, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -82,4 +83,36 @@ test("a graph-query /plan turn over the same taught store still routes to the re
   const r = await turn("/plan of the modules impacted by app/lib/a.mjs, which are untested");
   assert.match(r.answer, /driver: resolver-0\.8\.0/);
   assert.equal(isCapability("taught:move onto"), false);
+});
+
+test("/capabilities lists the taught action families read from the store, beside the built-in tools", async () => {
+  const r = await turn("/capabilities");
+  assert.match(r.answer, /read-only graph tools: .*tmct_impact/);
+  assert.match(r.answer, /taught actions \(planned over, never dispatched\):/);
+  assert.match(r.answer, /taught:move onto — subject: disk, target: disk\|peg/);
+});
+
+test("/capabilities with no taught actions says so honestly; /help advertises the command", async () => {
+  const empty = await mkdtemp(join(tmpdir(), "tmct-chat-plan-taught-empty-"));
+  try {
+    const r = await runTurn("/capabilities", { config: CONFIG, graph: GRAPH, memoryDir: empty, sessionId: "caps-empty" });
+    assert.match(r.answer, /taught actions: none yet/);
+    assert.match(r.answer, /you can move a disk onto a peg/);
+  } finally {
+    await rm(empty, { recursive: true, force: true });
+  }
+  const help = await turn("/help");
+  assert.match(help.answer, /\/capabilities\s+what \/plan can plan over/);
+});
+
+test("tmct plan --tools accepts a taught record name, validating after registration", () => {
+  const BIN = fileURLToPath(new URL("../bin/tmct.mjs", import.meta.url));
+  const args = [BIN, "plan", "make every disk rest on peg-c", "--repo", MEMORY, "--graph", join(REPO, ".tmct", "graph.json")];
+  const ok = spawnSync(process.execPath, [...args, "--tools", "taught:move onto"], { encoding: "utf8" });
+  assert.equal(ok.status, 0, ok.stderr || ok.stdout);
+  assert.match(ok.stdout, /driver: taught-0\.1\.0/);
+  const bogus = spawnSync(process.execPath, [...args, "--tools", "taught:no such action"], { encoding: "utf8" });
+  assert.equal(bogus.status, 2);
+  assert.match(bogus.stderr, /unknown --tools name/);
+  assert.match(bogus.stderr, /taught:move onto/, "the registered-capabilities hint includes the taught record");
 });
