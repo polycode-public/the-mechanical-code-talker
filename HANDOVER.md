@@ -5,10 +5,22 @@ Living handover. Any session resumes from here. **Plan of record: `ROADMAP.md`**
 file holds ONLY what to do next — no completed-work narrative (that lives in `ROADMAP.md`), per
 this project's own standing discipline.
 
-Session handle (inbox): `tmct` (this session; earlier sessions used `mechanic`). See
-`~/.claude/inboxes/tmct.md` and `~/.claude/inboxes/mechanic.md`, both still live.
+Session handles (inboxes): `tmct` (the edge-hunt/playtest session) and `tmct-hanoi` (the
+PLAN_HANOI/PLAN_VIZ_LEDGER session). See `~/.claude/inboxes/tmct.md` and
+`~/.claude/inboxes/tmct-hanoi.md`; `mechanic.md` is retired.
 
-## Version state (2026-07-13, v1.9.0)
+## Doing now (2026-07-15, v1.10.14 → 1.11.0 in flight)
+
+The operator approved implementing ALL of `PLAN_HANOI.md` (phases 1R-5R) and
+`PLAN_VIZ_LEDGER.md` (phases 1-4), releasing as v1.11.0 (the bump is the batch's final commit).
+Owner: the `tmct-hanoi` session, which holds `src/chat.mjs`/`src/memory/core.mjs` exclusively
+for the batch — coordinate via its inbox before touching either. Track E: action Rule family →
+teach frames → `src/domain.mjs` interpreter → plan lane/planState → `import --file` +
+`.tmct/imports/` scaffold + `chat --prompt`. Track L: `viz --ledger` + chat dock →
+`plan-viz.mjs` → `--render` wiring → Pages rebuild → README/ROADMAP → 5R (registry seam +
+crates domain). This section is updated as steps land and is deleted when the batch ships.
+
+## Version state (2026-07-13, v1.9.0 — superseded above; historical notes follow)
 
 `PLAN_VIZ_MEMORY.md` fully implemented (see that doc's own "IMPLEMENTED" status line + Phasing
 checklist for specifics): `tmct viz`'s walk now follows real concept-relation edges (not just
