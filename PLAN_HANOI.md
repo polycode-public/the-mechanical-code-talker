@@ -1,12 +1,11 @@
 # PLAN_HANOI.md — a goal-directed planning loop for tmct, validated against Towers of Hanoi
 
-Status: RESEARCH / DESIGN — not yet implemented. Nothing in this document is live code. Phase 2's
-search kernel (`findActionPath`, `src/planning.mjs`) shipped as a standalone proof-of-mechanism —
-see the dated entry at the end of this document — but Hanoi's own state/legal-moves/goal (Phases
-1/3/4) are still unbuilt. The 2026-07-15 proposal at the end of this document supersedes Phases
-1/3/4 with a revised phasing (1R-5R): the game domain is defined in chat sentences (or a text file
-via `tmct import --file`), a generic interpreter replaces the hard-coded Hanoi module, and the plan
-renders as an animated, self-contained HTML page.
+Status: IMPLEMENTED (2026-07-15) — phases 1R-5R all shipped; see the implementation addendum at
+the end of this document for what landed where and the deviations from the design as written.
+The game domain is defined in chat sentences (or a text file via `tmct import --file`), a generic
+interpreter (`src/domain.mjs`) drives the Phase-2 search kernel (`findActionPath`,
+`src/planning.mjs`), and the plan renders as an animated, self-contained HTML page
+(`chat --prompt … --render blocks`). The body below is the design record.
 
 **A different, already-live planning capability, for contrast.** `src/router/*` is a SEPARATE
 STRIPS/PDDL planner — not this document's design, and not built from it — that composes and
@@ -809,3 +808,51 @@ blocks, with step controls and the move list alongside.
 - **Where the in-progress plan lives is now decided** (session slot for the plan, durable facts
   for definition and state), resolving the standing open question above for this design; the
   guess-number doc's clearing rules apply verbatim.
+
+## 2026-07-15 — implementation addendum: phases 1R-5R shipped
+
+What landed where, one line each:
+
+- **1R** — the action Rule storage (`src/memory/core.mjs`), the five teach frames + the goal
+  frame (`src/chat.mjs`), `mgx:rendersAs`. Seeds 1-2 (prepositional verbs, comparatives) had
+  already shipped from the edge-hunt loop (v1.10.13/14) and are reused untouched.
+- **2R** — `src/domain.mjs`: `compileDomain`/`stateFromFacts`/`movesFromRules`/`compileGoal`,
+  wired to `findActionPath`. The 2^n−1 oracle passes for n=1..8 from definition text alone
+  (`test/domain.test.mjs`), and the module carries no domain literals (asserted by test).
+- **3R** — the plan lane, `planState` session slot, per-step `next` execution writing `@stepK`
+  snapshots and confirming the goal from re-read facts (`test/plan-lane.test.mjs`);
+  `tmct import --file` with the loud per-sentence report and exit-1-on-decline;
+  the `.tmct/imports/` scaffold; `chat --prompt` one-shot.
+- **4R** — `src/plan-viz.mjs` (`computeBlocksLayout`/`renderPlanHtml`) implementing the recorded
+  render decisions; `--render blocks --output plan.html` on `chat`.
+- **5R** — `registerCapability()` + the readOnly dispatch guard (`src/router/registry.mjs`,
+  `guardrail.mjs`), the taught-action bridge (`src/router/taught.mjs`), and the second domain:
+  `data/games/crates.txt` solves a two-goal conjunction at its hand-verified optimum with zero
+  interpreter changes (`test/domain-crates.test.mjs`).
+
+Deviations from the design as written, each made for a reason that binds:
+
+- **An action Rule FAMILY, not one flat kind.** `RULE_SLOT_SPEC` is flat and content-addressed,
+  and `normFactTerm` would mangle structure serialized into a slot, so one Rule individual per
+  taught sentence across three kinds (`action-signature`/`action-precond`/`action-effect`)
+  sharing `mgx:ruleName`. PLAN_ADVENTURE's converged single-kind sketch maps onto the family.
+- **Goals are transitive.** "every disk rests on peg-c" checks a chain walk along the goal
+  predicate, since only the bottom disk carries the direct edge in the goal state. Effects and
+  preconditions stay direct-row.
+- **The kind-of teach frame defers to the ACE path** wherever that path succeeds (single-word
+  object, no trailing punctuation) — matching those shapes here shadowed the ACE receipt and
+  broke the pinned README transcript before the rule was narrowed.
+- **Crates, not river-crossing, is the 5R domain.** River-crossing needs two frames that don't
+  exist (a second simultaneous effect: the farmer travels with the passenger; a
+  forbidden-together constraint) plus a multi-effect interpreter extension. Named here,
+  deferred; crates fits the shipped frames exactly and exercises the comparator being optional
+  and multi-goal conjunctions.
+- **The `.tmct/imports/` scaffold copies game files and documents everything else by id.** No
+  builtin ontology/lexicon-kind extension ids exist (every builtin bundle is a corpus), and
+  `--ontology`/`--lexicon` take arbitrary file paths, so the README names the flags and ids
+  rather than scaffolding files whose activation format nothing verifies.
+- **`winkInstance` is constructed once and cached** (`src/wink-model.mjs`): repeated
+  `winkNLP(model)` construction corrupts the model package's state until V8 throws, after which
+  every later call returns null — found as a warm-session sentence-split failure, fixed en route.
+- **The renders-as predicate is `mgx:rendersAs`** (curated camelCase like `mgx:hasA`), so the
+  preposition fold never suffixes it.

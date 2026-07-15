@@ -18,6 +18,11 @@ import { hallucinationsIn } from "./call-validator.mjs";
  *  undefined when there is no dispatcher to run it with. */
 async function dispatchEachCandidate(pool, capName, arg, ctx) {
   if (!ctx.dispatch) return undefined;
+  // Only readOnly capabilities may be dispatched here: the enrichment runs the
+  // SAME tool once per tied candidate, which is only safe when dispatch
+  // performs no writes. A registered world-mutating capability is planned
+  // over, never dispatched.
+  if (capabilityByName(capName)?.readOnly !== true) return undefined;
   const results = [];
   for (const c of pool) {
     const res = await ctx.dispatch(capName, { [arg]: c.label });

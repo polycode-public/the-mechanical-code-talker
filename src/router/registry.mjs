@@ -179,10 +179,54 @@ const CAPABILITIES = Object.freeze([
   }),
 ]);
 
-// A frozen name→capability index (built once).
-const BY_NAME = Object.freeze(
-  CAPABILITIES.reduce((m, c) => { m[c.name] = c; return m; }, Object.create(null)),
+// The live capability set: the built-in frozen array is the seed; registration
+// rebuilds `list`/`byName` wholesale so every accessor stays a plain read.
+const buildIndex = (caps) => Object.freeze(
+  caps.reduce((m, c) => { m[c.name] = c; return m; }, Object.create(null)),
 );
+let list = CAPABILITIES;
+let byName = buildIndex(list);
+
+function deepFreeze(value) {
+  if (value && typeof value === "object" && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const k of Object.keys(value)) deepFreeze(value[k]);
+  }
+  return value;
+}
+
+/** Register a capability at runtime (e.g. a taught action family bridged in by
+ *  src/router/taught.mjs). `readOnly` must be an explicit boolean; a
+ *  `readOnly: false` record is forced `dispatchable: false` — the guardrail's
+ *  candidate enrichment re-dispatches a tool once per tied candidate, which is
+ *  only safe when dispatch performs no writes. Returns an `unregister()`
+ *  disposer. */
+export function registerCapability(cap) {
+  const name = cap && typeof cap.name === "string" ? cap.name.trim() : "";
+  if (!name) throw new Error("registerCapability: a non-empty name is required");
+  if (byName[name]) throw new Error(`registerCapability: "${name}" is already registered`);
+  if (!Array.isArray(cap.parameters) || !Array.isArray(cap.preconditions)) {
+    throw new Error(`registerCapability: "${name}" needs parameters[] and preconditions[]`);
+  }
+  if (!cap.effects || !Array.isArray(cap.effects.add) || !Array.isArray(cap.effects.del)) {
+    throw new Error(`registerCapability: "${name}" needs effects {add: [], del: []}`);
+  }
+  if (typeof cap.readOnly !== "boolean") {
+    throw new Error(`registerCapability: "${name}" needs an explicit boolean readOnly`);
+  }
+  const rec = deepFreeze({
+    type: VOCAB.Capability,
+    ...cap,
+    name,
+    dispatchable: cap.readOnly === true ? cap.dispatchable !== false : false,
+  });
+  list = Object.freeze([...list, rec]);
+  byName = buildIndex(list);
+  return function unregister() {
+    list = Object.freeze(list.filter((c) => c !== rec));
+    byName = buildIndex(list);
+  };
+}
 
 // ---- unregistered dispatch tools ---------------------------------------------
 // Dispatch tools not yet registered; each names the precondition work it needs first.
@@ -199,28 +243,28 @@ export const REGISTRY = Object.freeze({
   vocab: VOCAB,
   kinds: KINDS,
   precond: PRECOND,
-  capabilities: CAPABILITIES,
+  get capabilities() { return list; },
 });
 
 // ---- pure accessors ---------------------------------------------------------
 
-/** All declared capabilities (the operator set). */
-export function capabilities() { return CAPABILITIES; }
+/** All declared capabilities (the operator set, plus any registered at runtime). */
+export function capabilities() { return list; }
 
 /** The capability named `n`, or undefined. */
-export function capabilityByName(n) { return BY_NAME[n]; }
+export function capabilityByName(n) { return byName[n]; }
 
 /** True iff `n` names a declared capability. */
-export function isCapability(n) { return Boolean(BY_NAME[n]); }
+export function isCapability(n) { return Boolean(byName[n]); }
 
 /** The parameter slots of capability `n` (empty array if unknown/no-arg). */
-export function parametersOf(n) { return BY_NAME[n]?.parameters ?? []; }
+export function parametersOf(n) { return byName[n]?.parameters ?? []; }
 
 /** The preconditions of capability `n` (the safety gate the guardrail checks). */
-export function preconditionsOf(n) { return BY_NAME[n]?.preconditions ?? []; }
+export function preconditionsOf(n) { return byName[n]?.preconditions ?? []; }
 
 /** The effects of capability `n` — `{ add, del }` (the proof-chain contribution). */
-export function effectsOf(n) { return BY_NAME[n]?.effects ?? { add: [], del: [] }; }
+export function effectsOf(n) { return byName[n]?.effects ?? { add: [], del: [] }; }
 
 /** The set of arg keys capability `n` accepts (for the guardrail's unknown-arg
  *  check). Returns a Set of strings. */

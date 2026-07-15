@@ -1,0 +1,24 @@
+# crates — a second taught game, same closed frames as hanoi-3.
+# Lines starting with # are skipped by import.
+# No size order here: stacking is legal onto any clear crate or pallet, so this
+# domain exercises the comparator precondition being optional. Goals can be a
+# conjunction — teach several goal sentences before "solve it".
+#
+# After `tmct import --file crates.txt`, try this in `tmct chat` (or via --prompt):
+#
+#   crate-c rests on crate-a. crate-a rests on pallet-1. crate-b rests on pallet-2.
+#   the goal is that crate-a rests on crate-b. the goal is that crate-b rests on pallet-2.
+#   solve it.
+#
+# (2 moves: clear crate-a, then stack it — the solver may route crate-c to
+# pallet-3 or onto crate-b; both are optimal.)
+a crate is a kind of container.
+a pallet is a kind of place.
+crate-a is a crate. crate-b is a crate. crate-c is a crate.
+pallet-1 is a pallet. pallet-2 is a pallet. pallet-3 is a pallet.
+you can stack a crate onto a pallet.
+you can stack a crate onto a crate.
+to stack a crate onto a target, nothing may rest on the crate.
+to stack a crate onto a target, nothing may rest on the target.
+stacking a crate onto a target makes the crate rest on the target.
+a crate renders as a block. a pallet renders as a slot.
