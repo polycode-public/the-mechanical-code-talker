@@ -9,6 +9,7 @@ image: node:24
 
 stages:
   - test
+  - e2e
   - deploy
   - verify
 
@@ -67,6 +68,24 @@ unit:
     - npm ci
     - npm test
 
+# Package hygiene: publint over the exports map, and the file list npm pack
+# would publish diffed against the committed expected manifest — no stray
+# file ships, nothing expected goes missing.
+pack:contents:
+  stage: test
+  script:
+    - npm ci
+    - npx --no-install publint
+    - npm pack --dry-run --json | node scripts/check-pack-manifest.mjs
+
+# The e2e tier: real-binary spawns and build smoke (e2e/*.test.mjs). Its own
+# pipeline column, so the tier's pass/fail is visible at the top level.
+e2e:
+  stage: e2e
+  script:
+    - npm ci
+    - npm run test:e2e
+
 # Publish the package to PUBLIC npmjs.org. Automatic on main, but the release
 # TRIGGER is a VERSION BUMP, not a push or a tag: the script compares
 # package.json's version against what's already live on npm and no-ops if they
@@ -79,6 +98,7 @@ publish:npm:
   stage: deploy
   needs:
     - unit
+    - e2e
   rules:
     # schedule-guarded: the nightly dep:audit schedule must not re-publish.
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
@@ -90,7 +110,9 @@ publish:npm:
     SIGSTORE_ID_TOKEN:
       aud: sigstore
   script:
-    - echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > .npmrc
+    # APPEND to the committed .npmrc — overwriting it would drop the
+    # ignore-scripts/save-exact hardening exactly where it matters most.
+    - echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" >> .npmrc
     - npm ci
     - npm test
     - LOCAL_VERSION=$(node -p "require('./package.json').version")

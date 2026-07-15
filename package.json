@@ -111,6 +111,7 @@
   },
   "devDependencies": {
     "esbuild": "^0.28.1",
-    "ink-testing-library": "^4.0.0"
+    "ink-testing-library": "^4.0.0",
+    "publint": "0.3.21"
   }
 }
