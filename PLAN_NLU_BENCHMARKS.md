@@ -191,19 +191,39 @@ every reported metric strictly inside the interval:
   splits (report it in the same table); tmct's F1 must clear it by a wide margin for the
   run to count as a measurement rather than a stunt.
 
-If tier 1 cannot clear this bar (e.g. short utterances leave token overlap too thin), the
-fallback order is: corpus-backed synonym expansion, then character n-gram features, then
-the tier-2 embedding arm — each still deterministic and offline, each a separately
-labelled row so the claim stays honest about which machinery earned which number.
+The spike below already clears this bar comfortably on CLINC150, so the fallback ladder
+(corpus-backed synonym expansion, then the tier-2 embedding arm) now exists to push the
+operating pair up, not to rescue it — each still deterministic and offline, each a
+separately labelled row so the claim stays honest about which machinery earned which
+number.
 
-## Estimated outcomes with the adapter (priors to be tested, not claims)
+## Estimated outcomes with the adapter (spike-measured priors, not claims)
 
-- **CLINC150, tier 1:** in-scope accuracy 65–85%. The paper's classical baselines sit near
-  90% and BERT-class models near 97%, so we do not expect to compete on this axis and the
-  write-up should not pretend to. OOS recall 60–90% depending on the frozen threshold; the
-  paper's core finding is that ML baselines score poorly here, so this is the winnable
-  axis. The claim shape: "X% OOS recall at Y% in-scope accuracy, no model, no training, no
-  cloud, deterministic."
+A scratchpad spike (2026-07-15, tf-idf matchers over the real CLINC150 `data_full.json`,
+threshold frozen on validation only; scripts not yet in-repo — step 2 rebuilds this
+properly inside `nlubench/`) measured the tier-1 arms end to end:
+
+| Arm | Raw in-scope acc | Frozen pair (acc / OOS recall) |
+| --- | --- | --- |
+| unigram 1-NN (plan's literal baseline) | 77.5% | 61.9% / 78.2% |
+| unigram 15-NN vote | 83.0% | 63.4% / 78.2% |
+| char 3–5-gram 15-NN vote | 83.9% | 68.2% / 89.7% |
+| centroid unigram | 83.6% | 68.2% / 85.0% |
+| centroid uni+bigram | 84.8% | 60.6% / 89.3% |
+
+Lever findings from the same spike: k-NN voting over 1-NN is free and worth ~+5.5 raw
+points; char n-grams are the biggest OOS-axis lever (+11.5 OOS recall vs unigram at equal
+accuracy, at real index-build cost — the slow arm); class centroids match k-NN at a
+fraction of the query cost; word bigrams are worthless (−1 to −2, dropped); margin-based
+(top1−top2) rejection only moves along the accuracy/OOS trade-off curve and does not
+dominate a plain score threshold — tested with both a margin-only and a score+margin grid,
+not a planned lever anymore.
+
+- **CLINC150, tier 1:** expect low-80s raw in-scope accuracy and an operating pair near
+  68% / 88–90% before untested levers (WordNet synonym expansion, wink-nlp lemmas). The
+  paper's classical baselines sit near 90% raw and BERT-class models near 97%, so we do
+  not compete on that axis and the write-up should not pretend to. The claim shape: "X%
+  OOS recall at Y% in-scope accuracy, no model, no training, no cloud, deterministic."
 - **HWU64, tier 1:** intent F1 0.55–0.75 against Rasa's published 0.863. The honest frame
   is value-per-footprint, not victory. Entity F1 0.35–0.60; beating Watson's published
   0.488 is plausible and would be the strongest single headline available.
