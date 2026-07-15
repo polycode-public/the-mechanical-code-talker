@@ -1,12 +1,11 @@
-// W3 seam tests — seedMemory → bootstrap (ROADMAP Phase 4).
+// First-run memory seeding:
 //
-//   - a graph-less first run seeds SEED_LIMIT corpus facts into .tmct/memory,
-//     says so honestly in the banner, and writes the marker;
+//   - a graph-less first run seeds corpus facts into .tmct/memory, says so
+//     honestly in the banner, and writes the marker;
 //   - the marker prevents a re-seed (second session: no seed line, same facts);
 //   - TMCT_NO_SEED=1 opts out entirely;
 //   - a fixture-graph repo never seeds;
-//   - the real binary in an empty dir still greets and exits 0 (the final gate,
-//     now with seeding).
+//   - the real binary in an empty dir still greets and exits 0.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -19,18 +18,16 @@ import { loadMemory, FACT_CLASS } from "../src/memory/core.mjs";
 import { clearCache } from "../src/source.mjs";
 
 const BIN = fileURLToPath(new URL("../bin/tmct.mjs", import.meta.url));
-const FIXTURE = fileURLToPath(new URL("./fixtures/entities.fixture.json", import.meta.url));
+const FIXTURE = fileURLToPath(new URL("../test/fixtures/entities.fixture.json", import.meta.url));
 
 // The graph-less bootstrap seeds every ACTIVE bundle (chat.mjs seedBootstrapMemory,
 // via src/extensions.mjs's resolveExtensions + seedActiveCorpusEntries), in the
 // entries' own fixed order (seon, conceptnet, then the rest sorted by name).
-// PLAN_SEED.md's persona flip: the default active bundle is now `human` (seon/
-// conceptnet ship but are opt-in) — the banner is BUNDLE-LIST-DRIVEN (every
-// `perBundle` entry with appended > 0, no privileged first-two names), so these
-// tests assert the bootstrap's SHAPE against a GENERIC "(N1 bundle1 + N2 bundle2 +
-// …)" banner, not the old hardcoded "N curated SEON + N ConceptNet" literal.
+// The default active bundle is `human` (seon/conceptnet ship but are opt-in);
+// the banner lists every bundle that appended facts, so these tests assert the
+// bootstrap's SHAPE against a generic "(N1 bundle1 + N2 bundle2 + …)" banner,
+// not a hardcoded bundle-name literal.
 const SEED_BANNER_RE = /^seeded (\d+) starter facts \((.+)\) — \/memory to inspect$/;
-const UNCAPPED_MIN = 1000; // proof the ConceptNet band's own cap is lifted, when active
 
 const factCount = async (dir) =>
   (await loadMemory(dir)).individuals.filter((i) => i.class === FACT_CLASS).length;
@@ -51,8 +48,8 @@ const parseSeedBanner = (line) => {
   return { total: Number(m[1]), clauses, byBundle };
 };
 
-test("W3: a graph-less first run seeds once — banner line, marker, facts; a second session skips", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "tmct-w3-seed-"));
+test("a graph-less first run seeds once — banner line, marker, facts; a second session skips", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-seed-first-run-"));
   try {
     clearCache();
     const s1 = await createSession({ repoPath: dir, env: {} });
@@ -78,8 +75,8 @@ test("W3: a graph-less first run seeds once — banner line, marker, facts; a se
   }
 });
 
-test("W3: TMCT_NO_SEED=1 opts out — no facts, no marker, no banner line", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "tmct-w3-noseed-"));
+test("TMCT_NO_SEED=1 opts out of seeding — no facts, no marker, no banner line", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-seed-noseed-"));
   try {
     clearCache();
     const s = await createSession({ repoPath: dir, env: { TMCT_NO_SEED: "1" } });
@@ -93,8 +90,8 @@ test("W3: TMCT_NO_SEED=1 opts out — no facts, no marker, no banner line", asyn
   }
 });
 
-test("W3: a repo WITH a graph artifact never seeds", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "tmct-w3-fixture-"));
+test("a repo WITH a graph artifact never seeds", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-seed-fixture-"));
   try {
     await mkdir(join(dir, ".tmct"), { recursive: true });
     await writeFile(join(dir, ".tmct", "graph.json"), await readFile(FIXTURE, "utf8"));
@@ -111,8 +108,8 @@ test("W3: a repo WITH a graph artifact never seeds", async () => {
   }
 });
 
-test("W3 + extensions: a tmct.toml activating tier2-aws seeds a SECOND bundle alongside the default human bundle — banner grows an extra clause, base sentence unchanged", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "tmct-w3-tier2-"));
+test("a tmct.toml activating tier2-aws seeds a second bundle alongside the default human bundle — banner grows an extra clause, base sentence unchanged", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-seed-tier2-"));
   try {
     await writeFile(join(dir, "tmct.toml"), '[extensions.tier2-aws]\nactive = true\n');
     clearCache();
@@ -135,20 +132,20 @@ test("W3 + extensions: a tmct.toml activating tier2-aws seeds a SECOND bundle al
   }
 });
 
-test("W3 gate: the real binary in an empty dir seeds, greets and exits 0", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "tmct-w3-gate-"));
+test("the real binary in an empty dir seeds memory, greets and exits 0", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-seed-gate-"));
   try {
     const t0 = Date.now();
     const r = spawnSync(process.execPath, [BIN], { encoding: "utf8", input: "hi\n/exit\n", cwd: dir });
     const elapsed = Date.now() - t0;
     assert.equal(r.status, 0, r.stderr);
-    assert.match(r.stdout, /no code graph loaded — starting empty/); // #3
+    assert.match(r.stdout, /no code graph loaded — starting empty/);
     const banner = r.stdout.split("\n").map(parseSeedBanner).find(Boolean);
     assert.ok(banner, `the seed banner is present: ${JSON.stringify(r.stdout)}`);
     const sumOfClauses = Object.values(banner.byBundle).reduce((a, b) => a + b, 0);
     assert.equal(banner.total, sumOfClauses, "banner arithmetic consistent");
     assert.ok(banner.byBundle.human > 0, `the default human bundle seeded (got ${JSON.stringify(banner.byBundle)})`);
-    // #3: empty greeting orients — leads with identity + the (now seed-confirmed)
+    // The empty greeting orients — leads with identity + the (now seed-confirmed)
     // vocabulary example, not an apology; this run DID seed, so the hint is the
     // term-specific one (see the TMCT_NO_SEED sibling test for the other branch).
     assert.match(r.stdout, /Hi\. I'm tmct\. Try "what is a dog"/);
