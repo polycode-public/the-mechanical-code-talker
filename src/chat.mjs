@@ -2545,7 +2545,50 @@ function assertCandidates(payload) {
       out.push(`every ${subject} is ${article} ${object}`);
     }
   }
+  // HABITUAL → CAPABILITY: "dogs bark" / "a dog barks" are the habitual
+  // surfaces of the capability teach the lane already owns as "a dog can
+  // bark" (the same reading the seed corpus itself uses: dog /r/CapableOf
+  // bark). Same safety story as the plural rewrite above — the candidate
+  // still has to ground through the ordinary teach path, so an unknown
+  // subject ("penguins swim") stays an honest decline.
+  const habitual = matchBareHabitualTeach(p);
+  if (habitual) {
+    const articleRule = grammarRules().find((r) => r.kind === "article");
+    const article = articleRule && beginsWithVowelSound(habitual.subject, articleRule) ? "an" : "a";
+    out.push(`${article} ${habitual.subject} can ${habitual.verb}`);
+  }
   return [...new Set(out)];
+}
+
+/** The two bare HABITUAL teach surfaces, recognized as one shape:
+ *  "dogs bark" (plural subject + base verb) and "a dog barks" (articled
+ *  singular + 3sg verb), both meaning the capability fact "a dog can
+ *  bark". Returns {subject, verb} folded to the singular/base forms, or
+ *  null. Deliberately closed: structural verbs (imports/calls/tests …)
+ *  are excluded so a truncated code query never reads as a capability
+ *  claim, and the plural surface's verb must be a BASE form (no
+ *  plural-looking "s" tail — "dogs animals" is not a habitual sentence;
+ *  "pass"/"miss"-style "ss" verbs stay eligible). */
+/** Words that sit in the habitual shapes' verb slot without being verbs —
+ *  politeness/discourse tails ("jokes please", "dogs too") that must stay
+ *  with the conversational lane. */
+const HABITUAL_VERB_EXCLUDE = new Set([
+  "please", "thanks", "kindly", "anyway", "though", "indeed", "maybe",
+  "perhaps", "still", "too", "also", "instead", "now", "then", "here", "there",
+]);
+function matchBareHabitualTeach(text) {
+  const t = String(text || "").trim();
+  const plural = t.match(/^(?:all\s+|every\s+)?([\w-]+s)\s+([a-z][\w-]*)[.!?]*$/i);
+  if (plural && !STRUCT_WORDS.has(plural[2].toLowerCase()) && !HABITUAL_VERB_EXCLUDE.has(plural[2].toLowerCase()) && !/[^s]s$/i.test(plural[2])) {
+    const subject = singularizeSurface(plural[1].toLowerCase());
+    if (subject !== plural[1].toLowerCase()) return { subject, verb: plural[2].toLowerCase() };
+  }
+  const singular = t.match(/^an?\s+([\w-]+)\s+([a-z][\w-]*s)[.!?]*$/i);
+  if (singular && !STRUCT_WORDS.has(singular[2].toLowerCase()) && !HABITUAL_VERB_EXCLUDE.has(singular[2].toLowerCase())) {
+    const verb = singularizeSurface(singular[2].toLowerCase());
+    if (verb !== singular[2].toLowerCase()) return { subject: singular[1].toLowerCase(), verb };
+  }
+  return null;
 }
 /** The "every X is a Y" rewrite of a declarative, for the "did you mean …"
  *  hint. Real a/an agreement (never a hardcoded "a", which is ungrammatical
@@ -3181,7 +3224,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
 
   let payload = null;
   if (wrapped && /\b(?:is|are)\b/i.test(wrapped)) payload = wrapped;
-  else if ((BARE_DECLARATIVE_RE.test(raw) || COMPARATIVE_TEACH_RE.test(raw)) && !QUESTION_LEAD_RE.test(raw) && !(await hasMidSentenceInterrogative(raw))) payload = raw;
+  else if ((BARE_DECLARATIVE_RE.test(raw) || COMPARATIVE_TEACH_RE.test(raw) || matchBareHabitualTeach(raw)) && !QUESTION_LEAD_RE.test(raw) && !(await hasMidSentenceInterrogative(raw))) payload = raw;
   if (!payload) {
     // "remember margo eats ribs", re-escaping here through a combination
     // that mechanism's own deliberate subject-shape restriction doesn't
@@ -7988,13 +8031,20 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   let isPluralMembershipTeach = false;
   {
     const pm = String(query).trim().match(/^([\w-]+)\s+are\s+([\w-]+)[.!?]*$/i);
-    if (pm) {
+    const habitual = pm ? null : matchBareHabitualTeach(String(query).trim());
+    if (pm || habitual) {
       try {
         const { loadLexicon, lookupNoun } = await import("./grammar/lexicon.mjs");
         const lex = loadLexicon();
-        const s = singularizeSurface(pm[1].toLowerCase());
-        const o = singularizeSurface(pm[2].toLowerCase());
-        isPluralMembershipTeach = s !== pm[1].toLowerCase() && !!lookupNoun(lex, s) && !!lookupNoun(lex, o);
+        if (pm) {
+          const s = singularizeSurface(pm[1].toLowerCase());
+          const o = singularizeSurface(pm[2].toLowerCase());
+          isPluralMembershipTeach = s !== pm[1].toLowerCase() && !!lookupNoun(lex, s) && !!lookupNoun(lex, o);
+        } else {
+          // The bare habitual sibling ("dogs bark", "a dog barks") — same
+          // deferral, same known-subject gate, so real chatter never diverts.
+          isPluralMembershipTeach = !!lookupNoun(lex, habitual.subject);
+        }
       } catch { /* lexicon unavailable — leave false, the ordinary path decides */ }
     }
   }

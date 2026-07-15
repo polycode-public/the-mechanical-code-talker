@@ -1003,3 +1003,57 @@ test("plural-membership exemption never claims real chatter: 'these are yours' s
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("bare habitual teach: 'dogs bark' stores dog mgx:capableOf bark and answers 'can a dog bark' yes", async () => {
+  const dir = await mem("habitual-plural");
+  try {
+    const taught = await runTurn("dogs bark", { config: CONFIG, memoryDir: dir, sessionId: "h1" });
+    assert.match(taught.answer, /noted — remembered/);
+    const mem2 = await loadMemory(dir);
+    assert.ok(readFactRows(mem2).find((f) => f.subject === "dog" && f.predicate === "mgx:capableOf" && f.object === "bark"));
+    const ask = await runTurn("can a dog bark", { config: CONFIG, memoryDir: dir });
+    assert.match(ask.answer, /^yes — /);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("bare habitual teach, 3sg surface: 'a dog barks' stores the same base-verb capability fact", async () => {
+  const dir = await mem("habitual-3sg");
+  try {
+    const taught = await runTurn("a dog barks", { config: CONFIG, memoryDir: dir, sessionId: "h2" });
+    assert.match(taught.answer, /noted — remembered/);
+    const mem2 = await loadMemory(dir);
+    assert.ok(readFactRows(mem2).find((f) => f.subject === "dog" && f.predicate === "mgx:capableOf" && f.object === "bark"));
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("habitual verb-slot exclusions hold: 'jokes please' stores nothing and keeps its conversational answer", async () => {
+  const dir = await mem("habitual-please");
+  try {
+    const r = await runTurn("jokes please", { config: CONFIG, memoryDir: dir, sessionId: "h3" });
+    assert.doesNotMatch(r.answer, /noted — remembered/);
+    const mem2 = await loadMemory(dir);
+    assert.ok(!readFactRows(mem2).length, "nothing stored");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("bare habitual with an unknown subject: 'penguins swim' never silently stores — same grounding discipline as 'a penguin can swim'", async () => {
+  const dir = await mem("habitual-unknown");
+  try {
+    const r = await runTurn("penguins swim", { config: CONFIG, memoryDir: dir, sessionId: "h4" });
+    assert.doesNotMatch(r.answer, /noted — remembered/);
+    const mem2 = await loadMemory(dir);
+    assert.ok(!readFactRows(mem2).some((f) => f.predicate === "mgx:capableOf"), "no capability fact fabricated");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
