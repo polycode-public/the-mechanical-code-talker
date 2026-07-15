@@ -113,14 +113,14 @@ export async function readMemoryAskBundle() {
 }
 
 /** Escape untrusted text for safe placement inside HTML content/attributes. */
-function escapeHtml(s) {
+export function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
 /** JSON-embed graph data into a `<script>` tag safely — escape `</` so a
  *  label/id containing "</script>" can't break out of the tag, and escape
  *  U+2028/U+2029 (valid in JSON strings, invalid unescaped in JS source). */
-function embedJson(value) {
+export function embedJson(value) {
   return JSON.stringify(value)
     .replace(/</g, "\\u003c")
     .replace(/\u2028/g, "\\u2028")

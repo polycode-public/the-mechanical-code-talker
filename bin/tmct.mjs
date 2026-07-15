@@ -86,10 +86,12 @@ Usage:
        [--depth <n>] [--budget <n>]  chain the memory's rdfs:subClassOf closure, materialising
        [--config <path>]      bounded, low-trust, retractable entailed facts (never on the chat path)
   tmct viz [--repo <abs>]      write one self-contained, navigable HTML file rendering the
-       [--focus <id>]         memory graph: pan/zoom, click a node for its label/class/
-       [--term <word>]        timestamps. Seeds from the most recently created individual
-       [--depth <n>]          by default (--focus <id> or --term <word> override it);
-       [--limit <n>]          --output defaults to graph.html in the cwd.
+       [--ledger]             memory graph: pan/zoom, click a node for its label/class/
+       [--focus <id>]         timestamps. Seeds from the most recently created individual
+       [--term <word>]        by default (--focus <id> or --term <word> override it);
+       [--depth <n>]          --output defaults to graph.html in the cwd. With --ledger,
+       [--limit <n>]          a readable fact ledger around one focus term instead
+                               (writes ledger.html; --limit caps the embedded fact rows).
        [--hub-degree <n>]     --depth = max arcs (hops) from the focus node (default 3);
        [--edge-kind <mode>]   --limit = spiral length, total nodes walked (default 300);
        [--output <path>]      --hub-degree = stop expanding THROUGH a node above N
@@ -1012,7 +1014,7 @@ async function main() {
     // depth/age falloff. Same repo resolution as `memory`/`syllogise` —
     // resolveRuntimeConfig: --repo > git root > cwd.
     const rest = process.argv.slice(3);
-    const { strFlag, resolveRuntimeConfig } = await import("../src/cli-args.mjs");
+    const { strFlag, boolFlag, resolveRuntimeConfig } = await import("../src/cli-args.mjs");
     const { computeVizGraph, renderVizHtml, readAskBundle, readMemoryAskBundle } = await import("../src/viz.mjs");
     const { writeFile } = await import("node:fs/promises");
     const { resolve } = await import("node:path");
@@ -1021,15 +1023,35 @@ async function main() {
       const v = j !== -1 ? Number(rest[j + 1]) : NaN;
       return Number.isFinite(v) ? v : undefined;
     };
+    const ledger = boolFlag(rest, ["--ledger"]);
     const focus = strFlag(rest, ["--focus"]);
     const term = strFlag(rest, ["--term"]); // PLAN_VIZ_MEMORY.md: seed via normFactTerm-matched Fact(s), alongside --focus
     const depth = numFlag("--depth"); // max arcs (hops) from the focus node
-    const nodeLimit = numFlag("--limit"); // spiral length: total nodes walked
+    const nodeLimit = numFlag("--limit"); // spiral length: total nodes walked (ledger mode: fact-row cap)
     const hubDegree = numFlag("--hub-degree"); // stop expanding THROUGH a node above N connections
     const edgeKindModeRaw = strFlag(rest, ["--edge-kind"]);
     const edgeKindMode = ["meta", "relation", "both"].includes(edgeKindModeRaw) ? edgeKindModeRaw : undefined;
-    const outPath = resolve(process.cwd(), strFlag(rest, ["--output", "--out"], "graph.html"));
+    const outPath = resolve(process.cwd(), strFlag(rest, ["--output", "--out"], ledger ? "ledger.html" : "graph.html"));
     const { repo } = await resolveRuntimeConfig({ argv: rest });
+    if (ledger) {
+      const { computeLedgerData, renderLedgerHtml } = await import("../src/ledger-viz.mjs");
+      const data = await computeLedgerData(repo, {
+        ...(focus ? { focus } : {}),
+        ...(!focus && term ? { term } : {}),
+        ...(nodeLimit != null ? { rowLimit: nodeLimit } : {}),
+      });
+      const memoryAskBundle = await readMemoryAskBundle();
+      await writeFile(outPath, renderLedgerHtml({ ...data, memoryAskBundle }), "utf8");
+      process.stdout.write(
+        `tmct viz --ledger — wrote ${data.meta.shown} fact row(s) around ${data.focus ? `'${data.focus}'` : "no focus"} to ${outPath}\n`,
+      );
+      if (data.meta.truncated) {
+        process.stdout.write(
+          `showing ${data.meta.shown} of ${data.meta.total} rows — narrow with --focus <term> or raise --limit\n`,
+        );
+      }
+      return;
+    }
     const vizGraph = await computeVizGraph(repo, {
       ...(focus ? { focus } : {}),
       ...(!focus && term ? { term } : {}), // --focus takes precedence when both are given
