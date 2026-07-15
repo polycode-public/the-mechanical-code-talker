@@ -54,6 +54,35 @@ Measured init sizes (fresh store, this machine): `init:large` 37,797 facts; `ini
   voicing appends "(N goals held)" duplicates; fold a deep-equal incoming goal spec and say
   so. Found by the 018 uber retest.
 
+- **Topic-shift ellipsis.** "what is a dog" → "what about cats" has no reader; the elliptical
+  follow-up falls to the wall. Named in `playtests/PLAYTEST_LOG_002.md` and 005.
+
+- **Anaphora depth.** The vocabulary antecedent decays after one turn, and a cold pronoun
+  ("can it bark" with no prior turn) falls to the generic wall. Named in
+  `playtests/PLAYTEST_LOG_005.md`.
+
+- **Negative capability as data.** "a penguin cannot fly" declines honestly (no
+  fact-vocabulary predicate for it) and "what cannot fly" has no reverse listing. Named in
+  `playtests/PLAYTEST_LOG_003.md`.
+
+- **Taught↔corpus predicate unification.** A taught "fire causes smoke" mints `mgx:cause`
+  while the corpus fact is `mgx:causes`; the two never unify at read time. Named in
+  `playtests/PLAYTEST_LOG_004.md`.
+
+- **Prepositional-fact leftovers.** Determiner-led multi-word subjects ("the small disk rests
+  on the middle disk") decline; bare-copula "what is on peg-a" misses; "does disk-1 rest on
+  peg-b" falls to the generic wall instead of a specific miss. Named in
+  `playtests/PLAYTEST_LOG_008.md`.
+
+- **In-chat recovery for deep chains.** 3+-hop derivations need the `syllogise` CLI; chat has
+  no `/syllogise` command and the honest deep-chain miss doesn't mention the recovery. Named
+  in `playtests/PLAYTEST_LOG_007.md`.
+
+- **Two standing design choices, revisit only with evidence** (decisions of record, not
+  pending work): 3+-word terms stay outside the ACE fragment (`playtests/PLAYTEST_LOG_006.md`);
+  comparative antisymmetry is not derived — asked directions only, an honesty choice
+  (`playtests/PLAYTEST_LOG_009.md`).
+
 - **Untouched playtest axes** (for the next edge-hunt dispatch): contractions and cleft rungs
   of the paraphrase ladder; passive↔active beyond UsedFor and the rule signature.
 
