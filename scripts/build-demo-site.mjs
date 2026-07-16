@@ -91,13 +91,15 @@ const HANOI_PROMPT =
 const planPath = join(SITE, "plan.html");
 const planDir = mkdtempSync(join(tmpdir(), "tmct-demo-plan-"));
 // stdin stays closed: chat reads it when it is open, and this run is scripted
-// entirely by --prompt.
+// entirely by --prompt. The timeout is generous because these spawns load the
+// wink model, and a build sharing a machine with a full test run has been seen
+// to take minutes for work that takes seconds idle.
 const runTmct = (args) =>
   execFileSync(process.execPath, [join(ROOT, "bin", "tmct.mjs"), ...args], {
     cwd: planDir,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
-    timeout: 120_000,
+    timeout: 480_000,
   });
 try {
   runTmct(["init"]);
