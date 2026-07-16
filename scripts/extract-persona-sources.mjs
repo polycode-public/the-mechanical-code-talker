@@ -23,14 +23,16 @@
 // convenience tool, never a build dependency, never required for `npm test`
 // or the product path.
 
-import { readFile, readdir } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { parseSchemaClasses } from "../src/domain/schemaorg/turtle.mjs";
+import {
+  WORDNET_YAML_DIR, loadSynsets, loadEntriesFor, loadAllNounSynsets,
+} from "../src/adapters/wordnet-source.mjs";
 
-const WORDNET_SRC = process.env.TMCT_WORDNET_SRC || join(homedir(), "projects", "globalwordnet", "english-wordnet");
 const SCHEMAORG_SRC = process.env.TMCT_SCHEMAORG_SRC || join(homedir(), "projects", "schemaorg", "schemaorg");
-const WORDNET_YAML_DIR = join(WORDNET_SRC, "src", "yaml");
 const SCHEMA_TTL = join(SCHEMAORG_SRC, "data", "schema.ttl");
 
 const OUT = (() => {
@@ -38,176 +40,7 @@ const OUT = (() => {
   return i !== -1 && process.argv[i + 1] ? process.argv[i + 1] : join("scripts", "persona-worksheet.json");
 })();
 
-// ---- Part 1: a tiny YAML-subset reader ------------------------------------
-// The OEWN dump uses a small, regular subset of YAML: 2-space-indented block
-// mappings/sequences, quoted or bare scalars, and long scalar list-items that
-// simply WRAP onto a further-indented continuation line (no block scalars, no
-// anchors, no flow style — confirmed by direct inspection, PLAN_SEED.md §5).
-// This reads exactly that subset; it is not a general YAML parser.
-function parseYaml(text) {
-  const rawLines = text.split("\n");
-  const lines = [];
-  for (const line of rawLines) {
-    if (!line.trim() || line.trim().startsWith("#")) continue;
-    const indent = line.length - line.trimStart().length;
-    lines.push({ indent, text: line.trimStart() });
-  }
-  let pos = 0;
-  // Non-greedy key group so a MULTI-WORD entry key ("M-1 rifle", "ice cream")
-  // still matches — the first ": "/end-of-line colon wins, exactly as real
-  // YAML's block-mapping key/value split works. A plain wrapped scalar
-  // continuation line (a definition/example fragment) only coincidentally
-  // matches this if it ALSO happens to contain a bare "word: " sequence —
-  // rare in this corpus's prose, and this is a maintainer worksheet tool
-  // whose output is hand-reviewed, not a correctness-critical parser.
-  const KEY_RE = /^(.+?):(\s+(.*)|)$/;
-  const isDash = (t) => t === "-" || t.startsWith("- ");
-
-  function parseScalar(s) {
-    const t = s.trim();
-    if ((t.startsWith("'") && t.endsWith("'") && t.length >= 2) || (t.startsWith('"') && t.endsWith('"') && t.length >= 2)) {
-      return t.slice(1, -1);
-    }
-    return t;
-  }
-
-  // A scalar that may continue on subsequent MORE-indented lines with no
-  // "key:"/"- " marker of their own (WordNet's definition-wrapping style). A
-  // QUOTED scalar ('...' or "...") is handled separately: WordNet definitions
-  // routinely contain a literal ": " inside the quoted text itself (e.g. "…
-  // Matthew, Mark, Luke, and John" split across a line boundary right after a
-  // colon) — the bare-scalar heuristic below would misread that continuation
-  // line as a new "key:" line and truncate the string. Once inside an open
-  // quote, EVERY line is a continuation until one ends with the matching
-  // closing quote, full stop — the key/dash heuristic never applies inside it.
-  function parseScalarOrContinue(first, minContinIndent) {
-    const trimmed = first.trim();
-    const quote = trimmed[0] === "'" || trimmed[0] === '"' ? trimmed[0] : null;
-    if (quote) {
-      const closes = (s) => s.length >= 2 && s.endsWith(quote);
-      let buf = trimmed;
-      while (!closes(buf) && pos < lines.length && lines[pos].indent >= minContinIndent) {
-        buf += " " + lines[pos].text.trim();
-        pos += 1;
-      }
-      return closes(buf) ? buf.slice(1, -1) : buf;
-    }
-    let s = parseScalar(first);
-    while (pos < lines.length && lines[pos].indent >= minContinIndent
-      && !isDash(lines[pos].text) && !KEY_RE.test(lines[pos].text)) {
-      s += " " + lines[pos].text.trim();
-      pos += 1;
-    }
-    return s;
-  }
-
-  /** The value that follows a "key:" (bare, no inline scalar) — peeks at the
-   *  next line to decide whether it's a nested sequence (which YAML allows to
-   *  sit at the SAME indent as the key itself, not just deeper) or a nested
-   *  mapping (which must be deeper) or simply absent (null). `parentIndent`
-   *  is the indent of the "key:" line whose value this resolves. */
-  function parseValue(parentIndent) {
-    if (pos >= lines.length || lines[pos].indent < parentIndent) return null;
-    const line = lines[pos];
-    if (isDash(line.text)) return parseSeq(line.indent);
-    if (line.indent > parentIndent && KEY_RE.test(line.text)) return parseMap(line.indent);
-    return null;
-  }
-
-  function parseSeq(indent) {
-    const arr = [];
-    while (pos < lines.length && lines[pos].indent === indent && isDash(lines[pos].text)) {
-      const dashIndent = indent;
-      const rest = lines[pos].text === "-" ? "" : lines[pos].text.slice(2);
-      pos += 1;
-      if (rest === "") {
-        arr.push(parseValue(dashIndent));
-        continue;
-      }
-      // A quoted scalar is classified FIRST, unconditionally — WordNet
-      // definitions routinely contain a literal ": " (or a colon at the very
-      // end of a wrapped line, e.g. "…including:\n  whales, …") inside quoted
-      // prose, which KEY_RE would otherwise misread as an inline "- key:"
-      // mapping. Only an UNQUOTED rest is even considered for that shape.
-      const quoted = rest[0] === "'" || rest[0] === '"';
-      const m = quoted ? null : KEY_RE.exec(rest);
-      if (m) {
-        // "- key: value" or "- key:" — an inline mapping for this list item;
-        // sibling keys of the SAME item are indented +2 from the dash.
-        const obj = {};
-        obj[m[1]] = m[3] !== undefined && m[3] !== "" ? parseScalarOrContinue(m[3], dashIndent + 2) : parseValue(dashIndent + 2);
-        while (pos < lines.length && lines[pos].indent === dashIndent + 2 && KEY_RE.test(lines[pos].text)) {
-          const mm = KEY_RE.exec(lines[pos].text);
-          pos += 1;
-          obj[mm[1]] = mm[3] !== undefined && mm[3] !== "" ? parseScalarOrContinue(mm[3], dashIndent + 4) : parseValue(dashIndent + 2);
-        }
-        arr.push(obj);
-      } else {
-        // a plain (or quoted) scalar list item — may wrap onto continuation lines
-        arr.push(parseScalarOrContinue(rest, dashIndent + 2));
-      }
-    }
-    return arr;
-  }
-
-  function parseMap(indent) {
-    const obj = {};
-    while (pos < lines.length && lines[pos].indent === indent && KEY_RE.test(lines[pos].text)) {
-      const m = KEY_RE.exec(lines[pos].text);
-      const key = parseScalar(m[1]);
-      pos += 1;
-      obj[key] = m[3] !== undefined && m[3] !== "" ? parseScalarOrContinue(m[3], indent + 2) : parseValue(indent);
-      // (parseValue(indent) — not indent+2 — so a same-indent sequence value
-      // is recognized; parseValue itself accepts child indent >= indent.)
-    }
-    return obj;
-  }
-
-  return parseMap(0);
-}
-
-// ---- Part 2: WordNet synset + entry indexes -------------------------------
-
-/** Load one or more noun.<x>/verb.<x>.yaml files into a flat synset-id -> record map. */
-async function loadSynsets(files) {
-  const map = new Map();
-  for (const f of files) {
-    const path = join(WORDNET_YAML_DIR, f);
-    if (!existsSync(path)) continue;
-    const parsed = parseYaml(await readFile(path, "utf8"));
-    for (const [id, rec] of Object.entries(parsed)) map.set(id, rec);
-  }
-  return map;
-}
-
-/** Load the entries-<letter>.yaml files that could contain any of `words`
- *  (only the letters actually needed — 28 files, ~1MB-3MB each, no reason to
- *  load all 28 when a clump only needs a handful of letters). Returns
- *  word -> { n: [{id, synset}], v: [...], a: [...] }. */
-async function loadEntriesFor(words) {
-  const letters = new Set();
-  for (const w of words) {
-    const c = w[0].toLowerCase();
-    letters.add(/[a-z]/.test(c) ? c : "0");
-  }
-  const index = new Map();
-  for (const letter of letters) {
-    const path = join(WORDNET_YAML_DIR, `entries-${letter}.yaml`);
-    if (!existsSync(path)) continue;
-    const parsed = parseYaml(await readFile(path, "utf8"));
-    for (const [word, byPos] of Object.entries(parsed)) {
-      if (!words.has(word)) continue;
-      const senses = {};
-      for (const [pos, rec] of Object.entries(byPos || {})) {
-        if (pos === "form") continue;
-        const list = Array.isArray(rec?.sense) ? rec.sense : [];
-        senses[pos] = list.map((s) => ({ id: s.id, synset: s.synset })).filter((s) => s.synset);
-      }
-      index.set(word, senses);
-    }
-  }
-  return index;
-}
+// ---- WordNet candidate selection ------------------------------------------
 
 /** For one target word, find its most likely synset (first noun sense, by
  *  WordNet's own sense-order convention — sense 1 is the most frequent/
@@ -234,7 +67,7 @@ function candidateFor(word, entries, synsets, pos = "n") {
   };
 }
 
-// ---- Part 3: the 9 persona clumps -> source-file mapping (PLAN_SEED.md §3) --
+// ---- The 9 persona clumps -> source-file mapping ---------------------------
 
 const CLUMPS = {
   "human-core": {
@@ -313,32 +146,11 @@ const CLUMPS = {
   },
 };
 
-// ---- Part 4: Schema.org class allowlist (human-base + human-bridge) ------
+// ---- Schema.org class allowlist (human-base + human-bridge) ---------------
 
 const SCHEMA_ALLOWLIST = ["Thing", "Person", "Place", "Event", "Organization", "Product"];
 
-/** Very small Turtle reader for schema.ttl's OWN regular shape: each class is
- *  one `:Name a rdfs:Class ;` block terminated by a line ending in ` .`, with
- *  `rdfs:label`/`rdfs:comment`/`rdfs:subClassOf` as `;`-separated predicate
- *  lines. Not a general Turtle parser — schema.ttl's own generator emits a
- *  single, very regular style (confirmed by direct inspection, PLAN_SEED.md §5). */
-function parseSchemaClasses(text) {
-  const classes = new Map(); // name -> { label, comment, subClassOf: [] }
-  const blocks = text.split(/\n(?=:[A-Za-z])/); // each class/property starts a new top-level block
-  for (const block of blocks) {
-    const head = /^:([A-Za-z0-9_]+)\s+a\s+rdfs:Class\s*;/.exec(block);
-    if (!head) continue;
-    const name = head[1];
-    const label = /rdfs:label\s+"([^"]*)"/.exec(block)?.[1] || name;
-    const comment = /rdfs:comment\s+"([^"]*)"/.exec(block)?.[1] || "";
-    const subClassOf = [...block.matchAll(/rdfs:subClassOf\s+:([A-Za-z0-9_]+)/g)].map((m) => m[1]);
-    classes.set(name, { name, label, comment, subClassOf });
-  }
-  return classes;
-}
-
-// ---- Part 5: example-sentence candidates (PLAN_SEED.md §9, the "tenth
-// deliverable") -------------------------------------------------------------
+// ---- Example-sentence candidates ------------------------------------------
 //
 //   node scripts/extract-persona-sources.mjs --examples [--out <path>]
 //
@@ -352,11 +164,6 @@ function parseSchemaClasses(text) {
 // expected). Writes a candidate list — NOT the final committed file — for a
 // human to hand-pick corpus/tier2/human-examples.jsonl from (same "curate
 // down from a big source" discipline as everything else here).
-async function loadAllNounSynsets() {
-  const files = (await readdir(WORDNET_YAML_DIR)).filter((f) => f.startsWith("noun."));
-  return loadSynsets(files);
-}
-
 // A handful of WordNet examples are cross-reference stubs ("see table 1"),
 // not real sentences — filtered here so a re-run reproduces the committed
 // corpus/tier2/human-examples.jsonl exactly (this was the one candidate
@@ -378,7 +185,7 @@ async function writeExampleCandidates(outPath) {
   console.error(`extract-persona-sources --examples: wrote ${outPath} (${candidates.length}/${words.length} words have a real WordNet example)`);
 }
 
-// ---- Part 6: main -----------------------------------------------------------
+// ---- main ------------------------------------------------------------------
 
 async function main() {
   if (!existsSync(WORDNET_YAML_DIR)) {
@@ -438,4 +245,4 @@ async function main() {
 const isMain = process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href;
 if (isMain) await main();
 
-export { parseYaml, parseSchemaClasses, candidateFor, loadSynsets, loadEntriesFor };
+export { candidateFor };

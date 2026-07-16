@@ -9,24 +9,21 @@
 // words are declared in WordNet's SAME synset as this word, for this part of
 // speech" — the ONLY substitution PLAN_BREADTH_FIRST_NLU.md §6a sanctions
 // ("synonym-substituted within a synset, using members, never crossing
-// synsets"). Reuses the hand-rolled YAML-subset reader and entries/synset
-// loaders already built and proven for the persona-seeding pass
-// (scripts/extract-persona-sources.mjs) rather than re-deriving them or
-// adding a YAML dependency — same "not a general YAML parser, offline,
-// maintainer-only" discipline.
+// synsets"). Reuses the WordNet reader in
+// src/adapters/wordnet-source.mjs rather than re-deriving it or adding a YAML
+// dependency — same "not a general YAML parser, offline, maintainer-only"
+// discipline.
 //
 // Sense choice: WordNet's own sense-1-is-most-frequent convention (the same
-// choice scripts/extract-persona-sources.mjs's candidateFor already makes for
-// the persona corpus) — a word with no declared sense for the requested POS
+// choice extract-persona-sources.mjs's candidateFor already makes for the
+// persona corpus) — a word with no declared sense for the requested POS
 // is simply absent from the result, never guessed.
 
 import { readdir } from "node:fs/promises";
-import { homedir } from "node:os";
-import { join } from "node:path";
-import { loadSynsets, loadEntriesFor } from "../extract-persona-sources.mjs";
+import {
+  WORDNET_SRC, WORDNET_YAML_DIR as YAML_DIR, loadSynsets, loadEntriesFor,
+} from "../../src/adapters/wordnet-source.mjs";
 
-const WORDNET_SRC = process.env.TMCT_WORDNET_SRC || join(homedir(), "projects", "globalwordnet", "english-wordnet");
-const YAML_DIR = join(WORDNET_SRC, "src", "yaml");
 const POS_MAP = Object.freeze({ noun: "n", verb: "v", adjective: "a" });
 
 let synsetCache = null;
