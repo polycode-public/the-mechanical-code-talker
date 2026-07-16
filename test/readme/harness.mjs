@@ -11,7 +11,9 @@ import { fileURLToPath } from "node:url";
 export const repoRoot = path.resolve(fileURLToPath(import.meta.url), "..", "..", "..");
 export const README_PATH = path.join(repoRoot, "README.md");
 
-const EXEC_TIMEOUT_MS = 240_000;
+// Generous: the transcript replays take ~1 min idle but have been observed
+// past 240s when other suites share the machine at full parallelism.
+const EXEC_TIMEOUT_MS = 480_000;
 const ELISION_LINES = new Set(["…", "..."]);
 
 let shimDir = null;
