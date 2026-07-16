@@ -42,7 +42,7 @@ test("demo:build produces the Pages demo artefacts", () => {
 test("build:ask-bundle rebuilds a parseable browser bundle", () => {
   const outDir = mkdtempSync(path.join(tmpdir(), "tmct-ask-bundle-"));
   runNpmScript("build:ask-bundle", { TMCT_ASK_BUNDLE_OUT: outDir });
-  const bundle = path.join(outDir, "surfaces", "memory-ask-browser.bundle.js");
+  const bundle = path.join(outDir, "surfaces", "web", "memory-ask-browser.bundle.js");
   assert.ok(existsSync(bundle), "the bundle was written");
   assert.ok(statSync(bundle).size > 100_000, "the bundle is non-trivially sized");
   // node --check parses without executing — a truncated or mis-stubbed

@@ -5123,7 +5123,7 @@ function uniqueFacts(rows) {
  *  graph's Facts. Returns { text, replace } — `replace:false` means the engine's
  *  own (schema-docs) answer stands and the fact lines are appended under it —
  *  or null when memory holds nothing relevant (misses stay unchanged).
- *  Exported so src/surfaces/memory-ask-browser-entry.mjs
+ *  Exported so src/surfaces/web/memory-ask-browser-entry.mjs
  *  can re-export it for `tmct viz`'s embedded "Ask the graph" panel — the ONLY
  *  reason this is `export` rather than module-private; the function's own
  *  behavior is unchanged (same signature, same logic, answers identically in

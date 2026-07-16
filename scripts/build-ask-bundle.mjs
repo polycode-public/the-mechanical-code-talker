@@ -2,7 +2,7 @@
 // ledger page's in-browser chat dock (PLAN_VIZ_LEDGER.md).
 //
 // Builds ONE IIFE bundle:
-//   - src/surfaces/memory-ask-browser-entry.mjs -> src/surfaces/memory-ask-browser.bundle.js —
+//   - src/surfaces/web/memory-ask-browser-entry.mjs -> src/surfaces/web/memory-ask-browser.bundle.js —
 //     tmct's MEMORY-graph answer engine (chat.mjs's factAnswer/factReadBack,
 //     the same ones `npm run chat` uses): "what is a dog", "who is the
 //     grandfather of ishmael".
@@ -28,7 +28,7 @@
 // other lane) — none of that extra code ever RUNS (factAnswer's only real I/O
 // is loadMemory(memoryDir), and the dock always hands it an in-memory
 // Backend-B handle already carrying the page's payload — see
-// src/surfaces/memory-ask-browser-entry.mjs's own doc comment), it just has to
+// src/surfaces/web/memory-ask-browser-entry.mjs's own doc comment), it just has to
 // LINK. The node-builtin stub below carries exactly the bindings that graph
 // still references — measured by dropping each and letting esbuild name what
 // breaks, so it shrinks as the monolith's link edges do.
@@ -164,4 +164,4 @@ async function buildOne(entryFile, outFile) {
   console.log(`built ${outPath}`);
 }
 
-await buildOne("surfaces/memory-ask-browser-entry.mjs", "surfaces/memory-ask-browser.bundle.js");
+await buildOne("surfaces/web/memory-ask-browser-entry.mjs", "surfaces/web/memory-ask-browser.bundle.js");

@@ -19,14 +19,14 @@ import { dirname, join } from "node:path";
 export const LEDGER_ROW_LIMIT_DEFAULT = 20000;
 
 /** Read the checked-in browser memory-ask-engine bundle
- *  (`src/surfaces/memory-ask-browser.bundle.js`) — the real memory-graph answer engine
+ *  (`src/surfaces/web/memory-ask-browser.bundle.js`) — the real memory-graph answer engine
  *  (chat.mjs's factAnswer/factReadBack) the chat dock runs on. Returns `""`,
  *  never throws, if the bundle hasn't been built — the page then renders with
  *  an honest "chat unavailable" note instead of a dock. */
 export async function readMemoryAskBundle() {
   try {
     const here = dirname(fileURLToPath(import.meta.url));
-    return await readFile(join(here, "..", "surfaces", "memory-ask-browser.bundle.js"), "utf8");
+    return await readFile(join(here, "..", "surfaces", "web", "memory-ask-browser.bundle.js"), "utf8");
   } catch {
     return "";
   }
