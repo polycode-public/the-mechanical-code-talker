@@ -89,7 +89,7 @@
     }
   });
 
-  // src/prose.mjs
+  // src/domain/prose.mjs
   function splitIdentifierWords(raw) {
     if (!raw) return [];
     let s = String(raw).replace(/\.[A-Za-z0-9]+$/, "");
@@ -122,7 +122,7 @@
   }
   var STOPWORDS, MAX_TOKEN_LEN, MAX_TOKENS_PER_DOC;
   var init_prose = __esm({
-    "src/prose.mjs"() {
+    "src/domain/prose.mjs"() {
       STOPWORDS = new Set(
         "a an and or but the of to in on at for with from by as is are was were be been being it its this that these those i you he she they we me my your our do does did not no yes if then else than so such can will would should could may might about into over under out up down off again more most some any all what which who whom whose when where why how".split(/\s+/)
       );
@@ -197,7 +197,7 @@
     }
   });
 
-  // src/memory/trust.mjs
+  // src/domain/memory/trust.mjs
   function parseChatTagRest(rest) {
     const at = rest.indexOf("@");
     const beforeAt = at >= 0 ? rest.slice(0, at) : rest;
@@ -280,7 +280,7 @@
   }
   var TRUST_SCORE_PROP, TRUST_INPUTS_PROP, CREATED_AT_PROP, UPDATED_AT_PROP, SOURCE_PRIOR, RECENCY_HALF_LIFE_MS, RECENCY_FLOOR, SOURCE_RELIABILITY_MIN, SOURCE_RELIABILITY_MAX, SOURCE_RELIABILITY_NEUTRAL, round, sourceTypeOf, RELIABILITY_CONFIDENCE_PSEUDOCOUNT;
   var init_trust = __esm({
-    "src/memory/trust.mjs"() {
+    "src/domain/memory/trust.mjs"() {
       TRUST_SCORE_PROP = "mgx:trustScore";
       TRUST_INPUTS_PROP = "mgx:trustInputs";
       CREATED_AT_PROP = "mgx:createdAt";
@@ -306,7 +306,7 @@
     }
   });
 
-  // src/codegraph.mjs
+  // src/domain/codegraph.mjs
   function relationKind(group) {
     const prop = String(group?.prop || "").toLowerCase();
     if (PROP_KIND[prop]) return PROP_KIND[prop];
@@ -399,7 +399,7 @@
   }
   var PROP_KIND, HISTORY_CAP;
   var init_codegraph = __esm({
-    "src/codegraph.mjs"() {
+    "src/domain/codegraph.mjs"() {
       init_prose();
       init_embed();
       init_trust();
@@ -440,7 +440,7 @@
     }
   });
 
-  // src/ask-vocab.mjs
+  // src/domain/ask-vocab.mjs
   function stripTrailingScopeFiller(text) {
     return text.replace(TRAILING_SCOPE_FILLER_RE, "").trim();
   }
@@ -456,7 +456,7 @@
   }
   var INHERITS_REVERSE_VERB_LIST, RELATIONS, INHERITS_REVERSE_VERBS, WHERE_MARKERS, MENTION_MARKERS, TRAILING_SCOPE_FILLER, TRAILING_SCOPE_FILLER_RE, TRAILING_DISCOURSE_TAG, TRAILING_DISCOURSE_TAG_RE, TRAILING_DISCOURSE_CLAUSE, TRAILING_DISCOURSE_CLAUSE_RE, VERB_TO_KIND, NON_REVERSE_VERB, ARTICLE_RELATION_CONTINUATIONS, ENTITY_TO_TYPE, MODIFIER_TO_KIND, PASSIVE_PARTICIPLE_TO_KIND, CONTRACTIONS, MISSPELLINGS, WRONG_WORDS, G_DROP, FILLER_WORDS, CONTEXT_PRONOUNS, NEGATION_FRAMES, COMMIT_CONTENT_FRAMES, META_MEANING_VERBS, RELATIVE_PRONOUNS, PLACEHOLDER_NOUNS, BOOLEAN_CONNECTIVES, QUALIFIERS, AGGREGATE_TRIGGERS, LIST_TRIGGERS, SUPERLATIVE_EXTREMES, EDGE_NOUN_TO_METRIC, METRIC_IMPLIES_ENTITY, ANAPHORA_TRIGGERS, MEMBERSHIP_KINDS, CASCADE_NOISE, CASCADE_SYNONYMS, HELP_TRIGGERS;
   var init_ask_vocab = __esm({
-    "src/ask-vocab.mjs"() {
+    "src/domain/ask-vocab.mjs"() {
       INHERITS_REVERSE_VERB_LIST = [
         "is a superclass of",
         "are a superclass of",
@@ -1204,7 +1204,7 @@
     }
   });
 
-  // src/interpret/normalize.mjs
+  // src/domain/interpret/normalize.mjs
   function escapeRegex(s) {
     return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
@@ -1334,7 +1334,7 @@
   }
   var tableRe, CONTRACTION_RE, correctionRe, MISSPELLING_RE, WRONG_WORD_RE, W_SLASH_RE, FOR_DIGIT_THANKS_RE, FOR_DIGIT_EXAMPLE_RE, KIND_NOUN_ANAPHORA_RE, VERB_ALTERNATION, FILLER_RE, RELATION_VERB_RE, INTERROGATIVE_LEAD_RE, LISTING_TAIL_KINDS, BARE_KIND_RE, isListingRemainder, GREETING_PREAMBLE_RE, THANKS_PREAMBLE_RE, ACK_PREAMBLE_RE, BROWSING_PREAMBLE_RE, HEDGE_ADVERB_PREAMBLE_RE, TROUBLE_ASIDE_RE, MODAL_WRAPPER_RE, EXPLAIN_WRAPPER_RE, TELL_ME_WRAPPER_RE, KNOW_WRAPPER_RE, WANT_KNOW_WRAPPER_RE, EMBEDDED_WHATIS_RE, EMBEDDED_MEANS_RE, SHOW_GIVE_ME_RE, LEADING_CONNECTIVE_RE, QUESTION_AUX_LEAD_RE, TOPIC_SWITCH_PREAMBLE_RE, SUBORDINATION_FRAMES_RE, SELF_CORRECTION_RE, CONDITIONAL_VERB_GERUND, CONDITIONAL_KIND_PLURAL, CONDITIONAL_QUALIFIER_SRC, CONDITIONAL_QUALIFIER_RE, COUNTERFACTUAL_RE, PHRASING_FRAMES, NEGATION_SET_RE, STOPWORDS2, splitWords, wordsOf;
   var init_normalize = __esm({
-    "src/interpret/normalize.mjs"() {
+    "src/domain/interpret/normalize.mjs"() {
       init_ask_vocab();
       tableRe = (table) => new RegExp(
         "\\b(" + Object.keys(table).sort((a, b) => b.length - a.length).map(escapeRegex).join("|") + ")\\b",
@@ -1573,7 +1573,7 @@
     }
   });
 
-  // src/interpret/fuzzy.mjs
+  // src/domain/interpret/fuzzy.mjs
   function editDistance(a, b, max) {
     if (a === b) return 0;
     if (Math.abs(a.length - b.length) > max) return max + 1;
@@ -1617,7 +1617,7 @@
   }
   var fuzzyBound, VOCAB_WORDS, FUZZY_TARGET_WORDS;
   var init_fuzzy = __esm({
-    "src/interpret/fuzzy.mjs"() {
+    "src/domain/interpret/fuzzy.mjs"() {
       init_ask_vocab();
       init_normalize();
       fuzzyBound = (s) => s.length <= 5 ? 1 : 2;
@@ -1630,7 +1630,7 @@
     }
   });
 
-  // src/interpret/strategies/grammar.mjs
+  // src/domain/interpret/strategies/grammar.mjs
   function parseAnchored(text) {
     for (const t of TEMPLATES) {
       const m = text.match(t.re);
@@ -1643,7 +1643,7 @@
   }
   var VERB_ALT, ENTITY_ALT, MODIFIER_ALT, META_ALT, TEMPLATES, grammarStrategy;
   var init_grammar = __esm({
-    "src/interpret/strategies/grammar.mjs"() {
+    "src/domain/interpret/strategies/grammar.mjs"() {
       init_ask_vocab();
       init_normalize();
       VERB_ALT = Object.keys(VERB_TO_KIND).sort((a, b) => b.length - a.length).map(escapeRegex).join("|");
@@ -1772,7 +1772,7 @@
     }
   });
 
-  // src/interpret/strategies/keywords.mjs
+  // src/domain/interpret/strategies/keywords.mjs
   function findPhrase(lcWords, table, consumed = null) {
     const phrases = Object.keys(table).sort((a, b) => b.split(" ").length - a.split(" ").length);
     for (const p of phrases) {
@@ -1918,7 +1918,7 @@
   }
   var PASSIVE_AUX, WH_WORDS, PLACEHOLDER_SET, keywordSpotStrategy;
   var init_keywords = __esm({
-    "src/interpret/strategies/keywords.mjs"() {
+    "src/domain/interpret/strategies/keywords.mjs"() {
       init_ask_vocab();
       init_normalize();
       init_fuzzy();
@@ -1936,7 +1936,7 @@
     }
   });
 
-  // src/interpret/strategies/noise-strip.mjs
+  // src/domain/interpret/strategies/noise-strip.mjs
   function maybeVerbNoiseWords(words, kept, nlp) {
     if (!nlp || typeof nlp.posTags !== "function" || !kept.length) return [];
     const keptSet = new Set(kept.map((w) => w.toLowerCase()));
@@ -1970,7 +1970,7 @@
   }
   var KEEP, CURATED_NOISE, noiseStripStrategy;
   var init_noise_strip = __esm({
-    "src/interpret/strategies/noise-strip.mjs"() {
+    "src/domain/interpret/strategies/noise-strip.mjs"() {
       init_ask_vocab();
       init_normalize();
       init_grammar();
@@ -2035,7 +2035,7 @@
     }
   });
 
-  // src/interpret/merge.mjs
+  // src/domain/interpret/merge.mjs
   function sameParse(p, q) {
     if (p.shape !== q.shape || p.kind !== q.kind) return false;
     if (p.shape === "ask") return cmpTerm(p.subject) === cmpTerm(q.subject) && cmpTerm(p.object) === cmpTerm(q.object);
@@ -2103,7 +2103,7 @@
   }
   var DEFAULT_CONFIDENCE, cmpTerm, LEADING_DET_RE, detCount, APPROXIMATE_VIAS, isApproximate;
   var init_merge = __esm({
-    "src/interpret/merge.mjs"() {
+    "src/domain/interpret/merge.mjs"() {
       DEFAULT_CONFIDENCE = 0.5;
       cmpTerm = (s) => String(s || "").trim().toLowerCase().replace(/\s+/g, " ").replace(/^(?:the|a|an)\s+/, "").replace(/^commit\s+(?=[0-9a-f]{7,40}$)/, "");
       LEADING_DET_RE = /^\s*(?:the|a|an)\s+/i;
@@ -2113,7 +2113,7 @@
     }
   });
 
-  // src/interpret/nlp-registry.mjs
+  // src/domain/interpret/nlp-registry.mjs
   function setDefaultNlpAdapter(factory) {
     defaultAdapterFactory = factory;
   }
@@ -2122,12 +2122,12 @@
   }
   var defaultAdapterFactory;
   var init_nlp_registry = __esm({
-    "src/interpret/nlp-registry.mjs"() {
+    "src/domain/interpret/nlp-registry.mjs"() {
       defaultAdapterFactory = null;
     }
   });
 
-  // src/interpret/pipeline.mjs
+  // src/domain/interpret/pipeline.mjs
   function runStrategiesSync(text, ctx = {}, strategies = STRATEGIES) {
     const results = [];
     for (const s of strategies) {
@@ -2141,7 +2141,7 @@
   }
   var OPTIONAL_STRATEGIES, STRATEGIES;
   var init_pipeline = __esm({
-    "src/interpret/pipeline.mjs"() {
+    "src/domain/interpret/pipeline.mjs"() {
       init_normalize();
       init_grammar();
       init_keywords();
@@ -2167,7 +2167,7 @@
     }
   });
 
-  // src/ask.mjs
+  // src/domain/ask.mjs
   var ask_exports = {};
   __export(ask_exports, {
     applyNegationFrames: () => applyNegationFrames,
@@ -4851,7 +4851,7 @@ ${lines.join("\n")}`;
   }
   var askEdgesOfKindCache, SYMBOL_GRAIN_SIBLING, FINE_ENTITY_TYPES, FINE_CLASS_SIBLING, KIND_UNIONS, kindsFor, OVERFLOW_CAP, PLURAL_FORMS, REVERSE_MISS_VERB, LEADING_RELATION_VERB_RE, FROZEN_META_AMBIGUOUS_TERMS, MAX_COMPOSE_DEPTH, NEST_SENTINEL, PRED_LEAD_SKIP, FRAME_WORDS, COPULA_WORDS, entityNoun, isGerundVerb, FWD_NEG_FRAME, PLURAL_ANAPHORA_OBJECT, TEMPORAL_AUX, TEMPORAL_TAIL, TEMPORAL_TRAIL_FILLER, TEMPORAL_DET, COMMIT_FILTER_OPS, ANAPHORA_NAME_TOKEN_RE, AGG_TAIL_FILLER, LIST_SKIP, LIST_TRIGGERS_SORTED, LISTABLE_KINDS, SCOPE_PREPOSITIONS, FIND_LINKERS, RECENT_COMMIT_LEAD, qualCache, META_FALLBACK_CLASSES, inheritsApplicableCache, FIND_TIER, DEGREE_KINDS, COMMIT_FILTER_DATE_RE, compositeList, LEADING_ARTICLE_RE, TRAILING_GRAIN_WORD_RE, ENTRY_POINT_QUERY_RE, ENTRY_POINT_BASENAMES, TEST_FIXTURE_PATH_SEGMENTS, moduleStemOf, isTestFixturePath, TRANSITIVE_MAX_DEPTH, CONTENT_VOCAB, STRUCTURAL_WORDS, CASCADE_NOISE_SET, NOISE_OR_SCAFFOLD, TRIGGER_FUZZY_WORDS, CASCADE_FUZZY_TARGETS, LAST_COMMIT_PHRASE_RE, BARE_WHEN_COMMIT_RE, DYNAMIC_LIST_TRIGGER_RE, DYNAMIC_COUNT_TRIGGER_RE, DYNAMIC_TAIL_OK_RE, BARE_META_WHATIS_RE, WHATIS_FOR_FALLBACK_RE;
   var init_ask = __esm({
-    "src/ask.mjs"() {
+    "src/domain/ask.mjs"() {
       init_codegraph();
       init_ask_vocab();
       init_normalize();
@@ -5296,7 +5296,7 @@ ${lines.join("\n")}`;
     }
   });
 
-  // src/hash.mjs
+  // src/domain/hash.mjs
   function fnv1a32(str) {
     let h = 2166136261;
     for (let i = 0; i < str.length; i += 1) {
@@ -5321,7 +5321,7 @@ ${lines.join("\n")}`;
   }
   var SHA256_K, TEXT_CAP, normText, factIdFor;
   var init_hash = __esm({
-    "src/hash.mjs"() {
+    "src/domain/hash.mjs"() {
       SHA256_K = new Uint32Array([
         1116352408,
         1899447441,
@@ -5394,7 +5394,7 @@ ${lines.join("\n")}`;
     }
   });
 
-  // src/memory/shacl.mjs
+  // src/domain/memory/shacl.mjs
   function attrValue(ind, prop) {
     const a = (ind?.attributes || []).find((x) => x?.prop === prop);
     return a ? String(a.value ?? "") : void 0;
@@ -5439,7 +5439,7 @@ ${lines.join("\n")}`;
   }
   var MEMORY_CLASSES, RULE_KINDS, RULE_SLOT_PROPS, nonEmpty;
   var init_shacl = __esm({
-    "src/memory/shacl.mjs"() {
+    "src/domain/memory/shacl.mjs"() {
       MEMORY_CLASSES = /* @__PURE__ */ new Set(["Utterance", "Fact", "Session", "Source", "Rule"]);
       RULE_KINDS = /* @__PURE__ */ new Set([
         "compose2",
@@ -6728,7 +6728,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
           ["objectRole", "mgx:ruleActionEffectObject"]
         ],
         // "the <left> may not be with the <right> without the <guard>" — each slot
-        // names a class whose sole member src/domain.mjs resolves at compile time.
+        // names a class whose sole member src/domain/domain.mjs resolves at compile time.
         [RULE_KIND_ACTION_CONSTRAINT]: [
           ["left", "mgx:ruleActionConstraintLeft"],
           ["right", "mgx:ruleActionConstraintRight"],
@@ -6743,10 +6743,10 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     }
   });
 
-  // adapter-stub-adapters/ask-nlp.mjs:./adapters/ask-nlp.mjs
+  // adapter-stub-ask-nlp.mjs:./adapters/ask-nlp.mjs
   var nlpAdapter;
   var init_ask_nlp = __esm({
-    "adapter-stub-adapters/ask-nlp.mjs:./adapters/ask-nlp.mjs"() {
+    "adapter-stub-ask-nlp.mjs:./adapters/ask-nlp.mjs"() {
       nlpAdapter = void 0;
     }
   });
@@ -7160,7 +7160,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     }
   });
 
-  // src/syllogise.mjs
+  // src/domain/syllogise.mjs
   var syllogise_exports = {};
   __export(syllogise_exports, {
     CARDINALITY_RULE_CONFIDENCE: () => CARDINALITY_RULE_CONFIDENCE,
@@ -7908,7 +7908,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   }
   var SUBCLASS_PREDICATE, SYLLOGISE_RULE, ENTAILED_PROVENANCE, TYPE_PREDICATE, CAX_SCO_RULE, ENTAILED_TYPE_PROVENANCE, DISJOINT_PREDICATE, CAX_DW_RULE, ENTAILED_DISJOINT_PROVENANCE, CAX_DW_RULE_CONFIDENCE, ON_PROPERTY_PREDICATE, SOME_VALUES_FROM_PREDICATE, CLS_SVF1_RULE, ENTAILED_SVF1_PROVENANCE, CLS_SVF1_RULE_CONFIDENCE, SEP, isSubClassOf, isType, isDisjoint, isOnProperty, isSomeValuesFrom, isOnClass, RESERVED_PREDICATES, HAS_PROPERTY_KEY, CARDINALITY_KIND_OF, ON_CLASS_PREDICATE, SCM_SVF_RULE, ENTAILED_SCM_SVF_PROVENANCE, SCM_SVF_RULE_CONFIDENCE, SCM_CARD_RULE, CARDINALITY_RULE_CONFIDENCE, CAX_MAXC0_RULE, CAX_MAXC0_RULE_CONFIDENCE;
   var init_syllogise = __esm({
-    "src/syllogise.mjs"() {
+    "src/domain/syllogise.mjs"() {
       init_hash();
       SUBCLASS_PREDICATE = "rdfs:subClassOf";
       SYLLOGISE_RULE = "subClassOf";
@@ -7953,7 +7953,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     }
   });
 
-  // src/planning.mjs
+  // src/domain/planning.mjs
   var planning_exports = {};
   __export(planning_exports, {
     findActionPath: () => findActionPath,
@@ -8015,7 +8015,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     return results;
   }
   var init_planning = __esm({
-    "src/planning.mjs"() {
+    "src/domain/planning.mjs"() {
     }
   });
 
@@ -8039,14 +8039,14 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   init_core();
   init_nlp_registry();
 
-  // adapter-stub-strategies/constructions.mjs:./interpret/strategies/constructions.mjs
+  // adapter-stub-strategies/constructions.mjs:./domain/interpret/strategies/constructions.mjs
   var setConstructionBanks = () => {
   };
 
   // src/server.mjs
   init_ask_nlp();
 
-  // adapter-stub-adapters/corpus/construction-banks.mjs:./adapters/corpus/construction-banks.mjs
+  // adapter-stub-corpus/construction-banks.mjs:./adapters/corpus/construction-banks.mjs
   var readConstructionFiles = () => ({ relations: [], constructions: [] });
 
   // src/server.mjs
@@ -8122,7 +8122,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   // src/chat.mjs
   init_templates();
 
-  // src/memory/bias.mjs
+  // src/domain/memory/bias.mjs
   var CORPUS_SOURCE_RE = /^src:corpus:(.+)$/;
   function biasForSourceId(sourceId, biasByBundle = {}) {
     const m = CORPUS_SOURCE_RE.exec(String(sourceId || ""));
@@ -8153,7 +8153,6 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   init_nlp_registry();
   init_ask_nlp();
   init_fuzzy();
-  init_answer_variants();
 
   // src/services/chat-session.mjs
   init_node_path();

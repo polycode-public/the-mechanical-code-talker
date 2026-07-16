@@ -13,7 +13,7 @@
 // persona clumps (PLAN_SEED.md §3) — never the final committed files. A human
 // (or an agent acting as one) reviews the worksheet and hand-picks the actual
 // facts/lexicon words/example sentences that land in corpus/tier2/human.jsonl
-// and src/grammar/lexicon-core.json, exactly the same "curate down from a big
+// and src/domain/grammar/lexicon-core.json, exactly the same "curate down from a big
 // source" discipline SEON and every existing tier2 bundle already follows.
 //
 //   node scripts/extract-persona-sources.mjs [--out <path>]

@@ -52,14 +52,14 @@ docs/references/
 The subset of the OWL 2 and RDF/RDFS vocabularies that tmct's grammar emits and
 its graph memory stores. Canonical sources: the W3C OWL 2 Primer and the RDF
 1.1 / RDF Schema 1.1 Recommendations (W3C Document License).
-**Consumer:** `src/grammar/ace.mjs` (Phase 2), `ontology/tmct-core.ttl`,
+**Consumer:** `src/domain/grammar/ace.mjs` (Phase 2), `ontology/tmct-core.ttl`,
 `src/adapters/memory/core.mjs` (Phase 1).
 
 ## 2. ACE-OWL sub-fragment — [`schemas/ace-owl-fragment.md`](schemas/ace-owl-fragment.md)
 
 The ~8 controlled-English sentence patterns tmct maps to OWL axioms, derived
 from Attempto Controlled English (ACE) and its APE parser's OWL output.
-**Consumer:** `src/grammar/ace.mjs` + `src/grammar/lexicon.mjs` (Phase 2);
+**Consumer:** `src/domain/grammar/ace.mjs` + `src/domain/grammar/lexicon.mjs` (Phase 2);
 the item-8 interpretation pipeline treats a grammar fit as a
 high-confidence strategy win.
 

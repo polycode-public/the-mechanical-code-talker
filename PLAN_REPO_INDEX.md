@@ -21,7 +21,7 @@ Status: RESEARCH / DESIGN — not yet implemented. Nothing in this document is l
 The framing above reads as a four-part port: parsing tools, ontology linkage, query tools, and a
 later re-integration of seonix as a tmct consumer. Tracing the real code in both repos shows three
 of those four are already done. tmct already ships a versioned, OWL-grounded query and interface
-layer (`src/ask.mjs`, `src/codegraph.mjs`, `src/adapters/repository-interface.mjs`), its own ontology already
+layer (`src/domain/ask.mjs`, `src/domain/codegraph.mjs`, `src/adapters/repository-interface.mjs`), its own ontology already
 aligns to seonix's code-entity vocabulary term-for-term (`ontology/tmct-core.ttl`), and seonix
 already depends on tmct as a library and routes its own chat surface through tmct's (confirmed live
 in seonix's `package.json` and `src/chat-shim.mjs`). The one piece that is genuinely, completely
@@ -35,15 +35,15 @@ in tmct and already has zero real callers, and reconcile the docs that predate t
 
 Confirmed by direct read of this repo, not assumed:
 
-- **`src/ask.mjs`** (4,694 lines) — a mechanical, zero-model-call natural-language query engine over
+- **`src/domain/ask.mjs`** (4,694 lines) — a mechanical, zero-model-call natural-language query engine over
   an already-loaded graph. Its own header (`ask.mjs:1-15`) states it compiles free text into a graph
   traversal. It answers "which modules import X" / "what calls Y" style questions today, using an
-  OWL/SEON-shaped predicate vocabulary (`src/ask-vocab.mjs`'s `RELATIONS` table: `imports`, `calls`,
+  OWL/SEON-shaped predicate vocabulary (`src/domain/ask-vocab.mjs`'s `RELATIONS` table: `imports`, `calls`,
   `defines`, `contains`, `inherits`, `tests`, `touches`, each with real verb synonyms). It is browser-
   bundled: `scripts/build-ask-bundle.mjs` esbuild-bundles a narrow entry point
   (`src/ask-browser-entry.mjs`) into `src/ask-browser.bundle.js`, which `src/viz.mjs` inlines into
   `tmct viz`'s "Ask the graph" panel.
-- **`src/codegraph.mjs`** (2,405 lines) — `parseEntities(payload)` (`codegraph.mjs:31-63`) takes an
+- **`src/domain/codegraph.mjs`** (2,405 lines) — `parseEntities(payload)` (`codegraph.mjs:31-63`) takes an
   **already-built** JS object and reshapes it; its own doc comment calls it "pure (no-network, no-fs)
   query logic over the typed `entities` payload that the deterministic indexer writes to
   `<repo>/.tmct/graph.json`." `spiralExpand` and `buildVizNodesAndEdges` are pure in-memory graph
@@ -140,8 +140,8 @@ Read directly from `<sibling-checkout>/seonix` (a full sibling repo):
   `tmct-core.ttl` — it is the same vocabulary tmct's own ontology already `rdfs:seeAlso`-links to.**
   No translation layer is needed; a ported parser needs to emit the `seon:`/`mgx:` prop tokens
   `docs/adapter-contract.md` already documents, which `tmct-core.ttl` already grounds.
-- **seonix's own `src/codegraph.mjs`** is a real, independent duplicate. Its header states: "Ported
-  ≈verbatim from marginalia seon-mcp/src/codegraph.mjs" — the same shared ancestor tmct's own
+- **seonix's own `src/domain/codegraph.mjs`** is a real, independent duplicate. Its header states: "Ported
+  ≈verbatim from marginalia seon-mcp/src/domain/codegraph.mjs" — the same shared ancestor tmct's own
   `codegraph.mjs` was lifted from (`git log`, this repo: `116af35 feat: initial lift of the seonix
   chat surface as @polycode-projects/mct (v0.1.0)`). A diff of the first 100 lines of each shows real
   divergence: seonix's carries `expandGraphPayload` wire-format expansion and `mgx:serves`/
@@ -149,7 +149,7 @@ Read directly from `<sibling-checkout>/seonix` (a full sibling repo):
   does not have; tmct's carries memory-specific `CREATED_AT_PROP`/`UPDATED_AT_PROP` imports seonix's
   does not need. **This is a real, live duplication this plan does not attempt to resolve** — see
   Non-goals.
-- **Query tools** — `src/codegraph.mjs`'s `resolveSymbol`/`renderDescribe`/`renderImpact`/
+- **Query tools** — `src/domain/codegraph.mjs`'s `resolveSymbol`/`renderDescribe`/`renderImpact`/
   `renderSearch`/etc., exposed via `bin/cli.mjs`'s `dispatchTool` dispatch and a `seonix ask`
   sub-mode. `src/server.mjs:14-15` documents directly that this NL sub-mode **already calls tmct's
   own `ask` engine**: "`seonix_ask` ... now tmct's ask engine." Query tools are not something to port

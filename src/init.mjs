@@ -141,7 +141,7 @@ backend = ${JSON.stringify(config.memory.backend)}
 # tier2-python, tier2-java, tier2-general) override the shipped defaults; any
 # other name declares a new host-supplied bundle (needs its own "kind").
 # [bias] is a flat bundle-name -> weight table consumed by
-# src/memory/bias.mjs's ranking.
+# src/domain/memory/bias.mjs's ranking.
 ${stringifyToml(extras)}`;
 }
 

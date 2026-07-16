@@ -27,7 +27,7 @@
 //      terminate. Refusing-when-unsure is the correct honest-miss behavior.
 
 import { hallucinationsIn } from "./grade.mjs";
-import { preconditionsOf, parametersOf, effectsOf, PRECOND } from "../src/router/registry.mjs";
+import { preconditionsOf, parametersOf, effectsOf, PRECOND } from "../src/domain/router/registry.mjs";
 
 // The stub is the DEFAULT "agent under test" for the seam described above.
 

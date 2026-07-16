@@ -18,13 +18,13 @@ import assert from "node:assert/strict";
 import { readFile, mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ask } from "../src/ask.mjs";
+import { ask } from "../src/domain/ask.mjs";
 import { runTurn, asBareCommand } from "../src/chat.mjs";
-import { parseEntities } from "../src/codegraph.mjs";
+import { parseEntities } from "../src/domain/codegraph.mjs";
 import { ingestSchemaDocs } from "../src/schema-docs.mjs";
 import { clearCache } from "../src/adapters/source.mjs";
-import { normalizeQuery } from "../src/interpret/normalize.mjs";
-import { stripNoise, noiseStripStrategy } from "../src/interpret/strategies/noise-strip.mjs";
+import { normalizeQuery } from "../src/domain/interpret/normalize.mjs";
+import { stripNoise, noiseStripStrategy } from "../src/domain/interpret/strategies/noise-strip.mjs";
 import { driveTurns } from "./helpers/session.mjs";
 
 const FIXTURE = new URL("./fixtures/entities.fixture.json", import.meta.url);

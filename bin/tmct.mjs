@@ -109,7 +109,7 @@ Usage:
        [--repo <abs>]          query tool calls for a compound or maintenance-goal
        [--graph <path>]        request ("of the modules impacted by X, which are
        [--config <path>]       untested", "what most needs a test") — a real STRIPS/
-       [--tools <a,b,...>]     PDDL planner (src/router/*), never a guessed call.
+       [--tools <a,b,...>]     PDDL planner (src/domain/router/*), never a guessed call.
        [--json]                Prints the grounded step sequence + composed answer,
                                or an honest "no plan found". --tools restricts the
                                declared toolset; --json prints the full loop result.
@@ -252,7 +252,7 @@ async function runCliMode() {
   const { dispatchTool, buildContextBundle } = await import("../src/server.mjs");
   const { loadConfig, DEFAULT_GRAPH_REL } = await import("../src/adapters/config.mjs");
   const source = await import("../src/adapters/source.mjs");
-  const codegraph = await import("../src/codegraph.mjs");
+  const codegraph = await import("../src/domain/codegraph.mjs");
   const { parseEntities, searchModulesRanked } = codegraph;
 
   /** Build a config pointed at a specific repo's artifact (for `cli` sub-commands that
@@ -1073,7 +1073,7 @@ async function main() {
       return Number.isFinite(v) ? v : dflt;
     };
     const { resolveRuntimeConfig } = await import("../src/cli-args.mjs");
-    const { syllogise } = await import("../src/syllogise.mjs");
+    const { syllogise } = await import("../src/domain/syllogise.mjs");
     const { loadMemory, readFactRows, appendFacts } = await import("../src/adapters/memory/core.mjs");
     const { repo } = await resolveRuntimeConfig({ argv: rest });
     const res = await syllogise(repo, {
@@ -1183,7 +1183,7 @@ async function main() {
   }
 
   if (mode === "plan") {
-    // `tmct plan "<request>"` — the capability router (src/router/*), surfaced
+    // `tmct plan "<request>"` — the capability router (src/domain/router/*), surfaced
     // for real: a STRIPS/PDDL-style planner over the SAME read-only graph-query
     // tools chat/serve dispatch. A single-shot request ("who calls X") resolves
     // directly; a compound request ("of the modules impacted by X, which are
@@ -1238,7 +1238,7 @@ async function main() {
       process.exit(2);
     }
     const { repo, config } = await resolveRuntimeConfig({ argv: rest });
-    const { buildCapabilityPlanCtx, runCapabilityPlan, declaredCapabilityNames } = await import("../src/router/drive.mjs");
+    const { buildCapabilityPlanCtx, runCapabilityPlan, declaredCapabilityNames } = await import("../src/domain/router/drive.mjs");
     const { capabilityPlanDeps } = await import("../src/chat.mjs");
     let ctx;
     try {

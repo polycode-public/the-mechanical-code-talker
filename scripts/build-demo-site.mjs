@@ -12,7 +12,7 @@
 // them. Run via `npm run demo:build`, the same script .gitlab-ci.yml's `pages` job
 // calls, whenever you want to serve public/ locally and try the site yourself.
 //
-// The copied engine set is whatever src/ask.mjs's imports actually reach, walked
+// The copied engine set is whatever src/domain/ask.mjs's imports actually reach, walked
 // from the source at build time. The copies keep src/'s directory layout under
 // public/engine/src/, because their own relative imports have to keep resolving.
 
@@ -58,7 +58,7 @@ function engineImportClosure(entry) {
   return [...reached].sort();
 }
 
-const engineFiles = engineImportClosure("ask.mjs");
+const engineFiles = engineImportClosure("domain/ask.mjs");
 for (const rel of engineFiles) {
   mkdirSync(dirname(join(OUT, rel)), { recursive: true });
   cpSync(join(SRC, rel), join(OUT, rel));

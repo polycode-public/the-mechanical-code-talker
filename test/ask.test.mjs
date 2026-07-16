@@ -7,9 +7,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { buildEntities } from "../src/adapters/graph-build.mjs";
-import { parseEntities } from "../src/codegraph.mjs";
+import { parseEntities } from "../src/domain/codegraph.mjs";
 import { ingestSchemaDocs } from "../src/schema-docs.mjs";
-import { parseQuery, resolveObject, traverse, render, ask, rephraseHint, normalizeQuery } from "../src/ask.mjs";
+import { parseQuery, resolveObject, traverse, render, ask, rephraseHint, normalizeQuery } from "../src/domain/ask.mjs";
 
 // Mirrors the operator's own worked example, with an INTERNAL coupling target instead of
 // an external package (log4j-style external imports do not surface as graph edges today —

@@ -5,7 +5,7 @@
 // "wink-eng-lite-web-model" resolve to esm.sh CDN builds pinned to the exact versions
 // package.json depends on).
 //
-// Everything askBrowser() returns is genuinely computed by src/ask.mjs's ask() running
+// Everything askBrowser() returns is genuinely computed by src/domain/ask.mjs's ask() running
 // in the visitor's own browser against public/demo-graph.json (a static copy of
 // examples/mini-webapp/.tmct/graph.json, schema-doc-enriched by scripts/build-demo-
 // graph.mjs) — nothing on this page is precomputed server-side or faked. GitLab Pages
@@ -17,8 +17,8 @@
 // of a static site, not a bug.
 
 import { registerWinkModel } from "./engine/src/adapters/wink-model.mjs";
-import { ask } from "./engine/src/ask.mjs";
-import { parseEntities } from "./engine/src/codegraph.mjs";
+import { ask } from "./engine/src/domain/ask.mjs";
+import { parseEntities } from "./engine/src/domain/codegraph.mjs";
 
 const GRAPH_URL = new URL("./demo-graph.json", import.meta.url);
 
@@ -89,7 +89,7 @@ function bootEngine() {
 }
 
 /** Ask the REAL engine a question. Boots the engine (once) if needed. Returns the same
- *  {content, tmct_ask} envelope src/ask.mjs's ask() returns. */
+ *  {content, tmct_ask} envelope src/domain/ask.mjs's ask() returns. */
 export async function askBrowser(query) {
   const { graph } = await bootEngine();
   return ask(graph, query);

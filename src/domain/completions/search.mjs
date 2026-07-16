@@ -2,7 +2,7 @@
 // and the graph search()/ask() services, asking both sources more widely than a single-answer
 // query. Returns whole-block/whole-result hits only — no sub-block span segmentation.
 
-import { retrieveBlocks } from "../adapters/memory/blocks.mjs";
+import { retrieveBlocks } from "../../adapters/memory/blocks.mjs";
 
 const DEFAULT_BLOCK_K = 8;   // "broad" > chat's narrow single-answer k (typically 3)
 const DEFAULT_GRAPH_LIMIT = 8;

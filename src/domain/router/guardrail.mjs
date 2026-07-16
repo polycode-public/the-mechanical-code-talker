@@ -1,4 +1,4 @@
-// src/router/guardrail.mjs — the guardrail. Validate an
+// src/domain/router/guardrail.mjs — the guardrail. Validate an
 // EXTERNALLY-proposed `tool_use` against the registry's declared preconditions.
 //
 // Proves RESOLVABILITY (the tool is registered/declared, args are well-formed, every

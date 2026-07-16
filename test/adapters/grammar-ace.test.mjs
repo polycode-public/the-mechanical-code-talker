@@ -5,8 +5,8 @@
 // docs/references/schemas/ace-owl-fragment.md's table.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseAce, tokenize } from "../../src/grammar/ace.mjs";
-import { loadLexicon } from "../../src/grammar/lexicon.mjs";
+import { parseAce, tokenize } from "../../src/domain/grammar/ace.mjs";
+import { loadLexicon } from "../../src/domain/grammar/lexicon.mjs";
 
 const triplesOf = (r) => r.triples.map((t) => [t.subject, t.predicate, t.object]);
 

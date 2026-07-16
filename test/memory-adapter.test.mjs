@@ -5,7 +5,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fetchEntities, registerProvider, clearCache, emptyEntities } from "../src/adapters/source.mjs";
-import { parseEntities, resolveSymbol } from "../src/codegraph.mjs";
+import { parseEntities, resolveSymbol } from "../src/domain/codegraph.mjs";
 import { ToolError } from "../src/adapters/config.mjs";
 
 /** A tiny in-memory provider payload in the contract's entities shape. */

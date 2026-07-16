@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 // scripts/generate-answer-variants.mjs — maintainer-only audit for
-// src/answer-variants.json (the wired-in answer-phrasing variety table --
-// see src/answer-variants.mjs for how it's used at render time). Never
+// src/domain/answer-variants.json (the wired-in answer-phrasing variety table --
+// see src/domain/answer-variants.mjs for how it's used at render time). Never
 // imported by src/ or bin/, never run by `npm test`, same discipline as its
 // sibling scripts/generate-template-variants.mjs.
 //
-// src/answer-variants.json is HAND-CURATED, not mechanically generated: its
+// src/domain/answer-variants.json is HAND-CURATED, not mechanically generated: its
 // pools are domain-specific code-graph connector phrases ("defined in",
 // "is dated", "for the full breakdown", ...) that describe a graph relation
 // or a UI pointer, not ordinary prose -- WordNet's own sense-1-is-most-
@@ -31,7 +31,7 @@ import { dirname, join } from "node:path";
 import { synsetsFor } from "./lib/wordnet-synonyms.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const DATA_FILE = join(HERE, "..", "src", "answer-variants.json");
+const DATA_FILE = join(HERE, "..", "src", "domain", "answer-variants.json");
 
 async function main() {
   const data = JSON.parse(await readFile(DATA_FILE, "utf8"));

@@ -4,7 +4,7 @@
 // way retrieveBlocks() fuses relevance/centrality/hub-dampening into one score.
 // splitSentences() is a simple regex splitter.
 
-import { degreeOf, rankBlocks, tokenizeBlock, OVERLAP_MIN } from "../adapters/memory/blocks.mjs";
+import { degreeOf, rankBlocks, tokenizeBlock, OVERLAP_MIN } from "../../adapters/memory/blocks.mjs";
 import { STOPWORDS } from "../prose.mjs";
 
 // Same content-token filter group.mjs applies (not exported, so replicated here).

@@ -1,4 +1,4 @@
-// src/router/drive.mjs — the product-facing drive of the capability router: the
+// src/domain/router/drive.mjs — the product-facing drive of the capability router: the
 // piece that turns a real English request into a real, executed answer over a
 // real repo graph. registry/resolver/planner/guardrail/goal-reasoner/
 // call-validator are all pure, deterministic decision machinery — this module
@@ -158,7 +158,7 @@ const WORLD_GOAL_RE = new RegExp(
 
 /** The taught world-goal lane: recognize "make every disk rest on peg-c",
  *  backward-chain the goal predicate to a REGISTERED taught capability record
- *  (the record src/router/taught.mjs bridged in is the thing consumed), then
+ *  (the record src/domain/router/taught.mjs bridged in is the thing consumed), then
  *  ground the move sequence by pure simulation over the taught rules
  *  (compileDomain + stateFromFacts + compileGoal + findActionPath — all
  *  read-only). Returned calls are NEVER dispatched: taught records carry

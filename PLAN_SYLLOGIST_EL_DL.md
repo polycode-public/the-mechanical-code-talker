@@ -8,7 +8,7 @@ stage is a costed option this document makes buildable, not a recommendation to 
 
 ## Where this sits
 
-`src/syllogise.mjs` today ships seven deterministic kernels, all inside the OWL 2 RL
+`src/domain/syllogise.mjs` today ships seven deterministic kernels, all inside the OWL 2 RL
 fragment: subclass transitivity, type propagation, disjointness "provable no",
 someValuesFrom application and subsumption, cardinality lower bounds, and max-0 denial —
 under budget/focus/screen/trust guards, materializing off the hot path so a query-time
@@ -155,7 +155,7 @@ stages.
 
 ## Costs and risks
 
-- **Size.** Stage EL is comparable to `src/syllogise.mjs` today. Stage DL is the largest
+- **Size.** Stage EL is comparable to `src/domain/syllogise.mjs` today. Stage DL is the largest
   single component since `ask.mjs` — a real engine plus a conformance corpus. That cost
   is the reason for the sequencing note at the top.
 - **Worst-case blowup is a semantics problem, not a perf problem.** SHOIQ is

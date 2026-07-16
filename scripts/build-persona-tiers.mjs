@@ -356,7 +356,7 @@ async function main() {
 
   const { CORPUSES } = await import("../corpus/tier2/generate.mjs");
   const smallLexiconNouns = new Set(CORPUSES.human.lexicon.nouns.map((w) => w.toLowerCase()));
-  const lexPath = fileURLToPath(new URL("../src/grammar/lexicon-core.json", import.meta.url));
+  const lexPath = fileURLToPath(new URL("../src/domain/grammar/lexicon-core.json", import.meta.url));
   const lex = JSON.parse(await readFile(lexPath, "utf8"));
   // Excludes existing ADJECTIVES and VERBS too, not just nouns — a word
   // already declared as an adjective (e.g. "male") must never ALSO become a

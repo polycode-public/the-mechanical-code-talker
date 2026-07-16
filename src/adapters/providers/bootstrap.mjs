@@ -8,7 +8,7 @@
 // This is the other end of the compatibility kit: the provider that has no data
 // must still CONFORM.
 
-import { parseEntities } from "../../codegraph.mjs";
+import { parseEntities } from "../../domain/codegraph.mjs";
 import { emptyEntities } from "../source.mjs";
 import { createGraphService } from "./graph-service.mjs";
 

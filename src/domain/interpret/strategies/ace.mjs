@@ -1,5 +1,5 @@
 // interpret/strategies/ace.mjs — the ACE-OWL controlled-fragment grammar
-// (src/grammar/ace.mjs) wired into the pipeline as an additive strategy: its
+// (src/domain/grammar/ace.mjs) wired into the pipeline as an additive strategy: its
 // own class ("ace-fact"), so a clean parse surfaces as an alternate, never
 // displacing a graph-query winner.
 

@@ -1,4 +1,4 @@
-// src/router/resolver.mjs — the resolver. Turn a request
+// src/domain/router/resolver.mjs — the resolver. Turn a request
 // into a SELECTED registry capability with bound arguments, by backward chaining over
 // capabilities-as-facts. Deterministic, no-LLM, glass-box: every choice is provable.
 //
@@ -97,7 +97,7 @@ export function backwardChain(topic) {
 /** Backward-chain a WORLD goal — a state predicate like "rest-on" that a
  *  taught action's effect establishes — to the registered record whose
  *  add-list carries the matching taught:world-effect (the bridge
- *  src/router/taught.mjs registers). Pure over the registry; null when no
+ *  src/domain/router/taught.mjs registers). Pure over the registry; null when no
  *  taught record achieves the predicate. The sibling of backwardChain above,
  *  which only ever matches epistemic `knows` effects. */
 export function backwardChainWorld(predicate) {

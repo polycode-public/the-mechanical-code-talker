@@ -1,5 +1,5 @@
 import { lookupByProseTokens, proseLayerHits, splitIdentifierWords } from "./prose.mjs";
-import { cosine } from "./adapters/embed.mjs";
+import { cosine } from "../adapters/embed.mjs";
 import { CREATED_AT_PROP, UPDATED_AT_PROP, provenanceTagToSource } from "./memory/trust.mjs";
 
 // Pure (no-network, no-fs) query logic over the typed `entities` payload that the

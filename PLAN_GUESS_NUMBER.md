@@ -2,7 +2,7 @@
 
 Status: RESEARCH / DESIGN — not yet implemented. No guesser, thinker, or bisection code exists in
 `src/`. Since this doc was written, the general planner shipped underneath it: `findActionPath` and
-`findReachableSet` in `src/planning.mjs`, the goal reasoner in `src/router/goal-reasoner.mjs`,
+`findReachableSet` in `src/domain/planning.mjs`, the goal reasoner in `src/domain/router/goal-reasoner.mjs`,
 taught action families (the four `RULE_KIND_ACTION_*` kinds in `src/adapters/memory/core.mjs`), the `/plan`
 chat command and `tmct plan` CLI mode, and the `planState` session slot in `src/chat.mjs`. Hanoi
 (`archive/PLAN_HANOI.md`) and river-crossing (`test/corpus/planning.jsonl`) validate that planner.

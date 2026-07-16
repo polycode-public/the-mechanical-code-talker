@@ -7,8 +7,8 @@ import { groupHits } from "./group.mjs";
 import { rankSentences } from "./rank.mjs";
 import { inferRelations } from "./infer.mjs";
 import { pruneCompletion } from "./prune.mjs";
-import { loadMemory } from "../adapters/memory/core.mjs";
-import { finish, grammarRules } from "../finish.mjs";
+import { loadMemory } from "../../adapters/memory/core.mjs";
+import { finish, grammarRules } from "../../finish.mjs";
 
 /** grammarRules() with sentence-capitalisation force-enabled (disabled in live chat only to
  *  protect single-answer lowercase-opener goldens, which don't apply to a multi-sentence
@@ -36,7 +36,7 @@ const DEFAULT_MAX_SENTENCES_PER_GROUP = 3; // see prune.mjs's own file header fo
  * @param {string} [opts.query]  the query rankSentences()/pruning focus on; defaults to `prompt`;
  *   pass `null` for self-weighted (LexRank-style) ranking instead
  * @param {number} [opts.maxSentencesPerGroup=3]  prune.mjs's top-K-per-group cutoff
- * @param {object} [opts.graph]  optional loaded graph (src/codegraph.mjs parseEntities() shape)
+ * @param {object} [opts.graph]  optional loaded graph (src/domain/codegraph.mjs parseEntities() shape)
  *   handed to finish()'s maskSegments to protect known entity labels during the grammar pass
  * @returns {Promise<{
  *   text: string,

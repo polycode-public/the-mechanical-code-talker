@@ -40,7 +40,7 @@ the authoritative count, the same convention `chatbench/GRADED.md` uses for chat
 `infbench/cases.jsonl`; it is a build artifact, not a fixture.
 
 **Step 2 — RUN.** Run `node infbench/run.mjs`. This replays every case through the two drive points
-(the pure kernel prover, `src/syllogise.mjs`; and the chat surface via `runChat()`), grades
+(the pure kernel prover, `src/domain/syllogise.mjs`; and the chat surface via `runChat()`), grades
 deterministically (no LLM anywhere in this loop — INFBENCH has no judge tier that decides truth),
 writes `infbench/results/raw/run-<version>[_00N]/product.jsonl` (the out dir is keyed on `--stamp`;
 a same-version re-run passes a `_00N`-suffixed stamp so the prior run's raw output survives), and
@@ -113,7 +113,7 @@ When Step 5 says "build," pick the **next engine capability that unlocks the cur
 band** — do not skip ahead to a capability for a higher band while a lower gate is still open; the
 ladder rule (§2) means a later band's rules can't be honestly measured until the earlier gate
 clears anyway. The originally staged capabilities (the `infbench/` harness itself; `cax-sco` type
-propagation in `src/syllogise.mjs`; the bounded live proof-chain chase in `src/chat.mjs`; `cax-dw`
+propagation in `src/domain/syllogise.mjs`; the bounded live proof-chain chase in `src/chat.mjs`; `cax-dw`
 disjointness; the forward-chainer; the consistency checker) are all shipped, so a build cycle today
 means a NEW band or rule the ladder grows to cover — **re-verify current ladder status from the
 latest `BENCHMARK_INFERENCE_<version>.md` before picking; don't trust any doc's snapshot as

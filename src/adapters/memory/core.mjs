@@ -8,22 +8,22 @@
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { proseTokensFor, buildProseIndex } from "./prose-tokens.mjs";
-import { fnv1aHex, normText, normFactTerm, factIdFor, factIdForTriple } from "../../hash.mjs";
+import { fnv1aHex, normText, normFactTerm, factIdFor, factIdForTriple } from "../../domain/hash.mjs";
 
 // Fact identity (normalization + id derivation) lives in hash.mjs — the one
 // content-address contract — and is re-exported here so store consumers keep
 // a single import site for read/write plus identity.
-export { normFactTerm, factIdForTriple } from "../../hash.mjs";
+export { normFactTerm, factIdForTriple } from "../../domain/hash.mjs";
 import {
   computeTrust, sessionReliabilityFrom, TRUST_SCORE_PROP, TRUST_INPUTS_PROP,
   CREATED_AT_PROP, UPDATED_AT_PROP, provenanceTagToSource,
-} from "../../memory/trust.mjs";
+} from "../../domain/memory/trust.mjs";
 
 // The createdAt/updatedAt vocabulary and the provenance-tag Source parser live
 // with the trust layer (they are its inputs); re-exported here so store
 // consumers keep one import site.
-export { CREATED_AT_PROP, UPDATED_AT_PROP, provenanceTagToSource } from "../../memory/trust.mjs";
-import { assertIndividualValid } from "../../memory/shacl.mjs";
+export { CREATED_AT_PROP, UPDATED_AT_PROP, provenanceTagToSource } from "../../domain/memory/trust.mjs";
+import { assertIndividualValid } from "../../domain/memory/shacl.mjs";
 
 export const MEMORY_DIR_REL = join(".tmct", "memory");
 export const MEMORY_GRAPH_REL = join(MEMORY_DIR_REL, "graph.json");
@@ -1142,7 +1142,7 @@ const RULE_SLOT_SPEC = {
     ["objectRole", "mgx:ruleActionEffectObject"],
   ],
   // "the <left> may not be with the <right> without the <guard>" — each slot
-  // names a class whose sole member src/domain.mjs resolves at compile time.
+  // names a class whose sole member src/domain/domain.mjs resolves at compile time.
   [RULE_KIND_ACTION_CONSTRAINT]: [
     ["left", "mgx:ruleActionConstraintLeft"], ["right", "mgx:ruleActionConstraintRight"],
     ["guard", "mgx:ruleActionConstraintGuard"],
@@ -1226,7 +1226,7 @@ export function findRulesByName(memory, name) {
 }
 
 /** Every taught Rule as a plain row {id, name, kind, slots, provenance} —
- *  the sibling of readFactRows, so consumers (src/domain.mjs) never touch
+ *  the sibling of readFactRows, so consumers (src/domain/domain.mjs) never touch
  *  raw individuals. Rules whose kind has no RULE_SLOT_SPEC entry are
  *  skipped (unreadable without a slot contract). Sorted by name, kind, id. */
 export function readRuleRows(memory) {

@@ -11,7 +11,7 @@
 // scm-svf1 now ALSO joined syllogise()'s batch pass (a genuine, persisted Fact
 // — see test/syllogise.test.mjs's own "syllogise: scm-svf1" tests for that
 // half). Cardinality monotonicity and cax-maxc0 remain genuinely LIVE-CHASE
-// ONLY (src/syllogise.mjs's own CARDINALITY_RULE_CONFIDENCE/
+// ONLY (src/domain/syllogise.mjs's own CARDINALITY_RULE_CONFIDENCE/
 // CAX_MAXC0_RULE_CONFIDENCE doc comments explain why: neither ever produces an
 // enumerable Fact for trust.mjs's entailed hook to attach to) — so THEIR
 // premise-derived trust is computed live, in chat.mjs, via the shared
@@ -26,7 +26,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runTurn } from "../../src/chat.mjs";
 import { appendFact, loadMemory, readFactRows } from "../../src/adapters/memory/core.mjs";
-import { CARDINALITY_RULE_CONFIDENCE, CAX_MAXC0_RULE_CONFIDENCE, SCM_SVF_RULE_CONFIDENCE } from "../../src/syllogise.mjs";
+import { CARDINALITY_RULE_CONFIDENCE, CAX_MAXC0_RULE_CONFIDENCE, SCM_SVF_RULE_CONFIDENCE } from "../../src/domain/syllogise.mjs";
 
 const CONFIG = {};
 const mem = () => mkdtemp(join(tmpdir(), "tmct-trust-live-"));

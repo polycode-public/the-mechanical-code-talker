@@ -1,6 +1,6 @@
 // demo-ui.mjs — drives the live chat-demo widget on the tmct GitLab Pages site.
 // Pure vanilla JS/DOM, no framework. Delegates all actual answering to
-// tmct-browser.mjs's askBrowser() — the REAL src/ask.mjs engine running in this
+// tmct-browser.mjs's askBrowser() — the REAL src/domain/ask.mjs engine running in this
 // browser tab — and to demo-templates.mjs for the closed, pre-verified question set.
 //
 // URL params (see index.html's inline note + the implementation report):
@@ -25,7 +25,7 @@ const primedQuestion = params.get("q");
 // The first two turns are flat single-question lookups; the last three are one
 // continuous exchange showing tmct carry a pronoun ("it") across turns — ask about
 // Task, then ask "what calls it?" and "where is it defined?" without repeating the
-// name. Verified turn by turn with src/ask.mjs's real ask(graph, query, {contextId,
+// name. Verified turn by turn with src/domain/ask.mjs's real ask(graph, query, {contextId,
 // prev}), threading contextId/prev exactly as src/chat.mjs's runAsk does: `prev` is
 // each turn's full match-id set, and the focus (contextId) only moves when the
 // question names a new entity outright — a pronoun object resolves against the

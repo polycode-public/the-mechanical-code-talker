@@ -1,4 +1,4 @@
-// src/router/planner.mjs — the planner. Compose a bounded, ordered plan of tool calls for
+// src/domain/router/planner.mjs — the planner. Compose a bounded, ordered plan of tool calls for
 // a multi-step request, over the SAME operators resolver.mjs resolves single-shot. HTN
 // decomposition into leaf sub-goals (each resolved by resolver.mjs),
 // with a POP causal-link proof chain (a threaded step's producer is the prior step; an

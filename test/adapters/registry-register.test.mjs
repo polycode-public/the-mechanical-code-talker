@@ -9,9 +9,9 @@ import { join } from "node:path";
 import {
   REGISTRY, capabilities, capabilityByName, isCapability,
   registerCapability, PRECOND, VOCAB,
-} from "../../src/router/registry.mjs";
-import { guard } from "../../src/router/guardrail.mjs";
-import { actionFamilies, capabilityFromActionRules, registerTaughtActions } from "../../src/router/taught.mjs";
+} from "../../src/domain/router/registry.mjs";
+import { guard } from "../../src/domain/router/guardrail.mjs";
+import { actionFamilies, capabilityFromActionRules, registerTaughtActions } from "../../src/domain/router/taught.mjs";
 import { runTurn } from "../../src/chat.mjs";
 import { loadMemory, readRuleRows } from "../../src/adapters/memory/core.mjs";
 import { clearCache } from "../../src/adapters/source.mjs";

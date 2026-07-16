@@ -6,7 +6,7 @@
 // in-memory graph (construction only — no fixture file, no disk).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { edgesOfKind } from "../src/codegraph.mjs";
+import { edgesOfKind } from "../src/domain/codegraph.mjs";
 
 test("edgesOfKind survives a single relation group of ~200k edges (no spread stack overflow)", () => {
   const N = 200_000;

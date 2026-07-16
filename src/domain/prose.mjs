@@ -4,7 +4,7 @@
 // `prose_tokens` attribute (self-describing) and inverted into
 // `entities.proseIndex` (word -> ids) for O(1) lookup.
 
-// Exported so src/completions/group.mjs can filter splitIdentifierWords'
+// Exported so src/domain/completions/group.mjs can filter splitIdentifierWords'
 // output (which doesn't apply this list itself) down to real content words.
 export const STOPWORDS = new Set(
   ("a an and or but the of to in on at for with from by as is are was were be been being " +

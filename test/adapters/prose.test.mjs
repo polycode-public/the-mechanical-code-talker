@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import {
   splitIdentifierWords, tokenizeProse, proseTokensFor,
   attachProseTokens, buildProseIndex, lookupByProseTokens,
-} from "../../src/prose.mjs";
+} from "../../src/domain/prose.mjs";
 
 test("splitIdentifierWords: camelCase, sentence-fragment names", () => {
   assert.deepEqual(

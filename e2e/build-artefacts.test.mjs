@@ -25,9 +25,9 @@ test("demo:build produces the Pages demo artefacts", () => {
   assert.ok(sizeOf("public/demo-graph.json") > 10_000, "demo-graph.json is non-trivial");
   assert.ok(sizeOf("public/ledger.html") > 100_000, "ledger.html carries the inlined bundle");
   for (const engineFile of [
-    "public/engine/src/ask.mjs",
-    "public/engine/src/interpret/pipeline.mjs",
-    "public/engine/src/grammar/lexicon-core.json",
+    "public/engine/src/domain/ask.mjs",
+    "public/engine/src/domain/interpret/pipeline.mjs",
+    "public/engine/src/domain/grammar/lexicon-core.json",
   ]) {
     assert.ok(sizeOf(engineFile) > 0, `${engineFile} was copied`);
   }

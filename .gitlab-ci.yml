@@ -191,10 +191,10 @@ publish:npm:
 # named `pages` whose artifact is the `public/` directory — the repo already
 # keeps the site there, so this job just hands it over. Main branch only.
 #
-# The page embeds a LIVE, client-side chat demo that runs the real src/ask.mjs query
+# The page embeds a LIVE, client-side chat demo that runs the real src/domain/ask.mjs query
 # engine in the visitor's browser (no backend — GitLab Pages is static). src/ stays the
 # single source of truth: this job COPIES the small, already browser-clean transitive
-# import set src/ask.mjs actually needs (verified: zero Node built-ins reachable at
+# import set src/domain/ask.mjs actually needs (verified: zero Node built-ins reachable at
 # runtime once public/engine-shims/*.mjs stand in for the three still-unconditionally-
 # imported `node:*` specifiers) into public/engine/, unmodified, byte-for-byte — no
 # transpilation, no bundling. It also regenerates public/demo-graph.json from the

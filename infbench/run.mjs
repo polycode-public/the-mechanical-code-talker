@@ -3,7 +3,7 @@
 // stage 0's "one npm run infbench chaining generate-cases.mjs then run.mjs").
 //
 // Replays every case in infbench/cases.jsonl through BOTH drive points:
-//   - kernel: src/syllogise.mjs's pure deriveSubClassClosure (no I/O) — see
+//   - kernel: src/domain/syllogise.mjs's pure deriveSubClassClosure (no I/O) — see
 //     infbench/grade.mjs's kernelVerdict.
 //   - chat: the REAL runChat() in a fresh temp dir per case, scripting every
 //     premise sentence as a chat turn (teaching it into memory via the SAME

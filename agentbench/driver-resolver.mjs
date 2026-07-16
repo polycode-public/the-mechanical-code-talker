@@ -2,9 +2,9 @@
 // wired behind the AGENTBENCH seam driver(request, tools, ctx) => loopResult).
 //
 // This is NOT a floor: it is the real capability router. A SINGLE-shot request
-// goes through the RESOLVER (src/router/resolver.mjs — command register -> NL
+// goes through the RESOLVER (src/domain/router/resolver.mjs — command register -> NL
 // parse -> imperative frame -> backward chaining -> resolveObject binding); a
-// MULTI-step request goes through the PLANNER (src/router/planner.mjs — HTN
+// MULTI-step request goes through the PLANNER (src/domain/router/planner.mjs — HTN
 // decomposition + POP causal-link proof + Steel & Ho monitor-and-replan under a
 // hard budget). Both refuse honestly (never a hallucinated / ungrounded call) —
 // the router's non-negotiable, inherited from the resolver + planner.
@@ -22,8 +22,8 @@
 // STAMP: every row is driver:"resolver-0.8.0" — the router baseline the shim-
 // transport floor is measured against.
 
-import { resolveOne } from "../src/router/resolver.mjs";
-import { plan, isMultiStep, decompose, MAX_STEPS } from "../src/router/planner.mjs";
+import { resolveOne } from "../src/domain/router/resolver.mjs";
+import { plan, isMultiStep, decompose, MAX_STEPS } from "../src/domain/router/planner.mjs";
 import { intersect, fallbackIfEmpty, guardIfEmpty, memberIndividuals, membersReaching } from "./results.mjs";
 
 export const DRIVER = "resolver-0.8.0";

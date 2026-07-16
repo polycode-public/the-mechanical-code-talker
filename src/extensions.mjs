@@ -12,7 +12,7 @@
 // A `tmct.toml` `[extensions]` table-of-tables may override a recognized builtin, or
 // declare a new host entry with its own `kind` (corpus | lexicon | templates | pack |
 // ontology). A separate flat `[bias]` table (bundle-name → number) feeds
-// src/memory/bias.mjs's ranking.
+// src/domain/memory/bias.mjs's ranking.
 //
 // Entries are returned in a fixed order: `seon` first, then `conceptnet`, then the rest
 // sorted by name (so seon's curated facts win idempotency races over ConceptNet noise).
@@ -347,7 +347,7 @@ export async function validateExtensionPack(dir, candidate) {
   if (candidate.lexiconPath) {
     const path = abs(candidate.lexiconPath);
     try {
-      const { loadLexicon } = await import("./grammar/lexicon.mjs");
+      const { loadLexicon } = await import("./domain/grammar/lexicon.mjs");
       const raw = JSON.parse(await readFile(path, "utf8"));
       const lex = loadLexicon(raw);
       results.push({

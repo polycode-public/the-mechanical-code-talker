@@ -47,15 +47,15 @@ import {
   renderFileHistory,
   renderMethodHistory,
   renderClassHistory,
-} from "./codegraph.mjs";
-import { ask } from "./ask.mjs";
+} from "./domain/codegraph.mjs";
+import { ask } from "./domain/ask.mjs";
 import { createGraphService } from "./adapters/providers/graph-service.mjs";
 // Read-only consumers of the conversational-memory graph (corpus facts, separate from
 // the code-map graph.json). Used by the fall-through bridge below: when the code-map
 // resolves nothing for a concept query, answer from the reified isa-family facts instead.
 import { loadMemory, readFactRows, normFactTerm } from "./adapters/memory/core.mjs";
-import { setDefaultNlpAdapter } from "./interpret/nlp-registry.mjs";
-import { setConstructionBanks } from "./interpret/strategies/constructions.mjs";
+import { setDefaultNlpAdapter } from "./domain/interpret/nlp-registry.mjs";
+import { setConstructionBanks } from "./domain/interpret/strategies/constructions.mjs";
 import { nlpAdapter } from "./adapters/ask-nlp.mjs";
 import { readConstructionFiles } from "./adapters/corpus/construction-banks.mjs";
 

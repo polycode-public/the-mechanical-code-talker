@@ -15,10 +15,10 @@ that shipped substrate.
   richer than proposed here: four action rule kinds (`RULE_KIND_ACTION_SIGNATURE` /
   `RULE_KIND_ACTION_PRECOND` / `RULE_KIND_ACTION_EFFECT` / `RULE_KIND_ACTION_CONSTRAINT` in
   `src/adapters/memory/core.mjs`), live teach frames (the ACTION-RULE TEACH FRAMES in `src/chat.mjs`),
-  legal-move enumeration with constraint pruning (`movesFromRules` in `src/domain.mjs`), and
-  plan search (`findActionPath` / `findReachableSet` in `src/planning.mjs`).
+  legal-move enumeration with constraint pruning (`movesFromRules` in `src/domain/domain.mjs`), and
+  plan search (`findActionPath` / `findReachableSet` in `src/domain/planning.mjs`).
 - Taught action families register as capability records the router executes
-  (`src/router/taught.mjs`; chat's `/plan`; `tmct plan "<request>"`). World-mutating actions now
+  (`src/domain/router/taught.mjs`; chat's `/plan`; `tmct plan "<request>"`). World-mutating actions now
   flow through the router, alongside the read-only graph-QUERY tools it started with.
 
 Ashcombe Hall builds ON this substrate. Nothing below redesigns it.
@@ -54,7 +54,7 @@ rather than reusing the ACE declarative/question grammar as-is.
 The world is a small, original English country house — Ashcombe Hall — invented for this document,
 no references to any existing book, game, or IP. This choice is deliberate, not decorative: the
 persona batch (`archive/PLAN_SEED.md`) already built a genuine, curated everyday-knowledge
-vocabulary (`corpus/tier2/human.jsonl`, `src/grammar/lexicon-core.json`'s `human-core`/
+vocabulary (`corpus/tier2/human.jsonl`, `src/domain/grammar/lexicon-core.json`'s `human-core`/
 `human-places`/`human-objects` clumps) — rooms, roles, household objects. Grounding the game world in
 that same lexicon tests grammar already in scope, in the spirit of this project's own standing
 preference for closed-set templates over general rules (`[[tmct-prefers-templates-over-general-rules]]`
@@ -64,7 +64,7 @@ fantasy lexicon (orcs, goblins, generic dungeon-crawl nouns) would test nothing 
 already has reason to know. Confirmed directly against the real corpus: of the world's core nouns,
 `cook`, `key`, `letter`, `cabinet`, `study`, `library`, `kitchen`, `garden`, `cellar`, `door`,
 `room`, `house`, `drawer`, `box`, `table`, `shelf`, `window` are **already** declared nouns in
-`src/grammar/lexicon-core.json`; only `butler`, `housekeeper`, `gardener`, `lamp`, `portrait`,
+`src/domain/grammar/lexicon-core.json`; only `butler`, `housekeeper`, `gardener`, `lamp`, `portrait`,
 `desk` need adding. `corpus/tier2/human.jsonl` already carries real background facts this world can
 build straight on — e.g. `cook AtLocation kitchen`, `kitchen IsA room`, `library IsA place`,
 `library HasA book`, `library UsedFor reading` (all verified by direct grep, not assumed). None of
@@ -75,7 +75,7 @@ the imperative verbs this doc needs (`go`, `open`, `unlock`, `close`, `look`) ar
 
 ### Gap 1 — an imperative command grammar (open)
 
-`src/grammar/ace.mjs` (~480 lines) has nine patterns today, all declarative or interrogative:
+`src/domain/grammar/ace.mjs` (~480 lines) has nine patterns today, all declarative or interrogative:
 Pattern 1 (universal ISA, `parseEvery`), Pattern 2 (class assertion, `parseCopula`), Pattern 3
 (`N1 VERB N2` relation, `parseRelation`), Pattern 4 (someValuesFrom restriction, `parseRestriction`),
 Pattern 5 (cardinality, `parseCardinality`), Pattern 6 (disjointWith, `parseDisjoint`), Pattern 7
@@ -107,9 +107,9 @@ slots. The shipped design is finer-grained: four action rule kinds in `src/adapt
 `RULE_KIND_ACTION_CONSTRAINT` (`RULE_KINDS` now has seven entries). An action is a named family of
 these rules, taught one sentence at a time through the ACTION-RULE TEACH FRAMES in `src/chat.mjs`,
 stored as ordinary Rule individuals, never a hardcoded per-verb switch. `movesFromRules`
-(`src/domain.mjs`) enumerates the legal moves a state allows and prunes with the taught
-constraints; `findActionPath`/`findReachableSet` (`src/planning.mjs`) search over them; each taught
-family also registers as a capability record the router consumes (`src/router/taught.mjs`,
+(`src/domain/domain.mjs`) enumerates the legal moves a state allows and prunes with the taught
+constraints; `findActionPath`/`findReachableSet` (`src/domain/planning.mjs`) search over them; each taught
+family also registers as a capability record the router consumes (`src/domain/router/taught.mjs`,
 `/plan`). Ashcombe Hall's verbs (`go`, `take`, `drop`, `open`, `unlock`, `close`, `give`, `look`)
 are ordinary taught families on this mechanism. Nothing here needs a new kind or new storage.
 
@@ -212,8 +212,8 @@ surfaces that as a concrete gap in the shipped mechanism, not a new design here.
 
 `"look"` and `"what am I carrying"` do NOT get hand-written room-description templates. They call
 `generateCompletion(dir, playerLocationLabel, { query: playerLocationLabel, memory, graph, graphService
-})` exactly as `src/completions/complete.mjs` already defines it, letting Stage 1's `broadSearch`
-(via `createCompletionsGraphAdapter`, `src/completions/graph-adapter.mjs`) surface every taught fact
+})` exactly as `src/domain/completions/complete.mjs` already defines it, letting Stage 1's `broadSearch`
+(via `createCompletionsGraphAdapter`, `src/domain/completions/graph-adapter.mjs`) surface every taught fact
 whose subject or object mentions the current room — the adapter's own `.ask()` already does exactly
 this term-matching search over `readFactRows(memory)`. "What am I carrying" is the same call with
 `query = playerId` instead of the room label. This is genuinely just pointing the existing
@@ -223,7 +223,7 @@ mechanism worth knowing about: taught `mgx:rendersAs` bindings already drive the
 digest (the render-binding teach frame in `src/chat.mjs`, consumed by `src/plan-viz.mjs`), so a
 room rendering has a second precedented path if the extractive digest falls short. The one real
 risk, named plainly: `pruneCompletion`'s top-K-per-group cutoff (`DEFAULT_MAX_SENTENCES_PER_GROUP`
-in `src/completions/complete.mjs`) could silently drop a fact that matters for correctness (e.g.
+in `src/domain/completions/complete.mjs`) could silently drop a fact that matters for correctness (e.g.
 the locked-cabinet fact, if it's competing with other room-facts for the top-K slots) — Phase 3
 below must verify this concretely against the real worked example, not assume it away.
 

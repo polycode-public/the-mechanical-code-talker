@@ -98,17 +98,20 @@ const stubNodeBuiltins = {
 
 // Optional-adapter modules tmct's own source already documents as
 // strip-compatible (see each real import site's "inlined viewer bundle"
-// comment in src/ask.mjs / src/interpret/pipeline.mjs). Stubbed as an explicit
+// comment in src/domain/ask.mjs / src/domain/interpret/pipeline.mjs). Stubbed as an explicit
 // `undefined` export, not an empty module — the calling code's own
 // `typeof X !== "undefined"` guards depend on the binding existing and being
 // exactly `undefined`, not on the import simply failing to resolve.
+// Keys are matched as a SUFFIX of the import specifier as each importer writes
+// it, so a key carries just enough trailing path to be unambiguous and keeps
+// matching wherever the module itself lives.
 const OPTIONAL_ADAPTER_STUBS = {
-  "adapters/ask-nlp.mjs": "export const nlpAdapter = undefined;\n",
+  "ask-nlp.mjs": "export const nlpAdapter = undefined;\n",
   "strategies/ace.mjs": "export const aceStrategy = undefined;\nexport const parseAceAmbiguous = undefined;\n",
   "strategies/constructions.mjs": "export const constructionsStrategy = undefined;\nexport const setConstructionBanks = () => {};\n",
   // the fs+TOML side of the construction banks — never read in the browser
   // (the strategy above is stubbed out entirely).
-  "adapters/corpus/construction-banks.mjs": "export const CONSTRUCTIONS_DIR = \"\";\nexport const readConstructionFiles = () => ({ relations: [], constructions: [] });\n",
+  "corpus/construction-banks.mjs": "export const CONSTRUCTIONS_DIR = \"\";\nexport const readConstructionFiles = () => ({ relations: [], constructions: [] });\n",
   // phrasing variety stays OFF in the dock — the browser answer is always the
   // base phrase, exactly as it was when the variants file couldn't be read.
   "answer-variants.mjs": "export const pickPhrase = (poolId, key, base) => base;\n",

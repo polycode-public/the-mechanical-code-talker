@@ -18,7 +18,7 @@ import { Readable, PassThrough } from "node:stream";
 import { runTurn, runChat, RECALL_MIN_SCORE } from "../src/chat.mjs";
 import { saveBlock } from "../src/adapters/memory/blocks.mjs";
 import { clearCache } from "../src/adapters/source.mjs";
-import { parseEntities } from "../src/codegraph.mjs";
+import { parseEntities } from "../src/domain/codegraph.mjs";
 import * as source from "../src/adapters/source.mjs";
 
 const FIXTURE = fileURLToPath(new URL("./fixtures/entities.fixture.json", import.meta.url));

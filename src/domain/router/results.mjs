@@ -1,4 +1,4 @@
-// src/router/results.mjs — the RESULT-EXECUTION layer for the capability router.
+// src/domain/router/results.mjs — the RESULT-EXECUTION layer for the capability router.
 //
 // Grading (and the live `tmct plan` surface) needs more than a call PLAN — it
 // needs the executed, COMPOSED answer: an "of the modules impacted by X, which

@@ -10,10 +10,10 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { buildEntities } from "../../src/adapters/graph-build.mjs";
-import { parseEntities } from "../../src/codegraph.mjs";
-import { parseQuery, ask } from "../../src/ask.mjs";
+import { parseEntities } from "../../src/domain/codegraph.mjs";
+import { parseQuery, ask } from "../../src/domain/ask.mjs";
 import { nlpAdapter } from "../../src/adapters/ask-nlp.mjs";
-import { setDefaultNlpAdapter } from "../../src/interpret/nlp-registry.mjs";
+import { setDefaultNlpAdapter } from "../../src/domain/interpret/nlp-registry.mjs";
 
 // This file exercises the DEFAULT-adapter tier directly against the domain
 // parser, so it wires the composition itself (chat.mjs/server.mjs/index.mjs
@@ -85,8 +85,8 @@ test("POS tier: e2e — \"the imports of myFile\" now answers exactly like \"wha
 
 test("determinism: two separate node processes produce byte-identical parse+answer with the adapter on", () => {
   const script = `
-    import { parseQuery, ask } from ${JSON.stringify(join(srcDir, "ask.mjs"))};
-    import { setDefaultNlpAdapter } from ${JSON.stringify(join(srcDir, "interpret", "nlp-registry.mjs"))};
+    import { parseQuery, ask } from ${JSON.stringify(join(srcDir, "domain/ask.mjs"))};
+    import { setDefaultNlpAdapter } from ${JSON.stringify(join(srcDir, "domain", "interpret", "nlp-registry.mjs"))};
     import { nlpAdapter } from ${JSON.stringify(join(srcDir, "adapters/ask-nlp.mjs"))};
     setDefaultNlpAdapter(nlpAdapter);
     const a = { id: "mod:a.mjs", label: "a.mjs", class: "Module" };
@@ -114,13 +114,13 @@ test("viewer bundle without wink: stripped codegraph+vocab+interpret+ask evaluat
   // Bundle order mirrors the import graph: vocab feeds the interpret modules
   // (normalize -> fuzzy -> strategies, the item-13 split), which feed ask.mjs.
   const sources = await Promise.all(
-    ["codegraph.mjs", "ask-vocab.mjs",
-      "interpret/nlp-registry.mjs",
-      "interpret/normalize.mjs", "interpret/fuzzy.mjs",
-      "interpret/strategies/grammar.mjs", "interpret/strategies/keywords.mjs",
-      "interpret/strategies/noise-strip.mjs",
-      "interpret/merge.mjs", "interpret/pipeline.mjs",
-      "ask.mjs"].map((f) => readFile(join(srcDir, f), "utf8")),
+    ["domain/codegraph.mjs", "domain/ask-vocab.mjs",
+      "domain/interpret/nlp-registry.mjs",
+      "domain/interpret/normalize.mjs", "domain/interpret/fuzzy.mjs",
+      "domain/interpret/strategies/grammar.mjs", "domain/interpret/strategies/keywords.mjs",
+      "domain/interpret/strategies/noise-strip.mjs",
+      "domain/interpret/merge.mjs", "domain/interpret/pipeline.mjs",
+      "domain/ask.mjs"].map((f) => readFile(join(srcDir, f), "utf8")),
   );
   // the exact strip an inlining viewer bundle applies (kept in sync by this test:
   // if the import/export shapes in ask.mjs or interpret/* ever stop matching it,

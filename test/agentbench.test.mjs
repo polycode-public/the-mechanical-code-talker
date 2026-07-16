@@ -20,7 +20,7 @@ import {
   capabilities, capabilityByName, isCapability, parametersOf,
   preconditionsOf, effectsOf, argKeysOf, requiredArgsOf,
   EXCLUDED_FROM_REGISTRY,
-} from "../src/router/registry.mjs";
+} from "../src/domain/router/registry.mjs";
 import {
   RUNGS, COMPLETION_FLOOR, parseCases, hallucinationsIn, isCallWellFormed,
   callMatches, callsMatch, gradeCase, rollup, ladderGate, sameSet,

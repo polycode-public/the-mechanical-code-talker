@@ -2,7 +2,7 @@
 // VERIFICATION ORACLE. Needs no sandbox at all (§5: "the candidate is DATA,
 // not code, run by the SAME trusted engine already shipped") — a candidate
 // GOAL_RULE is inserted into a CLONED rule array and run through the real,
-// unmodified src/router/goal-reasoner.mjs `goalReason` (the one additive,
+// unmodified src/domain/router/goal-reasoner.mjs `goalReason` (the one additive,
 // backward-compatible change this track makes to that module: an optional
 // `ruleSet` override, defaulted to the real GOAL_RULES for every other
 // caller). This mirrors agentbench/driver-goal.mjs's own in-process call —
@@ -17,9 +17,9 @@
 // example's own static `expect` literal, the same zero-fabrication posture
 // grade.mjs's gradeCase already documents.
 
-import { goalReason } from "../../src/router/goal-reasoner.mjs";
+import { goalReason } from "../../src/domain/router/goal-reasoner.mjs";
 import { callsMatch, sameSet, hallucinationsIn } from "../../agentbench/grade.mjs";
-import { backwardChain } from "../../src/router/resolver.mjs";
+import { backwardChain } from "../../src/domain/router/resolver.mjs";
 
 /** Run ONE candidate rule against ONE labeled example (agentbench case shape:
  *  `{request, tools, expect:{calls?, result?, refuse?}}`) through the REAL

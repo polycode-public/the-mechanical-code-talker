@@ -14,7 +14,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendFact, loadMemory, readFactRows, SOURCE_CLASS, SOURCE_RELIABILITY_PROP, UPDATED_AT_PROP } from "../src/adapters/memory/core.mjs";
-import { sessionReliabilityFrom } from "../src/memory/trust.mjs";
+import { sessionReliabilityFrom } from "../src/domain/memory/trust.mjs";
 
 const tmpRepo = () => mkdtemp(join(tmpdir(), "tmct-mem-srcrel-"));
 const attr = (ind, prop) => (ind?.attributes || []).find((a) => a?.prop === prop)?.value;

@@ -93,7 +93,7 @@ chatbench's grade ladder.
 
 ## Closed-world / default-deny
 
-The capability registry (`src/router/registry.mjs`) is a deliberate, documented
+The capability registry (`src/domain/router/registry.mjs`) is a deliberate, documented
 **strict subset** of the `dispatchTool` switch. The model is **closed-world
 default-deny**: a tool name that is not a registered capability is treated as
 UNKNOWN and rejected as a hallucination (`unknown-tool`). So a planner or shim

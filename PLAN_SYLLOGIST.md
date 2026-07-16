@@ -2,14 +2,14 @@
 
 > **STATUS: research/design notes — §3's own JTMS-shaped, VERIFY-backed slice (single justification
 > per scm-sco fact, dependency-directed removal, bounded) is now IMPLEMENTED and tested
-> (`retractSubClassOf`, `src/syllogise.mjs`; see §3 for scope). §1/§2/§4/§5 remain notes only —
+> (`retractSubClassOf`, `src/domain/syllogise.mjs`; see §3 for scope). §1/§2/§4/§5 remain notes only —
 > and §1's beyond-RL survey now has a deeper sibling doc, `PLAN_SYLLOGIST_EL_DL.md`, which owns the
 > EL-classifier/DL-tableau tier; this file owns the incrementality/retraction horizon.
 > **2026-07-12: both chat-layer findings routed here from `BENCHMARK_CONVERSATION_1.8.14.md` are now
 > CLOSED, not design questions** — (1) "X is not a Y"/"forget that X is a Y" now call
 > `retractSubClassOf` for real (`src/chat.mjs` teachLane, `RETRACT_NOT_A_RE`/`RETRACT_FORGET_RE`); (2)
 > teaching against a subject that's also a real code-graph symbol (e.g. "Task") now stores and
-> coexists with the graph fact — root cause was `src/ask.mjs`'s `relaxParse` DROP-UNMATCHED layer
+> coexists with the graph fact — root cause was `src/domain/ask.mjs`'s `relaxParse` DROP-UNMATCHED layer
 > silently re-reading a malformed declarative teach sentence as a different, valid elliptical
 > QUESTION (dropping the taught object entirely) before the miss-gated teach lane ever ran; fixed by
 > `runAsk`'s `relaxedTeachCollision` guard (`src/chat.mjs`), which restores the original graph answer
@@ -19,12 +19,12 @@
 > carried this material as a long aside inside an otherwise-shipped build plan; it has been moved
 > here, mostly verbatim (citations exactly as verified there), so it stands on its own instead of
 > getting archived alongside a finished plan. Nothing else in this file is scheduled or staffed — it
-> is a place to point a future session that wants to make `src/syllogise.mjs` (tmct's forward-
+> is a place to point a future session that wants to make `src/domain/syllogise.mjs` (tmct's forward-
 > chaining reasoning engine, the growing "Syllogist") more sophisticated, not a to-do list.
 
 ## What problem this solves, and why it matters
 
-`src/syllogise.mjs` (five rules today — scm-sco, cax-sco, cax-dw, cls-svf1, scm-svf1 — see that
+`src/domain/syllogise.mjs` (five rules today — scm-sco, cax-sco, cax-dw, cls-svf1, scm-svf1 — see that
 file's own header comment) has two structural limits neither `PLAN_INFERENCE_TESTING.md`'s shipped
 ladder nor this session's trust-hook fix touched:
 
@@ -78,7 +78,7 @@ fill.
 
 ## 2. Incrementality (RETE / semi-naive evaluation) is also solved — `syllogise.mjs` just hasn't adopted it yet
 
-`deriveSubClassClosure` (`src/syllogise.mjs`) re-scans the full `succ` adjacency snapshot every
+`deriveSubClassClosure` (`src/domain/syllogise.mjs`) re-scans the full `succ` adjacency snapshot every
 pass; the budget/focus/screen guards bound HOW MUCH work a pass does but not whether the pass
 reuses work from the last one — there is no persisted match-state across calls. The classical
 answer (compile the rule set into a discrimination network so a new fact only re-triggers the joins
@@ -153,7 +153,7 @@ first sentence — "today every entailed fact carries only a flat provenance TAG
 onto the fact itself, so there is no stored justification to walk at all" — is no longer true for
 scm-sco: `syllogise()` now persists each scm-sco conclusion's two premise fact ids as
 `mgx:factJustification` (`memory/core.mjs` `factIdForTriple`/`appendFacts`' `justification` param),
-and `retractSubClassOf` (`src/syllogise.mjs`) walks it — dependency-directed removal, bounded by
+and `retractSubClassOf` (`src/domain/syllogise.mjs`) walks it — dependency-directed removal, bounded by
 `budget`/`depth`, cascading through multi-hop chains. It does NOT stop at a bare justification walk
 (the naive JTMS failure mode this file itself names, citing de Kleer): each candidate is re-VERIFIED
 against the surviving graph (`buildAncestorCloser`, reused) before being removed, so a fact with a
@@ -187,7 +187,7 @@ relevance problem, because they are the same graph walk run in opposite directio
 
 Learning NEW inference rules (rather than executing hand-written ones) is a genuinely different
 topic: Progol-style Inductive Logic Programming, adjacent to the shipped CEGIS rule synthesis
-(`src/router/goal-reasoner.mjs`, `synthbench/`) but not the same thing. It stays a separate far
+(`src/domain/router/goal-reasoner.mjs`, `synthbench/`) but not the same thing. It stays a separate far
 spike from everything above; nothing in this document depends on it or blocks on it.
 
 ---
@@ -208,7 +208,7 @@ re-verifies every candidate rather than trusting the citation.
 `retractSubClassOf`'s cascade now covers all five rules' conclusions, keeping the same bounded,
 re-verified local check: per round it collects purely-entailed facts whose justification cites a
 removed id, then re-derives each candidate against the surviving facts using the rule family that
-owns its predicate (`buildSurvivorDerivabilityCheck` in `src/syllogise.mjs`). A conclusion still
+owns its predicate (`buildSurvivorDerivabilityCheck` in `src/domain/syllogise.mjs`). A conclusion still
 independently derivable survives. The entry point stays subClassOf-rooted, because chat's
 recognized retraction phrasings ("X is not a Y", "forget that X is a kind of Y") retract ⊑ facts;
 from there the cascade reaches propagated types, disjointness violations, and restriction

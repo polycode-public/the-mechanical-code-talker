@@ -8,8 +8,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { parseEntities } from "../../src/codegraph.mjs";
-import { resolveObject } from "../../src/ask.mjs";
+import { parseEntities } from "../../src/domain/codegraph.mjs";
+import { resolveObject } from "../../src/domain/ask.mjs";
 
 const FIXTURE = fileURLToPath(new URL("../fixtures/large-scale/.tmct/graph.json", import.meta.url));
 const graph = parseEntities(JSON.parse(readFileSync(FIXTURE, "utf8")));
@@ -68,7 +68,7 @@ test("resolveObjectCore stays bias-free: a genuine tie still refuses (ambiguous:
   assert.equal(r.ambiguous, true, "the genuine tie still refuses to silently pick a winner");
   assert.ok(r.candidates.length >= 1, "the tie still surfaces real candidates, never a fabricated single match");
   const { readFileSync: rfs } = await import("node:fs");
-  const askSrc = rfs(new URL("../../src/ask.mjs", import.meta.url), "utf8");
+  const askSrc = rfs(new URL("../../src/domain/ask.mjs", import.meta.url), "utf8");
   assert.doesNotMatch(askSrc, /memory\/bias\.mjs/, "ask.mjs never imports the bias module");
   assert.doesNotMatch(askSrc, /rankByBiasThenTrust/, "resolveObjectCore's own ranking is untouched by bias weighting");
 });

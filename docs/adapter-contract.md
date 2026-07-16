@@ -69,7 +69,7 @@ Field notes:
 - **`objectProperties[].prop`** — the closed vocabulary token. tmct classifies
   each group into a relation *kind* (imports / calls / defines / tests /
   touches / contains / inherits / callsSymbol / touchesSymbol) primarily by
-  this token (`src/codegraph.mjs`, `PROP_KIND` — SEON + `mgx:` tokens, with
+  this token (`src/domain/codegraph.mjs`, `PROP_KIND` — SEON + `mgx:` tokens, with
   legacy `mg:`/`seon:` aliases), falling back to keyword-matching the
   `predicate` verb. An unclassifiable group is still rendered and traversable
   by its predicate name; it just doesn't join the impact closure.
@@ -77,7 +77,7 @@ Field notes:
   group as truncated and works with the examples it has.
 - **`proseIndex`** — optional but what makes free-text object resolution and
   lexical ranking cheap. Producers using `attachProseTokens()` +
-  `buildProseIndex()` (`src/prose.mjs`) get it for free and it can never
+  `buildProseIndex()` (`src/domain/prose.mjs`) get it for free and it can never
   disagree with the `prose_tokens` attributes it inverts. A reserved
   `"tmct:layers"` key may carry normalised sub-indexes (spell/stem/lemma
   layers); absent is fine.
@@ -86,7 +86,7 @@ Field notes:
 
 ## 2. What tmct parses it into
 
-`parseEntities(payload)` (`src/codegraph.mjs`) — the loader every surface goes
+`parseEntities(payload)` (`src/domain/codegraph.mjs`) — the loader every surface goes
 through — yields:
 
 | field | shape | what tmct does with it |

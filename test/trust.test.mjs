@@ -7,7 +7,7 @@ import {
   computeTrust, recencyNudge, SOURCE_PRIOR, RECENCY_FLOOR,
   SOURCE_RELIABILITY_MIN, SOURCE_RELIABILITY_MAX, SOURCE_RELIABILITY_NEUTRAL,
   sessionReliabilityFrom,
-} from "../src/memory/trust.mjs";
+} from "../src/domain/memory/trust.mjs";
 
 // A fixture Source individual of a given type, as it lives in a memory payload.
 const src = (id, type) => ({ id, class: "Source", attributes: [{ prop: "mgx:sourceType", key: "sourceType", value: type }] });

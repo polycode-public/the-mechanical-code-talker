@@ -19,13 +19,13 @@ import { fileURLToPath } from "node:url";
 
 import {
   compileDomain, stateFromFacts, stateKeyFor, movesFromRules, compileGoal, PlanBudgetError,
-} from "../../src/domain.mjs";
-import { findActionPath } from "../../src/planning.mjs";
+} from "../../src/domain/domain.mjs";
+import { findActionPath } from "../../src/domain/planning.mjs";
 import { runTurn } from "../../src/chat.mjs";
 import { loadMemory, readFactRows, readRuleRows } from "../../src/adapters/memory/core.mjs";
 import { clearCache } from "../../src/adapters/source.mjs";
 
-const DOMAIN_SRC = fileURLToPath(new URL("../../src/domain.mjs", import.meta.url));
+const DOMAIN_SRC = fileURLToPath(new URL("../../src/domain/domain.mjs", import.meta.url));
 
 // A neutral vocabulary fixture (tokens/slots), unrelated to any shipped game.
 const RULES = [

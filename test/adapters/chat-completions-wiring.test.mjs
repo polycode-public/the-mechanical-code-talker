@@ -1,9 +1,9 @@
 // chat-completions-wiring.test.mjs — HANDOVER.md 2026-07-10 item 7: "wire
-// src/completions/ into live chat dispatch". BENCHMARK_CONVERSATION_1.4.1.md round 3's own
+// src/domain/completions/ into live chat dispatch". BENCHMARK_CONVERSATION_1.4.1.md round 3's own
 // architecturally-confirmed gap: "can you give me a detailed summary of how the task
 // system works" hit the plain grammar wall with NO inferred goal at all, even though
-// src/completions/'s extractive multi-sentence pipeline (generateCompletion(),
-// src/completions/complete.mjs) already existed and could answer it when called
+// src/domain/completions/'s extractive multi-sentence pipeline (generateCompletion(),
+// src/domain/completions/complete.mjs) already existed and could answer it when called
 // directly — it was simply unreachable from any real chat turn. This suite proves the
 // new (4e) COMPLETIONS RESCUE lane (src/chat.mjs) closes that gap:
 //   (a) the target phrase now produces real, grounded, multi-sentence prose instead of
@@ -11,7 +11,7 @@
 //       graph (test/fixtures/entities.fixture.json) has real facts about (defined in
 //       app/lib/b.mjs, contains a render method + a name attribute, inherits from Base,
 //       Widget.render calls fnAlpha) — mirrored here as seeded memory BLOCKS (the
-//       corpus src/completions/search.mjs's broadSearch() actually retrieves from);
+//       corpus src/domain/completions/search.mjs's broadSearch() actually retrieves from);
 //   (b) an unrelated/unknown subject still declines honestly — never fabricates;
 //   (c) the new trigger phrase does NOT shadow the EXISTING describe-wrapper lane
 //       (test/chat-ux.test.mjs's own "describe-wrapper rescue" tests) for phrasings
@@ -25,7 +25,7 @@ import { fileURLToPath } from "node:url";
 
 import { runTurn } from "../../src/chat.mjs";
 import { saveBlock } from "../../src/adapters/memory/blocks.mjs";
-import { parseEntities } from "../../src/codegraph.mjs";
+import { parseEntities } from "../../src/domain/codegraph.mjs";
 import { clearCache } from "../../src/adapters/source.mjs";
 import * as source from "../../src/adapters/source.mjs";
 
@@ -65,7 +65,7 @@ test("COMPLETIONS RESCUE: \"give me a detailed summary of how X works\" now answ
     assert.equal(record.miss, false, "a real completion is not recorded as a miss");
     assert.doesNotMatch(answer, /couldn't parse this as a graph question/, "the plain grammar wall must be gone");
     // multi-sentence, and every word traces back to the seeded Widget blocks — nothing
-    // invented (src/completions/ is purely extractive by construction).
+    // invented (src/domain/completions/ is purely extractive by construction).
     assert.ok((answer.match(/[.!?]/g) || []).length >= 2, "a real completion reads as multiple sentences");
     assert.match(answer, /Widget/, "the answer is actually about the asked-about subject");
   } finally {

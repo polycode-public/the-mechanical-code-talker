@@ -17,7 +17,7 @@
 import { createServer } from "node:http";
 import { runTurn, selectTool } from "./chat.mjs";
 import { TOOLS } from "./server.mjs";
-import { parseEntities } from "./codegraph.mjs";
+import { parseEntities } from "./domain/codegraph.mjs";
 import { uuidv7 } from "./adapters/uuid.mjs";
 import * as defaultSource from "./adapters/source.mjs";
 

@@ -1,6 +1,6 @@
 // completions-infer.test.mjs — Stage 1 (of the PLAN_COMPLETIONS.md pipeline numbering; third
 // file by staging index — completions-stage0/stage2 cover Stage 1+2 and Stage 4) verification
-// for src/completions/infer.mjs's cross-group inference.
+// for src/domain/completions/infer.mjs's cross-group inference.
 //
 // Stage 1's own exit criterion ("every asserted inference cites a concrete licensing test,
 // zero fabricated relationships on a hand-labeled set") is made concrete here exactly the way
@@ -32,7 +32,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { appendFact, loadMemory } from "../src/adapters/memory/core.mjs";
-import { inferRelations } from "../src/completions/infer.mjs";
+import { inferRelations } from "../src/domain/completions/infer.mjs";
 
 async function tmpRepo() {
   return mkdtemp(join(tmpdir(), "tmct-completions-infer-"));

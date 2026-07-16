@@ -9,9 +9,9 @@
 // hit (non-null, residue: []) against the committed lexicon — a premise the
 // grammar can't hold fails LOUD at generation time (throws), never silently.
 //
-// Fixture: the committed common-noun lexicon (src/grammar/lexicon-core.json)
+// Fixture: the committed common-noun lexicon (src/domain/grammar/lexicon-core.json)
 // as class/relation vocabulary, plus synthetic individuals exploiting the
-// tokenizer's CODE_REF rule (src/grammar/ace.mjs:42,71-72: any token containing
+// tokenizer's CODE_REF rule (src/domain/grammar/ace.mjs:42,71-72: any token containing
 // `. / \ # : @` is recognized as an individual BY FORM, no lexicon entry
 // needed) — e01.mjs, e02.mjs, … minted deterministically.
 //
@@ -38,10 +38,10 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { parseAce } from "../src/grammar/ace.mjs";
-import { loadLexicon, thirdPerson } from "../src/grammar/lexicon.mjs";
+import { parseAce } from "../src/domain/grammar/ace.mjs";
+import { loadLexicon, thirdPerson } from "../src/domain/grammar/lexicon.mjs";
 import { normFactTerm } from "../src/adapters/memory/core.mjs";
-import { fnv1a32 as fnv1a } from "../src/hash.mjs";
+import { fnv1a32 as fnv1a } from "../src/domain/hash.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = dirname(HERE);
@@ -73,14 +73,14 @@ export function seededShuffle(arr, rng) {
 
 // ---- fixture: the committed lexicon's class-noun vocabulary ----
 // PLAN_OSS_ACE_PARSER.md's ace-owl extraction briefly moved lexicon-core.json
-// out of src/grammar/, but that extraction was REVERTED on operator
+// out of src/domain/grammar/, but that extraction was REVERTED on operator
 // instruction (HANDOVER.md, 2026-07-10 — the unpublished-package incident):
-// the parser and its lexicon are back in src/grammar/ as the real
+// the parser and its lexicon are back in src/domain/grammar/ as the real
 // implementation, and the packages/ace-owl/ workspace is gone. This path had
 // gone stale pointing at the removed workspace (found while regenerating
 // cases.jsonl for the scm-svf1/cardinality-monotonicity/cax-maxc0 build) —
 // fixed back to the real committed location.
-const LEXICON_PATH = join(ROOT, "src", "grammar", "lexicon-core.json");
+const LEXICON_PATH = join(ROOT, "src", "domain", "grammar", "lexicon-core.json");
 const RAW_LEXICON = JSON.parse(readFileSync(LEXICON_PATH, "utf8"));
 const lexicon = loadLexicon();
 
@@ -416,7 +416,7 @@ function b2ChainLenK(rng) {
         band: "INF-B2", template: "b2ChainLenK", variant: `chain-${k}`,
         arms: ["chat"], checkType: "isa",
         premises, query, expect: { verdict: "unproven", entailed, proof: true },
-        note: "ceiling by construction (PLAN_INFERENCE_TESTING.md §2.2/§3): the chained subject-object pair is classically PROVABLE (scm-sco transitivity), but INF-B2 grades the chat-layer's multi-hop + proof-chain-materialization capability (§4 stage 2), which does not exist yet — expect stays the honest 'cannot be proven' floor until it does. The KERNEL closure (src/syllogise.mjs) already derives this correctly; this template deliberately runs CHAT-arm only so that correctness is never miscounted as fabrication against a declared-ceiling literal.",
+        note: "ceiling by construction (PLAN_INFERENCE_TESTING.md §2.2/§3): the chained subject-object pair is classically PROVABLE (scm-sco transitivity), but INF-B2 grades the chat-layer's multi-hop + proof-chain-materialization capability (§4 stage 2), which does not exist yet — expect stays the honest 'cannot be proven' floor until it does. The KERNEL closure (src/domain/syllogise.mjs) already derives this correctly; this template deliberately runs CHAT-arm only so that correctness is never miscounted as fabrication against a declared-ceiling literal.",
       }));
     }
   }
@@ -459,14 +459,14 @@ function b2Svf1(rng) {
 // neither template gave a real cls-svf1 implementation anything to move.
 // This template does: "every N1 that VERBs a N2 is a N3" + "IND1 VERBs IND2"
 // + "IND2 is a N2" ⊨ "IND1 is a some-VERB-N2" — the restriction CLASS itself
-// (cls-svf1's actual conclusion, `src/syllogise.mjs`'s `deriveSomeValuesFromApplication`),
+// (cls-svf1's actual conclusion, `src/domain/syllogise.mjs`'s `deriveSomeValuesFromApplication`),
 // NOT the further "IND1 is a N3" intersection step (that needs cls-int1 +
-// cax-sco too — out of this stage's scope, see `src/syllogise.mjs`'s header
+// cax-sco too — out of this stage's scope, see `src/domain/syllogise.mjs`'s header
 // comment). The query asks about the restriction node's own readable term
 // directly ("is IND1 a some-imports-test"), which is not a lexicon noun, so
 // query about a synthetic restriction-node term today regardless) is never
 // going to parse it as an ISA question — this template therefore declares
-// `arms: ["kernel"]` ONLY, checked directly against `src/syllogise.mjs`'s
+// `arms: ["kernel"]` ONLY, checked directly against `src/domain/syllogise.mjs`'s
 // pure kernel via `infbench/grade.mjs`'s `kernelVerdict` (a legitimate
 // bench-side drive point, exactly what the kernel arm already exists for —
 // see grade.mjs's own file-header comment), never against chat.mjs. ----
@@ -509,7 +509,7 @@ function b2Svf1Apply(rng) {
 // INF-C1 — c1Cardinality: (exactly n, queried min m≤n) / (max 0, existence).
 // FIXED IN PLACE (this build, PLAN_INFERENCE_TESTING.md §4 stage 4): both
 // variants now carry the TRUE classical verdict, proven by
-// proveCardinalityAtLeast/proveMaxCardinalityZeroDenial (src/syllogise.mjs) —
+// proveCardinalityAtLeast/proveMaxCardinalityZeroDenial (src/domain/syllogise.mjs) —
 // the generator's own `m = 1 + (i % n)` construction makes `m ≤ n`
 // unconditionally true, so exactly-min is always "yes"; "has at most 0" is an
 // honest encoded negation, so max0 is always "no". Leaving these pinned at
@@ -543,7 +543,7 @@ function c1Cardinality(rng) {
       band: "INF-C1", template: "c1Cardinality", variant: "exactly-min",
       arms: ["kernel", "chat"], checkType: "isa",
       premises, query, expect: { verdict: "yes", entailed, proof: true },
-      note: "cardinality monotonicity (exactly n ⊢ min m≤n): proveCardinalityAtLeast (src/syllogise.mjs) proves it directly from the restriction's own declared n against the queried m — sound whenever m≤n, which this template's own m=1+(i%n) construction always satisfies.",
+      note: "cardinality monotonicity (exactly n ⊢ min m≤n): proveCardinalityAtLeast (src/domain/syllogise.mjs) proves it directly from the restriction's own declared n against the queried m — sound whenever m≤n, which this template's own m=1+(i%n) construction always satisfies.",
     }));
   }
   for (let i = 0; i < 15; i += 1) {
@@ -563,14 +563,14 @@ function c1Cardinality(rng) {
       band: "INF-C1", template: "c1Cardinality", variant: "max0",
       arms: ["kernel", "chat"], checkType: "isa",
       premises, query, expect: { verdict: "no", entailed, proof: true },
-      note: "cax-maxc0 (§5's found capability, now consumed): 'has at most 0' is an honest encoded negation (owl:maxCardinality 0) — proveMaxCardinalityZeroDenial (src/syllogise.mjs) proves the class-level 'no' via a one-step universal generalization from cls-maxc1's ABox contradiction rule.",
+      note: "cax-maxc0 (§5's found capability, now consumed): 'has at most 0' is an honest encoded negation (owl:maxCardinality 0) — proveMaxCardinalityZeroDenial (src/domain/syllogise.mjs) proves the class-level 'no' via a one-step universal generalization from cls-maxc1's ABox contradiction rule.",
     }));
   }
   return cases;
 }
 
 // ---- INF-C1 — c1ScmSvfApply: scm-svf1 (someValuesFrom restriction
-// SUBSUMPTION, W3C OWL 2 RL Table 9 — see src/syllogise.mjs's own header
+// SUBSUMPTION, W3C OWL 2 RL Table 9 — see src/domain/syllogise.mjs's own header
 // comment for why scm-svf2, the property-subsumption sibling rule, is out of
 // scope: tmct's ACE grammar has no way to teach property subsumption at all).
 // Two INDEPENDENTLY taught someValuesFrom restrictions sharing the SAME
@@ -613,7 +613,7 @@ function c1ScmSvfApply(rng) {
       band: "INF-C1", template: "c1ScmSvfApply", variant: "positive",
       arms: ["kernel", "chat"], checkType: "isa",
       premises, query, expect: { verdict: "yes", entailed, proof: true },
-      note: "scm-svf1 (W3C OWL 2 RL Table 9): two independently taught someValuesFrom restrictions sharing the same property, whose filler classes are ⊑-related, entail the restriction-to-restriction subsumption itself (src/syllogise.mjs's deriveSomeValuesFromSubsumption) — not the further owl:intersectionOf step, mirroring b2Svf1Apply's own deliberately narrower scope.",
+      note: "scm-svf1 (W3C OWL 2 RL Table 9): two independently taught someValuesFrom restrictions sharing the same property, whose filler classes are ⊑-related, entail the restriction-to-restriction subsumption itself (src/domain/syllogise.mjs's deriveSomeValuesFromSubsumption) — not the further owl:intersectionOf step, mirroring b2Svf1Apply's own deliberately narrower scope.",
     }));
   }
   return cases;

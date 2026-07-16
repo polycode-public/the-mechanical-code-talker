@@ -517,7 +517,7 @@ function parseArgs(argv) {
  *  await cleanup() when done. Shared by main() and generate-graded.mjs. */
 export async function createRunnerDeps(stamp) {
   const { runTurn, runChat } = await import(join(ROOT, "src", "chat.mjs"));
-  const { parseEntities } = await import(join(ROOT, "src", "codegraph.mjs"));
+  const { parseEntities } = await import(join(ROOT, "src", "domain", "codegraph.mjs"));
   const { ingestSchemaDocs } = await import(join(ROOT, "src", "schema-docs.mjs"));
   const { parseSessionJsonl, parseSessionLog, turnKey } = await import(join(ROOT, "src", "sessions.mjs"));
   const { clearCache } = await import(join(ROOT, "src", "adapters", "source.mjs")); // H1a — see runSessionCase

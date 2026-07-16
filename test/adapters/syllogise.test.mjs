@@ -22,8 +22,8 @@ import {
   ENTAILED_SCM_SVF_PROVENANCE, SCM_SVF_RULE, SCM_SVF_RULE_CONFIDENCE,
   CARDINALITY_RULE_CONFIDENCE, CAX_MAXC0_RULE_CONFIDENCE, entailedTrustFrom,
   retractSubClassOf as retractSubClassOfSeam,
-} from "../../src/syllogise.mjs";
-import { assertSentence as assertSentenceSeam } from "../../src/grammar/assert.mjs";
+} from "../../src/domain/syllogise.mjs";
+import { assertSentence as assertSentenceSeam } from "../../src/domain/grammar/assert.mjs";
 import { freshConceptNetRepo } from "../helpers/seeded-fixture.mjs";
 
 // The persisting seams take the store's read/write functions injected; every
@@ -856,7 +856,7 @@ test("syllogise: cls-svf1's entailed trust is PREMISE-DERIVED (min(premiseTrusts
 });
 
 // ---- scm-svf1 joins syllogise()'s materializing batch pass (this session's ---
-// ---- own trust-hook-gap fix — was LIVE-CHASE ONLY, see src/syllogise.mjs's --
+// ---- own trust-hook-gap fix — was LIVE-CHASE ONLY, see src/domain/syllogise.mjs's --
 // ---- header comment for the "deferred, not merely" distinction) --------------
 
 test("syllogise: scm-svf1 materializes restriction-to-restriction subsumption from TWO independently-taught "
@@ -936,7 +936,7 @@ test("syllogise: scm-svf1's entailed trust is PREMISE-DERIVED (min(premiseTrusts
 
 // ---- entailedTrustFrom: the live-chase trust hook (chat.mjs's scm-svf1/ -----
 // ---- cardinality-monotonicity/cax-maxc0 call sites, which have no Fact/ -----
-// ---- appendFacts call to delegate to — src/syllogise.mjs's own doc comment) -
+// ---- appendFacts call to delegate to — src/domain/syllogise.mjs's own doc comment) -
 
 test("entailedTrustFrom: min(premiseTrusts) × ruleConfidence, rounded to 6dp", () => {
   assert.equal(entailedTrustFrom([1, 0.7, 0.95], CARDINALITY_RULE_CONFIDENCE), round6(0.7 * CARDINALITY_RULE_CONFIDENCE));

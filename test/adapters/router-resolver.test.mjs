@@ -10,20 +10,20 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
-import { parseEntities } from "../../src/codegraph.mjs";
+import { parseEntities } from "../../src/domain/codegraph.mjs";
 import { ingestSchemaDocs } from "../../src/schema-docs.mjs";
 import { buildEntities } from "../../src/adapters/graph-build.mjs";
-import { resolveObject } from "../../src/ask.mjs";
-import { RELATIONS } from "../../src/ask-vocab.mjs";
+import { resolveObject } from "../../src/domain/ask.mjs";
+import { RELATIONS } from "../../src/domain/ask-vocab.mjs";
 import { COMMANDS, selectTool } from "../../src/chat.mjs";
-import { capabilities, isCapability, effectsOf } from "../../src/router/registry.mjs";
+import { capabilities, isCapability, effectsOf } from "../../src/domain/router/registry.mjs";
 import {
   NL_INTENTS, UNMAPPED_KINDS, NOT_NL_REACHABLE, FRAMES,
   backwardChain, mapParse, mapFrame, commandCapability, resolveOne,
   reachableCapabilityNames, extractEntity,
-} from "../../src/router/resolver.mjs";
-import { guard, admits } from "../../src/router/guardrail.mjs";
-import { decompose, isMultiStep, plan, MAX_STEPS } from "../../src/router/planner.mjs";
+} from "../../src/domain/router/resolver.mjs";
+import { guard, admits } from "../../src/domain/router/guardrail.mjs";
+import { decompose, isMultiStep, plan, MAX_STEPS } from "../../src/domain/router/planner.mjs";
 import { resolverDriver } from "../../agentbench/driver-resolver.mjs";
 import { runAgentbench, createRunCtx } from "../../agentbench/run.mjs";
 import { parseCases, COMPLETION_FLOOR } from "../../agentbench/grade.mjs";

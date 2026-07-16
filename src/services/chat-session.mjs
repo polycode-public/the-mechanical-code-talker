@@ -20,7 +20,7 @@ import { createInterface } from "node:readline/promises";
 import { spawnSync } from "node:child_process";
 import { loadConfig, DEFAULT_GRAPH_REL } from "../adapters/config.mjs";
 import { resolveRuntimeConfig } from "../cli-args.mjs";
-import { parseEntities } from "../codegraph.mjs";
+import { parseEntities } from "../domain/codegraph.mjs";
 import { SESSIONS_DIR_REL, appendSessionToGraph } from "../sessions.mjs";
 import { uuidv7 } from "../adapters/uuid.mjs";
 import { createTelemetry } from "../telemetry.mjs";
@@ -208,7 +208,7 @@ export async function createSession({
   // lexicon degrades to the lazy per-turn load inside assertTurn.
   let lexicon = null;
   try {
-    const { loadLexicon } = await import("../grammar/lexicon.mjs");
+    const { loadLexicon } = await import("../domain/grammar/lexicon.mjs");
     const extra = extEntries ? await mergedLexiconExtra(extEntries, biasByBundle) : null;
     lexicon = loadLexicon(extra ?? undefined);
   } catch { lexicon = null; }

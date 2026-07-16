@@ -30,9 +30,9 @@ import { stubDriver } from "./driver-stub.mjs";
 import { shimDriver } from "./driver-shim.mjs";
 import { resolverDriver } from "./driver-resolver.mjs";
 import { goalDriver } from "./driver-goal.mjs";
-import { capabilityByName } from "../src/router/registry.mjs";
-import { resolveObject } from "../src/ask.mjs";
-import { parseEntities } from "../src/codegraph.mjs";
+import { capabilityByName } from "../src/domain/router/registry.mjs";
+import { resolveObject } from "../src/domain/ask.mjs";
+import { parseEntities } from "../src/domain/codegraph.mjs";
 import { resultSetOf } from "./results.mjs";
 import { ingestSchemaDocs } from "../src/schema-docs.mjs";
 

@@ -1,4 +1,4 @@
-// src/router/set-algebra.mjs — the COMPOSITION OPERATORS: pure set-algebra a
+// src/domain/router/set-algebra.mjs — the COMPOSITION OPERATORS: pure set-algebra a
 // multi-step plan needs to fold its threaded step result-sets into ONE composed
 // answer. Shared by the product router (goal-reasoner's relative-filter fold)
 // and the bench result-execution layer (agentbench/results.mjs re-exports

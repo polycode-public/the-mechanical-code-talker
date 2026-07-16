@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "curation": "Hand-curated. scripts/generate-answer-variants.mjs cross-checked each pool against real Open English WordNet synsets (scripts/lib/wordnet-synonyms.mjs) where a sense fit; most of these are domain-specific code-graph connector phrases WordNet's own sense-1 convention resolves to the wrong sense for -- e.g. 'locate' -> 'turn up', 'record' -> 'enter, put down', 'module' -> 'mental faculty' -- so every entry below was accepted or rejected by hand against the exact rendered sentence it replaces, never auto-accepted from a raw synset match. See src/answer-variants.mjs for how these are selected at render time.",
+  "curation": "Hand-curated. scripts/generate-answer-variants.mjs cross-checked each pool against real Open English WordNet synsets (scripts/lib/wordnet-synonyms.mjs) where a sense fit; most of these are domain-specific code-graph connector phrases WordNet's own sense-1 convention resolves to the wrong sense for -- e.g. 'locate' -> 'turn up', 'record' -> 'enter, put down', 'module' -> 'mental faculty' -- so every entry below was accepted or rejected by hand against the exact rendered sentence it replaces, never auto-accepted from a raw synset match. See src/domain/answer-variants.mjs for how these are selected at render time.",
   "pools": {
     "defined-in": {
       "base": "defined in",

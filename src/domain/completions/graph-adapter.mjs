@@ -7,10 +7,10 @@
 // renderDescribe and readFactRows(memory), falling back to svc.ask() only when it genuinely
 // parsed the term.
 
-import { createGraphService } from "../adapters/providers/graph-service.mjs";
+import { createGraphService } from "../../adapters/providers/graph-service.mjs";
 import { resolveSymbol, renderDescribe } from "../codegraph.mjs";
 import { ask } from "../ask.mjs";
-import { readFactRows } from "../adapters/memory/core.mjs";
+import { readFactRows } from "../../adapters/memory/core.mjs";
 
 /** renderDescribe() renders one line per fact with no terminal punctuation of its own;
  *  rank.mjs's splitSentences() treats each line as its own candidate sentence, and

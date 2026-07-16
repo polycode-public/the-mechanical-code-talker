@@ -149,11 +149,11 @@ export const AGREEMENT_TOLERANCE = 0.2;
 // ---- deterministic randomness ----
 
 /** FNV-1a 32-bit — turns a stamp/cell label into a seed. Sourced from the single
- *  hash module (src/hash.mjs) so the bench seed and the memory fact-id contract
+ *  hash module (src/domain/hash.mjs) so the bench seed and the memory fact-id contract
  *  share ONE definition; output is byte-identical to the prior inline copy (the old
  *  mid-loop `>>> 0` was a no-op — proven by fuzz). Imported as a local binding (not
  *  a bare re-export) so this module's own seed derivation can call it too. */
-import { fnv1a32 as fnv1a } from "../src/hash.mjs";
+import { fnv1a32 as fnv1a } from "../src/domain/hash.mjs";
 export { fnv1a };
 
 /** mulberry32 PRNG — small, seedable, deterministic across platforms. */

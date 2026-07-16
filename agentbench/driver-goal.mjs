@@ -8,7 +8,7 @@
 //      request (single-shot or a multi-step plan), that answer stands — the
 //      goal-reasoner adds nothing to a request the C1 layer already grounds.
 //   2. on a C1 REFUSAL (the escalation seam), hand the request to the
-//      goal-reasoner (src/router/goal-reasoner.mjs). It DEDUCES the active goals
+//      goal-reasoner (src/domain/router/goal-reasoner.mjs). It DEDUCES the active goals
 //      from the declared goal model over the graph, runs the hard-bounded BDI
 //      meta-loop, and either COMPOSES an answer (the coverage-gap set / the
 //      keystone module) or REFUSES honestly at the open-world goal-generation
@@ -25,7 +25,7 @@
 // is driver:"goal-0.8.1", so the rollup shows which layer answered each rung.
 
 import { resolverDriver } from "./driver-resolver.mjs";
-import { goalReason } from "../src/router/goal-reasoner.mjs";
+import { goalReason } from "../src/domain/router/goal-reasoner.mjs";
 
 export const DRIVER = "goal-0.8.1";
 

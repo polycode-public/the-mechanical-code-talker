@@ -121,7 +121,7 @@ which cases/tags it should move, and by how much.
 > **Build concurrently (workstream fan-out) — the coordinator model.** This is `CLAUDE.md`'s
 > standing working model in practice: the main session is the COORDINATOR, not the worker. A
 > cycle's changes usually decompose into mostly-independent **workstreams** — e.g. the
-> *interpretation pipeline* (`src/interpret/`), *memory* (`src/memory/`), the *bench harness*
+> *interpretation pipeline* (`src/domain/interpret/`), *memory* (`src/memory/`), the *bench harness*
 > (`chatbench/`), and *docs* — that can be built **in parallel by background subagents** while the
 > coordinator keeps the main chat free for the operator. Two rules make this safe: (a)
 > **serialize on shared files** — `chat.mjs` and `runTurn`'s orchestration are touched by several

@@ -129,7 +129,7 @@ operator's explicit prompt instructions (see `CLAUDE.md`'s first section).
 
 Repo-local identity (`antony@polycode.co.uk` / `Antony at Polycode`). `npm test` green at every
 commit. Coordinator plus background sub-agents, disjoint file-ownership where possible, serialized
-on shared files — this repo's heaviest-touched files (`src/chat.mjs`, `src/ask.mjs`) get edited by
+on shared files — this repo's heaviest-touched files (`src/chat.mjs`, `src/domain/ask.mjs`) get edited by
 one dispatch at a time, never in parallel, to avoid collisions.
 
 Three hard-won lessons, carried forward:

@@ -1,4 +1,4 @@
-// src/router/registry.mjs — the capability registry.
+// src/domain/router/registry.mjs — the capability registry.
 //
 // Each tmct tool is modelled as a STRIPS/PDDL operator declared as DATA: a `Capability` with
 // typed `Parameter`s, `Precondition`s, and `Effect`s (add-list/delete-list). Preconditions are
@@ -196,7 +196,7 @@ function deepFreeze(value) {
 }
 
 /** Register a capability at runtime (e.g. a taught action family bridged in by
- *  src/router/taught.mjs). `readOnly` must be an explicit boolean; a
+ *  src/domain/router/taught.mjs). `readOnly` must be an explicit boolean; a
  *  `readOnly: false` record is forced `dispatchable: false` — the guardrail's
  *  candidate enrichment re-dispatches a tool once per tied candidate, which is
  *  only safe when dispatch performs no writes. Returns an `unregister()`

@@ -1,5 +1,5 @@
 // test/goal-reasoner.test.mjs — the closed-world C2 goal-reasoner
-// (src/router/goal-reasoner.mjs + agentbench/driver-goal.mjs).
+// (src/domain/router/goal-reasoner.mjs + agentbench/driver-goal.mjs).
 //
 // Three groups:
 //   1. UNIT — the declared goal model + the pure meta-loop primitives (goal
@@ -23,10 +23,10 @@ import { fileURLToPath } from "node:url";
 
 import {
   GOAL_RULES, MAX_TICKS, backwardChainGoal, applicableRules, threatsAmong, dropCondition, goalReason,
-} from "../../src/router/goal-reasoner.mjs";
+} from "../../src/domain/router/goal-reasoner.mjs";
 import { goalDriver } from "../../agentbench/driver-goal.mjs";
 import { cochangesLabels, untestedModules, intersect } from "../../agentbench/results.mjs";
-import { capabilities } from "../../src/router/registry.mjs";
+import { capabilities } from "../../src/domain/router/registry.mjs";
 import { createRunCtx, runAgentbench, BENCH_VERSION, loadFixtureLabels } from "../../agentbench/run.mjs";
 import { parseCases, hallucinationsIn } from "../../agentbench/grade.mjs";
 import { resolverDriver } from "../../agentbench/driver-resolver.mjs";
@@ -222,9 +222,9 @@ test("goal-reasoner e2e: SCOPED-ONLY + AMBIGUITY seams both refuse honestly", as
 // candidate's real composed answer (mirrors resolveOne's candidateResults).
 test("goal-reasoner: an ambiguous FOCUS term stays refused but ADDITIONALLY carries candidateResults (never silently falls back to global)", async () => {
   const { buildEntities } = await import("../../src/adapters/graph-build.mjs");
-  const { parseEntities } = await import("../../src/codegraph.mjs");
+  const { parseEntities } = await import("../../src/domain/codegraph.mjs");
   const { ingestSchemaDocs } = await import("../../src/schema-docs.mjs");
-  const { resolveObject } = await import("../../src/ask.mjs");
+  const { resolveObject } = await import("../../src/domain/ask.mjs");
 
   const entities = buildEntities([
     { path: "old-payment-system.js", dotted: "oldPaymentSystem", imports: [], calls: [], defines: [] },

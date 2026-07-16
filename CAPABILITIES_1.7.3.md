@@ -16,8 +16,8 @@ This is an **overlay audit** over `CAPABILITIES_1.6.0.md` (pinned `b461ecd`), no
 version string:
 
 ```
-src/ask-vocab.mjs | src/ask.mjs | src/chat.mjs | src/codegraph.mjs
-src/interpret/strategies/{grammar,keywords,noise-strip}.mjs
+src/domain/ask-vocab.mjs | src/domain/ask.mjs | src/chat.mjs | src/domain/codegraph.mjs
+src/domain/interpret/strategies/{grammar,keywords,noise-strip}.mjs
 src/adapters/memory/core.mjs | src/sessions.mjs | package.json (version only)
 ```
 
@@ -86,11 +86,11 @@ since `CAPABILITIES_1.6.0.md`.
 
 | General agent capability | tmct — measured evidence | Llama 3.1 8B | Amazon Nova Pro | Claude Haiku 4.5 | Claude Sonnet 5 | Claude Opus 4.8 |
 | --- | --- | --- | --- | --- | --- | --- |
-| **Tool use / function calling** | Unchanged since `CAPABILITIES_1.6.0.md`: closed, rule-based router over a FIXED toolset. `BENCHMARK_AGENT_1.7.0.md` — 100% plan-completion, 98% result-completion, 0% hallucination, byte-identical to `1.5.7`'s table (router/planner untouched this window; `git log` confirms newest touch to `src/router/`/`agentbench/` is still the same pre-`1.5.7` commit) | **Stronger** — genuine open-ended function-calling over arbitrary declared tools | **Stronger**, plus reliable multi-tool composition | **Stronger** | **Stronger** | **Stronger** |
+| **Tool use / function calling** | Unchanged since `CAPABILITIES_1.6.0.md`: closed, rule-based router over a FIXED toolset. `BENCHMARK_AGENT_1.7.0.md` — 100% plan-completion, 98% result-completion, 0% hallucination, byte-identical to `1.5.7`'s table (router/planner untouched this window; `git log` confirms newest touch to `src/domain/router/`/`agentbench/` is still the same pre-`1.5.7` commit) | **Stronger** — genuine open-ended function-calling over arbitrary declared tools | **Stronger**, plus reliable multi-tool composition | **Stronger** | **Stronger** | **Stronger** |
 | **Planning & multi-step task decomposition** | Unchanged: same AGENTBENCH A0–C2 ladder, every gate PASS, bounded to pre-defined rungs. One honest gap unchanged (`ab-c2-what-to-test`) — see §2 for its sharpened diagnosis this cycle | **Comparable** — general planning exists but noisier than tmct's deterministic bounded ladder | **Comparable-to-stronger** | **Comparable-to-stronger** | **Stronger** | **Stronger** — handles open-ended plans tmct's fixed rungs can't represent |
-| **Reasoning (logical / multi-hop inference)** | Unchanged: `BENCHMARK_INFERENCE_1.7.0.md` — the first re-confirmation cycle since `1.6.0`, same numbers (kernel 80/80, chat 219/219, both 100% completion / 0% fabrication) — this session's own diff (`src/ask.mjs`/`chat.mjs`/`codegraph.mjs`/`memory/core.mjs`/`sessions.mjs`) never touches `src/syllogise.mjs` or `infbench/`, so this is a clean re-confirmation of unchanged reasoning-engine code, not new measurement | **Comparable** on short chains, **Weaker** as chain depth/ambiguity grows | **Comparable** | **Comparable** | **Stronger** | **Stronger** — arbitrary-depth reasoning, not capped at a fixed ladder depth |
+| **Reasoning (logical / multi-hop inference)** | Unchanged: `BENCHMARK_INFERENCE_1.7.0.md` — the first re-confirmation cycle since `1.6.0`, same numbers (kernel 80/80, chat 219/219, both 100% completion / 0% fabrication) — this session's own diff (`src/domain/ask.mjs`/`chat.mjs`/`codegraph.mjs`/`memory/core.mjs`/`sessions.mjs`) never touches `src/domain/syllogise.mjs` or `infbench/`, so this is a clean re-confirmation of unchanged reasoning-engine code, not new measurement | **Comparable** on short chains, **Weaker** as chain depth/ambiguity grows | **Comparable** | **Comparable** | **Stronger** | **Stronger** — arbitrary-depth reasoning, not capped at a fixed ladder depth |
 | **Knowledge grounding / retrieval (avoiding fabrication)** | **Improved this cycle.** 0% fabrication remains structural. `BENCHMARK_CEFR_ENGLISH_1.7.0.md`: mean up to 1.750/2 (from 1.710), **0 hard fails** (from 1), tier-1 **109/109** (from 108/109) — traced to `1.6.1`'s already-shipped fixes carrying forward, not new lever work this cycle, but the number is real and current | **Weaker** — no RAG discipline out of the box | **Weaker** bare call / **Comparable** with a real grounding harness | **Comparable** under strict grounding+citation prompting | **Comparable** | **Comparable** — best self-calibrated uncertainty of the five, but still probabilistic |
-| **Memory & multi-turn context retention** | **Extended this cycle.** Session-scoped persistent graph, 3 pluggable storage backends, anaphora/focus carried within a session — unchanged. New: edges now carry a `createdAt` stamp and nodes get a derived `updatedAt` (`src/adapters/memory/core.mjs`, `src/codegraph.mjs`'s `derivedUpdatedAt`), and the hub-avoiding `spiralExpand` traversal generalizes past the code graph to walk the memory graph itself (row 93) — groundwork for `PLAN_VIZ.md`, not yet exposed on any user-facing surface | **Weaker** — context-window/attention degradation over long sessions | **Comparable** | **Comparable** | **Comparable-to-stronger** | **Comparable-to-stronger** |
+| **Memory & multi-turn context retention** | **Extended this cycle.** Session-scoped persistent graph, 3 pluggable storage backends, anaphora/focus carried within a session — unchanged. New: edges now carry a `createdAt` stamp and nodes get a derived `updatedAt` (`src/adapters/memory/core.mjs`, `src/domain/codegraph.mjs`'s `derivedUpdatedAt`), and the hub-avoiding `spiralExpand` traversal generalizes past the code graph to walk the memory graph itself (row 93) — groundwork for `PLAN_VIZ.md`, not yet exposed on any user-facing surface | **Weaker** — context-window/attention degradation over long sessions | **Comparable** | **Comparable** | **Comparable-to-stronger** | **Comparable-to-stronger** |
 `ROADMAP.md` explicitly commits to closing, via richer template/surface-realization variety and verified paraphrase-alongside-original, not an 
 | **Autonomy / external action (browsing, files, computer use)** | Unchanged: none, read-only chat against a local graph | **Stronger** if tool-augmented | **Stronger** if tool-augmented | **Stronger** if tool-augmented | **Stronger** if tool-augmented | **Stronger** if tool-augmented |
 
@@ -123,7 +123,7 @@ What's left, still open, checked directly against current code:
   is the single biggest lever on the NL-generation-and-fluency row above if it lands.
 - **`ab-c2-what-to-test`'s composing gap** (row 51, `TOO_HARD_AUDIT.md` M2) — diagnosis sharpened
   this cycle: the ranking mechanism it needs already exists and works
-  (`src/router/goal-reasoner.mjs:421-431`); the real gap is the request never dispatches into the
+  (`src/domain/router/goal-reasoner.mjs:421-431`); the real gap is the request never dispatches into the
   rule that owns that composition step. Next pickup: trace the goal-classification step for this
   exact request shape.
 - **`archive/PLAN_CONVERSATION.md` Finding 4** — anaphoric "SUBJECT verb which N" misroutes into
@@ -163,14 +163,14 @@ each re-checking cited evidence directly against the real code at this pin — n
 
 | # | Capability | Status | Evidence | Change note |
 |---|---|---|---|---|
-| 1 | Multi-strategy interpretation pipeline (grammar/keyword/noise-strip/fuzzy) | implemented | `src/interpret/pipeline.mjs`, `merge.mjs`, `strategies/{ace,constructions,grammar,keywords,noise-strip}.mjs` all present | evidence detail changed: `grammar.mjs` (`ARTICLE_RELATION_CONTINUATIONS` guard), `keywords.mjs` (inherits-object fix), `noise-strip.mjs` (new `maybeVerbNoiseWords` POS gate) each got additive disambiguation fixes this window; pipeline shape/status unaffected |
-| 2 | ACE-inspired controlled-English grammar → OWL triples | implemented | `src/grammar/ace.mjs`, `src/grammar/lexicon.mjs` | unchanged since `CAPABILITIES_1.6.0.md` |
+| 1 | Multi-strategy interpretation pipeline (grammar/keyword/noise-strip/fuzzy) | implemented | `src/domain/interpret/pipeline.mjs`, `merge.mjs`, `strategies/{ace,constructions,grammar,keywords,noise-strip}.mjs` all present | evidence detail changed: `grammar.mjs` (`ARTICLE_RELATION_CONTINUATIONS` guard), `keywords.mjs` (inherits-object fix), `noise-strip.mjs` (new `maybeVerbNoiseWords` POS gate) each got additive disambiguation fixes this window; pipeline shape/status unaffected |
+| 2 | ACE-inspired controlled-English grammar → OWL triples | implemented | `src/domain/grammar/ace.mjs`, `src/domain/grammar/lexicon.mjs` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 3 | ACE-OWL parser extracted to standalone MPL-2.0 npm package | reverted (unchanged) | `packages/` still absent from this worktree | unchanged since `CAPABILITIES_1.6.0.md` |
 | 4 | OWL 2/RDF/RDFS + SEON core ontology grounding | implemented | `ontology/tmct-core.ttl` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 5 | Template libraries / response phrase book | implemented | `src/adapters/corpus/templates.mjs`, `data/templates/` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 6 | Filtered ConceptNet corpus slice (opt-in) | implemented | `corpus/conceptnet/`, `src/adapters/corpus/conceptnet.mjs:32-41` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 7 | Conversational memory as its own OWL-labelled graph (3 backends) | implemented | `src/adapters/memory/core.mjs:185-233` (Backend A flat-json / B in-memory / C sqlite) | evidence detail changed: added `mgx:updatedAt` own-attribute-mutation stamping and edge-level `createdAt` in `upsertEdge`; 3-backend split unaffected |
-| 8 | Input normalization pass | partial (unchanged shape) | `src/interpret/normalize.mjs` | unchanged since `CAPABILITIES_1.6.0.md` |
+| 8 | Input normalization pass | partial (unchanged shape) | `src/domain/interpret/normalize.mjs` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 9 | Graph-provider adapter contract (Repository Interface, 15 services) | implemented | `src/adapters/repository-interface.mjs` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 10 | Runnable conformance/compatibility test suite for RI providers | implemented | `src/conformance.mjs:60` `runConformance` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 11 | Library-first design, stable `exports` map (18 entry points) | implemented | `package.json`, re-verified, still 18 subpaths | unchanged since `CAPABILITIES_1.6.0.md` |
@@ -180,39 +180,39 @@ each re-checking cited evidence directly against the real code at this pin — n
 | 15 | Formal logical reasoning via Prolog/Progol (ILP) | claimed-only (deliberate) | `PLAN_CODE.md` still frames this door as deliberately shut | unchanged since `CAPABILITIES_1.6.0.md` |
 | 16 | Response-finishing grammar pass over segmented answers | partial (unchanged shape) | `src/finish.mjs:31,35,38` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 17 | `tmct init` onboarding CLI, `--persona-size` | implemented | `bin/tmct.mjs:63,573,589,594` | unchanged since `CAPABILITIES_1.6.0.md` |
-| 18 | Speculative inference batch (`tmct syllogise`) | implemented | `src/syllogise.mjs`; wired at `bin/tmct.mjs:795-808` | unchanged since `CAPABILITIES_1.6.0.md` |
-| 19 | `cax-dw` disjointness entailment rule (INF-B1) | implemented | `src/syllogise.mjs:127` `CAX_DW_RULE` | unchanged since `CAPABILITIES_1.6.0.md` — `syllogise.mjs` byte-identical (not a changed file this window) |
-| 20 | `cax-sco` type-propagation entailment rule | implemented | `src/syllogise.mjs:115` `CAX_SCO_RULE` | unchanged since `CAPABILITIES_1.6.0.md` |
-| 21/24 | Actor-level, session-scoped source trust (Laplace/add-k) | implemented | `src/memory/trust.mjs:112` `computeTrust` | unchanged since `CAPABILITIES_1.6.0.md` |
-| 22 | Consistency checking / cardinality entailment / proof-chain materialization (INF stages 4-5) | implemented | `src/syllogise.mjs`: `findConsistencyViolations`, `buildCardinalityRestrictions`, `proveCardinalityAtLeast`, `proveMaxCardinalityZeroDenial` | unchanged since `CAPABILITIES_1.6.0.md` |
-| 23 | Unified provenance/trust primitive (Source individuals) | implemented | `src/memory/trust.mjs:88,198` | unchanged since `CAPABILITIES_1.6.0.md` |
+| 18 | Speculative inference batch (`tmct syllogise`) | implemented | `src/domain/syllogise.mjs`; wired at `bin/tmct.mjs:795-808` | unchanged since `CAPABILITIES_1.6.0.md` |
+| 19 | `cax-dw` disjointness entailment rule (INF-B1) | implemented | `src/domain/syllogise.mjs:127` `CAX_DW_RULE` | unchanged since `CAPABILITIES_1.6.0.md` — `syllogise.mjs` byte-identical (not a changed file this window) |
+| 20 | `cax-sco` type-propagation entailment rule | implemented | `src/domain/syllogise.mjs:115` `CAX_SCO_RULE` | unchanged since `CAPABILITIES_1.6.0.md` |
+| 21/24 | Actor-level, session-scoped source trust (Laplace/add-k) | implemented | `src/domain/memory/trust.mjs:112` `computeTrust` | unchanged since `CAPABILITIES_1.6.0.md` |
+| 22 | Consistency checking / cardinality entailment / proof-chain materialization (INF stages 4-5) | implemented | `src/domain/syllogise.mjs`: `findConsistencyViolations`, `buildCardinalityRestrictions`, `proveCardinalityAtLeast`, `proveMaxCardinalityZeroDenial` | unchanged since `CAPABILITIES_1.6.0.md` |
+| 23 | Unified provenance/trust primitive (Source individuals) | implemented | `src/domain/memory/trust.mjs:88,198` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 25 | Memory-tree versioning (`snapshotMemory`, manual-trigger) | implemented | `src/adapters/memory/core.mjs:636` (was `:629`) | evidence line shifted (earlier-in-file additions: `UPDATED_AT_PROP` const); behavior unchanged |
 | 26 | Automatic, deterministic contradiction detection | implemented | `src/adapters/memory/core.mjs:1690` `findContradictions` (was `:1669`) | evidence line shifted; behavior unchanged |
 | 27 | Hub-dampened memory-fact ranking | implemented, on by default | `src/adapters/memory/blocks.mjs:249` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 28 | Extension-pack / corpus-lexicon loading seam (default bundle flipped) | implemented | `src/extensions.mjs:303` `seedActiveCorpusEntries` | unchanged since `CAPABILITIES_1.6.0.md` |
-| 29 | Bias-weighted ambiguity resolution | implemented | `src/memory/bias.mjs:71` `rankByBiasThenTrust` | unchanged since `CAPABILITIES_1.6.0.md` |
+| 29 | Bias-weighted ambiguity resolution | implemented | `src/domain/memory/bias.mjs:71` `rankByBiasThenTrust` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 30 | `tmct init --with-persona <name>`, size-tier flag | implemented | `bin/tmct.mjs:562` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 31 | Tier-2 general-knowledge corpus bundle (legacy, inactive by default) | implemented, legacy | `corpus/tier2/general.jsonl` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 32 | A wider general-knowledge seed set grown beyond tier2 | implemented | `corpus/tier2/human*.jsonl` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 33 | Context-preserving unknown-word ingestion | partial, still dormant | `src/adapters/corpus/conceptnet.mjs:167-210` (`captureUnknownContext`, default `false`, no production caller sets it true) | unchanged since `CAPABILITIES_1.6.0.md` |
-| 34 | SHACL-style declarative ingest gate | implemented | `src/memory/shacl.mjs` | unchanged since `CAPABILITIES_1.6.0.md` |
+| 34 | SHACL-style declarative ingest gate | implemented | `src/domain/memory/shacl.mjs` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 35 | Cross-repo HTTP smoke test | implemented | `test/server-http-smoke.test.mjs` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 36 | Machine-readable capability envelope | implemented, version field stale | `agentbench/envelope.json:4` `"agentbenchVersion": "1.4.1"` | doc-lag persists another cycle — still 1.4.1 through 1.6.0 and now 1.7.3 |
 | 37 | Ontology-hierarchies tracks a+b (ConceptNet Synonym/SimilarTo) | implemented, default-off | `src/chat.mjs:3879` (was `:3739`) | evidence line shifted (`chat.mjs` grew ~316 net lines this window); status unchanged |
 | 38 | Ontology-hierarchies tracks c+d (SEON spine) | implemented, default-off | `ontology/tmct-core.ttl` | unchanged since `CAPABILITIES_1.6.0.md` |
-| 39 | Advanced-grammar: subordination/conditional preamble frames | implemented | `src/interpret/normalize.mjs:358-537` | unchanged since `CAPABILITIES_1.6.0.md` |
-| 40 | Advanced-grammar: construction-grammar template bank | implemented | `src/interpret/strategies/constructions.mjs` | unchanged since `CAPABILITIES_1.6.0.md` |
+| 39 | Advanced-grammar: subordination/conditional preamble frames | implemented | `src/domain/interpret/normalize.mjs:358-537` | unchanged since `CAPABILITIES_1.6.0.md` |
+| 40 | Advanced-grammar: construction-grammar template bank | implemented | `src/domain/interpret/strategies/constructions.mjs` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 41 | Chat-taught relations & rules (6 items) | implemented, **surface grew** | `src/chat.mjs` — `PLAN_TAUGHT_RELATIONS.md` Items 1-6 markers all present; **new**: 4 reverse-query readers in `factAnswer` (`CAN_ASK_RE`/`WHAT_CAN_DO_RE`/`WHAT_HAS_RE`/`WHAT_INHERITS_RE`, ~`chat.mjs:4093-4162`) plus an `ISA_IDIOM_ROLE_WORDS` guard fixing a false "unknown relation" answer | **strengthened since `CAPABILITIES_1.6.0.md`**: still `implemented`, query-side surface for chat-taught relations grew 4 new lanes (also see row 95, the user-facing capability this enables) |
-| 42 | `findActionPath` (bounded successor BFS) | implemented, not wired to a real domain | `src/planning.mjs:94` | unchanged since `CAPABILITIES_1.6.0.md` — `planning.mjs` byte-identical |
-| 43 | `findReachableSet` (reachability enumeration) | implemented, wired into chat | `src/planning.mjs:199`; call site `src/chat.mjs:5068,5076` | unchanged since `CAPABILITIES_1.6.0.md` |
+| 42 | `findActionPath` (bounded successor BFS) | implemented, not wired to a real domain | `src/domain/planning.mjs:94` | unchanged since `CAPABILITIES_1.6.0.md` — `planning.mjs` byte-identical |
+| 43 | `findReachableSet` (reachability enumeration) | implemented, wired into chat | `src/domain/planning.mjs:199`; call site `src/chat.mjs:5068,5076` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 44 | Towers-of-Hanoi goal-directed planning loop | claimed-only | `PLAN_HANOI.md:3` "Status: RESEARCH / DESIGN — not yet implemented" | unchanged since `CAPABILITIES_1.6.0.md` |
 | 45 | "I am thinking of a number" closed-loop game | claimed-only | `PLAN_GUESS_NUMBER.md:3` "Status: RESEARCH / DESIGN — not yet implemented" | unchanged since `CAPABILITIES_1.6.0.md` |
 | 46 | Program synthesis Track 1 (`GOAL_RULE` synthesis) | implemented | `synthbench/{phrasing,rules}/` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 47 | Program synthesis Tracks 2-4 (Playwright sandbox) | claimed-only, sign-off-gated | no `playwright` in `package.json` | unchanged since `CAPABILITIES_1.6.0.md` |
-| 48 | Completions pipeline Stage 0 (broad search + grouping) | implemented | `src/completions/search.mjs`, `group.mjs` | unchanged since `CAPABILITIES_1.6.0.md` |
-| 49 | Completions pipeline Stage 2 (extractive ranking) | implemented | `src/completions/rank.mjs` | unchanged since `CAPABILITIES_1.6.0.md` |
+| 48 | Completions pipeline Stage 0 (broad search + grouping) | implemented | `src/domain/completions/search.mjs`, `group.mjs` | unchanged since `CAPABILITIES_1.6.0.md` |
+| 49 | Completions pipeline Stage 2 (extractive ranking) | implemented | `src/domain/completions/rank.mjs` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 50 | Completions pipeline wired into a user-facing chat answer path | implemented, gap closed | `src/chat.mjs:6475` `completionsRescueAnswer` (was `:6177`) | evidence line shifted; wiring unchanged |
-| 51 | Capability router, full 6-stage stack | implemented, **now invokable by a real user** | `src/router/{registry,resolver,planner,guardrail,goal-reasoner,call-validator,set-algebra,drive,results}.mjs` | **changed**: the 6-stage stack itself is unchanged (byte-identical, `BENCHMARK_AGENT_1.7.0.md`), but a real audit finding this cycle was that nothing outside `agentbench/`/tests could ever reach it — no CLI subcommand, no chat command, no library export. Closed via row 99: `tmct plan`/chat's `/plan`/`@polycode-projects/the-mechanical-code-talker/plan`. |
+| 51 | Capability router, full 6-stage stack | implemented, **now invokable by a real user** | `src/domain/router/{registry,resolver,planner,guardrail,goal-reasoner,call-validator,set-algebra,drive,results}.mjs` | **changed**: the 6-stage stack itself is unchanged (byte-identical, `BENCHMARK_AGENT_1.7.0.md`), but a real audit finding this cycle was that nothing outside `agentbench/`/tests could ever reach it — no CLI subcommand, no chat command, no library export. Closed via row 99: `tmct plan`/chat's `/plan`/`@polycode-projects/the-mechanical-code-talker/plan`. |
 | 52 | `POST /v1/messages` HTTP shim | implemented | `src/server-http.mjs` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 53 | bedrock-meter $0-rung routing integration | implemented in the sibling repo, not here | `PLAN_AGENTS.md:642` "Not started" (tmct's side) | unchanged since `CAPABILITIES_1.6.0.md` — `PLAN_AGENTS.md` byte-identical since its pin |
 | 54 | GitHub Copilot BYOK protocol shim | claimed-only | `PLAN_AGENTS.md:642` "Not started" | unchanged since `CAPABILITIES_1.6.0.md` |
@@ -229,12 +229,12 @@ each re-checking cited evidence directly against the real code at this pin — n
 | 66 | AGENTBENCH agentic ladder (A0-C2) | implemented | `agentbench/cases.jsonl` (56); `BENCHMARK_AGENT_1.7.0.md`: rung-for-rung identical to `_1.5.7.md` | **changed**: now re-confirmed and cited via `_1.7.0.md`, numbers unchanged |
 | 67 | INFBENCH classical-logic ladder | implemented | `infbench/results/raw/run-1.7.0/`; `BENCHMARK_INFERENCE_1.7.0.md`: both arms 100%/0% through INF-C2, kernel 80/80, chat 219/219 | **changed**: now measured by `_1.7.0.md`, first re-confirmation cycle since `1.6.0`, numbers unchanged |
 | 68 | Strategy-advisor background-agent watch process | implemented (process), dormant | `STRATEGY_ADVISOR.log` (8 entries, last 2026-07-11 16:55Z); no live process | unchanged since `CAPABILITIES_1.6.0.md` |
-| 69 | Segmentation IR + concept force | implemented | `src/concept.mjs`, `src/finish.mjs` | unchanged since `CAPABILITIES_1.6.0.md` |
-| 70 | Negation as bounded set complement | implemented | `src/router/set-algebra.mjs` | unchanged since `CAPABILITIES_1.6.0.md` |
+| 69 | Segmentation IR + concept force | implemented | `src/domain/concept.mjs`, `src/finish.mjs` | unchanged since `CAPABILITIES_1.6.0.md` |
+| 70 | Negation as bounded set complement | implemented | `src/domain/router/set-algebra.mjs` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 71 | Reversible-passive traversal | implemented | `test/ask-negation-passive.test.mjs` | unchanged since `CAPABILITIES_1.6.0.md` |
-| 72 | Compound-name resolution in `resolveObject` | implemented | `src/ask.mjs:2860` (was `:2810`) | evidence line shifted; logic identical |
-| 73 | Same compound-symbol matching extended to `/describe`'s resolver | still claimed-only / named gap | `src/codegraph.mjs:164` `resolveSymbol` — still exact/path-suffix/substring tiers only, no compound matching | unchanged since `CAPABILITIES_1.6.0.md` |
-| 74 | Reverse-`inherits` "the"-definite forms | still claimed-only / named gap | `src/ask-vocab.mjs:58-72,255-266` | unchanged since `CAPABILITIES_1.6.0.md` |
+| 72 | Compound-name resolution in `resolveObject` | implemented | `src/domain/ask.mjs:2860` (was `:2810`) | evidence line shifted; logic identical |
+| 73 | Same compound-symbol matching extended to `/describe`'s resolver | still claimed-only / named gap | `src/domain/codegraph.mjs:164` `resolveSymbol` — still exact/path-suffix/substring tiers only, no compound matching | unchanged since `CAPABILITIES_1.6.0.md` |
+| 74 | Reverse-`inherits` "the"-definite forms | still claimed-only / named gap | `src/domain/ask-vocab.mjs:58-72,255-266` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 75 | Cochange phrasing variants + "multi-root" over-match | still open | `BENCHMARK_CONVERSATION_1.5.7.md`'s original "X and Y `<verb>`" finding — standing evidence, gap unfixed | citation refreshed: old `ROADMAP.md:326-327,351-352` pointer is dead — `ROADMAP.md` was rewritten forward-looking-only and no longer names this gap anywhere; tracked here instead |
 | 76 | Bounded (N+1) goal recognition | claimed-only, research-horizon | `PLAN_AGENTS.md:644` "Not started" | unchanged since `CAPABILITIES_1.6.0.md` |
 | 77 | DRT-lite typed discourse record | claimed-only, research-horizon | `PLAN_AGENTS.md:644` "Not started" | unchanged since `CAPABILITIES_1.6.0.md` |
@@ -242,25 +242,25 @@ each re-checking cited evidence directly against the real code at this pin — n
 | 79 | A shared ~2M-word cross-domain ontology | claimed-only, "record, not commit" | `PLAN_AGENTS.md:646` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 80 | `dispatchTool` MCP-era tool switch | implemented | `src/server.mjs` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 81 | Supply-chain hardening (SAST, secrets, audit, OSV-Scanner, provenance) | implemented | `.gitlab-ci.yml` | unchanged since `CAPABILITIES_1.6.0.md` |
-| 82 | Predicate "find" queries | implemented | `src/ask.mjs:966,1028` (`parseSuperlative`, `parseFind`) | unchanged since `CAPABILITIES_1.6.0.md` |
-| 83 | Single-sourced `fnv1a` hash + wink browser-loader seam | implemented | `src/hash.mjs:19,30`; `src/adapters/wink-model.mjs` | unchanged since `CAPABILITIES_1.6.0.md` |
+| 82 | Predicate "find" queries | implemented | `src/domain/ask.mjs:966,1028` (`parseSuperlative`, `parseFind`) | unchanged since `CAPABILITIES_1.6.0.md` |
+| 83 | Single-sourced `fnv1a` hash + wink browser-loader seam | implemented | `src/domain/hash.mjs:19,30`; `src/adapters/wink-model.mjs` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 84 | SQLite memory Backend C | implemented | `src/adapters/memory/core.mjs:299` `createSqliteMemoryStore` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 85 | In-memory Backend B | implemented | `src/adapters/memory/core.mjs:217` `createInMemoryStore` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 86 | Multi-graph loading + `tmct import` verb | implemented | `bin/tmct.mjs:675`; `src/cli-args.mjs` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 87 | Default human-world persona + Small/Medium/Large content tiers | implemented | `corpus/tier2/human*.jsonl`, `archive/PLAN_SEED.md` | unchanged since `CAPABILITIES_1.6.0.md` |
-| 88 | `graphService` adapter wired into the completions pipeline | implemented | `src/completions/graph-adapter.mjs` | unchanged since `CAPABILITIES_1.6.0.md`; **this is the fix `TOO_HARD_AUDIT.md`'s U1 finding didn't know had already shipped — see §2** |
+| 88 | `graphService` adapter wired into the completions pipeline | implemented | `src/domain/completions/graph-adapter.mjs` | unchanged since `CAPABILITIES_1.6.0.md`; **this is the fix `TOO_HARD_AUDIT.md`'s U1 finding didn't know had already shipped — see §2** |
 | 89 | Public package exports for `generateCompletion`/`createCompletionsGraphAdapter` | implemented | `package.json` `exports`, lines 60-61 | unchanged since `CAPABILITIES_1.6.0.md` |
 | 90 | `SKILL_AGENT_FAST_LOOP.md` process + 2 shipped fixes | implemented | commits `21eb6a2`, `d04a926` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 91 | Persona-sweep as the conversation benchmark's default single-run mode | process change | `SKILL_BENCHMARK_CONVERSATION.md:50,407` §3.4 | unchanged since `CAPABILITIES_1.6.0.md` |
-| 92 | Multi-candidate lexicon/parse ambiguity resolution | implemented, **materially strengthened** | `src/grammar/lexicon.mjs:177,218`, `src/grammar/ace.mjs:244`, `src/chat.mjs:2778`, `src/ask.mjs:3518-3544` (`renderCore`) | **changed since `CAPABILITIES_1.6.0.md`**: commit `d955b25` makes the ambiguity-surfacing branch RESOLVE and render every candidate's real answer, not just describe it — see §2 |
+| 92 | Multi-candidate lexicon/parse ambiguity resolution | implemented, **materially strengthened** | `src/domain/grammar/lexicon.mjs:177,218`, `src/domain/grammar/ace.mjs:244`, `src/chat.mjs:2778`, `src/domain/ask.mjs:3518-3544` (`renderCore`) | **changed since `CAPABILITIES_1.6.0.md`**: commit `d955b25` makes the ambiguity-surfacing branch RESOLVE and render every candidate's real answer, not just describe it — see §2 |
 | — | `PLAN_ADVENTURE.md` | claimed-only, RESEARCH/DESIGN | `PLAN_ADVENTURE.md:1` header, unchanged | unchanged since `CAPABILITIES_1.6.0.md` |
-| 93 | Memory-graph-aware `spiralExpand` traversal | implemented (library-level, not CLI-wired) | `src/codegraph.mjs:762` `spiralExpand(graph, scored, {kinds, classPredicate, idNormalizer, seeds})`, `:598` `MEMORY_SPIRAL_EXPAND_KINDS`, `:869` `mostRecentIndividual()` | **new** — `spiralExpand` previously only walked code-graph Modules via one hardcoded call site; now generalizes to walk the memory graph (Session/Fact/Source) with a caller-supplied class predicate and id-normalizer. `PLAN_VIZ.md` groundwork; no CLI/`--focus` wiring yet |
-| 94 | Edge/node provenance timestamps (`createdAt`/derived `updatedAt`) | implemented | `src/adapters/memory/core.mjs` `UPDATED_AT_PROP = "mgx:updatedAt"`; `upsertEdge()` stamps `createdAt` first-write-wins; `src/codegraph.mjs:1292` `derivedUpdatedAt(graph, ind, {...})`; explicit stamps at `upsertSession`, `recomputeFactTrust`, `recomputeSourceReliability` | **new** — no prior row covered temporal/provenance metadata on memory-graph edges or nodes. `PLAN_VIZ.md` groundwork |
+| 93 | Memory-graph-aware `spiralExpand` traversal | implemented (library-level, not CLI-wired) | `src/domain/codegraph.mjs:762` `spiralExpand(graph, scored, {kinds, classPredicate, idNormalizer, seeds})`, `:598` `MEMORY_SPIRAL_EXPAND_KINDS`, `:869` `mostRecentIndividual()` | **new** — `spiralExpand` previously only walked code-graph Modules via one hardcoded call site; now generalizes to walk the memory graph (Session/Fact/Source) with a caller-supplied class predicate and id-normalizer. `PLAN_VIZ.md` groundwork; no CLI/`--focus` wiring yet |
+| 94 | Edge/node provenance timestamps (`createdAt`/derived `updatedAt`) | implemented | `src/adapters/memory/core.mjs` `UPDATED_AT_PROP = "mgx:updatedAt"`; `upsertEdge()` stamps `createdAt` first-write-wins; `src/domain/codegraph.mjs:1292` `derivedUpdatedAt(graph, ind, {...})`; explicit stamps at `upsertSession`, `recomputeFactTrust`, `recomputeSourceReliability` | **new** — no prior row covered temporal/provenance metadata on memory-graph edges or nodes. `PLAN_VIZ.md` groundwork |
 | 95 | Reverse fact-cascade query shapes (CapableOf/HasA/inherits) against the general-knowledge persona | implemented | `src/chat.mjs:4032-4048` `CAN_ASK_RE`/`WHAT_CAN_DO_RE`/`WHAT_HAS_RE`/`WHAT_INHERITS_RE`, wired into `factAnswer` (`chat.mjs:4164-4239`) | **new** — "can a dog bark", "what has a tail", "what inherits from horse" now resolve against corpus/taught facts instead of a code-graph-flavored miss. Row 82 ("find" queries) is a different, code-graph mechanism; no prior row covered reverse-by-object querying of these predicates. `PLAN_CONVERSATION.md` Finding 5 |
-| 96 | Forward-shape query entityType grain-checking (`forwardGrainMiss`) | implemented | `src/ask.mjs:480` `classesForKinds(graph, kinds)`; forward branch `src/ask.mjs:3198-3215` declines honestly when the asked `entityType` can never appear among a kind's real target classes | **new** — extends the reverse-shape branch's pre-existing filter/decline discipline to the forward branch, which previously had none ("what modules does X have" silently answering with function names). `PLAN_CONVERSATION.md` Finding 3 |
+| 96 | Forward-shape query entityType grain-checking (`forwardGrainMiss`) | implemented | `src/domain/ask.mjs:480` `classesForKinds(graph, kinds)`; forward branch `src/domain/ask.mjs:3198-3215` declines honestly when the asked `entityType` can never appear among a kind's real target classes | **new** — extends the reverse-shape branch's pre-existing filter/decline discipline to the forward branch, which previously had none ("what modules does X have" silently answering with function names). `PLAN_CONVERSATION.md` Finding 3 |
 | 97 | Possessive-named-instance teach shape ("my `<class>` `<name>` is a `<class>`") | implemented | `src/chat.mjs`, `teachLane`'s `stripPossessiveNamedInstance` (commit `1ccd298`) | **new** — "my cat whiskers is a cat" now teaches; previously a hard grammar wall (3-token subject, no existing frame matched). Found via `BENCHMARK_CONVERSATION_1.7.0.md`'s persona sweep |
 | 98 | Bare known class/entity name → describe/focus, zero-verb | implemented | `src/chat.mjs:7041-7059`, `runAsk` block `(2c)` | **new** — "task", "usercontroller" (real class names, no verb at all) now get a real describe-style answer via `metaFallbackEntityAnswer`, closing the last layer of a gap `BENCHMARK_CONVERSATION_1.7.0.md` found (a prior fix already covered the "what is X" wrapper). Commit `76b0a0d` — confirm this before trusting that report's own "not committed" text, which is stale at authoring time (see that file's correction note) |
-| 99 | Capability router invocation surface — `tmct plan`, chat `/plan`, library export | implemented | `bin/tmct.mjs` (`plan` subcommand), `src/chat.mjs` (`/plan` command), `src/router/drive.mjs` (`buildCapabilityPlanCtx`/`runCapabilityPlan`, exported as `./plan`), `test/router-drive.test.mjs` | **new** — closes row 51's reachability gap. `tmct plan "of the modules impacted by X, which are untested"` composes and executes a real multi-step plan; a request neither the resolver nor the planner grounds escalates to the goal-reasoner (`tmct plan "what most needs a test in this codebase"`); an unresolvable request is an honest "no plan found", never a crash. Does NOT change chat's own default `<question>` dispatch — asking the SAME questions without `/plan` still goes through `runAsk`'s existing miss-cascade, untouched; row 51's separate `ab-c2-what-to-test` composing note (§2) is about that default path, not this new explicit command |
+| 99 | Capability router invocation surface — `tmct plan`, chat `/plan`, library export | implemented | `bin/tmct.mjs` (`plan` subcommand), `src/chat.mjs` (`/plan` command), `src/domain/router/drive.mjs` (`buildCapabilityPlanCtx`/`runCapabilityPlan`, exported as `./plan`), `test/router-drive.test.mjs` | **new** — closes row 51's reachability gap. `tmct plan "of the modules impacted by X, which are untested"` composes and executes a real multi-step plan; a request neither the resolver nor the planner grounds escalates to the goal-reasoner (`tmct plan "what most needs a test in this codebase"`); an unresolvable request is an honest "no plan found", never a crash. Does NOT change chat's own default `<question>` dispatch — asking the SAME questions without `/plan` still goes through `runAsk`'s existing miss-cascade, untouched; row 51's separate `ab-c2-what-to-test` composing note (§2) is about that default path, not this new explicit command |
 
 **Stale evidence-citation sweep, not a status change**: rows 37, 50, 25, 26, 72 have shifted line
 numbers only (`chat.mjs`/`ask.mjs`/`memory/core.mjs` grew net lines this window from unrelated
@@ -281,7 +281,7 @@ item 92's `assertTurn` branch, but the same general "honest ambiguity, not a gue
 
 Before commit `d955b25`: an ambiguous parse rendered as "this could mean more than one thing: 1) X or
 2) Y — try rephrasing more specifically" — each candidate only DESCRIBED, never actually answered.
-After: `renderCore()` (`src/ask.mjs:3518-3544`) traverses and renders every branch for real, so the
+After: `renderCore()` (`src/domain/ask.mjs:3518-3544`) traverses and renders every branch for real, so the
 combined answer carries both readings' genuine content and reproduces identically on the same input.
 
 (`"could mean more than one thing"` + `meta "imports"` for `am-meta-imports`; `"imports is a
@@ -299,7 +299,7 @@ territory for this catalog):
 
 - **M1 (imports/mean) — RESOLVED**, commit `d955b25`. See above.
 - **U1 (`broadSearch` "deeper architectural limit") — RESOLVED**, and it turns out it was already
-  resolved a full day *before* `TOO_HARD_AUDIT.md` was even written: `src/completions/graph-adapter.mjs`
+  resolved a full day *before* `TOO_HARD_AUDIT.md` was even written: `src/domain/completions/graph-adapter.mjs`
   (commit `798a77f`, 2026-07-10) already wires `broadSearch()` to the live graph and the Fact store via
   `createCompletionsGraphAdapter(graph, memory)` — this catalog's own row 88 already tracked it as
   `implemented` since `CAPABILITIES_1.5.7.md`. `TOO_HARD_AUDIT.md`'s own finding cited a stale,
@@ -309,7 +309,7 @@ territory for this catalog):
   own by not checking the live catalog it was sitting next to.
 - **M2 (AGENTBENCH `ab-c2-what-to-test`) — still open, diagnosis sharpened.** Live-verified (re-ran
   the exact case via `node agentbench/run.mjs --driver goal --ladder`): the keystone-ranking mechanism
-  M2 asked for already exists and works (`src/router/goal-reasoner.mjs:421-431`, a declared-priority
+  M2 asked for already exists and works (`src/domain/router/goal-reasoner.mjs:421-431`, a declared-priority
   argmax over `|impact(m)|`). The real gap is narrower than M2's original text — the request never
   dispatches into the rule that owns that composition step at all (only `tmct_untested` gets called,
   never `tmct_impact`; the GDA expansion at `goal-reasoner.mjs:388-393` never fires for this request
@@ -457,7 +457,7 @@ in `PLAN_CONVERSATION.md` Finding 2; nothing left open in this plan's own scope.
 
 - **Done**: none, pulled out of `archive/PLAN_INFERENCE_TESTING.md` on that plan's retirement.
 - **Doing**: none.
-- **Todo**: reusing match-state across passes in `src/syllogise.mjs`, plus retraction-aware,
+- **Todo**: reusing match-state across passes in `src/domain/syllogise.mjs`, plus retraction-aware,
   incremental consistency checking. "Not a near-term default" per `HANDOVER.md`, unchanged.
 
 ### Fully shipped and archived, one-line notes

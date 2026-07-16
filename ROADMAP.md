@@ -28,7 +28,7 @@ getting silently traded away by inherited caution:
   clipping/pagination limits. L
 - **Paraphrase alongside the original, verified, never instead of it.** A surface-realization variant
   sits next to the literal grounded answer, never replacing it, and its accuracy is checked, not
-  assumed — by running tmct's own deterministic inference/consistency machinery (`src/syllogise.mjs`)
+  assumed — by running tmct's own deterministic inference/consistency machinery (`src/domain/syllogise.mjs`)
   against both the original and the paraphrase: they must entail the same conclusions, and neither may
   contradict the other sentence-by-sentence..
 

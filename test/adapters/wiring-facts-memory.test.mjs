@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runTurn } from "../../src/chat.mjs";
 import { appendFact } from "../../src/adapters/memory/core.mjs";
-import { parseEntities } from "../../src/codegraph.mjs";
+import { parseEntities } from "../../src/domain/codegraph.mjs";
 import { ingestSchemaDocs } from "../../src/schema-docs.mjs";
 import { clearCache } from "../../src/adapters/source.mjs";
 import { freshConceptNetRepo } from "../helpers/seeded-fixture.mjs";

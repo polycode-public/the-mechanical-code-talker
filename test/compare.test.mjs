@@ -3,7 +3,7 @@
 // "how is X different from Y" / "compare X and Y" / "what's the difference
 // between X and Y" now reach a real (4f) COMPARE RESCUE lane (src/chat.mjs)
 // that resolves both named entities (resolveSymbol) and renders their
-// differences (renderCompare, src/codegraph.mjs — reuses describe's own
+// differences (renderCompare, src/domain/codegraph.mjs — reuses describe's own
 // edgesFor/relLabel/capJoin, no new graph traversal).
 //
 // Driven against the SHIPPED examples/mini-webapp graph, whose
@@ -13,7 +13,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { driveTurns } from "./helpers/session.mjs";
-import { parseEntities } from "../src/codegraph.mjs";
+import { parseEntities } from "../src/domain/codegraph.mjs";
 
 const GRAPH = new URL("../examples/mini-webapp/.tmct/graph.json", import.meta.url).pathname;
 const CONFIG = { graphFile: GRAPH };

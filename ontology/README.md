@@ -31,7 +31,7 @@ the type system those labels refer back to.
 
 ## How the grammar's kinds map
 
-`src/grammar/ace.mjs` labels every emitted triple with a `kind` naming the
+`src/domain/grammar/ace.mjs` labels every emitted triple with a `kind` naming the
 governing OWL construct; the pattern→kind table is reproduced in the .ttl's
 section 2:
 
@@ -56,8 +56,8 @@ syntax), and `appendFact` normalizes fact subjects/objects through
 ## Extending the lexicon
 
 The grammar only understands **declared** words. Add domain vocabulary via
-`loadLexicon(extra)` (`src/grammar/lexicon.mjs`) with the same JSON shape as
-`src/grammar/lexicon-core.json`:
+`loadLexicon(extra)` (`src/domain/grammar/lexicon.mjs`) with the same JSON shape as
+`src/domain/grammar/lexicon-core.json`:
 
 ```js
 const lexicon = loadLexicon({

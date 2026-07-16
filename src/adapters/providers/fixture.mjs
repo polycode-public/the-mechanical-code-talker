@@ -9,7 +9,7 @@
 // The payload is embedded (not read from test/) so this ships as a runnable spec
 // inside the library. Its shape is exactly a parseEntities() input.
 
-import { parseEntities } from "../../codegraph.mjs";
+import { parseEntities } from "../../domain/codegraph.mjs";
 import { createGraphService } from "./graph-service.mjs";
 
 /** A compact but type-complete entities payload: modules, a class hierarchy

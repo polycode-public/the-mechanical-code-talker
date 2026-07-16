@@ -236,7 +236,7 @@ async function recordSessionMemory(graphFile, record, repoDirOverride = null) {
     ended = Boolean(parseSessionJsonl(sidecar)?.ended);
   } catch { /* no sidecar — nothing to fold from */ }
   if (ended) {
-    const { foldSessionLogs } = await import("./memory/fold.mjs"); // lazy: fold imports this module
+    const { foldSessionLogs } = await import("./domain/memory/fold.mjs"); // lazy: fold imports this module
     await foldSessionLogs(repoDir, { sessionId: record.id });
   }
 }

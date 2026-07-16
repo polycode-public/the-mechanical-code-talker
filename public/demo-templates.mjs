@@ -1,7 +1,7 @@
 // demo-templates.mjs — the 10 question templates the live chat demo picks from.
 //
 // Every (template, substitution) pair listed here was verified NON-MISS against the
-// real engine (src/ask.mjs's ask(), the exact function this page also calls) over
+// real engine (src/domain/ask.mjs's ask(), the exact function this page also calls) over
 // public/demo-graph.json, run Node-side with the same registerWinkModel wiring the
 // browser page uses (see the repo's verification run in the implementation report —
 // not re-run here to keep this file data-only). Substitution sets are deliberately

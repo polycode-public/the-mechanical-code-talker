@@ -23,12 +23,12 @@ import { join } from "node:path";
 import {
   constructionsStrategy, constructionBank, parseConstruction,
   setConstructionBanks, buildAgentNounTable, buildConstructionTemplates,
-} from "../../src/interpret/strategies/constructions.mjs";
+} from "../../src/domain/interpret/strategies/constructions.mjs";
 import { readConstructionFiles, CONSTRUCTIONS_DIR } from "../../src/adapters/corpus/construction-banks.mjs";
-import { STRATEGIES, normalizeInput, runStrategiesSync } from "../../src/interpret/pipeline.mjs";
-import { mergeStrategyResults } from "../../src/interpret/merge.mjs";
-import { parseQuery, ask } from "../../src/ask.mjs";
-import { parseEntities } from "../../src/codegraph.mjs";
+import { STRATEGIES, normalizeInput, runStrategiesSync } from "../../src/domain/interpret/pipeline.mjs";
+import { mergeStrategyResults } from "../../src/domain/interpret/merge.mjs";
+import { parseQuery, ask } from "../../src/domain/ask.mjs";
+import { parseEntities } from "../../src/domain/codegraph.mjs";
 
 // The strategy takes its banks registered from outside; this file wires the
 // real committed data the way the product composition points do.

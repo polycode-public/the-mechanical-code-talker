@@ -131,22 +131,22 @@ condition (§7) meaningful.
 
 Run the failing probe with `--narrate` first. Which strategy matched (or that none did) tells
 you which layer owns the fix. The interpretation pipeline
-(`src/interpret/pipeline.mjs`) runs, in precedence order: normalize → grammar → keyword-spot →
+(`src/domain/interpret/pipeline.mjs`) runs, in precedence order: normalize → grammar → keyword-spot →
 noise-strip → ACE → constructions.
 
 | Symptom | Layer to look at |
 |---|---|
-| A surface wrapper/rhetorical frame around a shape that already works | `src/interpret/normalize.mjs` (PHRASING_FRAMES, negation frames) |
-| A genuinely general question shape nothing handles | `src/interpret/strategies/grammar.mjs` (anchored templates T1–T10) |
+| A surface wrapper/rhetorical frame around a shape that already works | `src/domain/interpret/normalize.mjs` (PHRASING_FRAMES, negation frames) |
+| A genuinely general question shape nothing handles | `src/domain/interpret/strategies/grammar.mjs` (anchored templates T1–T10) |
 | A specific surface construction mis-read by keyword-spot (wrong subject/object direction, agent nouns, genitives, compounds) | `data/templates/constructions/*.toml` — the free-form templating layer |
-| Teach sentence not parsed / stored wrongly | `src/grammar/` (ACE grammar, lexicon) — verify with `tmct memory` |
+| Teach sentence not parsed / stored wrongly | `src/domain/grammar/` (ACE grammar, lexicon) — verify with `tmct memory` |
 | Parsed fine, answer phrased badly | `src/answer-variants.*`, `data/templates/responses.jsonl`, `src/finish.mjs` + `data/templates/grammar-rules.toml` (byte-stable contract — read that file's header first) |
 
 **The templating mindset (this is the important one).** When a fix means adding a special case
 to a general rule — an extra `|alternative` in a grammar.mjs regex, a carve-out for one phrasing —
 stop and ask whether you're overfitting. The project's preferred move for irregular language is
 the construction bank: `data/templates/constructions/` holds closed template families as DATA
-(pattern → AST skeleton), loaded by `src/interpret/strategies/constructions.mjs` and validated at
+(pattern → AST skeleton), loaded by `src/domain/interpret/strategies/constructions.mjs` and validated at
 load time against the closed relation/entity vocabularies. This is the same layer that fixed
 "store.mjs's importers" / "store.mjs importers" without touching the general grammar. The rules:
 

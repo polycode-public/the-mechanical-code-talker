@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { startServer, respondToMessages, selectTool } from "../src/server-http.mjs";
-import { parseEntities } from "../src/codegraph.mjs";
+import { parseEntities } from "../src/domain/codegraph.mjs";
 import { dispatchTool } from "../src/server.mjs";
 import * as source from "../src/adapters/source.mjs";
 

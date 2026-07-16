@@ -29,7 +29,7 @@
 
 import { hallucinationsIn } from "./grade.mjs";
 import { selectTool } from "../src/server-http.mjs";
-import { preconditionsOf, effectsOf, PRECOND } from "../src/router/registry.mjs";
+import { preconditionsOf, effectsOf, PRECOND } from "../src/domain/router/registry.mjs";
 
 const DRIVER = "shim-transport";
 

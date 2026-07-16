@@ -13,7 +13,7 @@
 //      that parseAce almost fits (exactly one undeclared "residue" word),
 //      look up that word's real WordNet synset and try substituting each
 //      member that is ALSO already declared in tmct's own lexicon
-//      (src/grammar/lexicon-core.json) for the SAME part of speech. Both
+//      (src/domain/grammar/lexicon-core.json) for the SAME part of speech. Both
 //      ends of the swap are real, independently-curated tmct vocabulary —
 //      WordNet only supplies the evidence that they're genuinely
 //      synonymous. If the substituted sentence now hits, it's a real,
@@ -28,7 +28,7 @@
 //   3. ALT-PHRASING — for a possessive-pattern (#7) hit, the ACE grammar
 //      itself declares TWO surface forms for the identical triple
 //      ("X's Y is Z" / "the Y of X is Z", both routed through
-//      src/grammar/ace.mjs's buildPossessive) — the one place in the pattern
+//      src/domain/grammar/ace.mjs's buildPossessive) — the one place in the pattern
 //      table where an alternate word order is grammar-sanctioned, not
 //      invented here. Generates the sentence's untried surface form and
 //      verifies it re-parses to the same triple shape.
@@ -42,8 +42,8 @@ import { readdir, readFile, writeFile, mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createHash } from "node:crypto";
-import { parseAce } from "../src/grammar/ace.mjs";
-import { loadLexicon } from "../src/grammar/lexicon.mjs";
+import { parseAce } from "../src/domain/grammar/ace.mjs";
+import { loadLexicon } from "../src/domain/grammar/lexicon.mjs";
 import { loadMarkdownCorpus, splitSentences } from "./lib/text-corpus.mjs";
 import { synsetsFor } from "./lib/wordnet-synonyms.mjs";
 import { classify } from "./template-coverage.mjs";

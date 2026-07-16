@@ -12,9 +12,9 @@ import { fileURLToPath } from "node:url";
 import { ingestSchemaDocs } from "../../src/schema-docs.mjs";
 import {
   buildCapabilityPlanCtx, runCapabilityPlan, runTaughtPlan, declaredCapabilityNames,
-} from "../../src/router/drive.mjs";
-import { isCapability } from "../../src/router/registry.mjs";
-import { actionFamilies, capabilityFromActionRules } from "../../src/router/taught.mjs";
+} from "../../src/domain/router/drive.mjs";
+import { isCapability } from "../../src/domain/router/registry.mjs";
+import { actionFamilies, capabilityFromActionRules } from "../../src/domain/router/taught.mjs";
 import { runTurn, capabilityPlanDeps } from "../../src/chat.mjs";
 import {
   appendRule, loadMemory, readRuleRows,

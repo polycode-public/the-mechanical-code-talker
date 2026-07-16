@@ -12,9 +12,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildEntities } from "../src/adapters/graph-build.mjs";
-import { parseEntities } from "../src/codegraph.mjs";
+import { parseEntities } from "../src/domain/codegraph.mjs";
 import { ingestSchemaDocs } from "../src/schema-docs.mjs";
-import { parseQuery, ask } from "../src/ask.mjs";
+import { parseQuery, ask } from "../src/domain/ask.mjs";
 
 const MODULES = [
   { path: "src/gateway.mjs", dotted: "src.gateway", imports: [], calls: [],

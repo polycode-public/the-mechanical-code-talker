@@ -38,7 +38,7 @@ export const DEFAULT_OUT = join(HERE, "envelope.json");
 // The schema is intentionally small and stable — additive-only going forward.
 export const SCHEMA_VERSION = 1;
 
-/** Hallucination REASON taxonomy (src/router/call-validator.mjs) split into the
+/** Hallucination REASON taxonomy (src/domain/router/call-validator.mjs) split into the
  *  two capability axes bedrock-meter's TMCT_ENVELOPE names:
  *    - "undeclared"/"unknown-tool"  -> a TOOLS-boundary violation (toolsOk)
  *    - "unknown-arg"/"missing-arg"  -> a SCHEMA/shape violation (structuredOk)
@@ -127,7 +127,7 @@ export function buildEnvelope({ rows, rolled, ladder, stamp, cases }) {
     },
     notes: [
       "rungReached is the highest A0-C2 rung with an unbroken gate-PASS chain from A0 (0% hallucination AT >=50% completion, agentbench/grade.mjs COMPLETION_FLOOR) — see agentbench/grade.mjs ladderGate()/highestGatePassRung().",
-      "toolsOk is false iff any produced call across the run named an undeclared or unknown-registry tool (the 'declared tools only, refuse otherwise' invariant). structuredOk is false iff any produced call had an unknown or missing argument against its declared schema. Both derive from src/router/call-validator.mjs's hallucination taxonomy, not a hand-set guess.",
+      "toolsOk is false iff any produced call across the run named an undeclared or unknown-registry tool (the 'declared tools only, refuse otherwise' invariant). structuredOk is false iff any produced call had an unknown or missing argument against its declared schema. Both derive from src/domain/router/call-validator.mjs's hallucination taxonomy, not a hand-set guess.",
       "maxContextTokens is not measured by AGENTBENCH today; it is intentionally left null rather than copying a downstream calibration's hand-set figure (that copy is exactly the drift this envelope exists to prevent).",
       "Regenerate with `node agentbench/generate-envelope.mjs` after any AGENTBENCH-affecting change; the output is deterministic (no Date.now) so a clean re-run over an unchanged tree is byte-identical.",
     ],

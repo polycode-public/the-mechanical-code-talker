@@ -1,5 +1,5 @@
 // completions-prune.test.mjs — Stage 5 ("drop non-contributing elements") verification for
-// src/completions/prune.mjs, per PLAN_COMPLETIONS.md §1.5/§4's own staging table (row 3): "any
+// src/domain/completions/prune.mjs, per PLAN_COMPLETIONS.md §1.5/§4's own staging table (row 3): "any
 // retrieved span that ends up in no surviving group, feeds no asserted inference, and is not
 // selected by Stage 4's ranking gets cut, explicitly, with the drop recorded (not silently
 // discarded)".
@@ -11,7 +11,7 @@
 // see its docblock), plus a determinism double-run diff.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { pruneCompletion } from "../src/completions/prune.mjs";
+import { pruneCompletion } from "../src/domain/completions/prune.mjs";
 
 function group(id, memberIds, label = id) {
   return { id, memberIds, label };

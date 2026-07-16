@@ -13,7 +13,7 @@
 // or open-ended-reasoning capability (see HANDOVER.md / PLAN_TMCT_ECOSYSTEM_
 // INTEGRATION.md's honest framing) — this loop only ever answers CLOSED, DECLARED
 // goals over a code graph (the coverage-gap / keystone goal-rules in
-// src/router/goal-reasoner.mjs). It cannot attempt a novel task outside those
+// src/domain/router/goal-reasoner.mjs). It cannot attempt a novel task outside those
 // rules; it refuses honestly instead (see the REFUSE example below).
 //
 // Usage: node demo/agentic-loop-demo.mjs
@@ -93,7 +93,7 @@ async function main() {
   }
   console.log(`\n${"=".repeat(72)}`);
   console.log("Every call above was resolved, planned, executed and composed by tmct's");
-  console.log("own deterministic router + goal-reasoner (src/router/) — no model call,");
+  console.log("own deterministic router + goal-reasoner (src/domain/router/) — no model call,");
   console.log("no network, no randomness. Requests 1-3 are the real, validated capability:");
   console.log("closed goal-rules climb reliably. Request 4 is the honest refusal working");
   console.log("as designed. Request 5 USED TO be a gap: an unrelated request silently got");

@@ -17,9 +17,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { parseEntities } from "../src/codegraph.mjs";
+import { parseEntities } from "../src/domain/codegraph.mjs";
 import { nlpAdapter } from "../src/adapters/ask-nlp.mjs";
-import { parseQuery, ask } from "../src/ask.mjs";
+import { parseQuery, ask } from "../src/domain/ask.mjs";
 
 const FIXTURE = fileURLToPath(new URL("./fixtures/entities.fixture.json", import.meta.url));
 const graph = parseEntities(JSON.parse(readFileSync(FIXTURE, "utf8")));

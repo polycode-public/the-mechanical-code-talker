@@ -8,7 +8,7 @@
 // COMPARISON, never a replay of the engine testing itself.
 //
 // TWO DRIVE POINTS (§2.1):
-//   - kernel: calls src/syllogise.mjs's pure provers directly over the
+//   - kernel: calls src/domain/syllogise.mjs's pure provers directly over the
 //     premises' own emitted triples — deriveSubClassClosure (subClassOf
 //     transitivity), deriveSomeValuesFromApplication (cls-svf1 restriction
 //     membership), and, as of this build, deriveSomeValuesFromSubsumption
@@ -41,9 +41,9 @@
 import {
   deriveSubClassClosure, deriveSomeValuesFromApplication, deriveSomeValuesFromSubsumption,
   buildCardinalityRestrictions, proveCardinalityAtLeast, proveMaxCardinalityZeroDenial,
-} from "../src/syllogise.mjs";
-import { parseAce } from "../src/grammar/ace.mjs";
-import { loadLexicon } from "../src/grammar/lexicon.mjs";
+} from "../src/domain/syllogise.mjs";
+import { parseAce } from "../src/domain/grammar/ace.mjs";
+import { loadLexicon } from "../src/domain/grammar/lexicon.mjs";
 import { normFactTerm } from "../src/adapters/memory/core.mjs";
 
 // ---- the bands (the classical-logic ladder — INF-A1 -> INF-C2) ----
@@ -125,7 +125,7 @@ const CARD_EXISTENCE_KERNEL_RE = /^does\s+an?\s+(.+?)\s+have\s+an?\s+(.+?)[?.!\s
  *  matching how `owl:intersectionOf` is already excluded (neither is a real
  *  taught object-property assertion). owl:onProperty is handled separately
  *  (it's shared scaffolding between someValuesFrom AND cardinality
- *  restrictions — see src/syllogise.mjs's `buildCardinalityRestrictions` doc
+ *  restrictions — see src/domain/syllogise.mjs's `buildCardinalityRestrictions` doc
  *  comment on the HAS_PROPERTY_KEY defensive belt). */
 const CARDINALITY_ROW_PREDICATES = new Set(["owl:cardinality", "owl:minCardinality", "owl:maxCardinality", "owl:onClass"]);
 
@@ -149,7 +149,7 @@ function singularCandidates(term) {
  *  existence claim), or "unproven" (the kernel's domain cannot see it — an
  *  honest structural ceiling, e.g. it has no notion of the codegraph or of
  *  disjointWith/the further owl:intersectionOf step past cls-svf1). Pure; no
- *  I/O — this is a bench-side check over `src/syllogise.mjs`'s pure kernels
+ *  I/O — this is a bench-side check over `src/domain/syllogise.mjs`'s pure kernels
  *  directly, deliberately NOT going through `chat.mjs` for the cls-svf1/
  *  scm-svf1 restriction-node query shapes (out of an earlier dispatch's
  *  scope — see the cls-svf1 template's own generator comment; c1ScmSvfApply's

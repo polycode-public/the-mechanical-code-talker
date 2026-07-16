@@ -26,7 +26,7 @@
 //     softer threshold would tolerate the ranker doing no better than chance.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { rankSentences, splitSentences } from "../src/completions/rank.mjs";
+import { rankSentences, splitSentences } from "../src/domain/completions/rank.mjs";
 
 // Fixture A: three "Store" blocks, each pairing a dense, cross-block-shared-vocabulary
 // sentence (Store/Task/User/records) with an identical, deliberately generic filler

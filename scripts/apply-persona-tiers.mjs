@@ -4,7 +4,7 @@
 // surfaces: corpus/tier2/generate.mjs's CORPUSES object (new "human-medium"
 // and "human-large" entries, each holding ONLY the facts incremental beyond
 // the previous tier — PLAN_SEED.md's tier-selection design) and
-// src/grammar/lexicon-core.json (new nouns the incremental facts need).
+// src/domain/grammar/lexicon-core.json (new nouns the incremental facts need).
 // Maintainer-only, offline, $0 — never imported by src/ or bin/, never run
 // by `npm test`. Run once per worksheet; re-run `node
 // corpus/tier2/generate.mjs --verify` afterward to write the actual
@@ -22,7 +22,7 @@ const WORKSHEET = (() => {
   return i !== -1 && process.argv[i + 1] ? process.argv[i + 1] : join(HERE, "persona-tiers-worksheet.json");
 })();
 const GENERATE_PATH = join(HERE, "..", "corpus", "tier2", "generate.mjs");
-const LEXICON_PATH = join(HERE, "..", "src", "grammar", "lexicon-core.json");
+const LEXICON_PATH = join(HERE, "..", "src", "domain", "grammar", "lexicon-core.json");
 
 const CLUMP_ORDER = [
   "human-core", "human-places", "human-objects", "human-nature",
@@ -41,7 +41,7 @@ const CLUMP_LABEL = {
 // A modest map of common English irregular plurals among the words this
 // batch is likely to introduce (Latin/Greek-derived cognition/body/nature
 // vocabulary especially) — anything NOT in this map defaults to `{}` and
-// relies on the regular -s/-es/-ies suffix fold (src/grammar/lexicon.mjs's
+// relies on the regular -s/-es/-ies suffix fold (src/domain/grammar/lexicon.mjs's
 // foldCandidates), same as the vast majority of Small tier's own additions.
 const IRREGULAR_PLURALS = {
   foot: "feet", tooth: "teeth", goose: "geese", ox: "oxen", die: "dice",

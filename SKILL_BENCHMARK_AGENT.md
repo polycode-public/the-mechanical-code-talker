@@ -40,7 +40,7 @@ Every cycle MUST satisfy:
   tree and stamp produce byte-identical `product.jsonl`. One run per arm is sufficient; there is no
   judge-noise tier to sample against, unlike CHATBENCH.
 - **The automatic-fail line: zero hallucination.** A produced call naming a tool outside the
-  declared set, or outside the registered-capability closed world (`src/router/registry.mjs`), or
+  declared set, or outside the registered-capability closed world (`src/domain/router/registry.mjs`), or
   with an unbindable/extra required argument, fails that case outright — no matter how good the
   rest of the loop looks. Closed-world default-deny: an unregistered tool name is treated as
   UNKNOWN and rejected exactly like an invented one.
@@ -68,7 +68,7 @@ Every cycle MUST satisfy:
   (tiny-local, 8B-open, Nova-micro/lite, Haiku) are anchors for a future write-up, not scores this
   harness produces (no network, no LLM). Don't claim a number for them.
 - **Bench-import direction stays one way.** The product (`src/`) never imports from `agentbench/`;
-  the bench imports downward from `src/router/call-validator.mjs` and `src/router/set-algebra.mjs`.
+  the bench imports downward from `src/domain/router/call-validator.mjs` and `src/domain/router/set-algebra.mjs`.
   A cycle that reverses this is a real regression, not a refactor detail — verify with
   `grep -r 'agentbench' src/` before writing up a cycle as clean.
 
@@ -89,10 +89,10 @@ coordinator model described below when it's one of several concurrent workstream
 > `CLAUDE.md`'s standing working model, the main session is the coordinator, not the worker. The
 > AGENTBENCH run itself is cheap enough to run inline most cycles. What benefits from delegation is
 > the SAME kind of work `SKILL_BENCHMARK_CEFR_ENGLISH.md`'s Step 2 calls out: a cycle that touches multiple
-> mostly-independent workstreams — a new HTN method in `src/router/planner.mjs`, a new declared goal
-> rule in `src/router/goal-reasoner.mjs`, new fixture-linted cases in `agentbench/cases.jsonl`, the
+> mostly-independent workstreams — a new HTN method in `src/domain/router/planner.mjs`, a new declared goal
+> rule in `src/domain/router/goal-reasoner.mjs`, new fixture-linted cases in `agentbench/cases.jsonl`, the
 > write-up itself — can fan those out to background sub-agents with clear file-ownership boundaries,
-> serialized on any shared file (the registry, `src/router/call-validator.mjs`), while the
+> serialized on any shared file (the registry, `src/domain/router/call-validator.mjs`), while the
 > coordinator keeps the main chat free for the operator and picks results up on each completion
 > notification. If a cycle ever needs a genuinely long run (a much larger case set, multiple drivers
 > compared in one pass), that run itself moves to a background task too — never block the
@@ -143,7 +143,7 @@ operator check-in rather than an automatic re-arm.
 - One cycle per router/planner capability. Unlike CHATBENCH's continuous autonomous cycles, an
   AGENTBENCH cycle's Step 5 "build" is genuine engine work (an HTN method, a goal rule, a driver
   change) — size the cycle to that, not to a fixed time box.
-- A pure re-measurement (no build) is a fast, cheap cycle — worth running whenever `src/router/` or
+- A pure re-measurement (no build) is a fast, cheap cycle — worth running whenever `src/domain/router/` or
   `agentbench/cases.jsonl` changes, to catch a regression before it compounds.
 - Run alongside `SKILL_BENCHMARK_CEFR_ENGLISH.md` and `SKILL_BENCHMARK_INFERENCE.md` cycles when a release
   touches both the chat surface and the router — they measure different axes of the same release

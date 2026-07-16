@@ -1,12 +1,12 @@
 // synthbench/rules/enumerate.mjs — PLAN_CODE.md Track 1, Stage 2 (§1.3/§6):
 // the BOUNDED field-grammar enumerator over the exact shape
-// src/router/goal-reasoner.mjs's GOAL_RULES entries declare. Produces
+// src/domain/router/goal-reasoner.mjs's GOAL_RULES entries declare. Produces
 // candidate rule OBJECTS only — nothing here runs a candidate through the
 // real engine (that is oracle.mjs, Stage 3) or narrows the set against
 // labeled examples (that is synthesize.mjs, Stage 4).
 //
 // GROUNDED IN THE REGISTRY, NOT HARDCODED. Every enumerated field ranges over
-// a set src/router/registry.mjs or src/router/resolver.mjs already declares —
+// a set src/domain/router/registry.mjs or src/domain/router/resolver.mjs already declares —
 // the topic list is READ from the registry's own `knows(...)` add-effects
 // (never a copied string list), so this enumerator's search space grows
 // automatically the day a new capability is registered (PLAN_CODE.md §7: "every
@@ -51,8 +51,8 @@
 // keeps the plan's own C(15,<=3) formula, which is far larger, tractable at
 // all). See test/synth-rules.test.mjs's stage-2 test for the exact count.
 
-import { capabilities, effectsOf, KINDS } from "../../src/router/registry.mjs";
-import { backwardChain } from "../../src/router/resolver.mjs";
+import { capabilities, effectsOf, KINDS } from "../../src/domain/router/registry.mjs";
+import { backwardChain } from "../../src/domain/router/resolver.mjs";
 
 // The resolvable entity-kind names registry.mjs's KINDS declares (the ones
 // backed by a real graph class — "seon:..." — never the free-text/enum slots

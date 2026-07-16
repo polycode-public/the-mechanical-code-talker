@@ -1,4 +1,4 @@
-// completions-complete.test.mjs — end-to-end verification for src/completions/complete.mjs's
+// completions-complete.test.mjs — end-to-end verification for src/domain/completions/complete.mjs's
 // generateCompletion(), PLAN_COMPLETIONS.md §4's staging table (row 3) exit criterion made
 // concrete: "A full end-to-end completion reads as one consistent voice and every sentence
 // traces to a source span."
@@ -31,7 +31,7 @@ import { join } from "node:path";
 
 import { saveBlock } from "../src/adapters/memory/blocks.mjs";
 import { appendFact, loadMemory } from "../src/adapters/memory/core.mjs";
-import { generateCompletion } from "../src/completions/complete.mjs";
+import { generateCompletion } from "../src/domain/completions/complete.mjs";
 
 async function tmpRepo() {
   return mkdtemp(join(tmpdir(), "tmct-completions-complete-"));

@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   paraphraseSubClass, recoverSubClassTriple, verifySubClassParaphrase, paraphraseVerifiedSubClass,
-} from "../../src/paraphrase.mjs";
+} from "../../src/domain/paraphrase.mjs";
 
 test("paraphraseSubClass: deterministic — same (subject, object) always produces the same text", () => {
   assert.equal(paraphraseSubClass("cache", "component"), paraphraseSubClass("cache", "component"));

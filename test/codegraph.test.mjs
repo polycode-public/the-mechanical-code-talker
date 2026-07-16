@@ -51,9 +51,9 @@ import {
   MEMORY_FACT_LINK_KINDS,
   pickLegendDimension,
   legendValueFor,
-} from "../src/codegraph.mjs";
+} from "../src/domain/codegraph.mjs";
 import { buildEntities } from "../src/adapters/graph-build.mjs";
-import { proseLayerHits } from "../src/prose.mjs";
+import { proseLayerHits } from "../src/domain/prose.mjs";
 import { appendUtterance, appendFact, loadMemory, CREATED_AT_PROP, UPDATED_AT_PROP } from "../src/adapters/memory/core.mjs";
 
 const fixture = JSON.parse(
@@ -1330,7 +1330,7 @@ test("spiralExpand walks the MEMORY graph (kinds=MEMORY_SPIRAL_EXPAND_KINDS, idN
     const sourceInd = m.individuals.find((i) => i.class === "Source");
     assert.ok(sourceInd, "fixture sanity: a Source individual was derived from the fact's provenance");
     // Simulate memory/fold.mjs's addCanonicalisedFromEdges (Fact → Utterance) — out of this
-    // agent's assigned files (src/memory/fold.mjs), so injected directly here in the exact shape
+    // agent's assigned files (src/domain/memory/fold.mjs), so injected directly here in the exact shape
     // that function produces, rather than driving the whole session-fold pipeline just to prove
     // spiralExpand's OWN traversal mechanics work over the real edge inventory.
     m.objectProperties.push({

@@ -7,8 +7,8 @@
 // Entities are a group's content tokens narrowed to graph-known terms (normFactTerm-matched
 // against loaded facts) — sharing an English word alone never licenses a relation.
 
-import { normFactTerm, readFactRows, resolveRelationChase } from "../adapters/memory/core.mjs";
-import { tokenizeBlock } from "../adapters/memory/blocks.mjs";
+import { normFactTerm, readFactRows, resolveRelationChase } from "../../adapters/memory/core.mjs";
+import { tokenizeBlock } from "../../adapters/memory/blocks.mjs";
 import { splitSentences } from "./rank.mjs";
 import { STOPWORDS } from "../prose.mjs";
 import { findActionPath, findReachableSet } from "../planning.mjs";

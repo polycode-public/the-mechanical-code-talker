@@ -8,7 +8,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import * as domainProse from "../../src/prose.mjs";
+import * as domainProse from "../../src/domain/prose.mjs";
 import * as storeProse from "../../src/adapters/memory/prose-tokens.mjs";
 
 const INPUTS = [

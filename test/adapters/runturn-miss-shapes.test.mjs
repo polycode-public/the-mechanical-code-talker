@@ -6,7 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { runTurn, shortMissHint, WALL_MISS_RE } from "../../src/chat.mjs";
-import { parseEntities } from "../../src/codegraph.mjs";
+import { parseEntities } from "../../src/domain/codegraph.mjs";
 import * as source from "../../src/adapters/source.mjs";
 
 const CONFIG = { graphFile: fileURLToPath(new URL("../fixtures/entities.fixture.json", import.meta.url)) };

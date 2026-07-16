@@ -10,7 +10,7 @@ import {
   loadLexicon, classify, numberOf, thirdPerson, predicateOf,
   lookupNoun, lookupVerb, lookupAdjective, lookupProperName,
   DETERMINERS, QUANTIFIERS,
-} from "../../src/grammar/lexicon.mjs";
+} from "../../src/domain/grammar/lexicon.mjs";
 import { mergedLexiconExtra } from "../../src/extensions.mjs";
 
 test("loadLexicon: the committed core is a real starter vocabulary (size floors), cached when unextended", () => {

@@ -5,8 +5,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { ask } from "../../src/ask.mjs";
-import { parseEntities } from "../../src/codegraph.mjs";
+import { ask } from "../../src/domain/ask.mjs";
+import { parseEntities } from "../../src/domain/codegraph.mjs";
 import { ingestSchemaDocs } from "../../src/schema-docs.mjs";
 
 const FIXTURE = new URL("../fixtures/entities.fixture.json", import.meta.url);

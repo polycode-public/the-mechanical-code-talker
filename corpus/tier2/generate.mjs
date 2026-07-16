@@ -264,7 +264,7 @@ export const CORPUSES = {
     description: "The default human-world persona (PLAN_SEED.md): everyday people, places, objects, nature, time/events, body/food and mind vocabulary, hand-curated from Open English WordNet (CC-BY-4.0) and bridged to Schema.org's (Apache-2.0) top-level classes — replaces the code-domain SEON+ConceptNet default.",
     // Every noun/verb/adjective this corpus's facts depend on, so a live
     // sentence built from the SAME curated vocabulary ("a man has a hat") can
-    // actually parse — src/grammar/lexicon-core.json carries the real
+    // actually parse — src/domain/grammar/lexicon-core.json carries the real
     // entries (PLAN_SEED.md §4's "two vocabulary surfaces", gated
     // independently); this list is the --verify drift-guard's source of
     // truth (below), not a second copy of the lexicon file itself.
@@ -684,7 +684,7 @@ export const CORPUSES = {
       // ---- human-bridge (~10 facts) — the cross-ontology showcase
       // (PLAN_SEED.md §8): a WordNet-side root/common term paired with its
       // Schema.org-inspired counterpart from human-base, above. scm-sco
-      // (src/syllogise.mjs, unmodified) proves a chain spanning both
+      // (src/domain/syllogise.mjs, unmodified) proves a chain spanning both
       // sources once a WordNet-side ⊑-chain reaches one of these —
       // test/chat-cross-ontology-bridge.test.mjs exercises this live.
       ["person", "/r/IsA", "schema_person"],
@@ -14883,7 +14883,7 @@ export async function fetchCorpus(url, expectedSha) {
  * Alignment drift-guard for a corpus entry that declares an optional
  * `lexicon` sub-key (today: only `human` — PLAN_SEED.md §4's "two vocabulary
  * surfaces" seam): the corpus fact set and the ACE parser's closed-set
- * vocabulary (src/grammar/lexicon-core.json) are two SEPARATE files, gated
+ * vocabulary (src/domain/grammar/lexicon-core.json) are two SEPARATE files, gated
  * independently, so nothing stops them drifting apart over time. Two
  * directions, both real (mirroring conceptnet-map.toml's own "slice relation
  * missing from map = error" precedent):
@@ -14916,7 +14916,7 @@ async function verifyLexiconAlignment(id, spec) {
   const properNames = (spec.lexicon.properNames || []).map((n) => n.toLowerCase());
   const declared = [...nouns, ...verbs, ...adjectives, ...properNames];
 
-  const lexPath = fileURLToPath(new URL("../../src/grammar/lexicon-core.json", import.meta.url));
+  const lexPath = fileURLToPath(new URL("../../src/domain/grammar/lexicon-core.json", import.meta.url));
   const lex = JSON.parse(await readFile(lexPath, "utf8"));
   const inLexicon = (w) => Boolean(lex.nouns[w] || lex.verbs[w] || lex.adjectives[w]
     || (lex.properNames || []).some((n) => n.toLowerCase() === w));

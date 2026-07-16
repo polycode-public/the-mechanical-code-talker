@@ -6,9 +6,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { STRATEGIES, runStrategiesSync, interpret } from "../../src/interpret/pipeline.mjs";
-import { runAce, aceStrategy } from "../../src/interpret/strategies/ace.mjs";
-import { parseQuery } from "../../src/ask.mjs";
+import { STRATEGIES, runStrategiesSync, interpret } from "../../src/domain/interpret/pipeline.mjs";
+import { runAce, aceStrategy } from "../../src/domain/interpret/strategies/ace.mjs";
+import { parseQuery } from "../../src/domain/ask.mjs";
 
 test("registration: the ACE strategy is registered, its own class, and ASYNC (so the sync path skips it)", () => {
   assert.ok(STRATEGIES.some((s) => s.id === "ace"), "ace strategy registered");

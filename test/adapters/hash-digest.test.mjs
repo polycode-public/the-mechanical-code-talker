@@ -7,7 +7,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
 
-import { sha256Bytes } from "../../src/hash.mjs";
+import { sha256Bytes } from "../../src/domain/hash.mjs";
 
 const refHex = (s) => createHash("sha256").update(s).digest("hex");
 const hex = (bytes) => Buffer.from(bytes).toString("hex");

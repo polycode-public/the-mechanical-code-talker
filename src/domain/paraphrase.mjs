@@ -1,7 +1,7 @@
 // paraphrase.mjs — a surface-realization variant of an isa-family
 // (`rdfs:subClassOf`) teach confirmation, shown alongside the original, never
 // replacing it, and only when verified against tmct's own inference engine
-// (src/syllogise.mjs). Scoped to isa-family facts only — the one predicate
+// (src/domain/syllogise.mjs). Scoped to isa-family facts only — the one predicate
 // family deriveSubClassClosure reasons over.
 //
 // Verification: re-derive the rdfs:subClassOf closure once from the original

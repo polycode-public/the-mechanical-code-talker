@@ -7,7 +7,7 @@
 // top of it, using the operator's own worked phrasings where given.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseQuery, normalizeQuery, applyNegationFrames } from "../../src/ask.mjs";
+import { parseQuery, normalizeQuery, applyNegationFrames } from "../../src/domain/ask.mjs";
 
 // ---- the operator's own worked example: three real phrasings of "what calls
 // this", tolerant of register (formal "invokes", neutral "calls", casual

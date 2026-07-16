@@ -12,8 +12,8 @@
 // per-case verdict, and the per-rung METRIC PAIR + ladder rollup. run.mjs wires
 // it to the pluggable driver and the fixture.
 
-import { isCapability } from "../src/router/registry.mjs";
-import { hallucinationsIn } from "../src/router/call-validator.mjs";
+import { isCapability } from "../src/domain/router/registry.mjs";
+import { hallucinationsIn } from "../src/domain/router/call-validator.mjs";
 
 // ---- the rungs (the agentic ladder — analogue of chatbench's CEFR GRADES) ----
 // A0 = single obvious tool, args on a plate. A1 = pick the right tool from a
@@ -106,10 +106,10 @@ export function parseCases(text, { knownLabels = null } = {}) {
 
 // ---- the zero-hallucination gate (the AUTOMATIC-FAIL check) ------------------
 // hallucinationsIn / isCallWellFormed LIVE in the product router now
-// (src/router/call-validator.mjs) — the bench imports the product, never the
+// (src/domain/router/call-validator.mjs) — the bench imports the product, never the
 // other way round. Re-exported here so every existing bench import keeps working.
 
-export { hallucinationsIn, isCallWellFormed } from "../src/router/call-validator.mjs";
+export { hallucinationsIn, isCallWellFormed } from "../src/domain/router/call-validator.mjs";
 
 // ---- expected-vs-produced call matching -------------------------------------
 

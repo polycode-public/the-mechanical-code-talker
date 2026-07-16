@@ -11,7 +11,7 @@
 //      own labeled examples.
 //   4. the full CEGIS loop (synthbench/rules/synthesize.mjs) — synthesizes a
 //      genuinely NOVEL rule (not hand-written anywhere in
-//      src/router/goal-reasoner.mjs) against a held-out example set, at 0%
+//      src/domain/router/goal-reasoner.mjs) against a held-out example set, at 0%
 //      fabrication, deterministically.
 
 import { test } from "node:test";
@@ -21,8 +21,8 @@ import { fileURLToPath } from "node:url";
 
 import { parseCases, hallucinationsIn } from "../../agentbench/grade.mjs";
 import { createRunCtx, loadFixtureLabels } from "../../agentbench/run.mjs";
-import { GOAL_RULES, goalReason } from "../../src/router/goal-reasoner.mjs";
-import { backwardChain } from "../../src/router/resolver.mjs";
+import { GOAL_RULES, goalReason } from "../../src/domain/router/goal-reasoner.mjs";
+import { backwardChain } from "../../src/domain/router/resolver.mjs";
 import {
   enumerateCandidates, allTopics, partitionTopics, FOCUS_CLASSES, MODE_SETS, COMPOSE_OPS,
 } from "../../synthbench/rules/enumerate.mjs";

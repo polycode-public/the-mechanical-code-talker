@@ -5,7 +5,7 @@
 //
 // Measures how much of a real, human-written prose corpus (this repo's own
 // *.md docs — see scripts/lib/text-corpus.mjs for why) tmct's ACE-OWL grammar
-// (src/grammar/ace.mjs's parseAce) already parses. Three buckets per sentence:
+// (src/domain/grammar/ace.mjs's parseAce) already parses. Three buckets per sentence:
 //   hit     — parseAce returned a pattern with at least one triple (a genuine,
 //             emittable axiom — every word resolved against the lexicon)
 //   residue — parseAce recognized the SHAPE of a pattern but one or more words
@@ -25,13 +25,13 @@
 // that now hits, counts it separately as "rescued" — never silently folded
 // into the baseline "hit" count. This is how §6a's generated synonym data
 // demonstrably moves the coverage number without touching
-// src/grammar/lexicon-core.json or any other product file.
+// src/domain/grammar/lexicon-core.json or any other product file.
 
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { parseAce } from "../src/grammar/ace.mjs";
-import { loadLexicon } from "../src/grammar/lexicon.mjs";
+import { parseAce } from "../src/domain/grammar/ace.mjs";
+import { loadLexicon } from "../src/domain/grammar/lexicon.mjs";
 import { loadMarkdownCorpus } from "./lib/text-corpus.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));

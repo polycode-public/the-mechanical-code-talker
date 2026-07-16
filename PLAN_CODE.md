@@ -13,7 +13,7 @@
 > requires its own separate operator sign-off per §8's gate before any implementation begins.
 
 > **Separately (not this doc's own build): the substrate Track 1 synthesizes into is now
-> invokable.** `src/router/*` — the registry/resolver/planner/goal-reasoner Track 1's own oracle
+> invokable.** `src/domain/router/*` — the registry/resolver/planner/goal-reasoner Track 1's own oracle
 > runs candidates through (§1.4's `goalReason`/`applicableRules`) — was real and tested but
 > unreachable outside `agentbench/`/the test suite until this cycle. It now has a real invocation
 > surface: `tmct plan "<request>"`, chat's `/plan`, and a `./plan` library export (see
@@ -46,12 +46,12 @@ no-LLM, permanently, and every mechanism must be deterministic, explainable, and
 Synthesis here means **search + verification against a bounded grammar**, never a language model
 guessing code. A synthesized artifact must be **as auditable as a hand-written one** — a
 synthesized `GOAL_RULE` must read exactly like the hand-written `GOAL_RULES` entries in
-`src/router/goal-reasoner.mjs`, a synthesized
+`src/domain/router/goal-reasoner.mjs`, a synthesized
 or repaired JS/HTML/CSS fragment must be plain, inspectable source text, never an opaque blob.
-Every **built-in** capability in `src/router/registry.mjs` is `readOnly: true` with an empty
+Every **built-in** capability in `src/domain/router/registry.mjs` is `readOnly: true` with an empty
 delete-list (the `capability()` builder hardcodes it — "queries mutate nothing"). Taught action
 families have since crossed the read-only line for WORLD STATE: `capabilityFromActionRules`
-(`src/router/taught.mjs`) registers `readOnly: false` records with real add/del effect lists,
+(`src/domain/router/taught.mjs`) registers `readOnly: false` records with real add/del effect lists,
 never auto-dispatched (`registerCapability` forces `dispatchable: false` on them; planning grounds
 them by pure simulation). Synthesis would be the first capability category to generate or modify
 **source artifacts** — code and rules, not world-state facts — which is still a genuine first for
@@ -66,7 +66,7 @@ natural-language completions rather than structured/executable artifacts, is `ar
 This is the lowest-risk, most tmct-native target, and — this is the direct answer to the operator's
 sandbox idea for this track specifically — **needs no sandbox at all**. A candidate `GOAL_RULE` is
 plain frozen data fed through the SAME trusted, already-shipped engine code
-(`applicableRules`/`goalReason`, `src/router/goal-reasoner.mjs` — both now take an optional
+(`applicableRules`/`goalReason`, `src/domain/router/goal-reasoner.mjs` — both now take an optional
 `ruleSet` param for exactly this) that every hand-written rule
 already runs through. `agentbench/driver-goal.mjs`'s `goalDriver` already calls `goalReason`
 **in-process**,
@@ -76,16 +76,16 @@ existing precedent that grading a candidate rule this way is already how this re
 ### 1.1 The exact shape being synthesized
 
 The `GOAL_RULES` docblock plus the two live entries (`coverage-invariant`,
-`cochange-risk-invariant`, `src/router/goal-reasoner.mjs`) pin the
+`cochange-risk-invariant`, `src/domain/router/goal-reasoner.mjs`) pin the
 field set precisely:
 
 | Field | Type | Constrains the search to |
 |---|---|---|
 | `id` | string | free (mechanically generated, e.g. `synth-<slug>`) |
 | `invariant` | string | free-text explanation, not searched (post-hoc, from the rule's own composed fields) |
-| `focusClass` | enum | the `seon`/`mgx` classes actually used as a capability parameter `kind` (the `KINDS` enum, `src/router/registry.mjs`) — today `Module`/`Class`/`seon:CodeEntity` (Symbol) |
+| `focusClass` | enum | the `seon`/`mgx` classes actually used as a capability parameter `kind` (the `KINDS` enum, `src/domain/router/registry.mjs`) — today `Module`/`Class`/`seon:CodeEntity` (Symbol) |
 | `modes` | subset of `{"scoped","global"}` | closed 2-element powerset minus ∅ — 3 possibilities |
-| `subGoals` | ordered list of topics | the topics reachable via `backwardChain` (`src/router/resolver.mjs`) — i.e. any `add`-effect `topic` string emitted by a registered capability: `matches, description, signature, impact, members, subclasses, exports, callers, callees, calls, tests, untested, history, cochanges, architecture` (the `CAPABILITIES` array, one per `knows(...)` call) |
+| `subGoals` | ordered list of topics | the topics reachable via `backwardChain` (`src/domain/router/resolver.mjs`) — i.e. any `add`-effect `topic` string emitted by a registered capability: `matches, description, signature, impact, members, subclasses, exports, callers, callees, calls, tests, untested, history, cochanges, architecture` (the `CAPABILITIES` array, one per `knows(...)` call) |
 | `priorityTopic`/`coverageTopic` | topic string | same closed topic set, used only when `"global"` ∈ `modes` |
 | `compose` | `{op, a, b, names, empty}` | `op` ∈ the exported `set-algebra.mjs` operators — `intersect`, `fallbackIfEmpty`, `guardIfEmpty`; `a`/`b` are `{topic, of?: "focus", withFocus?: bool}` |
 | `achieves` | string | the meta-goal name a request backward-chains to (`backwardChainGoal`) |
@@ -96,7 +96,7 @@ track tractable at all.
 
 ### 1.2 The simpler warm-up target — `PHRASING_FRAMES`
 
-`PHRASING_FRAMES` (`src/interpret/normalize.mjs`) is a strictly smaller instance of the same
+`PHRASING_FRAMES` (`src/domain/interpret/normalize.mjs`) is a strictly smaller instance of the same
 species: an entry is
 `{re: RegExp, to: (m) => string}`, first-match-wins, unmatched text passes through byte-unchanged
 (`applyPhrasingFrames`). The synthesis target is narrower still — not an arbitrary regex, but a
@@ -153,8 +153,8 @@ working code is a far stronger prior than blank-slate enumeration.
 
 *(Revision note. The first draft framed this track as greedy mutation search with an HTN aside.
 The planning substrate that shipped since — `findActionPath`/`findReachableSet` in
-`src/planning.mjs`, the four action rule kinds in `src/adapters/memory/core.mjs`,
-`compileGoal`/`movesFromRules` in `src/domain.mjs`, validated end to end by Hanoi and
+`src/domain/planning.mjs`, the four action rule kinds in `src/adapters/memory/core.mjs`,
+`compileGoal`/`movesFromRules` in `src/domain/domain.mjs`, validated end to end by Hanoi and
 river-crossing in `test/corpus/planning.jsonl` — makes the planning frame primary and the mutation
 search the inner proposal engine. Nothing from the first draft is dropped; §2.4–§2.6 carry it
 forward.)*
@@ -185,7 +185,7 @@ change is one template application. A composite change is either an HTN method �
 suite X green" into per-failing-test or per-function sub-goals, each searched within its own
 bounded depth (Erol, Hendler & Nau, 1994) — or a macro-action: a recurring template sequence
 ("extract guard, then invert condition") promoted to a single named action once it recurs.
-`src/router/planner.mjs` and `goal-reasoner.mjs` already run HTN-style decomposition for tool-call
+`src/domain/router/planner.mjs` and `goal-reasoner.mjs` already run HTN-style decomposition for tool-call
 planning; this track reuses the same paradigm for code-edit planning.
 
 ### 2.2 The load-bearing asymmetry: source effects are declarable, behavioral effects are only observable
@@ -569,16 +569,16 @@ three-language expansion plus the repair track are reasons to be *more* delibera
 sign-off gate, not less.
 
 ### Critical Files for Implementation
-- <repo-checkout>/src/router/registry.mjs
-- <repo-checkout>/src/router/goal-reasoner.mjs
-- <repo-checkout>/src/router/planner.mjs
-- <repo-checkout>/src/router/resolver.mjs
-- <repo-checkout>/src/router/set-algebra.mjs
-- <repo-checkout>/src/router/taught.mjs
-- <repo-checkout>/src/router/drive.mjs
-- <repo-checkout>/src/planning.mjs
-- <repo-checkout>/src/domain.mjs
-- <repo-checkout>/src/interpret/normalize.mjs
+- <repo-checkout>/src/domain/router/registry.mjs
+- <repo-checkout>/src/domain/router/goal-reasoner.mjs
+- <repo-checkout>/src/domain/router/planner.mjs
+- <repo-checkout>/src/domain/router/resolver.mjs
+- <repo-checkout>/src/domain/router/set-algebra.mjs
+- <repo-checkout>/src/domain/router/taught.mjs
+- <repo-checkout>/src/domain/router/drive.mjs
+- <repo-checkout>/src/domain/planning.mjs
+- <repo-checkout>/src/domain/domain.mjs
+- <repo-checkout>/src/domain/interpret/normalize.mjs
 - <repo-checkout>/synthbench/rules/oracle.mjs
 - <repo-checkout>/agentbench/cases.jsonl
 - <repo-checkout>/agentbench/grade.mjs

@@ -3,7 +3,7 @@
 // docs/references/schemas/ace-owl-fragment.md and nothing more: fitting the
 // grammar is a strong signal, missing it is a FEATURE — parseAce returns null
 // (or an empty-triples result carrying the unknown words as `residue`) and the
-// interpretation pipeline (src/interpret/) falls through to the tolerant
+// interpretation pipeline (src/domain/interpret/) falls through to the tolerant
 // strategies. No NLP dependency: tokenization is whitespace + trailing
 // punctuation, morphology is the lexicon's suffix fold.
 //
@@ -56,7 +56,7 @@ export const PATTERNS = Object.freeze([
 const DET = new Set(["a", "an", "the"]);
 // A token SHAPED like a code reference (a path, file, symbol or CURIE) is an
 // individual by form — a deterministic tokenizer rule, not a guess: declared
-// proper names cover words; this covers chat.mjs, src/ask.mjs, Foo#bar.
+// proper names cover words; this covers chat.mjs, src/domain/ask.mjs, Foo#bar.
 const CODE_REF = /[./\\#:@]/;
 
 /** Whitespace tokenizer: curly quotes normalized, commas/semicolons dropped,

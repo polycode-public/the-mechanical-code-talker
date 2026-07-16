@@ -3,8 +3,8 @@
 // grammar, not just exist in the table.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { RELATIONS, VERB_TO_KIND, ENTITY_TO_TYPE, MODIFIER_TO_KIND, MISSPELLINGS, WRONG_WORDS, AGGREGATE_TRIGGERS, LIST_TRIGGERS } from "../../src/ask-vocab.mjs";
-import { parseQuery, normalizeQuery } from "../../src/ask.mjs";
+import { RELATIONS, VERB_TO_KIND, ENTITY_TO_TYPE, MODIFIER_TO_KIND, MISSPELLINGS, WRONG_WORDS, AGGREGATE_TRIGGERS, LIST_TRIGGERS } from "../../src/domain/ask-vocab.mjs";
+import { parseQuery, normalizeQuery } from "../../src/domain/ask.mjs";
 
 // The aggregate/list TRIGGER words are grammar vocabulary too (parseAggregate/parseList
 // read them), so a correction may legitimately restore one ("manyn"→"many", "lst"→"list").

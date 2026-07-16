@@ -1,6 +1,6 @@
 // synthbench/phrasing/synthesize.mjs — Stage 0 (PLAN_CODE.md §1.2/§6): the
 // PHRASING_FRAMES warm-up. Synthesizes ONE `{re, to}` frame — the exact shape
-// src/interpret/normalize.mjs's PHRASING_FRAMES table declares — from a small
+// src/domain/interpret/normalize.mjs's PHRASING_FRAMES table declares — from a small
 // set of PAIRED utterance examples `{from, to}`, e.g.
 //   ("what functions are in Task", "what does Task contain")
 //   ("what functions are in Widget", "what does Widget contain")
@@ -19,7 +19,7 @@
 // through the same associative min/max, but the function never reads
 // Date.now/Math.random either way) always synthesize byte-identical output.
 
-import { escapeRegex } from "../../src/interpret/normalize.mjs";
+import { escapeRegex } from "../../src/domain/interpret/normalize.mjs";
 
 /** Longest common prefix across a list of strings (case-INsensitive compare,
  *  original casing returned) — []/empty input => "". */

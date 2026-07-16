@@ -25,7 +25,7 @@ import {
   sizeBundle,
   bundleMask,
   renderGraphOnlyBundle,
-} from "../../codegraph.mjs";
+} from "../../domain/codegraph.mjs";
 import { readSpanSafe, sliceSpan } from "../source-slice.mjs";
 import {
   hit,
@@ -126,7 +126,7 @@ async function renderSourceBodies(plan, mask, { readFile, repoRoot }) {
  *   present, every service is wrapped once to time it and record counts only, never raw
  *   text/body.
  * @param {Function} [opts.ask]  the natural-language answerer backing the `ask` service
- *   (src/ask.mjs's `ask` in the live wiring) — injected at construction like fs access,
+ *   (src/domain/ask.mjs's `ask` in the live wiring) — injected at construction like fs access,
  *   never an ambient import. Constructing without it makes `.ask()` an honest
  *   CAPABILITY_ABSENT miss, the same negotiation snippet/context use for missing
  *   source access.

@@ -48,9 +48,14 @@ const HISTORICAL_ROOT_DOCS = /^(BENCHMARK_|EXAMPLE_PLAYTEST_LOG)/;
 const BARE_PATH_FILES = new Set([
   join(ROOT, "test", "estate", "layer-map.mjs"),
   join(ROOT, "scripts", "build-demo-site.mjs"),
-  join(ROOT, "scripts", "build-ask-bundle.mjs"),
   join(ROOT, "test", "adapters", "ask-nlp.test.mjs"),
 ]);
+
+// build-ask-bundle.mjs names modules two ways, and only one of them is a path.
+// Its stub keys are suffix patterns matched against import specifiers as
+// written, so they match wherever a module lives and must survive a move
+// untouched. Its buildOne() arguments are real src-relative paths.
+const BUILD_ONE_FILE = join(ROOT, "scripts", "build-ask-bundle.mjs");
 
 const FROM_SPEC_RE = /\bfrom\s*(["'])(\.[^"'\n]*)\1/g;
 const DYNAMIC_SPEC_RE = /\bimport\s*\(\s*(["'])(\.[^"'\n]*)\1\s*\)/g;
@@ -173,11 +178,11 @@ function rewriteSrcDirJoins(text) {
   return out;
 }
 
-/** "src/ask.mjs" and "src/router/" wherever they appear as prose or a path. */
+/** "src/domain/ask.mjs" and "src/domain/router/" wherever they appear as prose or a path. */
 function rewriteTextualPaths(text) {
   let out = text;
   for (const [from, to] of moveByRel) {
-    // Guard the tail so src/ask.mjs never matches inside src/ask-nlp.mjs.
+    // Guard the tail so src/domain/ask.mjs never matches inside src/ask-nlp.mjs.
     out = out.replace(new RegExp(`src/${escapeRe(from)}(?![A-Za-z0-9._-])`, "g"), `src/${to}`);
   }
   for (const [from, to] of DIR_MOVES) {
@@ -198,31 +203,40 @@ function rewriteEngineImports(text) {
 const SELF_ANCHOR = "dirname(fileURLToPath(import.meta.url))";
 
 /**
- * A module that reads a data file by walking up from its own location — the
- * corpus readers' PKG_ROOT, say — resolves that walk against its own depth
- * under src/. Moving it a directory deeper silently re-points every such path,
- * so each upward walk gains the level the move added.
+ * A path a module builds from its own location — the corpus readers' PKG_ROOT,
+ * ledger-viz reading the bundle beside it — depends on both where the module
+ * sits and where the target sits. Either end moving re-points it, so each one
+ * is resolved against the old tree and written back against the new.
  */
-function rewriteSelfRelativePaths(text, from, to) {
-  const depthChange = to.split("/").length - from.split("/").length;
-  if (depthChange !== 1) throw new Error(`${from} -> ${to} changes depth by ${depthChange}; this rewrite handles one level`);
-  let out = text;
-
-  // join(dirname(fileURLToPath(import.meta.url)), "..", ...) — anchor and walk
-  // in one expression, so the walk is patched where it is written.
-  out = out.split(`${SELF_ANCHOR}, ".."`).join(`${SELF_ANCHOR}, "..", ".."`);
-
-  // const HERE = dirname(fileURLToPath(import.meta.url)) — the anchor still
-  // means "my directory" and stays true; its walking call sites are what move.
+function rewriteSelfAnchoredPaths(text, oldPath, newPath) {
+  const oldDir = dirname(oldPath);
+  const newDir = dirname(newPath);
+  const anchors = [escapeRe(SELF_ANCHOR)];
   for (const m of text.matchAll(new RegExp(`const\\s+(\\w+)\\s*=\\s*${escapeRe(SELF_ANCHOR)}\\s*;`, "g"))) {
-    out = out.replace(new RegExp(`(join|resolve)\\(\\s*${m[1]},\\s*"\\.\\."`, "g"), (hit) => `${hit}, ".."`);
+    anchors.push(escapeRe(m[1]));
+  }
+
+  let out = text;
+  for (const anchor of anchors) {
+    const re = new RegExp(`\\b(join|resolve)\\(\\s*(${anchor})\\s*,\\s*((?:["'][^"'\\n]+["']\\s*,\\s*)*["'][^"'\\n]+["'])\\s*\\)`, "g");
+    out = out.replace(re, (match, fn, anchorText, tail) => {
+      const segments = [...tail.matchAll(/["']([^"'\n]+)["']/g)].map((m) => m[1]);
+      const oldTarget = resolve(oldDir, ...segments);
+      const newTarget = moveByAbs.get(oldTarget) ?? oldTarget;
+      if (newTarget === oldTarget && oldDir === newDir) return match;
+      const rel = relative(newDir, newTarget).split("\\").join("/");
+      const parts = rel === "" ? ["."] : rel.split("/");
+      return `${fn}(${anchorText}, ${parts.map((s) => `"${s}"`).join(", ")})`;
+    });
   }
 
   // new URL("../../package.json", import.meta.url)
-  return out.replace(
-    /new URL\((["'])(\.\.\/[^"'\n]*)\1,\s*import\.meta\.url\)/g,
-    (_match, quote, rel) => `new URL(${quote}../${rel}${quote}, import.meta.url)`,
-  );
+  return out.replace(/new URL\((["'])(\.[^"'\n]*)\1,\s*import\.meta\.url\)/g, (match, quote, spec) => {
+    const oldTarget = resolve(oldDir, spec);
+    const newTarget = moveByAbs.get(oldTarget) ?? oldTarget;
+    if (newTarget === oldTarget && oldDir === newDir) return match;
+    return `new URL(${quote}${relativeSpecifier(newDir, newTarget)}${quote}, import.meta.url)`;
+  });
 }
 
 /** Quoted src-relative paths carrying no "src/" prefix: layer-map keys, entry lists. */
@@ -247,12 +261,14 @@ for (const file of scanFiles()) {
   // segment-wise join rewrites below leave it alone, so no path is rewritten
   // twice.
   if (BARE_PATH_FILES.has(file)) next = rewriteBarePaths(next);
+  if (file === BUILD_ONE_FILE) next = next.replace(/buildOne\([^)]*\)/g, (call) => rewriteBarePaths(call));
   if (file.endsWith(".mjs") || file.endsWith(".js")) {
     next = rewriteImports(next, file, newPath);
     next = rewriteJoinedPaths(next);
     next = rewriteSrcDirJoins(next);
-    const move = layerMoves.find((row) => join(SRC, row.from) === file);
-    if (move) next = rewriteSelfRelativePaths(next, move.from, move.to);
+    // Runs for every module, not just the moved ones: a file that stays put
+    // still has to follow a target that moved out from beside it.
+    next = rewriteSelfAnchoredPaths(next, file, newPath);
   }
   next = rewriteTextualPaths(next);
   if (file.startsWith(join(ROOT, "public"))) next = rewriteEngineImports(next);

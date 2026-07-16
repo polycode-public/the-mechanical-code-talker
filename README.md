@@ -235,11 +235,11 @@ Attribute: prose_tokens = memory record store [mgx:hasProseTokens]. Attribute: d
 ```
 
 Programmatically, the same pipeline is `generateCompletion()`
-(`src/completions/complete.mjs`):
+(`src/domain/completions/complete.mjs`):
 
 ```js cwd=repo
 import { fetchEntities } from "./src/adapters/source.mjs";
-import { parseEntities } from "./src/codegraph.mjs";
+import { parseEntities } from "./src/domain/codegraph.mjs";
 import { loadMemory } from "./src/adapters/memory/core.mjs";
 import { createCompletionsGraphAdapter } from "@polycode-projects/the-mechanical-code-talker/createCompletionsGraphAdapter";
 import { generateCompletion } from "@polycode-projects/the-mechanical-code-talker/generateCompletion";
@@ -259,7 +259,7 @@ Full pipeline design in `archive/PLAN_COMPLETIONS.md`.
 
 Some questions need more than one lookup. `tmct plan` is a small STRIPS/PDDL-style
 planner over the same read-only graph-query tools chat/serve use
-(`src/router/*`): it decomposes a compound request, resolves and executes each
+(`src/domain/router/*`): it decomposes a compound request, resolves and executes each
 step in order with a provable causal-link proof chain, and folds the results
 into one answer. A request neither the planner nor a single lookup can ground
 escalates to a closed-world goal-reasoner, which deduces maintenance goals
@@ -632,7 +632,7 @@ kill $SERVE_PID
        [--repo <abs>]          query tool calls for a compound or maintenance-goal
        [--graph <path>]        request ("of the modules impacted by X, which are
        [--config <path>]       untested", "what most needs a test") — a real STRIPS/
-       [--tools <a,b,...>]     PDDL planner (src/router/*), never a guessed call.
+       [--tools <a,b,...>]     PDDL planner (src/domain/router/*), never a guessed call.
        [--json]                Prints the grounded step sequence + composed answer,
                                or an honest "no plan found". --tools restricts the
                                declared toolset; --json prints the full loop result.
@@ -730,7 +730,7 @@ templates_path = "./vendor/my-pack/templates"
 phrasebook_path = "./vendor/my-pack/phrasebook.json"
 provenance_prefix = "corpus:my-custom-pack"
 
-# Flat bundle-name -> weight table, consumed by src/memory/bias.mjs's ranking.
+# Flat bundle-name -> weight table, consumed by src/domain/memory/bias.mjs's ranking.
 [bias]
 human = 1.0
 seon = 0.8
@@ -894,7 +894,7 @@ hardened:
 - Releases are published with **npm provenance** (`--provenance`).
 - A coordinated-disclosure `SECURITY.md` policy covers reports.
 
-The content-address hash is single-sourced in `src/hash.mjs`, so the
+The content-address hash is single-sourced in `src/domain/hash.mjs`, so the
 cross-version-stable fact-id contract has exactly one definition.
 
 ## Provenance

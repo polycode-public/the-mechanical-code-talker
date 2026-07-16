@@ -24,7 +24,7 @@ defeats the purpose.
 ## Where tmct stands today (the as-is estimate)
 
 tmct's capability universe is: 15 read-only code-graph capabilities
-(`src/router/registry.mjs`), a commonsense fact/teach surface in `src/chat.mjs`
+(`src/domain/router/registry.mjs`), a commonsense fact/teach surface in `src/chat.mjs`
 (IsA/HasA/CapableOf over a small animal-flavoured seed corpus), and runtime-taught game
 actions. None of the CLINC150/HWU64 domains (banking, travel, weather, alarms, music,
 cooking, ...) exist anywhere in the product, and a sweep of all 13 playtest logs confirms
@@ -267,7 +267,7 @@ attributable. Deltas are against the spike bases (CLINC150 68.2%/89.7%, HWU64 0.
 - **L7 — inference uplift: complete OWL 2 RL property reasoning** (transitive / inverse /
   symmetric / functional properties, subPropertyOf, property chains, sameAs,
   allValuesFrom, hasValue, intersection completion — the ~70 unshipped RL rules; today
-  `src/syllogise.mjs` ships 7 kernels, all class-level). Honest annotation: this does
+  `src/domain/syllogise.mjs` ships 7 kernels, all class-level). Honest annotation: this does
   NOT move intent F1 — its benchmark surface is L6 (richer hypernym/role chains behind
   entity typing) plus chatbench groundedness; its main value is product capability
   (kinship, part-whole, role reasoning). Product-path work, delivered under the
@@ -309,7 +309,7 @@ neither moves a leaderboard number directly — same honest annotation as L7/L8.
   are italian" ⊨ "john is italian"), case-split proofs via `PLAN_SYLLOGIST_EL_DL.md`'s
   `/prove`.
 - **W2 — planner consumption of `taught:` capability records ("how can I build X?",
-  days-to-weeks).** `src/router/planner.mjs` already does HTN decomposition with a POP
+  days-to-weeks).** `src/domain/router/planner.mjs` already does HTN decomposition with a POP
   causal-link chain, monitored execution, and an internal `why` trace; goal sentences
   and taught actions shipped in 1.11.0; `tmct plan` + the plan-viz page already render
   goal and steps. The named gap (a 1.11.0 follow-up in `HANDOVER.md`) is the planner

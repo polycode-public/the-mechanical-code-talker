@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 
 import { synthesizeFrame, applyFrame } from "../../synthbench/phrasing/synthesize.mjs";
 import { FAMILIES } from "../../synthbench/phrasing/examples.mjs";
-import { applyPhrasingFrames } from "../../src/interpret/normalize.mjs";
+import { applyPhrasingFrames } from "../../src/domain/interpret/normalize.mjs";
 
 // ---- determinism -------------------------------------------------------------
 

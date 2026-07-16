@@ -9,22 +9,22 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { interpret, STRATEGIES, normalizeInput, runStrategiesSync } from "../../src/interpret/pipeline.mjs";
-import { mergeStrategyResults, alternateLines, sameParse } from "../../src/interpret/merge.mjs";
+import { interpret, STRATEGIES, normalizeInput, runStrategiesSync } from "../../src/domain/interpret/pipeline.mjs";
+import { mergeStrategyResults, alternateLines, sameParse } from "../../src/domain/interpret/merge.mjs";
 import {
   applyPreambleFrames, applySubordinationFrames, applySelfCorrectionFrames, applyConditionalFrames,
   COUNTERFACTUAL_RE, normalizeQuery,
-} from "../../src/interpret/normalize.mjs";
-import { stripNoise } from "../../src/interpret/strategies/noise-strip.mjs";
-import { parseQuery, ask } from "../../src/ask.mjs";
+} from "../../src/domain/interpret/normalize.mjs";
+import { stripNoise } from "../../src/domain/interpret/strategies/noise-strip.mjs";
+import { parseQuery, ask } from "../../src/domain/ask.mjs";
 import { nlpAdapter } from "../../src/adapters/ask-nlp.mjs";
-import { setDefaultNlpAdapter } from "../../src/interpret/nlp-registry.mjs";
+import { setDefaultNlpAdapter } from "../../src/domain/interpret/nlp-registry.mjs";
 
 // The wink stop-word tier tests below use the DEFAULT adapter, so this file
 // wires the composition itself, the same way the product surfaces do.
 setDefaultNlpAdapter(nlpAdapter);
 import { buildEntities } from "../../src/adapters/graph-build.mjs";
-import { parseEntities } from "../../src/codegraph.mjs";
+import { parseEntities } from "../../src/domain/codegraph.mjs";
 import { ingestSchemaDocs } from "../../src/schema-docs.mjs";
 
 // The richer committed fixture (imports + tests edges) — the local MODULES set

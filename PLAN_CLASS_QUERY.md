@@ -28,7 +28,7 @@ not edit either file (out of scope per the task boundary), but the reconciliatio
 plainly before any design proceeds: the task's framing of item (d) as "genuinely open, not started"
 does not match the current repository.
 
-`dec95e8` added, all in `src/ask.mjs` (symbol names, not line numbers — the file has drifted by
+`dec95e8` added, all in `src/domain/ask.mjs` (symbol names, not line numbers — the file has drifted by
 ~1,000 lines since this doc's first pass and will drift again):
 
 - `PLURAL_FORMS` gained real noun forms for `Fact`/`Utterance`/`Session`/
@@ -44,7 +44,7 @@ does not match the current repository.
   `"count"`/`"list"` branches) — no new render logic, reusing `OVERFLOW_CAP = 12` verbatim.
 - Wired into `ask()` itself as a fallback that fires **only** after the normal cascade
   already produced an honest miss, and is skipped for any noun `ENTITY_TO_TYPE` (the closed code-
-  graph noun table, `src/ask-vocab.mjs`) already owns — so it never shadows a real
+  graph noun table, `src/domain/ask-vocab.mjs`) already owns — so it never shadows a real
   code-graph "list modules"/"how many classes" answer.
 - A real restrictor tail ("list facts **that mention widget**") is explicitly declined, not silently
   dropped — `DYNAMIC_TAIL_OK_RE` only accepts a closed set of harmless fillers
@@ -125,7 +125,7 @@ are real, narrower, freshly-found gaps immediately adjacent to it, precise enoug
 ### §A — a memory-class list/count lane in `chat.mjs`, reachable from live chat
 
 **Export, don't duplicate.** `resolveDynamicClass`, `DYNAMIC_LIST_TRIGGER_RE`,
-`DYNAMIC_COUNT_TRIGGER_RE`, and `DYNAMIC_TAIL_OK_RE` (`src/ask.mjs`) are internal (unexported)
+`DYNAMIC_COUNT_TRIGGER_RE`, and `DYNAMIC_TAIL_OK_RE` (`src/domain/ask.mjs`) are internal (unexported)
 today. Export all four. `chat.mjs` gains `listMemoryClass(memoryDir, query)` and extends
 `answerMemoryCount` (or adds a sibling `countMemoryClass`, naming TBD at implementation time) that:
 

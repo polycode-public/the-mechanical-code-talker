@@ -1,5 +1,5 @@
 // bias-weighting.test.mjs — Part 6 of the extension-pack batch: bias-weighted
-// fact ranking (src/memory/bias.mjs), and its wiring into chat.mjs's
+// fact ranking (src/domain/memory/bias.mjs), and its wiring into chat.mjs's
 // fact-listing lanes.
 //
 // Pure unit coverage for biasForSourceId/biasForRow/rankByBiasThenTrust, then
@@ -15,7 +15,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { biasForSourceId, biasForRow, rankByBiasThenTrust } from "../src/memory/bias.mjs";
+import { biasForSourceId, biasForRow, rankByBiasThenTrust } from "../src/domain/memory/bias.mjs";
 import { runTurn } from "../src/chat.mjs";
 import { seedMemory } from "../src/adapters/corpus/conceptnet.mjs";
 import { clearCache } from "../src/adapters/source.mjs";

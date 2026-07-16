@@ -75,7 +75,7 @@ The two audits this doc supersedes (`PLAN_TMCT_ECOSYSTEM_INTEGRATION.md`,
 |---|---|---|
 | `POST /v1/messages` HTTP shim (Anthropic-Messages-API-compatible) | **Shipped**, since 0.8.0 | `src/server-http.mjs`, `bin/tmct.mjs serve` |
 | Repository Interface v1.0.0 (15 services, closed `EDGE_KINDS`/`MISS_REASONS`) | **Shipped**, stable since 0.5.0 | `src/adapters/repository-interface.mjs`, `src/adapters/providers/graph-service.mjs`, `src/conformance.mjs` |
-| Capability router (STRIPS/PDDL registry, resolver, planner, guardrail, goal-reasoner) | **Shipped**, all 6 stages, **and now invokable** | `src/router/*`, measured on AGENTBENCH; `tmct plan`/chat's `/plan`/`./plan` library export — see §1.3 |
+| Capability router (STRIPS/PDDL registry, resolver, planner, guardrail, goal-reasoner) | **Shipped**, all 6 stages, **and now invokable** | `src/domain/router/*`, measured on AGENTBENCH; `tmct plan`/chat's `/plan`/`./plan` library export — see §1.3 |
 | AGENTBENCH goal-reasoner (Stage 5, the C2 rung) | **Shipped and measured** | 56 cases: 100% plan / 100% result / 0% hallucination across every rung (`archive/TOO_HARD_AUDIT.md` M2, fixed 2026-07-12 — no case held back) |
 | seonix code→graph, driven by tmct | **Shipped, in production**, seonix 0.8.0→0.10.6 | `seonix/src/tmct-provider.mjs` — 37 lines, `createGraphService` reused directly |
 | bedrock-meter cost-ordered router with a tmct rank-0 ($0) rung | **Shipped and tested** | `router.mjs`/`router-ladder.mjs`/`routing-target.mjs`, 11 passing tests |
@@ -83,7 +83,7 @@ The two audits this doc supersedes (`PLAN_TMCT_ECOSYSTEM_INTEGRATION.md`,
 | marginalia's "mechanical chat" replaced by tmct | **Not started** — the real open work | `app/lib/mechanical/`, 1,043 LOC, dark-flagged sub-path today |
 | marginalia LLM-decided facts (`typed-edges.mjs`) trust-tagged like tmct's own facts | **Not started** | confidence computed then discarded before persistence — the actual gap |
 | Chat-taught relations, rules, backward-chaining query dispatch | **Shipped** (`PLAN_TAUGHT_RELATIONS.md`, 2026-07-09) | Rule storage (compose2/filter/recursive kinds) + `resolveRelationChase` — see §1.2 |
-| Bias-weighted ambiguity resolution across seed sets | **Shipped**, v1.4.0 | `src/memory/bias.mjs`, `tmct.toml` `[bias]` table, `tmct init --with-persona` — see §4 |
+| Bias-weighted ambiguity resolution across seed sets | **Shipped**, v1.4.0 | `src/domain/memory/bias.mjs`, `tmct.toml` `[bias]` table, `tmct init --with-persona` — see §4 |
 | Memory-tree versioning + full actor-level trust | **Shipped**, v1.4.0 | `snapshotMemory()` (manual trigger); session-scoped Source IDs, unconditional — see §2.1 |
 | RI wrapper fixes + hub-dampened memory ranking (the (a)-tier uplift) | **Shipped**, v1.4.0 | `INTERFACE_VERSION` 1.1.0; `src/adapters/memory/blocks.mjs` dampening on by default — see §2 |
 | Extension-pack seam | **Shipped**, v1.4.0 | `src/extensions.mjs`, `[extensions]`/`[bias]` in `tmct.toml`, `tmct extend --validate` — see §3 |
@@ -118,7 +118,7 @@ nothing. Worth remembering when scoping Phase 2's slot-filling work (§5).
 
 The 6-stage router (§1's table) was real and tested since it shipped, but until now nothing outside
 `agentbench/` or the test suite could actually call it — an audit finding, closed this cycle. Three
-invocation surfaces exist now, all wrapping the same `src/router/drive.mjs`:
+invocation surfaces exist now, all wrapping the same `src/domain/router/drive.mjs`:
 
 - **A human typing in a terminal**: `tmct plan "<request>"` (see `bin/tmct.mjs`'s own `--help`) or
   chat's `/plan <request>` slash command. Not the shape another repo/agent uses — covered here only
@@ -168,13 +168,13 @@ bounded, (c) genuinely harder — and feed §2.3 below.
 - **Gazetteer-based entity/predicate recognition (b).** `app/lib/mechanical/matcher.mjs` builds a
   wink-nlp gazetteer straight from the graph's own entity labels/aliases plus lemma/stem-tolerant
   verb-phrase tables, so new vocabulary flows through with zero new grammar code. tmct's ACE grammar
-  (`src/grammar/ace.mjs`) is deliberately strict. Not a replacement: a more
+  (`src/domain/grammar/ace.mjs`) is deliberately strict. Not a replacement: a more
   tolerant recall path feeding the strict grammar as an additional front end, not instead of it.
 - **Declarative SHACL ingest gate (c) — ✅ shipped 2026-07-10.** Every marginalia memory node is
   validated against a shape contract (`app/ontology/shapes.ttl`, via `shacl-engine`) before it enters
   the shared tree — a standards-based, declarative write-boundary contract. 
 - **Hub-dampening + thin-concept detection (a) — ✅ shipped v1.4.0, on by default.** tmct already
-  implements exactly this pattern in `src/codegraph.mjs` (degree-quantile hub gating, min-heap
+  implements exactly this pattern in `src/domain/codegraph.mjs` (degree-quantile hub gating, min-heap
   frontier expansion) — for the **code** graph only. Ported into `src/adapters/memory/blocks.mjs`'s
   `retrieveBlocks` (`/ √(1 + degree)`, degree surfaced from the block-similarity graph's already-
   computed but previously-discarded adjacency). Shipped on unconditionally, per operator decision —
@@ -193,7 +193,7 @@ bounded, (c) genuinely harder — and feed §2.3 below.
 
 Structural note that reframes all of these: seonix depends on tmct as a package
 (`seonix/src/tmct-provider.mjs` imports `createGraphService` directly), and seonix's own
-`src/codegraph.mjs` is a near-verbatim fork of tmct's `src/codegraph.mjs` (2109 vs 2123 lines, diffs
+`src/domain/codegraph.mjs` is a near-verbatim fork of tmct's `src/domain/codegraph.mjs` (2109 vs 2123 lines, diffs
 are naming/gated-feature only). Most findings below are gaps in what tmct's Repository Interface
 **wrapper** (`repository-interface.mjs` + `providers/graph-service.mjs`) exposes, not gaps in
 algorithmic capability tmct would have to invent — the logic already sits in tmct's own
@@ -286,11 +286,11 @@ Near-term, mostly known-how, individually small. No item here requires research.
   hangs off of, also shipped — see §4.
 - ⛔ **`ace-owl` open-source extraction — shipped 2026-07-10, reverted the same day.** Extracted into
   `packages/ace-owl/` (a standalone `@polycode-projects/ace-owl` MPL-2.0 workspace package) with
-  tmct's own `src/grammar/ace.mjs`/`lexicon.mjs` left as thin re-export shims. The extraction
+  tmct's own `src/domain/grammar/ace.mjs`/`lexicon.mjs` left as thin re-export shims. The extraction
   commit itself noted `npm publish` was never run (operator-gated) — but shipped the registry
   dependency anyway, so `npm install` of tmct broke for everyone outside this workspace (a 404 on
   `@polycode-projects/ace-owl`, unpublished). Found and reverted the same day on operator
-  instruction: `ace.mjs`/`lexicon.mjs`/`lexicon-core.json` are back in `src/grammar/` as the real
+  instruction: `ace.mjs`/`lexicon.mjs`/`lexicon-core.json` are back in `src/domain/grammar/` as the real
   implementation (not shims), the workspace and dependency are gone. See ROADMAP.md's "Open-source
   the ACE-OWL parser" entry for the full account and what to do differently if attempted again.
 - ✅ **Ontology-hierarchies tracks a–d — shipped.** Tracks (a) synonym/similarTo activation and (b)
@@ -300,9 +300,9 @@ Near-term, mostly known-how, individually small. No item here requires research.
   hand-curated SEON upper-ontology spine (47 new rows: artifact/agent/event/quality/quantity roots
   + part-whole) and (d) `owl:disjointWith` growth (72 new rows, 42→114 total) shipped 2026-07-10.
 - ✅ **Advanced-grammar tracks a/d/f — shipped.** Track (a) subordination/conditional frames
-  (`SUBORDINATION_FRAMES`/`CONDITIONAL_QUALIFIER_RE` in `src/interpret/normalize.mjs`) found already
+  (`SUBORDINATION_FRAMES`/`CONDITIONAL_QUALIFIER_RE` in `src/domain/interpret/normalize.mjs`) found already
   shipped from an earlier session. Track (d) construction-grammar template bank shipped 2026-07-10:
-  `data/templates/constructions/agent-noun-relations.toml` + `src/interpret/strategies/
+  `data/templates/constructions/agent-noun-relations.toml` + `src/domain/interpret/strategies/
   constructions.mjs`, three new closed templates (T11-T13: "X of Y", "Y's X", "Y X" relation
   phrasings). Track (f) presupposition-as-honest-nudge (`presuppositionNudge`, `src/chat.mjs`) also
   found already shipped from an earlier session, not newly built this session.
@@ -318,7 +318,7 @@ Near-term, mostly known-how, individually small. No item here requires research.
     Widget.render call" → "does it call fnAlpha": "it" resolves correctly to Widget.render (the
     forward turn's own answer proves it), but the yes/no check wrongly answers "No — no calls edge
     found from Widget.render to fnAlpha" even though the immediately preceding turn just confirmed
-    the call. Root cause pinned: `src/ask.mjs`'s `shape === "ask"` branch calls `kindsFor(kind)`,
+    the call. Root cause pinned: `src/domain/ask.mjs`'s `shape === "ask"` branch calls `kindsFor(kind)`,
     and `KIND_UNIONS` (~line 134) only defines a union for `kind: "uses"` — never for bare `"calls"`
   - **Gap 2, discourse-count anaphora — mostly closed for relation filters, one confirmed gap
     remains.** "which modules import http.mjs" (→ base.mjs/router.mjs/tasks.mjs) → "how many of
@@ -340,7 +340,7 @@ Near-term, mostly known-how, individually small. No item here requires research.
     scanning INCOMING edges). Confirmed with real, asymmetric graph data: `store.mjs` has 3 recorded
     touching commits (proven by the working phrasing "has store.mjs been touched"), yet "was
     store.mjs touched"/"is store.mjs touched" both falsely answer "src/core/store.mjs has no touches
-    edges in the index." Root cause pinned: `src/interpret/strategies/keywords.mjs`'s
+    edges in the index." Root cause pinned: `src/domain/interpret/strategies/keywords.mjs`'s
     `parseKeywordSpot`, the final `if (beforeText) return { shape: "forward", ... }` fallback — fired
     whenever text precedes the verb and nothing follows it, true for "X is touched" since there's no
     explicit object after the participle — never consults `PASSIVE_AUX` the way the "by"-agent
@@ -370,7 +370,7 @@ that isn't code at all.
 - ✅ **The default stays honest ambiguity over guessing — confirmed, unchanged.** §2.2 already
   confirmed this is the right posture — tmct's resolver refuses and lists candidates on a genuine
   tie, and seonix's own conversational path defers to tmct's resolver for exactly this reason.
-- ✅ **`tmct.toml` `[bias]` table — shipped v1.4.0.** `src/memory/bias.mjs` (`biasForSourceId`,
+- ✅ **`tmct.toml` `[bias]` table — shipped v1.4.0.** `src/domain/memory/bias.mjs` (`biasForSourceId`,
   `biasForRow`, `rankByBiasThenTrust`), wired into `chat.mjs`'s fact-listing lanes (`factAnswer`,
   `factReadBack`'s listing branches, `describedFacts`, plus the count/quantifier-recall single-winner
   sites). Verified by control-flow tracing, not just code review: `rankByBiasThenTrust` is a pure

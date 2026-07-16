@@ -1,5 +1,5 @@
 // router-drive.test.mjs — the capability router's product-facing library
-// surface: src/router/drive.mjs (buildCapabilityPlanCtx/runCapabilityPlan)
+// surface: src/domain/router/drive.mjs (buildCapabilityPlanCtx/runCapabilityPlan)
 // over a real on-disk graph and the real dispatchTool. Unlike
 // test/adapters/router-resolver.test.mjs (which drives the pure router
 // machinery directly), this file proves the wiring a library caller invokes —
@@ -15,7 +15,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { ingestSchemaDocs } from "../../src/schema-docs.mjs";
-import { buildCapabilityPlanCtx, runCapabilityPlan, declaredCapabilityNames } from "../../src/router/drive.mjs";
+import { buildCapabilityPlanCtx, runCapabilityPlan, declaredCapabilityNames } from "../../src/domain/router/drive.mjs";
 import { capabilityPlanDeps } from "../../src/chat.mjs";
 
 const FIXTURE = fileURLToPath(new URL("../fixtures/entities.fixture.json", import.meta.url));

@@ -1,7 +1,7 @@
 # tmct's ACE-OWL sub-fragment — the controlled-grammar pattern table
 
 Hand-authored stub defining the ~9 controlled-English sentence patterns tmct's
-grammar (Phase 2, `src/grammar/ace.mjs`) maps to OWL axioms. The fragment is
+grammar (Phase 2, `src/domain/grammar/ace.mjs`) maps to OWL axioms. The fragment is
 **inspired by** Attempto Controlled English (ACE) and the OWL output of its APE
 parser — it is a deliberately small sub-fragment, not an ACE implementation.
 
@@ -17,8 +17,8 @@ parser — it is a deliberately small sub-fragment, not an ACE implementation.
 - **Retrieval date:** UNVERIFIED-pending-web-check (authored offline
   2026-07-04; the APE version number, repo URL, and per-pattern OWL mappings
   are to be verified against the live Attempto sources and stamped).
-- **Consumer in repo:** `src/grammar/ace.mjs` + `src/grammar/lexicon.mjs`
-  (Phase 2); the interpretation pipeline (`src/interpret/`, Phase 1) treats a
+- **Consumer in repo:** `src/domain/grammar/ace.mjs` + `src/domain/grammar/lexicon.mjs`
+  (Phase 2); the interpretation pipeline (`src/domain/interpret/`, Phase 1) treats a
   grammar fit as a high-confidence strategy result.
 
 ## The pattern table

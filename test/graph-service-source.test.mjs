@@ -9,7 +9,7 @@ import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseEntities } from "../src/codegraph.mjs";
+import { parseEntities } from "../src/domain/codegraph.mjs";
 import { createGraphService } from "../src/adapters/providers/graph-service.mjs";
 import { fixtureProvider, fixtureGraph } from "../src/adapters/providers/fixture.mjs";
 import { isHit, isMiss, MISS_REASONS } from "../src/adapters/repository-interface.mjs";

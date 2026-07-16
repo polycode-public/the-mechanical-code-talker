@@ -12,7 +12,7 @@ import {
   SAID_IN_SESSION_PROP, IN_REPLY_TO_PROP,
   UTTERANCE_CLASS, FACT_CLASS, MEMORY_SESSION_CLASS, emptyMemory,
 } from "../../src/adapters/memory/core.mjs";
-import { loadLexicon, predicateOf } from "../../src/grammar/lexicon.mjs";
+import { loadLexicon, predicateOf } from "../../src/domain/grammar/lexicon.mjs";
 
 const TTL_FILE = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "ontology", "tmct-core.ttl");
 

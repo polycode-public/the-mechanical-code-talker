@@ -13,9 +13,9 @@ import {
   appendRule, findRuleByName, readFactRows, normFactTerm,
   resolveRelationChase, resolveRelationChaseReverse,
 } from "../src/adapters/memory/core.mjs";
-import { parseEntities } from "../src/codegraph.mjs";
-import { lookupByProseTokens } from "../src/prose.mjs";
-import { findActionPath, findReachableSet } from "../src/planning.mjs";
+import { parseEntities } from "../src/domain/codegraph.mjs";
+import { lookupByProseTokens } from "../src/domain/prose.mjs";
+import { findActionPath, findReachableSet } from "../src/domain/planning.mjs";
 
 const SESSION = "01890000-0000-7000-8000-00000000abcd";
 const TS1 = "2026-07-03T10:01:00.000Z";

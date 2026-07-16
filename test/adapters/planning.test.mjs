@@ -1,4 +1,4 @@
-// planning.test.mjs — proves `findActionPath` (src/planning.mjs), the
+// planning.test.mjs — proves `findActionPath` (src/domain/planning.mjs), the
 // domain-agnostic on-demand-successor generalization of `findIsaChain`'s
 // bounded rooted BFS. The toy domains here are deliberately tiny — a handful
 // of hand-authored positions on a small fixed graph, not a stack-of-disks
@@ -6,7 +6,7 @@
 // generation, cycle-safe bounded BFS, real path-not-just-boolean return).
 import test from "node:test";
 import assert from "node:assert/strict";
-import { findActionPath, findReachableSet } from "../../src/planning.mjs";
+import { findActionPath, findReachableSet } from "../../src/domain/planning.mjs";
 
 // ---- Toy domain 1: a small fixed graph with two dead-end branches and a ---
 // ---- cycle, requiring a genuine 3-hop discovery to reach the goal. -------

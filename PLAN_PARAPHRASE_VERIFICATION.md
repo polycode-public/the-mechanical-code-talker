@@ -2,7 +2,7 @@
 
 Status: RESEARCH / DESIGN — the general verifier this document designs is not yet implemented.
 One narrow slice of the same ROADMAP goal already shipped separately and predates this doc:
-`src/paraphrase.mjs` (`verifySubClassParaphrase`, isa-family only, closure-backed, with
+`src/domain/paraphrase.mjs` (`verifySubClassParaphrase`, isa-family only, closure-backed, with
 `test/paraphrase.test.mjs`). The multi-technique `verifyParaphrase(originalFactRow,
 candidateText, technique)` below remains unbuilt and does not reuse that slice yet.
 
@@ -13,7 +13,7 @@ verbatim (`ROADMAP.md:26-30`):
 
 > **Paraphrase alongside the original, verified, never instead of it.** A surface-realization variant
 > sits next to the literal grounded answer, never replacing it, and its accuracy is checked, not
-> assumed — by running tmct's own deterministic inference/consistency machinery (`src/syllogise.mjs`)
+> assumed — by running tmct's own deterministic inference/consistency machinery (`src/domain/syllogise.mjs`)
 > against both the original and the paraphrase: they must entail the same conclusions, and neither may
 > contradict the other sentence-by-sentence.
 
@@ -30,7 +30,7 @@ actually has to run.
 
 ## Summary of the finding
 
-The `ROADMAP.md` framing — "verified... by running... `src/syllogise.mjs`... they must entail the
+The `ROADMAP.md` framing — "verified... by running... `src/domain/syllogise.mjs`... they must entail the
 same conclusions" — describes `syllogise.mjs` as a general consistency checker over two arbitrary
 sentences. It is not. `syllogise.mjs`'s entailment machinery forward-chains over the stored fact
 graph's `rdfs:subClassOf`/`rdf:type` edges; it has no notion of "sentence" at all. For the paraphrase
@@ -42,9 +42,9 @@ swaps a class for a taught superclass/subclass along the `⊑` hierarchy rather 
 synonym. That sub-case isn't something tmct's shipped generator produces yet. Part 3 below works out
 why, and Part 4 gives the concrete contract for both cases.
 
-## Part 1 — what `src/syllogise.mjs` actually does
+## Part 1 — what `src/domain/syllogise.mjs` actually does
 
-`syllogise.mjs`'s own header states its scope precisely (`src/syllogise.mjs:1-12`):
+`syllogise.mjs`'s own header states its scope precisely (`src/domain/syllogise.mjs:1-12`):
 
 > tmct's speculative-inference engine... forward-chain entailments over the OWL-labelled memory graph
 > so a future query-time MISS becomes a lookup. The MATERIALIZING pass (`syllogise()`, below) is NEVER
@@ -52,14 +52,14 @@ why, and Part 4 gives the concrete contract for both cases.
 > `deriveTypePropagation`) are plain, I/O-free functions, so a caller may also reuse them for a small,
 > bounded, READ-ONLY live check... without that being "the batch pass on the hot path".
 
-Five rules ship today (`src/syllogise.mjs:14-53`): `scm-sco` (subClassOf transitivity),
+Five rules ship today (`src/domain/syllogise.mjs:14-53`): `scm-sco` (subClassOf transitivity),
 `cax-sco` (type propagation across a subclass chain), `cax-dw` (disjointness violation),
 `cls-svf1` (someValuesFrom application), `scm-svf1` (someValuesFrom subsumption). Every exported
-function (`src/syllogise.mjs:191-1360`, confirmed by grep for `^export function`) takes plain
+function (`src/domain/syllogise.mjs:191-1360`, confirmed by grep for `^export function`) takes plain
 **edge arrays** — `[[a, b], …]` pairs of already-normalized term strings — never a memory directory,
 never raw sentence text, never a graph object:
 
-- `deriveSubClassClosure(edges, { depth, budget, focus })` (`src/syllogise.mjs:221`) — fixpoints
+- `deriveSubClassClosure(edges, { depth, budget, focus })` (`src/domain/syllogise.mjs:221`) — fixpoints
   `rdfs:subClassOf` edges into their transitive closure.
 - `deriveTypePropagation(typeEdges, subClassEdges, { budget, focus })` (`:318`) — propagates
   `rdf:type` up a subclass chain.
@@ -96,14 +96,14 @@ necessary step — Part 3.
 
 `archive/PLAN_BREADTH_FIRST_NLU.md` §6a scoped exactly this generation problem (`archive/PLAN_BREADTH_FIRST_NLU.md:
 327-341`): a combinatorial surface-variant expansion using the ACE grammar's 8 patterns
-(`src/grammar/ace.mjs`), the existing lexicon, and real WordNet synset data, self-verified before
+(`src/domain/grammar/ace.mjs`), the existing lexicon, and real WordNet synset data, self-verified before
 being committed. It shipped, partially, and was archived (`archive/PLAN_TEMPLATE_COVERAGE.md:1`):
 "harness + generator + first corpus batch shipped; growing coverage further and wiring the corpus
 into the live answer path remain real, undone follow-ons."
 
 What actually exists (`scripts/generate-template-variants.mjs`, 277 lines, confirmed read in full):
 three mechanical techniques, every row self-verified by re-parsing through `parseAce`
-(`src/grammar/ace.mjs`) before being written — a row that doesn't re-parse is dropped, never
+(`src/domain/grammar/ace.mjs`) before being written — a row that doesn't re-parse is dropped, never
 committed (`scripts/generate-template-variants.mjs:9-10`):
 
 1. **Rescue** (`generateRescues`, `:87-131`) — a docs-corpus sentence with exactly one word
@@ -120,7 +120,7 @@ The committed output, `corpus/generated/ace-surface-variants.jsonl` (17 rows, co
 `corpus/generated/manifest.json`), is real: e.g. `"the piece has a fast rhythm"` →
 `"the piece has a fast beat"` (`rhythm`/`beat`, WordNet synset `07100710-n`). Its own README states
 the honest scope (`corpus/generated/README.md`): "This corpus is not loaded by `src/chat.mjs`/
-`src/ask.mjs` or any other product code — it is committed raw material... Wiring it into live answer
+`src/domain/ask.mjs` or any other product code — it is committed raw material... Wiring it into live answer
 rendering is a separate, future phase."
 
 **The gap this design has to close, stated plainly**: that 17-row file is generic prose (docs +
@@ -132,8 +132,8 @@ to render, not consumed from the static file. This document treats **adapting
 `scripts/generate-template-variants.mjs`'s substitution technique into a live, per-answer call** as a
 real, named prerequisite (Phase 1 below), not something already available to import.
 
-One more existing mechanism, checked and ruled out as the vehicle here: `src/answer-variants.mjs` /
-`src/answer-variants.json`. Its own header is explicit about scope (`src/answer-variants.mjs:5-13`):
+One more existing mechanism, checked and ruled out as the vehicle here: `src/domain/answer-variants.mjs` /
+`src/domain/answer-variants.json`. Its own header is explicit about scope (`src/domain/answer-variants.mjs:5-13`):
 "A SMALL, curated, committed table... of safe cosmetic/locational/connector-word rephrasings for a
 deliberately narrow set of answer templates... never a relation verb..., never an entity id/label/
 path." It swaps words like "defined in" → "located in" — connective glue around a code-graph answer,
@@ -176,7 +176,7 @@ mechanisms:
 **Why `parseAce` is not a safe universal round-trip for the original side.** `FACT_PREDICATE_PHRASES`
 has roughly 30 connector phrases (`"is found in"`, `"can be prevented by"`, `"is a way to"`, …);
 `parseAce`'s 8 patterns dispatch on a much narrower set of literal surface cues (`"every"`, a
-leading possessive, `"the … of … is"`, a bare `"is"`, or a declared verb — `src/grammar/ace.mjs:
+leading possessive, `"the … of … is"`, a bare `"is"`, or a declared verb — `src/domain/grammar/ace.mjs:
 444-457`). `archive/PLAN_TEMPLATE_COVERAGE.md`'s own measured baseline is blunt about the gap: 0 of
 2,949 real docs sentences hit `parseAce` outright (60.4% got "shape-only" residue hits, 39.6%
 missed entirely). Nothing says a `factPhrase` rendering using an arbitrary
@@ -220,7 +220,7 @@ re-verified* member of the same WordNet synset as the original word, for the sam
 (recompute via `scripts/lib/wordnet-synonyms.mjs`'s `synsetsFor` at verification time — never trust
 a flag the generator set, the same "verify, don't just re-render" discipline `retractSubClassOf`
 already uses for retraction, `PLAN_SYLLOGIST.md`'s §3), **and** that replacement word must already be
-declared in tmct's own lexicon for that part of speech (`src/grammar/lexicon-core.json`, the same
+declared in tmct's own lexicon for that part of speech (`src/domain/grammar/lexicon-core.json`, the same
 "both ends of the swap are tmct's own curated vocabulary" rule `generate-template-variants.mjs`
 already applies at generation time, `scripts/generate-template-variants.mjs:15-18`). This is the
 "no new claim introduced" check: the replacement term must be a recognized synonym of a term tmct
@@ -228,7 +228,7 @@ already asserts the same relation about, never an unrelated or broader/narrower 
 under the paraphrase label.
 
 **Check 4 — triple deep-equality (alt-phrasing case only).** Parse the candidate through `parseAce`.
-It must hit (produce at least one triple, `src/grammar/ace.mjs:444`). The resulting
+It must hit (produce at least one triple, `src/domain/grammar/ace.mjs:444`). The resulting
 `{subject, predicate, object}`, each normalized via `normFactTerm`, must deep-equal the original Fact
 row's own normalized triple. A candidate that parses to a *different* triple, or that fails to parse
 at all, is rejected — never shown degraded, never shown with a caveat.

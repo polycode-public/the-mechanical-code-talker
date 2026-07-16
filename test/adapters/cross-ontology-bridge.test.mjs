@@ -14,7 +14,7 @@ import assert from "node:assert/strict";
 import { rm } from "node:fs/promises";
 import { createSession } from "../../src/chat.mjs";
 import { loadMemory, readFactRows, appendFacts, removeFacts } from "../../src/adapters/memory/core.mjs";
-import { syllogise as syllogiseSeam, findIsaChain, SUBCLASS_PREDICATE, ENTAILED_PROVENANCE } from "../../src/syllogise.mjs";
+import { syllogise as syllogiseSeam, findIsaChain, SUBCLASS_PREDICATE, ENTAILED_PROVENANCE } from "../../src/domain/syllogise.mjs";
 
 // The persisting seam takes the store's read/write functions injected; wire
 // the real memory/core.mjs implementations once here.

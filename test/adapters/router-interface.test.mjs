@@ -1,7 +1,7 @@
 // router-interface.test.mjs — FREEZE THE INTERFACE.
 // The router consumes parseQuery's output shape
 // {shape, kind, entityType, object} and resolveObject's {match, candidates, tier,
-// ambiguous} contract. Those two are owned by the CHAT surface (src/ask.mjs), not
+// ambiguous} contract. Those two are owned by the CHAT surface (src/domain/ask.mjs), not
 // the router — so a future parse change could silently break routing. This test
 // PINS both contracts against a committed fixture: if parseQuery's shape/kind for
 // a canonical request drifts, or resolveObject's return shape changes, the router
@@ -12,8 +12,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
-import { parseQuery, resolveObject } from "../../src/ask.mjs";
-import { parseEntities } from "../../src/codegraph.mjs";
+import { parseQuery, resolveObject } from "../../src/domain/ask.mjs";
+import { parseEntities } from "../../src/domain/codegraph.mjs";
 import { ingestSchemaDocs } from "../../src/schema-docs.mjs";
 
 const FIXTURE = fileURLToPath(new URL("../fixtures/entities.fixture.json", import.meta.url));

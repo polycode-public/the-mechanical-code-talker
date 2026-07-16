@@ -7,7 +7,7 @@
 import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { splitIdentifierWords, tokenizeProse } from "./prose-tokens.mjs";
-import { SOURCE_PRIOR } from "../../memory/trust.mjs";
+import { SOURCE_PRIOR } from "../../domain/memory/trust.mjs";
 
 // A block inherits its Source's trust (operator 1.0, corpus 0.7); retrieval
 // weights relevance × trust via a bounded factor (0.5 + trust, ~[0.5, 1.5]).

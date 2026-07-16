@@ -16,7 +16,7 @@ working vocabulary note, not a copy of the specs.
 - **Retrieval date:** UNVERIFIED-pending-web-check (authored offline from
   working knowledge 2026-07-04; URLs and term definitions to be verified
   against the live specs and stamped).
-- **Consumer in repo:** `src/grammar/ace.mjs` and `src/grammar/lexicon.mjs`
+- **Consumer in repo:** `src/domain/grammar/ace.mjs` and `src/domain/grammar/lexicon.mjs`
   (Phase 2), `ontology/tmct-core.ttl`, `src/adapters/memory/core.mjs` (Phase 1 graph
   memory labels).
 

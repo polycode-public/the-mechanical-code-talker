@@ -1,4 +1,4 @@
-// src/router/goal-reasoner.mjs — the closed-world goal-reasoner: a canned,
+// src/domain/router/goal-reasoner.mjs — the closed-world goal-reasoner: a canned,
 // hard-bounded meta-loop (BDI x goal-driven autonomy):
 //
 //     deduce current goals -> plan each goal (resolver.mjs's backward chain)

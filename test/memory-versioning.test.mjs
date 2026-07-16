@@ -167,7 +167,7 @@ test("A1 desync proof: mutateMemory (core.mjs) and writeMemoryGraph (fold.mjs) w
     // fold.mjs's write path: canoniseLinkSession's writeMemoryGraph, exercised
     // indirectly via foldSessionLogs so we drive the REAL fold.mjs code path
     // (not a re-implementation) against the same tmp dir.
-    const { foldSessionLogs } = await import("../src/memory/fold.mjs");
+    const { foldSessionLogs } = await import("../src/domain/memory/fold.mjs");
     await foldSessionLogs(dir); // no sessions recorded — a clean no-op write-free pass, proves no divergent file appears either
 
     const memDir = join(dir, ".tmct", "memory");

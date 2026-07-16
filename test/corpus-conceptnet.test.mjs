@@ -14,8 +14,8 @@ import {
 } from "../src/adapters/corpus/conceptnet.mjs";
 import { bareEnTerm, toRow, CANONICAL_RELS } from "../corpus/conceptnet/fetch-slice.mjs";
 import { loadMemory, normFactTerm } from "../src/adapters/memory/core.mjs";
-import { parseEntities } from "../src/codegraph.mjs";
-import { lookupByProseTokens } from "../src/prose.mjs";
+import { parseEntities } from "../src/domain/codegraph.mjs";
+import { lookupByProseTokens } from "../src/domain/prose.mjs";
 
 const attr = (ind, key) => (ind?.attributes || []).find((a) => a.key === key)?.value;
 

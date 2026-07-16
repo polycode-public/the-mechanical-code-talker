@@ -3,7 +3,7 @@
 // memory/blocks.mjs's buildNeighbours()/OVERLAP_MIN). Block granularity, no sub-block spans.
 // Each group's label is its top shared-IDF tokens (df/N over the hit set, not the corpus).
 
-import { buildNeighbours, OVERLAP_MIN, tokenizeBlock } from "../adapters/memory/blocks.mjs";
+import { buildNeighbours, OVERLAP_MIN, tokenizeBlock } from "../../adapters/memory/blocks.mjs";
 import { STOPWORDS } from "../prose.mjs";
 
 const LABEL_TOKEN_COUNT = 5;

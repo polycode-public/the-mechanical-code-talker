@@ -11,10 +11,10 @@ import assert from "node:assert/strict";
 import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { parseEntities } from "../../src/codegraph.mjs";
+import { parseEntities } from "../../src/domain/codegraph.mjs";
 import { ingestSchemaDocs } from "../../src/schema-docs.mjs";
-import { ask } from "../../src/ask.mjs";
-import { composeConcept, composeRelation, CONCEPT_CLASS, RELATION_TERM } from "../../src/concept.mjs";
+import { ask } from "../../src/domain/ask.mjs";
+import { composeConcept, composeRelation, CONCEPT_CLASS, RELATION_TERM } from "../../src/domain/concept.mjs";
 import { runTurn } from "../../src/chat.mjs";
 import { clearCache } from "../../src/adapters/source.mjs";
 

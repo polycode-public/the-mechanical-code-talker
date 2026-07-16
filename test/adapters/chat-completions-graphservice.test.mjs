@@ -1,5 +1,5 @@
 // chat-completions-graphservice.test.mjs — HANDOVER.md item 1: "completionsRescueAnswer
-// never passes a graphService adapter through to broadSearch". src/completions/search.mjs's
+// never passes a graphService adapter through to broadSearch". src/domain/completions/search.mjs's
 // broadSearch() always accepted an optional Repository-Interface `graphService` (its own
 // docblock names createGraphService(graph), src/adapters/providers/graph-service.mjs, as the reference
 // shape) but nothing in live chat ever constructed and passed one through — so the
@@ -25,7 +25,7 @@ import { fileURLToPath } from "node:url";
 
 import { runTurn } from "../../src/chat.mjs";
 import { appendFact } from "../../src/adapters/memory/core.mjs";
-import { parseEntities } from "../../src/codegraph.mjs";
+import { parseEntities } from "../../src/domain/codegraph.mjs";
 import { clearCache } from "../../src/adapters/source.mjs";
 import * as source from "../../src/adapters/source.mjs";
 

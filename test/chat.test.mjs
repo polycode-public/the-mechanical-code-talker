@@ -17,7 +17,7 @@ import {
   renderVerbose, WALL_MISS_RE,
 } from "../src/chat.mjs";
 import { dispatchTool } from "../src/server.mjs";
-import { parseEntities } from "../src/codegraph.mjs";
+import { parseEntities } from "../src/domain/codegraph.mjs";
 import * as source from "../src/adapters/source.mjs";
 import { CANONICAL_LINE_RE } from "./helpers/session.mjs";
 

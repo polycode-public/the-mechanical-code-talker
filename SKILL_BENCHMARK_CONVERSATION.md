@@ -7,8 +7,8 @@ greetings that land naturally, guided exploration that a curious user would actu
 closing that doesn't end on a wall; (2) whether tmct can **accept taught knowledge and then actually
 USE it to make a further inference**, not just recall it verbatim on the next turn (teach-then-INFER,
 not just teach-then-recall); and (3) whether a broad, open-ended question gets a **detailed
-completions-style response** via `src/completions/`'s hub-avoiding crawl (the degree-dampened
-`broadSearch`/`groupHits`/`rankSentences` pipeline in `src/completions/complete.mjs`) rather than
+completions-style response** via `src/domain/completions/`'s hub-avoiding crawl (the degree-dampened
+`broadSearch`/`groupHits`/`rankSentences` pipeline in `src/domain/completions/complete.mjs`) rather than
 the plain grammar wall. Two of the product's biggest capabilities — taught-relation inference and
 the completions pipeline — are real, shipped,
 and invisible to AGENTBENCH/INFBENCH/CHATBENCH alike. This skill is where they get tested.)*
@@ -90,7 +90,7 @@ conversation stops. A dead-end is any turn whose reply is one of:
   needs to combine that taught fact with something else to answer (a real inference, not a lookup)
   and instead hits a wall or an honest-but-avoidable miss, that's a dead-end too. Teach-then-RECALL
   passing while teach-then-INFER fails is exactly the gap this addition targets.
-- **(2026-07-10) a broad, open-ended question that should route to `src/completions/`'s pipeline**
+- **(2026-07-10) a broad, open-ended question that should route to `src/domain/completions/`'s pipeline**
   ("give me a detailed summary of how X works", "walk me through what happens when Y") hitting the
   plain grammar wall with no inferred goal at all. The pipeline is now wired into live chat
   dispatch (the completions rescue in `src/chat.mjs`), so a broad question that still hits the
@@ -169,7 +169,7 @@ this rule exists to prevent). Rules that make the play realistic:
 - **Try at least one broad, open-ended "detail" question per session** ("give me a detailed summary
   of how X works", "explain what happens when Y") — this is the completions pipeline's own territory
   (the hub-avoiding crawl: `broadSearch` → `groupHits` → `rankSentences`/`inferRelations` →
-  `prune`/voice pass, `src/completions/complete.mjs`, wired into live chat dispatch via the
+  `prune`/voice pass, `src/domain/completions/complete.mjs`, wired into live chat dispatch via the
   completions rescue in `src/chat.mjs`). A broad question that hits the plain wall is an ordinary
   dead-end to diagnose and route (§0).
 - Capture the transcript VERBATIM (pipe the turns: `printf 'q1\nq2\n…\n/exit\n' | node bin/tmct.mjs
@@ -187,7 +187,7 @@ ranked dead-end list, most-flow-breaking first.
 dead-end, write down what the fix would almost certainly be — **routing/recognition**, not new
 capability, in the large majority of cases ("what functions are in X" ≡ members-of-class, "what
 defined X" ≡ where-is-X-defined, "what about imports" ≡ the relation concept force) — and which
-existing module it would likely touch (`src/interpret/`, `src/concept.mjs`, `src/ask.mjs`'s miss
+existing module it would likely touch (`src/domain/interpret/`, `src/domain/concept.mjs`, `src/domain/ask.mjs`'s miss
 renderer). This is a diagnosis for whoever picks it up next, not an implementation: **do not edit any
 source file in this step.**
 
@@ -361,7 +361,7 @@ Step 3's diagnosis discipline) or a genuine ceiling (name it as one, don't force
 2. Route it per §1 Step 4: a small local gap becomes a `HANDOVER.md` open item, anything
    architectural a `PLAN_*.md`. If the routing/answer logic is actually correct and the dead-end
    is really awkward or repetitive phrasing, route it toward extending
-   `src/answer-variants.mjs`/`answer-variants.json` (the deterministic hit-template phrasing-variety
+   `src/domain/answer-variants.mjs`/`answer-variants.json` (the deterministic hit-template phrasing-variety
    system) instead of a routing fix. Note in the round's own log which one it went to.
 3. If Round-Step 3 found nothing worth routing (a clean round, or only genuine ceilings), say so
    plainly and move to the next round anyway (a clean round is a good outcome, not a failure, and
