@@ -118,21 +118,27 @@ export function computeBlocksLayout({ plan, rendersAs = {}, sizeOrder = [] }) {
   };
 
   const snapshots = (plan?.states || []).map((rows) => {
-    const supporterOf = new Map(); // object -> subject resting on it
+    const restingOn = new Map(); // object -> every subject resting directly on it
     for (const r of [...rows].sort((a, b) => (a.subject < b.subject ? -1 : 1))) {
-      if (blockSet.has(r.subject) && !supporterOf.has(r.object)) {
-        supporterOf.set(r.object, r.subject);
-      }
+      if (!blockSet.has(r.subject)) continue;
+      if (!restingOn.has(r.object)) restingOn.set(r.object, []);
+      const above = restingOn.get(r.object);
+      if (!above.includes(r.subject)) above.push(r.subject);
     }
     const stacks = {};
     const items = anchors.map((a) => ({ ...a }));
     for (const a of anchors) {
       const stack = [];
-      let top = a.id;
-      while (supporterOf.has(top)) {
-        top = supporterOf.get(top);
-        stack.push(top);
-      }
+      const placed = new Set();
+      const pileOnto = (support) => {
+        for (const label of [...(restingOn.get(support) || [])].sort()) {
+          if (placed.has(label)) continue;
+          placed.add(label);
+          stack.push(label);
+          pileOnto(label);
+        }
+      };
+      pileOnto(a.id);
       stacks[a.id] = stack;
       stack.forEach((label, i) => {
         const w = widthOf(label);
@@ -327,13 +333,35 @@ const PLAN = ${embedded};
       const a = posIn(before, id), b = posIn(after, id);
       return a && b && (a.x !== b.x || a.y !== b.y);
     });
-    if (reduced || movers.length !== 1) { drawState(i + 1); return; }
-    const id = movers[0], el = blockEls[id], to = posIn(after, id);
-    animating = true; el.classList.add("moving");
-    el.style.transition = "top .18s ease-in"; el.style.top = "${LIFT_Y}px"; await wait(190);
-    el.style.transition = "left .26s ease-in-out"; el.style.left = to.x + "px"; await wait(270);
-    el.style.transition = "top .18s ease-out"; el.style.top = to.y + "px"; await wait(200);
-    el.classList.remove("moving"); animating = false;
+    if (reduced || movers.length === 0) { drawState(i + 1); return; }
+    // A step can move several pieces at once (a carrier plus its passengers).
+    // Only pieces that change column actually travel; a piece whose column is
+    // unchanged is settling into the gap a departing piece left, so it drops
+    // in place rather than miming the journey.
+    const travellers = movers.filter((id) => posIn(before, id).x !== posIn(after, id).x);
+    const settlers = movers.filter((id) => posIn(before, id).x === posIn(after, id).x);
+    animating = true;
+    // Each traveller rides its own lane so pieces crossing together stay
+    // legible instead of stacking up on one another mid-air.
+    const riders = travellers.map((id, lane) => ({
+      el: blockEls[id],
+      to: posIn(after, id),
+      liftY: ${LIFT_Y} - lane * ${BLOCK_H + BLOCK_GAP},
+    }));
+    for (const r of riders) r.el.classList.add("moving");
+    for (const r of riders) { r.el.style.transition = "top .18s ease-in"; r.el.style.top = r.liftY + "px"; }
+    await wait(190);
+    for (const id of settlers) {
+      const el = blockEls[id];
+      el.style.transition = "top .2s ease-in-out"; el.style.top = posIn(after, id).y + "px";
+    }
+    for (const r of riders) { r.el.style.transition = "left .26s ease-in-out"; r.el.style.left = r.to.x + "px"; }
+    await wait(270);
+    for (const r of riders) { r.el.style.transition = "top .18s ease-out"; r.el.style.top = r.to.y + "px"; }
+    await wait(200);
+    for (const r of riders) r.el.classList.remove("moving");
+    drawState(i + 1);
+    animating = false;
   }
   const phaseFor = (i) => {
     if (i >= N) return "done";

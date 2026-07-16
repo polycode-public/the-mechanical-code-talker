@@ -7,6 +7,9 @@
 //   ledger.html       the memory ledger, with the ask bundle inlined
 //   plan.html         an animated replay of the solved hanoi-3 game
 //
+// It also stamps index.html's version from package.json, so the number the page
+// documents follows a version bump on its own.
+//
 // All of them are .gitignored. src/, examples/mini-webapp/.tmct/graph.json and the
 // binary stay the single source of truth, so the published site cannot drift from
 // them. Run via `npm run demo:build`, the same script .gitlab-ci.yml's `pages` job
@@ -16,7 +19,7 @@
 // from the source at build time. The copies keep src/'s directory layout under
 // public/engine/src/, because their own relative imports have to keep resolving.
 
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join, relative, resolve } from "node:path";
@@ -58,6 +61,22 @@ function engineImportClosure(entry) {
   return [...reached].sort();
 }
 
+// The footer's version number, rewritten from package.json on every build. The
+// page is tracked, so the committed copy carries whatever the last build wrote;
+// CI stamps it again before it publishes public/, which is what makes a bump
+// reach the deployed page without anyone editing HTML. post-deploy-smoke.mjs
+// reads the same element back off that page.
+const VERSION_STAMP = /(id="pkg-version"[^>]*>)[^<]*(<)/;
+
+function stampPageVersion() {
+  const { version } = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
+  const page = join(SITE, "index.html");
+  const html = readFileSync(page, "utf8");
+  if (!VERSION_STAMP.test(html)) throw new Error(`${page} has no #pkg-version element to stamp`);
+  writeFileSync(page, html.replace(VERSION_STAMP, `$1${version}$2`));
+  console.log(`stamped ${page} with version ${version}`);
+}
+
 const engineFiles = engineImportClosure("domain/ask.mjs");
 for (const rel of engineFiles) {
   mkdirSync(dirname(join(OUT, rel)), { recursive: true });
@@ -65,6 +84,8 @@ for (const rel of engineFiles) {
 }
 
 console.log(`copied ${engineFiles.length} engine source files into ${OUT}`);
+
+stampPageVersion();
 
 execFileSync(process.execPath, [join(here, "build-demo-graph.mjs"), join(SITE, "demo-graph.json")], { stdio: "inherit" });
 
