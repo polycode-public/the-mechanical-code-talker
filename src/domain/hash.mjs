@@ -103,6 +103,36 @@ export function normFactTerm(t) {
   return s.toLowerCase();
 }
 
+/** The closed taught→corpus predicate table. The teach lane mints a predicate
+ *  from the verb's LEMMA ("fire causes smoke" → mgx:cause), while the corpus
+ *  vocabulary spells the same relation in its curated form (mgx:causes). Left
+ *  apart, a taught fact and the corpus fact for the same triple are two facts
+ *  with two ids, and neither reader finds the other's. Each row below folds a
+ *  minted lemma onto the curated predicate that means the SAME thing in the
+ *  SAME direction, so both spellings converge on one fact id.
+ *
+ *  Closed on purpose — a table, not an inflection rule. Entries are added when
+ *  a curated predicate's surface phrase is a plain verb ("causes", "wants",
+ *  "requires", "involves") whose lemma the teach lane would otherwise mint
+ *  unrelated. Relations that invert their arguments (mgx:ownedBy,
+ *  mgx:createdBy) are absent: "X owns Y" and "X is owned by Y" are not the
+ *  same fact, so folding them would store a lie. */
+const CANONICAL_FACT_PREDICATE = new Map([
+  ["mgx:cause", "mgx:causes"],
+  ["mgx:desire", "mgx:desires"],
+  ["mgx:want", "mgx:desires"],
+  ["mgx:require", "mgx:hasPrerequisite"],
+  ["mgx:involve", "mgx:hasSubevent"],
+]);
+
+/** Normalize a fact PREDICATE: whitespace-collapse + cap (normText's storage
+ *  contract), then fold a minted lemma onto its curated corpus spelling. Casing
+ *  is left alone — a predicate is controlled vocabulary, not a term. */
+export function normFactPredicate(p) {
+  const t = normText(p);
+  return CANONICAL_FACT_PREDICATE.get(t) ?? t;
+}
+
 /** A Fact is content-addressed by its NUL-delimited (s, p, o) — NUL never
  *  occurs in a normalized term/predicate, so it's collision-proof unlike a
  *  space. Takes ALREADY-normalized parts; factIdForTriple normalizes first. */
@@ -113,5 +143,5 @@ export const factIdFor = (s, p, o) => `fact:${fnv1aHex(`${s}\0${p}\0${o}`)}`;
  *  syllogise.mjs's retraction machinery) name a not-yet-written fact's id
  *  deterministically, without an extra read. Pure, no I/O. */
 export function factIdForTriple(subject, predicate, object) {
-  return factIdFor(normFactTerm(subject), normText(predicate), normFactTerm(object));
+  return factIdFor(normFactTerm(subject), normFactPredicate(predicate), normFactTerm(object));
 }

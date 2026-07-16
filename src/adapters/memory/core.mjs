@@ -7,13 +7,13 @@
 
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { proseTokensFor, buildProseIndex } from "./prose-tokens.mjs";
-import { fnv1aHex, normText, normFactTerm, factIdFor, factIdForTriple } from "../../domain/hash.mjs";
+import { proseTokensFor, buildProseIndex } from "../prose-tokens.mjs";
+import { fnv1aHex, normText, normFactTerm, normFactPredicate, factIdFor, factIdForTriple } from "../../domain/hash.mjs";
 
 // Fact identity (normalization + id derivation) lives in hash.mjs — the one
 // content-address contract — and is re-exported here so store consumers keep
 // a single import site for read/write plus identity.
-export { normFactTerm, factIdForTriple } from "../../domain/hash.mjs";
+export { normFactTerm, normFactPredicate, factIdForTriple } from "../../domain/hash.mjs";
 import {
   computeTrust, sessionReliabilityFrom, TRUST_SCORE_PROP, TRUST_INPUTS_PROP,
   CREATED_AT_PROP, UPDATED_AT_PROP, provenanceTagToSource,
@@ -23,7 +23,7 @@ import {
 // with the trust layer (they are its inputs); re-exported here so store
 // consumers keep one import site.
 export { CREATED_AT_PROP, UPDATED_AT_PROP, provenanceTagToSource } from "../../domain/memory/trust.mjs";
-import { assertIndividualValid } from "../../domain/memory/shacl.mjs";
+import { assertIndividualValid } from "./shacl.mjs";
 
 export const MEMORY_DIR_REL = join(".tmct", "memory");
 export const MEMORY_GRAPH_REL = join(MEMORY_DIR_REL, "graph.json");
@@ -956,7 +956,7 @@ export async function appendUtterances(dir, utterances) {
  *  Returns { id }. */
 export async function appendFact(dir, { subject, predicate, object, provenance = "", createdAt = "", quantifier = "", premiseTrusts, ruleConfidence } = {}) {
   const s = normFactTerm(subject);
-  const p = normText(predicate);
+  const p = normFactPredicate(predicate);
   const o = normFactTerm(object);
   if (!s || !p || !o) throw new Error("a fact needs subject, predicate and object");
   const id = factIdFor(s, p, o);
@@ -1010,7 +1010,7 @@ export async function appendFacts(dir, facts) {
   let skipped = 0;
   for (const f of facts || []) {
     const s = normFactTerm(f?.subject);
-    const p = normText(f?.predicate);
+    const p = normFactPredicate(f?.predicate);
     const o = normFactTerm(f?.object);
     if (!s || !p || !o) { skipped += 1; continue; } // batch skips, never throws
     const text = `${s} ${p} ${o}`;
