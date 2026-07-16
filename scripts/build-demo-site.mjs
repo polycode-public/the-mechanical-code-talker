@@ -77,6 +77,12 @@ function stampPageVersion() {
   console.log(`stamped ${page} with version ${version}`);
 }
 
+// Clear OUT first. Copying into it without clearing leaves every file src/ has
+// since renamed sitting there forever, and the browser loads whatever it finds:
+// the five-layer src/ move stranded a whole flat copy of the old layout on each
+// dev machine that had run this. CI never saw it, because CI checks out clean.
+rmSync(OUT, { recursive: true, force: true });
+
 const engineFiles = engineImportClosure("domain/ask.mjs");
 for (const rel of engineFiles) {
   mkdirSync(dirname(join(OUT, rel)), { recursive: true });
