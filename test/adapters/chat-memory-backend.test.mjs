@@ -1,7 +1,7 @@
 // createSession/runChat's `memoryBackend` option — the
 // storage-backend seam wired into the CHAT surface, not just memory/core.mjs
 // directly. A real teach turn ("every module is a component", the same
-// declarative test/chat-ephemeral.test.mjs already exercises for the default
+// declarative test/tools/chat-ephemeral.test.mjs already exercises for the default
 // backend) is run through createSession under each of the three backends, and
 // the fact is confirmed via loadMemory(s.memoryDir) — proving the session
 // actually threads its OWN memoryDir handle through the live teach lane, not

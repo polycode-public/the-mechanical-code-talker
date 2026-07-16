@@ -103,7 +103,7 @@ a tool that does not exist. The unbounded-output tools (`tmct_snippet`,
 emit raw snippets / whole edit bundles — the most hallucination-prone surface;
 they need output-size / file-read preconditions we have not committed to), and
 the exclusion is recorded in `EXCLUDED_FROM_REGISTRY` so it reads as a decision,
-not an omission. A conformance test (`test/agentbench.test.mjs`) makes the
+not an omission. A conformance test (`test/bench/agentbench.test.mjs`) makes the
 "verified against the switch" claim executable: every registry arg-key is proven
 to be the key `dispatchTool` actually reads, and the registry is proven a strict
 subset of the dispatch case set — so arg-key drift fails at merge, not at runtime.

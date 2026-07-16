@@ -67,7 +67,7 @@ test("graded pool: every case carries grade + construction + the graded tag; ids
   }
   // Case-set v3: the frozen v1 core no longer lives in a separate file to
   // check collision against — it was folded into the go-to graded-pool.jsonl
-  // (test/chatbench.test.mjs's "frozen v1 core" tests cover its own
+  // (test/bench/chatbench.test.mjs's "frozen v1 core" tests cover its own
   // invariants there). Every id in THIS pool (the full, untouched generator
   // output) already asserted above to start with "g-", which is disjoint by
   // construction from the v1 core's own non-"g-" id scheme.

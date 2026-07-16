@@ -9,7 +9,7 @@
 // hand-labeled fixtures (a 3-block/9-sentence group and a 2-block/4-sentence group), each with
 // its "key point" sentences named explicitly, checked against rankSentences()'s own top-N
 // output for a justified recall threshold. Plus a determinism double-run diff, the same
-// discipline test/completions-stage0.test.mjs's own exit-criterion test applies to
+// discipline test/adapters/completions-stage0.test.mjs's own exit-criterion test applies to
 // search+group.
 //
 // Recall-threshold reasoning (documented here, not just asserted):

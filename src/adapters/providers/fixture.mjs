@@ -3,7 +3,7 @@
 //
 // It is a degenerate provider in the sense that its graph is tiny and its source
 // bodies are absent (snippet/context answer NO_SOURCE) — but every OTHER service
-// returns real graph truth. The contract suite (test/repository-interface.test.mjs)
+// returns real graph truth. The contract suite (test/adapters/repository-interface.test.mjs)
 // runs the whole compatibility kit against it.
 //
 // The payload is embedded (not read from test/) so this ships as a runnable spec
@@ -114,7 +114,7 @@ export function fixtureGraph() {
 /** The fixture provider: a Repository-Interface service over the small real graph.
  *  `opts` passes straight through to createGraphService — e.g. `{ sourceAccess: true,
  *  repoRoot, readFile }` to construct a source-capable fixture provider for testing
- *  (see test/repository-interface.test.mjs's third runConformance call, which is the
+ *  (see test/adapters/repository-interface.test.mjs's third runConformance call, which is the
  *  only thing that exercises the conformance kit's source-capable branch). */
 export function fixtureProvider(opts = {}) {
   return createGraphService(fixtureGraph(), opts);

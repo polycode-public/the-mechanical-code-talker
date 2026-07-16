@@ -11,7 +11,7 @@ TROG-2/CELF-5–adapted taxonomy.
 Code home: `chatbench/graded.mjs` (registries + pure logic),
 `chatbench/generate-graded.mjs` (the pool generator),
 `chatbench/graded-pool.jsonl` (the committed pool),
-`test/chatbench-graded.test.mjs` (lint + promoted always-run set).
+`test/bench/chatbench-graded.test.mjs` (lint + promoted always-run set).
 The v1 48 cases in `cases.jsonl` are untouched and always run.
 
 ## The licence rule
@@ -39,7 +39,7 @@ input source; CEFR band labels are an open framework (Council of Europe).
 ## The populated matrix
 
 Registry of record: `GRADED_MATRIX` in `chatbench/graded.mjs` (the lint in
-`test/chatbench-graded.test.mjs` enforces that the pool matches it exactly).
+`test/bench/chatbench-graded.test.mjs` enforces that the pool matches it exactly).
 Pool size is 50 where the fixture offers wide surface variation, 25 where the
 space is narrower (min the operator allows). Combo cells (marked `+`) pair a
 construction with another area — including `noise`, a v1 surface dimension —
@@ -248,7 +248,7 @@ construction** (failures were marked frontier at authoring), so the ladder
 gates nowhere; its job begins the first time a lever regresses an enforced
 expectation. The gating is implemented in `runGradedDraw` (`run.mjs`, injectable
 runner for unit-testing) and the pure `ladderGate` (`graded.mjs`); the
-`test/chatbench-graded.test.mjs` `runGradedDraw` test exercises it end-to-end.
+`test/bench/chatbench-graded.test.mjs` `runGradedDraw` test exercises it end-to-end.
 
 **The standing cadence (archive/PLAN_CYCLE_4.md §META-2 — don't pay to judge a ceiling
 while the floor leaks).** Tier-1 (and its dual-draw agreement) is FREE and always
@@ -270,7 +270,7 @@ runs for every grade. **Judged** spend is where discipline matters:
 When a cell passes reliably across two cycles' samples, its whole pool
 becomes promotion-eligible; promotion makes its **fixed 5-item promoted
 subset** (the first 5 non-frontier cases by id — deterministic and stable)
-an ALWAYS-RUN, judge-free unit test in `test/chatbench-graded.test.mjs`,
+an ALWAYS-RUN, judge-free unit test in `test/bench/chatbench-graded.test.mjs`,
 running through the same runner machinery in unit timescale. Promoting a
 future grade = appending its band name to the one `PROMOTED_GRADES` array in
 `chatbench/graded.mjs`. Currently promoted: **A1 and A2** (9 cells × 5 =
@@ -297,7 +297,7 @@ of the fluency is memorized versus generated. `bandScore()` is the primitive;
 A case tagged `template-lane` targets a *templated* capability — "the bench must
 say a level is being faked". A template-carried pass **raises the performance band
 and NEVER the productive band** (the honesty guarantee, asserted in
-`test/chatbench-graded.test.mjs`). Template-lane cells get their own parallel-forms
+`test/bench/chatbench-graded.test.mjs`). Template-lane cells get their own parallel-forms
 **agreement line** (`agreement.templateLane` + the `template-lane …` rows in the
 rendered table), reported ALONGSIDE the standard cells, never replacing them.
 `templateLaneLint(rows)` flags a template-lane row that passed `via:"composed"` —

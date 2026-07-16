@@ -1153,7 +1153,7 @@ const RULE_SLOT_SPEC = {
 // mirroring factIdFor's NUL-delimited discipline: identical rules upsert,
 // different ones coexist. For 2-slot kinds the joined string is byte-identical
 // to the historical (kind, name, slot1, slot2) template, so pre-existing rule
-// ids never change (pinned by test/memory-rules-action.test.mjs).
+// ids never change (pinned by test/adapters/memory-rules-action.test.mjs).
 const ruleIdFor = (kind, name, slotValues) => `rule:${fnv1aHex([kind, name, ...slotValues].join("\0"))}`;
 
 /** Append one taught RULE — a sibling of appendFact storing a `Rule`

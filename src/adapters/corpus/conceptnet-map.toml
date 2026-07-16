@@ -3,7 +3,7 @@
 #
 # One row per ConceptNet relation (the canonical closed set of 34 —
 # docs/references/schemas/conceptnet-relations.md is the reference list this
-# table is drift-checked against; test/corpus-conceptnet.test.mjs fails if the
+# table is drift-checked against; test/adapters/corpus-conceptnet.test.mjs fails if the
 # committed slice contains a relation with no row here).
 #
 # Fields:

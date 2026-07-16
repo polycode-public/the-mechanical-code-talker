@@ -65,7 +65,7 @@ test("context(): a resolvable symbol with NO site (a bare module) still hits —
 });
 
 // ---- path-traversal guard, exercised end-to-end THROUGH graph-service.mjs (not just the
-// lower-level source-slice.mjs unit tests in test/source-slice.test.mjs) ----------------------
+// lower-level source-slice.mjs unit tests in test/adapters/source-slice.test.mjs) ----------------------
 
 /** A minimal real graph with one Function individual whose `site.path` escapes repoRoot, plus a
  *  real sibling secret file OUTSIDE repoRoot the traversal path targets — so an unguarded read

@@ -89,7 +89,7 @@ node chatbench/generate-graded.mjs                   # rebuild the pool (determi
 unreliable one (a grade is reliable when all its non-frontier sampled cases
 pass; frontier cases never block). Cells that stay reliable across two
 cycles are PROMOTED: their fixed 5-item subsets run as always-run judge-free
-unit tests in `test/chatbench-graded.test.mjs` — currently grades **A1 and
+unit tests in `test/bench/chatbench-graded.test.mjs` — currently grades **A1 and
 A2** (9 cells × 5 cases); promoting a future grade = appending its band to
 `PROMOTED_GRADES` in `graded.mjs`.
 
@@ -151,7 +151,7 @@ The runner does NOT load `test/fixtures/entities.fixture.json` raw: it applies
 `ingestSchemaDocs()` first and materializes the ingested payload (to a temp
 file for turns mode, and as the seeded `.tmct/graph.json` for session mode),
 mirroring what every real graph writer produces
-(`buildEntities → ingestSchemaDocs → write`, the `test/ask.test.mjs`
+(`buildEntities → ingestSchemaDocs → write`, the `test/tools/ask.test.mjs`
 `buildGraph()` pattern). Without this, schema-vocabulary behavior would be
 missing from the baseline and a later "add schema docs" change would
 masquerade as a lever. The only un-ingested graph in the bench is the
@@ -216,6 +216,6 @@ carry baselineFail turns** documenting current weaknesses:
   in graph.json (the parse path drops Session individuals).
 - `mr-asked-before` — no recall surface for "what did i ask before".
 
-Tests (`test/chatbench.test.mjs`) cover the harness only — case lint, tier-1
+Tests (`test/bench/chatbench.test.mjs`) cover the harness only — case lint, tier-1
 evaluation, prompt/parse/aggregation, report rendering — and never call the
 judge. The bench itself is run by the tuning cycle, not by `npm test`.

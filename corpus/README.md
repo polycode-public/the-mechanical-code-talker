@@ -127,6 +127,6 @@ doc comment.
 
 See `conceptnet/README.md` — one command per route (API vs dump), the
 quality-filter pass, plus the seed-term list to extend. The test suite
-(`test/corpus-conceptnet.test.mjs`, `test/corpus-templates.test.mjs`) guards the
+(`test/adapters/corpus-conceptnet.test.mjs`, `test/corpus-templates.test.mjs`) guards the
 contracts: slice/mapping drift, en→en shape, the ≤ 1.5 MB budget, template
 ids/slots, and end-to-end seeding.

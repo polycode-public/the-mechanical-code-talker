@@ -14,7 +14,7 @@
 //     the same fixture test/chatflow-*.test.mjs and test/ask-resolve-ranking.test.mjs etc.
 //     already drive against (read-only here — this file never writes into examples/).
 //   - the block half of the corpus is seeded with saveBlock() into a throwaway temp dir,
-//     the exact pattern test/memory-blocks.test.mjs already established for exercising
+//     the exact pattern test/adapters/memory-blocks.test.mjs already established for exercising
 //     memory/blocks.mjs (a literal { id: text } corpus object, not a new fixture file).
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -39,7 +39,7 @@ async function tmpRepo() {
 }
 
 // A small block corpus mirroring mini-webapp's own domains, seeded the same way
-// test/memory-blocks.test.mjs seeds its CORPUS — three blocks share store/validate
+// test/adapters/memory-blocks.test.mjs seeds its CORPUS — three blocks share store/validate
 // vocabulary (should cluster together), two share logger/http vocabulary (should cluster
 // together), one is a deliberate off-topic isolate (should stay a singleton group).
 const BLOCK_CORPUS = {

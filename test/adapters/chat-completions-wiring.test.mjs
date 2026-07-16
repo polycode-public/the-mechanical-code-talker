@@ -40,7 +40,7 @@ const mem = () => mkdtemp(join(tmpdir(), "tmct-completions-wiring-"));
 // Widget.render calls fnAlpha. Phrased as ordinary prose BLOCKS (not "Q: .../A: ..."
 // pairs — that shape is recallFromBlocks' own W2 memory-recall lane's territory, a
 // DIFFERENT lane this suite must not accidentally exercise instead), the same shape
-// test/completions-complete.test.mjs's own fixture uses.
+// test/adapters/completions-complete.test.mjs's own fixture uses.
 const WIDGET_BLOCKS = {
   "blk-widget-1": "Widget is a Class defined in app/lib/b.mjs. Widget contains a render method and a name attribute. This detail is not important here.",
   "blk-widget-2": "Widget.render calls fnAlpha to do its core work. The render method is the main entry point callers use. This detail is not important here.",

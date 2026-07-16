@@ -20,7 +20,7 @@ const CONFIG = { graphFile: GRAPH };
 const drive = (queries) => driveTurns(CONFIG, queries);
 // Focus/anaphora threading (the "what calls it" follow-up test below) needs the
 // SAME preloaded `graph` object driveTurns's own `carryFocus` option is built for
-// (see test/chatbench-levers.test.mjs's repoDriver — the exact same pattern):
+// (see test/adapters/chatbench-levers.test.mjs's repoDriver — the exact same pattern):
 // runAsk's contextId-binding only fires when a live graph is threaded in, not the
 // bare config path a single stateless turn uses.
 const PRELOADED_GRAPH = parseEntities(JSON.parse(readFileSync(GRAPH, "utf8")));

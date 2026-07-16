@@ -2,8 +2,8 @@
 // generateCompletion(), with the pipeline's exit criterion made concrete: "A full end-to-end completion reads as one consistent voice and every sentence
 // traces to a source span."
 //
-// Fixture, deliberately built the same way test/completions-stage0.test.mjs and
-// test/completions-infer.test.mjs each build their own (a throwaway saveBlock() corpus + a
+// Fixture, deliberately built the same way test/adapters/completions-stage0.test.mjs and
+// test/adapters/completions-infer.test.mjs each build their own (a throwaway saveBlock() corpus + a
 // small appendFact() memory, seeded fresh per test): three "Store" blocks that cluster into one
 // group (mirroring stage0/stage2's own Store fixture shape — a key sentence + a shared, verbatim
 // filler sentence PER STORE BLOCK ONLY, so pruning's top-K-per-group cutoff has real material to
@@ -16,7 +16,7 @@
 // feeding no inference.
 //
 // Retrieval uses a BROAD prompt (covering every block's vocabulary, the same "pull in the whole
-// corpus" technique test/completions-stage0.test.mjs's own clustering-shape test uses) so this
+// corpus" technique test/adapters/completions-stage0.test.mjs's own clustering-shape test uses) so this
 // suite exercises real cross-group pruning rather than depending on retrieveBlocks() itself
 // filtering the off-topic/singleton material out before grouping ever sees it; a NARROWER query
 // (generateCompletion's own `opts.query`, independent of the broad retrieval prompt) drives the
