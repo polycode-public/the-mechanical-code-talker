@@ -28,6 +28,7 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { parseSchemaClasses } from "../src/domain/schemaorg/turtle.mjs";
+import { isRealSentence } from "../src/domain/persona/examples.mjs";
 import {
   WORDNET_YAML_DIR, loadSynsets, loadEntriesFor, loadAllNounSynsets,
 } from "../src/adapters/wordnet-source.mjs";
@@ -164,12 +165,6 @@ const SCHEMA_ALLOWLIST = ["Thing", "Person", "Place", "Event", "Organization", "
 // expected). Writes a candidate list — NOT the final committed file — for a
 // human to hand-pick corpus/tier2/human-examples.jsonl from (same "curate
 // down from a big source" discipline as everything else here).
-// A handful of WordNet examples are cross-reference stubs ("see table 1"),
-// not real sentences — filtered here so a re-run reproduces the committed
-// corpus/tier2/human-examples.jsonl exactly (this was the one candidate
-// dropped by hand when that file was first curated).
-const isRealSentence = (s) => !/^see\s+\w+\s*\d*\.?$/i.test(String(s).trim());
-
 async function writeExampleCandidates(outPath) {
   const { CORPUSES } = await import("../corpus/tier2/generate.mjs");
   const words = CORPUSES.human.lexicon.nouns.filter((w) => !w.includes(" "));

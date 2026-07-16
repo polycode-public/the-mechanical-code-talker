@@ -28,11 +28,14 @@ import { readFile, readdir, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { parseYaml, candidateFor } from "./extract-persona-sources.mjs";
-import { BLOCKLIST_RE, WORD_DENYLIST, defOf } from "./build-persona-tiers.mjs";
+import { candidateFor } from "./extract-persona-sources.mjs";
+import { WORDNET_YAML_DIR, loadAllNounSynsets, loadEntriesFor } from "../src/adapters/wordnet-source.mjs";
+import { BLOCKLIST_RE, WORD_DENYLIST } from "../src/domain/persona/tiers.mjs";
+import { isRealSentence, normalizeExample } from "../src/domain/persona/examples.mjs";
+import {
+  splitRecords, extractArray, extractText, isSimpleSentence, NOUN_POS,
+} from "../src/domain/semcor/parse.mjs";
 
-const WORDNET_SRC = process.env.TMCT_WORDNET_SRC || join(homedir(), "projects", "globalwordnet", "english-wordnet");
-const WORDNET_YAML_DIR = join(WORDNET_SRC, "src", "yaml");
 const SEMCOR_SRC = process.env.TMCT_SEMCOR_SRC || join(homedir(), "projects", "globalwordnet", "semcor");
 const SEMCOR_DATA_DIR = join(SEMCOR_SRC, "data");
 
@@ -45,61 +48,9 @@ const OUT = (() => {
   return i !== -1 && process.argv[i + 1] ? process.argv[i + 1] : join("scripts", `persona-examples-${TIER || "worksheet"}.json`);
 })();
 
-// ---- Part 1: WordNet inline examples (same mechanism as
+// ---- WordNet inline examples (the same mechanism as
 // extract-persona-sources.mjs's --examples mode, extended to a caller-
 // supplied cumulative word list rather than always Small's own). ----
-
-async function loadAllNounSynsets() {
-  const files = (await readdir(WORDNET_YAML_DIR)).filter((f) => f.startsWith("noun."));
-  const map = new Map();
-  for (const f of files) {
-    const parsed = parseYaml(await readFile(join(WORDNET_YAML_DIR, f), "utf8"));
-    for (const [id, rec] of Object.entries(parsed)) map.set(id, rec);
-  }
-  return map;
-}
-
-async function loadEntriesFor(words) {
-  const letters = new Set();
-  for (const w of words) {
-    const c = w[0].toLowerCase();
-    letters.add(/[a-z]/.test(c) ? c : "0");
-  }
-  const index = new Map();
-  for (const letter of letters) {
-    const path = join(WORDNET_YAML_DIR, `entries-${letter}.yaml`);
-    if (!existsSync(path)) continue;
-    const parsed = parseYaml(await readFile(path, "utf8"));
-    for (const [word, byPos] of Object.entries(parsed)) {
-      if (!words.has(word)) continue;
-      const senses = {};
-      for (const [pos, rec] of Object.entries(byPos || {})) {
-        if (pos === "form") continue;
-        const list = Array.isArray(rec?.sense) ? rec.sense : [];
-        senses[pos] = list.map((s) => ({ id: s.id, synset: s.synset })).filter((s) => s.synset);
-      }
-      index.set(word, senses);
-    }
-  }
-  return index;
-}
-
-const isRealSentence = (s) => !/^see\s+\w+\s*\d*\.?$/i.test(String(s).trim());
-
-// A handful of WordNet `example:` entries are an ATTRIBUTED LITERARY QUOTE
-// (a `{source, text}` mapping — e.g. "ecstasy"'s own example is `{source:
-// "Charles Dickens", text: "listening to sweet music..."}`), not a plain
-// string, unlike the vast majority — real, found live extending coverage
-// past Small tier's own 665-word list (none of Small's words happened to hit
-// this shape, so it went uncaught until Medium/Large's much wider coverage).
-// Normalize to the plain sentence text; the literary source is real but not
-// needed for this corpus's purpose (a plain example sentence, not a citation
-// index).
-function normalizeExample(example) {
-  if (typeof example === "string") return example;
-  if (example && typeof example === "object" && typeof example.text === "string") return example.text;
-  return null;
-}
 
 async function wordnetInlineExamples(words) {
   const synsets = await loadAllNounSynsets();
@@ -128,7 +79,7 @@ async function wordnetInlineExamples(words) {
   return candidates;
 }
 
-// ---- Part 2: SemCor supplement (Large tier only) --------------------------
+// ---- SemCor supplement (Large tier only) ----------------------------------
 
 const PREFERRED_GENRES = ["press_reportage", "humor"];
 // A WIDER genre set for the human-nature priority pass only: press_reportage/
@@ -142,88 +93,6 @@ const PREFERRED_GENRES = ["press_reportage", "humor"];
 // (isSimpleSentence) still applies regardless of genre, so this widening
 // trades genre-plainness for topical relevance, not grammatical complexity.
 const NATURE_GENRES = ["press_reportage", "humor", "popular_lore", "skill_and_hobbies", "learned"];
-
-/** Split a SemCor YAML file into per-sentence record blocks (top-level
- *  "<key>:" lines, skipping the leading "_meta:" schema block) — a targeted
- *  extractor for this file's own regular shape (flow-style lemmas/pos
- *  arrays, a folded single-quoted `text` scalar), not a general YAML parser
- *  (this repo has no YAML dependency; a maintainer worksheet tool's output
- *  is hand-reviewed, same discipline as scripts/extract-persona-sources.mjs's
- *  own tiny YAML reader). */
-function splitRecords(text) {
-  const lines = text.split("\n");
-  const blocks = [];
-  let i = 0;
-  while (i < lines.length && lines[i] !== "_meta:") i++;
-  i += 1;
-  while (i < lines.length && (lines[i].startsWith(" ") || lines[i].trim() === "")) i++; // skip rest of _meta
-  while (i < lines.length) {
-    if (/^[A-Za-z0-9_]+:$/.test(lines[i])) {
-      let j = i + 1;
-      const block = [];
-      while (j < lines.length && !/^[A-Za-z0-9_]+:$/.test(lines[j])) {
-        block.push(lines[j]);
-        j += 1;
-      }
-      blocks.push(block.join("\n"));
-      i = j;
-    } else {
-      i += 1;
-    }
-  }
-  return blocks;
-}
-
-/** Extract a flow-style JSON-compatible array value for `key` from one
- *  record block (lemmas/pos are double-quoted string arrays — valid JSON
- *  once isolated), balancing brackets across a line wrap if one occurs. */
-function extractArray(block, key) {
-  const re = new RegExp(`^\\s*${key}:\\s*(\\[.*)$`, "m");
-  const m = re.exec(block);
-  if (!m) return null;
-  let buf = m[1];
-  let depth = (buf.match(/\[/g) || []).length - (buf.match(/\]/g) || []).length;
-  const afterIdx = block.indexOf(m[0]) + m[0].length;
-  const rest = block.slice(afterIdx).split("\n");
-  let ri = 0;
-  while (depth > 0 && ri < rest.length) {
-    buf += `\n${rest[ri]}`;
-    depth += (rest[ri].match(/\[/g) || []).length - (rest[ri].match(/\]/g) || []).length;
-    ri += 1;
-  }
-  try { return JSON.parse(buf); } catch { return null; }
-}
-
-/** Extract the `text:` folded single-quoted scalar (YAML's own `''` ->
- *  literal `'` escape; line breaks folded to spaces). */
-function extractText(block) {
-  const m = /^\s*text:\s*'/m.exec(block);
-  if (!m) return null;
-  const start = block.indexOf("'", m.index);
-  let i = start + 1;
-  let raw = "";
-  while (i < block.length) {
-    if (block[i] === "'") {
-      if (block[i + 1] === "'") { raw += "'"; i += 2; continue; }
-      break;
-    }
-    raw += block[i];
-    i += 1;
-  }
-  return raw.replace(/\s+/g, " ").trim();
-}
-
-const NOUN_POS = new Set(["NN", "NNS"]);
-// Simple-grammar filter (PLAN_SEED.md §9): short, no semicolons/colons/
-// embedded quotes-within-quotes signaling reported speech, no more than one
-// comma (a rough proxy for "no complex embedded clauses").
-function isSimpleSentence(text, wordCount) {
-  if (wordCount > 18) return false;
-  if (/[;:]/.test(text)) return false;
-  if ((text.match(/,/g) || []).length > 1) return false;
-  if (/"/.test(text)) return false;
-  return true;
-}
 
 async function semcorExamplesFor(targetWords, maxPerWord = 2, genres = PREFERRED_GENRES) {
   const targets = new Set(targetWords);
@@ -257,7 +126,7 @@ async function semcorExamplesFor(targetWords, maxPerWord = 2, genres = PREFERRED
   return [...found.values()].flat();
 }
 
-// ---- Part 3: main -----------------------------------------------------------
+// ---- main ------------------------------------------------------------------
 
 async function main() {
   if (!TIER || !["medium", "large"].includes(TIER)) {
@@ -350,4 +219,3 @@ async function main() {
 const isMain = process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href;
 if (isMain) await main();
 
-export { splitRecords, extractArray, extractText, isSimpleSentence };
