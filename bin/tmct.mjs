@@ -19,7 +19,9 @@
 // The `cli` arms (digest / tmct_locate / any-tool fallback) are the carried,
 // de-emphasized non-chat modes, folded in here from the former bin/cli.mjs.
 // The graph artifact lives at <repo_path>/.tmct/graph.json; the tools (run
-// with cwd = that repo) load it by default. No flags, no config files.
+// with cwd = that repo) load it by default. The `cli` arms resolve it through
+// the same --graph/--repo/env/tmct.toml chain every other subcommand shares
+// (src/services/cli-args.mjs resolveRuntimeConfig).
 //
 // tmct began as a whole-package lift of an earlier chat surface (see README
 // provenance): internal module filenames and symbols were kept to preserve the
@@ -56,7 +58,8 @@ Usage:
        [--config <path>]       folded blocks (the /memory chat command, from the shell)
        [--verbose]
   tmct init [--repo <abs>]     initialize a repo for tmct (default: cwd): .tmct/,
-       [--force]               tmct.toml, tier-1 corpus seed, provenance record
+       [--force]               tmct.toml, .tmct/TOOLS.md (the cold-tool catalog),
+                               tier-1 corpus seed, provenance record
        [--corpus <id|path>]    also seed a corpus — a tier-2 manifest id (aws|python|java|
                                general) or a jsonl file path — opt-in, offline, $0
        [--ontology <name|path>]  activate+seed an ontology bundle (a recognized name or a path)
@@ -114,15 +117,19 @@ Usage:
                                or an honest "no plan found". --tools restricts the
                                declared toolset; --json prints the full loop result.
   tmct cli <tool> '{…}'        invoke a graph tool directly (carry-over, de-emphasized)
+       [--repo <abs>]          the repo to answer from; the payload's "repo_path" says
+       [--graph <path>]        the same thing. --graph names the graph file outright
+       [--config <path>]       (repeatable), --config an alternate tmct.toml
   tmct cli digest '{…}'        architecture map + per-module context bundles
   tmct --help                  show this help
 
 On a terminal, chat opens the full-screen TUI; piped input gets the plain shell.
 In chat: /help lists slash-commands; /exit leaves. Session log → <repo>/.tmct/session-<id>.log.
 
-Shared graph-path precedence (chat/serve; see src/services/cli-args.mjs): --graph flag(s) >
+Shared graph-path precedence (chat/serve/cli; see src/services/cli-args.mjs): --graph flag(s) >
 TMCT_GRAPH_FILE env > tmct.toml graph_file/graph_files > --repo-derived
-<repo>/.tmct/graph.json > git-root/cwd default.
+<repo>/.tmct/graph.json > git-root/cwd default. On the \`cli\` route, a payload's
+"repo_path" fills the --repo tier when the flag is absent.
 
 Memory-backend precedence (chat; see src/services/chat.mjs createSession): --memory-backend
 flag > TMCT_MEMORY_BACKEND env > tmct.toml [memory] backend > "default" (the flat
@@ -175,7 +182,7 @@ async function runDigest(args, { dispatchTool, buildContextBundle, source, confi
   let modules = Array.isArray(args.modules) ? args.modules.slice(0, DIGEST_MODULE_CAP) : [];
   let autoSelected = null; // for the header, when `query` drove selection
   if (!modules.length && args.query) {
-    const graph = parseEntities(await source.fetchEntities(configFor(repoPath)));
+    const graph = parseEntities(await source.fetchEntities(await configFor(repoPath)));
     // SHIPPED DEFAULT (0.5.0): the digest's query-mode auto-locate resolves literal-mention ON
     // (a fresh invocation with no tmct.toml), disable-able via `literal_mention:false`. Kept in
     // lockstep with the `tmct_locate` handler so `cli digest '{query}'` ≡ `cli tmct_locate` for the
@@ -196,7 +203,7 @@ async function runDigest(args, { dispatchTool, buildContextBundle, source, confi
   // not just the primary + 2 trimmed secondaries. Tests whether maximal injection re-bloats.
   const max = Boolean(args.max);
   const secondaryCap = max ? modules.length : DIGEST_SECONDARY_CAP;
-  const config = configFor(repoPath);
+  const config = await configFor(repoPath);
   const body = [];
   let effTier = "NONE"; // largest tier emitted across all modules
   let topup = false;    // whether any module's auto-sizing escalated above TINY
@@ -247,18 +254,23 @@ async function runDigest(args, { dispatchTool, buildContextBundle, source, confi
  *  Imports are lazy so `tmct --help` and chat startup never pay for the tool
  *  stack. */
 async function runCliMode() {
-  const [, sub, payload] = process.argv.slice(2);
-  const { join } = await import("node:path");
+  const rest = process.argv.slice(2);
+  const [, sub, payload] = rest;
   const { dispatchTool, buildContextBundle } = await import("../src/tools/server.mjs");
-  const { loadConfig, DEFAULT_GRAPH_REL } = await import("../src/adapters/config.mjs");
   const source = await import("../src/adapters/source.mjs");
   const codegraph = await import("../src/domain/codegraph.mjs");
   const { parseEntities, searchModulesRanked } = codegraph;
+  const { resolveRuntimeConfig, strFlag } = await import("../src/services/cli-args.mjs");
 
-  /** Build a config pointed at a specific repo's artifact (for `cli` sub-commands that
-   *  take a repo_path), or fall back to the cwd-derived default. */
-  const configFor = (repoPath) =>
-    repoPath ? { graphFile: join(repoPath, DEFAULT_GRAPH_REL) } : loadConfig();
+  /** Resolve this invocation's graph through the SAME precedence chain every other
+   *  subcommand uses (--graph flag(s) > TMCT_GRAPH_FILE > tmct.toml > --repo-derived),
+   *  so a passed --graph/--repo is honoured instead of silently answering from the cwd.
+   *  A payload's `repo_path` is this route's own way of naming the repo, so it fills the
+   *  --repo tier when the flag itself is absent. */
+  const configFor = async (repoPath) => {
+    const argv = repoPath && !strFlag(rest, ["--repo"]) ? [...rest, "--repo", repoPath] : rest;
+    return (await resolveRuntimeConfig({ argv })).config;
+  };
 
   // digest mode: architecture map + per-module context bundles → stdout
   if (sub === "digest") {
@@ -281,7 +293,7 @@ async function runCliMode() {
       process.stderr.write("tmct: tmct_locate expects a JSON arg, e.g. '{\"query\":\"…\",\"repo_path\":\"/abs\"}'\n");
       process.exit(2);
     }
-    const config = configFor(args.repo_path);
+    const config = await configFor(args.repo_path);
     try {
       const graph = parseEntities(await source.fetchEntities(config));
       // B016 recall-lever flags (LOCATE-phase, per-arm; output byte-identical when absent).
@@ -320,7 +332,7 @@ async function runCliMode() {
       process.stderr.write(`tmct: ${sub} expects a JSON arg, e.g. '{"symbol":"<name>"}'\n`);
       process.exit(2);
     }
-    const config = configFor(args.repo_path);
+    const config = await configFor(args.repo_path);
     try {
       const text = await dispatchTool(sub, args, { config });
       process.stdout.write(text + "\n");
@@ -527,6 +539,21 @@ async function activatePluggableInput(repoRoot, resolved) {
   return `seeded "${name}" (${entry.kind}) — ${seeded.appended} fact(s) added`
     + `${seeded.skipped ? `, ${seeded.skipped} already present` : ""}. `
     + `Activated in tmct.toml — future \`tmct init\`/chat sessions seed it automatically.\n`;
+}
+
+/** Write `repoRoot`/.tmct/TOOLS.md — the cold-tool catalog, rendered from the tool
+ *  definitions with THIS executable's own absolute path in every worked invocation, so
+ *  the copied line runs as-is. Returns the path written. */
+async function writeToolsCatalog(repoRoot) {
+  const { renderToolsCatalog } = await import("../src/tools/catalog.mjs");
+  const { mkdir, writeFile } = await import("node:fs/promises");
+  const { resolve: resolvePath } = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+  const dir = resolvePath(repoRoot, ".tmct");
+  await mkdir(dir, { recursive: true });
+  const catalogPath = resolvePath(dir, "TOOLS.md");
+  await writeFile(catalogPath, renderToolsCatalog(fileURLToPath(import.meta.url)), "utf8");
+  return catalogPath;
 }
 
 /** `--graph <path>` (repeatable) APPENDS to `repoRoot`'s tmct.toml
@@ -832,6 +859,10 @@ async function main() {
 
     const res = await initRepo(repoRoot, { force: forceFlag, persona: personaPreset, memoryBackend: memoryBackendVal });
     process.stdout.write(res.message + "\n");
+
+    // The cold tools carry no resident schema, so the initialized repo gets the catalog
+    // on disk: one copy-paste Bash invocation per tool, rewritten on every init.
+    process.stdout.write(`cold-tool catalog: ${await writeToolsCatalog(repoRoot)}\n`);
 
     // `--corpus`/`--ontology`/`--lexicon` now mean "activate this bundle and
     // PERSIST that into tmct.toml" — so a second `tmct init` (or the next chat
@@ -1163,7 +1194,7 @@ async function main() {
     const host = strFlag(rest, ["--host"], "127.0.0.1");
     const portRaw = strFlag(rest, ["--port"]);
     const port = portRaw !== undefined && Number.isFinite(Number(portRaw)) ? Number(portRaw) : 8787;
-    const { startServer } = await import("../src/surfaces/server-http.mjs");
+    const { startServer } = await import("../src/surfaces/http/server-http.mjs");
     // Graph-path precedence (src/services/cli-args.mjs, shared with `chat`): --graph
     // flag(s) > TMCT_GRAPH_FILE env > tmct.toml graph_file/graph_files >
     // --repo-derived <repo>/.tmct/graph.json > git-root/cwd default. This
