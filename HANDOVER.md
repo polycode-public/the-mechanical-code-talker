@@ -9,18 +9,85 @@ Session handles (inboxes): `tmct` (the edge-hunt/playtest session) and `tmct-han
 PLAN_HANOI/PLAN_VIZ_LEDGER session). See `~/.claude/inboxes/tmct.md` and
 `~/.claude/inboxes/tmct-hanoi.md`; `mechanic.md` is retired.
 
-## Version state (2026-07-15)
+## Version state (2026-07-16)
 
-v1.11.5 plus the full `archive/PLAN_OPEN_BACKLOG.md` delivery (workstreams A–F: the six
-deferred playtest edges, the three seonix ask-engine items, river-crossing + router
-consumption of taught records, justification for all five entailment rules, the ledger as THE
-`tmct viz` surface, the goal field, the cardinality exemption) and playtests 015–017.
+v1.12.1 in the working tree; v1.12.0 pushed to main, which CI publishes. Delivered since
+1.11.5: the `archive/PLAN_OPEN_BACKLOG.md` workstreams A–F, playtests 015–018, and
+`archive/PLAN_LAYERS_AND_TEST_ESTATE.md` — src/ re-homed into five layers with a
+downward-only import rule, the test estate rebuilt around six keyed corpus lanes with an
+e2e tier and a README example harness, and the CI quality pipeline (dependency cooldown,
+licence and PII checks, pack gate, post-deploy smoke).
 
 Measured init sizes (fresh store, this machine): `init:large` 37,797 facts; `init:xl` 72,075
 (16.6s); `init:xxl` 238,866 (38.5s). `init:xxxl` stays undocumented-as-code per
 `archive/TOO_HARD_AUDIT.md` (bulk ConceptNet download, not reachable from data in hand).
 
 ## Open items
+
+### From the layered-architecture and test-estate delivery
+
+- **26 import-layer violations remain allowlisted.** `test/estate/layer-allowlist.mjs` is a
+  shrink-only ratchet: the checker fails on any edge not listed and on any listed edge that
+  no longer occurs. Four clusters remain, each a real piece of design work: `completions/*`
+  reaches down into `memory/{core,blocks}` and up into `services/finish`; `memory/fold.mjs`
+  imports `node:fs/promises`, `node:path` and `services/sessions.mjs` (the last domain module
+  doing its own I/O); the store imports `domain/{hash,trust,shacl}` and `graph-build.mjs`
+  imports `domain/prose.mjs` (adapters reaching up for pure helpers with no legal shared
+  home); and `services/{chat,index}.mjs` import `tools/server.mjs` (services reaching up for
+  dispatch). Each fix deletes its line.
+
+- **The tool layer is one module, not one module per tool.** `src/tools/server.mjs` still
+  holds the whole dispatch switch. Splitting it per tool is restructuring, deliberately not
+  done during the moves. `src/tools/definitions.mjs` now holds every tool's schema, doc text
+  and examples, so the split has a seam to follow.
+
+- **`src/surfaces/` is flat.** The design names `surfaces/{tui,web,http}`; the move kept the
+  four modules side by side. Sub-bucketing is restructuring, same reason.
+
+- **The browser bundle still stubs 27 node builtins.** The design's end state is the bundle
+  selecting the in-memory backend instead of stubbing builtins. The measured reachable set is
+  down from 35 and the fact engine no longer touches the filesystem, but `services/chat.mjs`
+  re-exports the session layer and the fact engine reaches `corpus/conceptnet.mjs` (readline)
+  and `memory/core.mjs` (fs), so those stubs stay link-live. Cutting them means breaking those
+  two reaches.
+
+- **`build:ask-bundle` rewrites the committed bundle while other e2e files read it.** Small
+  window, never observed failing. The fix is the output-directory treatment
+  `build-demo-site.mjs` already has.
+
+- **`renderToolsCatalog` has no product caller.** `src/tools/catalog.mjs` renders a tools
+  catalog that nothing writes and nobody reads — it lives through its test alone. Wire it up
+  or delete it with its test.
+
+- **The `cli` route ignores `--repo` and `--graph`.** It takes `repo_path` inside the JSON
+  payload; passed the flags instead, it answers from the cwd's empty graph and exits 0. An
+  honest error or flag support would do.
+
+- **Corpus rows carry migration provenance.** Many `note` fields read "was
+  chatflow-tier2.test.mjs: …", naming files that no longer exist. They earned their place
+  during the coverage-gated purge, when a reviewer needed both sides in one diff. That review
+  is over, so they are now the doc-reference rot the hygiene rule targets. Strip them, or
+  rewrite each as the behaviour the row pins.
+
+- **Six frozen wrong answers.** The agent-debt rows pin answers that are still wrong, waiting
+  for a fix to flip them: the yes/no `callsSymbol` union, a pronoun-echoing empty, a
+  temporal-adverb misread, and a bare passive read as active. Both root causes are live
+  (`KIND_UNIONS` unions `uses` only; `parseKeywordSpot` falls through to `forward`).
+
+- **Three product bugs the migration surfaced, each pinned by a row.** An ask-level honest
+  empty ("list modules in nope") falls through to the teach lane and stores a garbage fact.
+  The describe wrappers disagree: "describe X" describes, "describe about X" misses, "please
+  describe X" gives an orientation card, "please describe about X" describes. `/tests
+  <function>` answers at module level.
+
+- **Version bumps now touch `public/index.html`.** The page carries a version stamp and a test
+  enforces that it matches `package.json`.
+
+- **The four-stage pipeline has not been watched through a release.** `test → e2e → deploy →
+  verify` is wired and the smoke job fails honestly against live state, but no session has
+  seen the columns go green on a version-bump push.
+
+### Standing
 
 - **Capability read-back over taught Rule rows.** "can you move a disk onto a peg?" is still a
   graph-question miss even when that exact signature was taught — a closed ask-lane reader over

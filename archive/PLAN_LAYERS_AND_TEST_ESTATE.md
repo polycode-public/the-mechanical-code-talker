@@ -1,26 +1,13 @@
+**Archived, 2026-07-16** — delivered. src/ is five layers (adapters, domain, services, tools,
+surfaces) with a downward-only import rule the suite enforces; the test estate is six keyed
+corpus lanes plus a unit ring, an e2e tier and a README example harness, with every legacy
+purge gated on a coverage diff; the quality pipeline (dependency cooldown, licence and PII
+checks, secret scan, pack gate, post-deploy smoke) runs across four pipeline stages. What the
+design specifies and the delivery did not reach — the 26 allowlisted import violations, the
+per-tool split of the tool layer, surfaces sub-bucketing, the bundle's remaining builtin stubs
+— is tracked in `HANDOVER.md`'s open items.
+
 # PLAN_LAYERS_AND_TEST_ESTATE.md — five code layers, a corpus-lane test estate, and a four-stage pipeline
-
-Status: IN DELIVERY — design agreed 2026-07-15; delivery started 2026-07-16.
-
-## Delivery status (updated 2026-07-16)
-
-45 commits in, suite green throughout (currently 2,352 unit/integration + 131 e2e, zero fail).
-
-- Workstreams 1–5 are DONE: skeleton + import checker + lane harness; quick wins
-  (.npmrc hardening, publint/pack gate, e2e CI stage, bench-smoke lane); supply chain and
-  content (renovate 14-day cooldown, licence allowlist + corpus licence rollup, PII lint,
-  clean full-history secret scan, link checker); all six corpus lanes (723 rows, every
-  purge coverage-gated); the README example harness (35 tagged blocks, all ten script
-  families documented and replayed by the suite).
-- Workstream 6 is IN PROGRESS: the in-place layer-violation fixes are merged (import
-  checker allowlist 54 → 26 edges; domain no longer imports the store, the NLP adapter,
-  or reads files at import). The chat.mjs minimal split + browser-bundle shrink is in
-  flight; the physical per-layer moves and the tool-contract/adapter flat-test
-  migrations follow it. Flat test/*.test.mjs count: 192 → 63.
-- Workstreams 7–8 and the closing 1.13.0 bump+push are not started.
-- Product findings frozen as failing-safe rows for the src fix pass: the teach-lane
-  garbage fact from an ask-level empty, the describe-wrapper inconsistency, the
-  debt-remeasure wrong answers, and /tests answering at module level for a function.
 
 ## Goal
 
