@@ -229,9 +229,9 @@ test("fuzzy keyword: \"which modules impotr walk.mjs\" (transposition, not in MI
   const p = parseQuery("which modules impotr walk.mjs", { nlp: null });
   assert.deepEqual(p, {
     shape: "reverse", entityType: "Module", modifier: "direct", kind: "imports", object: "walk.mjs",
-    // the repair is disclosed on the AST so consumers can tell a fuzzy-tier
-    // reading from an exact-vocabulary one
-    fuzzyVerb: true,
+    // the repair is disclosed on the AST, naming the word it rewrote, so
+    // consumers can tell a fuzzy-tier reading from an exact-vocabulary one
+    fuzzyVerb: { from: "impotr", to: "import" },
   });
 });
 

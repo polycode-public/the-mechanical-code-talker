@@ -8,7 +8,7 @@
 import {
   CONTRACTIONS, MISSPELLINGS, WRONG_WORDS, G_DROP, FILLER_WORDS,
   NEGATION_FRAMES, COMMIT_CONTENT_FRAMES, VERB_TO_KIND, ENTITY_TO_TYPE,
-  TRAILING_SCOPE_FILLER,
+  TRAILING_SCOPE_FILLER, TRAILING_TEMPORAL_ADVERBS,
 } from "../ask-vocab.mjs";
 
 export function escapeRegex(s) {
@@ -337,15 +337,35 @@ export function applyConditionalFrames(text) {
  *  force lowercase — object/subject terms (module/class names) are
  *  meaningfully cased, and every substitution already matches
  *  case-insensitively. */
+/** The contraction table applied on its own — "what's on peg-a" -> "what is on
+ *  peg-a". normalizeQuery's first pass, lifted out for callers that count words
+ *  and need "what's" counted as the two it stands for, without the filler strip
+ *  that would take words back off. Pure and idempotent. */
+export function expandContractions(text) {
+  return String(text || "").replace(CONTRACTION_RE, (m) => CONTRACTIONS[m.toLowerCase()]);
+}
+
+/** "where is disk-1 now" -> "where is disk-1". A locative question's answer is the
+ *  same with the adverb or without it, so the word carries nothing to read — but
+ *  the where template's term capture runs to the end of the string and binds it,
+ *  which then shows up in the receipt as part of the term. Stripped here, in the
+ *  shared pre-pass, so both parse strategies see one string and cannot disagree
+ *  about where the term ends. Anchored to "where is/are/was/were" and to the end:
+ *  a term of the same name elsewhere in a question is untouched. */
+const WHERE_TRAILING_TEMPORAL_RE = new RegExp(
+  `^(where\\s+(?:is|are|was|were)\\s+.+?)\\s+(?:${TRAILING_TEMPORAL_ADVERBS.map(escapeRegex).join("|")})(\\s*[?.!]*)$`,
+  "i",
+);
+
 export function normalizeQuery(text) {
-  let q = String(text || "");
-  q = q.replace(CONTRACTION_RE, (m) => CONTRACTIONS[m.toLowerCase()]);
+  let q = expandContractions(text);
   q = q.replace(MISSPELLING_RE, (m) => MISSPELLINGS[m.toLowerCase()]);
   q = q.replace(WRONG_WORD_RE, (m) => WRONG_WORDS[m.toLowerCase()]);
   q = q.replace(W_SLASH_RE, "with");
   q = q.replace(FOR_DIGIT_THANKS_RE, (_, w) => `${w} for`);
   q = q.replace(FOR_DIGIT_EXAMPLE_RE, (_, w) => `for ${w}`);
   q = q.replace(KIND_NOUN_ANAPHORA_RE, (_, pron) => pron);
+  q = q.replace(WHERE_TRAILING_TEMPORAL_RE, "$1$2");
   q = q.replace(G_DROP, "$1ing");
   q = applyPreambleFrames(q);
   // self-correction runs before subordination/conditional: a false start can

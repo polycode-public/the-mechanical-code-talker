@@ -16,7 +16,7 @@
 // (mgx:touchedByCommit / mgx:changeCoupledWith) — a different, simpler
 // question than temporal.mjs's time-scrubbing Chronograph surface.
 
-import { relationKind, impactClosure, normPath, HISTORY_CAP } from "./codegraph.mjs";
+import { relationKind, impactClosure, moduleCountOf, normPath, HISTORY_CAP } from "./codegraph.mjs";
 import {
   VERB_TO_KIND, ENTITY_TO_TYPE, MODIFIER_TO_KIND,
   CONTEXT_PRONOUNS, META_MEANING_VERBS,
@@ -26,7 +26,7 @@ import {
   AGGREGATE_TRIGGERS, LIST_TRIGGERS, SUPERLATIVE_EXTREMES, EDGE_NOUN_TO_METRIC, METRIC_IMPLIES_ENTITY, ANAPHORA_TRIGGERS,
   MEMBERSHIP_KINDS, CASCADE_NOISE, CASCADE_SYNONYMS, HELP_TRIGGERS,
 } from "./ask-vocab.mjs";
-import { normalizeQuery, applyNegationFrames, applyPhrasingFrames, matchNegationSet, STOPWORDS, splitWords, wordsOf } from "./interpret/normalize.mjs";
+import { expandContractions, normalizeQuery, applyNegationFrames, applyPhrasingFrames, matchNegationSet, STOPWORDS, splitWords, wordsOf } from "./interpret/normalize.mjs";
 import { editDistance, fuzzyBound } from "./interpret/fuzzy.mjs";
 import { parseAnchored } from "./interpret/strategies/grammar.mjs";
 import { parseKeywordSpot, findPhrase } from "./interpret/strategies/keywords.mjs";
@@ -1795,7 +1795,7 @@ function describeFindHit(ind) {
   return mod && mod !== "(unknown module)" ? `${label} in ${mod}` : label;
 }
 
-function renderComposite(parsed, result) {
+function renderComposite(parsed, result, graph) {
   if (result.compositeMiss) {
     if (result.reason === "no-prev") {
       return { content: `"those"/"them" needs a previous answer to refer to — ask a listing question first, then follow up.`, miss: true, ambiguous: false };
@@ -1858,7 +1858,7 @@ function renderComposite(parsed, result) {
   // — inherited from <ancestor>: …"), never silently presented as the owner's own.
   if (result.compositeKind === "membership") {
     if (!result.matches.length) {
-      return { content: `nothing in the index matches that${result.entityType ? ` (${nounFor(result.entityType, 2)})` : ""}. ${touchesRephraseHint()}`, miss: true, ambiguous: false, matches: [] };
+      return { content: `nothing in the index matches that${result.entityType ? ` (${nounFor(result.entityType, 2)})` : ""}. ${touchesRephraseHint(graph)}`, miss: true, ambiguous: false, matches: [] };
     }
     if (result.inheritedNotOwn) {
       const kindPlural = nounFor(result.entityType, 2);
@@ -1950,10 +1950,10 @@ function renderComposite(parsed, result) {
     const setNoun = result.entityType ? nounFor(result.entityType, n || 2) : (n === 1 ? "entity" : "entities");
     const wasWere = n === 1 ? "was" : "were";
     if (!n) {
-      return { content: `nothing in the index matches the inner set, so there is no change history to date. ${touchesRephraseHint()}`, miss: true, ambiguous: false, matches: [] };
+      return { content: `nothing in the index matches the inner set, so there is no change history to date. ${touchesRephraseHint(graph)}`, miss: true, ambiguous: false, matches: [] };
     }
     if (!result.matches.length) {
-      return { content: `no recorded commit touched the ${n} ${setNoun} in that set in this index. ${touchesRephraseHint()}`, miss: true, ambiguous: false, matches: [] };
+      return { content: `no recorded commit touched the ${n} ${setNoun} in that set in this index. ${touchesRephraseHint(graph)}`, miss: true, ambiguous: false, matches: [] };
     }
     const newest = result.matches[0];
     const date = (newest.attributes || []).find((a) => a.key === "date")?.value || "";
@@ -1970,7 +1970,7 @@ function renderComposite(parsed, result) {
   }
   // set-producing
   if (!result.matches.length) {
-    return { content: `nothing in the index matches that${result.entityType ? ` (${nounFor(result.entityType, 2)})` : ""}. ${touchesRephraseHint()}`, miss: true, ambiguous: false, matches: [] };
+    return { content: `nothing in the index matches that${result.entityType ? ` (${nounFor(result.entityType, 2)})` : ""}. ${touchesRephraseHint(graph)}`, miss: true, ambiguous: false, matches: [] };
   }
   return { content: `${compositeList(result.matches)}.`, miss: false, ambiguous: false, matches: result.matches };
 }
@@ -1988,8 +1988,17 @@ export function rephraseHint() {
 /** A short, honest nudge for the touches/history-family of correct-but-
  *  unhelpful misses, pointing at "who touched X" / "/describe X" shapes that
  *  produce a real answer elsewhere. Reused verbatim by every miss template
- *  in this family. */
-export function touchesRephraseHint() {
+ *  in this family.
+ *
+ *  A graph with no modules holds no index to rephrase against, so the shapes
+ *  above would send the reader off to look up entities that cannot be there.
+ *  It gets a line that says what the store actually holds instead. A NULL
+ *  graph is UNKNOWN, not empty (see chat.mjs's noCodeGraph), so it keeps the
+ *  index-shaped advice. */
+export function touchesRephraseHint(graph = null) {
+  if (graph && moduleCountOf(graph) === 0) {
+    return "This store holds no code index, so it records no modules or commits to look through.";
+  }
   return 'Try "who touched <a module that actually has commits>" or "/describe <module>" to see what\'s in the index.';
 }
 
@@ -2445,7 +2454,7 @@ export function traverse(graph, parsed, { contextId = null, prev = null, pinnedO
   if (parsed.ambiguousParse) {
     const branches = parsed.candidates.map((c) => {
       const branchResult = traverse(graph, c, { contextId, prev });
-      return { parsed: c, result: branchResult, rendered: render(c, branchResult) };
+      return { parsed: c, result: branchResult, rendered: render(c, branchResult, graph) };
     });
     return { matches: [], objMatch: null, candidates: parsed.candidates, traversal: null, ambiguous: true, branches };
   }
@@ -2598,7 +2607,7 @@ export function traverse(graph, parsed, { contextId = null, prev = null, pinnedO
     const pool = uniqueById([objMatch, ...(candidates || [])]).slice(0, OVERFLOW_CAP);
     const branches = pool.map((c) => {
       const branchResult = traverse(graph, parsed, { contextId, prev, pinnedObjMatch: c });
-      return { candidate: c, result: branchResult, rendered: render(parsed, branchResult) };
+      return { candidate: c, result: branchResult, rendered: render(parsed, branchResult, graph) };
     });
     return { matches: [], objMatch, candidates, traversal: null, ambiguous: true, branches };
   }
@@ -2951,19 +2960,19 @@ function canonicalOf(parsed) {
 /** Render a compiled query result into {content, miss, ambiguous, matches?,
  *  candidates?}. A tier-5 fuzzy object resolution is announced, not silent:
  *  prefixed "assuming you meant <label>:" so the correction is on the record. */
-export function render(parsed, result) {
-  const r = renderCore(parsed, result);
+export function render(parsed, result, graph = null) {
+  const r = renderCore(parsed, result, graph);
   if (result && result.matchedVia === "fuzzy" && result.objMatch && !r.ambiguous) {
     r.content = `assuming you meant ${result.objMatch.label}: ${r.content}`;
   }
   return r;
 }
 
-function renderCore(parsed, result) {
+function renderCore(parsed, result, graph) {
   if (!parsed) {
     return { content: `couldn't parse this as a graph question. Try: ${rephraseHint()}`, miss: true, ambiguous: false };
   }
-  if (parsed.node) return renderComposite(parsed, result);
+  if (parsed.node) return renderComposite(parsed, result, graph);
   if (parsed.ambiguousParse) {
     // Each branch was actually resolved in traverse() above (never guessed at) —
     // show every reading's real, effective answer, not just its one-line label, so
@@ -3090,7 +3099,7 @@ function renderCore(parsed, result) {
     const what = /^(?:commit[:\s])?[0-9a-f]{7,40}$/i.test(objText) ? "commit"
       : (!objText.includes("/") && /^[\w$]+(\.[\w$]+)+$/.test(objText) ? "symbol" : fallback);
     return {
-      content: `no ${what} matching "${parsed.object}" found in the index. ${touchesRephraseHint()}`,
+      content: `no ${what} matching "${parsed.object}" found in the index. ${touchesRephraseHint(graph)}`,
       miss: true, ambiguous: false, candidates: [],
     };
   }
@@ -3136,7 +3145,7 @@ function renderCore(parsed, result) {
   if (result.whenShape) {
     const subject = result.objMatch.label;
     if (!result.matches.length) {
-      return { content: `no recorded commit touches ${subject} in this index. ${touchesRephraseHint()}`, miss: true, ambiguous: false };
+      return { content: `no recorded commit touches ${subject} in this index. ${touchesRephraseHint(graph)}`, miss: true, ambiguous: false };
     }
     const newest = result.matches[0];
     const date = (newest.attributes || []).find((a) => a.key === "date")?.value || "";
@@ -3163,7 +3172,7 @@ function renderCore(parsed, result) {
   if (result.whoLastShape) {
     const subject = result.objMatch.label;
     if (!result.matches.length) {
-      return { content: `no recorded commit touches ${subject} in this index. ${touchesRephraseHint()}`, miss: true, ambiguous: false };
+      return { content: `no recorded commit touches ${subject} in this index. ${touchesRephraseHint(graph)}`, miss: true, ambiguous: false };
     }
     const newest = result.matches[0];
     const author = (newest.attributes || []).find((a) => a.key === "author")?.value;
@@ -3239,7 +3248,7 @@ function renderCore(parsed, result) {
     }
     const entityWord = nounFor(parsed.entityType || "Module", 2);
     return {
-      content: `No ${entityWord} found whose module directly ${verbFor(parsed.kind)} ${parsed.object}. ${touchesRephraseHint()}`,
+      content: `No ${entityWord} found whose module directly ${verbFor(parsed.kind)} ${parsed.object}. ${touchesRephraseHint(graph)}`,
       miss: true, ambiguous: false,
     };
   }
@@ -3437,7 +3446,7 @@ export function relaxParse(graph, query, { nlp = undefined, contextId = null, pr
       if (p.object != null && !hasRealTerm(p.object)) return null;
       if (p.shape === "ask" && p.subject != null && !hasRealTerm(p.subject)) return null;
     }
-    const rendered = render(p, traverse(graph, p, { contextId, prev }));
+    const rendered = render(p, traverse(graph, p, { contextId, prev }), graph);
     return rendered.miss ? null : { parsed: p, text };
   };
   const done = (hit) => ({ parsed: hit.parsed, from, to: hit.text, dropped: [...dropped], steps });
@@ -3642,14 +3651,14 @@ export function ask(graph, query, { contextId = null, nlp = undefined, prev = nu
     if (r) { parsed = r.parsed; relaxed = { from: r.from, to: r.to, dropped: r.dropped, steps: r.steps }; }
   }
   let result = traverse(graph, parsed, { contextId, prev });
-  let rendered = render(parsed, result);
+  let rendered = render(parsed, result, graph);
   // Dynamic memory-graph class count/list fallback, only once everything
   // above already produced an honest miss.
   if (rendered.miss && !rendered.ambiguous) {
     const dyn = dynamicClassQuery(graph, query);
     if (dyn) {
       const dynResult = traverse(graph, dyn, { contextId, prev });
-      const dynRendered = render(dyn, dynResult);
+      const dynRendered = render(dyn, dynResult, graph);
       if (!dynRendered.miss) { parsed = dyn; result = dynResult; rendered = dynRendered; relaxed = null; }
     }
   }
@@ -3658,13 +3667,17 @@ export function ask(graph, query, { contextId = null, nlp = undefined, prev = nu
   // `!envelope.parsed`, so populating it here would steal turns from lanes
   // like moduleOrientLane ("what is X for"). Fires only once nothing else parsed.
   if (parsed === null && rendered.miss && !rendered.ambiguous) {
-    const bareM = String(query || "").trim().match(BARE_META_WHATIS_RE);
+    // The contraction is written out first, or "what's X" reads as a different
+    // question from "what is X" on the apostrophe alone. Only the contraction
+    // pass, never normalizeQuery's fuller one — the filler strip would let
+    // "please describe X"-shaped turns in through a lead they didn't type.
+    const bareM = expandContractions(String(query || "")).trim().match(BARE_META_WHATIS_RE);
     const bareTerm = bareM?.[1]?.trim();
     if (bareTerm && !/\s+(?:for|about)$/i.test(bareTerm)) {
       const bareParsed = parseQuery(`what is a ${bareTerm}`, { nlp });
       if (bareParsed?.shape === "meta") {
         result = traverse(graph, bareParsed, { contextId, prev });
-        rendered = render(bareParsed, result);
+        rendered = render(bareParsed, result, graph);
       }
     }
   }
@@ -3683,7 +3696,7 @@ export function ask(graph, query, { contextId = null, nlp = undefined, prev = nu
       const forParsed = parseQuery(`what is a ${forTerm}`, { nlp });
       if (forParsed?.shape === "meta") {
         const forResult = traverse(graph, forParsed, { contextId, prev });
-        const forRendered = render(forParsed, forResult);
+        const forRendered = render(forParsed, forResult, graph);
         if (!forRendered.miss && !forRendered.ambiguous) {
           result = forResult;
           rendered = forRendered;
@@ -3707,7 +3720,7 @@ export function ask(graph, query, { contextId = null, nlp = undefined, prev = nu
     const answered = directFull.alternates
       .map((a) => {
         const altResult = traverse(graph, a.parsed, { contextId, prev });
-        const altRendered = render(a.parsed, altResult);
+        const altRendered = render(a.parsed, altResult, graph);
         return altRendered.miss ? null : { a, text: altRendered.content };
       })
       .filter(Boolean);

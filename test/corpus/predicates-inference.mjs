@@ -4,6 +4,7 @@
 // the line-anchored and negative assertions rows need beyond a bare regex.
 // Teach/read rows also assert the turn record's honest hit/miss verdict.
 export { notMiss, isMiss } from "./predicates-games.mjs";
+export { recordCanonicalAbsent } from "./predicates-planning.mjs";
 
 /** Some line of the answer matches the pattern (multiline ^-anchor stand-in). */
 export function answerLineMatches(result, pattern) {

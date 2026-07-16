@@ -3,6 +3,14 @@
 // refused or surfaced as ambiguity, never broken by a guess.
 
 import { VERB_TO_KIND, ENTITY_TO_TYPE, MODIFIER_TO_KIND } from "../ask-vocab.mjs";
+
+/** Words the canonicalization passes must leave alone even though no parse table
+ *  spells them. "used" reads as vocabulary, not as a relation: "what is it used
+ *  for" asks the corpus what a thing is FOR, and both tiers below would otherwise
+ *  walk it to the graph verb "uses" — the lemma tier through "use", the fuzzy tier
+ *  by one edit — and answer a question about imports and calls instead. The active
+ *  verb table deliberately has no bare "used" for the same reason. */
+const NEVER_CANONICALIZE = ["used"];
 import { STOPWORDS } from "./normalize.mjs";
 
 // ---- bounded edit distance — hand-rolled Damerau-Levenshtein, bounded with an
@@ -38,7 +46,8 @@ export const fuzzyBound = (s) => (s.length <= 5 ? 1 : 2);
  *  already vocabulary?" gate for the lemma/fuzzy canonicalization passes (an
  *  exact vocab word is NEVER rewritten: exact curated match always wins). */
 export const VOCAB_WORDS = new Set(
-  [...Object.keys(VERB_TO_KIND), ...Object.keys(ENTITY_TO_TYPE), ...Object.keys(MODIFIER_TO_KIND)]
+  [...Object.keys(VERB_TO_KIND), ...Object.keys(ENTITY_TO_TYPE), ...Object.keys(MODIFIER_TO_KIND),
+    ...NEVER_CANONICALIZE]
     .flatMap((p) => p.split(" ")),
 );
 

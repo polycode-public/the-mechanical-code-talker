@@ -47,6 +47,14 @@ export function parseEntities(payload) {
   };
 }
 
+/** Code entities (Modules) in the loaded graph — the "is there a code graph here"
+ *  test. 0 means a graph-less bootstrap OR a graph.json with no code entities (the
+ *  degenerate trap); both orient rather than over-promise. */
+export function moduleCountOf(graph) {
+  if (!graph || !Array.isArray(graph.individuals)) return 0;
+  return graph.individuals.filter((i) => (i.class || "") === "Module").length;
+}
+
 // ---- relation-kind classifier (for impact + tests-coverage) -------------------
 
 const KINDS = ["imports", "calls", "defines", "tests", "touches", "contains", "inherits", "callsSymbol", "touchesSymbol"];
@@ -1266,16 +1274,32 @@ export function renderArchitecture(graph, { pkg = "" } = {}) {
 }
 
 const COVERAGE_CAP = 40;
+const TESTS_GRAIN_NOTE = "tests edges are recorded module to module, so this is module-grain coverage.";
 
 /** The test modules covering a symbol/module — from the `tests` (mgx:testsCoverage)
- *  relation. Replaces grepping `tests/` for who imports the target. */
+ *  relation. Replaces grepping `tests/` for who imports the target.
+ *
+ *  `tests` edges run module to module, so a FUNCTION has no coverage of its
+ *  own to report and the answer is its defining module's. Asked about a
+ *  function, say both: which module the question hopped to, and that the
+ *  coverage is module-grain. Without that the answer names a module the user
+ *  never mentioned and silently passes off module coverage as the function's.
+ *  The grain note sits outside the indented list on purpose — indented, it
+ *  reads as one more test module. */
 export function renderTestsFor(graph, ind) {
   const modId = moduleIdOf(graph, ind);
   if (!modId) return `cannot map ${ind.label} to a module.`;
-  const modLabel = graph.byId.get(modId)?.label || modId;
+  // A symbol's module id is derived from its own recorded site, so it can name
+  // a module the index doesn't carry an individual for. The site's path is
+  // then the only honest spelling of it — never the raw id.
+  const modLabel = graph.byId.get(modId)?.label || siteOf(ind)?.path || modId;
   const tests = [...new Set(edgesOfKind(graph, "tests").filter((e) => e.object === modId).map((e) => e.subjectLabel || e.subject))];
-  if (!tests.length) return `${modLabel}: no covering tests recorded (no test module imports it).`;
-  return `${modLabel}: covered by ${tests.length} test module(s):\n  ${capJoin(tests, COVERAGE_CAP, "\n  ")}`;
+  const covered = tests.length > 0;
+  const verdict = covered
+    ? `covered by ${tests.length} test module(s):\n  ${capJoin(tests, COVERAGE_CAP, "\n  ")}`
+    : "no covering tests recorded (no test module imports it).";
+  if (modId === ind.id) return `${modLabel}: ${verdict}`;
+  return `${ind.label} is defined in ${modLabel}, which ${covered ? "is" : "has"} ${verdict}\n${TESTS_GRAIN_NOTE}`;
 }
 
 /** Source modules with no covering test module — a coverage gap view. Test

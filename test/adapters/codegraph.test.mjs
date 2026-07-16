@@ -319,10 +319,45 @@ test("renderTestsFor / renderUntested read the test-coverage relation", () => {
   assert.match(renderTestsFor(graph, graph.byId.get("mod-b")), /covered by 1 test module\(s\)/);
   assert.match(renderTestsFor(graph, graph.byId.get("mod-b")), /app\/unit-tests\/b\.test\.mjs/);
   assert.match(renderTestsFor(graph, graph.byId.get("mod-a")), /no covering tests recorded/);
+  // a module answers about itself, with no hop to name and no grain to qualify
+  assert.doesNotMatch(renderTestsFor(graph, graph.byId.get("mod-b")), /module-grain/);
   const untested = renderUntested(graph);
   assert.match(untested, /source module\(s\) with no covering test module/);
   assert.match(untested, /app\/lib\/a\.mjs/);
   assert.doesNotMatch(untested, /b\.test\.mjs/); // test modules are excluded
+});
+
+test("renderTestsFor asked about a symbol names the symbol, the module it hopped to, and the grain", () => {
+  // this fixture's Modules carry short ids, so a symbol's site-derived module
+  // id resolves to no individual — the site path is what the answer must name
+  assert.equal(
+    renderTestsFor(graph, graph.byId.get("fn-alpha")),
+    "fnAlpha is defined in app/lib/a.mjs, which has no covering tests recorded (no test module imports it).\n"
+    + "tests edges are recorded module to module, so this is module-grain coverage.",
+  );
+  // a covering-tests hop, over a graph whose module ids match the site paths
+  const sited = parseEntities({
+    individuals: [
+      { id: "mod:app/lib/b.mjs", class: "Module", label: "app/lib/b.mjs" },
+      { id: "test-b", class: "Module", label: "app/unit-tests/b.test.mjs" },
+      { id: "cls-widget", class: "Class", label: "Widget", attributes: [{ prop: "seon:startsAt", key: "site", value: "app/lib/b.mjs:1-30" }] },
+    ],
+    objectProperties: [{ predicate: "tests", prop: "mgx:testsCoverage", examples: [{ subject: "test-b", object: "mod:app/lib/b.mjs", subjectLabel: "app/unit-tests/b.test.mjs" }] }],
+  });
+  const covered = renderTestsFor(sited, sited.byId.get("cls-widget"));
+  assert.equal(
+    covered,
+    "Widget is defined in app/lib/b.mjs, which is covered by 1 test module(s):\n"
+    + "  app/unit-tests/b.test.mjs\n"
+    + "tests edges are recorded module to module, so this is module-grain coverage.",
+  );
+  // the grain note is flush left: indented it would read as another test module
+  assert.doesNotMatch(covered, /^ +tests edges are recorded/m);
+  // a Module answers about itself, byte for byte as it always has
+  assert.equal(
+    renderTestsFor(sited, sited.byId.get("mod:app/lib/b.mjs")),
+    "app/lib/b.mjs: covered by 1 test module(s):\n  app/unit-tests/b.test.mjs",
+  );
 });
 
 test("contextPlan bundles siblings + registration globals + tests for a module", () => {

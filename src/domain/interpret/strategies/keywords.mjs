@@ -92,14 +92,20 @@ export function parseKeywordSpot(text, nlp = null) {
     verbHit = findPhrase(lemmaWords, VERB_TO_KIND);
     if (verbHit) canonWords = lemmaWords;
   }
-  let fuzzyVerb = false;
+  let fuzzyVerb = null;
   if (!verbHit) {
     // tier 3: bounded-edit-distance rewrite toward verb/modifier keywords only
     // ("impotr" -> "import"); ≥4-char words only — below that the bound covers
     // half of English (and "and" is 1 edit from the "land in" constituent).
     const fuzzyWords = lcWords.map((w) => (w.length >= 4 && eligibleForCanon(w) ? fuzzyVocabWord(w) || w : w));
     verbHit = findPhrase(fuzzyWords, VERB_TO_KIND);
-    if (verbHit) { canonWords = fuzzyWords; fuzzyVerb = true; }
+    if (verbHit) {
+      canonWords = fuzzyWords;
+      const offset = lcWords.slice(verbHit.start, verbHit.end)
+        .findIndex((w, i) => w !== fuzzyWords[verbHit.start + i]);
+      const at = verbHit.start + Math.max(offset, 0);
+      fuzzyVerb = { from: lcWords[at], to: fuzzyWords[at] };
+    }
   }
   if (!verbHit && lcWords.includes("by")) {
     // A participle with no active verb entry still marks a passive when a passive
@@ -111,8 +117,10 @@ export function parseKeywordSpot(text, nlp = null) {
   }
   if (!verbHit) return null;
   // A tier-3 verb is a REPAIR, not a reading — downstream consumers (the teach
-  // lane's canonical receipt) need to know the difference, so it rides the AST.
-  const stamp = (ast) => (fuzzyVerb ? { ...ast, fuzzyVerb: true } : ast);
+  // lane's canonical receipt, and the chat surface's fuzzy-verb decline) need
+  // to know the difference AND which word was rewritten, so {from, to} rides
+  // the AST.
+  const stamp = (ast) => (fuzzyVerb ? { ...ast, fuzzyVerb } : ast);
   // POS rescue (Node-side only): a relation word used as a NOUN in a "the
   // <imports> of <term>" frame would otherwise misparse; only fires inside this
   // exact det+NOUN+"of" shape, since the same word tags NOUN in genuine verb use too.

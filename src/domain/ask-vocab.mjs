@@ -161,6 +161,12 @@ export const INHERITS_REVERSE_VERBS = Object.freeze([
 /** Definition-location markers: "where is X <marker>" (or bare "where is X"). */
 export const WHERE_MARKERS = Object.freeze(["defined", "declared", "located", "implemented"]);
 
+/** Temporal adverbs a locative question may trail ("where is disk-1 now"). They
+ *  carry no meaning the graph can read — the answer is the same with or without
+ *  one — so they are stripped rather than bound as part of the term. A closed set:
+ *  the term itself is free text, and only a listed word may be taken off it. */
+export const TRAILING_TEMPORAL_ADVERBS = Object.freeze(["now", "currently", "right now", "at the moment", "these days", "today"]);
+
 /** Prose-mention markers: "where is X <marker>" -> the prose/mentions surface. */
 export const MENTION_MARKERS = Object.freeze(["mentioned", "referenced"]);
 

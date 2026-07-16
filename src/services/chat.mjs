@@ -20,7 +20,7 @@
 import { join, dirname } from "node:path";
 import { dispatchTool, loadGraph, TOOLS } from "../tools/server.mjs";
 import { ToolError } from "../adapters/config.mjs";
-import { parseEntities, edgesOfKind, renderAuthorCard, renderAuthorTouches, renderCommitAuthor, resolveSymbol, renderCompare } from "../domain/codegraph.mjs";
+import { parseEntities, edgesOfKind, moduleCountOf, renderAuthorCard, renderAuthorTouches, renderCommitAuthor, resolveSymbol, renderCompare } from "../domain/codegraph.mjs";
 import { classDisplayName } from "../domain/ask.mjs";
 import { uuidv7 } from "../adapters/uuid.mjs";
 import * as defaultSource from "../adapters/source.mjs";
@@ -31,9 +31,9 @@ import { finish, beginsWithVowelSound, grammarRules } from "./finish.mjs";
 import { splitSentences } from "./sentences.mjs";
 import {
   VERB_TO_KIND, WHERE_MARKERS, MENTION_MARKERS, ENTITY_TO_TYPE, PASSIVE_PARTICIPLE_TO_KIND,
-  stripTrailingScopeFiller, stripTrailingDiscourseTag, EDGE_NOUN_TO_METRIC, RELATIONS,
+  stripTrailingScopeFiller, stripTrailingDiscourseTag, EDGE_NOUN_TO_METRIC, RELATIONS, LIST_TRIGGERS,
 } from "../domain/ask-vocab.mjs";
-import { COUNTERFACTUAL_RE, correctMisspellings, applyPreambleFrames, normalizeQuery, stripFillerWords, escapeRegex, kindNounAnaphoraHint } from "../domain/interpret/normalize.mjs";
+import { COUNTERFACTUAL_RE, correctMisspellings, applyPreambleFrames, expandContractions, normalizeQuery, stripFillerWords, escapeRegex, kindNounAnaphoraHint } from "../domain/interpret/normalize.mjs";
 import { setDefaultNlpAdapter } from "../domain/interpret/nlp-registry.mjs";
 import { setConstructionBanks } from "../domain/interpret/strategies/constructions.mjs";
 import { nlpAdapter } from "../adapters/ask-nlp.mjs";
@@ -347,7 +347,16 @@ export function asBareCommand(line) {
   // not part of the search term, and counting it could wrongly reject an
   // otherwise-short query as "too long" ("search for the payment controller"
   // is 4 tokens WITH "for", 3 without).
-  const stripped = (fl === "search" || fl === "find") && restTokRaw[0]?.toLowerCase() === "for";
+  //
+  // "describe about X" takes the same strip for the same reason: "about" is
+  // filler between the command and its symbol, and left in it binds verbatim
+  // ("no entity matching symbol \"about a dog\"") because this path never
+  // reaches describeWrapperAnswer's own "^about " strip. A bare "describe
+  // about" keeps its argument — with nothing after it, "about" is all the user
+  // gave and dropping it would answer a command they didn't type.
+  const strippedFor = (fl === "search" || fl === "find") && restTokRaw[0]?.toLowerCase() === "for";
+  const strippedAbout = fl === "describe" && restTokRaw[0]?.toLowerCase() === "about" && restTokRaw.length > 1;
+  const stripped = strippedFor || strippedAbout;
   const restTok = stripped ? restTokRaw.slice(1) : restTokRaw;
   const rest = restTok.join(" ");
   const effectiveLine = stripped ? `${fl}${rest ? ` ${rest}` : ""}` : trimmed;
@@ -888,7 +897,17 @@ export function isConversational(query) {
   if (IDENTITY_PHRASES.some((re) => re.test(raw))) return true;
   if (aiIdentityMatch(raw)) return true;
   const codeish = looksCodeish(raw, q);
-  return q.split(/\s+/).filter(Boolean).length <= 3 && !codeish;
+  // The catch-all counts words, so a contraction decides the turn on
+  // punctuation alone: "what's on peg-a" counts 3 and gets the orientation
+  // card, "what is on peg-a" counts 4 and gets the answer. Write the
+  // contraction out for the count only.
+  //
+  // The count is the whole reason this is expandContractions and not
+  // normalizeQuery: the fuller pass strips filler, which takes the count DOWN,
+  // and sends "please describe a dog" and "tell me about a dog" to the card
+  // instead. `q` itself is left alone so the GREET/THANKS/OK_ACK membership
+  // above reads the text as typed, and looksCodeish reads `raw`.
+  return expandContractions(q).split(/\s+/).filter(Boolean).length <= 3 && !codeish;
 }
 
 /** The tmct tools dispatchTool can back (the set a tool-emitting caller may use).
@@ -1436,13 +1455,7 @@ function conversationalTurn(line, ctx) {
 // gated and (for the lanes) only consulted on a would-miss, so ordinary graph
 // queries are never hijacked. ----
 
-/** Code entities (Modules) in the loaded graph — the "is there a code graph here"
- *  test. 0 means a graph-less bootstrap OR a graph.json with no code entities (the
- *  degenerate trap); both orient rather than over-promise. */
-export function moduleCountOf(graph) {
-  if (!graph || !Array.isArray(graph.individuals)) return 0;
-  return graph.individuals.filter((i) => (i.class || "") === "Module").length;
-}
+export { moduleCountOf };
 
 /** A KNOWN-empty code graph: a loaded graph object with 0 modules. A null graph
  *  (a bare runTurn that wasn't handed one) is "unknown", NOT empty — the empty
@@ -1932,6 +1945,31 @@ async function verbLemma(word) {
     const lemma = proseLemma();
     return lemma ? lemma(w) : w;
   } catch { return w; }
+}
+
+/** Did the keyword strategy's edit-distance tier repair an INFLECTION of the
+ *  verb the user typed, or swap the verb for a different one?
+ *
+ *  Both come out of the same one-edit rewrite, but they are not the same
+ *  event. "used" -> "uses" and "imported" -> "imports" are the vocabulary's own
+ *  verb wearing a form the phrase list doesn't happen to spell out, so the
+ *  repaired sentence still asks what was typed. "rest" -> "test" and "during"
+ *  -> "using" are different verbs, so the repaired sentence asks something
+ *  else. A shared lemma separates the two: it holds for every inflection of one
+ *  verb and for no pair of distinct ones.
+ *
+ *  Wink's lemmatiser is the same optional adapter generalVerbPredicate mints
+ *  through. Without it there is no signal, so this reports false and the caller
+ *  declines — the conservative direction, matching every other optional-adapter
+ *  path here. */
+async function repairSharesLemma(from, to) {
+  const [a, b] = [String(from || "").toLowerCase(), String(to || "").toLowerCase()];
+  if (a === b) return true;
+  try {
+    const { proseLemma } = await import("../adapters/prose-nlp.mjs");
+    const lemma = proseLemma();
+    return lemma ? lemma(a) === lemma(b) : false;
+  } catch { return false; }
 }
 
 /** Pre-ask declarative taxonomy teaches. Checked BEFORE the ask engine: "a
@@ -2523,6 +2561,28 @@ const GENERAL_VERB_NOT_A_VERB_RE = new RegExp(
   "i",
 );
 
+/** The same failure family as GENERAL_VERB_NOT_A_VERB_RE just above, one slot
+ *  over: a LISTING IMPERATIVE's own verb sitting in the subject position.
+ *  "list modules in nope" fits GENERAL_VERB_TEACH_RE perfectly — subject
+ *  "list", verb "modules", object "in nope" — and stores a Fact whose
+ *  confirmation ("noted — remembered: list modules in nope") looks like a
+ *  successful teach for a sentence that was a query.
+ *
+ *  A POS gate can't hold this: subjectIsNounOrPropn already runs at the bare-
+ *  sentence call site and wink tags "list" NOUN, exactly as its own docblock
+ *  concedes. So this is a closed table for the same reason that one is —
+ *  seeded from the single-word LIST_TRIGGERS (ask-vocab.mjs), the set the
+ *  listing grammar itself reads, so the two can never disagree about which
+ *  words open a listing.
+ *
+ *  Costs "list contains three items", which becomes a miss. It already misses
+ *  in its natural determiner form ("the list contains three items"), and a
+ *  miss beats a stored garbage fact. */
+const GENERAL_VERB_IMPERATIVE_SUBJECT_RE = new RegExp(
+  `^(?:${LIST_TRIGGERS.filter((t) => !/\s/.test(t)).join("|")})$`,
+  "i",
+);
+
 /** The predicate a general-verb teach payload's VERB maps to. "has"/"have"
  *  special-cases onto the EXISTING mgx:hasA predicate (point 2) — the same
  *  one ConceptNet's own /r/HasA facts already use (FACT_PREDICATE_PHRASES),
@@ -2586,6 +2646,7 @@ async function generalVerbTeach(payload) {
   // INVERTS the taught meaning — the vocabulary has no negative-capability
   // predicate, so an honest decline is the only correct move.
   if (verb === "cannot") return null;
+  if (GENERAL_VERB_IMPERATIVE_SUBJECT_RE.test(subjectRaw)) return null; // an imperative's verb, not a subject
   if (GENERAL_VERB_DETERMINER_RE.test(subjectRaw)) return null; // not a bare-name subject
   const subject = subjectRaw.trim();
   const folded = foldPrepositionIntoPredicate(await generalVerbPredicate(verb), objectRaw);
@@ -2959,8 +3020,26 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   // keeping recognition exactly as closed as the shapes it's equivalent to.
   const stripPossessiveNamedInstance = (s) =>
     (s == null ? s : s.replace(/^my\s+[a-z][\w-]*\s+([\w'-]+\s+(?:is|are)\s+.+)$/i, "$1"));
-  const raw = stripKindOf(stripYour(stripPossessiveNamedInstance(rawInput)));
-  const wrapped = stripKindOf(stripYour(stripPossessiveNamedInstance(wrappedInput)));
+  // "disk-2's bigger than disk-1" — the contracted copula. Written out it is
+  // the comparative frame's own sentence ("disk-2 is bigger than disk-1"), but
+  // contracted the "is" is invisible: GENERAL_VERB_ANYWHERE_EXCLUDE_RE can't
+  // see the copula it would have stood down for, so the general-verb frame
+  // takes the sentence first and mints a nonsense mgx:big fact reading back
+  // "disk-2's bigs than disk-1". Expanding it here, alongside the other
+  // surface rewrites, puts the sentence in front of the frame that owns it.
+  //
+  // The lookahead needs BOTH a comparative AND "than", and that pairing is the
+  // whole guard. A comparative alone is not a discriminator: COMPARATIVE_SRC's
+  // "[a-z]+er" matches father, mother, brother, sister and owner, so an
+  // expansion anchored on it turns "ahab is john's father" into "ahab is john
+  // is father" and destroys both genitive frames. Their role slot is a bare
+  // noun that ends the sentence, so it can never be followed by "than".
+  const expandComparativeContraction = (s) => (s == null ? s : s.replace(
+    new RegExp(`\\b([\\w-]+)'s(?=\\s+${COMPARATIVE_SRC}\\s+than\\b)`, "i"), "$1 is",
+  ));
+  const surfaces = (s) => expandComparativeContraction(stripKindOf(stripYour(stripPossessiveNamedInstance(s))));
+  const raw = surfaces(rawInput);
+  const wrapped = surfaces(wrappedInput);
 
   // CONJUNCTION PRE-PASS — "ahab is male and is the father of john": two
   // facts about ONE subject stated in one sentence. Split at the top-level
@@ -8192,6 +8271,12 @@ function actionLabel(name, subject, target) {
   return `${verb} ${subject} ${prep} ${target}`;
 }
 
+/** Do two goal specs state the same goal? Every field is already normalized
+ *  (normFactTerm on the terms, a lemma + a lowercased preposition on the
+ *  predicate), so equality on the four scalars is the whole comparison. */
+const sameGoalSpec = (a, b) =>
+  a.universal === b.universal && a.term === b.term && a.predicate === b.predicate && a.object === b.object;
+
 /** THE PLAN LANE — the closed goal/solve/legal-moves recognizers over the
  *  taught action rules (PLAN_HANOI's chat surface). Returns
  *  { text, via, deduced, note, plan? } or null when the query is none of the
@@ -8222,16 +8307,31 @@ async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", })
       // own "done — …" line and the confirmation read identically either way.
       : `${goalMatch[1] ? `${goalMatch[1].toLowerCase()} ` : ""}${goalMatch[2].toLowerCase()} ${verb}s ${goalMatch[4].toLowerCase()} ${goalMatch[5].toLowerCase()}`;
     const prev = planHolder.state && Array.isArray(planHolder.state.goals) && !planHolder.state.done ? planHolder.state : null;
+    const heldGoals = prev?.goals ?? [];
+    const heldTexts = prev?.goalTexts ?? [];
+    // Restating a goal you already set is one goal, not two. The spec is four
+    // normalized scalars, so the same goal in either voicing ("the goal is
+    // that …" / "the goal is to …") compiles to the identical object and a
+    // deep-equal catches it. Folded in the STORE, not at the read: deduping in
+    // "solve it" would leave the duplicate sitting in planHolder.state and
+    // leave "(N goals held)" saying something untrue.
+    //
+    // goals and goalTexts move in LOCKSTEP — "solve it" joins goalTexts by
+    // index to describe the specs it compiled, so dropping one without the
+    // other misaligns the plan's own account of what it is solving for.
+    const alreadyHeld = heldGoals.some((g) => sameGoalSpec(g, spec));
     planHolder.state = {
-      goals: [...(prev?.goals ?? []), spec],
-      goalTexts: [...(prev?.goalTexts ?? []), tail],
+      goals: alreadyHeld ? heldGoals : [...heldGoals, spec],
+      goalTexts: alreadyHeld ? heldTexts : [...heldTexts, tail],
       actions: null, states: null, stepGoals: null, cursor: 0, done: false,
     };
     const n = planHolder.state.goals.length;
     return {
-      text: `noted — the goal is that ${tail}.${n > 1 ? ` (${n} goals held)` : ""} Say "solve it" when the state is taught.`,
+      text: `${alreadyHeld ? "already noted" : "noted"} — the goal is that ${tail}.${n > 1 ? ` (${n} goals held)` : ""} Say "solve it" when the state is taught.`,
       via: "plan", deduced: "record the goal state for a later plan",
-      note: "GOAL frame — goal spec accumulated on the session plan slot",
+      note: alreadyHeld
+        ? "GOAL frame — the same goal spec was already held, so it folded onto the existing one"
+        : "GOAL frame — goal spec accumulated on the session plan slot",
     };
   }
 
@@ -9170,6 +9270,36 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       }
     }
   }
+  // (4g) FUZZY-VERB DECLINE — the keyword strategy's bounded-edit-distance
+  // tier rewrites ANY word within one edit of a graph verb, with no check that
+  // the typed word is real English: "rest" reads as "test", "during" as
+  // "using", "bigger" as "trigger", "behave" as "have", "ball" as "call".
+  // Whatever the repaired sentence traverses to answers a DIFFERENT question,
+  // and it does not read like one — "does store.mjs rest on app.mjs" comes
+  // back "No — no tests edge found", and a reader takes the No. So name the
+  // rewrite and refuse, dropping both halves of the receipt with it (a receipt
+  // for a question nobody asked is the same wrong answer in smaller type).
+  //
+  // Tried HERE, after every rescue lane above has already declined, for the
+  // same reason (4d)/(4e)/(4f) are: a repaired sentence some other lane can
+  // answer keeps that answer untouched. This only ever replaces the repaired
+  // parse's OWN standing reply.
+  //
+  // A real verb typo ("impotr") lands on the miss wall now. Telling a typo
+  // from a collision needs a generated collision-set table — plain dictionary
+  // membership isn't enough, since "rests" isn't in /usr/share/dict/words.
+  // Until one is designed, refusing is the honest half of the trade.
+  if (miss && recordMiss && via === "composed" && envelope?.parsed?.fuzzyVerb) {
+    const { from, to } = envelope.parsed.fuzzyVerb;
+    if (!(await repairSharesLemma(from, to))) {
+      answer = `I read "${from}" as "${to}", which asks a different question — so I won't answer it. `
+        + `"${from}" isn't a relation I record. Say the relation you mean, or /help for the query shapes I read.`;
+      via = "miss";
+      canonical = null;
+      deduced = null;
+      note(trace, `lane: (4g) FUZZY-VERB DECLINE — "${from}" only became a verb through the edit-distance repair tier ("${to}"), and the two words are different verbs, so the repaired sentence's graph answer is dropped rather than shown as an answer to what was typed`);
+    }
+  }
   // (5) #1 SHORT TAILORED MISS — replace ONLY the engine's full grammar cheat-sheet
   // wall (WALL_MISS_RE). Receipt-bearing misses keep their specific wording.
   // WALL KINDNESS: a second consecutive wall collapses to a one-liner whose
@@ -9198,8 +9328,11 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     // without a resolveEntity(graph) gate: it's inherently a MEMORY question,
     // so "nothing yet, teach me" is appropriate even when X is also a real
     // graph entity.
-    const knowAboutTerm = String(query).trim().match(KNOW_ABOUT_RE)?.[1]?.trim();
-    const offerTerm = knowAboutTerm || metaTermOf(query, envelope);
+    // Contraction-expanded, so "what's X" earns the same offer "what is X"
+    // does. Both shapes below anchor on the written-out copula.
+    const offerSrc = expandContractions(String(query).trim());
+    const knowAboutTerm = offerSrc.match(KNOW_ABOUT_RE)?.[1]?.trim();
+    const offerTerm = knowAboutTerm || metaTermOf(offerSrc, envelope);
     if (offerTerm) {
       let normFactTerm;
       try { ({ normFactTerm } = await import("../adapters/memory/core.mjs")); } catch { normFactTerm = null; }

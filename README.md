@@ -867,7 +867,7 @@ Three of them are **hot**: their schemas stay resident, so an agent driving tmct
 The `<where-marker>` slot takes any of *defined*, *declared*, *located*, *implemented*. The relation verb is the part that carries the meaning, and each relation has its own vocabulary rather than one blessed keyword:
 
 - **imports** — *couples to*, *couple to*, *depends on*, *imports*, and more
-- **uses** — *uses*, *use*, *used by*, *makes use of*, and more
+- **uses** — *uses*, *use*, *makes use of*, *make use of*, and more
 - **calls** — *invokes*, *invoke*, *calls*, *call*, and more
 - **defines** — *defines*, *define*, *declares*, *declare*, and more
 - **contains** — *contains*, *contain*, *lives in*, *live in*, and more
