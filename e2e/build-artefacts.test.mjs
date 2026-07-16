@@ -5,14 +5,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, statSync } from "node:fs";
+import { existsSync, mkdtempSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(fileURLToPath(import.meta.url), "..", "..");
-const runNpmScript = (script) =>
-  execFileSync("npm", ["run", script], { cwd: repoRoot, encoding: "utf8", timeout: 300_000 });
+const runNpmScript = (script, env = {}) =>
+  execFileSync("npm", ["run", script], {
+    cwd: repoRoot, env: { ...process.env, ...env }, encoding: "utf8", timeout: 300_000,
+  });
 
 const sizeOf = (rel) => {
   const abs = path.join(repoRoot, rel);
@@ -33,13 +36,18 @@ test("demo:build produces the Pages demo artefacts", () => {
   }
 });
 
+// The build goes to a temp directory of our own. Other e2e files read the
+// committed bundle, and node runs e2e files concurrently, so rebuilding over
+// the shared path would have this test racing their reads.
 test("build:ask-bundle rebuilds a parseable browser bundle", () => {
-  runNpmScript("build:ask-bundle");
-  const bundle = "src/surfaces/memory-ask-browser.bundle.js";
-  assert.ok(sizeOf(bundle) > 100_000, "the bundle is non-trivially sized");
+  const outDir = mkdtempSync(path.join(tmpdir(), "tmct-ask-bundle-"));
+  runNpmScript("build:ask-bundle", { TMCT_ASK_BUNDLE_OUT: outDir });
+  const bundle = path.join(outDir, "surfaces", "memory-ask-browser.bundle.js");
+  assert.ok(existsSync(bundle), "the bundle was written");
+  assert.ok(statSync(bundle).size > 100_000, "the bundle is non-trivially sized");
   // node --check parses without executing — a truncated or mis-stubbed
   // bundle fails here instead of in a visitor's browser.
-  execFileSync(process.execPath, ["--check", path.join(repoRoot, bundle)], { encoding: "utf8" });
+  execFileSync(process.execPath, ["--check", bundle], { encoding: "utf8" });
 });
 
 // The Pages build script's rendered page, in depth: public/ledger.html must

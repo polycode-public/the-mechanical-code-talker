@@ -33,12 +33,18 @@
 // still references — measured by dropping each and letting esbuild name what
 // breaks, so it shrinks as the monolith's link edges do.
 import { build } from "esbuild";
-import { writeFile, rename } from "node:fs/promises";
+import { writeFile, rename, mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const srcDir = join(here, "..", "src");
+// The bundle lands under outDir. It defaults to the repo's own src/, which is
+// what CI and a local `npm run build:ask-bundle` want. Set TMCT_ASK_BUNDLE_OUT
+// to build into a directory of your own instead. The e2e tests do that so their
+// run never rewrites the committed bundle while another test file reads it.
+// Entry points always resolve against src/; only the output moves.
+const outDir = process.env.TMCT_ASK_BUNDLE_OUT ? resolve(process.env.TMCT_ASK_BUNDLE_OUT) : srcDir;
 
 const stubNodeBuiltins = {
   name: "stub-node-builtins",
@@ -130,7 +136,7 @@ const stubOptionalAdapters = {
 };
 
 async function buildOne(entryFile, outFile) {
-  const outPath = join(srcDir, outFile);
+  const outPath = join(outDir, outFile);
   const result = await build({
     entryPoints: [join(srcDir, entryFile)],
     bundle: true,
@@ -152,6 +158,7 @@ async function buildOne(entryFile, outFile) {
   // a test evaluating it in a vm) always sees a complete file, old or new,
   // never a truncated one mid-write.
   const tmpPath = `${outPath}.tmp-${process.pid}`;
+  await mkdir(dirname(outPath), { recursive: true });
   await writeFile(tmpPath, result.outputFiles[0].contents);
   await rename(tmpPath, outPath);
   console.log(`built ${outPath}`);
