@@ -66,8 +66,10 @@ getting silently traded away by inherited caution:
   `factAnswer`/`factReadBack` carry the additive `goal` field the dock renders, multi-valued
   has/can facts are exempt from `findContradictions`, and page weight is budgeted (~561 KB
   after this batch; revisit only if outgrown). See its dated addendum.
-- **`PLAN_CODE.md`** — small JS-function and HTML/CSS-fragment synthesis via a sandboxed headless
-  browser (Track 1, program synthesis, already shipped). Blocked on a sandbox dependency decision.
+- **`PLAN_CODE.md`** — small JS-function and HTML/CSS-fragment synthesis, plus goal-directed
+  program repair (tests as the goal state, mutation templates as planning actions), via a sandboxed
+  headless browser (Track 1, rule/frame synthesis, already shipped). Blocked on a sandbox
+  dependency decision.
 - **`PLAN_AGENTS.md`** — the governing plan for tmct's broader multi-repo arc (marginalia, seonix,
   a pluggable LLM rung for Claude Code/Bedrock/Copilot). Check its own sequencing table for current
   phase status, not this file.
