@@ -143,6 +143,32 @@ So the surface is three groups with one discipline:
 
 The read/write split is the invariant. One writer, named, explicit; everything else reads.
 
+## Storage — already three backends, and the choice is load-bearing here
+
+`MEMORY_BACKENDS = ["file", "memory", "sqlite"]` (`test/corpus/run-lane.mjs`;
+`src/adapters/memory/core.mjs` calls them Backend A/B/C). All three are live today:
+`--memory-backend` on the CLI, `memoryBackend` in `tmct.toml`, `TMCT_MEMORY_BACKEND` in the
+env, and `npm run init:sqlite` already ships. The corpus lanes run rows against all three.
+
+Which one a checker wants depends on what it is checking, and they are not interchangeable:
+
+| backend | what it buys a checker |
+|---|---|
+| **file** (A) | the durable default — a store built once and checked against for a long time; readable on disk, diffable, committable |
+| **memory** (B) | a store that exists for one exchange. Feed the context, check, discard. Nothing persists, so nothing leaks between callers — this is the multi-tenant answer and the one an MCP server most likely wants per session |
+| **sqlite** (C) | a large store queried repeatedly; the one that survives a corpus at `init:xxl` scale (238,866 facts) without re-reading a JSON file per turn |
+
+Backend B is the interesting one for this design. The browser dock already proves it: the
+ledger page hands `factAnswer` an in-memory handle carrying the page's own payload, with zero
+filesystem access. A per-session in-memory store is the same shape — the caller feeds its
+context, checks against it, and the store dies with the session. No cross-caller
+contamination, no cleanup, and the "who asserted this" question stays inside one exchange.
+
+So the surface should take the backend as configuration rather than assume the default, and
+an MCP server almost certainly wants B per session with an optional A/C mounted read-only
+underneath for the durable corpus. That layering does not exist yet — the store is one
+backend at a time — and it is the open question this doc does not answer.
+
 ## The coverage problem, stated plainly
 
 tmct's grammar models a narrow slice. Most of an LLM response is not expressible as triples.
