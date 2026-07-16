@@ -60,19 +60,6 @@ mechanism itself. It is that the mechanism is unreachable from the one surface r
 use** (`npm run chat`), and two adjacent, narrower gaps sit next to it. All three are demonstrated
 below with a live reproduction against the actual CLI, not assumed.
 
-### Reconciling the "does `ask.mjs` know about Facts at all" question
-
-`archive/PLAN_VIZ_MEMORY.md`'s Bug 1 states `ask.mjs` "has no concept of Facts or corpus data at all." That
-claim is about **data reaching the engine**, not about the engine's own mechanism — which, per the
-above, does understand Fact/Utterance/Session/Source/Rule (and any other taught class) once it is
-handed a graph object whose `individuals` actually contain them. `archive/PLAN_VIZ_MEMORY.md` was scoped to
-the viz browser panel specifically; its fix has since SHIPPED as `src/surfaces/web/memory-ask-browser-entry.mjs`
-(exposing `factAnswer`/`factReadBack`/`createInMemoryStore` to the page bundle as
-`globalThis.tmctMemoryAsk` — delivered via `factAnswer` handed the embedded payload, not via a
-direct `ask()` call) and stays out of this document's scope. This document's own finding, below, is
-the same shape of problem but in the **live chat CLI**, and traced to a different, more specific
-root cause.
-
 ### Live reproduction — the mechanism does not reach `npm run chat`
 
 Seeded a real `.tmct/memory` with `dog`/`horse`/`cat` `rdfs:subClassOf` `animal`, plus two `horse`
@@ -120,7 +107,7 @@ are real, narrower, freshly-found gaps immediately adjacent to it, precise enoug
 | 6 | `what people do you know about` | Same shape as #4/#5, different noun | Covered by #4/#5 once those land — "people" resolves the same way "animals" does, off whatever `rdfs:subClassOf … person` facts exist in the loaded corpus. No separate work. |
 | 7 | `count all facts about horses` | Same as #3 | Same fix as #3. |
 | 8 | `how many modules are there` / `list all classes` (code graph) | Not a gap | Already works today, unrelated to this document — `ENTITY_TO_TYPE` + the existing count/list AST, long-predating `dec95e8`. Cited here only to show the boundary of what's already fine. |
-| 9 | `how many changes touch the last commit` (superlative/ranking) | Not this shape | `archive/TOO_HARD_AUDIT.md`'s M2 entry documents a **separate** mechanism (`parseSuperlative`/`SUPERLATIVE_EXTREMES`, argmax ranking — "the most-imported module") — a different query shape from plain count/list, already fixed, not touched by this document. |
+| 9 | `how many changes touch the last commit` (superlative/ranking) | Not this shape | A **separate** mechanism (`parseSuperlative`/`SUPERLATIVE_EXTREMES`, argmax ranking — "the most-imported module") — a different query shape from plain count/list, already fixed, not touched by this document. |
 
 ### §A — a memory-class list/count lane in `chat.mjs`, reachable from live chat
 
@@ -219,7 +206,7 @@ invent a third:
 
 ## Non-goals
 
-- **Not `archive/PLAN_VIZ_MEMORY.md`'s Bug 1** (the viz browser ask panel wiring). That shipped
+- **Not the viz browser ask panel wiring.** That shipped
   separately as `src/surfaces/web/memory-ask-browser-entry.mjs` for a different surface (the generated
   HTML file, not `npm run chat`). This document's §A lane is chat-CLI-specific and does not touch
   `src/services/ledger-viz.mjs`, `scripts/build-ask-bundle.mjs`, or any browser-bundle entry point.
@@ -236,10 +223,8 @@ invent a third:
 - **Not the code-graph side.** `ENTITY_TO_TYPE` + the existing count/list AST (`Function`/`Method`/
   `Class`/`Module`/`Attribute`/`GlobalVariable`/`Commit`) already work correctly and are unrelated to
   this document's findings — confirmed, not touched.
-- **Not the superlative/ranking mechanism** (`archive/TOO_HARD_AUDIT.md` M2, `parseSuperlative`) — a
+- **Not the superlative/ranking mechanism** (`parseSuperlative`) — a
   different query shape ("the most-imported module"), already fixed, out of scope here.
-- **Not a fix to `PLAN_BREADTH_FIRST_NLU.md`'s own "Status" section.** Out of this task's file
-  boundary; flagged here for whoever next touches that document.
 
 ## Phased implementation plan
 

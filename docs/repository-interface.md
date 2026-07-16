@@ -2,8 +2,7 @@
 
 The versioned contract between **tmct** (the query interpreter — the brittle side) and a
 **graph provider** (seonix, a fixture, a browser page — the stable side). tmct **owns and versions**
-this shape; a provider **implements** it over its native graph. See `archive/PLAN_REPOSITORY_INTERFACE.md`
-for the why; this file is the normative prose peer of the machine-readable
+this shape; a provider **implements** it over its native graph. This file is the normative prose peer of the machine-readable
 `docs/repository-interface.schema.json` (both are generated from / checked against
 `src/adapters/repository-interface.mjs`, the single source of truth).
 

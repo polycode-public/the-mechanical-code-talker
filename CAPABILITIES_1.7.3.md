@@ -126,7 +126,7 @@ What's left, still open, checked directly against current code:
   (`src/domain/router/goal-reasoner.mjs:421-431`); the real gap is the request never dispatches into the
   rule that owns that composition step. Next pickup: trace the goal-classification step for this
   exact request shape.
-- **`archive/PLAN_CONVERSATION.md` Finding 4** — anaphoric "SUBJECT verb which N" misroutes into
+- **`PLAN_CONVERSATION.md` Finding 4** — anaphoric "SUBJECT verb which N" misroutes into
   teach-a-fact. Bounded, three sub-problems, a concrete first-increment sketch exists (`HANDOVER.md`).
 - **A rephrase-hint pass on honest "nothing matches" misses** (`BENCHMARK_CEFR_ENGLISH_1.7.0.md`'s
   top decision-log pick) — 7+ cases across B1/C1 score zero on the judge's rephrase dimension despite
@@ -247,7 +247,7 @@ each re-checking cited evidence directly against the real code at this pin — n
 | 84 | SQLite memory Backend C | implemented | `src/adapters/memory/core.mjs:299` `createSqliteMemoryStore` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 85 | In-memory Backend B | implemented | `src/adapters/memory/core.mjs:217` `createInMemoryStore` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 86 | Multi-graph loading + `tmct import` verb | implemented | `bin/tmct.mjs:675`; `src/services/cli-args.mjs` | unchanged since `CAPABILITIES_1.6.0.md` |
-| 87 | Default human-world persona + Small/Medium/Large content tiers | implemented | `corpus/tier2/human*.jsonl`, `archive/PLAN_SEED.md` | unchanged since `CAPABILITIES_1.6.0.md` |
+| 87 | Default human-world persona + Small/Medium/Large content tiers | implemented | `corpus/tier2/human*.jsonl`, `PLAN_SEED.md` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 88 | `graphService` adapter wired into the completions pipeline | implemented | `src/domain/completions/graph-adapter.mjs` | unchanged since `CAPABILITIES_1.6.0.md`; **this is the fix `TOO_HARD_AUDIT.md`'s U1 finding didn't know had already shipped — see §2** |
 | 89 | Public package exports for `generateCompletion`/`createCompletionsGraphAdapter` | implemented | `package.json` `exports`, lines 60-61 | unchanged since `CAPABILITIES_1.6.0.md` |
 | 90 | `SKILL_AGENT_FAST_LOOP.md` process + 2 shipped fixes | implemented | commits `21eb6a2`, `d04a926` | unchanged since `CAPABILITIES_1.6.0.md` |
@@ -397,7 +397,7 @@ before or the same day the finding was written — this doc's hunt works), 1 has
 - **Todo**: Tracks 2-4 (bounded-mutation JS repair, HTML/CSS-fragment synthesis via a Playwright
   sandbox), each gated on its own separate operator sign-off.
 
-### `archive/PLAN_DID_YOU_SEE_HER_DUCK.md`
+### `PLAN_DID_YOU_SEE_HER_DUCK.md`
 
 **Fully shipped and archived** — one-line note: the breadth-first dead-end-pruning technique it built
 (`lookupNounCandidates`/`lookupVerbCandidates`/`parseAceAmbiguous`) is item 92, now further extended
@@ -437,7 +437,7 @@ in `PLAN_CONVERSATION.md` Finding 2; nothing left open in this plan's own scope.
   new corpus-generation step, an architectural call), not a minor bug fittable in `HANDOVER.md` or a
   too-hard research question fittable in `TOO_HARD_AUDIT.md` — it stays a live plan.
 
-### `archive/PLAN_CONVERSATION.md` — archived this cycle
+### `PLAN_CONVERSATION.md` — archived this cycle
 
 **Pinned at `9510a43`** (Findings 1/2/3/5); Finding 4 traced live in this same window.
 
@@ -449,30 +449,30 @@ in `PLAN_CONVERSATION.md` Finding 2; nothing left open in this plan's own scope.
   sub-problems, a concrete first-increment sketch. **Archived this cycle** (`git mv` to `archive/`,
   status banner updated) since this is the only open item and it's small enough to track as a
   `HANDOVER.md` open item rather than warrant its own live root plan — matching this project's own
-  convention for `archive/PLAN_DID_YOU_SEE_HER_DUCK.md` and others above.
+  convention for `PLAN_DID_YOU_SEE_HER_DUCK.md` and others above.
 
 ### `PLAN_SYLLOGIST.md`
 
 **Pinned at `efe7cee`.**
 
-- **Done**: none, pulled out of `archive/PLAN_INFERENCE_TESTING.md` on that plan's retirement.
+- **Done**: none, pulled out of `PLAN_INFERENCE_TESTING.md` on that plan's retirement.
 - **Doing**: none.
 - **Todo**: reusing match-state across passes in `src/domain/syllogise.mjs`, plus retraction-aware,
   incremental consistency checking. "Not a near-term default" per `HANDOVER.md`, unchanged.
 
 ### Fully shipped and archived, one-line notes
 
-- **`archive/PLAN_SEED.md`** (pinned `08d0d03`) — every item done: persistence backends, CLI/config
+- **`PLAN_SEED.md`** (pinned `08d0d03`) — every item done: persistence backends, CLI/config
   unification, persona content tiers, `createSession`→`initRepo` convergence.
-- **`archive/PLAN_INFERENCE_TESTING.md`** (pinned `1d31477`) — all 6 stages shipped and chat-wired,
+- **`PLAN_INFERENCE_TESTING.md`** (pinned `1d31477`) — all 6 stages shipped and chat-wired,
   confirmed again this cycle by a clean `BENCHMARK_INFERENCE_1.7.0.md` re-confirmation.
-- **`archive/PLAN_COMPLETIONS.md`** (pinned `59f7466`) — all 4 staging rows shipped.
+- **`PLAN_COMPLETIONS.md`** (pinned `59f7466`) — all 4 staging rows shipped.
 
 ### Archived, still carrying real open scope
 
-- **`archive/PLAN_ADVANCED_GRAMMAR.md`** (pinned `8cd3b36`) — **Done**: tracks (a) and (d). **Todo**:
+- **`PLAN_ADVANCED_GRAMMAR.md`** (pinned `8cd3b36`) — **Done**: tracks (a) and (d). **Todo**:
   tracks (b) DRT-lite discourse record, (e) ellipsis, (f) presupposition nudges.
-- **`archive/PLAN_ontology-hierarchies.md`** (pinned `8cd3b36`) — **Done**: stages 1-3. **Todo**:
+- **`PLAN_ontology-hierarchies.md`** (pinned `8cd3b36`) — **Done**: stages 1-3. **Todo**:
   stage 3+ growth.
 
 ---
@@ -522,13 +522,13 @@ re-deriving evidence directly rather than trusting the prior doc's word. **Zero 
 - **`TOO_HARD_AUDIT.md` cross-check** (§2): 2 of 4 action items resolved (M1, U1 — both already fixed
   before or the same day the finding was written), 1 diagnosis sharpened (M2), 1 wording fix applied
   (B1).
-- **Doc archival this cycle**: `PLAN_CONVERSATION.md` → `archive/PLAN_CONVERSATION.md` (only Finding 4
+- **Doc archival this cycle**: `PLAN_CONVERSATION.md` archived (only Finding 4
   remains open, tracked in `HANDOVER.md`). `PLAN_VIZ.md` and `PLAN_AGENTS.md` stay live — both carry
   real, substantial unbuilt scope that doesn't fit "minor bug" or "too hard."
 - **Real, unresolved gaps carried forward unchanged**: #44/#45 (Hanoi/guess-number), #53-58
   (marginalia/seonix/Bedrock/Copilot integration), #73/#74 (named grammar gaps), #75 (cochange
   conjunction parsing, citation refreshed), #76-79 (research-horizon items), `TOO_HARD_AUDIT.md` M2
-  (sharpened, still open), `archive/PLAN_CONVERSATION.md` Finding 4.
+  (sharpened, still open), `PLAN_CONVERSATION.md` Finding 4.
 - **The single most consequential finding of this refresh**: two of `TOO_HARD_AUDIT.md`'s four
   "worth acting on" findings were already resolved by the time this audit ran — one (M1) the same day
   it was written, one (U1) a full day *before* it was written, because that finding cited a stale,

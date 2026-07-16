@@ -1,10 +1,9 @@
 # BENCHMARK_CEFR_ENGLISH_1.8.0 — mean up to 1.789/2 (+0.039), ambiguity cell +0.437; breadth-first ambiguity fix resolves a case pair 1.7.0 called permanently unfixable
 
 **Headline:** CEFR_ENGLISH re-run against **1.8.0** (per `package.json`), following
-`SKILL_BENCHMARK_CEFR_ENGLISH.md`'s cycle. This is a **lever cycle**: `archive/PLAN_BREADTH_FIRST_NLU.md`
-Track 1 (entity-tie ambiguity fix) and Track 5 (surfacing alternate readings on hits) both land in
-`src/ask.mjs`'s answer path this session, and both are squarely inside the 4 `ambiguity`-tagged
-cases' reach.
+`SKILL_BENCHMARK_CEFR_ENGLISH.md`'s cycle. This is a **lever cycle**: the entity-tie ambiguity fix
+and the surfacing of alternate readings on hits both land in `src/ask.mjs`'s answer path this
+session, and both are squarely inside the 4 `ambiguity`-tagged cases' reach.
 
 **Result: mean 1.789 / 2 (up from 1.7.0's 1.750, +0.039), 0 hard fails out of 109 cases (same),
 0 voided samples (same), tier-1 109/109 (same).**
@@ -39,8 +38,8 @@ one case pair that most directly tested it.
 
 - Product run: `node chatbench/run.mjs --stamp 1.8.0 --sample 1 --single` → `chatbench/results/raw/run-1.8.0/product.jsonl` (109 rows).
 - Judge run: `node chatbench/judge.mjs --product chatbench/results/raw/run-1.8.0/product.jsonl --samples 2 --concurrency 12 --out chatbench/results/raw/run-1.8.0` → `judged.jsonl` (218 rows) + `summary.json`.
-- `npm test`: 1932/1932 green, this session, at commit `1a1339f` (`archive/PLAN_BREADTH_FIRST_NLU.md`'s
-  Tracks 1–6 all landed on top of this commit; `package.json`/`package-lock.json` are bumped to
+- `npm test`: 1932/1932 green, this session, at commit `1a1339f` (the breadth-first NLU tracks all
+  landed on top of this commit; `package.json`/`package-lock.json` are bumped to
   `1.8.0` locally but not yet committed, per this project's own discipline of bumping only at
   actual push time).
 - Judge model + prompt: `claude-haiku-4-5-20251001` @ `judge-prompt-v1`, same pin as every prior cycle.

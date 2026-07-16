@@ -31,7 +31,7 @@ between the player's turns. The answer at the time: tmct already had the right s
 taught, queryable fact graph, deterministic parsing, and — from that session's persona work — real
 place/object/person vocabulary), but three things were missing: an imperative command grammar, a
 mutable turn-by-turn world/player state, and an NPC turn scheduler. The operator then asked for a
-plan doc in the spirit of `archive/PLAN_HANOI.md`/`PLAN_GUESS_NUMBER.md` — a genuine architectural
+plan doc in the spirit of the Hanoi stretch and `PLAN_GUESS_NUMBER.md` — a genuine architectural
 stretch with a concrete, measurable success criterion, not an open-ended feature wishlist — with
 two hard constraints carried over verbatim from the operator's own framing:
 
@@ -41,7 +41,7 @@ two hard constraints carried over verbatim from the operator's own framing:
 > just a property and so on ... a completion digest [for the player's current state] using the
 > completions work we did. So no special player state store.
 
-This document is the third in the "architectural stretch" family, alongside `archive/PLAN_HANOI.md`
+This document is the third in the "architectural stretch" family, alongside Hanoi
 (open-loop planning) and `PLAN_GUESS_NUMBER.md` (closed-loop, observation-driven planning). All
 three validate a piece of "be an agent" — Hanoi validates *executing a precomputed plan*, the
 number-guessing game validates *sensing and replanning*, and this document validates *the world
@@ -53,7 +53,7 @@ rather than reusing the ACE declarative/question grammar as-is.
 
 The world is a small, original English country house — Ashcombe Hall — invented for this document,
 no references to any existing book, game, or IP. This choice is deliberate, not decorative: the
-persona batch (`archive/PLAN_SEED.md`) already built a genuine, curated everyday-knowledge
+persona batch already built a genuine, curated everyday-knowledge
 vocabulary (`corpus/tier2/human.jsonl`, `src/domain/grammar/lexicon-core.json`'s `human-core`/
 `human-places`/`human-objects` clumps) — rooms, roles, household objects. Grounding the game world in
 that same lexicon tests grammar already in scope, in the spirit of this project's own standing
@@ -242,7 +242,7 @@ throughout.
 
 ## Staged build plan
 
-*(Mirrors `archive/PLAN_HANOI.md`/`PLAN_GUESS_NUMBER.md`'s own phase-writing convention: numbered,
+*(Mirrors `PLAN_GUESS_NUMBER.md`'s own phase-writing convention: numbered,
 independently testable, `npm test` green throughout.)*
 
 **Phase 1 — World corpus + missing lexicon.** Add `butler`/`housekeeper`/`gardener`/`lamp`/`portrait`/
@@ -274,8 +274,8 @@ whether or not the player was present to see it.
 **Phase 5 — Generalization spike (deferred, explicitly not this document's scope).** Once this and
 both prior planning docs have independently validated their own piece (open-loop execution, closed-
 loop replanning, world-mutation-with-autonomous-actors), revisit whether a single unifying "agent
-loop" abstraction is warranted — same explicit deferral `archive/PLAN_HANOI.md` Phase 4 and
-`PLAN_GUESS_NUMBER.md` Phase 4 both already stage for their own convergence point.
+loop" abstraction is warranted — the same explicit deferral `PLAN_GUESS_NUMBER.md` Phase 4 already
+stages for its own convergence point.
 
 ## Open risks / questions
 
@@ -284,11 +284,10 @@ loop" abstraction is warranted — same explicit deferral `archive/PLAN_HANOI.md
   decline ("take the portrait") and instrument checks ("unlock the cabinet with the key") is
   Phase 2's first concrete question; a shape they can't express becomes a targeted extension to
   the shipped vocabulary, designed then.
-- **Snapshot volume.** `archive/PLAN_HANOI.md` §3 already flagged snapshot-per-step's cost profile as fine at
-  toy scale, expensive at larger ones. A full playthrough of Ashcombe Hall's worked example is ~12
-  turns — trivial — but a much longer game would revisit this exactly as Hanoi's own doc already
-  anticipated (recommendation there: revisit a real retraction primitive only if volume becomes a
-  real problem, not preemptively).
+- **Snapshot volume.** Snapshot-per-step's cost profile is fine at toy scale, expensive at larger
+  ones. A full playthrough of Ashcombe Hall's worked example is ~12 turns — trivial — but a much
+  longer game would revisit a real retraction primitive, and only if volume becomes a real problem,
+  not preemptively.
 - **The completions top-K risk named above** (pruneCompletion possibly dropping a correctness-critical
   fact from a room digest) needs a real check against the worked example in Phase 3, not an assumption
   either way.
@@ -296,8 +295,8 @@ loop" abstraction is warranted — same explicit deferral `archive/PLAN_HANOI.md
   but says nothing about how this would hold up with many NPCs each carrying many turn-gated Rules —
   named as an explicit non-goal for this document, consistent with Hanoi's own "search-space blow-up
   beyond toy scale" deferral.
-- **Confirmation-before-executing.** `archive/PLAN_HANOI.md`'s own open question (should a move require
-  confirmation) applies here too, and this document's answer leans the same direction that doc's
+- **Confirmation-before-executing.** Whether a move should require confirmation is an open question
+  here too, and this document's answer leans the same direction the
   `teachFact` precedent suggests (act, then state plainly what happened) — but a MISTAKEN action here
   (e.g. "give the letter to the housekeeper" before you've even found it) has no real-world stakes in
   a toy game either, so this is left as a Phase 3 implementation decision, not resolved here.
@@ -312,7 +311,7 @@ loop" abstraction is warranted — same explicit deferral `archive/PLAN_HANOI.md
   Rule table per NPC), not an NPC that plans its own path. A genuinely planning NPC is a real,
   larger follow-on tier; the `findActionPath` search it would use already runs in live
   goal-solving, so the tier starts from shipped code when someone designs it.
-- Not a replacement for `archive/PLAN_HANOI.md`/`PLAN_GUESS_NUMBER.md` — a third, complementary validation of
+- Not a replacement for the Hanoi and `PLAN_GUESS_NUMBER.md` validations — a third, complementary validation of
   the same underlying "read state, reason about actions' effects, act, repeat" capability, from the
   angle neither of the other two covers (a world that changes for reasons other than the agent's own
   choices).

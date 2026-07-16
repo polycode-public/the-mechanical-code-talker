@@ -199,7 +199,7 @@ export function isGreenRow(row) {
   return (t1.baselineFailTurns ?? []).every((i) => improved.has(i));
 }
 
-// ---- dual banding (archive/PLAN_FORMULAIC_COMPETENCE.md — productive vs performance) ----
+// ---- dual banding: productive vs performance ----
 
 /** A row is PRODUCTIVE when its answering turn was composed by the ask engine
  *  (via:"composed"), NOT carried by a formulaic path (template/count/recall/
@@ -211,9 +211,9 @@ export function isProductiveRow(row) {
   return (row.via ?? null) === "composed";
 }
 
-/** A row is TEMPLATE-LANE when its case is tagged so (archive/PLAN_FORMULAIC_COMPETENCE.md
- *  §template-lane): it deliberately targets a templated capability — "the bench
- *  must say a level is being faked". Its pass belongs to the performance band. */
+/** A row is TEMPLATE-LANE when its case is tagged so: it deliberately targets a
+ *  templated capability — "the bench must say a level is being faked". Its pass
+ *  belongs to the performance band. */
 export function isTemplateLane(row) {
   return (row.tags ?? []).includes("template-lane");
 }
@@ -240,7 +240,7 @@ export function bandScore(rows) {
 /** Template-lane lint over PRODUCT ROWS: a template-lane row that is GREEN via
  *  "composed" is NOT actually faking the level — either it is mis-tagged, or the
  *  engine has genuinely ACQUIRED the composition (a notable "chunk-becomes-
- *  grammar" event, archive/PLAN_FORMULAIC_COMPETENCE.md open question). Either way it must
+ *  grammar" event). Either way it must
  *  be surfaced, never silently credited to the productive band by accident. */
 export function templateLaneLint(rows) {
   const findings = [];
@@ -379,7 +379,7 @@ function agreementOverall(cells) {
 
 export function computeAgreement(rowsA, rowsB, { tolerance = AGREEMENT_TOLERANCE } = {}) {
   const cells = agreementCells(rowsA, rowsB, tolerance);
-  // Template-lane parallel-forms self-test (archive/PLAN_FORMULAIC_COMPETENCE.md): its own
+  // Template-lane parallel-forms self-test: its own
   // agreement line over template-lane rows only — reported ALONGSIDE the standard
   // cells, never replacing them. Empty when no template-lane cases were drawn.
   const tlA = rowsA.filter(isTemplateLane);
@@ -537,9 +537,9 @@ export function renderTimings(timings) {
   return lines.join("\n");
 }
 
-/** Render the rollup for stdout, including the productive/performance band gap
- *  (archive/PLAN_FORMULAIC_COMPETENCE.md): perf = greens by any via, prod = composed-only
- *  greens, gap = perf − prod (how much fluency is memorized vs generated). */
+/** Render the rollup for stdout, including the productive/performance band gap:
+ *  perf = greens by any via, prod = composed-only greens, gap = perf − prod (how
+ *  much fluency is memorized vs generated). */
 export function renderRollup(rollup) {
   const lines = [];
   const band = (b) => `perf ${b.performance.green}/${b.n} vs prod ${b.productive.green}/${b.n}, gap ${b.gap === null ? "—" : b.gap.toFixed(2)}`;

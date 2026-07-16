@@ -84,9 +84,7 @@ capability-router RFC. Its load-bearing point: *open-ended planning is not an
 LLM-only capability*. Within a declared operator model, a planner does
 goal-directed multi-step decomposition deterministically, so the agentic
 ladder's C1 ceiling is **open-world**, not planning itself. Primary papers are
-link-only (publisher copyright / scanned reports). **Consumer:**
-[`archive/PLAN_CAPABILITY_ROUTER.md`](../../archive/PLAN_CAPABILITY_ROUTER.md) — Stage 1
-(the resolver = open-condition satisfaction) and Stage 5 (the planner).
+link-only (publisher copyright / scanned reports).
 
 ## Deepen-next index
 

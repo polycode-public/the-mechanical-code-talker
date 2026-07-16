@@ -68,8 +68,7 @@ export const TAGS = [
 // graded pool cases carry the "graded" tag (their coverage registry is the
 // grade × construction matrix, not the v1 TAGS); it is valid everywhere but
 // deliberately NOT part of the v1 coverage registry above. "template-lane"
-// (archive/PLAN_FORMULAIC_COMPETENCE.md §template-lane) marks a case that targets a
-// TEMPLATED capability — a pass there raises the PERFORMANCE band only, never
+// marks a case that targets a TEMPLATED capability — a pass there raises the PERFORMANCE band only, never
 // the productive band; the dual-banding rollup + isTemplateLane read this tag.
 const EXTRA_TAGS = ["graded", "template-lane"];
 export const EXPECT_KEYS = [
@@ -459,7 +458,7 @@ export async function runCase(caseDef, deps) {
     stamp: deps.stamp,
     // via provenance of the ANSWERING turn (the last transcript turn) — the band
     // the dual-banding rollup reads: "composed" is productive, every other via
-    // (template/count/recall/fact/corpus/…) is performance-only (archive/PLAN_FORMULAIC_COMPETENCE.md).
+    // (template/count/recall/fact/corpus/…) is performance-only.
     via: transcript.length ? transcript[transcript.length - 1].via ?? null : null,
     judge: {
       dimensions: caseDef.judge?.dimensions ?? JUDGE_DIMENSIONS,
@@ -726,7 +725,7 @@ export async function main(argv = process.argv.slice(2)) {
     console.log(renderRollup(gradedRollup(graded)));
     const tlFindings = templateLaneLint([...graded, ...rowsB.filter((r) => r.grade)]);
     if (tlFindings.length) {
-      console.log("\ntemplate-lane lint (a template-lane pass must NOT be composed — see archive/PLAN_FORMULAIC_COMPETENCE.md):");
+      console.log("\ntemplate-lane lint (a template-lane pass must NOT be composed):");
       for (const f of tlFindings) console.log(`  - ${f.cell} ${f.caseId}: ${f.finding}`);
     }
   }

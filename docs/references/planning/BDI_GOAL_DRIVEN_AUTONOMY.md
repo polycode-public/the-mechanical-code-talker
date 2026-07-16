@@ -8,8 +8,7 @@ Intelligence (AAAI-10), https://cdn.aaai.org/ojs/7576/7576-13-11106-1-2-20201228
 (2007), *Perpetual Self-Aware Cognitive Agents*, AI Magazine 28(1), pp. 32–45 (goal reasoning /
 goal-generation) · Ghallab, M., Nau, D. & Traverso, P. (2016), *Automated Planning and Acting*,
 Cambridge University Press (continual / online planning-and-acting).
-**Licence:** link-only (publisher/author copyright). · **Consumer:** `archive/PLAN_CAPABILITY_ROUTER.md`
-(Stage 5, the closed-world C2 goal-reasoner).
+**Licence:** link-only (publisher/author copyright).
 · **Status:** BDI (ICMAS-95) and GDA (AAAI-10) citations **web-verified 2026-07-06** (canonical
 PDFs above resolve); Cox (2007) and Ghallab/Nau/Traverso (2016) authored from established knowledge —
 **UNVERIFIED-pending-web-check** (treat page numbers as good-faith).

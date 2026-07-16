@@ -277,7 +277,7 @@ future grade = appending its band name to the one `PROMOTED_GRADES` array in
 45 always-run cases; every A1/A2 cell's promoted subset passes today).
 Demotion (a promoted cell regressing) fails `npm test` — that is the point.
 
-## Dual banding — productive vs performance (archive/PLAN_FORMULAIC_COMPETENCE.md)
+## Dual banding — productive vs performance
 
 Every graded score splits into two bands, computed from the `via` provenance the
 product already stamps on each turn (threaded onto each product row as `row.via` =

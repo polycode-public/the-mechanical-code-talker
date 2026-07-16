@@ -5,13 +5,13 @@ Status: RESEARCH / DESIGN — not yet implemented. No guesser, thinker, or bisec
 `findReachableSet` in `src/domain/planning.mjs`, the goal reasoner in `src/domain/router/goal-reasoner.mjs`,
 taught action families (the four `RULE_KIND_ACTION_*` kinds in `src/adapters/memory/core.mjs`), the `/plan`
 chat command and `tmct plan` CLI mode, and the `planState` session slot in `src/services/chat.mjs`. Hanoi
-(`archive/PLAN_HANOI.md`) and river-crossing (`test/corpus/planning.jsonl`) validate that planner.
+and river-crossing (`test/corpus/planning.jsonl`) validate that planner.
 This doc is now scoped to what it does not cover: hidden state and belief narrowing.
 
 ## Origin
 
-2026-07-09 session, companion document to `archive/PLAN_HANOI.md`. Both validate the SAME
-underlying ask (the operator's own framing, verbatim, carried over from that doc): infer the
+2026-07-09 session. This doc validates the same underlying ask the Hanoi validation does (the
+operator's own framing, verbatim): infer the
 goal, read the relevant sub-graph of the current state, infer the paths to the goal by reasoning
 about the effect of actions on the sub-graph, given the goal/state/possible paths pick the next
 step, execute, repeat — be an agent.
@@ -135,7 +135,7 @@ observation so far (initialized to `{ lo: 1, hi: n }`).
 
 **Worst-case guess count**: `⌈log2(hi − lo + 1)⌉` guesses for the current interval — for the full
 range `[1, N]` that's the textbook `⌈log2 N⌉` (e.g. N=100 → 7 guesses worst case), the same
-closed-form correctness check `archive/PLAN_HANOI.md`'s `2^n − 1` gives for Hanoi, ported to the
+closed-form correctness check `2^n − 1` gives for Hanoi, ported to the
 closed-loop case exactly as the Origin section anticipated.
 
 **The degenerate/dishonest-input case, precisely**: after applying an update, if `lo > hi` the
@@ -281,5 +281,5 @@ strings, table-driven off game-state fields.
 ## Non-goals for this document
 
 - Not an implementation — no code changes land from this doc alone.
-- Not a replacement for `archive/PLAN_HANOI.md` — the two are deliberately complementary halves
+- Not a replacement for the Hanoi validation — the two are deliberately complementary halves
   (open-loop vs. closed-loop) of validating ONE planning-loop design, not two separate features.

@@ -132,8 +132,7 @@ connects them.**
   single external citation or to seonix's old shape. If a benchmark refuted an idea, report the
   measurement, not a running quarrel with the source. Contrast framing reads as defensive.
 - **Dependency pragmatism.** Never frame work around avoiding dependencies. State what a choice does
-  positively. (`archive/PLAN_DEPENDENCY_STRATEGY.md` already reaches the "change nothing now" verdict on its
-  own terms — keep that tone.)
+  positively.
 - **"NOT" sections stay factual.** The README's "What tmct deliberately is NOT" section is fine
   because each bullet states a positive scope decision (it's a conversation layer, not an indexer).
   Keep those grounded; don't let them drift into a list of things competitors get wrong.

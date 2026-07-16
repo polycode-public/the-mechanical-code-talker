@@ -51,9 +51,8 @@ A fifth, sibling track sits alongside these four rather than inside the phase se
 text generation** — broad search over a prompt, group the results, infer relationships between
 groups, mechanically summarize, drop what doesn't contribute, then a grammar/voice pass. Not
 LLM-style generation — extractive and compositional, never inventing text beyond what was retrieved.
-Detailed in the sibling doc `archive/PLAN_COMPLETIONS.md`, a competing-but-kindred capability to
-`PLAN_CODE.md`'s program synthesis (both are "tmct produces an artifact" categories; see
-`archive/PLAN_COMPLETIONS.md` §0 for the comparison). Cross-referenced from Phase 4 (§7) and the research
+It is a competing-but-kindred capability to `PLAN_CODE.md`'s program synthesis (both are "tmct
+produces an artifact" categories). Cross-referenced from Phase 4 (§7) and the research
 horizon (§9).
 
 A sixth thread, realized mid-session (2026-07-10): tmct's own code-domain specialization was never
@@ -83,7 +82,7 @@ other way round. Conclusions only:
 | Repository Interface `INTERFACE_VERSION` 1.1.0 (16 services, closed `EDGE_KINDS`/`MISS_REASONS`) | **Shipped**, since 0.5.0; 1.0.0 → 1.1.0 at v1.4.0 (§2.2) | `src/adapters/repository-interface.mjs` (`SERVICES`, 16), `src/adapters/providers/graph-service.mjs`, `runConformance` in `src/tools/conformance.mjs` |
 | Tool layer: declared tool surface + `dispatchTool` | **Shipped** — 22 declared tools (`TOOL_DEFINITIONS`), 3 hot (`tmct_context`, `tmct_snippet`, `tmct_ask`) and 19 cold | `src/tools/definitions.mjs` (`HOT_TOOLS`/`COLD_TOOLS`), `dispatchTool` + `TOOLS` in `src/tools/server.mjs`, catalog rendered by `src/tools/catalog.mjs`; contract tests in `test/tools/`. The router's registry excludes the three hot tools, see `EXCLUDED_FROM_REGISTRY` |
 | Capability router (STRIPS/PDDL registry, resolver, planner, guardrail, goal-reasoner) | **Shipped**, all 6 stages, **and invokable** | `src/domain/router/*`, 15 capabilities in `registry.mjs` (`capabilities()`), measured on AGENTBENCH; `tmct plan`/chat's `/plan`/`./plan` library export — see §1.3 |
-| AGENTBENCH goal-reasoner (Stage 5, the C2 rung) | **Shipped and measured** | 56 cases: 100% plan / 100% result / 0% hallucination across every rung (`archive/TOO_HARD_AUDIT.md` M2, fixed 2026-07-12 — no case held back) |
+| AGENTBENCH goal-reasoner (Stage 5, the C2 rung) | **Shipped and measured** | 56 cases: 100% plan / 100% result / 0% hallucination across every rung (fixed 2026-07-12 — no case held back) |
 | seonix code→graph, driven by tmct | **Shipped, in production**, seonix 0.8.0→0.10.6 | `seonix/src/tmct-provider.mjs` — 37 lines, `createGraphService` reused directly |
 | bedrock-meter cost-ordered router with a tmct rank-0 ($0) rung | **Shipped and tested** | `router.mjs`/`router-ladder.mjs`/`routing-target.mjs`, 11 passing tests |
 | marginalia's `seon-mcp` self-hosted code graph | Built, **not yet wired to tmct** | near-zero-gap integration, same pattern as seonix (§1.1 below) |
@@ -97,7 +96,7 @@ other way round. Conclusions only:
 
 ### 1.1 Foundational precedent: seonix proves the integration pattern
 
-seonix's cutover (`archive/PLAN_CHAT_EXTRACTION.md` in seonix's own repo, already done) is the
+seonix's cutover (already done) is the
 template for every other mount in this doc. `seonix chat`, the `seonix_ask` API, and the website
 "Ask the graph" panel all now call tmct; every typed, structural MCP tool (`seonix_describe`,
 `seonix_snippet`, `seonix_members`, `seonix_impact`, `seonix_search`, `seonix_context`) stayed
@@ -476,7 +475,7 @@ tmct" rather than validate against synthetic benchmarks.
   explicit-teaching half (marginalia's own capability audit already found "X is the Y of Z"-style
   explicit teaching moves cleanly to tmct + effort). This phase wires a new ingestion source to
   capability tmct already has.
-- **Also a natural Stage-1 input source for `archive/PLAN_COMPLETIONS.md`'s mechanical text-generation
+- **Also a natural Stage-1 input source for the mechanical text-generation
   pipeline** once that track is scoped — scraped web content is exactly the kind of broad-search
   material that pipeline's grouping/inference/summarization stages consume.
 
@@ -519,7 +518,7 @@ new shared reference doc, `docs/references/research-horizon.md`, cross-linked ra
   found. The capability router's own next spike to scope, not a result to claim yet.
 - **DRT-lite typed discourse record** — a bounded discourse-representation structure for tracking
   entities/relations across turns, feeding better slot-filling for Phase 2's marginalia work. Close
-  kin to `archive/PLAN_COMPLETIONS.md`'s Stage 3 (inference between retrieved-text groups, §1.3 there) — both
+  kin to the mechanical text-generation pipeline's inference between retrieved-text groups — both
   track relationships between spans of text, one across chat turns, one across retrieved groups;
   worth designing together if both are ever scoped.
 
@@ -572,7 +571,7 @@ Explicit pruning record, so these aren't re-asked:
 - **PLAN_OSS_ACE_PARSER's "sibling publish candidates"** (a bounded-Damerau fuzzy matcher, a
   PageRank+IDF block ranker) — both have permissive JS alternatives already, unlike ACE. Reduced to
   a single ROADMAP backlog line, not a phase here. (The block ranker specifically is un-pruned and
-  re-scoped inside `archive/PLAN_COMPLETIONS.md` §1.4, where it has a real job — see that doc, not this one.)
+  re-scoped inside the mechanical text-generation track, where it has a real job.)
 - **Duplicate WordNet/SEthesaurus rejection rationale** — stated once (§9, R3), not repeated across
   every doc that touches ontology scale.
 - **PLAN_TAUGHT_RELATIONS' full build narrative.** The doc is fully shipped and archived as-is

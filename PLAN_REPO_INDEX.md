@@ -166,11 +166,10 @@ Read directly from `<sibling-checkout>/seonix` (a full sibling repo):
 - **seonix already depends on tmct.** `seonix/package.json`: `"@polycode-projects/the-mechanical-
   code-talker": "^1.3.0"`. Two integration points: `src/tmct-provider.mjs` wraps seonix's parsed
   graph as a tmct Repository-Interface provider via `createGraphService`; `src/chat-shim.mjs` makes
-  `seonix chat` literally launch tmct's own `runChat` over seonix's graph. This confirms
-  `archive/PLAN_REPOSITORY_INTERFACE.md` (this repo, status line: "**STATUS: shipped (Phase 8)**")
-  already executed the query/chat inversion the operator's framing calls "later re-integrate ../seonix
-  to use the rich tmct library." That part is done. See Part 4 below for exactly what that plan
-  covered and what it leaves for this one.
+  `seonix chat` literally launch tmct's own `runChat` over seonix's graph. This confirms the
+  Repository Interface work already executed the query/chat inversion the operator's framing calls
+  "later re-integrate ../seonix to use the rich tmct library." That part is done. See Part 4 below
+  for exactly what that work covered and what it leaves for this one.
 - **seonix already carries `@playwright/test` as a devDependency** (`seonix/package.json`). This
   matters directly for the PLAN_CODE.md relocation below.
 
@@ -215,7 +214,7 @@ accurate than trying to split the document.
 
 ## Part 4 — the reconciliation: every stale "not a code indexer" claim, named
 
-This repo's own discipline (`archive/TOO_HARD_AUDIT.md`) is to name a stale claim precisely once a real
+This repo's own discipline is to name a stale claim precisely once a real
 architectural change supersedes it, not to leave it sitting. Every claim below is real, verified
 directly, and every one becomes false the moment Phase 1 below ships a working parser.
 
@@ -304,12 +303,11 @@ phasing), tie it to the persona mechanism that already exists rather than invent
 The operator's framing names this as later work: "later re-integrate ../seonix to use the rich tmct
 library but still have all it's code benchmarking and the exposure of a tool surface to LLMs."
 
-**Most of this already happened.** `archive/PLAN_REPOSITORY_INTERFACE.md`, status line "**STATUS:
-shipped (Phase 8)**," already executed exactly this inversion for the query/chat/ontology side:
+**Most of this already happened.** The Repository Interface work already executed exactly this
+inversion for the query/chat/ontology side:
 seonix imports tmct (`^1.3.0`), seonix's chat surface is a thin wrapper over tmct's own `runChat`
 (`seonix/src/chat-shim.mjs`), and seonix's graph is exposed to tmct's Repository Interface via
-`createGraphService` (`seonix/src/tmct-provider.mjs`). What that plan explicitly kept in seonix
-(`archive/PLAN_REPOSITORY_INTERFACE.md`, "What moves vs what stays," lines 141-151): the parsers
+`createGraphService` (`seonix/src/tmct-provider.mjs`). What that work explicitly kept in seonix: the parsers
 (`extract_ast.py` and friends), the benchmarking harness (`bench/`), and the MCP tool surface
 (`src/tools/server.mjs`, `@modelcontextprotocol/sdk`) — precisely the things the operator's framing says
 must stay in seonix. Nothing in this document changes that division.
@@ -358,7 +356,7 @@ must stay in seonix. Nothing in this document changes that division.
 zero new dependencies) and a minimal version of `extract_lang.mjs`'s dispatch pattern. Wire its
 output into `graph-build.mjs`'s existing, currently-uncalled `buildEntities()`. Exit criterion: a
 real Python repo produces a `.tmct/graph.json` that passes the existing Repository Interface
-conformance suite (`archive/PLAN_REPOSITORY_INTERFACE.md`'s contract kit) without modification to
+conformance suite (`test/adapters/repository-interface.test.mjs`) without modification to
 the interface itself.
 
 **Phase 2 — the CLI surface.** A new command (`tmct index [--repo <path>]`, or extending `tmct init
@@ -376,7 +374,7 @@ language.
 
 **Phase 4 — doc reconciliation.** Reword every stale claim in Part 4's table (README, `docs/adapter-
 contract.md`, `src/adapters/source.mjs`, the `src/services/chat.mjs` live strings) now that they are genuinely false.
-Follows `archive/TOO_HARD_AUDIT.md`'s own discipline: name the claim, state the supersession, reword —
+Follows the repo's own discipline: name the claim, state the supersession, reword —
 already done in Part 4 above; this phase is where the actual file edits land. `npm test` green
 throughout (some tests likely assert the old strings — expect to update pinned-string tests here).
 

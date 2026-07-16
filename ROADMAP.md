@@ -35,17 +35,6 @@ getting silently traded away by inherited caution:
 
 ## What's next (feature-shaped — see `HANDOVER.md` for the current task-level list)
 
-- **`archive/PLAN_BREADTH_FIRST_NLU.md`'s own remaining scope** — all six tracks shipped (entity-tie
-  ambiguity, router candidate enrichment, `tmct viz` + its embedded chat panel, template-coverage
-  harness, alternates-on-hits, canonical representation for the ask/teach lanes — all now in "Current
-  capability surface" above). Two named items are satisfied and closed, per their own track's
-  original scope (an explicit operator decision, not a silent drop): (a) canonical representation
-  for every OTHER chat lane (conversational, commands, recall, ~78 `chat.mjs` return sites) —
-  Track 6's own deliverable was the `canonical` field present on every response (even `null` where
-  unpopulated), which is met; full population everywhere was always a bigger, separately-scoped
-  follow-on. (b) growing the ACE grammar's free-form coverage past its measured 0/2,949-sentence
-  baseline — §6's own stated non-goal was a harness + baseline + first generated batch, not closing
-  the gap itself, which is met.
 - **`PLAN_ADVENTURE.md`** — a text-adventure architectural stretch. Its world-state and
   actions-as-data substrate shipped generically with the planning lane (action rule kinds,
   per-step board snapshots, legal-move enumeration); what remains its own is the imperative
@@ -55,17 +44,9 @@ getting silently traded away by inherited caution:
   retraction slice shipped (`retractSubClassOf`, justification persistence and cascade across all
   five rules); still open there: the ATMS generalization (alternate justification sets per fact),
   incremental matching (§2), and relevance under budget (§4).
-- **`archive/PLAN_HANOI.md`** — shipped in full, including the follow-ups: river-crossing (co-travel
-  effects, the forbidden-together constraint frame, 7-crossing oracle) and planner-side
-  consumption of `taught:` capability records (`/plan` in chat and bin). See its dated addenda.
 - **`PLAN_GUESS_NUMBER.md`** — closed-loop planning over hidden state (belief-interval bisection,
   thinker-mode secret commitment, observation folding) on top of the shipped planner substrate.
   Design-only.
-- **`archive/PLAN_VIZ_LEDGER.md`** — shipped in full, including the follow-ups, all resolved by
-  operator decision 2026-07-15: the ledger IS the `tmct viz` surface (node-link page removed),
-  `factAnswer`/`factReadBack` carry the additive `goal` field the dock renders, multi-valued
-  has/can facts are exempt from `findContradictions`, and page weight is budgeted (~561 KB
-  after this batch; revisit only if outgrown). See its dated addendum.
 - **`PLAN_CODE.md`** — small JS-function and HTML/CSS-fragment synthesis, plus goal-directed
   program repair (tests as the goal state, mutation templates as planning actions), via a sandboxed
   headless browser (Track 1, rule/frame synthesis, already shipped). Blocked on a sandbox

@@ -1,7 +1,7 @@
 # corpus/generated/ — mechanically-generated ACE surface variants
 
-`ace-surface-variants.jsonl` — archive/PLAN_BREADTH_FIRST_NLU.md §6a's raw material for
-tmct's "richer template/surface-realization variety" goal. Never an LLM, never
+`ace-surface-variants.jsonl` — raw material for tmct's "richer
+template/surface-realization variety" goal. Never an LLM, never
 invented text: every row is a real seed sentence with one word swapped for a
 real WordNet synset sibling, or a real sentence's alternate ACE-grammar-
 declared surface form. Every row is self-verified — it re-parses against
@@ -11,8 +11,7 @@ that doesn't re-parse is dropped, never committed.
 Regenerate: `node scripts/generate-template-variants.mjs`. Coverage
 measurement: `node scripts/template-coverage.mjs` (baseline) and
 `node scripts/template-coverage.mjs --rescue corpus/generated/ace-surface-variants.jsonl`
-(after). See `archive/PLAN_TEMPLATE_COVERAGE.md` for the design and the real
-before/after numbers.
+(after).
 
 ## Row shapes
 
@@ -29,8 +28,8 @@ Every row also carries `provenance` (`wordnet:<synsetId>` or
 
 This corpus is not loaded by `src/services/chat.mjs`/`src/domain/ask.mjs` or any other
 product code — it is committed raw material, verified by
-`scripts/template-coverage.mjs`, per archive/PLAN_BREADTH_FIRST_NLU.md §6's explicit
-non-goal. Wiring it into live answer rendering is a separate, future phase.
+`scripts/template-coverage.mjs`. Wiring it into live answer rendering is a
+separate, future phase.
 
 ## Licence
 

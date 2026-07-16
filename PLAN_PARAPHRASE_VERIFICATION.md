@@ -17,14 +17,8 @@ verbatim (`ROADMAP.md:26-30`):
 > against both the original and the paraphrase: they must entail the same conclusions, and neither may
 > contradict the other sentence-by-sentence.
 
-`archive/PLAN_BREADTH_FIRST_NLU.md`'s own "Status" section, after listing everything shipped, names two items
-as genuinely open (`archive/PLAN_BREADTH_FIRST_NLU.md:20-21`):
-
-> Two items are genuinely open, not yet started: (c) the paraphrase-verified-via-`syllogise.mjs` piece
-> of "Ambition"; (d) a real "list/count all X of class Y" query shape for memory-graph classes via
-> `ask.mjs` alone (§5b's documented gap).
-
-This document is the design for item (c). That one paragraph in `ROADMAP.md` is the entire existing
+This document is the design for the paraphrase-verified-via-`syllogise.mjs` piece of that goal,
+which is genuinely open and not yet started. That one paragraph in `ROADMAP.md` is the entire existing
 design — nothing deeper exists anywhere in the repo. The rest of this document works out how it
 actually has to run.
 
@@ -94,12 +88,11 @@ necessary step — Part 3.
 
 ## Part 2 — where paraphrase candidates come from today
 
-`archive/PLAN_BREADTH_FIRST_NLU.md` §6a scoped exactly this generation problem (`archive/PLAN_BREADTH_FIRST_NLU.md:
-327-341`): a combinatorial surface-variant expansion using the ACE grammar's 8 patterns
-(`src/domain/grammar/ace.mjs`), the existing lexicon, and real WordNet synset data, self-verified before
-being committed. It shipped, partially, and was archived (`archive/PLAN_TEMPLATE_COVERAGE.md:1`):
-"harness + generator + first corpus batch shipped; growing coverage further and wiring the corpus
-into the live answer path remain real, undone follow-ons."
+Earlier work scoped exactly this generation problem: a combinatorial surface-variant expansion using
+the ACE grammar's 8 patterns (`src/domain/grammar/ace.mjs`), the existing lexicon, and real WordNet
+synset data, self-verified before being committed. It shipped partially. The harness, the generator
+and the first corpus batch shipped; growing coverage further and wiring the corpus into the live
+answer path remain real, undone follow-ons.
 
 What actually exists (`scripts/generate-template-variants.mjs`, 277 lines, confirmed read in full):
 three mechanical techniques, every row self-verified by re-parsing through `parseAce`
@@ -177,7 +170,7 @@ mechanisms:
 has roughly 30 connector phrases (`"is found in"`, `"can be prevented by"`, `"is a way to"`, …);
 `parseAce`'s 8 patterns dispatch on a much narrower set of literal surface cues (`"every"`, a
 leading possessive, `"the … of … is"`, a bare `"is"`, or a declared verb — `src/domain/grammar/ace.mjs:
-444-457`). `archive/PLAN_TEMPLATE_COVERAGE.md`'s own measured baseline is blunt about the gap: 0 of
+444-457`). The measured coverage baseline is blunt about the gap: 0 of
 2,949 real docs sentences hit `parseAce` outright (60.4% got "shape-only" residue hits, 39.6%
 missed entirely). Nothing says a `factPhrase` rendering using an arbitrary
 `FACT_PREDICATE_PHRASES` connector will happen to match one of `parseAce`'s 8 literal shapes. Relying
@@ -265,10 +258,8 @@ is optional decoration next to an already-correct answer; showing a wrong one is
 showing none, since the literal grounded answer is already on screen and carries the real claim.
 
 **Logging, not silent drop.** Every rejected candidate is worth keeping as a data point — a
-generation technique that fails verification often is a signal the technique itself needs tightening
-(the same spirit as `archive/PLAN_TEMPLATE_COVERAGE.md`'s own "the harness ran, found real rescue
-candidates, and correctly reported that none of them cleared the bar — that's a genuine zero-yield
-result, not a harness shortfall"). Append rejected `{original, candidate, technique, failedCheck}`
+generation technique that fails verification often is a signal the technique itself needs tightening.
+Append rejected `{original, candidate, technique, failedCheck}`
 rows to a maintainer-only log file under `corpus/generated/` (mirroring the existing
 `ace-surface-variants.jsonl` convention), never surfaced to a chat user, reviewed the same way a
 maintainer already reviews `template-coverage.mjs`'s miss/residue buckets. This is diagnostic
@@ -334,8 +325,7 @@ to "no paraphrase shown," never to a broken answer).
 - **Not a general paraphrase generator.** This produces exactly the shapes Part 2/4 describe
   (single-slot synonym swap, possessive reordering, and — Phase 5 only — a taught hierarchy shift).
   Passive voice, nominalization (`destroy`↔`destruction`), and multi-word restructuring are explicit
-  non-goals of the underlying generator (`archive/PLAN_TEMPLATE_COVERAGE.md`'s own stated scope) and
-  inherited here unchanged.
+  non-goals of the underlying generator's own stated scope, and inherited here unchanged.
 - **Not multi-sentence answer paraphrasing.** Scoped to single-fact answers only (Part 4's closing
   note). A listed multi-fact answer (`whatElseAnswer` and similar) is a real, separate extension,
   named in Open risks, not designed here.
@@ -350,7 +340,7 @@ to "no paraphrase shown," never to a broken answer).
 
 - **Coverage.** No measurement yet of what fraction of real stored facts have a content word whose
   WordNet synset also contains an independently-tmct-declared sibling (the same "coincidence" gap
-  `archive/PLAN_TEMPLATE_COVERAGE.md` found for the Rescue technique: 0/8 residue words rescued,
+  the coverage harness found for the Rescue technique: 0/8 residue words rescued,
   because tmct's lexicon rarely happens to declare two words from the same synset). Phase 1's exit
   criterion asks for the real number rather than assuming one; this may turn out to be a low-yield
   feature for the same structural reason the coverage harness already found.

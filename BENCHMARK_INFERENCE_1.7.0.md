@@ -1,10 +1,9 @@
 # BENCHMARK_INFERENCE_1.7.0 — first re-run since the full ladder closed; every band passes, both arms
 
 **Headline:** first INFBENCH measurement since `1.3.1` (the last written-up cycle), against the
-current **1.7.0** codebase. `archive/PLAN_INFERENCE_TESTING.md`'s own status banner already recorded
-that Stages 0-5 shipped in the sessions between `1.3.1` and now — "Stages 0-5 ✅ ALL SHIPPED... the
-full 6-band ladder passes the gate with every rule chat-wired" — but that closure was never measured
-by a written-up INFBENCH cycle until this one. This session's own work (`src/ask.mjs`, `src/chat.mjs`,
+current **1.7.0** codebase. Stages 0-5 shipped in the sessions between `1.3.1` and now, closing the
+full 6-band ladder with every rule chat-wired, but that closure was never measured by a written-up
+INFBENCH cycle until this one. This session's own work (`src/ask.mjs`, `src/chat.mjs`,
 `src/codegraph.mjs`, `src/memory/core.mjs`, `src/sessions.mjs` — PLAN_VIZ.md and PLAN_CONVERSATION.md
 Findings 3/5) touches none of `src/syllogise.mjs` or `infbench/`, so this cycle is a first
 confirmation of already-landed reasoning-engine work, not new work from this session.
@@ -53,6 +52,6 @@ both arms, at both bands INF-B1 gated on previously.
 climb until the case-set generator grows a 7th band or a deeper composition depth. This cycle is a
 confirmation, not new build work: the reasoning-engine phases that closed INF-B1 (`cax-dw`
 disjointness, `scm-svf` composition-of-restriction, the recursive/reachability rule) landed in prior
-sessions per `archive/PLAN_INFERENCE_TESTING.md`'s own status banner. Nothing in this session's own
+sessions. Nothing in this session's own
 diff (VIZ/CONVERSATION work) touches the reasoning engine, so no band's movement is attributable to
 today's changes — this is INFBENCH catching up to already-shipped state, not measuring it.

@@ -55,9 +55,9 @@ families have since crossed the read-only line for WORLD STATE: `capabilityFromA
 never auto-dispatched (`registerCapability` forces `dispatchable: false` on them; planning grounds
 them by pure simulation). Synthesis would be the first capability category to generate or modify
 **source artifacts** — code and rules, not world-state facts — which is still a genuine first for
-the product's ethos, not an incremental feature, and is called out again in §8. (The second, a sibling and competing approach targeting
-natural-language completions rather than structured/executable artifacts, is `archive/PLAN_COMPLETIONS.md`
-— see its §0 for how the two compare.)
+the product's ethos, not an incremental feature, and is called out again in §8. (The second is a
+sibling and competing approach targeting natural-language completions rather than
+structured/executable artifacts.)
 
 ---
 
