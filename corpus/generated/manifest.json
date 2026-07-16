@@ -2,8 +2,8 @@
   "version": 1,
   "generated": "by scripts/generate-template-variants.mjs",
   "file": "ace-surface-variants.jsonl",
-  "rows": 18,
-  "bytes": 5012,
-  "sha256": "28fae5a3353f5dd1df365b4407e0ac2a5c66b98b232d8bf454fe3573f2c16760",
-  "license": "CC-BY-4.0 (WordNet-derived synonym substitutions of Open English WordNet / SemCor example sentences and this repo's own MPL-2.0 docs prose — see corpus/generated/README.md)"
+  "rows": 21,
+  "bytes": 6417,
+  "sha256": "6e1daca10e43455608e5ee91ca41e20c5a1c5b0127f14ffd087c85580fe1f0ad",
+  "license": "CC-BY-SA-4.0 (WordNet-derived synonym substitutions of Open English WordNet / SemCor example sentences (CC-BY-4.0) and corpus/prose/, which includes CC-BY-SA-4.0 Wikipedia text. Share-alike is viral and the rescue rows quote and modify that text, so the combined file is CC-BY-SA-4.0 — the stricter of the two. See corpus/prose/wikipedia/LICENSE-NOTICE and corpus/generated/README.md)"
 }
