@@ -119,7 +119,7 @@ are real, narrower, freshly-found gaps immediately adjacent to it, precise enoug
 | 6 | `what people do you know about` | Same shape as #4/#5, different noun | Covered by #4/#5 once those land — "people" resolves the same way "animals" does, off whatever `rdfs:subClassOf … person` facts exist in the loaded corpus. No separate work. |
 | 7 | `count all facts about horses` | Same as #3 | Same fix as #3. |
 | 8 | `how many modules are there` / `list all classes` (code graph) | Not a gap | Already works today, unrelated to this document — `ENTITY_TO_TYPE` + the existing count/list AST, long-predating `dec95e8`. Cited here only to show the boundary of what's already fine. |
-| 9 | `how many changes touch the last commit` (superlative/ranking) | Not this shape | `TOO_HARD_AUDIT.md`'s M2 entry documents a **separate** mechanism (`parseSuperlative`/`SUPERLATIVE_EXTREMES`, argmax ranking — "the most-imported module") — a different query shape from plain count/list, already fixed, not touched by this document. |
+| 9 | `how many changes touch the last commit` (superlative/ranking) | Not this shape | `archive/TOO_HARD_AUDIT.md`'s M2 entry documents a **separate** mechanism (`parseSuperlative`/`SUPERLATIVE_EXTREMES`, argmax ranking — "the most-imported module") — a different query shape from plain count/list, already fixed, not touched by this document. |
 
 ### §A — a memory-class list/count lane in `chat.mjs`, reachable from live chat
 
@@ -235,7 +235,7 @@ invent a third:
 - **Not the code-graph side.** `ENTITY_TO_TYPE` + the existing count/list AST (`Function`/`Method`/
   `Class`/`Module`/`Attribute`/`GlobalVariable`/`Commit`) already work correctly and are unrelated to
   this document's findings — confirmed, not touched.
-- **Not the superlative/ranking mechanism** (`TOO_HARD_AUDIT.md` M2, `parseSuperlative`) — a
+- **Not the superlative/ranking mechanism** (`archive/TOO_HARD_AUDIT.md` M2, `parseSuperlative`) — a
   different query shape ("the most-imported module"), already fixed, out of scope here.
 - **Not a fix to `PLAN_BREADTH_FIRST_NLU.md`'s own "Status" section.** Out of this task's file
   boundary; flagged here for whoever next touches that document.

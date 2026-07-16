@@ -215,7 +215,7 @@ accurate than trying to split the document.
 
 ## Part 4 — the reconciliation: every stale "not a code indexer" claim, named
 
-This repo's own discipline (`TOO_HARD_AUDIT.md`) is to name a stale claim precisely once a real
+This repo's own discipline (`archive/TOO_HARD_AUDIT.md`) is to name a stale claim precisely once a real
 architectural change supersedes it, not to leave it sitting. Every claim below is real, verified
 directly, and every one becomes false the moment Phase 1 below ships a working parser.
 
@@ -376,7 +376,7 @@ language.
 
 **Phase 4 — doc reconciliation.** Reword every stale claim in Part 4's table (README, `docs/adapter-
 contract.md`, `src/source.mjs`, the `src/chat.mjs` live strings) now that they are genuinely false.
-Follows `TOO_HARD_AUDIT.md`'s own discipline: name the claim, state the supersession, reword —
+Follows `archive/TOO_HARD_AUDIT.md`'s own discipline: name the claim, state the supersession, reword —
 already done in Part 4 above; this phase is where the actual file edits land. `npm test` green
 throughout (some tests likely assert the old strings — expect to update pinned-string tests here).
 

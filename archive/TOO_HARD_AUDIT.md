@@ -1,3 +1,9 @@
+**Archived, 2026-07-16** — every flagged finding from the original pass is resolved (see Status);
+none survived as a real ceiling. Kept as the reference list of verified-genuine constraints (the
+`init:xxxl` costing lives here) and as the worked example of re-deriving a "can't be fixed" claim
+instead of trusting it. `PLAN_CONVERSATION.md`, cited below, has since been removed from the repo —
+those citations are historical.
+
 # TOO_HARD_AUDIT.md — a hunt for stale "can't be fixed" claims
 
 ## Why this doc exists

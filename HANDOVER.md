@@ -18,7 +18,7 @@ consumption of taught records, justification for all five entailment rules, the 
 
 Measured init sizes (fresh store, this machine): `init:large` 37,797 facts; `init:xl` 72,075
 (16.6s); `init:xxl` 238,866 (38.5s). `init:xxxl` stays undocumented-as-code per
-`TOO_HARD_AUDIT.md` (bulk ConceptNet download, not reachable from data in hand).
+`archive/TOO_HARD_AUDIT.md` (bulk ConceptNet download, not reachable from data in hand).
 
 ## Open items
 
