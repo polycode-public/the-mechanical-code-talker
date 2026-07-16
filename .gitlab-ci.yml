@@ -177,13 +177,16 @@ publish:npm:
     - echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" >> .npmrc
     - npm ci
     - npm test
-    - LOCAL_VERSION=$(node -p "require('./package.json').version")
+    # Ask the registry what it serves (shell's job — one npm view), then let
+    # check:publish decide. The decision is semver-aware and unit tested in
+    # src/domain/publish-gate.mjs: it exits 0 to publish, 1 to skip, and says
+    # why either way. The `[ "$PUBLISHED" = "$LOCAL" ]` this replaces could only
+    # tell "same" from "different", so a local version BEHIND the registry — a
+    # revert, a stale branch — read as different and went to npm publish, which
+    # then failed on the registry's error rather than skipping cleanly.
     - PUBLISHED_VERSION=$(npm view @polycode-projects/the-mechanical-code-talker version 2>/dev/null || echo "none")
     - |
-      if [ "$PUBLISHED_VERSION" = "$LOCAL_VERSION" ]; then
-        echo "@polycode-projects/the-mechanical-code-talker is already at $LOCAL_VERSION on npm — no version bump in this push, skipping publish."
-      else
-        echo "publishing $LOCAL_VERSION (npm currently has ${PUBLISHED_VERSION})"
+      if npm run --silent check:publish -- "$PUBLISHED_VERSION"; then
         npm publish --provenance --access public
       fi
 

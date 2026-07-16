@@ -113,6 +113,7 @@
   "src/domain/paraphrase.mjs",
   "src/domain/planning.mjs",
   "src/domain/prose.mjs",
+  "src/domain/publish-gate.mjs",
   "src/domain/real-word-collisions.json",
   "src/domain/router/call-validator.mjs",
   "src/domain/router/drive.mjs",
