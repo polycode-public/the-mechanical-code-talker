@@ -139,7 +139,6 @@ export async function normalizeConfig(raw, { configDir } = {}) {
   if (t.impl_of_interface !== undefined) tune.implOfInterface = t.impl_of_interface;
   if (t.beam_search !== undefined) tune.beamSearch = t.beam_search;
   if (t.beam_width !== undefined) tune.beamWidth = t.beam_width;
-  if (t.embed_rank !== undefined) tune.embedRank = t.embed_rank;
   if (t.prose_layers !== undefined) tune.proseLayers = t.prose_layers;
   const exp = t.expansion || {};
   const expansion = {};

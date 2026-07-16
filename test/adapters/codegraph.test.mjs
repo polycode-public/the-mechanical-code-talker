@@ -1126,50 +1126,6 @@ test("literalMention: the repo-relative PATH form fires too, and flanked (non-bo
   }
 });
 
-// ── embedRank — static-embedding cosine re-rank.
-// The embedder is INJECTED (codegraph.mjs stays fs-free and CI never needs the 30 MB weights):
-// these tests use a fake keyword embedder, not the real potion-base-8M table (embed.test.mjs
-// covers that loader numerically). The literalMention fixture is reused: httpx.py beats http.py
-// lexically, and only semantic similarity ("url host handling" ↔ http.py's text) can flip them.
-const fakeEmbedder = {
-  dim: 2,
-  // Axis 0 = "url-ness", axis 1 = "client-ness": http.py's module text (path + parse_thing)
-  // maps to the url axis, httpx.py's (http_get/http_post/http_client) to the client axis.
-  embed(text) {
-    const t = String(text).toLowerCase();
-    const v = new Float32Array(2);
-    if (/\burl\b|parse_thing/.test(t)) v[0] = 1;
-    if (/http_get|http_client|\bclient\b/.test(t)) v[1] = 1;
-    const n = Math.hypot(v[0], v[1]);
-    if (n > 0) { v[0] /= n; v[1] /= n; }
-    return v;
-  },
-};
-
-test("embedRank: cosine similarity flips a lexically-tied rival; unrelated scores only ever grow boundedly", () => {
-  const q = "normalise the url host handling in the http helpers"; // "url" → http.py's axis
-  const off = searchModulesRanked(literalGraph, q);
-  const on = searchModulesRanked(literalGraph, q, { embedRank: true, embedder: fakeEmbedder });
-  const scoreOf = (list, p) => list.find((r) => r.path === p)?.score ?? 0;
-  assert.ok(scoreOf(on, "django/utils/http.py") > scoreOf(off, "django/utils/http.py"),
-    "the semantically-close module gains a strictly positive nudge");
-  // FRAC/CAP bound: no module's score may grow by more than EMB_CAP_FRAC (0.35) of itself.
-  for (const r of off) {
-    const grown = scoreOf(on, r.path);
-    assert.ok(grown <= r.score * 1.35 + 1e-9, `${r.path} bounded (${r.score} → ${grown})`);
-  }
-  assert.equal(on.length, off.length, "re-rank only — never introduces a new candidate");
-});
-
-test("embedRank OFF (absent/false) and embedRank WITHOUT an embedder are byte-identical no-ops", () => {
-  const q = "normalise the url host handling in the http helpers";
-  const base = searchModulesRanked(literalGraph, q);
-  assert.deepEqual(searchModulesRanked(literalGraph, q, {}), base);
-  assert.deepEqual(searchModulesRanked(literalGraph, q, { embedRank: false }), base);
-  // weights-absent path: flag on, no embedder injected → no-op (plus a one-time stderr note).
-  assert.deepEqual(searchModulesRanked(literalGraph, q, { embedRank: true }), base);
-});
-
 // B016 R1b promoted to the shipped default (2026-07-02, PLAN_B016.md §6.9): selectRankedModules is
 // the single source of truth for gap-extension, shared by cli.mjs's digest query-mode (which
 // EXPLICITLY opts into DEFAULT_SCORE_GAP as ITS OWN policy default) and bench/run.mjs's

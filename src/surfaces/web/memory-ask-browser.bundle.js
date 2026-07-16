@@ -936,23 +936,6 @@
     }
   });
 
-  // src/domain/vector.mjs
-  function cosine(a, b) {
-    let dot = 0, na = 0, nb = 0;
-    const n = Math.min(a.length, b.length);
-    for (let i = 0; i < n; i++) {
-      dot += a[i] * b[i];
-      na += a[i] * a[i];
-      nb += b[i] * b[i];
-    }
-    if (na === 0 || nb === 0) return 0;
-    return dot / (Math.sqrt(na) * Math.sqrt(nb));
-  }
-  var init_vector = __esm({
-    "src/domain/vector.mjs"() {
-    }
-  });
-
   // src/domain/memory/trust.mjs
   function parseChatTagRest(rest) {
     const at = rest.indexOf("@");
@@ -1307,27 +1290,6 @@
     }
     return idx;
   }
-  function moduleEmbedTexts(graph) {
-    const texts = /* @__PURE__ */ new Map();
-    const defIdx = definesIndex(graph);
-    const docs = /* @__PURE__ */ new Map();
-    for (const ind of graph.individuals) {
-      const doc = (ind.attributes || []).find((a) => a.key === "doc")?.value;
-      if (!doc) continue;
-      const modId = (ind.class || "") === "Module" ? ind.id : moduleIdOf(graph, ind);
-      if (!modId) continue;
-      let arr = docs.get(modId);
-      if (!arr) docs.set(modId, arr = []);
-      if (arr.length < EMB_TEXT_DOC_CAP) arr.push(String(doc).split("\n")[0]);
-    }
-    for (const ind of graph.individuals) {
-      if ((ind.class || "") !== "Module") continue;
-      const parts = String(ind.label).split(/[^a-zA-Z0-9_]+/).filter(Boolean);
-      const syms = (defIdx.get(ind.id) || []).slice(0, EMB_TEXT_SYMBOL_CAP);
-      texts.set(ind.id, [...parts, ...syms, ...docs.get(ind.id) || []].join(" "));
-    }
-    return texts;
-  }
   function identComponents(name) {
     return new Set(String(name).replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase().split(/[^a-z0-9]+/).filter(Boolean));
   }
@@ -1499,7 +1461,7 @@
     return results;
   }
   function scoreModules(graph, tokens, opts = {}) {
-    const { demoteNonProd = false, callAdjacency = false, implOfInterface = false, beamSearch = false, spiral = false, proseBoost = false, proseLayers = false, literalMention = false, embedRank = false, rawQuery = "" } = opts;
+    const { demoteNonProd = false, callAdjacency = false, implOfInterface = false, beamSearch = false, spiral = false, proseBoost = false, proseLayers = false, literalMention = false, rawQuery = "" } = opts;
     const beamWidth = Number.isFinite(opts.beamWidth) && opts.beamWidth > 0 ? opts.beamWidth : 8;
     const defIdx = definesIndex(graph);
     const modules = [];
@@ -1691,34 +1653,6 @@
         s.score += Math.min(signal * PROSE_LAYER_FRAC, s.score * PROSE_LAYER_CAP_FRAC);
       }
     }
-    if (embedRank) {
-      if (!opts.embedder) {
-        if (!embedWarned) {
-          embedWarned = true;
-          process.stderr.write("tmct: embedRank requested but no embedder available (weights not fetched? see `npm run refs:embeddings`) \u2014 flag is a no-op\n");
-        }
-      } else if (scored.length) {
-        const embedder = opts.embedder;
-        let cache2 = EMB_CACHE.get(graph);
-        if (!cache2 || cache2.embedder !== embedder) {
-          cache2 = { embedder, texts: moduleEmbedTexts(graph), vecs: /* @__PURE__ */ new Map() };
-          EMB_CACHE.set(graph, cache2);
-        }
-        const qv = embedder.embed(rawQuery || tokens.join(" "));
-        let maxBase = 0;
-        for (const s of scored) maxBase = Math.max(maxBase, s.score);
-        for (const s of scored) {
-          let v = cache2.vecs.get(s.ind.id);
-          if (!v) {
-            v = embedder.embed(cache2.texts.get(s.ind.id) || String(s.ind.label));
-            cache2.vecs.set(s.ind.id, v);
-          }
-          const sim = Math.max(0, cosine(qv, v));
-          if (!sim) continue;
-          s.score += Math.min(sim * maxBase * EMB_FRAC, s.score * EMB_CAP_FRAC);
-        }
-      }
-    }
     if (beamSearch && scored.length > 1) beamExpand(graph, scored, beamWidth);
     if (spiral && scored.length) spiralExpand(graph, scored, {
       depth: Number.isFinite(opts.spiralDepth) && opts.spiralDepth > 0 ? opts.spiralDepth : SPIRAL_DEPTH_DEFAULT,
@@ -1732,7 +1666,7 @@
     const raw = String(query || "");
     const tokens = raw.toLowerCase().split(/[^a-z0-9_]+/).filter(Boolean);
     if (!tokens.length) return [];
-    const effOpts = opts.literalMention || opts.embedRank ? { ...opts, rawQuery: raw } : opts;
+    const effOpts = opts.literalMention ? { ...opts, rawQuery: raw } : opts;
     return scoreModules(graph, tokens, effOpts).map((s) => ({ path: String(s.ind.label), score: s.score }));
   }
   function renderSearch(graph, query, { limit = SEARCH_LIMIT, kind = "", decorator = "", name = "" } = {}) {
@@ -2414,11 +2348,10 @@ ${shown.join("\n")}${tail}`;
   ${list.join("\n  ")}` + (edges.length > EXPORTS_CAP ? `
   \u2026+${edges.length - EXPORTS_CAP} more` : "");
   }
-  var PROP_KIND, isProvRef, DESCRIBE_EDGE_CAP, PROV_CAP, IMPACT_DEPTHS_LISTED, IMPACT_PER_DEPTH, IMPACT_TESTS_PER_DEP, SEARCH_LIMIT, SEARCH_SYMBOLS_SHOWN, PATH_W, SYM_W, EXACT_W, SYM_MATCH_CAP, PROX_FRAC, PROX_CAP_FRAC, isTestLabel, NONPROD_DEMOTE, isNonProdLabel, CALL_PROX_FRAC, CALL_PROX_CAP_FRAC, IMPL_PROX_FRAC, IMPL_PROX_CAP_FRAC, isCsModuleLabel, looksLikeCsInterface, PROSE_PROX_FRAC, PROSE_PROX_CAP_FRAC, PROSE_LOOKUP_LIMIT, PROSE_LAYER_FRAC, PROSE_LAYER_CAP_FRAC, PROSE_LAYER_DISCOUNT, LIT_W, LIT_MIN_COMPONENTS, LIT_COMP_CAP, LIT_FRAC, LIT_CAP_FRAC, EMB_FRAC, EMB_CAP_FRAC, EMB_TEXT_SYMBOL_CAP, EMB_TEXT_DOC_CAP, EMB_CACHE, embedWarned, BEAM_MARGIN_FRAC, BEAM_PROX_FRAC, BEAM_PROX_CAP_FRAC, BEAM_OVERFLOW_CAP, BEAM_PLIES, BEAM_EDGE_GROUPS, SPIRAL_DEPTH_DEFAULT, SPIRAL_NODE_LIMIT_DEFAULT, SPIRAL_Q_DEFAULT, SPIRAL_EXPAND_KINDS, SPIRAL_EMIT_FRAC, SPIRAL_HOP_DECAY, SPIRAL_PROX_FRAC, SPIRAL_PROX_CAP_FRAC, edgesOfKindCache, MEMBERS_CAP, SUBCLASS_CAP, CALL_CAP, attrVal, ARCH_PKG_CAP, ARCH_HUB_CAP, COVERAGE_CAP, TESTS_GRAIN_NOTE, HISTORY_CAP, CALL_SYMBOL_CLASSES, CALL_HINT_CAP, SYMBOL_CLASSES, CONTEXT_SIBLING_CAP, CLASS_MEMBER_CAP, COCHANGE_MID_CAP, CONTEXT_TESTS_CAP, TINY_MAX_LOC, TINY_MAX_ARITY, LARGE_CLASS_MEMBERS, INLINE_CALLEE_CAP, splitDecs, tokenize, countParams, modeOf, COCHANGE_CAP, EXPORTS_CAP;
+  var PROP_KIND, isProvRef, DESCRIBE_EDGE_CAP, PROV_CAP, IMPACT_DEPTHS_LISTED, IMPACT_PER_DEPTH, IMPACT_TESTS_PER_DEP, SEARCH_LIMIT, SEARCH_SYMBOLS_SHOWN, PATH_W, SYM_W, EXACT_W, SYM_MATCH_CAP, PROX_FRAC, PROX_CAP_FRAC, isTestLabel, NONPROD_DEMOTE, isNonProdLabel, CALL_PROX_FRAC, CALL_PROX_CAP_FRAC, IMPL_PROX_FRAC, IMPL_PROX_CAP_FRAC, isCsModuleLabel, looksLikeCsInterface, PROSE_PROX_FRAC, PROSE_PROX_CAP_FRAC, PROSE_LOOKUP_LIMIT, PROSE_LAYER_FRAC, PROSE_LAYER_CAP_FRAC, PROSE_LAYER_DISCOUNT, LIT_W, LIT_MIN_COMPONENTS, LIT_COMP_CAP, LIT_FRAC, LIT_CAP_FRAC, BEAM_MARGIN_FRAC, BEAM_PROX_FRAC, BEAM_PROX_CAP_FRAC, BEAM_OVERFLOW_CAP, BEAM_PLIES, BEAM_EDGE_GROUPS, SPIRAL_DEPTH_DEFAULT, SPIRAL_NODE_LIMIT_DEFAULT, SPIRAL_Q_DEFAULT, SPIRAL_EXPAND_KINDS, SPIRAL_EMIT_FRAC, SPIRAL_HOP_DECAY, SPIRAL_PROX_FRAC, SPIRAL_PROX_CAP_FRAC, edgesOfKindCache, MEMBERS_CAP, SUBCLASS_CAP, CALL_CAP, attrVal, ARCH_PKG_CAP, ARCH_HUB_CAP, COVERAGE_CAP, TESTS_GRAIN_NOTE, HISTORY_CAP, CALL_SYMBOL_CLASSES, CALL_HINT_CAP, SYMBOL_CLASSES, CONTEXT_SIBLING_CAP, CLASS_MEMBER_CAP, COCHANGE_MID_CAP, CONTEXT_TESTS_CAP, TINY_MAX_LOC, TINY_MAX_ARITY, LARGE_CLASS_MEMBERS, INLINE_CALLEE_CAP, splitDecs, tokenize, countParams, modeOf, COCHANGE_CAP, EXPORTS_CAP;
   var init_codegraph = __esm({
     "src/domain/codegraph.mjs"() {
       init_prose();
-      init_vector();
       init_trust();
       PROP_KIND = {
         // v2.0 faithful tokens (SEON-faithful realign)
@@ -2484,12 +2417,6 @@ ${shown.join("\n")}${tail}`;
       LIT_COMP_CAP = 4;
       LIT_FRAC = 1;
       LIT_CAP_FRAC = 0.9;
-      EMB_FRAC = 0.2;
-      EMB_CAP_FRAC = 0.35;
-      EMB_TEXT_SYMBOL_CAP = 64;
-      EMB_TEXT_DOC_CAP = 12;
-      EMB_CACHE = /* @__PURE__ */ new WeakMap();
-      embedWarned = false;
       BEAM_MARGIN_FRAC = 0.5;
       BEAM_PROX_FRAC = 0.2;
       BEAM_PROX_CAP_FRAC = 0.35;

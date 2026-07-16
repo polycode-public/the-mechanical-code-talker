@@ -1,5 +1,4 @@
 import { lookupByProseTokens, proseLayerHits, splitIdentifierWords } from "./prose.mjs";
-import { cosine } from "./vector.mjs";
 import { CREATED_AT_PROP, UPDATED_AT_PROP } from "./memory/trust.mjs";
 
 // Pure (no-network, no-fs) query logic over the typed `entities` payload that the
@@ -511,15 +510,6 @@ const LIT_COMP_CAP = 4;
 const LIT_FRAC = 1.0;
 const LIT_CAP_FRAC = 0.9;
 
-// opt-in via embedRank + an injected embedder: static-embedding re-rank over
-// path/symbol/doc text read from the graph (never source), cached per-process in EMB_CACHE
-const EMB_FRAC = 0.2;
-const EMB_CAP_FRAC = 0.35;
-const EMB_TEXT_SYMBOL_CAP = 64;
-const EMB_TEXT_DOC_CAP = 12;
-const EMB_CACHE = new WeakMap(); // graph -> { embedder, texts, vecs: Map<moduleId, Float32Array> }
-let embedWarned = false;
-
 // opt-in via beamSearch: multi-ply adaptive expansion of the proximity nudge above.
 // Beam width is a margin relative to each ply's best score (not a fixed count), so a
 // weak-then-strong candidate isn't prematurely discarded. Successors are generated
@@ -543,30 +533,6 @@ const SPIRAL_EMIT_FRAC = 0.5;
 const SPIRAL_HOP_DECAY = 0.6;
 const SPIRAL_PROX_FRAC = 0.2;
 const SPIRAL_PROX_CAP_FRAC = 0.35;
-
-/** embedRank: per-module embeddable text from path components + defined symbol
- *  names + doc first-lines, cached alongside the vectors in EMB_CACHE. */
-function moduleEmbedTexts(graph) {
-  const texts = new Map(); // moduleId -> text
-  const defIdx = definesIndex(graph);
-  const docs = new Map();  // moduleId -> [doc first-lines]
-  for (const ind of graph.individuals) {
-    const doc = (ind.attributes || []).find((a) => a.key === "doc")?.value;
-    if (!doc) continue;
-    const modId = (ind.class || "") === "Module" ? ind.id : moduleIdOf(graph, ind);
-    if (!modId) continue;
-    let arr = docs.get(modId);
-    if (!arr) docs.set(modId, (arr = []));
-    if (arr.length < EMB_TEXT_DOC_CAP) arr.push(String(doc).split("\n")[0]);
-  }
-  for (const ind of graph.individuals) {
-    if ((ind.class || "") !== "Module") continue;
-    const parts = String(ind.label).split(/[^a-zA-Z0-9_]+/).filter(Boolean);
-    const syms = (defIdx.get(ind.id) || []).slice(0, EMB_TEXT_SYMBOL_CAP);
-    texts.set(ind.id, [...parts, ...syms, ...(docs.get(ind.id) || [])].join(" "));
-  }
-  return texts;
-}
 
 /** Split a lowercased path label into boundary components: django/utils/text.py →
  *  {django,utils,text,py}. Component equality (not substring) stops "text" matching "ci<text>". */
@@ -773,7 +739,7 @@ export function spiralExpand(graph, scored = [], {
  *  IDF-weights each query token, scores path/symbol/exact-symbol matches, and
  *  re-ranks with a bounded import-proximity bonus. Pure; deterministic. */
 function scoreModules(graph, tokens, opts = {}) {
-  const { demoteNonProd = false, callAdjacency = false, implOfInterface = false, beamSearch = false, spiral = false, proseBoost = false, proseLayers = false, literalMention = false, embedRank = false, rawQuery = "" } = opts;
+  const { demoteNonProd = false, callAdjacency = false, implOfInterface = false, beamSearch = false, spiral = false, proseBoost = false, proseLayers = false, literalMention = false, rawQuery = "" } = opts;
   const beamWidth = Number.isFinite(opts.beamWidth) && opts.beamWidth > 0 ? opts.beamWidth : 8;
   const defIdx = definesIndex(graph);
   // Precompute each module's path components + defined-symbol exact/component sets, once.
@@ -967,36 +933,6 @@ function scoreModules(graph, tokens, opts = {}) {
       s.score += Math.min(signal * PROSE_LAYER_FRAC, s.score * PROSE_LAYER_CAP_FRAC);
     }
   }
-  // embedRank: the embedder is injected so this module stays fs-free; absent -> a one-time
-  // stderr note, never a failure
-  if (embedRank) {
-    if (!opts.embedder) {
-      if (!embedWarned) {
-        embedWarned = true;
-        process.stderr.write("tmct: embedRank requested but no embedder available (weights not fetched? see `npm run refs:embeddings`) — flag is a no-op\n");
-      }
-    } else if (scored.length) {
-      const embedder = opts.embedder;
-      let cache = EMB_CACHE.get(graph);
-      if (!cache || cache.embedder !== embedder) {
-        cache = { embedder, texts: moduleEmbedTexts(graph), vecs: new Map() };
-        EMB_CACHE.set(graph, cache);
-      }
-      const qv = embedder.embed(rawQuery || tokens.join(" "));
-      let maxBase = 0;
-      for (const s of scored) maxBase = Math.max(maxBase, s.score);
-      for (const s of scored) {
-        let v = cache.vecs.get(s.ind.id);
-        if (!v) {
-          v = embedder.embed(cache.texts.get(s.ind.id) || String(s.ind.label));
-          cache.vecs.set(s.ind.id, v);
-        }
-        const sim = Math.max(0, cosine(qv, v)); // negative similarity never penalises
-        if (!sim) continue;
-        s.score += Math.min(sim * maxBase * EMB_FRAC, s.score * EMB_CAP_FRAC);
-      }
-    }
-  }
   // beamSearch (opt-in): multi-ply generalization of the single-hop families above.
   if (beamSearch && scored.length > 1) beamExpand(graph, scored, beamWidth);
   // SPIRAL (opt-in): bounded-radius ego walk that may introduce lexically-invisible modules — runs
@@ -1024,9 +960,9 @@ export function searchModulesRanked(graph, query, opts = {}) {
   const tokens = raw.toLowerCase().split(/[^a-z0-9_]+/).filter(Boolean);
   if (!tokens.length) return [];
   // literalMention needs the query BEFORE tokenization (the tokenizer destroys the dotted refs
-  // it matches on) and embedRank embeds the raw phrasing; threaded only when a flag that
-  // consumes it is on, so the OFF path is provably unchanged.
-  const effOpts = (opts.literalMention || opts.embedRank) ? { ...opts, rawQuery: raw } : opts;
+  // it matches on); threaded only when a flag that consumes it is on, so the OFF path is
+  // provably unchanged.
+  const effOpts = opts.literalMention ? { ...opts, rawQuery: raw } : opts;
   return scoreModules(graph, tokens, effOpts).map((s) => ({ path: String(s.ind.label), score: s.score }));
 }
 
