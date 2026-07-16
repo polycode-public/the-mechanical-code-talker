@@ -2,7 +2,7 @@
 # (PLAN_RESPONSE_FINISHING.md, "The grammar pass (lever 2)").
 #
 # Each [[rule]] is a corrective grammar rule applied by applyGrammar() in
-# src/finish.mjs over the PROSE spans of a segmented answer — NEVER the flat
+# src/services/finish.mjs over the PROSE spans of a segmented answer — NEVER the flat
 # string, and NEVER a protected span (entity / path / number / code / provenance
 # / receipt). The engine reads STRUCTURE, never guesses from surface: an article
 # rule that would touch the word inside the following protected span refuses to

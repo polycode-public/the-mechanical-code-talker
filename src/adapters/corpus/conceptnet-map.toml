@@ -13,11 +13,11 @@
 #   ace       which ACE-OWL pattern it maps to (docs/references/schemas/
 #             ace-owl-fragment.md): subClassOf | type | ObjectProperty |
 #             someValuesFrom | disjointWith | property | none
-#   predicate the predicate URI src/corpus/conceptnet.mjs emits into memory
+#   predicate the predicate URI src/adapters/corpus/conceptnet.mjs emits into memory
 #             facts (absent when ace = "none" — no fact is emitted)
 #   note      why, and what a "none" row is still good for
 #
-# Loader contract (src/corpus/conceptnet.mjs): a relation in the slice that is
+# Loader contract (src/adapters/corpus/conceptnet.mjs): a relation in the slice that is
 # MISSING here is an error (drift guard); a row with ace = "none" is a
 # deliberate non-emission, silently skipped by toFacts().
 
@@ -189,7 +189,7 @@ rel = "/r/RelatedTo"
 surface = "{start} is related to {end}"
 ace = "ObjectProperty"
 predicate = "mgx:relatedTo"
-note = "weakest, undirected association — re-examined 2026-07-12 (TOO_HARD_AUDIT.md): the surface template above was already fully authored, so the prior 'too vague for an axiom' exclusion was a design call dressed as a technical one, not a real blocker. Emitted at LOWER trust (src/corpus/conceptnet.mjs routes RelatedTo facts through the corpus-weak: provenance prefix -> SOURCE_PRIOR.corpusWeak, memory/trust.mjs) rather than either full-strength or excluded."
+note = "weakest, undirected association — re-examined 2026-07-12 (TOO_HARD_AUDIT.md): the surface template above was already fully authored, so the prior 'too vague for an axiom' exclusion was a design call dressed as a technical one, not a real blocker. Emitted at LOWER trust (src/adapters/corpus/conceptnet.mjs routes RelatedTo facts through the corpus-weak: provenance prefix -> SOURCE_PRIOR.corpusWeak, src/domain/memory/trust.mjs) rather than either full-strength or excluded."
 
 [[relation]]
 rel = "/r/Synonym"

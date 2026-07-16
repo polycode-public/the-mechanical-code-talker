@@ -34,7 +34,7 @@ const SRC = join(ROOT, "src");
 // excluded on purpose: their graph.json files describe the toy codebases tmct
 // analyses, so their own "src/..." strings mean a different src entirely.
 const SCAN_DIRS = ["src", "test", "e2e", "scripts", "bin", "chatbench", "agentbench", "infbench", "synthbench", "demo", "public", "examples", "corpus", "docs", "ontology", "data"];
-const SCAN_EXTENSIONS = [".mjs", ".js", ".json", ".html", ".md"];
+const SCAN_EXTENSIONS = [".mjs", ".js", ".json", ".html", ".md", ".toml", ".yml"];
 const SKIP_DIRS = new Set(["node_modules", ".git", "fixtures", "engine", ".tmct"]);
 const SKIP_FILES = new Set(["move-table.json", "memory-ask-browser.bundle.js"]);
 

@@ -1,6 +1,6 @@
 # data/templates/constructions/agent-noun-relations.toml — construction-grammar
 # template bank (PLAN_ADVANCED_GRAMMAR.md track (d)): per-construction closed
-# template families as DATA, loaded by src/interpret/strategies/constructions.mjs
+# template families as DATA, loaded by src/domain/interpret/strategies/constructions.mjs
 # beside grammar.mjs's anchored T1-T10 grammar (this file's constructions are the
 # next numbers, T11-T13 — see the `id` field on each [[construction]] below; do
 # not renumber grammar.mjs's own T1-T10, this is an ADDITIVE, own-class strategy).
@@ -59,7 +59,7 @@ kind = "inherits"
 entityType = "Class"      # inherits is Class -> Class only
 
 # ---- constructions: pattern -> AST skeleton -------------------------------
-# Pattern DSL (src/interpret/strategies/constructions.mjs compiles this):
+# Pattern DSL (src/domain/interpret/strategies/constructions.mjs compiles this):
 #   <AGENT>  one of the [[relation]] nouns above (closed alternation, longest
 #            noun first so e.g. a hypothetical multi-word noun would never be
 #            shadowed by a shorter one sharing a prefix)
