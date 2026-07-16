@@ -42,24 +42,11 @@
   "main": "./src/services/index.mjs",
   "exports": {
     ".": "./src/services/index.mjs",
-    "./chat": "./src/services/chat.mjs",
-    "./resolveObject": "./src/domain/ask.mjs",
-    "./ask": "./src/domain/ask.mjs",
-    "./relationKind": "./src/domain/codegraph.mjs",
-    "./impactClosure": "./src/domain/codegraph.mjs",
-    "./dispatchTool": "./src/tools/server.mjs",
-    "./fetchEntities": "./src/adapters/source.mjs",
-    "./repository-interface": "./src/adapters/repository-interface.mjs",
-    "./graph-service": "./src/adapters/providers/graph-service.mjs",
-    "./providers/fixture": "./src/adapters/providers/fixture.mjs",
-    "./providers/bootstrap": "./src/adapters/providers/bootstrap.mjs",
-    "./conformance": "./src/tools/conformance.mjs",
-    "./init": "./src/services/init.mjs",
-    "./extensions": "./src/services/extensions.mjs",
-    "./toml-config": "./src/adapters/toml-config.mjs",
+    "./plan": "./src/domain/router/drive.mjs",
     "./generateCompletion": "./src/domain/completions/complete.mjs",
     "./createCompletionsGraphAdapter": "./src/domain/completions/graph-adapter.mjs",
-    "./plan": "./src/domain/router/drive.mjs"
+    "./repository-interface": "./src/adapters/repository-interface.mjs",
+    "./conformance": "./src/tools/conformance.mjs"
   },
   "files": [
     "bin/",

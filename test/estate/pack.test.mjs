@@ -38,3 +38,15 @@ test("publint reports no problem with the package metadata", async () => {
   const { messages } = await publint({ pkgDir: REPO_ROOT });
   assert.deepEqual(messages.map((m) => `${m.type}: ${formatMessage(m, pkg)}`), []);
 });
+
+test("every declared export subpath resolves through the exports map", async () => {
+  const pkg = JSON.parse(readFileSync(path.join(REPO_ROOT, "package.json"), "utf8"));
+  for (const subpath of Object.keys(pkg.exports)) {
+    const specifier = subpath === "." ? pkg.name : `${pkg.name}${subpath.slice(1)}`;
+    const mod = await import(specifier);
+    assert.ok(
+      Object.keys(mod).length > 0,
+      `${specifier} resolves but exports nothing`,
+    );
+  }
+});
