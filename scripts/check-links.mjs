@@ -14,33 +14,16 @@ import { readFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { relativeTargets } from "../src/domain/markdown-links.mjs";
+
+export { relativeTargets };
+
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 function trackedMarkdownFiles() {
   return execFileSync("git", ["ls-files", "-z", "*.md"], { cwd: REPO_ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 })
     .split("\0")
     .filter(Boolean);
-}
-
-// Inline links/images: [text](target "title") — target ends at the first
-// whitespace or closing paren. Reference definitions: [label]: target.
-const INLINE_LINK = /!?\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
-const REFERENCE_DEF = /^\s{0,3}\[[^\]]+\]:\s+(\S+)/gm;
-
-export function relativeTargets(markdown) {
-  const targets = [];
-  for (const regex of [INLINE_LINK, REFERENCE_DEF]) {
-    for (const match of markdown.matchAll(regex)) {
-      let target = match[1];
-      if (/^(https?|mailto|ftp):/i.test(target)) continue;
-      if (target.startsWith("#") || target.startsWith("/") || target.startsWith("<")) continue;
-      target = decodeURIComponent(target.split("#")[0].split("?")[0]);
-      if (!target) continue;
-      const line = markdown.slice(0, match.index).split("\n").length;
-      targets.push({ target, line });
-    }
-  }
-  return targets;
 }
 
 export function brokenLinks() {
