@@ -146,4 +146,5 @@ async function main() {
   console.error(`apply-persona-tiers: added ${added} new nouns to ${LEXICON_PATH}`);
 }
 
-await main();
+const isMain = process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href;
+if (isMain) await main();
