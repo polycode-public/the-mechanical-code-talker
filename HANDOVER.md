@@ -21,6 +21,85 @@ download, not reachable from data in hand).
 Logged by the 2.0.3 benchmark cycle, which measured all four axes and applied no lever. Each
 line names its reproducer and points at the write-up that found it.
 
+The first five are one family: **input silently discarded before the parser runs**, each producing a
+confident answer to a question nobody asked. They are listed first because tmct's honesty machinery
+never engages on them — by the time the parser sees the sentence, the evidence that it was a
+different sentence is gone.
+
+- **A "shortest" plan whose first move is illegal** — teach the README's own Hanoi board on its own
+  line (`disk-1 rests on disk-2. disk-2 rests on disk-3. disk-3 rests on peg-a.`), then the goal,
+  then `solve it`: answers `plan found — 3 moves (shortest)` starting `move disk-3 onto peg-c`,
+  which is illegal (disk-2 rests on disk-3), and never reaches the goal. The same sentences with the
+  goal on the SAME line give the correct 7. A teach-only line is not sentence-split, so all three
+  become one fact — `disk-1 mgx:rest-on "disk-2. disk-2 rests on disk-3. disk-3 rests on peg-a"` —
+  and the planner plans faultlessly over a phantom board. The tell is the bullets: the working form
+  prints three `•`, the broken one prints one blob. See `BENCHMARK_CONVERSATION_2.0.3.md`.
+- **An existential is stored as a universal, then proved** — `some men are fathers` stores as
+  `men is a kind of father`; with `john is a men`, `is john a father` answers `yes` **with a proof
+  citing both premises**. The teach frame strips the quantifier without distinguishing ∃ from ∀, so
+  an I-proposition lands as `rdfs:subClassOf` and the reasoner certifies a non-sequitur. The property
+  form (`some men are wise`) and the singular are both refused correctly — only the plural class form
+  leaks. See `BENCHMARK_CONVERSATION_2.0.3.md`.
+- **`what would break if I change X` answers with people** — `what would break if I change
+  src/core/store.mjs` → `read as "what would change src/core/store.mjs" — a1b2c3d4e5f6 (Grace
+  Hopper) and …`. "break if I" is stripped, the residue matches the `touches` history pattern, and
+  blast-radius becomes git blame. It announces the misreading and answers confidently anyway; the
+  impact closure it should return is already computed by `/impact`. See
+  `BENCHMARK_CONVERSATION_2.0.3.md`.
+- **Unknown modifiers are dropped, so it answers about a different entity** — `what imports the
+  deprecated legacy model.mjs` returns exactly what `what imports model.mjs` returns; the fiction is
+  discarded silently and the `Canonical:` line prints the garbage term back, having resolved past it.
+  The ambiguity guard fires only on multi-candidate collisions, not on unknown-token residue. The
+  realistic trigger is a user saying "the old model.mjs". See `BENCHMARK_CONVERSATION_2.0.3.md`.
+- **`tell me about a dog` reports that it knows nothing, one turn before proving it does** — answers
+  "the graph … is empty — no entities to answer from yet", while `tell me about dog` (no article)
+  returns the corpus facts. The article routes to the code-graph lookup and the corpus is never
+  consulted. A Tier 0 dead-end, so the conversation ladder does not ratchet. See
+  `BENCHMARK_CONVERSATION_2.0.3.md`.
+- **`show me the untested modules` (9) contradicts `/untested` (7)** — the natural-language
+  compositional route lacks the source-module filter the tool applies, so `test/tasks.test.mjs` and
+  `test/store.test.mjs` count themselves as untested. Same question, two surfaces, two answers. See
+  `BENCHMARK_CONVERSATION_2.0.3.md`.
+- **A negative assertion is executed as a retraction** — `john is a man` then `john is not a man`
+  answers `noted — forgotten: "john is a kind of man" is no longer stored`, and `is john a man` then
+  says "I don't know 'john' at all yet". A claim destroys information instead of recording a
+  disagreement. Sits oddly beside `0f8fb61` (capability negatives DO store: `penguin cannot fly` →
+  `penguin mgxneg:capableOf fly`) — same word "not", two behaviours. On an unknown subject
+  (`zeus is not mortal`) it is a silent no-op reported as a question about an empty graph. See
+  `BENCHMARK_CONVERSATION_2.0.3.md`.
+- **`what talks to the payment module?` — a README headline example — does not parse** (`README.md`
+  ~line 108). It fails at every arity, including with a real module path. `what uses store.mjs` works,
+  so the capability exists and only the phrasing is unrouted; one lexicon entry (`talks to` → `uses`)
+  is the fix. `/help` doesn't list the shape either, so the docs and the product disagree with the
+  README. See `BENCHMARK_CONVERSATION_2.0.3.md`.
+- **Quantifiers parse when teaching but not when asking** — `every man is mortal` stores, then
+  `is every man mortal` → "I don't know anything about 'every man' yet", while `is a man mortal`
+  answers yes. Same for `are all men mortal` / `is any man mortal`. `are men mortal` fails the same
+  way on the plural, and its suggestion text is ungrammatical ("remember that men is mortal"). See
+  `BENCHMARK_CONVERSATION_2.0.3.md`.
+- **An unparsed turn wipes the anaphora referent** — `what is a dog` / `go back to dogs` (a miss) /
+  `can it bark` → "not sure what 'it' refers to yet". Binding otherwise works well and even rebinds
+  correctly across a topic switch, so leaving the prior binding intact across a miss is the whole fix.
+  A casual user's misses come in clusters, so one stray turn strands every pronoun after it. See
+  `BENCHMARK_CONVERSATION_2.0.3.md`.
+- **`next` advances the plan but the fact read-back serves the stale board** — after `next`,
+  `what rests on disk-2` answers "disk-1 rests on disk-2" while the same turn's `board@step1` says
+  disk-1 is on peg-c. `what moves are legal now` sees the new board, so only the read-back path is
+  stale. `README.md:352` claims `next` writes each board state into memory as facts. See
+  `BENCHMARK_CONVERSATION_2.0.3.md`.
+- **Smaller items from the sweep** — a bare module path (`src/core/store.mjs`) dead-ends where a bare
+  class or function orients; vocabulary-session miss hints are hard-wired to the code-graph frame
+  (`what about cats` → "Try: which modules import <name>"); `what else` / `why` fall through to the
+  identity blurb though `tell me more` expands; `do all men die` hits the code-graph parse error;
+  `do all modules import model.mjs` produces a duplicated ambiguous parse where both readings fail;
+  `i was wondering what a dog is` doesn't parse; `hanoi-3.txt`'s own 4-disk recipe yields `no plan
+  found within 300 moves` because `smaller than` isn't transitive; plan follow-ups (`what is the next
+  move`, `how many moves`, `why that move`) fall through to code-graph replies; `is disk-1 clear?` —
+  a phrasing `hanoi-3.txt` advertises — misses at step 0 when it is clear. All in
+  `BENCHMARK_CONVERSATION_2.0.3.md`'s routed backlog.
+- **Capability gap, honest miss (not a defect)** — `no man is a stone` stores cleanly as
+  `man owl:disjointWith stone`, but `is john a stone` answers "I can't confirm that" rather than "no".
+  Disjointness is stored and never consulted when answering. See `BENCHMARK_CONVERSATION_2.0.3.md`.
 - **The fronted-agent passive answers the inverse, confidently** — `by which modules is
   app/lib/b.mjs imported` answers `app/lib/a.mjs.` (expected `app/functions/d/handler.mjs`), because
   it compiles to `forward(imports, "app/lib/b.mjs")` where the question asked for reverse. Tier-1
