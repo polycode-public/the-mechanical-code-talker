@@ -14,7 +14,7 @@
 
 import React, { useEffect, useState } from "react";
 import { render, Box, Text, useApp, useInput, useStdout } from "ink";
-import { createSession } from "../services/chat.mjs";
+import { createSession } from "../../services/chat.mjs";
 
 const h = React.createElement;
 

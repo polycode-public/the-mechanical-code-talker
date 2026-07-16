@@ -18,7 +18,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { App, statusText, appendTurn, transcriptLines, wrapLines,
-  insertAt, backspaceAt, clampCursor, inputCells } from "../src/tui/app.mjs";
+  insertAt, backspaceAt, clampCursor, inputCells } from "../src/surfaces/tui/app.mjs";
 import { createSession } from "../src/services/chat.mjs";
 
 const h = React.createElement;
@@ -231,7 +231,7 @@ test("TUI: /exit ends the app without dispatching a turn; Ctrl+C and a conversat
 // added roughly 500ms of that vs. the pre-session baseline) and produces ZERO
 // output until it fully resolves — runChat/runTui now both print an immediate
 // "starting…" line before the seed for exactly this reason (src/services/chat.mjs,
-// src/tui/app.mjs). This test doesn't go through runTui (it renders the App
+// src/surfaces/tui/app.mjs). This test doesn't go through runTui (it renders the App
 // component directly, same as the other TUI tests), so it doesn't see that line —
 // it guards the underlying "does the seed+render path ever complete" property.
 test("TUI: a genuinely fresh, unseeded repo reaches a working prompt through the real seed path (no TMCT_NO_SEED) and answers a natural-language question", async () => {

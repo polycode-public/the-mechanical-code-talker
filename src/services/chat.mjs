@@ -15,7 +15,7 @@
 // ENGINE is imported lazily and failure-tolerated, so a turn never crashes
 // (the one static ask.mjs import, classDisplayName, is a pure formatter).
 // createSession(…) is the SESSION SINK every shell shares (runChat's readline
-// loop, src/tui/app.mjs's Ink shell).
+// loop, src/surfaces/tui/app.mjs's Ink shell).
 
 import { join, dirname } from "node:path";
 import { dispatchTool, loadGraph, TOOLS } from "../tools/server.mjs";
@@ -5123,7 +5123,7 @@ function uniqueFacts(rows) {
  *  graph's Facts. Returns { text, replace } — `replace:false` means the engine's
  *  own (schema-docs) answer stands and the fact lines are appended under it —
  *  or null when memory holds nothing relevant (misses stay unchanged).
- *  Exported so src/memory-ask-browser-entry.mjs
+ *  Exported so src/surfaces/memory-ask-browser-entry.mjs
  *  can re-export it for `tmct viz`'s embedded "Ask the graph" panel — the ONLY
  *  reason this is `export` rather than module-private; the function's own
  *  behavior is unchanged (same signature, same logic, answers identically in

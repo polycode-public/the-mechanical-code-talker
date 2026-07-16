@@ -15,16 +15,16 @@
 // HTTP surface.
 
 import { createServer } from "node:http";
-import { runTurn, selectTool } from "./services/chat.mjs";
-import { TOOLS } from "./tools/server.mjs";
-import { parseEntities } from "./domain/codegraph.mjs";
-import { uuidv7 } from "./adapters/uuid.mjs";
-import * as defaultSource from "./adapters/source.mjs";
+import { runTurn, selectTool } from "../services/chat.mjs";
+import { TOOLS } from "../tools/server.mjs";
+import { parseEntities } from "../domain/codegraph.mjs";
+import { uuidv7 } from "../adapters/uuid.mjs";
+import * as defaultSource from "../adapters/source.mjs";
 
 // The shim's deterministic tool selection lives with the chat surface's own
 // command routing (selectTool in chat.mjs); re-exported here so HTTP-side
 // callers keep one import site for the whole shim seam.
-export { selectTool } from "./services/chat.mjs";
+export { selectTool } from "../services/chat.mjs";
 
 /** The zero usage every response carries — the meter prices tmct as the $0 floor. */
 const ZERO_USAGE = { input_tokens: 0, output_tokens: 0 };

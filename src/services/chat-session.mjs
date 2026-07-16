@@ -8,7 +8,7 @@
 // can run turns against an in-memory store with no session side effects.
 //
 // createSession(…) is the SESSION SINK every shell shares (runChat's
-// readline loop below, src/tui/app.mjs's Ink shell). chat.mjs re-exports
+// readline loop below, src/surfaces/tui/app.mjs's Ink shell). chat.mjs re-exports
 // createSession/runChat/gitToplevel and the session constants so existing
 // import sites keep working.
 

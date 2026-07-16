@@ -35,7 +35,7 @@ test("demo:build produces the Pages demo artefacts", () => {
 
 test("build:ask-bundle rebuilds a parseable browser bundle", () => {
   runNpmScript("build:ask-bundle");
-  const bundle = "src/memory-ask-browser.bundle.js";
+  const bundle = "src/surfaces/memory-ask-browser.bundle.js";
   assert.ok(sizeOf(bundle) > 100_000, "the bundle is non-trivially sized");
   // node --check parses without executing — a truncated or mis-stubbed
   // bundle fails here instead of in a visitor's browser.

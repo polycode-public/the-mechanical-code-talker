@@ -10027,7 +10027,7 @@ ${shown.join("\n")}${extra}`, replace: true, ...rest.length ? { pending: { items
   );
   var SEED_MARKER_REL = join(".tmct", "memory", "corpus-seed.json");
 
-  // src/memory-ask-browser-entry.mjs
+  // src/surfaces/memory-ask-browser-entry.mjs
   init_core();
   globalThis.tmctMemoryAsk = { factAnswer, factReadBack, createInMemoryStore, normFactTerm };
 })();

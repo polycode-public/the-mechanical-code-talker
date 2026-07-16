@@ -6,10 +6,10 @@
 export const LAYER_RANK = { adapters: 0, domain: 1, services: 2, tools: 3, surfaces: 4 };
 
 export const LAYER_OF = {
-  "tui/": "surfaces",
-  "server-http.mjs": "surfaces",
-  "memory-ask-browser-entry.mjs": "surfaces",
-  "memory-ask-browser.bundle.js": "surfaces",
+  "surfaces/tui/": "surfaces",
+  "surfaces/server-http.mjs": "surfaces",
+  "surfaces/memory-ask-browser-entry.mjs": "surfaces",
+  "surfaces/memory-ask-browser.bundle.js": "surfaces",
 
   "tools/server.mjs": "tools",
   "tools/schema-docs.mjs": "tools",

@@ -66,7 +66,7 @@ below with a live reproduction against the actual CLI, not assumed.
 claim is about **data reaching the engine**, not about the engine's own mechanism — which, per the
 above, does understand Fact/Utterance/Session/Source/Rule (and any other taught class) once it is
 handed a graph object whose `individuals` actually contain them. `archive/PLAN_VIZ_MEMORY.md` was scoped to
-the viz browser panel specifically; its fix has since SHIPPED as `src/memory-ask-browser-entry.mjs`
+the viz browser panel specifically; its fix has since SHIPPED as `src/surfaces/memory-ask-browser-entry.mjs`
 (exposing `factAnswer`/`factReadBack`/`createInMemoryStore` to the page bundle as
 `globalThis.tmctMemoryAsk` — delivered via `factAnswer` handed the embedded payload, not via a
 direct `ask()` call) and stays out of this document's scope. This document's own finding, below, is
@@ -220,7 +220,7 @@ invent a third:
 ## Non-goals
 
 - **Not `archive/PLAN_VIZ_MEMORY.md`'s Bug 1** (the viz browser ask panel wiring). That shipped
-  separately as `src/memory-ask-browser-entry.mjs` for a different surface (the generated
+  separately as `src/surfaces/memory-ask-browser-entry.mjs` for a different surface (the generated
   HTML file, not `npm run chat`). This document's §A lane is chat-CLI-specific and does not touch
   `src/services/ledger-viz.mjs`, `scripts/build-ask-bundle.mjs`, or any browser-bundle entry point.
 - **Not a new ontology mechanism.** Taught classes stay exactly what they are today — the object side

@@ -38,7 +38,7 @@ Three coupled transformations, done incrementally with `npm test` green at every
 Neither transformation is a greenfield rewrite. The tool layer already exists as
 `src/tools/server.mjs` (`dispatchTool`), the adapter seams already exist (`src/adapters/providers/`, the
 Backend B in-memory store in `src/adapters/memory/core.mjs`), and the surfaces already exist
-(`src/tui/`, `server-http.mjs`, the browser bundles). The work is re-homing, naming, and
+(`src/surfaces/tui/`, `server-http.mjs`, the browser bundles). The work is re-homing, naming, and
 closing gaps.
 
 ## The five layers

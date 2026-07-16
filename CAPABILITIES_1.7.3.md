@@ -174,7 +174,7 @@ each re-checking cited evidence directly against the real code at this pin — n
 | 9 | Graph-provider adapter contract (Repository Interface, 15 services) | implemented | `src/adapters/repository-interface.mjs` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 10 | Runnable conformance/compatibility test suite for RI providers | implemented | `src/tools/conformance.mjs:60` `runConformance` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 11 | Library-first design, stable `exports` map (18 entry points) | implemented | `package.json`, re-verified, still 18 subpaths | unchanged since `CAPABILITIES_1.6.0.md` |
-| 12 | Ink console TUI shell | implemented | `src/tui/app.mjs:33` | unchanged since `CAPABILITIES_1.6.0.md` |
+| 12 | Ink console TUI shell | implemented | `src/surfaces/tui/app.mjs:33` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 13 | Calculation surfaced as reasoning (counts/comparisons via templates) | implemented | `via:"template"` provenance, `src/services/chat.mjs:1230,3031,3374,6798,7068,7152` | unchanged since `CAPABILITIES_1.6.0.md`; all cited sites re-confirmed live despite `chat.mjs` growing +324/-8 lines this window |
 | 14 | Optionally running linters/tests to observe | claimed-only | no such code found | unchanged since `CAPABILITIES_1.6.0.md` |
 | 15 | Formal logical reasoning via Prolog/Progol (ILP) | claimed-only (deliberate) | `PLAN_CODE.md` still frames this door as deliberately shut | unchanged since `CAPABILITIES_1.6.0.md` |
@@ -213,7 +213,7 @@ each re-checking cited evidence directly against the real code at this pin — n
 | 49 | Completions pipeline Stage 2 (extractive ranking) | implemented | `src/domain/completions/rank.mjs` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 50 | Completions pipeline wired into a user-facing chat answer path | implemented, gap closed | `src/services/chat.mjs:6475` `completionsRescueAnswer` (was `:6177`) | evidence line shifted; wiring unchanged |
 | 51 | Capability router, full 6-stage stack | implemented, **now invokable by a real user** | `src/domain/router/{registry,resolver,planner,guardrail,goal-reasoner,call-validator,set-algebra,drive,results}.mjs` | **changed**: the 6-stage stack itself is unchanged (byte-identical, `BENCHMARK_AGENT_1.7.0.md`), but a real audit finding this cycle was that nothing outside `agentbench/`/tests could ever reach it — no CLI subcommand, no chat command, no library export. Closed via row 99: `tmct plan`/chat's `/plan`/`@polycode-projects/the-mechanical-code-talker/plan`. |
-| 52 | `POST /v1/messages` HTTP shim | implemented | `src/server-http.mjs` | unchanged since `CAPABILITIES_1.6.0.md` |
+| 52 | `POST /v1/messages` HTTP shim | implemented | `src/surfaces/server-http.mjs` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 53 | bedrock-meter $0-rung routing integration | implemented in the sibling repo, not here | `PLAN_AGENTS.md:642` "Not started" (tmct's side) | unchanged since `CAPABILITIES_1.6.0.md` — `PLAN_AGENTS.md` byte-identical since its pin |
 | 54 | GitHub Copilot BYOK protocol shim | claimed-only | `PLAN_AGENTS.md:642` "Not started" | unchanged since `CAPABILITIES_1.6.0.md` |
 | 55 | `seon-mcp` (marginalia) provider adapter | claimed-only | `PLAN_AGENTS.md:639,85` "Not started" | unchanged since `CAPABILITIES_1.6.0.md` |

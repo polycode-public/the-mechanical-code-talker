@@ -230,7 +230,7 @@ test("chat dock chain: a store taught via runTurn answers through the real bundl
       assert.equal(r.record.miss, false, `"${line}" should teach (got: ${r.answer})`);
     }
     const payload = await loadMemory(dir);
-    const bundle = await readFile(fileURLToPath(new URL("../src/memory-ask-browser.bundle.js", import.meta.url)), "utf8");
+    const bundle = await readFile(fileURLToPath(new URL("../src/surfaces/memory-ask-browser.bundle.js", import.meta.url)), "utf8");
     const ctx = vm.createContext({ console });
     vm.runInContext(bundle, ctx);
     ctx.__payload = payload;

@@ -10,7 +10,7 @@
 //   tmct cli digest '{…json}'              → architecture map + per-module context bundles
 //   tmct --help                            → this help
 //
-// On a real terminal, chat is the full-screen Ink TUI (src/tui/app.mjs);
+// On a real terminal, chat is the full-screen Ink TUI (src/surfaces/tui/app.mjs);
 // `--plain` — or a non-TTY stdin/stdout (pipes, scripts, the test suite) —
 // gets the classic readline shell. BOTH run the same session sink
 // (src/services/chat.mjs createSession), so logs, sidecars and graph memory are
@@ -665,7 +665,7 @@ async function main() {
       const { runChat } = await import("../src/services/chat.mjs");
       await runChat({ repoPath, ephemeral, narrate, ...extra });
     } else {
-      const { runTui } = await import("../src/tui/app.mjs");
+      const { runTui } = await import("../src/surfaces/tui/app.mjs");
       await runTui({ repoPath, ephemeral, narrate, ...extra });
     }
     return;
@@ -1163,7 +1163,7 @@ async function main() {
     const host = strFlag(rest, ["--host"], "127.0.0.1");
     const portRaw = strFlag(rest, ["--port"]);
     const port = portRaw !== undefined && Number.isFinite(Number(portRaw)) ? Number(portRaw) : 8787;
-    const { startServer } = await import("../src/server-http.mjs");
+    const { startServer } = await import("../src/surfaces/server-http.mjs");
     // Graph-path precedence (src/services/cli-args.mjs, shared with `chat`): --graph
     // flag(s) > TMCT_GRAPH_FILE env > tmct.toml graph_file/graph_files >
     // --repo-derived <repo>/.tmct/graph.json > git-root/cwd default. This

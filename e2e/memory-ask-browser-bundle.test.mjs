@@ -1,6 +1,6 @@
 // memory-ask-browser-bundle.test.mjs — proves the checked-in browser
 // MEMORY-graph ask-engine bundle (scripts/build-ask-bundle.mjs's output,
-// src/memory-ask-browser.bundle.js, inlined by `tmct viz`'s ledger-page chat
+// src/surfaces/memory-ask-browser.bundle.js, inlined by `tmct viz`'s ledger-page chat
 // dock) actually evaluates as a classic script and answers a real
 // memory-graph question, end to end, given an in-memory Backend-B handle
 // carrying an embedded payload (the SAME mechanism the real page uses,
@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const BUNDLE_PATH = join(here, "..", "src", "memory-ask-browser.bundle.js");
+const BUNDLE_PATH = join(here, "..", "src", "surfaces", "memory-ask-browser.bundle.js");
 
 async function loadBundleContext() {
   const bundle = await readFile(BUNDLE_PATH, "utf8");
