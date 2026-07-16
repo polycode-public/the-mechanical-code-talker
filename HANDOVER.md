@@ -10,18 +10,7 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 
 ## Version state (2026-07-16)
 
-v1.12.2 in the working tree; v1.12.1 pushed to main, which CI publishes. Delivered since
-1.11.5: src/ re-homed into five layers with a downward-only import rule, the test estate
-rebuilt around six keyed corpus lanes with an e2e tier and a README example harness, and
-the CI quality pipeline (dependency cooldown, licence and PII checks, pack gate,
-post-deploy smoke).
-
-Every lane that answered a question it was not asked is closed. The import-layer
-allowlist holds one entry, a decision rather than work. What is left is a single group:
-inputs with no reader at all, where the product misses and says so.
-
-The playtest record starts again from `playtests/PLAYTEST_LOG_001.md`. The open items below
-carry their own reproducers, so they stand without it.
+v2.0.3 in the working tree. CI publishes on a version bump on main; npm's latest is 2.0.1.
 
 Measured init sizes (fresh store, this machine): `init:large` 37,797 facts; `init:xl` 72,075
 (16.6s); `init:xxl` 238,866 (38.5s). `init:xxxl` stays undocumented-as-code (bulk ConceptNet
@@ -29,14 +18,19 @@ download, not reachable from data in hand).
 
 ## Open items
 
-None. Every item that answered a question it was not asked is fixed; every input that had no
-reader has one; and the last capability tmct refused on purpose — a negative fact — now
-stores, because a negative from a named source is a disagreement, not a contradiction.
+Logged by the 2.0.3 benchmark cycle, which measured all four axes and applied no lever. Each
+line names its reproducer and points at the write-up that found it.
 
-What is next is not a list of defects. `PLAN_CONSISTENCY_CHECK.md` (tmct as a consistency
-service for an LLM tool loop) and `PLAN_CHILD_CORPUS.md` (a wider default seed, so the base
-rate counts more than one bird) are both designs waiting on a decision, not work waiting on
-a session.
+- **The resolver floor stopped planning `ab-c2-what-to-test`** — `node agentbench/run.mjs
+  --driver resolver --ladder`: the case's verdict went `completed: true` → `false` since
+  `BENCHMARK_AGENT_1.7.0.md`, taking C2 plan-completion 36% → 27%. Probably correct (its plan now
+  comes from the goal reasoner, which the floor arm lacks), but unconfirmed. Decide whether the
+  floor's expectation moves or the resolver lost a plan it should still build. See
+  `BENCHMARK_AGENT_2.0.3.md`.
+
+Two designs are waiting on a decision rather than a session: `PLAN_CONSISTENCY_CHECK.md` (tmct as
+a consistency service for an LLM tool loop) and `PLAN_CHILD_CORPUS.md` (a wider default seed, so
+the base rate counts more than one bird).
 
 ## Discipline (unchanged)
 
