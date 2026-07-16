@@ -1,6 +1,7 @@
 # PLAN_DEFEASIBLE_NEGATION.md — negative facts, source-indexed, and the base rate
 
-Status: DESIGN — approved by the operator, not yet built.
+Status: DELIVERED. Built and driving; this file is the record of the design and what the
+probe found, kept for the reasoning rather than as work to do.
 
 ## Why this exists
 

@@ -231,6 +231,6 @@ graph verb; a qualifier check names the scope it cannot find; `can an ostrich fl
 count instead of concluding. You cannot prompt a model into that. It has to be unable to do
 otherwise.
 
-Related: `PLAN_DEFEASIBLE_NEGATION.md` — the sourced-negative work the `consistent-with-removals`
+Related: `archive/PLAN_DEFEASIBLE_NEGATION.md` — the sourced-negative work the `consistent-with-removals`
 verdict depends on. Without a stored negative there is nothing for a claim to contradict except
 a directly conflicting positive.

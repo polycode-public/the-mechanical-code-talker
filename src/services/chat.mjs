@@ -26,7 +26,11 @@ import { uuidv7 } from "../adapters/uuid.mjs";
 import * as defaultSource from "../adapters/source.mjs";
 import { loadTemplates, render as renderTemplate } from "../adapters/corpus/templates.mjs";
 import { rankByBiasThenTrust } from "../domain/memory/bias.mjs";
-import { HAS_A_PREDICATE, loadMemory as loadMemoryStore, normFactPredicate, readFactRows as readStoredFactRows, readRuleRows as readStoredRuleRows } from "../adapters/memory/core.mjs";
+import { HAS_A_PREDICATE, loadMemory as loadMemoryStore, normFactPredicate, normFactTerm as normFactTermStatic, readFactRows as readStoredFactRows, readRuleRows as readStoredRuleRows } from "../adapters/memory/core.mjs";
+import {
+  CAPABILITY_REPORT_CAP, NEG_CAPABLE_OF_PREDICATE, capabilityBaseRate, capabilityExtension,
+  isNegatedPredicate, negatedPredicate, positivePredicate, resolveCapabilityPolarity,
+} from "../domain/memory/capability.mjs";
 import { finish, beginsWithVowelSound, grammarRules } from "./finish.mjs";
 import { splitSentences } from "./sentences.mjs";
 import {
@@ -2531,8 +2535,37 @@ async function unknownAdjectiveFallback(payload, { memoryDir, sessionId, lexicon
 // A frequency/degree ADVERB commonly sits between a bare-name subject and the
 // real verb ("remember that TaskController usually needs review") — without
 // this skip it would mis-split VERB="usually", minting a nonsense predicate.
-const TEACH_ADVERB_SKIP_SRC = "(?:(?:usually|often|sometimes|rarely|never|always|typically|generally|"
+// Every word here is skippable because dropping it leaves the sentence's claim
+// intact: "usually needs review" and "needs review" assert the same relation at
+// different strengths, and tmct stores no strength. "never" is NOT one of them.
+// It reverses the claim, so skipping it stored the exact opposite of what the
+// sentence said ("tony never eats ribs" -> tony eats ribs) — a truthful teach
+// read back as a confident lie. It belongs to NEG_MARKER_SRC below.
+const TEACH_ADVERB_SKIP_SRC = "(?:(?:usually|often|sometimes|rarely|always|typically|generally|"
   + "occasionally|frequently|normally|regularly|commonly|mostly|currently|still|also|really|actually)\\s+)?";
+/** The negation markers a teach/query frame recognizes, in ONE place so the
+ *  teach side and the query side can never disagree about what negates a
+ *  sentence — the same discipline TEACH_ADVERB_SKIP_SRC is shared under. */
+const NEG_MARKER_SRC = "(?:cannot|can't|can not|does not|doesn't|do not|don't|never)";
+/** Split a leading negation marker off a teach payload, returning the POSITIVE
+ *  twin of the sentence plus the negation flag. Rewriting to the positive and
+ *  re-reading it through the ordinary frames is what keeps polarity out of the
+ *  parser: one recognizer, one predicate mint, one preposition fold, and the
+ *  prefix swaps at the very end (memory/capability.mjs).
+ *
+ *  The can-family rebuilds an explicit "can" so it lands on the SAME
+ *  mgx:capableOf the corpus's own /r/CapableOf data uses; the do-family and
+ *  "never" simply drop out, leaving the bare verb the mint already reads
+ *  ("fred does not eat kale" -> "fred eat kale", "tony never eats ribs" ->
+ *  "tony eats ribs"). */
+const GENERAL_VERB_NEGATION_RE = new RegExp(`^(.+?)\\s+(${NEG_MARKER_SRC})\\s+(.+)$`, "i");
+function splitTeachNegation(payload) {
+  const m = String(payload || "").trim().match(GENERAL_VERB_NEGATION_RE);
+  if (!m) return { payload: String(payload || "").trim(), negated: false };
+  const marker = m[2].toLowerCase();
+  const canFamily = /^can/.test(marker);
+  return { payload: `${m[1]} ${canFamily ? "can " : ""}${m[3]}`.trim(), negated: true };
+}
 const GENERAL_VERB_TEACH_RE = new RegExp(`^([\\w'-]+)\\s+${TEACH_ADVERB_SKIP_SRC}([a-z]+)\\s+(.+?)[.!?]*$`, "i");
 /** Determiners/quantifiers that make the FIRST token an article, not a real
  *  bare-name subject ("every controller…", "the cache…") — GENERAL_VERB_TEACH_RE
@@ -2674,13 +2707,23 @@ async function generalVerbPredicate(verb) {
   }
 }
 
+/** The capability predicate at the polarity a recognized capability surface
+ *  carried: mgx:capableOf, or its mgxneg: twin. Routed through
+ *  generalVerbPredicate's own "can" case rather than naming mgx:capableOf
+ *  again, so every capability write in this file still mints from one place. */
+const capabilityPredicate = async (negated) => {
+  const p = await generalVerbPredicate("can");
+  return negated ? negatedPredicate(p) : p;
+};
+
 /** Recognize + resolve a general-verb teach payload into {subject, predicate,
  *  object}, or null when it doesn't fit the shape / names an excluded verb /
  *  is missing a real subject or object (point 6 — an honest decline, never a
  *  guess). Pure recognition + predicate mapping; the caller (teachLane) does
  *  the actual write via the shared teachFact. */
 async function generalVerbTeach(payload) {
-  const p = String(payload || "").trim();
+  const raw = String(payload || "").trim();
+  const { payload: p, negated } = splitTeachNegation(raw);
   // A genuine declarative assertion never ends in a question mark — "g day
   // mate, you alright?" (Priority 1, above) reaches this function with no
   // leading question-word signal left to catch it (it never matched a
@@ -2708,19 +2751,19 @@ async function generalVerbTeach(payload) {
   const verb = verbRaw.toLowerCase();
   if (GENERAL_VERB_EXCLUDE_RE.test(verb)) return null; // owned by a more specific frame above
   if (GENERAL_VERB_NOT_A_VERB_RE.test(verb)) return null; // a closed-class word can never be the real verb
-  // "cannot" would mint a nonsense mgx:cannot fact whose read-back silently
-  // INVERTS the taught meaning — the vocabulary has no negative-capability
-  // predicate, so an honest decline is the only correct move.
-  if (verb === "cannot") return null;
   if (GENERAL_VERB_IMPERATIVE_SUBJECT_RE.test(subjectRaw)) return null; // an imperative's verb, not a subject
   const subject = subjectRaw.trim();
+  // The preposition folds on the POSITIVE predicate, and only then does the
+  // polarity prefix swap. Negating first would hand the fold an mgxneg: CURIE
+  // its /^mgx:[a-z]+$/ guard rejects, stranding "on water" inside the object of
+  // "a penguin cannot rest on water" — the very bug the fold exists to prevent.
   const folded = foldPrepositionIntoPredicate(await generalVerbPredicate(verb), objectRaw);
   // "the" strips alongside "a"/"an": the read-back side already strips a
   // leading determiner off the queried term, so leaving it on here stores an
   // object no question can match.
   const object = folded.object.replace(/^(?:an?|the)\s+/i, "").trim();
   if (!subject || !object) return null; // no well-formed triple — honest decline (point 6)
-  return { subject, predicate: folded.predicate, object };
+  return { subject, predicate: negated ? negatedPredicate(folded.predicate) : folded.predicate, object };
 }
 
 /** Is `word` a genuine NOUN/PROPN, per wink-nlp's optional POS tagger
@@ -2945,15 +2988,23 @@ function matchBareHabitualTeach(text) {
  *  here lets the teach lane's grounded-subject direct write catch a subject
  *  grounded only by a prior taught fact. Same closed verb-slot exclusions as
  *  the habitual shapes; a question lead ("can a wren sing") never reaches
- *  this — every call site is already QUESTION_LEAD-gated. */
+ *  this — every call site is already QUESTION_LEAD-gated.
+ *
+ *  Its NEGATIVE twin rides the same shape and returns `negated`: "a penguin
+ *  cannot fly" is the identical claim about the identical relation with the
+ *  polarity reversed, so reading it anywhere else would give the two surfaces
+ *  two chances to disagree. Only the can-family negates here — this is the
+ *  capability frame, and "penguins never fly" is a habitual surface that lands
+ *  on generalVerbTeach's own split instead. */
+const BARE_CAN_TEACH_RE = /^(?:an?\s+|every\s+|all\s+)?([\w-]+)\s+(can|cannot|can't|can not)\s+([a-z][\w-]*)[.!?]*$/i;
 function matchBareCanTeach(text) {
-  const m = String(text || "").trim().match(/^(?:an?\s+|every\s+|all\s+)?([\w-]+)\s+can\s+([a-z][\w-]*)[.!?]*$/i);
+  const m = String(text || "").trim().match(BARE_CAN_TEACH_RE);
   if (!m) return null;
   const subject = m[1].toLowerCase();
-  const verb = m[2].toLowerCase();
+  const verb = m[3].toLowerCase();
   if (STRUCT_WORDS.has(verb) || HABITUAL_VERB_EXCLUDE.has(verb) || GENERAL_VERB_NOT_A_VERB_RE.test(verb)) return null;
   if (GENERAL_VERB_DETERMINER_RE.test(subject) || GENERAL_VERB_NOT_A_VERB_RE.test(subject)) return null;
-  return { subject, verb };
+  return { subject, verb, negated: m[2].toLowerCase() !== "can" };
 }
 
 /** The "every X is a Y" rewrite of a declarative, for the "did you mean …"
@@ -2982,9 +3033,13 @@ function teachSuggestion(payload) {
 function habitualGroundingHintText(line, habitual) {
   const articleRule = grammarRules().find((r) => r.kind === "article");
   const article = articleRule && beginsWithVowelSound(habitual.subject, articleRule) ? "an" : "a";
+  // the promise must carry the sentence's OWN polarity — promising to remember
+  // that a penguin CAN fly, to someone who just said it cannot, is the same
+  // inversion the negative teach exists to stop, moved into the hint
+  const promise = habitual.negated ? `cannot ${habitual.verb}` : `can ${habitual.verb}`;
   return `I don't know "${habitual.subject}" yet, so I can't store "${line}" as a capability fact. `
     + `Ground it first — say "every ${habitual.subject} is a thing" — then say "${line}" again `
-    + `and I'll remember that ${article} ${habitual.subject} can ${habitual.verb}.`;
+    + `and I'll remember that ${article} ${habitual.subject} ${promise}.`;
 }
 
 /** PRONOUN-SUBJECT GUARD: "remember you are a womble" and the literal "every
@@ -3782,7 +3837,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
         if (!canLex) { const { loadLexicon } = await import("../domain/grammar/lexicon.mjs"); canLex = loadLexicon(); }
         if (await isGroundedTerm(canSingular, canLex, memoryDir, cache)) {
           const stored = await teachFact(memoryDir, sessionId, {
-            subject: canSingular, predicate: await generalVerbPredicate("can"), object: canShape.verb,
+            subject: canSingular, predicate: await capabilityPredicate(canShape.negated), object: canShape.verb,
           });
           if (stored) return stored;
         }
@@ -3855,7 +3910,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
       for (const subj of new Set([singularizeSurface(habitualTeach.subject), habitualTeach.subject])) {
         if (await isGroundedTerm(subj, habLex, memoryDir, cache)) {
           const stored = await teachFact(memoryDir, sessionId, {
-            subject: subj, predicate: await generalVerbPredicate("can"), object: habitualTeach.verb,
+            subject: subj, predicate: await capabilityPredicate(habitualTeach.negated), object: habitualTeach.verb,
           });
           if (stored) return stored;
         }
@@ -4692,9 +4747,40 @@ function thirdPersonSingularSurface(lemma) {
   if (/(?:s|x|z|ch|sh|o)$/i.test(w)) return `${w}es`;
   return `${w}s`;
 }
+/** The INVERSE of thirdPersonSingularSurface — "eats" -> "eat", "flies" ->
+ *  "fly", "has" -> "have". Do-support wants the bare infinitive after it
+ *  ("does not EAT", never "does not eats"), and so does every derived
+ *  forward yes/no reader ("does X cause Y"), so both fold through this one
+ *  function and can never drift apart on a verb. */
+function baseVerbSurface(verb) {
+  const w = String(verb || "");
+  if (/^has$/i.test(w)) return "have";
+  if (/[a-z]ies$/i.test(w) && !/[aeiou]ies$/i.test(w)) return `${w.slice(0, -3)}y`;
+  if (/(?:s|x|z|ch|sh|o)es$/i.test(w)) return w.slice(0, -2);
+  return w.replace(/s$/i, "");
+}
 function predicatePhrase(predicate) {
   if (FACT_PREDICATE_PHRASES[predicate]) return FACT_PREDICATE_PHRASES[predicate];
   const p = String(predicate || "");
+  // NEGATIVE polarity renders as its own positive phrase, negated — ONE branch
+  // for every predicate that can carry a polarity, curated or minted. The
+  // negative twins are deliberately absent from FACT_PREDICATE_PHRASES: the
+  // TRAILING_PREDICATE_MARKERS / REVERSE_PREDICATE_MARKERS /
+  // FORWARD_YESNO_MARKERS families all derive their vocabulary from that table,
+  // so an entry there would auto-mint readers for "what cannot X" and
+  // "does X cannot Y" that nobody wrote and nothing pins.
+  // The three surface shapes split exactly as FORWARD_YESNO_MARKERS splits
+  // them, for the same reason: a modal, a copula and a plain verb take
+  // different negations, and nothing else does.
+  const positive = positivePredicate(p);
+  if (positive) {
+    const phrase = predicatePhrase(positive);
+    if (phrase === "can") return "cannot";
+    if (phrase === "can be") return "cannot be";
+    if (phrase === "is" || phrase.startsWith("is ")) return `is not${phrase.slice(2)}`;
+    const [head, ...tail] = phrase.split(" ");
+    return ["does not", baseVerbSurface(head), ...tail].join(" ");
+  }
   // a comparative renders as its copula surface: mgx:smaller-than ->
   // "is smaller than" (never a 3sg fold — "smallers" isn't a word)
   const comp = /^mgx:([a-z]+(?:-[a-z]+)*)-than$/i.exec(p);
@@ -5183,6 +5269,152 @@ const DO_VERB_ASK_RE = /^(?:do|does)\s+(all\s+|every\s+)?(?:an?\s+|the\s+)?([\w'
 const WHAT_CAN_VERB_RE = /^what\s+can\s+(?!be\s)(.+?)[?.!\s]*$/i;
 const WHICH_KIND_CAN_RE = /^(?:which|what)\s+([\w'-]+(?:\s+[\w'-]+)*?)\s+can\s+(.+?)[?.!\s]*$/i;
 
+/** The negative surface of a yes/no question asks the SAME question as its
+ *  positive twin — "can't a penguin fly" and "can a penguin fly" both want the
+ *  polarity of penguin's flight, and a reader that answered them differently
+ *  would be disagreeing with itself in one session. So the negation is stripped
+ *  here and the ordinary reader answers, carrying whatever polarity the facts
+ *  actually hold. A question with no negation in it comes back byte-identical,
+ *  so every existing surface reads exactly as it always has.
+ *
+ *  Applied ONLY inside the capability + general-verb readers, never to `q` at
+ *  large: "is a task not an animal" is the retraction lane's copula surface,
+ *  and this must never reach it.
+ *
+ *  Those readers match this surface INSTEAD of the raw question, never as a
+ *  fallback after it. A lazy subject slot happily swallows the negation word
+ *  itself — "do penguins not fly" binds subject "penguins not" and matches — so
+ *  trying the raw question first would take a garbage bind over the good one. */
+function positiveQuestionSurface(q) {
+  const s = String(q || "")
+    .replace(/^(?:can't|cannot|can not)\s+/i, "can ")
+    .replace(/^(?:doesn't|does not)\s+/i, "does ")
+    .replace(/^(?:don't|do not)\s+/i, "do ")
+    .replace(/^(?:didn't|did not)\s+/i, "did ")
+    .replace(/\s+(?:not|never)\s+/i, " ");
+  return s.replace(/\s+/g, " ").trim();
+}
+
+/** Cite an isa chain the way (b3b) already cites one — each step as its own
+ *  phrase plus verbatim source. Shared so the inherited-capability answers and
+ *  the reverse-by-kind listing can never describe the same chain two ways. */
+function renderIsaCite(chain, facts) {
+  const steps = (chain || []).map((step) => facts.find(
+    (f) => f.predicate === step.predicate && f.subject === step.subject && f.object === step.object,
+  ));
+  if (!steps.length || !steps.every(Boolean)) return null;
+  return steps.map((g) => `${factPhrase(g)}${g.provenance ? ` (source: ${g.provenance})` : ""}`).join("; ");
+}
+
+/** THE capability answer — every reader that asks "can X do Y" renders through
+ *  this one function, over the one resolver. Five readers with five local
+ *  polarity filters would drift, and the drift is invisible: each would answer
+ *  confidently from one side while a negative it never looked at sat in the
+ *  store. "do penguins fly" and "can a penguin fly" must not disagree inside a
+ *  single session.
+ *
+ *  Returns null when the store holds no capability claim about the subject at
+ *  either specificity. The caller then keeps its own honest-miss text, and
+ *  falls to capabilityBaseRateReply only once that has nothing either: a
+ *  subject with capability facts of its own ("a dog can bark") is better
+ *  answered by citing them than by reciting what other animals do.
+ */
+function capabilityReply(subjectText, objectText, facts, { maxHops = 3 } = {}) {
+  const subj = factTermVariants(normFactTermStatic, subjectText);
+  const obj = factTermVariants(normFactTermStatic, objectText);
+  const r = resolveCapabilityPolarity(subj, obj, facts, { maxHops });
+
+  const viaChain = (chain) => {
+    const cite = chain && chain.length ? renderIsaCite(chain, facts) : null;
+    return cite ? ` — via: ${cite}` : "";
+  };
+
+  // both polarities at the same specificity: the disagreement is between the
+  // SOURCES, not inside the knowledge, so both are true statements about who
+  // said what. Report them and pick nothing.
+  if (r.verdict === "both") {
+    const lines = [...r.negative, ...r.positive].map(renderFactLine).join("\n");
+    return {
+      text: `I have both, at the same level of detail — my sources disagree, so I won't pick:\n${lines}`,
+      replace: true,
+      miss: true,
+    };
+  }
+
+  if (r.verdict === "yes" || r.verdict === "no") {
+    const winner = r.verdict === "no" ? r.negative[0] : r.positive[0];
+    let text = `${r.verdict} — ${renderFactLine(winner)}${viaChain(r.chain)}`;
+    // a direct fact beat a general default: say WHAT it overrides, or the
+    // answer silently contradicts what the same store says about the class
+    if (r.overrides) {
+      text += `. That overrides what I know about ${r.overrides.fact.subject} generally: ${renderFactLine(r.overrides.fact)}`;
+    }
+    return { text, replace: true };
+  }
+
+  return null;
+}
+
+/** Nothing is known about the subject's capability. Report the CLASS it belongs
+ *  to and how that class's other kinds split, then STOP — neither yes nor no.
+ *  That is the only reading of "birds fly" that survives a penguin.
+ *
+ *  Two axes, in order: the class base rate, and — when the class yields nothing
+ *  either way — the predicate's own extension ("but I do know 3 things that can
+ *  fly"). The pivot excludes the class itself: "I don't know if a penguin can
+ *  fly, but I know birds can" is circular, not informative.
+ *
+ *  Returns null unless the subject has a known class. Without one there is no
+ *  base rate to report and no reason to believe the subject is a real term at
+ *  all — an unresolved "it" belongs to the pronoun lane, not here.
+ */
+function capabilityBaseRateReply(subjectText, objectText, facts, { maxHops = 3 } = {}) {
+  const subj = factTermVariants(normFactTermStatic, subjectText);
+  const obj = factTermVariants(normFactTermStatic, objectText);
+  const baseRate = capabilityBaseRate(subj, obj, facts, { maxHops });
+  if (!baseRate) return null;
+  const lead = `${subjectText} is a kind of ${baseRate.klass}`;
+  const opener = `I don't know if ${subjectText} can ${objectText}.`;
+
+  if (baseRate.positive.length || baseRate.negative.length) {
+    // The split accounts for EVERY kind it counted — three ways, positive,
+    // negative and unknown. Say 5 and split only 4 and the arithmetic lies
+    // about what the store knows. The count is a fact about the kinds it has
+    // seen; "most birds fly" would be a claim about the ones it has not.
+    const split = [
+      `${baseRate.positive.length} can ${objectText}`,
+      `${baseRate.negative.length} cannot`,
+      `${baseRate.unknown.length} I have nothing on`,
+    ].join(", ");
+    const named = [...baseRate.positive, ...baseRate.negative]
+      .slice(0, CAPABILITY_REPORT_CAP)
+      .map((s) => renderFactLine(s.fact));
+    return {
+      text: `${opener} ${lead}, and of the ${baseRate.kinds} kind${baseRate.kinds === 1 ? "" : "s"} of ${baseRate.klass} I know, ${split}.\n${named.join("\n")}`,
+      replace: true,
+      miss: true,
+    };
+  }
+
+  const extension = capabilityExtension(obj, facts, { exclude: new Set([...subj, baseRate.klass]) });
+  if (extension.length) {
+    const shown = extension.slice(0, CAPABILITY_REPORT_CAP);
+    const rest = extension.slice(shown.length);
+    return {
+      text: `${opener} ${lead}, and nothing I know about ${baseRate.klass} says whether one can ${objectText}. I do know ${extension.length} thing${extension.length === 1 ? "" : "s"} that can ${objectText}${rest.length ? ` (first ${shown.length} shown)` : ""}:\n${shown.map(renderFactLine).join("\n")}`,
+      replace: true,
+      miss: true,
+      ...(rest.length ? { pending: { items: rest.map(renderFactLine), noun: "facts" } } : {}),
+    };
+  }
+
+  return {
+    text: `${opener} ${lead}, but nothing I remember says whether any kind of ${baseRate.klass} can ${objectText}.`,
+    replace: true,
+    miss: true,
+  };
+}
+
 /** SUPERLATIVE over TAUGHT COMPARATIVES — "which disk is smallest" / "what is
  *  the smallest disk" answered from the mgx:<comparative>-than facts the
  *  comparative teach frame mints ("disk-1 is smaller than disk-2"). The
@@ -5259,7 +5491,7 @@ const FORWARD_YESNO_MARKERS = Object.entries(FACT_PREDICATE_PHRASES)
       re = new RegExp(`^(?:is|are)\\s+(?:an?\\s+|the\\s+)?(.+?)\\s+${rest}\\s+(?:an?\\s+|the\\s+)?(.+?)[?.!\\s]*$`, "i");
     } else {
       const [head, ...tail] = phrase.split(" ");
-      const base = [head.replace(/s$/, ""), ...tail].map(escapeRegex).join("\\s+");
+      const base = [baseVerbSurface(head), ...tail].map(escapeRegex).join("\\s+");
       re = new RegExp(`^(?:does|do)\\s+(?:an?\\s+|the\\s+)?(.+?)\\s+${base}\\s+(?:an?\\s+|the\\s+)?(.+?)[?.!\\s]*$`, "i");
     }
     return { predicate, phrase, re };
@@ -5674,23 +5906,22 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     return null; // no remembered fact — the honest miss stands (never a guessed "no")
   }
 
-  // (b2) "can a dog bark" — yes iff a remembered mgx:capableOf fact says so.
-  // Mirrors the ISA_ASK_RE block just above almost verbatim (same memoryFacts
-  // single-hit lookup, same "never a guessed no" discipline).
-  const can = q.match(CAN_ASK_RE);
+  // (b2) "can a dog bark" — the polarity of a capability, resolved through the
+  // ONE resolver every capability reader in this file shares (see
+  // capabilityReply). Mirrors the ISA_ASK_RE block just above on the "never a
+  // guessed no" discipline: a "no" here is a REMEMBERED negative, never the
+  // absence of a positive.
+  const can = positiveQuestionSurface(q).match(CAN_ASK_RE);
   if (can) {
-    const facts = await memoryFacts(memoryDir);
-    const subj = factTermVariants(normFactTerm, can[1]);
-    const obj = factTermVariants(normFactTerm, can[2]);
-    const hit = facts.find(
-      (f) => f.predicate === "mgx:capableOf" && subj.has(f.subject) && obj.has(f.object),
-    );
-    if (hit) return { text: `yes — ${renderFactLine(hit)}`, replace: true };
+    const facts = await factRows(memoryDir, cache);
+    const reply = capabilityReply(can[1], can[2], facts);
+    if (reply) return reply;
     // A KNOWN subject with capability facts, none matching: an honest,
     // specific miss citing what it CAN do — the same closer the is-a ladder
     // answers with, instead of the misleading structural parse wall. An
     // unknown subject still declines. Never a guessed "no": absence of a
     // capableOf fact proves nothing.
+    const subj = factTermVariants(normFactTerm, can[1]);
     const knownCan = facts.filter((f) => f.predicate === "mgx:capableOf" && subj.has(f.subject));
     if (knownCan.length) {
       const shown = knownCan.slice(0, 3).map(renderFactLine).join("; ");
@@ -5703,7 +5934,9 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
         miss: true,
       };
     }
-    return null;
+    // nothing about the subject at all — report the class base rate, and answer
+    // neither yes nor no
+    return capabilityBaseRateReply(can[1], can[2], facts);
   }
 
   // (b2b) "does a dog have a tail" — yes iff a remembered mgx:hasA fact says
@@ -5729,22 +5962,22 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
   // (falls through instead): the shape is looser than (b2)'s, so a do-lead
   // question some later reader owns must keep its turn. The can't-confirm
   // branch is additionally miss-gated for the same reason.
-  const doAsk = q.match(DO_VERB_ASK_RE);
+  const doAsk = positiveQuestionSurface(q).match(DO_VERB_ASK_RE);
   if (doAsk) {
-    const facts = await memoryFacts(memoryDir);
+    const facts = await factRows(memoryDir, cache);
     const universal = !!doAsk[1];
     const subj = factTermVariants(normFactTerm, doAsk[2]);
     const obj = factTermVariants(normFactTerm, doAsk[3]);
-    const hit = facts.find(
-      (f) => f.predicate === "mgx:capableOf" && subj.has(f.subject) && obj.has(f.object),
-    );
-    if (hit && universal) {
+    // the SAME resolver (b2) answers through, so "do penguins fly" and "can a
+    // penguin fly" can never disagree in one session
+    const reply = capabilityReply(doAsk[2], doAsk[3], facts);
+    if (reply && universal) {
       return {
-        text: `I can't speak for all ${doAsk[2]} — what I remember is generic, not universal. I do know: ${renderFactLine(hit)}.`,
+        text: `I can't speak for all ${doAsk[2]} — what I remember is generic, not universal. ${reply.text}.`,
         replace: true,
       };
     }
-    if (hit) return { text: `yes — ${renderFactLine(hit)}`, replace: true };
+    if (reply) return reply;
     if (miss) {
       const knownCan = facts.filter((f) => f.predicate === "mgx:capableOf" && subj.has(f.subject));
       if (knownCan.length) {
@@ -5755,6 +5988,8 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
           miss: true,
         };
       }
+      const base = capabilityBaseRateReply(doAsk[2], doAsk[3], facts);
+      if (base) return base;
     }
   }
 
@@ -5764,7 +5999,12 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
   const canDo = q.match(WHAT_CAN_DO_RE);
   if (canDo) {
     const variants = factTermVariants(normFactTerm, canDo[1]);
-    const hits = (await factRows(memoryDir, cache)).filter((f) => f.predicate === "mgx:capableOf" && variants.has(f.subject));
+    // BOTH polarities. Filtering to the positive would silently omit what the
+    // store explicitly says the subject CANNOT do, which reads as "I don't
+    // know" for something it knows outright. renderFactLine spells the polarity
+    // ("a penguin cannot fly"), so the two never blur together in the list.
+    const hits = (await factRows(memoryDir, cache))
+      .filter((f) => (f.predicate === "mgx:capableOf" || f.predicate === NEG_CAPABLE_OF_PREDICATE) && variants.has(f.subject));
     if (!hits.length) return null;
     const ranked = rankByBiasThenTrust(uniqueFacts(hits), biasByBundle);
     const lines = ranked.map(renderFactLine);
@@ -5790,7 +6030,14 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     const kindVariants = factTermVariants(normFactTerm, whichCan[1]);
     const verbVariants = factTermVariants(normFactTerm, whichCan[2]);
     const facts = await factRows(memoryDir, cache);
-    const capable = uniqueFacts(facts.filter((f) => f.predicate === "mgx:capableOf" && verbVariants.has(f.object)));
+    // A subject the store explicitly says CANNOT do this is not an answer to
+    // "which birds can fly", even when a corpus row also says it can: the
+    // direct negative is the more specific claim, and listing penguin here
+    // while "can a penguin fly" answers "no" would be the same session
+    // contradicting itself. The resolver decides, so the two agree by
+    // construction.
+    const capable = uniqueFacts(facts.filter((f) => f.predicate === "mgx:capableOf" && verbVariants.has(f.object)))
+      .filter((f) => resolveCapabilityPolarity(new Set([f.subject]), verbVariants, facts).verdict === "yes");
     if (capable.length) {
       const { findIsaChain, SUBCLASS_PREDICATE: SC_PRED, TYPE_PREDICATE: TYPE_PRED } = await import("../domain/syllogise.mjs");
       const subClassRows = facts.filter((f) => f.predicate === SC_PRED);
@@ -5832,7 +6079,9 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
   const canVerb = q.match(WHAT_CAN_VERB_RE);
   if (canVerb && canVerb[1].trim().split(/\s+/).at(-1)?.toLowerCase() !== "do") {
     const verbVariants = factTermVariants(normFactTerm, canVerb[1]);
-    const hits = (await factRows(memoryDir, cache)).filter((f) => f.predicate === "mgx:capableOf" && verbVariants.has(f.object));
+    // same polarity discipline as (b3b): a subject with a direct negative is
+    // not an answer to "what can fly"
+    const hits = capabilityExtension(verbVariants, await factRows(memoryDir, cache));
     if (hits.length) {
       const ranked = rankByBiasThenTrust(uniqueFacts(hits), biasByBundle);
       const lines = ranked.map(renderFactLine);
@@ -7455,7 +7704,12 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
   // to the ordinary honest-miss cascade instead of fabricating a "no". Open
   // form lists every stored fact row for {subject, predicate} regardless of
   // object.
-  const genYN = q.match(GENERAL_VERB_YESNO_RE);
+  // The negation strips first, so "does fred not eat kale" and "doesn't fred
+  // eat kale" reach the SAME predicate lookup as "does fred eat kale" and the
+  // stored polarity — positive or negative — is what answers. The teach side
+  // strips through splitTeachNegation over the same NEG_MARKER_SRC, so the two
+  // sides can never disagree about what negates a sentence.
+  const genYN = positiveQuestionSurface(q).match(GENERAL_VERB_YESNO_RE);
   if (genYN && !GENERAL_VERB_ANYWHERE_EXCLUDE_RE.test(q)) {
     const [, subjectRaw, verbRaw, objectRaw] = genYN;
     const verb = verbRaw.toLowerCase();
@@ -7470,16 +7724,23 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
         const predicate = folded.predicate;
         const subjVariants = factTermVariants(normFactTerm, subject);
         const objVariants = factTermVariants(normFactTerm, object);
+        // BOTH polarities are looked up under one predicate pair: a stored
+        // negative answers "no" as confidently as a positive answers "yes",
+        // and neither is ever inferred from the other's absence.
+        const polar = [predicate, negatedPredicate(predicate)];
         const hit = rows
-          .filter((f) => f.predicate === predicate && subjVariants.has(f.subject) && objVariants.has(f.object))
+          .filter((f) => polar.includes(f.predicate) && subjVariants.has(f.subject) && objVariants.has(f.object))
           .sort(byTrust)[0];
-        if (hit) return { text: `yes — ${renderFactLine(hit)}`, replace: true, generalVerbQuery: true };
+        if (hit) {
+          const verdict = isNegatedPredicate(hit.predicate) ? "no" : "yes";
+          return { text: `${verdict} — ${renderFactLine(hit)}`, replace: true, generalVerbQuery: true };
+        }
         // A KNOWN subject under the SAME relation, no row matching this
         // object: an honest, specific miss citing what the subject IS
         // remembered to relate to, instead of the generic structural wall.
         // Still never a guessed "no" — the text declines to confirm and says
         // what it does know, and `miss: true` keeps it out of recall.
-        const sameRelation = rows.filter((f) => f.predicate === predicate && subjVariants.has(f.subject));
+        const sameRelation = rows.filter((f) => polar.includes(f.predicate) && subjVariants.has(f.subject));
         if (sameRelation.length) {
           const shown = sameRelation.slice(0, 3).map(renderFactLine).join("; ");
           return {
@@ -7505,7 +7766,11 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
         let predicate = await generalVerbPredicate(verb);
         if (verbPrep && /^mgx:[a-z]+$/.test(predicate)) predicate = `${predicate}-${verbPrep}`;
         const subjVariants = factTermVariants(normFactTerm, subject);
-        const hits = rankByBiasThenTrust(rows.filter((f) => f.predicate === predicate && subjVariants.has(f.subject)), biasByBundle);
+        // both polarities: "what does fred eat" should surface a remembered
+        // "fred does not eat kale" rather than miss on it — renderFactLine
+        // spells the polarity out, so the list can't be misread
+        const polar = [predicate, negatedPredicate(predicate)];
+        const hits = rankByBiasThenTrust(rows.filter((f) => polar.includes(f.predicate) && subjVariants.has(f.subject)), biasByBundle);
         if (hits.length) return { ...renderMany(hits), generalVerbQuery: true };
       }
     }
@@ -9150,7 +9415,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
             } else {
               habitualGroundingHint = habitualGroundingHintText(
                 bareLine.replace(/[.!?]+\s*$/, ""),
-                { subject: subjects[subjects.length - 1], verb: habitual.verb },
+                { ...habitual, subject: subjects[subjects.length - 1] },
               );
             }
           }

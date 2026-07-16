@@ -16,13 +16,13 @@ Measured, and it is the whole argument:
 - `CapableOf` edges in the slice: **231**. To `fly`: **zero**.
 - What they are instead: `browser -> search_internet`, `bike -> crash`, `annoying_person -> bug`.
 - Things that can fly in the ENTIRE shipped corpus: **one** — `bird`, from `tier2/human.jsonl`.
-- Kinds of bird seeded: **2** (`swift`, `owl`), with zero capabilities between them.
+- Kinds of bird seeded: **1** (`owl`), with zero capabilities on it.
 - `ostrich`: absent.
 
-So the defeasible-negation work (`PLAN_DEFEASIBLE_NEGATION.md`) lands on a store that cannot
+So the defeasible-negation work (`archive/PLAN_DEFEASIBLE_NEGATION.md`) lands on a store that cannot
 demonstrate it. Its base-rate answer — *"of the 5 kinds of bird I know, 3 fly, 1 doesn't, and
-1 I have nothing on"* — is correct, obeys every rule, and reads *"of the 2 kinds of bird I
-know, 0 fly, 0 don't, and 2 I have nothing on"* on a fresh install. The engine is not thin.
+1 I have nothing on"* — is correct, obeys every rule, and reads *"of the 1 kind of bird I
+know, 0 fly, 0 don't, and 1 I have nothing on"* on a fresh install. The engine is not thin.
 The seed is.
 
 ## What cannot be bought, stated first
@@ -83,7 +83,7 @@ canonical closed set of 34" with **no `/r/Not*` rows**, and the loader treats an
 relation as a hard error (a deliberate drift guard). So negatives do not arrive by widening
 the seed either — they need a mapping decision first.
 
-Which means: a wider corpus makes the base rate *real* (5 kinds of bird instead of 2), and
+Which means: a wider corpus makes the base rate *real* (5 kinds of bird instead of 1), and
 makes the positive default *findable* (`bird can fly` from data rather than one hand-written
 row). It does not, on its own, produce the penguin. That still comes from a taught fact, which
 is what tmct is for.
@@ -102,7 +102,7 @@ is what tmct is for.
 
 ## Related
 
-- `PLAN_DEFEASIBLE_NEGATION.md` — the reader work this corpus would feed. Its case 4 is
+- `archive/PLAN_DEFEASIBLE_NEGATION.md` — the reader work this corpus would feed. Its case 4 is
   correct and inert today; a wider seed is what makes it say something.
 - `PLAN_CONSISTENCY_CHECK.md` — a consistency service is only as useful as what it holds. This
   is the same gap seen from the other end.

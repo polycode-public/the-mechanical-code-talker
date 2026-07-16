@@ -106,6 +106,7 @@
   "src/domain/interpret/strategies/keywords.mjs",
   "src/domain/interpret/strategies/noise-strip.mjs",
   "src/domain/memory/bias.mjs",
+  "src/domain/memory/capability.mjs",
   "src/domain/memory/fold.mjs",
   "src/domain/memory/session-turns.mjs",
   "src/domain/memory/trust.mjs",

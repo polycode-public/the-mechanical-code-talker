@@ -7259,6 +7259,928 @@ ${bodyText}` : graphText, tier });
     }
   });
 
+  // src/domain/syllogise.mjs
+  var syllogise_exports = {};
+  __export(syllogise_exports, {
+    CARDINALITY_RULE_CONFIDENCE: () => CARDINALITY_RULE_CONFIDENCE,
+    CAX_DW_RULE: () => CAX_DW_RULE,
+    CAX_DW_RULE_CONFIDENCE: () => CAX_DW_RULE_CONFIDENCE,
+    CAX_MAXC0_RULE: () => CAX_MAXC0_RULE,
+    CAX_MAXC0_RULE_CONFIDENCE: () => CAX_MAXC0_RULE_CONFIDENCE,
+    CAX_SCO_RULE: () => CAX_SCO_RULE,
+    CLS_SVF1_RULE: () => CLS_SVF1_RULE,
+    CLS_SVF1_RULE_CONFIDENCE: () => CLS_SVF1_RULE_CONFIDENCE,
+    DISJOINT_PREDICATE: () => DISJOINT_PREDICATE,
+    ENTAILED_DISJOINT_PROVENANCE: () => ENTAILED_DISJOINT_PROVENANCE,
+    ENTAILED_PROVENANCE: () => ENTAILED_PROVENANCE,
+    ENTAILED_SCM_SVF_PROVENANCE: () => ENTAILED_SCM_SVF_PROVENANCE,
+    ENTAILED_SVF1_PROVENANCE: () => ENTAILED_SVF1_PROVENANCE,
+    ENTAILED_TYPE_PROVENANCE: () => ENTAILED_TYPE_PROVENANCE,
+    ON_CLASS_PREDICATE: () => ON_CLASS_PREDICATE,
+    ON_PROPERTY_PREDICATE: () => ON_PROPERTY_PREDICATE,
+    SCM_CARD_RULE: () => SCM_CARD_RULE,
+    SCM_SVF_RULE: () => SCM_SVF_RULE,
+    SCM_SVF_RULE_CONFIDENCE: () => SCM_SVF_RULE_CONFIDENCE,
+    SOME_VALUES_FROM_PREDICATE: () => SOME_VALUES_FROM_PREDICATE,
+    SUBCLASS_PREDICATE: () => SUBCLASS_PREDICATE,
+    SYLLOGISE_RULE: () => SYLLOGISE_RULE,
+    TYPE_PREDICATE: () => TYPE_PREDICATE,
+    buildCardinalityRestrictions: () => buildCardinalityRestrictions,
+    deriveDisjointViolations: () => deriveDisjointViolations,
+    deriveSomeValuesFromApplication: () => deriveSomeValuesFromApplication,
+    deriveSomeValuesFromSubsumption: () => deriveSomeValuesFromSubsumption,
+    deriveSubClassClosure: () => deriveSubClassClosure,
+    deriveTypePropagation: () => deriveTypePropagation,
+    entailedTrustFrom: () => entailedTrustFrom,
+    findConsistencyViolations: () => findConsistencyViolations,
+    findIsaChain: () => findIsaChain,
+    proveCardinalityAtLeast: () => proveCardinalityAtLeast,
+    proveMaxCardinalityZeroDenial: () => proveMaxCardinalityZeroDenial,
+    retractSubClassOf: () => retractSubClassOf,
+    syllogise: () => syllogise
+  });
+  function requireStore(store, needed, caller) {
+    for (const name of needed) {
+      if (typeof store?.[name] !== "function") {
+        throw new TypeError(`${caller} needs a store option carrying { ${needed.join(", ")} } (memory/core.mjs's read/write functions) \u2014 missing ${name}`);
+      }
+    }
+    return store;
+  }
+  function entailedTrustFrom(premiseTrusts, ruleConfidence = 1) {
+    const nums = (Array.isArray(premiseTrusts) ? premiseTrusts : []).filter((t) => typeof t === "number");
+    if (!nums.length) return null;
+    const clamped = Math.max(0, Math.min(1, Math.min(...nums) * ruleConfidence));
+    return Number(clamped.toFixed(6));
+  }
+  function normalizeFocus(focus) {
+    if (!focus) return null;
+    const arr = focus instanceof Set ? [...focus] : Array.isArray(focus) ? focus : [];
+    const out = /* @__PURE__ */ new Set();
+    for (const t of arr) {
+      const n = normFactTerm(t);
+      if (n) out.add(n);
+    }
+    return out.size ? out : null;
+  }
+  function deriveSubClassClosure(edges, { depth = 32, budget = 50, focus = null } = {}) {
+    const present = /* @__PURE__ */ new Set();
+    const succ = /* @__PURE__ */ new Map();
+    for (const [a, b] of edges || []) {
+      if (!a || !b || a === b) continue;
+      present.add(`${a}${SEP}${b}`);
+      if (!succ.has(a)) succ.set(a, /* @__PURE__ */ new Set());
+      succ.get(a).add(b);
+    }
+    const focusSet = focus instanceof Set ? focus.size ? focus : null : normalizeFocus(focus);
+    const inFocus = (a, b, c) => !focusSet || focusSet.has(a) || focusSet.has(b) || focusSet.has(c);
+    const derived = [];
+    const derivedKeys = /* @__PURE__ */ new Set();
+    for (let round2 = 0; round2 < depth; round2 += 1) {
+      const additions = [];
+      for (const [a, bs] of succ) {
+        for (const b of bs) {
+          const cs = succ.get(b);
+          if (!cs) continue;
+          for (const c of cs) {
+            if (a === c) continue;
+            const key = `${a}${SEP}${c}`;
+            if (present.has(key) || derivedKeys.has(key)) continue;
+            if (!inFocus(a, b, c)) continue;
+            additions.push([a, b, c, key]);
+          }
+        }
+      }
+      if (!additions.length) break;
+      additions.sort((x, y) => x[0].localeCompare(y[0]) || x[2].localeCompare(y[2]) || x[1].localeCompare(y[1]));
+      let progressed = false;
+      for (const [a, b, c, key] of additions) {
+        if (derivedKeys.has(key)) continue;
+        if (derived.length >= budget) break;
+        derivedKeys.add(key);
+        derived.push({ subject: a, object: c, via: b });
+        if (!succ.has(a)) succ.set(a, /* @__PURE__ */ new Set());
+        succ.get(a).add(c);
+        progressed = true;
+      }
+      if (derived.length >= budget || !progressed) break;
+    }
+    return derived;
+  }
+  function buildAncestorCloser(subClassEdges) {
+    const succ = /* @__PURE__ */ new Map();
+    for (const [a, b] of subClassEdges || []) {
+      if (!a || !b || a === b) continue;
+      if (!succ.has(a)) succ.set(a, /* @__PURE__ */ new Set());
+      succ.get(a).add(b);
+    }
+    const ancestorsCache = /* @__PURE__ */ new Map();
+    return (c) => {
+      if (ancestorsCache.has(c)) return ancestorsCache.get(c);
+      const seen = /* @__PURE__ */ new Set();
+      const stack = [...succ.get(c) || []];
+      while (stack.length) {
+        const n = stack.pop();
+        if (seen.has(n)) continue;
+        seen.add(n);
+        for (const next of succ.get(n) || []) if (!seen.has(next)) stack.push(next);
+      }
+      ancestorsCache.set(c, seen);
+      return seen;
+    };
+  }
+  function deriveTypePropagation(typeEdges, subClassEdges, { budget = 50, focus = null } = {}) {
+    const ancestorsOf2 = buildAncestorCloser(subClassEdges);
+    const present = /* @__PURE__ */ new Set();
+    const seenTypeEdge = /* @__PURE__ */ new Set();
+    for (const [x, c] of typeEdges || []) if (x && c) present.add(`${x}${SEP}${c}`);
+    const focusSet = focus instanceof Set ? focus.size ? focus : null : normalizeFocus(focus);
+    const inFocus = (x, c, d) => !focusSet || focusSet.has(x) || focusSet.has(c) || focusSet.has(d);
+    const candidates = [];
+    for (const [x, c] of typeEdges || []) {
+      if (!x || !c) continue;
+      const tk = `${x}${SEP}${c}`;
+      if (seenTypeEdge.has(tk)) continue;
+      seenTypeEdge.add(tk);
+      for (const d of ancestorsOf2(c)) {
+        if (d === c || d === x) continue;
+        const key = `${x}${SEP}${d}`;
+        if (present.has(key)) continue;
+        if (!inFocus(x, c, d)) continue;
+        candidates.push([x, c, d, key]);
+      }
+    }
+    candidates.sort((p, q) => p[0].localeCompare(q[0]) || p[2].localeCompare(q[2]) || p[1].localeCompare(q[1]));
+    const derived = [];
+    const derivedKeys = /* @__PURE__ */ new Set();
+    for (const [x, c, d, key] of candidates) {
+      if (derivedKeys.has(key)) continue;
+      if (derived.length >= budget) break;
+      derivedKeys.add(key);
+      derived.push({ subject: x, object: d, via: c });
+    }
+    return derived;
+  }
+  function deriveDisjointViolations(typeEdges, subClassEdges, disjointEdges, { budget = 50, focus = null } = {}) {
+    const ancestorsOf2 = buildAncestorCloser(subClassEdges);
+    const disjointOf = /* @__PURE__ */ new Map();
+    const presentPairs = /* @__PURE__ */ new Set();
+    for (const [a, b] of disjointEdges || []) {
+      if (!a || !b || a === b) continue;
+      presentPairs.add(`${a}${SEP}${b}`);
+      presentPairs.add(`${b}${SEP}${a}`);
+      if (!disjointOf.has(a)) disjointOf.set(a, /* @__PURE__ */ new Set());
+      disjointOf.get(a).add(b);
+      if (!disjointOf.has(b)) disjointOf.set(b, /* @__PURE__ */ new Set());
+      disjointOf.get(b).add(a);
+    }
+    if (!disjointOf.size) return [];
+    const seenTypeEdge = /* @__PURE__ */ new Set();
+    const focusSet = focus instanceof Set ? focus.size ? focus : null : normalizeFocus(focus);
+    const inFocus = (x, c, e) => !focusSet || focusSet.has(x) || focusSet.has(c) || focusSet.has(e);
+    const candidates = [];
+    for (const [x, c] of typeEdges || []) {
+      if (!x || !c) continue;
+      const tk = `${x}${SEP}${c}`;
+      if (seenTypeEdge.has(tk)) continue;
+      seenTypeEdge.add(tk);
+      for (const d of [c, ...ancestorsOf2(c)]) {
+        const partners = disjointOf.get(d);
+        if (!partners) continue;
+        for (const e of partners) {
+          if (e === x) continue;
+          const key = `${x}${SEP}${e}`;
+          if (presentPairs.has(key)) continue;
+          if (!inFocus(x, c, e)) continue;
+          candidates.push([x, c, d, e, key]);
+        }
+      }
+    }
+    candidates.sort((p, q) => p[0].localeCompare(q[0]) || p[3].localeCompare(q[3]) || p[2].localeCompare(q[2]) || p[1].localeCompare(q[1]));
+    const derived = [];
+    const derivedKeys = /* @__PURE__ */ new Set();
+    for (const [x, c, d, e, key] of candidates) {
+      if (derivedKeys.has(key)) continue;
+      if (derived.length >= budget) break;
+      derivedKeys.add(key);
+      derived.push({ subject: x, object: e, viaType: c, viaClass: d });
+    }
+    return derived;
+  }
+  function deriveSomeValuesFromApplication(propertyEdges, typeEdges, subClassEdges, restrictionEdges, { budget = 50, focus = null } = {}) {
+    const ancestorsOf2 = buildAncestorCloser(subClassEdges);
+    const byPropTarget = /* @__PURE__ */ new Map();
+    for (const r of restrictionEdges || []) {
+      if (!r || !r.restriction || !r.property || !r.target) continue;
+      const key = `${r.property}${SEP}${r.target}`;
+      if (!byPropTarget.has(key)) byPropTarget.set(key, /* @__PURE__ */ new Set());
+      byPropTarget.get(key).add(r.restriction);
+    }
+    if (!byPropTarget.size) return [];
+    const present = /* @__PURE__ */ new Set();
+    const typesOf = /* @__PURE__ */ new Map();
+    for (const [x, c] of typeEdges || []) {
+      if (!x || !c) continue;
+      present.add(`${x}${SEP}${c}`);
+      if (!typesOf.has(x)) typesOf.set(x, /* @__PURE__ */ new Set());
+      typesOf.get(x).add(c);
+    }
+    const focusSet = focus instanceof Set ? focus.size ? focus : null : normalizeFocus(focus);
+    const inFocus = (x, y, r) => !focusSet || focusSet.has(x) || focusSet.has(y) || focusSet.has(r);
+    const seenEdge = /* @__PURE__ */ new Set();
+    const candidates = [];
+    for (const [x, p, y] of propertyEdges || []) {
+      if (!x || !p || !y) continue;
+      const pKey = normFactTerm(p);
+      const ek = `${x}${SEP}${pKey}${SEP}${y}`;
+      if (seenEdge.has(ek)) continue;
+      seenEdge.add(ek);
+      const yTypes = typesOf.get(y);
+      if (!yTypes) continue;
+      for (const c of yTypes) {
+        for (const target of [c, ...ancestorsOf2(c)]) {
+          const restrictions = byPropTarget.get(`${pKey}${SEP}${target}`);
+          if (!restrictions) continue;
+          for (const r of restrictions) {
+            if (x === r) continue;
+            const key = `${x}${SEP}${r}`;
+            if (present.has(key)) continue;
+            if (!inFocus(x, y, r)) continue;
+            candidates.push([x, p, pKey, y, c, target, r, key]);
+          }
+        }
+      }
+    }
+    candidates.sort((a, b) => a[0].localeCompare(b[0]) || a[6].localeCompare(b[6]) || a[1].localeCompare(b[1]) || a[3].localeCompare(b[3]));
+    const derived = [];
+    const derivedKeys = /* @__PURE__ */ new Set();
+    for (const [x, p, pKey, y, c, target, r, key] of candidates) {
+      if (derivedKeys.has(key)) continue;
+      if (derived.length >= budget) break;
+      derivedKeys.add(key);
+      derived.push({ subject: x, object: r, viaProperty: p, viaPropertyKey: pKey, viaValue: y, viaType: c, viaTarget: target });
+    }
+    return derived;
+  }
+  function buildCardinalityRestrictions(rows) {
+    const onPropertyOf = /* @__PURE__ */ new Map();
+    const kindOf = /* @__PURE__ */ new Map();
+    const onClassOf = /* @__PURE__ */ new Map();
+    for (const r of rows || []) {
+      if (!r || !r.subject || !r.predicate) continue;
+      if (isOnProperty(r.predicate)) onPropertyOf.set(r.subject, r.object);
+      else if (isOnClass(r.predicate)) onClassOf.set(r.subject, r.object);
+      else {
+        const kind = CARDINALITY_KIND_OF[String(r.predicate).trim().toLowerCase()];
+        if (!kind) continue;
+        const n = Number(r.object);
+        if (Number.isFinite(n)) kindOf.set(r.subject, { kind, n });
+      }
+    }
+    const restrictions = [];
+    for (const [restriction, { kind, n }] of kindOf) {
+      if (onPropertyOf.get(restriction) !== HAS_PROPERTY_KEY) continue;
+      const onClass = onClassOf.get(restriction);
+      if (!onClass) continue;
+      restrictions.push({ restriction, kind, n, onClass });
+    }
+    restrictions.sort((a, b) => a.restriction.localeCompare(b.restriction));
+    return restrictions;
+  }
+  function deriveSomeValuesFromSubsumption(restrictionEdges, subClassEdges, { budget = 50, focus = null } = {}) {
+    const ancestorsOf2 = buildAncestorCloser(subClassEdges);
+    const byProperty = /* @__PURE__ */ new Map();
+    for (const r of restrictionEdges || []) {
+      if (!r || !r.restriction || !r.property || !r.target) continue;
+      const pKey = normFactTerm(r.property);
+      if (!byProperty.has(pKey)) byProperty.set(pKey, []);
+      byProperty.get(pKey).push({ restriction: r.restriction, target: r.target });
+    }
+    const present = /* @__PURE__ */ new Set();
+    for (const [a, b] of subClassEdges || []) if (a && b) present.add(`${a}${SEP}${b}`);
+    const focusSet = focus instanceof Set ? focus.size ? focus : null : normalizeFocus(focus);
+    const inFocus = (c1, c2) => !focusSet || focusSet.has(c1) || focusSet.has(c2);
+    const candidates = [];
+    for (const [, group] of byProperty) {
+      if (group.length < 2) continue;
+      for (const r1 of group) {
+        for (const r2 of group) {
+          if (r1.restriction === r2.restriction) continue;
+          if (r1.target === r2.target) continue;
+          if (!ancestorsOf2(r1.target).has(r2.target)) continue;
+          const key = `${r1.restriction}${SEP}${r2.restriction}`;
+          if (present.has(key)) continue;
+          if (!inFocus(r1.restriction, r2.restriction)) continue;
+          candidates.push([r1.restriction, r2.restriction, r1.target, r2.target, key]);
+        }
+      }
+    }
+    candidates.sort((a, b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]));
+    const derived = [];
+    const derivedKeys = /* @__PURE__ */ new Set();
+    for (const [c1, c2, y1, y2, key] of candidates) {
+      if (derivedKeys.has(key)) continue;
+      if (derived.length >= budget) break;
+      derivedKeys.add(key);
+      derived.push({ subject: c1, object: c2, viaY1: y1, viaY2: y2 });
+    }
+    return derived;
+  }
+  function findOwnCardinalityRestriction(subClassEdges, cardinalityRestrictionEdges, subject, matches, { budget = 20, focus = null } = {}) {
+    if (!subject) return null;
+    const ancestorsOf2 = buildAncestorCloser(subClassEdges);
+    const focusSet = focus instanceof Set ? focus.size ? focus : null : normalizeFocus(focus);
+    const inFocus = (c) => !focusSet || focusSet.has(subject) || focusSet.has(c);
+    const classToRestrictions = /* @__PURE__ */ new Map();
+    for (const [a, b] of subClassEdges || []) {
+      if (!a || !b) continue;
+      if (!classToRestrictions.has(a)) classToRestrictions.set(a, /* @__PURE__ */ new Set());
+      classToRestrictions.get(a).add(b);
+    }
+    const restrictionsByRid = new Map((cardinalityRestrictionEdges || []).map((r) => [r.restriction, r]));
+    let checked = 0;
+    for (const c of [subject, ...ancestorsOf2(subject)]) {
+      if (checked >= budget) break;
+      checked += 1;
+      if (!inFocus(c)) continue;
+      for (const rid of classToRestrictions.get(c) || []) {
+        const rec = restrictionsByRid.get(rid);
+        if (rec && matches(rec)) return { viaClass: c, viaRestriction: rid, record: rec };
+      }
+    }
+    return null;
+  }
+  function proveCardinalityAtLeast(subClassEdges, cardinalityRestrictionEdges, subject, onClass, m, opts = {}) {
+    if (!onClass || !Number.isFinite(m)) return null;
+    const found = findOwnCardinalityRestriction(
+      subClassEdges,
+      cardinalityRestrictionEdges,
+      subject,
+      (rec) => rec.onClass === onClass && (rec.kind === "exactly" || rec.kind === "min") && rec.n >= m,
+      opts
+    );
+    return found ? { subject, object: onClass, m, n: found.record.n, kind: found.record.kind, viaClass: found.viaClass, viaRestriction: found.viaRestriction } : null;
+  }
+  function proveMaxCardinalityZeroDenial(subClassEdges, cardinalityRestrictionEdges, subject, onClass, opts = {}) {
+    if (!onClass) return null;
+    const found = findOwnCardinalityRestriction(
+      subClassEdges,
+      cardinalityRestrictionEdges,
+      subject,
+      (rec) => rec.onClass === onClass && rec.kind === "max" && rec.n === 0,
+      opts
+    );
+    return found ? { subject, object: onClass, viaClass: found.viaClass, viaRestriction: found.viaRestriction } : null;
+  }
+  function findConsistencyViolations(typeEdges, subClassEdges, disjointEdges, { budget = 50, focus = null } = {}) {
+    const ancestorsOf2 = buildAncestorCloser(subClassEdges);
+    const disjointOf = /* @__PURE__ */ new Map();
+    for (const [a, b] of disjointEdges || []) {
+      if (!a || !b || a === b) continue;
+      if (!disjointOf.has(a)) disjointOf.set(a, /* @__PURE__ */ new Set());
+      disjointOf.get(a).add(b);
+      if (!disjointOf.has(b)) disjointOf.set(b, /* @__PURE__ */ new Set());
+      disjointOf.get(b).add(a);
+    }
+    if (!disjointOf.size) return [];
+    const typesBySubject = /* @__PURE__ */ new Map();
+    for (const [x, c] of typeEdges || []) {
+      if (!x || !c) continue;
+      if (!typesBySubject.has(x)) typesBySubject.set(x, /* @__PURE__ */ new Set());
+      typesBySubject.get(x).add(c);
+    }
+    const focusSet = focus instanceof Set ? focus.size ? focus : null : normalizeFocus(focus);
+    const inFocus = (x) => !focusSet || focusSet.has(x);
+    const candidates = [];
+    const seenPair = /* @__PURE__ */ new Set();
+    for (const [x, types] of typesBySubject) {
+      if (!inFocus(x)) continue;
+      const typeList = [...types].sort();
+      for (let i = 0; i < typeList.length; i += 1) {
+        for (let j = i + 1; j < typeList.length; j += 1) {
+          const [ta, tb] = [typeList[i], typeList[j]];
+          const closureA = [ta, ...ancestorsOf2(ta)];
+          const closureB = [tb, ...ancestorsOf2(tb)];
+          let hit2 = null;
+          for (const da of closureA) {
+            const partners = disjointOf.get(da);
+            if (!partners) continue;
+            for (const db of closureB) {
+              if (partners.has(db)) {
+                hit2 = [da, db];
+                break;
+              }
+            }
+            if (hit2) break;
+          }
+          if (!hit2) continue;
+          const pairKey = `${x}${SEP}${ta}${SEP}${tb}`;
+          if (seenPair.has(pairKey)) continue;
+          seenPair.add(pairKey);
+          candidates.push([x, ta, tb, hit2[0], hit2[1]]);
+        }
+      }
+    }
+    candidates.sort((p, q) => p[0].localeCompare(q[0]) || p[1].localeCompare(q[1]) || p[2].localeCompare(q[2]));
+    const derived = [];
+    for (const [x, ta, tb, viaA, viaB] of candidates) {
+      if (derived.length >= budget) break;
+      derived.push({ subject: x, classA: ta, classB: tb, viaA, viaB });
+    }
+    return derived;
+  }
+  async function syllogise(repoDir, { depth = 32, budget = 50, focus = null, store } = {}) {
+    const { loadMemory: loadMemory2, readFactRows: readFactRows2, appendFacts: appendFacts2 } = requireStore(store, ["loadMemory", "readFactRows", "appendFacts"], "syllogise");
+    const memory = await loadMemory2(repoDir);
+    const rows = readFactRows2(memory);
+    const subClassEdges = rows.filter((r) => isSubClassOf(r.predicate)).map((r) => [r.subject, r.object]);
+    const typeEdges = rows.filter((r) => isType(r.predicate)).map((r) => [r.subject, r.object]);
+    const disjointEdges = rows.filter((r) => isDisjoint(r.predicate)).map((r) => [r.subject, r.object]);
+    const onPropertyOf = /* @__PURE__ */ new Map();
+    const someValuesFromOf = /* @__PURE__ */ new Map();
+    const propertyEdges = [];
+    for (const r of rows) {
+      const pLower = String(r.predicate || "").trim().toLowerCase();
+      if (isOnProperty(r.predicate)) onPropertyOf.set(r.subject, r.object);
+      else if (isSomeValuesFrom(r.predicate)) someValuesFromOf.set(r.subject, r.object);
+      else if (!RESERVED_PREDICATES.has(pLower)) propertyEdges.push([r.subject, r.predicate, r.object]);
+    }
+    const restrictionEdges = [];
+    for (const [restriction, property] of onPropertyOf) {
+      const target = someValuesFromOf.get(restriction);
+      if (target) restrictionEdges.push({ restriction, property, target });
+    }
+    const normalizedFocus = normalizeFocus(focus);
+    const trustByTriple = /* @__PURE__ */ new Map();
+    for (const r of rows) trustByTriple.set(`${r.subject}${SEP}${r.predicate}${SEP}${r.object}`, r.trust);
+    const premiseTrust = (s, p, o) => trustByTriple.get(`${s}${SEP}${p}${SEP}${o}`);
+    const hasTriple = (s, p, o) => trustByTriple.has(`${s}${SEP}${p}${SEP}${o}`);
+    const numericOnly = (arr) => arr.filter((t) => typeof t === "number");
+    const scmDerived = deriveSubClassClosure(subClassEdges, { depth, budget, focus: normalizedFocus });
+    const enlargedSubClassEdges = subClassEdges.concat(scmDerived.map((d) => [d.subject, d.object]));
+    const remainingBudget = Math.max(0, budget - scmDerived.length);
+    const caxDerived = remainingBudget > 0 ? deriveTypePropagation(typeEdges, enlargedSubClassEdges, { budget: remainingBudget, focus: normalizedFocus }) : [];
+    const remainingBudgetDw = Math.max(0, budget - scmDerived.length - caxDerived.length);
+    const dwDerived = remainingBudgetDw > 0 ? deriveDisjointViolations(typeEdges, enlargedSubClassEdges, disjointEdges, { budget: remainingBudgetDw, focus: normalizedFocus }) : [];
+    const remainingBudgetSvf1 = Math.max(0, budget - scmDerived.length - caxDerived.length - dwDerived.length);
+    const svf1Derived = remainingBudgetSvf1 > 0 && restrictionEdges.length ? deriveSomeValuesFromApplication(propertyEdges, typeEdges, enlargedSubClassEdges, restrictionEdges, { budget: remainingBudgetSvf1, focus: normalizedFocus }) : [];
+    const remainingBudgetScmSvf = Math.max(0, budget - scmDerived.length - caxDerived.length - dwDerived.length - svf1Derived.length);
+    const scmSvfDerived = remainingBudgetScmSvf > 0 && restrictionEdges.length > 1 ? deriveSomeValuesFromSubsumption(restrictionEdges, enlargedSubClassEdges, { budget: remainingBudgetScmSvf, focus: normalizedFocus }) : [];
+    const restrictionByRid = new Map(restrictionEdges.map((r) => [r.restriction, r]));
+    const toWrite = [
+      ...scmDerived.map((d) => ({
+        subject: d.subject,
+        predicate: SUBCLASS_PREDICATE,
+        object: d.object,
+        provenance: ENTAILED_PROVENANCE,
+        // Persisted justification: the premise fact ids this conclusion rode
+        // (a⊑b, b⊑c) — content-addressed ids work even when a premise is
+        // itself an entailment this same pass just derived. Read back by
+        // retractSubClassOf (below) to find every entailment a retracted
+        // premise could have supported. All five rules persist one, each
+        // citing its own premise shape.
+        justification: [
+          factIdForTriple(d.subject, SUBCLASS_PREDICATE, d.via),
+          factIdForTriple(d.via, SUBCLASS_PREDICATE, d.object)
+        ]
+      })),
+      ...caxDerived.map((d) => ({
+        subject: d.subject,
+        predicate: TYPE_PREDICATE,
+        object: d.object,
+        provenance: ENTAILED_TYPE_PROVENANCE,
+        // The ⊑ premise is cited as the DIRECT via⊑object edge even when the
+        // taught chain is multi-hop: scm-sco materializes that edge (this same
+        // pass or an earlier one), and retraction re-VERIFIES every candidate
+        // anyway, so a citation left dangling by budget truncation is inert.
+        justification: [
+          factIdForTriple(d.subject, TYPE_PREDICATE, d.via),
+          factIdForTriple(d.via, SUBCLASS_PREDICATE, d.object)
+        ]
+      })),
+      ...dwDerived.map((d) => {
+        const dwStoredForward = hasTriple(d.viaClass, DISJOINT_PREDICATE, d.object);
+        const [dwS, dwO] = dwStoredForward ? [d.viaClass, d.object] : [d.object, d.viaClass];
+        const premiseTrusts = numericOnly([
+          premiseTrust(d.subject, TYPE_PREDICATE, d.viaType),
+          premiseTrust(dwS, DISJOINT_PREDICATE, dwO),
+          // the ⊑-lift premise only exists when this IS a lift (viaClass !==
+          // viaType) — a direct hit has no extra subClassOf premise to price in.
+          ...d.viaClass !== d.viaType ? [premiseTrust(d.viaType, SUBCLASS_PREDICATE, d.viaClass)] : []
+        ]);
+        return {
+          subject: d.subject,
+          predicate: DISJOINT_PREDICATE,
+          object: d.object,
+          provenance: ENTAILED_DISJOINT_PROVENANCE,
+          justification: [
+            factIdForTriple(d.subject, TYPE_PREDICATE, d.viaType),
+            factIdForTriple(dwS, DISJOINT_PREDICATE, dwO),
+            ...d.viaClass !== d.viaType ? [factIdForTriple(d.viaType, SUBCLASS_PREDICATE, d.viaClass)] : []
+          ],
+          ...premiseTrusts.length ? { premiseTrusts, ruleConfidence: CAX_DW_RULE_CONFIDENCE } : {}
+        };
+      }),
+      ...svf1Derived.map((d) => {
+        const premiseTrusts = numericOnly([
+          premiseTrust(d.subject, d.viaProperty, d.viaValue),
+          premiseTrust(d.viaValue, TYPE_PREDICATE, d.viaType),
+          premiseTrust(d.object, ON_PROPERTY_PREDICATE, d.viaPropertyKey),
+          premiseTrust(d.object, SOME_VALUES_FROM_PREDICATE, d.viaTarget),
+          // the ⊑-lift premise only exists when this IS a lift (viaType !==
+          // viaTarget) — a direct hit has no extra subClassOf premise to price in.
+          ...d.viaType !== d.viaTarget ? [premiseTrust(d.viaType, SUBCLASS_PREDICATE, d.viaTarget)] : []
+        ]);
+        return {
+          subject: d.subject,
+          predicate: TYPE_PREDICATE,
+          object: d.object,
+          provenance: ENTAILED_SVF1_PROVENANCE,
+          justification: [
+            factIdForTriple(d.subject, d.viaProperty, d.viaValue),
+            factIdForTriple(d.viaValue, TYPE_PREDICATE, d.viaType),
+            factIdForTriple(d.object, ON_PROPERTY_PREDICATE, d.viaPropertyKey),
+            factIdForTriple(d.object, SOME_VALUES_FROM_PREDICATE, d.viaTarget),
+            ...d.viaType !== d.viaTarget ? [factIdForTriple(d.viaType, SUBCLASS_PREDICATE, d.viaTarget)] : []
+          ],
+          // same sub-1 discount as cax-dw, same reason (see CAX_DW_RULE_CONFIDENCE).
+          ...premiseTrusts.length ? { premiseTrusts, ruleConfidence: CLS_SVF1_RULE_CONFIDENCE } : {}
+        };
+      }),
+      ...scmSvfDerived.map((d) => {
+        const r1 = restrictionByRid.get(d.subject);
+        const r2 = restrictionByRid.get(d.object);
+        const premiseTrusts = numericOnly([
+          r1 && premiseTrust(d.subject, ON_PROPERTY_PREDICATE, r1.property),
+          premiseTrust(d.subject, SOME_VALUES_FROM_PREDICATE, d.viaY1),
+          r2 && premiseTrust(d.object, ON_PROPERTY_PREDICATE, r2.property),
+          premiseTrust(d.object, SOME_VALUES_FROM_PREDICATE, d.viaY2),
+          premiseTrust(d.viaY1, SUBCLASS_PREDICATE, d.viaY2)
+        ]);
+        return {
+          subject: d.subject,
+          predicate: SUBCLASS_PREDICATE,
+          object: d.object,
+          provenance: ENTAILED_SCM_SVF_PROVENANCE,
+          justification: [
+            ...r1 ? [factIdForTriple(d.subject, ON_PROPERTY_PREDICATE, r1.property)] : [],
+            factIdForTriple(d.subject, SOME_VALUES_FROM_PREDICATE, d.viaY1),
+            ...r2 ? [factIdForTriple(d.object, ON_PROPERTY_PREDICATE, r2.property)] : [],
+            factIdForTriple(d.object, SOME_VALUES_FROM_PREDICATE, d.viaY2),
+            factIdForTriple(d.viaY1, SUBCLASS_PREDICATE, d.viaY2)
+          ],
+          // same sub-1 discount as cax-dw/cls-svf1, same reason (see CAX_DW_RULE_CONFIDENCE).
+          ...premiseTrusts.length ? { premiseTrusts, ruleConfidence: SCM_SVF_RULE_CONFIDENCE } : {}
+        };
+      })
+    ];
+    const { ids } = await appendFacts2(repoDir, toWrite);
+    const written = [];
+    let i = 0;
+    for (const d of scmDerived) {
+      written.push({ id: ids[i], subject: d.subject, object: d.object, via: d.via, rule: SYLLOGISE_RULE });
+      i += 1;
+    }
+    for (const d of caxDerived) {
+      written.push({ id: ids[i], subject: d.subject, object: d.object, via: d.via, rule: CAX_SCO_RULE });
+      i += 1;
+    }
+    for (const d of dwDerived) {
+      written.push({ id: ids[i], subject: d.subject, object: d.object, via: d.viaClass, rule: CAX_DW_RULE });
+      i += 1;
+    }
+    for (const d of svf1Derived) {
+      written.push({ id: ids[i], subject: d.subject, object: d.object, via: d.viaValue, rule: CLS_SVF1_RULE });
+      i += 1;
+    }
+    for (const d of scmSvfDerived) {
+      written.push({ id: ids[i], subject: d.subject, object: d.object, via: d.viaY1, rule: SCM_SVF_RULE });
+      i += 1;
+    }
+    return { derived: written, count: written.length, budget, depth, truncated: written.length >= budget };
+  }
+  function isPurelyEntailed(provenance) {
+    const tags = String(provenance || "").split(" | ").filter(Boolean);
+    return tags.length > 0 && tags.every((t) => t.startsWith("entailed:"));
+  }
+  function buildSurvivorDerivabilityCheck(rows) {
+    const subClassEdges = [];
+    const typesOf = /* @__PURE__ */ new Map();
+    const disjointOf = /* @__PURE__ */ new Map();
+    const onPropertyOf = /* @__PURE__ */ new Map();
+    const someValuesFromOf = /* @__PURE__ */ new Map();
+    const propertyEdgesOf = /* @__PURE__ */ new Map();
+    for (const r of rows) {
+      const pLower = String(r.predicate || "").trim().toLowerCase();
+      if (isSubClassOf(r.predicate)) subClassEdges.push([r.subject, r.object]);
+      else if (isType(r.predicate)) {
+        if (!typesOf.has(r.subject)) typesOf.set(r.subject, /* @__PURE__ */ new Set());
+        typesOf.get(r.subject).add(r.object);
+      } else if (isDisjoint(r.predicate)) {
+        if (!disjointOf.has(r.subject)) disjointOf.set(r.subject, /* @__PURE__ */ new Set());
+        disjointOf.get(r.subject).add(r.object);
+        if (!disjointOf.has(r.object)) disjointOf.set(r.object, /* @__PURE__ */ new Set());
+        disjointOf.get(r.object).add(r.subject);
+      } else if (isOnProperty(r.predicate)) onPropertyOf.set(r.subject, r.object);
+      else if (isSomeValuesFrom(r.predicate)) someValuesFromOf.set(r.subject, r.object);
+      else if (!RESERVED_PREDICATES.has(pLower)) {
+        if (!propertyEdgesOf.has(r.subject)) propertyEdgesOf.set(r.subject, []);
+        propertyEdgesOf.get(r.subject).push([normFactTerm(r.predicate), r.object]);
+      }
+    }
+    const ancestorsOf2 = buildAncestorCloser(subClassEdges);
+    const reaches = (a, b) => a !== b && ancestorsOf2(a).has(b);
+    const restrictionOf = (node) => {
+      const property = onPropertyOf.get(node);
+      const target = someValuesFromOf.get(node);
+      return property && target ? { property: normFactTerm(property), target } : null;
+    };
+    return (row) => {
+      if (isSubClassOf(row.predicate)) {
+        if (reaches(row.subject, row.object)) return true;
+        const r1 = restrictionOf(row.subject);
+        const r2 = restrictionOf(row.object);
+        return Boolean(r1 && r2 && r1.property === r2.property && reaches(r1.target, r2.target));
+      }
+      if (isType(row.predicate)) {
+        for (const c of typesOf.get(row.subject) || []) {
+          if (reaches(c, row.object)) return true;
+        }
+        const rec = restrictionOf(row.object);
+        if (rec) {
+          for (const [pKey, y] of propertyEdgesOf.get(row.subject) || []) {
+            if (pKey !== rec.property) continue;
+            for (const c of typesOf.get(y) || []) {
+              if (c === rec.target || reaches(c, rec.target)) return true;
+            }
+          }
+        }
+        return false;
+      }
+      if (isDisjoint(row.predicate)) {
+        for (const c of typesOf.get(row.subject) || []) {
+          for (const d of [c, ...ancestorsOf2(c)]) {
+            if (disjointOf.get(d)?.has(row.object)) return true;
+          }
+        }
+        return false;
+      }
+      return true;
+    };
+  }
+  async function retractSubClassOf(repoDir, subject, object, { budget = 50, depth = 32, store } = {}) {
+    const { loadMemory: loadMemory2, readFactRows: readFactRows2, removeFacts: removeFacts2 } = requireStore(store, ["loadMemory", "readFactRows", "removeFacts"], "retractSubClassOf");
+    const s = normFactTerm(subject);
+    const o = normFactTerm(object);
+    const targetId = factIdForTriple(s, SUBCLASS_PREDICATE, o);
+    const memory = await loadMemory2(repoDir);
+    const rows = readFactRows2(memory);
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    if (!byId.has(targetId)) return { retracted: [], count: 0, budget, depth, truncated: false, found: false };
+    const entailedRows = rows.filter((r) => r.justification.length && isPurelyEntailed(r.provenance));
+    const removed = /* @__PURE__ */ new Set([targetId]);
+    const order = [targetId];
+    let truncated = false;
+    let round2 = 0;
+    for (; round2 < depth; round2 += 1) {
+      const candidates = entailedRows.filter((r) => !removed.has(r.id) && r.justification.some((j) => removed.has(j))).sort((a, b) => a.subject.localeCompare(b.subject) || a.predicate.localeCompare(b.predicate) || a.object.localeCompare(b.object));
+      if (!candidates.length) break;
+      const candidateIds = new Set(candidates.map((c) => c.id));
+      const stillDerivable = buildSurvivorDerivabilityCheck(
+        rows.filter((r) => !removed.has(r.id) && !candidateIds.has(r.id))
+      );
+      let progressed = false;
+      let hitBudget = false;
+      for (const c of candidates) {
+        if (removed.size >= budget) {
+          hitBudget = true;
+          break;
+        }
+        if (stillDerivable(c)) continue;
+        removed.add(c.id);
+        order.push(c.id);
+        progressed = true;
+      }
+      if (hitBudget) {
+        truncated = true;
+        break;
+      }
+      if (!progressed) break;
+    }
+    if (!truncated && round2 >= depth) {
+      truncated = entailedRows.some((r) => !removed.has(r.id) && r.justification.some((j) => removed.has(j)));
+    }
+    const { removed: actuallyRemoved } = await removeFacts2(repoDir, order);
+    return { retracted: actuallyRemoved, count: actuallyRemoved.length, budget, depth, truncated, found: true };
+  }
+  function findIsaChain(subj, targets, typeEdges, subClassEdges, { maxHops = 6 } = {}) {
+    const targetSet = targets instanceof Set ? targets : new Set(targets || []);
+    const subSucc = /* @__PURE__ */ new Map();
+    for (const [a, b] of subClassEdges || []) {
+      if (!a || !b || a === b) continue;
+      if (!subSucc.has(a)) subSucc.set(a, /* @__PURE__ */ new Set());
+      subSucc.get(a).add(b);
+    }
+    let frontier = [];
+    for (const [x, c] of typeEdges || []) {
+      if (x === subj && c) frontier.push({ node: c, path: [{ subject: x, predicate: TYPE_PREDICATE, object: c }] });
+    }
+    for (const c of subSucc.get(subj) || []) {
+      frontier.push({ node: c, path: [{ subject: subj, predicate: SUBCLASS_PREDICATE, object: c }] });
+    }
+    const seen = /* @__PURE__ */ new Set([subj]);
+    for (let hop = 1; hop <= maxHops && frontier.length; hop += 1) {
+      for (const { node, path } of frontier) if (targetSet.has(node)) return path;
+      if (hop === maxHops) break;
+      const next = [];
+      for (const { node, path } of frontier) {
+        if (seen.has(node)) continue;
+        seen.add(node);
+        for (const c of subSucc.get(node) || []) {
+          if (seen.has(c)) continue;
+          next.push({ node: c, path: [...path, { subject: node, predicate: SUBCLASS_PREDICATE, object: c }] });
+        }
+      }
+      frontier = next;
+    }
+    return null;
+  }
+  var SUBCLASS_PREDICATE, SYLLOGISE_RULE, ENTAILED_PROVENANCE, TYPE_PREDICATE, CAX_SCO_RULE, ENTAILED_TYPE_PROVENANCE, DISJOINT_PREDICATE, CAX_DW_RULE, ENTAILED_DISJOINT_PROVENANCE, CAX_DW_RULE_CONFIDENCE, ON_PROPERTY_PREDICATE, SOME_VALUES_FROM_PREDICATE, CLS_SVF1_RULE, ENTAILED_SVF1_PROVENANCE, CLS_SVF1_RULE_CONFIDENCE, SEP, isSubClassOf, isType, isDisjoint, isOnProperty, isSomeValuesFrom, isOnClass, RESERVED_PREDICATES, HAS_PROPERTY_KEY, CARDINALITY_KIND_OF, ON_CLASS_PREDICATE, SCM_SVF_RULE, ENTAILED_SCM_SVF_PROVENANCE, SCM_SVF_RULE_CONFIDENCE, SCM_CARD_RULE, CARDINALITY_RULE_CONFIDENCE, CAX_MAXC0_RULE, CAX_MAXC0_RULE_CONFIDENCE;
+  var init_syllogise = __esm({
+    "src/domain/syllogise.mjs"() {
+      init_hash();
+      SUBCLASS_PREDICATE = "rdfs:subClassOf";
+      SYLLOGISE_RULE = "subClassOf";
+      ENTAILED_PROVENANCE = `entailed:${SYLLOGISE_RULE}`;
+      TYPE_PREDICATE = "rdf:type";
+      CAX_SCO_RULE = "type";
+      ENTAILED_TYPE_PROVENANCE = `entailed:${CAX_SCO_RULE}`;
+      DISJOINT_PREDICATE = "owl:disjointWith";
+      CAX_DW_RULE = "disjointWith";
+      ENTAILED_DISJOINT_PROVENANCE = `entailed:${CAX_DW_RULE}`;
+      CAX_DW_RULE_CONFIDENCE = 0.95;
+      ON_PROPERTY_PREDICATE = "owl:onProperty";
+      SOME_VALUES_FROM_PREDICATE = "owl:someValuesFrom";
+      CLS_SVF1_RULE = "someValuesFrom";
+      ENTAILED_SVF1_PROVENANCE = `entailed:${CLS_SVF1_RULE}`;
+      CLS_SVF1_RULE_CONFIDENCE = 0.95;
+      SEP = "\u241F";
+      isSubClassOf = (p) => String(p || "").trim().toLowerCase() === "rdfs:subclassof";
+      isType = (p) => String(p || "").trim().toLowerCase() === "rdf:type";
+      isDisjoint = (p) => String(p || "").trim().toLowerCase() === "owl:disjointwith";
+      isOnProperty = (p) => String(p || "").trim().toLowerCase() === "owl:onproperty";
+      isSomeValuesFrom = (p) => String(p || "").trim().toLowerCase() === "owl:somevaluesfrom";
+      isOnClass = (p) => String(p || "").trim().toLowerCase() === "owl:onclass";
+      RESERVED_PREDICATES = /* @__PURE__ */ new Set([
+        "rdfs:subclassof",
+        "rdf:type",
+        "owl:disjointwith",
+        "owl:onproperty",
+        "owl:somevaluesfrom",
+        "owl:intersectionof"
+      ]);
+      HAS_PROPERTY_KEY = "has";
+      CARDINALITY_KIND_OF = { "owl:cardinality": "exactly", "owl:mincardinality": "min", "owl:maxcardinality": "max" };
+      ON_CLASS_PREDICATE = "owl:onClass";
+      SCM_SVF_RULE = "someValuesFromSubsumption";
+      ENTAILED_SCM_SVF_PROVENANCE = `entailed:${SCM_SVF_RULE}`;
+      SCM_SVF_RULE_CONFIDENCE = 0.95;
+      SCM_CARD_RULE = "cardinalityMonotonicity";
+      CARDINALITY_RULE_CONFIDENCE = 0.95;
+      CAX_MAXC0_RULE = "maxCardinalityZero";
+      CAX_MAXC0_RULE_CONFIDENCE = 0.95;
+    }
+  });
+
+  // src/domain/memory/capability.mjs
+  function negatedPredicate(predicate) {
+    const p = String(predicate || "");
+    if (!p.startsWith(POSITIVE_PREDICATE_PREFIX)) return p;
+    return NEG_PREDICATE_PREFIX + p.slice(POSITIVE_PREDICATE_PREFIX.length);
+  }
+  function positivePredicate(predicate) {
+    const p = String(predicate || "");
+    if (!p.startsWith(NEG_PREDICATE_PREFIX)) return null;
+    return POSITIVE_PREDICATE_PREFIX + p.slice(NEG_PREDICATE_PREFIX.length);
+  }
+  function shortestChainTo(subjects, target, typeEdges, subClassEdges, maxHops) {
+    let best = null;
+    for (const s of subjects) {
+      if (s === target) return [];
+      const chain = findIsaChain(s, /* @__PURE__ */ new Set([target]), typeEdges, subClassEdges, { maxHops });
+      if (chain && (!best || chain.length < best.length)) best = chain;
+    }
+    return best;
+  }
+  function resolveCapabilityPolarity(subject, object, facts, { maxHops = 3 } = {}) {
+    const subjects = asSet(subject);
+    const objects = asSet(object);
+    const rows = Array.isArray(facts) ? facts : [];
+    const { typeEdges, subClassEdges } = isaEdgesOf(rows);
+    const carriers = rows.filter(
+      (f) => (f.predicate === CAPABLE_OF_PREDICATE || f.predicate === NEG_CAPABLE_OF_PREDICATE) && objects.has(f.object)
+    );
+    const candidates = [];
+    for (const fact of carriers) {
+      const polarity = fact.predicate === NEG_CAPABLE_OF_PREDICATE ? "negative" : "positive";
+      if (subjects.has(fact.subject)) {
+        candidates.push({ fact, polarity, hops: 0, chain: null });
+        continue;
+      }
+      const chain = shortestChainTo(subjects, fact.subject, typeEdges, subClassEdges, maxHops);
+      if (chain && chain.length) candidates.push({ fact, polarity, hops: chain.length, chain });
+    }
+    if (!candidates.length) {
+      return {
+        verdict: "none",
+        hops: 0,
+        positive: [],
+        negative: [],
+        chain: null,
+        overrides: null,
+        baseRate: capabilityBaseRate(subjects, objects, rows, { maxHops })
+      };
+    }
+    candidates.sort((a, b) => a.hops - b.hops || (b.fact.trust || 0) - (a.fact.trust || 0));
+    const hops = candidates[0].hops;
+    const winning = candidates.filter((c) => c.hops === hops);
+    const positive = winning.filter((c) => c.polarity === "positive").map((c) => c.fact);
+    const negative = winning.filter((c) => c.polarity === "negative").map((c) => c.fact);
+    const answered = negative.length && !positive.length ? "negative" : "positive";
+    const beaten = candidates.find((c) => c.hops > hops && c.polarity !== answered) || null;
+    return {
+      verdict: positive.length && negative.length ? "both" : negative.length ? "no" : "yes",
+      hops,
+      positive,
+      negative,
+      chain: candidates[0].chain,
+      overrides: beaten ? { fact: beaten.fact, chain: beaten.chain } : null,
+      baseRate: null
+    };
+  }
+  function capabilityBaseRate(subject, object, facts, { maxHops = 3 } = {}) {
+    const subjects = asSet(subject);
+    const objects = asSet(object);
+    const rows = Array.isArray(facts) ? facts : [];
+    const isaRows = rows.filter((f) => f.predicate === SUBCLASS_PREDICATE || f.predicate === TYPE_PREDICATE);
+    const parents = isaRows.filter((f) => subjects.has(f.subject)).map((f) => f.object);
+    if (!parents.length) return null;
+    const klass = parents[0];
+    const siblings = [...new Set(
+      isaRows.filter((f) => f.object === klass && !subjects.has(f.subject)).map((f) => f.subject)
+    )];
+    const capabilityOf = (name) => {
+      const hit2 = rows.find(
+        (f) => f.subject === name && objects.has(f.object) && (f.predicate === CAPABLE_OF_PREDICATE || f.predicate === NEG_CAPABLE_OF_PREDICATE)
+      );
+      if (!hit2) return { name, polarity: "unknown", fact: null };
+      return { name, polarity: hit2.predicate === NEG_CAPABLE_OF_PREDICATE ? "negative" : "positive", fact: hit2 };
+    };
+    const split = siblings.map(capabilityOf);
+    const { typeEdges, subClassEdges } = isaEdgesOf(rows);
+    return {
+      klass,
+      kinds: siblings.length,
+      positive: split.filter((s) => s.polarity === "positive"),
+      negative: split.filter((s) => s.polarity === "negative"),
+      unknown: split.filter((s) => s.polarity === "unknown"),
+      chain: shortestChainTo(subjects, klass, typeEdges, subClassEdges, maxHops)
+    };
+  }
+  function capabilityExtension(object, facts, { exclude = [], maxHops = 3 } = {}) {
+    const objects = asSet(object);
+    const skip = asSet(exclude);
+    const rows = Array.isArray(facts) ? facts : [];
+    const seen = /* @__PURE__ */ new Set();
+    const out = [];
+    for (const f of rows) {
+      if (f.predicate !== CAPABLE_OF_PREDICATE || !objects.has(f.object)) continue;
+      if (skip.has(f.subject) || seen.has(f.subject)) continue;
+      seen.add(f.subject);
+      if (resolveCapabilityPolarity(/* @__PURE__ */ new Set([f.subject]), objects, rows, { maxHops }).verdict !== "yes") continue;
+      out.push(f);
+    }
+    return out.sort(byTrustThenName);
+  }
+  var NEG_PREDICATE_PREFIX, POSITIVE_PREDICATE_PREFIX, isNegatedPredicate, CAPABLE_OF_PREDICATE, NEG_CAPABLE_OF_PREDICATE, CAPABILITY_REPORT_CAP, byTrustThenName, asSet, isaEdgesOf;
+  var init_capability = __esm({
+    "src/domain/memory/capability.mjs"() {
+      init_syllogise();
+      NEG_PREDICATE_PREFIX = "mgxneg:";
+      POSITIVE_PREDICATE_PREFIX = "mgx:";
+      isNegatedPredicate = (predicate) => String(predicate || "").startsWith(NEG_PREDICATE_PREFIX);
+      CAPABLE_OF_PREDICATE = "mgx:capableOf";
+      NEG_CAPABLE_OF_PREDICATE = negatedPredicate(CAPABLE_OF_PREDICATE);
+      CAPABILITY_REPORT_CAP = 6;
+      byTrustThenName = (a, b) => (b.trust || 0) - (a.trust || 0) || String(a.subject).localeCompare(String(b.subject));
+      asSet = (v) => v instanceof Set ? v : new Set(Array.isArray(v) ? v : [v]);
+      isaEdgesOf = (facts) => ({
+        typeEdges: facts.filter((f) => f.predicate === TYPE_PREDICATE).map((f) => [f.subject, f.object]),
+        subClassEdges: facts.filter((f) => f.predicate === SUBCLASS_PREDICATE).map((f) => [f.subject, f.object])
+      });
+    }
+  });
+
   // src/adapters/memory/shacl.mjs
   function attrValue(ind, prop) {
     const a = (ind?.attributes || []).find((x) => x?.prop === prop);
@@ -7414,7 +8336,7 @@ ${bodyText}` : graphText, tier });
   var core_exports = {};
   __export(core_exports, {
     CANONICALISED_FROM_PROP: () => CANONICALISED_FROM_PROP,
-    CAPABLE_OF_PREDICATE: () => CAPABLE_OF_PREDICATE,
+    CAPABLE_OF_PREDICATE: () => CAPABLE_OF_PREDICATE2,
     CONTRADICTION_TRUST_FLOOR: () => CONTRADICTION_TRUST_FLOOR,
     CREATED_AT_PROP: () => CREATED_AT_PROP,
     DEFAULT_RETENTION: () => DEFAULT_RETENTION,
@@ -7480,7 +8402,8 @@ ${bodyText}` : graphText, tier });
         owl: "http://www.w3.org/2002/07/owl#",
         rdf: "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
         rdfs: "http://www.w3.org/2000/01/rdf-schema#",
-        mgx: "urn:tmct:mgx#"
+        mgx: "urn:tmct:mgx#",
+        mgxneg: "urn:tmct:mgxneg#"
       },
       vocabulary: MEMORY_VOCABULARY.map((v) => ({ ...v })),
       classes: [],
@@ -8473,7 +9396,7 @@ ${bodyText}` : graphText, tier });
     }
     return out.sort((a, b) => `${a[0].subject} ${a[0].predicate}`.localeCompare(`${b[0].subject} ${b[0].predicate}`));
   }
-  var MEMORY_DIR_REL, MEMORY_GRAPH_REL, UTTERANCE_CLASS, FACT_CLASS, MEMORY_SESSION_CLASS, SOURCE_CLASS, RULE_CLASS, SAID_IN_SESSION_PROP, IN_REPLY_TO_PROP, DERIVED_FROM_PROP, STATED_BY_PROP, CANONICALISED_FROM_PROP, SOURCE_RELIABILITY_PROP, OPERATOR_SOURCE_ID, TEACH_SOURCE_ID, ROLES, LABEL_CAP, MEMORY_VOCABULARY, memoryGraphFile, BACKEND_MEMORY, BACKEND_SQLITE, SQLITE_DDL, STD_EDGE_KEYS, cloneJson, MEMORY_MANIFEST_REL, DEFAULT_RETENTION, resolveManifestFile, MEMORY_INDEX, memoryIndexOf, labelOf, nowIso, sourceLabel, isSessionScopedSourceId, RULE_KIND_COMPOSE2, RULE_KIND_FILTER, RULE_KIND_RECURSIVE, RULE_KIND_ACTION_SIGNATURE, RULE_KIND_ACTION_PRECOND, RULE_KIND_ACTION_EFFECT, RULE_KIND_ACTION_CONSTRAINT, RULE_KINDS2, RULE_NAME_PROP, RULE_KIND_PROP, RULE_SLOT_SPEC, ruleIdFor, CONTRADICTION_TRUST_FLOOR, HAS_A_PREDICATE, CAPABLE_OF_PREDICATE, MULTI_VALUED_PREDICATES;
+  var MEMORY_DIR_REL, MEMORY_GRAPH_REL, UTTERANCE_CLASS, FACT_CLASS, MEMORY_SESSION_CLASS, SOURCE_CLASS, RULE_CLASS, SAID_IN_SESSION_PROP, IN_REPLY_TO_PROP, DERIVED_FROM_PROP, STATED_BY_PROP, CANONICALISED_FROM_PROP, SOURCE_RELIABILITY_PROP, OPERATOR_SOURCE_ID, TEACH_SOURCE_ID, ROLES, LABEL_CAP, MEMORY_VOCABULARY, memoryGraphFile, BACKEND_MEMORY, BACKEND_SQLITE, SQLITE_DDL, STD_EDGE_KEYS, cloneJson, MEMORY_MANIFEST_REL, DEFAULT_RETENTION, resolveManifestFile, MEMORY_INDEX, memoryIndexOf, labelOf, nowIso, sourceLabel, isSessionScopedSourceId, RULE_KIND_COMPOSE2, RULE_KIND_FILTER, RULE_KIND_RECURSIVE, RULE_KIND_ACTION_SIGNATURE, RULE_KIND_ACTION_PRECOND, RULE_KIND_ACTION_EFFECT, RULE_KIND_ACTION_CONSTRAINT, RULE_KINDS2, RULE_NAME_PROP, RULE_KIND_PROP, RULE_SLOT_SPEC, ruleIdFor, CONTRADICTION_TRUST_FLOOR, HAS_A_PREDICATE, CAPABLE_OF_PREDICATE2, MULTI_VALUED_PREDICATES;
   var init_core = __esm({
     "src/adapters/memory/core.mjs"() {
       init_promises();
@@ -8483,6 +9406,7 @@ ${bodyText}` : graphText, tier });
       init_hash();
       init_trust();
       init_trust();
+      init_capability();
       init_shacl();
       MEMORY_DIR_REL = join(".tmct", "memory");
       MEMORY_GRAPH_REL = join(MEMORY_DIR_REL, "graph.json");
@@ -8533,7 +9457,8 @@ ${bodyText}` : graphText, tier });
         { prop: TRUST_SCORE_PROP, note: "materialised trust cache in [0,1] \u2014 pure function of a fact's Sources + createdAt (memory/trust.mjs); invalidated when a statedBy edge is added" },
         { prop: TRUST_INPUTS_PROP, note: "JSON of the inputs the trust score was computed from (source-type multiset, corroboration count, createdAt, recency) \u2014 makes the score auditable" },
         { prop: "mgx:hasProseTokens", note: "prose tokens (prose.mjs tokenizer) backing the payload's proseIndex" },
-        { prop: "mgx:sessionStarted", note: "session anchor: when the session started, ISO-8601" }
+        { prop: "mgx:sessionStarted", note: "session anchor: when the session started, ISO-8601" },
+        { prop: "rdf:predicate", prefix: NEG_PREDICATE_PREFIX, note: "a reified fact's predicate carries its POLARITY: mgxneg:capableOf is the negative twin of mgx:capableOf ('a penguin cannot fly'). Polarity cannot be a separate property \u2014 the fact id hashes (subject, predicate, object), so both polarities would share one id and union their statedBy edges (memory/capability.mjs)" }
       ];
       memoryGraphFile = (dir) => resolveMemoryGraphFile(dir);
       BACKEND_MEMORY = "memory";
@@ -8604,8 +9529,10 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
       ruleIdFor = (kind, name, slotValues) => `rule:${fnv1aHex([kind, name, ...slotValues].join("\0"))}`;
       CONTRADICTION_TRUST_FLOOR = 0.5;
       HAS_A_PREDICATE = "mgx:hasA";
-      CAPABLE_OF_PREDICATE = "mgx:capableOf";
-      MULTI_VALUED_PREDICATES = /* @__PURE__ */ new Set([HAS_A_PREDICATE, CAPABLE_OF_PREDICATE]);
+      CAPABLE_OF_PREDICATE2 = "mgx:capableOf";
+      MULTI_VALUED_PREDICATES = new Set(
+        [HAS_A_PREDICATE, CAPABLE_OF_PREDICATE2].flatMap((p) => [p, negatedPredicate(p)])
+      );
     }
   });
 
@@ -9087,799 +10014,6 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   var init_prose_nlp = __esm({
     "src/adapters/prose-nlp.mjs"() {
       init_wink_model();
-    }
-  });
-
-  // src/domain/syllogise.mjs
-  var syllogise_exports = {};
-  __export(syllogise_exports, {
-    CARDINALITY_RULE_CONFIDENCE: () => CARDINALITY_RULE_CONFIDENCE,
-    CAX_DW_RULE: () => CAX_DW_RULE,
-    CAX_DW_RULE_CONFIDENCE: () => CAX_DW_RULE_CONFIDENCE,
-    CAX_MAXC0_RULE: () => CAX_MAXC0_RULE,
-    CAX_MAXC0_RULE_CONFIDENCE: () => CAX_MAXC0_RULE_CONFIDENCE,
-    CAX_SCO_RULE: () => CAX_SCO_RULE,
-    CLS_SVF1_RULE: () => CLS_SVF1_RULE,
-    CLS_SVF1_RULE_CONFIDENCE: () => CLS_SVF1_RULE_CONFIDENCE,
-    DISJOINT_PREDICATE: () => DISJOINT_PREDICATE,
-    ENTAILED_DISJOINT_PROVENANCE: () => ENTAILED_DISJOINT_PROVENANCE,
-    ENTAILED_PROVENANCE: () => ENTAILED_PROVENANCE,
-    ENTAILED_SCM_SVF_PROVENANCE: () => ENTAILED_SCM_SVF_PROVENANCE,
-    ENTAILED_SVF1_PROVENANCE: () => ENTAILED_SVF1_PROVENANCE,
-    ENTAILED_TYPE_PROVENANCE: () => ENTAILED_TYPE_PROVENANCE,
-    ON_CLASS_PREDICATE: () => ON_CLASS_PREDICATE,
-    ON_PROPERTY_PREDICATE: () => ON_PROPERTY_PREDICATE,
-    SCM_CARD_RULE: () => SCM_CARD_RULE,
-    SCM_SVF_RULE: () => SCM_SVF_RULE,
-    SCM_SVF_RULE_CONFIDENCE: () => SCM_SVF_RULE_CONFIDENCE,
-    SOME_VALUES_FROM_PREDICATE: () => SOME_VALUES_FROM_PREDICATE,
-    SUBCLASS_PREDICATE: () => SUBCLASS_PREDICATE,
-    SYLLOGISE_RULE: () => SYLLOGISE_RULE,
-    TYPE_PREDICATE: () => TYPE_PREDICATE,
-    buildCardinalityRestrictions: () => buildCardinalityRestrictions,
-    deriveDisjointViolations: () => deriveDisjointViolations,
-    deriveSomeValuesFromApplication: () => deriveSomeValuesFromApplication,
-    deriveSomeValuesFromSubsumption: () => deriveSomeValuesFromSubsumption,
-    deriveSubClassClosure: () => deriveSubClassClosure,
-    deriveTypePropagation: () => deriveTypePropagation,
-    entailedTrustFrom: () => entailedTrustFrom,
-    findConsistencyViolations: () => findConsistencyViolations,
-    findIsaChain: () => findIsaChain,
-    proveCardinalityAtLeast: () => proveCardinalityAtLeast,
-    proveMaxCardinalityZeroDenial: () => proveMaxCardinalityZeroDenial,
-    retractSubClassOf: () => retractSubClassOf,
-    syllogise: () => syllogise
-  });
-  function requireStore(store, needed, caller) {
-    for (const name of needed) {
-      if (typeof store?.[name] !== "function") {
-        throw new TypeError(`${caller} needs a store option carrying { ${needed.join(", ")} } (memory/core.mjs's read/write functions) \u2014 missing ${name}`);
-      }
-    }
-    return store;
-  }
-  function entailedTrustFrom(premiseTrusts, ruleConfidence = 1) {
-    const nums = (Array.isArray(premiseTrusts) ? premiseTrusts : []).filter((t) => typeof t === "number");
-    if (!nums.length) return null;
-    const clamped = Math.max(0, Math.min(1, Math.min(...nums) * ruleConfidence));
-    return Number(clamped.toFixed(6));
-  }
-  function normalizeFocus(focus) {
-    if (!focus) return null;
-    const arr = focus instanceof Set ? [...focus] : Array.isArray(focus) ? focus : [];
-    const out = /* @__PURE__ */ new Set();
-    for (const t of arr) {
-      const n = normFactTerm(t);
-      if (n) out.add(n);
-    }
-    return out.size ? out : null;
-  }
-  function deriveSubClassClosure(edges, { depth = 32, budget = 50, focus = null } = {}) {
-    const present = /* @__PURE__ */ new Set();
-    const succ = /* @__PURE__ */ new Map();
-    for (const [a, b] of edges || []) {
-      if (!a || !b || a === b) continue;
-      present.add(`${a}${SEP}${b}`);
-      if (!succ.has(a)) succ.set(a, /* @__PURE__ */ new Set());
-      succ.get(a).add(b);
-    }
-    const focusSet = focus instanceof Set ? focus.size ? focus : null : normalizeFocus(focus);
-    const inFocus = (a, b, c) => !focusSet || focusSet.has(a) || focusSet.has(b) || focusSet.has(c);
-    const derived = [];
-    const derivedKeys = /* @__PURE__ */ new Set();
-    for (let round2 = 0; round2 < depth; round2 += 1) {
-      const additions = [];
-      for (const [a, bs] of succ) {
-        for (const b of bs) {
-          const cs = succ.get(b);
-          if (!cs) continue;
-          for (const c of cs) {
-            if (a === c) continue;
-            const key = `${a}${SEP}${c}`;
-            if (present.has(key) || derivedKeys.has(key)) continue;
-            if (!inFocus(a, b, c)) continue;
-            additions.push([a, b, c, key]);
-          }
-        }
-      }
-      if (!additions.length) break;
-      additions.sort((x, y) => x[0].localeCompare(y[0]) || x[2].localeCompare(y[2]) || x[1].localeCompare(y[1]));
-      let progressed = false;
-      for (const [a, b, c, key] of additions) {
-        if (derivedKeys.has(key)) continue;
-        if (derived.length >= budget) break;
-        derivedKeys.add(key);
-        derived.push({ subject: a, object: c, via: b });
-        if (!succ.has(a)) succ.set(a, /* @__PURE__ */ new Set());
-        succ.get(a).add(c);
-        progressed = true;
-      }
-      if (derived.length >= budget || !progressed) break;
-    }
-    return derived;
-  }
-  function buildAncestorCloser(subClassEdges) {
-    const succ = /* @__PURE__ */ new Map();
-    for (const [a, b] of subClassEdges || []) {
-      if (!a || !b || a === b) continue;
-      if (!succ.has(a)) succ.set(a, /* @__PURE__ */ new Set());
-      succ.get(a).add(b);
-    }
-    const ancestorsCache = /* @__PURE__ */ new Map();
-    return (c) => {
-      if (ancestorsCache.has(c)) return ancestorsCache.get(c);
-      const seen = /* @__PURE__ */ new Set();
-      const stack = [...succ.get(c) || []];
-      while (stack.length) {
-        const n = stack.pop();
-        if (seen.has(n)) continue;
-        seen.add(n);
-        for (const next of succ.get(n) || []) if (!seen.has(next)) stack.push(next);
-      }
-      ancestorsCache.set(c, seen);
-      return seen;
-    };
-  }
-  function deriveTypePropagation(typeEdges, subClassEdges, { budget = 50, focus = null } = {}) {
-    const ancestorsOf2 = buildAncestorCloser(subClassEdges);
-    const present = /* @__PURE__ */ new Set();
-    const seenTypeEdge = /* @__PURE__ */ new Set();
-    for (const [x, c] of typeEdges || []) if (x && c) present.add(`${x}${SEP}${c}`);
-    const focusSet = focus instanceof Set ? focus.size ? focus : null : normalizeFocus(focus);
-    const inFocus = (x, c, d) => !focusSet || focusSet.has(x) || focusSet.has(c) || focusSet.has(d);
-    const candidates = [];
-    for (const [x, c] of typeEdges || []) {
-      if (!x || !c) continue;
-      const tk = `${x}${SEP}${c}`;
-      if (seenTypeEdge.has(tk)) continue;
-      seenTypeEdge.add(tk);
-      for (const d of ancestorsOf2(c)) {
-        if (d === c || d === x) continue;
-        const key = `${x}${SEP}${d}`;
-        if (present.has(key)) continue;
-        if (!inFocus(x, c, d)) continue;
-        candidates.push([x, c, d, key]);
-      }
-    }
-    candidates.sort((p, q) => p[0].localeCompare(q[0]) || p[2].localeCompare(q[2]) || p[1].localeCompare(q[1]));
-    const derived = [];
-    const derivedKeys = /* @__PURE__ */ new Set();
-    for (const [x, c, d, key] of candidates) {
-      if (derivedKeys.has(key)) continue;
-      if (derived.length >= budget) break;
-      derivedKeys.add(key);
-      derived.push({ subject: x, object: d, via: c });
-    }
-    return derived;
-  }
-  function deriveDisjointViolations(typeEdges, subClassEdges, disjointEdges, { budget = 50, focus = null } = {}) {
-    const ancestorsOf2 = buildAncestorCloser(subClassEdges);
-    const disjointOf = /* @__PURE__ */ new Map();
-    const presentPairs = /* @__PURE__ */ new Set();
-    for (const [a, b] of disjointEdges || []) {
-      if (!a || !b || a === b) continue;
-      presentPairs.add(`${a}${SEP}${b}`);
-      presentPairs.add(`${b}${SEP}${a}`);
-      if (!disjointOf.has(a)) disjointOf.set(a, /* @__PURE__ */ new Set());
-      disjointOf.get(a).add(b);
-      if (!disjointOf.has(b)) disjointOf.set(b, /* @__PURE__ */ new Set());
-      disjointOf.get(b).add(a);
-    }
-    if (!disjointOf.size) return [];
-    const seenTypeEdge = /* @__PURE__ */ new Set();
-    const focusSet = focus instanceof Set ? focus.size ? focus : null : normalizeFocus(focus);
-    const inFocus = (x, c, e) => !focusSet || focusSet.has(x) || focusSet.has(c) || focusSet.has(e);
-    const candidates = [];
-    for (const [x, c] of typeEdges || []) {
-      if (!x || !c) continue;
-      const tk = `${x}${SEP}${c}`;
-      if (seenTypeEdge.has(tk)) continue;
-      seenTypeEdge.add(tk);
-      for (const d of [c, ...ancestorsOf2(c)]) {
-        const partners = disjointOf.get(d);
-        if (!partners) continue;
-        for (const e of partners) {
-          if (e === x) continue;
-          const key = `${x}${SEP}${e}`;
-          if (presentPairs.has(key)) continue;
-          if (!inFocus(x, c, e)) continue;
-          candidates.push([x, c, d, e, key]);
-        }
-      }
-    }
-    candidates.sort((p, q) => p[0].localeCompare(q[0]) || p[3].localeCompare(q[3]) || p[2].localeCompare(q[2]) || p[1].localeCompare(q[1]));
-    const derived = [];
-    const derivedKeys = /* @__PURE__ */ new Set();
-    for (const [x, c, d, e, key] of candidates) {
-      if (derivedKeys.has(key)) continue;
-      if (derived.length >= budget) break;
-      derivedKeys.add(key);
-      derived.push({ subject: x, object: e, viaType: c, viaClass: d });
-    }
-    return derived;
-  }
-  function deriveSomeValuesFromApplication(propertyEdges, typeEdges, subClassEdges, restrictionEdges, { budget = 50, focus = null } = {}) {
-    const ancestorsOf2 = buildAncestorCloser(subClassEdges);
-    const byPropTarget = /* @__PURE__ */ new Map();
-    for (const r of restrictionEdges || []) {
-      if (!r || !r.restriction || !r.property || !r.target) continue;
-      const key = `${r.property}${SEP}${r.target}`;
-      if (!byPropTarget.has(key)) byPropTarget.set(key, /* @__PURE__ */ new Set());
-      byPropTarget.get(key).add(r.restriction);
-    }
-    if (!byPropTarget.size) return [];
-    const present = /* @__PURE__ */ new Set();
-    const typesOf = /* @__PURE__ */ new Map();
-    for (const [x, c] of typeEdges || []) {
-      if (!x || !c) continue;
-      present.add(`${x}${SEP}${c}`);
-      if (!typesOf.has(x)) typesOf.set(x, /* @__PURE__ */ new Set());
-      typesOf.get(x).add(c);
-    }
-    const focusSet = focus instanceof Set ? focus.size ? focus : null : normalizeFocus(focus);
-    const inFocus = (x, y, r) => !focusSet || focusSet.has(x) || focusSet.has(y) || focusSet.has(r);
-    const seenEdge = /* @__PURE__ */ new Set();
-    const candidates = [];
-    for (const [x, p, y] of propertyEdges || []) {
-      if (!x || !p || !y) continue;
-      const pKey = normFactTerm(p);
-      const ek = `${x}${SEP}${pKey}${SEP}${y}`;
-      if (seenEdge.has(ek)) continue;
-      seenEdge.add(ek);
-      const yTypes = typesOf.get(y);
-      if (!yTypes) continue;
-      for (const c of yTypes) {
-        for (const target of [c, ...ancestorsOf2(c)]) {
-          const restrictions = byPropTarget.get(`${pKey}${SEP}${target}`);
-          if (!restrictions) continue;
-          for (const r of restrictions) {
-            if (x === r) continue;
-            const key = `${x}${SEP}${r}`;
-            if (present.has(key)) continue;
-            if (!inFocus(x, y, r)) continue;
-            candidates.push([x, p, pKey, y, c, target, r, key]);
-          }
-        }
-      }
-    }
-    candidates.sort((a, b) => a[0].localeCompare(b[0]) || a[6].localeCompare(b[6]) || a[1].localeCompare(b[1]) || a[3].localeCompare(b[3]));
-    const derived = [];
-    const derivedKeys = /* @__PURE__ */ new Set();
-    for (const [x, p, pKey, y, c, target, r, key] of candidates) {
-      if (derivedKeys.has(key)) continue;
-      if (derived.length >= budget) break;
-      derivedKeys.add(key);
-      derived.push({ subject: x, object: r, viaProperty: p, viaPropertyKey: pKey, viaValue: y, viaType: c, viaTarget: target });
-    }
-    return derived;
-  }
-  function buildCardinalityRestrictions(rows) {
-    const onPropertyOf = /* @__PURE__ */ new Map();
-    const kindOf = /* @__PURE__ */ new Map();
-    const onClassOf = /* @__PURE__ */ new Map();
-    for (const r of rows || []) {
-      if (!r || !r.subject || !r.predicate) continue;
-      if (isOnProperty(r.predicate)) onPropertyOf.set(r.subject, r.object);
-      else if (isOnClass(r.predicate)) onClassOf.set(r.subject, r.object);
-      else {
-        const kind = CARDINALITY_KIND_OF[String(r.predicate).trim().toLowerCase()];
-        if (!kind) continue;
-        const n = Number(r.object);
-        if (Number.isFinite(n)) kindOf.set(r.subject, { kind, n });
-      }
-    }
-    const restrictions = [];
-    for (const [restriction, { kind, n }] of kindOf) {
-      if (onPropertyOf.get(restriction) !== HAS_PROPERTY_KEY) continue;
-      const onClass = onClassOf.get(restriction);
-      if (!onClass) continue;
-      restrictions.push({ restriction, kind, n, onClass });
-    }
-    restrictions.sort((a, b) => a.restriction.localeCompare(b.restriction));
-    return restrictions;
-  }
-  function deriveSomeValuesFromSubsumption(restrictionEdges, subClassEdges, { budget = 50, focus = null } = {}) {
-    const ancestorsOf2 = buildAncestorCloser(subClassEdges);
-    const byProperty = /* @__PURE__ */ new Map();
-    for (const r of restrictionEdges || []) {
-      if (!r || !r.restriction || !r.property || !r.target) continue;
-      const pKey = normFactTerm(r.property);
-      if (!byProperty.has(pKey)) byProperty.set(pKey, []);
-      byProperty.get(pKey).push({ restriction: r.restriction, target: r.target });
-    }
-    const present = /* @__PURE__ */ new Set();
-    for (const [a, b] of subClassEdges || []) if (a && b) present.add(`${a}${SEP}${b}`);
-    const focusSet = focus instanceof Set ? focus.size ? focus : null : normalizeFocus(focus);
-    const inFocus = (c1, c2) => !focusSet || focusSet.has(c1) || focusSet.has(c2);
-    const candidates = [];
-    for (const [, group] of byProperty) {
-      if (group.length < 2) continue;
-      for (const r1 of group) {
-        for (const r2 of group) {
-          if (r1.restriction === r2.restriction) continue;
-          if (r1.target === r2.target) continue;
-          if (!ancestorsOf2(r1.target).has(r2.target)) continue;
-          const key = `${r1.restriction}${SEP}${r2.restriction}`;
-          if (present.has(key)) continue;
-          if (!inFocus(r1.restriction, r2.restriction)) continue;
-          candidates.push([r1.restriction, r2.restriction, r1.target, r2.target, key]);
-        }
-      }
-    }
-    candidates.sort((a, b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]));
-    const derived = [];
-    const derivedKeys = /* @__PURE__ */ new Set();
-    for (const [c1, c2, y1, y2, key] of candidates) {
-      if (derivedKeys.has(key)) continue;
-      if (derived.length >= budget) break;
-      derivedKeys.add(key);
-      derived.push({ subject: c1, object: c2, viaY1: y1, viaY2: y2 });
-    }
-    return derived;
-  }
-  function findOwnCardinalityRestriction(subClassEdges, cardinalityRestrictionEdges, subject, matches, { budget = 20, focus = null } = {}) {
-    if (!subject) return null;
-    const ancestorsOf2 = buildAncestorCloser(subClassEdges);
-    const focusSet = focus instanceof Set ? focus.size ? focus : null : normalizeFocus(focus);
-    const inFocus = (c) => !focusSet || focusSet.has(subject) || focusSet.has(c);
-    const classToRestrictions = /* @__PURE__ */ new Map();
-    for (const [a, b] of subClassEdges || []) {
-      if (!a || !b) continue;
-      if (!classToRestrictions.has(a)) classToRestrictions.set(a, /* @__PURE__ */ new Set());
-      classToRestrictions.get(a).add(b);
-    }
-    const restrictionsByRid = new Map((cardinalityRestrictionEdges || []).map((r) => [r.restriction, r]));
-    let checked = 0;
-    for (const c of [subject, ...ancestorsOf2(subject)]) {
-      if (checked >= budget) break;
-      checked += 1;
-      if (!inFocus(c)) continue;
-      for (const rid of classToRestrictions.get(c) || []) {
-        const rec = restrictionsByRid.get(rid);
-        if (rec && matches(rec)) return { viaClass: c, viaRestriction: rid, record: rec };
-      }
-    }
-    return null;
-  }
-  function proveCardinalityAtLeast(subClassEdges, cardinalityRestrictionEdges, subject, onClass, m, opts = {}) {
-    if (!onClass || !Number.isFinite(m)) return null;
-    const found = findOwnCardinalityRestriction(
-      subClassEdges,
-      cardinalityRestrictionEdges,
-      subject,
-      (rec) => rec.onClass === onClass && (rec.kind === "exactly" || rec.kind === "min") && rec.n >= m,
-      opts
-    );
-    return found ? { subject, object: onClass, m, n: found.record.n, kind: found.record.kind, viaClass: found.viaClass, viaRestriction: found.viaRestriction } : null;
-  }
-  function proveMaxCardinalityZeroDenial(subClassEdges, cardinalityRestrictionEdges, subject, onClass, opts = {}) {
-    if (!onClass) return null;
-    const found = findOwnCardinalityRestriction(
-      subClassEdges,
-      cardinalityRestrictionEdges,
-      subject,
-      (rec) => rec.onClass === onClass && rec.kind === "max" && rec.n === 0,
-      opts
-    );
-    return found ? { subject, object: onClass, viaClass: found.viaClass, viaRestriction: found.viaRestriction } : null;
-  }
-  function findConsistencyViolations(typeEdges, subClassEdges, disjointEdges, { budget = 50, focus = null } = {}) {
-    const ancestorsOf2 = buildAncestorCloser(subClassEdges);
-    const disjointOf = /* @__PURE__ */ new Map();
-    for (const [a, b] of disjointEdges || []) {
-      if (!a || !b || a === b) continue;
-      if (!disjointOf.has(a)) disjointOf.set(a, /* @__PURE__ */ new Set());
-      disjointOf.get(a).add(b);
-      if (!disjointOf.has(b)) disjointOf.set(b, /* @__PURE__ */ new Set());
-      disjointOf.get(b).add(a);
-    }
-    if (!disjointOf.size) return [];
-    const typesBySubject = /* @__PURE__ */ new Map();
-    for (const [x, c] of typeEdges || []) {
-      if (!x || !c) continue;
-      if (!typesBySubject.has(x)) typesBySubject.set(x, /* @__PURE__ */ new Set());
-      typesBySubject.get(x).add(c);
-    }
-    const focusSet = focus instanceof Set ? focus.size ? focus : null : normalizeFocus(focus);
-    const inFocus = (x) => !focusSet || focusSet.has(x);
-    const candidates = [];
-    const seenPair = /* @__PURE__ */ new Set();
-    for (const [x, types] of typesBySubject) {
-      if (!inFocus(x)) continue;
-      const typeList = [...types].sort();
-      for (let i = 0; i < typeList.length; i += 1) {
-        for (let j = i + 1; j < typeList.length; j += 1) {
-          const [ta, tb] = [typeList[i], typeList[j]];
-          const closureA = [ta, ...ancestorsOf2(ta)];
-          const closureB = [tb, ...ancestorsOf2(tb)];
-          let hit2 = null;
-          for (const da of closureA) {
-            const partners = disjointOf.get(da);
-            if (!partners) continue;
-            for (const db of closureB) {
-              if (partners.has(db)) {
-                hit2 = [da, db];
-                break;
-              }
-            }
-            if (hit2) break;
-          }
-          if (!hit2) continue;
-          const pairKey = `${x}${SEP}${ta}${SEP}${tb}`;
-          if (seenPair.has(pairKey)) continue;
-          seenPair.add(pairKey);
-          candidates.push([x, ta, tb, hit2[0], hit2[1]]);
-        }
-      }
-    }
-    candidates.sort((p, q) => p[0].localeCompare(q[0]) || p[1].localeCompare(q[1]) || p[2].localeCompare(q[2]));
-    const derived = [];
-    for (const [x, ta, tb, viaA, viaB] of candidates) {
-      if (derived.length >= budget) break;
-      derived.push({ subject: x, classA: ta, classB: tb, viaA, viaB });
-    }
-    return derived;
-  }
-  async function syllogise(repoDir, { depth = 32, budget = 50, focus = null, store } = {}) {
-    const { loadMemory: loadMemory2, readFactRows: readFactRows2, appendFacts: appendFacts2 } = requireStore(store, ["loadMemory", "readFactRows", "appendFacts"], "syllogise");
-    const memory = await loadMemory2(repoDir);
-    const rows = readFactRows2(memory);
-    const subClassEdges = rows.filter((r) => isSubClassOf(r.predicate)).map((r) => [r.subject, r.object]);
-    const typeEdges = rows.filter((r) => isType(r.predicate)).map((r) => [r.subject, r.object]);
-    const disjointEdges = rows.filter((r) => isDisjoint(r.predicate)).map((r) => [r.subject, r.object]);
-    const onPropertyOf = /* @__PURE__ */ new Map();
-    const someValuesFromOf = /* @__PURE__ */ new Map();
-    const propertyEdges = [];
-    for (const r of rows) {
-      const pLower = String(r.predicate || "").trim().toLowerCase();
-      if (isOnProperty(r.predicate)) onPropertyOf.set(r.subject, r.object);
-      else if (isSomeValuesFrom(r.predicate)) someValuesFromOf.set(r.subject, r.object);
-      else if (!RESERVED_PREDICATES.has(pLower)) propertyEdges.push([r.subject, r.predicate, r.object]);
-    }
-    const restrictionEdges = [];
-    for (const [restriction, property] of onPropertyOf) {
-      const target = someValuesFromOf.get(restriction);
-      if (target) restrictionEdges.push({ restriction, property, target });
-    }
-    const normalizedFocus = normalizeFocus(focus);
-    const trustByTriple = /* @__PURE__ */ new Map();
-    for (const r of rows) trustByTriple.set(`${r.subject}${SEP}${r.predicate}${SEP}${r.object}`, r.trust);
-    const premiseTrust = (s, p, o) => trustByTriple.get(`${s}${SEP}${p}${SEP}${o}`);
-    const hasTriple = (s, p, o) => trustByTriple.has(`${s}${SEP}${p}${SEP}${o}`);
-    const numericOnly = (arr) => arr.filter((t) => typeof t === "number");
-    const scmDerived = deriveSubClassClosure(subClassEdges, { depth, budget, focus: normalizedFocus });
-    const enlargedSubClassEdges = subClassEdges.concat(scmDerived.map((d) => [d.subject, d.object]));
-    const remainingBudget = Math.max(0, budget - scmDerived.length);
-    const caxDerived = remainingBudget > 0 ? deriveTypePropagation(typeEdges, enlargedSubClassEdges, { budget: remainingBudget, focus: normalizedFocus }) : [];
-    const remainingBudgetDw = Math.max(0, budget - scmDerived.length - caxDerived.length);
-    const dwDerived = remainingBudgetDw > 0 ? deriveDisjointViolations(typeEdges, enlargedSubClassEdges, disjointEdges, { budget: remainingBudgetDw, focus: normalizedFocus }) : [];
-    const remainingBudgetSvf1 = Math.max(0, budget - scmDerived.length - caxDerived.length - dwDerived.length);
-    const svf1Derived = remainingBudgetSvf1 > 0 && restrictionEdges.length ? deriveSomeValuesFromApplication(propertyEdges, typeEdges, enlargedSubClassEdges, restrictionEdges, { budget: remainingBudgetSvf1, focus: normalizedFocus }) : [];
-    const remainingBudgetScmSvf = Math.max(0, budget - scmDerived.length - caxDerived.length - dwDerived.length - svf1Derived.length);
-    const scmSvfDerived = remainingBudgetScmSvf > 0 && restrictionEdges.length > 1 ? deriveSomeValuesFromSubsumption(restrictionEdges, enlargedSubClassEdges, { budget: remainingBudgetScmSvf, focus: normalizedFocus }) : [];
-    const restrictionByRid = new Map(restrictionEdges.map((r) => [r.restriction, r]));
-    const toWrite = [
-      ...scmDerived.map((d) => ({
-        subject: d.subject,
-        predicate: SUBCLASS_PREDICATE,
-        object: d.object,
-        provenance: ENTAILED_PROVENANCE,
-        // Persisted justification: the premise fact ids this conclusion rode
-        // (a⊑b, b⊑c) — content-addressed ids work even when a premise is
-        // itself an entailment this same pass just derived. Read back by
-        // retractSubClassOf (below) to find every entailment a retracted
-        // premise could have supported. All five rules persist one, each
-        // citing its own premise shape.
-        justification: [
-          factIdForTriple(d.subject, SUBCLASS_PREDICATE, d.via),
-          factIdForTriple(d.via, SUBCLASS_PREDICATE, d.object)
-        ]
-      })),
-      ...caxDerived.map((d) => ({
-        subject: d.subject,
-        predicate: TYPE_PREDICATE,
-        object: d.object,
-        provenance: ENTAILED_TYPE_PROVENANCE,
-        // The ⊑ premise is cited as the DIRECT via⊑object edge even when the
-        // taught chain is multi-hop: scm-sco materializes that edge (this same
-        // pass or an earlier one), and retraction re-VERIFIES every candidate
-        // anyway, so a citation left dangling by budget truncation is inert.
-        justification: [
-          factIdForTriple(d.subject, TYPE_PREDICATE, d.via),
-          factIdForTriple(d.via, SUBCLASS_PREDICATE, d.object)
-        ]
-      })),
-      ...dwDerived.map((d) => {
-        const dwStoredForward = hasTriple(d.viaClass, DISJOINT_PREDICATE, d.object);
-        const [dwS, dwO] = dwStoredForward ? [d.viaClass, d.object] : [d.object, d.viaClass];
-        const premiseTrusts = numericOnly([
-          premiseTrust(d.subject, TYPE_PREDICATE, d.viaType),
-          premiseTrust(dwS, DISJOINT_PREDICATE, dwO),
-          // the ⊑-lift premise only exists when this IS a lift (viaClass !==
-          // viaType) — a direct hit has no extra subClassOf premise to price in.
-          ...d.viaClass !== d.viaType ? [premiseTrust(d.viaType, SUBCLASS_PREDICATE, d.viaClass)] : []
-        ]);
-        return {
-          subject: d.subject,
-          predicate: DISJOINT_PREDICATE,
-          object: d.object,
-          provenance: ENTAILED_DISJOINT_PROVENANCE,
-          justification: [
-            factIdForTriple(d.subject, TYPE_PREDICATE, d.viaType),
-            factIdForTriple(dwS, DISJOINT_PREDICATE, dwO),
-            ...d.viaClass !== d.viaType ? [factIdForTriple(d.viaType, SUBCLASS_PREDICATE, d.viaClass)] : []
-          ],
-          ...premiseTrusts.length ? { premiseTrusts, ruleConfidence: CAX_DW_RULE_CONFIDENCE } : {}
-        };
-      }),
-      ...svf1Derived.map((d) => {
-        const premiseTrusts = numericOnly([
-          premiseTrust(d.subject, d.viaProperty, d.viaValue),
-          premiseTrust(d.viaValue, TYPE_PREDICATE, d.viaType),
-          premiseTrust(d.object, ON_PROPERTY_PREDICATE, d.viaPropertyKey),
-          premiseTrust(d.object, SOME_VALUES_FROM_PREDICATE, d.viaTarget),
-          // the ⊑-lift premise only exists when this IS a lift (viaType !==
-          // viaTarget) — a direct hit has no extra subClassOf premise to price in.
-          ...d.viaType !== d.viaTarget ? [premiseTrust(d.viaType, SUBCLASS_PREDICATE, d.viaTarget)] : []
-        ]);
-        return {
-          subject: d.subject,
-          predicate: TYPE_PREDICATE,
-          object: d.object,
-          provenance: ENTAILED_SVF1_PROVENANCE,
-          justification: [
-            factIdForTriple(d.subject, d.viaProperty, d.viaValue),
-            factIdForTriple(d.viaValue, TYPE_PREDICATE, d.viaType),
-            factIdForTriple(d.object, ON_PROPERTY_PREDICATE, d.viaPropertyKey),
-            factIdForTriple(d.object, SOME_VALUES_FROM_PREDICATE, d.viaTarget),
-            ...d.viaType !== d.viaTarget ? [factIdForTriple(d.viaType, SUBCLASS_PREDICATE, d.viaTarget)] : []
-          ],
-          // same sub-1 discount as cax-dw, same reason (see CAX_DW_RULE_CONFIDENCE).
-          ...premiseTrusts.length ? { premiseTrusts, ruleConfidence: CLS_SVF1_RULE_CONFIDENCE } : {}
-        };
-      }),
-      ...scmSvfDerived.map((d) => {
-        const r1 = restrictionByRid.get(d.subject);
-        const r2 = restrictionByRid.get(d.object);
-        const premiseTrusts = numericOnly([
-          r1 && premiseTrust(d.subject, ON_PROPERTY_PREDICATE, r1.property),
-          premiseTrust(d.subject, SOME_VALUES_FROM_PREDICATE, d.viaY1),
-          r2 && premiseTrust(d.object, ON_PROPERTY_PREDICATE, r2.property),
-          premiseTrust(d.object, SOME_VALUES_FROM_PREDICATE, d.viaY2),
-          premiseTrust(d.viaY1, SUBCLASS_PREDICATE, d.viaY2)
-        ]);
-        return {
-          subject: d.subject,
-          predicate: SUBCLASS_PREDICATE,
-          object: d.object,
-          provenance: ENTAILED_SCM_SVF_PROVENANCE,
-          justification: [
-            ...r1 ? [factIdForTriple(d.subject, ON_PROPERTY_PREDICATE, r1.property)] : [],
-            factIdForTriple(d.subject, SOME_VALUES_FROM_PREDICATE, d.viaY1),
-            ...r2 ? [factIdForTriple(d.object, ON_PROPERTY_PREDICATE, r2.property)] : [],
-            factIdForTriple(d.object, SOME_VALUES_FROM_PREDICATE, d.viaY2),
-            factIdForTriple(d.viaY1, SUBCLASS_PREDICATE, d.viaY2)
-          ],
-          // same sub-1 discount as cax-dw/cls-svf1, same reason (see CAX_DW_RULE_CONFIDENCE).
-          ...premiseTrusts.length ? { premiseTrusts, ruleConfidence: SCM_SVF_RULE_CONFIDENCE } : {}
-        };
-      })
-    ];
-    const { ids } = await appendFacts2(repoDir, toWrite);
-    const written = [];
-    let i = 0;
-    for (const d of scmDerived) {
-      written.push({ id: ids[i], subject: d.subject, object: d.object, via: d.via, rule: SYLLOGISE_RULE });
-      i += 1;
-    }
-    for (const d of caxDerived) {
-      written.push({ id: ids[i], subject: d.subject, object: d.object, via: d.via, rule: CAX_SCO_RULE });
-      i += 1;
-    }
-    for (const d of dwDerived) {
-      written.push({ id: ids[i], subject: d.subject, object: d.object, via: d.viaClass, rule: CAX_DW_RULE });
-      i += 1;
-    }
-    for (const d of svf1Derived) {
-      written.push({ id: ids[i], subject: d.subject, object: d.object, via: d.viaValue, rule: CLS_SVF1_RULE });
-      i += 1;
-    }
-    for (const d of scmSvfDerived) {
-      written.push({ id: ids[i], subject: d.subject, object: d.object, via: d.viaY1, rule: SCM_SVF_RULE });
-      i += 1;
-    }
-    return { derived: written, count: written.length, budget, depth, truncated: written.length >= budget };
-  }
-  function isPurelyEntailed(provenance) {
-    const tags = String(provenance || "").split(" | ").filter(Boolean);
-    return tags.length > 0 && tags.every((t) => t.startsWith("entailed:"));
-  }
-  function buildSurvivorDerivabilityCheck(rows) {
-    const subClassEdges = [];
-    const typesOf = /* @__PURE__ */ new Map();
-    const disjointOf = /* @__PURE__ */ new Map();
-    const onPropertyOf = /* @__PURE__ */ new Map();
-    const someValuesFromOf = /* @__PURE__ */ new Map();
-    const propertyEdgesOf = /* @__PURE__ */ new Map();
-    for (const r of rows) {
-      const pLower = String(r.predicate || "").trim().toLowerCase();
-      if (isSubClassOf(r.predicate)) subClassEdges.push([r.subject, r.object]);
-      else if (isType(r.predicate)) {
-        if (!typesOf.has(r.subject)) typesOf.set(r.subject, /* @__PURE__ */ new Set());
-        typesOf.get(r.subject).add(r.object);
-      } else if (isDisjoint(r.predicate)) {
-        if (!disjointOf.has(r.subject)) disjointOf.set(r.subject, /* @__PURE__ */ new Set());
-        disjointOf.get(r.subject).add(r.object);
-        if (!disjointOf.has(r.object)) disjointOf.set(r.object, /* @__PURE__ */ new Set());
-        disjointOf.get(r.object).add(r.subject);
-      } else if (isOnProperty(r.predicate)) onPropertyOf.set(r.subject, r.object);
-      else if (isSomeValuesFrom(r.predicate)) someValuesFromOf.set(r.subject, r.object);
-      else if (!RESERVED_PREDICATES.has(pLower)) {
-        if (!propertyEdgesOf.has(r.subject)) propertyEdgesOf.set(r.subject, []);
-        propertyEdgesOf.get(r.subject).push([normFactTerm(r.predicate), r.object]);
-      }
-    }
-    const ancestorsOf2 = buildAncestorCloser(subClassEdges);
-    const reaches = (a, b) => a !== b && ancestorsOf2(a).has(b);
-    const restrictionOf = (node) => {
-      const property = onPropertyOf.get(node);
-      const target = someValuesFromOf.get(node);
-      return property && target ? { property: normFactTerm(property), target } : null;
-    };
-    return (row) => {
-      if (isSubClassOf(row.predicate)) {
-        if (reaches(row.subject, row.object)) return true;
-        const r1 = restrictionOf(row.subject);
-        const r2 = restrictionOf(row.object);
-        return Boolean(r1 && r2 && r1.property === r2.property && reaches(r1.target, r2.target));
-      }
-      if (isType(row.predicate)) {
-        for (const c of typesOf.get(row.subject) || []) {
-          if (reaches(c, row.object)) return true;
-        }
-        const rec = restrictionOf(row.object);
-        if (rec) {
-          for (const [pKey, y] of propertyEdgesOf.get(row.subject) || []) {
-            if (pKey !== rec.property) continue;
-            for (const c of typesOf.get(y) || []) {
-              if (c === rec.target || reaches(c, rec.target)) return true;
-            }
-          }
-        }
-        return false;
-      }
-      if (isDisjoint(row.predicate)) {
-        for (const c of typesOf.get(row.subject) || []) {
-          for (const d of [c, ...ancestorsOf2(c)]) {
-            if (disjointOf.get(d)?.has(row.object)) return true;
-          }
-        }
-        return false;
-      }
-      return true;
-    };
-  }
-  async function retractSubClassOf(repoDir, subject, object, { budget = 50, depth = 32, store } = {}) {
-    const { loadMemory: loadMemory2, readFactRows: readFactRows2, removeFacts: removeFacts2 } = requireStore(store, ["loadMemory", "readFactRows", "removeFacts"], "retractSubClassOf");
-    const s = normFactTerm(subject);
-    const o = normFactTerm(object);
-    const targetId = factIdForTriple(s, SUBCLASS_PREDICATE, o);
-    const memory = await loadMemory2(repoDir);
-    const rows = readFactRows2(memory);
-    const byId = new Map(rows.map((r) => [r.id, r]));
-    if (!byId.has(targetId)) return { retracted: [], count: 0, budget, depth, truncated: false, found: false };
-    const entailedRows = rows.filter((r) => r.justification.length && isPurelyEntailed(r.provenance));
-    const removed = /* @__PURE__ */ new Set([targetId]);
-    const order = [targetId];
-    let truncated = false;
-    let round2 = 0;
-    for (; round2 < depth; round2 += 1) {
-      const candidates = entailedRows.filter((r) => !removed.has(r.id) && r.justification.some((j) => removed.has(j))).sort((a, b) => a.subject.localeCompare(b.subject) || a.predicate.localeCompare(b.predicate) || a.object.localeCompare(b.object));
-      if (!candidates.length) break;
-      const candidateIds = new Set(candidates.map((c) => c.id));
-      const stillDerivable = buildSurvivorDerivabilityCheck(
-        rows.filter((r) => !removed.has(r.id) && !candidateIds.has(r.id))
-      );
-      let progressed = false;
-      let hitBudget = false;
-      for (const c of candidates) {
-        if (removed.size >= budget) {
-          hitBudget = true;
-          break;
-        }
-        if (stillDerivable(c)) continue;
-        removed.add(c.id);
-        order.push(c.id);
-        progressed = true;
-      }
-      if (hitBudget) {
-        truncated = true;
-        break;
-      }
-      if (!progressed) break;
-    }
-    if (!truncated && round2 >= depth) {
-      truncated = entailedRows.some((r) => !removed.has(r.id) && r.justification.some((j) => removed.has(j)));
-    }
-    const { removed: actuallyRemoved } = await removeFacts2(repoDir, order);
-    return { retracted: actuallyRemoved, count: actuallyRemoved.length, budget, depth, truncated, found: true };
-  }
-  function findIsaChain(subj, targets, typeEdges, subClassEdges, { maxHops = 6 } = {}) {
-    const targetSet = targets instanceof Set ? targets : new Set(targets || []);
-    const subSucc = /* @__PURE__ */ new Map();
-    for (const [a, b] of subClassEdges || []) {
-      if (!a || !b || a === b) continue;
-      if (!subSucc.has(a)) subSucc.set(a, /* @__PURE__ */ new Set());
-      subSucc.get(a).add(b);
-    }
-    let frontier = [];
-    for (const [x, c] of typeEdges || []) {
-      if (x === subj && c) frontier.push({ node: c, path: [{ subject: x, predicate: TYPE_PREDICATE, object: c }] });
-    }
-    for (const c of subSucc.get(subj) || []) {
-      frontier.push({ node: c, path: [{ subject: subj, predicate: SUBCLASS_PREDICATE, object: c }] });
-    }
-    const seen = /* @__PURE__ */ new Set([subj]);
-    for (let hop = 1; hop <= maxHops && frontier.length; hop += 1) {
-      for (const { node, path } of frontier) if (targetSet.has(node)) return path;
-      if (hop === maxHops) break;
-      const next = [];
-      for (const { node, path } of frontier) {
-        if (seen.has(node)) continue;
-        seen.add(node);
-        for (const c of subSucc.get(node) || []) {
-          if (seen.has(c)) continue;
-          next.push({ node: c, path: [...path, { subject: node, predicate: SUBCLASS_PREDICATE, object: c }] });
-        }
-      }
-      frontier = next;
-    }
-    return null;
-  }
-  var SUBCLASS_PREDICATE, SYLLOGISE_RULE, ENTAILED_PROVENANCE, TYPE_PREDICATE, CAX_SCO_RULE, ENTAILED_TYPE_PROVENANCE, DISJOINT_PREDICATE, CAX_DW_RULE, ENTAILED_DISJOINT_PROVENANCE, CAX_DW_RULE_CONFIDENCE, ON_PROPERTY_PREDICATE, SOME_VALUES_FROM_PREDICATE, CLS_SVF1_RULE, ENTAILED_SVF1_PROVENANCE, CLS_SVF1_RULE_CONFIDENCE, SEP, isSubClassOf, isType, isDisjoint, isOnProperty, isSomeValuesFrom, isOnClass, RESERVED_PREDICATES, HAS_PROPERTY_KEY, CARDINALITY_KIND_OF, ON_CLASS_PREDICATE, SCM_SVF_RULE, ENTAILED_SCM_SVF_PROVENANCE, SCM_SVF_RULE_CONFIDENCE, SCM_CARD_RULE, CARDINALITY_RULE_CONFIDENCE, CAX_MAXC0_RULE, CAX_MAXC0_RULE_CONFIDENCE;
-  var init_syllogise = __esm({
-    "src/domain/syllogise.mjs"() {
-      init_hash();
-      SUBCLASS_PREDICATE = "rdfs:subClassOf";
-      SYLLOGISE_RULE = "subClassOf";
-      ENTAILED_PROVENANCE = `entailed:${SYLLOGISE_RULE}`;
-      TYPE_PREDICATE = "rdf:type";
-      CAX_SCO_RULE = "type";
-      ENTAILED_TYPE_PROVENANCE = `entailed:${CAX_SCO_RULE}`;
-      DISJOINT_PREDICATE = "owl:disjointWith";
-      CAX_DW_RULE = "disjointWith";
-      ENTAILED_DISJOINT_PROVENANCE = `entailed:${CAX_DW_RULE}`;
-      CAX_DW_RULE_CONFIDENCE = 0.95;
-      ON_PROPERTY_PREDICATE = "owl:onProperty";
-      SOME_VALUES_FROM_PREDICATE = "owl:someValuesFrom";
-      CLS_SVF1_RULE = "someValuesFrom";
-      ENTAILED_SVF1_PROVENANCE = `entailed:${CLS_SVF1_RULE}`;
-      CLS_SVF1_RULE_CONFIDENCE = 0.95;
-      SEP = "\u241F";
-      isSubClassOf = (p) => String(p || "").trim().toLowerCase() === "rdfs:subclassof";
-      isType = (p) => String(p || "").trim().toLowerCase() === "rdf:type";
-      isDisjoint = (p) => String(p || "").trim().toLowerCase() === "owl:disjointwith";
-      isOnProperty = (p) => String(p || "").trim().toLowerCase() === "owl:onproperty";
-      isSomeValuesFrom = (p) => String(p || "").trim().toLowerCase() === "owl:somevaluesfrom";
-      isOnClass = (p) => String(p || "").trim().toLowerCase() === "owl:onclass";
-      RESERVED_PREDICATES = /* @__PURE__ */ new Set([
-        "rdfs:subclassof",
-        "rdf:type",
-        "owl:disjointwith",
-        "owl:onproperty",
-        "owl:somevaluesfrom",
-        "owl:intersectionof"
-      ]);
-      HAS_PROPERTY_KEY = "has";
-      CARDINALITY_KIND_OF = { "owl:cardinality": "exactly", "owl:mincardinality": "min", "owl:maxcardinality": "max" };
-      ON_CLASS_PREDICATE = "owl:onClass";
-      SCM_SVF_RULE = "someValuesFromSubsumption";
-      ENTAILED_SCM_SVF_PROVENANCE = `entailed:${SCM_SVF_RULE}`;
-      SCM_SVF_RULE_CONFIDENCE = 0.95;
-      SCM_CARD_RULE = "cardinalityMonotonicity";
-      CARDINALITY_RULE_CONFIDENCE = 0.95;
-      CAX_MAXC0_RULE = "maxCardinalityZero";
-      CAX_MAXC0_RULE_CONFIDENCE = 0.95;
     }
   });
 
@@ -10893,6 +11027,7 @@ ${JSON.stringify(envelope, null, 2)}`;
 
   // src/services/chat.mjs
   init_core();
+  init_capability();
   init_finish();
 
   // src/services/sentences.mjs
@@ -11288,7 +11423,9 @@ ${JSON.stringify(envelope, null, 2)}`;
     if (/[a-z]s$/i.test(w) && !/ss$/i.test(w)) return w.slice(0, -1);
     return w;
   }
-  var TEACH_ADVERB_SKIP_SRC = "(?:(?:usually|often|sometimes|rarely|never|always|typically|generally|occasionally|frequently|normally|regularly|commonly|mostly|currently|still|also|really|actually)\\s+)?";
+  var TEACH_ADVERB_SKIP_SRC = "(?:(?:usually|often|sometimes|rarely|always|typically|generally|occasionally|frequently|normally|regularly|commonly|mostly|currently|still|also|really|actually)\\s+)?";
+  var NEG_MARKER_SRC = "(?:cannot|can't|can not|does not|doesn't|do not|don't|never)";
+  var GENERAL_VERB_NEGATION_RE = new RegExp(`^(.+?)\\s+(${NEG_MARKER_SRC})\\s+(.+)$`, "i");
   var GENERAL_VERB_TEACH_RE = new RegExp(`^([\\w'-]+)\\s+${TEACH_ADVERB_SKIP_SRC}([a-z]+)\\s+(.+?)[.!?]*$`, "i");
   var GENERAL_VERB_DETERMINER_TEACH_RE = new RegExp(
     `^(?:the\\s+|an?\\s+)([\\w'-]+(?:\\s+[\\w'-]+)?)\\s+([a-z]+)\\s+(${PREP_SRC})\\s+(.+?)[.!?]*$`,
@@ -11406,9 +11543,25 @@ ${JSON.stringify(envelope, null, 2)}`;
     if (/(?:s|x|z|ch|sh|o)$/i.test(w)) return `${w}es`;
     return `${w}s`;
   }
+  function baseVerbSurface(verb) {
+    const w = String(verb || "");
+    if (/^has$/i.test(w)) return "have";
+    if (/[a-z]ies$/i.test(w) && !/[aeiou]ies$/i.test(w)) return `${w.slice(0, -3)}y`;
+    if (/(?:s|x|z|ch|sh|o)es$/i.test(w)) return w.slice(0, -2);
+    return w.replace(/s$/i, "");
+  }
   function predicatePhrase(predicate) {
     if (FACT_PREDICATE_PHRASES[predicate]) return FACT_PREDICATE_PHRASES[predicate];
     const p = String(predicate || "");
+    const positive = positivePredicate(p);
+    if (positive) {
+      const phrase = predicatePhrase(positive);
+      if (phrase === "can") return "cannot";
+      if (phrase === "can be") return "cannot be";
+      if (phrase === "is" || phrase.startsWith("is ")) return `is not${phrase.slice(2)}`;
+      const [head, ...tail] = phrase.split(" ");
+      return ["does not", baseVerbSurface(head), ...tail].join(" ");
+    }
     const comp = /^mgx:([a-z]+(?:-[a-z]+)*)-than$/i.exec(p);
     if (comp) return `is ${comp[1].replace(/-/g, " ")} than`;
     const m = /^mgx:([a-z]+)(?:-([a-z]+))?$/i.exec(p);
@@ -11580,6 +11733,83 @@ ${JSON.stringify(envelope, null, 2)}`;
   var DO_VERB_ASK_RE = /^(?:do|does)\s+(all\s+|every\s+)?(?:an?\s+|the\s+)?([\w'-]+(?:\s+[\w'-]+)*?)\s+([a-z-]+)[?.!\s]*$/i;
   var WHAT_CAN_VERB_RE = /^what\s+can\s+(?!be\s)(.+?)[?.!\s]*$/i;
   var WHICH_KIND_CAN_RE = /^(?:which|what)\s+([\w'-]+(?:\s+[\w'-]+)*?)\s+can\s+(.+?)[?.!\s]*$/i;
+  function positiveQuestionSurface(q) {
+    const s = String(q || "").replace(/^(?:can't|cannot|can not)\s+/i, "can ").replace(/^(?:doesn't|does not)\s+/i, "does ").replace(/^(?:don't|do not)\s+/i, "do ").replace(/^(?:didn't|did not)\s+/i, "did ").replace(/\s+(?:not|never)\s+/i, " ");
+    return s.replace(/\s+/g, " ").trim();
+  }
+  function renderIsaCite(chain, facts) {
+    const steps = (chain || []).map((step) => facts.find(
+      (f) => f.predicate === step.predicate && f.subject === step.subject && f.object === step.object
+    ));
+    if (!steps.length || !steps.every(Boolean)) return null;
+    return steps.map((g) => `${factPhrase(g)}${g.provenance ? ` (source: ${g.provenance})` : ""}`).join("; ");
+  }
+  function capabilityReply(subjectText, objectText, facts, { maxHops = 3 } = {}) {
+    const subj = factTermVariants(normFactTerm, subjectText);
+    const obj = factTermVariants(normFactTerm, objectText);
+    const r = resolveCapabilityPolarity(subj, obj, facts, { maxHops });
+    const viaChain = (chain) => {
+      const cite = chain && chain.length ? renderIsaCite(chain, facts) : null;
+      return cite ? ` \u2014 via: ${cite}` : "";
+    };
+    if (r.verdict === "both") {
+      const lines = [...r.negative, ...r.positive].map(renderFactLine).join("\n");
+      return {
+        text: `I have both, at the same level of detail \u2014 my sources disagree, so I won't pick:
+${lines}`,
+        replace: true,
+        miss: true
+      };
+    }
+    if (r.verdict === "yes" || r.verdict === "no") {
+      const winner = r.verdict === "no" ? r.negative[0] : r.positive[0];
+      let text = `${r.verdict} \u2014 ${renderFactLine(winner)}${viaChain(r.chain)}`;
+      if (r.overrides) {
+        text += `. That overrides what I know about ${r.overrides.fact.subject} generally: ${renderFactLine(r.overrides.fact)}`;
+      }
+      return { text, replace: true };
+    }
+    return null;
+  }
+  function capabilityBaseRateReply(subjectText, objectText, facts, { maxHops = 3 } = {}) {
+    const subj = factTermVariants(normFactTerm, subjectText);
+    const obj = factTermVariants(normFactTerm, objectText);
+    const baseRate = capabilityBaseRate(subj, obj, facts, { maxHops });
+    if (!baseRate) return null;
+    const lead = `${subjectText} is a kind of ${baseRate.klass}`;
+    const opener = `I don't know if ${subjectText} can ${objectText}.`;
+    if (baseRate.positive.length || baseRate.negative.length) {
+      const split = [
+        `${baseRate.positive.length} can ${objectText}`,
+        `${baseRate.negative.length} cannot`,
+        `${baseRate.unknown.length} I have nothing on`
+      ].join(", ");
+      const named = [...baseRate.positive, ...baseRate.negative].slice(0, CAPABILITY_REPORT_CAP).map((s) => renderFactLine(s.fact));
+      return {
+        text: `${opener} ${lead}, and of the ${baseRate.kinds} kind${baseRate.kinds === 1 ? "" : "s"} of ${baseRate.klass} I know, ${split}.
+${named.join("\n")}`,
+        replace: true,
+        miss: true
+      };
+    }
+    const extension = capabilityExtension(obj, facts, { exclude: /* @__PURE__ */ new Set([...subj, baseRate.klass]) });
+    if (extension.length) {
+      const shown = extension.slice(0, CAPABILITY_REPORT_CAP);
+      const rest = extension.slice(shown.length);
+      return {
+        text: `${opener} ${lead}, and nothing I know about ${baseRate.klass} says whether one can ${objectText}. I do know ${extension.length} thing${extension.length === 1 ? "" : "s"} that can ${objectText}${rest.length ? ` (first ${shown.length} shown)` : ""}:
+${shown.map(renderFactLine).join("\n")}`,
+        replace: true,
+        miss: true,
+        ...rest.length ? { pending: { items: rest.map(renderFactLine), noun: "facts" } } : {}
+      };
+    }
+    return {
+      text: `${opener} ${lead}, but nothing I remember says whether any kind of ${baseRate.klass} can ${objectText}.`,
+      replace: true,
+      miss: true
+    };
+  }
   var SUPERLATIVE_WORD_SRC = "(?:most|least)\\s+[a-z][\\w-]*|[a-z][\\w-]*est|best|worst";
   var WHICH_KIND_SUPERLATIVE_RE = new RegExp(`^which\\s+([\\w'-]+)\\s+(?:is|are)\\s+(?:the\\s+)?(${SUPERLATIVE_WORD_SRC})[?.!\\s]*$`, "i");
   var WHAT_IS_SUPERLATIVE_KIND_RE = new RegExp(`^what(?:'s|s|\\s+is)\\s+the\\s+(${SUPERLATIVE_WORD_SRC})\\s+([\\w'-]+)[?.!\\s]*$`, "i");
@@ -11627,7 +11857,7 @@ ${JSON.stringify(envelope, null, 2)}`;
       re = new RegExp(`^(?:is|are)\\s+(?:an?\\s+|the\\s+)?(.+?)\\s+${rest}\\s+(?:an?\\s+|the\\s+)?(.+?)[?.!\\s]*$`, "i");
     } else {
       const [head, ...tail] = phrase.split(" ");
-      const base = [head.replace(/s$/, ""), ...tail].map(escapeRegex).join("\\s+");
+      const base = [baseVerbSurface(head), ...tail].map(escapeRegex).join("\\s+");
       re = new RegExp(`^(?:does|do)\\s+(?:an?\\s+|the\\s+)?(.+?)\\s+${base}\\s+(?:an?\\s+|the\\s+)?(.+?)[?.!\\s]*$`, "i");
     }
     return { predicate, phrase, re };
@@ -11876,15 +12106,12 @@ ${JSON.stringify(envelope, null, 2)}`;
       if (hit2) return { text: `yes \u2014 ${renderFactLine(hit2)}`, replace: true };
       return null;
     }
-    const can = q.match(CAN_ASK_RE);
+    const can = positiveQuestionSurface(q).match(CAN_ASK_RE);
     if (can) {
-      const facts = await memoryFacts(memoryDir);
+      const facts = await factRows(memoryDir, cache2);
+      const reply = capabilityReply(can[1], can[2], facts);
+      if (reply) return reply;
       const subj = factTermVariants(normFactTerm2, can[1]);
-      const obj = factTermVariants(normFactTerm2, can[2]);
-      const hit2 = facts.find(
-        (f) => f.predicate === "mgx:capableOf" && subj.has(f.subject) && obj.has(f.object)
-      );
-      if (hit2) return { text: `yes \u2014 ${renderFactLine(hit2)}`, replace: true };
       const knownCan = facts.filter((f) => f.predicate === "mgx:capableOf" && subj.has(f.subject));
       if (knownCan.length) {
         const shown = knownCan.slice(0, 3).map(renderFactLine).join("; ");
@@ -11894,7 +12121,7 @@ ${JSON.stringify(envelope, null, 2)}`;
           miss: true
         };
       }
-      return null;
+      return capabilityBaseRateReply(can[1], can[2], facts);
     }
     const doesHave = q.match(DOES_HAVE_ASK_RE);
     if (doesHave) {
@@ -11906,22 +12133,20 @@ ${JSON.stringify(envelope, null, 2)}`;
       if (hit2) return { text: `yes \u2014 ${renderFactLine(hit2)}`, replace: true };
       return null;
     }
-    const doAsk = q.match(DO_VERB_ASK_RE);
+    const doAsk = positiveQuestionSurface(q).match(DO_VERB_ASK_RE);
     if (doAsk) {
-      const facts = await memoryFacts(memoryDir);
+      const facts = await factRows(memoryDir, cache2);
       const universal = !!doAsk[1];
       const subj = factTermVariants(normFactTerm2, doAsk[2]);
       const obj = factTermVariants(normFactTerm2, doAsk[3]);
-      const hit2 = facts.find(
-        (f) => f.predicate === "mgx:capableOf" && subj.has(f.subject) && obj.has(f.object)
-      );
-      if (hit2 && universal) {
+      const reply = capabilityReply(doAsk[2], doAsk[3], facts);
+      if (reply && universal) {
         return {
-          text: `I can't speak for all ${doAsk[2]} \u2014 what I remember is generic, not universal. I do know: ${renderFactLine(hit2)}.`,
+          text: `I can't speak for all ${doAsk[2]} \u2014 what I remember is generic, not universal. ${reply.text}.`,
           replace: true
         };
       }
-      if (hit2) return { text: `yes \u2014 ${renderFactLine(hit2)}`, replace: true };
+      if (reply) return reply;
       if (miss2) {
         const knownCan = facts.filter((f) => f.predicate === "mgx:capableOf" && subj.has(f.subject));
         if (knownCan.length) {
@@ -11932,12 +12157,14 @@ ${JSON.stringify(envelope, null, 2)}`;
             miss: true
           };
         }
+        const base = capabilityBaseRateReply(doAsk[2], doAsk[3], facts);
+        if (base) return base;
       }
     }
     const canDo = q.match(WHAT_CAN_DO_RE);
     if (canDo) {
       const variants = factTermVariants(normFactTerm2, canDo[1]);
-      const hits = (await factRows(memoryDir, cache2)).filter((f) => f.predicate === "mgx:capableOf" && variants.has(f.subject));
+      const hits = (await factRows(memoryDir, cache2)).filter((f) => (f.predicate === "mgx:capableOf" || f.predicate === NEG_CAPABLE_OF_PREDICATE) && variants.has(f.subject));
       if (!hits.length) return null;
       const ranked = rankByBiasThenTrust(uniqueFacts(hits), biasByBundle);
       const lines = ranked.map(renderFactLine);
@@ -11952,7 +12179,7 @@ ${JSON.stringify(envelope, null, 2)}`;
       const kindVariants = factTermVariants(normFactTerm2, whichCan[1]);
       const verbVariants = factTermVariants(normFactTerm2, whichCan[2]);
       const facts = await factRows(memoryDir, cache2);
-      const capable = uniqueFacts(facts.filter((f) => f.predicate === "mgx:capableOf" && verbVariants.has(f.object)));
+      const capable = uniqueFacts(facts.filter((f) => f.predicate === "mgx:capableOf" && verbVariants.has(f.object))).filter((f) => resolveCapabilityPolarity(/* @__PURE__ */ new Set([f.subject]), verbVariants, facts).verdict === "yes");
       if (capable.length) {
         const { findIsaChain: findIsaChain2, SUBCLASS_PREDICATE: SC_PRED, TYPE_PREDICATE: TYPE_PRED } = await Promise.resolve().then(() => (init_syllogise(), syllogise_exports));
         const subClassRows = facts.filter((f) => f.predicate === SC_PRED);
@@ -11989,7 +12216,7 @@ ${JSON.stringify(envelope, null, 2)}`;
     const canVerb = q.match(WHAT_CAN_VERB_RE);
     if (canVerb && canVerb[1].trim().split(/\s+/).at(-1)?.toLowerCase() !== "do") {
       const verbVariants = factTermVariants(normFactTerm2, canVerb[1]);
-      const hits = (await factRows(memoryDir, cache2)).filter((f) => f.predicate === "mgx:capableOf" && verbVariants.has(f.object));
+      const hits = capabilityExtension(verbVariants, await factRows(memoryDir, cache2));
       if (hits.length) {
         const ranked = rankByBiasThenTrust(uniqueFacts(hits), biasByBundle);
         const lines = ranked.map(renderFactLine);
@@ -12709,7 +12936,7 @@ ${shown.join("\n")}${extra}`, replace: true, ...rest.length ? { pending: { items
         if (!envelope?.parsed) return unknownAdjectiveOffer(subject, adjective);
       }
     }
-    const genYN = q.match(GENERAL_VERB_YESNO_RE);
+    const genYN = positiveQuestionSurface(q).match(GENERAL_VERB_YESNO_RE);
     if (genYN && !GENERAL_VERB_ANYWHERE_EXCLUDE_RE.test(q)) {
       const [, subjectRaw, verbRaw, objectRaw] = genYN;
       const verb = verbRaw.toLowerCase();
@@ -12721,9 +12948,13 @@ ${shown.join("\n")}${extra}`, replace: true, ...rest.length ? { pending: { items
           const predicate = folded.predicate;
           const subjVariants = factTermVariants(normFactTerm2, subject);
           const objVariants = factTermVariants(normFactTerm2, object);
-          const hit2 = rows.filter((f) => f.predicate === predicate && subjVariants.has(f.subject) && objVariants.has(f.object)).sort(byTrust)[0];
-          if (hit2) return { text: `yes \u2014 ${renderFactLine(hit2)}`, replace: true, generalVerbQuery: true };
-          const sameRelation = rows.filter((f) => f.predicate === predicate && subjVariants.has(f.subject));
+          const polar = [predicate, negatedPredicate(predicate)];
+          const hit2 = rows.filter((f) => polar.includes(f.predicate) && subjVariants.has(f.subject) && objVariants.has(f.object)).sort(byTrust)[0];
+          if (hit2) {
+            const verdict = isNegatedPredicate(hit2.predicate) ? "no" : "yes";
+            return { text: `${verdict} \u2014 ${renderFactLine(hit2)}`, replace: true, generalVerbQuery: true };
+          }
+          const sameRelation = rows.filter((f) => polar.includes(f.predicate) && subjVariants.has(f.subject));
           if (sameRelation.length) {
             const shown = sameRelation.slice(0, 3).map(renderFactLine).join("; ");
             return {
@@ -12746,7 +12977,8 @@ ${shown.join("\n")}${extra}`, replace: true, ...rest.length ? { pending: { items
           let predicate = await generalVerbPredicate(verb);
           if (verbPrep && /^mgx:[a-z]+$/.test(predicate)) predicate = `${predicate}-${verbPrep}`;
           const subjVariants = factTermVariants(normFactTerm2, subject);
-          const hits2 = rankByBiasThenTrust(rows.filter((f) => f.predicate === predicate && subjVariants.has(f.subject)), biasByBundle);
+          const polar = [predicate, negatedPredicate(predicate)];
+          const hits2 = rankByBiasThenTrust(rows.filter((f) => polar.includes(f.predicate) && subjVariants.has(f.subject)), biasByBundle);
           if (hits2.length) return { ...renderMany(hits2), generalVerbQuery: true };
         }
       }

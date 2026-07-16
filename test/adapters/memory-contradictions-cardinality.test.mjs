@@ -10,6 +10,7 @@ import {
   HAS_A_PREDICATE, CAPABLE_OF_PREDICATE, MULTI_VALUED_PREDICATES,
   loadMemory, appendFact, findContradictions,
 } from "../../src/adapters/memory/core.mjs";
+import { negatedPredicate } from "../../src/domain/memory/capability.mjs";
 
 const tmpRepo = () => mkdtemp(join(tmpdir(), "tmct-card-"));
 
@@ -58,6 +59,21 @@ test("a mixed store reports only the single-valued disagreement, never the multi
   }
 });
 
-test("the exemption list is closed: exactly the has/can family", () => {
-  assert.deepEqual([...MULTI_VALUED_PREDICATES].sort(), [CAPABLE_OF_PREDICATE, HAS_A_PREDICATE].sort());
+test("the exemption list is closed: exactly the has/can family, at both polarities", () => {
+  assert.deepEqual(
+    [...MULTI_VALUED_PREDICATES].sort(),
+    [CAPABLE_OF_PREDICATE, HAS_A_PREDICATE, negatedPredicate(CAPABLE_OF_PREDICATE), negatedPredicate(HAS_A_PREDICATE)].sort(),
+  );
+});
+
+test("two negative capabilities on one subject are two claims, not a self-contradiction", async () => {
+  const dir = await tmpRepo();
+  try {
+    const cannot = negatedPredicate(CAPABLE_OF_PREDICATE);
+    await appendFact(dir, { subject: "penguin", predicate: cannot, object: "fly", provenance: "ace:chat@2026-07-05T00:00:00.000Z" });
+    await appendFact(dir, { subject: "penguin", predicate: cannot, object: "sing", provenance: "ace:chat@2026-07-05T00:00:00.000Z" });
+    assert.deepEqual(findContradictions(await loadMemory(dir)), []);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });

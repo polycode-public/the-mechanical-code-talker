@@ -23,6 +23,7 @@ import {
 // with the trust layer (they are its inputs); re-exported here so store
 // consumers keep one import site.
 export { CREATED_AT_PROP, UPDATED_AT_PROP, provenanceTagToSource } from "../../domain/memory/trust.mjs";
+import { NEG_PREDICATE_PREFIX, negatedPredicate } from "../../domain/memory/capability.mjs";
 import { assertIndividualValid } from "./shacl.mjs";
 
 export const MEMORY_DIR_REL = join(".tmct", "memory");
@@ -91,6 +92,7 @@ const MEMORY_VOCABULARY = [
   { prop: TRUST_INPUTS_PROP, note: "JSON of the inputs the trust score was computed from (source-type multiset, corroboration count, createdAt, recency) — makes the score auditable" },
   { prop: "mgx:hasProseTokens", note: "prose tokens (prose.mjs tokenizer) backing the payload's proseIndex" },
   { prop: "mgx:sessionStarted", note: "session anchor: when the session started, ISO-8601" },
+  { prop: "rdf:predicate", prefix: NEG_PREDICATE_PREFIX, note: "a reified fact's predicate carries its POLARITY: mgxneg:capableOf is the negative twin of mgx:capableOf ('a penguin cannot fly'). Polarity cannot be a separate property — the fact id hashes (subject, predicate, object), so both polarities would share one id and union their statedBy edges (memory/capability.mjs)" },
 ];
 
 /** A fresh, empty memory payload — the buildEntities shape, plus the OWL/RDF
@@ -105,6 +107,7 @@ export function emptyMemory() {
       rdf: "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
       rdfs: "http://www.w3.org/2000/01/rdf-schema#",
       mgx: "urn:tmct:mgx#",
+      mgxneg: "urn:tmct:mgxneg#",
     },
     vocabulary: MEMORY_VOCABULARY.map((v) => ({ ...v })),
     classes: [],
@@ -1519,8 +1522,12 @@ export const CAPABLE_OF_PREDICATE = "mgx:capableOf";
 /** Predicates whose real-world semantics allow many objects at once ("a dog
  *  has legs" AND "a dog has a tail"; "a bird can fly" AND "a bird can sing"),
  *  so a second object is a second fact, never a disagreement. A closed list:
- *  every predicate outside it keeps the full contradiction contract. */
-export const MULTI_VALUED_PREDICATES = new Set([HAS_A_PREDICATE, CAPABLE_OF_PREDICATE]);
+ *  every predicate outside it keeps the full contradiction contract. Each
+ *  entry's negative twin joins it — "a penguin cannot fly" and "a penguin
+ *  cannot sing" are two claims, not a self-contradiction. */
+export const MULTI_VALUED_PREDICATES = new Set(
+  [HAS_A_PREDICATE, CAPABLE_OF_PREDICATE].flatMap((p) => [p, negatedPredicate(p)]),
+);
 
 /** Facts that CONTRADICT: same (subject, predicate), different object, each
  *  above the trust floor. Returns groups (trust-desc) so callers surface both,
