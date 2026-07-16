@@ -88,7 +88,7 @@ function buildGraph() {
 
 // ---- parseQuery (grammar) ----
 
-test("parseQuery: reverse shape — the operator's own example", () => {
+test("parseQuery: reverse shape — \"which functions explicitly couple to X\" parses entityType, kind and object", () => {
   const p = parseQuery("Which functions explicitly couple to logging");
   assert.deepEqual(p, { shape: "reverse", entityType: "Function", modifier: "direct", kind: "imports", object: "logging" });
 });
@@ -171,13 +171,6 @@ test("resolveObject: a closed-vocabulary word ≤3 chars never wins via raw subs
     assert.equal(match, null, `"${w}" must stay an honest miss, not a substring guess`);
     assert.equal(tier, null, `"${w}" must not report a stale tier`);
   }
-});
-
-test("resolveObject: the SAME containment tier still resolves a real ≥4-char term by substring (the floor doesn't over-reach)", () => {
-  const graph = buildGraph();
-  const { match, tier } = resolveObject(graph, "logging");
-  assert.equal(match.label, "src/logging.mjs");
-  assert.equal(tier, 3);
 });
 
 // ---- resolveObject tier 3: slashed-path terms require the FILENAME STEM, not
@@ -360,9 +353,9 @@ test("render: singular result (1 hit) does not pluralize awkwardly", () => {
   assert.equal(r.content, "in myFile.mjs there is function startup().");
 });
 
-// ---- end-to-end: the operator's exact worked example ----
+// ---- end-to-end ----
 
-test("ask(): the operator's worked example renders EXACTLY the specified sentence", () => {
+test("ask(): a reverse-shape coupling question renders one grouped sentence naming both matched functions and their modules", () => {
   const graph = buildGraph();
   const { content, tmct_ask } = ask(graph, "Which functions explicitly couple to logging");
   assert.equal(content, "in myFile.mjs there is function startup() and there is function myFunc() in src/someOtherFile.mjs.");
@@ -552,17 +545,6 @@ test("parseQuery: bare \"what is Commit\" (no article) parses identically to \"w
   assert.equal(p.object, "Commit");
 });
 
-test("parseQuery: the existing honest-miss regression (\"what is the meaning of this codebase\") still returns null — the meta-whatis template's mandatory article keeps it from swallowing this", () => {
-  assert.equal(parseQuery("what is the meaning of this codebase"), null);
-});
-
-// The bare-form closed-vocabulary restriction must still
-// reject a bare term that ISN'T in ENTITY_TO_TYPE, same as before the article was
-// loosened — both of the pinned honest-miss regressions below must keep failing null.
-test("parseQuery: bare \"what is the meaning of this codebase\" still returns null — \"meaning\" is not an ENTITY_TO_TYPE term", () => {
-  assert.equal(parseQuery("what is the meaning of this codebase"), null);
-});
-
 test("parseQuery: bare \"what is exposed\" still returns null — \"exposed\" isn't an ENTITY_TO_TYPE term", () => {
   assert.equal(parseQuery("what is exposed", { nlp: null }), null);
 });
@@ -611,24 +593,12 @@ test("ask(): a meta question about an undocumented term is an honest miss, never
 const FIXTURE_SHA = "ef74e44e25c8f00dbaadf00dcafe123456789abc";
 const FIXTURE_SHORT = "ef74e44e25c8"; // the Commit individual's label (sha.slice(0,12))
 
-test("parseQuery: \"which changes touch commit <sha>\" — the operator's failing question parses (both strategies agree on the reverse shape)", () => {
-  const p = parseQuery(`which changes touch commit ${FIXTURE_SHORT}`);
-  assert.deepEqual(p, { shape: "reverse", entityType: "Change", modifier: "direct", kind: "touches", object: `commit ${FIXTURE_SHORT}` });
-});
-
 test("parseQuery: \"what did commit abc1234 touch\" parses forward — no spurious strategy disagreement over the \"commit\" noun", () => {
   const p = parseQuery("what did commit abc1234 touch");
   assert.equal(p.ambiguousParse, undefined);
   assert.equal(p.shape, "forward");
   assert.equal(p.kind, "touches");
   assert.equal(p.object, "commit abc1234");
-});
-
-test("parseQuery: casual \"what changed in abc1234\" parses via keyword-spot alone", () => {
-  const p = parseQuery("what changed in abc1234");
-  assert.equal(p.shape, "reverse");
-  assert.equal(p.kind, "touches");
-  assert.equal(p.object, "abc1234");
 });
 
 test("parseQuery: the existing commit-as-answer shape (\"which commits touched myFile.mjs\") still parses unchanged", () => {
@@ -678,7 +648,7 @@ test("resolveObject: a hex-looking term matching NO commit falls through the ord
   assert.equal(nonHex.match.label, "src/logging.mjs");
 });
 
-test("ask(): \"which changes touch commit <sha>\" — the operator's question answers with BOTH grains, commit cited, grouped by class", () => {
+test("ask(): \"which changes touch commit <sha>\" answers with BOTH grains, commit cited, grouped by class", () => {
   const graph = buildGraph();
   const { content, tmct_ask } = ask(graph, `which changes touch commit ${FIXTURE_SHORT}`);
   assert.equal(tmct_ask.miss, false);

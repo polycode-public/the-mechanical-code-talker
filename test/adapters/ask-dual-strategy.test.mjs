@@ -190,13 +190,6 @@ test("merge: \"which changes touch commit ef74e44e25c8\" — both strategies fir
   assert.deepEqual(p, { shape: "reverse", entityType: "Change", modifier: "direct", kind: "touches", object: "commit ef74e44e25c8" });
 });
 
-test("merge: \"what did commit abc1234 touch\" — anchored captures \"commit abc1234\", keyword-spot strips the noun; still one agreed parse", () => {
-  const p = parseQuery("what did commit abc1234 touch");
-  assert.equal(p.ambiguousParse, undefined);
-  assert.equal(p.shape, "forward");
-  assert.equal(p.kind, "touches");
-});
-
 test("keyword-spot only: casual \"what changed in abc1234\" (no anchored template starts \"what changed\")", () => {
   const p = parseQuery("what changed in abc1234");
   assert.deepEqual(p, { shape: "reverse", entityType: null, modifier: "direct", kind: "touches", object: "abc1234" });

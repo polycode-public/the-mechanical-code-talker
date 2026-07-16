@@ -6,9 +6,8 @@
 // — so a later change that silently un-fixes a documented weakness fails HERE,
 // in `npm test`, before the bench ever has to catch it.
 //
-// Cycle 2 (CHATBENCH_001's ranked board — L1 noise-strip robustness + L3 the
-// typo→schema-term trap guard; H1a/H1b are harness-side and tested in
-// chatbench.test.mjs):
+// L1 noise-strip robustness + L3 the typo→schema-term trap guard (H1a/H1b are
+// harness-side and tested in chatbench.test.mjs):
 //   L1a "i was wondering what calls fnAlpha"   (ns-wondering)  — aux/filler frame
 //   L1b "hey tmct, what calls fnAlpha thanks"  (ns-hey-tmct)   — the product's own name
 //   L1c "wat calls fnAlpha"                    (tf-wat-calls)  — "wat" -> "what"
@@ -48,12 +47,7 @@ async function repoDriver() {
 const CLEAN_CALLS = ask(graph, "what calls fnAlpha");
 const CLEAN_IMPORTERS = ask(graph, "which modules import a.mjs");
 
-test("cycle-2 fixture sanity: the clean phrasings behave as CHATBENCH_001 documents", () => {
-  // CORRECTNESS FIX (cycle W2P): "what calls fnAlpha" now reads the symbol-level caller
-  // Widget.render off the callsSymbol edge (BEFORE: the module-coarse honest empty "No
-  // modules found whose module directly calls fnAlpha", miss:true). The noise/typo levers
-  // below still assert byte-identity to THIS clean answer, so their robustness purpose is
-  // unchanged — only the clean answer itself is now the correct, non-empty one.
+test("the clean phrasings the noise/typo levers compare against are real non-miss answers, so a byte-identity assertion can never pass on two shared misses", () => {
   assert.match(CLEAN_CALLS.content, /Widget\.render/);
   assert.equal(CLEAN_CALLS.tmct_ask.miss, false);
   // the three importers, positively
