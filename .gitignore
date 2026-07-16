@@ -70,3 +70,8 @@ public/engine/
 public/demo-graph.json
 public/demo-memory.json
 public/ledger.html
+public/plan.html
+
+# Chromium for the browser e2e tier. CI puts it here (PLAYWRIGHT_BROWSERS_PATH)
+# so the job cache can carry it between runs; `npm run e2e:browsers` fetches it.
+.playwright-browsers/

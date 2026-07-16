@@ -180,6 +180,21 @@
     width: 100%; height: 640px; border: 1px solid var(--border);
     border-radius: 8px; background: var(--card);
   }
+
+  /* ---- plan render ----------------------------------------------------------------- */
+  .plan-render { margin: 1.4rem 0 0.4rem; }
+  .plan-render .hero-row {
+    display: flex; justify-content: space-between; align-items: baseline;
+    flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.4rem;
+  }
+  .plan-render iframe {
+    width: 100%; height: 420px; border: 1px solid var(--border);
+    border-radius: 8px; background: var(--card);
+  }
+
+  /* ---- transcript ------------------------------------------------------------------ */
+  .transcript .ask { color: var(--accent); }
+  .transcript .miss { color: var(--muted); }
 </style>
 </head>
 <body>
@@ -189,9 +204,14 @@
   </h1>
 
   <p class="lede">
-    tmct's memory is sentences about things — so read it. Ask the graph a question
-    below, click any term inside a fact to drill in, and every answer is grounded
-    or an honest miss. No model calls anywhere.
+    Ask tmct a question and you get an answer you can check. Every fact it gives you
+    names where it came from. When it doesn't know, it says so. Nothing calls a model,
+    and it costs nothing to run.
+  </p>
+
+  <p>
+    tmct's memory is sentences about things, so you can read it. Ask the graph below,
+    then click any term inside a fact to drill in.
   </p>
 
   <div class="ledger-hero">
@@ -202,15 +222,45 @@
     <iframe src="./ledger.html" title="tmct memory ledger — explore the taught graph and ask it questions"></iframe>
   </div>
 
+  <h2>What an answer looks like</h2>
+  <p>Real output from a terminal, against a fresh memory.</p>
+  <pre class="transcript"><code><span class="ask">tmct&gt; what is a dog</span>
+dog is a kind of animal (source: corpus:human /r/IsA)
+dog has tail (source: corpus:human /r/HasA)
+dog can bark (source: corpus:human /r/CapableOf)
+
+<span class="ask">tmct&gt; what is a quokka</span>
+<span class="miss">"quokka" isn't a term in this graph's own vocabulary (no matching class or predicate).
+I don't know "quokka" yet — teach me directly, e.g. "quokka is a &lt;thing&gt;".</span></code></pre>
+  <p>
+    The second answer is the point. tmct would rather miss than guess. Scores and
+    method for that claim live in the benchmark write-ups, linked from the
+    <a href="https://gitlab.com/polycode-projects/the-mechanical-code-talker#readme">README</a>.
+  </p>
+
+  <h2>It plans, and shows the work</h2>
+  <p>
+    Teach it the rules of a game and ask it to solve one. The planner works over the
+    same graph, and <code>--render blocks</code> replays what it did, move by move.
+  </p>
+
+  <div class="plan-render">
+    <div class="hero-row">
+      <span class="demo-label">Towers of Hanoi, solved in 7 moves and replayed</span>
+      <a href="./plan.html">open full-screen &rarr;</a>
+    </div>
+    <iframe src="./plan.html" title="tmct plan render — an animated replay of the solved hanoi-3 game"></iframe>
+  </div>
+
   <p>
     A chatbot in the <em>ELIZA/PARRY lineage</em>, obsessed with software the way PARRY
-    was obsessed with the mafia. Interpretation is
-    <em>mechanical</em>, memory is an <em>OWL-labelled graph</em> on disk, and every
-    answer is either grounded or an honest miss. It starts stocked with an everyday,
-    general-knowledge vocabulary by default. Point it at a codebase and it reasons
-    over that too. It also holds a thread: ask about something, then ask "what calls
-    it?", and tmct still knows what "it" means.
+    was obsessed with the mafia. Interpretation is <em>mechanical</em> and memory is an
+    <em>OWL-labelled graph</em> on disk. It starts stocked with an everyday vocabulary.
+    Point it at a codebase and it reasons over that too. It also holds a thread: ask
+    about something, then ask "what calls it?", and tmct still knows what "it" means.
   </p>
+
+  <h2>Ask it about a codebase</h2>
 
   <div class="demo-wrap">
     <div class="demo-label">Live demo — running the real engine, right now, in your browser</div>
@@ -233,7 +283,7 @@
     </div>
   </div>
 
-  <h2>Install &amp; quickstart</h2>
+  <h2>Run the chat yourself</h2>
   <pre><code>npm install -g @polycode-projects/the-mechanical-code-talker
 
 $ tmct
@@ -243,8 +293,6 @@ tmct&gt; what calls it?
 …
 tmct&gt; which modules do not import logger?
 …
-tmct&gt; how is the payment module different from the logger?
-…
 tmct&gt; give me a detailed overview of how the payment module works
 …
 tmct&gt; /memory        # inspect what tmct remembers, with provenance
@@ -252,8 +300,27 @@ tmct&gt; /exit</code></pre>
   <p>Point it at a repo's graph with <code>tmct chat --repo /path/to/repo</code>, or start
   with nothing. tmct bootstraps an empty memory and remembers what you tell it.</p>
   <pre><code>tmct init         # scaffold .tmct/, tmct.toml, seed the default persona + provenance
+tmct viz          # write the ledger page above from your own memory
 tmct syllogise    # offline: pre-derive entailed facts (a maintenance job)</code></pre>
-  <p>Full feature list, the detailed-answer pipeline, and a library API in the
+
+  <h2>Use it as a library</h2>
+  <p>
+    The chat surface is a function. Feed it lines, read the answers, and the same
+    grounding and provenance rules apply.
+  </p>
+  <pre><code>import { Readable } from "node:stream";
+import { runChat } from "@polycode-projects/the-mechanical-code-talker";
+
+await runChat({
+  repoPath: "./my-repo",
+  input: Readable.from([
+    "ahab is the father of john\n",
+    "who is the father of john\n",
+    "/exit\n",
+  ]),
+  output: process.stdout,
+});</code></pre>
+  <p>Full feature list, the detailed-answer pipeline, and the rest of the library API in the
   <a href="https://gitlab.com/polycode-projects/the-mechanical-code-talker#readme">README</a>.</p>
 
   <footer>
@@ -261,6 +328,7 @@ tmct syllogise    # offline: pre-derive entailed facts (a maintenance job)</code
       <a href="https://gitlab.com/polycode-projects/the-mechanical-code-talker">repository</a>
       &middot;
       <a href="https://www.npmjs.com/package/@polycode-projects/the-mechanical-code-talker">npm</a>
+      &middot; this page documents <span id="pkg-version">1.12.1</span>
       &middot; &copy; Polycode Limited.</p>
   </footer>
 </main>
