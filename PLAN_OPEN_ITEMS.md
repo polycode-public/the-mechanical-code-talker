@@ -4,11 +4,14 @@
 the single plan doc for the open items `HANDOVER.md` carries after the 2.0.3 benchmark cycle. Work
 it top to bottom; the order is by evidence strength and blast radius, not by area.
 
-Pinned at `e2fb214`, package 2.1.0. Sources: `BENCHMARK_{AGENT,CEFR_ENGLISH,CONVERSATION,INFERENCE}_2.0.3.md`,
-`CAPABILITIES_2.0.3.md`, `playtests/PLAYTEST_LOG_002.md`, `HANDOVER.md`.
+Refreshed against the tree at **2.3.1** (`6dc4787`), after `PLAN_PURGE.md` executed. Sources:
+`BENCHMARK_{AGENT,CEFR_ENGLISH,CONVERSATION,INFERENCE}_2.0.3.md`, `CAPABILITIES_2.0.3.md`,
+`playtests/PLAYTEST_LOG_002.md`, `HANDOVER.md`.
 
-Another session is doing code hygiene in parallel. Expect line numbers here to move; every fix site
-is named by symbol as well as line, and the symbol is the durable half.
+**Every reproducer in Phases 1-3 was re-run at 2.3.1 and still reproduces.** The purge changed the
+furniture, not the behaviour. Line numbers still move under you — another session has uncommitted
+work in `scripts/` and `corpus/prose/` as this is written — so every fix site is named by symbol as
+well as line, and the symbol is the durable half.
 
 ---
 
@@ -46,32 +49,45 @@ wrongly). The pattern exists; it is the *decision* to answer anyway that is wron
 
 ---
 
-## Phase 0 (do this before anything) — rescan, because `PLAN_PURGE.md` lands first
+## Phase 0 — what `PLAN_PURGE.md` already changed
 
-Another session is executing `PLAN_PURGE.md`. It will have finished before this plan starts, and it
-moves ground this plan stands on. **Rescan the tree before working any item.** What it changes, and
-what that does to this doc:
+`PLAN_PURGE.md` has executed. The tree went 2.1.0 → **2.3.1**. This section is the reconciliation,
+kept because it records which of this plan's citations moved and which of its predictions were
+wrong.
 
-| `PLAN_PURGE.md` does | Consequence here |
+**Verified at 2.3.1: every Phase 1-3 reproducer still reproduces.** The Hanoi board still collapses
+into one fact and still yields `3 moves (shortest)`. `some men are fathers` is still proved.
+`what would break if I change X` still answers with three people. The fronted-agent passive still
+compiles to `forward`. `/untested` still says 7 while its natural-language twin says 9. The purge was
+hygiene; it did not touch behaviour.
+
+| `PLAN_PURGE.md` did | Actual consequence here |
 |---|---|
-| §4 promotes `scripts/` logic into `src/` | Every `node scripts/…` command in this plan may have moved. `corpus-matrix.mjs`, `generate-real-word-collisions.mjs`, `check-links.mjs`, `extract-facts-from-text.mjs` are all named for promotion. Re-derive the command before quoting it |
-| §6.1 deletes `guardrail.mjs` | `CAPABILITIES_2.0.3.md` row 51 says "capability router, full 6-stage stack" and `PLAN_AGENTS.md` §1 says "all 6 stages". If a stage is deleted, both counts are wrong. **Neither doc is the other's source of truth — fix the count where the audit says it, not twice** |
-| §6.2 deletes `embed.mjs` and `vector.mjs` | No item here cites them. Confirm no capability row does either |
-| §7 deletes 7 tests and renames 13 | Any test this plan names as a pin may have a new name |
-| §8 fixes 81 comments citing deleted docs | Includes `ask.mjs:17` (citing `temporal.mjs`, a module that never existed in git history) and `memory/core.mjs:83` (citing `derivedUpdatedAt`, dropped at `56b4365`). **`PLAN_PURGE.md` owns both**; already removed from Phase 5 so they are not fixed twice |
-| §9.4 fixes dangling references in live docs | **`PLAN_PURGE.md` owns all of this**, and covers it more thoroughly than Phase 5 did |
-| §9.5 fixes duplication and drift | Same |
+| deleted `guardrail.mjs` (`e187fd3`) | **Predicted, and it landed.** Two docs now overstate the router: `PLAN_AGENTS.md:84` lists "guardrail" among the stages and claims "all 6 stages"; `CAPABILITIES_2.0.3.md` row 51 says "full 6-stage stack". Both are wrong at 2.3.1. Added to Phase 5 |
+| deleted `embed.mjs` and `vector.mjs` (`c4e7778` window) | No item here cited them; no capability row did either. Nothing to do |
+| promoted `scripts/` logic into `src/` (`c68a1b1`, `6eeac09`, `f560531`, `17115e5`, and the persona cluster) | **The CLI wrappers survived.** `node scripts/corpus-matrix.mjs --gaps` and `node scripts/check-links.mjs` both still run, so every command this plan quotes still works. `e18ba96` also added `check:*` npm hooks for each |
+| stopped exporting 54 unused symbols (`c4e7778`) | Nothing this plan names was exported-only |
+| dropped 6 duplicate tests (`c3f5e16`), renamed 13 (`9cff8ec`) | `test/tools/ask.test.mjs` went 130 → **125** tests. The estate grew 149 → **160** files. No pin this plan names was deleted |
+| corrected four of its own claims (`1f8def6`) | Read `PLAN_PURGE.md` before assuming any of its other claims; it disproved four by executing them |
 
-**The split, so the two plans do not collide.** `PLAN_PURGE.md` owns *pointers* — a citation whose
-target does not exist, a comment naming a deleted doc, two docs saying the same thing. This plan
-owns *claims that are false* — a banner saying "not implemented" about shipped code, a count saying
-six when four is right, a premise saying "no Playwright" when `package.json:74` has it, a baseline
-saying one bird when the corpus seeds two. A broken link and a wrong fact need different work.
+**Two predictions this plan got wrong, corrected here:**
 
-Phase 5's table has already been trimmed to match: its pointer rows and its citation-rot paragraph
-are gone, because `PLAN_PURGE.md` §8 and §9.4 carry them. What is left there is only false claims.
+- **`PLAN_PURGE.md` §8 did not fix `ask.mjs:17` or `memory/core.mjs:83`.** Both survive at 2.3.1:
+  `ask.mjs:17` still cites `temporal.mjs`'s "time-scrubbing Chronograph surface" — a module with no
+  git history — and `core.mjs:83` still points at `derivedUpdatedAt`, deleted at `56b4365`.
+  `e7fb836` dropped *plan citations* from comments, which is a different sweep. **Both are back in
+  Phase 5.**
+- The scripts did not move out from under the commands. The promotion kept the CLI entry points.
 
----
+**The split between the two plans still holds, and is still worth honouring.** `PLAN_PURGE.md` owns
+*pointers* — a citation with no target, a comment naming a deleted doc, two docs saying the same
+thing. This plan owns *claims that are false* — a banner saying "not implemented" about shipped
+code, a count saying six stages when one was just deleted. A broken link and a wrong fact need
+different work.
+
+**Rescan before quoting anything below.** Another session has uncommitted work in
+`scripts/lib/text-corpus.mjs`, `scripts/template-coverage.mjs`, `scripts/fetch-prose-corpus.mjs` and
+`corpus/prose/` as this is written. Do not touch those paths.
 
 ---
 
@@ -535,6 +551,10 @@ Cheap, and they mislead the next session. `CAPABILITIES_2.0.3.md` §4.3 is the e
 | `PLAN_REPO_INDEX.md` | Same playwright premise in Parts 3/7, which specifically weakens the "move `PLAN_CODE.md` to seonix" argument. Also: "17 named services" is **16**; `ask.mjs` is 3,869 lines (doc says 4,694); Part 4's README refs no longer hold the cited text; Part 1 describes `src/viz.mjs`, which no longer exists |
 | `PLAN_CHILD_CORPUS.md` | Baseline miscounted: "1 kind of bird (`owl`), zero capabilities on it" — `human.jsonl` seeds `owl` **and** `swift`, and `owl` carries `CapableOf hunt_at_night`. The argument survives; the acceptance test does not, and the plan designates those numbers as its own step-5 re-measure target |
 | `PLAN_NLU_BENCHMARKS.md` | Estate figures stale: "723 rows" → **784 / 11 lanes / 368 keys**; "the grammar lane's 224 rows" → **233**. Its spike table is self-declared unreproducible; leave it, but say so where the deltas are quoted |
+| `PLAN_AGENTS.md` §1 | `:84` lists `guardrail` among the router's stages and claims **"all 6 stages"**; `:125` says "the 6-stage router". `guardrail.mjs` was deleted at `e187fd3`. Recount against `src/domain/router/` and fix the stage list, not just the number |
+| `CAPABILITIES_2.0.3.md` row 51 | Says "Capability router, **full 6-stage stack**" for the same reason. One correction, in the audit — `PLAN_AGENTS.md` §1 follows the audit, not the other way round |
+| `src/domain/ask.mjs:17` | A comment cites `temporal.mjs`'s "time-scrubbing Chronograph surface". **No such module has ever existed in git history.** `PLAN_PURGE.md` §8 did not reach it — verified surviving at 2.3.1. Delete the reference |
+| `src/adapters/memory/core.mjs:83` | A comment still points at `derivedUpdatedAt`, deleted at `56b4365`. Also survives at 2.3.1 |
 | `README.md` | `:352` claims `next` writes each board state into memory as facts — true of planner state, false of the fact read-back (3.10a). Fix the doc or the code, not neither |
 
 **Citation rot, and the 81 comments citing deleted docs, belong to `PLAN_PURGE.md`** (§8, §9.4).
@@ -549,24 +569,32 @@ per second**. They may duplicate assertions that exist elsewhere; that is the po
 
 ### The measured facts this design rests on
 
-Timings on this machine (16 logical / **8 physical** cores), clean, single samples:
+**Read the caveat before the table.** These walls were sampled on a shared machine while other
+sessions were working, and they swing badly: `grammar.test.mjs` measured 5.4s once and 31.6s
+another time; `inference.test.mjs` measured 38.6s, then 12.4s, then 24.5s. **Do not treat any
+absolute number here as a budget.** The same self-inflicted-load error put a wrong duration in the
+2.0.3 reports, and it is recorded there too.
 
-| suite | tests | wall | **ms/test** |
-|---|--:|--:|--:|
-| `test/tools/ask.test.mjs` | 130 | 424ms | **3.3** |
-| `test/adapters/paraphrase.test.mjs` | 10 | 219ms | 22 |
-| `test/corpus/grammar.test.mjs` | 234 | 5,408ms | 23 |
-| `test/corpus/templates.test.mjs` | 106 | 7,953ms | 75 |
-| `test/corpus/planning.test.mjs` | 47 | 16,011ms | 341 |
-| `test/corpus/inference.test.mjs` | 169 | 38,641ms | **229** |
-| `test/corpus/bench-smoke.test.mjs` | 5 | 1,869ms | 374 |
+What is stable across every sample is the **density spread**, and that is what the design rests on:
 
-Fixed costs are small: `node --test` on one trivial file is **180ms**; importing `ask.mjs` and
-parsing a query is **110ms**. So a 1s budget is real — roughly **800ms of work** after overhead.
+| suite | tests | ms/test (stable across samples) |
+|---|--:|--:|
+| `test/tools/ask.test.mjs` | 125 | **3.3** (407ms / 424ms / 436ms across three runs) |
+| `test/adapters/paraphrase.test.mjs` | 10 | ~19 |
+| `test/estate/import-layers.test.mjs` | 3 | ~70 |
+| the corpus lanes (`grammar`, `templates`, `planning`, `inference`) | 556 | **135-370**, and volatile |
+| `test/corpus/bench-smoke.test.mjs` | 5 | ~370 |
 
-The density spread is the design: `ask.test.mjs` buys 130 assertions for 424ms because it calls
-`ask()` in-process against a fixture graph. The corpus lanes cost 20-340ms/test because each row
-drives a real session. **Smoke and fast are built from the first kind.**
+`ask.test.mjs` buys 125 assertions for ~0.4s because it calls `ask()` in-process against a fixture
+graph. The corpus lanes cost 40-100× more per test because each row drives a real session. **That
+ratio held on every sample, under every load.** Smoke and fast are built from the first kind.
+
+Fixed costs are small and stable: `node --test` on one trivial file is ~180ms; importing `ask.mjs`
+and parsing a query is ~110ms. So a 1s budget leaves roughly 800ms of real work.
+
+**The budget test is the arbiter, not this table.** Write the tiers, then let
+`test/fast/budget.test.mjs` and `test/smoke/budget.test.mjs` say on a quiet machine whether they fit.
+If they do not, cut content — do not raise the budget.
 
 ### `test/smoke/` — a 1s budget
 
@@ -614,13 +642,21 @@ is the only guard that keeps this honest.
 
 ### `package.json`
 
+The purge gave every CI check an npm hook (`e18ba96`), so the conventions are now settled: `test:*`
+for suites, `check:*` for CI checks, `smoke:deploy` for the post-deploy probe. Fit the tiers to that:
+
 ```json
 "test:smoke": "node --test test/smoke/*.test.mjs",
 "test:fast":  "node --test --test-concurrency=8 test/smoke/*.test.mjs test/fast/*.test.mjs",
 "test":       "node --test --test-concurrency=8 \"test/**/*.test.mjs\""
 ```
 
-`test` keeps its glob and its meaning. The `--test-concurrency=8` is the concurrency finding below.
+**A naming hazard.** `smoke:deploy` already owns the word "smoke" in this repo, and it means
+something else entirely — a probe against a deployed site. `test:smoke` is inside the `test:*`
+namespace so the two do not collide mechanically, but a reader skimming `npm run` sees both. Say in
+`--help` what each is for, or rename one. Do not leave two meanings of "smoke" undocumented.
+
+`test` keeps its glob and its meaning, and gains the concurrency cap below.
 
 ### The concurrency finding
 
@@ -639,6 +675,10 @@ machine — 16 worker processes on **8 physical cores**, each loading the wink m
 half the processes, half the memory, and a machine that stays usable while the suite runs. This is
 the direct answer to "were we way past the point of a useful return" — yes, by 2×, and the return
 was zero.
+
+**Caveat, same as the table above.** These four samples were taken on a loaded machine. The
+*ordering* is a controlled comparison within one session and is likely sound; the absolute walls are
+not. Re-run the sweep on a quiet machine before pinning the number, and pin whatever it says.
 
 **But the bigger waste is the opposite of oversubscription.** Wall time per directory:
 
@@ -869,9 +909,138 @@ changes a block, the harness fails, and that is the design working.
 
 ---
 
+## Phase 10 — `PLAN_NORMATIVE.md`: reconcile the vocabulary against published standards
+
+A deliverable, not an item: **write `PLAN_NORMATIVE.md`**, then work it. This phase specifies what
+that doc must contain. It is research-then-uplift, and the research half is real: papers and
+standards get downloaded and read before a single identifier moves.
+
+### 10.1 Why this is worth doing here
+
+tmct already stores OWL-labelled triples and grounds them in an ontology (`ontology/tmct-core.ttl`).
+So the question is not "should we adopt a standard" — the project answered that. The question is
+whether the vocabulary it actually writes says what the standards already say, or reinvents it.
+
+A first count over `src/` and `ontology/` says it reinvents a lot:
+
+| prefix | uses |
+|---|--:|
+| **`mgx:`** (tmct's own) | **741** |
+| `rdfs:` | 251 |
+| `owl:` | 240 |
+| `rdf:` | 129 |
+| `seon:` | 99 |
+| `xsd:` | 32 |
+| `mgxneg:` | 4 |
+| **`prov:`** | **3** |
+
+**`prov:` at 3 uses is the finding.** Provenance is tmct's central claim — every fact records where
+it came from and when, and the README leads on it. W3C PROV-O is the published standard for exactly
+that, and tmct has its own `mgx:statedBy`, `mgx:commitAuthor`, `mgx:canonicalisedFrom`, source
+individuals, trust priors and reliability. Either those map onto PROV-O and should say so, or they
+do not and the doc should say why. Right now nobody has asked.
+
+The same count surfaced a defect on the way past: **the same term exists in two casings** —
+`mgx:callscoarse` and `mgx:callsCoarse`, `mgx:canonicalisedfrom` and `mgx:canonicalisedFrom`,
+`mgx:changecoupledwith` and `mgx:changeCoupledWith`, `mgx:cause` and `mgx:causes`. An IRI is
+case-sensitive. Two casings are two terms. Resolve this first; it is a bug, not a naming preference,
+and it needs no standard to justify fixing.
+
+### 10.2 What `PLAN_NORMATIVE.md` must do
+
+**Step 1 — inventory.** Every term tmct coins, in one table: the `mgx:`/`mgxneg:` predicates and
+classes, `EDGE_KINDS` (11), `MISS_REASONS` (4), the `RELATIONS` keys (10), the entity classes, the
+rule kinds, `INTERFACE_VERSION`'s service names (16), and the identifier vocabulary in `src/` that
+is not a triple at all but still names a concept. Machine-generate it; a hand list will be wrong by
+the time it is written.
+
+**Step 2 — download the standards, and read them.** Not summaries. The candidate areas, each with
+its own live question:
+
+- **Provenance** — W3C **PROV-O** (`prov:Entity`/`Activity`/`Agent`, `prov:wasDerivedFrom`,
+  `prov:wasAttributedTo`). Does `mgx:statedBy` mean `prov:wasAttributedTo`? Does a derived fact's
+  justification mean `prov:wasDerivedFrom`? This is the largest and most likely alignment.
+- **Ontology and terminology** — OWL 2 and RDFS are already in use; check the *usage* is conformant,
+  not just the prefix. **SKOS** for the corpus's concept vocabulary. **ISO 704** / **ISO 25964** for
+  terminology work and thesaurus structure, which is what the lexicon and corpus are.
+- **Software entities** — **SEON** is already used at 99 sites; check the alignment is real and
+  complete rather than partial. **CodeOntology** and the **SPDX** vocabulary (already used for
+  licences) for the rest.
+- **Controlled English** — **ACE** (Attempto Controlled English) is the declared basis of
+  `src/domain/grammar/ace.mjs`. Get the ACE specification and reconcile: what subset does tmct
+  implement, and where does it diverge? A README that says "ACE-inspired" should be able to say
+  which construction rules it honours.
+- **Planning** — **PDDL** and STRIPS are already cited in `docs/references/planning/`. The action
+  rule family (signature/precondition/effect) is PDDL's shape. Does it use PDDL's names?
+- **Commonsense relations** — the corpus mirrors ConceptNet's `/r/` relations into `mgx:`
+  (`capableOf`, `atLocation`, `causesDesire`, `antonym`). ConceptNet publishes that relation set.
+  A mirrored term should cite its origin.
+- **Truth maintenance** — Doyle's JTMS and de Kleer's ATMS are already named in `PLAN_SYLLOGIST.md`.
+  The justification field is a JTMS shape. Use its vocabulary.
+- **Language scoring** — CEFR is the Council of Europe's, and Phase 8 already constrains what tmct
+  may claim with it. The TROG/CELF construction taxonomy `chatbench/GRADED.md` adapts has its own
+  literature and a licence question the file already raises.
+- **Dialogue acts** — **ISO 24617-2 (SemAF)** is the published standard for the thing the
+  conversational lanes classify. tmct has no intent vocabulary at all (`CAPABILITIES_2.0.3.md` row
+  139, `absent`), so this is a naming decision that can be made right before anything is built.
+
+Put each downloaded artifact under `docs/references/` with the existing README-per-directory
+pattern, and cite it by version and date. **A standard read in 2026 is pinned to its 2026 edition.**
+
+**Step 3 — reconcile, one row per coined term.** For each, exactly one verdict:
+
+- **`aligned`** — already means the standard's term. Say so, and use the standard IRI.
+- **`map`** — means a standard term under a different name. Emit an `owl:equivalentProperty` /
+  `rdfs:subPropertyOf` / `skos:exactMatch` in `ontology/tmct-core.ttl`, and keep tmct's name as a
+  label. **This is the cheapest and most likely verdict, and it is the one to prefer:** the
+  vocabulary keeps reading like tmct while becoming machine-reconcilable with the outside world.
+- **`extend`** — a real concept the standard does not carry. Keep `mgx:`, subclass or subproperty it
+  from the nearest standard term, and write down what it adds.
+- **`rename`** — a coined name that is worse than the standard's for no reason. Change the code.
+- **`drop`** — a term nothing uses. `PLAN_PURGE.md` proved there is a lot of that.
+
+**Step 4 — uplift the code.** Only after Step 3. Prefer `map` over `rename`: an
+`owl:equivalentProperty` triple is additive and cannot break a caller, and a rename touches
+`.tmct/graph.json` payloads that already exist on disk. **Any rename of a stored predicate needs a
+migration story for existing memories, or it is a data-loss bug wearing a tidiness costume.** Say
+that in the plan.
+
+**Step 5 — reference the standards in `README.md`.** This is the deliverable's public half, and
+Phase 9's prose rules apply: no boasting. A short, factual list — the standard, the edition, and
+what tmct uses it for. "Facts carry PROV-O provenance" is a checkable claim; "built on open
+standards" is selling.
+
+### 10.3 The constraints this phase inherits
+
+- **`SKILL_CAPABILITIES_AUDIT.md` §1's rule holds**: an alignment claim in the README is a claim,
+  so it needs a test. An `owl:equivalentProperty` triple in the ontology is testable —
+  `test/adapters/grammar-ontology.test.mjs` already asserts the ontology mirrors the memory
+  vocabulary. Extend that, and the claim is pinned.
+- **The closed-vocabulary discipline is a feature, not an obstacle.** `ask-vocab.mjs` is
+  hand-curated on purpose, and `CLAUDE.md` prefers a curated table to a derived rule. A standard
+  gives the *concept* a name; it does not get to widen the phrase list.
+- **No capability walls.** Where no standard fits, name the gap and the candidate literature. Do not
+  write that a term is unalignable.
+- **This is not a rename-everything pass.** The success condition is that a reader can trace tmct's
+  vocabulary to published work, and that a machine can reconcile the graph with an outside one.
+  Both are met mostly by `map`, which changes no code.
+
+### 10.4 Where it meets the rest of this plan
+
+Phase 8's capability page wants 2026-normative terms for capabilities; Phase 10 wants normative
+terms for the *vocabulary*. They are the same instinct at two layers and should share a reference
+list. Do Phase 10's Step 2 research once and let Phase 8 cite it.
+
+Ordering: **after** Phases 1-3, because a vocabulary reconciliation that lands while the parser is
+being fixed will collide. **Before** Phase 9's prose pass, so the README's standards section is
+written once.
+
+---
+
 ## Sequencing
 
-0. **Rescan after `PLAN_PURGE.md`** (Phase 0). Nothing below is safe to quote until you do.
+0. **Read Phase 0** — `PLAN_PURGE.md` has landed and the reconciliation is recorded there. Rescan
+   anyway: another session has uncommitted work in `scripts/` and `corpus/prose/`.
 1. **Phase 6** — the smoke and fast tiers. Everything after is a code change; these make them cheap
    to check.
 2. **Phase 2** — the fronted-agent passive.
@@ -880,12 +1049,17 @@ changes a block, the harness fails, and that is the design working.
 5. **Phase 7** — the public-surface audit. Do it before Phase 9: knowing which examples are real is
    a prerequisite for rewriting the prose around them.
 6. **Phase 3** — the honest-miss gaps, grouped by fix site.
-7. **Phase 8** — the tested-capability page. After Phases 1-3, so it describes the fixed product.
-8. **Phase 9** — the prose pass. Last, so it describes what is true after everything above.
-9. **Phase 5** — document corrections; fold into whichever commit touches the doc.
-10. **Phase 4.2-4.6** — the instrument work, then re-measure all four axes and re-sweep.
+7. **Phase 10** — write `PLAN_NORMATIVE.md` and work it. After Phases 1-3 so it does not collide
+   with the parser fixes; its Step 2 research is shared with Phase 8. Fix the two-casings defect
+   (§10.1) first — that one needs no standard to justify.
+8. **Phase 8** — the tested-capability page. After Phases 1-3, so it describes the fixed product,
+   and after Phase 10's research, so it uses the terms that research settled.
+9. **Phase 9** — the prose pass, including the README's standards section. Last, so it describes
+   what is true after everything above.
+10. **Phase 5** — document corrections; fold into whichever commit touches the doc.
+11. **Phase 4.2-4.6** — the instrument work, then re-measure all four axes and re-sweep.
 
-Phases 7-9 have one ordering constraint between them: **audit, then measure, then describe.**
+Phases 7-10 have one ordering constraint: **audit, then reconcile, then measure, then describe.**
 Writing the prose first is how a README ends up claiming a headline example that never parsed.
 
 ## Verification
@@ -906,7 +1080,12 @@ Writing the prose first is how a README ends up claiming a headline example that
   the page.
 - Phase 9 may rewrite prose freely and may not touch an example's input or output without re-running
   it. If a rewrite changes a fenced block, the README harness fails — that is the design working.
-- Nothing in Phases 7-9 claims a capability the estate does not pin. `SKILL_CAPABILITIES_AUDIT.md`
+- Phase 10 prefers `map` to `rename`. An `owl:equivalentProperty` triple is additive and cannot
+  break a caller; a rename of a stored predicate needs a migration for the `.tmct/graph.json`
+  payloads already on disk, or it is data loss wearing a tidiness costume.
+- Every standard cited in the README is pinned to its edition and date, and carries a test — an
+  ontology alignment triple is testable, and `test/adapters/grammar-ontology.test.mjs` is where.
+- Nothing in Phases 7-10 claims a capability the estate does not pin. `SKILL_CAPABILITIES_AUDIT.md`
   §1's rule holds on public surfaces too: no test, no claim.
 - Delete each item from `HANDOVER.md` as it closes. `HANDOVER.md` holds open items only — a closed
   item is removed, not annotated.
