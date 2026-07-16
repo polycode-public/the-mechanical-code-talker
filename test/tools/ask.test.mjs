@@ -1412,3 +1412,48 @@ test("canonical: a boolean that isn't a plain complement keeps the coarse restat
 test("canonical: the machine notation is unchanged by the English gloss", () => {
   assert.equal(ask(miniWebappGraph, "which modules cannot import store.mjs").tmct_ask.canonical.machine, "composite(boolean)");
 });
+
+// ---- "talks to" is the union question a newcomer actually asks: imports and
+// calls together, which is exactly what "uses" already traverses. The README's
+// headline example is written in it, so these pin the phrasing and the shape it
+// resolves to. ----
+
+test("ask(): 'what does X talk to' reads as the forward uses union", () => {
+  const talk = ask(miniWebappGraph, "what does app.mjs talk to?");
+  const uses = ask(miniWebappGraph, "what does app.mjs use");
+  assert.equal(talk.tmct_ask.miss, false);
+  assert.equal(talk.content, uses.content);
+  assert.match(talk.tmct_ask.canonical.english, /what "app\.mjs" itself uses/);
+});
+
+test("ask(): 'what talks to X' reads as the reverse uses union", () => {
+  const talk = ask(miniWebappGraph, "what talks to store.mjs?");
+  const uses = ask(miniWebappGraph, "what uses store.mjs");
+  assert.equal(talk.tmct_ask.miss, false);
+  assert.equal(talk.content, uses.content);
+  assert.match(talk.content, /tasks\.mjs/);
+  assert.match(talk.content, /users\.mjs/);
+});
+
+// ---- a forward answer enumerates distinct targets. The "uses" union scans
+// imports+calls+callsSymbol, so a module reached by two of them was listed
+// twice — while the reverse traversal collapsed the same pair, leaving the two
+// directions disagreeing about it. ----
+
+test("ask(): a forward union answer names each target once, however many edge kinds reach it", () => {
+  // app.mjs both imports AND calls router.mjs and logger.mjs.
+  const { content } = ask(miniWebappGraph, "what does app.mjs use");
+  for (const mod of ["src/server/router.mjs", "src/lib/logger.mjs"]) {
+    const hits = content.split(mod).length - 1;
+    assert.equal(hits, 1, `${mod} appears ${hits}x in: ${content}`);
+  }
+});
+
+test("ask(): the forward and reverse union agree about a pair reached by two edge kinds", () => {
+  // app.mjs -> router.mjs holds on both imports and calls. Each direction must
+  // name the other exactly once.
+  const fwd = ask(miniWebappGraph, "what does app.mjs use");
+  const rev = ask(miniWebappGraph, "what uses router.mjs");
+  assert.equal(fwd.content.split("src/server/router.mjs").length - 1, 1);
+  assert.equal(rev.content.split("src/server/app.mjs").length - 1, 1);
+});

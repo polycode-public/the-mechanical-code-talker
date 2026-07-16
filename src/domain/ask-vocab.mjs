@@ -52,6 +52,9 @@ export const RELATIONS = {
     comment: "query-side union: imports (Module->Module) + calls (Module->Module) + callsSymbol (fn->fn).",
     verbs: [
       "uses", "use", "makes use of", "make use of",
+      // casual: "what does app.mjs talk to" is the union question a newcomer
+      // actually asks — imports and calls together, which is what "uses" is.
+      "talks to", "talk to",
       // gerund (g-drop normalization)
       "using",
     ],

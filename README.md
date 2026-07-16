@@ -103,12 +103,15 @@ The test suite replays every runnable example in this README against the
 live product, this transcript included. If the chat behavior ever drifts
 from the output above, the suite fails and says so.
 
-```session
-$ tmct
-tmct> what talks to the payment module?
-…
-tmct> /callers checkout
-…
+Point it at a codebase's graph and the same engine answers structural questions.
+`examples/mini-webapp` ships in this repo, so this runs as written:
+
+```session cwd=repo
+$ node bin/tmct.mjs chat --repo examples/mini-webapp --ephemeral
+tmct> what does app.mjs talk to?
+src/server/router.mjs and src/handlers/tasks.mjs and src/handlers/users.mjs and src/lib/logger.mjs.
+tmct> what talks to store.mjs?
+src/handlers/tasks.mjs and src/handlers/users.mjs.
 tmct> /exit
 ```
 

@@ -2779,7 +2779,13 @@ export function traverse(graph, parsed, { contextId = null, prev = null, pinnedO
     }
     const edges = fwdKinds.flatMap((k) => edgesOfKind(graph, k)).filter((e) => e.subject === objMatch.id);
     const targets = edges.map((e) => graph.byId.get(e.object)).filter(Boolean);
-    const deduped = subjIsFineSymbol ? uniqueById(targets) : targets;
+    // Dedupe unconditionally: a forward answer enumerates distinct targets, so
+    // reaching one twice is never information. It matters for a query-side
+    // union (KIND_UNIONS' "uses" scans imports+calls+callsSymbol), where a
+    // module that both imports AND calls another was listed twice — the
+    // reverse traversal already collapses these, so the two directions
+    // disagreed about the same pair.
+    const deduped = uniqueById(targets);
     // Keep only matches of the asked class, so a forward answer never leaks
     // a wrong-class match once an entityType was actually asked for.
     let matches = deduped;
