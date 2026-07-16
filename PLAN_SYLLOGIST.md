@@ -5,7 +5,7 @@
 > (`retractSubClassOf`, `src/domain/syllogise.mjs`; see §3 for scope). §1/§2/§4/§5 remain notes only —
 > and §1's beyond-RL survey now has a deeper sibling doc, `PLAN_SYLLOGIST_EL_DL.md`, which owns the
 > EL-classifier/DL-tableau tier; this file owns the incrementality/retraction horizon.
-> **2026-07-12: both chat-layer findings routed here from `BENCHMARK_CONVERSATION_1.8.14.md` are now
+> **2026-07-12: both chat-layer findings routed here from `archive/BENCHMARK_CONVERSATION_1.8.14.md` are now
 > CLOSED, not design questions** — (1) "X is not a Y"/"forget that X is a Y" now call
 > `retractSubClassOf` for real (`src/services/chat.mjs` teachLane, `RETRACT_NOT_A_RE`/`RETRACT_FORGET_RE`); (2)
 > teaching against a subject that's also a real code-graph symbol (e.g. "Task") now stores and

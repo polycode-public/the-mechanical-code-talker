@@ -5,8 +5,8 @@ Proving to Problem Solving*, Artificial Intelligence 2(3–4), pp. 189–208,
 https://ai.stanford.edu/~nilsson/OnlinePubs-Nils/PublishedPapers/strips.pdf · McDermott et al.
 (1998), *PDDL — The Planning Domain Definition Language*, Yale/AIPS,
 https://en.wikipedia.org/wiki/Planning_Domain_Definition_Language
-**Licence:** link-only. · **Consumer:** `PLAN_CAPABILITY_ROUTER.md` (Stage 0, the capability
-declaration format; Stage 1, the resolver). · **Status:** UNVERIFIED-pending-web-check.
+**Licence:** link-only. · **Consumer:** `PLAN_AGENTS.md` (Stage 0, the capability
+declaration format; Stage 1, the resolver; router status at §1.3). · **Status:** UNVERIFIED-pending-web-check.
 
 ## What it is
 

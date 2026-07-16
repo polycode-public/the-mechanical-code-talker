@@ -7,7 +7,8 @@ https://repository.essex.ac.uk/8658/
 1348, Springer, https://link.springer.com/book/10.1007/3-540-63912-8
 **Licence:** link-only — the report exists only as a **scanned image PDF** (text not extractable) and
 is not redistributable here; retrieve it from the Essex repository. · **Consumer:**
-`PLAN_CAPABILITY_ROUTER.md` (the loop's act-vs-plan decision; the per-run budget). · **Status:**
+`PLAN_AGENTS.md` (the loop's act-vs-plan decision; the per-run budget; router status at §1.3).
+· **Status:**
 UNVERIFIED-pending-web-check.
 
 ## What it is

@@ -180,7 +180,7 @@ resolves to a real graph traversal or declines honestly:
   (*because/although/while*), conditionals, and false-premise flags ("why
   does X still import Y" when it no longer does).
 
-The full catalog with measured coverage lives in `CAPABILITIES_1.7.3.md` and
+The full catalog with measured coverage lives in `CAPABILITIES_2.0.3.md` and
 the `BENCHMARK_*.md` reports.
 
 **Response finishing.** Before an answer prints, it is segmented into typed

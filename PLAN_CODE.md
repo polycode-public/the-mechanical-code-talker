@@ -17,7 +17,7 @@
 > runs candidates through (§1.4's `goalReason`/`applicableRules`) — was real and tested but
 > unreachable outside `agentbench/`/the test suite until this cycle. It now has a real invocation
 > surface: `tmct plan "<request>"`, chat's `/plan`, and a `./plan` library export (see
-> `CAPABILITIES_1.7.3.md` row 99, `PLAN_AGENTS.md` §1.3). This changes nothing about Track 1's own
+> `archive/CAPABILITIES_1.7.3.md` row 99, `PLAN_AGENTS.md` §1.3). This changes nothing about Track 1's own
 > synthesis PROCESS (still `synthbench/`, still hand-reviewed before a synthesized `GOAL_RULE`
 > joins the frozen `GOAL_RULES` array) — but once a synthesized rule IS merged, `tmct plan` reaches
 > it the same way it reaches every hand-written rule, with no extra wiring. Tracks 2-4 (executable

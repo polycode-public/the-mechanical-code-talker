@@ -9,7 +9,7 @@ evidence for every row.
 > **Invoke it by telling a session:** *"Follow `SKILL_CAPABILITIES_AUDIT.md` and run a capabilities
 > audit"*.
 
-`CAPABILITIES_1.7.3.md` is the last generated audit and the structural reference for what the
+`CAPABILITIES_2.0.3.md` is the last generated audit and the structural reference for what the
 sections look like. Read it for shape. Never copy its verdicts forward.
 
 ---
@@ -115,13 +115,15 @@ Worked example, true as this is written:
 
 | Benchmark | Latest report | Figure comes from |
 | --- | --- | --- |
-| AGENT | `BENCHMARK_AGENT_1.7.0.md` | 1.7.0, carried forward |
-| CEFR_ENGLISH | `BENCHMARK_CEFR_ENGLISH_1.8.0.md` | 1.8.0, carried forward |
-| CONVERSATION | `BENCHMARK_CONVERSATION_1.8.14.md` | 1.8.14, current |
-| INFERENCE | `BENCHMARK_INFERENCE_1.7.0.md` | 1.7.0, carried forward |
+| AGENT | `BENCHMARK_AGENT_2.0.3.md` | 2.0.3, current |
+| CEFR_ENGLISH | `BENCHMARK_CEFR_ENGLISH_2.0.3.md` | 2.0.3, current |
+| CONVERSATION | `BENCHMARK_CONVERSATION_2.0.3.md` | 2.0.3, current |
+| INFERENCE | `BENCHMARK_INFERENCE_2.0.3.md` | 2.0.3, current |
 
-`max(1.7.0, 1.8.0, 1.8.14, 1.7.0)` is 1.8.14, so that audit is `CAPABILITIES_1.8.14.md`, even
-though `package.json` reads 1.12.1.
+`max(2.0.3, 2.0.3, 2.0.3, 2.0.3)` is 2.0.3, so that audit is `CAPABILITIES_2.0.3.md`, even though
+`package.json` reads 2.1.0. That cycle measured all four axes before writing, so no row is carried
+forward — `CAPABILITIES_2.0.3.md`'s own opening says so. A cycle that measures fewer axes fills the
+"Figure comes from" column with the older version and the words "carried forward".
 
 **Every audit opens with that table, filled in for its own cycle.** A figure whose report is older
 than the audit's own number is carried forward, and the row says so. A carried-forward number

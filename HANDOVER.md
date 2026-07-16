@@ -1,9 +1,9 @@
 # HANDOVER — current state & kickoff
 
 Living handover. Any session resumes from here. **Plan of record: `ROADMAP.md`** — read its
-"Current capability surface" and "What's next" sections for the full feature-level picture. This
-file holds ONLY what to do next — no completed-work narrative (that lives in `ROADMAP.md`), per
-this project's own standing discipline.
+"What tmct is" and "What's next" sections for the full feature-level picture. This file holds ONLY
+what to do next. Completed work is not narrated here; `git log`, the `BENCHMARK_*.md` reports and
+`CAPABILITIES_*.md` hold that record.
 
 Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.md` and
 `~/.claude/inboxes/tmct-hanoi.md`; `mechanic.md` is retired.
@@ -103,7 +103,7 @@ different sentence is gone.
 - **The fronted-agent passive answers the inverse, confidently** — `by which modules is
   app/lib/b.mjs imported` answers `app/lib/a.mjs.` (expected `app/functions/d/handler.mjs`), because
   it compiles to `forward(imports, "app/lib/b.mjs")` where the question asked for reverse. Tier-1
-  (deterministic) PASS → FAIL vs `BENCHMARK_CEFR_ENGLISH_1.8.0.md` on `g-b2-passive-8` and
+  (deterministic) PASS → FAIL against the 1.8.0 baseline on `g-b2-passive-8` and
   `g-b2-passive-10`. Bisected to `98df45a fix(ask): the passive keeps its agent…`, which replaced a
   "wh-word after *by* means the agent is questioned → reverse" test with a "patient before *by*,
   agent after *by*" partition. That partition assumes a postposed agent (`X is imported by Y`); when
@@ -119,12 +119,12 @@ different sentence is gone.
   See `BENCHMARK_CEFR_ENGLISH_2.0.3.md`.
 - **The resolver floor stopped planning `ab-c2-what-to-test`** — `node agentbench/run.mjs
   --driver resolver --ladder`: the case's verdict went `completed: true` → `false` since
-  `BENCHMARK_AGENT_1.7.0.md`, taking C2 plan-completion 36% → 27%. Probably correct (its plan now
+  the 1.7.0 baseline, taking C2 plan-completion 36% → 27%. Probably correct (its plan now
   comes from the goal reasoner, which the floor arm lacks), but unconfirmed. Decide whether the
   floor's expectation moves or the resolver lost a plan it should still build. See
   `BENCHMARK_AGENT_2.0.3.md`.
 - **INFBENCH has stopped discriminating** — `npm run infbench`: 219/219 chat, 80/80 kernel, every
-  band PASS, and 0 verdict changes across all 299 rows vs `BENCHMARK_INFERENCE_1.7.0.md`. The
+  band PASS, and 0 verdict changes across all 299 rows against the 1.7.0 baseline. The
   ladder now measures the generator's reach, not the prover's. Deciding what a deeper band should
   assert is the open question. See `BENCHMARK_INFERENCE_2.0.3.md`.
 - **50 of INFBENCH's 219 greens are floors, not proofs** — they grade against a declared ceiling,
@@ -206,22 +206,11 @@ a consistency service for an LLM tool loop — INFBENCH's 20 INF-C2 cases are a 
 to grade it) and `PLAN_CHILD_CORPUS.md` (a wider default seed, so the base rate counts more than
 one bird).
 
-## Discipline (unchanged)
+## Discipline
 
-**Working model: coordinator + background sub-agents** (copied verbatim from this repo's own
-`CLAUDE.md`, so it's visible directly in this file too): run big tasks in concurrent background
-sub-agents and keep the main chat free — the main session is the COORDINATOR (plans, launches,
-integrates, answers the operator), not the worker. Decompose into workstreams with clear
-file-ownership boundaries; serialize on shared files (one agent owns `package.json`, `src/`, `bin/`,
-`test/` sequences; docs/site tracks run in parallel). Keep the chat for chat: anything long-running
-(benchmarks, judge passes, builds, test sweeps) executes as a BACKGROUND task at maximum safe
-concurrency; the main session launches it, keeps coordinating and conversing, and collects results
-on the completion notification — never block the conversation on a run. Push/publish is gated on
-the operator (CI publishes on version bump on `main`); versioning/commit/push cadence follows the
-operator's explicit prompt instructions (see `CLAUDE.md`'s first section).
-
-Repo-local identity (`antony@polycode.co.uk` / `Antony at Polycode`). `npm test` green at every
-commit.
+`CLAUDE.md` is the standing working model: the coordinator/background-sub-agent split, the test
+blast radius, the versioning and push rules, and the repo-local identity. Read it there. This
+section holds only what `CLAUDE.md` doesn't.
 
 Three hard-won lessons, carried forward:
 
@@ -255,6 +244,4 @@ Three hard-won lessons, carried forward:
    back to life.
 
 *Prior sessions' detailed handover (phases 0-13, releases 0.2.0 → 1.4.0) lives in this file's git
-history plus the `CEFR_ENGLISH_*`/`AGENTBENCH_*`/`INFBENCH_*`/`CONVERSATIONBENCH_*`/`archive/PLAN_*`
-artifacts. `ROADMAP.md`'s "Where we are now" holds the fuller progress narrative for everything
-shipped.*
+history, plus the `BENCHMARK_<axis>_<version>.md` reports and `archive/`.*
