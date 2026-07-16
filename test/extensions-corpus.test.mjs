@@ -1,12 +1,12 @@
 // extensions-corpus.test.mjs — the unified corpus loader loop
-// (src/extensions.mjs seedActiveCorpusEntries), Part 2's core seam: ordering,
+// (src/services/extensions.mjs seedActiveCorpusEntries), Part 2's core seam: ordering,
 // per-bundle failure tolerance, and idempotent re-running.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { resolveExtensions, seedActiveCorpusEntries } from "../src/extensions.mjs";
+import { resolveExtensions, seedActiveCorpusEntries } from "../src/services/extensions.mjs";
 import { loadMemory, FACT_CLASS } from "../src/adapters/memory/core.mjs";
 
 const tmp = () => mkdtemp(join(tmpdir(), "tmct-extcorpus-"));

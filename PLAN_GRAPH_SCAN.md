@@ -115,7 +115,7 @@ place.
 ## The query-side hypothesis: not confirmed at the scale this repro could reach
 
 The original finding named the query side too — a 13-minute single query against the 72,075-fact
-`init:xl` store. Reading the query path found a real, related defect: `factRows` (`src/chat.mjs:4209`)
+`init:xl` store. Reading the query path found a real, related defect: `factRows` (`src/services/chat.mjs:4209`)
 calls `loadMemory` (full file read + `JSON.parse`) and `readFactRows` (`core.mjs:1728`, another O(n)
 pass building two `Map`s and scanning every individual) **fresh, uncached, on every call** — and
 `factAnswer` alone (`chat.mjs:4615`–`5018`) calls it from at least seven separate call sites
@@ -249,5 +249,5 @@ couldn't reach — confirming or ruling out the three candidates named above for
   gathered here rules out simple total-fact-count scaling as the sole explanation but could not safely
   reach the real 72,075-fact, multi-corpus scale to confirm what does explain it. Phase 3 above is the
   named follow-up, not resolved here.
-- No implementation. This document proposes a design; `src/adapters/memory/core.mjs` and `src/chat.mjs` are
+- No implementation. This document proposes a design; `src/adapters/memory/core.mjs` and `src/services/chat.mjs` are
   unchanged by it.

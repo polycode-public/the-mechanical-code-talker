@@ -8,7 +8,7 @@ import {
   maskSegments, flatten,
   protectedSpans, protectedMultiset, invariantHolds, assertInvariance,
   finish, applyGrammar, loadGrammarRules,
-} from "../../src/finish.mjs";
+} from "../../src/services/finish.mjs";
 
 const GRAPH = {
   individuals: [

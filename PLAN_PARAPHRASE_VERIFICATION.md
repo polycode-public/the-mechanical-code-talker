@@ -68,8 +68,8 @@ never raw sentence text, never a graph object:
   type-then-subclass chain, in at most `maxHops` hops?" Its own doc comment: "Pure, no I/O,
   deterministic given the same edge lists" (`:1319-1320`).
 
-`src/chat.mjs` already reuses these live, read-only, outside the batch pass — the exact precedent
-this design leans on. At `src/chat.mjs:5785-5798`, the ISA proof-chase builds edge arrays straight
+`src/services/chat.mjs` already reuses these live, read-only, outside the batch pass — the exact precedent
+this design leans on. At `src/services/chat.mjs:5785-5798`, the ISA proof-chase builds edge arrays straight
 from `readFactRows`-derived rows:
 
 ```js
@@ -119,7 +119,7 @@ committed (`scripts/generate-template-variants.mjs:9-10`):
 The committed output, `corpus/generated/ace-surface-variants.jsonl` (17 rows, confirmed by
 `corpus/generated/manifest.json`), is real: e.g. `"the piece has a fast rhythm"` →
 `"the piece has a fast beat"` (`rhythm`/`beat`, WordNet synset `07100710-n`). Its own README states
-the honest scope (`corpus/generated/README.md`): "This corpus is not loaded by `src/chat.mjs`/
+the honest scope (`corpus/generated/README.md`): "This corpus is not loaded by `src/services/chat.mjs`/
 `src/domain/ask.mjs` or any other product code — it is committed raw material... Wiring it into live answer
 rendering is a separate, future phase."
 
@@ -143,14 +143,14 @@ problem (surface variety in `ask.mjs`'s code-graph templates) than the Ambition 
 "paraphrase... verified... entail the same conclusions" framing, which is clearly about a variant
 that *could* have drifted in meaning and therefore needs checking. This design is about that second,
 harder case: the memory-graph fact answers rendered by `factPhrase`/`renderFactLine`
-(`src/chat.mjs:4156-4185`), where a paraphrase touches real content words.
+(`src/services/chat.mjs:4156-4185`), where a paraphrase touches real content words.
 
 ## Part 3 — what "entail the same conclusions" means for a sentence, concretely
 
 **The original answer already has its triple; it does not need parsing.** `renderFactLine`
-(`src/chat.mjs:4156`) renders every fact answer from a stored Fact row —
+(`src/services/chat.mjs:4156`) renders every fact answer from a stored Fact row —
 `{subject, predicate, object, provenance}` — through `factPhrase`, which looks up a fixed connector
-phrase in `FACT_PREDICATE_PHRASES` (`src/chat.mjs:4022-4052`, ~30 entries, e.g.
+phrase in `FACT_PREDICATE_PHRASES` (`src/services/chat.mjs:4022-4052`, ~30 entries, e.g.
 `"rdfs:subClassOf": "is a kind of"`, `"mgx:hasA": "has"`, `"mgx:usedFor": "is used for"`). The
 sentence the user sees ("dog is a kind of animal") is a template fill, not free English that has to
 be parsed back into a triple to recover its meaning — the triple is sitting right there in the Fact
@@ -187,7 +187,7 @@ than discovering during implementation. Reconstructing the original's triple fro
 directly (which is already correct, by construction) sidesteps that risk entirely.
 
 **Was `scripts/extract-facts-from-text.mjs`'s recognizer considered?** Yes, and ruled out for this
-specific job. It reuses `runTurn` (`src/chat.mjs:4604`/`8922`) against a real or ephemeral memory
+specific job. It reuses `runTurn` (`src/services/chat.mjs:4604`/`8922`) against a real or ephemeral memory
 directory (`scripts/extract-facts-from-text.mjs:91-99`) — broader than `parseAce` alone (it also
 covers the teach lane's "natural frames," e.g. general-verb-teach shapes `parseAce` doesn't reach),
 but it does real `fs` I/O and writes into a memory graph (even an ephemeral scratch one) to determine
@@ -239,7 +239,7 @@ same-synset swaps only, never a hypernym/hyponym crossing). If a future generati
 a paraphrase that swaps a class for a taught superclass/subclass (e.g. an original `dog rdfs:subClassOf
 animal` paraphrased toward `dog rdfs:subClassOf creature`), same-synset equality (Check 3) is the
 wrong tool — `creature` is not `animal`'s synonym, it's its taught superclass. This is where
-`findIsaChain` earns its place, reusing `src/chat.mjs:5785-5798`'s exact live-chase pattern: build
+`findIsaChain` earns its place, reusing `src/services/chat.mjs:5785-5798`'s exact live-chase pattern: build
 `subClassEdges`/`typeEdges` from `readFactRows`, splice in the *candidate's* synthetic edge
 (`[candidateObject, originalObject]` or the reverse), and call
 `findIsaChain(candidateObject, [originalObject], typeEdges, subClassEdges, { maxHops: N })`. A chain

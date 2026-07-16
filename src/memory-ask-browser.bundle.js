@@ -6743,14 +6743,6 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     }
   });
 
-  // adapter-stub-ask-nlp.mjs:./adapters/ask-nlp.mjs
-  var nlpAdapter;
-  var init_ask_nlp = __esm({
-    "adapter-stub-ask-nlp.mjs:./adapters/ask-nlp.mjs"() {
-      nlpAdapter = void 0;
-    }
-  });
-
   // src/adapters/corpus/templates.mjs
   var import_meta, PKG_ROOT, TEMPLATES_FILE, PHRASEBOOK_FILE, TECHNICAL_SLOTS;
   var init_templates = __esm({
@@ -6849,10 +6841,10 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     }
   });
 
-  // src/finish.mjs
+  // src/services/finish.mjs
   var import_meta2, GRAMMAR_DIR, GRAMMAR_RULES_FILE, SEGMENT_TYPES, PROTECTED_TYPES;
   var init_finish = __esm({
-    "src/finish.mjs"() {
+    "src/services/finish.mjs"() {
       init_node_fs();
       init_node_url();
       init_node_path();
@@ -6860,7 +6852,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
       init_templates();
       import_meta2 = {};
       GRAMMAR_DIR = dirname(fileURLToPath(import_meta2.url));
-      GRAMMAR_RULES_FILE = join(GRAMMAR_DIR, "..", "data", "templates", "grammar-rules.toml");
+      GRAMMAR_RULES_FILE = join(GRAMMAR_DIR, "..", "..", "data", "templates", "grammar-rules.toml");
       SEGMENT_TYPES = Object.freeze([
         "prose",
         "entity",
@@ -6944,6 +6936,14 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     }
   });
 
+  // adapter-stub-ask-nlp.mjs:../adapters/ask-nlp.mjs
+  var nlpAdapter2;
+  var init_ask_nlp = __esm({
+    "adapter-stub-ask-nlp.mjs:../adapters/ask-nlp.mjs"() {
+      nlpAdapter2 = void 0;
+    }
+  });
+
   // src/adapters/toml-config.mjs
   var init_toml_config = __esm({
     "src/adapters/toml-config.mjs"() {
@@ -6953,10 +6953,10 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     }
   });
 
-  // src/sessions.mjs
+  // src/services/sessions.mjs
   var SESSIONS_DIR_REL;
   var init_sessions = __esm({
-    "src/sessions.mjs"() {
+    "src/services/sessions.mjs"() {
       init_promises();
       init_node_path();
       init_core();
@@ -7016,7 +7016,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     }
   });
 
-  // src/extensions.mjs
+  // src/services/extensions.mjs
   function builtinExtensions() {
     return {
       // Opt-in code-domain bundle.
@@ -7107,14 +7107,14 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   }
   var import_meta5, NAMENET_DIR, EXTENSION_KINDS, CONCEPTNET_PREFER, BUILTIN_EXTENSIONS;
   var init_extensions = __esm({
-    "src/extensions.mjs"() {
+    "src/services/extensions.mjs"() {
       init_node_path();
       init_promises();
       init_node_url();
       init_toml_config();
       init_conceptnet();
       import_meta5 = {};
-      NAMENET_DIR = join(dirname(fileURLToPath(import_meta5.url)), "..", "corpus", "namenet");
+      NAMENET_DIR = join(dirname(fileURLToPath(import_meta5.url)), "..", "..", "corpus", "namenet");
       EXTENSION_KINDS = Object.freeze(["corpus", "lexicon", "templates", "pack", "ontology"]);
       CONCEPTNET_PREFER = ["rdfs:subClassOf", "rdf:type", "mgx:usedFor", "mgx:partOf", "mgx:capableOf"];
       BUILTIN_EXTENSIONS = Object.freeze(builtinExtensions());
@@ -8019,7 +8019,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     }
   });
 
-  // src/chat.mjs
+  // src/services/chat.mjs
   init_node_path();
 
   // src/server.mjs
@@ -8043,8 +8043,8 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   var setConstructionBanks = () => {
   };
 
-  // src/server.mjs
-  init_ask_nlp();
+  // adapter-stub-ask-nlp.mjs:./adapters/ask-nlp.mjs
+  var nlpAdapter = void 0;
 
   // adapter-stub-corpus/construction-banks.mjs:./adapters/corpus/construction-banks.mjs
   var readConstructionFiles = () => ({ relations: [], constructions: [] });
@@ -8091,7 +8091,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     }
   ];
 
-  // src/chat.mjs
+  // src/services/chat.mjs
   init_config();
   init_codegraph();
   init_ask();
@@ -8119,7 +8119,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   var spawnSync6 = unavailable6("spawnSync");
   var createInterface6 = unavailable6("createInterface");
 
-  // src/chat.mjs
+  // src/services/chat.mjs
   init_templates();
 
   // src/domain/memory/bias.mjs
@@ -8140,18 +8140,29 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     return list.map((row, index) => ({ row, index, bias: biasForRow(row, biasByBundle) })).sort((a, b) => b.bias - a.bias || (b.row?.trust ?? 0) - (a.row?.trust ?? 0) || a.index - b.index).map((x) => x.row);
   }
 
-  // src/chat.mjs
+  // src/services/chat.mjs
   init_core();
   init_finish();
 
-  // src/sentences.mjs
+  // src/services/sentences.mjs
   init_wink_model();
 
-  // src/chat.mjs
+  // src/services/chat.mjs
   init_ask_vocab();
   init_normalize();
   init_nlp_registry();
+
+  // adapter-stub-strategies/constructions.mjs:../domain/interpret/strategies/constructions.mjs
+  var setConstructionBanks2 = () => {
+  };
+
+  // src/services/chat.mjs
   init_ask_nlp();
+
+  // adapter-stub-corpus/construction-banks.mjs:../adapters/corpus/construction-banks.mjs
+  var readConstructionFiles2 = () => ({ relations: [], constructions: [] });
+
+  // src/services/chat.mjs
   init_fuzzy();
 
   // src/services/chat-session.mjs
@@ -8231,7 +8242,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   // src/services/chat-session.mjs
   init_config();
 
-  // src/cli-args.mjs
+  // src/services/cli-args.mjs
   init_node_path();
   init_promises();
   init_node_path();
@@ -8242,16 +8253,16 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   init_codegraph();
   init_sessions();
 
-  // src/telemetry.mjs
+  // src/services/telemetry.mjs
   init_promises();
   init_node_path();
 
   // src/services/chat-session.mjs
   init_extensions();
 
-  // src/chat.mjs
-  setDefaultNlpAdapter(nlpAdapter);
-  setConstructionBanks(readConstructionFiles);
+  // src/services/chat.mjs
+  setDefaultNlpAdapter(nlpAdapter2);
+  setConstructionBanks2(readConstructionFiles2);
   var CONTEXT_WORDS = /* @__PURE__ */ new Set(["it", "this", "that", "here"]);
   var isPronoun = (s) => CONTEXT_WORDS.has(String(s || "").trim().toLowerCase());
   var GOAL_BY_KIND = {

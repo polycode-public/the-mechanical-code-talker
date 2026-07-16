@@ -9,7 +9,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { runTurn } from "../../src/chat.mjs";
+import { runTurn } from "../../src/services/chat.mjs";
 import { parseEntities } from "../../src/domain/codegraph.mjs";
 import { appendFact } from "../../src/adapters/memory/core.mjs";
 import { clearCache } from "../../src/adapters/source.mjs";

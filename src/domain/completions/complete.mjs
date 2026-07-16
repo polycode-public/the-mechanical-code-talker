@@ -8,7 +8,7 @@ import { rankSentences } from "./rank.mjs";
 import { inferRelations } from "./infer.mjs";
 import { pruneCompletion } from "./prune.mjs";
 import { loadMemory } from "../../adapters/memory/core.mjs";
-import { finish, grammarRules } from "../../finish.mjs";
+import { finish, grammarRules } from "../../services/finish.mjs";
 
 /** grammarRules() with sentence-capitalisation force-enabled (disabled in live chat only to
  *  protect single-answer lowercase-opener goldens, which don't apply to a multi-sentence

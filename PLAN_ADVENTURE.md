@@ -9,12 +9,12 @@ that shipped substrate.
 
 - Mutable turn-by-turn world state as graph facts (this document's Gap 2) shipped as per-step
   board snapshots (`board@step1…N`), written through ordinary `appendFact` and executed by the
-  "next" command (`PLAN_NEXT_RE` in `src/chat.mjs`). The river-crossing rows in
+  "next" command (`PLAN_NEXT_RE` in `src/services/chat.mjs`). The river-crossing rows in
   `test/corpus/planning.jsonl` validate it end to end.
 - Actions as taught, graph-resident data with precondition checks before firing (Gap 3) shipped
   richer than proposed here: four action rule kinds (`RULE_KIND_ACTION_SIGNATURE` /
   `RULE_KIND_ACTION_PRECOND` / `RULE_KIND_ACTION_EFFECT` / `RULE_KIND_ACTION_CONSTRAINT` in
-  `src/adapters/memory/core.mjs`), live teach frames (the ACTION-RULE TEACH FRAMES in `src/chat.mjs`),
+  `src/adapters/memory/core.mjs`), live teach frames (the ACTION-RULE TEACH FRAMES in `src/services/chat.mjs`),
   legal-move enumeration with constraint pruning (`movesFromRules` in `src/domain/domain.mjs`), and
   plan search (`findActionPath` / `findReachableSet` in `src/domain/planning.mjs`).
 - Taught action families register as capability records the router executes
@@ -92,7 +92,7 @@ case of an existing one.
 Shipped generically as the snapshot-per-step convention this document proposed: never mutate,
 always append a fresh per-step fact through the ordinary `appendFact` path, read back through the
 same `readFactRows(memory)` every other feature uses. The "next" command (`PLAN_NEXT_RE` in
-`src/chat.mjs`) executes one plan step and writes the `board@stepN` snapshot; the river-crossing
+`src/services/chat.mjs`) executes one plan step and writes the `board@stepN` snapshot; the river-crossing
 rows in `test/corpus/planning.jsonl` check every intermediate board against the written facts.
 Ashcombe Hall reuses this as-is: the player is one ordinary individual (e.g. `mgx:player`), and
 `currentlyIn`/`carries`/`hasVisited` are ordinary snapshot facts on that node
@@ -105,7 +105,7 @@ This document proposed one new rule kind, `RULE_KIND_ACTION`, with `[verb, preco
 slots. The shipped design is finer-grained: four action rule kinds in `src/adapters/memory/core.mjs` —
 `RULE_KIND_ACTION_SIGNATURE`, `RULE_KIND_ACTION_PRECOND`, `RULE_KIND_ACTION_EFFECT`,
 `RULE_KIND_ACTION_CONSTRAINT` (`RULE_KINDS` now has seven entries). An action is a named family of
-these rules, taught one sentence at a time through the ACTION-RULE TEACH FRAMES in `src/chat.mjs`,
+these rules, taught one sentence at a time through the ACTION-RULE TEACH FRAMES in `src/services/chat.mjs`,
 stored as ordinary Rule individuals, never a hardcoded per-verb switch. `movesFromRules`
 (`src/domain/domain.mjs`) enumerates the legal moves a state allows and prunes with the taught
 constraints; `findActionPath`/`findReachableSet` (`src/domain/planning.mjs`) search over them; each taught
@@ -116,7 +116,7 @@ are ordinary taught families on this mechanism. Nothing here needs a new kind or
 ### Gap 4 — an NPC turn scheduler (open; the hardest genuinely new piece)
 
 tmct today is purely reactive: the planner and everything else run only in response to a line of
-input, inside `turn(line)` — confirmed by reading `createSession`'s handle shape (`src/chat.mjs`,
+input, inside `turn(line)` — confirmed by reading `createSession`'s handle shape (`src/services/chat.mjs`,
 the same `focus`/`last` closure-variable relay `PLAN_GUESS_NUMBER.md` §1 documented). There is no
 turn counter, no timer, no background loop; nothing calls back into the graph without a `turn(line)`
 call first. This document proposes the minimal honest version of autonomy that fits that constraint
@@ -204,7 +204,7 @@ This document's original single-kind slot design is superseded. The shipped voca
 (`RULE_KIND_ACTION_SIGNATURE`/`PRECOND`/`EFFECT`/`CONSTRAINT`, `src/adapters/memory/core.mjs`) already
 stores structure, never prose: a signature names the verb and its slots, preconditions and effects
 are separate rule individuals in the same named family, and constraints prune illegal moves. The
-game teaches its starter verbs through the existing teach frames in `src/chat.mjs`. If one of
+game teaches its starter verbs through the existing teach frames in `src/services/chat.mjs`. If one of
 Ashcombe's actions needs a precondition shape the shipped vocabulary can't express, Phase 2
 surfaces that as a concrete gap in the shipped mechanism, not a new design here.
 
@@ -220,7 +220,7 @@ this term-matching search over `readFactRows(memory)`. "What am I carrying" is t
 extractive pipeline at a different query term — no new digest/rendering code, matching the
 operator's explicit instruction not to build a bespoke player summarizer. An adjacent shipped
 mechanism worth knowing about: taught `mgx:rendersAs` bindings already drive the plan lane's board
-digest (the render-binding teach frame in `src/chat.mjs`, consumed by `src/plan-viz.mjs`), so a
+digest (the render-binding teach frame in `src/services/chat.mjs`, consumed by `src/services/plan-viz.mjs`), so a
 room rendering has a second precedented path if the extractive digest falls short. The one real
 risk, named plainly: `pruneCompletion`'s top-K-per-group cutoff (`DEFAULT_MAX_SENTENCES_PER_GROUP`
 in `src/domain/completions/complete.mjs`) could silently drop a fact that matters for correctness (e.g.

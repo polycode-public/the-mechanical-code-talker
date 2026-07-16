@@ -89,9 +89,9 @@ Measured init sizes (fresh store, this machine): `init:large` 37,797 facts; `ini
 - **Closed-set gate coverage (a pattern, not one bug — mined from the strategy advisor's
   2026-07-12 sweep).** Several dead-ends share one shape: the machinery that would answer
   correctly exists, but a narrower closed-set gate in front of it rejects a valid input variant.
-  Two instances still live: `looksCodeish` (`src/chat.mjs`) flags any CamelCase compound as
+  Two instances still live: `looksCodeish` (`src/services/chat.mjs`) flags any CamelCase compound as
   code-ish and blocks the bare-meta-fact fallback that knows how to answer "what is X"; and
-  `CONTEXT_WORDS` (`src/chat.mjs`, four singular pronouns) has no plural/ordinal members, and
+  `CONTEXT_WORDS` (`src/services/chat.mjs`, four singular pronouns) has no plural/ordinal members, and
   object-position "that" never consults focus the way subject-position "it" does. A third
   instance (COUNT_NOUNS not consulting `EDGE_NOUN_TO_METRIC`) has since been fixed via
   `answerEdgeCount`, confirming the fix pattern: audit one gate, decide which members/table
@@ -129,7 +129,7 @@ operator's explicit prompt instructions (see `CLAUDE.md`'s first section).
 
 Repo-local identity (`antony@polycode.co.uk` / `Antony at Polycode`). `npm test` green at every
 commit. Coordinator plus background sub-agents, disjoint file-ownership where possible, serialized
-on shared files — this repo's heaviest-touched files (`src/chat.mjs`, `src/domain/ask.mjs`) get edited by
+on shared files — this repo's heaviest-touched files (`src/services/chat.mjs`, `src/domain/ask.mjs`) get edited by
 one dispatch at a time, never in parallel, to avoid collisions.
 
 Three hard-won lessons, carried forward:

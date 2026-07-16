@@ -1,4 +1,4 @@
-// cli-args.test.mjs — src/cli-args.mjs's shared flag helpers and
+// cli-args.test.mjs — src/services/cli-args.mjs's shared flag helpers and
 // resolveRuntimeConfig precedence chain (arg > env > tmct.toml > default for
 // graph paths; arg > toml > default for every other knob, via toml-config.mjs's
 // existing, separately-tested mergeEffective).
@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
-import { strFlag, repeatedFlag, boolFlag, enumFlag, resolveRuntimeConfig } from "../src/cli-args.mjs";
+import { strFlag, repeatedFlag, boolFlag, enumFlag, resolveRuntimeConfig } from "../src/services/cli-args.mjs";
 import { DEFAULT_GRAPH_REL } from "../src/adapters/config.mjs";
 
 const tmp = () => mkdtemp(join(tmpdir(), "tmct-cliargs-"));

@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 
 import { ingestSchemaDocs } from "../../src/schema-docs.mjs";
 import { buildCapabilityPlanCtx, runCapabilityPlan, declaredCapabilityNames } from "../../src/domain/router/drive.mjs";
-import { capabilityPlanDeps } from "../../src/chat.mjs";
+import { capabilityPlanDeps } from "../../src/services/chat.mjs";
 
 const FIXTURE = fileURLToPath(new URL("../fixtures/entities.fixture.json", import.meta.url));
 

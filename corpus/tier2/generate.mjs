@@ -244,7 +244,7 @@ export const CORPUSES = {
   // PLAN_SEED.md — the default "human-world" persona (the operator's own
   // framing: SEON+ConceptNet's code-domain bias was never the only sensible
   // default; this is the general-knowledge seed set that REPLACES it as the
-  // default active bundle, per src/extensions.mjs's builtinExtensions()).
+  // default active bundle, per src/services/extensions.mjs's builtinExtensions()).
   // Hand-curated from two locally-cloned reference sources
   // (scripts/extract-persona-sources.mjs's worksheet — never a mechanical
   // dump of either): Open English WordNet (CC-BY-4.0, Princeton WordNet +

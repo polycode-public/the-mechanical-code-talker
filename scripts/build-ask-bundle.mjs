@@ -7,7 +7,7 @@
 //     the same ones `npm run chat` uses): "what is a dog", "who is the
 //     grandfather of ishmael".
 // It's inlined verbatim into the page by ledger-viz.mjs's renderLedgerHtml.
-// Regenerate after touching src/chat.mjs and its dependents:
+// Regenerate after touching src/services/chat.mjs and its dependents:
 // `npm run build:ask-bundle`.
 //
 // Adapted directly from seonix's own scripts/build-ask-bundle.mjs (proven in

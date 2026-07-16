@@ -6,10 +6,10 @@ import assert from "node:assert/strict";
 import { copyFile, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { telemetryEnabled, invocationId, redact, createTelemetry } from "../src/telemetry.mjs";
+import { telemetryEnabled, invocationId, redact, createTelemetry } from "../src/services/telemetry.mjs";
 import { createGraphService } from "../src/adapters/providers/graph-service.mjs";
 import { fixtureGraph } from "../src/adapters/providers/fixture.mjs";
-import { createSession } from "../src/chat.mjs";
+import { createSession } from "../src/services/chat.mjs";
 import { dispatchTool } from "../src/server.mjs";
 import { fileURLToPath } from "node:url";
 

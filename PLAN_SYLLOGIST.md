@@ -7,12 +7,12 @@
 > EL-classifier/DL-tableau tier; this file owns the incrementality/retraction horizon.
 > **2026-07-12: both chat-layer findings routed here from `BENCHMARK_CONVERSATION_1.8.14.md` are now
 > CLOSED, not design questions** — (1) "X is not a Y"/"forget that X is a Y" now call
-> `retractSubClassOf` for real (`src/chat.mjs` teachLane, `RETRACT_NOT_A_RE`/`RETRACT_FORGET_RE`); (2)
+> `retractSubClassOf` for real (`src/services/chat.mjs` teachLane, `RETRACT_NOT_A_RE`/`RETRACT_FORGET_RE`); (2)
 > teaching against a subject that's also a real code-graph symbol (e.g. "Task") now stores and
 > coexists with the graph fact — root cause was `src/domain/ask.mjs`'s `relaxParse` DROP-UNMATCHED layer
 > silently re-reading a malformed declarative teach sentence as a different, valid elliptical
 > QUESTION (dropping the taught object entirely) before the miss-gated teach lane ever ran; fixed by
-> `runAsk`'s `relaxedTeachCollision` guard (`src/chat.mjs`), which restores the original graph answer
+> `runAsk`'s `relaxedTeachCollision` guard (`src/services/chat.mjs`), which restores the original graph answer
 > if the teach attempt itself declines. Regression coverage: the retract/"not a"/"forget" rows in
 > `test/corpus/inference.jsonl` (the corpus lane that absorbed the standalone teach-retract suite).
 > Pulled out of `PLAN_INFERENCE_TESTING.md` on its own retirement, 2026-07-11. That file's own §4/§5

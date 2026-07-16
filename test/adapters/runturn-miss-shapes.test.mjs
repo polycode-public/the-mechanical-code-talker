@@ -5,7 +5,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
-import { runTurn, shortMissHint, WALL_MISS_RE } from "../../src/chat.mjs";
+import { runTurn, shortMissHint, WALL_MISS_RE } from "../../src/services/chat.mjs";
 import { parseEntities } from "../../src/domain/codegraph.mjs";
 import * as source from "../../src/adapters/source.mjs";
 

@@ -93,7 +93,7 @@ conversation stops. A dead-end is any turn whose reply is one of:
 - **(2026-07-10) a broad, open-ended question that should route to `src/domain/completions/`'s pipeline**
   ("give me a detailed summary of how X works", "walk me through what happens when Y") hitting the
   plain grammar wall with no inferred goal at all. The pipeline is now wired into live chat
-  dispatch (the completions rescue in `src/chat.mjs`), so a broad question that still hits the
+  dispatch (the completions rescue in `src/services/chat.mjs`), so a broad question that still hits the
   plain wall is an ordinary dead-end to diagnose and route, not a named ceiling.
 
 The bar: **every turn either answers, or gives a guiding nudge toward a precise query** (the "if you
@@ -170,7 +170,7 @@ this rule exists to prevent). Rules that make the play realistic:
   of how X works", "explain what happens when Y") — this is the completions pipeline's own territory
   (the hub-avoiding crawl: `broadSearch` → `groupHits` → `rankSentences`/`inferRelations` →
   `prune`/voice pass, `src/domain/completions/complete.mjs`, wired into live chat dispatch via the
-  completions rescue in `src/chat.mjs`). A broad question that hits the plain wall is an ordinary
+  completions rescue in `src/services/chat.mjs`). A broad question that hits the plain wall is an ordinary
   dead-end to diagnose and route (§0).
 - Capture the transcript VERBATIM (pipe the turns: `printf 'q1\nq2\n…\n/exit\n' | node bin/tmct.mjs
   chat --repo <graph>`). In full ladder mode, run 3–6 short conversations per tier from different

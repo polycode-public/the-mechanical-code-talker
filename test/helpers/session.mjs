@@ -4,7 +4,7 @@
 // near-identical drive()/driveSession() loop. This module extracts the
 // genuinely-distinct shapes so each caller imports instead of re-declaring
 // its own copy — behavior is unchanged, only the source of the loop moves.
-import { runTurn, createSession } from "../../src/chat.mjs";
+import { runTurn, createSession } from "../../src/services/chat.mjs";
 import { clearCache } from "../../src/adapters/source.mjs";
 
 /** FEATURE B (0.9.x): every runAsk-composed answer carries an ALWAYS-ON

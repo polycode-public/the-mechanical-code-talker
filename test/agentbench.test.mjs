@@ -33,7 +33,7 @@ import {
   resultSetOf, untestedModules, impactLabels, testsForLabels, membersLabels, callersLabels,
   intersect, fallbackIfEmpty, guardIfEmpty, memberIndividuals, membersReaching,
 } from "../agentbench/results.mjs";
-import { COMMANDS } from "../src/chat.mjs";
+import { COMMANDS } from "../src/services/chat.mjs";
 
 const CASES_FILE = fileURLToPath(new URL("../agentbench/cases.jsonl", import.meta.url));
 

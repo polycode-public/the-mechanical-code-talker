@@ -5,7 +5,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { asBareCommand } from "../src/chat.mjs";
+import { asBareCommand } from "../src/services/chat.mjs";
 
 test("bare zero-arg system commands route to their slash form", () => {
   assert.equal(asBareCommand("stats"), "/stats");

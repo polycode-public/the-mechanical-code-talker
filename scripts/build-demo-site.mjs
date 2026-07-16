@@ -74,7 +74,7 @@ execFileSync(process.execPath, [join(here, "build-demo-graph.mjs"), join(SITE, "
 const { main: buildDemoMemory } = await import(join(here, "build-demo-memory.mjs"));
 const { outPath: memoryPath } = await buildDemoMemory(join(SITE, "demo-memory.json"));
 const { readFile: readF, writeFile: writeF } = await import("node:fs/promises");
-const { computeLedgerDataFromPayload, renderLedgerHtml, readMemoryAskBundle } = await import(join(ROOT, "src", "ledger-viz.mjs"));
+const { computeLedgerDataFromPayload, renderLedgerHtml, readMemoryAskBundle } = await import(join(ROOT, "src", "services/ledger-viz.mjs"));
 const payload = JSON.parse(await readF(memoryPath, "utf8"));
 const ledgerData = computeLedgerDataFromPayload(payload, {});
 const memoryAskBundle = await readMemoryAskBundle();

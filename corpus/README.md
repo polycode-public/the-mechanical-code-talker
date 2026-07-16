@@ -13,7 +13,7 @@ tmct's knowledge arrives in three tiers, distinguished by **when** it lands and
 | Tier | What | Ships in the package? | Lands when | Provenance |
 |---|---|---|---|---|
 | **1 — base** | the general English/tech ConceptNet slice + the response templates + the SE phrasebook — the vocabulary every tmct has out of the box | **yes**, committed here | `tmct init` seeds `.tmct/` from committed data (offline, $0) | `corpus:conceptnet /r/…` |
-| **2 — specialised** | LANGUAGE- or DOMAIN-specific fact sets (`aws`, `python`, `java`) plus one deliberately NON-code-domain "wider general-knowledge" bundle (`general`) so tmct can "expand into a concept for an applicable codebase" — or into a seed set that isn't code at all | **no** — selected per repo | activated via `src/extensions.mjs`'s `[extensions.tier2-<id>] active = true` (or `tmct init --corpus <id>`), inactive by default | `corpus:tier2-<id> /r/…` |
+| **2 — specialised** | LANGUAGE- or DOMAIN-specific fact sets (`aws`, `python`, `java`) plus one deliberately NON-code-domain "wider general-knowledge" bundle (`general`) so tmct can "expand into a concept for an applicable codebase" — or into a seed set that isn't code at all | **no** — selected per repo | activated via `src/services/extensions.mjs`'s `[extensions.tier2-<id>] active = true` (or `tmct init --corpus <id>`), inactive by default | `corpus:tier2-<id> /r/…` |
 | **3 — learned** | facts tmct writes from the actual conversation / the actual codebase it is pointed at | never committed | at runtime, into `.tmct/memory/` | `chat:…`, `codegraph:…` |
 
 **Offline / $0 is the default at every tier.** Tier-1 is committed. Tier-2's
@@ -101,7 +101,7 @@ sha256) in one deterministic pass. Curated data is authored in that file so it
 stays reviewable; a corpus too big to hand-curate is a `fetch` manifest entry
 (URL + sha256, opt-in network — `fetchCorpus()` is the reference downloader).
 
-**How tier-2 wires into `tmct init` (done — `src/extensions.mjs`):**
+**How tier-2 wires into `tmct init` (done — `src/services/extensions.mjs`):**
 `resolveExtensions(repoRoot)` ships all four tier-2 bundles as
 shipped-but-inactive `BUILTIN_EXTENSIONS` entries (`tier2-aws`/`tier2-python`/
 `tier2-java`/`tier2-general`); `[extensions.tier2-<id>] active = true` in

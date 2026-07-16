@@ -19,7 +19,7 @@ import { readFile, mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ask } from "../src/domain/ask.mjs";
-import { runTurn, asBareCommand } from "../src/chat.mjs";
+import { runTurn, asBareCommand } from "../src/services/chat.mjs";
 import { parseEntities } from "../src/domain/codegraph.mjs";
 import { ingestSchemaDocs } from "../src/schema-docs.mjs";
 import { clearCache } from "../src/adapters/source.mjs";

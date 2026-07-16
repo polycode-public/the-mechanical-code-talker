@@ -57,7 +57,7 @@ export const PERSONA_PRESETS = Object.freeze({
 /** Read this package's version (best-effort, for provenance). */
 async function tmctVersion() {
   try {
-    const pkgPath = join(dirname(fileURLToPath(import.meta.url)), "..", "package.json");
+    const pkgPath = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "package.json");
     const pkg = JSON.parse(await readFile(pkgPath, "utf8"));
     return pkg.version || null;
   } catch {
@@ -136,7 +136,7 @@ backend = ${JSON.stringify(config.memory.backend)}
   if (config.bias !== undefined) extras.bias = config.bias;
   if (!Object.keys(extras).length) return out;
   return `${out}
-# Extension packs + bias (src/extensions.mjs) — written by \`tmct init --with-persona\`
+# Extension packs + bias (src/services/extensions.mjs) — written by \`tmct init --with-persona\`
 # or a manual edit. Recognized names (human, seon, conceptnet, tier2-aws,
 # tier2-python, tier2-java, tier2-general) override the shipped defaults; any
 # other name declares a new host-supplied bundle (needs its own "kind").
@@ -206,7 +206,7 @@ export async function initRepo(dir, { force = false, seed, env = process.env, pe
   {
     const importsDir = join(paths.tmct, "imports");
     const gamesDir = join(importsDir, "games");
-    const shippedGames = join(dirname(fileURLToPath(import.meta.url)), "..", "data", "games");
+    const shippedGames = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "data", "games");
     if (!(await exists(gamesDir))) {
       await mkdir(gamesDir, { recursive: true });
       created.push(gamesDir);
@@ -277,7 +277,7 @@ export async function initRepo(dir, { force = false, seed, env = process.env, pe
     if (backendChoice === "memory") {
       seedNote = "seed skipped (memory backend is in-process only — nothing would persist past this command)";
     } else {
-      const { openMemoryBackend } = await import("./adapters/memory/core.mjs");
+      const { openMemoryBackend } = await import("../adapters/memory/core.mjs");
       const { dir: memoryDir, close: closeMemoryStore } = await openMemoryBackend(root, backendChoice);
       try {
         const { resolveExtensions, seedActiveCorpusEntries } = await import("./extensions.mjs");
@@ -348,7 +348,7 @@ export async function initRepo(dir, { force = false, seed, env = process.env, pe
  *  (toml-config.mjs) is where a bad file surfaces its error. */
 async function readWrittenConfig(tomlPath, base) {
   try {
-    const { loadTomlConfig } = await import("./adapters/toml-config.mjs");
+    const { loadTomlConfig } = await import("../adapters/toml-config.mjs");
     const raw = await loadTomlConfig(dirname(tomlPath));
     if (!raw) return base;
     const cfg = { ...base };
@@ -359,7 +359,7 @@ async function readWrittenConfig(tomlPath, base) {
       if (raw.seed.enabled !== undefined) cfg.seed.enabled = Boolean(raw.seed.enabled);
       if (raw.seed.limit !== undefined) cfg.seed.limit = Number(raw.seed.limit);
     }
-    // Sparse pass-through — src/extensions.mjs validates; this layer just carries the
+    // Sparse pass-through — src/services/extensions.mjs validates; this layer just carries the
     // raw tables through unmodified.
     if (raw.extensions !== undefined) cfg.extensions = raw.extensions;
     if (raw.bias !== undefined) cfg.bias = raw.bias;

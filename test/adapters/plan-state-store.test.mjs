@@ -9,7 +9,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { runTurn } from "../../src/chat.mjs";
+import { runTurn } from "../../src/services/chat.mjs";
 import { loadMemory, readFactRows } from "../../src/adapters/memory/core.mjs";
 import { clearCache } from "../../src/adapters/source.mjs";
 

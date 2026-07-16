@@ -15,7 +15,7 @@ import { parseEntities } from "../../src/domain/codegraph.mjs";
 import { ingestSchemaDocs } from "../../src/schema-docs.mjs";
 import { ask } from "../../src/domain/ask.mjs";
 import { composeConcept, composeRelation, CONCEPT_CLASS, RELATION_TERM } from "../../src/domain/concept.mjs";
-import { runTurn } from "../../src/chat.mjs";
+import { runTurn } from "../../src/services/chat.mjs";
 import { clearCache } from "../../src/adapters/source.mjs";
 
 const FIXTURE = new URL("../fixtures/entities.fixture.json", import.meta.url).pathname;

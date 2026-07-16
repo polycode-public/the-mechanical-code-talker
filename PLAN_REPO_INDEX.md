@@ -96,11 +96,11 @@ wired to anything that reads real source code.
 
 **Persona / `--repo` wiring — checked precisely, because it changes the scope of this plan.**
 `chat --repo <path>` already routes code-graph questions into the same `runTurn` that answers fact
-questions, live today, not a TODO: `runAsk` (`src/chat.mjs:7417`) calls `ask()` from `ask.mjs`
+questions, live today, not a TODO: `runAsk` (`src/services/chat.mjs:7417`) calls `ask()` from `ask.mjs`
 directly when a graph and focus/context are present (`chat.mjs:7525-7526`), or falls back to
 `dispatchTool("tmct_ask", ...)` (`chat.mjs:7529`), which itself calls the identical `ask()`
 (`src/server.mjs:478-481`). Both paths converge on one engine. Separately, `--with-persona code` is a
-real, shipped preset (`src/init.mjs:84-88`, `PERSONA_PRESETS.code = { extensions: { seon: {active:
+real, shipped preset (`src/services/init.mjs:84-88`, `PERSONA_PRESETS.code = { extensions: { seon: {active:
 true}, conceptnet: {active: true} }, bias: { seon: 1.0, conceptnet: 1.0 } }`) — but it activates
 fact-corpus bundles (SEON/ConceptNet ontology facts folded into memory), not a code-graph parser. It
 is a bias preset on `tmct init`, orthogonal to `--repo`. **The upshot: the chat-routing half of "query
@@ -227,10 +227,10 @@ directly, and every one becomes false the moment Phase 1 below ships a working p
 | 4 | `src/adapters/source.mjs:9` | "no indexer is ever imported here. tmct only READS through this seam." | This one should probably stay true and be preserved as an architectural boundary: `source.mjs` is the read seam; a new `src/index/` (or similar) module tree is the write/producer side, and `source.mjs` itself is not where the parser lives. Reword the comment to say so explicitly rather than delete it, since the boundary itself (reader vs. producer as separate modules) is worth keeping. |
 | 5 | `bin/tmct.mjs:556` | `// with every other subcommand. No --graph: memory reads no code graph.` | Not stale — this is a true statement about the `memory` subcommand specifically, unaffected by this plan. No change needed. |
 | 6 | `bin/tmct.mjs:842` | `// accepts --config for symmetry (syllogise reads no code graph either).` | Same as above — true, subcommand-scoped, no change needed. |
-| 7 | `src/chat.mjs:557-558` | `"I can't count \"${noun}\" — no code graph is loaded yet, so there's nothing to count (point me at one with --repo, or run \"npm run example:mini\")."` | Stays accurate as a *live-session* message (a repo with no graph still has no graph loaded until indexed), but the CLI should eventually offer to index on the spot rather than only pointing at an external `--repo`. Reword once a `tmct index` command exists, to mention it as an option. |
-| 8 | `src/chat.mjs:1565-1566` | `"For code structure (imports, calls, definitions) point me at a repo with --repo <path> ... tmct reads graphs; it doesn't index code itself. /help for commands."` | Directly false after Phase 1-2 below ship. Reword the "doesn't index code itself" clause; keep the `--repo` pointer language, since consuming an externally-produced graph remains supported. |
-| 9 | `src/chat.mjs:8317` | `"(this repo has no code graph — for structure, point me at a .tmct/graph.json with --repo <path> or run npm run example:mini; tmct doesn't index code itself.)"` | This is the exact live message the operator saw this session. Directly false after this plan ships. Reword to mention `tmct index` (or equivalent) as the first-class option, with `--repo` pointing at an externally-produced graph kept as a fallback. |
-| 10 | `src/chat.mjs:9482,9489,9494` | Startup-banner variants of the same "tmct reads graphs, it doesn't index code" message. | Same verdict as #9 — reword together, they are the same message family. |
+| 7 | `src/services/chat.mjs:557-558` | `"I can't count \"${noun}\" — no code graph is loaded yet, so there's nothing to count (point me at one with --repo, or run \"npm run example:mini\")."` | Stays accurate as a *live-session* message (a repo with no graph still has no graph loaded until indexed), but the CLI should eventually offer to index on the spot rather than only pointing at an external `--repo`. Reword once a `tmct index` command exists, to mention it as an option. |
+| 8 | `src/services/chat.mjs:1565-1566` | `"For code structure (imports, calls, definitions) point me at a repo with --repo <path> ... tmct reads graphs; it doesn't index code itself. /help for commands."` | Directly false after Phase 1-2 below ship. Reword the "doesn't index code itself" clause; keep the `--repo` pointer language, since consuming an externally-produced graph remains supported. |
+| 9 | `src/services/chat.mjs:8317` | `"(this repo has no code graph — for structure, point me at a .tmct/graph.json with --repo <path> or run npm run example:mini; tmct doesn't index code itself.)"` | This is the exact live message the operator saw this session. Directly false after this plan ships. Reword to mention `tmct index` (or equivalent) as the first-class option, with `--repo` pointing at an externally-produced graph kept as a fallback. |
+| 10 | `src/services/chat.mjs:9482,9489,9494` | Startup-banner variants of the same "tmct reads graphs, it doesn't index code" message. | Same verdict as #9 — reword together, they are the same message family. |
 
 None of these are reworded in this document — this is design only, and the operator's own scope
 boundary for this task excludes touching any file but this one. Phase 4 of the plan below is where
@@ -288,7 +288,7 @@ The design: once Phase 1-2 below ship a real parser and a `tmct index` command (
 phasing), tie it to the persona mechanism that already exists rather than inventing a new one:
 
 - `tmct init --repo <path> --with-persona code` (both flags already real and independently working,
-  `bin/tmct.mjs:610-615`, `src/init.mjs:84-88`) should, once this plan ships, **also run the new
+  `bin/tmct.mjs:610-615`, `src/services/init.mjs:84-88`) should, once this plan ships, **also run the new
   indexer** and write `.tmct/graph.json` from the repo's real source — so one command produces a
   `.tmct/` directory that is both bias-tuned toward code vocabulary (`seon`/`conceptnet` corpora,
   the persona's existing job) and backed by a real code graph (the indexer's new job). These are two
@@ -375,7 +375,7 @@ only. Exit criterion per language: the same conformance suite passes against a r
 language.
 
 **Phase 4 — doc reconciliation.** Reword every stale claim in Part 4's table (README, `docs/adapter-
-contract.md`, `src/adapters/source.mjs`, the `src/chat.mjs` live strings) now that they are genuinely false.
+contract.md`, `src/adapters/source.mjs`, the `src/services/chat.mjs` live strings) now that they are genuinely false.
 Follows `archive/TOO_HARD_AUDIT.md`'s own discipline: name the claim, state the supersession, reword —
 already done in Part 4 above; this phase is where the actual file edits land. `npm test` green
 throughout (some tests likely assert the old strings — expect to update pinned-string tests here).

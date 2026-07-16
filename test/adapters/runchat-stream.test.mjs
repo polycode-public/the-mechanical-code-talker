@@ -9,7 +9,7 @@ import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable, PassThrough } from "node:stream";
-import { runChat } from "../../src/chat.mjs";
+import { runChat } from "../../src/services/chat.mjs";
 
 test("README's headline 'teach it, then ask it to reason' example works verbatim through runChat streams", async () => {
   const graph = {

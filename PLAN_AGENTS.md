@@ -86,7 +86,7 @@ The two audits this doc supersedes (`PLAN_TMCT_ECOSYSTEM_INTEGRATION.md`,
 | Bias-weighted ambiguity resolution across seed sets | **Shipped**, v1.4.0 | `src/domain/memory/bias.mjs`, `tmct.toml` `[bias]` table, `tmct init --with-persona` — see §4 |
 | Memory-tree versioning + full actor-level trust | **Shipped**, v1.4.0 | `snapshotMemory()` (manual trigger); session-scoped Source IDs, unconditional — see §2.1 |
 | RI wrapper fixes + hub-dampened memory ranking (the (a)-tier uplift) | **Shipped**, v1.4.0 | `INTERFACE_VERSION` 1.1.0; `src/adapters/memory/blocks.mjs` dampening on by default — see §2 |
-| Extension-pack seam | **Shipped**, v1.4.0 | `src/extensions.mjs`, `[extensions]`/`[bias]` in `tmct.toml`, `tmct extend --validate` — see §3 |
+| Extension-pack seam | **Shipped**, v1.4.0 | `src/services/extensions.mjs`, `[extensions]`/`[bias]` in `tmct.toml`, `tmct extend --validate` — see §3 |
 
 ### 1.1 Foundational precedent: seonix proves the integration pattern
 
@@ -218,7 +218,7 @@ algorithmic capability tmct would have to invent — the logic already sits in t
   brief.
 - **Unbounded search/edges responses (a for the cap, b for cost telemetry) — ✅ shipped v1.4.0,
   telemetry wiring built but not yet live in production traffic.** `edges()`/`search()` now accept
-  `{limit, offset}`. `src/telemetry.mjs` now wraps every `graph-service.mjs` service once at
+  `{limit, offset}`. `src/services/telemetry.mjs` now wraps every `graph-service.mjs` service once at
   construction (optional `tel`, zero overhead when absent) and redacts `snippet()`'s `body` field
   (a real, if previously unreachable, log-leak fix). Caveat worth recording: `server.mjs`'s
   `dispatchTool` branches were deliberately NOT consolidated onto the wrapped `svc.*()` methods (the
@@ -274,7 +274,7 @@ Near-term, mostly known-how, individually small. No item here requires research.
   ladder run (`rungReached`/`structuredOk`/`toolsOk` derived from the real hallucination-taxonomy
   checks, not hand-set; `maxContextTokens` deliberately left `null` rather than fabricated, since
   AGENTBENCH does no token accounting).
-- ✅ **The extension-pack / corpus-lexicon loading seam — shipped v1.4.0.** `src/extensions.mjs`:
+- ✅ **The extension-pack / corpus-lexicon loading seam — shipped v1.4.0.** `src/services/extensions.mjs`:
   `resolveExtensions()`, an `[extensions]`/`[bias]` table in `tmct.toml`, `seedActiveCorpusEntries`
   replacing `chat.mjs`'s hardcoded two-call corpus bootstrap (this also fixed a real, deliberate bug
   — `tmct init` previously seeded ConceptNet only, never SEON), `mergedLexiconExtra`/
@@ -304,7 +304,7 @@ Near-term, mostly known-how, individually small. No item here requires research.
   shipped from an earlier session. Track (d) construction-grammar template bank shipped 2026-07-10:
   `data/templates/constructions/agent-noun-relations.toml` + `src/domain/interpret/strategies/
   constructions.mjs`, three new closed templates (T11-T13: "X of Y", "Y's X", "Y X" relation
-  phrasings). Track (f) presupposition-as-honest-nudge (`presuppositionNudge`, `src/chat.mjs`) also
+  phrasings). Track (f) presupposition-as-honest-nudge (`presuppositionNudge`, `src/services/chat.mjs`) also
   found already shipped from an earlier session, not newly built this session.
 - ◐ **Re-measure inherited chat-surface debt — partially re-measured 2026-07-10, all three narrowed
   this session, none fully closed.** The capability router doc named three specific gaps
@@ -649,7 +649,7 @@ full tick-by-tick record in `STRATEGY_ADVISOR.log`). 1543/1543 tests green at th
   resume cycle: two parts (`tmct extend --validate`, `tmct init --with-persona`) were left
   uncommitted/unbuilt at the track's first "done" report, caught by the coordinator's merge-time
   verification, finished on request.
-- **One real merge conflict**, in `src/chat.mjs`: Track A threaded a `tel` param through
+- **One real merge conflict**, in `src/services/chat.mjs`: Track A threaded a `tel` param through
   `runAsk`/`runCommand`/`runTurn`'s signatures at the same time Track D threaded a `biasByBundle`
   param through the same functions. Resolved by keeping both in every signature/ctx object/call site
   — verified end-to-end, not just merged and trusted.

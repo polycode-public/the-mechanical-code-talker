@@ -1,6 +1,6 @@
 // scripts/extract-facts-from-text.mjs — turn a plain text file into facts by
 // reusing the SAME deterministic recognizer the interactive chat's "teach"
-// lane already has (runTurn, src/chat.mjs) — no new NLU, no LLM, no guessing.
+// lane already has (runTurn, src/services/chat.mjs) — no new NLU, no LLM, no guessing.
 //
 // Usage:
 //   node scripts/extract-facts-from-text.mjs <text-file> [--repo <path>] [--out <file.jsonl>]
@@ -44,10 +44,10 @@ import { readFile, writeFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 
-import { runTurn, uuidv7 } from "../src/chat.mjs";
+import { runTurn, uuidv7 } from "../src/services/chat.mjs";
 import { loadMemory, readFactRows, appendFact } from "../src/adapters/memory/core.mjs";
 import { loadConfig } from "../src/adapters/config.mjs";
-import { splitSentences } from "../src/sentences.mjs";
+import { splitSentences } from "../src/services/sentences.mjs";
 
 export { splitSentences };
 

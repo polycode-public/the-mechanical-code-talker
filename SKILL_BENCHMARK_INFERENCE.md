@@ -113,7 +113,7 @@ When Step 5 says "build," pick the **next engine capability that unlocks the cur
 band** — do not skip ahead to a capability for a higher band while a lower gate is still open; the
 ladder rule (§2) means a later band's rules can't be honestly measured until the earlier gate
 clears anyway. The originally staged capabilities (the `infbench/` harness itself; `cax-sco` type
-propagation in `src/domain/syllogise.mjs`; the bounded live proof-chain chase in `src/chat.mjs`; `cax-dw`
+propagation in `src/domain/syllogise.mjs`; the bounded live proof-chain chase in `src/services/chat.mjs`; `cax-dw`
 disjointness; the forward-chainer; the consistency checker) are all shipped, so a build cycle today
 means a NEW band or rule the ladder grows to cover — **re-verify current ladder status from the
 latest `BENCHMARK_INFERENCE_<version>.md` before picking; don't trust any doc's snapshot as

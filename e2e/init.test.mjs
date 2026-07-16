@@ -15,10 +15,10 @@ import { parse as parseToml } from "smol-toml";
 import {
   initRepo, defaultConfig, renderTomlConfig,
   CONFIG_FILE, PROVENANCE_REL, SEED_MARKER_REL, PERSONA_PRESETS,
-} from "../src/init.mjs";
+} from "../src/services/init.mjs";
 import { loadTomlConfig, normalizeConfig } from "../src/adapters/toml-config.mjs";
 import { loadMemory, openMemoryBackend } from "../src/adapters/memory/core.mjs";
-import { resolveExtensions, seedActiveCorpusEntries } from "../src/extensions.mjs";
+import { resolveExtensions, seedActiveCorpusEntries } from "../src/services/extensions.mjs";
 
 async function tmp() {
   return mkdtemp(join(tmpdir(), "tmct-init-"));

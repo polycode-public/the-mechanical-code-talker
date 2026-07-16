@@ -11,7 +11,7 @@ import {
   lookupNoun, lookupVerb, lookupAdjective, lookupProperName,
   DETERMINERS, QUANTIFIERS,
 } from "../../src/domain/grammar/lexicon.mjs";
-import { mergedLexiconExtra } from "../../src/extensions.mjs";
+import { mergedLexiconExtra } from "../../src/services/extensions.mjs";
 
 test("loadLexicon: the committed core is a real starter vocabulary (size floors), cached when unextended", () => {
   const lex = loadLexicon();

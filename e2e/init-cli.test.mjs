@@ -3,7 +3,7 @@
 // These flags used to be a separate, untested, ad hoc code path (a bespoke
 // seedMemory call, provenance "corpus:tier2:<id>" — colon-separated). Part 2 of
 // the extension-pack batch folds them into the unified corpus loader
-// (src/extensions.mjs): `--corpus <id>` now means "activate
+// (src/services/extensions.mjs): `--corpus <id>` now means "activate
 // extensions.tier2-<id> and PERSIST that into tmct.toml" (so a later bare
 // `tmct init`/chat session remembers the choice), and the provenance tag is
 // now hyphenated ("corpus:tier2-<id>") to match the TOML-legal extension name.

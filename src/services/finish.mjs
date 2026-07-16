@@ -12,13 +12,13 @@ import { fileURLToPath } from "node:url";
 import { join, dirname } from "node:path";
 import { parse as parseToml } from "smol-toml";
 
-import { flatten } from "./adapters/corpus/templates.mjs";
+import { flatten } from "../adapters/corpus/templates.mjs";
 
 export { flatten };
 
 const GRAMMAR_DIR = dirname(fileURLToPath(import.meta.url));
 /** The data-driven grammar-rule table. */
-export const GRAMMAR_RULES_FILE = join(GRAMMAR_DIR, "..", "data", "templates", "grammar-rules.toml");
+export const GRAMMAR_RULES_FILE = join(GRAMMAR_DIR, "..", "..", "data", "templates", "grammar-rules.toml");
 
 /** The segment type vocabulary. `prose` is the only unprotected type. */
 export const SEGMENT_TYPES = Object.freeze([

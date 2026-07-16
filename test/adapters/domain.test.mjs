@@ -21,7 +21,7 @@ import {
   compileDomain, stateFromFacts, stateKeyFor, movesFromRules, compileGoal, PlanBudgetError,
 } from "../../src/domain/domain.mjs";
 import { findActionPath } from "../../src/domain/planning.mjs";
-import { runTurn } from "../../src/chat.mjs";
+import { runTurn } from "../../src/services/chat.mjs";
 import { loadMemory, readFactRows, readRuleRows } from "../../src/adapters/memory/core.mjs";
 import { clearCache } from "../../src/adapters/source.mjs";
 

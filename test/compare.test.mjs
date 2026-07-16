@@ -1,7 +1,7 @@
 // compare.test.mjs — regression coverage for the scoped-down v1 comparison
 // capability (HANDOVER.md 2026-07-12 "no comparison capability" item):
 // "how is X different from Y" / "compare X and Y" / "what's the difference
-// between X and Y" now reach a real (4f) COMPARE RESCUE lane (src/chat.mjs)
+// between X and Y" now reach a real (4f) COMPARE RESCUE lane (src/services/chat.mjs)
 // that resolves both named entities (resolveSymbol) and renders their
 // differences (renderCompare, src/domain/codegraph.mjs — reuses describe's own
 // edgesFor/relLabel/capJoin, no new graph traversal).

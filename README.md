@@ -489,7 +489,7 @@ package or a bare user gets a working install in one command.
 same output, split into one block per command with a short note on what each
 one is for, so it is easier to scan than the raw dump.
 
-Every subcommand shares one flag/config resolver (`src/cli-args.mjs`), which
+Every subcommand shares one flag/config resolver (`src/services/cli-args.mjs`), which
 is why `--repo`, `--graph`, and `--config` behave the same way everywhere.
 
 The bare command and `tmct chat` open the interactive session:
@@ -648,11 +648,11 @@ kill $SERVE_PID
 Two precedence chains apply across every command above, in this order:
 
 ```output:help:precedence
-Shared graph-path precedence (chat/serve; see src/cli-args.mjs): --graph flag(s) >
+Shared graph-path precedence (chat/serve; see src/services/cli-args.mjs): --graph flag(s) >
 TMCT_GRAPH_FILE env > tmct.toml graph_file/graph_files > --repo-derived
 <repo>/.tmct/graph.json > git-root/cwd default.
 
-Memory-backend precedence (chat; see src/chat.mjs createSession): --memory-backend
+Memory-backend precedence (chat; see src/services/chat.mjs createSession): --memory-backend
 flag > TMCT_MEMORY_BACKEND env > tmct.toml [memory] backend > "default" (the flat
 .tmct/ JSON file). Set it once with `tmct init --memory-backend <...>` and every
 later `tmct chat` in that repo picks it up with no flag needed.
@@ -681,7 +681,7 @@ npx tmct import --corpus wordnet-xl  # init:xxl instead ends with wordnet-full a
 `tmct init` writes a sparse `tmct.toml` with just the keys it needs. The file
 recognizes more keys than that default covers. Below is one config with every
 recognized key set, so you can see the full surface in one place
-(`src/adapters/toml-config.mjs` is the source of truth; `src/extensions.mjs` defines the
+(`src/adapters/toml-config.mjs` is the source of truth; `src/services/extensions.mjs` defines the
 `[extensions.*]`/`[bias]` shape).
 
 ```toml

@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createSession } from "../../src/chat.mjs";
+import { createSession } from "../../src/services/chat.mjs";
 import { clearCache } from "../../src/adapters/source.mjs";
 import { freshBootstrapRepo } from "../helpers/seeded-fixture.mjs";
 

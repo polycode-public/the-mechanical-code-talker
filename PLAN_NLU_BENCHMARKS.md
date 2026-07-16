@@ -24,7 +24,7 @@ defeats the purpose.
 ## Where tmct stands today (the as-is estimate)
 
 tmct's capability universe is: 15 read-only code-graph capabilities
-(`src/domain/router/registry.mjs`), a commonsense fact/teach surface in `src/chat.mjs`
+(`src/domain/router/registry.mjs`), a commonsense fact/teach surface in `src/services/chat.mjs`
 (IsA/HasA/CapableOf over a small animal-flavoured seed corpus), and runtime-taught game
 actions. None of the CLINC150/HWU64 domains (banking, travel, weather, alarms, music,
 cooking, ...) exist anywhere in the product, and a sweep of all 13 playtest logs confirms
@@ -33,7 +33,7 @@ no probe has ever touched them.
 Both benchmarks require the system to emit one label from a fixed vocabulary (150 or 64
 intents). tmct has no mapping to either vocabulary, so every in-scope query scores wrong
 by construction. Its refusal machinery is real and machine-readable (`miss: true`,
-`WALL_MISS_RE` in `src/chat.mjs`), so every OOS query maps to a correct "oos" prediction.
+`WALL_MISS_RE` in `src/services/chat.mjs`), so every OOS query maps to a correct "oos" prediction.
 
 Estimated as-is scores:
 
@@ -275,7 +275,7 @@ attributable. Deltas are against the spike bases (CLINC150 68.2%/89.7%, HWU64 0.
   here so the scoreboard linkage stays explicit.
 - **L8 — inference uplift: generalize the 1.11.0 rule-teach frames to full Horn rules.**
   What shipped (compose-2 / filter / recursive frames, query-side hop-counted chase in
-  `src/chat.mjs`) is a closed set of rule templates. The uplift is arbitrary
+  `src/services/chat.mjs`) is a closed set of rule templates. The uplift is arbitrary
   conjunctive-body Horn rules ("every X that lives in water is aquatic"), forward-
   chained by `syllogise()` under the same budget/focus/trust guards — Datalog over
   binary predicates, still polynomial and deterministic. Same honest annotation as L7:
@@ -297,7 +297,7 @@ plan builds (the "deterministic, grounded, no model" claim gets its demo), even 
 neither moves a leaderboard number directly — same honest annotation as L7/L8.
 
 - **W1 — a real `/why` proof-rendering lane (days-scale).** Today chat's "why" lane
-  (`src/chat.mjs:1011`) only re-renders the previous answer more fully. The feature: on
+  (`src/services/chat.mjs:1011`) only re-renders the previous answer more fully. The feature: on
   "why" after an answered fact, re-run the bounded live chase in proof-recording mode
   (the kernels already return `via`/premises; `scm-sco` facts already persist a
   two-premise justification; trust already grades by hop count via
@@ -325,7 +325,7 @@ The far end of the why-spectrum, worked — "why did the American Civil War star
 
 - **Teach:** "secession caused the civil war", "the slavery dispute caused secession",
   "the cotton economy caused the slavery dispute". Causal edges are already first-class:
-  `mgx:causes` is a corpus predicate with a display phrase (`src/chat.mjs:4060`), taught
+  `mgx:causes` is a corpus predicate with a display phrase (`src/services/chat.mjs:4060`), taught
   cause facts store today (the taught `mgx:cause` vs corpus `mgx:causes` predicate
   unification is a known deferred item that W1 would force closed).
 - **Ask "why did the civil war start?" today:** at best a single-hop read-back of one

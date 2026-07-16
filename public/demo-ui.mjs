@@ -26,7 +26,7 @@ const primedQuestion = params.get("q");
 // continuous exchange showing tmct carry a pronoun ("it") across turns — ask about
 // Task, then ask "what calls it?" and "where is it defined?" without repeating the
 // name. Verified turn by turn with src/domain/ask.mjs's real ask(graph, query, {contextId,
-// prev}), threading contextId/prev exactly as src/chat.mjs's runAsk does: `prev` is
+// prev}), threading contextId/prev exactly as src/services/chat.mjs's runAsk does: `prev` is
 // each turn's full match-id set, and the focus (contextId) only moves when the
 // question names a new entity outright — a pronoun object resolves against the
 // standing focus instead of replacing it, so "it" keeps meaning Task through the
@@ -39,7 +39,7 @@ const HISTORY = [
   { q: "where is it defined?", a: "Task is defined in src/core/model.mjs at lines 9-15." },
 ];
 
-const PROMPT = "tmct> "; // matches src/chat.mjs's real PROMPT constant
+const PROMPT = "tmct> "; // matches src/services/chat.mjs's real PROMPT constant
 
 const root = document.getElementById("tmct-demo");
 const wrap = root.closest(".demo-wrap") || document;

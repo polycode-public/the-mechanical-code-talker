@@ -18,28 +18,28 @@
 // loop, src/tui/app.mjs's Ink shell).
 
 import { join, dirname } from "node:path";
-import { dispatchTool, loadGraph, TOOLS } from "./server.mjs";
-import { ToolError } from "./adapters/config.mjs";
-import { parseEntities, edgesOfKind, renderAuthorCard, renderAuthorTouches, renderCommitAuthor, resolveSymbol, renderCompare } from "./domain/codegraph.mjs";
-import { classDisplayName } from "./domain/ask.mjs";
-import { uuidv7 } from "./adapters/uuid.mjs";
-import * as defaultSource from "./adapters/source.mjs";
-import { loadTemplates, render as renderTemplate } from "./adapters/corpus/templates.mjs";
-import { rankByBiasThenTrust } from "./domain/memory/bias.mjs";
-import { HAS_A_PREDICATE, loadMemory as loadMemoryStore, readFactRows as readStoredFactRows, readRuleRows as readStoredRuleRows } from "./adapters/memory/core.mjs";
+import { dispatchTool, loadGraph, TOOLS } from "../server.mjs";
+import { ToolError } from "../adapters/config.mjs";
+import { parseEntities, edgesOfKind, renderAuthorCard, renderAuthorTouches, renderCommitAuthor, resolveSymbol, renderCompare } from "../domain/codegraph.mjs";
+import { classDisplayName } from "../domain/ask.mjs";
+import { uuidv7 } from "../adapters/uuid.mjs";
+import * as defaultSource from "../adapters/source.mjs";
+import { loadTemplates, render as renderTemplate } from "../adapters/corpus/templates.mjs";
+import { rankByBiasThenTrust } from "../domain/memory/bias.mjs";
+import { HAS_A_PREDICATE, loadMemory as loadMemoryStore, readFactRows as readStoredFactRows, readRuleRows as readStoredRuleRows } from "../adapters/memory/core.mjs";
 import { finish, beginsWithVowelSound, grammarRules } from "./finish.mjs";
 import { splitSentences } from "./sentences.mjs";
 import {
   VERB_TO_KIND, WHERE_MARKERS, MENTION_MARKERS, ENTITY_TO_TYPE, PASSIVE_PARTICIPLE_TO_KIND,
   stripTrailingScopeFiller, stripTrailingDiscourseTag, EDGE_NOUN_TO_METRIC, RELATIONS,
-} from "./domain/ask-vocab.mjs";
-import { COUNTERFACTUAL_RE, correctMisspellings, applyPreambleFrames, normalizeQuery, stripFillerWords, escapeRegex, kindNounAnaphoraHint } from "./domain/interpret/normalize.mjs";
-import { setDefaultNlpAdapter } from "./domain/interpret/nlp-registry.mjs";
-import { setConstructionBanks } from "./domain/interpret/strategies/constructions.mjs";
-import { nlpAdapter } from "./adapters/ask-nlp.mjs";
-import { readConstructionFiles } from "./adapters/corpus/construction-banks.mjs";
-import { fuzzyMatchInSet, fuzzyBound } from "./domain/interpret/fuzzy.mjs";
-import { pickPhrase } from "./domain/answer-variants.mjs";
+} from "../domain/ask-vocab.mjs";
+import { COUNTERFACTUAL_RE, correctMisspellings, applyPreambleFrames, normalizeQuery, stripFillerWords, escapeRegex, kindNounAnaphoraHint } from "../domain/interpret/normalize.mjs";
+import { setDefaultNlpAdapter } from "../domain/interpret/nlp-registry.mjs";
+import { setConstructionBanks } from "../domain/interpret/strategies/constructions.mjs";
+import { nlpAdapter } from "../adapters/ask-nlp.mjs";
+import { readConstructionFiles } from "../adapters/corpus/construction-banks.mjs";
+import { fuzzyMatchInSet, fuzzyBound } from "../domain/interpret/fuzzy.mjs";
+import { pickPhrase } from "../domain/answer-variants.mjs";
 
 // Composition: the chat surface supplies the domain parser's default lemma/POS
 // adapter (the browser bundle's ask-nlp stub carries no factory, so this is a
@@ -59,7 +59,7 @@ export { uuidv7 };
 // node:fs/child_process/os/readline. Re-exported here (services → services) so
 // every existing import site — bin, tui, server-http, index, tests — keeps
 // importing createSession/runChat/gitToplevel/SESSION_LOG_DIR/PROMPT from chat.mjs.
-export { createSession, runChat, gitToplevel, SESSION_LOG_DIR, PROMPT } from "./services/chat-session.mjs";
+export { createSession, runChat, gitToplevel, SESSION_LOG_DIR, PROMPT } from "./chat-session.mjs";
 
 /** dispatchTool("tmct_ask", …) returns the prose answer plus a delimited
  *  machine-readable envelope; the TUI shows the prose only. Reused verbatim
@@ -600,7 +600,7 @@ async function answerEdgeCount(graph, query) {
   const ind = graph.byId?.get?.(entity.id);
   if (!ind) return null;
   let degreeMetric;
-  try { ({ degreeMetric } = await import("./domain/ask.mjs")); } catch { return null; }
+  try { ({ degreeMetric } = await import("../domain/ask.mjs")); } catch { return null; }
   const n = degreeMetric(graph, ind, metric);
   return `${n} ${edgeCountNoun(noun, n)}.`;
 }
@@ -618,7 +618,7 @@ async function countFromFacts(graph, memoryDir, query, biasByBundle = {}, cache 
   const asked = m[1].toLowerCase();
   if (COUNT_NOUNS[asked]) return null; // a real graph kind — answerCount owns it
   let normFactTerm;
-  try { ({ normFactTerm } = await import("./adapters/memory/core.mjs")); } catch { return null; }
+  try { ({ normFactTerm } = await import("../adapters/memory/core.mjs")); } catch { return null; }
   const objVariants = factTermVariants(normFactTerm, asked);
   const isa = (await factRows(memoryDir, cache))
     .filter((f) => ISA_PREDICATES.has(f.predicate) && objVariants.has(f.object));
@@ -646,7 +646,7 @@ async function answerQuantifierRecall(memoryDir, query, biasByBundle = {}, cache
   const asked = m[1].toLowerCase();
   if (COUNT_NOUNS[asked]) return null; // a real graph-countable class — answerCount owns it
   let normFactTerm;
-  try { ({ normFactTerm } = await import("./adapters/memory/core.mjs")); } catch { return null; }
+  try { ({ normFactTerm } = await import("../adapters/memory/core.mjs")); } catch { return null; }
   const subjVariants = factTermVariants(normFactTerm, asked);
   const rows = (await factRows(memoryDir, cache)).filter((f) => ISA_PREDICATES.has(f.predicate) && subjVariants.has(f.subject));
   if (!rows.length) return null; // never heard of this subject at all — let answerCount own the shape
@@ -688,7 +688,7 @@ async function answerMemoryCount(memoryDir, query) {
   }
   if (!cls) return null;
   let loadMemory;
-  try { ({ loadMemory } = await import("./adapters/memory/core.mjs")); } catch { return null; }
+  try { ({ loadMemory } = await import("../adapters/memory/core.mjs")); } catch { return null; }
   let mem;
   try { mem = await loadMemory(memoryDir); } catch { return null; }
   const n = (mem.individuals || []).filter((i) => (i.class || "") === cls).length;
@@ -1667,7 +1667,7 @@ async function hasMidSentenceInterrogative(text) {
   }
   if (!whIdx.length) return false;
   try {
-    const { nlpAdapter } = await import("./adapters/ask-nlp.mjs");
+    const { nlpAdapter } = await import("../adapters/ask-nlp.mjs");
     const adapter = nlpAdapter();
     if (!adapter) return false; // no wink — no signal, never a false positive
     const tags = adapter.posTags(words);
@@ -1928,7 +1928,7 @@ const BARE_KINDOF_TEACH_RE = /^an?\s+([a-z][\w-]+)\s+is\s+a\s+kind\s+of\s+(?:an?
 async function verbLemma(word) {
   const w = String(word || "").toLowerCase();
   try {
-    const { proseLemma } = await import("./adapters/prose-nlp.mjs");
+    const { proseLemma } = await import("../adapters/prose-nlp.mjs");
     const lemma = proseLemma();
     return lemma ? lemma(w) : w;
   } catch { return w; }
@@ -2008,7 +2008,7 @@ const teachProvenanceTag = (sessionId, ts) => `teach:chat${sessionId ? `:${sessi
  *  teach-miss text stands), never a crash. */
 async function teachFact(memoryDir, sessionId, { subject, predicate, object, quantifier = "" }) {
   try {
-    const { appendFact, normFactTerm } = await import("./adapters/memory/core.mjs");
+    const { appendFact, normFactTerm } = await import("../adapters/memory/core.mjs");
     const s = normFactTerm(subject);
     const o = normFactTerm(object);
     if (!s || !o) return null;
@@ -2108,7 +2108,7 @@ async function isGroundedByFact(term, memoryDir, cache = null) {
   if (!memoryDir) return false;
   const raw = String(term ?? "").trim();
   if (!raw) return false;
-  const { normFactTerm } = await import("./adapters/memory/core.mjs");
+  const { normFactTerm } = await import("../adapters/memory/core.mjs");
   const t = normFactTerm(raw);
   if (!t) return false;
   // TAUGHT-only (same discipline factReadBack's own cax-sco/scm-sco proof
@@ -2137,7 +2137,7 @@ async function isGroundedTerm(term, lex, memoryDir, cache = null) {
   const raw = String(term ?? "").trim();
   if (!raw) return false;
   if (GENERIC_ANCHOR_NOUNS.has(raw.toLowerCase())) return true;
-  const { classify } = await import("./domain/grammar/lexicon.mjs");
+  const { classify } = await import("../domain/grammar/lexicon.mjs");
   if (classify(raw, lex)) return true;
   return isGroundedByFact(raw, memoryDir, cache);
 }
@@ -2167,7 +2167,7 @@ async function ungroundedPairHint(payload, lexicon, memoryDir, cache = null) {
   const m = String(payload).trim().match(UNKNOWN_SUBJECT_RE);
   if (!m) return "";
   const [, , subjectRaw, , objectRaw] = m;
-  const { loadLexicon } = await import("./domain/grammar/lexicon.mjs");
+  const { loadLexicon } = await import("../domain/grammar/lexicon.mjs");
   const lex = lexicon || loadLexicon();
   if (await isGroundedTerm(subjectRaw, lex, memoryDir, cache)) return "";
   if (await isGroundedTerm(objectRaw, lex, memoryDir, cache)) return "";
@@ -2217,7 +2217,7 @@ async function unknownSubjectFallback(payload, { memoryDir, sessionId, lexicon }
   const m = String(payload).trim().match(UNKNOWN_SUBJECT_RE);
   if (!m) return null;
   const [, det, subjectRaw, verb, objectRaw] = m;
-  const { loadLexicon, lookupNoun, lookupAdjective, classify } = await import("./domain/grammar/lexicon.mjs");
+  const { loadLexicon, lookupNoun, lookupAdjective, classify } = await import("../domain/grammar/lexicon.mjs");
   const lex = lexicon || loadLexicon();
   // A known X's own ACE miss is a real miss — never silently reinterpreted here.
   if (classify(subjectRaw, lex)) return null;
@@ -2313,7 +2313,7 @@ async function unknownSubjectFallback(payload, { memoryDir, sessionId, lexicon }
  *  decline) — matching every other optional-adapter path in this file. */
 async function objectReadsAsNonNoun(word) {
   try {
-    const { nlpAdapter } = await import("./adapters/ask-nlp.mjs");
+    const { nlpAdapter } = await import("../adapters/ask-nlp.mjs");
     const adapter = nlpAdapter();
     if (!adapter) return false;
     const [tag] = adapter.posTags([String(word || "")]);
@@ -2329,7 +2329,7 @@ async function unknownObjectFallback(payload, { memoryDir, sessionId, lexicon },
   if (!m) return null;
   const [, det, subjectRaw, verb, objectRaw] = m;
   if (!/^(?:every|each|all)$/i.test((det || "").trim())) return null; // class-level mint needs a real universal quantifier
-  const { loadLexicon, lookupNoun } = await import("./domain/grammar/lexicon.mjs");
+  const { loadLexicon, lookupNoun } = await import("../domain/grammar/lexicon.mjs");
   const lex = lexicon || loadLexicon();
   const subjectGrounded = await isGroundedTerm(subjectRaw, lex, memoryDir, cache);
   if (!subjectGrounded) return null; // ungrounded subject isn't this fallback's asymmetry — never a guessed mint
@@ -2420,7 +2420,7 @@ async function unknownAdjectiveFallback(payload, { memoryDir, sessionId, lexicon
   const m = String(payload).trim().match(UNKNOWN_SUBJECT_RE);
   if (!m) return null;
   const [, , subjectRaw, , objectRaw] = m;
-  const { loadLexicon, lookupNoun, classify } = await import("./domain/grammar/lexicon.mjs");
+  const { loadLexicon, lookupNoun, classify } = await import("../domain/grammar/lexicon.mjs");
   const lex = lexicon || loadLexicon();
   // Y already a known NOUN or a fact-grounded CLASS term — a genuine class-
   // membership sentence, unknownSubjectFallback/unknownObjectFallback's own
@@ -2552,7 +2552,7 @@ async function generalVerbPredicate(verb) {
   // "can a X <verb>" reader finds it (same reasoning as HAS_A above).
   if (v === "can") return "mgx:capableOf";
   try {
-    const { proseLemma } = await import("./adapters/prose-nlp.mjs");
+    const { proseLemma } = await import("../adapters/prose-nlp.mjs");
     const lemma = proseLemma();
     const l = lemma ? lemma(v) : v;
     if (l === "have") return HAS_A_PREDICATE;
@@ -2609,7 +2609,7 @@ async function generalVerbTeach(payload) {
  *  this codebase. */
 async function subjectIsNounOrPropn(word) {
   try {
-    const { nlpAdapter } = await import("./adapters/ask-nlp.mjs");
+    const { nlpAdapter } = await import("../adapters/ask-nlp.mjs");
     const adapter = nlpAdapter();
     if (!adapter) return false;
     const [tag] = adapter.posTags([String(word || "")]);
@@ -2650,7 +2650,7 @@ async function matchRelationalVerbTeach(text) {
     if (GENERAL_VERB_DETERMINER_RE.test(head) || GENERAL_VERB_NOT_A_VERB_RE.test(head)) return null;
   }
   try {
-    const { nlpAdapter } = await import("./adapters/ask-nlp.mjs");
+    const { nlpAdapter } = await import("../adapters/ask-nlp.mjs");
     const adapter = nlpAdapter();
     if (!adapter) return null;
     const tags = adapter.posTags([...subjWords, verbRaw, ...objWords]);
@@ -2661,7 +2661,7 @@ async function matchRelationalVerbTeach(text) {
   }
   let base = strip;
   try {
-    const { proseLemma } = await import("./adapters/prose-nlp.mjs");
+    const { proseLemma } = await import("../adapters/prose-nlp.mjs");
     const lemma = proseLemma();
     if (lemma) {
       const l = lemma(verb);
@@ -2694,7 +2694,7 @@ async function bareTeachWrapperNudgeText(text) {
     if (GENERAL_VERB_DETERMINER_RE.test(head) || GENERAL_VERB_NOT_A_VERB_RE.test(head)) return null;
   }
   try {
-    const { nlpAdapter } = await import("./adapters/ask-nlp.mjs");
+    const { nlpAdapter } = await import("../adapters/ask-nlp.mjs");
     const adapter = nlpAdapter();
     if (!adapter) return null;
     const tags = adapter.posTags([subj, verbRaw, obj]);
@@ -3095,8 +3095,8 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   if (retractMatch) {
     const retractSubject = retractMatch[1].trim();
     const retractObject = retractMatch[2].trim();
-    const { retractSubClassOf } = await import("./domain/syllogise.mjs");
-    const { loadMemory: loadMemForRetract, readFactRows: readRowsForRetract, removeFacts } = await import("./adapters/memory/core.mjs");
+    const { retractSubClassOf } = await import("../domain/syllogise.mjs");
+    const { loadMemory: loadMemForRetract, readFactRows: readRowsForRetract, removeFacts } = await import("../adapters/memory/core.mjs");
     const result = await retractSubClassOf(memoryDir, retractSubject, retractObject, {
       store: { loadMemory: loadMemForRetract, readFactRows: readRowsForRetract, removeFacts },
     });
@@ -3228,7 +3228,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   const compose2 = ownSrc.match(COMPOSE2_RULE_TEACH_RE);
   if (compose2 && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion) {
     try {
-      const { appendRule, RULE_KIND_COMPOSE2 } = await import("./adapters/memory/core.mjs");
+      const { appendRule, RULE_KIND_COMPOSE2 } = await import("../adapters/memory/core.mjs");
       const { id } = await appendRule(memoryDir, {
         name: compose2[1],
         kind: RULE_KIND_COMPOSE2,
@@ -3253,7 +3253,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   const filterRule = ownSrc.match(FILTER_RULE_TEACH_RE);
   if (filterRule && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion) {
     try {
-      const { appendRule, RULE_KIND_FILTER } = await import("./adapters/memory/core.mjs");
+      const { appendRule, RULE_KIND_FILTER } = await import("../adapters/memory/core.mjs");
       const { id } = await appendRule(memoryDir, {
         name: filterRule[1],
         kind: RULE_KIND_FILTER,
@@ -3282,7 +3282,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   const recursiveRule = ownSrc.match(RECURSIVE_RULE_TEACH_RE);
   if (recursiveRule && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion) {
     try {
-      const { appendRule, RULE_KIND_RECURSIVE } = await import("./adapters/memory/core.mjs");
+      const { appendRule, RULE_KIND_RECURSIVE } = await import("../adapters/memory/core.mjs");
       const { id } = await appendRule(memoryDir, {
         name: recursiveRule[1],
         kind: RULE_KIND_RECURSIVE,
@@ -3318,7 +3318,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     try {
       const verb = await actionLemma(actionSig[1]);
       const prep = actionSig[3].toLowerCase();
-      const { appendRule, RULE_KIND_ACTION_SIGNATURE } = await import("./adapters/memory/core.mjs");
+      const { appendRule, RULE_KIND_ACTION_SIGNATURE } = await import("../adapters/memory/core.mjs");
       const { id } = await appendRule(memoryDir, {
         name: `${verb} ${prep}`,
         kind: RULE_KIND_ACTION_SIGNATURE,
@@ -3343,7 +3343,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     if (verb !== participle && participle.startsWith(verb.slice(0, Math.min(3, verb.length)))) {
       try {
         const prep = actionSigPassive[3].toLowerCase();
-        const { appendRule, RULE_KIND_ACTION_SIGNATURE } = await import("./adapters/memory/core.mjs");
+        const { appendRule, RULE_KIND_ACTION_SIGNATURE } = await import("../adapters/memory/core.mjs");
         const { id } = await appendRule(memoryDir, {
           name: `${verb} ${prep}`,
           kind: RULE_KIND_ACTION_SIGNATURE,
@@ -3374,7 +3374,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
       const prep = precondNothing[3].toLowerCase();
       const innerVerb = await actionLemma(precondNothing[5]);
       const scopeWord = precondNothing[4].toLowerCase();
-      const { appendRule, RULE_KIND_ACTION_PRECOND } = await import("./adapters/memory/core.mjs");
+      const { appendRule, RULE_KIND_ACTION_PRECOND } = await import("../adapters/memory/core.mjs");
       const { id } = await appendRule(memoryDir, {
         name: `${verb} ${prep}`,
         kind: RULE_KIND_ACTION_PRECOND,
@@ -3412,7 +3412,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
       const verb = await actionLemma(precondComp[1]);
       const prep = precondComp[3].toLowerCase();
       const scopeWord = precondComp[4].toLowerCase();
-      const { appendRule, RULE_KIND_ACTION_PRECOND } = await import("./adapters/memory/core.mjs");
+      const { appendRule, RULE_KIND_ACTION_PRECOND } = await import("../adapters/memory/core.mjs");
       const { id } = await appendRule(memoryDir, {
         name: `${verb} ${prep}`,
         kind: RULE_KIND_ACTION_PRECOND,
@@ -3438,7 +3438,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     try {
       const verb = await actionLemma(actionConstraint[1]);
       const prep = actionConstraint[3].toLowerCase();
-      const { appendRule, RULE_KIND_ACTION_CONSTRAINT } = await import("./adapters/memory/core.mjs");
+      const { appendRule, RULE_KIND_ACTION_CONSTRAINT } = await import("../adapters/memory/core.mjs");
       const { id } = await appendRule(memoryDir, {
         name: `${verb} ${prep}`,
         kind: RULE_KIND_ACTION_CONSTRAINT,
@@ -3493,7 +3493,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     try {
       const prep = actionEffect[3].toLowerCase();
       const effVerb = await actionLemma(actionEffect[6]);
-      const { appendRule, RULE_KIND_ACTION_EFFECT } = await import("./adapters/memory/core.mjs");
+      const { appendRule, RULE_KIND_ACTION_EFFECT } = await import("../adapters/memory/core.mjs");
       const { id } = await appendRule(memoryDir, {
         name: `${verb} ${prep}`,
         kind: RULE_KIND_ACTION_EFFECT,
@@ -3542,7 +3542,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     const quantifier = someMatch[1].toLowerCase();
     const subject = singularizeSurface(someMatch[2]);
     const object = singularizeSurface(someMatch[3]);
-    const { loadLexicon, lookupNoun } = await import("./domain/grammar/lexicon.mjs");
+    const { loadLexicon, lookupNoun } = await import("../domain/grammar/lexicon.mjs");
     const lex = lexicon || loadLexicon();
     if (lookupNoun(lex, object)) {
       const stored = await teachFact(memoryDir, sessionId, {
@@ -3621,7 +3621,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
       const canSingular = canShape ? singularizeSurface(canShape.subject) : null;
       if (canShape && canSingular !== canShape.subject) {
         let canLex = lexicon;
-        if (!canLex) { const { loadLexicon } = await import("./domain/grammar/lexicon.mjs"); canLex = loadLexicon(); }
+        if (!canLex) { const { loadLexicon } = await import("../domain/grammar/lexicon.mjs"); canLex = loadLexicon(); }
         if (await isGroundedTerm(canSingular, canLex, memoryDir, cache)) {
           const stored = await teachFact(memoryDir, sessionId, {
             subject: canSingular, predicate: await generalVerbPredicate("can"), object: canShape.verb,
@@ -3689,7 +3689,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     const habitualTeach = matchBareHabitualTeach(payload) || matchBareCanTeach(payload);
     if (habitualTeach) {
       let habLex = lexicon;
-      if (!habLex) { const { loadLexicon } = await import("./domain/grammar/lexicon.mjs"); habLex = loadLexicon(); }
+      if (!habLex) { const { loadLexicon } = await import("../domain/grammar/lexicon.mjs"); habLex = loadLexicon(); }
       // The singular is preferred so an explicit plural surface ("penguins
       // can swim") stores under the same spelling the grounding fact (and
       // every query-side variant fold) uses; a proper noun that only looks
@@ -3767,9 +3767,9 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   let unknown = [];
   if (memoryDir) {
     try {
-      const { parseAce } = await import("./domain/grammar/ace.mjs");
+      const { parseAce } = await import("../domain/grammar/ace.mjs");
       let lex = lexicon;
-      if (!lex) { const { loadLexicon } = await import("./domain/grammar/lexicon.mjs"); lex = loadLexicon(); }
+      if (!lex) { const { loadLexicon } = await import("../domain/grammar/lexicon.mjs"); lex = loadLexicon(); }
       for (const cand of assertCandidates(payload)) {
         const parse = parseAce(cand, lex);
         if (parse?.residue?.length) { unknown = [...new Set(parse.residue.map((w) => String(w).toLowerCase()))]; break; }
@@ -4249,7 +4249,7 @@ async function presuppositionNudge(query, { graph, memoryDir }) {
     let propHit = null;
     if (memoryDir) {
       let normFactTerm;
-      try { ({ normFactTerm } = await import("./adapters/memory/core.mjs")); } catch { normFactTerm = null; }
+      try { ({ normFactTerm } = await import("../adapters/memory/core.mjs")); } catch { normFactTerm = null; }
       if (normFactTerm) {
         const facts = await memoryFacts(memoryDir);
         const subjMatches = (f) => normFactTerm(f.subject) === normFactTerm(entityTerm);
@@ -4303,7 +4303,7 @@ const META_ORIENT_REPEAT_ONELINER = "still the same overview — /stats for the 
 async function resolveEntity(graph, term) {
   if (!graph || !term) return null;
   try {
-    const { resolveObject } = await import("./domain/ask.mjs");
+    const { resolveObject } = await import("../domain/ask.mjs");
     const r = resolveObject(graph, term);
     if (r?.match?.id && !r.ambiguous) return { id: r.match.id, label: r.match.label };
   } catch { /* tolerated */ }
@@ -4329,7 +4329,7 @@ export async function helpText() {
   const w = Math.max(...rows.map(([a]) => a.length));
   const lines = rows.map(([a, b]) => `  ${a.padEnd(w)}  ${b}`);
   let shapes;
-  try { const { rephraseHint } = await import("./domain/ask.mjs"); shapes = rephraseHint(); }
+  try { const { rephraseHint } = await import("../domain/ask.mjs"); shapes = rephraseHint(); }
   catch {
     // "touch" dropped from this cross-product for the same reason rephraseHint() drops it
     // (ask.mjs) — Module/Function/Class is never the subject of a touch edge, only Commit.
@@ -4458,7 +4458,7 @@ async function bestQaPair(blockText, query, graph) {
  *  Lazy + failure-tolerated (chat.mjs ethos): a broken store degrades to null. */
 async function recallFromBlocks(memoryDir, query, graph) {
   try {
-    const { retrieveBlocks } = await import("./adapters/memory/blocks.mjs");
+    const { retrieveBlocks } = await import("../adapters/memory/blocks.mjs");
     const hits = await retrieveBlocks(memoryDir, query, RECALL_TOP_K);
     const best = hits[0];
     if (!best || best.score < RECALL_MIN_SCORE || !best.text) return null;
@@ -4638,7 +4638,7 @@ function renderIsaChain(premises) {
  *  object, provenance} rows. Lazy + failure-tolerated: no memory → []. */
 async function memoryFacts(memoryDir) {
   try {
-    const { loadMemory } = await import("./adapters/memory/core.mjs");
+    const { loadMemory } = await import("../adapters/memory/core.mjs");
     const m = await loadMemory(memoryDir);
     const out = [];
     for (const ind of m.individuals || []) {
@@ -4671,7 +4671,7 @@ async function memoryFacts(memoryDir) {
 async function factRows(memoryDir, cache = null) {
   if (cache?.rows) return cache.rows;
   try {
-    const { loadMemory, readFactRows } = await import("./adapters/memory/core.mjs");
+    const { loadMemory, readFactRows } = await import("../adapters/memory/core.mjs");
     const rows = readFactRows(await loadMemory(memoryDir));
     if (cache) { cache.rows = rows; cache.reloads = (cache.reloads || 0) + 1; }
     return rows;
@@ -4783,7 +4783,7 @@ async function synonymIndex() {
     if (!index.get(tb).some((e) => e.variant === ta)) index.get(tb).push({ variant: ta, source });
   };
   try {
-    const { loadSlice, loadMap, termText } = await import("./adapters/corpus/conceptnet.mjs");
+    const { loadSlice, loadMap, termText } = await import("../adapters/corpus/conceptnet.mjs");
     const [assertions, map] = await Promise.all([loadSlice(), loadMap()]);
     const SINGLE_WORD_RE = /^[a-z]+$/;
     for (const a of assertions) {
@@ -4796,7 +4796,7 @@ async function synonymIndex() {
     }
   } catch { /* corpus unavailable — degrade gracefully */ }
   try {
-    const { loadPhrasebook } = await import("./adapters/corpus/templates.mjs");
+    const { loadPhrasebook } = await import("../adapters/corpus/templates.mjs");
     const { synonyms } = await loadPhrasebook();
     for (const family of synonyms) {
       for (let i = 0; i < family.length; i += 1) {
@@ -5169,7 +5169,7 @@ function withDeducedGoal(res, envelope, query) {
 
 async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle = {}, cache = null) {
   let normFactTerm;
-  try { ({ normFactTerm } = await import("./adapters/memory/core.mjs")); } catch { return null; }
+  try { ({ normFactTerm } = await import("../adapters/memory/core.mjs")); } catch { return null; }
   const q = String(query).trim();
 
   // (a-pre) "what is used for riding" / "what can be used for riding" / "what
@@ -5579,7 +5579,7 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     const facts = await factRows(memoryDir, cache);
     const capable = uniqueFacts(facts.filter((f) => f.predicate === "mgx:capableOf" && verbVariants.has(f.object)));
     if (capable.length) {
-      const { findIsaChain, SUBCLASS_PREDICATE: SC_PRED, TYPE_PREDICATE: TYPE_PRED } = await import("./domain/syllogise.mjs");
+      const { findIsaChain, SUBCLASS_PREDICATE: SC_PRED, TYPE_PREDICATE: TYPE_PRED } = await import("../domain/syllogise.mjs");
       const subClassRows = facts.filter((f) => f.predicate === SC_PRED);
       const typeRows = facts.filter((f) => f.predicate === TYPE_PRED);
       const subClassEdges = subClassRows.map((f) => [f.subject, f.object]);
@@ -5775,7 +5775,7 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     // above. A hit REFUSES the whole answer (every belief about a
     // contradictory subject is suspect, not just the clashing pair) rather
     // than silently answering from a memory that's already inconsistent.
-    const { findConsistencyViolations, TYPE_PREDICATE: CONS_TYPE_PREDICATE, SUBCLASS_PREDICATE: CONS_SC_PREDICATE, DISJOINT_PREDICATE: CONS_DISJOINT_PREDICATE } = await import("./domain/syllogise.mjs");
+    const { findConsistencyViolations, TYPE_PREDICATE: CONS_TYPE_PREDICATE, SUBCLASS_PREDICATE: CONS_SC_PREDICATE, DISJOINT_PREDICATE: CONS_DISJOINT_PREDICATE } = await import("../domain/syllogise.mjs");
     const consIsTaught = (f) => !f.provenance?.includes("corpus:") && !f.provenance?.includes("web:");
     const consTypeEdges = rows.filter((f) => f.predicate === CONS_TYPE_PREDICATE && consIsTaught(f)).map((f) => [f.subject, f.object]);
     const consSubClassEdges = rows.filter((f) => f.predicate === CONS_SC_PREDICATE && consIsTaught(f)).map((f) => [f.subject, f.object]);
@@ -5863,7 +5863,7 @@ async function whatElseAnswer(memoryDir, query, last) {
   const term = m[1].trim();
   if (!term) return null;
   let normFactTerm;
-  try { ({ normFactTerm } = await import("./adapters/memory/core.mjs")); } catch { return null; }
+  try { ({ normFactTerm } = await import("../adapters/memory/core.mjs")); } catch { return null; }
   const variants = factTermVariants(normFactTerm, term);
   const hits = (await memoryFacts(memoryDir)).filter((f) => variants.has(f.subject));
   const picture = pickPhrase("full-picture", term.toLowerCase(), "the full picture");
@@ -5904,7 +5904,7 @@ async function synonymFactAnswer(memoryDir, query, envelope) {
   const term = metaTermOf(query, envelope);
   if (!term) return null;
   let normFactTerm;
-  try { ({ normFactTerm } = await import("./adapters/memory/core.mjs")); } catch { return null; }
+  try { ({ normFactTerm } = await import("../adapters/memory/core.mjs")); } catch { return null; }
   const facts = await memoryFacts(memoryDir);
   for (const { variant, source } of await synonymsOf(term)) {
     const variants = factTermVariants(normFactTerm, variant);
@@ -6125,7 +6125,7 @@ export async function factReadBack(memoryDir, query, envelope, miss, graph = nul
 async function factReadBackReaders(memoryDir, query, envelope, miss, graph = null, focusLabel = null, biasByBundle = {}, cache = null) {
   if (!miss) return null;
   let normFactTerm;
-  try { ({ normFactTerm } = await import("./adapters/memory/core.mjs")); } catch { return null; }
+  try { ({ normFactTerm } = await import("../adapters/memory/core.mjs")); } catch { return null; }
   const q = String(query).trim();
   // DIRECT STRUCTURAL CHECK: "is X a Y"
   // naming a real code-graph inheritance edge needs NO taught fact at all — the
@@ -6287,7 +6287,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     const object = relAsk[3].trim();
     if (subject && !ISA_IDIOM_ROLE_WORDS.has(relationName)) {
       const aliasTrees = buildAliasSubClassTrees(rows);
-      const { findIsaChain: chaseAlias } = await import("./domain/syllogise.mjs");
+      const { findIsaChain: chaseAlias } = await import("../domain/syllogise.mjs");
       // Shared alias-chase substrate (item 2): every stored Fact whose
       // predicate resolves — directly, or via a taught (or, failing that,
       // general-knowledge) rdfs:subClassOf chain over relation-NAME strings
@@ -6330,8 +6330,8 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
       // `relationFactsFor`/`renderFactLine`/`factPhrase`/`factTermVariants`/
       // `byTrust`/`rows`/`HAS_PROPERTY_PREDICATE` are this block's own local
       // closures/constants, threaded through explicitly.
-      const { loadMemory, findRuleByName, resolveRelationChase } = await import("./adapters/memory/core.mjs");
-      const { findActionPath } = await import("./domain/planning.mjs");
+      const { loadMemory, findRuleByName, resolveRelationChase } = await import("../adapters/memory/core.mjs");
+      const { findActionPath } = await import("../domain/planning.mjs");
       const memory = await loadMemory(memoryDir);
       const relationChaseHelpers = { relationFactsFor, renderFactLine, factPhrase, factTermVariants, byTrust, rows, HAS_PROPERTY_PREDICATE, findActionPath };
       const hit = await resolveRelationChase(memory, relationName, subject, object, relationChaseHelpers);
@@ -6380,7 +6380,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     const object = IS_ADJECTIVE_PRONOUN_RE.test(rawObject) ? (focusLabel || null) : rawObject;
     if (object && !ISA_IDIOM_ROLE_WORDS.has(relationName)) {
       const aliasTreesWho = buildAliasSubClassTrees(rows);
-      const { findIsaChain: chaseAliasWho } = await import("./domain/syllogise.mjs");
+      const { findIsaChain: chaseAliasWho } = await import("../domain/syllogise.mjs");
       // Same candidate-list shape as (a0)'s own relationFactsFor — every
       // stored Fact whose predicate resolves, directly or via a taught (or
       // general-knowledge) rdfs:subClassOf chain over relation-NAME
@@ -6401,7 +6401,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
         }
         return out;
       };
-      const { loadMemory: loadMemWho, findRuleByName: findRuleByNameWho, resolveRelationChaseReverse } = await import("./adapters/memory/core.mjs");
+      const { loadMemory: loadMemWho, findRuleByName: findRuleByNameWho, resolveRelationChaseReverse } = await import("../adapters/memory/core.mjs");
       const memoryWho = await loadMemWho(memoryDir);
       // Generic REVERSE relation-NAME resolver — the mirror image of (a0)'s
       // resolveRelationChase: given a relation/rule name and a FIXED OBJECT,
@@ -6414,7 +6414,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
       // `relationFactsForWho`/`renderFactLine`/`factPhrase`/
       // `factTermVariants`/`byTrust`/`rows`/`HAS_PROPERTY_PREDICATE` are this
       // block's own local closures/constants, threaded through explicitly.
-      const { findReachableSet } = await import("./domain/planning.mjs");
+      const { findReachableSet } = await import("../domain/planning.mjs");
       const relationChaseHelpersWho = { relationFactsFor: relationFactsForWho, renderFactLine, factPhrase, factTermVariants, byTrust, rows, HAS_PROPERTY_PREDICATE, findReachableSet };
       const hits = await resolveRelationChaseReverse(memoryWho, relationName, object, relationChaseHelpersWho);
       if (hits.length) {
@@ -6461,7 +6461,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     if (subject) {
       const {
         loadMemory, findRuleByName, RULE_KIND_PROP: ruleKindProp, RULE_KIND_RECURSIVE: recKind,
-      } = await import("./adapters/memory/core.mjs");
+      } = await import("../adapters/memory/core.mjs");
       const memory = await loadMemory(memoryDir);
       const rule = findRuleByName(memory, ruleName);
       const ruleKind = rule?.attributes?.find((a) => a.prop === ruleKindProp)?.value;
@@ -6471,7 +6471,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
         const startEntity = normFactTerm(subject);
         if (baseCase && recStep && startEntity) {
           const aliasTreesList = buildAliasSubClassTrees(rows);
-          const { findIsaChain: chaseAlias } = await import("./domain/syllogise.mjs");
+          const { findIsaChain: chaseAlias } = await import("../domain/syllogise.mjs");
           // Same alias-chase substrate the yes/no dispatcher's own
           // relationFactsFor uses (re-derived here rather than shared across
           // the two `if` blocks, which never run in the same call — one
@@ -6501,7 +6501,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
           // (this is also what makes a genuine cycle in the taught edges —
           // e.g. two individuals mutually taught as each other's parent —
           // terminate safely: the cyclic-back node is already `seen`).
-          const { findReachableSet } = await import("./domain/planning.mjs");
+          const { findReachableSet } = await import("../domain/planning.mjs");
           const applyActions = (state) => {
             const relName = state.hop === 0 ? baseCase : recStep;
             return relationFactsForList(relName)
@@ -6600,7 +6600,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     //     technically-true-per-ConceptNet "yes" that has nothing to do with
     //     what the OPERATOR taught; only operator/teach/entailed-sourced isa
     //     facts are chased, matching "TAUGHT" in the gap's own name.
-    const { findIsaChain, SUBCLASS_PREDICATE: SC_PREDICATE, TYPE_PREDICATE: RDF_TYPE_PREDICATE } = await import("./domain/syllogise.mjs");
+    const { findIsaChain, SUBCLASS_PREDICATE: SC_PREDICATE, TYPE_PREDICATE: RDF_TYPE_PREDICATE } = await import("../domain/syllogise.mjs");
     const isTaught = isOperatorTaught;
     const chainSubClassRows = isa.filter((f) => f.predicate === SC_PREDICATE && isTaught(f));
     const chainTypeRows = isa.filter((f) => f.predicate === RDF_TYPE_PREDICATE && isTaught(f));
@@ -6649,7 +6649,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     // answer "no" from absence-of-membership rather than decline; anything
     // this chase can't connect through a stated disjointness falls through
     // to the honest miss below, never a guessed "no".
-    const { deriveDisjointViolations, DISJOINT_PREDICATE } = await import("./domain/syllogise.mjs");
+    const { deriveDisjointViolations, DISJOINT_PREDICATE } = await import("../domain/syllogise.mjs");
     const disjointRows = rows.filter((f) => f.predicate === DISJOINT_PREDICATE && isTaught(f));
     // NEGATED membership — "is a dog not a cat". ISA_ASK_RE captures the
     // subject as "dog not" (the "not" glues onto the subject because the
@@ -6717,7 +6717,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     const {
       deriveSomeValuesFromApplication, ON_PROPERTY_PREDICATE, SOME_VALUES_FROM_PREDICATE,
       deriveSomeValuesFromSubsumption, ENTAILED_SCM_SVF_PROVENANCE, SCM_SVF_RULE_CONFIDENCE, entailedTrustFrom,
-    } = await import("./domain/syllogise.mjs");
+    } = await import("../domain/syllogise.mjs");
     const onPropertyRows = rows.filter((f) => f.predicate === ON_PROPERTY_PREDICATE && isTaught(f));
     const someValuesFromRows = rows.filter((f) => f.predicate === SOME_VALUES_FROM_PREDICATE && isTaught(f));
     if (onPropertyRows.length && someValuesFromRows.length) {
@@ -6872,7 +6872,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     const {
       SUBCLASS_PREDICATE: CARD_SC_PREDICATE, ON_PROPERTY_PREDICATE: CARD_ON_PROPERTY_PREDICATE,
       buildCardinalityRestrictions, proveCardinalityAtLeast, CARDINALITY_RULE_CONFIDENCE, entailedTrustFrom,
-    } = await import("./domain/syllogise.mjs");
+    } = await import("../domain/syllogise.mjs");
     const isTaughtCard = isOperatorTaught;
     const cardSubClassEdges = isa.filter((f) => f.predicate === CARD_SC_PREDICATE && isTaughtCard(f)).map((f) => [f.subject, f.object]);
     const cardRows = rows.filter((f) => (f.predicate === CARD_ON_PROPERTY_PREDICATE || CARDINALITY_ROW_PREDICATES.has(f.predicate)) && isTaughtCard(f));
@@ -6922,7 +6922,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     const {
       SUBCLASS_PREDICATE: CARD_SC_PREDICATE, ON_PROPERTY_PREDICATE: CARD_ON_PROPERTY_PREDICATE,
       buildCardinalityRestrictions, proveMaxCardinalityZeroDenial, CAX_MAXC0_RULE_CONFIDENCE, entailedTrustFrom,
-    } = await import("./domain/syllogise.mjs");
+    } = await import("../domain/syllogise.mjs");
     const isTaughtCard = isOperatorTaught;
     const cardSubClassEdges = isa.filter((f) => f.predicate === CARD_SC_PREDICATE && isTaughtCard(f)).map((f) => [f.subject, f.object]);
     const cardRows = rows.filter((f) => (f.predicate === CARD_ON_PROPERTY_PREDICATE || CARDINALITY_ROW_PREDICATES.has(f.predicate)) && isTaughtCard(f));
@@ -7133,7 +7133,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
       // attempt, never a replacement: on no chain either, this falls through
       // to the ordinary property-miss handling just below, unchanged.
       {
-        const { findIsaChain: chaseAdj, SUBCLASS_PREDICATE: SC_PREDICATE_ADJ, TYPE_PREDICATE: TYPE_PREDICATE_ADJ } = await import("./domain/syllogise.mjs");
+        const { findIsaChain: chaseAdj, SUBCLASS_PREDICATE: SC_PREDICATE_ADJ, TYPE_PREDICATE: TYPE_PREDICATE_ADJ } = await import("../domain/syllogise.mjs");
         const isTaughtAdj = isOperatorTaught;
         const chainSubClassRowsAdj = rows.filter((f) => f.predicate === SC_PREDICATE_ADJ && isTaughtAdj(f));
         const chainTypeRowsAdj = rows.filter((f) => f.predicate === TYPE_PREDICATE_ADJ && isTaughtAdj(f));
@@ -7336,7 +7336,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
  *  nothing about this subject. */
 async function describedFacts(memoryDir, label, biasByBundle = {}, cache = null) {
   let normFactTerm;
-  try { ({ normFactTerm } = await import("./adapters/memory/core.mjs")); } catch { return null; }
+  try { ({ normFactTerm } = await import("../adapters/memory/core.mjs")); } catch { return null; }
   const rows = await factRows(memoryDir, cache);
   if (!rows.length) return null;
   const variants = factTermVariants(normFactTerm, label);
@@ -7367,8 +7367,8 @@ let corpusPromise = null; // the local slice as renderable rows, one load per pr
 function localCorpus() {
   if (!corpusPromise) {
     corpusPromise = (async () => {
-      const { loadSlice, loadMap, termText } = await import("./adapters/corpus/conceptnet.mjs");
-      const { normFactTerm } = await import("./adapters/memory/core.mjs");
+      const { loadSlice, loadMap, termText } = await import("../adapters/corpus/conceptnet.mjs");
+      const { normFactTerm } = await import("../adapters/memory/core.mjs");
       const [assertions, map] = await Promise.all([loadSlice(), loadMap()]);
       const rows = [];
       for (const a of assertions) {
@@ -7392,7 +7392,7 @@ function localCorpus() {
  *  where the tier-3 network lookup would attach — see CORPUS_LOOKUP_FLAG). */
 async function corpusAside(term) {
   try {
-    const { normFactTerm } = await import("./adapters/memory/core.mjs");
+    const { normFactTerm } = await import("../adapters/memory/core.mjs");
     const variants = factTermVariants(normFactTerm, term);
     const rows = (await localCorpus()).filter((r) => variants.has(r.key));
     if (!rows.length) return null;
@@ -7411,7 +7411,7 @@ const RECALL_ASK_RE = /^what (?:did|have) (?:i|we) (?:ask(?:ed)?(?: you)?|talk(?
  *  uuidv7s, so a plain sort is chronological). Null when nothing is folded yet. */
 async function recallSummary(memoryDir) {
   try {
-    const { loadBlockIndex, BLOCKS_DIR_REL } = await import("./adapters/memory/blocks.mjs");
+    const { loadBlockIndex, BLOCKS_DIR_REL } = await import("../adapters/memory/blocks.mjs");
     const { readFile } = await import("node:fs/promises");
     const index = await loadBlockIndex(memoryDir);
     const id = Object.keys(index.blocks).sort().at(-1);
@@ -7566,8 +7566,8 @@ let seonDefsPromise = null;
 function seonDefinitions() {
   if (!seonDefsPromise) {
     seonDefsPromise = (async () => {
-      const { SEON_DEFINITIONS_FILE } = await import("./adapters/corpus/conceptnet.mjs");
-      const { normFactTerm } = await import("./adapters/memory/core.mjs");
+      const { SEON_DEFINITIONS_FILE } = await import("../adapters/corpus/conceptnet.mjs");
+      const { normFactTerm } = await import("../adapters/memory/core.mjs");
       const { readFile } = await import("node:fs/promises");
       const raw = await readFile(SEON_DEFINITIONS_FILE, "utf8");
       const map = new Map();
@@ -7593,7 +7593,7 @@ let seonRelsPromise = null;
 function relationDefinitions() {
   if (!seonRelsPromise) {
     seonRelsPromise = (async () => {
-      const { SEON_DEFINITIONS_FILE } = await import("./adapters/corpus/conceptnet.mjs");
+      const { SEON_DEFINITIONS_FILE } = await import("../adapters/corpus/conceptnet.mjs");
       const { readFile } = await import("node:fs/promises");
       const relFile = join(dirname(SEON_DEFINITIONS_FILE), "relations.jsonl");
       const raw = await readFile(relFile, "utf8");
@@ -7685,12 +7685,12 @@ async function curatedDefinitionAnswer(query, envelope, { memoryDir, lexicon }) 
   const term = metaTermOf(query, envelope);
   if (!term) return null;
   let normFactTerm;
-  try { ({ normFactTerm } = await import("./adapters/memory/core.mjs")); } catch { return null; }
+  try { ({ normFactTerm } = await import("../adapters/memory/core.mjs")); } catch { return null; }
   // lexicon-noun gate: the curated defs are keyed on SE lexicon terms only.
   let lex = lexicon;
   try {
-    if (!lex) { const { loadLexicon } = await import("./domain/grammar/lexicon.mjs"); lex = loadLexicon(); }
-    const { lookupNoun } = await import("./domain/grammar/lexicon.mjs");
+    if (!lex) { const { loadLexicon } = await import("../domain/grammar/lexicon.mjs"); lex = loadLexicon(); }
+    const { lookupNoun } = await import("../domain/grammar/lexicon.mjs");
     if (!lookupNoun(lex, term)) return null;
   } catch { return null; }
   const def = (await seonDefinitions()).get(normFactTerm(term));
@@ -7867,7 +7867,7 @@ async function describeGrainRescue(graph, term) {
   const expectedClass = ENTITY_TO_TYPE[grainWord.toLowerCase()];
   if (!head?.trim() || !expectedClass) return null;
   try {
-    const { resolveObject } = await import("./domain/ask.mjs");
+    const { resolveObject } = await import("../domain/ask.mjs");
     const r = resolveObject(graph, head.trim(), { expectedClass });
     if (r?.match?.id && !r.ambiguous) return { id: r.match.id, label: r.match.label };
   } catch { /* tolerated */ }
@@ -8033,13 +8033,13 @@ async function completionsRescueAnswer(query, { memoryDir, graph }) {
   term = term.replace(/^(?:the|a|an)\s+/i, "").trim();
   if (!term) return null;
   try {
-    const { generateCompletion } = await import("./domain/completions/complete.mjs");
+    const { generateCompletion } = await import("../domain/completions/complete.mjs");
     // createCompletionsGraphAdapter wraps the SAME graph object this turn
     // already has in scope plus this repo's already-loaded Fact store, so
     // broadSearch can search live graph/memory content, not just saved
     // memory blocks.
-    const { createCompletionsGraphAdapter } = await import("./domain/completions/graph-adapter.mjs");
-    const { loadMemory } = await import("./adapters/memory/core.mjs");
+    const { createCompletionsGraphAdapter } = await import("../domain/completions/graph-adapter.mjs");
+    const { loadMemory } = await import("../adapters/memory/core.mjs");
     const memory = await loadMemory(memoryDir);
     const graphService = createCompletionsGraphAdapter(graph, memory);
     const result = await generateCompletion(memoryDir, term, { query: term, graph, memory, graphService });
@@ -8061,7 +8061,7 @@ async function relationForceAnswer(query, envelope, { graph, config, source, tem
   const rawTerm = relationTermOf(query, envelope);
   if (!rawTerm) return null;
   let composeRelation; let RELATION_TERM;
-  try { ({ composeRelation, RELATION_TERM } = await import("./domain/concept.mjs")); }
+  try { ({ composeRelation, RELATION_TERM } = await import("../domain/concept.mjs")); }
   catch { return null; }
   const term = String(rawTerm).toLowerCase();
   const kind = RELATION_TERM[term];
@@ -8100,8 +8100,8 @@ async function conceptForceAnswer(query, envelope, { graph, config, source, memo
   if (!rawTerm) return null;
   let normFactTerm; let composeConcept; let CONCEPT_CLASS;
   try {
-    ({ normFactTerm } = await import("./adapters/memory/core.mjs"));
-    ({ composeConcept, CONCEPT_CLASS } = await import("./domain/concept.mjs"));
+    ({ normFactTerm } = await import("../adapters/memory/core.mjs"));
+    ({ composeConcept, CONCEPT_CLASS } = await import("../domain/concept.mjs"));
   } catch { return null; }
   const term = normFactTerm(rawTerm);
   if (!CONCEPT_CLASS[term]) return null; // not an enumerable code concept — ordinary path owns it
@@ -8155,7 +8155,7 @@ async function entityOfKindInText(graph, expectedClass, answerText) {
     if (seen.has(key)) continue;
     seen.add(key);
     try {
-      const { resolveObject } = await import("./domain/ask.mjs");
+      const { resolveObject } = await import("../domain/ask.mjs");
       const r = resolveObject(graph, tok, { expectedClass });
       if (r?.match?.id && !r.ambiguous) return { id: r.match.id, label: r.match.label };
     } catch { /* tolerated — falls through to the next token */ }
@@ -8173,8 +8173,8 @@ async function entityOfKindInText(graph, expectedClass, answerText) {
  *  through src/domain.mjs. Fresh-loads memory (never the turn cache) because
  *  the caller may have just written snapshot rows this same turn. */
 async function loadPlanContext(memoryDir) {
-  const { loadMemory, readFactRows, readRuleRows } = await import("./adapters/memory/core.mjs");
-  const { compileDomain, stateFromFacts } = await import("./domain/domain.mjs");
+  const { loadMemory, readFactRows, readRuleRows } = await import("../adapters/memory/core.mjs");
+  const { compileDomain, stateFromFacts } = await import("../domain/domain.mjs");
   const payload = await loadMemory(memoryDir);
   const factRows = readFactRows(payload);
   const ruleRows = readRuleRows(payload);
@@ -8202,7 +8202,7 @@ async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", })
   const thatGoal = q.match(GOAL_TEACH_RE);
   const goalMatch = thatGoal || q.match(GOAL_TEACH_INFINITIVE_RE);
   if (goalMatch) {
-    const { normFactTerm } = await import("./adapters/memory/core.mjs");
+    const { normFactTerm } = await import("../adapters/memory/core.mjs");
     const verb = await verbLemma(goalMatch[3]);
     if (!verb) {
       return {
@@ -8258,7 +8258,7 @@ async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", })
       via: "plan", deduced: "plan a move sequence (no state yet)", note: "plan lane — honest decline: empty state",
     };
   }
-  const { movesFromRules, stateKeyFor, compileGoal, PlanBudgetError } = await import("./domain/domain.mjs");
+  const { movesFromRules, stateKeyFor, compileGoal, PlanBudgetError } = await import("../domain/domain.mjs");
 
   if (wantsLegal) {
     let moves;
@@ -8296,7 +8296,7 @@ async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", })
   } catch (err) {
     return { text: `I can't compile that goal: ${err?.message ?? err}`, via: "plan", deduced: "plan a move sequence (uncompilable goal)", note: "plan lane — goal compile decline" };
   }
-  const { findActionPath } = await import("./domain/planning.mjs");
+  const { findActionPath } = await import("../domain/planning.mjs");
   let found;
   try {
     found = findActionPath(state, isGoal, (s) => movesFromRules(s, domain), { maxDepth: 300, stateKey: stateKeyFor });
@@ -8357,7 +8357,7 @@ async function executePlanStep(planHolder, { memoryDir, sessionId = "" }) {
   const k = ps.cursor + 1;
   const action = ps.actions[ps.cursor];
   const rows = ps.states[k];
-  const { appendFact, loadMemory, readFactRows } = await import("./adapters/memory/core.mjs");
+  const { appendFact, loadMemory, readFactRows } = await import("../adapters/memory/core.mjs");
   for (const row of rows) {
     await appendFact(memoryDir, {
       subject: `${row.subject}@step${k}`, predicate: row.predicate, object: row.object,
@@ -8373,8 +8373,8 @@ async function executePlanStep(planHolder, { memoryDir, sessionId = "" }) {
     };
   }
   // Final step: confirm the goal against the store, from the written facts.
-  const { compileDomain, stateFromFacts, compileGoal } = await import("./domain/domain.mjs");
-  const { readRuleRows } = await import("./adapters/memory/core.mjs");
+  const { compileDomain, stateFromFacts, compileGoal } = await import("../domain/domain.mjs");
+  const { readRuleRows } = await import("../adapters/memory/core.mjs");
   const payload = await loadMemory(memoryDir);
   const factRows = readFactRows(payload);
   const domain = compileDomain(factRows, readRuleRows(payload));
@@ -8455,7 +8455,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       // binds) OR the previous turn produced a set to refer back to (thread it as
       // `prev` for the anaphora node). Builds the SAME delimited envelope dispatchTool
       // emits, so the parse below is identical either way.
-      const { ask } = await import("./domain/ask.mjs");
+      const { ask } = await import("../domain/ask.mjs");
       const r = ask(graph, askQuery, { contextId: effectiveContextId, prev });
       text = `${r.content}${ASK_ENVELOPE_DELIM}${JSON.stringify(r.tmct_ask, null, 2)}`;
     } else {
@@ -8707,7 +8707,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       ? null : (matchBareHabitualTeach(bareLine) || matchBareCanTeach(bareLine));
     if (pm || habitual) {
       try {
-        const { loadLexicon, lookupNoun } = await import("./domain/grammar/lexicon.mjs");
+        const { loadLexicon, lookupNoun } = await import("../domain/grammar/lexicon.mjs");
         const lex = loadLexicon();
         if (pm) {
           const s = singularizeSurface(pm[1].toLowerCase());
@@ -8765,7 +8765,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     const relTerm = relationTermOf(String(query), envelope);
     if (relTerm) {
       try {
-        const { RELATION_TERM } = await import("./domain/concept.mjs");
+        const { RELATION_TERM } = await import("../domain/concept.mjs");
         isVagueRelationTouch = !!RELATION_TERM[relTerm.toLowerCase()];
       } catch { /* leave false — the ordinary path decides */ }
     }
@@ -8840,7 +8840,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     if (!bareMetaHit && graph) {
       const term = metaTermOf(gateQuery, envelope);
       if (term) {
-        const { metaFallbackEntityAnswer } = await import("./domain/ask.mjs");
+        const { metaFallbackEntityAnswer } = await import("../domain/ask.mjs");
         const fallback = metaFallbackEntityAnswer(graph, term);
         if (fallback) bareMetaHit = { text: fallback.text, replace: true };
       }
@@ -8853,7 +8853,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // returns non-null for an EXACT label match, so ordinary small talk is
   // unaffected.
   if (!bareMetaHit && isConversationalCandidate && graph) {
-    const { metaFallbackEntityAnswer } = await import("./domain/ask.mjs");
+    const { metaFallbackEntityAnswer } = await import("../domain/ask.mjs");
     const fallback = metaFallbackEntityAnswer(graph, String(query).trim());
     if (fallback) bareMetaHit = { text: fallback.text, replace: true };
   }
@@ -9202,7 +9202,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     const offerTerm = knowAboutTerm || metaTermOf(query, envelope);
     if (offerTerm) {
       let normFactTerm;
-      try { ({ normFactTerm } = await import("./adapters/memory/core.mjs")); } catch { normFactTerm = null; }
+      try { ({ normFactTerm } = await import("../adapters/memory/core.mjs")); } catch { normFactTerm = null; }
       if (normFactTerm) {
         const cleanTerm = normFactTerm(offerTerm);
         const ent = knowAboutTerm ? null : await resolveEntity(graph, offerTerm);
@@ -9386,7 +9386,7 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
     note(trace, "goal: inspect tmct's memory store (facts/utterances/sessions)");
     if (!memoryDir) return mk("no memory store here — /memory works inside a repo session.", { miss: true });
     try {
-      const { inspectMemory } = await import("./adapters/memory/inspect.mjs");
+      const { inspectMemory } = await import("../adapters/memory/inspect.mjs");
       return mk(await inspectMemory(memoryDir, { verbose: /^(?:-v|--verbose|verbose)$/i.test(argText) }));
     } catch (e) {
       return mk(String(e?.message || e), { miss: true }); // a broken store reads as its own clean error
@@ -9408,13 +9408,13 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
   // so listing them means reading the rules, not the registry).
   if (name === "capabilities") {
     note(trace, "goal: see what /plan can plan over — built-in query tools and taught actions");
-    const { declaredCapabilityNames } = await import("./domain/router/drive.mjs");
-    const { actionFamilies, capabilityFromActionRules } = await import("./domain/router/taught.mjs");
+    const { declaredCapabilityNames } = await import("../domain/router/drive.mjs");
+    const { actionFamilies, capabilityFromActionRules } = await import("../domain/router/taught.mjs");
     const lines = [`read-only graph tools: ${declaredCapabilityNames().join(", ")}`];
     let families = new Map();
     if (memoryDir) {
       try {
-        const { loadMemory, readRuleRows } = await import("./adapters/memory/core.mjs");
+        const { loadMemory, readRuleRows } = await import("../adapters/memory/core.mjs");
         families = actionFamilies(readRuleRows(await loadMemory(memoryDir)));
       } catch { /* an unreadable store lists like an empty one */ }
     }
@@ -9442,7 +9442,7 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
     note(trace, "goal: plan/execute a compound or maintenance-goal request over the graph (the capability router)");
     if (!argText) return mk("/plan needs a request, e.g. `/plan of the modules impacted by X, which are untested`.", { miss: true });
     if (!graph) return mk("no graph loaded — /plan needs a code graph to plan over.", { miss: true });
-    const { buildCapabilityPlanCtx, runCapabilityPlan, declaredCapabilityNames } = await import("./domain/router/drive.mjs");
+    const { buildCapabilityPlanCtx, runCapabilityPlan, declaredCapabilityNames } = await import("../domain/router/drive.mjs");
     const planCtx = await buildCapabilityPlanCtx({ ...capabilityPlanDeps(), config, source, tel, graph, memoryDir });
     try {
       const result = await runCapabilityPlan(argText, declaredCapabilityNames(), planCtx);
@@ -9470,7 +9470,7 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
 
   const spec = COMMANDS[name];
   if (!spec) {
-    note(trace, `pattern: /${name} is not a registered command (see COMMANDS in src/chat.mjs)`);
+    note(trace, `pattern: /${name} is not a registered command (see COMMANDS in src/services/chat.mjs)`);
     return mk(`unknown command /${name} — type /help for the list of commands.`, { miss: true });
   }
   note(trace, `goal: ${spec.help}`);
@@ -9563,15 +9563,15 @@ function renderAmbiguousAssert(line, ambiguous, normFactTerm) {
  *  the unchanged parseAce path below. */
 async function assertTurn(line, { memoryDir, sessionId, focus, lexicon = null, cache = null }) {
   try {
-    const { parseAce, parseAceAmbiguous } = await import("./domain/grammar/ace.mjs");
+    const { parseAce, parseAceAmbiguous } = await import("../domain/grammar/ace.mjs");
     // A session handle carries its own loaded lexicon (createSession loads it once);
     // a bare runTurn (no handle) lazy-loads the cached core lexicon. The lexicon is
     // immutable, so sharing one reference across concurrent handles is re-entrant.
     let lex = lexicon;
-    if (!lex) { const { loadLexicon } = await import("./domain/grammar/lexicon.mjs"); lex = loadLexicon(); }
+    if (!lex) { const { loadLexicon } = await import("../domain/grammar/lexicon.mjs"); lex = loadLexicon(); }
     const ambiguous = parseAceAmbiguous(line, lex);
     if (ambiguous) {
-      const { normFactTerm } = await import("./adapters/memory/core.mjs");
+      const { normFactTerm } = await import("../adapters/memory/core.mjs");
       const answer = renderAmbiguousAssert(line, ambiguous, normFactTerm);
       // Genuinely ambiguous — no single triple was committed, so the canonical
       // form is every surviving reading's own would-be triple set, same idiom
@@ -9586,8 +9586,8 @@ async function assertTurn(line, { memoryDir, sessionId, focus, lexicon = null, c
     }
     const parse = parseAce(line, lex);
     if (!parse || !parse.triples?.length || parse.residue?.length) return null;
-    const { assertSentence } = await import("./domain/grammar/assert.mjs");
-    const { normFactTerm, appendFact } = await import("./adapters/memory/core.mjs");
+    const { assertSentence } = await import("../domain/grammar/assert.mjs");
+    const { normFactTerm, appendFact } = await import("../adapters/memory/core.mjs");
     const ts = new Date().toISOString();
     const res = await assertSentence(memoryDir, line, {
       lexicon: lex,
@@ -9622,7 +9622,7 @@ async function assertTurn(line, { memoryDir, sessionId, focus, lexicon = null, c
     let paraphraseSuffix = "";
     if (res.triples.length === 1 && res.triples[0].predicate === SUBCLASS_PREDICATE) {
       try {
-        const { paraphraseVerifiedSubClass } = await import("./domain/paraphrase.mjs");
+        const { paraphraseVerifiedSubClass } = await import("../domain/paraphrase.mjs");
         // Normalized (same normFactTerm cleanup `shown` above already applies)
         // so the generated paraphrase text reads like "cache is a kind of
         // component", never a raw lexicon-prefixed form like "tmct:cache".

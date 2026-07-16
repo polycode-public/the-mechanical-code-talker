@@ -7,7 +7,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable, PassThrough } from "node:stream";
-import { runTurn, runChat } from "../../src/chat.mjs";
+import { runTurn, runChat } from "../../src/services/chat.mjs";
 import { loadMemory, FACT_CLASS } from "../../src/adapters/memory/core.mjs";
 import { parseEntities } from "../../src/domain/codegraph.mjs";
 import * as source from "../../src/adapters/source.mjs";

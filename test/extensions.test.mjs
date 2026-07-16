@@ -1,4 +1,4 @@
-// extensions.test.mjs — the extension-pack seam (src/extensions.mjs).
+// extensions.test.mjs — the extension-pack seam (src/services/extensions.mjs).
 //
 // resolveExtensions(repoRoot) is the ONE seam every corpus-loading, lexicon-
 // merging and bias-ranking caller consults: a bare/no-toml dir must resolve to
@@ -14,7 +14,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   resolveExtensions, validateExtensionEntry, BUILTIN_EXTENSIONS, EXTENSION_KINDS,
-} from "../src/extensions.mjs";
+} from "../src/services/extensions.mjs";
 import { SEON_CONCEPTS_FILE, SLICE_FILE as CONCEPTNET_SLICE_FILE, TIER2_DIR } from "../src/adapters/corpus/conceptnet.mjs";
 
 const tmp = () => mkdtemp(join(tmpdir(), "tmct-ext-"));

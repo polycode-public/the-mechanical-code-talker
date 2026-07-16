@@ -17,7 +17,7 @@ import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable, PassThrough } from "node:stream";
-import { runTurn, runChat } from "../../src/chat.mjs";
+import { runTurn, runChat } from "../../src/services/chat.mjs";
 import { clearCache } from "../../src/adapters/source.mjs";
 import { ingestSchemaDocs } from "../../src/schema-docs.mjs";
 import { loadMemory, FACT_CLASS } from "../../src/adapters/memory/core.mjs";

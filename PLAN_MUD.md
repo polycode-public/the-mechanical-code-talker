@@ -66,10 +66,10 @@ carried on every fact that backend writes.
   found and fixed this same session where seeding didn't respect the configured backend.
 - Selection precedence, already real and tested: `--memory-backend <value>` CLI flag (on
   `init`/`import`/`chat`) > `TMCT_MEMORY_BACKEND` env > `tmct.toml`'s `[memory] backend` field >
-  `"default"` (`src/chat.mjs:9444`). A flag on `init` writes straight into `tmct.toml`
-  (`src/init.mjs`), so a later flagless `tmct chat` in that repo picks it up automatically — the
+  `"default"` (`src/services/chat.mjs:9444`). A flag on `init` writes straight into `tmct.toml`
+  (`src/services/init.mjs`), so a later flagless `tmct chat` in that repo picks it up automatically — the
   exact mechanism this document's `server:<name>` value plugs into as a fourth backend, "Backend D."
-- **The closed-set validator needs one small, precise extension.** `enumFlag` (`src/cli-args.mjs:82`)
+- **The closed-set validator needs one small, precise extension.** `enumFlag` (`src/services/cli-args.mjs:82`)
   currently validates `--memory-backend` against an exact-match closed list
   (`["default","memory","sqlite"]`). `server:<handle>@<name>` isn't a member of a closed set — it's a
   parameterized value, the same *shape* (not reusing the same function) as this codebase's own
@@ -248,7 +248,7 @@ identified user over time, the same mechanism `sessionReliabilityFrom` already i
 stabler identity key.
 
 **Rendering: "`<handle>` told me" replaces the generic "you told me" for handle-attributed facts.**
-`renderFactLine` (`src/chat.mjs`, the function this session's `corpusWeak`/`possibly:` hedge work
+`renderFactLine` (`src/services/chat.mjs`, the function this session's `corpusWeak`/`possibly:` hedge work
 already extended once today) currently special-cases `ace:chat`/`teach:chat` provenance into "you told
 me: ...". Needs a new branch, checked before that one: if the provenance is `handle:<handle>@...`,
 render `${handle} told me: ...` instead. On a single-user local session "you told me" is unambiguous;

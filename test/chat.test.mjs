@@ -15,7 +15,7 @@ import {
   uuidv7, runTurn, runChat, helpText, COMMANDS, SESSION_LOG_DIR, PROMPT,
   answerCount, renderStats, isConversational,
   renderVerbose, WALL_MISS_RE,
-} from "../src/chat.mjs";
+} from "../src/services/chat.mjs";
 import { dispatchTool } from "../src/server.mjs";
 import { parseEntities } from "../src/domain/codegraph.mjs";
 import * as source from "../src/adapters/source.mjs";

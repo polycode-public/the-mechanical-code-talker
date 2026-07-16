@@ -15,7 +15,7 @@ import {
 } from "../../src/domain/router/drive.mjs";
 import { isCapability } from "../../src/domain/router/registry.mjs";
 import { actionFamilies, capabilityFromActionRules } from "../../src/domain/router/taught.mjs";
-import { runTurn, capabilityPlanDeps } from "../../src/chat.mjs";
+import { runTurn, capabilityPlanDeps } from "../../src/services/chat.mjs";
 import {
   appendRule, loadMemory, readRuleRows,
   RULE_KIND_ACTION_SIGNATURE, RULE_KIND_ACTION_EFFECT, RULE_KIND_ACTION_CONSTRAINT,

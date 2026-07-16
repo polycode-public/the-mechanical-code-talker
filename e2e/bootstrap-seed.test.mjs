@@ -13,7 +13,7 @@ import { mkdtemp, mkdir, writeFile, readFile, rm, access } from "node:fs/promise
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createSession, SEED_MARKER_REL } from "../src/chat.mjs";
+import { createSession, SEED_MARKER_REL } from "../src/services/chat.mjs";
 import { loadMemory, FACT_CLASS } from "../src/adapters/memory/core.mjs";
 import { clearCache } from "../src/adapters/source.mjs";
 
@@ -21,7 +21,7 @@ const BIN = fileURLToPath(new URL("../bin/tmct.mjs", import.meta.url));
 const FIXTURE = fileURLToPath(new URL("../test/fixtures/entities.fixture.json", import.meta.url));
 
 // The graph-less bootstrap seeds every ACTIVE bundle (chat.mjs seedBootstrapMemory,
-// via src/extensions.mjs's resolveExtensions + seedActiveCorpusEntries), in the
+// via src/services/extensions.mjs's resolveExtensions + seedActiveCorpusEntries), in the
 // entries' own fixed order (seon, conceptnet, then the rest sorted by name).
 // The default active bundle is `human` (seon/conceptnet ship but are opt-in);
 // the banner lists every bundle that appended facts, so these tests assert the

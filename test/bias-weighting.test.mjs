@@ -16,7 +16,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { biasForSourceId, biasForRow, rankByBiasThenTrust } from "../src/domain/memory/bias.mjs";
-import { runTurn } from "../src/chat.mjs";
+import { runTurn } from "../src/services/chat.mjs";
 import { seedMemory } from "../src/adapters/corpus/conceptnet.mjs";
 import { clearCache } from "../src/adapters/source.mjs";
 
@@ -83,7 +83,7 @@ const tmp = () => mkdtemp(join(tmpdir(), "tmct-bias-e2e-"));
 
 /** Seed one conflicting-fact pair — "widget x" mgx:hasProperty {red|blue} —
  *  from two DIFFERENT provenancePrefixes, the exact shape two active
- *  corpus-kind extension bundles (src/extensions.mjs) produce via seedMemory.
+ *  corpus-kind extension bundles (src/services/extensions.mjs) produce via seedMemory.
  *  "red" (tier2-aws) is seeded FIRST, "blue" (seon) SECOND — so the no-bias
  *  baseline order is deterministic (insertion order, both facts equally
  *  corpus-trusted and thus tied on trust). */

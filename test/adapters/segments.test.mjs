@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import {
   TEMPLATES_FILE, loadTemplates, render, renderSegments, flatten, slotKind,
 } from "../../src/adapters/corpus/templates.mjs";
-import { isProtected } from "../../src/finish.mjs";
+import { isProtected } from "../../src/services/finish.mjs";
 
 const SLOT_G = /\{([A-Za-z][A-Za-z0-9]*)\}/g;
 

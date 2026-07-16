@@ -15,7 +15,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Readable, PassThrough } from "node:stream";
-import { runTurn, runChat, RECALL_MIN_SCORE } from "../src/chat.mjs";
+import { runTurn, runChat, RECALL_MIN_SCORE } from "../src/services/chat.mjs";
 import { saveBlock } from "../src/adapters/memory/blocks.mjs";
 import { clearCache } from "../src/adapters/source.mjs";
 import { parseEntities } from "../src/domain/codegraph.mjs";

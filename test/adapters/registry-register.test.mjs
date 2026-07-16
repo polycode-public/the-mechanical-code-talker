@@ -12,7 +12,7 @@ import {
 } from "../../src/domain/router/registry.mjs";
 import { guard } from "../../src/domain/router/guardrail.mjs";
 import { actionFamilies, capabilityFromActionRules, registerTaughtActions } from "../../src/domain/router/taught.mjs";
-import { runTurn } from "../../src/chat.mjs";
+import { runTurn } from "../../src/services/chat.mjs";
 import { loadMemory, readRuleRows } from "../../src/adapters/memory/core.mjs";
 import { clearCache } from "../../src/adapters/source.mjs";
 

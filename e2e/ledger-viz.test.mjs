@@ -10,7 +10,7 @@ import { appendFact, loadMemory, readFactRows, findContradictions } from "../src
 import {
   computeLedgerData, computeLedgerDataFromPayload, renderLedgerHtml,
   provBucketFor, phraseFor, familyFor, facetCounts,
-} from "../src/ledger-viz.mjs";
+} from "../src/services/ledger-viz.mjs";
 
 const T_OLD = "2026-06-01T10:00:00.000Z";
 const T_WEEK = "2026-07-12T10:00:00.000Z";
@@ -169,12 +169,12 @@ test("renderLedgerHtml: self-contained page with parseable LEDGER/PAYLOAD, both 
 
 // ---- phase 2: the chat dock ------------------------------------------------
 
-import { resolveAnsweredTerm } from "../src/ledger-viz.mjs";
+import { resolveAnsweredTerm } from "../src/services/ledger-viz.mjs";
 import { normFactTerm } from "../src/adapters/memory/core.mjs";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
-import { runTurn } from "../src/chat.mjs";
+import { runTurn } from "../src/services/chat.mjs";
 import { clearCache } from "../src/adapters/source.mjs";
 
 test("resolveAnsweredTerm: the earliest term label in the answer text wins", () => {

@@ -22,8 +22,8 @@ import {
 import {
   renderReport, renderTranscripts, orderDiscriminating,
 } from "../chatbench/report.mjs";
-import { runChat } from "../src/chat.mjs";
-import { parseSessionJsonl, parseSessionLog, turnKey } from "../src/sessions.mjs";
+import { runChat } from "../src/services/chat.mjs";
+import { parseSessionJsonl, parseSessionLog, turnKey } from "../src/services/sessions.mjs";
 
 const POOL_FILE = fileURLToPath(new URL("../chatbench/graded-pool.jsonl", import.meta.url));
 const PROMPT_FILE = fileURLToPath(new URL("../chatbench/judge-prompt-v1.txt", import.meta.url));

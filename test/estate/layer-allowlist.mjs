@@ -5,9 +5,9 @@
 // deleting its line here in the same change; never add a line.
 
 export const ALLOWED_VIOLATIONS = [
-  "src/chat.mjs -> src/server.mjs",
+  "src/services/chat.mjs -> src/server.mjs",
   "src/domain/codegraph.mjs -> src/adapters/embed.mjs",
-  "src/domain/completions/complete.mjs -> src/finish.mjs",
+  "src/domain/completions/complete.mjs -> src/services/finish.mjs",
   "src/domain/completions/complete.mjs -> src/adapters/memory/core.mjs",
   "src/domain/completions/graph-adapter.mjs -> src/adapters/memory/core.mjs",
   "src/domain/completions/graph-adapter.mjs -> src/adapters/providers/graph-service.mjs",
@@ -17,14 +17,14 @@ export const ALLOWED_VIOLATIONS = [
   "src/domain/completions/rank.mjs -> src/adapters/memory/blocks.mjs",
   "src/domain/completions/search.mjs -> src/adapters/memory/blocks.mjs",
   "src/adapters/graph-build.mjs -> src/domain/prose.mjs",
-  "src/index.mjs -> src/server.mjs",
+  "src/services/index.mjs -> src/server.mjs",
   "src/adapters/memory/blocks.mjs -> src/domain/memory/trust.mjs",
   "src/adapters/memory/core.mjs -> src/domain/hash.mjs",
   "src/adapters/memory/core.mjs -> src/domain/memory/shacl.mjs",
   "src/adapters/memory/core.mjs -> src/domain/memory/trust.mjs",
   "src/domain/memory/fold.mjs -> src/adapters/memory/blocks.mjs",
   "src/domain/memory/fold.mjs -> src/adapters/memory/core.mjs",
-  "src/domain/memory/fold.mjs -> src/sessions.mjs",
+  "src/domain/memory/fold.mjs -> src/services/sessions.mjs",
   "src/domain/memory/fold.mjs imports node:fs/promises",
   "src/domain/memory/fold.mjs imports node:path",
   "src/adapters/providers/bootstrap.mjs -> src/domain/codegraph.mjs",

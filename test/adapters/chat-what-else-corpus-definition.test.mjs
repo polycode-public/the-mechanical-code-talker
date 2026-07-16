@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runTurn } from "../../src/chat.mjs";
+import { runTurn } from "../../src/services/chat.mjs";
 
 test("'what else is X' after a curated prose definition surfaces additional facts, never the definition again", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-what-else-"));

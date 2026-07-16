@@ -19,14 +19,14 @@ import { tmpdir } from "node:os";
 import { createInterface } from "node:readline/promises";
 import { spawnSync } from "node:child_process";
 import { loadConfig, DEFAULT_GRAPH_REL } from "../adapters/config.mjs";
-import { resolveRuntimeConfig } from "../cli-args.mjs";
+import { resolveRuntimeConfig } from "./cli-args.mjs";
 import { parseEntities } from "../domain/codegraph.mjs";
-import { SESSIONS_DIR_REL, appendSessionToGraph } from "../sessions.mjs";
+import { SESSIONS_DIR_REL, appendSessionToGraph } from "./sessions.mjs";
 import { uuidv7 } from "../adapters/uuid.mjs";
-import { createTelemetry } from "../telemetry.mjs";
+import { createTelemetry } from "./telemetry.mjs";
 import * as defaultSource from "../adapters/source.mjs";
-import { resolveExtensions, mergedLexiconExtra } from "../extensions.mjs";
-import { runTurn, hasSeededVocabulary, vocabExampleHint } from "../chat.mjs";
+import { resolveExtensions, mergedLexiconExtra } from "./extensions.mjs";
+import { runTurn, hasSeededVocabulary, vocabExampleHint } from "./chat.mjs";
 
 /** Where session logs live, relative to the target repo. `.tmct/` is the repo's
  *  one artifact directory (gitignored, machine-local) — flip this single constant
@@ -61,7 +61,7 @@ export function gitToplevel(cwd = process.cwd()) {
  *  skipped/failed. */
 async function seedBootstrapMemory(repo, env = process.env) {
   try {
-    const { initRepo, PERSONA_PRESETS } = await import("../init.mjs");
+    const { initRepo, PERSONA_PRESETS } = await import("./init.mjs");
     const result = await initRepo(repo, { persona: PERSONA_PRESETS.human, env });
     return result.seeded ? result.seedResult : null;
   } catch {
@@ -134,7 +134,7 @@ export async function createSession({
   // narrate mode already on. Session-scoped and mutable — `/narrate on|off`
   // flips it turn-to-turn (see `turn()` below). Default OFF.
   let narrateOn = narrate || /^(1|true|yes)$/i.test(String(env.TMCT_NARRATE || ""));
-  // Graph resolution order (delegates to src/cli-args.mjs's
+  // Graph resolution order (delegates to src/services/cli-args.mjs's
   // resolveRuntimeConfig): explicit --graph path(s) win outright; then --repo
   // (never silently redirected by env); then TMCT_GRAPH_FILE env; then
   // tmct.toml's graph_file at the resolved repo root; then git root; then cwd.

@@ -4,7 +4,7 @@ Status: RESEARCH / DESIGN — not yet implemented. No guesser, thinker, or bisec
 `src/`. Since this doc was written, the general planner shipped underneath it: `findActionPath` and
 `findReachableSet` in `src/domain/planning.mjs`, the goal reasoner in `src/domain/router/goal-reasoner.mjs`,
 taught action families (the four `RULE_KIND_ACTION_*` kinds in `src/adapters/memory/core.mjs`), the `/plan`
-chat command and `tmct plan` CLI mode, and the `planState` session slot in `src/chat.mjs`. Hanoi
+chat command and `tmct plan` CLI mode, and the `planState` session slot in `src/services/chat.mjs`. Hanoi
 (`archive/PLAN_HANOI.md`) and river-crossing (`test/corpus/planning.jsonl`) validate that planner.
 This doc is now scoped to what it does not cover: hidden state and belief narrowing.
 
@@ -64,7 +64,7 @@ is not.
 
 ### 1. Where the state lives, turn to turn
 
-`planState` in `src/chat.mjs` already ships the exact session-state wiring this section once
+`planState` in `src/services/chat.mjs` already ships the exact session-state wiring this section once
 designed from scratch: a closure variable in `createSession`, passed into `runTurn`, returned
 from the turn, reassigned by the session handle, and (per its own code comment) "cleared by
 completion or a fresh goal, never by an aside". `focus` and `last` thread the same way.
@@ -72,7 +72,7 @@ completion or a fresh goal, never by an aside". `focus` and `last` thread the sa
 
 What a guess-number implementer still needs to know:
 
-- The slot is in-process only. `src/sessions.mjs` is a one-way provenance channel
+- The slot is in-process only. `src/services/sessions.mjs` is a one-way provenance channel
   (`readSessionRecords`/`foldInSessions` re-attach recorded sessions to a fresh graph rebuild);
   no code path reads a prior session's sidecar back into a live `createSession`. A process
   restart loses an in-progress game the same way it already loses `focus`. That is accepted
@@ -190,7 +190,7 @@ a single committed fact, without the mechanism caring which.
 
 ### 5. The goal line, per mode, per turn
 
-`withGoalLine` and `deduceGoalFromParsed`/`GOAL_BY_KIND` (all in `src/chat.mjs`) are built around a
+`withGoalLine` and `deduceGoalFromParsed`/`GOAL_BY_KIND` (all in `src/services/chat.mjs`) are built around a
 single deduced string computed ONCE per turn from `runAsk`'s `envelope.parsed` shape — a stateless,
 single-query-shape lookup table. A multi-turn game's goal line is fundamentally different: it must
 reflect the CURRENT game state, and it must be regenerated fresh every turn the game is active,

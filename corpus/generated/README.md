@@ -27,7 +27,7 @@ Every row also carries `provenance` (`wordnet:<synsetId>` or
 
 ## Not wired into the product path
 
-This corpus is not loaded by `src/chat.mjs`/`src/domain/ask.mjs` or any other
+This corpus is not loaded by `src/services/chat.mjs`/`src/domain/ask.mjs` or any other
 product code — it is committed raw material, verified by
 `scripts/template-coverage.mjs`, per archive/PLAN_BREADTH_FIRST_NLU.md §6's explicit
 non-goal. Wiring it into live answer rendering is a separate, future phase.

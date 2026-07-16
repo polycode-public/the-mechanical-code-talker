@@ -11,12 +11,12 @@ import { PassThrough, Readable } from "node:stream";
 import {
   SESSIONS_DIR_REL, SESSION_CLASS, ASKS_ABOUT_PROP,
   upsertSession, appendSessionToGraph, parseSessionJsonl, readSessionRecords, foldInSessions,
-} from "../src/sessions.mjs";
+} from "../src/services/sessions.mjs";
 import { CLASS_DOCS, PREDICATE_DOCS } from "../src/schema-docs.mjs";
-import { runChat } from "../src/chat.mjs";
+import { runChat } from "../src/services/chat.mjs";
 import { MEMORY_GRAPH_REL } from "../src/adapters/memory/core.mjs";
 
-const SRC_SESSIONS = fileURLToPath(new URL("../src/sessions.mjs", import.meta.url));
+const SRC_SESSIONS = fileURLToPath(new URL("../src/services/sessions.mjs", import.meta.url));
 const FIXTURE = fileURLToPath(new URL("./fixtures/entities.fixture.json", import.meta.url));
 
 /** A minimal fresh entities payload (the buildEntities shape) for pure upsert tests. */

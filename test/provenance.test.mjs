@@ -272,7 +272,7 @@ test("(e) two extension bundles asserting a conflicting fact: distinct Fact/Sour
     // same (subject, predicate) — /r/HasProperty maps to mgx:hasProperty in the
     // committed conceptnet-map.toml — DIFFERENT object, from two DIFFERENT
     // provenancePrefixes (the exact shape a tier2-aws bundle and a seon bundle
-    // would each pass to seedMemory via src/extensions.mjs's resolved entries).
+    // would each pass to seedMemory via src/services/extensions.mjs's resolved entries).
     await writeFile(sliceA, JSON.stringify({ start: "/c/en/widget_x", rel: "/r/HasProperty", end: "/c/en/red", weight: 1 }) + "\n");
     await writeFile(sliceB, JSON.stringify({ start: "/c/en/widget_x", rel: "/r/HasProperty", end: "/c/en/blue", weight: 1 }) + "\n");
     const { seedMemory } = await import("../src/adapters/corpus/conceptnet.mjs");

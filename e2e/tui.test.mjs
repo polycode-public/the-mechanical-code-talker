@@ -19,7 +19,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { App, statusText, appendTurn, transcriptLines, wrapLines,
   insertAt, backspaceAt, clampCursor, inputCells } from "../src/tui/app.mjs";
-import { createSession } from "../src/chat.mjs";
+import { createSession } from "../src/services/chat.mjs";
 
 const h = React.createElement;
 const FIXTURE = fileURLToPath(new URL("../test/fixtures/entities.fixture.json", import.meta.url));
@@ -230,7 +230,7 @@ test("TUI: /exit ends the app without dispatching a turn; Ctrl+C and a conversat
 // (measured; corpus/seon + ConceptNet, and this session's own ontology-wiring work
 // added roughly 500ms of that vs. the pre-session baseline) and produces ZERO
 // output until it fully resolves — runChat/runTui now both print an immediate
-// "starting…" line before the seed for exactly this reason (src/chat.mjs,
+// "starting…" line before the seed for exactly this reason (src/services/chat.mjs,
 // src/tui/app.mjs). This test doesn't go through runTui (it renders the App
 // component directly, same as the other TUI tests), so it doesn't see that line —
 // it guards the underlying "does the seed+render path ever complete" property.

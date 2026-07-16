@@ -5,7 +5,7 @@
 // src/domain/completions/'s extractive multi-sentence pipeline (generateCompletion(),
 // src/domain/completions/complete.mjs) already existed and could answer it when called
 // directly — it was simply unreachable from any real chat turn. This suite proves the
-// new (4e) COMPLETIONS RESCUE lane (src/chat.mjs) closes that gap:
+// new (4e) COMPLETIONS RESCUE lane (src/services/chat.mjs) closes that gap:
 //   (a) the target phrase now produces real, grounded, multi-sentence prose instead of
 //       the grammar wall, for "Widget" — a real Class this repo's own committed fixture
 //       graph (test/fixtures/entities.fixture.json) has real facts about (defined in
@@ -23,7 +23,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { runTurn } from "../../src/chat.mjs";
+import { runTurn } from "../../src/services/chat.mjs";
 import { saveBlock } from "../../src/adapters/memory/blocks.mjs";
 import { parseEntities } from "../../src/domain/codegraph.mjs";
 import { clearCache } from "../../src/adapters/source.mjs";

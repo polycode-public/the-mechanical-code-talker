@@ -140,7 +140,7 @@ noise-strip → ACE → constructions.
 | A genuinely general question shape nothing handles | `src/domain/interpret/strategies/grammar.mjs` (anchored templates T1–T10) |
 | A specific surface construction mis-read by keyword-spot (wrong subject/object direction, agent nouns, genitives, compounds) | `data/templates/constructions/*.toml` — the free-form templating layer |
 | Teach sentence not parsed / stored wrongly | `src/domain/grammar/` (ACE grammar, lexicon) — verify with `tmct memory` |
-| Parsed fine, answer phrased badly | `src/answer-variants.*`, `data/templates/responses.jsonl`, `src/finish.mjs` + `data/templates/grammar-rules.toml` (byte-stable contract — read that file's header first) |
+| Parsed fine, answer phrased badly | `src/answer-variants.*`, `data/templates/responses.jsonl`, `src/services/finish.mjs` + `data/templates/grammar-rules.toml` (byte-stable contract — read that file's header first) |
 
 **The templating mindset (this is the important one).** When a fix means adding a special case
 to a general rule — an extra `|alternative` in a grammar.mjs regex, a carve-out for one phrasing —

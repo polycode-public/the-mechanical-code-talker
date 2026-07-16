@@ -10,7 +10,7 @@
 // readMemoryAskBundle() is the one extra bit of I/O renderLedgerHtml itself
 // doesn't do: it reads the checked-in chat-dock engine bundle.
 
-import { loadMemory, readFactRows, findContradictions, normFactTerm } from "./adapters/memory/core.mjs";
+import { loadMemory, readFactRows, findContradictions, normFactTerm } from "../adapters/memory/core.mjs";
 import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson } from "./viz-theme.mjs";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -26,7 +26,7 @@ export const LEDGER_ROW_LIMIT_DEFAULT = 20000;
 export async function readMemoryAskBundle() {
   try {
     const here = dirname(fileURLToPath(import.meta.url));
-    return await readFile(join(here, "memory-ask-browser.bundle.js"), "utf8");
+    return await readFile(join(here, "..", "memory-ask-browser.bundle.js"), "utf8");
   } catch {
     return "";
   }

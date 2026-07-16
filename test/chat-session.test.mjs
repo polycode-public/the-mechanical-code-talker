@@ -9,7 +9,7 @@ import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createSession } from "../src/chat.mjs";
+import { createSession } from "../src/services/chat.mjs";
 import { clearCache } from "../src/adapters/source.mjs";
 
 const FIXTURE = fileURLToPath(new URL("./fixtures/entities.fixture.json", import.meta.url));

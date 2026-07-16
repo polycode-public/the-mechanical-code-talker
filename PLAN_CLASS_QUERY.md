@@ -81,8 +81,8 @@ called directly):
 
 | Query | What happened | Root cause, traced |
 |---|---|---|
-| `list facts` | `couldn't compile this compositional question ("facts" isn't a listable kind — try functions, classes, methods, modules, …)"` — the CODE-graph compositional miss message | `runAsk` (`src/chat.mjs`) calls `ask(graph, askQuery, …)` where `graph` is loaded exclusively from the **code** graph (`--repo`/`source.mjs`'s `fetchEntities`). `memoryDir`'s Fact/Utterance/Session/Source/Rule individuals are never merged into that `graph` object anywhere on this path. `dynamicClassQuery` runs, correctly, against a `graph.individuals` array that structurally cannot contain a `Fact` — it was never given the memory graph at all. |
-| `how many facts about horses are there` | `664 facts.` (the **unrestricted total**, ignoring "about horses" entirely — a real corpus, not the 5-fact fixture) | `answerMemoryCount` (`src/chat.mjs`), which fires *before* `runAsk` ever gets a turn, matches noun via `/\b(?:how many\|number of\|count(?:\s+the)?)\s+([a-z]+)\b/` — captures only the single word right after "how many", sets `cls = "Fact"`, and counts every Fact individual in the graph. The "about horses" tail is never inspected. Unlike `dynamicClassQuery`'s own `DYNAMIC_TAIL_OK_RE` discipline (decline a real restrictor rather than silently drop it), `answerMemoryCount` has no tail check at all — this is a **wrong, confidently-stated answer**, not an honest miss. |
+| `list facts` | `couldn't compile this compositional question ("facts" isn't a listable kind — try functions, classes, methods, modules, …)"` — the CODE-graph compositional miss message | `runAsk` (`src/services/chat.mjs`) calls `ask(graph, askQuery, …)` where `graph` is loaded exclusively from the **code** graph (`--repo`/`source.mjs`'s `fetchEntities`). `memoryDir`'s Fact/Utterance/Session/Source/Rule individuals are never merged into that `graph` object anywhere on this path. `dynamicClassQuery` runs, correctly, against a `graph.individuals` array that structurally cannot contain a `Fact` — it was never given the memory graph at all. |
+| `how many facts about horses are there` | `664 facts.` (the **unrestricted total**, ignoring "about horses" entirely — a real corpus, not the 5-fact fixture) | `answerMemoryCount` (`src/services/chat.mjs`), which fires *before* `runAsk` ever gets a turn, matches noun via `/\b(?:how many\|number of\|count(?:\s+the)?)\s+([a-z]+)\b/` — captures only the single word right after "how many", sets `cls = "Fact"`, and counts every Fact individual in the graph. The "about horses" tail is never inspected. Unlike `dynamicClassQuery`'s own `DYNAMIC_TAIL_OK_RE` discipline (decline a real restrictor rather than silently drop it), `answerMemoryCount` has no tail check at all — this is a **wrong, confidently-stated answer**, not an honest miss. |
 | `how many animals are there` / `how many animals do you know about` | `I can't count "animals". I count: sessions. Try "how many classes are there".` | Falls through `answerMemoryCount` (only knows the fixed `fact`/`utterance` nouns in `MEMORY_COUNT_NOUNS`), `answerQuantifierRecall` (needs the two-noun "how many Xs are Ys" shape, `HOW_MANY_ARE_RE`), `answerEdgeCount` (code-graph edge metrics only), and `answerCount`/`countFromFacts` (only fires when the taught subject **also** names a real code-graph class via `COUNT_NOUNS`; "dog"/"horse"/"cat" never do) to the CLI's generic honest miss. |
 | `what is an animal` | `dog is a kind of animal` / `cat is a kind of animal` / `horse is a kind of animal` — correct, real answer | Already works. `factAnswer`'s reverse-membership branch reads `isa.filter(f => variants.has(f.object))` — every fact whose OBJECT is "animal" — and renders each via the shared capped-list convention (`FACT_ANSWER_CAP = 32`, inline `shown`/`rest` blocks — there is no named helper) with "…and N more — say 'more' to see them" pagination. This is a genuine, already-correct "list all X of taught class Y" answer; it is just not reachable under the phrasing "list all animals" (see below). |
 
@@ -101,7 +101,7 @@ Four distinct, precisely-scoped findings fall out of this:
    count) — it does not count members of a purely conceptual taught class.
 4. **The list-shaped mirror of (3) already exists and works** (`"what is an animal"`), but only under
    `"what is a Y"` / `"what kind of thing is an X"` phrasings — `"list all animals"` / `"list the
-   animals"` do not match `KIND_OF_RE` (`src/chat.mjs`) or the bare meta-question fallback beside
+   animals"` do not match `KIND_OF_RE` (`src/services/chat.mjs`) or the bare meta-question fallback beside
    it, so an equally natural phrasing of the same, already-answerable question
    currently falls through to an honest miss instead of routing to the working code.
 
@@ -141,7 +141,7 @@ today. Export all four. `chat.mjs` gains `listMemoryClass(memoryDir, query)` and
 5. On a restrictor tail failing `DYNAMIC_TAIL_OK_RE`: decline (return `null`), same discipline
    `dynamicClassQuery` already uses — the caller's existing honest-miss fallback stands.
 
-**Wiring point**: `runTurn` (`src/chat.mjs`), immediately alongside `answerMemoryCount`'s
+**Wiring point**: `runTurn` (`src/services/chat.mjs`), immediately alongside `answerMemoryCount`'s
 existing call — same precedence tier (before `answerQuantifierRecall`/`answerEdgeCount`/
 `answerCount`, since those are code-graph-flavored and would otherwise short-circuit first on a
 shared noun). `answerMemoryCount`'s own fixed `MEMORY_COUNT_NOUNS` dict (just `fact`/
@@ -157,7 +157,7 @@ new lane operates on `loadMemory`'s real payload, never the code `graph`, and in
 ### §B — real cardinality count over a taught ontology class
 
 New function alongside `factAnswer`'s existing reverse-membership branch
-(`src/chat.mjs`), sharing its `variants`/`objectHits` computation:
+(`src/services/chat.mjs`), sharing its `variants`/`objectHits` computation:
 
 ```
 countTaughtClassMembers(rows, term, biasByBundle)
@@ -222,14 +222,14 @@ invent a third:
 - **Not `archive/PLAN_VIZ_MEMORY.md`'s Bug 1** (the viz browser ask panel wiring). That shipped
   separately as `src/memory-ask-browser-entry.mjs` for a different surface (the generated
   HTML file, not `npm run chat`). This document's §A lane is chat-CLI-specific and does not touch
-  `src/ledger-viz.mjs`, `scripts/build-ask-bundle.mjs`, or any browser-bundle entry point.
+  `src/services/ledger-viz.mjs`, `scripts/build-ask-bundle.mjs`, or any browser-bundle entry point.
 - **Not a new ontology mechanism.** Taught classes stay exactly what they are today — the object side
   of an `rdfs:subClassOf`/`rdf:type` fact, discovered dynamically, never a new schema table or a
   registered "class" concept distinct from an ordinary taught fact.
 - **Not full restrictor support for the memory-meta-class lane.** §A's new lane declines a restrictor
   tail (`"list facts that mention widget"`) rather than answering it, matching `dynamicClassQuery`'s
   own existing, deliberate scope. A correct restricted answer for that shape already exists under a
-  different phrasing (`TOLD_ABOUT_RE`, `"what did you tell me about widget"` — `src/chat.mjs`)
+  different phrasing (`TOLD_ABOUT_RE`, `"what did you tell me about widget"` — `src/services/chat.mjs`)
   and is not redesigned here. Teaching `"how many facts about X"` to route into
   `TOLD_ABOUT_RE`'s own machinery instead of `answerMemoryCount`'s broken bare-noun regex is a real,
   smaller follow-on, flagged below, not designed in full here.

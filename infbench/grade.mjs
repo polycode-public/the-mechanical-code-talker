@@ -111,7 +111,7 @@ export function parseCases(text) {
  *  no second query grammar needed. */
 const QUERY_RE = /^is\s+(?:an?\s+)?(.+?)\s+an?\s+(.+?)[?.!\s]*$/i;
 
-/** The two NEW cardinality ask-shapes (this build) — mirrors src/chat.mjs's
+/** The two NEW cardinality ask-shapes (this build) — mirrors src/services/chat.mjs's
  *  own CARD_AT_LEAST_ASK_RE/CARD_EXISTENCE_ASK_RE exactly (same surface, two
  *  independent copies: this one is bench-side and pure, chat.mjs's is the
  *  product-side live-chat reader — no shared import between them, same
@@ -131,7 +131,7 @@ const CARDINALITY_ROW_PREDICATES = new Set(["owl:cardinality", "owl:minCardinali
 
 /** Naive singular fold for a queried noun phrase that may be plural
  *  ("does every suite have at least 2 tests" — the object noun is pluralized
- *  when m>1) — mirrors src/chat.mjs's own `factTermVariants` exactly (a
+ *  when m>1) — mirrors src/services/chat.mjs's own `factTermVariants` exactly (a
  *  self-contained copy: grade.mjs is bench-side and doesn't import chat.mjs). */
 function singularCandidates(term) {
   const t = normFactTerm(term);

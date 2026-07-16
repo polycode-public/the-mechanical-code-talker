@@ -12,7 +12,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createSession } from "../src/chat.mjs";
+import { createSession } from "../src/services/chat.mjs";
 import { loadMemory, readFactRows } from "../src/adapters/memory/core.mjs";
 import { clearCache } from "../src/adapters/source.mjs";
 

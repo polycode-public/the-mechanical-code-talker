@@ -1,5 +1,5 @@
 // extend-validate.test.mjs — Part 4 of the extension-pack batch:
-// validateExtensionPack (src/extensions.mjs) and `tmct extend --validate <dir>`
+// validateExtensionPack (src/services/extensions.mjs) and `tmct extend --validate <dir>`
 // (bin/tmct.mjs). Reuses existing throw-loudly primitives (loadSlice/loadMap/
 // toFacts, loadLexicon, loadTemplates) — no new shape-checking logic.
 import { test } from "node:test";
@@ -9,7 +9,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { validateExtensionPack } from "../src/extensions.mjs";
+import { validateExtensionPack } from "../src/services/extensions.mjs";
 
 const BIN = fileURLToPath(new URL("../bin/tmct.mjs", import.meta.url));
 const tmp = () => mkdtemp(join(tmpdir(), "tmct-extend-"));

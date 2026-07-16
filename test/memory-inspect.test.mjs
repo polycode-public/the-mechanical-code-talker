@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 import { sampleSize, balancedSample, renderMemory, inspectMemory } from "../src/adapters/memory/inspect.mjs";
 import { appendFact, appendUtterances } from "../src/adapters/memory/core.mjs";
 import { saveBlock } from "../src/adapters/memory/blocks.mjs";
-import { runTurn } from "../src/chat.mjs";
+import { runTurn } from "../src/services/chat.mjs";
 import { clearCache } from "../src/adapters/source.mjs";
 
 const BIN = fileURLToPath(new URL("../bin/tmct.mjs", import.meta.url));

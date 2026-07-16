@@ -13,7 +13,7 @@
 // On a real terminal, chat is the full-screen Ink TUI (src/tui/app.mjs);
 // `--plain` — or a non-TTY stdin/stdout (pipes, scripts, the test suite) —
 // gets the classic readline shell. BOTH run the same session sink
-// (src/chat.mjs createSession), so logs, sidecars and graph memory are
+// (src/services/chat.mjs createSession), so logs, sidecars and graph memory are
 // identical either way.
 //
 // The `cli` arms (digest / tmct_locate / any-tool fallback) are the carried,
@@ -120,11 +120,11 @@ Usage:
 On a terminal, chat opens the full-screen TUI; piped input gets the plain shell.
 In chat: /help lists slash-commands; /exit leaves. Session log → <repo>/.tmct/session-<id>.log.
 
-Shared graph-path precedence (chat/serve; see src/cli-args.mjs): --graph flag(s) >
+Shared graph-path precedence (chat/serve; see src/services/cli-args.mjs): --graph flag(s) >
 TMCT_GRAPH_FILE env > tmct.toml graph_file/graph_files > --repo-derived
 <repo>/.tmct/graph.json > git-root/cwd default.
 
-Memory-backend precedence (chat; see src/chat.mjs createSession): --memory-backend
+Memory-backend precedence (chat; see src/services/chat.mjs createSession): --memory-backend
 flag > TMCT_MEMORY_BACKEND env > tmct.toml [memory] backend > "default" (the flat
 .tmct/ JSON file). Set it once with \`tmct init --memory-backend <...>\` and every
 later \`tmct chat\` in that repo picks it up with no flag needed.
@@ -340,7 +340,7 @@ async function runCliMode() {
 // Both `tmct init --corpus/--ontology/--lexicon` and the new `tmct import` verb
 // funnel through the SAME two-step seam: resolvePluggableInput (name/id/path →
 // a resolved descriptor) then activatePluggableInput (write tmct.toml + seed via
-// src/extensions.mjs's unified loop) — one seam instead of three near-duplicate
+// src/services/extensions.mjs's unified loop) — one seam instead of three near-duplicate
 // hand-rolled call sites.
 
 /** Read `repoRoot`'s current tmct.toml (if any) into the shape init.mjs's
@@ -348,7 +348,7 @@ async function runCliMode() {
  *  write it straight back without losing every other already-written key.
  *  Mirrors `tmct init --corpus`'s original inline config-merge exactly. */
 async function readConfigForRewrite(repoRoot) {
-  const { defaultConfig } = await import("../src/init.mjs");
+  const { defaultConfig } = await import("../src/services/init.mjs");
   const { loadTomlConfig } = await import("../src/adapters/toml-config.mjs");
   const raw = await loadTomlConfig(repoRoot);
   const cfg = { ...defaultConfig() };
@@ -367,7 +367,7 @@ async function readConfigForRewrite(repoRoot) {
 }
 
 async function writeConfig(repoRoot, cfg) {
-  const { renderTomlConfig, CONFIG_FILE } = await import("../src/init.mjs");
+  const { renderTomlConfig, CONFIG_FILE } = await import("../src/services/init.mjs");
   const { writeFile } = await import("node:fs/promises");
   const { join: joinPath } = await import("node:path");
   await writeFile(joinPath(repoRoot, CONFIG_FILE), renderTomlConfig(cfg));
@@ -431,7 +431,7 @@ async function repoRelative(repoRoot, p) {
  *  disk write — callers resolve every pluggable input BEFORE calling
  *  initRepo, so a bad name/path touches nothing. */
 async function resolvePluggableInput(kind, nameOrPath, { repoRoot }) {
-  const { BUILTIN_EXTENSIONS } = await import("../src/extensions.mjs");
+  const { BUILTIN_EXTENSIONS } = await import("../src/services/extensions.mjs");
   if (Object.prototype.hasOwnProperty.call(BUILTIN_EXTENSIONS, nameOrPath) && BUILTIN_EXTENSIONS[nameOrPath].kind === kind) {
     return { known: true, name: nameOrPath };
   }
@@ -465,7 +465,7 @@ async function resolvePluggableInput(kind, nameOrPath, { repoRoot }) {
 /** Activate one resolvePluggableInput() result in `repoRoot`'s tmct.toml and —
  *  for corpus/ontology-kind entries (or a pack-kind entry with a corpusPath) —
  *  seed it via the SAME unified loop every other bundle uses
- *  (src/extensions.mjs's seedActiveCorpusEntries). A lexicon/templates-kind
+ *  (src/services/extensions.mjs's seedActiveCorpusEntries). A lexicon/templates-kind
  *  entry only activates (merged read-time via mergedLexiconExtra, never
  *  seeded — matching today's behavior for those kinds). Returns a
  *  human-readable status line for stdout. */
@@ -485,14 +485,14 @@ async function activatePluggableInput(repoRoot, resolved) {
   cfg.extensions = { ...(cfg.extensions || {}), [name]: newEntry };
   await writeConfig(repoRoot, cfg);
 
-  const { resolveExtensions, seedActiveCorpusEntries } = await import("../src/extensions.mjs");
+  const { resolveExtensions, seedActiveCorpusEntries } = await import("../src/services/extensions.mjs");
   const { entries } = await resolveExtensions(repoRoot);
   const entry = entries.get(name);
   const seedable = entry.kind === "corpus" || entry.kind === "ontology" || (entry.kind === "pack" && entry.corpusPath);
   if (!seedable) {
     return `activated "${name}" (${entry.kind}) in tmct.toml — no corpus facts to seed for this kind.\n`;
   }
-  // Backend-aware seeding (same split-brain bug fix as src/init.mjs's own
+  // Backend-aware seeding (same split-brain bug fix as src/services/init.mjs's own
   // corpus seed, found in review): `cfg.memory.backend` already reflects
   // tmct.toml as it stands RIGHT NOW (readConfigForRewrite, above) — which,
   // for a `tmct init --corpus X --memory-backend sqlite` / `tmct import
@@ -574,17 +574,17 @@ async function main() {
     // session with the verbose developer/debug narrate mode already on. Default
     // OFF; `/narrate on`/`/narrate off` also toggles it mid-session.
     const narrate = rest.includes("--narrate");
-    // `--graph <path>` (repeatable) / `--config <path>` (src/cli-args.mjs): threaded
+    // `--graph <path>` (repeatable) / `--config <path>` (src/services/cli-args.mjs): threaded
     // through as the new top tier of createSession's graph-resolution order (above
     // TMCT_GRAPH_FILE — see chat.mjs's own docblock at createSession). Omitted from
     // the call entirely when absent, so a plain `tmct chat [--repo]` invocation is
     // byte-identical to before these flags existed.
-    const { repeatedFlag, strFlag, enumFlag } = await import("../src/cli-args.mjs");
+    const { repeatedFlag, strFlag, enumFlag } = await import("../src/services/cli-args.mjs");
     const graphPaths = repeatedFlag(rest, ["--graph"]);
     const configPath = strFlag(rest, ["--config"]);
     // `--memory-backend <default|memory|sqlite>`: the CLI's top tier of
     // createSession's memoryBackend precedence (CLI flag > TMCT_MEMORY_BACKEND
-    // env > tmct.toml's [memory] backend > built-in default — src/cli-args.mjs's
+    // env > tmct.toml's [memory] backend > built-in default — src/services/cli-args.mjs's
     // shared precedence order, resolved inside createSession itself). Omitted
     // when absent so the lower tiers still apply unchanged.
     let memoryBackend;
@@ -605,7 +605,7 @@ async function main() {
     const prompt = strFlag(rest, ["--prompt"]);
     // `--render <archetype> [--output <path>]` — after a one-shot --prompt whose
     // final turn produced a plan, write the self-contained animated plan page
-    // (src/plan-viz.mjs). Requires --prompt: interactive chat has no single
+    // (src/services/plan-viz.mjs). Requires --prompt: interactive chat has no single
     // final turn to render.
     let renderArchetype;
     try {
@@ -619,8 +619,8 @@ async function main() {
       process.exit(1);
     }
     if (prompt) {
-      const { createSession } = await import("../src/chat.mjs");
-      const { splitSentences } = await import("../src/sentences.mjs");
+      const { createSession } = await import("../src/services/chat.mjs");
+      const { splitSentences } = await import("../src/services/sentences.mjs");
       const session = await createSession({ repoPath, ephemeral, narrate, ...extra });
       let finalAnswer = "";
       let finalPlan = null;
@@ -640,7 +640,7 @@ async function main() {
           process.exitCode = 1;
           return;
         }
-        const { renderPlanHtml } = await import("../src/plan-viz.mjs");
+        const { renderPlanHtml } = await import("../src/services/plan-viz.mjs");
         const { writeFile } = await import("node:fs/promises");
         const { resolve: resolvePath } = await import("node:path");
         const outPath = resolvePath(process.cwd(), strFlag(rest, ["--output", "--out"], "plan.html"));
@@ -662,7 +662,7 @@ async function main() {
     // drive the same createSession sink — only the drawing differs.
     const plain = rest.includes("--plain") || !process.stdin.isTTY || !process.stdout.isTTY;
     if (plain) {
-      const { runChat } = await import("../src/chat.mjs");
+      const { runChat } = await import("../src/services/chat.mjs");
       await runChat({ repoPath, ephemeral, narrate, ...extra });
     } else {
       const { runTui } = await import("../src/tui/app.mjs");
@@ -674,12 +674,12 @@ async function main() {
   if (mode === "memory") {
     // `tmct memory` — the /memory chat command from the shell: same renderer
     // (src/adapters/memory/inspect.mjs). Repo resolution now goes through the shared
-    // resolveRuntimeConfig (src/cli-args.mjs) — --repo > git root > cwd, same
+    // resolveRuntimeConfig (src/services/cli-args.mjs) — --repo > git root > cwd, same
     // as before, plus a (currently inert but accepted) `--config` for symmetry
     // with every other subcommand. No `--graph`: memory reads no code graph.
     const rest = process.argv.slice(3);
     const verbose = rest.includes("--verbose") || rest.includes("-v");
-    const { resolveRuntimeConfig } = await import("../src/cli-args.mjs");
+    const { resolveRuntimeConfig } = await import("../src/services/cli-args.mjs");
     const { inspectMemory } = await import("../src/adapters/memory/inspect.mjs");
     const { repo } = await resolveRuntimeConfig({ argv: rest });
     process.stdout.write(await inspectMemory(repo, { verbose }) + "\n");
@@ -692,7 +692,7 @@ async function main() {
     // record provenance. Idempotent; --force rewrites config + re-records.
     //
     // TIERING POLICY: init is OFFLINE, $0 and TIER-1-ONLY by default (seon +
-    // conceptnet — src/extensions.mjs's BUILTIN_EXTENSIONS). A tier-2 domain/
+    // conceptnet — src/services/extensions.mjs's BUILTIN_EXTENSIONS). A tier-2 domain/
     // language corpus (corpus/tier2/: aws, python, java) is added ONLY when
     // explicitly asked via `--corpus <id>`. The `--detect` auto-detect is a
     // documented STUB: it inspects the repo's manifests (pyproject.toml → python,
@@ -702,9 +702,9 @@ async function main() {
     // subcommand without a --repo flag. It now takes one like every other
     // subcommand, defaulting to cwd exactly as before when absent.
     const rest = process.argv.slice(3);
-    const { strFlag, repeatedFlag, enumFlag } = await import("../src/cli-args.mjs");
+    const { strFlag, repeatedFlag, enumFlag } = await import("../src/services/cli-args.mjs");
     const { resolve: resolvePath } = await import("node:path");
-    const { initRepo, PERSONA_PRESETS } = await import("../src/init.mjs");
+    const { initRepo, PERSONA_PRESETS } = await import("../src/services/init.mjs");
 
     const repoFlag = strFlag(rest, ["--repo"]);
     const repoRoot = repoFlag ? resolvePath(process.cwd(), repoFlag) : process.cwd();
@@ -717,9 +717,9 @@ async function main() {
     // `--memory-backend <default|memory|sqlite>` (PLAN_SEED.md §6's storage-backend
     // seam, now reachable from `tmct init`): validated BEFORE touching disk, same
     // discipline as every other pluggable input below. Written into tmct.toml's
-    // `[memory] backend` (src/init.mjs's renderTomlConfig); chat.mjs's
+    // `[memory] backend` (src/services/init.mjs's renderTomlConfig); chat.mjs's
     // createSession reads it back at CLI-flag > TMCT_MEMORY_BACKEND env >
-    // tmct.toml > default precedence (src/cli-args.mjs's shared precedence order).
+    // tmct.toml > default precedence (src/services/cli-args.mjs's shared precedence order).
     let memoryBackendVal;
     try {
       memoryBackendVal = enumFlag(rest, ["--memory-backend"], ["default", "memory", "sqlite"]);
@@ -907,7 +907,7 @@ async function main() {
     // additive operation (appendGraphFiles) — it grows tmct.toml's graph_files
     // array, never activates an extensions bundle.
     const rest = process.argv.slice(3);
-    const { strFlag, repeatedFlag, enumFlag } = await import("../src/cli-args.mjs");
+    const { strFlag, repeatedFlag, enumFlag } = await import("../src/services/cli-args.mjs");
     const { resolve: resolvePath } = await import("node:path");
 
     const repoFlag = strFlag(rest, ["--repo"]);
@@ -982,7 +982,7 @@ async function main() {
     // Any declined sentence exits non-zero: a half-taught game plans wrongly
     // or not at all with no visible cause otherwise.
     if (fileVal) {
-      const { importDefinitionFile } = await import("../src/import-file.mjs");
+      const { importDefinitionFile } = await import("../src/services/import-file.mjs");
       try {
         const result = await importDefinitionFile(repoRoot, fileVal);
         process.stdout.write(result.report + "\n");
@@ -1000,7 +1000,7 @@ async function main() {
     // (the shape a package like seonix/marginalia ships) BEFORE it's activated
     // in any repo's tmct.toml. Reuses existing throw-loudly primitives
     // (loadSlice/loadMap/toFacts, loadLexicon, loadTemplates) via
-    // src/extensions.mjs's validateExtensionPack — never invents new
+    // src/services/extensions.mjs's validateExtensionPack — never invents new
     // shape-checking logic. `<dir>` must carry its own tmct.toml declaring one
     // or more `[extensions.<name>]` host entries (the SAME [extensions] table
     // shape a repo's own tmct.toml uses) naming the resource(s) to validate;
@@ -1014,7 +1014,7 @@ async function main() {
       process.exit(2);
     }
     const { resolve: resolvePath } = await import("node:path");
-    const { strFlag } = await import("../src/cli-args.mjs");
+    const { strFlag } = await import("../src/services/cli-args.mjs");
     const target = resolvePath(process.cwd(), dirArg);
     // `--config <path>` (optional): an alternate tmct.toml to validate against,
     // INSTEAD of `<target>/tmct.toml` — `target` still anchors every resource
@@ -1030,7 +1030,7 @@ async function main() {
       try { isDir = (await stat(abs)).isDirectory(); } catch { /* missing path — treat as a file target */ }
       configFile = isDir ? resolvePath(abs, "tmct.toml") : abs;
     }
-    const { resolveExtensions, BUILTIN_EXTENSIONS, validateExtensionPack } = await import("../src/extensions.mjs");
+    const { resolveExtensions, BUILTIN_EXTENSIONS, validateExtensionPack } = await import("../src/services/extensions.mjs");
     let entries;
     try {
       ({ entries } = await resolveExtensions(target, configFile ? { configFile } : {}));
@@ -1064,7 +1064,7 @@ async function main() {
     // `tmct syllogise` — the explicit speculative-inference batch (never on the chat
     // hot path): forward-chain the memory's rdfs:subClassOf closure into bounded,
     // low-trust, retractable entailed facts. Same repo resolution as `memory` —
-    // resolveRuntimeConfig (src/cli-args.mjs): --repo > git root > cwd. Also
+    // resolveRuntimeConfig (src/services/cli-args.mjs): --repo > git root > cwd. Also
     // accepts `--config` for symmetry (syllogise reads no code graph either).
     const rest = process.argv.slice(3);
     const numFlag = (name, dflt) => {
@@ -1072,7 +1072,7 @@ async function main() {
       const v = j !== -1 ? Number(rest[j + 1]) : NaN;
       return Number.isFinite(v) ? v : dflt;
     };
-    const { resolveRuntimeConfig } = await import("../src/cli-args.mjs");
+    const { resolveRuntimeConfig } = await import("../src/services/cli-args.mjs");
     const { syllogise } = await import("../src/domain/syllogise.mjs");
     const { loadMemory, readFactRows, appendFacts } = await import("../src/adapters/memory/core.mjs");
     const { repo } = await resolveRuntimeConfig({ argv: rest });
@@ -1103,8 +1103,8 @@ async function main() {
       process.exitCode = 1;
       return;
     }
-    const { strFlag, resolveRuntimeConfig } = await import("../src/cli-args.mjs");
-    const { computeLedgerData, renderLedgerHtml, readMemoryAskBundle } = await import("../src/ledger-viz.mjs");
+    const { strFlag, resolveRuntimeConfig } = await import("../src/services/cli-args.mjs");
+    const { computeLedgerData, renderLedgerHtml, readMemoryAskBundle } = await import("../src/services/ledger-viz.mjs");
     const { writeFile } = await import("node:fs/promises");
     const { resolve } = await import("node:path");
     const limitIdx = rest.indexOf("--limit");
@@ -1159,12 +1159,12 @@ async function main() {
       );
       return;
     }
-    const { strFlag, resolveRuntimeConfig } = await import("../src/cli-args.mjs");
+    const { strFlag, resolveRuntimeConfig } = await import("../src/services/cli-args.mjs");
     const host = strFlag(rest, ["--host"], "127.0.0.1");
     const portRaw = strFlag(rest, ["--port"]);
     const port = portRaw !== undefined && Number.isFinite(Number(portRaw)) ? Number(portRaw) : 8787;
     const { startServer } = await import("../src/server-http.mjs");
-    // Graph-path precedence (src/cli-args.mjs, shared with `chat`): --graph
+    // Graph-path precedence (src/services/cli-args.mjs, shared with `chat`): --graph
     // flag(s) > TMCT_GRAPH_FILE env > tmct.toml graph_file/graph_files >
     // --repo-derived <repo>/.tmct/graph.json > git-root/cwd default. This
     // REPLACES serve's old cwd-only default (loadConfig had no git-root
@@ -1218,7 +1218,7 @@ async function main() {
       );
       return;
     }
-    const { strFlag, resolveRuntimeConfig } = await import("../src/cli-args.mjs");
+    const { strFlag, resolveRuntimeConfig } = await import("../src/services/cli-args.mjs");
     const toolsFlag = strFlag(rest, ["--tools"]);
     const jsonFlag = rest.includes("--json");
     // The request is every argv token that isn't a recognized flag or its value,
@@ -1239,7 +1239,7 @@ async function main() {
     }
     const { repo, config } = await resolveRuntimeConfig({ argv: rest });
     const { buildCapabilityPlanCtx, runCapabilityPlan, declaredCapabilityNames } = await import("../src/domain/router/drive.mjs");
-    const { capabilityPlanDeps } = await import("../src/chat.mjs");
+    const { capabilityPlanDeps } = await import("../src/services/chat.mjs");
     let ctx;
     try {
       ctx = await buildCapabilityPlanCtx({ ...capabilityPlanDeps(), config, memoryDir: repo });

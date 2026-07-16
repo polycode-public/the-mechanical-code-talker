@@ -2,7 +2,7 @@
 // alternate-screen layout with a scrolling transcript pane, a bottom input line, and a
 // status bar (repo, module count, session id).
 //
-// Every turn goes through the SAME createSession sink (src/chat.mjs) the plain readline
+// Every turn goes through the SAME createSession sink (src/services/chat.mjs) the plain readline
 // shell uses — transcript log, sidecar, graph upsert, and memory side-write are
 // byte-identical to `--plain`; only the screen drawing differs.
 //
@@ -14,7 +14,7 @@
 
 import React, { useEffect, useState } from "react";
 import { render, Box, Text, useApp, useInput, useStdout } from "ink";
-import { createSession } from "../chat.mjs";
+import { createSession } from "../services/chat.mjs";
 
 const h = React.createElement;
 
@@ -221,7 +221,7 @@ export function App({ session }) {
  *  which also triggers the memory fold — stream flush). Returns
  *  { logFile, sidecarFile, turns } exactly like runChat. */
 export async function runTui({ repoPath, stdout = process.stdout, stdin = process.stdin, ...sessionOpts } = {}) {
-  // Same reasoning as runChat's equivalent line (src/chat.mjs): createSession's
+  // Same reasoning as runChat's equivalent line (src/services/chat.mjs): createSession's
   // first-run seed is silent for ~2-3s, and nothing is written to the terminal
   // (not even the alternate-screen switch below) until it resolves — this was
   // reported live as an apparent hang. One cheap line on the PRIMARY screen,

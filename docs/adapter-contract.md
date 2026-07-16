@@ -64,7 +64,7 @@ Field notes:
 - **`individuals[].id`** — the only required node field. Conventional shapes
   (`mod:<path>`, `fn:<path>#<name>`, `commit:<sha>`) matter for one thing:
   session fold-in re-resolution derives a fallback *label* from the id shape
-  (`src/sessions.mjs`, `labelFromId`). Other id schemes work; they just skip
+  (`src/services/sessions.mjs`, `labelFromId`). Other id schemes work; they just skip
   that fallback tier.
 - **`objectProperties[].prop`** — the closed vocabulary token. tmct classifies
   each group into a relation *kind* (imports / calls / defines / tests /
@@ -113,7 +113,7 @@ missing subject/object are dropped, nodes without `id` are skipped.
    payload JSON. Trimmed; empty means unset.
 3. **Default**: `<repo>/.tmct/graph.json` (`DEFAULT_GRAPH_REL`), where
    `<repo>` is `--repo` if given, else the git toplevel of the cwd, else the
-   cwd itself (`runChat`, `src/chat.mjs`).
+   cwd itself (`runChat`, `src/services/chat.mjs`).
 
 File reads are cached per path for the process; `clearCache()` (tests,
 long-lived embedders) discards it.
@@ -125,7 +125,7 @@ the exact shape above with all collections empty and `"bootstrap": true`
 marking it. The chat surface then starts honestly empty ("no graph loaded —
 starting empty"), answers with honest misses, and the first session upsert
 **creates** `.tmct/graph.json` from the conversation itself
-(`appendSessionToGraph`, `src/sessions.mjs`). The bootstrap payload is never
+(`appendSessionToGraph`, `src/services/sessions.mjs`). The bootstrap payload is never
 cached, so a provider (or indexer) writing the artifact mid-session is picked
 up on the next fetch. Any other read/parse failure is a clean `ToolError`.
 
