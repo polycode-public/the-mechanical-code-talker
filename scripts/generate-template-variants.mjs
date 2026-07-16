@@ -44,7 +44,7 @@ import { dirname, join } from "node:path";
 import { createHash } from "node:crypto";
 import { parseAce } from "../src/domain/grammar/ace.mjs";
 import { loadLexicon } from "../src/domain/grammar/lexicon.mjs";
-import { loadMarkdownCorpus, splitSentences } from "./lib/text-corpus.mjs";
+import { loadMarkdownCorpus } from "./lib/text-corpus.mjs";
 import { synsetsFor } from "./lib/wordnet-synonyms.mjs";
 import { classify } from "./template-coverage.mjs";
 

@@ -57,7 +57,7 @@ function stripMarkdownNoise(text) {
  *  expected and acceptable for a coverage measurement (parseAce would reject
  *  the resulting fragments as misses either way, which is the honest outcome
  *  for a genuinely ambiguous split). */
-export function splitSentences(text) {
+export function splitProseSentences(text) {
   const cleaned = stripMarkdownNoise(stripFencedCode(text)).replace(/\s+/g, " ").trim();
   if (!cleaned) return [];
   return cleaned
@@ -74,7 +74,7 @@ export async function loadMarkdownCorpus(repoDir, { files } = {}) {
   const out = [];
   for (const name of names) {
     const text = await readFile(join(repoDir, name), "utf8");
-    for (const sentence of splitSentences(text)) out.push({ sentence, file: name });
+    for (const sentence of splitProseSentences(text)) out.push({ sentence, file: name });
   }
   return out;
 }
