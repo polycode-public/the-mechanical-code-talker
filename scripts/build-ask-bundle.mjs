@@ -104,7 +104,13 @@ const stubNodeBuiltins = {
 const OPTIONAL_ADAPTER_STUBS = {
   "ask-nlp.mjs": "export const nlpAdapter = undefined;\n",
   "strategies/ace.mjs": "export const aceStrategy = undefined;\nexport const parseAceAmbiguous = undefined;\n",
-  "strategies/constructions.mjs": "export const constructionsStrategy = undefined;\n",
+  "strategies/constructions.mjs": "export const constructionsStrategy = undefined;\nexport const setConstructionBanks = () => {};\n",
+  // the fs+TOML side of the construction banks — never read in the browser
+  // (the strategy above is stubbed out entirely).
+  "corpus/construction-banks.mjs": "export const CONSTRUCTIONS_DIR = \"\";\nexport const readConstructionFiles = () => ({ relations: [], constructions: [] });\n",
+  // phrasing variety stays OFF in the dock — the browser answer is always the
+  // base phrase, exactly as it was when the variants file couldn't be read.
+  "answer-variants.mjs": "export const pickPhrase = (poolId, key, base) => base;\n",
 };
 const stubOptionalAdapters = {
   name: "stub-optional-adapters",

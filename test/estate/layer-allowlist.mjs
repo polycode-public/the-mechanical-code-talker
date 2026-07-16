@@ -5,10 +5,6 @@
 // deleting its line here in the same change; never add a line.
 
 export const ALLOWED_VIOLATIONS = [
-  "src/answer-variants.mjs imports node:crypto",
-  "src/answer-variants.mjs imports node:fs",
-  "src/answer-variants.mjs imports node:path",
-  "src/answer-variants.mjs imports node:url",
   "src/chat.mjs -> src/server.mjs",
   "src/codegraph.mjs -> src/embed.mjs",
   "src/completions/complete.mjs -> src/finish.mjs",
@@ -20,15 +16,8 @@ export const ALLOWED_VIOLATIONS = [
   "src/completions/infer.mjs -> src/memory/core.mjs",
   "src/completions/rank.mjs -> src/memory/blocks.mjs",
   "src/completions/search.mjs -> src/memory/blocks.mjs",
-  "src/grammar/lexicon.mjs imports node:fs",
-  "src/grammar/lexicon.mjs imports node:path",
-  "src/grammar/lexicon.mjs imports node:url",
   "src/graph-build.mjs -> src/prose.mjs",
   "src/index.mjs -> src/server.mjs",
-  "src/interpret/strategies/constructions.mjs imports node:fs",
-  "src/interpret/strategies/constructions.mjs imports node:path",
-  "src/interpret/strategies/constructions.mjs imports node:url",
-  "src/interpret/strategies/constructions.mjs imports smol-toml",
   "src/memory/blocks.mjs -> src/memory/trust.mjs",
   "src/memory/core.mjs -> src/hash.mjs",
   "src/memory/core.mjs -> src/memory/shacl.mjs",
@@ -41,6 +30,5 @@ export const ALLOWED_VIOLATIONS = [
   "src/providers/bootstrap.mjs -> src/codegraph.mjs",
   "src/providers/fixture.mjs -> src/codegraph.mjs",
   "src/providers/graph-service.mjs -> src/codegraph.mjs",
-  "src/uuid.mjs imports node:crypto",
   "src/wink-model.mjs calls require()",
 ];

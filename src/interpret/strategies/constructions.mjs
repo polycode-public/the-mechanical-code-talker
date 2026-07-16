@@ -1,57 +1,23 @@
 // interpret/strategies/constructions.mjs — construction-grammar template
-// banks, loaded as DATA from data/templates/constructions/*.toml (pattern ->
-// AST skeleton, slot types validated against RELATIONS/ENTITY_TO_TYPE),
-// registered as its own additive class ("construction") so a match outranks
-// a same-text keyword-spot guess rather than colliding with it.
+// banks (pattern -> AST skeleton, slot types validated against
+// RELATIONS/ENTITY_TO_TYPE), registered as their own additive class
+// ("construction") so a match outranks a same-text keyword-spot guess rather
+// than colliding with it.
 //
-// Loader is synchronous, cached once per process, and defensive: a missing
-// directory, unparseable TOML, or invalid entry is silently dropped, never
-// thrown.
-
-import { readFileSync, readdirSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { join, dirname } from "node:path";
-import { parse as parseToml } from "smol-toml";
+// The banks are DATA that rides in from outside: a composition point
+// (chat.mjs, server.mjs, index.mjs) reads data/templates/constructions/*.toml
+// through corpus/construction-banks.mjs and registers the raw tables here via
+// setConstructionBanks — this strategy never touches the filesystem. Compile
+// is cached once per registration and defensive: an invalid entry is silently
+// dropped, never thrown; no registration means an empty bank (the strategy
+// simply never fires).
 
 import { RELATIONS, ENTITY_TO_TYPE } from "../../ask-vocab.mjs";
 import { escapeRegex } from "../normalize.mjs";
 
-const STRATEGY_DIR = dirname(fileURLToPath(import.meta.url));
-/** The construction-bank directory (data, not code) — every *.toml file inside
- *  is loaded, in filename order, so a future bank is a new committed file, not
- *  an edit to this loader. */
-export const CONSTRUCTIONS_DIR = join(STRATEGY_DIR, "..", "..", "..", "data", "templates", "constructions");
-
 const VALID_KINDS = new Set(Object.keys(RELATIONS));
 const VALID_ENTITY_TYPES = new Set(Object.values(ENTITY_TO_TYPE));
 const VALID_SHAPES = new Set(["ask", "reverse", "forward", "where", "when", "meta", "mentions"]);
-
-/** Read every *.toml file in `dir` (sorted, deterministic) and return the raw
- *  parsed tables concatenated: {relations:[...], constructions:[...]}. A
- *  missing directory or an unparseable file is DEFENSIVE (per-file: a broken
- *  file is skipped, not fatal to the others) — callers get whatever validly
- *  parsed, never a thrown error from a data-authoring mistake. */
-export function readConstructionFiles(dir = CONSTRUCTIONS_DIR) {
-  let files;
-  try {
-    files = readdirSync(dir).filter((f) => f.endsWith(".toml")).sort();
-  } catch {
-    return { relations: [], constructions: [] };
-  }
-  const relations = [];
-  const constructions = [];
-  for (const file of files) {
-    let parsed;
-    try {
-      parsed = parseToml(readFileSync(join(dir, file), "utf8"));
-    } catch {
-      continue; // one malformed file never takes the others down
-    }
-    if (Array.isArray(parsed.relation)) relations.push(...parsed.relation);
-    if (Array.isArray(parsed.construction)) constructions.push(...parsed.construction);
-  }
-  return { relations, constructions };
-}
 
 /** Validate + index the raw [[relation]] rows into noun -> {kind, entityType}.
  *  Closed-vocabulary validation: `kind` MUST be
@@ -122,24 +88,36 @@ export function buildConstructionTemplates(constructions, agentNounTable) {
   return out;
 }
 
+let bankSource = null; // raw tables, or a () => raw-tables loader
 let bankCache = null;
 
+/** Register the raw construction tables ({relations, constructions}) or a
+ *  lazy loader returning them (corpus/construction-banks.mjs's
+ *  readConstructionFiles, in the live wiring). Re-registering invalidates the
+ *  compiled cache. */
+export function setConstructionBanks(source) {
+  bankSource = source ?? null;
+  bankCache = null;
+}
+
 /** The cached, compiled construction bank (relations table + runnable
- *  templates), loaded once per process. Defensive: any failure anywhere in the
- *  load/validate/compile chain degrades to an empty bank (the strategy simply
- *  never fires) rather than crashing the pipeline that imports this module. */
-export function constructionBank(dir = CONSTRUCTIONS_DIR) {
-  if (bankCache !== null && dir === CONSTRUCTIONS_DIR) return bankCache;
+ *  templates), compiled once per registration. Defensive: any failure
+ *  anywhere in the load/validate/compile chain degrades to an empty bank (the
+ *  strategy simply never fires) rather than crashing the pipeline that
+ *  imports this module. */
+export function constructionBank() {
+  if (bankCache !== null) return bankCache;
   let bank;
   try {
-    const { relations, constructions } = readConstructionFiles(dir);
+    const raw = typeof bankSource === "function" ? bankSource() : bankSource;
+    const { relations, constructions } = raw || { relations: [], constructions: [] };
     const agentNounTable = buildAgentNounTable(relations);
     const templates = buildConstructionTemplates(constructions, agentNounTable);
     bank = { agentNounTable, templates };
   } catch {
     bank = { agentNounTable: {}, templates: [] };
   }
-  if (dir === CONSTRUCTIONS_DIR) bankCache = bank;
+  bankCache = bank;
   return bank;
 }
 

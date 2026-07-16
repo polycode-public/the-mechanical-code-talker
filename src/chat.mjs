@@ -44,14 +44,19 @@ import {
 } from "./ask-vocab.mjs";
 import { COUNTERFACTUAL_RE, correctMisspellings, applyPreambleFrames, normalizeQuery, stripFillerWords, escapeRegex, kindNounAnaphoraHint } from "./interpret/normalize.mjs";
 import { setDefaultNlpAdapter } from "./interpret/nlp-registry.mjs";
+import { setConstructionBanks } from "./interpret/strategies/constructions.mjs";
 import { nlpAdapter } from "./ask-nlp.mjs";
+import { readConstructionFiles } from "./corpus/construction-banks.mjs";
 import { fuzzyMatchInSet, fuzzyBound } from "./interpret/fuzzy.mjs";
 import { pickPhrase } from "./answer-variants.mjs";
 
 // Composition: the chat surface supplies the domain parser's default lemma/POS
 // adapter (the browser bundle's ask-nlp stub carries no factory, so this is a
-// no-op there and the parser stays adapter-less).
+// no-op there and the parser stays adapter-less) and the construction-grammar
+// banks (lazy — the TOML read happens on the first parse that needs them; the
+// bundle's constructions stub ignores the registration entirely).
 setDefaultNlpAdapter(nlpAdapter);
+setConstructionBanks(readConstructionFiles);
 
 // uuidv7 lives in ./uuid.mjs (shared with telemetry + the bench stamp); re-exported
 // here because callers/tests still import it from chat.mjs.

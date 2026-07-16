@@ -20,11 +20,9 @@
 // irregular `plural` ("indices"). Anything the fold can't reach is simply not
 // in the lexicon — honest, not clever.
 
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
-
-const CORE_FILE = join(dirname(fileURLToPath(import.meta.url)), "lexicon-core.json");
+// The core vocabulary rides in as a JSON module — declarative data, no
+// filesystem read at import or call time, and the browser bundler inlines it.
+import coreLexiconRaw from "./lexicon-core.json" with { type: "json" };
 
 /** The CURIE namespace every tmct lexicon mints terms under. */
 export const DEFAULT_NS = "tmct:";
@@ -133,7 +131,7 @@ const coreCacheByNs = new Map();
  *  cached per-ns (the JSON is committed, immutable at runtime). */
 export function loadLexicon(extra, ns = DEFAULT_NS) {
   if (!extra && coreCacheByNs.has(ns)) return coreCacheByNs.get(ns);
-  const raw = JSON.parse(readFileSync(CORE_FILE, "utf8"));
+  const raw = coreLexiconRaw;
   const lex = {
     nouns: new Map(),
     nounPlurals: new Map(),

@@ -22,13 +22,17 @@ import { join } from "node:path";
 
 import {
   constructionsStrategy, constructionBank, parseConstruction,
-  readConstructionFiles, buildAgentNounTable, buildConstructionTemplates,
-  CONSTRUCTIONS_DIR,
+  setConstructionBanks, buildAgentNounTable, buildConstructionTemplates,
 } from "../../src/interpret/strategies/constructions.mjs";
+import { readConstructionFiles, CONSTRUCTIONS_DIR } from "../../src/corpus/construction-banks.mjs";
 import { STRATEGIES, normalizeInput, runStrategiesSync } from "../../src/interpret/pipeline.mjs";
 import { mergeStrategyResults } from "../../src/interpret/merge.mjs";
 import { parseQuery, ask } from "../../src/ask.mjs";
 import { parseEntities } from "../../src/codegraph.mjs";
+
+// The strategy takes its banks registered from outside; this file wires the
+// real committed data the way the product composition points do.
+setConstructionBanks(readConstructionFiles);
 
 const RICH_FIXTURE = fileURLToPath(new URL("../fixtures/entities.fixture.json", import.meta.url));
 function richGraph() { return parseEntities(JSON.parse(readFileSync(RICH_FIXTURE, "utf8"))); }
@@ -216,10 +220,15 @@ test("constructionBank: a directory with only invalid rows degrades to an empty,
       '[[relation]]\nnoun = "widgeteers"\nkind = "not-a-real-kind"\n\n[[construction]]\nid = "TX"\nshape = "reverse"\npattern = "<AGENT> of <TERM>"\n',
       "utf8",
     );
-    const bank = constructionBank(dir);
-    assert.deepEqual(bank.agentNounTable, {});
-    assert.equal(bank.templates.length, 0, "no valid agent noun means the pattern can't compile either");
-    assert.equal(parseConstruction("widgeteers of X", bank), null);
+    setConstructionBanks(() => readConstructionFiles(dir));
+    try {
+      const bank = constructionBank();
+      assert.deepEqual(bank.agentNounTable, {});
+      assert.equal(bank.templates.length, 0, "no valid agent noun means the pattern can't compile either");
+      assert.equal(parseConstruction("widgeteers of X", bank), null);
+    } finally {
+      setConstructionBanks(readConstructionFiles);
+    }
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

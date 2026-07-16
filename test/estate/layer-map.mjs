@@ -41,7 +41,6 @@ export const LAYER_OF = {
   "paraphrase.mjs": "domain",
   "concept.mjs": "domain",
   "hash.mjs": "domain",
-  "uuid.mjs": "domain",
   "grammar/": "domain",
   "interpret/": "domain",
   "router/": "domain",
@@ -66,6 +65,7 @@ export const LAYER_OF = {
   "wink-model.mjs": "adapters",
   "ask-nlp.mjs": "adapters",
   "prose-nlp.mjs": "adapters",
+  "uuid.mjs": "adapters",
   "repository-interface.mjs": "adapters",
   "corpus/": "adapters",
 };

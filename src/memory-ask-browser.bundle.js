@@ -2183,69 +2183,11 @@
     }
   });
 
-  // node-stub:node:crypto
-  var unavailable8, createRequire8, readFileSync8, writeFileSync8, readFile8, writeFile8, appendFile8, mkdir8, mkdtemp8, rename8, unlink8, rm8, stat8, access8, copyFile8, readdir8, createReadStream8, createWriteStream8, randomBytes8, createHash8, createRequireFromPath8, spawnSync8, createInterface8, createServer8, DatabaseSync8;
-  var init_node_crypto = __esm({
-    "node-stub:node:crypto"() {
-      unavailable8 = (name) => () => {
-        throw new Error(name + " unavailable in the browser ask bundle");
-      };
-      createRequire8 = unavailable8("createRequire");
-      readFileSync8 = unavailable8("readFileSync");
-      writeFileSync8 = unavailable8("writeFileSync");
-      readFile8 = unavailable8("readFile");
-      writeFile8 = unavailable8("writeFile");
-      appendFile8 = unavailable8("appendFile");
-      mkdir8 = unavailable8("mkdir");
-      mkdtemp8 = unavailable8("mkdtemp");
-      rename8 = unavailable8("rename");
-      unlink8 = unavailable8("unlink");
-      rm8 = unavailable8("rm");
-      stat8 = unavailable8("stat");
-      access8 = unavailable8("access");
-      copyFile8 = unavailable8("copyFile");
-      readdir8 = unavailable8("readdir");
-      createReadStream8 = unavailable8("createReadStream");
-      createWriteStream8 = unavailable8("createWriteStream");
-      randomBytes8 = unavailable8("randomBytes");
-      createHash8 = unavailable8("createHash");
-      createRequireFromPath8 = unavailable8("createRequireFromPath");
-      spawnSync8 = unavailable8("spawnSync");
-      createInterface8 = unavailable8("createInterface");
-      createServer8 = unavailable8("createServer");
-      DatabaseSync8 = unavailable8("DatabaseSync");
-    }
-  });
-
-  // src/answer-variants.mjs
-  function loadData() {
-    if (dataCache !== void 0) return dataCache;
-    try {
-      dataCache = JSON.parse(readFileSync2(DATA_FILE, "utf8"));
-    } catch {
-      dataCache = null;
-    }
-    return dataCache;
-  }
-  function pickPhrase(poolId, key, base) {
-    if (!key) return base;
-    const data = loadData();
-    const variants = data?.pools?.[poolId]?.variants;
-    if (!Array.isArray(variants) || !variants.length) return base;
-    const forms = [base, ...variants];
-    const digest = createHash8("sha256").update(`${poolId}:${String(key)}`).digest();
-    const idx = digest[0] % forms.length;
-    return forms[idx];
-  }
-  var import_meta, DATA_FILE, dataCache;
+  // adapter-stub-answer-variants.mjs:./answer-variants.mjs
+  var pickPhrase;
   var init_answer_variants = __esm({
-    "src/answer-variants.mjs"() {
-      init_node_fs();
-      init_node_url();
-      init_node_path();
-      init_node_crypto();
-      import_meta = {};
-      DATA_FILE = join(dirname(fileURLToPath(import_meta.url)), "answer-variants.json");
+    "adapter-stub-answer-variants.mjs:./answer-variants.mjs"() {
+      pickPhrase = (poolId, key, base) => base;
     }
   });
 
@@ -5401,9 +5343,75 @@ ${lines.join("\n")}`;
   function factIdForTriple(subject, predicate, object) {
     return factIdFor(normFactTerm(subject), normText(predicate), normFactTerm(object));
   }
-  var TEXT_CAP, normText, factIdFor;
+  var SHA256_K, TEXT_CAP, normText, factIdFor;
   var init_hash = __esm({
     "src/hash.mjs"() {
+      SHA256_K = new Uint32Array([
+        1116352408,
+        1899447441,
+        3049323471,
+        3921009573,
+        961987163,
+        1508970993,
+        2453635748,
+        2870763221,
+        3624381080,
+        310598401,
+        607225278,
+        1426881987,
+        1925078388,
+        2162078206,
+        2614888103,
+        3248222580,
+        3835390401,
+        4022224774,
+        264347078,
+        604807628,
+        770255983,
+        1249150122,
+        1555081692,
+        1996064986,
+        2554220882,
+        2821834349,
+        2952996808,
+        3210313671,
+        3336571891,
+        3584528711,
+        113926993,
+        338241895,
+        666307205,
+        773529912,
+        1294757372,
+        1396182291,
+        1695183700,
+        1986661051,
+        2177026350,
+        2456956037,
+        2730485921,
+        2820302411,
+        3259730800,
+        3345764771,
+        3516065817,
+        3600352804,
+        4094571909,
+        275423344,
+        430227734,
+        506948616,
+        659060556,
+        883997877,
+        958139571,
+        1322822218,
+        1537002063,
+        1747873779,
+        1955562222,
+        2024104815,
+        2227730452,
+        2361852424,
+        2428436474,
+        2756734187,
+        3204031479,
+        3329325298
+      ]);
       TEXT_CAP = 2e3;
       normText = (t) => String(t ?? "").replace(/\s+/g, " ").trim().slice(0, TEXT_CAP);
       factIdFor = (s, p, o) => `fact:${fnv1aHex(`${s}\0${p}\0${o}`)}`;
@@ -5495,18 +5503,18 @@ ${lines.join("\n")}`;
   // node-stub:node:sqlite
   var node_sqlite_exports = {};
   __export(node_sqlite_exports, {
-    DatabaseSync: () => DatabaseSync9,
-    access: () => access9,
-    appendFile: () => appendFile9,
+    DatabaseSync: () => DatabaseSync8,
+    access: () => access8,
+    appendFile: () => appendFile8,
     basename: () => basename,
-    copyFile: () => copyFile9,
-    createHash: () => createHash9,
-    createInterface: () => createInterface9,
-    createReadStream: () => createReadStream9,
-    createRequire: () => createRequire9,
-    createRequireFromPath: () => createRequireFromPath9,
-    createServer: () => createServer9,
-    createWriteStream: () => createWriteStream9,
+    copyFile: () => copyFile8,
+    createHash: () => createHash8,
+    createInterface: () => createInterface8,
+    createReadStream: () => createReadStream8,
+    createRequire: () => createRequire8,
+    createRequireFromPath: () => createRequireFromPath8,
+    createServer: () => createServer8,
+    createWriteStream: () => createWriteStream8,
     default: () => node_sqlite_default,
     dirname: () => dirname2,
     existsSync: () => existsSync2,
@@ -5514,47 +5522,47 @@ ${lines.join("\n")}`;
     fileURLToPath: () => fileURLToPath2,
     isAbsolute: () => isAbsolute,
     join: () => join2,
-    mkdir: () => mkdir9,
-    mkdtemp: () => mkdtemp9,
+    mkdir: () => mkdir8,
+    mkdtemp: () => mkdtemp8,
     pathToFileURL: () => pathToFileURL,
-    randomBytes: () => randomBytes9,
-    readFile: () => readFile9,
-    readFileSync: () => readFileSync9,
-    readdir: () => readdir9,
-    rename: () => rename9,
+    randomBytes: () => randomBytes8,
+    readFile: () => readFile8,
+    readFileSync: () => readFileSync8,
+    readdir: () => readdir8,
+    rename: () => rename8,
     resolve: () => resolve2,
-    rm: () => rm9,
+    rm: () => rm8,
     sep: () => sep2,
-    spawnSync: () => spawnSync9,
-    stat: () => stat9,
+    spawnSync: () => spawnSync8,
+    stat: () => stat8,
     tmpdir: () => tmpdir,
-    unlink: () => unlink9,
-    writeFile: () => writeFile9,
-    writeFileSync: () => writeFileSync9
+    unlink: () => unlink8,
+    writeFile: () => writeFile8,
+    writeFileSync: () => writeFileSync8
   });
-  var unavailable9, createRequire9, readFileSync9, writeFileSync9, readFile9, writeFile9, appendFile9, mkdir9, mkdtemp9, rename9, unlink9, rm9, stat9, access9, copyFile9, readdir9, createReadStream9, createWriteStream9, existsSync2, join2, dirname2, resolve2, isAbsolute, basename, extname, sep2, fileURLToPath2, pathToFileURL, randomBytes9, createHash9, createRequireFromPath9, spawnSync9, createInterface9, createServer9, tmpdir, DatabaseSync9, node_sqlite_default;
+  var unavailable8, createRequire8, readFileSync8, writeFileSync8, readFile8, writeFile8, appendFile8, mkdir8, mkdtemp8, rename8, unlink8, rm8, stat8, access8, copyFile8, readdir8, createReadStream8, createWriteStream8, existsSync2, join2, dirname2, resolve2, isAbsolute, basename, extname, sep2, fileURLToPath2, pathToFileURL, randomBytes8, createHash8, createRequireFromPath8, spawnSync8, createInterface8, createServer8, tmpdir, DatabaseSync8, node_sqlite_default;
   var init_node_sqlite = __esm({
     "node-stub:node:sqlite"() {
-      unavailable9 = (name) => () => {
+      unavailable8 = (name) => () => {
         throw new Error(name + " unavailable in the browser ask bundle");
       };
-      createRequire9 = unavailable9("createRequire");
-      readFileSync9 = unavailable9("readFileSync");
-      writeFileSync9 = unavailable9("writeFileSync");
-      readFile9 = unavailable9("readFile");
-      writeFile9 = unavailable9("writeFile");
-      appendFile9 = unavailable9("appendFile");
-      mkdir9 = unavailable9("mkdir");
-      mkdtemp9 = unavailable9("mkdtemp");
-      rename9 = unavailable9("rename");
-      unlink9 = unavailable9("unlink");
-      rm9 = unavailable9("rm");
-      stat9 = unavailable9("stat");
-      access9 = unavailable9("access");
-      copyFile9 = unavailable9("copyFile");
-      readdir9 = unavailable9("readdir");
-      createReadStream9 = unavailable9("createReadStream");
-      createWriteStream9 = unavailable9("createWriteStream");
+      createRequire8 = unavailable8("createRequire");
+      readFileSync8 = unavailable8("readFileSync");
+      writeFileSync8 = unavailable8("writeFileSync");
+      readFile8 = unavailable8("readFile");
+      writeFile8 = unavailable8("writeFile");
+      appendFile8 = unavailable8("appendFile");
+      mkdir8 = unavailable8("mkdir");
+      mkdtemp8 = unavailable8("mkdtemp");
+      rename8 = unavailable8("rename");
+      unlink8 = unavailable8("unlink");
+      rm8 = unavailable8("rm");
+      stat8 = unavailable8("stat");
+      access8 = unavailable8("access");
+      copyFile8 = unavailable8("copyFile");
+      readdir8 = unavailable8("readdir");
+      createReadStream8 = unavailable8("createReadStream");
+      createWriteStream8 = unavailable8("createWriteStream");
       existsSync2 = () => false;
       join2 = (...a) => a.join("/");
       dirname2 = (p) => String(p).replace(/\/[^/]*$/, "");
@@ -5568,14 +5576,14 @@ ${lines.join("\n")}`;
       sep2 = "/";
       fileURLToPath2 = (u) => String(u);
       pathToFileURL = (p) => new URL("file://" + p);
-      randomBytes9 = unavailable9("randomBytes");
-      createHash9 = unavailable9("createHash");
-      createRequireFromPath9 = unavailable9("createRequireFromPath");
-      spawnSync9 = unavailable9("spawnSync");
-      createInterface9 = unavailable9("createInterface");
-      createServer9 = unavailable9("createServer");
+      randomBytes8 = unavailable8("randomBytes");
+      createHash8 = unavailable8("createHash");
+      createRequireFromPath8 = unavailable8("createRequireFromPath");
+      spawnSync8 = unavailable8("spawnSync");
+      createInterface8 = unavailable8("createInterface");
+      createServer8 = unavailable8("createServer");
       tmpdir = () => "/tmp";
-      DatabaseSync9 = unavailable9("DatabaseSync");
+      DatabaseSync8 = unavailable8("DatabaseSync");
       node_sqlite_default = {};
     }
   });
@@ -6880,14 +6888,14 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   });
 
   // src/corpus/templates.mjs
-  var import_meta2, PKG_ROOT, TEMPLATES_FILE, PHRASEBOOK_FILE, TECHNICAL_SLOTS;
+  var import_meta, PKG_ROOT, TEMPLATES_FILE, PHRASEBOOK_FILE, TECHNICAL_SLOTS;
   var init_templates = __esm({
     "src/corpus/templates.mjs"() {
       init_promises();
       init_node_url();
       init_node_path();
-      import_meta2 = {};
-      PKG_ROOT = join(dirname(fileURLToPath(import_meta2.url)), "..", "..");
+      import_meta = {};
+      PKG_ROOT = join(dirname(fileURLToPath(import_meta.url)), "..", "..");
       TEMPLATES_FILE = join(PKG_ROOT, "data", "templates", "responses.jsonl");
       PHRASEBOOK_FILE = join(PKG_ROOT, "data", "phrasebook", "software-phrases.txt");
       TECHNICAL_SLOTS = Object.freeze(/* @__PURE__ */ new Set([
@@ -6939,7 +6947,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   });
 
   // src/corpus/conceptnet.mjs
-  var import_meta3, PKG_ROOT2, SLICE_FILE, MAP_FILE, SEON_CONCEPTS_FILE, SEON_DEFINITIONS_FILE, TIER2_DIR, TIER2_MANIFEST_FILE, WORDNET_DIR, WORDNET_MANIFEST_FILE;
+  var import_meta2, PKG_ROOT2, SLICE_FILE, MAP_FILE, SEON_CONCEPTS_FILE, SEON_DEFINITIONS_FILE, TIER2_DIR, TIER2_MANIFEST_FILE, WORDNET_DIR, WORDNET_MANIFEST_FILE;
   var init_conceptnet = __esm({
     "src/corpus/conceptnet.mjs"() {
       init_node_fs();
@@ -6949,8 +6957,8 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
       init_node_path();
       init_dist();
       init_core();
-      import_meta3 = {};
-      PKG_ROOT2 = join(dirname(fileURLToPath(import_meta3.url)), "..", "..");
+      import_meta2 = {};
+      PKG_ROOT2 = join(dirname(fileURLToPath(import_meta2.url)), "..", "..");
       SLICE_FILE = join(PKG_ROOT2, "corpus", "conceptnet", "slice.jsonl");
       MAP_FILE = join(PKG_ROOT2, "src", "corpus", "conceptnet-map.toml");
       SEON_CONCEPTS_FILE = join(PKG_ROOT2, "corpus", "seon", "concepts.jsonl");
@@ -7051,7 +7059,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
       }
     };
   }
-  var import_meta4, NAMENET_DIR, EXTENSION_KINDS, CONCEPTNET_PREFER, BUILTIN_EXTENSIONS;
+  var import_meta3, NAMENET_DIR, EXTENSION_KINDS, CONCEPTNET_PREFER, BUILTIN_EXTENSIONS;
   var init_extensions = __esm({
     "src/extensions.mjs"() {
       init_node_path();
@@ -7059,8 +7067,8 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
       init_node_url();
       init_toml_config();
       init_conceptnet();
-      import_meta4 = {};
-      NAMENET_DIR = join(dirname(fileURLToPath(import_meta4.url)), "..", "corpus", "namenet");
+      import_meta3 = {};
+      NAMENET_DIR = join(dirname(fileURLToPath(import_meta3.url)), "..", "corpus", "namenet");
       EXTENSION_KINDS = Object.freeze(["corpus", "lexicon", "templates", "pack", "ontology"]);
       CONCEPTNET_PREFER = ["rdfs:subClassOf", "rdf:type", "mgx:usedFor", "mgx:partOf", "mgx:capableOf"];
       BUILTIN_EXTENSIONS = Object.freeze(builtinExtensions());
@@ -7068,7 +7076,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   });
 
   // src/finish.mjs
-  var import_meta5, GRAMMAR_DIR, GRAMMAR_RULES_FILE, SEGMENT_TYPES, PROTECTED_TYPES;
+  var import_meta4, GRAMMAR_DIR, GRAMMAR_RULES_FILE, SEGMENT_TYPES, PROTECTED_TYPES;
   var init_finish = __esm({
     "src/finish.mjs"() {
       init_node_fs();
@@ -7076,8 +7084,8 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
       init_node_path();
       init_dist();
       init_templates();
-      import_meta5 = {};
-      GRAMMAR_DIR = dirname(fileURLToPath(import_meta5.url));
+      import_meta4 = {};
+      GRAMMAR_DIR = dirname(fileURLToPath(import_meta4.url));
       GRAMMAR_RULES_FILE = join(GRAMMAR_DIR, "..", "data", "templates", "grammar-rules.toml");
       SEGMENT_TYPES = Object.freeze([
         "prose",
@@ -7140,7 +7148,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     return cached;
   }
   function nodeRequireWink() {
-    const require2 = createRequire11(import_meta6.url);
+    const require2 = createRequire11(import_meta5.url);
     return {
       winkNLP: require2("wink-nlp"),
       model: require2("wink-eng-lite-web-model")
@@ -7160,11 +7168,11 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     }
     return instance;
   }
-  var import_meta6, injected, cached, instance;
+  var import_meta5, injected, cached, instance;
   var init_wink_model = __esm({
     "src/wink-model.mjs"() {
       init_node_module();
-      import_meta6 = {};
+      import_meta5 = {};
     }
   });
 
@@ -8174,8 +8182,20 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   init_graph_service();
   init_core();
   init_nlp_registry();
+
+  // adapter-stub-strategies/constructions.mjs:./interpret/strategies/constructions.mjs
+  var setConstructionBanks = () => {
+  };
+
+  // src/server.mjs
   init_ask_nlp();
+
+  // adapter-stub-corpus/construction-banks.mjs:./corpus/construction-banks.mjs
+  var readConstructionFiles = () => ({ relations: [], constructions: [] });
+
+  // src/server.mjs
   setDefaultNlpAdapter(nlpAdapter);
+  setConstructionBanks(readConstructionFiles);
   var TOOLS = [
     {
       name: "tmct_context",
@@ -8230,8 +8250,34 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   init_ask();
   init_sessions();
 
-  // src/uuid.mjs
-  init_node_crypto();
+  // node-stub:node:crypto
+  var unavailable9 = (name) => () => {
+    throw new Error(name + " unavailable in the browser ask bundle");
+  };
+  var createRequire9 = unavailable9("createRequire");
+  var readFileSync9 = unavailable9("readFileSync");
+  var writeFileSync9 = unavailable9("writeFileSync");
+  var readFile9 = unavailable9("readFile");
+  var writeFile9 = unavailable9("writeFile");
+  var appendFile9 = unavailable9("appendFile");
+  var mkdir9 = unavailable9("mkdir");
+  var mkdtemp9 = unavailable9("mkdtemp");
+  var rename9 = unavailable9("rename");
+  var unlink9 = unavailable9("unlink");
+  var rm9 = unavailable9("rm");
+  var stat9 = unavailable9("stat");
+  var access9 = unavailable9("access");
+  var copyFile9 = unavailable9("copyFile");
+  var readdir9 = unavailable9("readdir");
+  var createReadStream9 = unavailable9("createReadStream");
+  var createWriteStream9 = unavailable9("createWriteStream");
+  var randomBytes9 = unavailable9("randomBytes");
+  var createHash9 = unavailable9("createHash");
+  var createRequireFromPath9 = unavailable9("createRequireFromPath");
+  var spawnSync9 = unavailable9("spawnSync");
+  var createInterface9 = unavailable9("createInterface");
+  var createServer9 = unavailable9("createServer");
+  var DatabaseSync9 = unavailable9("DatabaseSync");
 
   // src/telemetry.mjs
   init_promises();
@@ -8274,6 +8320,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   init_fuzzy();
   init_answer_variants();
   setDefaultNlpAdapter(nlpAdapter);
+  setConstructionBanks(readConstructionFiles);
   var CONTEXT_WORDS = /* @__PURE__ */ new Set(["it", "this", "that", "here"]);
   var isPronoun = (s) => CONTEXT_WORDS.has(String(s || "").trim().toLowerCase());
   var GOAL_BY_KIND = {

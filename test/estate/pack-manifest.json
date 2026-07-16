@@ -70,6 +70,7 @@
   "src/conformance.mjs",
   "src/corpus/conceptnet-map.toml",
   "src/corpus/conceptnet.mjs",
+  "src/corpus/construction-banks.mjs",
   "src/corpus/templates.mjs",
   "src/corpus/unknown-ingest.mjs",
   "src/domain.mjs",

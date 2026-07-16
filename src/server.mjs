@@ -55,11 +55,15 @@ import { createGraphService } from "./providers/graph-service.mjs";
 // resolves nothing for a concept query, answer from the reified isa-family facts instead.
 import { loadMemory, readFactRows, normFactTerm } from "./memory/core.mjs";
 import { setDefaultNlpAdapter } from "./interpret/nlp-registry.mjs";
+import { setConstructionBanks } from "./interpret/strategies/constructions.mjs";
 import { nlpAdapter } from "./ask-nlp.mjs";
+import { readConstructionFiles } from "./corpus/construction-banks.mjs";
 
 // Composition: the tool layer supplies the domain parser's default lemma/POS
-// adapter, so dispatchTool-only consumers get the same NL tier chat wires.
+// adapter and the construction-grammar banks (lazy loader), so dispatchTool-
+// only consumers get the same NL tiers chat wires.
 setDefaultNlpAdapter(nlpAdapter);
+setConstructionBanks(readConstructionFiles);
 
 const SNIPPET_MAX_LINES = 200;
 

@@ -20,10 +20,14 @@ export { ask, resolveObject } from "./ask.mjs";
 export { interpret } from "./interpret/pipeline.mjs";
 
 // Composition: the library entry wires the domain parser's default lemma/POS
-// adapter, same as the chat and tool surfaces do for themselves.
+// adapter and the construction-grammar banks (lazy loader), same as the chat
+// and tool surfaces do for themselves.
 import { setDefaultNlpAdapter } from "./interpret/nlp-registry.mjs";
+import { setConstructionBanks } from "./interpret/strategies/constructions.mjs";
 import { nlpAdapter } from "./ask-nlp.mjs";
+import { readConstructionFiles } from "./corpus/construction-banks.mjs";
 setDefaultNlpAdapter(nlpAdapter);
+setConstructionBanks(readConstructionFiles);
 
 // Graph traversal primitives.
 export { relationKind, impactClosure } from "./codegraph.mjs";
