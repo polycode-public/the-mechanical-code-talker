@@ -180,6 +180,27 @@ Logged by the `CAPABILITIES_2.0.3.md` audit:
   (`src/domain/ask.mjs:17`) cites a `temporal.mjs` that **never existed in git history**. Six plans
   carry pre-layer-refactor line numbers. See `CAPABILITIES_2.0.3.md` §6.
 
+### Next-cycle recommendations the benchmarks made
+
+Not defects — the four reports' own decision lines, mirrored here so they are picked up rather than
+left in a document nobody re-reads.
+
+- **`naming-vocabulary` scores 1.675/2 over 20 cases** — the second-worst construction in CHATBENCH
+  and the largest sample of it, so the signal is real rather than a small-n artifact. Four A1 naming
+  cases score 1/2. Un-diagnosed: it needs a look before it needs a lever. See
+  `BENCHMARK_CEFR_ENGLISH_2.0.3.md`'s decision log.
+- **`ambiguity` scores 1.625/2 — the worst tag, and the least trustworthy number in the report**
+  (n=4 at N=1). Re-measure at N≥2 before spending a cycle on it. More generally, 2.0.3 ran at N=1 by
+  operator choice, so no per-case judge score in it is noise-averaged; the next cycle should return
+  to the go-to N=2. See `BENCHMARK_CEFR_ENGLISH_2.0.3.md`.
+- **AGENTBENCH's case set no longer tests the ladder** — all 11 C2 cases are green on the goal
+  driver, so the next AGENT cycle's work is deepening the corpus, not the engine. There is no gated
+  rung left to build past. See `BENCHMARK_AGENT_2.0.3.md`'s decision line.
+- **Re-sweep CONVERSATION once the dropped-input family lands, and add a sixth persona frame** — the
+  returning user with a stale mental model ("the old X", "didn't you say Y"). That frame is where
+  the unknown-modifier bug's realistic trigger lives, and no frame in the 2.0.3 sweep covered it.
+  See `BENCHMARK_CONVERSATION_2.0.3.md`'s Next.
+
 Two designs are waiting on a decision rather than a session: `PLAN_CONSISTENCY_CHECK.md` (tmct as
 a consistency service for an LLM tool loop — INFBENCH's 20 INF-C2 cases are a ceiling already built
 to grade it) and `PLAN_CHILD_CORPUS.md` (a wider default seed, so the base rate counts more than
