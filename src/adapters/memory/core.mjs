@@ -43,7 +43,7 @@ export const IN_REPLY_TO_PROP = "mgx:inReplyTo";
 // The provenance-link predicate family: one umbrella object property with two
 // workhorse subproperties, minted in the owned mgx: namespace to match
 // tmct-core.ttl's object-property style.
-export const DERIVED_FROM_PROP = "mgx:derivedFrom";        // umbrella: Fact → Source|Fact
+const DERIVED_FROM_PROP = "mgx:derivedFrom";        // umbrella: Fact → Source|Fact
 export const STATED_BY_PROP = "mgx:statedBy";              // a Source directly asserts a Fact
 export const CANONICALISED_FROM_PROP = "mgx:canonicalisedFrom"; // a canonical Fact ← its raw form
 export const SOURCE_RELIABILITY_PROP = "mgx:sourceReliability"; // actor-level (session-scoped) trust nudge on a Source, [0.5,1.5]
@@ -52,7 +52,7 @@ export const SOURCE_RELIABILITY_PROP = "mgx:sourceReliability"; // actor-level (
 // with no session-id segment. A tag that does carry one mints its own
 // per-session Source instead (`${ID}:<sessionId>`, sourceIdFor below).
 export const OPERATOR_SOURCE_ID = "src:operator-chat";
-export const TEACH_SOURCE_ID = "src:teach-chat";
+const TEACH_SOURCE_ID = "src:teach-chat";
 
 const ROLES = new Set(["visitor", "tmct"]);
 const LABEL_CAP = 48;    // utterance/fact labels stay skimmable in renders
@@ -1113,13 +1113,13 @@ export const RULE_KIND_ACTION_SIGNATURE = "action-signature";
 export const RULE_KIND_ACTION_PRECOND = "action-precond";
 export const RULE_KIND_ACTION_EFFECT = "action-effect";
 export const RULE_KIND_ACTION_CONSTRAINT = "action-constraint";
-export const RULE_KINDS = Object.freeze([
+const RULE_KINDS = Object.freeze([
   RULE_KIND_COMPOSE2, RULE_KIND_FILTER, RULE_KIND_RECURSIVE,
   RULE_KIND_ACTION_SIGNATURE, RULE_KIND_ACTION_PRECOND, RULE_KIND_ACTION_EFFECT,
   RULE_KIND_ACTION_CONSTRAINT,
 ]);
 
-export const RULE_NAME_PROP = "mgx:ruleName";
+const RULE_NAME_PROP = "mgx:ruleName";
 export const RULE_KIND_PROP = "mgx:ruleKind";
 
 // Per-kind slot contract: JS slot key -> the mgx: attribute it's written under.
@@ -1514,7 +1514,7 @@ export async function removeFacts(dir, ids) {
 
 /** The trust floor a fact must clear before a differing object counts as a real
  *  contradiction (below it the fact is too weak to contradict anything). */
-export const CONTRADICTION_TRUST_FLOOR = 0.5;
+const CONTRADICTION_TRUST_FLOOR = 0.5;
 
 export const HAS_A_PREDICATE = "mgx:hasA";
 export const CAPABLE_OF_PREDICATE = "mgx:capableOf";

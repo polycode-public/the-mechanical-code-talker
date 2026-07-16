@@ -9,8 +9,8 @@
 //
 // createSession(…) is the SESSION SINK every shell shares (runChat's
 // readline loop below, src/surfaces/tui/app.mjs's Ink shell). chat.mjs re-exports
-// createSession/runChat/gitToplevel and the session constants so existing
-// import sites keep working.
+// createSession/runChat and the session constants so existing import sites
+// keep working.
 
 import { join, resolve } from "node:path";
 import { createWriteStream } from "node:fs";

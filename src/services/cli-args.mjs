@@ -15,8 +15,8 @@
 //   3. tmct.toml's `graph_file` / `graph_files`
 //   4. <repo>/.tmct/graph.json, where repo is --repo, else git root, else cwd
 //
-// Deliberately does NOT import chat.mjs (would be circular) — the git-root lookup below
-// is a small, self-contained copy of chat.mjs's own gitToplevel().
+// Deliberately does NOT import chat-session.mjs (would be circular) — the git-root lookup
+// below is a small, self-contained copy of chat-session.mjs's own gitToplevel().
 
 import { spawnSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
@@ -26,8 +26,8 @@ import { loadTomlConfig, normalizeConfig, mergeEffective, CONFIG_FILE } from "..
 import { DEFAULT_GRAPH_REL } from "../adapters/config.mjs";
 
 /** The git top-level for `cwd`, or null if not in a repo (or git is
- *  unavailable). A deliberate re-declaration of chat.mjs's gitToplevel (not an
- *  import) — see the file docblock for why. */
+ *  unavailable). A deliberate re-declaration of chat-session.mjs's gitToplevel
+ *  (not an import) — see the file docblock for why. */
 function defaultGitRoot(cwd) {
   try {
     const r = spawnSync("git", ["rev-parse", "--show-toplevel"], { cwd, encoding: "utf8" });

@@ -13,7 +13,7 @@ import { emptyEntities } from "../source.mjs";
 import { createGraphService } from "./graph-service.mjs";
 
 /** The parsed empty bootstrap graph. */
-export function bootstrapGraph() {
+function bootstrapGraph() {
   return parseEntities(emptyEntities());
 }
 

@@ -3472,18 +3472,14 @@ ${shown.join("\n")}${tail}`;
     applyNegationFrames: () => applyNegationFrames,
     ask: () => ask,
     classDisplayName: () => classDisplayName,
-    compositionalHint: () => compositionalHint,
     degreeMetric: () => degreeMetric,
-    evalComposite: () => evalComposite,
     metaFallbackEntityAnswer: () => metaFallbackEntityAnswer,
     normalizeQuery: () => normalizeQuery,
     parseQuery: () => parseQuery,
     parseQueryFull: () => parseQueryFull,
-    relaxParse: () => relaxParse,
     render: () => render,
     rephraseHint: () => rephraseHint,
     resolveObject: () => resolveObject,
-    touchesRephraseHint: () => touchesRephraseHint,
     traverse: () => traverse
   });
   function edgesOfKind2(graph, kind) {
@@ -7227,9 +7223,7 @@ ${bodyText}` : graphText, tier });
     CARDINALITY_RULE_CONFIDENCE: () => CARDINALITY_RULE_CONFIDENCE,
     CAX_DW_RULE: () => CAX_DW_RULE,
     CAX_DW_RULE_CONFIDENCE: () => CAX_DW_RULE_CONFIDENCE,
-    CAX_MAXC0_RULE: () => CAX_MAXC0_RULE,
     CAX_MAXC0_RULE_CONFIDENCE: () => CAX_MAXC0_RULE_CONFIDENCE,
-    CAX_SCO_RULE: () => CAX_SCO_RULE,
     CLS_SVF1_RULE: () => CLS_SVF1_RULE,
     CLS_SVF1_RULE_CONFIDENCE: () => CLS_SVF1_RULE_CONFIDENCE,
     DISJOINT_PREDICATE: () => DISJOINT_PREDICATE,
@@ -7238,14 +7232,11 @@ ${bodyText}` : graphText, tier });
     ENTAILED_SCM_SVF_PROVENANCE: () => ENTAILED_SCM_SVF_PROVENANCE,
     ENTAILED_SVF1_PROVENANCE: () => ENTAILED_SVF1_PROVENANCE,
     ENTAILED_TYPE_PROVENANCE: () => ENTAILED_TYPE_PROVENANCE,
-    ON_CLASS_PREDICATE: () => ON_CLASS_PREDICATE,
     ON_PROPERTY_PREDICATE: () => ON_PROPERTY_PREDICATE,
-    SCM_CARD_RULE: () => SCM_CARD_RULE,
     SCM_SVF_RULE: () => SCM_SVF_RULE,
     SCM_SVF_RULE_CONFIDENCE: () => SCM_SVF_RULE_CONFIDENCE,
     SOME_VALUES_FROM_PREDICATE: () => SOME_VALUES_FROM_PREDICATE,
     SUBCLASS_PREDICATE: () => SUBCLASS_PREDICATE,
-    SYLLOGISE_RULE: () => SYLLOGISE_RULE,
     TYPE_PREDICATE: () => TYPE_PREDICATE,
     buildCardinalityRestrictions: () => buildCardinalityRestrictions,
     deriveDisjointViolations: () => deriveDisjointViolations,
@@ -7967,7 +7958,7 @@ ${bodyText}` : graphText, tier });
     }
     return null;
   }
-  var SUBCLASS_PREDICATE, SYLLOGISE_RULE, ENTAILED_PROVENANCE, TYPE_PREDICATE, CAX_SCO_RULE, ENTAILED_TYPE_PROVENANCE, DISJOINT_PREDICATE, CAX_DW_RULE, ENTAILED_DISJOINT_PROVENANCE, CAX_DW_RULE_CONFIDENCE, ON_PROPERTY_PREDICATE, SOME_VALUES_FROM_PREDICATE, CLS_SVF1_RULE, ENTAILED_SVF1_PROVENANCE, CLS_SVF1_RULE_CONFIDENCE, SEP, isSubClassOf, isType, isDisjoint, isOnProperty, isSomeValuesFrom, isOnClass, RESERVED_PREDICATES, HAS_PROPERTY_KEY, CARDINALITY_KIND_OF, ON_CLASS_PREDICATE, SCM_SVF_RULE, ENTAILED_SCM_SVF_PROVENANCE, SCM_SVF_RULE_CONFIDENCE, SCM_CARD_RULE, CARDINALITY_RULE_CONFIDENCE, CAX_MAXC0_RULE, CAX_MAXC0_RULE_CONFIDENCE;
+  var SUBCLASS_PREDICATE, SYLLOGISE_RULE, ENTAILED_PROVENANCE, TYPE_PREDICATE, CAX_SCO_RULE, ENTAILED_TYPE_PROVENANCE, DISJOINT_PREDICATE, CAX_DW_RULE, ENTAILED_DISJOINT_PROVENANCE, CAX_DW_RULE_CONFIDENCE, ON_PROPERTY_PREDICATE, SOME_VALUES_FROM_PREDICATE, CLS_SVF1_RULE, ENTAILED_SVF1_PROVENANCE, CLS_SVF1_RULE_CONFIDENCE, SEP, isSubClassOf, isType, isDisjoint, isOnProperty, isSomeValuesFrom, isOnClass, RESERVED_PREDICATES, HAS_PROPERTY_KEY, CARDINALITY_KIND_OF, SCM_SVF_RULE, ENTAILED_SCM_SVF_PROVENANCE, SCM_SVF_RULE_CONFIDENCE, CARDINALITY_RULE_CONFIDENCE, CAX_MAXC0_RULE_CONFIDENCE;
   var init_syllogise = __esm({
     "src/domain/syllogise.mjs"() {
       init_hash();
@@ -8003,13 +7994,10 @@ ${bodyText}` : graphText, tier });
       ]);
       HAS_PROPERTY_KEY = "has";
       CARDINALITY_KIND_OF = { "owl:cardinality": "exactly", "owl:mincardinality": "min", "owl:maxcardinality": "max" };
-      ON_CLASS_PREDICATE = "owl:onClass";
       SCM_SVF_RULE = "someValuesFromSubsumption";
       ENTAILED_SCM_SVF_PROVENANCE = `entailed:${SCM_SVF_RULE}`;
       SCM_SVF_RULE_CONFIDENCE = 0.95;
-      SCM_CARD_RULE = "cardinalityMonotonicity";
       CARDINALITY_RULE_CONFIDENCE = 0.95;
-      CAX_MAXC0_RULE = "maxCardinalityZero";
       CAX_MAXC0_RULE_CONFIDENCE = 0.95;
     }
   });
@@ -8299,10 +8287,8 @@ ${bodyText}` : graphText, tier });
   __export(core_exports, {
     CANONICALISED_FROM_PROP: () => CANONICALISED_FROM_PROP,
     CAPABLE_OF_PREDICATE: () => CAPABLE_OF_PREDICATE2,
-    CONTRADICTION_TRUST_FLOOR: () => CONTRADICTION_TRUST_FLOOR,
     CREATED_AT_PROP: () => CREATED_AT_PROP,
     DEFAULT_RETENTION: () => DEFAULT_RETENTION,
-    DERIVED_FROM_PROP: () => DERIVED_FROM_PROP,
     FACT_CLASS: () => FACT_CLASS,
     HAS_A_PREDICATE: () => HAS_A_PREDICATE,
     IN_REPLY_TO_PROP: () => IN_REPLY_TO_PROP,
@@ -8313,7 +8299,6 @@ ${bodyText}` : graphText, tier });
     MULTI_VALUED_PREDICATES: () => MULTI_VALUED_PREDICATES,
     OPERATOR_SOURCE_ID: () => OPERATOR_SOURCE_ID,
     RULE_CLASS: () => RULE_CLASS,
-    RULE_KINDS: () => RULE_KINDS2,
     RULE_KIND_ACTION_CONSTRAINT: () => RULE_KIND_ACTION_CONSTRAINT,
     RULE_KIND_ACTION_EFFECT: () => RULE_KIND_ACTION_EFFECT,
     RULE_KIND_ACTION_PRECOND: () => RULE_KIND_ACTION_PRECOND,
@@ -8322,12 +8307,10 @@ ${bodyText}` : graphText, tier });
     RULE_KIND_FILTER: () => RULE_KIND_FILTER,
     RULE_KIND_PROP: () => RULE_KIND_PROP,
     RULE_KIND_RECURSIVE: () => RULE_KIND_RECURSIVE,
-    RULE_NAME_PROP: () => RULE_NAME_PROP,
     SAID_IN_SESSION_PROP: () => SAID_IN_SESSION_PROP,
     SOURCE_CLASS: () => SOURCE_CLASS,
     SOURCE_RELIABILITY_PROP: () => SOURCE_RELIABILITY_PROP,
     STATED_BY_PROP: () => STATED_BY_PROP,
-    TEACH_SOURCE_ID: () => TEACH_SOURCE_ID,
     UPDATED_AT_PROP: () => UPDATED_AT_PROP,
     UTTERANCE_CLASS: () => UTTERANCE_CLASS,
     appendFact: () => appendFact,

@@ -128,11 +128,11 @@ function basename(p) {
 
 const isProvRef = (r) => /^(git|turn):/.test(String(r || ""));
 
-export function turnRefCount(ind) {
+function turnRefCount(ind) {
   return (ind?.derived_from || []).filter(isProvRef).length;
 }
 
-export function mentionTotal(ind) {
+function mentionTotal(ind) {
   const fromMentions = (ind?.mentions || []).reduce((n, m) => n + (Number(m?.count) || 0), 0);
   return fromMentions + turnRefCount(ind);
 }
@@ -1402,7 +1402,7 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 
 /** Map of lowercased author name → that author's Commit individuals (payload order).
  *  Tolerates both attribute-key conventions (author / commitAuthor), like commitLine. */
-export function authorIndex(graph) {
+function authorIndex(graph) {
   const idx = new Map();
   for (const ind of graph?.individuals || []) {
     if ((ind.class || "") !== "Commit") continue;

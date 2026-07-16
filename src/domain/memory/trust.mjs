@@ -69,7 +69,7 @@ export const SOURCE_PRIOR = Object.freeze({
   entailed: 0.3,
 });
 
-export const RECENCY_HALF_LIFE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const RECENCY_HALF_LIFE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 export const RECENCY_FLOOR = 0.9; // recency multiplier stays within [0.9, 1.0]
 
 // Actor-level (session-scoped) trust — a bounded nudge on a Source's type
@@ -156,7 +156,7 @@ export function computeTrust(fact, sourcesById = {}, opts = {}) {
 
 // Laplace/"add-k" pseudo-count: without it a single data point would saturate
 // mgx:sourceReliability to the bare max/min immediately.
-export const RELIABILITY_CONFIDENCE_PSEUDOCOUNT = 19;
+const RELIABILITY_CONFIDENCE_PSEUDOCOUNT = 19;
 
 /** Pure actor-level reliability from a session's asserted-vs-contradicted
  *  track record (findContradictions, core.mjs), confidence-scaled by sample

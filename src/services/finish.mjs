@@ -18,7 +18,7 @@ export { flatten };
 
 const GRAMMAR_DIR = dirname(fileURLToPath(import.meta.url));
 /** The data-driven grammar-rule table. */
-export const GRAMMAR_RULES_FILE = join(GRAMMAR_DIR, "..", "..", "data", "templates", "grammar-rules.toml");
+const GRAMMAR_RULES_FILE = join(GRAMMAR_DIR, "..", "..", "data", "templates", "grammar-rules.toml");
 
 /** The segment type vocabulary. `prose` is the only unprotected type. */
 export const SEGMENT_TYPES = Object.freeze([

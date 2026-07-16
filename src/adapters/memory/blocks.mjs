@@ -18,8 +18,8 @@ const trustFactorOf = (trust) => 0.5 + (typeof trust === "number" ? trust : SOUR
 export const BLOCKS_DIR_REL = join(".tmct", "memory", "blocks");
 const INDEX_NAME = "index.json";
 
-export const PAGERANK_DAMPING = 0.85;
-export const PAGERANK_ITERATIONS = 20;
+const PAGERANK_DAMPING = 0.85;
+const PAGERANK_ITERATIONS = 20;
 export const OVERLAP_MIN = 2;   // shared tokens for a similarity edge
 const MAX_TOKENS_PER_BLOCK = 800; // beyond tokenizeProse's per-doc cap: union over lines
 

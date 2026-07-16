@@ -147,7 +147,7 @@ export function callersLabels(graph, ind) {
 }
 
 /** Callees of a symbol (mirrors renderCallees). */
-export function calleesLabels(graph, ind) {
+function calleesLabels(graph, ind) {
   if (CALL_SYMBOL_CLASSES.has(ind.class)) {
     return uniqSort(edgesOfKind(graph, "callsSymbol").filter((e) => e.subject === ind.id).map((e) => e.objectLabel || e.object));
   }
@@ -157,7 +157,7 @@ export function calleesLabels(graph, ind) {
 }
 
 /** Subclasses (transitive) of a class (mirrors renderSubclasses closure). */
-export function subclassesLabels(graph, ind) {
+function subclassesLabels(graph, ind) {
   const inherits = edgesOfKind(graph, "inherits");
   const childrenOf = new Map();
   for (const e of inherits) {
@@ -198,7 +198,7 @@ export function cochangesLabels(graph, ind) {
 }
 
 /** A module's public exports (mirrors renderExports — the `reexports` edge). */
-export function exportsLabels(graph, ind) {
+function exportsLabels(graph, ind) {
   const modId = moduleIdOf(graph, ind);
   if (!modId) return [];
   return uniqSort(edgesOfKind(graph, "reexports").filter((e) => e.subject === modId).map((e) => e.objectLabel || e.object));

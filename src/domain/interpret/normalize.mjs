@@ -404,7 +404,7 @@ export function applyNegationFrames(text) {
 // Phrasing frames: route natural phrasings of a members-of-class or
 // where-defined question onto the canonical shape the grammar answers.
 // First match wins; run after applyNegationFrames.
-export const PHRASING_FRAMES = Object.freeze([
+const PHRASING_FRAMES = Object.freeze([
   // MEMBERS-of-class → "what does X contain".
   { re: /^what\s+(?:functions?|methods?|members?|attributes?|fields?|properties)\s+(?:are|is)\s+(?:in|inside|within)\s+(?:the\s+)?(.+?)\??$/i, to: (m) => `what does ${m[1]} contain` },
   { re: /^what\s+(?:functions?|methods?|members?|attributes?|fields?|properties)\s+(?:does|do)\s+(.+?)\s+have\??$/i, to: (m) => `what does ${m[1]} contain` },

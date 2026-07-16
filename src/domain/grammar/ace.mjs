@@ -8,7 +8,7 @@
 // punctuation, morphology is the lexicon's suffix fold.
 //
 // parseAce(sentence, lexicon) → { pattern, triples, residue } | null
-//   pattern  one of the PATTERNS below (also exported individually).
+//   pattern  one of the PATTERNS below.
 //   triples  [{ subject, predicate, object, kind, n? }] — OWL-labelled string
 //            triples shaped for src/adapters/memory/core.mjs's appendFact (which
 //            normalizes subject/object via normFactTerm: "tmct:module" is
@@ -36,18 +36,18 @@ import {
 // singularOnly below, and lexicon.mjs's lookupNoun doc for what this prunes).
 const SINGULAR_ONLY_DET = new Set(["a", "an"]);
 
-export const PATTERN_SUB_CLASS_OF = "subClassOf";
-export const PATTERN_TYPE_ASSERTION = "typeAssertion";
-export const PATTERN_RELATION = "relation";
-export const PATTERN_SOME_VALUES_FROM = "someValuesFrom";
-export const PATTERN_CARDINALITY = "cardinality";
-export const PATTERN_DISJOINT_WITH = "disjointWith";
-export const PATTERN_POSSESSIVE = "possessive";
-export const PATTERN_ADJECTIVE = "adjective";
-export const PATTERN_CAPABILITY = "capability";
+const PATTERN_SUB_CLASS_OF = "subClassOf";
+const PATTERN_TYPE_ASSERTION = "typeAssertion";
+const PATTERN_RELATION = "relation";
+const PATTERN_SOME_VALUES_FROM = "someValuesFrom";
+const PATTERN_CARDINALITY = "cardinality";
+const PATTERN_DISJOINT_WITH = "disjointWith";
+const PATTERN_POSSESSIVE = "possessive";
+const PATTERN_ADJECTIVE = "adjective";
+const PATTERN_CAPABILITY = "capability";
 
 /** The pattern field's full domain, in the README's table order. */
-export const PATTERNS = Object.freeze([
+const PATTERNS = Object.freeze([
   PATTERN_SUB_CLASS_OF, PATTERN_TYPE_ASSERTION, PATTERN_RELATION, PATTERN_SOME_VALUES_FROM,
   PATTERN_CARDINALITY, PATTERN_DISJOINT_WITH, PATTERN_POSSESSIVE, PATTERN_ADJECTIVE,
   PATTERN_CAPABILITY,

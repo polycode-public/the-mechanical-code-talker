@@ -211,7 +211,7 @@ export function stripTrailingScopeFiller(text) {
 
 /** Trailing bare discourse tags ("how many of those then"). "too" can stack
  *  ("is UserController a validator too then"), hence the double pass below. */
-export const TRAILING_DISCOURSE_TAG = Object.freeze(["then", "though", "too"]);
+const TRAILING_DISCOURSE_TAG = Object.freeze(["then", "though", "too"]);
 
 const TRAILING_DISCOURSE_TAG_RE = new RegExp(
   `\\s+(?:${TRAILING_DISCOURSE_TAG.join("|")})\\s*[?.!]*$`, "i",
@@ -219,7 +219,7 @@ const TRAILING_DISCOURSE_TAG_RE = new RegExp(
 
 /** Trailing comma-delimited discourse clauses ("what is a class, please
  *  explain"), anchored on a literal comma so this never fires mid-phrase. */
-export const TRAILING_DISCOURSE_CLAUSE = Object.freeze(["please explain", "explain"]);
+const TRAILING_DISCOURSE_CLAUSE = Object.freeze(["please explain", "explain"]);
 
 const TRAILING_DISCOURSE_CLAUSE_RE = new RegExp(
   `,\\s*(?:${TRAILING_DISCOURSE_CLAUSE.join("|")})\\s*[?.!]*$`, "i",

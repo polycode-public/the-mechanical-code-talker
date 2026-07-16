@@ -9,7 +9,7 @@
 // exact ones src/tools/server.mjs `dispatchTool` reads, so a bound call this registry validates is
 // directly dispatchable.
 
-export const PREFIXES = Object.freeze({
+const PREFIXES = Object.freeze({
   cap: "urn:tmct:cap#", // the capability/operator vocabulary (this module)
   mgx: "urn:tmct:mgx#", // tmct's code-graph predicates (imports/calls/tests/…)
   seon: "http://se-on.org/ontologies/seon.owl#", // software-evolution ontology classes

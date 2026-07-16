@@ -200,7 +200,7 @@ export function commandCapability(request, declaredNames, selectTool) {
 
 /** Build the glass-box proof chain for a grounded single call: its preconditions then the
  *  epistemic add-effect. Dispatch has succeeded, so `resolves` steps are ok. */
-export function proofFor(name, input) {
+function proofFor(name, input) {
   const steps = [];
   for (const pre of preconditionsOf(name)) {
     if (pre.pred === PRECOND.graphLoaded) steps.push({ step: "precondition", pred: pre.pred, ok: true });
@@ -306,7 +306,7 @@ export async function resolveOne(request, declaredNames, ctx, { execute = true }
 // ---- reachability (used by the bidirectional conformance test + docs) ---------
 
 /** The epistemic topics some NL intent or imperative frame can reach. */
-export function nlReachableTopics() {
+function nlReachableTopics() {
   const topics = new Set();
   for (const v of Object.values(NL_INTENTS)) topics.add(v.topic);
   for (const f of FRAMES) topics.add(f.topic);

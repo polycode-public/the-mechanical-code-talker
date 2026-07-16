@@ -55,7 +55,7 @@ export const NEG_CAPABLE_OF_PREDICATE = negatedPredicate(CAPABLE_OF_PREDICATE);
  *  order it lists them in. One constant each, in one place, so the verbosity of
  *  every case-4 answer is tuned by editing two lines. */
 export const CAPABILITY_REPORT_CAP = 6;
-export const byTrustThenName = (a, b) => (b.trust || 0) - (a.trust || 0) || String(a.subject).localeCompare(String(b.subject));
+const byTrustThenName = (a, b) => (b.trust || 0) - (a.trust || 0) || String(a.subject).localeCompare(String(b.subject));
 
 const asSet = (v) => (v instanceof Set ? v : new Set(Array.isArray(v) ? v : [v]));
 

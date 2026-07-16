@@ -26,7 +26,7 @@ export function registerWinkModel(factory) {
 
 /** Load `{ winkNLP, model }` once, or null when wink isn't available. Prefers a
  *  registered browser factory; otherwise falls back to Node module resolution. */
-export function loadWinkModel() {
+function loadWinkModel() {
   if (cached !== undefined) return cached;
   try {
     const pair = injected ? injected() : nodeRequireWink();

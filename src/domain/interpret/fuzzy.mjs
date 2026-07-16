@@ -80,7 +80,7 @@ const REAL_WORD_COLLISIONS = new Set(collisionData.words);
  *  what it says, and if we don't record that relation the honest answer is a
  *  miss. Only the words the tier could actually reach are tabled; anything else
  *  never gets this far. */
-export const isRealEnglishWord = (w) => REAL_WORD_COLLISIONS.has(w);
+const isRealEnglishWord = (w) => REAL_WORD_COLLISIONS.has(w);
 
 /** A query word may be canonicalized only if it is plain alphabetic, not a
  *  stopword, and not already vocabulary. Dotted/digit terms (file names, shas)

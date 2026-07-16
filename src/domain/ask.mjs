@@ -1786,7 +1786,7 @@ function evalQualCheck(graph, ast, opts) {
 
 /** Compile any compositional AST to a result object traverse() returns for the
  *  simple path — {matches, …} plus compositeKind/compositeMiss flags render() reads. */
-export function evalComposite(graph, ast, opts = {}) {
+function evalComposite(graph, ast, opts = {}) {
   if (ast.node === "miss") return { compositeMiss: true, reason: ast.reason || null, matches: [] };
   if (ast.node === "exists") return evalExists(graph, ast);
   if (ast.node === "qualCheck") return evalQualCheck(graph, ast, opts);
@@ -1828,7 +1828,7 @@ const compositeList = (matches) => listJoin(matches.slice(0, OVERFLOW_CAP)
   + (matches.length > OVERFLOW_CAP ? `, …and ${matches.length - OVERFLOW_CAP} more` : "");
 
 /** A compositional worked example for the rephrase hint. */
-export function compositionalHint() {
+function compositionalHint() {
   return 'compositional queries also work: "which functions call X and call Y", "what calls something that imports X", "public methods of X", "list functions" / "show me the classes", "how many classes", "which module has the most imports", "find me the payment class", or (after a listing) "which of those are tested"';
 }
 
@@ -2047,7 +2047,7 @@ export function rephraseHint() {
  *  It gets a line that says what the store actually holds instead. A NULL
  *  graph is UNKNOWN, not empty (see chat.mjs's noCodeGraph), so it keeps the
  *  index-shaped advice. */
-export function touchesRephraseHint(graph = null) {
+function touchesRephraseHint(graph = null) {
   if (graph && moduleCountOf(graph) === 0) {
     return "This store holds no code index, so it records no modules or commits to look through.";
   }
@@ -3516,7 +3516,7 @@ function isHelpRequest(query) {
  *                        they are content that may honestly fail to resolve.
  *    3. SYNONYM        — rewrite surviving near-canonical words to the closed vocab.
  *  Bounded (one token removed per noise iteration; hard guard) and deterministic. */
-export function relaxParse(graph, query, { nlp = undefined, contextId = null, prev = null } = {}) {
+function relaxParse(graph, query, { nlp = undefined, contextId = null, prev = null } = {}) {
   const from = applyNegationFrames(normalizeQuery(String(query || "")));
   let tokens = splitWords(from);
   if (!tokens.length) return null;

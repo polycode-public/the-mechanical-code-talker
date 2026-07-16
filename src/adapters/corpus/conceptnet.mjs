@@ -35,7 +35,7 @@ export const TIER2_MANIFEST_FILE = join(TIER2_DIR, "manifest.json");
 // conversion, same slice shape/loader path as tier-1/tier-2. "wordnet-xl"/"wordnet-full"
 // are wired as BUILTIN_EXTENSIONS corpus entries in src/extensions.mjs.
 export const WORDNET_DIR = join(PKG_ROOT, "corpus", "wordnet");
-export const WORDNET_MANIFEST_FILE = join(WORDNET_DIR, "manifest.json");
+const WORDNET_MANIFEST_FILE = join(WORDNET_DIR, "manifest.json");
 
 const ACE_PATTERNS = new Set(["subClassOf", "type", "ObjectProperty", "someValuesFrom", "disjointWith", "property", "none"]);
 

@@ -25,7 +25,7 @@
 import coreLexiconRaw from "./lexicon-core.json" with { type: "json" };
 
 /** The CURIE namespace every tmct lexicon mints terms under. */
-export const DEFAULT_NS = "tmct:";
+const DEFAULT_NS = "tmct:";
 
 /** Determiner tokens the grammar consumes (pattern table's every/a/no…). */
 export const DETERMINERS = Object.freeze({
@@ -160,7 +160,7 @@ export function lookupNoun(lexicon, word, opts = {}) {
 /** Every lexicon entry `word` could plausibly resolve to, ranked the same as
  *  lookupNoun's top choice but without discarding a genuine alternate (e.g.
  *  die/dice returns both entries). */
-export function lookupNounCandidates(lexicon, word, opts = {}) {
+function lookupNounCandidates(lexicon, word, opts = {}) {
   const w = String(word ?? "").toLowerCase();
   const standalone = lexicon.nouns.get(w);
   const irregular = lexicon.nounPlurals.get(w);
@@ -195,7 +195,7 @@ export function lookupVerb(lexicon, word) {
 
 /** Every verb entry `word` could plausibly resolve to via foldCandidates,
  *  most-specific-fold-first — the verb sibling of lookupNounCandidates. */
-export function lookupVerbCandidates(lexicon, word) {
+function lookupVerbCandidates(lexicon, word) {
   const w = String(word ?? "").toLowerCase();
   const out = [];
   const seen = new Set();

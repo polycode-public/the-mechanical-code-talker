@@ -123,7 +123,7 @@ export function mergeStrategyResults(results) {
  *  for alternateLines. Template only, reads straight off the parsed fields (the
  *  same discipline as ask.mjs's describeParse; callers with richer noun tables
  *  may pass their own describe). */
-export function describeAlternate(p) {
+function describeAlternate(p) {
   if (!p) return "something else";
   if (p.ambiguousParse) return "one of several readings";
   const obj = p.object ?? p.subject ?? "?";

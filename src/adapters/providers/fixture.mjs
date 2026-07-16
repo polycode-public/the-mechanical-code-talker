@@ -15,7 +15,7 @@ import { createGraphService } from "./graph-service.mjs";
 /** A compact but type-complete entities payload: modules, a class hierarchy
  *  (Base ← Widget ← Button), a method with a full signature, an attribute, a
  *  module global, and a commit — wired by one edge of every closed kind. */
-export const FIXTURE_ENTITIES = Object.freeze({
+const FIXTURE_ENTITIES = Object.freeze({
   generated_at: "2026-07-05T00:00:00.000Z",
   bootstrap: false,
   prefixes: { seon: "http://se-on.org/ontologies/seon.owl#", mgx: "urn:tmct:mgx#" },

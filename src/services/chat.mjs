@@ -62,8 +62,8 @@ export { uuidv7 };
 // in the session layer so runTurn and the fact engine below stay free of
 // node:fs/child_process/os/readline. Re-exported here (services → services) so
 // every existing import site — bin, tui, server-http, index, tests — keeps
-// importing createSession/runChat/gitToplevel/SESSION_LOG_DIR/PROMPT from chat.mjs.
-export { createSession, runChat, gitToplevel, SESSION_LOG_DIR, PROMPT } from "./chat-session.mjs";
+// importing createSession/runChat/SESSION_LOG_DIR/PROMPT from chat.mjs.
+export { createSession, runChat, SESSION_LOG_DIR, PROMPT } from "./chat-session.mjs";
 
 /** dispatchTool("tmct_ask", …) returns the prose answer plus a delimited
  *  machine-readable envelope; the TUI shows the prose only. Reused verbatim
