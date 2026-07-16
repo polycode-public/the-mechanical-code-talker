@@ -26,7 +26,7 @@ import { uuidv7 } from "../adapters/uuid.mjs";
 import * as defaultSource from "../adapters/source.mjs";
 import { loadTemplates, render as renderTemplate } from "../adapters/corpus/templates.mjs";
 import { rankByBiasThenTrust } from "../domain/memory/bias.mjs";
-import { HAS_A_PREDICATE, loadMemory as loadMemoryStore, readFactRows as readStoredFactRows, readRuleRows as readStoredRuleRows } from "../adapters/memory/core.mjs";
+import { HAS_A_PREDICATE, loadMemory as loadMemoryStore, normFactPredicate, readFactRows as readStoredFactRows, readRuleRows as readStoredRuleRows } from "../adapters/memory/core.mjs";
 import { finish, beginsWithVowelSound, grammarRules } from "./finish.mjs";
 import { splitSentences } from "./sentences.mjs";
 import {
@@ -2556,9 +2556,9 @@ async function generalVerbPredicate(verb) {
     const lemma = proseLemma();
     const l = lemma ? lemma(v) : v;
     if (l === "have") return HAS_A_PREDICATE;
-    return `mgx:${l}`;
+    return normFactPredicate(`mgx:${l}`);
   } catch {
-    return `mgx:${v}`;
+    return normFactPredicate(`mgx:${v}`);
   }
 }
 
@@ -6771,8 +6771,8 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
         // syllogise()'s batch pass uses.
         const restrictionByRid = new Map(restrictionEdges.map((r) => [r.restriction, r]));
         const svfTrustByTriple = new Map();
-        for (const f of rows) svfTrustByTriple.set(`${f.subject} ${f.predicate} ${f.object}`, f.trust);
-        const svfPremiseTrust = (s, p, o) => svfTrustByTriple.get(`${s} ${p} ${o}`);
+        for (const f of rows) svfTrustByTriple.set(`${f.subject}\0${f.predicate}\0${f.object}`, f.trust);
+        const svfPremiseTrust = (s, p, o) => svfTrustByTriple.get(`${s}\0${p}\0${o}`);
         const svfTrustOf = new Map(); // "c1\0c2" -> computed trust, for the synthetic row below
         for (const d of svfSubsumption) {
           const r1 = restrictionByRid.get(d.subject);
@@ -6785,7 +6785,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
             svfPremiseTrust(d.viaY1, SC_PREDICATE, d.viaY2),
           ].filter((t) => typeof t === "number");
           const t = entailedTrustFrom(premiseTrusts, SCM_SVF_RULE_CONFIDENCE);
-          if (t !== null) svfTrustOf.set(`${d.subject} ${d.object}`, t);
+          if (t !== null) svfTrustOf.set(`${d.subject}\0${d.object}`, t);
         }
         // A derived restriction⊑restriction edge has no underlying stored
         // Fact row to cite (it's a schema-level conclusion, not a taught
@@ -6802,7 +6802,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
           return derived
             ? {
               subject: derived.subject, predicate: SC_PREDICATE, object: derived.object, provenance: ENTAILED_SCM_SVF_PROVENANCE,
-              trust: svfTrustOf.get(`${derived.subject} ${derived.object}`),
+              trust: svfTrustOf.get(`${derived.subject}\0${derived.object}`),
             }
             : undefined;
         };
