@@ -3,8 +3,8 @@
 // memory/blocks.mjs's buildNeighbours()/OVERLAP_MIN). Block granularity, no sub-block spans.
 // Each group's label is its top shared-IDF tokens (df/N over the hit set, not the corpus).
 
-import { buildNeighbours, OVERLAP_MIN, tokenizeBlock } from "../../adapters/memory/blocks.mjs";
 import { STOPWORDS } from "../prose.mjs";
+import { requireInjected } from "./injected.mjs";
 
 const LABEL_TOKEN_COUNT = 5;
 
@@ -14,8 +14,8 @@ const isContentToken = (t) => /^[a-z0-9]+$/.test(t) && !STOPWORDS.has(t);
 
 /** tokenizeBlock(text), narrowed to real content tokens (see isContentToken above) — the
  *  token set this module actually clusters and labels on. */
-function contentTokens(text) {
-  return tokenizeBlock(text).filter(isContentToken);
+function makeContentTokens(tokenizeBlock) {
+  return (text) => tokenizeBlock(text).filter(isContentToken);
 }
 
 /** Plain union-find (path halving, union-by-index) — small N here (a single broad search's
@@ -41,13 +41,21 @@ function unionFind(n) {
  *
  * @param {Array<{id:string, text:string}>} hits
  * @param {object} [opts]
- * @param {number} [opts.overlapMin=OVERLAP_MIN]  shared-token threshold for a similarity edge
+ * @param {number} [opts.overlapMin]  shared-token threshold for a similarity edge; defaults to
+ *   the store's own OVERLAP_MIN
+ * @param {object} opts.store  REQUIRED — the block store's `{ buildNeighbours, tokenizeBlock,
+ *   OVERLAP_MIN }` clustering handles
  * @returns {Array<{ id: string, members: Array<{id:string, text:string}>, memberIds: string[],
  *   tokens: string[], label: string }>}
  *   One entry per connected component (a singleton hit is still a one-member group).
  *   Deterministic order: groups by lowest member id; members within a group by id.
  */
-export function groupHits(hits, { overlapMin = OVERLAP_MIN } = {}) {
+export function groupHits(hits, { overlapMin, store } = {}) {
+  const { buildNeighbours, tokenizeBlock, OVERLAP_MIN } = requireInjected(
+    store, ["buildNeighbours", "tokenizeBlock", "OVERLAP_MIN"], { caller: "groupHits", option: "store" },
+  );
+  const contentTokens = makeContentTokens(tokenizeBlock);
+  const edgeThreshold = overlapMin ?? OVERLAP_MIN;
   const list = Array.isArray(hits) ? hits.filter((h) => h && h.id != null) : [];
   if (!list.length) return [];
 
@@ -63,7 +71,7 @@ export function groupHits(hits, { overlapMin = OVERLAP_MIN } = {}) {
   const tokensById = {};
   for (const h of deduped) tokensById[h.id] = contentTokens(h.text || "");
 
-  const { ids, neighbours } = buildNeighbours(tokensById, overlapMin);
+  const { ids, neighbours } = buildNeighbours(tokensById, edgeThreshold);
   const { find, union } = unionFind(ids.length);
   for (let i = 0; i < ids.length; i += 1) {
     for (const j of neighbours[i]) union(i, j);

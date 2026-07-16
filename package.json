@@ -43,8 +43,8 @@
   "exports": {
     ".": "./src/services/index.mjs",
     "./plan": "./src/domain/router/drive.mjs",
-    "./generateCompletion": "./src/domain/completions/complete.mjs",
-    "./createCompletionsGraphAdapter": "./src/domain/completions/graph-adapter.mjs",
+    "./generateCompletion": "./src/services/completions.mjs",
+    "./createCompletionsGraphAdapter": "./src/services/completions.mjs",
     "./repository-interface": "./src/adapters/repository-interface.mjs",
     "./conformance": "./src/tools/conformance.mjs"
   },

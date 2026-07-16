@@ -4,15 +4,15 @@
 // way retrieveBlocks() fuses relevance/centrality/hub-dampening into one score.
 // splitSentences() is a simple regex splitter.
 
-import { degreeOf, rankBlocks, tokenizeBlock, OVERLAP_MIN } from "../../adapters/memory/blocks.mjs";
 import { STOPWORDS } from "../prose.mjs";
+import { requireInjected } from "./injected.mjs";
 
 // Same content-token filter group.mjs applies (not exported, so replicated here).
 const isContentToken = (t) => /^[a-z0-9]+$/.test(t) && !STOPWORDS.has(t);
 
 /** tokenizeBlock(text), narrowed to real content tokens — see isContentToken above. */
-function contentTokens(text) {
-  return tokenizeBlock(text).filter(isContentToken);
+function makeContentTokens(tokenizeBlock) {
+  return (text) => tokenizeBlock(text).filter(isContentToken);
 }
 
 // Sentence boundary: a run of [.!?] followed by whitespace and an uppercase letter or digit
@@ -46,13 +46,20 @@ export function splitSentences(text) {
  *
  * @param {{members: Array<{id:string, text:string}>}} group  a group.mjs groupHits() entry
  * @param {object} [opts]
- * @param {number} [opts.overlapMin=OVERLAP_MIN]  shared content-token threshold for a
- *   sentence-similarity edge
+ * @param {number} [opts.overlapMin]  shared content-token threshold for a sentence-similarity
+ *   edge; defaults to the store's own OVERLAP_MIN
  * @param {string|null} [opts.query=null]  optional query text to focus ranking on
+ * @param {object} opts.store  REQUIRED — the block store's `{ degreeOf, rankBlocks,
+ *   tokenizeBlock, OVERLAP_MIN }` ranking handles
  * @returns {Array<{sentence:string, score:number, sourceBlockId:string}>} best-first;
  *   deterministic tiebreak (sourceBlockId, then sentence text) on equal score.
  */
-export function rankSentences(group, { overlapMin = OVERLAP_MIN, query = null } = {}) {
+export function rankSentences(group, { overlapMin, query = null, store } = {}) {
+  const { degreeOf, rankBlocks, tokenizeBlock, OVERLAP_MIN } = requireInjected(
+    store, ["degreeOf", "rankBlocks", "tokenizeBlock", "OVERLAP_MIN"], { caller: "rankSentences", option: "store" },
+  );
+  const contentTokens = makeContentTokens(tokenizeBlock);
+  const edgeThreshold = overlapMin ?? OVERLAP_MIN;
   const members = Array.isArray(group?.members) ? group.members : [];
   if (!members.length) return [];
 
@@ -69,8 +76,8 @@ export function rankSentences(group, { overlapMin = OVERLAP_MIN, query = null } 
   const tokensById = {};
   for (const s of sentences) tokensById[s.id] = contentTokens(s.sentence);
 
-  const ranks = rankBlocks(tokensById, { overlapMin });
-  const degrees = degreeOf(tokensById, { overlapMin });
+  const ranks = rankBlocks(tokensById, { overlapMin: edgeThreshold });
+  const degrees = degreeOf(tokensById, { overlapMin: edgeThreshold });
 
   // IDF scoped to THIS group's sentence set (df/N), not the whole corpus.
   const ids = Object.keys(tokensById);

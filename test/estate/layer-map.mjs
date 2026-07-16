@@ -3,7 +3,13 @@
 // module directly under src/, or under any directory that is not a layer, is
 // claimed by nobody and the checker fails on it.
 
-export const LAYER_RANK = { adapters: 0, domain: 1, services: 2, tools: 3, surfaces: 4 };
+// domain is the core: pure rules and pure data, importing nothing at all — not a
+// node builtin, not a package, not another layer. Every layer above it may reach
+// down to it. adapters implement I/O in terms of that core, so a store reaching
+// for a hash or a trust score points inward, which is the direction of the rule.
+// A core module reaching back out to an adapter is what the checker exists to
+// catch: inject the adapter instead.
+export const LAYER_RANK = { domain: 0, adapters: 1, services: 2, tools: 3, surfaces: 4 };
 
 /** Layer for a src/-relative path, or null when nothing claims it. */
 export function layerOf(relPath) {

@@ -33,6 +33,7 @@ import { join } from "node:path";
 
 import { appendFact, loadMemory } from "../../src/adapters/memory/core.mjs";
 import { inferRelations } from "../../src/domain/completions/infer.mjs";
+import { COMPLETIONS_STORE } from "../../src/services/completions.mjs";
 
 async function tmpRepo() {
   return mkdtemp(join(tmpdir(), "tmct-completions-infer-"));
@@ -104,7 +105,7 @@ test("Stage 1 exit criterion: inferRelations() fires EXACTLY the hand-labeled re
   try {
     await seedFacts(dir);
     const memory = await loadMemory(dir);
-    const result = await inferRelations(GROUPS, memory);
+    const result = await inferRelations(GROUPS, memory, { store: COMPLETIONS_STORE });
 
     const shape = result.map((r) => ({ from: r.from, to: r.to, relation: r.relation }))
       .sort((a, b) => a.from.localeCompare(b.from) || a.to.localeCompare(b.to) || a.relation.localeCompare(b.relation));
@@ -126,7 +127,7 @@ test("supports: evidence cites the exact shared entities, relation name, and res
   try {
     await seedFacts(dir);
     const memory = await loadMemory(dir);
-    const result = await inferRelations(GROUPS, memory);
+    const result = await inferRelations(GROUPS, memory, { store: COMPLETIONS_STORE });
     const hit = result.find((r) => r.relation === "supports");
     assert.ok(hit, "supports must fire for the ahab/john pair");
     assert.equal(hit.evidence.relationName, "father");
@@ -144,7 +145,7 @@ test("contradicts: evidence cites the shared entity, shared token, and one negat
   try {
     await seedFacts(dir);
     const memory = await loadMemory(dir);
-    const result = await inferRelations(GROUPS, memory);
+    const result = await inferRelations(GROUPS, memory, { store: COMPLETIONS_STORE });
     const hit = result.find((r) => r.relation === "contradicts");
     assert.ok(hit, "contradicts must fire for the widget pair");
     assert.equal(hit.evidence.entity, "widget");
@@ -161,7 +162,7 @@ test("exemplifies: evidence cites the general class term, the instance term, and
   try {
     await seedFacts(dir);
     const memory = await loadMemory(dir);
-    const result = await inferRelations(GROUPS, memory);
+    const result = await inferRelations(GROUPS, memory, { store: COMPLETIONS_STORE });
     const hit = result.find((r) => r.relation === "exemplifies");
     assert.ok(hit, "exemplifies must fire for the buffer/cache pair");
     assert.equal(hit.evidence.generalTerm, "buffer");
@@ -177,7 +178,7 @@ test("elaborates: evidence cites the wider and narrower entity sets, and the wid
   try {
     await seedFacts(dir);
     const memory = await loadMemory(dir);
-    const result = await inferRelations(GROUPS, memory);
+    const result = await inferRelations(GROUPS, memory, { store: COMPLETIONS_STORE });
     const hit = result.find((r) => r.relation === "elaborates" && r.from === "g:router-deepdive");
     assert.ok(hit, "elaborates must fire for the router-basic/router-deepdive pair");
     assert.deepEqual(hit.evidence.narrowerEntities, ["router"]);
@@ -193,8 +194,8 @@ test("determinism: two runs over the identical groups + fixed memory produce byt
   try {
     await seedFacts(dir);
     const memory = await loadMemory(dir);
-    const run1 = await inferRelations(GROUPS, memory);
-    const run2 = await inferRelations(GROUPS, memory);
+    const run1 = await inferRelations(GROUPS, memory, { store: COMPLETIONS_STORE });
+    const run2 = await inferRelations(GROUPS, memory, { store: COMPLETIONS_STORE });
     assert.deepEqual(run2, run1, "identical inputs must yield byte-identical inferred relations — any diff is a determinism bug");
     assert.ok(run1.length > 0, "the fixture must actually exercise something real, not an empty no-op");
   } finally {
@@ -206,9 +207,9 @@ test("inferRelations(): fewer than two groups, or no groups, never throws and re
   const dir = await tmpRepo();
   try {
     const memory = await loadMemory(dir);
-    assert.deepEqual(await inferRelations([], memory), []);
-    assert.deepEqual(await inferRelations(null, memory), []);
-    assert.deepEqual(await inferRelations([GROUPS[0]], memory), []);
+    assert.deepEqual(await inferRelations([], memory, { store: COMPLETIONS_STORE }), []);
+    assert.deepEqual(await inferRelations(null, memory, { store: COMPLETIONS_STORE }), []);
+    assert.deepEqual(await inferRelations([GROUPS[0]], memory, { store: COMPLETIONS_STORE }), []);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

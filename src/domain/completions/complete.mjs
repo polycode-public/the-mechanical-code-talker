@@ -7,13 +7,12 @@ import { groupHits } from "./group.mjs";
 import { rankSentences } from "./rank.mjs";
 import { inferRelations } from "./infer.mjs";
 import { pruneCompletion } from "./prune.mjs";
-import { loadMemory } from "../../adapters/memory/core.mjs";
-import { finish, grammarRules } from "../../services/finish.mjs";
+import { requireInjected } from "./injected.mjs";
 
 /** grammarRules() with sentence-capitalisation force-enabled (disabled in live chat only to
  *  protect single-answer lowercase-opener goldens, which don't apply to a multi-sentence
  *  completion). */
-function completionGrammarRules() {
+function completionGrammarRules(grammarRules) {
   return grammarRules().map((r) => (r.id === "sentence-capitalisation" ? { ...r, enabled: true } : r));
 }
 
@@ -38,6 +37,9 @@ const DEFAULT_MAX_SENTENCES_PER_GROUP = 3; // see prune.mjs's own file header fo
  * @param {number} [opts.maxSentencesPerGroup=3]  prune.mjs's top-K-per-group cutoff
  * @param {object} [opts.graph]  optional loaded graph (src/domain/codegraph.mjs parseEntities() shape)
  *   handed to finish()'s maskSegments to protect known entity labels during the grammar pass
+ * @param {object} opts.store  REQUIRED — the memory/block store handles this pipeline reads
+ *   through; `loadMemory` here, plus whatever each stage below requires of its own
+ * @param {object} opts.finisher  REQUIRED — the prose finisher's `{ finish, grammarRules }`
  * @returns {Promise<{
  *   text: string,
  *   sourceSpans: Array<{sourceBlockId:string, groupId:string, sentence:string}>,
@@ -51,22 +53,26 @@ export async function generateCompletion(dir, prompt, opts = {}) {
   const {
     blockK, graphService = null, graphLimit, overlapMin,
     memory: memoryOpt, query = prompt, maxSentencesPerGroup = DEFAULT_MAX_SENTENCES_PER_GROUP,
-    graph,
+    graph, store, finisher,
   } = opts;
+  const { loadMemory } = requireInjected(store, ["loadMemory"], { caller: "generateCompletion", option: "store" });
+  const { finish, grammarRules } = requireInjected(
+    finisher, ["finish", "grammarRules"], { caller: "generateCompletion", option: "finisher" },
+  );
 
   // Stage 1 — broad search
-  const hits = await broadSearch(dir, prompt, { blockK, graphService, graphLimit });
+  const hits = await broadSearch(dir, prompt, { blockK, graphService, graphLimit, store });
 
   // Stage 2 — grouping
-  const groups = groupHits(hits, { overlapMin });
+  const groups = groupHits(hits, { overlapMin, store });
 
   // Stage 3 — cross-group inference
   const memory = memoryOpt || await loadMemory(dir);
-  const relations = groups.length >= 2 ? await inferRelations(groups, memory) : [];
+  const relations = groups.length >= 2 ? await inferRelations(groups, memory, { store }) : [];
 
   // Stage 4 — extractive sentence ranking, per group (query-focused unless the caller opted out)
   const rankedByGroup = {};
-  for (const g of groups) rankedByGroup[g.id] = rankSentences(g, { query });
+  for (const g of groups) rankedByGroup[g.id] = rankSentences(g, { query, store });
 
   // Stage 5 — pruning: decide keep/drop, with an itemized, auditable drop log
   const { kept, dropped } = pruneCompletion(
@@ -84,7 +90,7 @@ export async function generateCompletion(dir, prompt, opts = {}) {
   const rawText = kept.map((k) => k.sentence).join(" ");
 
   // Stage 6 — grammar/voice pass (reuses finish() verbatim; see completionGrammarRules() above).
-  const finished = finish({ answer: rawText, via: "completion" }, { graph, rules: completionGrammarRules() });
+  const finished = finish({ answer: rawText, via: "completion" }, { graph, rules: completionGrammarRules(grammarRules) });
 
   // sourceSpans traces every output sentence back to its block id + group id, from `kept`
   // (pre-grammar-pass) — stays index-aligned since finish() only mutates casing/punctuation.

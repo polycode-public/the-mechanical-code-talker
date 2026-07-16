@@ -2,7 +2,7 @@
 // and the graph search()/ask() services, asking both sources more widely than a single-answer
 // query. Returns whole-block/whole-result hits only — no sub-block span segmentation.
 
-import { retrieveBlocks } from "../../adapters/memory/blocks.mjs";
+import { requireInjected } from "./injected.mjs";
 
 const DEFAULT_BLOCK_K = 8;   // "broad" > chat's narrow single-answer k (typically 3)
 const DEFAULT_GRAPH_LIMIT = 8;
@@ -20,14 +20,16 @@ const DEFAULT_GRAPH_LIMIT = 8;
  *   (e.g. createGraphService(graph)). When supplied, its search() and ask() are queried too;
  *   omitted -> block-only search.
  * @param {number} [opts.graphLimit=8]  graph search()'s result limit
+ * @param {object} opts.store  REQUIRED — the block store's `{ retrieveBlocks }` reader
  * @returns {Promise<Array<{source:"block"|"graph-search"|"graph-ask", id:string, text:string, score:number}>>}
  *   best-first within each source; blocks first, then graph-search, then graph-ask (never
  *   shuffled/merged by score across sources — block scores and graph relevance aren't
  *   comparable).
  */
 export async function broadSearch(dir, query, {
-  blockK = DEFAULT_BLOCK_K, graphService = null, graphLimit = DEFAULT_GRAPH_LIMIT,
+  blockK = DEFAULT_BLOCK_K, graphService = null, graphLimit = DEFAULT_GRAPH_LIMIT, store,
 } = {}) {
+  const { retrieveBlocks } = requireInjected(store, ["retrieveBlocks"], { caller: "broadSearch", option: "store" });
   const q = String(query || "").trim();
   if (!q) return [];
 

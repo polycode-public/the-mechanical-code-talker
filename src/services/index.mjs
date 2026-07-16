@@ -57,5 +57,4 @@ export { CONFIG_FILE as TOML_CONFIG_FILE } from "../adapters/toml-config.mjs";
 
 // The "detailed answer" completions pipeline (also reachable as the
 // `./generateCompletion` and `./createCompletionsGraphAdapter` subpath exports).
-export { generateCompletion } from "../domain/completions/complete.mjs";
-export { createCompletionsGraphAdapter } from "../domain/completions/graph-adapter.mjs";
+export { generateCompletion, createCompletionsGraphAdapter } from "./completions.mjs";

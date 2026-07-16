@@ -24,9 +24,15 @@
 //     is deliberately small enough to demand the stronger, exact bar: both key points must
 //     outrank both filler sentences (recall 1.0 at top-N=2) — with only 4 candidates, a
 //     softer threshold would tolerate the ranker doing no better than chance.
+//
+// rankSentences() reads its PageRank/degree/tokenizer handles through an explicit `store`
+// option and imports none of them, so every call below passes one. The real store
+// (COMPLETIONS_STORE, what services/completions.mjs wires in production) is what the recall
+// thresholds above are calibrated against, so that is what these fixtures rank through.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { rankSentences, splitSentences } from "../../src/domain/completions/rank.mjs";
+import { COMPLETIONS_STORE } from "../../src/services/completions.mjs";
 
 // Fixture A: three "Store" blocks, each pairing a dense, cross-block-shared-vocabulary
 // sentence (Store/Task/User/records) with an identical, deliberately generic filler
@@ -69,7 +75,7 @@ const LOGGER_TOP_N = LOGGER_KEY_POINTS.size; // 2
 const LOGGER_RECALL_THRESHOLD = 1.0; // exact bar; see file header for reasoning
 
 test("Stage 2 exit criterion: top-N ranked sentences cover hand-labeled key points at the target recall (fixture A — 3 sources, 6 key points)", () => {
-  const ranked = rankSentences(GROUP_STORE);
+  const ranked = rankSentences(GROUP_STORE, { store: COMPLETIONS_STORE });
   assert.equal(ranked.length, 9, "3 blocks x 3 sentences each");
   const topN = ranked.slice(0, STORE_TOP_N);
   const hits = topN.filter((r) => STORE_KEY_POINTS.has(r.sentence)).length;
@@ -81,7 +87,7 @@ test("Stage 2 exit criterion: top-N ranked sentences cover hand-labeled key poin
 });
 
 test("Stage 2 exit criterion: top-N ranked sentences cover hand-labeled key points at the target recall (fixture B — 2 sources, 2 key points, exact bar)", () => {
-  const ranked = rankSentences(GROUP_LOGGER);
+  const ranked = rankSentences(GROUP_LOGGER, { store: COMPLETIONS_STORE });
   assert.equal(ranked.length, 4, "2 blocks x 2 sentences each");
   const topN = ranked.slice(0, LOGGER_TOP_N);
   const hits = topN.filter((r) => LOGGER_KEY_POINTS.has(r.sentence)).length;
@@ -93,7 +99,7 @@ test("Stage 2 exit criterion: top-N ranked sentences cover hand-labeled key poin
 });
 
 test("rankSentences(): every result is source-tagged back to its member block id", () => {
-  const ranked = rankSentences(GROUP_STORE);
+  const ranked = rankSentences(GROUP_STORE, { store: COMPLETIONS_STORE });
   for (const r of ranked) {
     assert.equal(typeof r.sentence, "string");
     assert.ok(r.sentence.length > 0);
@@ -104,17 +110,17 @@ test("rankSentences(): every result is source-tagged back to its member block id
 });
 
 test("rankSentences(): determinism — two runs over the identical group produce byte-identical ranked output", () => {
-  const run1 = rankSentences(GROUP_STORE);
-  const run2 = rankSentences(GROUP_STORE);
+  const run1 = rankSentences(GROUP_STORE, { store: COMPLETIONS_STORE });
+  const run2 = rankSentences(GROUP_STORE, { store: COMPLETIONS_STORE });
   assert.deepEqual(run2, run1, "identical input must yield byte-identical ranked sentence lists — any diff is a determinism bug");
 
-  const run3 = rankSentences(GROUP_LOGGER);
-  const run4 = rankSentences(GROUP_LOGGER);
+  const run3 = rankSentences(GROUP_LOGGER, { store: COMPLETIONS_STORE });
+  const run4 = rankSentences(GROUP_LOGGER, { store: COMPLETIONS_STORE });
   assert.deepEqual(run4, run3);
 });
 
 test("rankSentences(): query-focused mode only IDF-sums tokens overlapping the query (a sentence with zero overlap scores 0)", () => {
-  const ranked = rankSentences(GROUP_LOGGER, { query: "Logger createLogger" });
+  const ranked = rankSentences(GROUP_LOGGER, { query: "Logger createLogger", store: COMPLETIONS_STORE });
   const zeroScored = ranked.filter((r) => r.score === 0);
   // both filler sentences ("This detail is not important here.") share no content token with
   // the query, so they honestly score 0 rather than falling back to self-weighting.
@@ -124,9 +130,9 @@ test("rankSentences(): query-focused mode only IDF-sums tokens overlapping the q
 });
 
 test("rankSentences(): [] / no members -> [] (no crash on empty input)", () => {
-  assert.deepEqual(rankSentences({ members: [] }), []);
-  assert.deepEqual(rankSentences({}), []);
-  assert.deepEqual(rankSentences(null), []);
+  assert.deepEqual(rankSentences({ members: [] }, { store: COMPLETIONS_STORE }), []);
+  assert.deepEqual(rankSentences({}, { store: COMPLETIONS_STORE }), []);
+  assert.deepEqual(rankSentences(null, { store: COMPLETIONS_STORE }), []);
 });
 
 test("splitSentences(): splits on sentence-ending punctuation, trims, drops empties, preserves order", () => {

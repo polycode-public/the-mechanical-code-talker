@@ -8033,12 +8033,12 @@ async function completionsRescueAnswer(query, { memoryDir, graph }) {
   term = term.replace(/^(?:the|a|an)\s+/i, "").trim();
   if (!term) return null;
   try {
-    const { generateCompletion } = await import("../domain/completions/complete.mjs");
+    const { generateCompletion } = await import("./completions.mjs");
     // createCompletionsGraphAdapter wraps the SAME graph object this turn
     // already has in scope plus this repo's already-loaded Fact store, so
     // broadSearch can search live graph/memory content, not just saved
     // memory blocks.
-    const { createCompletionsGraphAdapter } = await import("../domain/completions/graph-adapter.mjs");
+    const { createCompletionsGraphAdapter } = await import("./completions.mjs");
     const { loadMemory } = await import("../adapters/memory/core.mjs");
     const memory = await loadMemory(memoryDir);
     const graphService = createCompletionsGraphAdapter(graph, memory);

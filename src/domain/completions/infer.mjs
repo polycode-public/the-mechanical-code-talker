@@ -1,5 +1,5 @@
-// completions/infer.mjs — Stage 3 ("inference between groups"): applies resolveRelationChase
-// (src/adapters/memory/core.mjs) to relationships BETWEEN retrieved text groups, not just graph facts.
+// completions/infer.mjs — Stage 3 ("inference between groups"): applies the injected
+// resolveRelationChase to relationships BETWEEN retrieved text groups, not just graph facts.
 // Four relations (supports/contradicts/elaborates/exemplifies), each with its own named
 // licensing test — see the four test*() functions below. A relation is asserted only when its
 // test concretely licenses it, never from prose similarity.
@@ -7,19 +7,18 @@
 // Entities are a group's content tokens narrowed to graph-known terms (normFactTerm-matched
 // against loaded facts) — sharing an English word alone never licenses a relation.
 
-import { normFactTerm, readFactRows, resolveRelationChase } from "../../adapters/memory/core.mjs";
-import { tokenizeBlock } from "../../adapters/memory/blocks.mjs";
 import { splitSentences } from "./rank.mjs";
 import { STOPWORDS } from "../prose.mjs";
 import { findActionPath, findReachableSet } from "../planning.mjs";
+import { requireInjected } from "./injected.mjs";
 
 // Same content-token filter group.mjs/rank.mjs apply to their own adjacency/ranking; not
 // exported from either, so replicated here rather than reached across files.
 const isContentToken = (t) => /^[a-z0-9]+$/.test(t) && !STOPWORDS.has(t);
 
 /** tokenizeBlock(text), narrowed to real content tokens — see isContentToken above. */
-function contentTokens(text) {
-  return tokenizeBlock(text).filter(isContentToken);
+function makeContentTokens(tokenizeBlock) {
+  return (text) => tokenizeBlock(text).filter(isContentToken);
 }
 
 // Local copy of chat.mjs's private HAS_PROPERTY_PREDICATE constant — not exported, so callers
@@ -47,7 +46,7 @@ function sentenceIsNegated(sentence) {
 
 /** Union of contentTokens() over every member's text — a group's own content-token
  *  vocabulary, deduped. */
-function groupContentTokenSet(group) {
+function groupContentTokenSet(group, { contentTokens }) {
   const set = new Set();
   for (const m of group?.members || []) {
     for (const t of contentTokens(m?.text || "")) set.add(t);
@@ -58,7 +57,7 @@ function groupContentTokenSet(group) {
 /** Every sentence across a group's members, pre-split (rank.mjs's own splitSentences — reused
  *  verbatim, no re-implementation), each carrying its own content-token set and negation flag
  *  — the exact per-sentence facts the contradicts test needs. */
-function sentencesOf(group) {
+function sentencesOf(group, { contentTokens }) {
   const out = [];
   for (const m of group?.members || []) {
     for (const sentence of splitSentences(m?.text || "")) {
@@ -70,7 +69,7 @@ function sentencesOf(group) {
 
 /** Every normFactTerm-normalized term that appears as SOME fact's subject or object in the
  *  loaded memory — the "graph-known term" universe entities are grounded against. */
-function buildGraphTerms(rows) {
+function buildGraphTerms(rows, normFactTerm) {
   const set = new Set();
   for (const r of rows) {
     const s = normFactTerm(r.subject);
@@ -82,8 +81,8 @@ function buildGraphTerms(rows) {
 }
 
 /** A group's GRAPH-GROUNDED entities: content tokens narrowed to graph-known terms, sorted. */
-function entitiesOf(group, graphTerms) {
-  return [...groupContentTokenSet(group)].filter((t) => graphTerms.has(t)).sort();
+function entitiesOf(group, grounding) {
+  return [...groupContentTokenSet(group, grounding)].filter((t) => grounding.graphTerms.has(t)).sort();
 }
 
 /** A minimal relationFactsFor(name): direct-predicate match only (`mgx:${name}`), no
@@ -125,9 +124,10 @@ function relationNameCandidates(rows) {
 /** SUPPORTS — groups A/B share >=2 graph-grounded entities AND a taught relation fact
  *  connects two of them. Tries every (subject, object) pair against every candidate relation
  *  name in fixed sorted order; first hit wins. Returns `{ licensingTest, evidence }` or null. */
-async function testSupports(a, b, memory, helpers, relationNames, graphTerms) {
-  const entitiesA = entitiesOf(a, graphTerms);
-  const entitiesB = entitiesOf(b, graphTerms);
+async function testSupports(a, b, grounding) {
+  const { memory, helpers, relationNames, resolveRelationChase } = grounding;
+  const entitiesA = entitiesOf(a, grounding);
+  const entitiesB = entitiesOf(b, grounding);
   const shared = entitiesA.filter((e) => entitiesB.includes(e));
   if (shared.length < 2) return null;
   for (const subjectTerm of shared) {
@@ -151,18 +151,18 @@ async function testSupports(a, b, memory, helpers, relationNames, graphTerms) {
 /** CONTRADICTS — groups A/B share a graph-grounded entity plus a second co-occurring token
  *  ("aspect"), and one side's matching sentence is negated while the other's isn't. Returns
  *  `{ licensingTest, evidence }` or null. */
-function testContradicts(a, b, graphTerms) {
-  const entitiesA = entitiesOf(a, graphTerms);
-  const entitiesB = entitiesOf(b, graphTerms);
+function testContradicts(a, b, grounding) {
+  const entitiesA = entitiesOf(a, grounding);
+  const entitiesB = entitiesOf(b, grounding);
   const sharedEntities = entitiesA.filter((e) => entitiesB.includes(e));
   if (!sharedEntities.length) return null;
 
-  const tokensA = groupContentTokenSet(a);
-  const tokensB = groupContentTokenSet(b);
+  const tokensA = groupContentTokenSet(a, grounding);
+  const tokensB = groupContentTokenSet(b, grounding);
   const sharedTokens = [...tokensA].filter((t) => tokensB.has(t)).sort();
 
-  const sentencesA = sentencesOf(a);
-  const sentencesB = sentencesOf(b);
+  const sentencesA = sentencesOf(a, grounding);
+  const sentencesB = sentencesOf(b, grounding);
 
   for (const entity of sharedEntities) {
     for (const aspect of sharedTokens) {
@@ -208,9 +208,9 @@ function isProperSubset(small, big) {
 /** ELABORATES — one group's graph-grounded entity set is a PROPER SUBSET of the other's; the
  *  wider group elaborates the narrower one. Equal sets never count. Returns
  *  `{ wider: "a"|"b", licensingTest, evidence }` or null. */
-function testElaborates(a, b, graphTerms) {
-  const entitiesA = new Set(entitiesOf(a, graphTerms));
-  const entitiesB = new Set(entitiesOf(b, graphTerms));
+function testElaborates(a, b, grounding) {
+  const entitiesA = new Set(entitiesOf(a, grounding));
+  const entitiesB = new Set(entitiesOf(b, grounding));
   if (!entitiesA.size || !entitiesB.size) return null;
   if (isProperSubset(entitiesB, entitiesA)) {
     return {
@@ -233,9 +233,10 @@ function testElaborates(a, b, graphTerms) {
  *  `instance` names an entity taught to BE one directly. Asymmetric: callers probe both
  *  directions by calling this twice with groups swapped (see inferRelations below). Returns
  *  `{ licensingTest, evidence }` or null. */
-function testExemplifies(general, instance, rows, graphTerms) {
-  const generalEntities = entitiesOf(general, graphTerms);
-  const instanceEntities = entitiesOf(instance, graphTerms);
+function testExemplifies(general, instance, grounding) {
+  const { rows, normFactTerm } = grounding;
+  const generalEntities = entitiesOf(general, grounding);
+  const instanceEntities = entitiesOf(instance, grounding);
   for (const gA of generalEntities) {
     const isClass = rows.some((r) => ISA_PREDICATES.has(r.predicate) && normFactTerm(r.object) === gA);
     if (!isClass) continue;
@@ -260,20 +261,34 @@ function testExemplifies(general, instance, rows, graphTerms) {
  * closed relations and includes a hit only when its test function fires.
  *
  * @param {Array<{id:string, members:Array<{id:string,text:string}>}>} groups
- * @param {object} memory  an already-loaded memory/core.mjs loadMemory() payload
- * @param {object} [opts]  reserved for future tuning; unused today
+ * @param {object} memory  an already-loaded loadMemory() payload
+ * @param {object} [opts]
+ * @param {object} opts.store  REQUIRED — the memory store's `{ readFactRows, normFactTerm,
+ *   resolveRelationChase }` readers plus the block store's `{ tokenizeBlock }` helper
  * @returns {Promise<Array<{from:string, to:string, relation:"supports"|"contradicts"|"elaborates"|"exemplifies", licensingTest:string, evidence:object}>>}
  *   deterministic: id-sorted pairwise order, stable-sorted by (from, to, relation).
  */
-// eslint-disable-next-line no-unused-vars -- opts reserved, see docblock
-export async function inferRelations(groups, memory, opts = {}) {
+export async function inferRelations(groups, memory, { store } = {}) {
+  const { readFactRows, normFactTerm, resolveRelationChase, tokenizeBlock } = requireInjected(
+    store, ["readFactRows", "normFactTerm", "resolveRelationChase", "tokenizeBlock"],
+    { caller: "inferRelations", option: "store" },
+  );
   const list = Array.isArray(groups) ? groups.filter((g) => g && g.id && Array.isArray(g.members)) : [];
   if (list.length < 2) return [];
 
   const rows = readFactRows(memory);
-  const graphTerms = buildGraphTerms(rows);
-  const helpers = makeHelpers(rows);
-  const relationNames = relationNameCandidates(rows);
+  // Everything the four licensing tests read, resolved once per call: the injected store
+  // handles, the loaded fact rows, and the indexes derived from them.
+  const grounding = {
+    memory,
+    rows,
+    normFactTerm,
+    resolveRelationChase,
+    contentTokens: makeContentTokens(tokenizeBlock),
+    graphTerms: buildGraphTerms(rows, normFactTerm),
+    helpers: makeHelpers(rows),
+    relationNames: relationNameCandidates(rows),
+  };
 
   const sorted = list.slice().sort((x, y) => x.id.localeCompare(y.id));
   const out = [];
@@ -284,13 +299,13 @@ export async function inferRelations(groups, memory, opts = {}) {
       const B = sorted[j];
 
       // eslint-disable-next-line no-await-in-loop -- deterministic fixed-order pairwise search
-      const sup = await testSupports(A, B, memory, helpers, relationNames, graphTerms);
+      const sup = await testSupports(A, B, grounding);
       if (sup) out.push({ from: A.id, to: B.id, relation: "supports", licensingTest: sup.licensingTest, evidence: sup.evidence });
 
-      const con = testContradicts(A, B, graphTerms);
+      const con = testContradicts(A, B, grounding);
       if (con) out.push({ from: A.id, to: B.id, relation: "contradicts", licensingTest: con.licensingTest, evidence: con.evidence });
 
-      const ela = testElaborates(A, B, graphTerms);
+      const ela = testElaborates(A, B, grounding);
       if (ela) {
         const from = ela.wider === "a" ? A.id : B.id;
         const to = ela.wider === "a" ? B.id : A.id;
@@ -298,9 +313,9 @@ export async function inferRelations(groups, memory, opts = {}) {
       }
 
       // Both directions probed independently — different claims, each its own test.
-      const bExemplifiesA = testExemplifies(A, B, rows, graphTerms);
+      const bExemplifiesA = testExemplifies(A, B, grounding);
       if (bExemplifiesA) out.push({ from: B.id, to: A.id, relation: "exemplifies", licensingTest: bExemplifiesA.licensingTest, evidence: bExemplifiesA.evidence });
-      const aExemplifiesB = testExemplifies(B, A, rows, graphTerms);
+      const aExemplifiesB = testExemplifies(B, A, grounding);
       if (aExemplifiesB) out.push({ from: A.id, to: B.id, relation: "exemplifies", licensingTest: aExemplifiesB.licensingTest, evidence: aExemplifiesB.evidence });
     }
   }

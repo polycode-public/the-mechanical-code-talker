@@ -7,10 +7,9 @@
 // renderDescribe and readFactRows(memory), falling back to svc.ask() only when it genuinely
 // parsed the term.
 
-import { createGraphService } from "../../adapters/providers/graph-service.mjs";
 import { resolveSymbol, renderDescribe } from "../codegraph.mjs";
 import { ask } from "../ask.mjs";
-import { readFactRows } from "../../adapters/memory/core.mjs";
+import { requireInjected } from "./injected.mjs";
 
 /** renderDescribe() renders one line per fact with no terminal punctuation of its own;
  *  rank.mjs's splitSentences() treats each line as its own candidate sentence, and
@@ -28,9 +27,15 @@ function withTerminalPunctuation(text) {
 /**
  * @param {object|null} graph   a parseEntities() result, or null when no code graph is loaded
  * @param {object|null} [memory=null]  a loadMemory() payload, or null when there's no Fact store
+ * @param {object} [opts]
+ * @param {object} opts.store  REQUIRED — the `{ createGraphService, readFactRows }` handles
+ *   this adapter builds its two sentence sources from
  * @returns {{search: Function, ask: Function}} a Repository-Interface-shaped graphService
  */
-export function createCompletionsGraphAdapter(graph, memory = null) {
+export function createCompletionsGraphAdapter(graph, memory = null, { store } = {}) {
+  const { createGraphService, readFactRows } = requireInjected(
+    store, ["createGraphService", "readFactRows"], { caller: "createCompletionsGraphAdapter", option: "store" },
+  );
   const svc = graph ? createGraphService(graph, { ask }) : null;
 
   return {

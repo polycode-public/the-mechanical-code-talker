@@ -29,6 +29,7 @@ import { parseEntities } from "../../src/domain/codegraph.mjs";
 import { createGraphService } from "../../src/adapters/providers/graph-service.mjs";
 import { broadSearch } from "../../src/domain/completions/search.mjs";
 import { groupHits } from "../../src/domain/completions/group.mjs";
+import { COMPLETIONS_STORE } from "../../src/services/completions.mjs";
 
 const MINI_WEBAPP_GRAPH = fileURLToPath(
   new URL("../../examples/mini-webapp/.tmct/graph.json", import.meta.url),
@@ -79,8 +80,8 @@ const PROMPT_SET = [
 async function runPipelineOnce(dir, graphService) {
   const out = {};
   for (const prompt of PROMPT_SET) {
-    const hits = await broadSearch(dir, prompt, { graphService });
-    const groups = groupHits(hits);
+    const hits = await broadSearch(dir, prompt, { graphService, store: COMPLETIONS_STORE });
+    const groups = groupHits(hits, { store: COMPLETIONS_STORE });
     out[prompt] = groups.map((g) => ({ id: g.id, memberIds: g.memberIds, label: g.label }));
   }
   return out;
@@ -109,9 +110,9 @@ test("groupHits(): every group carries member ids PLUS a human-inspectable label
   const dir = await tmpRepo();
   try {
     await seedBlocks(dir);
-    const hits = await broadSearch(dir, "what does the Store class do", { graphService: null });
+    const hits = await broadSearch(dir, "what does the Store class do", { graphService: null, store: COMPLETIONS_STORE });
     assert.ok(hits.length > 0, "the seeded block corpus must produce block hits for this prompt");
-    const groups = groupHits(hits);
+    const groups = groupHits(hits, { store: COMPLETIONS_STORE });
     assert.ok(groups.length > 0);
     for (const g of groups) {
       assert.ok(Array.isArray(g.memberIds) && g.memberIds.length > 0, "every group has real member ids");
@@ -133,12 +134,12 @@ test("groupHits(): connected components — blocks that share vocabulary cluster
     await seedBlocks(dir);
     // A broad-enough prompt/k to pull in the whole seeded corpus, so this test exercises the
     // clustering shape directly rather than depending on retrieval ranking cutting anything.
-    const hits = await broadSearch(dir, "store task user logger http lunch", { blockK: Object.keys(BLOCK_CORPUS).length });
+    const hits = await broadSearch(dir, "store task user logger http lunch", { blockK: Object.keys(BLOCK_CORPUS).length, store: COMPLETIONS_STORE });
     const ids = new Set(hits.map((h) => h.id));
     assert.ok(["blk-store-1", "blk-store-2", "blk-store-3", "blk-logger-1", "blk-logger-2", "blk-lunch"].every((id) => ids.has(id)),
       "the broad prompt must retrieve the whole seeded corpus for this shape assertion to be meaningful");
 
-    const groups = groupHits(hits);
+    const groups = groupHits(hits, { store: COMPLETIONS_STORE });
     const groupOf = (id) => groups.find((g) => g.memberIds.includes(id));
 
     const storeGroup = groupOf("blk-store-1");
@@ -160,7 +161,7 @@ test("groupHits(): connected components — blocks that share vocabulary cluster
 test("broadSearch(): block-only (no graphService) is still a valid, honest broad search — never throws, [] on no match", async () => {
   const dir = await tmpRepo();
   try {
-    const hits = await broadSearch(dir, "anything at all", { graphService: null });
+    const hits = await broadSearch(dir, "anything at all", { graphService: null, store: COMPLETIONS_STORE });
     assert.deepEqual(hits, [], "an empty block corpus honestly returns no hits, never a guess");
   } finally {
     await rm(dir, { recursive: true, force: true });
@@ -172,8 +173,8 @@ test("broadSearch(): an empty/blank query returns [] without touching either sou
   try {
     await seedBlocks(dir);
     const graphService = await graphServiceForMiniWebapp();
-    assert.deepEqual(await broadSearch(dir, "", { graphService }), []);
-    assert.deepEqual(await broadSearch(dir, "   ", { graphService }), []);
+    assert.deepEqual(await broadSearch(dir, "", { graphService, store: COMPLETIONS_STORE }), []);
+    assert.deepEqual(await broadSearch(dir, "   ", { graphService, store: COMPLETIONS_STORE }), []);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -183,7 +184,7 @@ test("broadSearch(): with a graphService, real graph search()/ask() hits are inc
   const dir = await tmpRepo();
   try {
     const graphService = await graphServiceForMiniWebapp();
-    const hits = await broadSearch(dir, "Store", { graphService });
+    const hits = await broadSearch(dir, "Store", { graphService, store: COMPLETIONS_STORE });
     assert.ok(hits.some((h) => h.source === "graph-search"), "graph search() results are included");
     assert.ok(hits.every((h) => ["block", "graph-search", "graph-ask"].includes(h.source)));
   } finally {
@@ -192,6 +193,6 @@ test("broadSearch(): with a graphService, real graph search()/ask() hits are inc
 });
 
 test("groupHits(): [] in -> [] out (no crash on an empty hit list)", () => {
-  assert.deepEqual(groupHits([]), []);
-  assert.deepEqual(groupHits(null), []);
+  assert.deepEqual(groupHits([], { store: COMPLETIONS_STORE }), []);
+  assert.deepEqual(groupHits(null, { store: COMPLETIONS_STORE }), []);
 });

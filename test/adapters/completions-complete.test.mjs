@@ -1,6 +1,12 @@
-// completions-complete.test.mjs — end-to-end verification for src/domain/completions/complete.mjs's
-// generateCompletion(), with the pipeline's exit criterion made concrete: "A full end-to-end completion reads as one consistent voice and every sentence
-// traces to a source span."
+// completions-complete.test.mjs — end-to-end verification for generateCompletion(), with the
+// pipeline's exit criterion made concrete: "A full end-to-end completion reads as one
+// consistent voice and every sentence traces to a source span."
+//
+// Driven through src/services/completions.mjs, the composition root that builds the real
+// memory/block store and prose finisher and hands them to the pure stages under
+// src/domain/completions/. That is the same wiring live chat and the published
+// `./generateCompletion` subpath both go through, so this suite exercises the real assembly
+// rather than a store the test invented.
 //
 // Fixture, deliberately built the same way test/adapters/completions-stage0.test.mjs and
 // test/adapters/completions-infer.test.mjs each build their own (a throwaway saveBlock() corpus + a
@@ -30,7 +36,7 @@ import { join } from "node:path";
 
 import { saveBlock } from "../../src/adapters/memory/blocks.mjs";
 import { appendFact, loadMemory } from "../../src/adapters/memory/core.mjs";
-import { generateCompletion } from "../../src/domain/completions/complete.mjs";
+import { generateCompletion } from "../../src/services/completions.mjs";
 
 async function tmpRepo() {
   return mkdtemp(join(tmpdir(), "tmct-completions-complete-"));
