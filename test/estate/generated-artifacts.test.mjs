@@ -1,0 +1,70 @@
+// The repo commits build outputs and then ships them: `npm publish` packs the
+// committed file, and the Pages job inlines it into the deployed ledger page
+// without rebuilding. So a committed artifact that has fallen behind its source
+// is what real users get, and nothing else notices — the bundle's own e2e tests
+// pass on a stale build, because a stale build still exists, still evaluates and
+// still answers. This rebuilds and compares.
+//
+// Rebuilding into a temp dir keeps the tracked file untouched, so a failure here
+// reports drift rather than quietly papering over it, and names the command that
+// fixes it.
+//
+// Only mechanically-generated files belong here. The other committed JSON under
+// src/ (answer-variants.json, grammar/lexicon-core.json) is hand-curated — its
+// scripts audit or add to it and cannot reproduce it, so there is nothing to
+// compare against and no guard to write.
+
+import test from "node:test";
+import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { createHash } from "node:crypto";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const repoRoot = path.resolve(fileURLToPath(import.meta.url), "..", "..", "..");
+const sha = (buf) => createHash("sha256").update(buf).digest("hex");
+
+test("the committed ask bundle is what its source builds today", () => {
+  const rel = "surfaces/web/memory-ask-browser.bundle.js";
+  const committed = path.join(repoRoot, "src", rel);
+  const out = mkdtempSync(path.join(tmpdir(), "tmct-bundle-freshness-"));
+  try {
+    execFileSync("node", [path.join(repoRoot, "scripts", "build-ask-bundle.mjs")], {
+      cwd: repoRoot,
+      env: { ...process.env, TMCT_ASK_BUNDLE_OUT: out },
+      stdio: "pipe",
+    });
+    assert.equal(
+      sha(readFileSync(path.join(out, rel))),
+      sha(readFileSync(committed)),
+      `src/${rel} has drifted from its source — run \`npm run build:ask-bundle\` and commit the result.\n`
+        + "It is packed by npm publish and inlined into the deployed ledger page as-is, so a stale "
+        + "commit ships stale code to real users.",
+    );
+  } finally {
+    rmSync(out, { recursive: true, force: true });
+  }
+});
+
+test("the committed ACE surface variants are what their generator produces today", () => {
+  const out = mkdtempSync(path.join(tmpdir(), "tmct-variants-freshness-"));
+  try {
+    execFileSync("node", [
+      path.join(repoRoot, "scripts", "generate-template-variants.mjs"),
+      "--out", path.join(out, "ace-surface-variants.jsonl"),
+    ], { cwd: repoRoot, stdio: "pipe" });
+    // The generator writes its manifest beside whatever --out names, so both land here.
+    for (const name of ["ace-surface-variants.jsonl", "manifest.json"]) {
+      assert.equal(
+        sha(readFileSync(path.join(out, name))),
+        sha(readFileSync(path.join(repoRoot, "corpus", "generated", name))),
+        `corpus/generated/${name} has drifted from its generator — run `
+          + "`node scripts/generate-template-variants.mjs` and commit the result.",
+      );
+    }
+  } finally {
+    rmSync(out, { recursive: true, force: true });
+  }
+});

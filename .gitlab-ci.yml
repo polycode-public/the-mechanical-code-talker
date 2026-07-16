@@ -211,6 +211,12 @@ pages:
   script:
     - echo "publishing public/ to GitLab Pages"
     - npm ci
+    # demo:build INLINES the ask bundle into ledger.html rather than building it, so
+    # without this the deployed chat dock would run whatever bundle was last committed
+    # by hand. Rebuilding here means the page always matches main.
+    # test/estate/generated-artifacts.test.mjs is what keeps the committed copy honest
+    # for `npm publish`, which packs the file itself.
+    - npm run build:ask-bundle
     # Literal, unmodified copies of the browser-clean engine sources into
     # public/engine/ (mirroring src/'s own directory structure so their relative
     # `import`s keep resolving) + a freshly regenerated public/demo-graph.json — see
