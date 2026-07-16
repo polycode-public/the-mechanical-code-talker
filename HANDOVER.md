@@ -21,6 +21,23 @@ download, not reachable from data in hand).
 Logged by the 2.0.3 benchmark cycle, which measured all four axes and applied no lever. Each
 line names its reproducer and points at the write-up that found it.
 
+- **The fronted-agent passive answers the inverse, confidently** — `by which modules is
+  app/lib/b.mjs imported` answers `app/lib/a.mjs.` (expected `app/functions/d/handler.mjs`), because
+  it compiles to `forward(imports, "app/lib/b.mjs")` where the question asked for reverse. Tier-1
+  (deterministic) PASS → FAIL vs `BENCHMARK_CEFR_ENGLISH_1.8.0.md` on `g-b2-passive-8` and
+  `g-b2-passive-10`. Bisected to `98df45a fix(ask): the passive keeps its agent…`, which replaced a
+  "wh-word after *by* means the agent is questioned → reverse" test with a "patient before *by*,
+  agent after *by*" partition. That partition assumes a postposed agent (`X is imported by Y`); when
+  the agent is fronted, the patient sits after "by", is read as the agent, and "agent alone → forward"
+  fires. `g-b2-passive-10` degrades to a miss; `g-b2-passive-8` gives a confident wrong answer, which
+  is the worse half. See `BENCHMARK_CEFR_ENGLISH_2.0.3.md`.
+- **CHATBENCH is blind to 14 of the 23 construction shapes** — the default `graded-pool.jsonl` covers
+  9 shapes / 12 of 36 grade×construction cells, so conditional, coordination-compositional,
+  discourse-deixis, ellipsis, garden-path, presupposition, quantifier-counting, relative-embedded,
+  subordination and five combination cells are unmeasured on every CEFR report to date.
+  `chatbench/graded-pool-max.jsonl` holds all 36; the per-cell floor (`MIN_PER_CELL = 5`) makes the
+  lightest full-coverage run 315 cases. A blind spot is where the next `98df45a` lands unnoticed.
+  See `BENCHMARK_CEFR_ENGLISH_2.0.3.md`.
 - **The resolver floor stopped planning `ab-c2-what-to-test`** — `node agentbench/run.mjs
   --driver resolver --ladder`: the case's verdict went `completed: true` → `false` since
   `BENCHMARK_AGENT_1.7.0.md`, taking C2 plan-completion 36% → 27%. Probably correct (its plan now
