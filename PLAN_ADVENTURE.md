@@ -1,29 +1,39 @@
 # PLAN_ADVENTURE.md — a text-adventure game as a fourth architectural stretch, validated against a country-house mystery
 
-Status: RESEARCH / DESIGN — not yet implemented. Nothing in this document is live code.
+Status: RESEARCH / DESIGN. Two of the four gaps this document originally designed have since
+shipped generically; this document now scopes the pieces still unbuilt (the imperative command
+grammar, the NPC turn scheduler, the Ashcombe Hall corpus, and the room-look digest) on top of
+that shipped substrate.
 
-**A different, already-live planning capability, for contrast.** This document's four gaps (an
-imperative command grammar, snapshot-per-step player/world state, actions-as-graph-data via a new
-`RULE_KIND_ACTION`, an NPC turn scheduler) are all unbuilt, exactly as below. Separately,
-`src/router/*` — a STRIPS/PDDL planner over read-only graph-QUERY tools, not world-mutating
-actions — is now invokable directly: `tmct plan "<request>"`, chat's `/plan`, or the `./plan`
-library export (`CAPABILITIES_1.7.3.md` row 99). It composes/executes compound or maintenance-goal
-requests against a static code graph ("of the modules impacted by X, which are untested") — it
-does not read or write Ashcombe Hall's world state, has no notion of an imperative verb, and cannot
-run Gap 4's NPC scheduler. Named here only so a reader who knows the router shipped doesn't assume
-this document's own game did too.
+**What shipped since this document was written.**
+
+- Mutable turn-by-turn world state as graph facts (this document's Gap 2) shipped as per-step
+  board snapshots (`board@step1…N`), written through ordinary `appendFact` and executed by the
+  "next" command (`PLAN_NEXT_RE` in `src/chat.mjs`). The river-crossing rows in
+  `test/corpus/planning.jsonl` validate it end to end.
+- Actions as taught, graph-resident data with precondition checks before firing (Gap 3) shipped
+  richer than proposed here: four action rule kinds (`RULE_KIND_ACTION_SIGNATURE` /
+  `RULE_KIND_ACTION_PRECOND` / `RULE_KIND_ACTION_EFFECT` / `RULE_KIND_ACTION_CONSTRAINT` in
+  `src/memory/core.mjs`), live teach frames (the ACTION-RULE TEACH FRAMES in `src/chat.mjs`),
+  legal-move enumeration with constraint pruning (`movesFromRules` in `src/domain.mjs`), and
+  plan search (`findActionPath` / `findReachableSet` in `src/planning.mjs`).
+- Taught action families register as capability records the router executes
+  (`src/router/taught.mjs`; chat's `/plan`; `tmct plan "<request>"`). World-mutating actions now
+  flow through the router, alongside the read-only graph-QUERY tools it started with.
+
+Ashcombe Hall builds ON this substrate. Nothing below redesigns it.
 
 ## Origin
 
 2026-07-11 session. The operator asked how close tmct is to something like the 1982 game The
 Hobbit — famous for a graph-shaped world, an imperative parser, and NPCs that acted on their own
-between the player's turns. The honest answer at the time: tmct already has the right substrate (a
-taught, queryable fact graph, deterministic parsing, and — from this session's persona work — real
-place/object/person vocabulary), but three things are missing: an imperative command grammar, a
+between the player's turns. The answer at the time: tmct already had the right substrate (a
+taught, queryable fact graph, deterministic parsing, and — from that session's persona work — real
+place/object/person vocabulary), but three things were missing: an imperative command grammar, a
 mutable turn-by-turn world/player state, and an NPC turn scheduler. The operator then asked for a
-plan doc in the spirit of `archive/PLAN_HANOI.md`/`PLAN_GUESS_NUMBER.md` — a genuine architectural stretch
-with a concrete, measurable success criterion, not an open-ended feature wishlist — with two hard
-constraints carried over verbatim from the operator's own framing:
+plan doc in the spirit of `archive/PLAN_HANOI.md`/`PLAN_GUESS_NUMBER.md` — a genuine architectural
+stretch with a concrete, measurable success criterion, not an open-ended feature wishlist — with
+two hard constraints carried over verbatim from the operator's own framing:
 
 > actions [are] things in the graph to be rationalised about before execution (not a hard wired
 > tool set) ... the state of the player/visitor needs to be maintained ... this should also be just
@@ -36,14 +46,14 @@ This document is the third in the "architectural stretch" family, alongside `arc
 three validate a piece of "be an agent" — Hanoi validates *executing a precomputed plan*, the
 number-guessing game validates *sensing and replanning*, and this document validates *the world
 itself changing in response to actions, some of which the agent didn't take* (NPC autonomy). It is
-also the first of the three to require a genuinely NEW parsing capability (imperative commands)
+also the only one of the three to need a genuinely NEW parsing capability (imperative commands)
 rather than reusing the ACE declarative/question grammar as-is.
 
 ## Why a country-house mystery, not fantasy
 
 The world is a small, original English country house — Ashcombe Hall — invented for this document,
-no references to any existing book, game, or IP. This choice is deliberate, not decorative: this
-session's persona batch (`archive/PLAN_SEED.md`) already built a genuine, curated everyday-knowledge
+no references to any existing book, game, or IP. This choice is deliberate, not decorative: the
+persona batch (`archive/PLAN_SEED.md`) already built a genuine, curated everyday-knowledge
 vocabulary (`corpus/tier2/human.jsonl`, `src/grammar/lexicon-core.json`'s `human-core`/
 `human-places`/`human-objects` clumps) — rooms, roles, household objects. Grounding the game world in
 that same lexicon tests grammar already in scope, in the spirit of this project's own standing
@@ -51,99 +61,78 @@ preference for closed-set templates over general rules (`[[tmct-prefers-template
 in operator memory, and `CLAUDE.md`'s own "templates over general rules"). Overfitting to a small,
 well-understood vocabulary is the point (formulaic competence); overfitting to a disconnected
 fantasy lexicon (orcs, goblins, generic dungeon-crawl nouns) would test nothing this codebase
-already has reason to know. Confirmed directly against the real corpus before writing this doc: of
-the world's core nouns, `cook`, `key`, `letter`, `cabinet`, `study`, `library`, `kitchen`, `garden`,
-`cellar`, `door`, `room`, `house`, `drawer`, `box`, `table`, `shelf`, `window` are **already**
-declared nouns in `src/grammar/lexicon-core.json`; only `butler`, `housekeeper`, `gardener`, `lamp`,
-`portrait`, `desk` need adding. `corpus/tier2/human.jsonl` already carries real background facts
-this world can build straight on — e.g. `cook AtLocation kitchen`, `kitchen IsA room`, `library IsA
-place`, `library HasA book`, `library UsedFor reading` (all verified by direct grep, not assumed).
-None of the imperative verbs this doc needs (`go`, `open`, `unlock`, `close`, `look`) are declared
-yet; `take` and `give` already are.
+already has reason to know. Confirmed directly against the real corpus: of the world's core nouns,
+`cook`, `key`, `letter`, `cabinet`, `study`, `library`, `kitchen`, `garden`, `cellar`, `door`,
+`room`, `house`, `drawer`, `box`, `table`, `shelf`, `window` are **already** declared nouns in
+`src/grammar/lexicon-core.json`; only `butler`, `housekeeper`, `gardener`, `lamp`, `portrait`,
+`desk` need adding. `corpus/tier2/human.jsonl` already carries real background facts this world can
+build straight on — e.g. `cook AtLocation kitchen`, `kitchen IsA room`, `library IsA place`,
+`library HasA book`, `library UsedFor reading` (all verified by direct grep, not assumed). None of
+the imperative verbs this doc needs (`go`, `open`, `unlock`, `close`, `look`) are declared yet;
+`take` and `give` already are.
 
-## The four architectural gaps, and what tmct already has for each
+## The four architectural gaps: two shipped, two open
 
-### Gap 1 — an imperative command grammar
+### Gap 1 — an imperative command grammar (open)
 
-`src/grammar/ace.mjs` (375 lines) has exactly 8 patterns today, all declarative or interrogative:
+`src/grammar/ace.mjs` (~480 lines) has nine patterns today, all declarative or interrogative:
 Pattern 1 (universal ISA, `parseEvery`), Pattern 2 (class assertion, `parseCopula`), Pattern 3
 (`N1 VERB N2` relation, `parseRelation`), Pattern 4 (someValuesFrom restriction, `parseRestriction`),
 Pattern 5 (cardinality, `parseCardinality`), Pattern 6 (disjointWith, `parseDisjoint`), Pattern 7
 (possessive/of-form, `parsePossessive`/`parseOfForm`), Pattern 8 (copula adjective, folded into
-Patterns 1/4/5's "every ..." arm and `parseCopula`'s copula arm). None of them parse an imperative
-sentence with no stated subject ("go north," "take the key") — every existing pattern requires an
-explicit subject noun phrase. This is a real, new grammar surface, not a missing case of an existing
-one.
+Patterns 1/4/5's "every ..." arm and `parseCopula`'s copula arm), and Pattern 9 ("N can VERB" →
+`mgx:capableOf`, `parseCapability`). None of them parse an imperative sentence with no stated
+subject ("go north," "take the key") — every existing pattern requires an explicit subject noun
+phrase. `lexicon-core.json` carries an empty `"imperative"` stub and nothing more; no
+`parseImperative` exists anywhere in the tree. This is a real, new grammar surface, not a missing
+case of an existing one.
 
-### Gap 2 — mutable turn-by-turn state, with no special player-state store
+### Gap 2 — mutable turn-by-turn state, no special player-state store (shipped; reuse it)
 
-Confirmed directly: `src/memory/core.mjs`'s `appendFact(dir, {subject, predicate, object, ...})`
-(line 1157) is **content-addressed and additive** — re-asserting the same triple upserts in place,
-but a DIFFERENT object for the same `(subject, predicate)` produces a second, coexisting Fact
-individual (`archive/PLAN_HANOI.md` §3 already established this precisely, for the same reason: no
-retraction primitive exists anywhere in the codebase, confirmed again this session with
-`grep -rn retract src/` — still nothing). `archive/PLAN_HANOI.md` solved this for board state via
-snapshot-per-step (never mutate, always append a fresh timestamped fact). This document reuses that
-exact convention for player/world state: `player currentlyIn library@turn7` rather than mutating a
-`player currentlyIn library` fact in place. The operator's own framing — "a node in the graph maps
-to the player and the player's location is then just a property" — is honoured literally: the player
-is one ordinary individual (e.g. `mgx:player`), and `currentlyIn`/`carries`/`hasVisited` are ordinary
-taught-fact predicates on that node, read back through the exact same `readFactRows(memory)`
-(`core.mjs:1629`) every other feature already uses. No new store, no new schema table — only a
-snapshot-write convention, which is already precedented.
+Shipped generically as the snapshot-per-step convention this document proposed: never mutate,
+always append a fresh per-step fact through the ordinary `appendFact` path, read back through the
+same `readFactRows(memory)` every other feature uses. The "next" command (`PLAN_NEXT_RE` in
+`src/chat.mjs`) executes one plan step and writes the `board@stepN` snapshot; the river-crossing
+rows in `test/corpus/planning.jsonl` check every intermediate board against the written facts.
+Ashcombe Hall reuses this as-is: the player is one ordinary individual (e.g. `mgx:player`), and
+`currentlyIn`/`carries`/`hasVisited` are ordinary snapshot facts on that node
+(`player currentlyIn library@turn7`). The one piece still unbuilt is Ashcombe-specific: the
+room-look digest over `generateCompletion` (see Design detail).
 
-### Gap 3 — actions as graph-resident data, reasoned about before execution
+### Gap 3 — actions as graph-resident data, reasoned about before execution (shipped; reuse it)
 
-This is where `PLAN_TAUGHT_RELATIONS.md`'s Rule model (archived, all six items shipped) is the
-direct precedent the operator's framing is asking to extend. Confirmed directly in
-`src/memory/core.mjs`: `RULE_KINDS = Object.freeze([RULE_KIND_COMPOSE2, RULE_KIND_FILTER,
-RULE_KIND_RECURSIVE])` (line 1306), each with its own slot spec in `RULE_SLOT_SPEC` (line 1318, e.g.
-`compose2: [["base1", "mgx:ruleBase1"], ["base2", "mgx:ruleBase2"]]`), stored via
-`appendRule(dir, {name, kind, slots, provenance, createdAt})` (line 1356) and looked up via
-`findRuleByName(memory, name)` (line 1404) — a genuinely closed, extensible, self-documenting
-vocabulary of "things you can teach tmct to reason about," already proven to grow (three kinds
-shipped, each independently). This document proposes a **fourth Rule kind, `RULE_KIND_ACTION =
-"action"`**, with slots `[["verb", "mgx:ruleActionVerb"], ["precondition", "mgx:ruleActionPrecond"],
-["effect", "mgx:ruleActionEffect"]]` — an action is taught the same way a compose2/filter/recursive
-relation is taught today, stored as an ordinary Rule individual, never a hardcoded per-verb switch
-statement in `chat.mjs`. "Take" is not special-cased JS; it is a Rule named "take" with a
-precondition ("the object is in the player's current room, and is not fixed-in-place") and an effect
-("the object's `carriedBy` becomes the player"). A new command is teachable through chat the same way
-a new relation already is, per `PLAN_TAUGHT_RELATIONS.md`'s own precedent — the plan's own worked
-example below stays inside a small closed starter set (go/take/drop/open/unlock/give/look), but the
-mechanism itself is not closed to exactly those six.
+This document proposed one new rule kind, `RULE_KIND_ACTION`, with `[verb, precondition, effect]`
+slots. The shipped design is finer-grained: four action rule kinds in `src/memory/core.mjs` —
+`RULE_KIND_ACTION_SIGNATURE`, `RULE_KIND_ACTION_PRECOND`, `RULE_KIND_ACTION_EFFECT`,
+`RULE_KIND_ACTION_CONSTRAINT` (`RULE_KINDS` now has seven entries). An action is a named family of
+these rules, taught one sentence at a time through the ACTION-RULE TEACH FRAMES in `src/chat.mjs`,
+stored as ordinary Rule individuals, never a hardcoded per-verb switch. `movesFromRules`
+(`src/domain.mjs`) enumerates the legal moves a state allows and prunes with the taught
+constraints; `findActionPath`/`findReachableSet` (`src/planning.mjs`) search over them; each taught
+family also registers as a capability record the router consumes (`src/router/taught.mjs`,
+`/plan`). Ashcombe Hall's verbs (`go`, `take`, `drop`, `open`, `unlock`, `close`, `give`, `look`)
+are ordinary taught families on this mechanism. Nothing here needs a new kind or new storage.
 
-**Evaluating a precondition before firing** reuses `resolveRelationChase`'s own dispatch discipline
-(`memory/core.mjs`, generic over "is this base a plain relation or another Rule," per
-`PLAN_TAUGHT_RELATIONS.md` Phase 5's note) rather than inventing a second reasoning engine: a
-precondition is itself expressed as an ordinary fact/relation check against the CURRENT graph state
-(does `key carriedBy player` hold, or does `door isLockedBy key` fail to hold), evaluated through the
-same fact-lookup machinery `factReadBack`'s existing `(a0)` block already uses. `src/syllogise.mjs`'s
-budget/focus/deterministic-order discipline (the same convention `archive/PLAN_HANOI.md` §2 already
-identified as reusable-by-analogy) governs how far a precondition check is allowed to chase before
-giving an honest "you can't do that yet" rather than hanging or guessing.
+### Gap 4 — an NPC turn scheduler (open; the hardest genuinely new piece)
 
-### Gap 4 — an NPC turn scheduler (the hardest, most genuinely new piece)
-
-tmct today is purely reactive: `runTurn`/`runAsk` only ever run in response to a line of input, never
-on their own initiative — confirmed by reading `createSession`'s handle shape (`chat.mjs`, same
-`focus`/`last` closure-variable relay `PLAN_GUESS_NUMBER.md` §1 already documented in detail): there
-is no timer, no background loop, nothing that calls back into the graph without a `turn(line)` call
-first. This document proposes the minimal honest version of autonomy that fits that constraint
+tmct today is purely reactive: the planner and everything else run only in response to a line of
+input, inside `turn(line)` — confirmed by reading `createSession`'s handle shape (`src/chat.mjs`,
+the same `focus`/`last` closure-variable relay `PLAN_GUESS_NUMBER.md` §1 documented). There is no
+turn counter, no timer, no background loop; nothing calls back into the graph without a `turn(line)`
+call first. This document proposes the minimal honest version of autonomy that fits that constraint
 without inventing a live process: **each player command that actually changes world state (a
 successful action, not a look/inventory query) is followed by exactly one bounded NPC-evaluation
-pass**, run synchronously inside the SAME `turn()` call, immediately after the player's own effect is
-written. The pass walks every NPC individual in the graph (a small, fixed cast — see the world design
-below), checks each NPC's own taught action Rules (the SAME `RULE_KIND_ACTION` mechanism Gap 3
-defines — an NPC's "routine" is not special code, it is a Rule whose subject happens to be an NPC
-instead of the player) against current state, and fires the first one whose precondition now holds
-and whose own scheduling fact (e.g. `housekeeper actsOnTurn 3`) matches the current turn count. This
-is honestly a **scripted-by-data, not emergent**, form of autonomy — closer to The Hobbit's own
-reality (its "Inference Engine" was itself a fixed rule table over NPC moods, not free simulation)
-than to a general planner. That is what this design delivers; real emergent NPC behaviour (an NPC
-that *plans* its own actions via `findActionPath`, `src/planning.mjs:94`, the same kernel
-`archive/PLAN_HANOI.md` built) is a further tier this document doesn't design — the kernel it would build
-on already exists.
+pass**, run synchronously inside the SAME `turn()` call, immediately after the player's own effect
+is written. The pass walks every NPC individual in the graph (a small, fixed cast — see the world
+design below), checks each NPC's own taught action families (the same shipped mechanism Gap 3 now
+points to — an NPC's "routine" is not special code, it is a taught action family whose subject
+happens to be an NPC instead of the player) against current state, and fires the first one whose
+precondition now holds and whose own scheduling fact (e.g. `housekeeper actsOnTurn 3`) matches the
+current turn count. This is honestly a **scripted-by-data, not emergent**, form of autonomy —
+closer to The Hobbit's own reality (its "Inference Engine" was itself a fixed rule table over NPC
+moods, not free simulation) than to a general planner. Real emergent NPC behaviour (an NPC that
+plans its own path with `findActionPath`) is a further tier this document doesn't design; the
+search it needs already runs in live goal-solving, so that tier would build on shipped code.
 
 ## The world: Ashcombe Hall
 
@@ -198,59 +187,53 @@ whether or not the player witnessed it. This mirrors Hanoi's own bar: not "did i
 
 ### The imperative grammar pattern (Gap 1)
 
-One new ACE pattern, alongside the existing 8, not folded into any of them (their shapes assume a
-subject; this one doesn't). A closed starter verb set — `go`, `take`, `drop`, `open`, `unlock`,
+One new ACE pattern, alongside the existing nine, not folded into any of them (their shapes assume
+a subject; this one doesn't). A closed starter verb set — `go`, `take`, `drop`, `open`, `unlock`,
 `close`, `give`, `look` — parsed as `{ verb, object?, indirectObject?, direction? }` (`"unlock the
 cabinet with the key"` → `{verb: "unlock", object: "cabinet", instrument: "key"}`; `"go north"` →
-`{verb: "go", direction: "north"}`). This does NOT resolve to an OWL triple the way Patterns 1-8 do —
-an imperative has no truth value to assert, it has an ACTION NAME to look up via `findRuleByName`
-(Gap 3). The parser's output shape is closer to `parseCardinality`'s already-structured (non-triple)
-return than to `parseRelation`'s triple — precedent already exists in the same file for "a pattern
-that doesn't produce a plain subject-predicate-object fact."
+`{verb: "go", direction: "north"}`). This does NOT resolve to an OWL triple the way the other
+patterns do — an imperative has no truth value to assert, it has an ACTION NAME to resolve against
+the taught action families Gap 3 already ships. The parser's output shape is closer to
+`parseCardinality`'s already-structured (non-triple) return than to `parseRelation`'s triple —
+precedent already exists in the same file for "a pattern that doesn't produce a plain
+subject-predicate-object fact."
 
-### The action Rule kind (Gap 3) — precise slot design
+### The action rules (Gap 3) — reuse the shipped mechanism
 
-```
-RULE_KIND_ACTION = "action"
-RULE_SLOT_SPEC[RULE_KIND_ACTION] = [
-  ["verb", "mgx:ruleActionVerb"],
-  ["precondition", "mgx:ruleActionPrecond"],   // a relation-check expression (see below)
-  ["effect", "mgx:ruleActionEffect"],          // a snapshot-fact template (see below)
-]
-```
+This document's original single-kind slot design is superseded. The shipped vocabulary
+(`RULE_KIND_ACTION_SIGNATURE`/`PRECOND`/`EFFECT`/`CONSTRAINT`, `src/memory/core.mjs`) already
+stores structure, never prose: a signature names the verb and its slots, preconditions and effects
+are separate rule individuals in the same named family, and constraints prune illegal moves. The
+game teaches its starter verbs through the existing teach frames in `src/chat.mjs`. If one of
+Ashcombe's actions needs a precondition shape the shipped vocabulary can't express, Phase 2
+surfaces that as a concrete gap in the shipped mechanism, not a new design here.
 
-A precondition is stored as a small closed expression shape (subject-slot, predicate, object-slot,
-polarity — "must hold" or "must NOT hold"), not free text — mirroring `RULE_SLOT_SPEC`'s own existing
-discipline of storing STRUCTURE, never prose, in a Rule's slots. An effect is a template for the
-snapshot fact to append (`{subject: "$object", predicate: "carriedBy", object: "$player"}` for take,
-substituting the actual parsed object/player ids at execution time). Both are intentionally minimal —
-this is not a general programming language, it is the smallest closed vocabulary that can express
-Ashcombe Hall's own six actions, matching this project's own "breadth over depth, closed-set over
-general rules" discipline everywhere else.
-
-### The player-state digest (Gap 2, "no special player state store")
+### The player-state digest (Gap 2 residue, "no special player state store")
 
 `"look"` and `"what am I carrying"` do NOT get hand-written room-description templates. They call
 `generateCompletion(dir, playerLocationLabel, { query: playerLocationLabel, memory, graph, graphService
 })` exactly as `src/completions/complete.mjs` already defines it, letting Stage 1's `broadSearch`
 (via `createCompletionsGraphAdapter`, `src/completions/graph-adapter.mjs`) surface every taught fact
-whose subject or object mentions the current room (`readFactRows(memory)`, the adapter's own `.ask()`
-already does exactly this term-matching search, confirmed by rereading `graph-adapter.mjs:97-105`).
-"What am I carrying" is the same call with `query = playerId` instead of the room label. This is
-genuinely just pointing the existing extractive pipeline at a different query term — no new
-digest/rendering code, matching the operator's explicit instruction not to build a bespoke player
-summarizer. The one real risk, named honestly: `pruneCompletion`'s top-K-per-group cutoff
-(`DEFAULT_MAX_SENTENCES_PER_GROUP = 3`, `complete.mjs:54`) could silently drop a fact that matters for
-correctness (e.g. the locked-cabinet fact, if it's competing with other room-facts for the top-3
-slot) — Phase 2 below must verify this concretely against the real worked example, not assume it away.
+whose subject or object mentions the current room — the adapter's own `.ask()` already does exactly
+this term-matching search over `readFactRows(memory)`. "What am I carrying" is the same call with
+`query = playerId` instead of the room label. This is genuinely just pointing the existing
+extractive pipeline at a different query term — no new digest/rendering code, matching the
+operator's explicit instruction not to build a bespoke player summarizer. An adjacent shipped
+mechanism worth knowing about: taught `mgx:rendersAs` bindings already drive the plan lane's board
+digest (the render-binding teach frame in `src/chat.mjs`, consumed by `src/plan-viz.mjs`), so a
+room rendering has a second precedented path if the extractive digest falls short. The one real
+risk, named plainly: `pruneCompletion`'s top-K-per-group cutoff (`DEFAULT_MAX_SENTENCES_PER_GROUP`
+in `src/completions/complete.mjs`) could silently drop a fact that matters for correctness (e.g.
+the locked-cabinet fact, if it's competing with other room-facts for the top-K slots) — Phase 3
+below must verify this concretely against the real worked example, not assume it away.
 
 ### The NPC scheduler (Gap 4) — precise mechanism
 
 A turn counter (`mgx:turnNumber` on a small session-scoped Turn individual, incremented by one on
 every state-changing player command — queries like "look" do not advance it). After the player's own
 effect is written, one bounded pass: for each NPC individual tagged `mgx:isNpc`, check its own taught
-`action`-kind Rules whose `precondition` includes an `actsOnTurn` match against the current counter;
-fire the first one that both matches the turn AND passes its stated precondition, writing its effect
+action families whose preconditions include an `actsOnTurn` match against the current counter; fire
+the first one that both matches the turn AND passes its stated precondition, writing its effect
 via the same snapshot-append convention as the player's own actions. This pass is capped at one fired
 action per NPC per turn (never a cascade) and is fully deterministic (NPCs are walked in a fixed,
 sorted order; ties are impossible by construction since each NPC's own Rules are turn-scoped to a
@@ -260,7 +243,7 @@ throughout.
 ## Staged build plan
 
 *(Mirrors `archive/PLAN_HANOI.md`/`PLAN_GUESS_NUMBER.md`'s own phase-writing convention: numbered,
-independently testable, `npm test` green throughout, nothing here implemented yet.)*
+independently testable, `npm test` green throughout.)*
 
 **Phase 1 — World corpus + missing lexicon.** Add `butler`/`housekeeper`/`gardener`/`lamp`/`portrait`/
 `desk` to `lexicon-core.json`; add Ashcombe Hall's rooms/exits/objects/roles as `corpus/tier2/
@@ -269,18 +252,19 @@ adventure.jsonl` (new tier-2 bundle, inactive by default, activated the same way
 adventure` (or equivalent) seeds a graph where every room/object/role from the worked example is a
 real individual, confirmed by direct query, zero grammar/scheduler code touched yet.
 
-**Phase 2 — The imperative grammar pattern + `RULE_KIND_ACTION` storage.** The new ACE pattern (Gap
-1) and the fourth Rule kind (Gap 3), unit-tested purely (parse → structured command; teach → stored
-Rule; no chat wiring, no player-state writes yet). Exit criterion: all six starter verbs parse
-correctly, and a hand-authored action Rule for each round-trips through `appendRule`/`findRuleByName`
-unchanged.
+**Phase 2 — The imperative grammar pattern.** The new ACE pattern (Gap 1), unit-tested purely
+(parse → structured command; no chat wiring, no player-state writes yet). Action storage already
+shipped, so this phase also teaches each Ashcombe action through the existing teach frames and
+confirms `movesFromRules` enumerates it. Exit criterion: all starter verbs parse correctly, and
+every Ashcombe action family round-trips through the shipped teach/lookup path unchanged.
 
-**Phase 3 — Player-state-as-facts + the digest.** The snapshot-per-step player/world state convention
-(Gap 2) and the `generateCompletion`-driven "look"/"inventory" digest, wired into chat but with NO NPC
-autonomy yet (single-player, fully player-driven). Exit criterion: the worked example's command
-sequence runs correctly end to end MINUS the housekeeper's turn-3 move, with every precondition
-failure honestly declined (the "take the portrait" step in particular — a real negative case, not
-just the happy path).
+**Phase 3 — Player-state wiring + the digest.** Wire parsed imperatives to fire their taught action
+family and write player/world snapshot facts (the shipped Gap 2 convention), plus the
+`generateCompletion`-driven "look"/"inventory" digest — chat-wired but with NO NPC autonomy yet
+(single-player, fully player-driven). Exit criterion: the worked example's command sequence runs
+correctly end to end MINUS the housekeeper's turn-3 move, with every precondition failure honestly
+declined (the "take the portrait" step in particular — a real negative case, not just the happy
+path).
 
 **Phase 4 — The NPC scheduler.** Gap 4's turn-counted pass, the housekeeper's turn-3 Rule as the
 first (and, for this validation, only) NPC action. Exit criterion: the FULL worked example above
@@ -295,10 +279,11 @@ loop" abstraction is warranted — same explicit deferral `archive/PLAN_HANOI.md
 
 ## Open risks / questions
 
-- **Precondition-expression coverage.** The closed (subject-slot, predicate, object-slot, polarity)
-  shape covers Ashcombe Hall's six actions; conjunctions/disjunctions of multiple conditions and
-  "N of M" style checks are a further tier, not designed here — whether this validation's scope or
-  real usage forces that tier first is an open question the next game world answers.
+- **Precondition-expression coverage.** The shipped precond/constraint rule shapes already carry
+  the river crossing's co-travel constraints. Whether they express Ashcombe's fixed-in-place
+  decline ("take the portrait") and instrument checks ("unlock the cabinet with the key") is
+  Phase 2's first concrete question; a shape they can't express becomes a targeted extension to
+  the shipped vocabulary, designed then.
 - **Snapshot volume.** `archive/PLAN_HANOI.md` §3 already flagged snapshot-per-step's cost profile as fine at
   toy scale, expensive at larger ones. A full playthrough of Ashcombe Hall's worked example is ~12
   turns — trivial — but a much longer game would revisit this exactly as Hanoi's own doc already
@@ -320,12 +305,13 @@ loop" abstraction is warranted — same explicit deferral `archive/PLAN_HANOI.md
 ## Non-goals for this document
 
 - Not an implementation — no code changes land from this doc alone.
-- Not a general game engine — Ashcombe Hall is a validation harness for the four architectural gaps,
-  the same way Hanoi and the number-guessing game are validation harnesses, not products in their own
-  right.
+- Not a general game engine — Ashcombe Hall is a validation harness for the remaining architectural
+  gaps, the same way Hanoi and the number-guessing game are validation harnesses, not products in
+  their own right.
 - Not emergent/planning NPC behaviour — Gap 4's scheduler is explicitly scripted-by-data (a fixed
-  Rule table per NPC), not an NPC that plans its own path via `findActionPath`. A genuinely planning
-  NPC is a real, much larger follow-on, not attempted here.
+  Rule table per NPC), not an NPC that plans its own path. A genuinely planning NPC is a real,
+  larger follow-on tier; the `findActionPath` search it would use already runs in live
+  goal-solving, so the tier starts from shipped code when someone designs it.
 - Not a replacement for `archive/PLAN_HANOI.md`/`PLAN_GUESS_NUMBER.md` — a third, complementary validation of
   the same underlying "read state, reason about actions' effects, act, repeat" capability, from the
   angle neither of the other two covers (a world that changes for reasons other than the agent's own

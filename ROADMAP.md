@@ -46,16 +46,21 @@ getting silently traded away by inherited caution:
   follow-on. (b) growing the ACE grammar's free-form coverage past its measured 0/2,949-sentence
   baseline — §6's own stated non-goal was a harness + baseline + first generated batch, not closing
   the gap itself, which is met.
-- **`PLAN_ADVENTURE.md`** — a text-adventure architectural stretch: an imperative command grammar,
-  mutable turn-by-turn world/player state as ordinary graph nodes (no special player-state store),
-  and an NPC turn scheduler. Design-only.
-- **`PLAN_SYLLOGIST.md`** — retraction-aware consistency checking under a hard budget and trust
-  tiers, the one open piece of the reasoning engine's research horizon. Design-only.
+- **`PLAN_ADVENTURE.md`** — a text-adventure architectural stretch. Its world-state and
+  actions-as-data substrate shipped generically with the planning lane (action rule kinds,
+  per-step board snapshots, legal-move enumeration); what remains its own is the imperative
+  command grammar ("go north", "take the key"), the NPC turn scheduler, the Ashcombe Hall
+  corpus, and the room-look digest.
+- **`PLAN_SYLLOGIST.md`** — the reasoning engine's research horizon. The single-justification
+  retraction slice shipped (`retractSubClassOf`, justification persistence and cascade across all
+  five rules); still open there: the ATMS generalization (alternate justification sets per fact),
+  incremental matching (§2), and relevance under budget (§4).
 - **`archive/PLAN_HANOI.md`** — shipped in full, including the follow-ups: river-crossing (co-travel
   effects, the forbidden-together constraint frame, 7-crossing oracle) and planner-side
   consumption of `taught:` capability records (`/plan` in chat and bin). See its dated addenda.
-- **`PLAN_GUESS_NUMBER.md`** — the closed-loop (observe-and-replan) planning domain for the same
-  kernels. Design-only.
+- **`PLAN_GUESS_NUMBER.md`** — closed-loop planning over hidden state (belief-interval bisection,
+  thinker-mode secret commitment, observation folding) on top of the shipped planner substrate.
+  Design-only.
 - **`archive/PLAN_VIZ_LEDGER.md`** — shipped in full, including the follow-ups, all resolved by
   operator decision 2026-07-15: the ledger IS the `tmct viz` surface (node-link page removed),
   `factAnswer`/`factReadBack` carry the additive `goal` field the dock renders, multi-valued
@@ -88,8 +93,9 @@ citations, not stop signs:
 - **Bounded, incremental, trust-tiered, retraction-safe justification tracking** — `PLAN_SYLLOGIST.md`
   §3. Doyle's JTMS (1979) and de Kleer's ATMS (1986) solve retraction; DRed/RDFox's Backward-Forward
   solve incremental Datalog maintenance; nobody's published the combination with tmct's
-  multi-trust-tier, hard-budget requirement. Speculative angle: an ATMS-lite extension to
-  `syllogise.mjs`'s currently-flat provenance tag, sketched but unbuilt.
+  multi-trust-tier, hard-budget requirement. The JTMS-lite slice shipped (one persisted
+  justification per entailed fact, VERIFY-backed retraction, all five rules); the open piece is the
+  ATMS generalization — alternate justification SETS per fact (see that doc's 2026-07-15 addendum).
 - **A shared ~2M-word cross-domain ontology** (general-English + technical/scientific/programming).
   Merging collides senses of lexically-shared words (`class`, `cache`, `thread`, `field`, `state`)
   across registers; knowledge-based WSD is real but weaker than supervised/neural WSD (Lesk 1986;

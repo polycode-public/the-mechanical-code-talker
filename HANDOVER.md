@@ -86,14 +86,27 @@ Measured init sizes (fresh store, this machine): `init:large` 37,797 facts; `ini
 - **Untouched playtest axes** (for the next edge-hunt dispatch): contractions and cleft rungs
   of the paraphrase ladder; passive↔active beyond UsedFor and the rule signature.
 
+- **Closed-set gate coverage (a pattern, not one bug — mined from the strategy advisor's
+  2026-07-12 sweep).** Several dead-ends share one shape: the machinery that would answer
+  correctly exists, but a narrower closed-set gate in front of it rejects a valid input variant.
+  Two instances still live: `looksCodeish` (`src/chat.mjs`) flags any CamelCase compound as
+  code-ish and blocks the bare-meta-fact fallback that knows how to answer "what is X"; and
+  `CONTEXT_WORDS` (`src/chat.mjs`, four singular pronouns) has no plural/ordinal members, and
+  object-position "that" never consults focus the way subject-position "it" does. A third
+  instance (COUNT_NOUNS not consulting `EDGE_NOUN_TO_METRIC`) has since been fixed via
+  `answerEdgeCount`, confirming the fix pattern: audit one gate, decide which members/table
+  lookups are safe to add, pin the existing exclusions with regressions. Worth one shared design
+  pass over the gates rather than a doc per instance.
+
 - **`PLAN_SYLLOGIST.md` research horizon**: the full ATMS generalization (de Kleer 1986). The
   four-rule justification slice shipped; the one inherited limit (a surviving conclusion keeps
   its stale single justification, so a later retraction of its other path won't re-examine it)
   is recorded in that doc's 2026-07-15 addendum.
 
-- **`PLAN_ADVENTURE.md`** — a text-adventure architectural stretch (imperative command grammar,
-  mutable turn-by-turn world/player state as graph nodes, an NPC turn scheduler). Design-only,
-  nothing implemented yet.
+- **`PLAN_ADVENTURE.md`** — a text-adventure architectural stretch. Its world-state and
+  actions-as-data substrate shipped generically with the planning lane; still unbuilt and its own:
+  the imperative command grammar, the NPC turn scheduler, the Ashcombe Hall corpus, and the
+  room-look digest.
 
 - **Standing cross-repo note (not closeable from this repo)**: if seonix's own chat surface goes
   through `runChat`/`createSession`, its `tmct.toml` needs to explicitly re-activate

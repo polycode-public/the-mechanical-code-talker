@@ -2,7 +2,9 @@
 
 > **STATUS: research/design notes — §3's own JTMS-shaped, VERIFY-backed slice (single justification
 > per scm-sco fact, dependency-directed removal, bounded) is now IMPLEMENTED and tested
-> (`retractSubClassOf`, `src/syllogise.mjs`; see §3 for scope). §1/§2/§4/§5 remain notes only.
+> (`retractSubClassOf`, `src/syllogise.mjs`; see §3 for scope). §1/§2/§4/§5 remain notes only —
+> and §1's beyond-RL survey now has a deeper sibling doc, `PLAN_SYLLOGIST_EL_DL.md`, which owns the
+> EL-classifier/DL-tableau tier; this file owns the incrementality/retraction horizon.
 > **2026-07-12: both chat-layer findings routed here from `BENCHMARK_CONVERSATION_1.8.14.md` are now
 > CLOSED, not design questions** — (1) "X is not a Y"/"forget that X is a Y" now call
 > `retractSubClassOf` for real (`src/chat.mjs` teachLane, `RETRACT_NOT_A_RE`/`RETRACT_FORGET_RE`); (2)
@@ -11,7 +13,8 @@
 > silently re-reading a malformed declarative teach sentence as a different, valid elliptical
 > QUESTION (dropping the taught object entirely) before the miss-gated teach lane ever ran; fixed by
 > `runAsk`'s `relaxedTeachCollision` guard (`src/chat.mjs`), which restores the original graph answer
-> if the teach attempt itself declines. Regression tests: `test/chat-syllogist-teach-retract.test.mjs`.
+> if the teach attempt itself declines. Regression coverage: the retract/"not a"/"forget" rows in
+> `test/corpus/inference.jsonl` (the corpus lane that absorbed the standalone teach-retract suite).
 > Pulled out of `PLAN_INFERENCE_TESTING.md` on its own retirement, 2026-07-11. That file's own §4/§5
 > carried this material as a long aside inside an otherwise-shipped build plan; it has been moved
 > here, mostly verbatim (citations exactly as verified there), so it stands on its own instead of
@@ -144,7 +147,8 @@ unbuilt, and honestly speculative: nobody has published this exact narrow combin
 system, so there is no citation to verify here beyond the separately-real building blocks above —
 flagged as such rather than dressed up as prior art.
 
-**LANDED (this session): the single-justification JTMS step, scm-sco only.** The paragraph above's
+**LANDED: the single-justification JTMS step — first for scm-sco, extended to all five rules
+2026-07-15 (see the addendum).** The paragraph above's
 first sentence — "today every entailed fact carries only a flat provenance TAG... never persisted
 onto the fact itself, so there is no stored justification to walk at all" — is no longer true for
 scm-sco: `syllogise()` now persists each scm-sco conclusion's two premise fact ids as
@@ -153,14 +157,15 @@ and `retractSubClassOf` (`src/syllogise.mjs`) walks it — dependency-directed r
 `budget`/`depth`, cascading through multi-hop chains. It does NOT stop at a bare justification walk
 (the naive JTMS failure mode this file itself names, citing de Kleer): each candidate is re-VERIFIED
 against the surviving graph (`buildAncestorCloser`, reused) before being removed, so a fact with a
-genuine second derivation path, or one later independently taught, survives — see
-`test/syllogise.test.mjs`'s `retractSubClassOf` block for both cases as regression tests. Still open,
+genuine second derivation path, or one later independently taught, survives. Still open,
 exactly as scoped above and NOT attempted: the true ATMS generalization (persisting every
 alternate justification SET per fact, not just one — this slice's VERIFY step gets the same answer
 for scm-sco's small rule set by re-deriving locally instead, which is cheap here but does not
 generalize to a rule set where that local re-derivation itself gets expensive). Justification
 tracking for the other four rules (cax-sco/cax-dw/cls-svf1/scm-svf1) landed 2026-07-15 — see the
-addendum at the end of this file.
+addendum at the end of this file. Tests for both the retracting and the surviving
+(independently derivable) cases live in `test/adapters/syllogise.test.mjs`'s `retractSubClassOf`
+block.
 
 ## 4. Relevance under budget is the same open question wearing a different hat
 
@@ -180,11 +185,10 @@ relevance problem, because they are the same graph walk run in opposite directio
 
 ## 5. Progol/ILP — learning new rules, a separate and much smaller spike
 
-Learning NEW inference rules (rather than executing hand-written ones) is a genuinely different,
-already-well-scoped-elsewhere topic — ROADMAP Item 11 covers Progol-style Inductive Logic
-Programming and Track 1's related-but-distinct CEGIS rule synthesis (`src/router/goal-reasoner.mjs`,
-`synthbench/`) in full. It stays a separate far spike from everything above; nothing in this document
-depends on it or blocks on it.
+Learning NEW inference rules (rather than executing hand-written ones) is a genuinely different
+topic: Progol-style Inductive Logic Programming, adjacent to the shipped CEGIS rule synthesis
+(`src/router/goal-reasoner.mjs`, `synthbench/`) but not the same thing. It stays a separate far
+spike from everything above; nothing in this document depends on it or blocks on it.
 
 ---
 
@@ -208,9 +212,9 @@ owns its predicate (`buildSurvivorDerivabilityCheck` in `src/syllogise.mjs`). A 
 independently derivable survives. The entry point stays subClassOf-rooted, because chat's
 recognized retraction phrasings ("X is not a Y", "forget that X is a kind of Y") retract ⊑ facts;
 from there the cascade reaches propagated types, disjointness violations, and restriction
-membership/subsumption. Tests: one per rule in `test/syllogise.test.mjs`, each with a retracting
-half and a surviving (independently derivable) half; the pre-existing scm-sco retraction tests run
-unchanged.
+membership/subsumption. Tests: one per rule in `test/adapters/syllogise.test.mjs`, each with a
+retracting half and a surviving (independently derivable) half; the pre-existing scm-sco retraction
+tests run unchanged.
 
 Still on the horizon, unchanged from §3: the ATMS generalization (tracking every alternate
 justification set per fact, de Kleer 1986). One concrete symptom this slice inherits from single
