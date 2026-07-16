@@ -171,31 +171,28 @@ export function parseKeywordSpot(text, nlp = null) {
 
   // Reversible passive ("PATIENT is VERBed BY AGENT"): a passive auxiliary plus a
   // standalone agent-marking "by" (not already swallowed into a multi-word verb
-  // phrase) flips subject/object; whether the agent is named or questioned picks
-  // forward vs. reverse.
+  // phrase) splits the sentence into a patient before "by" and an agent after it.
+  // How many of the two the sentence actually names picks the shape: both named
+  // is the yes/no ask, agent alone reads forward from the agent, patient alone
+  // reads reverse over the patient.
   const byIdx = lcWords.indexOf("by");
   const hasPassiveAux = lcWords.slice(0, verbHit.start).some((w) => PASSIVE_AUX.has(w));
   if (byIdx >= 0 && !consumed.has(byIdx) && hasPassiveAux) {
-    const roleWords = [];
-    for (let i = 0; i < words.length; i += 1) {
-      const w = lcWords[i];
-      if (consumed.has(i) || STOPWORDS.has(w) || w === "by" || PASSIVE_AUX.has(w)
-        || WH_WORDS.has(w) || PLACEHOLDER_SET.has(w)) continue;
-      roleWords.push(words[i]);
-    }
-    const object = roleWords.join(" ").trim();
-    if (object) {
-      // the first meaningful token after "by" (skipping only articles) decides direction:
-      // a wh-word or nothing → the agent is questioned (reverse over the named patient);
-      // a named token → the agent is given (forward from it).
-      let nextAfterBy = null;
-      for (let i = byIdx + 1; i < lcWords.length; i += 1) {
-        if (lcWords[i] === "the" || lcWords[i] === "a" || lcWords[i] === "an") continue;
-        nextAfterBy = lcWords[i]; break;
-      }
-      const agentNamed = nextAfterBy != null && !WH_WORDS.has(nextAfterBy) && !ENTITY_TO_TYPE[nextAfterBy];
-      return stamp({ shape: agentNamed ? "forward" : "reverse", entityType, modifier, kind, object });
-    }
+    const roleText = (from, to) => words
+      .slice(from, to)
+      .filter((_, j) => {
+        const i = from + j;
+        const w = lcWords[i];
+        return !consumed.has(i) && !STOPWORDS.has(w) && w !== "by" && !PASSIVE_AUX.has(w)
+          && !WH_WORDS.has(w) && !PLACEHOLDER_SET.has(w);
+      })
+      .join(" ")
+      .trim();
+    const patient = roleText(0, byIdx);
+    const agent = roleText(byIdx + 1, words.length);
+    if (patient && agent) return stamp({ shape: "ask", entityType: null, modifier: "direct", kind, subject: agent, object: patient });
+    if (agent) return stamp({ shape: "forward", entityType, modifier, kind, object: agent });
+    if (patient) return stamp({ shape: "reverse", entityType, modifier, kind, object: patient });
   }
 
   if (beforeText && afterText) {
@@ -214,6 +211,23 @@ export function parseKeywordSpot(text, nlp = null) {
   if (kind === "inherits" && !beforeText && entityHit && entityHit.start === verbHit.end) {
     const entityText = canonWords.slice(entityHit.start, entityHit.end).join(" ");
     if (entityText) return stamp({ shape: "reverse", entityType: null, modifier, kind, object: entityText });
+  }
+  // Bare passive ("was X touched", "is X imported"): a passive auxiliary before a
+  // participle, with no agent tail, makes X the PATIENT, so the active forward
+  // read below would answer a question nobody asked. The participle is looked up
+  // in lcWords rather than canonWords because the lemma tier rewrites it away
+  // ("imported" -> "import"); that same lookup is what leaves the present
+  // progressive ("what is X importing") on the active path, since a gerund is no
+  // participle. "touches" answers as a when-question, matching what "has X been
+  // touched" already says — one question must not get two answers.
+  if (beforeText && !afterText && hasPassiveAux && verbHit.end - verbHit.start === 1
+    && PASSIVE_PARTICIPLE_TO_KIND[lcWords[verbHit.start]]) {
+    // A patient of more than one token is the wreckage of a clause no tier here
+    // parses. Resolving past it would cite a confident answer to a question
+    // nobody asked, so this declines and the sentence misses honestly.
+    if (beforeText.split(/\s+/).length > 1) return null;
+    if (kind === "touches") return stamp({ shape: "when", entityType: null, modifier: "direct", kind, object: beforeText });
+    return stamp({ shape: "reverse", entityType, modifier, kind, object: beforeText });
   }
   // forward keeps the spotted entityType (traverse()'s commit-as-subject grain
   // selection); modifier stays hardcoded since no forward closure traversal exists.

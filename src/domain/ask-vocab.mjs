@@ -43,7 +43,7 @@ export const RELATIONS = {
   uses: {
     comment: "query-side union: imports (Module->Module) + calls (Module->Module) + callsSymbol (fn->fn).",
     verbs: [
-      "uses", "use", "used by", "makes use of", "make use of",
+      "uses", "use", "makes use of", "make use of",
       // gerund (g-drop normalization)
       "using",
     ],
@@ -111,8 +111,10 @@ export const RELATIONS = {
       "was modified by", "were modified by", "was tweaked in", "were tweaked in",
       "got changed in", "got edited in",
       // the same touch relation asked from the commit's side ("what did
-      // commit <sha> touch")
-      "touch", "touched by", "modified by", "changed by", "changed in",
+      // commit <sha> touch"). "touched by"/"modified by"/"changed by" are absent
+      // on purpose: they mark a passive AGENT, so swallowing the "by" here would
+      // hide the passive from the strategy that reads it and invert the operands.
+      "touch", "changed in",
       "landed in", "land in",
       // "was in"/"went into" only read as touch questions against a
       // sha-shaped object
@@ -466,6 +468,14 @@ export const QUALIFIERS = Object.freeze({
   untested: { via: "tested", value: false },
   uncovered: { via: "tested", value: false },
 });
+
+/** Agent words naming no particular thing, for the "is X <qualifier> by <agent>"
+ *  tail. "is X covered by tests" and "is X tested by anything" are asking the
+ *  plain coverage property, so they stay on the qualifier-check path; a NAMED
+ *  agent ("…by logger.mjs") is asking about that agent's own edges instead. */
+export const GENERIC_AGENT_WORDS = Object.freeze(new Set([
+  "tests", "test", "anything", "something", "anyone", "someone", "any",
+]));
 
 /** Aggregate/count triggers: "how many <kind> …", "count <kind>s", "number of
  *  <kind>". Bare "tally"/"sum"/"total" are deliberately excluded — they're

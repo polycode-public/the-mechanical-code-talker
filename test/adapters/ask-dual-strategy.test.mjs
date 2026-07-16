@@ -207,13 +207,14 @@ test("keyword-spot only: \"which changes landed in commit ef74e44e25c8\" and the
   assert.equal(landed.kind, "touches");
   assert.equal(landed.entityType, "Change");
   assert.equal(landed.object, "commit ef74e44e25c8");
-  // in the passive form there is no other entity noun, so the spotter consumes
-  // "commit" as the entity keyword and the object is the bare sha — traverse()
-  // treats an entityType of "Commit" on a commit-subject question as a wildcard
-  // (no Commit->Commit edges exist), so this still answers.
+  // the passive names its agent ("by commit <sha>") and questions its patient
+  // ("what"), so it reads forward from the commit. The spotter consumes "commit"
+  // as the entity keyword, leaving the bare sha as the object; traverse() reads a
+  // resolved Commit as the touch subject whichever way the shape points, so this
+  // reaches the same answer the active "what did commit <sha> touch" gives.
   const passive = parseQuery("what was touched by commit ef74e44e25c8");
   assert.equal(passive.kind, "touches");
-  assert.equal(passive.shape, "reverse");
+  assert.equal(passive.shape, "forward");
   assert.equal(passive.entityType, "Commit");
   assert.equal(passive.object, "ef74e44e25c8");
 });

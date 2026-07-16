@@ -22,6 +22,7 @@ import {
   CONTEXT_PRONOUNS, META_MEANING_VERBS,
   WHERE_MARKERS, MENTION_MARKERS,
   RELATIVE_PRONOUNS, PLACEHOLDER_NOUNS, BOOLEAN_CONNECTIVES, QUALIFIERS,
+  PASSIVE_PARTICIPLE_TO_KIND, GENERIC_AGENT_WORDS,
   AGGREGATE_TRIGGERS, LIST_TRIGGERS, SUPERLATIVE_EXTREMES, EDGE_NOUN_TO_METRIC, METRIC_IMPLIES_ENTITY, ANAPHORA_TRIGGERS,
   MEMBERSHIP_KINDS, CASCADE_NOISE, CASCADE_SYNONYMS, HELP_TRIGGERS,
 } from "./ask-vocab.mjs";
@@ -210,6 +211,7 @@ function parseComposite(text, nlp) {
   return parseExistence(w, lc)
     || parseQualifierCheck(w, lc)
     || parseNegation(text, nlp, 0)
+    || parseNegatedAsk(w, lc)
     || parseForwardNegation(w, lc, nlp)
     || parseTemporal(w, lc, nlp, 0)
     || parseCommitFilter(w, lc)
@@ -607,6 +609,18 @@ function parseQualifierCheck(w, lc) {
     if (QUALIFIERS[lc[i]]) { qualIdx = i; negated = lc[i - 1] === "not"; break; }
   }
   if (qualIdx < 0) return null; // no qualifier word at all → not this shape
+  // "is X tested by logger.mjs" asks about logger.mjs's own edges, not X's
+  // coverage property, so it declines here and reads as a passive instead. Two
+  // guards keep the decline narrow: the qualifier must have a relation
+  // counterpart ("is X public by Y" is not a sentence), and the agent must name
+  // something — "is X covered by tests" is still the plain coverage question.
+  const byIdx = lc.indexOf("by", qualIdx + 1);
+  if (byIdx > 0 && PASSIVE_PARTICIPLE_TO_KIND[lc[qualIdx]]) {
+    let agentIdx = byIdx + 1;
+    while (agentIdx < lc.length && (lc[agentIdx] === "the" || lc[agentIdx] === "a" || lc[agentIdx] === "an")) agentIdx += 1;
+    const agent = lc[agentIdx];
+    if (agent && !GENERIC_AGENT_WORDS.has(agent)) return null;
+  }
   let termStart = 1;
   if (lc[termStart] === "the") termStart += 1;
   let termEnd = negated ? qualIdx - 1 : qualIdx;
@@ -614,6 +628,25 @@ function parseQualifierCheck(w, lc) {
   const term = termEnd > termStart ? w.slice(termStart, termEnd).join(" ").trim() : "";
   if (!term) return { node: "miss", reason: `"is/are <qualifier>" needs a named thing to check first` };
   return { node: "qualCheck", term, qualifier: lc[qualIdx], negated };
+}
+
+/** Negated polar: "does X not <verb> Y" — its positive twin's yes/no question
+ *  asked for the edge's ABSENCE. The sentence re-parses through the anchored
+ *  grammar with "not" dropped, and the `negated` flag rides the parse the same
+ *  way parseQualifierCheck's does: eval folds it into the answer and render
+ *  states whichever polarity holds.
+ *
+ *  It lives here rather than in the grammar because the strategy pipeline reads
+ *  the same sentence at positive polarity ("not" is no stopword) and the merge
+ *  would call the two readings an ambiguity. Declining to a composite production
+ *  is what keeps the sentence out of that merge. */
+function parseNegatedAsk(w, lc) {
+  if (lc[0] !== "do" && lc[0] !== "does" && lc[0] !== "did") return null;
+  const notIdx = lc.indexOf("not", 1);
+  if (notIdx < 0) return null;
+  const positive = parseAnchored(w.filter((_, i) => i !== notIdx).join(" "));
+  if (!positive || positive.shape !== "ask") return null;
+  return { ...positive, negated: true };
 }
 
 /** Trailing filler an aggregate/list tail can carry ("how many classes are
@@ -2496,14 +2529,16 @@ export function traverse(graph, parsed, { contextId = null, prev = null, pinnedO
     // touches edges are stored commit -> entity; orient by where the commit
     // actually is when it's named on the object side.
     let [from, to] = [subj.match, obj.match];
-    let kinds = kindsFor(kind); // "uses" checks the whole union ("does X use Y")
-    if (kind === "touches") {
-      if (to.class === "Commit" && from.class !== "Commit") [from, to] = [to, from];
-      if (from.class === "Commit") kinds = ["touches", "touchesSymbol"];
-    }
+    if (kind === "touches" && to.class === "Commit" && from.class !== "Commit") [from, to] = [to, from];
+    // Both operands are named, so the yes/no wants the symbol-grain sibling
+    // unconditionally: a callsSymbol-only edge is still a real call, and reading
+    // the coarse kind alone answers No to a question the graph can answer Yes.
+    const sibling = SYMBOL_GRAIN_SIBLING[kind];
+    const kinds = [...new Set(sibling ? [...kindsFor(kind), sibling] : kindsFor(kind))];
     const edges = kinds.flatMap((k) => edgesOfKind(graph, k)).filter((e) => e.subject === from.id && e.object === to.id);
     return {
-      matches: edges, answer: edges.length > 0, objMatch: obj.match, subjMatch: subj.match,
+      matches: edges, answer: parsed.negated ? edges.length === 0 : edges.length > 0,
+      objMatch: obj.match, subjMatch: subj.match,
       candidates: [], traversal: `${kinds.join("+")} edge from ${from.label} to ${to.label}`, ambiguous: false,
     };
   }
@@ -2889,6 +2924,7 @@ function canonicalOf(parsed) {
   const q = (s) => JSON.stringify(String(s ?? ""));
   const args = [];
   if (parsed.kind) args.push(parsed.kind);
+  if (parsed.negated) args.push("negated");
   if (parsed.entityType) args.push(`entityType=${parsed.entityType}`);
   if (parsed.modifier && parsed.modifier !== "direct") args.push(`modifier=${parsed.modifier}`);
   if (parsed.subject != null) args.push(`subject=${q(parsed.subject)}`);
@@ -2896,7 +2932,7 @@ function canonicalOf(parsed) {
   const machine = `${parsed.shape}(${args.join(", ")})`;
   let english;
   if (parsed.shape === "ask") {
-    english = `does "${parsed.subject}" ${verbFor(parsed.kind)} "${parsed.object}"?`;
+    english = `does "${parsed.subject}" ${parsed.negated ? "not " : ""}${verbFor(parsed.kind)} "${parsed.object}"?`;
   } else if (parsed.shape === "meta") {
     english = `what does "${parsed.object}" mean, in this graph's own vocabulary?`;
   } else if (parsed.shape === "mentions") {
@@ -3168,9 +3204,17 @@ function renderCore(parsed, result) {
     if (!result.objMatch || !result.subjMatch) {
       return { content: `couldn't resolve one of the terms in this question.`, miss: true, ambiguous: false };
     }
+    // The edge sentence and the no-edge sentence each state what the graph
+    // holds; the question's polarity only decides which one carries the Yes.
+    const edgeFound = `${result.traversal}.`;
+    const noEdge = `no ${parsed.kind} edge found from ${result.subjMatch.label} to ${result.objMatch.label}.`;
+    const holds = parsed.negated ? noEdge : edgeFound;
+    const fails = parsed.negated ? edgeFound : noEdge;
     return {
-      content: result.answer ? `Yes — ${result.traversal}.` : `No — no ${parsed.kind} edge found from ${result.subjMatch.label} to ${result.objMatch.label}.`,
-      miss: !result.answer, ambiguous: false,
+      content: `${result.answer ? "Yes" : "No"} — ${result.answer ? holds : fails}`,
+      // A miss is the absence of a citation, which the polarity never changes:
+      // "no edge found" cites nothing whether it arrives as a Yes or a No.
+      miss: !result.matches.length, ambiguous: false,
     };
   }
   if (!result.matches.length) {
