@@ -50,10 +50,10 @@
     }
   });
 
-  // node-stub:node:fs
+  // node-stub:node:fs/promises
   var unavailable2, createRequire2, readFileSync2, writeFileSync2, readFile2, writeFile2, appendFile2, mkdir2, mkdtemp2, rename2, unlink2, rm2, stat2, access2, copyFile2, readdir2, createReadStream2, createWriteStream2, randomBytes2, createHash2, createRequireFromPath2, spawnSync2, createInterface2, createServer2, DatabaseSync2;
-  var init_node_fs = __esm({
-    "node-stub:node:fs"() {
+  var init_promises = __esm({
+    "node-stub:node:fs/promises"() {
       unavailable2 = (name) => () => {
         throw new Error(name + " unavailable in the browser ask bundle");
       };
@@ -81,40 +81,6 @@
       createInterface2 = unavailable2("createInterface");
       createServer2 = unavailable2("createServer");
       DatabaseSync2 = unavailable2("DatabaseSync");
-    }
-  });
-
-  // node-stub:node:fs/promises
-  var unavailable3, createRequire3, readFileSync3, writeFileSync3, readFile3, writeFile3, appendFile3, mkdir3, mkdtemp3, rename3, unlink3, rm3, stat3, access3, copyFile3, readdir3, createReadStream3, createWriteStream3, randomBytes3, createHash3, createRequireFromPath3, spawnSync3, createInterface3, createServer3, DatabaseSync3;
-  var init_promises = __esm({
-    "node-stub:node:fs/promises"() {
-      unavailable3 = (name) => () => {
-        throw new Error(name + " unavailable in the browser ask bundle");
-      };
-      createRequire3 = unavailable3("createRequire");
-      readFileSync3 = unavailable3("readFileSync");
-      writeFileSync3 = unavailable3("writeFileSync");
-      readFile3 = unavailable3("readFile");
-      writeFile3 = unavailable3("writeFile");
-      appendFile3 = unavailable3("appendFile");
-      mkdir3 = unavailable3("mkdir");
-      mkdtemp3 = unavailable3("mkdtemp");
-      rename3 = unavailable3("rename");
-      unlink3 = unavailable3("unlink");
-      rm3 = unavailable3("rm");
-      stat3 = unavailable3("stat");
-      access3 = unavailable3("access");
-      copyFile3 = unavailable3("copyFile");
-      readdir3 = unavailable3("readdir");
-      createReadStream3 = unavailable3("createReadStream");
-      createWriteStream3 = unavailable3("createWriteStream");
-      randomBytes3 = unavailable3("randomBytes");
-      createHash3 = unavailable3("createHash");
-      createRequireFromPath3 = unavailable3("createRequireFromPath");
-      spawnSync3 = unavailable3("spawnSync");
-      createInterface3 = unavailable3("createInterface");
-      createServer3 = unavailable3("createServer");
-      DatabaseSync3 = unavailable3("DatabaseSync");
     }
   });
 
@@ -177,38 +143,72 @@
     }
   });
 
-  // node-stub:node:url
-  var unavailable7, createRequire7, readFileSync7, writeFileSync7, readFile7, writeFile7, appendFile7, mkdir7, mkdtemp7, rename7, unlink7, rm7, stat7, access7, copyFile7, readdir7, createReadStream7, createWriteStream7, fileURLToPath, randomBytes7, createHash7, createRequireFromPath7, spawnSync7, createInterface7, createServer7, DatabaseSync7;
-  var init_node_url = __esm({
-    "node-stub:node:url"() {
-      unavailable7 = (name) => () => {
+  // node-stub:node:fs
+  var unavailable3, createRequire3, readFileSync3, writeFileSync3, readFile3, writeFile3, appendFile3, mkdir3, mkdtemp3, rename3, unlink3, rm3, stat3, access3, copyFile3, readdir3, createReadStream3, createWriteStream3, randomBytes3, createHash3, createRequireFromPath3, spawnSync3, createInterface3, createServer3, DatabaseSync3;
+  var init_node_fs = __esm({
+    "node-stub:node:fs"() {
+      unavailable3 = (name) => () => {
         throw new Error(name + " unavailable in the browser ask bundle");
       };
-      createRequire7 = unavailable7("createRequire");
-      readFileSync7 = unavailable7("readFileSync");
-      writeFileSync7 = unavailable7("writeFileSync");
-      readFile7 = unavailable7("readFile");
-      writeFile7 = unavailable7("writeFile");
-      appendFile7 = unavailable7("appendFile");
-      mkdir7 = unavailable7("mkdir");
-      mkdtemp7 = unavailable7("mkdtemp");
-      rename7 = unavailable7("rename");
-      unlink7 = unavailable7("unlink");
-      rm7 = unavailable7("rm");
-      stat7 = unavailable7("stat");
-      access7 = unavailable7("access");
-      copyFile7 = unavailable7("copyFile");
-      readdir7 = unavailable7("readdir");
-      createReadStream7 = unavailable7("createReadStream");
-      createWriteStream7 = unavailable7("createWriteStream");
+      createRequire3 = unavailable3("createRequire");
+      readFileSync3 = unavailable3("readFileSync");
+      writeFileSync3 = unavailable3("writeFileSync");
+      readFile3 = unavailable3("readFile");
+      writeFile3 = unavailable3("writeFile");
+      appendFile3 = unavailable3("appendFile");
+      mkdir3 = unavailable3("mkdir");
+      mkdtemp3 = unavailable3("mkdtemp");
+      rename3 = unavailable3("rename");
+      unlink3 = unavailable3("unlink");
+      rm3 = unavailable3("rm");
+      stat3 = unavailable3("stat");
+      access3 = unavailable3("access");
+      copyFile3 = unavailable3("copyFile");
+      readdir3 = unavailable3("readdir");
+      createReadStream3 = unavailable3("createReadStream");
+      createWriteStream3 = unavailable3("createWriteStream");
+      randomBytes3 = unavailable3("randomBytes");
+      createHash3 = unavailable3("createHash");
+      createRequireFromPath3 = unavailable3("createRequireFromPath");
+      spawnSync3 = unavailable3("spawnSync");
+      createInterface3 = unavailable3("createInterface");
+      createServer3 = unavailable3("createServer");
+      DatabaseSync3 = unavailable3("DatabaseSync");
+    }
+  });
+
+  // node-stub:node:url
+  var unavailable4, createRequire4, readFileSync4, writeFileSync4, readFile4, writeFile4, appendFile4, mkdir4, mkdtemp4, rename4, unlink4, rm4, stat4, access4, copyFile4, readdir4, createReadStream4, createWriteStream4, fileURLToPath, randomBytes4, createHash4, createRequireFromPath4, spawnSync4, createInterface4, createServer4, DatabaseSync4;
+  var init_node_url = __esm({
+    "node-stub:node:url"() {
+      unavailable4 = (name) => () => {
+        throw new Error(name + " unavailable in the browser ask bundle");
+      };
+      createRequire4 = unavailable4("createRequire");
+      readFileSync4 = unavailable4("readFileSync");
+      writeFileSync4 = unavailable4("writeFileSync");
+      readFile4 = unavailable4("readFile");
+      writeFile4 = unavailable4("writeFile");
+      appendFile4 = unavailable4("appendFile");
+      mkdir4 = unavailable4("mkdir");
+      mkdtemp4 = unavailable4("mkdtemp");
+      rename4 = unavailable4("rename");
+      unlink4 = unavailable4("unlink");
+      rm4 = unavailable4("rm");
+      stat4 = unavailable4("stat");
+      access4 = unavailable4("access");
+      copyFile4 = unavailable4("copyFile");
+      readdir4 = unavailable4("readdir");
+      createReadStream4 = unavailable4("createReadStream");
+      createWriteStream4 = unavailable4("createWriteStream");
       fileURLToPath = (u) => String(u);
-      randomBytes7 = unavailable7("randomBytes");
-      createHash7 = unavailable7("createHash");
-      createRequireFromPath7 = unavailable7("createRequireFromPath");
-      spawnSync7 = unavailable7("spawnSync");
-      createInterface7 = unavailable7("createInterface");
-      createServer7 = unavailable7("createServer");
-      DatabaseSync7 = unavailable7("DatabaseSync");
+      randomBytes4 = unavailable4("randomBytes");
+      createHash4 = unavailable4("createHash");
+      createRequireFromPath4 = unavailable4("createRequireFromPath");
+      spawnSync4 = unavailable4("spawnSync");
+      createInterface4 = unavailable4("createInterface");
+      createServer4 = unavailable4("createServer");
+      DatabaseSync4 = unavailable4("DatabaseSync");
     }
   });
 
@@ -5503,18 +5503,18 @@ ${lines.join("\n")}`;
   // node-stub:node:sqlite
   var node_sqlite_exports = {};
   __export(node_sqlite_exports, {
-    DatabaseSync: () => DatabaseSync8,
-    access: () => access8,
-    appendFile: () => appendFile8,
+    DatabaseSync: () => DatabaseSync5,
+    access: () => access5,
+    appendFile: () => appendFile5,
     basename: () => basename,
-    copyFile: () => copyFile8,
-    createHash: () => createHash8,
-    createInterface: () => createInterface8,
-    createReadStream: () => createReadStream8,
-    createRequire: () => createRequire8,
-    createRequireFromPath: () => createRequireFromPath8,
-    createServer: () => createServer8,
-    createWriteStream: () => createWriteStream8,
+    copyFile: () => copyFile5,
+    createHash: () => createHash5,
+    createInterface: () => createInterface5,
+    createReadStream: () => createReadStream5,
+    createRequire: () => createRequire5,
+    createRequireFromPath: () => createRequireFromPath5,
+    createServer: () => createServer5,
+    createWriteStream: () => createWriteStream5,
     default: () => node_sqlite_default,
     dirname: () => dirname2,
     existsSync: () => existsSync2,
@@ -5522,47 +5522,47 @@ ${lines.join("\n")}`;
     fileURLToPath: () => fileURLToPath2,
     isAbsolute: () => isAbsolute,
     join: () => join2,
-    mkdir: () => mkdir8,
-    mkdtemp: () => mkdtemp8,
+    mkdir: () => mkdir5,
+    mkdtemp: () => mkdtemp5,
     pathToFileURL: () => pathToFileURL,
-    randomBytes: () => randomBytes8,
-    readFile: () => readFile8,
-    readFileSync: () => readFileSync8,
-    readdir: () => readdir8,
-    rename: () => rename8,
+    randomBytes: () => randomBytes5,
+    readFile: () => readFile5,
+    readFileSync: () => readFileSync5,
+    readdir: () => readdir5,
+    rename: () => rename5,
     resolve: () => resolve2,
-    rm: () => rm8,
+    rm: () => rm5,
     sep: () => sep2,
-    spawnSync: () => spawnSync8,
-    stat: () => stat8,
+    spawnSync: () => spawnSync5,
+    stat: () => stat5,
     tmpdir: () => tmpdir,
-    unlink: () => unlink8,
-    writeFile: () => writeFile8,
-    writeFileSync: () => writeFileSync8
+    unlink: () => unlink5,
+    writeFile: () => writeFile5,
+    writeFileSync: () => writeFileSync5
   });
-  var unavailable8, createRequire8, readFileSync8, writeFileSync8, readFile8, writeFile8, appendFile8, mkdir8, mkdtemp8, rename8, unlink8, rm8, stat8, access8, copyFile8, readdir8, createReadStream8, createWriteStream8, existsSync2, join2, dirname2, resolve2, isAbsolute, basename, extname, sep2, fileURLToPath2, pathToFileURL, randomBytes8, createHash8, createRequireFromPath8, spawnSync8, createInterface8, createServer8, tmpdir, DatabaseSync8, node_sqlite_default;
+  var unavailable5, createRequire5, readFileSync5, writeFileSync5, readFile5, writeFile5, appendFile5, mkdir5, mkdtemp5, rename5, unlink5, rm5, stat5, access5, copyFile5, readdir5, createReadStream5, createWriteStream5, existsSync2, join2, dirname2, resolve2, isAbsolute, basename, extname, sep2, fileURLToPath2, pathToFileURL, randomBytes5, createHash5, createRequireFromPath5, spawnSync5, createInterface5, createServer5, tmpdir, DatabaseSync5, node_sqlite_default;
   var init_node_sqlite = __esm({
     "node-stub:node:sqlite"() {
-      unavailable8 = (name) => () => {
+      unavailable5 = (name) => () => {
         throw new Error(name + " unavailable in the browser ask bundle");
       };
-      createRequire8 = unavailable8("createRequire");
-      readFileSync8 = unavailable8("readFileSync");
-      writeFileSync8 = unavailable8("writeFileSync");
-      readFile8 = unavailable8("readFile");
-      writeFile8 = unavailable8("writeFile");
-      appendFile8 = unavailable8("appendFile");
-      mkdir8 = unavailable8("mkdir");
-      mkdtemp8 = unavailable8("mkdtemp");
-      rename8 = unavailable8("rename");
-      unlink8 = unavailable8("unlink");
-      rm8 = unavailable8("rm");
-      stat8 = unavailable8("stat");
-      access8 = unavailable8("access");
-      copyFile8 = unavailable8("copyFile");
-      readdir8 = unavailable8("readdir");
-      createReadStream8 = unavailable8("createReadStream");
-      createWriteStream8 = unavailable8("createWriteStream");
+      createRequire5 = unavailable5("createRequire");
+      readFileSync5 = unavailable5("readFileSync");
+      writeFileSync5 = unavailable5("writeFileSync");
+      readFile5 = unavailable5("readFile");
+      writeFile5 = unavailable5("writeFile");
+      appendFile5 = unavailable5("appendFile");
+      mkdir5 = unavailable5("mkdir");
+      mkdtemp5 = unavailable5("mkdtemp");
+      rename5 = unavailable5("rename");
+      unlink5 = unavailable5("unlink");
+      rm5 = unavailable5("rm");
+      stat5 = unavailable5("stat");
+      access5 = unavailable5("access");
+      copyFile5 = unavailable5("copyFile");
+      readdir5 = unavailable5("readdir");
+      createReadStream5 = unavailable5("createReadStream");
+      createWriteStream5 = unavailable5("createWriteStream");
       existsSync2 = () => false;
       join2 = (...a) => a.join("/");
       dirname2 = (p) => String(p).replace(/\/[^/]*$/, "");
@@ -5576,14 +5576,14 @@ ${lines.join("\n")}`;
       sep2 = "/";
       fileURLToPath2 = (u) => String(u);
       pathToFileURL = (p) => new URL("file://" + p);
-      randomBytes8 = unavailable8("randomBytes");
-      createHash8 = unavailable8("createHash");
-      createRequireFromPath8 = unavailable8("createRequireFromPath");
-      spawnSync8 = unavailable8("spawnSync");
-      createInterface8 = unavailable8("createInterface");
-      createServer8 = unavailable8("createServer");
+      randomBytes5 = unavailable5("randomBytes");
+      createHash5 = unavailable5("createHash");
+      createRequireFromPath5 = unavailable5("createRequireFromPath");
+      spawnSync5 = unavailable5("spawnSync");
+      createInterface5 = unavailable5("createInterface");
+      createServer5 = unavailable5("createServer");
       tmpdir = () => "/tmp";
-      DatabaseSync8 = unavailable8("DatabaseSync");
+      DatabaseSync5 = unavailable5("DatabaseSync");
       node_sqlite_default = {};
     }
   });
@@ -5703,7 +5703,7 @@ ${lines.join("\n")}`;
     }
     if (backendChoice === BACKEND_SQLITE) {
       const dbPath = join(repoRoot, ".tmct", "memory", "graph.sqlite");
-      await mkdir3(dirname(dbPath), { recursive: true });
+      await mkdir2(dirname(dbPath), { recursive: true });
       const handle = await createSqliteMemoryStore(dbPath);
       return { dir: handle, close: async () => closeSqliteMemoryStore(handle) };
     }
@@ -5875,8 +5875,8 @@ ${lines.join("\n")}`;
   }
   async function atomicWriteText(file, text) {
     const tmp = `${file}.tmp-${process.pid}-${Math.random().toString(36).slice(2, 10)}`;
-    await writeFile3(tmp, text);
-    await rename3(tmp, file);
+    await writeFile2(tmp, text);
+    await rename2(tmp, file);
   }
   async function atomicWriteJson(file, obj) {
     await atomicWriteText(file, JSON.stringify(obj));
@@ -5888,7 +5888,7 @@ ${lines.join("\n")}`;
     const graphFile = resolveMemoryGraphFile(dir);
     let graphText;
     try {
-      graphText = await readFile3(graphFile, "utf8");
+      graphText = await readFile2(graphFile, "utf8");
     } catch (e) {
       if (e?.code === "ENOENT") return { skipped: true, version: null, prunedVersion: null };
       throw e;
@@ -5896,7 +5896,7 @@ ${lines.join("\n")}`;
     const manifestFile = resolveManifestFile(dir);
     let manifest;
     try {
-      manifest = JSON.parse(await readFile3(manifestFile, "utf8"));
+      manifest = JSON.parse(await readFile2(manifestFile, "utf8"));
     } catch (e) {
       if (e?.code !== "ENOENT") throw e;
       manifest = { version: 0, retentionVersions: retentionVersions ?? DEFAULT_RETENTION };
@@ -5905,14 +5905,14 @@ ${lines.join("\n")}`;
     if (!Number.isInteger(manifest.retentionVersions)) manifest.retentionVersions = retentionVersions ?? DEFAULT_RETENTION;
     const v = manifest.version;
     const versionedFile = resolveMemoryGraphFile(dir, v);
-    await mkdir3(dirname(versionedFile), { recursive: true });
+    await mkdir2(dirname(versionedFile), { recursive: true });
     await atomicWriteText(versionedFile, graphText);
     manifest.version = v + 1;
     let prunedVersion = null;
     const pruneTarget = v - manifest.retentionVersions;
     if (pruneTarget >= 0) {
       try {
-        await unlink3(resolveMemoryGraphFile(dir, pruneTarget));
+        await unlink2(resolveMemoryGraphFile(dir, pruneTarget));
         prunedVersion = pruneTarget;
       } catch (e) {
         if (e?.code !== "ENOENT") throw e;
@@ -5926,7 +5926,7 @@ ${lines.join("\n")}`;
     if (isSqliteHandle(dir)) return readSqlitePayload(dir);
     let text;
     try {
-      text = await readFile3(memoryGraphFile(dir), "utf8");
+      text = await readFile2(memoryGraphFile(dir), "utf8");
     } catch (e) {
       if (e?.code === "ENOENT") return emptyMemory();
       throw e;
@@ -5942,7 +5942,7 @@ ${lines.join("\n")}`;
       persistSqlitePayload(dir, payload);
       return;
     }
-    await mkdir3(dirname(memoryGraphFile(dir)), { recursive: true });
+    await mkdir2(dirname(memoryGraphFile(dir)), { recursive: true });
     await atomicWriteJson(memoryGraphFile(dir), payload);
   }
   function buildMemoryIndex(payload) {
@@ -6794,6 +6794,31 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     }
   });
 
+  // src/corpus/templates.mjs
+  var import_meta, PKG_ROOT, TEMPLATES_FILE, PHRASEBOOK_FILE, TECHNICAL_SLOTS;
+  var init_templates = __esm({
+    "src/corpus/templates.mjs"() {
+      init_promises();
+      init_node_url();
+      init_node_path();
+      import_meta = {};
+      PKG_ROOT = join(dirname(fileURLToPath(import_meta.url)), "..", "..");
+      TEMPLATES_FILE = join(PKG_ROOT, "data", "templates", "responses.jsonl");
+      PHRASEBOOK_FILE = join(PKG_ROOT, "data", "phrasebook", "software-phrases.txt");
+      TECHNICAL_SLOTS = Object.freeze(/* @__PURE__ */ new Set([
+        "subject",
+        "count",
+        "noun",
+        "scope",
+        "comparison",
+        "metric",
+        "unit",
+        "superlative",
+        "provenance"
+      ]));
+    }
+  });
+
   // node_modules/smol-toml/dist/date.js
   var init_date = __esm({
     "node_modules/smol-toml/dist/date.js"() {
@@ -6867,6 +6892,107 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     }
   });
 
+  // src/finish.mjs
+  var import_meta2, GRAMMAR_DIR, GRAMMAR_RULES_FILE, SEGMENT_TYPES, PROTECTED_TYPES;
+  var init_finish = __esm({
+    "src/finish.mjs"() {
+      init_node_fs();
+      init_node_url();
+      init_node_path();
+      init_dist();
+      init_templates();
+      import_meta2 = {};
+      GRAMMAR_DIR = dirname(fileURLToPath(import_meta2.url));
+      GRAMMAR_RULES_FILE = join(GRAMMAR_DIR, "..", "data", "templates", "grammar-rules.toml");
+      SEGMENT_TYPES = Object.freeze([
+        "prose",
+        "entity",
+        "path",
+        "number",
+        "code",
+        "provenance",
+        "receipt"
+      ]);
+      PROTECTED_TYPES = Object.freeze(
+        new Set(SEGMENT_TYPES.filter((t) => t !== "prose"))
+      );
+    }
+  });
+
+  // node-stub:node:module
+  var unavailable7, createRequire7, readFileSync7, writeFileSync7, readFile7, writeFile7, appendFile7, mkdir7, mkdtemp7, rename7, unlink7, rm7, stat7, access7, copyFile7, readdir7, createReadStream7, createWriteStream7, randomBytes7, createHash7, createRequireFromPath7, spawnSync7, createInterface7, createServer7, DatabaseSync7;
+  var init_node_module = __esm({
+    "node-stub:node:module"() {
+      unavailable7 = (name) => () => {
+        throw new Error(name + " unavailable in the browser ask bundle");
+      };
+      createRequire7 = unavailable7("createRequire");
+      readFileSync7 = unavailable7("readFileSync");
+      writeFileSync7 = unavailable7("writeFileSync");
+      readFile7 = unavailable7("readFile");
+      writeFile7 = unavailable7("writeFile");
+      appendFile7 = unavailable7("appendFile");
+      mkdir7 = unavailable7("mkdir");
+      mkdtemp7 = unavailable7("mkdtemp");
+      rename7 = unavailable7("rename");
+      unlink7 = unavailable7("unlink");
+      rm7 = unavailable7("rm");
+      stat7 = unavailable7("stat");
+      access7 = unavailable7("access");
+      copyFile7 = unavailable7("copyFile");
+      readdir7 = unavailable7("readdir");
+      createReadStream7 = unavailable7("createReadStream");
+      createWriteStream7 = unavailable7("createWriteStream");
+      randomBytes7 = unavailable7("randomBytes");
+      createHash7 = unavailable7("createHash");
+      createRequireFromPath7 = unavailable7("createRequireFromPath");
+      spawnSync7 = unavailable7("spawnSync");
+      createInterface7 = unavailable7("createInterface");
+      createServer7 = unavailable7("createServer");
+      DatabaseSync7 = unavailable7("DatabaseSync");
+    }
+  });
+
+  // src/wink-model.mjs
+  function loadWinkModel() {
+    if (cached !== void 0) return cached;
+    try {
+      const pair = injected ? injected() : nodeRequireWink();
+      cached = pair && pair.winkNLP && pair.model ? pair : null;
+    } catch {
+      cached = null;
+    }
+    return cached;
+  }
+  function nodeRequireWink() {
+    const require2 = createRequire7(import_meta3.url);
+    return {
+      winkNLP: require2("wink-nlp"),
+      model: require2("wink-eng-lite-web-model")
+    };
+  }
+  function winkInstance() {
+    if (instance !== void 0) return instance;
+    const loaded = loadWinkModel();
+    if (!loaded) {
+      instance = null;
+      return null;
+    }
+    try {
+      instance = loaded.winkNLP(loaded.model);
+    } catch {
+      instance = null;
+    }
+    return instance;
+  }
+  var import_meta3, injected, cached, instance;
+  var init_wink_model = __esm({
+    "src/wink-model.mjs"() {
+      init_node_module();
+      import_meta3 = {};
+    }
+  });
+
   // src/toml-config.mjs
   var init_toml_config = __esm({
     "src/toml-config.mjs"() {
@@ -6887,67 +7013,42 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     }
   });
 
-  // src/corpus/templates.mjs
-  var import_meta, PKG_ROOT, TEMPLATES_FILE, PHRASEBOOK_FILE, TECHNICAL_SLOTS;
-  var init_templates = __esm({
-    "src/corpus/templates.mjs"() {
-      init_promises();
-      init_node_url();
-      init_node_path();
-      import_meta = {};
-      PKG_ROOT = join(dirname(fileURLToPath(import_meta.url)), "..", "..");
-      TEMPLATES_FILE = join(PKG_ROOT, "data", "templates", "responses.jsonl");
-      PHRASEBOOK_FILE = join(PKG_ROOT, "data", "phrasebook", "software-phrases.txt");
-      TECHNICAL_SLOTS = Object.freeze(/* @__PURE__ */ new Set([
-        "subject",
-        "count",
-        "noun",
-        "scope",
-        "comparison",
-        "metric",
-        "unit",
-        "superlative",
-        "provenance"
-      ]));
-    }
-  });
-
   // node-stub:node:readline
-  var unavailable10, createRequire10, readFileSync10, writeFileSync10, readFile10, writeFile10, appendFile10, mkdir10, mkdtemp10, rename10, unlink10, rm10, stat10, access10, copyFile10, readdir10, createReadStream10, createWriteStream10, randomBytes10, createHash10, createRequireFromPath10, spawnSync10, createInterface10, createServer10, DatabaseSync10;
+  var unavailable11, createRequire11, readFileSync11, writeFileSync11, readFile11, writeFile11, appendFile11, mkdir11, mkdtemp11, rename11, unlink11, rm11, stat11, access11, copyFile11, readdir11, createReadStream11, createWriteStream11, randomBytes11, createHash11, createRequireFromPath11, spawnSync11, createInterface11, createServer11, DatabaseSync11;
   var init_node_readline = __esm({
     "node-stub:node:readline"() {
-      unavailable10 = (name) => () => {
+      unavailable11 = (name) => () => {
         throw new Error(name + " unavailable in the browser ask bundle");
       };
-      createRequire10 = unavailable10("createRequire");
-      readFileSync10 = unavailable10("readFileSync");
-      writeFileSync10 = unavailable10("writeFileSync");
-      readFile10 = unavailable10("readFile");
-      writeFile10 = unavailable10("writeFile");
-      appendFile10 = unavailable10("appendFile");
-      mkdir10 = unavailable10("mkdir");
-      mkdtemp10 = unavailable10("mkdtemp");
-      rename10 = unavailable10("rename");
-      unlink10 = unavailable10("unlink");
-      rm10 = unavailable10("rm");
-      stat10 = unavailable10("stat");
-      access10 = unavailable10("access");
-      copyFile10 = unavailable10("copyFile");
-      readdir10 = unavailable10("readdir");
-      createReadStream10 = unavailable10("createReadStream");
-      createWriteStream10 = unavailable10("createWriteStream");
-      randomBytes10 = unavailable10("randomBytes");
-      createHash10 = unavailable10("createHash");
-      createRequireFromPath10 = unavailable10("createRequireFromPath");
-      spawnSync10 = unavailable10("spawnSync");
-      createInterface10 = unavailable10("createInterface");
-      createServer10 = unavailable10("createServer");
-      DatabaseSync10 = unavailable10("DatabaseSync");
+      createRequire11 = unavailable11("createRequire");
+      readFileSync11 = unavailable11("readFileSync");
+      writeFileSync11 = unavailable11("writeFileSync");
+      readFile11 = unavailable11("readFile");
+      writeFile11 = unavailable11("writeFile");
+      appendFile11 = unavailable11("appendFile");
+      mkdir11 = unavailable11("mkdir");
+      mkdtemp11 = unavailable11("mkdtemp");
+      rename11 = unavailable11("rename");
+      unlink11 = unavailable11("unlink");
+      rm11 = unavailable11("rm");
+      stat11 = unavailable11("stat");
+      access11 = unavailable11("access");
+      copyFile11 = unavailable11("copyFile");
+      readdir11 = unavailable11("readdir");
+      createReadStream11 = unavailable11("createReadStream");
+      createWriteStream11 = unavailable11("createWriteStream");
+      randomBytes11 = unavailable11("randomBytes");
+      createHash11 = unavailable11("createHash");
+      createRequireFromPath11 = unavailable11("createRequireFromPath");
+      spawnSync11 = unavailable11("spawnSync");
+      createInterface11 = unavailable11("createInterface");
+      createServer11 = unavailable11("createServer");
+      DatabaseSync11 = unavailable11("DatabaseSync");
     }
   });
 
   // src/corpus/conceptnet.mjs
-  var import_meta2, PKG_ROOT2, SLICE_FILE, MAP_FILE, SEON_CONCEPTS_FILE, SEON_DEFINITIONS_FILE, TIER2_DIR, TIER2_MANIFEST_FILE, WORDNET_DIR, WORDNET_MANIFEST_FILE;
+  var import_meta4, PKG_ROOT2, SLICE_FILE, MAP_FILE, SEON_CONCEPTS_FILE, SEON_DEFINITIONS_FILE, TIER2_DIR, TIER2_MANIFEST_FILE, WORDNET_DIR, WORDNET_MANIFEST_FILE;
   var init_conceptnet = __esm({
     "src/corpus/conceptnet.mjs"() {
       init_node_fs();
@@ -6957,8 +7058,8 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
       init_node_path();
       init_dist();
       init_core();
-      import_meta2 = {};
-      PKG_ROOT2 = join(dirname(fileURLToPath(import_meta2.url)), "..", "..");
+      import_meta4 = {};
+      PKG_ROOT2 = join(dirname(fileURLToPath(import_meta4.url)), "..", "..");
       SLICE_FILE = join(PKG_ROOT2, "corpus", "conceptnet", "slice.jsonl");
       MAP_FILE = join(PKG_ROOT2, "src", "corpus", "conceptnet-map.toml");
       SEON_CONCEPTS_FILE = join(PKG_ROOT2, "corpus", "seon", "concepts.jsonl");
@@ -7059,7 +7160,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
       }
     };
   }
-  var import_meta3, NAMENET_DIR, EXTENSION_KINDS, CONCEPTNET_PREFER, BUILTIN_EXTENSIONS;
+  var import_meta5, NAMENET_DIR, EXTENSION_KINDS, CONCEPTNET_PREFER, BUILTIN_EXTENSIONS;
   var init_extensions = __esm({
     "src/extensions.mjs"() {
       init_node_path();
@@ -7067,112 +7168,11 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
       init_node_url();
       init_toml_config();
       init_conceptnet();
-      import_meta3 = {};
-      NAMENET_DIR = join(dirname(fileURLToPath(import_meta3.url)), "..", "corpus", "namenet");
+      import_meta5 = {};
+      NAMENET_DIR = join(dirname(fileURLToPath(import_meta5.url)), "..", "corpus", "namenet");
       EXTENSION_KINDS = Object.freeze(["corpus", "lexicon", "templates", "pack", "ontology"]);
       CONCEPTNET_PREFER = ["rdfs:subClassOf", "rdf:type", "mgx:usedFor", "mgx:partOf", "mgx:capableOf"];
       BUILTIN_EXTENSIONS = Object.freeze(builtinExtensions());
-    }
-  });
-
-  // src/finish.mjs
-  var import_meta4, GRAMMAR_DIR, GRAMMAR_RULES_FILE, SEGMENT_TYPES, PROTECTED_TYPES;
-  var init_finish = __esm({
-    "src/finish.mjs"() {
-      init_node_fs();
-      init_node_url();
-      init_node_path();
-      init_dist();
-      init_templates();
-      import_meta4 = {};
-      GRAMMAR_DIR = dirname(fileURLToPath(import_meta4.url));
-      GRAMMAR_RULES_FILE = join(GRAMMAR_DIR, "..", "data", "templates", "grammar-rules.toml");
-      SEGMENT_TYPES = Object.freeze([
-        "prose",
-        "entity",
-        "path",
-        "number",
-        "code",
-        "provenance",
-        "receipt"
-      ]);
-      PROTECTED_TYPES = Object.freeze(
-        new Set(SEGMENT_TYPES.filter((t) => t !== "prose"))
-      );
-    }
-  });
-
-  // node-stub:node:module
-  var unavailable11, createRequire11, readFileSync11, writeFileSync11, readFile11, writeFile11, appendFile11, mkdir11, mkdtemp11, rename11, unlink11, rm11, stat11, access11, copyFile11, readdir11, createReadStream11, createWriteStream11, randomBytes11, createHash11, createRequireFromPath11, spawnSync11, createInterface11, createServer11, DatabaseSync11;
-  var init_node_module = __esm({
-    "node-stub:node:module"() {
-      unavailable11 = (name) => () => {
-        throw new Error(name + " unavailable in the browser ask bundle");
-      };
-      createRequire11 = unavailable11("createRequire");
-      readFileSync11 = unavailable11("readFileSync");
-      writeFileSync11 = unavailable11("writeFileSync");
-      readFile11 = unavailable11("readFile");
-      writeFile11 = unavailable11("writeFile");
-      appendFile11 = unavailable11("appendFile");
-      mkdir11 = unavailable11("mkdir");
-      mkdtemp11 = unavailable11("mkdtemp");
-      rename11 = unavailable11("rename");
-      unlink11 = unavailable11("unlink");
-      rm11 = unavailable11("rm");
-      stat11 = unavailable11("stat");
-      access11 = unavailable11("access");
-      copyFile11 = unavailable11("copyFile");
-      readdir11 = unavailable11("readdir");
-      createReadStream11 = unavailable11("createReadStream");
-      createWriteStream11 = unavailable11("createWriteStream");
-      randomBytes11 = unavailable11("randomBytes");
-      createHash11 = unavailable11("createHash");
-      createRequireFromPath11 = unavailable11("createRequireFromPath");
-      spawnSync11 = unavailable11("spawnSync");
-      createInterface11 = unavailable11("createInterface");
-      createServer11 = unavailable11("createServer");
-      DatabaseSync11 = unavailable11("DatabaseSync");
-    }
-  });
-
-  // src/wink-model.mjs
-  function loadWinkModel() {
-    if (cached !== void 0) return cached;
-    try {
-      const pair = injected ? injected() : nodeRequireWink();
-      cached = pair && pair.winkNLP && pair.model ? pair : null;
-    } catch {
-      cached = null;
-    }
-    return cached;
-  }
-  function nodeRequireWink() {
-    const require2 = createRequire11(import_meta5.url);
-    return {
-      winkNLP: require2("wink-nlp"),
-      model: require2("wink-eng-lite-web-model")
-    };
-  }
-  function winkInstance() {
-    if (instance !== void 0) return instance;
-    const loaded = loadWinkModel();
-    if (!loaded) {
-      instance = null;
-      return null;
-    }
-    try {
-      instance = loaded.winkNLP(loaded.model);
-    } catch {
-      instance = null;
-    }
-    return instance;
-  }
-  var import_meta5, injected, cached, instance;
-  var init_wink_model = __esm({
-    "src/wink-model.mjs"() {
-      init_node_module();
-      import_meta5 = {};
     }
   });
 
@@ -8076,95 +8076,6 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
 
   // src/chat.mjs
   init_node_path();
-  init_node_fs();
-  init_promises();
-
-  // node-stub:node:os
-  var unavailable4 = (name) => () => {
-    throw new Error(name + " unavailable in the browser ask bundle");
-  };
-  var createRequire4 = unavailable4("createRequire");
-  var readFileSync4 = unavailable4("readFileSync");
-  var writeFileSync4 = unavailable4("writeFileSync");
-  var readFile4 = unavailable4("readFile");
-  var writeFile4 = unavailable4("writeFile");
-  var appendFile4 = unavailable4("appendFile");
-  var mkdir4 = unavailable4("mkdir");
-  var mkdtemp4 = unavailable4("mkdtemp");
-  var rename4 = unavailable4("rename");
-  var unlink4 = unavailable4("unlink");
-  var rm4 = unavailable4("rm");
-  var stat4 = unavailable4("stat");
-  var access4 = unavailable4("access");
-  var copyFile4 = unavailable4("copyFile");
-  var readdir4 = unavailable4("readdir");
-  var createReadStream4 = unavailable4("createReadStream");
-  var createWriteStream4 = unavailable4("createWriteStream");
-  var randomBytes4 = unavailable4("randomBytes");
-  var createHash4 = unavailable4("createHash");
-  var createRequireFromPath4 = unavailable4("createRequireFromPath");
-  var spawnSync4 = unavailable4("spawnSync");
-  var createInterface4 = unavailable4("createInterface");
-  var createServer4 = unavailable4("createServer");
-  var DatabaseSync4 = unavailable4("DatabaseSync");
-
-  // node-stub:node:readline/promises
-  var unavailable5 = (name) => () => {
-    throw new Error(name + " unavailable in the browser ask bundle");
-  };
-  var createRequire5 = unavailable5("createRequire");
-  var readFileSync5 = unavailable5("readFileSync");
-  var writeFileSync5 = unavailable5("writeFileSync");
-  var readFile5 = unavailable5("readFile");
-  var writeFile5 = unavailable5("writeFile");
-  var appendFile5 = unavailable5("appendFile");
-  var mkdir5 = unavailable5("mkdir");
-  var mkdtemp5 = unavailable5("mkdtemp");
-  var rename5 = unavailable5("rename");
-  var unlink5 = unavailable5("unlink");
-  var rm5 = unavailable5("rm");
-  var stat5 = unavailable5("stat");
-  var access5 = unavailable5("access");
-  var copyFile5 = unavailable5("copyFile");
-  var readdir5 = unavailable5("readdir");
-  var createReadStream5 = unavailable5("createReadStream");
-  var createWriteStream5 = unavailable5("createWriteStream");
-  var randomBytes5 = unavailable5("randomBytes");
-  var createHash5 = unavailable5("createHash");
-  var createRequireFromPath5 = unavailable5("createRequireFromPath");
-  var spawnSync5 = unavailable5("spawnSync");
-  var createInterface5 = unavailable5("createInterface");
-  var createServer5 = unavailable5("createServer");
-  var DatabaseSync5 = unavailable5("DatabaseSync");
-
-  // node-stub:node:child_process
-  var unavailable6 = (name) => () => {
-    throw new Error(name + " unavailable in the browser ask bundle");
-  };
-  var createRequire6 = unavailable6("createRequire");
-  var readFileSync6 = unavailable6("readFileSync");
-  var writeFileSync6 = unavailable6("writeFileSync");
-  var readFile6 = unavailable6("readFile");
-  var writeFile6 = unavailable6("writeFile");
-  var appendFile6 = unavailable6("appendFile");
-  var mkdir6 = unavailable6("mkdir");
-  var mkdtemp6 = unavailable6("mkdtemp");
-  var rename6 = unavailable6("rename");
-  var unlink6 = unavailable6("unlink");
-  var rm6 = unavailable6("rm");
-  var stat6 = unavailable6("stat");
-  var access6 = unavailable6("access");
-  var copyFile6 = unavailable6("copyFile");
-  var readdir6 = unavailable6("readdir");
-  var createReadStream6 = unavailable6("createReadStream");
-  var createWriteStream6 = unavailable6("createWriteStream");
-  var randomBytes6 = unavailable6("randomBytes");
-  var createHash6 = unavailable6("createHash");
-  var createRequireFromPath6 = unavailable6("createRequireFromPath");
-  var spawnSync6 = unavailable6("spawnSync");
-  var createInterface6 = unavailable6("createInterface");
-  var createServer6 = unavailable6("createServer");
-  var DatabaseSync6 = unavailable6("DatabaseSync");
 
   // src/server.mjs
   init_promises();
@@ -8237,55 +8148,40 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
 
   // src/chat.mjs
   init_config();
-
-  // src/cli-args.mjs
-  init_node_path();
-  init_promises();
-  init_node_path();
-  init_toml_config();
-  init_config();
-
-  // src/chat.mjs
   init_codegraph();
   init_ask();
-  init_sessions();
 
   // node-stub:node:crypto
-  var unavailable9 = (name) => () => {
+  var unavailable6 = (name) => () => {
     throw new Error(name + " unavailable in the browser ask bundle");
   };
-  var createRequire9 = unavailable9("createRequire");
-  var readFileSync9 = unavailable9("readFileSync");
-  var writeFileSync9 = unavailable9("writeFileSync");
-  var readFile9 = unavailable9("readFile");
-  var writeFile9 = unavailable9("writeFile");
-  var appendFile9 = unavailable9("appendFile");
-  var mkdir9 = unavailable9("mkdir");
-  var mkdtemp9 = unavailable9("mkdtemp");
-  var rename9 = unavailable9("rename");
-  var unlink9 = unavailable9("unlink");
-  var rm9 = unavailable9("rm");
-  var stat9 = unavailable9("stat");
-  var access9 = unavailable9("access");
-  var copyFile9 = unavailable9("copyFile");
-  var readdir9 = unavailable9("readdir");
-  var createReadStream9 = unavailable9("createReadStream");
-  var createWriteStream9 = unavailable9("createWriteStream");
-  var randomBytes9 = unavailable9("randomBytes");
-  var createHash9 = unavailable9("createHash");
-  var createRequireFromPath9 = unavailable9("createRequireFromPath");
-  var spawnSync9 = unavailable9("spawnSync");
-  var createInterface9 = unavailable9("createInterface");
-  var createServer9 = unavailable9("createServer");
-  var DatabaseSync9 = unavailable9("DatabaseSync");
-
-  // src/telemetry.mjs
-  init_promises();
-  init_node_path();
+  var createRequire6 = unavailable6("createRequire");
+  var readFileSync6 = unavailable6("readFileSync");
+  var writeFileSync6 = unavailable6("writeFileSync");
+  var readFile6 = unavailable6("readFile");
+  var writeFile6 = unavailable6("writeFile");
+  var appendFile6 = unavailable6("appendFile");
+  var mkdir6 = unavailable6("mkdir");
+  var mkdtemp6 = unavailable6("mkdtemp");
+  var rename6 = unavailable6("rename");
+  var unlink6 = unavailable6("unlink");
+  var rm6 = unavailable6("rm");
+  var stat6 = unavailable6("stat");
+  var access6 = unavailable6("access");
+  var copyFile6 = unavailable6("copyFile");
+  var readdir6 = unavailable6("readdir");
+  var createReadStream6 = unavailable6("createReadStream");
+  var createWriteStream6 = unavailable6("createWriteStream");
+  var randomBytes6 = unavailable6("randomBytes");
+  var createHash6 = unavailable6("createHash");
+  var createRequireFromPath6 = unavailable6("createRequireFromPath");
+  var spawnSync6 = unavailable6("spawnSync");
+  var createInterface6 = unavailable6("createInterface");
+  var createServer6 = unavailable6("createServer");
+  var DatabaseSync6 = unavailable6("DatabaseSync");
 
   // src/chat.mjs
   init_templates();
-  init_extensions();
 
   // src/memory/bias.mjs
   var CORPUS_SOURCE_RE = /^src:corpus:(.+)$/;
@@ -8319,6 +8215,121 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   init_ask_nlp();
   init_fuzzy();
   init_answer_variants();
+
+  // src/services/chat-session.mjs
+  init_node_path();
+  init_node_fs();
+  init_promises();
+
+  // node-stub:node:os
+  var unavailable8 = (name) => () => {
+    throw new Error(name + " unavailable in the browser ask bundle");
+  };
+  var createRequire8 = unavailable8("createRequire");
+  var readFileSync8 = unavailable8("readFileSync");
+  var writeFileSync8 = unavailable8("writeFileSync");
+  var readFile8 = unavailable8("readFile");
+  var writeFile8 = unavailable8("writeFile");
+  var appendFile8 = unavailable8("appendFile");
+  var mkdir8 = unavailable8("mkdir");
+  var mkdtemp8 = unavailable8("mkdtemp");
+  var rename8 = unavailable8("rename");
+  var unlink8 = unavailable8("unlink");
+  var rm8 = unavailable8("rm");
+  var stat8 = unavailable8("stat");
+  var access8 = unavailable8("access");
+  var copyFile8 = unavailable8("copyFile");
+  var readdir8 = unavailable8("readdir");
+  var createReadStream8 = unavailable8("createReadStream");
+  var createWriteStream8 = unavailable8("createWriteStream");
+  var randomBytes8 = unavailable8("randomBytes");
+  var createHash8 = unavailable8("createHash");
+  var createRequireFromPath8 = unavailable8("createRequireFromPath");
+  var spawnSync8 = unavailable8("spawnSync");
+  var createInterface8 = unavailable8("createInterface");
+  var createServer8 = unavailable8("createServer");
+  var DatabaseSync8 = unavailable8("DatabaseSync");
+
+  // node-stub:node:readline/promises
+  var unavailable9 = (name) => () => {
+    throw new Error(name + " unavailable in the browser ask bundle");
+  };
+  var createRequire9 = unavailable9("createRequire");
+  var readFileSync9 = unavailable9("readFileSync");
+  var writeFileSync9 = unavailable9("writeFileSync");
+  var readFile9 = unavailable9("readFile");
+  var writeFile9 = unavailable9("writeFile");
+  var appendFile9 = unavailable9("appendFile");
+  var mkdir9 = unavailable9("mkdir");
+  var mkdtemp9 = unavailable9("mkdtemp");
+  var rename9 = unavailable9("rename");
+  var unlink9 = unavailable9("unlink");
+  var rm9 = unavailable9("rm");
+  var stat9 = unavailable9("stat");
+  var access9 = unavailable9("access");
+  var copyFile9 = unavailable9("copyFile");
+  var readdir9 = unavailable9("readdir");
+  var createReadStream9 = unavailable9("createReadStream");
+  var createWriteStream9 = unavailable9("createWriteStream");
+  var randomBytes9 = unavailable9("randomBytes");
+  var createHash9 = unavailable9("createHash");
+  var createRequireFromPath9 = unavailable9("createRequireFromPath");
+  var spawnSync9 = unavailable9("spawnSync");
+  var createInterface9 = unavailable9("createInterface");
+  var createServer9 = unavailable9("createServer");
+  var DatabaseSync9 = unavailable9("DatabaseSync");
+
+  // node-stub:node:child_process
+  var unavailable10 = (name) => () => {
+    throw new Error(name + " unavailable in the browser ask bundle");
+  };
+  var createRequire10 = unavailable10("createRequire");
+  var readFileSync10 = unavailable10("readFileSync");
+  var writeFileSync10 = unavailable10("writeFileSync");
+  var readFile10 = unavailable10("readFile");
+  var writeFile10 = unavailable10("writeFile");
+  var appendFile10 = unavailable10("appendFile");
+  var mkdir10 = unavailable10("mkdir");
+  var mkdtemp10 = unavailable10("mkdtemp");
+  var rename10 = unavailable10("rename");
+  var unlink10 = unavailable10("unlink");
+  var rm10 = unavailable10("rm");
+  var stat10 = unavailable10("stat");
+  var access10 = unavailable10("access");
+  var copyFile10 = unavailable10("copyFile");
+  var readdir10 = unavailable10("readdir");
+  var createReadStream10 = unavailable10("createReadStream");
+  var createWriteStream10 = unavailable10("createWriteStream");
+  var randomBytes10 = unavailable10("randomBytes");
+  var createHash10 = unavailable10("createHash");
+  var createRequireFromPath10 = unavailable10("createRequireFromPath");
+  var spawnSync10 = unavailable10("spawnSync");
+  var createInterface10 = unavailable10("createInterface");
+  var createServer10 = unavailable10("createServer");
+  var DatabaseSync10 = unavailable10("DatabaseSync");
+
+  // src/services/chat-session.mjs
+  init_config();
+
+  // src/cli-args.mjs
+  init_node_path();
+  init_promises();
+  init_node_path();
+  init_toml_config();
+  init_config();
+
+  // src/services/chat-session.mjs
+  init_codegraph();
+  init_sessions();
+
+  // src/telemetry.mjs
+  init_promises();
+  init_node_path();
+
+  // src/services/chat-session.mjs
+  init_extensions();
+
+  // src/chat.mjs
   setDefaultNlpAdapter(nlpAdapter);
   setConstructionBanks(readConstructionFiles);
   var CONTEXT_WORDS = /* @__PURE__ */ new Set(["it", "this", "that", "here"]);

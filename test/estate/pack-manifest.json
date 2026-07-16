@@ -131,6 +131,7 @@
   "src/sentences.mjs",
   "src/server-http.mjs",
   "src/server.mjs",
+  "src/services/chat-session.mjs",
   "src/sessions.mjs",
   "src/source-slice.mjs",
   "src/source.mjs",

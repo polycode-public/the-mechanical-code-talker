@@ -16,6 +16,7 @@ export const LAYER_OF = {
   "conformance.mjs": "tools",
 
   "chat.mjs": "services",
+  "services/chat-session.mjs": "services",
   "sessions.mjs": "services",
   "init.mjs": "services",
   "import-file.mjs": "services",
