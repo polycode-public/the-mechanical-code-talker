@@ -45,6 +45,9 @@ notice}), guarded by `test/estate/corpus-licences.test.mjs`.
 | `tier2/{aws,python,java,general}.jsonl` | tier-2 SAMPLE corpuses — same fact shape as the tier-1 slice, loadable via the same path (`general` is the one deliberately non-code-domain bundle) | ~4-6 KB each | MPL-2.0 |
 | `tier2/human.jsonl` | the DEFAULT active bundle: the everyday "human-world" persona, Small tier (664 facts) — hand-curated from Open English WordNet, bridged to Schema.org's top-level classes | ~80 KB | MPL-2.0 (hand-authored fact set; not a verbatim WordNet/Schema.org excerpt — see `tier2/generate.mjs`'s own header comment) |
 | `tier2/human-medium.jsonl` / `tier2/human-large.jsonl` | SIZE tiers of the SAME `human` bundle — each holds ONLY the facts that size adds beyond the previous one; both shipped INACTIVE by default, activated via `tmct init --persona-size medium\|large`. Built by `scripts/build-persona-tiers.mjs` from the same WordNet source, automatically curated (sense-ranked, blocklist/denylist-filtered) rather than hand-typed one at a time, given the scale (944 / ~12,000 facts) | ~111 KB / ~1.4 MB | MPL-2.0 (same "hand-authored in homage to the source's shape" basis as `human.jsonl`) |
+| `prose/sqlite/*.txt` | the frozen prose corpus, code half: plain-text extractions of 12 SQLite documentation pages | ~375 KB | **public domain** (see `prose/sqlite/LICENSE-NOTICE`) |
+| `prose/wikipedia/*.txt` | the frozen prose corpus, English half: 56 simple-English lead sections (everyday concepts) + 12 en.wikipedia full articles (NLP/OWL/logic) | ~356 KB | **CC-BY-SA 4.0** (see `prose/wikipedia/LICENSE-NOTICE`) |
+| `prose/manifest.json` | provenance for the above: source URL, byte count and sha256 per file, plus the fetch date | — | MPL-2.0 |
 | `tier2/human-examples.jsonl` / `tier2/human-examples-medium.jsonl` / `tier2/human-examples-large.jsonl` | the example-sentence corpus — real natural-language sentences mapped to the same curated vocabulary, NOT fact triples. Small/Medium tiers are 100% WordNet's own inline `example:` field (same CC-BY-4.0 basis as the fact bundles). Large tier ALSO includes a SemCor-filtered supplement (real Brown Corpus text, re-tagged to modern OEWN senses) for categories where WordNet's own inline coverage is thin (`human-nature` especially — `noun.animal.yaml`'s inline rate is under 1%) | ~11 KB / ~43 KB / ~257 KB | **The WordNet-inline entries**: CC-BY-4.0 (Princeton WordNet + Open English WordNet team), reproduced verbatim (these ARE the source's own example sentences, not a paraphrase). **The `source: "semcor:…"` entries**: CC-BY-4.0 per this SemCor fork's own `LICENSE.md` (a local uncommitted checkout of `globalwordnet/semcor`, real Brown Corpus text re-tagged to modern senses — the original 1960s Brown Corpus permissions aren't independently re-verified beyond that fork's own license statement; proceeding with attribution was an explicit operator decision) — each entry's own `source` field names its origin file (`semcor:<genre>/<file>.yaml`) for exactly this reason |
 
 And alongside (same phase, different directory because it is tmct-original
@@ -54,6 +57,51 @@ data, not a derived corpus):
 |---|---|---|
 | `../data/templates/responses.jsonl` | ~56 response templates ({id, class, template, register}) | MPL-2.0 |
 | `../data/phrasebook/software-phrases.txt` | ~170 SE phrase patterns + 31 synonym families | MPL-2.0 |
+
+## The prose corpus (`prose/`) — external and frozen, on purpose
+
+`prose/` is plain English text. It is not seeded and holds no facts. It exists
+to be *measured against*: `scripts/template-coverage.mjs` asks how much of it
+tmct's ACE grammar parses, and the rescue pass in
+`scripts/generate-template-variants.mjs` mines it for near-misses.
+
+It used to be this repository's own root `*.md` docs, and both reasons it moved
+are worth stating, because both were real bugs:
+
+- **A doc edit could drift a shipped artifact.** The corpus was globbed from
+  every root `*.md`, so editing a README or a plan changed
+  `generated/ace-surface-variants.jsonl` — a file npm ships. A rescue row could
+  be, and once was, a sentence someone had written into a plan that morning.
+  Committed text fetched from a recorded URL cannot do that.
+- **The coverage metric was not comparable across versions.** A hit rate only
+  means something against a fixed corpus. When the corpus moves with every doc
+  edit, two versions' numbers are not measuring the same thing, and a change in
+  the number says nothing about a change in the grammar.
+
+So the corpus is external (nothing in this repo can edit it), frozen (a
+snapshot, checksummed per file in `prose/manifest.json`), and re-fetched only
+when someone deliberately runs `npm run gen:prose-corpus`. `test/estate/prose-corpus.test.mjs`
+checks the committed bytes against the manifest, so a hand-edit fails loudly.
+
+**Licensing picked the sources, not preference.** The rescue pass substitutes
+words and commits the result to a file npm publishes, so this corpus is
+republished as a *modified derivative*. Only sources that permit derivatives
+qualify. IETF RFCs and W3C specifications — including the OWL 2 Primer, the
+best domain match there is — permit redistribution but **not** modification, so
+they are unusable here and must not be added. SQLite's documentation is public
+domain; Wikipedia is CC BY-SA 4.0. Adding Wikipedia is what makes
+`generated/ace-surface-variants.jsonl` CC-BY-SA-4.0 rather than CC-BY-4.0:
+share-alike is viral, and it reaches the generated file.
+
+**Why simple-English lead sections for the everyday half.** Measured, on the
+metric the rescue pass actually consumes (sentences with exactly one undeclared
+word): simple.wikipedia.org lead sections yield ~0.33 rescue candidates per KB
+against ~0.12 for technical prose. Lead sections are dense definitional English
+("A penguin is a bird that cannot fly"), which is the shape the ACE grammar was
+built to parse; later article sections drift into history and citations. The
+titles cover the same everyday concepts the persona clumps model
+(`scripts/build-persona-tiers.mjs`'s `CLUMP_FILES`). The technical half stays
+because tmct's own domain is code.
 
 ## How seeding works
 
