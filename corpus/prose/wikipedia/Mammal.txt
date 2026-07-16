@@ -1,0 +1,3 @@
+Mammals are in the class Mammalia. They are a group of vertebrate animals. They have fur or hair and very precise temperature regulation.
+With the exception of the monotremes, all mammals bear live young. Unlike other vertebrates, they are the only animals that produce milk for their young through their mammary glands. Parental care of the young is universal among mammals, sometimes for long periods.
+Mammals became the dominant land animals after non-bird dinosaurs were eliminated. Recent work helped to explain their success: epigenetics seems to have started in early mammals.

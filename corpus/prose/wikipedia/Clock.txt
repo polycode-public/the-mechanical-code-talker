@@ -1,0 +1,2 @@
+A clock is a device that tells the time. Some clocks can only show the time. Other clocks can show other things. For example, some clocks can show the date as well as the time, or show other information, like the timer
+temperature or the weather, some have stopwatch and some have alarm.

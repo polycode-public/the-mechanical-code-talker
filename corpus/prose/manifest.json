@@ -1,0 +1,512 @@
+{
+  "version": 1,
+  "generated": "by scripts/fetch-prose-corpus.mjs",
+  "fetched": "2026-07-16",
+  "description": "Frozen external prose corpus for the rescue pass and the coverage harness. Every file records the URL it came from and a sha256 of the committed bytes, so a re-fetch is verifiable and a doc edit in this repo can never drift it.",
+  "sources": [
+    {
+      "family": "sqlite",
+      "upstream": "SQLite documentation (sqlite.org)",
+      "license": "public-domain",
+      "licenseUrl": "https://www.sqlite.org/copyright.html",
+      "notice": "corpus/prose/sqlite/LICENSE-NOTICE",
+      "extraction": "HTML fetched per page; script/style/pre/code elements dropped, tags stripped, entities decoded"
+    },
+    {
+      "family": "wikipedia",
+      "upstream": "Wikipedia — simple.wikipedia.org lead sections (everyday concepts) and en.wikipedia.org full articles (tmct's technical domain)",
+      "license": "CC-BY-SA-4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+      "notice": "corpus/prose/wikipedia/LICENSE-NOTICE",
+      "extraction": "MediaWiki API action=query&prop=extracts&explaintext=1 (&exintro=1 for the simple-English set); section headings removed"
+    }
+  ],
+  "totals": {
+    "files": 80,
+    "bytes": 748490
+  },
+  "files": [
+    {
+      "file": "sqlite/arch.txt",
+      "url": "https://www.sqlite.org/arch.html",
+      "bytes": 8536,
+      "sha256": "2872a7e1a6217a95ffa9f7a9a7860a02c93e2b85422979bf90b8360ac0abfc09"
+    },
+    {
+      "file": "sqlite/atomiccommit.txt",
+      "url": "https://www.sqlite.org/atomiccommit.html",
+      "bytes": 61558,
+      "sha256": "a971f1f7bd1b87efc99ae0fa23aff184b2187d3ea5349a745027110bf854101b"
+    },
+    {
+      "file": "sqlite/faq.txt",
+      "url": "https://www.sqlite.org/faq.html",
+      "bytes": 26309,
+      "sha256": "e17bc359f41dfac7cae19c7e7a492956ef7f274042d6213ef81509bdd651a43b"
+    },
+    {
+      "file": "sqlite/fileformat.txt",
+      "url": "https://www.sqlite.org/fileformat.html",
+      "bytes": 81267,
+      "sha256": "34a71924d80d1498f5f7e309c8ea9e8d2196c19762439f02645d84a9065cdd1c"
+    },
+    {
+      "file": "sqlite/lang_createtable.txt",
+      "url": "https://www.sqlite.org/lang_createtable.html",
+      "bytes": 24831,
+      "sha256": "0382d25c2891621fac08857bd67ab38d72f9463183b603df722c0e918c40ce56"
+    },
+    {
+      "file": "sqlite/lang_insert.txt",
+      "url": "https://www.sqlite.org/lang_insert.html",
+      "bytes": 7361,
+      "sha256": "e8edf3d8839830ea4c11cf9113b31a5486c55e0ab890f7e4b6ecf1ee2a208686"
+    },
+    {
+      "file": "sqlite/lang_select.txt",
+      "url": "https://www.sqlite.org/lang_select.html",
+      "bytes": 52567,
+      "sha256": "e8a73be6e1304310105c27b48f78eaec47ae18efe6b176f56719a9bfa9bec9d2"
+    },
+    {
+      "file": "sqlite/optoverview.txt",
+      "url": "https://www.sqlite.org/optoverview.html",
+      "bytes": 50081,
+      "sha256": "fc24a8f3458aff3da2340ea5c2b8a5e107663df8473d4b24d6fa65aa96eea1d7"
+    },
+    {
+      "file": "sqlite/queryplanner.txt",
+      "url": "https://www.sqlite.org/queryplanner.html",
+      "bytes": 24352,
+      "sha256": "82bed42de559b164d24cf5fb4905aaf2d85f6e1f3ee128d370d075c0e44ef8d0"
+    },
+    {
+      "file": "sqlite/transactional.txt",
+      "url": "https://www.sqlite.org/transactional.html",
+      "bytes": 1122,
+      "sha256": "bf865b4e5d5fb9d54b6440ddbff0b5c4fff572610549e072d3a6f0cf782c70ea"
+    },
+    {
+      "file": "sqlite/wal.txt",
+      "url": "https://www.sqlite.org/wal.html",
+      "bytes": 31203,
+      "sha256": "85fc412c7cb91afe22f5d05876640c47f09590cc702596d1af655a89f1bc800a"
+    },
+    {
+      "file": "sqlite/whentouse.txt",
+      "url": "https://www.sqlite.org/whentouse.html",
+      "bytes": 15297,
+      "sha256": "f4c68cb9cc2547184f12218f985ac9416f2a4bda29fe53bb7ed212aaff13d638"
+    },
+    {
+      "file": "wikipedia/Apple.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Apple",
+      "bytes": 1308,
+      "sha256": "bc29bc048829caab5821cc474d71c9cf1c9b7e1fd7b792623bc12701ff6256ab"
+    },
+    {
+      "file": "wikipedia/Attempto_Controlled_English.txt",
+      "url": "https://en.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&titles=Attempto_Controlled_English",
+      "bytes": 13762,
+      "sha256": "9c71574bb4767366c9e2e4047f117cdc18762c58e6282d7742831947dfdf8347"
+    },
+    {
+      "file": "wikipedia/Automated_planning_and_scheduling.txt",
+      "url": "https://en.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&titles=Automated_planning_and_scheduling",
+      "bytes": 13090,
+      "sha256": "91236c6358c6d4eb825bce2c1b9f2bdffdddd558edbabb61537649e574487514"
+    },
+    {
+      "file": "wikipedia/Bee.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Bee",
+      "bytes": 873,
+      "sha256": "412bab0db00730cf62624a826b0939eb17822a1d3da4808a8b93bb394a55193a"
+    },
+    {
+      "file": "wikipedia/Bird.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Bird",
+      "bytes": 3714,
+      "sha256": "c4d67c3c0f19aa4d9a0109309a431f3778729d5f9c9f5c1f95c522a645e5e0aa"
+    },
+    {
+      "file": "wikipedia/Bone.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Bone",
+      "bytes": 722,
+      "sha256": "2ec0fb8f8414190da3e55a94430583ead8b5a1a7631ed5d10c0f79959da79300"
+    },
+    {
+      "file": "wikipedia/Book.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Book",
+      "bytes": 1886,
+      "sha256": "11be7225611e82eb0d4467a8b29ef66fea8fe78473838a82943842a9dfb10750"
+    },
+    {
+      "file": "wikipedia/Bread.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Bread",
+      "bytes": 1512,
+      "sha256": "48162d08c4b5f41238c3b7d2c3a5b88178739e6aecacf3995b1752c44714bc20"
+    },
+    {
+      "file": "wikipedia/Butterfly.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Butterfly",
+      "bytes": 2391,
+      "sha256": "4ca7b30a14458c71148182f59667599dc6bca7eee80de111e2309571ad47b016"
+    },
+    {
+      "file": "wikipedia/Car.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Car",
+      "bytes": 367,
+      "sha256": "35bd9e9433ba556c5f5a58ef0dd125e3fdbb7843ca83137d4b6bc896978046e1",
+      "redirectedFrom": "Car",
+      "servedTitle": "Automobile"
+    },
+    {
+      "file": "wikipedia/Cat.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Cat",
+      "bytes": 404,
+      "sha256": "2ee0ca6e537986a2784dbead7ed5087e90af7fa75412839de9955dead44acc9a"
+    },
+    {
+      "file": "wikipedia/Child.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Child",
+      "bytes": 1201,
+      "sha256": "6d84301f460e8649f889c767feec34119538e342caeef686d9b63c1afbe6bf68"
+    },
+    {
+      "file": "wikipedia/City.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=City",
+      "bytes": 634,
+      "sha256": "a1f196acaf64360de83e3f0f0a80f7028a28402b7ee7c9721f8db62ca319daf4"
+    },
+    {
+      "file": "wikipedia/Clock.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Clock",
+      "bytes": 288,
+      "sha256": "074f7bf0701bbbb17747e38b813f2f8724836d8082015ec4977363b12e46c748"
+    },
+    {
+      "file": "wikipedia/Cooking.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Cooking",
+      "bytes": 62,
+      "sha256": "af3f5587d51bb9aa0c82acd9b48941f3b9d669855ee03f137a6ba4f47a86b5ea"
+    },
+    {
+      "file": "wikipedia/Description_logic.txt",
+      "url": "https://en.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&titles=Description_logic",
+      "bytes": 24119,
+      "sha256": "239e0bed2151a44f30bbb47bdc39120e35258289ec7ee2430f20f5be9cfd60f3"
+    },
+    {
+      "file": "wikipedia/Doctor.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Doctor",
+      "bytes": 304,
+      "sha256": "8ffa5a1e39aa776e0bbf06e2a140d109ddce2d59b1a4b71b219ad488cbf404c1"
+    },
+    {
+      "file": "wikipedia/Dog.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Dog",
+      "bytes": 996,
+      "sha256": "ed1424d4b2d17d32869a5c55f0724f3c2c1f0cdfeafa18549c4f77a00d369d3b"
+    },
+    {
+      "file": "wikipedia/Eagle.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Eagle",
+      "bytes": 1002,
+      "sha256": "e28bac24101f29f63dec1a1261175e9964dedb347941b5f88c521bd53c5b24bd"
+    },
+    {
+      "file": "wikipedia/Emotion.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Emotion",
+      "bytes": 1228,
+      "sha256": "ab6e1d8105630ed09047bc955e9f9a61cdda251a5158fa2ed01f143907062d2b"
+    },
+    {
+      "file": "wikipedia/Eye.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Eye",
+      "bytes": 1110,
+      "sha256": "f6ef1c0ba5bf30e6b9e1d79af078005a54e764ce40e83d5c2829fec56f8c64e1"
+    },
+    {
+      "file": "wikipedia/Family.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Family",
+      "bytes": 813,
+      "sha256": "3397a5550c414e5a21da03612c266cf587dde1d3cb1c7d78e33152dbb6592dd8"
+    },
+    {
+      "file": "wikipedia/Farm.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Farm",
+      "bytes": 844,
+      "sha256": "a175bd39bd24b9325b4a5c89c284cb3d699e6f230588a98e9026d50c559dff15"
+    },
+    {
+      "file": "wikipedia/Fear.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Fear",
+      "bytes": 1206,
+      "sha256": "2d0cc99fa097df65e317d0c1cbb470de2ff1620a46732cf7361f0b9515c76054"
+    },
+    {
+      "file": "wikipedia/First-order_logic.txt",
+      "url": "https://en.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&titles=First-order_logic",
+      "bytes": 73814,
+      "sha256": "65dfee749f852070ab9d2836c155a5ee057082d699b4ef7db2f9047c953370ca"
+    },
+    {
+      "file": "wikipedia/Fish.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Fish",
+      "bytes": 1884,
+      "sha256": "ceaabc22c27ce549629b5ac43ba83f0b9fc3c4492f754b9688a0f89510b9cade"
+    },
+    {
+      "file": "wikipedia/Flower.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Flower",
+      "bytes": 661,
+      "sha256": "a4b5b3e33d372ee4537a96398a66e550b24f1e75b99647ff1ed40099d7b821df"
+    },
+    {
+      "file": "wikipedia/Food.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Food",
+      "bytes": 1947,
+      "sha256": "b14aa97e5dd6389041952fe217e232d03c633a656afd2c357b68ebc5bb0b1650"
+    },
+    {
+      "file": "wikipedia/Grass.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Grass",
+      "bytes": 2283,
+      "sha256": "8ff8b90c515ac2d41dcabc905b9aeb0460c183b5b57cc4ce6e8be9e884b783fb"
+    },
+    {
+      "file": "wikipedia/Hand.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Hand",
+      "bytes": 600,
+      "sha256": "0f81f49ff825d5957ef3fa367f085fc2dc615eb18c2d903c4df801b0c3aa685a"
+    },
+    {
+      "file": "wikipedia/Happiness.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Happiness",
+      "bytes": 844,
+      "sha256": "c31915754521ffde90c3dbf2883aaac1d3a83c49ab173959294003d013e3d3e0"
+    },
+    {
+      "file": "wikipedia/Heart.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Heart",
+      "bytes": 1187,
+      "sha256": "10e9313b21e5d03cfea00cecd9315208d7a621652570753720fc1fc491adb2ce"
+    },
+    {
+      "file": "wikipedia/Horse.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Horse",
+      "bytes": 687,
+      "sha256": "95d6537c7b38bff13b8cd1e9af01c1d539622dffbf46e182df1d04336fc05e4f"
+    },
+    {
+      "file": "wikipedia/House.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=House",
+      "bytes": 1994,
+      "sha256": "7c3d1bc390c4015399399352afda8f639364baf72e816809b74d6777ee2bc990"
+    },
+    {
+      "file": "wikipedia/Human.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Human",
+      "bytes": 1040,
+      "sha256": "1c719d6cb12293574847d27207273ae0f3c1641e3c2c3fb4498018a53ee2340b"
+    },
+    {
+      "file": "wikipedia/Insect.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Insect",
+      "bytes": 1001,
+      "sha256": "33ab50936ee0cf37f0977ddffaf533fa8f60582d18bbecb45c2fdea58e6c01bd"
+    },
+    {
+      "file": "wikipedia/Interactive_fiction.txt",
+      "url": "https://en.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&titles=Interactive_fiction",
+      "bytes": 33373,
+      "sha256": "25b3f2eab888106018077abb27c5d0b8eefaecca5d79fa69f1d05572b0a00a4a"
+    },
+    {
+      "file": "wikipedia/Knowledge_representation_and_reasoning.txt",
+      "url": "https://en.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&titles=Knowledge_representation_and_reasoning",
+      "bytes": 27698,
+      "sha256": "b3a6a78e66cbbf56a195d7fe12046b4ddf7d23b568888ce3a725970e9eb1a814"
+    },
+    {
+      "file": "wikipedia/Knowledge.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Knowledge",
+      "bytes": 4789,
+      "sha256": "685db268f2799be93d5de3a49b1ba21cbda1f15ca5ffcec433dac2e99e4bb182"
+    },
+    {
+      "file": "wikipedia/Language.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Language",
+      "bytes": 1012,
+      "sha256": "d894e1c549ee3c4dcd0bc83c53ca8858e07a6bbe3e3d9ff75fa94b7922738cac"
+    },
+    {
+      "file": "wikipedia/Learning.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Learning",
+      "bytes": 3942,
+      "sha256": "9b7f789c003ca153e17764d6e3df3cb47eeeb80172814f5aa7cca0f977700070"
+    },
+    {
+      "file": "wikipedia/Mammal.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Mammal",
+      "bytes": 584,
+      "sha256": "66ed2f3923a036f29ea8381b2b502c93902fc27bdc2df4b2112d8c172663b3df"
+    },
+    {
+      "file": "wikipedia/Memory.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Memory",
+      "bytes": 670,
+      "sha256": "017fa412aeb1223e2c7f0d3366be5c100043b7ba425d536946096c7587710592"
+    },
+    {
+      "file": "wikipedia/Milk.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Milk",
+      "bytes": 352,
+      "sha256": "6c4a9a2071ff290c5becd16096a717a19560ccd32d11d80608085e3df33c5d48"
+    },
+    {
+      "file": "wikipedia/Mountain.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Mountain",
+      "bytes": 305,
+      "sha256": "98e3e6ad7aaa6637af036c88b3fe80dc9d80e6b6e751b6cbb5cd8c0077c85f1e"
+    },
+    {
+      "file": "wikipedia/Natural_language_processing.txt",
+      "url": "https://en.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&titles=Natural_language_processing",
+      "bytes": 29865,
+      "sha256": "8ca6bec392a03be9af25289398c568989d868e97975bb33174f6c726dd2e83f3"
+    },
+    {
+      "file": "wikipedia/Ostrich.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Ostrich",
+      "bytes": 357,
+      "sha256": "c2036a63901b29de4e9207748ae1303cdc204a18b616125ba354a697c672db76"
+    },
+    {
+      "file": "wikipedia/Owl.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Owl",
+      "bytes": 505,
+      "sha256": "ca034c1375034af8c491c9f2fb79f083d8e37bd87b0fbc4621f83f184d445336"
+    },
+    {
+      "file": "wikipedia/Penguin.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Penguin",
+      "bytes": 468,
+      "sha256": "a18651aca0cfce1ac3270314e7566b2b753e3b7b8105179b474f8034f0813f7d"
+    },
+    {
+      "file": "wikipedia/Plant.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Plant",
+      "bytes": 1516,
+      "sha256": "f27694ef9cde44ca981ff63e7d92fb789f09aca4f96ebf4761bb42288c8f38a3"
+    },
+    {
+      "file": "wikipedia/Rain.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Rain",
+      "bytes": 168,
+      "sha256": "ae8cd569146d9b9cbdfa2e9b605099354e5060acba3d4384fa5b465ecd37f4d9"
+    },
+    {
+      "file": "wikipedia/Resource_Description_Framework.txt",
+      "url": "https://en.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&titles=Resource_Description_Framework",
+      "bytes": 23121,
+      "sha256": "4227706ed6ccb2c0b5a14fd026d32f9c426e551bc9b0c86dca347de268866228"
+    },
+    {
+      "file": "wikipedia/River.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=River",
+      "bytes": 398,
+      "sha256": "0c977a35fa60b5edf73a275006125e1f8ee0574e48d045870106a0bfcf377aed"
+    },
+    {
+      "file": "wikipedia/School.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=School",
+      "bytes": 2461,
+      "sha256": "bca92eab55cd91b411248b506b307e737465d987f0e444fa8452e74ec2f0f43d"
+    },
+    {
+      "file": "wikipedia/Sea.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Sea",
+      "bytes": 142,
+      "sha256": "279b65366b340430712868dc89f765873ea60fd8d94e58436d0fe4d21880e07e"
+    },
+    {
+      "file": "wikipedia/Semantic_reasoner.txt",
+      "url": "https://en.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&titles=Semantic_reasoner",
+      "bytes": 3437,
+      "sha256": "b635dd213999d33d47c4c70862653a9ad3ee19ec86fb8ca40f268ceeb15f5593"
+    },
+    {
+      "file": "wikipedia/Semantic_Web.txt",
+      "url": "https://en.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&titles=Semantic_Web",
+      "bytes": 30115,
+      "sha256": "88d8a95afd21618e2832689ce55c952d2391ac6ea8e639f3d3cd1c74fe1a6d25"
+    },
+    {
+      "file": "wikipedia/Snow.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Snow",
+      "bytes": 1517,
+      "sha256": "d50eb34e66db433703b8c8a1e8b3eb2dc6501e6941886125504a9c2e307c2df4"
+    },
+    {
+      "file": "wikipedia/Sun.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Sun",
+      "bytes": 3406,
+      "sha256": "5ac56e9f51ee7aa2344893f61d334bc0b93697361af13e6783b3204ab2985766"
+    },
+    {
+      "file": "wikipedia/Teacher.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Teacher",
+      "bytes": 756,
+      "sha256": "64b636ba86ae5110a7f2da896cc955ec08fe0c7badf9b806945fd1e3ac9d2603"
+    },
+    {
+      "file": "wikipedia/Team.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Team",
+      "bytes": 585,
+      "sha256": "4a1d447c0196f9a77056afc59cc942a3242ac25d8d45417dbaf05c5cb4734c11"
+    },
+    {
+      "file": "wikipedia/Text-based_game.txt",
+      "url": "https://en.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&titles=Text-based_game",
+      "bytes": 7083,
+      "sha256": "2f12953c5686525a3e363242f707b1fd56a560dbf2504f8854276a1c65e277eb"
+    },
+    {
+      "file": "wikipedia/Tool.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Tool",
+      "bytes": 1051,
+      "sha256": "16dde2f466ae26be9366be8fb66feceed1581ecf3199d5d26785de09edfd2ea5"
+    },
+    {
+      "file": "wikipedia/Tree.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Tree",
+      "bytes": 1638,
+      "sha256": "abecf6d15c24f98a97d79484d0abc159ceb17f94eb131a6b242ad74920571949"
+    },
+    {
+      "file": "wikipedia/Weather.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Weather",
+      "bytes": 891,
+      "sha256": "6c8b82ff45e42bc88acf908ac8c94e9c29317ea2fb58334fe7b4d18fc7967697"
+    },
+    {
+      "file": "wikipedia/Web_Ontology_Language.txt",
+      "url": "https://en.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&titles=Web_Ontology_Language",
+      "bytes": 16388,
+      "sha256": "be524b8709e7b2019b817b28c74108dd6aea4aff4e6258907c73164fafe9593f"
+    },
+    {
+      "file": "wikipedia/Wind.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Wind",
+      "bytes": 2121,
+      "sha256": "62493e44dc74d5703837f70b130b9067054f11ca4faaa5209494aef5ddf6ce58"
+    },
+    {
+      "file": "wikipedia/Writing.txt",
+      "url": "https://simple.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&exintro=1&titles=Writing",
+      "bytes": 1514,
+      "sha256": "340262ce26cc490e272f02ca74be2d48c244fbb66569ee733ffaf08a8b8316ae"
+    }
+  ]
+}
