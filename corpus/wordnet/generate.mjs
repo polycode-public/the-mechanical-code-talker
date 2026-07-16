@@ -30,12 +30,11 @@
 //      emitting one row per edge (see RELATION_MAP / synonymPairs below).
 //
 // The hand-rolled `parseYaml` this file reuses (imported, not duplicated) is
-// scripts/extract-persona-sources.mjs's own tiny YAML-subset reader — already
-// proven against this exact OEWN dump shape by scripts/build-persona-tiers.mjs
-// and scripts/build-persona-examples.mjs. Reusing it (rather than adding a
-// general YAML dependency, or re-deriving a second hand-rolled parser) keeps
-// this converter self-consistent with the rest of the persona-tier tooling
-// that already reads this same source.
+// src/domain/wordnet/yaml.mjs's tiny YAML-subset reader — already proven
+// against this exact OEWN dump shape by the persona-tier tooling. Reusing it
+// (rather than adding a general YAML dependency, or re-deriving a second
+// hand-rolled parser) keeps this converter self-consistent with the rest of
+// the tooling that already reads this same source.
 //
 // Licence: Open English WordNet content is CC-BY-4.0 (Princeton WordNet +
 // Open English Wordnet team) — see LICENSE-NOTICE in this directory. The
@@ -47,7 +46,7 @@ import { homedir } from "node:os";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { parseYaml } from "../../scripts/extract-persona-sources.mjs";
+import { parseYaml } from "../../src/domain/wordnet/yaml.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const WORDNET_OUT_DIR = HERE;
