@@ -515,12 +515,22 @@ export function applyPhrasingFrames(text) {
 // <verb> Y") and returns a descriptor, distinct from the rhetorical
 // double-negative rewriter above (which REMOVES negation instead of
 // preserving it as a set operation).
+// The modal negations ("which X cannot <verb> Y", "which X can't <verb> Y")
+// ride the same shape: the graph only records what IS, so the nearest
+// answerable reading of a modal negation is the same factual complement "do
+// not" asks for. Leaving them out doesn't produce a miss — a later strategy
+// reads the modal as filler and answers with the POSITIVE set, the exact
+// inverse of the question. The fused forms are matched HERE rather than
+// expanded in the shared CONTRACTIONS table because that table also feeds the
+// teach lane, where "a penguin cannot fly" is a negative capability teach with
+// its own grounding gate; rewriting it upstream diverted it past that gate.
 const NEGATION_SET_RE = new RegExp(
   "^(?:which|what|who|list|show(?:\\s+me)?|find|give\\s+me)?\\s*(?:the\\s+|all\\s+)?"
   + "([a-z][a-z-]*)\\s+"
   + "(?:(?:that|which|who)\\s+)?"
-  + "(?:(?:do|does|did|are|is|was|were|have|has)\\s+)?"
-  + "not\\s+(.+)$",
+  + "(?:(?:do|does|did|are|is|was|were|have|has|can|could|will|would|should)\\s+not"
+  + "|cannot|can't|won't|couldn't|shouldn't|wouldn't"
+  + "|not)\\s+(.+)$",
   "i",
 );
 

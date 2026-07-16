@@ -2854,7 +2854,7 @@ ${shown.join("\n")}${tail}`;
         }
       ]);
       NEGATION_SET_RE = new RegExp(
-        "^(?:which|what|who|list|show(?:\\s+me)?|find|give\\s+me)?\\s*(?:the\\s+|all\\s+)?([a-z][a-z-]*)\\s+(?:(?:that|which|who)\\s+)?(?:(?:do|does|did|are|is|was|were|have|has)\\s+)?not\\s+(.+)$",
+        "^(?:which|what|who|list|show(?:\\s+me)?|find|give\\s+me)?\\s*(?:the\\s+|all\\s+)?([a-z][a-z-]*)\\s+(?:(?:that|which|who)\\s+)?(?:(?:do|does|did|are|is|was|were|have|has|can|could|will|would|should)\\s+not|cannot|can't|won't|couldn't|shouldn't|wouldn't|not)\\s+(.+)$",
         "i"
       );
       STOPWORDS2 = /* @__PURE__ */ new Set([
