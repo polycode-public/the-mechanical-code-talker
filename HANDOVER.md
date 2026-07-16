@@ -30,8 +30,6 @@ Measured init sizes (fresh store, this machine): `init:large` 37,797 facts; `ini
 
 ## Open items
 
-### From the layered-architecture and test-estate delivery
-
 - **26 import-layer violations remain allowlisted.** `test/estate/layer-allowlist.mjs` is a
   shrink-only ratchet: the checker fails on any edge not listed and on any listed edge that
   no longer occurs. Four clusters remain, each a real piece of design work: `completions/*`
@@ -92,8 +90,6 @@ Measured init sizes (fresh store, this machine): `init:large` 37,797 facts; `ini
 - **The four-stage pipeline has not been watched through a release.** `test → e2e → deploy →
   verify` is wired and the smoke job fails honestly against live state, but no session has
   seen the columns go green on a version-bump push.
-
-### Standing
 
 - **Capability read-back over taught Rule rows.** "can you move a disk onto a peg?" is still a
   graph-question miss even when that exact signature was taught — a closed ask-lane reader over
