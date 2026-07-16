@@ -10,7 +10,6 @@ import {
   REGISTRY, capabilities, capabilityByName, isCapability,
   registerCapability, PRECOND, VOCAB,
 } from "../../src/domain/router/registry.mjs";
-import { guard } from "../../src/domain/router/guardrail.mjs";
 import { resolveOne } from "../../src/domain/router/resolver.mjs";
 import { actionFamilies, capabilityFromActionRules, registerTaughtActions } from "../../src/domain/router/taught.mjs";
 import { runTurn } from "../../src/services/chat.mjs";
@@ -49,30 +48,6 @@ test("registration validates: unique name, explicit boolean readOnly, effects sh
   assert.throws(() => registerCapability(record("tmct_describe")), /already registered/);
   assert.throws(() => registerCapability({ ...record("taught:x"), readOnly: undefined }), /explicit boolean readOnly/);
   assert.throws(() => registerCapability({ ...record("taught:x"), effects: {} }), /effects \{add/);
-});
-
-test("dispatch guard: the candidate enrichment never dispatches a readOnly:false capability", async () => {
-  const unregister = registerCapability(record("taught:test-guard", {
-    parameters: [{ type: VOCAB.Parameter, name: "symbol", kind: "seon:CodeEntity", arg: "symbol", required: true }],
-    preconditions: [{ type: VOCAB.Precondition, pred: PRECOND.resolves, param: "symbol", as: "seon:CodeEntity" }],
-  }));
-  const calls = [];
-  const ctx = {
-    resolve: () => ({ match: { label: "a" }, ambiguous: true, candidates: [{ label: "b" }] }),
-    dispatch: async (name, input) => { calls.push({ name, input }); return { ok: true }; },
-  };
-  try {
-    const verdict = await guard({ name: "taught:test-guard", input: { symbol: "amb" } }, null, ctx);
-    assert.equal(verdict.ok, false);
-    assert.equal(verdict.candidateResults, undefined);
-    assert.equal(calls.length, 0);
-    // The same ambiguous context against a readOnly builtin still enriches.
-    const builtin = await guard({ name: "tmct_describe", input: { symbol: "amb" } }, null, ctx);
-    assert.ok(Array.isArray(builtin.candidateResults));
-    assert.ok(calls.length > 0);
-  } finally {
-    unregister();
-  }
 });
 
 const symbolParam = {

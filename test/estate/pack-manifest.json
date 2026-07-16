@@ -117,7 +117,6 @@
   "src/domain/router/call-validator.mjs",
   "src/domain/router/drive.mjs",
   "src/domain/router/goal-reasoner.mjs",
-  "src/domain/router/guardrail.mjs",
   "src/domain/router/planner.mjs",
   "src/domain/router/registry.mjs",
   "src/domain/router/resolver.mjs",

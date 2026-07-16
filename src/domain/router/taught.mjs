@@ -3,9 +3,10 @@
 // A taught game action ("you can move a disk onto a peg" + its preconditions
 // and effect) becomes a registered capability record so the router's operator
 // model covers taught actions and built-in query tools alike. Registered
-// records carry readOnly: false, so the guardrail never dispatches them — the
-// resolver also never selects them on its own, because it backward-chains over
-// `knows` add-effects and these records carry world-triple effects instead.
+// records carry readOnly: false, so the resolver's dispatch gate refuses to
+// fire them — and it never selects one on its own anyway, because it
+// backward-chains over `knows` add-effects and these carry world-triple
+// effects instead. They are planned over and simulated.
 
 import { capabilityByName, registerCapability } from "./registry.mjs";
 

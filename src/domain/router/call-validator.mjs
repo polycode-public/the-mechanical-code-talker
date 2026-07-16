@@ -1,5 +1,5 @@
 // src/domain/router/call-validator.mjs — pure registry validators shared by the
-// product router (resolver / guardrail / goal-reasoner) + the bench grader
+// product router (resolver / goal-reasoner) + the bench grader
 // (agentbench/grade.mjs re-exports these). Depends ONLY on registry.mjs — no
 // bench code — so the product←bench dependency stays inverted: the bench
 // imports the product, never the other way round. No I/O, no Date.now, no LLM.

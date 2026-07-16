@@ -1,9 +1,9 @@
 // src/domain/router/registry.mjs — the capability registry.
 //
 // Each tmct tool is modelled as a STRIPS/PDDL operator declared as DATA: a `Capability` with
-// typed `Parameter`s, `Precondition`s, and `Effect`s (add-list/delete-list). Preconditions are
-// the safety gate guardrail.mjs checks before a call fires; resolver.mjs backward-chains from
-// a goal to a capability whose add-list achieves it.
+// typed `Parameter`s, `Precondition`s, and `Effect`s (add-list/delete-list). resolver.mjs
+// backward-chains from a goal to a capability whose add-list achieves it, and proves the
+// preconditions bind before the call fires.
 //
 // Plain data + pure accessors, no I/O. Tool names + parameter arg keys are the
 // exact ones src/tools/server.mjs `dispatchTool` reads, so a bound call this registry validates is
@@ -25,7 +25,7 @@ export const VOCAB = Object.freeze({
 
 // Parameter entity-KINDS — the seon/mgx classes a slot ranges over. `Query` and
 // `Kind`/`Package` are free-text / enum slots (no graph resolution); the rest
-// name a graph entity the guardrail must prove RESOLVES before the call fires.
+// name a graph entity the resolver must prove RESOLVES before the call fires.
 export const KINDS = Object.freeze({
   Symbol: "seon:CodeEntity", // any code symbol: function/method/class/module/attribute
   Module: "seon:Module",
@@ -196,11 +196,10 @@ function deepFreeze(value) {
 }
 
 /** Register a capability at runtime (e.g. a taught action family bridged in by
- *  src/domain/router/taught.mjs). `readOnly` must be an explicit boolean; a
- *  `readOnly: false` record is forced `dispatchable: false` — the guardrail's
- *  candidate enrichment re-dispatches a tool once per tied candidate, which is
- *  only safe when dispatch performs no writes. Returns an `unregister()`
- *  disposer. */
+ *  src/domain/router/taught.mjs). `readOnly` must be an explicit boolean: it is
+ *  what resolver.mjs's dispatch gate reads, and a `readOnly: false` record is
+ *  never dispatched. `dispatchable` is derived from it for callers that want the
+ *  record to state the conclusion. Returns an `unregister()` disposer. */
 export function registerCapability(cap) {
   const name = cap && typeof cap.name === "string" ? cap.name.trim() : "";
   if (!name) throw new Error("registerCapability: a non-empty name is required");
@@ -260,14 +259,14 @@ export function isCapability(n) { return Boolean(byName[n]); }
 /** The parameter slots of capability `n` (empty array if unknown/no-arg). */
 export function parametersOf(n) { return byName[n]?.parameters ?? []; }
 
-/** The preconditions of capability `n` (the safety gate the guardrail checks). */
+/** The preconditions of capability `n` (the safety gate the resolver checks). */
 export function preconditionsOf(n) { return byName[n]?.preconditions ?? []; }
 
 /** The effects of capability `n` — `{ add, del }` (the proof-chain contribution). */
 export function effectsOf(n) { return byName[n]?.effects ?? { add: [], del: [] }; }
 
-/** The set of arg keys capability `n` accepts (for the guardrail's unknown-arg
- *  check). Returns a Set of strings. */
+/** The set of arg keys capability `n` accepts (for call-validator.mjs's
+ *  unknown-arg check). Returns a Set of strings. */
 export function argKeysOf(n) {
   return new Set(parametersOf(n).map((p) => p.arg));
 }

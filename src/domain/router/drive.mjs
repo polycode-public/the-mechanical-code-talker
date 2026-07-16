@@ -1,7 +1,7 @@
 // src/domain/router/drive.mjs — the product-facing drive of the capability router: the
 // piece that turns a real English request into a real, executed answer over a
-// real repo graph. registry/resolver/planner/guardrail/goal-reasoner/
-// call-validator are all pure, deterministic decision machinery — this module
+// real repo graph. registry/resolver/planner/goal-reasoner/call-validator
+// are all pure, deterministic decision machinery — this module
 // is the thin, stateful shell around them that a CLI or chat surface calls:
 // build a { dispatch, resolve, graph } context against the repo's actual code
 // graph, then run a request through resolver -> planner -> goal-reasoner.
@@ -162,8 +162,7 @@ const WORLD_GOAL_RE = new RegExp(
  *  ground the move sequence by pure simulation over the taught rules
  *  (compileDomain + stateFromFacts + compileGoal + findActionPath — all
  *  read-only). Returned calls are NEVER dispatched: taught records carry
- *  readOnly:false / dispatchable:false, so the plan is simulated and chat's
- *  "next" executes move 1. Returns a loopResult, or null when the request is
+ *  readOnly:false, so the plan is simulated and chat's "next" executes move 1. Returns a loopResult, or null when the request is
  *  not a world-goal shape (the caller falls through to the goal-reasoner). */
 export async function runTaughtPlan(request, tools, ctx) {
   const m = WORLD_GOAL_RE.exec(String(request || "").trim());

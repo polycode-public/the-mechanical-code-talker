@@ -1,9 +1,8 @@
-// router-resolver.test.mjs — the capability router's resolver, guardrail and
-// planner. Deterministic, no-LLM. The headline is the BIDIRECTIONAL
-// CONFORMANCE test: every ask-vocab relation kind maps to a capability (or is
-// explicitly unmapped-with-reason), and every capability is reachable (or
-// tagged not-NL-reachable) — no orphans either way, enforced as a HARD
-// failure.
+// router-resolver.test.mjs — the capability router's resolver and planner.
+// Deterministic, no-LLM. The headline is the BIDIRECTIONAL CONFORMANCE test:
+// every ask-vocab relation kind maps to a capability (or is explicitly
+// unmapped-with-reason), and every capability is reachable (or tagged
+// not-NL-reachable) — no orphans either way, enforced as a HARD failure.
 
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
@@ -22,7 +21,6 @@ import {
   backwardChain, mapParse, mapFrame, commandCapability, resolveOne,
   reachableCapabilityNames, extractEntity,
 } from "../../src/domain/router/resolver.mjs";
-import { guard, admits } from "../../src/domain/router/guardrail.mjs";
 import { decompose, isMultiStep, plan, MAX_STEPS } from "../../src/domain/router/planner.mjs";
 import { resolverDriver } from "../../agentbench/driver-resolver.mjs";
 import { runAgentbench, createRunCtx } from "../../agentbench/run.mjs";
@@ -51,8 +49,8 @@ async function graphCtx() {
 // A genuinely AMBIGUOUS in-memory graph (same construction ask-compound-resolve.
 // test.mjs uses): two distinct Modules that tie on the SAME query term, so
 // resolveObject returns {match, candidates, ambiguous:true} for real — the exact
-// shape the breadth-first enrichment (resolveOne / guard's `candidateResults`)
-// is built to run every candidate through.
+// shape the breadth-first enrichment (resolveOne's `candidateResults`) is built
+// to run every candidate through.
 function ambiguousGraphCtx() {
   const entities = buildEntities([
     { path: "old-payment-system.js", dotted: "oldPaymentSystem", imports: [], calls: [], defines: [] },
@@ -225,10 +223,10 @@ test("resolver: HONEST REFUSE — unresolvable entity, out-of-set tool, and unma
   assert.match(imp.reason, /no importer/);
 });
 
-// Every registered capability is read-only (empty
-// delete-list), so an ambiguous-term refusal ADDITIONALLY dispatches the SAME
-// capability once per tied candidate: `refused:true` is preserved (never a
-// guessed winner) but a machine caller also gets each candidate's real answer.
+// A read-only capability may be dispatched once per tied candidate, so an
+// ambiguous-term refusal ADDITIONALLY carries each candidate's real answer:
+// `refused:true` is preserved (never a guessed winner) but a machine caller
+// still gets something to choose between.
 test("resolver: an ambiguous term stays refused:true but ADDITIONALLY carries candidateResults — real per-candidate answers, never a guess", async () => {
   const ctx = ambiguousGraphCtx();
   const r = await resolveOne("what does payment system export", ["tmct_exports"], ctx);
@@ -258,66 +256,7 @@ test("resolver: a bound call always self-passes the zero-hallucination gate (nev
   assert.deepEqual(r.selected, null);
 });
 
-// ---- 3. the GUARDRAIL ---------------------------------------------------------
-
-test("guardrail: DEFAULT-DENY — an unregistered / invented tool is denied outright", async () => {
-  assert.equal(await admits({ name: "tmct_teleport", input: {} }), false);
-  assert.equal((await guard({ name: "tmct_teleport", input: {} })).denied[0].reason, "default-deny");
-  // the intentionally-unregistered unbounded tools are denied too (registry = the trust boundary)
-  assert.equal(await admits({ name: "tmct_snippet", input: { symbol: "Widget" } }), false);
-});
-
-test("guardrail: a well-formed, resolvable call passes; an unresolvable one is denied on the resolves precondition", async () => {
-  const ctx = UNIT_CTX;
-  const ok = await guard({ name: "tmct_describe", input: { symbol: "Widget" } }, ["tmct_describe"], ctx);
-  assert.ok(ok.ok, JSON.stringify(ok.denied));
-  assert.ok(ok.steps.some((s) => s.pred && s.pred.includes("resolves") && s.ok && s.boundTo === "Widget"));
-
-  const bad = await guard({ name: "tmct_describe", input: { symbol: "zebra.mjs" } }, ["tmct_describe"], ctx);
-  assert.equal(bad.ok, false);
-  assert.equal(bad.denied[0].reason, "unresolved");
-});
-
-test("guardrail: proves RESOLVABILITY, not ANTECEDENT-CORRECTNESS — a mis-bound but resolvable symbol PASSES", async () => {
-  const ctx = UNIT_CTX;
-  // "abc1234" is a Commit sha; describing it is semantically odd, but the symbol
-  // RESOLVES to a real entity, so the guardrail admits it. Cross-turn binding
-  // correctness is the chat lever's job, not the guardrail's (file header).
-  const g = await guard({ name: "tmct_describe", input: { symbol: "abc1234" } }, ["tmct_describe"], ctx);
-  assert.ok(g.ok, "a resolvable-but-mis-bound symbol passes the guardrail (resolvability, not correctness)");
-  assert.match(g.provenance, /NOT proven antecedent-correct/);
-});
-
-// An ambiguous `resolves` term stays a DENIAL
-// (never a guess at which candidate is "the" one) but, with a dispatcher wired,
-// ADDITIONALLY carries `candidateResults`: the same tool dispatched once per
-// tied candidate, so a machine caller gets the honest "still ambiguous" verdict
-// AND every candidate's real answer.
-test("guardrail: an ambiguous resolves precondition stays a denial but ADDITIONALLY carries candidateResults (breadth-first, never a guess)", async () => {
-  const ctx = ambiguousGraphCtx();
-  const g = await guard({ name: "tmct_exports", input: { module: "payment system" } }, ["tmct_exports"], ctx);
-  assert.equal(g.ok, false, "still an honest denial — never a guessed winner");
-  assert.equal(g.denied[0].reason, "unresolved");
-  assert.ok(g.denied[0].detail.includes("ambiguous"));
-  assert.equal(g.candidateResults.length, 2, "one dispatched result per tied candidate");
-  const labels = g.candidateResults.map((c) => c.candidate).sort();
-  assert.deepEqual(labels, ["new-payment-system.js", "old-payment-system.js"]);
-  for (const { result } of g.candidateResults) assert.equal(result.ok, true, "each candidate's real dispatched answer, not a placeholder");
-
-  // no dispatcher wired -> denied exactly as before, no candidateResults at all
-  // (additive only — the non-enriched shape is untouched).
-  const structural = await guard({ name: "tmct_exports", input: { module: "payment system" } }, ["tmct_exports"], { resolve: ctx.resolve });
-  assert.equal(structural.ok, false);
-  assert.equal(structural.candidateResults, undefined);
-});
-
-test("guardrail: an undeclared (but registered) tool is a policy denial when a declared set is given", async () => {
-  const g = await guard({ name: "tmct_callers", input: { symbol: "x" } }, ["tmct_describe"]);
-  assert.equal(g.ok, false);
-  assert.ok(g.denied.some((d) => d.reason === "undeclared"));
-});
-
-// ---- 4. the PLANNER -----------------------------------------------------------
+// ---- 3. the PLANNER -----------------------------------------------------------
 
 test("planner: decompose picks the HTN method — conditional / relative-filter / member-filter / sequence / single", () => {
   assert.equal(decompose("if fnAlpha is untested, describe it").method, "conditional");
