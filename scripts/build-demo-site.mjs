@@ -22,20 +22,36 @@ const ROOT = join(here, "..");
 const SRC = join(ROOT, "src");
 const OUT = join(ROOT, "public", "engine", "src");
 
-const FLAT_FILES = ["ask.mjs", "ask-vocab.mjs", "prose.mjs", "codegraph.mjs", "embed.mjs", "wink-model.mjs", "ask-nlp.mjs"];
-const INTERPRET_FILES = ["normalize.mjs", "fuzzy.mjs", "merge.mjs", "pipeline.mjs"];
-const STRATEGY_FILES = ["grammar.mjs", "keywords.mjs", "noise-strip.mjs", "ace.mjs"];
-const GRAMMAR_FILES = ["ace.mjs", "lexicon.mjs", "lexicon-core.json"];
+// Paths are src-relative, and each file is copied to the same path under OUT,
+// so the copies' own relative imports resolve exactly as they do in src/.
+const ENGINE_FILES = [
+  "ask.mjs",
+  "ask-vocab.mjs",
+  "prose.mjs",
+  "codegraph.mjs",
+  "embed.mjs",
+  "wink-model.mjs",
+  "ask-nlp.mjs",
+  "interpret/normalize.mjs",
+  "interpret/fuzzy.mjs",
+  "interpret/merge.mjs",
+  "interpret/pipeline.mjs",
+  "interpret/strategies/grammar.mjs",
+  "interpret/strategies/keywords.mjs",
+  "interpret/strategies/noise-strip.mjs",
+  "interpret/strategies/ace.mjs",
+  "grammar/ace.mjs",
+  "grammar/lexicon.mjs",
+  "grammar/lexicon-core.json",
+];
 
-mkdirSync(join(OUT, "interpret", "strategies"), { recursive: true });
-mkdirSync(join(OUT, "grammar"), { recursive: true });
+for (const f of ENGINE_FILES) {
+  const dest = join(OUT, f);
+  mkdirSync(dirname(dest), { recursive: true });
+  cpSync(join(SRC, f), dest);
+}
 
-for (const f of FLAT_FILES) cpSync(join(SRC, f), join(OUT, f));
-for (const f of INTERPRET_FILES) cpSync(join(SRC, "interpret", f), join(OUT, "interpret", f));
-for (const f of STRATEGY_FILES) cpSync(join(SRC, "interpret", "strategies", f), join(OUT, "interpret", "strategies", f));
-for (const f of GRAMMAR_FILES) cpSync(join(SRC, "grammar", f), join(OUT, "grammar", f));
-
-console.log(`copied ${FLAT_FILES.length + INTERPRET_FILES.length + STRATEGY_FILES.length + GRAMMAR_FILES.length} engine source files into ${OUT}`);
+console.log(`copied ${ENGINE_FILES.length} engine source files into ${OUT}`);
 
 execFileSync(process.execPath, [join(here, "build-demo-graph.mjs")], { stdio: "inherit" });
 

@@ -1,0 +1,554 @@
+[
+  {
+    "from": "answer-variants.json",
+    "to": "domain/answer-variants.json",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "answer-variants.mjs",
+    "to": "domain/answer-variants.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "ask-nlp.mjs",
+    "to": "adapters/ask-nlp.mjs",
+    "layer": "adapters",
+    "moved": true
+  },
+  {
+    "from": "ask-vocab.mjs",
+    "to": "domain/ask-vocab.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "ask.mjs",
+    "to": "domain/ask.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "chat.mjs",
+    "to": "services/chat.mjs",
+    "layer": "services",
+    "moved": true
+  },
+  {
+    "from": "cli-args.mjs",
+    "to": "services/cli-args.mjs",
+    "layer": "services",
+    "moved": true
+  },
+  {
+    "from": "codegraph.mjs",
+    "to": "domain/codegraph.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "completions/complete.mjs",
+    "to": "domain/completions/complete.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "completions/graph-adapter.mjs",
+    "to": "domain/completions/graph-adapter.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "completions/group.mjs",
+    "to": "domain/completions/group.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "completions/infer.mjs",
+    "to": "domain/completions/infer.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "completions/prune.mjs",
+    "to": "domain/completions/prune.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "completions/rank.mjs",
+    "to": "domain/completions/rank.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "completions/search.mjs",
+    "to": "domain/completions/search.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "concept.mjs",
+    "to": "domain/concept.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "config.mjs",
+    "to": "adapters/config.mjs",
+    "layer": "adapters",
+    "moved": true
+  },
+  {
+    "from": "conformance.mjs",
+    "to": "tools/conformance.mjs",
+    "layer": "tools",
+    "moved": true
+  },
+  {
+    "from": "corpus/conceptnet-map.toml",
+    "to": "adapters/corpus/conceptnet-map.toml",
+    "layer": "adapters",
+    "moved": true
+  },
+  {
+    "from": "corpus/conceptnet.mjs",
+    "to": "adapters/corpus/conceptnet.mjs",
+    "layer": "adapters",
+    "moved": true
+  },
+  {
+    "from": "corpus/construction-banks.mjs",
+    "to": "adapters/corpus/construction-banks.mjs",
+    "layer": "adapters",
+    "moved": true
+  },
+  {
+    "from": "corpus/templates.mjs",
+    "to": "adapters/corpus/templates.mjs",
+    "layer": "adapters",
+    "moved": true
+  },
+  {
+    "from": "corpus/unknown-ingest.mjs",
+    "to": "adapters/corpus/unknown-ingest.mjs",
+    "layer": "adapters",
+    "moved": true
+  },
+  {
+    "from": "domain.mjs",
+    "to": "domain/domain.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "embed.mjs",
+    "to": "adapters/embed.mjs",
+    "layer": "adapters",
+    "moved": true
+  },
+  {
+    "from": "extensions.mjs",
+    "to": "services/extensions.mjs",
+    "layer": "services",
+    "moved": true
+  },
+  {
+    "from": "finish.mjs",
+    "to": "services/finish.mjs",
+    "layer": "services",
+    "moved": true
+  },
+  {
+    "from": "grammar/ace.mjs",
+    "to": "domain/grammar/ace.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "grammar/assert.mjs",
+    "to": "domain/grammar/assert.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "grammar/lexicon-core.json",
+    "to": "domain/grammar/lexicon-core.json",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "grammar/lexicon.mjs",
+    "to": "domain/grammar/lexicon.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "graph-build.mjs",
+    "to": "adapters/graph-build.mjs",
+    "layer": "adapters",
+    "moved": true
+  },
+  {
+    "from": "graph-merge.mjs",
+    "to": "adapters/graph-merge.mjs",
+    "layer": "adapters",
+    "moved": true
+  },
+  {
+    "from": "hash.mjs",
+    "to": "domain/hash.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "import-file.mjs",
+    "to": "services/import-file.mjs",
+    "layer": "services",
+    "moved": true
+  },
+  {
+    "from": "index.mjs",
+    "to": "services/index.mjs",
+    "layer": "services",
+    "moved": true
+  },
+  {
+    "from": "init.mjs",
+    "to": "services/init.mjs",
+    "layer": "services",
+    "moved": true
+  },
+  {
+    "from": "interpret/fuzzy.mjs",
+    "to": "domain/interpret/fuzzy.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "interpret/merge.mjs",
+    "to": "domain/interpret/merge.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "interpret/nlp-registry.mjs",
+    "to": "domain/interpret/nlp-registry.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "interpret/normalize.mjs",
+    "to": "domain/interpret/normalize.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "interpret/pipeline.mjs",
+    "to": "domain/interpret/pipeline.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "interpret/strategies/ace.mjs",
+    "to": "domain/interpret/strategies/ace.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "interpret/strategies/constructions.mjs",
+    "to": "domain/interpret/strategies/constructions.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "interpret/strategies/grammar.mjs",
+    "to": "domain/interpret/strategies/grammar.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "interpret/strategies/keywords.mjs",
+    "to": "domain/interpret/strategies/keywords.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "interpret/strategies/noise-strip.mjs",
+    "to": "domain/interpret/strategies/noise-strip.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "ledger-viz.mjs",
+    "to": "services/ledger-viz.mjs",
+    "layer": "services",
+    "moved": true
+  },
+  {
+    "from": "memory/bias.mjs",
+    "to": "domain/memory/bias.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "memory/blocks.mjs",
+    "to": "adapters/memory/blocks.mjs",
+    "layer": "adapters",
+    "moved": true
+  },
+  {
+    "from": "memory/core.mjs",
+    "to": "adapters/memory/core.mjs",
+    "layer": "adapters",
+    "moved": true
+  },
+  {
+    "from": "memory/fold.mjs",
+    "to": "domain/memory/fold.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "memory/inspect.mjs",
+    "to": "adapters/memory/inspect.mjs",
+    "layer": "adapters",
+    "moved": true
+  },
+  {
+    "from": "memory/prose-tokens.mjs",
+    "to": "adapters/memory/prose-tokens.mjs",
+    "layer": "adapters",
+    "moved": true
+  },
+  {
+    "from": "memory/shacl.mjs",
+    "to": "domain/memory/shacl.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "memory/trust.mjs",
+    "to": "domain/memory/trust.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "memory-ask-browser-entry.mjs",
+    "to": "surfaces/memory-ask-browser-entry.mjs",
+    "layer": "surfaces",
+    "moved": true
+  },
+  {
+    "from": "memory-ask-browser.bundle.js",
+    "to": "surfaces/memory-ask-browser.bundle.js",
+    "layer": "surfaces",
+    "moved": true
+  },
+  {
+    "from": "paraphrase.mjs",
+    "to": "domain/paraphrase.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "plan-viz.mjs",
+    "to": "services/plan-viz.mjs",
+    "layer": "services",
+    "moved": true
+  },
+  {
+    "from": "planning.mjs",
+    "to": "domain/planning.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "prose-nlp.mjs",
+    "to": "adapters/prose-nlp.mjs",
+    "layer": "adapters",
+    "moved": true
+  },
+  {
+    "from": "prose.mjs",
+    "to": "domain/prose.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "providers/bootstrap.mjs",
+    "to": "adapters/providers/bootstrap.mjs",
+    "layer": "adapters",
+    "moved": true
+  },
+  {
+    "from": "providers/fixture.mjs",
+    "to": "adapters/providers/fixture.mjs",
+    "layer": "adapters",
+    "moved": true
+  },
+  {
+    "from": "providers/graph-service.mjs",
+    "to": "adapters/providers/graph-service.mjs",
+    "layer": "adapters",
+    "moved": true
+  },
+  {
+    "from": "repository-interface.mjs",
+    "to": "adapters/repository-interface.mjs",
+    "layer": "adapters",
+    "moved": true
+  },
+  {
+    "from": "router/call-validator.mjs",
+    "to": "domain/router/call-validator.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "router/drive.mjs",
+    "to": "domain/router/drive.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "router/goal-reasoner.mjs",
+    "to": "domain/router/goal-reasoner.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "router/guardrail.mjs",
+    "to": "domain/router/guardrail.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "router/planner.mjs",
+    "to": "domain/router/planner.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "router/registry.mjs",
+    "to": "domain/router/registry.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "router/resolver.mjs",
+    "to": "domain/router/resolver.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "router/results.mjs",
+    "to": "domain/router/results.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "router/set-algebra.mjs",
+    "to": "domain/router/set-algebra.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "router/taught.mjs",
+    "to": "domain/router/taught.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "schema-docs.mjs",
+    "to": "tools/schema-docs.mjs",
+    "layer": "tools",
+    "moved": true
+  },
+  {
+    "from": "sentences.mjs",
+    "to": "services/sentences.mjs",
+    "layer": "services",
+    "moved": true
+  },
+  {
+    "from": "server-http.mjs",
+    "to": "surfaces/server-http.mjs",
+    "layer": "surfaces",
+    "moved": true
+  },
+  {
+    "from": "server.mjs",
+    "to": "tools/server.mjs",
+    "layer": "tools",
+    "moved": true
+  },
+  {
+    "from": "services/chat-session.mjs",
+    "to": "services/chat-session.mjs",
+    "layer": "services",
+    "moved": false
+  },
+  {
+    "from": "sessions.mjs",
+    "to": "services/sessions.mjs",
+    "layer": "services",
+    "moved": true
+  },
+  {
+    "from": "source-slice.mjs",
+    "to": "adapters/source-slice.mjs",
+    "layer": "adapters",
+    "moved": true
+  },
+  {
+    "from": "source.mjs",
+    "to": "adapters/source.mjs",
+    "layer": "adapters",
+    "moved": true
+  },
+  {
+    "from": "syllogise.mjs",
+    "to": "domain/syllogise.mjs",
+    "layer": "domain",
+    "moved": true
+  },
+  {
+    "from": "telemetry.mjs",
+    "to": "services/telemetry.mjs",
+    "layer": "services",
+    "moved": true
+  },
+  {
+    "from": "toml-config.mjs",
+    "to": "adapters/toml-config.mjs",
+    "layer": "adapters",
+    "moved": true
+  },
+  {
+    "from": "tui/app.mjs",
+    "to": "surfaces/tui/app.mjs",
+    "layer": "surfaces",
+    "moved": true
+  },
+  {
+    "from": "uuid.mjs",
+    "to": "adapters/uuid.mjs",
+    "layer": "adapters",
+    "moved": true
+  },
+  {
+    "from": "viz-theme.mjs",
+    "to": "services/viz-theme.mjs",
+    "layer": "services",
+    "moved": true
+  },
+  {
+    "from": "wink-model.mjs",
+    "to": "adapters/wink-model.mjs",
+    "layer": "adapters",
+    "moved": true
+  }
+]
