@@ -1,17 +1,27 @@
 # PLAN_PURGE.md — promote the load-bearing code, delete the dead weight
 
-**Status (2026-07-16): design only. Nothing has been deleted or moved yet.** This document
-names what is dead, states the policy for what gets promoted, and sequences the work.
+**Status (2026-07-17): EXECUTED, through 2.3.1.** The audit below is kept for its findings and
+its rules, which is what a later reader wants from it. What it got wrong is corrected in place
+and labelled, because the errors are the more useful half — every one came from reading the tree
+statically and writing it down as fact, which is what Rule 1 exists to stop.
 
-**We will run this after the 2.0.3 benchmarking completes.** All four axes now have a 2.0.3
-write-up, and the benchmark sweep is the last thing holding the tree still. Nothing here starts
-until it finishes.
+Shipped: the pre-2.0.3 benchmarks archived and the 20 dangling refs that move left behind
+repaired; `embedRank` and `guardrail.mjs` deleted; `coverage-compare.mjs` and
+`generate-answer-variants.mjs` deleted; 54 dead exports narrowed; 6 duplicate tests dropped and
+13 renamed; every CI check given an npm hook; and the load-bearing logic promoted out of
+`scripts/` into `src/domain` with the tests it never had — markdown-links, version-stamp,
+publish-gate, inflect, licences, corpus-matrix, and the 1,510-LOC persona/WordNet cluster.
 
-**We will archive every benchmark doc from before 2.0.3 as part of this work** (§9.1).
+Three bugs fell out of the promotions, all live, none of them the point of the exercise: the
+`#pkg-version` regex existed three times and had diverged, so the writer could stamp a value the
+deploy check rejects; the publish gate compared versions by string equality, so a version *behind*
+the registry went to `npm publish` and failed there; and `codegraph.mjs` told users to run a
+command that has never existed.
 
-Scope note: the five-layer `src/` reorg and the test-estate rebuild have landed. `PLAN_LAYERS_AND_TEST_ESTATE.md`
-is archived. Every path below was re-verified against `HEAD 7858087`, after the reorg, so these are
-current paths.
+The prose corpus is now external and frozen in `corpus/prose/` (§4.5). It used to be every
+root-level `*.md`, so editing any doc drifted a shipped artifact — and the guard for that skips
+wherever the WordNet clone is absent, so CI never saw it. Consequence to know: Wikipedia's
+share-alike is viral, so `corpus/generated/ace-surface-variants.jsonl` is CC-BY-SA-4.0 now.
 
 ---
 
@@ -801,48 +811,68 @@ the old layout on every dev machine that has run `demo:build`.
 
 ---
 
-## 11. Order of work
+## 11. What the order taught us
 
-**Nothing starts until the 2.0.3 benchmarking finishes.** Each batch is a commit or a short run of
-them, `npm test` green throughout (Rule 7).
+The seventeen-batch schedule that stood here is spent; the tree is the record of it. Four things
+about the *sequence* are worth keeping, because the next purge will face them again.
 
-| # | Batch | Risk |
-|---|---|---|
-| 1 | Doc reference fixes: `PLAN_AGENTS.md`'s false "archived" claim, `HANDOVER.md`'s three dead pointers, the four `docs/references/planning/*.md`, ROADMAP's plan index | none |
-| 2 | Archive the pre-2.0.3 benchmarks + `CAPABILITIES_1.7.3.md` with banners; repoint live pointers; manual grep sweep (§9.1, §9.2) | none |
-| 3 | Delete `scripts/coverage-compare.mjs`; `build-demo-site.mjs` `rmSync` fix; ship the `codegraph.mjs:976` message fix | low |
-| 4 | `package.json` hooks + CI switched to hooks (§5.2, §5.3) | low |
-| 5 | Promote Group A — the four estate checks. Tests already exist; this is a move (§4.2) | low |
-| 6 | Promote `version-stamp.mjs` and collapse the 3 divergent regexes (§4.4) | low — fixes a live divergence |
-| 7 | Promote `publish-gate.mjs` out of CI YAML, with tests (§5.4) | low — fixes a latent publish bug |
-| 8 | Promote Group B — `inflect.mjs`, `licences.mjs`, `corpus-matrix.mjs`, each with the unit tests they've never had (§4.3) | medium — first real test-writing |
-| 9 | Test deletions (6) + the 1 to verify + 13 renames (§7) | low |
-| 10 | Comment sweep: `src/`+`bin/` (16) as one commit; `test/` (146) per-file | low |
-| 11 | Dead exports, 58 symbols, one commit per module (§6.3) | low |
-| 12 | `guardrail.mjs` delete, after the `readOnly` check (§6.1) | **needs a read first** |
-| 13 | `embed.mjs` delete (§6.2) | **your call** |
-| 14 | Promote Group D — the persona/WordNet cluster, 1,510 LOC. `extract-persona-sources.mjs`'s `parseYaml` first; rename `splitSentences` before the move (§4.5) | **the big one — its own sub-plan** |
-| 15 | `extract-facts-from-text.mjs` → `tmct extract` verb (§4.7) | medium |
-| 16 | Generate the `--help` verb list instead of maintaining it twice (§1.4) | low |
-| 17 | Tracked bench results, 46MB (§10) | history rewrite if reclaiming space |
+**Order the safety port before the deletion, always.** `guardrail.mjs` looked like dead code and
+was, but it held the only runtime `readOnly` check in the tree. Porting first and deleting second
+turned a risky batch into two boring ones. Had they been one commit, nobody could have reviewed it.
 
-Batches 1-4 are safe and mechanical. Batch 14 is large enough to deserve its own plan document
-rather than being a row here; it is 43% of `scripts/` and contains three hand-rolled parsers.
+**Promote before you sweep.** The comment tail in `scripts/` shrank on its own as the modules
+moved, because a promoted function gets a fresh docstring rather than an inherited citation. Doing
+the sweep first would have been work thrown away.
+
+**A promotion is only proven by regenerating the artifact.** Six persona artifacts and the
+4,820-row collision table came out byte-identical after moving, and `corpus/wordnet`'s 192,498
+facts regenerated with an empty diff. Tests passing means the tests pass; a byte-identical
+regeneration means the behaviour did not move.
+
+**Concurrency cost more than it bought.** Agents sharing one working tree swept each other's
+staged work into the wrong commits, one `git stash` reverted another's files mid-run, and a
+`node_modules` probe emptied the directory under a running agent. `git commit -- <paths>` helps
+and is not enough — it commits the file's *current* content, including someone else's edits.
+Worktree isolation, or one agent per file, is the actual fix.
 
 ---
 
-## 12. Open questions
+## 12. The questions, and what was decided
 
-1. **Comment sweep scope.** All 205, or `src/`+`bin/` (16) now and the `test/` tail (146) later?
-   The 16 are a single clean commit; the 146 are a week of small ones.
-2. **`chatbench/results/raw/` + `agentbench/results/raw/`, 46MB tracked past a `.gitignore` that
-   says to ignore them.** Delete from the tree, keep, or rewrite history? Do any `BENCHMARK_*.md`
-   write-ups cite a specific raw run as evidence? If so, Rule 5 protects it.
-3. **`embed.mjs`** — do you want embedding re-rank? My recommendation is delete (§6.2); a yes turns
-   it into a 40-line wiring job in its own plan.
-4. **`generate-answer-variants.mjs`** — delete, or keep as a maintainer REPL? A drift guard has
-   nothing to compare against while its target stays hand-curated (§4.7).
-5. **`.idea/`** — shared config or personal cruft?
-6. ~~**`STRATEGY_ADVISOR.log`**~~ — answered: gitignored, untracked, and the advisor now prunes
-   entries older than a day as it runs.
-7. **Batch 14 as a separate plan?** Recommendation: yes.
+All seven are answered. Kept because the reasoning outlives the decision.
+
+1. **Comment sweep scope** — all of them, every area. The number was wrong too: the doc said 205,
+   which swept whole lines and caught test data and fixture dates. Comment-prefixed, it was 81.
+
+2. **The tracked bench results** — untracked, no history rewrite. This one turned on a number I got
+   wrong: I reported 46MB, which was the working tree. In history they cost **1.23 MiB of an
+   18.87 MiB pack**. Rewriting every commit hash on a branch with a live remote and a publishing CI,
+   to reclaim 6.5%, is a bad trade. The `.gitignore` already said `raw/`; now the tree agrees.
+
+3. **`embed.mjs`** — deleted, with `PLAN_EMBEDDINGS.md` recording the way back. It was never
+   finished rather than broken: the fetcher and npm script it advertised were never written. The
+   research turned up two things worth keeping: the model was wrong for the job (potion-base-8M's
+   retrieval score is its *weakest* axis, and code search is retrieval), and the one dead-end it
+   was meant to fix — `what talks to the payment module?` — closed at 2.1.0 for the price of one
+   lexicon row.
+
+4. **`generate-answer-variants.mjs`** — deleted. A print-only audit whose target is hand-curated,
+   so a drift guard has nothing to compare against.
+
+5. **`.idea/`** — kept, and the question was the wrong one. Its own `.gitignore` excludes
+   `workspace.xml` and `/shelf/`, which is the signature of deliberate sharing: config tracked,
+   personal state ignored. It only looked like cruft from outside.
+
+6. **`STRATEGY_ADVISOR.log`** — gitignored and untracked, and the rule fixed at its source. The
+   skill told the advisor "append-only; NEVER edit prior entries", which is *why* the file only
+   grew: every OPEN item in it was moot, already fixed, or long since mined into HANDOVER. The
+   advisor now prunes anything over a day old as it runs, and carries the file's header so a fresh
+   checkout can recreate it.
+
+7. **The persona cluster as a separate plan** — no, and the recommendation was wrong. It went in
+   this pass and proved itself by regeneration. Its own finding is better than the plan's: this doc
+   claimed `IRREGULAR_PLURALS` and `pluralOf` were two pluralization authorities to collapse. They
+   are not. They answer opposite questions — `pluralOf` *generates* candidate surface forms and
+   **wants** `"foots"`, because a form it fails to generate is a real word the repair tier may
+   rewrite; `IRREGULAR_PLURALS` *declares* the one correct plural, where `"foots"` is a lie the
+   grammar would trust. Merging breaks one or the other.
