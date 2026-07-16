@@ -9,6 +9,7 @@
 
 import { createGraphService } from "../providers/graph-service.mjs";
 import { resolveSymbol, renderDescribe } from "../codegraph.mjs";
+import { ask } from "../ask.mjs";
 import { readFactRows } from "../memory/core.mjs";
 
 /** renderDescribe() renders one line per fact with no terminal punctuation of its own;
@@ -30,7 +31,7 @@ function withTerminalPunctuation(text) {
  * @returns {{search: Function, ask: Function}} a Repository-Interface-shaped graphService
  */
 export function createCompletionsGraphAdapter(graph, memory = null) {
-  const svc = graph ? createGraphService(graph) : null;
+  const svc = graph ? createGraphService(graph, { ask }) : null;
 
   return {
     search(q, { limit } = {}) {

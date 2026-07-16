@@ -15,6 +15,7 @@ import {
 } from "../src/memory/core.mjs";
 import { parseEntities } from "../src/codegraph.mjs";
 import { lookupByProseTokens } from "../src/prose.mjs";
+import { findActionPath, findReachableSet } from "../src/planning.mjs";
 
 const SESSION = "01890000-0000-7000-8000-00000000abcd";
 const TS1 = "2026-07-03T10:01:00.000Z";
@@ -365,6 +366,7 @@ test("resolveRelationChase: direct fact hit — a plain taught relation resolves
       renderFactLine: testRenderFactLine, factPhrase: testFactPhrase,
       factTermVariants: testFactTermVariants, byTrust: testByTrust,
       rows, HAS_PROPERTY_PREDICATE: testHasPropertyPredicate,
+      findActionPath, findReachableSet,
     };
     const hit = await resolveRelationChase(memory, "father", "ahab", "john", helpers);
     assert.ok(hit, "direct fact resolves");
@@ -390,6 +392,7 @@ test("resolveRelationChase: compose2 rule chase — a 2-hop rule resolves via th
       renderFactLine: testRenderFactLine, factPhrase: testFactPhrase,
       factTermVariants: testFactTermVariants, byTrust: testByTrust,
       rows, HAS_PROPERTY_PREDICATE: testHasPropertyPredicate,
+      findActionPath, findReachableSet,
     };
     const hit = await resolveRelationChase(memory, "grandparent", "ahab", "ishmael", helpers);
     assert.ok(hit, "2-hop compose2 chase resolves");
@@ -418,6 +421,7 @@ test("resolveRelationChase: filter rule chase — recurses into its own base (it
       renderFactLine: testRenderFactLine, factPhrase: testFactPhrase,
       factTermVariants: testFactTermVariants, byTrust: testByTrust,
       rows, HAS_PROPERTY_PREDICATE: testHasPropertyPredicate,
+      findActionPath, findReachableSet,
     };
     const hit = await resolveRelationChase(memory, "grandfather", "ahab", "ishmael", helpers);
     assert.ok(hit, "filter chase resolves when base holds AND the property is taught");
@@ -442,6 +446,7 @@ test("resolveRelationChaseReverse: given a name + fixed object, returns every sa
       renderFactLine: testRenderFactLine, factPhrase: testFactPhrase,
       factTermVariants: testFactTermVariants, byTrust: testByTrust,
       rows, HAS_PROPERTY_PREDICATE: testHasPropertyPredicate,
+      findActionPath, findReachableSet,
     };
     const direct = await resolveRelationChaseReverse(memory, "father", "john", helpers);
     assert.deepEqual(direct.map((h) => h.subject), ["ahab"]);

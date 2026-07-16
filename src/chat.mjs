@@ -6337,8 +6337,9 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
       // `byTrust`/`rows`/`HAS_PROPERTY_PREDICATE` are this block's own local
       // closures/constants, threaded through explicitly.
       const { loadMemory, findRuleByName, resolveRelationChase } = await import("./memory/core.mjs");
+      const { findActionPath } = await import("./planning.mjs");
       const memory = await loadMemory(memoryDir);
-      const relationChaseHelpers = { relationFactsFor, renderFactLine, factPhrase, factTermVariants, byTrust, rows, HAS_PROPERTY_PREDICATE };
+      const relationChaseHelpers = { relationFactsFor, renderFactLine, factPhrase, factTermVariants, byTrust, rows, HAS_PROPERTY_PREDICATE, findActionPath };
       const hit = await resolveRelationChase(memory, relationName, subject, object, relationChaseHelpers);
       if (hit) return { text: `yes — ${hit.citation.join("; ")}`, replace: true };
       // A bare `return null` on any miss here would be wrong — the
@@ -6419,7 +6420,8 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
       // `relationFactsForWho`/`renderFactLine`/`factPhrase`/
       // `factTermVariants`/`byTrust`/`rows`/`HAS_PROPERTY_PREDICATE` are this
       // block's own local closures/constants, threaded through explicitly.
-      const relationChaseHelpersWho = { relationFactsFor: relationFactsForWho, renderFactLine, factPhrase, factTermVariants, byTrust, rows, HAS_PROPERTY_PREDICATE };
+      const { findReachableSet } = await import("./planning.mjs");
+      const relationChaseHelpersWho = { relationFactsFor: relationFactsForWho, renderFactLine, factPhrase, factTermVariants, byTrust, rows, HAS_PROPERTY_PREDICATE, findReachableSet };
       const hits = await resolveRelationChaseReverse(memoryWho, relationName, object, relationChaseHelpersWho);
       if (hits.length) {
         const lines = hits.map((h) => `${h.subject} — ${h.citation.join("; ")}`);

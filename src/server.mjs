@@ -228,7 +228,7 @@ export async function buildContextBundle(args, { config, source = defaultSource,
   // chat.mjs's session-level createTelemetry) — never minted here, so a caller that never
   // passes one costs nothing extra (createGraphService's own wrapping loop no-ops on tel:null).
   const repoRoot = dirname(dirname(config.graphFile));
-  const svc = createGraphService(graph, { sourceAccess: true, repoRoot, readFile, tel });
+  const svc = createGraphService(graph, { sourceAccess: true, repoRoot, readFile, tel, ask });
   const { match } = resolveOrThrow(svc, symbol, "symbol");
   const plan = contextPlan(graph, match);
   // #6/B1/B6: pick the section mask by depth — min forces TINY, full/max forces everything, auto
@@ -365,7 +365,7 @@ export async function dispatchTool(name, args, { config, source = defaultSource,
   // Item 1) rather than delegating, to keep its richer presentation (candidates, call hints,
   // truncation notices) — see the tmct_snippet branch below.
   const repoRoot = dirname(dirname(config.graphFile));
-  const svc = createGraphService(graph, { sourceAccess: true, repoRoot, readFile, tel });
+  const svc = createGraphService(graph, { sourceAccess: true, repoRoot, readFile, tel, ask });
   if (name === "tmct_context_more") {
     const symbol = String(args?.symbol || "").trim();
     if (!symbol) throw new ToolError("symbol is required");

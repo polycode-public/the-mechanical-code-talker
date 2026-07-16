@@ -7,11 +7,10 @@
 
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { proseTokensFor, buildProseIndex } from "../prose.mjs";
+import { proseTokensFor, buildProseIndex } from "./prose-tokens.mjs";
 import { fnv1aHex } from "../hash.mjs";
 import { computeTrust, sessionReliabilityFrom, TRUST_SCORE_PROP, TRUST_INPUTS_PROP } from "./trust.mjs";
 import { assertIndividualValid } from "./shacl.mjs";
-import { findActionPath, findReachableSet } from "../planning.mjs";
 
 export const MEMORY_DIR_REL = join(".tmct", "memory");
 export const MEMORY_GRAPH_REL = join(MEMORY_DIR_REL, "graph.json");
@@ -1322,9 +1321,10 @@ export function readRuleRows(memory) {
 // importable functions taking an already-loaded `memory` (a loadMemory()
 // payload — callers load it once, not per recursive call) and a `helpers`
 // bag (`relationFactsFor`, `renderFactLine`, `factPhrase`, `factTermVariants`,
-// `byTrust`, the trust-bearing `rows` array, and `HAS_PROPERTY_PREDICATE`),
-// so callers outside chat.mjs's own dispatch context can reuse the same
-// resolution logic.
+// `byTrust`, the trust-bearing `rows` array, `HAS_PROPERTY_PREDICATE`, and
+// the search kernels `findActionPath`/`findReachableSet` from planning.mjs —
+// injected so this store module never imports the domain layer), so callers
+// outside chat.mjs's own dispatch context can reuse the same resolution logic.
 //
 // Dispatch order: direct/alias fact hit → compose2 rule chase → filter rule
 // chase → honest miss (OWA discipline: null / [] on a miss, never a guessed
@@ -1337,7 +1337,7 @@ export function readRuleRows(memory) {
  * Rule chase. Returns `{ citation: string[] }` on a hit, null on an honest miss.
  */
 export async function resolveRelationChase(memory, name, subjectTerm, objectTerm, helpers) {
-  const { relationFactsFor, renderFactLine, factPhrase, factTermVariants, byTrust, rows, HAS_PROPERTY_PREDICATE } = helpers;
+  const { relationFactsFor, renderFactLine, factPhrase, factTermVariants, byTrust, rows, HAS_PROPERTY_PREDICATE, findActionPath } = helpers;
   const target = String(name || "").trim().toLowerCase();
   // (i)+(ii): direct hit or alias-chased hit for this exact (subject, object)
   // pair under the queried relation name.
@@ -1413,7 +1413,7 @@ export async function resolveRelationChase(memory, name, subjectTerm, objectTerm
  * `{ subject, citation }` pair that satisfies it, instead of one yes/no.
  */
 export async function resolveRelationChaseReverse(memory, name, objectTerm, helpers) {
-  const { relationFactsFor, renderFactLine, factPhrase, factTermVariants, byTrust, rows, HAS_PROPERTY_PREDICATE } = helpers;
+  const { relationFactsFor, renderFactLine, factPhrase, factTermVariants, byTrust, rows, HAS_PROPERTY_PREDICATE, findReachableSet } = helpers;
   const target = String(name || "").trim().toLowerCase();
   const ov = factTermVariants(normFactTerm, objectTerm);
   // (i)+(ii): every direct/alias-chased fact under this name whose object

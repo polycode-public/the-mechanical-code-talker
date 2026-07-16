@@ -103,6 +103,7 @@
   "src/memory/core.mjs",
   "src/memory/fold.mjs",
   "src/memory/inspect.mjs",
+  "src/memory/prose-tokens.mjs",
   "src/memory/shacl.mjs",
   "src/memory/trust.mjs",
   "src/paraphrase.mjs",

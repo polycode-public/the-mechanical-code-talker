@@ -29,21 +29,22 @@ import {
   toEdge,
 } from "../src/repository-interface.mjs";
 import { fixtureProvider } from "../src/providers/fixture.mjs";
+import { ask } from "../src/ask.mjs";
 import { bootstrapProvider } from "../src/providers/bootstrap.mjs";
 import { runConformance, assertIndividual, assertEdge, assertResult } from "../src/conformance.mjs";
 
 const REASONS = new Set(Object.values(MISS_REASONS));
 
 // ---- run the kit against BOTH reference providers ----------------------------
-runConformance("fixture", fixtureProvider);
-runConformance("bootstrap", bootstrapProvider);
+runConformance("fixture", () => fixtureProvider({ ask }));
+runConformance("bootstrap", () => bootstrapProvider({ ask }));
 
 // 2f: a THIRD run against a SOURCE-CAPABLE fixture provider — the only thing that actually
 // exercises conformance.mjs's source-capable branch (dead code otherwise: no provider anywhere
 // else ever sets sourceAccess:true). test/fixtures/source-provider/ holds real source files
 // whose paths/line-spans match FIXTURE_ENTITIES' `site` attributes exactly (see fixture.mjs).
 const SOURCE_PROVIDER_ROOT = fileURLToPath(new URL("./fixtures/source-provider", import.meta.url));
-runConformance("fixture-source-capable", () => fixtureProvider({ sourceAccess: true, repoRoot: SOURCE_PROVIDER_ROOT, readFile }));
+runConformance("fixture-source-capable", () => fixtureProvider({ sourceAccess: true, repoRoot: SOURCE_PROVIDER_ROOT, readFile, ask }));
 
 // =============================================================================
 // Interface-definition invariants (the versioned shape + no doc drift)
@@ -93,7 +94,7 @@ test("invoke() degrades an absent capability to miss(CAPABILITY_ABSENT), never t
   assert.ok(isMiss(absent) && absent.miss.reason === MISS_REASONS.CAPABILITY_ABSENT);
   assert.deepEqual(invoke(partial, "resolve", "x"), hit("here"));
   // A full reference provider trips CAPABILITY_ABSENT for nothing in SERVICES.
-  const svc = fixtureProvider();
+  const svc = fixtureProvider({ ask });
   const argsFor = (service) => {
     if (service === "edges") return ["no:id", EDGE_KINDS[0]];
     if (service === "architecture" || service === "untested" || service === "stats") return [{}];
@@ -168,7 +169,7 @@ test("[fixture] snippet is source-reaching → honest NO_SOURCE (span in detail)
 });
 
 test("[fixture] search is provider-local lexical; ask returns the NL envelope", () => {
-  const svc = fixtureProvider();
+  const svc = fixtureProvider({ ask });
   const classes = svc.search("", { kind: "class" }).value.results;
   assert.deepEqual(classes.map((c) => c.label).sort(), ["Base", "Button", "Widget"]);
   const a = svc.ask("which modules import graph.mjs");

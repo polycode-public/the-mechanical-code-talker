@@ -27,7 +27,6 @@ import {
   renderGraphOnlyBundle,
 } from "../codegraph.mjs";
 import { readSpanSafe, sliceSpan } from "../source-slice.mjs";
-import { ask } from "../ask.mjs";
 import {
   hit,
   miss,
@@ -126,9 +125,14 @@ async function renderSourceBodies(plan, mask, { readFile, repoRoot }) {
  * @param {object|null} [opts.tel]  an optional telemetry sink ({ record(fields) }). When
  *   present, every service is wrapped once to time it and record counts only, never raw
  *   text/body.
+ * @param {Function} [opts.ask]  the natural-language answerer backing the `ask` service
+ *   (src/ask.mjs's `ask` in the live wiring) — injected at construction like fs access,
+ *   never an ambient import. Constructing without it makes `.ask()` an honest
+ *   CAPABILITY_ABSENT miss, the same negotiation snippet/context use for missing
+ *   source access.
  * @returns the typed service object
  */
-export function createGraphService(graph, { sourceAccess = false, repoRoot = null, readFile = null, tel = null } = {}) {
+export function createGraphService(graph, { sourceAccess = false, repoRoot = null, readFile = null, tel = null, ask = null } = {}) {
   const byId = graph.byId;
   if (sourceAccess && (!repoRoot || typeof readFile !== "function")) {
     throw new TypeError(
@@ -401,6 +405,7 @@ export function createGraphService(graph, { sourceAccess = false, repoRoot = nul
     },
 
     ask(query) {
+      if (typeof ask !== "function") return miss(MISS_REASONS.CAPABILITY_ABSENT, "this provider was constructed without an ask answerer");
       const { content, tmct_ask } = ask(graph, String(query || ""));
       return hit({ content, tmct_ask });
     },

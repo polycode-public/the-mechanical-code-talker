@@ -53,6 +53,7 @@ export const LAYER_OF = {
 
   "memory/core.mjs": "adapters",
   "memory/blocks.mjs": "adapters",
+  "memory/prose-tokens.mjs": "adapters",
   "memory/inspect.mjs": "adapters",
   "providers/": "adapters",
   "source.mjs": "adapters",

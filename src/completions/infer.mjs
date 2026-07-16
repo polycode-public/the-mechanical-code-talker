@@ -11,6 +11,7 @@ import { normFactTerm, readFactRows, resolveRelationChase } from "../memory/core
 import { tokenizeBlock } from "../memory/blocks.mjs";
 import { splitSentences } from "./rank.mjs";
 import { STOPWORDS } from "../prose.mjs";
+import { findActionPath, findReachableSet } from "../planning.mjs";
 
 // Same content-token filter group.mjs/rank.mjs apply to their own adjacency/ranking; not
 // exported from either, so replicated here rather than reached across files.
@@ -104,6 +105,8 @@ function makeHelpers(rows) {
     byTrust: (a, b) => (b.trust ?? 0) - (a.trust ?? 0),
     rows,
     HAS_PROPERTY_PREDICATE,
+    findActionPath,
+    findReachableSet,
   };
 }
 

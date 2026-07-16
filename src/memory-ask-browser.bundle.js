@@ -155,23 +155,6 @@
     }
     return out;
   }
-  function proseTokensFor({ name, doc } = {}) {
-    const set = /* @__PURE__ */ new Set([...splitIdentifierWords(name), ...tokenizeProse(doc)]);
-    return [...set].sort();
-  }
-  function buildProseIndex(individuals) {
-    const index = /* @__PURE__ */ Object.create(null);
-    for (const ind of individuals) {
-      const tokAttr = (ind.attributes || []).find((a) => a.key === "prose_tokens");
-      if (!tokAttr?.value) continue;
-      for (const word of tokAttr.value.split(" ")) {
-        if (!index[word]) index[word] = [];
-        index[word].push(ind.id);
-      }
-    }
-    for (const word of Object.keys(index)) index[word].sort();
-    return index;
-  }
   function lookupByProseTokens(proseIndex, query, { limit = 10 } = {}) {
     const queryTokens = [.../* @__PURE__ */ new Set([...splitIdentifierWords(query), ...tokenizeProse(query)])];
     if (!queryTokens.length) return [];
@@ -235,6 +218,54 @@
       init_node_fs();
       init_node_path();
       init_node_url();
+    }
+  });
+
+  // src/memory/prose-tokens.mjs
+  function splitIdentifierWords2(raw) {
+    if (!raw) return [];
+    let s = String(raw).replace(/\.[A-Za-z0-9]+$/, "");
+    s = s.replace(/[/\\]/g, " ").replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2").replace(/([A-Za-z])([0-9])/g, "$1 $2").replace(/([0-9])([A-Za-z])/g, "$1 $2").replace(/[_\-.]+/g, " ");
+    return s.split(/\s+/).map((w) => w.toLowerCase()).filter((w) => w.length > 1 && w.length <= MAX_TOKEN_LEN2);
+  }
+  function tokenizeProse2(text) {
+    if (!text) return [];
+    const out = [];
+    const seen = /* @__PURE__ */ new Set();
+    for (const raw of String(text).toLowerCase().split(/[^a-z0-9]+/)) {
+      if (raw.length < 2 || raw.length > MAX_TOKEN_LEN2 || STOPWORDS2.has(raw)) continue;
+      if (seen.has(raw)) continue;
+      seen.add(raw);
+      out.push(raw);
+      if (out.length >= MAX_TOKENS_PER_DOC2) break;
+    }
+    return out;
+  }
+  function proseTokensFor({ name, doc } = {}) {
+    const set = /* @__PURE__ */ new Set([...splitIdentifierWords2(name), ...tokenizeProse2(doc)]);
+    return [...set].sort();
+  }
+  function buildProseIndex(individuals) {
+    const index = /* @__PURE__ */ Object.create(null);
+    for (const ind of individuals) {
+      const tokAttr = (ind.attributes || []).find((a) => a.key === "prose_tokens");
+      if (!tokAttr?.value) continue;
+      for (const word of tokAttr.value.split(" ")) {
+        if (!index[word]) index[word] = [];
+        index[word].push(ind.id);
+      }
+    }
+    for (const word of Object.keys(index)) index[word].sort();
+    return index;
+  }
+  var STOPWORDS2, MAX_TOKEN_LEN2, MAX_TOKENS_PER_DOC2;
+  var init_prose_tokens = __esm({
+    "src/memory/prose-tokens.mjs"() {
+      STOPWORDS2 = new Set(
+        "a an and or but the of to in on at for with from by as is are was were be been being it its this that these those i you he she they we me my your our do does did not no yes if then else than so such can will would should could may might about into over under out up down off again more most some any all what which who whom whose when where why how".split(/\s+/)
+      );
+      MAX_TOKEN_LEN2 = 40;
+      MAX_TOKENS_PER_DOC2 = 120;
     }
   });
 
@@ -416,72 +447,6 @@
         ]
       };
       nonEmpty = (v) => typeof v === "string" && v.trim().length > 0;
-    }
-  });
-
-  // src/planning.mjs
-  var planning_exports = {};
-  __export(planning_exports, {
-    findActionPath: () => findActionPath,
-    findReachableSet: () => findReachableSet
-  });
-  function defaultStateKey(state) {
-    if (state && typeof state === "object") return JSON.stringify(state);
-    return String(state);
-  }
-  function seedFrontier(startState, applyActions) {
-    const frontier = [];
-    for (const { action, nextState } of applyActions(startState) || []) {
-      frontier.push({ state: nextState, actions: [action], states: [startState, nextState] });
-    }
-    return frontier;
-  }
-  function findActionPath(startState, isGoal, applyActions, { maxDepth = 50, stateKey = defaultStateKey } = {}) {
-    if (isGoal(startState)) return { actions: [], states: [startState] };
-    let frontier = seedFrontier(startState, applyActions);
-    const seen = /* @__PURE__ */ new Set([stateKey(startState)]);
-    for (let depth = 1; depth <= maxDepth && frontier.length; depth += 1) {
-      for (const entry of frontier) if (isGoal(entry.state)) return { actions: entry.actions, states: entry.states };
-      if (depth === maxDepth) break;
-      const next = [];
-      for (const entry of frontier) {
-        const key = stateKey(entry.state);
-        if (seen.has(key)) continue;
-        seen.add(key);
-        for (const { action, nextState } of applyActions(entry.state) || []) {
-          const nk = stateKey(nextState);
-          if (seen.has(nk)) continue;
-          next.push({ state: nextState, actions: [...entry.actions, action], states: [...entry.states, nextState] });
-        }
-      }
-      frontier = next;
-    }
-    return null;
-  }
-  function findReachableSet(startState, applyActions, { maxDepth = 50, stateKey = defaultStateKey } = {}) {
-    let frontier = seedFrontier(startState, applyActions);
-    const seen = /* @__PURE__ */ new Set([stateKey(startState)]);
-    const results = [];
-    for (let depth = 1; depth <= maxDepth && frontier.length; depth += 1) {
-      const next = [];
-      for (const entry of frontier) {
-        const key = stateKey(entry.state);
-        if (seen.has(key)) continue;
-        seen.add(key);
-        results.push({ node: entry.state, path: { actions: entry.actions, states: entry.states } });
-        if (depth === maxDepth) continue;
-        for (const { action, nextState } of applyActions(entry.state) || []) {
-          const nk = stateKey(nextState);
-          if (seen.has(nk)) continue;
-          next.push({ state: nextState, actions: [...entry.actions, action], states: [...entry.states, nextState] });
-        }
-      }
-      frontier = next;
-    }
-    return results;
-  }
-  var init_planning = __esm({
-    "src/planning.mjs"() {
     }
   });
 
@@ -1467,7 +1432,7 @@
     return rows;
   }
   async function resolveRelationChase(memory, name, subjectTerm, objectTerm, helpers) {
-    const { relationFactsFor, renderFactLine: renderFactLine2, factPhrase: factPhrase2, factTermVariants: factTermVariants2, byTrust, rows, HAS_PROPERTY_PREDICATE: HAS_PROPERTY_PREDICATE2 } = helpers;
+    const { relationFactsFor, renderFactLine: renderFactLine2, factPhrase: factPhrase2, factTermVariants: factTermVariants2, byTrust, rows, HAS_PROPERTY_PREDICATE: HAS_PROPERTY_PREDICATE2, findActionPath: findActionPath2 } = helpers;
     const target = String(name || "").trim().toLowerCase();
     const sv = factTermVariants2(normFactTerm, subjectTerm);
     const ov = factTermVariants2(normFactTerm, objectTerm);
@@ -1493,7 +1458,7 @@
       };
       const isGoal = (state) => state.hopsTaken === 2 && state.entity === targetEntity;
       const stateKey = (state) => `${state.entity}#${state.hopsTaken}`;
-      const found = findActionPath({ entity: startEntity, hopsTaken: 0 }, isGoal, applyActions, { maxDepth: 2, stateKey });
+      const found = findActionPath2({ entity: startEntity, hopsTaken: 0 }, isGoal, applyActions, { maxDepth: 2, stateKey });
       if (!found) return null;
       const seenAlias = /* @__PURE__ */ new Set();
       const parts = [];
@@ -1525,7 +1490,7 @@
     return null;
   }
   async function resolveRelationChaseReverse(memory, name, objectTerm, helpers) {
-    const { relationFactsFor, renderFactLine: renderFactLine2, factPhrase: factPhrase2, factTermVariants: factTermVariants2, byTrust, rows, HAS_PROPERTY_PREDICATE: HAS_PROPERTY_PREDICATE2 } = helpers;
+    const { relationFactsFor, renderFactLine: renderFactLine2, factPhrase: factPhrase2, factTermVariants: factTermVariants2, byTrust, rows, HAS_PROPERTY_PREDICATE: HAS_PROPERTY_PREDICATE2, findReachableSet: findReachableSet2 } = helpers;
     const target = String(name || "").trim().toLowerCase();
     const ov = factTermVariants2(normFactTerm, objectTerm);
     const directHits = relationFactsFor(target).filter((e) => ov.has(e.fact.object));
@@ -1558,7 +1523,7 @@
         return relationFactsFor(relName).filter((e) => e.fact.object === state.entity).map((e) => ({ action: e, nextState: { entity: e.fact.subject, hopsTaken: state.hopsTaken + 1 } }));
       };
       const stateKeyRev = (state) => `${state.entity}#${state.hopsTaken}`;
-      const reached = findReachableSet(
+      const reached = findReachableSet2(
         { entity: targetEntity, hopsTaken: 0 },
         applyActionsRev,
         { maxDepth: 2, stateKey: stateKeyRev }
@@ -1676,11 +1641,10 @@
     "src/memory/core.mjs"() {
       init_promises();
       init_node_path();
-      init_prose();
+      init_prose_tokens();
       init_hash();
       init_trust();
       init_shacl();
-      init_planning();
       MEMORY_DIR_REL = join(".tmct", "memory");
       MEMORY_GRAPH_REL = join(MEMORY_DIR_REL, "graph.json");
       UTTERANCE_CLASS = "Utterance";
@@ -2837,7 +2801,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     if (!predicate) return null;
     return { entWord, predicate };
   }
-  var tableRe, CONTRACTION_RE, correctionRe, MISSPELLING_RE, WRONG_WORD_RE, W_SLASH_RE, FOR_DIGIT_THANKS_RE, FOR_DIGIT_EXAMPLE_RE, KIND_NOUN_ANAPHORA_RE, VERB_ALTERNATION, FILLER_RE, RELATION_VERB_RE, INTERROGATIVE_LEAD_RE, LISTING_TAIL_KINDS, BARE_KIND_RE, isListingRemainder, GREETING_PREAMBLE_RE, THANKS_PREAMBLE_RE, ACK_PREAMBLE_RE, BROWSING_PREAMBLE_RE, HEDGE_ADVERB_PREAMBLE_RE, TROUBLE_ASIDE_RE, MODAL_WRAPPER_RE, EXPLAIN_WRAPPER_RE, TELL_ME_WRAPPER_RE, KNOW_WRAPPER_RE, WANT_KNOW_WRAPPER_RE, EMBEDDED_WHATIS_RE, EMBEDDED_MEANS_RE, SHOW_GIVE_ME_RE, LEADING_CONNECTIVE_RE, QUESTION_AUX_LEAD_RE, TOPIC_SWITCH_PREAMBLE_RE, SUBORDINATION_FRAMES_RE, SELF_CORRECTION_RE, CONDITIONAL_VERB_GERUND, CONDITIONAL_KIND_PLURAL, CONDITIONAL_QUALIFIER_SRC, CONDITIONAL_QUALIFIER_RE, COUNTERFACTUAL_RE, PHRASING_FRAMES, NEGATION_SET_RE, STOPWORDS2, splitWords, wordsOf;
+  var tableRe, CONTRACTION_RE, correctionRe, MISSPELLING_RE, WRONG_WORD_RE, W_SLASH_RE, FOR_DIGIT_THANKS_RE, FOR_DIGIT_EXAMPLE_RE, KIND_NOUN_ANAPHORA_RE, VERB_ALTERNATION, FILLER_RE, RELATION_VERB_RE, INTERROGATIVE_LEAD_RE, LISTING_TAIL_KINDS, BARE_KIND_RE, isListingRemainder, GREETING_PREAMBLE_RE, THANKS_PREAMBLE_RE, ACK_PREAMBLE_RE, BROWSING_PREAMBLE_RE, HEDGE_ADVERB_PREAMBLE_RE, TROUBLE_ASIDE_RE, MODAL_WRAPPER_RE, EXPLAIN_WRAPPER_RE, TELL_ME_WRAPPER_RE, KNOW_WRAPPER_RE, WANT_KNOW_WRAPPER_RE, EMBEDDED_WHATIS_RE, EMBEDDED_MEANS_RE, SHOW_GIVE_ME_RE, LEADING_CONNECTIVE_RE, QUESTION_AUX_LEAD_RE, TOPIC_SWITCH_PREAMBLE_RE, SUBORDINATION_FRAMES_RE, SELF_CORRECTION_RE, CONDITIONAL_VERB_GERUND, CONDITIONAL_KIND_PLURAL, CONDITIONAL_QUALIFIER_SRC, CONDITIONAL_QUALIFIER_RE, COUNTERFACTUAL_RE, PHRASING_FRAMES, NEGATION_SET_RE, STOPWORDS3, splitWords, wordsOf;
   var init_normalize = __esm({
     "src/interpret/normalize.mjs"() {
       init_ask_vocab();
@@ -3023,7 +2987,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
         "^(?:which|what|who|list|show(?:\\s+me)?|find|give\\s+me)?\\s*(?:the\\s+|all\\s+)?([a-z][a-z-]*)\\s+(?:(?:that|which|who)\\s+)?(?:(?:do|does|did|are|is|was|were|have|has)\\s+)?not\\s+(.+)$",
         "i"
       );
-      STOPWORDS2 = /* @__PURE__ */ new Set([
+      STOPWORDS3 = /* @__PURE__ */ new Set([
         "what",
         "who",
         "which",
@@ -3101,7 +3065,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     return prev[b.length];
   }
   function eligibleForCanon(w) {
-    return /^[a-z]+$/.test(w) && !STOPWORDS2.has(w) && !VOCAB_WORDS.has(w);
+    return /^[a-z]+$/.test(w) && !STOPWORDS3.has(w) && !VOCAB_WORDS.has(w);
   }
   function fuzzyVocabWord(w) {
     return fuzzyMatchInSet(w, FUZZY_TARGET_WORDS, fuzzyBound(w));
@@ -3295,7 +3259,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     if (lcWords.includes("where") && !findPhrase(lcWords, VERB_TO_KIND)) {
       const mention = lcWords.some((w) => MENTION_MARKERS.includes(w));
       const markers = /* @__PURE__ */ new Set([...WHERE_MARKERS, ...MENTION_MARKERS]);
-      const objText = words.filter((w, i) => !STOPWORDS2.has(lcWords[i]) && !markers.has(lcWords[i])).join(" ").trim();
+      const objText = words.filter((w, i) => !STOPWORDS3.has(lcWords[i]) && !markers.has(lcWords[i])).join(" ").trim();
       if (objText) {
         const kind2 = mention ? "mentions" : "where";
         return { shape: kind2, entityType: null, modifier: "direct", kind: kind2, object: objText };
@@ -3307,7 +3271,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
       while (end > 1 && (lcWords[end - 1] === "ever" || lcWords[end - 1] === "been")) end -= 1;
       const tailVerb = end > 1 ? VERB_TO_KIND[lcWords[end - 1]] : null;
       if (tailVerb === "touches") {
-        const objText = words.slice(1, end - 1).filter((_, j) => !STOPWORDS2.has(lcWords[1 + j])).join(" ").trim();
+        const objText = words.slice(1, end - 1).filter((_, j) => !STOPWORDS3.has(lcWords[1 + j])).join(" ").trim();
         if (objText) return { shape: "when", entityType: null, modifier: "direct", kind: "touches", object: objText };
       }
     }
@@ -3348,7 +3312,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
       if ((det === "the" || det === "these" || det === "those") && lcWords[i + 1] === "of") {
         const tags = nlp.posTags(words);
         if (tags[i] === "NOUN") {
-          const objText = words.slice(i + 2).filter((w, j) => !STOPWORDS2.has(lcWords[i + 2 + j])).join(" ").trim();
+          const objText = words.slice(i + 2).filter((w, j) => !STOPWORDS3.has(lcWords[i + 2 + j])).join(" ").trim();
           if (objText) return stamp({ shape: "forward", entityType: null, modifier: "direct", kind: verbHit.kind, object: objText });
         }
       }
@@ -3371,7 +3335,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     mark(entityHit);
     const modifierHit = findPhrase(canonWords, MODIFIER_TO_KIND, consumed);
     mark(modifierHit);
-    const sideText = (from, to) => words.slice(from, to).filter((_, j) => !consumed.has(from + j) && !STOPWORDS2.has(lcWords[from + j])).join(" ").trim();
+    const sideText = (from, to) => words.slice(from, to).filter((_, j) => !consumed.has(from + j) && !STOPWORDS3.has(lcWords[from + j])).join(" ").trim();
     const beforeText = sideText(0, verbHit.start);
     const afterText = sideText(verbHit.end, words.length);
     const kind = verbHit.kind;
@@ -3391,7 +3355,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
       const roleWords = [];
       for (let i = 0; i < words.length; i += 1) {
         const w = lcWords[i];
-        if (consumed.has(i) || STOPWORDS2.has(w) || w === "by" || PASSIVE_AUX.has(w) || WH_WORDS.has(w) || PLACEHOLDER_SET.has(w)) continue;
+        if (consumed.has(i) || STOPWORDS3.has(w) || w === "by" || PASSIVE_AUX.has(w) || WH_WORDS.has(w) || PLACEHOLDER_SET.has(w)) continue;
         roleWords.push(words[i]);
       }
       const object = roleWords.join(" ").trim();
@@ -3481,7 +3445,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
       init_grammar();
       init_keywords();
       KEEP = /* @__PURE__ */ new Set([
-        ...STOPWORDS2,
+        ...STOPWORDS3,
         ...wordsOf(CONTEXT_PRONOUNS),
         ...wordsOf(Object.keys(VERB_TO_KIND)),
         ...wordsOf(Object.keys(ENTITY_TO_TYPE)),
@@ -3851,7 +3815,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     }
     const vh = findPhrase(predLc, VERB_TO_KIND);
     if (!vh) return { node: "miss", reason: "a negated set query needs a known relation verb (import, call, inherit from, test, \u2026)" };
-    const objWords = predWords.filter((_, i) => (i < vh.start || i >= vh.end) && !STOPWORDS2.has(predLc[i]) && predLc[i] !== "from");
+    const objWords = predWords.filter((_, i) => (i < vh.start || i >= vh.end) && !STOPWORDS3.has(predLc[i]) && predLc[i] !== "from");
     if (!objWords.length) {
       return complementAst(entityType, { op: "difference", kind: "set", ast: { node: "existsEdge", entityType, kind: vh.kind } });
     }
@@ -3872,7 +3836,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     if (notIdx < 0) return null;
     const vh = findPhrase(restLc, VERB_TO_KIND);
     if (!vh) return null;
-    const subjTokens = rest.filter((_, j) => j !== notIdx && (j < vh.start || j >= vh.end) && restLc[j] !== "from" && !STOPWORDS2.has(restLc[j]));
+    const subjTokens = rest.filter((_, j) => j !== notIdx && (j < vh.start || j >= vh.end) && restLc[j] !== "from" && !STOPWORDS3.has(restLc[j]));
     const subjectTerm = subjTokens.join(" ").trim();
     if (!subjectTerm) return null;
     return { node: "forwardComplement", kind: vh.kind, subjectTerm };
@@ -4114,7 +4078,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     const entWord = lc[i];
     i += 1;
     const tail = w.slice(i);
-    const tailMeaningful = lc.slice(i).some((t) => !STOPWORDS2.has(t) && !AGG_TAIL_FILLER.has(t));
+    const tailMeaningful = lc.slice(i).some((t) => !STOPWORDS3.has(t) && !AGG_TAIL_FILLER.has(t));
     let base;
     if (tailMeaningful) {
       const setAst = parseSetPhrase(`which ${entWord} ${tail.join(" ")}`, nlp, 1);
@@ -4161,7 +4125,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     const entWord = lc[i];
     i += 1;
     const tail = w.slice(i);
-    const tailMeaningful = lc.slice(i).some((t) => !STOPWORDS2.has(t) && !AGG_TAIL_FILLER.has(t));
+    const tailMeaningful = lc.slice(i).some((t) => !STOPWORDS3.has(t) && !AGG_TAIL_FILLER.has(t));
     let scopeTailLc = lc.slice(i);
     let scopeTailWords = tail;
     if (scopeTailLc[0] === "is" || scopeTailLc[0] === "are") {
@@ -4341,7 +4305,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
           return { node: "recentCommits" };
         }
       }
-      if ((framed || quals.length) && nextNoun && /^[a-z]+$/.test(lc[i]) && !VERB_TO_KIND[lc[i]] && !STOPWORDS2.has(lc[i]) && !CASCADE_NOISE_SET.has(lc[i])) {
+      if ((framed || quals.length) && nextNoun && /^[a-z]+$/.test(lc[i]) && !VERB_TO_KIND[lc[i]] && !STOPWORDS3.has(lc[i]) && !CASCADE_NOISE_SET.has(lc[i])) {
         return { node: "find", entityType: nextNoun.entityType, term: w[i] };
       }
       return null;
@@ -6546,7 +6510,7 @@ ${lines.join("\n")}`;
         ...wordsOf(RELATIVE_PRONOUNS),
         ...wordsOf(Object.keys(CASCADE_SYNONYMS))
       ]);
-      STRUCTURAL_WORDS = /* @__PURE__ */ new Set([...STOPWORDS2, ...FRAME_WORDS, ...CONTEXT_PRONOUNS]);
+      STRUCTURAL_WORDS = /* @__PURE__ */ new Set([...STOPWORDS3, ...FRAME_WORDS, ...CONTEXT_PRONOUNS]);
       CASCADE_NOISE_SET = new Set(wordsOf(CASCADE_NOISE));
       NOISE_OR_SCAFFOLD = /* @__PURE__ */ new Set([...CASCADE_NOISE_SET, ...STRUCTURAL_WORDS]);
       TRIGGER_FUZZY_WORDS = [
@@ -6568,7 +6532,7 @@ ${lines.join("\n")}`;
         ...wordsOf(Object.keys(VERB_TO_KIND)),
         ...Object.keys(ENTITY_TO_TYPE),
         ...TRIGGER_FUZZY_WORDS
-      ])].filter((wd) => /^[a-z]+$/.test(wd) && wd.length >= 4 && !STOPWORDS2.has(wd));
+      ])].filter((wd) => /^[a-z]+$/.test(wd) && wd.length >= 4 && !STOPWORDS3.has(wd));
       LAST_COMMIT_PHRASE_RE = /\b(?:the\s+)?(?:last|latest|most\s+recent)\s+commit\b/i;
       BARE_WHEN_COMMIT_RE = /^when\s+(?:was|were|is|did|does|do)\s+commit\s+[0-9a-fA-F:]+$/i;
       DYNAMIC_LIST_TRIGGER_RE = /^(?:list|show(?:\s+me)?)\s+(?:all\s+|the\s+)?([a-z][a-z'-]*)\s*(.*)$/i;
@@ -6810,7 +6774,6 @@ ${lines.join("\n")}`;
     "src/providers/graph-service.mjs"() {
       init_codegraph();
       init_source_slice();
-      init_ask();
       init_repository_interface();
     }
   });
@@ -8016,6 +7979,72 @@ ${lines.join("\n")}`;
       CARDINALITY_RULE_CONFIDENCE = 0.95;
       CAX_MAXC0_RULE = "maxCardinalityZero";
       CAX_MAXC0_RULE_CONFIDENCE = 0.95;
+    }
+  });
+
+  // src/planning.mjs
+  var planning_exports = {};
+  __export(planning_exports, {
+    findActionPath: () => findActionPath,
+    findReachableSet: () => findReachableSet
+  });
+  function defaultStateKey(state) {
+    if (state && typeof state === "object") return JSON.stringify(state);
+    return String(state);
+  }
+  function seedFrontier(startState, applyActions) {
+    const frontier = [];
+    for (const { action, nextState } of applyActions(startState) || []) {
+      frontier.push({ state: nextState, actions: [action], states: [startState, nextState] });
+    }
+    return frontier;
+  }
+  function findActionPath(startState, isGoal, applyActions, { maxDepth = 50, stateKey = defaultStateKey } = {}) {
+    if (isGoal(startState)) return { actions: [], states: [startState] };
+    let frontier = seedFrontier(startState, applyActions);
+    const seen = /* @__PURE__ */ new Set([stateKey(startState)]);
+    for (let depth = 1; depth <= maxDepth && frontier.length; depth += 1) {
+      for (const entry of frontier) if (isGoal(entry.state)) return { actions: entry.actions, states: entry.states };
+      if (depth === maxDepth) break;
+      const next = [];
+      for (const entry of frontier) {
+        const key = stateKey(entry.state);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        for (const { action, nextState } of applyActions(entry.state) || []) {
+          const nk = stateKey(nextState);
+          if (seen.has(nk)) continue;
+          next.push({ state: nextState, actions: [...entry.actions, action], states: [...entry.states, nextState] });
+        }
+      }
+      frontier = next;
+    }
+    return null;
+  }
+  function findReachableSet(startState, applyActions, { maxDepth = 50, stateKey = defaultStateKey } = {}) {
+    let frontier = seedFrontier(startState, applyActions);
+    const seen = /* @__PURE__ */ new Set([stateKey(startState)]);
+    const results = [];
+    for (let depth = 1; depth <= maxDepth && frontier.length; depth += 1) {
+      const next = [];
+      for (const entry of frontier) {
+        const key = stateKey(entry.state);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        results.push({ node: entry.state, path: { actions: entry.actions, states: entry.states } });
+        if (depth === maxDepth) continue;
+        for (const { action, nextState } of applyActions(entry.state) || []) {
+          const nk = stateKey(nextState);
+          if (seen.has(nk)) continue;
+          next.push({ state: nextState, actions: [...entry.actions, action], states: [...entry.states, nextState] });
+        }
+      }
+      frontier = next;
+    }
+    return results;
+  }
+  var init_planning = __esm({
+    "src/planning.mjs"() {
     }
   });
 
@@ -9391,8 +9420,9 @@ ${shown.join("\n")}${extra}`, replace: true, ...rest.length ? { pending: { items
           return out;
         };
         const { loadMemory: loadMemory2, findRuleByName: findRuleByName2, resolveRelationChase: resolveRelationChase2 } = await Promise.resolve().then(() => (init_core(), core_exports));
+        const { findActionPath: findActionPath2 } = await Promise.resolve().then(() => (init_planning(), planning_exports));
         const memory = await loadMemory2(memoryDir);
-        const relationChaseHelpers = { relationFactsFor, renderFactLine, factPhrase, factTermVariants, byTrust, rows, HAS_PROPERTY_PREDICATE };
+        const relationChaseHelpers = { relationFactsFor, renderFactLine, factPhrase, factTermVariants, byTrust, rows, HAS_PROPERTY_PREDICATE, findActionPath: findActionPath2 };
         const hit2 = await resolveRelationChase2(memory, relationName, subject, object, relationChaseHelpers);
         if (hit2) return { text: `yes \u2014 ${hit2.citation.join("; ")}`, replace: true };
         const nameKnown = relationFactsFor(relationName).length > 0 || !!findRuleByName2(memory, relationName);
@@ -9434,7 +9464,8 @@ ${shown.join("\n")}${extra}`, replace: true, ...rest.length ? { pending: { items
         };
         const { loadMemory: loadMemWho, findRuleByName: findRuleByNameWho, resolveRelationChaseReverse: resolveRelationChaseReverse2 } = await Promise.resolve().then(() => (init_core(), core_exports));
         const memoryWho = await loadMemWho(memoryDir);
-        const relationChaseHelpersWho = { relationFactsFor: relationFactsForWho, renderFactLine, factPhrase, factTermVariants, byTrust, rows, HAS_PROPERTY_PREDICATE };
+        const { findReachableSet: findReachableSet2 } = await Promise.resolve().then(() => (init_planning(), planning_exports));
+        const relationChaseHelpersWho = { relationFactsFor: relationFactsForWho, renderFactLine, factPhrase, factTermVariants, byTrust, rows, HAS_PROPERTY_PREDICATE, findReachableSet: findReachableSet2 };
         const hits2 = await resolveRelationChaseReverse2(memoryWho, relationName, object, relationChaseHelpersWho);
         if (hits2.length) {
           const lines = hits2.map((h) => `${h.subject} \u2014 ${h.citation.join("; ")}`);

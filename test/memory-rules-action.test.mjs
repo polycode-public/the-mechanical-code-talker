@@ -23,6 +23,7 @@ import {
   RULE_KIND_ACTION_EFFECT,
 } from "../src/memory/core.mjs";
 import { validateIndividual } from "../src/memory/shacl.mjs";
+import { findActionPath, findReachableSet } from "../src/planning.mjs";
 
 const tempDir = () => mkdtemp(join(tmpdir(), "tmct-rules-action-"));
 
@@ -36,6 +37,8 @@ const chaseHelpers = {
   byTrust: () => 0,
   rows: [],
   HAS_PROPERTY_PREDICATE: "mgx:hasProperty",
+  findActionPath,
+  findReachableSet,
 };
 
 test("compose2 rule ids are byte-stable across the ruleIdFor generalization", async () => {
