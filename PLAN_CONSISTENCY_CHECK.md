@@ -113,6 +113,36 @@ caller says who is asserting — corpus-A, visitor-B, or the model itself. A cla
 fed itself and then checks against is not corroboration, and only the source edge can tell
 those apart.
 
+## The whole tool surface, not just the check
+
+The graph tools go on the same surface. There are 22 of them behind `dispatchTool`, one
+module per tool with its schema in `src/tools/definitions.mjs` — ask, describe, callers,
+callees, impact, untested, tests-for, signature, snippet, history, cochanges, search,
+members, subclasses, architecture, context. They already exist, they already answer from the
+graph, and they already decline when they cannot.
+
+This is not scope creep, it is what makes the check usable. A caller told
+`consistent-with-removals` needs to know *what to say instead*, and the tools are how it
+finds out. Otherwise the loop's only move is to delete the offending claim, and the answer
+gets shorter rather than truer. The verdict says a claim is wrong; the tools say what is
+right.
+
+It also closes the loop the other way. A caller that queries first and asserts second is
+using the store as its source rather than its auditor — the check becomes a backstop instead
+of the only thing standing between invention and the reader. `tmct serve` already runs an
+Anthropic Messages API-compatible endpoint doing roughly this, and `cli <tool>` already
+routes a tool call from the command line.
+
+So the surface is three groups with one discipline:
+
+| group | writes? | what it is for |
+|---|---|---|
+| `teach` / `import` | yes | load the context to be checked against, with sources |
+| the 22 graph tools | no | find out what is true before asserting it |
+| `consistencyCheck` | no | the gate, one shot |
+
+The read/write split is the invariant. One writer, named, explicit; everything else reads.
+
 ## The coverage problem, stated plainly
 
 tmct's grammar models a narrow slice. Most of an LLM response is not expressible as triples.
