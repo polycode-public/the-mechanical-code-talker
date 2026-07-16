@@ -126,11 +126,17 @@ test("viewer bundle without wink: stripped codegraph+vocab+interpret+ask evaluat
   // if the import/export shapes in ask.mjs or interpret/* ever stop matching it,
   // this eval throws). Re-export statements ("export { a, b };") are dropped the
   // same way import statements are — the bindings are already top-level names.
+  // An import attribute ("with { type: "json" }") is part of the statement it
+  // trails, so it is dropped with it; the data itself is inlined below, which is
+  // what an inlining bundler does with an imported JSON module.
   const strip = (src) => src
-    .replace(/^import\s[\s\S]*?from\s+"[^"]+";\s*$/gm, "")
+    .replace(/^import\s[\s\S]*?from\s+"[^"]+"(\s+with\s+\{[^}]*\})?;\s*$/gm, "")
     .replace(/^export\s+\{[^}]*\}(\s+from\s+"[^"]+")?;\s*$/gm, "")
     .replace(/^export (?=(function|const|async function))/gm, "");
-  const bundle = sources.map(strip).join("\n");
+  const inlinedJson = [["collisionData", "domain/real-word-collisions.json"]];
+  const preamble = await Promise.all(inlinedJson.map(async ([binding, file]) =>
+    `const ${binding} = ${await readFile(join(srcDir, file), "utf8")};`));
+  const bundle = [...preamble, ...sources.map(strip)].join("\n");
   // no FUNCTIONAL wink machinery may survive the strip (comments may mention it):
   // a live import statement, import.meta, or a createRequire call would each be a
   // hard failure in a classic inlined <script>.

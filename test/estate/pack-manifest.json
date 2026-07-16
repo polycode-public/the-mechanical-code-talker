@@ -112,6 +112,7 @@
   "src/domain/paraphrase.mjs",
   "src/domain/planning.mjs",
   "src/domain/prose.mjs",
+  "src/domain/real-word-collisions.json",
   "src/domain/router/call-validator.mjs",
   "src/domain/router/drive.mjs",
   "src/domain/router/goal-reasoner.mjs",

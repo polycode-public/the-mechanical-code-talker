@@ -48,6 +48,27 @@ test("the committed ask bundle is what its source builds today", () => {
   }
 });
 
+test("the committed real-word collision table is what its generator produces today", () => {
+  const rel = "domain/real-word-collisions.json";
+  const out = mkdtempSync(path.join(tmpdir(), "tmct-collisions-freshness-"));
+  try {
+    execFileSync("node", [
+      path.join(repoRoot, "scripts", "generate-real-word-collisions.mjs"),
+      "--out", path.join(out, "real-word-collisions.json"),
+    ], { cwd: repoRoot, stdio: "pipe" });
+    assert.equal(
+      sha(readFileSync(path.join(out, "real-word-collisions.json"))),
+      sha(readFileSync(path.join(repoRoot, "src", rel))),
+      `src/${rel} has drifted from its generator — run \`node scripts/generate-real-word-collisions.mjs\` `
+        + "and commit the result.\nThe table is the fuzzy repair tier's precision gate: it lists the real "
+        + "English words the tier would otherwise rewrite onto a graph verb. Add a verb to the vocabulary and "
+        + "the table it attracts changes, so a stale commit silently repairs real words again.",
+    );
+  } finally {
+    rmSync(out, { recursive: true, force: true });
+  }
+});
+
 test("the committed ACE surface variants are what their generator produces today", () => {
   const out = mkdtempSync(path.join(tmpdir(), "tmct-variants-freshness-"));
   try {

@@ -25,6 +25,7 @@ import {
   PASSIVE_PARTICIPLE_TO_KIND, GENERIC_AGENT_WORDS,
   AGGREGATE_TRIGGERS, LIST_TRIGGERS, SUPERLATIVE_EXTREMES, EDGE_NOUN_TO_METRIC, METRIC_IMPLIES_ENTITY, ANAPHORA_TRIGGERS,
   MEMBERSHIP_KINDS, CASCADE_NOISE, CASCADE_SYNONYMS, HELP_TRIGGERS,
+  stripTrailingScopeFiller,
 } from "./ask-vocab.mjs";
 import { expandContractions, normalizeQuery, applyNegationFrames, applyPhrasingFrames, matchNegationSet, STOPWORDS, splitWords, wordsOf } from "./interpret/normalize.mjs";
 import { editDistance, fuzzyBound } from "./interpret/fuzzy.mjs";
@@ -596,10 +597,28 @@ function parseExistence(w, lc) {
                // different (relationship) question; leave it for the parsers below.
 }
 
-/** Qualifier-check: "is <term> [a/an] <qualifier> [<kind>]?" — a single-entity
- *  yes/no property check ("is Task.title public"), the missing single-entity
- *  sibling of the qualifier post-filter over a set. Guarded off "is/are
- *  there …" (parseExistence's shape). */
+/** The "in <scope>" tail of a qualifier check ("is Task.title public in Task").
+ *  A tail naming the whole index restricts nothing, so TRAILING_SCOPE_FILLER —
+ *  the table the meta-whatis reader already strips with — takes "in this
+ *  codebase" off first and the check runs unscoped, exactly as it reads.
+ *  Returns {scope}, a miss node, or null when there's no "in" tail at all. */
+function parseQualifierScope(qualifier, tailWords) {
+  if (!tailWords.length) return null;
+  const withQualifier = `${qualifier} ${tailWords.join(" ")}`;
+  const tail = stripTrailingScopeFiller(withQualifier).slice(qualifier.length).trim();
+  const rest = splitWords(tail);
+  const inIdx = rest.findIndex((x) => x.toLowerCase() === "in");
+  if (inIdx < 0) return null;
+  const scope = rest.slice(inIdx + 1).join(" ").trim();
+  return scope ? { scope } : { node: "miss", reason: `"in" needs a scope afterward` };
+}
+
+/** Qualifier-check: "is <term> [a/an] <qualifier> [<kind>] [in <scope>]?" — a
+ *  single-entity yes/no property check ("is Task.title public"), the missing
+ *  single-entity sibling of the qualifier post-filter over a set. Guarded off
+ *  "is/are there …" (parseExistence's shape). An "in <scope>" tail rides the
+ *  parse and eval checks the term is really inside that scope, so
+ *  "is Task.title public in SomeOtherClass" can't answer off the term alone. */
 function parseQualifierCheck(w, lc) {
   if (lc[0] !== "is" && lc[0] !== "are") return null;
   if (lc[1] === "there") return null; // parseExistence's own shape
@@ -621,13 +640,15 @@ function parseQualifierCheck(w, lc) {
     const agent = lc[agentIdx];
     if (agent && !GENERIC_AGENT_WORDS.has(agent)) return null;
   }
+  const tail = parseQualifierScope(lc[qualIdx], w.slice(qualIdx + 1));
+  if (tail?.node === "miss") return tail;
   let termStart = 1;
   if (lc[termStart] === "the") termStart += 1;
   let termEnd = negated ? qualIdx - 1 : qualIdx;
   if (termEnd > termStart && (lc[termEnd - 1] === "a" || lc[termEnd - 1] === "an")) termEnd -= 1;
   const term = termEnd > termStart ? w.slice(termStart, termEnd).join(" ").trim() : "";
   if (!term) return { node: "miss", reason: `"is/are <qualifier>" needs a named thing to check first` };
-  return { node: "qualCheck", term, qualifier: lc[qualIdx], negated };
+  return { node: "qualCheck", term, qualifier: lc[qualIdx], negated, scope: tail?.scope || null };
 }
 
 /** Negated polar: "does X not <verb> Y" — its positive twin's yes/no question
@@ -1725,14 +1746,38 @@ function evalExists(graph, ast) {
   return { compositeKind: "exists", entityType, term: null, scopeModule, scopeMatch, matches: pool };
 }
 
+/** Is `ind` inside a resolved qualifier-check scope? Read off the containment
+ *  the graph already carries: a directory or module scope matches the term's
+ *  own defining module, and a container scope (a class over its attributes and
+ *  methods) matches a MEMBERSHIP_KINDS edge. Anything the graph doesn't state
+ *  is not contained. */
+function withinScope(graph, ind, owner) {
+  const moduleId = moduleIdOf(graph, ind);
+  if (owner.kind === "dir") return owner.mods.some((m) => m.id === ind.id || m.id === moduleId);
+  return moduleId === owner.id || membershipOwnSet(graph, owner.id).some((o) => o.id === ind.id);
+}
+
 /** Qualifier-check eval: resolves the term (a context pronoun binds through
  *  contextId), then reads qualHolds(). `holds` means "the statement as asked
- *  is true" (negation already folded in). */
+ *  is true" (negation already folded in). An "in <scope>" tail is resolved and
+ *  checked first: the property is only reported for a term the scope really
+ *  contains, so the tail can never ride along unread. */
 function evalQualCheck(graph, ast, opts) {
-  const { term, qualifier, negated } = ast;
+  const { term, qualifier, negated, scope } = ast;
   const r = resolveTermOrContext(graph, term, opts.contextId);
   if (r.unresolvedPronoun) return { compositeKind: "qualCheck", qualCheckMiss: "pronoun", term, matches: [] };
   if (!r.match) return { compositeKind: "qualCheck", qualCheckMiss: "unresolved", term, matches: [] };
+  if (scope) {
+    const owner = resolveMembershipOwner(graph, scope, opts.contextId);
+    if (owner.kind === "miss") return { compositeKind: "qualCheck", qualCheckMiss: "scope", term, scope, matches: [] };
+    if (!withinScope(graph, r.match, owner)) {
+      return {
+        compositeKind: "qualCheck", qualCheckMiss: "outsideScope",
+        term, scope, subjectLabel: r.match.label,
+        scopeLabel: owner.kind === "dir" ? scope : owner.label, matches: [],
+      };
+    }
+  }
   const rawHolds = qualHolds(graph, r.match, QUALIFIERS[qualifier]);
   const holds = negated ? !rawHolds : rawHolds;
   return { compositeKind: "qualCheck", subject: r.match, qualifier, negated, holds, matches: [r.match] };
@@ -1829,6 +1874,12 @@ function renderComposite(parsed, result, graph) {
     }
     if (result.qualCheckMiss === "unresolved") {
       return { content: `couldn't find "${result.term}" in the index to check.`, miss: true, ambiguous: false };
+    }
+    if (result.qualCheckMiss === "scope") {
+      return { content: `couldn't find "${result.scope}" in the index to check inside.`, miss: true, ambiguous: false };
+    }
+    if (result.qualCheckMiss === "outsideScope") {
+      return { content: `No — ${result.subjectLabel} isn't in ${result.scopeLabel}.`, miss: true, ambiguous: false };
     }
     const label = result.subject.label;
     const truePhrase = result.negated ? `not ${result.qualifier}` : result.qualifier;
@@ -2092,6 +2143,28 @@ function resolveObjectCore(graph, term, { expectedClass = null } = {}) {
     }
   }
   if (extId && !expectedClass) return { match: { id: extId, label: t, class: null }, candidates: [], tier: 2, ambiguous: false };
+
+  // "store.mjs and logger.mjs" names two operands, and every tier below reads a
+  // term as ONE. Tier 3's slashStem deliberately resolves past trailing junk, so
+  // the second operand is dropped and the first is answered about with full
+  // confidence: "is model.mjs called by store.mjs and logger.mjs" returns a flat
+  // Yes that is only ever about store.mjs. Nothing here reads coordination, so a
+  // miss is the answer.
+  //
+  // Gated on both sides resolving to DIFFERENT individuals on their own, which is
+  // what makes this a coordination rather than a name: a label that merely
+  // contains the word was already claimed by the exact tier above, and a side that
+  // resolves to nothing was never an operand. Neither part carries an " and " of
+  // its own, so the recursion is one level deep.
+  const andParts = t.split(/\s+and\s+/i).map((p) => p.trim()).filter(Boolean);
+  if (andParts.length > 1) {
+    const operandIds = new Set();
+    for (const part of andParts) {
+      const r = resolveObjectCore(graph, part, { expectedClass });
+      if (r.match && !r.ambiguous) operandIds.add(r.match.id);
+    }
+    if (operandIds.size > 1) return { match: null, candidates: [], tier: null, ambiguous: false };
+  }
 
   // Tier 3, two regimes: a dotted term with no slash ("res.json") is
   // symbol-shaped, so it matches only symbol labels or a module by exact

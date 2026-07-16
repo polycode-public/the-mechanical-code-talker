@@ -1004,6 +1004,25 @@ function isBareCamelCaseMetaQuestion(query) {
   return BARE_WHATIS_RE.test(raw) || IS_ADJECTIVE_YESNO_RE.test(raw);
 }
 
+/** The same scoped exemption for the WRAPPERLESS form, lane (2c) only: a bare
+ *  "TaskController" typed on its own. isBareCamelCaseMetaQuestion above needs a
+ *  "what is X" / "is X <adjective>" wrapper, so a bare CamelCase name still
+ *  stops at looksCodeish()'s `/[a-z][A-Z]/` branch while its lowercase twin
+ *  ("task") reaches the lane and answers.
+ *
+ *  A single unbroken word is the whole shape (2c looks the raw line up as a
+ *  label), and that shape is what keeps the exemption at the CamelCase reason
+ *  and nothing else: a path, a dotted ref, a `()` call or any multi-word
+ *  near-miss structural question ("what is import") can't be one bare word, and
+ *  every STRUCT_WORDS member is lowercase, so the CamelCase requirement leaves
+ *  them all where they are. Lane (2c) still only diverts on a real, unique
+ *  graph hit — an unknown CamelCase word answers exactly as it does now. */
+function isBareCamelCaseEntityName(query) {
+  const raw = String(query).trim();
+  if (!/^[A-Za-z][A-Za-z0-9]*$/.test(raw)) return false;
+  return /[a-z][A-Z]/.test(raw);
+}
+
 // ---- the response-template library (W1: templates → render path) ----
 // The WORDING of the conversational/orientation surfaces lives in
 // data/templates/responses.jsonl (corpus/templates.mjs) — the template library is
@@ -2949,7 +2968,12 @@ function habitualGroundingHintText(line, habitual) {
  *  grammatical category error regardless of the verb — keeping the guard
  *  ahead of every teach recognizer (copula AND general-verb alike) the same
  *  way it already stood ahead of teachSuggestion/unknownSubjectFallback. */
-const TEACH_PRONOUN_RE = /^(?:every\s+|each\s+|all\s+|some\s+|a few\s+|a\s+|an\s+)?(you|i|it|they|he|she|we)\s+\S+/i;
+const TEACH_PRONOUNS = Object.freeze(["you", "i", "it", "they", "he", "she", "we"]);
+const TEACH_PRONOUN_RE = new RegExp(`^(?:every\\s+|each\\s+|all\\s+|some\\s+|a few\\s+|a\\s+|an\\s+)?(${TEACH_PRONOUNS.join("|")})\\s+\\S+`, "i");
+/** The same closed set, read as a whole-word membership test: a pronoun is no
+ *  more a legal fact subject when a reader LIFTS one out of a prior answer than
+ *  when a teach frame offers one. */
+const isTeachPronoun = (s) => TEACH_PRONOUNS.includes(String(s || "").trim().toLowerCase());
 
 /** RETRACTION / NEGATION of an already-taught subClassOf fact: "X is not a Y"
  *  (tolerating the same "kind/type of" infix every other teach shape in this
@@ -5217,8 +5241,8 @@ function uniqueFacts(rows) {
  *  deducible (withDeducedGoal, below) — the ledger page's chat dock renders
  *  it as its own "Goal (inferred)" line; every other consumer reads named
  *  fields and is unaffected. */
-export async function factAnswer(memoryDir, query, envelope, miss, biasByBundle = {}, cache = null) {
-  return withDeducedGoal(await factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle, cache), envelope, query);
+export async function factAnswer(memoryDir, query, envelope, miss, biasByBundle = {}, cache = null, focusLabel = null) {
+  return withDeducedGoal(await factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle, cache, focusLabel), envelope, query);
 }
 
 /** Attach the additive `goal` field to a fact reader's return: the same
@@ -5246,7 +5270,7 @@ function withDeducedGoal(res, envelope, query) {
   return goal ? { ...res, goal } : res;
 }
 
-async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle = {}, cache = null) {
+async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle = {}, cache = null, focusLabel = null) {
   let normFactTerm;
   try { ({ normFactTerm } = await import("../adapters/memory/core.mjs")); } catch { return null; }
   const q = String(query).trim();
@@ -5478,14 +5502,25 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     const compWord = compAsk[2].toLowerCase().replace(/\s+/g, "-");
     const compPredicate = `mgx:${compWord}-than`;
     const facts = await memoryFacts(memoryDir);
-    const subj = factTermVariants(normFactTerm, compAsk[1].replace(/^(?:an?|the)\s+/i, "").trim());
-    const obj = factTermVariants(normFactTerm, compAsk[3].replace(/^(?:an?|the)\s+/i, "").trim());
+    // Either side may be a context pronoun ("is it bigger than peg-a", "is
+    // peg-a bigger than that"), resolved against the standing focus the same
+    // way the property and relation lanes below resolve theirs. With no focus
+    // to bind to, the pronoun stays literal and the honest can't-confirm below
+    // stands — the lane never picks a subject the session hasn't named.
+    const compTerm = (raw) => {
+      const t = raw.replace(/^(?:an?|the)\s+/i, "").trim();
+      return focusLabel && IS_ADJECTIVE_PRONOUN_RE.test(t) ? focusLabel : t;
+    };
+    const subjTerm = compTerm(compAsk[1]);
+    const objTerm = compTerm(compAsk[3]);
+    const subj = factTermVariants(normFactTerm, subjTerm);
+    const obj = factTermVariants(normFactTerm, objTerm);
     const hit = facts.find((f) => f.predicate === compPredicate && subj.has(f.subject) && obj.has(f.object));
     if (hit) return { text: `yes — ${renderFactLine(hit)}`, replace: true };
     const known = facts.filter((f) => f.predicate === compPredicate && (subj.has(f.subject) || subj.has(f.object)));
     const shown = known.length ? ` I do know: ${known.slice(0, 3).map(renderFactLine).join("; ")}.` : "";
     return {
-      text: `I can't confirm that — nothing I remember compares them that way.${shown} If it's true, teach me: "${compAsk[1].trim()} is ${compAsk[2].toLowerCase()} than ${compAsk[3].trim()}".`,
+      text: `I can't confirm that — nothing I remember compares them that way.${shown} If it's true, teach me: "${subjTerm} is ${compAsk[2].toLowerCase()} than ${objTerm}".`,
       replace: true,
       miss: true,
     };
@@ -6632,8 +6667,17 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     // INSTANCE BRIDGE below would otherwise answer yes. Same stripTrailingDiscourseTag
     // fix, applied here too.
     const objVariants = factTermVariants(normFactTerm, stripTrailingDiscourseTag(isaAsk[2]));
-    const subjCandidates = new Set(factTermVariants(normFactTerm, isaAsk[1]));
-    const noun = await entityClassNoun(graph, isaAsk[1]);
+    // "is that an animal" — the subject slot takes a context pronoun like every
+    // other reader in this file, resolved against the session's standing focus
+    // through IS_ADJECTIVE_PRONOUN_RE (the same set/swap the property, relation
+    // and ownership lanes above already use). With no focus standing, the
+    // pronoun stays literal and the lane keeps its existing decline — the miss
+    // below reads it as a pronoun and suppresses the "I don't know it at all"
+    // wording, which is still the right answer with nothing to bind to.
+    const isaSubject = focusLabel && IS_ADJECTIVE_PRONOUN_RE.test(isaAsk[1].trim())
+      ? focusLabel : isaAsk[1];
+    const subjCandidates = new Set(factTermVariants(normFactTerm, isaSubject));
+    const noun = await entityClassNoun(graph, isaSubject);
     if (noun) for (const v of factTermVariants(normFactTerm, noun)) subjCandidates.add(v);
     const hit = isa
       .filter((f) => subjCandidates.has(f.subject) && objVariants.has(f.object))
@@ -6644,7 +6688,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     // "controller ⊑ handler" composes with a graph "TaskController inherits
     // Controller" so "is TaskController a handler" answers yes, naming BOTH
     // sources (the graph edge + the taught fact with its provenance).
-    const ent = await resolveEntity(graph, isaAsk[1]);
+    const ent = await resolveEntity(graph, isaSubject);
     if (ent) {
       const bridgeSubjects = new Map(); // fact-term variant → the superclass label as spelled in the graph
       for (const sup of inheritsChain(graph, ent.id)) {
@@ -6741,7 +6785,14 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     // shape. Deliberately shallow — no chain chases on the negated side; a
     // negative proved through a multi-hop positive chain stays an honest
     // miss rather than a guess.
-    const negSubject = isaAsk[1].match(/^(.*\S)\s+not$/i);
+    // The pronoun swap above can't see this shape — the trailing "not" rides
+    // inside the subject capture ("is that not a cat"), so the bare subject
+    // resolves against the focus here instead, on the same terms.
+    const negSubjectMatch = isaSubject.match(/^(.*\S)\s+not$/i);
+    const negSubject = negSubjectMatch && [
+      negSubjectMatch[0],
+      focusLabel && IS_ADJECTIVE_PRONOUN_RE.test(negSubjectMatch[1].trim()) ? focusLabel : negSubjectMatch[1],
+    ];
     if (negSubject) {
       const negSubjVariants = factTermVariants(normFactTerm, negSubject[1]);
       const negObjVariants = objVariants;
@@ -6913,9 +6964,9 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     // with the graph entity's class noun (the CLASS↔INSTANCE bridge), and
     // filtering on it here would cite facts about that noun ("class ⊑
     // component") as if they were facts about the asked subject ("Widget").
-    const directSubjVariants = factTermVariants(normFactTerm, isaAsk[1]);
+    const directSubjVariants = factTermVariants(normFactTerm, isaSubject);
     const knownSubjectIsa = isa.filter((f) => directSubjVariants.has(f.subject)).sort(byTrust);
-    const subjectWord = isaAsk[1].trim();
+    const subjectWord = isaSubject.trim();
     const kindWord = stripTrailingDiscourseTag(isaAsk[2]).trim();
     if (knownSubjectIsa.length) {
       const shown = knownSubjectIsa.slice(0, 3).map(renderFactLine).join("; ");
@@ -8916,7 +8967,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   let bareMetaHit = null;
   if ((isConversationalCandidate || isBareCamelCaseWhatisCandidate) && (bareWhatisShape || isAdjectiveShape || reversePredicateShape || capabilityAskShape)) {
     if (memoryDir) {
-      bareMetaHit = (await factAnswer(memoryDir, gateQuery, envelope, miss, biasByBundle, cache))
+      bareMetaHit = (await factAnswer(memoryDir, gateQuery, envelope, miss, biasByBundle, cache, newFocus?.label))
         ?? (await factReadBack(memoryDir, gateQuery, envelope, miss, graph, newFocus?.label, biasByBundle, cache));
       // An honest-miss return never diverts the gate — EXCEPT the capability
       // family's can't-confirm, which names the subject's real capabilities
@@ -8952,7 +9003,15 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // lookup and "divert only on a REAL, UNIQUE hit" discipline: it only
   // returns non-null for an EXACT label match, so ordinary small talk is
   // unaffected.
-  if (!bareMetaHit && isConversationalCandidate && graph) {
+  //
+  // `isBareCamelCaseEntityCandidate` ORs in for THIS lane the way
+  // isBareCamelCaseWhatisCandidate does for (2b) — a bare "TaskController" is
+  // excluded from isConversationalCandidate solely by the CamelCase transition,
+  // while a bare "task" reaches the lane. Same base gate and same
+  // `!vocabAntecedent`, so it's never looser than the gate it joins.
+  const isBareCamelCaseEntityCandidate = conversationalCandidateBaseGate && !vocabAntecedent
+    && isBareCamelCaseEntityName(query);
+  if (!bareMetaHit && (isConversationalCandidate || isBareCamelCaseEntityCandidate) && graph) {
     const { metaFallbackEntityAnswer } = await import("../domain/ask.mjs");
     const fallback = metaFallbackEntityAnswer(graph, String(query).trim());
     if (fallback) bareMetaHit = { text: fallback.text, replace: true };
@@ -9019,10 +9078,10 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     // normalization-mangled text reach readers whose guards were written for
     // the raw surface (the pronoun-subject identity family).
     const normalizedForFacts = envelope ? null : normalizeQuery(String(query));
-    const fact = (await factAnswer(memoryDir, query, envelope, miss, biasByBundle, cache))
+    const fact = (await factAnswer(memoryDir, query, envelope, miss, biasByBundle, cache, newFocus?.label))
       ?? (await factReadBack(memoryDir, query, envelope, miss, graph, newFocus?.label, biasByBundle, cache))
       ?? (normalizedForFacts && normalizedForFacts !== String(query).trim()
-        ? (await factAnswer(memoryDir, normalizedForFacts, envelope, miss, biasByBundle, cache))
+        ? (await factAnswer(memoryDir, normalizedForFacts, envelope, miss, biasByBundle, cache, newFocus?.label))
           ?? (await factReadBack(memoryDir, normalizedForFacts, envelope, miss, graph, newFocus?.label, biasByBundle, cache))
         : null);
     if (fact) {
@@ -9285,10 +9344,11 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // answer keeps that answer untouched. This only ever replaces the repaired
   // parse's OWN standing reply.
   //
-  // A real verb typo ("impotr") lands on the miss wall now. Telling a typo
-  // from a collision needs a generated collision-set table — plain dictionary
-  // membership isn't enough, since "rests" isn't in /usr/share/dict/words.
-  // Until one is designed, refusing is the honest half of the trade.
+  // A real English word never reaches here: the repair tier's own collision table
+  // (src/domain/real-word-collisions.json) refuses it before any distance is
+  // measured, so "rest" misses as itself. What is left for this lane is a NON-word
+  // that repaired onto a verb whose lemma differs from the word it came from —
+  // "impotr" still repairs to "import" and answers, because they share one.
   if (miss && recordMiss && via === "composed" && envelope?.parsed?.fuzzyVerb) {
     const { from, to } = envelope.parsed.fuzzyVerb;
     if (!(await repairSharesLemma(from, to))) {
@@ -9876,19 +9936,43 @@ function rewriteUsesAsBaseFrame(text) {
   return null;
 }
 
+/** The pronouns runTurn's vocabulary binding accepts in SUBJECT position, and
+ *  the shapes that put one there. The set is CONTEXT_WORDS — this file's own
+ *  closed anaphor table, the one isPronoun and every focus-resolving reader
+ *  already trust — plus the plural "they", which the fact readers take as a
+ *  bare subject the same way. Only "here" is left out: it stands for a PLACE
+ *  ("what's in here" = this repo), never for the thing a fact is about, so
+ *  binding it to a subject would be a category error.
+ *
+ *  The lead itself is what keeps this to subject position: the pronoun must
+ *  directly follow the opening auxiliary ("can it bark") or "what is/are" WITH
+ *  a continuation ("what is it used for"), so an idiom carrying a trailing
+ *  dummy pronoun ("what time is it") and the bare "what is it" never rewrite. */
+const VOCAB_PRONOUN_LEAD_SUBJECTS = Object.freeze([...CONTEXT_WORDS].filter((w) => w !== "here").concat("they"));
+const VOCAB_PRONOUN_LEAD_RE = new RegExp(
+  `^((?:is|are|can|could|does|do)\\s+|what\\s+(?:is|are)\\s+)(?:${VOCAB_PRONOUN_LEAD_SUBJECTS.join("|")})\\b(\\s+\\S.*)?$`, "i",
+);
+
 /** The subject of the LAST turn's first fact line, for vocabulary pronoun
  *  binding ("what is a dog" → "can it bark"). Fact answers render rigidly —
  *  "<subject> <phrase> <object> (source: …)", optionally behind a "yes — "/
  *  "no — "/"you told me: " prefix — so a 1–2 word leading subject followed
  *  by a phrase-table verb is extractable without any NLP. Anything else
  *  (code answers, walls, conversational text) returns null and no
- *  substitution happens. */
+ *  substitution happens.
+ *
+ *  A pronoun never binds. An honest miss opens first-person ("I can't confirm
+ *  that — …"), which fits the subject+verb shape exactly, so without the
+ *  isTeachPronoun check the miss lends "I" to the next turn and "is it an
+ *  animal" is looked up as "is I an animal". A pronoun is no more a fact
+ *  subject here than in the teach frames TEACH_PRONOUNS already guards. */
 function vocabAntecedentFrom(last) {
   const first = String(last?.answer || "").split("\n")[0]
     .replace(/^(?:yes|no) — /i, "")
     .replace(/^you told me: /i, "");
   const m = first.match(/^([a-z][\w'-]*(?:\s+[a-z][\w'-]*)?)\s+(?:is|are|has|can|causes|wants|requires|involves|means|begins|ends)\b/i);
-  return m ? m[1] : null;
+  if (!m || isTeachPronoun(m[1]) || isPronoun(m[1])) return null;
+  return m[1];
 }
 
 export async function runTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, vocabHint = null, tel = null, biasByBundle = {}, factRowsCache: injectedFactRowsCache = null, planState = null, _noSplit = false } = {}) {
@@ -9917,11 +10001,7 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // ONLY when no code focus is standing (a graph session's own pronoun
   // resolution is untouched), the turn looks like a fact question, and the
   // LAST answer's own first fact line names a subject to bind to.
-  // Anchored to SUBJECT position only: the pronoun must directly follow the
-  // opening auxiliary ("can it bark") or "what is/are" WITH a continuation
-  // ("what is it used for") — so idioms carrying a trailing dummy pronoun
-  // ("what time is it") and the bare "what is it" are never rewritten.
-  const pronounLead = frameLine.match(/^((?:is|are|can|could|does|do)\s+|what\s+(?:is|are)\s+)(?:it|they)\b(\s+\S.*)?$/i);
+  const pronounLead = frameLine.match(VOCAB_PRONOUN_LEAD_RE);
   const vocabAntecedent = (!focus?.id && memoryDir && pronounLead
     && !(/^what/i.test(pronounLead[1]) && !pronounLead[2]))
     ? vocabAntecedentFrom(last) : null;

@@ -121,7 +121,7 @@ test("showcase 4: the ambiguity surround — distinct readings are RESOLVED and 
   assert.match(answer, /2\)/, "reading 2 offered");
   // each reading now carries its own REAL resolved answer, not a bare "try rephrasing"
   // punt — same honest admission of ambiguity, backed by real content for both branches.
-  assert.match(answer, /no class named/, "reading 1's real honest-miss answer is shown");
+  assert.match(answer, /no class matching/, "reading 1's real honest-miss answer is shown");
   assert.match(answer, /no imports edge found/, "reading 2's real honest-miss answer is shown");
 });
 

@@ -3,13 +3,15 @@
 // refused or surfaced as ambiguity, never broken by a guess.
 
 import { VERB_TO_KIND, ENTITY_TO_TYPE, MODIFIER_TO_KIND } from "../ask-vocab.mjs";
+import collisionData from "../real-word-collisions.json" with { type: "json" };
 
-/** Words the canonicalization passes must leave alone even though no parse table
- *  spells them. "used" reads as vocabulary, not as a relation: "what is it used
- *  for" asks the corpus what a thing is FOR, and both tiers below would otherwise
- *  walk it to the graph verb "uses" — the lemma tier through "use", the fuzzy tier
- *  by one edit — and answer a question about imports and calls instead. The active
- *  verb table deliberately has no bare "used" for the same reason. */
+/** Words the LEMMA pass must leave alone even though no parse table spells them.
+ *  "used" reads as vocabulary, not as a relation: "what is it used for" asks the
+ *  corpus what a thing is FOR, and the lemma tier would otherwise walk it through
+ *  "use" to the graph verb "uses" and answer a question about imports and calls
+ *  instead. The active verb table deliberately has no bare "used" for the same
+ *  reason. The fuzzy tier reaches "used" too, by one edit, and the collision
+ *  table below holds it off there — "used" is real English, so no repair applies. */
 const NEVER_CANONICALIZE = ["used"];
 import { STOPWORDS } from "./normalize.mjs";
 
@@ -51,14 +53,34 @@ export const VOCAB_WORDS = new Set(
     .flatMap((p) => p.split(" ")),
 );
 
+/** Below this length the edit budget covers half of English, so the repair tier
+ *  ignores shorter words entirely ("and" is one edit from the "land in"
+ *  constituent). Shared with the generator that builds the collision table, so
+ *  both agree on which words the tier can ever reach. */
+export const FUZZY_REPAIR_MIN_LENGTH = 4;
+
 /** Fuzzy-correction TARGETS: verb-phrase and modifier constituents only,
  *  length ≥4. Entity nouns and short words are excluded — real identifiers
  *  collide with them too easily at this distance bound. */
-const FUZZY_TARGET_WORDS = [...new Set(
+export const FUZZY_TARGET_WORDS = [...new Set(
   [...Object.keys(VERB_TO_KIND), ...Object.keys(MODIFIER_TO_KIND)]
     .flatMap((p) => p.split(" "))
-    .filter((w) => w.length >= 4),
+    .filter((w) => w.length >= FUZZY_REPAIR_MIN_LENGTH),
 )];
+
+/** Real English words the repair tier would otherwise rewrite onto a graph verb
+ *  ("rest" -> "test", "during" -> "using", "bigger" -> "trigger"). Generated
+ *  offline from this repo's own WordNet corpus by
+ *  scripts/generate-real-word-collisions.mjs and committed, so the check is a
+ *  closed table lookup with no dictionary to carry at runtime. */
+const REAL_WORD_COLLISIONS = new Set(collisionData.words);
+
+/** Is `w` a real English word that the repair tier attracts? A word already in
+ *  the language is not a typo, so no repair applies to it — the sentence means
+ *  what it says, and if we don't record that relation the honest answer is a
+ *  miss. Only the words the tier could actually reach are tabled; anything else
+ *  never gets this far. */
+export const isRealEnglishWord = (w) => REAL_WORD_COLLISIONS.has(w);
 
 /** A query word may be canonicalized only if it is plain alphabetic, not a
  *  stopword, and not already vocabulary. Dotted/digit terms (file names, shas)
@@ -69,8 +91,15 @@ export function eligibleForCanon(w) {
 
 /** UNIQUE within-bound fuzzy vocab keyword for `w`, or null — a tie between two
  *  distinct target words at the same distance is refused outright (the honest-miss
- *  discipline at the vocabulary level; cf. MISSPELLINGS' curated "calss" decision). */
+ *  discipline at the vocabulary level; cf. MISSPELLINGS' curated "calss" decision).
+ *
+ *  This tier repairs TYPOS. A word that is already real English is not a typo,
+ *  so it is refused before the distance is even measured: "does store.mjs rest
+ *  on app.mjs" asks about resting, and rewriting it to "tests" answers a
+ *  question nobody asked. A word outside the language ("impotr") has no such
+ *  claim, and the repair is the whole point. */
 export function fuzzyVocabWord(w) {
+  if (isRealEnglishWord(w)) return null;
   return fuzzyMatchInSet(w, FUZZY_TARGET_WORDS, fuzzyBound(w));
 }
 
