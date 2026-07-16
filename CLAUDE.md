@@ -22,8 +22,46 @@ session is the COORDINATOR (plans, launches, integrates, answers the operator), 
   launches it, keeps coordinating and conversing, and collects results on the completion
   notification.
 - Commit per completed step with the repo-local identity (`antony@polycode.co.uk` /
-  `Antony at Polycode`); keep `npm test` green at every commit.
+  `Antony at Polycode`). Keep the tests green at every commit — but which tests depends on where
+  the commit lands, see "Test the blast radius" below.
 - Push/publish is gated on the operator (CI publishes on version bump on `main`).
+
+## Test the blast radius, not the whole suite
+
+Mid-task, survey the test estate and run only what your change can actually reach. A sub-agent in a
+worktree does the same, and keeps doing it when it commits: a worktree commit is a checkpoint, not
+a release.
+
+Two moments earn the full `npm test`, and they are the same moment wearing two hats — the change
+is about to become someone else's problem:
+
+- **a commit to `main`**, and
+- **a commit to a branch that has a remote** — anything that can reach CI or another person.
+
+Everything before those is your own iteration loop, and the full suite is minutes of it, every
+time. Pick the files instead. `node --test test/tools/ask.test.mjs` costs seconds.
+`node --test "test/estate/*.test.mjs"` costs seconds. Running all of it to check a one-line edit
+is a habit, not a check.
+
+**Sub-agents are the strict case.** They are the most expensive place to run a full suite — several
+run at once, each paying the whole cost — and the least likely to need it, because they own a slice
+of the tree by construction. A sub-agent running `npm test` is usually spending minutes confirming
+something its own range cannot break. Say so in the dispatch brief: name the files that agent
+should run, and tell it to cite the coordinator's count rather than re-earn it.
+
+How to find the radius, in order:
+
+- the file you edited, and whatever imports it;
+- its keyed corpus rows — `node scripts/corpus-matrix.mjs` prints the key × lane map;
+- the estate guard for any generated artifact you touched (the ask bundle, the real-word collision
+  table, the page version stamp) — these fail on drift, so a change that regenerates one is exactly
+  where a targeted run pays;
+- whatever the change's own reason names.
+
+Two traps this rule does not excuse. A radius you cannot see is a real reason to run the suite, and
+the only one — write down that you could not see it. And a shared, generated artifact is wider than
+it looks: touching the verb vocabulary regenerates the collision table, which redraws the ask
+bundle. Follow the generator, not the diff.
 
 ## Always tee a long-running command to a file before filtering it
 
