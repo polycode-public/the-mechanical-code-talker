@@ -1,17 +1,23 @@
-// scripts/build-demo-site.mjs — regenerate the two CI-generated pieces the GitLab
-// Pages site's live chat demo needs: public/engine/ (literal, unmodified copies of the
-// small browser-clean transitive import set src/ask.mjs's ask() actually needs) and
-// public/demo-graph.json (see build-demo-graph.mjs). Both are .gitignored — src/ and
-// examples/mini-webapp/.tmct/graph.json stay the single source of truth, so the
-// published site can never silently drift from them. Run via `npm run demo:build`
-// (same script .gitlab-ci.yml's `pages` job calls) whenever you want to serve public/
-// locally (e.g. `npx serve public`) and try the live demo yourself.
+// scripts/build-demo-site.mjs — regenerate everything the GitLab Pages site
+// generates rather than tracks:
 //
-// The copied set is whatever src/ask.mjs's imports actually reach, walked from the
-// source at build time. The copies keep src/'s directory layout under
+//   engine/           unmodified copies of the engine sources the in-page demo runs
+//   demo-graph.json   the example code graph (see build-demo-graph.mjs)
+//   demo-memory.json  the taught payload behind the ledger (see build-demo-memory.mjs)
+//   ledger.html       the memory ledger, with the ask bundle inlined
+//   plan.html         an animated replay of the solved hanoi-3 game
+//
+// All of them are .gitignored. src/, examples/mini-webapp/.tmct/graph.json and the
+// binary stay the single source of truth, so the published site cannot drift from
+// them. Run via `npm run demo:build`, the same script .gitlab-ci.yml's `pages` job
+// calls, whenever you want to serve public/ locally and try the site yourself.
+//
+// The copied engine set is whatever src/ask.mjs's imports actually reach, walked
+// from the source at build time. The copies keep src/'s directory layout under
 // public/engine/src/, because their own relative imports have to keep resolving.
 
-import { cpSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join, relative, resolve } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -75,3 +81,29 @@ const memoryAskBundle = await readMemoryAskBundle();
 const ledgerPath = join(SITE, "ledger.html");
 await writeF(ledgerPath, renderLedgerHtml({ ...ledgerData, memoryAskBundle }));
 console.log(`wrote ${ledgerPath} (${memoryAskBundle ? "chat dock enabled" : "no bundle — dock disabled"})`);
+
+// The plan render: solve the hanoi-3 game through the real planner and keep the
+// animated replay. This shells out to the binary a reader would run, so the page
+// shows the artefact they get rather than one built a private way.
+const HANOI_PROMPT =
+  "disk-1 rests on disk-2. disk-2 rests on disk-3. disk-3 rests on peg-a. " +
+  "the goal is that every disk rests on peg-c. solve it.";
+const planPath = join(SITE, "plan.html");
+const planDir = mkdtempSync(join(tmpdir(), "tmct-demo-plan-"));
+// stdin stays closed: chat reads it when it is open, and this run is scripted
+// entirely by --prompt.
+const runTmct = (args) =>
+  execFileSync(process.execPath, [join(ROOT, "bin", "tmct.mjs"), ...args], {
+    cwd: planDir,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    timeout: 120_000,
+  });
+try {
+  runTmct(["init"]);
+  runTmct(["import", "--file", join(planDir, ".tmct", "imports", "games", "hanoi-3.txt")]);
+  const solved = runTmct(["chat", "--prompt", HANOI_PROMPT, "--render", "blocks", "--output", planPath]);
+  console.log(`wrote ${planPath} (${/\((.*?)\)\s*$/.exec(solved.trim())?.[1] ?? "rendered"})`);
+} finally {
+  rmSync(planDir, { recursive: true, force: true });
+}

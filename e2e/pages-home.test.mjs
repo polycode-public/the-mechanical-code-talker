@@ -8,9 +8,10 @@
 // in CI, and the box drops to its lower tiers, which is asserted below.
 import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
-import { rmSync } from "node:fs";
+import { readFileSync, rmSync } from "node:fs";
+import { join } from "node:path";
 import { chromium } from "playwright";
-import { buildDemoSiteSnapshot } from "./helpers/demo-site.mjs";
+import { buildDemoSiteSnapshot, repoRoot } from "./helpers/demo-site.mjs";
 import { serveDirectory } from "./helpers/static-server.mjs";
 
 let siteDir;
@@ -105,13 +106,59 @@ test("the live-demo box answers on its lower tiers when the wink CDN is unreacha
   }
 });
 
-test("the page keeps the steps to run the local chat", async () => {
+test("the page keeps the steps to run the local chat and to use tmct as a library", async () => {
   const { context, page } = await openHomePage();
   try {
     const body = await page.locator("main").innerText();
     assert.match(body, /npm install -g @polycode-projects\/the-mechanical-code-talker/, "the install step is on the page");
     assert.match(body, /tmct chat --repo/, "the step to point tmct at a repo is on the page");
     assert.match(body, /tmct init/, "the scaffold step is on the page");
+    assert.match(body, /import \{ runChat \} from "@polycode-projects\/the-mechanical-code-talker"/, "the library import is on the page");
+    assert.match(body, /await runChat\(\{/, "the library call is on the page");
+  } finally {
+    await context.close();
+  }
+});
+
+test("the page shows a grounded answer and an honest miss before any of the methodology", async () => {
+  const { context, page } = await openHomePage();
+  try {
+    const transcript = await page.locator(".transcript").innerText();
+    assert.match(transcript, /dog is a kind of animal \(source: corpus:human/, "the excerpt shows an answer with its source");
+    assert.match(transcript, /I don't know "quokka" yet/, "the excerpt shows a miss");
+
+    const body = await page.locator("main").innerText();
+    // A reader meets what tmct does before it explains how it does it.
+    assert.ok(
+      body.indexOf("dog is a kind of animal") < body.indexOf("ELIZA/PARRY lineage"),
+      "the transcript lands above the lineage prose",
+    );
+  } finally {
+    await context.close();
+  }
+});
+
+test("the plan render loads its own replay of the solved game", async () => {
+  const { context, page } = await openHomePage();
+  try {
+    await page.locator(".plan-render").waitFor({ state: "visible" });
+    const frame = page.frameLocator(".plan-render iframe");
+    await frame.locator("body").waitFor({ state: "visible" });
+    const replay = await frame.locator("body").innerText();
+    assert.match(replay, /disk-1/, "the replay names the pieces it moved");
+  } finally {
+    await context.close();
+  }
+});
+
+test("the version the page documents is the version the package ships", async () => {
+  const { context, page } = await openHomePage();
+  try {
+    const shown = (await page.locator("#pkg-version").textContent())?.trim();
+    const { version } = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf8"));
+    // post-deploy-smoke.mjs reads this element off the deployed page and checks
+    // it against the published package, so a stale stamp reports a bad deploy.
+    assert.equal(shown, version, "the page's version stamp tracks package.json");
   } finally {
     await context.close();
   }
