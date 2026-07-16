@@ -19,7 +19,7 @@ import { join } from "node:path";
 import { Readable, PassThrough } from "node:stream";
 import { runTurn, runChat } from "../../src/services/chat.mjs";
 import { clearCache } from "../../src/adapters/source.mjs";
-import { ingestSchemaDocs } from "../../src/schema-docs.mjs";
+import { ingestSchemaDocs } from "../../src/tools/schema-docs.mjs";
 import { loadMemory, FACT_CLASS } from "../../src/adapters/memory/core.mjs";
 
 const FIXTURE = new URL("../fixtures/entities.fixture.json", import.meta.url).pathname;

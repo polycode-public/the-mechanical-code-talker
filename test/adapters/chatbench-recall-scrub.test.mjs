@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { runChat } from "../../src/services/chat.mjs";
-import { ingestSchemaDocs } from "../../src/schema-docs.mjs";
+import { ingestSchemaDocs } from "../../src/tools/schema-docs.mjs";
 import { clearCache } from "../../src/adapters/source.mjs";
 import { runSessionCase } from "../../chatbench/run.mjs";
 import { parseSessionJsonl, parseSessionLog, turnKey } from "../../src/services/sessions.mjs";

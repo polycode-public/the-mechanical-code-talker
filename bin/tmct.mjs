@@ -249,7 +249,7 @@ async function runDigest(args, { dispatchTool, buildContextBundle, source, confi
 async function runCliMode() {
   const [, sub, payload] = process.argv.slice(2);
   const { join } = await import("node:path");
-  const { dispatchTool, buildContextBundle } = await import("../src/server.mjs");
+  const { dispatchTool, buildContextBundle } = await import("../src/tools/server.mjs");
   const { loadConfig, DEFAULT_GRAPH_REL } = await import("../src/adapters/config.mjs");
   const source = await import("../src/adapters/source.mjs");
   const codegraph = await import("../src/domain/codegraph.mjs");

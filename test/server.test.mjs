@@ -7,7 +7,7 @@ import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { dispatchTool, TOOLS } from "../src/server.mjs";
+import { dispatchTool, TOOLS } from "../src/tools/server.mjs";
 import { ToolError } from "../src/adapters/config.mjs";
 
 const fixture = JSON.parse(

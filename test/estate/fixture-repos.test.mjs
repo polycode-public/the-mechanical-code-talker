@@ -9,7 +9,7 @@ import { readFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildEntities } from "../../src/adapters/graph-build.mjs";
-import { ingestSchemaDocs } from "../../src/schema-docs.mjs";
+import { ingestSchemaDocs } from "../../src/tools/schema-docs.mjs";
 import { FIXTURE_REPO_MODULES } from "../fixtures/repos/modules.mjs";
 
 const REPOS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "repos");

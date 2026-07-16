@@ -3,7 +3,7 @@
 //
 // Source of truth is examples/mini-webapp/.tmct/graph.json (the repo's own committed
 // fixture graph, already used by `npm run example:mini`). The one transformation
-// applied is src/schema-docs.mjs's REAL ingestSchemaDocs() — the same function a
+// applied is src/tools/schema-docs.mjs's REAL ingestSchemaDocs() — the same function a
 // graph writer calls after buildEntities — which merges tmct's static, repo-
 // independent schema documentation (Module/Class/Function/… + every predicate) in as
 // SchemaClass/SchemaPredicate individuals. Without it, "what is a module"/"what does
@@ -19,7 +19,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { ingestSchemaDocs } from "../src/schema-docs.mjs";
+import { ingestSchemaDocs } from "../src/tools/schema-docs.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const SRC = join(here, "..", "examples", "mini-webapp", ".tmct", "graph.json");

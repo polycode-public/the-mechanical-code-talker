@@ -71,7 +71,7 @@ Confirmed by direct read of this repo, not assumed:
   `rdfs:seeAlso`-linked to the exact SEON/`mgx:` prop tokens (`seon:hasSuperType`,
   `seon:containsCodeEntity`, `seon:declaresMethod`, `mgx:importsNamespace`, `mgx:callsSymbol`,
   `mgx:testsCoverage`, `mgx:touchesSymbol`) that a code-graph payload actually carries.
-- **`src/server.mjs`** — `dispatchTool` (the internal tool switch: `tmct_ask`, `tmct_describe`,
+- **`src/tools/server.mjs`** — `dispatchTool` (the internal tool switch: `tmct_ask`, `tmct_describe`,
   `tmct_impact`, `tmct_untested`, etc., line 348). A commit in this repo's own history
   (`f7c0ab0 refactor: drop the MCP server surface — dispatchTool is the plain internal tool switch`)
   shows tmct once had an MCP server and deliberately removed it, keeping `dispatchTool` as a plain
@@ -99,7 +99,7 @@ wired to anything that reads real source code.
 questions, live today, not a TODO: `runAsk` (`src/services/chat.mjs:7417`) calls `ask()` from `ask.mjs`
 directly when a graph and focus/context are present (`chat.mjs:7525-7526`), or falls back to
 `dispatchTool("tmct_ask", ...)` (`chat.mjs:7529`), which itself calls the identical `ask()`
-(`src/server.mjs:478-481`). Both paths converge on one engine. Separately, `--with-persona code` is a
+(`src/tools/server.mjs:478-481`). Both paths converge on one engine. Separately, `--with-persona code` is a
 real, shipped preset (`src/services/init.mjs:84-88`, `PERSONA_PRESETS.code = { extensions: { seon: {active:
 true}, conceptnet: {active: true} }, bias: { seon: 1.0, conceptnet: 1.0 } }`) — but it activates
 fact-corpus bundles (SEON/ConceptNet ontology facts folded into memory), not a code-graph parser. It
@@ -151,10 +151,10 @@ Read directly from `<sibling-checkout>/seonix` (a full sibling repo):
   Non-goals.
 - **Query tools** — `src/domain/codegraph.mjs`'s `resolveSymbol`/`renderDescribe`/`renderImpact`/
   `renderSearch`/etc., exposed via `bin/cli.mjs`'s `dispatchTool` dispatch and a `seonix ask`
-  sub-mode. `src/server.mjs:14-15` documents directly that this NL sub-mode **already calls tmct's
+  sub-mode. `src/tools/server.mjs:14-15` documents directly that this NL sub-mode **already calls tmct's
   own `ask` engine**: "`seonix_ask` ... now tmct's ask engine." Query tools are not something to port
   — seonix's own now points at tmct's.
-- **LLM tool-calling surface** — a real MCP server (`src/server.mjs`, `@modelcontextprotocol/sdk`,
+- **LLM tool-calling surface** — a real MCP server (`src/tools/server.mjs`, `@modelcontextprotocol/sdk`,
   `StdioServerTransport`). A tiered "C4" surface: only `seonix_context`, `seonix_snippet`,
   `seonix_ask` register as first-class MCP tools (`server.mjs:65-102`); roughly 11 more stay reachable
   only via CLI `dispatchTool`, deliberately kept off the MCP tool list.
@@ -311,7 +311,7 @@ seonix imports tmct (`^1.3.0`), seonix's chat surface is a thin wrapper over tmc
 `createGraphService` (`seonix/src/tmct-provider.mjs`). What that plan explicitly kept in seonix
 (`archive/PLAN_REPOSITORY_INTERFACE.md`, "What moves vs what stays," lines 141-151): the parsers
 (`extract_ast.py` and friends), the benchmarking harness (`bench/`), and the MCP tool surface
-(`src/server.mjs`, `@modelcontextprotocol/sdk`) — precisely the things the operator's framing says
+(`src/tools/server.mjs`, `@modelcontextprotocol/sdk`) — precisely the things the operator's framing says
 must stay in seonix. Nothing in this document changes that division.
 
 **What remains, sequenced as this plan's own Phase 2 (not this phase's scope, named for later):**

@@ -16,7 +16,7 @@ import {
   answerCount, renderStats, isConversational,
   renderVerbose, WALL_MISS_RE,
 } from "../src/services/chat.mjs";
-import { dispatchTool } from "../src/server.mjs";
+import { dispatchTool } from "../src/tools/server.mjs";
 import { parseEntities } from "../src/domain/codegraph.mjs";
 import * as source from "../src/adapters/source.mjs";
 import { CANONICAL_LINE_RE } from "./helpers/session.mjs";

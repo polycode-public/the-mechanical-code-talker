@@ -21,7 +21,7 @@ import { join } from "node:path";
 import { ask } from "../src/domain/ask.mjs";
 import { runTurn, asBareCommand } from "../src/services/chat.mjs";
 import { parseEntities } from "../src/domain/codegraph.mjs";
-import { ingestSchemaDocs } from "../src/schema-docs.mjs";
+import { ingestSchemaDocs } from "../src/tools/schema-docs.mjs";
 import { clearCache } from "../src/adapters/source.mjs";
 import { normalizeQuery } from "../src/domain/interpret/normalize.mjs";
 import { stripNoise, noiseStripStrategy } from "../src/domain/interpret/strategies/noise-strip.mjs";

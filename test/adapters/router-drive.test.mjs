@@ -14,7 +14,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { ingestSchemaDocs } from "../../src/schema-docs.mjs";
+import { ingestSchemaDocs } from "../../src/tools/schema-docs.mjs";
 import { buildCapabilityPlanCtx, runCapabilityPlan, declaredCapabilityNames } from "../../src/domain/router/drive.mjs";
 import { capabilityPlanDeps } from "../../src/services/chat.mjs";
 

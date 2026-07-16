@@ -16,9 +16,9 @@
 
 import { readFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import { ToolError } from "./adapters/config.mjs";
-import { sliceSpan, readSpanSafe } from "./adapters/source-slice.mjs";
-import * as defaultSource from "./adapters/source.mjs";
+import { ToolError } from "../adapters/config.mjs";
+import { sliceSpan, readSpanSafe } from "../adapters/source-slice.mjs";
+import * as defaultSource from "../adapters/source.mjs";
 import {
   parseEntities,
   resolveSymbol,
@@ -47,17 +47,17 @@ import {
   renderFileHistory,
   renderMethodHistory,
   renderClassHistory,
-} from "./domain/codegraph.mjs";
-import { ask } from "./domain/ask.mjs";
-import { createGraphService } from "./adapters/providers/graph-service.mjs";
+} from "../domain/codegraph.mjs";
+import { ask } from "../domain/ask.mjs";
+import { createGraphService } from "../adapters/providers/graph-service.mjs";
 // Read-only consumers of the conversational-memory graph (corpus facts, separate from
 // the code-map graph.json). Used by the fall-through bridge below: when the code-map
 // resolves nothing for a concept query, answer from the reified isa-family facts instead.
-import { loadMemory, readFactRows, normFactTerm } from "./adapters/memory/core.mjs";
-import { setDefaultNlpAdapter } from "./domain/interpret/nlp-registry.mjs";
-import { setConstructionBanks } from "./domain/interpret/strategies/constructions.mjs";
-import { nlpAdapter } from "./adapters/ask-nlp.mjs";
-import { readConstructionFiles } from "./adapters/corpus/construction-banks.mjs";
+import { loadMemory, readFactRows, normFactTerm } from "../adapters/memory/core.mjs";
+import { setDefaultNlpAdapter } from "../domain/interpret/nlp-registry.mjs";
+import { setConstructionBanks } from "../domain/interpret/strategies/constructions.mjs";
+import { nlpAdapter } from "../adapters/ask-nlp.mjs";
+import { readConstructionFiles } from "../adapters/corpus/construction-banks.mjs";
 
 // Composition: the tool layer supplies the domain parser's default lemma/POS
 // adapter and the construction-grammar banks (lazy loader), so dispatchTool-

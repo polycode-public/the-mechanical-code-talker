@@ -1,5 +1,5 @@
 // Unit tests for src/adapters/source-slice.mjs — the shared, safe span-slicing helpers
-// factored out of src/server.mjs (security fix: path-traversal guard on the
+// factored out of src/tools/server.mjs (security fix: path-traversal guard on the
 // fs-touching half, readSpanSafe).
 import { test } from "node:test";
 import assert from "node:assert/strict";

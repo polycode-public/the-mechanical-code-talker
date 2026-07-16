@@ -172,7 +172,7 @@ each re-checking cited evidence directly against the real code at this pin — n
 | 7 | Conversational memory as its own OWL-labelled graph (3 backends) | implemented | `src/adapters/memory/core.mjs:185-233` (Backend A flat-json / B in-memory / C sqlite) | evidence detail changed: added `mgx:updatedAt` own-attribute-mutation stamping and edge-level `createdAt` in `upsertEdge`; 3-backend split unaffected |
 | 8 | Input normalization pass | partial (unchanged shape) | `src/domain/interpret/normalize.mjs` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 9 | Graph-provider adapter contract (Repository Interface, 15 services) | implemented | `src/adapters/repository-interface.mjs` | unchanged since `CAPABILITIES_1.6.0.md` |
-| 10 | Runnable conformance/compatibility test suite for RI providers | implemented | `src/conformance.mjs:60` `runConformance` | unchanged since `CAPABILITIES_1.6.0.md` |
+| 10 | Runnable conformance/compatibility test suite for RI providers | implemented | `src/tools/conformance.mjs:60` `runConformance` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 11 | Library-first design, stable `exports` map (18 entry points) | implemented | `package.json`, re-verified, still 18 subpaths | unchanged since `CAPABILITIES_1.6.0.md` |
 | 12 | Ink console TUI shell | implemented | `src/tui/app.mjs:33` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 13 | Calculation surfaced as reasoning (counts/comparisons via templates) | implemented | `via:"template"` provenance, `src/services/chat.mjs:1230,3031,3374,6798,7068,7152` | unchanged since `CAPABILITIES_1.6.0.md`; all cited sites re-confirmed live despite `chat.mjs` growing +324/-8 lines this window |
@@ -240,7 +240,7 @@ each re-checking cited evidence directly against the real code at this pin — n
 | 77 | DRT-lite typed discourse record | claimed-only, research-horizon | `PLAN_AGENTS.md:644` "Not started" | unchanged since `CAPABILITIES_1.6.0.md` |
 | 78 | Winograd-hard commonsense coreference | claimed-only, deliberately out of reach | `PLAN_AGENTS.md:646` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 79 | A shared ~2M-word cross-domain ontology | claimed-only, "record, not commit" | `PLAN_AGENTS.md:646` | unchanged since `CAPABILITIES_1.6.0.md` |
-| 80 | `dispatchTool` MCP-era tool switch | implemented | `src/server.mjs` | unchanged since `CAPABILITIES_1.6.0.md` |
+| 80 | `dispatchTool` MCP-era tool switch | implemented | `src/tools/server.mjs` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 81 | Supply-chain hardening (SAST, secrets, audit, OSV-Scanner, provenance) | implemented | `.gitlab-ci.yml` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 82 | Predicate "find" queries | implemented | `src/domain/ask.mjs:966,1028` (`parseSuperlative`, `parseFind`) | unchanged since `CAPABILITIES_1.6.0.md` |
 | 83 | Single-sourced `fnv1a` hash + wink browser-loader seam | implemented | `src/domain/hash.mjs:19,30`; `src/adapters/wink-model.mjs` | unchanged since `CAPABILITIES_1.6.0.md` |

@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { CLASS_DOCS, PREDICATE_DOCS, ingestSchemaDocs } from "../src/schema-docs.mjs";
+import { CLASS_DOCS, PREDICATE_DOCS, ingestSchemaDocs } from "../src/tools/schema-docs.mjs";
 import { buildEntities } from "../src/adapters/graph-build.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));

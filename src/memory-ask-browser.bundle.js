@@ -6743,6 +6743,14 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     }
   });
 
+  // adapter-stub-ask-nlp.mjs:../adapters/ask-nlp.mjs
+  var nlpAdapter;
+  var init_ask_nlp = __esm({
+    "adapter-stub-ask-nlp.mjs:../adapters/ask-nlp.mjs"() {
+      nlpAdapter = void 0;
+    }
+  });
+
   // src/adapters/corpus/templates.mjs
   var import_meta, PKG_ROOT, TEMPLATES_FILE, PHRASEBOOK_FILE, TECHNICAL_SLOTS;
   var init_templates = __esm({
@@ -6933,14 +6941,6 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     "src/adapters/wink-model.mjs"() {
       init_node_module();
       import_meta3 = {};
-    }
-  });
-
-  // adapter-stub-ask-nlp.mjs:../adapters/ask-nlp.mjs
-  var nlpAdapter2;
-  var init_ask_nlp = __esm({
-    "adapter-stub-ask-nlp.mjs:../adapters/ask-nlp.mjs"() {
-      nlpAdapter2 = void 0;
     }
   });
 
@@ -8022,7 +8022,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   // src/services/chat.mjs
   init_node_path();
 
-  // src/server.mjs
+  // src/tools/server.mjs
   init_promises();
   init_node_path();
   init_config();
@@ -8032,24 +8032,24 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   init_promises();
   init_config();
 
-  // src/server.mjs
+  // src/tools/server.mjs
   init_codegraph();
   init_ask();
   init_graph_service();
   init_core();
   init_nlp_registry();
 
-  // adapter-stub-strategies/constructions.mjs:./domain/interpret/strategies/constructions.mjs
+  // adapter-stub-strategies/constructions.mjs:../domain/interpret/strategies/constructions.mjs
   var setConstructionBanks = () => {
   };
 
-  // adapter-stub-ask-nlp.mjs:./adapters/ask-nlp.mjs
-  var nlpAdapter = void 0;
+  // src/tools/server.mjs
+  init_ask_nlp();
 
-  // adapter-stub-corpus/construction-banks.mjs:./adapters/corpus/construction-banks.mjs
+  // adapter-stub-corpus/construction-banks.mjs:../adapters/corpus/construction-banks.mjs
   var readConstructionFiles = () => ({ relations: [], constructions: [] });
 
-  // src/server.mjs
+  // src/tools/server.mjs
   setDefaultNlpAdapter(nlpAdapter);
   setConstructionBanks(readConstructionFiles);
   var TOOLS = [
@@ -8151,18 +8151,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   init_ask_vocab();
   init_normalize();
   init_nlp_registry();
-
-  // adapter-stub-strategies/constructions.mjs:../domain/interpret/strategies/constructions.mjs
-  var setConstructionBanks2 = () => {
-  };
-
-  // src/services/chat.mjs
   init_ask_nlp();
-
-  // adapter-stub-corpus/construction-banks.mjs:../adapters/corpus/construction-banks.mjs
-  var readConstructionFiles2 = () => ({ relations: [], constructions: [] });
-
-  // src/services/chat.mjs
   init_fuzzy();
 
   // src/services/chat-session.mjs
@@ -8261,8 +8250,8 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   init_extensions();
 
   // src/services/chat.mjs
-  setDefaultNlpAdapter(nlpAdapter2);
-  setConstructionBanks2(readConstructionFiles2);
+  setDefaultNlpAdapter(nlpAdapter);
+  setConstructionBanks(readConstructionFiles);
   var CONTEXT_WORDS = /* @__PURE__ */ new Set(["it", "this", "that", "here"]);
   var isPronoun = (s) => CONTEXT_WORDS.has(String(s || "").trim().toLowerCase());
   var GOAL_BY_KIND = {

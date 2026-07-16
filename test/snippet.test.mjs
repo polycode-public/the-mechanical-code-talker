@@ -6,7 +6,7 @@ import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildEntities } from "../src/adapters/graph-build.mjs";
-import { dispatchTool } from "../src/server.mjs";
+import { dispatchTool } from "../src/tools/server.mjs";
 
 test("tmct_snippet returns the exact source span; modules have none", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-snip-"));

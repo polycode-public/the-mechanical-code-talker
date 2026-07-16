@@ -31,7 +31,7 @@ import {
 import { fixtureProvider } from "../src/adapters/providers/fixture.mjs";
 import { ask } from "../src/domain/ask.mjs";
 import { bootstrapProvider } from "../src/adapters/providers/bootstrap.mjs";
-import { runConformance, assertIndividual, assertEdge, assertResult } from "../src/conformance.mjs";
+import { runConformance, assertIndividual, assertEdge, assertResult } from "../src/tools/conformance.mjs";
 
 const REASONS = new Set(Object.values(MISS_REASONS));
 

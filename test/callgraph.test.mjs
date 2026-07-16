@@ -13,7 +13,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { parseEntities } from "../src/domain/codegraph.mjs";
 import { ask } from "../src/domain/ask.mjs";
-import { dispatchTool } from "../src/server.mjs";
+import { dispatchTool } from "../src/tools/server.mjs";
 
 const fixture = JSON.parse(
   readFileSync(fileURLToPath(new URL("./fixtures/entities.fixture.json", import.meta.url)), "utf8"),

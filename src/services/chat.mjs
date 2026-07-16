@@ -18,7 +18,7 @@
 // loop, src/tui/app.mjs's Ink shell).
 
 import { join, dirname } from "node:path";
-import { dispatchTool, loadGraph, TOOLS } from "../server.mjs";
+import { dispatchTool, loadGraph, TOOLS } from "../tools/server.mjs";
 import { ToolError } from "../adapters/config.mjs";
 import { parseEntities, edgesOfKind, renderAuthorCard, renderAuthorTouches, renderCommitAuthor, resolveSymbol, renderCompare } from "../domain/codegraph.mjs";
 import { classDisplayName } from "../domain/ask.mjs";

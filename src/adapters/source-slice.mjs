@@ -1,4 +1,4 @@
-// Shared, safe source-span slicing for the tool layer (src/server.mjs) and the
+// Shared, safe source-span slicing for the tool layer (src/tools/server.mjs) and the
 // source-capable Repository Interface provider (src/adapters/providers/graph-service.mjs).
 //
 // Two halves:

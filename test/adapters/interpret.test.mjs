@@ -25,7 +25,7 @@ import { setDefaultNlpAdapter } from "../../src/domain/interpret/nlp-registry.mj
 setDefaultNlpAdapter(nlpAdapter);
 import { buildEntities } from "../../src/adapters/graph-build.mjs";
 import { parseEntities } from "../../src/domain/codegraph.mjs";
-import { ingestSchemaDocs } from "../../src/schema-docs.mjs";
+import { ingestSchemaDocs } from "../../src/tools/schema-docs.mjs";
 
 // The richer committed fixture (imports + tests edges) — the local MODULES set
 // below has neither, so the conditional-qualifier/counterfactual tests (which

@@ -11,9 +11,9 @@ export const LAYER_OF = {
   "memory-ask-browser-entry.mjs": "surfaces",
   "memory-ask-browser.bundle.js": "surfaces",
 
-  "server.mjs": "tools",
-  "schema-docs.mjs": "tools",
-  "conformance.mjs": "tools",
+  "tools/server.mjs": "tools",
+  "tools/schema-docs.mjs": "tools",
+  "tools/conformance.mjs": "tools",
 
   "services/chat.mjs": "services",
   "services/chat-session.mjs": "services",

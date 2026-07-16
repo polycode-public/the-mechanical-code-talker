@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { ingestSchemaDocs } from "../src/schema-docs.mjs";
+import { ingestSchemaDocs } from "../src/tools/schema-docs.mjs";
 import { runTurn } from "../src/services/chat.mjs";
 import { clearCache } from "../src/adapters/source.mjs";
 

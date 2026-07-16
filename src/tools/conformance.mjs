@@ -15,7 +15,7 @@ import {
   SERVICES,
   isHit,
   isMiss,
-} from "./adapters/repository-interface.mjs";
+} from "../adapters/repository-interface.mjs";
 
 const REASONS = new Set(Object.values(MISS_REASONS));
 

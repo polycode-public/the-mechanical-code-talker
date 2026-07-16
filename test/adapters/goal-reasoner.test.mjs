@@ -223,7 +223,7 @@ test("goal-reasoner e2e: SCOPED-ONLY + AMBIGUITY seams both refuse honestly", as
 test("goal-reasoner: an ambiguous FOCUS term stays refused but ADDITIONALLY carries candidateResults (never silently falls back to global)", async () => {
   const { buildEntities } = await import("../../src/adapters/graph-build.mjs");
   const { parseEntities } = await import("../../src/domain/codegraph.mjs");
-  const { ingestSchemaDocs } = await import("../../src/schema-docs.mjs");
+  const { ingestSchemaDocs } = await import("../../src/tools/schema-docs.mjs");
   const { resolveObject } = await import("../../src/domain/ask.mjs");
 
   const entities = buildEntities([

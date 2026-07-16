@@ -79,7 +79,7 @@ function sink() {
  *  Returns { answer, miss, error? } for the query turn. */
 export async function driveChat(caseDef) {
   const { runChat } = await import(join(ROOT, "src", "services", "chat.mjs"));
-  const { ingestSchemaDocs } = await import(join(ROOT, "src", "schema-docs.mjs"));
+  const { ingestSchemaDocs } = await import(join(ROOT, "src", "tools", "schema-docs.mjs"));
   const { parseSessionJsonl, parseSessionLog, turnKey } = await import(join(ROOT, "src", "services", "sessions.mjs"));
 
   const dir = await mkdtemp(join(tmpdir(), `tmct-infbench-${caseDef.id.replace(/[^A-Za-z0-9-]/g, "_")}-`));

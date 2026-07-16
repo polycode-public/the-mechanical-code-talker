@@ -8,7 +8,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildEntities } from "../../src/adapters/graph-build.mjs";
 import { parseEntities } from "../../src/domain/codegraph.mjs";
-import { ingestSchemaDocs } from "../../src/schema-docs.mjs";
+import { ingestSchemaDocs } from "../../src/tools/schema-docs.mjs";
 import { ask, classDisplayName } from "../../src/domain/ask.mjs";
 
 test("classDisplayName splits a camel-case enum into lowercase words, byte-exact", () => {

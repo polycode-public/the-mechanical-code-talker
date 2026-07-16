@@ -11,7 +11,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 import { parseEntities } from "../../src/domain/codegraph.mjs";
-import { ingestSchemaDocs } from "../../src/schema-docs.mjs";
+import { ingestSchemaDocs } from "../../src/tools/schema-docs.mjs";
 import { buildEntities } from "../../src/adapters/graph-build.mjs";
 import { resolveObject } from "../../src/domain/ask.mjs";
 import { RELATIONS } from "../../src/domain/ask-vocab.mjs";

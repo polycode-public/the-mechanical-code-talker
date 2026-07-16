@@ -33,7 +33,7 @@ setConstructionBanks(readConstructionFiles);
 export { relationKind, impactClosure } from "../domain/codegraph.mjs";
 
 // Tool dispatch (slash-commands and CLI tool calls route through here).
-export { dispatchTool } from "../server.mjs";
+export { dispatchTool } from "../tools/server.mjs";
 
 // Conversational memory — tmct's OWN OWL-labelled graph under
 // .tmct/memory/, distinct from any provider-supplied code graph.

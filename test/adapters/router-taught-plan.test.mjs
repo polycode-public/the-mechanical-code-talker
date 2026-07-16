@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { ingestSchemaDocs } from "../../src/schema-docs.mjs";
+import { ingestSchemaDocs } from "../../src/tools/schema-docs.mjs";
 import {
   buildCapabilityPlanCtx, runCapabilityPlan, runTaughtPlan, declaredCapabilityNames,
 } from "../../src/domain/router/drive.mjs";
@@ -119,7 +119,7 @@ test("runTaughtPlan passes on a non-world-goal request instead of claiming it", 
 });
 
 test("a chat /plan world-goal turn consumes the taught action family and unregisters it before the turn ends", async () => {
-  const { loadGraph } = await import("../../src/server.mjs");
+  const { loadGraph } = await import("../../src/tools/server.mjs");
   const source = await import("../../src/adapters/source.mjs");
   const planned = await runTurn("/plan make every disk rest on peg-c", {
     config: GRAPH, graph: await loadGraph(GRAPH, source), memoryDir: MEMORY, sessionId: "taught-plan-chat",

@@ -6,7 +6,7 @@
 // a goal to a capability whose add-list achieves it.
 //
 // Plain data + pure accessors, no I/O. Tool names + parameter arg keys are the
-// exact ones src/server.mjs `dispatchTool` reads, so a bound call this registry validates is
+// exact ones src/tools/server.mjs `dispatchTool` reads, so a bound call this registry validates is
 // directly dispatchable.
 
 export const PREFIXES = Object.freeze({
@@ -44,7 +44,7 @@ export const PRECOND = Object.freeze({
 
 // ---- capability builder (returns PLAIN FROZEN data) -------------------------
 
-/** A parameter slot. `arg` is the exact key src/server.mjs `dispatchTool` reads. */
+/** A parameter slot. `arg` is the exact key src/tools/server.mjs `dispatchTool` reads. */
 const param = (name, kind, { arg = name, required = true, note = "" } = {}) =>
   Object.freeze({ type: VOCAB.Parameter, name, kind, arg, required, note });
 
@@ -76,7 +76,7 @@ function capability({ name, label, question, params = [], preconditions = [], ad
 }
 
 // ---- the declared capabilities -----------------------------------------------
-// Arg keys verified against src/server.mjs `dispatchTool`'s switch: describe/callers/
+// Arg keys verified against src/tools/server.mjs `dispatchTool`'s switch: describe/callers/
 // callees/tests/history/… take `symbol`; impact/exports take `module`; members/
 // subclasses take `class`; search takes `query` (+ optional kind/name/decorator);
 // architecture takes an optional `package`; untested takes nothing.

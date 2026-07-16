@@ -518,7 +518,7 @@ function parseArgs(argv) {
 export async function createRunnerDeps(stamp) {
   const { runTurn, runChat } = await import(join(ROOT, "src", "services", "chat.mjs"));
   const { parseEntities } = await import(join(ROOT, "src", "domain", "codegraph.mjs"));
-  const { ingestSchemaDocs } = await import(join(ROOT, "src", "schema-docs.mjs"));
+  const { ingestSchemaDocs } = await import(join(ROOT, "src", "tools", "schema-docs.mjs"));
   const { parseSessionJsonl, parseSessionLog, turnKey } = await import(join(ROOT, "src", "services", "sessions.mjs"));
   const { clearCache } = await import(join(ROOT, "src", "adapters", "source.mjs")); // H1a — see runSessionCase
 

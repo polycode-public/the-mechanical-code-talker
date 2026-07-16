@@ -12,7 +12,7 @@ import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseEntities } from "../../src/domain/codegraph.mjs";
-import { ingestSchemaDocs } from "../../src/schema-docs.mjs";
+import { ingestSchemaDocs } from "../../src/tools/schema-docs.mjs";
 import { ask } from "../../src/domain/ask.mjs";
 import { composeConcept, composeRelation, CONCEPT_CLASS, RELATION_TERM } from "../../src/domain/concept.mjs";
 import { runTurn } from "../../src/services/chat.mjs";

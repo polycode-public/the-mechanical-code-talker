@@ -34,7 +34,7 @@ import { capabilityByName } from "../src/domain/router/registry.mjs";
 import { resolveObject } from "../src/domain/ask.mjs";
 import { parseEntities } from "../src/domain/codegraph.mjs";
 import { resultSetOf } from "./results.mjs";
-import { ingestSchemaDocs } from "../src/schema-docs.mjs";
+import { ingestSchemaDocs } from "../src/tools/schema-docs.mjs";
 
 // The pluggable drivers, selectable with --driver. `stub` is the STUB-DRIVER
 // FLOOR (default); `shim` is the SHIM-TRANSPORT interface floor (server-http.mjs
@@ -111,8 +111,8 @@ export async function loadFixtureLabels() {
  *  real graph writer's pipeline) so the REAL dispatchTool can resolve entities.
  *  Returns { ctx, cleanup } — the caller MUST await cleanup(). */
 export async function createRunCtx() {
-  const { dispatchTool } = await import(join(ROOT, "src", "server.mjs"));
-  const { ingestSchemaDocs } = await import(join(ROOT, "src", "schema-docs.mjs"));
+  const { dispatchTool } = await import(join(ROOT, "src", "tools", "server.mjs"));
+  const { ingestSchemaDocs } = await import(join(ROOT, "src", "tools", "schema-docs.mjs"));
   const { ToolError } = await import(join(ROOT, "src", "adapters", "config.mjs"));
   const { selectTool } = await import(join(ROOT, "src", "services", "chat.mjs"));
 

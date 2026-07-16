@@ -8,7 +8,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { buildEntities } from "../src/adapters/graph-build.mjs";
 import { parseEntities } from "../src/domain/codegraph.mjs";
-import { ingestSchemaDocs } from "../src/schema-docs.mjs";
+import { ingestSchemaDocs } from "../src/tools/schema-docs.mjs";
 import { parseQuery, resolveObject, traverse, render, ask, rephraseHint, normalizeQuery } from "../src/domain/ask.mjs";
 
 // Mirrors the operator's own worked example, with an INTERNAL coupling target instead of

@@ -11,12 +11,12 @@
 // Every response's `usage` is { input_tokens: 0, output_tokens: 0 } — tmct is the $0
 // floor, priced as free by the meter.
 //
-// src/server.mjs is the tool-dispatch layer, not an HTTP server; this module is the
+// src/tools/server.mjs is the tool-dispatch layer, not an HTTP server; this module is the
 // HTTP surface.
 
 import { createServer } from "node:http";
 import { runTurn, selectTool } from "./services/chat.mjs";
-import { TOOLS } from "./server.mjs";
+import { TOOLS } from "./tools/server.mjs";
 import { parseEntities } from "./domain/codegraph.mjs";
 import { uuidv7 } from "./adapters/uuid.mjs";
 import * as defaultSource from "./adapters/source.mjs";

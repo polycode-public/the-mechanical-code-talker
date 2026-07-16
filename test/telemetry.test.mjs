@@ -10,7 +10,7 @@ import { telemetryEnabled, invocationId, redact, createTelemetry } from "../src/
 import { createGraphService } from "../src/adapters/providers/graph-service.mjs";
 import { fixtureGraph } from "../src/adapters/providers/fixture.mjs";
 import { createSession } from "../src/services/chat.mjs";
-import { dispatchTool } from "../src/server.mjs";
+import { dispatchTool } from "../src/tools/server.mjs";
 import { fileURLToPath } from "node:url";
 
 test("telemetryEnabled: OFF by default; env TMCT_TELEMETRY=1/0 wins both directions over toml", () => {

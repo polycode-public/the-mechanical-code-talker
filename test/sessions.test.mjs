@@ -12,7 +12,7 @@ import {
   SESSIONS_DIR_REL, SESSION_CLASS, ASKS_ABOUT_PROP,
   upsertSession, appendSessionToGraph, parseSessionJsonl, readSessionRecords, foldInSessions,
 } from "../src/services/sessions.mjs";
-import { CLASS_DOCS, PREDICATE_DOCS } from "../src/schema-docs.mjs";
+import { CLASS_DOCS, PREDICATE_DOCS } from "../src/tools/schema-docs.mjs";
 import { runChat } from "../src/services/chat.mjs";
 import { MEMORY_GRAPH_REL } from "../src/adapters/memory/core.mjs";
 
